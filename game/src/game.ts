@@ -80,7 +80,7 @@ import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
-import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, sectionLabel, storeyLabel} from './levels/registry';
+import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLabel, storeyLabel} from './levels/registry';
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
@@ -801,8 +801,8 @@ export class Game {
     this.hud.reset();
     // Lane F: enemies block the flashlight beam — marked once per actor in spawnEnemy (iteration 07, Lane Q)
     this.genMs = performance.now() - t0;
-    const codes = LEVEL_IDS.map(l => `${LEVELS[l].name} ${seedToCode(this.run.seeds[l])}`).join(' · ');
-    $('#seed-line').textContent = `${LEVELS[key.level].name} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
+    const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
+    $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
     if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : 'Clear the station'; // (+ mall: lane GEN)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
@@ -915,7 +915,8 @@ export class Game {
       const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed()}; // (+ mall: lane GEN)
       const key: SectionKey = {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
-      const ui = this.showLoading(`New run · ${def.name}. ${def.blurb}`, `Generating ${def.name}…`);
+      const shown = levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
+      const ui = this.showLoading(`New run · ${shown}. ${def.blurb}`, `Generating ${shown}…`);
       await nextPaint();
       let layout: StationLayout;
       try { layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return null; }
@@ -1006,12 +1007,12 @@ export class Game {
     const flight = this.lifecycle.run(async (): Promise<TravelResult> => {
       const from = {...this.run.current};
       const levelChange = req.to.level !== from.level;
-      const def = LEVELS[req.to.level];
       this.travelReq = req;
       this.cancelUse('travel');
       this.cancelFlareHold();
       this.aiming = false;
-      const ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${def.name} · ${sectionLabel(req.to)}…`);
+      const shown = levelDisplayName(req.to.level, this.run.seeds[req.to.level]); // (lane GEN: the seeded mall name)
+      const ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${shown} · ${sectionLabel(req.to)}…`);
       let built = false;
       try {
         await nextPaint();
@@ -1028,7 +1029,7 @@ export class Game {
         if (ok) await this.enterPlay();
         else this.setState('paused');
         if (this.state === 'paused') $('#pause .fine').textContent = 'The browser did not capture the mouse — click Resume to try again.';
-        this.hud.toast(levelChange ? `${def.name} · ${sectionLabel(req.to)} — your kit and condition came with you` : req.label);
+        this.hud.toast(levelChange ? `${shown} · ${sectionLabel(req.to)} — your kit and condition came with you` : req.label);
         return {ok: true};
       } catch (err) {
         console.error('Iteration 16: travel failed', err);
@@ -1085,11 +1086,11 @@ export class Game {
   updateStationIntro(): void {
     // Iteration 16 (RUN) / 17: per level — what is still alive here (kills earlier in the run stay dead)
     const k = this.run.current, n = this.zombies.filter(z => z.brain.alive).length;
-    // (task track3-eaton-centre-20261031, lane GEN: + The Eaton's Center)
+    // (task track3-eaton-centre-20261031, lane GEN: + the mall; task mall-playtest-revision-20261031: its seeded name, three floors)
     $('#station-intro').textContent = k.level === 'office'
       ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
       : k.level === 'mall'
-        ? `The Eaton's Center — a subway station at the bottom of the pit and six rings of shops up to the glass roof. ${n} infected reported in the station and the mall. Clear them out.`
+        ? `${this.layout.mall?.name ?? levelDisplayName('mall', this.run.seeds.mall)} — a subway station under a glass atrium and three floors of shops above it. ${n} infected reported in the station and the mall. Clear them out.`
         : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
@@ -1903,9 +1904,10 @@ export class Game {
     const spreadPx = Math.tan(spread) / Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2)) * (window.innerHeight / 2);
     const multi = this.levels.count > 1; // Lane B: the area / track bed of the player's own storey
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
-    // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House")
-    const storey = this.layout.office && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
-    const storeyName = storey ? (storey === 'L' ? 'Lobby' : `Floor ${storey}`) : '';
+    // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House"); task mall-playtest-revision-20261031
+    // (lane GEN): the mall's retail floor too ("Paper Lantern Books · Sales floor · Level 2 · Harbourline Center")
+    const storey = (this.layout.office || this.layout.mall) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
+    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
@@ -2317,7 +2319,7 @@ export class Game {
     const acc = s.shots ? Math.round(s.hits / s.shots * 100) : 0;
     const total = this.layout.zombies.length, down = total - this.zombies.filter(z => z.brain.alive).length;
     // Iteration 16 (RUN): the section / level, its code, this section's kills and the run totals (time, kills, shots, damage)
-    const text = `${LEVELS[k.level].name} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
+    const text = `${levelDisplayName(k.level, this.run.seeds[k.level])} · ${sectionLabel(k)} · ${this.layout.name} · code ${seedToCode(this.run.seeds[k.level])}\n`
       + `Run time ${Math.floor(s.time / 60)}:${String(Math.floor(s.time % 60)).padStart(2, '0')} · Infected down here ${down}/${total} · this run ${s.kills}\n`
       + `Shots ${s.shots} · Hits ${s.hits} (${acc}%) · Headshot hits ${s.headshots} · Damage taken ${Math.round(this.player.damageTaken)}`;
     $(kind === 'dead' ? '#death-stats' : '#win-stats').textContent = text;

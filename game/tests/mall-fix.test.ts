@@ -220,7 +220,7 @@ describe('U03 station columns end at a real ceiling', () => {
 
 /**
  * U03 + U04 on a GENERATED mall: every station `column` and every round `atriumColumn` ends at a drawn ceiling; no hung plate
- * under open air. Runs when the generator builds (lane GEN rewrites it in parallel: the fixture tests above carry U04 meanwhile).
+ * under open air.
  */
 export function columnEndpointIssues(layout: {props: PropPlacement[]; levels?: {grid: Grid}[]; grid: Grid; mall?: {roof: {springY: number}}; signs: {x: number; z: number; y: number; hang?: boolean; area: number; level?: number}[]; areas: {ceil: number}[]}): string[] {
   const out: string[] = [];
@@ -240,16 +240,25 @@ export function columnEndpointIssues(layout: {props: PropPlacement[]; levels?: {
 }
 
 describe('U03 / U04 on the generated mall (layout-agnostic endpoint check)', () => {
+  // (lane GEN rewrites the generator in parallel: this one test needs a generator that builds; the fixture tests above carry U04)
   it('no station column, atrium column or hung plate ends in open air', async () => {
-    let L: Parameters<typeof columnEndpointIssues>[0] | null = null;
-    try {
-      const {generateMallLevel} = await import('../src/gen/mall/index');
-      L = generateMallLevel({levelSeed: 0x7ea3c1, startWeapon: 'rifle'}) as unknown as Parameters<typeof columnEndpointIssues>[0];
-    } catch (e) {
-      console.warn(`generated-mall endpoint check skipped: generator unavailable (${String((e as Error).message).slice(0, 120)})`);
-      return;
-    }
+    const {generateMallLevel} = await import('../src/gen/mall/index');
+    const L = generateMallLevel({levelSeed: 0x7ea3c1, startWeapon: 'rifle'}) as unknown as Parameters<typeof columnEndpointIssues>[0];
     expect(columnEndpointIssues(L)).toEqual([]);
+    // every round atrium column record is a round prop on its own storey (gen/mall/columns.ts wired into the generator)
+    const cols = L.props.filter(q => q.kind === 'atriumColumn');
+    expect(cols.length).toBeGreaterThan(0);
+    for (const p of cols) { expect(p.round).toBe(true); expect(p.hx).toBe(ATRIUM_COLUMN.r); }
+    // the real collision / bullet paths on the generated level: walk into and shoot three columns
+    const lv = levelsOf(L as never), idx = new PropIndex(lv, L.props);
+    for (const p of cols.slice(0, 3)) {
+      let x = p.x + 1.0, z = p.z;
+      for (let s = 0; s < 60; s++) [x, z] = moveCircle(lv, idx, x, z, -0.03, 0, 0.3, p.y, 1.8);
+      expect(Math.hypot(x - p.x, z - p.z)).toBeGreaterThanOrEqual(0.3 + p.hx - 1e-3);
+      const h = lv.raycast({x: p.x + 1.0, y: p.y + 1.4, z: p.z}, {x: -1, y: 0, z: 0}, 5, {props: L.props});
+      expect(h.kind).toBe('prop');
+      expect(L.props[h.prop!]).toBe(p);
+    }
   });
 });
 

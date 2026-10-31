@@ -137,8 +137,10 @@ describe('U09: mall vending machines stand with their back to a real wall', () =
     expect(strictWalls(L), 'the mall keeps a retail ring storey (gen/levels.ts LevelRole) — else its wall placements are not strict').toBe(true);
     const vend = L.props.filter(p => p.kind === 'vending');
     expect(vend.length).toBeGreaterThan(0);
-    // galleries (retail-arcade walkways) keep the full passing lane; elsewhere the approach (a landmark may stand ~2 m off)
-    expect(vendingDefects(L, {lane: a => a?.type === 'retail-arcade'})).toEqual([]);
+    // corridor walkways keep the full passing lane; the open atrium courts / station halls the approach (a landmark or one of FIX's
+    // atrium columns, placed after the dressing, may stand ~2 m off in a wide court) — main-thread note, GEN's revised layout
+    const corridors = new Set((L.mall?.corridors ?? []).flatMap(c => c.areas));
+    expect(vendingDefects(L, {lane: a => !!a && corridors.has(a.id)})).toEqual([]);
     const perStorey = new Map<number, number>();
     for (const p of vend) perStorey.set(p.level ?? 0, (perStorey.get(p.level ?? 0) ?? 0) + 1);
     for (const [lv, n] of perStorey) expect(n, `storey ${lv}`).toBeLessThanOrEqual(lv === 0 ? 20 : 8);

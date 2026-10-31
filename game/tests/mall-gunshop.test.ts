@@ -1,6 +1,6 @@
 // Task mall-playtest-revision-20261031 (lane SHOPS, U11 — user: "gun store didn't have a gun! I think it should have on average 1
 // gun"). The per-GUN-SHOP weapon allocation (gen/mall/shopsWeapons.ts) replacing the old mall-wide ~2.3-gun quota:
-//  - the stock distribution: exactly 1.0 gun per gun shop in expectation, bounded (0 / 1 / 2, P(empty) 5 %), independent per shop
+//  - the stock distribution: exactly 1.0 gun per gun shop in expectation, bounded (0 / 1 / 2, P(empty) 2 %), independent per shop
 //    (a second gun shop draws its own stock — it never "adds none" by design);
 //  - loadout-free: the start weapon / inventory / Travel never enter the plan (same stock with a rifle or a pistol start, with the
 //    level-wide gear roll appended as the registry does on a Travel arrival);
@@ -57,7 +57,7 @@ const get = (seed: number) => { let v = cache.get(seed); if (!v) cache.set(seed,
 const SEEDS = [1, 2, 3, 4];
 
 describe('U11 stock distribution: one gun per gun shop on average, bounded, independent per shop', () => {
-  it('exact distribution 0 / 1 / 2 = 5 / 90 / 5 % (expectation 1.0); sampled means agree; two guns are always different', () => {
+  it('exact distribution 0 / 1 / 2 = 2 / 96 / 2 % (expectation 1.0); sampled means agree; two guns are always different', () => {
     const dist = gunShopStockDistribution();
     expect(dist.reduce((s, d) => s + d.p, 0)).toBeCloseTo(1, 9);
     expect(dist.reduce((s, d) => s + d.guns * d.p, 0)).toBeCloseTo(1, 9);
@@ -72,11 +72,11 @@ describe('U11 stock distribution: one gun per gun shop on average, bounded, inde
       for (const w of st) { expect(GUNS).toContain(w); byGun[w] = (byGun[w] ?? 0) + 1; }
       expect(gunShopStock(seed, id)).toEqual(st); // deterministic
     }
-    expect(sum / n).toBeGreaterThan(0.96);
-    expect(sum / n).toBeLessThan(1.04);
-    expect(zeros / n).toBeGreaterThan(0.03);
-    expect(zeros / n).toBeLessThan(0.07);
-    expect(twos / n).toBeGreaterThan(0.03);
+    expect(sum / n).toBeGreaterThan(0.98);
+    expect(sum / n).toBeLessThan(1.02);
+    expect(zeros / n).toBeGreaterThan(0.008);
+    expect(zeros / n).toBeLessThan(0.035);
+    expect(twos / n).toBeGreaterThan(0.008);
     for (const w of GUNS) expect(byGun[w], w).toBeGreaterThan(n * 0.15); // every gun shows up
   });
 
@@ -91,9 +91,9 @@ describe('U11 stock distribution: one gun per gun shop on average, bounded, inde
     }
     const cov = sab / N - (sa / N) * (sb / N), corr = cov / Math.sqrt((saa / N - (sa / N) ** 2) * (sbb / N - (sb / N) ** 2));
     expect(Math.abs(corr)).toBeLessThan(0.06);
-    expect(secondEmpty / N).toBeLessThan(0.07);
-    expect(both / N).toBeGreaterThan(0.88);
-    expect(sb / N).toBeGreaterThan(0.95); // the second shop averages one gun too
+    expect(secondEmpty / N).toBeLessThan(0.035);
+    expect(both / N).toBeGreaterThan(0.94);
+    expect(sb / N).toBeGreaterThan(0.97); // the second shop averages one gun too
   });
 });
 

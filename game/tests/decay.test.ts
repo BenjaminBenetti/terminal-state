@@ -208,7 +208,7 @@ describe('decay node hooks: architectural materials only, bounded cost', () => {
     expect(main).toContain('dcRough = ');
     expect(main).toMatch(/Roughness = .*clamp\( \( nodeUniform\d+ \+ dcRough \), 0\.04, 1\.0 \)/);
     const t = decayDetailTexture();
-    expect(t.anisotropy).toBe(1);
+    expect(t.anisotropy).toBe(16); // task mall-playtest-revision-20261031 (lane FIX, U08): 16x requested (software GL still clamps to 1)
     expect(t.generateMipmaps).toBe(true);
     expect(t.image.width).toBe(DETAIL_SIZE);
     expect(DECAY_UNIFORMS.uDecayTex.value).toBe(t);

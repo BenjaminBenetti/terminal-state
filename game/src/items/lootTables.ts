@@ -964,7 +964,7 @@ export const MALL_SALVAGE: SalvageTables = {
  * min(1, compartment loot area / `area`) — so a 6 cm wide pill drawer is far less likely than a cupboard — it gets U{lots} lots drawn
  * from the holder's RESOLVED rows (its own / purpose table: container- or purpose-themed, incl. the place's salvage rows) restricted to
  * `cats` and HOLDER_ALLOW and re-weighted by category (`weights`), packed on that compartment's own surfaces only (an item that fits
- * nowhere is dropped). Defaults (STORAGE_FILL_CATS / STORAGE_FILL_WEIGHTS): the shop's own stock — food and drink at 0.35 of their row
+ * nowhere is dropped). Defaults (STORAGE_FILL_CATS / STORAGE_FILL_WEIGHTS): the shop's own stock — food and drink at 0.25 of their row
  * weight (lane PROFILES' guard: mall consumables per 100 m² stay < 2.5x the Office's), torch cells, flares and the place's salvage
  * (crafting materials: the mall's signature resource, only where its rows carry them); dressings only in first-aid / medical storage
  * (MED_FILL), food in food storage (FOOD_FILL), ammo only by the deliberate arms rule. Finite, seeded once with the level, remembered
@@ -988,7 +988,7 @@ export interface StorageFill {
  * dressings (first-aid storage only: MED_FILL) and no ammo (the arms rule only).
  */
 export const STORAGE_FILL_CATS: readonly EconCat[] = ['food', 'drink', 'battery', 'flare', 'material'];
-export const STORAGE_FILL_WEIGHTS: Readonly<Partial<Record<EconCat, number>>> = {food: 0.35, drink: 0.35};
+export const STORAGE_FILL_WEIGHTS: Readonly<Partial<Record<EconCat, number>>> = {food: 0.25, drink: 0.25};
 const MED_FILL = {cats: ['med', 'drink'], weights: {drink: 0.5}} as const;
 const FOOD_FILL = {cats: ['food', 'drink'], weights: {}} as const;
 const ARMS_FILL = {cats: ['ammo', 'flare', 'battery'], weights: {}} as const;
@@ -1002,13 +1002,13 @@ const fillRule = (chance: number, area = 0.12, lots: LotRange = [1, 1], o?: {cat
  */
 export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> = {
   // the mall's own storage (lane ASSETS models; the medicine cabinet's 33 pill drawers (0.04 m²) each 10 %, its cupboard / door bay too)
-  mallCashwrapCounter: fillRule(0.22), pharmacyDispensaryCounter: fillRule(0.22, 0.12, [1, 1], MED_FILL), medicineDrawerCabinet: fillRule(0.1, 0.04, [1, 1], MED_FILL), dresserDrawers: fillRule(0.25),
-  glassDisplayCabinet: fillRule(0.18, 0.3), mallKioskCart: fillRule(0.25, 0.2), bookstoreBookcase: fillRule(0.15), storageTote: fillRule(0.18), cardboardBoxFlaps: fillRule(0.18),
+  mallCashwrapCounter: fillRule(0.14), pharmacyDispensaryCounter: fillRule(0.22, 0.12, [1, 1], MED_FILL), medicineDrawerCabinet: fillRule(0.1, 0.04, [1, 1], MED_FILL), dresserDrawers: fillRule(0.16),
+  glassDisplayCabinet: fillRule(0.12, 0.3), mallKioskCart: fillRule(0.16, 0.2), bookstoreBookcase: fillRule(0.1), storageTote: fillRule(0.12), cardboardBoxFlaps: fillRule(0.12),
   gunSafeTall: fillRule(0.4, 0.1, [1, 1], ARMS_FILL),
   // station / office storage in the mall's back rooms, offices, clinic and food units
-  cabinetTall: fillRule(0.18), cabinetLow: fillRule(0.18), staffLockers: fillRule(0.12, 0.1), kitchenette: fillRule(0.12, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.12), monitorDesk: fillRule(0.12),
-  filingCabinet: fillRule(0.12), officeFiling: fillRule(0.12), chestFreezer: fillRule(0.12, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.15, 0.12, [1, 1], MED_FILL),
-  labBench: fillRule(0.06, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.2, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.12, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.06),
+  cabinetTall: fillRule(0.12), cabinetLow: fillRule(0.12), staffLockers: fillRule(0.08, 0.1), kitchenette: fillRule(0.08, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.08), monitorDesk: fillRule(0.08),
+  filingCabinet: fillRule(0.08), officeFiling: fillRule(0.08), chestFreezer: fillRule(0.08, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.15, 0.12, [1, 1], MED_FILL),
+  labBench: fillRule(0.06, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.2, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.12, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.04),
 };
 /** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall) + (lane SHOPS, U10) its storage fill. */
 export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL};

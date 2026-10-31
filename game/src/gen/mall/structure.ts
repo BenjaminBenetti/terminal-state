@@ -321,7 +321,7 @@ export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights
       id: s.id, area: s.sales, ...(s.back !== undefined ? {backroom: s.back} : {}), level: s.level, program, kind: s.kind, brand: `Unit ${s.id}`,
       frontage: fronts[0], salesArea: areaCells(layout, s.sales, s.level) * CELL * CELL, depth: deep * CELL, width: along * CELL,
       lot: s.lot, zone: s.zone, frontages: fronts, stock: s.stock, stockArea: s.back !== undefined ? areaCells(layout, s.back, s.level) * CELL * CELL : 0,
-      serviceDoor: false, ...(s.recess !== undefined ? {recess: s.recess} : {}),
+      serviceDoor: s.serviceDoor, ...(s.recess !== undefined ? {recess: s.recess} : {}),
     };
   });
   const verticals: MallVerticalLink[] = [];
@@ -356,7 +356,8 @@ export function mallInfo(layout: StationLayout, mc: MallCarve, c: Crop, _flights
     void: {
       outline, bounds: vb, openings, openLevels: Array.from({length: FLOORS}, (_, i) => i + 1), floorLevel: 0, roofSpringY: mc.roof.springY, roofApexY: mc.roof.apexY,
     },
-    galleries: per(mc.galleries), courts: per(mc.courts), corridors: per(mc.corridors), service: [{level: 0, areas: mc.stationBoh.filter(id => layout.areas[id]?.type === 'service-corridor')}],
+    galleries: per(mc.galleries), courts: per(mc.courts), corridors: per(mc.corridors),
+    service: [{level: 0, areas: mc.stationBoh.filter(id => layout.areas[id]?.type === 'service-corridor')}, ...per(mc.service)],
     shops, bridges: [], verticals, elevators,
     roof: {outline: {...top.bounds}, polygon: top.outline, springY: mc.roof.springY, apexY: mc.roof.apexY, archSpacing: ROOF.archSpacing},
     patrol: [],
@@ -431,12 +432,7 @@ export function mouthHolds(layout: StationLayout, mc: MallCarve, c: Crop): {leve
     // The rest of the strip beside the run on the upper storey (the well's rim).
   }
   for (const e of mc.elevators) for (let lv = 0; lv <= FLOORS; lv++) hold(lv, e.landing);
-  // the service-stair landings' doors (3 m in front, every storey)
-  for (const cc of mc.cores) {
-    const north = cc.well.y < mc.sk.court.y;
-    for (let lv = 0; lv <= FLOORS; lv++) for (const lx of [cc.well.x, cc.well.x + cc.well.w - 3]) {
-      hold(lv, north ? {x: lx - 1, y: cc.well.y + cc.well.h + 1, w: 5, h: 5} : {x: lx - 1, y: cc.well.y - 6, w: 5, h: 5});
-    }
-  }
+  // the service-stair lobbies' front doors (2.5 m in front, every storey)
+  for (const cc of mc.cores) for (let lv = 0; lv <= FLOORS; lv++) hold(lv, {x: cc.lobby.x - 1, y: cc.lobby.y + cc.lobby.h + 1, w: 5, h: 5});
   return out;
 }

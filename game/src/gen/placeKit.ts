@@ -575,8 +575,38 @@ export function placeAgainstWall(ctx: PlaceCtx, area: Area, kind: PropKind, opts
 export function strictWallOk(ctx: PlaceCtx, area: Area, side: Side, t: number, kind: PropKind, y = 0): boolean {
   if (!ctx.strictWalls) return true;
   const def = PROP_DEFS[kind];
+  if (kind === 'vending' && vendingCapReached(ctx, area)) return false;
+  if (kind === 'vending' && nearLinkMouth(ctx, wallSpot(area, side, t, kind))) return false;
   if (!backed(ctx, area, side, t - def.w / 2, t + def.w / 2, areaBase(ctx.layout, area) + y)) return false;
   return kind !== 'vending' || clearAhead(ctx, area, side, t, kind, VENDING_CLEAR_AHEAD);
+}
+/**
+ * U09 (main thread, after GEN's compact generator landed: 49-55 wall-backed machines per mall, 8-23 per retail floor — still "a lot
+ * of vending machines" along every corridor): public vending machines per storey in a strict-wall (mall) layout — a retail floor
+ * ('ring') keeps a few by its courts, the station storey a bank or two. Shop interiors (the arcade's own machine) do not count.
+ */
+export const MALL_VENDING_PER_STOREY = {ring: 3, station: 6} as const;
+/** U09: a mall vending machine keeps this far (m, centre) from every stair / escalator stand point of its storey (queue space). */
+export const VENDING_LINK_CLEAR = 3.0;
+function nearLinkMouth(ctx: PlaceCtx, at: {x: number; z: number}): boolean {
+  for (const k of levelLinksOf(ctx.layout)) {
+    if (k.lower === ctx.level && Math.hypot(k.bottom.x - at.x, k.bottom.z - at.z) < VENDING_LINK_CLEAR) return true;
+    if (k.upper === ctx.level && Math.hypot(k.top.x - at.x, k.top.z - at.z) < VENDING_LINK_CLEAR) return true;
+  }
+  return false;
+}
+/** U09: a strict-wall (mall) storey already holds its public vending machines (always false outside the mall / in a shop). */
+export function vendingCapReached(ctx: PlaceCtx, area: Area): boolean {
+  return !!ctx.strictWalls && !!area.publicSpace && publicVending(ctx) >= vendingCap(ctx);
+}
+function vendingCap(ctx: PlaceCtx): number {
+  return levelRole(ctx.layout, ctx.level) === 'ring' ? MALL_VENDING_PER_STOREY.ring : MALL_VENDING_PER_STOREY.station;
+}
+/** Public-area vending machines already on the context's storey. */
+function publicVending(ctx: PlaceCtx): number {
+  let n = 0;
+  for (const p of ctx.layout.props) if (p.kind === 'vending' && propLevel(p) === ctx.level && ctx.layout.areas[p.area]?.publicSpace) n++;
+  return n;
 }
 /** U09: cells of the `dist` m strip in front of a wall-backed prop's face (its width). */
 function aheadCells(area: Area, side: Side, t: number, kind: PropKind, dist: number): [number, number, number, number] {

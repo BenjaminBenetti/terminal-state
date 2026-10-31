@@ -60,20 +60,22 @@ export interface MallFrame {
   name: string;
   /** Platform length (cells). */
   Lp: number;
-  /** Atrium (L1 opening) width along X (cells), its position along the platforms (0..1), rows over each platform (cells). */
+  /** Atrium (floor-1 opening) width along X (cells), its position along the platforms (0..1); rows of the north platform's back
+   *  kept outside it (the opening covers the rest of that platform: the start stands under it) and rows of the track bed under it. */
   VW: number;
   atX: number;
-  overN: number;
-  overS: number;
+  nOff: number;
+  bedOver: number;
   /** Setback per floor step (cells) on each side: [W, E, N, S] for floor 2 and floor 3 (nested, widening upward). */
   step2: readonly [number, number, number, number];
   step3: readonly [number, number, number, number];
   /** Irregular jut / notch on the L1 opening: which corner is notched, which side carries a bay. */
   notch: 'NW' | 'NE' | 'SW' | 'SE' | null;
   bay: 'W' | 'E' | 'S' | null;
-  /** Court gallery margins beside the top opening (cells): W / E (N / S are the escalator strips + walkways). */
+  /** Court gallery margins beside the top opening (cells): W / E / S (the north side is the escalator strip + its walkway). */
   gW: number;
   gE: number;
+  gS: number;
   /** Corridor wing walkway width (cells), wing lengths (cells), offsets (cells) — read per variant by the skeleton. */
   WW: number;
   wingA: number;
@@ -112,20 +114,20 @@ export function mallFrame(levelSeed: number, variant: MallVariant = mallVariantO
   // drifting east / south), 'elbow-branch' twists (floor 2 grows north-west, floor 3 south-east).
   let step2: [number, number, number, number], step3: [number, number, number, number];
   if (variant === 'terrace-cross') { step2 = pick4(3, 5); step3 = pick4(3, 5); }
-  else if (variant === 'arcade-loop') { step2 = [0, rng.int(6, 9), rng.int(2, 4), rng.int(3, 5)]; step3 = [rng.int(0, 2), rng.int(6, 9), rng.int(2, 4), rng.int(2, 4)]; }
-  else { step2 = [rng.int(6, 8), 0, rng.int(4, 6), 0]; step3 = [0, rng.int(6, 8), rng.int(1, 3), rng.int(4, 6)]; }
+  else if (variant === 'arcade-loop') { step2 = [0, rng.int(6, 9), 0, rng.int(3, 5)]; step3 = [rng.int(0, 2), rng.int(6, 9), 0, rng.int(3, 5)]; }
+  else { step2 = [rng.int(6, 8), 0, 0, rng.int(0, 2)]; step3 = [0, rng.int(6, 8), 0, rng.int(4, 6)]; }
   const corners = ['NW', 'NE', 'SW', 'SE'] as const;
   return {
     levelSeed: levelSeed >>> 0, variant, name: mallNameOf(levelSeed),
     Lp: rng.int(104, 124),
-    VW: rng.int(28, 36), atX: variant === 'arcade-loop' ? rng.range(0.3, 0.42) : variant === 'elbow-branch' ? rng.range(0.5, 0.62) : rng.range(0.42, 0.58),
-    overN: rng.int(2, 4), overS: rng.int(2, 5),
+    VW: rng.int(24, 32), atX: variant === 'arcade-loop' ? rng.range(0.3, 0.42) : variant === 'elbow-branch' ? rng.range(0.5, 0.62) : rng.range(0.42, 0.58),
+    nOff: rng.int(2, 3), bedOver: rng.int(4, 12),
     step2, step3,
-    notch: rng.chance(0.75) ? rng.pick(corners) : null,
-    bay: rng.chance(0.6) ? rng.pick(['W', 'E', 'S'] as const) : null,
-    gW: rng.int(9, 12), gE: rng.int(9, 12),
+    notch: rng.chance(0.85) ? rng.pick(corners) : null,
+    bay: rng.chance(0.7) ? rng.pick(['W', 'E', 'S'] as const) : null,
+    gW: rng.int(8, 10), gE: rng.int(8, 10), gS: rng.int(8, 10),
     WW: rng.int(12, 14),
-    wingA: rng.int(40, 54), wingB: rng.int(30, 42), wingOff: rng.int(-6, 6), branchLen: rng.int(18, 26),
+    wingA: rng.int(34, 40), wingB: rng.int(34, 38), wingOff: rng.int(-6, 6), branchLen: rng.int(14, 20),
     band: rng.int(24, 28),
     foodFloor: rng.int(1, FLOORS),
     escAt: rng.range(0.1, 0.3), liftAt: rng.range(0.62, 0.8),

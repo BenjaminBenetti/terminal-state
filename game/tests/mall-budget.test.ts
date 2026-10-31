@@ -49,25 +49,31 @@ import {OFFICE_MODEL_FILES} from '../src/assets/officeAssets';
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from '../src/assets/companyAssets';
 import {MALL_MODEL_FILES} from '../src/assets/mallAssets';
 import {lootProfile} from '../src/items/lootTables';
+import {readTowerInfo} from '../src/world/towerShared';
+import {buildElevatorView, planElevator} from '../src/world/elevator';
 import {Inventory} from '../src/items/inventory';
 
 installCanvasShim(false);
 // the pickups' label atlas clips its cells (ShimContext has no clip(); structural run: a no-op, like every other draw here)
 for (const k of ['clip', 'rect']) (ShimContext.prototype as unknown as Record<string, unknown>)[k] ??= () => {};
 
-/** The budget (measured values in lanes/PERF.done; caps leave ~25-30 % headroom). */
+/**
+ * The budget. Task mall-playtest-revision-20261031 (lane ARCH) RE-PINNED for the revised, smaller mall (station + 3 floors, ~24 shops):
+ * measured on t3a at 08:50Z (lanes/ARCH.notes) while lanes SHOPS / GEN still densify the shops — caps leave ~45-60 % headroom for
+ * that, far below the six-ring mall's (Track3 PERF: start view 1,076 objects / 3.46 M tris, level 5,468 / 13.9 M / 60 MB / 285).
+ */
 const MALL_BUDGET = {
-  /** Distinct GPU programs (vertex + fragment pairs) the start view needs with attribute instancing (measured 29). */
+  /** Distinct GPU programs (vertex + fragment pairs) the start view needs with attribute instancing (measured 25). */
   startViewPrograms: 60,
-  /** Render objects / triangles in the start view after the culler (with slab occlusion) + frustum (measured 1,076 / 3.46 M;
-   *  1,524 / 4.97 M with the atrium rule alone). */
-  startViewObjects: 1400, startViewTriangles: 4.5e6,
-  /** Whole level: render objects (5,468), triangles (13.9 M), geometry bytes (60 MB), materials (285). */
-  objects: 7000, triangles: 18e6, geometryMB: 80, materials: 380,
-  /** Canvas / data textures referenced by the level's materials, with mips (104 MB). */
-  canvasTextureMB: 135,
-  /** Lazy model working set: models (104) and their decoded GPU texture bytes with mips (595 MB). */
-  lazyModels: 130, lazyTextureMB: 760,
+  /** Render objects / triangles in the start view after the culler (with slab occlusion) + frustum (measured 305 / 0.36 M;
+   *  415 / 0.66 M with the atrium rule alone). */
+  startViewObjects: 500, startViewTriangles: 0.9e6,
+  /** Whole level: render objects (1,524), triangles (3.31 M), geometry bytes (37 MB), materials (253). */
+  objects: 2400, triangles: 5.5e6, geometryMB: 60, materials: 340,
+  /** Canvas / data textures referenced by the level's materials, with mips (98.6 MB). */
+  canvasTextureMB: 130,
+  /** Lazy model working set: models (81) and their decoded GPU texture bytes with mips (436 MB). */
+  lazyModels: 115, lazyTextureMB: 640,
 } as const;
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
@@ -281,6 +287,16 @@ function realMall() {
     stock.build(layout, {models, lotsOf: () => []});
     world.culler.register(cm.group);
     world.culler.register(stock.group);
+    // (task mall-playtest-revision, lane ARCH U07: the shaft's landing doorways are real apertures now — the game's tower runtime
+    // adds the glass elevator's view (landing doors shut, the cab at the bottom stop, the rig) and registers the landings with the
+    // culler exactly so: towerRuntime.build. Without it this scene would look through an open hole into the shaft.)
+    const lift = readTowerInfo(layout)?.elevator;
+    if (lift) {
+      const view = buildElevatorView(planElevator(lift), mats, {glass: true});
+      view.setCab(lift.stops[0].y, 0);
+      world.group.add(view.root);
+      for (const g of view.landings) world.culler.register(g);
+    }
     world.culler.maxDistance = Math.min(fogCullDistance(MALL_FOG.density), MALL_FOG.far);
     return {layout, world, cm, stock, roots: [world.group, cm.group, stock.group], keys, lazyTex};
   })());
@@ -397,7 +413,9 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
     console.log(`[mall budget] ${JSON.stringify(report)}`);
     if (process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT, JSON.stringify(report, null, 1)); // (vitest hides console output of passing tests)
     expect(codes.size).toBeLessThanOrEqual(MALL_BUDGET.startViewPrograms);
-    expect(codes.size * 10).toBeLessThan(smallInstanced + codes.size); // the fix: >= 10x fewer programs than three's default here
+    // the fix: several times fewer programs than three's default here (six-ring mall: 768 -> 29; the smaller revised mall has fewer
+    // small instanced meshes in its start view: measured 128 -> 25)
+    expect(codes.size * 4).toBeLessThan(smallInstanced + codes.size);
     expect(inView.length).toBeLessThanOrEqual(MALL_BUDGET.startViewObjects);
     expect(trisOf(inView)).toBeLessThanOrEqual(MALL_BUDGET.startViewTriangles);
     expect(inView.length).toBeLessThan(noSlab.length * 0.8); // slab occlusion: >= 20 % fewer objects than the atrium rule alone (measured -29 %)
@@ -413,8 +431,10 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
   it('slab occlusion never hides a mesh with visible pixels (depth-buffered oracle) on QA poses across every storey', async () => {
     const {layout, world} = await realMall();
     // (+ task track3 lane ARCH: every ring edge and more escalators — the poses ARCH's former 20 m atrium margin missed slivers from)
-    const poses: [Parameters<typeof mallQaPose>[1], number?][] = [['platform-lookup'], ['court'], ['ring-edge', 1], ['ring-edge', 2], ['ring-edge', 3], ['ring-edge', 4],
-      ['ring-edge', 5], ['ring-edge', 6], ['shopfront', 2], ['shopfront', 5], ['escalator', 0], ['escalator', 1], ['escalator', 3], ['escalator', 5], ['bridge'], ['elevator'], ['washrooms', 1]];
+    // (task mall-playtest-revision, lane ARCH: the revised storeys — station + floors 1..3 — and lane GEN's new poses: corridor wings,
+    // wing ends; no bridges)
+    const poses: [Parameters<typeof mallQaPose>[1], number?][] = [['platform-lookup'], ['court'], ['ring-edge', 1], ['ring-edge', 2], ['ring-edge', 3],
+      ['shopfront', 1], ['shopfront', 3], ['escalator', 0], ['escalator', 1], ['escalator', 2], ['corridor', 1], ['corridor', 3], ['wing-end', 2], ['elevator'], ['washrooms', 1]];
     const culledLayer = new THREE.Layers();
     culledLayer.set(CULL_LAYER);
     const out: string[] = [];
@@ -440,6 +460,7 @@ describe('the REAL mall (seed t3a, the primary\'s QA seed): GPU working-set budg
       const drawn = drawnBy([world.group], cam);
       out.push(`${name}${ring ?? ''}: drawn ${drawn.length} / ${(trisOf(drawn) / 1e6).toFixed(2)} M tris, slab-culled ${world.culler.slabCulled}, oracle-visible ${seen.size}, visible-but-culled ${hidden.length}${hidden.length ? ` (${hidden.slice(0, 5).map(m => m.name).join(', ')})` : ''}, any-rule ${hiddenAll.length}`);
       if (pre.length) out.push(`  (culled with slab occlusion OFF — the 20 m atrium margin alone: ${pre.map(m => `${m.name} ${seen.get(m)}px`).join(', ')})`);
+      if (hiddenAll.length && process.env.LL_MALL_BUDGET_OUT) writeFileSync(process.env.LL_MALL_BUDGET_OUT.replace(/\.json$/, '') + '-hidden.json', JSON.stringify(hiddenAll.map(m => ({pose: `${name}${ring ?? ''}`, mesh: m.name, level: m.userData.level, levels: m.userData.levels, box: new THREE.Box3().setFromObject(m), eye: cam.position.toArray(), slabOff: before.has(m), visibleLevels: [...world.culler.stats.visibleLevels], atrium: world.culler.atriumStats})), null, 1));
       expect(hidden.map(m => `${name}${ring ?? ''}: ${m.name} (${seen.get(m)} px)`)).toEqual([]);
       expect(hiddenAll.map(m => `${name}${ring ?? ''}: ${m.name} (${seen.get(m)} px)`)).toEqual([]);
       checked++;

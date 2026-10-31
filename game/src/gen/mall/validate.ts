@@ -183,19 +183,17 @@ export function mallRouteGroups(layout: StationLayout): {id: string; kind: strin
   const info = layout.mall;
   if (!info) return [];
   const g0 = layout.grid;
-  const out: {id: string; kind: string; cells: number[]}[] = [];
-  const byArea = new Map<number, {id: string; kind: string; cells: number[]}>();
+  const out: {id: string; kind: string; cells: number[]; box: {x0: number; y0: number; x1: number; y1: number}}[] = [];
   for (const a of layout.areas) {
     if (a.role !== 'stair' || a.ext) continue;
     const core = a.type === 'stair-core' && !a.publicSpace;
-    // service-stair runs of one core share the core's column: group them by the well's x (cores are separate wells)
-    const key = core ? `core@${a.x}` : `run#${a.id}`;
-    let grp = out.find(q => q.id === key);
-    if (!grp) { grp = {id: key, kind: core ? 'service-stair' : a.label.startsWith('Escalators') ? 'escalator' : 'stair', cells: []}; out.push(grp); }
+    // the service-stair runs of one core (two scissor lanes side by side) are ONE group: cluster runs whose rects nearly touch
+    let grp = core ? out.find(q => q.kind === 'service-stair' && a.x <= q.box.x1 + 2 && a.x + a.w >= q.box.x0 - 2 && a.y <= q.box.y1 + 2 && a.y + a.h >= q.box.y0 - 2) : undefined;
+    if (!grp) { grp = {id: core ? `core#${a.id}` : `run#${a.id}`, kind: core ? 'service-stair' : a.label.startsWith('Escalators') ? 'escalator' : 'stair', cells: [], box: {x0: a.x, y0: a.y, x1: a.x + a.w, y1: a.y + a.h}}; out.push(grp); }
+    grp.box = {x0: Math.min(grp.box.x0, a.x), y0: Math.min(grp.box.y0, a.y), x1: Math.max(grp.box.x1, a.x + a.w), y1: Math.max(grp.box.y1, a.y + a.h)};
     for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) grp.cells.push(g0.idx(x, y));
-    byArea.set(a.id, grp);
   }
-  return out;
+  return out.map(({id, kind, cells}) => ({id, kind, cells}));
 }
 
 /** Grid cell indices (layout grid) inside a polygon (cell centres) within its bounds. */

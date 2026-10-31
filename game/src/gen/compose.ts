@@ -28,7 +28,7 @@ import {wallBackedRuns} from './doorways';
 import {
   WALL_ROT, areaBase, areaLevel, backed, begin, boxClear, cellsOfBox, commit, doorSide, hangProp, levelLinksOf, levelRole, markCell, propBlocksDoorway,
   mountProp, rollback, tryPlaceProp, wallRange, wallXZ, type PlaceCtx,
-  reserveAhead, strictWallOk, // Task mall-playtest-revision-20261031 (lane SHOPS, U09)
+  reserveAhead, strictWallOk, vendingCapReached, // Task mall-playtest-revision-20261031 (lane SHOPS, U09)
 } from './placeKit';
 import type {Area, Door, Side, StationLayout} from './stationTypes';
 
@@ -637,6 +637,7 @@ function wallMember(cc: CC, ctx: PlaceCtx, a: Area, side: Side, t: number, kind:
   if (!backed(ctx, a, side, t - extent / 2, t + extent / 2, base)) return null;
   // Task mall-playtest-revision-20261031 (lane SHOPS, U09): a mall (strict-wall) vending machine also keeps its approach + passing lane
   if (ctx.strictWalls && kind === 'vending' && !along && !strictWallOk(ctx, a, side, t, kind)) return null;
+  if (kind === 'vending' && vendingCapReached(ctx, a)) return null; // (U09: the mall storey's public vending cap; no-op elsewhere)
   const [x, z] = wallXZ(a, side, t, depth / 2 + 0.03);
   const rot = WALL_ROT[side] + (along ? Math.PI / 2 : 0);
   const {hx, hz} = footprint(kind, rot);

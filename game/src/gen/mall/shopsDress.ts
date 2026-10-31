@@ -129,6 +129,8 @@ const snapUp = (v: number) => Math.ceil(v / CELL - 1e-6) * CELL;
 const snapDn = (v: number) => Math.floor(v / CELL + 1e-6) * CELL;
 /** Access strip (m) kept in front of a holder / display (customers stand there to reach it). */
 const HOLDER_FRONT = 0.8;
+/** Free floor (m) kept beside both ends of a wall-placed kind whose lid / flaps need room (U10 follow-up: the flap-top carton). */
+const SIDE_GAP: Readonly<Partial<Record<PropKind, number>>> = {cardboardBoxFlaps: 0.35};
 /** Task mall-playtest-revision-20261031 (lane SHOPS, D02): lattice spots tried per island the coarse grid could not place. */
 const ISLAND_FILL_TRIES = 40;
 
@@ -300,7 +302,25 @@ export class ShopDresser {
         const along = Math.round(this.rng.range(lo + def.w / 2 + 0.15, hi - def.w / 2 - 0.15) * 4) / 4;
         const s = wallSpot(this.a, wall, along, kind);
         const p = tryPlaceProp(this.ctx, this.a, kind, r3(s.x), r3(s.z), s.rot, {front: o.front ?? frontFor(kind)});
-        if (p) { this.placed.push(p); k++; break; }
+        if (p) {
+          this.placed.push(p); k++;
+          // Task mall-playtest-revision-20261031 (lane SHOPS, U10 follow-up): a flap-top carton keeps SIDE_GAP free beside both ends
+          // along the wall — a carton stack pressed against it cramped its flaps to 10-20 degrees (its finds hidden)
+          const gap = SIDE_GAP[kind];
+          if (gap) {
+            const hw = PROP_DEFS[kind].w / 2, hd = PROP_DEFS[kind].d / 2;
+            for (const sgn of [-1, 1]) {
+              const c = along + sgn * (hw + gap / 2);
+              const [x0, z0] = alongX ? [c - gap / 2, s.z - hd] : [s.x - hd, c - gap / 2], [x1, z1] = alongX ? [c + gap / 2, s.z + hd] : [s.x + hd, c + gap / 2];
+              const [cx0, cy0, cx1, cy1] = cellsOfBox((x0 + x1) / 2, (z0 + z1) / 2, (x1 - x0) / 2, (z1 - z0) / 2);
+              for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) {
+                const g = this.ctx.g;
+                if (g.inBounds(cx, cy) && g.area[g.idx(cx, cy)] === this.a.id && !g.blocked[g.idx(cx, cy)]) markCell(this.ctx, this.ctx.keep, g.idx(cx, cy));
+              }
+            }
+          }
+          break;
+        }
       }
     }
     return k;
@@ -473,7 +493,7 @@ function windowDisplay(d: ShopDresser, kind: PropKind, n: number): number {
  */
 const FOCAL: Partial<Record<MallRecipe, readonly KindV[]>> = {
   guns: [['gunDisplay', 0]], clothing: [['mannequinFull', 0], ['mannequinFull', 1]], department: [['mannequinFull', 0], ['mannequinFull', 1]],
-  shoes: [['merchTable', 0]], sports: [['merchTable', 0]], outdoors: [['tentDisplay', 0]], electronics: [['merchTable', 0]], phone: [['techDisplay', 0]],
+  shoes: [['merchTable', 0]], sports: [['merchTable', 0]], outdoors: [['merchTable', 0]], electronics: [['merchTable', 0]], phone: [['techDisplay', 0]],
   books: [['merchTable', 0]], toys: [['giantTeddy', 0]], home: [['merchTable', 0]], beauty: [['glassCounter', 0]], jewelry: [['glassCounter', 0]],
   optical: [['glassCounter', 0]], music: [['merchTable', 0]], pet: [['catTree', 0]], luggage: [['rollingSuitcase', 0], ['rollingSuitcase', 1]],
   florist: [['planterTree', 0]],
@@ -483,9 +503,13 @@ function focalDisplay(d: ShopDresser, f: MallShopFit): PropPlacement[] {
   const kinds = FOCAL[f.recipe];
   if (!kinds || f.kind === 'kiosk' || f.kind === 'food' || f.kind === 'service' || f.kind === 'vacant') return [];
   const {fr, W, D} = d;
+  // a compact gun shop's counter run crosses the floor 3.5 m in: a bench on the axis would stand in its customer strip — its benches
+  // come after the counter (guns recipe)
+  if (f.recipe === 'guns' && D < 8) return [];
   const end = d.lot?.shape === 'end';
   const u0 = end ? W / 2 : (fr.entry[0] + fr.entry[1]) / 2;
-  const v0 = end ? Math.max(3.0, D * 0.4) : Math.min(Math.max(2.6, D * 0.3), Math.max(2.6, D - 2.4));
+  // just past the 2 m entry keep-out; in a compact unit (D < 8) as shallow as that allows, so the counter run / till behind it fits
+  const v0 = end ? Math.max(3.0, D * 0.4) : D < 8 ? 2.4 : Math.min(Math.max(2.6, D * 0.3), Math.max(2.6, D - 2.4));
   const out: PropPlacement[] = [];
   const pair = kinds.length > 1;
   for (const [k, [kind, variant]] of kinds.entries()) {
@@ -493,7 +517,7 @@ function focalDisplay(d: ShopDresser, f: MallShopFit): PropPlacement[] {
     for (const [eu, ev] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [1, 0], [-1, 0]]) {
       const u = Math.round((u0 + du + eu) * 4) / 4, v = Math.round((v0 + ev) * 4) / 4;
       if (u < 0.5 || u > W - 0.5) continue;
-      const p = d.put(kind, u, v, fr.face, {ring: pair ? 0.5 : 0.8, variant});
+      const p = d.put(kind, u, v, fr.face, {ring: 0.5, variant}); // (a 0.5 m walk-round: an 0.8 m ring kept compact units' counters out)
       if (p) { out.push(p); break; }
     }
   }
@@ -513,13 +537,15 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.sideRow(d.rng.chance(0.5) ? 'L' : 'R', [['gunLocker', 0], ['cabinetTall', 0]], V + 1.6, D - 0.2, {max: 1});
     // the counter run (glass display counters + a till), a staff gap at one end
     const gapR = d.rng.chance(0.5);
-    const run = d.counterRun([['glassCounter', 0], ['glassCounter', 0], ['shopCounter', 0], ['glassCounter', 0]], V, gapR ? 0.3 : 1.3, gapR ? W - 1.3 : W - 0.3);
+    // (mall revision: a compact unit's run holds two or three modules — the till goes second so it is always there)
+    const runKinds: readonly KindV[] = W < 8 ? [['glassCounter', 0], ['shopCounter', 0], ['glassCounter', 0]] : [['glassCounter', 0], ['glassCounter', 0], ['shopCounter', 0], ['glassCounter', 0]];
+    const run = d.counterRun(runKinds, V, gapR ? 0.3 : 1.3, gapR ? W - 1.3 : W - 0.3);
     const till = run.find(p => p.kind === 'shopCounter');
     if (till) d.onTop(till, 'cashRegister', 0.35);
     // customer side: display benches (the weapon finds), accessory bays + ammo shelving along the side walls
     const benches = d.islands('gunDisplay', per(d, 45, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: V - 1.0}, {ring: 0.8}).length;
     if (!benches && !d.sideRows([['gunDisplay', 0]], 1.4, V - 0.6, {max: 1})) d.againstWall('gunDisplay', 1, {front: 0.9});
-    d.sideRows([['wallBay', 0], ['shelf', 0]], 1.4, V - 0.9);
+    d.sideRows([['wallBay', 0], ['shelf', 0]], D < 8 ? 0.8 : 1.4, V - 0.9); // (compact: the side walls from just behind the glazing)
     d.islands('merchTable', per(d, 90, 0, 2), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: V - 1.0}, {ring: 0.9});
     d.againstWall('bin', 1);
   },
@@ -593,7 +619,7 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const {W, D} = d;
     d.backRow([['repairBench', 1], ['glassCounter', 0], ['shopCounter', 0]], 0.3, W - 0.3);
     d.sideRows([['deviceWall', 0], ['glassDisplayCabinet', 0]], 1.4, D - 1.2);
-    d.islands('techDisplay', per(d, 35, 1, 4), {u0: 1.6, u1: W - 1.6, v0: 2.2, v1: D - 1.9}, {ring: 0.9});
+    d.islands('techDisplay', per(d, 18, 2, 4), {u0: 1.6, u1: W - 1.6, v0: 2.2, v1: D - 1.9}, {ring: 0.9}); // (mall revision: a phone shop is dense with demo tables)
     d.againstWall('spinnerRack', 1);
   },
   hardware(d) {
@@ -827,7 +853,7 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     for (const p of d.placed) if (p.kind === 'cabinetLow') boards.push(p);
     for (const b of boards) d.onTop(b, 'aquarium', 0);
     cashWrap(d, [['shopCounter', 0]], 1, 2.0);
-    d.sideRows([['stockShelf', sv('grocery')], ['wallBay', 0]], 2.6, D - 1.2);
+    d.sideRows([['stockShelf', sv('grocery')], ['wallBay', 0]], 1.4, D - 1.2); // (mall revision: from 1.4 m — a compact pet shop's side walls are short)
     if (W * D >= 100) d.aisles('retailGondola', [0], {u0: W * 0.5, u1: W - 1.3, v0: 3.2, v1: D - 1.6}, 1.2);
     d.islands('catTree', per(d, 50, 1, 3), {u0: 1.4, u1: W - 1.4, v0: 2.4, v1: D - 1.8}, {ring: 0.7});
     d.islands('merchTable', 1, {u0: 1.8, u1: W - 1.8, v0: 2.6, v1: D - 2.2}, {ring: 0.9});
@@ -925,8 +951,8 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     const {W, D} = d;
     // a stripped unit: a leftover shelf or two, sealed cartons, a crate, a ladder, rubbish, a barricade
     d.backRow([['shelf', 0]], 0.3, W - 0.3, {max: d.rng.int(0, 2)});
+    d.againstWall('cardboardBoxFlaps', 1); // (before the carton stacks: its side gaps keep them off its flaps)
     d.againstWall('cartonStack', d.rng.int(1, 2));
-    d.againstWall('cardboardBoxFlaps', 1);
     d.againstWall('crate', d.rng.int(0, 2));
     d.againstWall('stepLadder', d.rng.chance(0.5) ? 1 : 0);
     d.againstWall('trashBagPile', 1);

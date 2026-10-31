@@ -57,20 +57,20 @@ export function mallQaPose(layout: StationLayout, name: MallPoseName, ring?: num
     }
     case 'ring-edge': {
       const lv = Math.max(1, Math.min(top, ring ?? 2));
-      // The gallery cell on the void's north rim nearest the void's middle column, 0.6 m back from the rail.
+      // a walkway cell on that floor's opening rim (north side), near the opening's middle column, 0.35 m back from the rail
+      const op = m.void.openings?.find(o => o.level === lv);
+      const ob = op?.bounds ?? vb, ocx = (ob.x0 + ob.x1) / 2, ocz = (ob.z0 + ob.z1) / 2;
       const g = layout.levels[lv].grid;
-      const [cx] = g.cellOf(vcx, vcz);
-      for (let d = 0; d < g.w; d++) for (const x of [cx + d, cx - d]) {
-        for (let y = 1; y < g.h - 1; y++) {
-          const i = g.idx(x, y);
-          if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i]) continue;
-          const below = g.idx(x, y + 1);
-          if (g.cells[below] === FLOOR) continue;
+      const [cx] = g.cellOf(ocx, ocz);
+      const [, y0] = g.cellOf(ocx, ob.z0 - 3), [, y1] = g.cellOf(ocx, ocz);
+      for (let d = 0; d < 40; d++) for (const x of [cx + d, cx - d]) {
+        for (let y = Math.max(1, y0); y <= y1 && y < g.h - 1; y++) {
+          const i = g.idx(x, y), below = g.idx(x, y + 1);
+          if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i] || g.cells[below] !== 0 /* SOLID */) continue;
+          // the cell beyond is open below (a lower storey's band rises past this floor)
+          if (!layout.levels.some(L => L.id < lv && L.grid.cells[below] !== 0 && L.grid.ceil[below] > base(lv) + 1)) continue;
           const [wx, wz] = g.center(x, y);
-          if (wz < vb.z0 - 1 || wz > vcz) continue;
-          // the next cell south is the void (not a wall): its station band rises past this storey
-          if (layout.grid.cells[below] === 0 || layout.grid.ceil[below] < base(lv) + 2) continue;
-          return pose(lv, wx, wz - 0.35, yawTo(wx, wz, vcx, vb.z1), -0.35);
+          return pose(lv, wx, wz - 0.35, yawTo(wx, wz, ocx, ob.z1), -0.35);
         }
       }
       return null;

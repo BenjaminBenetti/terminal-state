@@ -87,7 +87,7 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
   'kiosk-cell': {
     id: 'kiosk-cell', label: 'Kiosk cell', shape: 'cell', width: [3, 4], depth: [2.5, 3.5], stock: 'none', stockSize: [0, 0],
     front: 'open', frontages: 1, zones: ['atrium', 'corridor', 'court', 'corner'],
-    programs: ['kiosk'], kinds: ['kiosk'], service: false, vacant: false, weight: 0.8, maxPerMall: 4,
+    programs: ['kiosk'], kinds: ['kiosk'], service: false, vacant: false, weight: 0.4, maxPerMall: 3,
     layout: 'open counter across the front (roll shutter), one back-wall rack; no stockroom, no aisle',
   },
   'food-counter': {
@@ -100,21 +100,21 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
     id: 'compact-square', label: 'Compact unit', shape: 'square', width: [5.5, 7.5], depth: [5.5, 7.5], stock: 'small-rear', stockSize: [1.5, 2.5],
     front: 'glazed', frontages: 1, zones: ['atrium', 'corridor', 'court'],
     programs: ['cafe', 'phone', 'pharmacy', 'jewelry', 'optical', 'beauty', 'florist', 'pet', 'music', 'luggage', 'clinic', 'guns', 'shoes'],
-    kinds: ['store'], service: true, vacant: true, weight: 1.4, maxPerMall: 8,
+    kinds: ['store'], service: true, vacant: true, weight: 1.0, maxPerMall: 8,
     layout: 'till by the entry, wall runs on three sides, one centre table / gondola; a small rear store behind a staff door',
   },
   'narrow-boutique': {
     id: 'narrow-boutique', label: 'Narrow boutique', shape: 'narrow-deep', width: [4.5, 6], depth: [9, 13], stock: 'small-rear', stockSize: [2, 2.5],
     front: 'glazed', frontages: 1, zones: ['corridor', 'atrium'],
     programs: ['clothing', 'shoes', 'jewelry', 'beauty', 'music', 'optical', 'guns', 'phone', 'luggage', 'pharmacy', 'toys'],
-    kinds: ['store'], service: true, vacant: true, weight: 1.3, maxPerMall: 6,
+    kinds: ['store'], service: true, vacant: true, weight: 1.0, maxPerMall: 6,
     layout: 'window display at the front, wall runs down both long sides, the till and fitting / back area at the far end',
   },
   'wide-showroom': {
     id: 'wide-showroom', label: 'Wide showroom', shape: 'wide-shallow', width: [12, 17], depth: [5.5, 7.5], stock: 'side', stockSize: [2.5, 3.5],
     front: 'wide', frontages: 1, zones: ['atrium', 'corridor', 'court'],
     programs: ['electronics', 'home', 'sports', 'shoes', 'toys', 'outdoors', 'arcade', 'music', 'beauty', 'pharmacy'],
-    kinds: ['store'], service: false, vacant: true, weight: 0.9, maxPerMall: 3,
+    kinds: ['store'], service: false, vacant: true, weight: 1.2, maxPerMall: 4,
     layout: 'long glazed frontage, display islands parallel to it, back-wall bays; the stock closet is a side room at one end',
   },
   'corner-double': {
@@ -128,7 +128,7 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
     id: 'standard-line', label: 'In-line store', shape: 'rect', width: [8, 11], depth: [9, 12.5], stock: 'service-corridor', stockSize: [2.5, 3.5],
     front: 'glazed', frontages: 1, zones: ['corridor', 'atrium', 'court'],
     programs: ['clothing', 'books', 'sports', 'outdoors', 'toys', 'hardware', 'pharmacy', 'electronics', 'home', 'pet', 'arcade', 'guns', 'shoes', 'music', 'grocery'],
-    kinds: ['store'], service: true, vacant: true, weight: 1.2, maxPerMall: 8,
+    kinds: ['store'], service: true, vacant: true, weight: 1.6, maxPerMall: 8,
     layout: 'gondola aisles perpendicular to the frontage, wall bays, cash wrap near the entry; a rear stockroom, staff door to the service corridor when one runs behind',
   },
   'recessed-arcade': {

@@ -8,8 +8,8 @@
 // land in the outfitter / security office instead. The plan also filtered the stock by the run's start weapon (stream
 // `mall-weapons:<start>`): physical shop stock depended on the player's loadout. Replaced by a PER-GUN-SHOP allocation:
 //  - STOCK (gunShopStock): every gun shop draws its OWN stock from (level seed, shop id) — stream `mall-gunshop:<shop id>`, independent
-//    per shop: 0 guns with p GUN_SHOP_STOCK.none (5 %), 1 with 90 %, 2 with 5 % => exactly 1.0 gun per gun shop in expectation,
-//    bounded (MAX_GUNS_PER_SHOP 2; P(empty) 5 %, documented). Which guns: GUN_SHOP_WEAPONS weights (pistol / shotgun / rifle), two
+//    per shop: 0 guns with p GUN_SHOP_STOCK.none (2 %), 1 with 96 %, 2 with 2 % => exactly 1.0 gun per gun shop in expectation,
+//    bounded (MAX_GUNS_PER_SHOP 2; P(empty) 2 %, documented — rare on purpose: an empty gun shop was the playtest complaint). Which guns: GUN_SHOP_WEAPONS weights (pistol / shotgun / rifle), two
 //    different guns when it stocks two. At most MAX_STOCKED_GUN_SHOPS (2) gun shops per mall are stocked (the catalogue caps gun shops
 //    at 2 anyway), so a mall holds 0..4 shop guns, ~1.35 on average with the catalogue's ~35 % second gun shop.
 //  - LOADOUT-FREE: the start weapon, the inventory, a Travel arrival and earlier visits never enter the plan — the stock is a fact of
@@ -38,8 +38,8 @@ import {frameOf, frontageSide, uvXZ} from './shopsDress';
 
 /** The real guns a mall gun shop can stock (the knife is melee, never a find). */
 export const MALL_FIND_WEAPONS = ['pistol', 'shotgun', 'rifle'] as const;
-/** Per-gun-shop stock draw r: r < none -> 0 guns, r < one -> 1 gun, else MAX_GUNS_PER_SHOP. E = 0.90 + 2 x 0.05 = 1.0. */
-export const GUN_SHOP_STOCK = {none: 0.05, one: 0.95} as const;
+/** Per-gun-shop stock draw r: r < none -> 0 guns, r < one -> 1 gun, else MAX_GUNS_PER_SHOP. E = 0.96 + 2 x 0.02 = 1.0. */
+export const GUN_SHOP_STOCK = {none: 0.02, one: 0.98} as const;
 export const MAX_GUNS_PER_SHOP = 2;
 /** Gun shops stocked per mall (sorted by shop id; the catalogue never makes more than 2). */
 export const MAX_STOCKED_GUN_SHOPS = 2;
@@ -51,7 +51,7 @@ export function gunShopStockDistribution(): {guns: number; p: number}[] {
   return [{guns: 0, p: GUN_SHOP_STOCK.none}, {guns: 1, p: GUN_SHOP_STOCK.one - GUN_SHOP_STOCK.none}, {guns: MAX_GUNS_PER_SHOP, p: 1 - GUN_SHOP_STOCK.one}];
 }
 /** One-line description of the plan (tools/pages/lootReference.ts reads it). */
-export const MALL_WEAPON_PLAN_SUMMARY = `Per gun shop (gen/mall/shopsWeapons.ts gunShopStock / placeMallWeapons): every gun shop draws its own stock from the level seed and its shop id (stream mall-gunshop:<shop id>, independent per shop): 0 guns ${GUN_SHOP_STOCK.none * 100} %, 1 gun ${Math.round((GUN_SHOP_STOCK.one - GUN_SHOP_STOCK.none) * 100)} %, ${MAX_GUNS_PER_SHOP} different guns ${Math.round((1 - GUN_SHOP_STOCK.one) * 100)} % (1.0 per gun shop on average; pistol / shotgun / rifle weights ${GUN_SHOP_WEAPONS.map(w => w[1]).join(' / ')}), at most ${MAX_STOCKED_GUN_SHOPS} gun shops stocked. Each gun lies on one of its shop's display benches (else its gun rack's cradle shelf, else its floor near the counter) with ONE box of its own calibre beside it. Independent of the start weapon, the inventory and Travel; layout pickups, so taken stays taken.`;
+export const MALL_WEAPON_PLAN_SUMMARY = `Per gun shop (gen/mall/shopsWeapons.ts gunShopStock / placeMallWeapons): every gun shop draws its own stock from the level seed and its shop id (stream mall-gunshop:<shop id>, independent per shop): 0 guns ${Math.round(GUN_SHOP_STOCK.none * 100)} %, 1 gun ${Math.round((GUN_SHOP_STOCK.one - GUN_SHOP_STOCK.none) * 100)} %, ${MAX_GUNS_PER_SHOP} different guns ${Math.round((1 - GUN_SHOP_STOCK.one) * 100)} % (1.0 per gun shop on average; pistol / shotgun / rifle weights ${GUN_SHOP_WEAPONS.map(w => w[1]).join(' / ')}), at most ${MAX_STOCKED_GUN_SHOPS} gun shops stocked. Each gun lies on one of its shop's display benches (else its gun rack's cradle shelf, else its floor near the counter) with ONE box of its own calibre beside it. Independent of the start weapon, the inventory and Travel; layout pickups, so taken stays taken.`;
 
 export interface MallWeaponPlanEntry {
   weapon: string;

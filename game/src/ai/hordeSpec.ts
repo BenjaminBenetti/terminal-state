@@ -45,6 +45,13 @@ export interface HordePlacementRules {
   readonly clusterM: number;
   /** Members keep this far (m) from enemies already placed on the storey (the ambient pool). */
   readonly ambientSpacingM: number;
+  /**
+   * Task mall-playtest-revision-20261031 (lane PROFILES, D07): ROUTE CAPACITY — patrol-route metres per member. The groups starting
+   * on a storey hold at most floor(R / routeMPerMember) members, R = the storey's walkable patrol route (the summed length of its
+   * same-storey patrol edges, ai/hordePlace.ts patrolRouteM); a storey whose capacity is below a minimum group takes none. Absent =
+   * no route bound (the budgets alone). It never changes a draw: it only clips a group's size / removes a storey option.
+   */
+  readonly routeMPerMember?: number;
 }
 
 export interface HordePatrolRules {
@@ -86,18 +93,21 @@ export interface HordeGroupSpec {
 }
 
 /**
- * The Eaton's Center hordes (lane HORDE proposal; PROFILES owns SPAWN_PROFILES.mall.horde and may spread / tune this): 3..5 groups
- * of 5..20 ordinary zombies (the user's full range), at most 64 horde members in the mall, one group (<= 20) starting per ring
- * storey, never within 45 walking metres of the subway start. Ordinary zombies only (rat/dog listed with weight 0: excluded).
+ * The mall's hordes (lane HORDE's model; lane PROFILES owns SPAWN_PROFILES.mall.horde and these numbers). Task
+ * mall-playtest-revision-20261031 (lane PROFILES, D07): re-proportioned for the COMPACT mall (station + 3 retail floors, ~5,200 m² of
+ * retail floor with 150-500 m of patrol route per floor; was 6 rings / ~40,000 m²): 1..2 groups (was 3..5) of 5..20 ordinary zombies
+ * (the user's range), at most 32 horde members in the mall (was 64), one group (<= 20) starting per retail floor, a group never larger
+ * than its start floor's route holds (18 route metres per member: a big floor-1 loop takes 20, a short top-floor court ~8-16), never
+ * within 45 walking metres of the subway start. Ordinary zombies only (rat/dog listed with weight 0: excluded).
  */
 export const MALL_HORDE_RULES: HordeRules = {
   label: 'Roaming hordes',
-  groups: [3, 5],
+  groups: [1, 2],
   size: [HORDE_GROUP_SIZE.min, HORDE_GROUP_SIZE.max],
   families: [['zombie', 1], ['ratdog', 0]],
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
-  budget: {total: 64, perStorey: 20, groupsPerStorey: 1},
-  placement: {storeys: 'rings', startM: 45, groupSpacingM: 30, memberSpacingM: 1.1, clusterM: 7, ambientSpacingM: 2.5},
+  budget: {total: 32, perStorey: 20, groupsPerStorey: 1},
+  placement: {storeys: 'rings', startM: 45, groupSpacingM: 30, memberSpacingM: 1.1, clusterM: 7, ambientSpacingM: 2.5, routeMPerMember: 18},
   patrol: {speed: 0.45, storeyChange: 0.3, pauseChance: 0.35, pause: [2, 7]},
 };
 
@@ -162,9 +172,10 @@ export function validateHordeRules(h: HordeRules, familyIds: readonly string[], 
   const p = h.placement;
   if (!p || typeof p !== 'object') bad('placement', 'missing');
   else {
-    known('placement', p, ['storeys', 'startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM']);
+    known('placement', p, ['storeys', 'startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM', 'routeMPerMember']);
     if (p.storeys !== 'rings' && !(Array.isArray(p.storeys) && p.storeys.every(nonNegInt))) bad('placement.storeys', `${JSON.stringify(p.storeys)} is not 'rings' or storey indices`);
     for (const k of ['startM', 'groupSpacingM', 'memberSpacingM', 'clusterM', 'ambientSpacingM'] as const) num(`placement.${k}`, p[k]);
+    if (p.routeMPerMember !== undefined && !(finiteNonNeg(p.routeMPerMember) && p.routeMPerMember > 0)) bad('placement.routeMPerMember', `${String(p.routeMPerMember)} is not a finite length > 0`);
     if (finiteNonNeg(p.memberSpacingM) && p.memberSpacingM < 0.8) bad('placement.memberSpacingM', 'members would overlap (bodies are ~0.7 m wide)');
   }
   const q = h.patrol;

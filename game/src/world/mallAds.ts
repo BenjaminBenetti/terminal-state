@@ -74,7 +74,8 @@ const PAL: Partial<Record<MallProgram | 'mall', AdPalette>> = {
   florist: {bg: '#5a8a5a', bg2: '#e88aa0', ink: '#fff6f0', accent: '#e88aa0', cloth: []},
   hardware: {bg: '#d29a1e', bg2: '#1a1a1a', ink: '#1a1a1a', accent: '#f4f0e0', cloth: []},
   guns: {bg: '#1b1c1d', bg2: '#3a3a30', ink: '#e8e2d2', accent: '#c8452e', cloth: []},
-  mall: {bg: '#1f2b38', bg2: '#d9a520', ink: '#f2efe6', accent: '#d9a520', cloth: ['#8a1f24', '#2f3b52', '#c8a26a', '#3e4a3a', '#e9e1d4', '#5a4a6a']},
+  vacant: {bg: '#cfccc4', bg2: '#8a8680', ink: '#2a2826', accent: '#c8452e', cloth: []},
+  mall: {bg: '#1f2b38', bg2: '#3e5a74', ink: '#f2efe6', accent: '#d9a520', cloth: ['#8a1f24', '#c8a26a', '#3e4a3a', '#e9e1d4', '#5a4a6a', '#b0485a']},
 };
 const GENERIC: AdPalette = {bg: '#2c3a46', bg2: '#8ab0c8', ink: '#eef2f4', accent: '#d9a520', cloth: ['#8a1f24', '#2f3b52', '#c8a26a']};
 export const adPalette = (p: MallProgram | 'mall'): AdPalette => PAL[p] ?? GENERIC;
@@ -93,6 +94,7 @@ const HEADLINES: Partial<Record<MallProgram | 'mall', string[]>> = {
   toys: ['PLAY TIME', 'NEW TOYS'], home: ['HOME REFRESH', 'COSY NIGHTS'], pet: ['HAPPY PETS', 'TREAT TIME'], florist: ['FRESH BLOOMS'],
   hardware: ['DIY WEEKEND', 'TOOLS 30% OFF'], guns: ['RANGE OPEN', 'HUNTING SEASON', 'SAFETY FIRST'],
   mall: ['SUMMER SALE', 'GIFT CARDS', 'OPEN 7 DAYS', 'NEW STORES', 'SHOP LATE'],
+  vacant: ['FOR LEASE', 'AVAILABLE', 'COMING SOON', 'NOW LEASING'],
 };
 
 type Ctx = CanvasRenderingContext2D;
@@ -203,13 +205,18 @@ function drawMotif(ctx: Ctx, program: MallProgram | 'mall', cx: number, cy: numb
       else { stroke(pal.accent, S * 0.06); circ(S * 0.2, S * 0.05, S * 0.45); ctx.stroke(); ctx.beginPath(); ctx.moveTo(S * 0.2, -S * 0.5); ctx.lineTo(S * 0.2, S * 0.6); ctx.moveTo(-S * 0.35, S * 0.05); ctx.lineTo(S * 0.75, S * 0.05); ctx.stroke(); }
       break;
     }
+    case 'vacant': { // a key (leasing)
+      stroke(pal.ink, S * 0.14); circ(-S * 0.45, 0, S * 0.32); ctx.stroke();
+      fill(pal.ink); ctx.fillRect(-S * 0.15, -S * 0.07, S * 1.0, S * 0.14); ctx.fillRect(S * 0.55, S * 0.05, S * 0.12, S * 0.25); ctx.fillRect(S * 0.3, S * 0.05, S * 0.1, S * 0.18);
+      break;
+    }
     case 'books': for (let i = 0; i < 5; i++) { fill(['#8a2e2a', '#c8a050', '#2f4a6a', '#f0e6cc', '#4a6a3a'][i]); ctx.fillRect(-S * 0.8 + i * S * 0.08, S * 0.5 - (i + 1) * S * 0.24, S * 1.5, S * 0.21); } break;
     case 'toys': { fill('#e8453a'); ctx.fillRect(-S * 0.8, S * 0.1, S * 0.6, S * 0.6); fill('#e8c547'); ctx.fillRect(-S * 0.2, S * 0.1, S * 0.6, S * 0.6); fill('#4a9a5a'); ctx.fillRect(-S * 0.5, -S * 0.5, S * 0.6, S * 0.6); fill('#c8945a'); circ(S * 0.55, -S * 0.1, S * 0.32); ctx.fill(); circ(S * 0.38, -S * 0.42, S * 0.12); ctx.fill(); circ(S * 0.72, -S * 0.42, S * 0.12); ctx.fill(); break; }
     case 'home': { fill(pal.accent); rr(-S * 0.9, S * 0.05, S * 1.4, S * 0.45, S * 0.1); ctx.fill(); rr(-S * 0.9, -S * 0.2, S * 0.3, S * 0.6, S * 0.08); ctx.fill(); rr(S * 0.2, -S * 0.2, S * 0.3, S * 0.6, S * 0.08); ctx.fill(); fill(pal.ink); ctx.fillRect(S * 0.7, -S * 0.6, S * 0.04, S * 1.1); fill('#f2e2a0'); ctx.beginPath(); ctx.moveTo(S * 0.55, -S * 0.55); ctx.lineTo(S * 0.9, -S * 0.55); ctx.lineTo(S * 0.82, -S * 0.85); ctx.lineTo(S * 0.63, -S * 0.85); ctx.closePath(); ctx.fill(); break; }
     case 'pet': { fill(pal.ink); ctx.beginPath(); ctx.ellipse(0, S * 0.25, S * 0.4, S * 0.32, 0, 0, Math.PI * 2); ctx.fill(); for (const [dx, dy] of [[-0.5, -0.15], [-0.18, -0.5], [0.18, -0.5], [0.5, -0.15]]) { circ(dx * S, dy * S, S * 0.15); ctx.fill(); } break; }
     case 'hardware': { stroke(pal.ink, S * 0.16); ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(-S * 0.6, S * 0.6); ctx.lineTo(S * 0.3, -S * 0.3); ctx.stroke(); ctx.beginPath(); ctx.arc(S * 0.45, -S * 0.45, S * 0.3, 0.8, Math.PI * 2 - 0.8); ctx.stroke(); fill(pal.accent); ctx.fillRect(-S * 0.1, -S * 0.75, S * 0.75, S * 0.18); fill('#6a4a2a'); ctx.fillRect(S * 0.2, -S * 0.6, S * 0.12, S * 1.2); break; }
     default: { // shopping bags (mall / generic)
-      for (const [dx, c] of [[-0.35, pal.accent], [0.3, pal.bg2]] as const) {
+      for (const [dx, c] of [[-0.35, pal.accent], [0.3, '#e9e1d4']] as const) {
         fill(c as string); ctx.fillRect((dx - 0.3) * S, -S * 0.2, S * 0.6, S * 0.8);
         stroke(c as string, S * 0.06); ctx.beginPath(); ctx.arc(dx * S, -S * 0.2, S * 0.18, Math.PI, Math.PI * 2); ctx.stroke();
       }
@@ -311,7 +318,11 @@ export function adTexture(ad: MallAd, brand: string): THREE.CanvasTexture {
 // Gallery billboards (lane ARCH's own placement, from the built wall faces)
 
 /** A candidate wall face (world): a straight run with its open-side normal, storey and y span. */
-export interface AdWall { level: number; x0: number; z0: number; x1: number; z1: number; nx: number; nz: number; y0: number; y1: number }
+export interface AdWall {
+  level: number; x0: number; z0: number; x1: number; z1: number; nx: number; nz: number; y0: number; y1: number;
+  /** Openings along the run (s from its min-x / min-z end, the builder's face convention). */
+  ops?: readonly {s0: number; s1: number}[];
+}
 
 /** Billboard dimensions (m): face, centre height above the storey floor, spacing, clearances. */
 export const GALLERY_AD = {w: 2.6, h: 1.6, y: 2.05, spacing: 9, propClear: 0.9, doorClear: 1.2, perStorey: 3} as const;
@@ -326,7 +337,15 @@ export function planGalleryAds(walls: readonly AdWall[], layout: StationLayout, 
   const props = layout.props ?? [];
   const doors = layout.doors ?? [];
   const perLevel = new Map<number, number>();
-  const sorted = [...walls].sort((a, b) => Math.hypot(b.x1 - b.x0, b.z1 - b.z0) - Math.hypot(a.x1 - a.x0, a.z1 - a.z0) || a.level - b.level || a.x0 - b.x0 || a.z0 - b.z0);
+  // the builder splits a run into a dado band and an upper band: merge contiguous bands of the same run first
+  const runs = new Map<string, AdWall>();
+  for (const f of [...walls].sort((a, b) => a.y0 - b.y0)) {
+    const key = `${f.level}|${f.x0}|${f.z0}|${f.x1}|${f.z1}|${f.nx}|${f.nz}`;
+    const r = runs.get(key);
+    if (r && f.y0 <= r.y1 + 0.02) { r.y1 = Math.max(r.y1, f.y1); r.ops = [...(r.ops ?? []), ...(f.ops ?? [])]; }
+    else if (!r) runs.set(key, {...f, ops: [...(f.ops ?? [])]});
+  }
+  const sorted = [...runs.values()].sort((a, b) => Math.hypot(b.x1 - b.x0, b.z1 - b.z0) - Math.hypot(a.x1 - a.x0, a.z1 - a.z0) || a.level - b.level || a.x0 - b.x0 || a.z0 - b.z0);
   let k = 0;
   for (const f of sorted) {
     const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
@@ -334,8 +353,14 @@ export function planGalleryAds(walls: readonly AdWall[], layout: StationLayout, 
     const base = storeyBase(f.level);
     if (f.y0 > base + 0.6 || f.y1 < base + A.y + A.h / 2 + 0.2) continue;
     if ((perLevel.get(f.level) ?? 0) >= A.perStorey) continue;
-    const cx = (f.x0 + f.x1) / 2 + f.nx * 0.02, cz = (f.z0 + f.z1) / 2 + f.nz * 0.02;
+    // the longest stretch of the run clear of its openings (doors, shopfronts, corridor mouths) by doorClear
     const alongX = Math.abs(f.z1 - f.z0) < 1e-6;
+    const cuts = (f.ops ?? []).map(o => [Math.max(0, o.s0 - A.doorClear), Math.min(len, o.s1 + A.doorClear)] as const).sort((a, b) => a[0] - b[0]);
+    let bestA = 0, bestB = 0, at = 0;
+    for (const [c0, c1] of [...cuts, [len, len] as const]) { if (c0 - at > bestB - bestA) { bestA = at; bestB = c0; } at = Math.max(at, c1); }
+    if (bestB - bestA < A.w + 1.2) continue;
+    const sMid = (bestA + bestB) / 2, a0 = alongX ? Math.min(f.x0, f.x1) : Math.min(f.z0, f.z1);
+    const cx = (alongX ? a0 + sMid : f.x0) + f.nx * 0.02, cz = (alongX ? f.z0 : a0 + sMid) + f.nz * 0.02;
     const half = A.w / 2;
     // clear of props standing at the wall (footprint within propClear of the face span) and of doors
     const near = (x: number, z: number, hx: number, hz: number, e: number) => alongX

@@ -373,9 +373,13 @@ export const SERVICE_ZONE_BUDGET: readonly [number, number] = [3, 5];
 export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}};
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// Task track3-eaton-centre-20261031 (lane PROFILES): THE EATON'S CENTER (LevelId 'mall', tier 2) — ONE logical level: the subway
-// station at the bottom of an open pit (storey 0) and six retail rings around the void (storeys 1..6), generated once per level
-// seed (gen/mall/index.ts, lane GEN). docs/enemy-spawns.md "The Eaton's Center".
+// Task track3-eaton-centre-20261031 (lane PROFILES): THE MALL (LevelId 'mall', tier 2; display name seeded per run: "<Name> Center",
+// gen/mall/names.ts mallNameOf(levelSeed)) — ONE logical level: the subway station at the bottom of the atrium (storey 0) and the
+// retail floors above it, generated once per level seed (gen/mall/index.ts, lane GEN). docs/enemy-spawns.md "The mall".
+// Task mall-playtest-revision-20261031 (lane PROFILES, D07): the COMPACT mall — station + THREE retail floors (was six rings);
+// measured core ~6,400 m² (station ~1,180, retail ~5,220: floor 1 ~2,260 / floor 2 ~1,740 / floor 3 ~1,220) + an optional Track2
+// tunnel / service annex (~2,200 m²), vs ~43,800 m² before. The old counts in the new mall would have been 1.11 enemies per 100 m²
+// of core (2.5x the Office's 0.45): re-proportioned below (counts per storey, horde groups / budget / route capacity, Siren draw).
 //
 // Two SEPARATE pools, never mixed:
 //  - AMBIENT (contexts 'pit' once + 'ring' once per ring, the generic Office placement gen/office/spawns.ts placeOfficeEnemies, which
@@ -386,9 +390,11 @@ export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per ann
 //    only — its own explicit family pool (Blightbelly / Siren / rat/dog weight 0; a Siren never, by validation), 5..20 members per
 //    group, global + per-storey budgets. Appended after the ambient family roll, which never reaches them.
 // Plus (lane INTEG, Track2 integration) the 'service' zone context SERVICE_CONTEXT: once per seeded service annex of the pit station
-// (Track 2's per-annex budget, the mall's family pool, no Siren), appended after every core spawn — hordes included.
-// Sized to the larger world but LESS dense than the Office (a ring is ~6-8x an Office storey; the hordes concentrate the threat):
-// ~8.5 ambient per ring vs 4.5 per Office floor.
+// (Track 2's per-annex budget, the mall's family pool, no Siren), appended after every core spawn — hordes included. Accounted
+// SEPARATELY from the core (station / retail) numbers: the annex is optional (0..1 per mall).
+// Density (mall revision, measured: evidence/census in the task folder): ambient ~19 per run = ~0.30 per 100 m² of core (station 3..5
+// on ~1,180 m², 4..6 per retail floor of 1,200-2,700 m²) — lighter than the Office's ~0.45 ambient, because the hordes (~1.5 groups,
+// ~18 members, on the retail floors only) concentrate the mall's threat; core total ~0.58 per 100 m² (old mall 0.26, sparse and vast).
 
 /** Mall area weights (the Office's rules; storefront / shop units are ordinary rooms here, galleries and courts public space). */
 export const MALL_AREA_WEIGHTS: AreaWeights = {
@@ -449,26 +455,28 @@ export const MALL_SIREN_WEIGHT = 0.32;
 /** The mall's AMBIENT pool: zombie (remainder), blightbelly 0.05, siren MALL_SIREN_WEIGHT, ratdog 0.05 (ENEMY_FAMILY_IDS order). */
 export const MALL_ENEMY_POOL: FamilyPool = familyPool({siren: MALL_SIREN_WEIGHT});
 /**
- * The mall's horde pool (lane HORDE's MALL_HORDE_RULES placement / patrol semantics; the pool, sizes and budgets declared here):
- * 3..5 groups of 5..20 ordinary zombies, at most 64 horde members in the mall, one group (<= 20 members) starting per ring. Every
- * registry family is listed explicitly (lane INTEG): only the zombie has weight — no Blightbelly, Siren or rat/dog in a horde.
+ * The mall's horde pool (lane HORDE's semantics; the pool, sizes, budgets and route capacity: MALL_HORDE_RULES, lane PROFILES). Task
+ * mall-playtest-revision-20261031 (D07): 1..2 groups (was 3..5) of 5..20 ordinary zombies, at most 32 horde members in the mall (was
+ * 64), one group (<= 20 members) starting per retail floor, clipped to the floor's patrol route (18 m per member). Every registry
+ * family is listed explicitly (lane INTEG): only the zombie has weight — no Blightbelly, Siren or rat/dog in a horde.
  */
 export const MALL_HORDE: HordeRules = {
   label: 'Roaming hordes',
-  groups: [3, 5],
+  groups: MALL_HORDE_RULES.groups,
   size: [5, 20],
   families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]],
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
-  budget: {total: 64, perStorey: 20, groupsPerStorey: 1},
+  budget: MALL_HORDE_RULES.budget,
   placement: MALL_HORDE_RULES.placement,
   patrol: MALL_HORDE_RULES.patrol,
 };
-/** The mall's spawn profile (SPAWN_PROFILES.mall). */
+/** The mall's spawn profile (SPAWN_PROFILES.mall). The label is the generic one: the display name is seeded per run ("<Name> Center"). */
 export const MALL_SPAWN_PROFILE: SpawnProfile = {
-  id: 'mall', label: 'The Eaton\'s Center', families: MALL_ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
+  id: 'mall', label: 'Mall (seeded "<Name> Center")', families: MALL_ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
   contexts: {
-    pit: {label: 'Pit station (platforms + plaza, storey 0)', count: [6, 9], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
-    ring: {label: 'Retail ring (each of storeys 1..6)', count: [7, 10], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    // (mall revision, D07) pit 3..5 (was 6..9) on the ~1,180 m² station storey; ring 4..6 (was 7..10) on each retail floor
+    pit: {label: 'Station storey (platforms + Fountain court + station back of house, storey 0)', count: [3, 5], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    ring: {label: 'Retail floor (each of storeys 1..3: courts, corridors, shops, stock rooms, service corridors)', count: [4, 6], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
     // lane INTEG (Track2 integration): the pit station's service annexes (LEVELS.mall.trackExtensions) — Track2's per-annex zone
     // budget, as on the Subway / Office (logical-level inheritance; not in MALL_SIREN_ELIGIBILITY.contexts: no Siren in an annex).
     service: SERVICE_CONTEXT,
@@ -477,7 +485,8 @@ export const MALL_SPAWN_PROFILE: SpawnProfile = {
   eligibility: {siren: MALL_SIREN_ELIGIBILITY},
   spacing: {siren: MALL_SIREN_SPACING},
   horde: MALL_HORDE,
-  budgets: {ambient: {total: 69, perStorey: 10}},
+  // (mall revision, D07) every context run fits: 5 + 3 x 6 = 23 (was 69 / 10)
+  budgets: {ambient: {total: 23, perStorey: 6}},
 };
 
 /**

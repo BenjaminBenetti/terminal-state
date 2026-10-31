@@ -58,11 +58,19 @@ export function ceilingAtTop(g: Grid, x: number, z: number, hx: number, hz: numb
  */
 export function hungRoofed(g: Grid, x: number, z: number, rot: number, w: number, ceil: number): boolean {
   const ax = Math.cos(rot) * w * 0.38, az = -Math.sin(rot) * w * 0.38;
-  return ceilingAtTop(g, x + ax, z + az, 0.05, 0.05, ceil) && ceilingAtTop(g, x - ax, z - az, 0.05, 0.05, ceil);
+  const ok = ceilingAtTop(g, x + ax, z + az, 0.05, 0.05, ceil) && ceilingAtTop(g, x - ax, z - az, 0.05, 0.05, ceil);
+  if (!ok) OPEN_AIR_REFUSED.signs++;
+  return ok;
 }
 const COLUMN_HALF = PROP_DEFS.column.w / 2;
+/** (lane FIX, U03) what the open-air rule refused in the last dress() (QA / tests: the old code placed these). */
+export const OPEN_AIR_REFUSED = {columns: 0, signs: 0};
 /** (lane FIX, U03) a station column of height `h` at (x, z) has a real ceiling over its whole footprint. */
-const columnRoofed = (ctx: Ctx, x: number, z: number, h: number): boolean => ceilingAtTop(ctx.g, x, z, COLUMN_HALF, COLUMN_HALF, ctx.g.floorAt(x, z) + h);
+const columnRoofed = (ctx: Ctx, x: number, z: number, h: number): boolean => {
+  const ok = ceilingAtTop(ctx.g, x, z, COLUMN_HALF, COLUMN_HALF, ctx.g.floorAt(x, z) + h);
+  if (!ok) OPEN_AIR_REFUSED.columns++;
+  return ok;
+};
 
 const EXIT_STREETS = ['Hollis St', 'Wexford Ave', 'Garnet St', 'Linden Ave', 'Carver St', 'Dorset Rd', 'Marlowe St', 'Ashby Ave', 'Fulton St', 'Bramley Rd', 'Pruitt Ave', 'Calder St', '4th Ave', 'King St', 'Queen St', 'Front St'];
 
@@ -160,6 +168,7 @@ const other = (ctx: Ctx, d: Door, a: Area) => ctx.layout.areas[d.a === a.id ? d.
 // Dressing
 
 export function dress(layout: StationLayout, rng: Rng): void {
+  OPEN_AIR_REFUSED.columns = 0; OPEN_AIR_REFUSED.signs = 0; // (lane FIX, U03)
   // Iteration 08 (Lane P): one placement context per level (its grid, doors, masks); every area is dressed on its own level.
   const ctxs = levelsOf(layout).map(L => makePlaceCtx(layout, rng, L.id));
   const ctx = ctxs[0];

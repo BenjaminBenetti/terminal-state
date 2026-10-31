@@ -3,8 +3,10 @@
 // world/towerRuntime.ts builds ONE physically travelling cab per world from world/towerShared.ts readTowerInfo (the Office's
 // layout.office v2 record: cab / shaft / door side / door / panel / stops with call panels and landings). The mall has no office
 // record; `mallTowerRecord` derives the same v2 shape from layout.mall.elevators[0] (the cab rides the shaft through the station
-// and all six rings; the shaft is SOLID on every storey grid, the cab is a Levels dynamic volume) — no windows, no exterior city.
-// The door faces the gallery walkway (away from the void); short storey labels ('S', '1' … '6') suit the cab buttons.
+// and every retail floor — task mall-playtest-revision-20261031: 4 stops, station + floors 1..3; the shaft is SOLID on every storey
+// grid, the cab is a Levels dynamic volume) — no windows, no exterior city. The door faces the gallery walkway (away from the
+// atrium; the shaft stands in the court's north strip, its landing on the walkway / the Fountain court); short storey labels
+// ('S', '1' … '3') suit the cab buttons.
 // The glass cab / shaft look is lane ARCH's (the runtime's view is the Office cab until then).
 
 import type {StationLayout} from '../stationTypes';

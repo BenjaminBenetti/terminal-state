@@ -42,6 +42,7 @@ import {assignMallPrograms} from './shops'; // lane SHOPS: programs / brands / p
 import {dressMallShops} from './shopsDress'; // lane SHOPS: the shop interiors (sales floors + stock rooms) by program recipe
 import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once-per-run gun-shop weapon plan
 import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARCH: fountain, directory pylons, wayfinding signs
+import {placeAtriumColumns, type ColumnReport} from './columns'; // task mall-playtest-revision-20261031 (lane FIX, U04): round atrium columns = props
 import {CROP_MARGIN, FLOORS, MALL_CANVAS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
 import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwayRoot, type Crop} from './structure';
@@ -59,7 +60,7 @@ const ATTEMPTS = 10;
 /** Validation issues of rejected attempts (QA / tests). */
 export const MALL_REJECTS = new Map<string, number>();
 /** Timing of the last generateMallLevel call (ms), its attempts and the last attempt's issues (QA / tests). */
-export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, salt: 0, issues: [] as string[], landmarks: null as LandmarkReport | null}; // (+ landmarks: lane ARCH)
+export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, salt: 0, issues: [] as string[], landmarks: null as LandmarkReport | null, columns: null as ColumnReport | null}; // (+ landmarks: lane ARCH; + columns: lane FIX)
 
 export interface MallGenOptions {
   /** Force a named variant (tests / QA); default: the level seed's. */
@@ -171,6 +172,10 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   placeMallWeapons(layout, ctx.levelSeed, layout.startWeapon ?? 'rifle');
   // lane ARCH: the pit-plaza fountain, directory pylons and wayfinding signs (after the interiors, before the populations)
   MALL_GEN_STATS.landmarks = placeMallLandmarks(layout, rng.fork('mall-landmarks'));
+  // lane FIX (U04): the round atrium columns under each slab edge as round props (collision / bullets / nav; ARCH renders the records),
+  // after the shops / landmarks (the columns keep a walkable ring off them) and before the populations (enemies / supplies / hordes
+  // avoid them). Pure and deterministic (its fork draws nothing from `rng`).
+  MALL_GEN_STATS.columns = placeAtriumColumns(layout, rng.fork('mall-columns'));
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);

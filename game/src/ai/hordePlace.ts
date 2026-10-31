@@ -9,8 +9,9 @@
 //  2. per group: a start storey among the eligible ones that still have room in the horde budget (perStorey members,
 //     groupsPerStorey groups) and an eligible start node there — a patrol node (layout.mall.patrol) on a walkable, clear,
 //     non-stair cell, at least placement.startM walking metres from the player start, groupSpacingM from every other group's
-//     start on that storey; size = rng.int(rules.size) clipped to the remaining total / storey budget (a group that cannot get
-//     HORDE_GROUP_SIZE.min members is not placed: never a horde of fewer than five);
+//     start on that storey; size = rng.int(rules.size) clipped to the remaining total / storey budget and (task
+//     mall-playtest-revision-20261031, lane PROFILES) to the storey's ROUTE CAPACITY (placement.routeMPerMember: patrol-route metres
+//     per member) (a group that cannot get HORDE_GROUP_SIZE.min members is not placed: never a horde of fewer than five);
 //  3. members on that storey's walkable, clear, non-stair cells reachable from the start node within placement.clusterM
 //     (a loose crowd, memberSpacingM apart, ambientSpacingM from the ambient enemies), types by rules.zombieTypes, families by the
 //     horde's OWN pool (hordeFamilyRoll: never the ambient roll), facing the group's first patrol direction.
@@ -39,6 +40,25 @@ export interface HordePlacementReport {
   skipped: string[];
   /** Patrol nodes eligible as a start per storey (QA). */
   eligibleNodes: Record<number, number>;
+  /** Task mall-playtest-revision-20261031 (lane PROFILES): members the storey's patrol route holds (placement.routeMPerMember; absent = no bound). */
+  routeCapacity: Record<number, number>;
+}
+
+/**
+ * Task mall-playtest-revision-20261031 (lane PROFILES, D07): the walkable patrol ROUTE of one storey (m) — the summed straight
+ * length of its same-storey patrol edges, each undirected edge once (vertical links are not route on any one storey).
+ */
+export function patrolRouteM(patrol: readonly MallPatrolNode[], level: number): number {
+  const byId = new Map(patrol.map(n => [n.id, n]));
+  let m = 0;
+  for (const n of patrol) {
+    if (n.level !== level) continue;
+    for (const e of n.edges) {
+      const t = byId.get(e.to);
+      if (t && t.level === level && t.id > n.id) m += Math.hypot(t.x - n.x, t.z - n.z);
+    }
+  }
+  return m;
 }
 
 export interface HordePlaceOptions {
@@ -79,7 +99,7 @@ function onStair(layout: StationLayout, g: StationLayout['grid'], i: number): bo
  */
 export function placeHordes(layout: StationLayout, rules: HordeRules | undefined, rng: Rng, opts: HordePlaceOptions = {}): HordePlacementReport {
   const first = layout.zombies.length; // lane INTEG (Track1 integration): the members appended below are tagged HORDE_CONTEXT
-  const report: HordePlacementReport = {asked: 0, placed: 0, members: 0, perStorey: {}, skipped: [], eligibleNodes: {}};
+  const report: HordePlacementReport = {asked: 0, placed: 0, members: 0, perStorey: {}, skipped: [], eligibleNodes: {}, routeCapacity: {}};
   layout.hordes = [];
   if (!rules) return report;
   const patrol = opts.patrol ?? layout.mall?.patrol ?? [];
@@ -105,6 +125,10 @@ export function placeHordes(layout: StationLayout, rules: HordeRules | undefined
     l.push(n);
   }
   for (const s of storeys) report.eligibleNodes[s] = byStorey.get(s)?.length ?? 0;
+  // (lane PROFILES, mall revision) route capacity per storey: members its patrol route holds (no draw; absent knob = the budget alone)
+  const routeCap = new Map<number, number>();
+  if (P.routeMPerMember !== undefined && P.routeMPerMember > 0) for (const s of storeys) routeCap.set(s, Math.floor(patrolRouteM(patrol, s) / P.routeMPerMember));
+  for (const [s, c] of routeCap) report.routeCapacity[s] = c;
   const groupsOn = new Map<number, number>(), membersOn = new Map<number, number>();
   const starts: {level: number; x: number; z: number}[] = [];
   let total = 0;
@@ -114,7 +138,7 @@ export function placeHordes(layout: StationLayout, rules: HordeRules | undefined
     // storeys with room for one more group (budget) and an eligible, spaced start node
     const options = storeys.map(s => {
       if ((groupsOn.get(s) ?? 0) >= B.groupsPerStorey) return null;
-      const room = B.perStorey - (membersOn.get(s) ?? 0);
+      const room = Math.min(B.perStorey, routeCap.get(s) ?? Infinity) - (membersOn.get(s) ?? 0);
       if (room < Math.max(HORDE_GROUP_SIZE.min, rules.size[0])) return null;
       const nodes = (byStorey.get(s) ?? []).filter(n => starts.every(q => q.level !== s || Math.hypot(q.x - n.x, q.z - n.z) >= P.groupSpacingM));
       return nodes.length ? {s, nodes, room} : null;

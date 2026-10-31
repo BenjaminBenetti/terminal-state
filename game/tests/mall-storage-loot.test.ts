@@ -2,8 +2,9 @@
 // loot in them ... just make sure we put loot inside the drawers and cupboards"). Layout-agnostic (single-prop rolls + one row of real
 // openables with their runtime models; no mall generator): the whole chain plan -> fit -> transforms -> visible -> targeted -> taken ->
 // remembered, and the causes fixed (lanes/SHOPS.done U10):
-//  - PLAN: the mall profile's per-compartment STORAGE FILL (items/lootTables.ts MALL_STORAGE_FILL, items/loot.ts storageFill) — themed,
-//    finite, deterministic; the Subway / Office / baseline profiles have none (their loot goldens stay byte-identical);
+//  - PLAN: the mall profile's per-compartment STORAGE FILL (items/lootTables.ts MALL_STORAGE_FILL, items/loot.ts storageFill) — themed
+//    (the holder's own resolved rows), finite, deterministic; the Subway / Office / baseline profiles have none (their loot goldens
+//    stay byte-identical);
 //  - FIT: the medicine cabinet's 33 pill drawers held nothing by construction (6 cm loot surface) — every fill compartment now takes
 //    at least one item of its own pool;
 //  - TRANSFORMS: a sliding LID (chest-freezer pane) no longer carries its compartment's lots off over the other half;
@@ -73,8 +74,8 @@ describe('plan: the mall storage fill (themed, finite, deterministic; old levels
       expect(compartments(kind).size, `${kind} has compartments`).toBeGreaterThan(0);
       expect(f!.chance, kind).toBeGreaterThan(0);
       expect(f!.chance, kind).toBeLessThanOrEqual(0.4);
-      for (const c of f!.cats ?? STORAGE_FILL_CATS) expect(c === 'material', `${kind}: no crafting materials`).toBe(false);
       if ((f!.cats ?? STORAGE_FILL_CATS).includes('ammo')) expect(kind, 'ammo only by the arms rule').toBe('gunSafeTall');
+      if ((f!.cats ?? STORAGE_FILL_CATS).includes('med')) expect(['pharmacyDispensaryCounter', 'medicineDrawerCabinet', 'examTable', 'labBench', 'biohazardFridge', 'crashCart'], `${kind}: dressings only in medical storage`).toContain(kind);
     }
   });
 
@@ -99,7 +100,7 @@ describe('plan: the mall storage fill (themed, finite, deterministic; old levels
     expect(packItems(['medkit'], pill, () => 0.5, false)[0]).toBeNull();
   });
 
-  it('per-compartment loot: drawers / cupboards now hold something often (not always); themed; compartments only; no materials / stray ammo', () => {
+  it('per-compartment loot: drawers / cupboards now hold something often (not always); themed; compartments only; no stray ammo / dressings', () => {
     const DRAWERS = ['mallCashwrapCounter', 'pharmacyDispensaryCounter', 'dresserDrawers', 'glassDisplayCabinet', 'mallKioskCart', 'bookstoreBookcase', 'storageTote', 'cardboardBoxFlaps', 'cabinetTall', 'desk', 'kitchenette'];
     for (const kind of DRAWERS) {
       const comps = compartments(kind);
@@ -118,9 +119,11 @@ describe('plan: the mall storage fill (themed, finite, deterministic; old levels
       const single = !openableSpec(kind) && isContainerKind(kind);
       for (const lots of rollsOf(kind, MALL, 'on')) {
         expect(new Set(lots.map(l => l.id)).size, `${kind}: unique lot ids`).toBe(lots.length);
+        const rows = new Set((compartmentTable(kind as HolderKind, AREA[kind], MALL) ?? holderTable(kind as HolderKind, AREA[kind], MALL)).rows.map(r => r[0]));
         for (const l of lots.filter(isFill)) {
           const c = econCat(l.itemId)!;
           expect(cats.includes(c) && (!allow || allow.includes(c)), `${kind} fill ${l.itemId}`).toBe(true);
+          expect(rows.has(l.itemId), `${kind} fill ${l.itemId} comes from its own resolved rows (themed; materials only via the place's salvage)`).toBe(true);
           expect(single || l.part !== undefined, `${kind}: fill lots lie in a compartment, never on an exposed top`).toBe(true);
           expect(lots.filter(q => (q.part ?? -1) === (l.part ?? -1) && !isFill(q)), `${kind}: only empty compartments are filled`).toEqual([]);
         }

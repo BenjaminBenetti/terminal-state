@@ -57,6 +57,9 @@ export interface RunCarve {
 export interface CoreCarve {
   id: string;
   well: CellRect;
+  /** The stair lobby beside the well (front door onto the court on every storey) and its area per storey. */
+  lobby: CellRect;
+  lobbies: number[];
   /** Landing area per storey (index = storey). */
   landings: number[];
   runs: {lower: number; area: number; flights: number[]; lane: 'A' | 'B'}[];
@@ -77,6 +80,7 @@ export interface ShopCarve {
   rect: CellRect;
   stock: MallLotStock;
   stockCells: number;
+  serviceDoor: boolean;
   recess?: number;
 }
 
@@ -100,6 +104,8 @@ export interface MallCarve {
   galleries: Map<number, number[]>;
   courts: Map<number, number[]>;
   corridors: Map<number, number[]>;
+  /** Service corridors per retail floor (the north corridor joining the cores' lobbies). */
+  service: Map<number, number[]>;
   recesses: number[];
   shops: ShopCarve[];
   runs: RunCarve[];
@@ -119,7 +125,7 @@ const fail = (why: string): null => { MALL_CARVE_FAILS[why] = (MALL_CARVE_FAILS[
 const BLOCK = {px0: 124, P2y: 74};
 
 /** Soft per-floor unit target (frontages incl. kiosks; end units / food counters included). */
-export const FLOOR_UNITS: Readonly<Record<number, number>> = {1: 9, 2: 8, 3: 7};
+export const FLOOR_UNITS: Readonly<Record<number, number>> = {1: 10, 2: 9, 3: 8};
 
 interface Seg { dir: Side4; line: number; a0: number; a1: number; zone: MallLotZone }
 
@@ -173,9 +179,9 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     const claimed = new Uint8Array(W * H);
     for (const piece of sk.walks) {
       if (!piece.floors.includes(lv)) continue;
-      const r = piece.rect;
-      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) ins[y * W + x] = 1;
-      const walkable = (x: number, y: number) => !claimed[y * W + x] && !openAt(lv, x, y) && !shaftAt(x, y) && !touching.some(p => inR(p.rect, x, y));
+      const r = piece.rect, pm = piece.mask;
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (!pm || pm[y * W + x]) ins[y * W + x] = 1;
+      const walkable = (x: number, y: number) => (!pm || pm[y * W + x] === 1) && !claimed[y * W + x] && !openAt(lv, x, y) && !shaftAt(x, y) && !touching.some(p => inR(p.rect, x, y));
       // jutting cells (open above: a larger opening on the next floor) carry their own areas with the roof-apex ceiling
       const jut = (x: number, y: number) => lv < FLOORS && openAt(lv + 1, x, y);
       for (const isJut of [false, true]) {
@@ -210,39 +216,53 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     runs.push(rc);
   }
 
-  // --- 4. Service-stair cores behind the court's north / south edges ---------------------------------------------------------
+  // --- 4. Two service-stair cores behind the court's north edge (beside their lobbies; on level 0 onto the Fountain court) -----
   const cores: CoreCarve[] = [];
-  const L = 2 * CORE.landing + SERVICE_RUN_CELLS, WH = 2 * CORE.lane + CORE.divider;
-  const coreFree = (r: CellRect) => {
-    for (let lv = 0; lv <= FLOORS; lv++) if (!k.rectFree(r, lv)) return false;
-    return true;
-  };
+  const L = 2 * CORE.landing + SERVICE_RUN_CELLS, WH = 2 * CORE.lane + CORE.divider, FW = WH + 1 + 3;
   const westFirst = rng.chance(0.5);
-  for (const side of ['N', 'S'] as const) {
-    const wy = side === 'N' ? C.y - 1 - WH : C.y + C.h + 1;
-    // the landing columns must face walkway on every retail floor (and the court / the south platform on level 0)
+  const nx0 = sk.court0.x, nx1 = sk.court0.x + sk.court0.w;
+  const taken: CellRect[] = [];
+  for (const which of westFirst ? ['W', 'E'] as const : ['E', 'W'] as const) {
+    // the lobby faces the court's north edge (its front wall = the court's wall row); scan inward from that end of the court
     const xs: number[] = [];
-    for (let x = C.x + 2; x + L <= C.x + C.w - 2; x++) xs.push(x);
-    if ((side === 'N') !== westFirst) xs.reverse();
-    let placed: CellRect | null = null;
+    for (let x = nx0 + 2; x + FW <= nx1 - 2; x++) xs.push(x);
+    if (which === 'E') xs.reverse();
+    let got: CoreCarve | null = null;
     for (const x of xs) {
-      const r = {x, y: wy, w: L, h: WH};
-      if (!coreFree(r)) continue;
-      const frontY = side === 'N' ? C.y : C.y + C.h - 1;
+      const foot: CellRect = {x, y: C.y - 1 - L, w: FW, h: L};
+      if (taken.some(t => overlaps(t, foot, 4))) continue;
       let ok = true;
-      for (let lv = 1; lv <= FLOORS && ok; lv++) for (const lx of [x, x + L - CORE.landing]) for (let t = 0; t < CORE.landing; t++) if (walkArea[lv][frontY * W + lx + t] < 0) ok = false;
+      for (let lv = 0; lv <= FLOORS && ok; lv++) if (!k.rectFree(foot, lv)) ok = false;
+      // the lobby's front must open onto walkway on every retail floor and the Fountain court on level 0
+      const lobbyX = which === 'W' ? x + WH + 1 : x;
+      for (let lv = 1; lv <= FLOORS && ok; lv++) for (let t = 0; t < 3; t++) if (walkArea[lv][C.y * W + lobbyX + t] < 0) ok = false;
+      for (let t = 0; t < 3 && ok; t++) { const a0 = g0.area[g0.idx(lobbyX + t, C.y)]; if (a0 < 0 || !court0.includes(a0)) ok = false; }
       if (!ok) continue;
-      // level 0: north = the Fountain court row; south = a straight spur north to the south platform's back wall
-      if (side === 'N') { for (const lx of [x, x + L - CORE.landing]) for (let t = 0; t < CORE.landing; t++) if (g0.cells[g0.idx(lx + t, C.y)] !== FLOOR) ok = false; }
-      else if (x < sk.px0 + 2 || x + L > sk.px1 - 2) ok = false;
-      if (!ok) continue;
-      placed = r;
-      break;
+      got = carveCore(k, `core-${which}`, x, C.y, which, bases, walkArea, court0);
+      if (got) { taken.push(foot); break; }
     }
-    if (!placed) return fail(`core-${side}`);
-    const core = carveCore(k, `core-${side}`, placed, side, bases, walkArea, sk, P1, court0);
-    if (!core) return fail(`core-door-${side}`);
-    cores.push(core);
+    if (!got) return fail(`core-${which}`);
+    cores.push(got);
+  }
+
+  // --- 4b. The north service corridor on every retail floor: behind the court's north band, joining both cores' lobbies at their
+  // far ends (a staff loop gallery -> lobby -> corridor -> lobby -> gallery); north-band stockrooms that reach it get a service door
+  const service = new Map<number, number[]>();
+  const svc: Int32Array[] = [new Int32Array(W * H).fill(-1)];
+  {
+    const lob = cores.map(cc => cc.lobby).sort((a, b) => a.x - b.x);
+    const y1 = lob[0].y - 1, y0 = y1 - 4;
+    const r: CellRect = {x: Math.min(...cores.map(cc => Math.min(cc.well.x, cc.lobby.x))), y: y0, w: 0, h: 4};
+    r.w = Math.max(...cores.map(cc => Math.max(cc.well.x + cc.well.w, cc.lobby.x + cc.lobby.w))) - r.x;
+    for (let lv = 1; lv <= FLOORS; lv++) {
+      const m = new Int32Array(W * H).fill(-1);
+      svc.push(m);
+      if (!k.rectFree(r, lv)) continue;
+      const A = k.addArea(r, 'service', 'service-corridor', r2(bases[lv] + CLEAR.corridor), -1, {level: lv, floorY: bases[lv], label: `Service corridor · ${mallStoreyLabel(lv)}`, publicSpace: false});
+      for (const cc of cores) k.carveDoor({x: cc.lobby.x, y: y1, w: 3, h: 1}, A, k.areas[cc.lobbies[lv]], CLEAR.door, false, {staff: true});
+      for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) m[y * W + x] = A.id;
+      service.set(lv, [A.id]);
+    }
   }
 
   // --- 5. Lots, end units, food court, washrooms per floor ------------------------------------------------------------------
@@ -251,7 +271,8 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   const used = (id: MallLotId) => familyCount.get(id) ?? 0;
   for (let lv = 1; lv <= FLOORS; lv++) {
     const lrng = rng.fork(`lots-${lv}`);
-    const ctx: LotCtx = {k, lv, base: bases[lv], W, walkArea: walkArea[lv], inside: inside[lv], rng: lrng, shops, recesses, count: familyCount};
+    const target = FLOOR_UNITS[lv] + lrng.int(-1, 1); // seeded: ~24-30 frontages per run
+    const ctx: LotCtx = {k, lv, base: bases[lv], W, walkArea: walkArea[lv], inside: inside[lv], svc: svc[lv], rng: lrng, shops, recesses, count: familyCount};
     const floorShops = () => shops.filter(s => s.level === lv).length;
     // end units / anchors closing the corridor ends
     for (const e of sk.ends) {
@@ -275,12 +296,16 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
     for (const s of lrng.shuffle(wcSegs.slice())) { wc = placeWashrooms(ctx, s); if (wc) break; }
     if (!wc) return fail(`washrooms-${lv}`);
     washrooms.push(wc);
-    // regular lots: longest edges first, until the floor's soft unit target
-    const order = segs.slice().sort((a, b) => (b.a1 - b.a0) - (a.a1 - a.a0) || a.line - b.line || a.a0 - b.a0);
-    for (const s of order) {
-      const left = FLOOR_UNITS[lv] - floorShops();
+    // regular lots: corridor / second-court edges first (shopping corridors are lined with shops), then the atrium court's edges,
+    // longest first, at most 3 units per edge in this pass; then a second pass over every edge until the floor's soft unit target
+    const byLen = (a: Seg, b: Seg) => (b.a1 - b.a0) - (a.a1 - a.a0) || a.line - b.line || a.a0 - b.a0;
+    const cor = segs.filter(s => s.zone !== 'atrium').sort(byLen), atr = segs.filter(s => s.zone === 'atrium').sort(byLen);
+    const order: Seg[] = [];
+    for (let i = 0; i < Math.max(cor.length, atr.length); i++) { if (cor[i]) order.push(cor[i]); if (atr[i]) order.push(atr[i]); }
+    for (const pass of [2, 99]) for (const s of order) {
+      const left = target - floorShops();
       if (left <= 0) break;
-      fillSegment(ctx, s, null, left);
+      fillSegment(ctx, s, null, Math.min(left, pass));
     }
   }
 
@@ -298,7 +323,7 @@ export function carveMall(k: Kit, rng: Rng, f: MallFrame): MallCarve | null {
   const elevators: ElevatorCarve[] = [{id: 'lift-N', shaft: sk.lift.shaft, cab: sk.lift.cab, doorSide: sk.lift.doorSide, door: sk.lift.door, landing: sk.lift.landing}];
   return {
     f, sk, bases, X0, Z0, X1, Z1, voidMask: sk.open[1], cw: W, vx0: vb.x0, vx1: vb.x1, vz0: vb.y0, vz1: vb.y1, block, court0,
-    galleries, courts, corridors, recesses, shops, runs, cores, elevators, washrooms, stationBoh, roof: {springY, apexY},
+    galleries, courts, corridors, service, recesses, shops, runs, cores, elevators, washrooms, stationBoh, roof: {springY, apexY},
   };
 }
 
@@ -314,7 +339,7 @@ function carveRun(k: Kit, p: RunPlan, bases: number[]): RunCarve {
   });
   const lanes: RunLane[] = [];
   const laneW = p.kind === 'escalator' ? 3 : 5;
-  const nLanes = p.kind === 'escalator' ? 2 : 1;
+  const nLanes = Math.max(1, Math.floor((p.axis === 'x' ? p.rect.h : p.rect.w) / laneW));
   const spec: StairSpec = {...(p.kind === 'escalator' ? RUN.escalator : RUN.stair), headroom: OPEN_HEADROOM};
   for (let li = 0; li < nLanes; li++) {
     const rect: CellRect = p.axis === 'x' ? {x: p.rect.x, y: p.rect.y + li * laneW, w: p.rect.w, h: laneW} : {x: p.rect.x + li * laneW, y: p.rect.y, w: laneW, h: p.rect.h};
@@ -329,60 +354,47 @@ function carveRun(k: Kit, p: RunPlan, bases: number[]): RunCarve {
 }
 
 /**
- * A service-stair core: well along X right behind the court edge (two scissor lanes, landings at both ends alternating storey to
- * storey); every landing has a staff door onto the walkway in front of it; level 0: the north core opens onto the Fountain court,
- * the south core gets a straight spur north to the south platform's back wall.
+ * A service-stair core behind the court's north edge: the well runs north-south (two scissor lanes, landings at both ends
+ * alternating storey to storey) with a 1.5 m stair lobby along its court-side flank ('W' core: lobby on its east side, 'E' core: on
+ * its west side). On every storey the lobby opens onto the walkway / the Fountain court (staff door) and into that storey's landing,
+ * so both landing ends are reachable from the front on every floor.
  */
-function carveCore(k: Kit, id: string, well: CellRect, side: 'N' | 'S', bases: number[], walkArea: Int32Array[], sk: MallSkeleton, P1: Area, court0: number[]): CoreCarve | null {
-  const L = well.w, WH = well.h, W = k.g.w;
+function carveCore(k: Kit, id: string, x: number, courtY: number, which: 'W' | 'E', bases: number[], walkArea: Int32Array[], court0: number[]): CoreCarve | null {
+  const L = 2 * CORE.landing + SERVICE_RUN_CELLS, WH = 2 * CORE.lane + CORE.divider, W = k.g.w;
+  const y0 = courtY - 1 - L;
+  const wx = which === 'W' ? x : x + 4, lx = which === 'W' ? x + WH + 1 : x;
+  const wallX = which === 'W' ? x + WH : x + 3;
+  const well: CellRect = {x: wx, y: y0, w: WH, h: L};
   const landings: number[] = new Array(FLOORS + 1).fill(-1);
-  const endOf = (lv: number): 'lo' | 'hi' => (lv % 2 === 0 ? 'lo' : 'hi');
-  const frontWall = side === 'N' ? well.y + WH : well.y - 1;
-  const frontRow = side === 'N' ? frontWall + 1 : frontWall - 1;
+  const lobbies: number[] = [];
+  const endOf = (lv: number): 'lo' | 'hi' => (lv % 2 === 0 ? 'hi' : 'lo'); // level 0: the south (court) end
   for (let lv = 0; lv <= FLOORS; lv++) {
-    const base = bases[lv];
-    const lx = endOf(lv) === 'lo' ? well.x : well.x + L - CORE.landing;
-    const la = k.addArea({x: lx, y: well.y, w: CORE.landing, h: WH}, 'room', 'stair-core', r2(base + (lv ? CLEAR.core : CLEAR.core0)), -1,
-      {...(lv ? {level: lv, floorY: base} : {}), label: `Service stairs · ${mallStoreyLabel(lv)}`, publicSpace: false, role: 'landing'});
+    const base = bases[lv], ceil = r2(base + (lv ? CLEAR.core : CLEAR.core0));
+    const lvOpt = lv ? {level: lv, floorY: base} : {};
+    const ly = endOf(lv) === 'lo' ? y0 : y0 + L - CORE.landing;
+    const la = k.addArea({x: wx, y: ly, w: WH, h: CORE.landing}, 'room', 'stair-core', ceil, -1, {...lvOpt, label: `Service stairs · ${mallStoreyLabel(lv)}`, publicSpace: false, role: 'landing'});
     landings[lv] = la.id;
-    const gap: Rect = {x: lx, y: frontWall, w: CORE.landing, h: 1};
-    if (lv > 0) {
-      const wa = walkArea[lv][frontRow * W + lx + 1];
-      if (wa < 0) return null;
-      k.carveDoor(gap, k.areas[wa], la, CLEAR.door, false, {staff: true});
-    } else if (side === 'N') {
-      const g0 = k.grid(0), a = g0.area[g0.idx(lx + 1, frontRow)];
-      if (a < 0 || !court0.includes(a)) return null;
-      k.carveDoor(gap, k.areas[a], la, CLEAR.door, false, {staff: true});
-    } else {
-      // spur from the landing's front wall north to the south platform's back wall (row P1b)
-      const P1b = P1.y + P1.h;
-      if (frontWall < P1b) return null;
-      if (frontWall - P1b >= 2) {
-        // spur rows [P1b + 1, frontWall) between the platform's back wall and the landing's front wall
-        const spur = k.addArea({x: lx, y: P1b + 1, w: CORE.landing, h: frontWall - P1b - 1}, 'service', 'service-corridor', CLEAR.core0, la.id, {label: 'Service corridor', publicSpace: false});
-        k.carveDoor(gap, spur, la, CLEAR.door, false);
-        k.carveDoor({x: lx, y: P1b, w: CORE.landing, h: 1}, P1, spur, CLEAR.door, false, {staff: true});
-      } else {
-        // the landing sits right behind the platform (one or two wall rows): one opening through them
-        k.carveDoor({x: lx, y: P1b, w: CORE.landing, h: frontWall - P1b + 1}, P1, la, CLEAR.door, false, {staff: true});
-      }
-    }
+    const lob = k.addArea({x: lx, y: y0, w: 3, h: L}, 'service', 'service-corridor', ceil, la.id, {...lvOpt, label: `Service stairs lobby · ${mallStoreyLabel(lv)}`, publicSpace: false});
+    lobbies.push(lob.id);
+    k.carveDoor({x: wallX, y: ly, w: 1, h: CORE.landing}, lob, la, CLEAR.door, false);
+    const gap: Rect = {x: lx, y: courtY - 1, w: 3, h: 1};
+    const front = lv ? walkArea[lv][courtY * W + lx + 1] : (() => { const g0 = k.grid(0), a = g0.area[g0.idx(lx + 1, courtY)]; return court0.includes(a) ? a : -1; })();
+    if (front < 0) return null;
+    k.carveDoor(gap, k.areas[front], lob, CLEAR.door, false, {staff: true});
   }
   const runs: CoreCarve['runs'] = [];
   for (let lv = 0; lv < FLOORS; lv++) {
     const lane: 'A' | 'B' = lv % 2 === 1 ? 'A' : 'B';
-    const ry = lane === 'A' ? well.y : well.y + CORE.lane + CORE.divider;
-    const rect: Rect = {x: well.x + CORE.landing, y: ry, w: SERVICE_RUN_CELLS, h: CORE.lane};
+    const rx = lane === 'A' ? wx : wx + CORE.lane + CORE.divider;
+    const rect: Rect = {x: rx, y: y0 + CORE.landing, w: CORE.lane, h: SERVICE_RUN_CELLS};
     const area = k.addArea(rect, 'room', 'stair-core', r2(bases[lv] + SERVICE_STAIR.headroom), landings[lv],
       {...(lv ? {level: lv, floorY: bases[lv]} : {}), also: [lv + 1], role: 'stair', publicSpace: false, label: `Service stairs · ${mallStoreyLabel(lv)} – ${mallStoreyLabel(lv + 1)}`});
-    const fl = layStairRun([k.grid(lv), k.grid(lv + 1)], rect, area.id, 'x', endOf(lv), bases[lv], bases[lv + 1], SERVICE_STAIR);
+    const fl = layStairRun([k.grid(lv), k.grid(lv + 1)], rect, area.id, 'z', endOf(lv), bases[lv], bases[lv + 1], SERVICE_STAIR);
     const ids: number[] = [];
     for (const q of fl) { q.id = k.flights.length; ids.push(q.id); k.flights.push(q); }
     runs.push({lower: lv, area: area.id, flights: ids, lane});
   }
-  void sk;
-  return {id, well, landings, runs};
+  return {id, well, lobby: {x: lx, y: y0, w: 3, h: L}, landings, lobbies, runs};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -394,8 +406,7 @@ function carveCore(k: Kit, id: string, well: CellRect, side: 'N' | 'S', bases: n
  */
 function segmentsOf(ins: Uint8Array, wa: Int32Array, W: number, H: number, sk: MallSkeleton, lv: number): Seg[] {
   const out: Seg[] = [];
-  const C = sk.court;
-  const zoneOf = (x: number, y: number): MallLotZone => (x >= C.x && x < C.x + C.w && y >= C.y && y < C.y + C.h ? 'atrium' : sk.walks.some(w => w.zone === 'court2' && w.floors.includes(lv) && x >= w.rect.x && x < w.rect.x + w.rect.w && y >= w.rect.y && y < w.rect.y + w.rect.h) ? 'court' : 'corridor');
+  const zoneOf = (x: number, y: number): MallLotZone => (sk.courtMask[y * W + x] ? 'atrium' : sk.walks.some(w => w.zone === 'court2' && w.floors.includes(lv) && x >= w.rect.x && x < w.rect.x + w.rect.w && y >= w.rect.y && y < w.rect.y + w.rect.h) ? 'court' : 'corridor');
   const at = (x: number, y: number) => x >= 0 && y >= 0 && x < W && y < H && ins[y * W + x] === 1;
   for (const dir of ['N', 'S', 'W', 'E'] as const) {
     const [dx, dy] = dir === 'N' ? [0, -1] : dir === 'S' ? [0, 1] : dir === 'W' ? [-1, 0] : [1, 0];
@@ -423,6 +434,8 @@ function segmentsOf(ins: Uint8Array, wa: Int32Array, W: number, H: number, sk: M
 
 interface LotCtx {
   k: Kit; lv: number; base: number; W: number; walkArea: Int32Array; inside: Uint8Array; rng: Rng;
+  /** Service corridor area id per cell on this floor (-1 = none). */
+  svc: Int32Array;
   shops: ShopCarve[]; recesses: number[]; count: Map<MallLotId, number>;
 }
 
@@ -510,9 +523,33 @@ function carveLot(c: LotCtx, s: Seg, a: number, p: LotPlan, zone: MallLotZone, k
   if (gal < 0) return null;
   const foot = lotRect(s, a, alongT, 0, deepT);
   if (!k.rectFree(foot, lv)) return null;
+  // corner units need a second frontage: a run of >= 6 walkway cells beyond one side wall within the sales depth
+  let corner: {gap: CellRect; gal: number; side: Side4} | null = null;
+  if (p.id === 'corner-double') {
+    for (const sideA of [sa - 1, sa + p.w]) {
+      if (p.sideStock && ((p.sideStock === 'L' && sideA === sa - 1) || (p.sideStock === 'R' && sideA === sa + p.w))) continue;
+      const outA = sideA === sa - 1 ? sideA - 1 : sideA + 1;
+      let run0 = -1, best: [number, number] | null = null;
+      for (let d = sd; d <= sd + p.ds; d++) {
+        const q = d < sd + p.ds ? lotRect(s, outA, 1, d, 1) : null;
+        const ok = q ? c.walkArea[q.y * c.W + q.x] >= 0 : false;
+        if (ok && run0 < 0) run0 = d;
+        if (!ok && run0 >= 0) { if (!best || d - run0 > best[1] - best[0]) best = [run0, d]; run0 = -1; }
+      }
+      if (!best || best[1] - best[0] < 6) continue;
+      const d0 = best[0] + 1, d1 = best[1] - 1;
+      const q = lotRect(s, outA, 1, (d0 + d1) >> 1, 1);
+      const g2 = c.walkArea[q.y * c.W + q.x];
+      if (g2 < 0) continue;
+      const side: Side4 = s.dir === 'N' || s.dir === 'S' ? (sideA === sa - 1 ? 'W' : 'E') : (sideA === sa - 1 ? 'N' : 'S');
+      corner = {gap: lotRect(s, sideA, 1, d0, d1 - d0), gal: g2, side};
+      break;
+    }
+    if (!corner) return null;
+  }
   const opt = {level: lv, floorY: base};
   const S = k.addArea(lotRect(s, sa, p.w, sd, p.ds), 'room', 'shop', r2(base + CLEAR.shop), gal, {...opt, label: 'Shop', publicSpace: true});
-  let back: Area | undefined, recessA: Area | undefined, stockCells = 0;
+  let back: Area | undefined, recessA: Area | undefined, stockCells = 0, serviceDoor = false;
   const fronts: ShopCarve['fronts'] = [];
   if (p.recess) {
     // the public vestibule in front of the shopfront (window bays at its sides belong to the shop's wall)
@@ -532,6 +569,18 @@ function carveLot(c: LotCtx, s: Seg, a: number, p: LotPlan, zone: MallLotZone, k
     const r = p.sideStock ? lotRect(s, p.sideStock === 'L' ? a : sa + p.w + 1, p.st, sd, p.ds) : lotRect(s, sa, p.w, sd + p.ds + 1, p.st);
     back = k.addArea(r, 'room', 'stock-room', r2(base + CLEAR.back), S.id, {...opt, label: 'Stock room', publicSpace: false});
     back.purpose = 'stock-room';
+    // a rear stockroom whose back wall is the service corridor's wall: a staff door onto it (the family's shared-corridor policy)
+    if (!p.sideStock) {
+      const dBack = sd + p.ds + 1 + p.st; // first row beyond the stockroom (its back wall), then the corridor
+      const u0 = sa + 1, u1 = sa + p.w - 1;
+      let ok = u1 - u0 >= 3;
+      for (let u = u0; u < u0 + 3 && ok; u++) { const q = lotRect(s, u, 1, dBack + 1, 1); if (c.svc[q.y * c.W + q.x] < 0) ok = false; }
+      if (ok) {
+        const q = lotRect(s, u0, 1, dBack + 1, 1);
+        k.carveDoor(lineRect(s, u0, 3, dBack + 1), back, k.areas[c.svc[q.y * c.W + q.x]], DOOR_HEIGHT, false, {staff: true});
+        serviceDoor = true;
+      }
+    }
     stockCells = r.w * r.h;
     // staff door between them (3 cells, off-centre)
     if (p.sideStock) {
@@ -544,35 +593,15 @@ function carveLot(c: LotCtx, s: Seg, a: number, p: LotPlan, zone: MallLotZone, k
       k.carveDoor(lineRect(s, Math.max(sa, u), Math.min(3, p.w), sd + p.ds + 1), S, back, DOOR_HEIGHT, false, {staff: true});
     }
   }
-  // corner units: a second shopfront on a side wall facing another walkway (within the sales depth)
-  if (p.id === 'corner-double') {
-    for (const sideA of [sa - 1, sa + p.w]) {
-      if (p.sideStock && ((p.sideStock === 'L' && sideA === sa - 1) || (p.sideStock === 'R' && sideA === sa + p.w))) continue;
-      const outA = sideA === sa - 1 ? sideA - 1 : sideA + 1;
-      // cells beyond the side wall at each depth of the sales floor
-      let run0 = -1, best: [number, number] | null = null;
-      for (let d = sd; d <= sd + p.ds; d++) {
-        const q = d < sd + p.ds ? lotRect(s, outA, 1, d, 1) : null;
-        const ok = q ? c.walkArea[q.y * c.W + q.x] >= 0 : false;
-        if (ok && run0 < 0) run0 = d;
-        if (!ok && run0 >= 0) { if (!best || d - run0 > best[1] - best[0]) best = [run0, d]; run0 = -1; }
-      }
-      if (!best || best[1] - best[0] < 6) continue;
-      const d0 = best[0] + 1, d1 = best[1] - 1;
-      const gapR = lotRect(s, sideA, 1, d0, d1 - d0);
-      const q = lotRect(s, outA, 1, (d0 + d1) >> 1, 1);
-      const g2 = c.walkArea[q.y * c.W + q.x];
-      if (g2 < 0) continue;
-      const d = k.carveDoor(gapR, k.areas[g2], S, CLEAR.shopfront, false, {shopfront: true});
-      const sideW: Side4 = s.dir === 'N' || s.dir === 'S' ? (sideA === sa - 1 ? 'W' : 'E') : (sideA === sa - 1 ? 'N' : 'S');
-      fronts.push({rect: gapR, side: sideW, door: d.id});
-      break;
-    }
+  // corner units: the second shopfront on the side wall facing the other walkway (found before carving)
+  if (corner) {
+    const d = k.carveDoor(corner.gap, k.areas[corner.gal], S, CLEAR.shopfront, false, {shopfront: true});
+    fronts.push({rect: corner.gap, side: corner.side, door: d.id});
   }
   c.count.set(p.id, (c.count.get(p.id) ?? 0) + 1);
   const shop: ShopCarve = {
     id: '', level: lv, side: OPP[s.dir], sales: S.id, ...(back ? {back: back.id} : {}), kind, lot: p.id, zone, fronts,
-    rect: lotRect(s, sa, p.w, sd, p.ds), stock: back ? (f.stock === 'service-corridor' ? 'rear' : f.stock) : 'none', stockCells,
+    rect: lotRect(s, sa, p.w, sd, p.ds), stock: back ? (f.stock === 'service-corridor' && !serviceDoor ? 'rear' : f.stock) : 'none', stockCells, serviceDoor,
     ...(recessA ? {recess: recessA.id} : {}),
   };
   shop.id = `L${lv}-${String(c.shops.filter(q => q.level === lv).length + 1).padStart(2, '0')}`;
@@ -593,7 +622,7 @@ function placeEnd(c: LotCtx, e: {dir: Side4; line: number; a0: number; a1: numbe
     const p = planLot(c, id, cellsOf(f.width[1]) + 4, cellsOf(f.depth[1]) + 12);
     if (!p) return null;
     // shrink width toward the corridor width over the tries (a wide unit may collide with the side bands' space later: it is first)
-    p.w = Math.max(Math.min(p.w, segLen + 16 - tries * 4), Math.min(segLen + 2, cellsOf(f.width[1])));
+    p.w = Math.max(cellsOf(f.width[0]), Math.min(p.w, segLen + 16 - tries * 4), Math.min(segLen + 2, cellsOf(f.width[1])));
     if (tries >= 3) p.ds = Math.max(cellsOf(f.depth[0]), p.ds - (tries - 2) * 4);
     const alongT = p.w + (p.sideStock ? p.st + 1 : 0);
     const a = Math.round((e.a0 + e.a1) / 2 - alongT / 2);
@@ -609,7 +638,11 @@ function placeEnd(c: LotCtx, e: {dir: Side4; line: number; a0: number; a1: numbe
  */
 function fillSegment(c: LotCtx, s: Seg, only: MallLotId[] | null, max: number): number {
   let placed = 0, a = s.a0;
-  const deepMax = c.rng.int(24, 30);
+  let deepMax = c.rng.int(24, 30);
+  // a service corridor behind this edge (probed at its middle): lots that can reach it are sized to (their back wall = its wall)
+  let reach = 0;
+  for (let d = 0; d < 40; d++) { const q = lotRect(s, (s.a0 + s.a1) >> 1, 1, d, 1); if (q.x < 0 || q.y < 0 || q.x >= c.W) break; if (c.svc[q.y * c.W + q.x] >= 0) { reach = d - 1; break; } }
+  if (reach > 0) deepMax = reach;
   while (a < s.a1 - 5 && placed < max) {
     const rem = s.a1 - a;
     // a corner where the edge meets another walkway at its far end: the last unit can take two frontages
@@ -635,6 +668,15 @@ function fillSegment(c: LotCtx, s: Seg, only: MallLotId[] | null, max: number): 
     for (const id of order) {
       const p = planLot(c, id, rem, deepMax);
       if (!p) continue;
+      const fam = MALL_LOTS[id];
+      if (reach > 0 && !p.sideStock && fam.stock !== 'none' && p.st > 0) {
+        // stretch to the corridor: grow the stockroom within its range, then the sales floor within its range
+        const used = p.ds + 1 + p.st + (p.recess ? p.recess + 1 : 0);
+        let gap = reach - used;
+        const stMax = cellsOf(fam.stockSize[1]), dsMax = cellsOf(fam.depth[1]);
+        const dst = Math.max(0, Math.min(gap, stMax - p.st)); p.st += dst; gap -= dst;
+        const dds = Math.max(0, Math.min(gap, dsMax - p.ds)); p.ds += dds;
+      }
       for (const shrink of [0, 2, 4]) {
         const q = {...p, ds: Math.max(cellsOf(MALL_LOTS[id].depth[0]), p.ds - shrink)};
         // a corner unit at the far end hugs the end of the edge
@@ -703,10 +745,10 @@ function stationServices(k: Kit, rng: Rng, sk: MallSkeleton, court0: number[]): 
   const out: number[] = [];
   for (const west of rng.chance(0.7) ? [true, false] : [false, true]) {
     const len = rng.int(26, 34);
-    const sy = C.y + 4, sh = 3;
+    const sy = C.y + 2, sh = 3;
     const spur: CellRect = west ? {x: C.x - 1 - len, y: sy, w: len, h: sh} : {x: C.x + C.w + 1, y: sy, w: len, h: sh};
     if (!west && spur.x + spur.w > sk.px1 - 4) continue; // keep the east end clear for Track2's growth
-    const north: CellRect = {x: spur.x, y: C.y - 6, w: len, h: sy - 1 - (C.y - 6)};
+    const north: CellRect = {x: spur.x, y: C.y - 7, w: len, h: sy - 1 - (C.y - 7)};
     const south: CellRect = {x: spur.x, y: sy + sh + 1, w: len, h: sk.P2y - 2 - (sy + sh + 1)};
     if (!k.rectFree(spur, 0) || north.h < 6 || south.h < 5 || !k.rectFree(north, 0) || !k.rectFree(south, 0)) continue;
     const wallX = west ? C.x - 1 : C.x + C.w;

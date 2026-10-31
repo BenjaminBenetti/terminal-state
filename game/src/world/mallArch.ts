@@ -684,8 +684,8 @@ export class MallArch {
       const sp = this.spaceOf(f.area, f.level);
       if (sp.space === 'station') { out.push(f); continue; }
       // D06: long opening-free public walls (courts, corridors, the plaza) are gallery billboard candidates
-      if ((sp.space === 'plaza' || sp.space === 'gallery') && !f.slope && !f.openings.length && Math.hypot(f.x1 - f.x0, f.z1 - f.z0) >= 3.8) {
-        this.adWalls.push({level: f.level, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, nx: f.nx, nz: f.nz, y0: f.y0, y1: f.y1});
+      if ((sp.space === 'plaza' || sp.space === 'gallery') && !f.slope && Math.hypot(f.x1 - f.x0, f.z1 - f.z0) >= 3.8) {
+        this.adWalls.push({level: f.level, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, nx: f.nx, nz: f.nz, y0: f.y0, y1: f.y1, ops: f.openings.map(o => ({s0: o.s0, s1: o.s1}))});
       }
       if (sp.space === 'plaza') { out.push({...f, finish: this.wallKey(sp), ...up}); continue; }
       // stair flight side walls: public flights white, service flights the core
@@ -1457,7 +1457,8 @@ export class MallArch {
     const fr = (lv: number) => { let f = frames.get(lv); if (!f) frames.set(lv, (f = {dark: new Mesher(), light: new Mesher()})); return f; };
     const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
     for (const ad of this.ads) {
-      const tex = adTexture(ad, ad.shop ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name);
+      // the advertiser: the shop's fictional brand (a vacant unit / a gallery ad: the seeded mall name)
+      const tex = adTexture(ad, ad.shop && ad.program !== 'vacant' ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name);
       const yaw = Math.atan2(ad.nx, ad.nz), alongX = Math.abs(ad.nz) > 0.5;
       // wall-mounted kinds stand on the real wall plane behind the record (whatever its proud offset): probe the storey grid
       const back = ad.kind === 'decal' ? 0 : this.wallBehind(ad);
@@ -1988,6 +1989,18 @@ export function directoryPlanTexture(layout: StationLayout, level: number, here:
     for (const e of m.elevators) {
       ctx.fillStyle = '#3a7fc1'; ctx.fillRect(X(e.shaft.x0), Y(e.shaft.z0), (e.shaft.x1 - e.shaft.x0) * k, (e.shaft.z1 - e.shaft.z0) * k);
       ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('E', X((e.shaft.x0 + e.shaft.x1) / 2), Y((e.shaft.z0 + e.shaft.z1) / 2)); ctx.textAlign = 'left';
+    }
+    // task mall-playtest-revision (station-return wayfinding): the way back to the Subway from this storey (lane GEN's
+    // wayfinding[].stationReturn: its first step's stand point), dashed from the pylon
+    const ret = m.wayfinding?.find(q => q.level === level)?.stationReturn?.[0];
+    if (ret) {
+      ctx.save();
+      ctx.strokeStyle = '#d23c3c'; ctx.lineWidth = 3; ctx.setLineDash?.([6, 4]);
+      ctx.beginPath(); ctx.moveTo(X(here.x), Y(here.z)); ctx.lineTo(X(ret.at.x), Y(ret.at.z)); ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#d23c3c'; ctx.beginPath(); ctx.arc(X(ret.at.x), Y(ret.at.z), 5, 0, Math.PI * 2); ctx.fill();
+      ctx.font = 'bold 11px "Helvetica Neue", Arial, sans-serif';
+      ctx.fillText(`TO SUBWAY ▼ (${ret.kind})`, Math.min(W - 120, X(ret.at.x) + 8), Math.min(PY + PH - 4, Y(ret.at.z) + 14));
     }
     // you are here
     const hx = X(here.x), hy = Y(here.z);

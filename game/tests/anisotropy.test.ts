@@ -140,7 +140,6 @@ describe('U08 request policy', () => {
     try {
       const wallMap = new THREE.Texture(), floorMap = new THREE.Texture(), propMap = new THREE.Texture();
       for (const t of [wallMap, floorMap, propMap]) t.anisotropy = 4;
-      const wall = new (surfaceMaterial('paintedPanel').constructor as typeof THREE.Material)() as THREE.MeshStandardMaterial;
       const wm = surfaceMaterial('paintedPanel');
       wm.map = wallMap;
       applyDecay(wm, DECAY_PROFILES.paint);
@@ -162,7 +161,6 @@ describe('U08 request policy', () => {
       expect(floorMap.anisotropy).toBe(16);
       expect(propMap.anisotropy).toBe(4);
       expect((trim.map as THREE.Texture).anisotropy).toBe(1);
-      void wall;
     } finally { un(); }
   });
 });
@@ -268,5 +266,65 @@ describe('U08 QA report (__LL.anisotropy())', () => {
     const got = requestMaterialAnisotropy([m, new THREE.MeshBasicMaterial({map: new THREE.Texture()})], 'ceiling');
     expect(got.length).toBe(6);
     for (const t of got) { expect(t.anisotropy).toBe(16); expect(t.userData.anisotropyRole).toBe('ceiling'); }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Procedural mall finishes (world/mallSurfaces.ts via world/proceduralAa.ts): anisotropic line anti-aliasing
+
+describe('U08 procedural mall floors: lines filtered per axis by coverage (the procedural 16x), not one isotropic fade', () => {
+  it('measured line contrast (tile grout 4 mm half-width, 0.30 m tiles; eye 1.62 m, vFOV 75, 1080 px): along-view lines stay crisp', async () => {
+    const {floorFootprint, lineAACpu, oldJointCpu} = await import('../src/world/proceduralAa');
+    const w = 0.004, S = 0.3;
+    const row = (d: number) => {
+      const f = floorFootprint(d);
+      const oldPx = Math.max(f.along, f.across); // max(fwidth(x), fwidth(z)) facing straight along z
+      return {d, old: oldJointCpu(0, w, oldPx, 0.01, 0.03), alongView: lineAACpu(0, w, f.across, S), acrossView: lineAACpu(0, w, f.along, S)};
+    };
+    const r3 = row(3), r5 = row(5), r8 = row(8), r12 = row(12);
+    // before: every grout line (both directions) half gone by ~4.5 m and gone by ~6 m ("muddy at a short distance")
+    expect(r5.old).toBeLessThan(0.3);
+    expect(r8.old).toBe(0);
+    // after: the lines running ALONG the view keep near-full contrast far beyond (their own footprint is the small across one)
+    expect(r5.alongView).toBeGreaterThan(0.8); // a 6.4 mm line in a 7.5 mm pixel
+    expect(r8.alongView).toBeGreaterThan(0.5);
+    expect(r12.alongView).toBeGreaterThan(0.3);
+    // cross-view lines are box-filtered: a faint line of their real ink instead of an aliased / vanished one
+    expect(r3.acrossView).toBeGreaterThan(0.5);
+    expect(r8.acrossView).toBeGreaterThan(0.05);
+    expect(r8.acrossView).toBeLessThan(0.3);
+    // never brighter than the line itself; far footprints settle to the average density (1.6 w / S), no moire
+    for (const d of [1, 2, 4, 6, 10, 20, 40]) { const q = row(d); for (const v of [q.alongView, q.acrossView]) { expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThanOrEqual(1); } }
+    expect(lineAACpu(0, w, 0.5, S)).toBeCloseTo(1.6 * w / S, 6);
+    expect(lineAACpu(0.15, w, 0.5, S)).toBeCloseTo(1.6 * w / S, 6);
+    // up close it is the old joint profile (full ink inside 0.6 w, gone beyond w)
+    expect(lineAACpu(0, w, 0.0005, S)).toBe(1);
+    expect(lineAACpu(0.0045, w, 0.0005, S)).toBe(0);
+  });
+
+  it('the mall surface graphs build on WGSL / GLSL with every derivative taken before the pattern If chain (WGSL uniformity)', async () => {
+    const {buildBoth} = await import('./helpers/tslShaders');
+    const {MALL_FINISH_ATTR, mallSurfaceMaterial} = await import('../src/world/mallSurfaces');
+    const geo = () => { const g = new THREE.PlaneGeometry(1, 1); g.setAttribute(MALL_FINISH_ATTR, new THREE.Float32BufferAttribute(new Float32Array(4).fill(3), 1)); return g; };
+    for (const k of ['wall', 'floor', 'ceiling'] as const) {
+      const wgsl = buildBoth(new THREE.Mesh(geo(), mallSurfaceMaterial(k)), {lights: [new THREE.SpotLight(0xffffff, 1)]});
+      for (const sh of wgsl) expect(sh.errors, `${k} ${sh.backend}`).toEqual([]);
+      const frag = wgsl.find(s => s.backend === 'wgsl')!.fragment;
+      const lines = frag.split('\n').filter(l => /\b(fwidth|dpdx|dpdy)\s*\(/.test(l));
+      expect(lines.filter(l => /fwidth/.test(l)).length, k).toBeGreaterThanOrEqual(2); // per-axis footprints (+ the ring radius on floors)
+      // every derivative is a top-level statement of the fragment main (never inside the pattern If chain)
+      for (const l of lines) expect(l, `${k}: ${l}`).toMatch(/^\t[\w.]+ = /);
+    }
+  });
+});
+
+describe('U08 game wiring (source guards)', () => {
+  it('the build-time pass runs right after buildWorld (before the scene / warm-up sees the level); the observer after the software cap', async () => {
+    const fs = await import('node:fs');
+    const src = fs.readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/this\.world = buildWorld\([^\n]*\n\s*requestArchitectureAnisotropy\(this\.world\.group\);[^\n]*\n\s*this\.scene\.add\(this\.world\.group\);/);
+    expect(src).toMatch(/this\.softwareGl = adaptToSoftwareGl\(this\.renderer\);[^\n]*\n\s*observeBackendAnisotropy\(this\.renderer\.backend\);/);
+    const qa = fs.readFileSync(new URL('../src/qa.ts', import.meta.url), 'utf8');
+    expect(qa).toMatch(/anisotropy: \(\) => anisotropyReport\(anisotropyCapability\(game\.softwareGl\)/);
   });
 });

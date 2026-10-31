@@ -12,6 +12,9 @@
 // dividers, concentric plaza rings, stone, tile, checker, planks, sealed concrete, clinical vinyl, confetti carpet; plaster, T-bar
 // grid (missing / stained tiles), open black ceilings, timber slats, metal panels. Fine detail fades with distance (fwidth) so
 // nothing shimmers. The 30-year decay hook (world/decay.ts) layers on top like every architectural material.
+// Task mall-playtest-revision-20261031 (lane FIX, U08 "floor muddy at a short distance"): line patterns (joints, grout, dividers,
+// seams, board lines, ring edges, T-bars, slats) are filtered per AXIS by coverage (world/proceduralAa.ts: the procedural
+// equivalent of anisotropic filtering) instead of one isotropic max(fwidth) fade; sub-cm 2D features keep the isotropic fade.
 // The shadow pass skips all of it (skipInShadowPass: opaque architecture, only alpha matters there).
 
 import * as THREE from 'three';
@@ -20,6 +23,7 @@ import {Fn, If, abs, attribute, clamp, dot, float, floor, fract, fwidth, int, iv
 import {SurfaceNodeMaterial} from './materials';
 import {skipInShadowPass, wmHash, wmNoise} from './surfaceNodes';
 import {applyDecay, type DecayProfile} from './decay';
+import {axisGate, gridAA, lineAA} from './proceduralAa'; // Task mall-playtest-revision-20261031 (lane FIX, U08): anisotropic line AA
 import type {MallCeilFinish, MallFloorFinish, MallWallFinish} from './mallFinishes';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,10 +78,6 @@ const ROW: AnyNode = int(floor(FID.add(0.5)));
 const tex = (k: number): AnyNode => textureLoad(MALL_TABLE, ivec2(int(k), ROW));
 const isC = (code: AnyNode, k: number): AnyNode => abs(code.sub(k)).lessThan(0.5);
 const LUMA: AnyNode = vec3(0.2126, 0.7152, 0.0722);
-/** Distance (m) to the nearest cell edge of a grid of cell size `size` at grid coordinate q. */
-const edgeDist = (q: AnyNode, size: AnyNode): AnyNode => { const f = fract(q) as AnyNode; return min(min(f.x, f.x.oneMinus()).mul(size.x), min(f.y, f.y.oneMinus()).mul(size.y)); };
-/** 1 inside a joint of half-width w (m) at edge distance d, with a soft edge. */
-const joint = (d: AnyNode, w: number | AnyNode): AnyNode => float(1).sub(smoothstep(float(w).mul(0.6), float(w), d));
 const shadowSafe = (full: AnyNode): AnyNode => skipInShadowPass(full as Node<'vec4'>, vec4(1, 1, 1, 1) as unknown as Node<'vec4'>, 'vec4');
 
 /** Mall wall colour: upper / lower pattern by height, skirting, cap rail, accent band. */
@@ -87,7 +87,9 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
   const s = U.x, h = U.y;
   const pw = positionWorld as AnyNode;
   // anti-aliasing weights (uniform control flow): pattern contrast fades out where a pattern period is ~2-3 px
-  const px = max(fwidth(s), fwidth(h)).toVar('mwPx');
+  const fs = fwidth(s).toVar('mwFs'), fh = fwidth(h).toVar('mwFh'); // (lane FIX, U08) per-axis footprints
+  const FW = vec2(fs, fh);
+  const px = max(fs, fh).toVar('mwPx');
   const lowerTop = T3.x, skirt = T3.y, scale = max(T3.z, 0.02).toVar('mwScale'), band = T3.w;
   const inLower = step(h, lowerTop).mul(step(0.001, lowerTop)).toVar('mwLower');
   const code = mix(T0.w, T1.w, inLower).toVar('mwCode');
@@ -102,13 +104,13 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
     // concrete block, running bond 0.4 x 0.2 (matches wallDetailPlan BLOCK), painted
     const row = floor(h.div(0.2));
     const q = vec2(s.div(0.4).add(fract(row.mul(0.5)).mul(0.5).mul(2)), h.div(0.2));
-    const j = joint(edgeDist(q, vec2(0.4, 0.2)), 0.008).mul(mid);
+    const j = gridAA(q, vec2(0.4, 0.2), 0.008, FW);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 3)) as AnyNode).sub(0.5).mul(0.08).add(1);
     out.assign(mix(col.mul(tone).mul(mottle), col.mul(0.66), j));
   }).ElseIf(isC(code, 2), () => {
     // ceramic tile grid (scale), grout, per-tile tone, a decorative band in the trim colour at `band`
     const q = vec2(s, h).div(scale);
-    const g = joint(edgeDist(q, vec2(scale, scale)), 0.004).mul(fine);
+    const g = gridAA(q, vec2(scale, scale), 0.004, FW);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 7)) as AnyNode).sub(0.5).mul(0.06).add(1);
     const grout = mix(col, vec3(0.6, 0.6, 0.58), 0.55).mul(0.82);
     const b = step(0.001, band).mul(float(1).sub(step(scale.mul(0.5), abs(h.sub(band)))));
@@ -116,8 +118,9 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
   }).ElseIf(isC(code, 3), () => {
     // slatwall: horizontal grooves every `scale`, a highlight on the slat edge
     const f = fract(h.div(scale));
-    const groove = float(1).sub(step(0.14, f)).mul(mid);
-    const lip = step(0.14, f).mul(float(1).sub(step(0.2, f))).mul(mid);
+    const midH = axisGate(fh, 0.03, 0.09); // horizontal grooves: the vertical footprint only
+    const groove = float(1).sub(step(0.14, f)).mul(midH);
+    const lip = step(0.14, f).mul(float(1).sub(step(0.2, f))).mul(midH);
     out.assign(col.mul(mottle).mul(float(1).sub(groove.mul(0.62))).mul(float(1).add(lip.mul(0.08))));
   }).ElseIf(isC(code, 4), () => {
     // pegboard: hole grid (scale), holes dark, fading to an average at distance
@@ -128,22 +131,22 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
     // vertical timber planks (scale wide): seams, per-plank tone, grain along the height
     const p = s.div(scale);
     const fp = fract(p);
-    const seam = float(1).sub(smoothstep(0.004, 0.01, min(fp, fp.oneMinus()).mul(scale))).mul(mid);
+    const seam = lineAA(min(fp, fp.oneMinus()).mul(scale), 0.0088, fs, scale);
     const grain = wmNoise(vec3(s.mul(9), h.mul(0.5), floor(p).mul(1.7))) as AnyNode;
     const tone = (wmHash(vec3(floor(p), 1, 9)) as AnyNode).sub(0.5).mul(0.16).add(1);
     out.assign(col.mul(tone).mul(mix(0.82, 1.14, grain)).mul(float(1).sub(seam.mul(0.55))));
   }).ElseIf(isC(code, 6), () => {
     // board-formed concrete: mottle, horizontal board lines, tie holes on a 0.6 m grid
     const n2 = wmNoise(vec3(s.mul(2.3), h.mul(2.3), 5)) as AnyNode;
-    const board = float(1).sub(smoothstep(0.003, 0.008, min(fract(h.div(0.15)), fract(h.div(0.15)).oneMinus()).mul(0.15))).mul(mid);
+    const board = lineAA(min(fract(h.div(0.15)), fract(h.div(0.15)).oneMinus()).mul(0.15), 0.0069, fh, 0.15);
     const tq = fract(vec2(s, h).div(0.6)).sub(0.5);
     const hole = float(1).sub(smoothstep(0.012, 0.018, length(tq).mul(0.6))).mul(mid);
-    const panel = float(1).sub(smoothstep(0.004, 0.009, edgeDist(vec2(s, h).div(vec2(scale, 2.4)), vec2(scale, 2.4)))).mul(mid);
+    const panel = gridAA(vec2(s, h).div(vec2(scale, 2.4)), vec2(scale, 2.4), 0.0081, FW);
     out.assign(col.mul(mix(0.8, 1.14, nLow.mul(0.55).add(n2.mul(0.45)))).mul(float(1).sub(board.mul(0.08))).mul(float(1).sub(hole.mul(0.6))).mul(float(1).sub(panel.mul(0.3))));
   }).ElseIf(isC(code, 7), () => {
     // veined stone panels (scale x scale / 2): joints, per-panel tone, veins in the trim colour
     const sq = vec2(s.div(scale), h.div(scale.mul(0.5)));
-    const j = joint(edgeDist(sq, vec2(scale, scale.mul(0.5))), 0.003).mul(mid);
+    const j = gridAA(sq, vec2(scale, scale.mul(0.5)), 0.003, FW);
     const tone = (wmHash(vec3(floor(sq.x), floor(sq.y), 5)) as AnyNode).mul(0.16).add(0.92);
     const vn = wmNoise(vec3(s.mul(0.9), h.mul(0.9), floor(sq.x).mul(2.1))) as AnyNode;
     const vein = float(1).sub(smoothstep(0.0, 0.03, abs(fract(vn.mul(4.5)).sub(0.5)))).mul(mid);
@@ -152,7 +155,7 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
     // brick, running bond (0.225 x 0.075 module incl. 10 mm joints), light mortar, per-brick tone
     const row = floor(h.div(0.075));
     const q = vec2(s.div(0.225).add(fract(row.mul(0.5))), h.div(0.075));
-    const j = joint(edgeDist(q, vec2(0.225, 0.075)), 0.006).mul(fine);
+    const j = gridAA(q, vec2(0.225, 0.075), 0.006, FW);
     const r = wmHash(vec3(floor(q.x), floor(q.y), 11)) as AnyNode;
     const brick = col.mul(r.sub(0.5).mul(0.26).add(1)).mul(mix(vec3(1, 1, 1), vec3(1.06, 0.95, 0.9), r));
     out.assign(mix(brick.mul(mottle), vec3(0.62, 0.6, 0.56).mul(mix(col, vec3(1, 1, 1), 0.5)), j.mul(0.85)));
@@ -160,7 +163,7 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
     // striped paper: alternating stripes (scale wide) of the colour and a cream
     const st = step(0.5, fract(s.div(scale.mul(2))));
     const cream = mix(col, vec3(0.92, 0.9, 0.84), 0.65);
-    out.assign(mix(col, mix(col, cream, st), mid).mul(mottle));
+    out.assign(mix(col, mix(col, cream, st), axisGate(fs, 0.03, 0.09)).mul(mottle)); // vertical stripes: the horizontal footprint
   }).ElseIf(isC(code, 10), () => {
     // diamond paper: a diamond lattice of the colour and the trim colour
     const dq = vec2(s.add(h), s.sub(h)).div(scale);
@@ -174,7 +177,7 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
   }).ElseIf(isC(code, 12), () => {
     // slab fascia: white render, a dark soffit-edge strip, faint panel joints every 2.4 m
     const strip = float(1).sub(step(0.06, h));
-    const pj = float(1).sub(smoothstep(0.003, 0.006, min(fract(s.div(2.4)), fract(s.div(2.4)).oneMinus()).mul(2.4))).mul(mid);
+    const pj = lineAA(min(fract(s.div(2.4)), fract(s.div(2.4)).oneMinus()).mul(2.4), 0.0056, fs, 2.4);
     out.assign(mix(col.mul(mix(0.97, 1.03, nLow)), trim, strip).mul(float(1).sub(pj.mul(0.12))));
   });
   // skirting and the cap rail on top of a contrasting lower zone
@@ -192,13 +195,18 @@ const WALL_COLOR: AnyNode = shadowSafe(Fn(() => {
 const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
   const T0 = tex(0).toVar('mfT0'), T1 = tex(1).toVar('mfT1'), T2 = tex(2).toVar('mfT2'), T3 = tex(3).toVar('mfT3');
   const P = (positionWorld as AnyNode).xz.toVar('mfP');
-  const px = max(fwidth(P.x), fwidth(P.y)).toVar('mfPx');
+  const fx = fwidth(P.x).toVar('mfFx'), fz = fwidth(P.y).toVar('mfFz'); // (lane FIX, U08) per-axis footprints (joints / grout: gridAA; the old
+  // joint(edgeDist(..)).mul(fine | mid) isotropic weights are gone)
+  const FF = vec2(fx, fz);
+  const px = max(fx, fz).toVar('mfPx');
   const chipVis = float(1).sub(smoothstep(0.006, 0.02, px)).toVar('mfChip');
-  const fine = float(1).sub(smoothstep(0.01, 0.03, px)).toVar('mfFine');
   const mid = float(1).sub(smoothstep(0.03, 0.09, px)).toVar('mfMid');
   const code = T0.w, A = T0.rgb, B = T1.rgb, Cc = T2.rgb;
   const w = max(T1.w, 0.03).toVar('mfW'), d = max(T3.x, 0.03).toVar('mfD');
   const nLow = (wmNoise(vec3(P.x.mul(0.45), P.y.mul(0.45), 2)) as AnyNode).toVar('mfN');
+  // plaza rings: the radial footprint, taken before the If chain (uniform control flow)
+  const ringR = length(P.sub(vec2(T3.y, T3.z))).toVar('mfRingR');
+  const fr = fwidth(ringR).toVar('mfFr');
   const out = vec3(A).toVar('mfOut');
   // terrazzo chips (two chip sizes) over a binder colour, toward the average where chips are sub-pixel
   const chips = (binder: AnyNode, c1: AnyNode, c2: AnyNode): AnyNode => {
@@ -213,25 +221,25 @@ const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
   If(isC(code, 0), () => {
     // terrazzo with brass divider strips every w x d
     const q = vec2(P.x.div(w), P.y.div(d));
-    const div = joint(edgeDist(q, vec2(w, d)), 0.005).mul(mid);
+    const div = gridAA(q, vec2(w, d), 0.005, FF);
     out.assign(mix(chips(A, B, Cc), Cc.mul(1.15), div.mul(0.9)));
   }).ElseIf(isC(code, 1), () => {
     // concentric-ring plaza terrazzo around (T3.y, T3.z): cream / black / cream / grey bands, divider strips at band edges
-    const r = length(P.sub(vec2(T3.y, T3.z)));
+    const r = ringR;
     const k = floor(r.div(w));
     const m = floor(fract(k.div(5)).mul(5).add(0.5));
     const isB = abs(m.sub(2)).lessThan(0.5), isCc = abs(m.sub(4)).lessThan(0.5);
     const binder = vec3(A).toVar();
     If(isB, () => { binder.assign(B); });
     If(isCc, () => { binder.assign(Cc); });
-    const fr = fract(r.div(w));
-    const edge = joint(min(fr, fr.oneMinus()).mul(w), 0.006).mul(mid);
+    const frr = fract(r.div(w));
+    const edge = lineAA(min(frr, frr.oneMinus()).mul(w), 0.006, fr, w);
     out.assign(mix(chips(binder, mix(B, A, 0.5), Cc), vec3(0.62, 0.5, 0.3), edge.mul(0.8)));
   }).ElseIf(isC(code, 2), () => {
     // polished stone w x d, half bond, per-slab tone, soft veins, a border band in colour C every 6 modules
     const row = floor(P.y.div(d));
     const q = vec2(P.x.div(w).add(row.mul(0.5)), P.y.div(d));
-    const j = joint(edgeDist(q, vec2(w, d)), 0.003).mul(mid);
+    const j = gridAA(q, vec2(w, d), 0.003, FF);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 19)) as AnyNode).mul(0.14).add(0.93);
     const vn = wmNoise(vec3(P.x.mul(0.8), P.y.mul(0.8), floor(q.x).mul(1.3))) as AnyNode;
     const vein = float(1).sub(smoothstep(0.0, 0.03, abs(fract(vn.mul(4)).sub(0.5)))).mul(mid);
@@ -239,28 +247,28 @@ const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
   }).ElseIf(isC(code, 3), () => {
     // ceramic tile grid w, grout B
     const q = P.div(w);
-    const g = joint(edgeDist(q, vec2(w, w)), 0.004).mul(fine);
+    const g = gridAA(q, vec2(w, w), 0.004, FF);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 23)) as AnyNode).sub(0.5).mul(0.07).add(1);
     out.assign(mix(A.mul(tone).mul(mix(0.96, 1.04, nLow)), B.mul(0.85), g));
   }).ElseIf(isC(code, 4), () => {
     // two-colour checker (w), thin joints
     const q = P.div(w);
     const chk = step(0.5, fract(floor(q.x).add(floor(q.y)).mul(0.5)));
-    const g = joint(edgeDist(q, vec2(w, w)), 0.003).mul(fine);
+    const g = gridAA(q, vec2(w, w), 0.003, FF);
     out.assign(mix(mix(A, B, chk).mul(mix(0.95, 1.05, nLow)), Cc, g.mul(0.7)));
   }).ElseIf(isC(code, 5), () => {
     // timber planks w wide (rows along z) x d long, random bond, grain along x
     const row = floor(P.y.div(w));
     const off = (wmHash(vec3(row, 3, 29)) as AnyNode).mul(d);
     const q = vec2(P.x.add(off).div(d), P.y.div(w));
-    const j = joint(edgeDist(q, vec2(d, w)), 0.0025).mul(fine);
+    const j = gridAA(q, vec2(d, w), 0.0025, FF);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 31)) as AnyNode).sub(0.5).mul(0.22).add(1);
     const grain = wmNoise(vec3(P.x.mul(1.4), P.y.mul(26), row)) as AnyNode;
     out.assign(mix(A, B, grain.mul(0.45)).mul(tone).mul(float(1).sub(j.mul(0.6))));
   }).ElseIf(isC(code, 6), () => {
     // sealed concrete: mottle, saw cuts every w, darker blotches
     const q = P.div(w);
-    const cut = joint(edgeDist(q, vec2(w, w)), 0.005).mul(mid);
+    const cut = gridAA(q, vec2(w, w), 0.005, FF);
     const n2 = wmNoise(vec3(P.x.mul(1.9), P.y.mul(1.9), 37)) as AnyNode;
     const blot = smoothstep(0.62, 0.8, n2).mul(0.3);
     out.assign(mix(A.mul(mix(0.85, 1.12, nLow)), B, blot).mul(float(1).sub(cut.mul(0.45))));
@@ -268,7 +276,7 @@ const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
     // sheet vinyl: fine flecks, faint welded seams every w, a coloured border line (B) every 2w
     const q = P.div(0.02);
     const fl = step(0.86, wmHash(vec3(floor(q.x), floor(q.y), 41)) as AnyNode).mul(chipVis);
-    const seam = joint(min(fract(P.x.div(w)), fract(P.x.div(w)).oneMinus()).mul(w), 0.002).mul(mid);
+    const seam = lineAA(min(fract(P.x.div(w)), fract(P.x.div(w)).oneMinus()).mul(w), 0.002, fx, w);
     out.assign(mix(A.mul(mix(0.97, 1.03, nLow)), Cc, fl.mul(0.5)).mul(float(1).sub(seam.mul(0.12))));
   }).ElseIf(isC(code, 8), () => {
     // confetti carpet: B / C flecks on A, carpet tile checker of pile direction
@@ -286,14 +294,14 @@ const FLOOR_COLOR: AnyNode = shadowSafe(Fn(() => {
 const CEIL_COLOR: AnyNode = shadowSafe(Fn(() => {
   const T0 = tex(0).toVar('mcT0'), T1 = tex(1).toVar('mcT1');
   const P = (positionWorld as AnyNode).xz.toVar('mcP');
-  const px = max(fwidth(P.x), fwidth(P.y)).toVar('mcPx');
-  const mid = float(1).sub(smoothstep(0.03, 0.09, px)).toVar('mcMid');
+  const cx = fwidth(P.x).toVar('mcFx'), cz = fwidth(P.y).toVar('mcFz'); // (lane FIX, U08) per-axis footprints
+  const FC = vec2(cx, cz);
   const code = T0.w, A = T0.rgb, B = T1.rgb, mod = max(T1.w, 0.05).toVar('mcMod');
   const nLow = (wmNoise(vec3(P.x.mul(0.5), P.y.mul(0.5), 9)) as AnyNode).toVar('mcN');
   const out = vec3(A.mul(mix(0.95, 1.04, nLow))).toVar('mcOut');
   If(isC(code, 1), () => {
     const q = P.div(mod);
-    const bar = joint(edgeDist(q, vec2(mod, mod)), 0.012).mul(mid);
+    const bar = gridAA(q, vec2(mod, mod), 0.012, FC);
     const r = wmHash(vec3(floor(q.x), floor(q.y), 47)) as AnyNode;
     const missing = step(r, 0.04), stained = step(r, 0.13).mul(float(1).sub(missing));
     const tileCol = A.mul(mix(vec3(1, 1, 1), vec3(0.78, 0.7, 0.55), stained)).mul(r.mul(0.08).add(0.96));
@@ -301,20 +309,20 @@ const CEIL_COLOR: AnyNode = shadowSafe(Fn(() => {
   }).ElseIf(isC(code, 2), () => {
     // open ceiling: painted dark, beams every module, a duct run every 3 modules
     const bx = fract(P.x.div(mod));
-    const beam = float(1).sub(smoothstep(0.03, 0.05, min(bx, bx.oneMinus()))).mul(mid);
+    const beam = lineAA(min(bx, bx.oneMinus()).mul(mod), mod.mul(0.05), cx, mod);
     const dz = fract(P.y.div(mod.mul(3)));
     const duct = step(0.42, dz).mul(float(1).sub(step(0.58, dz)));
     out.assign(mix(A.mul(mix(0.85, 1.1, nLow)), B, max(beam.mul(0.8), duct.mul(0.55))));
   }).ElseIf(isC(code, 3), () => {
     // linear timber slats along x, dark gaps
     const f = fract(P.y.div(mod));
-    const gap = step(0.62, f).mul(mid);
+    const gap = step(0.62, f).mul(axisGate(cz, 0.03, 0.09)); // slats along x: the z footprint
     const tone = (wmHash(vec3(floor(P.y.div(mod)), 1, 53)) as AnyNode).sub(0.5).mul(0.14).add(1);
     out.assign(mix(A.mul(tone), B, gap));
   }).ElseIf(isC(code, 4), () => {
     // metal panels: seams, per-panel tone
     const q = P.div(mod);
-    const seam = joint(edgeDist(q, vec2(mod, mod)), 0.006).mul(mid);
+    const seam = gridAA(q, vec2(mod, mod), 0.006, FC);
     const tone = (wmHash(vec3(floor(q.x), floor(q.y), 59)) as AnyNode).sub(0.5).mul(0.1).add(1);
     out.assign(mix(A.mul(tone), B, seam));
   });
