@@ -124,11 +124,11 @@ export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, stri
   // and its loose floor finds after every core record — the core view still reproduces SUBWAY_GOLDEN (asserted every run). Before
   // (stage 4, translated cores): 42 17f06a80 / 5b5d5bad (pistol 2b39a883), 9001 fe56616a / 294e2619, 48596 14b06df2 / fe055a49,
   // 16920 = SUBWAY_GOLDEN.
-  '42:rifle': ['8e2beb1a', '415337e2', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
-  '42:pistol': ['8e2beb1a', 'c392434c', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
-  '9001:rifle:side-mezzanine': ['5185b4b3', '01040514', 'station 30 (L0 23 L1 2 L2 5) + service 3'],
-  '16920:rifle:island-ends': ['f70291d9', '366aae1d', 'station 30 (L0 22 L1 5 L2 3) + service 5'],
-  '48596:rifle:deep': ['eb312772', '0ac9c3da', 'station 32 (L0 25 L1 2 L2 5) + service 3'],
+  '42:rifle': ['8321574e', '415337e2', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
+  '42:pistol': ['8321574e', 'c392434c', 'station 30 (L0 24 L1 2 L2 4) + service 4'],
+  '9001:rifle:side-mezzanine': ['05ae2856', '01040514', 'station 30 (L0 23 L1 2 L2 5) + service 3'],
+  '16920:rifle:island-ends': ['06a8cd42', '366aae1d', 'station 30 (L0 22 L1 5 L2 3) + service 5'],
+  '48596:rifle:deep': ['5e7443ff', '0ac9c3da', 'station 32 (L0 25 L1 2 L2 5) + service 3'],
 };
 // Office: stage 3 (task track1-siren-blightbelly-20261031); pickups / counts as at stage 2 (task office-props-physics-scale-20261030).
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
@@ -146,9 +146,9 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
  */
 export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...OFFICE_GOLDEN,
-  '222:pistol': ['72312ed5', 'e2d2d41d', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
-  '3333:pistol': ['149f6a02', 'adaf922a', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
-  '4242:pistol': ['b1c2b0ad', '36b424a5', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
+  '222:pistol': ['fc17be7a', 'e2d2d41d', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 7'],
+  '3333:pistol': ['66709f4c', 'adaf922a', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 6'],
+  '4242:pistol': ['b7048532', '36b424a5', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 9'],
 };
 
 /**

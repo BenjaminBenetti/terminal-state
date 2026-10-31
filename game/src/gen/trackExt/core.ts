@@ -5,7 +5,8 @@
 //  - finishExtensions (gen/trackExt/index.ts) EMBEDS the finished core into the larger grid its extensions need: every core
 //    decision was made in the core's own frame (exactly as without extensions), the embedding is a pure translation.
 //  - coreView takes it back out: the level exactly as it would have been generated without its extensions (extension cells back
-//    to rock, appended areas / doors left out). Used by runtime fields that must treat the core exactly as before (world/decay.ts)
+//    to rock with no prop footprints, appended areas / doors left out, and — lane CONTENT — the extensions' own appended props /
+//    lights / signs / pickups / spawns and composition clusters filtered by area). Used by runtime fields that must treat the core exactly as before (world/decay.ts)
 //    and by the translation-normalised golden proofs (tests/track-ext*.test.ts). Pure data; inputs are not modified.
 
 import {CELL, Grid, type NavLink} from '../grid';

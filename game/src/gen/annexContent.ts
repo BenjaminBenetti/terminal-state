@@ -14,8 +14,9 @@
 //                 lower service level: pump skids, transformer banks, tool bays, caches) on its own generated-model budget
 //                 ANNEX_COMPOSE_BUDGET, the iteration-07 dresser, purpose door plates — plus one STASH holder per annex (two in big
 //                 ones) in its dead-end rooms (loot key items/lootTables.ts ANNEX_STASH_KEY);
-//  3. lights    — untinted layout.lights: annex fixtures with the purposes' light odds (low, flickering, dead; the entry corridor at
-//                 least dim), sparse mostly dead / dying fixtures down the tunnels (much darker than the station);
+//  3. lights    — untinted layout.lights: annex fixtures with the purposes' light odds, one step darker half the time (low,
+//                 flickering, dead; the entry corridor at least dim), sparse mostly dead / dying fixtures down the tunnels (much
+//                 darker than the station);
 //  4. loot      — the per-annex loose floor program (items/lootTables.ts ANNEX_FLOOR) on the annex's free floor;
 //  5. vents     — layout.extensions.vents: steam spots over the annex's pump skids / water heaters / compressors, then corridor
 //                 walls (lane VIS's bounded, non-hazardous steam emitter reads them; never the gas field);
@@ -29,12 +30,11 @@ import type {Rng} from '../core/rng';
 import {CELL, FLOOR, SOLID} from './grid';
 import {ROOM_PURPOSES, purposeById, type LightOdds, type RoomPurpose} from './purposes';
 import {isP7Kind} from './props07';
-import {LIGHT_ODDS, dressExtensionAreas, stationP7Palette} from './stationDress';
+import {LIGHT_ODDS, clearAround, dressExtensionAreas, stationP7Palette} from './stationDress';
 import {placeAgainstWall, type PlaceCtx} from './placeKit';
 import {isExtensionArea, type ServiceAnnex, type TrackTunnel} from './trackExt/types';
 import {ANNEX_PICKED_KEY, ANNEX_STASH_KEY, BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, econCat, floorChance, floorCount, type LootProfile} from '../items/lootTables';
 import {areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, type SpawnContextRule, type SpawnProfile} from '../ai/spawnTables';
-import {clearAround} from './stationDress';
 import {levelDistance} from './levelGen';
 import {lootTheme} from '../items/lootEconomy';
 import {ITEMS} from '../items/items';
@@ -128,12 +128,12 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   const service = o.spawns.contexts.service;
   const ext = layout.extensions;
   if (!ext) return null;
-  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
+  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
+  const t0 = now();
   const root = rng.fork('track-ext-content');
   const first = {props: layout.props.length, signs: layout.signs.length, lights: layout.lights.length, pickups: layout.pickups.length, zombies: layout.zombies.length};
   const rep: ExtensionContentReport = {annexes: [], tunnelLights: 0, props: 0, signs: 0, lights: 0, pickups: 0, vents: 0, ms: 0, phases: {}, first};
-  const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
-  let tp = now();
+  let tp = t0;
   const phase = (k: string) => { const t = now(); rep.phases[k] = (rep.phases[k] ?? 0) + t - tp; tp = t; };
   const annexAreas = (n: ServiceAnnex) => n.areas.map(id => layout.areas[id]).filter((a): a is Area => !!a && isExtensionArea(a));
   // 1. purposes
@@ -191,18 +191,15 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
     for (const a of annexAreas(n)) purposes[a.purpose ?? a.type] = (purposes[a.purpose ?? a.type] ?? 0) + 1;
     const props = layout.props.slice(first.props).filter(p => ids.has(p.area));
     rep.annexes.push({
-      id: n.id, purposes, props: props.length, holders: props.filter(p => HOLDERS.has(p.kind)).length, stash: stashes.filter(i => ids.has(layout.props[i].area)).length,
+      id: n.id, purposes, props: props.length, holders: props.filter(p => p.host === undefined && isLootHolderKind(p.kind)).length, stash: stashes.filter(i => ids.has(layout.props[i].area)).length,
       lights: layout.lights.slice(first.lights).filter(l => ids.has(l.area)).length, pickups: layout.pickups.slice(first.pickups).filter(p => ids.has(p.area)).length,
       service: svc.get(n.id) ?? {count: 0, placed: 0},
     });
   }
-  rep.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
+  rep.ms = now() - t0;
   REPORTS.set(layout, rep);
   return rep;
 }
-
-/** Holder kinds counted in the report (items/loot.ts isLootHolderKind is the real test; this is census only). */
-const HOLDERS: ReadonlySet<string> = new Set(['crate', 'cabinetTall', 'cabinetLow', 'shelf', 'stockShelf', 'staffLockers', 'rollingToolChest', 'medCabinet', 'bin', 'wheelieBin', 'safe', 'filingCabinet']);
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // 1. Purposes
@@ -440,8 +437,8 @@ function placeAnnexFloor(layout: StationLayout, areas: readonly Area[], loot: Lo
  * fork, in its areas only: count = U{count}, the zombie types of that many spawns (the level's type roll); candidate cells =
  * walkable FLOOR of an annex area, >= startCells walking cells from the start, clearCells clear all round, >= landingKeepM from
  * the annex's entry door (its keep point), the area's effective weight > 0; weighted area order (Efraimidis-Spirakis keys), cap
- * passes, `tries` picks per visit, >= spacingM from every enemy already placed. Appends to layout.zombies (y: the cell floor via the
- * runtime's floorAt, like the station's main-level spawns); returns the drawn count and the placed count.
+ * passes, `tries` picks per visit, >= spacingM from every enemy already placed. Appends to layout.zombies (y = the cell's absolute
+ * floor: the trackbed); returns the drawn count and the placed count.
  */
 function placeServiceSpawns(layout: StationLayout, n: ServiceAnnex, areas: readonly Area[], ctx: SpawnContextRule, profile: SpawnProfile, dist: Int32Array, rng: Rng): {count: number; placed: number} {
   const g = layout.grid, pl = ctx.placement;
@@ -478,7 +475,8 @@ function placeServiceSpawns(layout: StationLayout, n: ServiceAnnex, areas: reado
         const [zx, zz] = g.center(x, y);
         if (layout.zombies.some(z => (z.level ?? 0) === 0 && Math.hypot(z.x - zx, z.z - zz) < pl.spacingM)) continue;
         perArea.set(id, (perArea.get(id) ?? 0) + 1);
-        layout.zombies.push({x: zx, z: zz, yaw: rng.range(-Math.PI, Math.PI), type: types[placed], area: id});
+        // y: the spawn's absolute floor height (ZombieSpawn.y; the annex lies on the trackbed, not at the main level's 0)
+        layout.zombies.push({x: zx, z: zz, y: g.floorOf(g.idx(x, y)), yaw: rng.range(-Math.PI, Math.PI), type: types[placed], area: id});
         placed++;
         break;
       }
