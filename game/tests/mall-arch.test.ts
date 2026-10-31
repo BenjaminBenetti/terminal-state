@@ -40,7 +40,8 @@ import {MALL_FINISH_ATTR, MALL_TABLE_ROWS, mallSurfaceMaterial, mallTableData} f
 import {MALL_SURFACE_MATERIALS, mallDressMaterials, maxRect, packAtlas, pointInPoly, splitFinishKey} from '../src/world/mallArch';
 import {SKY, bakeSkylight, mallSkyField} from '../src/world/mallSkylight';
 import {MALL_FOG, MallAtmosphere, fogTransmittance, mallQaPoses} from '../src/world/mallAtmosphere';
-import {MALL_EXT_ORDER, mallGasCurtainMaterial, mallGasMaterial, mallSkyMaterial} from '../src/world/mallExterior';
+import {GAS_SHEETS, MALL_EXT_ORDER, MALL_SKY, mallGasCurtainMaterial, mallGasMaterial, mallSkyMaterial, mallSkyPalette} from '../src/world/mallExterior';
+import {EXT_FOG, exteriorFogOpacity} from '../src/world/exterior';
 import {GALLERY_AD, type MallAd} from '../src/world/mallAds';
 import {MOOD} from '../src/world/lights';
 import {treatmentOf} from '../src/world/wallDetailPlan';
@@ -229,7 +230,8 @@ describe('mall atrium: the glass roof over the TOP opening, balustrades, columns
     expect(glass).toBeTruthy();
     const gm = matOf(glass);
     expect(gm.transparent).toBe(true);
-    expect(gm.depthWrite).toBe(false);
+    // (U02, primary's browser check: it writes depth so the interior haze march stops at the glass — no bright veil outside)
+    expect(gm.depthWrite).toBe(true);
     markShadows(w.group, true, true);
     expect(glass.castShadow).toBe(false);
     expect(meshes(w.group).find(m => m.name === 'mall-roof-steel')!.castShadow).toBe(true);
@@ -342,6 +344,52 @@ describe('U02 + U07 + D06 on the fixture build', () => {
     for (const st of F.layout.mall.storeys) expect(st.baseY + st.clear).toBeLessThan(deck);
     // the mall haze (scene fog) is unchanged by the exterior (a separate atmosphere: inside stays the light dusty haze)
     expect(MALL_FOG.density).toBe(0.0115);
+  });
+
+  it('U02 palette: the exterior IS the Office murk — its hue, at least its saturation, dark overhead (no pale overcast), gas visible against it, the Office fog density on the curtain', () => {
+    const w = fw(), arch = w.mallArch!;
+    const srgb = (c: readonly number[]) => c.map(v => (v <= 0.0031308 ? 12.92 * v : 1.055 * v ** (1 / 2.4) - 0.055));
+    const hsv = (c: readonly number[]) => {
+      const [r, g, b] = srgb(c), mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+      const h = d === 0 ? 0 : mx === r ? 60 * (((g - b) / d) % 6) : mx === g ? 60 * ((b - r) / d + 2) : 60 * ((r - g) / d + 4);
+      return {h: (h + 360) % 360, s: mx ? d / mx : 0, v: mx};
+    };
+    const lum = (c: readonly number[]) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    const office = hsv(EXT_FOG.color);
+    expect(office.h).toBeGreaterThan(80); // the Office murk: a sickly yellow-green
+    expect(office.h).toBeLessThan(105);
+    const pal = mallSkyPalette();
+    for (const [k, c] of Object.entries(pal)) {
+      const q = hsv(c);
+      expect(Math.abs(q.h - office.h), `${k} hue ${q.h.toFixed(1)} vs the Office ${office.h.toFixed(1)}`).toBeLessThan(8);
+      expect(q.s, `${k} saturation`).toBeGreaterThanOrEqual(office.s - 1e-6);
+      expect(q.s, `${k} not neon`).toBeLessThan(0.65);
+    }
+    // dark overhead: the zenith is a deep murky green, nowhere near the old pale overcast (sRGB value 0.51, saturation 0.12)
+    const z = hsv(pal.zenith);
+    expect(z.v).toBeLessThan(0.5);
+    expect(z.v).toBeGreaterThan(0.25);
+    expect(z.s).toBeGreaterThan(0.3);
+    expect(lum(pal.zenith)).toBeLessThan(0.17);
+    expect(lum(pal.horizon)).toBeLessThan(lum(pal.zenith));
+    // the gas reads against the sky both ways: lit rims brighter, dense cores darker
+    expect(lum(pal.gasLit)).toBeGreaterThan(lum(pal.zenith) * 1.4);
+    expect(lum(pal.gasCore)).toBeLessThan(lum(pal.zenith) * 0.7);
+    // depth: five sheets over the apex at distinct heights (parallax) + the roof layer + the curtain
+    expect(GAS_SHEETS.length).toBe(5);
+    expect(new Set(GAS_SHEETS).size).toBe(5);
+    expect(arch.stats.exteriorGas).toBe(GAS_SHEETS.length + 1);
+    // the curtain carries the Office fog's opacity at its distance from the roof (EXT_FOG density, world/exterior.ts)
+    const r = MALL_FIX.roof, half = Math.hypot(r.x1 - r.x0, r.z1 - r.z0) / 2;
+    expect(arch.stats.exteriorCurtain).toBeCloseTo(Math.min(0.9, exteriorFogOpacity(half + 6, 12, 12)), 6);
+    expect(arch.stats.exteriorCurtain).toBeGreaterThan(0.3);
+    expect(MALL_SKY.gas).toBeGreaterThan(0.4);
+    // the daylight through the glass is a little greener (the light of the murk), still ~unit luminance and plausible
+    const [tr, tg, tb] = SKY.tint;
+    expect(tg).toBe(Math.max(tr, tg, tb));
+    expect(tb).toBeLessThan(tr);
+    expect(lum(SKY.tint)).toBeGreaterThan(0.85);
+    expect(lum(SKY.tint)).toBeLessThanOrEqual(1);
   });
 
   it('U02: NO indoor gas hazard in the mall — the gas system stays inert (no field, no roof air, no exposure, no damage, no claimed hits)', () => {

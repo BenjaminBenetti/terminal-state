@@ -43,7 +43,7 @@ import {MALL_FINISH_ATTR, MALL_SPAN, ceilRow, floorRow, mallSurfaceMaterial, wal
 import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's door side (lane GEN derives it; never re-derived here)
 import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revision (U07): the same landing-doorway cut as the Office
 import {GLASS_RIG} from './elevator';
-import {MALL_EXT_ORDER, buildMallExteriorGas, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
+import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
 import {adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
@@ -74,12 +74,16 @@ const dressCache = new WeakMap<WorldMaterials, MallDressMaterials>();
 const edge01 = (q: AnyNode): AnyNode => { const f = fract(q) as AnyNode; return min(min(f.x, f.x.oneMinus()), min(f.y, f.y.oneMinus())); };
 
 /**
- * Roof glazing: unlit (it is lit from outside: the overcast sky behind it), transparent, depth-write off, double-sided. UVs are
- * metres (u along the vault, v around the arch): glazing bars every 1.5 x 1.2 m (opaque), panes tinted green-grey, a third of
- * them grimy (30 years of dirt), ~5 % broken out (open to the sky), grazing views more reflective (fresnel).
+ * Roof glazing: unlit (it is lit from outside: the toxic murk behind it), transparent, double-sided. UVs are metres (u along the
+ * vault, v around the arch): glazing bars every 1.5 x 1.2 m (opaque), panes tinted with the Office's murk colour (world/mallExterior.ts
+ * hazeSat: it never lays a pale film over the dark green sky), a third of them grimy (30 years of dirt, darker), ~5 % broken out (open
+ * to the sky), grazing views more opaque (fresnel). Task mall-playtest-revision (U02, primary's browser check): it WRITES DEPTH, so the
+ * screen-space interior haze (render/volumetric.ts: marched up to the scene depth, lit by the skylight) stops at the glass instead of
+ * laying a bright grey veil over the exterior beyond it; the exterior sky / gas draw before it (renderOrder) and every other glass is
+ * in front of it — still transparent, so never a flashlight shadow caster.
  */
 function roofGlass(): MeshBasicNodeMaterial {
-  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: false, side: THREE.DoubleSide});
+  const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: true, side: THREE.DoubleSide});
   m.name = 'mall-glass-roof';
   const U = (uv() as AnyNode).div(vec2(1.5, 1.2));
   const cell = floor(U) as AnyNode;
@@ -90,9 +94,9 @@ function roofGlass(): MeshBasicNodeMaterial {
   const grime = smoothstep(0.55, 0.95, r).mul(0.32);
   const v = normalize(cameraPosition.sub(positionWorld) as AnyNode);
   const fres = float(1).sub(abs(dot(normalize(normalWorld as AnyNode), v))).pow(3);
-  // (task mall-playtest-revision U02: tinted toward the toxic murk outside — it is lit by the green gas, not a clean sky)
-  const pane = mix(vec3(0.5, 0.6, 0.5), vec3(0.36, 0.36, 0.28), grime.mul(2.2));
-  m.colorNode = mix(pane, vec3(0.78, 0.8, 0.78), bar);
+  const murk = hazeSat() as AnyNode;
+  const pane = mix(murk.mul(1.7), murk.mul(1.05), grime.mul(2.2));
+  m.colorNode = mix(pane, vec3(0.62, 0.64, 0.6), bar);
   m.opacityNode = clamp(max(bar.mul(0.96), float(0.12).add(grime).add(fres.mul(0.3)).mul(float(1).sub(broken))), 0, 1);
   m.userData.mallGlass = 'roof';
   return m;
@@ -425,8 +429,9 @@ export interface AtriumStats {
   glazing: number; shutters: number; partialShutters: number;
   /** Landmarks drawn (gen/mall/landmarks.ts): fountains and directory pylons. */
   fountains: number; pylons: number;
-  /** Task mall-playtest-revision (U02): exterior gas layers drawn over / round the glass roof. */
-  exteriorGas: number;
+  /** Task mall-playtest-revision (U02): exterior gas layers drawn over / round the glass roof; the curtain's opacity (= the Office
+   *  fog's opacity at its distance). */
+  exteriorGas: number; exteriorCurtain: number;
   /** Flat glazing (m²) over the part of the top opening outside the vault. */
   flatGlazingM2: number;
   /** D06: ad faces drawn (lane SHOPS' records / ARCH's gallery billboards). */
@@ -468,7 +473,7 @@ export class MallArch {
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -1028,6 +1033,7 @@ export class MallArch {
     const ext = buildMallExteriorGas({roof: {...B}, vault: {...o}, deckY: yD, springY: R.springY, apexY: R.apexY});
     for (const m of ext.meshes) { m.userData.levels = all; add(m); }
     this.stats.exteriorGas = ext.stats.layers;
+    this.stats.exteriorCurtain = ext.stats.curtainOpacity;
   }
 
   /** Glass balustrades + stainless handrails + base shoes on every owned rail run (per storey, per 48 m chunk). */

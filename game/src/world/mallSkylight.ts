@@ -22,8 +22,10 @@ export const SKY = {
   radiance: 3.4,
   /** Transmittance of 30-year-old dirty glazing with some panes broken out. */
   glazing: 0.62,
-  /** Overcast daylight through the green murk (linear RGB, ~unit luminance; cf. gen/office DAYLIGHT_TINT). */
-  tint: [0.84, 1.0, 0.9] as readonly [number, number, number],
+  /** Overcast daylight through the green murk (linear RGB, ~unit luminance; cf. gen/office DAYLIGHT_TINT). Task mall-playtest-revision
+   *  (U02, primary's browser check): a little greener / yellower — the light of the toxic murk (was [0.84, 1.0, 0.9]); it also tints
+   *  the interior haze the skylight lights. */
+  tint: [0.78, 1.0, 0.64] as readonly [number, number, number],
   /** Receivers lie within this horizontal distance of a sky column (m). */
   reach: 12,
   /** Azimuth samples per voxel. */
