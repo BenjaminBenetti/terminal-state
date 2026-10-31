@@ -14,17 +14,32 @@ export function fnv(s: string, h = 0x811c9dc5): number {
   return h >>> 0;
 }
 
-/** One spawn record, exact floats (String(number) round-trips the double). */
-export function spawnRecord(l: StationLayout, i: number): string {
+/** One spawn record, exact floats (String(number) round-trips the double). `maskFamily`: the family field reads '*'. */
+export function spawnRecord(l: StationLayout, i: number, maskFamily = false): string {
   const z = l.zombies[i];
   const a = l.areas[z.area];
-  return `${i}|${z.archetype ?? '-'}|${z.type}|${z.x}|${z.y ?? '-'}|${z.z}|${z.yaw}|${z.area}|${a ? a.purpose ?? a.type : '?'}|${z.level ?? 0}`;
+  return `${i}|${maskFamily ? '*' : z.archetype ?? '-'}|${z.type}|${z.x}|${z.y ?? '-'}|${z.z}|${z.yaw}|${z.area}|${a ? a.purpose ?? a.type : '?'}|${z.level ?? 0}`;
 }
 
 export function spawnSpecHash(l: StationLayout): string {
   let h = fnv(`${l.seed}|${l.attempt}|${l.zombies.length}`);
   for (let i = 0; i < l.zombies.length; i++) h = fnv(spawnRecord(l, i), h);
   return h.toString(16).padStart(8, '0');
+}
+
+/**
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): the spawn spec hash with the FAMILY field masked — count, order, zombie type,
+ * exact x / y / z / yaw, area id + key, level of every spawn. A family-composition change must leave it untouched.
+ */
+export function maskedSpawnSpecHash(l: StationLayout): string {
+  let h = fnv(`${l.seed}|${l.attempt}|${l.zombies.length}`);
+  for (let i = 0; i < l.zombies.length; i++) h = fnv(spawnRecord(l, i, true), h);
+  return h.toString(16).padStart(8, '0');
+}
+
+/** Spawn indices of one family (absent archetype = zombie), in layout order. */
+export function familyIndices(l: StationLayout, family: string): number[] {
+  return l.zombies.flatMap((z, i) => ((z.archetype ?? 'zombie') === family ? [i] : []));
 }
 
 /**
@@ -65,29 +80,62 @@ export const OFFICE_PARITY = [
 ];
 export const officeKey = (c: (typeof OFFICE_PARITY)[number]) => `${c.levelSeed}:${c.startWeapon}`;
 
-// PINNED at main 932624e before any lane SPAWN source change (pin history: tests/enemy-spawn-parity.test.ts).
-/** [spawn spec hash, pickup hash, context counts] per corpus entry — main 932624e. */
+// PIN HISTORY: tests/enemy-spawn-parity.test.ts. Stage 3 (task track1-siren-blightbelly-20261031): the families Blightbelly (both
+// levels) and Siren (Office) replace shares of the zombie slots — the spec hash moves ONLY through the family field: the masked
+// hash, the pickup hash, the context counts and the rat/dog indices are the INVARIANT pins below, captured from the untouched
+// main dba90dd sources.
+/** [spawn spec hash, pickup hash, context counts] per corpus entry — stage 3 (task track1; pickups / counts as at main 932624e). */
 export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = {
-  '1:rifle': ['a71290f4', '262ff5d8', 'station 28 (L0 22 L1 2 L2 4)'],
-  '1:pistol': ['a71290f4', '066f09e3', 'station 28 (L0 22 L1 2 L2 4)'],
-  '7:rifle': ['f8281aad', 'ff632831', 'station 23 (L0 18 L1 3 L2 2)'],
-  '7:pistol': ['f8281aad', '32b70455', 'station 23 (L0 18 L1 3 L2 2)'],
-  '42:rifle': ['4c817345', 'a7674cf5', 'station 30 (L0 24 L1 2 L2 4)'],
-  '42:pistol': ['4c817345', '569e091c', 'station 30 (L0 24 L1 2 L2 4)'],
-  '1234:rifle': ['e1e089f5', '1c40b92a', 'station 31 (L0 21 L1 6 L2 4)'],
-  '1234:pistol': ['e1e089f5', '344c2e2d', 'station 31 (L0 21 L1 6 L2 4)'],
-  '9001:rifle:side-mezzanine': ['689b3629', 'c8431649', 'station 30 (L0 23 L1 2 L2 5)'],
+  '1:rifle': ['52c57838', '262ff5d8', 'station 28 (L0 22 L1 2 L2 4)'],
+  '1:pistol': ['52c57838', '066f09e3', 'station 28 (L0 22 L1 2 L2 4)'],
+  '7:rifle': ['9ffd5bd5', 'ff632831', 'station 23 (L0 18 L1 3 L2 2)'],
+  '7:pistol': ['9ffd5bd5', '32b70455', 'station 23 (L0 18 L1 3 L2 2)'],
+  '42:rifle': ['1d09d867', 'a7674cf5', 'station 30 (L0 24 L1 2 L2 4)'],
+  '42:pistol': ['1d09d867', '569e091c', 'station 30 (L0 24 L1 2 L2 4)'],
+  '1234:rifle': ['b1e955bd', '1c40b92a', 'station 31 (L0 21 L1 6 L2 4)'],
+  '1234:pistol': ['b1e955bd', '344c2e2d', 'station 31 (L0 21 L1 6 L2 4)'],
+  '9001:rifle:side-mezzanine': ['9f96c951', 'c8431649', 'station 30 (L0 23 L1 2 L2 5)'],
   '16920:rifle:island-ends': ['85de6292', 'c2c7277a', 'station 30 (L0 22 L1 5 L2 3)'],
   '24839:rifle:express': ['1c6c666f', '60427365', 'station 25 (L0 17 L1 4 L2 4)'],
-  '32758:rifle:interchange': ['9c1d3f5f', 'e4e49861', 'station 31 (L0 23 L1 3 L2 5)'],
-  '40677:rifle:split': ['280e6a9b', '314cffa5', 'station 23 (L0 18 L1 2 L2 3)'],
-  '48596:rifle:deep': ['41e72df3', 'ff5eebea', 'station 32 (L0 25 L1 2 L2 5)'],
+  '32758:rifle:interchange': ['409a0efd', 'e4e49861', 'station 31 (L0 23 L1 3 L2 5)'],
+  '40677:rifle:split': ['ea09047b', '314cffa5', 'station 23 (L0 18 L1 2 L2 3)'],
+  '48596:rifle:deep': ['8388ceeb', 'ff5eebea', 'station 32 (L0 25 L1 2 L2 5)'],
 };
-// Office: stage 2 (task office-props-physics-scale-20261030) — see the pin history in tests/enemy-spawn-parity.test.ts.
+// Office: stage 3 (task track1-siren-blightbelly-20261031); pickups / counts as at stage 2 (task office-props-physics-scale-20261030).
 export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = {
-  '11:pistol': ['5d274546', 'ef270423', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
-  '222:pistol': ['24f81c38', '3e9001ac', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1'],
-  '3333:pistol': ['73e3a9b0', 'bc96b5e2', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2'],
-  '4242:pistol': ['8f127b50', 'ba008081', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0'],
-  '11:rifle': ['5d274546', '7cb613ae', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+  '11:pistol': ['73536b5a', 'ef270423', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+  '222:pistol': ['5e4e485b', '3e9001ac', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1'],
+  '3333:pistol': ['9720588a', 'bc96b5e2', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2'],
+  '4242:pistol': ['46b33d60', 'ba008081', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0'],
+  '11:rifle': ['73536b5a', '7cb613ae', 'street 5 f2 5 f3 5 f4 5 f5 5 f6 6 f7 5 f8 6 roof 1'],
+};
+
+/**
+ * INVARIANT pins (task track1-siren-blightbelly-20261031, lane SPAWN): [family-masked spec hash, rat/dog spawn indices] per corpus
+ * entry, computed from the UNTOUCHED main dba90dd sources (`git archive dba90dd game/src`, before any task track1 change; their
+ * full hashes reproduced the stage-1 / stage-2 goldens exactly). A family-composition change keeps these; only a layout / RNG
+ * change may move them, and that needs its own cause + evidence.
+ */
+export const SUBWAY_INVARIANT: Record<string, readonly [string, readonly number[]]> = {
+  '1:rifle': ['0495ad52', [9, 25]],
+  '1:pistol': ['0495ad52', [9, 25]],
+  '7:rifle': ['1c08827e', [15]],
+  '7:pistol': ['1c08827e', [15]],
+  '42:rifle': ['aadd0d6c', [1, 25, 28]],
+  '42:pistol': ['aadd0d6c', [1, 25, 28]],
+  '1234:rifle': ['b82e9831', [2, 4]],
+  '1234:pistol': ['b82e9831', [2, 4]],
+  '9001:rifle:side-mezzanine': ['8fcb9b7d', []],
+  '16920:rifle:island-ends': ['2dfe6845', [6]],
+  '24839:rifle:express': ['8942a3d1', []],
+  '32758:rifle:interchange': ['ec69551c', [17]],
+  '40677:rifle:split': ['ff8f1971', [6, 22]],
+  '48596:rifle:deep': ['bf618337', [3, 15, 18, 19]],
+};
+export const OFFICE_INVARIANT: Record<string, readonly [string, readonly number[]]> = {
+  '11:pistol': ['ada21f10', [6, 24, 26, 30]],
+  '222:pistol': ['bb2a6a60', [20, 31]],
+  '3333:pistol': ['3b92b59b', [10]],
+  '4242:pistol': ['8b028dba', []],
+  '11:rifle': ['ada21f10', [6, 24, 26, 30]],
 };

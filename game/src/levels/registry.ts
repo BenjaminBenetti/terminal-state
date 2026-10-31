@@ -12,7 +12,7 @@ import {isMaskLootItem, placeMaskLoot, placeSectionGear} from './gearAdapter';
 import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): The Eaton's Center
 import {MALL_TRACK_EXTENSIONS, type TrackExtConfigInterim} from '../gen/mall/trackExt'; // (lane GEN: Track2 interim declaration)
-import type {Arrival, LevelDef, LevelId, SectionGenContext, SectionKey} from './types';
+import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
 export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall'];
@@ -33,6 +33,7 @@ function withGear(layout: StationLayout, ctx: SectionGenContext): StationLayout 
 export const LEVELS: Record<LevelId, LevelDef> = {
   subway: {
     id: 'subway',
+    tier: 0, // task track1-siren-blightbelly-20261031 (lane SPAWN): level 0 difficulty — the starting level
     name: 'Subway',
     blurb: 'A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.',
     entry: 'main',
@@ -44,6 +45,7 @@ export const LEVELS: Record<LevelId, LevelDef> = {
   },
   office: {
     id: 'office',
+    tier: 1, // task track1-siren-blightbelly-20261031 (lane SPAWN): level 1 difficulty
     name: 'Office Space',
     blurb: 'A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator.',
     entry: 'main',
@@ -79,6 +81,17 @@ export const TRACK_EXTENSIONS: Partial<Record<LevelId, TrackExtConfigInterim | '
 
 export function isLevelId(v: unknown): v is LevelId {
   return typeof v === 'string' && (LEVEL_IDS as readonly string[]).includes(v);
+}
+
+/**
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): the difficulty tier of a registered level (types.ts LevelTier). Throws for an
+ * unregistered id or a level without a valid tier — never a silent Subway / Office default (levels/levelContract.ts validates all).
+ */
+export function levelTier(id: LevelId): LevelTier {
+  const def = isLevelId(id) ? LEVELS[id] : undefined;
+  if (!def) throw new Error(`level '${String(id)}' is not registered`);
+  if (!Number.isInteger(def.tier) || def.tier < 0) throw new Error(`level '${id}' has no valid tier (${String(def.tier)})`);
+  return def.tier;
 }
 
 /**

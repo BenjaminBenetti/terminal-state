@@ -10,8 +10,8 @@
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1088,
-      "sha256": "a89089b2dbc2c682077da7de9f618731c976d5b5d73e5fb275e2cb7a420c233e"
+      "bytes": 1184,
+      "sha256": "4e87a211d661bd1ffc9cfe2cd5208a2fa87535088503fb36c1765ca030ae2cfa"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1204,6 +1204,36 @@
       "sha256": "9e8f67caa43ecd62bb7d096fd42fe68c7f871a6ec8dd5b23bd2a78e638502c82"
     },
     {
+      "path": "assets/audio/t1-blight-burst-01.mp3",
+      "bytes": 9613,
+      "sha256": "4cdb84d572f390c7dfe50c77847a256169d124a04bde0b924f957f2e76a41e9c"
+    },
+    {
+      "path": "assets/audio/t1-blight-hiss-01.mp3",
+      "bytes": 62693,
+      "sha256": "bdbc9bbbea24ff2aa6538baac2d4a50f4104f031d228124f6cd85eb68bb7e00f"
+    },
+    {
+      "path": "assets/audio/t1-siren-hum-01.mp3",
+      "bytes": 71053,
+      "sha256": "22e984e994883369481de07c2740a66085afaea769903fea7bb7d36cdec708c2"
+    },
+    {
+      "path": "assets/audio/t1-siren-hum-02.mp3",
+      "bytes": 88607,
+      "sha256": "b8847bea61f98b07a650313dc0e5b354bf577789a3d383bd8ea61385623e3f78"
+    },
+    {
+      "path": "assets/audio/t1-siren-scream-01.mp3",
+      "bytes": 27167,
+      "sha256": "fa8cf96dbdd365215a4e92fa344e3ef3bae6f0e60bd5575082c3fed7bc71a4dc"
+    },
+    {
+      "path": "assets/audio/t1-siren-scream-02.mp3",
+      "bytes": 33436,
+      "sha256": "ddeccacecf985514f5340f02c030bd212a4a10712cf518c452d19d9e13f0b5a8"
+    },
+    {
       "path": "assets/audio/train-distant-01.mp3",
       "bytes": 119118,
       "sha256": "7b089591a6d79233e9887bdac5e9a1fe9fddcefa33db64afc9ac3b306a7b23cf"
@@ -1399,9 +1429,24 @@
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
     },
     {
+      "path": "assets/derivatives/audio-track1.json",
+      "bytes": 50624,
+      "sha256": "77f6a7ff4881aac2d626c896f4fa74c12d7377de17878cc4b9b2abefdb865c34"
+    },
+    {
       "path": "assets/derivatives/creature-ratdog.json",
       "bytes": 23070,
       "sha256": "2534182960bf96f813b2d57d92d2b530250ddaeb5d9967a7aa15b2fb6ccd23f4"
+    },
+    {
+      "path": "assets/derivatives/enemy-blightbelly.json",
+      "bytes": 37031,
+      "sha256": "134a1b58ae19723855cab13eb6c9a96f6325dccf964cea9e66fcdf4aec6f7ff1"
+    },
+    {
+      "path": "assets/derivatives/enemy-siren.json",
+      "bytes": 30099,
+      "sha256": "2c8e08d1e0676190efa43047b0ea3618828d20bc569157b2647c8b8f069eaaed"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1672,6 +1717,16 @@
       "path": "assets/models/creature-ratdog-t25.glb",
       "bytes": 893544,
       "sha256": "58a5d210e02272a67ae4c7c9bd3f56279f35d6a34000237cb568b19dac57dfad"
+    },
+    {
+      "path": "assets/models/enemy-blightbelly.glb",
+      "bytes": 2221420,
+      "sha256": "20c5ecff63c4d1bcd76cb883a923dc17202efd618e4263b7d7425756deff5f77"
+    },
+    {
+      "path": "assets/models/enemy-siren.glb",
+      "bytes": 12873516,
+      "sha256": "4ac5d8cae88e1655d0e721eeab2442d16d12697a695a433b6670f0a35997098b"
     },
     {
       "path": "assets/models/gun-locker.glb",

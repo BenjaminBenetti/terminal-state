@@ -33,7 +33,7 @@ beforeAll(() => {
   site = buildSite({commit: COMMIT, readSource: sourceReader(ROOT)});
   ref = JSON.parse(site.get('data/loot.json')!) as LootReference;
   enemyRef = JSON.parse(site.get('data/enemies.json')!) as EnemyReference;
-}, 120000);
+}, 120000); // task track1-siren-blightbelly-20261031 (lane SPAWN): the full build now runs the 20-level eligibility census too (track3 lane PROFILES: + the mall censuses)
 
 const pages = () => [...site.keys()].filter(p => p.endsWith('.html'));
 /** Copy of the site with one file replaced / added (validator rejection tests). */

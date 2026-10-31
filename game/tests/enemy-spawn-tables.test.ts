@@ -13,7 +13,7 @@ import {generateOfficeLevel} from '../src/gen/office/index';
 import {lootProfile} from '../src/items/lootTables';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import {ENEMY_ARCHETYPES} from '../src/ai/creatureArchetypes';
-import {assignEnemyArchetypes, pickEnemyArchetype} from '../src/ai/creatureSpawn';
+import {assignEnemyArchetypes, enemyRoll, pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {
   ALL_FAMILIES, ENEMY_FAMILY_IDS, SPAWN_CONTEXT_IDS, SPAWN_PROFILES, areaCap, hasRoomEntry, roomFamilyPool, roomIntensity, roomKey, roomModifier,
   spawnContext, spawnProfile, spawnRoomKeys, validateSpawnProfile, type RoomModifiers, type SpawnProfile,
@@ -59,8 +59,9 @@ describe('spawn profiles: registry coverage', () => {
     // the shipped controls (moved verbatim): Subway 22-32 on the station, Office 5-8 / 3-6 per floor / 0-2 roof; 40 % coated
     expect(SUBWAY.contexts.station!.count).toEqual([22, 32]);
     expect([OFFICE.contexts.street!.count, OFFICE.contexts.floor!.count, OFFICE.contexts.roof!.count]).toEqual([[5, 8], [3, 6], [0, 2]]);
-    expect(SUBWAY.families).toEqual([['zombie', 0.95], ['ratdog', 0.05]]);
-    expect(OFFICE.families).toBe(SUBWAY.families);
+    // task track1-siren-blightbelly-20261031: Blightbelly 5 % on both, the Siren opted in on the Office only (draw weight 0.19)
+    expect(SUBWAY.families).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0.05]]);
+    expect(OFFICE.families).toEqual([['zombie', 0.71], ['blightbelly', 0.05], ['siren', 0.19], ['ratdog', 0.05]]);
     expect(SUBWAY.zombieTypes).toEqual({coatedChance: 0.4, atLeastOneEach: true});
   });
 
@@ -164,7 +165,7 @@ describe('room modifiers (TEST-ONLY profiles; the shipped profiles stay neutral)
       expect(placement(l)).toEqual(placement(n)); // weights never touch an RNG stream
       expect(pickupHash(l)).toBe(pickupHash(n));
       l.zombies.forEach((z, i) => {
-        if (keyOf(l, z) === 'platform') { platformSpawns++; expect(z.archetype).toBe('zombie'); if (n.zombies[i].archetype === 'ratdog') ratsBefore++; }
+        if (keyOf(l, z) === 'platform') { platformSpawns++; expect(z.archetype).not.toBe('ratdog'); if (n.zombies[i].archetype === 'ratdog') ratsBefore++; }
         else expect(z.archetype).toBe(n.zombies[i].archetype);
       });
     }
@@ -187,23 +188,23 @@ describe('room modifiers (TEST-ONLY profiles; the shipped profiles stay neutral)
     // the other room is untouched, index by index
     for (const l of [w2, w0]) expect(l.zombies.filter(z => z.area === 1).map(z => z.archetype)).toEqual(neutral.zombies.filter(z => z.area === 1).map(z => z.archetype));
     // the same roll walked over the room pool
-    expect(pickEnemyArchetype(9, 4, roomFamilyPool(withRooms(SUBWAY, {platform: {zombie: {weight: 0}}}), areas[0]))).toBe('ratdog');
+    expect(pickEnemyArchetype(9, 4, roomFamilyPool(withRooms(SUBWAY, {platform: {zombie: {weight: 0}}}), areas[0]))).toBe(enemyRoll(9, 4) < 0.5 ? 'blightbelly' : 'ratdog');
   });
 
   it('per-family density: intensity D = Σ p·w·d / Σ p·w, the mix p·w·d; all.density multiplies D only', () => {
     const a = {type: 'platform' as const};
     const R0 = withRooms(SUBWAY, {platform: {ratdog: {density: 0}}});
     expect(roomIntensity(R0, a)).toBeCloseTo(0.95, 12);
-    expect(roomFamilyPool(R0, a)).toEqual([['zombie', 0.95], ['ratdog', 0]]);
+    expect(roomFamilyPool(R0, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0]]);
     const R2 = withRooms(SUBWAY, {platform: {ratdog: {density: 2}}});
     expect(roomIntensity(R2, a)).toBeCloseTo(1.05, 12);
-    // family intensity in the room = D x its share of the room mix: zombies keep 0.95 (first order), rat/dogs double 0.05 -> 0.1
-    const pool2 = roomFamilyPool(R2, a), mix = pool2[0][1] + pool2[1][1];
-    expect(roomIntensity(R2, a) * pool2[0][1] / mix).toBeCloseTo(0.95, 12);
-    expect(roomIntensity(R2, a) * pool2[1][1] / mix).toBeCloseTo(0.1, 12);
+    // family intensity in the room = D x its share of the room mix: zombies keep 0.9 (first order), rat/dogs double 0.05 -> 0.1
+    const pool2 = roomFamilyPool(R2, a), mix = pool2.reduce((t, [, w]) => t + w, 0);
+    expect(roomIntensity(R2, a) * pool2[0][1] / mix).toBeCloseTo(0.9, 12);
+    expect(roomIntensity(R2, a) * pool2[3][1] / mix).toBeCloseTo(0.1, 12);
     const A = withRooms(SUBWAY, {platform: {all: {density: 3}, ratdog: {weight: 0}}});
     expect(roomIntensity(A, a)).toBe(3); // weight alone never changes the intensity
-    expect(roomFamilyPool(A, a)).toEqual([['zombie', 0.95], ['ratdog', 0]]);
+    expect(roomFamilyPool(A, a)).toEqual([['zombie', 0.9], ['blightbelly', 0.05], ['siren', 0], ['ratdog', 0]]);
     expect(roomModifier(A, a, 'zombie')).toEqual({density: 3, weight: 1});
     // purpose entry first, then the room type, per field; missing = 1
     const F = withRooms(SUBWAY, {'first-aid-room': {ratdog: {weight: 0}}, 'stock-room': {ratdog: {weight: 4, density: 2}}});
@@ -259,7 +260,7 @@ describe('validation', () => {
     for (const [what, p] of bad) expect(validateSpawnProfile(p).length, what).toBeGreaterThan(0);
     // explicit zeros ARE valid (the documented way to disable a room / a family there); an all-zero pool with count [0, 0] = no enemies
     expect(validateSpawnProfile(withRooms(SUBWAY, {platform: {all: {density: 0}, ratdog: {weight: 0, density: 0}}}))).toEqual([]);
-    expect(validateSpawnProfile({...OFFICE, families: [['zombie', 0], ['ratdog', 0]],
+    expect(validateSpawnProfile({...OFFICE, families: [['zombie', 0], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]],
       contexts: Object.fromEntries(Object.entries(OFFICE.contexts).map(([k, c]) => [k, {...c!, count: [0, 0] as const}]))})).toEqual([]);
   });
 });

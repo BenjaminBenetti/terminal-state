@@ -20,13 +20,19 @@
 //                    measured over a small labelled seed corpus. Never from map bounding boxes. A census, not a runtime rule.
 //  - room modifiers  per room key (area purpose id, else room type) and family: density (local intensity) and weight (conditional
 //                    composition); missing = 1 (neutral). Shipped values: none / all 1.
+//  - eligibility     (task track1-siren-blightbelly-20261031, schema 2) a family with an eligibility rule only takes placed slots where
+//                    the rule holds; a draw elsewhere becomes the rule's fallback family (a zombie). Its placed share is therefore
+//                    BELOW its draw share and is MEASURED (sampled eligibility census), never derived from the weight alone.
+//  - tier            the level's explicit difficulty tier (levels/registry.ts LEVELS[id].tier): metadata, no scaling.
+//  - family stats    combat / behaviour figures read from each family's exported constants (health hp, speeds m/s, reach m, damage
+//                    hp per hit, times s); wake rules and the death burst where a family has them.
 
 import type {SourceLoc} from './lootReferenceTypes';
 
 export type {SourceLoc};
 
-/** Bump when the shape changes incompatibly (the renderer may check it). */
-export const ENEMY_REFERENCE_SCHEMA = 1;
+/** Bump when the shape changes incompatibly (the renderer may check it). 2 = task track1: tiers, family stats, eligibility. */
+export const ENEMY_REFERENCE_SCHEMA = 2;
 
 export type Range = readonly [lo: number, hi: number];
 
@@ -121,6 +127,40 @@ export interface EnemyFamilyInfo {
   /** Levels whose pool gives this family weight > 0. */
   levels: readonly string[];
   at: SourceLoc;
+  /** Task track1 (schema 2): combat figures per variant, read from the family's exported stats (brain.ts ZombieStats shape). */
+  stats: readonly FamilyStatsVariant[];
+  /** Task track1 (schema 2): behaviour rules read from the family's exported constants (wake rules, death burst, lunge); [] = none. */
+  rules: readonly FamilyRuleGroup[];
+}
+
+/** One stats block (the zombie has one per type: shambler / coated; other families one, variant null). */
+export interface FamilyStatsVariant {
+  variant: string | null;
+  /** Health (hp). */
+  hp: number;
+  /** m/s. */
+  wanderSpeed: number;
+  chaseSpeed: number;
+  /** Attack range (m, centre to centre) and damage per hit (hp). */
+  attackRange: number;
+  attackDamage: number;
+  /** Swing length and the moment it lands (s). */
+  attackDuration: number;
+  attackImpact: number;
+  /** Recovery after a swing (s); null = the brain's default. */
+  attackCooldown: number | null;
+  /** Sight range when awake (m). */
+  sightRange: number;
+  /** Body radius (m). */
+  radius: number;
+  at: SourceLoc;
+}
+
+export interface FamilyRuleGroup {
+  /** 'Dormant wake', 'Death burst', 'Claw lunge' … */
+  title: string;
+  rows: readonly {what: string; value: number | string; unit: string}[];
+  at: SourceLoc;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -131,6 +171,8 @@ export interface EnemyLevelInfo {
   id: string;
   name: string;
   blurb: string;
+  /** Task track1 (schema 2): the explicit difficulty tier (Subway 0, Office 1) — metadata only. */
+  tier: {value: number; at: SourceLoc; note: string};
   profile: {label: string; at: SourceLoc};
   /** The real generator that reads this profile. */
   generator: {fn: string; at: SourceLoc; note: string};
@@ -144,6 +186,8 @@ export interface EnemyLevelInfo {
   rooms: RoomModifierTable;
   /** Sampled census of the real generator (null when disabled). */
   census: LevelCensus | null;
+  /** Task track1 (schema 2): sampled census of the families with an eligibility rule (null = none restricted / census disabled). */
+  eligibilityCensus: EligibilityCensus | null;
   /** Where to tune what. */
   knobs: readonly EnemyKnob[];
   /** Task track3-eaton-centre-20261031 (lane PROFILES): Track1 family hooks of the ambient pool (empty = none). */
@@ -261,12 +305,51 @@ export interface PlacementInfo {
 
 export interface FamilyPoolInfo {
   denominator: number;
-  rows: readonly {family: string; weight: number; share: number}[];
+  /** share = weight / denominator = the DRAW share; `restricted` = the family has an eligibility rule (placed share is lower). */
+  rows: readonly {family: string; weight: number; share: number; restricted?: boolean}[];
   /** How the roll works (independent per-spawn roll keyed on (level seed, spawn index), REPLACES a zombie). */
   roll: string;
-  /** share × total.mean per family: expected spawns of that family per level under neutral modifiers, before placement shortfall. */
-  expectedPerLevel: readonly {family: string; mean: number}[];
+  /**
+   * Expected spawns of each family per level, before placement shortfall. basis 'exact' = share × total.mean (no eligibility rule
+   * touches the family); 'sampled' = measured by the eligibility census (a restricted family and its fallback); mean null = not
+   * measured in this build (census disabled).
+   */
+  expectedPerLevel: readonly {family: string; mean: number | null; basis: 'exact' | 'sampled'}[];
+  /** Task track1 (schema 2): the eligibility rules of the profile (one per restricted family; [] = none). */
+  eligibility: readonly EligibilityInfo[];
   at: SourceLoc;
+}
+
+export interface EligibilityInfo {
+  family: string;
+  /** Generation contexts the family may take (every other context's draws fall back). */
+  contexts: readonly string[];
+  /** Plain-language criteria, in check order. */
+  criteria: readonly string[];
+  fallback: string;
+  /** At most this many per generated level (all contexts), null = no cap. */
+  maxPerLevel: number | null;
+  why: string;
+  at: SourceLoc;
+}
+
+export interface EligibilityCensus {
+  seeds: readonly number[];
+  layouts: number;
+  note: string;
+  /** Placed spawns per family over the sample (all families). */
+  placed: readonly {family: string; total: number; perLevel: number; share: number}[];
+  restricted: readonly {
+    family: string;
+    /** Spawns whose roll drew the family, and how many of those it actually took. */
+    draws: number;
+    placed: number;
+    /** Placed per level: mean, layouts with none, max, and the histogram. */
+    perLevel: {mean: number; none: number; max: number; histogram: readonly {count: number; layouts: number}[]};
+    /** Draws that fell back, by the first failed criterion. */
+    fallbacks: readonly {reason: string; draws: number}[];
+    byContext: readonly {context: string; placed: number}[];
+  }[];
 }
 
 export interface ZombieTypeInfo {

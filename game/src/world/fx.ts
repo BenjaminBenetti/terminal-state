@@ -405,6 +405,30 @@ export class Effects {
     }
   }
 
+  /**
+   * Task track1-siren-blightbelly-20261031 (lane BLIGHT): a Blightbelly pustule cluster popping — pus droplets spraying out
+   * along `normal` (they fall) and a couple of slow, rising green mist puffs, in the existing soft-particle ring (no new
+   * material: warmed with the 'effects' pool). `k` scales the counts (bounded: <= 3 mist + 8 droplets per call), `cloud`
+   * adds the big slow belly cloud (<= 5 large puffs) once per burst.
+   */
+  blightBurst(pos: THREE.Vector3, normal: THREE.Vector3, k = 1, cloud = false): void {
+    const mist = Math.min(3, Math.max(1, Math.round(2 * k))), drops = Math.min(8, Math.max(2, Math.round(6 * k)));
+    for (let i = 0; i < mist; i++) {
+      const v = normal.clone().multiplyScalar(rnd(0.3, 0.8)).add(new THREE.Vector3(rnd(-0.25, 0.25), rnd(0.05, 0.3), rnd(-0.25, 0.25)));
+      this.soft.spawn(pos, v.x, v.y, v.z, rnd(0.18, 0.3), rnd(1.1, 1.7), this.blightMist, 0.32, 1.3, -0.08, 2.2);
+    }
+    for (let i = 0; i < drops; i++) {
+      const v = normal.clone().multiplyScalar(rnd(1.4, 3.4)).add(new THREE.Vector3(rnd(-0.9, 0.9), rnd(0.3, 1.6), rnd(-0.9, 0.9)));
+      this.soft.spawn(pos, v.x, v.y, v.z, rnd(0.014, 0.03), rnd(0.45, 0.85), this.blightPus, 0.95, 0, 9.8, 0.5);
+    }
+    if (cloud) for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + rnd(-0.3, 0.3), sp = rnd(0.35, 0.8);
+      this.soft.spawn(pos, Math.cos(a) * sp, rnd(0.05, 0.25), Math.sin(a) * sp, rnd(0.45, 0.7), rnd(2.2, 3.2), this.blightMist, 0.26, 0.9, -0.04, 1.4);
+    }
+  }
+  private readonly blightMist = C(0x8a9a3e); // lane BLIGHT: sickly yellow-green (reads beside the green office gas)
+  private readonly blightPus = C(0xc9c463);
+
   tracer(from: THREE.Vector3, to: THREE.Vector3): void {
     const i = this.tracerNext;
     this.tracerNext = (i + 1) % this.tracerCap;

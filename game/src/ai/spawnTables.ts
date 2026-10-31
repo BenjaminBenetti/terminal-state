@@ -33,7 +33,7 @@
 //    changes placement draws: on the Subway the storey moves of loose floor supplies follow on the SAME stream as the storey
 //    moves of enemies (placeLevelSpawns), so those moved supplies may land on other cells (same items / counts / pools).
 
-import type {Area, AreaKind, RoomType, ZombieType} from '../gen/stationTypes';
+import type {Area, AreaKind, Door, RoomType, ZombieType} from '../gen/stationTypes';
 import {MIN_ZOMBIE_SPAWN_CELLS} from '../gen/stationTypes';
 import type {LevelId} from '../levels/types';
 import {ROOM_LABEL} from '../gen/stationKit';
@@ -46,20 +46,52 @@ export type {HordeRules} from './hordeSpec';
 // ---------------------------------------------------------------------------------------------------------------------------
 // Families
 
-/** Enemy families (= the archetype registry ai/creatureArchetypes.ts ENEMY_ARCHETYPES; tests check they agree). */
-export type EnemyFamilyId = 'zombie' | 'ratdog';
-export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'ratdog'];
+/**
+ * Enemy families (= the archetype registry ai/creatureArchetypes.ts ENEMY_ARCHETYPES, SAME key order; tests check they agree).
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): 'blightbelly' and 'siren' sit BEFORE 'ratdog' — the order is also every
+ * shipped pool's roll order, so the rat/dog keeps the top 5 % band of the same roll and every rat/dog draw stays identical.
+ */
+export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog';
+export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog'];
 /** Room-modifier family key that applies its density to every family of the room. */
 export const ALL_FAMILIES = 'all';
 
 /** A family pool: [family, relative weight] in roll order (the pick walks it in this order). */
 export type FamilyPool = readonly (readonly [EnemyFamilyId, number])[];
 
+/** A non-zombie family (the zombie always takes the remainder of a pool built by familyPool). */
+export type ShareFamilyId = Exclude<EnemyFamilyId, 'zombie'>;
+
 /**
- * Relative spawn weight of each family at ANY spawn point (iteration 07 Lane Q, moved from ai/creatureSpawn.ts). The user asked
- * for the field-notes rat/dog to be about 5 % of the enemies. Both shipped levels use this pool.
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): the DEFAULT share of every non-zombie family in a level's pool (familyPool).
+ *  - ratdog 0.05: iteration 07 (Lane Q), the user asked for the field-notes rat/dog to be about 5 % of the enemies.
+ *  - blightbelly 0.05: the user asked for the exploding Blightbelly on every level, "roughly as rare as the rat dog" — DEFAULT ON.
+ *  - siren 0: the Siren is OPT-IN per level (OPT_IN_FAMILIES): a level enables her deliberately with a weight AND an eligibility
+ *    rule (Office only today; never the Subway). Nothing is enabled by a level's tier.
  */
-export const ENEMY_POOL: FamilyPool = [['zombie', 0.95], ['ratdog', 0.05]];
+export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05};
+/** Families a level must enable deliberately: weight > 0 is only valid together with an explicit `eligibility` rule. */
+export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
+
+/**
+ * A level's family pool in ENEMY_FAMILY_IDS order: DEFAULT_FAMILY_SHARES overridden by `shares`, the zombie = the remainder (rounded
+ * to 1e-9 so the table reads 0.9, not 0.8999999999999999; the rat/dog band [0.95, 1) of the roll is unchanged by that rounding).
+ */
+export function familyPool(shares: Partial<Record<ShareFamilyId, number>> = {}): FamilyPool {
+  const s: Record<ShareFamilyId, number> = {...DEFAULT_FAMILY_SHARES, ...shares};
+  let rest = 1;
+  for (const f of ENEMY_FAMILY_IDS) if (f !== 'zombie') rest -= s[f];
+  rest = Math.round(rest * 1e9) / 1e9;
+  if (!(rest >= 0)) throw new Error(`familyPool: the non-zombie shares exceed 1 (${JSON.stringify(s)})`);
+  return ENEMY_FAMILY_IDS.map(f => [f, f === 'zombie' ? rest : s[f]] as const);
+}
+
+/**
+ * The DEFAULT pool (the Subway's, and every level that does not opt in to the Siren): zombie 0.9, blightbelly 0.05, siren 0,
+ * ratdog 0.05. Before task track1 both shipped levels used [zombie 0.95, ratdog 0.05]: the rat/dog keeps its band of the same
+ * roll (identical draws), the Blightbelly takes 5 % of the old zombie band (placed slots replaced, never added).
+ */
+export const ENEMY_POOL: FamilyPool = familyPool();
 
 /**
  * Iteration 12 (AI lane, mandate F "More enemies. Double the number of enemies."): enemy spawn points per station (moved from
@@ -146,9 +178,11 @@ export type RoomModifier = Readonly<Partial<Record<EnemyFamilyId | typeof ALL_FA
 export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
 
 /**
- * Generation contexts. Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center adds 'pit' (the subway station storey at
- * the bottom of the void, once), 'ring' (one retail ring, once per ring) and 'service' (Track2's per-annex zone budget — a DATA HOOK
- * until Track2's same-world service annexes exist: 0 runs, excluded from the core totals; see MALL_SERVICE_HOOK).
+ * Generation contexts (one count rule each). A same-world annex zone (e.g. Track 2's track-tunnel service annexes) adds its
+ * own id here and declares its count in the profile of every level that has it (docs/level-enemy-contract.md).
+ * Task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center adds 'pit' (the subway station storey at the bottom of the
+ * void, once), 'ring' (one retail ring, once per ring) and 'service' (Track2's per-annex zone budget — a DATA HOOK until Track2's
+ * same-world service annexes exist: 0 runs, excluded from the core totals; see MALL_SERVICE_HOOK).
  */
 export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service';
 export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service'];
@@ -186,6 +220,42 @@ export interface AmbientBudget {
   readonly perStorey: number;
 }
 
+/**
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): WHERE a family may take a placed slot. A spawn whose (unchanged) family roll
+ * lands on the family but which fails ANY criterion becomes `fallback` instead — never renormalised, so every other family's
+ * draws and share are untouched (the rat/dog stays exactly its 5 %). Criteria are checked only for spawns that drew the family
+ * (no extra RNG, no per-frame cost). Absent criteria = no restriction.
+ */
+export interface FamilyEligibility {
+  /** The spawn's generation context (markSpawnContext) must be one of these (an untagged spawn of a multi-context profile: never). */
+  readonly contexts: readonly SpawnContextId[];
+  /** Area kinds allowed. */
+  readonly kinds?: readonly AreaKind[];
+  /** Room keys (purpose ids or room types) never allowed — matched against BOTH the area's purpose and its room type. */
+  readonly excludeRooms?: readonly string[];
+  /** The area's shorter side >= this many cells (0.5 m). */
+  readonly minSideCells?: number;
+  /** The area's w x h >= this many cells. */
+  readonly minAreaCells?: number;
+  /** The spawn cell and every cell within this Chebyshev radius are walkable floor of the SAME area (pose + ground patch). */
+  readonly clearCells?: number;
+  /** Straight-line distance (m) from the spawn to the centre of every opening (door) of its area. */
+  readonly doorKeepM?: number;
+  /**
+   * Fair passage (m): with a disc of this radius around the spawn treated as impassable, every walkable cell around the disc stays
+   * in ONE connected region of the storey (pockets of <= PASSAGE_NOOK_CELLS cells ignored) — she never seals off part of a floor.
+   */
+  readonly passageRadiusM?: number;
+  /**
+   * At most this many of the family per generated LEVEL (every context of the one logical level, annexes included): eligible draws
+   * beyond it, in spawn-index order, fall back too.
+   */
+  readonly maxPerLevel?: number;
+  /** What an ineligible draw becomes (a family without an eligibility rule of its own). */
+  readonly fallback: EnemyFamilyId;
+  readonly why: string;
+}
+
 export interface SpawnProfile {
   /** The logical level (LevelId) a registered profile belongs to. */
   readonly id: string;
@@ -195,6 +265,8 @@ export interface SpawnProfile {
   readonly contexts: Readonly<Partial<Record<SpawnContextId, SpawnContextRule>>>;
   readonly levelMoves?: LevelMoveRules;
   readonly rooms: RoomModifiers;
+  /** Per-family placement eligibility (task track1, lane SPAWN). Required for an OPT_IN_FAMILIES family with weight > 0. */
+  readonly eligibility?: Readonly<Partial<Record<EnemyFamilyId, FamilyEligibility>>>;
   /** Task track3-eaton-centre-20261031 (lane HORDE / PROFILES): the SEPARATE roaming-horde pool (ai/hordeSpec.ts); absent = none. */
   readonly horde?: HordeRules;
   /** Lane PROFILES: Track1 family hooks of the ambient pool (FamilyHook); absent = none. */
@@ -349,8 +421,42 @@ export const MALL_SPAWN_PROFILE: SpawnProfile = {
 };
 
 /**
- * THE PER-LEVEL PROFILES. Both shipped levels keep today's controls exactly and NO room modifiers (every room resolves to 1). A new
- * level adds its entry here (Record<LevelId, …> makes that mandatory); tests/enemy-spawn-tables.test.ts checks coverage.
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): where an Office Siren may lie dormant. She is an INDOOR-ROOM encounter of the
+ * office floors (2..8): never on the station or in the lobby (context 'street'), never on the roof (context 'roof'), never in a
+ * corridor (kind passage), closet, washroom, stairwell / stair core or the elevator. Her room is at least 4 x 4 m (shorter side 8
+ * cells, 100 cells = 25 m2); she lies on a clear 1.5 x 1.5 m patch of free floor of the room itself (3 x 3 cells: pose + the
+ * centre of the ground corruption, never across a doorway); every doorway of her room is at least 3 m away (stepping in does not
+ * wake her: the 2 m proximity wake leaves a step to see her and back off); and a 2.5 m disc around her (wake radius + 0.5 m)
+ * never seals off part of the floor — the player can always walk around her, so avoiding her is a real choice. At most 4 per
+ * level (the whole logical level, annex contexts included: an outlier run never fills the tower with them). An ineligible or
+ * over-cap Siren draw becomes an ordinary zombie (its shambler / coated type roll is already there).
+ * (Census, docs/enemy-spawns.md: a 2.5 x 2.5 m clear patch left only ~2.4 eligible slots per run in furnished rooms — too few to
+ * spread her over the tower; 1.5 x 1.5 m leaves ~11.4 of the ~31 office-floor slots.)
+ */
+export const OFFICE_SIREN_ELIGIBILITY: FamilyEligibility = {
+  contexts: ['floor'],
+  kinds: ['room'],
+  excludeRooms: ['washroom', 'office-stair', 'stair-core', 'office-elevator', 'office-lobby', 'office-corridor', 'office-roof'],
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4,
+  fallback: 'zombie',
+  why: 'office-floor rooms only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 4 per level',
+};
+
+/**
+ * Task track1-siren-blightbelly-20261031 (lane SPAWN): the Office's Siren DRAW weight, tuned by census so that a complete Office run
+ * places about 2 Sirens (not 2 per floor). Only ~11.3 of the ~38.7 placed slots of a run are eligible (OFFICE_SIREN_ELIGIBILITY:
+ * office-floor rooms) and an ineligible draw becomes a zombie, so the draw weight is above the placed share: 0.19 x ~11.3 eligible
+ * slots -> mean 1.97 Sirens per run (400-run census: 12.5 % of runs none, max 4 = the cap), ~5.1 % of the placed enemies — the
+ * brief's 5 % starting split, measured. The rat/dog keeps its band [0.95, 1) of the roll. Census: docs/enemy-spawns.md.
+ */
+export const OFFICE_SIREN_WEIGHT = 0.19;
+/** The Office pool: zombie (remainder), blightbelly 0.05, siren OFFICE_SIREN_WEIGHT, ratdog 0.05. */
+export const OFFICE_ENEMY_POOL: FamilyPool = familyPool({siren: OFFICE_SIREN_WEIGHT});
+
+/**
+ * THE PER-LEVEL PROFILES. Every level lists every family (familyPool); the Office opts in to the Siren with its eligibility rule.
+ * No room modifiers (every room resolves to 1). A new level adds its entry here (Record<LevelId, …> makes that mandatory;
+ * levels/levelContract.ts validateLevelRegistry + tests/enemy-spawn-contract.test.ts check coverage and the tier).
  */
 export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
   subway: {
@@ -362,13 +468,14 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
     rooms: {},
   },
   office: {
-    id: 'office', label: 'Office Space', families: ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
+    id: 'office', label: 'Office Space', families: OFFICE_ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
     contexts: {
       street: {label: 'Station + lobby', count: [5, 8], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
       floor: {label: 'Office floor', count: [3, 6], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
       roof: {label: 'Roof', count: [0, 2], placement: OFFICE_PLACEMENT, accept: {min: null, max: 'count'}},
     },
     rooms: {},
+    eligibility: {siren: OFFICE_SIREN_ELIGIBILITY},
   },
   // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_SPAWN_PROFILE).
   mall: MALL_SPAWN_PROFILE,
@@ -488,6 +595,153 @@ export function areaSpawnWeight(w: AreaWeights, p: SpawnProfile, a: AreaLike): n
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
+// Task track1-siren-blightbelly-20261031 (lane SPAWN): spawn context tags + family eligibility (zombie fallback).
+
+/**
+ * Generation-time side table: the context of every spawn a placement routine appended (layout data unchanged, so no layout
+ * fingerprint moves). Keyed by the layout object; garbage with it.
+ */
+const SPAWN_CONTEXTS = new WeakMap<object, SpawnContextId[]>();
+
+/** A placement routine tags the spawns it appended (indices first .. zombies.length - 1) with its context. */
+export function markSpawnContext(layout: {readonly zombies: readonly unknown[]}, first: number, context: SpawnContextId): void {
+  let tags = SPAWN_CONTEXTS.get(layout);
+  if (!tags) SPAWN_CONTEXTS.set(layout, (tags = []));
+  for (let i = first; i < layout.zombies.length; i++) tags[i] = context;
+}
+
+/**
+ * The generation context of spawn `index`: its tag, else — only when the profile declares exactly ONE context (unambiguous, e.g.
+ * the Subway's 'station') — that context, else undefined (never eligible for a context-restricted family).
+ */
+export function spawnContextOf(layout: object, profile: SpawnProfile, index: number): SpawnContextId | undefined {
+  const tag = SPAWN_CONTEXTS.get(layout)?.[index];
+  if (tag) return tag;
+  const ids = Object.keys(profile.contexts) as SpawnContextId[];
+  return ids.length === 1 ? ids[0] : undefined;
+}
+
+/** The grid surface the eligibility checks read (gen/grid.ts Grid satisfies it). */
+export interface EligibilityGrid {
+  readonly w: number;
+  readonly h: number;
+  readonly area: ArrayLike<number>;
+  walkable(x: number, y: number): boolean;
+  cellOf(wx: number, wz: number): [number, number];
+  center(x: number, y: number): [number, number];
+}
+/** The layout surface the eligibility checks read (gen/stationTypes.ts StationLayout satisfies it). */
+export interface EligibilityLayout {
+  readonly areas?: readonly (Pick<Area, 'type' | 'purpose'> & Partial<Pick<Area, 'kind' | 'w' | 'h'>>)[];
+  readonly doors?: readonly Pick<Door, 'x' | 'y' | 'w' | 'h' | 'a' | 'b'>[];
+  readonly levels?: readonly {readonly grid: EligibilityGrid}[];
+  readonly grid?: EligibilityGrid;
+}
+export interface EligibilitySpawn {
+  readonly x?: number;
+  readonly z?: number;
+  readonly area?: number;
+  readonly level?: number;
+}
+
+/** Fair-passage pockets up to this many cells (between desks, behind a column) may be cut off. */
+export const PASSAGE_NOOK_CELLS = 8;
+
+/**
+ * True when a disc of radius `r` (m) around (cx, cz) treated as impassable splits the walkable cells around it into more than one
+ * region larger than PASSAGE_NOOK_CELLS (4-connected flood over the storey grid, outside the disc).
+ */
+export function sealsPassage(g: EligibilityGrid, cx: number, cz: number, r: number): boolean {
+  const cell = g.center(1, 0)[0] - g.center(0, 0)[0];
+  const [sx, sy] = g.cellOf(cx, cz);
+  const rc = Math.ceil(r / cell) + 1;
+  const inDisc = (x: number, y: number): boolean => { const [wx, wz] = g.center(x, y); return Math.hypot(wx - cx, wz - cz) <= r; };
+  const free = (x: number, y: number): boolean => g.walkable(x, y) && !inDisc(x, y);
+  const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
+  const boundary: number[] = [];
+  for (let y = sy - rc; y <= sy + rc; y++) for (let x = sx - rc; x <= sx + rc; x++) {
+    if (!free(x, y)) continue;
+    if (N4.some(([ox, oy]) => inDisc(x + ox, y + oy) && g.walkable(x + ox, y + oy))) boundary.push(y * g.w + x);
+  }
+  const label = new Int32Array(g.w * g.h);
+  const queue = new Int32Array(g.w * g.h);
+  let big = 0;
+  for (let k = 0, comp = 0; k < boundary.length; k++) {
+    if (label[boundary[k]]) continue;
+    comp++;
+    let head = 0, tail = 0, size = 0;
+    queue[tail++] = boundary[k];
+    label[boundary[k]] = comp;
+    while (head < tail) {
+      const i = queue[head++], x = i % g.w, y = (i - x) / g.w;
+      size++;
+      for (const [ox, oy] of N4) {
+        const nx = x + ox, ny = y + oy, j = ny * g.w + nx;
+        if (nx < 0 || ny < 0 || nx >= g.w || ny >= g.h || label[j] || !free(nx, ny)) continue;
+        label[j] = comp;
+        queue[tail++] = j;
+      }
+    }
+    if (size > PASSAGE_NOOK_CELLS && ++big > 1) return true;
+  }
+  return false;
+}
+
+const roomExcluded = (rule: FamilyEligibility, a: Pick<Area, 'purpose' | 'type'>): boolean =>
+  !!rule.excludeRooms && (rule.excludeRooms.includes(a.type) || (a.purpose !== undefined && rule.excludeRooms.includes(a.purpose)));
+
+/**
+ * The first criterion of `rule` spawn `s` fails ('context', 'kind', 'room', 'size', 'clear', 'door', 'passage', 'geometry'), or
+ * null when the spawn is eligible. Geometry the rule needs but the layout lacks (synthetic test layouts) fails: conservative.
+ */
+export function eligibilityFailure(rule: FamilyEligibility, layout: EligibilityLayout, s: EligibilitySpawn, context: SpawnContextId | undefined): string | null {
+  if (context === undefined || !rule.contexts.includes(context)) return 'context';
+  const a = s.area !== undefined ? layout.areas?.[s.area] : undefined;
+  if (!a) return 'geometry';
+  if (rule.kinds && (a.kind === undefined || !rule.kinds.includes(a.kind))) return a.kind === undefined ? 'geometry' : 'kind';
+  if (roomExcluded(rule, a)) return 'room';
+  if (rule.minSideCells !== undefined || rule.minAreaCells !== undefined) {
+    if (a.w === undefined || a.h === undefined) return 'geometry';
+    if ((rule.minSideCells !== undefined && Math.min(a.w, a.h) < rule.minSideCells) || (rule.minAreaCells !== undefined && a.w * a.h < rule.minAreaCells)) return 'size';
+  }
+  const needsGrid = rule.clearCells !== undefined || rule.doorKeepM !== undefined || rule.passageRadiusM !== undefined;
+  if (!needsGrid) return null;
+  const lv = s.level ?? 0;
+  const g = layout.levels?.[lv]?.grid ?? (lv === 0 ? layout.grid : undefined);
+  if (!g || s.x === undefined || s.z === undefined) return 'geometry';
+  if (rule.clearCells !== undefined) {
+    const [x, y] = g.cellOf(s.x, s.z), r = rule.clearCells;
+    for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+      if (!g.walkable(x + ox, y + oy) || g.area[(y + oy) * g.w + x + ox] !== s.area) return 'clear';
+    }
+  }
+  if (rule.doorKeepM !== undefined) {
+    if (!layout.doors) return 'geometry';
+    for (const d of layout.doors) {
+      if (d.a !== s.area && d.b !== s.area) continue;
+      const [dx, dz] = g.center(d.x + (d.w - 1) / 2, d.y + (d.h - 1) / 2);
+      if (Math.hypot(dx - s.x, dz - s.z) < rule.doorKeepM) return 'door';
+    }
+  }
+  if (rule.passageRadiusM !== undefined && sealsPassage(g, s.x, s.z, rule.passageRadiusM)) return 'passage';
+  return null;
+}
+
+/**
+ * The family spawn `index` of `layout` takes: `drawn` when it has no eligibility rule in the profile or the spawn passes it, else
+ * the rule's fallback (eligibility never consumes RNG and never changes another family's draw).
+ */
+export function eligibleFamily(
+  profile: SpawnProfile, drawn: EnemyFamilyId, layout: EligibilityLayout & object, s: EligibilitySpawn, index: number,
+  placedSoFar?: ReadonlyMap<EnemyFamilyId, number>,
+): EnemyFamilyId {
+  const rule = profile.eligibility?.[drawn];
+  if (!rule) return drawn;
+  if (rule.maxPerLevel !== undefined && (placedSoFar?.get(drawn) ?? 0) >= rule.maxPerLevel) return rule.fallback;
+  return eligibilityFailure(rule, layout, s, spawnContextOf(layout, profile, index)) === null ? drawn : rule.fallback;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
 // Census hook (QA / the reference's sampled census): generation-time only, null by default — no runtime / per-frame cost.
 
 export interface SpawnCandidateReport {
@@ -569,7 +823,7 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
     if (pl.landingKeepM !== undefined) num(`${path}.landingKeepM`, pl.landingKeepM);
   };
 
-  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms', 'horde', 'familyHooks', 'rare', 'budgets']);
+  known('profile', p, ['id', 'label', 'families', 'zombieTypes', 'contexts', 'levelMoves', 'rooms', 'eligibility', 'horde', 'familyHooks', 'rare', 'budgets']);
   // --- families
   const seen = new Set<string>();
   let poolSum = 0;
@@ -699,6 +953,32 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
       }
       if (nonNegInt(b.total) && nonNegInt(b.perStorey) && b.total < b.perStorey) bad('budgets.ambient.total', `${b.total} < perStorey ${b.perStorey}`);
     }
+  }
+  // --- family eligibility (task track1-siren-blightbelly-20261031, lane SPAWN)
+  const el = p.eligibility;
+  if (el !== undefined && (!el || typeof el !== 'object')) bad('eligibility', 'not a map');
+  else if (el) for (const [f, rule] of Object.entries(el) as [string, FamilyEligibility][]) {
+    const path = `eligibility.${f}`;
+    if (!(ENEMY_FAMILY_IDS as readonly string[]).includes(f)) bad(path, 'unknown family');
+    if (!rule || typeof rule !== 'object') { bad(path, 'not a rule'); continue; }
+    known(path, rule, ['contexts', 'kinds', 'excludeRooms', 'minSideCells', 'minAreaCells', 'clearCells', 'doorKeepM', 'passageRadiusM', 'maxPerLevel', 'fallback', 'why']);
+    if (!Array.isArray(rule.contexts) || !rule.contexts.length) bad(`${path}.contexts`, 'needs at least one context');
+    else for (const c of rule.contexts) {
+      if (!(SPAWN_CONTEXT_IDS as readonly string[]).includes(c)) bad(`${path}.contexts`, `unknown spawn context ${c}`);
+      else if (!p.contexts || !own(p.contexts, c)) bad(`${path}.contexts`, `context ${c} is not declared by this profile`);
+    }
+    for (const k of rule.kinds ?? []) if (!own(AREA_KINDS, k)) bad(`${path}.kinds`, `unknown area kind ${k}`);
+    for (const k of rule.excludeRooms ?? []) if (!roomKeys.has(k)) bad(`${path}.excludeRooms`, `unknown room key ${k}`);
+    for (const k of ['minSideCells', 'minAreaCells', 'clearCells', 'maxPerLevel'] as const) if (rule[k] !== undefined) int(`${path}.${k}`, rule[k]);
+    for (const k of ['doorKeepM', 'passageRadiusM'] as const) if (rule[k] !== undefined) num(`${path}.${k}`, rule[k]);
+    if (!(ENEMY_FAMILY_IDS as readonly string[]).includes(rule.fallback)) bad(`${path}.fallback`, `unknown family ${String(rule.fallback)}`);
+    else if (rule.fallback === f) bad(`${path}.fallback`, 'falls back to itself');
+    else if (own(el, rule.fallback)) bad(`${path}.fallback`, `${rule.fallback} has an eligibility rule of its own (the fallback must always be valid)`);
+    if (typeof rule.why !== 'string' || !rule.why.trim()) bad(`${path}.why`, 'needs a reason');
+  }
+  // --- opt-in families: a weight > 0 needs an explicit eligibility rule (the Siren is never enabled by default / by tier)
+  if (Array.isArray(p.families)) for (const [f, w] of p.families) {
+    if (OPT_IN_FAMILIES.includes(f) && finiteNonNeg(w) && w > 0 && !(el && own(el, f))) bad(`families.${f}`, `opt-in family with weight ${w} needs an eligibility.${f} rule (where it may spawn)`);
   }
   return issues;
 }
