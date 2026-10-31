@@ -41,6 +41,7 @@ import {
 } from './mallFinishes';
 import {MALL_FINISH_ATTR, MALL_SPAN, ceilRow, floorRow, mallSurfaceMaterial, wallRow, writeRow, MALL_TABLE_ROWS} from './mallSurfaces';
 import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's door side (lane GEN derives it; never re-derived here)
+import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyNode = any;
@@ -60,6 +61,8 @@ export interface MallDressMaterials {
   glassRoof: THREE.Material; glassRail: THREE.Material; whiteSteel: THREE.Material; stainless: THREE.Material; darkSteel: THREE.Material;
   columnRender: THREE.Material; columnTile: THREE.Material; membrane: THREE.Material; sky: THREE.Material; can: THREE.Material;
   trimLight: THREE.Material; trimDark: THREE.Material; trimWood: THREE.Material; soffit: THREE.Material;
+  /** The pit-plaza fountain: dark granite basin, pale stone coping, stagnant water, verdigris bronze centrepiece. */
+  fountainStone: THREE.Material; fountainCoping: THREE.Material; fountainWater: THREE.Material; fountainBronze: THREE.Material;
 }
 const dressCache = new WeakMap<WorldMaterials, MallDressMaterials>();
 
@@ -136,6 +139,10 @@ export function mallDressMaterials(mats: WorldMaterials): MallDressMaterials {
     trimDark: named(thinTrim(surfaceMaterial('paintedSteel', {color: 0x2e3032, metalness: 0.3}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-dark'),
     trimWood: named(thinTrim(surfaceMaterial('woodVeneer', {color: 0xc8a888, roughness: 1}, {grime: [0.2, 0.4], macro: 0.1})), 'mall-trim-wood'),
     soffit: named(surfaceMaterial('paintedPanel', {color: 0xe6e4de, roughness: 1}, {macro: 0.06}), 'mall-escalator-soffit'),
+    fountainStone: named(surfaceMaterial('black', {color: 0x6a6a6c, roughness: 0.55}, {grime: [0.4, 0.4], macro: 0.15}), 'mall-fountain-stone'),
+    fountainCoping: named(surfaceMaterial('porcelain', {color: 0xcdc4b2, roughness: 0.7}, {grime: [0.3, 0.3], macro: 0.12}), 'mall-fountain-coping'),
+    fountainWater: named(new SurfaceNodeMaterial({map: stagnantWaterTexture(), roughness: 0.12, metalness: 0}), 'mall-fountain-water'),
+    fountainBronze: named(surfaceMaterial('brushedSteel', {color: 0x6f8f74, metalness: 0.45}, {grime: [0.3, 0.6], macro: 0.25}), 'mall-fountain-bronze'),
   };
   dressCache.set(mats, d);
   return d;
@@ -417,6 +424,8 @@ export interface AtriumStats {
   signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; soffits: number; droppedFaces: number;
   /** Shopfront props drawn (lane SHOPS' collision-only glazing / closed shutters) and visual-only partial shutters. */
   glazing: number; shutters: number; partialShutters: number;
+  /** Landmarks drawn (gen/mall/landmarks.ts): fountains and directory pylons. */
+  fountains: number; pylons: number;
   /** Build time of the atrium dressing (ms). */
   ms: number;
 }
@@ -444,7 +453,7 @@ export class MallArch {
   private nextRow = 0;
   private readonly floorCache = new Map<number, string | null>();
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -479,6 +488,12 @@ export class MallArch {
       const x0 = a.x * CELL, z0 = a.y * CELL, x1 = (a.x + a.w) * CELL, z1 = (a.y + a.h) * CELL;
       if (x1 < vb.x0 - pad || x0 > vb.x1 + pad || z1 < vb.z0 - pad || z0 > vb.z1 + pad) continue;
       this.plazaCenter.set(a.id, {x: (x0 + x1) / 2, z: (z0 + z1) / 2});
+    }
+    // the concentric rings of the court holding the fountain (gen/mall/landmarks.ts) centre on it: every plaza area of that court
+    const fountain = layout.props.find(p => p.kind === 'fountainBasin');
+    if (fountain) {
+      const lab = layout.areas[fountain.area]?.label;
+      for (const id of [...this.plazaCenter.keys()]) if (layout.areas[id]?.label === lab) this.plazaCenter.set(id, {x: fountain.x, z: fountain.z});
     }
     this.dress = mallDressMaterials(mats);
   }
@@ -755,6 +770,7 @@ export class MallArch {
     for (const fn of [
       () => this.buildRoof(add), () => this.buildBalustrades(add, rails), () => this.buildColumns(add), () => this.buildShaftTowers(add),
       () => this.buildSignage(group, add), () => this.buildBanners(add), () => this.buildEscalatorSoffits(add), () => this.buildShopfronts(add, this.mats),
+      () => this.buildFountain(add),
     ]) {
       try { fn(); } catch (e) { console.warn('mall atrium: part skipped', e); }
     }
@@ -1097,6 +1113,21 @@ export class MallArch {
         }
       }
     }
+    // directory pylons (gen/mall/landmarks.ts): body in the sign boxes, the storey plan on the front, the brand directory on the back
+    for (const p of this.layout.props) {
+      if (p.kind !== 'directoryPylon') continue;
+      const lv = p.level ?? 0;
+      boxOf(lv).box(p.x, p.y + p.h / 2, p.z, p.hx * 2, p.h, p.hz * 2);
+      const plan = directoryPlanTexture(this.layout, lv, {x: p.x, z: p.z}, this.atrium, 9500 + lv * 7 + Math.round(p.x));
+      const list = directoryListTexture(this.layout, lv, 9600 + lv);
+      const yaw = p.rot, fwd = PYLON_FACE.d / 2 + 0.004;
+      const fx = Math.sin(yaw), fz = Math.cos(yaw);
+      for (const [tex, sgn] of [[plan, 1], [list, -1]] as const) {
+        face(tex, new THREE.Matrix4().compose(new THREE.Vector3(p.x + fx * fwd * sgn, p.y + PYLON_FACE.y, p.z + fz * fwd * sgn), q.setFromAxisAngle(UP, yaw + (sgn < 0 ? Math.PI : 0)),
+          new THREE.Vector3(PYLON_FACE.w, PYLON_FACE.h, 1)), lv);
+      }
+      this.stats.pylons++;
+    }
     for (const [lv, b] of boxes) add(b.mesh(this.dress.darkSteel, `mall-sign-boxes-${lv}`, {level: lv}));
     if (faces.size) this.buildSignFaces(group, faces, add);
   }
@@ -1247,6 +1278,67 @@ export class MallArch {
       add(l.shutter.mesh(shutterMat, `shopfront-mall-shutter-${lv}`, {level: lv}));
       add(l.partial.mesh(shutterMat, `mall-shutter-partial-${lv}`, {level: lv}));
     }
+  }
+
+  /**
+   * The pit-plaza fountain (gen/mall/landmarks.ts `fountainBasin` + `fountainSpire`), drawn exactly in its colliders: a square
+   * dark-granite basin wall with a broad pale-stone coping (the sitting ledge, 0.45-0.5 m), a dark basin floor, stagnant water at
+   * 0.3 m (algae, scum, floating debris: the pumps died decades ago), and a tiered verdigris-bronze centrepiece on a stone plinth.
+   */
+  buildFountain(add: (m: THREE.Mesh | null) => void): void {
+    const basins = this.layout.props.filter(p => p.kind === 'fountainBasin'), spires = this.layout.props.filter(p => p.kind === 'fountainSpire');
+    if (!basins.length && !spires.length) return;
+    const stone = new Mesher(), coping = new Mesher(), water = new Mesher(), bronze = new Mesher();
+    for (const b of basins) {
+      const H = b.hx, L = Math.min(LEDGE, H * 0.3), y0 = b.y, top = b.y + b.h, lh = b.h - 0.05;
+      const x0 = b.x - H, x1 = b.x + H, z0 = b.z - H, z1 = b.z + H;
+      const ring = (m: Mesher, ya: number, yb: number) => {
+        m.box(b.x, (ya + yb) / 2, z0 + L / 2, 2 * H, yb - ya, L);
+        m.box(b.x, (ya + yb) / 2, z1 - L / 2, 2 * H, yb - ya, L);
+        m.box(x0 + L / 2, (ya + yb) / 2, b.z, L, yb - ya, 2 * H - 2 * L);
+        m.box(x1 - L / 2, (ya + yb) / 2, b.z, L, yb - ya, 2 * H - 2 * L);
+      };
+      ring(stone, y0, y0 + lh);
+      ring(coping, y0 + lh, top);
+      stone.box(b.x, y0 + 0.03, b.z, 2 * (H - L), 0.06, 2 * (H - L));
+      const wy = y0 + 0.3, a0 = H - L;
+      water.quad([[b.x - a0, wy, b.z - a0], [b.x - a0, wy, b.z + a0], [b.x + a0, wy, b.z + a0], [b.x + a0, wy, b.z - a0]], [0, 1, 0], [[0, 0], [0, 1], [1, 1], [1, 0]]);
+    }
+    for (const sp of spires) {
+      // a turned centrepiece: stone drum plinth, three diminishing round bowls on columns (lathe), a spout finial; the lowest bowl
+      // holds a stagnant puddle. Widest bowl = the collider's half size (the collider square's corners lie inside the basin).
+      const R = sp.hx, y = sp.y, X = sp.x, Z = sp.z, H = sp.h;
+      stone.cyl(X, y + 0.05, Z, 0.42, 0.5, 20);
+      stone.add(discGeometry(X, y + 0.55, Z, 0.42, 20, true));
+      const bowl = (rim: number, rimY: number, depth: number, stem: number) => {
+        const t = 0.035;
+        const prof = [
+          new THREE.Vector2(0.001, rimY - depth - t), new THREE.Vector2(stem, rimY - depth - t), new THREE.Vector2(rim * 0.55, rimY - depth * 0.55),
+          new THREE.Vector2(rim * 0.88, rimY - depth * 0.15), new THREE.Vector2(rim, rimY), new THREE.Vector2(rim - t, rimY + 0.012),
+          new THREE.Vector2((rim - t) * 0.86, rimY - depth * 0.12), new THREE.Vector2((rim - t) * 0.5, rimY - depth * 0.62), new THREE.Vector2(0.001, rimY - depth + t * 0.2),
+        ];
+        const g = new THREE.LatheGeometry(prof, 24);
+        g.translate(X, y, Z);
+        bronze.add(g);
+      };
+      // column segments with collars between the bowls, the bowls, the spout
+      bronze.cyl(X, y + 0.55, Z, 0.11, 0.2, 14);
+      bowl(R, 1.0, 0.24, 0.12);
+      water.add(discGeometry(X, y + 0.93, Z, R * 0.78, 24, true));
+      bronze.cyl(X, y + 1.0, Z, 0.085, 0.5, 14);
+      bronze.cyl(X, y + 1.3, Z, 0.12, 0.06, 14);
+      bowl(R * 0.62, 1.7, 0.17, 0.09);
+      bronze.cyl(X, y + 1.7, Z, 0.06, 0.3, 12);
+      bowl(R * 0.34, 2.08, 0.1, 0.06);
+      const sp1 = new THREE.SphereGeometry(0.075, 12, 8); sp1.translate(X, y + 2.12, Z); bronze.add(sp1);
+      const sp2 = new THREE.ConeGeometry(0.045, H - 2.19, 10); sp2.translate(X, y + 2.19 + (H - 2.19) / 2, Z); bronze.add(sp2);
+    }
+    const lv = (basins[0] ?? spires[0]).level ?? 0;
+    add(stone.mesh(this.dress.fountainStone, 'mall-fountain-stone', {level: lv}));
+    add(coping.mesh(this.dress.fountainCoping, 'mall-fountain-coping', {level: lv}));
+    add(water.mesh(this.dress.fountainWater, 'mall-fountain-water', {level: lv}));
+    add(bronze.mesh(this.dress.fountainBronze, 'mall-fountain-bronze', {level: lv}));
+    this.stats.fountains = basins.length;
   }
 
   /** Hanging banners in the void: from just under the springing line, avoiding bridges and the shaft. */
@@ -1471,3 +1563,159 @@ export const MALL_DEEP = ATRIUM_MARGIN + 1;
 export const MALL_SURFACE_MATERIALS = 6;
 /** The per-vertex attribute name (re-exported for the builder). */
 export {MALL_FINISH_ATTR};
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// Landmarks: fountain water, directory pylon faces (task track3, lane ARCH)
+
+const LEDGE = FOUNTAIN.ledge;
+/** Directory pylon face: size (2:3, the 320 x 480 canvases), centre height above the floor, the body depth. */
+export const PYLON_FACE = {w: 0.74, h: 1.11, y: 1.22, d: PYLON.d} as const;
+
+let waterTex: THREE.CanvasTexture | null = null;
+/** Stagnant fountain water: dark green-brown, algae blooms, a scum line, floating leaves / cups / a can (one texture). */
+function stagnantWaterTexture(): THREE.CanvasTexture {
+  if (waterTex) return waterTex;
+  waterTex = canvasTexture(256, 256, 7431, (ctx, w, h, rnd) => {
+    ctx.fillStyle = '#1e261c'; ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < 26; i++) {
+      const x = rnd() * w, y = rnd() * h, r = 12 + rnd() * 40;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+      g.addColorStop(0, `rgba(${60 + rnd() * 30},${80 + rnd() * 30},${34 + rnd() * 20},0.55)`); g.addColorStop(1, 'rgba(40,52,30,0)');
+      ctx.fillStyle = g; ctx.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    ctx.strokeStyle = 'rgba(120,118,92,0.35)'; ctx.lineWidth = 6; ctx.strokeRect(3, 3, w - 6, h - 6); // scum line at the wall
+    for (let i = 0; i < 40; i++) { ctx.fillStyle = `rgba(${90 + rnd() * 60},${60 + rnd() * 30},${20 + rnd() * 20},0.8)`; ctx.beginPath(); ctx.ellipse(rnd() * w, rnd() * h, 2 + rnd() * 4, 1 + rnd() * 2, rnd() * 3, 0, Math.PI * 2); ctx.fill(); }
+    ctx.fillStyle = '#c8c2b0'; ctx.fillRect(w * 0.62, h * 0.3, 10, 7); ctx.fillStyle = '#8a1f24'; ctx.fillRect(w * 0.3, h * 0.72, 9, 5); // a cup, a can
+    ctx.fillStyle = 'rgba(255,255,255,0.05)'; for (let i = 0; i < 12; i++) ctx.fillRect(rnd() * w, rnd() * h, 20 + rnd() * 30, 1);
+  });
+  waterTex.wrapS = waterTex.wrapT = THREE.ClampToEdgeWrapping;
+  return waterTex;
+}
+
+/** A flat round disc (water surface / plinth top) at (x, y, z), facing up (indexed, normals, uvs 0..1). */
+function discGeometry(x: number, y: number, z: number, r: number, seg: number, up: boolean): THREE.BufferGeometry {
+  const g = new THREE.CircleGeometry(r, seg);
+  g.rotateX(up ? -Math.PI / 2 : Math.PI / 2);
+  g.translate(x, y, z);
+  return g;
+}
+
+/** Plan rectangle of a storey in world metres (its public areas, shops and the void), for the directory face. */
+function storeyPlanBounds(layout: StationLayout, level: number): {x0: number; z0: number; x1: number; z1: number} {
+  const b = {x0: Infinity, z0: Infinity, x1: -Infinity, z1: -Infinity};
+  const m = layout.mall!;
+  const shops = new Set(m.shops.filter(s => s.level === level).map(s => s.area));
+  for (const a of layout.areas) {
+    if ((a.level ?? 0) !== level || !(a.publicSpace || shops.has(a.id))) continue;
+    b.x0 = Math.min(b.x0, a.x * CELL); b.z0 = Math.min(b.z0, a.y * CELL); b.x1 = Math.max(b.x1, (a.x + a.w) * CELL); b.z1 = Math.max(b.z1, (a.y + a.h) * CELL);
+  }
+  if (!Number.isFinite(b.x0)) return {...m.void.bounds};
+  return b;
+}
+
+/**
+ * The directory plan face of a pylon (canvas 320 x 480): the storey's public plan north-up — shops filled in their program's sign
+ * colour, galleries / courts pale, the void dark, washrooms blue, escalators (orange arrows foot -> head), stairs, the elevator — a
+ * red "You are here" dot at the pylon, a header (the mall name + the storey) and a legend; aged (yellowed, grimy).
+ */
+export function directoryPlanTexture(layout: StationLayout, level: number, here: {x: number; z: number}, atrium: Uint8Array | null, seed: number): THREE.CanvasTexture {
+  const m = layout.mall!;
+  const st = m.storeys.find(q => q.level === level);
+  return canvasTexture(320, 480, seed, (ctx, W, H, rnd) => {
+    ctx.fillStyle = '#efeadf'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1f2b38'; ctx.fillRect(0, 0, W, 64);
+    ctx.fillStyle = '#d9a520'; ctx.font = 'bold 13px "Helvetica Neue", Arial, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText("THE EATON'S CENTER · DIRECTORY", 12, 17);
+    ctx.fillStyle = '#f2efe6'; ctx.font = 'bold 26px "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(level === m.void.floorLevel ? 'SUBWAY · COURTS' : (st?.label ?? `Level ${level}`).toUpperCase(), 12, 45);
+    // plan area
+    const PX = 12, PY = 76, PW = W - 24, PH = H - 76 - 92;
+    const b = storeyPlanBounds(layout, level), bw = Math.max(1, b.x1 - b.x0), bh = Math.max(1, b.z1 - b.z0);
+    const k = Math.min(PW / bw, PH / bh), ox = PX + (PW - bw * k) / 2, oy = PY + (PH - bh * k) / 2;
+    const X = (x: number) => ox + (x - b.x0) * k, Y = (z: number) => oy + (z - b.z0) * k;
+    const shopBy = new Map(m.shops.filter(s => s.level === level).map(s => [s.area, s]));
+    const gal = new Set(m.galleries.flatMap(g => g.areas)), bridges = new Set(m.bridges.map(q => q.area));
+    for (const a of layout.areas) {
+      if ((a.level ?? 0) !== level) continue;
+      const s = shopBy.get(a.id);
+      let fill: string | null = null;
+      if (s) fill = BRAND_STYLE[s.program].bg;
+      else if (/washroom/i.test(`${a.label} ${a.type}`) && a.publicSpace) fill = '#9fc6d8';
+      else if (gal.has(a.id) || bridges.has(a.id) || (a.publicSpace && a.kind !== 'platform')) fill = '#d6d0c2';
+      else if (a.kind === 'platform') fill = '#bdb6a6';
+      if (!fill) continue;
+      ctx.fillStyle = fill;
+      ctx.fillRect(X(a.x * CELL), Y(a.y * CELL), a.w * CELL * k, a.h * CELL * k);
+      if (s) { ctx.strokeStyle = 'rgba(20,20,20,0.55)'; ctx.lineWidth = 1; ctx.strokeRect(X(a.x * CELL) + 0.5, Y(a.y * CELL) + 0.5, a.w * CELL * k - 1, a.h * CELL * k - 1); }
+    }
+    // the void (dark) on the rings; the pit storey's atrium shows as the platforms under it
+    if (level !== m.void.floorLevel) {
+      const o = m.void.outline;
+      ctx.fillStyle = '#2a3a52';
+      ctx.beginPath(); o.forEach((p, i) => (i ? ctx.lineTo(X(p.x), Y(p.z)) : ctx.moveTo(X(p.x), Y(p.z)))); ctx.closePath(); ctx.fill();
+      for (const br of m.bridges.filter(q => q.level === level)) { ctx.strokeStyle = '#d6d0c2'; ctx.lineWidth = Math.max(2, br.width * k); ctx.beginPath(); ctx.moveTo(X(br.from.x), Y(br.from.z)); ctx.lineTo(X(br.to.x), Y(br.to.z)); ctx.stroke(); }
+    }
+    void atrium;
+    // runs touching this storey: escalators orange, stairs grey (arrow foot -> head)
+    const arrow = (ax: number, az: number, bx: number, bz: number, col: string) => {
+      ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.moveTo(X(ax), Y(az)); ctx.lineTo(X(bx), Y(bz)); ctx.stroke();
+      const ang = Math.atan2(Y(bz) - Y(az), X(bx) - X(ax));
+      ctx.beginPath(); ctx.moveTo(X(bx), Y(bz)); ctx.lineTo(X(bx) - 7 * Math.cos(ang - 0.5), Y(bz) - 7 * Math.sin(ang - 0.5)); ctx.lineTo(X(bx) - 7 * Math.cos(ang + 0.5), Y(bz) - 7 * Math.sin(ang + 0.5)); ctx.closePath(); ctx.fill();
+    };
+    for (const v of m.verticals) {
+      if (v.lower !== level && v.upper !== level) continue;
+      if (v.kind === 'escalator') arrow(v.foot.x, v.foot.z, v.head.x, v.head.z, '#e0702a');
+      else if (v.kind === 'stair') arrow(v.foot.x, v.foot.z, v.head.x, v.head.z, '#5a5a5a');
+    }
+    for (const e of m.elevators) {
+      ctx.fillStyle = '#3a7fc1'; ctx.fillRect(X(e.shaft.x0), Y(e.shaft.z0), (e.shaft.x1 - e.shaft.x0) * k, (e.shaft.z1 - e.shaft.z0) * k);
+      ctx.fillStyle = '#fff'; ctx.font = 'bold 9px Arial, sans-serif'; ctx.textAlign = 'center'; ctx.fillText('E', X((e.shaft.x0 + e.shaft.x1) / 2), Y((e.shaft.z0 + e.shaft.z1) / 2)); ctx.textAlign = 'left';
+    }
+    // you are here
+    const hx = X(here.x), hy = Y(here.z);
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(hx, hy, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#d23c3c'; ctx.beginPath(); ctx.arc(hx, hy, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.font = 'bold 11px "Helvetica Neue", Arial, sans-serif'; ctx.fillStyle = '#d23c3c';
+    ctx.fillText('YOU ARE HERE', Math.min(W - 92, hx + 9), Math.max(PY + 8, hy - 9));
+    // legend
+    const LY = H - 84;
+    ctx.fillStyle = '#1f2b38'; ctx.fillRect(0, LY - 6, W, 2);
+    const legend: [string, string][] = [['#e0702a', 'Escalators'], ['#5a5a5a', 'Stairs'], ['#3a7fc1', 'Elevator'], ['#9fc6d8', 'Washrooms'], ['#2a3a52', 'Atrium'], ['#d23c3c', 'You are here']];
+    ctx.font = '12px "Helvetica Neue", Arial, sans-serif';
+    legend.forEach(([c, t], i) => { const lx = 12 + (i % 2) * 150, ly = LY + 8 + Math.floor(i / 2) * 22; ctx.fillStyle = c; ctx.fillRect(lx, ly - 6, 14, 12); ctx.fillStyle = '#2a2a2a'; ctx.fillText(t, lx + 20, ly); });
+    // 30 years: yellowed, grime from the bottom, scratches
+    ctx.fillStyle = 'rgba(160,130,60,0.12)'; ctx.fillRect(0, 0, W, H);
+    const g = ctx.createLinearGradient(0, H * 0.5, 0, H); g.addColorStop(0, 'rgba(40,34,26,0)'); g.addColorStop(1, 'rgba(40,34,26,0.35)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { ctx.beginPath(); const x = rnd() * W, y = rnd() * H; ctx.moveTo(x, y); ctx.lineTo(x + (rnd() - 0.5) * 80, y + (rnd() - 0.5) * 40); ctx.stroke(); }
+  });
+}
+
+/** The brand directory face of a pylon (canvas 320 x 480): this storey's stores with a program colour chip, aged. */
+export function directoryListTexture(layout: StationLayout, level: number, seed: number): THREE.CanvasTexture {
+  const m = layout.mall!;
+  const shops = m.shops.filter(s => s.level === level && s.program !== 'vacant').sort((a, b) => a.brand.localeCompare(b.brand));
+  return canvasTexture(320, 480, seed, (ctx, W, H, rnd) => {
+    ctx.fillStyle = '#efeadf'; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#1f2b38'; ctx.fillRect(0, 0, W, 64);
+    ctx.fillStyle = '#d9a520'; ctx.font = 'bold 13px "Helvetica Neue", Arial, sans-serif'; ctx.textBaseline = 'middle';
+    ctx.fillText('STORES ON THIS LEVEL', 12, 17);
+    const st = m.storeys.find(q => q.level === level);
+    ctx.fillStyle = '#f2efe6'; ctx.font = 'bold 26px "Helvetica Neue", Arial, sans-serif';
+    ctx.fillText(level === m.void.floorLevel ? 'SUBWAY · COURTS' : (st?.label ?? `Level ${level}`).toUpperCase(), 12, 45);
+    const rows = Math.max(1, shops.length), rh = Math.min(26, (H - 90) / rows);
+    ctx.font = `${Math.max(10, Math.round(rh * 0.6))}px "Helvetica Neue", Arial, sans-serif`;
+    shops.forEach((s, i) => {
+      const y = 80 + i * rh + rh / 2;
+      ctx.fillStyle = BRAND_STYLE[s.program].bg; ctx.fillRect(12, y - rh * 0.35, rh * 0.7, rh * 0.7);
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)'; ctx.strokeRect(12.5, y - rh * 0.35 + 0.5, rh * 0.7 - 1, rh * 0.7 - 1);
+      ctx.fillStyle = '#23272b'; ctx.fillText(s.brand, 20 + rh * 0.7, y);
+      ctx.fillStyle = '#6a6458'; ctx.textAlign = 'right'; ctx.fillText(s.program.replace('-', ' '), W - 12, y); ctx.textAlign = 'left';
+    });
+    if (!shops.length) { ctx.fillStyle = '#6a6458'; ctx.fillText('Platforms · Fountain court · South court', 12, 100); }
+    ctx.fillStyle = 'rgba(160,130,60,0.12)'; ctx.fillRect(0, 0, W, H);
+    for (let i = 0; i < 18; i++) { ctx.fillStyle = `rgba(40,34,26,${0.04 + rnd() * 0.08})`; ctx.fillRect(rnd() * W, rnd() * H, 2 + rnd() * 30, 1 + rnd() * 3); }
+  });
+}

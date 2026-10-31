@@ -148,6 +148,16 @@ const EDITS = {
   'shoe-wall-display': {basis: 'shoe wall 2.0 x 2.0 x 0.23 m (per-axis y x1.45)', scaleAxes: [[1, 1.45]]},
   // M20: table top 0.80 m at the frozen 1.6 m -> uniform to a 0.75 m table top (stool seats ~0.49 m).
   'food-court-table-set': {basis: 'uniform: table top 0.75 m', sizeM: 0.75, sizeAxis: 'h'},
+  // --- batch 2 ---
+  // M29 (review/b2g2-*): its right-hand door is modelled swung open (adds depth / width) -> size by the cabinet height 1.9 m instead of
+  // the frozen 1.2 m width.
+  // Primary (recovery02): close that door locally. Manifest frame (frozen 1.2 m width): the door panel (20 tris, x -0.563..-0.539,
+  // y 0.21..2.36, z -0.751..0.036) + 4 hardware pieces (134 tris total, none sharing vertices with the cabinet) are swung 90 deg forward
+  // from a hinge at (x -0.551, z 0.036) = the cabinet's left front edge (build frame, front -Z). Rotated -90 deg about that line, its
+  // 0.787 m width fitted x0.731 to the bay (x -0.585..-0.010, interior drawers + shelves behind it), hinge moved to x -0.585 (dx -0.034),
+  // seated 18 mm proud of the drawer pulls (dz -0.066). Then uniform to 1.9 m tall.
+  'medicine-drawer-cabinet': {basis: 'right door (open in the model) rotated closed about its hinge + width-fitted to its bay (local); uniform: cabinet height 1.9 m', sizeM: 1.9, sizeAxis: 'h',
+    hingeClose: {pred: c => c.max[2] <= 0.04 && c.min[2] < -0.12 && c.min[0] > -0.61 && c.max[0] < -0.48, hinge: [-0.551, 0.036], sx: 0.731, dx: -0.034, dz: -0.066}},
 };
 
 // ---------- records ----------
@@ -224,6 +234,37 @@ function extendComps(doc, {pred, from, to}) {
   return tris;
 }
 
+/**
+ * Local repair (manifest frame): a door modelled SWUNG OPEN 90 degrees, rotated CLOSED about its vertical hinge line. The components
+ * `pred` selects (door panel + its hardware; their vertices are not shared with anything else) get, in order: rotation -90 deg about Y
+ * through (hx, hz) [x' = hx - (z - hz), z' = hz + (x - hx)], a width fit sx along x about the hinge, then a shift (dx, dz). Normals /
+ * tangents follow (rotation, then the inverse width scale, renormalised). Returns {tris, comps, verts}.
+ */
+function hingeCloseComps(doc, {pred, hinge: [hx, hz], sx = 1, dx = 0, dz = 0}) {
+  let tris = 0, verts = 0; const comps = new Set();
+  for (const pc of components(doc)) {
+    const sel = new Set(pc.comps.filter(c => pred({...c, ext: [0, 1, 2].map(k => c.max[k] - c.min[k])})).map(c => c.id));
+    if (!sel.size) continue;
+    const I = pc.prim.getIndices().getArray(), mine = new Set(), other = new Set();
+    for (let t = 0; t < I.length; t += 3) for (let k = 0; k < 3; k++) (sel.has(pc.tri[t / 3]) ? mine : other).add(I[t + k]);
+    for (const v of mine) if (other.has(v)) throw new Error('hingeCloseComps: a door vertex is shared with the cabinet');
+    const P = pc.prim.getAttribute('POSITION'), N = pc.prim.getAttribute('NORMAL'), T = pc.prim.getAttribute('TANGENT');
+    const p = [0, 0, 0], n = [0, 0, 0], q = [0, 0, 0, 0];
+    const dir = (x, y, z) => { const a = [-z / sx, y, x], l = Math.hypot(...a) || 1; return a.map(c => c / l); };
+    for (const v of mine) {
+      P.getElement(v, p);
+      P.setElement(v, [hx + dx - sx * (p[2] - hz), p[1], hz + dz + (p[0] - hx)]);
+      if (N) { N.getElement(v, n); N.setElement(v, dir(n[0], n[1], n[2])); }
+      if (T) { T.getElement(v, q); const d = dir(q[0], q[1], q[2]); T.setElement(v, [...d.map((c, i) => (i === 0 ? c * sx * sx : c)), q[3]].map((c, i, a) => (i < 3 ? c / (Math.hypot(a[0], a[1], a[2]) || 1) : c))); }
+    }
+    verts += mine.size;
+    for (let t = 0; t < I.length; t += 3) if (sel.has(pc.tri[t / 3])) tris++;
+    for (const id of sel) comps.add(id);
+  }
+  if (!tris) throw new Error('hingeCloseComps: nothing selected');
+  return {tris, comps: comps.size, verts};
+}
+
 /** Local procedural part: an axis-aligned untextured box (own material) as node `name` — e.g. a belt deck over a modelled trough. */
 function addBox(doc, {min, max, color, roughness = 0.85, metallic = 0, name = 'box'}) {
   const P = [], N = [], I = [];
@@ -297,6 +338,7 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
   if (E) {
     if (E.parts) split = await splitClutter(doc, E);
     if (E.extend) for (const x of E.extend) (edits.extended ??= []).push({from: x.from, to: x.to, tris: extendComps(doc, x)});
+    if (E.hingeClose) edits.hingeClosed = {...hingeCloseComps(doc, E.hingeClose), hinge: E.hingeClose.hinge, sx: E.hingeClose.sx, dx: E.hingeClose.dx, dz: E.hingeClose.dz};
     if (E.glass) glass = await splitGlass(doc, sharp, E.glass);
     if (E.glassComps) glass = splitGlassComps(doc, E.glassComps);
     if (E.supports) ghosts = await cleanSupportTexture(doc, sharp, E.supports, E.ghostThresh ?? 34, null);

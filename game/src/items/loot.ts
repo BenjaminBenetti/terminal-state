@@ -81,6 +81,8 @@ export const HOLDER_LABEL: Record<HolderKind, string> = {
   ...OPENABLE_META.label,
   // Task track3-eaton-centre-20261031 (lane SHOPS): mall shop holders
   glassCounter: 'display counter', merchTable: 'display table', wallBay: 'shelving bay', produceStand: 'produce stand', bookstoreBookcase: 'bookcase',
+  retailGondola: 'gondola shelf', clothingWallUnit: 'clothing bay', checkoutLane: 'checkout', outdoorsPlankShelving: 'plank shelving', storageTote: 'storage tote',
+  shoeWallDisplay: 'shoe wall', foodCourtTableSet: 'table',
 };
 /** Back-compat alias (iteration 02 name). */
 export const CONTAINER_LABEL = HOLDER_LABEL;

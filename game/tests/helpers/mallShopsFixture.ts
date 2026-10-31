@@ -2,6 +2,7 @@
 // Each ring storey L (1..rings) at y = 5 L: a north service corridor, north stock rooms, north shop units (12 m deep), the gallery
 // (6 m), south shop units (8 m deep), south stock rooms and a south service corridor; 1-cell walls between bands / units, a shopfront
 // door per unit onto the gallery (piers either side), a staff door unit -> stock room and a service door stock room -> corridor.
+// mall.galleries lists each ring's gallery (the gallery commons pass furnishes it); no void / rails / runs (synthetic).
 // Storey 0 is a token station floor. Every grid has the same size / origin, y absolute (Area.floorY / ceil, grid floor / ceil).
 
 import {CELL, FLOOR, Grid} from '../../src/gen/grid';
@@ -47,8 +48,10 @@ export function mallShopsFixture(rings = 2): MallShopsFixture {
   };
   // storey 0: a token station floor
   area({x: 2, y: 40, w: W - 4, h: 12}, 0, 'platform', 'platform', 'platform', true, 4.4);
+  const galleries: {level: number; areas: number[]}[] = [];
   for (let L = 1; L <= rings; L++) {
     const gal = area({x: 2, y: ROWS.gallery[0], w: W - 4, h: ROWS.gallery[1] - ROWS.gallery[0] + 1}, L, 'concourse', 'concourse', `Level ${L} gallery`, true, 4.6);
+    galleries.push({level: L, areas: [gal.id]});
     const corrN = area({x: 2, y: ROWS.corrN[0], w: W - 4, h: 4}, L, 'service', 'service-corridor', 'service corridor', false, 3.0);
     const corrS = area({x: 2, y: ROWS.corrS[0], w: W - 4, h: 4}, L, 'service', 'service-corridor', 'service corridor', false, 3.0);
     const band = (units: {w: number; d?: number}[], north: boolean) => {
@@ -82,7 +85,7 @@ export function mallShopsFixture(rings = 2): MallShopsFixture {
   }
   const levels: Level[] = grids.map((grid, id) => ({id, role: id === 0 ? 'main' : 'upper', grid, baseY: id * STOREY_H}));
   const storeys: MallStorey[] = levels.map(l => ({level: l.id, label: l.id ? `Level ${l.id}` : 'Subway', baseY: l.baseY, clear: 4.4, role: l.id ? 'ring' : 'station'}));
-  const mall = {version: 1, variant: 'synthetic', name: 'The Eaton\'s Center', storeys, void: null, galleries: [], shops, bridges: [], verticals: [], elevators: [],
+  const mall = {version: 1, variant: 'synthetic', name: 'The Eaton\'s Center', storeys, void: null, galleries, shops, bridges: [], verticals: [], elevators: [],
     roof: null, patrol: [], subwayRoot: null, start: {x: 4, z: 23, yaw: 0, level: 0}} as unknown as MallInfo;
   const layout = {
     seed: 1, attempt: 0, name: 'synthetic mall', grid: grids[0], areas, doors, props: [], lights: [], signs: [], pickups: [], zombies: [], storefronts: [], decor: [],

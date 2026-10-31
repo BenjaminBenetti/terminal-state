@@ -158,4 +158,11 @@ Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview +
 - `assets/models/mall-storage-tote.glb` — storage-tote (M18; Meshy tasks 01a18f88-517f-72d0-bb0a-953bc8e545cc / 01a18f92-66c8-732e-a8b8-507680e37dfa)
 - `assets/models/mall-shoe-wall-display.glb` — shoe-wall-display (M19; Meshy tasks 01a18f88-76dc-734f-b861-ca2f46587d80 / 01a18f92-8c09-74ba-ade1-55e0a35bd7cb)
 - `assets/models/mall-food-court-table-set.glb` — food-court-table-set (M20; Meshy tasks 01a18f88-a19d-775f-bbec-678a2f0e8ca0 / 01a18f92-b352-724e-813c-554c1a771428)
+- `assets/models/mall-try-on-ottoman.glb` — try-on-ottoman (M24; Meshy tasks 01a18fc0-e43c-73b4-961d-aa5199eac603 / 01a18fc3-1488-77db-8722-48daa8b7e852)
+- `assets/models/mall-medicine-drawer-cabinet.glb` — medicine-drawer-cabinet (M29; Meshy tasks 01a18fc4-04a2-73b4-a836-bebadc58a555 / 01a18fc7-bb05-7511-ae95-620db8cc0e0b)
+- `assets/models/mall-camping-tent-display.glb` — camping-tent-display (M36; Meshy tasks 01a18fc1-0cda-7234-8908-7d041df68c99 / 01a18fc3-395b-7049-8caa-46d74563b38a)
+- `assets/models/mall-tv-wall-bank.glb` — tv-wall-bank (M41; Meshy tasks 01a18fc1-362c-72cc-8257-3ae885cb9dac / 01a18fc3-5dc8-7339-9ed4-2ef6dc93bf7c)
+- `assets/models/mall-kiddie-ride.glb` — kiddie-ride (M50; Meshy tasks 01a18fc1-64a4-742e-a07a-dc3fc665bd7b / 01a18fc3-875b-76e5-8f6a-64222ed2ab97)
+- `assets/models/mall-salon-styling-chair.glb` — salon-styling-chair (M51; Meshy tasks 01a18fc1-8df4-71cb-8dd2-2b5adecd3d2a / 01a18fc3-aca4-7273-a1a2-9f21bd81d6b4)
+- `assets/models/mall-bed-display.glb` — bed-display (M52; Meshy tasks 01a18fc3-d691-72ff-92b9-6a59b9fcd8cd / 01a18fc7-93ff-75f0-b920-00beb0543755)
 <!-- END mall-track3-20261031 -->

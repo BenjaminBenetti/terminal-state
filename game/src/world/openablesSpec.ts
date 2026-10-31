@@ -412,6 +412,63 @@ const EXAM = {zCut: 0.185, zFront: 0.204, depth: 0.45, dist: 0.35, tight: true} 
  */
 const BOOKCASE_X: readonly (readonly [number, number])[] = [[-0.56, -0.02], [0.025, 0.565]];
 const BOOKCASE_DRAWER = {zCut: 0.2, zFront: 0.216, depth: 0.4, dist: 0.3} as const;
+/**
+ * Task track3-eaton-centre-20261031 (lane SHOPS): the rest of lane ASSETS' batch 1 storage, measured on the runtime GLBs in the prop frame
+ * (half turn applied) with open-measure front-depth profiles and ray casts (reference/tasks/track3-eaton-centre-20261031/tools):
+ * - M01 till / back counter (mall-cashwrap-counter.glb, 2.0 x 2.04 x 0.78): drawer fronts at z 0.330..0.343 (handles to 0.376) in two
+ *   columns x -0.81..-0.17 / -0.125..0.505 — rows y 0.222..0.455 and 0.462..0.578 (the left column's top is an open niche, floor 0.689),
+ *   a top-right drawer 0.70..0.882; a single-faced cupboard front x 0.528..0.972, y 0.128..0.888 at z 0.345 over a clean interior
+ *   (floor 0.122, ceiling 0.892) hinged on its outer edge.
+ * - M02 glass display cabinet (0.92 x 1.90 x 0.70): two glass-frame doors (no pane geometry: contents visible) x -0.452..0 / 0..0.452,
+ *   y 0.372..1.688, frames at z 0.281..0.311, handles at the meeting stiles; modelled glass shelves 0.367 / 0.621 / 0.800 / 0.994 /
+ *   1.183 / 1.369 under the inner ceiling 1.687.
+ * - M11 dispensary back counter (3.2 x 2.56 x 0.69): a 4-drawer stack x -0.565..0.19 (fronts z 0.289..0.307; rows 0.11 / 0.304 /
+ *   0.484 / 0.66 / 0.885), cupboard doors (z 0.282..0.305, full-height slits at x -1.37 / -0.575 / 0.95 / 1.335; handles at -0.99 / 0.55 /
+ *   0.98) and a tall mirror-door cupboard x -1.375..-0.858, y 1.13..2.47 (front 0.240..0.248). Its base / tall interiors are irregular
+ *   model faces: the compartments are lined (replaceInterior) like the specimen fridge.
+ * - M17 kiosk cart (2.5 x 1.71 x 1.46): a lower cabinet x -0.612..0.938 (single-faced front z 0.466, interior floor 0.268, top 0.626)
+ *   behind two doors meeting at its middle.
+ */
+const CASHWRAP_DRAWER = {zCut: 0.32, zFront: 0.343, depth: 0.5, dist: 0.38} as const;
+const DISP_DRAWER = {zCut: 0.284, zFront: 0.307, depth: 0.5, dist: 0.38} as const;
+/** A side-hinged door DERIVED from a mall model: front region, hinge on its outer edge (`hinge` -1 left / +1 right), its compartment. */
+function mallDoor(name: string, x0: number, x1: number, y0: number, y1: number, z0: number, z1: number, hinge: -1 | 1, comp: Partial<PartSpec> & {surfaces: readonly SurfaceSpec[]}): PartSpec {
+  return {
+    name,
+    move: {type: 'hinge', axis: 'y', pivot: [hinge < 0 ? x0 : x1, 0, (z0 + z1) / 2], angle: hinge * 100 * P, min: 55 * P},
+    region: [box(x0, y0, z0, x1, y1, z1)],
+    openAxis: 2,
+    ...comp,
+  };
+}
+/** Glass display cabinet shelf tops and the inner ceiling. */
+const GDC_SHELVES = [0.367, 0.621, 0.8, 0.994, 1.183, 1.369, 1.687] as const;
+const gdcSurfaces = (x0: number, x1: number): SurfaceSpec[] => GDC_SHELVES.slice(0, 6).map((y, i) => ({y, x0, x1, z0: -0.15, z1: 0.24, clear: Math.round((GDC_SHELVES[i + 1] - y - 0.025) * 1000) / 1000}));
+/** M11 base cupboard (lined): a liner from just above the floor to under the counter, surfaces on its floor (+ an optional shelf). */
+function dispCupboard(name: string, x0: number, x1: number, hinge: -1 | 1, shelf = false): PartSpec {
+  const ix0 = x0 + 0.012, ix1 = x1 - 0.012;
+  return mallDoor(name, x0, x1, 0.125, 0.886, 0.275, 0.4, hinge, {
+    cavity: box(ix0, 0.13, -0.3, ix1, 0.88, 0.27), replaceInterior: true,
+    ...(shelf ? {inner: [B('inner', ix0, 0.5, -0.3, ix1, 0.515, 0.25)]} : {}),
+    surfaces: [{y: 0.132, x0: ix0 + 0.03, x1: ix1 - 0.03, z0: -0.27, z1: 0.24, clear: shelf ? 0.34 : 0.5},
+      ...(shelf ? [{y: 0.517, x0: ix0 + 0.03, x1: ix1 - 0.03, z0: -0.27, z1: 0.22, clear: 0.33}] : [])],
+  });
+}
+/**
+ * Lane ASSETS batch 2 M29 medicine drawer cabinet (mall-medicine-drawer-cabinet.glb, 0.94 x 1.90 x 0.65; its right door closed locally
+ * by lane ASSETS), measured in the prop frame by front-depth profiles + upward planes (lane SHOPS): body front z 0.238, back panel
+ * -0.291. LEFT: a 3 x 11 grid of small drawer fronts (z 0.195..0.245, cup pulls to 0.275; texture seams, fronts 5 cm thick) in columns
+ * x -0.438 / -0.298 / -0.158 / -0.018, rows split at 0.16 / 0.28 / 0.39 / 0.50 | rail 0.50..0.54 (a full-depth board) | 0.54 / 0.65 /
+ * 0.76 / 0.87 / 0.98 / 1.10 / 1.21 / 1.32 / 1.43; above them a cupboard door 1.43..1.845 (pull at its right edge: hinged left). RIGHT:
+ * one full-height door x 0.010..0.461, y 0.164..1.847, z 0.277..0.296 (pull at x 0.18, y ~1.0 to z 0.325) hinged on its right edge
+ * x 0.461, over a modelled bay (back -0.189): an inner drawer bank 0.16..0.96 (fronts z 0.219) and shelves 1.11 / 1.31 / 1.51 under a
+ * board at 1.79. The inner bank is FIXED (the bay's loot lies on its top and the shelves): a drawer behind a door could be left
+ * pulled out when the door shuts on it — nested compartments are not supported (gen/mall/kinds.ts MALL_OPEN_AUDIT records it).
+ */
+const MED_COLS: readonly (readonly [number, number])[] = [[-0.438, -0.298], [-0.298, -0.158], [-0.158, -0.018]];
+const MED_ROWS: readonly (readonly [number, number])[] = [[0.16, 0.28], [0.28, 0.39], [0.39, 0.5], [0.54, 0.65], [0.65, 0.76], [0.76, 0.87], [0.87, 0.98], [0.98, 1.1],
+  [1.1, 1.21], [1.21, 1.32], [1.32, 1.43]];
+const MED_DRAWER = {zCut: 0.193, zFront: 0.245, depth: 0.42, dist: 0.3, tight: true} as const;
 /** A tall cupboard bay of the E05 server cabinet run: two shelves inside its lined, hollow bay (x0..x1, floor 0.105, back -0.672). */
 function serverBay(name: string, x0: number, x1: number, hinge: -1 | 1): PartSpec {
   const ix0 = x0 + 0.012, ix1 = x1 - 0.012;
@@ -873,6 +930,85 @@ export const OPENABLE_SPECS = {
     loot: LOOT.bookstoreBookcase,
     sound: {open: 'desk', close: 'desk'},
   },
+  /** M01 till / back counter (wall-backed): 5 derived drawers + its derived cupboard door; open niche, counter top, hutch shelves exposed. */
+  mallCashwrapCounter: {
+    label: 'back counter', model: 'office-mall-cashwrap-counter', turn: true, body: 'model', group: 'container',
+    parts: [
+      modelDrawer('lower left drawer', -0.81, -0.17, 0.222, 0.455, CASHWRAP_DRAWER),
+      modelDrawer('upper left drawer', -0.81, -0.17, 0.462, 0.578, {...CASHWRAP_DRAWER, tight: true}),
+      modelDrawer('lower right drawer', -0.125, 0.505, 0.222, 0.455, CASHWRAP_DRAWER),
+      modelDrawer('upper right drawer', -0.125, 0.505, 0.462, 0.578, {...CASHWRAP_DRAWER, tight: true}),
+      modelDrawer('top drawer', -0.125, 0.505, 0.7, 0.882, CASHWRAP_DRAWER),
+      mallDoor('cupboard', 0.528, 0.972, 0.128, 0.888, 0.33, 0.4, 1, {
+        plate: box(0.545, 0.145, 0.333, 0.955, 0.87, 0.336),
+        cavity: box(0.535, 0.125, -0.37, 0.965, 0.885, 0.325), cavityHidden: true, modelInterior: true,
+        surfaces: [{y: 0.124, x0: 0.56, x1: 0.94, z0: -0.33, z1: 0.28, clear: 0.7}],
+      }),
+    ],
+    loot: LOOT.mallCashwrapCounter,
+    sound: {open: 'desk', close: 'desk'},
+  },
+  /** M02 glass display cabinet: two derived glass-frame doors, each over its half of the five modelled glass shelves (lots visible). */
+  glassDisplayCabinet: {
+    label: 'display cabinet', model: 'office-glass-display-cabinet', turn: true, body: 'model', group: 'container',
+    parts: ([[-1, -0.452, -0.002], [1, 0.002, 0.452]] as const).map(([h, x0, x1]) => mallDoor(h < 0 ? 'left glass door' : 'right glass door', x0, x1, 0.372, 1.688, 0.27, 0.36, h, {
+      glass: true,
+      cavity: box(h < 0 ? -0.43 : 0.005, 0.367, -0.29, h < 0 ? -0.005 : 0.43, 1.685, 0.27), cavityHidden: true, modelInterior: true,
+      surfaces: gdcSurfaces(h < 0 ? -0.41 : 0.02, h < 0 ? -0.02 : 0.41),
+    })),
+    loot: LOOT.glassDisplayCabinet,
+    sound: {open: 'cabinetTall', close: 'cabinetTall'},
+  },
+  /** M11 dispensary back counter: 4 derived drawers, 5 derived cupboard doors (lined), a derived tall mirror-door cupboard (lined). */
+  pharmacyDispensaryCounter: {
+    label: 'dispensary counter', model: 'office-pharmacy-dispensary-counter', turn: true, body: 'model', group: 'container',
+    parts: [
+      ...([[0.11, 0.304], [0.308, 0.484], [0.488, 0.66], [0.664, 0.885]] as const).map(([y0, y1], i) => modelDrawer(i === 0 ? 'bottom drawer' : i === 3 ? 'top drawer' : 'drawer', -0.565, 0.19, y0, y1, DISP_DRAWER)),
+      dispCupboard('left cupboard', -1.362, -0.982, -1, true),
+      dispCupboard('cupboard', -0.978, -0.582, 1),
+      dispCupboard('cupboard', 0.203, 0.568, -1),
+      dispCupboard('cupboard', 0.572, 0.947, 1),
+      dispCupboard('right cupboard', 0.958, 1.332, 1),
+      mallDoor('mirror cupboard', -1.372, -0.862, 1.13, 2.465, 0.235, 0.3, -1, {
+        cavity: box(-1.362, 1.14, -0.31, -0.872, 2.44, 0.232), replaceInterior: true,
+        inner: [B('inner', -1.362, 1.78, -0.31, -0.872, 1.795, 0.2)],
+        surfaces: [{y: 1.142, x0: -1.33, x1: -0.9, z0: -0.28, z1: 0.2, clear: 0.6}, {y: 1.797, x0: -1.33, x1: -0.9, z0: -0.28, z1: 0.18, clear: 0.6}],
+      }),
+    ],
+    loot: LOOT.pharmacyDispensaryCounter,
+    sound: {open: 'cabinetTall', close: 'cabinetTall'},
+  },
+  /** M17 kiosk cart: two derived lower-cabinet doors (single-faced fronts: inner plates) over its clean interior; the display box is open. */
+  mallKioskCart: {
+    label: 'kiosk cart', model: 'office-mall-kiosk-cart', turn: true, body: 'model', group: 'container',
+    parts: ([[-1, -0.605, 0.162], [1, 0.168, 0.932]] as const).map(([h, x0, x1]) => mallDoor(h < 0 ? 'left cabinet door' : 'right cabinet door', x0, x1, 0.275, 0.6, 0.44, 0.56, h, {
+      plate: box(x0 + 0.015, 0.29, 0.455, x1 - 0.015, 0.585, 0.458),
+      cavity: box(x0 + 0.01, 0.268, -0.42, x1 - 0.01, 0.62, 0.44), cavityHidden: true, modelInterior: true,
+      surfaces: [{y: 0.27, x0: x0 + 0.05, x1: x1 - 0.05, z0: -0.38, z1: 0.4, clear: 0.33}],
+    })),
+    loot: LOOT.mallKioskCart,
+    sound: {open: 'cabinetLow', close: 'cabinetLow'},
+  },
+  /** Batch 2 M29 medicine drawer cabinet: 33 derived small drawers + a derived top cupboard (left), a derived full-height door (right). */
+  medicineDrawerCabinet: {
+    label: 'medicine cabinet', model: 'office-medicine-drawer-cabinet', turn: true, body: 'model', group: 'container',
+    parts: [
+      ...MED_ROWS.flatMap(([y0, y1], r) => MED_COLS.map(([x0, x1]) => modelDrawer(r === 0 ? 'bottom drawer' : r === MED_ROWS.length - 1 ? 'top drawer' : 'drawer', x0, x1, y0, y1, MED_DRAWER))),
+      mallDoor('top cupboard', -0.44, -0.016, 1.43, 1.845, 0.193, 0.27, -1, {
+        cavity: box(-0.43, 1.44, -0.28, -0.026, 1.835, 0.19), replaceInterior: true,
+        surfaces: [{y: 1.442, x0: -0.4, x1: -0.06, z0: -0.25, z1: 0.16, clear: 0.36}],
+      }),
+      mallDoor('door', 0.006, 0.466, 0.16, 1.852, 0.27, 0.34, 1, {
+        cavity: box(0.02, 0.955, -0.19, 0.452, 1.79, 0.27), cavityHidden: true, modelInterior: true,
+        surfaces: [
+          {y: 0.962, x0: 0.04, x1: 0.43, z0: -0.17, z1: 0.19, clear: 0.12},
+          ...([[1.11, 0.17], [1.31, 0.17], [1.51, 0.26]] as const).map(([y, clear]) => ({y, x0: 0.04, x1: 0.43, z0: -0.17, z1: 0.18, clear})),
+        ],
+      }),
+    ],
+    loot: LOOT.medicineDrawerCabinet,
+    sound: {open: 'cabinetTall', close: 'cabinetTall'},
+  },
 } as const satisfies Record<string, OpenableSpec>;
 
 export type OpenableKind = keyof typeof OPENABLE_SPECS;
@@ -887,7 +1023,9 @@ export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingB
   // task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage
   'officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
   'bakeryCase', // task office-props-physics-scale-20261030 (lane FURN): the bakery display case
-  'bookstoreBookcase'] as const; // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (base drawers + open shelves)
+  'bookstoreBookcase', // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookstore bookcase (base drawers + open shelves)
+  'mallCashwrapCounter', 'glassDisplayCabinet', 'pharmacyDispensaryCounter', 'mallKioskCart', // lane SHOPS: lane ASSETS batch 1 storage
+  'medicineDrawerCabinet'] as const; // lane SHOPS: lane ASSETS batch 2 M29
 export type OpenableContainerKind = (typeof OPENABLE_CONTAINER_KINDS)[number];
 
 /**

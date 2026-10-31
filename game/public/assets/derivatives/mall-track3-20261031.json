@@ -141,17 +141,26 @@
    "frozenAt": "2026-10-31T01:09:45Z",
    "attempts": 1,
    "credits": 15
+  },
+  {
+   "batch": 2,
+   "file": "batch-2.frozen.json",
+   "sha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "attempts": 16,
+   "credits": 240
   }
  ],
  "credits": {
-  "previews": 120,
-  "refines": 200,
+  "previews": 170,
+  "refines": 270,
   "rejectedOrReplacedAttempts": 20,
-  "total": 320
+  "total": 440
  },
  "authorityUse": {
-  "attempts": 24,
-  "posts": 44,
+  "attempts": 34,
+  "posts": 61,
   "max": {
    "attempts": 100,
    "credits": 1500,
@@ -3770,7 +3779,14 @@
     ],
     "checks": "identity ok: kiosk cart, red / cream striped scalloped canopy on 4 posts with finials, dark wood body, display window side (native +Z) with dark shelves, brass spoked wheels, push handles at one end; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after the uniform 2.5 m: 2.50 x 1.71 x 1.46 m (incl. push handles); display box ~0.5-1.1 m, canopy 1.47-1.60 m, round spoked wheels; grounded on the wheels (6 contacts)",
+     "evidence": [
+      "review/b1g5-scale-sheet.png",
+      "review/b1g5-runtime.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -3974,7 +3990,14 @@
     ],
     "checks": "grey ribbed heavy-duty bin; the lid is a SEPARATE component (190 tris) modelled raised open; a shallow inner tray plate ~0.07 m below the rim; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 0.60 x 0.63 x 0.59 m bin; rim 0.44 m, inner tray 0.38 m, raised lid to 0.55 m; grounded (4 feet)",
+     "evidence": [
+      "review/b1g5-scale-sheet.png",
+      "review/b1g5-runtime.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -4172,7 +4195,14 @@
     ],
     "checks": "identity ok: white slatwall shoe display, 3 columns x 6 rows of angled ledges with lips, EMPTY; PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after y x1.45: 2.00 x 2.00 x 0.23 m; 6 ledge rows ~0.28-1.46 m (3 columns), slatwall above to 2.0; grounded (panel feet)",
+     "evidence": [
+      "review/b1g5-scale-sheet.png",
+      "review/b1g5-runtime.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -4374,7 +4404,14 @@
     ],
     "checks": "identity ok: square tan laminate pedestal table + 4 round steel pedestal stools with tan seats (separate base discs: a floor-fixed set); PBR present; billed 10",
     "rule4": "none",
-    "scale": null
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after the uniform resize: 1.50 x 0.75 x 1.48 m; table top 0.75 m, 4 stool seats 0.44 m; grounded (9 base contacts)",
+     "evidence": [
+      "review/b1g5-scale-sheet.png",
+      "review/b1g5-runtime.png"
+     ]
+    }
    },
    "textures": [
     {
@@ -4414,7 +4451,1497 @@
     "glass": null,
     "ghosts": null
    }
+  },
+  {
+   "code": "M24",
+   "id": "try-on-ottoman",
+   "key": "office-try-on-ottoman",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "apparel-footwear",
+   "priority": "P2",
+   "role": "furniture",
+   "programs": [
+    "shoes",
+    "clothing"
+   ],
+   "shopsKind": "ottoman",
+   "interaction": {
+    "openable": {
+     "class": "none",
+     "how": "solid ottoman (SHOPS ottoman)"
+    },
+    "physics": {
+     "class": "dynamic",
+     "massKg": 12,
+     "contact": "pad",
+     "mat": "cloth",
+     "how": "shoved when walked into, slides under buckshot"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "free",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "low rectangular shoe store try-on ottoman bench about twice as long as it is deep and only knee high, one thick padded grey upholstered cushion seat with a flat top on a low dark wooden plinth base, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "texturePrompt": "low rectangular shoe store try-on ottoman bench about twice as long as it is deep and only knee high, one thick padded grey upholstered cushion seat with a flat top on a low dark wooden plinth base, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 1500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc0-e43c-73b4-961d-aa5199eac603",
+    "refine": "01a18fc3-1488-77db-8722-48daa8b7e852"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc0-e43c-73b4-961d-aa5199eac603",
+     "slot": 24,
+     "attemptId": "T3-024"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc3-1488-77db-8722-48daa8b7e852",
+     "slot": 24,
+     "attemptId": "T3-024"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/try-on-ottoman/T3-024/refine/try-on-ottoman-refine.glb (raw original, outside Git)",
+    "sha256": "51e28c012c8f81b325a07290a1bc003168b991fc81067f45eb38fbcfb67c3f9a",
+    "bytes": 7914672,
+    "triangles": 1545,
+    "extent": [
+     0.9575,
+     0.4492,
+     0.6792
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3693336
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1216610
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2904793
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/try-on-ottoman/T3-024/preview/try-on-ottoman-preview.glb",
+    "previewSha256": "32c67f75d960c44cc9ab4979513f641b6a2d9d704e39a96016e1a151b684355f",
+    "previewTriangles": 1545
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-try-on-ottoman.glb",
+    "url": "assets/models/mall-try-on-ottoman.glb",
+    "sha256": "45af83d0f41cd18f367cad3473353ccf67f93fe4f6444f4806afbd5536dc137e",
+    "bytes": 161148,
+    "triangles": 1545,
+    "dims": [
+     0.9,
+     0.4222,
+     0.6384
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 1500,
+   "targetSize": {
+    "w": 0.9,
+    "h": 0.42,
+    "d": 0.45,
+    "sizeM": 0.9,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 0.9,
+   "sizeAxis": "w",
+   "scale": 0.939928,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "M",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 260000,
+   "transform": "rotateY(180deg) * uniform scale to 0.9 m (w), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g1-raw-ortho.png"
+    ],
+    "checks": "grey fabric cushion on a dark wood plinth, flat top; PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 0.90 x 0.42 x 0.64 m; cushion top 0.41 m (seat reference); grounded (plinth)",
+     "evidence": [
+      "review/b2g1-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 55849,
+     "sha256": "44e83d844f5cad8ebda57ec19f3cbc53510a2e35f11cff837c0b932614e54ad7"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 12225,
+     "sha256": "a3df38655189d5ab22465f885c1d3adb47cf4b8cb4b4236bc2b73772badddcf3"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3051,
+     "sha256": "9d41449b331579580e6fa6f04bb9bb88268bb885854c5901e3794bb2993c9d8f"
+    }
+   ]
+  },
+  {
+   "code": "M29",
+   "id": "medicine-drawer-cabinet",
+   "key": "office-medicine-drawer-cabinet",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "pharmacy-clinic",
+   "priority": "P2",
+   "role": "holder",
+   "programs": [
+    "pharmacy",
+    "clinic"
+   ],
+   "shopsKind": "medicineDrawerCabinet",
+   "interaction": {
+    "openable": {
+     "class": "openable",
+     "how": "derived drawers + open shelves"
+    },
+    "physics": {
+     "class": "static",
+     "why": "too heavy",
+     "how": "steel cabinet"
+    },
+    "lootSlot": "medical"
+   },
+   "placement": "wall",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "tall pharmacy medicine storage cabinet about one and a half times taller than it is wide, white steel, the lower half a grid of four rows by five columns of small closed drawers shut flush with label holders and pulls, the upper half two empty open shelves with a back panel, no boxes and no bottles, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "texturePrompt": "tall pharmacy medicine storage cabinet about one and a half times taller than it is wide, white steel, the lower half a grid of four rows by five columns of small closed drawers shut flush with label holders and pulls, the upper half two empty open shelves with a back panel, no boxes and no bottles, realistic game asset, store fixture in an abandoned shopping mall, dusty and lightly worn, completely empty with no products, no merchandise and nothing on its shelves or surfaces, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 3500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc4-04a2-73b4-a836-bebadc58a555",
+    "refine": "01a18fc7-bb05-7511-ae95-620db8cc0e0b"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc4-04a2-73b4-a836-bebadc58a555",
+     "slot": 29,
+     "attemptId": "T3-029"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc7-bb05-7511-ae95-620db8cc0e0b",
+     "slot": 29,
+     "attemptId": "T3-029"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/medicine-drawer-cabinet/T3-029/refine/medicine-drawer-cabinet-refine.glb (raw original, outside Git)",
+    "sha256": "da2465ead4b97d52d2972c48b19fd2e5d3cbe6796a1f9bb76d25e09489888269",
+    "bytes": 5064012,
+    "triangles": 3096,
+    "extent": [
+     0.4707,
+     0.9507,
+     0.5889
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1950624
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1336181
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1618322
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/medicine-drawer-cabinet/T3-029/preview/medicine-drawer-cabinet-preview.glb",
+    "previewSha256": "e1f90873e01f6f135c5afef33a748f2cea6c95f6cf9ebc1e7dfd5e608a5b7ef0",
+    "previewTriangles": 3100
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-medicine-drawer-cabinet.glb",
+    "url": "assets/models/mall-medicine-drawer-cabinet.glb",
+    "sha256": "67d1c182beb3319d2034d4e4dceaf2fe9114a2ce3570c8a7b5feaf06b99dc19e",
+    "bytes": 204976,
+    "triangles": 3096,
+    "dims": [
+     0.9358,
+     1.9,
+     0.6504
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 3500,
+   "targetSize": {
+    "w": 1.2,
+    "h": 1.9,
+    "d": 0.5,
+    "sizeM": 1.2,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 1.9,
+   "sizeAxis": "h",
+   "scale": 1.998561,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "M",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 260000,
+   "transform": "rotateY(180deg) * uniform scale to 1.2 m (w), grounded (min y = 0), centred on x/z; baked into vertices; local edits (EDITS): basis, sizeM, sizeAxis, hingeClose",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g2-raw-ortho.png"
+    ],
+    "checks": "white steel pharmacy cabinet, grid of labelled drawers + top cupboard on the left, right-hand door modelled swung OPEN (empty shelves / drawers inside); PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed after the 1.9 m height sizing: 0.94 x 1.90 x 1.18 m incl. the swung-open right door (body ~0.56 m deep); drawer grid 0.05-1.55 m, top cupboard above; grounded (4 contacts)",
+     "evidence": [
+      "review/b2g2-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 47430,
+     "sha256": "5be094af3c9a7b08d471fd87b103bcc9933666ea02c9a2fc9503b3d8172de65e"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13617,
+     "sha256": "d18ff5f4680bcd8de84ed9024b4dcc258dd0f751281c1a1c13ada81d0c6e0250"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 4162,
+     "sha256": "2c0e88f8723434bdbc0be1562d320cfaac17141a471541068d24d07f2236697f"
+    }
+   ],
+   "edits": {
+    "k": 0.7839405646803936,
+    "removed": null,
+    "glass": null,
+    "ghosts": null,
+    "hingeClosed": {
+     "tris": 134,
+     "comps": 5,
+     "verts": 153,
+     "hinge": [
+      -0.551,
+      0.036
+     ],
+     "sx": 0.731,
+     "dx": -0.034,
+     "dz": -0.066
+    }
+   }
+  },
+  {
+   "code": "M36",
+   "id": "camping-tent-display",
+   "key": "office-camping-tent-display",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "outdoors-gun-shop-furniture",
+   "priority": "P2",
+   "role": "decor",
+   "programs": [
+    "outdoors"
+   ],
+   "shopsKind": "tentDisplay",
+   "interaction": {
+    "openable": {
+     "class": "none",
+     "how": "decor (SHOPS tentDisplay)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "anchored",
+     "how": "guyed / screwed to its plinth"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "free (on its plinth)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "pitched green two-person dome camping tent standing alone, a rounded dome about as wide as it is deep and two thirds as tall, the front door flap rolled up and tied open showing an empty dark interior with no sleeping bag, guy lines staked out, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, single object, no ground plane",
+   "texturePrompt": "pitched green two-person dome camping tent standing alone, a rounded dome about as wide as it is deep and two thirds as tall, the front door flap rolled up and tied open showing an empty dark interior with no sleeping bag, guy lines staked out, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 2500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc1-0cda-7234-8908-7d041df68c99",
+    "refine": "01a18fc3-395b-7049-8caa-46d74563b38a"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc1-0cda-7234-8908-7d041df68c99",
+     "slot": 36,
+     "attemptId": "T3-036"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc3-395b-7049-8caa-46d74563b38a",
+     "slot": 36,
+     "attemptId": "T3-036"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/camping-tent-display/T3-036/refine/camping-tent-display-refine.glb (raw original, outside Git)",
+    "sha256": "a8374c5e56a46b5b8fa2c037dc66fd8b252f5b489f0f5fcc6e3481bb96f954b6",
+    "bytes": 4546892,
+    "triangles": 2058,
+    "extent": [
+     0.9526,
+     0.4995,
+     0.9253
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1795384
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1425948
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1196241
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/camping-tent-display/T3-036/preview/camping-tent-display-preview.glb",
+    "previewSha256": "6175ac979c28c2f72d6522c40acd49e2744004fc2a3d22f271bed843bb61d388",
+    "previewTriangles": 2062
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-camping-tent-display.glb",
+    "url": "assets/models/mall-camping-tent-display.glb",
+    "sha256": "c7bdce318b7257ac6035ba29d2fd83c1ee22817bf32dc78eb9aee42229af5389",
+    "bytes": 223400,
+    "triangles": 2058,
+    "dims": [
+     2.2,
+     1.1536,
+     2.1369
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 6291455
+   },
+   "targetTriangles": 2500,
+   "targetSize": {
+    "w": 2.2,
+    "h": 1.5,
+    "d": 2.2,
+    "sizeM": 2.2,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 2.2,
+   "sizeAxis": "w",
+   "scale": 2.309379,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "L",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 420000,
+   "transform": "rotateY(180deg) * uniform scale to 2.2 m (w), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g1-raw-ortho.png"
+    ],
+    "checks": "green dome tent, door open on native +Z, empty interior, guy lines; PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 2.20 x 1.15 x 2.14 m two-person dome; door open; grounded (14 contacts incl. guy-line stakes)",
+     "evidence": [
+      "review/b2g1-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 93333,
+     "sha256": "e7c3e3be067966f88edea03414b9fac9a680fdadeff1fb7edfa0219982bfd4b1"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 11448,
+     "sha256": "2aec7853580b872bd8ac4a21fd74e38758029c428c04bd67cac055f241e28bc4"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2184,
+     "sha256": "c2bd9097234aa151e2fa1adcba4485b27942ed4db93ad8c3a68fadc807d0110c"
+    }
+   ]
+  },
+  {
+   "code": "M41",
+   "id": "tv-wall-bank",
+   "key": "office-tv-wall-bank",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "electronics-hardware",
+   "priority": "P2",
+   "role": "equipment",
+   "programs": [
+    "electronics",
+    "department",
+    "arcade"
+   ],
+   "shopsKind": "tvWall",
+   "interaction": {
+    "openable": {
+     "class": "none",
+     "how": "mounted equipment (SHOPS tvWall)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "mounted",
+     "how": "wall bracket"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "wall mount (base 1.05 m, SHOPS MALL_MOUNT_Y)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "flat wall-mounted display bank of six large thin flat-screen televisions in a neat grid three wide and two high, bezel to bezel on a slim black steel bracket frame, dark blank screens, the whole unit a thin flat panel about twice as wide as it is tall, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, powered off, single object, no ground plane",
+   "texturePrompt": "flat wall-mounted display bank of six large thin flat-screen televisions in a neat grid three wide and two high, bezel to bezel on a slim black steel bracket frame, dark blank screens, the whole unit a thin flat panel about twice as wide as it is tall, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, powered off, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 2500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc1-362c-72cc-8257-3ae885cb9dac",
+    "refine": "01a18fc3-5dc8-7339-9ed4-2ef6dc93bf7c"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc1-362c-72cc-8257-3ae885cb9dac",
+     "slot": 41,
+     "attemptId": "T3-041"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc3-5dc8-7339-9ed4-2ef6dc93bf7c",
+     "slot": 41,
+     "attemptId": "T3-041"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/tv-wall-bank/T3-041/refine/tv-wall-bank-refine.glb (raw original, outside Git)",
+    "sha256": "07cecf20182a37ccc8cbfa257fd4a9df65a688874cfc4e7c44b22b1a0e456017",
+    "bytes": 3526308,
+    "triangles": 1948,
+    "extent": [
+     0.9575,
+     0.6724,
+     0.2051
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1344900
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1065270
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1012664
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/tv-wall-bank/T3-041/preview/tv-wall-bank-preview.glb",
+    "previewSha256": "4fa919c489471e574aed96fa84d96136cd582c981617b62263b882d4a217f652",
+    "previewTriangles": 2424
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-tv-wall-bank.glb",
+    "url": "assets/models/mall-tv-wall-bank.glb",
+    "sha256": "7bc28749d4ebedb69f101f7433b0353f58b5670ad1ecd31027d738e036ca85e0",
+    "bytes": 151488,
+    "triangles": 1948,
+    "dims": [
+     2.4,
+     1.6853,
+     0.514
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 6291455
+   },
+   "targetTriangles": 2500,
+   "targetSize": {
+    "w": 2.4,
+    "h": 1.4,
+    "d": 0.15,
+    "sizeM": 2.4,
+    "sizeAxis": "w",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 2.4,
+   "sizeAxis": "w",
+   "scale": 2.506475,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "L",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 420000,
+   "transform": "rotateY(180deg) * uniform scale to 2.4 m (w), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g1-raw-ortho.png"
+    ],
+    "checks": "six black flat screens (blank) on a floor-standing black frame with splayed feet; PBR present; billed 10",
+    "rule4": "n/a: the screens ARE the mounted equipment (no loose items)",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 2.40 x 1.69 x 0.51 m floor-standing bank; lower screen row ~0.05-0.65 m, upper ~1.0-1.68 m; feet 0.51 m deep; grounded (13 contacts)",
+     "evidence": [
+      "review/b2g1-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 48319,
+     "sha256": "7bbcebaf1bafe6b41766a0c0e4e2cf60070f447ebbad4e6cdeabe972309f776c"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10456,
+     "sha256": "0fa26c5fbd3f7974c72319986e91a076f8a6d9fb54aaf72cbe23fecf1ed99bac"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 1444,
+     "sha256": "c1382424677516d1ebac0eadcee98bb3124154b378e02f50a152b87291e57500"
+    }
+   ]
+  },
+  {
+   "code": "M50",
+   "id": "kiddie-ride",
+   "key": "office-kiddie-ride",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "common-area-landmark-furniture",
+   "priority": "P2",
+   "role": "machine",
+   "programs": [
+    "galleries",
+    "toys",
+    "arcade"
+   ],
+   "shopsKind": "kiddieRide",
+   "interaction": {
+    "openable": {
+     "class": "exception",
+     "how": "locked coin vault (SHOPS kiddieRide)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "too heavy",
+     "how": "~150 kg ride"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "free",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "coin-operated children kiddie ride, a small faded red fibreglass cartoon race car with one child seat and a steering wheel, mounted on a square rocking pedestal base with a coin box on its front, the car longer than it is wide, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, powered off, single object, no ground plane",
+   "texturePrompt": "coin-operated children kiddie ride, a small faded red fibreglass cartoon race car with one child seat and a steering wheel, mounted on a square rocking pedestal base with a coin box on its front, the car longer than it is wide, realistic game asset, in an abandoned shopping mall, dusty and lightly worn, powered off, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 2500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc1-64a4-742e-a07a-dc3fc665bd7b",
+    "refine": "01a18fc3-875b-76e5-8f6a-64222ed2ab97"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc1-64a4-742e-a07a-dc3fc665bd7b",
+     "slot": 50,
+     "attemptId": "T3-050"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc3-875b-76e5-8f6a-64222ed2ab97",
+     "slot": 50,
+     "attemptId": "T3-050"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/kiddie-ride/T3-050/refine/kiddie-ride-refine.glb (raw original, outside Git)",
+    "sha256": "3cbd4bff96d628848cea21bf7b17bac36534daa505a25d6f0c14f73b4495b91f",
+    "bytes": 8006780,
+    "triangles": 2519,
+    "extent": [
+     0.9526,
+     0.5747,
+     0.5083
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 3450288
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2112288
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2319512
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/kiddie-ride/T3-050/preview/kiddie-ride-preview.glb",
+    "previewSha256": "14e9d105faab0a5d77d3c76faf1d2dbed60b55e8830b58e7f9a211a67fb520e4",
+    "previewTriangles": 2519
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-kiddie-ride.glb",
+    "url": "assets/models/mall-kiddie-ride.glb",
+    "sha256": "8588ea097a987ada64421a40958b3bd14e34e068ca9eea6d952d452074a96052",
+    "bytes": 201168,
+    "triangles": 2519,
+    "dims": [
+     1.3,
+     0.7843,
+     0.6936
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 2500,
+   "targetSize": {
+    "w": 0.9,
+    "h": 1.3,
+    "d": 1.3,
+    "sizeM": 1.3,
+    "sizeAxis": "longest",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured; size the ride by the car length (a low / long result must not be blown up by height)"
+   },
+   "sizeM": 1.3,
+   "sizeAxis": "longest",
+   "scale": 1.364633,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "M",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 260000,
+   "transform": "rotateY(180deg) * uniform scale to 1.3 m (longest), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g1-raw-ortho.png"
+    ],
+    "checks": "weathered red fibreglass cartoon car with steering wheel + seat on a red rocking pedestal; PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 1.30 x 0.78 x 0.69 m (car along x); seat ~0.47 m, pedestal ~0.1 m; a small child car ride; grounded (pedestal)",
+     "evidence": [
+      "review/b2g1-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 64608,
+     "sha256": "721b58b838ad67e331d2febcb86fedb61ae2197ab9ebee90ad50811eb01a950d"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 24608,
+     "sha256": "008710c2d65f8c8057efce7589c7e2d8e84208df4729267929dd13dc87a0d2b2"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 2978,
+     "sha256": "662825013571bac1377e69a5d41723a6ca3835fddffe3372ba17c0dd5850a597"
+    }
+   ]
+  },
+  {
+   "code": "M51",
+   "id": "salon-styling-chair",
+   "key": "office-salon-styling-chair",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "specialty-retail",
+   "priority": "P2",
+   "role": "furniture",
+   "programs": [
+    "beauty",
+    "service"
+   ],
+   "shopsKind": "salonChair",
+   "interaction": {
+    "openable": {
+     "class": "none",
+     "how": "furniture (SHOPS salonChair)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "anchored",
+     "how": "bolted hydraulic base"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "free",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "salon styling chair, a padded black vinyl swivel armchair with a high back and two armrests on a round chrome hydraulic pump base with a foot pedal, a chrome footrest bar in front, empty seat, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "texturePrompt": "salon styling chair, a padded black vinyl swivel armchair with a high back and two armrests on a round chrome hydraulic pump base with a foot pedal, a chrome footrest bar in front, empty seat, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 2000,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc1-8df4-71cb-8dd2-2b5adecd3d2a",
+    "refine": "01a18fc3-aca4-7273-a1a2-9f21bd81d6b4"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc1-8df4-71cb-8dd2-2b5adecd3d2a",
+     "slot": 51,
+     "attemptId": "T3-051"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc3-aca4-7273-a1a2-9f21bd81d6b4",
+     "slot": 51,
+     "attemptId": "T3-051"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/salon-styling-chair/T3-051/refine/salon-styling-chair-refine.glb (raw original, outside Git)",
+    "sha256": "67e2c8a3d2a7773ba42ade3d7168b426a167cf96eeab1da620f5f1d223287cc8",
+    "bytes": 5973052,
+    "triangles": 1977,
+    "extent": [
+     0.6982,
+     0.9526,
+     0.8506
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2330978
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1625568
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1912124
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/salon-styling-chair/T3-051/preview/salon-styling-chair-preview.glb",
+    "previewSha256": "9dca709a5a582f80486fae6d0ddd9dcae94cf15c9adee7faecdf65f221f78443",
+    "previewTriangles": 1977
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-salon-styling-chair.glb",
+    "url": "assets/models/mall-salon-styling-chair.glb",
+    "sha256": "a6d865a0c5351a6c8595c317460a558e1c7863c394d6f58ac59fd786d09ecd72",
+    "bytes": 178076,
+    "triangles": 1977,
+    "dims": [
+     0.8063,
+     1.1,
+     0.9822
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 2097151
+   },
+   "targetTriangles": 2000,
+   "targetSize": {
+    "w": 0.7,
+    "h": 1.1,
+    "d": 0.7,
+    "sizeM": 1.1,
+    "sizeAxis": "h",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 1.1,
+   "sizeAxis": "h",
+   "scale": 1.15469,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "M",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 512,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 260000,
+   "transform": "rotateY(180deg) * uniform scale to 1.1 m (h), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g1-raw-ortho.png"
+    ],
+    "checks": "black vinyl high-back salon chair with headrest, grey armrest side panels, chrome hydraulic base + footrest toward native +Z; PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 0.81 x 1.10 x 0.98 m; seat 0.49 m, armrests 0.69 m, headrest ~1.1 m; grounded (round base)",
+     "evidence": [
+      "review/b2g1-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 56648,
+     "sha256": "ac94b921f754d9b0f539aa326a539fd5949f7d9dabbd6bbb70a8f143abdb0cf5"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 23202,
+     "sha256": "85966d7f4bc702fe2b3de9e79b7ef94914292777c401fa59ff3fc6b4f62ada0d"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 6278,
+     "sha256": "0ffe5bf67fb7c217b6d41f3b1a700991b8bdd9e6337a8a18627f706e022dcc41"
+    }
+   ]
+  },
+  {
+   "code": "M52",
+   "id": "bed-display",
+   "key": "office-bed-display",
+   "batch": 2,
+   "freezeSha256": "9712898b9ba12336c83ec1d3a5a06454670dc25ec51742ab923f5166c5d9e183",
+   "frozenBy": "Studio Beta primary 0e9c0db3 (recovery02) — reviewed all 16 entries: preview args identical to manifest.track3.json (explicit meshy-t2.5, smart-topology, triangle, manifest polycount, glb); refine args identical (2k, PBR, ai_model omitted = inherits the verified T2.5 preview); prompt text only revised (silhouette / proportion wording, absent-contents wording for rule 4, shut-flush openables); rule-5 sizes per manifest (M50 by longest axis 1.3 m). Cumulative ceilings respected: after batch 40/100 attempts, 560/1500 credits, 76/200 POSTs (42/590/80 with the full replacement allowance).",
+   "frozenAt": "2026-10-31T02:18:23Z",
+   "category": "specialty-retail",
+   "priority": "P2",
+   "role": "furniture",
+   "programs": [
+    "home",
+    "department"
+   ],
+   "shopsKind": "displayBed",
+   "interaction": {
+    "openable": {
+     "class": "none",
+     "how": "furniture (SHOPS displayBed)"
+    },
+    "physics": {
+     "class": "static",
+     "why": "too heavy",
+     "how": "~70 kg"
+    },
+    "lootSlot": "-"
+   },
+   "placement": "wall (headboard)",
+   "model": "meshy-t2.5",
+   "modelType": "smart-topology",
+   "topology": "triangle",
+   "route": "text-to-3d preview (geometry, 5 credits) + refine (2K PBR texture, 10 credits, inherits the T2.5 preview model)",
+   "previewPrompt": "queen size showroom bed, a long rectangular wooden bed frame about one and a third times longer than it is wide, a bare white mattress with no pillows, no sheets and no blanket, a tall upholstered grey headboard at one short end, short wooden legs, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "texturePrompt": "queen size showroom bed, a long rectangular wooden bed frame about one and a third times longer than it is wide, a bare white mattress with no pillows, no sheets and no blanket, a tall upholstered grey headboard at one short end, short wooden legs, realistic game asset, furniture in an abandoned shopping mall, dusty and lightly worn, nothing on it, single object, no ground plane",
+   "previewArgs": {
+    "ai_model": "meshy-t2.5",
+    "model_type": "smart-topology",
+    "topology": "triangle",
+    "target_polycount": 2500,
+    "target_formats": [
+     "glb"
+    ]
+   },
+   "refineArgs": {
+    "enable_pbr": true,
+    "texture_resolution": "2k",
+    "target_formats": [
+     "glb"
+    ],
+    "ai_model": "omitted (inherits the T2.5 preview)"
+   },
+   "tasks": {
+    "preview": "01a18fc3-d691-72ff-92b9-6a59b9fcd8cd",
+    "refine": "01a18fc7-93ff-75f0-b920-00beb0543755"
+   },
+   "credits": {
+    "preview": 5,
+    "refine": 10
+   },
+   "creditsAllAttempts": 15,
+   "attempts": [
+    {
+     "kind": "preview",
+     "task": "01a18fc3-d691-72ff-92b9-6a59b9fcd8cd",
+     "slot": 52,
+     "attemptId": "T3-052"
+    },
+    {
+     "kind": "refine",
+     "task": "01a18fc7-93ff-75f0-b920-00beb0543755",
+     "slot": 52,
+     "attemptId": "T3-052"
+    }
+   ],
+   "source": {
+    "file": "reference/tasks/track3-eaton-centre-20261031/assets/raw/bed-display/T3-052/refine/bed-display-refine.glb (raw original, outside Git)",
+    "sha256": "4ad9fcc9aafea20183dccb2f4322a9dcecdca62cbe65af3a71ed250fa1bab81e",
+    "bytes": 5981796,
+    "triangles": 2495,
+    "extent": [
+     0.6685,
+     0.4927,
+     0.9438
+    ],
+    "textures": [
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2719884
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 1097201
+     },
+     {
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 2010972
+     }
+    ],
+    "previewFile": "reference/tasks/track3-eaton-centre-20261031/assets/raw/bed-display/T3-052/preview/bed-display-preview.glb",
+    "previewSha256": "833daa8c7a45b9ce7ac09a510834c02d4e8eb2ca599477d9f3ad864232f99db8",
+    "previewTriangles": 2610
+   },
+   "output": {
+    "file": "game/public/assets/models/mall-bed-display.glb",
+    "url": "assets/models/mall-bed-display.glb",
+    "sha256": "4f5c1176175e85a0211c3dd9d6e5cc1549176c06f9fc648a226c6b1ac289c980",
+    "bytes": 352088,
+    "triangles": 2495,
+    "dims": [
+     1.4873,
+     1.0962,
+     2.1
+    ],
+    "overBudget": false,
+    "overTris": false,
+    "gpuTextureBytes": 6291455
+   },
+   "targetTriangles": 2500,
+   "targetSize": {
+    "w": 1.6,
+    "h": 1.05,
+    "d": 2.1,
+    "sizeM": 2.1,
+    "sizeAxis": "longest",
+    "note": "metres; the derivative is scaled uniformly to sizeM along sizeAxis; the other extents are recorded as measured"
+   },
+   "sizeM": 2.1,
+   "sizeAxis": "longest",
+   "scale": 2.224934,
+   "nativeFront": "+Z",
+   "policy": "lean",
+   "tier": "L",
+   "textureStep": 0,
+   "textureSizes": {
+    "baseColor": 1024,
+    "other": 256,
+    "jpegQuality": 85
+   },
+   "budget": 420000,
+   "transform": "rotateY(180deg) * uniform scale to 2.1 m (longest), grounded (min y = 0), centred on x/z; baked into vertices",
+   "front": "-Z",
+   "up": "+Y",
+   "review": {
+    "evidence": [
+     "review/b2g2-raw-ortho.png"
+    ],
+    "checks": "oak bed frame + legs, grey upholstered headboard at native -Z, bare white mattress (no bedding); PBR present; billed 10",
+    "rule4": "none",
+    "scale": {
+     "verdict": "ok",
+     "notes": "viewed: 1.49 x 1.10 x 2.10 m low platform bed; mattress top 0.39 m, headboard to 1.10 m (to the wall); grounded (4 legs)",
+     "evidence": [
+      "review/b2g2-scale-sheet.png"
+     ]
+    }
+   },
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 199650,
+     "sha256": "bfcbf9d744aff9e66da14a5a7e51ea8a3c66efc33e2af603e7a5b8945e05863b"
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10637,
+     "sha256": "95c30a1c26b702e7eb092a1cb4693478962defef494058656cc7c09daf751b43"
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 3599,
+     "sha256": "8e06e06c34cdbfb99f8a980ff8ada9fd8b9abcb711812b6f894d736f2a4e97d6"
+    }
+   ]
   }
  ],
- "missing": []
+ "missing": [
+  {
+   "code": "M30",
+   "id": "multideck-open-cooler",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M31",
+   "id": "cafe-bistro-table",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M32",
+   "id": "cafe-chair",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M35",
+   "id": "gun-safe-tall",
+   "batch": 2,
+   "reason": "preview only"
+  },
+  {
+   "code": "M37",
+   "id": "mall-bench",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M40",
+   "id": "mall-info-desk",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M42",
+   "id": "cosmetics-wall-unit",
+   "batch": 2,
+   "reason": "not generated yet"
+  },
+  {
+   "code": "M45",
+   "id": "dresser-drawers",
+   "batch": 2,
+   "reason": "preview only"
+  },
+  {
+   "code": "M47",
+   "id": "cardboard-box-flaps",
+   "batch": 2,
+   "reason": "preview only"
+  }
+ ]
 }

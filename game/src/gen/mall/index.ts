@@ -36,6 +36,7 @@ import {placeMallSupplies} from './supplies'; // lane PROFILES: the mall's per-s
 import {assignMallPrograms} from './shops'; // lane SHOPS: programs / brands / purposes of the shop units
 import {dressMallShops} from './shopsDress'; // lane SHOPS: the shop interiors (sales floors + stock rooms) by program recipe
 import {placeMallWeapons} from './shopsWeapons'; // lane SHOPS: the bounded once-per-run gun-shop weapon plan
+import {placeMallLandmarks, type LandmarkReport} from './landmarks'; // lane ARCH: fountain, directory pylons, wayfinding signs
 import {CROP_MARGIN, MALL_CANVAS, RINGS, mallFrame, mallSeed, type MallFrame, type MallVariant} from './frame';
 import {carveMall, type MallCarve} from './carve';
 import {mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, type Crop} from './structure';
@@ -50,7 +51,7 @@ const ATTEMPTS = 12;
 /** Validation issues of rejected attempts (QA / tests). */
 export const MALL_REJECTS = new Map<string, number>();
 /** Timing of the last generateMallLevel call (ms), its attempts and the last attempt's issues (QA / tests). */
-export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, issues: [] as string[]};
+export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, issues: [] as string[], landmarks: null as LandmarkReport | null}; // (+ landmarks: lane ARCH)
 
 export interface MallGenOptions {
   /** Force a named variant (tests / QA); default: the level seed's. */
@@ -148,6 +149,8 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // then the gun shops' weapon finds (one plan per logical run from the level seed + start weapon; layout pickups, remembered).
   dressMallShops(layout, rng.fork('mall-shop-dress'), {frame: 'absolute'});
   placeMallWeapons(layout, ctx.levelSeed, layout.startWeapon ?? 'rifle');
+  // lane ARCH: the pit-plaza fountain, directory pylons and wayfinding signs (after the interiors, before the populations)
+  MALL_GEN_STATS.landmarks = placeMallLandmarks(layout, rng.fork('mall-landmarks'));
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);

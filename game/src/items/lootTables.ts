@@ -124,6 +124,10 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   bakeryCase: 'vend',
   // Task track3-eaton-centre-20261031 (lane SHOPS): The Eaton's Center open shop holders (gen/mall/kinds.ts)
   glassCounter: 'countertop', merchTable: 'surface', wallBay: 'shelf', produceStand: 'shelf', bookstoreBookcase: 'container',
+  // lane ASSETS batch 1 fixtures (lane SHOPS): open holders + the openable back counters / cabinet / kiosk cart
+  retailGondola: 'shelf', clothingWallUnit: 'shelf', checkoutLane: 'countertop', outdoorsPlankShelving: 'shelf', storageTote: 'container', shoeWallDisplay: 'shelf',
+  foodCourtTableSet: 'surface', mallCashwrapCounter: 'countertop', glassDisplayCabinet: 'vend', pharmacyDispensaryCounter: 'medical', mallKioskCart: 'countertop',
+  medicineDrawerCabinet: 'medical', // lane ASSETS batch 2 M29 (lane SHOPS)
 };
 /** Separate compartment rolls (desk / security-desk drawers, kitchenette cupboards) are closed storage. */
 export const COMPARTMENT_SLOT: SlotCategory = 'container';
@@ -185,6 +189,8 @@ export const HOLDER_MOD: Readonly<Record<string, CatWeights>> = {
   ...p7(e => e.mod),
   // track3 lane SHOPS: mall shop holders (their purposes normally decide; these apply in a purpose-less area only)
   glassCounter: [0.8, 0.6, 0.6, 0.2], merchTable: [1, 1, 0.4, 0.1], wallBay: [1, 1, 0.6, 0.2], produceStand: [2, 0.8, 0, 0], bookstoreBookcase: [1, 1, 0.5, 0.1],
+  retailGondola: [1.2, 1, 0.6, 0.1], clothingWallUnit: [1, 1, 0.6, 0.1], checkoutLane: [1.2, 1, 0.2, 0.05], outdoorsPlankShelving: [1, 1.2, 0.6, 0.2], storageTote: [1, 1, 0.8, 0.4],
+  shoeWallDisplay: [1, 1, 0.5, 0.1], foodCourtTableSet: [1, 1.4, 0.1, 0],
 };
 /** Empty-roll chance of the original table roll (iteration 12: most holders end up empty anyway — items/lootEconomy.ts). */
 export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
@@ -193,6 +199,7 @@ export const HOLDER_EMPTY: Readonly<Record<string, number>> = {
   kitchenette: 0.25, fridge: 0.15, gunLocker: 0.08, monitorDesk: 0.4, medCabinet: 0.15,
   ...p7(e => e.empty),
   glassCounter: 0.35, merchTable: 0.5, wallBay: 0.3, produceStand: 0.3, bookstoreBookcase: 0.4, // track3 lane SHOPS
+  retailGondola: 0.3, clothingWallUnit: 0.5, checkoutLane: 0.45, outdoorsPlankShelving: 0.3, storageTote: 0.35, shoeWallDisplay: 0.4, foodCourtTableSet: 0.65,
 };
 /** Lot-count range of the original table roll. */
 export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
@@ -202,6 +209,7 @@ export const HOLDER_LOTS: Readonly<Record<string, LotRange>> = {
   kitchenette: [1, 3], fridge: [2, 5], gunLocker: [2, 4], monitorDesk: [1, 2], medCabinet: [1, 4],
   ...p7(e => e.lots),
   glassCounter: [1, 3], merchTable: [1, 2], wallBay: [1, 3], produceStand: [1, 3], bookstoreBookcase: [1, 2], // track3 lane SHOPS
+  retailGondola: [1, 3], clothingWallUnit: [1, 2], checkoutLane: [1, 2], outdoorsPlankShelving: [1, 3], storageTote: [1, 2], shoeWallDisplay: [1, 2], foodCourtTableSet: [1, 2],
 };
 /** Stocked rooms get fuller shelves: `extra` more lots at the high end for these holder kinds (legacy tables only). */
 export const FULL_ROOMS = {
@@ -343,6 +351,11 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
   bakeryCase: ['food'],
   // Task track3-eaton-centre-20261031 (lane SHOPS): a produce stand holds food and drink only (its bins), never salvage or medicine
   produceStand: ['food', 'drink'],
+  // lane SHOPS (track3): a glass display cabinet shows goods (no ammo / salvage); the dispensary counter holds medicine and bottled water;
+  // a kiosk cart snacks, drinks and cells; a food-court table what diners left
+  glassDisplayCabinet: ['food', 'drink', 'med', 'battery', 'flare'], pharmacyDispensaryCounter: ['med', 'drink'], mallKioskCart: ['food', 'drink', 'battery'],
+  foodCourtTableSet: ['food', 'drink'],
+  medicineDrawerCabinet: ['med', 'drink'], // lane SHOPS (track3, batch 2 M29): a medicine drawer cabinet holds medicine (and bottled water)
 };
 /**
  * Task office-interactions-layout-20261030 (lane OPEN): openable containers whose OWN table is never narrowed to the room purpose's
@@ -351,7 +364,9 @@ export const HOLDER_ALLOW: Readonly<Partial<Record<string, readonly EconCat[]>>>
  * pharmacy things.)
  */
 export const CONTAINER_THEMED: ReadonlySet<string> = new Set(['officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
-  'bakeryCase']); // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
+  'bakeryCase', // lane FURN (office-props-physics-scale-20261030): a bakery case holds bread whatever the room
+  'pharmacyDispensaryCounter', // lane SHOPS (track3): a dispensary counter holds medicine whatever shop it stands in
+  'medicineDrawerCabinet']); // lane SHOPS (track3, batch 2 M29): so does the medicine drawer cabinet
 /** Junk holders: whatever the room, their few finds are random (a bin in a security office is still a bin). */
 export const RANDOM_HOLDERS: ReadonlySet<string> = new Set(['bin', 'wheelieBin']);
 
@@ -363,7 +378,8 @@ export const LIMB_ECONOMY = {
   share: {medical: 0.27, personal: 0.2, security: 0.2, service: 0.2, tech: 0.2, public: 0.19, food: 0.14} as Readonly<Record<LootTheme, number>>,
   /** First-aid fixtures hold treatments whatever room they hang in (a wall first-aid kit in an office break room / corridor). */
   holder: {firstAidWallKit: 0.36, medCabinet: 0.3, crashCart: 0.36, wheeledStretcher: 0.36,
-    examTable: 0.36, biohazardFridge: 0.3} as Readonly<Partial<Record<string, number>>>, // + office clinic storage (lane OPEN)
+    examTable: 0.36, biohazardFridge: 0.3, // + office clinic storage (lane OPEN)
+    pharmacyDispensaryCounter: 0.3, medicineDrawerCabinet: 0.3} as Readonly<Partial<Record<string, number>>>, // + the mall dispensary counter / medicine cabinet (track3 lane SHOPS)
   /** Splints a little ahead of slings: legs are hurt more often (hard landings, rat / dog bites go low). */
   pool: [[LEG_SPLINT, 1.1], [ARM_SLING, 0.9], [TRAUMA_KIT, 0.3]] as ItemRows,
 };
@@ -455,6 +471,16 @@ export const ARCHIVE_ROWS: ItemRows = [['chocolate', 1], ['battery', 0.6], ['ban
  * shelf or in a staff drawer — narrowed to the shop purpose's rows like every non-themed container (items/loot.ts purposeRows).
  */
 export const BOOKCASE_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['cola', 0.5], ['bandage', 0.5], ['chips', 0.4], ['battery', 0.3]];
+/** Lane SHOPS (track3): the till / back counter's drawers, cupboard and shelves — staff leftovers (narrowed to the shop purpose's rows). */
+export const CASHWRAP_ROWS: ItemRows = [['chocolate', 1], ['water', 0.8], ['battery', 0.6], ['bandage', 0.5], ['cola', 0.5], ['chips', 0.4]];
+/** Lane SHOPS (track3): a glass display cabinet's shelves — the shop's small goods (narrowed to its purpose's rows). */
+export const GLASS_CABINET_ROWS: ItemRows = [['battery', 1], ['bandage', 0.9], ['water', 0.6], ['chocolate', 0.5], ['flare', 0.2], ['medkit', 0.15]];
+/** Lane SHOPS (track3): the dispensary counter (container-themed: medicine in any shop) — dressings, first-aid kits, bottled water. */
+export const DISPENSARY_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.7], ['water', 0.5]];
+/** Lane SHOPS (track3, batch 2 M29): the medicine drawer cabinet (container-themed) — dressings in the small drawers, kits on the shelves. */
+export const MEDICINE_CABINET_ROWS: ItemRows = [['bandage', 3], ['medkit', 0.6], ['water', 0.3]];
+/** Lane SHOPS (track3): a gallery kiosk cart's cabinet — snacks, drinks, a cell. */
+export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
@@ -494,6 +520,13 @@ export const OPENABLE_TABLES = {
   bakeryCase: {lots: [3, 6], empty: 0.1, items: BAKERY_ROWS},
   // task track3-eaton-centre-20261031 (lane SHOPS): the mall bookcase (open shelves + 2 base drawers), placed in numbers in bookstores
   bookstoreBookcase: {lots: [1, 2], empty: 0.55, items: BOOKCASE_ROWS},
+  // lane SHOPS (track3): lane ASSETS batch 1 storage — one counter / dispensary per shop, cabinets / carts a few per mall
+  mallCashwrapCounter: {lots: [1, 3], empty: 0.4, items: CASHWRAP_ROWS},
+  glassDisplayCabinet: {lots: [1, 3], empty: 0.45, items: GLASS_CABINET_ROWS},
+  pharmacyDispensaryCounter: {lots: [2, 4], empty: 0.25, items: DISPENSARY_ROWS},
+  mallKioskCart: {lots: [1, 3], empty: 0.35, items: KIOSK_CART_ROWS},
+  // lane SHOPS (track3): batch 2 M29 — one per pharmacy / clinic / first-aid room (35 compartments, most of them empty)
+  medicineDrawerCabinet: {lots: [2, 4], empty: 0.3, items: MEDICINE_CABINET_ROWS},
 } as const satisfies Readonly<Record<string, OwnTable>>;
 
 // ---------------------------------------------------------------------------------------

@@ -10,14 +10,16 @@ import {PROP_DEFS} from '../src/gen/props';
 import {ROOM_PURPOSES, STORE_PURPOSES, purposeById} from '../src/gen/purposes';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {MallProgram} from '../src/gen/mall/mallTypes';
-import {MALL_HOLDER_KINDS, MALL_KINDS, MALL_OPEN_AUDIT, MALL_PHYS, MALL_SURFACES, isMallHolderKind} from '../src/gen/mall/kinds';
+import {GARMENT_RAIL_Y, MALL_HOLDER_KINDS, MALL_KINDS, MALL_KIND_ASSET, MALL_OPEN_AUDIT, MALL_PHYS, MALL_SURFACES, isMallHolderKind} from '../src/gen/mall/kinds';
+import {MALL_DIMS} from '../src/assets/mallDims.generated';
+import {COMMONS} from '../src/gen/mall/commons';
 import {MALL_PROGRAMS, assignMallPrograms, mallShopCensus, shopFit} from '../src/gen/mall/shops';
-import {dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
+import {MALL_COMMONS_STATS, dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
 import {MALL_FIND_WEAPONS, mallGearSpots, mallShopPose, mallWeaponPlan, placeMallWeapons} from '../src/gen/mall/shopsWeapons';
 import {OPENABLE_AUDIT, OPENABLE_CONTAINER_KINDS, openableSpec} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {dynamicKind} from '../src/physics/dynamicItems';
-import {HOLDER_ALLOW, HOLDER_SLOTS, econCat} from '../src/items/lootTables';
+import {HOLDER_ALLOW, HOLDER_SLOTS, OPENABLE_TABLES, econCat} from '../src/items/lootTables';
 import {holderTable, isLootHolderKind, rollLootItems} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {WEAPON_FIND_AMMO} from '../src/gen/weaponFinds';
@@ -159,11 +161,11 @@ describe('interiors: substantial, distinct, purposeful', () => {
   it('signature fixtures per program (gun counters + display benches + racks / lockers; dispensary; checkouts + aisles; kitchens)', () => {
     const SIG: Partial<Record<MallProgram, string[][]>> = {
       guns: [['glassCounter'], ['gunDisplay'], ['shelf', 'gunLocker', 'gunRack']],
-      pharmacy: [['stockShelf'], ['medCabinet', 'glassCounter']],
+      pharmacy: [['stockShelf'], ['medCabinet', 'glassCounter', 'pharmacyDispensaryCounter']],
       electronics: [['deviceWall', 'techDisplay', 'tvWall']],
       hardware: [['stockShelf', 'shelf']],
       clothing: [['clothingRack', 'wallBay'], ['shopCounter']],
-      grocery: [['shopCounter'], ['stockShelf'], ['shopCooler', 'produceStand']],
+      grocery: [['shopCounter', 'checkoutLane'], ['stockShelf', 'retailGondola'], ['shopCooler', 'produceStand']],
       'food-court': [['shopCounter', 'shopDisplay'], ['grillLine', 'pizzaOven', 'wokLine', 'deliLine', 'blenderBar', 'espressoBar', 'shopBackbar']],
     };
     let checked = 0;
@@ -296,7 +298,8 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
     for (const k of MALL_HOLDER_KINDS) {
       expect(isLootHolderKind(k), k).toBe(true);
       expect(HOLDER_SLOTS[k], k).toBeTruthy();
-      expect(MALL_OPEN_AUDIT[k].cls).toBe('open');
+      // (the M18 storage tote is storage whose lid flaps are modelled raised open: a reasoned exception, its tray an open surface)
+      expect(MALL_OPEN_AUDIT[k].cls, k).toBe(k === 'storageTote' ? 'exception' : 'open');
       const def = PROP_DEFS[k];
       const surf = holderSurfaces(k, def);
       expect(surf.length, k).toBe(MALL_SURFACES[k].length);
@@ -332,11 +335,152 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
     // separated decor rides a real host: garment groups hang on garment rails, TVs stand on display tables (lane ASSETS M06 / M10)
     for (const s of SEEDS) {
       const props = get(s).layout.props;
-      for (const p of props.filter(q => q.kind === 'garmentHangingGroup')) expect(['garmentRail', 'garmentRailRound']).toContain(props[p.host!]?.kind);
+      for (const p of props.filter(q => q.kind === 'garmentHangingGroup')) expect(['garmentRail', 'garmentRailRound', 'clothingWallUnit']).toContain(props[p.host!]?.kind);
       for (const p of props.filter(q => q.kind === 'flatScreenTv')) expect(props[p.host!]?.kind).toBe('merchTable');
-      for (const p of props.filter(q => q.kind === 'cashRegister')) expect(['shopCounter']).toContain(props[p.host!]?.kind);
+      for (const p of props.filter(q => q.kind === 'cashRegister')) expect(['shopCounter', 'checkoutLane']).toContain(props[p.host!]?.kind);
     }
     console.info(`[kinds placed] ${[...seen].sort().join(', ')}`);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Lane ASSETS batch 1 integration (recovery-02): every delivered model renders its kind at its measured size, is classified, and
+// furnishes the shops / gallery commons with the prop rules (openables measured, themed finite loot, door strips, no baked clutter).
+
+/** The batch-1 kinds that render a delivered model (lanes/ASSETS.notes section 10). */
+const BATCH1 = ['mallCashwrapCounter', 'glassDisplayCabinet', 'retailGondola', 'clothingWallUnit', 'pharmacyDispensaryCounter', 'checkoutLane', 'produceStand', 'gunRack',
+  'glassCounter', 'outdoorsPlankShelving', 'mallKioskCart', 'storageTote', 'shoeWallDisplay', 'foodCourtTableSet'] as const;
+/** The batch-2 kinds that render a delivered model (lanes/ASSETS.notes section 12; M35 / M45 / M47 and the rest not delivered). */
+const BATCH2 = ['ottoman', 'tentDisplay', 'tvWall', 'kiddieRide', 'salonChair', 'displayBed', 'medicineDrawerCabinet'] as const;
+
+describe('lane ASSETS batch 1: measured models, openables, audits', () => {
+  it('every batch-1 / batch-2 kind renders its delivered model: footprint / height = the measured runtime GLB (collider = visual)', () => {
+    for (const k of [...BATCH1, ...BATCH2]) {
+      const id = MALL_KIND_ASSET[k];
+      expect(id, k).toBeTruthy();
+      const dims = MALL_DIMS[id!];
+      expect(dims, `${k} ${id} delivered`).toBeDefined();
+      const def = PROP_DEFS[k];
+      expect(def.w, k).toBeCloseTo(dims[0], 2);
+      expect(def.h, k).toBeCloseTo(dims[1], 2);
+      expect(def.d, k).toBeCloseTo(dims[2], 2);
+    }
+  });
+
+  it('the four storage fixtures open (rule 1): measured drawers / doors, own themed finite tables, surfaces inside the box', () => {
+    // (batch 2 M29: 33 small drawers + the top cupboard + the full-height door)
+    const PARTS: Record<string, number> = {mallCashwrapCounter: 6, glassDisplayCabinet: 2, pharmacyDispensaryCounter: 10, mallKioskCart: 2, medicineDrawerCabinet: 35};
+    for (const [k, n] of Object.entries(PARTS)) {
+      const spec = openableSpec(k as never)!;
+      expect(spec, k).toBeDefined();
+      expect(spec.model, k).toBe(`office-${MALL_KIND_ASSET[k as keyof typeof MALL_KIND_ASSET]}`);
+      expect(spec.parts.length, k).toBe(n);
+      expect(OPENABLE_CONTAINER_KINDS as readonly string[], k).toContain(k);
+      expect(MALL_OPEN_AUDIT[k as keyof typeof MALL_OPEN_AUDIT]).toMatchObject({role: 'storage', cls: 'openable'});
+      expect(isLootHolderKind(k), k).toBe(true);
+      expect(HOLDER_SLOTS[k as keyof typeof HOLDER_SLOTS], k).toBeTruthy();
+      expect((OPENABLE_TABLES as Record<string, unknown>)[k], k).toBeTruthy();
+      const def = PROP_DEFS[k as keyof typeof PROP_DEFS];
+      const surf = holderSurfaces(k as never, def);
+      expect(surf.filter(q => q.part !== undefined).length, `${k}: every compartment has a floor`).toBeGreaterThanOrEqual(n);
+      for (const q of surf) {
+        expect(q.x0, k).toBeGreaterThanOrEqual(-def.w / 2 - 1e-6);
+        expect(q.x1, k).toBeLessThanOrEqual(def.w / 2 + 1e-6);
+        expect(q.z0, k).toBeGreaterThanOrEqual(-def.d / 2 - 1e-6);
+        expect(q.z1, k).toBeLessThanOrEqual(def.d / 2 + 1e-6);
+        expect(q.y, k).toBeLessThanOrEqual(def.h);
+      }
+      expect(MALL_PHYS[k as keyof typeof MALL_PHYS].dynamic, k).toBe(false);
+    }
+    // contents themed to the container: the dispensary holds medicine, whatever shop it stands in
+    const cats: Record<string, number> = {};
+    for (let i = 0; i < 300; i++) for (const e of rollLootItems(20261031, i, 'pharmacyDispensaryCounter' as never, 'mall-pharmacy')) { const c = econCat(e.itemId) ?? e.itemId; cats[c] = (cats[c] ?? 0) + e.count; }
+    expect((cats.med ?? 0) / Object.values(cats).reduce((a, b) => a + b, 0)).toBeGreaterThan(0.6);
+    // ... and so does the medicine drawer cabinet (container-themed), even in a clinic / first-aid room
+    const mc: Record<string, number> = {};
+    for (let i = 0; i < 300; i++) for (const e of rollLootItems(20261031, i, 'medicineDrawerCabinet' as never, 'mall-first-aid')) { const c = econCat(e.itemId) ?? e.itemId; mc[c] = (mc[c] ?? 0) + e.count; }
+    expect((mc.med ?? 0) / Object.values(mc).reduce((a, b) => a + b, 0)).toBeGreaterThan(0.6);
+    // the medicine cabinet's drawers: 3 x 11 grid, no two fronts overlap, each a real tray floor
+    const med = openableSpec('medicineDrawerCabinet')!;
+    const fronts = med.parts.filter(q => q.move.type === 'slide').map(q => q.region![0]);
+    expect(fronts.length).toBe(33);
+    for (let i = 0; i < fronts.length; i++) for (let j = i + 1; j < fronts.length; j++) {
+      const a = fronts[i], b = fronts[j];
+      expect(a[0] < b[3] - 1e-6 && b[0] < a[3] - 1e-6 && a[1] < b[4] - 1e-6 && b[1] < a[4] - 1e-6, `drawers ${i} / ${j} overlap`).toBe(false);
+    }
+  });
+
+  it('exceptions are explicit: the open bays / stands / lanes are open holders, the tote a reasoned storage exception, the gun rack empty decor', () => {
+    expect(MALL_OPEN_AUDIT.storageTote).toMatchObject({role: 'storage', cls: 'exception'});
+    expect(MALL_OPEN_AUDIT.storageTote.how.length).toBeGreaterThan(60);
+    expect(MALL_PHYS.storageTote.dynamic).toBe(false);
+    for (const k of ['clothingWallUnit', 'retailGondola', 'checkoutLane', 'produceStand', 'glassCounter', 'outdoorsPlankShelving', 'shoeWallDisplay', 'foodCourtTableSet'] as const) {
+      expect(MALL_OPEN_AUDIT[k].cls, k).toBe('open');
+      expect(MALL_SURFACES[k].length, k).toBeGreaterThan(0);
+    }
+    expect(MALL_OPEN_AUDIT.gunRack).toMatchObject({role: 'decor', cls: 'none'});
+    expect(MALL_PHYS.gunRack.dynamic).toBe(false);
+    expect(MALL_PHYS.foodCourtTableSet.dynamic).toBe(false);
+  });
+});
+
+describe('lane ASSETS batch 1: placement in the shops and the gallery commons', () => {
+  it('every batch-1 kind furnishes the synthetic mall; racks stand on the floor; garments ride the bay rails; tills ride the lanes', () => {
+    const seen = new Map<string, number>();
+    for (const s of SEEDS) {
+      const {layout} = get(s);
+      const props = layout.props;
+      for (const p of props) seen.set(p.kind, (seen.get(p.kind) ?? 0) + 1);
+      const floorOf = (p: (typeof props)[number]) => layout.areas[p.area].floorY ?? 0;
+      for (const p of props.filter(q => q.kind === 'gunRack' || q.kind === 'tvWall')) { expect(p.mounted, `${p.kind} floor-standing`).toBeFalsy(); expect(p.y).toBeCloseTo(floorOf(p), 3); }
+      for (const p of props.filter(q => q.kind === 'garmentHangingGroup')) {
+        const h = props[p.host!];
+        expect(p.y + PROP_DEFS.garmentHangingGroup.h, `${h.kind} rail`).toBeCloseTo(h.y + GARMENT_RAIL_Y[h.kind as keyof typeof GARMENT_RAIL_Y]!, 2);
+      }
+      for (const p of props.filter(q => q.kind === 'cashRegister' && props[q.host!].kind === 'checkoutLane')) expect(p.y).toBeCloseTo(props[p.host!].y + 0.89, 3);
+      // totes stand in stock rooms only; kiosk carts / table sets outside the shops stand in the galleries
+      for (const p of props.filter(q => q.kind === 'storageTote')) expect(layout.areas[p.area].type).toBe('stock-room');
+      const gal = new Set(layout.mall!.galleries.flatMap(g => g.areas));
+      const shopAreas = new Set(layout.mall!.shops.flatMap(q => [q.area, ...(q.backroom !== undefined ? [q.backroom] : [])]));
+      for (const p of props.filter(q => q.kind === 'mallKioskCart')) expect(gal.has(p.area), 'kiosk cart in a gallery').toBe(true);
+      for (const p of props.filter(q => q.kind === 'foodCourtTableSet')) expect(gal.has(p.area) || shopAreas.has(p.area)).toBe(true);
+    }
+    console.info(`[batch-1 kinds placed] ${BATCH1.map(k => `${k} ${seen.get(k) ?? 0}`).join(', ')}`);
+    console.info(`[batch-2 kinds placed] ${BATCH2.map(k => `${k} ${seen.get(k) ?? 0}`).join(', ')}`);
+    // (the tent, kiddie ride and salon chairs furnish outdoors / toys / arcade / beauty floors the small synthetic mall rarely draws:
+    // the generated-mall block below requires them)
+    for (const k of [...BATCH1, ...BATCH2.filter(q => q !== 'tentDisplay' && q !== 'kiddieRide' && q !== 'salonChair')]) expect(seen.get(k) ?? 0, `${k} placed`).toBeGreaterThan(0);
+    expect(seen.get('mallCashwrapCounter') ?? 0, 'back counters behind the wraps').toBeGreaterThanOrEqual(6);
+  });
+
+  it('gallery commons: one kiosk cart per ring at most, food-hall seating only on the food ring, clear rings of walkable gallery floor', () => {
+    for (const s of SEEDS) {
+      const {layout} = get(s, 2, 1);
+      const rejects = MALL_COMMONS_STATS.last?.rejects ?? {};
+      const m = layout.mall!;
+      for (const gl of m.galleries) {
+        const g = layout.levels[gl.level].grid, gal = new Set(gl.areas);
+        const on = (k: string) => layout.props.filter(p => p.kind === k && gal.has(p.area));
+        const kiosks = on('mallKioskCart'), seats = on('foodCourtTableSet');
+        expect(kiosks.length, `seed ${s} ring ${gl.level} kiosks`).toBeLessThanOrEqual(COMMONS.kiosk.perRing);
+        const food = m.shops.some(q => q.level === gl.level && q.kind === 'food');
+        if (!food) expect(seats.length).toBe(0); else expect(seats.length).toBeLessThanOrEqual(COMMONS.seat.max);
+        for (const [p, ring] of [...kiosks.map(q => [q, COMMONS.kiosk.ring] as const), ...seats.map(q => [q, COMMONS.seat.ring] as const)]) {
+          const rc = Math.ceil(ring / CELL - 1e-6);
+          const [x0, y0] = g.cellOf(p.x - p.hx + 0.04, p.z - p.hz + 0.04), [x1, y1] = g.cellOf(p.x + p.hx - 0.04, p.z + p.hz - 0.04);
+          for (let cy = y0 - rc; cy <= y1 + rc; cy++) for (let cx = x0 - rc; cx <= x1 + rc; cx++) {
+            if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) continue;
+            const i = g.idx(cx, cy);
+            expect(gal.has(g.area[i]) && g.cells[i] === FLOOR && !g.blocked[i], `seed ${s} ${p.kind} ring cell ${cx},${cy}`).toBe(true);
+          }
+        }
+        for (let i = 0; i < seats.length; i++) for (let j = i + 1; j < seats.length; j++) expect(Math.hypot(seats[i].x - seats[j].x, seats[i].z - seats[j].z)).toBeGreaterThanOrEqual(COMMONS.seat.gap - 1e-6);
+      }
+      const n = (k: string) => layout.props.filter(p => p.kind === k && m.galleries.some(gl => gl.areas.includes(p.area))).length;
+      console.info(`[commons seed ${s}] kiosks ${n('mallKioskCart')} seats ${n('foodCourtTableSet')} rejects ${JSON.stringify(rejects)}`);
+      expect(n('mallKioskCart'), `seed ${s} kiosks`).toBeGreaterThan(0);
+      expect(n('foodCourtTableSet'), `seed ${s} food-hall seats`).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -468,5 +612,36 @@ describe('generated mall: shops dressed, census, weapons (bounded seeds)', () =>
       for (const e of plan.filter(q => q.copy === 0)) expect(found.some(p => p.itemId === e.weapon && guns.some(g => g.area === p.area)), `seed ${seed} ${e.weapon}`).toBe(true);
       console.info(`[gen weapons ${seed}] plan ${JSON.stringify(plan)} found ${JSON.stringify(found.map(p => ({id: p.itemId, area: p.area, y: p.y})))}`);
     }
+  });
+  it('gallery commons on the generated mall: kiosk carts / food-hall seats clear of railings, run mouths, elevators and shop entries', () => {
+    for (const seed of GEN_SEEDS) {
+      const L = mall(seed), m = L.mall!;
+      const gal = new Set(m.galleries.flatMap(g => g.areas));
+      const pieces = L.props.filter(p => (p.kind === 'mallKioskCart' || p.kind === 'foodCourtTableSet') && gal.has(p.area));
+      for (const p of pieces) {
+        const c = p.kind === 'mallKioskCart' ? COMMONS.kiosk : COMMONS.seat;
+        const lv = p.level ?? 0;
+        const b = {x0: p.x - p.hx, x1: p.x + p.hx, z0: p.z - p.hz, z1: p.z + p.hz};
+        const ptBox = (x: number, z: number) => Math.hypot(Math.max(b.x0 - x, 0, x - b.x1), Math.max(b.z0 - z, 0, z - b.z1));
+        for (const r of L.rails.filter(q => q.level === lv)) {
+          let d = Infinity;
+          for (let t = 0; t <= 1.0001; t += 0.02) d = Math.min(d, ptBox(r.x0 + (r.x1 - r.x0) * t, r.z0 + (r.z1 - r.z0) * t));
+          expect(d, `seed ${seed} ${p.kind} rail`).toBeGreaterThanOrEqual(c.rail - 0.05);
+        }
+        for (const v of m.verticals) {
+          if (v.lower === lv) expect(ptBox(v.foot.x, v.foot.z), `seed ${seed} ${p.kind} run foot`).toBeGreaterThanOrEqual(c.mouth - 1e-6);
+          if (v.upper === lv) expect(ptBox(v.head.x, v.head.z), `seed ${seed} ${p.kind} run head`).toBeGreaterThanOrEqual(c.mouth - 1e-6);
+        }
+        expect(p.y, `${p.kind} on its storey floor`).toBeCloseTo(m.storeys.find(q => q.level === lv)!.baseY, 1);
+      }
+      console.info(`[gen commons ${seed}] ${pieces.map(p => `${p.kind}@L${p.level ?? 0}`).join(' ') || 'none'} rejects ${JSON.stringify(MALL_COMMONS_STATS.last?.rejects ?? {})}`);
+      expect(mallIssues(L), `seed ${seed}`).toEqual([]);
+    }
+  });
+  it('every delivered batch-1 / batch-2 model furnishes the generated mall', () => {
+    const seen = new Map<string, number>();
+    for (const seed of GEN_SEEDS) for (const p of mall(seed).props) seen.set(p.kind, (seen.get(p.kind) ?? 0) + 1);
+    console.info(`[gen batch kinds] ${[...BATCH1, ...BATCH2].map(k => `${k} ${seen.get(k) ?? 0}`).join(', ')}`);
+    for (const k of [...BATCH1, ...BATCH2]) expect(seen.get(k) ?? 0, `${k} placed`).toBeGreaterThan(0);
   });
 });

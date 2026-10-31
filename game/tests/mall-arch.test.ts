@@ -555,7 +555,10 @@ describe('the REAL generated mall (lane GEN, seed 12345 galleria): finishes, bal
     const sf = meshes(w.group).filter(mm => mm.name.startsWith('shopfront-mall-') || mm.name.startsWith('mall-shutter-partial'));
     console.log(`[mall shopfronts] ${st.glazing} glazing panes, ${st.shutters} closed shutters, ${st.partialShutters} partial shutters -> ${sf.length} draw calls`);
     expect(sf.length).toBeLessThanOrEqual(4 * m.storeys.length);
-    for (const q of sf) expect(matOf(q).transparent ? q.castShadow : false).toBe(false);
+    // glass is transparent and never a flashlight shadow caster; the opaque shutters / frames do cast
+    markShadows(w.group, true, true);
+    for (const q of sf.filter(mm => mm.name.startsWith('shopfront-mall-glass'))) { expect(matOf(q).transparent).toBe(true); expect(q.castShadow).toBe(false); }
+    for (const q of sf.filter(mm => /shopfront-mall-(shutter|frame)/.test(mm.name))) expect(q.castShadow).toBe(true);
   });
 
   it('frontages face the gallery (derived from geometry, whatever frontage.side means): signs / curtains go on the gallery side', () => {

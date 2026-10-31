@@ -58,6 +58,22 @@ export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {
   'storage-tote': {url: 'assets/models/mall-storage-tote.glb', bytes: 147472, tris: 1478, code: 'M18', key: 'office-storage-tote'},
   'shoe-wall-display': {url: 'assets/models/mall-shoe-wall-display.glb', bytes: 206620, tris: 3350, code: 'M19', key: 'office-shoe-wall-display'},
   'food-court-table-set': {url: 'assets/models/mall-food-court-table-set.glb', bytes: 204492, tris: 3294, code: 'M20', key: 'office-food-court-table-set'},
+  'try-on-ottoman': {url: 'assets/models/mall-try-on-ottoman.glb', bytes: 161148, tris: 1545, code: 'M24', key: 'office-try-on-ottoman'},
+  'medicine-drawer-cabinet': {url: 'assets/models/mall-medicine-drawer-cabinet.glb', bytes: 204976, tris: 3096, code: 'M29', key: 'office-medicine-drawer-cabinet'},
+  'multideck-open-cooler': {url: null, bytes: 0, tris: 0, code: 'M30', key: 'office-multideck-open-cooler'},
+  'cafe-bistro-table': {url: null, bytes: 0, tris: 0, code: 'M31', key: 'office-cafe-bistro-table'},
+  'cafe-chair': {url: null, bytes: 0, tris: 0, code: 'M32', key: 'office-cafe-chair'},
+  'gun-safe-tall': {url: null, bytes: 0, tris: 0, code: 'M35', key: 'office-gun-safe-tall'},
+  'camping-tent-display': {url: 'assets/models/mall-camping-tent-display.glb', bytes: 223400, tris: 2058, code: 'M36', key: 'office-camping-tent-display'},
+  'mall-bench': {url: null, bytes: 0, tris: 0, code: 'M37', key: 'office-mall-bench'},
+  'mall-info-desk': {url: null, bytes: 0, tris: 0, code: 'M40', key: 'office-mall-info-desk'},
+  'tv-wall-bank': {url: 'assets/models/mall-tv-wall-bank.glb', bytes: 151488, tris: 1948, code: 'M41', key: 'office-tv-wall-bank'},
+  'cosmetics-wall-unit': {url: null, bytes: 0, tris: 0, code: 'M42', key: 'office-cosmetics-wall-unit'},
+  'dresser-drawers': {url: null, bytes: 0, tris: 0, code: 'M45', key: 'office-dresser-drawers'},
+  'cardboard-box-flaps': {url: null, bytes: 0, tris: 0, code: 'M47', key: 'office-cardboard-box-flaps'},
+  'kiddie-ride': {url: 'assets/models/mall-kiddie-ride.glb', bytes: 201168, tris: 2519, code: 'M50', key: 'office-kiddie-ride'},
+  'salon-styling-chair': {url: 'assets/models/mall-salon-styling-chair.glb', bytes: 178076, tris: 1977, code: 'M51', key: 'office-salon-styling-chair'},
+  'bed-display': {url: 'assets/models/mall-bed-display.glb', bytes: 352088, tris: 2495, code: 'M52', key: 'office-bed-display'},
 };
 
 export const MALL_PART_ASSETS: Readonly<Record<string, MallPartEntry>> = {

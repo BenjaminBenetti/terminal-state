@@ -47,6 +47,13 @@ export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number
   'storage-tote': [0.6, 0.6267, 0.5897],
   'shoe-wall-display': [2, 1.9952, 0.2254],
   'food-court-table-set': [1.499, 0.75, 1.4843],
+  'try-on-ottoman': [0.9, 0.4222, 0.6384],
+  'medicine-drawer-cabinet': [0.9358, 1.9, 0.6504],
+  'camping-tent-display': [2.2, 1.1536, 2.1369],
+  'tv-wall-bank': [2.4, 1.6853, 0.514],
+  'kiddie-ride': [1.3, 0.7843, 0.6936],
+  'salon-styling-chair': [0.8063, 1.1, 0.9822],
+  'bed-display': [1.4873, 1.0962, 2.1],
 };
 
 export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
@@ -70,5 +77,21 @@ export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
   'storage-tote': {code: 'M18', role: 'holder/movable', programs: ['all backrooms'], sizeM: 0.6, sizeAxis: 'w', target: [0.6, 0.38, 0.4], placement: 'floor / onTop (shelves)', shopsKind: 'storageTote'},
   'shoe-wall-display': {code: 'M19', role: 'holder', programs: ['shoes', 'sports', 'outdoors'], sizeM: 2, sizeAxis: 'w', target: [2, 2.2, 0.35], placement: 'wall', shopsKind: 'shoeWallDisplay'},
   'food-court-table-set': {code: 'M20', role: 'furniture/holder', programs: ['food-court'], sizeM: 0.75, sizeAxis: 'h', target: [1.6, 0.75, 1.6], placement: 'free (hall)', shopsKind: 'foodCourtTableSet'},
+  'try-on-ottoman': {code: 'M24', role: 'furniture', programs: ['shoes', 'clothing'], sizeM: 0.9, sizeAxis: 'w', target: [0.9, 0.42, 0.45], placement: 'free', shopsKind: 'ottoman'},
+  'medicine-drawer-cabinet': {code: 'M29', role: 'holder', programs: ['pharmacy', 'clinic'], sizeM: 1.9, sizeAxis: 'h', target: [1.2, 1.9, 0.5], placement: 'wall', shopsKind: 'medicineDrawerCabinet'},
+  'multideck-open-cooler': {code: 'M30', role: 'holder', programs: ['grocery', 'cafe'], sizeM: 1.9, sizeAxis: 'w', target: [1.9, 2, 0.9], placement: 'wall', shopsKind: 'multideckOpenCooler'},
+  'cafe-bistro-table': {code: 'M31', role: 'furniture', programs: ['cafe', 'food-court', 'books'], sizeM: 0.7, sizeAxis: 'w', target: [0.7, 0.75, 0.7], placement: 'free', shopsKind: 'cafeBistroTable'},
+  'cafe-chair': {code: 'M32', role: 'furniture', programs: ['cafe', 'food-court'], sizeM: 0.88, sizeAxis: 'h', target: [0.45, 0.88, 0.5], placement: 'atHost (M32)', shopsKind: 'cafeChair'},
+  'gun-safe-tall': {code: 'M35', role: 'holder', programs: ['guns', 'outdoors'], sizeM: 1.8, sizeAxis: 'h', target: [0.75, 1.8, 0.6], placement: 'wall', shopsKind: 'gunSafeTall'},
+  'camping-tent-display': {code: 'M36', role: 'decor', programs: ['outdoors'], sizeM: 2.2, sizeAxis: 'w', target: [2.2, 1.5, 2.2], placement: 'free (on its plinth)', shopsKind: 'tentDisplay'},
+  'mall-bench': {code: 'M37', role: 'furniture', programs: ['galleries', 'plaza', 'food-court'], sizeM: 1.8, sizeAxis: 'w', target: [1.8, 0.45, 0.55], placement: 'free (gallery)', shopsKind: 'mallBench'},
+  'mall-info-desk': {code: 'M40', role: 'holder', programs: ['plaza'], sizeM: 3, sizeAxis: 'w', target: [3, 1.1, 1.4], placement: 'free (plaza)', shopsKind: 'mallInfoDesk'},
+  'tv-wall-bank': {code: 'M41', role: 'equipment', programs: ['electronics', 'department', 'arcade'], sizeM: 2.4, sizeAxis: 'w', target: [2.4, 1.4, 0.15], placement: 'wall mount (base 1.05 m, SHOPS MALL_MOUNT_Y)', shopsKind: 'tvWall'},
+  'cosmetics-wall-unit': {code: 'M42', role: 'holder', programs: ['beauty', 'department', 'pharmacy'], sizeM: 1.2, sizeAxis: 'w', target: [1.2, 2.2, 0.45], placement: 'wall', shopsKind: 'cosmeticsWallUnit'},
+  'dresser-drawers': {code: 'M45', role: 'holder', programs: ['home', 'department'], sizeM: 1.4, sizeAxis: 'w', target: [1.4, 0.85, 0.5], placement: 'wall', shopsKind: 'dresserDrawers'},
+  'cardboard-box-flaps': {code: 'M47', role: 'holder/movable', programs: ['all backrooms'], sizeM: 0.55, sizeAxis: 'w', target: [0.55, 0.4, 0.4], placement: 'floor / onTop', shopsKind: 'cardboardBoxFlaps'},
+  'kiddie-ride': {code: 'M50', role: 'machine', programs: ['galleries', 'toys', 'arcade'], sizeM: 1.3, sizeAxis: 'longest', target: [0.9, 1.3, 1.3], placement: 'free', shopsKind: 'kiddieRide'},
+  'salon-styling-chair': {code: 'M51', role: 'furniture', programs: ['beauty', 'service'], sizeM: 1.1, sizeAxis: 'h', target: [0.7, 1.1, 0.7], placement: 'free', shopsKind: 'salonChair'},
+  'bed-display': {code: 'M52', role: 'furniture', programs: ['home', 'department'], sizeM: 2.1, sizeAxis: 'longest', target: [1.6, 1.05, 2.1], placement: 'wall (headboard)', shopsKind: 'displayBed'},
 };
 // END GENERATED
