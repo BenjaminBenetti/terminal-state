@@ -29,6 +29,11 @@
 // c = max(min(GAS.CAP, breach field + puffs) at the eye, roof outdoor) -> the same threshold / dps / protection (mask + filter)
 // / HUD / cough path; the puffs' cells share their storey's volumetric gas layer, composed with the breach field on upload.
 // No puff: one more boolean in the fast path. Section build / teardown clear the puffs (never saved: no re-emission).
+//
+// Task reactor-build-20261101 (lane AIR): THE REACTOR's DEPTH GAS (world/reactor/air.ts) — `depth` is set by the Reactor runtime
+// (world/reactor/generators.ts) while a layout with `reactor` is built; the eye exposure is then c = max(min(CAP, breach field +
+// puffs), roof outdoor, depth gas) through the same threshold / dps / protection / HUD / cough path (source 'depth'), and the
+// fallback haze covers it too. Without layout.reactor the term never exists (one more boolean in the fast path).
 
 import * as THREE from 'three';
 import type {Vec3, WorldHit} from '../../combat/hitscan';
@@ -40,6 +45,7 @@ import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-
 import {GasHud} from '../../ui/gasHud';
 import {GAS, GasField} from './field';
 import {GasPuffs, type PuffGrid, type PuffSpec} from './puff'; // task track1-siren-blightbelly-20261031 (lane BLIGHT)
+import type {DepthGasSource} from '../reactor/air'; // task reactor-build-20261101 (lane AIR): the Reactor's depth gas
 
 /** What the gas system needs from Game (structural: tests drive it with a fake host). */
 export interface GasHost {
@@ -64,8 +70,11 @@ export interface GasHost {
   bulletHitHandlers?: ((wh: WorldHit, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[];
 }
 
-/** Where this frame's exposure comes from: the breach-gas field, the roof's outside atmosphere, or nothing (clean air). */
-export type GasSource = 'field' | 'outdoor' | null;
+/**
+ * Where this frame's exposure comes from: the breach-gas field, the roof's outside atmosphere, the Reactor's depth gas (task
+ * reactor-build-20261101, lane AIR), or nothing (clean air).
+ */
+export type GasSource = 'field' | 'outdoor' | 'depth' | null;
 
 /**
  * This frame's exposure (QA / HUD / the cough player): `c` = max(field c at the eye, outdoor c), `outdoor` = the outdoor part
@@ -76,6 +85,8 @@ export interface GasExposure {
   c: number; protected: boolean; dps: number; damage: number; outdoor: number; source: GasSource;
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): the temporary puffs' part of `c` (QA; already inside c). */
   puff?: number;
+  /** Task reactor-build-20261101 (lane AIR): the Reactor depth gas at the eye (QA; `c` is the max of the parts). */
+  depth?: number;
 }
 
 const GLASS = new THREE.Color(0xc9d8dc);
@@ -94,11 +105,16 @@ export class GasSystem {
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
-  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0};
+  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0}; // (+ depth: lane AIR)
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): temporary local puffs of the current world (any level / storey). */
   readonly puffs = new GasPuffs();
   /** Task gas-mask-roof-feedback-20261030 (item 10): the office roof (its outside atmosphere; null on the Subway / between worlds). */
   roof: RoofAir | null = null;
+  /**
+   * Task reactor-build-20261101 (lane AIR): the Reactor's depth gas (world/reactor/air.ts ReactorAir), set by world/reactor/
+   * generators.ts after this system's section build; read only while layout.reactor exists. Null on every other level.
+   */
+  depth: DepthGasSource | null = null;
   /** Counters (QA / tests). */
   readonly counts = {impacts: 0, damage: 0, cracked: 0, broken: 0, passThrough: 0, uploads: 0};
   readonly hud = new GasHud();
@@ -155,7 +171,8 @@ export class GasSystem {
     this.roof = null;
     this.puffs.clear(); // lane BLIGHT: temporary puffs never outlive their world (never saved: no re-emission on a revisit)
     this.puffs.world = null;
-    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0});
+    this.depth = null; // task reactor-build-20261101 (lane AIR): the Reactor runtime sets it again after this build (never outlives its world)
+    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0});
     this.hud.clear();
   }
 
@@ -312,7 +329,8 @@ export class GasSystem {
 
   frame(dt: number): void {
     const f = this.field, roof = this.roof, P = this.puffs;
-    if (!f && !roof && !P.active) { this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff)
+    const D = this.depth && this.host.layout.reactor ? this.depth : null; // task reactor-build-20261101 (lane AIR): only on the Reactor
+    if (!f && !roof && !P.active && !D) { this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas
     if (f) f.tick(dt);
     if (P.active) P.tick(dt);
     this.upload();
@@ -325,15 +343,18 @@ export class GasSystem {
     const cPuff = pl.alive && P.active ? P.concentrationAt(pl.x, pl.eye, pl.z) : 0;
     const cField = pl.alive ? Math.min(GAS.CAP, (f ? f.concentrationAt(pl.x, pl.eye, pl.z) : 0) + cPuff) : 0;
     const cOut = pl.alive && roof ? GAS.ROOF_OUTDOOR_C * roofBlend(pl.x, pl.eye, pl.z, roof) : 0;
-    const c = Math.max(cField, cOut);
+    // task reactor-build-20261101 (lane AIR): the Reactor's depth gas at the eye — max with the other sources, never a sum
+    const cDepth = pl.alive && D ? D.depthGasAt(pl.x, pl.eye, pl.z) : 0;
+    const c = Math.max(cField, cOut, cDepth);
     const raw = GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
     const prot = c >= Math.min(GAS.HUD_MIN, GAS.THRESHOLD) ? this.protection() : false;
     const dps = prot ? 0 : raw;
-    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut; e.puff = cPuff;
-    e.source = c < GAS.HUD_MIN ? null : cOut > cField ? 'outdoor' : 'field';
+    e.c = c; e.protected = prot; e.dps = dps; e.outdoor = cOut; e.puff = cPuff; e.depth = cDepth;
+    e.source = c < GAS.HUD_MIN ? null : cOut > cField && cOut >= cDepth ? 'outdoor' : cDepth > cField ? 'depth' : 'field'; // (lane AIR: + 'depth')
     if (dps > 0 && dt > 0 && pl.alive) { pl.takeDamage(dps * dt); e.damage += dps * dt; }
-    // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn
-    const haze = (!!this.host.atmosphereBypass || !this.host.atmosphere.active) && e.source === 'field';
+    // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn. Lane AIR:
+    // and for the Reactor's volumetric depth strata (the same eye concentration)
+    const haze = (!!this.host.atmosphereBypass || !this.host.atmosphere.active) && (e.source === 'field' || e.source === 'depth');
     this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze});
   }
 }
