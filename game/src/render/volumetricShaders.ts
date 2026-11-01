@@ -18,6 +18,14 @@
 // in-scatter of the same lights and a small ambient emission, shaped by the shared height profile and wisped by the moving
 // detail noise. Gated per step by the `gasOn` uniform (TSL If): no gas anywhere = one uniform branch per step.
 //
+// Task reactor-build-20261101 (lane AIR): THE REACTOR's DEPTH GAS (world/reactor/air.ts) — a 40 m open pit column cannot be
+// stratified by the per-storey R8 layers (one band = one layer), so a reactor layout compiles one more march term (MarchOptions
+// .depth; every other level builds exactly the previous program): c = the strata table (a uniform float array of TABLE_N heights
+// over [yLo, yHi], already x (1 − cleared) per zone; the SAME table the exposure reads) inside the layout's x / z rect, with
+// mean-1 wisps (the detail noise) and slow horizontal sheets (one stretched noise lookup) so the layers read like B; its own
+// thin extinction, tinted scatter of the same lights and a small emission. Gated by the `depthOn` uniform (set when any stratum
+// is left), so a cleared pit costs one uniform branch per step; the table changes only when the clearing does.
+//
 // WGSL uniformity: textureSampleCompare (the flashlight shadow) needs uniform control flow, so the march loop has a
 // compile-time trip count, no per-pixel break, and the shadow compare runs unconditionally at the top of each step; every
 // other lookup is textureSampleLevel / textureLoad (fine in per-pixel branches).
@@ -28,6 +36,7 @@ import * as TSL from 'three/tsl';
 import {lfSlotAt, lightFieldSample} from '../world/lightFieldNode';
 import {MAX_SLOTS} from '../world/lightField';
 import {GAS} from '../world/gas/field';
+import {REACTOR_AIR, REACTOR_GAS_LOOK} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR): the depth gas table size / look
 import {BILATERAL_K, DENSITY_MAP_RANGE} from './atmosphere';
 import {SMOKE_LIMITS, VIS_WINDOWS} from './smoke';
 
@@ -78,6 +87,12 @@ export function createFogUniforms() {
     puff: uniformArray(arr4(VF_LIMITS.puffs), 'vec4'), puffD: uniformArray(new Array<number>(VF_LIMITS.puffs).fill(0), 'float'),
     // task gasmask-breach-20261030: breach gas — on (0 / 1), [extinction / m, scatter albedo, emission, noise], tint (linear)
     gasOn: uniform(0), gasK: uniform(new THREE.Vector4(GAS.EXT, GAS.SCATTER, GAS.EMISSION, GAS.NOISE)), gasTint: uniform(new THREE.Vector3(...GAS.TINT)),
+    // task reactor-build-20261101 (lane AIR): the Reactor's depth gas — on (0 / 1), rect [x0, z0, x1, z1], range [yLo, yHi, 1 / (yHi − yLo), 0],
+    // the strata table, look [extinction / m, scatter albedo, emission, wisps], sheets [xz scale, y scale, amount, 0], tint (linear)
+    depthOn: uniform(0), depthRect: uniform(new THREE.Vector4(0, 0, 0, 0)), depthRange: uniform(new THREE.Vector4(0, 1, 1, 0)),
+    depthTab: uniformArray(new Array<number>(REACTOR_AIR.TABLE_N).fill(0), 'float'),
+    depthK: uniform(new THREE.Vector4(REACTOR_GAS_LOOK.ext, REACTOR_GAS_LOOK.scatter, REACTOR_GAS_LOOK.emission, REACTOR_GAS_LOOK.wisps)),
+    depthSheet: uniform(new THREE.Vector4(REACTOR_GAS_LOOK.sheetXZ, REACTOR_GAS_LOOK.sheetY, REACTOR_GAS_LOOK.sheets, 0)), depthTint: uniform(new THREE.Vector3(...REACTOR_GAS_LOOK.tint)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -141,7 +156,15 @@ const distAtt = (d: N, cutoff: N, decay: N): N => {
 
 export interface MarchOptions {
   steps: number;
+  /**
+   * Task reactor-build-20261101 (lane AIR): compile the Reactor's depth gas term (layout.reactor only; render/volumetric.ts keys the
+   * program by it at setStation, before the warm-up). Absent / false: exactly the previous program.
+   */
+  depth?: boolean;
 }
+
+/** Task reactor-build-20261101 (lane AIR): name of the depth-gas variable (marks the reactor variant of the march). */
+export const VF_DEPTH_MARK = 'vfDepthSig';
 
 /**
  * The march material (two outputs). Rebuilt when the step count or the shadow texture changes (quality change, the
@@ -298,8 +321,33 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
           gasSig.assign(gc.mul(prof).mul(band).mul(wisp).mul(n(u.gasK).x));
         });
       });
+      // --- task reactor-build-20261101 (lane AIR): the Reactor's depth gas strata (world/reactor/air.ts table), reactor layouts only ---
+      let depthSig: N = null;
+      if (o.depth) {
+        const NT = REACTOR_AIR.TABLE_N;
+        depthSig = n(float(0)).toVar(VF_DEPTH_MARK);
+        If(n(u.depthOn).greaterThan(0.5), () => {
+          const dr = n(u.depthRect), rg = n(u.depthRange);
+          const inside = n(p).x.greaterThanEqual(dr.x).and(n(p).x.lessThanEqual(dr.z)).and(n(p).z.greaterThanEqual(dr.y)).and(n(p).z.lessThanEqual(dr.w)).and(n(p).y.lessThan(rg.y));
+          If(inside, () => {
+            // linear between the table's samples (the exposure's world/reactor/air.ts tableAt)
+            const fu = clamp(n(p).y.sub(rg.x).mul(rg.z), 0, 1).mul(NT - 1).toVar();
+            const fl = n(min(floor(fu), NT - 2)).toVar();
+            const i0 = int(fl).toVar();
+            const dc = n(mix(n(u.depthTab).element(i0), n(u.depthTab).element(i0.add(1)), fu.sub(fl))).toVar();
+            If(dc.greaterThan(0.002), () => {
+              // slow horizontal sheets (stretched noise, drifting with the air) x the moving wisps — both mean 1 (the exposure is the mean)
+              const shv = n(u.depthSheet);
+              const sh = n(noiseT.sample(vec3(n(p).x.mul(shv.x), n(p).y.mul(shv.y), n(p).z.mul(shv.x)).add(u.offAir)).level(0)).r;
+              const sheets = float(1).add(n(shv.z).mul(n(sh).sub(0.5)).mul(2));
+              const wisp = float(1).add(n(u.depthK).w.mul(D.g.sub(0.5)).mul(2));
+              depthSig.assign(dc.mul(clamp(sheets.mul(wisp), 0, 2.5)).mul(n(u.depthK).x));
+            });
+          });
+        });
+      }
       // --- in-scattering ---
-      If(sigma.add(smokeSig).add(gasSig).greaterThan(0), () => {
+      If((depthSig ? sigma.add(smokeSig).add(gasSig).add(depthSig) : sigma.add(smokeSig).add(gasSig)).greaterThan(0), () => {
         const L = n(vec3(0, 0, 0)).toVar();
         If(flashOn, () => {
           const lv = n(p).sub(u.flashPos).toVar();
@@ -334,9 +382,17 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
         const tr = n(u.fogDensity).mul(t);
         // gas: tinted single scatter of the same lights + its faint ambient emission (u.gasK.y albedo, .z emission)
         const gasTint = n(u.gasTint).mul(gasSig);
-        const scat = vec3(sigma, sigma, sigma).add(smokeTint.mul(n(u.ext).z)).add(gasTint.mul(n(u.gasK).y));
-        acc.addAssign(L.mul(scat).add(gasTint.mul(n(u.gasK).z)).mul(w.mul(exp(tr.mul(tr).negate())).mul(tv)));
-        tv.mulAssign(exp(excess.mul(n(u.ext).x).add(smokeSig.mul(n(u.ext).y)).add(gasSig).mul(w).negate()));
+        if (!depthSig) {
+          const scat = vec3(sigma, sigma, sigma).add(smokeTint.mul(n(u.ext).z)).add(gasTint.mul(n(u.gasK).y));
+          acc.addAssign(L.mul(scat).add(gasTint.mul(n(u.gasK).z)).mul(w.mul(exp(tr.mul(tr).negate())).mul(tv)));
+          tv.mulAssign(exp(excess.mul(n(u.ext).x).add(smokeSig.mul(n(u.ext).y)).add(gasSig).mul(w).negate()));
+        } else {
+          // task reactor-build-20261101 (lane AIR): + the depth strata's own tinted scatter / emission / extinction
+          const depthTint = n(u.depthTint).mul(depthSig);
+          const scat = vec3(sigma, sigma, sigma).add(smokeTint.mul(n(u.ext).z)).add(gasTint.mul(n(u.gasK).y)).add(depthTint.mul(n(u.depthK).y));
+          acc.addAssign(L.mul(scat).add(gasTint.mul(n(u.gasK).z)).add(depthTint.mul(n(u.depthK).z)).mul(w.mul(exp(tr.mul(tr).negate())).mul(tv)));
+          tv.mulAssign(exp(excess.mul(n(u.ext).x).add(smokeSig.mul(n(u.ext).y)).add(gasSig).add(depthSig).mul(w).negate()));
+        }
       });
     });
     out0.assign(vec4(acc, viewDepth));

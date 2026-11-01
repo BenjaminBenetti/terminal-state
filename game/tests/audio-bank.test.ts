@@ -119,7 +119,7 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // task studio-alpha-track2-round2-20261031-01 (R4): the annex fans' fixed channels (HVAC recording; fan-sound.test.ts)
     'updateFans',
     // iteration 12 (AUDIO): hit-confirm dip + flare-loop plumbing / lifecycle
-    'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares',
+    'dipForConfirm', 'loopFilter', 'updateLoops', 'endLoop', 'stopFlares', 'stopMachines', // (+ stopMachines: task reactor-build-20261101)
     // task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + cross-storey step gate
     'setVocalReach', 'vocal', 'stepHeard',
     // task gas-mask-roof-feedback-20261030: silencing a sounding cough (plays nothing)
@@ -160,6 +160,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       batteryInsert: () => sfx.batteryInsert(), flashlightFlicker: () => { ctx.currentTime += 1; sfx.flashlightFlicker(0.5); },
       flareIgnite: () => sfx.flareIgnite(2, 1.2, 2), flareOut: () => sfx.flareOut(6, 0.1, 6),
       flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },
+      // task reactor-build-20261101 (primary): the Reactor's machine one-shots + loops
+      reactorCue: () => { for (const c of ['reactorGeneratorStart', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup'] as const) { ctx.currentTime += 1; sfx.reactorCue(c, 4, 1, 4); } },
+      reactorLoop: () => { for (const c of ['reactorGeneratorLoop', 'reactorFanLoop', 'reactorHum'] as const) { const h = sfx.reactorLoop(c, 5, 1, 5); h?.setPos(5.5, 1, 5); h?.stop(); } },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
       physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'cardboard', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },
