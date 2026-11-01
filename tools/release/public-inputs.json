@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 18851,
-      "sha256": "55a8d86386b8ca8a211830d036b78c2b8adec173024114a9a02f373fa82462a4"
+      "bytes": 19163,
+      "sha256": "2c7c5e31d9578664d9f8e507b574f8ebc22a055bc9a42151177d429d80f2aae1"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1465,8 +1465,8 @@
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
-      "bytes": 252240,
-      "sha256": "b827d4678468e925596ac24f28a666fd1f3bf447cd2f8190f05d89bf2895949a"
+      "bytes": 258151,
+      "sha256": "02bb38581b09d7142c46ab2a751a0017422d7b467d07a8d9aa04350ba0f0e73e"
     },
     {
       "path": "assets/derivatives/meshy-t25-ammo-20261030.json",
@@ -1495,8 +1495,8 @@
     },
     {
       "path": "assets/derivatives/office-overhaul-20261030.json",
-      "bytes": 286924,
-      "sha256": "912556de9ea3eb57f2711f36a516c5094a484663d0dd22b6e5b78dbc2b429cd4"
+      "bytes": 291540,
+      "sha256": "69a1d61c71e431cdc4bfb7845ddb40c117b1d901d894ea91bb8d33cc93d3c354"
     },
     {
       "path": "assets/derivatives/office-server-rack-r2-20261030.json",
@@ -1929,6 +1929,11 @@
       "sha256": "969d0ac50f49f008d5ec3f7748489d6909acb22ca1be516a7046b92a72026eea"
     },
     {
+      "path": "assets/models/mall-mannequin-female.glb",
+      "bytes": 174764,
+      "sha256": "8124dcab904357a1ec0036def8d9e6b023e0e3a8be62b25339f1d80849e0129e"
+    },
+    {
       "path": "assets/models/mall-mannequin-full.glb",
       "bytes": 141884,
       "sha256": "04f850509d4e21b0bcefbdea7899a3931fd2acd724f64502545dcfb056b933d1"
@@ -2015,8 +2020,8 @@
     },
     {
       "path": "assets/models/office-bakery-case.glb",
-      "bytes": 333084,
-      "sha256": "c48e415b93094d81429962f6c53b68cc753201355b17298b38d01d58b3408ae0"
+      "bytes": 333300,
+      "sha256": "da2f2d90a7d9a19f360ac148435baabb83bcdb5733d750ae7d9c3942e7539133"
     },
     {
       "path": "assets/models/office-bean-bag.glb",

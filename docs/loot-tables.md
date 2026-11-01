@@ -116,6 +116,7 @@ Every slot must be used by at least one kind; a test checks this.
 | **Stack size** | Rounds per ammo box or handful. | `BOX_COUNT`, `HANDFUL` |
 | **Floor chance / count** | Chance of each loose find, and how many copies. | `SUBWAY_FLOOR`, `OFFICE_FLOOR` |
 | **Gear** | Rare gear count mean, cap and weights. | `GEAR_LOOT` |
+| **Gear placement** | Where the one gear roll lands, by room purpose and piece (multiplies `gearAreaWeight`; absent = unbiased). Mall only. | `LootTables.gearPlace` (`MALL_GEAR_PLACE`) |
 
 ### Overrides (`LootOverrides`, per profile)
 
@@ -286,6 +287,11 @@ reproduce the earlier pins byte for byte).
     - **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
     - **Exact means the whole budget:** the mall's storage fill (`LootTables.storageFill`) never tops up an exact annex table, so a
       searched-clean holder stays clean and the annex economy is the same on every level.
+    - **Never empty by packing (Mall round 3 CI follow-up, 2026-11-01):** the random yaw jitter could make a lot that fits only nearly
+      square miss its surface (a 0.32 x 0.22 m med kit on a 0.24 m deep stock shelf), leaving an `empty: 0` supply shelf EMPTY. When
+      every rolled lot of an exact table is unplaced, `rollHolderLots` packs the holder square instead (`packItems(..., square)`, its
+      own `:square` stream). Partial drops stay as they were. Over the 18-station Subway corpus exactly 2 of 6,397 holders changed (two
+      such shelves now hold their med kit); core hashes and the Office are unchanged.
     - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
     - **Signature-room lockers** (the deepest intact holders of a boiler / generator / turbine room roll their room table):
       `ANNEX_SPARES_ROWS` = the server spares without the crafting materials (battery 1.4, flare 0.6, bandage 0.5, water 0.6).
@@ -424,7 +430,7 @@ The mall is ONE logical level, `LevelId` `mall` (tier 2); its display name is se
 (`Mall (seeded "<Name> Center")`). Since the playtest revision it is compact: the station + three retail floors (~6,600 m² of core
 floor, ~670 loot holders a run; the six-ring mall had ~43,800 m² and ~2,950 holders).
 
-`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL}` —
+`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL, gearPlace: MALL_GEAR_PLACE}` —
 every consumable, ammo / calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll —
 plus `overrides` = `MALL_OVERRIDES`: `categoryWeight: {material: 0.25}` (the dial: every material row of the mall's tables, salvage and
 storage-fill pools included; six rings: 0.6) and `itemWeight: {bio_mater: 1.5}` (the scarcest material lifted). The station and the three
@@ -469,6 +475,33 @@ filters 2–5).
 - **Rewards**: none of its own (the base reward tables are inherited but inert: no mall holder carries their keys). Weapon finds are
   lane SHOPS' per-gun-shop stock (about one gun per gun shop, its own ammunition once; an explicit exception, like the Office's
   weapon plan).
+- **Rare-gear placement** (task mall-round3-20261031, lane SHOPS R6 — user: "clothing stores should have higher gear drop chance …
+  the same idea applies to all stores where the theme would reasonably boost spawn chance of associated loot"). `LootTables.gearPlace`
+  = `MALL_GEAR_PLACE`, read by `gen/gearLoot.ts` `placeGear` (`gearPlaceFactor`) through the level's profile (`levels/registry.ts`
+  `withGear`). It multiplies an area's gear-spot weight (`gearAreaWeight`, only where it is already > 0) by room purpose and piece:
+  - the wearable-gear shops (clothing, womenswear, outdoors, sports, shoes, department, luggage) ×12 on the sales floor and ×4 in the
+    stock room;
+  - per piece: work boots → shoe store / hardware, work gloves → hardware / clothing, the daypack → luggage / outdoors / sports, the hard
+    hat → hardware, the armour vest / chest rig → the gun shop ×10 and mall security ×3, the hard hat and armour damped in the boutiques.
+  The count and pieces are the shared ONE roll (`GEAR_LOOT`, no mean change). Mask loot placement is unbiased. The Subway / Office
+  tables carry no bias: identical placement.
+  Measured on 10 generated malls (womenswear on; unbiased vs biased placement on identical layouts, 240 level rolls each;
+  `reference/tasks/mall-round3-20261031/lanes/SHOPS-evidence/loot-after.json`):
+  - a gear-themed store holds a piece in **8.0 %** of runs (was 3.4 %; other shops 2.4 % → 1.7 %, so 4.7×);
+  - **50 %** of the gear lands in them (was 21 %), and 39 % of runs put a piece in one of them (was 19 %);
+  - per store: clothing 3.3 → 7.0 %, womenswear 3.0 → 6.3 %, outdoors 3.9 → 12.9 %, sports 4.4 → 10 %, shoes 3.0 → 6.6 %,
+    luggage 2.4 → 5.8 %, department 3.5 → 6.2 %; hardware 3.2 → 6.7 % (hard hats), gun shop 2.3 → 4.3 % (armour).
+  Other themes were already boosted (holder units per themed store vs the average other shop, same census): medicine in the pharmacy /
+  clinic / optician 16×, ammunition in the gun shop 13×, scrap metal in hardware 6.4×, bio mater in medical shops 15×, batteries in
+  electronics / phone / hardware 3.4×, food / drink in grocery / food court / café / kiosk 3.4× / 2.6×. Weakest: electrical parts in
+  electronics / phone stores (1.4×). Their sales floors are glass display cabinets (which take no salvage by design) and device walls
+  (which hold no loot); a salvage-share trial at 0.48 gave only +0.2 / +0.7 parts per store, so it was reverted. Changing that is a
+  fit-out decision: a parts-holding fixture in tech stores.
+- **Round-3 CI follow-up (2026-11-01, lane SHOPS):** shoe stores carry the same x1.5 daypack affinity as clothing / womenswear /
+  department (a mall with a luggage store had left the shoe store at 1.87x per store for the daypack). The clinic / first-aid **crash
+  cart** rolls `CRASH_CART` (its medicine + spare defibrillator / monitor cells) and its mall storage fill draws medicine and cells at
+  0.35 (was medicine at 0.25): its four upper drawers are 6.5-7.8 cm deep, so no dressing / kit fits there and they were always empty
+  (2,000 simulated carts: 8.6 % -> 28.5 % of compartments stocked; mall-profiles enforces the 0.22 per-kind floor on that simulation).
 - **Track2 service annex** (at most one per mall, `TRACK_EXT_MALL.annex.max = 1`): annex holders / floor items come from Track2's own
   annex content (finite, seeded once, appended last), rolled under the mall profile — the annex purpose's theme decides any salvage;
   the mall floor program never sees extension areas (they are attached after every core pass); the ONE rare-gear roll, the gas-mask

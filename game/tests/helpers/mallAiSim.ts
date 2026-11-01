@@ -92,7 +92,7 @@ export function mallAiSim(layout: StationLayout, o: {atrium: boolean; player: Si
       return null;
     },
     rand,
-    ...(o.atrium ? {atrium: true} : {}),
+    ...(o.atrium ? {atrium: true, atriumNotice: true} : {}), // (mall round 3, lane ENEMY R2: + the game's open-atrium notice rule)
     ...lureWorld(L, {attracting: () => []}),
   });
   const frameMs: number[] = [], deferredMs: number[] = [];
@@ -120,7 +120,7 @@ export function mallAiSim(layout: StationLayout, o: {atrium: boolean; player: Si
         prof?.begin(S.brain);
         const out = b.update(1 / 60, w);
         prof?.end(S.brain);
-        if (out.alerted) director.alerted(b);
+        if (out.alerted) director.alerted(b, o.atrium ? player.y : undefined); // Game.updateZombies (mall round 3: H.alerted(b, p.y))
         prof?.begin(S.motor);
         if (out.face !== null) {
           let d = out.face - b.yaw;

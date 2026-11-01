@@ -42,7 +42,7 @@ import {spawnProfile} from './ai/spawnTables'; // lane HORDE: the level's horde 
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
-import {hearingMuffle, slabsBetween, type BrainWorld} from './ai/brain';
+import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
@@ -2063,13 +2063,11 @@ export class Game {
   /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
   private alertZombies(radius: number): void {
     const multi = this.levels.count > 1, P = this.player, bases = multi ? this.levels.list.map(l => l.baseY) : null;
-    for (const z of this.zombies) {
-      const b = z.brain;
-      if (!b.alive || Math.hypot(b.x - P.x, b.z - P.z, b.y - P.y) > radius) continue;
-      const los = multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z);
-      const muffle = hearingMuffle(los, bases ? slabsBetween(bases, P.y, b.y) : 0);
-      b.hear(P.x, P.z, radius * muffle, P.y);
-    }
+    // lane ENEMY (mall round 3, R2): the listener loop is ai/brain.ts alertListeners (moved verbatim; the Node aggro scenario runs it).
+    // An open-atrium level (layout.mall) adds the cross-storey rule (ATRIUM_PERCEPTION: x0.7 per storey through the void, at most 3
+    // new cross-storey responders per noise); the Subway / Office pass no flag: the established loop.
+    alertListeners(this.zombies.map(z => z.brain), P, radius,
+      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall);
   }
 
   /**
@@ -2183,6 +2181,8 @@ export class Game {
       ...lureWorld(L, this.lightSources),
       // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
       ...(this.layout.mall ? {atrium: true} : {}),
+      // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
+      ...(this.layout.mall ? {atriumNotice: true} : {}),
     };
   }
 
@@ -2220,7 +2220,7 @@ export class Game {
       prof.begin(SPAN.brain);
       const out = b.update(dt, w);
       prof.end(SPAN.brain);
-      if (H && out.alerted) H.alerted(b); // lane HORDE: group mates within earshot hear the call (brain.hear; never group-wide)
+      if (H && out.alerted) H.alerted(b, p.y); // lane HORDE: group mates within earshot hear the call (brain.hear; never group-wide); lane ENEMY (mall R2): a cross-storey sighting calls at most 2
       prof.begin(SPAN.motor);
       if (out.face !== null) {
         let d = out.face - b.yaw;

@@ -58,7 +58,8 @@ export type MallShutter = 'open' | 'partial' | 'closed';
 export type MallRecipe =
   | 'guns' | 'outdoors' | 'pharmacy' | 'clinic' | 'electronics' | 'phone' | 'hardware' | 'clothing' | 'shoes' | 'department' | 'food' | 'cafe'
   | 'grocery' | 'books' | 'toys' | 'sports' | 'jewelry' | 'home' | 'beauty' | 'music' | 'pet' | 'arcade' | 'luggage' | 'optical' | 'florist'
-  | 'kiosk' | 'security' | 'first-aid' | 'management' | 'customer-service' | 'janitorial' | 'vacant';
+  | 'kiosk' | 'security' | 'first-aid' | 'management' | 'customer-service' | 'janitorial' | 'vacant'
+  | 'womenswear'; // task mall-round3-20261031 (lane SHOPS, R4)
 
 export interface MallProgramDef {
   id: MallProgram;
@@ -148,6 +149,16 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
     purpose: 'mall-clothing', back: 'mall-clothing-back', front: 'glazed', shutter: [0.6, 0.35, 0.05], recipe: 'clothing',
     finishes: [F('vinyl-oak', 'paint-white', 'plaster-white', 0x8d6e63), F('stone-black', 'brick-white', 'open-black', 0xd4a017)],
     sign: S(0xf5f1e8, 0x2a2522, 0x8d6e63, 'serif'),
+  },
+  // Task mall-round3-20261031 (lane SHOPS, R4 — user: "no female clothing store ... which would normally always be in a mall! Lets get
+  // that in"): the women's fashion store — dresses on rails, blouse / skirt racks, handbag / shoe displays, fitting rooms, a window display
+  // of female mannequins (gen/mall/shopsDress.ts RECIPES.womenswear). Fictional brands; its own two finishes and sign. MALL_ALWAYS.
+  womenswear: {
+    id: 'womenswear', label: 'Women\'s fashion store', brands: ['Maison Verity', 'Lark & Lace', 'Rosalind Row', 'Ivy Hart Boutique', 'Sable & Silk', 'The Linen Muse', 'Cora Belle', 'Wren Atelier'],
+    units: ['store', 'anchor'], min: {area: 40, depth: 5.5, width: 4.5}, weight: 1.2, count: [1, 3], rings: [1.3, 1.3, 1.2, 1, 0.8, 0.6],
+    purpose: 'mall-womenswear', back: 'mall-womenswear-back', front: 'glazed', shutter: [0.65, 0.35, 0], recipe: 'womenswear',
+    finishes: [F('vinyl-oak', 'paint-blush', 'plaster-white', 0xb76e79), F('terrazzo-cream', 'wallpaper-damask', 'plaster-white', 0x2f2a3a)],
+    sign: S(0xfbf3ef, 0x7a2e4a, 0xc9a96e, 'serif'),
   },
   shoes: {
     id: 'shoes', label: 'Shoe store', brands: ['Solemate Shoes', 'Stride & Co.', 'Heel to Toe', 'Lacework Footwear', 'Cobble Street Shoes'],
@@ -378,7 +389,8 @@ function ringOf(layout: StationLayout, level: number): number {
 // recipes, every delivered model reachable through some recipe); a smaller mall of ~18-24 units shows a curated subset per seed.
 
 /** Programs every mall has when a unit suits them: the gun shop, clothes, a pharmacy, a café (food counters are their own family). */
-export const MALL_ALWAYS: readonly MallProgram[] = ['guns', 'clothing', 'pharmacy', 'cafe'];
+// Task mall-round3-20261031 (lane SHOPS, R4 — user: a women's clothing store "would normally always be in a mall"): + 'womenswear'.
+export const MALL_ALWAYS: readonly MallProgram[] = ['guns', 'clothing', 'womenswear', 'pharmacy', 'cafe'];
 /**
  * The rotating catalogue in its ring order (interleaved big / small, so a window of consecutive entries mixes unit sizes). A mall
  * walks it from a seeded start (mallRotation): early entries are featured, the tail only when units are left.

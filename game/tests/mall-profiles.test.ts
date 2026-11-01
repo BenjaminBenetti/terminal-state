@@ -28,12 +28,14 @@ import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import {holderTable, rollLootItems, type HolderKind} from '../src/items/loot';
 import {salvageRule, withSalvage} from '../src/items/lootEconomy';
 import {
-  BASE_TABLES, BASELINE_PROFILE, MALL_FLOOR, MALL_PROFILE, MALL_SALVAGE, MALL_STORAGE_FILL, PROFILES, STORAGE_FILL_FALLBACK, lootProfile, validateLootProfile,
+  BASE_TABLES, BASELINE_PROFILE, MALL_FLOOR, MALL_GEAR_PLACE, MALL_PROFILE, MALL_SALVAGE, MALL_STORAGE_FILL, PROFILES, STORAGE_FILL_FALLBACK, lootProfile, validateLootProfile,
   type LootProfile,
 } from '../src/items/lootTables';
 import {MATERIAL_IDS, isMaterialItem} from '../src/items/craftMaterials';
+import {SIREN_HUM} from '../src/audio/sfx'; // mall round 3 (lane ENEMY, R8): the Siren spacing = her hum's audible distance
 import {
   ENEMY_FAMILY_IDS, HORDE_CONTEXT, MALL_SIREN_ELIGIBILITY, MALL_SIREN_SPACING, MALL_SIREN_WEIGHT, MALL_SPAWN_PROFILE, SPAWN_PROFILES,
+  MALL_AREA_WEIGHTS, MALL_PLACEMENT, MALL_RING_AREA_WEIGHTS, MALL_RING_PLACEMENT, MALL_SHOP_WEIGHT,
   declaredSpawnContexts, eligibilityFailure, familyPool, markSpawnContext, spawnContextOf, spawnProfile, validateSpawnProfile,
   type FamilyEligibility, type SpawnProfile,
 } from '../src/ai/spawnTables';
@@ -45,7 +47,7 @@ import {HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules} from '../src/ai/
 import {patrolRouteM} from '../src/ai/hordePlace';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
 import {buildEnemyReference, ENEMY_LEVEL_ADAPTER} from '../../tools/pages/enemyReference';
-import {compartmentCensus, runCensus, stockedRate, summarize, type CensusSummary, type CompartmentCensus} from './helpers/materialCensus';
+import {compartmentCensus, holderTemplates, runCensus, simulatedStockedRate, stockedRate, summarize, type CensusSummary, type CompartmentCensus} from './helpers/materialCensus';
 import {layoutHolderDetails} from './helpers/lootEconomy';
 
 const MALL = lootProfile('mall');
@@ -94,12 +96,16 @@ describe('mall loot profile', () => {
     for (const [k, v] of Object.entries(BASE_TABLES)) expect((MALL.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
     expect(MALL.tables.salvage).toBe(MALL_SALVAGE);
     expect(MALL.tables.storageFill).toBe(MALL_STORAGE_FILL);
+    // task mall-round3-20261031 (lane SHOPS, R6): + the rare-gear PLACEMENT bias (where the ONE roll lands: themed shops); the gear
+    // roll itself (tables.gear: count / pieces) is still the base object above (tests/mall-themed-loot.test.ts)
+    expect(MALL.tables.gearPlace).toBe(MALL_GEAR_PLACE);
     expect(MALL.tables.floor.mall).toBe(MALL_FLOOR);
     for (const l of ['subway', 'office'] as const) {
       expect(PROFILES[l].tables).toBe(BASE_TABLES);
       expect(PROFILES[l].overrides).toEqual({});
       expect(BASE_TABLES.salvage).toBeUndefined();
       expect(BASE_TABLES.storageFill).toBeUndefined();
+      expect(BASE_TABLES.gearPlace).toBeUndefined();
     }
     // the salvage keys are real purposes / themes; every salvage row is a crafting material
     for (const k of Object.keys(MALL_SALVAGE.purposes ?? {})) expect(purposeById(k), `salvage purpose ${k}`).toBeDefined();
@@ -202,11 +208,30 @@ describe('normalised material census (placed + reachable, mall vs Office, same m
     expect(exMed.rate).toBeGreaterThan(0.3);
     expect(exMed.rate).toBeLessThan(0.55);
     // the commonly opened drawers / cupboards of shops and stock rooms each hold something often — never every one
+    // Task mall-round3 ci-followup (20261101): the per-kind floor (0.22; the tool chest 0.1) is checked on the 3-mall census when a kind
+    // has >= 24 sampled compartments. Round 3's women's store (in every mall) took the unit seed 222's clinic used to stand in, so the
+    // sample kept only 4 crash carts = 20 compartments: one compartment moves that rate by 5 points (0.20 measured), and the binomial
+    // sd at p ~ 0.3, n = 20 is ~0.10 — 20 compartments cannot carry a 0.22 floor. For a kind with 12-23 sampled compartments the SAME
+    // floor is enforced on a LARGE direct simulation of that kind's stocking through the real production path (items/loot.ts
+    // createHolderState: its own table roll + the mall storage fill + packing on its real surfaces, the census's own holder inputs —
+    // helpers/materialCensus.ts simulatedStockedRate, >= 2,000 holders on deterministic streams), and the small census sample must be
+    // binomially consistent with that simulated rate (within 3 sigma). The 0.22 contract is unchanged.
+    const SIM_HOLDERS = 2000;
+    const tpl = (k: string) => SEEDS.flatMap(s => holderTemplates(mall(s), k, a => !isExt(a)));
     for (const r of rows) {
       if (r.comps < 12) continue; // too few in a 3-mall sample for a rate
       if (r.k === 'medicineDrawerCabinet') { expect(r.rate, r.k).toBeLessThan(0.3); continue; } // 33 pill drawers each: the dressings guard
-      expect(r.rate, r.k).toBeGreaterThan(r.k === 'rollingToolChest' ? 0.1 : 0.22);
+      const floor = r.k === 'rollingToolChest' ? 0.1 : 0.22;
       expect(r.rate, r.k).toBeLessThan(0.75);
+      if (r.comps >= 24) { expect(r.rate, r.k).toBeGreaterThan(floor); continue; }
+      const sim = simulatedStockedRate(tpl(r.k), MALL, SIM_HOLDERS);
+      process.stdout.write(`[mall-profiles] ${r.k}: census ${r.stocked} / ${r.comps} = ${r.rate.toFixed(3)}; simulated ${sim.stocked} / ${sim.comps} = ${sim.rate.toFixed(3)} (${sim.holders} holders)\n`);
+      expect(sim.holders, `${r.k} simulated holders`).toBeGreaterThanOrEqual(SIM_HOLDERS);
+      expect(sim.rate, `${r.k} simulated stocked rate`).toBeGreaterThan(floor);
+      expect(sim.rate, `${r.k} simulated stocked rate`).toBeLessThan(0.75);
+      const sd = Math.sqrt(sim.rate * (1 - sim.rate) / r.comps);
+      expect(r.rate, `${r.k} census vs simulated (3 sigma)`).toBeGreaterThanOrEqual(sim.rate - 3 * sd);
+      expect(r.rate, `${r.k} census vs simulated (3 sigma)`).toBeLessThanOrEqual(sim.rate + 3 * sd);
     }
     // what the fill puts inside: mostly the mall's crafting materials and small themed items; ammo only by the gun safe's arms rule;
     // dressings only in medical storage
@@ -246,14 +271,24 @@ describe('mall spawn profile', () => {
     expect(P.families).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}));
     expect(P.families.map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
     expect(Object.fromEntries(P.families)).toMatchObject({blightbelly: 0.05, ratdog: 0.05, siren: MALL_SIREN_WEIGHT});
-    expect(MALL_SIREN_WEIGHT).toBe(0.8); // (the most the retail-room rule allows under cap 2: the placed share saturates at ~4.5 %)
+    expect(MALL_SIREN_WEIGHT).toBe(0.8); // (mall round 3, R8: kept — the Blightbelly / rat-dog draw bands keep their spawn indices)
     expect(P.rooms).toEqual({});
-    // the Siren: retail-floor shops only (never the station, an annex or a horde), the Office's gates, <= 2 per mall, zombie fallback; 30 m apart
+    // the Siren: retail-floor shops only (never the station, an annex or a horde), the Office's gates, <= 4 per mall (mall round 3, R8: the
+    // Office's cap), zombie fallback; 24 m apart (her hum's audible distance)
     expect(P.eligibility).toEqual({siren: MALL_SIREN_ELIGIBILITY});
-    expect(MALL_SIREN_ELIGIBILITY).toMatchObject({contexts: ['ring'], kinds: ['room'], minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 2, fallback: 'zombie'});
+    expect(MALL_SIREN_ELIGIBILITY).toMatchObject({contexts: ['ring'], kinds: ['room'], minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4, fallback: 'zombie'});
     for (const k of ['washroom', 'stair-core', 'storage', 'utility']) expect(MALL_SIREN_ELIGIBILITY.excludeRooms).toContain(k);
     expect(P.spacing).toEqual({siren: MALL_SIREN_SPACING});
-    expect(MALL_SIREN_SPACING.spacingM).toBe(30);
+    expect(MALL_SIREN_SPACING.spacingM).toBe(SIREN_HUM.maxDist);
+    expect(MALL_SIREN_SPACING.spacingM).toBe(24);
+    // (mall round 3, R8) retail-floor placement weights the shop sales floors; the station storey keeps the generic mall weights
+    expect(P.contexts.ring!.placement).toBe(MALL_RING_PLACEMENT);
+    expect(P.contexts.pit!.placement).toBe(MALL_PLACEMENT);
+    expect(MALL_RING_PLACEMENT).toEqual({...MALL_PLACEMENT, areaWeights: MALL_RING_AREA_WEIGHTS});
+    expect(MALL_RING_AREA_WEIGHTS.rules[0]).toMatchObject({when: {type: ['shop']}, weight: MALL_SHOP_WEIGHT});
+    expect(MALL_RING_AREA_WEIGHTS.rules.slice(1)).toEqual(MALL_AREA_WEIGHTS.rules);
+    expect(MALL_RING_AREA_WEIGHTS.otherwise).toBe(MALL_AREA_WEIGHTS.otherwise);
+    expect(MALL_SHOP_WEIGHT).toBe(6);
     // the horde pool: explicit (every registry family listed), ordinary zombies only, 5..20 per group, fewer groups, smaller budget,
     // route capacity and an out-of-sight start (lane PROFILES' MALL_HORDE_RULES)
     const H = P.horde!;
@@ -329,7 +364,7 @@ describe('mall spawn profile', () => {
       }
       expect(ambient.length).toBeLessThanOrEqual(P.budgets!.ambient.total);
       expect(ambient.every(z => (ENEMY_FAMILY_IDS as readonly string[]).includes(z.archetype ?? 'zombie'))).toBe(true);
-      // Sirens: drawn by the roll, eligible retail-floor shop / stock-room slots only, <= 2, >= 30 m apart; the post-pass is idempotent
+      // Sirens: drawn by the roll, eligible retail-floor shop / stock-room slots only, <= 4, >= 24 m apart (mall round 3, R8); the post-pass is idempotent
       const sirens = l.zombies.map((z, i) => [z, i] as const).filter(([z]) => z.archetype === 'siren');
       expect(sirens.length).toBeLessThanOrEqual(MALL_SIREN_ELIGIBILITY.maxPerLevel!);
       for (const [z, i] of sirens) {
@@ -457,9 +492,10 @@ describe('reference coverage (the generated pages document the mall automaticall
     const S = spawnProfile('mall');
     expect(m.total.mean).toBe((S.contexts.pit!.count[0] + S.contexts.pit!.count[1]) / 2 + MALL_RINGS * (S.contexts.ring!.count[0] + S.contexts.ring!.count[1]) / 2);
     expect(m.pool.rows.map(x => [x.family, x.weight])).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}).map(([f, w]) => [f, w]));
-    expect(m.pool.eligibility.map(e => [e.family, e.contexts, e.maxPerLevel, e.spacing?.metres])).toEqual([['siren', ['ring'], 2, 30]]);
-    expect(m.pool.eligibility[0].criteria.join(' ')).toMatch(/30 m/);
-    expect(m.knobs.find(k => k.what === 'spacing (siren, m)')!.value).toBe(30);
+    // (mall round 3, lane ENEMY R8: cap 4, 24 m — read from the live rule)
+    expect(m.pool.eligibility.map(e => [e.family, e.contexts, e.maxPerLevel, e.spacing?.metres])).toEqual([['siren', ['ring'], MALL_SIREN_ELIGIBILITY.maxPerLevel, MALL_SIREN_SPACING.spacingM]]);
+    expect(m.pool.eligibility[0].criteria.join(' ')).toMatch(new RegExp(`${MALL_SIREN_SPACING.spacingM} m`));
+    expect(m.knobs.find(k => k.what === 'spacing (siren, m)')!.value).toBe(MALL_SIREN_SPACING.spacingM);
     expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]]);
     expect(m.horde!.semantics.join(' ')).toMatch(new RegExp(`'${HORDE_CONTEXT}'`));
     expect(m.horde!.size).toMatchObject({lo: 5, hi: 20});

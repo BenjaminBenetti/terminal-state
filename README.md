@@ -49,11 +49,16 @@ Work in this Git repository. **After checks, commit and push changes to GitHub
 push. See [AGENTS.md](AGENTS.md). The workflow
 [`.github/workflows/game-build.yml`](.github/workflows/game-build.yml) runs on pushes
 to main, on **pull requests into main** (check `build`, required before merging) and
-on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off),
-`npm run build` (typecheck + build), `npm test`, workflow/packager checks and the
-portable CI packager. All third-party actions are pinned to verified
+on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off). Jobs run in
+parallel: six full-suite Vitest shards (`test (shard i/6)`, `vitest --shard`), `checks`
+(workflow/packager validators, `ci:test`) and `bundle` (`npm run build` = typecheck + build,
+then the portable CI packager; no tests). The required `build` check is a lightweight
+aggregate that always runs after all of them and fails unless every one succeeded and the
+shards' executed file lists cover the whole test inventory exactly once
+(`tools/release/test-shards.mjs`). All third-party actions are pinned to verified
 official-repository commit SHAs. Pull-request runs validate only: release artifacts
-are uploaded only by runs on main itself.
+are uploaded only by runs on main itself (by `bundle`), and are a release only when that
+commit's whole workflow, `build` included, succeeded.
 
 A successful run on main uploads **`terminal-state-web-<full commit SHA>`**, containing:
 

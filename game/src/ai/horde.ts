@@ -39,7 +39,7 @@ import type {Waypoint} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import type {MallPatrolNode} from '../gen/mall/mallTypes';
 import type {StationLayout} from '../gen/stationTypes';
-import {hearingMuffle, slabsBetween, type BrainOutput, type BrainWorld, type PatrolLink, type ZombieBrain} from './brain';
+import {ATRIUM_PERCEPTION, hearingMuffle, slabsBetween, type BrainOutput, type BrainWorld, type PatrolLink, type ZombieBrain} from './brain';
 import {groundOf} from './motor';
 import type {HordeGroupSpec, HordePatrolRules} from './hordeSpec';
 import {MALL_HORDE_RULES} from './hordeSpec';
@@ -111,7 +111,7 @@ export function hordeBehaviourNotes(speed: number): string[] {
     `Patrol intent: each group's anchor walks a real path-finder route (ladders excluded) from patrol node to patrol node at ${speed} m/s, pausing now and then; one route per group, never per member.`,
     `Formation: the leader (first living member) holds the anchor; the rest stand in staggered rows of 2 / 3 at ${A.rowSpacing} m of the anchor's own trail behind it, ±${A.latSpacing} m to the side (pulled in where a wall, railing, the void edge or a stair side is in the way), so the crowd bends round corners and files up stairs / escalators.`,
     `Cohesion: the anchor slows as its crowd falls behind (full pace up to ${A.lagOK} m of slot error at the 80th percentile, stopped at ${A.lagStop} m) and abandons a leg it stood on for ${A.stallGiveUp} s; members steer to their slots with their own motor (no teleport), follow the trail crumbs when cut off, and ask for one regroup path when far (${A.regroupM} m+); after ${A.regroupFails} failed regroups a member leaves the group and becomes an ordinary enemy.`,
-    `Perception: the ordinary enemy AI — a member that sees the player (or hears gunfire / is hit, or sees a light) breaks formation and chases / investigates on its own; its alert call is heard by group mates within ${A.alertCallM} m through the usual wall / slab muffle. There is no group-wide aggro.`,
+    `Perception: the ordinary enemy AI — a member that sees the player (or hears gunfire / is hit, or sees a light) breaks formation and chases / investigates on its own; its alert call is heard by group mates within ${A.alertCallM} m through the usual wall / slab muffle — after a sighting across the open atrium (the player on another storey) by at most ${ATRIUM_PERCEPTION.callCrossMax} of them, nearest first. There is no group-wide aggro.`,
     `While any member is engaged the group halts where it is; ${A.calmResume} s after the last one calms down it walks on, members returning to their slots after their usual search.`,
     `Performance: groups farther than ${A.farM} m think every ${A.farStride} frames (staggered), slot walk tests run every ${A.validateEvery} s per group, leg / regroup searches go through the path service (background frame-budget chunks when far and unseen), calm members beyond ${A.animFarM} m animate every ${A.animStride} frames.`,
     `Audio: at most one idle groan per group every ${A.vocalGap} s, under the global ${VOCAL_GATE.cap}-voice enemy vocal cap.`,
@@ -681,6 +681,9 @@ export class HordeDirector {
   /** QA counters. */
   alertsCalled = 0;
   callsHeard = 0;
+  /** Lane ENEMY (mall round 3, R2): calls heard after a cross-storey sighting, and mates the callCrossMax cap left in formation. */
+  crossCalls = 0;
+  crossCallsCapped = 0;
   groansAllowed = 0;
   groansDeferred = 0;
   thinks = 0;
@@ -728,12 +731,18 @@ export class HordeDirector {
   /**
    * A member just became alerted (saw the player: its brain's `alerted`): group mates within alertCallM hear its call through the
    * existing hearing rule (distance x wall / slab muffle; brain.hear) — never the whole group, never another storey through slabs.
+   * Lane ENEMY (mall round 3, R2): a sighting of a player on another storey (`targetY`) reaches at most ATRIUM_PERCEPTION.callCrossMax.
    */
-  alerted(b: ZombieBrain): void {
+  alerted(b: ZombieBrain, targetY?: number): void {
     const m = this.byBrain.get(b);
     if (!m || m.detached) return;
     this.alertsCalled++;
     const R = HORDE_AI.alertCallM;
+    // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): `targetY` = the sighted player's feet height. A sighting on ANOTHER
+    // storey (across the open atrium) is heard by at most ATRIUM_PERCEPTION.callCrossMax mates, nearest first — one glance down the
+    // void no longer sends the whole group running down; a same-storey call (or no targetY) is exactly the established one.
+    const across = targetY !== undefined && Math.abs(targetY - b.y) > ATRIUM_PERCEPTION.dy;
+    const heard: {ob: ZombieBrain; d: number; r: number}[] = [];
     for (const o of m.group.members) {
       const ob = o.brain;
       if (o === m || o.detached || !ob.alive || ob.state === 'chase' || ob.state === 'attack') continue;
@@ -742,9 +751,18 @@ export class HordeDirector {
       const los = this.levels.lineOfSight({x: b.x, y: b.y + 1.5, z: b.z}, {x: ob.x, y: ob.y + 1.5, z: ob.z});
       const r = R * hearingMuffle(los, slabsBetween(this.bases, b.y, ob.y));
       if (d > r) continue;
+      if (across) { heard.push({ob, d, r}); continue; }
       ob.hear(b.x, b.z, r, b.y);
       this.callsHeard++;
     }
+    if (!across) return;
+    heard.sort((p, q) => p.d - q.d); // stable: equal distances keep the member order
+    for (let k = 0; k < heard.length && k < ATRIUM_PERCEPTION.callCrossMax; k++) {
+      heard[k].ob.hear(b.x, b.z, heard[k].r, b.y);
+      this.callsHeard++;
+      this.crossCalls++;
+    }
+    this.crossCallsCapped += Math.max(0, heard.length - ATRIUM_PERCEPTION.callCrossMax);
   }
 
   /**

@@ -402,8 +402,10 @@ export class StationLighting {
         if (out <= 0.02) tmpColor.setRGB(0.035, 0.038, 0.04); // dead tube: dark grey glass
         else {
           const k = 0.12 + 0.88 * out;
-          // Tubes look near-white; a third of the light colour shows through.
-          tmpColor.setRGB(k * (0.65 + 0.35 * tr / mx), k * (0.65 + 0.35 * tg / mx), k * (0.65 + 0.35 * tb / mx));
+          // Tubes look near-white; a third of the light colour shows through. Task mall-round3-20261031 (lane LIGHT, R7): an
+          // off-colour tube (Fixture.tint: only the mall's walkway fixtures) shows two thirds of its colour.
+          const s = f.tint ? 0.65 : 0.35;
+          tmpColor.setRGB(k * (1 - s + s * tr / mx), k * (1 - s + s * tg / mx), k * (1 - s + s * tb / mx));
         }
         tubes.setColorAt(i, tmpColor);
         tubesDirty = true;

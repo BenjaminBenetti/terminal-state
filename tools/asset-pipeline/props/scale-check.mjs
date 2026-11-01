@@ -88,6 +88,8 @@ export async function loadRuntime() {
     `export {isContainerKind} from '${G}/items/loot';`,
     `export {isP7Kind, p7ModelKey, p7Spec, P7_FILES} from '${G}/gen/props07';`,
     `export {MODEL_FILES} from '${G}/assets/manifest';`,
+    // task mall-round3-20261031 (lane SHOPS, R4): mall kinds render office-<id> keys from assets/models/mall-<id>.glb (MALL_MODEL_FILES)
+    `export {MALL_MODEL_FILES} from '${G}/assets/mallAssets';`,
     // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): authored procedural purpose shapes (box parts) render too
     `export {purposePropShape, PURPOSE_ACCENT} from '${G}/gen/purposeShapes';`,
     `export {PURPOSE_PROP_KINDS, PURPOSE_MODEL_KEYS} from '${G}/gen/props';`,
@@ -116,7 +118,7 @@ export async function loadRuntime() {
 /** Runtime model file of a library key (manifest / office-<asset> / p7_<kind>), or null. */
 function modelFileOf(rt, key) {
   if (!key) return null;
-  let url = rt.MODEL_FILES[key]?.url ?? rt.P7_FILES[key]?.url ?? null;
+  let url = rt.MODEL_FILES[key]?.url ?? rt.P7_FILES[key]?.url ?? rt.MALL_MODEL_FILES?.[key]?.url ?? null;
   if (!url && key.startsWith('office-')) url = `assets/models/${key}.glb`; // OFFICE_MODEL_FILES / COMPANY_MODEL_FILES naming
   if (!url) return null;
   const f = path.join(PUBLIC, url);

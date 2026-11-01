@@ -25,6 +25,9 @@ const PROV = fs.existsSync(provPath) ? JSON.parse(fs.readFileSync(provPath, 'utf
   modelProof: {requested: {ai_model: string; model_type: string}};
   outputs: {id: string; code: string; model: string; modelType: string; tasks: {preview: string; refine: string}; credits: {preview: number | null; refine: number | null};
     output: {url: string; sha256: string; bytes: number; triangles: number; dims: number[]}; sizeM: number; sizeAxis: 'h' | 'w' | 'longest'; front: string}[];
+  // task mall-round3-20261031 (lane SHOPS, R4): accepted models outside the Track3 batches, own task / ledger (build-mall-track3.mjs EXTRA)
+  extraOutputs?: {id: string; code: string; task: string; model: string; modelType: string; tasks: {preview: string; refine: string}; credits: {preview: number | null; refine: number | null};
+    source: {sha256: string}; output: {url: string; sha256: string; bytes: number}; front: string}[];
 } : null;
 const ALLOW = new Map((JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]}).files.map(f => [f.path, f]));
 const sha = (b: Buffer) => crypto.createHash('sha256').update(b).digest('hex');
@@ -40,7 +43,8 @@ describe('mall assets registry (lane ASSETS)', () => {
       const buf = fs.readFileSync(path.join(PUB, a.url));
       expect(buf.length).toBe(a.bytes);
       expect(ALLOW.get(a.url)).toEqual({path: a.url, bytes: buf.length, sha256: sha(buf)});
-      const o = PROV?.outputs.find(x => x.id === id);
+      // (R4) an EXTRA asset (own task / ledger) carries the same model proof in its own record
+      const o = PROV?.outputs.find(x => x.id === id) ?? PROV?.extraOutputs?.find(x => x.id === id);
       expect(o, `${id} provenance`).toBeTruthy();
       expect(o!.output.sha256).toBe(sha(buf));
       expect(o!.model).toBe('meshy-t2.5');
@@ -82,7 +86,7 @@ describe('mall assets registry (lane ASSETS)', () => {
       const along = spec.sizeAxis === 'h' ? dims[1] : spec.sizeAxis === 'w' ? dims[0] : Math.max(...dims);
       expect(Math.abs(along - spec.sizeM)).toBeLessThan(3e-3);
       MALL_DIMS[id].forEach((v, k) => expect(Math.abs(v - dims[k])).toBeLessThan(1e-3));
-      expect(PROV!.outputs.find(o => o.id === id)!.front).toBe('-Z');
+      expect((PROV!.outputs.find(o => o.id === id) ?? PROV!.extraOutputs?.find(o => o.id === id))!.front).toBe('-Z');
     }
   });
 });

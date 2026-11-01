@@ -186,6 +186,8 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the per-compartment storage fill (LootTables.storageFill; mall only)
   STORAGE_FILL_CATS: 'economy.storageFill (default categories)', STORAGE_FILL_WEIGHTS: 'economy.storageFill (default category weights)',
   MALL_STORAGE_FILL: 'economy.storageFill (mall) + holder notes',
+  // task mall-round3-20261031 (lane SHOPS, R6): the mall's rare-gear placement bias (LootTables.gearPlace; surfaced on the rare-gear source)
+  MALL_GEAR_PLACE: 'special: rare gear (placement bias, mall)',
   // task mall-playtest-revision-20261031 (lane PROFILES, U10 follow-up): the fill's fallback categories and the themes they are stock in
   STORAGE_FILL_FALLBACK: 'economy.storageFill (default fallback categories) + holder notes', STORAGE_FILL_STOCK_THEMES: 'economy.storageFill (themes whose fallback categories are their stock)',
   // Track 2 (lane CONTENT): the service-annex loot context (ANNEX_STASH / ANNEX_PICKED and their rows are row tables: auto-detected)
@@ -1209,9 +1211,13 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     const den = w.reduce((s, x) => s + x[1], 0);
     const per = new Map<string, {pAny: number; mean: number}>();
     for (const {k, p} of dist) for (const r of halvingPicks(w, k)) { const e = per.get(r.id) ?? {pAny: 0, mean: 0}; e.pAny += p * r.pAny; e.mean += p * r.mean; per.set(r.id, e); }
+    // task mall-round3-20261031 (lane SHOPS, R6): levels whose tables carry a placement bias (LootTables.gearPlace: the mall's themed shops)
+    const biased = ls.filter(l => profiles.get(l)!.tables.gearPlace);
+    const gp = biased.length ? profiles.get(biased[0])!.tables.gearPlace! : undefined;
+    const bias = gp ? ` ${biased.join(' / ')}: the spot choice is weighted by room purpose and piece (LootTables.gearPlace — ${Object.keys(gp.purposes).length} shop purposes favoured for every piece, per-piece affinities for ${Object.keys(gp.items ?? {}).length} pieces: the clothing / womenswear / outdoors / sports / shoe / luggage / department stores and their stock rooms hold most of the level's gear; the count is unchanged).` : '';
     add({
       id: groups.size === 1 ? 'gear' : `gear:${ls.join('+')}`, family: 'gear', label: 'Rare gear (level-wide roll)', class: 'special', levels: ls,
-      summary: `ONE roll per logical level (key gear-roll:<level>; Office storeys never roll separately): count ~ Poisson(${g.mean}) capped at ${g.cap}, pieces drawn by weight with a repeat of the same piece half as likely each time; placed as floor pickups in back-of-house rooms >= ${GEAR_MIN_SPAWN_M} m from the spawn.`,
+      summary: `ONE roll per logical level (key gear-roll:<level>; Office storeys never roll separately): count ~ Poisson(${g.mean}) capped at ${g.cap}, pieces drawn by weight with a repeat of the same piece half as likely each time; placed as floor pickups in back-of-house rooms >= ${GEAR_MIN_SPAWN_M} m from the spawn.${bias}`,
       items: w.map(([itemId, weight]) => ({itemId, count: 1, weight, share: rd(weight / den), chance: rd(per.get(itemId)!.pAny),
         note: `first-pick share ${rd(weight / den)}; P(the level's roll includes it) = ${rd(per.get(itemId)!.pAny)} (exact, before placement); expected copies ${rd(per.get(itemId)!.mean)}`})),
       denominator: rd(den), distribution: dist.map(d => ({k: d.k, p: rd(d.p)})), expected: rd(expectation(dist)),
@@ -1221,8 +1227,9 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
         {what: 'cap', value: g.cap, at: T('GEAR_CAP_PER_LEVEL'), overrides: ['gear.cap', 'tables']},
         {what: 'piece weights', value: `${w.length} pieces`, at: T('GEAR_WEIGHTS'), overrides: ['gear.weight', 'tables']},
         {what: 'repeat halving (x0.5)', value: 0.5, at: B.src.at(F.gearLoot, 'rollLevelGear'), overrides: ['none']},
+        ...(gp ? [{what: `placement bias (${biased.join(' / ')})`, value: `${Object.keys(gp.purposes).length} purposes, ${Object.keys(gp.items ?? {}).length} pieces`, at: T('MALL_GEAR_PLACE'), overrides: ['tables'] as TuningKnob['overrides']}] : []),
       ],
-      at: [T('GEAR_LOOT'), B.src.at(F.gearLoot, 'rollLevelGear'), B.src.at(F.gearLoot, 'gearCountFor'), B.src.at(F.gearLoot, 'gearAreaWeight')],
+      at: [T('GEAR_LOOT'), B.src.at(F.gearLoot, 'rollLevelGear'), B.src.at(F.gearLoot, 'gearCountFor'), B.src.at(F.gearLoot, 'gearAreaWeight'), ...(gp ? [B.src.at(F.gearLoot, 'gearPlaceFactor')] : [])],
     });
   }
 

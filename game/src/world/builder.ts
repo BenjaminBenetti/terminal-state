@@ -17,7 +17,7 @@ import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
 import {ACCENT_COLORS, propShape, type ShapeMat} from '../gen/propShapes';
 import {isContainerKind} from '../items/loot';
-import type {Area, SignPlacement, StationLayout} from '../gen/station';
+import type {Area, LightPlacement, SignPlacement, StationLayout} from '../gen/station';
 import type {WorldMaterials, MatKey} from './materials';
 import {canvasTexture, signPlate} from './canvasTextures';
 import {companySignTexture, signStyleKey} from './companySigns'; // Task office-overhaul-20261030 (lane TENANTS)
@@ -118,6 +118,16 @@ export interface Fixture {
   phase: number;
   /** Current brightness 0..1 for emissive + pooled light. */
   level: number;
+  /** Task mall-round3-20261031 (lane LIGHT, R7): off-colour tube tint (LightPlacement.tint of a real fixture; absent elsewhere). */
+  tint?: readonly [number, number, number];
+}
+
+/**
+ * The runtime fixture of layout light i (`virtual` daylight sources: no output). Task mall-round3-20261031 (lane LIGHT, R7): a real
+ * fixture's tint (the mall's off-colour walkway tubes) reaches its tube / glow; every other fixture is the same object as before.
+ */
+export function layoutFixture(l: LightPlacement, i: number): Fixture {
+  return {x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.virtual ? 0 : l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1, ...(l.tint && !l.virtual ? {tint: l.tint} : {})};
 }
 
 export interface BuiltWorld {
@@ -655,7 +665,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // --- Light fixtures (model derivative) + emissive tubes ----------------------------------
   // Iteration 16 (WORLD-GEN): `virtual` lights (office daylight) bake into the field but show no fixture, tube or glow card.
-  const fixtures: Fixture[] = layout.lights.map((l, i) => ({x: l.x, y: l.y, z: l.z, broken: l.broken, flicker: l.flicker, warm: l.warm, dying: l.dying, power: l.virtual ? 0 : l.power, area: l.area, phase: i * 1.7, level: l.broken ? 0 : 1}));
+  const fixtures: Fixture[] = layout.lights.map(layoutFixture); // (round 3 lane LIGHT: + the off-colour tint of a real fixture)
   const lightMats = layout.lights.map(l => new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y, l.z), new THREE.Quaternion().setFromAxisAngle(UP, l.rot), l.virtual ? HIDDEN : new THREE.Vector3(1, 1, 1)));
   let tubes: THREE.InstancedMesh | null = null;
   // Task track3-eaton-centre-20261031 (lane ARCH): mall ring fixtures are square downlight cans (their tube = the can's lens).

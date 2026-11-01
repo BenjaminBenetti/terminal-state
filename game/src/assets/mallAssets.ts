@@ -21,7 +21,7 @@ export interface MallAssetEntry {
   bytes: number;
   /** Triangle count of the runtime derivative (0 while not delivered). */
   tris: number;
-  /** Attempt-manifest code (M01..M80). */
+  /** Attempt-manifest code (Track3 M01..M80; M81+ = round-3 EXTRA assets with their own task / ledger — build-mall-track3.mjs EXTRA). */
   code: string;
   /** Lazy model-library key (`office-<id>`). */
   key: string;
@@ -74,6 +74,7 @@ export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {
   'kiddie-ride': {url: 'assets/models/mall-kiddie-ride.glb', bytes: 201168, tris: 2519, code: 'M50', key: 'office-kiddie-ride'},
   'salon-styling-chair': {url: 'assets/models/mall-salon-styling-chair.glb', bytes: 178076, tris: 1977, code: 'M51', key: 'office-salon-styling-chair'},
   'bed-display': {url: 'assets/models/mall-bed-display.glb', bytes: 352088, tris: 2495, code: 'M52', key: 'office-bed-display'},
+  'mannequin-female': {url: 'assets/models/mall-mannequin-female.glb', bytes: 174764, tris: 3000, code: 'M81', key: 'office-mannequin-female'},
 };
 
 export const MALL_PART_ASSETS: Readonly<Record<string, MallPartEntry>> = {

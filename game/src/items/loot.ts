@@ -398,7 +398,16 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
   const r = holderRng(seed, index, kind);
   const raw = rollItems(r, kind, t, areaType, profile);
   const items = t.exact ? raw : scarce(raw, scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
-  const placed = packItems(items.map(e => e.itemId), surfaces, r, kind === 'crate' && r() < 0.5);
+  const ids = items.map(e => e.itemId), lying = kind === 'crate' && r() < 0.5;
+  let placed = packItems(ids, surfaces, r, lying);
+  // Mall round 3 CI follow-up: an EXACT table (the annex supply / scraps / stash / cache tables) is never empty, but the random yaw jitter
+  // can make a lot that fits square miss its surface (a 0.32 x 0.22 m med kit on a 0.24 m deep stock shelf fits only nearly square: an
+  // annex supply shelf rolled its one lot and stayed EMPTY). Only then — every rolled lot unplaced — the holder packs square instead, on
+  // its own stream; every other holder (partial drops included: "packing may rarely drop a lot") is unchanged.
+  if (t.exact && placed.length && placed.every(p => !p)) {
+    const sq = packItems(ids, surfaces, mulberry32(hashString(`loot:${kind}:${index}:square`, seed >>> 0)), lying, true);
+    if (sq.some(Boolean)) placed = sq;
+  }
   const lots: Lot[] = [];
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
   // (playtest revision: an exact annex table is the annex's whole budget — the mall's storage fill never tops it up, so a searched-clean

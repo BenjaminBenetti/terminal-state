@@ -64,7 +64,10 @@ zone, accounted separately:
   run's spawns with its context through `markSpawnContext`):
   - `pit` — the station storey (platforms, the Fountain court, station back of house), once per level: **U{3..5}** (was U{6..9}).
   - `ring` — one retail floor (courts, corridor wings, shops, stock rooms, service corridors), once per floor (three runs): **U{4..6}**
-    each (was U{7..10} on each of six rings). E = 4 + 3 × 5 = **19 ambient enemies** per level (measured 19.1, 17..21) = ~0.29 per
+    each (was U{7..10} on each of six rings). Placement `MALL_RING_PLACEMENT` (mall round 3, R8): the station storey's rules plus shop
+    sales floors (room type `shop`) at area weight **`MALL_SHOP_WEIGHT` = 6** (galleries 1, stock / back rooms 1.3) — a dead mall's
+    infected linger in the shops; of a run's ~15 retail slots ~8.8 now land in shops (was 3.2), 3.2 on the galleries (was 6.1), 1.9 in
+    stock rooms (was 3.5). The counts, the station storey (`MALL_PLACEMENT`), the family pool and the horde rules are unchanged. E = 4 + 3 × 5 = **19 ambient enemies** per level (measured 19.1, 17..21) = ~0.29 per
     100 m² of core — lighter than the Office's ~0.45, because the hordes concentrate the mall's threat. The old counts in the compact
     mall would have been 32.7 ambient + 38.3 horde = 1.11 enemies per 100 m² of core (2.5× the Office): re-proportioned, not crammed.
   - `service` — Track 2's per-annex zone budget `SERVICE_CONTEXT` (U{3..5} per annex), exactly as on the Subway / Office (see
@@ -80,11 +83,13 @@ zone, accounted separately:
     station storey, never a `service` annex, never a horde); area kind `room` — shop sales floors and stock rooms (never a court,
     corridor or gallery, a washroom passage, a service corridor or a closet); never a washroom, stair core, plant room (`storage` /
     `utility`) or elevator; room ≥ 4 × 4 m, a clear 1.5 × 1.5 m patch of its own floor, every doorway (shopfronts too) ≥ 3 m away,
-    a 2.5 m disc never seals passage, **at most 2 per mall** (was 4); an ineligible or over-cap draw becomes a zombie.
-  - `spacing.siren` = `MALL_SIREN_SPACING` (`FamilySpacing`): ≥ 30 m (straight 3D line) between the mall's Sirens. Track1's
+    a 2.5 m disc never seals passage, **at most 4 per mall** (the Office's cap; mall round 3 — it was 2 since the playtest revision); an
+    ineligible or over-cap draw becomes a zombie.
+  - `spacing.siren` = `MALL_SIREN_SPACING` (`FamilySpacing`): ≥ **24 m** (straight 3D line; mall round 3 — was 30 m) between the mall's
+    Sirens = her hum's audible distance (`audio/sfx.ts` `SIREN_HUM.maxDist`): two are never heard humming at once. Track1's
     `FamilyEligibility` has no spacing field, so this is a small mall-side post-pass, `applyFamilySpacing` (`game/src/ai/familySpacing.ts`),
     run once right after `assignEnemyArchetypes`: in spawn-index order an eligible Siren draw is placed only while fewer than the cap are
-    placed AND it is ≥ 30 m from every placed one (cap and spacing jointly), else a zombie. Pure, RNG-free, never touches horde members.
+    placed AND it is ≥ 24 m from every placed one (cap and spacing jointly), else a zombie. Pure, RNG-free, never touches horde members.
     Final user decision: rare Sirens appear in the Office and the mall, never the Subway, never in hordes; appearance locked; HP /
     attacks / timing unchanged by this retune.
   - **Census** (mall revision, 48 generated malls: 24 tuning seeds `9100 + 104729k` + 24 validation seeds `50021 + 7919k`; weight × cap ×
@@ -99,6 +104,19 @@ zone, accounted separately:
     Blightbelly / rat-dog bands is a Siren), so a ~5 % share every run (mean 0.9–1.0) is not reachable by the weight alone — it needs
     more eligible slots (a `shop` / `stock-room` room density modifier, or cap 3: 0.8 / cap 3 → 0.92, 4.8 %), and the 29 % of runs
     without any eligible retail room stay Siren-free whatever the weight.
+  - **Mall round 3 (R8)** — user: "I've done a bunch of mall runs, and not found a siren ever, confirm that siren can spawn on this level.
+    with chance similar to office space, i.e. average 2 per mall." The runtime path was confirmed end to end (`game/tests/mall-sirens.test.ts`:
+    a real generated mall's Sirens → the lazy `enemy_siren` key selected for the mall and shipped in the release allowlist → spawned →
+    a dormant `SirenActor` from the real `enemy-siren.glb` with her vein patch on her retail floor); nothing drops her. The cause was
+    rarity: on the current generator (48 malls, the seeds above) **mean 0.79, 37.5 % of malls none, max 2**; only ~1.1 of ~15 retail
+    slots passed her room gates (galleries 6.1 per run fail on kind, narrow 2–2.5 m stock rooms 3.6 on size, shopfront proximity 1.4).
+    Gates alone (re-run on the same layouts) top out near 1.1–1.25. Retune: shop-weighted retail placement (above), the Office's cap 4,
+    24 m spacing, every Office room gate and the 0.8 draw weight kept (the Blightbelly / rat-dog bands keep their spawn indices) →
+    **mean 1.96 Sirens per mall (Office 1.97), 8.3 % of malls none (Office 12.5 %), max 4**, histogram 0:4 1:12 2:16 3:14 4:2, tuning
+    half 2.17 / validation half 1.75, by floor 1 / 2 / 3 = 42 / 27 / 25, the station / annex / hordes 0; eligible slots 3.27 per run;
+    core ambient zombie 78.4 %, Siren 10.3 %, Blightbelly 5.5 %, rat/dog 5.8 % (~5.6 % Sirens of all core enemies with the hordes).
+    Evidence: `reference/tasks/mall-round3-20261031/lanes/ENEMY-evidence/r8-*.json`; `game/tests/mall-sirens.test.ts` keeps a 12-mall
+    sample (mean ≥ 1.5, ≤ 2 malls without one).
   - `budgets.ambient` (`AmbientBudget`): **total 23, per storey 6** (was 69 / 10) — validation keeps every context's count hi within the
     per-storey cap.
 - **Horde pool** — `horde` (`HordeRules`, `game/src/ai/hordeSpec.ts` `MALL_HORDE_RULES`, lane HORDE's model; values lane PROFILES):
@@ -119,6 +137,16 @@ zone, accounted separately:
   ≥ 28.1 m from the platform start, 0 non-zombie members. Finite: no spawner, no kill top-up, no revisit respawn; kills persist
   through the run memory like every enemy.
 - `rooms`: none (neutral by default).
+- **Open-atrium perception** (mall round 3, R2 — user: "When killing zombies at the subway terminal the open atrium often causes zombies
+  higher up to agro, causing them to run down in a big stream"; `game/src/ai/brain.ts` `ATRIUM_PERCEPTION`, mall only, across storeys
+  only, noticing only): an UNAWARE enemy notices a player on another storey within its sight range × 0.75 measured in 3D (shambler
+  13.5 m; the old test was the 18 m PLAN distance, so floor-3 zombies 21–23 m away noticed the pit), in its field of view, after 1 s
+  of continuous sight; gunfire heard through the void × 0.7 per storey (through slabs × 0.35 as before), at most 3 new cross-storey
+  responders per noise; a horde member's cross-storey sighting calls at most 2 mates (it called every mate within 6 m: up to 17
+  measured). Aware enemies keep the established sight (no blindness); the dormant Siren's wake rules are untouched. Deterministic
+  scenario, 12 malls × 90 s from the start (`reference/tasks/mall-round3-20261031/lanes/ENEMY-evidence`): roaming the platform 56 → 11
+  upper-floor responders, largest single-event group 12 → 1; firing 49 rifle shots 63 → 27, group 11 → 2 (on the round-2 placement,
+  before R8 moved ambient zombies into the shops: 100 → 15 and 98 → 47).
 
 **Densities** (10-mall census, per 100 m² of the matching floor): station ambient 0.30, retail ambient 0.29, horde 0.46 of retail floor,
 core total (ambient + hordes) 0.67 in that sample (every one of its runs drew 2 groups; with the 48-mall horde mean ~0.53) — the
@@ -129,7 +157,7 @@ six-ring mall: 0.26; the Office's ambient 0.45; annex `service` 0.23 of tunnel +
 `game.ts` `buildSection` spawns EVERY `layout.zombies` index not killed in the run memory (`run/memory.ts` `enemiesToSpawn`) — hordes and
 the annex's appended `service` spawns included — with no culling, frame-budget or distance gate (actors are added to the scene directly;
 the level culler registers only the holder / shelf-stock groups); the only skip is a Siren whose model is not loaded (counted, warned
-once, never a stand-in). `spawnEnemy` puts each body at `s.y ?? grid(s.level).floorAt(x, z)`. The test checks on generated malls that
+once, never a stand-in; mall round 3: `game/tests/mall-sirens.test.ts` builds the real Siren actors of a generated mall). `spawnEnemy` puts each body at `s.y ?? grid(s.level).floorAt(x, z)`. The test checks on generated malls that
 every placed spawn (station, retail, horde, annex) stands on walkable floor of its own storey with the runtime support floor at that
 height, and that the station storey and the annex hold stocked loot holders and loose finds.
 
@@ -326,13 +354,17 @@ tiers), `enemies/<level>.html` (profile, eligibility), `enemies/families.html` (
   and tagged, annex areas only, within the per-annex budget / keep-off / spacing, the core's spawns and families unchanged, no
   Siren in an annex, kills remembered. Stage 5 of the parity pins: the live layouts of annex seeds (core views unchanged).
 - Downstream: the Subway fingerprints (`game/tests/office-gen.test.ts`) and loot goldens (`game/tests/loot-golden.test.ts`).
-- `game/tests/mall-profiles.test.ts` — the mall profile (rewritten for the compact mall): the Track1 pool, Siren rule (cap 2),
+- `game/tests/mall-profiles.test.ts` — the mall profile (rewritten for the compact mall): the Track1 pool, Siren rule (cap 4 since mall round 3), the shop-weighted retail placement,
   spacing, horde pool, route capacity / out-of-sight start and budgets and their validation, the generator asking for exactly `pit` +
   `ring` (+ the annex `service` zone), context tags (`pit` / `ring` / `horde` / `service`), ambient counts per storey within contexts and
-  budgets, Sirens only in eligible retail-floor shops (≤ 2, ≥ 30 m apart), hordes of 5..20 ordinary zombies within budgets / route
+  budgets, Sirens only in eligible retail-floor shops (≤ 4, ≥ 24 m apart), hordes of 5..20 ordinary zombies within budgets / route
   capacity, ≥ 45 walking m and ≥ 28 m straight from the start, the runtime registration check (every placed spawn on a real floor of
   its storey; station / annex loot present), `applyFamilySpacing` semantics, determinism, and the reference's mall sections (dynamic
   identity). `game/tests/mall-horde.test.ts` — the horde model on a synthetic ring mall + the generated mall (placement, 120 s roam).
+  `game/tests/mall-sirens.test.ts` (mall round 3, R8) — the Siren runtime path on a real generated mall (lazy model key, release
+  allowlist, spawn, dormant actor from the real GLB, veins) and a 12-mall Siren-count sample. `game/tests/mall-atrium-aggro.test.ts`
+  (R2) — the open-atrium perception (ai/brain.ts `ATRIUM_PERCEPTION`: cross-storey notice / gunfire / horde-call rules) and a
+  before / after start-of-level scenario on generated malls (`game/tests/helpers/aggroSim.ts`).
 
 ```sh
 ./node_modules/.bin/vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism \

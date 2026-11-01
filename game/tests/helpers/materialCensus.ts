@@ -24,6 +24,13 @@ import {MATERIAL_IDS} from '../../src/items/craftMaterials';
 import {layoutHolderDetails} from './lootEconomy';
 import {FILL_ID_BASE, STORAGE_FILL_STATS, isContainerKind} from '../../src/items/loot'; // task mall-playtest-revision-20261031 (lane PROFILES): storage-fill accounting
 import {openableSpec} from '../../src/world/openablesSpec';
+// ci-followup 20261101: the direct stocking simulation (simulatedStockedRate) — the production holder roll + fill, the census's inputs
+import {Rng} from '../../src/core/rng';
+import {PROP_DEFS} from '../../src/gen/props';
+import {cutSurfaces} from '../../src/gen/props07';
+import {createHolderState, type HolderKind, type Lot} from '../../src/items/loot';
+import {holderSurfaces, type Dims, type Surface} from '../../src/items/lootLayout';
+import {surfaceOpts} from './lootEconomy';
 
 export const CENSUS_CATS = ['food', 'drink', 'med', 'ammo', 'battery', 'flare', 'material', 'weapon', 'gear', 'other'] as const;
 export type CensusCat = (typeof CENSUS_CATS)[number];
@@ -229,22 +236,62 @@ export function compartmentCensus(layout: StationLayout, profile: LootProfile, k
   for (const h of layoutHolderDetails(layout, profile)) {
     if (!keep(layout.areas[h.prop.area])) continue;
     const kind = h.kind as string;
-    const single = !openableSpec(kind) && isContainerKind(kind);
-    const comps = new Set<number>();
-    for (const s of h.surfaces) { const c = s.part ?? (single ? -1 : undefined); if (c !== undefined) comps.add(c); }
-    if (!comps.size) continue;
+    const c = stockedComps(kind, h.surfaces, h.lots);
+    if (!c.comps) continue;
     const e = (out.byKind[kind] ??= {holders: 0, comps: 0, stocked: 0, fillOnly: 0});
     e.holders++;
-    for (const c of comps) {
-      e.comps++;
-      const lots = h.lots.filter(l => single || l.part === c);
-      if (!lots.length) continue;
-      e.stocked++;
-      if (lots.every(l => l.id % 1000 >= FILL_ID_BASE)) e.fillOnly++;
-    }
-    for (const l of h.lots) if (l.id % 1000 >= FILL_ID_BASE) { const c = censusCat(l.itemId); out.fillUnits[c] += l.count; const k = (out.fillByKind[kind] ??= {}); k[c] = (k[c] ?? 0) + l.count; }
+    e.comps += c.comps; e.stocked += c.stocked; e.fillOnly += c.fillOnly;
+    for (const l of h.lots) if (l.id % 1000 >= FILL_ID_BASE) { const cat = censusCat(l.itemId); out.fillUnits[cat] += l.count; const k = (out.fillByKind[kind] ??= {}); k[cat] = (k[cat] ?? 0) + l.count; }
   }
   return out;
+}
+
+/**
+ * The compartments of ONE holder and how many hold a lot (the census rule: a compartment = a surface part; a single-compartment
+ * container without an openable spec = one; `fillOnly` = stocked by the storage fill alone). Shared by compartmentCensus and
+ * simulatedStockedRate so both count the same way.
+ */
+export function stockedComps(kind: string, surfaces: readonly Surface[], lots: readonly Lot[]): {comps: number; stocked: number; fillOnly: number} {
+  const single = !openableSpec(kind) && isContainerKind(kind);
+  const set = new Set<number>();
+  for (const s of surfaces) { const c = s.part ?? (single ? -1 : undefined); if (c !== undefined) set.add(c); }
+  let stocked = 0, fillOnly = 0;
+  for (const c of set) {
+    const mine = lots.filter(l => single || l.part === c);
+    if (!mine.length) continue;
+    stocked++;
+    if (mine.every(l => l.id % 1000 >= FILL_ID_BASE)) fillOnly++;
+  }
+  return {comps: set.size, stocked, fillOnly};
+}
+
+/** A holder as the census meets it: its kind, its loot key (purpose / room type) and its real surfaces (openable spec + cuts). */
+export interface HolderTemplate { kind: string; areaType: string; surfaces: readonly Surface[] }
+/** The census inputs of every holder of `kind` in a layout (the same surfaces / loot key layoutHolderDetails rolls with). */
+export function holderTemplates(layout: StationLayout, kind: string, keep: (a: Area | undefined) => boolean = () => true): HolderTemplate[] {
+  const def = (PROP_DEFS as unknown as Record<string, Dims | undefined>)[kind];
+  if (!def) return [];
+  const base = holderSurfaces(kind as never, def, surfaceOpts());
+  return layout.props.filter(p => p.kind === kind && keep(layout.areas[p.area])).map(p => {
+    const a = layout.areas[p.area];
+    return {kind, areaType: p.purpose ?? a?.purpose ?? a?.type ?? 'default', surfaces: cutSurfaces(base, p.cut)};
+  });
+}
+/**
+ * Task mall-round3 ci-followup (20261101): a LARGE direct simulation of a holder kind's stocking through the REAL production path —
+ * items/loot.ts createHolderState (the holder's own table roll + the level's per-compartment storage fill + packing on its real
+ * surfaces) — over `n` holders cycling `templates`, each on its own deterministic stream (seed from a fixed Rng, its own index).
+ */
+export function simulatedStockedRate(templates: readonly HolderTemplate[], profile: LootProfile, n: number, seed = 20261101): {holders: number; comps: number; stocked: number; rate: number} {
+  const rng = new Rng(seed);
+  let comps = 0, stocked = 0;
+  for (let i = 0; i < n && templates.length; i++) {
+    const t = templates[i % templates.length];
+    const st = createHolderState(rng.int(1, 0x7ffffffe), i, t.kind as HolderKind, t.areaType, t.surfaces, undefined, profile);
+    const c = stockedComps(t.kind, t.surfaces, st.lots);
+    comps += c.comps; stocked += c.stocked;
+  }
+  return {holders: templates.length ? n : 0, comps, stocked, rate: comps ? stocked / comps : 0};
 }
 
 /** Stocked share of the compartments of `kinds` (all kinds when absent) over several censuses. */

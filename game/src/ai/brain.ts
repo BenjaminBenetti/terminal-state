@@ -135,6 +135,12 @@ export interface BrainWorld {
    * materially keeps the current route a little longer (never within ATRIUM_CHASE.nearM). Absent: the established chase, unchanged.
    */
   atrium?: boolean;
+  /**
+   * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium NOTICE rule (ATRIUM_PERCEPTION: an unaware enemy and a
+   * player on another storey — 3D range, dwell). The game sets it together with `atrium` (layout.mall only); separate so the Node
+   * aggro scenario can compare the rule off / on with the atrium chase rules unchanged. Absent: the established sight.
+   */
+  atriumNotice?: boolean;
 }
 
 export interface BrainOutput {
@@ -169,6 +175,85 @@ export function slabsBetween(bases: readonly number[], ya: number, yb: number): 
 export function hearingMuffle(los: boolean, slabs: number): number {
   if (los) return 1;
   return slabs > 0 ? HEARING.slab ** slabs : HEARING.wall;
+}
+
+/**
+ * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2). User (mall round 3): "slight agro issue at the start of the level. When
+ * killing zombies at the subway terminal the open atrium often causes zombies higher up to agro, causing them to run down in a big
+ * stream. We might need better line of sight checks before agro-ing or something."
+ *
+ * Measured cause (deterministic Node scenario on 12 generated malls, tests/mall-atrium-aggro.test.ts; lanes/ENEMY.notes): the
+ * established perception treats the open atrium like open floor. (1) SIGHT: the range test is the PLAN distance (18 m), so an idle
+ * zombie 15 m up on floor 3 noticed a player in the pit 21-23 m away (3D) the moment it stood by the void, and the 5 m all-round
+ * awareness was plan distance too (anyone right above saw straight down); (2) GUNFIRE: a listener with a sight line through the void
+ * heard a shot at full loudness (rifle 30 m, shotgun 38 m: zombies two floors up at 26-28 m answered); (3) HORDE CALLS: a single
+ * member's sighting across the void called every mate within 6 m — the whole group (up to 17 measured) ran down at once.
+ *
+ * OPEN-ATRIUM rules — only in an open-atrium level (BrainWorld.atriumNotice / alertListeners `atrium` / HordeDirector.alerted's
+ * `targetY`: the game passes them only for a layout with `mall`; the Subway and the Office never see them), only ACROSS STOREYS (feet more than `dy` apart: an escalator rider half
+ * a storey away is still "the same floor"), and only for NOTICING (an enemy already aware of the player — chasing / searching —
+ * keeps the established sight; nobody that genuinely sees the player goes blind):
+ *  - sight: an UNAWARE enemy notices a player on another storey within sightRange x `noticeFrac` measured in 3D (eye to eye:
+ *    shambler 13.5 m, coated 12, rat/dog 15), inside its usual field of view (1.3 rad) unless within `closeM` (3D), with a clear
+ *    3D sight line — and only after keeping the player in view for `dwellS` s (a glance down through the void is not a sighting);
+ *  - gunfire: a listener on another storey that hears the shot THROUGH the open void (a sight line, no slab between) hears it
+ *    x `hearOpen` per storey between (rifle 30 m: floor 1 21 m, floor 2 14.7 m, floor 3 10.3 m — the pit is 15 m below it) — some
+ *    sound carries up the atrium, not the whole mall; through slabs the established x0.35 per slab still applies. Of the listeners
+ *    on other storeys (through the void or a slab) a single noise would newly send hunting, only the `hearCrossMax` nearest react (a
+ *    crowd joins shot by shot, never all at once from one shot: measured, a horde walking over the station heard one shot through
+ *    the floor slab and 7 of its members came down together);
+ *  - horde call (ai/horde.ts HordeDirector.alerted): a member that noticed the player on ANOTHER storey calls at most
+ *    `callCrossMax` mates (the nearest within the usual call radius); a same-storey call is unchanged.
+ * Attack timing / damage / HP, the Siren's dormant wake (proximity / flashlight / damage — she ignores hearing while dormant),
+ * Blightbelly burst and rat/dog mechanics, and horde composition are untouched.
+ */
+export const ATRIUM_PERCEPTION = {
+  /** Feet heights farther apart than this (m) are different storeys (STOREY 5 m; mid-escalator 2.5 m is not). */
+  dy: 3,
+  /** Unaware cross-storey notice range = the enemy's sightRange x this, measured in 3D. */
+  noticeFrac: 0.75,
+  /** Within this 3D distance (m) the field of view does not matter (the base brain's 5 m all-round awareness, but in 3D). */
+  closeM: 5,
+  /** Continuous sight (s) an unaware enemy needs to notice a player on another storey. */
+  dwellS: 1.0,
+  /** Gunfire heard across storeys through the open void (sight line, no slab): radius x hearOpen^storeys. */
+  hearOpen: 0.7,
+  /** At most this many NEW cross-storey responders per noise (nearest first). */
+  hearCrossMax: 3,
+  /** A horde member that noticed the player on another storey calls at most this many mates (nearest first). */
+  callCrossMax: 2,
+} as const;
+
+/** Brain states a heard noise turns into a chase (ZombieBrain.hear). */
+const HEAR_TURNS: ReadonlySet<BrainState> = new Set<BrainState>(['idle', 'wander', 'search', 'investigate', 'patrol']);
+
+/**
+ * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): Game.alertZombies' listener loop, moved here verbatim so the Node
+ * aggro scenario (tests/helpers/aggroSim.ts) runs the game's own rule. A noise of loudness `radius` at `src` (feet): every living
+ * enemy within the 3D radius hears it muffled by hearingMuffle(los(b), slabs between the feet heights; `bases` null = one level).
+ * `atrium` (open-atrium levels only): listeners on another storey with a sight line through the void use ATRIUM_PERCEPTION.hearOpen
+ * per storey (through slabs: the established muffle), and of ALL the listeners on other storeys that would newly start hunting at
+ * most hearCrossMax react (nearest first). Without `atrium`: exactly the established loop.
+ */
+export function alertListeners(brains: Iterable<ZombieBrain>, src: {x: number; y: number; z: number}, radius: number, los: (b: ZombieBrain) => boolean, bases: readonly number[] | null, atrium = false): void {
+  let cross: {b: ZombieBrain; d: number; r: number}[] | null = null;
+  for (const b of brains) {
+    const d = Math.hypot(b.x - src.x, b.z - src.z, b.y - src.y);
+    if (!b.alive || d > radius) continue;
+    const seen = los(b), slabs = bases ? slabsBetween(bases, src.y, b.y) : 0;
+    if (atrium && slabs > 0 && Math.abs(b.y - src.y) > ATRIUM_PERCEPTION.dy) {
+      // another storey: through the open void (a sight line) x hearOpen per storey; through the slabs the established x0.35 each
+      const r = radius * (seen ? ATRIUM_PERCEPTION.hearOpen ** slabs : hearingMuffle(false, slabs));
+      if (d > r) continue;
+      if (HEAR_TURNS.has(b.state)) (cross ??= []).push({b, d, r}); // would newly start hunting: capped below
+      else b.hear(src.x, src.z, r, src.y); // already hunting (its last known spot moves) / dormant / climbing: as always
+      continue;
+    }
+    b.hear(src.x, src.z, radius * hearingMuffle(seen, slabs), src.y);
+  }
+  if (!cross) return;
+  cross.sort((p, q) => p.d - q.d); // stable: equal distances keep the enemy order
+  for (let k = 0; k < cross.length && k < ATRIUM_PERCEPTION.hearCrossMax; k++) cross[k].b.hear(src.x, src.z, cross[k].r, src.y);
 }
 
 export class ZombieBrain {
@@ -217,6 +302,8 @@ export class ZombieBrain {
   private plannedGoal: [number, number, number] | null = null;
   private plannedT = 0;
   throttled = 0;
+  /** Lane ENEMY (mall round 3, R2): continuous cross-storey sight (s) of an unaware enemy in an open-atrium level (ATRIUM_PERCEPTION.dwellS). */
+  noticeT = 0;
 
   constructor(readonly type: ZombieType, public x: number, public z: number, public yaw: number, readonly stats: ZombieStats = ZOMBIE_STATS[type]) {
     this.hp = stats.hp;
@@ -297,9 +384,12 @@ export class ZombieBrain {
     return false;
   }
 
-  private sees(w: BrainWorld): boolean {
-    if (!w.playerAlive) return false;
+  private sees(w: BrainWorld, dt: number): boolean {
+    if (!w.playerAlive) { this.noticeT = 0; return false; }
     const dx = w.px - this.x, dz = w.pz - this.z;
+    // lane ENEMY (mall round 3, R2): an unaware enemy and a player on another storey of an open-atrium level (ATRIUM_PERCEPTION)
+    if (w.atriumNotice === true && !this.aware && w.py !== undefined && Math.abs(w.py - this.y) > ATRIUM_PERCEPTION.dy) return this.noticeAcross(w, dx, dz, dt);
+    this.noticeT = 0;
     const d = Math.hypot(dx, dz);
     if (d > this.stats.sightRange) return false;
     if (d > 2.5) {
@@ -308,6 +398,24 @@ export class ZombieBrain {
       if (!this.aware && a > 1.3 && d > 5) return false;
     }
     return w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
+  }
+
+  /**
+   * Lane ENEMY (mall round 3, R2; ATRIUM_PERCEPTION): an UNAWARE enemy noticing a player on another storey of an open-atrium level —
+   * 3D distance within sightRange x noticeFrac, the usual 1.3 rad field of view beyond closeM (3D), a clear 3D sight line, held
+   * for dwellS s of continuous sight (any frame without it starts the count again).
+   */
+  private noticeAcross(w: BrainWorld, dx: number, dz: number, dt: number): boolean {
+    const A = ATRIUM_PERCEPTION, d = Math.hypot(dx, dz, (w.py ?? this.y) - this.y);
+    let ok = d <= this.stats.sightRange * A.noticeFrac;
+    if (ok && d > A.closeM) {
+      const ang = Math.atan2(dx, dz) - this.yaw;
+      ok = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang))) <= 1.3;
+    }
+    if (ok) ok = w.los(this.x, this.z, w.px, w.pz, this.y, w.py);
+    if (!ok) { this.noticeT = 0; return false; }
+    this.noticeT += dt;
+    return this.noticeT >= A.dwellS;
   }
 
   private steerTo(w: BrainWorld, tx: number, tz: number, out: BrainOutput): boolean {
@@ -364,7 +472,7 @@ export class ZombieBrain {
     this.attackCd = Math.max(0, this.attackCd - dt);
     this.pathFailT = Math.max(0, this.pathFailT - dt);
     if (this.state === 'dead') { out.anim = 'Death'; return out; }
-    const sees = this.sees(w);
+    const sees = this.sees(w, dt);
     const distP = Math.hypot(w.px - this.x, w.pz - this.z);
     if (sees) {
       if (!this.aware) out.alerted = true;

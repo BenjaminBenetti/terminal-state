@@ -18,6 +18,7 @@ import {fogCullDistance} from './levelCulling';
 import type {MallArch} from './mallArch';
 import {skylightStats} from './mallSkylight';
 import {mallSkyTune, type MallSkyTune} from './mallExterior'; // task mall-playtest-revision (U02)
+import {AD_GLOW} from './mallAds'; // task mall-round3 (lane SHOPS, R5): the ads' backlight gain (QA tune)
 
 /** The mall's scene fog (FogExp2) and camera far plane. */
 export const MALL_FOG = {density: 0.0115, color: 0x3a403c, far: 250};
@@ -171,12 +172,20 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
     mallSkylight: () => skylightStats(),
     // task mall-playtest-revision (lane ARCH): U02 exterior murk / gas tuning (uniforms only) and the D06 ads drawn
     mallSky: (o: MallSkyTune = {}) => mallSkyTune(o),
-    mallAds: () => {
+    // (task mall-round3, lane SHOPS R5: + {glow} tunes the backlight gain; + per slot / storey, lit faces, atlas pages, the cart headers)
+    mallAds: (o: {glow?: number} = {}) => {
       const a = game.world?.mallArch;
       if (!a) return null;
-      const by: Record<string, number> = {};
-      for (const q of a.ads) by[`${q.kind}:${q.program}`] = (by[`${q.kind}:${q.program}`] ?? 0) + 1;
-      return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, by, first: a.ads.slice(0, 6).map(q => ({kind: q.kind, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2)}))};
+      if (typeof o.glow === 'number' && Number.isFinite(o.glow)) AD_GLOW.value = Math.max(0, o.glow);
+      const by: Record<string, number> = {}, slot: Record<string, number> = {}, level: Record<string, number> = {};
+      for (const q of a.ads) {
+        by[`${q.kind}:${q.program}`] = (by[`${q.kind}:${q.program}`] ?? 0) + 1;
+        slot[q.slot ?? q.kind] = (slot[q.slot ?? q.kind] ?? 0) + 1;
+        level[`L${q.level}`] = (level[`L${q.level}`] ?? 0) + 1;
+      }
+      const at = (q: (typeof a.ads)[number]) => ({kind: q.kind, slot: q.slot, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), glow: q.glow});
+      return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, lit: a.stats.litAds, pages: a.stats.adPages, meshes: a.stats.adMeshes, textureMB: +a.stats.adTextureMB.toFixed(1), glow: AD_GLOW.value,
+        by, slot, level, first: a.ads.slice(0, 6).map(at), carts: a.ads.filter(q => q.kind === 'cart').map(at), menus: a.ads.filter(q => q.kind === 'menu').map(at)};
     },
     mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null,
       occlusionCulled: game.world?.culler?.occlusionCulled ?? null, occlusion: game.world?.culler?.occlusion ?? null}), // (+ slabCulled: lane PERF; + occlusion: task mall-round2 lane PERF)

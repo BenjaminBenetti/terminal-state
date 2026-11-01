@@ -20,7 +20,8 @@ export function hordeQaApi(game: Game, lookAt: (x: number, y: number, z: number)
       if (!H) return {hordes: false, placed: game.layout?.hordes?.length ?? 0};
       return {
         hordes: true, placed: game.layout.hordes?.length ?? 0, time: r2(H.time),
-        counters: {thinks: H.thinks, alertsCalled: H.alertsCalled, callsHeard: H.callsHeard, groansAllowed: H.groansAllowed, groansDeferred: H.groansDeferred},
+        // (mall round 3, lane ENEMY R2: + crossCalls / crossCallsCapped — calls after a sighting across the atrium, capped at callCrossMax)
+        counters: {thinks: H.thinks, alertsCalled: H.alertsCalled, callsHeard: H.callsHeard, crossCalls: H.crossCalls, crossCallsCapped: H.crossCallsCapped, groansAllowed: H.groansAllowed, groansDeferred: H.groansDeferred},
         player: {x: r2(p.x), y: r2(p.y), z: r2(p.z)},
         groups: H.summary({x: p.x, y: p.y, z: p.z}),
         tuning: HORDE_AI,

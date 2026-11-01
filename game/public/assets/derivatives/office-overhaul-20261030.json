@@ -7178,9 +7178,9 @@
    "output": {
     "file": "game/public/assets/models/office-bakery-case.glb",
     "url": "assets/models/office-bakery-case.glb",
-    "sha256": "c48e415b93094d81429962f6c53b68cc753201355b17298b38d01d58b3408ae0",
-    "bytes": 333084,
-    "triangles": 1343,
+    "sha256": "da2f2d90a7d9a19f360ac148435baabb83bcdb5733d750ae7d9c3942e7539133",
+    "bytes": 333300,
+    "triangles": 1331,
     "dims": [
      1.9453,
      1.35,
@@ -7199,7 +7199,7 @@
     "other": 512,
     "jpegQuality": 85
    },
-   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.2158 to 1.35 m (h), grounded / centred again",
+   "transform": "rotateY(0deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices; lane FURN: loose clutter separated, then furniture-only rescale x1.2158 to 1.35 m (h), grounded / centred again; coplanar duplicate layers reduced to one (lane FIX R3, lib/coplanar-dedupe.mjs)",
    "front": "-Z",
    "up": "+Y",
    "review": {
@@ -7272,6 +7272,226 @@
      0.676,
      0.852
     ],
+    "edits": {
+     "coplanarDedupe": [
+      {
+       "axis": 1,
+       "facing": 1,
+       "keep": "larger",
+       "box": {
+        "min": [
+         -0.7545,
+         1.03,
+         -0.245
+        ],
+        "max": [
+         0.7545,
+         1.0425,
+         0.58
+        ]
+       },
+       "planes": [
+        {
+         "at": 1.03296,
+         "front": 2,
+         "clipped": 0,
+         "dropped": 0,
+         "opposite": 4,
+         "oppositeDropped": 4,
+         "oppositeClipped": 0,
+         "overlapM2": 1.22864
+        }
+       ],
+       "trianglesIn": 6,
+       "frontKept": 2,
+       "frontClipped": 0,
+       "frontDropped": 0,
+       "oppositeDropped": 4,
+       "piecesAdded": 0,
+       "overlapRemovedM2": 1.22864,
+       "clipOpposite": true,
+       "oppositeClipped": 0,
+       "minAxisCos": 0.99,
+       "slab": [
+        1.03,
+        1.0425
+       ]
+      },
+      {
+       "axis": 1,
+       "facing": 1,
+       "keep": "larger",
+       "box": {
+        "min": [
+         -0.7545,
+         0.819,
+         -0.245
+        ],
+        "max": [
+         0.7545,
+         0.8255,
+         0.58
+        ]
+       },
+       "planes": [
+        {
+         "at": 0.82049,
+         "front": 2,
+         "clipped": 0,
+         "dropped": 0,
+         "opposite": 4,
+         "oppositeDropped": 4,
+         "oppositeClipped": 0,
+         "overlapM2": 1.2298
+        }
+       ],
+       "trianglesIn": 6,
+       "frontKept": 2,
+       "frontClipped": 0,
+       "frontDropped": 0,
+       "oppositeDropped": 4,
+       "piecesAdded": 0,
+       "overlapRemovedM2": 1.2298,
+       "clipOpposite": true,
+       "oppositeClipped": 0,
+       "minAxisCos": 0.99,
+       "slab": [
+        0.819,
+        0.8255
+       ]
+      },
+      {
+       "axis": 2,
+       "facing": -1,
+       "keep": "larger",
+       "box": {
+        "min": [
+         -0.78,
+         0.735,
+         -0.2145
+        ],
+        "max": [
+         0.78,
+         0.829,
+         -0.2085
+        ]
+       },
+       "planes": [
+        {
+         "at": -0.21264,
+         "front": 2,
+         "clipped": 0,
+         "dropped": 0,
+         "opposite": 3,
+         "oppositeDropped": 3,
+         "oppositeClipped": 0,
+         "overlapM2": 0.13917
+        }
+       ],
+       "trianglesIn": 5,
+       "frontKept": 2,
+       "frontClipped": 0,
+       "frontDropped": 0,
+       "oppositeDropped": 3,
+       "piecesAdded": 0,
+       "overlapRemovedM2": 0.13917,
+       "clipOpposite": true,
+       "oppositeClipped": 0,
+       "minAxisCos": 0.99,
+       "slab": [
+        -0.2145,
+        -0.2085
+       ]
+      },
+      {
+       "axis": 2,
+       "facing": -1,
+       "keep": "larger",
+       "box": {
+        "min": [
+         -0.78,
+         0.95,
+         -0.2145
+        ],
+        "max": [
+         0.78,
+         1.0415,
+         -0.2085
+        ]
+       },
+       "planes": [
+        {
+         "at": -0.2113,
+         "front": 2,
+         "clipped": 0,
+         "dropped": 0,
+         "opposite": 2,
+         "oppositeDropped": 2,
+         "oppositeClipped": 0,
+         "overlapM2": 0.13588
+        }
+       ],
+       "trianglesIn": 4,
+       "frontKept": 2,
+       "frontClipped": 0,
+       "frontDropped": 0,
+       "oppositeDropped": 2,
+       "piecesAdded": 0,
+       "overlapRemovedM2": 0.13588,
+       "clipOpposite": true,
+       "oppositeClipped": 0,
+       "minAxisCos": 0.99,
+       "slab": [
+        -0.2145,
+        -0.2085
+       ]
+      },
+      {
+       "axis": 2,
+       "facing": -1,
+       "keep": "larger",
+       "box": {
+        "min": [
+         -0.9105,
+         1.2545,
+         -0.3003
+        ],
+        "max": [
+         0.9205,
+         1.2832,
+         -0.2969
+        ]
+       },
+       "planes": [
+        {
+         "at": -0.29811,
+         "front": 3,
+         "clipped": 0,
+         "dropped": 0,
+         "opposite": 2,
+         "oppositeDropped": 2,
+         "oppositeClipped": 1,
+         "overlapM2": 0.04414
+        }
+       ],
+       "trianglesIn": 5,
+       "frontKept": 3,
+       "frontClipped": 0,
+       "frontDropped": 0,
+       "oppositeDropped": 2,
+       "piecesAdded": 3,
+       "overlapRemovedM2": 0.04414,
+       "clipOpposite": true,
+       "oppositeClipped": 1,
+       "minAxisCos": 0.99,
+       "slab": [
+        -0.3003,
+        -0.2969
+       ]
+      }
+     ],
+     "coplanarDedupeTask": "mall-round3-20261031 (lane FIX, R3): coplanar / crossing double sheets of the two display shelves (one up-facing layer each), their front lips and the band over the inner pane (one customer-facing layer each)"
+    },
     "glass": {
      "tris": 105,
      "area": 2.6748,

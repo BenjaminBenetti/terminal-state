@@ -413,24 +413,67 @@ function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights:
     const key = `${lower}-${upper}`;
     let e = pairs.get(key);
     if (!e) pairs.set(key, (e = {L: lists(), lower, upper}));
-    buildEscalator(e.L, r, q);
+    buildEscalator(e.L, r, q, true);
   }
   for (const [key, e] of pairs) emitLists(group, e.L, mats, `mall-escalators-${key}`, [e.lower, e.upper]);
+}
+
+/**
+ * Newel-to-newel extent of the escalator over flight `r` along its axis: the top newel at the lane rect's start (the box mouth) +
+ * ESC.newelTop, the bottom newel ESC.newelBottom beyond the flight's end (buildEscalator; the mall's balustrade trimming, task
+ * mall-round3-20261031 lane FIX R1).
+ */
+export function escalatorExtent(r: Ramp): {sTop: number; sBot: number} {
+  const axisX = r.axis === 'x';
+  const dir = Math.sign(r.s1 - r.s0) || 1;
+  const rectLo = (axisX ? r.x : r.y) * CELL;
+  const lead = Math.abs(r.s0 - (dir > 0 ? rectLo : rectLo + (axisX ? r.w : r.h) * CELL));
+  return {sTop: r.s0 - dir * Math.max(0.2, lead - ESC.newelTop), sBot: r.s1 + dir * ESC.newelBottom};
+}
+
+/** Height of the escalator's outer cladding above the pitch line (its top = the balustrade decking), for the mall's rail trimming. */
+export const ESCALATOR_DECK = ESC.deck;
+
+const UP = new THREE.Vector3(0, 1, 0);
+/**
+ * Box from a to b with its WIDTH `w` kept level (perpendicular to the run and to world up) and thickness `t` square to the run.
+ * `beam` turns +Z onto the run with the shortest rotation, which rolls the cross-section on a pitched run along X (~30 deg on the
+ * mall's escalators); task mall-round3-20261031 (lane FIX R1): the mall's escalators use this one.
+ */
+function beamLevel(out: THREE.BufferGeometry[], a: V3, b: V3, w: number, t: number): void {
+  const d = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+  const len = d.length();
+  if (len < 1e-4) return;
+  d.divideScalar(len);
+  const x = new THREE.Vector3().crossVectors(UP, d);
+  if (x.lengthSq() < 1e-8) { beam(out, a, b, w, t); return; } // vertical: no level width direction
+  x.normalize();
+  const y = new THREE.Vector3().crossVectors(d, x);
+  const g = new THREE.BoxGeometry(w, t, len);
+  g.applyMatrix4(new THREE.Matrix4().makeBasis(x, y, d).setPosition((a.x + b.x) / 2, (a.y + b.y) / 2, (a.z + b.z) / 2));
+  out.push(g);
 }
 
 /**
  * One stopped escalator over its flight: steps between the comb plates, landing plates, skirts, decking, glass and handrails over
  * the whole newel-to-newel length (flat over the top landing, the pitch, flat into the lower hall). Built for runs along Z (the
  * transit hall's); beam cross-sections (width, thickness) assume the width stays horizontal, which holds for Z runs.
+ * Task mall-round3-20261031 (lane FIX R1 — user: "z-fighting appears on escalators where they connect slopped walls under them"),
+ * `mall` only (the Office transit hall is unchanged): the outer cladding starts AT the pitch line instead of 5 cm below it — the
+ * level geometry's sloped wall under a flight ends exactly on the pitch line in the same plane (world/levelGeometry.ts: the
+ * neighbour's band minus the flight's), so that 5 cm strip was two coplanar faces (stainless vs the wall finish) along the whole
+ * run; and the beams keep their width level on the mall's X runs (beamLevel).
  */
-function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight): void {
+function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight, mall = false): void {
   const axisX = r.axis === 'x';
   const H = (s: number) => rampHeight(r, s);
   const dir = Math.sign(r.s1 - r.s0) || 1;
-  // top newel at the lane rect's start (the box mouth) + ESC.newelTop, bottom newel ESC.newelBottom beyond the flight's end
-  const rectLo = (axisX ? r.x : r.y) * CELL;
-  const lead = Math.abs(r.s0 - (dir > 0 ? rectLo : rectLo + (axisX ? r.w : r.h) * CELL));
-  const sTop = r.s0 - dir * Math.max(0.2, lead - ESC.newelTop), sBot = r.s1 + dir * ESC.newelBottom;
+  const {sTop, sBot} = escalatorExtent(r);
+  const clad = mall ? 0 : 0.05;
+  // (mall) the decking strip, the comb and landing plates 4 mm narrower than the balustrade / step band, so their side faces stand 2 mm
+  // inside the outer cladding / skirt planes instead of in them (beamLevel's square sections made the decking exactly coplanar)
+  const inset = mall ? 0.004 : 0;
+  const bm = mall ? (out: THREE.BufferGeometry[], a: V3, b: V3, w: number, t = w) => beamLevel(out, a, b, w, t) : beam;
   const P = (s: number, a: number, y: number): V3 => (axisX ? {x: s, y, z: a} : {x: a, y, z: s});
   const a0 = q.a0, a1 = q.a1, b0 = a0 + ESC.bal, b1 = a1 - ESC.bal;
   const pieces: [number, number][] = [[sTop, r.s0], [r.s0, r.s1], [r.s1, sBot]];
@@ -459,11 +502,11 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight): void {
   // Comb plates (yellow) at both flight ends, stainless landing plates beyond them.
   for (const [s, y] of [[r.s0, r.h0], [r.s1, r.h1]] as const) {
     const out = s === r.s0 ? -dir : dir;
-    beam(L.yellow, P(s, (b0 + b1) / 2, y + 0.012), P(s + out * 0.16, (b0 + b1) / 2, y + 0.012), w, 0.024);
+    bm(L.yellow, P(s, (b0 + b1) / 2, y + 0.012), P(s + out * 0.16, (b0 + b1) / 2, y + 0.012), w - inset, 0.024);
   }
   const plate = (sa: number, sb: number, y: number) => box(L.stainless, ...((): [number, number, number, number, number, number] => {
     const sc = (sa + sb) / 2, len = Math.abs(sb - sa);
-    return axisX ? [sc, y + 0.006, (b0 + b1) / 2, len, 0.012, w] : [(b0 + b1) / 2, y + 0.006, sc, w, 0.012, len];
+    return axisX ? [sc, y + 0.006, (b0 + b1) / 2, len, 0.012, w - inset] : [(b0 + b1) / 2, y + 0.006, sc, w - inset, 0.012, len];
   })());
   plate(r.s0 - dir * 0.16, sTop, r.h0);
   plate(r.s1 + dir * 0.16, sBot, r.h1);
@@ -477,14 +520,17 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight): void {
       quadGeo(L.stainless, [P(pb, aIn, yb - 0.02), P(pa, aIn, ya - 0.02), P(pa, aIn, ya + ESC.skirt), P(pb, aIn, yb + ESC.skirt)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
       // decking: a stainless strip over the balustrade base
       const across = Math.abs(aOut - aIn);
-      beam(L.stainless, P(pa, (aIn + aOut) / 2, ya + ESC.deck - 0.02), P(pb, (aIn + aOut) / 2, yb + ESC.deck - 0.02), across, 0.05);
-      // outer cladding: the balustrade's side toward the wall / the stair, floor to decking
-      quadGeo(L.stainless, [P(pa, aOut, ya - 0.05), P(pb, aOut, yb - 0.05), P(pb, aOut, yb + ESC.deck), P(pa, aOut, ya + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-      quadGeo(L.stainless, [P(pb, aOut, yb - 0.05), P(pa, aOut, ya - 0.05), P(pa, aOut, ya + ESC.deck), P(pb, aOut, yb + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      bm(L.stainless, P(pa, (aIn + aOut) / 2, ya + ESC.deck - 0.02), P(pb, (aIn + aOut) / 2, yb + ESC.deck - 0.02), across - inset, 0.05);
+      // outer cladding: the balustrade's side toward the wall / the stair, floor to decking (mall: its outward face only — the inward
+      // one faces the closed balustrade box and stood in the plane of the level geometry's flight side wall behind it)
+      // the first quad's normal points along +across when the run goes +s on an X run (-s on a Z run); outward = away from the steps
+      const firstOut = (axisX ? dir : -dir) === (aOut === a0 ? -1 : 1);
+      if (!mall || firstOut) quadGeo(L.stainless, [P(pa, aOut, ya - clad), P(pb, aOut, yb - clad), P(pb, aOut, yb + ESC.deck), P(pa, aOut, ya + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      if (!mall || !firstOut) quadGeo(L.stainless, [P(pb, aOut, yb - clad), P(pa, aOut, ya - clad), P(pa, aOut, ya + ESC.deck), P(pb, aOut, yb + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
       // glass balustrade panel (both faces) and the black handrail on top of it
       quad2(L.glass, [P(pa, aMid, ya + ESC.deck), P(pb, aMid, yb + ESC.deck), P(pb, aMid, yb + ESC.glass), P(pa, aMid, ya + ESC.glass)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-      beam(L.black, P(pa, aMid, ya + ESC.rail), P(pb, aMid, yb + ESC.rail), 0.08, 0.035);
-      beam(L.stainless, P(pa, aMid, ya + ESC.glass), P(pb, aMid, yb + ESC.glass), 0.03, 0.02);
+      bm(L.black, P(pa, aMid, ya + ESC.rail), P(pb, aMid, yb + ESC.rail), 0.08, 0.035);
+      bm(L.stainless, P(pa, aMid, ya + ESC.glass), P(pb, aMid, yb + ESC.glass), 0.03, 0.02);
     }
   }
   // Handrail loops round both newel ends (a vertical half circle bulging out beyond the end).
@@ -495,7 +541,7 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight): void {
       for (let i = 0; i <= 8; i++) {
         const th = Math.PI / 2 - Math.PI * i / 8;
         const p = P(s + outDir * ESC.loop * Math.cos(th), aMid, y + ESC.loop * Math.sin(th));
-        if (prev) beam(L.black, prev, p, 0.08, 0.035);
+        if (prev) bm(L.black, prev, p, 0.08, 0.035);
         prev = p;
       }
       // the newel's glass end panel below the loop

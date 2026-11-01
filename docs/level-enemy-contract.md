@@ -80,11 +80,12 @@ profile, family list, tier or guarantee.
   roll or rule (no Siren) reaches a horde member. `declaredSpawnContexts(profile)` = the ambient contexts + `'horde'` when the
   profile has hordes; the contract test checks every spawn against it.
 - **Level-wide spacing of a restricted family** (`SpawnProfile.spacing`, `FamilySpacing {spacingM, why}`; requires the family's
-  eligibility rule): Track1's `FamilyEligibility` has no spacing field, so the mall applies its 30 m Siren spacing with the post-pass
+  eligibility rule): Track1's `FamilyEligibility` has no spacing field, so the mall applies its 24 m Siren spacing (mall round 3; was 30 m) with the post-pass
   `applyFamilySpacing(layout, profile)` (`game/src/ai/familySpacing.ts`) right after `assignEnemyArchetypes` — cap and spacing jointly,
   in spawn-index order, RNG-free.
 - The mall registers tier 2, `familyPool({siren: MALL_SIREN_WEIGHT})` (compact-mall census, task mall-playtest-revision-20261031:
-  draw weight 0.8 (saturated), cap 2, 30 m — mean 0.85 Sirens per run, 4.5 % of the placed ambient enemies; the six-ring tuning was 0.32 / cap 4),
+  draw weight 0.8, cap 2, 30 m — mean 0.85 Sirens per run; mall round 3, R8: shop-weighted retail placement `MALL_RING_PLACEMENT`, the
+  Office's cap 4, 24 m — mean 1.96 per mall, 8.3 % none, like the Office's 1.97; the six-ring tuning was 0.32 / cap 4),
   `MALL_SIREN_ELIGIBILITY` (retail-floor shops / stock rooms only), the horde pool's route capacity / out-of-sight start
   (`HordePlacementRules.routeMPerMember` / `startClearM`) and `ENEMY_LEVEL_ADAPTER.mall`; details and the census in
   `docs/enemy-spawns.md` "The mall".

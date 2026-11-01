@@ -14,6 +14,7 @@ import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): the mall
 import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-playtest-revision-20261031 (lane GEN): seeded "<Name> Center"
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
+import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -22,11 +23,12 @@ export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall'];
 /**
  * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
  * gas masks / filters (gen/maskLoot.ts, appended to it by levels/gearAdapter.ts) are placed AFTER the gear with their own rng,
- * so every gear placement is exactly what it was.
+ * so every gear placement is exactly what it was. Task mall-round3-20261031 (lane SHOPS, R6): the gear is placed under the level's loot
+ * profile (its LootTables.gearPlace bias: the mall's themed shops; the Subway / Office tables carry none = unchanged placement).
  */
-function withGear(layout: StationLayout, ctx: SectionGenContext): StationLayout {
+function withGear(layout: StationLayout, ctx: SectionGenContext, level: LevelId): StationLayout {
   if (ctx.gear && ctx.gear.length) {
-    placeSectionGear(layout, ctx.gear.filter(g => !isMaskLootItem(g.itemId)));
+    placeSectionGear(layout, ctx.gear.filter(g => !isMaskLootItem(g.itemId)), lootProfile(level));
     placeMaskLoot(layout, ctx.gear.filter(g => isMaskLootItem(g.itemId)));
   }
   return layout;
@@ -43,7 +45,7 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     trackExtensions: trackExtConfig('subway'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Subway has no section '${section}'`);
-      return withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx);
+      return withGear(generateStation(ctx.levelSeed >>> 0, {startWeapon: ctx.startWeapon, trackExtensions: LEVELS.subway.trackExtensions}), ctx, 'subway');
     },
   },
   office: {
@@ -56,7 +58,7 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     trackExtensions: trackExtConfig('office'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`Office Space has no section '${section}'`);
-      return withGear(generateOfficeLevel(ctx, undefined, undefined, LEVELS.office.trackExtensions), ctx);
+      return withGear(generateOfficeLevel(ctx, undefined, undefined, LEVELS.office.trackExtensions), ctx, 'office');
     },
   },
   // Task track3-eaton-centre-20261031 (lane GEN): THE MALL — a subway station under a glass atrium (gen/mall/index.ts). ONE continuous
@@ -75,7 +77,7 @@ export const LEVELS: Record<LevelId, LevelDef> = {
     trackExtensions: trackExtConfig('mall'),
     generate: (section, ctx) => {
       if (section !== 'main') throw new Error(`${MALL_GENERIC_NAME} has no section '${section}'`);
-      return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx);
+      return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx, 'mall');
     },
   },
 };
