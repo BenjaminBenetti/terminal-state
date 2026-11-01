@@ -672,5 +672,5 @@ async function writeDebug(dir, {imgs, seg, reg, prep, mesh, S, baseRGB, src, cov
   void prep; void mesh;
 }
 
-/** Internal steps exposed for the QA / diagnostics scripts (qa/strainer-sheets.mjs). */
+/** Internal steps exposed for ad-hoc diagnostics (segmentation / registration inspection without a full build). */
 export const _internal = {loadSource, segment, prepMesh, posedMesh, projectView, registerView, edt};
