@@ -19,6 +19,7 @@ import type {MallArch} from './mallArch';
 import {skylightStats} from './mallSkylight';
 import {mallSkyTune, type MallSkyTune} from './mallExterior'; // task mall-playtest-revision (U02)
 import {AD_GLOW} from './mallAds'; // task mall-round3 (lane SHOPS, R5): the ads' backlight gain (QA tune)
+import {mallAdArtSummary, preloadMallAdArt, releaseMallAdArt} from '../assets/mallAdArt'; // task mall-round4 (lane ADS): the Codex ad artwork
 
 /** The mall's scene fog (FogExp2) and camera far plane. */
 export const MALL_FOG = {density: 0.0115, color: 0x3a403c, far: 250};
@@ -31,6 +32,8 @@ interface AtmosphereHost {
   camera: THREE.PerspectiveCamera;
   sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
   world?: {culler?: {maxDistance: number}; mallArch?: MallArch} | null;
+  /** Game.sectionPreloads (task mall-round4, lane ADS: the ad artwork is decoded behind the mall's loading screen). */
+  sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
 }
 
 export class MallAtmosphere {
@@ -40,6 +43,9 @@ export class MallAtmosphere {
 
   constructor(private readonly host: AtmosphereHost) {
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.restore()});
+    // Task mall-round4 (lane ADS): a MALL section decodes its eight Codex ad images before the world (and its ad atlas) is built —
+    // MallArch.buildAds releases them once packed; any other level loads none and drops a leftover (assets/mallAdArt.ts)
+    host.sectionPreloads?.push(async layout => { if (layout.mall) await preloadMallAdArt(); else releaseMallAdArt(); });
   }
 
   build(layout: StationLayout): void {
@@ -184,7 +190,10 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
         level[`L${q.level}`] = (level[`L${q.level}`] ?? 0) + 1;
       }
       const at = (q: (typeof a.ads)[number]) => ({kind: q.kind, slot: q.slot, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), glow: q.glow});
+      // (task mall-round4, lane ADS: + art = the Codex images drawn by the last build — loaded ids, ads per image, faces with art / plain
+      // fill, released after the atlas — and the loader's state now: held ids (none after a build), last failures, counters)
       return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, lit: a.stats.litAds, pages: a.stats.adPages, meshes: a.stats.adMeshes, textureMB: +a.stats.adTextureMB.toFixed(1), glow: AD_GLOW.value,
+        art: {...a.adArt, byTheme: {...a.adArt.byTheme}, loader: mallAdArtSummary()},
         by, slot, level, first: a.ads.slice(0, 6).map(at), carts: a.ads.filter(q => q.kind === 'cart').map(at), menus: a.ads.filter(q => q.kind === 'menu').map(at)};
     },
     mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null,

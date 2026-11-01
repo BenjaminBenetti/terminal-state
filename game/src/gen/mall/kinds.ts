@@ -77,6 +77,13 @@ const SPECS = {
   flatScreenTv: {box: [1.23, 0.5, 0.819], cls: 'plastic'},
   // M06: a group of garments on hangers, hung on a garment rail (decor filler separated from the rail: root CLAUDE.md rule 4)
   garmentHangingGroup: {box: [0.89, 0.59, 0.85], cls: 'fabric'},
+  // Task mall-round4-20261101 (lane GARMENTS — user: "we need to generate female cloths for the female store (else it doesn't match up)"):
+  // three accepted Meshy T2.5 women's garment groups, FACE-OUT rows (garments side by side facing the prop front, hanger hooks on top),
+  // riders on the womenswear rails / wall bays like M06 (MALL_RIDER_KINDS). Sized by hanging length (hook to hem); box = nominal until
+  // the cooked model's measured dims replace it (MALL_KIND_ASSET / MALL_DIMS).
+  womensDressesGroup: {box: [1.38, 0.16, 1.05], cls: 'fabric'},
+  womensBlousesGroup: {box: [1.07, 0.2, 0.65], cls: 'fabric'},
+  womensSkirtsGroup: {box: [0.74, 0.19, 0.76], cls: 'fabric'},
   // M05: an empty round garment rack (chrome ring on a centre post, castor base)
   garmentRailRound: {box: [1.2, 1.19, 1.545], cls: 'steel'},
   // --- lane ASSETS batch 1, the rest (lanes/ASSETS.notes section 10): every kind renders its delivered model; the boxes below are the
@@ -184,6 +191,9 @@ export const MALL_KIND_ASSET: Readonly<Partial<Record<MallKind, string>>> = {
   // task mall-round3-20261031 (lane SHOPS, R4): the female mannequin M81 — the primary's accepted Meshy T2.5 model (task
   // mall-round3-recovery01-20261101; build-mall-track3.mjs EXTRA)
   mannequinFemale: 'mannequin-female',
+  // task mall-round4-20261101 (lane GARMENTS, sub-lane GARMENTS-ASSETS): the women's face-out garment groups M82-M84 — the primary's three
+  // accepted Meshy T2.5 models (build-mall-track3.mjs EXTRA; hem at y 0, hook tops at y = h)
+  womensDressesGroup: 'womens-dresses-group', womensBlousesGroup: 'womens-blouses-group', womensSkirtsGroup: 'womens-skirts-group',
 };
 /** Lane ASSETS hook: a delivered model's measured bounds [x, y, z] (m) by asset id (assets/mallDims.generated.ts MALL_DIMS). */
 export const MALL_MODEL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = MALL_DIMS;
@@ -240,7 +250,7 @@ export const GARMENT_RAIL_Y: Readonly<Partial<Record<MallKind, number>>> = {garm
  * loose (physics/dynamicItems.ts) the rider's meshes become parts of the host's body (translate + rotate with it) and its own static
  * collider goes (h 0). The garment groups on a garment rail / round rack; on the static clothing bay they simply stay with the bay.
  */
-export const MALL_RIDER_KINDS: readonly MallKind[] = ['garmentHangingGroup'];
+export const MALL_RIDER_KINDS: readonly MallKind[] = ['garmentHangingGroup', 'womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup']; // (+ round 4: the women's face-out groups)
 
 /** Exposed loot surfaces of the open mall holders and of the bookcase (an openable container: its shelves + its drawers' trays). */
 export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, readonly SurfaceSpec[]>> = {
@@ -360,6 +370,10 @@ export const MALL_PHYS = {
   // Task mall-playtest-revision-20261031 (lane SHOPS, U05): the old sentence claimed the rail stays put while garments hang on it — it
   // did not (the rail's body moved, the garments floated). They now RIDE the rail (MALL_RIDER_KINDS, physics/dynamicItems.ts riders).
   garmentHangingGroup: S('host decor', 'garments on hangers hung on their garment rail (decor filler, not items): they ride the rail — when a walk-in or a shot sends the rail loose they become parts of its body and translate / rotate with it (no floating stock, no stationary collider left behind); on the static clothing bay they stay with the bay'),
+  // Task mall-round4-20261101 (lane GARMENTS): the women's face-out garment groups ride their rail / wall bay exactly like M06
+  womensDressesGroup: S('host decor', 'five women\'s dresses on hangers hung face-out on their garment rail / clothing bay (decor filler, not items): they ride the rail — when a walk-in or a shot sends the rail loose they become parts of its body and translate / rotate with it (no floating stock, no stationary collider left behind); on the static clothing bay they stay with the bay'),
+  womensBlousesGroup: S('host decor', 'six women\'s blouses / tops on hangers hung face-out on their garment rail / round rack / clothing bay (decor filler, not items): they ride the rail like the M06 garment groups (move with it when it goes loose, no collider left behind)'),
+  womensSkirtsGroup: S('host decor', 'five women\'s skirts on clip hangers hung face-out on their garment rail / round rack / clothing bay (decor filler, not items): they ride the rail like the M06 garment groups (move with it when it goes loose, no collider left behind)'),
   flatScreenTv: {dynamic: true, mass: 15, mat: 'pad', onHost: true, how: 'flat-screen TV on its stand (~15 kg) on a display table: a shot slides / topples it off the table, a bump shoves it'},
   mallCashwrapCounter: S('holder', 'till / back counter with hutch (~150 kg) built against the wall: a loot holder (drawers, cupboard, shelves) stays put'),
   glassDisplayCabinet: S('holder', 'glass display cabinet (~70 kg loaded): a loot holder stays put so its finite lots never float'),
@@ -412,6 +426,9 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   garmentRail: {role: 'decor', cls: 'none', how: 'empty garment rail on castors (no baked garments): nothing to open'},
   mannequinFull: {role: 'decor', cls: 'none', how: 'display mannequin: nothing to open'},
   mannequinFemale: {role: 'decor', cls: 'none', how: 'female display mannequin (featureless form on a stand): not storage, nothing to open'},
+  womensDressesGroup: {role: 'decor', cls: 'none', how: 'women\'s dresses on hangers on a rail (decor filler / loose stock, not items, not storage): nothing to open'},
+  womensBlousesGroup: {role: 'decor', cls: 'none', how: 'women\'s blouses / tops on hangers on a rail (decor filler / loose stock, not items, not storage): nothing to open'},
+  womensSkirtsGroup: {role: 'decor', cls: 'none', how: 'women\'s skirts on clip hangers on a rail (decor filler / loose stock, not items, not storage): nothing to open'},
   flatScreenTv: {role: 'equipment', cls: 'none', how: 'flat-screen TV on its stand: no door, lid or drawer (a display set, not an item)'},
   garmentHangingGroup: {role: 'decor', cls: 'none', how: 'garments on hangers on a rail (decor filler, not items): nothing to open'},
   garmentRailRound: {role: 'decor', cls: 'none', how: 'empty round garment rack (no baked garments): nothing to open'},
@@ -588,6 +605,13 @@ export function mallShape(kind: MallKind): ShapePart[] {
       box('steelBright', [w, 0.03, 0.03], [0, h - 0.05, 0]),
       box('steelBright', [0.03, 0.03, d], [0, h - 0.05, 0]),
     ];
+    case 'womensDressesGroup': case 'womensBlousesGroup': case 'womensSkirtsGroup': { // (round 4) load-failure stand-in: a face-out row + hook bar
+      const n = kind === 'womensDressesGroup' ? 5 : kind === 'womensBlousesGroup' ? 6 : 5, gw = w / n;
+      return [
+        ...Array.from({length: n}, (_, i) => box('partition', [gw * 0.86, h * 0.86, d * 0.6], [-w / 2 + gw * (i + 0.5), h * 0.43, 0])),
+        box('steelBright', [w * 0.95, 0.02, 0.02], [0, h - 0.01, 0]),
+      ];
+    }
     case 'garmentHangingGroup': return [
       ...[-0.36, -0.12, 0.12, 0.36].map(x => box('partition', [0.07, h * 0.82, d * 0.8], [x * w, h * 0.55, 0])),
       box('steelBright', [w * 0.9, 0.02, 0.02], [0, h - 0.01, 0]),

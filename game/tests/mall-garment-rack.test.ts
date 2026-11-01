@@ -44,6 +44,16 @@ function dressedRing(seed: number): StationLayout {
   return layout;
 }
 
+/** Task mall-round4-20261101 (lane GARMENTS): the women's face-out garment groups (they ride like M06). */
+const WOMENS = ['womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup'];
+/** A dressed synthetic ring whose two forced womenswear shops carry the women's groups on their rails. */
+function womensRing(seed: number): StationLayout {
+  const {layout} = mallShopsFixture(1);
+  assignMallPrograms(layout, new Rng(seed), {force: {'L1-N02': 'womenswear', 'L1-S03': 'womenswear', 'L1-N07': 'clothing'}});
+  dressMallShops(layout, new Rng(seed ^ 0x5eed), {frame: 'absolute'});
+  return layout;
+}
+
 /** Rails (index) hosting at least one rider, with their riders. */
 function railsWithRiders(layout: StationLayout): {rail: PropPlacement; i: number; riders: {p: PropPlacement; i: number}[]}[] {
   const out: {rail: PropPlacement; i: number; riders: {p: PropPlacement; i: number}[]}[] = [];
@@ -121,6 +131,49 @@ describe('U05 garments ride their rack', () => {
         expect(parts.filter(q => q.mesh.parent === rig.pd.group).length).toBe(parts.length);
       }
       void yawOf;
+    }
+    expect(tested).toBeGreaterThan(0);
+  });
+
+  it('(round 4) the women\'s face-out groups ride their rail the same way: a REAL walk-in carries them, no stationary collider, drawn once', () => {
+    for (const k of WOMENS) {
+      expect(MALL_RIDER_KINDS, k).toContain(k);
+      expect(ridesHost(k), k).toBe(true);
+      expect(PROP_PHYSICS_AUDIT[k].cls, k).toBe('static');
+      expect(PROP_PHYSICS_AUDIT[k].how, k).toMatch(/ride/);
+    }
+    const layout = fresh(womensRing(3));
+    const rig = contactRig(layout);
+    const cands = railsWithRiders(layout).filter(c => c.riders.every(r => WOMENS.includes(r.p.kind)));
+    expect(cands.length, 'rails carrying women\'s groups').toBeGreaterThan(1);
+    let tested = 0;
+    for (const c of cands) {
+      if (tested >= 2) break;
+      if (!rig.ph.dynamicItems.isDynamicProp(c.rail)) continue;
+      if (c.riders.some(r => r.p.h === 0)) continue; // already knocked loose by an earlier walk-in (a neighbouring rail): not untouched
+      const at = approach(rig, c.rail, 1.0, 1.2);
+      if (!at) continue;
+      const r0 = drawn(rig.pd, c.rail), g0 = c.riders.map(r => drawn(rig.pd, r.p));
+      expect(r0).not.toBeNull();
+      for (const g of g0) expect(g).not.toBeNull();
+      const before = g0.map(g => rel(r0!.m, g!.m));
+      expect(c.riders.every(r => r.p.h > 0.5)).toBe(true); // a real collider while hung on the static rail
+      stand(rig, at);
+      walkForward(rig, 1.4);
+      settle(rig, 2.5);
+      const r1 = drawn(rig.pd, c.rail)!;
+      const moved = new THREE.Vector3().setFromMatrixPosition(r1.m).distanceTo(new THREE.Vector3().setFromMatrixPosition(r0!.m));
+      if (moved < 0.05) continue; // pinned against something: try the next rail
+      tested++;
+      for (const [k, r] of c.riders.entries()) {
+        const g1 = drawn(rig.pd, r.p)!;
+        expect(g1.detached, `${r.p.kind} drawn by its own meshes`).toBe(true);
+        expect(g1.hidden, 'its shared instance hidden (no orphan duplicate)').toBe(true);
+        expect(near(rel(r1.m, g1.m), before[k], 2e-3), `${c.rail.kind} ${r.p.kind} keeps its hang`).toBe(true);
+        expect(r.p.h, 'no stationary collider left where it hung').toBe(0);
+        const parts = rig.pd.states.get(r.p)!.parts!;
+        expect(parts.filter(q => q.mesh.parent === rig.pd.group).length).toBe(parts.length);
+      }
     }
     expect(tested).toBeGreaterThan(0);
   });

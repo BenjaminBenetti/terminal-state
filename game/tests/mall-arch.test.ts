@@ -43,6 +43,7 @@ import {MALL_FOG, MallAtmosphere, fogTransmittance, mallQaPoses} from '../src/wo
 import {GAS_SHEETS, MALL_EXT_ORDER, MALL_SKY, mallGasCurtainMaterial, mallGasMaterial, mallSkyMaterial, mallSkyPalette} from '../src/world/mallExterior';
 import {EXT_FOG, exteriorFogOpacity} from '../src/world/exterior';
 import {AD_GLOW, GALLERY_AD, GALLERY_LIGHTBOX, adAtlasMaterial, adGlowOf, type MallAd} from '../src/world/mallAds';
+import {AD_ART_IDS, mallAdArtSummary} from '../src/assets/mallAdArt'; // task mall-round4 (lane ADS)
 import {MOOD} from '../src/world/lights';
 import {treatmentOf} from '../src/world/wallDetailPlan';
 import type {MallProgram} from '../src/gen/mall/mallTypes';
@@ -519,6 +520,13 @@ describe('U02 + U07 + D06 on the fixture build', () => {
     // brand text: the shop's fictional brand and the seeded mall name are drawn on the ads
     expect(drawn.includes(fashion.brand.toUpperCase())).toBe(true);
     expect(drawn.includes(F.layout.mall.name.toUpperCase())).toBe(true);
+    // task mall-round4 (lane ADS): every face maps to a shipped Codex image; none is held in Node, so every face drew the plain palette
+    // fill (never substitute drawn art) — and nothing stays held after the atlas build
+    expect(arch.adArt.drawn).toBe(0);
+    expect(arch.adArt.fallback).toBe(arch.ads.length);
+    expect(Object.values(arch.adArt.byTheme).reduce((s, v) => s + (v ?? 0), 0)).toBe(arch.ads.length);
+    for (const id of Object.keys(arch.adArt.byTheme)) expect(AD_ART_IDS).toContain(id);
+    expect(mallAdArtSummary().held).toEqual([]);
     // the poster record (1.5 cm proud) has its frame on the wall plane (z = 2.5 + the unit's wall... the shop's back wall z = 2.5)
     const frames = meshes(w.group).filter(m => m.name === `mall-ad-frames-${fashion.level}`);
     expect(frames.length).toBe(1);

@@ -3,6 +3,9 @@
 import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import {NodeIO} from '@gltf-transform/core';
+// task mall-round4-20261101 (lane GARMENTS): the women's garment GLBs (M82-M84) carry KHR_mesh_quantization (8-bit normals / 16-bit UVs),
+// which the game's three.js GLTFLoader decodes natively; the texture-stripping reader must know the extension to round-trip them
+import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {FLOOR, Grid, SOLID} from '../../src/gen/grid';
@@ -19,7 +22,7 @@ import type {StationLayout} from '../../src/gen/station';
 const pub = (rel: string) => fileURLToPath(new URL('../../public/' + rel, import.meta.url));
 
 export async function loadStripped(url: string): Promise<GLTF> {
-  const io = new NodeIO();
+  const io = new NodeIO().registerExtensions([KHRMeshQuantization]);
   const doc = await io.read(pub(url));
   for (const t of doc.getRoot().listTextures()) t.dispose();
   const bin = await io.writeBinary(doc);

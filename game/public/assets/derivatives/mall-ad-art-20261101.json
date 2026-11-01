@@ -1,0 +1,286 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "mall-ad-art-20261101",
+ "task": "studio-beta-mall-round4-20261101-01",
+ "lane": "ADS (Mall round 4)",
+ "status": "runtime derivatives of EIGHT static ad artworks generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit round-4 authorization (\"use codex to produce images for the adds\"; 8 accepted of 8 attempts, cap 12); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "game/src/world/mallAds.ts adTexture / drawMenu: the art is cover-cropped under the code-driven fictional brand, headline, price roundel, menu lines and aging overlay (dynamic text, exempt per root CLAUDE.md)",
+ "rebuild": "node tools/asset-pipeline/mall-ads/build-ad-art.mjs",
+ "rawStorage": "reference/tasks/mall-round4-20261101/codex/ad-<theme>/{ad-<theme>-original.png, receipt.json, prompt.txt, codex-events.jsonl} + SOURCES-SHA256.txt + ATTEMPTS.jsonl (read-only raw masters, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "resize": {
+   "width": 512,
+   "height": 512,
+   "fit": "fill (square source: aspect kept, nothing cropped)",
+   "kernel": "lanczos3"
+  },
+  "colour": "sRGB, alpha none",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/mall-ads/build-ad-art.mjs"
+ },
+ "files": [
+  {
+   "id": "ad-womenswear",
+   "subject": "woman in a floral midi dress and camel trench, blush-pink backdrop (women's fashion)",
+   "source": {
+    "file": "ad-womenswear/ad-womenswear-original.png",
+    "sha256": "1ea43ca85f7c7273e0b351532a2de3fa4037c11ac3835a445889ccfcf92a4b4f",
+    "bytes": 1803434,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195bd-135d-7310-9843-ceff9f3e8b7d",
+    "nativeOutput": "exec-49172adc-b0ff-4da7-a004-aa8c8f92af9f.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:12:38Z",
+    "finished": "2026-11-01T06:13:21Z"
+   },
+   "prompt": "Fashion campaign photograph for a women's clothing boutique: one adult woman, full length, standing in a relaxed elegant pose, wearing a flowing knee-length floral midi dress in muted rose and cream tones with a light camel trench coat draped over her shoulders and simple flat shoes, carrying a small structured handbag; tasteful, modest, fully clothed; soft blush-pink seamless studio backdrop.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-womenswear.jpg",
+    "bytes": 20836,
+    "sha256": "5675e080c91abffaf9a7c980afdeb78de9e5029b8c32d45f012a11056cbc1033",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-menswear",
+   "subject": "man in a charcoal overcoat and plaid scarf, slate-blue backdrop (menswear / department)",
+   "source": {
+    "file": "ad-menswear/ad-menswear-original.png",
+    "sha256": "7a9edb686c89541916e5bc78828b3739c6b3d70fe12426adad3651d192f9ab6d",
+    "bytes": 1854447,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195bf-7b95-7e52-8276-0520baa08005",
+    "nativeOutput": "exec-c5e471b1-27ef-4431-9a1f-2534e32724e9.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:15:16Z",
+    "finished": "2026-11-01T06:16:00Z"
+   },
+   "prompt": "Fashion campaign photograph for a menswear and department store: one adult man, three-quarter length, standing confidently, wearing a charcoal wool overcoat over a navy knit sweater and a light shirt collar, with a muted plaid scarf; fully clothed; deep slate-blue seamless studio backdrop.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-menswear.jpg",
+    "bytes": 17190,
+    "sha256": "be24f6616437ce87c90edb55ace3f96f4c04a35ce9a13a1e045021ff7c2289ed",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-food",
+   "subject": "double cheeseburger, fries and a drink cup, amber backdrop (food court)",
+   "source": {
+    "file": "ad-food/ad-food-original.png",
+    "sha256": "e82e03bfac0da552775352d2e95e6e57de64ad5636b8e259cd1790990e540589",
+    "bytes": 1884402,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c0-2827-7db2-939e-fd40c819bc92",
+    "nativeOutput": "exec-42b888dd-fb4c-4c4f-8d40-3c6fa47e0b03.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:16:00Z",
+    "finished": "2026-11-01T06:16:37Z"
+   },
+   "prompt": "Food advertising photograph for a mall food-court burger counter: one juicy double cheeseburger on a sesame bun with lettuce and tomato beside a paper cone of golden french fries and a plain unbranded paper drink cup with a straw, on a clean light surface; appetising, glossy, freshly made; warm amber-orange seamless backdrop.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-food.jpg",
+    "bytes": 33620,
+    "sha256": "e705776a38df920a37f91fc906931b83bfd72e606db5aa5ae616357561b6adaf",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-cafe",
+   "subject": "latte with foam art, croissant and pastry (cafe / bakery)",
+   "source": {
+    "file": "ad-cafe/ad-cafe-original.png",
+    "sha256": "2d496938d90f4ddee262d57b8f0e228f79ef8d417ec773171324aa0bc950c780",
+    "bytes": 1992820,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c0-ba93-7a43-a7d9-23fdef8fad43",
+    "nativeOutput": "exec-3def697d-21e3-4754-a760-36d5e1db7514.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:16:38Z",
+    "finished": "2026-11-01T06:17:27Z"
+   },
+   "prompt": "Food advertising photograph for a mall coffee shop and bakery: one ceramic cup of latte with heart-shaped foam art on a saucer, a golden flaky croissant and a small glazed pastry beside it, a few roasted coffee beans scattered; cosy and inviting, gentle wisp of steam; warm cream and brown seamless backdrop.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-cafe.jpg",
+    "bytes": 30596,
+    "sha256": "94eada0c2f22a5f271a268ed1033e59fbefeec387d97a4bc150e02062949d340",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-electronics",
+   "subject": "phone, headphones and laptop, teal-blue backdrop (electronics / phones)",
+   "source": {
+    "file": "ad-electronics/ad-electronics-original.png",
+    "sha256": "fde40b3dbd03c3239474a769e7a6c371dac11dcef33a80d9cd30cb9f10026b6b",
+    "bytes": 1708185,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c1-7d2b-7b33-8315-1a49832e7f11",
+    "nativeOutput": "exec-ac246279-b3ce-41a3-a39c-4900673d3010.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:17:27Z",
+    "finished": "2026-11-01T06:18:10Z"
+   },
+   "prompt": "Product advertising photograph for a mall electronics and phone store: a sleek generic slab smartphone standing upright with a softly glowing abstract colourful screen, a pair of over-ear wireless headphones and a slim open laptop with an abstract gradient screen, all plain unbranded devices with no visible logos or text; futuristic and clean; cool teal-to-deep-blue gradient backdrop with soft light streaks.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-electronics.jpg",
+    "bytes": 26842,
+    "sha256": "9e46c28f5d70ee780920961914f3f32d504ead88bd4a7f21f0f12fb5bc92b2d6",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-health",
+   "subject": "unlabelled skincare bottles and vitamin capsules, mint backdrop (pharmacy / beauty)",
+   "source": {
+    "file": "ad-health/ad-health-original.png",
+    "sha256": "59aacdcae01e117486b929b20403ff2e6ac7bc8d0f4762c10960412d810a7f5d",
+    "bytes": 1626781,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c2-241c-7b42-a315-6fdba8529303",
+    "nativeOutput": "exec-841058e5-dcff-4154-8ed4-c3dcdd6498bc.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:18:10Z",
+    "finished": "2026-11-01T06:18:47Z"
+   },
+   "prompt": "Product advertising photograph for a mall pharmacy and beauty counter: a tidy arrangement of plain unlabelled skincare bottles, a pump dispenser, a jar of cream and a few vitamin capsules with a sprig of green leaves; fresh, clean, wellness feeling; soft mint-green and white seamless backdrop.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-health.jpg",
+    "bytes": 23604,
+    "sha256": "4b327f5bc1f293632938920eb24e4ea3a8286a7481e718b0d54700af74b73555",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-sports",
+   "subject": "running shoe, daypack and bottle before a mountain ridge (sports / outdoors)",
+   "source": {
+    "file": "ad-sports/ad-sports-original.png",
+    "sha256": "7f3bfd90d93a019e57bb30aa5d4fa3734a4469415f069acf02100d5d8c9f3526",
+    "bytes": 2132570,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c2-b42c-7211-89bd-b5e9e14c8a1a",
+    "nativeOutput": "exec-44e91ce5-143f-4492-bf7c-6498cad748f4.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:18:47Z",
+    "finished": "2026-11-01T06:19:38Z"
+   },
+   "prompt": "Product advertising photograph for a mall sports and outdoor store: one modern running shoe in bright colours, mid-stride angle, beside a compact hiking daypack and a steel water bottle, all plain unbranded with no logos; energetic and adventurous; backdrop of a soft-focus mountain ridge at golden hour fading into a clear sky.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-sports.jpg",
+    "bytes": 46300,
+    "sha256": "50fa217e72c9960332b38727c9624d5fbbc5195a8be2cc7d44e35953957cd7fe",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-shopping",
+   "subject": "jewel-tone shopping bags, gift boxes and flowers (mall-wide / general)",
+   "source": {
+    "file": "ad-shopping/ad-shopping-original.png",
+    "sha256": "912ccd808e3be2a704928820a044d1c78aa3349af2d27768d06fd6a6f135ea98",
+    "bytes": 2107926,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a195c3-7a0d-73e3-96f3-f4cc7232e6c5",
+    "nativeOutput": "exec-aba53a17-f219-4f0f-a5b8-664eba51eda3.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T06:19:38Z",
+    "finished": "2026-11-01T06:20:13Z"
+   },
+   "prompt": "Lifestyle advertising photograph for a shopping mall seasonal sale: a cluster of stylish plain paper shopping bags in coordinated jewel tones with rope handles, a couple of wrapped gift boxes with satin ribbons and a small bouquet of fresh flowers, all unbranded; festive and inviting; warm golden-beige seamless backdrop with soft bokeh lights.\n\nStyle for the whole ad set: polished contemporary shopping-mall advertising photography, high-key soft studio lighting, clean and slightly warm colour grade, shallow depth of field, crisp focus on the subject, professional retail campaign look. Composition: square canvas, the subject centred in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels on any product. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "output": {
+    "url": "assets/textures/mall/ads/ad-shopping.jpg",
+    "bytes": 39830,
+    "sha256": "67608d93c019318ba3a484297d84cc726984b56ba80c6dacd93b6e321cda5fc1",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  }
+ ]
+}

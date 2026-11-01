@@ -1,7 +1,8 @@
 // Task mall-playtest-revision-20261031 (lane SHOPS, D06 — user: "there was no uh billboards or anything like certainly the stores would
 // have like pictures of people wearing the clothes ... some ads and some billboards"): ad / fashion-merchandising PLACEMENT records of
-// the shops. Pure data (no three.js), deterministic. Lane ARCH renders the faces (fictional vector art, generic dressed adult
-// silhouettes, no real brands / photos) from these records; gallery / atrium billboards are ARCH's own (from geometry, not here).
+// the shops. Pure data (no three.js), deterministic. world/mallAds.ts renders the faces from these records (task mall-round4, lane ADS:
+// the Codex-generated ad artwork per theme under fictional brands, no real brands); gallery / atrium billboards are ARCH's own (from
+// geometry, not here).
 // Records are not props: no collider, no physics / openables audit; they never block signs, entries or interactions.
 //
 // Contract with lane ARCH (lanes/ARCH.notes "Requests to other lanes"): `layout.mall.ads?: MallAd[]`, read loosely by ARCH.
@@ -55,7 +56,7 @@ export interface MallAd {
   /** decal = on shopfront glass (both faces); poster = flat on a wall; lightbox = 0.12 m deep backlit box on a wall; billboard = big panel;
    *  menu = a 0.1 m deep backlit menu board on a food counter's wall; cart = a double-faced backlit header sign on a kiosk cart's top. */
   kind: 'poster' | 'lightbox' | 'billboard' | 'decal' | 'menu' | 'cart';
-  /** Theme (clothing / shoes / department -> dressed adult silhouettes, ...). */
+  /** Theme (its artwork: world/mallAds.ts adArtOf — clothing / shoes / department -> the fashion campaign photos, ...). */
   program: MallProgram | 'mall';
   /** MallShop.id (the brand is read from the shop); none = a gallery ad. */
   shop?: string;
@@ -88,7 +89,7 @@ export interface MallAdsReport {
   bySlot: Partial<Record<MallAdSlot, number>>;
 }
 
-/** Fashion programs: window decals x1-2 + a lightbox by the window display (dressed adult silhouettes on ARCH's faces). */
+/** Fashion programs: window decals x1-2 + a lightbox by the window display (the fashion campaign artwork on the faces). */
 export const FASHION: ReadonlySet<MallProgram> = new Set(['clothing', 'shoes', 'department', 'beauty', 'sports', 'jewelry', 'optical', 'outdoors', 'luggage', 'womenswear']);
 /** (R5) Eye-level poster: face size ranges, bottom / top above the floor (m), clear gap to other records. */
 export const EYE_POSTER = {w: [0.6, 0.85], h: [0.85, 1.2], bottom: 1.0, top: 2.3, gap: 0.3} as const;
