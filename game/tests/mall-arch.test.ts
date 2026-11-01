@@ -23,13 +23,13 @@ import {fakeEnvTextures} from './helpers/openablesFixture';
 import {buildBoth} from './helpers/tslShaders';
 import {visibleMeshes} from './helpers/visibleMeshes';
 import {MALL_FIX, inOpening, mallFixture, mallY} from './helpers/mallFixture';
-import {CELL, FLOOR, SOLID} from '../src/gen/grid';
+import {CELL, FLOOR, SOLID, rampHeight} from '../src/gen/grid';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {bakeLightField, sampleField, type BakedField} from '../src/world/lightField';
-import {stationLevels} from '../src/world/levelGeometry';
+import {OVERLAP_STATS, stationLevels} from '../src/world/levelGeometry';
 import {ATRIUM_SIGHT_TESTS, CULL_LAYER} from '../src/world/levelCulling';
 import {markShadows} from '../src/render/volumetric';
 import {planWarmup} from '../src/render/warmup';
@@ -830,11 +830,36 @@ describe('old levels unchanged: the Subway and the Office never reach the mall p
   };
   it('a generated Subway station and the Office build without any mall mesh, attribute or atrium tile', () => {
     const s = generateStation(4242);
+    // (task mall-round3, lane FIX R1: the level geometry's same-column overlap subtraction never runs outside the mall's open wells, so
+    // their wall faces are unchanged — counted on these already-built worlds)
+    OVERLAP_STATS.subtracted = 0;
     noMall(buildWorld(s, mats(), {}));
+    expect(OVERLAP_STATS.subtracted, 'Subway: overlapping-band subtractions').toBe(0);
     const o = generateOfficeLevel({levelSeed: 777, startWeapon: 'pistol'} as never);
+    OVERLAP_STATS.subtracted = 0;
     const w = buildWorld(o, mats(), {});
+    expect(OVERLAP_STATS.subtracted, 'Office: overlapping-band subtractions').toBe(0);
     noMall(w);
     expect(w.officeArch).toBeTruthy();
+    // (lane FIX R1) the Office transit escalators keep their old geometry (the mall-only cladding / beam changes never reach them):
+    // both cladding faces on the balustrade line, from 5 cm under the pitch
+    const transit = w.group.getObjectByName('transit-stainless') as THREE.Mesh;
+    const t = (o as {office?: {transit?: {escalators: {flights: number[]}[]}}}).office!.transit!.escalators[0];
+    const q = o.traversal.stairs[t.flights[0]], r = o.grid.ramps[q.ramp];
+    const pos = transit.geometry.getAttribute('position'), nor: number[] = [];
+    let below = false;
+    for (let i = 0; i < pos.count; i += 3) {
+      const xs = [0, 1, 2].map(k => pos.getX(i + k));
+      if (!xs.every(x => Math.abs(x - q.a0) < 1e-5)) continue;
+      const e1 = [0, 1, 2].map(k => [pos.getX(i + 1), pos.getY(i + 1), pos.getZ(i + 1)][k] - [pos.getX(i), pos.getY(i), pos.getZ(i)][k]);
+      const e2 = [0, 1, 2].map(k => [pos.getX(i + 2), pos.getY(i + 2), pos.getZ(i + 2)][k] - [pos.getX(i), pos.getY(i), pos.getZ(i)][k]);
+      const nx = e1[1] * e2[2] - e1[2] * e2[1], l = Math.hypot(nx, e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
+      if (l < 1e-9 || Math.abs(nx) / l < 0.99) continue;
+      nor.push(Math.sign(nx));
+      for (let k = 0; k < 3; k++) if (pos.getY(i + k) < rampHeight(r, pos.getZ(i + k)) - 0.04) below = true;
+    }
+    expect(new Set(nor).size, 'transit cladding: both faces').toBe(2);
+    expect(below, 'transit cladding: from 5 cm under the pitch').toBe(true);
   });
 
   it('the light-field bytes of a Subway station are identical with the mall sky hook spread in (it is {} there)', () => {

@@ -4,7 +4,8 @@
 // (tests/helpers/mallShopsFixture.ts), a few seeds, cached.
 // Task mall-round3-20261031 (lane SHOPS, R5 — user: "there are no adds ... They should appear on kiosks, and as posters in the store
 // and stuff"): + eye-level in-store posters, kiosk-cell ads, food-counter menu boards, kiosk-cart header signs standing on the cart's
-// canopy, static backlight (glow) shares, and one REAL generated mall's per-kind counts.
+// canopy, static backlight (glow) shares. (The REAL generated mall's per-kind case lives in tests/mall-shops.test.ts, on its memoized
+// seed-4242 mall: CI time, PR #25.)
 import {describe, expect, it} from 'vitest';
 import {Rng} from '../src/core/rng';
 import {CELL} from '../src/gen/grid';
@@ -15,6 +16,7 @@ import {MALL_PROGRAMS, assignMallPrograms, shopFit} from '../src/gen/mall/shops'
 import {dressMallShops} from '../src/gen/mall/shopsDress';
 import {CART_AD, EYE_POSTER, FASHION, GLOW_DEAD, MENU_BOARD, adBox, adGlow, mallAds, placeMallAds, propBox, type MallAd} from '../src/gen/mall/ads';
 import {mallShopsFixture} from './helpers/mallShopsFixture';
+import {checkMenu} from './helpers/mallAdsChecks';
 
 function dressed(seed: number): StationLayout {
   const {layout} = mallShopsFixture(2);
@@ -31,29 +33,6 @@ const ov = (a: ReturnType<typeof adBox>, b: ReturnType<typeof adBox>, e = 0.005)
 const MIN_BOTTOM: Record<string, number> = {header: 1.6, eye: EYE_POSTER.bottom, display: 0.6, menu: MENU_BOARD.bottom};
 /** The cart a header record stands on (same storey, same centre). */
 const cartOf = (L: StationLayout, ad: MallAd) => L.props.find(p => p.kind === 'mallKioskCart' && (p.level ?? 0) === ad.level && Math.abs(p.x - ad.x) < 1e-3 && Math.abs(p.z - ad.z) < 1e-3);
-
-/** (R5) A food unit's menu board (if any): high on a wall above the kitchen line, backlit, its cuisine; true when present. */
-function checkMenu(L: StationLayout, s: NonNullable<StationLayout['mall']>['shops'][number], ads: readonly MallAd[]): boolean {
-  const fit = shopFit(s)!, menu = ads.find(ad => ad.shop === s.id && ad.kind === 'menu');
-  if (!menu) return false;
-  const base = areaBase(L, L.areas[s.area]);
-  expect(menu.slot).toBe('menu');
-  expect(menu.y - menu.h / 2).toBeGreaterThanOrEqual(base + MENU_BOARD.bottom - 1e-6);
-  expect(menu.w).toBeGreaterThanOrEqual(MENU_BOARD.w[0] - 1e-6);
-  expect(menu.glow).toBeDefined();
-  expect(menu.cuisine).toBe(fit.cuisine);
-  // clears every prop standing within 0.4 m of that wall span by MENU_BOARD.over
-  const wallX = menu.nz !== 0, along = wallX ? menu.x : menu.z, line = (wallX ? menu.z : menu.x) - (menu.nz || menu.nx) * MENU_BOARD.depth / 2;
-  for (const p of L.props) {
-    if ((p.level ?? 0) !== menu.level || p.kind === 'shopGlazing' || p.kind === 'shopShutter') continue;
-    const b = propBox(p), a0 = wallX ? b.x0 : b.z0, a1 = wallX ? b.x1 : b.z1;
-    if (a1 <= along - menu.w / 2 || a0 >= along + menu.w / 2) continue;
-    const n = menu.nz || menu.nx, near = n > 0 ? (wallX ? b.z0 : b.x0) - line : line - (wallX ? b.z1 : b.x1);
-    if (near > 0.4 || near < -0.05) continue;
-    expect(menu.y - menu.h / 2, `${s.id} menu over ${p.kind}`).toBeGreaterThanOrEqual(b.y1 + MENU_BOARD.over - 1e-3);
-  }
-  return true;
-}
 
 describe('D06 / R5 shop ad / merchandising placement records', () => {
   it('every shop record belongs to a real shop, faces its room / the walkway, sits inside its wall span at absolute heights', () => {
@@ -103,21 +82,24 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
   });
 
   it('records overlap no prop (mounted ones too), no other record, no wall sign; decals never sit over an entry span', () => {
+    // (CI time, PR #25: violations are collected and asserted once — the same pairs / boxes as one expect per pair)
+    const bad: string[] = [];
     for (const seed of SEEDS) {
       const L = get(seed), ads = mallAds(L);
       const boxes = ads.map(ad => adBox(ad));
+      const props = L.props.map(p => ({p, b: propBox(p), lv: p.level ?? 0}));
       for (const [i, ad] of ads.entries()) {
         const own = ad.kind === 'cart' ? cartOf(L, ad) : undefined;
-        for (const p of L.props) {
-          if ((p.level ?? 0) !== ad.level) continue;
+        for (const {p, b, lv} of props) {
+          if (lv !== ad.level) continue;
           if (ad.kind === 'decal' && (p.kind === 'shopGlazing' || p.kind === 'shopShutter')) continue; // it lies on its glass
           if (p === own) continue; // (R5) a cart header stands on its own cart (its finials reach past the canopy top): the cart test
-          expect(ov(boxes[i], propBox(p)), `seed ${seed} ${ad.shop ?? ad.kind} ${ad.kind} vs ${p.kind}`).toBe(false);
+          if (ov(boxes[i], b)) bad.push(`seed ${seed} ${ad.shop ?? ad.kind} ${ad.kind} vs ${p.kind}`);
         }
-        for (const [j, q] of ads.entries()) if (j !== i && q.level === ad.level) expect(ov(boxes[i], boxes[j]), `seed ${seed} ${ad.shop} ${ad.kind} vs ${q.kind}`).toBe(false);
+        for (const [j, q] of ads.entries()) if (j !== i && q.level === ad.level && ov(boxes[i], boxes[j])) bad.push(`seed ${seed} ${ad.shop} ${ad.kind} vs ${q.kind}`);
         for (const s of L.signs) if ((s.level ?? 0) === ad.level && !s.hang) {
           const sw = (s.w ?? 1.4) / 2;
-          expect(ov(boxes[i], {x0: s.x - sw, x1: s.x + sw, z0: s.z - sw, z1: s.z + sw, y0: s.y - 0.35, y1: s.y + 0.35})).toBe(false);
+          if (ov(boxes[i], {x0: s.x - sw, x1: s.x + sw, z0: s.z - sw, z1: s.z + sw, y0: s.y - 0.35, y1: s.y + 0.35})) bad.push(`seed ${seed} ${ad.shop} ${ad.kind} vs sign`);
         }
         if (ad.kind === 'decal') {
           // not over the walk-in opening: the decal's span lies on its glazing prop only (the entry span has no glazing)
@@ -125,10 +107,11 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
           const along = ad.nz !== 0 ? ad.x : ad.z, f = shop.frontage, fs = ad.nz !== 0 ? Math.min(f.x0, f.x1) : Math.min(f.z0, f.z1);
           const e = shopFit(shop)!.entry;
           const e0 = fs + e[0], e1 = fs + e[1];
-          expect(along + ad.w / 2 <= e0 + 1e-6 || along - ad.w / 2 >= e1 - 1e-6, `seed ${seed} ${ad.shop} decal clear of the entry`).toBe(true);
+          if (!(along + ad.w / 2 <= e0 + 1e-6 || along - ad.w / 2 >= e1 - 1e-6)) bad.push(`seed ${seed} ${ad.shop} decal over the entry`);
         }
       }
     }
+    expect(bad).toEqual([]);
   });
 
   it('fashion stores carry window decals and a lightbox; every kind occurs; most real stores have an ad; service rooms none', () => {
@@ -240,24 +223,4 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
     expect(Object.values(rep.byKind).reduce((s, v) => s + (v ?? 0), 0)).toBe(rep.ads);
     expect(Object.values(rep.bySlot).reduce((s, v) => s + (v ?? 0), 0)).toBe(rep.ads); // (R5) every record has a slot
   });
-
-  it('R5: a REAL generated mall — every kind, eye-level posters, every kiosk cart / kiosk cell / food unit carries ads, womenswear ads', async () => {
-    const {generateMallLevel} = await import('../src/gen/mall/index');
-    const L = generateMallLevel({levelSeed: 4242, startWeapon: 'pistol'} as never) as StationLayout;
-    const ads = mallAds(L), by = (f: (a: MallAd) => boolean) => ads.filter(f).length;
-    expect(ads.length).toBeGreaterThan(70);
-    expect(by(a => a.slot === 'eye')).toBeGreaterThan(20);
-    expect(by(a => a.kind === 'cart')).toBe(L.props.filter(p => p.kind === 'mallKioskCart').length);
-    const shops = L.mall!.shops.map(s => ({s, f: shopFit(s)!}));
-    let food = 0, menus = 0;
-    for (const {s, f} of shops) {
-      const mine = ads.filter(a => a.shop === s.id);
-      if (f.kind === 'kiosk' || f.kind === 'store' || f.kind === 'anchor' || f.kind === 'food') expect(mine.length, `${s.id} ${f.kind} ${f.program}`).toBeGreaterThan(0);
-      if (f.kind === 'food') { food++; if (checkMenu(L, s, ads)) menus++; }
-    }
-    expect(food).toBeGreaterThan(0);
-    expect(menus / food).toBeGreaterThan(0.6);
-    const women = shops.filter(({f}) => f.program === 'womenswear');
-    for (const {s} of women) expect(ads.some(a => a.shop === s.id), `womenswear ${s.id}`).toBe(true);
-  }, 60000);
 });

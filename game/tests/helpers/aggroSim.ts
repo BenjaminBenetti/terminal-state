@@ -41,6 +41,8 @@ export interface AggroOpts {
   atrium: boolean;
   /** Optional player walk: waypoints on the station storey (looped at `walkSpeed` m/s, default 1.6), starting from the start. */
   walk?: readonly [number, number][];
+  /** Player start on the station storey (default: the level's start, layout.playerSpawn). */
+  start?: {x: number; z: number; yaw?: number};
   walkSpeed?: number;
   /** The player's flashlight on (player/flashlight.ts BEAM: 20 m attract range, 0.58 rad half cone), aimed along the walk / start yaw, pitched 0.2 rad down. */
   flashlight?: boolean;
@@ -48,11 +50,20 @@ export interface AggroOpts {
 
 const HUNT = new Set(['chase', 'attack', 'stagger']);
 
+/** The static world of a layout (levels, prop index, path finder), shared by every run on it — or on a copy with the same levels / props. */
+const STATIC = new WeakMap<object, {props: object; L: Levels; idx: PropIndex; pf: PathFinder}>();
+function staticWorld(layout: StationLayout): {L: Levels; idx: PropIndex; pf: PathFinder} {
+  let w = STATIC.get(layout.levels);
+  if (!w || w.props !== layout.props) {
+    const L = levelsOf(layout);
+    STATIC.set(layout.levels, (w = {props: layout.props, L, idx: new PropIndex(L, layout.props), pf: new PathFinder(L)}));
+  }
+  return w;
+}
+
 export function aggroSim(layout: StationLayout, o: AggroOpts) {
-  const L: Levels = levelsOf(layout);
-  const props = new PropIndex(L, layout.props);
-  const pf = new PathFinder(L);
-  const sp = layout.playerSpawn;
+  const {L, idx: props, pf} = staticWorld(layout);
+  const sp = o.start ? {yaw: layout.playerSpawn.yaw, ...o.start} : layout.playerSpawn;
   const py = L.grid(0).floorAt(sp.x, sp.z);
   const player = {x: sp.x, y: py, z: sp.z, eye: py + STAND_EYE, alive: true};
   const near = (x: number, z: number, y: number | undefined) => nearPlayerRule(Math.hypot(x - player.x, z - player.z, (y ?? player.y) - player.y), () => null);

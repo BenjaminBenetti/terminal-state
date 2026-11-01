@@ -27,6 +27,8 @@ import {holderTable, isLootHolderKind, rollLootItems} from '../src/items/loot';
 import {holderSurfaces} from '../src/items/lootLayout';
 import {WEAPON_FIND_AMMO} from '../src/gen/weaponFinds';
 import {mallLotsFixture, mallShopsFixture} from './helpers/mallShopsFixture';
+import {checkMenu} from './helpers/mallAdsChecks'; // (R5 real-mall ad case)
+import {mallAds, type MallAd} from '../src/gen/mall/ads';
 import {generateMallLevel, mallIssues} from '../src/gen/mall/index';
 
 /** A dressed synthetic lot-family storey (absolute frame) for `seed` (fixture sizes + assignment + dressing all from the seed). */
@@ -817,6 +819,26 @@ describe('generated mall: shops dressed, census, weapons (bounded seeds)', () =>
       console.info(`[gen commons ${seed}] ${pieces.map(p => `${p.kind}@L${p.level ?? 0}`).join(' ') || 'none'} rejects ${JSON.stringify(MALL_COMMONS_STATS.last?.rejects ?? {})}`);
       expect(mallIssues(L), `seed ${seed}`).toEqual([]);
     }
+  });
+  // Task mall-round3-20261031 (lane SHOPS, R5): moved here from tests/mall-ads.test.ts unchanged — it reuses this block's memoized
+  // seed-4242 mall instead of generating its own (CI time, PR #25)
+  it('R5: a REAL generated mall — every kind, eye-level posters, every kiosk cart / kiosk cell / food unit carries ads, womenswear ads', () => {
+    const L = mall(4242);
+    const ads = mallAds(L), by = (f: (a: MallAd) => boolean) => ads.filter(f).length;
+    expect(ads.length).toBeGreaterThan(70);
+    expect(by(a => a.slot === 'eye')).toBeGreaterThan(20);
+    expect(by(a => a.kind === 'cart')).toBe(L.props.filter(p => p.kind === 'mallKioskCart').length);
+    const shops = L.mall!.shops.map(s => ({s, f: shopFit(s)!}));
+    let food = 0, menus = 0;
+    for (const {s, f} of shops) {
+      const mine = ads.filter(a => a.shop === s.id);
+      if (f.kind === 'kiosk' || f.kind === 'store' || f.kind === 'anchor' || f.kind === 'food') expect(mine.length, `${s.id} ${f.kind} ${f.program}`).toBeGreaterThan(0);
+      if (f.kind === 'food') { food++; if (checkMenu(L, s, ads)) menus++; }
+    }
+    expect(food).toBeGreaterThan(0);
+    expect(menus / food).toBeGreaterThan(0.6);
+    const women = shops.filter(({f}) => f.program === 'womenswear');
+    for (const {s} of women) expect(ads.some(a => a.shop === s.id), `womenswear ${s.id}`).toBe(true);
   });
   it('delivered models furnish the generated malls (the catalogue rotates: most of them in two seeds, all across the synthetic sample)', () => {
     const seen = new Map<string, number>();

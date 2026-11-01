@@ -182,7 +182,7 @@ export function hearingMuffle(los: boolean, slabs: number): number {
  * killing zombies at the subway terminal the open atrium often causes zombies higher up to agro, causing them to run down in a big
  * stream. We might need better line of sight checks before agro-ing or something."
  *
- * Measured cause (deterministic Node scenario on 12 generated malls, tests/mall-atrium-aggro.test.ts; lanes/ENEMY.notes): the
+ * Measured cause (deterministic Node scenario on 12 generated malls, tests/helpers/aggroSim.ts; lanes/ENEMY.notes): the
  * established perception treats the open atrium like open floor. (1) SIGHT: the range test is the PLAN distance (18 m), so an idle
  * zombie 15 m up on floor 3 noticed a player in the pit 21-23 m away (3D) the moment it stood by the void, and the 5 m all-round
  * awareness was plan distance too (anyone right above saw straight down); (2) GUNFIRE: a listener with a sight line through the void
