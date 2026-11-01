@@ -183,29 +183,30 @@ function run(rig, t, T, G) {
 // ---------------------------------------------------------------- one-shots
 export function attackKeys() {
   const B = basePose();
-  // wind-up: the right claw drawn up and back out to the side, torso coiled to the right, weight on the back foot
-  const windup = {...B, hips: [0, -0.07, -0.06], hipsRot: [4, -10, 0], spine: [0, -8, 0], chest: [-2, -14, 0], neck: [-8, 5, 0], head: [-6, 5, 0],
+  // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (user: "double the reach of the swing ... using its long arms"): a
+  // LUNGING long-arm swipe. Coil (weight on the back foot, the right claw drawn up and back) -> at 0.62 s the lunge: a long step
+  // with the left foot, the hips drop and drive forward, the torso pitches ~45 deg, the right arm straightens fully forward at
+  // chest height (the claws at full reach) -> impact at 1.0 s -> the claw sweeps across -> step back into stance. The brain moves
+  // the body forward during the same 0.62 -> 1.0 s window (ZombieStats.lunge), so the visible claws cover the doubled range.
+  const coil = {...B, hips: [0, -0.13, -0.14], hipsRot: [5, -14, 0], spine: [0, -9, 0], chest: [-4, -16, 0], neck: [-8, 6, 0], head: [-6, 6, 0],
     armL: {...ARM_HANG, dir: [0.45, -0.8, 0.4], flex: 30, wrist: -10},
-    armR: mirrorArm({dir: [0.82, 0.3, -0.48], flex: 45, wrist: -18, twist: 0, wristSide: 0}),
-    legL: {mode: 'ik', z: 0.06, x: 0, lift: 0.02, pitch: 4, yaw: 4}, legR: {mode: 'ik', z: -0.12, x: 0, lift: 0, pitch: 0, yaw: -6}};
-  // hit: lunge onto the left foot, torso uncoils; the extended right arm sweeps through the front at chest height
-  const hit = {...B, hips: [0, -0.1, 0.18], hipsRot: [10, 8, 0], spine: [6, 6, 0], chest: [2, 10, 0], neck: [-12, -5, 0], head: [-9, -4, 0],
-    armL: {...ARM_HANG, dir: [0.4, -0.75, 0.52], flex: 26, wrist: -10},
-    // (the torso is uncoiled ~24 deg to the left here: this Chest-frame direction points the arm straight ahead)
-    // (wristSide lifts the hanging claws in line with the forearm: the tips sweep at ~1.35 m)
-    armR: mirrorArm({dir: [0.45, -0.05, 0.9], flex: 6, wrist: 2, twist: 0, wristSide: -25}),
-    legL: {mode: 'ik', z: 0.42, x: 0, lift: 0, pitch: -4, yaw: 4}, legR: {mode: 'ik', z: -0.16, x: 0, lift: 0, pitch: 16, yaw: -6}};
-  // follow-through: the claw carries on across and down to the left, well in front of the body (elbow bending), the left
-  // claw following low and out
-  const follow = {...hit, hips: [0, -0.12, 0.18], hipsRot: [12, 14, 0], chest: [4, 14, 0], neck: [-12, -5, 0], head: [-9, -5, 0],
-    armL: {...ARM_HANG, dir: [0.55, -0.7, 0.45], flex: 30, wrist: -12},
-    armR: mirrorArm({dir: [-0.08, -0.4, 0.91], flex: 22, wrist: -6, twist: 0, wristSide: 0})};
-  const recover = {...B, hips: [0, -0.1, 0.1], hipsRot: [12, 4, 0], legL: {mode: 'ik', z: 0.2, x: 0, lift: 0.02, pitch: 0, yaw: 4}};
-  // (lumbering) a slow, telegraphed coil (0 -> 0.75 s, held a beat), a heavy swipe landing at 1.0 s, a long follow-through and a
-  // slow recovery (the hit pose itself is unchanged: same reach, same chest-height sweep)
-  const coiled = {...windup, chest: V.add(windup.chest, [-1, -3, 0]), hipsRot: V.add(windup.hipsRot, [0, -3, 0])};
+    armR: mirrorArm({dir: [0.82, 0.35, -0.45], flex: 48, wrist: -18, twist: 0, wristSide: 0}),
+    legL: {mode: 'ik', z: 0.1, x: 0, lift: 0.02, pitch: 4, yaw: 4}, legR: {mode: 'ik', z: -0.28, x: 0, lift: 0, pitch: 4, yaw: -6}};
+  const coiled = {...coil, chest: V.add(coil.chest, [-1, -3, 0]), hipsRot: V.add(coil.hipsRot, [0, -3, 0]), hips: V.add(coil.hips, [0, -0.02, -0.03])};
+  // the lunge at the hit frame: low, far forward; the straight right arm reaches out level at chest height
+  const hit = {...B, hips: [0, -0.26, 0.82], hipsRot: [18, 10, 0], spine: [6, 6, 0], chest: [5, 10, 0], neck: [-20, -5, 0], head: [-16, -4, 0],
+    armL: {...ARM_HANG, dir: [0.45, -0.7, 0.55], flex: 24, wrist: -10},
+    armR: mirrorArm({dir: [0.3, 0.58, 0.72], flex: 0, wrist: 6, twist: 0, wristSide: -22}),
+    legL: {mode: 'ik', z: 1.15, x: 0, lift: 0, pitch: -6, yaw: 4}, legR: {mode: 'ik', z: -0.5, x: 0, lift: 0, pitch: 30, yaw: -6}};
+  // follow-through: the claw carries across to the left and down, still low and forward
+  // (kept in front of the body: the arm passes ahead of the chest, never through it)
+  const follow = {...hit, hips: [0, -0.26, 0.78], hipsRot: [18, 13, 0], chest: [6, 10, 0],
+    armL: {...ARM_HANG, dir: [0.62, -0.68, 0.38], flex: 30, wrist: -12},
+    armR: mirrorArm({dir: [0.12, 0.28, 0.95], flex: 14, wrist: -6, twist: 0, wristSide: 0})};
+  // recovery: rise, pull the front foot back and drag the back foot in (stepping back into stance)
+  const recover = {...B, hips: [0, -0.14, 0.18], hipsRot: [13, 4, 0], legL: {mode: 'ik', z: 0.3, x: 0, lift: 0.03, pitch: 0, yaw: 4}, legR: {mode: 'ik', z: -0.12, x: 0, lift: 0.02, pitch: 6, yaw: -5}};
   return [
-    {t: 0, p: B}, {t: 0.58, p: windup, ease: 'inOut'}, {t: 0.75, p: coiled, ease: 'out'}, {t: CLIP_SPECS.Attack.impactTime, p: hit, ease: 'in'},
+    {t: 0, p: B}, {t: 0.45, p: coil, ease: 'inOut'}, {t: 0.62, p: coiled, ease: 'out'}, {t: CLIP_SPECS.Attack.impactTime, p: hit, ease: 'in'},
     {t: 1.25, p: follow, ease: 'out'}, {t: 1.65, p: recover, ease: 'inOut'}, {t: CLIP_SPECS.Attack.duration, p: B, ease: 'inOut'},
   ];
 }
