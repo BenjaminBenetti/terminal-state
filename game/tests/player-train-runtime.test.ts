@@ -20,7 +20,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type TrainPlacement} from '../src/gen/playerTrain';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {TRAIN_DOOR, TRAIN_LIGHTS, PlayerTrainRuntime, installPlayerTrain, interiorLightMounts, trainColliders, trainQaApi, type TrainHost} from '../src/world/playerTrain';
-import {TRAIN_VIEW, leafSpan, viewCost, windowsOf} from '../src/world/playerTrainView';
+import {TRAIN_VIEW, TrainMaterials, WALL_ART_GLASS, buildTrainView, leafSpan, viewCost, windowsOf} from '../src/world/playerTrainView';
 import {raycastWorld} from '../src/combat/hitscan';
 import {loadStripped} from './helpers/openablesFixture';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -556,6 +556,38 @@ describe('player train follow-up: see-through windows (glass panes, lining cut-o
     const l = w.leaf!;
     expect(l.x0).toBeGreaterThan(-SPEC.doorLeaf.width / 2); expect(l.x1).toBeLessThan(SPEC.doorLeaf.width / 2);
     expect(l.y0).toBeGreaterThan(0); expect(l.y1).toBeLessThan(SPEC.doorLeaf.height);
+  });
+
+  it('task train-lockbox: a newly cut (saloon) window gets the wall art\'s painted glass laid exactly on its hole; the cab walls keep their mapping, continuous on both sides', () => {
+    // a saloon window on each side between the rear and middle doors, plus the cab windows the spec already has
+    const sal = [{side: -1 as const, zone: 'saloon', x0: -3.6, x1: -2.4, y0: 1.98, y1: 2.82, skinZ: 1.46}, {side: 1 as const, zone: 'saloon', x0: -3.6, x1: -2.4, y0: 1.98, y1: 2.82, skinZ: 1.46}];
+    const sp = {...SPEC, windows: {...SPEC.windows, side: [...SPEC.windows.side, ...sal]}} as typeof SPEC;
+    const view = buildTrainView(sp, new TrainMaterials());
+    const walls = view.fixed.getObjectByName('train-walls') as THREE.Mesh;
+    const pos = walls.geometry.attributes.position, uv = walls.geometry.attributes.uv;
+    const at = (x: number, y: number, z: number) => {
+      const out: [number, number][] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i) - x) < 1e-6 && Math.abs(pos.getY(i) - y) < 1e-6 && Math.abs(pos.getZ(i) - z) < 1e-6) out.push([uv.getX(i), uv.getY(i)]);
+      return out;
+    };
+    const hw = SPEC.interior.halfWidth;
+    for (const w of sal) {
+      // the hole's corner seen as the viewer's lower-left (from inside: -Z wall = smaller x, +Z wall = larger x) carries the painted
+      // glass's lower-left corner; the upper-right likewise
+      const ll = at(w.side < 0 ? w.x0 : w.x1, w.y0, w.side * hw), ur = at(w.side < 0 ? w.x1 : w.x0, w.y1, w.side * hw);
+      expect(ll.length, 'a lining vertex on the hole corner').toBeGreaterThan(0);
+      for (const [u, v] of ll) { expect(u).toBeCloseTo(WALL_ART_GLASS.u0, 6); expect(v).toBeCloseTo(WALL_ART_GLASS.v0, 6); }
+      for (const [u, v] of ur) { expect(u).toBeCloseTo(WALL_ART_GLASS.u1, 6); expect(v).toBeCloseTo(WALL_ART_GLASS.v1, 6); }
+    }
+    // the cab walls (accepted mapping): every lining vertex shared by two pieces carries ONE uv (no per-piece reversal on +Z)
+    const seen = new Map<string, string>();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      if (x < SPEC.cab.x0) continue;
+      const k = `${x.toFixed(5)},${pos.getY(i).toFixed(5)},${pos.getZ(i).toFixed(5)}`, u = `${uv.getX(i).toFixed(5)},${uv.getY(i).toFixed(5)}`;
+      if (seen.has(k)) expect(seen.get(k), `uv continuity at ${k}`).toBe(u); else seen.set(k, u);
+    }
+    for (const g of view.geometries) g.dispose();
   });
 
   it('glass in every cut window and leaf window, the lining open behind it, collision unchanged, bullets stop at the glass', () => {

@@ -58,6 +58,13 @@ export const TRAIN_VIEW = {
   lens: 0.07,
 } as const;
 
+/**
+ * Task train-lockbox-windows-20261101-232156: where the wall bay art (the accepted Codex train-int-wall texture) paints its window
+ * GLASS, in texture coordinates (measured on the 1024 px image: the dark glass inside the rubber gasket at px x 118..903, y 170..556).
+ * A newly cut side window gets the bay laid so this rect lands exactly on its hole: the painted gasket frames the real opening.
+ */
+export const WALL_ART_GLASS = {u0: 0.115, u1: 0.882, v0: 0.457, v1: 0.834} as const;
+
 /** The spec's head / tail mounts sit this far in front of the modelled lamp lenses (lane ASSETS). */
 const LENS_AHEAD = 0.05;
 
@@ -225,7 +232,7 @@ export function partitionsOf(spec: PlayerTrainSpec): {x: number; doorway: {z0: n
  * train-local; the leaf rect in the leaf GLB's own frame). Rects are the inner-most opening in their projection.
  */
 export interface TrainWindows {
-  side: readonly {side: -1 | 1; x0: number; x1: number; y0: number; y1: number; skinZ: number}[];
+  side: readonly {side: -1 | 1; zone?: string; x0: number; x1: number; y0: number; y1: number; skinZ: number}[];
   end: readonly {end: -1 | 1; z0: number; z1: number; y0: number; y1: number; skinX: number}[];
   leaf: {x0: number; x1: number; y0: number; y1: number} | null;
 }
@@ -302,25 +309,55 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   const seam = TRAIN_VIEW.shortBay;
   for (const side of [-1, 1] as const) {
     const z = side * hw, n: V3 = [0, 0, -side];
-    // u runs to the viewer's right: +X on the -Z wall (seen facing -Z), -X on the +Z wall
-    // (corner order is left -> right as seen from inside, so ua is always the viewer's left edge)
-    const piece = (a: number, b: number, y0: number, y1: number, ua: number, ub: number) => {
-      const v0 = (y0 - f) / H, v1 = (y1 - f) / H;
-      if (side < 0) wall.quad([a, y0, z], [b, y0, z], [b, y1, z], [a, y1, z], n, [ua, v0], [ub, v0], [ub, v1], [ua, v1]);
-      else wall.quad([b, y0, z], [a, y0, z], [a, y1, z], [b, y1, z], n, [ua, v0], [ub, v0], [ub, v1], [ua, v1]);
+    // u runs to the viewer's right: +X on the -Z wall (seen facing -Z), -X on the +Z wall; uOf / vOf give a corner's texture
+    // coordinates (task train-lockbox: one continuous mapping per span, also across window holes on the +Z wall)
+    const piece = (a: number, b: number, y0: number, y1: number, uOf: (x: number) => number, vOf: (y: number) => number) => {
+      const v0 = vOf(y0), v1 = vOf(y1);
+      if (side < 0) wall.quad([a, y0, z], [b, y0, z], [b, y1, z], [a, y1, z], n, [uOf(a), v0], [uOf(b), v0], [uOf(b), v1], [uOf(a), v1]);
+      else wall.quad([b, y0, z], [a, y0, z], [a, y1, z], [b, y1, z], n, [uOf(b), v0], [uOf(a), v0], [uOf(a), v1], [uOf(b), v1]);
     };
+    const vWall = (y: number) => (y - f) / H;
+    /** u growing to the viewer's right over [a, b], from ua at the viewer's left edge to ub at the right. */
+    const uSpan = (a: number, b: number, ua: number, ub: number) => (x: number) => ua + ((side < 0 ? x - a : b - x) / (b - a)) * (ub - ua);
     const seamU = (len: number): [number, number] => { const w = Math.min(0.24, len / H) / 2; return [-w, w]; };
     // (task train-shell-followup) the see-through side windows cut out of this side's lining (their sleeves / glass below)
-    const holes = win.side.filter(w => w.side === side).map(w => [w.x0, w.x1, w.y0, w.y1] as [number, number, number, number]);
+    const wins = win.side.filter(w => w.side === side);
+    const holes = wins.map(w => [w.x0, w.x1, w.y0, w.y1] as [number, number, number, number]);
     for (const [a, b] of wallSpans(ix0, ix1, cutsOf(side))) {
-      const len = b - a, nb = Math.round(len / H);
-      const [ua, ub] = nb >= 1 && len >= seam * H ? [0, nb] : seamU(len);
-      const uAt = (x: number) => ua + ((x - a) / len) * (ub - ua); // the span's bay mapping, kept across the window holes
-      for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, f, c, holes)) piece(x0, x1, y0, y1, uAt(x0), uAt(x1));
+      const inSpan = wins.filter(w => w.x1 > a && w.x0 < b);
+      const len = b - a;
+      if (!inSpan.length || inSpan.every(w => (w.zone ?? 'cab') === 'cab')) {
+        // the accepted bay mapping (whole window bays / a plain seam strip), kept across the cab's window holes
+        const nb = Math.round(len / H);
+        const [ua, ub] = nb >= 1 && len >= seam * H ? [0, nb] : seamU(len);
+        const uOf = uSpan(a, b, ua, ub);
+        for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, f, c, holes)) piece(x0, x1, y0, y1, uOf, vWall);
+        continue;
+      }
+      // task train-lockbox-windows: a span with newly cut windows — one wall bay per window, the bay art's painted glass laid exactly
+      // over the real hole (so its painted gasket frames it), plain panel between the bays (the bay art's seam strip)
+      const sorted = [...inSpan].sort((p, q) => p.x0 - q.x0);
+      sorted.forEach((w, i) => {
+        const ba = i === 0 ? a : (sorted[i - 1].x1 + w.x0) / 2, bb = i === sorted.length - 1 ? b : (w.x1 + sorted[i + 1].x0) / 2;
+        const su = (WALL_ART_GLASS.u1 - WALL_ART_GLASS.u0) / (w.x1 - w.x0), sv = (WALL_ART_GLASS.v1 - WALL_ART_GLASS.v0) / (w.y1 - w.y0);
+        // u at x: the painted glass's left / right edges (as seen from inside) on the hole's left / right edges
+        const uOf = (x: number) => WALL_ART_GLASS.u0 + (side < 0 ? x - w.x0 : w.x1 - x) * su;
+        const vOf = (y: number) => WALL_ART_GLASS.v0 + (y - w.y0) * sv;
+        // the art tile (u 0..1) in x, clipped to the bay; the bay's rest is the plain seam strip on the same v (the trims line up)
+        const t0 = side < 0 ? w.x0 - WALL_ART_GLASS.u0 / su : w.x1 - (1 - WALL_ART_GLASS.u0) / su;
+        const t1 = side < 0 ? w.x0 + (1 - WALL_ART_GLASS.u0) / su : w.x1 + WALL_ART_GLASS.u0 / su;
+        const ta = Math.max(ba, t0), tb = Math.min(bb, t1);
+        for (const [x0, x1, y0, y1] of rectMinusHoles(ta, tb, f, c, holes)) piece(x0, x1, y0, y1, uOf, vOf);
+        for (const [pa, pb] of [[ba, ta], [tb, bb]] as const) {
+          if (pb - pa < 1e-3) continue;
+          const [s0, s1] = seamU(pb - pa);
+          piece(pa, pb, f, c, uSpan(pa, pb, s0, s1), vOf);
+        }
+      });
     }
     for (const d of spec.doors.filter(q => q.side === side)) {
       const a = d.x - d.width / 2, b = d.x + d.width / 2, top = Math.min(c, f + d.height);
-      if (c - top > 1e-3) { const [s0, s1] = seamU(b - a); piece(a, b, top, c, s0, s1); }
+      if (c - top > 1e-3) { const [s0, s1] = seamU(b - a); piece(a, b, top, c, uSpan(a, b, s0, s1), vWall); }
     }
   }
   add(wall, mats.get('wall', tex.wall), 'train-walls');
