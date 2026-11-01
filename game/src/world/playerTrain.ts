@@ -969,7 +969,7 @@ export class PlayerTrainRuntime {
   // Task train-lockbox-windows-20261101-232156: the Lockbox (the world object; lane BOX owns its 40 slots and its view)
 
   private lockboxPrompt(): string {
-    return this.onLockboxInteract || this.lockboxLid.target === 0 ? '<b>[E]</b> Open Lockbox' : '<b>[E]</b> Close Lockbox';
+    return this.lockboxLid.target === 0 ? '<b>[E]</b> Open Lockbox' : '<b>[E]</b> Close Lockbox'; // open lid = the view is open (E closes it)
   }
 
   /** [E] on the aimed Lockbox: lane BOX's handler (it opens its view and sets the lid), else the lid toggles. */
