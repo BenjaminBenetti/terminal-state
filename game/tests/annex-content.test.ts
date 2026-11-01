@@ -35,6 +35,8 @@ import {STEAM, annexVents} from '../src/world/trackExt/steam';
 import {CAP_OVERHANG, CAP_SKIN} from '../src/world/trackExt/caps';
 import {placeSectionGear, rollLevelGear} from '../src/gen/gearLoot';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
+import {annexCachesOf} from '../src/gen/annexCache'; // (round 3, lane HIDEOUT)
+import {ANNEX_CACHE_GEAR_KEY} from '../src/items/lootTables'; // (round 3, lane HIDEOUT)
 
 /** Seeds by annex count (deterministic; tests/track-ext.test.ts census); `hatch`: a tunnel annex + a service-hatch annex (GEN-2). */
 const SUBWAY = {1: 4055629249, 2: 2563024239, none: 2027820797, hatch: 774566179};
@@ -319,9 +321,12 @@ describe('service annex loot (finite, themed, appended, never multiplying the le
       const dist = levelDistance(l.levels, sx, sy, start.level ?? 0, l.levelLinks)[0];
       for (const p of l.pickups.slice(rep.first.pickups)) {
         expect(own(p)).toBe(true);
-        expect(ITEMS[p.itemId].kind).not.toBe('gear');
+        // (round 3, lane HIDEOUT) the hideout's gear piece (gen/annexCache.ts, ANNEX_CACHE_GEAR) is the one tagged annex pickup: gear by design
+        const hideoutGear = p.reward === ANNEX_CACHE_GEAR_KEY;
+        if (hideoutGear) expect(ITEMS[p.itemId].kind).toBe('gear');
+        else expect(ITEMS[p.itemId].kind).not.toBe('gear');
         expect(ITEMS[p.itemId].kind).not.toBe('weapon');
-        expect(p.reward).toBeUndefined();
+        if (!hideoutGear) expect(p.reward).toBeUndefined();
         const [x, y] = g.cellOf(p.x, p.z), i = g.idx(x, y);
         expect(dist[i], `${l.seed} ${p.itemId} reachable`).toBeGreaterThanOrEqual(0);
         expect(p.y).toBeCloseTo(g.floorOf(i), 6);
@@ -422,7 +427,9 @@ describe('extension lights, steam vents and the rest', () => {
     for (const l of WITH()) {
       const rep = extensionContentOf(l)!;
       const ext = l.lights.slice(rep.first.lights);
-      expect(ext.every(x => !x.tint && !x.virtual)).toBe(true);
+      // (round 3, lane HIDEOUT) the only fixture-less sources: the hideout lanterns' warm light (gen/annexCache.ts, one per cache)
+      const lanterns = new Set(annexCachesOf(l).map(c => c.light).filter(i => i >= 0).map(i => l.lights[i]));
+      expect(ext.every(x => !x.tint && (!x.virtual || (lanterns.has(x) && x.warm)))).toBe(true);
       for (const n of l.extensions!.annexes) {
         expect(l.areas[n.areas[0]].lighting).not.toBe('dark');
         for (const id of n.areas) {
@@ -433,7 +440,7 @@ describe('extension lights, steam vents and the rest', () => {
         }
       }
       // darker: the share of steadily working fixtures in the annexes is well below the core station's
-      const coreL = l.lights.slice(0, rep.first.lights).filter(x => !x.virtual), annL = ext.filter(inAnnex(l));
+      const coreL = l.lights.slice(0, rep.first.lights).filter(x => !x.virtual), annL = ext.filter(inAnnex(l)).filter(x => !x.virtual);
       const share = (L: typeof ext) => L.filter(x => !x.broken && !x.dying).length / Math.max(1, L.length);
       expect(share(annL)).toBeLessThan(share(coreL) * 0.6);
     }

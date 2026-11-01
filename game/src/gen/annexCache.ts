@@ -333,7 +333,7 @@ function buildCache(ctx: PlaceCtx, layout: StationLayout, n: ServiceAnnex, a: Ar
   let own: LightPlacement | undefined;
   for (let i = from.lights; i < layout.lights.length && !own; i++) if (layout.lights[i].area === a.id && !layout.lights[i].virtual) own = layout.lights[i];
   if (L && own) Object.assign(own, {broken: false, dying: false, flicker: false, warm: true, power: L.power});
-  if (L && a.lighting === 'dark') a.lighting = 'dim';
+  if ((L && own) || lantern) if (a.lighting === 'dark') a.lighting = 'dim';
   // (round 3) the LANTERN lights the room: a warm, steady light-field source at the lantern (`virtual`: no fixture / tube / glow card,
   // world/builder.ts; the baked light field, world/lightField.ts) — appended, so every earlier light keeps its index
   let light = -1;
