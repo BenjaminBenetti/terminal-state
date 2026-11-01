@@ -59,8 +59,10 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
   const roll = btsAreaRoll(ctx.levelSeed), present = roll < BTS_AREA_CHANCE;
   ext.area = {roll, chance: BTS_AREA_CHANCE, present};
   // (GEN-2) the incidence planner: a seeded per-level wanted annex count (own fork: the original planner's draws are untouched) —
-  // (lane AREA) only for a level that has the area, from the weights of 1 / 2 annexes (absence is the area roll's alone)
-  const want = present && A.count ? Math.min(A.max, rng.fork('annex-count').weighted(A.count.map((w, i) => [i, w] as [number, number]).filter(([i]) => i >= 1))) : 0;
+  // (lane AREA) only for a level that has the area, from the weights of 1 / 2 annexes (absence is the area roll's alone; a config
+  // whose 1 / 2 weights are both 0 wants none)
+  const counts = A.count ? A.count.map((w, i) => [i, w] as [number, number]).filter(([i, w]) => i >= 1 && w > 0) : [];
+  const want = present && counts.length ? Math.min(A.max, rng.fork('annex-count').weighted(counts)) : 0;
   let hosts = 0;
   const open: BedEndInfo[] = [];
   // tunnels: bed ends in a seeded order, each on its own fork (independent of the others' draws)

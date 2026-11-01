@@ -16,6 +16,10 @@ Off a tunnel's side wall, or behind a **service hatch** in the outer wall of a b
 same level and world, with no loading. Graffiti arrows and tags appear only where a real route leads to an annex, and (playtest
 revision) the platforms announce every real annex entrance with station-surface art: see "Station invitation art" below.
 
+**The area is rare (2026-11-01):** the annexes — this "Beyond the Station" area with everything that belongs to it — exist on a
+level only when the level's ONE seeded roll succeeds, **20 % of levels on every level type**. See "The area roll" below. The tunnels
+themselves are not part of the roll: every level keeps its tunnels, caps and bed ends exactly as configured.
+
 ## Opting a level in
 
 1. **Declare it in the registry.** In `game/src/levels/registry.ts`, `LEVELS[id].trackExtensions` is a required field:
@@ -26,7 +30,8 @@ revision) the platforms announce every real annex entrance with station-surface 
 2. **Generate in this order:**
    - After all of its own carving, the generator calls `extendTracks(k, rng.fork('track-ext'), cfg, ctx)` from
      `game/src/gen/trackExt/index.ts`. It takes any `Kit` with trenches; `ctx` is
-     `{levelId, canvasGrow: 'any' | 'east-south', origin?, maxCells}`.
+     `{levelId, levelSeed, canvasGrow: 'any' | 'east-south', origin?, maxCells}`. `levelSeed` is the LOGICAL level seed (the
+     run's per-level seed, never an attempt seed): the area roll is taken from it, so a new level type gets the same 20 % rule.
    - After every core pass:
      - `finishExtensions(layout, ext, {ox, oy, grow})` embeds the finished core into the larger grid its extensions need. With
        `'any'` (the Subway), a west or north extension translates the core. With `'east-south'` (a fixed crop origin, as in
@@ -49,9 +54,43 @@ revision) the platforms announce every real annex entrance with station-surface 
 | Cap kinds | rubble / bulkhead / gate, weights 0.45 / 0.3 / 0.25 |
 | Cap depth | 1.5 m |
 
+**The area roll** (2026-11-01, lane AREA; user: "drop the spawn chance of the beyond the station area ... twenty percent ... across
+all levels"):
+- **One roll per logical level:** `btsAreaRoll(levelSeed)` (`game/src/gen/trackExt/config.ts`) is a pure hash of the level seed on
+  its own salt (`BTS_AREA_SALT`); the area is present when it is below **`BTS_AREA_CHANCE` = 0.2**, one shared constant for every
+  level type. It is never per tunnel, entrance, candidate or storey (that would compound the odds), never an attempt seed (a
+  generation retry rolls the same), and never re-rolled on entering, reloading or revisiting: generation is a pure function of the
+  seed and the run keeps only the seed. `extendTracks` records it on every plan as `layout.extensions.area = {roll, chance, present}`.
+- **Absent (about 80 % of levels):** no annex is planned at all — no annex door or bed hatch, no graffiti clue, no station
+  invitation art, no hideout, cache, survivor mark, annex loot, light, vent, machinery or service spawn, no orphan door or stranded
+  room. The tunnels, caps and bed ends are the ordinary ones; every tunnel's log line says `annex: no area (level roll …)`.
+- **Present:** the existing planner places the area through the existing lawful entrances and caps, its count shaped as before but
+  conditional on at least one annex:
+  - Subway (`TRACK_EXT`): `annex.count` is now `[0, 0.53, 0.40]` — the level wants 1 or 2 annexes in the ratio 0.53 : 0.40 (the old
+    0.07 "wants none" entry is the roll's job now); tunnels first, then service hatches, at most 2;
+  - Office (`TRACK_EXT_OFFICE`, the original planner): the old seeded 0.6 chance PER ELIGIBLE TUNNEL is gone (the `annex.chance`
+    setting no longer exists); every eligible tunnel, in the seeded order, takes an annex until `annex.max` 2 (the retired roll's draw
+    is still taken and ignored, so each annex's own layout stream is unchanged);
+  - Mall (`TRACK_EXT_MALL`): one annex.
+  The content / layout / hideout / cache / graffiti / loot rules are unchanged; the guaranteed deep hideout applies to every annex.
+- **Core unaffected:** the roll draws from no generation stream and the core never depends on whether annexes were placed
+  (`game/tests/bts-area.test.ts` core-view proof; the core pins of the parity / loot / office tests never moved).
+- **Realised occurrence** (measured; `game/tests/bts-area.test.ts` re-measures 250 seeds per type every run). Present levels that
+  still get no annex are genuinely ineligible — no tunnel with a long enough first straight (the Office's fixed east / south canvas:
+  its island-ends bed ends are often 0.5–2 m from the station walls) — nothing is re-rolled or compensated:
+  | Level | Present levels with an annex | 0 / 1 / 2 annexes (present levels) | Realised rate |
+  |---|---|---|---|
+  | Subway | 200 / 200 | 0 / 147 / 53 | 0.20 |
+  | Office | 183 / 200 (281 / 311 incl. seeds 1–700) | 17 / 43 / 140 | ≈ 0.18 (0.2 × 0.90–0.92) |
+  | Mall | 200 / 200 | 0 / 200 / 0 | 0.20 |
+  (200 present seeds per type, `(i × 2654435761 + 7777) >>> 0` picked by the roll; the roll itself is 0.199 over 100,000 seeds and
+  0.2 within 4σ per seed family, Subway archetype and mall variant over 60,000 seeds.)
+- **Tests** select their annex samples with the real roll (`game/tests/helpers/btsArea.ts` `presentSeeds` / `absentSeeds`); there is
+  deliberately no override that forces the area.
+
 **Annexes:**
-- **How many per level:** `annex.count` weights are 0.07 / 0.53 / 0.40 for 0 / 1 / 2 annexes. The level tries tunnels first,
-  then hatches; a failed attempt is omitted with no orphan door, clue or cell.
+- **How many per level:** on a level whose area roll succeeded (above), the Subway's `annex.count` weights are 0 / 0.53 / 0.40 for
+  0 / 1 / 2 annexes. The level tries tunnels first, then hatches; a failed attempt is omitted with no orphan door, clue or cell.
 - **Size:** `share` 0.25 of the baseline, jittered by 0.85–1.15, minimum `minShare` 0.15.
 - **Layout:** corridors 1.5–2 m wide; rooms from 3×3 m to 8×10 m; ceilings 2.4–2.8 m.
 - **The service-area plan** (round 3, task studio-alpha-track2-round3-20261031-01, lane LAYOUT; user: "layout feels like it is not
@@ -95,7 +134,8 @@ revision) the platforms announce every real annex entrance with station-surface 
 - Right after the archetype skeleton, 40 m of rock is kept free past every bed end that is still open, so the rest of the
   station plans around the tunnel room. This is a deliberate layout change to the core station, made for annex incidence.
 - With `coreReserveM: 0` (`TRACK_EXT_RESERVE_OFF`, `game/tests/helpers/trackExtCore.ts`), the core reproduces the earlier pins.
-- The Office uses `TRACK_EXT_OFFICE`: no reserve and the original annex planner.
+- The Office uses `TRACK_EXT_OFFICE`: no reserve and the original annex planner (since 2026-11-01 without its per-tunnel roll).
+- The reserve is applied whatever the area roll says: the core station never depends on the roll.
 
 **Service hatches:**
 - **Why they exist:** island-ends and express stations have their paid-concourse end halls 1.5–4 m past every bed end, so no
@@ -103,8 +143,9 @@ revision) the platforms announce every real annex entrance with station-surface 
 - **How they work:** an annex there is reached through a door in the bed's outer side wall near an end, 2–10 m from the end
   face, never in a platform face. The annex sits at bed floor height. The way back is the bed's own ladders.
 
-**Measured incidence** (64-seed corpus): 60/64 Subway levels have at least one annex and 18/64 have two (0 / 1 / 2 =
-4 / 42 / 18); 16 of 78 annexes are behind a hatch.
+**Measured incidence** (64-seed corpus, before the 2026-11-01 one-roll rule): 60/64 Subway levels had at least one annex and 18/64
+two (0 / 1 / 2 = 4 / 42 / 18); 16 of 78 annexes were behind a hatch. Now only about 20 % of levels have the area at all (above);
+`game/tests/track-ext.test.ts` holds the same incidence checks over the first 64 corpus seeds that roll it PRESENT.
 
 ## The mall (`mall`, task track3-eaton-centre-20261031, lane INTEG)
 
@@ -134,7 +175,8 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
   the opt-in `TrackExtContext.coreCrop`; the budget check is then exact (max 74,802 over 20 malls).
 - Hatches stay refused in the mall (both beds of its `sideBlock` are flanked by side platforms), and the west bed end lies behind the
   fixed crop origin (east / south growth only), so a mall has at most ONE tunnel (east) and one annex.
-- Measured (48 generated malls: 16 seeds `9100 + 104729k` x 3 variants; every attempt valid first time, none dropped):
+- Since 2026-11-01 the mall's annex also needs the level's area roll (20 %): a present mall gets its one annex (200 / 200 measured).
+- Measured before that rule (48 generated malls: 16 seeds `9100 + 104729k` x 3 variants; every attempt valid first time, none dropped):
   - 1 tunnel per mall (east end), 45.5–103.5 m (mean 69.6), caps bulkhead 24 / gate 18 / rubble 6;
   - annexes 0 / 1 / 2 = 3 / 45 / 0 (the 3 are one seed's "wants 0" draw), 1135–1957 m² (mean 1604), 47–84 areas;
   - `service` spawns 3.88 per run (4.13 per annex, max 5): zombie 169 / rat-dog 13 / Blightbelly 4, no Siren;
@@ -144,7 +186,9 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
 
 ## Data model (`game/src/gen/trackExt/types.ts`)
 
-`layout.extensions?: TrackExtensions` holds `{tunnels, annexes, log, core, shift, coreXZ, vents?}`.
+`layout.extensions?: TrackExtensions` holds `{tunnels, annexes, log, core, shift, coreXZ, vents?, area}`. `area` (2026-11-01) =
+`{roll, chance, present}`: the level's one Beyond the Station roll (`present` false ⇒ `annexes` is empty and nothing of the area
+exists).
 
 **`TrackTunnel`:**
 - `trench`, `from` (`'x0' | 'x1'`), `floorY`, `ceilY`, `width`;

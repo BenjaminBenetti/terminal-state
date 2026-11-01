@@ -347,7 +347,8 @@ The track beds continue past the old black end walls into finite concrete tunnel
 ends in a physical cap: a rubble heap, a bulkhead or a gate. Island-ends and express stations have no room past their bed
 ends, so instead they get service hatches in the outer bed wall.
 
-Up to two seeded service annexes per level are reached through a side door or a hatch. Each is about a quarter of the
+On 20 % of levels (one seeded roll per level, every level type: `BTS_AREA_CHANCE`), up to two seeded service annexes are reached
+through a side door or a hatch; the other levels keep only their tunnels. Each is about a quarter of the
 station's walkable area, at track-bed height. They are dark (untinted, mostly dying or dead fixtures), with pipes and
 conduits on board-formed concrete. Steam from the vents is visual only and never hurts. Each annex has:
 - **loot:** a deep stash or two, picked-over shelves, and nothing guaranteed;
