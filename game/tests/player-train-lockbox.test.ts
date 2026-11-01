@@ -21,6 +21,9 @@ import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type T
 import {LOCKBOX_CLEAR, LOCKBOX_PROVISIONAL, PARTITION_HALF, PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {PlayerTrainRuntime, installPlayerTrain, trainQaApi, type TrainHost} from '../src/world/playerTrain';
 import {TRAIN_VIEW} from '../src/world/playerTrainView';
+import {PLAYER_TRAIN_MEASURED} from '../src/assets/playerTrain.generated';
+import {loadStripped} from './helpers/openablesFixture';
+import {LOCKBOX_MODEL_KEY} from '../src/world/trainLockbox';
 import {LOCKBOX, lockboxFootprint} from '../src/world/trainLockbox';
 
 installCanvasShim(false);
@@ -92,9 +95,13 @@ describe('the Lockbox: placement (spec.lockbox)', () => {
   it('stands in the rear compartment, centred along it, its back on the far-side lining, front to the aisle, clear of doorway / doors / walls', () => {
     const rear = SPEC.rear!, hw = SPEC.interior.halfWidth;
     expect(PARTITION_HALF).toBe(TRAIN_VIEW.partition / 2);
-    // provisional until lane ASSETS measures the cooked model: 1.03 x 0.55 x 0.61 m (substantial: a 40-slot box)
-    expect([LB.length, LB.height, LB.depth]).toEqual([LOCKBOX_PROVISIONAL.length, LOCKBOX_PROVISIONAL.height, LOCKBOX_PROVISIONAL.depth]);
+    // the cooked model's measured size (lane ASSETS; the provisional box only without it): ~1.03 x 0.56 x 0.61 m — substantial (40 slots)
+    const M = (PLAYER_TRAIN_MEASURED as {lockbox?: typeof LOCKBOX_PROVISIONAL}).lockbox ?? LOCKBOX_PROVISIONAL;
+    expect([LB.length, LB.height, LB.depth]).toEqual([M.length, M.height, M.depth]);
+    expect(LB.seamY).toBe(M.seamY);
+    expect([LB.lid.hingeY, LB.lid.hingeZ]).toEqual([M.hinge.y, M.hinge.z]);
     expect(LB.length).toBeGreaterThan(0.9);
+    expect(LB.height).toBeGreaterThan(0.45);
     const fp = lockboxFootprint(LB);
     // in the compartment, 1.5-3 cm clear of the rear bulkhead and the partition's rear face; centred between them
     const back = SPEC.interior.x0, partitionFace = rear.x1 - PARTITION_HALF;
@@ -263,5 +270,45 @@ describe('the Lockbox: collision, aim, lid, lane BOX API', () => {
     const c = build();
     expect(c.rt.lockboxView!.source).toBe('placeholder');
     expect(c.rt.lockboxView!.lid).not.toBeNull();
+  });
+});
+
+describe('the Lockbox: the cooked Meshy model (lane ASSETS) in place', () => {
+  it('two nodes, grounded in its footprint, the lid pivoting on its hinge line, the liner inside the cavity', async () => {
+    const files = (await import('../src/assets/playerTrain.generated')).PLAYER_TRAIN_MODELS as Record<string, {url: string}>;
+    expect(files[LOCKBOX_MODEL_KEY], 'the cooked lockbox is in the train catalogue').toBeTruthy();
+    const gltf = await loadStripped(files[LOCKBOX_MODEL_KEY].url);
+    expect(gltf.scene.getObjectByName('lockbox-body')).toBeTruthy();
+    expect(gltf.scene.getObjectByName('lockbox-lid')).toBeTruthy();
+    const {h, rt, p} = build(() => ({lockbox: gltf}));
+    const v = rt.lockboxView!;
+    expect(v.source).toBe('model');
+    v.group.updateMatrixWorld(true);
+    // the placed model sits on the car floor, inside its collision footprint (+1 cm), never in the lining / partition
+    const bb = new THREE.Box3();
+    v.group.traverse(o => { if ((o as THREE.Mesh).isMesh && !o.userData.lockboxLiner) bb.expandByObject(o); });
+    const lo = worldToTrain(p, bb.min.x, bb.min.y, bb.min.z), hi = worldToTrain(p, bb.max.x, bb.max.y, bb.max.z);
+    const fp = lockboxFootprint(LB);
+    expect(bb.min.y).toBeCloseTo(p.floorY, 2);
+    expect(bb.max.y - p.floorY).toBeCloseTo(LB.height, 2);
+    expect(Math.min(lo.x, hi.x)).toBeGreaterThan(fp.x0 - 0.01); expect(Math.max(lo.x, hi.x)).toBeLessThan(fp.x1 + 0.01);
+    expect(Math.min(lo.z, hi.z)).toBeGreaterThan(fp.z0 - 0.01); expect(Math.max(lo.z, hi.z)).toBeLessThan(SPEC.interior.halfWidth);
+    // the lid node's origin is the hinge line (box frame), and it opens up and back about it
+    const lid = v.lid!;
+    expect(lid.position.y).toBeCloseTo(LB.lid.hingeY, 3);
+    expect(lid.position.z).toBeCloseTo(LB.lid.hingeZ, 3);
+    const front0 = new THREE.Box3().setFromObject(lid);
+    rt.setLockboxOpen(true);
+    step(h, LOCKBOX.lidTime + 0.1);
+    v.group.updateMatrixWorld(true);
+    const front1 = new THREE.Box3().setFromObject(lid);
+    expect(front1.max.y, 'the open lid stands up').toBeGreaterThan(front0.max.y + 0.3);
+    // the liner fills the measured cavity (box frame), below the seam
+    const liner = v.group.getObjectByName('train-lockbox-liner') as THREE.Mesh;
+    liner.geometry.computeBoundingBox();
+    const lb = liner.geometry.boundingBox!;
+    expect(lb.max.y).toBeCloseTo(LB.seamY!, 4);
+    expect(lb.min.y).toBeCloseTo(LB.cavity!.y0, 4);
+    expect(lb.min.x).toBeGreaterThanOrEqual(-LB.length / 2); expect(lb.max.x).toBeLessThanOrEqual(LB.length / 2);
   });
 });
