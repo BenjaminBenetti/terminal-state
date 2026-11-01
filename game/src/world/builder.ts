@@ -582,6 +582,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Pendant rods for fixtures hung below tall ceilings.
   for (const l of layout.lights) {
     if (l.virtual) continue; // Iteration 16 (WORLD-GEN): fixture-less daylight sources have no rods
+    if (reactor?.isLamp(l)) continue; // task reactor-build-20261101 (lane ARCH): pit lamps hang on their own bracket (ReactorArch.buildLamps)
     // Lane T: the local ceiling (follows flights / landings / the underpass), not the area's top.
     const local = gridOf(levelOf(l)).ceilAt(l.x, l.z);
     const ceil = Math.min(layout.areas[l.area]?.ceil ?? l.y, Number.isFinite(local) ? local : Infinity);
@@ -677,13 +678,15 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   let tubes: THREE.InstancedMesh | null = null;
   // Task track3-eaton-centre-20261031 (lane ARCH): mall ring fixtures are square downlight cans (their tube = the can's lens).
   const down = (i: number) => !!mall && mall.isDownlight(layout.lights[i]);
-  if (models.light) instances += instanceModel(group, models.light, mall ? lightMats.filter((_, i) => !down(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
+  const lamp = (i: number) => !!reactor && reactor.isLamp(layout.lights[i]); // task reactor-build-20261101 (lane ARCH): pit fixtures = caged industrial lamps
+  if (models.light) instances += instanceModel(group, models.light, mall || reactor ? lightMats.filter((_, i) => !down(i) && !lamp(i)) : lightMats, {w: mats.fixture.w, h: mats.fixture.h, d: mats.fixture.d, anchor: 'top'}, 'light');
   if (mall) instances += mall.buildDownlights(group, lightMats, layout.lights, mats.fixture);
+  if (reactor) instances += reactor.buildLamps(group, lightMats, layout.lights); // (reactor-build, lane ARCH)
   {
     const geo = new THREE.BoxGeometry(mats.fixture.w * 0.82, 0.025, mats.fixture.d * 0.42);
     geo.translate(0, -mats.fixture.h - 0.004, 0);
     tubes = new THREE.InstancedMesh(geo, mats.get('tube'), layout.lights.length);
-    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : m));
+    lightMats.forEach((m, i) => tubes!.setMatrixAt(i, down(i) ? downlightLensMatrix(m, mats.fixture) : lamp(i) ? reactor!.lampLensMatrix(m, mats.fixture) : m)); // (reactor-build, lane ARCH: + the pit lamps' lens)
     const c = new THREE.Color();
     fixtures.forEach((f, i) => tubes!.setColorAt(i, f.broken ? c.setRGB(0.05, 0.05, 0.05) : c.setRGB(1, 1, 1)));
     tubes.name = 'light-tubes';

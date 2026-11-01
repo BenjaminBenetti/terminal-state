@@ -82,6 +82,23 @@ describe('builder: a world carrying layout.reactor', () => {
     expect(ms.has('reactor-steel')).toBe(true);
   });
 
+  it('GEN light fixtures inside the pit render as caged lamps (no tube fixture, the tube instance is the lens); outside: tubes', () => {
+    const base = reactorOn(levelFixture());
+    const light = (x: number, z: number) => ({x, y: 3.2, z, rot: 0, area: 0, broken: false, flicker: false, warm: true, power: 1, dying: false, level: 0});
+    const L = {...base, lights: [light(12, 6), light(14, 18), light(28, 6)]};
+    const w = buildWorld(L, mats(), {});
+    expect(w.reactorArch!.isLamp(L.lights[0])).toBe(true);
+    expect(w.reactorArch!.isLamp(L.lights[2])).toBe(false);
+    expect(w.reactorArch!.stats.lamps).toBe(2);
+    const n = names(w);
+    expect(n.some(x => x.startsWith('reactor-lamp-cage-'))).toBe(true);
+    const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    w.tubes!.getMatrixAt(0, m); m.decompose(p, q, s);
+    expect(s.x).toBeLessThan(0.5); // shrunk into the cage's lens
+    w.tubes!.getMatrixAt(2, m); m.decompose(p, q, s);
+    expect(s.x).toBeCloseTo(1, 5); // a tube fixture outside the pit
+  });
+
   it('the same world WITHOUT layout.reactor never reaches a Reactor path (no kit, no finishes, no atrium, no visuals)', () => {
     const before = buildWorld(reactorOn(levelFixture()), mats(), {});
     expect(activeReactorArchVisuals()).toBe(before.reactorArch!.visuals);

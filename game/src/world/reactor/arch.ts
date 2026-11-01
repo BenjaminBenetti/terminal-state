@@ -22,7 +22,7 @@ import type {ReactorInfo} from '../../gen/reactor/reactorTypes';
 import type {MatKey, WorldMaterials} from '../materials';
 import {cellCeil, type BuiltFace} from '../levelGeometry';
 import {inPoly, planReactorKit, type KitPlan, type KitStats} from './archKit';
-import {buildKitMeshes, type KitBuildStats, type KitBuilt} from './archMeshes';
+import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './archMeshes';
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
@@ -36,6 +36,8 @@ export interface ReactorArchStats {
   /** Faces / floors / ceilings remapped to reactor finishes (by key). */
   faces: Record<string, number>;
   pitCells: number;
+  /** GEN's light fixtures in the pit drawn as caged lamps (buildLamps). */
+  lamps: number;
   ms: number;
 }
 
@@ -57,7 +59,7 @@ export class ReactorArch {
   plan: KitPlan | null = null;
   built: KitBuilt | null = null;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
-  readonly stats: ReactorArchStats = {kit: null, meshes: null, models: [], faces: {}, pitCells: 0, ms: 0};
+  readonly stats: ReactorArchStats = {kit: null, meshes: null, models: [], faces: {}, pitCells: 0, lamps: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): ReactorArch | null {
     const r = (layout as {reactor?: ReactorInfo}).reactor;
@@ -162,6 +164,54 @@ export class ReactorArch {
   ownsRail(r: RailRun): boolean {
     if (r.kind === 'parapet') return false;
     return r.level > 0 || this.inPit((r.x0 + r.x1) / 2 + r.nx * 0.3, (r.z0 + r.z1) / 2 + r.nz * 0.3) || this.inPit((r.x0 + r.x1) / 2 - r.nx * 0.3, (r.z0 + r.z1) / 2 - r.nz * 0.3);
+  }
+
+  // -------------------------------------------------------------------------------------------------------------------------
+  // GEN's light fixtures in the pit: caged industrial lamps (the lighting system's tube instance becomes the cage's lens)
+
+  /** A real (non-virtual) layout light inside the pit: drawn as a caged lamp, not a Subway tube fixture (rooms keep tubes). */
+  isLamp(l: {x: number; z: number; virtual?: boolean}): boolean {
+    return !l.virtual && this.inPit(l.x, l.z);
+  }
+
+  /** The tube instance of a pit lamp as its lens: a 0.2 m glowing square under the cage (0.36 m below the light point). */
+  lampLensMatrix(m: THREE.Matrix4, fixture: {w: number; h: number; d: number}): THREE.Matrix4 {
+    const sx = 0.2 / (fixture.w * 0.82), sz = 0.2 / (fixture.d * 0.42);
+    return m.clone().multiply(new THREE.Matrix4().makeTranslation(0, fixture.h + 0.004 - 0.36, 0)).multiply(new THREE.Matrix4().makeScale(sx, 1, sz));
+  }
+
+  /** Cages + hangers of the pit lamps (instanced per tier; the light points are the layout's): returns the instance count. */
+  buildLamps(group: THREE.Group, lightMats: readonly THREE.Matrix4[], lights: readonly {x: number; y: number; z: number; level?: number; virtual?: boolean}[]): number {
+    const byLevel = new Map<number, THREE.Matrix4[][]>();
+    const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
+    lights.forEach((l, i) => {
+      if (!this.isLamp(l)) return;
+      lightMats[i].decompose(p, q, s);
+      const cage = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.19, p.z), q, new THREE.Vector3(0.26, 0.34, 0.26));
+      const hanger = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + 0.22, p.z), q, new THREE.Vector3(0.05, 0.44, 0.05));
+      const lv = l.level ?? 0;
+      let e = byLevel.get(lv);
+      if (!e) byLevel.set(lv, (e = [[], []]));
+      e[0].push(cage); e[1].push(hanger);
+    });
+    if (!byLevel.size) return 0;
+    const dress = reactorDress(this.mats);
+    const cageGeo = kitGeometry('cage'), rodGeo = kitGeometry('tube');
+    let n = 0;
+    for (const [lv, [cages, rods]] of byLevel) {
+      const above = this.info.tiers.filter(t => t.baseY > (this.info.tiers.find(u => u.level === lv)?.baseY ?? 0)).sort((a, b) => a.baseY - b.baseY)[0]?.level;
+      for (const [geo, list, name] of [[cageGeo, cages, 'cage'], [rodGeo, rods, 'hanger']] as const) {
+        const im = new THREE.InstancedMesh(geo, dress.steelDark, list.length);
+        list.forEach((m, k) => im.setMatrixAt(k, m));
+        im.name = `reactor-lamp-${name}-L${lv}`;
+        im.userData.levels = above === undefined ? [lv] : [lv, above];
+        im.computeBoundingSphere();
+        group.add(im);
+      }
+      n += cages.length;
+    }
+    this.stats.lamps = n;
+    return n;
   }
 
   // -------------------------------------------------------------------------------------------------------------------------
