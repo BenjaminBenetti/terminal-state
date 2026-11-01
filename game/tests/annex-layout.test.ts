@@ -25,11 +25,13 @@ import type {LevelId} from '../src/levels/types';
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LABEL = process.env.LAYOUT_LABEL ?? 'after';
 
-/** The CI sample: tunnel annexes, a tunnel + hatch level, a two-annex level, the Office street station and the mall (~9 annexes). */
+/**
+ * The CI sample (~3 s of generation): a tunnel + a hatch annex, an island-ends hatch annex, the Office street station's two annexes
+ * and the mall's (6 annexes). The broad sample (opt-in, below) holds the 309-annex guarantee.
+ */
 const CI_SAMPLE: readonly [string, () => StationLayout][] = [
-  ['subway 1043', () => generateStation(1043)], ['subway 1002', () => generateStation(1002)], ['subway 2563024239', () => generateStation(2563024239)],
-  ['subway 774566179', () => generateStation(774566179)], ['office 222', () => generateOfficeLevel({levelSeed: 222, startWeapon: 'pistol'})],
-  ['mall 846932', () => generateMallLevel({levelSeed: 846932, startWeapon: 'rifle'})],
+  ['subway 1002', () => generateStation(1002)], ['subway 2654448106', () => generateStation(2654448106)],
+  ['office 7922', () => generateOfficeLevel({levelSeed: 7922, startWeapon: 'pistol'})], ['mall 5150', () => generateMallLevel({levelSeed: 5150, startWeapon: 'rifle'})],
 ];
 
 describe('service annex layout: a logical service area (round 3, lane LAYOUT)', () => {
@@ -60,7 +62,7 @@ describe('service annex layout: a logical service area (round 3, lane LAYOUT)', 
     // functional zoning over the sample: most signature rooms have their partner next door / across the corridor
     const pairs = all.reduce((t, m) => t + m.adjPairs, 0), ok = all.reduce((t, m) => t + m.adjOk, 0);
     expect(ok / pairs, 'functional adjacency').toBeGreaterThanOrEqual(0.6);
-    expect(all.length).toBeGreaterThanOrEqual(8);
+    expect(all.length).toBeGreaterThanOrEqual(6);
   });
 
   it('zones: staff rooms along the entry passage and the junction (no machinery there but halls), plant districts deeper, no repeats within 3 hops', () => {

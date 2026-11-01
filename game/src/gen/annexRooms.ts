@@ -5,12 +5,14 @@
 // claustrophobic feel, "break it up with bigger rooms … so you have a mix").
 //
 // Two passes, both on the annex content's own forks (gen/annexContent.ts; no core stream is consumed):
-//  1. assignAnnexRooms — every annex area takes a purpose: machinery HALLS (Area.extHall, gen/trackExt/carve.ts) and about half of
-//     the medium rooms a SIGNATURE, the other rooms a small utility purpose (existing ids: workshop, stores, electrical, pump,
-//     custodial, first aid), closets a closet purpose, corridors 'service-corridor'. THE ANTI-REPETITION RULE (bounded, seeded):
-//      - halls first (largest first), then the chosen medium rooms in door-graph (traversal) order;
-//      - a room never takes a signature already used by an annex room within ANNEX_ROOMS.hops (2) door hops — a room seen through one
-//        door or across one corridor / hall: no adjacent copies of one signature along the traversal;
+//  1. assignAnnexRooms — every annex area takes a purpose: machinery HALLS (Area.extHall, gen/trackExt/carve.ts) and the medium rooms
+//     of the plant districts a SIGNATURE, the other rooms a small utility purpose (existing ids: workshop, stores, electrical, pump,
+//     custodial, first aid), closets a closet purpose, corridors 'service-corridor'. (Round 3, lane LAYOUT: by ZONE — staff rooms
+//     along the entry passage / junction, plant districts power / water / heat / air along the corridors, the old stores and the
+//     hideout at the deep end; ANNEX_ZONES below.) THE ANTI-REPETITION RULE (bounded, seeded):
+//      - halls first (largest first), then the chosen medium rooms district by district;
+//      - a room never takes a signature already used by an annex room within ANNEX_ROOMS.hops (3; round 2: 2) door hops — a room seen
+//        through one door, across one corridor / hall or one fire door along: no adjacent copies of one signature along the traversal;
 //      - weight = the signature's weight x its hall preference (halls) x unusedBoost (6) while still unused in the annex
 //        x repeat (0.2) ^ uses so far — every annex shows several different signatures before any repeats;
 //      - a signature whose layout cannot be built in the room (doors / proportions) falls back to another eligible one (same rule),

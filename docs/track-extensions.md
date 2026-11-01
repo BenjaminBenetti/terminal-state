@@ -54,15 +54,38 @@ revision) the platforms announce every real annex entrance with station-surface 
   then hatches; a failed attempt is omitted with no orphan door, clue or cell.
 - **Size:** `share` 0.25 of the baseline, jittered by 0.85–1.15, minimum `minShare` 0.15.
 - **Layout:** corridors 1.5–2 m wide; rooms from 3×3 m to 8×10 m; ceilings 2.4–2.8 m.
+- **The service-area plan** (round 3, task studio-alpha-track2-round3-20261031-01, lane LAYOUT; user: "layout feels like it is not
+  logical. The layout should have a logical arrangement matching what a real service area would be like. There must always be 1
+  cache room generated at least", earlier "the confusing maze of rooms"). `annex.layout` (`SERVICE_LAYOUT`,
+  `gen/trackExt/annexLayout.ts` `planServiceArea`, driven by `Carver.grow`) replaced the random room tree (a weighted random parent,
+  a random side, up to 14 corridors each ending in a room):
+  - **entry passage**: the entry corridor from the tunnel / hatch door (6–18 m), lined with small staff rooms;
+  - **main service corridor** (the spine): at the passage's end a T (or an L, or straight on) into a 2 m corridor running across
+    it, in **10–16 m segments joined by fire-door openings** (each segment its own corridor area, so the door-hop depth still grows
+    along it), 3–5 segments beyond the junction, bending (L) only where the rock runs out;
+  - **wings**: 2–4 perpendicular 1.5–2 m corridors off slots reserved on the spine's sides, 1–2 segments each;
+  - **rooms lined up along both sides of every corridor**, in sequence (one wall between neighbours), each with its door onto that
+    corridor, with a consistent bay depth per corridor side — 4–5.5 m deep staff rooms on the entry passage and the junction,
+    5–8 m plant rooms beyond — and 3–3.5 m closets among them (widths along the corridor by weight); every corridor end that
+    leads on to nothing closes with an **end room**; a segment that ends up with no room is undone;
+  - choices are growth-aware (crop cells; the Subway 260k / Office 80k / Mall 75k budgets), with a relaxed second pass (shorter
+    segments, bends anywhere) in tight rock; one optional **loop** door (`loopChance`) from a corridor into a corridor / room it
+    backs onto, at least 4 door hops apart, never into the hideout;
+  - **the hideout** (`ServiceAnnex.hideout`): see "Data model".
+  Measured (broad sample: 200 Subway + 40 Office + 20 Mall levels, 309 annexes, the same 309 as before — incidence unchanged):
+  every room, hall and closet opens onto a corridor (was 59 % of rooms / 35 % of closets; 51 % of all rooms and closets were
+  reachable only through other rooms, chains up to 8), 13.5 corridors per annex, the longest straight corridor run 49.8 m mean /
+  104.5 m max (was 17.7 / 35.5), 9.4 door hops to the deepest room (was 11.2), functional neighbours (generator ↔ electrical,
+  the water rooms together, boiler ↔ pump / stores, turbine ↔ power / water) 76 % (was 55 %), every annex a hideout.
 - **Machinery halls** (`annex.hall`, task track2-playtest-revision, lane ROOMS): 2–3 larger, taller rooms per annex
   (9–12 × 12–16 m, ceilings 3.6–4.2 m; `Area.extHall`) inside the SAME area target, so the tight network stays and is
   regularly broken by a big room:
   - hall k is attempted once the annex has grown to (k + 0.5) / (count + 1) of its target (a rhythm, not a cluster);
-  - only off a corridor at least `spacing` (2) areas past the previous hall on its branch, only while the hall keeps the annex
-    within its target (+ 2 % slack) and the grid budget (the Mall's hard cell budget included); 8 seeded placements per attempt;
-  - a hall is a room later areas may branch off (parent weight 2.2).
-  Measured: 1–3 halls per annex on the fixed seed set; the 64-seed incidence is unchanged (0 / 1 / 2 = 4 / 42 / 18, 16 hatches,
-  ratio to the baseline 0.15 / 0.25 / 0.29 min / mean / max).
+  - (round 3) as a side room of the corridor being lined (one per segment, the least crop growth of 8 seeded spots), else as the
+    end room of a run; only while the hall keeps the annex within its target (+ 2 % slack) and the grid budget; at least one per
+    annex (ends first, then any corridor side, up to +4 % of the target).
+  Measured (round 3, broad sample): 1–3 halls per annex, mean 2.5 (was 0–3, mean 1.9); the 64-seed incidence is unchanged
+  (0 / 1 / 2 = 4 / 42 / 18, 16 hatches, ratio to the baseline 0.18 / 0.25 / 0.29 min / mean / max).
 - **Door placement:** a tunnel that hosts an annex gets a first straight of at least 21 m (`annex.hostFirstStraight`), which
   leaves room for the door.
 
@@ -129,6 +152,14 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
 - `door`, `areas`, `floorY`, `ceilY`, `cells`, `areaM2`, `exit`.
 - `bed?`: a `BedEntry` for hatches. Its door record has `a === b ===` the entry corridor, because the bed has no area. Hatch
   graffiti lives in `BedEntry.clues`.
+- `hideout?: number` (round 3, lane LAYOUT; optional, additive): THE HIDEOUT ROOM the layout keeps for the survivor cache — a
+  `layout.areas` id of the annex: a room (never a closet, corridor or machinery hall) of at least 3.5 × 4 m and 14 m² (18–32 m²
+  preferred), in the deepest third of the annex's door-hop range (`Area.depth`, band 2 of dMin..dMax — the band formula of
+  `gen/annexCache.ts` / `pickOver`), a dead end (one door; the loop door never opens into it). The planner picks one (end rooms of
+  the deep runs and moderate sizes first; the two deepest corridor ends close with a hideout-sized store room) or, when none exists,
+  adds one off the deepest corridors (a side bay or an end) or behind a deep room. The purpose pass never gives it a machinery
+  signature: it is the deep end's **old stores** (`storage`). `extensionIssues` reports a hideout that is not a plain room of its
+  annex. Absent = none (readers keep their own fallback). Measured: every annex of the broad sample (309 / 309) has one.
 
 **Areas:**
 - Extension areas carry `area.ext = 'tunnel' | 'annex'` plus `extId`.
@@ -180,10 +211,27 @@ runtime-scaled 1.78 m zombie):
   small utility role (workshop, maintenance stores, electrical room, pump room, custodial room, first-aid post), closets stay
   janitor / electrical / supply closets, corridors stay composed service corridors.
 - **The anti-repetition rule** (bounded, seeded): halls first (largest first), then the chosen rooms in door-graph traversal
-  order; a room never takes a signature already used by an annex room within 2 door hops (one door, or across one corridor /
-  hall); weight = signature weight × hall preference (halls) × 6 while unused in the annex × 0.2 ^ uses. A layout that cannot
-  be built in its room (doors / proportions) undoes itself and tries up to 2 other eligible signatures under the same rule,
-  then the room becomes a utility room. Measured on the fixed seed set: 5–7 distinct signatures per annex, all seven across it.
+  order; a room never takes a signature already used by an annex room within 3 door hops (round 3: was 2 — rooms lined along one
+  corridor are 2 hops apart, so the rule also keeps the next segment / wing from repeating); weight = signature weight × hall
+  preference (halls) × 6 while unused in the annex × 0.2 ^ uses (× the zone factors below). A layout that cannot
+  be built in its room (doors / proportions) undoes itself and tries up to 2 other eligible signatures under the same rule (its own
+  district's first), then the room becomes a utility room of its zone. Measured on the fixed seed set: 5–7 distinct signatures per
+  annex, all seven across it.
+- **Zones** (round 3, lane LAYOUT; `gen/annexRooms.ts` `ANNEX_ZONES`, `assignAnnexRooms`): the purposes follow the plan instead of a
+  random draw per room:
+  - **staff / maintenance** on the corridors within one hop of the entry (the entry passage and the spine junction): workshop,
+    maintenance stores, custodial room, first-aid post, janitor / supply closets — no machinery there except a hall;
+  - **plant districts** deeper, along the corridors in door-graph order: a district runs on along its corridor and into the next
+    segments / wings until it has its rooms (power 4, water 6, heat 3, air 3), then the next starts (a seeded rotation; a corridor
+    that closes with a plant-sized end room starts the air district): **power** (generator room, its electrical / switch room
+    beside it, electrical closets; the turbine hall), **water** (sewage channel, overflow chamber, spillway — each kind once per
+    district — and pump rooms), **heat** (boiler room with its pump room / fuel stores), **air** (ventilation plant, at a corridor
+    end where it can). 85 % of a district's medium rooms take one of its signatures (a district shows each kind once; another
+    district's machinery only now and then), the rest its utility rooms; halls weigh their district's signatures × 5;
+  - **old stores** at the deep end: the hideout and the small rooms / closets on its corridor (`storage`, supply closets);
+  - **partners**: after the draw and again after the machinery is built, a generator room without an electrical room / closet within
+    two hops converts the nearest utility room of its district (else a closet) into one; a water room, a boiler room or a turbine
+    hall likewise gets its pump / electrical room; at least 4 different signatures per annex (medium utility rooms convert when not).
 - **Machinery** is world geometry from the records (`world/trackExt/machines.ts`): locally authored boxes / cylinders merged into
   one mesh per (annex, material) — about 12 draws and 18–33k triangles per annex — with value-only clones of the shared
   world-mapped shape materials (painted / brushed steel, panel, concrete, grille, black: no texture loads, shared programs).
@@ -437,6 +485,12 @@ Tunnels have sparse fixtures, mostly dead or dying.
   `track-ext-vis-gen.test.ts`.
 - **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
   anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
+- **Layout (round 3, lane LAYOUT):** `annex-layout.test.ts` (~4 s: 6 annexes of Subway 1002 / 2654448106, Office 7922, Mall 5150 —
+  every room / hall / closet on a corridor, every corridor serving rooms, a straight main corridor >= 20 m, 1–3 halls, functional
+  neighbours >= 60 %, no machinery in the staff zone but halls, no repeat within 3 hops, THE HIDEOUT record and its rule; metrics in
+  `tests/helpers/annexLayoutMetrics.ts`). Opt-in evidence: `ANNEX_LAYOUT_EVIDENCE=1 [LAYOUT_LABEL=after]` (top-down plan pictures of
+  Subway 1043 / 1002 / 1037, Office 222, Mall 846932 into `qa-artifacts/r3-layout/<label>/`, `tests/helpers/annexPlan.ts`) and
+  `ANNEX_LAYOUT_BROAD=1` (200 Subway + 40 Office + 20 Mall levels: metrics and the hideout guarantee, `/tmp/r3-layout-<label>-broad.json`).
 - **Water / fan motion (round 2, lane MOTION):** `annex-motion.test.ts` (per-vertex flow directions / speeds, surfaces in place,
   the shared game-clock uniform, real GLSL builds of the materials, the CPU mirror travelling downstream, rotors pivoting on the hub
   inside the fan box, the anti-strobe cap, dispose / rebuild without accumulation, draw budget); opt-in `MOTION_PICTURES=1` CPU
