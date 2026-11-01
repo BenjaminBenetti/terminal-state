@@ -97,6 +97,16 @@
 // 12. Task studio-alpha-track2-round3 (+ recovery01) — CAUSE: the annexes re-laid as a logical service area (spine, lined rooms,
 //     districts, hideout room: the service spawns land elsewhere) and the hideout's gear pickup appended to the pickups. Moved: ONLY
 //     live annex entries (old values in the helper); station / service counts, core views and invariants unchanged.
+// 13. Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY) — CAUSE: THE STRAINER, a new registered family appended LAST
+//     to ENEMY_FAMILY_IDS with weight 0.08 ONLY in the service-annex pool (SERVICE_FAMILY_POOL: zombie 0.75 -> 0.67; rat/dog 0.20 and
+//     Blightbelly 0.05 unchanged; an explicit 0 in every level pool / other context / horde). The service roll bands shift (zombie
+//     [0, 0.67), Blightbelly [0.67, 0.72), rat/dog [0.72, 0.92), Strainer [0.92, 1)), so ONLY the family field of 'service' spawns
+//     moves. Moved: the live annex entries' spawn hashes — Subway 7, 42, 1234, 16920, 24839, 32758, 40677, 48596; Office 222, 3333,
+//     4242 (stage-12 values in the helper). Unchanged: every pickup hash, station / street / floor / roof / service count, the
+//     non-annex entries (Subway 1, 9001; Office 11), every core view, the reserve-off view and every invariant (asserted every run).
+//     PROOF: (one-off, lane FAMILY) re-assigning each live layout's families with the pre-round-4 service pool reproduced every
+//     stage-12 spawn hash exactly (and office-gen.test.ts's stage-12 LIVE fingerprints); (every run, below) on every live layout the
+//     family-masked hash equals the pre-round-4 assignment's, only 'service' spawns differ, and a Strainer is only ever a service spawn.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -108,6 +118,8 @@ import {
 import {SUBWAY_GOLDEN_RESERVE, SUBWAY_INVARIANT_RESERVE} from './helpers/enemySpawnParity';
 import {coreView} from '../src/gen/trackExt/index';
 import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
+import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
+import {familyPool, spawnContextOf, spawnProfile, type SpawnProfile} from '../src/ai/spawnTables';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {TrackExtConfig} from '../src/gen/trackExt/types';
 
@@ -116,6 +128,25 @@ const subwayAt = (c: (typeof SUBWAY_PARITY)[number], cfg?: TrackExtConfig) =>
   generateStation(c.seed, {startWeapon: c.startWeapon, ...(c.archetype ? {archetype: c.archetype} : {}), ...(cfg ? {trackExtensions: cfg} : {})});
 
 const triple = (l: StationLayout): [string, string, string] => [spawnSpecHash(l), pickupHash(l), contextCounts(l)];
+
+/**
+ * Stage 13 proof (task studio-alpha-beyond-station-round4-20261101-01, lane FAMILY), on a live layout: re-assigned with the PRE-round-4
+ * service pool (no Strainer row: zombie 0.75, Blightbelly 0.05, Siren 0, rat/dog 0.20) the family-masked hash is identical, the only
+ * spawns whose family differs are 'service' spawns, and every Strainer is a 'service' spawn. Restores the shipped assignment.
+ */
+function strainerOnlyMovedServiceFamilies(l: StationLayout, P: SpawnProfile, key: string): void {
+  const shipped = l.zombies.map(z => z.archetype ?? 'zombie'), masked = maskedSpawnSpecHash(l), hash = spawnSpecHash(l);
+  const pre: SpawnProfile = {...P, contexts: {...P.contexts, service: {...P.contexts.service!, families: familyPool({ratdog: 0.2, blightbelly: 0.05, siren: 0}).filter(([f]) => f !== 'strainer')}}};
+  assignEnemyArchetypes(l, pre);
+  expect(maskedSpawnSpecHash(l), `${key} masked (stage 13)`).toBe(masked);
+  l.zombies.forEach((z, i) => {
+    const ctx = spawnContextOf(l, P, i);
+    if ((z.archetype ?? 'zombie') !== shipped[i]) expect(ctx, `${key} #${i}: only a service spawn's family moved`).toBe('service');
+    if (shipped[i] === 'strainer') expect(ctx, `${key} #${i}: a Strainer only in a service spawn`).toBe('service');
+  });
+  assignEnemyArchetypes(l, P);
+  expect(spawnSpecHash(l), `${key} restored`).toBe(hash);
+}
 
 const NEW_FAMILIES = ['blightbelly', 'siren'] as const;
 
@@ -158,6 +189,7 @@ describe('enemy spawn parity (full specs incl. family: pin stage 3, task track1)
       const l = subwayAt(c);
       core[subwayKey(c)] = triple(coreView(l));
       live[subwayKey(c)] = triple(l);
+      strainerOnlyMovedServiceFamilies(l, spawnProfile('subway'), subwayKey(c)); // stage 13
     }
     if (JSON.stringify(off) !== JSON.stringify(SUBWAY_GOLDEN)) console.info(`[enemy-spawn-parity] subway reserve-off core ${JSON.stringify(off, null, 1)}`);
     if (JSON.stringify(core) !== JSON.stringify(SUBWAY_GOLDEN_RESERVE)) console.info(`[enemy-spawn-parity] subway core ${JSON.stringify(core, null, 1)}`);
@@ -173,6 +205,7 @@ describe('enemy spawn parity (full specs incl. family: pin stage 3, task track1)
       const l = generateOfficeLevel({levelSeed: c.levelSeed, startWeapon: c.startWeapon});
       core[officeKey(c)] = triple(coreView(l));
       live[officeKey(c)] = triple(l);
+      strainerOnlyMovedServiceFamilies(l, spawnProfile('office'), officeKey(c)); // stage 13
     }
     if (JSON.stringify(live) !== JSON.stringify(OFFICE_GOLDEN_TRACK2)) console.info(`[enemy-spawn-parity] office ${JSON.stringify(live, null, 1)}`);
     expect(core).toEqual(OFFICE_GOLDEN);
