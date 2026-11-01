@@ -602,6 +602,42 @@ export const OFFICE_SIREN_WEIGHT = 0.19;
 /** The Office pool: zombie (remainder), blightbelly 0.05, siren OFFICE_SIREN_WEIGHT, ratdog 0.05. */
 export const OFFICE_ENEMY_POOL: FamilyPool = familyPool({siren: OFFICE_SIREN_WEIGHT});
 
+// Task reactor-build-20261101 (primary): THE REACTOR (tier 3, the culminating level) — existing families only, no boss, no new enemy;
+// density and the nastier families rise with DEPTH through per-context pools (the generator tags each storey run, gen/reactor):
+//  - 'station' = the rim storey (the station, rim gallery, rim office): a few, mostly zombies — the arrival is safe-ish;
+//  - 'floor'   = the UPPER walkway tiers (zone 1): zombies with rat/dogs flanking on the catwalks, a rare Blightbelly;
+//  - 'ring'    = the DEEP walkway tiers (zone 2): more of everything — Blightbellies (their puffs undo local clearing for a while) and
+//                a Siren sleeping in a dark side room (REACTOR_SIREN_ELIGIBILITY: rooms only, <= 2 per level, 30 m apart);
+//  - 'pit'     = the core floor round the vessel + its rooms: the densest fights;
+//  - 'service' = SERVICE_CONTEXT, the rim station's Beyond-the-Station annex (the Strainer stays there and nowhere else).
+// No horde pool (first pass). Counts are per storey run; the generator places what fits (accept 'count' max).
+export const REACTOR_SIREN_ELIGIBILITY: FamilyEligibility = {
+  contexts: ['ring', 'pit'],
+  kinds: ['room'],
+  excludeRooms: ['washroom', 'stair-core'],
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 2,
+  fallback: 'zombie',
+  why: 'deep-tier / core-floor side rooms only (dark alcoves off the galleries), room >= 4 x 4 m, clear patch, doorways >= 3 m away, never seals passage, <= 2 per level',
+};
+export const REACTOR_SIREN_SPACING: FamilySpacing = {spacingM: 30, why: 'two sleeping Sirens never share a stretch of the descent'};
+const REACTOR_UPPER_POOL: FamilyPool = familyPool({ratdog: 0.12, blightbelly: 0.04});
+const REACTOR_DEEP_POOL: FamilyPool = familyPool({ratdog: 0.1, blightbelly: 0.14, siren: 0.35});
+const REACTOR_CORE_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.16, siren: 0.35});
+export const REACTOR_SPAWN_PROFILE: SpawnProfile = {
+  id: 'reactor', label: 'Reactor', families: familyPool({ratdog: 0.1, blightbelly: 0.08}), zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    station: {label: 'Rim (station, rim gallery, rim office)', count: [2, 4], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
+    floor: {label: 'Upper walkway tier (zone 1; each of tiers 1-2)', count: [4, 6], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_UPPER_POOL},
+    ring: {label: 'Deep walkway tier (zone 2; each of tiers 3-4)', count: [6, 8], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_DEEP_POOL},
+    pit: {label: 'Core floor (vessel ring, pump hall, control room)', count: [7, 10], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_CORE_POOL},
+    service: SERVICE_CONTEXT,
+  },
+  rooms: {},
+  eligibility: {siren: REACTOR_SIREN_ELIGIBILITY},
+  spacing: {siren: REACTOR_SIREN_SPACING},
+  budgets: {ambient: {total: 4 + 6 * 2 + 8 * 2 + 10, perStorey: 10}},
+};
+
 /**
  * THE PER-LEVEL PROFILES. Every level lists every family (familyPool); the Office opts in to the Siren with its eligibility rule.
  * No room modifiers (every room resolves to 1). A new level adds its entry here (Record<LevelId, …> makes that mandatory;
@@ -633,6 +669,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
   },
   // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_SPAWN_PROFILE).
   mall: MALL_SPAWN_PROFILE,
+  // Task reactor-build-20261101 (primary): THE REACTOR (REACTOR_SPAWN_PROFILE: depth-graded context pools, the deep Siren rule).
+  reactor: REACTOR_SPAWN_PROFILE,
 };
 
 /** The spawn profile of a logical level. */

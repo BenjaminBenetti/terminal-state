@@ -14,7 +14,9 @@ import type {StationLayout} from '../gen/stationTypes';
 import type {TrackExtConfig} from '../gen/trackExt/types';
 
 // Task track3-eaton-centre-20261031 (lane GEN): + 'mall' — the mall (tier 2; gen/mall/index.ts generateMallLevel; seeded "<Name> Center").
-export type LevelId = 'subway' | 'office' | 'mall';
+// Task reactor-build-20261101 (primary): + 'reactor' — THE REACTOR (tier 3; gen/reactor/index.ts generateReactorLevel): the selected B
+// "Industrial Service Cathedral" pit under a rim station.
+export type LevelId = 'subway' | 'office' | 'mall' | 'reactor';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {
