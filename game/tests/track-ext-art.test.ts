@@ -78,13 +78,14 @@ describe('station-surface invitation art (presentation)', () => {
   let mats: WorldMaterials;
   beforeAll(() => { mats = new WorldMaterials(fakeTex(), 7, {w: 1.2, h: 0.19, d: 0.17}); });
 
-  it('one atlas (<= 2048 x 1024, mipmapped), its cells inside it and disjoint; one material', () => {
+  // (round 3, lane HIDEOUT) a fifth 256 px row holds the survivor's trail cells 12-15: 2048 x 1280 (~13.3 MiB with mips, was ~10.7)
+  it('one atlas (<= 2048 x 1280, mipmapped), its cells inside it and disjoint; one material', () => {
     expect(ATLAS.w).toBeLessThanOrEqual(2048);
-    expect(ATLAS.h).toBeLessThanOrEqual(1024);
+    expect(ATLAS.h).toBeLessThanOrEqual(1280);
     const t = graffitiAtlas();
     expect(t.generateMipmaps).toBe(true);
     expect([(t.image as {width: number}).width, (t.image as {height: number}).height]).toEqual([ATLAS.w, ATLAS.h]);
-    const rects = Array.from({length: 12}, (_, i) => cellRect(i));
+    const rects = Array.from({length: 16}, (_, i) => cellRect(i));
     for (const [x, y, w, h] of rects) { expect(x >= 0 && y >= 0 && x + w <= ATLAS.w && y + h <= ATLAS.h).toBe(true); }
     for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
       const [a, b] = [rects[i], rects[j]];

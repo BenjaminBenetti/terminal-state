@@ -89,6 +89,16 @@ export interface ServiceAnnex {
   exit: {x: number; z: number};
   /** (GEN-2) Only on service-hatch annexes (tunnel = -1): the door in the track bed's side wall. */
   bed?: BedEntry;
+  /**
+   * (Round 3, lane LAYOUT; optional, additive) THE HIDEOUT ROOM of the annex (layout.areas id): the room the layout keeps for the
+   * survivor cache — a room (never a closet, corridor or machinery hall; gen/annexRooms.ts never gives it a machinery signature: it is
+   * a disused maintenance room of the deep end's old stores, HIDEOUT_PURPOSES: an old workshop, else a custodial room, else stores —
+   * the leanest furniture that fits) of at least 3.5 x 4 m and 14 m² (>= 4 x 4.5 m preferred), in the DEEPEST THIRD of the annex's door-hop range
+   * (Area.depth: band 2 of dMin..dMax, the band formula of gen/annexCache.ts / pickOver), a dead end (one door) wherever the layout
+   * allows (the loop door never opens into it). Set by gen/trackExt/annexLayout.ts planServiceArea on every annex it can find or add
+   * one in (the broad census: all of them); absent = none — readers keep their own fallback.
+   */
+  hideout?: number;
 }
 
 /**
@@ -164,6 +174,41 @@ export interface TrackExtensions {
    * at the bed end of every real annex entrance (planned after the attach on rng.fork('station-art'); absent / empty = none).
    */
   art?: StationArt[];
+  /**
+   * (task studio-alpha-track2-round3-20261031-01, lane HIDEOUT: gen/annexMarks.ts) The survivor's trail: graffiti marks on annex walls
+   * beside the doorways of the shortest door-hop path from each annex's entry to its hideout (the first survivor cache), the hideout
+   * mark at its doorway and the tally inside (planned after the caches on fork `marks:<annexId>`; absent / empty = none).
+   */
+  cacheMarks?: CacheMark[];
+}
+
+/**
+ * (round 3, lane HIDEOUT) One survivor mark on an annex wall (gen/annexMarks.ts; drawn by world/trackExt/graffiti.ts cacheMarkDecals).
+ * The wall: `axis` 'z' = a wall along X (plane z = const), 'x' = a wall along Z; `n` = its inward normal's sign on that axis; `c` the
+ * centre along the wall (world x for 'z', world z for 'x'), `y` absolute, `w` x `h` metres.
+ */
+export interface CacheMark {
+  annex: number;
+  /** The area whose wall carries it (the player stands in it). */
+  area: number;
+  /** 'arrow': the trail (arrow + survivor symbol at a doorway); 'hideout': the distinctive mark at the hideout's doorway; 'tally': inside. */
+  kind: 'arrow' | 'hideout' | 'tally';
+  /** The doorway it marks (layout.doors index; -1 for the tally) and the area beyond it (the hideout's own id for the tally). */
+  door: number;
+  next: number;
+  axis: 'x' | 'z';
+  plane: number;
+  n: 1 | -1;
+  c: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Arrow direction for a viewer facing the wall; null for the non-directional hideout / tally marks. */
+  dir: 'left' | 'right' | null;
+  /** Position on the trail (door hops from the annex entry area). */
+  step: number;
+  /** Deterministic presentation variant. */
+  variant: number;
 }
 
 /**
@@ -282,6 +327,23 @@ export interface TrackExtConfig {
      * Short / long side and ceiling ranges in metres (ceiling above the floor; the annex rooms keep `ceil`). Absent = no halls.
      */
     hall?: {count: [number, number]; short: [number, number]; long: [number, number]; ceil: [number, number]; spacing: number; tries: number; slack: number};
+    /**
+     * (Round 3, lane LAYOUT; optional: gen/trackExt/annexLayout.ts SERVICE_LAYOUT is the default) THE SERVICE-AREA PLAN — metres unless
+     * noted: the main service corridor's width and segment lengths (straight runs split by fire-door openings), how many segments the
+     * spine wants beyond its junction, wings (count, segments each, width), the room bay depth off a corridor per zone (staff: the entry
+     * passage + the spine junction; plant: beyond), room widths along a corridor per zone ([min, max, weight]), the chance a spine side
+     * reserves a wing slot, the hideout rule (short / long side, m², preferred m² range) and the crop-growth scale (cells) of the
+     * growth-aware choices.
+     */
+    layout?: {
+      spineWidth: [number, number]; segment: [number, number]; spineSegments: [number, number];
+      wings: [number, number]; wingSegments: [number, number]; wingWidth: [number, number];
+      bay: {staff: [number, number]; plant: [number, number]};
+      widths: {staff: [number, number, number][]; plant: [number, number, number][]};
+      slotChance: number;
+      hideout: {short: number; long: number; m2: number; prefer: [number, number]};
+      growthScale: number;
+    };
   };
   /**
    * CORE-CHANGING option (0 = off, the DESIGN §0 default: the core stays byte-identical): metres of rock kept free straight past
@@ -316,6 +378,12 @@ export interface TrackExtContext {
   origin?: {x: number; y: number};
   /** Final grid cell budget (W x H): the light field / density maps grow with it. */
   maxCells: number;
+  /**
+   * (Round 3, lane LAYOUT addition, OPT-IN; 'east-south' only) The level's own core crop size (cells, from the fixed origin) when its
+   * crop rule keeps more than the extension estimate's 2 cells past the last carved cell (the mall: its exclusive extent + 3, and the
+   * outer corridor's frame) — the grid budget check then uses the exact crop: max(core, extension extent + 3) per axis.
+   */
+  coreCrop?: {w: number; h: number};
   /**
    * (task track3 lane INTEG addition, OPT-IN; default: every level grid) Level grids that must stay ROCK around / under every
    * extension cell — the storeys of the station itself. Any other storey may stand ABOVE an extension cell when it is solid there or

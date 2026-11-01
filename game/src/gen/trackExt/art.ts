@@ -327,12 +327,12 @@ export function stationArtRecordIssues(layout: StationLayout, ext: TrackExtensio
  * paint): `axis` 'z' = a wall along X (plane z = const), 'x' = a wall along Z; `n` the face normal's sign on that axis; [c0, c1]
  * the world range along the wall, [y0, y1] the heights.
  */
-export interface ArtKeepout { axis: 'x' | 'z'; plane: number; n: 1 | -1; c0: number; c1: number; y0: number; y1: number; why: 'station-art' | 'hatch-clue' }
+export interface ArtKeepout { axis: 'x' | 'z'; plane: number; n: 1 | -1; c0: number; c1: number; y0: number; y1: number; why: 'station-art' | 'hatch-clue' | 'cache-mark' }
 
 /** Covers a hatch clue's marks (world/trackExt/graffiti.ts GRAFFITI: arrows 2.0 x 1.0 m at 1.7 m, tags 2.2 x 1.1 m at 2.3 m + their arrow). */
 export const HATCH_CLUE_KEEPOUT = {half: 1.35, y0: 0.9, y1: 3.0} as const;
 
-/** Every painted bed / platform-end wall rect of a layout: its station art and its service hatches' clue marks (bed walls). */
+/** Every painted wall rect of a layout: its station art, its service hatches' clue marks (bed walls) and (round 3) the annex survivor marks. */
 export function stationArtKeepouts(layout: Pick<StationLayout, 'extensions' | 'trenches'>): ArtKeepout[] {
   const ext = layout.extensions, out: ArtKeepout[] = [], m = 0.15;
   if (!ext) return out;
@@ -355,6 +355,8 @@ export function stationArtKeepouts(layout: Pick<StationLayout, 'extensions' | 't
       out.push({axis: 'z', plane: b.wall === 'N' ? tr.z0 : tr.z1, n: b.wall === 'N' ? 1 : -1, c0: x - K.half, c1: x + K.half, y0: b.floorY + K.y0, y1: b.floorY + K.y1, why: 'hatch-clue'});
     }
   }
+  // (round 3, lane HIDEOUT) the survivor's trail marks on the annex walls (gen/annexMarks.ts): no pipes / cables / stains across them
+  for (const c of ext.cacheMarks ?? []) out.push({axis: c.axis, plane: c.plane, n: c.n, c0: c.c - c.w / 2 - m, c1: c.c + c.w / 2 + m, y0: c.y - c.h / 2 - m, y1: c.y + c.h / 2 + m, why: 'cache-mark'});
   return out;
 }
 

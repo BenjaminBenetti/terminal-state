@@ -25,6 +25,7 @@ import {CELL, SOLID, type Grid, type Ramp} from './grid';
 import type {Door, SignKind, SignPlacement, StationLayout} from './stationTypes';
 import {storefrontParts} from './storefronts';
 import {apertureOf} from './levelGen';
+import {isExtensionArea} from './trackExt/types'; // (round 3, lane HIDEOUT)
 
 /** Iteration 08 (Lane A): grid of the level an opening is carved on (the level of its `a` area). */
 function doorGrid(layout: StationLayout, d: Door): Grid {
@@ -409,6 +410,9 @@ export function decorVolumes(layout: StationLayout): DecorVolume[] {
     } else push(rotatedBox(s.x, s.z, s.rot, w, 0.06, s.y - h / 2, s.y + h / 2, 0.03), 'sign', ref);
   });
   layout.lights.forEach((l, i) => {
+    // (round 3, lane HIDEOUT) a `virtual` light-field source draws no fixture, rod or tube (world/builder.ts): the hideout lantern's
+    // light in an annex has nothing to collide with (the lantern prop itself is checked as a prop); office daylight keeps its old boxes
+    if (l.virtual && isExtensionArea(layout.areas[l.area])) return;
     push(rotatedBox(l.x, l.z, l.rot, FIXTURE.w, FIXTURE.d, l.y - FIXTURE.h, l.y), 'light', `light#${i}`);
     // Iteration 08 (Lane A): the rod reaches the ceiling of the fixture's own level.
     const lg = layout.levels?.[l.level ?? layout.areas[l.area]?.level ?? 0]?.grid ?? g;

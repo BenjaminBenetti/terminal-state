@@ -134,14 +134,16 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   // --- Track2 seam (lane INTEG): AFTER all mall carving, BEFORE the crop — the tunnels past the pit station's bed ends + service
   // annexes are PLANNED on their own fork (east / south of the fixed origin only); the crop and every core pass below run exactly as
   // without them; finishExtensions grows the grid and stamps them after the last core pass.
-  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, mallTrackExtContext(ox, oy));
-
-  // --- Crop: extent of everything carved (the extensions join later, finishExtensions) ----------------------------------------
+  // (round 3, lane LAYOUT: the crop extent is taken first — extendTracks writes nothing into the Kit — so the extension planner budgets
+  // the 75k cells on the exact core crop)
   let x1 = mc.X1, y1 = mc.Z1;
   for (const r of [...k.areas, ...k.doors, ...k.trenches.map(t => ({x: t.x0, y: t.y0, w: t.x1 - t.x0, h: t.y1 - t.y0}))]) {
     if (r.w <= 0 || r.h <= 0) continue;
     x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
   }
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, mallTrackExtContext(ox, oy, {w: x1 - ox + CROP_MARGIN, h: y1 - oy + CROP_MARGIN}));
+
+  // --- Crop: extent of everything carved (the extensions join later, finishExtensions) ----------------------------------------
   const use = Array.from({length: FLOORS + 1}, (_, i) => i);
   const c = cropKit(k, use, ox, oy, x1 - ox + CROP_MARGIN, y1 - oy + CROP_MARGIN);
   const crop: Crop = {ox, oy};

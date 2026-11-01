@@ -75,6 +75,9 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   cartonStack: ['too heavy', 'carton stack (~40 kg): collapses when shot (breakable) rather than sliding'],
   // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): the annex survivor cache's camp bed (gen/annexCache.ts)
   palletBed: ['too heavy', 'camp bed: a foam mattress and bedding on two wooden pallets (~45 kg) lying flat against a wall: a body bump or a bullet does not shove it'],
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout (gen/annexCache.ts)
+  bedroll: ['flat', 'floor bedroll: a foam mat and a sleeping bag (~3 kg of soft bedding, 17 cm) lying flat against a wall: no rigid body to shove or tip, a bump or a bullet only dents the foam'],
+  campTable: ['too heavy', 'makeshift camp table: a salvaged door panel on two piers of eight cinder blocks (~90 kg): a body bump or a bullet does not shove it; its lantern / stove are separate loose props on its top'],
   // iteration-07 generated floor kinds
   fareValidatorStand: ['anchored', 'fare validator post bolted to the floor'],
   newspaperVendingBox: ['too heavy', 'steel newspaper box (~35 kg), chained'],

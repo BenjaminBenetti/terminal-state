@@ -13,7 +13,7 @@ generated model).
 | Question | Where it is recorded | Classes |
 |---|---|---|
 | Can it be opened / searched? | `OPENABLE_AUDIT` in `game/src/world/openablesSpec.ts` | `openable` (doors / drawers / lids this system animates), `existing` (earlier holder with moving parts), `open` (open shelving / counters: loot reachable), `exception` (looks openable but deliberately closed — honest reason), `none` (no door / lid / drawer at all) |
-| Does it move when shot or bumped? | `PROP_PHYSICS_AUDIT` in `game/src/damage/physicsAudit.ts` (office kinds: `OFFICE_PHYS` in `game/src/gen/office/physics.ts`; Subway kinds: `PROP_PHYSICS` / `PROP_DEFS.physics`, `game/src/damage/materials.ts`) — see section 3 | `dynamic` (mass / collider / contact material) or `static` with a reason (`StaticWhy`: `holder`, `anchored`, `built-in`, `too heavy`, `fixture`, `partition`, `mounted`, `host decor`, `structure`, `machinery`, `kept`) |
+| Does it move when shot or bumped? | `PROP_PHYSICS_AUDIT` in `game/src/damage/physicsAudit.ts` (office kinds: `OFFICE_PHYS` in `game/src/gen/office/physics.ts`; Subway kinds: `PROP_PHYSICS` / `PROP_DEFS.physics`, `game/src/damage/materials.ts`) — see section 3 | `dynamic` (mass / collider / contact material) or `static` with a reason (`StaticWhy`: `holder`, `anchored`, `built-in`, `too heavy`, `fixture`, `partition`, `mounted`, `host decor`, `structure`, `machinery`, `kept`, `flat` — soft bedding lying flat, round 3) |
 
 Both audits are enforced by tests: an unclassified kind fails CI.
 
@@ -120,6 +120,29 @@ mattress (vinyl cover), an open sleeping bag (accent palette), a pillow and a fo
   1.78 m reference zombie's height. Viewed beside zombie `lastshift` at runtime scale 1.0.
 - The cache's other pieces are existing kinds with their existing classes (shelf / cabinets / crate: open / existing openables, holder
   statics; the camp things: their iteration-07 dynamic / static rows).
+
+The survivor HIDEOUT (task studio-alpha-track2-round3-20261031-01, lane HIDEOUT; user: "The cache should include pops like bed roll,
+lantern and stuff, to make it feel like someone lives there … substantial detail"): five NEW local procedural kinds (box parts, no model
+/ asset file, no generation), every one classified in both audits and scale-checked beside the runtime zombie (`node
+tools/asset-pipeline/props/scale-check.mjs --kind <kind>`; the tool now also renders `gen/propShapes.ts` prop shapes; renders under
+`qa-artifacts/hideout-scale/`, viewed):
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
+|---|---|---|---|---|
+| `bedroll` (purpose shape) | closed-cell foam mat, lofted sleeping bag (accent palette), rolled-fleece pillow, folded blanket | `none` | static, NEW `StaticWhy` **`flat`**: ~3 kg of soft bedding lying flat — no rigid body to shove or tip | 1.90 × 0.15 × 0.72 m (box 1.95 × 0.17 × 0.78); grounded, 10 contact clusters over 1.9 × 0.72 m; bag top 0.10 m, pillow / blanket 0.14 m |
+| `campTable` (purpose shape) | a salvaged door panel (lock bore, hinge plates) on two piers of eight cinder blocks | `none` (a table top) | static `too heavy` (~90 kg) | 1.30 × 0.75 × 0.62 m; grounded, 12 clusters (the block piers); top 0.75 m (desk height) |
+| `footlocker` (purpose shape + authored openable) | wooden trunk on skids, steel corners / band / hasp, rope-grip handles; the authored LID hinges on its back edge over a wood-lined compartment | `openable` (`world/openablesSpec.ts` `footlocker`: body = the purpose shape minus the lid, `bodyPurpose`; lid `hinge x`, −95°, ≥ 65° against the wall) | static `holder` (non-spill holder: its lots never float) | 0.81 × 0.39 × 0.43 m; grounded on its skids (8 clusters); lid top 0.385, compartment floor 0.042 m |
+| `campLantern` (prop shape) | steel fuel base + valve knob, painted collar / hood (accent), glass globe round a self-lit mantle (NEW face-mapped `lanternGlow` shape material), guard posts, vent cap, wire bail | `none` | **dynamic**, 1.2 kg cylinder, `pad` contact, `onHost` (it stands on the camp table and goes loose on that static host, like an office monitor) | 0.15 × 0.31 × 0.16 m; grounded (base); hood 0.25 m |
+| `campStove` (prop shape) | one-burner portable butane stove: painted body, steel top plate, burner + cap, pan supports, knob, canister door — no pot / food baked | `none` | **dynamic**, 1.8 kg, `pad` contact, `onHost` | 0.30 × 0.11 × 0.27 m; grounded; top plate 0.083 m |
+
+- No baked loose clutter: the bedroll's pillow / blanket are bedding (like the pallet bed); the lantern and the stove are SEPARATE loose
+  props on the table's real top (`PropPlacement.host` = the table, y = its 0.75 m top); the hideout's food / water / ammo are real loot in
+  its holders; the gear piece is a real pickup.
+- The lantern's LIGHT is not a prop light: a warm `virtual` light-field record at the lantern (the existing baked light field, no new
+  light system; it stays where the lantern stood if the lantern is knocked away — a documented limitation).
+- Tests: `tests/annex-hideout.test.ts` (audit classes, supported pieces, the footlocker's lid part and its persistence),
+  `office-physics` / `contact-physics` (the two new dynamic Subway kinds and their masses; on-host by design), `openables`,
+  `purpose-shapes`, `damage`, `textures` (the new `lanternGlow` key).
 
 ## 3. Movable things move
 Standing user rule (2026-10-30): **every physics object reacts to the player walking into it — no shot needed first** (task

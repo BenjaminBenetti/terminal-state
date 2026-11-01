@@ -130,6 +130,7 @@ export const SHAPE_KEY_CLASS: Record<ShapeMat, DamageClass> = {
   mirror: 'glass', shutter: 'sheetMetal', shopFrame: 'steel', signBand: 'plastic', menuBoard: 'screen', shutterSteel: 'sheetMetal',
   kitchenSteel: 'steel', laminate: 'laminate', tileShop: 'tile', quarryTile: 'tile', woodVeneer: 'wood', plasticSeat: 'plastic',
   glassShopfront: 'glass', menuBoardNoodle: 'screen', menuBoardCoffee: 'screen', menuBoardPizza: 'screen',
+  lanternGlow: 'glass', // lane HIDEOUT (round 3): the lantern mantle behind its globe
 };
 
 export const PURPOSE_KEY_CLASS: Record<PurposeMat, DamageClass> = {
@@ -226,6 +227,9 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   cartonStack: {cls: 'cardboard', integrity: 80, breaks: 'collapse'},
   // Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed (mattress + bedding on pallets): soft, never breaks
   palletBed: NEVER('fabric'),
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout — bedroll (soft bedding), camp table (a door on
+  // cinder blocks), wooden footlocker, lantern and camp stove (sheet steel): dents / splinter marks, never break (no destructibility)
+  bedroll: NEVER('fabric'), campTable: NEVER('wood'), footlocker: NEVER('wood'), campLantern: NEVER('sheetMetal'), campStove: NEVER('sheetMetal'),
   // Iteration 07 (Lane P2): generated prop types (class / breaks per type in gen/props07.ts).
   ...P7_PROP_DAMAGE,
   // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts).
@@ -293,7 +297,8 @@ export const PHYS_MATS: Readonly<Record<PhysMat, {friction: number; restitution:
  * or `kept`: a Subway kind whose iteration-07 class this pass deliberately leaves unchanged (Subway behaviour / goldens frozen)
  * although it could move; listed so a later Subway pass sees it.
  */
-export type StaticWhy = 'holder' | 'anchored' | 'built-in' | 'too heavy' | 'fixture' | 'partition' | 'mounted' | 'host decor' | 'structure' | 'machinery' | 'kept';
+/** (lane HIDEOUT, round 3) 'flat': soft bedding / covering lying flat on the floor — no rigid body to shove or tip (the hideout bedroll). */
+export type StaticWhy = 'holder' | 'anchored' | 'built-in' | 'too heavy' | 'fixture' | 'partition' | 'mounted' | 'host decor' | 'structure' | 'machinery' | 'kept' | 'flat';
 
 export interface ItemPhysics {
   /** Mass (kg) of one loose item (a full can, a box of rounds). */
@@ -372,6 +377,9 @@ export const PROP_PHYSICS: Record<string, PropPhysics> = {
   oilRadiator: {mass: 12, dynamic: true, mat: 'heavy'}, wetDryVac: {mass: 8, dynamic: true, mat: 'plastic'}, handToolbox: {mass: 6, dynamic: true, mat: 'heavy'},
   coatRack: {mass: 6, dynamic: true, mat: 'heavy'}, biohazardBin: {mass: 6, dynamic: true, mat: 'plastic'}, bicycle: {mass: 13, dynamic: true, mat: 'heavy'},
   wheelchair: {mass: 15, dynamic: true, mat: 'heavy'}, crowdBarrier: {mass: 16, dynamic: true, mat: 'heavy'},
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the hideout's camping lantern (~1.2 kg) and camp stove (~1.8 kg) — light
+  // loose props on the floor or on the camp table's top (`onHost`: they go loose on their static host, like an office monitor)
+  campLantern: {mass: 1.2, dynamic: true, shape: 'cylinder', mat: 'metal', onHost: true}, campStove: {mass: 1.8, dynamic: true, mat: 'metal', onHost: true},
 };
 
 /**
@@ -418,6 +426,9 @@ export const SUBWAY_CONTACT: Readonly<Record<string, {mat: 'castor' | 'pad'; fit
   paperShredder: {mat: 'pad', how: 'bin-style paper shredder (~10 kg): shoved along when bumped'},
   duffelBag: {mat: 'pad', how: 'duffel bag (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
   biohazardBin: {mat: 'pad', how: 'biohazard bin (~6 kg; no PROP_DEFS kind yet): shoved along when bumped'},
+  // lane HIDEOUT (round 3): the survivor hideout's camp things
+  campLantern: {mat: 'pad', how: 'camping lantern (~1.2 kg) on the camp table or the floor: knocked off / over when bumped or shot'},
+  campStove: {mat: 'pad', how: 'portable camp stove (~1.8 kg) on the camp table or the floor: shoved off / along when bumped or shot'},
 };
 
 /**
