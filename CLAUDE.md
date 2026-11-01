@@ -30,8 +30,10 @@ User: "codex is to be used to generate all textures. Except for dynamic stuff of
 - **Processing is not authoring.** Deterministic processing of approved or generated sources is fine: UV baking, crop / resize, format
   conversion, mips, PBR derivative maps. It is not a loophole for replacing generated art with hand-drawn art. There is no silent
   exception for new hand-painted textures.
-- **Provider textures** delivered with an approved model (e.g. a Meshy refine) are generated sources: keep the originals as private
-  raw provenance and the runtime derivatives in the normal pipeline (provenance, allowlist, CREDITS).
+- **Provider textures** delivered with a model (e.g. Meshy UV maps) are kept as private, read-only raw provenance. Approving a NEW
+  model does not make its provider maps an approved runtime texture source: a new asset's runtime static textures come from Codex
+  sources (e.g. its approved Codex art projected / baked onto the model's UVs, or new Codex images), never from re-encoded or renamed
+  provider maps. Runtime derivatives go through the normal pipeline (provenance, allowlist, CREDITS).
 - **Existing approved textures stay** unless a task actually replaces them.
 - **The generation rules above still apply.** Codex image calls need fresh explicit authorization with a count. If Codex image
   generation or sign-in is unavailable, report the blocker; never substitute another generator, and never label code-drawn output as
