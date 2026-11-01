@@ -624,7 +624,8 @@ const REACTOR_UPPER_POOL: FamilyPool = familyPool({ratdog: 0.12, blightbelly: 0.
 const REACTOR_DEEP_POOL: FamilyPool = familyPool({ratdog: 0.1, blightbelly: 0.14, siren: 0.35});
 const REACTOR_CORE_POOL: FamilyPool = familyPool({ratdog: 0.08, blightbelly: 0.16, siren: 0.35});
 export const REACTOR_SPAWN_PROFILE: SpawnProfile = {
-  id: 'reactor', label: 'Reactor', families: familyPool({ratdog: 0.1, blightbelly: 0.08}), zombieTypes: ZOMBIE_TYPES,
+  // the level pool = the default shares (only the rim's 'station' run reads it; every deeper context has its own pool below)
+  id: 'reactor', label: 'Reactor', families: familyPool(), zombieTypes: ZOMBIE_TYPES,
   contexts: {
     station: {label: 'Rim (station, rim gallery, rim office)', count: [2, 4], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
     floor: {label: 'Upper walkway tier (zone 1; each of tiers 1-2)', count: [4, 6], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_UPPER_POOL},
