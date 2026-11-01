@@ -100,7 +100,7 @@ function checkFallback(s: number, l: StationLayout, ref: StationLayout): NonNull
     // drawn from the service context's OWN pool (the Strainer has weight only there)
     expect((P.contexts.service?.families ?? P.families).some(([f, w]) => f === (z.archetype ?? 'zombie') && w > 0), `${tag} #${i} ${z.archetype}`).toBe(true);
   }
-  // the station invitation art announces the hatch (measured: 1-3 pieces at every one of 56 fallback hatches over 666 present seeds)
+  // the station invitation art announces the hatch (measured: 1-4 pieces at every one of 56 fallback hatches over 666 present seeds)
   const art = (e.art ?? []).filter(a => a.annex === n.id);
   expect(art.length, `${tag} invitation art`).toBeGreaterThan(0);
   expect(art.every(a => a.entry === 'hatch' && a.trench === n.bed!.trench && a.from === n.bed!.from), tag).toBe(true);
