@@ -103,7 +103,7 @@ describe('player train: cooked assets', () => {
     // runtime budgets: one mesh / material each, bounded triangles
     expect(PLAYER_TRAIN_MODELS['player-train-shell'].tris).toBeLessThanOrEqual(32000);
     expect(PLAYER_TRAIN_MODELS['player-train-console'].tris).toBeLessThanOrEqual(15000);
-    expect(PLAYER_TRAIN_MODELS['player-train-door-leaf'].tris).toBeLessThanOrEqual(10000);
+    expect(PLAYER_TRAIN_MODELS['player-train-door-leaf'].tris).toBeLessThanOrEqual(1200); // 12 leaves per car: a light LOD (re-baked planar UV)
     for (const part of Object.keys(ACCEPTED)) expect(prov.models[part].derivative).toMatchObject({meshes: 1, materials: 1});
   });
 

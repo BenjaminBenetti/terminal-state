@@ -42,7 +42,11 @@
 // DOOR LEAF: the raw leaf's -Z face carries an upside-down human figure baked into the glass (provider artifact; not painted over).
 // The leaf is rebuilt from its CLEAN +Z half: clipped at the slab mid-plane, the kept half mirrored onto the other side (same UVs,
 // so the figure's region of the atlas is simply never sampled), then fitted to ONE leaf of a centre-opening pair for the widest
-// doorway (non-uniform: a flat panel). Frame: grounded, centred, closing edge (the T-handle) at +X, faces +-Z.
+// doorway (non-uniform: a flat panel). Frame: grounded, centred, closing edge (the T-handle) at +X, faces +-Z. Twelve leaves per car,
+// so the clean half is decimated by POSITION to ~520 triangles (meshoptimizer; the Meshy atlas splits about half of all vertices on
+// UV seams, which stalls any UV-preserving decimation at ~1,000+ per half), given a planar front UV, and the leaf's OWN accepted maps
+// (base colour, metallic-roughness, tangent-space normal re-expressed for the new frame) are re-baked onto it by an orthographic +Z
+// projection of the clean half (UV baking of the same source: no painting, nothing of the -Z face sampled). ~1,040 triangles per leaf.
 // CONSOLE: turned so the operator side (native +Z) faces -X (the driver stands behind it looking toward the front, +X), UNIFORM
 // scale so its control ledge stands at desk height (~0.72 m, rule 5), grounded, centred.
 //
@@ -54,6 +58,7 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
+import {MeshoptSimplifier} from 'meshoptimizer';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -101,8 +106,12 @@ const CAB_DEPTH = 2.2;
 const CAB_DOORWAY = {halfWidth: 0.45, height: 2.0};
 const LEAF = {overlap: 0.03, thickness: 0.045, top: 0.03}; // leaf = half the widest doorway + overlap at the jamb; into the header
 const CONSOLE = {scale: 2.05, frontGap: 0.04};
+// door leaf: 12 per car, so a light flat panel: the clean half is decimated by POSITION (meshoptimizer; the Meshy atlas splits about
+// half of all vertices on UV seams, which blocks any UV-preserving decimation near the target), re-UV'd by a planar front projection
+// and the accepted Meshy maps re-baked onto it (UV baking of the same source; no painting); ~1,000 triangles per leaf
+const LEAF_LOD = {targetHalfTriangles: 520, error: 0.004, creaseDeg: 40, bake: {w: 512, h: 1024, supersample: 2}};
 const LAMP_OFFSET = 0.05; // light mounts sit this far in front of the lamp lens
-const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: 1024, normal: 512, mr: 256, quality: 85}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
+const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: [512, 1024], normal: [256, 512], mr: [128, 256], quality: 85, baked: 'planar front projection'}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -224,12 +233,127 @@ function fitTris(tris, scaleOf) {
   return {scale: sc, tris: tris.map(t => t.map(v => [(v[0] - c[0]) * sc[0], (v[1] - c[1]) * sc[1], (v[2] - c[2]) * sc[2], ...norm([v[3] / sc[0], v[4] / sc[1], v[5] / sc[2]]), v[6], v[7]]))};
 }
 
+/** Position-only meshoptimizer decimation of a triangle soup (welded at 0.1 um raw). Open borders only collapse along themselves,
+ *  so a planar clip border stays on its plane. Returns position triangles. */
+async function decimatePositions(tris, targetTriangles, error) {
+  await MeshoptSimplifier.ready;
+  const key = v => `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)},${Math.round(v[2] * 1e7)}`;
+  const map = new Map(), pos = [], idx = [];
+  for (const t of tris) {
+    const ids = t.map(v => { const k = key(v); let i = map.get(k); if (i === undefined) { i = pos.length; map.set(k, i); pos.push([v[0], v[1], v[2]]); } return i; });
+    if (ids[0] !== ids[1] && ids[1] !== ids[2] && ids[0] !== ids[2]) idx.push(...ids);
+  }
+  const [out] = MeshoptSimplifier.simplify(new Uint32Array(idx), new Float32Array(pos.flat()), 3, targetTriangles * 3, error, []);
+  const res = [];
+  for (let i = 0; i < out.length; i += 3) res.push([pos[out[i]], pos[out[i + 1]], pos[out[i + 2]]]);
+  return res;
+}
+
+/** Crease-angle vertex normals for position triangles -> vertex records with a planar UV (u along +x, v down along -y). */
+function shadePlanar(tris, creaseDeg, box) {
+  const fn = tris.map(t => cross(sub(t[1], t[0]), sub(t[2], t[0]))); // area-weighted face normals
+  const unit = fn.map(norm), byPos = new Map(), cosC = Math.cos(creaseDeg * Math.PI / 180);
+  tris.forEach((t, f) => t.forEach(p => { const k = p.join(','); if (!byPos.has(k)) byPos.set(k, []); byPos.get(k).push(f); }));
+  return tris.map((t, f) => t.map(p => {
+    const n = [0, 0, 0];
+    for (const g of byPos.get(p.join(','))) if (dot(unit[f], unit[g]) >= cosC) for (let k = 0; k < 3; k++) n[k] += fn[g][k];
+    const nn = norm(n);
+    return [p[0], p[1], p[2], nn[0], nn[1], nn[2], (p[0] - box.x0) / (box.x1 - box.x0), (box.y1 - p[1]) / (box.y1 - box.y0)];
+  }));
+}
+
+/** three.js derivative tangent frame of a triangle (T = dP/du, B = dP/dv, orthonormalized against N). */
+function uvFrame(t, N) {
+  const e1 = sub(t[1], t[0]), e2 = sub(t[2], t[0]);
+  const du1 = t[1][6] - t[0][6], dv1 = t[1][7] - t[0][7], du2 = t[2][6] - t[0][6], dv2 = t[2][7] - t[0][7];
+  const det = du1 * dv2 - du2 * dv1;
+  if (Math.abs(det) < 1e-14) return null;
+  const T = [0, 1, 2].map(k => (e1[k] * dv2 - e2[k] * dv1) / det), B = [0, 1, 2].map(k => (e2[k] * du1 - e1[k] * du2) / det);
+  const ortho = v => norm(sub(v, N.map(x => x * dot(v, N))));
+  return {T: ortho(T), B: ortho(B)};
+}
+
+/** Orthographic +Z projection bake of the source triangles' maps (base colour, metallic-roughness, tangent-space normal re-expressed
+ *  for the planar target UV; three.js / GLTFLoader derivative-tangent convention: n = T * x - B * y + N * z). */
+async function bakePlanar(src, maps, box, {w, h, supersample: ss}) {
+  const W = w * ss, H = h * ss;
+  const cell = Math.max((box.x1 - box.x0) / 96, 1e-4), gw = Math.ceil((box.x1 - box.x0) / cell) + 1, gh = Math.ceil((box.y1 - box.y0) / cell) + 1;
+  const grid = Array.from({length: gw * gh}, () => []);
+  const pre = src.map((t, f) => {
+    const N = norm(cross(sub(t[1], t[0]), sub(t[2], t[0])));
+    const d = (t[1][0] - t[0][0]) * (t[2][1] - t[0][1]) - (t[2][0] - t[0][0]) * (t[1][1] - t[0][1]);
+    const xs = t.map(v => v[0]), ys = t.map(v => v[1]);
+    for (let gy = Math.floor((Math.min(...ys) - box.y0) / cell); gy <= Math.floor((Math.max(...ys) - box.y0) / cell); gy++)
+      for (let gx = Math.floor((Math.min(...xs) - box.x0) / cell); gx <= Math.floor((Math.max(...xs) - box.x0) / cell); gx++)
+        if (gx >= 0 && gy >= 0 && gx < gw && gy < gh) grid[gy * gw + gx].push(f);
+    return {t, d, N, frame: uvFrame(t, N)};
+  });
+  const sample = (m, u, v) => {
+    const x = Math.min(m.w - 1, Math.max(0, (u - Math.floor(u)) * m.w - 0.5)), y = Math.min(m.h - 1, Math.max(0, (v - Math.floor(v)) * m.h - 0.5));
+    const x0 = Math.floor(x), y0 = Math.floor(y), x1 = Math.min(m.w - 1, x0 + 1), y1 = Math.min(m.h - 1, y0 + 1), fx = x - x0, fy = y - y0;
+    return [0, 1, 2].map(c => (m.data[(y0 * m.w + x0) * 3 + c] * (1 - fx) + m.data[(y0 * m.w + x1) * 3 + c] * fx) * (1 - fy)
+      + (m.data[(y1 * m.w + x0) * 3 + c] * (1 - fx) + m.data[(y1 * m.w + x1) * 3 + c] * fx) * fy);
+  };
+  const out = {base: new Float32Array(W * H * 3), mr: new Float32Array(W * H * 3), normal: new Float32Array(W * H * 3)}, hit = new Uint8Array(W * H);
+  let misses = 0;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+    const x = box.x0 + (i + 0.5) / W * (box.x1 - box.x0), y = box.y1 - (j + 0.5) / H * (box.y1 - box.y0);
+    const gx = Math.min(gw - 1, Math.floor((x - box.x0) / cell)), gy = Math.min(gh - 1, Math.floor((y - box.y0) / cell));
+    let best = null, bz = -Infinity, bw = null;
+    for (const f of grid[gy * gw + gx]) {
+      const {t, d} = pre[f];
+      if (Math.abs(d) < 1e-16) continue;
+      const a = ((t[1][0] - x) * (t[2][1] - y) - (t[2][0] - x) * (t[1][1] - y)) / d, b = ((t[2][0] - x) * (t[0][1] - y) - (t[0][0] - x) * (t[2][1] - y)) / d, c = 1 - a - b;
+      if (a < -1e-9 || b < -1e-9 || c < -1e-9) continue;
+      const z = a * t[0][2] + b * t[1][2] + c * t[2][2];
+      if (z > bz) { bz = z; best = pre[f]; bw = [a, b, c]; }
+    }
+    const o = (j * W + i) * 3;
+    if (!best) { misses++; continue; }
+    hit[j * W + i] = 1;
+    const {t, N, frame} = best;
+    const u = bw[0] * t[0][6] + bw[1] * t[1][6] + bw[2] * t[2][6], v = bw[0] * t[0][7] + bw[1] * t[1][7] + bw[2] * t[2][7];
+    const bc = sample(maps.base, u, v), mr = sample(maps.mr, u, v);
+    let n = N;
+    if (frame) { const q = sample(maps.normal, u, v).map(c => c / 127.5 - 1); n = norm([0, 1, 2].map(k => frame.T[k] * q[0] - frame.B[k] * q[1] + N[k] * q[2])); }
+    // target frame (planar UV): T' = +x, B' = -y projected on the tangent plane of N
+    const Tt = norm(sub([1, 0, 0], N.map(c => c * N[0]))), Bt = norm(sub([0, -1, 0], N.map(c => c * -N[1])));
+    const enc = [dot(n, Tt), -dot(n, Bt), dot(n, N)];
+    for (let c = 0; c < 3; c++) { out.base[o + c] = bc[c]; out.mr[o + c] = mr[c]; out.normal[o + c] = enc[c]; }
+  }
+  // fill the (rare) misses from hit neighbours, then box-downsample the supersampled maps
+  for (let pass = 0; pass < 8 && misses; pass++) {
+    const next = Uint8Array.from(hit);
+    for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+      if (hit[j * W + i]) continue;
+      const nb = [[i - 1, j], [i + 1, j], [i, j - 1], [i, j + 1]].filter(([a, b]) => a >= 0 && b >= 0 && a < W && b < H && hit[b * W + a]);
+      if (!nb.length) continue;
+      for (const k of ['base', 'mr', 'normal']) for (let c = 0; c < 3; c++) out[k][(j * W + i) * 3 + c] = nb.reduce((sum, [a, b]) => sum + out[k][(b * W + a) * 3 + c], 0) / nb.length;
+      next[j * W + i] = 1; misses--;
+    }
+    hit.set(next);
+  }
+  const down = (img, isNormal) => {
+    const r = Buffer.alloc(w * h * 3);
+    for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) {
+      const acc = [0, 0, 0];
+      for (let b = 0; b < ss; b++) for (let a = 0; a < ss; a++) for (let c = 0; c < 3; c++) acc[c] += img[((j * ss + b) * W + i * ss + a) * 3 + c];
+      let v = acc.map(x => x / (ss * ss));
+      if (isNormal) v = norm(v).map(x => (x + 1) * 127.5);
+      for (let c = 0; c < 3; c++) r[(j * w + i) * 3 + c] = Math.max(0, Math.min(255, Math.round(v[c])));
+    }
+    return r;
+  };
+  return {base: down(out.base, false), mr: down(out.mr, false), normal: down(out.normal, true), misses};
+}
+
 async function finishDoc(doc, name, tex) {
   const r = doc.getRoot();
   r.listMeshes().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
   r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${name}-${i}` : name));
   r.listMaterials().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
-  await doc.transform(dedup(), prune(),
+  if (tex.baked) await doc.transform(dedup(), prune());
+  else await doc.transform(dedup(), prune(),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [tex.base, tex.base], quality: tex.quality, slots: /^baseColor/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [tex.mr, tex.mr], quality: tex.quality, slots: /^metallicRoughness/}),
     textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [tex.normal, tex.normal], quality: tex.quality, slots: /^normal/}));
@@ -443,7 +567,28 @@ for (let t = 0; t < leafRaw.idx.length; t += 3) {
 const keptLeafTris = leafTris.length;
 const leafHasFigureFace = leafTris.some(t => t.every(v => v[2] < LEAF_ZC + 1e-6));
 if (leafHasFigureFace || !(lzMin < LEAF_ZC - 0.006)) fail('door leaf: the -Z face was not removed');
-leafTris = [...leafTris, ...leafTris.map(t => [t[0], t[2], t[1]].map(v => [v[0], v[1], 2 * LEAF_ZC - v[2], v[3], v[4], -v[5], v[6], v[7]]))];
+// LOD: decimate the clean half by position, planar front UV, crease-angle normals; bake the Meshy maps of the clean half onto it
+const leafBox = {x0: Math.min(...leafTris.flatMap(t => t.map(v => v[0]))), x1: Math.max(...leafTris.flatMap(t => t.map(v => v[0]))),
+  y0: Math.min(...leafTris.flatMap(t => t.map(v => v[1]))), y1: Math.max(...leafTris.flatMap(t => t.map(v => v[1])))};
+const leafHalf = shadePlanar(await decimatePositions(leafTris, LEAF_LOD.targetHalfTriangles, LEAF_LOD.error), LEAF_LOD.creaseDeg, leafBox);
+if (leafHalf.some(t => t.some(v => v[2] < LEAF_ZC - 1e-7))) fail('door leaf: decimation moved geometry past the mid-plane');
+const leafMat = leafRaw.doc.getRoot().listMaterials()[0];
+const decodeMap = async tex => { const {data, info} = await sharp(Buffer.from(tex.getImage())).removeAlpha().raw().toBuffer({resolveWithObject: true}); return {data, w: info.width, h: info.height}; };
+const leafBake = await bakePlanar(leafTris, {base: await decodeMap(leafMat.getBaseColorTexture()), mr: await decodeMap(leafMat.getMetallicRoughnessTexture()), normal: await decodeMap(leafMat.getNormalTexture())}, leafBox, LEAF_LOD.bake);
+if (leafBake.misses) fail(`door leaf bake: ${leafBake.misses} texels without a source surface`);
+const jpegMap = async (raw, size) => { const {w, h} = LEAF_LOD.bake; let img = sharp(raw, {raw: {width: w, height: h, channels: 3}}); if (size[0] !== w) img = img.resize(size[0], size[1], {kernel: 'lanczos3', fit: 'fill'}); return img.jpeg({quality: TEX.leaf.quality, mozjpeg: true, chromaSubsampling: '4:2:0'}).toBuffer(); };
+leafMat.getBaseColorTexture().setImage(await jpegMap(leafBake.base, TEX.leaf.base)).setMimeType('image/jpeg');
+leafMat.getMetallicRoughnessTexture().setImage(await jpegMap(leafBake.mr, TEX.leaf.mr)).setMimeType('image/jpeg');
+leafMat.getNormalTexture().setImage(await jpegMap(leafBake.normal, TEX.leaf.normal)).setMimeType('image/jpeg');
+const simplifiedLeafHalf = leafHalf.length;
+leafTris = [...leafHalf, ...leafHalf.map(t => [t[0], t[2], t[1]].map(v => [v[0], v[1], 2 * LEAF_ZC - v[2], v[3], v[4], -v[5], v[6], v[7]]))];
+{ // the mirrored halves meet exactly: no open edge on the mid-plane
+  const k = v => `${Math.round(v[0] * 1e7)},${Math.round(v[1] * 1e7)},${Math.round(v[2] * 1e7)}`, edges = new Map();
+  for (const t of leafTris) for (let j = 0; j < 3; j++) { const a = k(t[j]), b = k(t[(j + 1) % 3]); if (a === b) continue; const e = a < b ? `${a}|${b}` : `${b}|${a}`; edges.set(e, (edges.get(e) ?? 0) + 1); }
+  const zcKey = Math.round(LEAF_ZC * 1e7);
+  const openOnPlane = [...edges].filter(([e, n]) => n === 1 && e.split('|').every(p => Math.abs(+p.split(',')[2] - zcKey) <= 1)).length;
+  if (openOnPlane) fail(`door leaf: ${openOnPlane} open edges on the mid-plane after mirroring`);
+}
 const leafFit = fitTris(leafTris, size => [leafSize.width / size[0], leafSize.height / size[1], leafSize.thickness / size[2]]);
 leafTris = leafFit.tris;
 const leafScale = leafFit.scale.map(r4);
@@ -493,7 +638,7 @@ const derivation = {
     cookedUndersideY: r4(B), components: {total: compList.length, triangles: counts}, doorCuts: {rawX: RAW.doors, sides: [-1, 1], removedAreaM2: r3(removedArea), innerSkinZ: r4(innerSkin), recessPlaneZ: {platform: r4(recess[-1]), far: r4(recess[1])}, skinBesideZ: {platform: r4(skinBeside[-1]), far: r4(skinBeside[1])}},
     checks, fit, coverboardClearance: {minYAboveRailOutboard124: coverboardClear, coverboardTop: 0.185}},
   doorLeaf: {method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
-    rawZ: [r4(lzMin), r4(lzMax)], keptTriangles: keptLeafTris, scale: leafScale, frame: 'grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)'},
+    rawZ: [r4(lzMin), r4(lzMax)], keptTriangles: keptLeafTris, lod: {...LEAF_LOD, tool: 'meshoptimizer simplify by position on the kept half (borders collapse only along themselves: the mid-plane loop stays on the plane), crease-angle normals, planar front UV; base colour / metallic-roughness / normal re-baked from the clean half by an orthographic +Z projection (normals re-expressed in the new tangent frame); then mirrored', halfTriangles: simplifiedLeafHalf, sourceHalfTriangles: keptLeafTris}, scale: leafScale, frame: 'grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)'},
   console: {method: 'turned -90 deg about Y (native operator side +Z -> -X), uniform scale', scale: CONSOLE.scale, frame: 'grounded, centred; operator side -X, windshield side +X, width along Z'},
 };
 const prov = {schema: 'last-line-derivative/1', asset: 'player-train-20261101', task: TASK, lane: 'ASSETS (Studio Beta player train)',
@@ -561,7 +706,7 @@ ${measured.doors.map(d => `    {side: ${d.side} as const, x: ${d.x}, width: ${d.
 const credPath = path.join(PUB, CREDITS_REL);
 const credSrc = fs.readFileSync(credPath, 'utf8');
 const credSection = [CREDITS_BEGIN, '## Player train (level one): car shell, driving desk, door leaf, interior textures', '',
-  `Models generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's player-train authorization (${last.attempts} attempts, ${last.billed} credits of up to ${open.ceilings.billedPlusReserved}); interior textures generated with Codex native image generation (the owned Codex CLI's built-in image_gen tool). Runtime derivatives (mesh processing: body stretched to human scale with the undercarriage unstretched, door openings cut, the leaf rebuilt from its clean face; texture resize / format conversion only) built by \`tools/asset-pipeline/train/build-player-train.mjs\` (provenance: \`${PROV_REL}\`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.`, '',
+  `Models generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's player-train authorization (${last.attempts} attempts, ${last.billed} credits of up to ${open.ceilings.billedPlusReserved}); interior textures generated with Codex native image generation (the owned Codex CLI's built-in image_gen tool). Runtime derivatives (mesh processing: body stretched to human scale with the undercarriage unstretched, door openings cut, the leaf rebuilt from its clean face and decimated, its own maps re-baked onto a planar UV; otherwise texture resize / format conversion only) built by \`tools/asset-pipeline/train/build-player-train.mjs\` (provenance: \`${PROV_REL}\`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.`, '',
   `- \`${MODEL.shell}\` — weathered subway car shell (Meshy tasks ${accepted.shell.preview} / ${accepted.shell.task})`,
   `- \`${MODEL.console}\` — cab driving desk (Meshy tasks ${accepted.console.preview} / ${accepted.console.task})`,
   `- \`${MODEL.leaf}\` — sliding door leaf (Meshy tasks ${accepted.leaf.preview} / ${accepted.leaf.task})`,

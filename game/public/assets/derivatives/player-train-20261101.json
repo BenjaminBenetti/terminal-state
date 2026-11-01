@@ -122,50 +122,60 @@
      2.031,
      0.045
     ],
-    "triangles": 7878,
+    "triangles": 1040,
     "meshes": 1,
     "materials": 1,
     "textures": [
      {
       "slot": "baseColor",
       "size": [
-       1024,
+       512,
        1024
       ],
       "mime": "image/jpeg",
-      "bytes": 96106
+      "bytes": 34547
      },
      {
       "slot": "metallicRoughness",
       "size": [
-       256,
+       128,
        256
       ],
       "mime": "image/jpeg",
-      "bytes": 10998
+      "bytes": 2761
      },
      {
       "slot": "normal",
       "size": [
-       512,
+       256,
        512
       ],
       "mime": "image/jpeg",
-      "bytes": 10099
+      "bytes": 1923
      }
     ],
-    "gpuBytesWithMips": 7340031,
+    "gpuBytesWithMips": 3670017,
     "texturePolicy": {
-     "base": 1024,
-     "normal": 512,
-     "mr": 256,
-     "quality": 85
+     "base": [
+      512,
+      1024
+     ],
+     "normal": [
+      256,
+      512
+     ],
+     "mr": [
+      128,
+      256
+     ],
+     "quality": 85,
+     "baked": "planar front projection"
     }
    },
    "output": {
     "url": "assets/models/player-train-door-leaf.glb",
-    "bytes": 442200,
-    "sha256": "98df16f13db5ed2c66cb7f3a92afe2aa8b223402abc008348de98a155b0b2c39"
+    "bytes": 111172,
+    "sha256": "5fe1f62fb3577c8a55fe4c25a73191fa4fd5d3403a78a9467d91defcfb06a87c"
    }
   },
   "train-cab-console": {
@@ -344,6 +354,19 @@
     0.0266
    ],
    "keptTriangles": 3939,
+   "lod": {
+    "targetHalfTriangles": 520,
+    "error": 0.004,
+    "creaseDeg": 40,
+    "bake": {
+     "w": 512,
+     "h": 1024,
+     "supersample": 2
+    },
+    "tool": "meshoptimizer simplify by position on the kept half (borders collapse only along themselves: the mid-plane loop stays on the plane), crease-angle normals, planar front UV; base colour / metallic-roughness / normal re-baked from the clean half by an orthographic +Z projection (normals re-expressed in the new tangent frame); then mirrored",
+    "halfTriangles": 520,
+    "sourceHalfTriangles": 3939
+   },
    "scale": [
     1.3668,
     2.1331,

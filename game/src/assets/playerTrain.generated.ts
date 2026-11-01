@@ -6,7 +6,7 @@
 //   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z.
 export const PLAYER_TRAIN_MODELS = {
   'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2292108, tris: 26956, dims: [16.2031, 3.8508, 2.9914] as const},
-  'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 442200, tris: 7878, dims: [0.608, 2.031, 0.045] as const},
+  'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 111172, tris: 1040, dims: [0.608, 2.031, 0.045] as const},
   'player-train-console': {key: 'player-train-console', url: 'assets/models/player-train-console.glb', bytes: 607856, tris: 11389, dims: [0.8028, 1.1641, 1.9549] as const},
 } as const;
 
