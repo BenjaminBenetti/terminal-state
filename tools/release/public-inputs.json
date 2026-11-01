@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 23908,
-      "sha256": "badb3e26f819a66ef0cf9a0aba06a101ecd0ac9fb698211314d8c9a90d945fbc"
+      "bytes": 23426,
+      "sha256": "c2ef8800287733f34bd0b8cbf5a85ee27a42cfa023321e130e9d3240aeb6a98a"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1455,8 +1455,8 @@
     },
     {
       "path": "assets/derivatives/enemy-strainer.json",
-      "bytes": 81493,
-      "sha256": "7823ca31753d3e4a4eb73b7291b6b18ec8fa92703357586ac44d7301e0507130"
+      "bytes": 61817,
+      "sha256": "405124a2392215775ccb3ab776b27efaf9b15e5d2aa43b2dd56e2dfebc083c49"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1750,8 +1750,8 @@
     },
     {
       "path": "assets/models/enemy-strainer.glb",
-      "bytes": 2462484,
-      "sha256": "93284f71927968a721739ecddd04e4be8b06232850d655580f3672aa262c2680"
+      "bytes": 2377612,
+      "sha256": "30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a"
     },
     {
       "path": "assets/models/gun-locker.glb",
