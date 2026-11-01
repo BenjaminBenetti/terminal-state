@@ -149,7 +149,7 @@ export function controlPrompt(s: ReactorRunState, id: RestartControlId, inv: Pic
       const n = fuseSlot(id) + 1;
       return blocked ? `Fuse slot ${n} · burnt out — needs a fuse cartridge` : `${P}Fit a fuse cartridge · slot ${n}`;
     }
-    case 'breaker': return blocked ? `Main breaker · replace the burnt fuses first (${fusesInstalled(s)}/${REACTOR_FUSE_SLOTS})` : `${H}Close the main breaker`;
+    case 'breaker': return blocked ? `Main breaker · replace the burnt fuses first (${fusesInstalled(s)} of ${REACTOR_FUSE_SLOTS} fitted)` : `${H}Close the main breaker`;
     case 'valve': return `${H}Open the main coolant valve`;
     case 'pump': return blocked ? `Circulation pump · needs ${!s.breaker && !s.valve ? 'control power + the coolant valve open' : !s.breaker ? 'control power' : 'the coolant valve open'}` : `${P}Start the circulation pump`;
     case 'keyswitch': return blocked ? 'Key switch · needs the startup key' : `${P}Insert the startup key`;
