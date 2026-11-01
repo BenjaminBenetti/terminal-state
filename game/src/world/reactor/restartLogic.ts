@@ -166,30 +166,6 @@ export interface RestartFields {
 }
 export const RESTART_FIELDS: readonly (keyof RestartFields)[] = ['fuses', 'breaker', 'valve', 'pump', 'keyInserted', 'rods', 'restarted', 'restartedAt'];
 
-/**
- * Defensive mirror of RESTART's fields (lane store 'reactor.restart', same section memory: travel keeps it, Retry restores it with
- * the main record, NewGame drops it). If another writer ever stores a stale copy of the shared record, the monotonic merge below
- * keeps a consumed part's effect (a seated fuse / an inserted key) — never lost, never duplicated.
- */
-export const RESTART_MIRROR_LANE = 'reactor.restart';
-
-/** `into` with every RESTART flag that is set in `from` (monotonic OR merge; restartedAt from whichever restarted first). */
-export function mergeRestartFields(into: ReactorRunState, from: Partial<RestartFields> | null | undefined): ReactorRunState {
-  if (!from || typeof from !== 'object') return into;
-  const f = Array.isArray(from.fuses) ? from.fuses : [];
-  for (let i = 0; i < into.fuses.length; i++) into.fuses[i] = into.fuses[i] || f[i] === true;
-  into.breaker ||= from.breaker === true && into.fuses.every(Boolean);
-  into.valve ||= from.valve === true;
-  into.pump ||= from.pump === true && into.breaker && into.valve;
-  into.keyInserted ||= from.keyInserted === true;
-  into.rods ||= from.rods === true && into.keyInserted && into.pump;
-  if (!into.restarted && from.restarted === true && into.rods) {
-    into.restarted = true;
-    into.restartedAt = typeof from.restartedAt === 'number' && Number.isFinite(from.restartedAt) ? from.restartedAt : 0;
-  }
-  return into;
-}
-
 export const pickRestartFields = (s: ReactorRunState): RestartFields => ({
   fuses: [...s.fuses], breaker: s.breaker, valve: s.valve, pump: s.pump, keyInserted: s.keyInserted, rods: s.rods, restarted: s.restarted, restartedAt: s.restartedAt,
 });
@@ -197,13 +173,15 @@ export const pickRestartFields = (s: ReactorRunState): RestartFields => ({
 /** The run's lane-store API (RunState.laneStore / setLaneStore; Game.run is replaced by NewGame: always pass the live one). */
 export interface RestartRun { laneStore<T = unknown>(lane: string): T | undefined; setLaneStore(lane: string, data: unknown): void }
 
-/** The persisted state for this layout: the shared record (any shape) merged with the RESTART mirror. */
+/** The persisted state for this layout (the shared record, any shape -> valid). */
 export function readRestartState(run: RestartRun, lane: string, generators: number, zones: number): ReactorRunState {
-  const s = loadReactorState(run.laneStore(lane), generators, zones);
-  return mergeRestartFields(s, run.laneStore<Partial<RestartFields>>(RESTART_MIRROR_LANE));
+  return loadReactorState(run.laneStore(lane), generators, zones);
 }
 
-/** Writes RESTART's fields: re-reads the shared record (AIR's latest generators / zoneClear kept as stored), then the mirror. */
+/**
+ * Writes RESTART's fields by READ-MERGE-WRITE: re-reads the stored record (lane AIR's latest `generators` / `zoneClear` are kept
+ * exactly as stored — AIR does the same for its keys), sets only RESTART's fields, writes it back. Never a stale whole record.
+ */
 export function writeRestartState(run: RestartRun, lane: string, generators: number, zones: number, s: ReactorRunState): void {
   const cur = loadReactorState(run.laneStore(lane), generators, zones);
   const mine = pickRestartFields(s);
@@ -211,7 +189,6 @@ export function writeRestartState(run: RestartRun, lane: string, generators: num
   cur.breaker = mine.breaker; cur.valve = mine.valve; cur.pump = mine.pump; cur.keyInserted = mine.keyInserted; cur.rods = mine.rods;
   cur.restarted = mine.restarted; cur.restartedAt = mine.restartedAt;
   run.setLaneStore(lane, cur);
-  run.setLaneStore(RESTART_MIRROR_LANE, mine);
 }
 
 /** The layout bits the "next step" line reads (layout.reactor). */

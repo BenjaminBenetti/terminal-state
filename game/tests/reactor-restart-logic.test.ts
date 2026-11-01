@@ -5,7 +5,7 @@ import {describe, expect, it} from 'vitest';
 import {Inventory} from '../src/items/inventory';
 import {REACTOR_LANE, emptyReactorState, loadReactorState, reactorTasks} from '../src/world/reactor/runState';
 import {
-  FUSE_CARTRIDGE_ID, HOLD_S, REACTOR_KEY_ID, RESTART_CONTROL_IDS, RESTART_MIRROR_LANE, blocker, controlDone, controlPrompt, mergeRestartFields,
+  FUSE_CARTRIDGE_ID, HOLD_S, REACTOR_KEY_ID, RESTART_CONTROL_IDS, blocker, controlDone, controlPrompt,
   nextStepText, operate, readRestartState, taskLine, writeRestartState, type RestartControlId,
 } from '../src/world/reactor/restartLogic';
 import {newRun, reactorInfoFixture} from './helpers/reactorRestartFixture';
@@ -130,17 +130,21 @@ describe('reactor restart persistence', () => {
     expect(stored.valve).toBe(true);
   });
 
-  it('a stale full-record writer can never undo a consumed part (monotonic mirror)', () => {
+  it("both lanes read-merge-write: AIR saving its keys after us never wipes ours (and ours never wipe AIR's)", () => {
     const run = newRun();
-    const s = emptyReactorState(2, 2);
+    const s = readRestartState(run, REACTOR_LANE, 2, 2);
     operate(s, 'fuse-0', withParts(1, 0), 0);
     writeRestartState(run, REACTOR_LANE, 2, 2, s);
-    run.setLaneStore(REACTOR_LANE, emptyReactorState(2, 2)); // e.g. another lane saving its old copy of the whole record
-    expect(readRestartState(run, REACTOR_LANE, 2, 2).fuses).toEqual([true, false]);
-    expect(run.laneStore(RESTART_MIRROR_LANE)).toMatchObject({fuses: [true, false]});
-    // merge is monotonic and validates prerequisites
-    const m = mergeRestartFields(emptyReactorState(2, 2), {fuses: [true, false], breaker: true, rods: true, restarted: true});
-    expect(m).toMatchObject({fuses: [true, false], breaker: false, rods: false, restarted: false});
+    // lane AIR's save (world/reactor/generators.ts): read the stored record, set ONLY generators / zoneClear, write back
+    const cur = loadReactorState(run.laneStore(REACTOR_LANE), 2, 2);
+    cur.generators[0] = {started: true, startedAt: 3};
+    cur.zoneClear[0] = 0.5;
+    run.setLaneStore(REACTOR_LANE, cur);
+    const back = readRestartState(run, REACTOR_LANE, 2, 2);
+    expect(back.fuses).toEqual([true, false]);
+    expect(back.generators[0]).toEqual({started: true, startedAt: 3});
+    // one record only (no side store)
+    expect(Object.keys(run.memory().lanes)).toEqual([REACTOR_LANE]);
   });
 
   it('travel keeps the record; Retry restores the level-entry snapshot; a new run starts clean', () => {

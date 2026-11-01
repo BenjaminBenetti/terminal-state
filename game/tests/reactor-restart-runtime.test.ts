@@ -213,7 +213,7 @@ describe('screen drawing', () => {
         const {pw, ph} = screenPixels(1.6, 1.0);
         const c = new ShimCanvas(true);
         c.width = pw; c.height = ph;
-        drawReactorScreen(c.getContext('2d') as unknown as CanvasRenderingContext2D, id, m, pw, ph);
+        drawReactorScreen(c.getContext() as unknown as CanvasRenderingContext2D, id, m, pw, ph);
         let lit = 0;
         for (let i = 0; i < c.data.length; i += 4) if (c.data[i] + c.data[i + 1] + c.data[i + 2] > 60) lit++;
         expect(lit, id).toBeGreaterThan(200);

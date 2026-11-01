@@ -5,9 +5,10 @@
 import {afterEach, describe, expect, it} from 'vitest';
 import {VENT_TOWERS, WIN, WIN_TEXT, WinSequence, circuitAt, planWin, tierStartAt, towersDoneAt, winDoneAt, type WinSink} from '../src/world/reactor/restartWin';
 import {setReactorVisuals, type ReactorVisuals} from '../src/world/reactor/visuals';
-import {setReactorAir} from '../src/world/reactor/restartAir';
 import {FUSE_CARTRIDGE_ID, REACTOR_KEY_ID} from '../src/world/reactor/restartLogic';
 import {aimAt, buildRestart, fakeHost, reactorInfoFixture} from './helpers/reactorRestartFixture';
+import {ReactorRestart} from '../src/world/reactor/restart';
+import {REACTOR_AIR} from '../src/world/reactor/air';
 
 interface Rec { core: number[]; tiers: [number, number][]; fans: [number, number][]; circuit: number[]; air: number[]; toasts: string[]; towers: number }
 function recSink(): {sink: WinSink; rec: Rec} {
@@ -26,7 +27,7 @@ function fakeVisuals() {
 
 const firstLit = (tiers: [number, number][]) => { const out: number[] = []; for (const [l, k] of tiers) if (k > 0 && !out.includes(l)) out.push(l); return out; };
 
-afterEach(() => { setReactorVisuals(null); setReactorAir(null); });
+afterEach(() => { setReactorVisuals(null); });
 
 describe('win timeline', () => {
   const info = reactorInfoFixture();
@@ -39,6 +40,7 @@ describe('win timeline', () => {
     expect(tierStartAt(3, 4) + WIN.tierRampS).toBeCloseTo(WIN.tierStartS + WIN.tierSpanS, 6);
     expect(WIN.tierSpanS).toBeGreaterThanOrEqual(15); // "over ~20 s"
     expect(WIN.coreS).toBeGreaterThanOrEqual(5);
+    expect(WIN.airDurationS).toBe(REACTOR_AIR.CLEAR_ALL_S); // the same whole-pit clearing AIR resumes on a rebuild
   });
 
   it('steps: core ramps first, tiers light bottom-up, fans only go up (to 1, once each), clearAll once, each toast once', () => {
@@ -68,14 +70,14 @@ describe('win timeline', () => {
     expect(rec.tiers.length).toBeLessThan(4 * 120);
   });
 
-  it('finish() jumps to the end state without toasts, and clears the air at once', () => {
+  it('finish() jumps to the end state without toasts (clearAir sent once if never sent)', () => {
     const {sink, rec} = recSink();
     const w = new WinSequence(plan, sink);
     w.finish();
     expect(rec.core).toEqual([1]);
     expect(rec.tiers.map(t => t[1])).toEqual([1, 1, 1, 1]);
     expect(rec.fans).toHaveLength(4);
-    expect(rec.air).toEqual([0]);
+    expect(rec.air).toEqual([WIN.airDurationS]);
     expect(rec.toasts).toEqual([]);
     expect(rec.circuit).toEqual([1]);
     expect(w.done).toBe(true);
@@ -108,9 +110,9 @@ describe('win in the runtime (fake host)', () => {
     const {v, calls} = fakeVisuals();
     setReactorVisuals(v);
     const air: number[] = [];
-    setReactorAir({clearAll: d => air.push(d)});
     const h = fakeHost();
     const rt = buildRestart(h);
+    rt.clearAir = d => { air.push(d); return true; };
     let milestones = 0;
     rt.recordMilestone = () => { milestones++; return true; };
     expect(h.lightPool.circuitLevel).toEqual([null, null, 0]); // powered fixtures dark until the restart
@@ -136,15 +138,41 @@ describe('win in the runtime (fake host)', () => {
     expect(milestones).toBe(1);
   });
 
-  it('a later AIR registration still gets its clearAll exactly once', () => {
+  it("audio through the lead's Sfx machine API: one-shots per control, ONE core hum loop (re-requested until audio runs)", () => {
+    const cues: string[] = [];
+    let loops = 0, audioUp = false;
+    const handle = {playing: true, setPos() {}, stop() { handle.playing = false; }};
+    const h = fakeHost();
+    h.sfx = {reactorCue: (c: string) => { cues.push(c); }, reactorLoop: (c: string) => { loops++; expect(c).toBe('reactorHum'); return audioUp ? handle : null; }};
+    const rt = buildRestart(h);
+    rt.clearAir = () => true;
+    restartAll(h, rt);
+    expect(cues).toEqual(['reactorFuse', 'reactorFuse', 'reactorBreaker', 'reactorValve', 'reactorPump', 'reactorStartup']);
+    for (let i = 0; i < 40; i++) rt.frame(0.1); // audio not running: re-requested about once a second
+    expect(loops).toBeGreaterThanOrEqual(2);
+    expect(loops).toBeLessThanOrEqual(5);
+    audioUp = true;
+    for (let i = 0; i < 40; i++) rt.frame(0.1);
+    const n = loops;
+    for (let i = 0; i < 100; i++) rt.frame(0.1);
+    expect(loops).toBe(n); // one handle kept
+    rt.teardown();
+    expect(handle.playing).toBe(false);
+  });
+
+  it("lane AIR's clearAll is retried until AIR's air exists, then called exactly once", () => {
     const h = fakeHost();
     const rt = buildRestart(h);
-    restartAll(h, rt);
-    for (let i = 0; i < 100; i++) rt.frame(0.1); // past WIN.airAtS, nobody registered
     const air: number[] = [];
-    setReactorAir({clearAll: d => air.push(d)});
+    let built = false;
+    rt.clearAir = d => { if (!built) return false; air.push(d); return true; };
+    restartAll(h, rt);
+    for (let i = 0; i < 100; i++) rt.frame(0.1); // past WIN.airAtS, AIR not built yet
+    expect(air).toEqual([]);
+    built = true;
     for (let i = 0; i < 10; i++) rt.frame(0.1);
     expect(air).toEqual([WIN.airDurationS]);
+    expect(rt.counts.airCalls).toBe(1);
   });
 
   it('a rebuilt restarted world: end state at once (no replay, no toasts, no second milestone), ARCH re-applied when it registers late', () => {
@@ -155,14 +183,16 @@ describe('win in the runtime (fake host)', () => {
     rt.teardown();
     const h2 = fakeHost(h.run, h.inv);
     const air: number[] = [];
-    setReactorAir({clearAll: d => air.push(d)});
-    const rt2 = buildRestart(h2);
+    const rt2 = new ReactorRestart(h2).install();
+    rt2.clearAir = d => { air.push(d); return true; };
+    for (const s of h2.sectionHooks) s.build?.(h2.layout);
     let milestones = 0;
     rt2.recordMilestone = () => { milestones++; return true; };
     expect(rt2.state!.restarted).toBe(true);
     expect(rt2.win!.done).toBe(true);
     expect(h2.lightPool.circuitLevel).toEqual([null, null, 1]);
-    expect(air).toEqual([0]);
+    for (let i = 0; i < 5; i++) rt2.frame(0.1);
+    expect(air).toEqual([]); // AIR resumes its own whole-pit clearing from the stored restartedAt
     const {v, calls} = fakeVisuals();
     setReactorVisuals(v); // ARCH's build after ours
     rt2.frame(0.016);

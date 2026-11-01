@@ -1,7 +1,7 @@
 // Task reactor-build-20261101 (lane RESTART): THE WIN as a pure, deterministic timeline (no three.js / DOM; tests step it).
 // Diegetic, bounded, no cutscene and no forced end — the run goes on:
 //  t = 0          the rods are withdrawn: the startup cue; the core starts to glow (setCoreGlow ramps 0 -> 1 over WIN.coreS);
-//  t = airAtS     the local gas clears: lane AIR's clearAll(airDurationS), called ONCE;
+//  t = airAtS     the local gas clears: lane AIR's reactorClearAll (its own whole-pit duration REACTOR_AIR.CLEAR_ALL_S), called ONCE;
 //  t = tierStartS industrial lighting and the extraction fans SEQUENCE UP THROUGH THE PIT, tier by tier from the core floor to the
 //                 rim (setTierPower(level, k) in bottom-up order, each tier's fans with it), ~WIN.tierSpanS in all; the light field's
 //                 powered circuit follows the mean tier power;
@@ -12,13 +12,14 @@
 // nothing is revived, the zombies stay. Rebuilding a restarted world jumps straight to the end state (no replay).
 
 import type {ReactorFan, ReactorTier} from '../../gen/reactor/reactorTypes';
+import {REACTOR_AIR} from './air';
 
 export const WIN = {
   /** Core glow ramp (s). */
   coreS: 6,
-  /** Local gas clearing: when clearAll is called and the duration passed to it (s). */
+  /** Local gas clearing: when lane AIR's clearAll is called and its duration (s: AIR's own, so a rebuilt world resumes it alike). */
   airAtS: 5,
-  airDurationS: 22,
+  airDurationS: REACTOR_AIR.CLEAR_ALL_S,
   /** The tier sequence: first tier starts at tierStartS, the last one is fully on at tierStartS + tierSpanS; each ramps over tierRampS. */
   tierStartS: 6,
   tierSpanS: 20,
@@ -150,7 +151,7 @@ export class WinSequence {
     this.emit(false);
   }
 
-  /** Jump to the end state (every value at its final level; clearAir(0) if it was never called). */
+  /** Jump to the end state (every value at its final level; clearAir if it was never called — the runtime skips it on a restore). */
   finish(): void {
     this.t = Math.max(this.t, winDoneAt(this.plan.tiers.length) + 1);
     this.emit(true);
@@ -165,7 +166,7 @@ export class WinSequence {
     const t = this.t, s = this.sink, n = this.plan.tiers.length;
     const g = coreGlowAt(t);
     if (moved(this.core, g)) { this.core = g; if (g > 0) s.coreGlow(g); }
-    if (!this.air && (t >= WIN.airAtS || final)) { this.air = true; s.clearAir(final && t > WIN.airAtS + WIN.airDurationS ? 0 : WIN.airDurationS); }
+    if (!this.air && (t >= WIN.airAtS || final)) { this.air = true; s.clearAir(WIN.airDurationS); }
     for (let r = 0; r < n; r++) {
       const k = tierPowerAt(t, r, n);
       if (!moved(this.tier[r], k)) continue;

@@ -15,17 +15,19 @@
 // - THE WIN (world/reactor/restartWin.ts WinSequence): the core glows up, tier lighting + fans sequence up the pit bottom-up
 //   (reactorVisuals().setCoreGlow / setTierPower / setFanSpeed), the light pool's powered circuit 2 ramps with it
 //   (world/lights.ts StationLighting.circuitLevel — the generator marks the powered fixtures `dying`: no re-bake, no shader change),
-//   lane AIR's clearAll (world/reactor/restartAir.ts seam) once, the monitors switch to the SURFACE VENTILATION NETWORK, two toasts,
-//   and the persistent local milestone (run/milestones.ts) is written once. The run goes on: no forced end, no reset.
-// Audio: Sound Lab cues reactorBreaker / reactorFuse / reactorValve / reactorPump / reactorStartup / reactorHum (loop) when the lead
-// registers them in audio/bank.ts CUES (graceful absence: existing accepted cues pitched as stand-ins, the hum silent).
+//   lane AIR's reactorClearAll (world/reactor/generators.ts) once — a rebuilt restarted world is resumed by AIR itself from the
+//   stored restartedAt —, the monitors switch to the SURFACE VENTILATION NETWORK, two toasts, and the persistent local milestone
+//   (run/milestones.ts) is written once. The run goes on: no forced end, no reset.
+// Audio: the lead's Sound Lab machine set through Sfx.reactorCue ('reactorFuse' / 'reactorBreaker' / 'reactorValve' / 'reactorPump' /
+// 'reactorStartup') and Sfx.reactorLoop('reactorHum') at the core while the reactor runs (one handle, re-requested while audio is not
+// running yet); both are silent when audio / a clip is missing. The key switch uses the existing 'click'.
 
 import * as THREE from 'three';
 import type {StationLayout} from '../../gen/stationTypes';
 import type {ReactorControl, ReactorInfo} from '../../gen/reactor/reactorTypes';
 import {REACTOR_LANE, reactorTasks, type ReactorRunState} from './runState';
 import {reactorVisuals, type ReactorVisuals} from './visuals';
-import {reactorAir} from './restartAir';
+import {reactorClearAll} from './generators';
 import {
   CONTROL_NAME, HOLD_S, blocker, controlDone, controlPrompt, doneText, isRestartControl, nextStepText, operate, readRestartState,
   taskLine, writeRestartState, type RestartControlId, type RestartEvent, type RestartHints, type RestartInventory, type RestartRun,
@@ -36,7 +38,6 @@ import {buildControlView, buildScreenView, controlFront, type ControlView, type 
 import {preloadReactorItemModels} from './restartItems';
 import {recordReactorRestarted} from '../../run/milestones';
 import {rayCylinder, towerCue, type P3} from '../towerShared';
-import {CLIP_MANIFEST, CUES} from '../../audio/bank';
 
 export {preloadReactorItemModels};
 
@@ -79,10 +80,10 @@ export interface RestartHost {
 
 interface ControlEntry { id: RestartControlId; c: ReactorControl; level: number; view: ControlView; fx: number; fz: number; r: number }
 
-const CUE_SET: ReadonlySet<string> = new Set(CUES as readonly string[]);
-/** Lead's Sound Lab cue names (registered in audio/bank.ts CUES once integrated). */
-export const RESTART_CUES = ['reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorHum'] as const;
-type RestartCue = (typeof RESTART_CUES)[number];
+/** The lead's Sfx machine API (audio/sfx.ts MachineCue / MachineLoopCue): duck-typed so tests / an older Sfx stay silent. */
+type RestartCue = 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup';
+interface LoopHandle { setPos(x: number, y: number, z: number): void; stop(fadeS?: number): void; readonly playing: boolean }
+interface MachineSfx { reactorCue?(cue: RestartCue, x: number, y: number, z: number): void; reactorLoop?(cue: 'reactorHum', x: number, y: number, z: number): LoopHandle | null }
 
 const runtimes = new WeakMap<object, ReactorRestart>();
 /** The runtime installed into a host (QA). */
@@ -102,6 +103,10 @@ export class ReactorRestart {
   readonly counts = {presses: 0, holds: 0, completed: 0, refused: 0, letGo: 0, airCalls: 0, milestones: 0, saves: 0, redraws: 0};
   /** Milestone writer (tests replace it): true when written now. */
   recordMilestone: (levelSeed: number) => boolean = seed => recordReactorRestarted(seed);
+  /** Lane AIR's whole-pit clearing (tests replace it): false while no Reactor air is built (retried next frame). */
+  clearAir: (durationS: number) => boolean = d => reactorClearAll(d);
+  /** The restarted core's hum loop (Sfx.reactorLoop handle) or null. */
+  humLoop: LoopHandle | null = null;
   /** The powered circuit level last sent (0..1). */
   circuit = 0;
   private plan: WinPlan | null = null;
@@ -110,6 +115,7 @@ export class ReactorRestart {
   private version = 0;
   private drawn = -1;
   private airPending: number | null = null;
+  private restoring = false;
   private applied: ReactorVisuals | null = null;
   private pollT = 0;
   private airSig = -1;
@@ -200,7 +206,9 @@ export class ReactorRestart {
     this.circuit = 0;
     if (this.state.restarted) {
       this.win = new WinSequence(this.plan, this.sink);
+      this.restoring = true; // lane AIR resumes its own whole-pit clearing from the stored restartedAt: no second clearAll
       this.win.finish();
+      this.restoring = false;
     }
     this.setCircuit(this.state.restarted ? 1 : 0);
     this.applyVisuals();
@@ -232,6 +240,8 @@ export class ReactorRestart {
     this.plan = null;
     this.applied = null;
     this.airPending = null;
+    this.humLoop?.stop(0.6);
+    this.humLoop = null;
     this.removeObjective();
   }
 
@@ -255,7 +265,7 @@ export class ReactorRestart {
     tierPower: (level, k) => reactorVisuals().setTierPower(level, k),
     fanSpeed: (id, k) => reactorVisuals().setFanSpeed(id, k),
     circuit: k => this.setCircuit(k),
-    clearAir: d => { this.airPending = d; this.flushAir(); },
+    clearAir: d => { if (this.restoring) return; this.airPending = d; this.flushAir(); },
     toast: text => this.host.hud.toast(text),
     towers: () => { this.version++; },
   };
@@ -268,14 +278,14 @@ export class ReactorRestart {
     else lp.circuitLevel[2] = k;
   }
 
+  /** Hands the pending whole-pit clearing to lane AIR (kept pending, retried each frame, until AIR's air is built). */
   private flushAir(): void {
     if (this.airPending === null) return;
-    const air = reactorAir();
-    if (!air) return;
-    const d = this.airPending;
+    let ok = false;
+    try { ok = this.clearAir(this.airPending); } catch (err) { console.warn('reactor restart: clearing the gas failed', err); ok = true; }
+    if (!ok) return;
     this.airPending = null;
     this.counts.airCalls++;
-    try { air.clearAll(d); } catch (err) { console.warn('reactor restart: clearing the gas failed', err); }
   }
 
   /** Sends the full current visual state to the registered ARCH visuals. */
@@ -350,16 +360,16 @@ export class ReactorRestart {
     this.updateObjective();
   }
 
-  /** The re-struck reactor hum near the core once it runs (only when the lead's 'reactorHum' clip is registered). */
+  /** The restarted core's hum: ONE Sfx.reactorLoop handle at the core (re-requested about once a second while audio is not up). */
   private hum(dt: number): void {
     const s = this.state!, info = this.info!;
-    if (!s.restarted || !CUE_SET.has('reactorHum')) return;
+    if (!s.restarted || (this.humLoop && this.humLoop.playing)) return;
     this.humT -= dt;
     if (this.humT > 0) return;
-    const dur = CLIP_MANIFEST.reactorHum?.[0]?.dur ?? 6;
-    this.humT = Math.max(2, dur - 0.25);
-    const k = this.win ? Math.min(1, this.win.t / 6) : 1;
-    towerCue(this.host.sfx, 'reactorHum', {x: info.core.x, y: info.core.y1 * 0.5 + info.core.y0 * 0.5, z: info.core.z}, {gain: 0.4 + 0.6 * k, jitter: 0});
+    this.humT = 1;
+    const sfx = this.host.sfx as MachineSfx | null;
+    if (typeof sfx?.reactorLoop !== 'function') return;
+    this.humLoop = sfx.reactorLoop('reactorHum', info.core.x, (info.core.y0 + info.core.y1) / 2, info.core.z);
   }
 
   // -------------------------------------------------------------------------------------------
@@ -521,14 +531,15 @@ export class ReactorRestart {
     this.coreQ = -1;
     this.cue('reactorStartup', {x: info.core.x, y: (info.core.y0 + info.core.y1) / 2, z: info.core.z}, ['trainDistant', {rate: 0.6, gain: 1}]);
     this.host.hud.toast('Control rods withdrawn — the core is waking');
-    this.humT = 2.5;
+    this.humT = 2.5; // the hum swells in after the startup cue
     const seed = this.host.run.seeds?.reactor ?? this.host.layout.seed;
     try { if (this.recordMilestone(seed)) this.counts.milestones++; } catch { /* storage is optional */ }
   }
 
-  /** A Sound Lab cue by its registered name, else an existing accepted cue (pitched) as the stand-in. */
+  /** The lead's Sound Lab machine one-shot (Sfx.reactorCue); an Sfx without it: an existing accepted cue, pitched, as the stand-in. */
   private cue(name: RestartCue, at: P3, fallback: [string, {rate?: number; gain?: number}]): void {
-    if (CUE_SET.has(name)) towerCue(this.host.sfx, name, at, {gain: 1});
+    const sfx = this.host.sfx as MachineSfx | null;
+    if (typeof sfx?.reactorCue === 'function') sfx.reactorCue(name, at.x, at.y, at.z);
     else towerCue(this.host.sfx, fallback[0], at, fallback[1]);
   }
 
@@ -619,7 +630,8 @@ export class ReactorRestart {
       hold: this.hold ? {id: this.hold.e.id, t: +this.hold.t.toFixed(2)} : null,
       win: this.win ? {t: +this.win.t.toFixed(2), done: this.win.done, towers: this.win.towerStates()} : null,
       circuit: +this.circuit.toFixed(3), lightCircuit: this.host.lightPool?.circuitLevel ?? null, objective: this.objHtml, counts: {...this.counts},
-      visualsRegistered: this.applied !== null, airRegistered: reactorAir() !== null, cues: RESTART_CUES.map(c => `${c}:${CUE_SET.has(c) ? 'registered' : 'absent'}`),
+      visualsRegistered: this.applied !== null, airPending: this.airPending, hum: this.humLoop ? this.humLoop.playing : null,
+      machineAudio: typeof (this.host.sfx as MachineSfx | null)?.reactorCue === 'function',
     };
   }
 
