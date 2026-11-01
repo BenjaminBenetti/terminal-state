@@ -16,6 +16,7 @@ import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-pl
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
+import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
@@ -163,7 +164,18 @@ export function storeyLabel(layout: StationLayout, level: number): string {
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */
 export interface ArrivalPose { x: number; z: number; yaw: number; level?: number; y?: number; source: string }
 
-export function arrivalPose(layout: StationLayout, _arrival: Arrival): ArrivalPose {
+/**
+ * Task player-train-shell-20261101-202805 (lane PLACE): with the level's parked player train (`train` = gen/playerTrain.ts
+ * playerTrainPlacement(layout), passed by Game.buildSection), a START arrival — New game, Travel and Retry all arrive with
+ * {kind: 'start'} — spawns INSIDE the train (trainSpawnPose: interior floor, explicit y, facing the platform-side doors). The
+ * generated starts (layout.playerSpawn / office.start / mall.start) are never changed: generation and many tests key off them, and
+ * callers without a train (tests, censuses) get exactly the old pose.
+ * SEAM: only 'start' uses the train. Nothing saves a player position today (a page reload is a new run); a future resume /
+ * saved-pose arrival (or any other kind, e.g. the unused 'return') never gets the train pose: resolve such a pose BEFORE this
+ * function so the legitimately saved position always wins (tests/player-train-placement.test.ts).
+ */
+export function arrivalPose(layout: StationLayout, arrival: Arrival, train?: TrainPlacement | null): ArrivalPose {
+  if (train && arrival.kind === 'start') return trainSpawnPose(layout, train);
   const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start)
   if (start) return {...start, source: 'start'};
   const sp = layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};

@@ -1,0 +1,849 @@
+// Task player-train-shell-20261101-202805 (lane TRAIN): the player's home train in the game — one level-one car PARKED on the start
+// platform's track of every station level (Subway / Office / Mall through ONE path: gen/playerTrain.ts playerTrainPlacement, set as
+// game.trainPlacement by Game.buildSection before the section hooks). Installs itself through the Game registries (sectionHooks /
+// frameHooks / interactHandlers / promptProviders / stateListeners / sectionPreloads / warmRegistry); no other Game code.
+//
+// ONE train-local object: the view (world/playerTrainView.ts) is built in the train-local frame under one root whose world pose is
+// the placement; the collision is a pure function of the spec + that pose (trainColliders). Driving it later = moving the root and
+// re-deriving the colliders (remove + re-add the volume, refit the boxes) — nothing here assumes the car never moves, but nothing
+// here simulates motion either (no driving, no moving platform physics today).
+//
+// Collision / walkability (gen/levels.ts DynamicVolume + prop boxes):
+//  - the interior is a dynamic volume (floor / ceiling = the car's, shell 0) over the cells under the lining (snapped outward, so
+//    the floor never ends short of a wall); its stops = [floor] so the bed band under the car is NOT hidden — the car body encloses
+//    it instead: an UNDERFRAME box (bed floor -> car floor over the whole footprint) and WALL boxes (bed floor -> roof) along both
+//    sides with the door openings, END walls and the cab PARTITION with its open doorway (and the console). They are prop boxes
+//    in game.propIndex (player / enemy collision; rebuilt per build with everything already there, like world/stalls.ts) AND
+//    pushed into layout.props (hitscan / melee / the flashlight lure ray and the ragdoll / item statics: bullets stop at the
+//    car's walls, floor, roof and closed doors); the door heads / partition header / roof are layout.props only (above the floor
+//    they never collide anyway). All are removed again at teardown;
+//  - each door opening facing a platform has a GATE whose passage spans the platform gap (the cells between the car and the
+//    platform edge), passable while the doors are >= DOOR.gateOpen open: an added band at the car floor bridges the gap. The rest
+//    of that gap along the car is closed by low collision-only CURBS (bed floor -> car floor + 5 cm; the 0.5 m gap is narrower
+//    than a body anyway) — the same curb fills a door's bridge while its gate is shut — so nobody can sidestep off a bridge or
+//    the platform edge into a gap a body cannot stand in (a trap). Far-side doors open onto the bed (a drop, no bridge);
+//  - leaves: two prop boxes per doorway (the wall's full thickness) refitted every frame to the sliding leaves.
+// Doors (aim + [E], promptProviders '[E] Open doors' / 'Close doors'; no overlay): the pair slides apart into the wall pockets in
+// DOOR.time; closing is REFUSED while any living body stands in the doorway or on its bridge, a body stepping in while they close
+// RE-OPENS them, and pushing into a shut door for DOOR.pushOpen s opens it — never trapped, never closed on anyone. They start
+// shut (the spawn faces the middle platform door, whose prompt shows at once) and keep their state per level for the run.
+// Lights that CAST light: created ONCE at install (boot) and kept in the scene — one head SpotLight aimed down the track ahead, one
+// red tail SpotLight aimed back, interior PointLights — intensity 0 with no train, moved to the car's mounts per build, intensity
+// only otherwise (the light set never changes: docs/rendering-warmup.md). No shadow casters (the flashlight stays the only one),
+// bounded distance / decay, not lures (world/lightSources.ts is untouched).
+// NOT done here (limits): enemies' path finding ignores volumes (they never path INTO the car; nothing makes it a safe zone).
+
+import * as THREE from 'three';
+import type {StationLayout} from '../gen/stationTypes';
+import type {DynamicVolume, Levels, VolumeGate} from '../gen/levels';
+import type {PropPlacement} from '../gen/props';
+import {PropIndex} from '../core/physics';
+import {CELL, STEP_UP} from '../gen/grid';
+import type {WarmupRegistry} from '../render/warmup';
+import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec, type TrainDoorSpec} from './playerTrainSpec';
+import {RAIL_TOP_ABOVE_BED, playerTrainPlacement, trainToWorld, worldToTrain, type TrainPlacement} from '../gen/playerTrain';
+import {TRAIN_VIEW, TrainMaterials, buildTrainView, jambOut, leafSpan, outerHalf, viewCost, type TrainModels, type TrainTextures, type TrainView} from './playerTrainView';
+import {rayBox, towerCue, type P3} from './towerShared';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {PLAYER_TRAIN_MODELS} from '../assets/playerTrain.generated';
+import {assetUrl} from '../assets/loader';
+import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
+
+// ---------------------------------------------------------------------------------------------
+// Assets (lane ASSETS' cooked files: assets/playerTrain.generated.ts). The models load through the game's lazy prop library (shared by
+// every level, fetched behind the loading screen of the first level with a train, kept while levels place one); the Codex interior
+// textures through a module cache (shared by every level, never level-scoped).
+
+/** The prop library file map of the train models (game.ts propModels catalogue). */
+export const PLAYER_TRAIN_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> =
+  Object.fromEntries(Object.values(PLAYER_TRAIN_MODELS).map(m => [m.key, {url: m.url, bytes: m.bytes}]));
+
+/** Game.sectionModelKeys: the train models for a level that parks the car (playerTrainPlacement is pure and memoized per layout). */
+export function playerTrainModelKeys(layout: StationLayout): string[] {
+  return playerTrainPlacement(layout) ? Object.keys(PLAYER_TRAIN_MODEL_FILES) : [];
+}
+
+/** The loaded models from the prop library (missing = the procedural fallback for that part). */
+export function trainModelsFrom(lib: {get(key: string): GLTF | undefined}, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TrainModels {
+  return {shell: lib.get(spec.models.shell.key) ?? null, door: lib.get(spec.models.doorLeaf.key) ?? null, console: lib.get(spec.models.console.key) ?? null};
+}
+
+let textureCache: Promise<TrainTextures> | null = null;
+/** The Codex interior textures (sRGB; wall repeats along the car, floor / ceiling in 2D, the bulkhead once). Never rejects. */
+export function loadTrainTextures(spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): Promise<TrainTextures> {
+  textureCache ??= (async () => {
+    const one = async (url: string, role: SurfaceRole, wrapS: boolean, wrapT: boolean): Promise<THREE.Texture | null> => {
+      try {
+        const t = await new THREE.TextureLoader().loadAsync(assetUrl(url));
+        t.colorSpace = THREE.SRGBColorSpace;
+        t.wrapS = wrapS ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+        t.wrapT = wrapT ? THREE.RepeatWrapping : THREE.ClampToEdgeWrapping;
+        t.anisotropy = 4;
+        requestSurfaceAnisotropy(t, role);
+        t.name = url.split('/').pop() ?? url;
+        return t;
+      } catch (err) {
+        console.warn(`player train: texture ${url} failed`, err);
+        return null;
+      }
+    };
+    const T = spec.textures;
+    const [wall, floor, ceiling, bulkhead] = await Promise.all([
+      one(T.wall, 'wall', true, false), one(T.floor, 'floor', true, true), one(T.ceiling, 'ceiling', true, true), one(T.bulkhead, 'wall', false, false),
+    ]);
+    return {wall, floor, ceiling, bulkhead};
+  })();
+  return textureCache;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Tuning
+
+export const TRAIN_DOOR = {
+  /** Full stroke of a leaf pair (s). */
+  time: 1.3,
+  /** Open fraction from which the doorway (and its platform bridge) is passable. */
+  gateOpen: 0.7,
+  /** Pushing into a shut door this long opens it (s): standing within pushReach of its leaves, the movement keys aimed into it (cos). */
+  pushOpen: 0.7,
+  pushReach: 0.12,
+  pushAlign: 0.6,
+  /** Reach (m, eye to the doorway) for the [E] toggle. */
+  reach: 2.2,
+  /** The curb top above the car floor (m): a body standing at the floor / the platform cannot step past it into the gap. */
+  curbAbove: 0.05,
+  /** Seconds between "stand clear" hints. */
+  hint: 3,
+} as const;
+
+/** Boot-time lights (candela / m / rad). Head + tail are SpotLights; the interior PointLights take `interior.count` of the mounts. */
+export const TRAIN_LIGHTS = {
+  // (primary, browser A/B pixel check: 60 / 8 / 4.5 left no visible pool beside the 34 cd flashlight; 360 / 160 / 10 cast clearly)
+  head: {color: 0xfff1d6, intensity: 360, distance: 32, angle: 0.42, penumbra: 0.55, decay: 1.4, aim: 12, drop: 0.9},
+  tail: {color: 0xff2414, intensity: 160, distance: 12, angle: 0.95, penumbra: 0.6, decay: 2, aim: 4, drop: 0.7},
+  interior: {color: 0xffd7a3, intensity: 10, distance: 5.5, decay: 2, count: 3},
+} as const;
+
+/** The collision boxes' prop kind: an anchored steel structure (damage/materials.ts NEVER('steel'), not dynamic, not a holder). */
+const BOX_KIND = 'column' as const;
+
+const ease = (t: number) => t * t * (3 - 2 * t);
+
+// ---------------------------------------------------------------------------------------------
+// Collision: a pure function of the spec + the world pose
+
+export interface DoorCollider {
+  index: number;
+  door: TrainDoorSpec;
+  /** The two leaf boxes [toward local -X, toward +X] (refitted to the leaves). */
+  leaves: [PropPlacement, PropPlacement];
+  /** The platform bridge (null: no platform within reach on this side — the far side opens onto the bed). */
+  gate: VolumeGate | null;
+  /** Fills this door's bridge cells while its gate is shut (null without a gate). */
+  curb: PropPlacement | null;
+  /** Local |z| from which a body is past the doorway on the outside (the platform edge with a bridge, else the outer skin). */
+  outZ: number;
+}
+
+export interface TrainColliders {
+  volume: DynamicVolume;
+  /** Grounded static boxes: side walls (with openings), end walls, the partition, the console, the underframe. */
+  statics: PropPlacement[];
+  /** Hitscan / ragdoll statics only (above the floor: door heads, the partition header, the roof). */
+  overhead: PropPlacement[];
+  /** Collision-only curbs closing the platform gap beside the car (never in layout.props). */
+  curbs: PropPlacement[];
+  doors: DoorCollider[];
+  bedY: number;
+  floorY: number;
+  ceilY: number;
+  topY: number;
+  /** Curb height (bed floor -> car floor + curbAbove). */
+  curbH: number;
+}
+
+type Pose = Pick<TrainPlacement, 'x' | 'z' | 'railTopY' | 'front' | 'level'> & Partial<Pick<TrainPlacement, 'platformArea' | 'trenchIndex'>>;
+
+/** World AABB (x0, z0, x1, z1) of a train-local rect. */
+function worldRect(p: Pose, lx0: number, lx1: number, lz0: number, lz1: number): [number, number, number, number] {
+  const a = trainToWorld(p, lx0, 0, lz0), b = trainToWorld(p, lx1, 0, lz1);
+  return [Math.min(a.x, b.x), Math.min(a.z, b.z), Math.max(a.x, b.x), Math.max(a.z, b.z)];
+}
+
+function propBox(p: Pose, area: number, lx0: number, lx1: number, lz0: number, lz1: number, y: number, h: number): PropPlacement {
+  const [x0, z0, x1, z1] = worldRect(p, Math.min(lx0, lx1), Math.max(lx0, lx1), Math.min(lz0, lz1), Math.max(lz0, lz1));
+  return {kind: BOX_KIND, x: (x0 + x1) / 2, z: (z0 + z1) / 2, y, rot: 0, area, hx: (x1 - x0) / 2, hz: (z1 - z0) / 2, h, blocksSight: false, variant: 0, level: p.level};
+}
+
+/** Re-fit a box in place to a train-local rect (x / z / hx / hz only). */
+export function refitBox(b: PropPlacement, p: Pose, lx0: number, lx1: number, lz0: number, lz1: number): void {
+  const [x0, z0, x1, z1] = worldRect(p, Math.min(lx0, lx1), Math.max(lx0, lx1), Math.min(lz0, lz1), Math.max(lz0, lz1));
+  b.x = (x0 + x1) / 2; b.z = (z0 + z1) / 2; b.hx = (x1 - x0) / 2; b.hz = (z1 - z0) / 2;
+}
+
+const snapLo = (v: number) => Math.floor(v / CELL + 1e-6) * CELL;
+const snapHi = (v: number) => Math.ceil(v / CELL - 1e-6) * CELL;
+
+/** Wall spans of one side: [lo, hi] minus the door openings. */
+function spans(lo: number, hi: number, cuts: [number, number][]): [number, number][] {
+  const out: [number, number][] = [];
+  let a = lo;
+  for (const [c0, c1] of [...cuts].sort((q, r) => q[0] - r[0])) {
+    if (c1 <= a || c0 >= hi) continue;
+    if (c0 > a + 1e-4) out.push([a, Math.min(c0, hi)]);
+    a = Math.max(a, c1);
+  }
+  if (hi > a + 1e-4) out.push([a, hi]);
+  return out;
+}
+
+/**
+ * The car's colliders at `p`. `levels` (without the car's volume) finds the platform gap beside each door; `consoleRect` = the
+ * desk's local footprint + height when its model is placed. Pure: nothing is registered here.
+ */
+export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | null, opt: {bedY?: number; area?: number; consoleRect?: {x0: number; x1: number; z0: number; z1: number; top: number} | null} = {}): TrainColliders {
+  const hw = spec.interior.halfWidth, out = outerHalf(spec), L2 = spec.length / 2;
+  const floorY = p.railTopY + spec.floorY, ceilY = p.railTopY + spec.ceilingY, topY = p.railTopY + spec.roofY;
+  const bedY = opt.bedY ?? p.railTopY - RAIL_TOP_ABOVE_BED;
+  const area = opt.area ?? p.platformArea ?? -1;
+  const H = topY - bedY;
+  // --- the interior volume: the lining's footprint, snapped OUTWARD to whole cells ---
+  const [ix0, iz0, ix1, iz1] = worldRect(p, spec.interior.x0, spec.interior.x1, -hw, hw);
+  const volume: DynamicVolume = {
+    x0: snapLo(ix0), z0: snapLo(iz0), x1: snapHi(ix1), z1: snapHi(iz1), floorY, ceilY, level: p.level, area,
+    gates: [], stops: [floorY], shell: 0, name: 'player-train',
+  };
+  // --- statics ---
+  const statics: PropPlacement[] = [];
+  for (const side of [-1, 1] as const) {
+    const cuts = spec.doors.filter(d => d.side === side).map(d => [d.x - d.width / 2, d.x + d.width / 2] as [number, number]);
+    for (const [a, b] of spans(-L2, L2, cuts)) statics.push(propBox(p, area, a, b, side * hw, side * out, bedY, H));
+  }
+  statics.push(propBox(p, area, spec.interior.x1, L2, -out, out, bedY, H)); // front end (behind the cab's front wall)
+  statics.push(propBox(p, area, -L2, spec.interior.x0, -out, out, bedY, H)); // rear end
+  const cab = spec.cab, pt = TRAIN_VIEW.partition / 2, dw = cab.doorway;
+  statics.push(propBox(p, area, cab.x0 - pt, cab.x0 + pt, -hw, dw.z0, bedY, ceilY - bedY));
+  statics.push(propBox(p, area, cab.x0 - pt, cab.x0 + pt, dw.z1, hw, bedY, ceilY - bedY));
+  const cr = opt.consoleRect;
+  if (cr) statics.push(propBox(p, area, cr.x0, cr.x1, cr.z0, cr.z1, bedY, p.railTopY + cr.top - bedY));
+  statics.push(propBox(p, area, -L2, L2, -out, out, bedY, floorY - bedY)); // underframe: the floor for bullets, the body for the bed
+  // --- overhead (layout.props only) ---
+  const overhead: PropPlacement[] = [];
+  for (const d of spec.doors) {
+    const y = floorY + d.height;
+    if (topY - y > 1e-3) overhead.push(propBox(p, area, d.x - d.width / 2, d.x + d.width / 2, d.side * hw, d.side * out, y, topY - y));
+  }
+  if (ceilY - (floorY + dw.height) > 1e-3) overhead.push(propBox(p, area, cab.x0 - pt, cab.x0 + pt, dw.z0, dw.z1, floorY + dw.height, ceilY - floorY - dw.height));
+  overhead.push(propBox(p, area, -L2, L2, -out, out, ceilY, topY - ceilY)); // the roof (above the interior ceiling)
+  // --- doors: leaves, platform bridges (gates), curbs ---
+  const curbH = floorY + TRAIN_DOOR.curbAbove - bedY;
+  const curbs: PropPlacement[] = [];
+  const doors: DoorCollider[] = [];
+  const [bx0, , bx1] = worldRect(p, -L2, L2, 0, 0);
+  const platformGap = new Map<-1 | 1, {depth: number; edge: number; dir: 1 | -1}>();
+  const gapOf = (side: -1 | 1, wx: number): {depth: number; edge: number; dir: 1 | -1} | null => {
+    if (!levels) return null;
+    const dirZ = (trainToWorld(p, 0, 0, side).z - p.z) > 0 ? 1 : -1;
+    const edge = dirZ > 0 ? volume.z1 : volume.z0;
+    for (let k = 0; k < 3; k++) {
+      const wz = edge + dirZ * (k + 0.5) * CELL;
+      const bands = levels.bands(wx, wz);
+      if (bands.some(b => b.floor >= floorY - STEP_UP && b.floor <= floorY + 0.05 && b.ceil >= floorY + 1.8)) return {depth: k * CELL, edge, dir: dirZ};
+    }
+    return null;
+  };
+  spec.doors.forEach((d, index) => {
+    const lw = leafSpan(d, 0, 0, spec.doorLeaf.width), rw = leafSpan(d, 1, 0, spec.doorLeaf.width);
+    const leaves: [PropPlacement, PropPlacement] = [
+      propBox(p, area, lw[0], lw[1], d.side * hw, d.side * out, bedY, floorY + d.height - bedY),
+      propBox(p, area, rw[0], rw[1], d.side * hw, d.side * out, bedY, floorY + d.height - bedY),
+    ];
+    const [wx0, , wx1] = worldRect(p, d.x - d.width / 2, d.x + d.width / 2, 0, 0);
+    const g = gapOf(d.side, (wx0 + wx1) / 2);
+    let gate: VolumeGate | null = null, curb: PropPlacement | null = null, outZ = out;
+    if (g && g.depth > 0) {
+      if (!platformGap.has(d.side)) platformGap.set(d.side, g);
+      const a0 = snapLo(wx0), a1 = snapHi(wx1);
+      gate = {side: g.dir > 0 ? 'S' : 'N', a0, a1, depth: g.depth, height: d.height, open: false};
+      volume.gates.push(gate);
+      const zA = g.edge, zB = g.edge + g.dir * g.depth;
+      curb = {kind: BOX_KIND, x: (a0 + a1) / 2, z: (zA + zB) / 2, y: bedY, rot: 0, area, hx: (a1 - a0) / 2, hz: Math.abs(zB - zA) / 2, h: curbH, blocksSight: false, variant: 0, level: p.level};
+      outZ = Math.abs(worldToTrain(p, 0, 0, zB).z);
+    }
+    doors.push({index, door: d, leaves, gate, curb, outZ});
+  });
+  // the rest of each platform gap along the car body: fixed curbs between the bridges
+  for (const [side, g] of platformGap) {
+    const bridges = doors.filter(dc => dc.door.side === side && dc.gate).map(dc => [dc.gate!.a0, dc.gate!.a1] as [number, number]);
+    const zA = g.edge, zB = g.edge + g.dir * g.depth;
+    for (const [a, b] of spans(bx0, bx1, bridges)) {
+      curbs.push({kind: BOX_KIND, x: (a + b) / 2, z: (zA + zB) / 2, y: bedY, rot: 0, area, hx: (b - a) / 2, hz: Math.abs(zB - zA) / 2, h: curbH, blocksSight: false, variant: 0, level: p.level});
+    }
+  }
+  return {volume, statics, overhead, curbs, doors, bedY, floorY, ceilY, topY, curbH};
+}
+
+// ---------------------------------------------------------------------------------------------
+// Lights (created once at install)
+
+export interface TrainLights {
+  head: THREE.SpotLight;
+  tail: THREE.SpotLight;
+  interior: THREE.PointLight[];
+  all: THREE.Light[];
+}
+
+export function createTrainLights(): TrainLights {
+  const H = TRAIN_LIGHTS.head, T = TRAIN_LIGHTS.tail, I = TRAIN_LIGHTS.interior;
+  const head = new THREE.SpotLight(H.color, 0, H.distance, H.angle, H.penumbra, H.decay);
+  head.name = 'player-train-head';
+  const tail = new THREE.SpotLight(T.color, 0, T.distance, T.angle, T.penumbra, T.decay);
+  tail.name = 'player-train-tail';
+  head.target.name = 'player-train-head-target';
+  tail.target.name = 'player-train-tail-target';
+  const interior: THREE.PointLight[] = [];
+  for (let i = 0; i < I.count; i++) {
+    const l = new THREE.PointLight(I.color, 0, I.distance, I.decay);
+    l.name = `player-train-interior-${i}`;
+    interior.push(l);
+  }
+  const all: THREE.Light[] = [head, tail, ...interior];
+  for (const l of all) { l.castShadow = false; l.position.set(0, -1000, 0); }
+  return {head, tail, interior, all};
+}
+
+/** The interior light mounts used by `count` lights: spread over the spec's mounts (first / last / evenly between). */
+export function interiorLightMounts(spec: PlayerTrainSpec, count: number = TRAIN_LIGHTS.interior.count): {x: number; y: number; z: number}[] {
+  const m = [...spec.lights.interior].sort((a, b) => a.x - b.x);
+  if (!m.length) return [];
+  if (count <= 1 || m.length === 1) return Array.from({length: Math.max(0, count)}, (_, i) => m[Math.min(m.length - 1, i)]);
+  return Array.from({length: count}, (_, i) => m[Math.round((i * (m.length - 1)) / (count - 1))]);
+}
+
+const avg = (pts: readonly {x: number; y: number; z: number}[], fb: {x: number; y: number; z: number}) =>
+  pts.length ? {x: pts.reduce((s, q) => s + q.x, 0) / pts.length, y: pts.reduce((s, q) => s + q.y, 0) / pts.length, z: pts.reduce((s, q) => s + q.z, 0) / pts.length} : fb;
+
+// ---------------------------------------------------------------------------------------------
+// Runtime
+
+/** What the train needs from Game (structural: tests drive it with a fake host). */
+export interface TrainHost {
+  scene: THREE.Scene;
+  camera: THREE.Camera;
+  player: {x: number; z: number; y: number; vx: number; vz: number; radius: number; alive: boolean; yaw?: number};
+  /** Held keys (push-open reads the movement keys; Game.input). */
+  input?: {down(code: string): boolean};
+  zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled?: boolean}[];
+  levels: Levels;
+  layout: StationLayout;
+  propIndex: PropIndex;
+  /** gen/playerTrain.ts playerTrainPlacement(layout), set by Game.buildSection before the section hooks (null: no train here). */
+  trainPlacement?: TrainPlacement | null;
+  sfx: unknown;
+  hud: {toast(text: string, warn?: boolean): void};
+  warmRegistry: WarmupRegistry;
+  atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void};
+  physics?: {propsChanged?(x: number, z: number): void};
+  interactHandlers: (() => boolean)[];
+  frameHooks: ((dt: number) => void)[];
+  sectionHooks: {build?(layout: StationLayout): void; teardown?(): void}[];
+  promptProviders?: (() => string | null)[];
+  stateListeners?: ((state: never, prev: never) => void)[];
+  sectionPreloads?: ((layout: StationLayout) => Promise<void>)[];
+  state: string;
+  world?: {culler?: unknown} | null;
+  run?: {current: {level: string; section: string}};
+}
+
+export interface TrainOptions {
+  spec?: PlayerTrainSpec;
+  /** The cooked models, read at build time (preloaded through the prop model library; missing = procedural fallbacks). */
+  models?: () => TrainModels;
+  /** Fetches the Codex interior textures once (awaited as a bounded section preload; failures = plain paint). */
+  textures?: () => Promise<TrainTextures>;
+  /** Longest wait for the textures before a build (then plain paint for that level). */
+  textureWaitMs?: number;
+}
+
+export interface DoorRt {
+  col: DoorCollider;
+  /** Open fraction (0 shut .. 1 open) and where it is going. */
+  t: number;
+  target: 0 | 1;
+  /** A living body stands in the doorway / on its bridge (this frame). */
+  blocked: boolean;
+  playerBlocks: boolean;
+  /** Push-open timer (s). */
+  push: number;
+  moving: boolean;
+  /** The open fraction the leaves / boxes / gate were last fitted to. */
+  shown: number;
+}
+
+export interface BuiltTrain {
+  placement: TrainPlacement;
+  view: TrainView;
+  col: TrainColliders;
+  doors: DoorRt[];
+  levels: Levels;
+  layout: StationLayout;
+  /** Every box pushed into layout.props (removed at teardown). */
+  layoutBoxes: PropPlacement[];
+  /** game.propIndex before this build (restored at teardown). */
+  prevIndex: PropIndex;
+  key: string;
+}
+
+export class PlayerTrainRuntime {
+  readonly spec: PlayerTrainSpec;
+  train: BuiltTrain | null = null;
+  readonly lights: TrainLights;
+  /** The doorway under the crosshair (within reach, unobstructed) + its prompt. */
+  target: DoorRt | null = null;
+  prompt: string | null = null;
+  /** Counters (QA / tests). */
+  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0};
+  private readonly mats = new TrainMaterials();
+  private textures: TrainTextures = {};
+  private texturesLoading: Promise<void> | null = null;
+  /** Door targets per level / section for this run (restored on the next build of it). */
+  private memory = new WeakMap<object, Map<string, (0 | 1)[]>>();
+  private readonly memoryFallback = {};
+  private hintT = 1e9;
+  private readonly vEye = new THREE.Vector3();
+  private readonly vDir = new THREE.Vector3();
+  private readonly box = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
+  private readonly nearBodies: {x: number; y: number; z: number; stats: {radius: number}}[] = [];
+
+  constructor(readonly host: TrainHost, readonly opts: TrainOptions = {}) {
+    this.spec = opts.spec ?? PLAYER_TRAIN_SPEC;
+    this.lights = createTrainLights();
+  }
+
+  /** Registers every hook and adds the boot-time lights to the scene (called once from the Game constructor). */
+  install(): this {
+    const h = this.host;
+    for (const l of this.lights.all) h.scene.add(l);
+    h.scene.add(this.lights.head.target, this.lights.tail.target);
+    h.sectionHooks.push({build: () => this.build(), teardown: () => this.teardown()});
+    h.frameHooks.push(dt => this.frame(dt));
+    h.interactHandlers.push(() => this.interact());
+    h.promptProviders?.push(() => this.prompt);
+    h.stateListeners?.push(((state: string) => { if (state !== 'playing') { this.target = null; this.prompt = null; } }) as (state: never, prev: never) => void);
+    h.warmRegistry.addPool('player-train', () => (this.train ? [this.train.view.root] : []));
+    const wait = this.opts.textureWaitMs ?? 8000;
+    h.sectionPreloads?.push(() => Promise.race([this.preloadTextures(), new Promise<void>(r => setTimeout(r, wait))]));
+    return this;
+  }
+
+  /** Fetches the interior textures once (never rejects). */
+  preloadTextures(): Promise<void> {
+    if (!this.opts.textures) return Promise.resolve();
+    this.texturesLoading ??= this.opts.textures().then(t => { this.textures = t ?? {}; }, err => { console.warn('player train: interior textures unavailable', err); });
+    return this.texturesLoading;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Lifecycle (once per built level; synchronous: the player is placed inside before the first update)
+
+  build(): void {
+    if (this.train) this.teardown();
+    const h = this.host, p = h.trainPlacement ?? null;
+    if (!p || !h.levels || !h.layout) { this.lightsOff(); return; }
+    const spec = this.spec;
+    const view = buildTrainView(spec, this.mats, this.opts.models?.() ?? {}, this.textures);
+    const root = view.root;
+    root.position.set(p.x, p.railTopY, p.z);
+    root.rotation.set(0, p.yaw, 0);
+    root.updateMatrixWorld(true);
+    // the desk's footprint from the placed model (local), so it collides as drawn
+    let consoleRect: {x0: number; x1: number; z0: number; z1: number; top: number} | null = null;
+    const desk = view.fixed.getObjectByName('train-console');
+    if (desk) {
+      // setFromObject is in world space: back to the train frame through the root (exact: the yaw is 0 / PI)
+      const bb = new THREE.Box3().setFromObject(desk).applyMatrix4(new THREE.Matrix4().copy(root.matrixWorld).invert());
+      consoleRect = {x0: bb.min.x, x1: bb.max.x, z0: bb.min.z, z1: bb.max.z, top: bb.max.y};
+    }
+    const bedY = h.layout.trenches?.[p.trenchIndex]?.floorY;
+    const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect});
+    // 1. the walkable interior (support / headroom / rays inside), the platform bridges
+    h.levels.addDynamicVolume(col.volume);
+    // 2. hitscan / physics statics: walls, floor, roof, partition, console, door leaves
+    const leafBoxes = col.doors.flatMap(d => d.leaves);
+    const layoutBoxes = [...col.statics, ...col.overhead, ...leafBoxes];
+    h.layout.props.push(...layoutBoxes);
+    // 3. collision: everything already in the index (stalls etc.) + the car's grounded boxes. The leaves are bucketed over their
+    //    whole travel (pocket to pocket) and refitted every frame (world/stalls.ts pattern)
+    const prevIndex = h.propIndex;
+    const mine = new Set<PropPlacement>(layoutBoxes);
+    const base = prevIndex ? prevIndex.props.filter(q => !mine.has(q)) : h.layout.props.filter(q => !mine.has(q));
+    const doors: DoorRt[] = col.doors.map(dc => ({col: dc, t: 0, target: 0, blocked: false, playerBlocks: false, push: 0, moving: false, shown: NaN}));
+    for (const d of doors) {
+      const dd = d.col.door, hw = spec.interior.halfWidth, out = outerHalf(spec);
+      const [a0] = leafSpan(dd, 0, 1, spec.doorLeaf.width), [, b1] = leafSpan(dd, 1, 1, spec.doorLeaf.width);
+      for (const b of d.col.leaves) refitBox(b, p, a0, b1, dd.side * hw, dd.side * out);
+    }
+    const curbs = [...col.curbs, ...col.doors.map(d => d.curb).filter((c): c is PropPlacement => !!c)];
+    h.propIndex = new PropIndex(h.levels, [...base, ...col.statics, ...leafBoxes, ...curbs]);
+    // 4. the view: in the scene, storey-culled (static parts; the leaves move), torch shadows
+    view.root.traverse(x => { if ((x as THREE.Mesh).isMesh) x.userData.level = p.level; });
+    h.scene.add(root);
+    h.atmosphere?.markShadows(view.fixed, true);
+    for (const pair of view.leaves) for (const l of pair) h.atmosphere?.markShadows(l, false);
+    const culler = h.world?.culler as {register?(root: THREE.Object3D): void} | undefined;
+    if (culler && typeof culler.register === 'function') culler.register(view.fixed);
+    const key = this.sectionKey();
+    this.train = {placement: p, view, col, doors, levels: h.levels, layout: h.layout, layoutBoxes, prevIndex, key};
+    // 5. door states remembered for this level in this run (else shut), applied at once
+    const saved = this.memFor().get(key);
+    doors.forEach((d, i) => { d.target = saved?.[i] ?? 0; d.t = d.target; });
+    this.applyDoors(0, true);
+    // 6. the lights at the car's mounts
+    this.placeLights(p);
+    // physics: the statics chunks under the car are rebuilt lazily from layout.props (the volume add also clears them)
+    for (let x = col.volume.x0 - 2; x <= col.volume.x1 + 2; x += 4) for (const z of [col.volume.z0 - 1, (col.volume.z0 + col.volume.z1) / 2, col.volume.z1 + 1]) h.physics?.propsChanged?.(x, z);
+    this.counts.builds++;
+  }
+
+  teardown(): void {
+    const t = this.train;
+    this.train = null;
+    this.target = null;
+    this.prompt = null;
+    this.lightsOff();
+    if (!t) return;
+    this.memFor().set(t.key, t.doors.map(d => d.target));
+    t.levels.removeDynamicVolume(t.col.volume);
+    const mine = new Set(t.layoutBoxes);
+    const props = t.layout.props;
+    for (let i = props.length - 1; i >= 0; i--) if (mine.has(props[i])) props.splice(i, 1);
+    if (this.host.propIndex !== t.prevIndex && this.host.layout === t.layout) this.host.propIndex = t.prevIndex;
+    this.host.scene.remove(t.view.root);
+    for (const g of t.view.geometries) g.dispose();
+    this.counts.teardowns++;
+  }
+
+  private memFor(): Map<string, (0 | 1)[]> {
+    const owner = (this.host.run as object | undefined) ?? this.memoryFallback;
+    let m = this.memory.get(owner);
+    if (!m) this.memory.set(owner, (m = new Map()));
+    return m;
+  }
+
+  /** NewGame: forget every remembered door state (a fresh run). */
+  resetMemory(): void {
+    this.memory = new WeakMap();
+  }
+
+  private sectionKey(): string {
+    const c = this.host.run?.current;
+    return c ? `${c.level}:${c.section}` : `seed:${(this.host.layout as {seed?: number}).seed ?? 0}`;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Lights
+
+  private placeLights(p: TrainPlacement): void {
+    const s = this.spec, L = this.lights, H = TRAIN_LIGHTS.head, T = TRAIN_LIGHTS.tail, I = TRAIN_LIGHTS.interior;
+    const head = avg(s.lights.head, {x: s.length / 2, y: s.floorY + 0.6, z: 0});
+    const tail = avg(s.lights.tail, {x: -s.length / 2, y: s.floorY + 0.6, z: 0});
+    const w = (q: {x: number; y: number; z: number}) => trainToWorld(p, q.x, q.y, q.z);
+    const at = (o: THREE.Object3D, q: {x: number; y: number; z: number}) => { const v = w(q); o.position.set(v.x, v.y, v.z); o.updateMatrixWorld(); };
+    at(L.head, {x: head.x + 0.05, y: head.y, z: head.z});
+    at(L.head.target, {x: head.x + H.aim, y: head.y - H.drop, z: head.z});
+    at(L.tail, {x: tail.x - 0.05, y: tail.y, z: tail.z});
+    at(L.tail.target, {x: tail.x - T.aim, y: tail.y - T.drop, z: tail.z});
+    L.head.intensity = H.intensity;
+    L.tail.intensity = T.intensity;
+    const mounts = interiorLightMounts(s, L.interior.length);
+    L.interior.forEach((l, i) => {
+      const m = mounts[i];
+      if (!m) { l.intensity = 0; return; }
+      at(l, {x: m.x, y: m.y - 0.12, z: m.z});
+      l.intensity = I.intensity;
+    });
+  }
+
+  private lightsOff(): void {
+    for (const l of this.lights.all) l.intensity = 0;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Per frame: doors (sense, logic, leaves, colliders, gates) and the targeted doorway
+
+  frame(dt: number): void {
+    const t = this.train;
+    if (!t) { this.prompt = null; return; }
+    this.hintT += dt;
+    this.applyDoors(dt, false);
+    this.updateTarget();
+  }
+
+  /** Bodies in each doorway, the door logic, then leaves / boxes / gates / curbs follow. */
+  private applyDoors(dt: number, snap: boolean): void {
+    const t = this.train!, h = this.host, p = t.placement, spec = this.spec;
+    const hw = spec.interior.halfWidth, out = outerHalf(spec);
+    const P = h.player;
+    // bodies near the car only (a cheap reject before the per-door tests)
+    const near = (x: number, z: number) => Math.abs(x - p.x) < spec.length / 2 + 2 && Math.abs(z - p.z) < spec.width + 2;
+    const playerNear = P.alive && near(P.x, P.z);
+    const bodies = this.nearBodies;
+    bodies.length = 0;
+    for (const z of h.zombies) { const b = z.brain; if (b.alive && !z.ragdolled && near(b.x, b.z)) bodies.push(b); }
+    for (const d of t.doors) {
+      const dd = d.col.door;
+      // --- sense: a living body whose circle reaches the leaves' path, or standing on the bridge ---
+      const inDoor = (x: number, y: number, z: number, r: number): boolean => {
+        if (Math.abs(y - t.col.floorY) > 1.0) return false;
+        const q = worldToTrain(p, x, y, z), s = q.z * dd.side;
+        return Math.abs(q.x - dd.x) < dd.width / 2 + r - 0.05 && s > hw - r && s < Math.max(out + r, d.col.outZ);
+      };
+      d.playerBlocks = playerNear && inDoor(P.x, P.y, P.z, P.radius);
+      let blocked = d.playerBlocks;
+      if (!blocked) for (const b of bodies) if (inDoor(b.x, b.y, b.z, b.stats.radius)) { blocked = true; break; }
+      d.blocked = blocked;
+      // --- logic: never close on a body; push into a shut door to open it ---
+      if (!snap) {
+        if (d.target === 0 && d.t > 0 && blocked) {
+          d.target = 1;
+          this.counts.reopen++;
+          this.cue(d, 'reopen');
+          if (d.playerBlocks) this.hint('Stand clear of the doors');
+        }
+        if (d.target === 0 && d.t < 0.02 && playerNear && this.pushing(d)) {
+          d.push += dt;
+          if (d.push >= TRAIN_DOOR.pushOpen) { d.push = 0; d.target = 1; this.counts.pushOpen++; this.counts.opened++; this.cue(d, 'opening'); }
+        } else d.push = 0;
+        const was = d.t;
+        const step = dt / TRAIN_DOOR.time;
+        if (d.target > d.t) d.t = Math.min(1, d.t + step);
+        else if (d.target < d.t) d.t = Math.max(0, d.t - step);
+        const moving = d.t !== was;
+        if (moving !== d.moving) {
+          d.moving = moving;
+          const c = trainToWorld(p, dd.x, 0, dd.side * out);
+          h.physics?.propsChanged?.(c.x, c.z); // the ragdoll / item statics re-read the leaf boxes
+          if (!moving) this.cue(d, d.t >= 1 ? 'opened' : 'closed');
+        }
+      }
+      // --- follow: leaves (view + boxes), gate, curb (only when the leaves moved) ---
+      if (!snap && d.t === d.shown) continue;
+      d.shown = d.t;
+      const e = ease(d.t);
+      const pair = t.view.leaves[d.col.index];
+      for (const k of [0, 1] as const) {
+        const [a, b] = leafSpan(dd, k, e, spec.doorLeaf.width);
+        if (pair?.[k]) pair[k].position.x = (a + b) / 2;
+        refitBox(d.col.leaves[k], p, a, b, dd.side * hw, dd.side * out);
+      }
+      const open = e >= TRAIN_DOOR.gateOpen;
+      if (d.col.gate) d.col.gate.open = open;
+      if (d.col.curb) d.col.curb.h = open ? 0 : t.col.curbH;
+    }
+  }
+
+  /**
+   * The player presses into this shut door: standing against its leaves (inside or outside, within the opening) with the movement
+   * keys pushing toward them (the body's velocity is zero against the leaf, so the intent is read from the keys + yaw as
+   * player/player.ts moves). Without an input (tests' bare hosts) nothing is pushed.
+   */
+  private pushing(d: DoorRt): boolean {
+    const t = this.train!, h = this.host, P = h.player, p = t.placement, dd = d.col.door, inp = h.input;
+    if (!inp || Math.abs(P.y - t.col.floorY) > 0.6) return false;
+    const q = worldToTrain(p, P.x, P.y, P.z), s = q.z * dd.side;
+    if (Math.abs(q.x - dd.x) > dd.width / 2 - 0.1) return false;
+    // against the leaves from inside (the leaf boxes fill the wall: hw .. out), or from outside against the closed bridge's curb
+    const hw = this.spec.interior.halfWidth, out = outerHalf(this.spec), plane = (hw + out) / 2;
+    const reach = P.radius + TRAIN_DOOR.pushReach;
+    if (s < hw - reach || s > Math.max(out, d.col.outZ) + reach) return false;
+    let fx = 0, fz = 0;
+    if (inp.down('KeyW') || inp.down('ArrowUp')) fz -= 1;
+    if (inp.down('KeyS') || inp.down('ArrowDown')) fz += 1;
+    if (inp.down('KeyA') || inp.down('ArrowLeft')) fx -= 1;
+    if (inp.down('KeyD') || inp.down('ArrowRight')) fx += 1;
+    const len = Math.hypot(fx, fz);
+    if (len === 0) return false;
+    const sy = Math.sin(P.yaw ?? 0), cy = Math.cos(P.yaw ?? 0);
+    const wz = (-fx * sy + fz * cy) / len; // world wish direction (z), as player/player.ts
+    const toward = (s < plane ? 1 : -1) * wz * p.front * dd.side; // local z of the wish (front = the frame's z sign), + = into the leaves
+    return toward > TRAIN_DOOR.pushAlign;
+  }
+
+  private hint(text: string): void {
+    if (this.hintT < TRAIN_DOOR.hint) return;
+    this.hintT = 0;
+    this.host.hud.toast(text);
+  }
+
+  private cue(d: DoorRt, what: 'opening' | 'closing' | 'opened' | 'closed' | 'reopen' | 'refused'): void {
+    const t = this.train;
+    if (!t) return;
+    const dd = d.col.door, c = trainToWorld(t.placement, dd.x, this.spec.floorY + 1.2, dd.side * outerHalf(this.spec));
+    const at: P3 = {x: c.x, y: c.y, z: c.z};
+    const sfx = this.host.sfx;
+    switch (what) {
+      // existing Sound Lab cues only (no new audio): a metal cabinet slide pitched down, the closing clunk
+      case 'opening': case 'reopen': towerCue(sfx, 'cabinetOpen', at, {rate: 0.62, gain: 0.85}); break;
+      case 'closing': towerCue(sfx, 'cabinetOpen', at, {rate: 0.55, gain: 0.7}); break;
+      case 'closed': towerCue(sfx, 'cabinetClose', at, {rate: 0.6, gain: 0.9}); break;
+      case 'opened': towerCue(sfx, 'clank', at, {rate: 0.9, gain: 0.25}); break;
+      case 'refused': (sfx as {denied?(): void} | null)?.denied?.(); break;
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // [E]: aim at a doorway (its leaves / opening, either face) within reach, nothing structural in between
+
+  /** The doorway under the crosshair (null: none within reach / blocked). */
+  pickDoor(): DoorRt | null {
+    const t = this.train, h = this.host;
+    if (!t || !h.player.alive) return null;
+    const P = h.player, pl = t.placement;
+    if (Math.abs(P.x - pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(P.z - pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return null;
+    const cam = h.camera;
+    cam.updateMatrixWorld();
+    cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
+    const eye: P3 = {x: this.vEye.x, y: this.vEye.y, z: this.vEye.z}, dir: P3 = {x: this.vDir.x, y: this.vDir.y, z: this.vDir.z};
+    const hw = this.spec.interior.halfWidth, jo = jambOut(this.spec), p = t.placement;
+    let best: DoorRt | null = null, bt: number = TRAIN_DOOR.reach;
+    for (const d of t.doors) {
+      const dd = d.col.door;
+      const za = dd.side * (hw - 0.03), zb = dd.side * (jo + 0.02);
+      const [x0, z0, x1, z1] = worldRect(p, dd.x - dd.width / 2, dd.x + dd.width / 2, Math.min(za, zb), Math.max(za, zb));
+      const b = this.box;
+      b.min.x = x0; b.min.z = z0; b.max.x = x1; b.max.z = z1;
+      b.min.y = t.col.floorY; b.max.y = t.col.floorY + dd.height;
+      const hit = rayBox(eye, dir, b as never, bt);
+      if (hit !== null && hit < bt) { bt = hit; best = d; }
+    }
+    if (!best) return null;
+    const blocked = h.levels.raycast(eye, dir, bt + 0.02);
+    if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return null;
+    return best;
+  }
+
+  private updateTarget(): void {
+    const d = this.host.state === 'playing' ? this.pickDoor() : null;
+    this.target = d;
+    this.prompt = d ? this.promptFor(d) : null;
+  }
+
+  promptFor(d: DoorRt): string {
+    if (d.target === 1) return d.blocked ? '<b>[E]</b> Close doors · stand clear' : '<b>[E]</b> Close doors';
+    return '<b>[E]</b> Open doors';
+  }
+
+  /** E handler (Game.interactHandlers): toggles the aimed doorway; true when the train handled the key. */
+  interact(): boolean {
+    if (!this.train || this.host.state !== 'playing') return false;
+    const d = this.pickDoor();
+    if (!d) return false;
+    this.toggle(d);
+    return true;
+  }
+
+  /** Toggle through the door rules (what a real press does): closing is refused while a body is in the doorway. */
+  toggle(d: DoorRt): 'opening' | 'closing' | 'refused' {
+    this.counts.toggles++;
+    if (d.target === 1) {
+      if (d.blocked) {
+        this.counts.refused++;
+        this.cue(d, 'refused');
+        this.hintT = TRAIN_DOOR.hint;
+        this.hint('Stand clear of the doors');
+        return 'refused';
+      }
+      d.target = 0;
+      this.counts.closed++;
+      this.cue(d, 'closing');
+      return 'closing';
+    }
+    d.target = 1;
+    this.counts.opened++;
+    this.cue(d, 'opening');
+    return 'opening';
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // QA / tests
+
+  /** The player stands inside the car's interior volume. */
+  playerInside(): boolean {
+    const t = this.train, P = this.host.player;
+    if (!t) return false;
+    const q = worldToTrain(t.placement, P.x, P.y, P.z), s = this.spec;
+    return P.alive && q.x > s.interior.x0 && q.x < s.interior.x1 && Math.abs(q.z) < s.interior.halfWidth && Math.abs(P.y - t.col.floorY) < 0.3;
+  }
+
+  /** QA: set a door's target by index (through the rules: a refused close returns 'refused'); null = no such door. */
+  setDoor(i: number, open: boolean): 'opening' | 'closing' | 'refused' | 'unchanged' | null {
+    const d = this.train?.doors[i];
+    if (!d) return null;
+    if ((d.target === 1) === open) return 'unchanged';
+    return this.toggle(d);
+  }
+
+  /** QA readout (__LL.train()). */
+  qa() {
+    const t = this.train, L = this.lights;
+    const light = (l: THREE.Light) => ({name: l.name, intensity: +l.intensity.toFixed(2), at: [+l.position.x.toFixed(2), +l.position.y.toFixed(2), +l.position.z.toFixed(2)]});
+    return {
+      built: !!t,
+      placement: t ? {level: t.placement.level, x: +t.placement.x.toFixed(2), z: +t.placement.z.toFixed(2), yaw: t.placement.yaw, front: t.placement.front, floorY: +t.col.floorY.toFixed(3), platformEdgeZ: t.placement.platformEdgeZ} : null,
+      provisionalSpec: this.spec.provisional,
+      source: t?.view.source ?? null,
+      cost: t ? viewCost(t.view.root) : null,
+      volume: t ? {x0: t.col.volume.x0, z0: t.col.volume.z0, x1: t.col.volume.x1, z1: t.col.volume.z1, floorY: +t.col.volume.floorY.toFixed(3), ceilY: +t.col.volume.ceilY.toFixed(3), gates: t.col.volume.gates.length} : null,
+      doors: t?.doors.map((d, i) => ({i, side: d.col.door.side, x: d.col.door.x, t: +d.t.toFixed(2), target: d.target, gate: d.col.gate ? {open: d.col.gate.open, depth: d.col.gate.depth} : null, blocked: d.blocked})) ?? [],
+      target: t && this.target ? t.doors.indexOf(this.target) : null,
+      prompt: this.prompt,
+      playerInside: this.playerInside(),
+      lights: {head: light(L.head), tail: light(L.tail), interior: L.interior.map(light)},
+      boxes: t ? {statics: t.col.statics.length, overhead: t.col.overhead.length, curbs: t.col.curbs.length, layoutProps: t.layoutBoxes.length} : null,
+      counts: {...this.counts},
+    };
+  }
+}
+
+/** Installs the player train runtime into a Game (one call in the Game constructor, after the other lanes). */
+export function installPlayerTrain(host: TrainHost, opts: TrainOptions = {}): PlayerTrainRuntime {
+  return new PlayerTrainRuntime(host, opts).install();
+}
+
+/** QA hooks (spread into window.__LL) for the primary's short serial browser spot check. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function trainQaApi(game: unknown): Record<string, (...a: any[]) => unknown> {
+  const g = game as {trainRuntime?: PlayerTrainRuntime; player: {x: number; z: number; y: number; yaw: number; pitch: number; vy: number; grounded: boolean}};
+  const rt = () => g.trainRuntime ?? null;
+  /** Stand inside `back` m from door i (on its axis, in the car) facing it. */
+  const faceDoor = (i: number, back = 1.1): boolean => {
+    const r = rt(), t = r?.train, d = t?.doors[i];
+    if (!r || !t || !d) return false;
+    const dd = d.col.door, s = r.spec, inside = dd.side * Math.max(0.2, s.interior.halfWidth - back);
+    const at = trainToWorld(t.placement, dd.x, s.floorY, inside), door = trainToWorld(t.placement, dd.x, s.floorY + 1.2, dd.side * s.interior.halfWidth);
+    const P = g.player;
+    P.x = at.x; P.z = at.z; P.y = at.y; P.vy = 0; P.grounded = true;
+    P.yaw = Math.atan2(-(door.x - at.x), -(door.z - at.z));
+    P.pitch = -0.12;
+    return true;
+  };
+  return {
+    /** The train: placement, volume, doors (t / target / gate / blocked), lights (intensity + position), cost, counts. */
+    train: () => rt()?.qa() ?? null,
+    /** Open / close door i through the door rules (no aim); returns 'opening' | 'closing' | 'refused' | 'unchanged' | null. */
+    trainDoor: (i: number, open = true) => rt()?.setDoor(i, open) ?? null,
+    /** Stand inside facing door i (default: the middle platform-side door) — the [E] prompt shows on the next frame. */
+    trainFaceDoor: (i?: number, back = 1.1) => {
+      const t = rt()?.train;
+      if (!t) return false;
+      let k = i ?? -1;
+      if (k < 0) for (let j = 0; j < t.doors.length; j++) {
+        const dd = t.doors[j].col.door;
+        if (dd.side < 0 && (k < 0 || Math.abs(dd.x) < Math.abs(t.doors[k].col.door.x))) k = j;
+      }
+      return k >= 0 && faceDoor(k, back);
+    },
+    /** The light intensities (the light set never changes: same objects in every level). */
+    trainLights: () => rt()?.qa().lights ?? null,
+  };
+}

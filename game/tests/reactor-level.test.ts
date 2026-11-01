@@ -3,7 +3,8 @@
 // needs a mask (no gas deadlock), the mask route is real (the deep air hurts), the kit plans every set piece within a bounded cost,
 // and the level regenerates identically. Pure (no renderer / DOM).
 import {describe, expect, it} from 'vitest';
-import {LEVELS} from '../src/levels/registry';
+import {LEVELS, arrivalPose} from '../src/levels/registry';
+import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {levelsOf} from '../src/gen/levels';
 import {GAS} from '../src/world/gas/field';
 import {ReactorAir} from '../src/world/reactor/air';
@@ -47,6 +48,18 @@ describe('the Reactor on real generated layouts', () => {
       expect(r.arrival.stop1 - r.arrival.stop0).toBeGreaterThanOrEqual(30);
       expect(L.platforms).toContain(r.arrival.platform);
       for (const k of ['stairs', 'bridge', 'ladder'] as const) expect(r.routes.some(x => x.kind === k), k).toBe(true);
+    }, 60_000);
+
+    it(`seed ${seed}: the shared player train (PR 33 contract) parks at the rim station inside the Reactor's arrival stop window`, () => {
+      const L = level(seed), r = L.reactor!;
+      const p = playerTrainPlacement(L);
+      expect(p, 'train placement').not.toBeNull();
+      expect(p!.level).toBe(0);
+      expect(p!.trenchIndex).toBe(r.arrival.trench);
+      expect(p!.x0).toBeGreaterThanOrEqual(Math.min(r.arrival.stop0, r.arrival.stop1) - 1e-6);
+      expect(p!.x1).toBeLessThanOrEqual(Math.max(r.arrival.stop0, r.arrival.stop1) + 1e-6);
+      expect(arrivalPose(L, {kind: 'start'}, p).source).toBe('train'); // New game / Travel / Retry arrive in the car
+      expect(arrivalPose(L, {kind: 'start'}).source).toBe('start'); // without a train: the rim platform start (layout.reactor.start)
     }, 60_000);
 
     it(`seed ${seed}: the restart chain is complete — every control at a walkable stand point, parts guaranteed, never behind their own lock`, () => {

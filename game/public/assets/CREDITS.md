@@ -232,3 +232,17 @@ Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Cod
 - `assets/textures/reactor/grating-{color,normal,orm}.jpg` — steel bar grating deck (dark gaps) (Codex colour source; normal / ORM derived locally)
 - `assets/textures/reactor/pit-concrete-{color,normal,orm}.jpg` — board-formed stained pit concrete (Codex colour source; normal / ORM derived locally)
 <!-- END reactor-kit-20261101 -->
+
+<!-- BEGIN player-train-20261101 (build-player-train.mjs) -->
+## Player train (level one): car shell, driving desk, door leaf, interior textures
+
+Models generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's player-train authorization (4 attempts, 50 credits of up to 300); interior textures generated with Codex native image generation (the owned Codex CLI's built-in image_gen tool). Runtime derivatives (mesh processing: body stretched to human scale with the undercarriage unstretched, door openings cut, the leaf rebuilt from its clean face and decimated, its own maps re-baked onto a planar UV; otherwise texture resize / format conversion only) built by `tools/asset-pipeline/train/build-player-train.mjs` (provenance: `assets/derivatives/player-train-20261101.json`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.
+
+- `assets/models/player-train-shell.glb` — weathered subway car shell (Meshy tasks 01a198d2-7f79-7021-981f-3b63e0548d6f / 01a198d3-a2b4-70c5-a452-6084c8b0d0fd)
+- `assets/models/player-train-console.glb` — cab driving desk (Meshy tasks 01a198d0-a538-7332-9064-ada748d324d6 / 01a198d2-0957-7588-83fe-c959b740c1ef)
+- `assets/models/player-train-door-leaf.glb` — sliding door leaf (Meshy tasks 01a198d0-ade7-7435-8dbe-13a82462028b / 01a198d2-0f84-7605-9343-24943ef4f4aa)
+- `assets/textures/train/train-int-wall.jpg` — interior side wall, one window bay (tiles along the car) (Codex thread 01a198d0-301a-7e62-abad-ee94bcd0efde)
+- `assets/textures/train/train-int-floor.jpg` — ribbed rubber floor (tiles in 2D) (Codex thread 01a198d0-f4bb-7c81-8b89-8f605a9ef95c)
+- `assets/textures/train/train-int-ceiling.jpg` — vented ceiling panels (tiles in 2D) (Codex thread 01a198d1-c556-7673-a111-b1b56f00891f)
+- `assets/textures/train/train-int-bulkhead.jpg` — end bulkhead with a central closed door (one panel) (Codex thread 01a198d2-7511-7f32-93e6-c6155d93261b)
+<!-- END player-train-20261101 -->
