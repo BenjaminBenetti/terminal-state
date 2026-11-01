@@ -21,6 +21,7 @@
 
 import type {ReactorInfo} from '../../gen/reactor/reactorTypes';
 import type {ReactorRunState} from './runState';
+import {outdoorGasAt, pitShaftSpec, reactorOutdoorGas, type OutdoorGas, type ShaftSpec} from '../gaslightRules'; // task reactor-expansion-20261101 (lane GASLIGHT)
 
 /** Every depth-gas tuning value (times s, lengths m). */
 export const REACTOR_AIR = {
@@ -53,9 +54,13 @@ export const REACTOR_AIR = {
  * read in the dark, B's luminous yellow-green), wisp + horizontal sheet modulation (mean 1), sheet noise scales, linear tint.
  */
 export const REACTOR_GAS_LOOK = {
-  ext: 0.12, scatter: 0.6, emission: 0.08, wisps: 0.35, // (emission 0.05 -> 0.08: spot-check fix — B's luminous strata read in the dark pit)
+  // task reactor-expansion-20261101 (lane GASLIGHT, user: "the toxic gas is not visible!"): ext 0.12 -> 0.3, emission 0.08 -> 0.25,
+  // tint [0.5, 0.62, 0.22] -> greener. Root cause: at 0.12 / m x c (zone 1 top c 0.14 = 0.017 / m) the strata barely dimmed the pit
+  // and their unlit glow (tint x emission, at most 0.04 linear) sat under the olive scene fog of a pit whose powered lamps are dead
+  // until the restart: the deadly air read like ordinary murk. Now the strata glow a clear toxic green that thickens with depth.
+  ext: 0.3, scatter: 0.6, emission: 0.25, wisps: 0.35,
   sheets: 0.45, sheetXZ: 0.035, sheetY: 0.32,
-  tint: [0.5, 0.62, 0.22] as readonly [number, number, number],
+  tint: [0.38, 0.74, 0.18] as readonly [number, number, number],
 } as const;
 
 const clamp01 = (v: number) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -118,8 +123,12 @@ export interface DepthRect { x0: number; z0: number; x1: number; z1: number }
 /** What world/gas/system.ts samples (the eye concentration of the depth gas). */
 export interface DepthGasSource { depthGasAt(x: number, y: number, z: number): number }
 
-/** What render/volumetric.ts draws (VolumetricAtmosphere.setDepthGas): c at TABLE_N heights over [yLo, yHi] inside rect. */
-export interface DepthGasTable { table: ArrayLike<number>; yLo: number; yHi: number; rect: DepthRect }
+/**
+ * What render/volumetric.ts draws (VolumetricAtmosphere.setDepthGas): c at TABLE_N heights over [yLo, yHi] inside rect. Task
+ * reactor-expansion-20261101 (lane GASLIGHT): + `outdoor` — the toxic surface air above the open pit top (world/gaslightRules.ts
+ * outdoorGasAt; the exposure adds the SAME function) — and `shafts`, the sky light through the opening (render only).
+ */
+export interface DepthGasTable { table: ArrayLike<number>; yLo: number; yHi: number; rect: DepthRect; outdoor?: OutdoorGas | null; shafts?: ShaftSpec | null }
 
 interface ZoneRec { id: number; yTop: number; yBottom: number; cTop: number; cBottom: number; H: number; TR: number; gen: number }
 
@@ -147,7 +156,17 @@ export class ReactorAir implements DepthGasSource {
   private readonly zeros: Float64Array;
   private all: {from: number; dur: number; base: Float64Array} | null = null;
 
+  /**
+   * Task reactor-expansion-20261101 (lane GASLIGHT): the toxic surface air above the OPEN pit top (out of reach: above the roof line)
+   * and the shafts of sky light through the opening. Exposure (depthGasAt) and render (renderTable) read the same `outdoor`.
+   */
+  readonly outdoor: OutdoorGas | null;
+  readonly shafts: ShaftSpec | null;
+
   constructor(readonly info: ReactorInfo, readonly rect: DepthRect, readonly state: ReactorRunState) {
+    const open = info.pit.roofY > info.pit.rimY + 2; // (lane GASLIGHT)
+    this.outdoor = open ? reactorOutdoorGas(info.pit.roofY, rect) : null;
+    this.shafts = open ? pitShaftSpec(info.pit.bounds, info.pit.roofY) : null;
     const genOf = new Map<number, number>();
     for (const g of info.generators) if (!genOf.has(g.zone)) genOf.set(g.zone, g.id);
     const rim = info.pit.rimY;
@@ -258,12 +277,13 @@ export class ReactorAir implements DepthGasSource {
   depthGasAt(x: number, y: number, z: number): number {
     const r = this.rect;
     if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1) return 0;
-    return this.tableAt(y);
+    // (lane GASLIGHT) + the outdoor air above the open pit top — max, never a sum (they never overlap: the strata end below the rim)
+    return Math.max(this.tableAt(y), outdoorGasAt(this.outdoor, x, y, z));
   }
 
   /** The render table (shared arrays: copy, never keep). */
   renderTable(): DepthGasTable {
-    return {table: this.table, yLo: this.yLo, yHi: this.yHi, rect: this.rect};
+    return {table: this.table, yLo: this.yLo, yHi: this.yHi, rect: this.rect, outdoor: this.outdoor, shafts: this.shafts}; // (lane GASLIGHT: + outdoor / shafts)
   }
 
   stats(): ReactorAirStats {

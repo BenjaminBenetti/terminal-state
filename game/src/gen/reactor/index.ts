@@ -20,6 +20,7 @@ import {Kit} from '../stationKit';
 import type {Level, LevelLink} from '../levels';
 import {levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
+import {planPitLamps} from './gaslightLamps'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
 import {spawnProfile, type SpawnContextId, type SpawnProfile} from '../../ai/spawnTables';
@@ -197,6 +198,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   layout.reactor = reactorInfo(layout, rc, rng.fork('reactor-info'), {
     linkIds, ladderLinks: lad.links, gens: gens.gens, fans, sites: sb.sites, screens: sb.screens, components, start, flights: layout.traversal.stairs,
   });
+  planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top
 
   // --- Track2 attach, then the ONE family roll ---------------------------------------------------------------------------------
   if (ext) {
