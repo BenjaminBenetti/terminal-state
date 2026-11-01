@@ -47,6 +47,14 @@ export interface ZombieStats {
   attackCooldown?: number;
   /** Iteration 08 (Lane B): clear height the body needs under soffits / slabs (m; default levels.BODY_CLEAR 1.6). */
   height?: number;
+  /**
+   * (Strainer reach, task studio-alpha-strainer-reach-squish-20261101-201110-01) a forward LUNGE inside the swing: between clip times
+   * `from` .. `to` (s) the body travels up to `distM` toward the player through the normal motor (collision, storeys, no walls),
+   * never closer than `stopM` (centre to centre). Default: none (every other enemy swings in place, as before).
+   */
+  lunge?: {distM: number; from: number; to: number; stopM: number};
+  /** (Strainer reach) centre-to-centre distance at which the swing connects at the impact frame (default attackRange + 0.45, as before). */
+  hitRange?: number;
 }
 
 // Attack duration/impact match the Attack clip (1.1 s, impact 0.45 s) in derivatives/zombie-rigged.json.
@@ -607,11 +615,20 @@ export class ZombieBrain {
         this.stateT -= dt;
         out.anim = 'Attack';
         if (elapsed < this.stats.attackImpact) out.face = Math.atan2(w.px - this.x, w.pz - this.z);
+        // (Strainer reach) the lunge: travel toward the player inside the swing window (the motor keeps walls / storeys / bodies)
+        const L = this.stats.lunge;
+        if (L && elapsed >= L.from && elapsed < L.to && distP > L.stopM && w.playerAlive) {
+          const d = Math.max(1e-6, Math.hypot(w.px - this.x, w.pz - this.z));
+          out.dirX = (w.px - this.x) / d;
+          out.dirZ = (w.pz - this.z) / d;
+          out.speed = Math.min(L.distM / (L.to - L.from), (distP - L.stopM) / Math.max(dt, 1e-3));
+        }
         if (!this.attackDone && elapsed + dt >= this.stats.attackImpact) {
           this.attackDone = true;
           const ang = Math.atan2(w.px - this.x, w.pz - this.z) - this.yaw;
           const a = Math.abs(Math.atan2(Math.sin(ang), Math.cos(ang)));
-          if (w.playerAlive && distP <= this.stats.attackRange + 0.45 && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py)) out.attackHit = true;
+          const hitRange = this.stats.hitRange ?? this.stats.attackRange + 0.45;
+          if (w.playerAlive && distP <= hitRange && a < 1.2 && this.reachY(w, 0.15) && w.los(this.x, this.z, w.px, w.pz, this.y, w.py)) out.attackHit = true;
         }
         if (this.stateT <= 0) { this.setState('chase'); this.repathT = 0; this.attackCd = this.stats.attackCooldown ?? 0.45; } // lane SIREN: per-stats cooldown (default unchanged)
         break;

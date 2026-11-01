@@ -309,10 +309,10 @@ the ordinary per-spawn family roll of the service annexes (0.08, above) — no s
 
 | Stat | Strainer | Ordinary zombie (shambler) |
 |---|---|---|
-| Health | **600** (6x; was 200 — user playtest 2026-11-01: "much to weak") | 100 |
+| Health | **1200** (12x; 200 → 600 → 1200 — user playtests 2026-11-01: "much to weak", "needs double the health") | 100 |
 | Claw damage | **24** (2.4x; was 13) — slow but heavy | 10 |
 | Walk / chase speed | **0.40 / 1.35 m/s** (was 0.585 / 2.45): it LUMBERS — a walking player (3.4 m/s) outpaces it | 0.65 / 2.55 m/s |
-| Attack range (centre to centre) | 1.931 m = the GLB's 1.631 m claw reach + the player's 0.3 m body radius (long arms) | 1.35 m |
+| Attack range (centre to centre) | **3.862 m** (was 1.931 — doubled, user: "double the reach of the swing"): the lunging long-arm swipe reaches 2.311 m (contact 2.611 m) and the body lunges the last 1.251 m toward the player in the clip's 0.62 → 1.0 s window (motor-applied: walls / storeys / bodies block it); the claws connect within 2.611 + 0.45 m after the lunge (`STRAINER_REACH`, `ZombieStats.lunge` / `hitRange`) | 1.35 m |
 | Swing / claw contact / cooldown | Attack clip **2.0 s**, claws land at **1.0 s** (a telegraphed coil; the clip's `attackHitTime`), **1.0 s** recovery (was 1.4 / 0.6 / 0.6) | 1.1 s / 0.45 s / 0.45 s |
 | Collider radius / turn rate | 0.36 m / **3.0** rad/s (was 4.0) | 0.33 m / 4.5 rad/s |
 | Stagger | only a single hit ≥ 45 (`STRAINER_STAGGER_MIN`): ordinary rounds never stun-lock it | any hit ≥ 20 |
@@ -340,8 +340,9 @@ the ordinary per-spawn family roll of the service annexes (0.08, above) — no s
 - **No model → counted zombie stand-in** (`createEnemyActor` `fallback`, the Blightbelly's contract; QA `strainers()` / `enemyMix()`).
 - **Asset contract numbers** (`STRAINER_ASSET` = the `enemyStrainer` extras of `enemy-strainer.glb`;
   `game/tests/strainer-contract.test.ts` checks the agreement): heightM 2.15, headCenter [-0.0006, 1.9481, 0.228] (the crown hunched
-  forward, on the Head bone), headRadius 0.257, reachM 1.631 (horizontal claw reach at the Attack hit frame -> attack range 1.931 m),
-  attackHitTime 1.0 s, Attack clip 2.0 s, Walk / Run ground speeds 0.42 / 1.35 m/s; hit radii torso 0.241 / arm 0.0633 / leg 0.1004.
+  forward, on the Head bone), headRadius 0.257, reachM (horizontal claw reach at the Attack hit frame; see below),
+  attackHitTime 1.0 s, Attack clip 2.0 s, Walk / Run ground speeds 0.42 / 1.35 m/s; hit radii torso 0.241 / arm 0.0633 / leg 0.1004;
+  reachM 2.311 since the lunging swipe (was 1.631).
 
 ## Room modifiers
 
