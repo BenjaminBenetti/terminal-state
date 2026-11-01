@@ -7,6 +7,8 @@
 // meshy/raw/a1/model.glb, sha256-pinned + re-verified after the build; ledger meshy/LEDGER.jsonl, read only) and writes ONLY:
 //   game/public/assets/models/enemy-strainer.glb
 //   game/public/assets/derivatives/enemy-strainer.json
+//   game/public/assets/CREDITS.md          the marked enemy-strainer section only
+//   tools/release/public-inputs.json       only the two outputs' entries + CREDITS.md (whose bytes change) added / updated
 // It does NOT touch the zombie wardrobe or any other enemy (no BODIES entry; never picked as an ordinary zombie body).
 //
 // Pipeline (the humanoid libs in tools/asset-pipeline/zombie/lib are used unchanged):
@@ -55,6 +57,10 @@ const TASK_DIR = path.join(REPO, 'reference/tasks/beyond-station-round4-20261101
 const GENERATOR = 'Terminal State Strainer enemy derivative builder (tools/asset-pipeline/enemy/build-strainer.mjs)';
 const OUT_GLB = path.join(REPO, 'game/public/assets/models/enemy-strainer.glb');
 const OUT_JSON = path.join(REPO, 'game/public/assets/derivatives/enemy-strainer.json');
+const CREDITS = path.join(REPO, 'game/public/assets/CREDITS.md');
+const ALLOW = path.join(REPO, 'tools/release/public-inputs.json');
+const CREDITS_BEGIN = '<!-- BEGIN enemy-strainer-20261101 (build-strainer.mjs) -->';
+const CREDITS_END = '<!-- END enemy-strainer-20261101 -->';
 
 /** The accepted Meshy T2.5 image-to-3D body (meshy/LEDGER.jsonl 'accepted' row), pinned. */
 export const SOURCE = {
@@ -88,7 +94,7 @@ const REGION_STRAND = 5;
 
 function guardOutput(file) {
   const r = rel(path.resolve(file));
-  if (![rel(OUT_GLB), rel(OUT_JSON)].includes(r)) throw new Error('refusing to write outside the Strainer derivative outputs: ' + r);
+  if (![rel(OUT_GLB), rel(OUT_JSON), rel(CREDITS), rel(ALLOW)].includes(r)) throw new Error('refusing to write outside the Strainer derivative outputs: ' + r);
   return file;
 }
 
@@ -501,6 +507,28 @@ function buildDocument({skel, body, clips, extras, tex}) {
   return doc;
 }
 
+// ------------------------------------------------------------------------------------------------ CREDITS + allowlist
+/** The marked CREDITS.md section, then the public-input allowlist entries of this builder's outputs (+ CREDITS.md). */
+function writeCreditsAndAllowlist() {
+  const credSrc = fs.readFileSync(CREDITS, 'utf8');
+  const section = [CREDITS_BEGIN, '## Beyond the Station round 4: the Strainer (enemy)', '',
+    'Generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose, 2K PBR; 1 attempt, 15 credits) through the Meshy MCP under the user\'s round-4 task authorization, conditioned on the project\'s own user-approved front T-pose image of the Strainer (a Codex native image generation made from the project\'s approved Strainer concept). Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-strainer.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture); the provider\'s texture maps are resized / re-encoded only (provenance: `assets/derivatives/enemy-strainer.json`). AI-generated asset: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the input image are kept outside Git.', '',
+    `- \`${rel(OUT_GLB).replace(/^game\/public\//, '')}\` — the Strainer, a tall clawed drain-filter stalker (Meshy task ${SOURCE.taskId})`, CREDITS_END].join('\n');
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`${esc(CREDITS_BEGIN)}[\\s\\S]*?${esc(CREDITS_END)}`);
+  const next = re.test(credSrc) ? credSrc.replace(re, section) : credSrc.replace(/\n*$/, '\n\n') + section + '\n';
+  fs.writeFileSync(guardOutput(CREDITS), next);
+  const allowRaw = fs.readFileSync(ALLOW, 'utf8'), allow = JSON.parse(allowRaw);
+  if (allow.schema !== 'terminal-state-public-inputs-v1' || !Array.isArray(allow.files)) throw new Error('unknown public-input policy schema');
+  if (JSON.stringify(allow, null, 2) + '\n' !== allowRaw) throw new Error('public-inputs.json formatting differs from JSON.stringify(_, null, 2); refusing to rewrite');
+  const pub = p => path.relative(path.join(REPO, 'game/public'), p);
+  const mine = [OUT_GLB, OUT_JSON, CREDITS].map(pub);
+  const add = [OUT_GLB, OUT_JSON, CREDITS].map(f => { const b = fs.readFileSync(f); return {path: pub(f), bytes: b.length, sha256: sha256File(f)}; });
+  allow.files = [...allow.files.filter(f => !mine.includes(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
+  fs.writeFileSync(guardOutput(ALLOW), JSON.stringify(allow, null, 2) + '\n');
+  console.log('  CREDITS section + allowlist:', add.map(a => `${a.path} ${a.bytes}`).join(', '));
+}
+
 // ------------------------------------------------------------------------------------------------ main
 async function main() {
   const t0 = Date.now();
@@ -638,6 +666,7 @@ async function main() {
   };
   fs.mkdirSync(path.dirname(OUT_JSON), {recursive: true});
   fs.writeFileSync(guardOutput(OUT_JSON), JSON.stringify(manifest, null, 1) + '\n');
+  writeCreditsAndAllowlist();
   console.log(`done: ${rel(OUT_GLB)} ${outBytes} bytes sha256 ${outSha} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 

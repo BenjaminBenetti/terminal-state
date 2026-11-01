@@ -6,7 +6,7 @@
  "lane": "ASSET",
  "date": "2026-11-01",
  "generatedBy": "tools/asset-pipeline/enemy/build-strainer.mjs",
- "builtAt": "2026-11-01T08:05:12.024Z",
+ "builtAt": "2026-11-01T08:08:56.604Z",
  "buildSeconds": 14,
  "status": {
   "approved": false,
