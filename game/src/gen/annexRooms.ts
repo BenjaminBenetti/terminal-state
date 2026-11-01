@@ -70,8 +70,11 @@ export const ANNEX_ROOMS = {
   medium: {short: 4.5, m2: 26},
   /** Share of the medium rooms that take a signature (seeded, bigger rooms likelier); the rest keep a small utility role. */
   mediumShare: 0.6,
-  /** Anti-repetition: door hops within which a signature is never repeated; boost while unused; penalty per use. */
-  hops: 2, unusedBoost: 6, repeat: 0.2,
+  /**
+   * Anti-repetition: door hops within which a signature is never repeated; boost while unused; penalty per use. (Round 3, lane
+   * LAYOUT: 3 hops — rooms lined along one corridor are 2 hops apart, so the rule also keeps the next segment / wing from repeating.)
+   */
+  hops: 3, unusedBoost: 6, repeat: 0.2,
   /** Alternative signatures tried when a layout does not fit its room. */
   retries: 2,
   /** Small utility rooms (existing purpose ids), weights; repeat penalty per use. */
@@ -291,15 +294,15 @@ export const ANNEX_ZONES = {
   } as Readonly<Record<AnnexZone, readonly (readonly [SignatureId, number])[]>>,
   util: {
     staff: [['workshop', 1], ['storage', 1], ['custodial-room', 0.8], ['first-aid-room', 0.7]],
-    power: [['electrical-room', 1], ['workshop', 0.25], ['storage', 0.25]],
+    power: [['electrical-room', 1], ['storage', 0.3]],
     water: [['pump-room', 1], ['storage', 0.25]],
-    heat: [['pump-room', 0.8], ['storage', 0.6], ['workshop', 0.5]],
-    air: [['electrical-room', 0.6], ['workshop', 0.6], ['storage', 0.4]],
+    heat: [['pump-room', 0.8], ['storage', 0.6], ['workshop', 0.3]],
+    air: [['electrical-room', 0.6], ['storage', 0.5]],
     stores: [['storage', 1]],
   } as Readonly<Record<AnnexZone, readonly (readonly [string, number])[]>>,
   closet: {
-    staff: [['janitor-closet', 1.4], ['supply-closet', 1]], power: [['electrical-closet', 1]], water: [['janitor-closet', 1], ['supply-closet', 0.4]],
-    heat: [['supply-closet', 1], ['janitor-closet', 0.5]], air: [['electrical-closet', 1]], stores: [['supply-closet', 1]],
+    staff: [['janitor-closet', 1.4], ['supply-closet', 1]], power: [['electrical-closet', 1], ['supply-closet', 0.35]], water: [['janitor-closet', 1], ['supply-closet', 0.4]],
+    heat: [['supply-closet', 1], ['janitor-closet', 0.5]], air: [['electrical-closet', 1], ['janitor-closet', 0.4]], stores: [['supply-closet', 1]],
   } as Readonly<Record<AnnexZone, readonly (readonly [string, number])[]>>,
   /** Rooms a plant district takes (along its corridor and on into the next) before the next district starts. */
   district: {power: 4, water: 6, heat: 3, air: 3} as Readonly<Record<string, number>>,
@@ -355,20 +358,32 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
   // next segment / wing until it has its rooms; the rotation is seeded
   const rot = rng.shuffle(PLANT_ZONES.slice());
   const fill = new Map<AnnexZone, number>();
-  let next = 0;
-  const czone = new Map<number, AnnexZone>();
+  let next = 0, districts = 0;
+  const czone = new Map<number, AnnexZone>(), cdist = new Map<number, number>();
   for (const c of corr) {
-    if (c.depth <= dMin + 1) { czone.set(c.id, 'staff'); continue; }
+    if (c.depth <= dMin + 1) { czone.set(c.id, 'staff'); cdist.set(c.id, -1); continue; }
     const rooms = (hosted.get(c.id) ?? []).filter(a => a.kind === 'room').length;
-    const pz = (adj.get(c.id) ?? []).map(id => byId.get(id)!).filter(p => p.kind === 'service' && p.depth < c.depth).map(p => czone.get(p.id)).find(z => z && z !== 'staff');
+    const pc = (adj.get(c.id) ?? []).map(id => byId.get(id)!).find(p => p.kind === 'service' && p.depth < c.depth && czone.get(p.id) !== 'staff');
+    const pz = pc ? czone.get(pc.id) : undefined;
     let z: AnnexZone | undefined = pz && (fill.get(pz) ?? 0) < Z.district[pz] ? pz : undefined;
-    if (!z) {
+    if (z) cdist.set(c.id, cdist.get(pc!.id)!);
+    else {
       for (let k = 0; k < rot.length && !z; k++) { const cand = rot[(next + k) % rot.length]; if ((fill.get(cand) ?? 0) < Z.district[cand]) { z = cand; next = (next + k + 1) % rot.length; } }
       if (!z) { fill.clear(); z = rot[next]; next = (next + 1) % rot.length; }
+      fill.set(z, 0);
+      cdist.set(c.id, districts++);
     }
     czone.set(c.id, z);
     fill.set(z, (fill.get(z) ?? 0) + rooms);
   }
+  // signatures already shown by a district (each kind once per district: one generator room, one sewage channel, ...)
+  const inDistrict = new Map<number, Set<SignatureId>>();
+  const distOf = (a: Area) => cdist.get(host.get(a.id) ?? -1) ?? -1;
+  const take = (a: Area, s: SignatureId) => {
+    sig.set(a.id, s); used.set(s, (used.get(s) ?? 0) + 1);
+    const d = distOf(a);
+    if (d >= 0) { let set = inDistrict.get(d); if (!set) inDistrict.set(d, (set = new Set())); set.add(s); }
+  };
   for (const c of corr) zone.set(c.id, czone.get(c.id)!);
   for (const a of areas) if (a.kind !== 'service') zone.set(a.id, czone.get(host.get(a.id) ?? -1) ?? 'staff');
   // the old stores at the deep end: the hideout and the small rooms / closets on its corridor
@@ -384,23 +399,26 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
   const rooms = areas.filter(a => a.kind === 'room' && a.id !== hideout);
   const halls = rooms.filter(a => a.extHall).sort((p, q) => m2(q) - m2(p) || p.id - q.id);
   for (const a of halls) {
-    const s = drawSignature(a, adj, sig, used, rng, new Set(), weightsFor(a));
-    if (s) { sig.set(a.id, s); used.set(s, (used.get(s) ?? 0) + 1); }
+    const s = drawSignature(a, adj, sig, used, rng, new Set(inDistrict.get(distOf(a)) ?? []), weightsFor(a));
+    if (s) take(a, s);
   }
   // medium plant rooms: their district's signatures (another district's only now and then, when theirs are all next door already)
   const medium = (a: Area) => !a.extHall && dims(a)[0] >= R.medium.short - 1e-6 && m2(a) >= R.medium.m2 - 1e-6;
-  for (const a of rooms.filter(q => medium(q) && PLANT_ZONES.includes(zone.get(q.id)!)).sort(bfs)) {
+  // (district by district; a corridor-end room first, so the ventilation plant takes the far wall where it can)
+  const hostOrder = (a: Area) => order.get(host.get(a.id) ?? -1) ?? 1e9;
+  for (const a of rooms.filter(q => medium(q) && PLANT_ZONES.includes(zone.get(q.id)!)).sort((p, q) => hostOrder(p) - hostOrder(q) || (endOf(p) ? 0 : 1) - (endOf(q) ? 0 : 1) || bfs(p, q))) {
     if (!rng.chance(Z.plantShare)) continue;
-    const w = weightsFor(a), z = zone.get(a.id)!;
-    let s = drawSignature(a, adj, sig, used, rng, new Set(Z.sig[z].length ? SIGNATURE_IDS.filter(q => !Z.sig[z].some(([o]) => o === q)) : []), w);
-    if (!s && rng.chance(0.35)) s = drawSignature(a, adj, sig, used, rng, new Set(), w);
-    if (s) { sig.set(a.id, s); used.set(s, (used.get(s) ?? 0) + 1); }
+    const w = weightsFor(a), z = zone.get(a.id)!, seen = inDistrict.get(distOf(a)) ?? new Set<SignatureId>();
+    let s = drawSignature(a, adj, sig, used, rng, new Set([...seen, ...SIGNATURE_IDS.filter(q => !Z.sig[z].some(([o]) => o === q))]), w);
+    // (a district whose signatures are all shown keeps its utility rooms; now and then another district's machinery not yet seen here)
+    if (!s && rng.chance(0.25)) s = drawSignature(a, adj, sig, used, rng, new Set([...seen, ...used.keys()]), w);
+    if (s) take(a, s);
   }
   // variety: at least minSignatures different ones (a medium utility room takes an unused signature, plant rooms before staff rooms)
   for (const a of rooms.filter(q => medium(q) && !sig.has(q.id) && zone.get(q.id) !== 'stores').sort((p, q) => (zone.get(p.id) === 'staff' ? 1 : 0) - (zone.get(q.id) === 'staff' ? 1 : 0) || bfs(p, q))) {
     if (used.size >= Z.minSignatures) break;
     const s = drawSignature(a, adj, sig, used, rng, new Set(used.keys()), weightsFor(a));
-    if (s) { sig.set(a.id, s); used.set(s, 1); }
+    if (s) take(a, s);
   }
   // purposes: signature rooms; utility rooms / closets from their zone (hop rule where possible + repeat penalty); corridors
   const uUsed = new Map<string, number>();
@@ -426,7 +444,9 @@ function partners(areas: readonly Area[], adj: Map<number, number[]>, byId: Map<
   const near = (id: number) => within(adj, id, 2).map(o => byId.get(o)!).filter(Boolean);
   const want: [SignatureId[], string[], string][] = [
     [['generator'], ['electrical-room', 'electrical-closet'], 'electrical-room'],
+    [['turbine'], ['generator-room', 'electrical-room', 'electrical-closet', 'spillway', 'overflow-chamber', 'sewage-room'], 'electrical-room'],
     [['sewage', 'overflow', 'spillway'], ['pump-room', 'sewage-room', 'overflow-chamber', 'spillway'], 'pump-room'],
+    [['boiler'], ['pump-room', 'storage', 'workshop'], 'pump-room'],
   ];
   for (const a of areas) {
     const s = sig.get(a.id);

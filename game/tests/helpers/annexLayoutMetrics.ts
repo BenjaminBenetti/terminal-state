@@ -16,8 +16,8 @@ export const ADJACENCY: Readonly<Record<string, readonly string[]>> = {
   'boiler-room': ['pump-room', 'storage', 'workshop'],
   'turbine-hall': ['generator-room', 'electrical-room', 'electrical-closet', 'spillway', 'overflow-chamber', 'sewage-room'],
 };
-/** Staff / maintenance purposes (the zone near the entry). */
-export const STAFF = new Set(['workshop', 'storage', 'custodial-room', 'first-aid-room']);
+/** Staff / maintenance purposes (the zone near the entry; maintenance storage is left out: it is also the plant's and the deep end's stores). */
+export const STAFF = new Set(['workshop', 'custodial-room', 'first-aid-room']);
 
 /** The hideout rule of the round-3 brief: a room (not closet / corridor / hall / signature), >= 3.5 x 4 m and >= 14 m², deep third. */
 export const HIDEOUT_MIN = {short: 3.5, long: 4, m2: 14};
@@ -173,7 +173,7 @@ export function summarize(list: readonly AnnexLayoutMetrics[]): Record<string, s
     'mean door hops over rooms (mean of annexes)': f1(mean(m => m.meanHops)),
     'functional adjacency pairs satisfied': `${sum(m => m.adjOk)} / ${sum(m => m.adjPairs)} (${pct(sum(m => m.adjOk), sum(m => m.adjPairs))})`,
     'ventilation plants at a corridor end / deep band': `${sum(m => m.ventEnd)} / ${sum(m => m.vents)}`,
-    'staff rooms (workshop / stores / custodial / first aid) in the entry half': `${pct(sum(m => m.staffNear), sum(m => m.staff))}`,
+    'staff rooms (workshop / custodial / first aid) in the entry half': `${pct(sum(m => m.staffNear), sum(m => m.staff))}`,
     'signature rooms in the entry third': `${pct(sum(m => m.sigEntry), sum(m => m.sigs))}`,
     'distinct signatures per annex (min / mean)': `${min(m => m.signatures)} / ${f1(mean(m => m.signatures))}`,
     'halls per annex (min / mean / max)': `${min(m => m.halls)} / ${f1(mean(m => m.halls))} / ${max(m => m.halls)}`,

@@ -167,6 +167,23 @@ export class Carver {
     return this.coreFree(x, y, ownBed) && this.extFree(x, y, group);
   }
 
+  /**
+   * (Round 3, lane LAYOUT) cellOk(x, y, group, null) memoised per virtual-window cell for one group (1 ok / 2 not; 0 unknown): its
+   * inputs only change at a commit (claim), and a group's own claims never turn its free cells into blocked ones — the cache is reset
+   * when another group asks. The layout planner's free-depth profiles read every cell beside a corridor once.
+   */
+  private okMemo: Int8Array | null = null;
+  private okGroup = -1;
+  private cellOkCached(x: number, y: number, i: number, group: number): boolean {
+    if (!this.okMemo) this.okMemo = new Int8Array(this.vw * this.vh);
+    if (this.okGroup !== group) { this.okMemo.fill(0); this.okGroup = group; }
+    const v = this.okMemo[i];
+    if (v) return v === 1;
+    const ok = this.cellOk(x, y, group, null);
+    this.okMemo[i] = ok ? 1 : 2;
+    return ok;
+  }
+
   /** Registers open / footprint cells of a group: exact owner + the margin.ext neighbourhood. */
   private claim(xs: readonly number[], ys: readonly number[], group: number): void {
     const me = this.cfg.margin.ext, g = group + 1;
@@ -378,7 +395,7 @@ export class Carver {
       const i = this.vi(x, y);
       if (i < 0 || this.own[i] === group + 1) return false;
     }
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (this.own[this.vi(x, y)] !== 0 || !this.cellOk(x, y, group, null)) return false;
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const i = this.vi(x, y); if (i < 0 || this.own[i] !== 0 || !this.cellOkCached(x, y, i, group)) return false; }
     return true;
   }
 
@@ -587,7 +604,7 @@ export class Carver {
     const rootId = addArea(root, 'corridor', from.area, 1);
     const entry = addDoor(doorRect, from.area >= 0 ? from.area : rootId, rootId);
     const prims: LayoutPrims = {
-      free: (x, y) => { const i = this.vi(x, y); return i >= 0 && this.own[i] === 0 && this.cellOk(x, y, group, null); },
+      free: (x, y) => { const i = this.vi(x, y); return i >= 0 && this.own[i] === 0 && this.cellOkCached(x, y, i, group); },
       ring: (x, y) => { const i = this.vi(x, y); return i >= 0 && this.own[i] !== group + 1; },
       rectOk: r => this.rectOk(r, group),
       fits: r => this.fits(bbox(r)),

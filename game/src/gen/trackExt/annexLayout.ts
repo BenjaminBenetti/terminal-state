@@ -169,9 +169,11 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
       let w = Math.min(drawWidth(z), run[1] - t);
       const rest = run[1] - t - w - 1;
       if (rest >= 0 && rest < roomMin && run[1] - t <= wMax) w = run[1] - t;
+      // a closet-wide slot is a closet (janitor / supply / electrical): shallow as well
+      const Dw = w <= closetMax ? Math.min(D, rng.int(roomMin, closetMax)) : D;
       let placed = false;
       for (let ww = w; ww >= roomMin && !placed; ww--) {
-        const d = depthAt(p, t, ww, D);
+        const d = depthAt(p, t, ww, ww <= closetMax ? Dw : D);
         if (d < Dmin) continue;
         if (P.cells() + ww * d > budget + 40) continue;
         if (addRoom(s, sideRect(s, side, t, ww, d), false, false) !== null) { block(s, side, t, ww); t += ww + 1; placed = true; }
@@ -208,8 +210,10 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
   const lineSeg = (s: Seg): void => {
     const z = zone(s), bay = L.bay[z];
     for (const side of rng.shuffle([0, 1] as (0 | 1)[])) {
-      const p = profile(s, side, H ? cl(H.long[1]) : cl(bay[1]));
-      if (hallDue() && s.depth >= 2) sideHall(s, side, p);
+      // (a hall-deep profile only while a hall is due: the free-depth scan is the planner's main cost)
+      const deepScan = !!H && hallDue() && s.depth >= 2;
+      const p = profile(s, side, deepScan ? cl(H!.long[1]) : cl(Math.max(bay[1], 8)));
+      if (deepScan) sideHall(s, side, p);
       // a wing slot: room for a perpendicular corridor to pass the bay and carry rooms of its own
       if (s.role === 'spine' && wings + segs.filter(q => q.slots.some(sl => sl.state === 'free')).length < wingsWant + 1 && rng.chance(L.slotChance)) {
         const w = cr(L.wingWidth), runs = runsOf(s, side).filter(([r0, r1]) => r1 - r0 >= w + 2);
@@ -372,10 +376,11 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
     return null;
   };
   const openEnds = () => segs.flatMap(s => ([0, 1] as const).filter(e => s.ends[e] === 'open' || s.ends[e] === 'dead').map(e => ({s, e}))).sort((p, q) => q.s.depth - p.s.depth);
-  for (const {s, e} of openEnds()) {
-    if (hallDue() || (H && halls === 0 && hallWant > 0)) { if (endRoom(s, e, {hall: true, budget: targetCells * (1 + (H?.slack ?? 0))}) !== null) continue; }
-    endRoom(s, e, {budget: targetCells * 1.03});
-  }
+  openEnds().forEach(({s, e}, k) => {
+    if (hallDue() || (H && halls === 0 && hallWant > 0)) { if (endRoom(s, e, {hall: true, budget: targetCells * (1 + (H?.slack ?? 0))}) !== null) return; }
+    // the two deepest ends close with a hideout-sized store room (4-5.5 x 4.5-6 m), the rest with a bay-deep room
+    endRoom(s, e, {hide: k < 2, budget: targetCells * 1.03});
+  });
   // unused wing slots: a room / closet in the gap when the target allows (else it stays a stretch of blank wall)
   for (const s of segs) for (const sl of s.slots) {
     if (sl.state === 'used') continue;
