@@ -167,6 +167,12 @@ export function edgeBand(g: Grid, i: number, alongX: boolean, plane: number, t0:
   return {f0: f, f1: f, c0: f + R.headroom, c1: f + R.headroom, sloped: false};
 }
 
+/**
+ * Task mall-round3-20261031 (lane FIX R1): how many (band, edge) pairs subtracted an overlapping lower band of their own column in
+ * extractWallFaces (the mall's open escalator wells only; tests prove 0 for the Subway / Office). Reset by the caller.
+ */
+export const OVERLAP_STATS = {subtracted: 0};
+
 /** Tags of the line bounding a piece: A floor / A ceiling / neighbour band j floor (2j) or ceiling (2j + 1). */
 export const TAG_AF = -1, TAG_AC = -2;
 
@@ -337,7 +343,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
   const areaOf = (id: number): Area | undefined => (id >= 0 ? layout.areas[id] : undefined);
 
   // Scratch (allocation-free constant-band fast path; sloped stair edges use subtractBands).
-  const MAXB = Math.max(4, cols.S + 1);
+  const MAXB = Math.max(4, 2 * cols.S + 1); // (+ the same column's overlapping lower bands, task mall-round3 lane FIX R1)
   const bF = new Float64Array(MAXB), bC = new Float64Array(MAXB);
   const pB = new Float64Array(2 * MAXB + 2), pT = new Float64Array(2 * MAXB + 2);
   const pBt = new Int32Array(2 * MAXB + 2), pTt = new Int32Array(2 * MAXB + 2);
@@ -441,7 +447,27 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
             let A: Lin | null = null;
             /** Skirt included in A's floor line (sloped ramp edges only), so pitch = floor + aSkirt. */
             let aSkirt = 0;
-            if (!isRamp && !anyRampB) {
+            // Task mall-round3-20261031 (lane FIX R1 — user: "z-fighting appears on escalators where they connect slopped walls under
+            // them"): a LOWER band of the same column that reaches above this band's floor already emits the faces where both are open.
+            // Only the mall's open escalator wells do that (Ramp.headroom = OPEN_HEADROOM: a scissor stack's lower flight band runs on up
+            // through the flight above it and the storeys over it), and both bands drew the same face — coplanar duplicates with
+            // different texture bases (visible z-fighting on the wells' slab edges). Subtract such bands from this one; columns whose
+            // bands do not overlap (stacked storeys with a slab between: every Subway / Office column) skip this, unchanged.
+            let over: (Lin & {sloped: boolean})[] | null = null;
+            if (ab > 0) {
+              const fA = g.floorOf(i) - 0.5;
+              let Af: Lin | null = null; // this band's own floor / pitch line (no skirt)
+              for (let lb = 0; lb < ab; lb++) {
+                const g2 = levels[cols.level(i, lb)].grid;
+                if (cellCeil(g2, i) + 0.5 <= fA) continue; // quick reject: a slab between
+                const r2 = g2.rampIdx[i] >= 0;
+                const E = edgeBand(g2, i, alongX, plane, t0, t1, r2 ? WALL_SKIRT : 0);
+                if (r2 && !E.sloped) { const E0 = edgeBand(g2, i, alongX, plane, t0, t1, 0); E.f0 = E0.f0; E.f1 = E0.f1; }
+                Af ??= edgeBand(g, i, alongX, plane, t0, t1, 0);
+                if (E.c0 > Af.f0 + MIN_H || E.c1 > Af.f1 + MIN_H) { (over ??= []).push(E); OVERLAP_STATS.subtracted++; }
+              }
+            }
+            if (!isRamp && !anyRampB && !over) {
               // Constant bands (the common case): straight 1D interval subtraction, no allocation.
               f = g.floorOf(i); c = ceilOf(g, i, f);
               for (let bb = 0; bb < nb; bb++) {
@@ -463,6 +489,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
                 sloped ||= B.sloped;
                 bandsB.push(B);
               }
+              for (const E of over ?? []) { sloped ||= E.sloped; bandsB.push(E); }
               if (!sloped) bandsB.sort((p, q) => p.f0 - q.f0);
               subtractBands(Ae, bandsB, pieces);
               f = Ae.f0; c = Ae.c0;
@@ -509,7 +536,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
             }
             let cls = 0; // 0 other, 1 wall, 2 opening
             let top = NaN;
-            if (np === 1) {
+            if (np === 1 && !over) {
               if (pBt[0] === TAG_AF && pTt[0] === TAG_AC) cls = 1;
               else if (pTt[0] === TAG_AC && pBt[0] >= 0 && pBt[0] % 2 === 1) {
                 // Walk-through: the neighbour's band starts at (about) this floor: a door / arch / storefront.

@@ -195,7 +195,7 @@ export function aggroSim(layout: StationLayout, o: AggroOpts) {
   const byCause = (list: Responder[]) => list.reduce((m, r) => { m[r.cause] = (m[r.cause] ?? 0) + 1; return m; }, {} as Record<string, number>);
   // "came down": upper-floor spawns standing on the station storey (or within a storey of it and still hunting) at the end
   const cameDown = upper.filter(r => brains[r.index].alive && brains[r.index].y < 2.5).length;
-  const upperSpawns = layout.zombies.filter((s, i) => levelOf(i) >= 1 && brains[i]).length;
+  const upperSpawns = layout.zombies.filter((_, i) => levelOf(i) >= 1 && brains[i]).length;
   // the largest group of upper-floor enemies set hunting by ONE event (same frame, same cause)
   const burst = new Map<string, number>();
   for (const r of upper) burst.set(`${r.t}|${r.cause}`, (burst.get(`${r.t}|${r.cause}`) ?? 0) + 1);

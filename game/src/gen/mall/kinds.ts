@@ -71,8 +71,9 @@ const SPECS = {
   mannequinFull: {box: [0.449, 0.447, 1.85], cls: 'plastic'},
   // Task mall-round3-20261031 (lane SHOPS, R4 — user: "Make sure to make a female maniqune. This asset will be handy in other spots, because it
   // will be spooooky!"): an adult FEMALE full-figure display mannequin on a round stand (featureless fibreglass form, no clothing baked:
-  // rule 4), a local zero-spend derivative of the M07 mannequin (tools/asset-pipeline; MALL_KIND_ASSET below once built). Box = nominal.
-  mannequinFemale: {box: [0.42, 0.4, 1.76], cls: 'plastic'},
+  // rule 4) — the primary's accepted Meshy T2.5 model M81 (MALL_KIND_ASSET below; build-mall-track3.mjs EXTRA). Box = its measured runtime
+  // bounds (MALL_DIMS replaces it; the procedural fallback form below is built to it).
+  mannequinFemale: {box: [0.437, 0.352, 1.75], cls: 'plastic'},
   flatScreenTv: {box: [1.23, 0.5, 0.819], cls: 'plastic'},
   // M06: a group of garments on hangers, hung on a garment rail (decor filler separated from the rail: root CLAUDE.md rule 4)
   garmentHangingGroup: {box: [0.89, 0.59, 0.85], cls: 'fabric'},
@@ -180,6 +181,9 @@ export const MALL_KIND_ASSET: Readonly<Partial<Record<MallKind, string>>> = {
   // batch 2 resume + 2R (lanes/ASSETS.notes section 12c)
   gunSafeTall: 'gun-safe-tall', dresserDrawers: 'dresser-drawers', cardboardBoxFlaps: 'cardboard-box-flaps', multideckOpenCooler: 'multideck-open-cooler',
   cosmeticsWallUnit: 'cosmetics-wall-unit', mallBench: 'mall-bench', cafeBistroTable: 'cafe-bistro-table', cafeChair: 'cafe-chair',
+  // task mall-round3-20261031 (lane SHOPS, R4): the female mannequin M81 — the primary's accepted Meshy T2.5 model (task
+  // mall-round3-recovery01-20261101; build-mall-track3.mjs EXTRA)
+  mannequinFemale: 'mannequin-female',
 };
 /** Lane ASSETS hook: a delivered model's measured bounds [x, y, z] (m) by asset id (assets/mallDims.generated.ts MALL_DIMS). */
 export const MALL_MODEL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = MALL_DIMS;
@@ -349,8 +353,9 @@ export const MALL_PHYS = {
   garmentRail: {dynamic: true, mass: 14, mat: 'castor', how: 'empty chrome garment rail on castors (~14 kg): rolls away when walked into, slides / tips when shot'},
   // (collider 1.2x its slim model box: the shoulders / base plate the walker meets first — a 0.45 m box let the camera clip 16 cm in)
   mannequinFull: {dynamic: true, mass: 7, mat: 'pad', fit: 1.2, how: 'full-figure hollow plastic display mannequin on a base (~7 kg, tall and narrow): tips over when shot or bumped'},
-  // (R4) the female mannequin: same light hollow form class as M07 (a slimmer ~6 kg shell on its stand)
-  mannequinFemale: {dynamic: true, mass: 6, mat: 'pad', fit: 1.2, how: 'female full-figure hollow fibreglass display mannequin on a round stand (~6 kg, tall and narrow): tips over when shot or bumped; nothing rides it (no baked clothing)'},
+  // (R4) the female mannequin M81: hollow fibreglass shell (~6 kg) + a round brushed-steel base plate and ankle rod (~3 kg). Collider 1.2x its
+  // slim model box like M07 (box 0.437 x 0.352 = hands / base plate -> 0.52 x 0.42 m: the shoulders / plate the walker meets, no camera clip)
+  mannequinFemale: {dynamic: true, mass: 9, mat: 'pad', fit: 1.2, how: 'female full-figure hollow fibreglass display mannequin on a round steel base plate (~9 kg, tall and narrow): tips over when shot or bumped; nothing rides it (no baked clothing)'},
   garmentRailRound: {dynamic: true, mass: 18, mat: 'pad', how: 'empty round chrome garment rack (~18 kg): shoved across the floor when walked into, slides / tips when shot'},
   // Task mall-playtest-revision-20261031 (lane SHOPS, U05): the old sentence claimed the rail stays put while garments hang on it — it
   // did not (the rail's body moved, the garments floated). They now RIDE the rail (MALL_RIDER_KINDS, physics/dynamicItems.ts riders).

@@ -1158,7 +1158,11 @@ const MALL_BOUTIQUES = ['clothing', 'womenswear', 'shoes', 'luggage', 'departmen
  *    chest rig -> the gun shop x10 (its benches / pickups leave few free cells), mall security x3 (the rig also outdoors x1.5); the
  *    hard hat x0.4 and the armour x0.2-0.25 in the boutiques, the armour x0.5 in sporting goods.
  * Still ONE roll per logical level with the shared GEAR_LOOT count / weights (no mean change): only where the pieces land moves.
- * Measured (same 10 malls, womenswear on): docs/loot-tables.md "The mall" / tests/mall-themed-loot.test.ts.
+ * Measured (the same 10 generated malls, womenswear on, unbiased vs biased placement on identical layouts, 240 level rolls each): a
+ * gear-themed store holds a piece in 8.0 % of runs (was 3.4 %; other shops 2.4 % -> 1.7 %: 4.7x), 50 % of the gear lands in them (21 %),
+ * a run has a piece in one of them 39 % of the time (19 %); clothing 3.3 -> 7.0 %, womenswear 3.0 -> 6.3 %, outdoors 3.9 -> 12.9 %,
+ * sports 4.4 -> 10 %, shoes 3.0 -> 6.6 %; hard hats in hardware, armour in the gun shop (docs/loot-tables.md "The mall";
+ * tests/mall-themed-loot.test.ts).
  */
 export const MALL_GEAR_PLACE: GearPlacement = {
   purposes: mallShops(['clothing', 'womenswear', 'outdoors', 'sports', 'shoes', 'department', 'luggage'], 12, 4),

@@ -8,7 +8,7 @@
 export type MallAssetSizeAxis = 'h' | 'w' | 'longest';
 
 export interface MallAssetSpec {
-  /** Attempt-manifest code (M01..M80). */
+  /** Attempt-manifest code (Track3 M01..M80; M81+ = round-3 EXTRA assets with their own task / ledger — build-mall-track3.mjs EXTRA). */
   code: string;
   /** fixture / holder / loose-stock / furniture / decor / machine (manifest role). */
   role: string;
@@ -62,6 +62,7 @@ export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number
   'kiddie-ride': [1.3, 0.7843, 0.6936],
   'salon-styling-chair': [0.8063, 1.1, 0.9822],
   'bed-display': [1.4873, 1.0962, 2.1],
+  'mannequin-female': [0.4368, 1.75, 0.3523],
 };
 
 export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
@@ -101,5 +102,6 @@ export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
   'kiddie-ride': {code: 'M50', role: 'machine', programs: ['galleries', 'toys', 'arcade'], sizeM: 1.3, sizeAxis: 'longest', target: [0.9, 1.3, 1.3], placement: 'free', shopsKind: 'kiddieRide'},
   'salon-styling-chair': {code: 'M51', role: 'furniture', programs: ['beauty', 'service'], sizeM: 1.1, sizeAxis: 'h', target: [0.7, 1.1, 0.7], placement: 'free', shopsKind: 'salonChair'},
   'bed-display': {code: 'M52', role: 'furniture', programs: ['home', 'department'], sizeM: 2.1, sizeAxis: 'longest', target: [1.6, 1.05, 2.1], placement: 'wall (headboard)', shopsKind: 'displayBed'},
+  'mannequin-female': {code: 'M81', role: 'decor/movable', programs: ['womenswear', 'clothing', 'department'], sizeM: 1.75, sizeAxis: 'h', target: [0.44, 1.75, 0.35], placement: 'free', shopsKind: 'mannequinFemale'},
 };
 // END GENERATED

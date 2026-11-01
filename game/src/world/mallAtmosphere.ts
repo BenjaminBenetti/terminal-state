@@ -184,7 +184,7 @@ export function mallArchQaApi(game: {world?: {mallArch?: MallArch; culler?: {atr
         level[`L${q.level}`] = (level[`L${q.level}`] ?? 0) + 1;
       }
       const at = (q: (typeof a.ads)[number]) => ({kind: q.kind, slot: q.slot, program: q.program, level: q.level, x: +q.x.toFixed(2), y: +q.y.toFixed(2), z: +q.z.toFixed(2), glow: q.glow});
-      return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, lit: a.stats.litAds, pages: a.stats.adPages, textureMB: +a.stats.adTextureMB.toFixed(1), glow: AD_GLOW.value,
+      return {shop: a.stats.shopAds, gallery: a.stats.galleryAds, lit: a.stats.litAds, pages: a.stats.adPages, meshes: a.stats.adMeshes, textureMB: +a.stats.adTextureMB.toFixed(1), glow: AD_GLOW.value,
         by, slot, level, first: a.ads.slice(0, 6).map(at), carts: a.ads.filter(q => q.kind === 'cart').map(at), menus: a.ads.filter(q => q.kind === 'menu').map(at)};
     },
     mallCuller: () => ({atrium: game.world?.culler?.atriumStats ?? null, stats: game.world?.culler?.stats ?? null, slabCulled: game.world?.culler?.slabCulled ?? null,

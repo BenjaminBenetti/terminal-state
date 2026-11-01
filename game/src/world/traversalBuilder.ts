@@ -470,6 +470,9 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight, mall = false): 
   const dir = Math.sign(r.s1 - r.s0) || 1;
   const {sTop, sBot} = escalatorExtent(r);
   const clad = mall ? 0 : 0.05;
+  // (mall) the decking strip, the comb and landing plates 4 mm narrower than the balustrade / step band, so their side faces stand 2 mm
+  // inside the outer cladding / skirt planes instead of in them (beamLevel's square sections made the decking exactly coplanar)
+  const inset = mall ? 0.004 : 0;
   const bm = mall ? (out: THREE.BufferGeometry[], a: V3, b: V3, w: number, t = w) => beamLevel(out, a, b, w, t) : beam;
   const P = (s: number, a: number, y: number): V3 => (axisX ? {x: s, y, z: a} : {x: a, y, z: s});
   const a0 = q.a0, a1 = q.a1, b0 = a0 + ESC.bal, b1 = a1 - ESC.bal;
@@ -499,11 +502,11 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight, mall = false): 
   // Comb plates (yellow) at both flight ends, stainless landing plates beyond them.
   for (const [s, y] of [[r.s0, r.h0], [r.s1, r.h1]] as const) {
     const out = s === r.s0 ? -dir : dir;
-    bm(L.yellow, P(s, (b0 + b1) / 2, y + 0.012), P(s + out * 0.16, (b0 + b1) / 2, y + 0.012), w, 0.024);
+    bm(L.yellow, P(s, (b0 + b1) / 2, y + 0.012), P(s + out * 0.16, (b0 + b1) / 2, y + 0.012), w - inset, 0.024);
   }
   const plate = (sa: number, sb: number, y: number) => box(L.stainless, ...((): [number, number, number, number, number, number] => {
     const sc = (sa + sb) / 2, len = Math.abs(sb - sa);
-    return axisX ? [sc, y + 0.006, (b0 + b1) / 2, len, 0.012, w] : [(b0 + b1) / 2, y + 0.006, sc, w, 0.012, len];
+    return axisX ? [sc, y + 0.006, (b0 + b1) / 2, len, 0.012, w - inset] : [(b0 + b1) / 2, y + 0.006, sc, w - inset, 0.012, len];
   })());
   plate(r.s0 - dir * 0.16, sTop, r.h0);
   plate(r.s1 + dir * 0.16, sBot, r.h1);
@@ -517,10 +520,13 @@ function buildEscalator(L: OfficeLists, r: Ramp, q: StairFlight, mall = false): 
       quadGeo(L.stainless, [P(pb, aIn, yb - 0.02), P(pa, aIn, ya - 0.02), P(pa, aIn, ya + ESC.skirt), P(pb, aIn, yb + ESC.skirt)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
       // decking: a stainless strip over the balustrade base
       const across = Math.abs(aOut - aIn);
-      bm(L.stainless, P(pa, (aIn + aOut) / 2, ya + ESC.deck - 0.02), P(pb, (aIn + aOut) / 2, yb + ESC.deck - 0.02), across, 0.05);
-      // outer cladding: the balustrade's side toward the wall / the stair, floor to decking
-      quadGeo(L.stainless, [P(pa, aOut, ya - clad), P(pb, aOut, yb - clad), P(pb, aOut, yb + ESC.deck), P(pa, aOut, ya + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
-      quadGeo(L.stainless, [P(pb, aOut, yb - clad), P(pa, aOut, ya - clad), P(pa, aOut, ya + ESC.deck), P(pb, aOut, yb + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      bm(L.stainless, P(pa, (aIn + aOut) / 2, ya + ESC.deck - 0.02), P(pb, (aIn + aOut) / 2, yb + ESC.deck - 0.02), across - inset, 0.05);
+      // outer cladding: the balustrade's side toward the wall / the stair, floor to decking (mall: its outward face only — the inward
+      // one faces the closed balustrade box and stood in the plane of the level geometry's flight side wall behind it)
+      // the first quad's normal points along +across when the run goes +s on an X run (-s on a Z run); outward = away from the steps
+      const firstOut = (axisX ? dir : -dir) === (aOut === a0 ? -1 : 1);
+      if (!mall || firstOut) quadGeo(L.stainless, [P(pa, aOut, ya - clad), P(pb, aOut, yb - clad), P(pb, aOut, yb + ESC.deck), P(pa, aOut, ya + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      if (!mall || !firstOut) quadGeo(L.stainless, [P(pb, aOut, yb - clad), P(pa, aOut, ya - clad), P(pa, aOut, ya + ESC.deck), P(pb, aOut, yb + ESC.deck)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
       // glass balustrade panel (both faces) and the black handrail on top of it
       quad2(L.glass, [P(pa, aMid, ya + ESC.deck), P(pb, aMid, yb + ESC.deck), P(pb, aMid, yb + ESC.glass), P(pa, aMid, ya + ESC.glass)], [[0, 0], [1, 0], [1, 1], [0, 1]]);
       bm(L.black, P(pa, aMid, ya + ESC.rail), P(pb, aMid, yb + ESC.rail), 0.08, 0.035);

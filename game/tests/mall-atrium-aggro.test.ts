@@ -103,7 +103,7 @@ describe('sight across storeys (open-atrium notice rule)', () => {
       return b.state;
     };
     expect(run(true)).toBe('chase'); // it keeps seeing the player (never gives up)
-    expect(run(false)).toBe('search'); // without the sight line it searches after 9 s: the sight is what keeps it hunting
+    expect(run(false)).not.toBe('chase'); // without the sight line it gives up (search -> idle): the sight is what keeps it hunting
   });
 });
 
@@ -187,29 +187,31 @@ describe('horde call after a cross-storey sighting (HordeDirector.alerted)', () 
 
 describe('the generated mall start: before / after (deterministic scenario)', () => {
   const has = (LEVEL_IDS as readonly string[]).includes('mall');
-  (has ? it : it.skip)('player roaming the station and firing a rifle: fewer upper-floor responders, no mass stream from one event, station fights kept', () => {
+  (has ? it : it.skip)('player roaming the station (t3a: no shots, 70 s; m5: 30 rifle shots, 60 s): fewer upper-floor responders, no mass stream from one event, station fights kept', () => {
     const lines: string[] = [];
     const tot = {before: {upper: 0, burst: 0, calls: 0, station: 0}, after: {upper: 0, burst: 0, calls: 0, station: 0}};
-    for (const code of ['m5', 't3a']) {
+    // (census, 12 malls x 90 s: lanes/ENEMY-evidence in the task folder. At the time of writing, before the change: t3a — a floor-3 horde
+    // member sighted the player across the void at ~62 s and its call sent 12 mates down at once; m5 firing for 90 s — a call burst of 11)
+    for (const [code, fire] of [['t3a', false], ['m5', true]] as const) {
       const layout: StationLayout = LEVELS.mall.generate(LEVELS.mall.entry, {levelSeed: codeToSeed(code)!, startWeapon: 'pistol'});
       const L = levelsOf(layout), sp = layout.playerSpawn, y0 = L.grid(0).floorAt(sp.x, sp.z);
       const walk: [number, number][] = [];
       for (const dx of [10, -10, 6, -6]) if (!walk.length && L.walkLineClear(sp.x, y0, sp.z, sp.x + dx, sp.z, 0.4, y0)) walk.push([sp.x + dx, sp.z]);
       for (const atrium of [false, true]) {
-        // 30 rifle shots (30 m) over 45 s while walking up and down the platform; each shot kills the nearest station enemy in sight
-        const r = aggroSim(layout, {noise: 30, shots: Array.from({length: 30}, (_, k) => 3 + k * 1.5), seconds: 60, atrium, walk});
+        // walking up and down the platform; fire = 30 rifle shots (30 m) over 45 s, each killing the nearest station enemy in sight
+        const r = aggroSim(layout, {noise: 30, shots: fire ? Array.from({length: 30}, (_, k) => 3 + k * 1.5) : [], seconds: fire ? 60 : 70, atrium, walk});
         const k = atrium ? 'after' : 'before';
         // the largest group set hunting by ONE gunshot / call (same frame, same cause)
         const ev = new Map<string, number>();
         for (const u of r.upper) if (u.cause === 'gunfire' || u.cause === 'call') ev.set(`${u.t}|${u.cause}`, (ev.get(`${u.t}|${u.cause}`) ?? 0) + 1);
-        const burst = Math.max(0, ...ev.values());
+        const burst = Math.max(0, ...ev.values()), callBurst = Math.max(0, ...[...ev].filter(([key]) => key.endsWith('call')).map(([, n]) => n));
         const station = r.responders.filter(u => u.level === 0).length;
         tot[k].upper += r.upper.length; tot[k].burst = Math.max(tot[k].burst, burst); tot[k].calls += r.callsHeard; tot[k].station += station;
-        lines.push(`${code} (${layout.mall!.variant}, hordes ${(layout.hordes ?? []).map(h => `L${h.level}:${h.members.length}`).join(' ')}) ${k}: upper-floor responders ${r.upper.length}/${r.upperSpawns} ${JSON.stringify(r.upperByCause)}, ` +
-          `reached the station ${r.reached}, largest single-event group ${burst}, horde calls heard ${r.callsHeard}; station responders ${station} ${JSON.stringify(r.stationByCause)}, kills ${r.kills}`);
+        lines.push(`${code} ${fire ? 'firing' : 'walking'} (${layout.mall!.variant}, hordes ${(layout.hordes ?? []).map(h => `L${h.level}:${h.members.length}`).join(' ')}) ${k}: upper-floor responders ${r.upper.length}/${r.upperSpawns} ${JSON.stringify(r.upperByCause)}, ` +
+          `reached the station ${r.reached}, largest single-event group ${burst} (calls ${callBurst}), horde calls heard ${r.callsHeard}; station responders ${station} ${JSON.stringify(r.stationByCause)}, kills ${r.kills}`);
       }
     }
-    console.info(`[mall atrium aggro] 60 s from the start, rifle (30 shots), roaming the platform\n  ${lines.join('\n  ')}`);
+    console.info(`[mall atrium aggro] from the start, roaming the platform\n  ${lines.join('\n  ')}`);
     expect(tot.after.upper).toBeLessThan(tot.before.upper * 0.75);
     expect(tot.after.burst).toBeLessThanOrEqual(ATRIUM_PERCEPTION.hearCrossMax); // no mass stream from one shot / call
     expect(tot.after.calls).toBeLessThanOrEqual(tot.before.calls);

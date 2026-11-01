@@ -28,7 +28,7 @@
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
 import {abs, cameraPosition, clamp, dot, float, floor, fract, max, min, mix, normalWorld, normalize, positionWorld, smoothstep, step, uv, vec2, vec3} from 'three/tsl';
-import {CELL, FLOOR, SOLID, VOID, rampHeight} from '../gen/grid';
+import {CELL, FLOOR, SOLID, VOID, rampHeight, type Ramp} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import type {MallInfo, MallProgram, MallShop} from '../gen/mall/mallTypes';
@@ -36,7 +36,8 @@ import {canvasTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, cloneSurfaceMaterial, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
 import {shapeMaterial} from './shapeMaterials';
 import {SIGN_ATLAS_CONTEXT, wmHash} from './surfaceNodes';
-import {CHUNK_M, RAIL_HEIGHT, cellCeil, type RailRun} from './levelGeometry';
+import {CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil, type RailRun} from './levelGeometry';
+import {escalatorExtent} from './traversalBuilder'; // task mall-round3 (lane FIX R1); a function import only (traversalBuilder imports mallEscalatorFlights)
 import {ATRIUM_MARGIN} from './levelCulling';
 import {
   GALLERY_FLOOR, PLAZA_FLOOR, PROGRAM_FINISH, SPACE_FINISH, bohClass, bohFinish, stockFinish,
@@ -428,7 +429,7 @@ interface SpaceInfo { space: MallSpace; ring: number; program?: MallProgram; sho
 
 /** Atrium statistics (QA / tests / render-cost report). */
 export interface AtriumStats {
-  meshes: number; triangles: number; roofPanes: number; arches: number; balustradeM: number; balustradeRuns: number; columns: number;
+  meshes: number; triangles: number; roofPanes: number; arches: number; balustradeM: number; balustradeRuns: number; balustradeTrimmedM: number; balustradeTrimmedRuns: number; columns: number;
   signs: number; blades: number; labels: number; banners: number; downlights: number; shaftPanels: number; shaftSpandrels: number; soffits: number; droppedFaces: number;
   /** Shopfront props drawn (lane SHOPS' collision-only glazing / closed shutters) and visual-only partial shutters. */
   glazing: number; shutters: number; partialShutters: number;
@@ -441,8 +442,8 @@ export interface AtriumStats {
   flatGlazingM2: number;
   /** D06: ad faces drawn (lane SHOPS' records / ARCH's gallery billboards). */
   shopAds: number; galleryAds: number;
-  /** Task mall-round3 (lane SHOPS, R5): backlit ads drawn with glow > 0, ad atlas pages (= face meshes) and their texture MB (mips). */
-  litAds: number; adPages: number; adTextureMB: number;
+  /** Task mall-round3 (lane SHOPS, R5): backlit ads drawn with glow > 0, ad atlas pages, ad face meshes, the pages' texture MB (mips). */
+  litAds: number; adPages: number; adMeshes: number; adTextureMB: number;
   /** Task mall-round2 (M09): locked street exits drawn (lane GEN's layout.mall.exits) and the cost of each (meshes = draws, tris). */
   exits: number; exitCost: StreetExitStats[];
   /** Build time of the atrium dressing (ms). */
@@ -482,7 +483,7 @@ export class MallArch {
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adTextureMB: 0, exits: 0, exitCost: [], ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, balustradeTrimmedM: 0, balustradeTrimmedRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adMeshes: 0, adTextureMB: 0, exits: 0, exitCost: [], ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -1074,29 +1075,119 @@ export class MallArch {
       const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
       if (len < 0.05) continue;
       const key = `${r.level}:${Math.floor((r.x0 + r.x1) / 2 / CHUNK_M)},${Math.floor((r.z0 + r.z1) / 2 / CHUNK_M)}`;
+      // task mall-round3-20261031 (lane FIX R1): only the parts not standing in a wall / escalator balustrade plane (railPieces)
+      const pieces = this.railPieces(r, len);
+      this.stats.balustradeTrimmedM += len - pieces.reduce((s, [p0, p1]) => s + p1 - p0, 0);
+      if (!pieces.length) continue;
       let L = lists.get(key);
       if (!L) lists.set(key, (L = {level: r.level, glass: new Mesher(), rail: new Mesher(), shoe: new Mesher()}));
-      this.stats.balustradeM += len;
-      this.stats.balustradeRuns++;
       const at = (s: number, dy: number): [number, number, number] => {
         const u = s / len;
         return [r.x0 + (r.x1 - r.x0) * u, r.y0 + (r.y1 - r.y0) * u + dy, r.z0 + (r.z1 - r.z0) * u];
       };
       const n = [r.nx, 0, r.nz];
-      const panels = Math.max(1, Math.round(len / PANEL));
-      for (let p = 0; p < panels; p++) {
-        const sa = (len * p) / panels + (p ? GAP / 2 : 0), sb = (len * (p + 1)) / panels - (p < panels - 1 ? GAP / 2 : 0);
-        L.glass.quad2([at(sa, 0.1), at(sb, 0.1), at(sb, TOP - 0.06), at(sa, TOP - 0.06)], n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+      for (const [p0, p1] of pieces) {
+        const plen = p1 - p0;
+        this.stats.balustradeM += plen;
+        this.stats.balustradeRuns++;
+        const panels = Math.max(1, Math.round(plen / PANEL));
+        for (let p = 0; p < panels; p++) {
+          const sa = p0 + (plen * p) / panels + (p ? GAP / 2 : 0), sb = p0 + (plen * (p + 1)) / panels - (p < panels - 1 ? GAP / 2 : 0);
+          L.glass.quad2([at(sa, 0.1), at(sb, 0.1), at(sb, TOP - 0.06), at(sa, TOP - 0.06)], n, [[0, 0], [1, 0], [1, 1], [0, 1]]);
+        }
+        const v = (s: number, dy: number) => new THREE.Vector3(...at(s, dy));
+        L.rail.beam(v(p0, TOP), v(p1, TOP), 0.055, 0.055);
+        L.shoe.beam(v(p0, 0.05), v(p1, 0.05), 0.07, 0.1);
       }
-      const v = (s: number, dy: number) => new THREE.Vector3(...at(s, dy));
-      L.rail.beam(v(0, TOP), v(len, TOP), 0.055, 0.055);
-      L.shoe.beam(v(0, 0.05), v(len, 0.05), 0.07, 0.1);
     }
     for (const [key, L] of lists) {
       add(L.glass.mesh(this.dress.glassRail, `mall-balustrade-glass-${key}`, {level: L.level}));
       add(L.rail.mesh(this.dress.stainless, `mall-balustrade-rail-${key}`, {level: L.level}));
       add(L.shoe.mesh(this.dress.darkSteel, `mall-balustrade-shoe-${key}`, {level: L.level}));
     }
+  }
+
+  /** A band of column (cx, cz) whose floor (a flight: its pitch at x / z) lies within 0.6 m of `y` (lane FIX R1: rails stand on a floor). */
+  private floorNear(cols: LevelColumns, cx: number, cz: number, x: number, z: number, y: number): boolean {
+    if (cx < 0 || cz < 0 || cx >= cols.W || cz >= cols.H) return false;
+    const i = cz * cols.W + cx;
+    for (let k = 0; k < cols.count(i); k++) {
+      const g = this.levels[cols.level(i, k)].grid, ri = g.rampIdx[i];
+      const f = ri >= 0 ? rampHeight(g.ramps[ri], g.ramps[ri].axis === 'x' ? x : z) : g.floorOf(i);
+      if (Math.abs(f - y) < 0.6) return true;
+    }
+    return false;
+  }
+
+  private cols: LevelColumns | null = null;
+  private escLines: {axisX: boolean; a: number; ramp: Ramp; sLo: number; sHi: number}[] | null = null;
+
+  /**
+   * Task mall-round3-20261031 (lane FIX R1 — user: "z-fighting appears on escalators where they connect slopped walls under them"):
+   * the spans [s0, s1] (0..len along the run) of an owned rail run that are DRAWN as a glass balustrade; the collision rail itself is
+   * unchanged. Skipped, sampled every 5 cm (spans < 0.3 m dropped):
+   *  (a) where the rail lies on a mall escalator's side line and that escalator's balustrade runs beside it (newel to newel + the newel
+   *      boxes / handrail loops) at the rail's height (pitch within rail foot - 0.25 .. + 1.3 m): the escalator's own glass balustrade /
+   *      outer cladding is the barrier there and the rail's glass stood in the cladding's plane — or, at the foot of the next flight of
+   *      a scissor stack, the flat upper-storey guard on the line between the two lanes (gen/mall/structure.ts runRails) runs into it;
+   *  (b) where a column beside the rail line is closed over the rail's whole height (0.15 / 0.55 / 0.95 m above its foot): the rail is
+   *      buried in the closed volume under the next flight of a scissor stack (escalators or stairs) or stands against a wall, its glass
+   *      in the plane of the level geometry's wall face (the sloped wall under a flight), its handrail / shoe poking through that wall.
+   *  (c) where neither cell beside the line has a floor within 0.6 m of the rail's foot: the flat upper-storey guard that runRails lays
+   *      along the line between two scissor lanes floats in the open well there (between the lower flight and the next one over it).
+   * A rail with nothing skipped is the single span [0, len] (drawn exactly as before).
+   */
+  private railPieces(r: RailRun, len: number): [number, number][] {
+    if (!this.escLines) {
+      this.escLines = [];
+      for (const {flight} of mallEscalatorFlights(this.layout)) {
+        const ramp = this.layout.grid.ramps[flight.ramp];
+        if (!ramp) continue;
+        const {sTop, sBot} = escalatorExtent(ramp);
+        // + the newel boxes / handrail loops (0.4 m beyond both newels)
+        for (const a of [flight.a0, flight.a1]) this.escLines.push({axisX: ramp.axis === 'x', a, ramp, sLo: Math.min(sTop, sBot) - 0.4, sHi: Math.max(sTop, sBot) + 0.4});
+      }
+    }
+    const cols = (this.cols ??= new LevelColumns(this.levels as Level[]));
+    const n = Math.max(1, Math.round(len / 0.05)), h = len / n;
+    const dx = (r.x1 - r.x0) / len, dz = (r.z1 - r.z0) / len;
+    const alongX = Math.abs(dz) < 1e-6, alongZ = Math.abs(dx) < 1e-6;
+    const keep: boolean[] = [];
+    for (let k = 0; k < n; k++) {
+      const s = (k + 0.5) * h, x = r.x0 + dx * s, z = r.z0 + dz * s, y = r.y0 + (r.y1 - r.y0) * s / len;
+      let ok = true;
+      for (const e of this.escLines) {
+        if (!(e.axisX ? alongX && Math.abs(z - e.a) < 0.02 : alongZ && Math.abs(x - e.a) < 0.02)) continue;
+        const sa = e.axisX ? x : z;
+        if (sa < e.sLo || sa > e.sHi) continue;
+        const ph = rampHeight(e.ramp, sa);
+        if (ph > y - 0.25 && ph < y + 1.3) { ok = false; break; }
+      }
+      // neither cell beside the line (0.25 m off it, square to the run) may be closed over the rail's whole height, and one of them must
+      // have a floor at the rail's foot
+      if (ok) {
+        let floor = false;
+        for (const sg of [-1, 1]) {
+          const cx = Math.floor((x - dz * sg * 0.25) / CELL), cz = Math.floor((z + dx * sg * 0.25) / CELL);
+          if (!cols.freeAt(cx, cz, y + 0.15) && !cols.freeAt(cx, cz, y + 0.55) && !cols.freeAt(cx, cz, y + 0.95)) { ok = false; break; }
+          floor ||= this.floorNear(cols, cx, cz, x, z, y);
+        }
+        if (!floor) ok = false;
+      }
+      keep.push(ok);
+    }
+    if (keep.every(Boolean)) return [[0, len]];
+    this.stats.balustradeTrimmedRuns++;
+    const out: [number, number][] = [];
+    for (let k = 0; k < n;) {
+      if (!keep[k]) { k++; continue; }
+      let e = k;
+      while (e < n && keep[e]) e++;
+      const p0 = k ? k * h : 0, p1 = e === n ? len : e * h;
+      if (p1 - p0 >= 0.3) out.push([p0, p1]);
+      k = e;
+    }
+    return out;
   }
 
   /**
@@ -1638,19 +1729,21 @@ export class MallArch {
 
   /**
    * Atlas pages of canvas faces: per page and storey ONE instanced plane mesh (cut-out pages: alpha-tested, double-sided).
-   * Task mall-round3-20261031 (lane SHOPS, R5): packed PER STOREY (a storey's ads share its own pages: with ~2x the faces the meshes
-   * stay ~one per storey and kind instead of pages x storeys, and a culled storey never needs another storey's page); opaque pages
-   * carry the per-instance backlight `aGlow` (world/mallAds.ts adAtlasMaterial: emissive = atlas x aGlow x AD_GLOW).
+   * Task mall-round3-20261031 (lane SHOPS, R5): opaque faces packed PER STOREY (a storey's ads share its own pages: with ~2x the faces
+   * the meshes stay ~1-2 per storey instead of pages x storeys, and a culled storey never needs another storey's page; the few vinyl
+   * decals keep global pages); opaque pages carry the per-instance backlight `aGlow` (world/mallAds.ts adAtlasMaterial: emissive =
+   * atlas x aGlow x AD_GLOW).
    */
   private buildAtlasFaces(group: THREE.Group, faces: Map<THREE.Texture, {m: THREE.Matrix4; level: number; glow: number}[]>, name: string, cutout: boolean): void {
-    const levels = new Map<number, THREE.Texture[]>();
-    for (const [t, es] of faces) { const lv = es[0].level; (levels.get(lv) ?? levels.set(lv, []).get(lv)!).push(t); }
-    for (const [lv, texs] of [...levels].sort((a, b) => a[0] - b[0])) {
+    // (the few window-vinyl faces share global pages: per-storey pages of a handful of decals would be mostly empty rows)
+    const groups = new Map<number, THREE.Texture[]>();
+    for (const [t, es] of faces) { const key = cutout ? -1 : es[0].level; (groups.get(key) ?? groups.set(key, []).get(key)!).push(t); }
+    for (const [key, texs] of [...groups].sort((a, b) => a[0] - b[0])) {
       const imgs = texs.map(t => t.image as {width: number; height: number});
       const {cells, pages} = packAtlas(imgs);
       pages.forEach((Hh, pg) => {
         const mine = cells.map((c, i) => [c, i] as const).filter(([c]) => c[0] === pg);
-        const atlas = canvasTexture(ATLAS_W, Hh, 9800 + pg + (cutout ? 50 : 0) + lv * 100, ctx => {
+        const atlas = canvasTexture(ATLAS_W, Hh, 9800 + pg + (cutout ? 50 : 0) + Math.max(0, key) * 100, ctx => {
           if (cutout) ctx.clearRect(0, 0, ATLAS_W, Hh); else { ctx.fillStyle = '#1f2225'; ctx.fillRect(0, 0, ATLAS_W, Hh); }
           for (const [[, x, y, w, h], i] of mine) {
             const img = imgs[i] as unknown as CanvasImageSource;
@@ -1660,26 +1753,31 @@ export class MallArch {
         });
         atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
         const mat = adAtlasMaterial(atlas, cutout);
-        const ms: THREE.Matrix4[] = [], rects: number[] = [], glows: number[] = [];
-        for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
-          ms.push(e.m);
-          rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
-          glows.push(e.glow);
-        }
-        const geo = new THREE.PlaneGeometry(1, 1);
-        geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
-        if (!cutout) geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(glows), 1));
-        const im = new THREE.InstancedMesh(geo, mat, ms.length);
-        ms.forEach((m, k) => im.setMatrixAt(k, m));
-        im.name = `${name}-${pg}-${lv}`;
-        im.userData.level = lv;
-        im.computeBoundingSphere();
-        im.matrixAutoUpdate = false;
-        group.add(im);
-        this.stats.meshes++;
-        this.stats.triangles += 2 * ms.length;
         this.stats.adPages++;
         this.stats.adTextureMB += ATLAS_W * Hh * 4 * 4 / 3 / 1048576;
+        const byLevel = new Map<number, {ms: THREE.Matrix4[]; rects: number[]; glows: number[]}>();
+        for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
+          let b = byLevel.get(e.level);
+          if (!b) byLevel.set(e.level, (b = {ms: [], rects: [], glows: []}));
+          b.ms.push(e.m);
+          b.rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
+          b.glows.push(e.glow);
+        }
+        for (const [lv, b] of byLevel) {
+          const geo = new THREE.PlaneGeometry(1, 1);
+          geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(b.rects), 4));
+          if (!cutout) geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(b.glows), 1));
+          const im = new THREE.InstancedMesh(geo, mat, b.ms.length);
+          b.ms.forEach((m, k) => im.setMatrixAt(k, m));
+          im.name = `${name}-${pg}-${lv}`;
+          im.userData.level = lv;
+          im.computeBoundingSphere();
+          im.matrixAutoUpdate = false;
+          group.add(im);
+          this.stats.meshes++;
+          this.stats.triangles += 2 * b.ms.length;
+          this.stats.adMeshes++;
+        }
       });
       for (const t of texs) t.dispose();
     }

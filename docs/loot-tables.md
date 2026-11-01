@@ -116,6 +116,7 @@ Every slot must be used by at least one kind; a test checks this.
 | **Stack size** | Rounds per ammo box or handful. | `BOX_COUNT`, `HANDFUL` |
 | **Floor chance / count** | Chance of each loose find, and how many copies. | `SUBWAY_FLOOR`, `OFFICE_FLOOR` |
 | **Gear** | Rare gear count mean, cap and weights. | `GEAR_LOOT` |
+| **Gear placement** | Where the one gear roll lands, by room purpose and piece (multiplies `gearAreaWeight`; absent = unbiased). Mall only. | `LootTables.gearPlace` (`MALL_GEAR_PLACE`) |
 
 ### Overrides (`LootOverrides`, per profile)
 
@@ -401,7 +402,7 @@ The mall is ONE logical level, `LevelId` `mall` (tier 2); its display name is se
 (`Mall (seeded "<Name> Center")`). Since the playtest revision it is compact: the station + three retail floors (~6,600 m² of core
 floor, ~670 loot holders a run; the six-ring mall had ~43,800 m² and ~2,950 holders).
 
-`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL}` —
+`PROFILES.mall` = `MALL_PROFILE`: `tables` = `MALL_TABLES` = `{...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL, gearPlace: MALL_GEAR_PLACE}` —
 every consumable, ammo / calibre, box size, scarcity, limb, rare-gear and reward table is the SAME object the Subway and the Office roll —
 plus `overrides` = `MALL_OVERRIDES`: `categoryWeight: {material: 0.25}` (the dial: every material row of the mall's tables, salvage and
 storage-fill pools included; six rings: 0.6) and `itemWeight: {bio_mater: 1.5}` (the scarcest material lifted). The station and the three
@@ -446,6 +447,28 @@ filters 2–5).
 - **Rewards**: none of its own (the base reward tables are inherited but inert: no mall holder carries their keys). Weapon finds are
   lane SHOPS' per-gun-shop stock (about one gun per gun shop, its own ammunition once; an explicit exception, like the Office's
   weapon plan).
+- **Rare-gear placement** (task mall-round3-20261031, lane SHOPS R6 — user: "clothing stores should have higher gear drop chance …
+  the same idea applies to all stores where the theme would reasonably boost spawn chance of associated loot"). `LootTables.gearPlace`
+  = `MALL_GEAR_PLACE`, read by `gen/gearLoot.ts` `placeGear` (`gearPlaceFactor`) through the level's profile (`levels/registry.ts`
+  `withGear`). It multiplies an area's gear-spot weight (`gearAreaWeight`, only where it is already > 0) by room purpose and piece:
+  - the wearable-gear shops (clothing, womenswear, outdoors, sports, shoes, department, luggage) ×12 on the sales floor and ×4 in the
+    stock room;
+  - per piece: work boots → shoe store / hardware, work gloves → hardware / clothing, the daypack → luggage / outdoors / sports, the hard
+    hat → hardware, the armour vest / chest rig → the gun shop ×10 and mall security ×3, the hard hat and armour damped in the boutiques.
+  The count and pieces are the shared ONE roll (`GEAR_LOOT`, no mean change). Mask loot placement is unbiased. The Subway / Office
+  tables carry no bias: identical placement.
+  Measured on 10 generated malls (womenswear on; unbiased vs biased placement on identical layouts, 240 level rolls each;
+  `reference/tasks/mall-round3-20261031/lanes/SHOPS-evidence/loot-after.json`):
+  - a gear-themed store holds a piece in **8.0 %** of runs (was 3.4 %; other shops 2.4 % → 1.7 %, so 4.7×);
+  - **50 %** of the gear lands in them (was 21 %), and 39 % of runs put a piece in one of them (was 19 %);
+  - per store: clothing 3.3 → 7.0 %, womenswear 3.0 → 6.3 %, outdoors 3.9 → 12.9 %, sports 4.4 → 10 %, shoes 3.0 → 6.6 %,
+    luggage 2.4 → 5.8 %, department 3.5 → 6.2 %; hardware 3.2 → 6.7 % (hard hats), gun shop 2.3 → 4.3 % (armour).
+  Other themes were already boosted (holder units per themed store vs the average other shop, same census): medicine in the pharmacy /
+  clinic / optician 16×, ammunition in the gun shop 13×, scrap metal in hardware 6.4×, bio mater in medical shops 15×, batteries in
+  electronics / phone / hardware 3.4×, food / drink in grocery / food court / café / kiosk 3.4× / 2.6×. Weakest: electrical parts in
+  electronics / phone stores (1.4×). Their sales floors are glass display cabinets (which take no salvage by design) and device walls
+  (which hold no loot); a salvage-share trial at 0.48 gave only +0.2 / +0.7 parts per store, so it was reverted. Changing that is a
+  fit-out decision: a parts-holding fixture in tech stores.
 - **Track2 service annex** (at most one per mall, `TRACK_EXT_MALL.annex.max = 1`): annex holders / floor items come from Track2's own
   annex content (finite, seeded once, appended last), rolled under the mall profile — the annex purpose's theme decides any salvage;
   the mall floor program never sees extension areas (they are attached after every core pass); the ONE rare-gear roll, the gas-mask

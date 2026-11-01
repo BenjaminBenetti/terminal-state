@@ -436,10 +436,27 @@ export const MALL_CAPS: AreaCaps = {
     {when: {kind: ['closet']}, fixed: 1, why: 'closets: at most one'},
   ],
 };
-/** Mall placement (every ambient context): the Office values — 14 tries, 4 m same-storey spacing, 36 cells (18 m), 5 m off landings. */
+/** Mall placement (the station storey 'pit'): the Office values — 14 tries, 4 m same-storey spacing, 36 cells (18 m), 5 m off landings. */
 export const MALL_PLACEMENT: PlacementRules = {
   areaWeights: MALL_AREA_WEIGHTS, caps: MALL_CAPS, tries: 14, spacingM: 4, startCells: 36, clearCells: 1, landingKeepM: 5,
 };
+/**
+ * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R8 — user: "I've done a bunch of mall runs, and not found a siren ever, confirm
+ * that siren can spawn on this level. with chance similar to office space, i.e. average 2 per mall."): the RETAIL floors' area
+ * weights = MALL_AREA_WEIGHTS + shop sales floors (room type 'shop': stores, anchors, food units, kiosks) at MALL_SHOP_WEIGHT.
+ * Measured (48 registry malls, lanes/ENEMY-evidence/r8-*.json): with the shops at the generic 1.3 only ~3.2 of a run's ~15 retail
+ * slots landed in a shop (6.1 on the galleries, 3.5 in narrow 2-2.5 m stock rooms), so ~1.1 slots per run passed the Siren's room
+ * gates — the cause of "never found a siren" (mean 0.79, 37.5 % of runs none). A dead mall's infected linger inside the shops more
+ * than out on the open galleries: at 6 about 8.8 of the ~15 retail slots are in shops (galleries 3.2, stock rooms 1.9). Placement
+ * only: the per-storey counts, the family pool / bands, the station storey (MALL_PLACEMENT) and the hordes' rules are unchanged.
+ */
+export const MALL_SHOP_WEIGHT = 6;
+export const MALL_RING_AREA_WEIGHTS: AreaWeights = {
+  ...MALL_AREA_WEIGHTS,
+  rules: [{when: {type: ['shop']}, weight: MALL_SHOP_WEIGHT, why: 'shop sales floors of the retail floors (stores, anchors, food units, kiosks): the infected linger in the shops'}, ...MALL_AREA_WEIGHTS.rules],
+};
+/** Mall placement of a retail floor ('ring'): MALL_PLACEMENT with MALL_RING_AREA_WEIGHTS (lane ENEMY, mall round 3, R8). */
+export const MALL_RING_PLACEMENT: PlacementRules = {...MALL_PLACEMENT, areaWeights: MALL_RING_AREA_WEIGHTS};
 /**
  * Lane INTEG (Track1 integration, modelled on OFFICE_SIREN_ELIGIBILITY): where a mall Siren may lie dormant. She is an
  * ENCLOSED-SHOP encounter of the retail rings: context 'ring' only (never the 'pit' station storey with its platforms, plaza and
@@ -449,20 +466,26 @@ export const MALL_PLACEMENT: PlacementRules = {
  * or an elevator. The Office's gates: room >= 4 x 4 m (shorter side 8 cells, 100 cells), a clear 1.5 x 1.5 m patch of its own
  * floor, every doorway (shopfront included) >= 3 m away, a 2.5 m disc never seals passage, at most 4 in the whole mall. An
  * ineligible or over-cap draw becomes an ordinary zombie.
+ * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R8): the cap back to the Office's 4 (the compact-mall cap 2 of the playtest
+ * revision capped the mean below 1); every room gate stays the Office's (her fairness: never at a doorway, never sealing passage).
  */
 export const MALL_SIREN_ELIGIBILITY: FamilyEligibility = {
   contexts: ['ring'],
   kinds: ['room'],
   excludeRooms: ['washroom', 'stair-core', 'storage', 'utility', 'office-stair', 'office-elevator'],
-  // (mall revision, D07) the Office's room gates unchanged; the whole-mall cap 4 -> 2 for the compact mall (census below)
-  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 2,
+  // (mall revision, D07) the Office's room gates unchanged; (mall round 3, R8) the whole-mall cap 2 -> 4 = the Office's (census below)
+  minSideCells: 8, minAreaCells: 100, clearCells: 1, doorKeepM: 3, passageRadiusM: 2.5, maxPerLevel: 4,
   fallback: 'zombie',
-  why: 'enclosed shop sales floors / stock rooms of the retail floors only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 2 per mall',
+  why: 'enclosed shop sales floors / stock rooms of the retail floors only, room >= 4 x 4 m, clear floor patch, doorways >= 3 m away, never seals passage, <= 4 per mall',
 };
-/** Lane INTEG: the mall's whole-level Siren spacing (FamilySpacing; ai/familySpacing.ts) — the 30 m of the interim MALL_RARE_RULES. */
+/**
+ * Lane INTEG: the mall's whole-level Siren spacing (FamilySpacing; ai/familySpacing.ts) — 30 m in the interim MALL_RARE_RULES. Task
+ * studio-beta-mall-round3-20261031-01 (lane ENEMY, R8): 24 m = her hum's audible distance (audio/sfx.ts SIREN_HUM.maxDist): two
+ * dormant Sirens are never heard humming at once, and up to 4 fit the compact mall's three retail floors.
+ */
 export const MALL_SIREN_SPACING: FamilySpacing = {
-  spacingM: 30,
-  why: 'rare ambient Sirens (at most 2 in the compact mall): never two within earshot of one another',
+  spacingM: 24,
+  why: 'up to 4 Sirens in the compact mall, never two within earshot of one another (her hum carries 24 m)',
 };
 /**
  * The mall's Siren DRAW weight (NOT the Office's 0.19). A draw only becomes a Siren in an eligible retail-floor shop / stock-room
@@ -477,6 +500,12 @@ export const MALL_SIREN_SPACING: FamilySpacing = {
  * (every eligible slot outside the Blightbelly / rat-dog bands is already a Siren) — more would need more eligible slots (a room
  * modifier or the cap), not a larger weight. Blightbelly 5.8 % / rat-dog 6.0 % placed keep their 5 % draw bands (never
  * renormalised). (Track3 census, six rings: 0.32 -> 2.88 per run, 4.9 %; first compact tuning 0.5 -> 0.69, 3.6 %.)
+ * Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R8: "average 2 per mall", like the Office's 1.97): the weight stays 0.8 (the
+ * Blightbelly / rat-dog draw bands keep their exact spawn indices); the eligible slots grow instead — retail placement weights shops
+ * (MALL_SHOP_WEIGHT 6), the cap is the Office's 4, spacing 24 m. Census (48 registry malls, the seeds above; lanes/ENEMY-evidence):
+ * eligible slots 1.10 -> 3.27 per run; Sirens mean 0.79 -> 1.96 per run (tuning half 2.17, validation half 1.75), runs without one
+ * 37.5 % -> 8.3 %, max 2 -> 4 (= the cap; 0/1/2/3/4 in 4/12/16/14/2 runs), per storey floor 1 / 2 / 3 = 42 / 27 / 25; never the station storey, an annex or a
+ * horde; 10.3 % of the placed core ambient enemies (~19 per run; ~5.6 % with the ~16 horde members); Blightbelly 5.5 % / rat-dog 5.8 %.
  */
 export const MALL_SIREN_WEIGHT = 0.8;
 /** The mall's AMBIENT pool: zombie (remainder), blightbelly 0.05, siren MALL_SIREN_WEIGHT, ratdog 0.05 (ENEMY_FAMILY_IDS order). */
@@ -503,7 +532,8 @@ export const MALL_SPAWN_PROFILE: SpawnProfile = {
   contexts: {
     // (mall revision, D07) pit 3..5 (was 6..9) on the ~1,180 m² station storey; ring 4..6 (was 7..10) on each retail floor
     pit: {label: 'Station storey (platforms + Fountain court + station back of house, storey 0)', count: [3, 5], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
-    ring: {label: 'Retail floor (each of storeys 1..3: courts, corridors, shops, stock rooms, service corridors)', count: [4, 6], placement: MALL_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    // (mall round 3, lane ENEMY R8) retail placement weights the shop sales floors (MALL_RING_PLACEMENT); the counts are unchanged
+    ring: {label: 'Retail floor (each of storeys 1..3: courts, corridors, shops, stock rooms, service corridors)', count: [4, 6], placement: MALL_RING_PLACEMENT, accept: {min: 'count', max: 'count'}},
     // lane INTEG (Track2 integration): the pit station's service annexes (LEVELS.mall.trackExtensions) — Track2's per-annex zone
     // budget, as on the Subway / Office (logical-level inheritance; not in MALL_SIREN_ELIGIBILITY.contexts: no Siren in an annex).
     service: SERVICE_CONTEXT,

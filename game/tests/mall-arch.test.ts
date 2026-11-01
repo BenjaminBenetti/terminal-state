@@ -42,7 +42,7 @@ import {SKY, bakeSkylight, mallSkyField} from '../src/world/mallSkylight';
 import {MALL_FOG, MallAtmosphere, fogTransmittance, mallQaPoses} from '../src/world/mallAtmosphere';
 import {GAS_SHEETS, MALL_EXT_ORDER, MALL_SKY, mallGasCurtainMaterial, mallGasMaterial, mallSkyMaterial, mallSkyPalette} from '../src/world/mallExterior';
 import {EXT_FOG, exteriorFogOpacity} from '../src/world/exterior';
-import {GALLERY_AD, type MallAd} from '../src/world/mallAds';
+import {AD_GLOW, GALLERY_AD, GALLERY_LIGHTBOX, adAtlasMaterial, adGlowOf, type MallAd} from '../src/world/mallAds';
 import {MOOD} from '../src/world/lights';
 import {treatmentOf} from '../src/world/wallDetailPlan';
 import type {MallProgram} from '../src/gen/mall/mallTypes';
@@ -70,6 +70,10 @@ const fashion = F.shops.find(s => s.program === 'clothing')!;
 const FIX_ADS: MallAd[] = [
   {kind: 'decal', program: 'clothing', shop: fashion.id, level: fashion.level, x: (fashion.frontage.x0 + fashion.frontage.x1) / 2 + 2, y: mallY(fashion.level) + 1.5, z: 12.25, nx: 0, nz: 1, w: 0.9, h: 1.2, seed: 11},
   {kind: 'poster', program: 'clothing', shop: fashion.id, level: fashion.level, x: 8, y: mallY(fashion.level) + 2.2, z: 2.5 + 0.015, nx: 0, nz: 1, w: 0.9, h: 1.0, seed: 12},
+  // task mall-round3 (lane SHOPS, R5): a backlit menu board, a (dim) kiosk-cart header sign (double-faced), a dead lightbox
+  {kind: 'menu', program: 'food-court', shop: fashion.id, level: fashion.level, x: 11, y: mallY(fashion.level) + 2.4, z: 2.5 + 0.05, nx: 0, nz: 1, w: 2.0, h: 0.6, seed: 13, slot: 'menu', glow: 1, cuisine: 'burger'},
+  {kind: 'cart', program: 'kiosk', level: fashion.level, x: 20, y: mallY(fashion.level) + 1.6 + 0.03 + 0.21, z: 20, nx: 0, nz: 1, w: 1.1, h: 0.42, seed: 14, slot: 'cart', glow: 0.4, brand: 'Pretzel Twist'},
+  {kind: 'lightbox', program: 'clothing', shop: fashion.id, level: fashion.level, x: 5, y: mallY(fashion.level) + 1.6, z: 2.5 + 0.06, nx: 0, nz: 1, w: 1.0, h: 1.7, seed: 15, slot: 'display', glow: 0},
 ];
 (F.layout.mall as unknown as {ads: MallAd[]}).ads = FIX_ADS;
 let fixtureWorld: BuiltWorld | null = null;
@@ -465,17 +469,53 @@ describe('U02 + U07 + D06 on the fixture build', () => {
     expect(arch.stats.galleryAds).toBeGreaterThan(0);
     const faces = meshes(w.group).filter(m => m.name.startsWith('mall-ad-faces') || m.name.startsWith('mall-ad-decals')) as THREE.InstancedMesh[];
     const n = faces.reduce((s, m) => s + m.count, 0);
-    expect(n).toBe(arch.ads.filter(a => a.kind !== 'decal').length + 2 * arch.ads.filter(a => a.kind === 'decal').length); // decals: both faces
-    expect(faces.length).toBeLessThanOrEqual(8);
+    const two = (a: MallAd) => a.kind === 'decal' || a.kind === 'cart'; // decals / (R5) kiosk-cart headers: both faces
+    expect(n).toBe(arch.ads.filter(a => !two(a)).length + 2 * arch.ads.filter(two).length);
+    // (R5) opaque faces packed per storey (about one page each), the few decals on a shared page: one mesh per page and storey
+    const storeys = new Set(arch.ads.map(a => a.level)).size;
+    expect(faces.length).toBeLessThanOrEqual(2 * storeys + 1);
+    expect(arch.stats.adMeshes).toBe(faces.length);
+    expect(arch.stats.adPages).toBeLessThanOrEqual(faces.length);
+    for (const m of faces.filter(q => q.name.startsWith('mall-ad-faces'))) expect(new Set(faces.filter(q => q.name.startsWith('mall-ad-faces') && matOf(q) === matOf(m)).map(q => q.userData.level)).size).toBe(1); // a page per storey
     for (const m of faces) expect(Number.isInteger(m.userData.level)).toBe(true);
-    // gallery billboards: storey-correct height, on public walls of the plaza / galleries, bounded per storey
-    for (const a of arch.ads.filter(q => q.program === 'mall')) {
-      expect(a.kind).toBe('billboard');
-      expect(a.y - mallY(a.level)).toBeCloseTo(GALLERY_AD.y, 5);
+    // (R5) backlight: opaque pages carry aGlow per instance (= the record's glow: lit kinds; posters 0) and the emissive node; decals none
+    const glowSum = faces.filter(m => m.name.startsWith('mall-ad-faces')).reduce((s, m) => s + Array.from((m.geometry.getAttribute('aGlow') as THREE.BufferAttribute).array as Float32Array).reduce((a, b) => a + b, 0), 0);
+    const want = arch.ads.reduce((s, a) => s + adGlowOf(a) * (a.kind === 'cart' ? 2 : a.kind === 'decal' ? 0 : 1), 0);
+    expect(glowSum).toBeCloseTo(want, 3);
+    expect(adGlowOf(FIX_ADS[0])).toBe(0); // decal
+    expect(adGlowOf(FIX_ADS[1])).toBe(0); // paper poster
+    expect(adGlowOf(FIX_ADS[2])).toBe(1); // menu board lit
+    expect(adGlowOf(FIX_ADS[3])).toBe(0.4); // a dim cart header
+    expect(adGlowOf(FIX_ADS[4])).toBe(0); // a dead lightbox
+    expect(arch.stats.litAds).toBe(arch.ads.filter(a => adGlowOf(a) > 0).length);
+    for (const m of faces) {
+      const mat = matOf(m) as THREE.Material & {emissiveNode?: unknown};
+      if (m.name.startsWith('mall-ad-faces')) { expect(mat.name).toBe('mall-ad-atlas'); expect(mat.emissiveNode).toBeTruthy(); }
+      else { expect(mat.name).toBe('mall-ad-decal-atlas'); expect(m.geometry.getAttribute('aGlow')).toBeUndefined(); expect(mat.alphaTest).toBe(0.5); }
     }
-    const per = new Map<number, number>();
-    for (const a of arch.ads.filter(q => q.program === 'mall')) per.set(a.level, (per.get(a.level) ?? 0) + 1);
+    // (R5) the kiosk-cart header: a slim box standing on its canopy line (record bottom - border), centred on the record
+    const cart = FIX_ADS[3], frameTris = tris(meshes(w.group).find(m => m.name === `mall-ad-frames-${cart.level}`)!).filter(t => Math.abs(t.c.x - 20) < 0.7 && Math.abs(t.c.z - 20) < 0.2);
+    expect(frameTris.length).toBeGreaterThan(0);
+    expect(Math.min(...frameTris.map(t => t.lo.y))).toBeCloseTo(cart.y - cart.h / 2 - 0.03, 3);
+    expect(Math.max(...frameTris.map(t => t.hi.z)) - Math.min(...frameTris.map(t => t.lo.z))).toBeCloseTo(0.06, 3);
+    // gallery billboards: storey-correct height, on public walls of the plaza / galleries, bounded per storey
+    for (const a of arch.ads.filter(q => q.slot === 'gallery' && q.kind === 'billboard')) {
+      expect(a.program).toBe('mall');
+      expect(a.y - mallY(a.level)).toBeCloseTo(GALLERY_AD.y, 5);
+      expect(a.glow).toBeDefined();
+    }
+    const per = new Map<number, number>(), perLb = new Map<number, number>();
+    for (const a of arch.ads.filter(q => q.slot === 'gallery' && q.kind === 'billboard')) per.set(a.level, (per.get(a.level) ?? 0) + 1);
     for (const c of per.values()) expect(c).toBeLessThanOrEqual(GALLERY_AD.perStorey);
+    // (R5) gallery wall lightboxes: eye level, backlit, advertising a real store of the mall (its brand), bounded per storey
+    for (const a of arch.ads.filter(q => q.slot === 'gallery' && q.kind === 'lightbox')) {
+      expect(a.y - mallY(a.level)).toBeCloseTo(GALLERY_LIGHTBOX.y, 5);
+      expect(a.glow).toBeDefined();
+      if (a.shop) expect(F.shops.find(q => q.id === a.shop)?.program).toBe(a.program);
+      perLb.set(a.level, (perLb.get(a.level) ?? 0) + 1);
+    }
+    for (const c of perLb.values()) expect(c).toBeLessThanOrEqual(GALLERY_LIGHTBOX.perStorey);
+    expect(drawn.includes('PRETZEL TWIST')).toBe(true); // (R5) the cart's own kiosk brand
     // brand text: the shop's fictional brand and the seeded mall name are drawn on the ads
     expect(drawn.includes(fashion.brand.toUpperCase())).toBe(true);
     expect(drawn.includes(F.layout.mall.name.toUpperCase())).toBe(true);
@@ -622,6 +662,20 @@ describe('mall atmosphere, QA poses, warm-up and shader builds', () => {
     for (const m of [d.glassRoof, d.glassRail, d.sky, d.whiteSteel, d.columnTile, mallGasMaterial(), mallGasCurtainMaterial()]) {
       for (const sh of buildBoth(new THREE.Mesh(new THREE.PlaneGeometry(1, 1), m), {lights: lights()})) expect(sh.errors, `${m.name} ${sh.backend}`).toEqual([]);
     }
+    // task mall-round3 (lane SHOPS, R5): the ad atlas pages — emissive backlight from the atlas x per-instance aGlow x AD_GLOW (opaque),
+    // the cut-out vinyl page (no backlight)
+    const atlas = new THREE.DataTexture(new Uint8Array(16).fill(200), 2, 2);
+    for (const cut of [false, true]) {
+      const g = new THREE.PlaneGeometry(1, 1);
+      const im = new THREE.InstancedMesh(g, adAtlasMaterial(atlas, cut), 2);
+      g.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array([0, 0, 1, 1, 0, 0, 0.5, 0.5]), 4));
+      if (!cut) g.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array([1, 0]), 1));
+      for (const sh of buildBoth(im, {lights: lights()})) {
+        expect(sh.errors, `ad atlas cut=${cut} ${sh.backend}`).toEqual([]);
+        if (!cut) expect(sh.vertex + sh.fragment).toMatch(/aGlow/);
+      }
+    }
+    expect(AD_GLOW.value).toBeGreaterThan(0.3);
   });
 });
 
@@ -687,6 +741,38 @@ describe('the REAL generated mall (lane GEN): finishes, balustrades, render cost
       const vis = visibleMeshes(w.group, cq, 96, 54, {minPx: 3});
       expect([...vis].filter(([mm]) => culled(mm)).map(([mm, n]) => `${mm.name} L${mm.userData.level} ${n}px`), q.name).toEqual([]);
     }
+  });
+
+  it('R5 (task mall-round3, lane SHOPS): gallery wall lightboxes on the real mall — on solid public wall, clear of doors / props, eye level, bounded', async () => {
+    const {layout, w} = await get();
+    const arch = w.mallArch!, L = GALLERY_LIGHTBOX;
+    const lbs = arch.ads.filter(a => a.slot === 'gallery' && a.kind === 'lightbox');
+    expect(lbs.length).toBeGreaterThan(4);
+    const per = new Map<number, number>();
+    for (const a of lbs) {
+      per.set(a.level, (per.get(a.level) ?? 0) + 1);
+      const base = layout.mall!.storeys.find(s2 => s2.level === a.level)!.baseY;
+      expect(a.y - base).toBeCloseTo(L.y, 5);
+      // solid wall right behind the whole face (5 samples across, at 0.7 m and 2.0 m above the floor)
+      const g = layout.levels[a.level].grid, alongX = a.nz !== 0;
+      for (const k of [-0.45, -0.2, 0, 0.2, 0.45]) {
+        const bx = a.x - a.nx * (L.depth / 2 + 0.06) + (alongX ? k * a.w : 0), bz = a.z - a.nz * (L.depth / 2 + 0.06) + (alongX ? 0 : k * a.w);
+        expect(g.cells[Math.floor(bz / CELL) * g.w + Math.floor(bx / CELL)], `lightbox ${a.x.toFixed(1)},${a.z.toFixed(1)} L${a.level} backed`).toBe(SOLID);
+      }
+      // the floor in front is walkable public space (never inside a shop or behind a counter)
+      const fx = a.x + a.nx * 0.6, fz = a.z + a.nz * 0.6, fi = Math.floor(fz / CELL) * g.w + Math.floor(fx / CELL);
+      expect(g.cells[fi]).toBe(FLOOR);
+      // clear of props at the wall and of doors
+      const near = (x: number, z: number, hx: number, hz: number, e: number) => alongX
+        ? Math.abs(z - a.z) < hz + e && x + hx > a.x - a.w / 2 - e && x - hx < a.x + a.w / 2 + e
+        : Math.abs(x - a.x) < hx + e && z + hz > a.z - a.w / 2 - e && z - hz < a.z + a.w / 2 + e;
+      for (const p of layout.props) if ((p.level ?? 0) === a.level) expect(near(p.x, p.z, p.hx, p.hz, L.propClear - 0.01), `lightbox vs ${p.kind}`).toBe(false);
+      for (const d of layout.doors) if (((d as {level?: number}).level ?? 0) === a.level) expect(near((d.x + d.w / 2) * CELL, (d.y + d.h / 2) * CELL, d.w * CELL / 2, d.h * CELL / 2, L.doorClear - 0.01)).toBe(false);
+    }
+    for (const c of per.values()) expect(c).toBeLessThanOrEqual(L.perStorey);
+    // every gallery ad pair on a storey keeps its spacing
+    const gal = arch.ads.filter(a => a.slot === 'gallery');
+    for (const a of gal) for (const b of gal) if (a !== b && a.level === b.level) expect(Math.hypot(a.x - b.x, a.z - b.z)).toBeGreaterThan((a.w + b.w) / 2 + 0.5);
   });
 
   it('shopfronts (lane SHOPS collision-only props): every glazing pane / closed shutter is drawn exactly over its collider; frontages face the walkway', async () => {

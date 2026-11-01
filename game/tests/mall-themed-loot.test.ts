@@ -70,7 +70,11 @@ describe('mall rare-gear placement bias (data)', () => {
     expect(f('mall-books', 'boots')).toBe(1);
     expect(f('mall-shoes', 'boots')).toBeGreaterThan(f('mall-clothing', 'boots'));
     expect(f('mall-shoes', 'boots')).toBeGreaterThan(f('mall-shoes', 'helmet'));
-    expect(f('mall-hardware', 'helmet')).toBeGreaterThan(f('mall-outdoors', 'helmet'));
+    // a whole shop's effective spot weight (sales floor + stock room: gearAreaWeight x the bias) — hardware has no whole-store boost
+    const shopW = (p: string, piece: string) => gearAreaWeight(area(`mall-${p}`, 'shop')) * f(`mall-${p}`, piece) + gearAreaWeight(area(`mall-${p}-back`, 'stock-room')) * f(`mall-${p}-back`, piece);
+    expect(shopW('hardware', 'helmet')).toBeGreaterThan(shopW('outdoors', 'helmet'));
+    expect(shopW('guns', 'armor_vest')).toBeGreaterThan(shopW('outdoors', 'armor_vest'));
+    expect(shopW('shoes', 'boots')).toBeGreaterThan(shopW('clothing', 'boots'));
     expect(f('mall-clothing', 'helmet')).toBeLessThan(f('mall-clothing', 'gloves'));
     expect(f('mall-luggage', 'backpack')).toBeGreaterThan(f('mall-clothing', 'backpack'));
     expect(f('mall-womenswear', 'gloves')).toBeGreaterThan(f('mall-womenswear', 'armor_vest'));
@@ -81,9 +85,14 @@ describe('mall rare-gear placement bias (data)', () => {
     }
     // effective spot weight: a clothing store's sales floor / stock room now clearly outweighs an untouched shop's
     const w = (p: string, t: string, piece: string) => gearAreaWeight(area(p, t)) * f(p, piece);
-    for (const piece of PIECES) {
-      expect(w('mall-clothing', 'shop', piece) + w('mall-clothing-back', 'stock-room', piece), piece).toBeGreaterThan(
-        (w('mall-books', 'shop', piece) + w('mall-books-back', 'stock-room', piece)) * (piece === 'helmet' || piece.startsWith('armor') || piece === 'chest_rig' ? 1.4 : 4));
+    const clothing = (piece: string) => w('mall-clothing', 'shop', piece) + w('mall-clothing-back', 'stock-room', piece);
+    const books = (piece: string) => w('mall-books', 'shop', piece) + w('mall-books-back', 'stock-room', piece);
+    // the wearables: > 4x an untouched shop; the hard hat a little; body armour deliberately NOT a clothing-store find (~x1)
+    for (const piece of ['backpack', 'boots', 'gloves']) expect(clothing(piece), piece).toBeGreaterThan(4 * books(piece));
+    expect(clothing('helmet')).toBeGreaterThan(1.4 * books('helmet'));
+    for (const piece of ['armor_vest', 'chest_rig']) {
+      expect(clothing(piece), piece).toBeGreaterThan(0.8 * books(piece));
+      expect(clothing(piece), piece).toBeLessThan(2 * books(piece));
     }
   });
 });

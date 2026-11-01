@@ -2,15 +2,18 @@
 // have like pictures of people wearing the clothes ... some ads and some billboards"): the shops' ad / fashion-merchandising PLACEMENT
 // records (gen/mall/ads.ts -> layout.mall.ads, rendered by lane ARCH). Layout-agnostic: the dressed synthetic shop rings
 // (tests/helpers/mallShopsFixture.ts), a few seeds, cached.
+// Task mall-round3-20261031 (lane SHOPS, R5 — user: "there are no adds ... They should appear on kiosks, and as posters in the store
+// and stuff"): + eye-level in-store posters, kiosk-cell ads, food-counter menu boards, kiosk-cart header signs standing on the cart's
+// canopy, static backlight (glow) shares, and one REAL generated mall's per-kind counts.
 import {describe, expect, it} from 'vitest';
 import {Rng} from '../src/core/rng';
 import {CELL} from '../src/gen/grid';
 import {wallBacked} from '../src/gen/doorways';
 import {areaBase} from '../src/gen/placeKit';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {assignMallPrograms, shopFit} from '../src/gen/mall/shops';
+import {MALL_PROGRAMS, assignMallPrograms, shopFit} from '../src/gen/mall/shops';
 import {dressMallShops} from '../src/gen/mall/shopsDress';
-import {FASHION, adBox, mallAds, placeMallAds, propBox, type MallAd} from '../src/gen/mall/ads';
+import {CART_AD, EYE_POSTER, FASHION, GLOW_DEAD, MENU_BOARD, adBox, adGlow, mallAds, placeMallAds, propBox, type MallAd} from '../src/gen/mall/ads';
 import {mallShopsFixture} from './helpers/mallShopsFixture';
 
 function dressed(seed: number): StationLayout {
@@ -24,15 +27,43 @@ const get = (seed: number) => { let v = cache.get(seed); if (!v) cache.set(seed,
 const SEEDS = [1, 2, 3];
 const ov = (a: ReturnType<typeof adBox>, b: ReturnType<typeof adBox>, e = 0.005) =>
   a.x0 < b.x1 - e && b.x0 < a.x1 - e && a.y0 < b.y1 - e && b.y0 < a.y1 - e && a.z0 < b.z1 - e && b.z0 < a.z1 - e;
+/** Lowest bottom (m above the storey floor) per wall slot. */
+const MIN_BOTTOM: Record<string, number> = {header: 1.6, eye: EYE_POSTER.bottom, display: 0.6, menu: MENU_BOARD.bottom};
+/** The cart a header record stands on (same storey, same centre). */
+const cartOf = (L: StationLayout, ad: MallAd) => L.props.find(p => p.kind === 'mallKioskCart' && (p.level ?? 0) === ad.level && Math.abs(p.x - ad.x) < 1e-3 && Math.abs(p.z - ad.z) < 1e-3);
 
-describe('D06 shop ad / merchandising placement records', () => {
-  it('every record belongs to a real shop, faces its room / the walkway, sits inside its wall span at absolute heights', () => {
+/** (R5) A food unit's menu board (if any): high on a wall above the kitchen line, backlit, its cuisine; true when present. */
+function checkMenu(L: StationLayout, s: NonNullable<StationLayout['mall']>['shops'][number], ads: readonly MallAd[]): boolean {
+  const fit = shopFit(s)!, menu = ads.find(ad => ad.shop === s.id && ad.kind === 'menu');
+  if (!menu) return false;
+  const base = areaBase(L, L.areas[s.area]);
+  expect(menu.slot).toBe('menu');
+  expect(menu.y - menu.h / 2).toBeGreaterThanOrEqual(base + MENU_BOARD.bottom - 1e-6);
+  expect(menu.w).toBeGreaterThanOrEqual(MENU_BOARD.w[0] - 1e-6);
+  expect(menu.glow).toBeDefined();
+  expect(menu.cuisine).toBe(fit.cuisine);
+  // clears every prop standing within 0.4 m of that wall span by MENU_BOARD.over
+  const wallX = menu.nz !== 0, along = wallX ? menu.x : menu.z, line = (wallX ? menu.z : menu.x) - (menu.nz || menu.nx) * MENU_BOARD.depth / 2;
+  for (const p of L.props) {
+    if ((p.level ?? 0) !== menu.level || p.kind === 'shopGlazing' || p.kind === 'shopShutter') continue;
+    const b = propBox(p), a0 = wallX ? b.x0 : b.z0, a1 = wallX ? b.x1 : b.z1;
+    if (a1 <= along - menu.w / 2 || a0 >= along + menu.w / 2) continue;
+    const n = menu.nz || menu.nx, near = n > 0 ? (wallX ? b.z0 : b.x0) - line : line - (wallX ? b.z1 : b.x1);
+    if (near > 0.4 || near < -0.05) continue;
+    expect(menu.y - menu.h / 2, `${s.id} menu over ${p.kind}`).toBeGreaterThanOrEqual(b.y1 + MENU_BOARD.over - 1e-3);
+  }
+  return true;
+}
+
+describe('D06 / R5 shop ad / merchandising placement records', () => {
+  it('every shop record belongs to a real shop, faces its room / the walkway, sits inside its wall span at absolute heights', () => {
     for (const seed of SEEDS) {
       const L = get(seed), ads = mallAds(L);
-      expect(ads.length, `seed ${seed}`).toBeGreaterThan(10);
+      expect(ads.length, `seed ${seed}`).toBeGreaterThan(30);
       for (const ad of ads) {
-        expect(['poster', 'lightbox', 'decal']).toContain(ad.kind);
+        expect(['poster', 'lightbox', 'decal', 'menu', 'cart']).toContain(ad.kind);
         expect(Math.abs(ad.nx) + Math.abs(ad.nz)).toBe(1); // unit axis-aligned
+        if (ad.kind === 'cart') continue; // (R5) no shop: the kiosk-cart test below
         const shop = L.mall!.shops.find(s => s.id === ad.shop)!;
         expect(shop, `seed ${seed} ${ad.shop}`).toBeDefined();
         const fit = shopFit(shop)!;
@@ -48,6 +79,7 @@ describe('D06 shop ad / merchandising placement records', () => {
         expect(along + ad.w / 2).toBeLessThanOrEqual(s1 + 1e-6);
         if (ad.kind === 'decal') {
           // on a glazing span of its own unit, facing OUT of the unit (toward the walkway)
+          expect(ad.slot).toBe('window');
           const gl = L.props.find(p => p.kind === 'shopGlazing' && p.area === a.id && Math.abs(p.x - ad.x) < 1e-3 && Math.abs(p.z - ad.z) < 1e-3);
           expect(gl, `seed ${seed} ${ad.shop} decal on glazing`).toBeDefined();
           expect(ad.w).toBeLessThanOrEqual(2 * Math.max(gl!.hx, gl!.hz) + 1e-6);
@@ -57,12 +89,14 @@ describe('D06 shop ad / merchandising placement records', () => {
           // wall-backed over its width at its bottom and at 1.0 m (never over a door / opening), on a wall of its area, facing in
           const side = ad.nz === 1 ? 'N' : ad.nz === -1 ? 'S' : ad.nx === 1 ? 'W' : 'E';
           const line = side === 'N' ? z0 : side === 'S' ? z1 : side === 'W' ? x0 : x1;
-          const off = ad.kind === 'lightbox' ? 0.06 : 0.015;
+          const off = ad.kind === 'lightbox' ? 0.06 : ad.kind === 'menu' ? MENU_BOARD.depth / 2 : 0.015;
           expect(Math.abs((ad.nz !== 0 ? ad.z : ad.x) - (line + (ad.nz || ad.nx) * off))).toBeLessThan(1e-3);
           const g = L.levels![a.level ?? 0].grid;
           expect(wallBacked(g, a, side, along - ad.w / 2, along + ad.w / 2, ad.y - ad.h / 2), `seed ${seed} ${ad.shop} ${ad.kind} backed`).toBe(true);
           expect(wallBacked(g, a, side, along - ad.w / 2, along + ad.w / 2, base + 1.0)).toBe(true);
-          expect(ad.y - ad.h / 2).toBeGreaterThanOrEqual(base + (ad.kind === 'poster' ? 1.6 : 0.6) - 1e-6);
+          expect(MIN_BOTTOM[ad.slot!], `slot ${ad.slot}`).toBeDefined();
+          expect(ad.y - ad.h / 2).toBeGreaterThanOrEqual(base + MIN_BOTTOM[ad.slot!] - 1e-6);
+          if (ad.slot === 'eye') expect(ad.y + ad.h / 2).toBeLessThanOrEqual(base + EYE_POSTER.top + 1e-6);
         }
       }
     }
@@ -73,10 +107,12 @@ describe('D06 shop ad / merchandising placement records', () => {
       const L = get(seed), ads = mallAds(L);
       const boxes = ads.map(ad => adBox(ad));
       for (const [i, ad] of ads.entries()) {
+        const own = ad.kind === 'cart' ? cartOf(L, ad) : undefined;
         for (const p of L.props) {
           if ((p.level ?? 0) !== ad.level) continue;
           if (ad.kind === 'decal' && (p.kind === 'shopGlazing' || p.kind === 'shopShutter')) continue; // it lies on its glass
-          expect(ov(boxes[i], propBox(p)), `seed ${seed} ${ad.shop} ${ad.kind} vs ${p.kind}`).toBe(false);
+          if (p === own) continue; // (R5) a cart header stands on its own cart (its finials reach past the canopy top): the cart test
+          expect(ov(boxes[i], propBox(p)), `seed ${seed} ${ad.shop ?? ad.kind} ${ad.kind} vs ${p.kind}`).toBe(false);
         }
         for (const [j, q] of ads.entries()) if (j !== i && q.level === ad.level) expect(ov(boxes[i], boxes[j]), `seed ${seed} ${ad.shop} ${ad.kind} vs ${q.kind}`).toBe(false);
         for (const s of L.signs) if ((s.level ?? 0) === ad.level && !s.hang) {
@@ -104,7 +140,7 @@ describe('D06 shop ad / merchandising placement records', () => {
       for (const s of L.mall!.shops) {
         const fit = shopFit(s)!;
         const mine = ads.filter(ad => ad.shop === s.id);
-        if (fit.kind === 'service' || fit.kind === 'kiosk') { expect(mine.length, `${s.id} ${fit.kind}`).toBe(0); continue; }
+        if (fit.kind === 'service') { expect(mine.length, `${s.id} ${fit.kind}`).toBe(0); continue; }
         if (fit.kind === 'store' || fit.kind === 'anchor' || fit.kind === 'food') { stores++; if (mine.length) withAd++; }
         if (FASHION.has(fit.program) && fit.front === 'glazed' && fit.kind !== 'vacant') {
           fashion++;
@@ -113,11 +149,83 @@ describe('D06 shop ad / merchandising placement records', () => {
         }
       }
     }
-    expect([...seen].sort()).toEqual(['decal', 'lightbox', 'poster']);
-    expect(withAd / stores).toBeGreaterThan(0.75);
+    for (const k of ['cart', 'decal', 'lightbox', 'poster'] as const) expect(seen.has(k), k).toBe(true); // (menu boards: food units — the real mall below)
+    expect(withAd / stores).toBeGreaterThan(0.85);
     expect(fashion).toBeGreaterThan(3);
     expect(fashionDecal / fashion).toBeGreaterThan(0.8);
     expect(fashionLight / fashion).toBeGreaterThan(0.6);
+    expect(FASHION.has('womenswear')).toBe(true);
+  });
+
+  it('R5: eye-level posters in most real stores (centre 1.2-2.0 m, by the till / entry walls), kiosk cells and food units carry ads', () => {
+    let stores = 0, withEye = 0, kiosks = 0, kioskAds = 0, food = 0, withMenu = 0, eyes = 0;
+    for (const seed of SEEDS) {
+      const L = get(seed), ads = mallAds(L);
+      for (const ad of ads.filter(q => q.slot === 'eye')) {
+        eyes++;
+        const a = L.areas[L.mall!.shops.find(s => s.id === ad.shop)!.area], base = areaBase(L, a);
+        expect(ad.kind).toBe('poster');
+        expect(ad.y - base, `seed ${seed} ${ad.shop} eye centre`).toBeGreaterThanOrEqual(1.2);
+        expect(ad.y - base).toBeLessThanOrEqual(2.0);
+        expect(ad.h).toBeGreaterThan(ad.w); // portrait
+        expect(ad.glow).toBeUndefined(); // paper
+      }
+      for (const s of L.mall!.shops) {
+        const fit = shopFit(s)!, mine = ads.filter(ad => ad.shop === s.id);
+        if (fit.kind === 'store' || fit.kind === 'anchor') { stores++; if (mine.some(ad => ad.slot === 'eye')) withEye++; }
+        if (fit.kind === 'kiosk') { kiosks++; if (mine.length) kioskAds++; }
+        if (fit.kind === 'food') { food++; if (checkMenu(L, s, ads)) withMenu++; }
+      }
+    }
+    expect(eyes).toBeGreaterThan(20);
+    expect(withEye / stores).toBeGreaterThan(0.7);
+    expect(kiosks).toBeGreaterThan(0);
+    expect(kioskAds).toBe(kiosks);
+    if (food) expect(withMenu / food).toBeGreaterThan(0.6); // (the synthetic rings may draw no food unit: the real mall below has them)
+  });
+
+  it('R5: every gallery kiosk cart carries ONE double-faced header sign standing on its canopy top, centred, along its long side', () => {
+    let carts = 0;
+    for (const seed of SEEDS) {
+      const L = get(seed), ads = mallAds(L);
+      for (const p of L.props.filter(q => q.kind === 'mallKioskCart')) {
+        carts++;
+        const mine = ads.filter(ad => ad.kind === 'cart' && cartOf(L, ad) === p);
+        expect(mine.length, `seed ${seed} cart at ${p.x},${p.z}`).toBe(1);
+        const ad = mine[0];
+        expect(ad.slot).toBe('cart');
+        expect(ad.shop).toBeUndefined();
+        expect(MALL_PROGRAMS.kiosk.brands).toContain(ad.brand);
+        // the sign box (face + border) stands ON the canopy's flat top: no float, no sink
+        const top = p.y + (p.lift ?? 0) + CART_AD.top * (p.h / CART_AD.modelH);
+        expect(ad.y - ad.h / 2 - CART_AD.border).toBeCloseTo(top, 2);
+        expect(top).toBeLessThan(p.y + p.h); // under the finials' tips (the cart's box top)
+        // centred and inside the flat top both ways (the cart is half-turned at runtime): +-w/2 + border within 0.6 m of the centre
+        expect(ad.w / 2 + CART_AD.border).toBeLessThanOrEqual(0.6);
+        const long = Math.max(p.hx, p.hz);
+        expect(long).toBeGreaterThan(ad.w / 2 + 0.5);
+        // faces look across the long side (the long axis runs along the sign)
+        expect(ad.nz !== 0).toBe(p.hx >= p.hz);
+        expect(ad.glow).toBeDefined();
+      }
+    }
+    expect(carts).toBeGreaterThan(0);
+  });
+
+  it('R5: static backlight — lit kinds carry glow (a share dead / dim, most lit), paper / vinyl none; adGlow deterministic', () => {
+    const glows: number[] = [];
+    for (const seed of SEEDS) for (const ad of mallAds(get(seed))) {
+      if (ad.kind === 'lightbox' || ad.kind === 'menu' || ad.kind === 'cart') { expect(ad.glow).toBeDefined(); glows.push(ad.glow!); } else expect(ad.glow).toBeUndefined();
+    }
+    for (const g of glows) expect(g === 0 || (g >= 0.3 && g <= 0.5) || (g >= 0.85 && g <= 1)).toBe(true);
+    // the shares on a large deterministic sample (the per-mall sample is small)
+    const big = Array.from({length: 4000}, (_, i) => adGlow(i * 7919 + 13));
+    const dead = big.filter(g => g === 0).length / big.length, lit = big.filter(g => g >= 0.85).length / big.length;
+    expect(dead).toBeGreaterThan(GLOW_DEAD - 0.04);
+    expect(dead).toBeLessThan(GLOW_DEAD + 0.04);
+    expect(lit).toBeGreaterThan(0.6);
+    expect(adGlow(12345)).toBe(adGlow(12345));
+    expect(glows.filter(g => g > 0).length / glows.length).toBeGreaterThan(0.6);
   });
 
   it('deterministic, pure records (never props), a re-run replaces the list', () => {
@@ -130,5 +238,26 @@ describe('D06 shop ad / merchandising placement records', () => {
     expect(rep.ads).toBe(mallAds(L).length);
     expect(mallAds(L)).not.toBe(before);
     expect(Object.values(rep.byKind).reduce((s, v) => s + (v ?? 0), 0)).toBe(rep.ads);
+    expect(Object.values(rep.bySlot).reduce((s, v) => s + (v ?? 0), 0)).toBe(rep.ads); // (R5) every record has a slot
   });
+
+  it('R5: a REAL generated mall — every kind, eye-level posters, every kiosk cart / kiosk cell / food unit carries ads, womenswear ads', async () => {
+    const {generateMallLevel} = await import('../src/gen/mall/index');
+    const L = generateMallLevel({levelSeed: 4242, startWeapon: 'pistol'} as never) as StationLayout;
+    const ads = mallAds(L), by = (f: (a: MallAd) => boolean) => ads.filter(f).length;
+    expect(ads.length).toBeGreaterThan(70);
+    expect(by(a => a.slot === 'eye')).toBeGreaterThan(20);
+    expect(by(a => a.kind === 'cart')).toBe(L.props.filter(p => p.kind === 'mallKioskCart').length);
+    const shops = L.mall!.shops.map(s => ({s, f: shopFit(s)!}));
+    let food = 0, menus = 0;
+    for (const {s, f} of shops) {
+      const mine = ads.filter(a => a.shop === s.id);
+      if (f.kind === 'kiosk' || f.kind === 'store' || f.kind === 'anchor' || f.kind === 'food') expect(mine.length, `${s.id} ${f.kind} ${f.program}`).toBeGreaterThan(0);
+      if (f.kind === 'food') { food++; if (checkMenu(L, s, ads)) menus++; }
+    }
+    expect(food).toBeGreaterThan(0);
+    expect(menus / food).toBeGreaterThan(0.6);
+    const women = shops.filter(({f}) => f.program === 'womenswear');
+    for (const {s} of women) expect(ads.some(a => a.shop === s.id), `womenswear ${s.id}`).toBe(true);
+  }, 60000);
 });

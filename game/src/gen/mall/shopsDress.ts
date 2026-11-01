@@ -661,7 +661,13 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     void fr;
     const tills = d.placed.filter(p => p.kind === 'shopCounter');
     if (tills[0]) d.onTop(tills[0], 'cashRegister', 0.35);
-    d.sideRows([['deviceWall', 0], ['glassDisplayCabinet', 0], ['wallBay', 0], ['deviceWall', 0]], 1.6, D - 1.3);
+    // (R6: slatwall bays between the device walls / cabinet — open shelves carrying the store's cells and salvaged parts)
+    d.sideRows([['deviceWall', 0], ['wallBay', 0], ['glassDisplayCabinet', 0], ['wallBay', 0]], 1.6, D - 1.3);
+    // Task mall-round3-20261031 (lane SHOPS, R6 — "stores where the theme would reasonably boost spawn chance of associated loot"): the
+    // repair corner's rolling tool chest (an existing openable holder: its drawers take the store's salvage — electrical parts — through
+    // the mall storage fill). Before, an electronics sales floor was glass cabinets (no salvage by their display rule) and device walls
+    // (no loot): fewer electrical parts than a bookstore (lanes/SHOPS-LOOT.part)
+    d.againstWall('rollingToolChest', 1, {walls: [fr.L, fr.R, fr.back]});
     d.islands('techDisplay', per(d, 30, 2, 8), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0});
     // TV display tables: a flat-screen set (lane ASSETS M10, loose on-host decor) on each, loot beside it
     for (const t of d.islands('merchTable', per(d, 60, 1, 3), {u0: 1.8, u1: W - 1.8, v0: 2.4, v1: D - 2.2}, {ring: 1.0})) d.onTop(t, 'flatScreenTv', d.rng.chance(0.5) ? -0.15 : 0.15);
@@ -669,7 +675,8 @@ const RECIPES: Record<MallRecipe, Recipe> = {
   phone(d) {
     const {W, D} = d;
     d.backRow([['repairBench', 1], ['glassCounter', 0], ['shopCounter', 0]], 0.3, W - 0.3);
-    d.sideRows([['deviceWall', 0], ['glassDisplayCabinet', 0]], 1.4, D - 1.2);
+    d.againstWall('rollingToolChest', 1); // (R6: the repair bench's tool chest — electrical parts in its drawers; before the demo tables)
+    d.sideRows([['deviceWall', 0], ['wallBay', 0], ['glassDisplayCabinet', 0]], 1.4, D - 1.2);
     d.islands('techDisplay', per(d, 18, 2, 4), {u0: 1.6, u1: W - 1.6, v0: 2.2, v1: D - 1.9}, {ring: 0.9}); // (mall revision: a phone shop is dense with demo tables)
     d.againstWall('spinnerRack', 1);
   },

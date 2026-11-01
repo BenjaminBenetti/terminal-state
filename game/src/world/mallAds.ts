@@ -340,17 +340,18 @@ function drawMenu(ctx: Ctx, w: number, h: number, r: Rnd, ad: MallAd, brand: str
     const lines = 2 + (r() < 0.5 ? 1 : 0);
     for (let k = 0; k < lines; k++) {
       const y = hh + body * (lines === 3 ? 0.22 + k * 0.28 : 0.32 + k * 0.36);
-      fitText(ctx, order[(i * 3 + k) % order.length], x0 + pw * 0.4, y, pw * 0.4, Math.round(body * 0.13), false, '#f2ede2', 'left');
+      fitText(ctx, order[(i * 3 + k) % order.length], x0 + pw * 0.4, y, pw * 0.36, Math.round(body * 0.13), false, '#f2ede2', 'left');
       fitText(ctx, `$${3 + Math.floor(r() * 10)}.${pick(['29', '49', '79', '99'], r)}`, x0 + pw * 0.96, y, pw * 0.16, Math.round(body * 0.13), false, pal.accent, 'right');
     }
   }
   age(ctx, w, h, r, false);
 }
 
-/** Canvas size (px) of an ad face of w x h metres (bounded: posters ~256 px wide, billboards <= 512; R5: menu boards 448 for their
- *  item lines, faces under 1.8 m on their long side 256 — ~150-210 px / m like the big posters' ~130 — to bound the atlas memory). */
+/** Canvas size (px) of an ad face of w x h metres (bounded: posters ~256 px wide, billboards <= 512; R5 — ~2.3x the faces in the same
+ *  atlas memory class: billboards 416, menu boards 448 for their item lines, faces >= 1.8 m on their long side 288, smaller 224 —
+ *  120-200 px / m, the D06 posters' ~130-200). */
 export function adCanvasSize(ad: Pick<MallAd, 'w' | 'h' | 'kind'>): {w: number; h: number} {
-  const long = ad.kind === 'billboard' ? 512 : ad.kind === 'menu' ? 448 : Math.max(ad.w, ad.h) < 1.8 ? 256 : 320;
+  const long = ad.kind === 'billboard' ? 416 : ad.kind === 'menu' ? 448 : Math.max(ad.w, ad.h) < 1.8 ? 224 : 288;
   const k = long / Math.max(ad.w, ad.h);
   return {w: Math.max(32, Math.round(ad.w * k / 4) * 4), h: Math.max(32, Math.round(ad.h * k / 4) * 4)};
 }
