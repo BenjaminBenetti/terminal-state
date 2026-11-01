@@ -93,6 +93,9 @@ import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type
 import {starterInventory} from './run/starter';
 import {applyHolders, captureHolders, capturePickups, restorePickup} from './run/worldMemory';
 import {runBagStore} from './run/bagStore';
+import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
+import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
+import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -157,7 +160,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -255,6 +258,8 @@ export class Game {
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
   readonly tower: TowerRuntime;
+  /** Task player-train-shell-20261101-202805 (lane TRAIN): the parked player train in the world — the car, its interior volume / colliders, doors, lights (world/playerTrain.ts). */
+  readonly trainRuntime: PlayerTrainRuntime;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
    * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
@@ -276,6 +281,13 @@ export class Game {
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
   readonly runParticipants: RunParticipant[] = [];
+  /**
+   * Task player-train-shell-20261101-202805 (lane PLACE): the current level's parked player train (gen/playerTrain.ts; null = the level
+   * cannot fit it), set in buildSection before the start pose and the section hooks — lane TRAIN builds the car here. `playerTrain` is
+   * the run's ONE train identity (run/playerTrain.ts, RunParticipant 'player-train').
+   */
+  trainPlacement: TrainPlacement | null = null;
+  readonly playerTrain = new PlayerTrainRecord();
   /** Called on every setState (lanes close their UIs when the state leaves 'playing'). */
   readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
@@ -456,6 +468,12 @@ export class Game {
     this.sectionModelKeys.push(enemyModelKeysFor);
     this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
     hookName('sirens');
+    // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
+    // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
+    // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
+    this.trainRuntime = installPlayerTrain(this, {models: () => trainModelsFrom(this.propModels), textures: () => loadTrainTextures()});
+    hookName('train');
+    this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -766,7 +784,13 @@ export class Game {
     this.run.arrival = {...arrival};
     this.arrival = {...arrival};
     mem.visits++;
-    const pose = arrivalPose(this.layout, arrival);
+    // Task player-train-shell-20261101-202805 (lane PLACE): the parked player train of this level (pure, memoized per layout); a START
+    // arrival (New game / Travel / Retry) spawns inside it at its interior floor (explicit y). Only the pose is set here: updates run
+    // only in 'playing' (after this build and the warm-up), and lane TRAIN's sectionHooks.build below adds the car's floor volume and
+    // colliders synchronously, so the player is never simulated before the train exists. The train identity follows the level.
+    this.trainPlacement = playerTrainPlacement(this.layout);
+    this.playerTrain.parkAt(key);
+    const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
     if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
@@ -839,6 +863,8 @@ export class Game {
     // GEAR's own state (open bag view, readied bag) is closed by its section teardown; NewGame resets it. Its bags and worn
     // gear live in RUN memory / the Inventory, so a snapshot needs nothing from it.
     if (gear?.reset && !this.runParticipants.some(p => p.id === 'gear')) this.runParticipants.push({id: 'gear', save: () => null, load: () => {}, reset: () => gear.reset!()});
+    // Task player-train-shell-20261101-202805 (lane PLACE): the run's one player train (NewGame: a fresh level-one train; Retry: as at entry)
+    if (!this.runParticipants.some(p => p.id === PLAYER_TRAIN_PARTICIPANT)) this.runParticipants.push(this.playerTrain.participant());
   }
   private bagStoreWired = false;
 

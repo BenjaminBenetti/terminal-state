@@ -1,0 +1,627 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "player-train-20261101",
+ "task": "studio-beta-player-train-shell-20261101-202805-01",
+ "lane": "ASSETS (Studio Beta player train)",
+ "status": "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "rebuild": "node tools/asset-pipeline/train/build-player-train.mjs",
+ "rawStorage": "reference/tasks/player-train-shell-20261101-202805/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} + reference/tasks/player-train-shell-20261101-202805/codex/<id>/{<id>-original.png, receipt.json, prompt.txt} + SOURCES-SHA256.txt (read-only raw masters, outside Git)",
+ "frame": "train-local: origin = car centre on the track centre line at rail-top height, +X front (cab), +Y up, -Z platform side; metres",
+ "modelProof": {
+  "requested": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "topology": "triangle",
+   "target_polycount": {
+    "train-shell": 30000,
+    "train-cab-console": 12000,
+    "train-door-leaf": 4000
+   },
+   "refine": "enable_pbr true, texture_resolution 2k, ai_model omitted (inherits the T2.5 preview)"
+  },
+  "evidence": [
+   "exact create arguments recorded in the fsynced ledger intent lines before each paid call; acks carry the task ids",
+   "previews billed 5 credits each (the T2 / T2.5 tier), refines 10"
+  ]
+ },
+ "ledger": {
+  "attempts": 4,
+  "attemptedPOSTs": 8,
+  "accepted": 3,
+  "credits": {
+   "billed": 50,
+   "reserved": 0,
+   "ceiling": 300
+  },
+  "close": "all required parts accepted (shell, cab console, door leaf) -> train-shell Meshy budget CLOSED. Final: 4 / 10 attempts, 8 / 24 paid-POST intents (1 refused client-side: 800-char prompt limit, never submitted, not billed), 50 / 300 credits billed, 0 reserved, 3 accepted. The unused 250 are NOT authority."
+ },
+ "models": {
+  "train-shell": {
+   "prompt": "one single subway metro passenger car, a long low rectangular box about seven times longer than it is wide and slightly taller than wide; each long side has a continuous row of eight large passenger windows along the upper half and three evenly spaced pairs of double sliding doors with tall windows; a driver's cab front end with a big flat windshield and two headlights; a flat rear end with a gangway door and two tail lights; two bogies under the floor near the ends; gently curved roof; stainless steel body with a faded colour stripe; realistic game asset, weathered and abandoned: rust streaks, peeling paint, grime, intact, single object, no text, no logos, no ground plane",
+   "texturePrompt": "weathered stainless steel subway car body with a faded red colour stripe below the windows, dark grimy window glass, darker grey door panels with dark door windows, black rubber seals, rust streaks running down from the windows and seams, grime along the bottom, dark grey undercarriage and rusty bogies, a darker cab front with a dark windshield, pale round headlights and small red tail lights",
+   "tasks": {
+    "preview": "01a198d2-7f79-7021-981f-3b63e0548d6f",
+    "refine": "01a198d3-a2b4-70c5-a452-6084c8b0d0fd"
+   },
+   "billed": 15,
+   "source": {
+    "file": "shell-a2-refine-01a198d3-a2b4.glb",
+    "bytes": 8884588,
+    "sha256": "bf82cd6e3907033c2b8a2e1c339742bbf83747360be1e0ec5dd875f9e5e9fc81",
+    "previewSha256": "15439da3508aa622478b1d5c2ea24603acdd9c4bf05d3848be4c1944253934ba"
+   },
+   "derivative": {
+    "dims": [
+     16.2031,
+     3.8508,
+     2.9914
+    ],
+    "triangles": 26956,
+    "meshes": 1,
+    "materials": 1,
+    "textures": [
+     {
+      "slot": "baseColor",
+      "size": [
+       2048,
+       2048
+      ],
+      "mime": "image/jpeg",
+      "bytes": 734280
+     },
+     {
+      "slot": "metallicRoughness",
+      "size": [
+       512,
+       512
+      ],
+      "mime": "image/jpeg",
+      "bytes": 68267
+     },
+     {
+      "slot": "normal",
+      "size": [
+       1024,
+       1024
+      ],
+      "mime": "image/jpeg",
+      "bytes": 124792
+     }
+    ],
+    "gpuBytesWithMips": 29360127,
+    "texturePolicy": {
+     "base": 2048,
+     "normal": 1024,
+     "mr": 512,
+     "quality": 82
+    }
+   },
+   "output": {
+    "url": "assets/models/player-train-shell.glb",
+    "bytes": 2292108,
+    "sha256": "194cc743542ef6c9b048c66c3d53e326fbc60ada80bb56fb7df2a403720a967d"
+   }
+  },
+  "train-door-leaf": {
+   "prompt": "one single sliding door leaf of a subway train, a tall flat rectangular steel door panel about three times taller than it is wide, a large window with dark grimy glass in the upper half, a black rubber edge seal along the closing edge, a small recessed grip, flat and thin, no frame, no wall around it, realistic game asset, heavily weathered and abandoned for years: rust streaks, peeling paint, grime and dust, structurally intact, single object, no text, no logos, no numbers, no ground plane",
+   "texturePrompt": "stainless steel subway door leaf with a large dark grimy glass window in the upper half, black rubber seals, rust streaks and grime, faded paint, no lettering",
+   "tasks": {
+    "preview": "01a198d0-ade7-7435-8dbe-13a82462028b",
+    "refine": "01a198d2-0f84-7605-9343-24943ef4f4aa"
+   },
+   "billed": 15,
+   "source": {
+    "file": "door-a1-refine-01a198d2-0f84.glb",
+    "bytes": 5112216,
+    "sha256": "f75158963509c94a0b44973d218362e188d15d30665834395fe902a1a4a719e1",
+    "previewSha256": "45721d514ecd5d7f2380c444ad9cf35793cf05e13bb9830ee16005ee8f102f50"
+   },
+   "derivative": {
+    "dims": [
+     0.608,
+     2.031,
+     0.045
+    ],
+    "triangles": 7878,
+    "meshes": 1,
+    "materials": 1,
+    "textures": [
+     {
+      "slot": "baseColor",
+      "size": [
+       1024,
+       1024
+      ],
+      "mime": "image/jpeg",
+      "bytes": 96106
+     },
+     {
+      "slot": "metallicRoughness",
+      "size": [
+       256,
+       256
+      ],
+      "mime": "image/jpeg",
+      "bytes": 10998
+     },
+     {
+      "slot": "normal",
+      "size": [
+       512,
+       512
+      ],
+      "mime": "image/jpeg",
+      "bytes": 10099
+     }
+    ],
+    "gpuBytesWithMips": 7340031,
+    "texturePolicy": {
+     "base": 1024,
+     "normal": 512,
+     "mr": 256,
+     "quality": 85
+    }
+   },
+   "output": {
+    "url": "assets/models/player-train-door-leaf.glb",
+    "bytes": 442200,
+    "sha256": "98df16f13db5ed2c66cb7f3a92afe2aa8b223402abc008348de98a155b0b2c39"
+   }
+  },
+  "train-cab-console": {
+   "prompt": "a subway train driver's control desk console, a waist-high steel cabinet with a sloped top panel carrying a master controller lever, a brake handle, rows of toggle switches, round analogue gauges and two small dark screens, a narrow front kick panel, no chair, no windshield, realistic game asset, heavily weathered and abandoned for years: rust streaks, peeling paint, grime and dust, structurally intact, single object, no text, no logos, no numbers, no ground plane",
+   "texturePrompt": "grey painted steel driver desk, black control levers with worn grips, chrome toggle switches, cream analogue gauge faces with needles and no numbers, dark glass screens, heavily rusted edges, dust and grime",
+   "tasks": {
+    "preview": "01a198d0-a538-7332-9064-ada748d324d6",
+    "refine": "01a198d2-0957-7588-83fe-c959b740c1ef"
+   },
+   "billed": 15,
+   "source": {
+    "file": "console-a1-refine-01a198d2-0957.glb",
+    "bytes": 6879116,
+    "sha256": "62499045b27825f852dbbea84b04029ef18be66d730299e9b522c86812016f48",
+    "previewSha256": "c788e2b80bc78e850a931acba19f3c44982e3dda7bd381edbf4839449247642f"
+   },
+   "derivative": {
+    "dims": [
+     0.8028,
+     1.1641,
+     1.9549
+    ],
+    "triangles": 11389,
+    "meshes": 1,
+    "materials": 1,
+    "textures": [
+     {
+      "slot": "baseColor",
+      "size": [
+       1024,
+       1024
+      ],
+      "mime": "image/jpeg",
+      "bytes": 178041
+     },
+     {
+      "slot": "metallicRoughness",
+      "size": [
+       256,
+       256
+      ],
+      "mime": "image/jpeg",
+      "bytes": 22308
+     },
+     {
+      "slot": "normal",
+      "size": [
+       512,
+       512
+      ],
+      "mime": "image/jpeg",
+      "bytes": 22215
+     }
+    ],
+    "gpuBytesWithMips": 7340031,
+    "texturePolicy": {
+     "base": 1024,
+     "normal": 512,
+     "mr": 256,
+     "quality": 85
+    }
+   },
+   "output": {
+    "url": "assets/models/player-train-console.glb",
+    "bytes": 607856,
+    "sha256": "c0ac72b225bc0beaf2a86f22d6b714a266e9f627d0f6f2ea3f6cf904105da66a"
+   }
+  }
+ },
+ "derivation": {
+  "shell": {
+   "frame": "raw +X end = front (+X), raw -Z side = platform (-Z); no turn, no mirror",
+   "scale": {
+    "bodyXZ": 17,
+    "bodyYAboveUnderside": 19,
+    "bodyYBelowUnderside": 17,
+    "underframe": 17,
+    "bogieXY": 18.6489,
+    "bogieZ": 13.1072
+   },
+   "rawPlanes": {
+    "underside": -0.0505,
+    "sill": -0.0488,
+    "doorTop": 0.0565,
+    "wheelBottom": -0.1013,
+    "wheelTreadZ": 0.0549,
+    "bogieCentresX": [
+     0.3308,
+     -0.3313
+    ]
+   },
+   "cookedUndersideY": 0.9477,
+   "components": {
+    "total": 232,
+    "triangles": {
+     "body": 8946,
+     "bogie": [
+      4719,
+      4640
+     ],
+     "underframe": 8601,
+     "upper": 1900
+    }
+   },
+   "doorCuts": {
+    "rawX": [
+     [
+      0.2125,
+      0.276
+     ],
+     [
+      -0.0233,
+      0.0447
+     ],
+     [
+      -0.3538,
+      -0.2863
+     ]
+    ],
+    "sides": [
+     -1,
+     1
+    ],
+    "removedAreaM2": 19.687,
+    "innerSkinZ": 1.3655,
+    "recessPlaneZ": {
+     "platform": 1.38,
+     "far": 1.3836
+    },
+    "skinBesideZ": {
+     "platform": 1.4409,
+     "far": 1.4853
+    }
+   },
+   "checks": {
+    "interiorBox": 0,
+    "leafPockets": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ],
+    "openings": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
+    ]
+   },
+   "fit": {
+    "width": 2.9914,
+    "length": 16.2031,
+    "floorAbovePlatform": 0.125,
+    "doorClear": 2.001,
+    "ceilingAboveFloor": 2.27,
+    "wheelTreadZ": [
+     0.72,
+     0.72
+    ],
+    "minY": 0,
+    "platformGap": 0.507
+   },
+   "coverboardClearance": {
+    "minYAboveRailOutboard124": 0.208,
+    "coverboardTop": 0.185
+   }
+  },
+  "doorLeaf": {
+   "method": "clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)",
+   "rawZ": [
+    -0.0232,
+    0.0266
+   ],
+   "keptTriangles": 3939,
+   "scale": [
+    1.3668,
+    2.1331,
+    0.5343
+   ],
+   "frame": "grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)"
+  },
+  "console": {
+   "method": "turned -90 deg about Y (native operator side +Z -> -X), uniform scale",
+   "scale": 2.05,
+   "frame": "grounded, centred; operator side -X, windshield side +X, width along Z"
+  }
+ },
+ "textures": [
+  {
+   "id": "train-int-wall",
+   "subject": "interior side wall, one window bay (tiles along the car)",
+   "source": {
+    "file": "train-int-wall/train-int-wall-original.png",
+    "sha256": "ef79149ff7be71b108885642936d117c9d259bc4bc988b1858336c37f4387ff2",
+    "bytes": 2916991,
+    "width": 1254,
+    "height": 1254
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "threadId": "01a198d0-301a-7e62-abad-ee94bcd0efde",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T20:32:22Z",
+    "finished": "2026-11-01T20:33:13Z"
+   },
+   "prompt": "Texture of ONE window bay of the interior side wall of an old stripped subway train car, seen from inside the car: a lower wainscot of off-white painted steel panels with rivet lines, in the middle band one large rectangular window with a rounded-corner rubber gasket and dark grimy glass (nothing visible outside but darkness), an upper painted steel panel with a thin aluminium trim strip; the left and right edges are plain painted panel so the bay tiles seamlessly side by side along the car.\n\nFlat surface texture for a video game, photographed STRAIGHT-ON: the camera looks perpendicularly at the surface, orthographic-like, no perspective, no vanishing lines, even soft lighting with no strong shadows or highlights, the surface fills the entire square canvas edge to edge. Abandoned for years but structurally sound: rust stains and streaks, grime, dust, scuffs and chipped paint, not destroyed. Absolutely NO text, NO letters, NO numbers, NO logos, NO signs, NO people, NO objects in front of the surface. One single image, not a collage, no borders.\n",
+   "recipe": {
+    "resize": "1024 x 1024 lanczos3 (square source, nothing cropped)",
+    "encode": "jpeg q85 mozjpeg 4:2:0, metadata stripped"
+   },
+   "output": {
+    "url": "assets/textures/train/train-int-wall.jpg",
+    "bytes": 176202,
+    "sha256": "902e6007d8e03d0fcf818375a4ca9e72be97d735501d6d549b458dbcdeab2887",
+    "width": 1024,
+    "height": 1024
+   }
+  },
+  {
+   "id": "train-int-floor",
+   "subject": "ribbed rubber floor (tiles in 2D)",
+   "source": {
+    "file": "train-int-floor/train-int-floor-original.png",
+    "sha256": "473b39a42b81db37ef2fcec070b33a7a083e95c35c311d0b5bea9cb053cb8b3f",
+    "bytes": 3601919,
+    "width": 1254,
+    "height": 1254
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "threadId": "01a198d0-f4bb-7c81-8b89-8f605a9ef95c",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T20:33:13Z",
+    "finished": "2026-11-01T20:34:06Z"
+   },
+   "prompt": "Seamless tileable texture of a worn subway train car floor: dark charcoal ribbed rubber flooring with long parallel raised ribs, scuffed and dusty, with patches of grime, small rust stains from fittings and faint drag marks; tiles seamlessly in both directions.\n\nFlat surface texture for a video game, photographed STRAIGHT-ON: the camera looks perpendicularly at the surface, orthographic-like, no perspective, no vanishing lines, even soft lighting with no strong shadows or highlights, the surface fills the entire square canvas edge to edge. Abandoned for years but structurally sound: rust stains and streaks, grime, dust, scuffs and chipped paint, not destroyed. Absolutely NO text, NO letters, NO numbers, NO logos, NO signs, NO people, NO objects in front of the surface. One single image, not a collage, no borders.\n",
+   "recipe": {
+    "resize": "1024 x 1024 lanczos3 (square source, nothing cropped)",
+    "encode": "jpeg q85 mozjpeg 4:2:0, metadata stripped"
+   },
+   "output": {
+    "url": "assets/textures/train/train-int-floor.jpg",
+    "bytes": 273446,
+    "sha256": "676e0c1a1125f8f0936e2ac4aee04035592a3eca62f4ca4a043a01bbffd013a9",
+    "width": 1024,
+    "height": 1024
+   }
+  },
+  {
+   "id": "train-int-ceiling",
+   "subject": "vented ceiling panels (tiles in 2D)",
+   "source": {
+    "file": "train-int-ceiling/train-int-ceiling-original.png",
+    "sha256": "b32f741ef2dc92087c382d52e780989c76d9916b1f5cc86d0c7b8ccfdbc11a95",
+    "bytes": 3578465,
+    "width": 1254,
+    "height": 1254
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "threadId": "01a198d1-c556-7673-a111-b1b56f00891f",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T20:34:06Z",
+    "finished": "2026-11-01T20:34:51Z"
+   },
+   "prompt": "Seamless tileable texture of the ceiling of an old subway train car: light grey painted perforated metal ceiling panels with narrow ventilation slots along the middle and panel joints with screws, water stains and soot discolouration; tiles seamlessly in both directions.\n\nFlat surface texture for a video game, photographed STRAIGHT-ON: the camera looks perpendicularly at the surface, orthographic-like, no perspective, no vanishing lines, even soft lighting with no strong shadows or highlights, the surface fills the entire square canvas edge to edge. Abandoned for years but structurally sound: rust stains and streaks, grime, dust, scuffs and chipped paint, not destroyed. Absolutely NO text, NO letters, NO numbers, NO logos, NO signs, NO people, NO objects in front of the surface. One single image, not a collage, no borders.\n",
+   "recipe": {
+    "resize": "1024 x 1024 lanczos3 (square source, nothing cropped)",
+    "encode": "jpeg q85 mozjpeg 4:2:0, metadata stripped"
+   },
+   "output": {
+    "url": "assets/textures/train/train-int-ceiling.jpg",
+    "bytes": 301347,
+    "sha256": "b7b953e3ed2053a4f94d5c3fbdcef5f76913e119bb5cfb4819d2aeb99e9325d8",
+    "width": 1024,
+    "height": 1024
+   }
+  },
+  {
+   "id": "train-int-bulkhead",
+   "subject": "end bulkhead with a central closed door (one panel)",
+   "source": {
+    "file": "train-int-bulkhead/train-int-bulkhead-original.png",
+    "sha256": "94171e5aae6099dee5f28143b72052735ad28d3e0e51eb8787a866a1c44445a7",
+    "bytes": 3021265,
+    "width": 1254,
+    "height": 1254
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "threadId": "01a198d2-7511-7f32-93e6-c6155d93261b",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-01T20:34:51Z",
+    "finished": "2026-11-01T20:35:43Z"
+   },
+   "prompt": "Texture of the interior end wall (bulkhead) of an old subway train car, seen straight-on from inside the passenger area: off-white painted steel panelling with rivets, in the centre a narrow closed cab door with a small window of dark glass and a plain recessed handle, rust streaks running down from the seams; symmetric composition, the wall fills the frame.\n\nFlat surface texture for a video game, photographed STRAIGHT-ON: the camera looks perpendicularly at the surface, orthographic-like, no perspective, no vanishing lines, even soft lighting with no strong shadows or highlights, the surface fills the entire square canvas edge to edge. Abandoned for years but structurally sound: rust stains and streaks, grime, dust, scuffs and chipped paint, not destroyed. Absolutely NO text, NO letters, NO numbers, NO logos, NO signs, NO people, NO objects in front of the surface. One single image, not a collage, no borders.\n",
+   "recipe": {
+    "resize": "1024 x 1024 lanczos3 (square source, nothing cropped)",
+    "encode": "jpeg q85 mozjpeg 4:2:0, metadata stripped"
+   },
+   "output": {
+    "url": "assets/textures/train/train-int-bulkhead.jpg",
+    "bytes": 192123,
+    "sha256": "ce35d3b8715a9832f4f855fe6914042ab42b617b216370107e950685019c7ddb",
+    "width": 1024,
+    "height": 1024
+   }
+  }
+ ],
+ "measured": {
+  "length": 16.2031,
+  "width": 2.9914,
+  "floorY": 0.98,
+  "ceilingY": 3.25,
+  "roofY": 3.8508,
+  "interior": {
+   "x0": -7.25,
+   "x1": 7.25,
+   "halfWidth": 1.3
+  },
+  "cab": {
+   "x0": 5.05,
+   "x1": 7.25,
+   "doorway": {
+    "z0": -0.45,
+    "z1": 0.45,
+    "height": 2
+   }
+  },
+  "doors": [
+   {
+    "side": -1,
+    "x": -5.441,
+    "width": 1.147,
+    "height": 2.001
+   },
+   {
+    "side": 1,
+    "x": -5.441,
+    "width": 1.147,
+    "height": 2.001
+   },
+   {
+    "side": -1,
+    "x": 0.182,
+    "width": 1.156,
+    "height": 2.001
+   },
+   {
+    "side": 1,
+    "x": 0.182,
+    "width": 1.156,
+    "height": 2.001
+   },
+   {
+    "side": -1,
+    "x": 4.152,
+    "width": 1.08,
+    "height": 2.001
+   },
+   {
+    "side": 1,
+    "x": 4.152,
+    "width": 1.08,
+    "height": 2.001
+   }
+  ],
+  "console": {
+   "x": 6.809,
+   "z": 0,
+   "yaw": 0,
+   "scale": 1
+  },
+  "lights": {
+   "head": [
+    {
+     "x": 7.734,
+     "y": 1.362,
+     "z": -0.833
+    },
+    {
+     "x": 7.734,
+     "y": 1.362,
+     "z": 0.833
+    }
+   ],
+   "tail": [
+    {
+     "x": -7.734,
+     "y": 1.362,
+     "z": -0.833
+    },
+    {
+     "x": -7.734,
+     "y": 1.362,
+     "z": 0.833
+    }
+   ],
+   "interior": [
+    {
+     "x": -4.175,
+     "y": 3.21,
+     "z": 0
+    },
+    {
+     "x": 1.975,
+     "y": 3.21,
+     "z": 0
+    },
+    {
+     "x": 6.15,
+     "y": 3.21,
+     "z": 0
+    }
+   ],
+   "lampRadius": 0.076,
+   "marker": {
+    "front": [
+     {
+      "x": 7.734,
+      "y": 3.256,
+      "z": -0.833
+     },
+     {
+      "x": 7.734,
+      "y": 3.256,
+      "z": 0.833
+     }
+    ],
+    "rear": [
+     {
+      "x": -7.734,
+      "y": 3.256,
+      "z": -0.833
+     },
+     {
+      "x": -7.734,
+      "y": 3.256,
+      "z": 0.833
+     }
+    ]
+   }
+  },
+  "doorLeaf": {
+   "outerZ": 1.359,
+   "width": 0.608,
+   "height": 2.031,
+   "thickness": 0.045
+  }
+ }
+}
