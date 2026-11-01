@@ -58,12 +58,16 @@ beforeAll(async () => { models = await openableModels(); }, 120000);
 /**
  * Fresh New Game runs: a tunnel annex (Subway: two caches in one large annex) and an Office annex pair; the Mall in the opt-in sample.
  * (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old 1043 / 222 roll it absent — FRESH holds
- * the first seeds at / after them rolling PRESENT in the same role, tests/helpers/btsArea.ts. Those two alone were no representative
- * sample of hideouts (1 / 5 with the camp table vs ~0.8 over 30 Subway + 15 Office present levels: two-cache annexes furnish their
- * second cache more sparsely), so the sample also takes the first three Subway / two Office seeds at / after 1043 / 222 that roll
- * the area PRESENT (224 = FRESH.office): 6 levels, 14 hideouts — larger than the old sample, never smaller.)
+ * the first seeds at / after them rolling PRESENT in the same role, tests/helpers/btsArea.ts.)
  */
-const SAMPLE: readonly [LevelId, number][] = [
+const SAMPLE: readonly [LevelId, number][] = [['subway', FRESH.subwayTunnel], ['office', FRESH.office]];
+/**
+ * (lane AREA) The hideout SHARES ("most hideouts", lots per hideout) over a larger sample: the two replacements alone were no
+ * representative sample of hideouts (1 / 5 with the camp table vs ~0.8 over 30 Subway + 15 Office present levels: two-cache annexes
+ * furnish their second cache more sparsely), so these two tests also take the first three Subway / two Office seeds at / after
+ * 1043 / 222 that roll the area PRESENT (224 = FRESH.office): 6 levels, 14 hideouts — larger than the old sample, never smaller.
+ */
+const HIDEOUTS: readonly [LevelId, number][] = [
   ['subway', FRESH.subwayTunnel], ...presentSeeds(3, i => 1043 + i).map(s => ['subway', s] as [LevelId, number]),
   ...presentSeeds(2, i => 222 + i).map(s => ['office', s] as [LevelId, number]),
 ];
@@ -117,7 +121,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
     }
     expect(openableSpec('footlocker')!.parts[0].move).toMatchObject({type: 'hinge', axis: 'x'});
     let caches = 0, tables = 0, beside = 0, annexes = 0;
-    for (const [level, seed] of SAMPLE) {
+    for (const [level, seed] of HIDEOUTS) {
       const {layout} = fresh(level, seed);
       annexes += layout.extensions?.annexes.length ?? 0;
       for (const c of annexCachesOf(layout)) {
@@ -165,7 +169,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
 
   it('substantial loot: packed lots (ContainerManager.build + the level profile), their own tables, no material / gear / weapon, ammo only in the crate / footlocker', () => {
     let caches = 0, lots = 0;
-    for (const [level, seed] of SAMPLE) {
+    for (const [level, seed] of HIDEOUTS) {
       const {layout, cm} = fresh(level, seed);
       for (const c of annexCachesOf(layout)) {
         caches++;
