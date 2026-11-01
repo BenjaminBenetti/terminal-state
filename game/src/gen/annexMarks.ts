@@ -35,10 +35,17 @@ export const CACHE_MARKS = {
   arrow: {w: 0.9, h: 0.45, y: 1.5},
   hideout: {w: 1.0, h: 0.5, y: 1.55},
   tally: {w: 0.8, h: 0.4, y: 1.35},
+  /** A doorway whose wall has no room for the full mark (a doorway filling a narrow end wall, flanked by other doorways) gets a SMALL one. */
+  small: {w: 0.6, h: 0.3, frameGap: 0.15},
   /** Gap from a doorway's opening to the mark (the frame trim + a hand's width). */
   frameGap: 0.3,
   /** Slide along the wall away from the doorway in `step` m steps up to `slide` m when the first spot is taken. */
-  step: 0.25, slide: 1.0,
+  step: 0.25, slide: 2.0,
+  /**
+   * A doorway this close to a corner (m) may be marked on the perpendicular wall at that corner instead (the arrow points into the
+   * corner; at the corner the doorway is the nearest one on the wall meeting it there — corridors: its far end).
+   */
+  cornerReach: 6.0,
   /** A prop within this distance of the wall plane (m) that reaches the mark's height blocks it. */
   propReach: 0.6,
   /** Keep this far from a corner (m) and from the ceiling (m); this far from a steam vent (m); between two marks on one wall (m). */
@@ -131,7 +138,9 @@ export function planCacheMarks(layout: StationLayout, n: ServiceAnnex, caches: r
   const signs = layout.signs.filter(sg => sg.x >= box.x0 && sg.x <= box.x1 && sg.z >= box.z0 && sg.z <= box.z1);
   const vents = (layout.extensions?.vents ?? []).filter(v => ids.has(v.area));
   const K = path.doors.length;
-  const ctx: MarkCtx = {layout, n, rng, out, propsOf, signs, vents};
+  const doorsOf = new Map<number, number[]>();
+  layout.doors.forEach((d, i) => { if (d.a === d.b) return; for (const id of [d.a, d.b]) if (ids.has(id)) { let l = doorsOf.get(id); if (!l) doorsOf.set(id, (l = [])); l.push(i); } });
+  const ctx: MarkCtx = {layout, n, rng, out, propsOf, signs, vents, doorsOf};
   for (let i = 0; i < K; i++) {
     const a = layout.areas[path.areas[i]], d = path.doors[i];
     const junction = (degree.get(a.id) ?? 0) >= 3;
@@ -157,30 +166,46 @@ export function planCacheMarks(layout: StationLayout, n: ServiceAnnex, caches: r
 interface MarkCtx {
   layout: StationLayout; n: ServiceAnnex; rng: Rng; out: CacheMark[]; propsOf: Map<number, number[]>;
   signs: readonly StationLayout['signs'][number][]; vents: readonly {x: number; y: number; z: number}[];
+  /** Each annex area's doorways (layout.doors indices; a hatch's a === b entry left out). */
+  doorsOf: Map<number, number[]>;
 }
 
 /** A trail mark in area `a` beside door `di` (leading to `next`): the doorway's wall, else a perpendicular wall at a corner it meets. */
 function placeDoorMark(ctx: MarkCtx, a: Area, di: number, next: number, kind: 'arrow' | 'hideout', step: number): boolean {
-  const M = CACHE_MARKS, d = ctx.layout.doors[di], S = kind === 'hideout' ? M.hideout : M.arrow;
+  const M = CACHE_MARKS, d = ctx.layout.doors[di], full = kind === 'hideout' ? M.hideout : M.arrow;
   const side = doorSide(d, a), f = wallFrame(a, side), [d0, d1] = doorSpan(d, side), [lo, hi] = wallRange(a, side);
   const dc = (d0 + d1) / 2;
   const sides = ctx.rng.chance(0.5) ? [1, -1] : [-1, 1];
-  // 1. the doorway's own wall, beside its frame
+  // the area's other doorways by wall: a mark is never read past one (no other opening between the mark and what it points at)
+  const mine = ctx.doorsOf.get(a.id) ?? [], bySide = new Map<Side, [number, number][]>();
+  const others = (s: Side) => {
+    let l = bySide.get(s);
+    if (!l) bySide.set(s, (l = mine.filter(i => i !== di && doorSide(ctx.layout.doors[i], a) === s).map(i => doorSpan(ctx.layout.doors[i], s))));
+    return l;
+  };
+  const clearBetween = (s: Side, c: number, to: number) => others(s).every(([q0, q1]) => q1 <= Math.min(c, to) || q0 >= Math.max(c, to));
+  // the full mark everywhere first, then the small one
+  for (const [S, gap] of [[full, M.frameGap], [{...full, w: M.small.w, h: M.small.h}, M.small.frameGap]] as const) {
+  // 1. the doorway's own wall, beside its frame (sliding away from it while no other doorway comes between)
   for (let k = 0; k * M.step <= M.slide + 1e-9; k++) for (const sg of sides) {
-    const c = sg > 0 ? d1 + M.frameGap + S.w / 2 + k * M.step : d0 - M.frameGap - S.w / 2 - k * M.step;
-    if (tryMark(ctx, a, f, c, S, kind, di, next, step, kind === 'arrow' ? arrowDir(f.axis, f.n, c, dc) : null)) return true;
+    const c = sg > 0 ? d1 + gap + S.w / 2 + k * M.step : d0 - gap - S.w / 2 - k * M.step;
+    if (!clearBetween(side, c, dc)) continue;
+    if (tryMark(ctx, a, f, c, S, kind, di, next, step, kind === 'arrow' ? arrowDir(f.axis, f.n, c, dc) : null, gap)) return true;
   }
-  // 2. a perpendicular wall at a corner the doorway meets (within 1.2 m of its edge): the arrow points into that corner
+  // 2. a perpendicular wall at a corner the doorway meets (within `cornerReach` of its edge): the arrow points into that corner (no
+  // other doorway on that wall between the mark and the corner, none on the doorway's wall between the corner and the doorway)
   for (const [corner, edge] of [[lo, d0], [hi, d1]] as const) {
-    if (Math.abs(edge - corner) > 1.2) continue;
+    if (Math.abs(edge - corner) > M.cornerReach || !clearBetween(side, corner, dc)) continue;
     const ps: Side = side === 'N' || side === 'S' ? (corner === lo ? 'W' : 'E') : (corner === lo ? 'N' : 'S');
     const pf = wallFrame(a, ps), [plo, phi] = wallRange(a, ps);
     const near = (side === 'N' || side === 'W') ? plo : phi; // the end of the perpendicular wall at this corner (where the doorway's wall is)
     const into = near === plo ? 1 : -1;
     for (let k = 0; k * M.step <= M.slide + 1e-9; k++) {
       const c = near + into * (M.corner + 0.15 + S.w / 2 + k * M.step);
-      if (tryMark(ctx, a, pf, c, S, kind, di, next, step, kind === 'arrow' ? arrowDir(pf.axis, pf.n, c, near) : null)) return true;
+      if (!clearBetween(ps, c, near)) continue;
+      if (tryMark(ctx, a, pf, c, S, kind, di, next, step, kind === 'arrow' ? arrowDir(pf.axis, pf.n, c, near) : null, gap)) return true;
     }
+  }
   }
   return false;
 }
@@ -188,7 +213,7 @@ function placeDoorMark(ctx: MarkCtx, a: Area, di: number, next: number, kind: 'a
 /** The survivor's tally inside the hideout: a wall without a doorway first, centred-ish, any valid spot. */
 function placeTally(ctx: MarkCtx, a: Area, step: number): boolean {
   const M = CACHE_MARKS, S = M.tally;
-  const doorSides = new Set(ctx.layout.doors.filter(d => (d.a === a.id || d.b === a.id) && d.a !== d.b).map(d => doorSide(d, a)));
+  const doorSides = new Set((ctx.doorsOf.get(a.id) ?? []).map(i => doorSide(ctx.layout.doors[i], a)));
   const order = (['N', 'S', 'W', 'E'] as Side[]).sort((p, q) => Number(doorSides.has(p)) - Number(doorSides.has(q)));
   for (const s of order) {
     const f = wallFrame(a, s), [lo, hi] = wallRange(a, s), spots: number[] = [];
@@ -199,7 +224,7 @@ function placeTally(ctx: MarkCtx, a: Area, step: number): boolean {
 }
 
 /** Validates one spot (the header's placement rule) and appends the record. */
-function tryMark(ctx: MarkCtx, a: Area, f: {axis: 'x' | 'z'; plane: number; n: 1 | -1}, c: number, S: {w: number; h: number; y: number}, kind: CacheMark['kind'], door: number, next: number, step: number, dir: 'left' | 'right' | null): boolean {
+function tryMark(ctx: MarkCtx, a: Area, f: {axis: 'x' | 'z'; plane: number; n: 1 | -1}, c: number, S: {w: number; h: number; y: number}, kind: CacheMark['kind'], door: number, next: number, step: number, dir: 'left' | 'right' | null, frameGap: number = CACHE_MARKS.frameGap): boolean {
   const M = CACHE_MARKS, layout = ctx.layout;
   const g = levelGrid(layout, a.level ?? 0);
   const side: Side = f.axis === 'z' ? (f.n > 0 ? 'N' : 'S') : (f.n > 0 ? 'W' : 'E');
@@ -210,7 +235,7 @@ function tryMark(ctx: MarkCtx, a: Area, f: {axis: 'x' | 'z'; plane: number; n: 1
   const front = (side === 'N' ? a.y : side === 'S' ? a.y + a.h - 1 : side === 'W' ? a.x : a.x + a.w - 1);
   const back = (side === 'N' ? a.y - 1 : side === 'S' ? a.y + a.h : side === 'W' ? a.x - 1 : a.x + a.w);
   const cellAt = (along: number, across: number) => (f.axis === 'z' ? [along, across] : [across, along]) as [number, number];
-  const k0 = Math.floor((c0 - M.frameGap + 0.05) / CELL), k1 = Math.floor((c1 + M.frameGap - 0.05) / CELL);
+  const k0 = Math.floor((c0 - frameGap + 0.05) / CELL), k1 = Math.floor((c1 + frameGap - 0.05) / CELL);
   for (let k = k0; k <= k1; k++) {
     const [bx, by] = cellAt(k, back);
     if (!g.inBounds(bx, by) || g.cells[g.idx(bx, by)] !== SOLID) return false;
@@ -229,6 +254,8 @@ function tryMark(ctx: MarkCtx, a: Area, f: {axis: 'x' | 'z'; plane: number; n: 1
   // other marks on this wall
   for (const m of ctx.out) if (m.axis === f.axis && Math.abs(m.plane - f.plane) < 0.05 && m.n === f.n && c0 < m.c + m.w / 2 + M.gap && c1 > m.c - m.w / 2 - M.gap) return false;
   const [mx, mz] = f.axis === 'z' ? [c, f.plane] : [f.plane, c];
+  // a door mark must READ as its own doorway (readMarkDoor: what a player sees), else the spot is not used
+  if (kind !== 'tally' && readMarkDoor(layout, a, {kind, axis: f.axis, n: f.n, c, w: S.w, dir}, ctx.doorsOf.get(a.id)) !== door) return false;
   // the mark's height: its own first, then lower / higher (a door plate or a wall-hung fixture beside the doorway)
   for (const dy of M.heights) {
     const y = floorY + S.y + dy, y0 = y - S.h / 2, y1 = y + S.h / 2;
@@ -280,6 +307,44 @@ function ceilOver(g: Grid, a: Area, f: {axis: 'x' | 'z'}, c0: number, c1: number
 }
 
 /**
+ * READING a mark like a player (the trail's contract; the planner keeps only spots that read as their own doorway, tests/helpers
+ * cacheMarks.ts follows the trail with it): from what a player SEES only — the mark's wall, its place on it, its arrow. An ARROW points
+ * along its wall at the nearest doorway of the area in its direction on that wall, else (it points into a corner) at the doorway
+ * nearest that corner (within cornerReach) on the wall meeting it there; a HIDEOUT mark marks the nearest doorway on its wall (within
+ * frameGap + slide of its edge), else the doorway nearest the closer corner. -1: nothing readable (a tally, no doorway).
+ */
+export function readMarkDoor(layout: StationLayout, a: Area, m: Pick<CacheMark, 'kind' | 'axis' | 'n' | 'c' | 'w' | 'dir'>, areaDoors?: readonly number[]): number {
+  if (m.kind === 'tally') return -1;
+  const M = CACHE_MARKS;
+  const side: Side = m.axis === 'z' ? (m.n > 0 ? 'N' : 'S') : (m.n > 0 ? 'W' : 'E');
+  let doors = areaDoors;
+  if (!doors) { const l: number[] = []; layout.doors.forEach((d, i) => { if ((d.a === a.id || d.b === a.id) && d.a !== d.b) l.push(i); }); doors = l; }
+  const onWall = (s: Side) => doors.filter(i => doorSide(layout.doors[i], a) === s).map(i => {
+    const [d0, d1] = doorSpan(layout.doors[i], s);
+    return {i, d0, d1, c: (d0 + d1) / 2};
+  });
+  const same = onWall(side), [lo, hi] = wallRange(a, side);
+  const corner = (end: number): number => {
+    const meet: Side = m.axis === 'z' ? (end === lo ? 'W' : 'E') : (end === lo ? 'N' : 'S');
+    const at = side === 'N' ? a.y * CELL : side === 'S' ? (a.y + a.h) * CELL : side === 'W' ? a.x * CELL : (a.x + a.w) * CELL;
+    let best = -1, bd = Infinity;
+    for (const d of onWall(meet)) { const dist = Math.min(Math.abs(d.d0 - at), Math.abs(d.d1 - at)); if (dist < bd) { bd = dist; best = d.i; } }
+    return bd <= M.cornerReach + 1e-6 ? best : -1;
+  };
+  if (m.kind === 'arrow' && m.dir) {
+    // the viewer's right along the wall axis: an X-wall (axis 'z') +x * n, a Z-wall (axis 'x') -z * n
+    const sgn = (m.dir === 'right' ? 1 : -1) * (m.axis === 'z' ? m.n : -m.n);
+    let best = -1, bd = Infinity;
+    for (const d of same) { const s = (d.c - m.c) * sgn; if (s > 0 && s < bd) { bd = s; best = d.i; } }
+    return best >= 0 ? best : corner(sgn > 0 ? hi : lo);
+  }
+  let best = -1, bd = Infinity;
+  for (const d of same) { const s = Math.max(0, Math.max(d.d0 - (m.c + m.w / 2), (m.c - m.w / 2) - d.d1)); if (s < bd) { bd = s; best = d.i; } }
+  if (best >= 0 && bd <= M.frameGap + M.slide + 1e-6) return best;
+  return corner(Math.abs(m.c - lo) < Math.abs(m.c - hi) ? lo : hi);
+}
+
+/**
  * Invariants of the trail records (tests): every mark lies on rock behind / its area's floor in front, inside its wall, under the
  * ceiling; a trail mark sits on the wall of a doorway of its area (or a perpendicular wall at a corner it meets) that leads to `next`,
  * its arrow pointing at that doorway (or into the corner). Returns the issues (empty = valid).
@@ -295,12 +360,20 @@ export function cacheMarkIssues(layout: StationLayout): string[] {
     const [lo, hi] = wallRange(a, side);
     if (m.c - m.w / 2 < lo - 1e-3 || m.c + m.w / 2 > hi + 1e-3) out.push(`mark ${i}: off its wall`);
     if (m.kind === 'tally') return;
+    if (readMarkDoor(layout, a, m) !== m.door) out.push(`mark ${i}: reads as doorway ${readMarkDoor(layout, a, m)}, not its own ${m.door}`);
     const d = layout.doors[m.door];
     if (!d || !((d.a === m.area && d.b === m.next) || (d.b === m.area && d.a === m.next))) { out.push(`mark ${i}: door ${m.door} does not join ${m.area} -> ${m.next}`); return; }
     const ds = doorSide(d, a), [d0, d1] = doorSpan(d, ds);
     if (ds === side) {
-      if (m.c + m.w / 2 > d0 - 0.2 + 1e-3 && m.c - m.w / 2 < d1 + 0.2 - 1e-3) out.push(`mark ${i}: over its doorway`);
+      const fg = Math.min(CACHE_MARKS.frameGap, CACHE_MARKS.small.frameGap); // clear of the doorway's frame
+      if (m.c + m.w / 2 > d0 - fg + 1e-3 && m.c - m.w / 2 < d1 + fg - 1e-3) out.push(`mark ${i}: over its doorway`);
       if (Math.min(Math.abs(m.c - d0), Math.abs(m.c - d1)) > m.w / 2 + CACHE_MARKS.frameGap + CACHE_MARKS.slide + 1e-3) out.push(`mark ${i}: not beside its doorway`);
+      // no other doorway of the area between the mark and its own
+      for (const [j, q] of layout.doors.entries()) {
+        if (j === m.door || q.a === q.b || (q.a !== a.id && q.b !== a.id) || doorSide(q, a) !== side) continue;
+        const [q0, q1] = doorSpan(q, side), lo2 = Math.min(m.c, (d0 + d1) / 2), hi2 = Math.max(m.c, (d0 + d1) / 2);
+        if (q1 > lo2 + 1e-6 && q0 < hi2 - 1e-6) out.push(`mark ${i}: doorway ${j} between it and its doorway`);
+      }
       if (m.kind === 'arrow' && m.dir !== arrowDir(m.axis, m.n, m.c, (d0 + d1) / 2)) out.push(`mark ${i}: arrow does not point at its doorway`);
     } else if (m.kind === 'arrow') {
       const [plo, phi] = wallRange(a, side), near = (ds === 'N' || ds === 'W') ? plo : phi;

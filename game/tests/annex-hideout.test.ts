@@ -332,8 +332,10 @@ describe.runIf(!!process.env.HIDEOUT_SAMPLE)('the guarantee over a broad sample 
         census.annexes++;
         const mine = caches.filter(c => c.annex === n.id);
         if (!mine.length) { census.without++; out.push(`WITHOUT ${level} ${seed} annex ${n.id}`); continue; }
-        const walk = followTrail(l, annexEntryArea(l, n), mine[0].area);
+        const walk = followTrail(l, annexEntryArea(l, n), new Set(mine.map(c => c.area))); // any of the annex's caches is a payoff
         if (walk.arrived) census.arrived++;
+        else out.push(`NOT ARRIVED ${level} ${seed} annex ${n.id}: lost in area ${walk.lost} (${l.areas[walk.lost ?? 0]?.kind} ${l.areas[walk.lost ?? 0]?.purpose}) after ${walk.areas.length} areas; missed ${cacheMarkReportsOf(l).find(r => r.annex === n.id)?.missed}`);
+        if (mine[0].lantern < 0) out.push(`NO LANTERN ${level} ${seed} annex ${n.id} area ${mine[0].area} (${l.areas[mine[0].area].purpose}, ${l.areas[mine[0].area].w}x${l.areas[mine[0].area].h})`);
       }
       for (const c of caches) {
         census.caches++; census.tiers[c.tier] = (census.tiers[c.tier] ?? 0) + 1; census.holders += c.holders.length;

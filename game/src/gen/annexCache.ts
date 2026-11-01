@@ -305,7 +305,7 @@ function buildCache(ctx: PlaceCtx, layout: StationLayout, n: ServiceAnnex, a: Ar
   // no table: the lantern on the floor at the bed's head (else its foot, else any wall)
   if (!lantern) {
     lantern = besideBed(ctx, a, bed, C.lantern.kind, -1, 0.12) ?? besideBed(ctx, a, bed, C.lantern.kind, 1, 0.12) ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES)?.p
-      ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES, 0)?.p ?? null; // a 17 cm lantern needs no access strip: any free wall cell
+      ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES, 0)?.p ?? onFloor(ctx, a, C.lantern.kind) ?? null; // a 17 cm lantern needs no access strip
     if (lantern) (lantern as PropPlacement).variant = rng.int(0, 11);
   }
   // 5. camp things: the level's loaded iteration-07 kinds whose own wall placement spec allows this room's purpose (the p7 contract)
@@ -451,10 +451,34 @@ function atWall(ctx: PlaceCtx, a: Area, kind: PropKind, side: Side, along: numbe
   const def = PROP_DEFS[kind], base = areaBase(ctx.layout, a);
   const [lo, hi] = wallRange(a, side);
   if (along - def.w / 2 < lo + 0.02 || along + def.w / 2 > hi - 0.02) return null;
-  if (!strictWallOk(ctx, a, side, along, kind)) return null;
   const s = wallSpot(a, side, along, kind), {hx, hz} = footprint(kind, s.rot);
+  // cheap first: every footprint cell free floor of the room (tryPlaceProp's own first test; most taken spots fail here)
+  const g = ctx.g, [x0, y0, x1, y1] = cellsOfBox(s.x, s.z, hx, hz);
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+    if (!g.inBounds(cx, cy)) return null;
+    const i = g.idx(cx, cy);
+    if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.keep[i] || ctx.doorCell[i]) return null;
+  }
+  if (!strictWallOk(ctx, a, side, along, kind)) return null;
   if (propBlocksDoorway(ctx.layout, s.x, s.z, hx, hz, base, def.h)) return null;
   return tryPlaceProp(ctx, a, kind, s.x, s.z, s.rot, {front});
+}
+
+/**
+ * (round 3) A small loose prop on any free floor cell of the room (seeded order; tryPlaceProp's own checks: no keep / door / blocked
+ * cell, room connectivity): the lantern's last resort when every wall spot is taken.
+ */
+function onFloor(ctx: PlaceCtx, a: Area, kind: PropKind): PropPlacement | null {
+  const cells: [number, number][] = [];
+  for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) cells.push([x, y]);
+  const base = areaBase(ctx.layout, a), def = PROP_DEFS[kind];
+  for (const [x, y] of ctx.rng.shuffle(cells)) {
+    const px = (x + 0.5) * CELL, pz = (y + 0.5) * CELL, {hx, hz} = footprint(kind, 0);
+    if (propBlocksDoorway(ctx.layout, px, pz, hx, hz, base, def.h)) continue;
+    const p = tryPlaceProp(ctx, a, kind, px, pz, 0, {front: 0});
+    if (p) return p;
+  }
+  return null;
 }
 
 /**
