@@ -12,6 +12,10 @@
 //   attack-hit.png       Attack around the hit frame (top / front / side) with the claw tip path and the reach
 //   clearance-worst.png  the clearance audit's worst frames (sidecar verification.clearance)
 //   beside-zombie.png    beside the runtime-scale zombie (front, side) + top-down collider vs a 1.0 m doorway
+//   textured.png         lit + normal-mapped (lib/strainer-texture-render.mjs) bind front / back / 3/4, two clip poses, crown
+//                        close-ups (the Codex-projected maps; texture QA of lane TEXTURE)
+//   normal-check.png     the same close-ups with the normal map off / on + a synthetic dome quad (bump direction check)
+//   --glb FILE           render another GLB (default: the written runtime GLB)
 import fs from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
@@ -22,11 +26,13 @@ import {JOINTS} from '../../zombie/lib/skeleton.mjs';
 import {skinPositions} from '../../zombie/lib/glb.mjs';
 import {qMul, qRot, V} from '../../zombie/lib/pose.mjs';
 import {Canvas, project, dot, line, hline, drawSkeleton, composeGrid} from '../lib/qa-render.mjs';
+import {LitCanvas, skinNormals} from '../lib/strainer-texture-render.mjs';
+import {normalFromGradient} from '../lib/strainer-texture-bake.mjs';
 
 const argOut = process.argv.indexOf('--out');
 const OUT = path.resolve(argOut > 0 ? process.argv[argOut + 1] : path.join(REPO, 'qa-artifacts/strainer'));
 const only = (i => i > 0 ? new Set(process.argv[i + 1].split(',')) : null)(process.argv.indexOf('--only'));
-const GLB = path.join(REPO, 'game/public/assets/models/enemy-strainer.glb');
+const GLB = (i => (i > 0 ? path.resolve(process.argv[i + 1]) : path.join(REPO, 'game/public/assets/models/enemy-strainer.glb')))(process.argv.indexOf('--glb'));
 const ZOMBIE = path.join(REPO, 'game/public/assets/models/zombie-body-lastshift-t25.glb');
 const SIDECAR = path.join(REPO, 'game/public/assets/derivatives/enemy-strainer.json');
 
@@ -52,8 +58,10 @@ async function loadSkinned(file) {
     const A = s => prim.getAttribute(s);
     const wA = A('WEIGHTS_0'), wArr = wA.getArray(), weights = wA.getNormalized() ? Float32Array.from(wArr, v => v / 255) : Float32Array.from(wArr);
     const mat = prim.getMaterial();
-    meshes.push({name: node.getName(), pos: Float32Array.from(A('POSITION').getArray()), uv: Float32Array.from(A('TEXCOORD_0').getArray()), idx: Uint32Array.from(prim.getIndices().getArray()),
-      joints: Uint16Array.from(A('JOINTS_0').getArray()), weights, tex: mat.getBaseColorTexture() ? await decode(mat.getBaseColorTexture()) : null});
+    const nA = A('NORMAL'), nrm = nA ? Float32Array.from(nA.getArray(), v => (nA.getNormalized() ? Math.max(-1, v / 127) : v)) : null;
+    meshes.push({name: node.getName(), pos: Float32Array.from(A('POSITION').getArray()), nrm, uv: Float32Array.from(A('TEXCOORD_0').getArray()), idx: Uint32Array.from(prim.getIndices().getArray()),
+      joints: Uint16Array.from(A('JOINTS_0').getArray()), weights, tex: mat.getBaseColorTexture() ? await decode(mat.getBaseColorTexture()) : null,
+      normalTex: mat.getNormalTexture() ? await decode(mat.getNormalTexture()) : null, mrTex: mat.getMetallicRoughnessTexture() ? await decode(mat.getMetallicRoughnessTexture()) : null});
   }
   const clips = root.listAnimations().map(a => {
     const tracks = {};
@@ -80,7 +88,8 @@ function fk(M, clip, f) {
   }
   return world;
 }
-const posed = (M, clip, f) => { const w = fk(M, clip, f); return {world: w, meshes: M.meshes.map(m => ({...m, pos: skinPositions(m, {joints: M.bind}, w)}))}; };
+const posed = (M, clip, f) => { const w = fk(M, clip, f); return {world: w, meshes: M.meshes.map(m => ({...m, pos: skinPositions(m, {joints: M.bind}, w), nrm: m.nrm && skinNormals(m, w, JOINTS.map(j => j[0]))}))}; };
+const litMesh = m => ({pos: m.pos, nrm: m.nrm, uv: m.uv, idx: m.idx, base: m.tex, normal: m.normalTex, mr: m.mrTex});
 const bboxOf = meshes => { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity]; for (const m of meshes) for (let i = 0; i < m.pos.length; i += 3) for (let k = 0; k < 3; k++) { lo[k] = Math.min(lo[k], m.pos[i + k]); hi[k] = Math.max(hi[k], m.pos[i + k]); } return {lo, hi}; };
 const drawMeshes = (c, cam, meshes) => { for (const m of meshes) c.draw({pos: m.pos, idx: m.idx, uv: m.uv, tex: m.tex}, cam); };
 
@@ -237,6 +246,64 @@ async function main() {
     }
     const f = path.join(OUT, 'stretch.png');
     await composeGrid(cells, {cols: 4, title: 'Strainer triangle stretch (posed / bind edge): grey < 1.66x, yellow < 2.3x, red above; the worst frame per clip', file: f});
+    written.push(f);
+  }
+  if (want('textured')) {
+    const cells = [], bp = posed(M, null, 0);
+    for (const [yaw, lab] of [[0, 'bind front'], [180, 'bind back'], [35, 'bind 3/4 front'], [215, 'bind 3/4 back']]) {
+      const c = new LitCanvas(470, 560), cam = {yawDeg: yaw, cx: 0, cy: 1.1, cz: 0, height: 2.3};
+      for (const m of bp.meshes) c.draw(litMesh(m), cam);
+      cells.push({canvas: c, label: lab});
+    }
+    for (const [cn, t, yaw, lab] of [['Walk', 0.45, 30, 'Walk'], ['Attack', null, 330, 'Attack hit']]) {
+      const clip = M.clips.find(c => c.name === cn), f = t == null ? clip.times.findIndex(x => Math.abs(x - X.attackHitTime) < 1e-3) : clip.times.findIndex(x => Math.abs(x - t) < 0.017);
+      const p = posed(M, clip, f), bb = bboxOf(p.meshes), c = new LitCanvas(470, 560);
+      const cam = {yawDeg: yaw, cx: (bb.lo[0] + bb.hi[0]) / 2, cy: 1.1, cz: (bb.lo[2] + bb.hi[2]) / 2, height: 2.4};
+      for (const m of p.meshes) c.draw(litMesh(m), cam);
+      cells.push({canvas: c, label: `${lab} t=${clip.times[f].toFixed(2)} yaw ${yaw}`});
+    }
+    for (const [yaw, lab] of [[20, 'crown 3/4 front'], [200, 'crown 3/4 back']]) {
+      const c = new LitCanvas(470, 560), cam = {yawDeg: yaw, cx: 0, cy: 1.72, cz: 0.15, height: 0.95};
+      for (const m of bp.meshes) c.draw(litMesh(m), cam);
+      cells.push({canvas: c, label: lab});
+    }
+    const f = path.join(OUT, 'textured.png');
+    await composeGrid(cells, {cols: 4, title: 'Strainer textured (Codex-projected base colour + derived normal / roughness; CPU lit, normal-mapped)', file: f});
+    written.push(f);
+  }
+  if (want('texdetail')) {
+    // close-ups of the regions projection covers worst: crown top, under the crown, arm undersides, hands, armpit / flank,
+    // inner thighs, feet, idle pose from a player's eye height
+    const cells = [], bp = posed(M, null, 0);
+    const idle = posed(M, M.clips.find(c => c.name === 'Idle'), 0);
+    const views = [[bp, 180, 0, 2.0, -0.05, 0.6, 'crown top from behind'], [bp, 0, 0, 1.75, 0.3, 0.6, 'under the crown (front)'], [bp, 90, 0.55, 1.45, 0, 0.8, 'L arm side (from +X)'],
+      [bp, 0, 0.95, 1.0, 0.1, 0.6, 'L hand front'], [bp, 180, -0.95, 1.0, 0.1, 0.6, 'R hand back'], [bp, 60, 0.3, 1.45, 0, 0.7, 'L flank / armpit 3/4'],
+      [bp, 10, 0, 0.75, 0, 0.8, 'thighs / knees front'], [bp, 30, 0, 0.15, 0.1, 0.45, 'feet 3/4'], [idle, 20, 0, 1.3, 0, 2.3, 'Idle from 1.6 m (3/4)'], [idle, 160, 0, 1.3, 0, 2.3, 'Idle back 3/4']];
+    for (const [P_, yaw, cx, cy, cz, hh, lab] of views) {
+      const c = new LitCanvas(380, 420), cam = {yawDeg: yaw, cx, cy, cz, height: hh};
+      for (const m of P_.meshes) c.draw(litMesh(m), cam);
+      cells.push({canvas: c, label: lab});
+    }
+    const f = path.join(OUT, 'texdetail.png');
+    await composeGrid(cells, {cols: 5, title: 'Strainer texture close-ups (projection coverage stress regions)', file: f});
+    written.push(f);
+  }
+  if (want('normalcheck')) {
+    const cells = [], bp = posed(M, null, 0);
+    for (const nmOn of [false, true]) for (const [yaw, cy, hh, lab] of [[10, 1.75, 0.6, 'crown / ribs'], [190, 1.5, 0.7, 'back / spine'], [25, 0.7, 0.6, 'knee']]) {
+      const c = new LitCanvas(380, 380), cam = {yawDeg: yaw, cx: yaw === 25 ? 0.15 : 0, cy, cz: 0.1, height: hh};
+      for (const m of bp.meshes) c.draw(litMesh(m), cam, {normalMap: nmOn});
+      cells.push({canvas: c, label: `${lab}: normal map ${nmOn ? 'ON' : 'off'} (key light upper left)`});
+    }
+    // synthetic dome through the bake's own normal encoder on a glTF-UV quad (u -> +X, v -> -Y): lit upper-left = raised
+    const S = 64, img = new Uint8Array(S * S * 4), hgt = (x, y) => Math.exp(-((x - 32) ** 2 + (y - 32) ** 2) / 120);
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) { const nv = normalFromGradient((hgt(x + 1, y) - hgt(x - 1, y)) / 2, (hgt(x, y + 1) - hgt(x, y - 1)) / 2, 6, 0.9); img.set([(nv[0] * 0.5 + 0.5) * 255, (nv[1] * 0.5 + 0.5) * 255, (nv[2] * 0.5 + 0.5) * 255, 255], (y * S + x) * 4); }
+    const quad = {pos: Float32Array.from([-0.5, 0.5, 0, 0.5, 0.5, 0, 0.5, -0.5, 0, -0.5, -0.5, 0]), nrm: Float32Array.from([0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1]), uv: Float32Array.from([0, 0, 1, 0, 1, 1, 0, 1]), idx: Uint32Array.from([0, 2, 1, 0, 3, 2]),
+      base: {data: new Uint8Array(S * S * 4).fill(170), width: S, height: S}, normal: {data: img, width: S, height: S}};
+    const c = new LitCanvas(380, 380); c.draw(quad, {yawDeg: 0, cx: 0, cy: 0, cz: 0, height: 1.2});
+    cells.push({canvas: c, label: 'synthetic dome (bake encoder): bright upper-left = raised'});
+    const f = path.join(OUT, 'normal-check.png');
+    await composeGrid(cells, {cols: 3, title: 'Normal map direction check (glTF convention; three.js derivative tangents)', file: f});
     written.push(f);
   }
   if (want('beside')) {

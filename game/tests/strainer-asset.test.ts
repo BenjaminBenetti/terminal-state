@@ -1,4 +1,5 @@
-// Task studio-alpha-beyond-station-round4-20261101-01 (lane ASSET): the Strainer runtime derivative (enemy-strainer.glb) —
+// Task studio-alpha-beyond-station-round4-20261101-01 (lane ASSET; textures: lane TEXTURE of the compliance follow-up, Codex
+// projection bake) : the Strainer runtime derivative (enemy-strainer.glb) —
 // the locally rigged / animated derivative of the accepted Meshy T2.5 image-to-3D body, its GLB extras contract (height,
 // headshot sphere, claw reach / hit frame, clips) and its provenance sidecar / allowlist / credits. Runtime-independent: the
 // GLB is parsed by three's GLTFLoader (textures stripped: no image decoder in node) and CPU-skinned through three's own
@@ -7,7 +8,7 @@
 import {describe, expect, it, beforeAll} from 'vitest';
 import * as THREE from 'three';
 import {readFileSync, existsSync} from 'node:fs';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {createHash} from 'node:crypto';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {NodeIO} from '@gltf-transform/core';
@@ -22,6 +23,22 @@ const SOURCE_SHA = 'cfaa5c7068aab8271fc2f9c13076082aca8e473dbe1fff131ee2ac7f2a6b
 const MESHY_TASK = '01a195f6-f769-7638-9bb6-48d52ba3c491';
 const CLIPS = ['Idle', 'Walk', 'Run', 'Attack', 'Hit', 'Death'];
 const prov = JSON.parse(readFileSync(pub(SIDECAR), 'utf8'));
+// lane TEXTURE (task studio-alpha-bts-round4-compliance-followup-20261101-01): the runtime maps are baked from two CODEX images
+const CODEX_FRONT_SHA = 'bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be'; // user-approved front T-pose
+const CODEX_BACK_SHA = '0a0bf26d4ba808af2442138b375ef2677b028d3e30a2e633e8d78807a0963a6e'; // accepted Codex back view
+// embedded images that must NOT ship: the Meshy provider maps (raw) and their re-encodes in the pre-bake GLB (30d4347c...)
+const MESHY_MAP_SHAS = [
+  'cb283413b22029bcee569c5f9f82a433191f92f52db0295af260b7cfe314d696', 'fc7973512a65278b5a71a9d30c6eba954a1af7a3b167c02ec258da851aa1a7f0', '750f66a14069eb77cc8bf5f12268b2063e63ef878e043c5ef279cf16c1be3af0',
+  'be4b71251964d3e9d940362130c7816dce8b11bb08474618fc3a5489ce0556b5', '956c0f68ec0e8ad0971c84f9a50ac41f06c170e3db4e0972d530fa427289015c', '3319c11d8bddbef5075e064c282cd55fc8b969a1ea82c4d8f3771bef4858ff18',
+];
+// geometry / skin / animation / scene / material identity of the pre-bake GLB (tools/asset-pipeline/enemy/lib/strainer-texture-identity.mjs)
+const IDENTITY = {
+  geometry: '75d40fcf82867944630d3a60ee7b3393bc72f970f6682cf88d46e760b90f8f4e',
+  skin: '1a32b0b9a4d8ef8b5a70e1ee08b0588961b940845ba17aa96dc5ebec8cfaf589',
+  animation: 'dfdfc819d8977d59c2c827b7f1642a55f1a3e8ac154d55e237e94dff34d88260',
+  scene: '813f854bb0c3515b92a38e37de7f636066f6999793dc9752ca3c20bbe96a99e6',
+  material: '89d343d836fa2d1d7522c736acae6a871790fff0776fa259318988cdf2b3ea43',
+};
 
 interface Extras {
   heightM: number; joints: string[]; bodyMesh: string; sourceSha256: string; meshyTaskId: string;
@@ -81,6 +98,52 @@ describe('Strainer derivative (enemy-strainer.glb)', () => {
     if (existsSync(raw)) expect(sha(readFileSync(raw))).toBe(SOURCE_SHA);
   });
 
+  it('ships textures baked from the two Codex images only (no Meshy provider map at runtime)', async () => {
+    const T = prov.textures;
+    expect(T.runtimeSources).toBe('codex');
+    expect(T.providerMapsUsedAtRuntime).toBe(false);
+    expect(T.sources.front.sha256).toBe(CODEX_FRONT_SHA);
+    expect(T.sources.back.sha256).toBe(CODEX_BACK_SHA);
+    expect(T.sources.front.file).toBe('reference/tasks/strainer-tpose-20261101/pose/strainer-tpose-attempt2.png');
+    expect(T.sources.back.file).toBe('reference/tasks/beyond-station-round4-followup-20261101/codex/strainer-back-attempt1.png');
+    expect(T.sources.front.codex.route).toMatch(/codex-cli 0\.163\.0.*image_gen/);
+    expect(T.sources.back.codex).toMatchObject({attempt: 1, promptSha256: expect.stringMatching(/^52df94c6/)});
+    expect(prov.honesty.textures).toMatch(/ONLY from two Codex-generated images/);
+    expect(prov.honesty.textures).toMatch(/Meshy provider maps are NOT used at runtime/);
+    for (const k of ['baseColor', 'metallicRoughness', 'normal']) expect(prov.source.providerMaps[k].runtimeUse, k).toBe(false);
+    // the bake is recorded with its registration and fill (IoU of the projected silhouette vs each Codex figure)
+    for (const v of ['front', 'back']) {
+      expect(T.registrationIoU[v].iou, v).toBeGreaterThan(0.8);
+      for (const [r, iou] of Object.entries(T.registrationIoU[v].regions)) expect(iou as number, `${v} ${r}`).toBeGreaterThan(0.6);
+    }
+    expect(T.filledFraction).toBeGreaterThanOrEqual(0);
+    expect(T.filledFraction).toBeLessThan(0.6);
+    // the embedded images ARE the recorded bake outputs (sizes as documented) and none is a Meshy map / re-encode
+    const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(pub(GLB));
+    const mat = doc.getRoot().listMaterials()[0];
+    const tex = {baseColor: mat.getBaseColorTexture()!, metallicRoughness: mat.getMetallicRoughnessTexture()!, normal: mat.getNormalTexture()!};
+    for (const [k, t] of Object.entries(tex)) {
+      const img = Buffer.from(t.getImage()!);
+      expect(sha(img), k).toBe(T.bake.outputs[k].sha256);
+      expect(MESHY_MAP_SHAS, k).not.toContain(sha(img));
+      expect(t.getMimeType(), k).toBe('image/jpeg');
+      expect(t.getSize(), k).toEqual(k === 'baseColor' ? [2048, 2048] : [1024, 1024]);
+    }
+    expect(doc.getRoot().listTextures()).toHaveLength(3);
+    // the Codex sources live in the external reference/ tree (not in Git): re-verified when mounted
+    for (const s of [T.sources.front, T.sources.back]) { const f = repo(s.file); if (existsSync(f)) expect(sha(readFileSync(f)), s.file).toBe(s.sha256); }
+  });
+
+  it('only the images changed: geometry, skin, animation, scene extras and material parameters equal the pre-bake GLB', async () => {
+    const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(pub(GLB));
+    const {strainerIdentity, STRAINER_IDENTITY} = await import(pathToFileURL(repo('tools/asset-pipeline/enemy/lib/strainer-texture-identity.mjs')).href);
+    const got = strainerIdentity(doc);
+    expect(got).toEqual(IDENTITY);
+    expect(STRAINER_IDENTITY).toMatchObject(IDENTITY);
+    expect(prov.textures.identity).toMatchObject(IDENTITY);
+    expect(prov.mesh.geometryHash).toBe('29d46598dea492bb');
+  });
+
   it('is allowlisted at its current bytes and credited', () => {
     const allow = JSON.parse(readFileSync(repo('tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
     for (const rel of [GLB, SIDECAR, 'assets/CREDITS.md']) {
@@ -96,6 +159,8 @@ describe('Strainer derivative (enemy-strainer.glb)', () => {
     expect(sec).toContain(MESHY_TASK);
     expect(sec).toMatch(/Meshy T2\.5 image-to-3D/);
     expect(sec).toMatch(/Codex/);
+    expect(sec).toMatch(/Textures: derived only from Codex-generated sources/);
+    expect(sec).toMatch(/Meshy provider texture maps are not used at runtime/);
     expect(sec).toMatch(/AI-generated asset/);
     expect(sec).toMatch(/no licence or commercial clearance implied/);
     expect(sec).not.toMatch(/\/workspaces?\/|\/home\//);
