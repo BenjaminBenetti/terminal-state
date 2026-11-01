@@ -271,7 +271,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN)
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -817,7 +817,7 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : 'Clear the station'; // (+ mall: lane GEN)
+    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : key.level === 'reactor' ? 'Restart the reactor' : 'Clear the station'; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -925,7 +925,7 @@ export class Game {
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed()}; // (+ mall: lane GEN)
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
       const key: SectionKey = {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
       const shown = levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
@@ -1104,7 +1104,9 @@ export class Game {
       ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
       : k.level === 'mall'
         ? `${this.layout.mall?.name ?? levelDisplayName('mall', this.run.seeds.mall)} — a subway station under a glass atrium and three floors of shops above it. ${n} infected reported in the station and the mall. Clear them out.`
-        : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
+        : k.level === 'reactor' // task reactor-build-20261101: THE REACTOR
+          ? `Reactor — a station on the rim of the reactor pit. The core lies dormant far below, under bands of gas. ${n} infected reported in the pit. Restart the reactor: restore the auxiliary generators or mask up, find the startup key and the fuses, bring the coolant and the core back.`
+          : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
   /**

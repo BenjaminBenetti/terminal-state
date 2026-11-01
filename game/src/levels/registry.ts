@@ -14,11 +14,12 @@ import {generateOfficeLevel} from '../gen/office/index'; // lane GEN
 import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre-20261031 (lane GEN): the mall
 import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-playtest-revision-20261031 (lane GEN): seeded "<Name> Center"
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
+import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
-export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall'];
+export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101)
 
 /**
  * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
@@ -80,6 +81,23 @@ export const LEVELS: Record<LevelId, LevelDef> = {
       return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx, 'mall');
     },
   },
+  // Task reactor-build-20261101 (primary + lane GEN): THE REACTOR — the user-selected B "Industrial Service Cathedral": a rim subway
+  // station at the TOP of a huge vertical industrial pit, walkway tiers, bridges, lattice towers, the crane and the organ-pipe wall
+  // going down through stratified gas to the dormant reactor core (gen/reactor/index.ts). ONE continuous world, section 'main'. The
+  // rim station's beds are track-bearing: TRACK_EXT_REACTOR (tunnels past the bed ends + at most one Beyond-the-Station annex).
+  reactor: {
+    id: 'reactor',
+    tier: 3, // level 3 difficulty — the culminating level; metadata only (no unlock gating: selectable like every level)
+    name: 'Reactor',
+    blurb: 'A station on the rim of a vast industrial pit — descend the gantries through deepening gas, restart the auxiliary generators or mask up, and bring the dormant reactor back to life.',
+    entry: 'main',
+    sections: () => ['main'],
+    trackExtensions: trackExtConfig('reactor'),
+    generate: (section, ctx) => {
+      if (section !== 'main') throw new Error(`Reactor has no section '${section}'`);
+      return withGear(generateReactorLevel(ctx, {trackExt: LEVELS.reactor.trackExtensions}), ctx, 'reactor');
+    },
+  },
 };
 
 export function isLevelId(v: unknown): v is LevelId {
@@ -121,12 +139,12 @@ export function levelDisplayName(level: LevelId, levelSeed?: number): string {
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : 'Station';
+  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : 'Station';
 }
 
 /** What the HUD calls clearing the level. */
 export function clearLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : 'Station clear';
+  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : 'Station clear';
 }
 
 /**
@@ -137,14 +155,16 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   const s = layout.office?.storeys.find(t => t.levelId === level);
   if (s) return s.label;
   const m = layout.mall?.storeys.find(t => t.level === level);
-  return m ? m.label : '';
+  if (m) return m.label;
+  const r = layout.reactor?.tiers.find(t => t.level === level); // task reactor-build-20261101: 'Rim', 'Tier 1' … 'Core floor'
+  return r ? r.label : '';
 }
 
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */
 export interface ArrivalPose { x: number; z: number; yaw: number; level?: number; y?: number; source: string }
 
 export function arrivalPose(layout: StationLayout, _arrival: Arrival): ArrivalPose {
-  const start = layout.office?.start ?? layout.mall?.start; // (lane GEN: + the mall's platform start)
+  const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start)
   if (start) return {...start, source: 'start'};
   const sp = layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};
   return {x: sp.x, z: sp.z, yaw: sp.yaw, level: sp.level, y: sp.y, source: 'playerSpawn'};

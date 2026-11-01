@@ -33,6 +33,9 @@ export const MASK_LOOT = {
     subway: {masks: [0, 1], filters: [0, 2]},
     // Task track3-eaton-centre-20261031: the mall keeps the Office's mask / filter roll (lane PROFILES decision, PROFILES.done).
     mall: {masks: [1, 2], filters: [2, 5]},
+    // Task reactor-build-20261101 (primary): the Reactor ALWAYS holds one mask and a real but tight filter supply — the mask + filter
+    // route can bypass the generators, but never so many filters that it becomes the default (the generator route needs no mask).
+    reactor: {masks: [1, 1], filters: [3, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
   foundFilter: [0.35, 0.75] as const,

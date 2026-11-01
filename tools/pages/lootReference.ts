@@ -151,6 +151,8 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (its storey contexts: levelContexts; no tenant floors). Lane
   // INTEG (Track2 integration): its pit station grows service annexes like the Subway / Office (the per-annex floor variant).
   mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // Task reactor-build-20261101 (primary + lane GEN): the Reactor's per-storey mall floor program (gen/mall/supplies.ts placeMallSupplies)
+  reactor: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
