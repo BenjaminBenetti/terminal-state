@@ -31,6 +31,7 @@ import {cropKit} from '../office/common';
 import {holdCells} from '../office/transit';
 import {placeOfficeEnemies, type SpawnField} from '../office/spawns';
 import {placeMallSupplies} from '../mall/supplies';
+import {placeWeaponFinds} from '../weaponFinds';
 import type {TrackExtConfig} from '../trackExt/types';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS} from '../trackExt/index';
 import {populateExtensions} from '../annexContent';
@@ -46,8 +47,8 @@ import {reactorIssues} from './validate';
 export {reactorFrame, reactorSeed, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
 export {reactorIssues, routeIssues as reactorRouteIssues} from './validate';
 
-/** The level id (LevelId gains 'reactor' with the primary's registration; a string until then). */
-const REACTOR_ID = 'reactor' as LevelId;
+/** The level id (levels/registry.ts LEVELS.reactor). */
+const REACTOR_ID: LevelId = 'reactor';
 
 export interface ReactorGenOptions {
   /** Force a named kit variant (tests / QA): 'W' / 'E' or a variant name ('west-stairs-…' / 'east-stairs-…'); default: the level seed's. */
@@ -171,15 +172,16 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
     placeOfficeEnemies(layout, rng.fork(`reactor-enemies-${lv}`), field, [lv], spawns, context);
   }
   for (let lv = 0; lv < REACTOR_LEVELS; lv++) placeMallSupplies(layout, rng.fork(`reactor-supplies-${lv}`), field, [lv], lv === 0 ? 'pit' : 'ring', loot);
+  // weapon finds: the station rule (plausible back-of-house rooms far from the start; tools/pages LEVEL_ADAPTER.reactor weapons 'station')
+  placeWeaponFinds(layout, rng.fork('weaponFinds'), layout.startWeapon ?? 'rifle');
 
   // --- Lighting, traversal finishing, deck fixtures, the record ------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
+  // applyLighting's stand-in fixture of an unlit area hangs at the area centre: never over the pit decks (they get their own below)
+  layout.lights = layout.lights.filter(l => !deckIds.has(l.area));
   finishTraversal(layout);
-  // the maintenance ladders' plates: on their storey, relabelled
-  for (const s of layout.signs) {
-    const l = lad.ladders.find(q => Math.abs(q.x + 0.95 - s.x) < 1e-6 && Math.abs(q.bottomY + 0.72 - s.y) < 1e-6);
-    if (l) { s.level = l.level; s.text = 'MAINTENANCE LADDER'; s.area = layout.levels[l.level ?? 0].grid.area[layout.grid.idx(...layout.grid.cellOf(l.bottom.x, l.bottom.z))]; }
-  }
+  // finishTraversal's rescue-ladder plate ('EMERGENCY LADDER', storey-less) is not for the maintenance ladders (ARCH marks them)
+  layout.signs = layout.signs.filter(s => !lad.ladders.some(q => Math.abs(q.x + 0.95 - s.x) < 1e-6 && Math.abs(q.bottomY + 0.72 - s.y) < 1e-6));
   for (const a of layout.areas) if (deckIds.has(a.id)) a.lighting = a.level ? 'dim' : 'lit';
   deckLights(layout, rc, rng.fork('reactor-deck-lights'));
   const fans = placeFans(layout, rc, rng.fork('reactor-fans'));

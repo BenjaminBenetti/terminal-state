@@ -27,7 +27,7 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   if (!info) return ['no reactor record'];
   const levels = layout.levels, g0 = layout.grid;
   if (levels.length !== REACTOR_LEVELS || levels.length > 8) return [`${levels.length} levels`];
-  if (g0.w > 300 || g0.h > 300) issues.push(`grid ${g0.w} x ${g0.h} cells`);
+  if (g0.w * g0.h > 90_000) issues.push(`grid ${g0.w} x ${g0.h} cells`); // the ~300 x 300 cell budget (Track2 growth included)
   for (const L of levels) {
     if (L.id !== levels.indexOf(L)) issues.push(`level ${L.id} id mismatch`);
     if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);

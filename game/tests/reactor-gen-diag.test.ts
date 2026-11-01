@@ -1,28 +1,16 @@
 import {describe, it, expect} from 'vitest';
 import {writeFileSync, mkdirSync} from 'node:fs';
-import {MALL_SPAWN_PROFILE, type SpawnProfile} from '../src/ai/spawnTables';
-import {reactorAttempt} from '../src/gen/reactor/index';
-import {reactorIssues} from '../src/gen/reactor/validate';
+import {generateReactorLevel, REACTOR_GEN_STATS, REACTOR_REJECTS} from '../src/gen/reactor/index';
 import {REACTOR_CARVE_FAILS} from '../src/gen/reactor/carve';
-
-const ring = MALL_SPAWN_PROFILE.contexts.ring!, pit = MALL_SPAWN_PROFILE.contexts.pit!;
-const SP: SpawnProfile = {...MALL_SPAWN_PROFILE, id: 'reactor', contexts: {station: pit, floor: ring, ring, pit, service: MALL_SPAWN_PROFILE.contexts.service}};
 
 describe('diag', () => {
   it('runs', () => {
     const out: string[] = [];
-    for (const seed of [1, 2, 3]) {
-      const t0 = performance.now();
-      const L = reactorAttempt({levelSeed: seed}, 0, {spawns: SP, trackExt: 'none'});
-      const ms = performance.now() - t0;
-      out.push(`seed ${seed}: ${L ? 'ok' : 'carve fail'} ${ms.toFixed(0)} ms ${JSON.stringify(REACTOR_CARVE_FAILS)}`);
-      if (L) {
-        const t1 = performance.now();
-        const iss = reactorIssues(L, {startCells: 36});
-        out.push(`  validate ${(performance.now() - t1).toFixed(0)} ms grid ${L.grid.w}x${L.grid.h} zombies ${L.zombies.length} pickups ${L.pickups.length} props ${L.props.length} lights ${L.lights.length}`);
-        out.push(...iss.slice(0, 40).map(s => '  ' + s));
-      }
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8, 11, 12]) {
+      const L = generateReactorLevel({levelSeed: seed});
+      out.push(`seed ${seed}: ${REACTOR_GEN_STATS.ms.toFixed(0)} ms attempts ${REACTOR_GEN_STATS.attempts} carveFails ${REACTOR_GEN_STATS.carveFails} variant ${L.reactor!.pit.variant} grid ${L.grid.w}x${L.grid.h} ext ${L.extensions?.tunnels.length ?? 0}/${L.extensions?.annexes.length ?? 0} z ${L.zombies.length} issues ${REACTOR_GEN_STATS.issues.slice(0, 3).join(' | ')}`);
     }
+    out.push(JSON.stringify([...REACTOR_REJECTS]), JSON.stringify(REACTOR_CARVE_FAILS));
     mkdirSync('/tmp/reactor', {recursive: true});
     writeFileSync('/tmp/reactor/diag.txt', out.join('\n'));
     expect(true).toBe(true);
