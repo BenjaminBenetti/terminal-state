@@ -149,12 +149,12 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
     //    station cells (as above) AND over every leak-driven FLOOR cell of the full storey (station + annex cells).
     //  - BED-CLASS cells (the track tunnels: FLOOR cells, but the track bed continued: "the tunnels' ballast is as damp as the bed"):
     //    every cell at least the bed's own damp floor (0.3, the station's VOID beds' base) — a per-cell rule, independent of storey.
-    //  - The FULL storey mean is the cell-weighted mix of those class means (checked: nothing lies outside the classes). In the
-    //    PRESENT mix the original full-storey ordering holds as it was written (9003: lower 0.095 > main 0.072 > upper 0.034; 9013:
-    //    0.098 > 0.064 > 0.029). In the ABSENT mix the main storey adds its bed-class tunnels (a 0.3+ floor, 3-4x a storey's leak
-    //    wetness) with no annex cells: main 0.093 vs lower 0.088 on 9001 (station main 0.072) — the expected mix, not drier lower
-    //    ground; so there the full main storey is checked against its expectation (wetter than its leak-driven cells, drier than
-    //    upper never) and the lower storey against the main storey's leak-driven cells.
+    //  - The FULL storey mean is the cell-weighted mix of those class means (checked: nothing lies outside the classes), so its
+    //    expectation depends on the mix. Both mixes: the main storey's bed-class tunnels only add wetness (full main > its
+    //    leak-driven cells) and it stays wetter than the upper deck. PRESENT mix: the original full-storey ordering as it was written
+    //    (9003: lower 0.095 > main 0.072 > upper 0.034; 9013: 0.098 > 0.064 > 0.029). ABSENT mix: the main storey adds its tunnels'
+    //    0.3+ bed floor (3-4x a storey's leak wetness) with no annex cells: main 0.093 vs lower 0.088 on 9001 (station main 0.072) —
+    //    the expected mix, not drier lower ground — so there the lower storey is compared with the main storey's leak-driven cells.
     // KNOWN DEFECT, reported (not asserted either way): buildDecayField copies the WHOLE core window from the core view, so extension
     // cells that lie inside that rectangle carry the core's rock texels (wet ~0, rock neglect) instead of the extension rules (on 9001
     // 20-85 % of a tunnel's cells; on 9003 / 9013 up to 87 % of an annex's). Changing it moves the track-ext-core "runtime fields" and
