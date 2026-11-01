@@ -7,8 +7,9 @@
 // Ordinary melee baseline: the SAME ZombieBrain as every zombie (perception, chase, search, light lure, track-bed drops, one claw
 // swipe per attack with the LOS + reach + facing checks) with the conservative subtype numbers below. NO acid / ranged / explosion /
 // scream / boss / ceiling / teleport / loot systems. It does not climb ladders (it lurks in the annex): every path request ignores
-// ladder nav links, exactly like the rat/dog and the Siren. Audio: NO new clips — the existing zombie cues through the cue adapter
-// (STRAINER_CUES: the deep groan voice from its taller mouth, the ordinary claw swing, footfalls and death).
+// ladder nav links, exactly like the rat/dog and the Siren. Audio (STRAINER_CUES): the existing zombie voice calls (the deep groan
+// from its taller mouth, alert, death) + its OWN wet squelch set (reach + squish task: local Sound Lab footsteps, swing, contact,
+// hit squish).
 //
 // ASSET CONTRACT (lane ASSET: game/public/assets/models/enemy-strainer.glb — one skinned body on the shared 18-joint skeleton, clips
 // Idle / Walk / Run / Attack / Hit / Death, feet at the origin, +Z facing, bind height 2.15 m, scene extras `enemyStrainer` {heightM,

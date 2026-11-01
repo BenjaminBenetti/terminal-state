@@ -326,8 +326,9 @@ the ordinary per-spawn family roll of the service annexes (0.08, above) — no s
   Head bone, scaled with the actor), a Hips → Neck torso capsule and arm / leg capsules; ordinary body hits elsewhere. Death, corpse
   volumes and ragdoll (the humanoid rig on the shared 18-joint skeleton) go through the existing contracts; kills persist through
   the run memory like every enemy.
-- **Audio:** no new clips — the existing zombie calls through the cue adapter (`STRAINER_CUES`: the deep groan voice from its 1.9 m
-  mouth, the ordinary swing, the existing HEAVY gait footfalls, the death).
+- **Audio:** `STRAINER_CUES` — the existing zombie voice calls (the deep groan from its 1.9 m mouth, alert, death) plus its OWN wet
+  squelch set (reach + squish task: local Sound Lab, `game/src/audio/manifest.strainer.generated.ts`): squelching footsteps on its
+  real footfalls, a wet arm-swing peaking at the impact, a fleshy contact squelch only on a hit, a rate-limited squish when shot.
 - **Lumbering animation** (user playtest 2026-11-01): the local clips (`tools/asset-pipeline/enemy/lib/strainer-clips.mjs`) are a
   heavy, flat-footed, weight-shifting Walk (2.6 s, 0.42 m/s) and a chase lumber `Run` (1.6 s, 1.35 m/s = the chase speed, double
   support, no flight phase) played at their authored speeds (feet planted), and a slow telegraphed Attack (2.0 s, impact 1.0 s; the

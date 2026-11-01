@@ -575,7 +575,7 @@ describe('Strainer lumbering / wet (user playtest 2026-11-01)', () => {
 describe('Strainer lunging long-arm swipe (reach doubled)', () => {
   const W = (pz: () => number): BrainWorld => ({
     get px() { return 0; }, get pz() { return pz(); }, playerAlive: true, los: () => true, walkClear: () => false, rand: rng(5),
-    findPath: (_ax, _az, bx, bz) => [[bx, bz]], randomNear: () => null,
+    findPath: (_ax: number, _az: number, bx: number, bz: number) => [[bx, bz]], randomNear: () => null,
   } as unknown as BrainWorld);
   /** Run one swing with a minimal motor (out.speed along out.dir); `player(t)` = the player's z at time t since the swing began. */
   function swing(start: number, player: (t: number) => number) {
