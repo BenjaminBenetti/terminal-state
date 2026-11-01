@@ -10,7 +10,8 @@
 //    service spawns from the service pool incl. the Strainer's, the invitation art, the hatch clues);
 //  - byte-identical where the fallback never runs (present levels with a tunnel annex, absent levels);
 //  - determinism (twice, the raw attempt, a revisit through the run);
-//  - opt-in OFFICE_AREA_FALLBACK_BROAD=1: the >= 300 present-seed cohort, old vs new, census into /tmp/office-area-fallback-broad.txt.
+//  - opt-in OFFICE_AREA_FALLBACK_BROAD=1: 666 present seeds in three families (the first 330 present corpus seeds + 31702, the present
+//    seeds of 1-700, 200 present seeds of the 7777 family), old vs new, census + timing into /tmp/office-area-fallback-broad.txt.
 import {writeFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
 import {generateOfficeLevel, officeAttempt, officeIssues, towerFrame} from '../src/gen/office/index';
@@ -172,28 +173,40 @@ describe('the Office presence fallback (one seeded service hatch when a PRESENT 
 });
 
 describe.runIf(!!process.env.OFFICE_AREA_FALLBACK_BROAD)('the broad present cohort (opt-in OFFICE_AREA_FALLBACK_BROAD=1)', () => {
-  it('>= 300 present seeds + 31702: every present Office level has the area; the fallback changes only the formerly-failing ones', () => {
-    const seeds = [31702, ...presentSeeds(330, corpus)], lines: string[] = [];
-    let realised = 0, tunnelAnnex = 0, fallback = 0, two = 0;
-    const t0 = performance.now();
-    for (const s of seeds) {
-      const l = live(s), r = before(s), n = l.extensions!.annexes.length;
-      if (n) realised++;
-      if (n === 2) two++;
-      if (r.extensions!.annexes.length) {
-        tunnelAnnex++;
-        expect(sameLevel(l, r), `${s}`).toEqual([]);
-      } else {
-        fallback++;
-        const h = checkFallback(s, l, r);
-        lines.push(`${s}: bed ${h.bed!.trench}${h.bed!.from} ${h.bed!.wall} s ${h.bed!.s} ${Math.round(h.areaM2)} m² ${h.areas.length} areas, clues ${h.bed!.clues.length}`);
+  it('666 present seeds in three families: every present Office level has the area; the fallback changes only the formerly-failing ones', () => {
+    const cohorts: Record<string, number[]> = {
+      corpus: [31702, ...presentSeeds(330, corpus)],
+      'seeds 1-700': Array.from({length: 700}, (_, i) => i + 1).filter(btsAreaPresent),
+      '7777': presentSeeds(200, i => (i * 2654435761 + 7777) >>> 0),
+    };
+    const lines: string[] = [], ms = {fbLive: 0, fbBefore: 0, nLive: 0, nBefore: 0};
+    let fbCount = 0, nCount = 0;
+    for (const [name, seeds] of Object.entries(cohorts)) {
+      let realised = 0, tunnelAnnex = 0, fallback = 0, two = 0;
+      const t0 = performance.now();
+      for (const s of seeds) {
+        const a = performance.now(), l = live(s), b = performance.now(), r = before(s), c = performance.now(), n = l.extensions!.annexes.length;
+        if (n) realised++;
+        if (n === 2) two++;
+        if (r.extensions!.annexes.length) {
+          tunnelAnnex++;
+          ms.nLive += b - a; ms.nBefore += c - b; nCount++;
+          expect(sameLevel(l, r), `${s}`).toEqual([]);
+        } else {
+          fallback++;
+          ms.fbLive += b - a; ms.fbBefore += c - b; fbCount++;
+          const h = checkFallback(s, l, r), svc = l.zombies.filter(z => h.areas.includes(z.area)).length;
+          lines.push(`${name} ${s}: bed ${h.bed!.trench}${h.bed!.from} ${h.bed!.wall} s ${h.bed!.s} ${Math.round(h.areaM2)} m² ${h.areas.length} areas, clues ${h.bed!.clues.length}, art ${(l.extensions!.art ?? []).length}, service ${svc}, caches ${annexCachesOf(l).length}`);
+        }
       }
+      const msg = `${name}: ${seeds.length} present, ${realised} with the area (${tunnelAnnex} tunnel annex levels byte-identical, ${fallback} via the fallback hatch, ${two} with two); ${((performance.now() - t0) / 1000).toFixed(1)} s`;
+      report(msg);
+      lines.unshift(msg);
+      expect(realised, name).toBe(seeds.length);
+      if (name === 'corpus') { expect(FORMER.every(s => seeds.includes(s))).toBe(true); expect(fallback).toBe(FORMER.length); }
     }
-    const msg = `${seeds.length} present: ${realised} with the area (${tunnelAnnex} tunnel annex levels byte-identical, ${fallback} via the fallback hatch, ${two} with two); ${((performance.now() - t0) / 1000).toFixed(1)} s`;
-    report(msg);
-    writeFileSync('/tmp/office-area-fallback-broad.txt', [msg, ...lines].join('\n') + '\n');
-    expect(realised).toBe(seeds.length);
-    expect(FORMER.every(s => seeds.includes(s))).toBe(true);
-    expect(fallback).toBe(FORMER.length);
-  }, 3600000);
+    const timing = `mean generation ms (live / before): fallback levels ${(ms.fbLive / fbCount).toFixed(0)} / ${(ms.fbBefore / fbCount).toFixed(0)} (${fbCount}), other present levels ${(ms.nLive / nCount).toFixed(0)} / ${(ms.nBefore / nCount).toFixed(0)} (${nCount})`;
+    report(timing);
+    writeFileSync('/tmp/office-area-fallback-broad.txt', [timing, ...lines].join('\n') + '\n');
+  }, 7200000);
 });
