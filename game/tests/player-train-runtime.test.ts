@@ -172,7 +172,7 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       for (const l of rt.lights.all) expect(l.castShadow).toBe(false);
       // cost the car adds (reported): a handful of draws
       const cost = viewCost(t.view.root);
-      expect(cost.meshes).toBeLessThanOrEqual(26); // 9 lining + the window glass + 3 fallback skin + 12 fallback leaves
+      expect(cost.meshes).toBeLessThanOrEqual(30); // 9 lining + the window glass + 3 fallback skin + 12 fallback leaves + the Lockbox (body, lid, liner)
       // the procedural surfaces face the way their normals say (winding = shading normal), the lining faces into the car
       const owned = new Set(t.view.geometries);
       const inward = new Set(['train-floor', 'train-ceiling', 'train-walls']);
@@ -779,7 +779,8 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
       expect(rt.playerInside()).toBe(true);
       const cost = viewCost(t.view.root);
       // 25 draws: 9 lining + the window glass + shell + desk + 12 leaves + ONE instanced leaf-glass draw (task train-shell-followup)
-      expect(cost.meshes).toBeLessThanOrEqual(26);
+      // + the Lockbox (task train-lockbox: body, lid, liner)
+      expect(cost.meshes).toBeLessThanOrEqual(30);
       expect(cost.tris).toBeLessThan(160000);
     } finally {
       for (const s of host.sectionHooks) s.teardown?.();

@@ -35,6 +35,8 @@ export interface TrainModels {
   shell?: GLTF | null;
   door?: GLTF | null;
   console?: GLTF | null;
+  /** Task train-lockbox: the cooked Lockbox (world/trainLockbox.ts builds it; missing = its placeholder). */
+  lockbox?: GLTF | null;
 }
 
 /** Thicknesses / tiling (m). */
@@ -98,7 +100,7 @@ export interface TrainView {
 // Materials: created once per runtime (MaterialCache) and kept across level builds, so the next level's warm-up reuses the same
 // programs (three frees a pipeline with its last user).
 
-type MatKey = 'wall' | 'floor' | 'ceiling' | 'bulkhead' | 'metal' | 'rubber' | 'paint' | 'skirt' | 'roof' | 'fixture' | 'head' | 'tail' | 'leaf' | 'desk';
+type MatKey = 'wall' | 'floor' | 'ceiling' | 'bulkhead' | 'metal' | 'rubber' | 'paint' | 'skirt' | 'roof' | 'fixture' | 'head' | 'tail' | 'leaf' | 'desk' | 'liner' | 'lockbox';
 
 export class TrainMaterials {
   private readonly cache = new Map<string, THREE.Material>();
@@ -140,6 +142,9 @@ function makeMaterial(key: MatKey, tex: THREE.Texture | null): THREE.Material {
     case 'roof': return std({color: 0x4d4943, roughness: 0.85, metalness: 0.3});
     case 'leaf': return std({color: 0x707a7a, roughness: 0.6, metalness: 0.45}); // fallback leaf
     case 'desk': return std({color: 0x3c4a46, roughness: 0.7, metalness: 0.35}); // fallback console
+    // task train-lockbox (lane TRAIN): the Lockbox's dark untextured cavity liner and its placeholder paint (until the cooked model)
+    case 'liner': return std({color: 0x17150f, roughness: 0.95, metalness: 0.1});
+    case 'lockbox': return std({color: 0x3f4a3a, roughness: 0.7, metalness: 0.4});
     case 'fixture': return std({color: 0xf1e3c4, emissive: 0xffd9a0, emissiveIntensity: 1.4, roughness: 0.5, metalness: 0});
     case 'head': return std({color: 0xfff6e0, emissive: 0xfff1d6, emissiveIntensity: 2.2, roughness: 0.3, metalness: 0});
     case 'tail': return std({color: 0x8a120c, emissive: 0xff2414, emissiveIntensity: 1.8, roughness: 0.4, metalness: 0});

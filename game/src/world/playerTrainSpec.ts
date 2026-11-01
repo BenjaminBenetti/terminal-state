@@ -56,6 +56,19 @@ export interface PlayerTrainSpec {
     end: readonly {end: -1 | 1; z0: number; z1: number; y0: number; y1: number; skinX: number}[];
     leaf: {x0: number; x1: number; y0: number; y1: number};
   };
+  /**
+   * Task train-lockbox-windows-20261101-232156 (lane TRAIN): the Lockbox in the rear compartment (world/trainLockbox.ts) — x / z = the
+   * centre of its footprint (train-local), yaw = its rotation about Y (PI: the model's +Z front / latches face the aisle, -Z), its
+   * length (along the car) x height x depth, the lid's hinge line (y / z in the box's own frame: front +Z, grounded) and open angle;
+   * seamY = the lid seam height, cavity = the open body's inner box (box frame) for the dark liner. Measured on the cooked model by
+   * lane ASSETS (PLAYER_TRAIN_MEASURED.lockbox), else the provisional 1.03 x 0.55 x 0.61 m box.
+   */
+  lockbox?: {
+    x: number; z: number; yaw: number; length: number; height: number; depth: number;
+    lid: {hingeY: number; hingeZ: number; openAngle: number};
+    seamY?: number;
+    cavity?: {x0: number; x1: number; y0: number; y1: number; z0: number; z1: number};
+  };
   /** Runtime files (relative URLs; assets/playerTrain.generated.ts has bytes / tris / dims). */
   models: {shell: {key: string; url: string}; doorLeaf: {key: string; url: string}; console: {key: string; url: string}};
   textures: {wall: string; floor: string; ceiling: string; bulkhead: string};
@@ -66,6 +79,23 @@ const M = PLAYER_TRAIN_MEASURED, F = PLAYER_TRAIN_MODELS, T = PLAYER_TRAIN_TEXTU
 export const REAR_DOOR_CLEAR = 0.12;
 const rearX1 = Math.round((Math.min(...M.doors.map(d => d.x - d.width / 2)) - REAR_DOOR_CLEAR) * 1000) / 1000;
 const model = (k: keyof typeof F) => ({key: F[k].key, url: F[k].url});
+
+/** (lane TRAIN, train-lockbox) The Lockbox stands this far clear of the rear bulkhead, the partition and the side lining (m). */
+export const LOCKBOX_CLEAR = 0.025;
+/** The rear partition's half thickness (= world/playerTrainView.ts TRAIN_VIEW.partition / 2; a test pins the two together). */
+export const PARTITION_HALF = 0.03;
+/** The Lockbox's own measurements (model frame: front +Z, grounded, centred) — lane ASSETS' cooked model when measured. */
+export interface LockboxMeasured {
+  length: number; height: number; depth: number; seamY: number;
+  hinge: {y: number; z: number};
+  cavity: {x0: number; x1: number; y0: number; y1: number; z0: number; z1: number};
+}
+/** Provisional Lockbox (until PLAYER_TRAIN_MEASURED.lockbox): 1.03 x 0.55 x 0.61 m, the lid from 0.42 m, 3.5 cm walls. */
+export const LOCKBOX_PROVISIONAL: LockboxMeasured = {
+  length: 1.03, height: 0.55, depth: 0.61, seamY: 0.42, hinge: {y: 0.42, z: -0.285},
+  cavity: {x0: -0.48, x1: 0.48, y0: 0.06, y1: 0.42, z0: -0.27, z1: 0.27},
+};
+const LB: LockboxMeasured = (M as {lockbox?: LockboxMeasured}).lockbox ?? LOCKBOX_PROVISIONAL;
 
 export const PLAYER_TRAIN_SPEC: PlayerTrainSpec = {
   provisional: false,
@@ -82,6 +112,15 @@ export const PLAYER_TRAIN_SPEC: PlayerTrainSpec = {
   lights: {head: M.lights.head, tail: M.lights.tail, interior: M.lights.interior, lampRadius: M.lights.lampRadius, marker: M.lights.marker},
   doorLeaf: {...M.doorLeaf},
   windows: {side: M.windows.side.map(w => ({...w})), end: M.windows.end.map(w => ({...w})), leaf: {...M.windows.leaf}},
+  // (lane TRAIN, train-lockbox) centred in the rear compartment's length (rear bulkhead .. the partition's rear face), its back
+  // LOCKBOX_CLEAR off the far-side (+Z) lining, front / latches toward the aisle (yaw PI turns the model's +Z front to -Z)
+  lockbox: {
+    x: Math.round(((M.interior.x0 + rearX1 - PARTITION_HALF) / 2) * 10000) / 10000,
+    z: Math.round((M.interior.halfWidth - LOCKBOX_CLEAR - LB.depth / 2) * 10000) / 10000,
+    yaw: Math.PI, length: LB.length, height: LB.height, depth: LB.depth,
+    lid: {hingeY: LB.hinge.y, hingeZ: LB.hinge.z, openAngle: (100 * Math.PI) / 180},
+    seamY: LB.seamY, cavity: {...LB.cavity},
+  },
   models: {shell: model('player-train-shell'), doorLeaf: model('player-train-door-leaf'), console: model('player-train-console')},
   textures: {wall: T['train-int-wall'].url, floor: T['train-int-floor'].url, ceiling: T['train-int-ceiling'].url, bulkhead: T['train-int-bulkhead'].url},
 };
