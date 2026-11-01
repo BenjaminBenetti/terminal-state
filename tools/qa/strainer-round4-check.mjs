@@ -69,6 +69,30 @@ await withBrowserLock(async () => {
       await waitGame(0.3, 180);
       if (headroom('screenshot')) { await page.screenshot({path: path.join(out, `${code}-strainer.png`)}); step('screenshot strainer (internal diagnostic)'); }
     }
+    // 4. (round 4 follow-up) one tunnel frame: the decay field's extension cells inside the core rectangle now keep their own
+    //    (bed-level wet) rules — a harness camera placement in the tunnel cell nearest the station, looking along the tunnel
+    if (headroom('tunnel')) {
+      const t = await ev(() => {
+        const l = window.__game.layout, g = l.grid, P = window.__game.player;
+        const ids = new Set(l.areas.flatMap((a, i) => a.ext === 'tunnel' ? [i] : []));
+        let best = null, far = null;
+        for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i])) {
+          const x = (i % g.w + 0.5) * 0.5, z = (Math.floor(i / g.w) + 0.5) * 0.5, d = Math.hypot(x - P.x, z - P.z);
+          if (!best || d < best.d) best = {x, z, d, area: g.area[i]};
+        }
+        if (!best) return null;
+        for (let i = 0; i < g.cells.length; i++) if (g.area[i] === best.area) {
+          const x = (i % g.w + 0.5) * 0.5, z = (Math.floor(i / g.w) + 0.5) * 0.5, d = Math.hypot(x - best.x, z - best.z);
+          if (!far || d > far.d) far = {x, z, d};
+        }
+        const k = Math.min(1, 6 / Math.max(1e-6, far.d)), sx = best.x + (far.x - best.x) * k, sz = best.z + (far.z - best.z) * k;
+        const ok = window.__LL.teleport(sx, sz);
+        window.__LL.lookAt(far.x, (window.__game.player.y ?? 0) + 1.4, far.z);
+        return {ok, at: {x: +sx.toFixed(1), z: +sz.toFixed(1)}, area: best.area, lookM: +far.d.toFixed(1)};
+      });
+      step('placement tunnel', t ?? {missing: 'tunnel'});
+      if (t?.ok) { await waitGame(0.8, 180); if (headroom('tunnel screenshot')) { await page.screenshot({path: path.join(out, `${code}-tunnel.png`)}); step('screenshot tunnel (internal diagnostic)'); } }
+    }
   } catch (e) {
     step('error', {message: String(e?.message ?? e).slice(0, 400)});
   } finally {
