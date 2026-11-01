@@ -51,9 +51,12 @@ export type {HordeRules} from './hordeSpec';
  * Enemy families (= the archetype registry ai/creatureArchetypes.ts ENEMY_ARCHETYPES, SAME key order; tests check they agree).
  * Task track1-siren-blightbelly-20261031 (lane SPAWN): 'blightbelly' and 'siren' sit BEFORE 'ratdog' — the order is also every
  * shipped pool's roll order, so the rat/dog keeps the top 5 % band of the same roll and every rat/dog draw stays identical.
+ * Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): 'strainer' (THE STRAINER, ai/strainer.ts) is APPENDED LAST.
+ * Every pool that gives it weight 0 (every pool outside the service annexes: STRAINER_CONTEXTS) keeps its bands, its total and so
+ * every pick of the same roll bit-identical (pickEnemyArchetype never lands on a weight-0 family).
  */
-export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog';
-export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog'];
+export type EnemyFamilyId = 'zombie' | 'blightbelly' | 'siren' | 'ratdog' | 'strainer';
+export const ENEMY_FAMILY_IDS: readonly EnemyFamilyId[] = ['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer'];
 /** Room-modifier family key that applies its density to every family of the room. */
 export const ALL_FAMILIES = 'all';
 
@@ -69,10 +72,23 @@ export type ShareFamilyId = Exclude<EnemyFamilyId, 'zombie'>;
  *  - blightbelly 0.05: the user asked for the exploding Blightbelly on every level, "roughly as rare as the rat dog" — DEFAULT ON.
  *  - siren 0: the Siren is OPT-IN per level (OPT_IN_FAMILIES): a level enables her deliberately with a weight AND an eligibility
  *    rule (Office only today; never the Subway). Nothing is enabled by a level's tier.
+ *  - strainer 0 (task studio-alpha-beyond-station-round4-20261101-01, lane FAMILY): THE STRAINER is CONTEXT-LOCKED
+ *    (CONTEXT_LOCKED_FAMILIES): a positive weight only in the pool of a context listed in STRAINER_CONTEXTS (the Beyond the Station
+ *    service annexes: SERVICE_FAMILY_SHARES.strainer 0.08); every level pool, every other context and every horde pool says 0.
  */
-export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05};
+export const DEFAULT_FAMILY_SHARES: Readonly<Record<ShareFamilyId, number>> = {blightbelly: 0.05, siren: 0, ratdog: 0.05, strainer: 0};
 /** Families a level must enable deliberately: weight > 0 is only valid together with an explicit `eligibility` rule. */
 export const OPT_IN_FAMILIES: readonly EnemyFamilyId[] = ['siren'];
+/**
+ * Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the generation contexts whose OWN family pool (SpawnContextRule
+ * .families) may give THE STRAINER a positive weight. Today only 'service' (the Beyond the Station service annexes: the user wants it
+ * lurking there and nowhere else). A future area enables it DELIBERATELY by adding its context here (and a weight to that context's
+ * pool); validateSpawnProfile rejects a positive Strainer weight anywhere else — a level pool (which every core context reads), any
+ * other context's pool, a horde pool (also HORDE_FORBIDDEN_FAMILIES).
+ */
+export const STRAINER_CONTEXTS: readonly SpawnContextId[] = ['service'];
+/** Families locked to a list of contexts' own pools (validateSpawnProfile): family -> the contexts where its weight may be > 0. */
+export const CONTEXT_LOCKED_FAMILIES: Readonly<Partial<Record<EnemyFamilyId, readonly SpawnContextId[]>>> = {strainer: STRAINER_CONTEXTS};
 
 /**
  * A level's family pool in ENEMY_FAMILY_IDS order: DEFAULT_FAMILY_SHARES overridden by `shares`, the zombie = the remainder (rounded
@@ -89,8 +105,9 @@ export function familyPool(shares: Partial<Record<ShareFamilyId, number>> = {}):
 
 /**
  * The DEFAULT pool (the Subway's, and every level that does not opt in to the Siren): zombie 0.9, blightbelly 0.05, siren 0,
- * ratdog 0.05. Before task track1 both shipped levels used [zombie 0.95, ratdog 0.05]: the rat/dog keeps its band of the same
- * roll (identical draws), the Blightbelly takes 5 % of the old zombie band (placed slots replaced, never added).
+ * ratdog 0.05, strainer 0 (lane FAMILY: listed explicitly, weight 0 — never outside STRAINER_CONTEXTS). Before task track1 both
+ * shipped levels used [zombie 0.95, ratdog 0.05]: the rat/dog keeps its band of the same roll (identical draws), the Blightbelly
+ * takes 5 % of the old zombie band (placed slots replaced, never added).
  */
 export const ENEMY_POOL: FamilyPool = familyPool();
 
@@ -385,8 +402,14 @@ export const SERVICE_ZONE_BUDGET: readonly [number, number] = [5, 6];
  * rate should be boosted to 20% in this area." Rat/dog 0.20 (the level default 0.05), Blightbelly 0.05 (unchanged), Siren 0 (never in
  * an annex), ordinary zombies the remainder 0.75 — a CONFIGURED selection share per service spawn, not a quota: a 5–6-enemy annex
  * may hold none or several. Same count, same placement, same single roll per spawn; the core contexts and hordes are untouched.
+ * Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): + THE STRAINER 0.08 (the user's pick for Beyond the Station:
+ * a tall, long-reach clawed lurker; STRAINER_CONTEXTS = ['service'] is the only place it may have weight). Rat/dog 0.20 and
+ * Blightbelly 0.05 stay exactly; the ordinary zombies absorb it: 0.75 -> 0.67. Still a configured per-spawn selection share — no
+ * Strainer is forced into an annex, none is guaranteed. Roll bands (ENEMY_FAMILY_IDS order, the Strainer appended last): zombie
+ * [0, 0.67), Blightbelly [0.67, 0.72), rat/dog [0.72, 0.92), Strainer [0.92, 1) — the service spawns' rat/dog / Blightbelly bands
+ * moved up with the zombie remainder; every core pool (Strainer 0) keeps its bands exactly.
  */
-export const SERVICE_FAMILY_SHARES: Readonly<Partial<Record<ShareFamilyId, number>>> = {ratdog: 0.2, blightbelly: 0.05, siren: 0};
+export const SERVICE_FAMILY_SHARES: Readonly<Partial<Record<ShareFamilyId, number>>> = {ratdog: 0.2, blightbelly: 0.05, siren: 0, strainer: 0.08};
 export const SERVICE_FAMILY_POOL: FamilyPool = familyPool(SERVICE_FAMILY_SHARES);
 /** The 'service' context of a level whose stations grow annexes (the per-annex zone budget; never regenerates a level). */
 export const SERVICE_CONTEXT: SpawnContextRule = {label: 'Service annex (per annex)', count: SERVICE_ZONE_BUDGET, placement: SERVICE_PLACEMENT, accept: {min: null, max: 'count'}, families: SERVICE_FAMILY_POOL};
@@ -520,7 +543,7 @@ export const MALL_HORDE: HordeRules = {
   label: 'Roaming hordes',
   groups: MALL_HORDE_RULES.groups,
   size: [5, 20],
-  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]],
+  families: [['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0]], // lane FAMILY: the Strainer never joins a horde
   zombieTypes: {coatedChance: 0.4, atLeastOneEach: false},
   budget: MALL_HORDE_RULES.budget,
   placement: MALL_HORDE_RULES.placement,
@@ -1001,6 +1024,9 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
         num(`${path}.families[${i}].weight`, w);
         if (finiteNonNeg(w)) sum += w;
         if (typeof f === 'string' && OPT_IN_FAMILIES.includes(f as EnemyFamilyId) && finiteNonNeg(w) && w > 0 && !p.eligibility?.[f as EnemyFamilyId]?.contexts.includes(id as SpawnContextId)) bad(`${path}.families.${f}`, `opt-in family with weight ${w} needs an eligibility.${f} rule listing '${id}'`);
+        // lane FAMILY: a context-locked family (the Strainer) may only have weight in the pools of its listed contexts
+        const locked = typeof f === 'string' ? CONTEXT_LOCKED_FAMILIES[f as EnemyFamilyId] : undefined;
+        if (locked && finiteNonNeg(w) && w > 0 && !locked.includes(id as SpawnContextId)) bad(`${path}.families.${f}`, `context-locked family with weight ${w} outside its contexts [${locked.join(', ')}] (spawnTables CONTEXT_LOCKED_FAMILIES)`);
       });
       if (Array.isArray(c.families)) for (const f of ENEMY_FAMILY_IDS) if (!cs.has(f)) bad(`${path}.families`, `family ${f} missing (list it with weight 0 to exclude it)`);
       if (Array.isArray(c.families) && sum <= 0) bad(`${path}.families`, 'every family weight is 0');
@@ -1106,6 +1132,10 @@ export function validateSpawnProfile(p: SpawnProfile, roomKeys: ReadonlySet<stri
   // --- opt-in families: a weight > 0 needs an explicit eligibility rule (the Siren is never enabled by default / by tier)
   if (Array.isArray(p.families)) for (const [f, w] of p.families) {
     if (OPT_IN_FAMILIES.includes(f) && finiteNonNeg(w) && w > 0 && !(el && own(el, f))) bad(`families.${f}`, `opt-in family with weight ${w} needs an eligibility.${f} rule (where it may spawn)`);
+    // lane FAMILY: the LEVEL pool is read by every context without its own pool, so a context-locked family (the Strainer) must be 0
+    // here — it gets weight only in the own pool of a context listed in CONTEXT_LOCKED_FAMILIES (STRAINER_CONTEXTS)
+    const locked = CONTEXT_LOCKED_FAMILIES[f as EnemyFamilyId];
+    if (locked && finiteNonNeg(w) && w > 0) bad(`families.${f}`, `context-locked family with weight ${w} in the level pool: only the own pool of a context in [${locked.join(', ')}] may enable it (spawnTables CONTEXT_LOCKED_FAMILIES)`);
   }
   return issues;
 }

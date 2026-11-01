@@ -124,7 +124,7 @@ export interface EnemyFamilyInfo {
    * outfits chosen at spawn time); null = none.
    */
   variants: string | null;
-  /** Levels whose pool gives this family weight > 0. */
+  /** Levels whose pool — or one of its contexts' own pools (lane FAMILY, round 4: the service annexes') — gives this family weight > 0. */
   levels: readonly string[];
   at: SourceLoc;
   /** Task track1 (schema 2): combat figures per variant, read from the family's exported stats (brain.ts ZombieStats shape). */

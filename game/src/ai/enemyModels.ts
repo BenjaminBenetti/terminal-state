@@ -12,6 +12,10 @@ import {ENEMY_ARCHETYPES} from './creatureArchetypes';
 export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {
   enemy_blightbelly: {url: 'assets/models/enemy-blightbelly.glb', bytes: 2_221_420},
   enemy_siren: {url: 'assets/models/enemy-siren.glb', bytes: 12_873_732},
+  // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): THE STRAINER (service annexes only: only a layout whose annex
+  // roll placed one loads it). TODO-ASSET: `bytes` is a provisional progress weight until lane ASSET's GLB lands (then its real size;
+  // tests/strainer-asset.test.ts checks it within 10 % once the file exists). Missing file -> the counted zombie stand-in.
+  enemy_strainer: {url: 'assets/models/enemy-strainer.glb', bytes: 4_000_000},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */
