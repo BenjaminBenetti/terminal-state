@@ -13,15 +13,17 @@ import {CLIP_BYTES_I11, CLIP_GAPS_I11, CLIP_MANIFEST_I11} from '../src/audio/man
 import {CLIP_BYTES_I12, CLIP_GAPS_I12, CLIP_MANIFEST_I12} from '../src/audio/manifest.iteration12.generated';
 import {CLIP_BYTES_COUGH, CLIP_GAPS_COUGH, CLIP_MANIFEST_COUGH} from '../src/audio/manifest.cough.generated';
 import {CLIP_BYTES_T1, CLIP_GAPS_T1, CLIP_MANIFEST_T1} from '../src/audio/manifest.track1.generated'; // Task track1-siren-blightbelly-20261031 (lane AUDIO)
+import {CLIP_BYTES_STRAINER, CLIP_GAPS_STRAINER, CLIP_MANIFEST_STRAINER} from '../src/audio/manifest.strainer.generated'; // strainer squish set (lane AUDIO)
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
 // Iteration 07 (Lane Q): + rat/dog creature vocals + paw scrabble (i07q).
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
 // Task track1-siren-blightbelly-20261031 (lane AUDIO): + Siren hum / scream, Blightbelly burst / gas hiss (t1).
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1;
+// Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / swing / contact / squish.
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -79,7 +81,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -124,7 +126,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // Task track1-siren-blightbelly-20261031 (lane AUDIO): hum / hiss fades + bookkeeping (play nothing)
     'sirenHumStop', 'stopTrack1Cues', 'sweepTrack1', 'fadeVoice',
     // Task mall-round2-20261031 (lane AUDIO, M01): releasing cardboard drag voices (plays nothing)
-    'propDragStop', 'stopDrags']);
+    'propDragStop', 'stopDrags',
+    // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): Strainer cue voice caps (play nothing)
+    'sLive', 'strainerVoice']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -169,6 +173,10 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       // Task track1-siren-blightbelly-20261031 (lane AUDIO): Siren hum / wake scream, Blightbelly burst / gas hiss
       sirenHum: () => sfx.sirenHum({}, 3, 0.5, 3), sirenScream: () => sfx.sirenScream({}, 3, 0.5, 3),
       blightBurst: () => sfx.blightBurst({}, 3, 1.1, 3), blightHiss: () => sfx.blightHiss({}, 3, 1.1, 3, 0.15),
+      // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): the Strainer's wet footfalls / swing / contact / squish
+      strainerGait: () => { for (let i = 0; i < 12; i++) { ctx.currentTime += 0.2; sfx.strainerGait(z, 2, 2, 1.35, 0.2, 'Run'); } },
+      strainerSwing: () => { for (let i = 0; i < 12; i++) { ctx.currentTime += 0.1; sfx.strainerSwing(z, 1, 1.0, i ? 0.1 : 0, 3, 1.5, 3); } },
+      strainerContact: () => sfx.strainerContact(3, 3), strainerSquish: () => sfx.strainerSquish({}, 3, 1.3, 3),
       ambience: () => {
         for (const area of ['platform', 'service-corridor', 'washroom', 'food-court', 'utility']) { sfx.setRoom('medium', area); for (let i = 0; i < 400; i++) { ctx.currentTime += 0.25; sfx.ambience(0.25); } }
       },
