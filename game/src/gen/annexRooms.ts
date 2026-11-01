@@ -270,63 +270,203 @@ function within(adj: Map<number, number[]>, id: number, hops: number): number[] 
   return out;
 }
 
+/**
+ * Round 3 (lane LAYOUT): the purpose ZONES of a service annex. User: "the layout should have a logical arrangement matching what a
+ * real service area would be like" — so purposes follow the plan (gen/trackExt/annexLayout.ts: entry passage, main service corridor,
+ * wings, rooms lined up along them): the STAFF / maintenance rooms line the entry passage and the spine junction (corridors within one
+ * hop of the entry), the deep end keeps the OLD STORES (the hideout and the small rooms beside it), and the plant in between is grouped
+ * into DISTRICTS along the corridors — POWER (generator room beside its electrical / switch room, the turbine hall), WATER (sewage
+ * channel, overflow chamber, spillway, pump rooms together), HEAT (boiler room with its pump / fuel stores), AIR (ventilation plant,
+ * at a corridor end where it can) — a district runs on along its corridor and into the next segments / wings until it has its rooms,
+ * then the next district starts (seeded order).
+ */
+export type AnnexZone = 'staff' | 'power' | 'water' | 'heat' | 'air' | 'stores';
+export const PLANT_ZONES: readonly AnnexZone[] = ['power', 'water', 'heat', 'air'];
+
+/** THE zoning config (one exported block): per zone its signatures, utility purposes and closets (weights), and its district size. */
+export const ANNEX_ZONES = {
+  sig: {
+    staff: [], stores: [],
+    power: [['generator', 1], ['turbine', 1]], water: [['sewage', 1], ['overflow', 1], ['spillway', 1]], heat: [['boiler', 1]], air: [['ventilation', 1]],
+  } as Readonly<Record<AnnexZone, readonly (readonly [SignatureId, number])[]>>,
+  util: {
+    staff: [['workshop', 1], ['storage', 1], ['custodial-room', 0.8], ['first-aid-room', 0.7]],
+    power: [['electrical-room', 1], ['workshop', 0.25], ['storage', 0.25]],
+    water: [['pump-room', 1], ['storage', 0.25]],
+    heat: [['pump-room', 0.8], ['storage', 0.6], ['workshop', 0.5]],
+    air: [['electrical-room', 0.6], ['workshop', 0.6], ['storage', 0.4]],
+    stores: [['storage', 1]],
+  } as Readonly<Record<AnnexZone, readonly (readonly [string, number])[]>>,
+  closet: {
+    staff: [['janitor-closet', 1.4], ['supply-closet', 1]], power: [['electrical-closet', 1]], water: [['janitor-closet', 1], ['supply-closet', 0.4]],
+    heat: [['supply-closet', 1], ['janitor-closet', 0.5]], air: [['electrical-closet', 1]], stores: [['supply-closet', 1]],
+  } as Readonly<Record<AnnexZone, readonly (readonly [string, number])[]>>,
+  /** Rooms a plant district takes (along its corridor and on into the next) before the next district starts. */
+  district: {power: 4, water: 6, heat: 3, air: 3} as Readonly<Record<string, number>>,
+  /** Share of a plant district's medium rooms that take a signature (the rest keep its utility role: tight rooms between the plant). */
+  plantShare: 0.85,
+  /** A signature of the room's own zone weighs this much more than one of another zone (halls: any zone may serve). */
+  inZone: 5,
+  /** A ventilation plant prefers a corridor-end room (its fans on the far wall) by this factor. */
+  ventEnd: 3,
+  /** The annex shows at least this many different signatures (medium utility rooms are converted when it would not). */
+  minSignatures: 4,
+};
+
 /** The signature per room id decided by assignAnnexRooms (consumed by placeAnnexMachinery). */
 export interface AnnexRoomPlan {
   sig: Map<number, SignatureId>;
   adj: Map<number, number[]>;
   order: Map<number, number>;
+  /** (Round 3, lane LAYOUT) the zone of every room / closet / hall (corridors: their district). */
+  zone?: Map<number, AnnexZone>;
+}
+
+/** (Round 3) Whether a room sits at the END of its host corridor (beyond the corridor's run: its fans / outfall on the far wall). */
+function atCorridorEnd(a: Area, c: Area): boolean {
+  return c.w >= c.h ? (a.x >= c.x + c.w || a.x + a.w <= c.x) : (a.y >= c.y + c.h || a.y + a.h <= c.y);
 }
 
 /**
- * Purposes of one annex's areas (see the file header, pass 1): `setPurpose(area, purposeId)` applies one (the caller's purpose ↔ slot
- * rule). Returns the plan placeAnnexMachinery builds the layouts from.
+ * Purposes of one annex's areas (see the file header, pass 1, and ANNEX_ZONES): `setPurpose(area, purposeId)` applies one (the caller's
+ * purpose ↔ slot rule). Returns the plan placeAnnexMachinery builds the layouts from. The annex's HIDEOUT room (ServiceAnnex.hideout,
+ * gen/trackExt/annexLayout.ts) never takes a signature: it stays the old stores ('storage') the survivor cache moves into.
  */
 export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], rng: Rng, setPurpose: (a: Area, pid: string) => void, utilityOk: (pid: string, a: Area) => boolean): AnnexRoomPlan {
-  const R = ANNEX_ROOMS, {adj, order} = annexDoorGraph(layout, areas);
-  const sig = new Map<number, SignatureId>(), used = new Map<SignatureId, number>();
-  const rooms = areas.filter(a => a.kind === 'room');
-  const halls = rooms.filter(a => a.extHall).sort((p, q) => m2(q) - m2(p) || p.id - q.id);
-  const medium = rooms.filter(a => !a.extHall && dims(a)[0] >= R.medium.short - 1e-6 && m2(a) >= R.medium.m2 - 1e-6);
-  const k = Math.round(medium.length * R.mediumShare);
-  const chosen = medium.map(a => ({a, key: Math.pow(rng.next(), 1 / m2(a))})).sort((p, q) => q.key - p.key || p.a.id - q.a.id).slice(0, k).map(o => o.a)
-    .sort((p, q) => (order.get(p.id) ?? 1e9) - (order.get(q.id) ?? 1e9) || p.id - q.id);
-  for (const a of [...halls, ...chosen]) {
-    const s = drawSignature(a, adj, sig, used, rng);
-    if (!s) continue;
-    sig.set(a.id, s);
-    used.set(s, (used.get(s) ?? 0) + 1);
+  const R = ANNEX_ROOMS, Z = ANNEX_ZONES, {adj, order} = annexDoorGraph(layout, areas);
+  const byId = new Map(areas.map(a => [a.id, a]));
+  const sig = new Map<number, SignatureId>(), used = new Map<SignatureId, number>(), zone = new Map<number, AnnexZone>();
+  const hideout = layout.extensions?.annexes.find(n => n.id === areas[0]?.extId)?.hideout;
+  const bfs = (p: Area, q: Area) => (order.get(p.id) ?? 1e9) - (order.get(q.id) ?? 1e9) || p.id - q.id;
+  const corr = areas.filter(a => a.kind === 'service').sort(bfs);
+  const dMin = Math.min(...areas.map(a => a.depth));
+  // host corridor of every room (the shallowest corridor it opens onto; rooms off rooms: their room's host)
+  const host = new Map<number, number>();
+  const rq: number[] = [];
+  for (const a of areas.slice().sort(bfs)) {
+    if (a.kind === 'service') continue;
+    const cs = (adj.get(a.id) ?? []).map(id => byId.get(id)!).filter(c => c.kind === 'service').sort((p, q) => p.depth - q.depth || p.id - q.id);
+    if (cs.length) { host.set(a.id, cs[0].id); rq.push(a.id); }
   }
-  // purposes: signature rooms, then utility rooms (hop rule where possible + repeat penalty), closets, corridors
+  for (let h = 0; h < rq.length; h++) for (const o of adj.get(rq[h]) ?? []) if (!host.has(o) && byId.get(o)!.kind !== 'service') { host.set(o, host.get(rq[h])!); rq.push(o); }
+  const hosted = new Map<number, Area[]>(corr.map(c => [c.id, []]));
+  for (const a of areas) if (a.kind !== 'service') hosted.get(host.get(a.id) ?? -1)?.push(a);
+  // districts: staff within one hop of the entry, then plant districts along the corridors (BFS order), each running on into the
+  // next segment / wing until it has its rooms; the rotation is seeded
+  const rot = rng.shuffle(PLANT_ZONES.slice());
+  const fill = new Map<AnnexZone, number>();
+  let next = 0;
+  const czone = new Map<number, AnnexZone>();
+  for (const c of corr) {
+    if (c.depth <= dMin + 1) { czone.set(c.id, 'staff'); continue; }
+    const rooms = (hosted.get(c.id) ?? []).filter(a => a.kind === 'room').length;
+    const pz = (adj.get(c.id) ?? []).map(id => byId.get(id)!).filter(p => p.kind === 'service' && p.depth < c.depth).map(p => czone.get(p.id)).find(z => z && z !== 'staff');
+    let z: AnnexZone | undefined = pz && (fill.get(pz) ?? 0) < Z.district[pz] ? pz : undefined;
+    if (!z) {
+      for (let k = 0; k < rot.length && !z; k++) { const cand = rot[(next + k) % rot.length]; if ((fill.get(cand) ?? 0) < Z.district[cand]) { z = cand; next = (next + k + 1) % rot.length; } }
+      if (!z) { fill.clear(); z = rot[next]; next = (next + 1) % rot.length; }
+    }
+    czone.set(c.id, z);
+    fill.set(z, (fill.get(z) ?? 0) + rooms);
+  }
+  for (const c of corr) zone.set(c.id, czone.get(c.id)!);
+  for (const a of areas) if (a.kind !== 'service') zone.set(a.id, czone.get(host.get(a.id) ?? -1) ?? 'staff');
+  // the old stores at the deep end: the hideout and the small rooms / closets on its corridor
+  if (hideout !== undefined && byId.has(hideout)) {
+    zone.set(hideout, 'stores');
+    for (const a of hosted.get(host.get(hideout) ?? -1) ?? []) if (!a.extHall && (a.kind === 'closet' || dims(a)[0] < R.medium.short - 1e-6 || m2(a) < R.medium.m2 - 1e-6)) zone.set(a.id, 'stores');
+  }
+  const endOf = (a: Area) => { const h = byId.get(host.get(a.id) ?? -1); return !!h && atCorridorEnd(a, h); };
+  const weightsFor = (a: Area) => (s: SignatureId): number => {
+    const z = zone.get(a.id) ?? 'staff', own = Z.sig[z].some(([q]) => q === s);
+    return (a.extHall ? (own ? Z.inZone : 1) : own ? Z.inZone : 1) * (s === 'ventilation' && endOf(a) ? Z.ventEnd : 1);
+  };
+  const rooms = areas.filter(a => a.kind === 'room' && a.id !== hideout);
+  const halls = rooms.filter(a => a.extHall).sort((p, q) => m2(q) - m2(p) || p.id - q.id);
+  for (const a of halls) {
+    const s = drawSignature(a, adj, sig, used, rng, new Set(), weightsFor(a));
+    if (s) { sig.set(a.id, s); used.set(s, (used.get(s) ?? 0) + 1); }
+  }
+  // medium plant rooms: their district's signatures (another district's only now and then, when theirs are all next door already)
+  const medium = (a: Area) => !a.extHall && dims(a)[0] >= R.medium.short - 1e-6 && m2(a) >= R.medium.m2 - 1e-6;
+  for (const a of rooms.filter(q => medium(q) && PLANT_ZONES.includes(zone.get(q.id)!)).sort(bfs)) {
+    if (!rng.chance(Z.plantShare)) continue;
+    const w = weightsFor(a), z = zone.get(a.id)!;
+    let s = drawSignature(a, adj, sig, used, rng, new Set(Z.sig[z].length ? SIGNATURE_IDS.filter(q => !Z.sig[z].some(([o]) => o === q)) : []), w);
+    if (!s && rng.chance(0.35)) s = drawSignature(a, adj, sig, used, rng, new Set(), w);
+    if (s) { sig.set(a.id, s); used.set(s, (used.get(s) ?? 0) + 1); }
+  }
+  // variety: at least minSignatures different ones (a medium utility room takes an unused signature, plant rooms before staff rooms)
+  for (const a of rooms.filter(q => medium(q) && !sig.has(q.id) && zone.get(q.id) !== 'stores').sort((p, q) => (zone.get(p.id) === 'staff' ? 1 : 0) - (zone.get(q.id) === 'staff' ? 1 : 0) || bfs(p, q))) {
+    if (used.size >= Z.minSignatures) break;
+    const s = drawSignature(a, adj, sig, used, rng, new Set(used.keys()), weightsFor(a));
+    if (s) { sig.set(a.id, s); used.set(s, 1); }
+  }
+  // purposes: signature rooms; utility rooms / closets from their zone (hop rule where possible + repeat penalty); corridors
   const uUsed = new Map<string, number>();
-  const ordered = areas.slice().sort((p, q) => (order.get(p.id) ?? 1e9) - (order.get(q.id) ?? 1e9) || p.id - q.id);
-  for (const a of ordered) {
+  for (const a of areas.slice().sort(bfs)) {
     if (a.kind === 'service') { setPurpose(a, 'service-corridor'); continue; }
     const s = sig.get(a.id);
     if (s) { setPurpose(a, ROOM_SIGNATURES[s].purpose); continue; }
-    if (a.kind === 'closet') { setPurpose(a, rng.weighted(R.closets)); continue; }
-    setPurpose(a, drawUtility(a, adj, areas, uUsed, rng, utilityOk));
+    const z = zone.get(a.id) ?? 'staff';
+    if (a.kind === 'closet') { setPurpose(a, rng.weighted(Z.closet[z])); continue; }
+    setPurpose(a, a.id === hideout ? 'storage' : drawUtility(a, adj, areas, uUsed, rng, utilityOk, Z.util[z]));
   }
-  return {sig, adj, order};
+  partners(areas, adj, byId, sig, zone, setPurpose, utilityOk);
+  return {sig, adj, order, zone};
 }
 
-/** The anti-repetition draw of one room's signature (null: none eligible). `ban`: signatures already tried here. */
-function drawSignature(a: Area, adj: Map<number, number[]>, sig: ReadonlyMap<number, SignatureId>, used: ReadonlyMap<SignatureId, number>, rng: Rng, ban: ReadonlySet<SignatureId> = new Set()): SignatureId | null {
+/**
+ * (Round 3) Functional partners after the draw: a generator room with no electrical room / closet within two door hops converts the
+ * nearest utility room of its corridor (same district) into one; a water room (sewage / overflow / spillway) with no other water room
+ * or pump room within two hops converts one into a pump room. Only utility rooms of a plant district change (never the hideout).
+ */
+function partners(areas: readonly Area[], adj: Map<number, number[]>, byId: Map<number, Area>, sig: ReadonlyMap<number, SignatureId>, zone: ReadonlyMap<number, AnnexZone>,
+  setPurpose: (a: Area, pid: string) => void, ok: (pid: string, a: Area) => boolean): void {
+  const near = (id: number) => within(adj, id, 2).map(o => byId.get(o)!).filter(Boolean);
+  const want: [SignatureId[], string[], string][] = [
+    [['generator'], ['electrical-room', 'electrical-closet'], 'electrical-room'],
+    [['sewage', 'overflow', 'spillway'], ['pump-room', 'sewage-room', 'overflow-chamber', 'spillway'], 'pump-room'],
+  ];
+  for (const a of areas) {
+    const s = sig.get(a.id);
+    if (!s) continue;
+    for (const [sigs, partner, conv] of want) {
+      if (!sigs.includes(s) || near(a.id).some(o => partner.includes(o.purpose ?? ''))) continue;
+      const cx = (a.x + a.w / 2), cy = (a.y + a.h / 2);
+      const cand = near(a.id).filter(o => o.kind === 'room' && !sig.has(o.id) && !o.extHall && PLANT_ZONES.includes(zone.get(o.id)!) && ok(conv, o))
+        .sort((p, q) => Math.abs(p.x + p.w / 2 - cx) + Math.abs(p.y + p.h / 2 - cy) - (Math.abs(q.x + q.w / 2 - cx) + Math.abs(q.y + q.h / 2 - cy)) || p.id - q.id);
+      if (cand.length) setPurpose(cand[0], conv);
+    }
+  }
+}
+
+/**
+ * The anti-repetition draw of one room's signature (null: none eligible). `ban`: signatures not to draw (tried here / another zone's);
+ * `w`: (round 3) a per-signature weight factor (the room's zone, a ventilation plant at a corridor end).
+ */
+function drawSignature(a: Area, adj: Map<number, number[]>, sig: ReadonlyMap<number, SignatureId>, used: ReadonlyMap<SignatureId, number>, rng: Rng, ban: ReadonlySet<SignatureId> = new Set(),
+  w: (s: SignatureId) => number = () => 1): SignatureId | null {
   const R = ANNEX_ROOMS;
   const near = new Set(within(adj, a.id, R.hops).map(id => sig.get(id)).filter((s): s is SignatureId => !!s));
   const opts = SIGNATURE_IDS.filter(s => !ban.has(s) && !near.has(s) && fitsSig(s, a)).map(s => {
     const sp = ROOM_SIGNATURES[s], u = used.get(s) ?? 0;
-    return [s, sp.weight * (a.extHall ? sp.hall : 1) * (u ? Math.pow(R.repeat, u) : R.unusedBoost)] as [SignatureId, number];
-  });
+    return [s, sp.weight * (a.extHall ? sp.hall : 1) * (u ? Math.pow(R.repeat, u) : R.unusedBoost) * w(s)] as [SignatureId, number];
+  }).filter(o => o[1] > 0);
   return opts.length ? rng.weighted(opts) : null;
 }
 
-function drawUtility(a: Area, adj: Map<number, number[]>, areas: readonly Area[], used: Map<string, number>, rng: Rng, ok: (pid: string, a: Area) => boolean): string {
+/** A utility purpose for a room: from `list` (round 3: its zone's; default ANNEX_ROOMS.utility), the hop rule where possible, repeat penalty. */
+function drawUtility(a: Area, adj: Map<number, number[]>, areas: readonly Area[], used: Map<string, number>, rng: Rng, ok: (pid: string, a: Area) => boolean,
+  list: readonly (readonly [string, number])[] = ANNEX_ROOMS.utility): string {
   const R = ANNEX_ROOMS, byId = new Map(areas.map(q => [q.id, q]));
   const near = new Set(within(adj, a.id, R.hops).map(id => byId.get(id)?.purpose).filter((p): p is string => !!p));
-  const all = R.utility.filter(([pid]) => ok(pid, a));
+  let all = list.filter(([pid]) => ok(pid, a));
+  // (round 3) the zone's purposes do not fit this room: any fitting utility purpose
+  if (!all.length) all = R.utility.filter(([pid]) => ok(pid, a));
   const fresh = all.filter(([pid]) => !near.has(pid));
-  const list = (fresh.length ? fresh : all).map(([pid, w]) => [pid, w * Math.pow(R.utilityRepeat, used.get(pid) ?? 0)] as [string, number]);
-  const pid = list.length ? rng.weighted(list) : 'storage';
+  const pool = (fresh.length ? fresh : all).map(([pid, w]) => [pid, w * Math.pow(R.utilityRepeat, used.get(pid) ?? 0)] as [string, number]);
+  const pid = pool.length ? rng.weighted(pool) : 'storage';
   used.set(pid, (used.get(pid) ?? 0) + 1);
   return pid;
 }
@@ -851,7 +991,9 @@ export function placeAnnexMachinery(layout: StationLayout, plan: AnnexRoomPlan, 
       rollback(ctx);
       out.length = n0;
       plan.sig.delete(a.id);
-      s = drawSignature(a, plan.adj, plan.sig, used, e.rng, tried);
+      // (round 3) a retry prefers the room's own district
+      const z = plan.zone?.get(a.id);
+      s = drawSignature(a, plan.adj, plan.sig, used, e.rng, tried, q => (z && ANNEX_ZONES.sig[z].some(([o]) => o === q) ? ANNEX_ZONES.inZone : 1));
       if (s) plan.sig.set(a.id, s);
     }
     if (ok && s) {
@@ -862,7 +1004,8 @@ export function placeAnnexMachinery(layout: StationLayout, plan: AnnexRoomPlan, 
       rep.solids += e.placed;
     } else {
       plan.sig.delete(a.id);
-      setPurpose(a, drawUtility(a, plan.adj, areas, uUsed, e.rng, utilityOk));
+      const z = plan.zone?.get(a.id);
+      setPurpose(a, drawUtility(a, plan.adj, areas, uUsed, e.rng, utilityOk, z ? ANNEX_ZONES.util[z] : ANNEX_ROOMS.utility));
       rep.demoted++;
     }
   }

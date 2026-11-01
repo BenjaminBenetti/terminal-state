@@ -17,6 +17,7 @@ import {ROOM_LABEL, type Kit, type TrenchCells} from '../stationKit';
 import type {Area, AreaKind, Door, Rect, RoomType} from '../stationTypes';
 import {buildPath, pathEnd, pointAt, samplePath, tubeCells, walkCells, type ShapeStep, type TubeCells, type TunnelPath, type Vec2} from './path';
 import {SUBWAY_WALK_BASELINE_M2} from './config';
+import {planServiceArea, type LaidKind, type LayoutPrims} from './annexLayout';
 import type {BedEnd, BedEntry, CapKind, ServiceAnnex, TrackExtConfig, TrackExtContext, TrackExtensions, TrackTunnel} from './types';
 
 /** Cells of virtual canvas around the core bbox the extensions may use (> longest tunnel + an annex). */
@@ -61,9 +62,6 @@ interface PlannedTunnel {
   foot: {x: number[]; y: number[]};
   area: number; cap: CapKind;
 }
-
-/** `since`: areas since the last machinery hall on its branch (lane ROOMS: the hall rhythm); `hall`: a machinery hall (a room). */
-interface AnnexArea { area: number; rect: Rect; kind: 'corridor' | 'room' | 'closet'; depth: number; since: number; hall?: boolean }
 
 const vkey = (x: number, y: number): number => (y + 8192) * 16384 + (x + 8192);
 
@@ -368,14 +366,19 @@ export class Carver {
 
   get planned(): readonly PlannedTunnel[] { return this.tunnels; }
 
-  /** Rect test for an annex area of `group`: core / other-group margins on every cell, one wall cell to the own group. */
+  /**
+   * Rect test for an annex area of `group`: core / other-group margins on every cell, one wall cell to the own group. (Round 3, lane
+   * LAYOUT: the ring is tested first — the cheap rejection — and no interior cell may be claimed either, so a rect can never swallow
+   * a smaller area of its own annex whole.)
+   */
   private rectOk(r: Rect, group: number): boolean {
     if (r.w < 1 || r.h < 1) return false;
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (!this.cellOk(x, y, group, null)) return false;
     for (let y = r.y - 1; y <= r.y + r.h; y++) for (let x = r.x - 1; x <= r.x + r.w; x++) {
+      if (y > r.y - 1 && y < r.y + r.h && x === r.x) x = r.x + r.w;
       const i = this.vi(x, y);
       if (i < 0 || this.own[i] === group + 1) return false;
     }
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (this.own[this.vi(x, y)] !== 0 || !this.cellOk(x, y, group, null)) return false;
     return true;
   }
 
@@ -500,8 +503,10 @@ export class Carver {
   }
 
   /**
-   * Room-graph growth from the entry corridor `root` (running away from the tunnel / bed toward `away`). Transactional: claims
-   * cells as it goes; on failure every claim and record is rolled back.
+   * (Round 3, lane LAYOUT) The service area grown from the entry corridor `root` (running away from the tunnel / bed toward `away`):
+   * a LOGICAL plan — the entry passage, a main service corridor across its end, a few wings, rooms lined up along every corridor,
+   * machinery halls, end rooms, the hideout (gen/trackExt/annexLayout.ts planServiceArea; this method supplies its primitives).
+   * Transactional: claims cells as it goes; on failure every claim and record is rolled back.
    */
   private grow(from: AnnexEntry, annexId: number, rng: Rng, root: Rect, away: 'N' | 'S', doorRect: Rect, targetM2: number, minM2: number): {annex: ServiceAnnex; door: number} | string {
     const A = this.cfg.annex, group = from.group, floorY = from.floorY;
@@ -512,13 +517,10 @@ export class Carver {
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const i = this.vi(x, y); this.own[i] = group + 1; claimed.push(i); }
     };
     const ceilH = () => Math.round(rng.range(A.ceil[0], A.ceil[1]) * 20) / 20;
-    // (lane ROOMS) machinery halls: how many this annex wants (A.hall; none without it)
+    // (lane ROOMS) machinery halls: taller rooms (A.hall; the planner decides how many and where)
     const H = A.hall;
-    const hallWant = H ? rng.int(H.count[0], H.count[1]) : 0;
-    let halls = 0;
     let cells = 0;
-    const list: AnnexArea[] = [];
-    const addArea = (r: Rect, kind: AnnexArea['kind'], parent: number, depth: number, since: number, hall = false): AnnexArea => {
+    const addArea = (r: Rect, kind: LaidKind, parent: number, depth: number, hall = false): number => {
       let type: RoomType, ak: AreaKind;
       if (kind === 'corridor') { type = 'service-corridor'; ak = 'service'; }
       else if (kind === 'closet') { type = rng.chance(0.5) ? 'janitor-closet' : 'supply-closet'; ak = 'closet'; }
@@ -536,9 +538,7 @@ export class Carver {
       cells += r.w * r.h;
       this.box = this.grown({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1});
       this.carve.rects.push({...r});
-      const e: AnnexArea = {area: a.id, rect: r, kind, depth, since, ...(hall ? {hall: true} : {})};
-      list.push(e);
-      return e;
+      return a.id;
     };
     const addDoor = (r: Rect, a: number, b: number): number => {
       const ab = this.carve.areas[b];
@@ -550,23 +550,18 @@ export class Carver {
       cells += r.w * r.h;
       return d.id;
     };
-    const rollback = (why: string): string => {
-      this.carve.areas.length = a0; this.carve.doors.length = d0; this.carve.cells.length = c0; this.carve.rects.length = r0;
-      for (const i of claimed) this.own[i] = 0;
-      this.box = box0;
-      return why;
+    type Mark = {a: number; d: number; c: number; r: number; cells: number; claimed: number; box: {x0: number; y0: number; x1: number; y1: number}};
+    const mark = (): Mark => ({a: this.carve.areas.length, d: this.carve.doors.length, c: this.carve.cells.length, r: this.carve.rects.length, cells, claimed: claimed.length, box: {...this.box}});
+    const undo = (m: Mark) => {
+      this.carve.areas.length = m.a; this.carve.doors.length = m.d; this.carve.cells.length = m.c; this.carve.rects.length = m.r;
+      cells = m.cells;
+      for (let i = m.claimed; i < claimed.length; i++) this.own[claimed[i]] = 0;
+      claimed.length = m.claimed;
+      this.box = m.box;
     };
-    /** Rect adjacent to `p` on `side` (one wall cell between), `along` x `deep`, at overlap offset u in [0, 1]. */
-    const adjacent = (p: Rect, side: 'N' | 'S' | 'E' | 'W', along: number, deep: number, u: number): Rect => {
-      const need = Math.min(A.doorCells + 2, side === 'N' || side === 'S' ? p.w : p.h);
-      if (side === 'N' || side === 'S') {
-        const lo = p.x - along + need, hi = p.x + p.w - need;
-        const x = Math.round(lo + (hi - lo) * u);
-        return {x, y: side === 'S' ? p.y + p.h + 1 : p.y - 1 - deep, w: along, h: deep};
-      }
-      const lo = p.y - along + need, hi = p.y + p.h - need;
-      const y = Math.round(lo + (hi - lo) * u);
-      return {x: side === 'E' ? p.x + p.w + 1 : p.x - 1 - deep, y, w: deep, h: along};
+    const rollback = (why: string): string => {
+      undo({a: a0, d: d0, c: c0, r: r0, cells: 0, claimed: 0, box: box0});
+      return why;
     };
     /** Door rect in the shared wall of p and c (null when the overlap is too small). */
     const wallDoor = (p: Rect, c: Rect, width: number): Rect | null => {
@@ -585,150 +580,38 @@ export class Carver {
       for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) { const i = this.vi(x, y); if (i < 0 || this.own[i] !== 0 || !this.coreFree(x, y, null)) return null; }
       return r;
     };
-    const cellsOf = (m: number) => Math.max(1, Math.round(m / CELL));
-    const roomDims = (closet: boolean): [number, number] => {
-      if (closet) { const a = rng.int(cellsOf(A.roomMin[0]), cellsOf(A.closetMax)), b = rng.int(cellsOf(A.roomMin[1]), cellsOf(A.closetMax)); return [a, b]; }
-      // big plant / store rooms more often than small ones (cramped, but worth the walk)
-      const big = rng.chance(0.6);
-      const sMin = cellsOf(big ? 5.5 : A.roomMin[0]), sMax = cellsOf(big ? A.roomMax[0] : 5.5);
-      const s = rng.int(sMin, sMax);
-      const l = rng.int(Math.max(s, cellsOf(A.roomMin[1])), Math.max(s, cellsOf(big ? A.roomMax[1] : 7)));
-      return rng.chance(0.5) ? [s, l] : [l, s];
-    };
-    const growth = (r: Rect) => this.cellsFor(this.grown({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1})) - this.cellsFor(this.box);
+    const bbox = (r: Rect) => ({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1});
 
-    // root corridor + the entry door (tunnel area -> corridor) + a room at its far end (dead ends end in rooms)
-    const rootA = addArea(root, 'corridor', from.area, 1, 1);
-    // (GEN-2: a hatch door joins the bed, which has no area: a = b = the entry corridor)
-    const entry = addDoor(doorRect, from.area >= 0 ? from.area : rootA.area, rootA.area);
-    const endRoom = (c: AnnexArea, dirSide: 'N' | 'S' | 'E' | 'W'): boolean => {
-      for (let k = 0; k < 6; k++) {
-        const [along, deep] = roomDims(rng.chance(0.2));
-        const r = adjacent(c.rect, dirSide, along, deep, rng.next());
-        if (!this.rectOk(r, group) || !this.fits({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1})) continue;
-        const dw = wallDoor(c.rect, r, Math.min(A.doorCells, c.kind === 'corridor' ? Math.min(c.rect.w, c.rect.h) : A.doorCells));
-        if (!dw) continue;
-        const kind = along <= cellsOf(A.closetMax) && deep <= cellsOf(A.closetMax) ? 'closet' : 'room';
-        const e = addArea(r, kind, c.area, c.depth + 1, c.since + 1);
-        addDoor(dw, c.area, e.area);
-        return true;
-      }
-      return false;
+    // root corridor (the entry passage) + the entry door (tunnel area -> corridor; GEN-2: a hatch door joins the bed, which has no
+    // area: a = b = the entry corridor), then the plan
+    const rootId = addArea(root, 'corridor', from.area, 1);
+    const entry = addDoor(doorRect, from.area >= 0 ? from.area : rootId, rootId);
+    const prims: LayoutPrims = {
+      free: (x, y) => { const i = this.vi(x, y); return i >= 0 && this.own[i] === 0 && this.cellOk(x, y, group, null); },
+      ring: (x, y) => { const i = this.vi(x, y); return i >= 0 && this.own[i] !== group + 1; },
+      rectOk: r => this.rectOk(r, group),
+      fits: r => this.fits(bbox(r)),
+      growth: r => this.cellsFor(this.grown(bbox(r))) - this.cellsFor(this.box),
+      add: (r, kind, parent, depth, hall) => addArea(r, kind, parent, depth, hall),
+      door: addDoor,
+      wallDoor,
+      cells: () => cells,
+      mark,
+      undo: m => undo(m as Mark),
     };
-    if (!endRoom(rootA, away)) return rollback('no room at the entry corridor end');
-
-    const sides: ('N' | 'S' | 'E' | 'W')[] = ['N', 'S', 'E', 'W'];
-    const target = targetM2 / (CELL * CELL);
-    let corridors = 1;
-    /**
-     * (lane ROOMS) One machinery-hall attempt: `tries` seeded placements off corridors at least H.spacing areas past the previous
-     * hall on their branch (long side along the host wall half the time), within the area target (+ slack) and the grid budget;
-     * the least crop growth wins. A hall is a 'room' (Area.extHall, taller ceiling) that later areas may branch off.
-     */
-    const tryHall = (): boolean => {
-      if (!H) return false;
-      const hosts = list.filter(e => e.kind === 'corridor' && e.since >= H.spacing);
-      if (!hosts.length) return false;
-      let best: {r: Rect; P: AnnexArea; g: number} | null = null;
-      for (let t = 0; t < H.tries; t++) {
-        const P = rng.pick(hosts);
-        const s = rng.int(cellsOf(H.short[0]), cellsOf(H.short[1])), l = rng.int(Math.max(s, cellsOf(H.long[0])), cellsOf(H.long[1]));
-        const [along, deep] = rng.chance(0.5) ? [l, s] : [s, l];
-        const r = adjacent(P.rect, rng.pick(sides), along, deep, rng.next());
-        if (cells + along * deep > target * (1 + H.slack)) continue;
-        if (!this.rectOk(r, group) || !this.fits({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1})) continue;
-        const g = growth(r);
-        if (!best || g < best.g) best = {r, P, g};
-      }
-      if (!best) return false;
-      const dw = wallDoor(best.P.rect, best.r, Math.min(A.doorCells, best.P.rect.w, best.P.rect.h));
-      if (!dw) return false;
-      const e = addArea(best.r, 'room', best.P.area, best.P.depth + 1, 0, true);
-      addDoor(dw, best.P.area, e.area);
-      halls++;
-      return true;
-    };
-    for (let step = 0; step < A.steps && cells < target; step++) {
-      // (lane ROOMS) hall k is due once the annex reaches (k + 0.5) / (want + 1) of its target: big rooms along the growth, not a cluster
-      if (halls < hallWant && cells >= target * (halls + 0.5) / (hallWant + 1) && tryHall()) continue;
-      const parents = list.map(e => [e, e.kind === 'corridor' ? 3 : e.kind === 'room' ? (e.depth < 9 ? (e.hall ? 2.2 : 1.1) : 0.3) : 0] as [AnnexArea, number]).filter(e => e[1] > 0);
-      if (!parents.length) break;
-      const P = rng.weighted(parents);
-      const kind: AnnexArea['kind'] = P.kind === 'corridor'
-        ? rng.weighted([['room', 0.62], ['corridor', corridors < 14 ? 0.26 : 0], ['closet', 0.12]] as [AnnexArea['kind'], number][])
-        : rng.weighted([['closet', 0.25], ['room', 0.5], ['corridor', corridors < 14 ? 0.25 : 0]] as [AnnexArea['kind'], number][]);
-      let best: {r: Rect; side: 'N' | 'S' | 'E' | 'W'; g: number} | null = null;
-      for (let c = 0; c < 4; c++) {
-        const side = rng.pick(sides);
-        let along: number, deep: number;
-        if (kind === 'corridor') {
-          const cw = rng.int(cellsOf(A.corridorWidth[0]), cellsOf(A.corridorWidth[1])), cl = rng.int(cellsOf(A.corridorLength[0]), cellsOf(A.corridorLength[1]));
-          // away from the parent (deep = length) or along its wall (along = length)
-          [along, deep] = rng.chance(0.55) ? [cw, cl] : [cl, cw];
-        } else [along, deep] = roomDims(kind === 'closet');
-        const r = adjacent(P.rect, side, along, deep, rng.next());
-        if (!this.rectOk(r, group) || !this.fits({x0: r.x, y0: r.y, x1: r.x + r.w - 1, y1: r.y + r.h - 1})) continue;
-        const g = growth(r);
-        if (!best || g < best.g) best = {r, side, g};
-      }
-      if (!best) continue;
-      const dw = wallDoor(P.rect, best.r, kind === 'closet' ? 2 : Math.min(A.doorCells, kind === 'corridor' ? Math.min(best.r.w, best.r.h) : A.doorCells));
-      if (!dw) continue;
-      const kindF = kind === 'room' && best.r.w <= cellsOf(A.closetMax) && best.r.h <= cellsOf(A.closetMax) ? 'closet' : kind;
-      const mark = {a: this.carve.areas.length, d: this.carve.doors.length, c: this.carve.cells.length, r: this.carve.rects.length, l: list.length, cells, claimed: claimed.length, box: {...this.box}};
-      const e = addArea(best.r, kindF, P.area, P.depth + 1, P.hall ? 1 : P.since + 1);
-      addDoor(dw, P.area, e.area);
-      if (kindF === 'corridor') {
-        // a corridor runs on to a room at its far end (or is undone)
-        const far: 'N' | 'S' | 'E' | 'W' = best.r.w < best.r.h ? (best.side === 'S' ? 'S' : best.side === 'N' ? 'N' : rng.pick(['N', 'S'] as const))
-          : (best.side === 'E' ? 'E' : best.side === 'W' ? 'W' : rng.pick(['E', 'W'] as const));
-        if (!endRoom(e, far)) {
-          this.carve.areas.length = mark.a; this.carve.doors.length = mark.d; this.carve.cells.length = mark.c; this.carve.rects.length = mark.r;
-          list.length = mark.l; cells = mark.cells;
-          for (let i = mark.claimed; i < claimed.length; i++) this.own[claimed[i]] = 0;
-          claimed.length = mark.claimed;
-          this.box = mark.box;
-          continue;
-        }
-        corridors++;
-      }
-    }
+    const plan = planServiceArea(prims, rng, A, {id: rootId, r: root, away}, targetM2 / (CELL * CELL));
+    if (!plan) return rollback('no service corridor fits');
     if (cells * CELL * CELL < minM2) return rollback(`too small (${Math.round(cells * CELL * CELL)} m² < ${Math.round(minM2)} m²)`);
 
-    // one main loop: an extra door between two neighbouring areas far apart in the door graph
-    if (rng.chance(A.loopChance)) {
-      const ids = list.map(e => e.area);
-      const adj = new Map<number, number[]>();
-      for (const d of this.carve.doors.slice(d0)) for (const [p, q] of [[d.a, d.b], [d.b, d.a]]) { let l = adj.get(p); if (!l) adj.set(p, (l = [])); l.push(q); }
-      const hops = (s: number): Map<number, number> => {
-        const dist = new Map<number, number>([[s, 0]]), q = [s];
-        while (q.length) { const v = q.shift()!; for (const w of adj.get(v) ?? []) if (!dist.has(w)) { dist.set(w, dist.get(v)! + 1); q.push(w); } }
-        return dist;
-      };
-      const pairs: [AnnexArea, AnnexArea][] = [];
-      for (let i = 0; i < list.length; i++) {
-        const di = hops(ids[i]);
-        for (let j = i + 1; j < list.length; j++) {
-          if ((di.get(ids[j]) ?? 99) < 4) continue;
-          if (list[i].kind === 'closet' || list[j].kind === 'closet') continue;
-          pairs.push([list[i], list[j]]);
-        }
-      }
-      for (const [p, q] of rng.shuffle(pairs)) {
-        const dw = wallDoor(p.rect, q.rect, Math.min(A.doorCells, p.kind === 'corridor' ? Math.min(p.rect.w, p.rect.h) : A.doorCells, q.kind === 'corridor' ? Math.min(q.rect.w, q.rect.h) : A.doorCells));
-        if (!dw) continue;
-        addDoor(dw, p.area, q.area);
-        break;
-      }
-    }
     // commit: the other groups keep margin.ext from every annex cell
     const xs: number[] = [], ys: number[] = [];
     for (let i = c0; i < this.carve.cells.length; i++) { xs.push(this.carve.cells[i].x); ys.push(this.carve.cells[i].y); }
     this.claim(xs, ys, group);
-    const areas = list.map(e => e.area);
+    const areas = plan.areas.map(e => e.id);
     const ceilY = Math.max(...areas.map(i => this.carve.areas[i].ceil));
     const ex = (doorRect.x + doorRect.w / 2) * CELL, ez = (doorRect.y + doorRect.h / 2) * CELL;
-    return {annex: {id: annexId, tunnel: from.tunnel, door: entry, areas, floorY, ceilY, cells, areaM2: cells * CELL * CELL, exit: {x: ex, z: ez}}, door: entry};
+    return {annex: {id: annexId, tunnel: from.tunnel, door: entry, areas, floorY, ceilY, cells, areaM2: cells * CELL * CELL, exit: {x: ex, z: ez},
+      ...(plan.hideout !== null ? {hideout: plan.hideout} : {})}, door: entry};
   }
 
   // ---------------------------------------------------------------------------------------------

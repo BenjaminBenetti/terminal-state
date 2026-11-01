@@ -17,6 +17,30 @@ import type {TrackExtConfig} from './types';
 export const SUBWAY_WALK_BASELINE_M2 = 7371;
 
 /**
+ * (Round 3, lane LAYOUT) THE SERVICE-AREA PLAN of every annex (TrackExtConfig.annex.layout; gen/trackExt/annexLayout.ts): a 2 m main
+ * service corridor in 10-16 m segments (fire-door openings between them; 3-5 beyond its junction), 2-4 wings of 1-2 segments,
+ * rooms lined up along both sides of every corridor — 4-5.5 m deep small staff rooms on the entry passage and the junction, 5-8 m
+ * plant rooms beyond, widths along the corridor by weight — wing slots reserved on a spine side with `slotChance`, the hideout rule
+ * (>= 3.5 x 4 m and 14 m², 18-32 m² preferred) and the growth-aware choices' crop scale (cells).
+ */
+export const SERVICE_LAYOUT: NonNullable<TrackExtConfig['annex']['layout']> = {
+  spineWidth: [2, 2],
+  segment: [10, 16],
+  spineSegments: [3, 5],
+  wings: [2, 4],
+  wingSegments: [1, 2],
+  wingWidth: [1.5, 2],
+  bay: {staff: [4, 5.5], plant: [5, 8]},
+  widths: {
+    staff: [[3, 3.5, 0.2], [4, 5, 0.5], [5.5, 7, 0.3]],
+    plant: [[3, 3.5, 0.1], [4, 5, 0.25], [5.5, 7.5, 0.35], [8, 10, 0.3]],
+  },
+  slotChance: 0.55,
+  hideout: {short: 3.5, long: 4, m2: 14, prefer: [18, 32]},
+  growthScale: 2000,
+};
+
+/**
  * Track extension config of the Subway (the Office street station uses TRACK_EXT_OFFICE: the same block minus the GEN-2 options).
  *
  * GEN-2 (user: service annexes "present randomly on basically every level that has a subway track", "multiple can spawn, two"):
@@ -65,6 +89,8 @@ export const TRACK_EXT: TrackExtConfig = {
     // task track2-playtest-revision (lane ROOMS): 2-3 machinery halls per annex (9-12 x 12-16 m, 3.6-4.2 m ceilings) inside the
     // same area target — the tight network stays, punctuated by big signature rooms (user feedback 5)
     hall: {count: [2, 3], short: [9, 12], long: [12, 16], ceil: [3.6, 4.2], spacing: 2, tries: 8, slack: 0.02},
+    // round 3 (lane LAYOUT): the logical service-area plan (main corridor, wings, rooms lined up, the hideout)
+    layout: SERVICE_LAYOUT,
   },
   coreReserveM: 40,
   hatch: {s: [2, 10]},

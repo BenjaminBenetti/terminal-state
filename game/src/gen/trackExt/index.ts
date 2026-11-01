@@ -253,6 +253,7 @@ export function attachExtensions(layout: StationLayout, ext: TrackExtensions, cr
   for (const n of ext.annexes) {
     n.door = D(n.door);
     n.areas = n.areas.map(A);
+    if (n.hideout !== undefined) n.hideout = A(n.hideout); // (round 3, lane LAYOUT)
     n.exit = {x: r4(n.exit.x - dx), z: r4(n.exit.z - dz)};
     if (n.bed) { n.bed.door = D(n.bed.door); n.bed.x = r4(n.bed.x - dx); n.bed.z = r4(n.bed.z - dz); }
   }
@@ -315,6 +316,9 @@ export function trackExtCoverageIssues(levelId: string, decl: TrackExtConfig | '
 export function extensionAreaIds(layout: StationLayout): number[] {
   return layout.areas.filter(a => isExtensionArea(a)).map(a => a.id);
 }
+
+/** (Round 3, lane LAYOUT) The machinery-signature purposes (gen/annexRooms.ts ROOM_SIGNATURES): a hideout never takes one. */
+const SIGNATURE_PURPOSES = new Set(['boiler-room', 'generator-room', 'sewage-room', 'overflow-chamber', 'spillway', 'turbine-hall', 'ventilation-plant']);
 
 /** Minimum clear height (m) on every extension cell (doorways included). */
 export const EXT_HEAD_CLEARANCE = 2.2;
@@ -439,6 +443,11 @@ export function extensionIssues(layout: StationLayout, dists?: readonly Int32Arr
       if (h < lo - 1e-6 || h > hi + 1e-6) issues.push(`annex ${n.id}: area ${id} ceiling ${h.toFixed(2)} m`);
       if (a.extHall && a.kind !== 'room') issues.push(`annex ${n.id}: hall ${id} is not a room`);
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.area[g.idx(x, y)] !== id) { issues.push(`annex ${n.id}: area ${id} rect not its own`); y = a.y + a.h; break; }
+    }
+    // (round 3, lane LAYOUT) the hideout: one of the annex's rooms — never a closet / corridor / hall, never a machinery signature
+    if (n.hideout !== undefined) {
+      const h = layout.areas[n.hideout];
+      if (!h || !n.areas.includes(n.hideout) || h.kind !== 'room' || h.extHall || (h.purpose && SIGNATURE_PURPOSES.has(h.purpose))) issues.push(`annex ${n.id}: hideout ${n.hideout} is not a plain room of the annex`);
     }
     if (n.tunnel >= 0) {
       if (n.bed) issues.push(`annex ${n.id}: both a tunnel and a bed entry`);

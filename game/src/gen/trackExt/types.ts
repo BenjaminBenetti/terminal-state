@@ -89,6 +89,15 @@ export interface ServiceAnnex {
   exit: {x: number; z: number};
   /** (GEN-2) Only on service-hatch annexes (tunnel = -1): the door in the track bed's side wall. */
   bed?: BedEntry;
+  /**
+   * (Round 3, lane LAYOUT; optional, additive) THE HIDEOUT ROOM of the annex (layout.areas id): the room the layout keeps for the
+   * survivor cache — a room (never a closet, corridor or machinery hall; gen/annexRooms.ts never gives it a machinery signature: it is
+   * the annex's "old stores", purpose 'storage') of at least 3.5 x 4 m and 14 m², in the DEEPEST THIRD of the annex's door-hop range
+   * (Area.depth: band 2 of dMin..dMax, the band formula of gen/annexCache.ts / pickOver), a dead end (one door) wherever the layout
+   * allows (the loop door never opens into it). Set by gen/trackExt/annexLayout.ts planServiceArea on every annex it can find or add
+   * one in (the broad census: all of them); absent = none — readers keep their own fallback.
+   */
+  hideout?: number;
 }
 
 /**
@@ -282,6 +291,23 @@ export interface TrackExtConfig {
      * Short / long side and ceiling ranges in metres (ceiling above the floor; the annex rooms keep `ceil`). Absent = no halls.
      */
     hall?: {count: [number, number]; short: [number, number]; long: [number, number]; ceil: [number, number]; spacing: number; tries: number; slack: number};
+    /**
+     * (Round 3, lane LAYOUT; optional: gen/trackExt/annexLayout.ts SERVICE_LAYOUT is the default) THE SERVICE-AREA PLAN — metres unless
+     * noted: the main service corridor's width and segment lengths (straight runs split by fire-door openings), how many segments the
+     * spine wants beyond its junction, wings (count, segments each, width), the room bay depth off a corridor per zone (staff: the entry
+     * passage + the spine junction; plant: beyond), room widths along a corridor per zone ([min, max, weight]), the chance a spine side
+     * reserves a wing slot, the hideout rule (short / long side, m², preferred m² range) and the crop-growth scale (cells) of the
+     * growth-aware choices.
+     */
+    layout?: {
+      spineWidth: [number, number]; segment: [number, number]; spineSegments: [number, number];
+      wings: [number, number]; wingSegments: [number, number]; wingWidth: [number, number];
+      bay: {staff: [number, number]; plant: [number, number]};
+      widths: {staff: [number, number, number][]; plant: [number, number, number][]};
+      slotChance: number;
+      hideout: {short: number; long: number; m2: number; prefer: [number, number]};
+      growthScale: number;
+    };
   };
   /**
    * CORE-CHANGING option (0 = off, the DESIGN §0 default: the core stays byte-identical): metres of rock kept free straight past
