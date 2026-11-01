@@ -354,7 +354,7 @@ fork `marks:<annexId>`):
 - **Presentation:** `cacheMarkDecals` paints flat quads on each record's wall plane into the ONE graffiti mesh (one draw per level, the
   shared material). The atlas grows to **2048 × 1280** (one more 256 px row: ~13.3 MiB with mips, was ~10.7). The marks are wall-treatment
   keep-outs (`stationArtKeepouts`, why `'cache-mark'`): no pipes / cables / stains across them.
-- **Measured:** broad sample (291 annexes) — 2677 marks (~9.2 an annex) over 2507 path doorways / 2080 junctions, **2 doorways missed**;
+- **Measured:** broad sample (291 annexes) — 2677 marks (~9.2 an annex; measured with the tally in the first cache only — a second cache's tally adds one more) over 2507 path doorways / 2080 junctions, **2 doorways missed**;
   a mark reader following ONLY the marks (no cache knowledge) reaches a cache in **289 / 291** annexes (the 2 misses). The opt-in
   real-Player route (`ANNEX_ROUTE=1 ROUTE_ONLY=marks`, strategy `'marks'`, `tests/helpers/annexRoute.ts`): on Subway 1043 / 1002 (2),
   Office 222 (2), Mall 846932 the trail reached every hideout after **8–11 rooms / 78–270 m** with no lost step, vs the round-2
