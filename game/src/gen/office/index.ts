@@ -90,8 +90,9 @@ export function generateOfficeLevel(ctx: SectionGenContext, loot: LootProfile = 
     OFFICE_GEN_STATS.attempts = attempt + 1;
     if (!layout) { OFFICE_GEN_STATS.carveFails++; continue; }
     let issues = officeIssues(layout, f, spawns);
-    // Track 2: extensions never decide a retry (the core keeps its attempt): drop them and re-check the core.
-    if (issues.length && layout.extensions?.tunnels.length) {
+    // Track 2: extensions never decide a retry (the core keeps its attempt): drop them and re-check the core. (Round 4 follow-up: an
+    // annex too, like the Subway / Mall guards — the Office's fallback bed hatch can exist on a level without tunnels.)
+    if (issues.length && (layout.extensions?.tunnels.length || layout.extensions?.annexes.length)) {
       dropExtensions(layout);
       issues = officeIssues(layout, f, spawns);
       if (!issues.length) TRACK_EXT_STATS.rescued++;
