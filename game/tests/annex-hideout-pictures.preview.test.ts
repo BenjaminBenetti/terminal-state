@@ -93,6 +93,9 @@ describe.runIf(!!process.env.HIDEOUT_PICTURES)('hideout review pictures (HIDEOUT
     // 5. the hideout mark beside the hideout's doorway
     const hm = marks.find(m => m.kind === 'hideout' && m.next === c.area) ?? marks.find(m => m.kind === 'hideout');
     if (hm) await shoot('hideout-mark', scene, look(hm, 2.2, -0.3), 0.6);
+    // 6. the survivor's tally on the hideout's wall
+    const tm = marks.find(m => m.kind === 'tally' && m.area === c.area);
+    if (tm) await shoot('hideout-tally', scene, look(tm, 1.8, 0.2), 0.6);
     report.push(`level subway ${seed}; hideout area ${a.id} (${a.purpose}) depth ${c.depth}, tier ${c.tier}; pieces ${c.pieces.map(i => L.props[i].kind).join(', ')}`);
     report.push(`holders: ${c.holders.map(i => { const hh = cm.all.find(q => q.prop === L.props[i])!; return `${hh.kind} [${hh.state.lots.map(l => l.itemId).join(', ')}]`; }).join('; ')}`);
     report.push(`gear: ${c.gear >= 0 ? L.pickups[c.gear].itemId : '-'}; trail marks ${marks.filter(m => m.annex === c.annex).length}; corridor mark at step ${corridorMark.step} (${corridorMark.dir}); hideout mark ${hm ? `area ${hm.area}` : '-'}`);

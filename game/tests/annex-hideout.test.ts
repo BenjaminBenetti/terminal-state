@@ -353,4 +353,25 @@ describe.runIf(!!process.env.HIDEOUT_SAMPLE)('the guarantee over a broad sample 
     expect(census.without).toBe(0);
     expect(census.issues).toBe(0);
   }, 3600000);
+
+  it('packed lots per hideout (ContainerManager.build with each level\'s profile) on the fresh-run sample', () => {
+    const lv: [LevelId, number][] = [['subway', 1043], ['subway', 1002], ['subway', 777001], ['subway', 777002], ['subway', 4055629249], ['subway', 2563024239],
+      ['subway', 774566179], ['office', 222], ['office', 3333], ['mall', 846932], ['mall', 5150], ['mall', 9090]];
+    const by: Record<string, number> = {};
+    let caches = 0, holders = 0, lots = 0, rounds = 0;
+    for (const [level, seed] of lv) {
+      const {layout, cm} = fresh(level, seed);
+      for (const c of annexCachesOf(layout)) {
+        caches++;
+        for (const i of c.holders) {
+          const h = cm.all.find(q => q.prop === layout.props[i])!;
+          holders++;
+          for (const l of h.state.lots) { lots++; const k = econCat(l.itemId) ?? l.itemId; by[k] = (by[k] ?? 0) + 1; if (k === 'ammo') rounds += l.count; }
+        }
+      }
+    }
+    const per = Object.fromEntries(Object.entries(by).map(([k, v]) => [k, +(v / caches).toFixed(2)]));
+    writeFileSync('/tmp/annex-hideout-lots.txt', `${JSON.stringify({levels: lv.length, caches, holdersPerCache: +(holders / caches).toFixed(2), lotsPerCache: +(lots / caches).toFixed(2), ammoRoundsPerCache: +(rounds / caches).toFixed(1), perCache: per}, null, 1)}\n`);
+    expect(lots / caches).toBeGreaterThanOrEqual(8);
+  }, 600000);
 });

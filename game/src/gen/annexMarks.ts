@@ -15,7 +15,7 @@
 //   - on every doorway of the last `dense` areas before the hideout (denser near the end);
 //   - the doorway INTO the hideout gets the distinctive HIDEOUT mark instead (the symbol + "SAFE"); a second cache in a large annex gets
 //     one too, on the last doorway of its own path;
-//   - inside the hideout, the survivor's TALLY (days counted) on a quiet wall.
+//   - inside the hideout (and a second cache), the survivor's TALLY (days counted) on a quiet wall.
 // Placement rule: on a real wall face (the grid cells behind the whole mark + a frame margin are rock, the cells in front are the
 // area's floor), on the doorway's own wall beside its frame (either side, up to 1 m along), else on the perpendicular wall at a corner
 // the doorway meets (the arrow then points into that corner); clear of door frames (frameGap), signs (door plates), props against the
@@ -157,9 +157,8 @@ export function planCacheMarks(layout: StationLayout, n: ServiceAnnex, caches: r
     const k = p2.doors.length - 1;
     if (placeDoorMark(ctx, layout.areas[p2.areas[k]], p2.doors[k], c.area, 'hideout', k)) rep.marks++; else rep.missed++;
   }
-  // the survivor's tally inside the hideout (a quiet wall first)
-  const h = layout.areas[caches[0].area];
-  if (h && placeTally(ctx, h, K)) rep.marks++;
+  // the survivor's tally inside every cache room (a quiet wall first)
+  for (const c of caches) { const h = layout.areas[c.area]; if (h && placeTally(ctx, h, K)) rep.marks++; }
   return rep;
 }
 
