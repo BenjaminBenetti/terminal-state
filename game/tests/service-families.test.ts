@@ -13,6 +13,7 @@ import {isExtensionArea} from '../src/gen/trackExt/types';
 import {freshLayout} from './helpers/annexRoute';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
+import {FRESH} from './helpers/btsArea';
 
 const share = (pool: typeof ENEMY_POOL, f: string) => pool.find(r => r[0] === f)![1];
 /** The same profile without the service context's own pool (the pre-R6 behaviour): the comparison baseline for core isolation. */
@@ -21,7 +22,9 @@ const withoutServicePool = (p: SpawnProfile): SpawnProfile => {
   return {...p, contexts: {...p.contexts, service}};
 };
 /** Bounded sample: two Subway runs (tunnel; tunnel + hatch), an Office and a Mall annex; Subway seed 1 is the no-annex control. */
-const SAMPLE: readonly [LevelId, number][] = [['subway', 1043], ['subway', 1002], ['office', 222], ['mall', 846932], ['subway', 1]];
+// (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old playtest seeds roll it absent — FRESH,
+// tests/helpers/btsArea.ts, holds the first seeds at / after them rolling PRESENT in the same role.)
+const SAMPLE: readonly [LevelId, number][] = [['subway', FRESH.subwayTunnel], ['subway', FRESH.subwayHatch], ['office', FRESH.office], ['mall', FRESH.mall], ['subway', 1]];
 const layouts = new Map<string, StationLayout>();
 const fresh = (l: LevelId, s: number) => layouts.get(`${l}:${s}`) ?? (layouts.set(`${l}:${s}`, freshLayout(l, s)), layouts.get(`${l}:${s}`)!);
 

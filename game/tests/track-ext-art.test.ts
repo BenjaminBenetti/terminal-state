@@ -25,8 +25,12 @@ import {hasNodeHook} from '../src/render/nodeHooks';
 import {planWallDetail} from '../src/world/wallDetailPlan';
 import type {NodeMaterial} from 'three/webgpu';
 
-/** tests/track-ext.test.ts corpora: a tunnel-door annex (side-mezzanine), a service hatch (island-ends), no annex at all. */
-const SEED = {tunnel: 1043, hatch: 2654448106, none: 2027820797} as const;
+/**
+ * tests/track-ext.test.ts corpora: a tunnel-door annex, a service hatch (island-ends), no annex at all. (2026-11-01, lane AREA: the
+ * annexes exist only where the level's one area roll succeeds — 1043 / 2654448106 now roll it absent; 1068 = the first seed >= 1043
+ * rolling PRESENT whose tunnel annex carries the full entrance art set (piece, stencil, platform end wall, mouth art), 1514198804 = track-ext.test's SUBWAY_HATCH.one; 2027820797 rolls absent.)
+ */
+const SEED = {tunnel: 1068, hatch: 1514198804, none: 2027820797} as const;
 const cache = new Map<number, StationLayout>();
 const gen = (s: number) => { let l = cache.get(s); if (!l) cache.set(s, (l = generateStation(s))); return l; };
 

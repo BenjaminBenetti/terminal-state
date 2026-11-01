@@ -10,6 +10,7 @@ import {FAN_RADIUS_SCALE, FAN_SOUND, audibleFans, fanSources, type FanSource} fr
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, type Node, type Src} from './helpers/fakeAudio';
 import {freshLayout} from './helpers/annexRoute';
+import {FRESH} from './helpers/btsArea';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const settle = () => new Promise(r => setTimeout(r, 40));
@@ -41,7 +42,7 @@ describe('R4 fan sound: an accepted existing recording, fixed voices, storey / d
   });
 
   it('positions: every fanWall / fanUnit record of a fresh annex level, at hub height, on its annex floor; none without annexes', () => {
-    const L = freshLayout('subway', 1043);
+    const L = freshLayout('subway', FRESH.subwayTunnel); // (lane AREA: was 1043, which now rolls the area absent)
     const machines = L.extensions!.machines!.filter(m => m.kind === 'fanWall' || m.kind === 'fanUnit');
     const fans = fanSources(L);
     expect(fans.length).toBe(machines.length);

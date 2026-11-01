@@ -48,14 +48,25 @@ import {createMemory, pickupPlan, takenLayoutPickups} from '../src/run/memory';
 import {Rng} from '../src/core/rng';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
+import {FRESH, presentSeeds} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 let models: Record<string, GLTF> = {};
 beforeAll(async () => { models = await openableModels(); }, 120000);
 
-/** Fresh New Game runs: a tunnel annex (Subway 1043: two caches in one large annex) and an Office annex pair (222); the Mall in the opt-in sample. */
-const SAMPLE: readonly [LevelId, number][] = [['subway', 1043], ['office', 222]];
+/**
+ * Fresh New Game runs: a tunnel annex (Subway: two caches in one large annex) and an Office annex pair; the Mall in the opt-in sample.
+ * (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old 1043 / 222 roll it absent — FRESH holds
+ * the first seeds at / after them rolling PRESENT in the same role, tests/helpers/btsArea.ts. Those two alone were no representative
+ * sample of hideouts (1 / 5 with the camp table vs ~0.8 over 30 Subway + 15 Office present levels: two-cache annexes furnish their
+ * second cache more sparsely), so the sample also takes the first three Subway / two Office seeds at / after 1043 / 222 that roll
+ * the area PRESENT (224 = FRESH.office): 6 levels, 14 hideouts — larger than the old sample, never smaller.)
+ */
+const SAMPLE: readonly [LevelId, number][] = [
+  ['subway', FRESH.subwayTunnel], ...presentSeeds(3, i => 1043 + i).map(s => ['subway', s] as [LevelId, number]),
+  ...presentSeeds(2, i => 222 + i).map(s => ['office', s] as [LevelId, number]),
+];
 const memo = new Map<string, {layout: StationLayout; cm: ContainerManager; inv: Inventory}>();
 function fresh(level: LevelId, seed: number) {
   const k = `${level}:${seed}`;
@@ -79,7 +90,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
       for (const n of layout.extensions!.annexes) expect(annexCachesOf(layout).filter(c => c.annex === n.id).length, `${level} ${seed} annex ${n.id}`).toBeGreaterThanOrEqual(1);
     }
     // the ladder, forced: the same annex offered only rooms / closets / halls no ordinary rung accepts (closets, corridors, signature rooms)
-    const l = generateStation(1043, {startWeapon: 'pistol'}), n = l.extensions!.annexes[0];
+    const l = generateStation(FRESH.subwayTunnel, {startWeapon: 'pistol'}), n = l.extensions!.annexes[0];
     const kinds = new Set(l.props.map(p => p.kind as string));
     const odd = n.areas.map(id => l.areas[id]).filter(a => a.kind !== 'room' || a.extHall || /room$|hall|plant|chamber|spillway/.test(a.purpose ?? '') && !/^(storage|workshop|custodial-room|first-aid-room|electrical-room|pump-room)$/.test(a.purpose ?? ''));
     const relaxed = placeAnnexCaches(l, n, odd, kinds, new Rng(77));
@@ -226,12 +237,12 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
     }
     expect(pieces, 'the sample holds gear pieces').toBeGreaterThanOrEqual(1);
     // finite: taken once, a regenerated section (run memory by layout pickup index) never offers it again
-    const {layout} = fresh('subway', 1043);
+    const {layout} = fresh('subway', FRESH.subwayTunnel);
     const idx = layout.pickups.flatMap((p, i) => (p.reward === ANNEX_CACHE_GEAR_KEY ? [i] : []));
     expect(idx.length).toBeGreaterThanOrEqual(1);
     const mem = createMemory({level: 'subway', section: 'main'});
     mem.pickups = layout.pickups.flatMap((p, i) => (idx.includes(i) ? [] : [{stack: {itemId: p.itemId, count: p.count}, pose: {x: p.x, y: p.y, z: p.z, yaw: 0}, anchor: [p.x, p.y, p.z], layoutIndex: i}])) as never;
-    const again = freshLayout('subway', 1043);
+    const again = freshLayout('subway', FRESH.subwayTunnel);
     expect(again.pickups.map(p => [p.itemId, p.x, p.z, p.reward ?? ''])).toEqual(layout.pickups.map(p => [p.itemId, p.x, p.z, p.reward ?? '']));
     expect(takenLayoutPickups(again.pickups.length, structuredClone(mem))).toEqual(idx);
     const plan = pickupPlan(again.pickups.length, mem);
@@ -240,7 +251,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
   });
 
   it('the footlocker\'s finds stay taken: capture -> regenerate -> rebuild -> apply (never refilled)', () => {
-    const {layout, cm, inv} = fresh('subway', 1043);
+    const {layout, cm, inv} = fresh('subway', FRESH.subwayTunnel);
     const h = cm.all.find(q => q.kind === 'footlocker' && q.state.lots.length)!;
     expect(h).toBeDefined();
     const n0 = h.state.lots.length, lot = h.state.lots[0];
@@ -251,7 +262,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
     expect(inv.count(lot.itemId)).toBeGreaterThan(c0);
     expect(h.state.lots.length).toBe(n0 - 1);
     const recs = captureHolders(cm);
-    const again = freshLayout('subway', 1043);
+    const again = freshLayout('subway', FRESH.subwayTunnel);
     const cm2 = new ContainerManager(models, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), () => new Inventory());
     cm2.build(again, {}, lootProfile('subway'));
     applyHolders(cm2, recs);
@@ -299,7 +310,7 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
   });
 
   it('presentation: the marks are decals of the one graffiti mesh / atlas (their own cells), off-limits to the wall treatment', () => {
-    const {layout} = fresh('subway', 1043), marks = layout.extensions!.cacheMarks!;
+    const {layout} = fresh('subway', FRESH.subwayTunnel), marks = layout.extensions!.cacheMarks!;
     const acc = new Acc(), decals = cacheMarkDecals(acc, marks);
     expect(decals.length).toBe(marks.length);
     expect(acc.triangleCount).toBe(2 * marks.length);
@@ -350,17 +361,20 @@ describe.runIf(!!process.env.HIDEOUT_SAMPLE)('the guarantee over a broad sample 
       }
       for (const r of cacheMarkReportsOf(l)) { census.marks += r.marks; census.missed += r.missed; census.pathDoors += r.doors.length; census.junctions += r.junctions; }
     };
-    for (let i = 1; i <= N.subway; i++) { const s = (i * 2654435761) >>> 0; take('subway', s, generateStation(s, {startWeapon: 'pistol'})); }
-    for (let i = 1; i <= N.office; i++) { const s = i * 7919 + 11; take('office', s, generateOfficeLevel({levelSeed: s, startWeapon: 'pistol'})); }
-    for (let i = 1; i <= N.mall; i++) { const s = i * 104729 + 7; take('mall', s, generateMallLevel({levelSeed: s, startWeapon: 'pistol'} as never)); }
+    // (lane AREA: the first N seeds of each formula that roll the area PRESENT — the same annex sample size as before the one-roll rule)
+    for (const s of presentSeeds(N.subway, i => (i * 2654435761) >>> 0, 1)) take('subway', s, generateStation(s, {startWeapon: 'pistol'}));
+    for (const s of presentSeeds(N.office, i => i * 7919 + 11, 1)) take('office', s, generateOfficeLevel({levelSeed: s, startWeapon: 'pistol'}));
+    for (const s of presentSeeds(N.mall, i => i * 104729 + 7, 1)) take('mall', s, generateMallLevel({levelSeed: s, startWeapon: 'pistol'} as never));
     writeFileSync('/tmp/annex-hideout-sample.txt', `${JSON.stringify(census, null, 1)}\n${out.join('\n')}\n`);
     expect(census.without).toBe(0);
     expect(census.issues).toBe(0);
   }, 3600000);
 
   it('packed lots per hideout (ContainerManager.build with each level\'s profile) on the fresh-run sample', () => {
-    const lv: [LevelId, number][] = [['subway', 1043], ['subway', 1002], ['subway', 777001], ['subway', 777002], ['subway', 4055629249], ['subway', 2563024239],
-      ['subway', 774566179], ['office', 222], ['office', 3333], ['mall', 846932], ['mall', 5150], ['mall', 9090]];
+    // (lane AREA: each seed of the old list that now rolls the area absent -> its FRESH / track-ext.test role seed, or the first seed at / after
+    // it rolling PRESENT (777001 / 777002 / 3333 / 5150 / 9090 -> 777006 / 777015 / 3336 / 5158 / 9097); 4055629249 kept)
+    const lv: [LevelId, number][] = [['subway', FRESH.subwayTunnel], ['subway', FRESH.subwayHatch], ['subway', 777006], ['subway', 777015], ['subway', 4055629249], ['subway', 3964205382],
+      ['subway', 1874796201], ['office', FRESH.office], ['office', 3336], ['mall', FRESH.mall], ['mall', 5158], ['mall', 9097]];
     const by: Record<string, number> = {};
     let caches = 0, holders = 0, lots = 0, rounds = 0;
     for (const [level, seed] of lv) {

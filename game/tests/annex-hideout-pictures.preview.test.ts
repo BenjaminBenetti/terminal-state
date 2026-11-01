@@ -1,7 +1,7 @@
 // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): opt-in CPU review pictures of the survivor HIDEOUT and its TRAIL on a real
 // generated level (no WebGL, no browser): the hideout from its doorway, the bed with the footlocker, the camp table with the lantern /
 // stove, a trail mark in a service corridor beside its doorway, the hideout mark at the hideout's door.
-//   HIDEOUT_PICTURES=1 [HIDEOUT_SEED=1043] ./node_modules/.bin/vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism game/tests/annex-hideout-pictures.preview.test.ts
+//   HIDEOUT_PICTURES=1 [HIDEOUT_SEED=1090] ./node_modules/.bin/vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism game/tests/annex-hideout-pictures.preview.test.ts
 // Writes qa-artifacts/hideout-pictures/*.png + pictures.txt (git-ignored, never committed). Approximate lighting (helpers/meshPreview.ts:
 // flashlight + ambient, albedo only — no light field, so neither the lantern's warm pool nor the paint's glow shows): composition /
 // identity / scale review, not the game's look or darkness. Iteration-07 camp things (chairs, work lights) need their models: not drawn.
@@ -20,6 +20,7 @@ import {lootProfile} from '../src/items/lootTables';
 import {CELL} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
 import {annexCachesOf} from '../src/gen/annexCache';
+import {FRESH} from './helpers/btsArea';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let models: Record<string, GLTF> = {};
@@ -49,7 +50,7 @@ describe.runIf(!!process.env.HIDEOUT_PICTURES)('hideout review pictures (HIDEOUT
       await sharp(px, {raw: {width: 960, height: 540, channels: 3}}).png().toFile(path.join(out, `${name}.png`));
       report.push(`${name}: cam ${JSON.stringify(cam)}`);
     };
-    const seed = Number(process.env.HIDEOUT_SEED ?? 1043);
+    const seed = Number(process.env.HIDEOUT_SEED ?? FRESH.subwayTunnel); // (lane AREA: was 1043, which now rolls the area absent)
     const L = freshLayout('subway', seed);
     const w = buildWorld(L, mats, {});
     const cm = new ContainerManager(models, mats, () => ({}) as never);

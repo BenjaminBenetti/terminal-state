@@ -17,6 +17,7 @@ import {machineBoxes} from '../src/gen/annexRooms';
 import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
 import {freshLayout} from './helpers/annexRoute';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
@@ -63,7 +64,9 @@ describe('R3: the generated annex genset', () => {
 
   it('fit on every real genset record: on the plinth, inside its collision body box, uniform scale', () => {
     let n = 0;
-    for (const [level, seed] of [['subway', 1043], ['subway', 1002], ['office', 222], ['mall', 846932], ['subway', 1037]] as const) {
+    // (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old playtest seeds roll it absent — FRESH,
+    // tests/helpers/btsArea.ts, holds the first seeds at / after them rolling PRESENT in the same role.)
+    for (const [level, seed] of [['subway', FRESH.subwayTunnel], ['subway', FRESH.subwayHatch], ['office', FRESH.office], ['mall', FRESH.mall], ['subway', FRESH.subwayGenset]] as const) {
       const L = freshLayout(level, seed);
       for (const m of (L.extensions?.machines ?? []).filter(q => q.kind === 'genset')) {
         n++;
@@ -87,7 +90,7 @@ describe('R3: the generated annex genset', () => {
   }, 120000);
 
   it('runtime: instanced on each genset (procedural body replaced, plinth + exhaust kept); without the model the procedural set stands', () => {
-    const L = freshLayout('subway', 1037);
+    const L = freshLayout('subway', FRESH.subwayGenset);
     const gensets = L.extensions!.machines!.filter(m => m.kind === 'genset').length;
     expect(gensets).toBeGreaterThan(0);
     const mats = () => new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});

@@ -230,8 +230,8 @@ sends the draw to `fallback`. Never renormalised, so no other family's draw or s
 <!-- Track 2 — Beyond the Station (lane CONTENT) -->
 
 The track tunnels past the station's bed ends can lead, through a side door, to a seeded **service annex**: a cramped, dark
-back-of-house of plant rooms, stores, closets and 1.5–2 m corridors (`game/src/gen/trackExt/` generates it; 0–2 per level, each
-~25 % of the Subway's walkable exploration area). It is part of its LOGICAL level (docs/level-enemy-contract.md §2): same profile,
+back-of-house of plant rooms, stores, closets and 1.5–2 m corridors (`game/src/gen/trackExt/` generates it; 0–2 per level, only on the
+20 % of levels whose one area roll succeeds — docs/track-extensions.md —, each ~25 % of the Subway's walkable exploration area). It is part of its LOGICAL level (docs/level-enemy-contract.md §2): same profile,
 same family pool and zombie types, same tier.
 
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |

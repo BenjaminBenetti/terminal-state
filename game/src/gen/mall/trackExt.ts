@@ -4,7 +4,7 @@
 //
 //  - Declaration: levels/registry.ts LEVELS.mall.trackExtensions = trackExtConfig('mall') (TRACK_EXT_MALL: the GEN-2 planner, no core
 //    reserve). Coverage: tests/track-ext-coverage.test.ts.
-//  - Plan: gen/mall/index.ts calls extendTracks(k, rng.fork('track-ext'), cfg, mallTrackExtContext(ox, oy)) AFTER all mall carving
+//  - Plan: gen/mall/index.ts calls extendTracks(k, rng.fork('track-ext'), cfg, mallTrackExtContext(ctx.levelSeed, ox, oy)) AFTER all mall carving
 //    and BEFORE the crop (the Kit's main stream is never consumed; the plan writes nothing into the Kit).
 //  - Attach: after the LAST core pass (hordes included) finishExtensions(layout, ext, {ox, oy, grow: 'east-south'}) grows the grid
 //    east / south of the fixed origin and appends the extension areas / doors / cells; populateExtensions dresses, lights, stocks and
@@ -31,8 +31,8 @@ export const MALL_EXT_MAX_CELLS = 75_000;
  * bed ceiling, slabs between) may stand above a tunnel / annex (never their atrium openings: those lie over the station block).
  * Without it a bed end under a retail floor is "blocked at the mouth". At most ONE annex (TRACK_EXT_MALL annex.max 1).
  */
-export function mallTrackExtContext(ox: number, oy: number, coreCrop?: {w: number; h: number}): TrackExtContext {
+export function mallTrackExtContext(levelSeed: number, ox: number, oy: number, coreCrop?: {w: number; h: number}): TrackExtContext {
   // (round 3, lane LAYOUT: + the mall's exact core crop size, so the 75k budget holds exactly — its crop keeps one cell more than the
-  // extension planner's default estimate)
-  return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0], ...(coreCrop ? {coreCrop} : {})};
+  // extension planner's default estimate; 2026-11-01 lane AREA: + the logical level seed of the one Beyond the Station area roll)
+  return {levelId: 'mall', levelSeed, canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0], ...(coreCrop ? {coreCrop} : {})};
 }

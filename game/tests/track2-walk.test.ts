@@ -3,8 +3,10 @@
 // along the game's own PathFinder routes (as qaWalk.ts does in the browser; seamless-traversal.test.ts is the Office twin). No
 // teleport. Loot is opened / taken through the game's ContainerManager targeting + interact ([E]) from the reached stand point.
 //
-// Two annex entries: a TUNNEL annex (seed 1043: platform -> drop into the bed -> tunnel -> side door) and a SERVICE-HATCH annex
-// (seed 1002, annex 1: a door in the bed's outer wall). The way back is a bed rescue ladder up to the platform.
+// Two annex entries: a TUNNEL annex (FRESH.subwayTunnel: platform -> drop into the bed -> tunnel -> side door) and a SERVICE-HATCH annex
+// (FRESH.subwayHatch, annex 1: a door in the bed's outer wall). The way back is a bed rescue ladder up to the platform.
+// (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old seeds 1043 / 1002 roll it absent — FRESH,
+// tests/helpers/btsArea.ts, holds the first seeds at / after them rolling PRESENT in the same role.)
 // Proves: reachable on foot both ways; height changes continuously (falls / climbs, no snap); never below the track-bed floor or
 // off the map; no damage; loot in the annex is targetable and takeable after the walk, and taking it leaves the holder emptier.
 
@@ -24,6 +26,7 @@ import {WorldMaterials} from '../src/world/materials';
 import {ContainerManager, type Holder} from '../src/world/containers';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {ServiceAnnex} from '../src/gen/trackExt/types';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
@@ -150,17 +153,17 @@ function takeOne(cm: ContainerManager, h: Holder, inv: Inventory) {
 }
 
 describe('Track 2: a real player walks into a service annex, loots it and climbs back to the platform', () => {
-  it('tunnel annex (seed 1043): platform -> bed -> tunnel -> side door -> loot -> bed ladder -> platform', () => {
-    const layout = LEVELS.subway.generate('main', {levelSeed: 1043, startWeapon: 'pistol'} as never);
+  it(`tunnel annex (seed ${FRESH.subwayTunnel}): platform -> bed -> tunnel -> side door -> loot -> bed ladder -> platform`, () => {
+    const layout = LEVELS.subway.generate('main', {levelSeed: FRESH.subwayTunnel, startWeapon: 'pistol'} as never);
     const a = layout.extensions!.annexes.find(q => q.tunnel >= 0)!;
     expect(a).toBeDefined();
     annexRoundTrip(layout, a, true);
   }, 120000);
 
-  it('service-hatch annex (seed 1002): platform -> bed -> hatch in the bed wall -> loot -> bed ladder -> platform', () => {
-    const layout = LEVELS.subway.generate('main', {levelSeed: 1002, startWeapon: 'pistol'} as never);
+  it(`service-hatch annex (seed ${FRESH.subwayHatch}): platform -> bed -> hatch in the bed wall -> loot -> bed ladder -> platform`, () => {
+    const layout = LEVELS.subway.generate('main', {levelSeed: FRESH.subwayHatch, startWeapon: 'pistol'} as never);
     const a = layout.extensions!.annexes.find(q => q.tunnel < 0)!;
-    expect(a, 'seed 1002 has a hatch annex').toBeDefined();
+    expect(a, `seed ${FRESH.subwayHatch} has a hatch annex`).toBeDefined();
     expect(a.bed).toBeDefined();
     annexRoundTrip(layout, a, false);
   }, 120000);

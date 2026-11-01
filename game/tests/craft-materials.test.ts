@@ -23,6 +23,7 @@ import {MATERIAL_MODEL_SOURCE, materialItemModel} from '../src/world/materialIte
 import {itemModelSources, itemTemplate} from '../src/world/pickups';
 import {generateStation} from '../src/gen/station';
 import {mulberry32} from '../src/core/rng';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
@@ -167,9 +168,11 @@ describe('loot: economy category material — finite, themed, kept as rolled, ne
       for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `seed ${seed} ${h.kind}`).toBe(false);
       for (const p of l.pickups) expect(isMaterialItem(p.itemId)).toBe(false);
     }
-    // (round 2) its service annexes too: the signature lockers once rolled the server spares' electrical parts (1002 / 1043 / 1234)
-    for (const seed of [1002, 1043, 1234]) {
+    // (round 2) its service annexes too: the signature lockers once rolled the server spares' electrical parts (1002 / 1043 / 1234;
+    // lane AREA: 1002 / 1043 now roll the area absent -> their FRESH replacements rolling it PRESENT; 1234 still present)
+    for (const seed of [FRESH.subwayHatch, FRESH.subwayTunnel, 1234]) {
       const l = generateStation(seed);
+      expect(l.extensions!.annexes.length, `seed ${seed} annexes`).toBeGreaterThan(0);
       for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `annex seed ${seed} ${h.kind}`).toBe(false);
     }
   });

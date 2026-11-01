@@ -3,7 +3,32 @@
 // structure requires it (the level-specific grid budgets / crop rules are the generator's TrackExtContext): the Office street
 // station keeps the original planner (TRACK_EXT_OFFICE), the Subway adds the GEN-2 incidence options.
 
+import {Rng, hashString} from '../../core/rng';
 import type {TrackExtConfig} from './types';
+
+/**
+ * THE BEYOND THE STATION AREA CHANCE (user, 2026-11-01: "drop the spawn chance of the beyond the station area ... twenty percent ...
+ * across all levels"). The area itself — the service annexes (doors / hatches, rooms, hideouts, caches, marks, graffiti, invitation
+ * art, annex loot / lights / vents / service spawns) — exists on a generated level with this probability, ONE shared constant for
+ * every level type that uses the shared attach path (Subway, Office, Mall and any future level declaring a TrackExtConfig).
+ */
+export const BTS_AREA_CHANCE = 0.2;
+/** Salt of the area roll's own stream (a dedicated hash of the LEVEL seed; bump the version only with an authorized re-roll). */
+export const BTS_AREA_SALT = 'beyond-the-station-area-v1';
+
+/**
+ * The level's ONE Beyond the Station area roll u in [0, 1): a pure function of the logical LEVEL seed (the run's per-level seed,
+ * ctx.levelSeed — not an attempt seed and not a per-tunnel / per-entrance stream), so it never re-rolls on a generation retry, on
+ * re-entering / reloading / revisiting the level, and draws nothing from any generation stream (the core is untouched by it).
+ */
+export function btsAreaRoll(levelSeed: number): number {
+  return new Rng(hashString(BTS_AREA_SALT, levelSeed >>> 0)).next();
+}
+
+/** True when the level's one area roll succeeds (u < BTS_AREA_CHANCE): the level may carry service annexes at all. */
+export function btsAreaPresent(levelSeed: number): boolean {
+  return btsAreaRoll(levelSeed) < BTS_AREA_CHANCE;
+}
 
 /**
  * The Subway walkable-exploration BASELINE (m²) — the annex size target is a share of it (TRACK_EXT.annex.share).
@@ -48,7 +73,8 @@ export const SERVICE_LAYOUT: NonNullable<TrackExtConfig['annex']['layout']> = {
  *    requirement): 40 m of rock stay free straight past every bed end that is still open right after the archetype skeleton,
  *    so the station's later growth leaves room for a tunnel there (gen/trackExt/index.ts reserveTunnelRoom);
  *  - annex.count: seeded per-level weights of wanting 0 / 1 / 2 annexes, attempted over the level's candidates (tunnels first,
- *    then service hatches) — `annex.chance` is the Office's per-tunnel roll and unused here;
+ *    then service hatches). (2026-11-01, lane AREA) Whether the level has the area at all is BTS_AREA_CHANCE's one level roll; the
+ *    weights only shape the count of a level whose roll succeeded — the zero entry is 0 (was 0.07): 1 or 2 in the ratio 0.53 : 0.4;
  *  - annex.hostFirstStraight: a tunnel planned while the level still wants an annex host gets a first straight long enough for
  *    the door (doorMinS + the door + a few metres of door positions);
  *  - hatch: where no tunnel continues a bed end (island-ends / express: the paid end halls stand 1.5-4 m past every bed end),
@@ -67,8 +93,7 @@ export const TRACK_EXT: TrackExtConfig = {
   },
   margin: {core: 1, ext: 2},
   annex: {
-    chance: 0.6,
-    count: [0.07, 0.53, 0.4],
+    count: [0, 0.53, 0.4],
     hostFirstStraight: 21,
     max: 2,
     share: 0.25,
@@ -103,9 +128,10 @@ export const TRACK_EXT: TrackExtConfig = {
 };
 
 /**
- * The Office street station: TRACK_EXT without the GEN-2 options — the original planner (one `annex.chance` roll per eligible
- * tunnel, annexes off tunnels only) and no core reserve (its fixed-origin canvas only grows east / south; the reserve is a Subway
- * layout change). Its extensions, and every Office pin, stay exactly as before GEN-2.
+ * The Office street station: TRACK_EXT without the GEN-2 options — the original planner (annexes off tunnels only, on the eligible
+ * tunnels in a seeded order, up to annex.max) and no core reserve (its fixed-origin canvas only grows east / south; the reserve is a
+ * Subway layout change). (2026-11-01, lane AREA) Its old per-eligible-tunnel 0.6 roll is gone: the level's one BTS_AREA_CHANCE roll
+ * decides whether it has the area; when it does, every eligible tunnel takes an annex until the max (at least one where eligible).
  */
 export const TRACK_EXT_OFFICE: TrackExtConfig = {
   ...TRACK_EXT,
@@ -116,7 +142,8 @@ export const TRACK_EXT_OFFICE: TrackExtConfig = {
 
 /**
  * Task track3-eaton-centre-20261031 (lane INTEG, Track2 integration): THE EATON'S CENTER's pit station — TRACK_EXT (the GEN-2
- * incidence planner: 0 / 1 / 2 wanted annexes, tunnels first, then service hatches) WITHOUT the core reserve: coreReserveM is a
+ * incidence planner: tunnels first, then service hatches; with annex.max 1 and the 2026-11-01 one-roll rule: ONE annex when the
+ * level's BTS_AREA_CHANCE roll succeeds and a candidate fits, none otherwise) WITHOUT the core reserve: coreReserveM is a
  * Subway skeleton step (gen/station.ts reserveTunnelRoom) the mall generator never runs, so the mall's core layout is unchanged.
  * Its canvas has a fixed crop origin (east / south growth only: gen/mall/index.ts).
  */
