@@ -346,7 +346,8 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(b.damage(50, 0, 2)).toBe(false);
   });
 
-  it('audio: NO new clips — the existing zombie calls through the cue adapter, from its taller mouth', () => {
+  // lane AUDIO (strainer squish set): the VOICE stays the zombie calls; footfalls are its own wet set (tests/strainer-audio.test.ts)
+  it('audio: the existing zombie voice calls through the cue adapter, from its taller mouth; its own wet footfalls', () => {
     const calls: string[] = [];
     const sfx = new Proxy({}, {get: (_t, k) => (...a: unknown[]) => { calls.push(`${String(k)}:${(a[1] as number)?.toFixed?.(2) ?? ''}`); }}) as never;
     const a = new StrainerActor(syntheticStrainer(), spawnAt(0, 0), rng(1));
@@ -356,7 +357,7 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     a.groanT = 0;
     STRAINER_CUES.tick(sfx, a as never, 0.1, 1.2, 5, rng(2));
     STRAINER_CUES.death(sfx, a as never);
-    expect(calls.map(c => c.split(':')[0])).toEqual(['groan', 'zombieAttack', 'groan', 'zombieGait', 'zombieDeath']);
+    expect(calls.map(c => c.split(':')[0])).toEqual(['groan', 'zombieAttack', 'groan', 'strainerGait', 'zombieDeath']);
     expect(calls[0]).toBe('groan:1.90'); // voice height (feet y 0 + 1.9)
   });
 });

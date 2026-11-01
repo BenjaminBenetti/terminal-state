@@ -2288,6 +2288,7 @@ export class Game {
     this.recoilPitch += 0.035;
     this.recoilYaw += Math.sign(right) * 0.03;
     this.sfx.hurt();
+    if (archetypeOf(z) === 'strainer') this.sfx.strainerContact(z.brain.x, z.brain.z); // lane AUDIO (strainer squish set): the wet claw contact — only for a connecting swipe (out.attackHit), never a miss
     this.cancelUse('hit'); // a zombie hit knocks the item away from the face (nothing consumed)
   }
 

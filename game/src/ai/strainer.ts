@@ -151,9 +151,16 @@ export class StrainerBrain extends ZombieBrain {
 export const STRAINER_VOICE_Y = 1.9;
 
 /**
- * The Strainer's positional cues — NO new audio: the existing zombie calls (Sound Lab clips) through the cue adapter, with the DEEP
- * groan voice (the Blightbelly's) from its taller mouth, the ordinary claw swing / the heavy gait footfalls (it lumbers) and the
- * zombie death. It never climbs, so no rung clanks. (Standalone, not a spread of ZOMBIE_CUES: ai/creatureArchetypes.ts imports this.)
+ * The Strainer's positional cues. VOICE: the existing zombie calls (Sound Lab clips) — the DEEP groan (the Blightbelly's) from its
+ * taller mouth, the attack snarl as a swing starts, the zombie death. Task studio-alpha-strainer-reach-squish-20261101-201110-01
+ * (lane AUDIO; user: "It needs unique 'squishy sounds' to really sell its swamp creature feel."): its OWN wet Sound Lab set
+ * (audio/sfx.ts STRAINER_AUDIO) for movement and melee —
+ *  - wet squelching footfalls on the foot plants of its Walk / Run clip, driven by the REAL ground speed `moved` (silent standing
+ *    still; replaces the borrowed heavy zombie gait);
+ *  - one wet arm-swing whoosh per swing whose peak lands on the claw's impact (brain attackImpact; silent if the swing is cut first);
+ *  - the fleshy claw-contact squelch only when the claw connects (game.ts hurtPlayer — never on a miss);
+ *  - a short, rate-limited wet squish when it is shot but survives (hurt).
+ * It never climbs, so no rung clanks. (Standalone, not a spread of ZOMBIE_CUES: ai/creatureArchetypes.ts imports this.)
  */
 export const STRAINER_CUES: EnemyCues = {
   alert: (sfx, z) => sfx.groan(z.brain.x, z.brain.y + STRAINER_VOICE_Y, z.brain.z, true, true),
@@ -163,8 +170,13 @@ export const STRAINER_CUES: EnemyCues = {
     if (!b.alive) return;
     z.groanT -= dt;
     if (z.groanT <= 0) { z.groanT = (b.aware ? 2.8 : 6.5) + rand() * 6; if (dist < 22) sfx.groan(b.x, b.y + STRAINER_VOICE_Y, b.z, true); }
-    sfx.zombieGait(z, b.x, b.z, moved, dt, true, b.y); // (lumbering) the existing HEAVY gait footfalls (the Blightbelly's), no new audio
+    // the wet arm-swing whoosh (claw at chest height), its peak on the impact; once per swing (attackSeq)
+    if (b.state === 'attack') sfx.strainerSwing(z, b.attackSeq, b.stats.attackImpact, dt, b.x, b.y + 1.5, b.z);
+    // wet footfalls on the foot plants of the clip the actor plays (Walk / Run; any other clip = not walking); an actor without clip
+    // info falls back to its speed (the chase lumber vs the wander walk)
+    const clip = (z as {clip?: string | null}).clip;
+    sfx.strainerGait(z, b.x, b.z, moved, dt, clip === 'Walk' || clip === 'Run' ? clip : clip ? null : moved > 0.85 ? 'Run' : 'Walk', b.y, z.scale);
   },
-  hurt: () => {},
+  hurt: (sfx, z) => sfx.strainerSquish(z, z.brain.x, z.brain.y + 1.3, z.brain.z),
   death: (sfx, z) => sfx.zombieDeath(z.brain.x, z.brain.y + 1.6, z.brain.z),
 };
