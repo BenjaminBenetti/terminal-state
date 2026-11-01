@@ -1,33 +1,608 @@
 {
  "schema": "the-last-line/derivative-manifest@1",
  "asset": "enemy-strainer",
- "title": "Strainer (tall clawed drain-filter stalker) - rigged runtime derivative of the accepted Meshy T2.5 model (prototype)",
+ "title": "Strainer (tall clawed drain-filter stalker) - rigged runtime derivative of the accepted Meshy T2.5 model with Codex-projected textures (prototype)",
  "task": "studio-alpha-beyond-station-round4-20261101-01",
  "lane": "ASSET",
+ "textureTask": "studio-alpha-bts-round4-compliance-followup-20261101-01",
+ "textureLane": "TEXTURE",
  "date": "2026-11-01",
  "generatedBy": "tools/asset-pipeline/enemy/build-strainer.mjs",
- "builtAt": "2026-11-01T08:08:56.604Z",
- "buildSeconds": 14,
+ "builtAt": "2026-11-01T10:07:45.021Z",
+ "buildSeconds": 69,
  "status": {
   "approved": false,
   "gameReady": false,
   "stage": "unapproved prototype derivative; art / anatomy / deformation / gameplay fit not certified",
-  "licenseClearance": "none - a derivative of an AI generation (Meshy, conditioned on a Codex-generated image); access to it grants no licence, commercial or production clearance"
+  "licenseClearance": "none - a derivative of AI generations (Meshy geometry conditioned on a Codex-generated image; textures projected from two Codex-generated images); access to it grants no licence, commercial or production clearance"
  },
  "honesty": {
   "sourceHadSkeleton": false,
   "rig": "NEW derivative skeleton (shared 18-joint naming / hierarchy of the zombie wardrobe) and automatic skin weights created by this CPU pipeline",
   "animation": "hand-authored procedural keyframes / gait functions (lib/strainer-clips.mjs) sampled with this body's own joint positions - NOT motion capture",
-  "textures": "the provider's own generated maps, resized / re-encoded only (no painting, no new artwork)",
-  "generation": "no AI generation, inference, model download or network service was used by this builder; the Meshy model was generated earlier by the task primary (ledger below)"
+  "textures": "derived ONLY from two Codex-generated images (the user-approved front T-pose + the accepted Codex back view) by deterministic projection / UV baking onto the accepted mesh's existing UV layout, with nearest-surface fill of unseen texels and island padding; normal / metallic-roughness maps computed from that baked colour; no painting, no procedural or hand-drawn artwork; the Meshy provider maps are NOT used at runtime (kept private raw provenance only)",
+  "generation": "no AI generation, inference, model download or network service was used by this builder; the Meshy model and the two Codex images were generated earlier by the task primaries (ledgers below)"
  },
- "provenance": "generated (Meshy T2.5 image-to-3D, smart topology, t-pose, 2K PBR, from the project's own user-approved Codex-generated front T-pose) + local derivative work",
+ "provenance": "generated (Meshy T2.5 image-to-3D geometry, smart topology, t-pose, from the project's own user-approved Codex-generated front T-pose; runtime textures projected from that front T-pose + an accepted Codex back view) + local derivative work",
+ "textures": {
+  "runtimeSources": "codex",
+  "providerMapsUsedAtRuntime": false,
+  "sources": {
+   "front": {
+    "file": "reference/tasks/strainer-tpose-20261101/pose/strainer-tpose-attempt2.png",
+    "sha256": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be",
+    "bytes": 1888811,
+    "size": [
+     1536,
+     1024
+    ],
+    "view": "front: the creature faces the camera (creature left = image right)",
+    "approval": "user-approved front T-pose (the image the Meshy image-to-3D body was conditioned on)",
+    "codex": {
+     "route": "codex exec -i (codex-cli 0.163.0, ChatGPT login, existing owned tooling) -> built-in image_gen (tools.image_gen__imagegen); agent model gpt-6.1-sol; image model id not reported by the tool",
+     "task": "strainer-tpose-20261101",
+     "attempts": "reference/tasks/strainer-tpose-20261101/pose/ATTEMPTS.jsonl",
+     "attempt": 2,
+     "promptSha256": "9c56267e30828134a900ee81e257b724f9ddf026bd65ce7b996bcd06ada0646f",
+     "conditionedOn": {
+      "file": "reference/tasks/beyond-enemy-concepts-20261101/concepts/strainer-attempt1.png",
+      "sha256": "d182c908b51d62ab9b8132190705f14d922e4c759dce637f58638d8de8ae9aa6",
+      "what": "the approved Strainer concept"
+     }
+    },
+    "sha256Verified": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be"
+   },
+   "back": {
+    "file": "reference/tasks/beyond-station-round4-followup-20261101/codex/strainer-back-attempt1.png",
+    "sha256": "0a0bf26d4ba808af2442138b375ef2677b028d3e30a2e633e8d78807a0963a6e",
+    "bytes": 1871041,
+    "size": [
+     1536,
+     1024
+    ],
+    "view": "back: seen from directly behind in the same pose / framing (creature left = image left, i.e. mirrored vs the front)",
+    "approval": "accepted Codex back view (first acceptable attempt; projection source for this bake only)",
+    "codex": {
+     "route": "codex exec -i (codex-cli 0.163.0, ChatGPT login, existing owned tooling) -> built-in image_gen (tools.image_gen__imagegen); agent model gpt-6.1-sol; image model id not reported by the tool",
+     "task": "beyond-station-round4-followup-20261101",
+     "attempts": "reference/tasks/beyond-station-round4-followup-20261101/codex/ATTEMPTS.jsonl",
+     "attempt": 1,
+     "promptSha256": "52df94c696c4add502fd895ac05b522725ae389b29ccf91736a351bb5e6d223a",
+     "conditionedOn": {
+      "file": "reference/tasks/strainer-tpose-20261101/pose/strainer-tpose-attempt2.png",
+      "sha256": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be",
+      "what": "the approved front T-pose (attached image)"
+     }
+    },
+    "sha256Verified": "0a0bf26d4ba808af2442138b375ef2677b028d3e30a2e633e8d78807a0963a6e"
+   }
+  },
+  "chain": "Codex front T-pose (user-approved) + Codex back view (accepted attempt 1, conditioned on the front) -> segmentation -> registration of the rig-posed accepted mesh -> projection / UV bake (existing Meshy UV layout, unchanged) -> fill + island padding -> base colour; normal + metallic-roughness derived from that base colour",
+  "registrationIoU": {
+   "front": {
+    "iou": 0.8627,
+    "regions": {
+     "torso+head": 0.9051,
+     "L arm": 0.7353,
+     "R arm": 0.7765,
+     "L leg": 0.8939,
+     "R leg": 0.9018
+    }
+   },
+   "back": {
+    "iou": 0.847,
+    "regions": {
+     "torso+head": 0.8998,
+     "L arm": 0.7105,
+     "R arm": 0.7478,
+     "L leg": 0.8666,
+     "R leg": 0.8733
+    }
+   }
+  },
+  "filledFraction": 0.4159,
+  "filledFullyFraction": 0.2043,
+  "bake": {
+   "sources": {
+    "front": {
+     "file": "reference/tasks/strainer-tpose-20261101/pose/strainer-tpose-attempt2.png",
+     "sha256": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be",
+     "bytes": 1888811,
+     "size": [
+      1536,
+      1024
+     ],
+     "view": "front: the creature faces the camera (creature left = image right)",
+     "approval": "user-approved front T-pose (the image the Meshy image-to-3D body was conditioned on)",
+     "codex": {
+      "route": "codex exec -i (codex-cli 0.163.0, ChatGPT login, existing owned tooling) -> built-in image_gen (tools.image_gen__imagegen); agent model gpt-6.1-sol; image model id not reported by the tool",
+      "task": "strainer-tpose-20261101",
+      "attempts": "reference/tasks/strainer-tpose-20261101/pose/ATTEMPTS.jsonl",
+      "attempt": 2,
+      "promptSha256": "9c56267e30828134a900ee81e257b724f9ddf026bd65ce7b996bcd06ada0646f",
+      "conditionedOn": {
+       "file": "reference/tasks/beyond-enemy-concepts-20261101/concepts/strainer-attempt1.png",
+       "sha256": "d182c908b51d62ab9b8132190705f14d922e4c759dce637f58638d8de8ae9aa6",
+       "what": "the approved Strainer concept"
+      }
+     },
+     "sha256Verified": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be"
+    },
+    "back": {
+     "file": "reference/tasks/beyond-station-round4-followup-20261101/codex/strainer-back-attempt1.png",
+     "sha256": "0a0bf26d4ba808af2442138b375ef2677b028d3e30a2e633e8d78807a0963a6e",
+     "bytes": 1871041,
+     "size": [
+      1536,
+      1024
+     ],
+     "view": "back: seen from directly behind in the same pose / framing (creature left = image left, i.e. mirrored vs the front)",
+     "approval": "accepted Codex back view (first acceptable attempt; projection source for this bake only)",
+     "codex": {
+      "route": "codex exec -i (codex-cli 0.163.0, ChatGPT login, existing owned tooling) -> built-in image_gen (tools.image_gen__imagegen); agent model gpt-6.1-sol; image model id not reported by the tool",
+      "task": "beyond-station-round4-followup-20261101",
+      "attempts": "reference/tasks/beyond-station-round4-followup-20261101/codex/ATTEMPTS.jsonl",
+      "attempt": 1,
+      "promptSha256": "52df94c696c4add502fd895ac05b522725ae389b29ccf91736a351bb5e6d223a",
+      "conditionedOn": {
+       "file": "reference/tasks/strainer-tpose-20261101/pose/strainer-tpose-attempt2.png",
+       "sha256": "bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be",
+       "what": "the approved front T-pose (attached image)"
+      }
+     },
+     "sha256Verified": "0a0bf26d4ba808af2442138b375ef2677b028d3e30a2e633e8d78807a0963a6e"
+    }
+   },
+   "segmentation": {
+    "front": {
+     "figurePx": 209585,
+     "figureFraction": 0.1333,
+     "erodedPx": 193906,
+     "rawAboveThresholdPx": 212084,
+     "floorShadowPx": 5162,
+     "floorZoneTopRow": 889,
+     "droppedSpeckPx": 225,
+     "filledHolePx": 228,
+     "bgMeanResidual": 1.6326,
+     "bboxPx": [
+      42,
+      28,
+      1495,
+      963
+     ],
+     "meanErodedRGB": [
+      104.9426,
+      89.353,
+      71.5406
+     ],
+     "backgroundModel": [
+      [
+       169.7025,
+       1.7183,
+       6.6295,
+       2.5568,
+       -0.9932,
+       6.8083
+      ],
+      [
+       169.4684,
+       1.7322,
+       6.6103,
+       2.4259,
+       -0.9997,
+       6.6456
+      ],
+      [
+       171.3535,
+       1.7319,
+       6.7904,
+       2.4596,
+       -1.0106,
+       6.592
+      ]
+     ]
+    },
+    "back": {
+     "figurePx": 214094,
+     "figureFraction": 0.1361,
+     "erodedPx": 198442,
+     "rawAboveThresholdPx": 218125,
+     "floorShadowPx": 6364,
+     "floorZoneTopRow": 885,
+     "droppedSpeckPx": 162,
+     "filledHolePx": 274,
+     "bgMeanResidual": 1.947,
+     "bboxPx": [
+      41,
+      27,
+      1495,
+      959
+     ],
+     "meanErodedRGB": [
+      107.4831,
+      89.9825,
+      69.4612
+     ],
+     "backgroundModel": [
+      [
+       167.9951,
+       2.0291,
+       7.7893,
+       2.4851,
+       -1.2595,
+       8.61
+      ],
+      [
+       168.2282,
+       1.9535,
+       7.7228,
+       2.2349,
+       -1.2708,
+       8.0163
+      ],
+      [
+       170.3563,
+       1.8542,
+       7.847,
+       2.3295,
+       -1.2869,
+       7.8829
+      ]
+     ]
+    }
+   },
+   "registration": {
+    "front": {
+     "iouInitial": 0.6066,
+     "iou": 0.8627,
+     "regionIoU": {
+      "torso+head": 0.9051,
+      "L arm": 0.7353,
+      "R arm": 0.7765,
+      "L leg": 0.8939,
+      "R leg": 0.9018
+     },
+     "evals": 915,
+     "imageMaskPx": 53109,
+     "workScale": 0.5,
+     "k": 452.7628,
+     "cx": 767.5205,
+     "cy": 968,
+     "armDeg": {
+      "Lu": 40,
+      "Lf": 6,
+      "Lh": 0,
+      "Ru": 40,
+      "Rf": 6,
+      "Rh": 1.3125
+     },
+     "similarity": {
+      "torso+head": {
+       "s": 0.985,
+       "thDeg": -0.375,
+       "txPx": 2,
+       "tyPx": 32.375
+      },
+      "L arm": {
+       "s": 1.075,
+       "thDeg": 0,
+       "txPx": -8,
+       "tyPx": 9
+      },
+      "R arm": {
+       "s": 1.0288,
+       "thDeg": 0,
+       "txPx": -6,
+       "tyPx": 10.25
+      },
+      "L leg": {
+       "s": 0.9975,
+       "thDeg": -0.375,
+       "txPx": -2.5,
+       "tyPx": -1.75
+      },
+      "R leg": {
+       "s": 1,
+       "thDeg": 0.2813,
+       "txPx": 3.625,
+       "tyPx": -2.75
+      }
+     }
+    },
+    "back": {
+     "iouInitial": 0.6071,
+     "iou": 0.847,
+     "regionIoU": {
+      "torso+head": 0.8998,
+      "L arm": 0.7105,
+      "R arm": 0.7478,
+      "L leg": 0.8666,
+      "R leg": 0.8733
+     },
+     "evals": 1039,
+     "imageMaskPx": 54206,
+     "workScale": 0.5,
+     "k": 451.3116,
+     "cx": 767.2505,
+     "cy": 964.25,
+     "armDeg": {
+      "Lu": 40,
+      "Lf": 6.1875,
+      "Lh": 6,
+      "Ru": 40,
+      "Rf": 6,
+      "Rh": 0.75
+     },
+     "similarity": {
+      "torso+head": {
+       "s": 1,
+       "thDeg": 0.75,
+       "txPx": -2.5,
+       "tyPx": 38.75
+      },
+      "L arm": {
+       "s": 0.9975,
+       "thDeg": -3,
+       "txPx": -17.375,
+       "tyPx": -0.875
+      },
+      "R arm": {
+       "s": 1.04,
+       "thDeg": 0,
+       "txPx": 5.875,
+       "tyPx": 9.375
+      },
+      "L leg": {
+       "s": 0.995,
+       "thDeg": 0,
+       "txPx": 0.5,
+       "tyPx": -0.5
+      },
+      "R leg": {
+       "s": 1,
+       "thDeg": 0,
+       "txPx": -1.625,
+       "tyPx": -2
+      }
+     }
+    }
+   },
+   "mesh": {
+    "vertices": 22989,
+    "triangles": 20532,
+    "looseStrandComponents": 254,
+    "mainBodyWeldedVertices": 9200,
+    "uvLayout": "the accepted mesh's own TEXCOORD_0 (unchanged)"
+   },
+   "bake": {
+    "size": 2048,
+    "coveredTexels": 1378914,
+    "coveredFraction": 0.3288,
+    "overlappingTexelWrites": 5000,
+    "sampledFully": 0.5841,
+    "sampledPartially": 0.2116,
+    "unsampled": 0.2043,
+    "byView": {
+     "frontOnly": 0.3497,
+     "backOnly": 0.4159,
+     "frontAndBack": 0.0324,
+     "neither": 0.2056,
+     "neitherOccluded": 0.1893,
+     "neitherOutsideFigure": 0.01
+    },
+    "pulledSamples": 103370,
+    "filledTexels": 573471,
+    "filledFraction": 0.4159,
+    "filledFullyFraction": 0.2043,
+    "fillNearestSampleM": {
+     "mean": 0.0139,
+     "max": 0.095
+    },
+    "fillSamplePoints": 200836
+   },
+   "derivatives": {
+    "normal": {
+     "size": 1024,
+     "meanTiltDeg": 10.5487,
+     "clampedFraction": 0.0091,
+     "method": "height = gauss(L, blur) - gauss(L, highPassSigma) of the baked colour luminance at 1024 (island texels only); n = normalize(-strength dh/dx, +strength dh/dy, 1) (row y grows with v: glTF +Y = toward decreasing v), tilt clamped to maxTilt"
+    },
+    "metallicRoughness": {
+     "size": 1024,
+     "channels": "R 255 (unused), G roughness, B metallic 0",
+     "roughnessMean": 0.5465,
+     "roughnessMin": 0.32,
+     "roughnessMax": 0.8,
+     "method": "per texel of the baked colour (HSV): pale pink / bone (hue -25..35 deg, value > 0.5) -> dull, saturated olive / yellow (hue 35..80 deg, saturation > 0.35) -> wet slime, dark crevices (value < 0.25) slightly wetter; otherwise wet skin; metallic 0"
+    },
+    "normalConvention": "glTF 2.0 tangent space: R = +X (toward increasing u), G = +Y (toward decreasing v, image up), B = +Z; verified by the builder on a synthetic dome (checkNormalConvention) and in a lit CPU render"
+   },
+   "outputs": {
+    "baseColor": {
+     "size": 2048,
+     "bytes": 704715,
+     "sha256": "dc3e6a01d71c398bc36e8767b2cba2c98012037add7bcad4831c8bf7a7f302f6",
+     "quality": 86,
+     "chromaSubsampling": "4:2:0"
+    },
+    "normal": {
+     "size": 1024,
+     "bytes": 436505,
+     "sha256": "62913fa99e943856c9512e878ccd521af57573a84466460f1ea860da2e4ac889",
+     "quality": 92,
+     "chromaSubsampling": "4:4:4"
+    },
+    "metallicRoughness": {
+     "size": 1024,
+     "bytes": 339744,
+     "sha256": "fb17600819d67553cf38aa82423038f8260add9a50a7ef84008bf5c4c4f1b8d9",
+     "quality": 88,
+     "chromaSubsampling": "4:4:4"
+    }
+   },
+   "params": {
+    "size": {
+     "baseColor": 2048,
+     "normal": 1024,
+     "metallicRoughness": 1024
+    },
+    "segment": {
+     "borderPx": 24,
+     "threshold": 13,
+     "refits": 3,
+     "rowSigma": 6,
+     "floorZone": 0.08,
+     "shadowAlphaMin": 0.45,
+     "shadowChroma": 7,
+     "closeR": 1.5,
+     "openR": 1,
+     "minComponentPx": 80,
+     "holeMaxPx": 40,
+     "erodePx": 2,
+     "pullPx": 7,
+     "note": "background = per-channel quadratic surface + per-row median offset (Gaussian-smoothed over rowSigma rows) fitted to the border band, refitted on pixels within threshold/2 of it; figure = RGB distance to the background model > threshold, minus the floor contact shadow (bottom floorZone of the figure: neutral darkening rgb ~ alpha x background with alpha >= shadowAlphaMin and chroma residual < shadowChroma); closing then opening (Euclidean disks), components >= minComponentPx kept, background holes <= holeMaxPx filled; sampling mask = figure eroded by erodePx (Euclidean)"
+    },
+    "register": {
+     "workScale": 0.5,
+     "regions": [
+      "torso+head",
+      "L arm",
+      "R arm",
+      "L leg",
+      "R leg"
+     ],
+     "regionJoints": [
+      [
+       "Root",
+       "Hips",
+       "Spine",
+       "Chest",
+       "Neck",
+       "Head"
+      ],
+      [
+       "L_UpperArm",
+       "L_Forearm",
+       "L_Hand"
+      ],
+      [
+       "R_UpperArm",
+       "R_Forearm",
+       "R_Hand"
+      ],
+      [
+       "L_Thigh",
+       "L_Shin",
+       "L_Foot"
+      ],
+      [
+       "R_Thigh",
+       "R_Shin",
+       "R_Foot"
+      ]
+     ],
+     "pivots": [
+      "Hips",
+      "L_UpperArm",
+      "R_UpperArm",
+      "L_Thigh",
+      "R_Thigh"
+     ],
+     "armInit": {
+      "upper": 34,
+      "fore": 0,
+      "hand": 0
+     },
+     "steps": {
+      "k": 0.02,
+      "c": 4,
+      "angle": 6,
+      "s": 0.04,
+      "th": 3,
+      "t": 4
+     },
+     "halvings": 5,
+     "sweepsPerLevel": 3,
+     "note": "arms posed with the builder rig (local rotations about +Z of UpperArm / Forearm / Hand, mirrored for the right side) and CPU linear-blend skinned; base projection x_img = cx +- k x (mirror for the back view), y_img = cy - k y; per region a similarity (scale s, rotation th, translation t) about its pivot joint, blended per vertex by the skin-weight share of the region; all parameters by coordinate ascent of the whole-figure silhouette IoU at workScale (steps halved when a sweep makes no progress)"
+    },
+    "bake": {
+     "facing": [
+      0,
+      0.3
+     ],
+     "depthEps": {
+      "base": 0.01,
+      "slopePx": 1,
+      "max": 0.06
+     },
+     "strandsOccludeBody": false,
+     "strandFacing": "unsigned (|n.z|: loose strips are double-sided)",
+     "note": "view weight = smoothstep(facing[0], facing[1], n.view) x visible x inside-pull-range; colour = weighted mean of FRONT / BACK; confidence = min(1, sum of weights); the rest from the fill"
+    },
+    "fill": {
+     "k": 12,
+     "sigmaMin": 0.008,
+     "sigmaK": 0.6,
+     "cellM": 0.02,
+     "maxRings": 20,
+     "sampleStride": 2,
+     "note": "texels with confidence < 1: colour = conf x sample + (1 - conf) x Gaussian-weighted mean of the k nearest well-sampled texels (bind-surface 3D distance; sigma = max(sigmaMin, sigmaK x d_k); well-sampled texels taken at sampleStride)"
+    },
+    "pad": {
+     "px": 16,
+     "note": "UV islands dilated by averaging covered 8-neighbours, then the remaining empty atlas = mean island colour"
+    },
+    "normal": {
+     "blur": 0.8,
+     "highPassSigma": 6,
+     "strength": 5,
+     "maxTilt": 0.75,
+     "note": "height = gauss(L, blur) - gauss(L, highPassSigma) of the baked colour luminance at 1024 (island texels only); n = normalize(-strength dh/dx, +strength dh/dy, 1) (row y grows with v: glTF +Y = toward decreasing v), tilt clamped to maxTilt"
+    },
+    "roughness": {
+     "base": 0.55,
+     "bone": 0.8,
+     "slime": 0.4,
+     "dark": -0.08,
+     "note": "per texel of the baked colour (HSV): pale pink / bone (hue -25..35 deg, value > 0.5) -> dull, saturated olive / yellow (hue 35..80 deg, saturation > 0.35) -> wet slime, dark crevices (value < 0.25) slightly wetter; otherwise wet skin; metallic 0"
+    },
+    "jpeg": {
+     "base": {
+      "quality": 86,
+      "chromaSubsampling": "4:2:0"
+     },
+     "metallicRoughness": {
+      "quality": 88,
+      "chromaSubsampling": "4:4:4"
+     },
+     "normal": {
+      "quality": 92,
+      "chromaSubsampling": "4:4:4"
+     }
+    }
+   },
+   "seconds": 57
+  },
+  "identity": {
+   "geometry": "75d40fcf82867944630d3a60ee7b3393bc72f970f6682cf88d46e760b90f8f4e",
+   "skin": "1a32b0b9a4d8ef8b5a70e1ee08b0588961b940845ba17aa96dc5ebec8cfaf589",
+   "animation": "dfdfc819d8977d59c2c827b7f1642a55f1a3e8ac154d55e237e94dff34d88260",
+   "scene": "813f854bb0c3515b92a38e37de7f636066f6999793dc9752ca3c20bbe96a99e6",
+   "material": "89d343d836fa2d1d7522c736acae6a871790fff0776fa259318988cdf2b3ea43",
+   "pinnedFrom": {
+    "glbSha256": "30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a",
+    "bytes": 2377612,
+    "note": "the Strainer GLB of merge 859a402 (Meshy provider maps re-encoded), before the Codex texture bake"
+   },
+   "method": "lib/strainer-texture-identity.mjs: sha256 over every accessor / node / skin / animation / scene-extras / non-texture material parameter of the written GLB equals the pinned pre-bake GLB (only the three embedded images differ)"
+  }
+ },
  "source": {
   "file": "reference/tasks/beyond-station-round4-20261101/meshy/raw/a1/model.glb",
   "sha256Verified": "cfaa5c7068aab8271fc2f9c13076082aca8e473dbe1fff131ee2ac7f2a6b8b64",
   "bytes": 9383188,
   "readOnly": true,
-  "rawKeptOutsideGit": "reference/ (external, ignored) - the raw GLB, its provider maps and the input image are not modified or shipped",
+  "rawKeptOutsideGit": "reference/ (external, ignored) - the raw GLB, its provider maps, the input image and the Codex images are not modified or shipped",
   "triangles": 20532,
   "vertices": 22989,
   "material": {
@@ -42,43 +617,39 @@
    "metallicRoughnessSynthesised": false
   },
   "doubleSided": true,
-  "textures": {
-   "baseColor": [
-    2048,
-    2048,
-    "image/jpeg",
-    3584446
-   ],
-   "metallicRoughness": [
-    2048,
-    2048,
-    "image/jpeg",
-    2059927
-   ],
-   "normal": [
-    2048,
-    2048,
-    "image/jpeg",
-    2754544
-   ]
+  "providerMaps": {
+   "baseColor": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3584446,
+    "sha256": "cb283413b22029bcee569c5f9f82a433191f92f52db0295af260b7cfe314d696",
+    "runtimeUse": false
+   },
+   "metallicRoughness": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2059927,
+    "sha256": "fc7973512a65278b5a71a9d30c6eba954a1af7a3b167c02ec258da851aa1a7f0",
+    "runtimeUse": false
+   },
+   "normal": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2754544,
+    "sha256": "750f66a14069eb77cc8bf5f12268b2063e63ef878e043c5ef279cf16c1be3af0",
+    "runtimeUse": false
+   },
+   "note": "Meshy provider texture maps of the raw GLB: private raw provenance only, NOT decoded or used for any runtime texture"
   },
-  "metallicRoughnessChannelStats": [
-   {
-    "min": 230,
-    "max": 255,
-    "mean": 254.6
-   },
-   {
-    "min": 53,
-    "max": 166,
-    "mean": 114.2
-   },
-   {
-    "min": 0,
-    "max": 118,
-    "mean": 0.7
-   }
-  ],
   "inputImageVerified": true,
   "meshy": {
    "ledger": "reference/tasks/beyond-station-round4-20261101/meshy/LEDGER.jsonl",
@@ -150,29 +721,37 @@
  "outputs": {
   "glb": {
    "path": "game/public/assets/models/enemy-strainer.glb",
-   "bytes": 2377612,
-   "sha256": "30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a",
+   "bytes": 2462484,
+   "sha256": "93284f71927968a721739ecddd04e4be8b06232850d655580f3672aa262c2680",
    "format": "glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG textures; JOINTS_0 u8 / WEIGHTS_0 normalized u8; one SkinnedMesh node"
   },
   "textures": {
    "baseColor": {
     "size": 2048,
-    "format": "JPEG 4:2:0",
+    "bytes": 704715,
+    "sha256": "dc3e6a01d71c398bc36e8767b2cba2c98012037add7bcad4831c8bf7a7f302f6",
     "quality": 86,
-    "bytes": 889068,
-    "edits": "none (re-encode only)"
+    "chromaSubsampling": "4:2:0",
+    "format": "JPEG 4:2:0",
+    "source": "Codex projection bake (front + back views)"
    },
    "metallicRoughness": {
     "size": 1024,
-    "format": "JPEG 4:4:4 (source packed map: G roughness, B metallic; resized)",
+    "bytes": 339744,
+    "sha256": "fb17600819d67553cf38aa82423038f8260add9a50a7ef84008bf5c4c4f1b8d9",
     "quality": 88,
-    "bytes": 201628
+    "chromaSubsampling": "4:4:4",
+    "format": "JPEG 4:4:4 packed: G roughness, B metallic (0), R unused",
+    "source": "function of the baked Codex colour"
    },
    "normal": {
     "size": 1024,
-    "format": "JPEG 4:4:4 tangent-space (source map resized; glTF convention, no tangents: three.js derivative tangents)",
+    "bytes": 436505,
+    "sha256": "62913fa99e943856c9512e878ccd521af57573a84466460f1ea860da2e4ac889",
     "quality": 92,
-    "bytes": 305397
+    "chromaSubsampling": "4:4:4",
+    "format": "JPEG 4:4:4 tangent-space (glTF convention, no tangents: three.js derivative tangents)",
+    "source": "high-passed luminance height of the baked Codex colour"
    }
   }
  },
@@ -3779,9 +4358,9 @@
   "Automatic approximate skin weights on a low-poly (20.5 k triangle) source: LBS volume loss at shoulders / elbows / knees in strong poses; no finger / claw / jaw bones (the claws move rigidly with the Hand; the \"twitch\" is wrist / forearm motion).",
   "The loose fronds / grille strands are rigid with the body part they hang from (no secondary motion / physics); in poses far from the bind (arms hanging) the arm fronds no longer hang vertically.",
   "Procedural (not mocap) clips; no facial rig.",
-  "Hidden-side geometry and texture of the source are AI-generated (Meshy); the texture atlas has dilation streaks in unused space.",
+  "Hidden-side geometry of the source is AI-generated (Meshy). The textures are projected from two Codex views (front + back) and so carry their studio lighting; surfaces seen by neither view (under the crown, inner limbs, crevices; see textures.filledFraction) are filled from the nearest projected surface and read smoother; the Codex views are separate generations, so their details only approximately agree where front and back meet at the sides.",
   "The hunched crown overhangs the motor collider forward and the hanging claws swing outside it (visual brushing of door jambs, no collision change).",
   "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false."
  ],
- "rebuild": "flock /tmp/r4-heavy.lock node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-strainer.mjs && node tools/asset-pipeline/enemy/qa/strainer-sheets.mjs --out /tmp/r4qa/strainer"
+ "rebuild": "flock /tmp/r4-heavy.lock node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-strainer.mjs [--bake-debug DIR] && node tools/asset-pipeline/enemy/qa/strainer-sheets.mjs --out DIR (needs the external reference/ tree: the Meshy raw body + the two Codex images, sha256-pinned)"
 }

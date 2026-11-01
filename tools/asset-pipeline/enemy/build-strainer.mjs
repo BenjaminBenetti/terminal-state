@@ -16,8 +16,10 @@
 //   2. landmarks: the main body (largest connected component; the ~250 loose frond / grille strands are separate closed
 //      strips) densified (zombie/lib/densify.mjs, same surface) -> lib/strainer-skeleton.mjs (the shared 18-joint skeleton
 //      measured with Strainer-specific, logged rules: hunched head, spread arms, long clawed hands, bent knees);
-//   3. mesh: the Meshy smart-topology mesh, its UVs and its 2K PBR maps are KEPT (no simplify / re-UV / re-bake); textures
-//      re-encoded for size only (base colour 2048 JPEG, metallic-roughness + normal 1024 JPEG 4:4:4);
+//   3. mesh: the Meshy smart-topology mesh and its UVs are KEPT (no simplify / re-UV); the Meshy provider maps are NOT used
+//      (private raw provenance only): step 6 bakes the runtime maps from the two CODEX images (the user-approved front T-pose +
+//      the accepted Codex back view) by projection onto the existing UV layout (lib/strainer-texture-bake.mjs; base colour
+//      2048 JPEG, metallic-roughness + normal 1024 JPEG 4:4:4 derived from the baked colour only);
 //   4. skin: zombie/lib/skin.mjs region flood + chain weights + masked Laplacian smoothing (welded), then (a) the Neck /
 //      Head share fades to Chest laterally (the spiked shoulder tops rise level with the crown), (b) the Chest / Neck / Head
 //      shares are diffused over the jaw / upper rib-cage junction, (c) every loose strand copies the weights of the body
@@ -26,10 +28,15 @@
 //      search + regionFloorReport with Strainer ranges: lib/strainer-clips.mjs solveStrainerDeath),
 //      floor guard on the one-shots, CPU-skinned verification (floor, planted feet, arm / thigh vs torso and claw vs leg
 //      clearance, triangle stretch, the Attack claw reach / hit frame);
-//   6. GLB (gltf-transform; KHR_mesh_quantization normals) + scene extras `enemyStrainer` + sidecar provenance.
+//   6. textures: lib/strainer-texture-bake.mjs (segment the Codex images, register the rig-posed mesh to each, project / bake
+//      into the UV atlas, fill + pad, normal / metallic-roughness from the baked colour);
+//   7. GLB (gltf-transform; KHR_mesh_quantization normals) + scene extras `enemyStrainer` + sidecar provenance; the written GLB
+//      must reproduce the pinned geometry / skin / animation / scene / material identity (lib/strainer-texture-identity.mjs):
+//      only the three embedded images may differ from the pre-bake GLB.
+//   `--bake-debug DIR` writes the bake's segmentation / registration / coverage diagnostics (internal QA, never committed).
 import fs from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
+import crypto from 'node:crypto';
 import {Document, NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS, KHRMeshQuantization} from '@gltf-transform/extensions';
 import {MeshoptSimplifier} from 'meshoptimizer';
@@ -45,14 +52,18 @@ import {skinPositions} from '../zombie/lib/glb.mjs';
 import {regionFloorReport} from '../zombie/lib/clipsolve.mjs';
 import {realize, deathFinal} from '../zombie/lib/clips.mjs';
 import {Rig, V} from '../zombie/lib/pose.mjs';
-import {quantizeWeights, writeDoc, geometryHash} from '../zombie/lib/variant-glb.mjs';
+import {quantizeWeights, geometryHash} from '../zombie/lib/variant-glb.mjs';
 import {auditPoses, triangleStretch, stretchStats} from '../zombie/lib/stretch.mjs';
 import {TriGrid} from '../zombie/lib/penetration.mjs';
 import {CLIP_SPECS, sampleClip, poseAt, FPS, solveStrainerDeath} from './lib/strainer-clips.mjs';
 import {detectStrainerSkeleton, SKELETON_OPTIONS} from './lib/strainer-skeleton.mjs';
+import {bakeStrainerTextures, CODEX_SOURCES} from './lib/strainer-texture-bake.mjs';
+import {assertStrainerIdentity, STRAINER_IDENTITY} from './lib/strainer-texture-identity.mjs';
 
 const ARGS = new Set(process.argv.slice(2));
+const BAKE_DEBUG = (i => (i > 0 ? path.resolve(process.argv[i + 1]) : null))(process.argv.indexOf('--bake-debug'));
 const TASK = 'studio-alpha-beyond-station-round4-20261101-01';
+const TEXTURE_TASK = 'studio-alpha-bts-round4-compliance-followup-20261101-01';
 const TASK_DIR = path.join(REPO, 'reference/tasks/beyond-station-round4-20261101');
 const GENERATOR = 'Terminal State Strainer enemy derivative builder (tools/asset-pipeline/enemy/build-strainer.mjs)';
 const OUT_GLB = path.join(REPO, 'game/public/assets/models/enemy-strainer.glb');
@@ -79,7 +90,7 @@ export const OPTIONS = {
   neckLateralFade: {x0: 0.16, x1: 0.25, note: 'torso-region main-body vertices: Neck + Head weight x (1 - smoothstep(x0, x1, |x|)), the remainder to Chest'},
   jawJunction: {below: 0.14, above: 0.06, maxAbsX: 0.25, iterations: 24, lambda: 0.5, note: 'torso-region main-body vertices from Neck.y - below to Head.y + above, |x| < maxAbsX: Laplacian diffusion of the normalised Chest / Neck / Head shares (neighbours outside the zone are fixed boundary values); each vertex keeps its Chest + Neck + Head total and all other influences'},
   strands: {note: 'every connected component other than the main body (loose frond / grille strips) copies the 4 weights of the main-body vertex nearest to its topmost vertex (its root): strands move rigidly with what they hang from'},
-  textures: {baseColor: 2048, metallicRoughness: 1024, normal: 1024, quality: {base: 86, mr: 88, normal: 92}},
+  textures: 'Codex projection bake: every parameter in lib/strainer-texture-bake.mjs BAKE (recorded in the sidecar textures.bake.params)',
   // motor collider: the torso / hip core (the hunched crown overhangs it, the hanging arms swing outside it); must pass the
   // game's narrowest walk-through openings (2-cell doors = 1.0 m in the 0.5 m grid)
   collider: {radius: 0.36, narrowestOpeningM: 1.0},
@@ -119,12 +130,15 @@ function readLedger() {
   };
 }
 
-/** Raw embedded images of the source material. */
-async function sourceImages() {
+/**
+ * The source material's flags + a provenance description of the Meshy provider maps (size / mime / bytes / sha256). Their
+ * pixels are NOT decoded or used: the runtime maps come from the Codex bake; the provider maps stay private raw provenance.
+ */
+async function sourceMaterial() {
   const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(SOURCE.file);
   const mat = doc.getRoot().listMaterials()[0];
-  const img = t => t && {bytes: Buffer.from(t.getImage()), mime: t.getMimeType(), size: t.getSize()};
-  return {base: img(mat.getBaseColorTexture()), mr: img(mat.getMetallicRoughnessTexture()), normal: img(mat.getNormalTexture()), doubleSided: mat.getDoubleSided(), normalScale: mat.getNormalScale()};
+  const meta = t => t && {size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().length, sha256: crypto.createHash('sha256').update(t.getImage()).digest('hex'), runtimeUse: false};
+  return {providerMaps: {baseColor: meta(mat.getBaseColorTexture()), metallicRoughness: meta(mat.getMetallicRoughnessTexture()), normal: meta(mat.getNormalTexture())}, doubleSided: mat.getDoubleSided(), normalScale: mat.getNormalScale()};
 }
 
 /** Weld by exact position, keeping the UV-split -> welded vertex map (weldByPosition semantics). */
@@ -512,7 +526,7 @@ function buildDocument({skel, body, clips, extras, tex}) {
 function writeCreditsAndAllowlist() {
   const credSrc = fs.readFileSync(CREDITS, 'utf8');
   const section = [CREDITS_BEGIN, '## Beyond the Station round 4: the Strainer (enemy)', '',
-    'Generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose, 2K PBR; 1 attempt, 15 credits) through the Meshy MCP under the user\'s round-4 task authorization, conditioned on the project\'s own user-approved front T-pose image of the Strainer (a Codex native image generation made from the project\'s approved Strainer concept). Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-strainer.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture); the provider\'s texture maps are resized / re-encoded only (provenance: `assets/derivatives/enemy-strainer.json`). AI-generated asset: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the input image are kept outside Git.', '',
+    'Geometry: generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose; 1 attempt, 15 credits) through the Meshy MCP under the user\'s round-4 task authorization, conditioned on the project\'s own user-approved front T-pose image of the Strainer (a Codex native image generation made from the project\'s approved Strainer concept). Textures: derived only from Codex-generated sources, the user-approved front T-pose and an accepted Codex back view of the same pose (Codex CLI built-in image generation), projected / baked onto the accepted mesh\'s existing UV layout by deterministic CPU processing (segmentation, rig-posed registration, projection, nearest-surface fill of unseen areas; normal and roughness maps computed from that colour); the Meshy provider texture maps are not used at runtime and stay private raw provenance. Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-strainer.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture) (provenance: `assets/derivatives/enemy-strainer.json`). AI-generated asset: provider terms apply (Meshy, OpenAI / Codex); unapproved prototype, no licence or commercial clearance implied. Raw masters, the Meshy maps and the Codex images are kept outside Git.', '',
     `- \`${rel(OUT_GLB).replace(/^game\/public\//, '')}\` — the Strainer, a tall clawed drain-filter stalker (Meshy task ${SOURCE.taskId})`, CREDITS_END].join('\n');
   const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const re = new RegExp(`${esc(CREDITS_BEGIN)}[\\s\\S]*?${esc(CREDITS_END)}`);
@@ -539,12 +553,12 @@ async function main() {
   if (inputVerified === false) throw new Error('approved input image sha256 mismatch');
   console.log('[1/7] load + place');
   const m = await loadSource({id: SOURCE.id, file: SOURCE.file, sha256: SOURCE.sha256});
-  const imgs = await sourceImages();
+  const imgs = await sourceMaterial();
   const fd = detectFacing(m.pos);
   const pl = placement(m, OPTIONS.heightM, fd.facing);
   const low = placeHigh(m, pl);
   const {nativeBounds, ...plRest} = pl;
-  console.log('  facing', fd.facing, 'scale', pl.scale.toFixed(4), 'textures', JSON.stringify([imgs.base.size, imgs.base.mime, imgs.mr && imgs.mr.size, imgs.normal && imgs.normal.size]));
+  console.log('  facing', fd.facing, 'scale', pl.scale.toFixed(4), 'provider maps (provenance only, not used)', JSON.stringify(Object.values(imgs.providerMaps).map(p => p && p.size)));
 
   console.log('[2/7] landmarks + skeleton');
   const weld = weldLow(low.pos, low.nrm, m.idx);
@@ -596,12 +610,10 @@ async function main() {
   console.log('  stretch', JSON.stringify(stretch));
   if (ARGS.has('--no-write')) { console.log('dev run: nothing written'); return; }
 
-  console.log('[6/7] textures');
-  const base = await sharp(imgs.base.bytes).resize(OPTIONS.textures.baseColor, OPTIONS.textures.baseColor, {kernel: 'lanczos3'}).jpeg({quality: OPTIONS.textures.quality.base, mozjpeg: true, chromaSubsampling: '4:2:0'}).toBuffer();
-  const mr = await sharp(imgs.mr.bytes).resize(OPTIONS.textures.metallicRoughness, OPTIONS.textures.metallicRoughness, {kernel: 'lanczos3'}).jpeg({quality: OPTIONS.textures.quality.mr, mozjpeg: true, chromaSubsampling: '4:4:4'}).toBuffer();
-  const normal = await sharp(imgs.normal.bytes).resize(OPTIONS.textures.normal, OPTIONS.textures.normal, {kernel: 'lanczos3'}).jpeg({quality: OPTIONS.textures.quality.normal, mozjpeg: true, chromaSubsampling: '4:4:4'}).toBuffer();
-  const mrStats = (await sharp(imgs.mr.bytes).stats()).channels.map(c => ({min: c.min, max: c.max, mean: +c.mean.toFixed(1)}));
-  console.log('  bytes base', base.length, 'mr', mr.length, 'normal', normal.length);
+  console.log('[6/7] textures: Codex projection bake');
+  const bake = await bakeStrainerTextures({mesh: {pos: low.pos, nrm: low.nrm, uv: m.uv, idx: m.idx, joints: bodyW.joints, weights: bodyW.weights}, skel, rig, debugDir: BAKE_DEBUG, log: s => console.log(s)});
+  const {base, mr, normal} = bake;
+  console.log('  bytes base', base.length, 'mr', mr.length, 'normal', normal.length, `(${bake.report.seconds} s)`);
 
   console.log('[7/7] GLB + sidecar');
   const bb = bounds(low.pos);
@@ -621,24 +633,41 @@ async function main() {
     note: 'Rigged derivative of the accepted Meshy T2.5 Strainer (image-to-3D of the approved front T-pose); NEW 18-joint skeleton / skin / procedural clips; offsets in model metres at actor scale 1 (bind frame = model frame, identity bind rotations); unapproved, gameReady false.',
   };
   const doc = buildDocument({skel, body: bodyMesh, clips, extras, tex: {base, mr, normal, doubleSided: imgs.doubleSided}});
+  // identity proof BEFORE writing: everything but the three embedded images must equal the pinned pre-bake GLB
+  const glbBytes = await new NodeIO().registerExtensions([KHRMeshQuantization]).writeBinary(doc);
+  const identity = assertStrainerIdentity(await new NodeIO().registerExtensions(ALL_EXTENSIONS).readBinary(glbBytes));
+  console.log('  identity (geometry / skin / animation / scene / material) == pinned pre-bake GLB:', JSON.stringify(Object.fromEntries(Object.entries(identity).map(([k, v]) => [k, v.slice(0, 12)]))));
   fs.mkdirSync(path.dirname(OUT_GLB), {recursive: true});
-  await writeDoc(doc, guardOutput(OUT_GLB));
+  fs.writeFileSync(guardOutput(OUT_GLB), glbBytes);
   const outBytes = fs.statSync(OUT_GLB).size, outSha = sha256File(OUT_GLB);
   if (sha256File(SOURCE.file) !== SOURCE.sha256) throw new Error('SOURCE CHANGED during the build');
+  for (const [k, s] of Object.entries(CODEX_SOURCES)) if (sha256File(path.join(REPO, s.file)) !== s.sha256) throw new Error(`Codex ${k} source CHANGED during the build`);
   const J = skel.joints;
   const boneLengthsM = Object.fromEntries(JOINTS.filter(([, p]) => p).map(([n, p]) => [n, r4(V.len(V.sub(J[n], J[p])))]));
+  const R = bake.report, regIoU = v => ({iou: R.registration[v].iou, regions: R.registration[v].regionIoU});
   const manifest = {
-    schema: 'the-last-line/derivative-manifest@1', asset: 'enemy-strainer', title: 'Strainer (tall clawed drain-filter stalker) - rigged runtime derivative of the accepted Meshy T2.5 model (prototype)',
-    task: TASK, lane: 'ASSET', date: '2026-11-01', generatedBy: 'tools/asset-pipeline/enemy/build-strainer.mjs', builtAt: new Date().toISOString(), buildSeconds: Math.round((Date.now() - t0) / 1000),
-    status: {approved: false, gameReady: false, stage: 'unapproved prototype derivative; art / anatomy / deformation / gameplay fit not certified', licenseClearance: 'none - a derivative of an AI generation (Meshy, conditioned on a Codex-generated image); access to it grants no licence, commercial or production clearance'},
-    honesty: {sourceHadSkeleton: false, rig: 'NEW derivative skeleton (shared 18-joint naming / hierarchy of the zombie wardrobe) and automatic skin weights created by this CPU pipeline', animation: 'hand-authored procedural keyframes / gait functions (lib/strainer-clips.mjs) sampled with this body\'s own joint positions - NOT motion capture', textures: 'the provider\'s own generated maps, resized / re-encoded only (no painting, no new artwork)', generation: 'no AI generation, inference, model download or network service was used by this builder; the Meshy model was generated earlier by the task primary (ledger below)'},
-    provenance: 'generated (Meshy T2.5 image-to-3D, smart topology, t-pose, 2K PBR, from the project\'s own user-approved Codex-generated front T-pose) + local derivative work',
-    source: {file: rel(SOURCE.file), sha256Verified: SOURCE.sha256, bytes: fs.statSync(SOURCE.file).size, readOnly: true, rawKeptOutsideGit: 'reference/ (external, ignored) - the raw GLB, its provider maps and the input image are not modified or shipped', triangles: m.triangles, vertices: m.vertices, material: m.material, doubleSided: imgs.doubleSided,
-      textures: {baseColor: [...imgs.base.size, imgs.base.mime, imgs.base.bytes.length], metallicRoughness: [...imgs.mr.size, imgs.mr.mime, imgs.mr.bytes.length], normal: [...imgs.normal.size, imgs.normal.mime, imgs.normal.bytes.length]}, metallicRoughnessChannelStats: mrStats,
+    schema: 'the-last-line/derivative-manifest@1', asset: 'enemy-strainer', title: 'Strainer (tall clawed drain-filter stalker) - rigged runtime derivative of the accepted Meshy T2.5 model with Codex-projected textures (prototype)',
+    task: TASK, lane: 'ASSET', textureTask: TEXTURE_TASK, textureLane: 'TEXTURE', date: '2026-11-01', generatedBy: 'tools/asset-pipeline/enemy/build-strainer.mjs', builtAt: new Date().toISOString(), buildSeconds: Math.round((Date.now() - t0) / 1000),
+    status: {approved: false, gameReady: false, stage: 'unapproved prototype derivative; art / anatomy / deformation / gameplay fit not certified', licenseClearance: 'none - a derivative of AI generations (Meshy geometry conditioned on a Codex-generated image; textures projected from two Codex-generated images); access to it grants no licence, commercial or production clearance'},
+    honesty: {sourceHadSkeleton: false, rig: 'NEW derivative skeleton (shared 18-joint naming / hierarchy of the zombie wardrobe) and automatic skin weights created by this CPU pipeline', animation: 'hand-authored procedural keyframes / gait functions (lib/strainer-clips.mjs) sampled with this body\'s own joint positions - NOT motion capture',
+      textures: 'derived ONLY from two Codex-generated images (the user-approved front T-pose + the accepted Codex back view) by deterministic projection / UV baking onto the accepted mesh\'s existing UV layout, with nearest-surface fill of unseen texels and island padding; normal / metallic-roughness maps computed from that baked colour; no painting, no procedural or hand-drawn artwork; the Meshy provider maps are NOT used at runtime (kept private raw provenance only)',
+      generation: 'no AI generation, inference, model download or network service was used by this builder; the Meshy model and the two Codex images were generated earlier by the task primaries (ledgers below)'},
+    provenance: 'generated (Meshy T2.5 image-to-3D geometry, smart topology, t-pose, from the project\'s own user-approved Codex-generated front T-pose; runtime textures projected from that front T-pose + an accepted Codex back view) + local derivative work',
+    textures: {
+      runtimeSources: 'codex', providerMapsUsedAtRuntime: false,
+      sources: R.sources,
+      chain: 'Codex front T-pose (user-approved) + Codex back view (accepted attempt 1, conditioned on the front) -> segmentation -> registration of the rig-posed accepted mesh -> projection / UV bake (existing Meshy UV layout, unchanged) -> fill + island padding -> base colour; normal + metallic-roughness derived from that base colour',
+      registrationIoU: {front: regIoU('front'), back: regIoU('back')},
+      filledFraction: R.bake.filledFraction, filledFullyFraction: R.bake.filledFullyFraction,
+      bake: R,
+      identity: {...identity, pinnedFrom: STRAINER_IDENTITY.pinnedFrom, method: 'lib/strainer-texture-identity.mjs: sha256 over every accessor / node / skin / animation / scene-extras / non-texture material parameter of the written GLB equals the pinned pre-bake GLB (only the three embedded images differ)'},
+    },
+    source: {file: rel(SOURCE.file), sha256Verified: SOURCE.sha256, bytes: fs.statSync(SOURCE.file).size, readOnly: true, rawKeptOutsideGit: 'reference/ (external, ignored) - the raw GLB, its provider maps, the input image and the Codex images are not modified or shipped', triangles: m.triangles, vertices: m.vertices, material: m.material, doubleSided: imgs.doubleSided,
+      providerMaps: {...imgs.providerMaps, note: 'Meshy provider texture maps of the raw GLB: private raw provenance only, NOT decoded or used for any runtime texture'},
       inputImageVerified: inputVerified,
       meshy: {...meshy, provider: 'Meshy image-to-3D (meshy_image_to_3d)', aiModel: meshy.settings.ai_model, smartTopology: meshy.settings.model_type === 'smart-topology'}},
     outputs: {glb: {path: rel(OUT_GLB), bytes: outBytes, sha256: outSha, format: 'glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG textures; JOINTS_0 u8 / WEIGHTS_0 normalized u8; one SkinnedMesh node'},
-      textures: {baseColor: {size: OPTIONS.textures.baseColor, format: 'JPEG 4:2:0', quality: OPTIONS.textures.quality.base, bytes: base.length, edits: 'none (re-encode only)'}, metallicRoughness: {size: OPTIONS.textures.metallicRoughness, format: 'JPEG 4:4:4 (source packed map: G roughness, B metallic; resized)', quality: OPTIONS.textures.quality.mr, bytes: mr.length}, normal: {size: OPTIONS.textures.normal, format: 'JPEG 4:4:4 tangent-space (source map resized; glTF convention, no tangents: three.js derivative tangents)', quality: OPTIONS.textures.quality.normal, bytes: normal.length}}},
+      textures: {baseColor: {...R.outputs.baseColor, format: 'JPEG 4:2:0', source: 'Codex projection bake (front + back views)'}, metallicRoughness: {...R.outputs.metallicRoughness, format: 'JPEG 4:4:4 packed: G roughness, B metallic (0), R unused', source: 'function of the baked Codex colour'}, normal: {...R.outputs.normal, format: 'JPEG 4:4:4 tangent-space (glTF convention, no tangents: three.js derivative tangents)', source: 'high-passed luminance height of the baked Codex colour'}}},
     conventions: {units: 'metres', up: '+Y', facing: '+Z', floor: 'y = 0', origin: 'midpoint between the feet', handedness: 'L_ = character left = +X', heightM: r4(skel.H), bindPose: 'the generated T-pose (arms ~44 deg below horizontal, slightly bent knees, head / crown hunched forward)', bindRotations: 'identity (bone frames aligned with model space)'},
     placement: {...plRest, nativeBounds: {min: r4(nativeBounds.min), max: r4(nativeBounds.max)}, boundsM: extras.boundsM, sizeM: r3([bb.max[0] - bb.min[0], bb.max[1] - bb.min[1], bb.max[2] - bb.min[2]])}, facing: fd,
     landmarks: cloud.stats,
@@ -658,11 +687,11 @@ async function main() {
       'Automatic approximate skin weights on a low-poly (20.5 k triangle) source: LBS volume loss at shoulders / elbows / knees in strong poses; no finger / claw / jaw bones (the claws move rigidly with the Hand; the "twitch" is wrist / forearm motion).',
       'The loose fronds / grille strands are rigid with the body part they hang from (no secondary motion / physics); in poses far from the bind (arms hanging) the arm fronds no longer hang vertically.',
       'Procedural (not mocap) clips; no facial rig.',
-      'Hidden-side geometry and texture of the source are AI-generated (Meshy); the texture atlas has dilation streaks in unused space.',
+      'Hidden-side geometry of the source is AI-generated (Meshy). The textures are projected from two Codex views (front + back) and so carry their studio lighting; surfaces seen by neither view (under the crown, inner limbs, crevices; see textures.filledFraction) are filled from the nearest projected surface and read smoother; the Codex views are separate generations, so their details only approximately agree where front and back meet at the sides.',
       'The hunched crown overhangs the motor collider forward and the hanging claws swing outside it (visual brushing of door jambs, no collision change).',
       'Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false.',
     ],
-    rebuild: 'flock /tmp/r4-heavy.lock node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-strainer.mjs && node tools/asset-pipeline/enemy/qa/strainer-sheets.mjs --out /tmp/r4qa/strainer',
+    rebuild: 'flock /tmp/r4-heavy.lock node --max-old-space-size=3500 tools/asset-pipeline/enemy/build-strainer.mjs [--bake-debug DIR] && node tools/asset-pipeline/enemy/qa/strainer-sheets.mjs --out DIR (needs the external reference/ tree: the Meshy raw body + the two Codex images, sha256-pinned)',
   };
   fs.mkdirSync(path.dirname(OUT_JSON), {recursive: true});
   fs.writeFileSync(guardOutput(OUT_JSON), JSON.stringify(manifest, null, 1) + '\n');

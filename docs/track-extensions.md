@@ -71,26 +71,49 @@ all levels"):
   - Office (`TRACK_EXT_OFFICE`, the original planner): the old seeded 0.6 chance PER ELIGIBLE TUNNEL is gone (the `annex.chance`
     setting no longer exists); every eligible tunnel, in the seeded order, takes an annex until `annex.max` 2 (the retired roll's draw
     is still taken and ignored, so each annex's own layout stream is unchanged);
+  - **Office presence fallback** (2026-11-01, lane OFFICE; user: the ACTUAL area occurrence is 20 % on every level type): about 7 % of
+    present Office levels have no tunnel whose first straight is long enough for a door (the fixed east / south canvas: the
+    island-ends bed ends are often 0.5–2 m from the station walls, the tunnels that do fit bend early). Such a level — present, and
+    its eligible tunnels placed NO annex — gets ONE **service-hatch** annex instead (`TRACK_EXT_OFFICE.fallbackHatch` = the Subway's
+    `hatch` window, 2–10 m from the end face): the existing GEN-2 bed-wall entry (`Carver.planHatch`, "Service hatches" below) is
+    tried at the bed ends no tunnel continues, in a seeded order on its own fork `rng.fork('annex-fallback')` of the track-ext stream,
+    until one fits. It restores presence, it never adds a second annex; it is not the GEN-2 planner (no `annex.count`, no host first
+    straights, no hatches as ordinary candidates). The roll, its 0.2, the tunnels, caps, the core and the accepted attempt are
+    untouched: a level whose tunnels placed an annex, and every absent level, is byte-identical to before; a config with
+    `annex.max` 0 (the no-annex reference) never runs it. Its log lines read `hatch fallback: …` / `annex 0 via a fallback bed hatch …`;
   - Mall (`TRACK_EXT_MALL`): one annex.
-  The content / layout / hideout / cache / graffiti / loot rules are unchanged; the guaranteed deep hideout applies to every annex.
+  The content / layout / hideout / cache / graffiti / loot rules are unchanged; the guaranteed deep hideout applies to every annex
+  (the fallback hatch's annex included: hideout, caches, survivor marks, hatch graffiti, invitation art, annex loot, service spawns).
 - **Core unaffected:** the roll draws from no generation stream and the core never depends on whether annexes were placed
   (`game/tests/bts-area.test.ts` core-view proof; the core pins of the parity / loot / office tests never moved).
-- **Realised occurrence** (measured; `game/tests/bts-area.test.ts` re-measures 250 seeds per type every run). Present levels that
-  still get no annex are genuinely ineligible — no tunnel with a long enough first straight (the Office's fixed east / south canvas:
-  its island-ends bed ends are often 0.5–2 m from the station walls) — nothing is re-rolled or compensated:
+- **Realised occurrence** (measured; `game/tests/bts-area.test.ts` re-measures 250 seeds per type every run and requires every
+  present level of every type to have the area and the realised rate to be 0.2 within 4σ). Nothing is re-rolled or compensated: the
+  Office's present-but-ineligible levels take the presence fallback above, on the same one roll:
   | Level | Present levels with an annex | 0 / 1 / 2 annexes (present levels) | Realised rate |
   |---|---|---|---|
   | Subway | 200 / 200 | 0 / 147 / 53 | 0.20 |
-  | Office | 183 / 200 (281 / 311 incl. seeds 1–700) | 17 / 43 / 140 | ≈ 0.18 (0.2 × 0.90–0.92) |
+  | Office | 200 / 200 (was 183 / 200: the 17 now behind a fallback hatch) | 0 / 60 / 140 (was 17 / 43 / 140) | 0.20 (was ≈ 0.18) |
   | Mall | 200 / 200 | 0 / 200 / 0 | 0.20 |
   (200 present seeds per type, `(i × 2654435761 + 7777) >>> 0` picked by the roll; the roll itself is 0.199 over 100,000 seeds and
   0.2 within 4σ per seed family, Subway archetype and mall variant over 60,000 seeds. The test's own 250 corpus seeds,
   `(i × 2654435761 + 12345) >>> 0` for i = 1000–1249: 48 roll present (0.192) — Subway 48 / 48 with an annex (11 with two), Office
-  45 / 48 (36 with two; realised 0.180), Mall 48 / 48.)
+  48 / 48 (36 with two, 3 via the fallback hatch; was 45 / 48, realised 0.180), Mall 48 / 48.)
+  Office fallback, measured over **666 present Office levels** (lane OFFICE, `game/tests/office-area-fallback.test.ts`: the 23
+  formerly-failing corpus levels every run, all three cohorts with opt-in `OFFICE_AREA_FALLBACK_BROAD=1`): the first 330 present
+  corpus seeds `(i × 2654435761 + 12345) >>> 0` + 31702, 331 / 331 with the area (308 tunnel-annex levels byte-identical to before,
+  23 via the fallback); seeds 1–700, 135 / 135 present (119 byte-identical, 16 via the fallback); the 7777 cohort above, 200 / 200
+  (183 byte-identical, 17). All 56 formerly-failing levels: exactly one hatch annex (1227–2142 m², 36–70 areas, N wall 30 / S wall
+  26, 2.3–9.8 m from the end), tunnels / log / core view / accepted attempt identical to the level without the fallback, every
+  invariant (`extensionIssues` incl. `hatchIssues`, `officeIssues`, `cacheMarkIssues`), a hideout with 1–2 caches and survivor marks,
+  annex loot, lights, 5–6 service spawns from the service pool, 1–4 invitation art pieces at the hatch, hatch graffiti on 47 / 56 (the
+  0.85 clue chance). Generation time: the levels without the fallback are unchanged (648 vs 643 ms mean over 610 levels, noise); a
+  fallback level plans one more annex (679 vs 593 ms, 56 levels) — about 1.4 % of all Office levels.
 - **Limitations:** the 20 % is per generated level, so a run's three levels are three independent rolls (about half of all runs
-  have the area on none of them); an Office level that rolls present can still have no annex (above); a present level's annexes
-  can still be dropped by the existing safety net if the finished layout fails validation with them (`dropExtensions`, never a
-  re-roll; none in the samples above). The annex docs below describe the area where it exists.
+  have the area on none of them); the Office fallback needs an open bed end with rock behind a side wall — every present Office level
+  measured had one, but it is not a proof for every seed (a level with none would log `hatch fallback: omitted (…)` / `no open bed
+  end` and stay without the area: never a re-roll); a present level's annexes can still be dropped by the existing safety net if the
+  finished layout fails validation with them (`dropExtensions`, never a re-roll; none in the samples above). The annex docs below
+  describe the area where it exists.
 - **Tests** select their annex samples with the real roll (`game/tests/helpers/btsArea.ts` `presentSeeds` / `absentSeeds`); there is
   deliberately no override that forces the area.
 
@@ -140,7 +163,8 @@ all levels"):
 - Right after the archetype skeleton, 40 m of rock is kept free past every bed end that is still open, so the rest of the
   station plans around the tunnel room. This is a deliberate layout change to the core station, made for annex incidence.
 - With `coreReserveM: 0` (`TRACK_EXT_RESERVE_OFF`, `game/tests/helpers/trackExtCore.ts`), the core reproduces the earlier pins.
-- The Office uses `TRACK_EXT_OFFICE`: no reserve and the original annex planner (since 2026-11-01 without its per-tunnel roll).
+- The Office uses `TRACK_EXT_OFFICE`: no reserve and the original annex planner (since 2026-11-01 without its per-tunnel roll, and
+  with the presence fallback hatch: "The area roll" above).
 - The reserve is applied whatever the area roll says: the core station never depends on the roll.
 
 **Service hatches:**
@@ -148,6 +172,8 @@ all levels"):
   tunnel fits.
 - **How they work:** an annex there is reached through a door in the bed's outer side wall near an end, 2–10 m from the end
   face, never in a platform face. The annex sits at bed floor height. The way back is the bed's own ladders.
+- **The Office** (2026-11-01) uses them only as its presence fallback (`fallbackHatch`): one hatch, only on a present level whose
+  tunnels placed no annex ("The area roll" above). The runtime (hatch rendering, nav, travel, content) is the Subway's, unchanged.
 
 **Measured incidence** (64-seed corpus, before the 2026-11-01 one-roll rule): 60/64 Subway levels had at least one annex and 18/64
 two (0 / 1 / 2 = 4 / 42 / 18); 16 of 78 annexes were behind a hatch. Now only about 20 % of levels have the area at all (above);
@@ -616,6 +642,10 @@ Tunnels have sparse fixtures, mostly dead or dying.
 - **Track extensions:** `track-ext.test.ts` (generation and census), `track-ext-core.test.ts` (core identity and the
   reserve-off proof), `track-ext-coverage.test.ts`, `track-ext-vis.test.ts`, and the opt-in `TRACK_EXT_GEN=1`
   `track-ext-vis-gen.test.ts`.
+- **The area roll:** `bts-area.test.ts` (the one 20 % roll, absent / present on every level type, core-view invariance,
+  determinism, realised 0.2 per type) and `office-area-fallback.test.ts` (the Office presence fallback: its config, 31702 and the
+  23 formerly-failing corpus levels — one hatch annex each with its content and invariants, nothing else changed — byte identity
+  where it never runs, determinism; opt-in `OFFICE_AREA_FALLBACK_BROAD=1`: 666 present levels in three seed families, ~16 min).
 - **Content:** `annex-content.test.ts` (lane ROOMS: machinery records = their collision boxes, visual-only safety, the
   anti-repetition rule, ≥ 4 signatures and ≥ 1 hall per annex, 30–70 holders per annex, bounded merged machinery meshes).
 - **Layout (round 3, lane LAYOUT):** `annex-layout.test.ts` (~4 s: 6 annexes of Subway 1002 / 2654448106, Office 7922, Mall 5150 —
