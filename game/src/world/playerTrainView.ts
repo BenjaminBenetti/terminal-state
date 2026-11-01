@@ -45,6 +45,10 @@ export const TRAIN_VIEW = {
   leafClear: 0.01,
   /** Glass panes sit this far inside the cut skin plane (task train-shell-followup). */
   glassInset: 0.004,
+  /** Task train-lockbox: the pocket-end stop post (x thickness) behind a window over the rear door's leaf pocket, and its gap to the
+   *  parked leaf's -X edge (m). */
+  pocketStop: 0.02,
+  pocketStopGap: 0.007,
   /** The jambs / heads / thresholds reach this far past the leaf's outer face (the shell's recess walls cover from ~outerZ + 0.02). */
   jambPast: 0.03,
   /** Cab partition thickness. */
@@ -64,6 +68,22 @@ export const TRAIN_VIEW = {
  * A newly cut side window gets the bay laid so this rect lands exactly on its hole: the painted gasket frames the real opening.
  */
 export const WALL_ART_GLASS = {u0: 0.115, u1: 0.882, v0: 0.457, v1: 0.834} as const;
+
+/**
+ * Task train-lockbox-windows-20261101-232156: the nose corner windows (zone 'nose') wrap each corner end window round the rounded nose.
+ * The side pane at |z| = skinZ closes the strip of the side hole BEHIND the end pane's plane (from the nose rect's inner x edge to the
+ * end pane at skinX), beside the end window's sleeve: the corner reads as one recessed wraparound window and the sleeve's inside is
+ * never seen bare from the side.
+ */
+export function noseCorners(spec: PlayerTrainSpec, e: TrainWindows['end'][number]): TrainWindows['side'][number][] {
+  return windowsOf(spec).side.filter(n => n.zone === 'nose' && Math.sign(n.x0 + n.x1) === e.end
+    && (n.side < 0 ? Math.abs(e.z0 + n.skinZ) < 0.02 : Math.abs(e.z1 - n.skinZ) < 0.02));
+}
+/** The side pane rect (x0 < x1, y0 < y1) of nose corner n joined to end window e. */
+export function nosePane(e: TrainWindows['end'][number], n: TrainWindows['side'][number]): {x0: number; x1: number; y0: number; y1: number} {
+  const inner = e.end > 0 ? n.x0 : n.x1, pane = e.end * e.skinX;
+  return {x0: Math.min(inner, pane), x1: Math.max(inner, pane), y0: Math.max(n.y0, e.y0), y1: Math.min(n.y1, e.y1)};
+}
 
 /** The spec's head / tail mounts sit this far in front of the modelled lamp lenses (lane ASSETS). */
 const LENS_AHEAD = 0.05;
@@ -232,7 +252,7 @@ export function partitionsOf(spec: PlayerTrainSpec): {x: number; doorway: {z0: n
  * train-local; the leaf rect in the leaf GLB's own frame). Rects are the inner-most opening in their projection.
  */
 export interface TrainWindows {
-  side: readonly {side: -1 | 1; zone?: string; x0: number; x1: number; y0: number; y1: number; skinZ: number}[];
+  side: readonly {side: -1 | 1; zone?: string; x0: number; x1: number; y0: number; y1: number; skinZ: number; pocket?: {x0: number; x1: number}}[];
   end: readonly {end: -1 | 1; z0: number; z1: number; y0: number; y1: number; skinX: number}[];
   leaf: {x0: number; x1: number; y0: number; y1: number} | null;
 }
@@ -406,27 +426,71 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   }
   // (task train-shell-followup) window sleeves: frames closing the void between the lining and the cut skin, around every window
   const glass = new QuadSet();
+  const leafSpec = spec.doorLeaf;
+  /** Signed z range (s * a .. s * b, ascending) of the |z| interval [a, b] on side s. */
+  const zr = (s: -1 | 1, a: number, b: number): [number, number] => [Math.min(s * a, s * b), Math.max(s * a, s * b)];
   for (const w of win.side) {
-    const s = w.side, zl = Math.min(s * hw, s * w.skinZ), zh = Math.max(s * hw, s * w.skinZ);
-    if (zh - zl > 1e-3) {
-      metal.quad([w.x0, w.y0, zh], [w.x0, w.y0, zl], [w.x0, w.y1, zl], [w.x0, w.y1, zh], [1, 0, 0], [zh, w.y0], [zl, w.y0], [zl, w.y1], [zh, w.y1]);
-      metal.quad([w.x1, w.y0, zl], [w.x1, w.y0, zh], [w.x1, w.y1, zh], [w.x1, w.y1, zl], [-1, 0, 0], [zl, w.y0], [zh, w.y0], [zh, w.y1], [zl, w.y1]);
-      metal.quad([w.x0, w.y1, zl], [w.x1, w.y1, zl], [w.x1, w.y1, zh], [w.x0, w.y1, zh], [0, -1, 0], [w.x0, zl], [w.x1, zl], [w.x1, zh], [w.x0, zh]);
-      metal.quad([w.x0, w.y0, zh], [w.x1, w.y0, zh], [w.x1, w.y0, zl], [w.x0, w.y0, zl], [0, 1, 0], [w.x0, zh], [w.x1, zh], [w.x1, zl], [w.x0, zl]);
+    const s = w.side;
+    if (w.zone === 'nose') continue; // (task train-lockbox) the nose corner panes are built with their end window below
+    // task train-lockbox: a rear-compartment window over the rear door's leaf pocket is a pocket door seen through glass — no sleeve
+    // face crosses the leaf's slot (|z| of the leaf's faces + 5 mm) inside the pocket span, a slim stop post at the parked leaf's -X end
+    const slot = w.pocket ? {x0: w.pocket.x0 - 0.005, x1: w.pocket.x1 + 0.005, a: leafSpec.outerZ - leafSpec.thickness - 0.005, b: leafSpec.outerZ + 0.005} : null;
+    const zParts = (x: number): [number, number][] => {
+      const parts: [number, number][] = !slot || x <= slot.x0 || x >= slot.x1 ? [[hw, w.skinZ]] : [[hw, slot.a], [slot.b, w.skinZ]];
+      return parts.filter(([a, b]) => b - a > 0.008);
+    };
+    if (w.skinZ - hw > 1e-3) {
+      for (const [a, b] of zParts(w.x0)) {
+        const [zl, zh] = zr(s, a, b);
+        metal.quad([w.x0, w.y0, zh], [w.x0, w.y0, zl], [w.x0, w.y1, zl], [w.x0, w.y1, zh], [1, 0, 0], [zh, w.y0], [zl, w.y0], [zl, w.y1], [zh, w.y1]);
+      }
+      for (const [a, b] of zParts(w.x1)) {
+        const [zl, zh] = zr(s, a, b);
+        metal.quad([w.x1, w.y0, zl], [w.x1, w.y0, zh], [w.x1, w.y1, zh], [w.x1, w.y1, zl], [-1, 0, 0], [zl, w.y0], [zh, w.y0], [zh, w.y1], [zl, w.y1]);
+      }
+      // head / sill, split where the slot starts / ends along the window
+      const xs = [w.x0, ...(slot ? [slot.x0, slot.x1].filter(x => x > w.x0 && x < w.x1) : []), w.x1];
+      for (let i = 0; i + 1 < xs.length; i++) {
+        const xa = xs[i], xb = xs[i + 1];
+        for (const [a, b] of zParts((xa + xb) / 2)) {
+          const [zl, zh] = zr(s, a, b);
+          metal.quad([xa, w.y1, zl], [xb, w.y1, zl], [xb, w.y1, zh], [xa, w.y1, zh], [0, -1, 0], [xa, zl], [xb, zl], [xb, zh], [xa, zh]);
+          metal.quad([xa, w.y0, zh], [xb, w.y0, zh], [xb, w.y0, zl], [xa, w.y0, zl], [0, 1, 0], [xa, zh], [xb, zh], [xb, zl], [xa, zl]);
+        }
+      }
+    }
+    if (w.pocket && w.pocket.x0 > w.x0 && w.pocket.x0 < w.x1) {
+      const [zl, zh] = zr(s, hw, w.skinZ), px1 = w.pocket.x0 - TRAIN_VIEW.pocketStopGap;
+      metal.box(px1 - TRAIN_VIEW.pocketStop, w.y0, zl, px1, w.y1, zh); // the parked leaf's -X edge rests against it
     }
     const zg = s * (w.skinZ - TRAIN_VIEW.glassInset);
     glass.quad([w.x0, w.y0, zg], [w.x1, w.y0, zg], [w.x1, w.y1, zg], [w.x0, w.y1, zg], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
   }
   for (const w of win.end) {
     const e = w.end, xl = Math.min(e * (e > 0 ? ix1 : -ix0), e * w.skinX), xh = Math.max(e * (e > 0 ? ix1 : -ix0), e * w.skinX);
+    // task train-lockbox: the nose corner window joined to this end window (its wraparound): a side pane at |z| = its skinZ closes
+    // the strip of the side hole beside this window's sleeve (NOSE_PANE), and that strip of the sleeve's side face gives way to it
+    const nose = noseCorners(spec, w);
+    const zFace = (z: number) => nose.find(n => Math.abs(n.side * n.skinZ - z) < 0.02) ?? null;
     if (xh - xl > 1e-3) {
-      metal.quad([xl, w.y0, w.z0], [xh, w.y0, w.z0], [xh, w.y1, w.z0], [xl, w.y1, w.z0], [0, 0, 1], [xl, w.y0], [xh, w.y0], [xh, w.y1], [xl, w.y1]);
-      metal.quad([xh, w.y0, w.z1], [xl, w.y0, w.z1], [xl, w.y1, w.z1], [xh, w.y1, w.z1], [0, 0, -1], [xh, w.y0], [xl, w.y0], [xl, w.y1], [xh, w.y1]);
+      const sideFace = (z: number, facing: 1 | -1) => {
+        const n = zFace(z), panes = n ? [nosePane(w, n)] : [];
+        for (const [a, b, y0, y1] of rectMinusHoles(xl, xh, w.y0, w.y1, panes.map(q => [q.x0, q.x1, q.y0, q.y1] as [number, number, number, number]))) {
+          if (facing > 0) metal.quad([a, y0, z], [b, y0, z], [b, y1, z], [a, y1, z], [0, 0, 1], [a, y0], [b, y0], [b, y1], [a, y1]);
+          else metal.quad([b, y0, z], [a, y0, z], [a, y1, z], [b, y1, z], [0, 0, -1], [b, y0], [a, y0], [a, y1], [b, y1]);
+        }
+      };
+      sideFace(w.z0, 1);
+      sideFace(w.z1, -1);
       metal.quad([xl, w.y1, w.z0], [xh, w.y1, w.z0], [xh, w.y1, w.z1], [xl, w.y1, w.z1], [0, -1, 0], [xl, w.z0], [xh, w.z0], [xh, w.z1], [xl, w.z1]);
       metal.quad([xl, w.y0, w.z1], [xh, w.y0, w.z1], [xh, w.y0, w.z0], [xl, w.y0, w.z0], [0, 1, 0], [xl, w.z1], [xh, w.z1], [xh, w.z0], [xl, w.z0]);
     }
     const xg = e * (w.skinX - TRAIN_VIEW.glassInset);
     glass.quad([xg, w.y0, w.z1], [xg, w.y0, w.z0], [xg, w.y1, w.z0], [xg, w.y1, w.z1], [1, 0, 0], [0, 0], [1, 0], [1, 1], [0, 1]);
+    for (const n of nose) {
+      const q = nosePane(w, n), z = n.side * n.skinZ;
+      if (q.x1 - q.x0 > 1e-3 && q.y1 - q.y0 > 1e-3) glass.quad([q.x0, q.y0, z], [q.x1, q.y0, z], [q.x1, q.y1, z], [q.x0, q.y1, z], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
+    }
   }
   add(metal, mats.get('metal'), 'train-trim');
   add(rubber, mats.get('rubber'), 'train-thresholds');

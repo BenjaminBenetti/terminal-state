@@ -253,12 +253,14 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   const G = TRAIN_GLASS_HALF, inset = TRAIN_VIEW.glassInset;
   for (const side of [-1, 1] as const) {
     const cuts = spec.doors.filter(d => d.side === side).map(d => [d.x - d.width / 2, d.x + d.width / 2] as [number, number]);
-    const holes = win.side.filter(w => w.side === side).map(w => [w.x0, w.x1, p.railTopY + w.y0, p.railTopY + w.y1] as [number, number, number, number]);
+    // (the nose corner windows lie inside the end boxes beyond the bulkheads: the end box keeps them; their end panes have glass boxes)
+    const sideWins = win.side.filter(w => w.side === side && w.zone !== 'nose');
+    const holes = sideWins.map(w => [w.x0, w.x1, p.railTopY + w.y0, p.railTopY + w.y1] as [number, number, number, number]);
     for (const [a, b] of spans(-L2, L2, cuts)) {
       statics.push(propBox(p, area, a, b, side * hw, side * out, bedY, H));
       for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, bedY, topY, holes)) shoot.push(propBox(p, area, x0, x1, side * hw, side * out, y0, y1 - y0));
     }
-    for (const w of win.side.filter(q => q.side === side)) {
+    for (const w of sideWins) {
       const zg = side * (w.skinZ - inset);
       glass.push(propBox(p, area, w.x0, w.x1, zg - G, zg + G, p.railTopY + w.y0, w.y1 - w.y0));
     }
