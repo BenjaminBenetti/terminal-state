@@ -1,0 +1,278 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-reactor-20261101",
+ "task": "studio-reactor-build-20261101-205236-01",
+ "lane": "primary",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (narrow reactor / generator ambience allowed by the Reactor build brief; 9 jobs of a 12-job cap, every first take accepted)",
+ "plannedBy": "tools/audio-pipeline/reactor-plan.py",
+ "rebuild": "node tools/audio-pipeline/reactor-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope levels per segment). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": 128,
+ "derivatives": [
+  {
+   "cue": "reactorGeneratorStart",
+   "url": "assets/audio/reactor-gen-start.mp3",
+   "bytes": 90279,
+   "sha256": "680befcbd7304be10649f3f2b32da84b8f32326afc81719dbdeee560f12679b2",
+   "dur": 5.6,
+   "ops": [
+    "mono",
+    "trim 0-5.6 s",
+    "cosine fades",
+    "peak -1 dBFS (3.6 dB)"
+   ],
+   "source": {
+    "clip": "reactor-gen-start-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-gen-start-01.wav",
+    "rawSha256": "3ffe4ea3ed6f5e05ede8dac38c3443ee77ab138482a2308425140828b053f4e1",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-big-old-industrial-diesel-generator-be_w8a8_seed979852337_211814.wav",
+    "labSidecarSha256": "65f3d16c3d02810ae4caa33bf4cc6ae077c25cbd081d6a52a3fce1aa7d18b4e9",
+    "jobId": "20261101T211814-979852337",
+    "prompt": "TrackType: SFX, a big old industrial diesel generator being started: the electric starter motor cranks and whirrs, the engine coughs and sputters a few times, then catches and roars to life and settles into a loud steady rumble, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 979852337,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorGeneratorLoop",
+   "url": "assets/audio/reactor-gen-loop-loop.mp3",
+   "bytes": 122044,
+   "sha256": "9232e8c11e41e8f50c7c0e4eec257588b407fa3cd5540f57ee01c39ea76bd705",
+   "dur": 7.6,
+   "loop": {
+    "start": 0.3,
+    "length": 7
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 0.11 dB)",
+    "loop 7 s, equal-power crossfade 0.6 s",
+    "margins 0.3 s",
+    "rms -20 dBFS (-2.6 dB)"
+   ],
+   "source": {
+    "clip": "reactor-gen-loop-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-gen-loop-01.wav",
+    "rawSha256": "ba0262c1285e0570da5c824ca5e73ecbdeffa91624ee65d3dcf46ab10f3c4e66",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-loud-big-diesel-generator-engine-runni_w8a8_seed1080658695_211818.wav",
+    "labSidecarSha256": "7fa2dda7ea44fd4d7fec46261c9e4689c0f1e800b06a5b5a5dcdf689645c468c",
+    "jobId": "20261101T211818-1080658695",
+    "prompt": "TrackType: SFX, a loud big diesel generator engine running steadily at constant speed, continuous deep mechanical rumble and rattle, no changes in speed, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1080658695,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorFanLoop",
+   "url": "assets/audio/reactor-fan-loop-loop.mp3",
+   "bytes": 106161,
+   "sha256": "a541ae31c99548788d0e4b00f8c5cfcb4b1b545439d9b0d3254684622350b9b6",
+   "dur": 6.6,
+   "loop": {
+    "start": 0.3,
+    "length": 6
+   },
+   "ops": [
+    "mono",
+    "stationary window from 0.5 s (std 0.23 dB)",
+    "loop 6 s, equal-power crossfade 0.6 s",
+    "margins 0.3 s",
+    "rms -20 dBFS (-2.6 dB)"
+   ],
+   "source": {
+    "clip": "reactor-fan-loop-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-fan-loop-01.wav",
+    "rawSha256": "c5cb3b5c2b6abf939da8bea3ad501c2ba6fc80835b57f53bc48a1058793341f3",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-huge-industrial-extraction-fan-spinnin_w8a8_seed5287025_211823.wav",
+    "labSidecarSha256": "2de17e0ecd3bf3b169af4264eec21c4296ecfc56c6c907a2afe617d91212c5d1",
+    "jobId": "20261101T211823-5287025",
+    "prompt": "TrackType: SFX, a huge industrial extraction fan spinning steadily inside a metal duct, a constant deep whooshing roar of moving air with a low motor hum, no changes, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 5287025,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorBreaker",
+   "url": "assets/audio/reactor-breaker.mp3",
+   "bytes": 22987,
+   "sha256": "ea3a5e0912f614954cd6d859d7c4dfe275c708200ad60426879f2e425c7ea944",
+   "dur": 1.4,
+   "ops": [
+    "mono",
+    "trim 0-1.4 s",
+    "cosine fades",
+    "peak -1 dBFS (3.8 dB)"
+   ],
+   "source": {
+    "clip": "reactor-breaker-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-breaker-01.wav",
+    "rawSha256": "073e3beb900642ae445cc1f7514b7f7ce664288b4f2a0b5d93c244c4c0564752",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-heavy-industrial-main-circuit-breaker_w8a8_seed1906900016_211827.wav",
+    "labSidecarSha256": "3dc621ecedb363a667b93ca30096b748c14bb6607870dcc3049a663917332b1f",
+    "jobId": "20261101T211827-1906900016",
+    "prompt": "TrackType: SFX, a heavy industrial main circuit breaker lever thrown closed, one big mechanical clunk with a deep electrical thump and a short buzz, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1906900016,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorFuse",
+   "url": "assets/audio/reactor-fuse.mp3",
+   "bytes": 17554,
+   "sha256": "781f7234f3bd9f9e17a5c738429e21605516bd472df053c24d621863e366e6f0",
+   "dur": 1.05,
+   "ops": [
+    "mono",
+    "trim 0.55-1.6 s",
+    "cosine fades",
+    "peak -1 dBFS (3.9 dB)"
+   ],
+   "source": {
+    "clip": "reactor-fuse-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-fuse-01.wav",
+    "rawSha256": "ac8fd3b8f8a5c7f165ac8a230c54a63cd585dc880d38c2ae1a20ce283d66ed50",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-heavy-ceramic-cartridge-fuse-pushed-fi_w8a8_seed1222034763_211832.wav",
+    "labSidecarSha256": "f0110701e9e1cf7412592dbace9b2cec3ca628efbfb70a6b267da346f34c8c11",
+    "jobId": "20261101T211832-1222034763",
+    "prompt": "TrackType: SFX, a heavy ceramic cartridge fuse pushed firmly into metal spring clips, one solid metallic click and scrape, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1222034763,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorValve",
+   "url": "assets/audio/reactor-valve.mp3",
+   "bytes": 48483,
+   "sha256": "d4aeff363876bdcc5dc3545416efcfcfb331d8e33f40aa37ba8865045231d66b",
+   "dur": 3,
+   "ops": [
+    "mono",
+    "trim 0-3 s",
+    "cosine fades",
+    "peak -1 dBFS (2.7 dB)"
+   ],
+   "source": {
+    "clip": "reactor-valve-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-valve-01.wav",
+    "rawSha256": "46813a49be8db3dd004a5f8bceca0abba1891611aa93d122e1e8d1bb58ba0095",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-large-rusty-valve-handwheel-turned-slo_w8a8_seed6901423_211836.wav",
+    "labSidecarSha256": "ea2f08361b479f57bfab8e5d62bca5079937b3060bb2b9da27a95bef16aca4be",
+    "jobId": "20261101T211836-6901423",
+    "prompt": "TrackType: SFX, a large rusty valve handwheel turned slowly by hand, metal squeaking and grinding, then water starts rushing through big steel pipes, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 6901423,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorPump",
+   "url": "assets/audio/reactor-pump.mp3",
+   "bytes": 77322,
+   "sha256": "3956c3091aa1cf6568df0489b84a239113e927c1e5a1fbcc6ef3488978fc1e4e",
+   "dur": 4.8,
+   "ops": [
+    "mono",
+    "trim 0-4.8 s",
+    "cosine fades",
+    "peak -1 dBFS (3.5 dB)"
+   ],
+   "source": {
+    "clip": "reactor-pump-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-pump-01.wav",
+    "rawSha256": "01e50bac99e63fc622f1f54f6c97392acb466ac0dceaa38ae632faf2ec4c48d9",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-big-industrial-electric-pump-motor-sta_w8a8_seed2010082487_211841.wav",
+    "labSidecarSha256": "9087573d3c733e79e668c88a96bc0970662964e65da55045739502308b2c59c8",
+    "jobId": "20261101T211841-2010082487",
+    "prompt": "TrackType: SFX, a big industrial electric pump motor starting up, a rising electric whine, then a steady hum with water surging through large pipes, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 2010082487,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorStartup",
+   "url": "assets/audio/reactor-startup.mp3",
+   "bytes": 150883,
+   "sha256": "c3b0c7a33f9fe107084e7f187cbb172d1a3b767e0d600063ec1b14e475f055ab",
+   "dur": 9.4,
+   "ops": [
+    "mono",
+    "trim 0-9.4 s",
+    "cosine fades",
+    "peak -1 dBFS (1.1 dB)"
+   ],
+   "source": {
+    "clip": "reactor-startup-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-startup-01.wav",
+    "rawSha256": "c733d23a256664ec3f0fa4f08d1c56048a5fb9bcd2604ba0508ffd648751dd60",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-gigantic-industrial-power-plant-machin_w8a8_seed980044156_211846.wav",
+    "labSidecarSha256": "a5d4863df3e3395e92924b65b2b822605b4a3c5a140a98122051c6ff07864bb6",
+    "jobId": "20261101T211846-980044156",
+    "prompt": "TrackType: SFX, a gigantic industrial power plant machine powering up: heavy relays clacking, a deep low hum rising and swelling in pitch and loudness, turbines spinning up into a powerful steady drone, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 980044156,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorHum",
+   "url": "assets/audio/reactor-hum-loop.mp3",
+   "bytes": 138344,
+   "sha256": "82de7316b215eff896d4201dcb3ed7afc57a0247a533aee21e0e5d3cb47abc7a",
+   "dur": 8.6,
+   "loop": {
+    "start": 0.3,
+    "length": 8
+   },
+   "ops": [
+    "mono",
+    "stationary window from 0.5 s (std 0.54 dB)",
+    "loop 8 s, equal-power crossfade 0.6 s",
+    "margins 0.3 s",
+    "rms -20 dBFS (-1.9 dB)"
+   ],
+   "source": {
+    "clip": "reactor-hum-01",
+    "rawFile": "reference/tasks/reactor-build-20261101-205236/audio/raw/reactor-hum-01.wav",
+    "rawSha256": "419d195b8f90a9a46bc2ca2e47c4d09f9cabf5a5a537134bb479a45c9a699146",
+    "rawBytes": 1764044,
+    "labFile": "sfx_the-constant-deep-low-electrical-hum-of_w8a8_seed633155767_211850.wav",
+    "labSidecarSha256": "fea216ff557ba8b935567de403cbda55e350d93939ee301687de6aed6dc422a3",
+    "jobId": "20261101T211850-633155767",
+    "prompt": "TrackType: SFX, the constant deep low electrical hum of a huge running power plant machine, a steady smooth drone with a faint mechanical throb, no changes, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 633155767,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}
