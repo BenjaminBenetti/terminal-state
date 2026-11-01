@@ -131,7 +131,7 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: '47d6dde6', // stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: 'f6caed49', // stage 16 (mall round 3 CI follow-up, exact-table square fallback): was 47d6dde6 — exactly 2 of 6,397 holders differ, the EMPTY annex supply stock shelves 135824 #213 / 32877 #158 now hold the med kit they rolled (core hashes unchanged); stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
   subwayPickups: '473514e1', // stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
   officeHolders: 'a46e2b2b', // stage 15: was e69a7b80; stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)

@@ -277,7 +277,11 @@ const SNUG_GAP = 0.004;
  * Places items on surfaces left-to-right without overlap (deterministic for a given `rnd`).
  * Returns one placement per item, or null when an item fits nowhere (callers drop it).
  */
-export function packItems(itemIds: readonly string[], surfaces: readonly Surface[], rnd: () => number, lying = false): (Placement | null)[] {
+/**
+ * `square` (mall round 3 CI follow-up): no random yaw jitter — every item square to the surface front. Only the exact-table fallback in
+ * items/loot.ts rollHolderLots uses it (on its own stream), when the jittered packing left a rolled lot unplaced.
+ */
+export function packItems(itemIds: readonly string[], surfaces: readonly Surface[], rnd: () => number, lying = false, square = false): (Placement | null)[] {
   type Slot = {item: number; orient: Orient; yaw: number; sx: number; sy: number; sz: number};
   const bins: Slot[][] = surfaces.map(() => []);
   const used = surfaces.map(() => 0);
@@ -291,7 +295,7 @@ export function packItems(itemIds: readonly string[], surfaces: readonly Surface
       const s = surfaces[i];
       const lie = lying || (!!s.spill && rnd() < 0.7);
       let placed = false;
-      const jitter = (rnd() * 2 - 1);
+      const jitter = square ? 0 : (rnd() * 2 - 1);
       const gap = s.snug ? SNUG_GAP : GAP; // (lane SHOPS U10: snug compartments; the jitter is still drawn — same stream for every surface)
       for (const orient of orientOptions(id, lie)) {
         const o = orientedSize(id, orient);

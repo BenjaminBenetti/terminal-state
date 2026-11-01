@@ -14,11 +14,13 @@ permissions:
 
 jobs:
   test-1:
-    # Mall round 3 CI follow-up (user choice B, 2026-11-01): the full Vitest suite runs as THREE parallel shards on the standard
-    # runner (`vitest --shard`, whole files; game:test is the unchanged full-suite command). Each shard proves from its JSON report that
-    # it ran its files completely without a failure and publishes the list; the required `build` job fails unless all three shards
-    # succeeded and their lists partition the whole test inventory (tools/release/test-shards.mjs).
-    name: test (shard 1/3)
+    # Mall round 3 CI follow-up (user, 2026-11-01: "put it to 6 CI runners ... remove the testing from the build step"): the full
+    # Vitest suite runs as SIX parallel shards on the standard runner (`vitest --shard`, whole files; game:test is the unchanged
+    # full-suite command, one worker per shard as the single job had — the suite's wall-clock budgets assume it: three workers on
+    # the 4-CPU public runner doubled them). Each shard proves from its JSON report that it ran its files completely without a
+    # failure and publishes the list; `bundle` compiles / packages in parallel with NO tests, `checks` runs the workflow / packager
+    # validators, and the required `build` is a lightweight fail-closed aggregate of all of them (tools/release/test-shards.mjs).
+    name: test (shard 1/6)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -41,12 +43,12 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci
-      - run: npm run game:test -- --shard=1/3 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - run: npm run game:test -- --shard=1/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
       - id: shard
-        run: node tools/release/test-shards.mjs verify 1 3 "$RUNNER_TEMP/vitest-shard.json"
+        run: node tools/release/test-shards.mjs verify 1 6 "$RUNNER_TEMP/vitest-shard.json"
 
   test-2:
-    name: test (shard 2/3)
+    name: test (shard 2/6)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -69,12 +71,12 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci
-      - run: npm run game:test -- --shard=2/3 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - run: npm run game:test -- --shard=2/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
       - id: shard
-        run: node tools/release/test-shards.mjs verify 2 3 "$RUNNER_TEMP/vitest-shard.json"
+        run: node tools/release/test-shards.mjs verify 2 6 "$RUNNER_TEMP/vitest-shard.json"
 
   test-3:
-    name: test (shard 3/3)
+    name: test (shard 3/6)
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -97,31 +99,102 @@ jobs:
           node-version: '22.16.0'
           cache: npm
       - run: npm ci
-      - run: npm run game:test -- --shard=3/3 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - run: npm run game:test -- --shard=3/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
       - id: shard
-        run: node tools/release/test-shards.mjs verify 3 3 "$RUNNER_TEMP/vitest-shard.json"
+        run: node tools/release/test-shards.mjs verify 3 6 "$RUNNER_TEMP/vitest-shard.json"
 
-  build:
-    # Stable check name (required status check on main). Validation runs for every trigger; only runs on main itself
-    # (the exact merged commit, or a manual run on main) upload release artifacts — see the upload steps.
-    # Fail-closed gate: `build` always runs after the three test shards (a job skipped by a failed `needs` would read as a passing
-    # required check) and its first step fails unless every shard succeeded; the inventory step then proves the shards ran every
-    # test file exactly once. Release uploads come after both, from this job only.
-    name: build
-    needs: [test-1, test-2, test-3]
-    if: ${{ always() }}
+  test-4:
+    name: test (shard 4/6)
     runs-on: ubuntu-24.04
-    # Track 2 (PR #20) set 30 min for the single-job suite (~21-29 min on the 2 vCPU private runner); the shards keep the same cap.
+    timeout-minutes: 30
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    outputs:
+      files: ${{ steps.shard.outputs.files }}
+      tests: ${{ steps.shard.outputs.tests }}
+      skipped: ${{ steps.shard.outputs.skipped }}
+      skippedFiles: ${{ steps.shard.outputs.skippedFiles }}
+    steps:
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run game:test -- --shard=4/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - id: shard
+        run: node tools/release/test-shards.mjs verify 4 6 "$RUNNER_TEMP/vitest-shard.json"
+
+  test-5:
+    name: test (shard 5/6)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    outputs:
+      files: ${{ steps.shard.outputs.files }}
+      tests: ${{ steps.shard.outputs.tests }}
+      skipped: ${{ steps.shard.outputs.skipped }}
+      skippedFiles: ${{ steps.shard.outputs.skippedFiles }}
+    steps:
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run game:test -- --shard=5/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - id: shard
+        run: node tools/release/test-shards.mjs verify 5 6 "$RUNNER_TEMP/vitest-shard.json"
+
+  test-6:
+    name: test (shard 6/6)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    outputs:
+      files: ${{ steps.shard.outputs.files }}
+      tests: ${{ steps.shard.outputs.tests }}
+      skipped: ${{ steps.shard.outputs.skipped }}
+      skippedFiles: ${{ steps.shard.outputs.skippedFiles }}
+    steps:
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run game:test -- --shard=6/6 --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"
+      - id: shard
+        run: node tools/release/test-shards.mjs verify 6 6 "$RUNNER_TEMP/vitest-shard.json"
+
+  checks:
+    # The workflow / pin validator and the node --test suites of the release tooling (packager, dynamic-app wrapper, shard proof).
+    name: checks
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       PUPPETEER_SKIP_DOWNLOAD: 'true'
     steps:
-      - name: Require every test shard
-        env:
-          SHARD_RESULTS: ${{ needs.test-1.result }} ${{ needs.test-2.result }} ${{ needs.test-3.result }}
-        run: |
-          echo "test shards: $SHARD_RESULTS"
-          [ "$SHARD_RESULTS" = 'success success success' ] || { echo "::error::every test shard must succeed (got: $SHARD_RESULTS)"; exit 1; }
       - name: Check out source
         # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -135,23 +208,32 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run ci:check
-      - name: Prove the shards ran the whole test inventory
-        env:
-          SHARD_1_FILES: ${{ needs.test-1.outputs.files }}
-          SHARD_1_TESTS: ${{ needs.test-1.outputs.tests }}
-          SHARD_1_SKIPPED: ${{ needs.test-1.outputs.skipped }}
-          SHARD_1_SKIPPED_FILES: ${{ needs.test-1.outputs.skippedFiles }}
-          SHARD_2_FILES: ${{ needs.test-2.outputs.files }}
-          SHARD_2_TESTS: ${{ needs.test-2.outputs.tests }}
-          SHARD_2_SKIPPED: ${{ needs.test-2.outputs.skipped }}
-          SHARD_2_SKIPPED_FILES: ${{ needs.test-2.outputs.skippedFiles }}
-          SHARD_3_FILES: ${{ needs.test-3.outputs.files }}
-          SHARD_3_TESTS: ${{ needs.test-3.outputs.tests }}
-          SHARD_3_SKIPPED: ${{ needs.test-3.outputs.skipped }}
-          SHARD_3_SKIPPED_FILES: ${{ needs.test-3.outputs.skippedFiles }}
-        run: node tools/release/test-shards.mjs inventory 3
-      - run: npm run build
       - run: npm run ci:test
+
+  bundle:
+    # The compile / package / assets job: no test execution and no `needs`, so it runs in parallel with the shards. Only runs on main
+    # itself (the exact merged commit, or a manual run on main) upload the release artifacts — see the upload steps. An artifact
+    # uploaded here is not a release by itself: Main publishes only the artifact of a commit whose WHOLE workflow succeeded
+    # (required check `build` included).
+    name: bundle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PUPPETEER_SKIP_DOWNLOAD: 'true'
+    steps:
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - run: npm ci
+      - run: npm run build
       - run: npm run ci:package
       - name: Upload static site and integrity manifest
         # Release artifacts come only from main: pull-request runs (ref refs/pull/N/merge) and manual runs from another
@@ -175,3 +257,58 @@ jobs:
           if-no-files-found: error
           include-hidden-files: false
           retention-days: 30
+
+  build:
+    # Stable check name (required status check on main): a lightweight FAIL-CLOSED aggregate. It always runs once the bundle, the
+    # checks and all six shards finished (a job skipped by a failed `needs` would read as a passing required check); its first step
+    # fails unless every one of them succeeded, then the inventory step proves the shards ran every test file exactly once.
+    name: build
+    needs: [bundle, checks, test-1, test-2, test-3, test-4, test-5, test-6]
+    if: ${{ always() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require the bundle, the checks and every test shard
+        env:
+          RESULTS: ${{ needs.bundle.result }} ${{ needs.checks.result }} ${{ needs.test-1.result }} ${{ needs.test-2.result }} ${{ needs.test-3.result }} ${{ needs.test-4.result }} ${{ needs.test-5.result }} ${{ needs.test-6.result }}
+        run: |
+          echo "bundle checks test-1..6: $RESULTS"
+          [ "$RESULTS" = 'success success success success success success success success' ] || { echo "::error::the bundle, the checks and every test shard must succeed (got: $RESULTS)"; exit 1; }
+      - name: Check out source
+        # Official actions/checkout v7.0.1 (node24), SHA verified with git ls-remote.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Set up Node
+        # Official actions/setup-node v7.1.0 (node24), SHA verified with git ls-remote.
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+          cache: npm
+      - name: Prove the shards ran the whole test inventory
+        env:
+          SHARD_1_FILES: ${{ needs.test-1.outputs.files }}
+          SHARD_1_TESTS: ${{ needs.test-1.outputs.tests }}
+          SHARD_1_SKIPPED: ${{ needs.test-1.outputs.skipped }}
+          SHARD_1_SKIPPED_FILES: ${{ needs.test-1.outputs.skippedFiles }}
+          SHARD_2_FILES: ${{ needs.test-2.outputs.files }}
+          SHARD_2_TESTS: ${{ needs.test-2.outputs.tests }}
+          SHARD_2_SKIPPED: ${{ needs.test-2.outputs.skipped }}
+          SHARD_2_SKIPPED_FILES: ${{ needs.test-2.outputs.skippedFiles }}
+          SHARD_3_FILES: ${{ needs.test-3.outputs.files }}
+          SHARD_3_TESTS: ${{ needs.test-3.outputs.tests }}
+          SHARD_3_SKIPPED: ${{ needs.test-3.outputs.skipped }}
+          SHARD_3_SKIPPED_FILES: ${{ needs.test-3.outputs.skippedFiles }}
+          SHARD_4_FILES: ${{ needs.test-4.outputs.files }}
+          SHARD_4_TESTS: ${{ needs.test-4.outputs.tests }}
+          SHARD_4_SKIPPED: ${{ needs.test-4.outputs.skipped }}
+          SHARD_4_SKIPPED_FILES: ${{ needs.test-4.outputs.skippedFiles }}
+          SHARD_5_FILES: ${{ needs.test-5.outputs.files }}
+          SHARD_5_TESTS: ${{ needs.test-5.outputs.tests }}
+          SHARD_5_SKIPPED: ${{ needs.test-5.outputs.skipped }}
+          SHARD_5_SKIPPED_FILES: ${{ needs.test-5.outputs.skippedFiles }}
+          SHARD_6_FILES: ${{ needs.test-6.outputs.files }}
+          SHARD_6_TESTS: ${{ needs.test-6.outputs.tests }}
+          SHARD_6_SKIPPED: ${{ needs.test-6.outputs.skipped }}
+          SHARD_6_SKIPPED_FILES: ${{ needs.test-6.outputs.skippedFiles }}
+        run: node tools/release/test-shards.mjs inventory 6

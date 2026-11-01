@@ -15,12 +15,13 @@ const file = (rel, status = 'passed', tests = ['passed']) => ({name: `${VROOT}/$
 const report = (files, o = {}) => ({success: true, numFailedTests: 0, numFailedTestSuites: 0, numPassedTests: 5, numPendingTests: 1, numTodoTests: 0, testResults: files, ...o});
 
 test('a complete, successful shard report gives its files and counts', () => {
-  const r = parseShardReport(report([file('tests/b.test.ts'), file('tests/a.test.ts'), file('tests/p.test.ts', 'skipped', ['skipped'])]), VROOT);
+  const r = parseShardReport(report([file('tests/b.test.ts'), file('tests/a.test.ts'), file('tests/p.test.ts', 'skipped', ['skipped']),
+    file('tests/q.test.ts', 'passed', ['skipped', 'pending']), file('tests/m.test.ts', 'passed', ['passed', 'skipped'])]), VROOT);
   assert.deepEqual(r.errors, []);
-  assert.deepEqual(r.files, ['tests/a.test.ts', 'tests/b.test.ts', 'tests/p.test.ts']);
+  assert.deepEqual(r.files, ['tests/a.test.ts', 'tests/b.test.ts', 'tests/m.test.ts', 'tests/p.test.ts', 'tests/q.test.ts']);
   assert.equal(r.tests, 5);
   assert.equal(r.skipped, 1);
-  assert.equal(r.skippedFiles, 1);
+  assert.equal(r.skippedFiles, 2); // p (status skipped) and q (Vitest marks a wholly skipped file 'passed'); m ran a test
 });
 
 test('any failure, an unsuccessful or empty run, or a foreign / duplicated file fails the shard', () => {

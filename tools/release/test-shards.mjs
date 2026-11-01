@@ -46,14 +46,18 @@ export function parseShardReport(report, vitestRoot = GAME) {
     const rel = path.relative(vitestRoot, t.name).split(path.sep).join('/');
     if (rel.startsWith('..') || path.isAbsolute(rel)) errors.push(`file outside the vitest root: ${t.name}`);
     files.push(rel);
+    // (Vitest's JSON marks a wholly skipped file 'passed' with every test 'skipped' / 'pending' / 'todo')
+    const tests = t.assertionResults ?? [];
     if (t.status === 'failed') errors.push(`failed: ${rel}`);
-    else if (t.status !== 'passed') skippedFiles++;
+    else if (t.status !== 'passed' || !tests.length || tests.every(a => SKIPPED.has(a.status))) skippedFiles++;
     for (const a of t.assertionResults ?? []) if (a.status === 'failed') errors.push(`failed test: ${rel} > ${a.fullName ?? a.title}`);
   }
   if (new Set(files).size !== files.length) errors.push('a file appears twice in the report');
   const skipped = (report.numPendingTests ?? 0) + (report.numTodoTests ?? 0);
   return {errors, files: files.sort(), tests: report.numPassedTests ?? 0, skipped, skippedFiles};
 }
+
+const SKIPPED = new Set(['skipped', 'pending', 'todo', 'disabled']);
 
 /** Shard file lists vs the inventory: every inventory file in exactly one shard, nothing else, no empty shard. */
 export function checkPartition(inventory, shards) {

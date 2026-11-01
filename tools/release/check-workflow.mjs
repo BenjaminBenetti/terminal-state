@@ -10,8 +10,8 @@ const pins = {
   'actions/upload-artifact':'cf430e030ddbb5b0abf93d22962f4752f3646cd9',
 };
 const actions = [...workflow.matchAll(/^\s*uses:\s*(\S+)@(\S+)\s*$/gm)];
-// (mall round 3 CI follow-up: checkout + setup-node in each of the three test shards and in build, + the two release uploads)
-assert.equal(actions.length,10);
+// (mall round 3 CI follow-up: checkout + setup-node in each of the six test shards, checks, bundle and build, + the two release uploads)
+assert.equal(actions.length,20);
 for (const [,name,pin] of actions) assert.equal(pin,pins[name],`Unreviewed action ${name}`);
 for (const required of ['branches: [main]','workflow_dispatch:',"github.ref == 'refs/heads/main'",'contents: read',
   'persist-credentials: false',"node-version: '22.16.0'","PUPPETEER_SKIP_DOWNLOAD: 'true'",'run: npm ci',
@@ -21,45 +21,60 @@ for (const required of ['branches: [main]','workflow_dispatch:',"github.ref == '
 assert(!/\b(?:pull_request_target|write-all|secrets\.)\b/.test(workflow),'Unexpected privileged workflow');
 // Pull requests into main run the full validation before merge (required check 'build'); only main uploads release artifacts.
 assert(/^on:\n  push:\n    branches: \[main\]\n(?:  #.*\n)*  pull_request:\n    branches: \[main\]\n  workflow_dispatch:\n/m.test(workflow),'Expected push(main) + pull_request(main) + workflow_dispatch triggers');
-// Mall round 3 CI follow-up (user choice B, 2026-11-01): the full Vitest suite runs as exactly THREE parallel shards (test-1..3) of the
-// unchanged full-suite command; `build` (the required check) always runs after them and FAILS CLOSED — its first, unconditional step
-// requires every shard result to be success (a job skipped by a failed `needs` would read as a passing required check), then the
-// inventory step proves the shards ran every test file exactly once (tools/release/test-shards.mjs) before the build / package /
-// main-only release uploads.
+// Mall round 3 CI follow-up (user, 2026-11-01: six runners, no tests in the build step): the full Vitest suite runs as exactly SIX
+// parallel shards (test-1..6) of the unchanged full-suite command; `bundle` compiles / packages in parallel with NO test execution and
+// uploads the main-only release artifacts; `checks` runs this validator and ci:test; the required `build` is a lightweight aggregate
+// that always runs after all of them and FAILS CLOSED — its first, unconditional step requires every result to be success (a job
+// skipped by a failed `needs` would read as a passing required check), then the inventory step proves the shards ran every test file
+// exactly once (tools/release/test-shards.mjs).
+const SHARDS = 6;
 const gameJobs = workflow.slice(workflow.indexOf('\njobs:\n') + 1).split(/\n(?=  [a-z][\w-]*:\n)/).slice(1);
 const gameJob = id => gameJobs.find(j => j.startsWith(`  ${id}:\n`)) ?? assert.fail(`game-build.yml: missing job ${id}`);
-assert.deepEqual(gameJobs.map(j => j.slice(2, j.indexOf(':'))),['test-1','test-2','test-3','build'],'game-build.yml: expected jobs test-1, test-2, test-3, build');
+const shardIds = Array.from({length: SHARDS}, (_, k) => `test-${k + 1}`);
+assert.deepEqual(gameJobs.map(j => j.slice(2, j.indexOf(':'))),[...shardIds,'checks','bundle','build'],'game-build.yml: expected jobs test-1..6, checks, bundle, build');
 assert.equal(pkg0.scripts['game:test'],'vitest run --config game/vitest.config.ts','package.json game:test must stay the full-suite command');
-for (const i of [1,2,3]) {
+const common = ['persist-credentials: false',"node-version: '22.16.0'"];
+for (let i = 1; i <= SHARDS; i++) {
   const t = gameJob(`test-${i}`);
-  assert(new RegExp(`^  test-${i}:\\n(?:    #.*\\n)*    name: test \\(shard ${i}/3\\)\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n`).test(t),`test-${i}: name / standard runner / 30 min`);
-  assert(!/^\s*if:/m.test(t),`test-${i}: no condition anywhere (every shard always runs)`);
-  for (const required of ['persist-credentials: false',"node-version: '22.16.0'","PUPPETEER_SKIP_DOWNLOAD: 'true'",'      - run: npm ci\n',
-    `      - run: npm run game:test -- --shard=${i}/3 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"\n`,
-    `      - id: shard\n        run: node tools/release/test-shards.mjs verify ${i} 3 "$RUNNER_TEMP/vitest-shard.json"\n`,
+  assert(new RegExp(`^  test-${i}:\\n(?:    #.*\\n)*    name: test \\(shard ${i}/${SHARDS}\\)\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n`).test(t),`test-${i}: name / standard runner / 30 min`);
+  assert(!/^\s*(?:if|needs):/m.test(t),`test-${i}: no condition / dependency (every shard always runs)`);
+  for (const required of [...common,"PUPPETEER_SKIP_DOWNLOAD: 'true'",'      - run: npm ci\n',
+    `      - run: npm run game:test -- --shard=${i}/${SHARDS} --maxWorkers=1 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/vitest-shard.json"\n`,
+    `      - id: shard\n        run: node tools/release/test-shards.mjs verify ${i} ${SHARDS} "$RUNNER_TEMP/vitest-shard.json"\n`,
     '      files: ${{ steps.shard.outputs.files }}\n','      tests: ${{ steps.shard.outputs.tests }}\n',
     '      skipped: ${{ steps.shard.outputs.skipped }}\n','      skippedFiles: ${{ steps.shard.outputs.skippedFiles }}\n']) assert(t.includes(required),`test-${i}: missing ${required.trim()}`);
 }
-const build = gameJob('build');
-assert(/^  build:\n(?:    #.*\n)*    name: build\n    needs: \[test-1, test-2, test-3\]\n    if: \$\{\{ always\(\) \}\}\n    runs-on: ubuntu-24\.04\n(?:    #.*\n)*    timeout-minutes: 30\n/.test(build),
-  'The validation job must be named build, need all three shards and always run (fail-closed gate)');
-const steps = build.split(/\n      - /).slice(1);
-assert(steps[0].startsWith('name: Require every test shard\n        env:\n          SHARD_RESULTS: ${{ needs.test-1.result }} ${{ needs.test-2.result }} ${{ needs.test-3.result }}\n')
-  && steps[0].includes(`[ "$SHARD_RESULTS" = 'success success success' ] || {`) && steps[0].includes('exit 1; }') && !/\n\s*if:/.test(steps[0]),
-  'build: the first step must fail unless every shard succeeded');
-const inv = steps.find(st => st.startsWith('name: Prove the shards ran the whole test inventory\n')) ?? assert.fail('build: missing the inventory step');
-for (const i of [1,2,3]) for (const [k,o] of [['FILES','files'],['TESTS','tests'],['SKIPPED','skipped'],['SKIPPED_FILES','skippedFiles']])
-  assert(inv.includes(`          SHARD_${i}_${k}: \${{ needs.test-${i}.outputs.${o} }}\n`),`build: inventory step lacks SHARD_${i}_${k}`);
-assert(inv.includes('\n        run: node tools/release/test-shards.mjs inventory 3') && !/\n\s*if:/.test(inv),'build: unconditional inventory 3');
-const order = ['name: Require every test shard','run: npm ci','run: npm run ci:check','name: Prove the shards ran the whole test inventory',
-  'run: npm run build','run: npm run ci:test','run: npm run ci:package','name: Upload static site and integrity manifest'].map(k => steps.findIndex(st => st.startsWith(k)));
-assert(order.every((x, i) => x >= 0 && (i === 0 || x > order[i - 1])),'build: gate -> npm ci -> ci:check -> inventory -> build -> ci:test -> ci:package -> uploads');
-assert(!/\brun: npm test\b/.test(workflow),'game-build.yml: the suite runs only in the shards');
-const uploads = steps.filter(st => /uses:\s*actions\/upload-artifact@/.test(st));
+const stepsOf = job => job.split(/\n      - /).slice(1);
+const checksJob = gameJob('checks');
+assert(/^  checks:\n(?:    #.*\n)*    name: checks\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n/.test(checksJob) && !/^\s*(?:if|needs):/m.test(checksJob),'checks: unconditional, standard runner, 30 min');
+assert.deepEqual(stepsOf(checksJob).map(x => x.trim()).slice(2),['run: npm ci','run: npm run ci:check','run: npm run ci:test'],'checks: npm ci -> ci:check -> ci:test');
+const bundle = gameJob('bundle');
+assert(/^  bundle:\n(?:    #.*\n)*    name: bundle\n    runs-on: ubuntu-24\.04\n    timeout-minutes: 30\n/.test(bundle) && !/^\s*needs:/m.test(bundle),'bundle: no needs (parallel with the tests), standard runner, 30 min');
+const bundleSteps = stepsOf(bundle);
+assert.deepEqual(bundleSteps.slice(2,5).map(x => x.trim()),['run: npm ci','run: npm run build','run: npm run ci:package'],'bundle: npm ci -> build -> ci:package');
+assert(!/vitest|game:test|npm test|ci:test|test-shards/.test(bundle),'bundle: no test execution in the compile / package job');
+const uploads = bundleSteps.filter(st => /uses:\s*actions\/upload-artifact@/.test(st));
 assert.equal(uploads.length,2);
 for (const st of uploads) assert(/\n        if: github\.ref == 'refs\/heads\/main'\n/.test(st),'Release artifact uploads must be limited to main');
+assert.equal(bundleSteps.length,7,'bundle: checkout, setup-node, npm ci, build, ci:package, two uploads');
+const build = gameJob('build');
+const needIds = ['bundle','checks',...shardIds];
+assert(new RegExp(`^  build:\\n(?:    #.*\\n)*    name: build\\n    needs: \\[${needIds.join(', ')}\\]\\n    if: \\$\\{\\{ always\\(\\) \\}\\}\\n    runs-on: ubuntu-24\\.04\\n    timeout-minutes: 30\\n    steps:\\n`).test(build),
+  'The required job must be named build, need the bundle, the checks and all six shards, and always run (fail-closed aggregate)');
+const steps = stepsOf(build);
+assert.equal(steps.length,4,'build: gate, checkout, setup-node, inventory only (lightweight aggregate)');
+assert(steps[0].startsWith(`name: Require the bundle, the checks and every test shard\n        env:\n          RESULTS: ${needIds.map(j => `\${{ needs.${j}.result }}`).join(' ')}\n`)
+  && steps[0].includes(`[ "$RESULTS" = '${needIds.map(() => 'success').join(' ')}' ] || {`) && steps[0].includes('exit 1; }') && !/\n\s*if:/.test(steps[0]),
+  'build: the first step must fail unless the bundle, the checks and every shard succeeded');
+const inv = steps[3];
+assert(inv.startsWith('name: Prove the shards ran the whole test inventory\n'),'build: the last step is the inventory proof');
+for (let i = 1; i <= SHARDS; i++) for (const [k,o] of [['FILES','files'],['TESTS','tests'],['SKIPPED','skipped'],['SKIPPED_FILES','skippedFiles']])
+  assert(inv.includes(`          SHARD_${i}_${k}: \${{ needs.test-${i}.outputs.${o} }}\n`),`build: inventory step lacks SHARD_${i}_${k}`);
+assert(inv.includes(`\n        run: node tools/release/test-shards.mjs inventory ${SHARDS}`) && !/\n\s*if:/.test(inv),`build: unconditional inventory ${SHARDS}`);
+assert(!/npm (?:ci|test|run)|vitest/.test(build),'build: aggregate only (no install / build / tests)');
+assert(!/\brun: npm test\b/.test(workflow),'game-build.yml: the suite runs only in the shards');
 assert.equal((workflow.match(/^\s*if:/gm) ?? []).length,3,"Only build's always() gate and the two upload steps may be conditional (validation always runs)");
-assert.deepEqual([...workflow.matchAll(/^\s*timeout-minutes:\s*(\d+)\s*$/gm)].map(m => m[1]),['30','30','30','30'],'game-build.yml: every job keeps the 30 min cap');
+assert.deepEqual([...workflow.matchAll(/^\s*timeout-minutes:\s*(\d+)\s*$/gm)].map(m => m[1]),Array(SHARDS + 3).fill('30'),'game-build.yml: every job keeps the 30 min cap');
 const pkg=JSON.parse(fs.readFileSync(new URL('package.json',root),'utf8'));
 assert.equal(pkg.name,'terminal-state');
 for(const alias of ['dev','build','preview']) assert.equal(pkg.scripts[alias],`npm run game:${alias}`);

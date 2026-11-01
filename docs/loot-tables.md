@@ -287,6 +287,11 @@ reproduce the earlier pins byte for byte).
     - **Searched clean:** `ANNEX_PICKED` (exact, `empty: 1`) for the rest.
     - **Exact means the whole budget:** the mall's storage fill (`LootTables.storageFill`) never tops up an exact annex table, so a
       searched-clean holder stays clean and the annex economy is the same on every level.
+    - **Never empty by packing (Mall round 3 CI follow-up, 2026-11-01):** the random yaw jitter could make a lot that fits only nearly
+      square miss its surface (a 0.32 x 0.22 m med kit on a 0.24 m deep stock shelf), leaving an `empty: 0` supply shelf EMPTY. When
+      every rolled lot of an exact table is unplaced, `rollHolderLots` packs the holder square instead (`packItems(..., square)`, its
+      own `:square` stream). Partial drops stay as they were. Over the 18-station Subway corpus exactly 2 of 6,397 holders changed (two
+      such shelves now hold their med kit); core hashes and the Office are unchanged.
     - **Room storage:** every annex room / closet the dressing left without a holder gets one storage piece (open shelving first).
     - **Signature-room lockers** (the deepest intact holders of a boiler / generator / turbine room roll their room table):
       `ANNEX_SPARES_ROWS` = the server spares without the crafting materials (battery 1.4, flare 0.6, bandage 0.5, water 0.6).
