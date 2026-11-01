@@ -9,6 +9,7 @@ import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
+import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import type {TrackExtensions} from './trackExt/types';
 
@@ -296,6 +297,8 @@ export interface StationLayout {
   office?: OfficeTowerInfo;
   /** Task track3-eaton-centre-20261031: The Eaton's Center (LevelId 'mall') — written by gen/mall (lane GEN). */
   mall?: MallInfo;
+  /** Task reactor-build-20261101: THE REACTOR (LevelId 'reactor') — the pit, tiers, gas zones, generators, restart sites (gen/reactor). */
+  reactor?: ReactorInfo;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
   hordes?: HordeGroupSpec[];
   /**
