@@ -18,6 +18,7 @@ import {MOOD, syncGlowFog} from '../lights';
 import {fogCullDistance} from '../levelCulling';
 import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTexture} from './archAssets';
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
+import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
@@ -64,11 +65,12 @@ export class ReactorArchRuntime {
   }
 
   build(layout: StationLayout): void {
-    if (!(layout as {reactor?: unknown}).reactor) { this.restore(); return; }
+    if (!(layout as {reactor?: unknown}).reactor) { this.restore(); releaseReactorMaterials(); return; }
     this.apply(REACTOR_FOG.density, REACTOR_FOG.color);
   }
 
   teardown(): void {
+    this.host.world?.reactorArch?.dispose();
     registerReactorArchVisuals(null);
     this.restore();
   }

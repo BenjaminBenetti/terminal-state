@@ -99,7 +99,7 @@ function slotSurface(key: ReactorSurfaceKey): THREE.Material | null {
     case 'reactor-deck-under': return slotMaterial('rustedSteel', {color: 0x8a7e72, role: 'wall', macro: 0.3}, key);
     case 'reactor-room-wall': return slotMaterial('rustedSteel', {color: 0xa8b0a0, role: 'wall', macro: 0.2, grime: [0.3, 0.9]}, key);
     case 'reactor-ceil': return slotMaterial('pitConcrete', {color: 0x9a948c, role: 'wall', macro: 0.2}, key);
-    case 'reactor-trim': { const m = slotMaterial('rustedSteel', {color: 0x8a8078, macro: 0.2}, key); return m ? thinTrim(m) : null; }
+    case 'reactor-trim': { const m = slotMaterial('rustedSteel', {color: 0x8a8078, macro: 0.2}, key); return m ? trackClones(thinTrim(m)) : null; }
   }
 }
 
@@ -123,12 +123,34 @@ export function reactorSurfaceScale(mats: WorldMaterials, key: ReactorSurfaceKey
   return c.scale.get(key)!;
 }
 
+/** thinTrim clones of the Codex maps (anisotropy 1 for thin members): not LevelResources' own textures, released here. */
+const clones = new Set<THREE.Texture>();
+const trackClones = <M extends MeshStandardNodeMaterial>(m: M): M => {
+  for (const k of ['map', 'normalMap', 'roughnessMap', 'metalnessMap'] as const) {
+    const t = m[k];
+    if (t && !Object.values(reactorTextureStore.maps).includes(t)) clones.add(t);
+  }
+  return m;
+};
+
+/**
+ * Leaving the Reactor (archInstall.ts, any other level's build): the thin-trim clones of the Codex maps are disposed and the texture
+ * store emptied (LevelResources disposes the maps themselves), so the cached reactor materials rebuild on the next Reactor build.
+ */
+export function releaseReactorMaterials(): number {
+  const n = clones.size;
+  for (const t of clones) t.dispose();
+  clones.clear();
+  if (Object.keys(reactorTextureStore.maps).length) { reactorTextureStore.maps = {}; reactorTextureStore.version++; }
+  return n;
+}
+
 /** The kit dressing materials (archKit.ts KitMat; 'marker' is per build: arch.ts). Shared, cached per WorldMaterials + texture version. */
 export function reactorDress(mats: WorldMaterials): Record<Exclude<KitMat, 'marker'>, THREE.Material> {
   const c = cacheOf(mats);
   const d = c.dress;
   if (d.steel) return d as Record<Exclude<KitMat, 'marker'>, THREE.Material>;
-  const thin = <M extends MeshStandardNodeMaterial>(m: M | null): M | null => (m ? thinTrim(m) : null);
+  const thin = <M extends MeshStandardNodeMaterial>(m: M | null): M | null => (m ? trackClones(thinTrim(m)) : null);
   d.steel = named(thin(slotMaterial('rustedSteel', {color: 0xd0c4b8, macro: 0.35, grime: [0.2, 1.2]})) ?? thinTrim(surfaceMaterial('paintedSteel', {color: 0x6a5546, metalness: 0.45}, {grime: [0.3, 1.2], macro: 0.35})), 'reactor-steel');
   d.steelDark = named(thin(slotMaterial('rustedSteel', {color: 0x80766e, macro: 0.3})) ?? thinTrim(surfaceMaterial('paintedSteel', {color: 0x3c3530, metalness: 0.45}, {macro: 0.3})), 'reactor-steel-dark');
   d.yellow = named(thinTrim(surfaceMaterial('paintedSteel', {color: 0xb88c26, metalness: 0.3}, {grime: [0.25, 1.0], macro: 0.35})), 'reactor-crane-yellow');

@@ -236,6 +236,12 @@ export class ReactorArch {
     return this.stats;
   }
 
+  /** Teardown (archInstall.ts): the per-build textures (label atlas). Geometries go with the world group; shared materials stay cached. */
+  dispose(): void {
+    for (const t of this.built?.textures ?? []) t.dispose();
+    if (this.built) this.built.textures.length = 0;
+  }
+
   /** Summary (QA / tests). */
   summary(): {stats: ReactorArchStats; visuals: ReturnType<ReactorArchVisuals['state']>} {
     return {stats: this.stats, visuals: this.visuals.state()};

@@ -78,6 +78,8 @@ export interface KitBuilt {
   tierLamps: Map<number, {mesh: THREE.InstancedMesh; mat: MeshBasicNodeMaterial}>;
   /** Every geometry created here (released with the world: the game disposes the world group's geometries). */
   geometries: THREE.BufferGeometry[];
+  /** Per-build textures (the label atlas): released by ReactorArch.dispose on teardown. */
+  textures: THREE.Texture[];
 }
 
 const trisOf = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
@@ -211,14 +213,15 @@ export function buildKitMeshes(group: THREE.Group, plan: KitPlan, mat: (k: Exclu
     tierLamps.set(level, {mesh: im, mat: lm});
   }
   // --- stencilled tier labels (one atlas, one merged mesh)
-  try { if (buildLabels(group, plan, created, tag)) { stats.meshes++; stats.labelMeshes++; } } catch (e) { console.warn('reactor kit: labels skipped', e); }
-  return {stats, slot: ref => slots.get(ref.part)?.[ref.index], modelSlots, fanRotors, tierLamps, geometries: created};
+  const textures: THREE.Texture[] = [];
+  try { if (buildLabels(group, plan, created, tag, textures)) { stats.meshes++; stats.labelMeshes++; } } catch (e) { console.warn('reactor kit: labels skipped', e); }
+  return {stats, slot: ref => slots.get(ref.part)?.[ref.index], modelSlots, fanRotors, tierLamps, geometries: created, textures};
 }
 
 /** Label atlas row size (px) and the text style: stencilled black capitals on the painted band. */
 const ROW_W = 1024, ROW_H = 128;
 
-function buildLabels(group: THREE.Group, plan: KitPlan, created: THREE.BufferGeometry[], tag: (o: THREE.Object3D, bands: Iterable<number>) => void): boolean {
+function buildLabels(group: THREE.Group, plan: KitPlan, created: THREE.BufferGeometry[], tag: (o: THREE.Object3D, bands: Iterable<number>) => void, textures: THREE.Texture[]): boolean {
   if (!plan.labels.length || typeof document === 'undefined') return false;
   const texts = [...new Set(plan.labels.map(l => l.text))];
   const H = Math.max(ROW_H, texts.length * ROW_H);
@@ -240,6 +243,7 @@ function buildLabels(group: THREE.Group, plan: KitPlan, created: THREE.BufferGeo
     });
   });
   atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
+  textures.push(atlas);
   const pos: number[] = [], nor: number[] = [], uv: number[] = [], idx: number[] = [];
   const v = new THREE.Vector3(), n = new THREE.Vector3(), nm = new THREE.Matrix3();
   for (const l of plan.labels) {

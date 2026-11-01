@@ -30,6 +30,8 @@ export class ReactorArchVisuals implements ReactorVisuals {
   private readonly fans: FanState[] = [];
   private readonly fanIndex = new Map<number, number>();
   private readonly gens = new Map<number, GenState>();
+  /** The same generator states as an array (the per-frame loop: no iterator allocation). */
+  private readonly genList: GenState[] = [];
   private readonly tiers = new Map<number, {mat: MeshBasicNodeMaterial; power: number}>();
   private glowTarget = 0;
   private glow = -1;
@@ -46,7 +48,9 @@ export class ReactorArchVisuals implements ReactorVisuals {
       plan.fans.forEach((f, i) => { this.fanIndex.set(f.id, i); this.fans.push({target: 0, speed: 0, angle: (f.id * 0.7) % (Math.PI * 2), basis: f.basis, radius: f.radius}); });
       for (const g of plan.generators) {
         const body = g.modelIndex >= 0 ? built.modelSlots.get('generator')?.[g.modelIndex] ?? [] : g.body.map(r => built.slot(r)).filter((s): s is InstanceSlot => !!s);
-        this.gens.set(g.id, {level: 0, body, red: built.slot(g.lamps[0]), green: built.slot(g.lamps[1]), resting: true, phase: g.id * 1.37});
+        const st: GenState = {level: 0, body, red: built.slot(g.lamps[0]), green: built.slot(g.lamps[1]), resting: true, phase: g.id * 1.37};
+        this.gens.set(g.id, st);
+        this.genList.push(st);
       }
       for (const [level, t] of built.tierLamps) this.tiers.set(level, {mat: t.mat, power: -1});
     }
@@ -95,7 +99,8 @@ export class ReactorArchVisuals implements ReactorVisuals {
     // fans
     let fanMoved = false;
     const ease = 1 - Math.exp(-dt / ARCH_VISUALS.fanEase);
-    for (const f of this.fans) {
+    for (let i = 0; i < this.fans.length; i++) {
+      const f = this.fans[i];
       if (f.speed === 0 && f.target === 0) continue;
       f.speed += (f.target - f.speed) * ease;
       if (Math.abs(f.speed - f.target) < 1e-3) f.speed = f.target;
@@ -104,15 +109,17 @@ export class ReactorArchVisuals implements ReactorVisuals {
     }
     if (fanMoved) writes += this.writeFans(false);
     // generators
-    for (const g of this.gens.values()) {
+    for (let gi = 0; gi < this.genList.length; gi++) {
+      const g = this.genList[gi];
       if (g.level <= 0) {
-        if (!g.resting) { for (const s of g.body) { s.mesh.setMatrixAt(s.index, s.base); s.mesh.instanceMatrix.needsUpdate = true; writes++; } g.resting = true; }
+        if (!g.resting) { for (let k = 0; k < g.body.length; k++) { const s = g.body[k]; s.mesh.setMatrixAt(s.index, s.base); s.mesh.instanceMatrix.needsUpdate = true; writes++; } g.resting = true; }
         continue;
       }
       g.resting = false;
       const a = ARCH_VISUALS.jitter * g.level, t = this.time * 60 + g.phase;
       const dx = a * Math.sin(t * 1.37), dy = a * 0.5 * Math.sin(t * 2.11 + 1), dz = a * Math.sin(t * 1.73 + 2);
-      for (const s of g.body) {
+      for (let k = 0; k < g.body.length; k++) {
+        const s = g.body[k];
         this.m.copy(s.base);
         const e = this.m.elements;
         e[12] += dx; e[13] += dy; e[14] += dz;
@@ -140,12 +147,13 @@ export class ReactorArchVisuals implements ReactorVisuals {
     const im = this.built?.fanRotors;
     if (!im) return 0;
     let n = 0;
-    this.fans.forEach((f, i) => {
-      if (!all && f.speed === 0 && f.target === 0) return;
+    for (let i = 0; i < this.fans.length; i++) {
+      const f = this.fans[i];
+      if (!all && f.speed === 0 && f.target === 0) continue;
       this.m.copy(f.basis).multiply(this.r.makeRotationZ(f.angle)).scale(this.sv.setScalar(f.radius));
       im.setMatrixAt(i, this.m);
       n++;
-    });
+    }
     if (n) im.instanceMatrix.needsUpdate = true;
     return n;
   }

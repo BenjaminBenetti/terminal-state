@@ -15,7 +15,8 @@ import {generateStation} from '../src/gen/station';
 import type {ReactorInfo} from '../src/gen/reactor/reactorTypes';
 import {reactorVisuals} from '../src/world/reactor/visuals';
 import {activeReactorArchVisuals} from '../src/world/reactor/archVisuals';
-import {reactorDress, reactorSurfaceMaterial, REACTOR_SURFACE_KEYS} from '../src/world/reactor/archMaterials';
+import {releaseReactorMaterials, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, REACTOR_SURFACE_KEYS} from '../src/world/reactor/archMaterials';
+import {reactorTexture, reactorTextureLoads, setReactorTexture} from '../src/world/reactor/archAssets';
 
 installCanvasShim(false);
 
@@ -127,5 +128,25 @@ describe('builder: a world carrying layout.reactor', () => {
     for (const k of REACTOR_SURFACE_KEYS) expect(reactorSurfaceMaterial(m, k).name).toBe(k);
     expect(reactorDress(m)).toBe(reactorDress(m));
     expect(reactorSurfaceMaterial(m, 'reactor-wall').userData.decay).toBeDefined();
+  });
+
+  it('with the Codex sets resolved: world-mapped PBR over colour / normal / ORM (Meshy / Codex maps untouched); leaving releases the clones', () => {
+    const m = mats();
+    const tex = (n: string) => { const t = new THREE.Texture({width: 64, height: 64} as unknown as HTMLImageElement); t.name = n; t.anisotropy = 8; return t; };
+    for (const l of reactorTextureLoads()) setReactorTexture(l.slot, l.map, tex(`${l.slot}:${l.map}`));
+    const wall = reactorSurfaceMaterial(m, 'reactor-wall') as THREE.MeshStandardMaterial;
+    expect(wall.map!.name).toBe('pitConcrete:color');
+    expect(wall.normalMap!.name).toBe('pitConcrete:normal');
+    expect(wall.roughnessMap!.name).toBe('pitConcrete:orm');
+    expect(wall.metalnessMap).toBe(wall.roughnessMap);
+    expect(reactorSurfaceScale(m, 'reactor-wall')).toEqual({u: 1, v: 1}); // world-mapped: the builder's UVs are not used
+    expect((reactorSurfaceMaterial(m, 'reactor-grating') as THREE.MeshStandardMaterial).map!.name).toBe('grating:color');
+    const steel = reactorDress(m).steel as THREE.MeshStandardMaterial;
+    expect(steel.map!.name).toBe('rustedSteel:color');
+    expect(steel.map!.anisotropy).toBe(1); // thin-trim clone
+    expect(releaseReactorMaterials()).toBeGreaterThan(0);
+    expect(reactorTexture('pitConcrete', 'color')).toBeUndefined();
+    // back to the fallback sets on the next build (the cache follows the store version)
+    expect((reactorSurfaceMaterial(m, 'reactor-wall') as THREE.MeshStandardMaterial).map?.name ?? '').not.toBe('pitConcrete:color');
   });
 });
