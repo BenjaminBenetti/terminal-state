@@ -38,7 +38,6 @@ const stubMats = (): ((k: Exclude<KitMat, 'marker'>) => THREE.Material) => {
   return k => { let m = cache.get(k); if (!m) { m = k === 'glow' || k === 'panelLamp' ? new MeshBasicNodeMaterial() : new THREE.MeshStandardMaterial(); m.name = k; cache.set(k, m); } return m; };
 };
 const meshesOf = (g: THREE.Group) => g.children.filter((o): o is THREE.Mesh => (o as THREE.Mesh).isMesh);
-const trisOf = (m: THREE.Mesh) => ((m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3) * ((m as THREE.InstancedMesh).isInstancedMesh ? (m as THREE.InstancedMesh).count : 1);
 
 describe('kit plan from a hand-built Reactor', () => {
   const info = archFixtureInfo();
