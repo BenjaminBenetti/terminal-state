@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 23426,
-      "sha256": "c2ef8800287733f34bd0b8cbf5a85ee27a42cfa023321e130e9d3240aeb6a98a"
+      "bytes": 25505,
+      "sha256": "04ccf0fc697c39d190658d7c260ae71c47cc403a8022b8bd13c783579277b4eb"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1674,6 +1674,11 @@
       "sha256": "a235f2c1db27345365ebd751f6dd87f1c852c3ea5eabfdc42ed52c293045fd43"
     },
     {
+      "path": "assets/derivatives/player-train-20261101.json",
+      "bytes": 21151,
+      "sha256": "f1cd1b68d5b38955a80d0c65f4bf2d790171e2bb736cc47ab1566273ff453d39"
+    },
+    {
       "path": "assets/derivatives/props-iteration02.json",
       "bytes": 16480,
       "sha256": "1005662e1bd9091694ecaf046bc082143917328f5597fefcfe503c8944ee0f35"
@@ -3169,6 +3174,21 @@
       "sha256": "48a549253787896c3ba8c5bc06310c3091c986a715b0b8e75c846ef161196d86"
     },
     {
+      "path": "assets/models/player-train-console.glb",
+      "bytes": 607856,
+      "sha256": "c0ac72b225bc0beaf2a86f22d6b714a266e9f627d0f6f2ea3f6cf904105da66a"
+    },
+    {
+      "path": "assets/models/player-train-door-leaf.glb",
+      "bytes": 111172,
+      "sha256": "5fe1f62fb3577c8a55fe4c25a73191fa4fd5d3403a78a9467d91defcfb06a87c"
+    },
+    {
+      "path": "assets/models/player-train-shell.glb",
+      "bytes": 2292108,
+      "sha256": "194cc743542ef6c9b048c66c3d53e326fbc60ada80bb56fb7df2a403720a967d"
+    },
+    {
       "path": "assets/models/rifle-optic.glb",
       "bytes": 3811688,
       "sha256": "296c2e9ab86a3c2ea5aac91ecb5ac35be37a3149c32159e4047ed10d4ce9693c"
@@ -3437,6 +3457,26 @@
       "path": "assets/textures/platform-working-face-orm.jpg",
       "bytes": 383868,
       "sha256": "84615abbfd9be47e8db07fa5daf921e0c9592b503aa60702e2ac3181d3c9eabd"
+    },
+    {
+      "path": "assets/textures/train/train-int-bulkhead.jpg",
+      "bytes": 192123,
+      "sha256": "ce35d3b8715a9832f4f855fe6914042ab42b617b216370107e950685019c7ddb"
+    },
+    {
+      "path": "assets/textures/train/train-int-ceiling.jpg",
+      "bytes": 301347,
+      "sha256": "b7b953e3ed2053a4f94d5c3fbdcef5f76913e119bb5cfb4819d2aeb99e9325d8"
+    },
+    {
+      "path": "assets/textures/train/train-int-floor.jpg",
+      "bytes": 273446,
+      "sha256": "676e0c1a1125f8f0936e2ac4aee04035592a3eca62f4ca4a043a01bbffd013a9"
+    },
+    {
+      "path": "assets/textures/train/train-int-wall.jpg",
+      "bytes": 176202,
+      "sha256": "902e6007d8e03d0fcf818375a4ca9e72be97d735501d6d549b458dbcdeab2887"
     },
     {
       "path": "assets/textures/tunnel-authored-backing-color.jpg",
