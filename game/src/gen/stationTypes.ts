@@ -51,7 +51,9 @@ export type AreaRole =
   | 'ticket-hall' | 'great-hall' | 'exit-hall' | 'mall' | 'food-hall' | 'line-2'
   // Iteration 08 (Lane A): multi-level program — stair cores (lobby / landing), upper decks over the
   // platforms, crossover bridges and catwalks over the track beds, lower service crossing + gallery.
-  | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery';
+  | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery'
+  // task reactor-build-20261101 (lane GEN): THE REACTOR's pit decks / rooms (gen/reactor; ARCH keys materials off them; additive only)
+  | 'reactor-gallery' | 'reactor-landing' | 'reactor-bridge' | 'reactor-tower' | 'reactor-floor' | 'reactor-room';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 

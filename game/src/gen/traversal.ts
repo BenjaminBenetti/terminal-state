@@ -102,7 +102,7 @@ export interface Ladder {
    * the top office floor (`level`) climbing through a ceiling hatch to the roof deck (`topLevel`). Same scripted climb and the
    * same climbing controls as the rescue ladders (ladderClimbPath / Player.startClimb); trench = -1, platform = the roof area.
    */
-  kind?: 'rescue' | 'roof';
+  kind?: 'rescue' | 'roof' | 'maintenance'; // task reactor-build-20261101 (lane GEN): + 'maintenance' (cross-storey AI-usable ladder, gen/reactor)
   level?: number;
   topLevel?: number;
 }
@@ -527,7 +527,7 @@ export function traversalIssues(layout: StationLayout): string[] {
     if (lg.inBounds(cx, cy) && lg.rampIdx[lg.idx(cx, cy)] >= 0) issues.push(`pickup ${p.itemId} on stairs`);
   }
   for (const l of ladders) {
-    if (l.kind === 'roof') {
+    if (l.kind === 'roof' || l.kind === 'maintenance') { // task reactor-build-20261101 (lane GEN): the reactor's cross-storey maintenance ladders too
       // Task office-overhaul-20261030 (lane STRUCT): the roof access ladder — foot on its storey, head on the roof deck, both clear.
       const gb = grids[l.level ?? 0], gt = grids[l.topLevel ?? 0];
       if (!gb || !gt) { issues.push(`ladder ${l.id} storeys missing`); continue; }
