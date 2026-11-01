@@ -10,7 +10,9 @@
 // never used, equipped, held as a weapon or thrown; it stacks in the pockets first (like ammo).
 // Task office-props-physics-scale-20261030 (lane RACK): 'material' = collectible crafting salvage (items/craftMaterials.ts) for a
 // FUTURE crafting system: passive like 'supply' (never used / equipped / thrown; pockets first), nothing consumes it yet.
-export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply' | 'material';
+// Task reactor-build-20261101 (lane RESTART): 'part' = a finite restart part of THE REACTOR (startup key, fuse cartridge): passive
+// (never used / equipped / thrown; pockets first), placed once by the level generator, never in a loot table; a control consumes it.
+export type ItemKind = 'weapon' | 'ammo' | 'consumable' | 'throwable' | 'gear' | 'supply' | 'material' | 'part';
 
 /** Key into the HUD icon set (ui/icons.ts). */
 export type IconKey =
@@ -21,7 +23,8 @@ export type IconKey =
   | 'knife' // lane KNIFE: the first melee weapon
   | 'filter' // mask lane: gas-mask filter canister
   | GearIconKey | MedicalIconKey // Iteration 16 (lanes GEAR / INJURY)
-  | MaterialIconKey; // lane RACK (office-props-physics-scale-20261030): crafting materials
+  | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
+  | 'reactorKey' | 'fuseCartridge'; // task reactor-build-20261101 (lane RESTART): the reactor restart parts
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
 export type ConsumeVerb = 'apply' | 'eat' | 'drink' | 'use';
@@ -117,6 +120,12 @@ export const ITEMS: Record<string, ItemDef> = {
   ...MEDICAL_ITEMS,
   // --- Task office-props-physics-scale-20261030 (lane RACK): crafting materials (items/craftMaterials.ts; no crafting yet) ---
   ...MATERIAL_ITEMS,
+  // --- Task reactor-build-20261101 (lane RESTART): THE REACTOR's restart parts (world/reactor/restartLogic.ts) — finite, placed once by
+  // the Reactor generator (layout.pickups + layout.reactor.components), never in a loot table, never refilled ---
+  reactor_key: {id: 'reactor_key', name: 'Startup key', short: 'Key', kind: 'part', stackMax: 1, icon: 'reactorKey',
+    description: 'The shift supervisor\'s reactor startup key, brass on a red fob. The control-room key switch will not arm the rod control without it — the switch keeps it once it is in.'},
+  fuse_cartridge: {id: 'fuse_cartridge', name: 'Fuse cartridge', short: 'Fuse', kind: 'part', stackMax: 3, icon: 'fuseCartridge',
+    description: 'A heavy ceramic switchgear fuse cartridge with tinned end caps and blade contacts. The reactor switchgear has two burnt-out slots; press E on a slot to seat one.'},
 };
 
 export function itemDef(id: string): ItemDef {
@@ -206,6 +215,10 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,
   ...MATERIAL_DIMS, // lane RACK (office-props-physics-scale-20261030): authored models (world/materialItems.ts)
+  // task reactor-build-20261101 (lane RESTART): the stand-in models' bounds (world/reactor/restartItems.ts): the key lying flat on its
+  // fob, the ceramic cartridge lying along X (blade contacts included)
+  reactor_key: {w: 0.158, d: 0.034, h: 0.009, shape: 'flat'},
+  fuse_cartridge: {w: 0.216, d: 0.056, h: 0.056, shape: 'flat'},
 };
 
 export function itemDims(id: string): ItemDims {

@@ -439,7 +439,7 @@ export class Inventory {
         if (!left) break;
       }
     }
-    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' || def.kind === 'supply' || def.kind === 'material' ? ['pack', 'hotbar'] : ['hotbar', 'pack']; // mask lane: filters like ammo; lane RACK: materials too
+    const order: Bar[] = def.kind === 'ammo' || def.kind === 'gear' || def.kind === 'supply' || def.kind === 'material' || def.kind === 'part' ? ['pack', 'hotbar'] : ['hotbar', 'pack']; // mask lane: filters like ammo; lane RACK: materials too; task reactor-build-20261101 (lane RESTART): restart parts too
     for (const bar of order) {
       const list = this.list(bar);
       for (let i = 0; i < list.length && left > 0; i++) {

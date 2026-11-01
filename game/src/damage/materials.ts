@@ -258,6 +258,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   gas_mask: 'rubber', gas_filter: 'sheetMetal', // task gasmask-breach-20261030 (mask lane): rubber full-face mask; painted steel filter canister
   // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — circuit board + wire bundle; bent steel; plastic specimen jar
   electrical_parts: 'plastic', scrap_metal: 'sheetMetal', bio_mater: 'plastic',
+  reactor_key: 'steel', fuse_cartridge: 'porcelain', // task reactor-build-20261101 (lane RESTART): brass key on a fob; ceramic HRC fuse cartridge
 };
 export function itemClass(itemId: string): DamageClass {
   return ITEM_CLASS[itemId] ?? 'plastic';
@@ -331,6 +332,8 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   // a filled 0.4 l specimen jar ~0.35 kg (upright cylinder)
   electrical_parts: {mass: 0.35, shape: 'box', mat: 'plastic'}, scrap_metal: {mass: 1.1, shape: 'box', mat: 'metal'},
   bio_mater: {mass: 0.35, shape: 'cylinder', mat: 'plastic'},
+  // task reactor-build-20261101 (lane RESTART): key + ring + fob ~50 g; a 160 A ceramic HRC cartridge ~0.6 kg (sand-filled ceramic)
+  reactor_key: {mass: 0.05, shape: 'box', mat: 'metal'}, fuse_cartridge: {mass: 0.6, shape: 'box', mat: 'stone'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

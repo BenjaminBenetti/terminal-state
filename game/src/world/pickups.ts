@@ -16,6 +16,7 @@ import {isMedicalItem, medicalItemModel, medicalModelSource} from './medicalItem
 import {MATERIAL_MODEL_SOURCE, isMaterialItem, materialItemModel} from './materialItems'; // lane RACK (office-props-physics-scale-20261030)
 import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/models'; // Iteration 16 (lane GEAR); mask lane: the outfit gas mask
 import {isGearItem} from '../items/gear';
+import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/restartItems'; // task reactor-build-20261101 (lane RESTART)
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 
@@ -263,6 +264,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (isReactorItem(itemId)) {
+    // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — procedural stand-ins, swappable for the lead's GLBs
+    t = reactorItemModel(itemId);
+    templateSource.set(itemId, reactorItemSource(itemId));
   } else if (isMaterialItem(itemId)) {
     // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — authored procedural geometry (world/materialItems.ts)
     t = materialItemModel(itemId);
