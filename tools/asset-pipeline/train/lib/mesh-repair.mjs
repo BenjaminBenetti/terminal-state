@@ -243,3 +243,20 @@ export function resolveCoverageFull(tris, priority, opts = {}, passes = 6) {
   }
   return {tris: cur, removedArea, clippedTriangles, passes: n + 1};
 }
+
+/**
+ * Occupancy box of the dark glass in a raster (robust to stray dark smears outside a window): the longest run of columns that are dark
+ * in >= colFrac of the rows, then within it the longest run of rows dark in >= rowFrac of those columns. Returns {u0, u1, v0, v1} or null.
+ */
+export function darkBoxOccupancy(r, {dark = 55, colFrac = 0.25, rowFrac = 0.25} = {}) {
+  const {W, H, lum, u0, v1, px} = r;
+  const isDark = i => lum[i] < dark;
+  const longestRun = flags => { let best = null, s = -1; for (let i = 0; i <= flags.length; i++) { if (i < flags.length && flags[i]) { if (s < 0) s = i; } else if (s >= 0) { if (!best || i - s > best[1] - best[0]) best = [s, i]; s = -1; } } return best; };
+  const cols = Array.from({length: W}, (_, x) => { let n = 0; for (let y = 0; y < H; y++) if (isDark(y * W + x)) n++; return n / H >= colFrac; });
+  const cr = longestRun(cols);
+  if (!cr) return null;
+  const rows = Array.from({length: H}, (_, y) => { let n = 0; for (let x = cr[0]; x < cr[1]; x++) if (isDark(y * W + x)) n++; return n / (cr[1] - cr[0]) >= rowFrac; });
+  const rr = longestRun(rows);
+  if (!rr) return null;
+  return {u0: u0 + cr[0] * px, u1: u0 + cr[1] * px, v0: v1 - rr[1] * px, v1: v1 - rr[0] * px};
+}

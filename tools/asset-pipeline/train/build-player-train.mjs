@@ -121,7 +121,17 @@ const REPAIR = {cos: 0.97, gap: 0.003, creaseDeg: 40};
 // side windows stay POCKET_CLEAR away from the open door leaves' wall pockets (an open leaf would show through the glass: lane TRAIN)
 // and are skipped when less than MIN_WIDTH remains (the rear-compartment side windows: the rear door's open leaf covers them)
 const WINDOW = {inset: 0.03, dark: 55, px: 0.01, y: [1.75, 3.1], endZMax: 1.28, endCutMin: 7.26, ring: 0.02, pocketClear: 0.04, slide: 0.01, minWidth: 0.4};
-const SIDE_WINDOW_SEARCH = [{zone: 'cab', x: [5.15, 6.5]}, {zone: 'cab', x: [6.5, 7.08]}, {zone: 'rear', x: [-6.98, -6.3]}];
+// Task studio-beta-train-lockbox-windows-20261101-232156-01 (user: "The windows on the side of the train remain solid. Make them see
+// through!"): every remaining side window too. New entries take their x extent from the upper glass band (above the grab bars and
+// Meshy's baked smear on the far-side double window, where the side gaskets still run), then their y extent over that x span.
+// 'rear' windows lie over the rear door's leaf pocket: cut whole, the parked leaf seen behind the glass like a real pocket door
+// (`pocket` = the parked-leaf span, for lane TRAIN's pocket stop / no sleeve across the pocket). 'nose' windows are the corner wrap of
+// the end windows: their end-side edge runs 1 cm into the end-window hole (one wraparound opening, no opaque sliver between).
+const NEW_WINDOW = {xBand: [2.55, 3.1], noseOverlap: 0.01};
+const SIDE_WINDOW_SEARCH = [{zone: 'cab', x: [5.15, 6.5]}, {zone: 'cab', x: [6.5, 7.08]},
+  {zone: 'saloon', x: [-4.3, -2.55], band: true}, {zone: 'saloon', x: [-2.55, -0.95], band: true}, {zone: 'saloon', x: [1.4, 2.95], band: true},
+  {zone: 'rear', x: [-6.98, -6.3], band: true, pocketDoor: true},
+  {zone: 'nose', x: [7.25, 7.62], band: true, noseEnd: 1}, {zone: 'nose', x: [-7.65, -7.25], band: true, noseEnd: -1}];
 const END_WINDOW_SEARCH = [{z: [-1.5, -0.55]}, {z: [-0.55, 0.55]}, {z: [0.55, 1.5]}];
 const LEAF_WINDOW = {rimMargin: 0.02, topMargin: 0.04, bottom: 0.06, stileGap: 0.015};
 const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: [512, 1024], normal: [256, 512], mr: [128, 256], quality: 85, baked: 'planar front projection'}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
@@ -517,20 +527,26 @@ const windowsSide = [], windowsEnd = [], windowsSkipped = [];
 const leafW = Math.max(...doorRects.map(d => d.x1 - d.x0)) / 2 + LEAF.overlap;
 const pockets = doorRects.flatMap(d => [[d.x0 - WINDOW.slide - leafW, d.x0 - WINDOW.slide], [d.x1 + WINDOW.slide, d.x1 + WINDOW.slide + leafW]]); // open-leaf x spans
 for (const sd of [-1, 1]) for (const w of SIDE_WINDOW_SEARCH) {
-  const r = rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px});
-  const b = darkBox(r, {dark: WINDOW.dark});
+  let b;
+  if (w.band) {
+    const bx = darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: NEW_WINDOW.xBand[0], v1: NEW_WINDOW.xBand[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
+    const by = bx && darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: bx.u0, u1: bx.u1, v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
+    b = bx && by && {u0: bx.u0, u1: bx.u1, v0: by.v0, v1: by.v1};
+  } else b = darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
   if (!b) fail(`no ${w.zone} window glass found on side ${sd} in x ${w.x}`);
   const rect = {u0: b.u0 + WINDOW.inset, u1: b.u1 - WINDOW.inset, v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
+  if (w.noseEnd > 0) rect.u1 = b.u1 + NEW_WINDOW.noseOverlap; else if (w.noseEnd < 0) rect.u0 = b.u0 - NEW_WINDOW.noseOverlap;
   const glass = {...rect};
-  let trimmed = false;
+  let trimmed = false, pocket = null;
   for (const [p0, p1] of pockets) {
+    if (w.pocketDoor) { if (rect.u1 > p0 && rect.u0 < p1) pocket = {x0: r4(p0), x1: r4(p1)}; continue; }
     if (rect.u1 <= p0 - WINDOW.pocketClear || rect.u0 >= p1 + WINDOW.pocketClear) continue;
     trimmed = true;
     if ((p0 + p1) / 2 < (rect.u0 + rect.u1) / 2) rect.u0 = Math.max(rect.u0, p1 + WINDOW.pocketClear); else rect.u1 = Math.min(rect.u1, p0 - WINDOW.pocketClear);
   }
   if (trimmed && (rect.u1 - rect.u0 < WINDOW.minWidth || rect.u1 - rect.u0 < 0.6 * (glass.u1 - glass.u0))) { windowsSkipped.push({side: sd, zone: w.zone, glassX: [r3(glass.u0), r3(glass.u1)], why: 'an open door leaf parks in the wall pocket behind it'}); continue; }
   const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: CUT_MIN_Z, px: WINDOW.px}), rect, WINDOW.ring);
-  windowsSide.push({side: sd, zone: w.zone, x0: r3(rect.u0), x1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinZ: r3(Math.floor(skin * 1000) / 1000)});
+  windowsSide.push({side: sd, zone: w.zone, x0: r3(rect.u0), x1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinZ: r3(Math.floor(skin * 1000) / 1000), ...(pocket ? {pocket} : {})});
 }
 for (const end of [1, -1]) for (const w of END_WINDOW_SEARCH) {
   const r = rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: w.z[0], u1: w.z[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px});
@@ -539,6 +555,13 @@ for (const end of [1, -1]) for (const w of END_WINDOW_SEARCH) {
   const rect = {u0: Math.max(-WINDOW.endZMax, b.u0 + WINDOW.inset), u1: Math.min(WINDOW.endZMax, b.u1 - WINDOW.inset), v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
   const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px}), rect, WINDOW.ring);
   windowsEnd.push({end, z0: r3(rect.u0), z1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinX: r3(Math.floor(skin * 1000) / 1000)});
+}
+// nose windows: the glass plane is where the corner opening meets the end-window hole (the end windows' outer |z|), so a nose pane at
+// |z| skinZ from x0 / x1 to the end pane at skinX closes the wraparound corner (the ring around a corner hole runs onto the end face)
+for (const w of windowsSide.filter(q => q.zone === 'nose')) {
+  const end = Math.sign(w.x0 + w.x1), ends = windowsEnd.filter(e => e.end === end && Math.sign(e.z0 + e.z1) === w.side);
+  if (!ends.length) fail(`nose window ${w.x0}..${w.x1}: no adjacent end window`);
+  w.skinZ = r3(Math.max(...ends.map(e => Math.max(Math.abs(e.z0), Math.abs(e.z1)))));
 }
 let windowArea = 0;
 for (const w of windowsSide) { const c = cutRect(shellTris, {u: 0, v: 1, n: 2, u0: w.x0, u1: w.x1, v0: w.y0, v1: w.y1, sign: w.side, nMin: CUT_MIN_Z}); shellTris = c.tris; windowArea += c.removedArea; }
@@ -625,11 +648,14 @@ checks.endWindows.forEach((n, i) => n && problems.push(`end window ${i} still ha
 for (const w of windowsSide) {
   if (w.zone === 'cab' && (w.x0 < cab.x0 + 0.05 || w.x1 > interior.x1)) problems.push(`cab window ${w.x0}..${w.x1} outside the cab`);
   if (w.y0 < floorY + 0.5 || w.y1 > ceilingY) problems.push(`side window y ${w.y0}..${w.y1} outside the wall`);
-  if (!(w.skinZ > interior.halfWidth)) problems.push(`side window skin ${w.skinZ} inside the lining`);
-  for (const [p0, p1] of pockets) if (w.x1 > p0 - WINDOW.pocketClear + 1e-9 && w.x0 < p1 + WINDOW.pocketClear - 1e-9) problems.push(`side window ${w.x0}..${w.x1} over a leaf pocket ${p0}..${p1}`);
+  if (w.zone === 'nose' ? !(w.skinZ >= 1.2 && Math.min(Math.abs(w.x0), Math.abs(w.x1)) > interior.x1) : !(w.skinZ > interior.halfWidth)) problems.push(`side window skin ${w.skinZ} inside the lining`);
+  if (w.zone === 'saloon' && (w.x0 < interior.x0 || w.x1 > interior.x1 || (w.x1 > cab.x0 && w.x0 < cab.x1))) problems.push(`saloon window ${w.x0}..${w.x1} outside the saloon`);
+  if (w.zone === 'rear' && !w.pocket) problems.push(`rear window ${w.x0}..${w.x1} without its pocket record`);
+  if (!w.pocket) for (const [p0, p1] of pockets) if (w.x1 > p0 - WINDOW.pocketClear + 1e-9 && w.x0 < p1 + WINDOW.pocketClear - 1e-9) problems.push(`side window ${w.x0}..${w.x1} over a leaf pocket ${p0}..${p1}`);
 }
 for (const w of windowsEnd) if (w.z0 < -interior.halfWidth || w.z1 > interior.halfWidth || w.y0 < floorY + 0.5 || w.y1 > ceilingY || !(w.skinX > interior.x1)) problems.push(`end window ${JSON.stringify(w)} outside the end wall`);
 if (windowsEnd.length !== 6) problems.push(`expected 3 windows per end face, cut ${windowsEnd.length}`);
+{ const zc = z => windowsSide.filter(w => w.zone === z).length; if (zc('cab') !== 4 || zc('saloon') !== 6 || zc('rear') !== 2 || zc('nose') !== 4) problems.push(`side windows per zone: cab ${zc('cab')} saloon ${zc('saloon')} rear ${zc('rear')} nose ${zc('nose')}`); }
 for (const k of ['degenerate', 'normalFlip', 'foldOverlaps', 'duplicateOverlaps']) if (censusAfter[k]) problems.push(`repair left ${censusAfter[k]} ${k}`);
 
 // ======================================================================================================================
@@ -750,7 +776,7 @@ const derivation = {
     checks, fit, coverboardClearance: {minYAboveRailOutboard124: coverboardClear, coverboardTop: 0.185},
     repair: {method: 'single coverage of near-coincident parallel faces (|cos| >= ' + REPAIR.cos + ', planes within ' + REPAIR.gap + ' m): faces in priority order (outward body / fitting faces, undercarriage, inward body faces = Meshy fold flaps; larger first), each clipped against the kept faces it overlaps (no vertex moved, attributes interpolated, covered area kept); degenerate faces dropped; vertex normals recomputed from the final faces with a ' + REPAIR.creaseDeg + ' deg crease',
       census: {before: censusBefore, after: censusAfter}, passes: [repaired.passes, repaired2.passes], clippedTriangles: repaired.clippedTriangles + repaired2.clippedTriangles, removedOverlapAreaM2: r3(repaired.removedArea + repaired2.removedArea)},
-    windows: {method: 'the dark glass (base colour luminance < ' + WINDOW.dark + ') inside per-window search boxes on the repaired surface, raster ' + WINDOW.px + ' m; rect = glass box inset ' + WINDOW.inset + ' m (the gasket stays); side windows kept ' + WINDOW.pocketClear + ' m clear of the open-leaf wall pockets; straight through-cuts (|z| > ' + CUT_MIN_Z + ' / |x| > ' + WINDOW.endCutMin + '); skinZ / skinX = the innermost skin on a ' + WINDOW.ring + ' m ring around each cut',
+    windows: {method: 'the dark glass (base colour luminance < ' + WINDOW.dark + ') inside per-window search boxes on the repaired surface, raster ' + WINDOW.px + ' m; rect = glass box inset ' + WINDOW.inset + ' m (the gasket stays); cab / saloon side windows kept ' + WINDOW.pocketClear + ' m clear of the open-leaf wall pockets; saloon / rear / nose windows take their x extent from the upper glass band ' + NEW_WINDOW.xBand + ' (above grab bars and the baked smear); rear windows cut whole over the rear door leaf pocket (pocket recorded: the parked leaf shows behind the glass like a real pocket door); nose windows (the end windows\' corner wrap) run ' + NEW_WINDOW.noseOverlap + ' m into the end-window hole; straight through-cuts (|z| > ' + CUT_MIN_Z + ' / |x| > ' + WINDOW.endCutMin + '); skinZ / skinX = the innermost skin on a ' + WINDOW.ring + ' m ring around each cut',
       removedAreaM2: r3(windowArea), skipped: windowsSkipped}},
   doorLeaf: {window: {...leafWindow, method: 'both glass faces (|n.z| > 0.9, |z| < 7.5 mm) clipped out inside the frame rim (inner edges + ' + LEAF_WINDOW.rimMargin + ' m), below the top rim (- ' + LEAF_WINDOW.topMargin + ' m), from y ' + LEAF_WINDOW.bottom + '; the closing-edge stile carrying the T-handle backplate kept (' + LEAF_WINDOW.stileGap + ' m gap); collision unchanged (lane TRAIN keeps the leaf box)'},
     method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
@@ -817,7 +843,7 @@ ${measured.doors.map(d => `    {side: ${d.side} as const, x: ${d.x}, width: ${d.
   doorLeaf: ${lit(measured.doorLeaf)},
   windows: {
     side: [
-${measured.windows.side.map(w => `      {side: ${w.side} as const, zone: '${w.zone}' as const, x0: ${w.x0}, x1: ${w.x1}, y0: ${w.y0}, y1: ${w.y1}, skinZ: ${w.skinZ}},`).join('\n')}
+${measured.windows.side.map(w => `      {side: ${w.side} as const, zone: '${w.zone}' as const, x0: ${w.x0}, x1: ${w.x1}, y0: ${w.y0}, y1: ${w.y1}, skinZ: ${w.skinZ}${w.pocket ? `, pocket: {x0: ${w.pocket.x0}, x1: ${w.pocket.x1}}` : ''}},`).join('\n')}
     ],
     end: [
 ${measured.windows.end.map(w => `      {end: ${w.end} as const, z0: ${w.z0}, z1: ${w.z1}, y0: ${w.y0}, y1: ${w.y1}, skinX: ${w.skinX}},`).join('\n')}

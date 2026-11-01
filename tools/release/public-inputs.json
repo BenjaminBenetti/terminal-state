@@ -1725,8 +1725,8 @@
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
-      "bytes": 25078,
-      "sha256": "cd4704b8df63b1f30b7c8ba54c5f08893f453aedfa452a0ff68dc951070a536b"
+      "bytes": 26979,
+      "sha256": "982cda2874a8891aa07af9dbd5ef9a3dfc0e20d7c981e968493d5801e027ec17"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -3240,8 +3240,8 @@
     },
     {
       "path": "assets/models/player-train-shell.glb",
-      "bytes": 2545908,
-      "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
+      "bytes": 2542524,
+      "sha256": "def2107d0b66915621fe09929dbe7ab6aecd0e21742ddd39cf303bbdb4da4fed"
     },
     {
       "path": "assets/models/reactor-aux-generator.glb",
