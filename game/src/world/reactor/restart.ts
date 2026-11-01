@@ -556,7 +556,7 @@ export class ReactorRestart {
       const key = screenKey(v.id, m);
       if (key === v.key) continue;
       v.key = key;
-      const ctx = v.canvas?.getContext('2d') as CanvasRenderingContext2D | null | undefined;
+      const ctx = typeof v.canvas?.getContext === 'function' ? v.canvas.getContext('2d') as CanvasRenderingContext2D | null : null;
       if (!ctx) continue;
       drawReactorScreen(ctx, v.id, m, v.pw, v.ph);
       v.texture.needsUpdate = true;
