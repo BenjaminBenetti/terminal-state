@@ -75,6 +75,9 @@ export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {
   'salon-styling-chair': {url: 'assets/models/mall-salon-styling-chair.glb', bytes: 178076, tris: 1977, code: 'M51', key: 'office-salon-styling-chair'},
   'bed-display': {url: 'assets/models/mall-bed-display.glb', bytes: 352088, tris: 2495, code: 'M52', key: 'office-bed-display'},
   'mannequin-female': {url: 'assets/models/mall-mannequin-female.glb', bytes: 174764, tris: 3000, code: 'M81', key: 'office-mannequin-female'},
+  'womens-dresses-group': {url: 'assets/models/mall-womens-dresses-group.glb', bytes: 248664, tris: 4081, code: 'M82', key: 'office-womens-dresses-group'},
+  'womens-blouses-group': {url: 'assets/models/mall-womens-blouses-group.glb', bytes: 252032, tris: 4230, code: 'M83', key: 'office-womens-blouses-group'},
+  'womens-skirts-group': {url: 'assets/models/mall-womens-skirts-group.glb', bytes: 210276, tris: 4515, code: 'M84', key: 'office-womens-skirts-group'},
 };
 
 export const MALL_PART_ASSETS: Readonly<Record<string, MallPartEntry>> = {

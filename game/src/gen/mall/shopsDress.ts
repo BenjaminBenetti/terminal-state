@@ -349,31 +349,53 @@ export class ShopDresser {
    * GARMENT_RAIL_Y: rail 1.53, round ring 1.31, the M08 clothing bay's rail 1.915), `du` along the host's local x (host decor: it
    * rides the rail).
    */
-  hang(host: PropPlacement, kind: PropKind, du = 0): PropPlacement | null {
+  hang(host: PropPlacement, kind: PropKind, du = 0, dv = 0): PropPlacement | null {
     const hi = this.layout.props.indexOf(host);
     if (hi < 0) return null;
     const def = PROP_DEFS[kind], hd = PROP_DEFS[host.kind];
     const rail = GARMENT_RAIL_Y[host.kind as keyof typeof GARMENT_RAIL_Y] ?? hd.h - 0.02;
     if (def.h >= rail || Math.abs(du) + def.w / 2 > hd.w / 2 + 1e-6) return null;
     const {hx, hz} = footprint(kind, host.rot);
-    const x = host.x + Math.cos(host.rot) * du, z = host.z - Math.sin(host.rot) * du;
+    // (round 4, lane GARMENTS: `dv` along the host's local +Z — a women's group's own hook rod sits behind its bounds centre)
+    const x = host.x + Math.cos(host.rot) * du + Math.sin(host.rot) * dv, z = host.z - Math.sin(host.rot) * du + Math.cos(host.rot) * dv;
     const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: host.y + r3(rail - def.h), rot: host.rot, area: host.area, hx, hz, h: def.h, blocksSight: false, variant: 0,
       host: hi, ...(host.level ? {level: host.level} : {})};
     this.layout.props.push(p);
     this.placed.push(p);
     return p;
   }
-  /** Garment groups on a share of the rails just placed (a looted store: some rails stripped bare); a clothing bay takes two. */
-  dressRails(rails: readonly PropPlacement[], share = 0.65): void {
+  /**
+   * Garment groups on a share of the rails just placed (a looted store: some rails stripped bare); a clothing bay takes two. Task
+   * mall-round4-20261101 (lane GARMENTS): `women` = the chance a rail carries the WOMEN'S face-out groups instead of M06 (womenswear 1,
+   * a department floor part of its rails, menswear / clothing 0 — no extra draw then, so those stores dress exactly as before).
+   */
+  dressRails(rails: readonly PropPlacement[], share = 0.65, women = 0): void {
     for (const r of rails) {
+      if (women > 0 && WOMENS_HANGS[r.kind] && (women >= 1 || this.rng.chance(women))) { if (this.rng.chance(share)) this.hangWomen(r); continue; }
       if (r.kind === 'clothingWallUnit') { for (const du of [-0.55, 0.55]) if (this.rng.chance(share)) this.hang(r, 'garmentHangingGroup', du); }
       else if ((r.kind === 'garmentRail' || r.kind === 'garmentRailRound') && this.rng.chance(share)) this.hang(r, 'garmentHangingGroup');
     }
   }
   /** Dresses the clothing bays (lane ASSETS M08) placed so far that carry nothing yet: garment groups on their rails. */
-  dressWallUnits(share = 0.7): void {
+  dressWallUnits(share = 0.7, women = 0): void {
     const hosts = new Set(this.layout.props.map(p => p.host).filter((h): h is number => h !== undefined));
-    this.dressRails(this.placed.filter(p => p.kind === 'clothingWallUnit' && !hosts.has(this.layout.props.indexOf(p))), share);
+    this.dressRails(this.placed.filter(p => p.kind === 'clothingWallUnit' && !hosts.has(this.layout.props.indexOf(p))), share, women);
+  }
+  /**
+   * Task mall-round4-20261101 (lane GARMENTS): hangs one of the host's women's options (WOMENS_HANGS, seeded) whose every group FITS:
+   * its hem clears the floor by HEM_CLEAR under the host's rail (GARMENT_RAIL_Y) and the face-out row stays within the host's usable
+   * width (a round rack: WOMENS_ROUND_W of its ring — a straight row wider than that would poke out). Riders face the host's front.
+   */
+  hangWomen(r: PropPlacement): boolean {
+    const opts = WOMENS_HANGS[r.kind];
+    const rail = GARMENT_RAIL_Y[r.kind as keyof typeof GARMENT_RAIL_Y];
+    if (!opts || rail === undefined) return false;
+    const usable = PROP_DEFS[r.kind].w * (r.kind === 'garmentRailRound' ? WOMENS_ROUND_W : 1) / 2;
+    const fit = opts.filter(o => o.every(([k, du]) => PROP_DEFS[k].h <= rail - HEM_CLEAR && Math.abs(du) + PROP_DEFS[k].w / 2 <= usable + 1e-6));
+    if (!fit.length) return false;
+    const o = fit[this.rng.int(0, fit.length - 1)];
+    for (const [k, du] of o) this.hang(r, k, du, WOMENS_ROD_Z[k] ?? 0);
+    return true;
   }
 
   /** Reserves frame cells (u0..u1 x v0..v1) as a keep-out (the shopfront entry, a staff gap). */
@@ -403,6 +425,28 @@ const FRONT_KINDS: ReadonlySet<string> = new Set(['stockShelf', 'shelf', 'wallBa
 const OPENABLE_STRIP: Readonly<Partial<Record<PropKind, number>>> = {mallCashwrapCounter: 0.9, pharmacyDispensaryCounter: 0.9, glassDisplayCabinet: 0.7, mallKioskCart: 0.9,
   medicineDrawerCabinet: 0.7, // (batch 2 M29: a 0.46 m door, drawers travel 0.3 m)
   gunSafeTall: 0.7, dresserDrawers: 0.7}; // (12c: the safe's 0.58 m door, the dresser's drawers travel 0.3 m)
+/**
+ * Task mall-round4-20261101 (lane GARMENTS — user: "we need to generate female cloths for the female store (else it doesn't match up)"):
+ * the women's face-out garment groups each rail host may carry, by hanging length (an option = groups [kind, offset along the host's x]):
+ * the long dresses (~1.05 m) on a straight rail (rail 1.53 m) or centred on a clothing bay (1.915 m); blouses (~0.65 m) on a straight rail
+ * or two to a bay; skirts (~0.76 m) on a round rack (ring 1.31 m) or beside blouses on a bay. hangWomen keeps only the options that fit.
+ */
+const WOMENS_HANGS: Readonly<Partial<Record<PropKind, readonly (readonly (readonly [PropKind, number])[])[]>>> = {
+  garmentRail: [[['womensDressesGroup', 0]], [['womensDressesGroup', 0]], [['womensBlousesGroup', 0]]],
+  garmentRailRound: [[['womensSkirtsGroup', 0]]],
+  clothingWallUnit: [[['womensDressesGroup', 0]], [['womensBlousesGroup', -0.55], ['womensSkirtsGroup', 0.55]], [['womensSkirtsGroup', -0.55], ['womensBlousesGroup', 0.55]]],
+};
+/** Share of a department store's rails / bays on its women's side (the rest keep M06). */
+export const DEPT_WOMENS = 0.4;
+/**
+ * Each women's group's own hook rod lies this far BEHIND its bounds centre (measured on the cooked M82 / M83 / M84: dresses 6-8 cm,
+ * blouses 3.4-4.4 cm, skirts 1-4 cm; lanes/GARMENTS-ASSETS.part): the rider shifts forward by it so its rod sits on the host's rail line.
+ */
+export const WOMENS_ROD_Z: Readonly<Partial<Record<PropKind, number>>> = {womensDressesGroup: 0.07, womensBlousesGroup: 0.039, womensSkirtsGroup: 0.025};
+/** Minimum floor clearance (m) of a hung women's group's hem. */
+const HEM_CLEAR = 0.15;
+/** Share of a round rack's ring width a straight face-out row may span (wider would poke out of the ring). */
+const WOMENS_ROUND_W = 0.7;
 /** Access strip for a kind placed against a wall: holders / displays keep a customer strip, openables their swing (placeKit adds it). */
 function frontFor(kind: PropKind): number {
   const strip = OPENABLE_STRIP[kind];
@@ -733,11 +777,11 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.sideRow(sideB, [['shoeWallDisplay', 0]], 2.4, D - 1.2, {max: 1});
     d.sideRows([['dresserDrawers', 0]], D * 0.45, D - 1.2, {max: 1});
     d.sideRows([['clothingWallUnit', 0], ['wallBay', 0]], 2.4, D - 1.2);
-    d.dressWallUnits(0.75);
+    d.dressWallUnits(0.75, 1); // (round 4: the women's face-out groups, never M06)
     if (W * D >= 140) d.backRow([['fittingRooms', 0]], corner < W / 2 ? W - fw - 0.6 : 0.25, corner < W / 2 ? W - 0.25 : fw + 0.6, {max: 1, front: 1.0});
     // the floor: dresses on rails (down a narrow unit, else parallel to the windows), blouse / skirt round racks, folded-knit tables
-    d.dressRails(d.islands('garmentRail', per(d, 28, 1, 7), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8, along: !narrow}), 0.75);
-    d.dressRails(d.islands('garmentRailRound', per(d, 40, 1, 4), {u0: 1.8, u1: W - 1.8, v0: 2.8, v1: D - 2.4}, {ring: 0.8}), 0.75);
+    d.dressRails(d.islands('garmentRail', per(d, 28, 1, 7), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8, along: !narrow}), 0.75, 1);
+    d.dressRails(d.islands('garmentRailRound', per(d, 40, 1, 4), {u0: 1.8, u1: W - 1.8, v0: 2.8, v1: D - 2.4}, {ring: 0.8}), 0.75, 1);
     d.islands('merchTable', per(d, 75, 1, 3), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
     d.islands('mannequinFemale', W * D >= 90 ? 2 : 1, {u0: 1.4, u1: W - 1.4, v0: D * 0.35, v1: D - 2.2}, {ring: 0.6});
     d.islands(W * D >= 70 ? 'loungeArmchair' : 'ottoman', 1, {u0: 1.2, u1: W - 1.2, v0: D * 0.55, v1: D - 1.6}, {ring: 0.7});
@@ -772,9 +816,10 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     }
     d.sideRows([['dresserDrawers', 0]], D * 0.6, D - 1.0, {max: 1});
     d.sideRows([['wallBay', 0], ['garmentRail', 0]], 2.4, D - 1.2);
-    d.dressWallUnits();
-    d.dressRails(d.islands('garmentRail', Math.round(Math.min(8, W * D / 35)), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
-    d.dressRails(d.islands('garmentRailRound', per(d, 60, 1, 4), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
+    // (round 4, lane GARMENTS: its women's side — about 40 % of its rails / bays carry the women's face-out groups, the rest M06)
+    d.dressWallUnits(0.7, DEPT_WOMENS);
+    d.dressRails(d.islands('garmentRail', Math.round(Math.min(8, W * D / 35)), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}), 0.65, DEPT_WOMENS);
+    d.dressRails(d.islands('garmentRailRound', per(d, 60, 1, 4), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}), 0.65, DEPT_WOMENS);
     d.islands('mannequinFull', 2, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6});
     d.islands('mannequinFemale', 2, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6}); // (R4)
     d.islands('merchTable', 3, {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.9});

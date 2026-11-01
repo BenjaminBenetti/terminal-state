@@ -63,6 +63,9 @@ export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number
   'salon-styling-chair': [0.8063, 1.1, 0.9822],
   'bed-display': [1.4873, 1.0962, 2.1],
   'mannequin-female': [0.4368, 1.75, 0.3523],
+  'womens-dresses-group': [1.4532, 1.05, 0.1667],
+  'womens-blouses-group': [1.0757, 0.65, 0.2057],
+  'womens-skirts-group': [0.7362, 0.76, 0.1914],
 };
 
 export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
@@ -103,5 +106,8 @@ export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {
   'salon-styling-chair': {code: 'M51', role: 'furniture', programs: ['beauty', 'service'], sizeM: 1.1, sizeAxis: 'h', target: [0.7, 1.1, 0.7], placement: 'free', shopsKind: 'salonChair'},
   'bed-display': {code: 'M52', role: 'furniture', programs: ['home', 'department'], sizeM: 2.1, sizeAxis: 'longest', target: [1.6, 1.05, 2.1], placement: 'wall (headboard)', shopsKind: 'displayBed'},
   'mannequin-female': {code: 'M81', role: 'decor/movable', programs: ['womenswear', 'clothing', 'department'], sizeM: 1.75, sizeAxis: 'h', target: [0.44, 1.75, 0.35], placement: 'free', shopsKind: 'mannequinFemale'},
+  'womens-dresses-group': {code: 'M82', role: 'loose-stock', programs: ['womenswear', 'clothing', 'department'], sizeM: 1.05, sizeAxis: 'h', target: [1.45, 1.05, 0.17], placement: 'onHost (womenswear rails / round racks / clothing bays)', shopsKind: 'womensDressesGroup'},
+  'womens-blouses-group': {code: 'M83', role: 'loose-stock', programs: ['womenswear', 'clothing', 'department'], sizeM: 0.65, sizeAxis: 'h', target: [1.07, 0.65, 0.2], placement: 'onHost (womenswear rails / round racks / clothing bays)', shopsKind: 'womensBlousesGroup'},
+  'womens-skirts-group': {code: 'M84', role: 'loose-stock', programs: ['womenswear', 'clothing', 'department'], sizeM: 0.76, sizeAxis: 'h', target: [0.74, 0.76, 0.19], placement: 'onHost (womenswear rails / round racks / clothing bays)', shopsKind: 'womensSkirtsGroup'},
 };
 // END GENERATED

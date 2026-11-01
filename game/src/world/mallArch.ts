@@ -48,7 +48,8 @@ import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's do
 import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revision (U07): the same landing-doorway cut as the Office
 import {GLASS_RIG} from './elevator';
 import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
-import {adAtlasMaterial, adGlowOf, adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06); R5: + backlight
+import {adArtOf, adAtlasMaterial, adGlowOf, adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06); R5: + backlight; mall-round4 (ADS): + art
+import {AD_ART_IDS, mallAdArt, releaseMallAdArt, type AdArtId} from '../assets/mallAdArt'; // task mall-round4 (lane ADS): the Codex ad artwork, released after the atlas
 import {buildStreetExit, cutExitOpenings, setStreetHaze, streetExitSpecs, streetExitTune, type StreetExitSpec, type StreetExitStats, type StreetExitTune} from './mallStreetExit'; // task mall-round2 (M09)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
@@ -482,6 +483,9 @@ export class MallArch {
   private readonly adWalls: AdWall[] = [];
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
+  /** Task mall-round4 (lane ADS): the last buildAds' artwork — images held while drawing, ads per image, faces drawn with art / with the
+   *  plain fill (no image held), images released after the atlas (QA __LL.mallAds().art). */
+  adArt: {loaded: AdArtId[]; byTheme: Partial<Record<AdArtId, number>>; drawn: number; fallback: number; released: number} = {loaded: [], byTheme: {}, drawn: 0, fallback: 0, released: 0};
   readonly dress: MallDressMaterials;
   stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, balustradeTrimmedM: 0, balustradeTrimmedRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adMeshes: 0, adTextureMB: 0, exits: 0, exitCost: [], ms: 0};
 
@@ -1603,11 +1607,18 @@ export class MallArch {
   /**
    * Task mall-playtest-revision-20261031 (lane ARCH, D06): advertising faces — lane SHOPS' records (`layout.mall.ads`: posters, lightboxes,
    * billboards, glass decals in / at their shops) + ARCH's gallery billboards on long blank public walls (world/mallAds.ts
-   * planGalleryAds) — original vector art (fictional brands, generic dressed adult silhouettes, theme motifs), one canvas each,
+   * planGalleryAds) — one canvas each (task mall-round4, lane ADS: the Codex artwork under the fictional brand / headline text),
    * packed into atlas pages: per page and storey ONE instanced face mesh (opaque pages; decals on cut-out pages), frames / boxes
    * merged per storey. Faces / frames sit on the wall (never a collider: nothing to bump, nothing blocks a door or a sign).
+   * Task mall-round4 (lane ADS): the decoded Codex ad artwork (assets/mallAdArt.ts, preloaded behind the mall's loading screen) is held
+   * only for this build: released once the atlas pages are packed (also on a throw); `adArt` records what was drawn.
    */
   buildAds(group: THREE.Group, add: (m: THREE.Mesh | null) => void): void {
+    this.adArt = {loaded: AD_ART_IDS.filter(id => mallAdArt(id) !== null), byTheme: {}, drawn: 0, fallback: 0, released: 0};
+    try { this.buildAdFaces(group, add); } finally { this.adArt.released = releaseMallAdArt(); }
+  }
+
+  private buildAdFaces(group: THREE.Group, add: (m: THREE.Mesh | null) => void): void {
     const shopAds = adsOf(this.layout);
     const gallery = planGalleryAds(this.adWalls, this.layout, hashStr(this.info.name) + this.layout.seed, lv => this.storeyOf(lv)?.baseY ?? 0);
     this.ads = [...shopAds, ...gallery];
@@ -1624,7 +1635,11 @@ export class MallArch {
     const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
     for (const ad of this.ads) {
       // the advertiser: the shop's fictional brand (a vacant unit / a gallery ad: the seeded mall name; R5: a kiosk cart its own brand)
-      const tex = adTexture(ad, ad.brand ?? (ad.shop && ad.program !== 'vacant' ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name));
+      const brand = ad.brand ?? (ad.shop && ad.program !== 'vacant' ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name);
+      const tex = adTexture(ad, brand);
+      const art = adArtOf(ad, brand); // (lane ADS) the image it shows (or the plain fill when none is held)
+      this.adArt.byTheme[art] = (this.adArt.byTheme[art] ?? 0) + 1;
+      if (mallAdArt(art)) this.adArt.drawn++; else this.adArt.fallback++;
       const glow = adGlowOf(ad);
       const yaw = Math.atan2(ad.nx, ad.nz), alongX = Math.abs(ad.nz) > 0.5;
       // wall-mounted kinds stand on the real wall plane behind the record (whatever its proud offset): probe the storey grid

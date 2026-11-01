@@ -17,7 +17,7 @@ import {MALL_DIMS} from '../src/assets/mallDims.generated';
 import {COMMONS} from '../src/gen/mall/commons';
 import {MALL_ALWAYS, MALL_ASSIGN_STATS, MALL_PROGRAMS, MALL_ROTATION, assignMallPrograms, inferLot, mallShopCensus, shopFit} from '../src/gen/mall/shops';
 import {MALL_LOTS, lotSuits} from '../src/gen/mall/lots';
-import {MALL_COMMONS_STATS, MALL_FOCAL, SPOOKY_MANNEQUINS, dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
+import {MALL_COMMONS_STATS, MALL_FOCAL, SPOOKY_MANNEQUINS, WOMENS_ROD_Z, dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
 import {MALL_FIND_WEAPONS, mallGearSpots, mallShopPose, mallWeaponPlan, placeMallWeapons} from '../src/gen/mall/shopsWeapons';
 import {OPENABLE_AUDIT, OPENABLE_CONTAINER_KINDS, openableSpec} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
@@ -404,6 +404,7 @@ describe('mall prop kinds: classified, holders with surfaces, no baked clutter',
     for (const s of SEEDS) {
       const props = get(s).layout.props;
       for (const p of props.filter(q => q.kind === 'garmentHangingGroup')) expect(['garmentRail', 'garmentRailRound', 'clothingWallUnit']).toContain(props[p.host!]?.kind);
+      for (const p of props.filter(q => ['womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup'].includes(q.kind))) expect(['garmentRail', 'garmentRailRound', 'clothingWallUnit']).toContain(props[p.host!]?.kind); // (round 4)
       for (const p of props.filter(q => q.kind === 'flatScreenTv')) expect(props[p.host!]?.kind).toBe('merchTable');
       for (const p of props.filter(q => q.kind === 'cashRegister')) expect(['shopCounter', 'checkoutLane']).toContain(props[p.host!]?.kind);
     }
@@ -719,6 +720,49 @@ describe('R4 womenswear store + the reusable female mannequin', () => {
     const inter = [...w].filter(k => c.has(k)).length, uni = new Set([...w, ...c]).size;
     console.info(`[R4 womenswear] stores ${stores}, window ${window}; kinds ${[...w].sort().join(' ')}; jaccard vs clothing ${(inter / uni).toFixed(2)}`);
     expect(inter / uni, 'womenswear reads differently from the clothing store').toBeLessThan(0.6);
+  });
+
+  it('(round 4) the women\'s face-out garment groups dress the womenswear rails / bays (never M06), fit their hosts and face the shopper; clothing keeps M06', () => {
+    const WOMENS = ['womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup'];
+    const HOSTS = ['garmentRail', 'garmentRailRound', 'clothingWallUnit'];
+    let wsStores = 0, wsWithWomen = 0, women = 0, clothingM06 = 0;
+    for (const s of ROT_SEEDS) {
+      const L = get(s).layout, props = L.props;
+      const prog = new Map<number, string>();
+      for (const q of L.mall!.shops) prog.set(q.area, q.program);
+      for (const q of L.mall!.shops.filter(x => x.program === 'womenswear')) {
+        wsStores++;
+        const here = props.filter(p => p.area === q.area);
+        if (here.some(p => WOMENS.includes(p.kind))) wsWithWomen++;
+        expect(here.filter(p => p.kind === 'garmentHangingGroup').length, `seed ${s} ${q.id}: no M06 in the women's store`).toBe(0);
+      }
+      for (const q of L.mall!.shops.filter(x => x.program === 'clothing')) {
+        const here = props.filter(p => p.area === q.area);
+        expect(here.filter(p => WOMENS.includes(p.kind)).length, `seed ${s} ${q.id}: the clothing store keeps M06`).toBe(0);
+        clothingM06 += here.filter(p => p.kind === 'garmentHangingGroup').length;
+      }
+      for (const p of props.filter(x => WOMENS.includes(x.kind))) {
+        women++;
+        const h = props[p.host!];
+        expect(HOSTS, `seed ${s} ${p.kind} host`).toContain(h?.kind);
+        expect(['womenswear', 'department'], `seed ${s} ${p.kind} in ${prog.get(p.area)}`).toContain(prog.get(p.area));
+        const rail = GARMENT_RAIL_Y[h.kind as keyof typeof GARMENT_RAIL_Y]!, def = PROP_DEFS[p.kind as keyof typeof PROP_DEFS];
+        expect(p.y + def.h, `${p.kind} hook line on the ${h.kind} rail`).toBeCloseTo(h.y + rail, 2);
+        expect(p.y - h.y, `${p.kind} hem clears the floor on ${h.kind}`).toBeGreaterThanOrEqual(0.15 - 1e-6);
+        expect(Math.abs(Math.sin(p.rot - h.rot)), 'faces the host front (the shopper)').toBeLessThan(1e-6);
+        expect(Math.cos(p.rot - h.rot)).toBeGreaterThan(0.999);
+        const du = Math.cos(h.rot) * (p.x - h.x) - Math.sin(h.rot) * (p.z - h.z);
+        const dv = Math.sin(h.rot) * (p.x - h.x) + Math.cos(h.rot) * (p.z - h.z);
+        expect(dv, `${p.kind}: its own hook rod on the host's rail line`).toBeCloseTo(WOMENS_ROD_Z[p.kind as keyof typeof WOMENS_ROD_Z] ?? 0, 2);
+        const usable = PROP_DEFS[h.kind as keyof typeof PROP_DEFS].w * (h.kind === 'garmentRailRound' ? 0.7 : 1) / 2;
+        expect(Math.abs(du) + def.w / 2, `${p.kind} fits along the ${h.kind}`).toBeLessThanOrEqual(usable + 2e-3);
+        expect(p.h).toBe(def.h);
+      }
+    }
+    console.info(`[R4 garments] womenswear stores ${wsStores} (with women's groups ${wsWithWomen}), women's groups ${women}, clothing M06 groups ${clothingM06}`);
+    expect(wsWithWomen / wsStores, 'women\'s stores visibly dressed with the women\'s groups').toBeGreaterThan(0.75);
+    expect(clothingM06).toBeGreaterThan(0);
+    expect(women).toBeGreaterThan(ROT_SEEDS.length);
   });
 
   it('female mannequins elsewhere are bounded spooky extras: back rooms / vacant units / the department floor, standing on the floor, nothing hung on them', () => {
