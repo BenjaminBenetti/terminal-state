@@ -456,10 +456,11 @@ export class Carver {
    * (GEN-2) Tries to grow a SERVICE-HATCH annex at a bed end no tunnel continues: a door through one of the bed's side walls
    * (`hatch.s` m from the end face; the wall cells and a jamb either side must be rock on every level grid — never a platform
    * face), the entry corridor running straight away from the bed into the rock, then the same room-graph growth as off a tunnel.
-   * Claims it on success; returns the reason on failure (nothing claimed, nothing recorded).
+   * Claims it on success; returns the reason on failure (nothing claimed, nothing recorded). `H` = the hatch window (default the
+   * config's `hatch`; the original planner's presence fallback passes its `fallbackHatch`).
    */
-  planHatch(end: BedEndInfo, annexId: number, rng: Rng): {annex: ServiceAnnex; door: number; entry: HatchEntry} | string {
-    const A = this.cfg.annex, H = this.cfg.hatch;
+  planHatch(end: BedEndInfo, annexId: number, rng: Rng, H: TrackExtConfig['hatch'] = this.cfg.hatch): {annex: ServiceAnnex; door: number; entry: HatchEntry} | string {
+    const A = this.cfg.annex;
     if (!H) return 'no hatches configured';
     const t = end.t, dc = A.doorCells, g = this.k.g, group = this.tunnels.length + this.hatchGroups;
     const target = A.share * SUBWAY_WALK_BASELINE_M2 * rng.range(A.jitter[0], A.jitter[1]);

@@ -8,7 +8,8 @@
 //  - ABSENT and PRESENT levels of EVERY registered track-bearing level type (Subway, Office, Mall) through the production registry path:
 //    absent => zero annexes and nothing of the area; present => the annexes with their guaranteed hideout, caches, marks, loot, spawns;
 //  - core-view invariance (the core never depends on the roll), determinism (twice, either generation order, every attempt, a revisit);
-//  - realised occurrence per level type over 250 seeds each (the cheap roll picks; every present level is generated).
+//  - realised occurrence per level type over 250 seeds each (the cheap roll picks; every present level is generated): 0.2 on every
+//    type — (2026-11-01, lane OFFICE) a present Office level whose tunnels are all ineligible takes ONE fallback service hatch.
 import {describe, expect, it} from 'vitest';
 import {generateAttempt, generateStation, pickArchetype} from '../src/gen/station';
 import {generateOfficeLevel, officeAttempt} from '../src/gen/office/index';
@@ -149,9 +150,10 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
         clues += t.clues; art += t.art;
         for (const n of e.annexes) {
           const ids = new Set(n.areas), ntag = `${tag} annex ${n.id}`;
-          // the entrance: a tunnel door or (GEN-2 planner levels) a bed hatch
-          if (n.bed) expect(level === 'office', `${ntag}: the Office has no hatches`).toBe(false);
-          else expect(e.tunnels[n.tunnel].doors.some(d => d.annex === n.id), ntag).toBe(true);
+          // the entrance: a tunnel door or (GEN-2 planner levels) a bed hatch. (2026-11-01, lane OFFICE) The Office has a hatch ONLY as
+          // its presence fallback (TRACK_EXT_OFFICE.fallbackHatch): the level's one annex, when no tunnel annex exists
+          if (n.bed && level === 'office') expect(e.annexes.length === 1 && e.tunnels.every(t => !t.doors.length), `${ntag}: an Office hatch only as the fallback`).toBe(true);
+          if (!n.bed) expect(e.tunnels[n.tunnel].doors.some(d => d.annex === n.id), ntag).toBe(true);
           // the guaranteed deep hideout, its cache(s) and the survivor marks leading there
           expect(n.hideout !== undefined && ids.has(n.hideout), `${ntag} hideout`).toBe(true);
           expect(annexCachesOf(l).filter(c => c.annex === n.id).length, `${ntag} caches`).toBeGreaterThanOrEqual(1);
@@ -169,15 +171,32 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     expect(art).toBeGreaterThan(0);
   }, 300000);
 
-  it('PRESENT but geometrically ineligible (Office 31702): no annex, honestly logged, nothing of the area — never a second roll', () => {
+  it('PRESENT with every tunnel ineligible (Office 31702): ONE fallback hatch annex, nothing else changed — never a second roll', () => {
+    // (2026-11-01, lane OFFICE) was "no annex": the Office's presence fallback (TRACK_EXT_OFFICE.fallbackHatch) now places ONE
+    // service-hatch annex at an open bed end on its own fork; the same one roll, the tunnels / core / attempt exactly as without it
+    // (tests/office-area-fallback.test.ts proves the whole formerly-failing cohort)
     const l = gen('office', 31702), e = l.extensions!;
     expect(e.area).toEqual({roll: btsAreaRoll(31702), chance: BTS_AREA_CHANCE, present: true});
+    const ref = generateOfficeLevel({levelSeed: 31702, startWeapon: 'pistol'}, undefined, undefined, {...(LEVELS.office.trackExtensions as TrackExtConfig), fallbackHatch: undefined});
+    expect(ref.extensions!.annexes, 'without the fallback: none').toEqual([]);
+    // the tunnels: every one still ineligible (first straight too short), no door, no clue; their log lines exactly as before
+    const tunnelLog = e.log.filter(g => /^annex/.test(g.result) && !/fallback/.test(g.result));
+    expect(tunnelLog.length).toBe(e.tunnels.length);
+    expect(tunnelLog.every(g => /not eligible/.test(g.result))).toBe(true);
+    expect(JSON.stringify(e.tunnels)).toBe(JSON.stringify(ref.extensions!.tunnels));
+    expect(e.log.slice(0, ref.extensions!.log.length)).toEqual(ref.extensions!.log);
+    // exactly one annex, behind a service hatch at a bed end no tunnel continues, with the whole area
+    expect(e.annexes.length).toBe(1);
+    const n = e.annexes[0];
+    expect(n.tunnel).toBe(-1);
+    expect(n.bed && !e.tunnels.some(t => t.trench === n.bed!.trench && t.from === n.bed!.from)).toBe(true);
     const t = areaTraces(l);
-    expect(Object.entries(t).filter(([, v]) => v !== 0), JSON.stringify(t)).toEqual([]);
-    const annexLog = e.log.filter(g => /^annex/.test(g.result));
-    expect(annexLog.length).toBe(e.tunnels.length);
-    expect(annexLog.every(g => /not eligible/.test(g.result))).toBe(true);
-  });
+    expect({annexes: t.annexes, hatches: t.hatches, tunnelDoors: t.tunnelDoors, hideouts: t.hideouts, reportAnnexes: t.reportAnnexes}).toEqual({annexes: 1, hatches: 1, tunnelDoors: 0, hideouts: 1, reportAnnexes: 1});
+    for (const k of ['annexAreas', 'annexDoors', 'caches', 'marks', 'props', 'pickups', 'spawns', 'annexLights'] as const) expect(t[k], k).toBeGreaterThan(0);
+    // the core and the accepted attempt are those of the level without it
+    expect(l.attempt).toBe(ref.attempt);
+    expect(canonDiff(canonCore(l), canonCore(ref))).toEqual([]);
+  }, 120000);
 
   it('the fresh-run sample seeds of the annex tests (tests/helpers/btsArea.ts FRESH) roll PRESENT and play their roles', () => {
     for (const [k, s] of Object.entries(FRESH)) expect(btsAreaPresent(s), k).toBe(true);
@@ -229,29 +248,33 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     }
   }, 300000);
 
-  it('realised occurrence per level type over 250 seeds each: 0.2 x the measured eligibility (absent levels never carry an annex)', () => {
-    // documented eligibility (docs/track-extensions.md): every present Subway / Mall level fits an annex; ~8 % of present Office
-    // levels have no tunnel with a long enough first straight (measured 17 / 200) — genuine geometry, not a second roll
-    const ELIGIBLE_MIN: Record<string, number> = {subway: 1, office: 0.8, mall: 1};
+  it('realised occurrence per level type over 250 seeds each: 0.2 — every present level has the area (absent levels never carry an annex)', () => {
+    // (2026-11-01, lane OFFICE) every present Subway / Mall level fits an annex, and so does every present Office level now: ~7 % of
+    // them have no tunnel with a long enough first straight (measured 23 / 331), and those take ONE service hatch instead (the Office's
+    // presence fallback, TRACK_EXT_OFFICE.fallbackHatch; tests/office-area-fallback.test.ts) — the same one roll, never a second one
     const N = 250, seeds = Array.from({length: N}, (_, i) => corpus(1000 + i));
     for (const level of TRACK_LEVELS) {
       const t0 = performance.now();
       const present = seeds.filter(btsAreaPresent);
-      let realised = 0, two = 0;
+      let realised = 0, two = 0, hatches = 0;
       for (const s of present) {
-        const l = live(level, s), n = l.extensions!.annexes.length;
-        expect(l.extensions!.area!.present).toBe(true);
+        const l = live(level, s), e = l.extensions!, n = e.annexes.length;
+        expect(e.area!.present).toBe(true);
         if (n) realised++;
         if (n === 2) two++;
-        // a present level without an annex is genuinely ineligible: the log says why, nothing was rolled away
-        if (!n) expect(l.extensions!.log.filter(g => /^annex: /.test(g.result)).every(g => /not eligible|omitted/.test(g.result)), `${level} ${s}`).toBe(true);
+        hatches += e.annexes.filter(a => a.bed).length;
+        // a present level without an annex would be genuinely ineligible: the log says why, nothing was rolled away
+        if (!n) expect(e.log.filter(g => /^annex: /.test(g.result)).every(g => /not eligible|omitted/.test(g.result)), `${level} ${s}`).toBe(true);
+        // an Office hatch only as the fallback: the level's one annex, no tunnel door
+        if (level === 'office' && e.annexes.some(a => a.bed)) expect(n === 1 && e.tunnels.every(t => !t.doors.length), `${level} ${s}`).toBe(true);
       }
       // absent levels: a generated sample (the planner never runs there)
       for (const s of seeds.filter(x => !btsAreaPresent(x)).slice(0, 6)) expect(live(level, s).extensions!.annexes.length, `${level} ${s} absent`).toBe(0);
       const rate = present.length / N, occ = realised / N, elig = realised / present.length;
-      report(`${level}: ${present.length}/${N} rolled present (${rate.toFixed(3)}), ${realised} with an annex (${two} with two): realised ${occ.toFixed(3)}, eligibility ${elig.toFixed(3)}; ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+      report(`${level}: ${present.length}/${N} rolled present (${rate.toFixed(3)}), ${realised} with an annex (${two} with two, ${hatches} hatch annexes): realised ${occ.toFixed(3)}, eligibility ${elig.toFixed(3)}; ${((performance.now() - t0) / 1000).toFixed(1)} s`);
       expect(Math.abs(rate - 0.2)).toBeLessThan(4 * Math.sqrt(0.16 / N));
-      expect(elig, `${level} eligibility`).toBeGreaterThanOrEqual(ELIGIBLE_MIN[level]);
+      expect(elig, `${level}: every present level has the area`).toBe(1);
+      expect(Math.abs(occ - 0.2), `${level}: realised occurrence`).toBeLessThan(4 * Math.sqrt(0.16 / N));
       expect(occ).toBeLessThanOrEqual(rate);
     }
   }, 600000);
