@@ -1,114 +1,132 @@
-// Task reactor-build-20261101 (lane ARCH): the Reactor's ASSET SEAMS — the GLB swap registry and the texture slots.
+// Task reactor-build-20261101 (lane ARCH): the Reactor's ASSET SEAMS — the GLB swap registry and the texture slots, on top of the
+// lead's cooked kit (assets/reactorKit.generated.ts REACTOR_KIT / REACTOR_TEXTURES: Meshy T2.5 models from Codex reference images
+// made with the selected B concept, Codex tileable surface sets; Meshy maps KEPT, never retextured).
 //
-// GLB SWAP (one entry per set piece). Every piece is procedural today (world/reactor/archKit.ts). When the lead cooks a GLB into
-// game/public/assets/models/reactor-<piece>.glb he flips that ONE entry to `delivered: true` with its real bytes / tris / dims; then
-//  - REACTOR_MODEL_FILES lists it for the lazy prop library (game.ts propModels: fetched behind the Reactor's loading screen only —
-//    assets/levelAssets.ts LEVEL_ONLY_RULES owns assets/models/reactor-*.glb for the 'reactor' level, like mall-*.glb for the mall);
-//  - reactorModelKeysFor(layout) asks for it on a Reactor layout (game.ts sectionModelKeys);
-//  - the kit builder instances the model on every record of that piece instead of the procedural body (fit below) and keeps its
-//    procedural extras (generator control box + lamps, cable runs, pipe-bank catwalks + lamps, vessel glow parts, crane runways).
-// `delivered: false` entries are never fetched and never in the file map (no 404s, no late fetches): procedural pieces stand.
+// GLB SWAP (one entry per set piece; world/reactor/archKit.ts): a piece with `delivered: true` whose model the lazy prop library
+// loaded (game.ts propModels + sectionModelKeys -> reactorModelKeysFor, fetched behind the Reactor's loading screen only:
+// assets/levelAssets.ts LEVEL_ONLY_RULES owns assets/models/reactor-*.glb for the 'reactor' level) is INSTANCED on every record of
+// that piece instead of the procedural body; `delivered: false` (or a model that failed to load: Node tests, a 404) keeps the
+// procedural piece. Procedural extras stay with a model: fan blades (inside the housing's empty ring), generator start panel + lamps,
+// cable runs, pipe-bank catwalks + lamps, the vessel's glow parts + ring gantries, crane runways / bridge, lamp lens glows (the
+// Meshy lamp has no emission map: a per-tier emissive lens overlay carries setTierPower).
+// Every REACTOR_KIT url is referenced from runtime code through REACTOR_MODEL_FILES (the release packager drops unreferenced GLBs).
 //
-// TEXTURE SLOTS: the Codex tileable textures (lead-delivered, game/public/assets/textures/reactor/*.jpg). Same switch: a slot with
-// `delivered: true` is loaded by the Reactor's section preload (LevelResources, level 'reactor': released when the run leaves the
-// level) and replaces the reused approved surface set of the materials using it (world/reactor/archMaterials.ts). Until then the
-// reactor surfaces reuse the repo's EXISTING approved surface sets (tunnel concrete, painted block, steel / slat sets) with tints
-// and the existing decay hooks — no new hand-drawn texture (CLAUDE.md "Codex for INITIAL sources").
-// Pure data + small helpers (no three.js): Node tests, the CI packager families and the runtime agree.
+// TEXTURE SLOTS: REACTOR_TEXTURES colour / normal / ORM (R ao, G roughness, B metal) JPEGs, loaded by the Reactor's section preload
+// (LevelResources, level 'reactor': released when the run leaves the level), applied by world/reactor/archMaterials.ts with the
+// tile span below. Before they resolve (Node tests, a failed fetch) the reactor surfaces reuse the repo's EXISTING approved surface
+// sets with tints and the existing decay hooks — never a new hand-drawn texture (CLAUDE.md: Codex for INITIAL sources).
+// Pure data + small helpers (no three.js).
 
-/** The set pieces that can switch from procedural to a cooked GLB. */
+import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES, type ReactorKitModel} from '../../assets/reactorKit.generated';
+
+/** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =
-  | 'crane-trolley' | 'crane-hook' | 'pipe-bank' | 'aux-generator' | 'vessel'
-  | 'switchgear' | 'coolant-pump' | 'valve' | 'control-console';
+  | 'vessel' | 'generator' | 'craneTrolley' | 'craneHook' | 'fanHousing' | 'switchgear' | 'coolantPump' | 'controlConsole'
+  | 'pipeBank' | 'coolantValve' | 'floodLamp';
 
 /**
- * How a delivered model is fitted onto its record:
- *  - 'record'  : stretched to the record's box (generator size w x h x d; machine boxes) — base on the floor, front +Z;
- *  - 'uniform' : one uniform scale so the model's real `dims` fit the record's box (keeps proportions), base anchored;
- *  - 'real'    : real size (dims are metres; no scaling) at the record's anchor (trolley on the bridge, hook block at hookY);
- *  - 'stack'   : a stackable module tiled along the record (pipe bank: every dims[0] m along the wall, every dims[1] m up).
+ * How a delivered model is fitted onto its record (models are real size, +Y up, front +Z, grounded min y 0, centred x / z):
+ *  - 'uniform' : one uniform scale so the model fits the record's box (generator in its footprint; vessel to 2 x ReactorCore.radius);
+ *  - 'real'    : real size (no scaling) at the record's anchor (trolley on the bridge, hook block at hookY, site machines, lamps);
+ *  - 'stack'   : a stackable module tiled up / along the record (pipe bank: 4 m modules up the organ wall);
+ *  - 'ring'    : uniform scale so the housing's empty ring matches the fan radius (fan housing: ring radius `ring` m at scale 1).
  */
-export type ReactorFit = 'record' | 'uniform' | 'real' | 'stack';
+export type ReactorFit = 'uniform' | 'real' | 'stack' | 'ring';
 
 export interface ReactorModelSpec {
   piece: ReactorPiece;
-  /** Lazy-library key (assets/loader.ts PropModelLibrary): 'reactor-<piece>'. */
+  /** Lazy-library key (assets/loader.ts PropModelLibrary) = REACTOR_KIT[piece].key. */
   key: string;
-  /** Site-relative runtime path: 'assets/models/reactor-<piece>.glb' (level-only: the Reactor). */
+  /** Site-relative runtime path (level-only: the Reactor). */
   url: string;
-  /** Cooked GLB bytes / triangles (0 until delivered). */
   bytes: number;
   tris: number;
-  /** Real-size W x H x D (m) of the model as authored (front +Z, base at y 0); the procedural stand-in's nominal size until delivered. */
+  /** Real-size W x H x D (m) as cooked (front +Z, base at y 0). */
   dims: readonly [number, number, number];
   fit: ReactorFit;
-  anchor: 'bottom' | 'top';
-  /** false: not cooked yet — never fetched; the procedural piece stands. */
+  /** false: not cooked — never fetched; the procedural piece stands. */
   delivered: boolean;
+  /** Most instances drawn from the model per level (the rest stay procedural): bounds the triangles of heavy kit pieces. */
+  cap: number;
+  /** Measured anchors in model space (m at scale 1; probed from the cooked GLBs, 2026-11-01). */
+  anchors?: Readonly<Record<string, readonly [number, number, number] | number>>;
 }
 
-const spec = (piece: ReactorPiece, dims: readonly [number, number, number], fit: ReactorFit, anchor: 'bottom' | 'top' = 'bottom'): ReactorModelSpec =>
-  ({piece, key: `reactor-${piece}`, url: `assets/models/reactor-${piece}.glb`, bytes: 0, tris: 0, dims, fit, anchor, delivered: false});
+const fromKit = (piece: ReactorPiece, m: ReactorKitModel, fit: ReactorFit, cap: number, anchors?: ReactorModelSpec['anchors']): ReactorModelSpec =>
+  ({piece, key: m.key, url: m.url, bytes: m.bytes, tris: m.tris, dims: m.dims, fit, delivered: true, cap, ...(anchors ? {anchors} : {})});
 
 /**
- * THE registry (the lead edits one entry per delivered model: delivered true + bytes / tris / dims).
- * Nominal dims = the procedural stand-in's size (archKit.ts), so a delivered model of the same size drops in unchanged.
+ * THE registry. Anchors (probed vertex bounds of the cooked GLBs):
+ *  - fanHousing: back flange plate at z -0.68..-0.34 (against the wall), duct ring inner radius ~0.70 about (0, 1.256) at z 0.02..0.36,
+ *    motor pod r < 0.45 at z -0.24..0.47 -> blades in the ring at z ~0.14, radius 0.66;
+ *  - floodLamp: wall plate at the -Z end (z -0.219, y 0.27..0.45), caged head at z 0..0.22, lens face ~0.19 x 0.28 at z 0.21, y 0.17;
+ *  - generator: control box on the +Z long side near +X (x 1.54..2.35, y 0.76..1.65);
+ *  - vessel: hazard plinth radius 6.4 (y 0..1.66), nozzles to +-7 (y 1.66..4.15), body radius ~5.0 (y 4.15..5.8), dome to 9.97;
+ *  - craneTrolley: rope stubs below its middle; craneHook: rope stubs on top (height 2.2).
  */
 export const REACTOR_MODELS: Readonly<Record<ReactorPiece, ReactorModelSpec>> = {
-  'crane-trolley': spec('crane-trolley', [2.6, 1.6, 2.4], 'real'),
-  'crane-hook': spec('crane-hook', [1.1, 2.6, 0.6], 'real', 'top'),
-  'pipe-bank': spec('pipe-bank', [4, 4, 1.6], 'stack'),
-  'aux-generator': spec('aux-generator', [4.2, 2.4, 1.8], 'record'),
-  vessel: spec('vessel', [10, 12, 10], 'uniform'),
-  switchgear: spec('switchgear', [0.8, 2.1, 0.6], 'record'),
-  'coolant-pump': spec('coolant-pump', [1.8, 1.3, 1.1], 'record'),
-  valve: spec('valve', [0.9, 1.6, 0.6], 'record'),
-  'control-console': spec('control-console', [1.6, 1.15, 0.85], 'record'),
+  vessel: fromKit('vessel', REACTOR_KIT.vessel, 'uniform', 1, {plinthR: 6.4, plinthTop: 1.66, bodyR: 5.0, seamY: 4.35, width: 14}),
+  generator: fromKit('generator', REACTOR_KIT.generator, 'uniform', 8, {controlBox: [1.95, 1.2, 0.84]}),
+  craneTrolley: fromKit('craneTrolley', REACTOR_KIT.craneTrolley, 'real', 1),
+  craneHook: fromKit('craneHook', REACTOR_KIT.craneHook, 'real', 1),
+  fanHousing: fromKit('fanHousing', REACTOR_KIT.fanHousing, 'ring', 16, {ringR: 0.7, ringY: 1.256, back: -0.679, bladeZ: 0.14, bladeR: 0.66}),
+  switchgear: fromKit('switchgear', REACTOR_KIT.switchgear, 'real', 12),
+  coolantPump: fromKit('coolantPump', REACTOR_KIT.coolantPump, 'real', 3),
+  controlConsole: fromKit('controlConsole', REACTOR_KIT.controlConsole, 'real', 3),
+  // 4 m modules at ~15 k triangles each: the top of each bank (clear air, seen from the rim) is modelled, the gassed depths stay
+  // procedural pipes (a ring catwalk hides the seam): 30 modules max per level (~450 k triangles)
+  pipeBank: fromKit('pipeBank', REACTOR_KIT.pipeBank, 'stack', 30),
+  coolantValve: fromKit('coolantValve', REACTOR_KIT.coolantValve, 'real', 3),
+  // ~4 k triangles each: the pit-wall / catwalk / gantry lamps take the model (up to the cap, top-down); railing lamps stay cheap cages
+  floodLamp: fromKit('floodLamp', REACTOR_KIT.floodLamp, 'real', 64, {plate: [0, 0.36, -0.219], lens: [0, 0.167, 0.212], lensW: 0.17, lensH: 0.24}),
 };
 
 export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
 
-/** Lazy-library file map of the DELIVERED Reactor models (game.ts propModels). Empty until the lead delivers one. */
-export function reactorModelFiles(models: Readonly<Record<ReactorPiece, ReactorModelSpec>> = REACTOR_MODELS): Record<string, {url: string; bytes: number}> {
+/**
+ * Lazy-library file map of the whole cooked kit (game.ts propModels; RESTART's item models fuseCartridge / reactorKey included so
+ * the library can serve them): every REACTOR_KIT url is referenced from runtime code here.
+ */
+export function reactorModelFiles(): Record<string, {url: string; bytes: number}> {
   const out: Record<string, {url: string; bytes: number}> = {};
-  for (const p of REACTOR_PIECES) { const m = models[p]; if (m.delivered) out[m.key] = {url: m.url, bytes: m.bytes}; }
+  for (const m of Object.values(REACTOR_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
   return out;
 }
 export const REACTOR_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = reactorModelFiles();
 
-/** The lazy keys a layout needs (game.ts sectionModelKeys): every delivered Reactor model on a Reactor layout, else none. */
+/** The lazy keys a layout needs (game.ts sectionModelKeys): ARCH's delivered pieces on a Reactor layout, else none. */
 export function reactorModelKeysFor(layout: {reactor?: unknown}, models: Readonly<Record<ReactorPiece, ReactorModelSpec>> = REACTOR_MODELS): readonly string[] {
   if (!layout.reactor) return [];
   return REACTOR_PIECES.filter(p => models[p].delivered).map(p => models[p].key);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// Texture slots (Codex tileable textures, lead-delivered)
+// Texture slots (Codex tileable sets)
 
 export type ReactorTextureSlot = 'pitConcrete' | 'rustedSteel' | 'grating';
+export type ReactorTextureMap = 'color' | 'normal' | 'orm';
 
 export interface ReactorTextureSpec {
   slot: ReactorTextureSlot;
-  /** Colour map (sRGB): 'assets/textures/reactor/<name>.jpg'. Optional normal map (linear) beside it: '<name>-normal.jpg'. */
-  url: string;
-  normalUrl: string;
+  /** colour (sRGB), normal + ORM (linear; R ao, G roughness, B metal) — site-relative paths. */
+  color: string;
+  normal: string;
+  orm: string;
   /** Real-world span (m) one tile covers (u, v): world-mapped / UV scale of the surfaces using it. */
   span: readonly [number, number];
-  /** Which reactor surfaces / dressing materials take it (archMaterials.ts). */
+  /** Reactor surface keys / dressing materials that take it (archMaterials.ts). */
   uses: readonly string[];
   delivered: boolean;
-  /** The normal map is delivered too. */
-  normal: boolean;
 }
 
-const tex = (slot: ReactorTextureSlot, name: string, span: readonly [number, number], uses: readonly string[]): ReactorTextureSpec =>
-  ({slot, url: `assets/textures/reactor/${name}.jpg`, normalUrl: `assets/textures/reactor/${name}-normal.jpg`, span, uses, delivered: false, normal: false});
+const tex = (slot: ReactorTextureSlot, set: {color: string; normal: string; orm: string}, span: readonly [number, number], uses: readonly string[]): ReactorTextureSpec =>
+  ({slot, color: set.color, normal: set.normal, orm: set.orm, span, uses, delivered: true});
 
-/** THE texture slots (the lead flips `delivered` / `normal` when the Codex files land). */
+/** THE texture slots (tile spans are ARCH's choice: board-formed concrete 3 m, riveted plate 1.6 m, bar grating 1 m). */
 export const REACTOR_TEXTURES: Readonly<Record<ReactorTextureSlot, ReactorTextureSpec>> = {
-  pitConcrete: tex('pitConcrete', 'pit-concrete', [4, 4], ['reactor-wall', 'reactor-roof']),
-  rustedSteel: tex('rustedSteel', 'rusted-steel', [2, 2], ['reactor-deck-under', 'reactor-plate', 'steel', 'steelDark']),
-  grating: tex('grating', 'grating', [1, 1], ['reactor-grating', 'grating']),
+  pitConcrete: tex('pitConcrete', KIT_TEXTURES['pit-concrete'], [3, 3], ['reactor-wall', 'reactor-roof', 'reactor-floor', 'concrete']),
+  rustedSteel: tex('rustedSteel', KIT_TEXTURES['rusted-steel'], [1.6, 1.6], ['reactor-deck-under', 'reactor-room-wall', 'reactor-trim', 'steel', 'steelDark', 'machine']),
+  grating: tex('grating', KIT_TEXTURES.grating, [1, 1], ['reactor-grating', 'grating']),
 };
 
 export const REACTOR_TEXTURE_SLOTS = Object.keys(REACTOR_TEXTURES) as ReactorTextureSlot[];
@@ -116,29 +134,32 @@ export const REACTOR_TEXTURE_SLOTS = Object.keys(REACTOR_TEXTURES) as ReactorTex
 /** The level id the Reactor's level-only assets belong to (levels/types.ts LevelId 'reactor'). */
 export const REACTOR_LEVEL = 'reactor';
 
-/** Delivered texture files to preload ([url, srgb] pairs; colour + optional normal). Empty until the lead delivers one. */
-export function reactorTextureLoads(textures: Readonly<Record<ReactorTextureSlot, ReactorTextureSpec>> = REACTOR_TEXTURES): {slot: ReactorTextureSlot; url: string; srgb: boolean; normal: boolean}[] {
-  const out: {slot: ReactorTextureSlot; url: string; srgb: boolean; normal: boolean}[] = [];
+/** Delivered texture files to preload (colour sRGB, normal / ORM linear). */
+export function reactorTextureLoads(textures: Readonly<Record<ReactorTextureSlot, ReactorTextureSpec>> = REACTOR_TEXTURES): {slot: ReactorTextureSlot; map: ReactorTextureMap; url: string; srgb: boolean}[] {
+  const out: {slot: ReactorTextureSlot; map: ReactorTextureMap; url: string; srgb: boolean}[] = [];
   for (const s of REACTOR_TEXTURE_SLOTS) {
     const t = textures[s];
     if (!t.delivered) continue;
-    out.push({slot: s, url: t.url, srgb: true, normal: false});
-    if (t.normal) out.push({slot: s, url: t.normalUrl, srgb: false, normal: true});
+    out.push({slot: s, map: 'color', url: t.color, srgb: true}, {slot: s, map: 'normal', url: t.normal, srgb: false}, {slot: s, map: 'orm', url: t.orm, srgb: false});
   }
   return out;
 }
 
 /**
- * The textures the Reactor's section preload resolved (per slot: colour / normal), read synchronously by the material factory
- * while the world is built. `version` bumps on every change so cached materials pick up a reloaded texture after a level change
- * (LevelResources disposes the old ones when the run leaves the Reactor).
+ * The textures the Reactor's section preload resolved, read synchronously by the material factory while the world is built.
+ * `version` bumps on every change so cached materials pick up reloaded textures after a level change (LevelResources disposes the
+ * old ones when the run leaves the Reactor).
  */
-export const reactorTextureStore: {version: number; color: Partial<Record<ReactorTextureSlot, unknown>>; normal: Partial<Record<ReactorTextureSlot, unknown>>} =
-  {version: 0, color: {}, normal: {}};
+export const reactorTextureStore: {version: number; maps: Partial<Record<`${ReactorTextureSlot}:${ReactorTextureMap}`, unknown>>} = {version: 0, maps: {}};
 
-export function setReactorTexture(slot: ReactorTextureSlot, kind: 'color' | 'normal', t: unknown | null): void {
-  const cur = reactorTextureStore[kind][slot];
-  if (cur === (t ?? undefined)) return;
-  if (t) reactorTextureStore[kind][slot] = t; else delete reactorTextureStore[kind][slot];
+export function setReactorTexture(slot: ReactorTextureSlot, map: ReactorTextureMap, t: unknown | null): void {
+  const k = `${slot}:${map}` as const;
+  if (reactorTextureStore.maps[k] === (t ?? undefined)) return;
+  if (t) reactorTextureStore.maps[k] = t; else delete reactorTextureStore.maps[k];
   reactorTextureStore.version++;
+}
+
+/** A slot's colour map is resolved (its normal / ORM may be missing: then the colour alone is used). */
+export function reactorTexture(slot: ReactorTextureSlot, map: ReactorTextureMap): unknown | undefined {
+  return reactorTextureStore.maps[`${slot}:${map}`];
 }

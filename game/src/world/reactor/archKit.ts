@@ -22,7 +22,7 @@ import type {
   ReactorSite, ReactorTower,
 } from '../../gen/reactor/reactorTypes';
 import type {RailRun} from '../../gen/levels';
-import type {ReactorPiece} from './archAssets';
+import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
 
 /** Unit geometries of the kit (archMeshes.ts kitGeometry). */
 export type KitGeo = 'box' | 'ibeam' | 'cyl' | 'tube' | 'stripe' | 'plane' | 'bulb' | 'cage' | 'blade' | 'wheel';
@@ -42,11 +42,13 @@ export interface KitGenerator {
   body: KitRef[];
   /** Panel lamps: [off (red), running (green)]. */
   lamps: [KitRef, KitRef];
-  /** Model placement (when 'aux-generator' is delivered). */
+  /** Placement (the model's, when the 'generator' model is used: its index in modelPlacements.get('generator'), else -1). */
   place: THREE.Matrix4;
   size: {w: number; d: number; h: number};
+  modelIndex: number;
 }
-export interface KitLamp { band: number; level: number; m: THREE.Matrix4; dead: boolean; tint: number }
+/** A lamp's emissive part (procedural bulb in a cage, or the lens overlay of a flood-lamp model): per-tier material (setTierPower). */
+export interface KitLamp { band: number; level: number; m: THREE.Matrix4; dead: boolean; tint: number; model: boolean }
 
 /** Merged unique geometry (vessel, hook, gantries) in world space, per material. */
 export interface KitMerged { mat: KitMat; geos: THREE.BufferGeometry[]; band: number; name: string }
@@ -97,7 +99,7 @@ export function polyDist(poly: readonly {x: number; z: number}[], x: number, z: 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Matrix helpers (scratch vectors; the plan is built once per level on the loading screen)
 
-const _a = new THREE.Vector3(), _b = new THREE.Vector3(), _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
+const _x = new THREE.Vector3(), _y = new THREE.Vector3(), _z = new THREE.Vector3();
 const _q = new THREE.Quaternion(), _s = new THREE.Vector3(), _p = new THREE.Vector3();
 
 type P3 = {x: number; y: number; z: number};
@@ -235,14 +237,30 @@ export class KitPlan {
   box(mat: KitMat, x: number, y: number, z: number, sx: number, sy: number, sz: number, yaw = 0, color?: number): KitRef | null {
     return this.add('box', mat, boxMatrix(x, y, z, sx, sy, sz, yaw), this.bandOf(y - sy / 2 + 0.05), color);
   }
-  lamp(x: number, y: number, z: number, level?: number): void {
+  /**
+   * A caged industrial lamp MOUNTED at (x, y, z) on whatever lies behind it (wall, post, pipe bank), its head out along `n`: the
+   * flood-lamp model when `model` (pit walls, catwalks, gantries — up to its cap; callers go top-down), else a cheap cage + bulb.
+   */
+  lamp(x: number, y: number, z: number, n: {x: number; z: number}, level?: number, model = false): void {
     if (this.lamps.length >= KIT.maxLamps) return;
     const band = this.bandOf(y);
     const lv = level ?? this.tiers[band]?.level ?? 0;
     const h = kitHash(x, y, z, this.seed);
-    const m = boxMatrix(x, y, z, 0.2, 0.26, 0.2);
-    this.lamps.push({band, level: lv, m, dead: h < 0.1, tint: 0.82 + 0.18 * kitHash(z, x, 3)});
-    this.add('cage', 'steelDark', boxMatrix(x, y, z, 0.26, 0.34, 0.26), band);
+    const dead = h < 0.1, tint = 0.82 + 0.18 * kitHash(z, x, 3);
+    const nl = Math.hypot(n.x, n.z) || 1, nx = n.x / nl, nz = n.z / nl, yaw = Math.atan2(nx, nz); // local +Z -> n
+    if (model && this.canModel('floodLamp')) {
+      const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[], lens = A.lens as readonly number[];
+      // model origin: its wall plate (local z = plate[2] < 0, centre height plate[1]) on the mount point
+      const ox = x - nx * plate[2], oz = z - nz * plate[2], oy = y - plate[1];
+      this.placeModel('floodLamp', boxMatrix(ox, oy, oz, 1, 1, 1, yaw), band);
+      const d = lens[2] + 0.008;
+      this.lamps.push({band, level: lv, m: boxMatrix(ox + nx * d, oy + lens[1], oz + nz * d, A.lensW as number, A.lensH as number, 0.03, yaw), dead, tint, model: true});
+    } else {
+      const cx = x + nx * 0.17, cz = z + nz * 0.17;
+      this.member('box', 'steelDark', {x, y: y + 0.12, z}, {x: cx, y: y + 0.12, z: cz}, 0.05, 0.05); // bracket arm
+      this.lamps.push({band, level: lv, m: boxMatrix(cx, y, cz, 0.2, 0.26, 0.2, yaw), dead, tint, model: false});
+      this.add('cage', 'steelDark', boxMatrix(cx, y, cz, 0.26, 0.34, 0.26, yaw), band);
+    }
     this.stats.lamps++;
   }
   placeModel(piece: ReactorPiece, m: THREE.Matrix4, band: number, size?: readonly [number, number, number]): void {
@@ -250,7 +268,12 @@ export class KitPlan {
     if (!l) this.modelPlacements.set(piece, (l = []));
     l.push(size ? {m, band, size} : {m, band});
   }
+  /** The piece's model is loaded (arch.ts: KitOptions.models). */
   usesModel(piece: ReactorPiece): boolean { return !!this.opts.models?.has(piece); }
+  /** The model is loaded and its per-level cap (REACTOR_MODELS[piece].cap) is not reached yet. */
+  canModel(piece: ReactorPiece, more = 1): boolean {
+    return this.usesModel(piece) && (this.modelPlacements.get(piece)?.length ?? 0) + more <= REACTOR_MODELS[piece].cap;
+  }
 
   /** Total instances over every part. */
   get instanceCount(): number { let n = 0; for (const p of this.parts.values()) n += p.list.length; return n + this.lamps.length; }
@@ -262,6 +285,7 @@ export function planReactorKit(info: ReactorInfo, opts: KitOptions = {}): KitPla
   const step = (fn: () => void, what: string) => { try { fn(); } catch (e) { console.warn(`reactor kit: ${what} skipped`, e); } };
   step(() => planWallRibs(plan), 'wall ribs');
   step(() => planMarkers(plan), 'markers');
+  step(() => planWallLamps(plan), 'wall lamps'); // first: the flood-lamp model's cap goes to the pit walls, top tier down
   step(() => { for (const d of info.decks) planDeck(plan, d); }, 'decks');
   step(() => { for (const t of info.towers) planTower(plan, t); }, 'towers');
   step(() => planCrane(plan, info.crane), 'crane');
@@ -272,7 +296,6 @@ export function planReactorKit(info: ReactorInfo, opts: KitOptions = {}): KitPla
   step(() => planVessel(plan, info.core), 'vessel');
   step(() => { for (const s of info.sites) planSite(plan, s); }, 'sites');
   step(() => { for (const s of info.screens) planScreen(plan, s); }, 'screens');
-  step(() => planWallLamps(plan), 'wall lamps');
   step(() => { if (opts.rails) planRails(plan, opts.rails); }, 'rails');
   return plan;
 }
@@ -355,10 +378,8 @@ function planWallLamps(plan: KitPlan): void {
       const tx = (e.b.x - e.a.x) / e.len, tz = (e.b.z - e.a.z) / e.len;
       for (let k = 0; k < n; k++) {
         const s = (e.len * (k + 0.5)) / n;
-        const x = e.a.x + tx * s + e.nx * 0.45, z = e.a.z + tz * s + e.nz * 0.45;
-        // a short bracket arm from the wall
-        plan.member('box', 'steelDark', {x: x - e.nx * 0.42, y: y + 0.22, z: z - e.nz * 0.42}, {x, y: y + 0.22, z}, 0.06, 0.06);
-        plan.lamp(x, y, z, t.level);
+        // on the wall face (flood-lamp model while its cap lasts: tiers are visited top-down)
+        plan.lamp(e.a.x + tx * s + e.nx * 0.02, y, e.a.z + tz * s + e.nz * 0.02, {x: e.nx, z: e.nz}, t.level, true);
       }
     }
   }
@@ -491,7 +512,7 @@ function planDeck(plan: KitPlan, d: ReactorDeck): void {
       const n = Math.floor(e.len / KIT.lampPitch);
       for (let k = 0; k < n; k++) {
         const s = (k + 0.5) * (e.len / n);
-        plan.lamp(e.x0 + tx * s + e.nx * 0.12, d.y + 1.28, e.z0 + tz * s + e.nz * 0.12, d.level);
+        plan.lamp(e.x0 + tx * s + e.nx * 0.05, d.y + 1.18, e.z0 + tz * s + e.nz * 0.05, {x: e.nx, z: e.nz}, d.level);
       }
     }
   }
@@ -519,7 +540,7 @@ function planTower(plan: KitPlan, t: ReactorTower): void {
       if (plan.member('box', 'steel', A(ya + 0.15), B(yb - 0.2), KIT.brace, KIT.brace)) n++;
       if (plan.member('box', 'steel', B(ya + 0.15), A(yb - 0.2), KIT.brace, KIT.brace)) n++;
     }
-    if (s % 2 === 1) plan.lamp(t.x + t.hx + 0.25, ya + sh * 0.5, t.z, plan.tiers[plan.bandOf(ya + sh * 0.5)]?.level);
+    if (s % 2 === 1) plan.lamp(t.x + t.hx + KIT.leg / 2, ya + sh * 0.5, t.z + t.hz, {x: 1, z: 0}, plan.tiers[plan.bandOf(ya + sh * 0.5)]?.level);
   }
   // foot plates
   for (const [cx, cz] of corners) plan.box('concrete', t.x + cx, t.y0 + 0.15, t.z + cz, 0.8, 0.3, 0.8);
@@ -562,22 +583,24 @@ function planCrane(plan: KitPlan, c: ReactorCrane): void {
   // walkway + handrail along one girder
   cnt(plan.member('box', 'grating', W(ba + 1.55, c.railY + 0.32, c.b0), W(ba + 1.55, c.railY + 0.32, c.b1), 0.75, 0.05));
   cnt(plan.member('box', 'yellow', W(ba + 1.9, c.railY + 1.35, c.b0), W(ba + 1.9, c.railY + 1.35, c.b1), 0.05, 0.05));
-  // trolley (GLB 'reactor-crane-trolley' when delivered) on top of the girders
-  const tb = c.trolleyAt, ty = c.railY + 1.65;
+  // trolley (the 'craneTrolley' model when loaded: real size, its length along the runway axis, spanning both girders) on top
+  const tb = c.trolleyAt, ty = c.railY + 0.95 + 1.35 / 2;
   const tp = W(ba, ty, tb);
-  if (plan.usesModel('crane-trolley')) plan.placeModel('crane-trolley', boxMatrix(tp.x, ty, tp.z, 1, 1, 1, ax ? 0 : Math.PI / 2), plan.bandOf(ty));
+  if (plan.canModel('craneTrolley')) { plan.placeModel('craneTrolley', boxMatrix(tp.x, ty, tp.z, 1, 1, 1, ax ? 0 : Math.PI / 2), plan.bandOf(ty)); n++; }
   else {
     cnt(plan.add('box', 'yellow', boxMatrix(tp.x, ty + 0.55, tp.z, ax ? 2.4 : 2.6, 1.1, ax ? 2.6 : 2.4), plan.bandOf(ty)));
     cnt(plan.add('cyl', 'steelDark', cylMatrix(W(ba - 1.0, ty + 0.75, tb), W(ba + 1.0, ty + 0.75, tb), 0.9), plan.bandOf(ty))); // hoist drum
     cnt(plan.add('box', 'black', boxMatrix(tp.x, ty + 1.25, tp.z, ax ? 1.2 : 1.0, 0.4, ax ? 1.0 : 1.2), plan.bandOf(ty))); // motor
   }
-  // hoist ropes down to the hook block, the block and hook (GLB 'reactor-crane-hook' when delivered)
-  const blockTop = c.hookY + 2.0;
+  // hoist ropes down to the hook block, the block and hook (the 'craneHook' model when loaded: real size, rope stubs on top,
+  // its bottom at hookY)
+  const hookModel = plan.canModel('craneHook');
+  const blockTop = c.hookY + (hookModel ? REACTOR_MODELS.craneHook.dims[1] - 0.05 : 2.0);
   if (ty - blockTop > 0.5) {
-    for (const [oa, ob] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.12], [0.18, 0.12]]) cnt(plan.cyl('tube', 'black', W(ba + oa, ty, tb + ob), W(ba + oa * 0.7, blockTop, tb + ob * 0.7), 0.045));
+    for (const [oa, ob] of [[-0.18, -0.12], [0.18, -0.12], [-0.18, 0.12], [0.18, 0.12]]) cnt(plan.cyl('tube', 'black', W(ba + oa, ty + 0.1, tb + ob), W(ba + oa * 0.7, blockTop, tb + ob * 0.7), 0.045));
   }
   const hp = W(ba, c.hookY, tb);
-  if (plan.usesModel('crane-hook')) plan.placeModel('crane-hook', boxMatrix(hp.x, blockTop, hp.z, 1, 1, 1, ax ? 0 : Math.PI / 2), plan.bandOf(c.hookY));
+  if (hookModel) { plan.placeModel('craneHook', boxMatrix(hp.x, c.hookY, hp.z, 1, 1, 1, ax ? 0 : Math.PI / 2), plan.bandOf(c.hookY)); n++; }
   else {
     cnt(plan.add('box', 'yellow', boxMatrix(hp.x, c.hookY + 1.45, hp.z, ax ? 0.9 : 0.5, 1.1, ax ? 0.5 : 0.9), plan.bandOf(c.hookY)));
     cnt(plan.add('cyl', 'black', cylMatrix(W(ba, c.hookY + 1.55, tb - 0.3), W(ba, c.hookY + 1.55, tb + 0.3), 0.75), plan.bandOf(c.hookY))); // sheave
@@ -615,19 +638,28 @@ function planPipeBank(plan: KitPlan, b: ReactorPipeBank): void {
   if (!(L > 1 && H > 2)) return;
   const tx = (b.x1 - b.x0) / L, tz = (b.z1 - b.z0) / L;
   const at = (s: number, off: number, y: number): P3 => ({x: b.x0 + tx * s + b.nx * off, y, z: b.z0 + tz * s + b.nz * off});
-  const D = Math.max(0.8, b.depth);
-  if (plan.usesModel('pipe-bank')) {
-    // stackable 4 m modules (arch.ts fits each to dims): along the wall every 4 m, up every 4 m
-    const nu = Math.max(1, Math.round(L / 4)), nv = Math.max(1, Math.round(H / 4));
+  const PB = REACTOR_MODELS.pipeBank.dims;
+  const D = Math.max(0.8, b.depth, plan.usesModel('pipeBank') ? PB[2] : 0);
+  // stackable 4 m modules ('pipeBank' model: real height, front +Z = toward the pit, back on the wall, flat-cut ends) from the TOP
+  // down while the per-level cap lasts (the clear upper air); below, the procedural organ pipes (the gassed depths)
+  let yProc = b.y1;
+  if (plan.usesModel('pipeBank')) {
+    const nu = Math.max(1, Math.round(L / PB[0])), sx = L / (nu * PB[0]);
     const yaw = Math.atan2(b.nx, b.nz);
-    for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
-      const p = at((i + 0.5) * (L / nu), D / 2, b.y0 + j * (H / nv));
-      plan.placeModel('pipe-bank', boxMatrix(p.x, p.y, p.z, L / nu, H / nv, D, yaw), plan.bandOf(p.y + 0.1), [L / nu, H / nv, D]);
+    if (sx > 0.8 && sx < 1.25) {
+      for (let y = b.y1 - PB[1]; y >= b.y0 - 0.01 && plan.canModel('pipeBank', nu); y -= PB[1]) {
+        for (let i = 0; i < nu; i++) {
+          const p = at((i + 0.5) * (L / nu), PB[2] / 2 + 0.02, y);
+          plan.placeModel('pipeBank', boxMatrix(p.x, y, p.z, sx, 1, 1, yaw), plan.bandOf(y + 0.1));
+        }
+        yProc = y;
+      }
     }
-  } else {
+  }
+  if (yProc > b.y0 + 0.5) {
     // two rows: big pipes against the wall, smaller ones in front (organ pipes of several diameters)
     const rows: {off: number; sizes: number[]}[] = [{off: D * 0.32, sizes: [1.15, 0.9, 1.3, 0.75, 1.0]}, {off: D * 0.74, sizes: [0.42, 0.55, 0.36, 0.62, 0.48]}];
-    const cuts = [b.y1, ...plan.tiers.map(t => t.baseY).filter(y => y < b.y1 && y > b.y0), b.y0].sort((p, q) => q - p);
+    const cuts = [yProc, ...plan.tiers.map(t => t.baseY).filter(y => y < yProc && y > b.y0), b.y0].sort((p, q) => q - p);
     for (const [ri, row] of rows.entries()) {
       let s = 0.3 + kitHash(ri, plan.seed) * 0.3;
       let k = 0;
@@ -636,8 +668,8 @@ function planPipeBank(plan: KitPlan, b: ReactorPipeBank): void {
         const d = Math.min(row.sizes[k++ % row.sizes.length] * (0.9 + 0.2 * h), D * (ri ? 0.5 : 0.62));
         const c = s + d / 2;
         if (c + d / 2 > L - 0.1) break;
-        // organ tops: most run to the top, some stop short with a cap
-        const top = h < 0.28 ? b.y1 - 3 - Math.round(h * 30) : b.y1;
+        // organ tops: most run to the top, some stop short with a cap (under the model modules: all run into them)
+        const top = yProc < b.y1 ? yProc : h < 0.28 ? b.y1 - 3 - Math.round(h * 30) : b.y1;
         // split at the tier heights (per-band chunks)
         for (let i = 0; i + 1 < cuts.length; i++) {
           const y1 = Math.min(cuts[i], top), y0 = cuts[i + 1];
@@ -645,7 +677,7 @@ function planPipeBank(plan: KitPlan, b: ReactorPipeBank): void {
           plan.cyl('cyl', 'pipe', at(c, row.off, y0), at(c, row.off, y1), d);
         }
         plan.stats.pipes++;
-        if (top < b.y1) plan.cyl('cyl', 'steelDark', at(c, row.off, top), at(c, row.off, top + 0.35), d * 1.12);
+        if (top < b.y1 && yProc >= b.y1) plan.cyl('cyl', 'steelDark', at(c, row.off, top), at(c, row.off, top + 0.35), d * 1.12);
         // flanges every ~3.6 m (staggered per pipe)
         for (let y = b.y0 + 1 + h * KIT.flangePitch; y < top - 0.4; y += KIT.flangePitch) {
           plan.cyl('cyl', 'steelDark', at(c, row.off, y - 0.09), at(c, row.off, y + 0.09), d * 1.24);
@@ -674,7 +706,7 @@ function planPipeBank(plan: KitPlan, b: ReactorPipeBank): void {
       plan.member('box', 'steel', at(s, o1, y), at(s, o1, y + 1.05), 0.05, 0.05);
       if (k % 2 === 0) plan.member('box', 'steelDark', at(s, o1 - 0.1, y - 0.08), at(s, D * 0.2, y - 1.1), 0.1, 0.1);
     }
-    for (let s = 2; s < L - 1; s += 4.5) plan.lamp(at(s, o1 + 0.1, y + 1.3).x, y + 1.3, at(s, o1 + 0.1, y).z);
+    for (let s = 2; s < L - 1; s += 4.5) { const p = at(s, o1 + 0.03, y + 1.15); plan.lamp(p.x, p.y, p.z, {x: b.nx, z: b.nz}, undefined, true); }
     plan.stats.catwalks++;
   }
 }
@@ -687,24 +719,35 @@ function planFan(plan: KitPlan, f: ReactorFan): void {
   const nl = Math.hypot(f.nx, f.nz) || 1, nx = f.nx / nl, nz = f.nz / nl;
   const hub = new THREE.Vector3(f.x, f.y, f.z);
   const P = (o: number, dy = 0): P3 => ({x: f.x + nx * o, y: f.y + dy, z: f.z + nz * o});
-  // duct + dark back disc + square frame plate + motor hub + guard ring
-  plan.cyl('tube', 'steelDark', P(-0.7), P(0.35), R * 2.16);
-  plan.cyl('cyl', 'black', P(-0.62), P(-0.56), R * 2.1);
   const yaw = Math.atan2(nx, nz);
-  const fw = R * 2 + 0.7;
-  for (const [lx, ly, sx, sy] of [[0, R + 0.2, fw, 0.4], [0, -R - 0.2, fw, 0.4], [R + 0.2, 0, 0.4, fw], [-R - 0.2, 0, 0.4, fw]] as const) {
-    const c = Math.cos(yaw), s = Math.sin(yaw);
-    plan.add('box', 'steelDark', boxMatrix(f.x + lx * c + nx * 0.05, f.y + ly, f.z - lx * s + nz * 0.05, sx, sy, 0.16, yaw), plan.bandOf(f.y - R));
+  // the hub point is on the wall face; the housing stands out from it along n
+  let bladeAt = 0.12, bladeR = R * 0.95;
+  if (plan.canModel('fanHousing')) {
+    // 'fanHousing' model (empty ring facing +Z): uniform scale so its ring opening matches the fan radius, back plate on the wall
+    const A = REACTOR_MODELS.fanHousing.anchors!, s = R / (A.ringR as number);
+    const back = -(A.back as number) * s;
+    plan.placeModel('fanHousing', boxMatrix(f.x + nx * back, f.y - (A.ringY as number) * s, f.z + nz * back, s, s, s, yaw), plan.bandOf(f.y - R));
+    bladeAt = back + (A.bladeZ as number) * s;
+    bladeR = (A.bladeR as number) * s;
+  } else {
+    // duct + dark back disc + square frame plate + motor hub + guard ring
+    plan.cyl('tube', 'steelDark', P(-0.7), P(0.35), R * 2.16);
+    plan.cyl('cyl', 'black', P(-0.62), P(-0.56), R * 2.1);
+    const fw = R * 2 + 0.7;
+    for (const [lx, ly, sx, sy] of [[0, R + 0.2, fw, 0.4], [0, -R - 0.2, fw, 0.4], [R + 0.2, 0, 0.4, fw], [-R - 0.2, 0, 0.4, fw]] as const) {
+      const c = Math.cos(yaw), s = Math.sin(yaw);
+      plan.add('box', 'steelDark', boxMatrix(f.x + lx * c + nx * 0.05, f.y + ly, f.z - lx * s + nz * 0.05, sx, sy, 0.16, yaw), plan.bandOf(f.y - R));
+    }
+    plan.cyl('cyl', 'machine', P(-0.4), P(0.05), R * 0.42);
+    plan.cyl('tube', 'black', P(0.42), P(0.48), R * 2.12);
   }
-  plan.cyl('cyl', 'machine', P(-0.4), P(0.05), R * 0.42);
-  plan.cyl('tube', 'black', P(0.42), P(0.48), R * 2.12);
-  // hazard ring label: a yellow band below the housing
-  plan.add('box', 'yellow', boxMatrix(f.x + nx * 0.1, f.y - R - 0.62, f.z + nz * 0.1, fw * 0.8, 0.16, 0.05, yaw), plan.bandOf(f.y - R - 0.7));
-  // rotor basis: local Z = the outward normal, Y up
+  // hazard band below the housing
+  plan.add('box', 'yellow', boxMatrix(f.x + nx * 0.06, f.y - R - 0.75, f.z + nz * 0.06, R * 1.6, 0.16, 0.05, yaw), plan.bandOf(f.y - R - 0.8));
+  // rotor basis: local Z = the outward normal, Y up (archMeshes 'blade': unit radius in local XY)
   _z.set(nx, 0, nz); _y.set(0, 1, 0); _x.crossVectors(_y, _z);
   const basis = new THREE.Matrix4().makeBasis(_x.clone(), _y.clone(), _z.clone());
-  basis.setPosition(f.x + nx * 0.12, f.y, f.z + nz * 0.12);
-  plan.fans.push({id: f.id, zone: f.zone, level: f.level, hub, basis, radius: R});
+  basis.setPosition(f.x + nx * bladeAt, f.y, f.z + nz * bladeAt);
+  plan.fans.push({id: f.id, zone: f.zone, level: f.level, hub, basis, radius: bladeR});
   plan.stats.fans++;
 }
 
@@ -718,9 +761,16 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
   const band = plan.bandOf(g.y + 0.1);
   const body: KitRef[] = [];
   const push = (r: KitRef | null) => { if (r) body.push(r); };
-  const place = localBox(o, yaw, 0, 0, 0, 1, 1, 1);
-  if (plan.usesModel('aux-generator')) plan.placeModel('aux-generator', place, band, [w, h, d]);
-  else {
+  let place = localBox(o, yaw, 0, 0, 0, 1, 1, 1), modelIndex = -1;
+  if (plan.canModel('generator')) {
+    // the 'generator' model (real size 5.6 x 2.48 x 1.67, length X): one uniform scale inside the record's footprint; its own control
+    // box is on its +Z long side, so it turns to face the start panel's side
+    const GD = REACTOR_MODELS.generator.dims, s = Math.min(1.25, w / GD[0], h / GD[1], d / GD[2]);
+    const lz = (g.panel.x - g.x) * Math.sin(yaw) + (g.panel.z - g.z) * Math.cos(yaw);
+    place = boxMatrix(g.x, g.y, g.z, s, s, s, lz >= 0 ? yaw : yaw + Math.PI);
+    modelIndex = plan.modelPlacements.get('generator')?.length ?? 0;
+    plan.placeModel('generator', place, band, [GD[0] * s, GD[1] * s, GD[2] * s]);
+  } else {
     plan.add('box', 'steelDark', localBox(o, yaw, 0, 0.12, 0, w, 0.24, d), band); // skid
     push(plan.add('box', 'machine', localBox(o, yaw, -w * 0.1, 0.24 + h * 0.27, 0, w * 0.46, h * 0.54, d * 0.72), band)); // engine block
     push(plan.add('box', 'steelDark', localBox(o, yaw, -w * 0.1, 0.24 + h * 0.6, 0, w * 0.42, h * 0.12, d * 0.5), band)); // rocker covers
@@ -737,11 +787,12 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
   const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
   const pyaw = Math.atan2(fx, fz);
   plan.add('box', 'machine', boxMatrix(px - fx * 0.12, py, pz - fz * 0.12, 0.62, 0.78, 0.26, pyaw), band);
+  if (py - 0.39 > g.y + 0.1) plan.cyl('tube', 'steelDark', {x: px - fx * 0.12, y: g.y, z: pz - fz * 0.12}, {x: px - fx * 0.12, y: py - 0.39, z: pz - fz * 0.12}, 0.09); // its post
   plan.add('box', 'yellow', boxMatrix(px + fx * 0.02, py - 0.24, pz + fz * 0.02, 0.12, 0.2, 0.06, pyaw), band); // start lever
   const c = Math.cos(pyaw), s = Math.sin(pyaw);
   const lamp = (lx: number, color: number): KitRef => plan.add('bulb', 'panelLamp', boxMatrix(px + lx * c + fx * 0.03, py + 0.24, pz - lx * s + fz * 0.03, 0.08, 0.08, 0.08), band, color)!;
   const lamps: [KitRef, KitRef] = [lamp(-0.14, 0xff3020), lamp(0.14, 0x103010)];
-  plan.generators.push({id: g.id, zone: g.zone, level: g.level, body, lamps, place, size: {w, d, h}});
+  plan.generators.push({id: g.id, zone: g.zone, level: g.level, body, lamps, place, size: {w, d, h}, modelIndex});
   plan.stats.generators++;
   // cable run to the zone's fans: a tray + three cables along the polyline
   for (let i = 0; i + 1 < g.cable.length; i++) {
@@ -767,14 +818,29 @@ export function vesselDims(c: ReactorCore): {rv: number; plinthH: number; yd: nu
 
 function planVessel(plan: KitPlan, c: ReactorCore): void {
   if (!(c.radius > 0.5 && c.y1 > c.y0 + 2)) return;
-  const {rv, plinthH, yd, domeH} = vesselDims(c);
+  let {rv, plinthH, yd, domeH} = vesselDims(c);
   const band = plan.bandOf(c.y0 + 0.1);
   const steel: THREE.BufferGeometry[] = [], vessel: THREE.BufferGeometry[] = [], glow: THREE.BufferGeometry[] = [], grate: THREE.BufferGeometry[] = [];
   const T = (g: THREE.BufferGeometry, y: number) => { g.translate(c.x, y, c.z); return g; };
-  // plinth (stepped) + a glowing slot ring on top of it
-  steel.push(T(new THREE.CylinderGeometry(c.radius, c.radius * 1.03, plinthH, 40, 1, false), c.y0 + plinthH / 2));
-  glow.push(T(new THREE.CylinderGeometry(rv * 1.05, rv * 1.05, 0.14, 40, 1, true), c.y0 + plinthH + 0.07));
-  if (!plan.usesModel('vessel')) {
+  const model = plan.canModel('vessel');
+  let gantryLow = c.y0 + 3.4;
+  if (model) {
+    // the 'vessel' model (dome + CRDM housings + 4 nozzles + hazard plinth; 14 m across the nozzles): one uniform scale so it spans
+    // 2 x ReactorCore.radius (the solid round obstruction); glow parts at its measured seam / plinth
+    const A = REACTOR_MODELS.vessel.anchors!, s = (2 * c.radius) / (A.width as number);
+    plan.placeModel('vessel', boxMatrix(c.x, c.y0, c.z, s, s, s), band, [REACTOR_MODELS.vessel.dims[0] * s, REACTOR_MODELS.vessel.dims[1] * s, REACTOR_MODELS.vessel.dims[2] * s]);
+    rv = (A.bodyR as number) * s;
+    glow.push(T(new THREE.CylinderGeometry(rv * 1.025, rv * 1.025, 0.2 * s, 40, 1, true), c.y0 + (A.seamY as number) * s));
+    glow.push(T(new THREE.CylinderGeometry((A.plinthR as number) * s * 1.006, (A.plinthR as number) * s * 1.006, 0.22 * s, 48, 1, true), c.y0 + 0.42 * s));
+    gantryLow = Math.max(gantryLow, c.y0 + 4.45 * s);
+    yd = c.y0 + 6.6 * s; domeH = REACTOR_MODELS.vessel.dims[1] * s - 6.6 * s;
+    plan.stats.vesselParts += 1;
+  } else {
+    // plinth (stepped) + a glowing slot ring on top of it
+    steel.push(T(new THREE.CylinderGeometry(c.radius, c.radius * 1.03, plinthH, 40, 1, false), c.y0 + plinthH / 2));
+    glow.push(T(new THREE.CylinderGeometry(rv * 1.05, rv * 1.05, 0.14, 40, 1, true), c.y0 + plinthH + 0.07));
+  }
+  if (!model) {
     const bodyH = yd - (c.y0 + plinthH);
     vessel.push(T(new THREE.CylinderGeometry(rv, rv * 1.02, bodyH, 40, 1, true), c.y0 + plinthH + bodyH / 2));
     const dome = new THREE.SphereGeometry(rv, 40, 12, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -814,11 +880,10 @@ function planVessel(plan: KitPlan, c: ReactorCore): void {
       plan.add('cyl', 'steelDark', cylMatrix({x: c.x + dx * (rv + 1.45), y, z: c.z + dz * (rv + 1.45)}, {x: c.x + dx * (rv + 1.7), y, z: c.z + dz * (rv + 1.7)}, 1.3), band);
     }
     plan.stats.vesselParts += 6;
-  } else {
-    plan.placeModel('vessel', boxMatrix(c.x, c.y0 + plinthH, c.z, 1, 1, 1), band, [rv * 2, c.y1 - c.y0 - plinthH, rv * 2]);
   }
-  // ring gantries (above head height on the core floor), with brackets, rails, posts, lamps
-  const rings = [c.y0 + 3.4, yd - 0.9].filter((y, i, a) => i === 0 || y > a[0] + 2.6);
+  void domeH;
+  // ring gantries (above head height on the core floor; with the model above its nozzle band), brackets, rails, posts, lamps
+  const rings = [gantryLow, yd - 0.9].filter((y, i, a) => i === 0 || y > a[0] + 2.6);
   for (const y of rings) {
     const r0 = rv + 0.25, r1 = rv + 1.45;
     const prof = [new THREE.Vector2(r0, -0.06), new THREE.Vector2(r1, -0.06), new THREE.Vector2(r1, 0.06), new THREE.Vector2(r0, 0.06), new THREE.Vector2(r0, -0.06)];
@@ -829,7 +894,7 @@ function planVessel(plan: KitPlan, c: ReactorCore): void {
       const a = (k / 24) * Math.PI * 2, ca = Math.cos(a), sa = Math.sin(a);
       plan.add('box', 'steel', memberMatrix({x: c.x + ca * r1, y, z: c.z + sa * r1}, {x: c.x + ca * r1, y: y + 1.05, z: c.z + sa * r1}, 0.05, 0.05), band);
       if (k % 2 === 0) plan.add('box', 'steelDark', memberMatrix({x: c.x + ca * r1 * 0.98, y: y - 0.08, z: c.z + sa * r1 * 0.98}, {x: c.x + ca * rv, y: y - 1.1, z: c.z + sa * rv}, 0.12, 0.12), band);
-      if (k % 6 === 3) plan.lamp(c.x + ca * (r1 + 0.1), y + 1.3, c.z + sa * (r1 + 0.1));
+      if (k % 6 === 3) plan.lamp(c.x + ca * (r1 + 0.03), y + 1.2, c.z + sa * (r1 + 0.03), {x: ca, z: sa}, undefined, true);
     }
     plan.stats.gantries++;
   }
@@ -845,14 +910,22 @@ function planVessel(plan: KitPlan, c: ReactorCore): void {
 /** The machine piece of a control id ('fuse-0' / 'breaker' -> switchgear, 'pump', 'valve', 'rods' / 'keyswitch' -> console). */
 export function pieceOfControl(id: string): ReactorPiece | null {
   if (/^(fuse|breaker|switch)/.test(id)) return 'switchgear';
-  if (/^pump/.test(id)) return 'coolant-pump';
-  if (/^valve/.test(id)) return 'valve';
-  if (/^(rods|keyswitch|console)/.test(id)) return 'control-console';
+  if (/^pump/.test(id)) return 'coolantPump';
+  if (/^valve/.test(id)) return 'coolantValve';
+  if (/^(rods|keyswitch|console)/.test(id)) return 'controlConsole';
   return null;
 }
 
+/** Procedural stand-in sizes (W x H x D, m) when a machine's model is not loaded. */
+const MACHINE_DIMS: Record<'switchgear' | 'coolantPump' | 'coolantValve' | 'controlConsole', readonly [number, number, number]> = {
+  switchgear: [0.8, 2.1, 0.6], coolantPump: [1.8, 1.3, 1.1], coolantValve: [0.9, 1.6, 0.6], controlConsole: [1.6, 1.15, 0.85],
+};
+
 function planSite(plan: KitPlan, site: ReactorSite): void {
   const floorY = plan.info.tiers.find(t => t.level === site.level)?.baseY;
+  // one machine per piece and facing: a console / pump / valve serves every control of its kind; the switchgear is a BANK of
+  // cabinet sections side by side (4-6, inside the room) behind its fuse / breaker controls
+  const seen = new Map<string, {x: number; z: number}[]>();
   for (const ctl of site.controls) {
     const piece = pieceOfControl(ctl.id);
     if (!piece) continue;
@@ -861,24 +934,25 @@ function planSite(plan: KitPlan, site: ReactorSite): void {
     if (fl < 0.05) { fx = -Math.sin(ctl.yaw); fz = -Math.cos(ctl.yaw); } else { fx /= fl; fz /= fl; }
     // the machine stands behind the control point (away from the stand), its front facing the player
     const yaw = Math.atan2(-fx, -fz);
-    const fy = floorY !== undefined && ctl.at.y - floorY < 2.5 && ctl.at.y >= floorY ? floorY : ctl.at.y - 1.1;
-    const dims = {switchgear: [0.8, 2.1, 0.6], 'coolant-pump': [1.8, 1.3, 1.1], valve: [0.9, 1.6, 0.6], 'control-console': [1.6, 1.15, 0.85]}[piece as 'switchgear'];
-    const [w, h, d] = dims;
+    const fy = floorY !== undefined && ctl.at.y - floorY < 2.5 && ctl.at.y >= floorY - 0.05 ? floorY : ctl.at.y - 1.1;
+    const model = plan.canModel(piece);
+    const [w, h, d] = model ? REACTOR_MODELS[piece].dims : MACHINE_DIMS[piece as keyof typeof MACHINE_DIMS];
     const cx = ctl.at.x + fx * (d / 2 + 0.02), cz = ctl.at.z + fz * (d / 2 + 0.02);
+    const key = `${piece}|${Math.round(yaw * 10)}`;
+    const prior = seen.get(key) ?? [];
+    // a machine of this kind facing this way already stands within its width: that one serves this control too
+    if (piece === 'switchgear' ? prior.length > 0 : prior.some(p => Math.hypot(p.x - cx, p.z - cz) < w * 0.6)) continue;
+    prior.push({x: cx, z: cz}); seen.set(key, prior);
     const band = plan.bandOf(fy + 0.1);
-    if (plan.usesModel(piece)) { plan.placeModel(piece, boxMatrix(cx, fy, cz, 1, 1, 1, yaw), band, [w, h, d]); plan.stats.machines++; continue; }
+    if (piece === 'switchgear') { planSwitchgearBank(plan, site, {x: cx, z: cz}, fy, yaw, model, prior); continue; }
+    if (model) { plan.placeModel(piece, boxMatrix(cx, fy, cz, 1, 1, 1, yaw), band, [w, h, d]); plan.stats.machines++; continue; }
     const o = {x: cx, y: fy, z: cz};
-    if (piece === 'switchgear') {
-      plan.add('box', 'machine', localBox(o, yaw, 0, h / 2, 0, w, h, d), band);
-      plan.add('box', 'steelDark', localBox(o, yaw, 0, h - 0.05, 0, w + 0.04, 0.1, d + 0.04), band);
-      plan.add('box', 'black', localBox(o, yaw, 0, ctl.at.y - fy, d / 2 + 0.005, w * 0.6, 0.34, 0.02), band); // fuse / breaker panel
-      plan.add('box', 'yellow', localBox(o, yaw, w * 0.3, h * 0.82, d / 2 + 0.006, 0.18, 0.12, 0.012), band); // warning plate
-    } else if (piece === 'coolant-pump') {
+    if (piece === 'coolantPump') {
       plan.add('box', 'steelDark', localBox(o, yaw, 0, 0.1, 0, w, 0.2, d), band);
       plan.add('cyl', 'machine', cylMatrix(localPt(o, yaw, -w * 0.45, 0.2 + d * 0.38, 0), localPt(o, yaw, 0.05, 0.2 + d * 0.38, 0), d * 0.76), band); // motor
       plan.add('cyl', 'pipe', cylMatrix(localPt(o, yaw, 0.15, 0.2 + h * 0.4, -d * 0.4), localPt(o, yaw, 0.15, 0.2 + h * 0.4, d * 0.4), h * 0.62), band); // volute
       plan.add('tube', 'pipe', cylMatrix(localPt(o, yaw, 0.6, 0.2 + h * 0.4, 0), localPt(o, yaw, 0.6, h + 1.4, 0), 0.32), band); // discharge riser
-    } else if (piece === 'valve') {
+    } else if (piece === 'coolantValve') {
       plan.add('tube', 'pipe', cylMatrix(localPt(o, yaw, 0, 0, -d * 0.2), localPt(o, yaw, 0, h, -d * 0.2), 0.36), band);
       plan.add('cyl', 'steelDark', cylMatrix(localPt(o, yaw, 0, ctl.at.y - fy - 0.2, -d * 0.2), localPt(o, yaw, 0, ctl.at.y - fy + 0.15, -d * 0.2), 0.55), band); // valve body
       plan.add('tube', 'steelDark', cylMatrix(localPt(o, yaw, 0, ctl.at.y - fy, -d * 0.2), localPt(o, yaw, 0, ctl.at.y - fy, d * 0.42), 0.06), band); // stem
@@ -892,6 +966,53 @@ function planSite(plan: KitPlan, site: ReactorSite): void {
     }
     plan.stats.machines++;
   }
+}
+
+/** Cabinet sections per switchgear bank (the 'switchgear' model is ONE section: tiled side by side). */
+export const SWITCHGEAR_SECTIONS = {min: 4, max: 6} as const;
+
+/**
+ * A switchgear BANK facing `yaw` (front toward the controls' stand points), covering every fuse / breaker control of the site that
+ * faces the same way: 4-6 sections side by side along the wall, inside the room rect (fewer when the wall is shorter).
+ */
+function planSwitchgearBank(plan: KitPlan, site: ReactorSite, c: {x: number; z: number}, fy: number, yaw: number, model: boolean, _prior: {x: number; z: number}[]): void {
+  const [w, h, d] = model ? REACTOR_MODELS.switchgear.dims : MACHINE_DIMS.switchgear;
+  const tx = Math.cos(yaw), tz = -Math.sin(yaw); // the bank runs along the section's local X
+  const fx = -Math.sin(yaw), fz = -Math.cos(yaw); // into the wall (away from the player)
+  // the controls this bank serves (same piece + facing): their projections along the bank
+  const proj: number[] = [];
+  for (const ctl of site.controls) {
+    if (pieceOfControl(ctl.id) !== 'switchgear') continue;
+    let gx = ctl.at.x - ctl.stand.x, gz = ctl.at.z - ctl.stand.z;
+    const gl = Math.hypot(gx, gz) || 1; gx /= gl; gz /= gl;
+    if (gx * fx + gz * fz < 0.9) continue;
+    proj.push((ctl.at.x - c.x) * tx + (ctl.at.z - c.z) * tz);
+  }
+  if (!proj.length) proj.push(0);
+  // room extent along the bank line through c (0.1 m margin)
+  const r = site.rect, m = 0.1;
+  let s0 = -Infinity, s1 = Infinity;
+  for (const [p, t, lo, hi] of [[c.x, tx, r.x0 + m, r.x1 - m], [c.z, tz, r.z0 + m, r.z1 - m]] as const) {
+    if (Math.abs(t) < 1e-6) { if (p < lo - 0.5 || p > hi + 0.5) { s0 = 0; s1 = 0; } continue; }
+    const a = (lo - p) / t, b = (hi - p) / t;
+    s0 = Math.max(s0, Math.min(a, b)); s1 = Math.min(s1, Math.max(a, b));
+  }
+  if (!Number.isFinite(s0) || !Number.isFinite(s1) || s1 - s0 < w) { s0 = Math.min(...proj) - w / 2; s1 = Math.max(...proj) + w / 2; }
+  const need = Math.max(...proj) - Math.min(...proj) + w;
+  const n = Math.max(1, Math.min(SWITCHGEAR_SECTIONS.max, Math.max(Math.ceil(need / w - 1e-6), Math.min(SWITCHGEAR_SECTIONS.min, Math.floor((s1 - s0) / w + 1e-6)))));
+  const mid = (Math.min(...proj) + Math.max(...proj)) / 2;
+  const start = Math.max(s0, Math.min(s1 - n * w, mid - (n * w) / 2));
+  const band = plan.bandOf(fy + 0.1);
+  for (let k = 0; k < n; k++) {
+    const s = start + (k + 0.5) * w, x = c.x + tx * s, z = c.z + tz * s;
+    if (model && plan.canModel('switchgear')) { plan.placeModel('switchgear', boxMatrix(x, fy, z, 1, 1, 1, yaw), band, [w, h, d]); continue; }
+    const o = {x, y: fy, z};
+    plan.add('box', 'machine', localBox(o, yaw, 0, h / 2, 0, w - 0.02, h, d), band);
+    plan.add('box', 'steelDark', localBox(o, yaw, 0, h - 0.05, 0, w, 0.1, d + 0.04), band);
+    plan.add('box', 'black', localBox(o, yaw, 0, 1.2, d / 2 + 0.005, w * 0.6, 0.34, 0.02), band); // fuse / breaker panel
+    plan.add('box', 'yellow', localBox(o, yaw, w * 0.3, h * 0.82, d / 2 + 0.006, 0.18, 0.12, 0.012), band); // warning plate
+  }
+  plan.stats.machines += n;
 }
 
 function planScreen(plan: KitPlan, s: ReactorScreen): void {
