@@ -10,6 +10,7 @@ import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
 import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
+import type {WasteDecor} from './reactor/complex/wasteTypes'; // task reactor-expansion-20261101 (lane WASTE): the waste repository decor
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import type {TrackExtensions} from './trackExt/types';
 
@@ -301,6 +302,8 @@ export interface StationLayout {
   mall?: MallInfo;
   /** Task reactor-build-20261101: THE REACTOR (LevelId 'reactor') — the pit, tiers, gas zones, generators, restart sites (gen/reactor). */
   reactor?: ReactorInfo;
+  /** task reactor-expansion-20261101 (lane WASTE): the waste repository's decor (gen/reactor/complex/wasteTypes.ts; world/reactor/wasteVisuals.ts). */
+  reactorWaste?: WasteDecor;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
   hordes?: HordeGroupSpec[];
   /**
