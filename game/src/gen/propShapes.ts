@@ -15,6 +15,8 @@ export const SHAPE_MAT_KEYS = [
   // Iteration 04 storefront keys.
   'shopFrame', 'signBand', 'menuBoard', 'shutterSteel', 'kitchenSteel', 'laminate', 'tileShop', 'quarryTile',
   'woodVeneer', 'plasticSeat', 'glassShopfront', 'menuBoardNoodle', 'menuBoardCoffee', 'menuBoardPizza',
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the camping lantern's glowing mantle (face-mapped, self-lit warm)
+  'lanternGlow',
 ] as const;
 export type ShapeMat = (typeof SHAPE_MAT_KEYS)[number];
 
@@ -28,6 +30,9 @@ export const ACCENT_COLORS: Partial<Record<PropKind, number[]>> = {
   table: [0x7d5a3c, 0x4f6f6c],
   booth: [0xc99a2e],
   ticketMachine: [0xc99a2e],
+  // lane HIDEOUT (round 3): lantern hoods (green, red, navy) and camp-stove bodies (charcoal, red, silver grey)
+  campLantern: [0x2f6e3a, 0xb8452a, 0x34506e],
+  campStove: [0x2a2b2d, 0x9a2a22, 0x8a8f94],
 };
 
 const box = (m: ShapeMat, s: [number, number, number], p: [number, number, number], rx?: number): ShapePart => ({m, s, p, rx});
@@ -228,7 +233,48 @@ function washCounter(): ShapePart[] {
   return parts;
 }
 
-const FACTORIES: Partial<Record<PropKind, () => ShapePart[]>> = {stall, vending, shelf, table, desk, booth, ticketMachine, exitStair, toiletStall, washCounter};
+/**
+ * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): a camping lantern (0.17 x 0.31 x 0.17 m): a steel fuel base with its valve
+ * knob, a painted collar (accent), a glass globe round a glowing mantle (`lanternGlow`, self-lit), four guard posts, a painted hood, a vent
+ * cap and a wire bail. A light loose prop (on the hideout's table or the floor); its light is a warm light-field source at the lantern
+ * (gen/annexCache.ts), the mantle only glows.
+ */
+function campLantern(): ShapePart[] {
+  const out: ShapePart[] = [
+    box('steelDark', [0.15, 0.04, 0.15], [0, 0.02, 0]),
+    box('black', [0.03, 0.02, 0.01], [0, 0.026, 0.08]),
+    box('accent', [0.13, 0.025, 0.13], [0, 0.0525, 0]),
+    box('lanternGlow', [0.045, 0.075, 0.045], [0, 0.14, 0]),
+    box('glass', [0.11, 0.15, 0.11], [0, 0.14, 0]),
+    box('accent', [0.15, 0.03, 0.15], [0, 0.23, 0]),
+    box('steelDark', [0.06, 0.025, 0.06], [0, 0.2575, 0]),
+    box('steelBright', [0.008, 0.045, 0.008], [-0.065, 0.2875, 0]),
+    box('steelBright', [0.008, 0.045, 0.008], [0.065, 0.2875, 0]),
+    box('steelBright', [0.138, 0.008, 0.008], [0, 0.306, 0]),
+  ];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(box('steelBright', [0.008, 0.15, 0.008], [sx * 0.058, 0.14, sz * 0.058]));
+  return out;
+}
+
+/**
+ * (lane HIDEOUT) A one-burner portable butane stove (0.30 x 0.12 x 0.27 m): its painted body (accent), the steel top plate, the burner
+ * with its cap and four pan supports, the control knob and the canister door on the front. A light loose prop; no pot or food baked in.
+ */
+function campStove(): ShapePart[] {
+  const out: ShapePart[] = [
+    box('accent', [0.3, 0.075, 0.27], [0, 0.0375, 0]),
+    box('steelBright', [0.29, 0.008, 0.26], [0, 0.079, 0]),
+    box('black', [0.12, 0.01, 0.12], [-0.03, 0.088, -0.01]),
+    box('steelDark', [0.05, 0.008, 0.05], [-0.03, 0.097, -0.01]),
+    box('black', [0.035, 0.03, 0.02], [0.1, 0.035, 0.125]),
+    box('black', [0.1, 0.004, 0.004], [0.06, 0.062, 0.134]),
+  ];
+  for (const [dx, dz, w, d] of [[-0.065, 0, 0.012, 0.05], [0.065, 0, 0.012, 0.05], [0, -0.065, 0.05, 0.012], [0, 0.065, 0.05, 0.012]] as const) out.push(box('black', [w, 0.025, d], [-0.03 + dx, 0.0955, -0.01 + dz]));
+  return out;
+}
+
+const FACTORIES: Partial<Record<PropKind, () => ShapePart[]>> = {stall, vending, shelf, table, desk, booth, ticketMachine, exitStair, toiletStall, washCounter,
+  campLantern, campStove}; // lane HIDEOUT (round 3)
 
 /** Box parts for a procedural prop kind (fresh array), or null for kinds built elsewhere. */
 export function propShape(kind: PropKind): ShapePart[] | null {

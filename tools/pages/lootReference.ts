@@ -196,6 +196,10 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // round 2 (studio-alpha-track2-round2-20261031-01, lane CACHE, R5): the annex survivor caches (ANNEX_CACHE_PANTRY / _KIT / _CRATE and
   // their rows are LootSpec / row tables: auto-detected)
   ANNEX_CACHE_KEY: 'service-annex survivor cache storage (loot key -> purpose annex-cache: holder contexts by kind; exact, never empty, no salvage)',
+  // round 3 (studio-alpha-track2-round3-20261031-01, lane HIDEOUT): the hideout's footlocker (ANNEX_CACHE_LOCKER and its rows are tables:
+  // auto-detected) and its gear piece (a chance per hideout from the level's gear pool + the gas mask)
+  ANNEX_CACHE_GEAR_KEY: 'special: hideout gear piece (pickup reward tag)', ANNEX_CACHE_GEAR: 'special: hideout gear piece (chance, gas-mask weight)',
+  annexCacheGearRows: 'special: hideout gear piece (rows API)',
 };
 
 const SLOT_TEXT: Readonly<Record<SlotCategory, [string, string]>> = {
@@ -1219,6 +1223,29 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
         {what: 'repeat halving (x0.5)', value: 0.5, at: B.src.at(F.gearLoot, 'rollLevelGear'), overrides: ['none']},
       ],
       at: [T('GEAR_LOOT'), B.src.at(F.gearLoot, 'rollLevelGear'), B.src.at(F.gearLoot, 'gearCountFor'), B.src.at(F.gearLoot, 'gearAreaWeight')],
+    });
+  }
+
+  // --- (round 3, lane HIDEOUT) the hideout's gear piece: a chance per service annex's first survivor cache (levels with annexes)
+  const hideoutLevels = levels.filter(l => LEVEL_ADAPTER[l].annex);
+  const hg = new Map<string, LevelId[]>();
+  for (const l of hideoutLevels) { const k = JSON.stringify(LT.annexCacheGearRows(profiles.get(l)!)); hg.set(k, [...(hg.get(k) ?? []), l]); }
+  for (const [, ls] of hg) {
+    const rows = LT.annexCacheGearRows(profiles.get(ls[0])!).filter(([id]) => GEAR_ITEMS[id]);
+    const den = rows.reduce((t, r) => t + r[1], 0), c = LT.ANNEX_CACHE_GEAR.chance;
+    add({
+      id: hg.size === 1 ? 'hideout-gear' : `hideout-gear:${ls.join('+')}`, family: 'gear', label: 'Hideout gear piece (service-annex survivor cache)', class: 'special', levels: ls,
+      summary: `Each service annex's FIRST survivor cache (the hideout, gen/annexCache.ts) holds ONE piece of rare gear with chance ${c}: drawn by weight from the level's gear pool (its resolved gear weights) plus the gas mask (weight ${LT.ANNEX_CACHE_GEAR.gasMask}; a found mask carries a ${MASK_LOOT.foundFilter[0] * 100}–${MASK_LOOT.foundFilter[1] * 100} % filter), a floor pickup at the bedside tagged ${LT.ANNEX_CACHE_GEAR_KEY}. Separate from the level-wide gear / mask rolls (unchanged); the annex count per level is a seeded census quantity.`,
+      items: rows.map(([itemId, weight]) => ({itemId, count: 1, weight, share: rd(weight / den), chance: rd(c * weight / den),
+        note: `share ${rd(weight / den)}; P(a given hideout holds it) = ${rd(c * weight / den)} (exact, before placement)`})),
+      denominator: rd(den), distribution: [{k: 0, p: rd(1 - c)}, {k: 1, p: rd(c)}], expected: rd(c),
+      probability: '`chance` is the exact probability that ONE hideout holds the piece (chance x share), before placement; per level it applies once per service annex (0-2 a level).',
+      knobs: [
+        {what: 'chance per hideout', value: c, at: T('ANNEX_CACHE_GEAR'), overrides: ['none']},
+        {what: 'gas-mask weight', value: LT.ANNEX_CACHE_GEAR.gasMask, at: T('ANNEX_CACHE_GEAR'), overrides: ['itemWeight']},
+        {what: 'piece weights', value: `${rows.length} pieces`, at: T('GEAR_WEIGHTS'), overrides: ['gear.weight', 'tables']},
+      ],
+      at: [T('ANNEX_CACHE_GEAR'), T('annexCacheGearRows'), B.src.at('game/src/gen/annexCache.ts', 'placeGearPiece')],
     });
   }
 

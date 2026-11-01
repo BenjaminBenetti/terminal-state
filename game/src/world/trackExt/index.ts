@@ -18,7 +18,7 @@ import type {WorldMaterials} from '../materials';
 import {hazardMaterial} from '../traversalBuilder';
 import {Acc} from './mesh';
 import {buildShells, type ShellBuild} from './shell';
-import {graffitiDecals, graffitiMaterial, stationArtDecals, type GraffitiDecal, type StationArtDecal} from './graffiti';
+import {cacheMarkDecals, graffitiDecals, graffitiMaterial, stationArtDecals, type CacheMarkDecal, type GraffitiDecal, type StationArtDecal} from './graffiti';
 import {hatchGraffiti, hatchPlates, type HatchPlate} from './hatch';
 import {serviceSignMaterial} from './shell';
 import type {TrackExtView} from './view';
@@ -46,6 +46,8 @@ export interface TrackExtStats {
   hatches: number;
   /** (Playtest revision, lane ART) Station-surface invitation art decals (layout.extensions.art records). */
   art: number;
+  /** (Round 3, lane HIDEOUT) The survivor's trail decals in the annexes (layout.extensions.cacheMarks records; same mesh). */
+  cacheMarks: number;
   /** (lane ROOMS) The annexes' machinery: draws (one per annex x material), triangles, records (not in per100m: tunnels only). */
   machines: {draws: number; triangles: number; records: number};
 }
@@ -60,6 +62,8 @@ export interface TrackExtBuilt {
   plates: HatchPlate[];
   /** (Playtest revision, lane ART) The station-art decals (same mesh as the clue marks). */
   artDecals: StationArtDecal[];
+  /** (Round 3, lane HIDEOUT) The survivor's trail decals (same mesh as the clue marks). */
+  markDecals: CacheMarkDecal[];
   /** (lane ROOMS) The annex machinery meshes. */
   machines: MachineBuild;
   stats: TrackExtStats;
@@ -87,6 +91,8 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
   decals.push(...hatchGraffiti(acc, view.hatches, layout.seed >>> 0));
   // (playtest revision, lane ART) the station-surface invitation art on the bed walls the platforms face: the same mesh
   const artDecals = stationArtDecals(acc, view.ext.art ?? [], layout.trenches, layout.seed >>> 0);
+  // (round 3, lane HIDEOUT) the survivor's trail to each annex's hideout, on the annex walls: the same mesh
+  const markDecals = cacheMarkDecals(acc, view.ext.cacheMarks ?? []);
   const steel = new Acc(), sign = new Acc();
   const plates = hatchPlates(steel, sign, view.hatches);
   const hatchMeshes: THREE.Mesh[] = [];
@@ -120,7 +126,7 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
   const triangles = shells.perTunnel.reduce((n, p) => n + p.triangles, 0) + decalTris + steel.triangleCount + sign.triangleCount;
   const per = lengthM > 0 ? 100 / lengthM : 0;
   return {
-    view, shells, decals, plates, artDecals, machines,
+    view, shells, decals, plates, artDecals, markDecals, machines,
     stats: {
       tunnels: view.tunnels.length, lengthM, meshes: draws + machines.draws, draws: draws + machines.draws, triangles: triangles + machines.triangles,
       instances: shells.perTunnel.reduce((n, p) => n + p.instances, 0),
@@ -128,6 +134,7 @@ export function buildTrackExtensions(group: THREE.Group, view: TrackExtView, lay
       decals: decals.length,
       hatches: plates.length,
       art: artDecals.length,
+      cacheMarks: markDecals.length,
       machines: {draws: machines.draws, triangles: machines.triangles, records: machines.records},
     },
   };

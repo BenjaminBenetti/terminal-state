@@ -164,6 +164,41 @@ export interface TrackExtensions {
    * at the bed end of every real annex entrance (planned after the attach on rng.fork('station-art'); absent / empty = none).
    */
   art?: StationArt[];
+  /**
+   * (task studio-alpha-track2-round3-20261031-01, lane HIDEOUT: gen/annexMarks.ts) The survivor's trail: graffiti marks on annex walls
+   * beside the doorways of the shortest door-hop path from each annex's entry to its hideout (the first survivor cache), the hideout
+   * mark at its doorway and the tally inside (planned after the caches on fork `marks:<annexId>`; absent / empty = none).
+   */
+  cacheMarks?: CacheMark[];
+}
+
+/**
+ * (round 3, lane HIDEOUT) One survivor mark on an annex wall (gen/annexMarks.ts; drawn by world/trackExt/graffiti.ts cacheMarkDecals).
+ * The wall: `axis` 'z' = a wall along X (plane z = const), 'x' = a wall along Z; `n` = its inward normal's sign on that axis; `c` the
+ * centre along the wall (world x for 'z', world z for 'x'), `y` absolute, `w` x `h` metres.
+ */
+export interface CacheMark {
+  annex: number;
+  /** The area whose wall carries it (the player stands in it). */
+  area: number;
+  /** 'arrow': the trail (arrow + survivor symbol at a doorway); 'hideout': the distinctive mark at the hideout's doorway; 'tally': inside. */
+  kind: 'arrow' | 'hideout' | 'tally';
+  /** The doorway it marks (layout.doors index; -1 for the tally) and the area beyond it (the hideout's own id for the tally). */
+  door: number;
+  next: number;
+  axis: 'x' | 'z';
+  plane: number;
+  n: 1 | -1;
+  c: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Arrow direction for a viewer facing the wall; null for the non-directional hideout / tally marks. */
+  dir: 'left' | 'right' | null;
+  /** Position on the trail (door hops from the annex entry area). */
+  step: number;
+  /** Deterministic presentation variant. */
+  variant: number;
 }
 
 /**

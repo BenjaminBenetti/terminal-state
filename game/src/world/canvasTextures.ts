@@ -923,6 +923,24 @@ export function fareScreenTexture(): THREE.CanvasTexture {
   });
 }
 
+/**
+ * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): a camping lantern's glowing mantle — a warm white-hot core fading to
+ * amber at the edges with a faint mesh weave (self-lit: emissiveMap = map; small, painted once).
+ */
+export function lanternGlowTexture(): THREE.CanvasTexture {
+  return faceTexture(64, 96, 4321, p => {
+    const ctx = p.ctx, w = 64, h = 96;
+    const g = ctx.createRadialGradient(w / 2, h * 0.52, 2, w / 2, h * 0.52, w * 0.75);
+    g.addColorStop(0, '#fff8e0');
+    g.addColorStop(0.35, '#ffd27a');
+    g.addColorStop(0.8, '#f08a2a');
+    g.addColorStop(1, '#a8501a');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(160,80,20,0.25)'; ctx.lineWidth = 1;
+    for (let x = 4; x < w; x += 8) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + 6, h); ctx.stroke(); }
+  });
+}
+
 /** Snack/drink vending front: coils, generic products, price tags, glass glare. */
 export function vendFrontTexture(): THREE.CanvasTexture {
   return faceTexture(256, 512, 4302, p => {

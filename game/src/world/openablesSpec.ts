@@ -592,6 +592,28 @@ export const OPENABLE_SPECS = {
     loot: LOOT.staffLockers,
     sound: {open: 'staffLockers', close: 'staffLockers'},
   },
+  /**
+   * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout's wooden FOOTLOCKER (gen/purposeShapes.ts body: a
+   * hollow box of boards on skids): the authored lid (boards, front band, hasp, top grip) lifts on its back edge over a wood-lined
+   * compartment; the cache's finds lie on its floor (items/lootTables.ts ANNEX_CACHE_LOCKER through the 'annex-cache' key). Placed with its
+   * back 3 cm off a wall: the wall stops the lid near upright (fit), at least 65 degrees open.
+   */
+  footlocker: {
+    label: 'footlocker', model: null, body: 'authored', group: 'container',
+    bodyPurpose: {drop: [box(-0.42, 0.331, -0.23, 0.42, 0.45, 0.23)]},
+    parts: [{
+      name: 'footlocker',
+      move: {type: 'hinge', axis: 'x', pivot: [0, 0.385, -0.21], angle: -95 * P, min: 65 * P},
+      boxes: [
+        B('wood', -0.4, 0.33, -0.21, 0.4, 0.385, 0.21), B('steelBright', -0.4, 0.355, 0.205, 0.4, 0.37, 0.213),
+        B('steelBright', -0.035, 0.335, 0.21, 0.035, 0.372, 0.216), B('black', -0.09, 0.385, -0.02, 0.09, 0.393, 0.02),
+      ],
+      cavity: box(-0.375, 0.04, -0.185, 0.375, 0.329, 0.185), cavityRole: 'wood',
+      surfaces: [{y: 0.042, x0: -0.35, x1: 0.35, z0: -0.16, z1: 0.16, clear: 0.27}],
+    }],
+    loot: LOOT.footlocker,
+    sound: {open: 'crate', close: 'crate'},
+  },
   /** Four-drawer filing cabinet (p7-filing-cabinet-t25.glb): drawer fronts slide out along +Z with their trays. */
   filingCabinet: {
     label: 'filing cabinet', model: 'p7_filingCabinet', body: 'model', group: 'container',
@@ -1120,6 +1142,7 @@ export function openableSpec(kind: string): OpenableSpec | null { return SPECS[k
 
 /** New container kinds (not loot holders before iteration 08): items/loot.ts ContainerKind additions. */
 export const OPENABLE_CONTAINER_KINDS = ['bin', 'wheelieBin', 'newspaperVendingBox', 'staffLockers', 'filingCabinet', 'safe', 'chestFreezer', 'firstAidWallKit', 'fireExtinguisherCabinet', 'aedWallCabinet',
+  'footlocker', // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout's footlocker
   'toiletStall', // task office-overhaul-20261030 (lane INTERACT): washroom cubicles
   // task office-interactions-layout-20261030 (lane OPEN): office-overhaul storage
   'officeFiling', 'executiveDesk', 'labBench', 'examTable', 'vaultSafe', 'serverCabinet', 'serverRack', 'biohazardFridge', 'archiveBoxes',
@@ -1346,6 +1369,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   ...['bench', 'column', 'fareGate', 'washCounter', 'shopGlazing', 'magazineRack', 'techDisplay', 'deviceWall', 'showcase', 'flowerStand', 'repairBench', 'breadRack',
     'couch', 'noticeBoard', 'janitorCart', 'mopSink', 'signalRack',
     'palletBed', // lane CACHE (round 2, R5): a camp bed — mattress and bedding on pallets, nothing to open
+    'bedroll', 'campTable', 'campLantern', 'campStove', // lane HIDEOUT (round 3): bedroll, door-on-blocks table, lantern, camp stove — nothing to open
     'payphone', 'emergencyCallPoint', 'fareValidatorStand', 'infoTouchKiosk', 'capsuleToyMachine', 'crowdBarrier', 'securityPodium', 'platformClock', 'cctvCamera',
     'shoeShineChair', 'babyStroller', 'bicycle', 'wheelchair', 'trashBagPile', 'foldingBarricade', 'wetFloorSign', 'urinal', 'handDryer',
     'mopBucketWringer', 'floorScrubber', 'floorBuffer', 'handTruck', 'palletJack', 'stepLadder', 'coatRack', 'pedestalFan',

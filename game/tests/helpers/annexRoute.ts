@@ -34,6 +34,8 @@ import type {StationLayout} from '../../src/gen/stationTypes';
 import type {ServiceAnnex} from '../../src/gen/trackExt/types';
 import type {LevelId} from '../../src/levels/types';
 import {fakeEnvTextures} from './openablesFixture';
+import {doorOfMark, doorsOfArea, marksIn} from './cacheMarks'; // (round 3, lane HIDEOUT) the trail reader
+import {doorSide} from '../../src/gen/placeKit'; // (round 3, lane HIDEOUT)
 
 const DT = 1 / 30;
 const OPTS = {aiming: false, speedMult: 1, canSprint: false};
@@ -63,14 +65,22 @@ export interface RouteReport {
   /** Inventory delta of the whole route (item -> count taken). */
   inventory: Record<string, number>;
   returned: boolean; minY: number; maxDy: number; events: RouteEvent[];
+  /** (round 3, strategy 'marks') areas entered by reading a mark, walked through as a corridor, chosen while lost. */
+  trail?: {read: number; corridor: number; lost: number};
 }
 /**
  * Room choice of a route — 'nearest': the nearest unvisited annex area by walking distance (the playtest revision's ordinary route);
  * 'deeper' (round 2, lane CACHE): an explorer pushing on into the annex — among the unvisited areas that share a door with an area
  * already visited (the frontier: what the player can see the way to), the one deepest by door hops from the entry, ties by walking
  * distance; dead ends are entered and the route backtracks to the frontier. Topology only: never the loot / cache ground truth.
+ * 'marks' (round 3, lane HIDEOUT): a player following ONLY the survivor's trail they can see — in each area the marks on its walls,
+ * read by helpers/cacheMarks.ts doorOfMark (the mark's wall, place and arrow; never the record's door / next / step or the cache);
+ * an unmarked area with a single way on is walked through; with no readable mark at a choice the player is LOST and explores (the
+ * nearest unvisited neighbouring area, else the nearest unvisited area next to a visited one) until a mark is seen again. Holders
+ * are opened only in the room where the route ends (its arrival is recognised like 'deeper' records it: the room's cache key, read
+ * only to report / stop, never to choose).
  */
-export type RouteStrategy = 'nearest' | 'deeper';
+export type RouteStrategy = 'nearest' | 'deeper' | 'marks';
 
 /** A fresh New Game layout exactly as Game.newGame / prepareSection generate it. */
 export function freshLayout(level: LevelId, seed: number): StationLayout {
@@ -182,7 +192,77 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
     let d = 0; for (let k = 1; k < r.length; k++) d += Math.hypot(r[k][0] - r[k - 1][0], r[k][1] - r[k - 1][1]);
     return d;
   };
-  while (unvisited.size && rooms < maxRooms) {
+  // (round 3, lane HIDEOUT) 'marks': follow the survivor's trail (see RouteStrategy)
+  const throughDoor = (door: number, next: number): [number, number] => {
+    const na = layout.areas[next], g = layout.grid;
+    let tx = (na.x + na.w / 2) * CELL, tz = (na.y + na.h / 2) * CELL;
+    if (door >= 0) {
+      const d = layout.doors[door], sd = doorSide(d, na), cx = (d.x + d.w / 2) * CELL, cz = (d.y + d.h / 2) * CELL;
+      tx = cx + (sd === 'W' ? 1.2 : sd === 'E' ? -1.2 : 0); tz = cz + (sd === 'N' ? 1.2 : sd === 'S' ? -1.2 : 0);
+    }
+    let best: [number, number] = [tx, tz], bd = Infinity;
+    for (let y = na.y; y < na.y + na.h; y++) for (let x = na.x; x < na.x + na.w; x++) {
+      if (!g.walkable(x, y) || g.area[g.idx(x, y)] !== next || !g.circleClear((x + 0.5) * CELL, (y + 0.5) * CELL, 0.36)) continue;
+      const dd = Math.hypot((x + 0.5) * CELL - tx, (y + 0.5) * CELL - tz);
+      if (dd < bd) { bd = dd; best = [(x + 0.5) * CELL, (y + 0.5) * CELL]; }
+    }
+    return best;
+  };
+  const trail = {read: 0, corridor: 0, lost: 0};
+  let cur = [layout.doors[A.door].a, layout.doors[A.door].b].find(id => ids.has(id))!, came = A.door;
+  if (strategy === 'marks') { unvisited.delete(cur); rooms++; ev('room', {area: cur, how: 'entry', purpose: layout.areas[cur].purpose}); }
+  while (strategy === 'marks' && rooms < maxRooms && !cache) {
+    const a = layout.areas[cur];
+    // the cache room is recognised on arrival (record / stop only): open its holders, done
+    if (cm.all.some(h => h.prop.area === cur && h.prop.purpose === ANNEX_CACHE_KEY)) {
+      cache = {metres: +metres.toFixed(1), rooms, depth: a.depth, maxDepth, area: cur, holdersOpened: 0, holderIds: [], taken: {}};
+      ev('cache room', {...cache});
+      for (const h of cm.all.filter(q => q.prop.area === cur && q.prop.purpose === ANNEX_CACHE_KEY)) {
+        const {aim, stand} = cm.aimPoint(h);
+        if (!walkTo(stand.x, stand.z, A.floorY, 20)) continue;
+        const eye = new THREE.Vector3(p.x, p.y + STAND_EYE, p.z), dir = new THREE.Vector3(aim.x, aim.y, aim.z).sub(eye).normalize();
+        if (cm.target(eye, dir, L)?.container !== h) continue;
+        opened++;
+        const got = openAndTake(cm, h, inv);
+        cache.holdersOpened++;
+        cache.holderIds.push(`${h.kind}#${h.serial}@${h.prop.x.toFixed(2)},${h.prop.z.toFixed(2)}`);
+        for (const id of got) cache.taken[id] = (cache.taken[id] ?? 0) + 1;
+        if (got.length) { stocked++; taken.push(...got); } else empty++;
+      }
+      break;
+    }
+    let door = -1, how = '';
+    for (const m of marksIn(layout, cur)) { const d = doorOfMark(layout, a, m); if (d >= 0 && d !== came) { door = d; how = `read ${m.kind}`; break; } }
+    if (door < 0) {
+      const others = doorsOfArea(layout, a).filter(i => i !== came && layout.doors[i].a !== layout.doors[i].b && ids.has(layout.doors[i].a) && ids.has(layout.doors[i].b));
+      if (others.length === 1) { door = others[0]; how = 'corridor'; }
+    }
+    let next = -1;
+    if (door >= 0) {
+      const d = layout.doors[door];
+      next = d.a === cur ? d.b : d.a;
+      if (how === 'corridor') trail.corridor++; else trail.read++;
+    } else {
+      // lost: the nearest unvisited neighbour, else the nearest unvisited area next to a visited one
+      trail.lost++;
+      let bd = Infinity;
+      const near = (adj.get(cur) ?? []).filter(q => unvisited.has(q));
+      const pool = near.length ? near : [...unvisited].filter(id => (adj.get(id) ?? []).some(q => !unvisited.has(q)));
+      for (const id of pool) { const dd = walkDist(id); if (dd < bd) { bd = dd; next = id; } }
+      how = 'lost';
+      came = -1;
+    }
+    if (next < 0) break;
+    if (door >= 0) came = door;
+    // through the doorway: a walkable cell just inside the next area (a metre past the opening), else its centre / any free cell
+    if (!walkTo(...throughDoor(door, next), A.floorY) && !walkTo(areaCentre(next).x, areaCentre(next).z, A.floorY)) { ev('room unreachable', {area: next}); unvisited.delete(next); continue; }
+    unvisited.delete(next);
+    cur = next;
+    rooms++;
+    depthReached = Math.max(depthReached, layout.areas[cur].depth);
+    ev('room', {area: cur, how, purpose: layout.areas[cur].purpose, depth: layout.areas[cur].depth});
+  }
+  while (strategy !== 'marks' && unvisited.size && rooms < maxRooms) {
     let best = -1, bestD = Infinity, bestDepth = -1;
     const cands = strategy === 'deeper' ? [...unvisited].filter(id => seen.has(id) || (adj.get(id) ?? []).some(q => !unvisited.has(q))) : [...unvisited];
     for (const id of cands) {
@@ -249,6 +329,7 @@ export function walkAnnexRoute(level: LevelId, seed: number, annexId: number, mo
     enemies: {total: enemies.length, aware: enemies.filter(e => e.aware).length, firstAware},
     cache, depthReached, maxDepth, inventory,
     returned, minY: +minY.toFixed(2), maxDy: +maxDy.toFixed(3), events,
+    ...(strategy === 'marks' ? {trail} : {}),
   };
 }
 

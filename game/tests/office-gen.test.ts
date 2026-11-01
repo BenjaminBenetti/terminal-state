@@ -13,7 +13,7 @@ import {
   OFFICE_FLOORS, OFFICE_GEN_STATS, OFFICE_SECTIONS, OFFICE_TOP_FLOOR, generateOfficeLevel, generateOfficeSection, officeIssues, officeSeed, towerFrame,
 } from '../src/gen/office/index';
 import {FLOOR_HEIGHT, MARGIN, OFFICE_ROOF_LEVEL, SCISSOR_STAIR, WELL, landingEnd} from '../src/gen/office/frame';
-import {ROOF_FIND_KEY} from '../src/items/lootTables';
+import {ANNEX_CACHE_GEAR_KEY, ROOF_FIND_KEY} from '../src/items/lootTables';
 import {OFFICE_ENEMIES, officeWeaponPlan} from '../src/gen/office/spawns';
 import {isOfficeKind} from '../src/gen/office/kinds';
 import {generateStation} from '../src/gen/station';
@@ -297,6 +297,8 @@ describe('office level (one continuous layout)', () => {
         expect(ITEMS[p.itemId], p.itemId).toBeDefined();
         // (task gas-mask-roof-feedback-20261030: the roof find may be a gear piece — the explicit roof exception, on the roof only)
         if (p.reward === ROOF_FIND_KEY) { expect(p.level).toBe(OFFICE_ROOF_LEVEL); continue; }
+        // (round 3, lane HIDEOUT) the service annex hideout's gear piece (gen/annexCache.ts ANNEX_CACHE_GEAR): in the annex only
+        if (p.reward === ANNEX_CACHE_GEAR_KEY) { expect(isExtensionArea(l.areas[p.area])).toBe(true); continue; }
         expect(ITEMS[p.itemId].kind).not.toBe('gear');
       }
       for (const p of l.props) expect(PROP_DEFS[p.kind], p.kind).toBeDefined();
@@ -517,7 +519,8 @@ describe('the Subway is unchanged', () => {
       live[key] = fingerprint(legacy(l));
       expect(l.office).toBeUndefined();
       expect(l.props.some(p => isOfficeKind(p.kind))).toBe(false);
-      expect(l.lights.some(q => q.virtual || q.tint)).toBe(false);
+      // (round 3, lane HIDEOUT) the only fixture-less sources: the annex hideout lanterns' warm light (gen/annexCache.ts), untinted
+      expect(l.lights.some(q => q.tint || (q.virtual && !(q.warm && isExtensionArea(l.areas[q.area]))))).toBe(false);
     }
     expect(replaced, 'the corpus exercises the family mapping').toBeGreaterThan(0);
     expect(core).toEqual(CORE);

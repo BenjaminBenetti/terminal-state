@@ -138,6 +138,9 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
 
 **`StationArt`** (`TrackExtensions.art`, playtest revision): station-surface invitation art records — see "Station invitation art".
 
+**`CacheMark`** (`TrackExtensions.cacheMarks`, round 3, lane HIDEOUT): the survivor's trail marks on annex walls (wall plane, centre,
+size, arrow direction, the doorway it marks and the area beyond) — see "The survivor's trail (round 3)". `dropExtensions` deletes them.
+
 **`coreView(layout)`** (`game/src/gen/trackExt/core.ts`) returns the level exactly as it would be without its extensions:
 - extension cells go back to rock;
 - appended areas, doors and records are dropped;
@@ -291,6 +294,71 @@ config `ANNEX_CACHE`).
     (inventory deltas and holder ids in `qa-artifacts/annex-route/<tag>-deeper.json`). A cache is a reward for exploring the annex,
     not a find on the way in (the ordinary nearest-first route's first loot stays 2–5 rooms in).
   - **Cost:** the cache pass takes 0.46 ms (Subway 424242, min of 5) to 0.5–0.9 ms (two annexes) per level.
+
+**The hideout (round 3)** (task `studio-alpha-track2-round3-20261031-01`, lane HIDEOUT; user: "There must always be 1 cache room
+generated at least." / "additional graffite clues in the area should guid the player to the hideout / cache. The cache should include
+pops like bed roll, lantern and stuff, to make it feel like someone lives there. it should have substantial detail applied and contain
+substantial loot. perhaps a boosted chance of gear spawning. it needs to be a good pay off for navigating the confusing maze of rooms.")
+- **The guarantee — at least one cache per annex, always** (`ANNEX_CACHE.relaxed`): the layout lane's guaranteed hideout room
+  `ServiceAnnex.hideout` (an area id) is tried FIRST when the layout carries one (read defensively: absent on older layouts), then the
+  round-2 rule (deep band → middle → any eligible room), then two new rungs, each only when everything above placed nothing:
+  **relaxed** — any room / closet / hall / signature room past the entry corridor with ≥ 1.5 m short side and ≥ 4 m² (up to 16 rooms,
+  weighted deeper first; the bedroll first, ≥ 1 holder), then **last** — every annex area deepest first (corridors too; the bedroll
+  alone suffices). Measured over 200 Subway + 40 Office + 20 Mall levels (opt-in `HIDEOUT_SAMPLE=1`, `tests/annex-hideout.test.ts`):
+  291 annexes, **0 without a cache**; 350 caches (346 deep, 4 middle; the relaxed / last rungs never needed there, proven by a forced
+  CI test).
+- **Lived in** (`gen/annexCache.ts buildCache`; new kinds and their classes / scale checks: `docs/prop-affordances.md`):
+  - the **sleeping spot**: a pallet bed (45 %) or a floor **bedroll** (`bedroll`), a quiet wall first; a second sleeper's bedroll in a
+    roomy room (≥ 20 m² free, 40 %);
+  - the **footlocker** (`footlocker`, openable lid) at the foot of the bed (else its head, else any wall), then the pantry shelf;
+  - the **camp table** (`campTable`, a door on cinder blocks) BEFORE the extra storage, with the **lantern** (`campLantern`) and the
+    **camp stove** (`campStove`) standing on its top (`host` = the table; loose `onHost` props); no table → the lantern on the floor at
+    the bed's head (else any wall cell, else any free floor cell);
+  - then the kit cabinet and the supply crate; up to two camp things (chairs first) as before;
+  - **the lantern lights the room**: a warm, steady `virtual` light-field record at the lantern (+0.2 m; power 0.7, reach ~7.5 m; no
+    fixture / tube / glow card — `world/builder.ts`; the doorway validator skips annex `virtual` sources: `gen/doorways.ts`), and the
+    room's first ceiling fixture still burns steady / warm / low; the room is never 'dark'.
+  - the **tally** (days counted) on a quiet wall of every cache room (the trail's last mark, below).
+  - Measured (broad sample, 350 caches): bedroll 220 / pallet bed 130, a second bedroll 49, the camp table + lantern + stove 259 (74 %),
+    the lantern in **350 / 350**, 3.41 holders a cache.
+- **Substantial loot** (`docs/loot-tables.md` "Survivor caches" round 3): the footlocker joins (2–3 lots: spare rounds, flares, cells,
+  filters, a dressing), the pantry / crate roll 3–4 lots. Measured (packed lots, `ContainerManager.build` with each level's profile;
+  Subway 1043 / 1002 / 777001 / 777002 / 4055629249 / 2563024239 / 774566179, Office 222 / 3333, Mall 846932 / 5150 / 9090: 20 caches):
+  **9.4 lots a cache** (round 2: 6.75) — food 2.5, drink 1.95, ammo 2.0 lots (~15 rounds), dressings / treatments 0.9, cells 1.1, flares
+  0.65, gas filters 0.3; 3.1 holders.
+- **The gear piece** (`ANNEX_CACHE_GEAR`: chance 0.6 per annex hideout; the level's gear pool + the gas mask): measured 168 of 291
+  annexes (57.7 %): backpack 34, gloves 29, boots 24, gas mask 23, helmet 21, chest rig 20, armour vest 17. A floor pickup at the
+  bedside, tagged `reward: 'annex-cache-gear'`.
+- **Cost** (warm, min of 5, this worker): cache pass 0.76 ms + trail 0.70 ms on Subway 424242 (one annex); 1.0–2.3 ms + 1.2–1.7 ms on
+  two-annex / two-cache levels (1043, 1002, 2563024239, 774566179). `generateStation(424242)` 255–285 ms here.
+
+**The survivor's trail (round 3)** (`gen/annexMarks.ts planCacheMarks`, records `layout.extensions.cacheMarks`, after the caches on
+fork `marks:<annexId>`):
+- **The path:** the shortest door-hop path (BFS over the annex's own doors, in layout order) from the annex's entry area (the annex side
+  of its entry door) to its FIRST cache (the hideout).
+- **Where marks go:** in each path area the player leaves by the path's next doorway; a mark goes on THAT area's wall right beside that
+  doorway — always in the entry area (the trail's start), at every **junction** (an area with 3+ doorways), and on every doorway of the
+  last 3 areas (denser near the end). The doorway INTO the hideout gets the distinctive **hideout mark** (the symbol with a dot +
+  "SAFE"); a second cache gets one on the last doorway of its own path; every cache room gets the **tally** inside.
+- **Placement rule:** on a real wall face — rock behind the whole mark + a frame margin, the area's floor in front — on the doorway's own
+  wall beside its frame (0.3 m gap; sliding up to 2 m while no other doorway comes between), else on the perpendicular wall at a corner
+  the doorway meets (within 6 m; the arrow then points into that corner), the full 0.9 × 0.45 m mark first, then a small 0.6 × 0.3 m one
+  (0.15 m frame gap); heights 1.5 m over the floor, else 1.0 / 1.95 m; clear of signs (door plates), props against the wall (within
+  0.6 m, reaching the mark's height), steam vents, other marks; under the ceiling. **Every door mark must READ as its own doorway**
+  (`readMarkDoor`: what a player sees — an arrow points along its wall at the nearest doorway in its direction, else into a corner at the
+  doorway nearest that corner; a hideout mark marks the nearest doorway on its wall), so the trail is self-consistent by construction.
+  A doorway with no valid spot gets none (`CacheMarkReport.missed`). `cacheMarkIssues(layout)` re-checks every record (tests).
+- **Glyphs** (`world/trackExt/graffitiArt.ts`, local canvas paths; atlas row 5, cells 12–15): the survivor's ARROW (a circled triangle —
+  the recurring symbol — and a sprayed arrow; mirrored for left), the HIDEOUT mark, the TALLY (groups of five, the symbol small).
+  One luminous lime for the trail (`SURVIVOR_SPRAY.trail` #b6ff5c) and chalk for the tally, with the graffiti glow (`GRAFFITI_GLOW`).
+- **Presentation:** `cacheMarkDecals` paints flat quads on each record's wall plane into the ONE graffiti mesh (one draw per level, the
+  shared material). The atlas grows to **2048 × 1280** (one more 256 px row: ~13.3 MiB with mips, was ~10.7). The marks are wall-treatment
+  keep-outs (`stationArtKeepouts`, why `'cache-mark'`): no pipes / cables / stains across them.
+- **Measured:** broad sample (291 annexes) — 2677 marks (~9.2 an annex; measured with the tally in the first cache only — a second cache's tally adds one more) over 2507 path doorways / 2080 junctions, **2 doorways missed**;
+  a mark reader following ONLY the marks (no cache knowledge) reaches a cache in **289 / 291** annexes (the 2 misses). The opt-in
+  real-Player route (`ANNEX_ROUTE=1 ROUTE_ONLY=marks`, strategy `'marks'`, `tests/helpers/annexRoute.ts`): on Subway 1043 / 1002 (2),
+  Office 222 (2), Mall 846932 the trail reached every hideout after **8–11 rooms / 78–270 m** with no lost step, vs the round-2
+  topology-only `'deeper'` explorer on the same layouts **12–56 rooms / 168–834 m** (`qa-artifacts/annex-route/<tag>-marks.json`).
 
 **Enemies** (`SERVICE_CONTEXT`):
 - **Count:** `SERVICE_ZONE_BUDGET` 5–6 per annex (was 3–5; about 80 % of the core's density; the hi fits the compact Mall's
@@ -451,6 +519,13 @@ Tunnels have sparse fixtures, mostly dead or dying.
   targetable from their stand points, the working light, the camp things' placement contract, the cache appended last; taken cache
   lots stay taken across regenerate -> rebuild -> `applyHolders`. Opt-in evidence: `ANNEX_ROUTE=1 ROUTE_ONLY=deeper` (the deeper
   route) and `ANNEX_PICTURES=1` (CPU pictures of the cache rooms, `qa-artifacts/track2-revision-pictures/cache-*.png`).
+- **The hideout and its trail (round 3, lane HIDEOUT):** `annex-hideout.test.ts` (CI, ~7 s: the guarantee incl. the forced fallback
+  ladder, the lived-in dressing contract — supported pieces, the lantern's light, classifications — packed loot via `ContainerManager`,
+  the gear roll's rate / shares / filter, its placement and persistence, the footlocker's persistence, the trail marks beside the path
+  doorways reading as their doorways, a mark reader arriving, the decals / keep-outs); opt-in `HIDEOUT_SAMPLE=1` (the 260-level guarantee
+  census into `/tmp/annex-hideout-sample.txt`, packed lots into `/tmp/annex-hideout-lots.txt`), `ANNEX_ROUTE=1 ROUTE_ONLY=marks` (the
+  mark-following real-Player route vs `'deeper'`), `HIDEOUT_PICTURES=1` (`annex-hideout-pictures.preview.test.ts`: CPU pictures into
+  `qa-artifacts/hideout-pictures/`).
 - **Station art and wall finish (playtest revision):** `track-ext-art.test.ts`; opt-in CPU previews
   `TRACK_EXT_ART_PREVIEW=1 [ART_OUT=label] ... game/tests/track-ext-art-preview.test.ts` (station views, routes, an annex wall at
   1–2 m, into `qa-artifacts/track2-revision-art/`).
