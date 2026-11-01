@@ -14,14 +14,15 @@ import * as THREE from 'three';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {CELL, SOLID, VOID} from '../src/gen/grid';
 import {stationLevels} from '../src/world/levelGeometry';
-import {cellFloorFn} from '../src/world/lightField';
+import {MAX_SLOTS, cellFloorFn} from '../src/world/lightField';
 import {
   ATMOSPHERE, ATMOSPHERE_ITER12, areaClassOf, atmosphereFor, buildAirMap, buildDensityMap, buildNoiseVolume, fieldOffsets,
   flashlightRadiance, fogMotion, mediumAt, mediumStats, noiseScales, pointRadiance, sampleAirMap, sampleNoise4,
   type MediumMaps, type SpotInput, type V3,
 } from '../src/render/atmosphere';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
-import {coreView} from '../src/gen/trackExt/index';
+import {btsAreaPresent, coreView} from '../src/gen/trackExt/index';
+import {presentSeeds} from './helpers/btsArea';
 
 const stations = new Map<number, StationLayout>();
 const station = (seed: number) => { let s = stations.get(seed); if (!s) stations.set(seed, (s = generateStation(seed))); return s; };
@@ -256,6 +257,52 @@ describe('(c) visible slow motion in world space, on the fog clock', () => {
       const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
       expect(Math.max(...ms) / avg, `seed ${seed}`).toBeLessThan(1.1);
       expect(Math.min(...ms) / avg, `seed ${seed}`).toBeGreaterThan(0.9);
+    }
+  });
+
+  it('...and over the FULL LIVE level (station + track beds + tunnels + service annexes), area absent and present, same band', () => {
+    // (2026-11-01, round-4 follow-up lane ENV) The same property, the same 1.1 / 0.9 band and the same fog-time series as the core
+    // check above, over the LIVE layout: the three seeds above (each rolls the Beyond the Station area ABSENT: its live level is the
+    // core plus its track tunnels, 3 / 2 / 2) and, for each, the first seed at or after it whose level rolls the area PRESENT (the
+    // real roll, tests/helpers/btsArea.ts: 1715005 split with a tunnel + an annex, 8 island-ends with two hatch annexes, 43 express
+    // with one), so both physical mixes are covered.
+    // MEASUREMENT: the COMPLETE walking-height sample (mediumStats stride 1: every open cell of every level slot; 9x the samples of
+    // stride 9), because "the station-wide amount" is the mean over the whole level and any fixed stride over the row-major cell
+    // index is a lattice whose shape depends on the grid width: seed 42's live grid is 576 = 64 x 9 cells wide, so `i += 9` lands on
+    // the SAME 64 columns in every row — a comb of lines 4.5 m apart across the drift axis (the air drift is within 35 deg of x, the
+    // track draft along x; the patch noise has 7.5 m / 3.75 m lattice periods), which aliases the translating patches into a swing
+    // of the comb's mean: stride 9 reads 1.131 / 0.915 there, the complete sample of the same domain 1.050 / 0.963 (strides 7 / 10
+    // / 11: 1.055 / 1.048 / 1.047). The same comb explains every other outlier checked: 0x1a2b3c live (531 = 59 x 9) 1.095 vs
+    // complete 1.040; the CORE views of seed 3 (369 = 41 x 9) 1.119 vs 1.040 and seed 13 (405 = 45 x 9) min 0.876 vs 0.966. Complete
+    // sample, max / min over the mean: absent 1.040 / 0.956, 1.046 / 0.962, 1.050 / 0.963; present 1.026 / 0.975, 1.027 / 0.966,
+    // 1.044 / 0.972 (per class, the narrow tunnel strips alone swing up to 1.18 / 0.85: fewer patches across them; the level-wide
+    // amount, the property, stays steady).
+    const absent = [0x1a2b3c, 6, 42], present = absent.map(s0 => presentSeeds(1, i => s0 + i)[0]);
+    const openCells = (l: StationLayout, count: (g: StationLayout['grid'], i: number) => void) => {
+      for (const L of stationLevels(l).slice(0, MAX_SLOTS)) for (let i = 0; i < L.grid.w * L.grid.h; i++) if (L.grid.cells[i] !== SOLID) count(L.grid, i);
+    };
+    for (const seed of [...absent, ...present]) {
+      const l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      const on = btsAreaPresent(seed);
+      expect(on, `seed ${seed}`).toBe(present.includes(seed));
+      // THE DOMAIN, partitioned: every open cell of the live level is a station cell, a track-bed cell (VOID), a tunnel cell or an
+      // annex cell; station + bed = exactly the core view's open cells (the live domain is the core plus every extension cell)
+      const n = {station: 0, bed: 0, tunnel: 0, annex: 0};
+      openCells(l, (g, i) => { const ext = l.areas[g.area[i]]?.ext; n[g.cells[i] === VOID ? 'bed' : ext ?? 'station']++; });
+      let core = 0;
+      openCells(coreView(l), () => core++);
+      expect(n.station + n.bed, `seed ${seed}`).toBe(core);
+      if (on) expect(n.annex, `seed ${seed}: the PRESENT mix samples annex cells`).toBeGreaterThan(0);
+      else { expect(n.annex, `seed ${seed}`).toBe(0); expect(n.tunnel, `seed ${seed}: the ABSENT mix samples its tunnels`).toBeGreaterThan(0); }
+      const ms: number[] = [];
+      for (let t = 0; t <= 300; t += 20) {
+        const s = mediumStats(l, maps, p, t, 1);
+        expect(s.samples, `seed ${seed}`).toBe(n.station + n.bed + n.tunnel + n.annex);
+        ms.push(s.mean);
+      }
+      const avg = ms.reduce((a, b) => a + b, 0) / ms.length;
+      expect(Math.max(...ms) / avg, `seed ${seed} (live, ${on ? 'present' : 'absent'})`).toBeLessThan(1.1);
+      expect(Math.min(...ms) / avg, `seed ${seed} (live, ${on ? 'present' : 'absent'})`).toBeGreaterThan(0.9);
     }
   });
 

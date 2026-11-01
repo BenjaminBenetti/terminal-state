@@ -7,8 +7,10 @@ import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
 import {levelFixture} from './helpers/levelRenderFixture';
 import {ARCHETYPES, generateStation, type StationLayout} from '../src/gen/station';
-import {CELL, FLOOR} from '../src/gen/grid';
+import {CELL, FLOOR, VOID} from '../src/gen/grid';
 import {isExtensionArea} from '../src/gen/trackExt/types';
+import {btsAreaPresent, coreView, hasExtensionGrowth} from '../src/gen/trackExt/index';
+import {presentSeeds} from './helpers/btsArea';
 import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
@@ -135,6 +137,93 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
     }
     expect(mean(wetBy.lower)).toBeGreaterThan(mean(wetBy.main));
     expect(mean(wetBy.main)).toBeGreaterThan(mean(wetBy.upper));
+  });
+
+  it('wetness over the FULL LIVE level (station + track tunnels + service annexes), area absent and present: every FLOOR cell by class', () => {
+    // (2026-11-01, round-4 follow-up lane ENV) The test above keeps the station's own cells per storey; this one covers EVERY FLOOR
+    // cell of the live layout, on the original seed 9001 (every archetype; its level rolls the Beyond the Station area ABSENT, so its
+    // main storey is the station plus track tunnels) and on the first two seeds after it that roll the area PRESENT (the real roll,
+    // tests/helpers/btsArea.ts: 9003, 9013 — every archetype carries 1-2 annexes there), with the per-class rules of world/decay.ts:
+    //  - LEAK-DRIVEN cells (the station's, and the annexes': rooms / corridors, no bed floor): seeded leak patches whose budget scales
+    //    with LEVEL_WETNESS by storey role (water finds its way down) — the original property, lower > main > upper, now over the
+    //    station cells (as above) AND over every leak-driven FLOOR cell of the full storey (station + annex cells).
+    //  - BED-CLASS cells (the track tunnels: FLOOR cells, but the track bed continued: "the tunnels' ballast is as damp as the bed"):
+    //    every cell at least the bed's own damp floor (0.3, the station's VOID beds' base) — a per-cell rule, independent of storey.
+    //  - The FULL storey mean is the cell-weighted mix of those class means (checked: nothing lies outside the classes). In the
+    //    PRESENT mix the original full-storey ordering holds as it was written (9003: lower 0.095 > main 0.072 > upper 0.034; 9013:
+    //    0.098 > 0.064 > 0.029). In the ABSENT mix the main storey adds its bed-class tunnels (a 0.3+ floor, 3-4x a storey's leak
+    //    wetness) with no annex cells: main 0.093 vs lower 0.088 on 9001 (station main 0.072) — the expected mix, not drier lower
+    //    ground; so there the full main storey is checked against its expectation (wetter than its leak-driven cells, drier than
+    //    upper never) and the lower storey against the main storey's leak-driven cells.
+    // KNOWN DEFECT, reported (not asserted either way): buildDecayField copies the WHOLE core window from the core view, so extension
+    // cells that lie inside that rectangle carry the core's rock texels (wet ~0, rock neglect) instead of the extension rules (on 9001
+    // 20-85 % of a tunnel's cells; on 9003 / 9013 up to 87 % of an annex's). Changing it moves the track-ext-core "runtime fields" and
+    // storeys-n decay pins (other lanes'), so the bed / annex per-cell rules below cover the cells BEYOND the core window; once the
+    // window copy skips extension cells, they hold for every cell (measured with that change: tunnels min 0.302 on every cell; the
+    // full-storey orderings above unchanged in sign).
+    const present = presentSeeds(2, i => 9001 + i);
+    for (const seed of [9001, ...present]) {
+      const on = btsAreaPresent(seed);
+      expect(on, `seed ${seed}`).toBe(seed !== 9001);
+      type Role = 'upper' | 'main' | 'lower';
+      const S: Record<Role, number[]> = {upper: [], main: [], lower: []}, K = {upper: [], main: [], lower: []} as Record<Role, number[]>, F = {upper: [], main: [], lower: []} as Record<Role, number[]>;
+      let bedChecked = 0, annexChecked = 0;
+      for (const fam of ARCHETYPES) {
+        const l = gen(fam, seed), lv = stationLevels(l), f = buildDecayField(l, lv), e = l.extensions;
+        const tag = `${fam} ${seed}`;
+        // the roll decides the annex cells: none on the absent level, at least one annex on every archetype of a present level
+        expect((e?.annexes.length ?? 0) > 0, tag).toBe(on);
+        const win = e && hasExtensionGrowth(l) ? e.core : null;
+        const beyond = (g: {w: number}, i: number) => { if (!win) return true; const x = i % g.w, y = (i - x) / g.w; return x < win.x || y < win.y || x >= win.x + win.w || y >= win.y + win.h; };
+        const clv = stationLevels(coreView(l));
+        for (let L = 0; L < lv.length; L++) {
+          const g = lv[L].grid, role = lv[L].role as Role, cls = {station: [] as number[], tunnel: [] as number[], annex: [] as number[]};
+          let floors = 0, coreFloors = 0;
+          for (let i = 0; i < g.cells.length; i++) if (g.cells[i] === FLOOR) { floors++; cls[l.areas[g.area[i]]?.ext ?? 'station'].push(i); }
+          for (const c of clv[L].grid.cells) if (c === FLOOR) coreFloors++;
+          // 100 % partition of the storey's FLOOR cells; the station class is exactly the core station's floor of that storey
+          expect(cls.station.length + cls.tunnel.length + cls.annex.length, `${tag} L${L}`).toBe(floors);
+          expect(cls.station.length, `${tag} L${L}`).toBe(coreFloors);
+          const wet = (v: number[]) => v.map(i => texel(f, L, i, 2));
+          const ws = wet(cls.station), wt = wet(cls.tunnel), wa = wet(cls.annex), all = [...ws, ...wt, ...wa];
+          const mixed = (mean(ws) * ws.length + mean(wt) * wt.length + mean(wa) * wa.length) / floors;
+          expect(mean(all), `${tag} L${L}: full storey = cell-weighted mix of the class means`).toBeCloseTo(mixed, 9);
+          // bed class (per cell: the minimum): the station's own track beds (VOID: the 0.3 base) and every tunnel cell beyond the core window
+          let bedMin = 1, tunnelMin = 1;
+          if (role === 'main') for (let i = 0; i < g.cells.length; i++) if (g.cells[i] === VOID) bedMin = Math.min(bedMin, texel(f, L, i, 2));
+          for (const i of cls.tunnel) if (beyond(g, i)) { tunnelMin = Math.min(tunnelMin, texel(f, L, i, 2)); bedChecked++; }
+          expect(bedMin, `${tag} L${L}: driest track-bed cell`).toBeGreaterThanOrEqual(0.3 - 0.5 / 255);
+          expect(tunnelMin, `${tag} L${L}: driest tunnel cell beyond the core window`).toBeGreaterThanOrEqual(0.3 - 0.5 / 255);
+          // annex cells beyond the core window: the station's floor rule for leaks — leaks exist, most of it is dry
+          const annexOut = cls.annex.filter(i => beyond(g, i));
+          if (annexOut.length) {
+            const wetShare = annexOut.filter(i => texel(f, L, i, 2) > 0.3).length / annexOut.length;
+            expect(wetShare, `${tag} annex`).toBeGreaterThan(0.03);
+            expect(wetShare, `${tag} annex`).toBeLessThan(0.4);
+            annexChecked += annexOut.length;
+          }
+          S[role].push(mean(ws));
+          K[role].push(mean([...ws, ...wa]));
+          F[role].push(mean(all));
+        }
+      }
+      expect(bedChecked, `seed ${seed}: tunnel cells exercised`).toBeGreaterThan(1000);
+      if (on) expect(annexChecked, `seed ${seed}: annex cells exercised`).toBeGreaterThan(1000);
+      const m = (r: Record<Role, number[]>) => ({upper: mean(r.upper), main: mean(r.main), lower: mean(r.lower)});
+      const s = m(S), k = m(K), full = m(F), row = `seed ${seed}: station ${JSON.stringify(s)} leak-driven ${JSON.stringify(k)} full ${JSON.stringify(full)}`;
+      // station cells and the full storey's leak-driven cells: wetter lower level, drier upper deck (both mixes)
+      expect(s.lower, row).toBeGreaterThan(s.main);
+      expect(s.main, row).toBeGreaterThan(s.upper);
+      expect(k.lower, row).toBeGreaterThan(k.main);
+      expect(k.main, row).toBeGreaterThan(k.upper);
+      // the full storey: the main storey's bed-class tunnels only add wetness; never drier than the upper deck
+      expect(full.main, row).toBeGreaterThan(k.main);
+      expect(full.main, row).toBeGreaterThan(full.upper);
+      // present mix: the original full-storey ordering as written; absent mix: the lower storey against the main storey's
+      // leak-driven cells (its full mean adds the tunnels' bed floor with no annex to dilute it: see the header)
+      if (on) expect(full.lower, row).toBeGreaterThan(full.main);
+      else expect(full.lower, row).toBeGreaterThan(k.main);
+    }
   });
 
   it('detail texture: no stamped shapes (smooth stain field, smooth grain), vertical runs only in A', () => {
