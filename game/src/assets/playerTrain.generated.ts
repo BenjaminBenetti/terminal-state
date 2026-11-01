@@ -5,8 +5,8 @@
 //   shell: train-local (place at the car origin);  door leaf: ONE leaf of a centre-opening pair, grounded / centred, closing edge
 //   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z.
 export const PLAYER_TRAIN_MODELS = {
-  'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2292108, tris: 26956, dims: [16.2031, 3.8508, 2.9914] as const},
-  'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 111172, tris: 1040, dims: [0.608, 2.031, 0.045] as const},
+  'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2545908, tris: 27495, dims: [16.2031, 3.8508, 2.9914] as const},
+  'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 107428, tris: 992, dims: [0.608, 2.031, 0.045] as const},
   'player-train-console': {key: 'player-train-console', url: 'assets/models/player-train-console.glb', bytes: 607856, tris: 11389, dims: [0.8028, 1.1641, 1.9549] as const},
 } as const;
 
@@ -41,4 +41,21 @@ export const PLAYER_TRAIN_MEASURED = {
     marker: {front: [{x: 7.734, y: 3.256, z: -0.833}, {x: 7.734, y: 3.256, z: 0.833}], rear: [{x: -7.734, y: 3.256, z: -0.833}, {x: -7.734, y: 3.256, z: 0.833}]},
   },
   doorLeaf: {outerZ: 1.359, width: 0.608, height: 2.031, thickness: 0.045},
+  windows: {
+    side: [
+      {side: -1 as const, zone: 'cab' as const, x0: 5.35, x1: 6.36, y0: 1.96, y1: 2.82, skinZ: 1.481},
+      {side: -1 as const, zone: 'cab' as const, x0: 6.62, x1: 6.94, y0: 1.96, y1: 2.78, skinZ: 1.466},
+      {side: 1 as const, zone: 'cab' as const, x0: 5.35, x1: 6.34, y0: 1.93, y1: 2.82, skinZ: 1.473},
+      {side: 1 as const, zone: 'cab' as const, x0: 6.62, x1: 6.94, y0: 1.93, y1: 2.78, skinZ: 1.476},
+    ],
+    end: [
+      {end: 1 as const, z0: -1.28, z1: -0.67, y0: 1.93, y1: 2.97, skinX: 7.395},
+      {end: 1 as const, z0: -0.38, z1: 0.45, y0: 1.99, y1: 3.05, skinX: 7.64},
+      {end: 1 as const, z0: 0.66, z1: 1.28, y0: 1.91, y1: 2.96, skinX: 7.395},
+      {end: -1 as const, z0: -1.28, z1: -0.66, y0: 1.92, y1: 2.96, skinX: 7.422},
+      {end: -1 as const, z0: -0.4, z1: 0.44, y0: 1.95, y1: 2.99, skinX: 7.707},
+      {end: -1 as const, z0: 0.68, z1: 1.28, y0: 1.9, y1: 2.97, skinX: 7.433},
+    ],
+    leaf: {x0: -0.242, x1: 0.195, y0: 0.06, y1: 1.922},
+  },
 } as const;

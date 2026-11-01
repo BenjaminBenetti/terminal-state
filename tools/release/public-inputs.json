@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 28814,
-      "sha256": "5cfbf0bb044a3a5f15dfced5d096307f43d695efccde81f3a26ec5c12d0dcd42"
+      "bytes": 28950,
+      "sha256": "03c7eb534ce29b308966afac4e9f304e730a34af011fef6e4a2933b3dec11503"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1725,8 +1725,8 @@
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
-      "bytes": 21151,
-      "sha256": "f1cd1b68d5b38955a80d0c65f4bf2d790171e2bb736cc47ab1566273ff453d39"
+      "bytes": 25078,
+      "sha256": "cd4704b8df63b1f30b7c8ba54c5f08893f453aedfa452a0ff68dc951070a536b"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -3235,13 +3235,13 @@
     },
     {
       "path": "assets/models/player-train-door-leaf.glb",
-      "bytes": 111172,
-      "sha256": "5fe1f62fb3577c8a55fe4c25a73191fa4fd5d3403a78a9467d91defcfb06a87c"
+      "bytes": 107428,
+      "sha256": "1106d394775b16e04baad04d55d12bbe97b3407fd5391a208c25bb8239940bae"
     },
     {
       "path": "assets/models/player-train-shell.glb",
-      "bytes": 2292108,
-      "sha256": "194cc743542ef6c9b048c66c3d53e326fbc60ada80bb56fb7df2a403720a967d"
+      "bytes": 2545908,
+      "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
     },
     {
       "path": "assets/models/reactor-aux-generator.glb",

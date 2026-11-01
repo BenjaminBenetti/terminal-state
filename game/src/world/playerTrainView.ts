@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {PlayerTrainSpec, TrainDoorSpec} from './playerTrainSpec';
+import {cabGlassMaterial} from './elevator';
 
 /** The accepted Codex interior textures (runtime JPEGs; null / missing = plain paint). */
 export interface TrainTextures {
@@ -40,6 +41,8 @@ export interface TrainModels {
 export const TRAIN_VIEW = {
   /** An open leaf's closing edge clears the jamb by this. */
   leafClear: 0.01,
+  /** Glass panes sit this far inside the cut skin plane (task train-shell-followup). */
+  glassInset: 0.004,
   /** The jambs / heads / thresholds reach this far past the leaf's outer face (the shell's recess walls cover from ~outerZ + 0.02). */
   jambPast: 0.03,
   /** Cab partition thickness. */
@@ -82,6 +85,13 @@ export interface TrainView {
   geometries: THREE.BufferGeometry[];
   /** Which parts came from the cooked models. */
   source: {shell: 'model' | 'procedural'; door: 'model' | 'procedural'; console: 'model' | 'none'; textures: number};
+  /**
+   * Task train-shell-followup: the glass of every leaf window as ONE instanced mesh (both faces, so a mirrored leaf needs no flipped
+   * pipeline: one draw for all twelve panes), instance i = slots[i]'s leaf; null without a leaf window / leaf model.
+   */
+  leafGlass: {mesh: THREE.InstancedMesh; slots: {door: number; k: 0 | 1; holder: THREE.Object3D; inner: THREE.Object3D}[]} | null;
+  /** Re-fit the leaf-window glass instances to the leaves' current positions (call after moving the leaves). */
+  syncLeafGlass(): void;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -101,6 +111,13 @@ export class TrainMaterials {
   }
 
   get size(): number { return this.cache.size; }
+
+  /**
+   * Task train-shell-followup-20261101-221246: the window glass — the moving glass lift's clear glass (world/elevator.ts
+   * cabGlassMaterial: transparent, depthWrite off, both faces, a little fresnel, no world mapping, so nothing swims when the car moves;
+   * never a shadow caster). Shared, never disposed here.
+   */
+  glass(): THREE.Material { return cabGlassMaterial(); }
 
   dispose(): void {
     for (const m of this.cache.values()) m.dispose();
@@ -188,6 +205,54 @@ export function wallSpans(lo: number, hi: number, cuts: readonly (readonly [numb
   return out;
 }
 
+/**
+ * The partitions with an open doorway: the cab's (at cab.x0) and, task train-shell-followup-20261101-221246, the rear compartment's
+ * (at rear.x1, no console). Shared by the view and the collision.
+ */
+export function partitionsOf(spec: PlayerTrainSpec): {x: number; doorway: {z0: number; z1: number; height: number}; end: 1 | -1}[] {
+  const out: {x: number; doorway: {z0: number; z1: number; height: number}; end: 1 | -1}[] = [{x: spec.cab.x0, doorway: spec.cab.doorway, end: 1}];
+  if (spec.rear) out.push({x: spec.rear.x1, doorway: spec.rear.doorway, end: -1});
+  return out;
+}
+
+/**
+ * Task train-shell-followup-20261101-221246: the see-through windows lane ASSETS cut out of the cooked shell / door leaf (spec.windows,
+ * train-local; the leaf rect in the leaf GLB's own frame). Rects are the inner-most opening in their projection.
+ */
+export interface TrainWindows {
+  side: readonly {side: -1 | 1; x0: number; x1: number; y0: number; y1: number; skinZ: number}[];
+  end: readonly {end: -1 | 1; z0: number; z1: number; y0: number; y1: number; skinX: number}[];
+  leaf: {x0: number; x1: number; y0: number; y1: number} | null;
+}
+/** The spec's window cut-outs (none until the shell / leaf carry them). */
+export function windowsOf(spec: PlayerTrainSpec): TrainWindows {
+  const w = (spec as {windows?: Partial<TrainWindows> | null}).windows;
+  return {side: w?.side ?? [], end: w?.end ?? [], leaf: w?.leaf ?? null};
+}
+
+/** The end-wall cut-outs (z0, z1, y0, y1) of the windows cut through the end at `end` (+1 = the front / cab, -1 = the rear). */
+export function endHoles(spec: PlayerTrainSpec, end: 1 | -1): [number, number, number, number][] {
+  return windowsOf(spec).end.filter(w => w.end === end).map(w => [w.z0, w.z1, w.y0, w.y1] as [number, number, number, number]);
+}
+
+/** [a0, a1] x [b0, b1] minus axis-aligned holes (a0, a1, b0, b1; clipped to the rect) as disjoint rects (column decomposition). */
+export function rectMinusHoles(a0: number, a1: number, b0: number, b1: number, holes: readonly (readonly [number, number, number, number])[]): [number, number, number, number][] {
+  const hs = holes.map(h => [Math.max(a0, h[0]), Math.min(a1, h[1]), Math.max(b0, h[2]), Math.min(b1, h[3])] as const).filter(h => h[1] - h[0] > 1e-4 && h[3] - h[2] > 1e-4);
+  if (!hs.length) return [[a0, a1, b0, b1]];
+  const cuts = [...new Set([a0, a1, ...hs.flatMap(h => [h[0], h[1]])])].sort((p, q) => p - q);
+  const out: [number, number, number, number][] = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const c0 = cuts[i], c1 = cuts[i + 1];
+    if (c1 - c0 < 1e-4) continue;
+    const mid = (c0 + c1) / 2;
+    const over = hs.filter(h => h[0] < mid && h[1] > mid).map(h => [h[2], h[3]] as [number, number]).sort((p, q) => p[0] - q[0]);
+    let b = b0;
+    for (const [h0, h1] of over) { if (h0 > b + 1e-4) out.push([c0, c1, b, h0]); b = Math.max(b, h1); }
+    if (b1 > b + 1e-4) out.push([c0, c1, b, b1]);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------------
 
 /**
@@ -215,6 +280,7 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   const hw = spec.interior.halfWidth, out = outerHalf(spec), f = spec.floorY, c = spec.ceilingY, H = c - f;
   const ix0 = spec.interior.x0, ix1 = spec.interior.x1, L2 = spec.length / 2;
   const tex = textures;
+  const win = windowsOf(spec);
   const nTex = [tex.wall, tex.floor, tex.ceiling, tex.bulkhead].filter(Boolean).length;
   const cutsOf = (side: -1 | 1) => spec.doors.filter(d => d.side === side).map(d => [d.x - d.width / 2, d.x + d.width / 2] as const);
 
@@ -239,10 +305,13 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
       else wall.quad([b, y0, z], [a, y0, z], [a, y1, z], [b, y1, z], n, [ua, v0], [ub, v0], [ub, v1], [ua, v1]);
     };
     const seamU = (len: number): [number, number] => { const w = Math.min(0.24, len / H) / 2; return [-w, w]; };
+    // (task train-shell-followup) the see-through side windows cut out of this side's lining (their sleeves / glass below)
+    const holes = win.side.filter(w => w.side === side).map(w => [w.x0, w.x1, w.y0, w.y1] as [number, number, number, number]);
     for (const [a, b] of wallSpans(ix0, ix1, cutsOf(side))) {
       const len = b - a, nb = Math.round(len / H);
-      if (nb >= 1 && len >= seam * H) piece(a, b, f, c, 0, nb);
-      else { const [s0, s1] = seamU(len); piece(a, b, f, c, s0, s1); }
+      const [ua, ub] = nb >= 1 && len >= seam * H ? [0, nb] : seamU(len);
+      const uAt = (x: number) => ua + ((x - a) / len) * (ub - ua); // the span's bay mapping, kept across the window holes
+      for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, f, c, holes)) piece(x0, x1, y0, y1, uAt(x0), uAt(x1));
     }
     for (const d of spec.doors.filter(q => q.side === side)) {
       const a = d.x - d.width / 2, b = d.x + d.width / 2, top = Math.min(c, f + d.height);
@@ -252,21 +321,24 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   add(wall, mats.get('wall', tex.wall), 'train-walls');
 
   // --- end walls + cab partition (the bulkhead art; the partition's open doorway cut where its painted door is) ---------------
-  const bulk = new QuadSet();
+  const bulk = new QuadSet(), pt = TRAIN_VIEW.partition / 2;
   const uZ = (z: number, facingPlusX: boolean) => (facingPlusX ? (hw - z) : (z + hw)) / (2 * hw); // u to the viewer's right
   const endWall = (x: number, facingPlusX: boolean, z0: number, z1: number, y0: number, y1: number) => {
     const n: V3 = [facingPlusX ? 1 : -1, 0, 0], v0 = (y0 - f) / H, v1 = (y1 - f) / H;
     if (facingPlusX) bulk.quad([x, y0, z1], [x, y0, z0], [x, y1, z0], [x, y1, z1], n, [uZ(z1, true), v0], [uZ(z0, true), v0], [uZ(z0, true), v1], [uZ(z1, true), v1]);
     else bulk.quad([x, y0, z0], [x, y0, z1], [x, y1, z1], [x, y1, z0], n, [uZ(z0, false), v0], [uZ(z1, false), v0], [uZ(z1, false), v1], [uZ(z0, false), v1]);
   };
-  endWall(ix0, true, -hw, hw, f, c); // the rear wall (a closed gangway door painted on it)
-  endWall(ix1, false, -hw, hw, f, c); // the cab's front wall
-  const cab = spec.cab, dw = cab.doorway, pt = TRAIN_VIEW.partition / 2;
-  const doorTop = Math.min(c, f + dw.height);
-  for (const [x, plusX] of [[cab.x0 - pt, false], [cab.x0 + pt, true]] as const) {
-    endWall(x, plusX, -hw, dw.z0, f, c);
-    endWall(x, plusX, dw.z1, hw, f, c);
-    if (c - doorTop > 1e-3) endWall(x, plusX, dw.z0, dw.z1, doorTop, c);
+  // end walls with the end windows' cut-outs (their frames: the window sleeves below)
+  for (const r of rectMinusHoles(-hw, hw, f, c, endHoles(spec, -1))) endWall(ix0, true, r[0], r[1], r[2], r[3]); // the rear wall (a closed gangway door painted on it)
+  for (const r of rectMinusHoles(-hw, hw, f, c, endHoles(spec, 1))) endWall(ix1, false, r[0], r[1], r[2], r[3]); // the cab's front wall
+  // the partitions: the cab's and (task train-shell-followup) the rear compartment's, both with the open doorway
+  for (const {x: px, doorway: dw} of partitionsOf(spec)) {
+    const doorTop = Math.min(c, f + dw.height);
+    for (const [x, plusX] of [[px - pt, false], [px + pt, true]] as const) {
+      endWall(x, plusX, -hw, dw.z0, f, c);
+      endWall(x, plusX, dw.z1, hw, f, c);
+      if (c - doorTop > 1e-3) endWall(x, plusX, dw.z0, dw.z1, doorTop, c);
+    }
   }
   add(bulk, mats.get('bulkhead', tex.bulkhead), 'train-bulkheads');
 
@@ -284,14 +356,47 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
     rubber.quad([a, f + 0.004, zh], [b, f + 0.004, zh], [b, f + 0.004, zl], [a, f + 0.004, zl], [0, 1, 0], [a, zh], [b, zh], [b, zl], [a, zl]);
   }
   // partition doorway reveals (both jambs + head across the partition thickness)
-  {
-    const x0 = cab.x0 - pt, x1 = cab.x0 + pt;
+  for (const {x: px, doorway: dw} of partitionsOf(spec)) {
+    const x0 = px - pt, x1 = px + pt, doorTop = Math.min(c, f + dw.height);
     metal.quad([x0, f, dw.z0], [x1, f, dw.z0], [x1, doorTop, dw.z0], [x0, doorTop, dw.z0], [0, 0, 1], [x0, 0], [x1, 0], [x1, 1], [x0, 1]);
     metal.quad([x1, f, dw.z1], [x0, f, dw.z1], [x0, doorTop, dw.z1], [x1, doorTop, dw.z1], [0, 0, -1], [x1, 0], [x0, 0], [x0, 1], [x1, 1]);
     metal.quad([x0, doorTop, dw.z0], [x1, doorTop, dw.z0], [x1, doorTop, dw.z1], [x0, doorTop, dw.z1], [0, -1, 0], [x0, 0], [x1, 0], [x1, 1], [x0, 1]);
   }
+  // (task train-shell-followup) window sleeves: frames closing the void between the lining and the cut skin, around every window
+  const glass = new QuadSet();
+  for (const w of win.side) {
+    const s = w.side, zl = Math.min(s * hw, s * w.skinZ), zh = Math.max(s * hw, s * w.skinZ);
+    if (zh - zl > 1e-3) {
+      metal.quad([w.x0, w.y0, zh], [w.x0, w.y0, zl], [w.x0, w.y1, zl], [w.x0, w.y1, zh], [1, 0, 0], [zh, w.y0], [zl, w.y0], [zl, w.y1], [zh, w.y1]);
+      metal.quad([w.x1, w.y0, zl], [w.x1, w.y0, zh], [w.x1, w.y1, zh], [w.x1, w.y1, zl], [-1, 0, 0], [zl, w.y0], [zh, w.y0], [zh, w.y1], [zl, w.y1]);
+      metal.quad([w.x0, w.y1, zl], [w.x1, w.y1, zl], [w.x1, w.y1, zh], [w.x0, w.y1, zh], [0, -1, 0], [w.x0, zl], [w.x1, zl], [w.x1, zh], [w.x0, zh]);
+      metal.quad([w.x0, w.y0, zh], [w.x1, w.y0, zh], [w.x1, w.y0, zl], [w.x0, w.y0, zl], [0, 1, 0], [w.x0, zh], [w.x1, zh], [w.x1, zl], [w.x0, zl]);
+    }
+    const zg = s * (w.skinZ - TRAIN_VIEW.glassInset);
+    glass.quad([w.x0, w.y0, zg], [w.x1, w.y0, zg], [w.x1, w.y1, zg], [w.x0, w.y1, zg], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
+  }
+  for (const w of win.end) {
+    const e = w.end, xl = Math.min(e * (e > 0 ? ix1 : -ix0), e * w.skinX), xh = Math.max(e * (e > 0 ? ix1 : -ix0), e * w.skinX);
+    if (xh - xl > 1e-3) {
+      metal.quad([xl, w.y0, w.z0], [xh, w.y0, w.z0], [xh, w.y1, w.z0], [xl, w.y1, w.z0], [0, 0, 1], [xl, w.y0], [xh, w.y0], [xh, w.y1], [xl, w.y1]);
+      metal.quad([xh, w.y0, w.z1], [xl, w.y0, w.z1], [xl, w.y1, w.z1], [xh, w.y1, w.z1], [0, 0, -1], [xh, w.y0], [xl, w.y0], [xl, w.y1], [xh, w.y1]);
+      metal.quad([xl, w.y1, w.z0], [xh, w.y1, w.z0], [xh, w.y1, w.z1], [xl, w.y1, w.z1], [0, -1, 0], [xl, w.z0], [xh, w.z0], [xh, w.z1], [xl, w.z1]);
+      metal.quad([xl, w.y0, w.z1], [xh, w.y0, w.z1], [xh, w.y0, w.z0], [xl, w.y0, w.z0], [0, 1, 0], [xl, w.z1], [xh, w.z1], [xh, w.z0], [xl, w.z0]);
+    }
+    const xg = e * (w.skinX - TRAIN_VIEW.glassInset);
+    glass.quad([xg, w.y0, w.z1], [xg, w.y0, w.z0], [xg, w.y1, w.z0], [xg, w.y1, w.z1], [1, 0, 0], [0, 0], [1, 0], [1, 1], [0, 1]);
+  }
   add(metal, mats.get('metal'), 'train-trim');
   add(rubber, mats.get('rubber'), 'train-thresholds');
+  if (!glass.empty) {
+    const g = glass.geometry();
+    geometries.push(g);
+    const m = new THREE.Mesh(g, mats.glass());
+    m.name = 'train-glass';
+    m.userData.trainGlass = true;
+    m.renderOrder = 1; // after the opaque car (transparent: depthWrite off, both faces)
+    fixed.add(m);
+  }
 
   // --- light fittings (emissive; the casting lights are the runtime's boot-time lights) -----------------------------------------
   const fixtures = new QuadSet(), heads = new QuadSet(), tails = new QuadSet();
@@ -370,7 +475,8 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   const doorModel = models.door?.scene ?? null;
   let modelBox: THREE.Box3 | null = null;
   if (doorModel) { doorModel.updateMatrixWorld(true); modelBox = new THREE.Box3().setFromObject(doorModel); }
-  let leafGeo: THREE.BufferGeometry | null = null;
+  let leafGeo: THREE.BufferGeometry | null = null, leafGlassGeo: THREE.BufferGeometry | null = null;
+  const glassSlots: {door: number; k: 0 | 1; holder: THREE.Object3D; inner: THREE.Object3D}[] = [];
   // lane ASSETS' leaf rules: the closed leaf's OUTER face at |z| = doorLeaf.outerZ (a clear sliding pocket at every door), its baked
   // width / height / thickness; both faces alike, closing edge (T-handle) at +X -> the +X leaf of a pair is mirrored
   const DL = spec.doorLeaf, lw = DL.width;
@@ -389,6 +495,17 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
         const inner = new THREE.Group();
         leaf.position.set(-ctr.x, -ctr.y, -ctr.z);
         inner.add(leaf);
+        // (task train-shell-followup) glass in the leaf's cut window, in the leaf's own frame: it slides (and mirrors) with the leaf
+        if (win.leaf) {
+          leafGlassGeo ??= (() => {
+            const q = new QuadSet(), w = win.leaf!, z = -ctr.z;
+            q.quad([w.x0 - ctr.x, w.y0 - ctr.y, z], [w.x1 - ctr.x, w.y0 - ctr.y, z], [w.x1 - ctr.x, w.y1 - ctr.y, z], [w.x0 - ctr.x, w.y1 - ctr.y, z], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
+            const g = q.geometry();
+            geometries.push(g);
+            return g;
+          })();
+          glassSlots.push({door: spec.doors.indexOf(d), k, holder, inner});
+        }
         inner.scale.set(sx * (k === 1 ? -1 : 1), sy, sz2);
         leaf = inner;
       } else {
@@ -405,13 +522,34 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
     }
     leaves.push(pair);
   }
-  return {root, fixed, leaves, geometries, source: {shell: shellSrc, door: doorModel ? 'model' : 'procedural', console: consoleSrc, textures: nTex}};
+  // the leaf-window glass: one instanced mesh under the root (it moves with the leaves: never culler-registered)
+  let leafGlass: TrainView['leafGlass'] = null;
+  if (leafGlassGeo && glassSlots.length) {
+    const im = new THREE.InstancedMesh(leafGlassGeo, mats.glass(), glassSlots.length);
+    im.name = 'train-door-glass';
+    im.userData.trainGlass = true;
+    im.renderOrder = 1;
+    root.add(im);
+    leafGlass = {mesh: im, slots: glassSlots};
+  }
+  const mtx = new THREE.Matrix4();
+  const syncLeafGlass = (): void => {
+    if (!leafGlass) return;
+    leafGlass.slots.forEach((sl, i) => {
+      sl.holder.updateMatrix(); sl.inner.updateMatrix();
+      leafGlass!.mesh.setMatrixAt(i, mtx.multiplyMatrices(sl.holder.matrix, sl.inner.matrix)); // (the doors group is the root's identity child)
+    });
+    leafGlass.mesh.instanceMatrix.needsUpdate = true;
+    leafGlass.mesh.computeBoundingSphere();
+  };
+  syncLeafGlass();
+  return {root, fixed, leaves, geometries, source: {shell: shellSrc, door: doorModel ? 'model' : 'procedural', console: consoleSrc, textures: nTex}, leafGlass, syncLeafGlass};
 }
 
-/** Draw calls / triangles of a view (QA / tests: the cost the train adds). */
+/** Draw calls / triangles of a view (QA / tests: the cost the train adds; hidden warm-up prototypes never draw). */
 export function viewCost(root: THREE.Object3D): {meshes: number; tris: number} {
   let meshes = 0, tris = 0;
-  root.traverse(o => {
+  root.traverseVisible(o => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     meshes++;

@@ -59,6 +59,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
 import {MeshoptSimplifier} from 'meshoptimizer';
+import {resolveCoverageFull, dropDegenerate, creaseNormals, censusOf, faceNormal, rasterFace, darkBox, ringMin, cutRect} from './lib/mesh-repair.mjs';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -111,6 +112,18 @@ const CONSOLE = {scale: 2.05, frontGap: 0.04};
 // and the accepted Meshy maps re-baked onto it (UV baking of the same source; no painting); ~1,000 triangles per leaf
 const LEAF_LOD = {targetHalfTriangles: 520, error: 0.004, creaseDeg: 40, bake: {w: 512, h: 1024, supersample: 2}};
 const LAMP_OFFSET = 0.05; // light mounts sit this far in front of the lamp lens
+// Task train-shell-followup-20261101-221246 (user: "messed up geometry / triangles", "you should be able to see through the windows"):
+// REPAIR = single coverage of near-coincident parallel faces (Meshy folds: inward flaps lying on the skin; duplicate layers) + crease
+// normals from the final faces; WINDOWS = exact through-cuts of the cab / rear-compartment side windows and both end faces' windows
+// (found as the dark glass inside these search boxes on the repaired surface; rect = the glass box inset by the gasket), and the door
+// leaf's window (inside its frame rim, the closing-edge stile with the T-handle kept). Glass panes / lining sleeves: lane TRAIN.
+const REPAIR = {cos: 0.97, gap: 0.003, creaseDeg: 40};
+// side windows stay POCKET_CLEAR away from the open door leaves' wall pockets (an open leaf would show through the glass: lane TRAIN)
+// and are skipped when less than MIN_WIDTH remains (the rear-compartment side windows: the rear door's open leaf covers them)
+const WINDOW = {inset: 0.03, dark: 55, px: 0.01, y: [1.75, 3.1], endZMax: 1.28, endCutMin: 7.26, ring: 0.02, pocketClear: 0.04, slide: 0.01, minWidth: 0.4};
+const SIDE_WINDOW_SEARCH = [{zone: 'cab', x: [5.15, 6.5]}, {zone: 'cab', x: [6.5, 7.08]}, {zone: 'rear', x: [-6.98, -6.3]}];
+const END_WINDOW_SEARCH = [{z: [-1.5, -0.55]}, {z: [-0.55, 0.55]}, {z: [0.55, 1.5]}];
+const LEAF_WINDOW = {rimMargin: 0.02, topMargin: 0.04, bottom: 0.06, stileGap: 0.015};
 const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: [512, 1024], normal: [256, 512], mr: [128, 256], quality: 85, baked: 'planar front projection'}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
@@ -461,8 +474,24 @@ for (const sd of [-1, 1]) for (const d of doorRects) for (const fx of [0.2, 0.35
 const recess = {[-1]: median(recessZ[-1]), [1]: median(recessZ[1])}, skinBeside = {[-1]: median(beltZ[-1]), [1]: median(beltZ[1])};
 for (const sd of [-1, 1]) if (!(skinBeside[sd] - recess[sd] > 0.03)) fail(`door recess not found on side ${sd}: recess ${recess[sd]} vs skin ${skinBeside[sd]}`);
 // triangles, door cuts
+// class tags (record slot 8): 0 the body component, 1 upper fittings (roof vents / end fittings), 2 underframe, 3 / 4 bogies
+const bodyVert = new Uint8Array(nV); for (const i of body.verts) bodyVert[i] = 1;
+const clsOf = i => classOf[i] >= 0 ? 3 + classOf[i] : classOf[i] === -2 ? 2 : bodyVert[i] ? 0 : 1;
 let shellTris = [];
-for (let t = 0; t < shellRaw.idx.length; t += 3) shellTris.push([0, 1, 2].map(j => vert(cooked, shellRaw.idx[t + j])));
+for (let t = 0; t < shellRaw.idx.length; t += 3) shellTris.push([0, 1, 2].map(j => [...vert(cooked, shellRaw.idx[t + j]), clsOf(shellRaw.idx[t + j])]));
+// ---------- repair (before any cut): census, single coverage of near-coincident faces, degenerate faces ----------
+const censusBefore = censusOf(shellTris, REPAIR);
+// priority: body / fittings faces that face OUTWARD from the car's core first (largest first), then the undercarriage, then body
+// faces turned INWARD (the Meshy fold flaps lying on the skin): those survive only where no outward face covers them
+const coreClamp = c => [Math.max(-7.0, Math.min(7.0, c[0])), Math.max(1.6, Math.min(3.0, c[1])), Math.max(-0.8, Math.min(0.8, c[2]))];
+const repairPriority = t => {
+  if (t[0][8] >= 2) return 1;
+  const c = [0, 1, 2].map(k => (t[0][k] + t[1][k] + t[2][k]) / 3), q = coreClamp(c), o = [c[0] - q[0], c[1] - q[1], c[2] - q[2]];
+  const n = faceNormal(t), ol = Math.hypot(...o), nl = Math.hypot(...n);
+  return ol > 1e-6 && nl > 0 && (n[0] * o[0] + n[1] * o[1] + n[2] * o[2]) / (ol * nl) < -0.5 ? 2 : 0;
+};
+const repaired = resolveCoverageFull(shellTris, repairPriority, REPAIR);
+shellTris = dropDegenerate(repaired.tris);
 let removedArea = 0;
 for (const sd of [-1, 1]) for (const d of doorRects) {
   const next = [];
@@ -482,6 +511,43 @@ for (const sd of [-1, 1]) for (const d of doorRects) {
   }
   shellTris = next;
 }
+// ---------- windows: measure the glass on the repaired surface, then cut straight through-holes ----------
+const baseImg = await (async () => { const {data, info} = await sharp(Buffer.from(shellRaw.doc.getRoot().listMaterials()[0].getBaseColorTexture().getImage())).removeAlpha().raw().toBuffer({resolveWithObject: true}); return {data, w: info.width, h: info.height}; })();
+const windowsSide = [], windowsEnd = [], windowsSkipped = [];
+const leafW = Math.max(...doorRects.map(d => d.x1 - d.x0)) / 2 + LEAF.overlap;
+const pockets = doorRects.flatMap(d => [[d.x0 - WINDOW.slide - leafW, d.x0 - WINDOW.slide], [d.x1 + WINDOW.slide, d.x1 + WINDOW.slide + leafW]]); // open-leaf x spans
+for (const sd of [-1, 1]) for (const w of SIDE_WINDOW_SEARCH) {
+  const r = rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px});
+  const b = darkBox(r, {dark: WINDOW.dark});
+  if (!b) fail(`no ${w.zone} window glass found on side ${sd} in x ${w.x}`);
+  const rect = {u0: b.u0 + WINDOW.inset, u1: b.u1 - WINDOW.inset, v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
+  const glass = {...rect};
+  let trimmed = false;
+  for (const [p0, p1] of pockets) {
+    if (rect.u1 <= p0 - WINDOW.pocketClear || rect.u0 >= p1 + WINDOW.pocketClear) continue;
+    trimmed = true;
+    if ((p0 + p1) / 2 < (rect.u0 + rect.u1) / 2) rect.u0 = Math.max(rect.u0, p1 + WINDOW.pocketClear); else rect.u1 = Math.min(rect.u1, p0 - WINDOW.pocketClear);
+  }
+  if (trimmed && (rect.u1 - rect.u0 < WINDOW.minWidth || rect.u1 - rect.u0 < 0.6 * (glass.u1 - glass.u0))) { windowsSkipped.push({side: sd, zone: w.zone, glassX: [r3(glass.u0), r3(glass.u1)], why: 'an open door leaf parks in the wall pocket behind it'}); continue; }
+  const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: CUT_MIN_Z, px: WINDOW.px}), rect, WINDOW.ring);
+  windowsSide.push({side: sd, zone: w.zone, x0: r3(rect.u0), x1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinZ: r3(Math.floor(skin * 1000) / 1000)});
+}
+for (const end of [1, -1]) for (const w of END_WINDOW_SEARCH) {
+  const r = rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: w.z[0], u1: w.z[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px});
+  const b = darkBox(r, {dark: WINDOW.dark});
+  if (!b) fail(`no end window glass found at end ${end} in z ${w.z}`);
+  const rect = {u0: Math.max(-WINDOW.endZMax, b.u0 + WINDOW.inset), u1: Math.min(WINDOW.endZMax, b.u1 - WINDOW.inset), v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
+  const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px}), rect, WINDOW.ring);
+  windowsEnd.push({end, z0: r3(rect.u0), z1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinX: r3(Math.floor(skin * 1000) / 1000)});
+}
+let windowArea = 0;
+for (const w of windowsSide) { const c = cutRect(shellTris, {u: 0, v: 1, n: 2, u0: w.x0, u1: w.x1, v0: w.y0, v1: w.y1, sign: w.side, nMin: CUT_MIN_Z}); shellTris = c.tris; windowArea += c.removedArea; }
+for (const w of windowsEnd) { const c = cutRect(shellTris, {u: 2, v: 1, n: 0, u0: w.z0, u1: w.z1, v0: w.y0, v1: w.y1, sign: w.end, nMin: WINDOW.endCutMin}); shellTris = c.tris; windowArea += c.removedArea; }
+// the cuts split faces; resolve once more at that scale (cuts never create overlaps, but smaller pieces expose coincident ones), then
+// recompute the normals from the final faces
+const repaired2 = resolveCoverageFull(shellTris, repairPriority, REPAIR);
+shellTris = creaseNormals(dropDegenerate(repaired2.tris), REPAIR.creaseDeg);
+const censusAfter = censusOf(shellTris, REPAIR);
 // the leaf plane: one leaf of a centre-opening pair for the widest doorway; its outer face sits just inside the innermost remaining
 // skin over each opening and its sliding pocket (the recess jamb lips reach further in than the recess panel), so an open leaf
 // never pokes through the skin
@@ -530,6 +596,9 @@ const checks = {
   leafPockets: doors.map(d => boxHits(finalTris, {min: [d.x - d.width / 2 - leafSize.width, floorY + 0.005, d.side < 0 ? -(leafOuterZ - 0.003) : leafOuterZ - leafSize.thickness],
     max: [d.x + d.width / 2 + leafSize.width, floorY + d.height, d.side < 0 ? -(leafOuterZ - leafSize.thickness) : leafOuterZ - 0.003]})),
   openings: doors.map(d => boxHits(finalTris, {min: [d.x - d.width / 2 + 0.01, floorY + 0.01, d.side < 0 ? -2 : interior.halfWidth], max: [d.x + d.width / 2 - 0.01, floorY + d.height - 0.01, d.side < 0 ? -interior.halfWidth : 2]})),
+  // every window is a clear straight through-hole from the lining out past the skin
+  sideWindows: windowsSide.map(w => boxHits(finalTris, {min: [w.x0 + 0.01, w.y0 + 0.01, w.side < 0 ? -2 : interior.halfWidth], max: [w.x1 - 0.01, w.y1 - 0.01, w.side < 0 ? -interior.halfWidth : 2]})),
+  endWindows: windowsEnd.map(w => boxHits(finalTris, {min: [w.end > 0 ? interior.x1 : -9, w.y0 + 0.01, w.z0 + 0.01], max: [w.end > 0 ? 9 : -interior.x1, w.y1 - 0.01, w.z1 - 0.01]})),
 };
 const wheelTreads = [];
 for (let i = 0; i < nV; i++) if (classOf[i] >= 0 && shellRaw.pos[i * 3 + 1] < yWheel + 0.002) wheelTreads.push([cooked.pos[i * 3], cooked.pos[i * 3 + 1], cooked.pos[i * 3 + 2]]);
@@ -551,6 +620,17 @@ if (!(fit.ceilingAboveFloor >= 2.25)) problems.push(`ceiling ${fit.ceilingAboveF
 if (treadZ.some(z => Math.abs(z - RAIL_HALF_GAUGE) > 0.01)) problems.push(`wheel treads at ${treadZ}`);
 if (Math.abs(fit.minY) > 1e-3) problems.push(`not on the rail plane: min y ${fit.minY}`);
 if (cab.x0 < frontDoor.x1 + 0.25) problems.push(`cab partition ${cab.x0} too close to the front door edge ${frontDoor.x1}`);
+checks.sideWindows.forEach((n, i) => n && problems.push(`side window ${i} still has ${n} shell triangles`));
+checks.endWindows.forEach((n, i) => n && problems.push(`end window ${i} still has ${n} shell triangles`));
+for (const w of windowsSide) {
+  if (w.zone === 'cab' && (w.x0 < cab.x0 + 0.05 || w.x1 > interior.x1)) problems.push(`cab window ${w.x0}..${w.x1} outside the cab`);
+  if (w.y0 < floorY + 0.5 || w.y1 > ceilingY) problems.push(`side window y ${w.y0}..${w.y1} outside the wall`);
+  if (!(w.skinZ > interior.halfWidth)) problems.push(`side window skin ${w.skinZ} inside the lining`);
+  for (const [p0, p1] of pockets) if (w.x1 > p0 - WINDOW.pocketClear + 1e-9 && w.x0 < p1 + WINDOW.pocketClear - 1e-9) problems.push(`side window ${w.x0}..${w.x1} over a leaf pocket ${p0}..${p1}`);
+}
+for (const w of windowsEnd) if (w.z0 < -interior.halfWidth || w.z1 > interior.halfWidth || w.y0 < floorY + 0.5 || w.y1 > ceilingY || !(w.skinX > interior.x1)) problems.push(`end window ${JSON.stringify(w)} outside the end wall`);
+if (windowsEnd.length !== 6) problems.push(`expected 3 windows per end face, cut ${windowsEnd.length}`);
+for (const k of ['degenerate', 'normalFlip', 'foldOverlaps', 'duplicateOverlaps']) if (censusAfter[k]) problems.push(`repair left ${censusAfter[k]} ${k}`);
 
 // ======================================================================================================================
 // DOOR LEAF (clean +Z half, mirrored)
@@ -592,6 +672,36 @@ leafTris = [...leafHalf, ...leafHalf.map(t => [t[0], t[2], t[1]].map(v => [v[0],
 const leafFit = fitTris(leafTris, size => [leafSize.width / size[0], leafSize.height / size[1], leafSize.thickness / size[2]]);
 leafTris = leafFit.tris;
 const leafScale = leafFit.scale.map(r4);
+// ---------- the leaf's window: through-cut of both glass faces inside the frame rim, the closing-edge stile (T-handle) kept ----------
+const isGlassFace = t => { const n = faceNormal(t), l = Math.hypot(...n); return l > 0 && Math.abs(n[2] / l) > 0.9 && t.every(v => Math.abs(v[2]) < 0.0075); };
+const isRimFace = t => { const n = faceNormal(t), l = Math.hypot(...n); return l > 0 && Math.abs(n[2] / l) > 0.9 && t.every(v => Math.abs(v[2]) > 0.012); };
+const leafWindow = (() => {
+  const rim = leafTris.filter(t => isRimFace(t) && t[0][2] > 0);
+  const hw = leafSize.width / 2;
+  // inner edges of the rim strips: left / right along the mid-height band, top along the centre band
+  const band = (lo, hi, k) => rim.filter(t => Math.max(...t.map(v => v[k])) >= lo && Math.min(...t.map(v => v[k])) <= hi); // rim strips span the leaf
+  const midBand = band(1.2, 1.6, 1), cBand = band(-0.1, 0.1, 0);
+  const left = Math.max(...midBand.flatMap(t => t.map(v => v[0])).filter(x => x < 0)), right = Math.min(...midBand.flatMap(t => t.map(v => v[0])).filter(x => x > 0));
+  const top = Math.min(...cBand.flatMap(t => t.map(v => v[1])).filter(y => y > 1.0));
+  // the T-handle: geometry standing proud of the glass inside the rim; its backplate = the x bins whose vertical extent > 0.1 m
+  const proud = leafTris.flatMap(t => t).filter(v => v[2] > 0.0075 && v[0] > left + 0.005 && v[0] < right - 0.005 && v[1] > 0.3 && v[1] < 1.7);
+  const bins = new Map();
+  for (const v of proud) { const b = Math.floor(v[0] / 0.005); const e = bins.get(b) ?? [Infinity, -Infinity]; bins.set(b, [Math.min(e[0], v[1]), Math.max(e[1], v[1])]); }
+  const plate = [...bins].filter(([, [a, b]]) => b - a > 0.1).map(([b]) => b * 0.005);
+  if (!(left < -0.2 && left > -0.3 && right > 0.2 && right < 0.3 && top > 1.8 && top < 2.0 && plate.length && Math.min(...plate) > 0)) fail(`door leaf window: unexpected frame (rim ${left}, ${right}, top ${top}, handle plate ${plate})`);
+  return {x0: r3(left + LEAF_WINDOW.rimMargin), x1: r3(Math.min(right - LEAF_WINDOW.rimMargin, Math.min(...plate) - LEAF_WINDOW.stileGap)), y0: LEAF_WINDOW.bottom, y1: r3(top - LEAF_WINDOW.topMargin), rim: [r4(left), r4(right), r4(top)], plateX0: r4(Math.min(...plate)), halfWidth: hw};
+})();
+{
+  // the glass layer: its +-Z faces, plus any small detail on it (rivet facets) lying wholly inside the window (no floating bits remain)
+  const inWin = t => t.every(v => Math.abs(v[2]) < 0.0075 && v[0] > leafWindow.x0 && v[0] < leafWindow.x1 && v[1] > leafWindow.y0 && v[1] < leafWindow.y1);
+  const strays = leafTris.filter(t => !isGlassFace(t) && inWin(t));
+  const glass = leafTris.filter(isGlassFace), rest = leafTris.filter(t => !isGlassFace(t) && !inWin(t));
+  leafWindow.strayFacets = strays.length;
+  let g = glass, cutArea = 0;
+  for (const sign of [1, -1]) { const c = cutRect(g, {u: 0, v: 1, n: 2, u0: leafWindow.x0, u1: leafWindow.x1, v0: leafWindow.y0, v1: leafWindow.y1, sign, nMin: 0}); g = c.tris; cutArea += c.removedArea; }
+  leafTris = [...rest, ...g];
+  leafWindow.cutArea = r3(cutArea);
+}
 writeTris(leafRaw.doc, leafRaw.prim, leafTris);
 leafRaw.doc.getRoot().listMaterials().forEach(m => m.setDoubleSided(true));
 const leafOut = await finishDoc(leafRaw.doc, 'player-train-door-leaf', TEX.leaf);
@@ -628,6 +738,7 @@ if (problems.length) { console.error(JSON.stringify({fit, checks, problems}, nul
 const measured = {
   length: fit.length, width: fit.width, floorY, ceilingY, roofY: shellOut.bounds.max[1], interior, cab, doors, console: consoleSpec, lights,
   doorLeaf: {outerZ: leafOuterZ, ...leafSize},
+  windows: {side: windowsSide, end: windowsEnd, leaf: {x0: leafWindow.x0, x1: leafWindow.x1, y0: leafWindow.y0, y1: leafWindow.y1}},
 };
 const files = {
   'player-train-shell': {url: MODEL.shell, out: shellOut}, 'player-train-door-leaf': {url: MODEL.leaf, out: leafOut}, 'player-train-console': {url: MODEL.console, out: conOut},
@@ -636,8 +747,13 @@ const derivation = {
   shell: {frame: 'raw +X end = front (+X), raw -Z side = platform (-Z); no turn, no mirror', scale: {bodyXZ: S, bodyYAboveUnderside: SY, bodyYBelowUnderside: S, underframe: S, bogieXY: r4(SB), bogieZ: r4(SBZ)},
     rawPlanes: {underside: RAW.underside, sill: RAW.sill, doorTop: RAW.doorTop, wheelBottom: r4(yWheel), wheelTreadZ: r4(wheelZ), bogieCentresX: bogieCx.map(r4)},
     cookedUndersideY: r4(B), components: {total: compList.length, triangles: counts}, doorCuts: {rawX: RAW.doors, sides: [-1, 1], removedAreaM2: r3(removedArea), innerSkinZ: r4(innerSkin), recessPlaneZ: {platform: r4(recess[-1]), far: r4(recess[1])}, skinBesideZ: {platform: r4(skinBeside[-1]), far: r4(skinBeside[1])}},
-    checks, fit, coverboardClearance: {minYAboveRailOutboard124: coverboardClear, coverboardTop: 0.185}},
-  doorLeaf: {method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
+    checks, fit, coverboardClearance: {minYAboveRailOutboard124: coverboardClear, coverboardTop: 0.185},
+    repair: {method: 'single coverage of near-coincident parallel faces (|cos| >= ' + REPAIR.cos + ', planes within ' + REPAIR.gap + ' m): faces in priority order (outward body / fitting faces, undercarriage, inward body faces = Meshy fold flaps; larger first), each clipped against the kept faces it overlaps (no vertex moved, attributes interpolated, covered area kept); degenerate faces dropped; vertex normals recomputed from the final faces with a ' + REPAIR.creaseDeg + ' deg crease',
+      census: {before: censusBefore, after: censusAfter}, passes: [repaired.passes, repaired2.passes], clippedTriangles: repaired.clippedTriangles + repaired2.clippedTriangles, removedOverlapAreaM2: r3(repaired.removedArea + repaired2.removedArea)},
+    windows: {method: 'the dark glass (base colour luminance < ' + WINDOW.dark + ') inside per-window search boxes on the repaired surface, raster ' + WINDOW.px + ' m; rect = glass box inset ' + WINDOW.inset + ' m (the gasket stays); side windows kept ' + WINDOW.pocketClear + ' m clear of the open-leaf wall pockets; straight through-cuts (|z| > ' + CUT_MIN_Z + ' / |x| > ' + WINDOW.endCutMin + '); skinZ / skinX = the innermost skin on a ' + WINDOW.ring + ' m ring around each cut',
+      removedAreaM2: r3(windowArea), skipped: windowsSkipped}},
+  doorLeaf: {window: {...leafWindow, method: 'both glass faces (|n.z| > 0.9, |z| < 7.5 mm) clipped out inside the frame rim (inner edges + ' + LEAF_WINDOW.rimMargin + ' m), below the top rim (- ' + LEAF_WINDOW.topMargin + ' m), from y ' + LEAF_WINDOW.bottom + '; the closing-edge stile carrying the T-handle backplate kept (' + LEAF_WINDOW.stileGap + ' m gap); collision unchanged (lane TRAIN keeps the leaf box)'},
+    method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
     rawZ: [r4(lzMin), r4(lzMax)], keptTriangles: keptLeafTris, lod: {...LEAF_LOD, tool: 'meshoptimizer simplify by position on the kept half (borders collapse only along themselves: the mid-plane loop stays on the plane), crease-angle normals, planar front UV; base colour / metallic-roughness / normal re-baked from the clean half by an orthographic +Z projection (normals re-expressed in the new tangent frame); then mirrored', halfTriangles: simplifiedLeafHalf, sourceHalfTriangles: keptLeafTris}, scale: leafScale, frame: 'grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)'},
   console: {method: 'turned -90 deg about Y (native operator side +Z -> -X), uniform scale', scale: CONSOLE.scale, frame: 'grounded, centred; operator side -X, windshield side +X, width along Z'},
 };
@@ -699,6 +815,15 @@ ${measured.doors.map(d => `    {side: ${d.side} as const, x: ${d.x}, width: ${d.
     marker: {front: ${lit(measured.lights.marker.front)}, rear: ${lit(measured.lights.marker.rear)}},
   },
   doorLeaf: ${lit(measured.doorLeaf)},
+  windows: {
+    side: [
+${measured.windows.side.map(w => `      {side: ${w.side} as const, zone: '${w.zone}' as const, x0: ${w.x0}, x1: ${w.x1}, y0: ${w.y0}, y1: ${w.y1}, skinZ: ${w.skinZ}},`).join('\n')}
+    ],
+    end: [
+${measured.windows.end.map(w => `      {end: ${w.end} as const, z0: ${w.z0}, z1: ${w.z1}, y0: ${w.y0}, y1: ${w.y1}, skinX: ${w.skinX}},`).join('\n')}
+    ],
+    leaf: ${lit(measured.windows.leaf)},
+  },
 } as const;
 `;
 
@@ -706,7 +831,7 @@ ${measured.doors.map(d => `    {side: ${d.side} as const, x: ${d.x}, width: ${d.
 const credPath = path.join(PUB, CREDITS_REL);
 const credSrc = fs.readFileSync(credPath, 'utf8');
 const credSection = [CREDITS_BEGIN, '## Player train (level one): car shell, driving desk, door leaf, interior textures', '',
-  `Models generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's player-train authorization (${last.attempts} attempts, ${last.billed} credits of up to ${open.ceilings.billedPlusReserved}); interior textures generated with Codex native image generation (the owned Codex CLI's built-in image_gen tool). Runtime derivatives (mesh processing: body stretched to human scale with the undercarriage unstretched, door openings cut, the leaf rebuilt from its clean face and decimated, its own maps re-baked onto a planar UV; otherwise texture resize / format conversion only) built by \`tools/asset-pipeline/train/build-player-train.mjs\` (provenance: \`${PROV_REL}\`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.`, '',
+  `Models generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's player-train authorization (${last.attempts} attempts, ${last.billed} credits of up to ${open.ceilings.billedPlusReserved}); interior textures generated with Codex native image generation (the owned Codex CLI's built-in image_gen tool). Runtime derivatives (mesh processing: body stretched to human scale with the undercarriage unstretched, door openings and see-through window openings cut, Meshy's folded / duplicate overlapping faces removed and the normals recomputed, the leaf rebuilt from its clean face and decimated with its own maps re-baked onto a planar UV and its window cut; otherwise texture resize / format conversion only) built by \`tools/asset-pipeline/train/build-player-train.mjs\` (provenance: \`${PROV_REL}\`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters are kept outside Git.`, '',
   `- \`${MODEL.shell}\` — weathered subway car shell (Meshy tasks ${accepted.shell.preview} / ${accepted.shell.task})`,
   `- \`${MODEL.console}\` — cab driving desk (Meshy tasks ${accepted.console.preview} / ${accepted.console.task})`,
   `- \`${MODEL.leaf}\` — sliding door leaf (Meshy tasks ${accepted.leaf.preview} / ${accepted.leaf.task})`,
