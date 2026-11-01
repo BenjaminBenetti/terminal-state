@@ -495,10 +495,18 @@ function drawSignature(a: Area, adj: Map<number, number[]>, sig: ReadonlyMap<num
   return opts.length ? rng.weighted(opts) : null;
 }
 
+/** (Round 3) Area by id of an annex's area list, built once per list (drawUtility runs once per utility room). */
+const BY_ID = new WeakMap<readonly Area[], Map<number, Area>>();
+function byIdOf(areas: readonly Area[]): Map<number, Area> {
+  let m = BY_ID.get(areas);
+  if (!m) BY_ID.set(areas, (m = new Map(areas.map(q => [q.id, q]))));
+  return m;
+}
+
 /** A utility purpose for a room: from `list` (round 3: its zone's; default ANNEX_ROOMS.utility), the hop rule where possible, repeat penalty. */
 function drawUtility(a: Area, adj: Map<number, number[]>, areas: readonly Area[], used: Map<string, number>, rng: Rng, ok: (pid: string, a: Area) => boolean,
   list: readonly (readonly [string, number])[] = ANNEX_ROOMS.utility): string {
-  const R = ANNEX_ROOMS, byId = new Map(areas.map(q => [q.id, q]));
+  const R = ANNEX_ROOMS, byId = byIdOf(areas);
   const near = new Set(within(adj, a.id, R.hops).map(id => byId.get(id)?.purpose).filter((p): p is string => !!p));
   let all = list.filter(([pid]) => ok(pid, a));
   // (round 3) the zone's purposes do not fit this room: any fitting utility purpose

@@ -64,6 +64,8 @@ interface PlannedTunnel {
 }
 
 const vkey = (x: number, y: number): number => (y + 8192) * 16384 + (x + 8192);
+/** (Round 3) The cellOk memo of Carver.cellOkCached: generation stamps + values over a virtual window, shared and grown on demand. */
+const OK_MEMO = {stamps: new Uint32Array(0), ok: new Uint8Array(0), next: 1};
 
 export class Carver {
   private readonly W: number; private readonly H: number;
@@ -172,15 +174,19 @@ export class Carver {
    * inputs only change at a commit (claim), and a group's own claims never turn its free cells into blocked ones — the cache is reset
    * when another group asks. The layout planner's free-depth profiles read every cell beside a corridor once.
    */
-  private okMemo: Int8Array | null = null;
   private okGroup = -1;
+  private okStamp = 0;
   private cellOkCached(x: number, y: number, i: number, group: number): boolean {
-    if (!this.okMemo) this.okMemo = new Int8Array(this.vw * this.vh);
-    if (this.okGroup !== group) { this.okMemo.fill(0); this.okGroup = group; }
-    const v = this.okMemo[i];
-    if (v) return v === 1;
+    // (one module-level buffer of generation stamps, reused by every Carver: no per-level allocation; a new stamp clears it)
+    if (this.okGroup !== group || !this.okStamp) {
+      this.okGroup = group;
+      if (OK_MEMO.stamps.length < this.vw * this.vh) { OK_MEMO.stamps = new Uint32Array(this.vw * this.vh); OK_MEMO.ok = new Uint8Array(this.vw * this.vh); OK_MEMO.next = 1; }
+      this.okStamp = OK_MEMO.next++;
+      if (OK_MEMO.next > 0xfffffff0) { OK_MEMO.stamps.fill(0); OK_MEMO.next = 1; this.okStamp = OK_MEMO.next++; }
+    }
+    if (OK_MEMO.stamps[i] === this.okStamp) return OK_MEMO.ok[i] === 1;
     const ok = this.cellOk(x, y, group, null);
-    this.okMemo[i] = ok ? 1 : 2;
+    OK_MEMO.stamps[i] = this.okStamp; OK_MEMO.ok[i] = ok ? 1 : 0;
     return ok;
   }
 

@@ -5,7 +5,7 @@
 //
 // The plan (cells; one wall cell between areas, doors in the walls — the carver's rules, gen/trackExt/carve.ts):
 //  1. ENTRY PASSAGE: the entry corridor from the tunnel / bed door (planned by the carver), lined with small staff rooms;
-//  2. MAIN SERVICE CORRIDOR (the spine): at the passage's end a T (or an L, or straight on) into a 2 m corridor running across it,
+//  2. MAIN SERVICE CORRIDOR (the spine): at the passage's end a T (or an L, or straight on) into a 1.5-2 m corridor running across it,
 //     extended in long straight runs of 10-16 m SEGMENTS joined by fire-door openings (each segment its own corridor area, so
 //     door-hop depth still grows along it), bending (L) only where the rock runs out;
 //  3. WINGS: a few perpendicular secondary corridors (1.5-2 m) off reserved slots on the spine's sides, 1-2 segments each;
@@ -110,21 +110,19 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
   const drawWidth = (z: 'staff' | 'plant') => { const [lo, hi] = rng.weighted(L.widths[z].map(([a, b, w]) => [[a, b], w] as [[number, number], number])); return rng.int(cl(lo), cl(hi)); };
   const maxWidth = (z: 'staff' | 'plant') => cl(Math.max(...L.widths[z].map(e => e[1])));
 
-  // ---- profiles: free depth beside a corridor side, per along cell (exact rectOk equivalent for rooms lined on that side)
-  const sideCell = (s: Seg, side: 0 | 1, t: number, k: number): [number, number] => {
-    const v = side === 0 ? c0Of(s) - 1 - k : c1Of(s) + k;
-    return s.ax === 'x' ? [t, v] : [v, t];
-  };
+  // ---- profiles: free depth beside a corridor side, per along cell (exact rectOk equivalent for rooms lined on that side; no
+  // allocation per cell: the scan is the planner's main cost)
   const profile = (s: Seg, side: 0 | 1, K: number): Prof => {
     const base = a0Of(s) - 1, n = a1Of(s) - base + 1, fi = new Int16Array(n), fr = new Int16Array(n);
+    const v0 = side === 0 ? c0Of(s) - 1 : c1Of(s), dv = side === 0 ? -1 : 1, onX = s.ax === 'x';
     for (let j = 0; j < n; j++) {
       const t = base + j;
       let k = 0;
-      while (k <= K + 1) { const [x, y] = sideCell(s, side, t, k); if (!P.ring(x, y)) break; k++; }
+      while (k <= K + 1) { const v = v0 + dv * k; if (!(onX ? P.ring(t, v) : P.ring(v, t))) break; k++; }
       fr[j] = k;
       let m = 0;
       const lim = Math.min(K, k - 1);
-      while (m < lim) { const [x, y] = sideCell(s, side, t, m + 1); if (!P.free(x, y)) break; m++; }
+      while (m < lim) { const v = v0 + dv * (m + 1); if (!(onX ? P.free(t, v) : P.free(v, t))) break; m++; }
       fi[j] = m;
     }
     return {base, fi, fr};

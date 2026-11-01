@@ -60,7 +60,7 @@ revision) the platforms announce every real annex entrance with station-surface 
   `gen/trackExt/annexLayout.ts` `planServiceArea`, driven by `Carver.grow`) replaced the random room tree (a weighted random parent,
   a random side, up to 14 corridors each ending in a room):
   - **entry passage**: the entry corridor from the tunnel / hatch door (6–18 m), lined with small staff rooms;
-  - **main service corridor** (the spine): at the passage's end a T (or an L, or straight on) into a 2 m corridor running across
+  - **main service corridor** (the spine): at the passage's end a T (or an L, or straight on) into a 1.5–2 m corridor running across
     it, in **10–16 m segments joined by fire-door openings** (each segment its own corridor area, so the door-hop depth still grows
     along it), 3–5 segments beyond the junction, bending (L) only where the rock runs out;
   - **wings**: 2–4 perpendicular 1.5–2 m corridors off slots reserved on the spine's sides, 1–2 segments each;

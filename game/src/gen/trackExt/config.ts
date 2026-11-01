@@ -17,14 +17,14 @@ import type {TrackExtConfig} from './types';
 export const SUBWAY_WALK_BASELINE_M2 = 7371;
 
 /**
- * (Round 3, lane LAYOUT) THE SERVICE-AREA PLAN of every annex (TrackExtConfig.annex.layout; gen/trackExt/annexLayout.ts): a 2 m main
+ * (Round 3, lane LAYOUT) THE SERVICE-AREA PLAN of every annex (TrackExtConfig.annex.layout; gen/trackExt/annexLayout.ts): a 1.5-2 m main
  * service corridor in 10-16 m segments (fire-door openings between them; 3-5 beyond its junction), 2-4 wings of 1-2 segments,
  * rooms lined up along both sides of every corridor — 4-5.5 m deep small staff rooms on the entry passage and the junction, 5-8 m
  * plant rooms beyond, widths along the corridor by weight — wing slots reserved on a spine side with `slotChance`, the hideout rule
  * (>= 3.5 x 4 m and 14 m², 18-32 m² preferred) and the growth-aware choices' crop scale (cells).
  */
 export const SERVICE_LAYOUT: NonNullable<TrackExtConfig['annex']['layout']> = {
-  spineWidth: [2, 2],
+  spineWidth: [1.5, 2],
   segment: [10, 16],
   spineSegments: [3, 5],
   wings: [2, 4],
