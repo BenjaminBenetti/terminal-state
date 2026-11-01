@@ -8,7 +8,7 @@
 //    doors, pushing into a shut door opens it; from the platform a shut door's gap is closed (no falling in);
 //  - the lights exist from install (boot) with the same light set in every section, cast (intensity > 0) only with a train;
 //  - teardown restores the volume list, layout.props, game.propIndex and the scene; the draw / triangle cost the car adds.
-import {beforeAll, describe, expect, it, vi} from 'vitest';
+import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {installCanvasShim} from './helpers/canvas2d';
 import {LEVELS} from '../src/levels/registry';
@@ -19,8 +19,8 @@ import {WarmupRegistry} from '../src/render/warmup';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type TrainPlacement} from '../src/gen/playerTrain';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
-import {TRAIN_DOOR, TRAIN_LIGHTS, PlayerTrainRuntime, installPlayerTrain, interiorLightMounts, trainColliders, type TrainHost} from '../src/world/playerTrain';
-import {viewCost} from '../src/world/playerTrainView';
+import {TRAIN_DOOR, TRAIN_LIGHTS, PlayerTrainRuntime, installPlayerTrain, interiorLightMounts, trainColliders, trainQaApi, type TrainHost} from '../src/world/playerTrain';
+import {TRAIN_VIEW, leafSpan, viewCost, windowsOf} from '../src/world/playerTrainView';
 import {raycastWorld} from '../src/combat/hitscan';
 import {loadStripped} from './helpers/openablesFixture';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -37,6 +37,11 @@ const layoutOf = (level: 'subway' | 'office' | 'mall', levelSeed = 4242): Statio
   if (!l) layouts.set(k, (l = LEVELS[level].generate(LEVELS[level].entry, {levelSeed})));
   return l;
 };
+
+/** Every runtime a test installed: torn down after each test even when an assertion failed mid-way (the layouts are cached). */
+const live: PlayerTrainRuntime[] = [];
+const track = (rt: PlayerTrainRuntime): PlayerTrainRuntime => { live.push(rt); return rt; };
+afterEach(() => { for (const rt of live.splice(0)) if (rt.train) rt.teardown(); });
 
 class Keys implements MoveInput {
   held = new Set<string>();
@@ -111,7 +116,7 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       const p = host.trainPlacement!;
       expect(p, `${level}: placed`).not.toBeNull();
       const lightsBoot0 = sceneLights(host.scene);
-      const rt = installPlayerTrain(host);
+      const rt = track(installPlayerTrain(host));
       const lightsBoot = sceneLights(host.scene);
       expect(lightsBoot - lightsBoot0, 'lights added once at install').toBe(2 + TRAIN_LIGHTS.interior.count);
       for (const l of rt.lights.all) expect(l.intensity).toBe(0);
@@ -133,7 +138,8 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       const eye = {x: sp.x, y: sp.y + STAND_EYE, z: sp.z}, side = trainToWorld(p, 0, 0, 1), dz = side.z - p.z;
       const wall = raycastWorld(host.levels, layout.props, eye, {x: 0, y: 0, z: dz}, 30, layout.trench.floorY);
       expect(wall.kind).toBe('prop');
-      expect(Math.abs(worldToTrain(p, eye.x, eye.y, eye.z + dz * wall.t).z)).toBeCloseTo(SPEC.interior.halfWidth, 2);
+      // (straight across from the spawn stands the far middle door: the bullet stops on its leaf, where the leaf is drawn)
+      expect(Math.abs(worldToTrain(p, eye.x, eye.y, eye.z + dz * wall.t).z)).toBeCloseTo(SPEC.doorLeaf.outerZ - SPEC.doorLeaf.thickness, 3);
       const down = raycastWorld(host.levels, layout.props, eye, {x: 0, y: -1, z: 0}, 30, layout.trench.floorY);
       expect(eye.y - down.t).toBeCloseTo(p.floorY, 3);
       const up = raycastWorld(host.levels, layout.props, eye, {x: 0, y: 1, z: 0}, 30, layout.trench.floorY);
@@ -166,7 +172,7 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       for (const l of rt.lights.all) expect(l.castShadow).toBe(false);
       // cost the car adds (reported): a handful of draws
       const cost = viewCost(t.view.root);
-      expect(cost.meshes).toBeLessThanOrEqual(24);
+      expect(cost.meshes).toBeLessThanOrEqual(26); // 9 lining + the window glass + 3 fallback skin + 12 fallback leaves
       // the procedural surfaces face the way their normals say (winding = shading normal), the lining faces into the car
       const owned = new Set(t.view.geometries);
       const inward = new Set(['train-floor', 'train-ceiling', 'train-walls']);
@@ -214,7 +220,7 @@ describe('player train: a real Player walks out of the train and back (Subway)',
 
   it('a shut door blocks; aim + [E] opens it; out onto the platform over the bridge and back in; the far wall blocks', () => {
     const {host} = makeHost(layout);
-    const rt = installPlayerTrain(host);
+    const rt = track(installPlayerTrain(host));
     for (const s of host.sectionHooks) s.build?.(layout);
     const p = host.trainPlacement!, t = rt.train!, hw = SPEC.interior.halfWidth;
     try {
@@ -289,7 +295,7 @@ describe('player train: a real Player walks out of the train and back (Subway)',
 
   it('never closes on a body: refused in the doorway, re-opens when stepped into, push-open, the gap stays closed from the platform', () => {
     const {host, toasts, pushKeys} = makeHost(layout);
-    const rt = installPlayerTrain(host);
+    const rt = track(installPlayerTrain(host));
     for (const s of host.sectionHooks) s.build?.(layout);
     const p = host.trainPlacement!, t = rt.train!, hw = SPEC.interior.halfWidth;
     try {
@@ -370,7 +376,7 @@ describe('player train: a real Player walks out of the train and back (Subway)',
 
   it('remembers door states per level for the run; colliders are a pure function of the spec + pose', () => {
     const {host} = makeHost(layout);
-    const rt = installPlayerTrain(host);
+    const rt = track(installPlayerTrain(host));
     for (const s of host.sectionHooks) s.build?.(layout);
     rt.setDoor(0, true);
     for (const s of host.sectionHooks) s.teardown?.();
@@ -389,12 +395,278 @@ describe('player train: a real Player walks out of the train and back (Subway)',
   });
 });
 
+describe('player train follow-up (train-shell-followup-20261101-221246): door highlight, rear compartment', () => {
+  it('the aimed door pair highlights like a drawer: on aim, off on un-aim / out of reach / leaving play; materials restored', () => {
+    const layout = layoutOf('subway');
+    const {host} = makeHost(layout);
+    const rt = track(installPlayerTrain(host));
+    for (const s of host.sectionHooks) s.build?.(layout);
+    const p = host.trainPlacement!, t = rt.train!;
+    const d = t.doors[middleDoor(-1)];
+    const mine = rt.leafMeshes(d), others = t.doors.filter(x => x !== d).flatMap(x => rt.leafMeshes(x));
+    const bases = new Map(mine.map(m => [m, m.material as THREE.Material]));
+    try {
+      spawnInside(host, rt, p);
+      expect(mine.length).toBeGreaterThanOrEqual(2); // both leaves of the pair
+      step(host, DT);
+      expect(rt.target).toBe(d);
+      expect(rt.highlighted).toBe(d);
+      expect(host.promptProviders.map(f => f()).find(Boolean)).toBe('<b>[E]</b> Open doors');
+      for (const m of mine) {
+        const hi = m.material as THREE.MeshStandardMaterial;
+        expect(hi).not.toBe(bases.get(m));
+        expect(m.userData.baseMat).toBe(bases.get(m));
+        expect(hi.isMeshStandardMaterial).toBe(true);
+        expect(hi.emissive.r).toBeGreaterThan(0.02); // the containers' warm pulse
+      }
+      for (const m of others) expect(m.userData.baseMat ?? m.material).toBe(m.material); // only the aimed pair
+      // the glow pulses while aimed (the same formula as drawers)
+      const e0 = (mine[0].material as THREE.MeshStandardMaterial).emissive.r;
+      step(host, 0.2);
+      expect((mine[0].material as THREE.MeshStandardMaterial).emissive.r).not.toBeCloseTo(e0, 4);
+      // opening keeps the target, the prompt follows the state
+      expect(host.interactHandlers.some(f => f())).toBe(true);
+      step(host, DT);
+      expect(rt.highlighted).toBe(d);
+      expect(host.promptProviders.map(f => f()).find(Boolean)).toBe('<b>[E]</b> Close doors');
+      // un-aim: look at the far wall -> restored
+      face(host, p, 2.5, 3);
+      step(host, DT);
+      expect(rt.target).toBeNull();
+      expect(rt.highlighted).toBeNull();
+      for (const m of mine) expect(m.material).toBe(bases.get(m));
+      // re-aim, then leave play (pause): cleared at once
+      face(host, p, d.col.door.x, -3);
+      step(host, DT);
+      expect(rt.highlighted).toBe(d);
+      for (const f of host.stateListeners) (f as unknown as (s: string, q: string) => void)('paused', 'playing');
+      expect(rt.highlighted).toBeNull();
+      expect(rt.prompt).toBeNull();
+      for (const m of mine) expect(m.material).toBe(bases.get(m));
+      // out of reach: walk to the car's far end -> nothing aimed, nothing glowing
+      face(host, p, d.col.door.x, -3);
+      step(host, DT);
+      expect(rt.highlighted).toBe(d);
+      host.player.x = trainToWorld(p, 6.0, 0, 0).x;
+      step(host, DT);
+      expect(rt.highlighted).toBeNull();
+      for (const m of mine) expect(m.material).toBe(bases.get(m));
+      // teardown while highlighted: the leaves get their own materials back; the clone cache stays bounded
+      spawnInside(host, rt, p);
+      step(host, DT);
+      expect(rt.highlighted).toBe(d);
+    } finally {
+      for (const s of host.sectionHooks) s.teardown?.();
+    }
+    expect(rt.highlighted).toBeNull();
+    for (const m of mine) expect(m.material, 'restored at teardown').toBe(bases.get(m));
+    expect((rt as unknown as {hiMats: Map<unknown, unknown>}).hiMats.size).toBeLessThanOrEqual(2); // one clone per leaf base material
+  });
+
+  it('the rear compartment: a partition with the cab\'s doorway (no console); a real Player walks in and back; its wall blocks', () => {
+    const rear = SPEC.rear!;
+    expect(rear.x0).toBe(SPEC.interior.x0);
+    const rearDoorEdge = Math.min(...SPEC.doors.map(d => d.x - d.width / 2));
+    expect(rear.x1).toBeLessThan(rearDoorEdge - 0.05); // clear of the rear doors (their pockets are outside the lining)
+    expect(rear.x1 - rear.x0).toBeGreaterThan(1.0); // room to stand in
+    expect(rear.doorway).toEqual(SPEC.cab.doorway);
+    const layout = layoutOf('subway');
+    const {host} = makeHost(layout);
+    const rt = track(installPlayerTrain(host));
+    for (const s of host.sectionHooks) s.build?.(layout);
+    const p = host.trainPlacement!, t = rt.train!;
+    try {
+      // the partition panels collide beside its doorway
+      const panels = t.col.statics.filter(b => { const q = worldToTrain(p, b.x, 0, b.z); return Math.abs(q.x - rear.x1) < 0.05 && b.hx < 0.2 + 1e-6 && Math.abs(b.hx - 0.03) < 0.01 || (Math.abs(q.x - rear.x1) < 0.05 && Math.abs(b.hz - 0.03) < 0.01); });
+      expect(panels.length).toBe(2);
+      spawnInside(host, rt, p);
+      // along the car to just in front of the rear partition, then through its doorway
+      face(host, p, rear.x1 + 1.0, 0);
+      for (let i = 0; i < 400 && local(host, p).x > rear.x1 + 1.05; i++) step(host, DT, W());
+      expect(local(host, p).x).toBeLessThan(rear.x1 + 1.2);
+      face(host, p, -20, local(host, p).z);
+      step(host, 2.5, W());
+      const q = local(host, p);
+      expect(q.x, 'inside the rear compartment').toBeLessThan(rear.x1 - 0.4);
+      expect(q.x, 'stopped by the rear wall').toBeGreaterThan(SPEC.interior.x0 + host.player.radius - 0.02);
+      expect(host.player.y).toBeCloseTo(p.floorY, 6);
+      expect(host.player.standBlocked).toBe(false);
+      expect(rt.playerInside()).toBe(true);
+      // and back out into the saloon
+      face(host, p, 20, local(host, p).z);
+      step(host, 1.2, W());
+      expect(local(host, p).x).toBeGreaterThan(rear.x1 + 0.5);
+      // QA hooks for the browser spot check: stand in the rear compartment / the cab, the readout
+      const qa = trainQaApi({trainRuntime: rt, player: host.player});
+      expect(qa.trainGo('rear')).toBe(true);
+      expect(local(host, p).x).toBeLessThan(rear.x1);
+      expect(rt.playerInside()).toBe(true);
+      expect(qa.trainGo('cab')).toBe(true);
+      expect(local(host, p).x).toBeGreaterThan(SPEC.cab.x0);
+      expect(qa.trainGo('spawn')).toBe(true);
+      const info = qa.train() as {rear: unknown; windows: {end: number; glassBoxes: number}; highlighted: number | null};
+      expect(info.rear).toEqual(SPEC.rear);
+      expect(info.windows.end).toBe(windowsOf(SPEC).end.length);
+      expect(info.windows.glassBoxes).toBe(windowsOf(SPEC).side.length + windowsOf(SPEC).end.length + SPEC.doors.length * 2);
+      face(host, p, rear.x1 + 1.0, 0);
+      for (let i = 0; i < 400 && local(host, p).x > rear.x1 + 1.05; i++) step(host, DT, W());
+      // beside the doorway the partition blocks
+      face(host, p, local(host, p).x, 0.95);
+      step(host, 0.8, W());
+      face(host, p, -20, local(host, p).z);
+      step(host, 2, W());
+      expect(local(host, p).x).toBeGreaterThan(rear.x1 + TRAIN_VIEW.partition / 2 + host.player.radius - 0.02);
+    } finally {
+      for (const s of host.sectionHooks) s.teardown?.();
+    }
+  });
+});
+
+describe('player train follow-up: see-through windows (glass panes, lining cut-outs, collision kept, bullets stop at the glass)', () => {
+  // the shape lane ASSETS publishes as spec.windows (rects = the inner-most skin opening); synthetic rects here so this test pins the
+  // runtime regardless of the exact cut (the real spec's windows are checked in the cooked-model test when present)
+  const WIN = {
+    side: [{side: -1 as const, x0: 5.4, x1: 6.9, y0: 2.0, y1: 2.9, skinZ: 1.42}, {side: 1 as const, x0: -7.15, x1: -6.72, y0: 2.0, y1: 2.9, skinZ: 1.42}],
+    end: [{end: 1 as const, z0: -0.9, z1: 0.9, y0: 2.25, y1: 3.0, skinX: 7.7}, {end: -1 as const, z0: -0.5, z1: 0.5, y0: 2.25, y1: 3.0, skinX: 7.7}],
+    leaf: {x0: -0.2, x1: 0.2, y0: 1.1, y1: 1.9},
+  };
+  const spec = {...SPEC, windows: WIN} as typeof SPEC;
+  let models: {door: GLTF};
+  beforeAll(async () => { models = {door: await loadStripped(SPEC.models.doorLeaf.url)}; }, 120000);
+
+  it('the published cut windows (spec.windows, lane ASSETS) fit the runtime: inside the cab / rear compartment / ends, clear of the leaf pockets', () => {
+    const w = windowsOf(SPEC);
+    expect(w.end.length, 'the windshield + rear end windows are published').toBeGreaterThan(0);
+    expect(w.leaf, 'the leaf window is published').not.toBeNull();
+    const hw = SPEC.interior.halfWidth, rear = SPEC.rear!;
+    const pockets = SPEC.doors.flatMap(d => [0, 1].map(k => leafSpan(d, k as 0 | 1, 1, SPEC.doorLeaf.width)));
+    for (const s of w.side) {
+      const inCab = s.x0 >= SPEC.cab.x0 + TRAIN_VIEW.partition && s.x1 <= SPEC.interior.x1 + 1e-6;
+      const inRear = s.x0 >= SPEC.interior.x0 - 1e-6 && s.x1 <= rear.x1 - TRAIN_VIEW.partition;
+      expect(inCab || inRear, `side window ${s.x0}..${s.x1} in the cab or the rear compartment`).toBe(true);
+      for (const [a, b] of pockets) expect(s.x1 <= a + 1e-6 || s.x0 >= b - 1e-6, `side window ${s.x0}..${s.x1} clear of the open leaf ${a.toFixed(3)}..${b.toFixed(3)}`).toBe(true);
+      expect(s.y0).toBeGreaterThan(SPEC.floorY); expect(s.y1).toBeLessThan(SPEC.ceilingY);
+      expect(s.skinZ).toBeGreaterThan(hw); expect(s.skinZ).toBeLessThanOrEqual(SPEC.width / 2 + 1e-6);
+    }
+    for (const e of w.end) {
+      expect(e.z0).toBeGreaterThanOrEqual(-hw - 1e-6); expect(e.z1).toBeLessThanOrEqual(hw + 1e-6);
+      expect(e.y0).toBeGreaterThan(SPEC.floorY); expect(e.y1).toBeLessThan(SPEC.ceilingY);
+      expect(e.skinX).toBeGreaterThan(SPEC.interior.x1); expect(e.skinX).toBeLessThanOrEqual(SPEC.length / 2 + 1e-6);
+    }
+    const l = w.leaf!;
+    expect(l.x0).toBeGreaterThan(-SPEC.doorLeaf.width / 2); expect(l.x1).toBeLessThan(SPEC.doorLeaf.width / 2);
+    expect(l.y0).toBeGreaterThan(0); expect(l.y1).toBeLessThan(SPEC.doorLeaf.height);
+  });
+
+  it('glass in every cut window and leaf window, the lining open behind it, collision unchanged, bullets stop at the glass', () => {
+    const layout = layoutOf('subway');
+    const {host} = makeHost(layout);
+    const fxCalls: string[] = [];
+    const h2 = {...host, bulletHitHandlers: [] as ((wh: never, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[],
+      fx: {impact: (_p: THREE.Vector3, _n: THREE.Vector3, surface: string) => { fxCalls.push(surface); }}};
+    const rt = track(installPlayerTrain(h2, {spec, models: () => models}));
+    for (const s of h2.sectionHooks) s.build?.(layout);
+    const p = h2.trainPlacement!, t = rt.train!, v = t.view;
+    // --- the view: one static glass mesh (both faces, transparent, no depth write, no shadow), a pane in each leaf window ---
+    const glass = v.fixed.getObjectByName('train-glass') as THREE.Mesh;
+    expect(glass).toBeTruthy();
+    const gm = glass.material as THREE.Material;
+    expect(gm.transparent).toBe(true);
+    expect(gm.depthWrite).toBe(false);
+    expect(gm.side).toBe(THREE.DoubleSide);
+    expect(glass.castShadow).toBe(false);
+    expect(glass.geometry.index!.count / 6).toBe(WIN.side.length + WIN.end.length);
+    // the leaf-window glass: ONE instanced draw for all twelve panes (both faces; never culler-registered: it moves)
+    const lg = v.leafGlass!;
+    expect(lg.mesh.isInstancedMesh).toBe(true);
+    expect(lg.mesh.count).toBe(SPEC.doors.length * 2);
+    expect(lg.mesh.parent).toBe(v.root);
+    expect((lg.mesh.material as THREE.Material).side).toBe(THREE.DoubleSide);
+    // looking out through each window from inside: the first thing on the ray is the glass (no lining in front of it), then nothing
+    // of the car until past the skin plane
+    const ray = new THREE.Raycaster();
+    v.root.updateMatrixWorld(true);
+    const opaque: THREE.Object3D[] = [];
+    v.fixed.traverse(o => { if ((o as THREE.Mesh).isMesh && o !== glass) opaque.push(o); });
+    const look = (from: [number, number, number], to: [number, number, number]) => {
+      const a = trainToWorld(p, ...from), b = trainToWorld(p, ...to);
+      const o = new THREE.Vector3(a.x, a.y, a.z), d = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z), len = d.length();
+      ray.set(o, d.normalize()); ray.far = len;
+      return {glass: ray.intersectObject(glass, false)[0]?.distance ?? null, opaque: ray.intersectObjects(opaque, false)[0]?.distance ?? null, len};
+    };
+    for (const w of WIN.side) {
+      const cx = (w.x0 + w.x1) / 2, cy = (w.y0 + w.y1) / 2;
+      const r = look([cx, cy, 0], [cx, cy, w.side * (w.skinZ + 0.3)]);
+      expect(r.glass, 'side glass').not.toBeNull();
+      expect(r.opaque === null || r.opaque > r.glass!, 'nothing opaque in front of the side glass').toBe(true);
+    }
+    for (const w of WIN.end) {
+      const cz = (w.z0 + w.z1) / 2, cy = (w.y0 + w.y1) / 2, x0 = w.end > 0 ? SPEC.interior.x1 - 0.5 : SPEC.interior.x0 + 0.5;
+      const r = look([x0, cy, cz], [w.end * (w.skinX + 0.3), cy, cz]);
+      expect(r.glass, 'end glass').not.toBeNull();
+      expect(r.opaque === null || r.opaque > r.glass!, 'nothing opaque in front of the end glass').toBe(true);
+    }
+    // --- collision: unchanged — the full wall boxes stay in game.propIndex (glass is not passable) ---
+    for (const b of t.col.statics) expect(h2.propIndex.props).toContain(b);
+    expect(t.col.statics.length).toBe(trainColliders(SPEC, p, null).statics.length);
+    // a real Player pushing into the cab side window from inside stays in the car
+    const w0 = WIN.side[0];
+    const at = trainToWorld(p, (w0.x0 + w0.x1) / 2 - 0.6, SPEC.floorY, 0);
+    h2.player.spawn(at.x, at.z, 0, at.y);
+    face(h2 as Host, p, (w0.x0 + w0.x1) / 2 - 0.6, -3);
+    step(h2 as Host, 2, W());
+    expect(Math.abs(local(h2 as Host, p).z)).toBeLessThan(SPEC.interior.halfWidth - h2.player.radius + 0.01);
+    // --- bullets: a shot through a window stops at its glass (a glass impact, not the steel); a shot at a shut door's window too ---
+    const shoot = (from: [number, number, number], to: [number, number, number]) => {
+      const a = trainToWorld(p, ...from), b = trainToWorld(p, ...to);
+      const d = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z).normalize();
+      const wh = raycastWorld(h2.levels, layout.props, a, {x: d.x, y: d.y, z: d.z}, 30, layout.trench.floorY);
+      const point = new THREE.Vector3(a.x, a.y, a.z).addScaledVector(d, wh.t);
+      const handled = h2.bulletHitHandlers.some(f => f(wh as never, point, d, 1, 20));
+      return {wh, point: worldToTrain(p, point.x, point.y, point.z), handled};
+    };
+    const sw = shoot([(w0.x0 + w0.x1) / 2, (w0.y0 + w0.y1) / 2, 0], [(w0.x0 + w0.x1) / 2, (w0.y0 + w0.y1) / 2, -3]);
+    expect(sw.wh.kind).toBe('prop');
+    expect(sw.handled).toBe(true);
+    expect(Math.abs(sw.point.z)).toBeCloseTo(w0.skinZ - TRAIN_VIEW.glassInset - 0.01, 3);
+    const we = WIN.end[0];
+    const ew = shoot([SPEC.cab.x0 + 0.3, (we.y0 + we.y1) / 2, 0], [20, (we.y0 + we.y1) / 2, 0]);
+    expect(ew.handled).toBe(true);
+    expect(ew.point.x).toBeCloseTo(we.skinX - TRAIN_VIEW.glassInset - 0.01, 3);
+    // the middle platform door's window (shut): the leaf glass, at the leaf
+    const d = t.doors[middleDoor(-1)], dd = d.col.door;
+    const [ga, gb] = [dd.x - SPEC.doorLeaf.width / 2 + WIN.leaf.x0, dd.x - SPEC.doorLeaf.width / 2 + WIN.leaf.x1];
+    const ly = SPEC.floorY + (WIN.leaf.y0 + WIN.leaf.y1) / 2; // (the leaf rect's y is above the leaf bottom = the car floor)
+    const lw = shoot([(ga + gb) / 2, ly, 0], [(ga + gb) / 2, ly, -3]);
+    expect(lw.handled).toBe(true);
+    expect(Math.abs(lw.point.z)).toBeCloseTo(SPEC.doorLeaf.outerZ - SPEC.doorLeaf.thickness - 0.002, 3);
+    // a shot at the wall beside a window: the steel (the damage system), not the glass
+    const ww = shoot([3.0, 2.0, 0], [3.0, 2.0, -3]);
+    expect(ww.handled).toBe(false);
+    expect(Math.abs(ww.point.z)).toBeCloseTo(SPEC.interior.halfWidth, 3);
+    expect(fxCalls.filter(x => x === 'glass').length).toBe(3);
+    expect(rt.counts.glassHits).toBe(3);
+    // the leaf glass slides with the leaf: open the door, its pane instance and its glass box are in the pocket
+    const slot = lg.slots.findIndex(sl => sl.door === d.col.index && sl.k === 0);
+    const at0 = new THREE.Matrix4(), at1 = new THREE.Matrix4(), p0 = new THREE.Vector3(), p1 = new THREE.Vector3();
+    lg.mesh.getMatrixAt(slot, at0); p0.setFromMatrixPosition(at0);
+    rt.setDoor(t.doors.indexOf(d), true);
+    step(h2 as Host, TRAIN_DOOR.time + 0.1);
+    lg.mesh.getMatrixAt(slot, at1); p1.setFromMatrixPosition(at1);
+    expect(p0.x - p1.x).toBeCloseTo(dd.width / 2 + TRAIN_VIEW.leafClear, 3); // (root-local: -X, the pocket side of leaf 0)
+    const lgb = d.col.leafGlass![0], lgl = worldToTrain(p, lgb.x, 0, lgb.z);
+    expect(lgl.x).toBeLessThan(dd.x - dd.width / 2); // in the wall pocket, out of the opening
+    // the glass never highlights (only the leaf panels do)
+    for (const m of rt.leafMeshes(d)) expect(m.userData.trainGlass).toBeFalsy();
+  });
+});
+
 describe('player train: out of the middle platform door and back on every level', () => {
   for (const level of ['office', 'mall'] as const) {
     it(`${level}: spawn -> aim + [E] -> platform -> back inside`, () => {
       const layout = layoutOf(level);
       const {host} = makeHost(layout);
-      const rt = installPlayerTrain(host);
+      const rt = track(installPlayerTrain(host));
       for (const s of host.sectionHooks) s.build?.(layout);
       const p = host.trainPlacement!, t = rt.train!;
       try {
@@ -429,7 +701,7 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
   it('shell / leaves / desk placed by the spec; the desk collides; a walk into the cab stops at the desk; the cost', () => {
     const layout = layoutOf('subway');
     const {host} = makeHost(layout);
-    const rt = installPlayerTrain(host, {models: () => models});
+    const rt = track(installPlayerTrain(host, {models: () => models}));
     for (const s of host.sectionHooks) s.build?.(layout);
     const p = host.trainPlacement!, t = rt.train!;
     try {
@@ -454,8 +726,49 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
           expect(Math.max(...zs)).toBeCloseTo(SPEC.doorLeaf.outerZ, 3);
         }
       }
-      // through the partition doorway into the cab: the desk stops the walk
+      // task train-shell-followup: GENUINELY see-through with the cooked (cut) shell and leaf — from inside, a ray through the middle of
+      // every published window passes the lining hole, the glass and the shell's cut without touching anything opaque out to 0.5 m
+      // past the skin; the glass is there (one static mesh: every side + end window; one instanced draw: every leaf window)
+      const WN = windowsOf(SPEC);
+      const glassMesh = t.view.fixed.getObjectByName('train-glass') as THREE.Mesh;
+      expect(glassMesh.geometry.index!.count / 6).toBe(WN.side.length + WN.end.length);
+      expect(t.view.leafGlass!.mesh.count).toBe(SPEC.doors.length * 2);
+      t.view.root.updateMatrixWorld(true);
+      const solid: THREE.Object3D[] = [];
+      t.view.root.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh && !m.userData.trainGlass && !m.userData.highlightPrototype) solid.push(m); });
+      const caster = new THREE.Raycaster();
+      const clear = (from: [number, number, number], to: [number, number, number], what: string) => {
+        const a = trainToWorld(p, ...from), b = trainToWorld(p, ...to);
+        const o = new THREE.Vector3(a.x, a.y, a.z), dv = new THREE.Vector3(b.x - a.x, b.y - a.y, b.z - a.z);
+        caster.set(o, dv.clone().normalize()); caster.far = dv.length();
+        const hit = caster.intersectObjects(solid, false)[0];
+        expect(hit ? `${hit.object.name} at ${hit.distance.toFixed(3)}` : null, `${what}: nothing opaque on the view out`).toBeNull();
+        caster.far = dv.length();
+        expect(caster.intersectObject(glassMesh, false).length + caster.intersectObject(t.view.leafGlass!.mesh, false).length, `${what}: through glass`).toBeGreaterThan(0);
+      };
+      for (const w of WN.side) {
+        const cx = (w.x0 + w.x1) / 2, cy = (w.y0 + w.y1) / 2;
+        clear([cx, cy, 0], [cx, cy, w.side * (w.skinZ + 0.5)], `cab side window x ${w.x0}..${w.x1} side ${w.side}`);
+      }
+      for (const w of WN.end) {
+        const cz = (w.z0 + w.z1) / 2, cy = (w.y0 + w.y1) / 2;
+        const from = w.end > 0 ? SPEC.console.x - 0.5 : (SPEC.rear!.x0 + SPEC.rear!.x1) / 2;
+        clear([from, Math.max(cy, SPEC.floorY + 1.3), cz], [w.end * (w.skinX + 0.5), cy, cz], `end ${w.end} window z ${w.z0}..${w.z1}`);
+      }
+      for (const dd of SPEC.doors.filter(q => q.side < 0)) {
+        const lx = dd.x - SPEC.doorLeaf.width / 2 + (WN.leaf!.x0 + WN.leaf!.x1) / 2, ly = SPEC.floorY + 1.4; // leaf 0 of the shut pair (clear of the T-handle lever)
+        clear([lx, ly, 0], [lx, ly, -2.5], `door ${dd.x} leaf window`);
+      }
+      // the cooked leaf highlights like a drawer (its Meshy PBR material cloned, emissive pulse), and only while aimed
       spawnInside(host, rt, p);
+      step(host, DT);
+      const aimed = t.doors[middleDoor(-1)];
+      expect(rt.highlighted).toBe(aimed);
+      for (const m of rt.leafMeshes(aimed)) {
+        expect(m.material).not.toBe(m.userData.baseMat);
+        expect((m.material as THREE.MeshStandardMaterial).map).toBe((m.userData.baseMat as THREE.MeshStandardMaterial).map);
+      }
+      // through the partition doorway into the cab: the desk stops the walk
       face(host, p, SPEC.cab.x0 - 0.5, 0);
       step(host, 1.5, W());
       face(host, p, 20, 0);
@@ -465,7 +778,7 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
       expect(q.x, 'stopped by the desk').toBeLessThan(dx0 - host.player.radius + 0.02);
       expect(rt.playerInside()).toBe(true);
       const cost = viewCost(t.view.root);
-      // measured 2026-11-01: 23 meshes / 133,115 triangles (shell 27.0k, desk 11.4k, 12 leaves x 7.9k, lining ~0.3k)
+      // 25 draws: 9 lining + the window glass + shell + desk + 12 leaves + ONE instanced leaf-glass draw (task train-shell-followup)
       expect(cost.meshes).toBeLessThanOrEqual(26);
       expect(cost.tris).toBeLessThan(160000);
     } finally {

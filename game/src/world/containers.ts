@@ -47,6 +47,7 @@ import {
 } from '../items/lootLayout';
 import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
 import {cloneSurfaceMaterial, type WorldMaterials} from './materials';
+import {highlightPulse} from './highlight'; // task train-shell-followup-20261101-221246 (lane TRAIN): the shared highlight pulse
 import {surface} from './canvasTextures';
 import {LotDisplay, type LotInstance} from './lootDisplay';
 import {itemModelSources} from './pickups';
@@ -891,10 +892,7 @@ export class ContainerManager {
     }
     this.refreshT -= dt;
     if (this.dirty || this.refreshT <= 0) this.refresh();
-    if (this.highlighted) {
-      const k = 0.06 + 0.035 * Math.sin(time * 6);
-      for (const m of this.hiMats.values()) m.emissive.setRGB(k, k * 0.85, k * 0.5);
-    }
+    if (this.highlighted) highlightPulse(this.hiMats.values(), time); // (world/highlight.ts: shared with the player train's doors)
     this.display.pulse(time);
   }
 

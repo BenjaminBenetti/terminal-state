@@ -56,7 +56,7 @@
      3.8508,
      2.9914
     ],
-    "triangles": 26956,
+    "triangles": 27495,
     "meshes": 1,
     "materials": 1,
     "textures": [
@@ -98,8 +98,8 @@
    },
    "output": {
     "url": "assets/models/player-train-shell.glb",
-    "bytes": 2292108,
-    "sha256": "194cc743542ef6c9b048c66c3d53e326fbc60ada80bb56fb7df2a403720a967d"
+    "bytes": 2545908,
+    "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
    }
   },
   "train-door-leaf": {
@@ -122,7 +122,7 @@
      2.031,
      0.045
     ],
-    "triangles": 1040,
+    "triangles": 992,
     "meshes": 1,
     "materials": 1,
     "textures": [
@@ -174,8 +174,8 @@
    },
    "output": {
     "url": "assets/models/player-train-door-leaf.glb",
-    "bytes": 111172,
-    "sha256": "5fe1f62fb3577c8a55fe4c25a73191fa4fd5d3403a78a9467d91defcfb06a87c"
+    "bytes": 107428,
+    "sha256": "1106d394775b16e04baad04d55d12bbe97b3407fd5391a208c25bb8239940bae"
    }
   },
   "train-cab-console": {
@@ -299,7 +299,7 @@
      -1,
      1
     ],
-    "removedAreaM2": 19.687,
+    "removedAreaM2": 19.324,
     "innerSkinZ": 1.3655,
     "recessPlaneZ": {
      "platform": 1.38,
@@ -327,6 +327,20 @@
      0,
      0,
      0
+    ],
+    "sideWindows": [
+     0,
+     0,
+     0,
+     0
+    ],
+    "endWindows": [
+     0,
+     0,
+     0,
+     0,
+     0,
+     0
     ]
    },
    "fit": {
@@ -345,9 +359,82 @@
    "coverboardClearance": {
     "minYAboveRailOutboard124": 0.208,
     "coverboardTop": 0.185
+   },
+   "repair": {
+    "method": "single coverage of near-coincident parallel faces (|cos| >= 0.97, planes within 0.003 m): faces in priority order (outward body / fitting faces, undercarriage, inward body faces = Meshy fold flaps; larger first), each clipped against the kept faces it overlaps (no vertex moved, attributes interpolated, covered area kept); degenerate faces dropped; vertex normals recomputed from the final faces with a 40 deg crease",
+    "census": {
+     "before": {
+      "triangles": 28806,
+      "degenerate": 22,
+      "sliver": 653,
+      "normalFlip": 1113,
+      "foldOverlaps": 1289,
+      "foldArea": 21.854,
+      "duplicateOverlaps": 504,
+      "duplicateArea": 5.893,
+      "nonManifoldEdges": 0
+     },
+     "after": {
+      "triangles": 27495,
+      "degenerate": 0,
+      "sliver": 916,
+      "normalFlip": 0,
+      "foldOverlaps": 0,
+      "foldArea": 0,
+      "duplicateOverlaps": 0,
+      "duplicateArea": 0,
+      "nonManifoldEdges": 11
+     }
+    },
+    "passes": [
+     5,
+     4
+    ],
+    "clippedTriangles": 2493,
+    "removedOverlapAreaM2": 23.563
+   },
+   "windows": {
+    "method": "the dark glass (base colour luminance < 55) inside per-window search boxes on the repaired surface, raster 0.01 m; rect = glass box inset 0.03 m (the gasket stays); side windows kept 0.04 m clear of the open-leaf wall pockets; straight through-cuts (|z| > 1.1 / |x| > 7.26); skinZ / skinX = the innermost skin on a 0.02 m ring around each cut",
+    "removedAreaM2": 8.153,
+    "skipped": [
+     {
+      "side": -1,
+      "zone": "rear",
+      "glassX": [
+       -6.82,
+       -6.48
+      ],
+      "why": "an open door leaf parks in the wall pocket behind it"
+     },
+     {
+      "side": 1,
+      "zone": "rear",
+      "glassX": [
+       -6.83,
+       -6.51
+      ],
+      "why": "an open door leaf parks in the wall pocket behind it"
+     }
+    ]
    }
   },
   "doorLeaf": {
+   "window": {
+    "x0": -0.242,
+    "x1": 0.195,
+    "y0": 0.06,
+    "y1": 1.922,
+    "rim": [
+     -0.262,
+     0.2613,
+     1.9623
+    ],
+    "plateX0": 0.21,
+    "halfWidth": 0.304,
+    "strayFacets": 4,
+    "cutArea": 1.63,
+    "method": "both glass faces (|n.z| > 0.9, |z| < 7.5 mm) clipped out inside the frame rim (inner edges + 0.02 m), below the top rim (- 0.04 m), from y 0.06; the closing-edge stile carrying the T-handle backplate kept (0.015 m gap); collision unchanged (lane TRAIN keeps the leaf box)"
+   },
    "method": "clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)",
    "rawZ": [
     -0.0232,
@@ -645,6 +732,102 @@
    "width": 0.608,
    "height": 2.031,
    "thickness": 0.045
+  },
+  "windows": {
+   "side": [
+    {
+     "side": -1,
+     "zone": "cab",
+     "x0": 5.35,
+     "x1": 6.36,
+     "y0": 1.96,
+     "y1": 2.82,
+     "skinZ": 1.481
+    },
+    {
+     "side": -1,
+     "zone": "cab",
+     "x0": 6.62,
+     "x1": 6.94,
+     "y0": 1.96,
+     "y1": 2.78,
+     "skinZ": 1.466
+    },
+    {
+     "side": 1,
+     "zone": "cab",
+     "x0": 5.35,
+     "x1": 6.34,
+     "y0": 1.93,
+     "y1": 2.82,
+     "skinZ": 1.473
+    },
+    {
+     "side": 1,
+     "zone": "cab",
+     "x0": 6.62,
+     "x1": 6.94,
+     "y0": 1.93,
+     "y1": 2.78,
+     "skinZ": 1.476
+    }
+   ],
+   "end": [
+    {
+     "end": 1,
+     "z0": -1.28,
+     "z1": -0.67,
+     "y0": 1.93,
+     "y1": 2.97,
+     "skinX": 7.395
+    },
+    {
+     "end": 1,
+     "z0": -0.38,
+     "z1": 0.45,
+     "y0": 1.99,
+     "y1": 3.05,
+     "skinX": 7.64
+    },
+    {
+     "end": 1,
+     "z0": 0.66,
+     "z1": 1.28,
+     "y0": 1.91,
+     "y1": 2.96,
+     "skinX": 7.395
+    },
+    {
+     "end": -1,
+     "z0": -1.28,
+     "z1": -0.66,
+     "y0": 1.92,
+     "y1": 2.96,
+     "skinX": 7.422
+    },
+    {
+     "end": -1,
+     "z0": -0.4,
+     "z1": 0.44,
+     "y0": 1.95,
+     "y1": 2.99,
+     "skinX": 7.707
+    },
+    {
+     "end": -1,
+     "z0": 0.68,
+     "z1": 1.28,
+     "y0": 1.9,
+     "y1": 2.97,
+     "skinX": 7.433
+    }
+   ],
+   "leaf": {
+    "x0": -0.242,
+    "x1": 0.195,
+    "y0": 0.06,
+    "y1": 1.922
+   }
   }
  }
 }

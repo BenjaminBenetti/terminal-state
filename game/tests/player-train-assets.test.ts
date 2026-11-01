@@ -64,6 +64,70 @@ const boundsOf = (tris: V3[][]): Box => {
   return {min, max};
 };
 
+/** Triangles with their vertex normals (for the defect census). */
+async function trianglesWithNormals(url: string): Promise<{p: V3[]; n: V3[]}[]> {
+  const doc = await new NodeIO().read(pub(url));
+  const prim = doc.getRoot().listMeshes()[0].listPrimitives()[0];
+  const pos = prim.getAttribute('POSITION')!.getArray()!, nrm = prim.getAttribute('NORMAL')!.getArray()!, idx = prim.getIndices()!.getArray()!;
+  const out: {p: V3[]; n: V3[]}[] = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const ids = [idx[t], idx[t + 1], idx[t + 2]];
+    out.push({p: ids.map(i => [pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]] as V3), n: ids.map(i => [nrm[i * 3], nrm[i * 3 + 1], nrm[i * 3 + 2]] as V3)});
+  }
+  return out;
+}
+/**
+ * Independent defect census (task train-shell-followup): degenerate faces, faces whose winding disagrees with their vertex normals
+ * (they shade inside-out with DoubleSide), and coincident overlaps: near-parallel faces (|cos| >= 0.97) whose overlap region lies within
+ * 3 mm of the other's plane (z-fighting / Meshy fold flaps lying on the skin).
+ */
+function census(tris: {p: V3[]; n: V3[]}[]): {degenerate: number; normalFlip: number; coincident: number} {
+  const len = (a: V3) => Math.hypot(a[0], a[1], a[2]);
+  const items: {p: V3[]; n: V3; a: number}[] = [];
+  let degenerate = 0, normalFlip = 0, coincident = 0;
+  for (const t of tris) {
+    const fn = cross(sub(t.p[1], t.p[0]), sub(t.p[2], t.p[0])), a = len(fn) / 2;
+    if (a < 1e-7) { degenerate++; continue; }
+    const vn: V3 = [0, 1, 2].map(k => t.n[0][k] + t.n[1][k] + t.n[2][k]) as V3;
+    if (dot(fn, vn) < 0) normalFlip++;
+    items.push({p: t.p, n: fn.map(v => v / (2 * a)) as V3, a});
+  }
+  const cell = 0.3, grid = new Map<string, number[]>();
+  items.forEach((it, k) => {
+    const lo = [0, 1, 2].map(d => Math.floor(Math.min(...it.p.map(v => v[d])) / cell)), hi = [0, 1, 2].map(d => Math.floor(Math.max(...it.p.map(v => v[d])) / cell));
+    for (let x = lo[0]; x <= hi[0]; x++) for (let y = lo[1]; y <= hi[1]; y++) for (let z = lo[2]; z <= hi[2]; z++) { const g = `${x},${y},${z}`; grid.set(g, [...(grid.get(g) ?? []), k]); }
+  });
+  const seen = new Set<string>();
+  for (const list of grid.values()) for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+    const key = list[i] < list[j] ? `${list[i]}|${list[j]}` : `${list[j]}|${list[i]}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const A = items[list[i]], B = items[list[j]];
+    if (Math.abs(dot(A.n, B.n)) < 0.97) continue;
+    // B clipped to A's prism (A's edges, in A's plane): the overlap region
+    const ax: V3 = Math.abs(A.n[0]) > 0.9 ? [0, 1, 0] : [1, 0, 0], u = cross(A.n, ax), ul = len(u), U: V3 = [u[0] / ul, u[1] / ul, u[2] / ul], W = cross(A.n, U);
+    const a2 = A.p.map(q => [dot(q, U), dot(q, W)]);
+    const ccw = (a2[1][0] - a2[0][0]) * (a2[2][1] - a2[0][1]) - (a2[2][0] - a2[0][0]) * (a2[1][1] - a2[0][1]) >= 0;
+    let poly: V3[] = B.p;
+    for (let e = 0; e < 3 && poly.length; e++) {
+      const p0 = a2[e], p1 = a2[(e + 1) % 3];
+      const side = (q: V3) => { const c = (p1[0] - p0[0]) * (dot(q, W) - p0[1]) - (p1[1] - p0[1]) * (dot(q, U) - p0[0]); return ccw ? c : -c; };
+      const next: V3[] = [];
+      for (let k = 0; k < poly.length; k++) {
+        const P = poly[k], Q = poly[(k + 1) % poly.length], sp = side(P), sq = side(Q);
+        if (sp >= 0) next.push(P);
+        if ((sp >= 0) !== (sq >= 0)) { const tt = sp / (sp - sq); next.push([P[0] + (Q[0] - P[0]) * tt, P[1] + (Q[1] - P[1]) * tt, P[2] + (Q[2] - P[2]) * tt]); }
+      }
+      poly = next.length >= 3 ? next : [];
+    }
+    if (poly.length < 3 || !poly.every(q => Math.abs(dot(A.n, sub(q, A.p[0]))) <= 0.003)) continue;
+    let area = 0;
+    for (let k = 1; k + 1 < poly.length; k++) area += len(cross(sub(poly[k], poly[0]), sub(poly[k + 1], poly[0]))) / 2;
+    if (area > 1e-4) coincident++;
+  }
+  return {degenerate, normalFlip, coincident};
+}
+
 describe('player train: cooked assets', () => {
   it('derivatives are shared files whose bytes, allowlist entries and provenance agree; provenance pins the raw hashes / task ids', () => {
     const allow = JSON.parse(fs.readFileSync(path.join(GAME, '..', 'tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
@@ -242,5 +306,76 @@ describe('player train: cooked assets', () => {
     let nx = 0;
     for (const t of con) if (t.every(p => p[1] > 0.6)) nx += cross(sub(t[1], t[0]), sub(t[2], t[0]))[0];
     expect(nx).toBeLessThan(0);
+  }, 60000);
+
+  // task studio-beta-train-shell-followup-20261101-221246-01 (user: "messed up geometry / triangles", "see through the windows")
+  it('the shipped shell is repaired: no degenerate faces, no inside-out normals, no coincident overlaps (folds / duplicate layers)', async () => {
+    const tris = await trianglesWithNormals(PLAYER_TRAIN_MODELS['player-train-shell'].url);
+    expect(census(tris)).toEqual({degenerate: 0, normalFlip: 0, coincident: 0});
+    const rep = prov.derivation.shell.repair;
+    expect(rep.census.after).toMatchObject({degenerate: 0, normalFlip: 0, foldOverlaps: 0, duplicateOverlaps: 0});
+    expect(rep.census.before.foldOverlaps).toBeGreaterThan(0); // the Meshy folds the repair removed (documented, not silent)
+  }, 120000);
+
+  it('windows: cab side + both end faces + the leaf, measured rects on the faces, inside the body, clear of the open-leaf pockets', () => {
+    const {interior: I, cab, doorLeaf: L, windows: Wn} = SPEC;
+    expect(Wn.side.length).toBe(4);
+    for (const w of Wn.side) {
+      expect(w.zone).toBe('cab');
+      expect(w.x0).toBeGreaterThanOrEqual(cab.x0 + 0.05);
+      expect(w.x1).toBeLessThanOrEqual(I.x1);
+      expect(w.x1 - w.x0).toBeGreaterThan(0.2);
+      expect(w.y0).toBeGreaterThan(SPEC.floorY + 0.5);
+      expect(w.y1).toBeLessThan(SPEC.ceilingY);
+      expect(w.skinZ).toBeGreaterThan(L.outerZ); // the glass plane lies outside the leaf / lining zone, on the skin
+      expect(w.skinZ).toBeLessThanOrEqual(SPEC.width / 2);
+      // an open leaf parks at |z| outerZ - thickness .. outerZ beside its doorway: never behind a side window
+      for (const d of SPEC.doors.filter(q => q.side === w.side)) for (const [p0, p1] of [[d.x - d.width / 2 - 0.01 - L.width, d.x - d.width / 2 - 0.01], [d.x + d.width / 2 + 0.01, d.x + d.width / 2 + 0.01 + L.width]]) {
+        expect(w.x1 <= p0 - 0.039 || w.x0 >= p1 + 0.039, `window ${w.x0}..${w.x1} vs pocket ${p0}..${p1}`).toBe(true);
+      }
+    }
+    for (const end of [1, -1] as const) {
+      const ws = Wn.end.filter(w => w.end === end).sort((a, b) => a.z0 - b.z0);
+      expect(ws).toHaveLength(3);
+      for (let i = 1; i < ws.length; i++) expect(ws[i].z0).toBeGreaterThan(ws[i - 1].z1);
+      for (const w of ws) {
+        expect(w.z0).toBeGreaterThanOrEqual(-I.halfWidth);
+        expect(w.z1).toBeLessThanOrEqual(I.halfWidth);
+        expect(w.y0).toBeGreaterThan(SPEC.floorY + 0.5);
+        expect(w.y1).toBeLessThan(SPEC.ceilingY);
+        expect(w.skinX).toBeGreaterThan(I.x1);
+        expect(w.skinX).toBeLessThan(SPEC.length / 2);
+      }
+    }
+    // the leaf window lies inside the leaf, the closing-edge stile (+X, the T-handle) kept
+    const lw = Wn.leaf;
+    expect(lw.x0).toBeGreaterThan(-L.width / 2);
+    expect(lw.x1).toBeLessThan(L.width / 2 - 0.05);
+    expect(lw.x0).toBeLessThan(lw.x1);
+    expect(lw.y0).toBeGreaterThanOrEqual(0);
+    expect(lw.y1).toBeLessThan(L.height);
+    expect(lw.y1 - lw.y0).toBeGreaterThan(1.5);
+  });
+
+  it('the shipped models really are open at every window, with the skin / frame still around it', async () => {
+    const tris = await triangles(PLAYER_TRAIN_MODELS['player-train-shell'].url);
+    const I = SPEC.interior;
+    const hits = (box: Box) => tris.filter(t => triBox(box, t)).length;
+    for (const w of SPEC.windows.side) {
+      const zIn = w.side < 0 ? -2 : I.halfWidth, zOut = w.side < 0 ? -I.halfWidth : 2;
+      expect(hits({min: [w.x0 + 0.01, w.y0 + 0.01, zIn], max: [w.x1 - 0.01, w.y1 - 0.01, zOut]}), `side window ${w.x0}`).toBe(0);
+      expect(hits({min: [w.x0, w.y1 + 0.03, zIn], max: [w.x1, w.y1 + 0.08, zOut]}), `skin above ${w.x0}`).toBeGreaterThan(0);
+    }
+    for (const w of SPEC.windows.end) {
+      const xIn = w.end > 0 ? I.x1 : -9, xOut = w.end > 0 ? 9 : -I.x1;
+      expect(hits({min: [xIn, w.y0 + 0.01, w.z0 + 0.01], max: [xOut, w.y1 - 0.01, w.z1 - 0.01]}), `end window ${w.end} ${w.z0}`).toBe(0);
+      expect(hits({min: [xIn, w.y1 + 0.03, w.z0], max: [xOut, w.y1 + 0.08, w.z1]}), `end skin above ${w.end} ${w.z0}`).toBeGreaterThan(0);
+    }
+    const leaf = await triangles(PLAYER_TRAIN_MODELS['player-train-door-leaf'].url);
+    const lw = SPEC.windows.leaf;
+    const leafHits = (box: Box) => leaf.filter(t => triBox(box, t)).length;
+    expect(leafHits({min: [lw.x0 + 0.01, lw.y0 + 0.01, -0.005], max: [lw.x1 - 0.01, lw.y1 - 0.01, 0.005]})).toBe(0); // both glass faces gone
+    expect(leafHits({min: [lw.x1 + 0.02, lw.y0 + 0.2, -0.03], max: [SPEC.doorLeaf.width / 2, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the stile
+    expect(leafHits({min: [-SPEC.doorLeaf.width / 2, lw.y0 + 0.2, -0.03], max: [lw.x0 - 0.005, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the rim
   }, 60000);
 });
