@@ -138,6 +138,24 @@ export interface ReactorSite {
   /** Room rectangle (world m). */
   rect: ReactorRect;
   controls: readonly ReactorControl[];
+  /** (lane GEN, additive) The big machines reserved in the room (ARCH renders them; each collides as an 'annexMachine' prop). */
+  machines?: readonly ReactorMachine[];
+}
+
+/**
+ * (lane GEN, additive) A machine footprint reserved in a restart site: centre (floor y), front-facing yaw (camera convention: the
+ * front faces the operator), size along the wall (w) / off it (d) / height (h), and the index of its collision prop in layout.props.
+ */
+export interface ReactorMachine {
+  kind: 'switchgear' | 'pump' | 'valve' | 'console' | 'statusBoard';
+  x: number;
+  z: number;
+  y: number;
+  yaw: number;
+  w: number;
+  d: number;
+  h: number;
+  prop: number;
 }
 
 /** Restart components (finite, seeded once, always placed in the level, never behind their own lock). */
