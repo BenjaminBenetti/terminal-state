@@ -48,11 +48,15 @@ export interface PlayerTrainSpec {
   doorLeaf: {outerZ: number; width: number; height: number; thickness: number};
   /** (lane ASSETS, train-shell-followup) See-through window cuts: straight through-holes in the cooked models (the Meshy maps are kept;
    *  glass panes / lining sleeves are lane TRAIN's). side: rect in x / y on the side skin, skinZ = |z| of the innermost skin around the
-   *  hole (the glass plane); zone 'cab' (the rear-compartment side windows are not cut: the rear door's open leaf parks behind them).
+   *  hole (the glass plane); zones 'cab' | 'saloon' | 'rear' (over the rear door's leaf pocket: `pocket`) | 'nose' (the end windows'
+   *  corner wrap, beyond the bulkheads, joined to the end-window hole).
    *  end: rect in z / y on the front (+1) / rear (-1) end face, skinX = |x| of the innermost skin around the hole. leaf: the door leaf's
    *  window in the leaf GLB's own frame (x centred, y from the bottom, closing edge +X; both faces cut, the handle stile kept). */
   windows: {
-    side: readonly {side: -1 | 1; zone?: 'cab' | 'rear'; x0: number; x1: number; y0: number; y1: number; skinZ: number}[];
+    side: readonly {side: -1 | 1; zone?: 'cab' | 'saloon' | 'rear' | 'nose'; x0: number; x1: number; y0: number; y1: number; skinZ: number;
+      /** (lockbox-windows task) The open door leaf parks behind this window (x span; the leaf at |z| doorLeaf.outerZ - thickness ..
+       *  outerZ): a pocket door seen through the glass, so no lining sleeve across the pocket. */
+      pocket?: {x0: number; x1: number}}[];
     end: readonly {end: -1 | 1; z0: number; z1: number; y0: number; y1: number; skinX: number}[];
     leaf: {x0: number; x1: number; y0: number; y1: number};
   };

@@ -54,9 +54,9 @@
     "dims": [
      16.2031,
      3.8508,
-     2.9914
+     2.9866
     ],
-    "triangles": 27495,
+    "triangles": 27566,
     "meshes": 1,
     "materials": 1,
     "textures": [
@@ -98,8 +98,8 @@
    },
    "output": {
     "url": "assets/models/player-train-shell.glb",
-    "bytes": 2545908,
-    "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
+    "bytes": 2542524,
+    "sha256": "def2107d0b66915621fe09929dbe7ab6aecd0e21742ddd39cf303bbdb4da4fed"
    }
   },
   "train-door-leaf": {
@@ -332,6 +332,18 @@
      0,
      0,
      0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
      0
     ],
     "endWindows": [
@@ -344,7 +356,7 @@
     ]
    },
    "fit": {
-    "width": 2.9914,
+    "width": 2.9866,
     "length": 16.2031,
     "floorAbovePlatform": 0.125,
     "doorClear": 2.001,
@@ -375,9 +387,9 @@
       "nonManifoldEdges": 0
      },
      "after": {
-      "triangles": 27495,
+      "triangles": 27566,
       "degenerate": 0,
-      "sliver": 916,
+      "sliver": 980,
       "normalFlip": 0,
       "foldOverlaps": 0,
       "foldArea": 0,
@@ -390,32 +402,13 @@
      5,
      4
     ],
-    "clippedTriangles": 2493,
-    "removedOverlapAreaM2": 23.563
+    "clippedTriangles": 2586,
+    "removedOverlapAreaM2": 23.733
    },
    "windows": {
-    "method": "the dark glass (base colour luminance < 55) inside per-window search boxes on the repaired surface, raster 0.01 m; rect = glass box inset 0.03 m (the gasket stays); side windows kept 0.04 m clear of the open-leaf wall pockets; straight through-cuts (|z| > 1.1 / |x| > 7.26); skinZ / skinX = the innermost skin on a 0.02 m ring around each cut",
-    "removedAreaM2": 8.153,
-    "skipped": [
-     {
-      "side": -1,
-      "zone": "rear",
-      "glassX": [
-       -6.82,
-       -6.48
-      ],
-      "why": "an open door leaf parks in the wall pocket behind it"
-     },
-     {
-      "side": 1,
-      "zone": "rear",
-      "glassX": [
-       -6.83,
-       -6.51
-      ],
-      "why": "an open door leaf parks in the wall pocket behind it"
-     }
-    ]
+    "method": "the dark glass (base colour luminance < 55) inside per-window search boxes on the repaired surface, raster 0.01 m; rect = glass box inset 0.03 m (the gasket stays); cab / saloon side windows kept 0.04 m clear of the open-leaf wall pockets; saloon / rear / nose windows take their x extent from the upper glass band 2.55,3.1 (above grab bars and the baked smear); rear windows cut whole over the rear door leaf pocket (pocket recorded: the parked leaf shows behind the glass like a real pocket door); nose windows (the end windows' corner wrap) run 0.01 m into the end-window hole; straight through-cuts (|z| > 1.1 / |x| > 7.26); skinZ / skinX = the innermost skin on a 0.02 m ring around each cut",
+    "removedAreaM2": 17.769,
+    "skipped": []
    }
   },
   "doorLeaf": {
@@ -595,7 +588,7 @@
  ],
  "measured": {
   "length": 16.2031,
-  "width": 2.9914,
+  "width": 2.9866,
   "floorY": 0.98,
   "ceilingY": 3.25,
   "roofY": 3.8508,
@@ -754,6 +747,64 @@
      "skinZ": 1.466
     },
     {
+     "side": -1,
+     "zone": "saloon",
+     "x0": -4.04,
+     "x1": -2.88,
+     "y0": 1.97,
+     "y1": 2.83,
+     "skinZ": 1.416
+    },
+    {
+     "side": -1,
+     "zone": "saloon",
+     "x0": -2.3,
+     "x1": -1.15,
+     "y0": 1.97,
+     "y1": 2.83,
+     "skinZ": 1.481
+    },
+    {
+     "side": -1,
+     "zone": "saloon",
+     "x0": 1.59,
+     "x1": 2.74,
+     "y0": 1.96,
+     "y1": 2.82,
+     "skinZ": 1.471
+    },
+    {
+     "side": -1,
+     "zone": "rear",
+     "x0": -6.82,
+     "x1": -6.48,
+     "y0": 1.96,
+     "y1": 2.8,
+     "skinZ": 1.48,
+     "pocket": {
+      "x0": -6.6326,
+      "x1": -6.0246
+     }
+    },
+    {
+     "side": -1,
+     "zone": "nose",
+     "x0": 7.3,
+     "x1": 7.61,
+     "y0": 2.01,
+     "y1": 2.96,
+     "skinZ": 1.28
+    },
+    {
+     "side": -1,
+     "zone": "nose",
+     "x0": -7.62,
+     "x1": -7.3,
+     "y0": 1.91,
+     "y1": 2.96,
+     "skinZ": 1.28
+    },
+    {
      "side": 1,
      "zone": "cab",
      "x0": 5.35,
@@ -770,6 +821,64 @@
      "y0": 1.93,
      "y1": 2.78,
      "skinZ": 1.476
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": -4,
+     "x1": -2.61,
+     "y0": 1.95,
+     "y1": 2.82,
+     "skinZ": 1.473
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": -2.47,
+     "x1": -1.15,
+     "y0": 1.93,
+     "y1": 2.82,
+     "skinZ": 1.473
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": 1.62,
+     "x1": 2.75,
+     "y0": 1.93,
+     "y1": 2.84,
+     "skinZ": 1.479
+    },
+    {
+     "side": 1,
+     "zone": "rear",
+     "x0": -6.83,
+     "x1": -6.57,
+     "y0": 1.93,
+     "y1": 2.79,
+     "skinZ": 1.474,
+     "pocket": {
+      "x0": -6.6326,
+      "x1": -6.0246
+     }
+    },
+    {
+     "side": 1,
+     "zone": "nose",
+     "x0": 7.34,
+     "x1": 7.57,
+     "y0": 1.99,
+     "y1": 2.87,
+     "skinZ": 1.28
+    },
+    {
+     "side": 1,
+     "zone": "nose",
+     "x0": -7.58,
+     "x1": -7.36,
+     "y0": 2,
+     "y1": 2.87,
+     "skinZ": 1.28
     }
    ],
    "end": [

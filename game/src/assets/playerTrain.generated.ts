@@ -5,7 +5,7 @@
 //   shell: train-local (place at the car origin);  door leaf: ONE leaf of a centre-opening pair, grounded / centred, closing edge
 //   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z.
 export const PLAYER_TRAIN_MODELS = {
-  'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2545908, tris: 27495, dims: [16.2031, 3.8508, 2.9914] as const},
+  'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2542524, tris: 27566, dims: [16.2031, 3.8508, 2.9866] as const},
   'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 107428, tris: 992, dims: [0.608, 2.031, 0.045] as const},
   'player-train-console': {key: 'player-train-console', url: 'assets/models/player-train-console.glb', bytes: 607856, tris: 11389, dims: [0.8028, 1.1641, 1.9549] as const},
 } as const;
@@ -21,7 +21,7 @@ export const PLAYER_TRAIN_TEXTURES = {
 
 /** Measured on the cooked shell (see the provenance 'derivation'); world/playerTrainSpec.ts PLAYER_TRAIN_SPEC reads this. */
 export const PLAYER_TRAIN_MEASURED = {
-  length: 16.2031, width: 2.9914, floorY: 0.98, ceilingY: 3.25, roofY: 3.8508,
+  length: 16.2031, width: 2.9866, floorY: 0.98, ceilingY: 3.25, roofY: 3.8508,
   interior: {x0: -7.25, x1: 7.25, halfWidth: 1.3},
   cab: {x0: 5.05, x1: 7.25, doorway: {z0: -0.45, z1: 0.45, height: 2}},
   doors: [
@@ -45,8 +45,20 @@ export const PLAYER_TRAIN_MEASURED = {
     side: [
       {side: -1 as const, zone: 'cab' as const, x0: 5.35, x1: 6.36, y0: 1.96, y1: 2.82, skinZ: 1.481},
       {side: -1 as const, zone: 'cab' as const, x0: 6.62, x1: 6.94, y0: 1.96, y1: 2.78, skinZ: 1.466},
+      {side: -1 as const, zone: 'saloon' as const, x0: -4.04, x1: -2.88, y0: 1.97, y1: 2.83, skinZ: 1.416},
+      {side: -1 as const, zone: 'saloon' as const, x0: -2.3, x1: -1.15, y0: 1.97, y1: 2.83, skinZ: 1.481},
+      {side: -1 as const, zone: 'saloon' as const, x0: 1.59, x1: 2.74, y0: 1.96, y1: 2.82, skinZ: 1.471},
+      {side: -1 as const, zone: 'rear' as const, x0: -6.82, x1: -6.48, y0: 1.96, y1: 2.8, skinZ: 1.48, pocket: {x0: -6.6326, x1: -6.0246}},
+      {side: -1 as const, zone: 'nose' as const, x0: 7.3, x1: 7.61, y0: 2.01, y1: 2.96, skinZ: 1.28},
+      {side: -1 as const, zone: 'nose' as const, x0: -7.62, x1: -7.3, y0: 1.91, y1: 2.96, skinZ: 1.28},
       {side: 1 as const, zone: 'cab' as const, x0: 5.35, x1: 6.34, y0: 1.93, y1: 2.82, skinZ: 1.473},
       {side: 1 as const, zone: 'cab' as const, x0: 6.62, x1: 6.94, y0: 1.93, y1: 2.78, skinZ: 1.476},
+      {side: 1 as const, zone: 'saloon' as const, x0: -4, x1: -2.61, y0: 1.95, y1: 2.82, skinZ: 1.473},
+      {side: 1 as const, zone: 'saloon' as const, x0: -2.47, x1: -1.15, y0: 1.93, y1: 2.82, skinZ: 1.473},
+      {side: 1 as const, zone: 'saloon' as const, x0: 1.62, x1: 2.75, y0: 1.93, y1: 2.84, skinZ: 1.479},
+      {side: 1 as const, zone: 'rear' as const, x0: -6.83, x1: -6.57, y0: 1.93, y1: 2.79, skinZ: 1.474, pocket: {x0: -6.6326, x1: -6.0246}},
+      {side: 1 as const, zone: 'nose' as const, x0: 7.34, x1: 7.57, y0: 1.99, y1: 2.87, skinZ: 1.28},
+      {side: 1 as const, zone: 'nose' as const, x0: -7.58, x1: -7.36, y0: 2, y1: 2.87, skinZ: 1.28},
     ],
     end: [
       {end: 1 as const, z0: -1.28, z1: -0.67, y0: 1.93, y1: 2.97, skinX: 7.395},

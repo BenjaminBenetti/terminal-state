@@ -317,23 +317,34 @@ describe('player train: cooked assets', () => {
     expect(rep.census.before.foldOverlaps).toBeGreaterThan(0); // the Meshy folds the repair removed (documented, not silent)
   }, 120000);
 
-  it('windows: cab side + both end faces + the leaf, measured rects on the faces, inside the body, clear of the open-leaf pockets', () => {
+  it('windows: every side window (cab / saloon / rear / nose) + both end faces + the leaf, on the faces, inside the body, pockets handled', () => {
     const {interior: I, cab, doorLeaf: L, windows: Wn} = SPEC;
-    expect(Wn.side.length).toBe(4);
+    const zone = (z: string) => Wn.side.filter(w => w.zone === z);
+    // task lockbox-windows (user: "The windows on the side of the train remain solid. Make them see through!"): all of them, both sides
+    expect([zone('cab').length, zone('saloon').length, zone('rear').length, zone('nose').length]).toEqual([4, 6, 2, 4]);
+    for (const side of [-1, 1] as const) expect(Wn.side.filter(w => w.side === side)).toHaveLength(8);
+    const pocketsOf = (side: number) => SPEC.doors.filter(q => q.side === side).flatMap(d => [[d.x - d.width / 2 - 0.01 - L.width, d.x - d.width / 2 - 0.01], [d.x + d.width / 2 + 0.01, d.x + d.width / 2 + 0.01 + L.width]]);
     for (const w of Wn.side) {
-      expect(w.zone).toBe('cab');
-      expect(w.x0).toBeGreaterThanOrEqual(cab.x0 + 0.05);
-      expect(w.x1).toBeLessThanOrEqual(I.x1);
       expect(w.x1 - w.x0).toBeGreaterThan(0.2);
       expect(w.y0).toBeGreaterThan(SPEC.floorY + 0.5);
       expect(w.y1).toBeLessThan(SPEC.ceilingY);
-      expect(w.skinZ).toBeGreaterThan(L.outerZ); // the glass plane lies outside the leaf / lining zone, on the skin
       expect(w.skinZ).toBeLessThanOrEqual(SPEC.width / 2);
-      // an open leaf parks at |z| outerZ - thickness .. outerZ beside its doorway: never behind a side window
-      for (const d of SPEC.doors.filter(q => q.side === w.side)) for (const [p0, p1] of [[d.x - d.width / 2 - 0.01 - L.width, d.x - d.width / 2 - 0.01], [d.x + d.width / 2 + 0.01, d.x + d.width / 2 + 0.01 + L.width]]) {
-        expect(w.x1 <= p0 - 0.039 || w.x0 >= p1 + 0.039, `window ${w.x0}..${w.x1} vs pocket ${p0}..${p1}`).toBe(true);
+      if (w.zone === 'cab') { expect(w.x0).toBeGreaterThanOrEqual(cab.x0 + 0.05); expect(w.x1).toBeLessThanOrEqual(I.x1); }
+      if (w.zone === 'saloon') { expect(w.x0).toBeGreaterThan(I.x0); expect(w.x1).toBeLessThan(cab.x0); }
+      if (w.zone === 'rear') { expect(w.x0).toBeGreaterThan(I.x0); expect(w.x1).toBeLessThan(SPEC.rear!.x1); }
+      if (w.zone === 'nose') { expect(Math.min(Math.abs(w.x0), Math.abs(w.x1))).toBeGreaterThan(I.x1); expect(w.skinZ).toBeGreaterThan(1.2); } // beyond the bulkheads
+      else expect(w.skinZ).toBeGreaterThan(L.outerZ); // the glass plane lies outside the leaf / lining zone, on the skin
+      if (w.pocket) {
+        // a pocket-door window (rear): the recorded span is the parked leaf behind it, and it really overlaps the window
+        expect(w.zone).toBe('rear');
+        expect(pocketsOf(w.side).some(([p0, p1]) => Math.abs(p0 - w.pocket!.x0) < 2e-3 && Math.abs(p1 - w.pocket!.x1) < 2e-3)).toBe(true);
+        expect(w.pocket.x0 < w.x1 && w.pocket.x1 > w.x0).toBe(true);
+      } else {
+        // an open leaf parks at |z| outerZ - thickness .. outerZ beside its doorway: never behind a plain side window
+        for (const [p0, p1] of pocketsOf(w.side)) expect(w.x1 <= p0 - 0.039 || w.x0 >= p1 + 0.039, `window ${w.x0}..${w.x1} vs pocket ${p0}..${p1}`).toBe(true);
       }
     }
+    expect(zone('rear').every(w => w.pocket)).toBe(true);
     for (const end of [1, -1] as const) {
       const ws = Wn.end.filter(w => w.end === end).sort((a, b) => a.z0 - b.z0);
       expect(ws).toHaveLength(3);
@@ -363,6 +374,10 @@ describe('player train: cooked assets', () => {
     const hits = (box: Box) => tris.filter(t => triBox(box, t)).length;
     for (const w of SPEC.windows.side) {
       const zIn = w.side < 0 ? -2 : I.halfWidth, zOut = w.side < 0 ? -I.halfWidth : 2;
+      if (w.zone === 'nose') { // the corner wrap: open from the end-window hole's edge (|z| skinZ) out
+        expect(hits({min: [w.x0 + 0.01, w.y0 + 0.01, w.side < 0 ? -2 : w.skinZ + 0.01], max: [w.x1 - 0.01, w.y1 - 0.01, w.side < 0 ? -(w.skinZ + 0.01) : 2]}), `nose window ${w.x0}`).toBe(0);
+        continue;
+      }
       expect(hits({min: [w.x0 + 0.01, w.y0 + 0.01, zIn], max: [w.x1 - 0.01, w.y1 - 0.01, zOut]}), `side window ${w.x0}`).toBe(0);
       expect(hits({min: [w.x0, w.y1 + 0.03, zIn], max: [w.x1, w.y1 + 0.08, zOut]}), `skin above ${w.x0}`).toBeGreaterThan(0);
     }
