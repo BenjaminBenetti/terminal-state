@@ -21,6 +21,7 @@ import {annexLayoutMetrics, bandOf, hideoutOk, summarize, type AnnexLayoutMetric
 import {annexPlanPng} from './helpers/annexPlan';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
+import {FRESH, presentSeeds} from './helpers/btsArea';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const LABEL = process.env.LAYOUT_LABEL ?? 'after';
@@ -29,9 +30,12 @@ const LABEL = process.env.LAYOUT_LABEL ?? 'after';
  * The CI sample (~3 s of generation): a tunnel + a hatch annex, an island-ends hatch annex, the Office street station's two annexes
  * and the mall's (6 annexes). The broad sample (opt-in, below) holds the 309-annex guarantee.
  */
+// (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old 1002 / 2654448106 / 7922 / 5150 roll it
+// absent — the same six annexes come from FRESH.subwayHatch (tunnel + hatch), track-ext.test's SUBWAY_HATCH.one / OFFICE_ANNEX[2] and
+// Mall 5158, the first mall seed >= 5150 rolling PRESENT.)
 const CI_SAMPLE: readonly [string, () => StationLayout][] = [
-  ['subway 1002', () => generateStation(1002)], ['subway 2654448106', () => generateStation(2654448106)],
-  ['office 7922', () => generateOfficeLevel({levelSeed: 7922, startWeapon: 'pistol'})], ['mall 5150', () => generateMallLevel({levelSeed: 5150, startWeapon: 'rifle'})],
+  [`subway ${FRESH.subwayHatch}`, () => generateStation(FRESH.subwayHatch)], ['subway 1514198804', () => generateStation(1514198804)],
+  ['office 7926', () => generateOfficeLevel({levelSeed: 7926, startWeapon: 'pistol'})], ['mall 5158', () => generateMallLevel({levelSeed: 5158, startWeapon: 'rifle'})],
 ];
 
 describe('service annex layout: a logical service area (round 3, lane LAYOUT)', () => {
@@ -115,8 +119,8 @@ describe('service annex layout: a logical service area (round 3, lane LAYOUT)', 
   });
 });
 
-/** The plan-picture sample (the round-2 fresh-run levels + Subway 1037). */
-const PLAN_SAMPLE: readonly [LevelId, number][] = [['subway', 1043], ['subway', 1002], ['subway', 1037], ['office', 222], ['mall', 846932]];
+/** The plan-picture sample (the round-2 fresh-run levels + Subway 1037; lane AREA: their FRESH replacements rolling the area PRESENT). */
+const PLAN_SAMPLE: readonly [LevelId, number][] = [['subway', FRESH.subwayTunnel], ['subway', FRESH.subwayHatch], ['subway', FRESH.subwayGenset], ['office', FRESH.office], ['mall', FRESH.mall]];
 
 describe.runIf(!!process.env.ANNEX_LAYOUT_EVIDENCE)('annex layout evidence (ANNEX_LAYOUT_EVIDENCE=1)', () => {
   it('renders top-down plans of the sample annexes and writes their metrics', async () => {
@@ -140,9 +144,10 @@ describe.runIf(!!process.env.ANNEX_LAYOUT_BROAD)('annex layout broad sample (ANN
   it('200 Subway + 40 Office + 20 Mall levels: metrics and the hideout guarantee', () => {
     const levels: [string, () => StationLayout][] = [];
     const nSub = Number(process.env.BROAD_SUBWAY ?? 200), nOff = Number(process.env.BROAD_OFFICE ?? 40), nMall = Number(process.env.BROAD_MALL ?? 20);
-    for (let i = 0; i < nSub; i++) { const s = (i * 2654435761 + 12345) >>> 0; levels.push([`subway-${s}`, () => generateStation(s)]); }
-    for (let i = 0; i < nOff; i++) { const s = 1000 + i * 7919; levels.push([`office-${s}`, () => generateOfficeLevel({levelSeed: s, startWeapon: 'pistol'})]); }
-    for (let i = 0; i < nMall; i++) { const s = 9100 + 104729 * i; levels.push([`mall-${s}`, () => generateMallLevel({levelSeed: s, startWeapon: 'rifle'})]); }
+    // (lane AREA: the first n seeds of each formula rolling the area PRESENT — the same annex sample size as before the one-roll rule)
+    for (const s of presentSeeds(nSub, i => (i * 2654435761 + 12345) >>> 0)) levels.push([`subway-${s}`, () => generateStation(s)]);
+    for (const s of presentSeeds(nOff, i => 1000 + i * 7919)) levels.push([`office-${s}`, () => generateOfficeLevel({levelSeed: s, startWeapon: 'pistol'})]);
+    for (const s of presentSeeds(nMall, i => 9100 + 104729 * i)) levels.push([`mall-${s}`, () => generateMallLevel({levelSeed: s, startWeapon: 'rifle'})]);
     const per: Record<string, AnnexLayoutMetrics[]> = {subway: [], office: [], mall: []};
     const misses: string[] = [], incidence: Record<string, number[]> = {subway: [0, 0, 0], office: [0, 0, 0], mall: [0, 0, 0]};
     const t0 = performance.now();

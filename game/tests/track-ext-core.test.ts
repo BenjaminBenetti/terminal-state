@@ -23,10 +23,17 @@ import {TRACK_EXT_RESERVE_OFF, canonDiff, canonLayout} from './helpers/trackExtC
 import {TRACK_EXT, type TrackExtConfig} from '../src/gen/trackExt/index';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
+import {ANNEX_CACHE_GEAR_KEY} from '../src/items/lootTables';
+import {presentSeeds} from './helpers/btsArea';
 
-/** Subway seeds of the census corpus whose extensions exist (several translate the core west / north). */
-const SUBWAY = [3041725023, 4055629249, 3429001940, 1788470405, 1161843096, 2175747322, 3189651548, 2563024239];
-const OFFICE = [3, 7922, 15841];
+/**
+ * Subway seeds of the census corpus whose extensions exist (several translate the core west / north). (lane AREA, the one area roll:
+ * the first eight corpus seeds rolling the area PRESENT whose reserve-off plan has tunnels — tunnels AND annexes; was 3041725023,
+ * 4055629249, 3429001940, 1788470405, 1161843096, 2175747322, 3189651548, 2563024239, six of which now roll it absent.)
+ */
+const SUBWAY = [4055629249, 3429001940, 3964205382, 683142312, 3337578073, 1070419229, 2084323455, 2471600372];
+/** (lane AREA) The Office census formula 3 + 7919 k: its first three seeds rolling the area PRESENT (were 3, 7922, 15841: absent). */
+const OFFICE = presentSeeds(3, k => 3 + 7919 * k);
 
 function sameCore(ext: StationLayout, none: StationLayout, tag: string): void {
   expect(ext.extensions, `${tag}: extensions`).toBeTruthy();
@@ -101,7 +108,9 @@ describe('track extensions — the core level is unchanged', () => {
   });
 
   it('the level registry path (gear + masks placed on the finished layout) keeps the core: gear never lands in an extension', () => {
-    for (const [level, seed] of [['subway', 2563024239], ['subway', 1161843096], ['subway', 1549120013], ['office', 7922]] as [LevelId, number][]) {
+    // (lane AREA: levels rolling the area PRESENT, so their annexes' own floor finds are there — 3964205382 / 535215787 / 7926 replace
+    // 2563024239 / 1161843096 / 7922, which now roll it absent: the first present seeds of the same corpus / >= the old Office seed)
+    for (const [level, seed] of [['subway', 3964205382], ['subway', 535215787], ['subway', 1549120013], ['office', 7926]] as [LevelId, number][]) {
       const gear = rollLevelGear(seed, level, ['main']).main;
       const all = [...gear, ...['armor_vest', 'chest_rig', 'backpack', 'helmet'].map(itemId => ({itemId}))];
       const ext = LEVELS[level].generate('main', {levelSeed: seed, startWeapon: 'pistol', gear: all});
@@ -110,10 +119,11 @@ describe('track extensions — the core level is unchanged', () => {
       placeSectionGear(none, all.filter(g => !isMaskLootItem(g.itemId)));
       placeMaskLoot(none, all.filter(g => isMaskLootItem(g.itemId)));
       sameCore(ext, none, `${level} ${seed} (+ gear)`);
-      // the gear / mask roll never lands in an extension (the annexes' own floor finds are theirs, appended before it)
-      const rolled = new Set(all.map(g => g.itemId));
-      for (const p of ext.pickups) if (rolled.has(p.itemId)) expect(isExtensionArea(ext.areas[p.area]), `${level} ${seed}: ${p.itemId}`).toBe(false);
-      expect(ext.pickups.filter(p => rolled.has(p.itemId)).length).toBe(none.pickups.filter(p => rolled.has(p.itemId)).length);
+      // the gear / mask roll never lands in an extension (the annexes' own floor finds are theirs, appended before it — and so is a
+      // hideout's own gear piece, the round-3 layout pickup tagged ANNEX_CACHE_GEAR_KEY: lane AREA's 3964205382 rolls an armor vest there)
+      const rolled = new Set(all.map(g => g.itemId)), levelGear = (p: {itemId: string; reward?: string}) => rolled.has(p.itemId) && p.reward !== ANNEX_CACHE_GEAR_KEY;
+      for (const p of ext.pickups) if (levelGear(p)) expect(isExtensionArea(ext.areas[p.area]), `${level} ${seed}: ${p.itemId}`).toBe(false);
+      expect(ext.pickups.filter(levelGear).length).toBe(none.pickups.filter(levelGear).length);
     }
   });
 

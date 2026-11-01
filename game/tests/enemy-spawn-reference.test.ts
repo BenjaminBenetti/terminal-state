@@ -29,6 +29,7 @@ import {
   enemyCensus, expectedCoatedShare, ruleRows,
 } from '../../tools/pages/enemyReference';
 import {ENEMY_REFERENCE_SCHEMA, type EnemyReference, type SourceLoc} from '../../tools/pages/enemyReferenceTypes';
+import {FRESH} from './helpers/btsArea';
 
 const readSource = (f: string): string | null => {
   try { return readFileSync(new URL(`../../${f}`, import.meta.url), 'utf8'); } catch { return null; }
@@ -147,12 +148,13 @@ describe('enemy spawn reference: runtime agreement', () => {
     let layout: object | null = null;
     const reports: SpawnCandidateReport[] = [];
     setSpawnCensusHook(r => reports.push(r));
-    try { layout = LEVELS.office.generate('main', {levelSeed: 222, startWeapon: 'pistol'}); } finally { setSpawnCensusHook(null); }
+    // (2026-11-01, lane AREA: an Office level rolling the Beyond the Station area PRESENT — FRESH.office; 222 now rolls it absent)
+    try { layout = LEVELS.office.generate('main', {levelSeed: FRESH.office, startWeapon: 'pistol'}); } finally { setSpawnCensusHook(null); }
     for (const r of reports) if (r.layout === layout) runs.set(r.context, (runs.get(r.context) ?? 0) + 1);
     // (Track 2, lane CONTENT: the 'service' zone runs once per seeded service annex of THIS level — its count of annexes)
     const annexes = (layout as unknown as {extensions?: {annexes: unknown[]}}).extensions?.annexes.length ?? 0;
     expect(Object.fromEntries(runs)).toEqual(Object.fromEntries(level('office').contexts.map(c => [c.id, c.zone ? annexes : c.runs]).filter(([, n]) => n)));
-    expect(annexes, 'office 222 exercises the service zone').toBeGreaterThan(0);
+    expect(annexes, `office ${FRESH.office} exercises the service zone`).toBeGreaterThan(0);
     expect(level('office').contexts.find(c => c.id === 'floor')!.runs).toBe(OFFICE_FLOORS.length - 1);
   });
 

@@ -18,6 +18,7 @@ import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {lootProfile} from '../src/items/lootTables';
 import {CELL} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
+import {FRESH} from './helpers/btsArea';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 let models: Record<string, GLTF> = {};
@@ -47,7 +48,7 @@ describe.runIf(!!process.env.ANNEX_PICTURES)('annex review pictures (ANNEX_PICTU
       await sharp(px, {raw: {width: 960, height: 540, channels: 3}}).png().toFile(path.join(out, `${name}.png`));
       report.push(`${name}: cam ${JSON.stringify(cam)}`);
     };
-    const L = freshLayout('subway', 1043);
+    const L = freshLayout('subway', FRESH.subwayTunnel); // (lane AREA: was 1043, which now rolls the area absent)
     // (round 2, R3) the generated genset (its own base-colour map decoded here: Node's GLTFLoader has no image decoder)
     const {loadStripped} = await import('./helpers/openablesFixture');
     const {ANNEX_GENSET} = await import('../src/assets/annexGenset');

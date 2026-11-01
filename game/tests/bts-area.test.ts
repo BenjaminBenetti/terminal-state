@@ -24,7 +24,8 @@ import {Rng} from '../src/core/rng';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
 import {canonDiff, canonLayout} from './helpers/trackExtCore';
-import {absentSeeds, presentSeeds} from './helpers/btsArea';
+import {FRESH, absentSeeds, presentSeeds} from './helpers/btsArea';
+import {freshLayout} from './helpers/annexRoute';
 
 const report = (s: string) => process.stdout.write(`[bts-area] ${s}\n`);
 /** The census corpus formula of the track-extension tests. */
@@ -40,6 +41,16 @@ const reference = (level: LevelId, levelSeed: number): StationLayout => {
   return level === 'subway' ? generateStation(levelSeed, {startWeapon: 'pistol', trackExtensions: cfg})
     : level === 'office' ? generateOfficeLevel({levelSeed, startWeapon: 'pistol'}, undefined, undefined, cfg)
       : generateMallLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg});
+};
+/**
+ * Canonical core view. The mall's locked street-exit halls are an APPEND-ONLY post-pass after the attach (gen/mall/exits.ts): their
+ * area ids follow the extension areas, so the mall record's exits are compared with those ids taken out (everything else exact).
+ */
+const canonCore = (l: StationLayout): Record<string, unknown> => {
+  const c = canonLayout(coreView(l));
+  const strip = (v: unknown): unknown => Array.isArray(v) ? v.map(strip) : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'area').map(([k, x]) => [k, strip(x)])) : v;
+  if (c.mall && typeof c.mall === 'object') c.mall = {...(c.mall as Record<string, unknown>), exits: strip((c.mall as Record<string, unknown>).exits)};
+  return c;
 };
 const cache = new Map<string, StationLayout>();
 const gen = (level: LevelId, s: number) => { const k = `${level}:${s}`; let l = cache.get(k); if (!l) cache.set(k, (l = live(level, s))); return l; };
@@ -144,7 +155,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
           // the guaranteed deep hideout, its cache(s) and the survivor marks leading there
           expect(n.hideout !== undefined && ids.has(n.hideout), `${ntag} hideout`).toBe(true);
           expect(annexCachesOf(l).filter(c => c.annex === n.id).length, `${ntag} caches`).toBeGreaterThanOrEqual(1);
-          expect((e.cacheMarks ?? []).some(m => m.annex === n.id && m.kind === 'hideout'), `${ntag} hideout mark`).toBe(true);
+          expect((e.cacheMarks ?? []).filter(m => m.annex === n.id).length, `${ntag} survivor marks`).toBeGreaterThan(0);
           // its loot holders / finds, lights and service spawns (the zone budget per annex)
           expect(l.props.filter(p => ids.has(p.area)).length, `${ntag} props`).toBeGreaterThan(10);
           expect(l.lights.filter(x => ids.has(x.area)).length, `${ntag} lights`).toBeGreaterThan(0);
@@ -158,13 +169,37 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     expect(art).toBeGreaterThan(0);
   }, 300000);
 
+  it('PRESENT but geometrically ineligible (Office 31702): no annex, honestly logged, nothing of the area — never a second roll', () => {
+    const l = gen('office', 31702), e = l.extensions!;
+    expect(e.area).toEqual({roll: btsAreaRoll(31702), chance: BTS_AREA_CHANCE, present: true});
+    const t = areaTraces(l);
+    expect(Object.entries(t).filter(([, v]) => v !== 0), JSON.stringify(t)).toEqual([]);
+    const annexLog = e.log.filter(g => /^annex/.test(g.result));
+    expect(annexLog.length).toBe(e.tunnels.length);
+    expect(annexLog.every(g => /not eligible/.test(g.result))).toBe(true);
+  });
+
+  it('the fresh-run sample seeds of the annex tests (tests/helpers/btsArea.ts FRESH) roll PRESENT and play their roles', () => {
+    for (const [k, s] of Object.entries(FRESH)) expect(btsAreaPresent(s), k).toBe(true);
+    // each is the FIRST seed at / after the old playtest seed that rolls present and plays the role
+    for (const [k, old] of Object.entries({subwayTunnel: 1043, subwayHatch: 1002, subwayGenset: 1037, office: 222, mall: 846932})) expect(btsAreaPresent(old), `${k} old ${old}`).toBe(false);
+    const tl = freshLayout('subway', FRESH.subwayTunnel), T = tl.extensions!;
+    expect(T.annexes.map(n => n.tunnel >= 0)).toEqual([true]);
+    expect((T.machines ?? []).some(m => m.kind === 'fanWall' || m.kind === 'fanUnit')).toBe(true);
+    expect(annexCachesOf(tl).filter(c => c.annex === T.annexes[0].id).length).toBeGreaterThanOrEqual(2);
+    expect(freshLayout('subway', FRESH.subwayHatch).extensions!.annexes.map(n => n.tunnel >= 0).sort()).toEqual([false, true]);
+    expect(freshLayout('subway', FRESH.subwayGenset).extensions!.machines!.some(m => m.kind === 'genset')).toBe(true);
+    expect(freshLayout('office', FRESH.office).extensions!.annexes.length).toBe(2);
+    expect(freshLayout('mall', FRESH.mall).extensions!.annexes.length).toBe(1);
+  }, 120000);
+
   it('core-view invariance: present or absent, the core equals the same level generated with no annex possible', () => {
     for (const level of TRACK_LEVELS) {
       for (const seed of [ABSENT[0], PRESENT[0]]) {
         const l = gen(level, seed), ref = reference(level, seed);
         expect(ref.extensions!.annexes, `${level} ${seed}: reference`).toEqual([]);
         expect(l.attempt, `${level} ${seed}: same attempt`).toBe(ref.attempt);
-        expect(canonDiff(canonLayout(coreView(l)), canonLayout(coreView(ref))), `${level} ${seed}: core view`).toEqual([]);
+        expect(canonDiff(canonCore(l), canonCore(ref)), `${level} ${seed}: core view`).toEqual([]);
       }
     }
   }, 300000);

@@ -36,14 +36,17 @@ import {CELL} from '../src/gen/grid';
 import {isExtensionArea} from '../src/gen/trackExt/types';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 let models: Record<string, GLTF> = {};
 beforeAll(async () => { models = await openableModels(); }, 120000);
 
-/** Two fresh Subway runs (tunnel annex 1043; tunnel + bed-wall hatch 1002) + an Office and a Mall annex. */
-const SAMPLE: readonly [LevelId, number][] = [['subway', 1043], ['subway', 1002], ['office', 222], ['mall', 846932]];
+/** Two fresh Subway runs (a tunnel annex; tunnel + bed-wall hatch) + an Office and a Mall annex. */
+// (2026-11-01, lane AREA: the area exists only where the level's one roll succeeds; the old playtest seeds roll it absent — FRESH,
+// tests/helpers/btsArea.ts, holds the first seeds at / after them rolling PRESENT in the same role.)
+const SAMPLE: readonly [LevelId, number][] = [['subway', FRESH.subwayTunnel], ['subway', FRESH.subwayHatch], ['office', FRESH.office], ['mall', FRESH.mall]];
 const cache = new Map<string, {layout: StationLayout; cm: ContainerManager}>();
 function fresh(level: LevelId, seed: number) {
   const k = `${level}:${seed}`;
@@ -132,7 +135,7 @@ describe('fresh New Game annexes: findable finite loot, encounterable enemies (p
   });
 
   it('taken annex loot stays taken on a revisit, a killed annex enemy stays dead (finite run memory; no refill)', () => {
-    const {layout, cm} = fresh('subway', 1043);
+    const {layout, cm} = fresh('subway', FRESH.subwayTunnel);
     const inv = new Inventory();
     const cm2 = new ContainerManager(models, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), () => inv);
     cm2.build(layout, {}, lootProfile('subway'));
@@ -154,7 +157,7 @@ describe('fresh New Game annexes: findable finite loot, encounterable enemies (p
     ];
     const recs = captureHolders(cm2);
     // the revisit: the same section regenerated and rebuilt, the run memory applied (Game.buildSection order)
-    const again = freshLayout('subway', 1043);
+    const again = freshLayout('subway', FRESH.subwayTunnel);
     const cm3 = new ContainerManager(models, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), () => new Inventory());
     cm3.build(again, {}, lootProfile('subway'));
     applyHolders(cm3, recs);

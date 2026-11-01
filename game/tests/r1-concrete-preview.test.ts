@@ -19,9 +19,10 @@ import {mipChain, mipStats, renderMeshes, type PreviewCam, type PreviewLight} fr
 import {freshLayout} from './helpers/annexRoute';
 import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {CELL} from '../src/gen/grid';
+import {FRESH} from './helpers/btsArea';
 
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const SEED = 1043;
+const SEED = FRESH.subwayTunnel; // (lane AREA: was 1043, which now rolls the area absent)
 const [RW, RH] = (process.env.R1_RES ?? '1920x1080').split('x').map(Number);
 
 /** Per-mip statistics of a texture: colour = linear luminance, rough = G, normal = |xy| tilt (minified normals average out). */
@@ -80,7 +81,7 @@ describe.runIf(!!process.env.R1_CONCRETE)('R1 concrete: CPU before / after at pl
     const sw = s.map.image as unknown as ShimCanvas;
     await sharp(Buffer.from(sw.data), {raw: {width: sw.width, height: sw.height, channels: 4}}).png().toFile(path.join(out, 'swatch-color.png'));
 
-    // ---- the level: subway 1043, first annex ----
+    // ---- the level: subway FRESH.subwayTunnel (was 1043), first annex ----
     const L = freshLayout('subway', SEED);
     const w = buildWorld(L, mats, {});
     const A = L.extensions!.annexes[0], fy = A.floorY;

@@ -38,9 +38,13 @@ import type {Area, StationLayout} from '../src/gen/stationTypes';
 import {annexCachesOf} from '../src/gen/annexCache'; // (round 3, lane HIDEOUT)
 import {ANNEX_CACHE_GEAR_KEY} from '../src/items/lootTables'; // (round 3, lane HIDEOUT)
 
-/** Seeds by annex count (deterministic; tests/track-ext.test.ts census); `hatch`: a tunnel annex + a service-hatch annex (GEN-2). */
-const SUBWAY = {1: 4055629249, 2: 2563024239, none: 2027820797, hatch: 774566179};
-const OFFICE = {1: 3, 2: 7922};
+/**
+ * Seeds by annex count (deterministic; tests/track-ext.test.ts census); `hatch`: a tunnel annex + a service-hatch annex (GEN-2).
+ * (2026-11-01, lane AREA: annexes only where the level's one area roll succeeds — the same role seeds as tests/track-ext.test.ts:
+ * 2 / hatch / Office 1 / 2 re-found among seeds rolling PRESENT (were 2563024239 / 774566179 / 3 / 7922); `none` rolls absent.)
+ */
+const SUBWAY = {1: 4055629249, 2: 3964205382, none: 2027820797, hatch: 1874796201};
+const OFFICE = {1: 10, 2: 7926};
 const cache = new Map<string, StationLayout>();
 const sub = (seed: number) => { const k = `s${seed}`; let l = cache.get(k); if (!l) cache.set(k, (l = generateStation(seed))); return l; };
 const off = (seed: number) => { const k = `o${seed}`; let l = cache.get(k); if (!l) cache.set(k, (l = generateOfficeLevel({levelSeed: seed, startWeapon: 'pistol'}))); return l; };
@@ -408,7 +412,9 @@ describe('service spawns (the \'service\' zone context)', () => {
   });
 
   it('no Siren ever in an Office annex; killed annex enemies are never spawned again', () => {
-    for (const seed of [OFFICE[1], OFFICE[2], 222, 3333, 4242]) {
+    // (lane AREA: 224 / 3336 / 4257 = the first seeds >= the old 222 / 3333 / 4242 rolling the area PRESENT — those now roll absent)
+    for (const seed of [OFFICE[1], OFFICE[2], 224, 3336, 4257]) {
+      expect(off(seed).extensions!.annexes.length, `Office ${seed} annexes`).toBeGreaterThan(0);
       const l = off(seed), own = inAnnex(l);
       expect(l.zombies.filter(z => own(z) && z.archetype === 'siren')).toEqual([]);
     }
