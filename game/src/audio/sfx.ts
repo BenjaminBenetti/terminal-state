@@ -358,7 +358,18 @@ export interface FlareBurnHandle {
 interface FlareLoop {
   src: AudioBufferSourceNode; fade: GainNode; level: GainNode; filter: BiquadFilterNode; panner: PannerNode; nodes: AudioNode[];
   pos: Pos; next: number; stopped: boolean;
+  /** Task reactor-build-20261101: audible range of this loop (default FLARE_LOOP.far; a machine loop: MACHINE_LOOP.far). */
+  far?: number;
 }
+/**
+ * Task reactor-build-20261101 (primary): the Reactor's MACHINE loops (auxiliary generator running, a zone's extraction fans, the
+ * restarted core's hum) and machine one-shots (generator start, breaker, fuse, valve, pump, core startup) — the flare-loop chain
+ * (fade -> level -> air / occlusion lowpass -> panner -> master + reverb send) with a bigger reference distance: machines are loud.
+ * Bounded: at most MACHINE_LOOP.max loops (the oldest fades to make room); every loop stops on a new world (setWorld).
+ */
+export const MACHINE_LOOP = {max: 6, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
+export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum';
+export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup';
 const NOOP_FLARE: FlareBurnHandle = {setPos() {}, stop() {}, playing: false};
 
 /**
@@ -465,6 +476,8 @@ export class Sfx {
   private confirms = 0;
   // Iteration 12 (AUDIO): burning flare loops (bounded, FLARE_LOOP.max).
   private flareLoops: FlareLoop[] = [];
+  /** Task reactor-build-20261101: the Reactor's machine loops (bounded: MACHINE_LOOP.max). */
+  private machineLoops: FlareLoop[] = [];
   // Task track1-siren-blightbelly-20261031 (lane AUDIO): the sounding hum phrase per Siren, the live gas hisses, once-per-enemy memories and counters (debugState().t1).
   private t1Hums = new Map<object, Voice>();
   private t1Hisses: Voice[] = [];
@@ -675,7 +688,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -1625,6 +1638,75 @@ export class Sfx {
     };
   }
 
+  /**
+   * Task reactor-build-20261101 (primary): a Reactor machine one-shot at a world point (generator start, breaker, fuse, valve, pump,
+   * the core's startup swell). Silent when audio is paused / not started or the clip is missing.
+   */
+  reactorCue(cue: MachineCue, x: number, y: number, z: number): void {
+    this.play(this.voice({at: {x, y, z}, ref: MACHINE_LOOP.ref, rolloff: MACHINE_LOOP.rolloff, send: MACHINE_LOOP.send, pri: 1, maxDist: MACHINE_LOOP.maxDist}), cue, {jitter: 0.02, gainJitter: 0.5});
+  }
+
+  /**
+   * Task reactor-build-20261101 (primary): a Reactor machine's spatial running loop at a world point (a running generator, a zone's
+   * extraction fans, the restarted core's hum). Returns a handle like flareBurnStart (no-op when audio is not running or the clip is
+   * missing). At most MACHINE_LOOP.max (the oldest fades to make room); all stop on a new world.
+   */
+  reactorLoop(cue: MachineLoopCue, x: number, y: number, z: number): FlareBurnHandle | null {
+    const ctx = this.live;
+    if (!ctx) return null;
+    const clip = this.bank.pick(cue);
+    if (!clip) return null;
+    this.machineLoops = this.machineLoops.filter(l => !l.stopped);
+    while (this.machineLoops.length >= MACHINE_LOOP.max) this.endLoop(this.machineLoops[0], 0.4);
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = clip.buffer;
+    src.loop = true;
+    const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+    src.loopStart = a;
+    src.loopEnd = b;
+    src.playbackRate.value = rnd(0.97, 1.03); // two machines never phase into one
+    const fade = ctx.createGain();
+    fade.gain.value = 0;
+    fade.gain.setTargetAtTime(CUE_GAIN[cue], now, MACHINE_LOOP.fadeIn / 3);
+    const level = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.Q.value = 0.5;
+    const panner = this.makePanner(ctx, false, MACHINE_LOOP.ref, MACHINE_LOOP.rolloff);
+    src.connect(fade).connect(level).connect(filter).connect(panner).connect(this.master);
+    const nodes: AudioNode[] = [src, fade, level, filter, panner];
+    if (this.reverbIn) {
+      const sn = ctx.createGain();
+      sn.gain.value = MACHINE_LOOP.send;
+      filter.connect(sn).connect(this.reverbIn);
+      nodes.push(sn);
+    }
+    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false, far: MACHINE_LOOP.far};
+    this.setPannerPos(panner, x, y, z);
+    this.loopFilter(loop, true);
+    src.onended = () => { for (const n of loop.nodes) { try { n.disconnect(); } catch { /* already gone */ } } loop.nodes.length = 0; };
+    src.start(now, a + Math.random() * Math.max(0, b - a));
+    this.soundsStarted++;
+    this.machineLoops.push(loop);
+    const self = this;
+    return {
+      setPos(px: number, py: number, pz: number) {
+        if (loop.stopped) return;
+        loop.pos.x = px; loop.pos.y = py; loop.pos.z = pz;
+        self.setPannerPos(loop.panner, px, py, pz);
+      },
+      stop(fadeS?: number) { self.endLoop(loop, fadeS ?? MACHINE_LOOP.fadeOut); },
+      get playing() { return !loop.stopped; },
+    };
+  }
+
+  /** Task reactor-build-20261101: fade out every machine loop (new world). */
+  stopMachines(fadeS = 0.1): void {
+    for (const l of this.machineLoops.slice()) this.endLoop(l, fadeS);
+    this.machineLoops = [];
+  }
+
   /** Fade out every burning-flare loop (new station / retry / death). */
   stopFlares(fadeS = 0.1): void {
     for (const l of this.flareLoops.slice()) this.endLoop(l, fadeS);
@@ -1638,7 +1720,7 @@ export class Sfx {
     const t = ctx.currentTime, d = this.dist(l.pos);
     const occ = this.occlusion && d > 1.5 ? clamp01(this.occlusion(l.pos.x, l.pos.z, l.pos.y)) : 0;
     const cutoff = Math.min(20000, 17000 / (1 + d * 0.04)) * (occ > 0 ? 0.08 + 0.92 * (1 - occ) : 1);
-    const lvl = d > FLARE_LOOP.far ? 0 : 1 - 0.45 * occ;
+    const lvl = d > (l.far ?? FLARE_LOOP.far) ? 0 : 1 - 0.45 * occ;
     l.next = t + FLARE_LOOP.update;
     if (immediate) { l.filter.frequency.value = cutoff; l.level.gain.value = lvl; return; }
     l.filter.frequency.setTargetAtTime(cutoff, t, 0.08);
@@ -1647,14 +1729,17 @@ export class Sfx {
 
   /** Refresh every live loop's filter/level as the listener moves (setListener cadence). */
   private updateLoops(force: boolean): void {
-    if (!this.flareLoops.length) return;
+    if (!this.flareLoops.length && !this.machineLoops.length) return;
     const t = this.ctx?.currentTime ?? 0;
     for (const l of this.flareLoops) if (!l.stopped && (force || t >= l.next)) this.loopFilter(l, false);
+    for (const l of this.machineLoops) if (!l.stopped && (force || t >= l.next)) this.loopFilter(l, false); // task reactor-build-20261101
   }
 
   private endLoop(l: FlareLoop, fadeS: number): void {
     const i = this.flareLoops.indexOf(l);
     if (i >= 0) this.flareLoops.splice(i, 1);
+    const j = this.machineLoops.indexOf(l); // task reactor-build-20261101
+    if (j >= 0) this.machineLoops.splice(j, 1);
     if (l.stopped) return;
     l.stopped = true;
     const ctx = this.ctx;
