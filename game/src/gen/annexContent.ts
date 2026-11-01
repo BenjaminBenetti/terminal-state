@@ -39,7 +39,7 @@ import {ROOM_PURPOSES, purposeById, type LightOdds, type RoomPurpose} from './pu
 import {isP7Kind} from './props07';
 import {LIGHT_ODDS, clearAround, dressExtensionAreas, stationP7Palette} from './stationDress';
 import {areaBase, makePlaceCtx, placeAgainstWall, type PlaceCtx} from './placeKit';
-import {isExtensionArea, type ServiceAnnex, type TrackTunnel} from './trackExt/types';
+import {isExtensionArea, type CacheMark, type ServiceAnnex, type TrackTunnel} from './trackExt/types';
 import {ANNEX_PICKED_KEY, ANNEX_SCRAPS_KEY, ANNEX_STASH_KEY, ANNEX_SUPPLY_KEY, BATTERY_ID, FLARE_ID, FLOOR_ECONOMY, econCat, floorChance, floorCount, type LootProfile} from '../items/lootTables';
 import {areaCap, areaSpawnWeight, markSpawnContext, reportSpawnCandidates, rollZombieTypes, type SpawnContextRule, type SpawnProfile} from '../ai/spawnTables';
 import {levelDistance} from './levelGen';
@@ -52,6 +52,8 @@ import {isLootHolderKind, rollsPurposeTable} from '../items/loot';
 import {ANNEX_RULES, assignAnnexRooms, placeAnnexMachinery, SIGNATURE_OF_PURPOSE, type AnnexMachine, type AnnexRoomPlan, type SignatureId} from './annexRooms';
 // Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): survivor caches deeper in
 import {placeAnnexCaches, type AnnexCacheRecord} from './annexCache';
+// Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor's trail of graffiti marks to the hideout
+import {planCacheMarks} from './annexMarks';
 
 /**
  * Generated-model (iteration-07) placements the composition of ONE annex's corridors may add: the composer's own budget
@@ -242,10 +244,17 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   const caches = new Map<number, AnnexCacheRecord[]>();
   for (const n of ext.annexes) {
     const p0 = layout.props.length;
-    caches.set(n.id, placeAnnexCaches(layout, n, annexAreas(n), coreKinds, root.fork(`cache:${n.id}`), {reuse: storageCtx.get(n.id), from: first}));
+    caches.set(n.id, placeAnnexCaches(layout, n, annexAreas(n), coreKinds, root.fork(`cache:${n.id}`), {reuse: storageCtx.get(n.id), from: first, loot: o.loot}));
     rep.props += layout.props.length - p0;
   }
   phase('cache');
+  // 8. (round 3, lane HIDEOUT) the survivor's trail to each annex's hideout (gen/annexMarks.ts): data records, on their own forks
+  if (ext.annexes.length) {
+    const marks: CacheMark[] = [];
+    for (const n of ext.annexes) planCacheMarks(layout, n, caches.get(n.id) ?? [], root.fork(`marks:${n.id}`), marks);
+    ext.cacheMarks = marks;
+  }
+  phase('marks');
   // report
   rep.lights = layout.lights.length - first.lights;
   rep.pickups = layout.pickups.length - first.pickups;

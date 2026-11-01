@@ -94,6 +94,9 @@
 //     area": the service spawns draw their family from SERVICE_FAMILY_POOL (rat/dog 0.20), so the annex spawns' archetypes move (R5's
 //     caches are appended after the service run). Moved: ONLY live annex entries' spawn hashes (old values in the helper); every
 //     count, pickup hash, core view and invariant unchanged (asserted every run).
+// 12. Task studio-alpha-track2-round3 (+ recovery01) — CAUSE: the annexes re-laid as a logical service area (spine, lined rooms,
+//     districts, hideout room: the service spawns land elsewhere) and the hideout's gear pickup appended to the pickups. Moved: ONLY
+//     live annex entries (old values in the helper); station / service counts, core views and invariants unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';

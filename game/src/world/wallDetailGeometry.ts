@@ -467,7 +467,10 @@ function aabb(buf: Buf, c: readonly number[], hx: number, hy: number, hz: number
   }
 }
 
-/** Rubble at the foot of a breach: small rotated chunks on the floor in front of it. */
+/** How far (m) in front of the wall face a breach's rubble may reach (its chunks' far sides). */
+export const RUBBLE_REACH = 0.32;
+
+/** Rubble at the foot of a breach: small rotated chunks on the floor in front of it (within RUBBLE_REACH of the face). */
 export function rubble(buf: Buf, F: Frame, s0: number, s1: number, floorY: number, n: number, seed: number, cell: CellRect): void {
   const rnd = mulberry32(seed);
   for (let i = 0; i < n; i++) {
@@ -480,8 +483,12 @@ export function rubble(buf: Buf, F: Frame, s0: number, s1: number, floorY: numbe
     g.rotateX((rnd() - 0.5) * 0.5);
     g.rotateZ((rnd() - 0.5) * 0.5);
     g.computeBoundingBox();
-    const lift = -g.boundingBox!.min.y;
-    const p = pt(F, s0 + (s1 - s0) * rnd(), floorY + lift * 0.85, 0.05 + rnd() * rnd() * 0.3);
+    const bb = g.boundingBox!, lift = -bb.min.y;
+    // (round 3, lane LAYOUT: a chunk's far side stays within RUBBLE_REACH of the wall — the stand-off used to be drawn up to 0.35 m
+    // before the chunk's own half-size, so a rare draw lay ~0.4 m out, off the wall's footprint; same draws, clamped)
+    const half = Math.max(-bb.min.x, bb.max.x, -bb.min.z, bb.max.z);
+    const s = s0 + (s1 - s0) * rnd(), off = Math.min(0.05 + rnd() * rnd() * 0.3, RUBBLE_REACH - half);
+    const p = pt(F, s, floorY + lift * 0.85, off);
     g.translate(p[0], p[1], p[2]);
     const k = 0.6 + rnd() * 0.35;
     buf.geo(g, [k, k, k * 0.97]);

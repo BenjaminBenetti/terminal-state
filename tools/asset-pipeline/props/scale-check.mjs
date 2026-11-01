@@ -93,6 +93,8 @@ export async function loadRuntime() {
     // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): authored procedural purpose shapes (box parts) render too
     `export {purposePropShape, PURPOSE_ACCENT} from '${G}/gen/purposeShapes';`,
     `export {PURPOSE_PROP_KINDS, PURPOSE_MODEL_KEYS} from '${G}/gen/props';`,
+    // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): procedural PROP shapes (gen/propShapes.ts box parts: the camp lantern / stove)
+    `export {propShape, ACCENT_COLORS} from '${G}/gen/propShapes';`,
   ].join('\n');
   const bundle = await rolldown({
     input: 'scale-check-entry', platform: 'node', logLevel: 'silent',
@@ -165,6 +167,14 @@ export async function resolveKind(kind) {
       path: 'procedural purpose shape (gen/purposeShapes.ts parts; world/storefrontBuilder.ts buildPurposeProps)', fit: null, turn: false, lift: 0, def, modelKey: null,
       notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key']};
   }
+  // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): a procedural PROP shape (gen/propShapes.ts propShape: the hideout's camp lantern /
+  // stove, the core's table / desk ...) renders its box parts exactly as world/builder.ts addProceduralProp instances them (prop frame, metres)
+  {
+    const parts = rt.propShape(kind);
+    if (parts?.length) return {kind, file: path.join(GAME, 'src/gen/propShapes.ts'), parts, accent: rt.ACCENT_COLORS[kind]?.[0] ?? 0xb0a890,
+      path: 'procedural prop shape (gen/propShapes.ts parts; world/builder.ts addProceduralProp)', fit: null, turn: false, lift: 0, def, modelKey: null,
+      notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key']};
+  }
   return {kind, file: null, path: 'procedural box form (no runtime model)', def};
 }
 
@@ -173,6 +183,7 @@ const PART_RGB = {
   wood: 0x8a6a45, woodVeneer: 0x8a6a45, vinyl: 0x56604a, cardboard: 0xa8865a, steelDark: 0x3a3d40, steelBright: 0xa9adb0, black: 0x1e1e1e,
   panel: 0x8f9396, partition: 0xa3b3ae, counter: 0xb9b2a4, concrete: 0x8c8a85, porcelain: 0xe6e4df,
   paintRed: 0xb23a2e, paintYellow: 0xd9a520, paintGreen: 0x3f7d4a, paintWhite: 0xe8e4da, paintBlue: 0x2f5f9a, paintOrange: 0xd9732a,
+  glass: 0xc8d8dc, lanternGlow: 0xffd27a, // lane HIDEOUT (round 3): the lantern globe / mantle
 };
 /**
  * Triangles of authored box parts ({m, s, p, rx?, ry?}: rotateX, then rotateY, then translate — the builder's order) as a loadModel()

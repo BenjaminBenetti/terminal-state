@@ -316,6 +316,28 @@ reproduce the earlier pins byte for byte).
     chocolate 0.3), drink 1.6 (water 1.4, cola 0.2), dressings 1.1, first-aid kits 0.25, limb treatments (splint / sling) 0.16, torch batteries 0.85, gas-mask filters 0.4,
     ammo 1.2 lots (~9 rounds). A 2-holder cache (no third piece fitted: 14 of 60 measured) is ~2/3 of that. Measured on the sample
     (packed lots, `ContainerManager.build` with each level's profile): see `docs/track-extensions.md` "Survivor caches".
+  - **Round 3, the HIDEOUT** (task `studio-alpha-track2-round3-20261031-01`, lane HIDEOUT; user: "it should have substantial detail
+    applied and contain substantial loot. perhaps a boosted chance of gear spawning. it needs to be a good pay off for navigating the
+    confusing maze of rooms"):
+    - a fourth holder, the **footlocker** at the foot of the bed (`gen/annexCache.ts`; an openable authored lid): `ANNEX_CACHE_LOCKER`
+      (exact, `empty: 0`, 2–3 lots) = generic ammo 1.0 (~1/3 each caliber), flare 0.7, battery 0.7, gas filter 0.5, bandage 0.6,
+      chocolate 0.4, water 0.3 — the survivor's personal kit; no medkit (the injury band below), no material, no gear;
+    - fuller holders: the pantry shelf and the supply crate roll **3–4** lots (were 2–3); the kit stays 2–3 (its med kits / splints are
+      the injury economy's knob);
+    - **the ammo rule now:** the crate AND the footlocker hold the cache's ammo (generic rows, big-box stacks in the crate); the pantry
+      and the kit never do;
+    - a footlocker is an own-table openable container: `items/loot.ts holderTable` lets an EXACT purpose table that names the kind
+      explicitly (`'annex-cache'` → `footlocker`) roll instead of its own table (`OPENABLE_TABLES.footlocker`, used nowhere else); every
+      other own-table container is unchanged;
+    - **the gear piece** (`ANNEX_CACHE_GEAR`, key `ANNEX_CACHE_GEAR_KEY` `'annex-cache-gear'`): each annex's FIRST cache (the hideout)
+      holds ONE piece of rare gear with **chance 0.6** — drawn by weight from the level profile's gear pool (`annexCacheGearRows`:
+      `gearParams(profile).weights`, i.e. `GEAR_WEIGHTS` with the level's overrides) plus the **gas mask** at weight 0.8 (its filter
+      seeded like the level's mask find: 35–75 % of `FILTER_LIFE_S`). A layout pickup at the bedside (tagged `reward`), rolled on its own
+      fork (`cache:<annex>` → `gear`), appended after the annex's other pickups: finite, remembered by run memory (layout pickup index),
+      never re-rolled. The level's ONE gear roll and mask roll, their placement and pins are unchanged (the level gear / mask pickups,
+      appended later by `levels/registry.ts withGear`, move one index on: their run-time yaw draw shifts, their place does not).
+      The loot reference lists it as the special `hideout-gear`.
+    - Measured: see `docs/track-extensions.md` "The hideout (round 3)".
   - **Never a reward roll:** no rare gear, gas mask, weapon or crafting material (`salvage: false`: the mall's salvage rows never join
     these tables — `items/lootEconomy.ts salvageRule`); the gas filter is the ordinary spare canister (a `supply` item with no
     economy category: its `itemWeight` is the tuning dial). Exact means the whole budget: no scarcity cut, re-theme, limb conversion
@@ -328,7 +350,8 @@ reproduce the earlier pins byte for byte).
   per-level totals (the annex count is a seeded census quantity).
 - **Never multiplied.** No guaranteed high-tier item: every stash may be empty, every floor find is a chance or passes the keep cut.
   The level's ONE rare-gear roll and mask roll never land in an annex (`gearAreaWeight` = 0 for extension areas; gear spacing
-  ignores the annex finds), no weapon find is placed there, and the Office roof cache / roof find are untouched.
+  ignores the annex finds), no weapon find is placed there, and the Office roof cache / roof find are untouched. (Round 3: the hideout's
+  own gear piece — a 0.6 chance per annex hideout, above — is the one deliberate gear source in an annex, separate from those rolls.)
 - **Measured** (playtest revision; fresh New Game path, Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
   5150 / 9090):
   - **Holders:** 49–75 per annex, **28–38 % stocked** (the core station stocks ~1/3).

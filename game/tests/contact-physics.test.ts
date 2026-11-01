@@ -113,7 +113,7 @@ describe('every light physics prop wakes by contact (Subway and Office), holders
     // Subway kinds keep their iteration-07 masses (only the contact material / wake changed)
     const sub = Object.fromEntries(ALL_PROP_KINDS.filter(k => PROP_PHYSICS_AUDIT[k].src === 'subway' && PROP_PHYSICS_AUDIT[k].cls === 'dynamic').sort().map(k => [k, PROP_PHYSICS_AUDIT[k].mass]));
     expect(sub).toEqual({
-      babyStroller: 9, basketStack: 3, bicycle: 13, bin: 7, coatRack: 6, crowdBarrier: 16, drumFan: 14, fireExtinguisher: 6, foldingBarricade: 6, foldingChair: 4,
+      babyStroller: 9, basketStack: 3, bicycle: 13, bin: 7, campLantern: 1.2, campStove: 1.8, coatRack: 6, crowdBarrier: 16, drumFan: 14, fireExtinguisher: 6, foldingBarricade: 6, foldingChair: 4,
       handToolbox: 6, handTruck: 14, ingredientBin: 8, ivPole: 4, mopBucketWringer: 8, newspaperBundles: 12, officeSwivelChair: 12, paperShredder: 10, pedestalFan: 5,
       plasticStackChair: 3, rollingSuitcase: 9, spinnerRack: 14, stepLadder: 7, trashBagPile: 8, tripodWorkLight: 6, wetDryVac: 8, wetFloorSign: 1.2, wheelchair: 15,
       wheelieBin: 12,

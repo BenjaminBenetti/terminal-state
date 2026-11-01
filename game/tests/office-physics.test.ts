@@ -151,21 +151,23 @@ describe('physics-affordance audit (PROP_PHYSICS_AUDIT): every prop kind classif
     const dyn = Object.fromEntries(sub.filter(k => PROP_PHYSICS_AUDIT[k].cls === 'dynamic').sort().map(k => [k, PROP_PHYSICS_AUDIT[k].mass]));
     console.info(`[subway] ${JSON.stringify(dyn)}`);
     expect(dyn).toEqual({
-      babyStroller: 9, basketStack: 3, bicycle: 13, bin: 7, coatRack: 6, crowdBarrier: 16, drumFan: 14, fireExtinguisher: 6, foldingBarricade: 6, foldingChair: 4,
+      babyStroller: 9, basketStack: 3, bicycle: 13, bin: 7, campLantern: 1.2, campStove: 1.8, coatRack: 6, crowdBarrier: 16, drumFan: 14, fireExtinguisher: 6, foldingBarricade: 6, foldingChair: 4,
       handToolbox: 6, handTruck: 14, ingredientBin: 8, ivPole: 4, mopBucketWringer: 8, newspaperBundles: 12, officeSwivelChair: 12, paperShredder: 10, pedestalFan: 5,
       plasticStackChair: 3, rollingSuitcase: 9, spinnerRack: 14, stepLadder: 7, trashBagPile: 8, tripodWorkLight: 6, wetDryVac: 8, wetFloorSign: 1.2, wheelchair: 15,
       wheelieBin: 12,
     });
     for (const k of sub) {
       const ph = propPhysics(k);
-      expect(!!ph.onHost, k).toBe(false);
+      // (round 3, lane HIDEOUT) the hideout's lantern / camp stove stand on its camp table: on-host decor that goes loose on its static host
+      expect(!!ph.onHost, k).toBe(k === 'campLantern' || k === 'campStove');
       // task office-props-physics-scale-20261030 (lane PHYS): calibrated contact + wake exactly for the SUBWAY_CONTACT kinds
       const overlay = !!SUBWAY_CONTACT[k] && ph.dynamic;
       expect(ph.mat === 'castor' || ph.mat === 'pad' || !!ph.contact || ph.fit !== undefined, k).toBe(overlay);
       expect(PROP_PHYSICS_AUDIT[k].contact ?? false, k).toBe(overlay && dynamicKind(k));
     }
     // every office row of PROP_PHYSICS is an office kind (no Subway id overwritten)
-    for (const k of Object.keys(PROP_PHYSICS)) if (PROP_PHYSICS[k].mat === 'castor' || PROP_PHYSICS[k].mat === 'pad' || PROP_PHYSICS[k].onHost || PROP_PHYSICS[k].contact) expect(OFFICE_KINDS as readonly string[]).toContain(k);
+    // ((round 3, lane HIDEOUT) the hideout's on-host lantern / camp stove are Subway rows by design: they stand on its camp table)
+    for (const k of Object.keys(PROP_PHYSICS)) if (PROP_PHYSICS[k].mat === 'castor' || PROP_PHYSICS[k].mat === 'pad' || (PROP_PHYSICS[k].onHost && k !== 'campLantern' && k !== 'campStove') || PROP_PHYSICS[k].contact) expect(OFFICE_KINDS as readonly string[]).toContain(k);
   });
 
   it('docs/prop-affordances.md names the audit and the office physics table', () => {

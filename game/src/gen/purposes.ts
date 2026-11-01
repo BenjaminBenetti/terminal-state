@@ -32,6 +32,7 @@ import {
   ANNEX_PICKED, ANNEX_PICKED_KEY, ANNEX_STASH, ANNEX_STASH_KEY, // Track 2 (lane CONTENT): the service-annex holders' loot keys / tables
   ANNEX_SCRAPS, ANNEX_SCRAPS_KEY, ANNEX_SUPPLY, ANNEX_SUPPLY_KEY, // playtest revision: distributed supply / scraps holders
   ANNEX_CACHE_CRATE, ANNEX_CACHE_KEY, ANNEX_CACHE_KIT, ANNEX_CACHE_PANTRY, // round 2 (lane CACHE, R5): the survivor caches deeper in
+  ANNEX_CACHE_LOCKER, // round 3 (lane HIDEOUT): the hideout's footlocker
   ANNEX_SPARES_ROWS, // the annex signature rooms' tool / spares rows (+ TENANT_SUPPLY); round 2: without crafting materials
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
@@ -1229,7 +1230,7 @@ function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
     // only cache ammo) — every table exact, never empty, no salvage (items/lootTables.ts ANNEX_CACHE_*)
     [ANNEX_CACHE_KEY]: {
       id: ANNEX_CACHE_KEY, category: 'back', theme: 'personal', label: 'Survivor\'s cache', slots: ['storage'], kinds: ['room'], weight: 0, max: 0,
-      light: [0, 0.3, 0.7], props: [], loot: {shelf: ANNEX_CACHE_PANTRY, cabinetTall: ANNEX_CACHE_KIT, cabinetLow: ANNEX_CACHE_KIT, crate: ANNEX_CACHE_CRATE, default: ANNEX_CACHE_KIT}, floor: {},
+      light: [0, 0.3, 0.7], props: [], loot: {shelf: ANNEX_CACHE_PANTRY, cabinetTall: ANNEX_CACHE_KIT, cabinetLow: ANNEX_CACHE_KIT, crate: ANNEX_CACHE_CRATE, footlocker: ANNEX_CACHE_LOCKER, default: ANNEX_CACHE_KIT}, floor: {},
     },
   };
 }

@@ -121,6 +121,7 @@ export const HOLDER_SLOTS: Readonly<Record<string, SlotCategory>> = {
   shelf: 'shelf', stockShelf: 'shelf', shoppingCart: 'shelf',
   // general closed storage
   cabinetTall: 'container', cabinetLow: 'container', crate: 'container', staffLockers: 'container', filingCabinet: 'container', safe: 'container',
+  footlocker: 'container', // lane HIDEOUT (round 3): the survivor hideout's footlocker
   rollingToolChest: 'container',
   // specialist fixtures (HOLDER_ALLOW keeps their finds plausible)
   grillLine: 'foodPrep', espressoBar: 'foodPrep', wokLine: 'foodPrep', deliLine: 'foodPrep', blenderBar: 'foodPrep', hotdogCart: 'foodPrep', busCart: 'foodPrep',
@@ -531,6 +532,9 @@ export const OPENABLE_TABLES = {
   wheelieBin: {lots: [1, 3], empty: 0.5, items: JUNK_ROWS},
   newspaperVendingBox: {lots: [1, 1], empty: 0.72, items: NEWSBOX_ROWS},
   staffLockers: {lots: [1, 4], empty: 0.2, items: PERSONAL_ROWS},
+  // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the footlocker's own table (only ever placed in a hideout, where the
+  // 'annex-cache' key's exact ANNEX_CACHE_LOCKER rolls instead: items/loot.ts holderTable)
+  footlocker: {lots: [1, 3], empty: 0.3, items: PERSONAL_ROWS},
   filingCabinet: {lots: [1, 3], empty: 0.35, items: OFFICE_ROWS},
   safe: {lots: [1, 3], empty: 0.4, items: SAFE_ROWS},
   chestFreezer: {lots: [1, 3], empty: 0.35, items: FROZEN_ROWS},
@@ -721,12 +725,31 @@ export const ANNEX_CACHE_PANTRY_ROWS: ItemRows = [['water', 1.2], ['beans', 1.1]
 // in 0.8-1.7, injuries.test.ts)
 export const ANNEX_CACHE_KIT_ROWS: ItemRows = [['bandage', 1.3], ['medkit', 0.35], ['leg_splint', 0.12], ['arm_sling', 0.12], ['battery', 0.9], ['gas_filter', 0.55], ['water', 0.4]];
 export const ANNEX_CACHE_CRATE_ROWS: ItemRows = [...genericAmmo(1.5), ['beans', 0.5], ['water', 0.4], ['bandage', 0.4], ['battery', 0.3]];
-/** The cache's pantry shelf: food / drink, never empty, 2-3 lots (exact, no salvage). */
-export const ANNEX_CACHE_PANTRY: LootSpec = {items: ANNEX_CACHE_PANTRY_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
+/**
+ * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT; user: "it should have substantial detail applied and contain substantial
+ * loot … it needs to be a good pay off for navigating the confusing maze of rooms"): the hideout's FOOTLOCKER at the foot of the bed —
+ * the survivor's personal kit: their spare boxes of rounds (the second and last cache holder with ammo: the deliberate rule, generic
+ * calibers), flares, torch cells, gas-mask filters, dressings, a treat. No medkit (the injury economy's treatments ≈ med kits band:
+ * the kit cabinet carries the cache's med kits with their splint / sling), no material, no gear (the gear piece is its own roll below).
+ */
+export const ANNEX_CACHE_LOCKER_ROWS: ItemRows = [...genericAmmo(1.0), ['flare', 0.7], ['battery', 0.7], ['gas_filter', 0.5], ['bandage', 0.6], ['chocolate', 0.4], ['water', 0.3]];
+/** The cache's pantry shelf: food / drink, never empty, 3-4 lots (round 3: was 2-3; exact, no salvage). */
+export const ANNEX_CACHE_PANTRY: LootSpec = {items: ANNEX_CACHE_PANTRY_ROWS, lots: [3, 4], empty: 0, exact: true, salvage: false};
 /** The cache's kit cabinet: medicine, cells, gas-mask filters, water, never empty, 2-3 lots (exact, no salvage). */
 export const ANNEX_CACHE_KIT: LootSpec = {items: ANNEX_CACHE_KIT_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
-/** The cache's supply crate: the deliberate ammo (generic calibers) + a few supplies, never empty, 2-3 lots (exact, no salvage). */
-export const ANNEX_CACHE_CRATE: LootSpec = {items: ANNEX_CACHE_CRATE_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
+/** The cache's supply crate: the deliberate ammo (generic calibers) + a few supplies, never empty, 3-4 lots (round 3: was 2-3; exact, no salvage). */
+export const ANNEX_CACHE_CRATE: LootSpec = {items: ANNEX_CACHE_CRATE_ROWS, lots: [3, 4], empty: 0, exact: true, salvage: false};
+/** (round 3, lane HIDEOUT) The hideout's footlocker: personal kit + spare rounds, never empty, 2-3 lots (exact, no salvage). */
+export const ANNEX_CACHE_LOCKER: LootSpec = {items: ANNEX_CACHE_LOCKER_ROWS, lots: [2, 3], empty: 0, exact: true, salvage: false};
+/**
+ * (round 3, lane HIDEOUT; user: "perhaps a boosted chance of gear spawning") the hideout's GEAR piece: with `chance` per hideout (each
+ * annex's FIRST cache only) ONE piece of rare gear lies in the hideout — drawn from the level profile's gear pool (gearParams(profile)
+ * .weights: the level's own GEAR_WEIGHTS with its overrides) plus the gas mask at `gasMask` (its filter charge seeded like the level's
+ * mask find, gen/maskLoot.ts). A layout pickup tagged `reward: ANNEX_CACHE_GEAR_KEY` (finite: rolled once from the layout seed,
+ * remembered by run memory, never re-rolled); the level's ONE gear roll and mask roll are separate and unchanged.
+ */
+export const ANNEX_CACHE_GEAR_KEY = 'annex-cache-gear';
+export const ANNEX_CACHE_GEAR = {chance: 0.6, gasMask: 0.8} as const;
 
 /**
  * Per service annex (gen/annexContent.ts placeAnnexFloor, fork `track-ext-content` → `loot`), the Subway program's shape: `boxes`
@@ -1286,6 +1309,18 @@ export function gearParams(profile: LootProfile): GearLoot {
   if (!o) return g;
   const weights = o.weight ? Object.fromEntries(Object.entries(g.weights).map(([id, w]) => [id, w * (o.weight![id] ?? 1)])) : g.weights;
   return {mean: o.mean === undefined ? g.mean : g.mean * o.mean, cap: o.cap ?? g.cap, weights};
+}
+
+/**
+ * (round 3, lane HIDEOUT) The rows of a hideout's gear piece (ANNEX_CACHE_GEAR): the level profile's gear pool (gearParams: the
+ * level's gear weights with its overrides; ids the caller keeps to real gear items) plus the gas mask at ANNEX_CACHE_GEAR.gasMask
+ * (scaled by an `itemWeight.gas_mask` override); rows with weight <= 0 dropped (a level tunes it to nothing with zero weights).
+ */
+export function annexCacheGearRows(profile: LootProfile): ItemRows {
+  const rows: [string, number][] = Object.entries(gearParams(profile).weights).filter(([, w]) => w > 0);
+  const mask = ANNEX_CACHE_GEAR.gasMask * (profile.overrides.itemWeight?.gas_mask ?? 1);
+  if (mask > 0 && !rows.some(r => r[0] === 'gas_mask')) rows.push(['gas_mask', mask]);
+  return rows;
 }
 
 /**

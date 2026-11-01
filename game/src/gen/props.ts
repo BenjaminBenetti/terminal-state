@@ -19,6 +19,10 @@ export type PropKind =
   // Task track2-playtest-revision (lane ROOMS): collision-only box of a service annex's anchored MACHINERY (gen/annexRooms.ts
   // machineBoxes; drawn by world/trackExt/machines.ts from layout.extensions.machines). hx/hz/h per placement; variant = MachineKind index.
   | 'annexMachine'
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout's small LOOSE camp things (gen/propShapes.ts box
+  // parts, instanced per kind like the procedural furniture): a camping lantern and a camp stove — light dynamic props (on the floor or
+  // on the hideout's camp table, `onHost`).
+  | 'campLantern' | 'campStove'
   // Iteration 05 (Lane R): room/store PURPOSE props (gen/purposes.ts registry). Rendered by
   // world/storefrontBuilder.ts: Lane A generated models when present (PURPOSE_MODEL_KEYS), authored
   // textured parts (gen/purposeShapes.ts) otherwise. Holders among them have PURPOSE_SURFACES.
@@ -39,6 +43,9 @@ export const PURPOSE_PROP_KINDS = [
   'gunLocker', 'monitorDesk', 'medCabinet', 'safe', 'signalRack', 'cartonStack',
   // Task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a survivor's camp bed in an annex cache room (gen/annexCache.ts)
   'palletBed',
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout (gen/annexCache.ts) — a floor bedroll, a makeshift
+  // camp table (a door on cinder blocks) and a wooden footlocker (an openable holder: world/openablesSpec.ts authored lid)
+  'bedroll', 'campTable', 'footlocker',
 ] as const;
 export type PurposePropKind = (typeof PURPOSE_PROP_KINDS)[number];
 export function isPurposePropKind(kind: string): kind is PurposePropKind {
@@ -150,6 +157,18 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
    * scale (scale-checked beside a runtime zombie): pallet deck 0.12 m, mattress top 0.26 m, pillow top 0.37 m.
    */
   palletBed: {w: 2.0, d: 0.84, h: 0.38, blocksSight: false},
+  /**
+   * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the survivor hideout (gen/annexCache.ts), real scale (scale-checked beside
+   * a runtime zombie, docs/prop-affordances.md): a floor BEDROLL (closed-cell foam mat + a lofted sleeping bag, a rolled-fleece pillow,
+   * a folded blanket; 17 cm high), a makeshift CAMP TABLE (an old hollow-core door laid on two cinder-block piers, top 0.75 m: the
+   * lantern / stove stand on it as separate loose props) and a wooden FOOTLOCKER (lid hinged at the back: an openable holder).
+   */
+  bedroll: {w: 1.95, d: 0.78, h: 0.17, blocksSight: false},
+  campTable: {w: 1.3, d: 0.62, h: 0.75, blocksSight: false},
+  footlocker: {w: 0.8, d: 0.42, h: 0.4, blocksSight: false},
+  /** (lane HIDEOUT) a camping lantern (steel base, glass globe round a glowing mantle, cap, bail) and a one-burner camp stove on its gas canister. */
+  campLantern: {w: 0.17, d: 0.17, h: 0.31, blocksSight: false},
+  campStove: {w: 0.3, d: 0.27, h: 0.12, blocksSight: false},
   // --- Iteration 07 generated props (Lane P2): footprints = measured runtime model bounds (gen/props07.ts) ---
   ...P7_PROP_DEFS,
   // --- Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts) ---

@@ -51,7 +51,15 @@ export function mallAiSim(layout: StationLayout, o: {atrium: boolean; player: Si
     return b;
   });
   const director = new HordeDirector(layout, L, i => (o.hordes === false ? undefined : brains[i]), MALL_HORDE_RULES.patrol, layout.mall?.patrol ?? []);
-  const rand = mulberry32(99);
+  // (round 3, lane LAYOUT) The station's enemies draw from the seeded stream they always had; enemies in the track extensions (the
+  // service annex: its own seeded stream) no longer share it. With one shared stream, the annex enemies' wander draws — far away in
+  // the annex, never aware of the player — re-dealt every station enemy's random decisions, so any annex layout change re-rolled this
+  // measurement of the STATION's chase relief (diagnosed on mall 32451: with the annex enemies removed or on their own stream, the
+  // station's numbers are identical before / after the round-3 layout). The game itself draws from Math.random.
+  const coreRand = mulberry32(99), extRand = mulberry32(0x5eed);
+  const extBrain = layout.zombies.map(z => !!(layout.areas[z.area] as {ext?: string} | undefined)?.ext);
+  let inExt = false;
+  const rand = () => (inExt ? extRand() : coreRand());
   const prof = o.prof ?? null;
   const recs: PathRec[] = [];
   let frame = 0, raf = 0;
@@ -106,7 +114,9 @@ export function mallAiSim(layout: StationLayout, o: {atrium: boolean; player: Si
       reach.update(1 / 60, player.x, player.y, player.z);
       prof?.end(S.vocal);
       director.update(1 / 60, w, player);
-      for (const b of brains) {
+      for (let bi = 0; bi < brains.length; bi++) {
+        const b = brains[bi];
+        inExt = extBrain[bi];
         prof?.begin(S.brain);
         const out = b.update(1 / 60, w);
         prof?.end(S.brain);
@@ -129,6 +139,7 @@ export function mallAiSim(layout: StationLayout, o: {atrium: boolean; player: Si
         }
         prof?.end(S.motor);
       }
+      inExt = false;
       const ms = performance.now() - t0;
       prof?.lap(S.deferred);
       const t1 = performance.now();

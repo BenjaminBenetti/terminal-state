@@ -10,7 +10,7 @@
 
 import * as THREE from 'three';
 import {SHAPE_MAT_KEYS, type ShapeMat} from '../gen/propShapes';
-import {fareScreenTexture, menuBoardTexture, vendFrontTexture} from './canvasTextures';
+import {fareScreenTexture, lanternGlowTexture, menuBoardTexture, vendFrontTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial, worldMapped, type WorldMaterials} from './materials';
 
 export type ShapeUv = 'world' | 'face';
@@ -60,6 +60,9 @@ const SPECS: Record<ShapeMat, Spec> = {
   woodVeneer: {alias: 'wood'},
   plasticSeat: {uv: 'world', make: () => surfaceMaterial('plastic', {color: 0xc98a2a}, {grime: [0.15, 0.3], macro: 0.1})},
   glassShopfront: {uv: 'world', make: () => surfaceMaterial('glass', {color: 0xdde6e8, transparent: true, opacity: 0.42, depthWrite: false, metalness: 0.1}, {macro: 0.1})},
+  // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): the camping lantern's mantle — a warm self-lit glow (one graphic per face;
+  // the light it casts is a light-field source, gen/annexCache.ts)
+  lanternGlow: {uv: 'face', make: () => glow(lanternGlowTexture(), 1.6, 0.5)},
 };
 
 const resolve = (k: ShapeMat): ShapeMat => { const s = SPECS[k]; return 'alias' in s ? s.alias : k; };

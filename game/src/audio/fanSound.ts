@@ -20,8 +20,15 @@ export interface FanSource {
   rate: number;
 }
 
-/** Audible range (m) and the storey band (listener feet within this of the fan's floor). */
-export const FAN_SOUND = {maxDist: 14, storeyBand: 2.4, voices: 2, gain: 0.42, ref: 1.4, rolloff: 1.3, lowpassHz: 5200, highpassHz: 70} as const;
+/**
+ * Audible range (m) and the storey band (listener feet within this of the fan's floor). Round 3 (task
+ * studio-alpha-track2-round3-20261031-01; user: "ventilation fan sound effect does not play in a large enough radius. should be maybe
+ * 5x the current radius"): the whole distance law is scaled by FAN_RADIUS_SCALE — the cut-off 14 -> 70 m AND the panner's reference
+ * distance 1.4 -> 7 m (inverse model, same rolloff), so the level heard at 5 d now equals the level heard at d before (round 2's
+ * 14 m cut-off sat where the inverse law had already fallen to ~8 %: the fan was audible only within ~6-8 m).
+ */
+export const FAN_RADIUS_SCALE = 5;
+export const FAN_SOUND = {maxDist: 14 * FAN_RADIUS_SCALE, storeyBand: 2.4, voices: 2, gain: 0.42, ref: 1.4 * FAN_RADIUS_SCALE, rolloff: 1.3, lowpassHz: 5200, highpassHz: 70} as const;
 
 /** Fan hub positions from the annex machinery records (gen/annexRooms.ts AnnexMachine; same local frame as world/trackExt/machines.ts). */
 export function fanSources(layout: Pick<StationLayout, 'extensions'>): FanSource[] {
