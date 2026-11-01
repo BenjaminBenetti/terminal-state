@@ -53,7 +53,7 @@ export const REACTOR_AIR = {
  * read in the dark, B's luminous yellow-green), wisp + horizontal sheet modulation (mean 1), sheet noise scales, linear tint.
  */
 export const REACTOR_GAS_LOOK = {
-  ext: 0.12, scatter: 0.6, emission: 0.05, wisps: 0.35,
+  ext: 0.12, scatter: 0.6, emission: 0.08, wisps: 0.35, // (emission 0.05 -> 0.08: spot-check fix — B's luminous strata read in the dark pit)
   sheets: 0.45, sheetXZ: 0.035, sheetY: 0.32,
   tint: [0.5, 0.62, 0.22] as readonly [number, number, number],
 } as const;

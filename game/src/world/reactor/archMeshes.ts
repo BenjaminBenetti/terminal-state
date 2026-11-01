@@ -35,7 +35,7 @@ export function kitGeometry(geo: KitGeo): THREE.BufferGeometry {
       return g;
     }
     case 'plane': return new THREE.PlaneGeometry(1, 1);
-    case 'bulb': return new THREE.IcosahedronGeometry(0.5, 0);
+    case 'bulb': return new THREE.IcosahedronGeometry(0.5, 1); // (spot-check fix: detail 1 reads round up close, not a hexagon)
     case 'cage': {
       const parts: THREE.BufferGeometry[] = [];
       for (const [x, z] of [[0.42, 0.42], [-0.42, 0.42], [0.42, -0.42], [-0.42, -0.42]]) parts.push(new THREE.BoxGeometry(0.07, 1, 0.07).translate(x, 0, z));

@@ -348,6 +348,9 @@ export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly 
 /** Emergency decks: lit from the start (steady fixtures) — the stair / generator / route-2 end landings; the rim runs on station power. */
 const EMERGENCY = /^(Generator landing|Stair landing|South landing|Rim )/;
 
+/** Every this-many-th powered deck lamp stays on (dim, steady) before the restart (task reactor-build-20261101 spot-check fix). */
+export const POWERED_EMERGENCY_EVERY = 3;
+
 /**
  * Deck fixtures: wall-side lamps along the galleries / landings / terraces every ~7 m (2.6 m up), lamps on the bridges and tower decks,
  * a ring of work lamps round the vessel. Lane RESTART's light contract: the pit's POWERED industrial fixtures (galleries, bridges,
@@ -357,7 +360,12 @@ const EMERGENCY = /^(Generator landing|Stair landing|South landing|Rim )/;
  */
 export function deckLights(layout: StationLayout, rc: ReactorCarve, rng: Rng): number {
   const before = layout.lights.length;
-  const add = (lv: number, area: number, x: number, z: number, y: number, rot: number, mode: 'rim' | 'emergency' | 'powered') => {
+  // task reactor-build-20261101 (primary, spot-check fix): with EVERY deck lamp on the dead circuit the pit read pitch black before the
+  // restart (browser spot check: the rim vista showed nothing below). Every POWERED_EMERGENCY_EVERY-th powered deck lamp therefore
+  // stays on as a dim steady emergency lamp (sodium pools down the pit, like B), the rest come up at the win.
+  let poweredN = 0;
+  const add = (lv: number, area: number, x: number, z: number, y: number, rot: number, mode0: 'rim' | 'emergency' | 'powered', deck = true) => {
+    const mode = mode0 === 'powered' && deck && poweredN++ % POWERED_EMERGENCY_EVERY === 1 ? 'emergency' : mode0;
     const l: LightPlacement = mode === 'powered'
       ? {x: r3(x), y: r3(y), z: r3(z), rot, area, broken: false, flicker: false, warm: true, power: r3(rng.range(0.85, 1)), dying: true}
       : {x: r3(x), y: r3(y), z: r3(z), rot, area, broken: false, flicker: false, warm: true, power: mode === 'rim' ? r3(rng.range(0.85, 1)) : r3(rng.range(0.45, 0.6)), dying: false};
@@ -394,7 +402,7 @@ export function deckLights(layout: StationLayout, rc: ReactorCarve, rng: Rng): n
     const g = layout.levels[CORE_LEVEL].grid, [cx, cy] = g.cellOf(x, z);
     const i = g.idx(cx, cy), y = rc.bases[CORE_LEVEL] + 3.0;
     if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i] || !rc.coreAreas.includes(g.area[i]) || g.ceil[i] < y + 0.3) continue;
-    add(CORE_LEVEL, g.area[i], x, z, y, 0, 'powered');
+    add(CORE_LEVEL, g.area[i], x, z, y, 0, 'powered', false);
   }
   return layout.lights.length - before;
 }
