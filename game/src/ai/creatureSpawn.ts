@@ -35,6 +35,10 @@ export function pickEnemyArchetype(seed: number, index: number, pool: FamilyPool
     r -= Math.max(0, w);
     if (r < 0) return id;
   }
+  // (float edge only) the LAST family with a positive weight — never a weight-0 family listed after it (task
+  // studio-alpha-beyond-station-round4-20261101-01, lane FAMILY: the Strainer is appended last at weight 0 in every non-service pool;
+  // for every pool shipped before it the last entry, the rat/dog, has a positive weight: the same family as before)
+  for (let k = pool.length - 1; k >= 0; k--) if (pool[k][1] > 0) return pool[k][0];
   return pool[pool.length - 1][0];
 }
 

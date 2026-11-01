@@ -26,12 +26,14 @@ const layouts = new Map<string, StationLayout>();
 const fresh = (l: LevelId, s: number) => layouts.get(`${l}:${s}`) ?? (layouts.set(`${l}:${s}`, freshLayout(l, s)), layouts.get(`${l}:${s}`)!);
 
 describe('R6: service-only family pool', () => {
-  it('configured: rat/dog 0.20, Blightbelly 0.05 (unchanged), Siren 0, zombies 0.75 — in every level\'s service context only', () => {
+  // round 4 (task studio-alpha-beyond-station-round4-20261101-01, lane FAMILY): + the Strainer 0.08, absorbed by the zombies 0.75 -> 0.67
+  it('configured: rat/dog 0.20, Blightbelly 0.05 (unchanged), Siren 0, Strainer 0.08, zombies 0.67 — in every level\'s service context only', () => {
     expect(share(SERVICE_FAMILY_POOL, 'ratdog')).toBe(0.2);
     expect(share(SERVICE_FAMILY_POOL, 'blightbelly')).toBe(DEFAULT_FAMILY_SHARES.blightbelly);
     expect(share(SERVICE_FAMILY_POOL, 'siren')).toBe(0);
-    expect(share(SERVICE_FAMILY_POOL, 'zombie')).toBe(0.75);
-    expect(SERVICE_FAMILY_SHARES).toEqual({ratdog: 0.2, blightbelly: 0.05, siren: 0});
+    expect(share(SERVICE_FAMILY_POOL, 'strainer')).toBe(0.08);
+    expect(share(SERVICE_FAMILY_POOL, 'zombie')).toBe(0.67);
+    expect(SERVICE_FAMILY_SHARES).toEqual({ratdog: 0.2, blightbelly: 0.05, siren: 0, strainer: 0.08});
     expect(SERVICE_CONTEXT.count).toEqual(SERVICE_ZONE_BUDGET);
     expect(SERVICE_ZONE_BUDGET).toEqual([5, 6]);
     for (const [id, p] of Object.entries(SPAWN_PROFILES)) {
@@ -41,6 +43,7 @@ describe('R6: service-only family pool', () => {
       // the level pools themselves are untouched: never the service pool
       expect(p.families, id).not.toBe(SERVICE_FAMILY_POOL);
       expect(share(p.families, 'ratdog'), id).toBeLessThanOrEqual(0.05);
+      expect(share(p.families, 'strainer'), `${id}: no Strainer in a level pool`).toBe(0);
     }
     expect(SPAWN_PROFILES.subway.families).toBe(ENEMY_POOL);
     expect(share(ENEMY_POOL, 'ratdog')).toBe(0.05);
@@ -50,24 +53,28 @@ describe('R6: service-only family pool', () => {
   });
 
   it('the roll: 20,000 (seed, index) draws on the service pool select rat/dogs at ~20 % (selection share, not a placement quota)', () => {
-    let rat = 0, bb = 0, siren = 0;
+    let rat = 0, bb = 0, siren = 0, strainer = 0;
     for (let i = 0; i < 20000; i++) {
       const f = pickEnemyArchetype(7919 + (i >> 6), i & 63, SERVICE_FAMILY_POOL);
       if (f === 'ratdog') rat++;
       else if (f === 'blightbelly') bb++;
       else if (f === 'siren') siren++;
+      else if (f === 'strainer') strainer++;
     }
     expect(rat / 20000).toBeGreaterThan(0.19);
     expect(rat / 20000).toBeLessThan(0.21);
     expect(bb / 20000).toBeGreaterThan(0.044);
     expect(bb / 20000).toBeLessThan(0.056);
     expect(siren).toBe(0);
+    // round 4 (lane FAMILY): the Strainer's configured 0.08 selection share
+    expect(strainer / 20000).toBeGreaterThan(0.072);
+    expect(strainer / 20000).toBeLessThan(0.088);
     expect(enemyRoll(1, 2)).toBe(enemyRoll(1, 2));
   });
 
   it('isolation on real fresh New Game layouts: core and horde draws bit-identical, service spawns on the service pool; census', () => {
     const lines: string[] = [];
-    let svc = 0, svcRat = 0, svcBb = 0, coreN = 0, coreRat = 0;
+    let svc = 0, svcRat = 0, svcBb = 0, svcStrainer = 0, coreN = 0, coreRat = 0;
     for (const [level, seed] of SAMPLE) {
       const L = fresh(level, seed), P = SPAWN_PROFILES[level];
       const generated = L.zombies.map(z => z.archetype);
@@ -83,9 +90,10 @@ describe('R6: service-only family pool', () => {
           expect(after[i]).not.toBe('siren');
           // the generated layout already carries the service draw (the Mall's Siren spacing only touches Sirens)
           expect(generated[i], `${level} ${seed} #${i}`).toBe(after[i]);
-          svc++; if (after[i] === 'ratdog') svcRat++; if (after[i] === 'blightbelly') svcBb++;
+          svc++; if (after[i] === 'ratdog') svcRat++; if (after[i] === 'blightbelly') svcBb++; if (after[i] === 'strainer') svcStrainer++;
         } else {
           expect(after[i], `${level} ${seed} #${i} (${ctx[i] ?? 'untagged'}${z.horde !== undefined ? ', horde' : ''}) unchanged`).toBe(before[i]);
+          expect(after[i], `${level} ${seed} #${i}: a Strainer only in a service spawn (round 4, lane FAMILY)`).not.toBe('strainer');
           if (z.horde === undefined) { coreN++; if (after[i] === 'ratdog') coreRat++; }
         }
       });
@@ -96,8 +104,8 @@ describe('R6: service-only family pool', () => {
     }
     // the no-annex control has no service spawns at all
     expect(fresh('subway', 1).zombies.every((_, i) => spawnContextOf(fresh('subway', 1), SPAWN_PROFILES.subway, i) !== 'service')).toBe(true);
-    lines.push(`sample: service ${svc} placed, rat/dog ${svcRat} (${(100 * svcRat / Math.max(1, svc)).toFixed(0)} %), Blightbelly ${svcBb}; core ambient ${coreN}, rat/dog ${coreRat}`);
-    lines.push('configured service share 0.20 is a per-spawn selection probability; a 5-6 enemy annex may hold none or several');
+    lines.push(`sample: service ${svc} placed, rat/dog ${svcRat} (${(100 * svcRat / Math.max(1, svc)).toFixed(0)} %), Blightbelly ${svcBb}, Strainer ${svcStrainer}; core ambient ${coreN}, rat/dog ${coreRat}`);
+    lines.push('configured service shares (rat/dog 0.20, Strainer 0.08) are per-spawn selection probabilities; a 5-6 enemy annex may hold none or several');
     writeFileSync('/tmp/r6-service-census.txt', lines.join('\n') + '\n');
     expect(svc).toBeGreaterThan(0);
   }, 120000);

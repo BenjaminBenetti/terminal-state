@@ -28,8 +28,12 @@ mall: {
 ```
 
    - **Every family listed**: build the pool with `familyPool(shares)` — `DEFAULT_FAMILY_SHARES` gives **blightbelly 0.05 (default
-     ON)**, **siren 0 (default OFF)**, ratdog 0.05, the zombie the remainder, in `ENEMY_FAMILY_IDS` roll order. Turning Blightbelly
-     off for a level is `familyPool({blightbelly: 0})` with a written reason.
+     ON)**, **siren 0 (default OFF)**, ratdog 0.05, **strainer 0 (context-locked)**, the zombie the remainder, in `ENEMY_FAMILY_IDS`
+     roll order. Turning Blightbelly off for a level is `familyPool({blightbelly: 0})` with a written reason.
+   - **The Strainer is context-locked** (`CONTEXT_LOCKED_FAMILIES`, `STRAINER_CONTEXTS = ['service']`): a positive weight is valid
+     ONLY in the own pool of a listed context (today the service annexes' `SERVICE_FAMILY_POOL`, 0.08); a level pool, any other
+     context's pool and every horde pool must say 0 (`validateSpawnProfile`). A new area enables it deliberately by adding its
+     context to `STRAINER_CONTEXTS` and a weight to that context's pool.
    - **The Siren is opt-in, deliberately** (`OPT_IN_FAMILIES`): a siren weight > 0 is only valid with an explicit
      `eligibility.siren` rule naming the contexts (and room exclusions) where she may lie dormant. Model it on
      `OFFICE_SIREN_ELIGIBILITY` (indoor rooms only, room ≥ 4 × 4 m, clear floor patch, doorways ≥ 3 m, fair passage, ≤ 4 per level).
@@ -97,6 +101,7 @@ profile, family list, tier or guarantee.
 | Every `LEVEL_IDS` entry has a `LEVELS` entry with the same id and an integer tier ≥ 0; no stray `LEVELS` / profile entries | `validateLevelRegistry` (`game/src/levels/levelContract.ts`) |
 | A profile with the same id, every family listed once, known contexts / room keys / kinds, finite values | `validateSpawnProfile` |
 | Siren weight > 0 without an `eligibility.siren` rule; eligibility naming an undeclared context, an unknown room key, a fallback that is itself restricted | `validateSpawnProfile` |
+| Strainer weight > 0 outside the own pool of a `STRAINER_CONTEXTS` context (level pool, other contexts, hordes) | `validateSpawnProfile`, `game/tests/strainer.test.ts` |
 | Every spawn of every registered level carries a context its profile declares | `game/tests/enemy-spawn-contract.test.ts` |
 | Families = `ENEMY_ARCHETYPES` key order; `ENEMY_LEVEL_ADAPTER` / `ENEMY_FAMILY_ADAPTER` cover every level / family | `tools/pages/enemyReference.ts` (typecheck + build), `game/tests/enemy-spawn-reference.test.ts` |
 | Zero Sirens in the Subway, ≈ 2 per Office run, Blightbelly / rat-dog ≈ 5 % | `game/tests/enemy-spawn-contract.test.ts` |
@@ -107,6 +112,7 @@ profile, family list, tier or guarantee.
 - [ ] `SPAWN_PROFILES[id]` via `familyPool(...)`; Blightbelly on unless a written reason says otherwise.
 - [ ] Siren: weight 0, or a deliberate draw weight + `eligibility.siren` (contexts, room exclusions, clearance, cap) + a census
       showing the level's target (report mean, share of runs with none, max).
+- [ ] Strainer: 0 in the level pool (`familyPool` does it); it appears only through an annex `service` context's own pool.
 - [ ] Every context the generator runs declared with an explicit `count`; annex contexts too, appended last and tagged.
 - [ ] Every placement routine calls `markSpawnContext`; `assignEnemyArchetypes` once at the end.
 - [ ] `ENEMY_LEVEL_ADAPTER[id]` in `tools/pages/enemyReference.ts`.

@@ -428,7 +428,8 @@ fork `marks:<annexId>`):
 - **Ordering and tagging:** annex spawns are appended after every core spawn and tagged
   `markSpawnContext(layout, firstIndex, 'service')`. `assignEnemyArchetypes` runs once afterwards.
 - **Families:** they inherit the level's profile and tier, but draw from the annexes' own pool `SERVICE_FAMILY_POOL` (round 2:
-  rat/dog 0.20, Blightbelly 0.05, Siren 0, zombies 0.75; a configured selection share, not a quota). There are no Sirens in
+  rat/dog 0.20, Blightbelly 0.05, Siren 0; round 4: + the Strainer 0.08, zombies 0.75 -> 0.67; configured selection shares, not
+  quotas — the Strainer appears only here, never forced or guaranteed: docs/enemy-spawns.md "The Strainer"). There are no Sirens in
   `'service'`. Core contexts and hordes keep their pools (docs/enemy-spawns.md).
 - **Counted separately:** they are excluded from the core station / street / floor counts and reported separately.
 - **Measured:** 5–6 per annex (Subway levels +5 / +6 with one annex, +10 to +12 with two). The ordinary routes made 1–3 enemies

@@ -2268,7 +2268,8 @@ export class Game {
     // Iteration 16 (lane INJURY): rat / dog bites are 'creature' hits that land low (legs ~58 %, player/injuries.ts biteHitLocation)
     // Task track1-siren-blightbelly-20261031 (lane SIREN): the Siren's claw swipe is a standing humanoid melee hit (melee locations, 'zombie' source), attacker 'siren'
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's fist slam too (an ordinary zombie hit: melee locations, 'zombie' source), attacker 'blightbelly'
-    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly';
+    // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer's long claw swipe too (a standing humanoid melee hit), attacker 'strainer'
+    const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer';
     const creature = archetypeOf(z) !== 'zombie' && !claw;
     const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie',
       location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature || claw ? archetypeOf(z) : z.brain.type};

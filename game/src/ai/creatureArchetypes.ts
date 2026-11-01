@@ -16,6 +16,8 @@ import type {WoundableActor} from '../damage/wounds';
 import type {Sfx} from '../audio/sfx';
 import type {ZombieSpawn} from '../gen/station';
 import {CreatureActor, RATDOG_STATS} from './creatureActor';
+import {STRAINER_CUES, STRAINER_STATS, STRAINER_VOICE_Y} from './strainer'; // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
+import {StrainerActor} from './strainerActor'; // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
 import {BLIGHT_CUES, BLIGHTBELLY_STATS} from './blightbelly'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT)
 import {BlightbellyActor} from './blightbellyActor'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT)
 import {SIREN_STATS} from './siren'; // Task track1-siren-blightbelly-20261031 (lane SIREN)
@@ -110,6 +112,7 @@ export const RATDOG_CUES: EnemyCues = {
 export function enemyCues(z: EnemyActor): EnemyCues {
   if (archetypeOf(z) === 'blightbelly') return BLIGHT_CUES; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): deep groans, heavy gait
   if (archetypeOf(z) === 'siren') return SIREN_CUES; // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant hum, one wake scream, no groans
+  if (archetypeOf(z) === 'strainer') return STRAINER_CUES; // lane FAMILY: the existing zombie calls (deep groan from its taller mouth) — no new audio
   return archetypeOf(z) === 'ratdog' ? RATDOG_CUES : ZOMBIE_CUES;
 }
 
@@ -130,7 +133,8 @@ export interface EnemyArchetypeDef {
 export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
   zombie: {id: 'zombie', label: 'Infected', model: null, stats: null, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.6,
     source: 'zombie wardrobe registry (ai/outfits.ts); stats ZOMBIE_STATS by shambler / coated type'},
-  // Task track1-siren-blightbelly-20261031 (lane SPAWN): key order zombie, blightbelly, siren, ratdog = ENEMY_FAMILY_IDS (= roll order).
+  // Task track1-siren-blightbelly-20261031 (lane SPAWN): key order zombie, blightbelly, siren, ratdog = ENEMY_FAMILY_IDS (= roll order);
+  // lane FAMILY (round 4): + strainer, appended last.
   // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the obese, pustule-covered zombie subtype that bursts once when killed
   // (ai/blightbelly.ts stats / burst, ai/blightbellyActor.ts, ai/blightBurst.ts); model lazily loaded per layout (ai/enemyModels.ts).
   blightbelly: {id: 'blightbelly', label: 'Blightbelly', model: 'enemy_blightbelly', stats: BLIGHTBELLY_STATS, climbsLadders: true, dropsIntoTrackBed: true, voiceHeight: 1.5,
@@ -142,6 +146,12 @@ export const ENEMY_ARCHETYPES: Record<EnemyArchetypeId, EnemyArchetypeDef> = {
     source: 'user-supplied Pale Apparition body + Ghost Dress GLBs (appearance locked) -> derivative enemy-siren.glb (lane RIGS: unit fit, dress attachment, shared 18-joint rig + clips)'},
   ratdog: {id: 'ratdog', label: 'Tunnel scavenger (rat/dog)', model: 'creature_ratdog', stats: RATDOG_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: 0.35,
     source: 'Field Notes core asset quadruped-02 concept -> Meshy T2.5 replacement -> derivative creature-ratdog-t25.glb (new rig + procedural clips)'},
+  // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): THE STRAINER, APPENDED LAST (= ENEMY_FAMILY_IDS: every older
+  // pool's roll bands unchanged) — a tall, long-reach clawed ordinary-melee infected (ai/strainer.ts stats, ai/strainerActor.ts),
+  // weight > 0 only in the service-annex pool (spawnTables STRAINER_CONTEXTS). No ladder links (it lurks in the annex); model lazily
+  // loaded per layout (ai/enemyModels.ts).
+  strainer: {id: 'strainer', label: 'Strainer', model: 'enemy_strainer', stats: STRAINER_STATS, climbsLadders: false, dropsIntoTrackBed: true, voiceHeight: STRAINER_VOICE_Y,
+    source: 'user-picked Strainer concept (Beyond the Station) -> derivative enemy-strainer.glb (lane ASSET: shared 18-joint rig, clips Idle / Walk / Run / Attack / Hit / Death, extras enemyStrainer)'},
 };
 
 /**
@@ -165,6 +175,13 @@ export function createEnemyActor(spawn: ZombieSpawn, models: Record<string, GLTF
   if (spawn.archetype === 'siren') {
     const g = models[ENEMY_ARCHETYPES.siren.model!];
     if (g) return {actor: new SirenActor(g, spawn, rand), fallback: false};
+    return {actor: zombie(), fallback: true};
+  }
+  // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer when its (lazily loaded) model is there, else the
+  // Blightbelly's contract — a counted zombie stand-in (QA `fallback`; never a T-pose / slide)
+  if (spawn.archetype === 'strainer') {
+    const g = models[ENEMY_ARCHETYPES.strainer.model!];
+    if (g) return {actor: new StrainerActor(g, spawn, rand), fallback: false};
     return {actor: zombie(), fallback: true};
   }
   return {actor: zombie(), fallback: false};

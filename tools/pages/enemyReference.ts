@@ -30,6 +30,7 @@ import {ZOMBIE_STATS, type ZombieStats} from '../../game/src/ai/brain';
 import {BLIGHTBELLY_BURST, BLIGHTBELLY_STATS} from '../../game/src/ai/blightbelly';
 import {SIREN_CLAW, SIREN_STATS, SIREN_WAKE} from '../../game/src/ai/siren';
 import {LUNGE as RATDOG_LUNGE, RATDOG_STATS} from '../../game/src/ai/creatureActor';
+import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS} from '../../game/src/ai/strainer'; // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
 import {LEVELS, LEVEL_IDS} from '../../game/src/levels/registry';
 import {validateLevelRegistry} from '../../game/src/levels/levelContract';
 import type {LevelId} from '../../game/src/levels/types';
@@ -85,6 +86,7 @@ const F = {
   memory: 'game/src/run/memory.ts', pistol: 'game/src/weapons/pistol.ts',
   // task track1 (lane SPAWN): family stats / rules, the registry contract
   brain: 'game/src/ai/brain.ts', blightbelly: 'game/src/ai/blightbelly.ts', siren: 'game/src/ai/siren.ts', creatureActor: 'game/src/ai/creatureActor.ts',
+  strainer: 'game/src/ai/strainer.ts', // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
   mallIndex: 'game/src/gen/mall/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
@@ -95,7 +97,7 @@ const F = {
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt,
+  F.contract, F.mallTypes, F.trackExt, F.strainer,
 ].slice().sort();
 
 /**
@@ -129,6 +131,14 @@ export const ENEMY_FAMILY_ADAPTER: Readonly<Record<EnemyFamilyId, {
     stats: [{variant: null, stats: RATDOG_STATS, file: F.creatureActor, symbol: 'RATDOG_STATS'}],
     rules: [{title: 'Bite lunge', value: RATDOG_LUNGE, file: F.creatureActor, symbol: 'LUNGE'}],
   },
+  // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): THE STRAINER (service annexes only)
+  strainer: {
+    stats: [{variant: null, stats: STRAINER_STATS, file: F.strainer, symbol: 'STRAINER_STATS'}],
+    rules: [
+      {title: 'Body, reach and claw timing (asset contract enemy-strainer.glb; provisional until the GLB lands)', value: STRAINER_ASSET, file: F.strainer, symbol: 'STRAINER_ASSET'},
+      {title: 'Runtime root scale (its own narrow jitter)', value: {scale: STRAINER_SCALE, maxTopM: STRAINER_MAX_TOP_M}, file: F.strainer, symbol: 'STRAINER_SCALE'},
+    ],
+  },
 };
 
 /** Labels + units of known rule constant leaves (key path → [label, unit]). Unknown leaves show their key path. */
@@ -152,6 +162,13 @@ const RULE_LABEL: Readonly<Record<string, readonly [string, string]>> = {
   'lunge.from': ['lunge starts this far into the swing', 's'], 'lunge.speed': ['lunge speed', 'm/s'], 'lunge.stop': ['no lunge closer than', 'm'],
   // ai/creatureActor.ts LUNGE
   from: ['lunge starts this far into the bite', 's'], to: ['lunge ends', 's'], speed: ['lunge speed', 'm/s'], stop: ['no lunge closer than', 'm'],
+  // ai/strainer.ts STRAINER_ASSET / STRAINER_SCALE (task studio-alpha-beyond-station-round4-20261101-01, lane FAMILY)
+  heightM: ['bind height (feet to crown, scale 1)', 'm'], headCenter: ['head hit-sphere centre, bind pose (x, y, z; hunched forward)', 'm'],
+  headRadius: ['head hit-sphere radius', 'm'], reachM: ['horizontal claw reach at the Attack hit frame (attack range = reach + the player\'s 0.3 m body radius)', 'm'],
+  attackHitTime: ['claws land this far into the Attack clip', 's'], attackDuration: ['Attack clip length', 's'],
+  walkGroundSpeed: ['Walk clip authored ground speed', 'm/s'], runGroundSpeed: ['Run clip authored ground speed', 'm/s'],
+  'hitRadii.torso': ['torso hit-capsule radius', 'm'], 'hitRadii.arm': ['arm hit-capsule radius', 'm'], 'hitRadii.leg': ['leg hit-capsule radius', 'm'],
+  'scale.min': ['runtime root scale at least', 'x'], 'scale.max': ['runtime root scale at most', 'x'], maxTopM: ['crown height cap (annex doors are 2.3 m)', 'm'],
 };
 
 /** Every leaf of a rules constant as a row (nested objects flattened by key path; arrays: numbers joined, else their length). */
@@ -172,7 +189,7 @@ export function ruleRows(value: object, prefix = ''): {what: string; value: numb
 }
 
 /** Track 2 (lane CONTENT): how the service-annex zone context relates to the level (shown with the context). */
-const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, no Siren — a per-spawn probability, not a quota; the sampled census shows the placed outcome). No guarantee. Killed annex enemies stay dead for the run (per-index memory).';
+const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas; the sampled census shows the placed outcome). No guarantee. Killed annex enemies stay dead for the run (per-index memory).';
 
 /**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
@@ -601,7 +618,9 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
     const stats = ad.stats.map(v => statsVariant(v, src.at(v.file, v.symbol)));
     const rules: FamilyRuleGroup[] = ad.rules.map(r => ({title: r.title, rows: ruleRows(r.value), at: src.at(r.file, r.symbol)}));
     return {id, label: d.label, model: d.model, variants: VARIANTS[id] ?? null,
-      levels: LEVEL_IDS.filter(l => profileOf(l).families.some(([f, w]) => f === id && w > 0)), at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`), stats, rules};
+      // lane FAMILY (round 4): + a context's OWN pool (the Strainer has weight only in the service annexes' pool)
+      levels: LEVEL_IDS.filter(l => profileOf(l).families.some(([f, w]) => f === id && w > 0)
+        || Object.values(profileOf(l).contexts).some(c => c?.families?.some(([f, w]) => f === id && w > 0))), at: src.at(F.archetypes, `ENEMY_ARCHETYPES.${id}`), stats, rules};
   });
 
   const corpus: CensusCorpus[] = [];
