@@ -269,14 +269,14 @@ describe('(c) visible slow motion in world space, on the fog clock', () => {
     // MEASUREMENT: the COMPLETE walking-height sample (mediumStats stride 1: every open cell of every level slot; 9x the samples of
     // stride 9), because "the station-wide amount" is the mean over the whole level and any fixed stride over the row-major cell
     // index is a lattice whose shape depends on the grid width: seed 42's live grid is 576 = 64 x 9 cells wide, so `i += 9` lands on
-    // the SAME 64 columns in every row — a comb of lines 4.5 m apart across the drift axis (the air drift is within 35 deg of x, the
-    // track draft along x; the patch noise has 7.5 m / 3.75 m lattice periods), which aliases the translating patches into a swing
-    // of the comb's mean: stride 9 reads 1.131 / 0.915 there, the complete sample of the same domain 1.050 / 0.963 (strides 7 / 10
-    // / 11: 1.055 / 1.048 / 1.047). The same comb explains every other outlier checked: 0x1a2b3c live (531 = 59 x 9) 1.095 vs
-    // complete 1.040; the CORE views of seed 3 (369 = 41 x 9) 1.119 vs 1.040 and seed 13 (405 = 45 x 9) min 0.876 vs 0.966. Complete
-    // sample, max / min over the mean: absent 1.040 / 0.956, 1.046 / 0.962, 1.050 / 0.963; present 1.026 / 0.975, 1.027 / 0.966,
-    // 1.044 / 0.972 (per class, the narrow tunnel strips alone swing up to 1.18 / 0.85: fewer patches across them; the level-wide
-    // amount, the property, stays steady).
+    // the SAME 64 columns in every row — a comb of lines along z, 4.5 m apart along x, the drift axis (the air drift is within 35 deg
+    // of x, the track draft along x; the patch noise has 7.5 m / 3.75 m lattice periods), which aliases the translating patches into
+    // a swing of the comb's mean: stride 9 reads 1.131 / 0.915 there, the complete sample of the same domain 1.050 / 0.963; stride 8
+    // (576 = 72 x 8, a 4 m comb) 1.074, the oblique lattices of strides 7 / 10 / 11 1.055 / 1.048 / 1.047. The same comb explains
+    // every other outlier checked: 0x1a2b3c live (531 = 59 x 9) 1.095 vs complete 1.040; the CORE views of seed 3 (369 = 41 x 9)
+    // 1.119 vs 1.040 and seed 13 (405 = 45 x 9) min 0.876 vs 0.966. Complete sample, max / min over the mean: absent 1.040 / 0.956,
+    // 1.046 / 0.962, 1.050 / 0.963; present 1.026 / 0.975, 1.027 / 0.966, 1.044 / 0.972 (per class, the narrow tunnel strips alone
+    // swing up to 1.18 / 0.85: fewer patches across them; the level-wide amount, the property, stays steady).
     const absent = [0x1a2b3c, 6, 42], present = absent.map(s0 => presentSeeds(1, i => s0 + i)[0]);
     const openCells = (l: StationLayout, count: (g: StationLayout['grid'], i: number) => void) => {
       for (const L of stationLevels(l).slice(0, MAX_SLOTS)) for (let i = 0; i < L.grid.w * L.grid.h; i++) if (L.grid.cells[i] !== SOLID) count(L.grid, i);

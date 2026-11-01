@@ -144,23 +144,23 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
     // cell of the live layout, on the original seed 9001 (every archetype; its level rolls the Beyond the Station area ABSENT, so its
     // main storey is the station plus track tunnels) and on the first two seeds after it that roll the area PRESENT (the real roll,
     // tests/helpers/btsArea.ts: 9003, 9013 — every archetype carries 1-2 annexes there), with the per-class rules of world/decay.ts:
+    //  - CORE cells: byte-identical to the core view's own field (extensions never change the station's decay).
     //  - LEAK-DRIVEN cells (the station's, and the annexes': rooms / corridors, no bed floor): seeded leak patches whose budget scales
     //    with LEVEL_WETNESS by storey role (water finds its way down) — the original property, lower > main > upper, now over the
-    //    station cells (as above) AND over every leak-driven FLOOR cell of the full storey (station + annex cells).
+    //    station cells (as above) AND over every leak-driven FLOOR cell of the full storey (station + annex cells); every annex
+    //    storey also keeps the station's floor rule (leaks exist on 3-40 % of it, most of it dry).
     //  - BED-CLASS cells (the track tunnels: FLOOR cells, but the track bed continued: "the tunnels' ballast is as damp as the bed"):
-    //    every cell at least the bed's own damp floor (0.3, the station's VOID beds' base) — a per-cell rule, independent of storey.
-    //  - The FULL storey mean is the cell-weighted mix of those class means (checked: nothing lies outside the classes). In the
-    //    PRESENT mix the original full-storey ordering holds as it was written (9003: lower 0.095 > main 0.072 > upper 0.034; 9013:
-    //    0.098 > 0.064 > 0.029). In the ABSENT mix the main storey adds its bed-class tunnels (a 0.3+ floor, 3-4x a storey's leak
-    //    wetness) with no annex cells: main 0.093 vs lower 0.088 on 9001 (station main 0.072) — the expected mix, not drier lower
-    //    ground; so there the full main storey is checked against its expectation (wetter than its leak-driven cells, drier than
-    //    upper never) and the lower storey against the main storey's leak-driven cells.
-    // KNOWN DEFECT, reported (not asserted either way): buildDecayField copies the WHOLE core window from the core view, so extension
-    // cells that lie inside that rectangle carry the core's rock texels (wet ~0, rock neglect) instead of the extension rules (on 9001
-    // 20-85 % of a tunnel's cells; on 9003 / 9013 up to 87 % of an annex's). Changing it moves the track-ext-core "runtime fields" and
-    // storeys-n decay pins (other lanes'), so the bed / annex per-cell rules below cover the cells BEYOND the core window; once the
-    // window copy skips extension cells, they hold for every cell (measured with that change: tunnels min 0.302 on every cell; the
-    // full-storey orderings above unchanged in sign).
+    //    EVERY cell at least the bed's own damp floor (0.3, the station's VOID beds' base) — a per-cell rule, independent of storey.
+    //  - The FULL storey mean is the cell-weighted mix of those class means (checked: nothing lies outside the classes), so its
+    //    expectation depends on the mix. Both mixes: the main storey's bed-class tunnels only add wetness (full main > its
+    //    leak-driven cells) and it stays wetter than the upper deck. PRESENT mix: the original full-storey ordering as it was written
+    //    (9003: lower 0.095 > main 0.085 > upper 0.034; 9013: 0.098 > 0.078 > 0.029). ABSENT mix: the main storey adds its tunnels'
+    //    0.3+ bed floor (3-4x a storey's leak wetness) with no annex cells: main 0.105 vs lower 0.088 on 9001 (station main 0.072) —
+    //    the expected mix, not drier lower ground — so there the lower storey is compared with the main storey's leak-driven cells.
+    // DEFECT FIXED with this test (round-4 follow-up, authorized by the primary): buildDecayField copied the WHOLE core window from the
+    // core view, so the extension cells inside that rectangle carried the core's rock texels (wet ~0, rock neglect ~0.6-0.86) instead
+    // of the extension rules — on 9001 20-85 % of a tunnel's cells, on 9003 / 9013 up to 87 % of an annex's (a seam in the tunnels /
+    // annexes; before the round-4 roll those dry cells also diluted the full main storey). The window now copies core cells only.
     const present = presentSeeds(2, i => 9001 + i);
     for (const seed of [9001, ...present]) {
       const on = btsAreaPresent(seed);
@@ -174,8 +174,19 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
         // the roll decides the annex cells: none on the absent level, at least one annex on every archetype of a present level
         expect((e?.annexes.length ?? 0) > 0, tag).toBe(on);
         const win = e && hasExtensionGrowth(l) ? e.core : null;
-        const beyond = (g: {w: number}, i: number) => { if (!win) return true; const x = i % g.w, y = (i - x) / g.w; return x < win.x || y < win.y || x >= win.x + win.w || y >= win.y + win.h; };
-        const clv = stationLevels(coreView(l));
+        const cv = coreView(l), clv = stationLevels(cv);
+        // the core is untouched: every NON-extension texel of the core window equals the core view's own field, byte for byte
+        if (win) {
+          const cf = buildDecayField(cv, clv);
+          let diff = 0;
+          for (let L = 0; L < lv.length; L++) for (let y = 0; y < win.h; y++) for (let x = 0; x < win.w; x++) {
+            const i = (y + win.y) * f.w + x + win.x;
+            if (isExtensionArea(l.areas[lv[L].grid.area[i]])) continue;
+            const a = (L * f.w * f.h + i) * 4, b = (L * cf.w * cf.h + y * cf.w + x) * 4;
+            for (let c = 0; c < 4; c++) if (f.data[a + c] !== cf.data[b + c]) diff++;
+          }
+          expect(diff, `${tag}: core texels changed`).toBe(0);
+        }
         for (let L = 0; L < lv.length; L++) {
           const g = lv[L].grid, role = lv[L].role as Role, cls = {station: [] as number[], tunnel: [] as number[], annex: [] as number[]};
           let floors = 0, coreFloors = 0;
@@ -188,19 +199,18 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
           const ws = wet(cls.station), wt = wet(cls.tunnel), wa = wet(cls.annex), all = [...ws, ...wt, ...wa];
           const mixed = (mean(ws) * ws.length + mean(wt) * wt.length + mean(wa) * wa.length) / floors;
           expect(mean(all), `${tag} L${L}: full storey = cell-weighted mix of the class means`).toBeCloseTo(mixed, 9);
-          // bed class (per cell: the minimum): the station's own track beds (VOID: the 0.3 base) and every tunnel cell beyond the core window
-          let bedMin = 1, tunnelMin = 1;
+          // bed class (per cell: the minimum): the station's own track beds (VOID: the 0.3 base) and EVERY tunnel cell
+          let bedMin = 1;
           if (role === 'main') for (let i = 0; i < g.cells.length; i++) if (g.cells[i] === VOID) bedMin = Math.min(bedMin, texel(f, L, i, 2));
-          for (const i of cls.tunnel) if (beyond(g, i)) { tunnelMin = Math.min(tunnelMin, texel(f, L, i, 2)); bedChecked++; }
           expect(bedMin, `${tag} L${L}: driest track-bed cell`).toBeGreaterThanOrEqual(0.3 - 0.5 / 255);
-          expect(tunnelMin, `${tag} L${L}: driest tunnel cell beyond the core window`).toBeGreaterThanOrEqual(0.3 - 0.5 / 255);
-          // annex cells beyond the core window: the station's floor rule for leaks — leaks exist, most of it is dry
-          const annexOut = cls.annex.filter(i => beyond(g, i));
-          if (annexOut.length) {
-            const wetShare = annexOut.filter(i => texel(f, L, i, 2) > 0.3).length / annexOut.length;
+          if (wt.length) expect(Math.min(...wt), `${tag} L${L}: driest tunnel cell`).toBeGreaterThanOrEqual(0.3 - 0.5 / 255);
+          bedChecked += wt.length;
+          // EVERY annex cell: the station's floor rule for leaks — leaks exist, most of it is dry
+          if (wa.length) {
+            const wetShare = wa.filter(v => v > 0.3).length / wa.length;
             expect(wetShare, `${tag} annex`).toBeGreaterThan(0.03);
             expect(wetShare, `${tag} annex`).toBeLessThan(0.4);
-            annexChecked += annexOut.length;
+            annexChecked += wa.length;
           }
           S[role].push(mean(ws));
           K[role].push(mean([...ws, ...wa]));

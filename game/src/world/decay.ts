@@ -37,6 +37,7 @@ import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/station';
 import {hashString, mulberry32} from '../core/rng';
 import {coreView, hasExtensionGrowth} from '../gen/trackExt/core'; // Track 2 (lane GEN)
+import {isExtensionArea} from '../gen/trackExt/types';
 import {NodeMaterial, QuadMesh, RenderTarget, type Node} from 'three/webgpu';
 import {
   Fn, clamp, dot, float, floor, fract, int, ivec2, materialColor, materialRoughness, max, min, mix, modelWorldMatrix, normalLocal, positionWorld, pow,
@@ -224,10 +225,19 @@ export function buildDecayField(layout: StationLayout, levels: readonly Level[])
   const cf = buildFieldOf(core, levels.map(L => byId.get(L.id) ?? {...L, grid: core.grid}));
   const full = buildFieldOf(layout, levels);
   const {x, y, w, h} = e.core, W = full.w, H = full.h;
+  // (2026-11-01, round-4 follow-up lane ENV) only the window's CORE cells come from the core view: an extension cell (tunnel / annex,
+  // Area.ext) inside the window keeps the whole grid's texel (its own rules: damp bed floor, extension leaks / neglect). The window
+  // used to be copied whole, so the tunnel / annex cells there carried the core's rock texels (dry, rock neglect): a seam inside them.
+  const ext = layout.areas.map(a => isExtensionArea(a));
   for (let L = 0; L < full.levels; L++) {
+    const area = levels[L].grid.area;
     for (let r = 0; r < h; r++) {
-      const s = (L * w * h + r * w) * 4, d = (L * W * H + (r + y) * W + x) * 4;
-      full.data.set(cf.data.subarray(s, s + w * 4), d);
+      const s = (L * w * h + r * w) * 4, d = (L * W * H + (r + y) * W + x) * 4, row = (r + y) * W + x;
+      for (let c = 0; c < w; c++) {
+        const a = area[row + c];
+        if (a >= 0 && ext[a]) continue;
+        for (let k = 0; k < 4; k++) full.data[d + c * 4 + k] = cf.data[s + c * 4 + k];
+      }
     }
   }
   full.stats = {ms: (typeof performance !== 'undefined' ? performance.now() : 0) - t0, sources: cf.stats.sources, leaks: cf.stats.leaks};
