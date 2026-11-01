@@ -813,7 +813,7 @@ function bedroll(): PurposePart[] {
     bb('accent', -0.62, 0.015, -0.36, 0.95, 0.105, 0.36),
     bb('accent', -0.86, 0.015, -0.33, -0.62, 0.06, 0.33),
     box('accent', [0.3, 0.025, 0.7], [-0.47, 0.118, 0], 0, 0.05),
-    bb('black', -0.62, 0.098, 0.356, 0.95, 0.103, 0.364),
+    bb('accent', -0.62, 0.098, 0.356, 0.95, 0.103, 0.364), // the zip line: the bag's own colour (round 3 integration: no extra 'black' draw batch per hideout chunk)
     box('paintBlue', [0.24, 0.11, 0.44], [-0.78, 0.07, -0.01], 0, 0.12),
     bb('paintRed', 0.6, 0.105, -0.3, 0.9, 0.15, 0.08),
     bb('paintRed', 0.6, 0.128, 0.0, 0.9, 0.131, 0.082),
@@ -821,8 +821,8 @@ function bedroll(): PurposePart[] {
 }
 
 /**
- * (lane HIDEOUT) The hideout's makeshift CAMP TABLE: a salvaged door panel (1.3 x 0.62 m, 3.8 cm, a lock bore and two hinge plates on
- * its edges) laid across two piers of cinder blocks (0.39 x 0.19 x 0.18 m blocks, four courses, alternate courses turned). Top 0.75 m.
+ * (lane HIDEOUT) The hideout's makeshift CAMP TABLE: a salvaged door panel (1.3 x 0.62 m, 3.8 cm) laid across two piers of cinder
+ * blocks (0.39 x 0.19 x 0.18 m blocks, four courses, alternate courses turned). Top 0.75 m.
  * Its lantern / stove are SEPARATE loose props standing on the top (gen/annexCache.ts, `host`), never baked in.
  */
 function campTable(): PurposePart[] {
@@ -837,10 +837,9 @@ function campTable(): PurposePart[] {
   });
   out.push(
     bb('wood', -0.65, 0.712, -0.31, 0.65, 0.75, 0.31),
-    bb('black', 0.47, 0.72, 0.305, 0.5, 0.742, 0.31),
-    bb('steelBright', -0.45, 0.716, -0.31, -0.37, 0.746, -0.306),
-    bb('steelBright', 0.25, 0.716, -0.31, 0.33, 0.746, -0.306),
   );
+  // (round 3 integration) the door's lock bore / hinge plates were dropped: each added a 'black' / 'steelBright' draw batch to the
+  // hideout's chunk and the split station's worst view went over the levels-render draw budget (261 vs < 260)
   return out;
 }
 

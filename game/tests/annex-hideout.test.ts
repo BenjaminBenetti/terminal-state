@@ -105,9 +105,10 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
       expect(dynamicKind(k) && !!propPhysics(k).onHost, k).toBe(true);
     }
     expect(openableSpec('footlocker')!.parts[0].move).toMatchObject({type: 'hinge', axis: 'x'});
-    let caches = 0, tables = 0, beside = 0;
+    let caches = 0, tables = 0, beside = 0, annexes = 0;
     for (const [level, seed] of SAMPLE) {
       const {layout} = fresh(level, seed);
+      annexes += layout.extensions?.annexes.length ?? 0;
       for (const c of annexCachesOf(layout)) {
         caches++;
         const a = layout.areas[c.area], tag = `${level} ${seed} cache ${c.area}`;
@@ -143,7 +144,10 @@ describe('the hideout (round 3, lane HIDEOUT)', () => {
         if (fl && fl.rot === bed.rot && Math.hypot(fl.x - bed.x, fl.z - bed.z) <= PROP_DEFS[bed.kind].w / 2 + 0.08 + PROP_DEFS.footlocker.w / 2 + 0.5 + 0.03) beside++;
       }
     }
-    expect(caches).toBeGreaterThanOrEqual(4);
+    // (round 3 integration) every annex has its cache (the guarantee), on the logical layout mostly ONE per annex: the second cache
+    // needs >= 2000 m² and the spine-and-rooms annexes run ~1,550-1,950 m² here
+    expect(annexes).toBeGreaterThanOrEqual(3);
+    expect(caches).toBeGreaterThanOrEqual(annexes);
     expect(tables / caches, 'the camp table set in most hideouts').toBeGreaterThanOrEqual(0.5);
     expect(beside / caches, 'the footlocker beside the bed in most hideouts').toBeGreaterThanOrEqual(0.5);
   });
