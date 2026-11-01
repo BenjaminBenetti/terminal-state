@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ZOMBIE_STATS, ZombieBrain, type BrainWorld} from '../src/ai/brain';
 import {
-  PLAYER_BODY_RADIUS, STRAINER_ASSET, STRAINER_CUES, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STAGGER_MIN, STRAINER_STATS, STRAINER_WET, StrainerBrain, strainerAttackRange,
+  PLAYER_BODY_RADIUS, STRAINER_ASSET, STRAINER_CUES, STRAINER_MAX_TOP_M, STRAINER_REACH, STRAINER_SCALE, STRAINER_STAGGER_MIN, STRAINER_STATS, STRAINER_WET, StrainerBrain, strainerAttackRange,
 } from '../src/ai/strainer';
 import {STRAINER_BONES, STRAINER_CLIPS, StrainerActor} from '../src/ai/strainerActor';
 import {STRAINER_TRAIL, StrainerWetTrail} from '../src/ai/strainerTrail';
@@ -256,8 +256,8 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
   // (user playtest 2026-11-01: "much to weak", "should lumber towards you, but be strong") — strong, slow, heavy-hitting
   it('stats: a durable, strong, LUMBERING threat — 6x health, heavy claws, far slower than a zombie, longer reach and recovery', () => {
     const T = STRAINER_STATS;
-    expect(T.hp).toBe(600);
-    expect(T.hp).toBeGreaterThanOrEqual(5 * S.hp);
+    expect(T.hp).toBe(1200); // (reach + squish task) user: "Needs double the health. 1,200 health"
+    expect(T.hp).toBeGreaterThanOrEqual(10 * S.hp);
     expect(T.attackDamage).toBe(24);
     expect(T.attackDamage).toBeGreaterThanOrEqual(2 * S.attackDamage); // strong
     expect(T.wanderSpeed).toBe(0.4);
@@ -268,10 +268,18 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(T.wanderSpeed).toBeCloseTo(STRAINER_ASSET.walkGroundSpeed, 1);
     expect(T.turnRate!).toBeLessThan(4.5); // a heavy body turns slowly
     expect(T.attackRange).toBeGreaterThan(S.attackRange); // the long arms
-    expect(T.attackRange).toBe(strainerAttackRange(STRAINER_ASSET.reachM));
-    expect(T.attackRange).toBeCloseTo(STRAINER_ASSET.reachM + PLAYER_BODY_RADIUS, 6);
-    expect(T.attackRange / S.attackRange).toBeGreaterThan(1.4); // the GLB's reach: 1.931 / 1.35 = 1.43x
-    expect(T.attackRange).toBeLessThanOrEqual(2.3);
+    // (reach + squish task) user: "double the reach of the swing": the previous range 1.931 -> 3.862, covered VISIBLY by the
+    // lunging long-arm swipe (clip claw contact = reach + the player's radius) plus the lunge travel
+    expect(STRAINER_REACH.previousRangeM).toBe(1.931);
+    expect(T.attackRange).toBe(2 * 1.931);
+    expect(STRAINER_REACH.contactM).toBe(strainerAttackRange(STRAINER_ASSET.reachM));
+    expect(STRAINER_REACH.contactM).toBeCloseTo(STRAINER_ASSET.reachM + PLAYER_BODY_RADIUS, 6);
+    expect(STRAINER_REACH.contactM + T.lunge!.distM).toBeCloseTo(T.attackRange, 2); // claws + lunge cover the whole range
+    expect(T.lunge!.distM).toBeLessThan(1.5); // the arms carry most of it (no long leap)
+    expect(T.lunge!.to).toBe(T.attackImpact); // the lunge lands with the claws
+    expect(T.lunge!.from).toBeLessThan(T.lunge!.to);
+    expect(T.lunge!.stopM).toBeLessThan(STRAINER_REACH.contactM); // never lunges past the point where the claws already reach
+    expect(T.hitRange!).toBeCloseTo(STRAINER_REACH.contactM + 0.45, 6); // contact after the lunge: the visible claws + the usual slack
     expect(T.attackCooldown!).toBe(1.0); // a long recovery after the big swing (zombie default 0.45)
     expect(T.attackDuration).toBeGreaterThan(S.attackDuration); // a slower, telegraphed swipe
     expect(T.attackImpact).toBeGreaterThan(S.attackImpact);
@@ -282,7 +290,7 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(T.radius).toBeLessThan(0.5); // passes every 1.0 m opening
     expect(T.chaseAnim).toBe('Run');
     expect(strainerAttackRange(0.2)).toBeGreaterThan(S.attackRange); // never shorter than a zombie's
-    expect(strainerAttackRange(5)).toBe(2.3); // never an invisible reach
+    expect(strainerAttackRange(5)).toBe(3.0); // never an invisible reach
     // no global retune: the other families are untouched
     expect(ZOMBIE_STATS.shambler).toMatchObject({hp: 100, chaseSpeed: 2.55, attackDamage: 10, attackRange: 1.35, radius: 0.33});
     expect(BLIGHTBELLY_STATS).toMatchObject({hp: 100, chaseSpeed: 1.6, attackDamage: 10});
@@ -330,15 +338,16 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(zf.some(o => (o as {noLinks?: boolean}).noLinks === true)).toBe(false);
   });
 
-  it('dies once like every enemy (the brain\'s own contract); 6x the zombie\'s health (user playtest: "much to weak")', () => {
+  it('dies once like every enemy (the brain\'s own contract); 12x the zombie\'s health (user: "1,200 health")', () => {
     const b = new StrainerBrain(0, 0, 0);
-    for (let k = 0; k < 5; k++) expect(b.damage(S.hp, 0, 2), `zombie-worth ${k + 1}`).toBe(false); // five zombies' worth is not enough
+    for (let k = 0; k < 11; k++) expect(b.damage(S.hp, 0, 2), `zombie-worth ${k + 1}`).toBe(false); // eleven zombies' worth is not enough
     expect(b.alive).toBe(true);
     expect(b.damage(S.hp, 0, 2)).toBe(true);
     expect(b.damage(50, 0, 2)).toBe(false);
   });
 
-  it('audio: NO new clips — the existing zombie calls through the cue adapter, from its taller mouth', () => {
+  // lane AUDIO (strainer squish set): the VOICE stays the zombie calls; footfalls are its own wet set (tests/strainer-audio.test.ts)
+  it('audio: the existing zombie voice calls through the cue adapter, from its taller mouth; its own wet footfalls', () => {
     const calls: string[] = [];
     const sfx = new Proxy({}, {get: (_t, k) => (...a: unknown[]) => { calls.push(`${String(k)}:${(a[1] as number)?.toFixed?.(2) ?? ''}`); }}) as never;
     const a = new StrainerActor(syntheticStrainer(), spawnAt(0, 0), rng(1));
@@ -348,7 +357,7 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     a.groanT = 0;
     STRAINER_CUES.tick(sfx, a as never, 0.1, 1.2, 5, rng(2));
     STRAINER_CUES.death(sfx, a as never);
-    expect(calls.map(c => c.split(':')[0])).toEqual(['groan', 'zombieAttack', 'groan', 'zombieGait', 'zombieDeath']);
+    expect(calls.map(c => c.split(':')[0])).toEqual(['groan', 'zombieAttack', 'groan', 'strainerGait', 'zombieDeath']);
     expect(calls[0]).toBe('groan:1.90'); // voice height (feet y 0 + 1.9)
   });
 });
@@ -455,7 +464,7 @@ describe('Strainer: actor (shared rig), head zone, fallback, ragdoll, persistenc
     const a = new StrainerActor(syntheticStrainer(), spawnAt(8, 8, 0.3), rng(4));
     a.root.position.y = 0;
     for (let i = 0; i < 4; i++) { a.animate(1 / 30, 'Walk', 0.5); a.updateVolumes(); }
-    expect(a.brain.damage(999, 8, 11)).toBe(true);
+    expect(a.brain.damage(STRAINER_STATS.hp, 8, 11)).toBe(true); // one lethal hit (its full health)
     expect(ph.ragdoll(a, {dir: {x: 0, y: -0.1, z: -1}, point: {x: 8, y: 1.3, z: 8}, strength: killImpulseStrength('rifle', 1, 1)})).toBe(true);
     expect(a.ragdolled).toBe(true);
     for (let t = 0; t < 4; t += 1 / 60) ph.update(1 / 60);
@@ -557,5 +566,50 @@ describe('Strainer lumbering / wet (user playtest 2026-11-01)', () => {
     // the marks live in ONE fixed instanced ring (fx WET_TRAIL: cap, lifetime): nothing accumulates without bound
     expect(WET_TRAIL.cap).toBeLessThanOrEqual(64);
     expect(WET_TRAIL.lifetimeS).toBeLessThanOrEqual(20);
+  });
+});
+
+// Task studio-alpha-strainer-reach-squish-20261101-201110-01 (user: "double the reach of the swing ... using its long arms"): the
+// swing starts from 3.862 m; the body lunges toward the player only inside the clip's lunge window (motor-applied), and the claws
+// connect only within their visible contact (+ the usual slack) after the lunge — a retreating player is missed.
+describe('Strainer lunging long-arm swipe (reach doubled)', () => {
+  const W = (pz: () => number): BrainWorld => ({
+    get px() { return 0; }, get pz() { return pz(); }, playerAlive: true, los: () => true, walkClear: () => false, rand: rng(5),
+    findPath: (_ax: number, _az: number, bx: number, bz: number) => [[bx, bz]], randomNear: () => null,
+  } as unknown as BrainWorld);
+  /** Run one swing with a minimal motor (out.speed along out.dir); `player(t)` = the player's z at time t since the swing began. */
+  function swing(start: number, player: (t: number) => number) {
+    const b = new StrainerBrain(0, 0, 0);
+    let t0 = -1, t = 0, hit = false, lungeFrom = -1, lungeTo = -1;
+    const z0 = b.z;
+    const w = W(() => player(t0 < 0 ? 0 : t - t0) + start);
+    for (; t < 4; t += 1 / 60) {
+      const o = b.update(1 / 60, w);
+      if (b.state === 'attack' && t0 < 0) t0 = t;
+      if (o.speed > 0 && b.state === 'attack') { if (lungeFrom < 0) lungeFrom = t - t0; lungeTo = t - t0; b.x += o.dirX * o.speed / 60; b.z += o.dirZ * o.speed / 60; }
+      if (o.attackHit) hit = true;
+      if (t0 >= 0 && b.state !== 'attack') break;
+    }
+    return {hit, started: t0 >= 0, lunged: b.z - z0, lungeFrom, lungeTo};
+  }
+
+  it('hits a player standing 3.8 m away after a ~1.25 m lunge inside the lunge window; the swing starts from up to 3.862 m', () => {
+    const r = swing(3.8, () => 0);
+    expect(r.started).toBe(true);
+    expect(r.hit).toBe(true);
+    expect(r.lunged).toBeGreaterThan(1.0);
+    expect(r.lunged).toBeLessThanOrEqual(STRAINER_REACH.lungeM + 0.05);
+    expect(r.lungeFrom).toBeGreaterThanOrEqual(STRAINER_STATS.lunge!.from - 0.02);
+    expect(r.lungeTo).toBeLessThanOrEqual(STRAINER_STATS.lunge!.to + 0.02);
+    expect(swing(3.95, () => 0).started).toBe(false); // beyond the doubled range: no swing
+  });
+
+  it('misses a player who steps back out of the claws\' reach during the wind-up (no invisible hit); no lunge when already in reach', () => {
+    expect(swing(3.8, t => Math.min(1.6, t * 2)).hit).toBe(false); // backs off 1.6 m before the impact
+    const close = swing(2.0, () => 0);
+    expect(close.hit).toBe(true);
+    expect(close.lunged).toBe(0); // within the visible claw reach already: the swipe lands in place
+    const z = new ZombieBrain('shambler', 0, 0, 0), w = W(() => 1.2);
+    for (let t = 0; t < 2; t += 1 / 60) { const o = z.update(1 / 60, w); if (z.state === 'attack') expect(o.speed).toBe(0); } // zombies never lunge
   });
 });

@@ -15,7 +15,7 @@ import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {ENEMY_MODEL_FILES} from '../src/ai/enemyModels';
-import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS, strainerAttackRange} from '../src/ai/strainer';
+import {STRAINER_ASSET, STRAINER_MAX_TOP_M, STRAINER_REACH, STRAINER_SCALE, STRAINER_STATS, strainerAttackRange} from '../src/ai/strainer';
 import {STRAINER_CLIPS, StrainerActor, type StrainerExtras} from '../src/ai/strainerActor';
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
@@ -72,7 +72,8 @@ describe('Strainer GLB vs the asset contract', () => {
     expect(STRAINER_ASSET.attackDuration).toBeCloseTo(X.clips?.Attack?.duration ?? attack.duration, 3);
     if (X.clips?.Walk?.groundSpeed) expect(STRAINER_ASSET.walkGroundSpeed).toBeCloseTo(X.clips.Walk.groundSpeed, 3);
     if (X.clips?.Run?.groundSpeed) expect(STRAINER_ASSET.runGroundSpeed).toBeCloseTo(X.clips.Run.groundSpeed, 3);
-    expect(STRAINER_STATS.attackRange).toBe(strainerAttackRange(X.reachM!));
+    expect(STRAINER_REACH.contactM).toBe(strainerAttackRange(X.reachM!)); // the visible claw contact (the range = 2x 1.931 incl. the lunge)
+    expect(STRAINER_STATS.attackRange).toBe(STRAINER_REACH.rangeM);
     const bytes = statSync(GLB).size;
     expect(Math.abs(ENEMY_MODEL_FILES.enemy_strainer.bytes - bytes) / bytes).toBeLessThan(0.1);
   });

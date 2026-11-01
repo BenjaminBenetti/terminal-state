@@ -10,8 +10,8 @@
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1184,
-      "sha256": "4e87a211d661bd1ffc9cfe2cd5208a2fa87535088503fb36c1765ca030ae2cfa"
+      "bytes": 1305,
+      "sha256": "34b491fa57bd8c6ddbeca60ee609c83eed619ab7e06e3732435bd7e6bd89755c"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1204,6 +1204,76 @@
       "sha256": "9e8f67caa43ecd62bb7d096fd42fe68c7f871a6ec8dd5b23bd2a78e638502c82"
     },
     {
+      "path": "assets/audio/strainer-contact-01.mp3",
+      "bytes": 6687,
+      "sha256": "8d319a62f951a978f7c55116cbd7fd9fabee073eb057d4fc832b845ffa79b25c"
+    },
+    {
+      "path": "assets/audio/strainer-contact-02.mp3",
+      "bytes": 8359,
+      "sha256": "a26305e357e221e2e9d0806c71a565d91c39d7356e48f6f0c5d81d65e5b767cf"
+    },
+    {
+      "path": "assets/audio/strainer-squish-01.mp3",
+      "bytes": 7105,
+      "sha256": "d52b9149a05eeee54e245193042760f26bd6e108830379959a7d0d02a95d1e99"
+    },
+    {
+      "path": "assets/audio/strainer-squish-02.mp3",
+      "bytes": 5433,
+      "sha256": "a7ff61ba76dc8cb31fb6208c47a6bd9cba5882d5dd2018c43623801846ae3f84"
+    },
+    {
+      "path": "assets/audio/strainer-step-01-s01.mp3",
+      "bytes": 9613,
+      "sha256": "9afb7693644d519f053415516846ff540d8b8190f3f64c0eafc1744496d1863a"
+    },
+    {
+      "path": "assets/audio/strainer-step-01-s02.mp3",
+      "bytes": 8359,
+      "sha256": "690c12f960617eeaf05b419b15a59097a80a69c89ff40d5b80e76fa6a3bef750"
+    },
+    {
+      "path": "assets/audio/strainer-step-01-s03.mp3",
+      "bytes": 9613,
+      "sha256": "9c5d5880b7d3d8ad7704453bc194143f0abc4ed11c7664d3a5d65a328c2e740f"
+    },
+    {
+      "path": "assets/audio/strainer-step-01-s04.mp3",
+      "bytes": 6687,
+      "sha256": "72a4d140e86e13332d86dbe43a77438a51981f36175e95eb7ed851c564b1a670"
+    },
+    {
+      "path": "assets/audio/strainer-step-02-s01.mp3",
+      "bytes": 8777,
+      "sha256": "16a76b467fc4700e9c2336e8c1a1d489918a1a9920d1da2be6b4655362bda61d"
+    },
+    {
+      "path": "assets/audio/strainer-step-02-s02.mp3",
+      "bytes": 9613,
+      "sha256": "b376661642b96ec3a706ed11533e4f5dc63cf1c65f8da2b28da1f438ed8e1845"
+    },
+    {
+      "path": "assets/audio/strainer-step-02-s03.mp3",
+      "bytes": 9613,
+      "sha256": "493475aceb94c58511ab2ad1eb558791d22004ee586972becd14a0fd1d1de8b4"
+    },
+    {
+      "path": "assets/audio/strainer-step-02-s04.mp3",
+      "bytes": 7941,
+      "sha256": "26926d00be566fafc807d48d340b50f2d817e43cd621293347a3c3d2c42ec273"
+    },
+    {
+      "path": "assets/audio/strainer-swing-01.mp3",
+      "bytes": 13792,
+      "sha256": "6010c8690e4554661237fc238959aaa092a0514d86ec0e0b2c065b7ea7354fd5"
+    },
+    {
+      "path": "assets/audio/strainer-swing-03.mp3",
+      "bytes": 19226,
+      "sha256": "346d68dbdb731f617b6814c922e3e95097419878c9285d4ad3c92f149fd556a8"
+    },
+    {
       "path": "assets/audio/t1-blight-burst-01.mp3",
       "bytes": 9613,
       "sha256": "4cdb84d572f390c7dfe50c77847a256169d124a04bde0b924f957f2e76a41e9c"
@@ -1434,6 +1504,11 @@
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
     },
     {
+      "path": "assets/derivatives/audio-strainer.json",
+      "bytes": 89623,
+      "sha256": "e4b9d387481c3b9c3552afcb06782ce6fbe4ab7e1ba0435b7f2db78989f60382"
+    },
+    {
       "path": "assets/derivatives/audio-track1.json",
       "bytes": 50624,
       "sha256": "77f6a7ff4881aac2d626c896f4fa74c12d7377de17878cc4b9b2abefdb865c34"
@@ -1455,8 +1530,8 @@
     },
     {
       "path": "assets/derivatives/enemy-strainer.json",
-      "bytes": 64116,
-      "sha256": "fe789ca5e646da64d38d5e68f7b64005e68edc2c6510ba3102e1232fb0b71313"
+      "bytes": 64081,
+      "sha256": "44408b072ee159f2ec54b815cb0665d0a96da836ab77ded5d5e9929b804af7ea"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1751,7 +1826,7 @@
     {
       "path": "assets/models/enemy-strainer.glb",
       "bytes": 2395736,
-      "sha256": "2486d2b99b41303e2b4a1e05762714b5d916c0192ab346636a1e4fd72255a3c4"
+      "sha256": "7e6ad8ba435c15a18c7dda75727c1d7f54d46082bf3f12e77d9b21877dc408a5"
     },
     {
       "path": "assets/models/gun-locker.glb",

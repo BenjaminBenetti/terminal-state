@@ -112,7 +112,7 @@ export const RATDOG_CUES: EnemyCues = {
 export function enemyCues(z: EnemyActor): EnemyCues {
   if (archetypeOf(z) === 'blightbelly') return BLIGHT_CUES; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): deep groans, heavy gait
   if (archetypeOf(z) === 'siren') return SIREN_CUES; // Task track1-siren-blightbelly-20261031 (lane SIREN): dormant hum, one wake scream, no groans
-  if (archetypeOf(z) === 'strainer') return STRAINER_CUES; // lane FAMILY: the existing zombie calls (deep groan from its taller mouth) — no new audio
+  if (archetypeOf(z) === 'strainer') return STRAINER_CUES; // lane FAMILY: the zombie voice calls (deep groan from its taller mouth) + its own wet squelch set
   return archetypeOf(z) === 'ratdog' ? RATDOG_CUES : ZOMBIE_CUES;
 }
 

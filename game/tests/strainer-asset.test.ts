@@ -179,8 +179,8 @@ describe('Strainer derivative (enemy-strainer.glb)', () => {
     expect(head.clone().add(new THREE.Vector3(...X.head.offset)).distanceTo(new THREE.Vector3(...X.headCenter))).toBeLessThan(1e-3);
     // the claw reach at the hit frame: horizontal root -> claw tip, longer than an ordinary zombie's arm
     expect(X.reachM).toBe(X.attack.reachM);
-    expect(X.reachM).toBeGreaterThan(1.2);
-    expect(X.reachM).toBeLessThan(2.0);
+    expect(X.reachM).toBeGreaterThan(2.0); // (reach + squish task) the lunging long-arm swipe: the arm straight out on a deep lunge
+    expect(X.reachM).toBeLessThan(3.0);
     expect(X.attack.clawTipR[1]).toBeGreaterThan(1.1); // chest height (~1.3 m on a 1.78 m target)
     expect(X.attack.clawTipR[1]).toBeLessThan(1.6);
     expect(X.attack.clawTipR[2]).toBeGreaterThan(1.0); // in front
@@ -234,9 +234,9 @@ describe('Strainer derivative (enemy-strainer.glb)', () => {
 // texture / PBR maps Meshy generated (re-encoded only). The round-4 follow-up wrongly replaced them with a Codex projection bake; it
 // was reverted. This contract pins the chain and the exact Meshy-mapped runtime output so a replacement cannot silently return.
 describe('Strainer texture source contract: Codex initial source -> Meshy model -> its Meshy maps kept', () => {
-  // (lumbering rework, user playtest 2026-11-01: the clips changed, so the GLB changed; its three texture images did NOT — they are
+  // (lumbering rework + the lunging swipe, user playtests 2026-11-01: the clips changed, so the GLB changed; its three texture images did NOT — they are
   // pinned below to the round-4 Meshy re-encodes of the original 30d4347c… GLB, byte for byte)
-  const RUNTIME = {bytes: 2_395_736, sha256: '2486d2b99b41303e2b4a1e05762714b5d916c0192ab346636a1e4fd72255a3c4'};
+  const RUNTIME = {bytes: 2_395_736, sha256: '7e6ad8ba435c15a18c7dda75727c1d7f54d46082bf3f12e77d9b21877dc408a5'};
   const MESHY_IMAGES = {
     baseColor: 'be4b71251964d3e9d940362130c7816dce8b11bb08474618fc3a5489ce0556b5',
     metallicRoughness: '956c0f68ec0e8ad0971c84f9a50ac41f06c170e3db4e0972d530fa427289015c',

@@ -6,7 +6,8 @@ MP3 encoding) of a raw clip generated with the user's local Last Line Sound Lab 
 w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio-iteration05.json
 (iteration-06 breaking cues i06-*.mp3: ../derivatives/audio-iteration06.json; player gas coughs cough-*.mp3:
 ../derivatives/audio-cough.json; Siren hum / scream and Blightbelly burst / gas hiss t1-*.mp3:
-../derivatives/audio-track1.json).
+../derivatives/audio-track1.json; the Strainer's wet footfalls / arm swing / claw contact / hit squish strainer-*.mp3:
+../derivatives/audio-strainer.json).
 
 Powered by Stability AI.
 
