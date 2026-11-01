@@ -364,6 +364,14 @@ export interface TrackExtConfig {
    * Absent = no hatches (annexes only off tunnels).
    */
   hatch?: {s: [number, number]};
+  /**
+   * (2026-11-01, lane OFFICE; optional, the ORIGINAL planner only — a config without annex.count) THE PRESENCE FALLBACK: on a level
+   * whose one area roll succeeded but whose eligible tunnels placed NO annex, ONE service-hatch annex is tried (the same lawful
+   * bed-wall entry as `hatch`, `s` m from the end face) at the bed ends no tunnel continues, in a seeded order on its own fork
+   * (rng.fork('annex-fallback') of the track-ext stream: every other draw, tunnel and annex is unchanged), until one succeeds. It
+   * restores the area's presence, it never adds a second annex; a level with a tunnel annex never runs it. Absent = no fallback.
+   */
+  fallbackHatch?: {s: [number, number]};
   clues: {
     /** Chance that a tunnel (or bed wall: a service hatch) leading to an annex door carries graffiti at all. */
     chance: number;

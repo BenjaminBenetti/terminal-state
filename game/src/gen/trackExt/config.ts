@@ -132,12 +132,17 @@ export const TRACK_EXT: TrackExtConfig = {
  * tunnels in a seeded order, up to annex.max) and no core reserve (its fixed-origin canvas only grows east / south; the reserve is a
  * Subway layout change). (2026-11-01, lane AREA) Its old per-eligible-tunnel 0.6 roll is gone: the level's one BTS_AREA_CHANCE roll
  * decides whether it has the area; when it does, every eligible tunnel takes an annex until the max (at least one where eligible).
+ * (2026-11-01, lane OFFICE; user: the ACTUAL area occurrence is 20 % on every level type) `fallbackHatch`: a present level whose
+ * eligible tunnels placed NO annex (the fixed east / south canvas often leaves every first straight too short for a door) gets ONE
+ * service-hatch annex at an open bed end instead — the Subway's bed-wall entry and 2-10 m window (TRACK_EXT.hatch), on its own fork;
+ * the GEN-2 planner (count, host first straights, hatches as further candidates) stays off.
  */
 export const TRACK_EXT_OFFICE: TrackExtConfig = {
   ...TRACK_EXT,
   annex: {...TRACK_EXT.annex, count: undefined, hostFirstStraight: undefined},
   coreReserveM: 0,
   hatch: undefined,
+  fallbackHatch: TRACK_EXT.hatch,
 };
 
 /**

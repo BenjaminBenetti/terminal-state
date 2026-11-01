@@ -99,6 +99,22 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
       if (typeof res === 'string') { ln(`annex: omitted (${res})`); continue; }
       addTunnelAnnex(res, tr, ln);
     }
+    // (2026-11-01, lane OFFICE) the presence fallback (cfg.fallbackHatch): the roll succeeded but no eligible tunnel took an annex
+    // — ONE service hatch (the GEN-2 bed-wall entry, C.planHatch) at the bed ends no tunnel continues, in a seeded order on its own
+    // fork (every draw above is unchanged), until one fits; a level whose tunnels placed an annex never gets here
+    const F = cfg.fallbackHatch;
+    if (F && !ext.annexes.length) {
+      const fr = rng.fork('annex-fallback'), ends = fr.shuffle(open.slice());
+      if (!ends.length) ext.log.push({trench: -1, from: 'x0', result: 'hatch fallback: no open bed end'});
+      for (const e of ends) {
+        const ln = (result: string) => ext.log.push({trench: e.trench, from: e.from, result});
+        if (ext.annexes.length) { ln('hatch fallback: not needed (the level has its annex)'); continue; }
+        const res = C.planHatch(e, 0, fr.fork(`hatch:${e.trench}:${e.from}`), F);
+        if (typeof res === 'string') { ln(`hatch fallback: omitted (${res})`); continue; }
+        ext.annexes.push({...res.annex, bed: {...res.entry, clues: []}});
+        ln(`annex ${res.annex.id} via a fallback bed hatch (${res.entry.wall} wall, ${res.entry.s.toFixed(1)} m from the end): ${Math.round(res.annex.areaM2)} m² in ${res.annex.areas.length} areas`);
+      }
+    }
   } else {
     // (GEN-2) the wanted count over the candidates in a seeded order: eligible tunnels first, then service hatches at the bed
     // ends no tunnel continues (cfg.hatch) — each candidate at most one annex, until the count is met
