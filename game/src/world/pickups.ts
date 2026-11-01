@@ -265,7 +265,7 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
   } else if (isReactorItem(itemId)) {
-    // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — procedural stand-ins, swappable for the lead's GLBs
+    // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — the Meshy kit GLBs (procedural stand-in if one failed to load)
     t = reactorItemModel(itemId);
     templateSource.set(itemId, reactorItemSource(itemId));
   } else if (isMaterialItem(itemId)) {
