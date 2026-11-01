@@ -153,7 +153,8 @@ export function buildControlView(id: RestartControlId, c: ReactorControl): Contr
       root.add(spinner);
       mesh(cylZ(0.06, 0.02), 'steel', 0, 0, 0, spinner);
       mesh(boxG(0.11, 0.018, 0.025), 'yellow', 0, 0, 0.004, spinner);
-      view.sync = s => { pumpOn = s.pump; run.set(s.pump ? 'green' : null); };
+      let first = true;
+      view.sync = s => { if (first && s.pump) spool = 1; first = false; pumpOn = s.pump; run.set(s.pump ? 'green' : null); }; // a restored running pump: already at speed
       view.animate = dt => {
         spool = pumpOn ? Math.min(1, spool + dt / 4) : 0;
         if (spool > 0) spinner.rotation.z -= dt * 14 * spool;

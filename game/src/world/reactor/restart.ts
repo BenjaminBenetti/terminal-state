@@ -1,7 +1,7 @@
 // Task reactor-build-20261101 (lane RESTART): THE REACTOR's restart runtime — the industrial controls, their in-world feedback, the
 // status screens, the HUD objective line and THE WIN. installReactorRestart(game) is called ONCE from the Game constructor and only
 // REGISTERS (like world/towerRuntime.ts / gear/system.ts); it is inert on every level without `layout.reactor`:
-// - sectionHooks: build = read the persisted record (runState.ts REACTOR_LANE, RESTART's fields; + a monotonic mirror), build the
+// - sectionHooks: build = read the persisted record (runState.ts REACTOR_LANE, RESTART's fields), build the
 //   control overlays (world/reactor/restartViews.ts) at layout.reactor.sites[].controls and the canvas screens at
 //   layout.reactor.screens, restore the visuals (a restarted reactor comes back restarted with its lights on: no replay); teardown =
 //   save + dispose. Travel keeps the record (section memory), Retry restores the level-entry snapshot, NewGame starts clean.
@@ -245,7 +245,7 @@ export class ReactorRestart {
     this.removeObjective();
   }
 
-  /** Persist RESTART's fields now (read-modify-write of the shared record + the mirror). */
+  /** Persist RESTART's fields now (read-merge-write of the shared record: AIR's keys kept as stored). */
   save(): void {
     const info = this.info, s = this.state;
     if (!info || !s) return;
