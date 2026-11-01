@@ -99,8 +99,10 @@ function checkFallback(s: number, l: StationLayout, ref: StationLayout): NonNull
     // drawn from the service context's OWN pool (the Strainer has weight only there)
     expect((P.contexts.service?.families ?? P.families).some(([f, w]) => f === (z.archetype ?? 'zombie') && w > 0), `${tag} #${i} ${z.archetype}`).toBe(true);
   }
-  // the station invitation art announces the hatch
-  expect((e.art ?? []).filter(a => a.annex === n.id).every(a => a.entry === 'hatch'), tag).toBe(true);
+  // the station invitation art announces the hatch (measured: 1-3 pieces at every one of 56 fallback hatches over 666 present seeds)
+  const art = (e.art ?? []).filter(a => a.annex === n.id);
+  expect(art.length, `${tag} invitation art`).toBeGreaterThan(0);
+  expect(art.every(a => a.entry === 'hatch' && a.trench === n.bed!.trench && a.from === n.bed!.from), tag).toBe(true);
   return n;
 }
 
@@ -135,7 +137,7 @@ describe('the Office presence fallback (one seeded service hatch when a PRESENT 
     }
     report(`${FORMER.length} formerly-failing present seeds: ${FORMER.length} / ${FORMER.length} with one hatch annex; hatch clues ${clues}, invitation art ${art} pieces at ${hatchArt} hatches; ${((performance.now() - t0) / 1000).toFixed(1)} s`);
     expect(clues, 'hatch graffiti clues over the cohort').toBeGreaterThan(0);
-    expect(hatchArt, 'hatches announced by station art').toBeGreaterThan(0);
+    expect(hatchArt, 'hatches announced by station art').toBe(FORMER.length);
   }, 600000);
 
   it('byte-identical where the fallback never runs: present levels with a tunnel annex, absent levels', () => {

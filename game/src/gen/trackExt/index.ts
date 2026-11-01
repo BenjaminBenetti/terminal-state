@@ -101,9 +101,10 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
     }
     // (2026-11-01, lane OFFICE) the presence fallback (cfg.fallbackHatch): the roll succeeded but no eligible tunnel took an annex
     // — ONE service hatch (the GEN-2 bed-wall entry, C.planHatch) at the bed ends no tunnel continues, in a seeded order on its own
-    // fork (every draw above is unchanged), until one fits; a level whose tunnels placed an annex never gets here
+    // fork (every draw above is unchanged), until one fits; a level whose tunnels placed an annex never gets here (nor a config whose
+    // annex.max is 0: no annex possible)
     const F = cfg.fallbackHatch;
-    if (F && !ext.annexes.length) {
+    if (F && !ext.annexes.length && A.max > 0) {
       const fr = rng.fork('annex-fallback'), ends = fr.shuffle(open.slice());
       if (!ends.length) ext.log.push({trench: -1, from: 'x0', result: 'hatch fallback: no open bed end'});
       for (const e of ends) {
