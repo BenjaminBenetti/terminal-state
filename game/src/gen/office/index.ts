@@ -139,7 +139,7 @@ function tryLevel(f: TowerFrame, genSeed: number, seed: number, attempt: number,
   // --- Track 2 (lane GEN): tunnels past the station's bed ends + annexes on their OWN fork (east / south of the fixed origin;
   // the crop and every core pass below run exactly as without them; finishExtensions grows the grid and stamps them at the end) --
   const ox = TX - MARGIN, oy = TY - MARGIN;
-  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'office', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: OFFICE_EXT_MAX_CELLS});
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'office', levelSeed: ctx.levelSeed, canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: OFFICE_EXT_MAX_CELLS});
 
   // --- Crop: tower interior NW corner at grid cell (MARGIN, MARGIN) on every storey ----------------------------------------
   let x1 = TX + f.TW, y1 = TY + f.TD;
