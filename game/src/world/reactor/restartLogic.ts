@@ -214,6 +214,32 @@ export function writeRestartState(run: RestartRun, lane: string, generators: num
   run.setLaneStore(RESTART_MIRROR_LANE, mine);
 }
 
+/** The layout bits the "next step" line reads (layout.reactor). */
+export interface NextStepInfo {
+  tiers: readonly {level: number; label: string}[];
+  sites: readonly {id: string; level: number}[];
+  components: readonly {item: string; where: string}[];
+}
+
+/** The pit board's "Next: …" line — where to go and what to do next (the order a crew would follow). */
+export function nextStepText(s: ReactorRunState, info: NextStepInfo, inv: Pick<RestartInventory, 'count'>): string {
+  if (s.restarted) return 'Reactor running — surface ventilation towers powered';
+  const at = (site: string) => {
+    const st = info.sites.find(x => x.id === site);
+    const tier = st ? info.tiers.find(t => t.level === st.level) : undefined;
+    return tier ? ` (${tier.label})` : '';
+  };
+  const whereOf = (item: string) => info.components.find(c => c.item === item)?.where;
+  if (!s.keyInserted && inv.count(REACTOR_KEY_ID) < 1) { const w = whereOf(REACTOR_KEY_ID); return `Next: find the startup key${w ? ` — ${w}` : ''}`; }
+  if (!allFuses(s) && inv.count(FUSE_CARTRIDGE_ID) < REACTOR_FUSE_SLOTS - fusesInstalled(s)) { const w = whereOf(FUSE_CARTRIDGE_ID); return `Next: find spare fuse cartridges${w ? ` — ${w}` : ''}`; }
+  if (!allFuses(s)) return `Next: replace the burnt fuses — switchgear${at('switchgear')}`;
+  if (!s.breaker) return `Next: close the main breaker — switchgear${at('switchgear')}`;
+  if (!s.valve) return `Next: open the main coolant valve — pump hall${at('pumpHall')}`;
+  if (!s.pump) return `Next: start the circulation pump — pump hall${at('pumpHall')}`;
+  if (!s.keyInserted) return `Next: insert the startup key — control room${at('control')}`;
+  return `Next: withdraw the control rods — control room${at('control')}`;
+}
+
 /** The task statuses (runState.reactorTasks) + a compact ticked line for the HUD ("✓ Key · Power · Coolant · Rods"). */
 export function taskLine(s: ReactorRunState): {tasks: ReturnType<typeof reactorTasks>; html: string} {
   const tasks = reactorTasks(s);

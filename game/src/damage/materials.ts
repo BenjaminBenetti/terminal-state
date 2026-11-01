@@ -332,8 +332,8 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   // a filled 0.4 l specimen jar ~0.35 kg (upright cylinder)
   electrical_parts: {mass: 0.35, shape: 'box', mat: 'plastic'}, scrap_metal: {mass: 1.1, shape: 'box', mat: 'metal'},
   bio_mater: {mass: 0.35, shape: 'cylinder', mat: 'plastic'},
-  // task reactor-build-20261101 (lane RESTART): key + ring + fob ~50 g; a 160 A ceramic HRC cartridge ~0.6 kg (sand-filled ceramic)
-  reactor_key: {mass: 0.05, shape: 'box', mat: 'metal'}, fuse_cartridge: {mass: 0.6, shape: 'box', mat: 'stone'},
+  // task reactor-build-20261101 (lane RESTART): key + ring + fob ~50 g; a 0.3 m sand-filled ceramic HRC cartridge ~0.9 kg
+  reactor_key: {mass: 0.05, shape: 'box', mat: 'metal'}, fuse_cartridge: {mass: 0.9, shape: 'box', mat: 'stone'},
 };
 export function itemPhysics(itemId: string): ItemPhysics {
   return ITEM_PHYSICS[itemId] ?? {mass: 0.3, shape: 'box', mat: 'plastic'};

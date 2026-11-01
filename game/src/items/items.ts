@@ -215,10 +215,10 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,
   ...MATERIAL_DIMS, // lane RACK (office-props-physics-scale-20261030): authored models (world/materialItems.ts)
-  // task reactor-build-20261101 (lane RESTART): the stand-in models' bounds (world/reactor/restartItems.ts): the key lying flat on its
-  // fob, the ceramic cartridge lying along X (blade contacts included)
-  reactor_key: {w: 0.158, d: 0.034, h: 0.009, shape: 'flat'},
-  fuse_cartridge: {w: 0.216, d: 0.056, h: 0.056, shape: 'flat'},
+  // task reactor-build-20261101 (lane RESTART): the Meshy kit models' runtime bounds (assets/reactorKit.generated.ts REACTOR_KIT.reactorKey
+  // / .fuseCartridge, so they stay at scale 1; world/reactor/restartItems.ts): the key lying flat, the ceramic cartridge along X
+  reactor_key: {w: 0.13, d: 0.0573, h: 0.0073, shape: 'flat'},
+  fuse_cartridge: {w: 0.3, d: 0.062, h: 0.0623, shape: 'flat'},
 };
 
 export function itemDims(id: string): ItemDims {

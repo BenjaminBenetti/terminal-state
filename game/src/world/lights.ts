@@ -265,6 +265,12 @@ export class StationLighting {
   /** Kept for API compatibility: no pooled lights exist any more. */
   readonly lights: readonly THREE.Light[] = [];
   readonly levels: [number, number, number] = [1, 1, 1];
+  /**
+   * Task reactor-build-20261101 (lane RESTART): per-circuit level override (null / a null entry = the circuit's own flicker pattern).
+   * Only the Reactor sets it: circuit 2 = its POWERED industrial fixtures (generator marks them `dying`), held at 0 until the
+   * restart and ramped to 1 by the win sequence (world/reactor/restart.ts) — no re-bake, no shader change. Every other level: null.
+   */
+  circuitLevel: [number | null, number | null, number | null] | null = null;
   profile: LightProfile = 'lit';
   areaIndex = -1;
   private t = 0;
@@ -364,7 +370,7 @@ export class StationLighting {
    */
   update(dt: number, cam?: THREE.Vector3): void {
     this.t += dt;
-    for (let g = 0; g < 3; g++) this.levels[g] = groupLevel(g, this.t);
+    for (let g = 0; g < 3; g++) this.levels[g] = this.circuitLevel?.[g] ?? groupLevel(g, this.t); // task reactor-build-20261101 (lane RESTART): + override
     this.setFieldLevels();
     this.applyLevels(false);
     syncGlowFog(this.scene.fog);

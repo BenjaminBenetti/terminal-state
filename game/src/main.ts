@@ -9,6 +9,7 @@ import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 import {warmupNote} from './render/warmup'; // Iteration 14
 import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
+import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -121,6 +122,8 @@ async function boot(): Promise<void> {
     const b = document.querySelector('.level-card[data-level="mall"] b');
     if (b) b.textContent = nameOf('mall');
   });
+  // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
+  game.stateListeners.push((st: GameState) => { if (st !== 'title') return; const el = $('#milestone-badge'), t = milestoneBadge(readMilestones()); if (el) { el.textContent = t; el.hidden = !t; } });
   // the title's level choice (before the run starts): rebuilds the prepared run's start (same seeds) and warms it up
   const choice = document.querySelectorAll<HTMLButtonElement>('.level-card');
   const markChoice = (level: LevelId) => { for (const c of choice) c.setAttribute('aria-checked', String(c.dataset.level === level)); };
