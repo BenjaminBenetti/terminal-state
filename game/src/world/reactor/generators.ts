@@ -203,6 +203,8 @@ export class ReactorAirRuntime {
   info: ReactorInfo | null = null;
   /** This module's live view of the REACTOR_LANE record (its `generators` / `zoneClear` are ours). */
   state: ReactorRunState | null = null;
+  /** Task reactor-build-20261101 (merge fix): the reactor runs (the win called clearAll this world): every fan at full. */
+  reactorPowered = false;
   /** The aimed generator (ReactorGenerator.id, -1 none) and the E hold in progress. */
   target = -1;
   hold: {gen: number; t: number; x: number; z: number; clears: number} | null = null;
@@ -251,6 +253,7 @@ export class ReactorAirRuntime {
   // World lifecycle
 
   build(layout: StationLayout): void {
+    this.reactorPowered = false; // (merge fix) a new world: the restored record's `restarted` decides
     this.clear();
     const info = layout.reactor;
     if (!info) return;
@@ -367,6 +370,7 @@ export class ReactorAirRuntime {
 
   /** Lane RESTART's win: every zone clears over `durationS`. */
   clearAll(durationS?: number): boolean {
+    this.reactorPowered = true; // (merge fix) the win: fans hold full speed from now on
     if (!this.air) return false;
     this.air.clearAll(durationS ?? REACTOR_AIR.CLEAR_ALL_S, this.host.clock);
     this.save();
@@ -423,7 +427,9 @@ export class ReactorAirRuntime {
     }
     for (const f of info.fans) {
       const gid = this.zoneGen[f.zone] ?? -1, gs = gid >= 0 ? st.generators[gid] : undefined;
-      const s = gs?.started ? fanSpool(clock - gs.startedAt) : 0;
+      // task reactor-build-20261101 (primary, merge fix): once the reactor is restarted (the win: clearAll, or a restored restarted
+      // record) every fan runs at full on reactor power — a generator started afterwards never dips its zone's fans
+      const s = this.reactorPowered || st.restarted ? 1 : gs?.started ? fanSpool(clock - gs.startedAt) : 0;
       const q = Math.round(s * 50) / 50;
       if (all || q !== this.fanSent[f.id]) { v.setFanSpeed(f.id, q); this.fanSent[f.id] = q; }
     }
