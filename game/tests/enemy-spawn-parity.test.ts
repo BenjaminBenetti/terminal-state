@@ -107,6 +107,17 @@
 //     PROOF: (one-off, lane FAMILY) re-assigning each live layout's families with the pre-round-4 service pool reproduced every
 //     stage-12 spawn hash exactly (and office-gen.test.ts's stage-12 LIVE fingerprints); (every run, below) on every live layout the
 //     family-masked hash equals the pre-round-4 assignment's, only 'service' spawns differ, and a Strainer is only ever a service spawn.
+// 14. Task studio-alpha-beyond-station-round4-20261101-01 (lane AREA) — CAUSE: user "drop the spawn chance of the beyond the station
+//     area ... twenty percent ... across all levels": the annexes exist only where the level's ONE seeded roll succeeds
+//     (gen/trackExt/config.ts btsAreaRoll(levelSeed) < BTS_AREA_CHANCE 0.2). Moved: ONLY live entries of levels that LOST their annexes
+//     (they roll the area absent): Subway 7 / 42 / 16920 / 24839 / 40677 / 48596 (now = their reserve-on core views, except 42 / 40677
+//     still translated by their tunnels; no "+ service") and Office 222 / 3333 / 4242 (now = OFFICE_GOLDEN); the present-rolling
+//     1234 / 32758 (same wanted count) and the annex-free 1 / 9001 / 11 are unchanged. Every station / street / floor / roof count,
+//     core view, reserve-off view and invariant is unchanged (asserted every run). Old values beside the pins in the helper.
+//     COMBINED (the round-4 merge of 13 + 14): the absent-rolling entries take 14 (no service spawn left for 13 to move); the
+//     present-rolling Subway 1234 / 32758 take 13's spawn hash (pickups unchanged by both). So in the pins, Strainer coverage of a
+//     parity level now rests on Subway 1234 / 32758 (no Office parity level rolls the area); the family-masked / service-only checks
+//     below still run on every live layout.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';

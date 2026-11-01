@@ -109,6 +109,15 @@
 //     473514e1, officeHolders e69a7b80 -> a46e2b2b, officePickups 5fa98572 -> c60b27da, gearPlaced 879dd375 -> 87da653f (live
 //     coordinates of re-cropped stations). Core views, the reserve-off proof, the roof find, gearRolls and the core gear placement
 //     are unchanged (asserted every run).
+// 17. Task studio-alpha-beyond-station-round4-20261101-01 (lane AREA) — LIVE only. CAUSE: user "drop the spawn chance of the beyond the
+//     station area ... twenty percent ... across all levels": the annexes exist only where the level's ONE seeded roll succeeds
+//     (gen/trackExt/config.ts btsAreaRoll(levelSeed) < BTS_AREA_CHANCE 0.2). PROOF: 4 of the 18 economy stations roll the area PRESENT
+//     (17039, 24958, 40796, 56634; the other 14 lost their annexes' holders / finds: 6,397 -> 5,325 live holders) and none of the
+//     Office levels 11 / 222 / 3333 (u = 0.4839 / 0.5528 / 0.3172), whose live hashes therefore equal their core views. Re-pinned:
+//     subwayHolders f6caed49 -> aa2103ac, subwayPickups 473514e1 -> fd47fecc, officeHolders a46e2b2b -> c36c5fba (= GOLDEN_CORE),
+//     officePickups c60b27da -> 1aa35d40 (= GOLDEN_CORE), gearPlaced 87da653f -> ecb0c21c (live coordinates of stations re-cropped
+//     without their annexes). Core views, the reserve-off proof, the roof find, gearRolls and the core gear placement are unchanged
+//     (asserted every run).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -131,17 +140,17 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'f6caed49', // stage 16 (mall round 3 CI follow-up, exact-table square fallback): was 47d6dde6 — exactly 2 of 6,397 holders differ, the EMPTY annex supply stock shelves 135824 #213 / 32877 #158 now hold the med kit they rolled (core hashes unchanged); stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: 'aa2103ac', // stage 17 (lane AREA, the one 20 % area roll: 14 of 18 stations lost their annexes): was f6caed49; stage 16 (mall round 3 CI follow-up, exact-table square fallback): was 47d6dde6 — exactly 2 of 6,397 holders differ, the EMPTY annex supply stock shelves 135824 #213 / 32877 #158 now hold the med kit they rolled (core hashes unchanged); stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: '473514e1', // stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
-  officeHolders: 'a46e2b2b', // stage 15: was e69a7b80; stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
+  subwayPickups: 'fd47fecc', // stage 17: was 473514e1; stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
+  officeHolders: 'c36c5fba', // stage 17 (no Office corpus level has the area now: = the core view): was a46e2b2b; stage 15: was e69a7b80; stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
-  officePickups: 'c60b27da', // stage 15: was 5fa98572; stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
+  officePickups: '1aa35d40', // stage 17 (= the core view): was c60b27da; stage 15: was 5fa98572; stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
   /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
-  gearPlaced: '87da653f', // stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
+  gearPlaced: 'ecb0c21c', // stage 17: was 87da653f; stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
 };
 
 function fnv() {

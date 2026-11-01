@@ -84,7 +84,13 @@ all levels"):
   | Office | 183 / 200 (281 / 311 incl. seeds 1–700) | 17 / 43 / 140 | ≈ 0.18 (0.2 × 0.90–0.92) |
   | Mall | 200 / 200 | 0 / 200 / 0 | 0.20 |
   (200 present seeds per type, `(i × 2654435761 + 7777) >>> 0` picked by the roll; the roll itself is 0.199 over 100,000 seeds and
-  0.2 within 4σ per seed family, Subway archetype and mall variant over 60,000 seeds.)
+  0.2 within 4σ per seed family, Subway archetype and mall variant over 60,000 seeds. The test's own 250 corpus seeds,
+  `(i × 2654435761 + 12345) >>> 0` for i = 1000–1249: 48 roll present (0.192) — Subway 48 / 48 with an annex (11 with two), Office
+  45 / 48 (36 with two; realised 0.180), Mall 48 / 48.)
+- **Limitations:** the 20 % is per generated level, so a run's three levels are three independent rolls (about half of all runs
+  have the area on none of them); an Office level that rolls present can still have no annex (above); a present level's annexes
+  can still be dropped by the existing safety net if the finished layout fails validation with them (`dropExtensions`, never a
+  re-roll; none in the samples above). The annex docs below describe the area where it exists.
 - **Tests** select their annex samples with the real roll (`game/tests/helpers/btsArea.ts` `presentSeeds` / `absentSeeds`); there is
   deliberately no override that forces the area.
 
