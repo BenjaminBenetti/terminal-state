@@ -31,6 +31,8 @@ export const MALL_EXT_MAX_CELLS = 75_000;
  * bed ceiling, slabs between) may stand above a tunnel / annex (never their atrium openings: those lie over the station block).
  * Without it a bed end under a retail floor is "blocked at the mouth". At most ONE annex (TRACK_EXT_MALL annex.max 1).
  */
-export function mallTrackExtContext(ox: number, oy: number): TrackExtContext {
-  return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0]};
+export function mallTrackExtContext(ox: number, oy: number, coreCrop?: {w: number; h: number}): TrackExtContext {
+  // (round 3, lane LAYOUT: + the mall's exact core crop size, so the 75k budget holds exactly — its crop keeps one cell more than the
+  // extension planner's default estimate)
+  return {levelId: 'mall', canvasGrow: 'east-south', origin: {x: ox, y: oy}, maxCells: MALL_EXT_MAX_CELLS, rockLevels: [0], ...(coreCrop ? {coreCrop} : {})};
 }
