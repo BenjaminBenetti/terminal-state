@@ -242,7 +242,7 @@ export function populateExtensions(layout: StationLayout, rng: Rng, o: {loot: Lo
   const caches = new Map<number, AnnexCacheRecord[]>();
   for (const n of ext.annexes) {
     const p0 = layout.props.length;
-    caches.set(n.id, placeAnnexCaches(layout, n, annexAreas(n), coreKinds, root.fork(`cache:${n.id}`), {reuse: storageCtx.get(n.id), from: first}));
+    caches.set(n.id, placeAnnexCaches(layout, n, annexAreas(n), coreKinds, root.fork(`cache:${n.id}`), {reuse: storageCtx.get(n.id), from: first, loot: o.loot}));
     rep.props += layout.props.length - p0;
   }
   phase('cache');
