@@ -1222,6 +1222,9 @@ export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, s
 export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.25}, itemWeight: {[BIO_MATER]: 1.5}};
 /** (mall revision, U01) the label is the generic one: the mall's display name is seeded per run ("<Name> Center", gen/mall/names.ts). */
 export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'Mall (seeded "<Name> Center")', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
+/** Task reactor-build-20261101 (primary): THE REACTOR (tier 3) — MALL_TABLES under scarcer ammo / medicine / batteries. */
+export const REACTOR_OVERRIDES: LootOverrides = {categoryWeight: {ammo: 0.75, med: 0.8, battery: 0.85, material: 0.2}};
+export const REACTOR_PROFILE: LootProfile = {id: 'reactor', label: 'Reactor', tables: MALL_TABLES, overrides: REACTOR_OVERRIDES};
 
 /**
  * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level
@@ -1232,6 +1235,9 @@ export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   office: {id: 'office', label: 'Office Space', tables: BASE_TABLES, overrides: {}},
   // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_PROFILE).
   mall: MALL_PROFILE,
+  // Task reactor-build-20261101 (primary): THE REACTOR — the mall's tables (its per-storey loose floor program serves the tiers) with
+  // the culminating level's pressure: ammo, medicine and batteries scarcer, materials a little rarer (docs/loot-tables.md overrides).
+  reactor: REACTOR_PROFILE,
 };
 
 /** The loot profile of a logical level. */

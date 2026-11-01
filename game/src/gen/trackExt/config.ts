@@ -157,7 +157,14 @@ export const TRACK_EXT_MALL: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, an
 // no longer covers the west bed end's tunnel stub, so a service hatch there could host a second annex next to the east tunnel's; the
 // brief keeps one per mall, proportionate to the ~8-10k m² core. Subway / Office configs are untouched.)
 
+/**
+ * Task reactor-build-20261101 (primary): THE REACTOR's rim station — the mall's rule (no core reserve: the reactor generator never runs
+ * the Subway skeleton step; AT MOST ONE Beyond-the-Station annex under the standard one-roll chance). The bed tunnels continue past
+ * the rim station's bed ends (the future train arrival comes through them).
+ */
+export const TRACK_EXT_REACTOR: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, annex: {...TRACK_EXT.annex, max: 1}};
+
 /** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
 export function trackExtConfig(levelId: string): TrackExtConfig {
-  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : TRACK_EXT;
+  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : TRACK_EXT;
 }

@@ -76,6 +76,7 @@ import {attributeInstancing, setAttributeInstancing} from './render/instancing';
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
+import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
@@ -271,7 +272,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN)
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -449,6 +450,7 @@ export class Game {
     };
     this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
     hookName('cough');
+    installReactorAir(this); hookName('reactorAir'); // task reactor-build-20261101 (lane AIR): after GAS (sets gas.depth on its build) — Reactor depth gas, generators (hold E), fans, HUD air line; inert elsewhere
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): after GAS (bursts add gas puffs); frame hook + section hooks. The lazy
     // enemy models (ai/enemyModels.ts) are fetched per layout through propModels like the office models.
     this.blight = installBlightBurst(this, {rand: () => this.rand()});
@@ -817,7 +819,7 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : 'Clear the station'; // (+ mall: lane GEN)
+    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : key.level === 'reactor' ? 'Restart the reactor' : 'Clear the station'; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -925,7 +927,7 @@ export class Game {
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed()}; // (+ mall: lane GEN)
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
       const key: SectionKey = {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
       const shown = levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
@@ -1104,7 +1106,9 @@ export class Game {
       ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
       : k.level === 'mall'
         ? `${this.layout.mall?.name ?? levelDisplayName('mall', this.run.seeds.mall)} — a subway station under a glass atrium and three floors of shops above it. ${n} infected reported in the station and the mall. Clear them out.`
-        : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
+        : k.level === 'reactor' // task reactor-build-20261101: THE REACTOR
+          ? `Reactor — a station on the rim of the reactor pit. The core lies dormant far below, under bands of gas. ${n} infected reported in the pit. Restart the reactor: restore the auxiliary generators or mask up, find the startup key and the fuses, bring the coolant and the core back.`
+          : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
   }
 
   /**

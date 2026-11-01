@@ -14,6 +14,7 @@ import {CLIP_MANIFEST_I12} from './manifest.iteration12.generated';
 import {CLIP_MANIFEST_COUGH} from './manifest.cough.generated'; // task gas-mask-roof-feedback-20261030: the player's gas cough
 import {CLIP_MANIFEST_T1} from './manifest.track1.generated'; // Task track1-siren-blightbelly-20261031 (lane AUDIO): Siren / Blightbelly
 import {CLIP_MANIFEST_STRAINER} from './manifest.strainer.generated'; // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): the Strainer's squish set
+import {CLIP_MANIFEST_REACTOR} from './manifest.reactor.generated'; // task reactor-build-20261101 (primary): the Reactor's machine set
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -24,7 +25,7 @@ import {CLIP_MANIFEST_STRAINER} from './manifest.strainer.generated'; // Task st
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -46,6 +47,9 @@ export const CUES = [
   // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO, tools/audio-pipeline/strainer-build.mjs): the Strainer's
   // wet squelching footfalls, wet arm-swing whoosh, fleshy claw-contact squelch and the short wet squish when it is shot.
   'strainerStep', 'strainerSwing', 'strainerContact', 'strainerSquish',
+  // Task reactor-build-20261101 (primary, tools/audio-pipeline/reactor-build.mjs): the Reactor's machines — auxiliary generator start +
+  // running loop, extraction-fan loop, switchgear breaker / fuse, coolant valve / pump, the core's startup swell + running hum loop.
+  'reactorGeneratorStart', 'reactorGeneratorLoop', 'reactorFanLoop', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorHum',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',

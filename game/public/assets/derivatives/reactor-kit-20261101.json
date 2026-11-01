@@ -1,0 +1,897 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "reactor-kit-20261101",
+ "task": "studio-reactor-build-20261101-205236-01",
+ "lane": "primary (sole Meshy / Codex producer)",
+ "status": "runtime derivatives of NEW Reactor models generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP, from Codex initial reference images (and three Codex tileable surface sources) each generated WITH the user-selected B concept image attached; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "selectedReference": {
+  "file": "B-service-cathedral-attempt2.png (private, outside Git)",
+  "sha256": "d7e5821d6146af0c4ee0cbe1485c8863c825156a227e5a132992bfe99e9df340"
+ },
+ "authority": {
+  "userGenerationApprovalSha256": "320b79de385a128d8e95eb5ad28b72dd3a2f5ee4462ad7fcd4e0a4a2a3c0ae52",
+  "caps": {
+   "credits": 1000,
+   "attempts": 50,
+   "paidPosts": 100
+  }
+ },
+ "rebuild": "node tools/asset-pipeline/props/build-reactor-kit.mjs",
+ "rawStorage": "reference/tasks/reactor-build-20261101-205236/meshy/raw/<asset>/attempt-<n>/ (immutable native GLBs + maps, read-only) + meshy/LEDGER.jsonl + MANIFEST.json; Codex originals reference/tasks/reactor-build-20261101-205236/art/codex/ (read-only) + ATTEMPTS.jsonl; outside Git",
+ "modelProof": {
+  "requested": "image-to-3d: ai_model meshy-t2.5, model_type smart-topology, should_texture, texture_resolution 2k, enable_pbr, target_formats [glb]; text-to-3d: preview ai_model meshy-t2.5 smart-topology + refine (enable_pbr, 2k, ai_model omitted: inherits the preview)",
+  "evidence": [
+   "exact create arguments in the fsynced ledger intent line before each paid call; ack with the returned task id right after",
+   "billing tier: image-to-3d 15 (T2 / T2.5 textured; 7.1 / 6 / latest bill 30), text preview 5 (7.1 / 6 / latest bill 20), refine 10",
+   "the Meshy task GET response does not echo ai_model / model_type: the request record + billing tier are the model proof"
+  ]
+ },
+ "texturePolicy": "Meshy maps kept channel for channel (re-encoded JPEG: base / metallicRoughness / normal per KIT.tex); surface sets: Codex colour source + normal / ORM derived locally from its luminance (no generation)",
+ "ledger": {
+  "attempts": 13,
+  "attemptedPOSTs": 15,
+  "billed": 195,
+  "reserved": 0,
+  "accepted": 13
+ },
+ "models": [
+  {
+   "key": "vessel",
+   "id": "reactor-vessel",
+   "url": "assets/models/reactor-vessel.glb",
+   "bytes": 2824764,
+   "tris": 27125,
+   "dims": [
+    14,
+    9.9677,
+    12.8115
+   ],
+   "what": "the dormant reactor pressure vessel (dome, CRDM housings, nozzles, hazard plinth)",
+   "scale": 14.93333,
+   "rawExtent": [
+    0.9375,
+    0.6675,
+    0.8579
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      2048,
+      2048
+     ],
+     "mime": "image/jpeg",
+     "bytes": 1060801
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 77074
+    },
+    {
+     "slot": "normal",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 215255
+    }
+   ],
+   "task": "01a198f4-0f17-719d-8ff3-94ba1c1268a8",
+   "credits": 15,
+   "codexInput": {
+    "file": "reactor-vessel-attempt1.png",
+    "sha256": "62006eb68cac5587a91b8b8d039eb93d138ebaed8e4b20095405d3f5e85ad48b",
+    "codexSession": "rollout-2026-11-01T21-04-41-01a198ed-c26d-7ca1-9508-3915f0e7dd1f.jsonl"
+   },
+   "source": {
+    "file": "raw/reactor-vessel/attempt-1/model.glb",
+    "sha256": "5e13df4f29de7dc1c28bc4651030162c17ec3168e6058f92edbfc5fc1c830b16"
+   },
+   "sha256": "7e39d047a60dff7f4fca2162a99c788d3efa2b806854e6b208c0aed522909739"
+  },
+  {
+   "key": "generator",
+   "id": "aux-generator",
+   "url": "assets/models/reactor-aux-generator.glb",
+   "bytes": 1215480,
+   "tris": 18651,
+   "dims": [
+    5.6,
+    2.4844,
+    1.6734
+   ],
+   "what": "auxiliary diesel generator set on a skid (length along X)",
+   "scale": 5.84844,
+   "rawExtent": [
+    0.9575,
+    0.4248,
+    0.2861
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 237957
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 19144
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 31845
+    }
+   ],
+   "task": "01a198f4-332d-76ed-86d3-cafe459483d5",
+   "credits": 15,
+   "codexInput": {
+    "file": "aux-generator-attempt2.png",
+    "sha256": "49a8f8ec3c8661e3193c4388bd2247fc1aa396dba3e387a95b69e8e04ec92c70",
+    "codexSession": "rollout-2026-11-01T21-05-20-01a198ee-5d61-7650-8108-18166d8e109b.jsonl"
+   },
+   "source": {
+    "file": "raw/aux-generator/attempt-2/model.glb",
+    "sha256": "c7b5572e756807dc93ded75d116edaf76ec403f326c3f77ab407b45f6521a531"
+   },
+   "sha256": "e6aa5f1b8a10c8091d6e9a2ff63a01f7504fad9ca61cadd870c0a0e26e81d36a"
+  },
+  {
+   "key": "craneTrolley",
+   "id": "crane-trolley",
+   "url": "assets/models/reactor-crane-trolley.glb",
+   "bytes": 1106572,
+   "tris": 13677,
+   "dims": [
+    4,
+    1.7812,
+    2.4242
+   ],
+   "what": "overhead crane hoist trolley (length along X)",
+   "scale": 4.2075,
+   "rawExtent": [
+    0.9507,
+    0.4233,
+    0.5762
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 328597
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16896
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 53359
+    }
+   ],
+   "task": "01a198f4-3af8-7606-9a98-c798d50be71b",
+   "credits": 15,
+   "codexInput": {
+    "file": "crane-trolley-attempt3.png",
+    "sha256": "9696ec3ad09ad90e154a7107782efad26be1732d92c6aa08cdddf7f202b519fb",
+    "codexSession": "rollout-2026-11-01T21-05-59-01a198ee-f6a1-7843-8f2f-7c34f023f4bb.jsonl"
+   },
+   "source": {
+    "file": "raw/crane-trolley/attempt-3/model.glb",
+    "sha256": "9fcf9bc1c53c5dd2700f2c961242cba04eb5fb6d4edfdce06c23b9dc2036b916"
+   },
+   "sha256": "00e29e1d47efccf591f46cc129c9add0dd0d7d56cdcfc42187057d805fb64ad6"
+  },
+  {
+   "key": "craneHook",
+   "id": "crane-hook",
+   "url": "assets/models/reactor-crane-hook.glb",
+   "bytes": 679096,
+   "tris": 9678,
+   "dims": [
+    1.0785,
+    2.2,
+    0.6991
+   ],
+   "what": "crane hook block (height along Y)",
+   "scale": 2.31294,
+   "rawExtent": [
+    0.4663,
+    0.9512,
+    0.3022
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 288130
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26175
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42772
+    }
+   ],
+   "task": "01a198f4-41f7-7710-813c-484b02be8460",
+   "credits": 15,
+   "codexInput": {
+    "file": "crane-hook-attempt4.png",
+    "sha256": "9184e9f8c20aebd7c44e2b05d185c1060d5677987f9bb1f2403671e4819b297a",
+    "codexSession": "rollout-2026-11-01T21-06-30-01a198ef-6d5e-7791-ae0d-634248c594f5.jsonl"
+   },
+   "source": {
+    "file": "raw/crane-hook/attempt-4/model.glb",
+    "sha256": "2beaa77b0c6c857d346b8b33d7fa567d3c73ce0227dfa003c255032c1f7115c4"
+   },
+   "sha256": "d1d692d1be1707d8d6c467d58df9513df9420486278cfe939f719102a7a343f2"
+  },
+  {
+   "key": "fanHousing",
+   "id": "extraction-fan",
+   "url": "assets/models/reactor-extraction-fan.glb",
+   "bytes": 902808,
+   "tris": 11579,
+   "dims": [
+    2.6,
+    2.5124,
+    1.3571
+   ],
+   "what": "wall extraction fan duct housing, empty opening facing +Z (blades procedural)",
+   "scale": 2.71951,
+   "rawExtent": [
+    0.9561,
+    0.9238,
+    0.499
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 268494
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13538
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 35648
+    }
+   ],
+   "task": "01a198f9-093d-7257-b5d1-2f386ac74ddb",
+   "credits": 15,
+   "codexInput": {
+    "file": "extraction-fan-attempt5.png",
+    "sha256": "3eeff3975bfd2ec2d7519d1a94ca526f11e1f13afbc96f3e38a8e185104e2784",
+    "codexSession": "rollout-2026-11-01T21-07-34-01a198f0-6907-7b11-a8ad-197fd8843dd3.jsonl"
+   },
+   "source": {
+    "file": "raw/extraction-fan/attempt-5/model.glb",
+    "sha256": "6fcb933e354ee49070356817f582259df164be938224f1627e3d47749eaf291d"
+   },
+   "sha256": "9d1e632ca615a4e895fa04d6f2cf6f28d7e3a0fc9d38ba1fc9e52d77fbca9efe"
+  },
+  {
+   "key": "switchgear",
+   "id": "switchgear",
+   "url": "assets/models/reactor-switchgear.glb",
+   "bytes": 739132,
+   "tris": 9155,
+   "dims": [
+    1.0972,
+    2.2,
+    1.3004
+   ],
+   "what": "one switchgear cabinet section, front +Z",
+   "scale": 2.31175,
+   "rawExtent": [
+    0.4746,
+    0.9517,
+    0.5625
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 249764
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20539
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 39925
+    }
+   ],
+   "task": "01a198f9-1098-7436-8a57-d6f92157203e",
+   "credits": 15,
+   "codexInput": {
+    "file": "switchgear-attempt6.png",
+    "sha256": "f953066fc4f714d13533ab17ff45ba33a50cb8339baaddcd34bfe1dcf2916c84",
+    "codexSession": "rollout-2026-11-01T21-08-11-01a198f0-f7ac-7890-81b2-8625790d8440.jsonl"
+   },
+   "source": {
+    "file": "raw/switchgear/attempt-6/model.glb",
+    "sha256": "97854969442e56a111bc083eda6f6c5349ff93ab5636935f4bc255884cfa021f"
+   },
+   "sha256": "448792e68b86c582dce7dc6b8496fc95223c5245a2deacd1966d95d056737964"
+  },
+  {
+   "key": "coolantPump",
+   "id": "coolant-pump",
+   "url": "assets/models/reactor-coolant-pump.glb",
+   "bytes": 869924,
+   "tris": 14559,
+   "dims": [
+    3.5,
+    1.8156,
+    1.359
+   ],
+   "what": "centrifugal coolant pump + motor on plinth (length along X)",
+   "scale": 3.68156,
+   "rawExtent": [
+    0.9507,
+    0.4932,
+    0.3691
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 275559
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20862
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 40225
+    }
+   ],
+   "task": "01a198f9-18a8-73dc-9fbb-64181af9307f",
+   "credits": 15,
+   "codexInput": {
+    "file": "coolant-pump-attempt7.png",
+    "sha256": "cd882fde3ec67d28b22aec11456b4da167a886574682b15f98e54e6e42d5006f",
+    "codexSession": "rollout-2026-11-01T21-08-41-01a198f1-6d1a-7bb3-a6e0-392989759380.jsonl"
+   },
+   "source": {
+    "file": "raw/coolant-pump/attempt-7/model.glb",
+    "sha256": "20ea834aee7869074d7e9da6f3d46f5bfbd6fae61fd820331fed34c1340b1d65"
+   },
+   "sha256": "8dacb2129e8ff721cef4e17c5091a7593479586483eecb112ebfac6a7031f40a"
+  },
+  {
+   "key": "controlConsole",
+   "id": "control-console",
+   "url": "assets/models/reactor-control-console.glb",
+   "bytes": 989972,
+   "tris": 13723,
+   "dims": [
+    3,
+    1.5417,
+    1.4907
+   ],
+   "what": "control room console desk, front +Z",
+   "scale": 3.16375,
+   "rawExtent": [
+    0.9482,
+    0.4873,
+    0.4712
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 249667
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 15651
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42024
+    }
+   ],
+   "task": "01a198f9-206c-7690-944a-fec0d7c6f89b",
+   "credits": 15,
+   "codexInput": {
+    "file": "control-console-attempt8.png",
+    "sha256": "683a6bbe38df0e3ba18a832888b440d5d0a8ce8b7f982952a665630b170f981b",
+    "codexSession": "rollout-2026-11-01T21-09-10-01a198f1-e0ba-7f73-b1b8-93695f4c5cf1.jsonl"
+   },
+   "source": {
+    "file": "raw/control-console/attempt-8/model.glb",
+    "sha256": "2c587cf1e3eb94a580b84b9826322acc96ff85177b88f65b78fc89affdceea7e"
+   },
+   "sha256": "4e22305831c43cfb110e02be644c866988f3d950a8d8bbcd49a5056705dd4e01"
+  },
+  {
+   "key": "pipeBank",
+   "id": "pipe-bank",
+   "url": "assets/models/reactor-pipe-bank.glb",
+   "bytes": 951472,
+   "tris": 14998,
+   "dims": [
+    3.8728,
+    4,
+    1.49
+   ],
+   "what": "stackable 4 m organ-pipe bank module, front +Z, flat-cut ends",
+   "scale": 4.20318,
+   "rawExtent": [
+    0.9214,
+    0.9517,
+    0.3545
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 204427
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14612
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 28459
+    }
+   ],
+   "task": "01a198f9-286f-73c4-b658-10704a34372a",
+   "credits": 15,
+   "codexInput": {
+    "file": "pipe-bank-attempt9.png",
+    "sha256": "1c6e63c13163d6767757bb582264019267fa5dc66c0abfee817c1b650399792a",
+    "codexSession": "rollout-2026-11-01T21-09-49-01a198f2-7693-79f2-a08d-4a94facbdef9.jsonl"
+   },
+   "source": {
+    "file": "raw/pipe-bank/attempt-9/model.glb",
+    "sha256": "f7cc1c44ab3dfa9ab30f302fd8c56c5448b70d4558f9bba930d1f750b69db0c9"
+   },
+   "sha256": "cac3a2b8e02a07159897bafcd7c699319e3c0461625c3090ca8275444684b884"
+  },
+  {
+   "key": "coolantValve",
+   "id": "coolant-valve",
+   "url": "assets/models/reactor-coolant-valve.glb",
+   "bytes": 777580,
+   "tris": 9946,
+   "dims": [
+    1.2892,
+    2,
+    0.8564
+   ],
+   "what": "main coolant gate valve with handwheel (pipe along X)",
+   "scale": 2.10051,
+   "rawExtent": [
+    0.6138,
+    0.9521,
+    0.4077
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 256646
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20269
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 36752
+    }
+   ],
+   "task": "01a198f9-303f-751d-bbab-a417fb645fa4",
+   "credits": 15,
+   "codexInput": {
+    "file": "coolant-valve-attempt10.png",
+    "sha256": "972b1b6e4617fe24dabfa5899721cec378f371728e58d1db0bf40d1692f88092",
+    "codexSession": "rollout-2026-11-01T21-10-29-01a198f3-11ed-7b62-9cdb-f6738d7c7b75.jsonl"
+   },
+   "source": {
+    "file": "raw/coolant-valve/attempt-10/model.glb",
+    "sha256": "e411147385e3ef2b356b71d60b772b02a3d322eb84a307f105d85ede84cd5695"
+   },
+   "sha256": "efa9f07a166f0759a6c41187ab91d129ac4b1ddb46dd670d5b7ade2c881a5184"
+  },
+  {
+   "key": "floodLamp",
+   "id": "flood-lamp",
+   "url": "assets/models/reactor-flood-lamp.glb",
+   "bytes": 266632,
+   "tris": 4075,
+   "dims": [
+    0.2398,
+    0.45,
+    0.4373
+   ],
+   "what": "caged wall flood lamp on a bracket (instanced)",
+   "scale": 0.47359,
+   "rawExtent": [
+    0.5063,
+    0.9502,
+    0.9233
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 84300
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 9487
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7775
+    }
+   ],
+   "task": "01a198f9-3771-7247-849b-5a4e6f64db6f",
+   "credits": 15,
+   "codexInput": {
+    "file": "flood-lamp-attempt11.png",
+    "sha256": "fc869e4a57914a7af014cdfa64746f2d6407c00b252b769f790842c20c3311da",
+    "codexSession": "rollout-2026-11-01T21-11-11-01a198f3-b7c1-7260-b6a7-83f969243121.jsonl"
+   },
+   "source": {
+    "file": "raw/flood-lamp/attempt-11/model.glb",
+    "sha256": "1b17fc7da5711a6d31a1273754f97fcf75b95ec2ecce7173ad4302c8f75e70a4"
+   },
+   "sha256": "f710b0f32511690b4169beeda57ad22dd79092d6d134b5d4b488be434742a61a"
+  },
+  {
+   "key": "fuseCartridge",
+   "id": "fuse-cartridge",
+   "url": "assets/models/reactor-fuse-cartridge.glb",
+   "bytes": 226784,
+   "tris": 3165,
+   "dims": [
+    0.3,
+    0.0623,
+    0.062
+   ],
+   "what": "item: ceramic cartridge fuse (length along X)",
+   "scale": 0.31331,
+   "rawExtent": [
+    0.9575,
+    0.1987,
+    0.1978
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 85995
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 8600
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7470
+    }
+   ],
+   "task": "01a198fb-61d2-71e8-97b2-0af06e44edb8",
+   "credits": 10,
+   "codexInput": null,
+   "source": {
+    "file": "raw/fuse-cartridge/attempt-12/refine/model.glb",
+    "sha256": "452f4fae7db231d77c0ea737de55c16af3927619d68ab2d0150bb77a86888418"
+   },
+   "sha256": "1ba56d844dcc55ec5cd537e65acc0da143cd9bbbce5fd4801bb06a9de5aa3244"
+  },
+  {
+   "key": "reactorKey",
+   "id": "reactor-key",
+   "url": "assets/models/reactor-key.glb",
+   "bytes": 185064,
+   "tris": 3141,
+   "dims": [
+    0.13,
+    0.0073,
+    0.0573
+   ],
+   "what": "item: control-room startup key on a red fob (longest extent)",
+   "scale": 0.13632,
+   "rawExtent": [
+    0.9536,
+    0.0537,
+    0.4204
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 51006
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5004
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 4228
+    }
+   ],
+   "task": "01a198fb-690f-70fd-8d2a-ecb477ff98d6",
+   "credits": 10,
+   "codexInput": null,
+   "source": {
+    "file": "raw/reactor-key/attempt-13/refine/model.glb",
+    "sha256": "cd00d3f4c43bbc7f217c8ba0c37e060c8755b2ef77a3104ce1d34eac658a7569"
+   },
+   "sha256": "dbd67b586c715163508054e313f29f0033b8ea7faccac5dd9ff7b9b95f1415bd"
+  }
+ ],
+ "textures": [
+  {
+   "key": "rusted-steel",
+   "id": "tex-rusted-steel",
+   "what": "riveted rusted painted steel plate",
+   "size": 1024,
+   "codex": {
+    "file": "tex-rusted-steel-attempt12.png",
+    "sha256": "e4a2b509c13db51c1438f88f3f1996ed92373dd3333c4e90714457dc96792b60",
+    "codexSession": "rollout-2026-11-01T21-11-50-01a198f4-50b6-7ee3-b46b-eb103ab4b518.jsonl"
+   },
+   "files": [
+    {
+     "url": "assets/textures/reactor/rusted-steel-color.jpg",
+     "bytes": 384785,
+     "sha256": "67ee73715a44659d093219de165c5b9e151e5e6e15188fa9359317e8fe715e25"
+    },
+    {
+     "url": "assets/textures/reactor/rusted-steel-normal.jpg",
+     "bytes": 276084,
+     "sha256": "80afd54b802af68f73ca276f77b2aad2b6b59a546d6fab05654d5fcd6159bcee"
+    },
+    {
+     "url": "assets/textures/reactor/rusted-steel-orm.jpg",
+     "bytes": 185844,
+     "sha256": "639a45cd6f5a0b0a11dae3e7005392fe4cfc4a7f2c3b656b9e3b8be7c51b74fd"
+    }
+   ]
+  },
+  {
+   "key": "grating",
+   "id": "tex-grating",
+   "what": "steel bar grating deck (dark gaps)",
+   "size": 1024,
+   "codex": {
+    "file": "tex-grating-attempt13.png",
+    "sha256": "62b607cd532633f85121c87fd1cfe7c4cc91e5bd88b22c48b9d72feea04d1d13",
+    "codexSession": "rollout-2026-11-01T21-12-29-01a198f4-e6cf-71b2-a7f3-57579c6a9dba.jsonl"
+   },
+   "files": [
+    {
+     "url": "assets/textures/reactor/grating-color.jpg",
+     "bytes": 242250,
+     "sha256": "87c788a27e09556f1396d4ddd0bb6ce33d68dbb6df7fa9d25e94eb3596a3e028"
+    },
+    {
+     "url": "assets/textures/reactor/grating-normal.jpg",
+     "bytes": 231499,
+     "sha256": "679054ce5ccb9c961d56fed48a5de3878cec7bdc33609ed2800760b36a607720"
+    },
+    {
+     "url": "assets/textures/reactor/grating-orm.jpg",
+     "bytes": 176280,
+     "sha256": "917ae3cf6257edec8ad5f8ed062735510733d25e965b114a7f10c1ef4c73d6b5"
+    }
+   ]
+  },
+  {
+   "key": "pit-concrete",
+   "id": "tex-pit-concrete",
+   "what": "board-formed stained pit concrete",
+   "size": 1024,
+   "codex": {
+    "file": "tex-pit-concrete-attempt14.png",
+    "sha256": "b41a924cbe672a2edb11b67df9a4368b6542509d3a5deeef0a35b2e7ce07b01e",
+    "codexSession": "rollout-2026-11-01T21-13-03-01a198f5-6ba4-7922-a4ba-00e0e2abe704.jsonl"
+   },
+   "files": [
+    {
+     "url": "assets/textures/reactor/pit-concrete-color.jpg",
+     "bytes": 405719,
+     "sha256": "2e4ad73d30121949c12f9c850c32b863493842480e961ccfc264e646719a39bc"
+    },
+    {
+     "url": "assets/textures/reactor/pit-concrete-normal.jpg",
+     "bytes": 253555,
+     "sha256": "4a5565400326592ee79250e61f9b21aa1425f66317e9735774e30634741fd75a"
+    },
+    {
+     "url": "assets/textures/reactor/pit-concrete-orm.jpg",
+     "bytes": 169154,
+     "sha256": "d3d3a8a8c0648945e7c742bad584b5a6532254236a19874c2ee3012113aedc68"
+    }
+   ]
+  }
+ ]
+}

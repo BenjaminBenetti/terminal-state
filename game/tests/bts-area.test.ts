@@ -116,7 +116,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     // a pure function of the seed: repeated / interleaved calls agree; no level type has a chance of its own
     for (let i = 0; i < 200; i++) expect(btsAreaRoll(corpus(i))).toBe(btsAreaRoll(corpus(i)));
     for (const id of TRACK_LEVELS) expect('chance' in (LEVELS[id].trackExtensions as TrackExtConfig).annex, id).toBe(false);
-    expect(TRACK_LEVELS).toEqual(['subway', 'office', 'mall']);
+    expect(TRACK_LEVELS).toEqual(['subway', 'office', 'mall', 'reactor']); // (+ reactor: task reactor-build-20261101 — TRACK_EXT_REACTOR)
   });
 
   it('ABSENT on every level type: zero annexes and nothing of the area; the tunnels stay ordinary tunnels', () => {
@@ -240,7 +240,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     expect(attempts.length).toBeGreaterThanOrEqual(6);
     for (const a of attempts) expect(a.extensions!.area).toEqual({roll: btsAreaRoll(seed), chance: BTS_AREA_CHANCE, present: true});
     // a revisit: the run keeps only the level seeds; the level regenerates identically (the area included)
-    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1], reactor: ABSENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     for (const level of TRACK_LEVELS) {
       const s = run.seeds[level], first = gen(level, s), again = LEVELS[level].generate('main', {levelSeed: run.seeds[level], startWeapon: 'pistol'} as never);
       expect(again.extensions!.area!.present, level).toBe(btsAreaPresent(s));

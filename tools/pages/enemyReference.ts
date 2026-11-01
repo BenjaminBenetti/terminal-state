@@ -37,7 +37,7 @@ import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
-import {TRACK_EXT, TRACK_EXT_MALL} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
+import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -89,7 +89,7 @@ const F = {
   strainer: 'game/src/ai/strainer.ts', // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
-  mallIndex: 'game/src/gen/mall/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
+  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
 } as const;
@@ -236,6 +236,19 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       // lane INTEG (Track2 integration): the station's service annex — the same zone context as the Subway / Office; the mall grows at
       // most TRACK_EXT_MALL.annex.max (1) annex (task mall-playtest-revision-20261031, lane GEN)
       service: {storeys: 'one seeded service annex off the east track tunnel of the station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_MALL.annex.max], note: SERVICE_ZONE_NOTE}},
+    },
+  },
+  // Task reactor-build-20261101 (primary + lane GEN): THE REACTOR — depth-graded contexts (the rim, upper / deep walkway tiers, the core
+  // floor) + the rim station's annex.
+  reactor: {
+    generator: {fn: 'generateReactorLevel', file: F.reactorIndex,
+      note: `ONE continuous level (LevelId 'reactor', tier 3): a rim subway station at the TOP of a vertical industrial pit, walkway tiers going down and the core floor round the dormant reactor vessel, generated once per level seed: placeOfficeEnemies runs the station context once (the rim storey), the floor context once per UPPER walkway tier, the ring context once per DEEP walkway tier and the pit context once (the core floor), each on its own fork (reactor-enemies-<storey>) with its OWN depth-graded family pool, and tags its spawns with the context; then (Track 2) the rim station's tunnel / service annex (at most ${TRACK_EXT_REACTOR.annex.max}) is attached and placeServiceSpawns runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (the deep-tier Siren eligibility included) and applyFamilySpacing keeps the Sirens apart. Moving between tiers never rerolls anything.`},
+    contexts: {
+      station: {storeys: 'the rim storey (level 0: the station platform, the rim gallery, the rim control office)', runs: 1},
+      floor: {storeys: 'one UPPER walkway tier (each of tiers 1-2: galleries, landings, bridges, side rooms)', runs: 2},
+      ring: {storeys: 'one DEEP walkway tier (each of tiers 3-4: galleries, landings, bridges, side rooms incl. the switchgear room)', runs: 2},
+      pit: {storeys: 'the core floor (round the vessel, the pump hall, the control room)', runs: 1},
+      service: {storeys: 'one seeded service annex off a rim-station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_REACTOR.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

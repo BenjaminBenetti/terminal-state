@@ -122,6 +122,7 @@
             <button type="button" class="level-card" data-level="subway" role="radio" aria-checked="true"><b>Subway</b><span>A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.</span></button>
             <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator. One continuous level.</span></button>
             <button type="button" class="level-card" data-level="mall" role="radio" aria-checked="false"><b>Shopping Center</b><span>A subway station under a small glass atrium — look up to the sky, then explore three floors of shops, corridors and arcades by escalator, stairs or the glass elevator. A different center every run. One continuous level.</span></button>
+            <button type="button" class="level-card" data-level="reactor" role="radio" aria-checked="false"><b>Reactor</b><span>A station on the rim of a vast industrial pit — descend the gantries through deepening gas, restart the auxiliary generators or mask up, and bring the dormant reactor back to life. The hardest level. One continuous level.</span></button>
           </div>
         </div>
         <p id="station-intro" class="intro"></p>
@@ -146,6 +147,7 @@
           <button id="btn-resume" class="primary">Resume</button>
           <button id="btn-travel">Travel to Office Space</button>
           <button id="btn-travel-2">Travel to the Shopping Center</button>
+          <button id="btn-travel-3">Travel to the Reactor</button>
           <button id="btn-new-game">New game</button>
           <button class="btn-fullscreen" type="button">Fullscreen</button>
         </div>
@@ -155,7 +157,7 @@
         </div>
         <div class="confirm danger hidden" id="confirm-new">
           <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
-          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-cancel" type="button">Cancel</button></div>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
         <p class="fine fs-status"></p>
         <div class="settings">
@@ -203,6 +205,7 @@
           <button id="btn-death-new">New game · Subway</button>
           <button id="btn-death-new-other">New game · Office Space</button>
           <button id="btn-death-new-third">New game · Shopping Center</button>
+          <button id="btn-death-new-fourth">New game · Reactor</button>
         </div>
       </div>
     </section>
@@ -217,11 +220,12 @@
           <button id="btn-win-stay" class="primary">Keep exploring</button>
           <button id="btn-win-travel">Travel to Office Space</button>
           <button id="btn-win-travel-2">Travel to the Shopping Center</button>
+          <button id="btn-win-travel-3">Travel to the Reactor</button>
           <button id="btn-win-new">New game</button>
         </div>
         <div class="confirm danger hidden" id="confirm-win-new">
           <p><b>Start a new game?</b> Everything resets — a fresh starter kit, full health, no gear or injuries — and every level is generated anew. This run is lost.</p>
-          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-cancel" type="button">Cancel</button></div>
+          <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
       </div>
     </section>
