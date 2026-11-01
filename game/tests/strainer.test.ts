@@ -5,7 +5,7 @@
 //  - non-service picks bit-identical to the pre-change pools (200k rolls per level pool, room modifiers included);
 //  - a Node simulation of many tagged service-annex spawns: Strainers only in 'service' spawns, at ~0.08;
 //  - stats vs the ordinary zombie (read from source), the melee brain (long reach, claw contact at the clip's hit time, no ladder
-//    links), the actor on a contract-shaped synthetic rig (TODO-ASSET: the real GLB is checked by tests/strainer-asset.test.ts),
+//    links), the actor on a contract-shaped synthetic rig (the real GLB is checked by tests/strainer-contract.test.ts),
 //    the head zone (hunched forward, scaled), the counted zombie fallback, the ragdoll / corpse, save / load of a killed Strainer.
 import {describe, expect, it} from 'vitest';
 import {writeFileSync} from 'node:fs';
@@ -44,7 +44,7 @@ const spawnAt = (x: number, z: number, yaw = 0): ZombieSpawn => ({x, z, yaw, typ
 /** The pool exactly as it was before the Strainer existed (its row removed). */
 const before = (pool: FamilyPool): FamilyPool => pool.filter(([f]) => f !== 'strainer');
 
-// --- a contract-shaped synthetic rig (TODO-ASSET: the real enemy-strainer.glb replaces it in strainer-asset.test.ts) ----------
+// --- a contract-shaped synthetic rig (the real enemy-strainer.glb is exercised in strainer-contract.test.ts) ----------
 const JOINTS: readonly [string, string | null, [number, number, number]][] = [
   ['Root', null, [0, 0, 0]], ['Hips', 'Root', [0, 1.1, 0]], ['Spine', 'Hips', [0, 1.32, 0.03]], ['Chest', 'Spine', [0, 1.56, 0.07]],
   ['Neck', 'Chest', [0, 1.8, 0.12]], ['Head', 'Neck', [0, 1.9, 0.15]],
@@ -262,7 +262,7 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(T.attackRange).toBeGreaterThan(S.attackRange); // the long arms
     expect(T.attackRange).toBe(strainerAttackRange(STRAINER_ASSET.reachM));
     expect(T.attackRange).toBeCloseTo(STRAINER_ASSET.reachM + PLAYER_BODY_RADIUS, 6);
-    expect(T.attackRange / S.attackRange).toBeGreaterThan(1.4); // provisional ~1.5x until the GLB's reachM (TODO-ASSET)
+    expect(T.attackRange / S.attackRange).toBeGreaterThan(1.4); // the GLB's reach: 1.931 / 1.35 = 1.43x
     expect(T.attackRange).toBeLessThanOrEqual(2.3);
     expect(T.attackCooldown!).toBeGreaterThan(0.45); // the brain's default (the zombie's)
     expect(T.attackCooldown!).toBeLessThan(1);
@@ -403,7 +403,7 @@ describe('Strainer: actor (shared rig), head zone, fallback, ragdoll, persistenc
     const eye = (y: number) => new THREE.Vector3(3, y, 12);
     expect(first(eye(head.a.y), new THREE.Vector3(head.a.x - 3, 0, head.a.z - 12).normalize())).toBe('head');
     expect(first(eye(1.4), new THREE.Vector3(0, 0, -1))).toBe('torso');
-    // the defaults when the extras omit the head (STRAINER_ASSET, TODO-ASSET)
+    // the defaults when the extras omit the head (STRAINER_ASSET)
     const d = new StrainerActor(syntheticStrainer(), spawnAt(0, 0, 0), rng(5));
     d.root.position.y = 0;
     const dh = d.updateVolumes()[0];

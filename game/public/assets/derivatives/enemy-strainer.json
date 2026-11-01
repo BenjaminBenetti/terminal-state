@@ -6,7 +6,7 @@
  "lane": "ASSET",
  "date": "2026-11-01",
  "generatedBy": "tools/asset-pipeline/enemy/build-strainer.mjs",
- "builtAt": "2026-11-01T07:47:00.900Z",
+ "builtAt": "2026-11-01T08:08:56.604Z",
  "buildSeconds": 14,
  "status": {
   "approved": false,
@@ -150,8 +150,8 @@
  "outputs": {
   "glb": {
    "path": "game/public/assets/models/enemy-strainer.glb",
-   "bytes": 2377572,
-   "sha256": "d61abb73b60e3de1dddc68cdaa36b5e0574da7b70bbc9d8eba40de848b61b07c",
+   "bytes": 2377612,
+   "sha256": "30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a",
    "format": "glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG textures; JOINTS_0 u8 / WEIGHTS_0 normalized u8; one SkinnedMesh node"
   },
   "textures": {
@@ -2676,14 +2676,23 @@
   }
  },
  "skinning": {
-  "method": "zombie/lib/skin.mjs region classification + chain weights + masked Laplacian smoothing on the welded source mesh (UV-seam copies share weights), + face curtain -> Head, + loose strands follow their roots",
-  "faceCurtain": {
-   "verticesChanged": 869,
-   "z0": 0.2,
-   "z1": 0.23,
-   "maxAbsX": 0.2,
-   "aboveNeckM": 0.08,
-   "note": "torso-region vertices below the neck base + aboveNeckM, |x| < maxAbsX, are blended to Head by smoothstep(z0, z1, z): the grille bar / frond curtain hangs 0.2-0.27 m in front of a chest whose front surface is at z <= 0.19"
+  "method": "zombie/lib/skin.mjs region classification + chain weights + masked Laplacian smoothing on the welded source mesh (UV-seam copies share weights), + lateral Neck / Head fade, + jaw / rib-cage junction diffusion, + loose strands follow their roots",
+  "neckLateralFade": {
+   "verticesChanged": 976,
+   "weightMovedToChest": 424.2644,
+   "x0": 0.16,
+   "x1": 0.25,
+   "note": "torso-region main-body vertices: Neck + Head weight x (1 - smoothstep(x0, x1, |x|)), the remainder to Chest"
+  },
+  "jawJunction": {
+   "zoneVertices": 2794,
+   "verticesChanged": 2794,
+   "below": 0.14,
+   "above": 0.06,
+   "maxAbsX": 0.25,
+   "iterations": 24,
+   "lambda": 0.5,
+   "note": "torso-region main-body vertices from Neck.y - below to Head.y + above, |x| < maxAbsX: Laplacian diffusion of the normalised Chest / Neck / Head shares (neighbours outside the zone are fixed boundary values); each vertex keeps its Chest + Neck + Head total and all other influences"
   },
   "strands": {
    "strands": 254,
@@ -2691,14 +2700,13 @@
    "byDominantBone": {
     "Hips": 40,
     "L_Hand": 1,
-    "Spine": 23,
+    "Spine": 42,
     "R_Hand": 1,
-    "Chest": 45,
-    "Head": 63,
+    "Chest": 59,
+    "Head": 43,
     "R_Forearm": 26,
     "L_UpperArm": 9,
     "L_Forearm": 25,
-    "Neck": 13,
     "R_UpperArm": 8
    },
    "maxRootGapM": 0.0512,
@@ -2847,31 +2855,70 @@
    "attackDuration": 1.4,
    "attackImpact": 0.6,
    "attackHitTime": 0.6,
-   "attackReachM": 1.493,
+   "attackReachM": 1.631,
    "walkGroundSpeed": 0.62,
    "runGroundSpeed": 2.4,
    "note": "ZombieStats.attackDuration / attackImpact should match Attack (the right claw sweeps through the front at chest height at attackHitTime; reachM = horizontal root -> claw tip at that frame, actor scale 1); locomotion clips are authored in place for groundSpeed at timeScale 1 (ai/zombieActor.ts scales by speed / (groundSpeed x actor scale), clamped 0.35..1.8)"
   },
   "deathSolve": {
+   "method": "lib/strainer-clips.mjs solveStrainerDeath (zombie/lib/clipsolve.mjs coordinate descent + cost on regionFloorReport, Strainer ranges)",
+   "ranges": {
+    "hipsPitch": [
+     -95,
+     -80
+    ],
+    "hipsRoll": [
+     -12,
+     12
+    ],
+    "neck": [
+     -16,
+     4
+    ],
+    "head": [
+     -14,
+     4
+    ],
+    "headYaw": [
+     -16,
+     0
+    ],
+    "armLz": [
+     -0.8,
+     0
+    ],
+    "armRz": [
+     -0.8,
+     0
+    ],
+    "footLz": [
+     0,
+     0.5
+    ],
+    "footRz": [
+     -0.2,
+     0.35
+    ]
+   },
    "tune": {
     "hipsPitch": -95,
     "hipsRoll": 9.125,
-    "neck": 10,
-    "head": -6,
-    "headYaw": -38,
+    "neck": -16,
+    "head": 0.156,
+    "headYaw": -10,
     "armLz": -0.688,
     "armRz": -0.694,
     "footLz": 0.42,
     "footRz": 0.12
    },
    "hipsY": -0.836,
-   "cost": 0.03587,
+   "cost": 0.045,
    "evals": 109,
    "contact": {
     "legR": 0.012,
-    "head": 0.094,
-    "pelvis": 0.01,
     "torso": 0.039,
+    "pelvis": 0.01,
+    "head": 0.139,
     "armL": 0.155,
     "armR": 0.025,
     "legL": -0.033
@@ -3002,23 +3049,27 @@
    }
   },
   "footSkate": {
-   "method": "stance frames (phase 0.06..beta-0.06): mean horizontal position of the 20 lowest foot vertices, frame-to-frame speed relative to the treadmill (stance foot should slide back at exactly groundSpeed); 0 = no skating",
+   "method": "flat-foot stance frames (phase 0.15..0.75 x beta; Idle all frames): mean horizontal position of the fixed sole vertex set (bind foot vertices below 3 cm), frame-to-frame speed relative to the treadmill (the stance foot slides back at exactly groundSpeed in place); 0 = no skating",
+   "soleVertices": {
+    "L": 429,
+    "R": 405
+   },
    "Idle": {
-    "maxSlipMps": 0.777,
-    "meanSlipMps": 0.324,
+    "maxSlipMps": 0,
+    "meanSlipMps": 0,
     "framesTested": 240,
     "groundSpeed": 0
    },
    "Walk": {
-    "maxSlipMps": 1.22,
-    "meanSlipMps": 0.392,
-    "framesTested": 54,
+    "maxSlipMps": 0,
+    "meanSlipMps": 0,
+    "framesTested": 38,
     "groundSpeed": 0.62
    },
    "Run": {
-    "maxSlipMps": 1.924,
-    "meanSlipMps": 0.502,
-    "framesTested": 12,
+    "maxSlipMps": 0,
+    "meanSlipMps": 0,
+    "framesTested": 10,
     "groundSpeed": 2.4
    }
   },
@@ -3055,9 +3106,9 @@
      "framesTested": 14
     },
     "Attack": {
-     "maxDepthM": 0.1046,
-     "worstT": 0.86667,
-     "maxVertsDeeperThan1cm": 9,
+     "maxDepthM": 0,
+     "worstT": null,
+     "maxVertsDeeperThan1cm": 0,
      "framesTested": 22
     },
     "Hit": {
@@ -3095,7 +3146,7 @@
     "Run": {
      "maxDepthM": 0.105,
      "worstT": 0.6,
-     "maxVertsDeeperThan1cm": 25,
+     "maxVertsDeeperThan1cm": 35,
      "framesTested": 14
     },
     "Attack": {
@@ -3111,9 +3162,9 @@
      "framesTested": 8
     },
     "Death": {
-     "maxDepthM": 0.091,
-     "worstT": 1.06667,
-     "maxVertsDeeperThan1cm": 26,
+     "maxDepthM": 0.0877,
+     "worstT": 0.6,
+     "maxVertsDeeperThan1cm": 25,
      "framesTested": 32
     }
    },
@@ -3166,33 +3217,33 @@
    "hitFrame": 18,
    "hit": {
     "t": 0.6,
-    "reachM": 1.493,
-    "reachR": 1.493,
-    "reachL": 1.163,
+    "reachM": 1.631,
+    "reachR": 1.631,
+    "reachL": 1.228,
     "clawTipR": [
-     0.539,
-     1.028,
-     1.392
+     0.128,
+     1.334,
+     1.626
     ],
     "clawTipL": [
-     0.818,
-     0.527,
-     0.826
+     0.84,
+     0.745,
+     0.896
     ],
     "frontMostR": [
-     0.432,
-     1.05,
-     1.402
+     0.128,
+     1.334,
+     1.626
     ]
    },
    "maxReachR": {
-    "m": 1.558,
-    "t": 0.4
+    "m": 1.631,
+    "t": 0.6
    },
    "centreLineCrossingR": {
-    "t": 0.577,
-    "y": 1.212,
-    "z": 1.462
+    "t": 0.594,
+    "y": 1.357,
+    "z": 1.595
    },
    "handVertices": {
     "L": 779,
@@ -3342,201 +3393,201 @@
     {
      "t": 0.46667,
      "R": [
-      -1.494,
-      1.532,
-      -0.389
+      -1.505,
+      1.564,
+      -0.365
      ],
-     "reachR": 1.544,
+     "reachR": 1.549,
      "L": [
-      -0.074,
-      0.92,
-      1.07
+      -0.076,
+      0.949,
+      1.073
      ],
-     "reachL": 1.073,
+     "reachL": 1.075,
      "frontR": [
-      -1.085,
-      1.617,
-      -0.234
+      -1.086,
+      1.633,
+      -0.23
      ]
     },
     {
      "t": 0.53333,
      "R": [
-      -1.195,
-      1.374,
-      0.961
+      -1.307,
+      1.526,
+      0.831
      ],
-     "reachR": 1.533,
+     "reachR": 1.549,
      "L": [
-      0.304,
-      0.75,
-      1.081
+      0.302,
+      0.861,
+      1.102
      ],
-     "reachL": 1.123,
+     "reachL": 1.142,
      "frontR": [
-      -1.167,
-      1.392,
-      0.971
+      -1.279,
+      1.544,
+      0.84
      ]
     },
     {
      "t": 0.6,
      "R": [
-      0.539,
-      1.028,
-      1.392
+      0.128,
+      1.334,
+      1.626
      ],
-     "reachR": 1.493,
+     "reachR": 1.631,
      "L": [
-      0.818,
-      0.527,
-      0.826
+      0.84,
+      0.745,
+      0.896
      ],
-     "reachL": 1.163,
+     "reachL": 1.228,
      "frontR": [
-      0.432,
-      1.05,
-      1.402
+      0.128,
+      1.334,
+      1.626
      ]
     },
     {
      "t": 0.66667,
      "R": [
-      0.958,
-      1.208,
-      1.01
+      0.632,
+      1.18,
+      1.325
      ],
-     "reachR": 1.392,
+     "reachR": 1.468,
      "L": [
-      0.971,
-      0.537,
-      0.645
+      0.982,
+      0.716,
+      0.733
      ],
-     "reachL": 1.166,
+     "reachL": 1.225,
      "frontR": [
-      0.796,
-      1.097,
-      1.062
+      0.539,
+      1.144,
+      1.355
      ]
     },
     {
      "t": 0.73333,
      "R": [
-      1.05,
-      1.24,
-      0.849
+      0.816,
+      1.176,
+      1.109
      ],
-     "reachR": 1.35,
+     "reachR": 1.377,
      "L": [
-      1.038,
-      0.546,
-      0.534
+      1.048,
+      0.706,
+      0.635
      ],
-     "reachL": 1.168,
+     "reachL": 1.226,
      "frontR": [
-      0.942,
-      1.24,
-      0.894
+      0.652,
+      1.094,
+      1.159
      ]
     },
     {
      "t": 0.8,
      "R": [
-      1.058,
-      1.23,
-      0.818
+      0.834,
+      1.169,
+      1.07
      ],
-     "reachR": 1.337,
+     "reachR": 1.357,
      "L": [
-      1.045,
-      0.547,
-      0.516
+      1.055,
+      0.701,
+      0.618
      ],
-     "reachL": 1.166,
+     "reachL": 1.223,
      "frontR": [
-      0.852,
-      1.216,
-      0.866
+      0.674,
+      1.081,
+      1.122
      ]
     },
     {
      "t": 0.86667,
      "R": [
-      0.929,
-      1.03,
-      0.883
+      0.64,
+      1.005,
+      1.145
      ],
-     "reachR": 1.282,
+     "reachR": 1.311,
      "L": [
-      0.966,
-      0.552,
-      0.578
+      0.967,
+      0.643,
+      0.668
      ],
-     "reachL": 1.126,
+     "reachL": 1.175,
      "frontR": [
-      0.821,
-      1.052,
-      0.92
+      0.568,
+      0.935,
+      1.154
      ]
     },
     {
      "t": 0.93333,
      "R": [
-      0.509,
-      0.681,
-      0.973
+      0.256,
+      0.726,
+      1.14
      ],
-     "reachR": 1.099,
+     "reachR": 1.169,
      "L": [
-      0.814,
-      0.537,
-      0.655
+      0.804,
+      0.585,
+      0.714
      ],
-     "reachL": 1.045,
+     "reachL": 1.075,
      "frontR": [
-      0.459,
-      0.718,
-      0.98
+      0.251,
+      0.723,
+      1.141
      ]
     },
     {
      "t": 1,
      "R": [
-      -0.073,
-      0.5,
-      0.923
+      -0.171,
+      0.548,
+      0.976
      ],
-     "reachR": 0.926,
+     "reachR": 0.991,
      "L": [
-      0.635,
-      0.499,
-      0.702
+      0.632,
+      0.525,
+      0.72
      ],
-     "reachL": 0.947,
+     "reachL": 0.958,
      "frontR": [
-      -0.073,
-      0.5,
-      0.923
+      -0.155,
+      0.52,
+      0.976
      ]
     },
     {
      "t": 1.06667,
      "R": [
-      -0.378,
-      0.513,
-      0.825
+      -0.381,
+      0.515,
+      0.826
      ],
-     "reachR": 0.907,
+     "reachR": 0.91,
      "L": [
       0.538,
-      0.519,
-      0.704
+      0.52,
+      0.705
      ],
-     "reachL": 0.886,
+     "reachL": 0.887,
      "frontR": [
-      -0.366,
-      0.484,
-      0.829
+      -0.369,
+      0.486,
+      0.83
      ]
     },
     {
@@ -3644,16 +3695,17 @@
   },
   "motionStretch": {
    "triangles": 20532,
-   "p50": 1,
-   "p99": 4.469,
-   "max": 10.33,
-   "over2x": 692,
-   "over3x": 383,
-   "fractionOver": 0.0187,
+   "p50": 1.001,
+   "p99": 1.838,
+   "max": 4.64,
+   "over2x": 101,
+   "over3x": 12,
+   "fractionOver": 0.0006,
    "worstClips": {
-    "Hit": 47,
-    "Death": 156,
-    "Attack": 4
+    "Attack": 55,
+    "Death": 89,
+    "Hit": 52,
+    "Run": 11
    },
    "poses": 112,
    "method": "per triangle: worst edge length ratio posed / bind over every 3rd frame of all six clips (CPU skinning)"
@@ -3661,28 +3713,28 @@
  },
  "hit": {
   "radii": {
-   "head": 0.2235,
+   "head": 0.2101,
    "torso": 0.241,
    "arm": 0.0633,
    "leg": 0.1004,
    "torsoP90": 0.2806,
-   "method": "torso: 75th pct distance of the torso core (crotch..neck, z < 0.2: not the frond curtain) to the Hips-Spine-Chest-Neck chain (capsule Hips->Neck in ai/zombieActor.ts updateVolumes); head: 75th pct distance of the head vertices to the Head joint -> head end segment (the crown points forward-down), plus the headshot sphere; limbs: autorig bodyProfile radii x1.35 (arm) / x1.4 (leg) like zombie/lib/hit.mjs (unclamped)"
+   "method": "torso: 75th pct distance of the torso core (crotch..neck, z < 0.2: not the rib cage / grille bar standing in front) to the Hips-Spine-Chest-Neck chain (capsule Hips->Neck in ai/zombieActor.ts updateVolumes); head: 75th pct distance of the head vertices to the Head joint -> head end segment (the crown points forward-down), plus the headshot sphere; limbs: autorig bodyProfile radii x1.35 (arm) / x1.4 (leg) like zombie/lib/hit.mjs (unclamped)"
   },
   "headSphere": {
    "bone": "Head",
    "center": [
-    0,
+    -0.0006,
     1.9481,
     0.228
    ],
    "offset": [
-    0,
+    -0.0006,
     0.0411,
     0.1474
    ],
-   "radius": 0.2705,
-   "radiusMax": 0.4,
-   "vertices": 3070,
+   "radius": 0.257,
+   "radiusMax": 0.3426,
+   "vertices": 2827,
    "method": "bind pose: torso-region vertices above the neck base with Head weight >= 0.5 (the crown / face cage); centre = their bbox centre, radius = 85th pct distance to it (radiusMax = enclosing)"
   },
   "collider": {

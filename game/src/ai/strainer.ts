@@ -12,9 +12,8 @@
 //
 // ASSET CONTRACT (lane ASSET: game/public/assets/models/enemy-strainer.glb — one skinned body on the shared 18-joint skeleton, clips
 // Idle / Walk / Run / Attack / Hit / Death, feet at the origin, +Z facing, bind height 2.15 m, scene extras `enemyStrainer` {heightM,
-// headCenter, headRadius, reachM, attackHitTime, clips}). STRAINER_ASSET mirrors those numbers for the static stats / the reference;
-// values marked TODO-ASSET are PROVISIONAL until the GLB lands — then they are set to the GLB's extras (tests/strainer-asset.test.ts
-// checks the agreement once the file exists).
+// headCenter, headRadius, reachM, attackHitTime, clips}). STRAINER_ASSET mirrors those numbers for the static stats / the reference
+// (tests/strainer-contract.test.ts checks the agreement; tests/strainer-asset.test.ts checks the derivative itself).
 
 import {ZOMBIE_STATS, ZombieBrain, type BrainOutput, type BrainWorld, type ZombieStats} from './brain';
 import type {EnemyCues} from './creatureArchetypes';
@@ -23,30 +22,27 @@ import type {EnemyCues} from './creatureArchetypes';
 export const PLAYER_BODY_RADIUS = 0.3;
 
 /**
- * The asset contract numbers the gameplay reads (model metres / seconds at scale 1). TODO-ASSET: provisional until
- * enemy-strainer.glb lands; then every value = the GLB's `enemyStrainer` extras (tests/strainer-asset.test.ts, skipped until then).
+ * The asset contract numbers the gameplay reads (model metres / seconds at scale 1) = the `enemyStrainer` extras of
+ * enemy-strainer.glb (tools/asset-pipeline/enemy/build-strainer.mjs; tests/strainer-contract.test.ts checks the agreement).
  */
 export const STRAINER_ASSET = {
-  /** Bind height (feet -> crown, m). Contract: 2.15. */
+  /** Bind height (feet -> crown, m): ~21 % taller than the 1.78 m zombie, under the 2.3 m annex doors. */
   heightM: 2.15,
-  /** Head hit-sphere centre in the BIND pose (model metres, +Z forward): the head is hunched FORWARD of the body. TODO-ASSET. */
-  headCenter: [0, 1.97, 0.17] as readonly [number, number, number],
-  /** Head hit-sphere radius (model metres; the gameplay head zone). TODO-ASSET. */
-  headRadius: 0.13,
-  /**
-   * Horizontal claw reach (m) from the feet origin at the Attack clip's hit frame. TODO-ASSET: provisional 1.7 so the attack range
-   * (reach + the player's body radius) is 2.0 m = ~1.5x the shambler's 1.35 (the brief's provisional rule until the GLB's reachM).
-   */
-  reachM: 1.7,
-  /** Seconds into the Attack clip when the claws land (brain attackImpact). TODO-ASSET. */
+  /** Head hit-sphere centre in the BIND pose (model metres, +Z forward): the crown is hunched FORWARD of the body (on the Head bone). */
+  headCenter: [-0.0006, 1.9481, 0.228] as readonly [number, number, number],
+  /** Head hit-sphere radius (model metres): the measured rib-grille crown (~0.5 m wide), larger than a zombie's 0.10-0.17 head. */
+  headRadius: 0.257,
+  /** Horizontal claw reach (m) from the feet origin at the Attack clip's hit frame (the right claw tip at chest height). */
+  reachM: 1.631,
+  /** Seconds into the Attack clip when the claws land (brain attackImpact). */
   attackHitTime: 0.6,
-  /** Clip durations (s): the brain's attackDuration = the Attack clip. TODO-ASSET. */
-  attackDuration: 1.3,
-  /** Ground speeds (m/s) the in-place Walk / Run clips were authored for at timeScale 1 (extras clips.*.groundSpeed win). TODO-ASSET. */
-  walkGroundSpeed: 0.55,
-  runGroundSpeed: 2.2,
-  /** Gameplay limb / torso hit radii (model metres; extras hitRadii win): a lanky body — thinner than the zombie's. TODO-ASSET. */
-  hitRadii: {torso: 0.2, arm: 0.075, leg: 0.095},
+  /** Clip durations (s): the brain's attackDuration = the Attack clip. */
+  attackDuration: 1.4,
+  /** Ground speeds (m/s) the in-place Walk / Run clips were authored for at timeScale 1 (extras clips.*.groundSpeed win). */
+  walkGroundSpeed: 0.62,
+  runGroundSpeed: 2.4,
+  /** Gameplay limb / torso hit radii (model metres; extras hitRadii win): a lanky body — thinner limbs than the zombie's. */
+  hitRadii: {torso: 0.241, arm: 0.0633, leg: 0.1004},
 } as const;
 
 /**
@@ -63,8 +59,7 @@ export const STRAINER_MAX_TOP_M = 2.25;
  * 2.3 m (no invisible reach from a bad number). The brain adds its usual 0.45 m step-away margin at the hit frame (brain.ts 'attack').
  */
 export function strainerAttackRange(reachM: number): number {
-  const r = Math.round((reachM + PLAYER_BODY_RADIUS) * 100) / 100;
-  return Math.min(2.3, Math.max(ZOMBIE_STATS.shambler.attackRange + 0.15, r));
+  return Math.min(2.3, Math.max(ZOMBIE_STATS.shambler.attackRange + 0.15, reachM + PLAYER_BODY_RADIUS));
 }
 
 /**
@@ -74,9 +69,9 @@ export function strainerAttackRange(reachM: number): number {
  *  - attackDamage 13 = 1.3x: the long claws hit harder than a zombie's swipe (below the coated zombie's 15);
  *  - wanderSpeed 0.585 = 0.9x; chaseSpeed 2.45 (~0.96x, NEVER faster than the zombie): long strides, not a sprinter — a walking
  *    player (3.4 m/s) outpaces it;
- *  - attackRange 2.0 = reach + the player's radius (strainerAttackRange(STRAINER_ASSET.reachM)), LONGER than the zombie's 1.35
- *    because of the long arms (TODO-ASSET: the GLB's reachM);
- *  - attackDuration / attackImpact = the Attack clip / its attackHitTime (claw contact timed by the clip; TODO-ASSET);
+ *  - attackRange 1.931 = the GLB's claw reach 1.631 + the player's radius (strainerAttackRange(STRAINER_ASSET.reachM)), LONGER than
+ *    the zombie's 1.35 because of the long arms;
+ *  - attackDuration 1.4 / attackImpact 0.6 = the Attack clip / its attackHitTime (claw contact timed by the clip);
  *  - attackCooldown 0.6 s (zombie default 0.45): slightly longer recovery after the big swing;
  *  - radius 0.36 m: the lanky body's collider (passes every 1.0 m opening with 0.14 m per side); turnRate 4.0 (default 4.5).
  * Unchanged: sightRange 18, the Run chase clip, the body clear height (it stoops under soffits like every enemy: BODY_CLEAR).

@@ -120,10 +120,11 @@ async function main() {
   if (want('weights')) {
     const cells = [];
     const bp = posed(M, null, 0);
-    for (const [yaw, lab, cy, h] of [[0, 'front', 1.1, 2.35], [90, 'side', 1.1, 2.35], [180, 'back', 1.1, 2.35], [35, 'upper 3/4', 1.65, 1.0]]) {
+    for (const [yaw, lab, cy, h, tex] of [[0, 'front', 1.1, 2.35], [90, 'side', 1.1, 2.35], [180, 'back', 1.1, 2.35], [35, 'upper 3/4', 1.65, 1.0],
+      [0, 'pelvis front', 1.0, 0.6], [0, 'pelvis front (texture)', 1.0, 0.6, true], [0, 'shoulders front', 1.8, 0.7], [180, 'shoulders back', 1.8, 0.7]]) {
       const c = new Canvas(560, 600), cam = {yawDeg: yaw, cx: 0, cy, cz: 0, height: h};
-      for (const m of bp.meshes) c.draw(weightMesh(m), cam);
-      cells.push({canvas: c, label: `${lab}: dominant bone colour`});
+      for (const m of bp.meshes) c.draw(tex ? m : weightMesh(m), cam);
+      cells.push({canvas: c, label: `${lab}${tex ? '' : ': dominant bone colour'}`});
     }
     const f = path.join(OUT, 'weights.png');
     await composeGrid(cells, {cols: 4, title: 'Strainer skin: dominant bone (Hips white, Spine yellow, Chest orange, Neck magenta, Head red, arms blue / cyan, legs brown / green)', file: f});
@@ -155,6 +156,22 @@ async function main() {
     await sheet(path.join(OUT, 'clips-34.png'), 'Strainer clips (CPU-skinned GLB tracks), 3/4 front view; red line = floor', 35, ['Idle', 'Walk', 'Run', 'Attack', 'Hit', 'Death'], 6);
     await sheet(path.join(OUT, 'clips-side.png'), 'Strainer clips, side view (from +X): planted feet, lean, claws', 90, ['Walk', 'Run', 'Attack', 'Death'], 6);
     await sheet(path.join(OUT, 'clips-front.png'), 'Strainer clips, front view: claws vs thighs', 0, ['Idle', 'Walk', 'Run', 'Attack'], 6);
+  }
+  if (want('detail')) {
+    // key poses large: [clip, time, yaw, cy, height]
+    const keys = [['Idle', 1.0, 30, 1.25, 1.6], ['Walk', 0.45, 60, 1.1, 2.2], ['Run', 0.3, 70, 1.05, 2.2], ['Attack', 0.6, 20, 1.2, 2.0], ['Hit', 0.1, 330, 1.3, 1.6], ['Death', 2.1, 30, 0.35, 2.4], ['Walk', 0.9, 200, 1.1, 2.2], ['Death', 2.1, 120, 0.35, 2.4]];
+    const cells = [];
+    for (const [cn, t, yaw, cy, h] of keys) {
+      const clip = M.clips.find(c => c.name === cn), f = clip.times.findIndex(x => Math.abs(x - t) < 0.017);
+      const p = posed(M, clip, f), bb = bboxOf(p.meshes);
+      const c = new Canvas(520, 560), cam = {yawDeg: yaw, cx: (bb.lo[0] + bb.hi[0]) / 2, cy, cz: (bb.lo[2] + bb.hi[2]) / 2, height: h};
+      drawMeshes(c, cam, p.meshes);
+      hline(c, cam, 0, [200, 60, 60]);
+      cells.push({canvas: c, label: `${cn} t=${clip.times[f].toFixed(2)} yaw ${yaw}`});
+    }
+    const f = path.join(OUT, 'detail.png');
+    await composeGrid(cells, {cols: 4, title: 'Strainer key poses (detail): wrists / claws attached, shoulders, head follows the neck', file: f});
+    written.push(f);
   }
   if (want('attack')) {
     const clip = M.clips.find(c => c.name === 'Attack'), A = X.attack;
@@ -195,6 +212,31 @@ async function main() {
     }
     const f = path.join(OUT, 'clearance-worst.png');
     await composeGrid(cells, {cols: 4, title: 'Clearance audit worst frames (CPU-skinned close-ups)', file: f});
+    written.push(f);
+  }
+  if (want('stretch')) {
+    // per clip: the frame with the most triangles stretched > 2.5x (edge length posed / bind), triangles coloured by stretch
+    const body = M.meshes[0], I = body.idx, P0 = body.pos, nt = I.length / 3;
+    const grad = {width: 64, height: 1, data: new Uint8Array(64 * 4)};
+    for (let k = 0; k < 64; k++) { const s = k / 63; grad.data.set(s < 0.33 ? [150, 150, 150, 255] : s < 0.66 ? [250, 210, 40, 255] : [240, 30, 30, 255], k * 4); }
+    const L = (P, a, b) => Math.hypot(P[a * 3] - P[b * 3], P[a * 3 + 1] - P[b * 3 + 1], P[a * 3 + 2] - P[b * 3 + 2]);
+    const ratio = P => { const r = new Float32Array(nt); for (let t = 0; t < nt; t++) { const a = I[t * 3], b = I[t * 3 + 1], c = I[t * 3 + 2]; r[t] = Math.max(L(P, a, b) / Math.max(2e-3, L(P0, a, b)), L(P, b, c) / Math.max(2e-3, L(P0, b, c)), L(P, c, a) / Math.max(2e-3, L(P0, c, a))); } return r; };
+    const cells = [];
+    for (const cn of ['Walk', 'Run', 'Attack', 'Hit', 'Death']) {
+      const clip = M.clips.find(c => c.name === cn);
+      let best = null;
+      for (let f = 0; f < clip.times.length; f += 2) { const p = posed(M, clip, f), r = ratio(p.meshes[0].pos); let k = 0; for (const v of r) if (v > 2.5) k++; if (!best || k > best.k) best = {f, k, r, p}; }
+      const pos = new Float32Array(nt * 9), uv = new Float32Array(nt * 6), idx = new Uint32Array(nt * 3), Pp = best.p.meshes[0].pos;
+      for (let t = 0; t < nt; t++) { const u = (0.5 + 63 * Math.min(1, Math.max(0, (best.r[t] - 1) / 2))) / 64 * 0.98 + 0.01; for (let k = 0; k < 3; k++) { const v = I[t * 3 + k]; pos.set([Pp[v * 3], Pp[v * 3 + 1], Pp[v * 3 + 2]], (t * 3 + k) * 3); uv.set([u, 0.5], (t * 3 + k) * 2); idx[t * 3 + k] = t * 3 + k; } }
+      const bb = bboxOf(best.p.meshes);
+      for (const yaw of [35, 215]) {
+        const c = new Canvas(360, 400), hh = Math.max(2.3, (bb.hi[0] - bb.lo[0]) * 1.2, (bb.hi[2] - bb.lo[2]) * 1.2), cam = {yawDeg: yaw, cx: (bb.lo[0] + bb.hi[0]) / 2, cy: hh / 2 - 0.05, cz: (bb.lo[2] + bb.hi[2]) / 2, height: hh};
+        c.draw({pos, idx, uv, tex: grad}, cam);
+        cells.push({canvas: c, label: `${cn} t=${clip.times[best.f].toFixed(2)} tris>2.5x ${best.k} yaw ${yaw}`});
+      }
+    }
+    const f = path.join(OUT, 'stretch.png');
+    await composeGrid(cells, {cols: 4, title: 'Strainer triangle stretch (posed / bind edge): grey < 1.66x, yellow < 2.3x, red above; the worst frame per clip', file: f});
     written.push(f);
   }
   if (want('beside')) {

@@ -7,6 +7,8 @@
 // meshy/raw/a1/model.glb, sha256-pinned + re-verified after the build; ledger meshy/LEDGER.jsonl, read only) and writes ONLY:
 //   game/public/assets/models/enemy-strainer.glb
 //   game/public/assets/derivatives/enemy-strainer.json
+//   game/public/assets/CREDITS.md          the marked enemy-strainer section only
+//   tools/release/public-inputs.json       only the two outputs' entries + CREDITS.md (whose bytes change) added / updated
 // It does NOT touch the zombie wardrobe or any other enemy (no BODIES entry; never picked as an ordinary zombie body).
 //
 // Pipeline (the humanoid libs in tools/asset-pipeline/zombie/lib are used unchanged):
@@ -16,10 +18,12 @@
 //      measured with Strainer-specific, logged rules: hunched head, spread arms, long clawed hands, bent knees);
 //   3. mesh: the Meshy smart-topology mesh, its UVs and its 2K PBR maps are KEPT (no simplify / re-UV / re-bake); textures
 //      re-encoded for size only (base colour 2048 JPEG, metallic-roughness + normal 1024 JPEG 4:4:4);
-//   4. skin: zombie/lib/skin.mjs region flood + chain weights + masked Laplacian smoothing (welded), then (a) the face
-//      curtain (the grille bar / fronds hanging from the jaw in front of the chest) follows the Head, (b) every loose strand
-//      copies the weights of the body surface at its root (rigid strands: no stretching between bones), top 4;
-//   5. clips: lib/strainer-clips.mjs (Idle, Walk, Run, Attack, Hit, Death), death pose floor-solved (zombie/lib/clipsolve.mjs),
+//   4. skin: zombie/lib/skin.mjs region flood + chain weights + masked Laplacian smoothing (welded), then (a) the Neck /
+//      Head share fades to Chest laterally (the spiked shoulder tops rise level with the crown), (b) the Chest / Neck / Head
+//      shares are diffused over the jaw / upper rib-cage junction, (c) every loose strand copies the weights of the body
+//      surface at its root (rigid strands: no stretching between bones), top 4;
+//   5. clips: lib/strainer-clips.mjs (Idle, Walk, Run, Attack, Hit, Death), death pose floor-solved (zombie/lib/clipsolve.mjs
+//      search + regionFloorReport with Strainer ranges: lib/strainer-clips.mjs solveStrainerDeath),
 //      floor guard on the one-shots, CPU-skinned verification (floor, planted feet, arm / thigh vs torso and claw vs leg
 //      clearance, triangle stretch, the Attack claw reach / hit frame);
 //   6. GLB (gltf-transform; KHR_mesh_quantization normals) + scene extras `enemyStrainer` + sidecar provenance.
@@ -34,17 +38,17 @@ import {loadSource} from '../zombie/lib/source.mjs';
 import {detectFacing, placement, validateSkeleton, rigFor, bodyProfile} from '../zombie/lib/autorig.mjs';
 import {placeHigh} from '../zombie/lib/stage-mesh.mjs';
 import {densify} from '../zombie/lib/densify.mjs';
-import {weldByPosition, bounds, normalizeAll, components} from '../zombie/lib/mesh.mjs';
+import {weldByPosition, bounds, normalizeAll, components, vertexAdjacency} from '../zombie/lib/mesh.mjs';
 import {JOINTS} from '../zombie/lib/skeleton.mjs';
 import {computeSkinWeights, JOINT_NAMES} from '../zombie/lib/skin.mjs';
 import {skinPositions} from '../zombie/lib/glb.mjs';
-import {solveDeathPose, regionFloorReport} from '../zombie/lib/clipsolve.mjs';
+import {regionFloorReport} from '../zombie/lib/clipsolve.mjs';
 import {realize, deathFinal} from '../zombie/lib/clips.mjs';
 import {Rig, V} from '../zombie/lib/pose.mjs';
 import {quantizeWeights, writeDoc, geometryHash} from '../zombie/lib/variant-glb.mjs';
 import {auditPoses, triangleStretch, stretchStats} from '../zombie/lib/stretch.mjs';
 import {TriGrid} from '../zombie/lib/penetration.mjs';
-import {CLIP_SPECS, sampleClip, poseAt, FPS} from './lib/strainer-clips.mjs';
+import {CLIP_SPECS, sampleClip, poseAt, FPS, solveStrainerDeath} from './lib/strainer-clips.mjs';
 import {detectStrainerSkeleton, SKELETON_OPTIONS} from './lib/strainer-skeleton.mjs';
 
 const ARGS = new Set(process.argv.slice(2));
@@ -53,6 +57,10 @@ const TASK_DIR = path.join(REPO, 'reference/tasks/beyond-station-round4-20261101
 const GENERATOR = 'Terminal State Strainer enemy derivative builder (tools/asset-pipeline/enemy/build-strainer.mjs)';
 const OUT_GLB = path.join(REPO, 'game/public/assets/models/enemy-strainer.glb');
 const OUT_JSON = path.join(REPO, 'game/public/assets/derivatives/enemy-strainer.json');
+const CREDITS = path.join(REPO, 'game/public/assets/CREDITS.md');
+const ALLOW = path.join(REPO, 'tools/release/public-inputs.json');
+const CREDITS_BEGIN = '<!-- BEGIN enemy-strainer-20261101 (build-strainer.mjs) -->';
+const CREDITS_END = '<!-- END enemy-strainer-20261101 -->';
 
 /** The accepted Meshy T2.5 image-to-3D body (meshy/LEDGER.jsonl 'accepted' row), pinned. */
 export const SOURCE = {
@@ -66,8 +74,10 @@ export const OPTIONS = {
   heightM: 2.15, // decided: ~21 % taller than the 1.78 m zombie; annex doors 2.3 m, ceilings 2.4-2.8 m (runtime root scale multiplies)
   landmarks: {densifyFrac: 0.0045},
   skin: {smoothIters: 4, smoothLambda: 0.5, maxInfluences: 4},
-  // the grille bar + fronds hanging from the jaw in front of the chest (z > chest front): rigid with the Head
-  faceCurtain: {z0: 0.2, z1: 0.23, maxAbsX: 0.2, aboveNeckM: 0.08, note: 'torso-region vertices below the neck base + aboveNeckM, |x| < maxAbsX, are blended to Head by smoothstep(z0, z1, z): the grille bar / frond curtain hangs 0.2-0.27 m in front of a chest whose front surface is at z <= 0.19'},
+  // the spiked shoulder tops / trapezius rise level with the crown: their Neck / Head share fades to Chest laterally (the
+  // head cage itself is ~ +-0.15 m wide), so a head turn does not drag the shoulder spikes
+  neckLateralFade: {x0: 0.16, x1: 0.25, note: 'torso-region main-body vertices: Neck + Head weight x (1 - smoothstep(x0, x1, |x|)), the remainder to Chest'},
+  jawJunction: {below: 0.14, above: 0.06, maxAbsX: 0.25, iterations: 24, lambda: 0.5, note: 'torso-region main-body vertices from Neck.y - below to Head.y + above, |x| < maxAbsX: Laplacian diffusion of the normalised Chest / Neck / Head shares (neighbours outside the zone are fixed boundary values); each vertex keeps its Chest + Neck + Head total and all other influences'},
   strands: {note: 'every connected component other than the main body (loose frond / grille strips) copies the 4 weights of the main-body vertex nearest to its topmost vertex (its root): strands move rigidly with what they hang from'},
   textures: {baseColor: 2048, metallicRoughness: 1024, normal: 1024, quality: {base: 86, mr: 88, normal: 92}},
   // motor collider: the torso / hip core (the hunched crown overhangs it, the hanging arms swing outside it); must pass the
@@ -84,7 +94,7 @@ const REGION_STRAND = 5;
 
 function guardOutput(file) {
   const r = rel(path.resolve(file));
-  if (![rel(OUT_GLB), rel(OUT_JSON)].includes(r)) throw new Error('refusing to write outside the Strainer derivative outputs: ' + r);
+  if (![rel(OUT_GLB), rel(OUT_JSON), rel(CREDITS), rel(ALLOW)].includes(r)) throw new Error('refusing to write outside the Strainer derivative outputs: ' + r);
   return file;
 }
 
@@ -164,25 +174,65 @@ function setRow(sw, i, m) {
 }
 const rowOf = (sw, i) => { const m = new Map(); for (let k = 0; k < 4; k++) { const w = sw.weights[i * 4 + k]; if (w > 0) m.set(sw.joints[i * 4 + k], (m.get(sw.joints[i * 4 + k]) || 0) + w); } return m; };
 
-/** (a) face curtain -> Head. */
-function faceCurtain(weld, sw, skel, split) {
-  const O = OPTIONS.faceCurtain, HEAD = JOINT_NAMES.indexOf('Head');
-  let changed = 0;
+/** (a) lateral fade of the Neck / Head share (shoulder spikes / trapezius stay with the Chest). */
+function neckLateralFade(weld, sw, split) {
+  const O = OPTIONS.neckLateralFade, NECK = JOINT_NAMES.indexOf('Neck'), HEAD = JOINT_NAMES.indexOf('Head'), CHEST = JOINT_NAMES.indexOf('Chest');
+  let changed = 0, moved = 0;
   for (let i = 0; i < weld.pos.length / 3; i++) {
     if (!split.isMain[i] || sw.region[i] !== 0) continue;
-    const x = weld.pos[i * 3], y = weld.pos[i * 3 + 1], z = weld.pos[i * 3 + 2];
-    if (Math.abs(x) > O.maxAbsX || y < skel.crotchY || y > skel.neckBaseY + O.aboveNeckM) continue;
-    const f = smooth(O.z0, O.z1, z);
+    const f = smooth(O.x0, O.x1, Math.abs(weld.pos[i * 3]));
     if (f <= 0) continue;
-    const m = rowOf(sw, i);
-    for (const [j, w] of m) m.set(j, w * (1 - f));
-    m.set(HEAD, (m.get(HEAD) || 0) + f);
-    setRow(sw, i, m); changed++;
+    const m = rowOf(sw, i), nh = (m.get(NECK) || 0) + (m.get(HEAD) || 0);
+    if (nh <= 1e-6) continue;
+    if (m.has(NECK)) m.set(NECK, m.get(NECK) * (1 - f));
+    if (m.has(HEAD)) m.set(HEAD, m.get(HEAD) * (1 - f));
+    m.set(CHEST, (m.get(CHEST) || 0) + nh * f);
+    setRow(sw, i, m); changed++; moved += nh * f;
   }
-  return {verticesChanged: changed, ...O};
+  return {verticesChanged: changed, weightMovedToChest: r4(moved), ...O};
 }
 
-/** (b) loose strands copy the weights at their root (nearest main-body vertex to the strand's topmost vertex). */
+/**
+ * (b) jaw / rib-cage junction: the exposed upper ribs join the jaw directly under the face, so skin.mjs's tilted neck / head
+ * boundary switches Chest -> Head within ~6 cm there; diffuse the Chest / Neck / Head shares (each vertex keeps its total
+ * of the three and every other influence) over the junction zone so the change is spread over the upper rib cage.
+ */
+function junctionSmooth(weld, sw, skel, split) {
+  const O = OPTIONS.jawJunction, J = skel.joints, C = ['Chest', 'Neck', 'Head'].map(n => JOINT_NAMES.indexOf(n));
+  const n = weld.pos.length / 3, {offs, adj} = vertexAdjacency(n, weld.idx);
+  const inZone = new Uint8Array(n), share = new Float32Array(n * 3), total = new Float32Array(n);
+  let zone = 0;
+  for (let i = 0; i < n; i++) {
+    const m = rowOf(sw, i);
+    for (let k = 0; k < 3; k++) share[i * 3 + k] = m.get(C[k]) || 0;
+    total[i] = share[i * 3] + share[i * 3 + 1] + share[i * 3 + 2];
+    const x = weld.pos[i * 3], y = weld.pos[i * 3 + 1];
+    if (split.isMain[i] && sw.region[i] === 0 && total[i] > 0.05 && Math.abs(x) < O.maxAbsX && y > J.Neck[1] - O.below && y < J.Head[1] + O.above) { inZone[i] = 1; zone++; }
+  }
+  for (let it = 0; it < O.iterations; it++) {
+    const next = Float32Array.from(share);
+    for (let i = 0; i < n; i++) {
+      if (!inZone[i]) continue;
+      const deg = offs[i + 1] - offs[i]; if (!deg) continue;
+      const avg = [0, 0, 0];
+      for (let e = offs[i]; e < offs[i + 1]; e++) { const j = adj[e], tj = total[j] || 1; for (let k = 0; k < 3; k++) avg[k] += share[j * 3 + k] / tj; }
+      const cur = [0, 1, 2].map(k => share[i * 3 + k] / total[i]);
+      const mix = cur.map((v, k) => (1 - O.lambda) * v + O.lambda * avg[k] / deg), ms = mix[0] + mix[1] + mix[2] || 1;
+      for (let k = 0; k < 3; k++) next[i * 3 + k] = total[i] * mix[k] / ms;
+    }
+    share.set(next);
+  }
+  let changed = 0;
+  for (let i = 0; i < n; i++) {
+    if (!inZone[i]) continue;
+    const m = rowOf(sw, i);
+    for (let k = 0; k < 3; k++) m.set(C[k], share[i * 3 + k]);
+    setRow(sw, i, m); changed++;
+  }
+  return {zoneVertices: zone, verticesChanged: changed, ...O};
+}
+
+/** (c) loose strands copy the weights at their root (nearest main-body vertex to the strand's topmost vertex). */
 function strandsFollowRoots(weld, sw, split) {
   const P = weld.pos, mainIds = [];
   for (let i = 0; i < P.length / 3; i++) if (split.isMain[i]) mainIds.push(i);
@@ -227,7 +277,7 @@ function measureHit(weld, sw, skel, profile) {
     const p = [P[i * 3], P[i * 3 + 1], P[i * 3 + 2]];
     let hw = 0; for (let k = 0; k < 4; k++) if (sw.joints[i * 4 + k] === HEAD) hw += sw.weights[i * 4 + k];
     if (hw >= 0.5 && p[1] >= skel.neckBaseY) { headPts.push(p); head.push(onPolyline(p, [J.Head, skel.ends.Head])); continue; }
-    if (p[1] < skel.crotchY || p[1] > J.Neck[1] || p[2] > 0.2) continue; // torso core (not the curtain in front)
+    if (p[1] < skel.crotchY || p[1] > J.Neck[1] || p[2] > 0.2) continue; // torso core (not the rib cage / grille bar standing in front)
     torso.push(onPolyline(p, spine));
   }
   const lo = [0, 1, 2].map(k => Math.min(...headPts.map(q => q[k]))), hi = [0, 1, 2].map(k => Math.max(...headPts.map(q => q[k])));
@@ -242,7 +292,7 @@ function measureHit(weld, sw, skel, profile) {
     arm: r4(((L.L_UpperArm.radius ?? 0.06) + (L.L_Forearm.radius ?? 0.05)) / 2 * 1.35),
     leg: r4(((L.L_Thigh.radius ?? 0.09) + (L.L_Shin.radius ?? 0.07)) / 2 * 1.4),
     torsoP90: r4(pct(torso, 0.9)),
-    method: 'torso: 75th pct distance of the torso core (crotch..neck, z < 0.2: not the frond curtain) to the Hips-Spine-Chest-Neck chain (capsule Hips->Neck in ai/zombieActor.ts updateVolumes); head: 75th pct distance of the head vertices to the Head joint -> head end segment (the crown points forward-down), plus the headshot sphere; limbs: autorig bodyProfile radii x1.35 (arm) / x1.4 (leg) like zombie/lib/hit.mjs (unclamped)',
+    method: 'torso: 75th pct distance of the torso core (crotch..neck, z < 0.2: not the rib cage / grille bar standing in front) to the Hips-Spine-Chest-Neck chain (capsule Hips->Neck in ai/zombieActor.ts updateVolumes); head: 75th pct distance of the head vertices to the Head joint -> head end segment (the crown points forward-down), plus the headshot sphere; limbs: autorig bodyProfile radii x1.35 (arm) / x1.4 (leg) like zombie/lib/hit.mjs (unclamped)',
   };
 }
 
@@ -290,9 +340,11 @@ function verifyFloor(rig, skel, mesh, clips, footVerts) {
   return out;
 }
 
-/** Planted-foot slide (loops): horizontal travel of the stance foot's sole vs the treadmill ground speed. */
+/** Planted-foot slide (loops): horizontal travel of the flat stance foot's sole vs the treadmill ground speed. */
 function verifySkate(rig, skel, mesh, clips, footVerts) {
   const out = {};
+  // fixed sole vertex sets: bind foot vertices below 3 cm
+  const sole = Object.fromEntries(['L', 'R'].map(s => [s, footVerts[s].filter(i => mesh.pos[i * 3 + 1] < 0.03)]));
   for (const c of clips.filter(c => c.name === 'Walk' || c.name === 'Run' || c.name === 'Idle')) {
     const S = CLIP_SPECS[c.name], v = S.groundSpeed || 0, dt = 1 / FPS;
     let worst = 0, sum = 0, k = 0;
@@ -300,18 +352,17 @@ function verifySkate(rig, skel, mesh, clips, footVerts) {
       let prev = null;
       for (let f = 0; f < c.times.length; f++) {
         const ph = (c.times[f] / c.duration + (s === 'R' ? 0.5 : 0)) % 1;
-        const stance = c.name === 'Idle' || (ph < S.beta - 0.06 && ph > 0.06);
+        // flat-foot window of the stance (heel strike settled by 15 %, toe roll starts at 75 %: lib/strainer-clips.mjs footCycle)
+        const stance = c.name === 'Idle' || (ph > 0.15 * S.beta && ph < 0.75 * S.beta);
         const P = skinPositions(mesh, skel, rig.fk(poseAt(c, f)));
-        // lowest sole vertex cluster: mean of the 20 lowest foot vertices
-        const ids = [...footVerts[s]].sort((a, b) => P[a * 3 + 1] - P[b * 3 + 1]).slice(0, 20);
-        const m = ids.reduce((a, i) => [a[0] + P[i * 3] / ids.length, a[1] + P[i * 3 + 2] / ids.length], [0, 0]);
+        const m = sole[s].reduce((a, i) => [a[0] + P[i * 3] / sole[s].length, a[1] + P[i * 3 + 2] / sole[s].length], [0, 0]);
         if (stance && prev) { const slip = Math.hypot(m[0] - prev[0], (m[1] - prev[1]) + v * dt) / dt; worst = Math.max(worst, slip); sum += slip; k++; }
         prev = stance ? m : null;
       }
     }
     out[c.name] = {maxSlipMps: r3(worst), meanSlipMps: r3(k ? sum / k : 0), framesTested: k, groundSpeed: v};
   }
-  return {method: 'stance frames (phase 0.06..beta-0.06): mean horizontal position of the 20 lowest foot vertices, frame-to-frame speed relative to the treadmill (stance foot should slide back at exactly groundSpeed); 0 = no skating', ...out};
+  return {method: 'flat-foot stance frames (phase 0.15..0.75 x beta; Idle all frames): mean horizontal position of the fixed sole vertex set (bind foot vertices below 3 cm), frame-to-frame speed relative to the treadmill (the stance foot slides back at exactly groundSpeed in place); 0 = no skating', soleVertices: {L: sole.L.length, R: sole.R.length}, ...out};
 }
 
 /**
@@ -456,6 +507,28 @@ function buildDocument({skel, body, clips, extras, tex}) {
   return doc;
 }
 
+// ------------------------------------------------------------------------------------------------ CREDITS + allowlist
+/** The marked CREDITS.md section, then the public-input allowlist entries of this builder's outputs (+ CREDITS.md). */
+function writeCreditsAndAllowlist() {
+  const credSrc = fs.readFileSync(CREDITS, 'utf8');
+  const section = [CREDITS_BEGIN, '## Beyond the Station round 4: the Strainer (enemy)', '',
+    'Generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose, 2K PBR; 1 attempt, 15 credits) through the Meshy MCP under the user\'s round-4 task authorization, conditioned on the project\'s own user-approved front T-pose image of the Strainer (a Codex native image generation made from the project\'s approved Strainer concept). Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-strainer.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture); the provider\'s texture maps are resized / re-encoded only (provenance: `assets/derivatives/enemy-strainer.json`). AI-generated asset: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the input image are kept outside Git.', '',
+    `- \`${rel(OUT_GLB).replace(/^game\/public\//, '')}\` — the Strainer, a tall clawed drain-filter stalker (Meshy task ${SOURCE.taskId})`, CREDITS_END].join('\n');
+  const esc = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const re = new RegExp(`${esc(CREDITS_BEGIN)}[\\s\\S]*?${esc(CREDITS_END)}`);
+  const next = re.test(credSrc) ? credSrc.replace(re, section) : credSrc.replace(/\n*$/, '\n\n') + section + '\n';
+  fs.writeFileSync(guardOutput(CREDITS), next);
+  const allowRaw = fs.readFileSync(ALLOW, 'utf8'), allow = JSON.parse(allowRaw);
+  if (allow.schema !== 'terminal-state-public-inputs-v1' || !Array.isArray(allow.files)) throw new Error('unknown public-input policy schema');
+  if (JSON.stringify(allow, null, 2) + '\n' !== allowRaw) throw new Error('public-inputs.json formatting differs from JSON.stringify(_, null, 2); refusing to rewrite');
+  const pub = p => path.relative(path.join(REPO, 'game/public'), p);
+  const mine = [OUT_GLB, OUT_JSON, CREDITS].map(pub);
+  const add = [OUT_GLB, OUT_JSON, CREDITS].map(f => { const b = fs.readFileSync(f); return {path: pub(f), bytes: b.length, sha256: sha256File(f)}; });
+  allow.files = [...allow.files.filter(f => !mine.includes(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
+  fs.writeFileSync(guardOutput(ALLOW), JSON.stringify(allow, null, 2) + '\n');
+  console.log('  CREDITS section + allowlist:', add.map(a => `${a.path} ${a.bytes}`).join(', '));
+}
+
 // ------------------------------------------------------------------------------------------------ main
 async function main() {
   const t0 = Date.now();
@@ -483,13 +556,14 @@ async function main() {
 
   console.log('[3/7] skin');
   const sw = computeSkinWeights(weld, rigFor(skel), {kind: 'body', ...OPTIONS.skin});
-  const curtain = faceCurtain(weld, sw, skel, split);
+  const lateral = neckLateralFade(weld, sw, split);
+  const junction = junctionSmooth(weld, sw, skel, split);
   const strands = strandsFollowRoots(weld, sw, split);
   const bodyW = spread(weld.weldId, sw);
   const profile = bodyProfile(skel, weld, sw);
   const hit = measureHit(weld, sw, skel, profile);
   const foot = footprint(weld, sw);
-  console.log('  regions', JSON.stringify(sw.stats.regionVertexCounts), 'curtain', curtain.verticesChanged, 'strands', JSON.stringify(strands.byDominantBone), 'rootGap', strands.maxRootGapM);
+  console.log('  regions', JSON.stringify(sw.stats.regionVertexCounts), 'neckLateralFade', lateral.verticesChanged, 'junction', junction.zoneVertices, 'strands', JSON.stringify(strands.byDominantBone), 'rootGap', strands.maxRootGapM);
   console.log('  hit', JSON.stringify(hit), 'footprint', JSON.stringify(foot));
   const bodyMesh = {name: 'StrainerBody', pos: low.pos, nrm: low.nrm, uv: m.uv, idx: m.idx, ...bodyW};
 
@@ -497,7 +571,7 @@ async function main() {
   const rig = new Rig(skel);
   // (zombie/lib/clipsolve.mjs labels the mesh named 'ZombieBody' as the body)
   const solveSet = [{...bodyMesh, name: 'ZombieBody'}];
-  const death = solveDeathPose(rig, skel, solveSet);
+  const death = solveStrainerDeath(rig, skel, solveSet, regionFloorReport);
   const deathContact = regionFloorReport(rig, skel, solveSet, realize(rig, deathFinal(death.hipsY, death.tune)));
   console.log('  death', JSON.stringify({tune: death.tune, hipsY: r4(death.hipsY), contact: deathContact}));
   const clips = Object.keys(CLIP_SPECS).map(name => sampleClip(rig, name, {deathHipsY: death.hipsY, deathTune: death.tune}));
@@ -570,13 +644,13 @@ async function main() {
     landmarks: cloud.stats,
     skeleton: {jointCount: JOINTS.length, joints: JOINTS.map(([n, p]) => ({name: n, parent: p, bindWorldPosition: r4(J[n])})), ends: skel.ends, boneLengthsM, validationIssues: issues, options: SKELETON_OPTIONS,
       validationNote: 'the anthropometric ranges of autorig.validateSkeleton are for ordinary adults; this creature is deliberately long-shinned with wide-set shoulders and long forearms (out-of-range ratios are the generated proportions, not a detection failure: see the joint overlay render)', estimation: skel.log},
-    skinning: {method: 'zombie/lib/skin.mjs region classification + chain weights + masked Laplacian smoothing on the welded source mesh (UV-seam copies share weights), + face curtain -> Head, + loose strands follow their roots', faceCurtain: curtain, strands, ...sw.stats},
+    skinning: {method: 'zombie/lib/skin.mjs region classification + chain weights + masked Laplacian smoothing on the welded source mesh (UV-seam copies share weights), + lateral Neck / Head fade, + jaw / rib-cage junction diffusion, + loose strands follow their roots', neckLateralFade: lateral, jawJunction: junction, strands, ...sw.stats},
     mesh: {node: 'StrainerBody', vertices: low.pos.length / 3, triangles: m.idx.length / 3, weldedVertices: weld.pos.length / 3, mainBodyWeldedVertices: split.mainVertices, looseStrandComponents: split.strands.length, geometryHash: geometryHash(low.pos, m.idx), note: 'the Meshy smart-topology mesh and UVs unchanged (placed: uniform scale + translation); no simplification / re-UV / re-bake'},
     profile: {heightM: profile.heightM, landmarks: profile.landmarks, limb: profile.limb, head: profile.head, torso: profile.torso},
     clips: {method: 'hand-authored procedural keyframes / gait functions (lib/strainer-clips.mjs) at 30 fps, legs by foot-planting IK (zombie/lib/pose.mjs); not motion capture', fps: FPS, meta: clipMeta,
       runtime: {attackDuration: CLIP_SPECS.Attack.duration, attackImpact: CLIP_SPECS.Attack.impactTime, attackHitTime: CLIP_SPECS.Attack.impactTime, attackReachM: attack.hit.reachM, walkGroundSpeed: CLIP_SPECS.Walk.groundSpeed, runGroundSpeed: CLIP_SPECS.Run.groundSpeed,
         note: 'ZombieStats.attackDuration / attackImpact should match Attack (the right claw sweeps through the front at chest height at attackHitTime; reachM = horizontal root -> claw tip at that frame, actor scale 1); locomotion clips are authored in place for groundSpeed at timeScale 1 (ai/zombieActor.ts scales by speed / (groundSpeed x actor scale), clamped 0.35..1.8)'},
-      deathSolve: {tune: death.tune, hipsY: r4(death.hipsY), cost: +death.cost.toExponential(3), evals: death.evals, contact: deathContact, solvedAgainst: 'body'}, floorGuard: {method: 'per frame: Hips raised so the lowest CPU-skinned vertex stays >= 5 mm above the floor (Attack / Hit / Death)', clips: guarded}},
+      deathSolve: {method: 'lib/strainer-clips.mjs solveStrainerDeath (zombie/lib/clipsolve.mjs coordinate descent + cost on regionFloorReport, Strainer ranges)', ranges: death.ranges, tune: death.tune, hipsY: r4(death.hipsY), cost: +death.cost.toExponential(3), evals: death.evals, contact: deathContact, solvedAgainst: 'body'}, floorGuard: {method: 'per frame: Hips raised so the lowest CPU-skinned vertex stays >= 5 mm above the floor (Attack / Hit / Death)', clips: guarded}},
     verification: {cpuSkinningFloor: floor, footSkate: skate, clearance, attack, motionStretch: {...stretch, method: 'per triangle: worst edge length ratio posed / bind over every 3rd frame of all six clips (CPU skinning)'}},
     hit: {radii: (({headSphere, ...h}) => h)(hit), headSphere: hit.headSphere, collider: foot.collider, footprint: foot, heightM: r4(skel.H), notes: ['ai/zombieActor.ts updateVolumes: head sphere (r head), torso capsule Hips->Neck (r torso), limb capsules UpperArm->Hand (r arm), Thigh->Foot (r leg); the headshot sphere (bone Head + offset, radius) covers the forward-hunched crown / face cage that a sphere at the Head joint would miss', 'all values in model metres at actor root scale 1 (multiply by the runtime scale)']},
     runtime: {modelKey: 'enemy_strainer', url: 'assets/models/enemy-strainer.glb', extras: 'gltf.scene.userData.enemyStrainer', meshes: {body: 'StrainerBody'}, bones: 'same 18 names as the zombie bodies (ai/zombieActor.ts BONES all present)'},
@@ -592,6 +666,7 @@ async function main() {
   };
   fs.mkdirSync(path.dirname(OUT_JSON), {recursive: true});
   fs.writeFileSync(guardOutput(OUT_JSON), JSON.stringify(manifest, null, 1) + '\n');
+  writeCreditsAndAllowlist();
   console.log(`done: ${rel(OUT_GLB)} ${outBytes} bytes sha256 ${outSha} (${((Date.now() - t0) / 1000).toFixed(1)} s)`);
 }
 

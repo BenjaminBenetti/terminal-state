@@ -311,8 +311,8 @@ the ordinary per-spawn family roll of the service annexes (0.08, above) — no s
 | Health | 200 (2x) | 100 |
 | Claw damage | 13 (1.3x) | 10 |
 | Walk / chase speed | 0.585 (0.9x) / 2.45 m/s (never faster) | 0.65 / 2.55 m/s |
-| Attack range (centre to centre) | 2.0 m = claw reach + the player's 0.3 m body radius (long arms) | 1.35 m |
-| Swing / claw contact / cooldown | Attack clip 1.3 s, claws land at 0.6 s (the clip's `attackHitTime`), 0.6 s recovery | 1.1 s / 0.45 s / 0.45 s |
+| Attack range (centre to centre) | 1.931 m = the GLB's 1.631 m claw reach + the player's 0.3 m body radius (long arms) | 1.35 m |
+| Swing / claw contact / cooldown | Attack clip 1.4 s, claws land at 0.6 s (the clip's `attackHitTime`), 0.6 s recovery | 1.1 s / 0.45 s / 0.45 s |
 | Collider radius / turn rate | 0.36 m / 4.0 rad/s | 0.33 m / 4.5 rad/s |
 | Ladders / track bed | never climbs (path requests ignore ladder links) / drops in like every enemy | climbs / drops in |
 | Root scale | its own 0.97–1.03 (crown ≤ 2.215 m, under the 2.3 m annex doors) | 0.95–1.05 |
@@ -327,9 +327,10 @@ the ordinary per-spawn family roll of the service annexes (0.08, above) — no s
 - **Audio:** no new clips — the existing zombie calls through the cue adapter (`STRAINER_CUES`: the deep groan voice from its 1.9 m
   mouth, the ordinary swing / footfalls / death).
 - **No model → counted zombie stand-in** (`createEnemyActor` `fallback`, the Blightbelly's contract; QA `strainers()` / `enemyMix()`).
-- **Asset contract numbers** (`STRAINER_ASSET`; values marked TODO-ASSET are provisional until lane ASSET's GLB lands, then set to
-  its `enemyStrainer` extras — `game/tests/strainer-asset.test.ts` checks them once the file exists): heightM, headCenter,
-  headRadius, reachM (horizontal claw reach at the Attack hit frame), attackHitTime, the Attack clip duration, Walk / Run ground speeds.
+- **Asset contract numbers** (`STRAINER_ASSET` = the `enemyStrainer` extras of `enemy-strainer.glb`;
+  `game/tests/strainer-contract.test.ts` checks the agreement): heightM 2.15, headCenter [-0.0006, 1.9481, 0.228] (the crown hunched
+  forward, on the Head bone), headRadius 0.257, reachM 1.631 (horizontal claw reach at the Attack hit frame -> attack range 1.931 m),
+  attackHitTime 0.6 s, Attack clip 1.4 s, Walk / Run ground speeds 0.62 / 2.4 m/s; hit radii torso 0.241 / arm 0.0633 / leg 0.1004.
 
 ## Room modifiers
 

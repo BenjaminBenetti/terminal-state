@@ -109,8 +109,8 @@ function idle(rig, t, T) {
   P.spine = [4 - 1.6 * Math.sin(br + 0.3), -1.5 * Math.sin(w), 1.2 * Math.sin(w)];
   P.chest = [5 - 2.4 * Math.sin(br + 0.8), -1.2 * Math.sin(w + 0.3), 1.0 * Math.sin(w)]; // the ribs heave with the breath
   // the head hangs and slowly sways / tilts, a predator listening
-  P.neck = [-8 + 2.5 * Math.sin(w + 2.0), 6 * Math.sin(w + 0.5), 0];
-  P.head = [-6 + 3 * Math.sin(br + 1.4), 6 * Math.sin(w + 1.1), 5 * Math.sin(w + 0.2)];
+  P.neck = [-8 + 2 * Math.sin(w + 2.0), 4 * Math.sin(w + 0.5), 0];
+  P.head = [-6 + 2.5 * Math.sin(br + 1.4), 4 * Math.sin(w + 1.1), 3 * Math.sin(w + 0.2)];
   // claws twitch: small fast wrist / finger-plane jerks (integer harmonics: seamless loop)
   const tw = k => Math.pow(Math.max(0, Math.sin(k)), 6);
   P.armL = {...P.armL, dir: [0.3 + 0.02 * Math.sin(w + 1), -0.9, 0.3 + 0.04 * Math.sin(w + 0.5)], flex: 18 + 3 * Math.sin(br) + 8 * tw(5 * w + 0.3), wrist: -8 - 14 * tw(7 * w + 1.1) + 6 * tw(3 * w + 2), wristSide: 6 * tw(9 * w + 0.4)};
@@ -163,8 +163,8 @@ function run(rig, t, T, G) {
   P.hipsRot = [20, 9 * Math.sin(w), 4 * Math.sin(w - 0.4)];
   P.spine = [6, -5 * Math.sin(w), -3 * Math.sin(w - 0.4)];
   P.chest = [6 + 3 * Math.cos(2 * w), -7 * Math.sin(w), -2 * Math.sin(w)];
-  P.neck = [-14, 4 * Math.sin(w), 0];
-  P.head = [-12 + 4 * Math.cos(2 * w), -3 * Math.sin(w), 2 * Math.sin(w + 1)];
+  P.neck = [-11, 4 * Math.sin(w), 0];
+  P.head = [-9 + 2 * Math.cos(2 * w), -3 * Math.sin(w), 2 * Math.sin(w + 1)];
   // loping arm pump, opposite the legs: claws swing forward low, trail back high
   P.armL = {...ARM_HANG, dir: [0.32, -0.78 + 0.12 * Math.sin(w + 0.3), 0.2 - 0.55 * Math.sin(w)], flex: 30 + 20 * Math.max(0, -Math.sin(w)), wrist: -14 + 10 * Math.sin(w - 0.8)};
   P.armR = mirrorArm({...ARM_HANG, dir: [0.32, -0.78 + 0.12 * Math.sin(w + 0.3 + Math.PI), 0.2 + 0.55 * Math.sin(w)], flex: 30 + 20 * Math.max(0, Math.sin(w)), wrist: -14 - 10 * Math.sin(w - 0.8)});
@@ -177,19 +177,22 @@ function run(rig, t, T, G) {
 export function attackKeys() {
   const B = basePose();
   // wind-up: the right claw drawn up and back out to the side, torso coiled to the right, weight on the back foot
-  const windup = {...B, hips: [0, -0.07, -0.06], hipsRot: [4, -10, 0], spine: [0, -8, 0], chest: [-2, -14, 0], neck: [-8, 8, 0], head: [-6, 10, 0],
+  const windup = {...B, hips: [0, -0.07, -0.06], hipsRot: [4, -10, 0], spine: [0, -8, 0], chest: [-2, -14, 0], neck: [-8, 5, 0], head: [-6, 5, 0],
     armL: {...ARM_HANG, dir: [0.45, -0.8, 0.4], flex: 30, wrist: -10},
     armR: mirrorArm({dir: [0.82, 0.3, -0.48], flex: 45, wrist: -18, twist: 0, wristSide: 0}),
     legL: {mode: 'ik', z: 0.06, x: 0, lift: 0.02, pitch: 4, yaw: 4}, legR: {mode: 'ik', z: -0.12, x: 0, lift: 0, pitch: 0, yaw: -6}};
   // hit: lunge onto the left foot, torso uncoils; the extended right arm sweeps through the front at chest height
-  const hit = {...B, hips: [0, -0.16, 0.2], hipsRot: [16, 8, 0], spine: [6, 6, 0], chest: [6, 10, 0], neck: [-14, -6, 0], head: [-10, -6, 0],
+  const hit = {...B, hips: [0, -0.1, 0.18], hipsRot: [10, 8, 0], spine: [6, 6, 0], chest: [2, 10, 0], neck: [-12, -5, 0], head: [-9, -4, 0],
     armL: {...ARM_HANG, dir: [0.4, -0.75, 0.52], flex: 26, wrist: -10},
-    armR: mirrorArm({dir: [0.05, -0.02, 1.0], flex: 6, wrist: 2, twist: 0, wristSide: 0}),
+    // (the torso is uncoiled ~24 deg to the left here: this Chest-frame direction points the arm straight ahead)
+    // (wristSide lifts the hanging claws in line with the forearm: the tips sweep at ~1.35 m)
+    armR: mirrorArm({dir: [0.45, -0.05, 0.9], flex: 6, wrist: 2, twist: 0, wristSide: -25}),
     legL: {mode: 'ik', z: 0.42, x: 0, lift: 0, pitch: -4, yaw: 4}, legR: {mode: 'ik', z: -0.16, x: 0, lift: 0, pitch: 16, yaw: -6}};
-  // follow-through: the claw carries on across to the left, the left claw following low
-  const follow = {...hit, hips: [0, -0.17, 0.2], hipsRot: [18, 16, 0], chest: [8, 18, 0], neck: [-14, -10, 0], head: [-10, -8, 0],
-    armL: {...ARM_HANG, dir: [0.5, -0.7, 0.5], flex: 30, wrist: -12},
-    armR: mirrorArm({dir: [-0.55, -0.3, 0.78], flex: 18, wrist: -6, twist: 0, wristSide: 0})};
+  // follow-through: the claw carries on across and down to the left, well in front of the body (elbow bending), the left
+  // claw following low and out
+  const follow = {...hit, hips: [0, -0.12, 0.18], hipsRot: [12, 14, 0], chest: [4, 14, 0], neck: [-12, -5, 0], head: [-9, -5, 0],
+    armL: {...ARM_HANG, dir: [0.55, -0.7, 0.45], flex: 30, wrist: -12},
+    armR: mirrorArm({dir: [-0.08, -0.4, 0.91], flex: 22, wrist: -6, twist: 0, wristSide: 0})};
   const recover = {...B, hips: [0, -0.1, 0.1], hipsRot: [12, 4, 0], legL: {mode: 'ik', z: 0.2, x: 0, lift: 0.02, pitch: 0, yaw: 4}};
   return [
     {t: 0, p: B}, {t: 0.4, p: windup, ease: 'inOut'}, {t: CLIP_SPECS.Attack.impactTime, p: hit, ease: 'in'}, {t: 0.78, p: follow, ease: 'out'},
@@ -199,35 +202,72 @@ export function attackKeys() {
 
 function hitKeys() {
   const B = basePose();
-  const flinch = {...B, hips: [0.01, -0.07, -0.06], hipsRot: [2, 6, 3], spine: [-6, 5, 3], chest: [-10, 8, 4], neck: [-14, 6, 0], head: [-12, 10, 10],
+  const flinch = {...B, hips: [0.01, -0.07, -0.06], hipsRot: [2, 6, 3], spine: [-6, 5, 3], chest: [-10, 8, 4], neck: [-12, 4, 0], head: [-10, 5, 4],
     armL: {...ARM_HANG, dir: [0.5, -0.8, 0.1], flex: 40, wrist: -22}, armR: mirrorArm({...ARM_HANG, dir: [0.48, -0.82, 0.15], flex: 44, wrist: -24}),
     legL: {...B.legL, z: 0.04}, legR: {...B.legR, z: -0.09}};
-  const rebound = {...B, hips: [0, -0.06, 0.01], hipsRot: [11, -2, -1], chest: [7, -2, 0], head: [-4, -3, 3]};
+  const rebound = {...B, hips: [0, -0.06, 0.01], hipsRot: [11, -2, -1], chest: [7, -2, 0], head: [-5, -2, 2]};
   return [{t: 0, p: B}, {t: 0.09, p: flinch, ease: 'snap'}, {t: 0.26, p: rebound, ease: 'inOut'}, {t: CLIP_SPECS.Hit.duration, p: B, ease: 'inOut'}];
 }
 
 function deathKeys(final) {
   const B = basePose();
   // jolt upright, stagger back a step, knees buckle, the long body topples back as a unit, hits the floor, settles
-  const jolt = {...B, hips: [0, -0.04, -0.05], hipsRot: [0, -6, 4], spine: [-6, -4, 0], chest: [-10, -6, 4], neck: [-16, 0, 0], head: [-14, -10, 10],
+  const jolt = {...B, hips: [0, -0.04, -0.05], hipsRot: [0, -6, 4], spine: [-6, -4, 0], chest: [-10, -6, 4], neck: [-12, 0, 0], head: [-10, -5, 4],
     armL: {...ARM_HANG, dir: [0.6, -0.72, 0.1], flex: 34, wrist: -20}, armR: mirrorArm({...ARM_HANG, dir: [0.55, -0.75, 0.05], flex: 38, wrist: -22}),
     legL: {...B.legL, z: 0.03}, legR: {...B.legR, z: -0.08}};
-  const stagger = {...B, hips: [0.02, -0.1, -0.16], hipsRot: [-4, -10, 6], spine: [-6, -4, 2], chest: [-8, -6, 6], neck: [-10, 0, 0], head: [-10, -14, 14],
+  const stagger = {...B, hips: [0.02, -0.1, -0.16], hipsRot: [-4, -10, 6], spine: [-6, -4, 2], chest: [-8, -6, 6], neck: [-10, 0, 0], head: [-8, -6, 5],
     armL: {...ARM_HANG, dir: [0.8, -0.4, -0.1], flex: 40, wrist: -20}, armR: mirrorArm({...ARM_HANG, dir: [0.75, -0.3, -0.2], flex: 46, wrist: -25}),
     legL: {mode: 'ik', z: -0.02, x: 0.02, lift: 0, pitch: -6, yaw: 8}, legR: {mode: 'ik', z: -0.34, x: 0.04, lift: 0, pitch: 12, yaw: -10}};
-  const buckle = {...B, hips: [0.03, -0.42, -0.26], hipsRot: [-12, -8, 8], spine: [4, -4, 4], chest: [6, -4, 6], neck: [4, 0, 0], head: [0, -16, 18],
+  const buckle = {...B, hips: [0.03, -0.42, -0.26], hipsRot: [-12, -8, 8], spine: [4, -4, 4], chest: [6, -4, 6], neck: [-4, 0, 0], head: [-4, -6, 6],
     armL: {...ARM_HANG, dir: [0.75, -0.6, 0.0], flex: 30, wrist: -20}, armR: mirrorArm({...ARM_HANG, dir: [0.7, -0.6, -0.1], flex: 40, wrist: -25}),
     legL: {mode: 'ik', z: -0.02, x: 0.03, lift: 0, pitch: -14, yaw: 12}, legR: {mode: 'ik', z: -0.32, x: 0.05, lift: 0, pitch: 4, yaw: -12}};
-  const topple = {...B, hips: [0.04, -0.56, -0.46], hipsRot: [-55, -6, 6], spine: [6, -4, 2], chest: [8, -2, 4], neck: [10, 0, 0], head: [4, -20, 10],
+  const topple = {...B, hips: [0.04, -0.56, -0.46], hipsRot: [-55, -6, 6], spine: [6, -4, 2], chest: [8, -2, 4], neck: [-6, 0, 0], head: [-4, -8, 5],
     armL: {...ARM_HANG, dir: [0.85, 0.15, 0.4], flex: 35, wrist: -20}, armR: mirrorArm({...ARM_HANG, dir: [0.82, 0.1, 0.45], flex: 40, wrist: -20}),
     legL: {mode: 'ik', z: 0.0, x: 0.04, lift: 0, pitch: -20, yaw: 14}, legR: {mode: 'ik', z: -0.24, x: 0.06, lift: 0, pitch: -12, yaw: -14}};
-  const thud = {...final, hips: V.add(final.hips, [0, -0.004, 0.02]), chest: V.add(final.chest, [-4, 0, 0]), neck: V.add(final.neck, [5, 0, 0]), head: V.add(final.head, [2, -15, 0]),
+  const thud = {...final, hips: V.add(final.hips, [0, -0.004, 0.02]), chest: V.add(final.chest, [-4, 0, 0]), neck: V.add(final.neck, [5, 0, 0]), head: V.add(final.head, [2, -5, 0]),
     armL: {...final.armL, dir: V.add(final.armL.dir, [0, 0, 0.25])}, armR: {...final.armR, dir: V.add(final.armR.dir, [0, 0, 0.25])}};
   return [
     {t: 0, p: B}, {t: 0.14, p: jolt, ease: 'snap'}, {t: 0.44, p: stagger, ease: 'out'}, {t: 0.8, p: buckle, ease: 'in'},
     {t: 1.1, p: topple, ease: 'inOut'}, {t: 1.38, p: thud, ease: 'in'}, {t: 1.62, p: {...final, hips: V.add(final.hips, [0, 0.012, 0])}, ease: 'out'},
     {t: CLIP_SPECS.Death.duration, p: final, ease: 'inOut'},
   ];
+}
+
+/**
+ * Death-pose floor-contact solve: the zombie/lib/clipsolve.mjs solveDeathPose search (same cost, same coordinate descent,
+ * same zombie/lib/clips.mjs deathFinal supine pose) with Strainer parameter ranges: the head may only turn a little
+ * (headYaw -16..0 deg instead of -80..-20) and nod only a little (neck -16..4, head -14..4 instead of -35..10 / -30..10): the
+ * crown cage is joined to the exposed rib cage directly under the jaw, and a large head turn / pitch tears that junction.
+ */
+export const DEATH_PARAMS = {hipsPitch: [-95, -80], hipsRoll: [-12, 12], neck: [-16, 4], head: [-14, 4], headYaw: [-16, 0], armLz: [-0.8, 0], armRz: [-0.8, 0], footLz: [0.0, 0.5], footRz: [-0.2, 0.35]};
+export const DEATH_START = {hipsPitch: -88, hipsRoll: 5, neck: -10, head: -8, headYaw: -10, armLz: -0.3, armRz: -0.3, footLz: 0.42, footRz: 0.12};
+export function solveStrainerDeath(rig, skel, meshes, regionFloorReport) {
+  const regions = ['torso', 'pelvis', 'head', 'armL', 'armR', 'legL', 'legR'];
+  let evals = 0;
+  const evaluate = tune => {
+    evals++;
+    let hipsY = -0.64 * skel.H / 1.78, rep;
+    for (let it = 0; it < 3; it++) {
+      rep = regionFloorReport(rig, skel, meshes, realize(rig, deathFinal(hipsY, tune)));
+      const min = Math.min(...Object.entries(rep).filter(([k]) => !/leg[LR]$/.test(k)).map(([, v]) => v));
+      hipsY += 0.01 - min;
+    }
+    rep = regionFloorReport(rig, skel, meshes, realize(rig, deathFinal(hipsY, tune)));
+    let cost = 0;
+    for (const r of regions) cost += Math.pow(Math.max(0, rep[r] - 0.015), 2) + 4 * Math.pow(Math.min(0, rep[r] - 0.015), 2);
+    return {cost, hipsY, rep};
+  };
+  let tune = {...DEATH_START};
+  let best = evaluate(tune), step = 0.25;
+  for (let round = 0; round < 6; round++) {
+    for (const [k, [lo, hi]] of Object.entries(DEATH_PARAMS)) for (const dir of [1, -1]) {
+      const cand = {...tune, [k]: Math.min(hi, Math.max(lo, tune[k] + dir * step * (hi - lo)))};
+      const r = evaluate(cand);
+      if (r.cost < best.cost - 1e-7) { best = r; tune = cand; }
+    }
+    step /= 2;
+  }
+  return {tune: Object.fromEntries(Object.entries(tune).map(([k, v]) => [k, +v.toFixed(3)])), hipsY: best.hipsY, cost: best.cost, evals, report: best.rep, ranges: DEATH_PARAMS};
 }
 
 export function evalClip(rig, name, t, ctx = {}) {
@@ -269,3 +309,6 @@ export function sampleClip(rig, name, ctx = {}) {
 
 /** Pose of sampled frame f (for CPU skinning / audits). */
 export const poseAt = (clip, f) => ({hips: clip.hips[f], rot: Object.fromEntries(Object.entries(clip.rot).map(([k, v]) => [k, v[f]]))});
+
+/** QA probes (tools only). */
+export const _qa = {keyed, resolveArms, basePose};
