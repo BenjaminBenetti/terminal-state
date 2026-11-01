@@ -74,11 +74,12 @@ export const REACTOR_MODELS: Readonly<Record<ReactorPiece, ReactorModelSpec>> = 
   coolantPump: fromKit('coolantPump', REACTOR_KIT.coolantPump, 'real', 3),
   controlConsole: fromKit('controlConsole', REACTOR_KIT.controlConsole, 'real', 3),
   // 4 m modules at ~15 k triangles each: the top of each bank (clear air, seen from the rim) is modelled, the gassed depths stay
-  // procedural pipes (a ring catwalk hides the seam): 30 modules max per level (~450 k triangles)
-  pipeBank: fromKit('pipeBank', REACTOR_KIT.pipeBank, 'stack', 30),
+  // procedural pipes (a ring catwalk hides the seam): 24 modules max per level (~360 k triangles)
+  pipeBank: fromKit('pipeBank', REACTOR_KIT.pipeBank, 'stack', 24),
   coolantValve: fromKit('coolantValve', REACTOR_KIT.coolantValve, 'real', 3),
-  // ~4 k triangles each: the pit-wall / catwalk / gantry lamps take the model (up to the cap, top-down); railing lamps stay cheap cages
-  floodLamp: fromKit('floodLamp', REACTOR_KIT.floodLamp, 'real', 64, {plate: [0, 0.36, -0.219], lens: [0, 0.167, 0.212], lensW: 0.17, lensH: 0.24}),
+  // ~4 k triangles each: the pit-wall / catwalk / gantry lamps take the model (up to the cap, top-down: the clear upper tiers seen
+  // from the rim); deeper / railing lamps stay cheap cages (~100 triangles)
+  floodLamp: fromKit('floodLamp', REACTOR_KIT.floodLamp, 'real', 32, {plate: [0, 0.36, -0.219], lens: [0, 0.167, 0.212], lensW: 0.17, lensH: 0.24}),
 };
 
 export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];

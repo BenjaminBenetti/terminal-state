@@ -941,7 +941,7 @@ function planSite(plan: KitPlan, site: ReactorSite): void {
     const key = `${piece}|${Math.round(yaw * 10)}`;
     const prior = seen.get(key) ?? [];
     // a machine of this kind facing this way already stands within its width: that one serves this control too
-    if (piece === 'switchgear' ? prior.length > 0 : prior.some(p => Math.hypot(p.x - cx, p.z - cz) < w * 0.6)) continue;
+    if (piece === 'switchgear' ? prior.length > 0 : prior.some(p => Math.hypot(p.x - cx, p.z - cz) < w * 0.95)) continue;
     prior.push({x: cx, z: cz}); seen.set(key, prior);
     const band = plan.bandOf(fy + 0.1);
     if (piece === 'switchgear') { planSwitchgearBank(plan, site, {x: cx, z: cz}, fy, yaw, model, prior); continue; }
