@@ -27,6 +27,7 @@ import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale,
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
+import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -61,6 +62,8 @@ export class ReactorArch {
   built: KitBuilt | null = null;
   /** Task reactor-expansion-20261101 (lane GASLIGHT): the mounted pit lamps planned with the kit (model or cage, lens matrix). */
   mountedLamps: MountedLampRec[] = [];
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky dome + outside gas (null: no opening). */
+  pitSky: PitSkyStats | null = null;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
   readonly stats: ReactorArchStats = {kit: null, meshes: null, models: [], faces: {}, pitCells: 0, lamps: 0, ms: 0};
 
@@ -240,6 +243,8 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    // (lane GASLIGHT) the open pit top: the toxic sky + the outside gas sheets above the roof line (the volumetric part is the march's)
+    try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }
