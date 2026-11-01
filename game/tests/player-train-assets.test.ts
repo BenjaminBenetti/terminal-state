@@ -393,4 +393,60 @@ describe('player train: cooked assets', () => {
     expect(leafHits({min: [lw.x1 + 0.02, lw.y0 + 0.2, -0.03], max: [SPEC.doorLeaf.width / 2, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the stile
     expect(leafHits({min: [-SPEC.doorLeaf.width / 2, lw.y0 + 0.2, -0.03], max: [lw.x0 - 0.005, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the rim
   }, 60000);
+
+  // task studio-beta-train-lockbox-windows-20261101-232156-01 (user: "I want to add a lock box in the back compartement of the train")
+  it('lockbox: Meshy model with a body + hinged lid node, real size, grounded / centred, cavity inside the body, provenance pinned', async () => {
+    const M = PLAYER_TRAIN_MODELS['player-train-lockbox'], LB = PLAYER_TRAIN_MEASURED.lockbox;
+    expect(M.url).toBe('assets/models/player-train-lockbox.glb');
+    expect(levelOfAsset(M.url)).toBeNull();
+    expect(LB.length).toBeGreaterThanOrEqual(1.0);
+    expect(LB.length).toBeLessThanOrEqual(1.05);
+    expect([LB.length, LB.height, LB.depth]).toEqual([...M.dims]);
+    const doc = await new NodeIO().read(pub(M.url));
+    const nodes = doc.getRoot().listNodes().filter(n => n.getMesh());
+    expect(nodes.map(n => n.getName()).sort()).toEqual(['lockbox-body', 'lockbox-lid']);
+    const body = nodes.find(n => n.getName() === 'lockbox-body')!, lid = nodes.find(n => n.getName() === 'lockbox-lid')!;
+    expect(body.getTranslation()).toEqual([0, 0, 0]);
+    const lt = lid.getTranslation();
+    expect(lt[0]).toBe(0);
+    expect(lt[1]).toBeCloseTo(LB.hinge.y, 4);
+    expect(lt[2]).toBeCloseTo(LB.hinge.z, 4);
+    expect(LB.seamY).toBe(LB.hinge.y);
+    const verts = (n: typeof body) => { const P = n.getMesh()!.listPrimitives()[0].getAttribute('POSITION')!.getArray()!; const out: V3[] = []; for (let i = 0; i < P.length; i += 3) out.push([P[i], P[i + 1], P[i + 2]]); return out; };
+    const bv = verts(body), lv = verts(lid);
+    const bb = {min: [0, 1, 2].map(k => Math.min(...bv.map(v => v[k]))), max: [0, 1, 2].map(k => Math.max(...bv.map(v => v[k])))};
+    // grounded / centred / front +Z: the whole box spans x / z symmetric about 0 and starts at y 0
+    const all = [...bv, ...lv.map(v => [v[0] + lt[0], v[1] + lt[1], v[2] + lt[2]] as V3)];
+    expect(Math.min(...all.map(v => v[1]))).toBeCloseTo(0, 3);
+    expect(Math.abs(Math.min(...all.map(v => v[0])) + Math.max(...all.map(v => v[0])))).toBeLessThan(2e-3);
+    expect(Math.abs(Math.min(...all.map(v => v[2])) + Math.max(...all.map(v => v[2])))).toBeLessThan(2e-3);
+    // the hinge is the back-top edge: at the seam, at the back; the lid lies in front of / above it (hasps hang a little at the front)
+    expect(LB.hinge.z).toBeLessThan(-0.45 * LB.depth);
+    expect(LB.seamY).toBeGreaterThan(0.5 * LB.height);
+    expect(Math.min(...lv.map(v => v[2]))).toBeGreaterThan(-0.01);
+    expect(Math.min(...lv.map(v => v[1]))).toBeGreaterThan(-0.06);
+    expect(Math.max(...lv.map(v => v[1])) + LB.hinge.y).toBeCloseTo(LB.height, 3);
+    // the body stops at the seam (an open box: no top face; its catches peek a little above), the cavity sits inside it
+    expect(bb.max[1]).toBeLessThan(LB.seamY + 0.02);
+    const C = LB.cavity;
+    expect(C.x0).toBeGreaterThan(bb.min[0]); expect(C.x1).toBeLessThan(bb.max[0]);
+    expect(C.z0).toBeGreaterThan(bb.min[2]); expect(C.z1).toBeLessThan(bb.max[2]);
+    expect(C.y0).toBeGreaterThan(0); expect(C.y1).toBe(LB.seamY);
+    expect(bv.filter(v => v[1] > LB.seamY - 0.01 && Math.abs(v[0]) < C.x1 - 0.05 && v[2] > C.z0 + 0.05 && v[2] < C.z1 - 0.05)).toHaveLength(0); // open top
+    // opened ~100 deg about the hinge (rotation.x = -angle), the lid swings up and back, clear of the cavity
+    const a = -100 * Math.PI / 180;
+    const opened = lv.map(v => [v[0], lt[1] + v[1] * Math.cos(a) - v[2] * Math.sin(a), lt[2] + v[1] * Math.sin(a) + v[2] * Math.cos(a)]);
+    expect(Math.min(...opened.map(v => v[1]))).toBeGreaterThan(LB.seamY - 0.08);
+    expect(Math.max(...opened.map(v => v[2]))).toBeLessThan(C.z0 + 0.1);
+    // provenance: the ONE accepted lockbox refine, its raw hash and the lockbox ledger
+    const m = prov.models['train-lockbox'];
+    expect(m.tasks).toEqual({preview: '01a1996f-788c-73a8-b72f-b0cbf80a91ea', refine: '01a19970-d6a7-7150-ac6c-a68aa972b326'});
+    expect(m.source.sha256).toBe('b6b9857fedeb64df69651d7cc47ce230146d577694b6548ee118668a27782f7d');
+    const b = fs.readFileSync(pub(M.url));
+    expect(m.output).toEqual({url: M.url, bytes: b.length, sha256: sha(b)});
+    expect(m.derivative).toMatchObject({meshes: 2, materials: 1, triangles: M.tris});
+    expect(prov.lockboxLedger).toMatchObject({accepted: 1, credits: {reserved: 0}});
+    expect(prov.lockboxLedger.credits.billed).toBeLessThanOrEqual(50);
+    expect(M.tris).toBeLessThanOrEqual(12000);
+  }, 60000);
 });

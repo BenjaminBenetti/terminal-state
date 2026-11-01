@@ -3,11 +3,13 @@
 // Train-local frame: origin = car centre on the track centre line at RAIL-TOP height, +X front (cab), +Y up, -Z platform side.
 // Shared runtime files (every station level parks the car). Models are baked at their runtime size in their own frames:
 //   shell: train-local (place at the car origin);  door leaf: ONE leaf of a centre-opening pair, grounded / centred, closing edge
-//   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z.
+//   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z;
+//   lockbox: grounded / centred, front (latches) +Z, nodes 'lockbox-body' + 'lockbox-lid' (origin on the back hinge line).
 export const PLAYER_TRAIN_MODELS = {
   'player-train-shell': {key: 'player-train-shell', url: 'assets/models/player-train-shell.glb', bytes: 2542524, tris: 27566, dims: [16.2031, 3.8508, 2.9866] as const},
   'player-train-door-leaf': {key: 'player-train-door-leaf', url: 'assets/models/player-train-door-leaf.glb', bytes: 107428, tris: 992, dims: [0.608, 2.031, 0.045] as const},
   'player-train-console': {key: 'player-train-console', url: 'assets/models/player-train-console.glb', bytes: 607856, tris: 11389, dims: [0.8028, 1.1641, 1.9549] as const},
+  'player-train-lockbox': {key: 'player-train-lockbox', url: 'assets/models/player-train-lockbox.glb', bytes: 546116, tris: 8578, dims: [1.03, 0.5555, 0.6138] as const},
 } as const;
 
 /** Interior textures (Codex sources, 1024 px sRGB JPEG): the wall is one window bay (tile along the car), floor / ceiling tile in
@@ -70,4 +72,7 @@ export const PLAYER_TRAIN_MEASURED = {
     ],
     leaf: {x0: -0.242, x1: 0.195, y0: 0.06, y1: 1.922},
   },
+  /** The rear-compartment lockbox model's own frame (front +Z, grounded, centred): seam height, the lid node's hinge origin, the open
+   *  body's inner box (for the runtime's dark liner). */
+  lockbox: {length: 1.03, height: 0.5555, depth: 0.6138, seamY: 0.3731, hinge: {y: 0.3731, z: -0.3026}, cavity: {x0: -0.461, x1: 0.461, y0: 0.032, y1: 0.3731, z0: -0.283, z1: 0.253}},
 } as const;

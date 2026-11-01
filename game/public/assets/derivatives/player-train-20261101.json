@@ -3,7 +3,7 @@
  "asset": "player-train-20261101",
  "task": "studio-beta-player-train-shell-20261101-202805-01",
  "lane": "ASSETS (Studio Beta player train)",
- "status": "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "status": "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50), plus the rear-compartment LOCKBOX model (Meshy T2.5, the user's lockbox authorization: up to 50 credits; used 15); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
  "rebuild": "node tools/asset-pipeline/train/build-player-train.mjs",
  "rawStorage": "reference/tasks/player-train-shell-20261101-202805/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} + reference/tasks/player-train-shell-20261101-202805/codex/<id>/{<id>-original.png, receipt.json, prompt.txt} + SOURCES-SHA256.txt (read-only raw masters, outside Git)",
  "frame": "train-local: origin = car centre on the track centre line at rail-top height, +X front (cab), +Y up, -Z platform side; metres",
@@ -243,7 +243,87 @@
     "bytes": 607856,
     "sha256": "c0ac72b225bc0beaf2a86f22d6b714a266e9f627d0f6f2ea3f6cf904105da66a"
    }
+  },
+  "train-lockbox": {
+   "task": "studio-beta-train-lockbox-windows-20261101-232156-01",
+   "prompt": "one single large heavy-duty steel lockbox storage chest, a long rectangular box about twice as long as it is deep and about as tall as it is deep, sitting flat on the floor on a low steel base skid; a separate thick flat lid on top with a clear horizontal seam all around where the lid meets the box, lid slightly overhanging the front; a long piano hinge along the back top edge; reinforced folded steel corner caps and edge strips; three raised horizontal stiffening ribs pressed into the front and sides; two sturdy steel latch clasps on the front; a folding steel carry handle on each short end; realistic game asset, industrial, weathered: chipped olive green paint, rust on edges, grime; closed lid, single object, no padlock, no text, no logos, no ground plane",
+   "texturePrompt": "weathered industrial steel lockbox: chipped and faded olive green paint over steel, rust streaks and bare worn steel on the edges, corners and lid rim, darker grime in the seams and ribs, scuffed lid top, dull steel latches, hinge and handles, realistic PBR, no text, no logos",
+   "tasks": {
+    "preview": "01a1996f-788c-73a8-b72f-b0cbf80a91ea",
+    "refine": "01a19970-d6a7-7150-ac6c-a68aa972b326"
+   },
+   "billed": 15,
+   "source": {
+    "file": "lockbox-a1-refine-01a19970-d6a7.glb",
+    "bytes": 7073364,
+    "sha256": "b6b9857fedeb64df69651d7cc47ce230146d577694b6548ee118668a27782f7d",
+    "previewSha256": "2295a0ffb8e167a9d34dfcfb709ee083911fd722a8d120f4cd8683e799327976"
+   },
+   "derivative": {
+    "dims": [
+     1.03,
+     0.5555,
+     0.6138
+    ],
+    "triangles": 8578,
+    "meshes": 2,
+    "materials": 1,
+    "textures": [
+     {
+      "slot": "baseColor",
+      "size": [
+       1024,
+       1024
+      ],
+      "mime": "image/jpeg",
+      "bytes": 169827
+     },
+     {
+      "slot": "metallicRoughness",
+      "size": [
+       256,
+       256
+      ],
+      "mime": "image/jpeg",
+      "bytes": 24993
+     },
+     {
+      "slot": "normal",
+      "size": [
+       512,
+       512
+      ],
+      "mime": "image/jpeg",
+      "bytes": 12671
+     }
+    ],
+    "gpuBytesWithMips": 7340031,
+    "texturePolicy": {
+     "base": 1024,
+     "normal": 512,
+     "mr": 256,
+     "quality": 85
+    }
+   },
+   "output": {
+    "url": "assets/models/player-train-lockbox.glb",
+    "bytes": 546116,
+    "sha256": "adac19d46112b49cd046cbf320877536508e8299675a8f17bee6cdc1d3804345"
+   }
   }
+ },
+ "lockboxLedger": {
+  "task": "studio-beta-train-lockbox-windows-20261101-232156-01",
+  "rawStorage": "reference/tasks/train-lockbox-windows-20261101-232156/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} (read-only raw masters, outside Git)",
+  "attempts": 1,
+  "attemptedPOSTs": 2,
+  "accepted": 1,
+  "credits": {
+   "billed": 15,
+   "reserved": 0,
+   "ceiling": 50
+  },
+  "close": "budget CLOSED at the first acceptable: 1 / 3 attempts, 2 / 6 paid POSTs, 15 / 50 credits billed, 0 reserved, 1 / 1 accepted. The unused 35 are not authority. Codex: 0 / 4 calls (none needed)."
  },
  "derivation": {
   "shell": {
@@ -458,6 +538,21 @@
    "method": "turned -90 deg about Y (native operator side +Z -> -X), uniform scale",
    "scale": 2.05,
    "frame": "grounded, centred; operator side -X, windshield side +X, width along Z"
+  },
+  "lockbox": {
+   "method": "split by part at the lid seam (stacked closed parts; seam = midway between the body top and the lowest lid band): a part goes with the lid when it reaches > 0.02 raw above the seam (bands, cap, straps, top corner caps, the latch / centre hasps hanging over the body), the rest (body, catches, end handles, skid, bottom corner caps) is the body; the body top face removed (open box); uniform scale; the lid node origin on the back hinge line (seam height, lid back face)",
+   "seamRaw": 0.0884,
+   "scale": 1.0845,
+   "parts": {
+    "total": 143,
+    "lid": 79
+   },
+   "triangles": {
+    "body": 3884,
+    "lid": 4694,
+    "bodyTopRemoved": 8
+   },
+   "frame": "front (latches) +Z as generated, grounded, centred x / z; nodes lockbox-body (origin) and lockbox-lid (origin = hinge: rotation.x = -angle opens upward toward the back)"
   }
  },
  "textures": [
@@ -936,6 +1031,24 @@
     "x1": 0.195,
     "y0": 0.06,
     "y1": 1.922
+   }
+  },
+  "lockbox": {
+   "length": 1.03,
+   "height": 0.5555,
+   "depth": 0.6138,
+   "seamY": 0.3731,
+   "hinge": {
+    "y": 0.3731,
+    "z": -0.3026
+   },
+   "cavity": {
+    "x0": -0.461,
+    "x1": 0.461,
+    "y0": 0.032,
+    "y1": 0.3731,
+    "z0": -0.283,
+    "z1": 0.253
    }
   }
  }

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 28950,
-      "sha256": "03c7eb534ce29b308966afac4e9f304e730a34af011fef6e4a2933b3dec11503"
+      "bytes": 29206,
+      "sha256": "87f9f844cbb05b25f38492103ba27fc74fe80db62bcfcb9ac249d6463701b347"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1725,8 +1725,8 @@
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
-      "bytes": 26979,
-      "sha256": "982cda2874a8891aa07af9dbd5ef9a3dfc0e20d7c981e968493d5801e027ec17"
+      "bytes": 31318,
+      "sha256": "e917ec8203fd6b0e0570fae6f452e966d5c315d14d47c6d072bb6561055b3d02"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -3237,6 +3237,11 @@
       "path": "assets/models/player-train-door-leaf.glb",
       "bytes": 107428,
       "sha256": "1106d394775b16e04baad04d55d12bbe97b3407fd5391a208c25bb8239940bae"
+    },
+    {
+      "path": "assets/models/player-train-lockbox.glb",
+      "bytes": 546116,
+      "sha256": "adac19d46112b49cd046cbf320877536508e8299675a8f17bee6cdc1d3804345"
     },
     {
       "path": "assets/models/player-train-shell.glb",

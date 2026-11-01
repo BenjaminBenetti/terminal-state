@@ -241,6 +241,7 @@ Models generated for this project with Meshy T2.5 (smart topology; text-to-3D pr
 - `assets/models/player-train-shell.glb` — weathered subway car shell (Meshy tasks 01a198d2-7f79-7021-981f-3b63e0548d6f / 01a198d3-a2b4-70c5-a452-6084c8b0d0fd)
 - `assets/models/player-train-console.glb` — cab driving desk (Meshy tasks 01a198d0-a538-7332-9064-ada748d324d6 / 01a198d2-0957-7588-83fe-c959b740c1ef)
 - `assets/models/player-train-door-leaf.glb` — sliding door leaf (Meshy tasks 01a198d0-ade7-7435-8dbe-13a82462028b / 01a198d2-0f84-7605-9343-24943ef4f4aa)
+- `assets/models/player-train-lockbox.glb` — rear-compartment steel lockbox, split into body + hinged lid (Meshy tasks 01a1996f-788c-73a8-b72f-b0cbf80a91ea / 01a19970-d6a7-7150-ac6c-a68aa972b326; the user's lockbox authorization, 15 of up to 50 credits)
 - `assets/textures/train/train-int-wall.jpg` — interior side wall, one window bay (tiles along the car) (Codex thread 01a198d0-301a-7e62-abad-ee94bcd0efde)
 - `assets/textures/train/train-int-floor.jpg` — ribbed rubber floor (tiles in 2D) (Codex thread 01a198d0-f4bb-7c81-8b89-8f605a9ef95c)
 - `assets/textures/train/train-int-ceiling.jpg` — vented ceiling panels (tiles in 2D) (Codex thread 01a198d1-c556-7673-a111-b1b56f00891f)
