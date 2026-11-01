@@ -264,7 +264,7 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
   const growthFactor = (g: number) => 1 / (1 + g / L.growthScale);
   const pickOpt = (ok: Opt[]): Opt => rng.weighted(ok.map(o => [o, o.pref * growthFactor(o.g)] as [Opt, number]));
 
-  /** Lays a segment off `from` through `door`-able wall, lines it; undone (null) when it carries no room. */
+  /** Lays a segment off `from` (a door through the wall between them) and lines it; undone (null) when it carries no room. */
   const laySeg = (from: Seg, o: Opt, chain: number): Seg | null => {
     const m = P.mark(), n0 = laid.length, h0 = halls, fromHall = from.hall;
     const dw = P.wallDoor(from.r, o.r, Math.min(doorW, widthOf(from), o.ax === 'x' ? o.r.h : o.r.w));
@@ -275,7 +275,7 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
     laid.push({id, r: o.r, kind: 'corridor', depth: s.depth, hall: false, host: from.id, endRoom: false});
     segs.push(s);
     lineSeg(s);
-    if (s.rooms === 0 && !s.slots.length) {
+    if (s.rooms === 0) {
       P.undo(m); laid.length = n0; halls = h0; from.hall = fromHall; segs.pop();
       return null;
     }
@@ -364,7 +364,8 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
       let deep: number, across: number;
       if (o.hall && H) { const sh = cr(H.short), lo = rng.int(Math.max(sh, cl(H.long[0])), cl(H.long[1])); [deep, across] = rng.chance(0.5) ? [lo, sh] : [sh, lo]; }
       else if (o.hide) { deep = rng.int(cl(4.5), cl(6)); across = rng.int(cl(4), cl(5.5)); }
-      else { deep = cr(L.bay[zone(s)]); across = rng.int(Math.max(wc, roomMin), Math.max(wc, roomMin) + cl(4)); }
+      // (a plant end room is plant-sized: >= 4.5 m across — the far wall a ventilation plant / culvert wants)
+      else { const lo = Math.max(wc, zone(s) === 'plant' ? cl(4.5) : roomMin); deep = cr(L.bay[zone(s)]); across = rng.int(lo, lo + cl(3)); }
       if (k >= 3 && !o.hall) { deep = Math.max(roomMin, deep - 2 * (k - 2)); across = Math.max(roomMin, Math.min(across, wc + 4)); }
       if (P.cells() + deep * across > o.budget) continue;
       const v0 = rng.int(c1 - across, c0), u0 = e ? a1 + 1 : a0 - 1 - deep;

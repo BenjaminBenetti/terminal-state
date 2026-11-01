@@ -368,6 +368,9 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
     let z: AnnexZone | undefined = pz && (fill.get(pz) ?? 0) < Z.district[pz] ? pz : undefined;
     if (z) cdist.set(c.id, cdist.get(pc!.id)!);
     else {
+      // a corridor that closes with a plant-sized end room starts the AIR district while it has room (its fans on the far wall)
+      const endRoom = (hosted.get(c.id) ?? []).some(a => a.kind === 'room' && !a.extHall && atCorridorEnd(a, c) && fitsSig('ventilation', a));
+      if (endRoom && (fill.get('air') ?? 0) < Z.district.air) z = 'air';
       for (let k = 0; k < rot.length && !z; k++) { const cand = rot[(next + k) % rot.length]; if ((fill.get(cand) ?? 0) < Z.district[cand]) { z = cand; next = (next + k + 1) % rot.length; } }
       if (!z) { fill.clear(); z = rot[next]; next = (next + 1) % rot.length; }
       fill.set(z, 0);
@@ -404,9 +407,8 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
   }
   // medium plant rooms: their district's signatures (another district's only now and then, when theirs are all next door already)
   const medium = (a: Area) => !a.extHall && dims(a)[0] >= R.medium.short - 1e-6 && m2(a) >= R.medium.m2 - 1e-6;
-  // (district by district; a corridor-end room first, so the ventilation plant takes the far wall where it can)
-  const hostOrder = (a: Area) => order.get(host.get(a.id) ?? -1) ?? 1e9;
-  for (const a of rooms.filter(q => medium(q) && PLANT_ZONES.includes(zone.get(q.id)!)).sort((p, q) => hostOrder(p) - hostOrder(q) || (endOf(p) ? 0 : 1) - (endOf(q) ? 0 : 1) || bfs(p, q))) {
+  // (district by district; its corridor-end rooms first, so the ventilation plant takes the far wall where it can)
+  for (const a of rooms.filter(q => medium(q) && PLANT_ZONES.includes(zone.get(q.id)!)).sort((p, q) => distOf(p) - distOf(q) || (endOf(p) ? 0 : 1) - (endOf(q) ? 0 : 1) || bfs(p, q))) {
     if (!rng.chance(Z.plantShare)) continue;
     const w = weightsFor(a), z = zone.get(a.id)!, seen = inDistrict.get(distOf(a)) ?? new Set<SignatureId>();
     let s = drawSignature(a, adj, sig, used, rng, new Set([...seen, ...SIGNATURE_IDS.filter(q => !Z.sig[z].some(([o]) => o === q))]), w);
@@ -456,7 +458,10 @@ function partners(areas: readonly Area[], adj: Map<number, number[]>, byId: Map<
       const cx = (a.x + a.w / 2), cy = (a.y + a.h / 2);
       const cand = near(a.id).filter(o => o.kind === 'room' && !sig.has(o.id) && !o.extHall && PLANT_ZONES.includes(zone.get(o.id)!) && ok(conv, o))
         .sort((p, q) => Math.abs(p.x + p.w / 2 - cx) + Math.abs(p.y + p.h / 2 - cy) - (Math.abs(q.x + q.w / 2 - cx) + Math.abs(q.y + q.h / 2 - cy)) || p.id - q.id);
-      if (cand.length) setPurpose(cand[0], conv);
+      if (cand.length) { setPurpose(cand[0], conv); continue; }
+      // no room for it: a closet of the district within two hops becomes the generator's electrical closet
+      const closet = conv === 'electrical-room' ? near(a.id).find(o => o.kind === 'closet' && PLANT_ZONES.includes(zone.get(o.id)!)) : undefined;
+      if (closet) setPurpose(closet, 'electrical-closet');
     }
   }
 }
@@ -1029,5 +1034,8 @@ export function placeAnnexMachinery(layout: StationLayout, plan: AnnexRoomPlan, 
       rep.demoted++;
     }
   }
+  // (round 3) the functional partners again for what was actually BUILT (a retry / demotion may have changed a room's machinery);
+  // only utility rooms change purpose — the purposes' furniture is placed after this pass
+  if (plan.zone) partners(areas, plan.adj, byId, rep.built, plan.zone, setPurpose, utilityOk);
   return rep;
 }

@@ -34,10 +34,14 @@ export interface AnnexLayoutMetrics {
   longestStraightM: number;
   /** Corridors with a single door (true dead ends), corridors serving no room, corridors leading to exactly one room and nothing else. */
   deadEndCorridors: number; corridorsNoRoom: number; singleRoomCorridors: number;
+  /** The entry passage carries no room of its own (a plain passage into the main corridor). */
+  entryBare: number;
   /** Door hops from the annex door (entry corridor = 1): the deepest room, and the mean over rooms. */
   maxHops: number; meanHops: number;
   /** Functional adjacency: signature rooms with a partner rule, and how many have a partner within 2 hops. */
   adjPairs: number; adjOk: number;
+  /** Signature purposes without their partner (count per purpose). */
+  adjMiss: Record<string, number>;
   /** Ventilation plants at a corridor end (door in its corridor's end wall) or in the deep band / all ventilation plants. */
   ventEnd: number; vents: number;
   /** Staff rooms in the entry half of the depth range / staff rooms; signature rooms in the entry third. */
@@ -110,7 +114,8 @@ export function annexLayoutMetrics(layout: StationLayout, n: ServiceAnnex, tag =
   }
   const roomDoorsOf = (c: Area) => adj.get(c.id)!.filter(o => !isCorr(o)).length;
   const deadEnd = corr.filter(c => doorsOf.get(c.id)! <= 1).length;
-  const noRoom = corr.filter(c => roomDoorsOf(c) === 0).length;
+  // (the entry passage is counted apart: a short passage from the tunnel / bed straight into the main corridor is a real service-area plan)
+  const noRoom = corr.filter(c => c.id !== entry && roomDoorsOf(c) === 0).length, entryBare = roomDoorsOf(byId.get(entry)!) === 0 ? 1 : 0;
   const single = corr.filter(c => roomDoorsOf(c) === 1 && adj.get(c.id)!.filter(isCorr).length + (c.id === entry ? 1 : 0) <= 1).length;
   const roomHops = [...rooms, ...closets].map(a => hops.get(a.id) ?? 0);
   // adjacency within 2 hops
@@ -120,10 +125,11 @@ export function annexLayoutMetrics(layout: StationLayout, n: ServiceAnnex, tag =
     return out;
   };
   let adjPairs = 0, adjOk = 0, vents = 0, ventEnd = 0;
+  const adjMiss: Record<string, number> = {};
   const ds = areas.map(a => a.depth), dMin = Math.min(...ds), dMax = Math.max(...ds);
   for (const a of areas) {
     const want = ADJACENCY[a.purpose ?? ''];
-    if (want) { adjPairs++; if (within2(a.id).some(o => want.includes(o.purpose ?? ''))) adjOk++; }
+    if (want) { adjPairs++; if (within2(a.id).some(o => want.includes(o.purpose ?? ''))) adjOk++; else adjMiss[a.purpose!] = (adjMiss[a.purpose!] ?? 0) + 1; }
     if (a.purpose === 'ventilation-plant') {
       vents++;
       const atEnd = adj.get(a.id)!.some(o => { const c = byId.get(o)!; if (c.kind !== 'service') return false; return axisX(c) ? (a.x >= c.x + c.w || a.x + a.w <= c.x) : (a.y >= c.y + c.h || a.y + a.h <= c.y); });
@@ -139,9 +145,9 @@ export function annexLayoutMetrics(layout: StationLayout, n: ServiceAnnex, tag =
     areas: areas.length, corridors: corr.length, rooms: rooms.length, closets: closets.length, halls: rooms.filter(a => a.extHall).length,
     roomsOnCorridor: rooms.filter(onCorr).length, closetsOnCorridor: closets.filter(onCorr).length,
     viaRooms: via.length, maxRoomChain: Math.max(0, ...[...chain.values()]) + (via.length ? 0 : 0),
-    longestStraightM: longest, deadEndCorridors: deadEnd, corridorsNoRoom: noRoom, singleRoomCorridors: single,
+    longestStraightM: longest, deadEndCorridors: deadEnd, corridorsNoRoom: noRoom, singleRoomCorridors: single, entryBare,
     maxHops: Math.max(...roomHops), meanHops: roomHops.reduce((s, v) => s + v, 0) / Math.max(1, roomHops.length),
-    adjPairs, adjOk, ventEnd, vents,
+    adjPairs, adjOk, adjMiss, ventEnd, vents,
     staffNear: staff.filter(a => (a.depth - dMin) <= (dMax - dMin) / 2).length, staff: staff.length,
     sigEntry: sigs.filter(a => bandOf(a.depth, dMin, dMax) === 0).length, sigs: sigs.length,
     hideout: hid, hideoutOk: hid !== undefined ? hideoutOk(layout, n, hid) : candidateExists, candidateExists,
@@ -167,11 +173,12 @@ export function summarize(list: readonly AnnexLayoutMetrics[]): Record<string, s
     'corridors per annex (mean / min / max)': `${f1(mean(m => m.corridors))} / ${min(m => m.corridors)} / ${max(m => m.corridors)}`,
     'longest straight corridor run, m (mean / max)': `${f1(mean(m => m.longestStraightM))} / ${f1(max(m => m.longestStraightM))}`,
     'dead-end corridors (one door) per annex (mean / max)': `${f1(mean(m => m.deadEndCorridors))} / ${max(m => m.deadEndCorridors)}`,
-    'corridors serving no room (total)': `${sum(m => m.corridorsNoRoom)}`,
+    'corridors serving no room (total; entry passages apart)': `${sum(m => m.corridorsNoRoom)} (+ ${sum(m => m.entryBare)} plain entry passages)`,
     'corridors leading to one room and nothing else, per annex (mean / max)': `${f1(mean(m => m.singleRoomCorridors))} / ${max(m => m.singleRoomCorridors)}`,
     'door hops to the deepest room (mean / max)': `${f1(mean(m => m.maxHops))} / ${max(m => m.maxHops)}`,
     'mean door hops over rooms (mean of annexes)': f1(mean(m => m.meanHops)),
     'functional adjacency pairs satisfied': `${sum(m => m.adjOk)} / ${sum(m => m.adjPairs)} (${pct(sum(m => m.adjOk), sum(m => m.adjPairs))})`,
+    'signature rooms without their partner, by purpose': JSON.stringify(list.reduce((t, m) => { for (const [k, v] of Object.entries(m.adjMiss)) t[k] = (t[k] ?? 0) + v; return t; }, {} as Record<string, number>)),
     'ventilation plants at a corridor end / deep band': `${sum(m => m.ventEnd)} / ${sum(m => m.vents)}`,
     'staff rooms (workshop / custodial / first aid) in the entry half': `${pct(sum(m => m.staffNear), sum(m => m.staff))}`,
     'signature rooms in the entry third': `${pct(sum(m => m.sigEntry), sum(m => m.sigs))}`,
