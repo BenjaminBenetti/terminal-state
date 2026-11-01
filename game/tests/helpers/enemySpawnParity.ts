@@ -151,21 +151,30 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
  * rooms lining corridors, districts, a guaranteed hideout room) and the survivor hideout's appended props / holders / gear pickup;
  * station counts and service counts unchanged; core views and invariants unchanged.) Stage 11 values: 7:rifle b1c2f2b6 / 1d5815a2; 7:pistol b1c2f2b6 / 38baae1c; 42:rifle 74c78b25 / 9be118c8; 42:pistol 74c78b25 / 186f52a5; 1234:rifle a9984c6c / 45845216; 1234:pistol a9984c6c / a9d8de05; 16920:rifle:island-ends e590cc9c / 613f7960; 24839:rifle:express 2973f416 / 0c54c1fa; 32758:rifle:interchange 445e4780 / e2507d64; 40677:rifle:split a56c9a6c / 88097a6a; 48596:rifle:deep 09bdf5c9 / b2698499.
  */
+/*
+ * (stage 13, task studio-alpha-beyond-station-round4-20261101-01, lane FAMILY — CAUSE: THE STRAINER in the service-annex family pool:
+ * SERVICE_FAMILY_POOL zombie 0.75 -> 0.67 + strainer 0.08, appended last, so the service spawns' roll bands shift (Blightbelly
+ * [0.67, 0.72), rat/dog [0.72, 0.92), Strainer [0.92, 1)) and ONLY the family field of 'service' spawns moves. Every pickup hash,
+ * station / service count, core view, reserve-off view and invariant unchanged (asserted every run); the non-annex entries (1,
+ * 9001) unchanged. Proof (one-off, lane FAMILY): re-assigning each live layout's families with the pre-round-4 service pool
+ * reproduced every stage-12 value below exactly; the family-masked hash is unchanged (asserted every run, enemy-spawn-parity).)
+ * Stage 12 values: 7:rifle / 7:pistol 79ec16c4; 42:rifle / 42:pistol 0ce1e145; 1234:rifle / 1234:pistol 4a3cdf4e; 16920:rifle:island-ends f2b75061; 24839:rifle:express 62c94ac6; 32758:rifle:interchange dac885cb; 40677:rifle:split 208af2d8; 48596:rifle:deep 8b9dfba4.
+ */
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
   '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
-  '7:rifle': ['79ec16c4', '7cba1dfe', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
-  '7:pistol': ['79ec16c4', '7d3ccef9', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
-  '42:rifle': ['0ce1e145', 'f5ae73d6', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
-  '42:pistol': ['0ce1e145', '7b427094', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
-  '1234:rifle': ['4a3cdf4e', 'f4b76840', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
-  '1234:pistol': ['4a3cdf4e', '47dbb51e', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
+  '7:rifle': ['f5494b95', '7cba1dfe', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
+  '7:pistol': ['f5494b95', '7d3ccef9', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
+  '42:rifle': ['575ce1dd', 'f5ae73d6', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
+  '42:pistol': ['575ce1dd', '7b427094', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
+  '1234:rifle': ['e88fb26c', 'f4b76840', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
+  '1234:pistol': ['e88fb26c', '47dbb51e', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
   '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
-  '16920:rifle:island-ends': ['f2b75061', '70f09490', 'station 30 (L0 22 L1 5 L2 3) + service 12'],
-  '24839:rifle:express': ['62c94ac6', 'bf1afe97', 'station 25 (L0 17 L1 4 L2 4) + service 5'],
-  '32758:rifle:interchange': ['dac885cb', 'a27c94a6', 'station 31 (L0 23 L1 3 L2 5) + service 11'],
-  '40677:rifle:split': ['208af2d8', '18da6041', 'station 23 (L0 18 L1 2 L2 3) + service 6'],
-  '48596:rifle:deep': ['8b9dfba4', '140fd37c', 'station 31 (L0 23 L1 3 L2 5) + service 5'],
+  '16920:rifle:island-ends': ['bd6d0f89', '70f09490', 'station 30 (L0 22 L1 5 L2 3) + service 12'],
+  '24839:rifle:express': ['3e904103', 'bf1afe97', 'station 25 (L0 17 L1 4 L2 4) + service 5'],
+  '32758:rifle:interchange': ['bcde1364', 'a27c94a6', 'station 31 (L0 23 L1 3 L2 5) + service 11'],
+  '40677:rifle:split': ['a16389e2', '18da6041', 'station 23 (L0 18 L1 2 L2 3) + service 6'],
+  '48596:rifle:deep': ['55007251', '140fd37c', 'station 31 (L0 23 L1 3 L2 5) + service 5'],
 };
 /**
  * Stage 5 (GEN-2): the CORE VIEW of the live Subway layouts — the core station generated with the reserve (a layout change; its
@@ -208,11 +217,13 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
 // (stage 10, after main ce83b48: service budget 5-6, O(1) earshot test; stage 9 values 222:pistol 77e4f2eb / c4c75d94, 4242:pistol 776cf71a / fa22f50e)
 // (stage 11, round 2: R6 service family pool / R5 caches; stage 10 values 222:pistol 85d5ef13 / c4c75d94, 3333:pistol a6396e3c / f86503e8, 4242:pistol 175acd3a / fa22f50e)
 // (stage 12, round 3: logical annex layout + hideout; stage 11 values 222:pistol 516b635c / c4c75d94, 3333:pistol be008292 / f86503e8, 4242:pistol 6631013a / fa22f50e)
+// (stage 13, round 4 lane FAMILY: the Strainer 0.08 in the service pool — only the service spawns' family field moves; pickups / counts
+// unchanged; the pre-round-4 pool reproduces the stage-12 values exactly. Stage 12 values 222:pistol f6719782, 3333:pistol 649ffc1e, 4242:pistol ee2b2e05)
 export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...OFFICE_GOLDEN,
-  '222:pistol': ['f6719782', 'bcd1121a', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 10'],
-  '3333:pistol': ['649ffc1e', 'a411517e', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 10'],
-  '4242:pistol': ['ee2b2e05', '9bba5dd7', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 11'],
+  '222:pistol': ['2ffd2cfb', 'bcd1121a', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 10'],
+  '3333:pistol': ['bf63e572', 'a411517e', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 10'],
+  '4242:pistol': ['86f0c9a0', '9bba5dd7', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 11'],
 };
 
 /**

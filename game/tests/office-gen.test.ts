@@ -497,9 +497,13 @@ describe('the Subway is unchanged', () => {
   // 42 62c4187f / da0b79d6, 1234 67a308e5 / fcda47b2; seed 1 (no annex) and CORE unchanged)
   // (round 3 — CAUSE: the logical annex layout (spine, lined rooms, districts, hideout room) + the survivor hideout's props / lantern
   // light / gear pickup; stage before: 7 e3af4b69 / 7e118e47, 42 608b33e4 / e7fb9e97, 1234 87eba43d / 35497900; seed 1 and CORE unchanged)
+  // (round 4, task studio-alpha-beyond-station-round4-20261101-01 lane FAMILY — CAUSE: the Strainer 0.08 in the service-annex family
+  // pool (zombies 0.75 -> 0.67, appended last): only the annex service spawns' archetypes move (enemy-spawn-parity stage 13). PROOF
+  // (one-off): re-assigned with the pre-round-4 service pool, every live fingerprint reproduced the stage-before values exactly;
+  // stage before: 7 6dfe8a80 / ea7d8213, 42 bc5c9cde / 809464c2, 1234 1bc68a4 / 640ce0e0; seed 1 and CORE unchanged)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '6dfe8a80', '7:pistol': 'ea7d8213',
-    '42:rifle': 'bc5c9cde', '42:pistol': '809464c2', '1234:rifle': '1bc68a4', '1234:pistol': '640ce0e0',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '5da4b8b9', '7:pistol': '6a946f5e',
+    '42:rifle': 'ed21c520', '42:pistol': '94914c64', '1234:rifle': '5795ebde', '1234:pistol': '43055a5a',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;
