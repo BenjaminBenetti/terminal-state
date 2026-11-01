@@ -110,12 +110,13 @@ export function checkRuntime(text, rel, files) {
 // mall level); assets/models/office-*.glb + assets/textures/office/** are the office catalogue (its gear / medical models
 // are used in every level and the mall's shops may reuse office / company props); everything else is shared.
 const REPORT_TYPES = ['bundle', 'models', 'textures', 'audio', 'derivatives', 'notices'];
-const REPORT_FAMILIES = ['mall', 'office', 'shared'];
+const REPORT_FAMILIES = ['mall', 'office', 'reactor', 'shared']; // task reactor-build-20261101 (lane ARCH): + the Reactor (levelAssets.ts LEVEL_ONLY_RULES)
 const typeOf = rel => rel === 'index.html' || bundlePath(rel) ? 'bundle' : rel.startsWith('assets/models/') ? 'models'
   : rel.startsWith('assets/textures/') ? 'textures' : rel.startsWith('assets/audio/') && rel.endsWith('.mp3') ? 'audio'
   : rel.startsWith('assets/derivatives/') ? 'derivatives' : 'notices';
 const familyOf = rel => /^assets\/(?:models\/mall-|textures\/mall\/)/.test(rel) ? 'mall'
-  : /^assets\/(?:models\/office-|textures\/office\/)/.test(rel) ? 'office' : 'shared';
+  : /^assets\/(?:models\/office-|textures\/office\/)/.test(rel) ? 'office'
+  : /^assets\/(?:models\/reactor-|textures\/reactor\/)/.test(rel) ? 'reactor' : 'shared'; // (reactor-build, lane ARCH)
 const tally = keys => Object.fromEntries(keys.map(k => [k, {files: 0, bytes: 0}]));
 export function sizeReport(entries, excludedBytes = []) {
   const byType = tally(REPORT_TYPES), models = tally(REPORT_FAMILIES), textures = tally(REPORT_FAMILIES);
