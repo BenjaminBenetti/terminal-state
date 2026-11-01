@@ -160,10 +160,13 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
   `layout.areas` id of the annex: a room (never a closet, corridor or machinery hall) of at least 3.5 × 4 m and 14 m² (18–32 m²
   preferred), in the deepest third of the annex's door-hop range (`Area.depth`, band 2 of dMin..dMax — the band formula of
   `gen/annexCache.ts` / `pickOver`), a dead end (one door; the loop door never opens into it). The planner picks one (end rooms of
-  the deep runs and moderate sizes first; the two deepest corridor ends close with a hideout-sized store room) or, when none exists,
-  adds one off the deepest corridors (a side bay or an end) or behind a deep room. The purpose pass never gives it a machinery
-  signature: it is the deep end's **old stores** (`storage`). `extensionIssues` reports a hideout that is not a plain room of its
-  annex. Absent = none (readers keep their own fallback). Measured: every annex of the broad sample (309 / 309) has one.
+  the deep runs, moderate sizes and >= 4 x 4.5 m first; the two deepest corridor ends close with a hideout-sized store room) or,
+  when none exists, adds one off the deepest corridors (a side bay or an end) or behind a deep room. The purpose pass never gives it a
+  machinery signature: it is a disused maintenance room of the deep end's **old stores** (`HIDEOUT_PURPOSES`: an old workshop, else a
+  custodial room, else maintenance stores — the leanest furniture that fits). `extensionIssues` reports a hideout that is not a plain
+  room of its annex. Absent = none (readers keep their own fallback). Measured: every annex of the broad sample (309 / 309) has one;
+  the round-2 survivor-cache placer, restricted to the hideout, builds its cache there in 62 of 65 sampled annexes (51 / 65 with
+  shelved `storage` — why the lean purposes).
 
 **Areas:**
 - Extension areas carry `area.ext = 'tunnel' | 'annex'` plus `extId`.
@@ -232,7 +235,8 @@ runtime-scaled 1.78 m zombie):
     district — and pump rooms), **heat** (boiler room with its pump room / fuel stores), **air** (ventilation plant, at a corridor
     end where it can). 85 % of a district's medium rooms take one of its signatures (a district shows each kind once; another
     district's machinery only now and then), the rest its utility rooms; halls weigh their district's signatures × 5;
-  - **old stores** at the deep end: the hideout and the small rooms / closets on its corridor (`storage`, supply closets);
+  - **old stores** at the deep end: the hideout (a disused workshop / custodial room / stores, `HIDEOUT_PURPOSES`) and the small
+    rooms / closets on its corridor (`storage`, supply closets);
   - **partners**: after the draw and again after the machinery is built, a generator room without an electrical room / closet within
     two hops converts the nearest utility room of its district (else a closet) into one; a water room, a boiler room or a turbine
     hall likewise gets its pump / electrical room; at least 4 different signatures per annex (medium utility rooms convert when not).

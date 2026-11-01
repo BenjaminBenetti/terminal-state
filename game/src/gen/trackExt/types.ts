@@ -92,7 +92,8 @@ export interface ServiceAnnex {
   /**
    * (Round 3, lane LAYOUT; optional, additive) THE HIDEOUT ROOM of the annex (layout.areas id): the room the layout keeps for the
    * survivor cache — a room (never a closet, corridor or machinery hall; gen/annexRooms.ts never gives it a machinery signature: it is
-   * the annex's "old stores", purpose 'storage') of at least 3.5 x 4 m and 14 m², in the DEEPEST THIRD of the annex's door-hop range
+   * a disused maintenance room of the deep end's old stores, HIDEOUT_PURPOSES: an old workshop, else a custodial room, else stores —
+   * the leanest furniture that fits) of at least 3.5 x 4 m and 14 m² (>= 4 x 4.5 m preferred), in the DEEPEST THIRD of the annex's door-hop range
    * (Area.depth: band 2 of dMin..dMax, the band formula of gen/annexCache.ts / pickOver), a dead end (one door) wherever the layout
    * allows (the loop door never opens into it). Set by gen/trackExt/annexLayout.ts planServiceArea on every annex it can find or add
    * one in (the broad census: all of them); absent = none — readers keep their own fallback.

@@ -335,7 +335,8 @@ function atCorridorEnd(a: Area, c: Area): boolean {
 /**
  * Purposes of one annex's areas (see the file header, pass 1, and ANNEX_ZONES): `setPurpose(area, purposeId)` applies one (the caller's
  * purpose ↔ slot rule). Returns the plan placeAnnexMachinery builds the layouts from. The annex's HIDEOUT room (ServiceAnnex.hideout,
- * gen/trackExt/annexLayout.ts) never takes a signature: it stays the old stores ('storage') the survivor cache moves into.
+ * gen/trackExt/annexLayout.ts) never takes a signature: it stays a disused maintenance room of the old stores (HIDEOUT_PURPOSES) the
+ * survivor cache moves into.
  */
 export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], rng: Rng, setPurpose: (a: Area, pid: string) => void, utilityOk: (pid: string, a: Area) => boolean): AnnexRoomPlan {
   const R = ANNEX_ROOMS, Z = ANNEX_ZONES, {adj, order} = annexDoorGraph(layout, areas);
@@ -432,10 +433,21 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
     if (s) { setPurpose(a, ROOM_SIGNATURES[s].purpose); continue; }
     const z = zone.get(a.id) ?? 'staff';
     if (a.kind === 'closet') { setPurpose(a, rng.weighted(Z.closet[z])); continue; }
-    setPurpose(a, a.id === hideout ? 'storage' : drawUtility(a, adj, areas, uUsed, rng, utilityOk, Z.util[z]));
+    setPurpose(a, a.id === hideout ? hideoutPurpose(a, utilityOk) : drawUtility(a, adj, areas, uUsed, rng, utilityOk, Z.util[z]));
   }
   partners(areas, adj, byId, sig, zone, setPurpose, utilityOk);
   return {sig, adj, order, zone};
+}
+
+/**
+ * (Round 3) The hideout's purpose: the deep end's disused maintenance room with the leanest furniture that fits it — an old workshop
+ * (a tool locker, maybe a shelf), else a custodial room, else maintenance stores — so the survivor cache (gen/annexCache.ts: a bed,
+ * 2-3 storage pieces) has the floor (measured with the round-2 cache placer on 65 annexes: 62 fit as an old workshop / custodial
+ * room, 51 as shelved stores).
+ */
+export const HIDEOUT_PURPOSES: readonly string[] = ['workshop', 'custodial-room', 'storage'];
+function hideoutPurpose(a: Area, ok: (pid: string, a: Area) => boolean): string {
+  return HIDEOUT_PURPOSES.find(p => ok(p, a)) ?? 'storage';
 }
 
 /**

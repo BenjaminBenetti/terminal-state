@@ -411,7 +411,9 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
     const dLo = Math.min(...c.map(a => a.depth)), med = (a: LaidArea) => Math.min(a.r.w, a.r.h) * CELL >= 4.5 && a.r.w * a.r.h * CELL * CELL >= 26;
     return rng.weighted(c.map(a => {
       const m2 = a.r.w * a.r.h * CELL * CELL;
-      return [a.id, (m2 >= HD.prefer[0] && m2 <= HD.prefer[1] ? 3 : m2 < HD.prefer[0] ? 2 : 1) * (med(a) ? 0.4 : 1) * (a.endRoom ? 2 : 1) * (1 + a.depth - dLo)] as [number, number];
+      // (>= 4 x 4.5 m preferred: room for a bed and the cache's storage beside the room's own furniture)
+      const roomy = Math.min(a.r.w, a.r.h) >= cl(4) && Math.max(a.r.w, a.r.h) >= cl(4.5) ? 2 : 1;
+      return [a.id, (m2 >= HD.prefer[0] && m2 <= HD.prefer[1] ? 3 : m2 < HD.prefer[0] ? 2 : 1) * roomy * (med(a) ? 0.4 : 1) * (a.endRoom ? 2 : 1) * (1 + a.depth - dLo)] as [number, number];
     }));
   };
   hideout = choose();

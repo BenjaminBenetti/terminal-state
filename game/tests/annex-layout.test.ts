@@ -14,7 +14,7 @@ import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {generateMallLevel} from '../src/gen/mall/index';
 import {extensionIssues, TRACK_EXT} from '../src/gen/trackExt/index';
-import {ANNEX_ROOMS, ROOM_SIGNATURES, SIGNATURE_IDS, SIGNATURE_OF_PURPOSE, annexDoorGraph} from '../src/gen/annexRooms';
+import {ANNEX_ROOMS, HIDEOUT_PURPOSES, ROOM_SIGNATURES, SIGNATURE_IDS, SIGNATURE_OF_PURPOSE, annexDoorGraph} from '../src/gen/annexRooms';
 import {annexSignatureOf} from '../src/gen/annexContent';
 import {freshLayout} from './helpers/annexRoute';
 import {annexLayoutMetrics, bandOf, hideoutOk, summarize, type AnnexLayoutMetrics} from './helpers/annexLayoutMetrics';
@@ -98,7 +98,7 @@ describe('service annex layout: a logical service area (round 3, lane LAYOUT)', 
         expect(h.kind).toBe('room');
         expect(h.extHall).toBeFalsy();
         expect(annexSignatureOf(h)).toBeUndefined();
-        expect(h.purpose, `${t} the old stores`).toBe('storage');
+        expect(HIDEOUT_PURPOSES, `${t} a disused maintenance room of the old stores`).toContain(h.purpose);
         expect(l.doors.filter(d => d.a === h.id || d.b === h.id).length, `${t} hideout doors`).toBe(1);
         const ds = n.areas.map(id => l.areas[id].depth);
         expect(bandOf(h.depth, Math.min(...ds), Math.max(...ds))).toBe(2);
