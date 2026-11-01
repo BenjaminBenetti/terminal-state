@@ -103,6 +103,12 @@
 //     conversion). The kit now carries a splint / sling (0.12 each) and med kits 0.35 (was 0.45): per station treatments 2.61, med
 //     kits 2.89. Re-pinned: subwayHolders 288dd84c -> de651870 (same holder / lot counts). Office holders, pickups, core views,
 //     reserve-off, roof find and gear unchanged.
+// 15. Task studio-alpha-track2-round3 (+ recovery01) — LIVE only. CAUSE: the annexes re-laid as a logical service area (spine
+//     corridor, rooms lining corridors, districts, a guaranteed hideout room) and the survivor hideout (footlocker + richer exact
+//     tables, a 0.6 per-annex gear piece as a layout pickup). Re-pinned: subwayHolders de651870 -> 47d6dde6, subwayPickups 0467b2d6 ->
+//     473514e1, officeHolders e69a7b80 -> a46e2b2b, officePickups 5fa98572 -> c60b27da, gearPlaced 879dd375 -> 87da653f (live
+//     coordinates of re-cropped stations). Core views, the reserve-off proof, the roof find, gearRolls and the core gear placement
+//     are unchanged (asserted every run).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -125,17 +131,17 @@ const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearP
 const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
-  subwayHolders: 'de651870', // stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
+  subwayHolders: '47d6dde6', // stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: '0467b2d6', // stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
-  officeHolders: 'e69a7b80', // stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
+  subwayPickups: '473514e1', // stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
+  officeHolders: 'a46e2b2b', // stage 15: was e69a7b80; stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
-  officePickups: '5fa98572', // stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
+  officePickups: 'c60b27da', // stage 15: was 5fa98572; stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
   gearRolls: '77148ba3',
   /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
-  gearPlaced: '879dd375', // stage 10 (translated live coordinates); was fee77ca3
+  gearPlaced: '87da653f', // stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
 };
 
 function fnv() {

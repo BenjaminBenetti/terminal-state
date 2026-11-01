@@ -494,9 +494,11 @@ describe('the Subway is unchanged', () => {
   // (round 2, task studio-alpha-track2-round2-20261031-01 — CAUSE: R5 survivor caches (bed / storage / camp props appended, the
   // cache room's lit fixture), R6 service family pool, the signature lockers without materials; stage before: 7 3275dde8 / c0e8c846,
   // 42 62c4187f / da0b79d6, 1234 67a308e5 / fcda47b2; seed 1 (no annex) and CORE unchanged)
+  // (round 3 — CAUSE: the logical annex layout (spine, lined rooms, districts, hideout room) + the survivor hideout's props / lantern
+  // light / gear pickup; stage before: 7 e3af4b69 / 7e118e47, 42 608b33e4 / e7fb9e97, 1234 87eba43d / 35497900; seed 1 and CORE unchanged)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': 'e3af4b69', '7:pistol': '7e118e47',
-    '42:rifle': '608b33e4', '42:pistol': 'e7fb9e97', '1234:rifle': '87eba43d', '1234:pistol': '35497900',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '6dfe8a80', '7:pistol': 'ea7d8213',
+    '42:rifle': 'bc5c9cde', '42:pistol': '809464c2', '1234:rifle': '1bc68a4', '1234:pistol': '640ce0e0',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;
