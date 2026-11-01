@@ -376,7 +376,8 @@ describe('service spawns (the \'service\' zone context)', () => {
           expect(own(z), `${l.seed} #${i} in an annex`).toBe(true);
           expect(ctx).toBe('service');
           expect(z.archetype).not.toBe('siren');
-          expect(P.families.some(([f, w]) => f === (z.archetype ?? 'zombie') && w > 0)).toBe(true);
+          // (R6 / round 4, lane FAMILY) a service spawn draws from the service context's OWN pool (the Strainer has weight only there)
+          expect((P.contexts.service?.families ?? P.families).some(([f, w]) => f === (z.archetype ?? 'zombie') && w > 0)).toBe(true);
         }
       });
     }

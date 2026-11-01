@@ -290,7 +290,8 @@ describe('office level (one continuous layout)', () => {
       }
       expect(core.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
-      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
+      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie')
+        || (z.archetype === 'strainer' && isExtensionArea(l.areas[z.area])))).toBe(true); // round 4 (lane FAMILY): + the Strainer, service annexes only
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
       for (const p of l.pickups) {

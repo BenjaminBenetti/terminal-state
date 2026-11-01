@@ -298,7 +298,7 @@ describe('mall spawn profile', () => {
     expect(H.budget).toEqual({total: 32, perStorey: 20, groupsPerStorey: 1});
     expect(H.placement).toBe(MALL_HORDE_RULES.placement);
     expect(H.placement).toMatchObject({startM: 45, routeMPerMember: 18, startClearM: 28});
-    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, blightbelly: 0, siren: 0, ratdog: 0});
+    expect(Object.fromEntries(H.families)).toEqual({zombie: 1, blightbelly: 0, siren: 0, ratdog: 0, strainer: 0}); // round 4 (lane FAMILY): + strainer 0
   });
 
   it('validation enforces the Siren / spacing / horde / budget semantics', () => {
@@ -496,7 +496,7 @@ describe('reference coverage (the generated pages document the mall automaticall
     expect(m.pool.eligibility.map(e => [e.family, e.contexts, e.maxPerLevel, e.spacing?.metres])).toEqual([['siren', ['ring'], MALL_SIREN_ELIGIBILITY.maxPerLevel, MALL_SIREN_SPACING.spacingM]]);
     expect(m.pool.eligibility[0].criteria.join(' ')).toMatch(new RegExp(`${MALL_SIREN_SPACING.spacingM} m`));
     expect(m.knobs.find(k => k.what === 'spacing (siren, m)')!.value).toBe(MALL_SIREN_SPACING.spacingM);
-    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0]]);
+    expect(m.horde!.pool.rows.map(x => [x.family, x.weight])).toEqual([['zombie', 1], ['blightbelly', 0], ['siren', 0], ['ratdog', 0], ['strainer', 0]]); // (round 4, lane FAMILY: + strainer 0)
     expect(m.horde!.semantics.join(' ')).toMatch(new RegExp(`'${HORDE_CONTEXT}'`));
     expect(m.horde!.size).toMatchObject({lo: 5, hi: 20});
     expect(m.budgets!.ambient.total).toBe(S.budgets!.ambient.total);
