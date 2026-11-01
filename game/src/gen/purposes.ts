@@ -39,6 +39,7 @@ import {
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
 // deliberate sidearm stock, not a rifle / shotgun place.
 import {genericAmmo} from '../items/calibers';
+import {REACTOR_BUNKER_PURPOSES} from './reactor/complex/bunkerPurposes'; // task reactor-expansion-20261101 (lane BUNKER)
 
 // ---------------------------------------------------------------------------------------
 // Types
@@ -630,6 +631,8 @@ export const ROOM_PURPOSES: Readonly<Record<string, RoomPurpose>> = {
   ...MALL_PURPOSES(),
   // --- Track 2 (lane CONTENT): the SERVICE ANNEX stash loot key (a PROP-level purpose, never an area's).
   ...ANNEX_PURPOSES(),
+  // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's own rooms ('reactor-bunker-*', preset; weight 0, appended last)
+  ...REACTOR_BUNKER_PURPOSES(),
 };
 
 export const ALL_PURPOSES: readonly Purpose[] = [...Object.values(STORE_PURPOSES), ...Object.values(ROOM_PURPOSES)];
