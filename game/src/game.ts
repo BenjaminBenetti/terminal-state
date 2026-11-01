@@ -76,6 +76,7 @@ import {attributeInstancing, setAttributeInstancing} from './render/instancing';
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
 import {installCough, type CoughFeedback} from './audio/cough'; // Task gas-mask-roof-feedback-20261030: the player coughs while gas hurts them
+import {installReactorAir} from './world/reactor/generators'; // task reactor-build-20261101 (lane AIR): Reactor depth gas + auxiliary generators
 import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai/blightBurst'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): the Blightbelly's once-only death burst
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
@@ -449,6 +450,7 @@ export class Game {
     };
     this.cough = installCough(this); // after GAS: its frame hook reads this frame's exposure
     hookName('cough');
+    installReactorAir(this); hookName('reactorAir'); // task reactor-build-20261101 (lane AIR): after GAS (sets gas.depth on its build) — Reactor depth gas, generators (hold E), fans, HUD air line; inert elsewhere
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): after GAS (bursts add gas puffs); frame hook + section hooks. The lazy
     // enemy models (ai/enemyModels.ts) are fetched per layout through propModels like the office models.
     this.blight = installBlightBurst(this, {rand: () => this.rand()});
