@@ -8,6 +8,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 import {levelFixture} from './helpers/levelRenderFixture';
 import {ARCHETYPES, generateStation, type StationLayout} from '../src/gen/station';
 import {CELL, FLOOR} from '../src/gen/grid';
+import {isExtensionArea} from '../src/gen/trackExt/types';
 import {TEXTURE_FILES, type TextureKey} from '../src/assets/manifest';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
@@ -116,9 +117,13 @@ describe('decay field: deterministic per seed, coherent (lanes, edges, leaks, ar
       expect(negOf(a => !a.publicSpace), fam).toBeGreaterThan(negOf(a => a.kind === 'platform') + 0.1);
       const neg = floors.map(i => texel(f, 0, i, 3)), m = mean(neg);
       expect(Math.sqrt(mean(neg.map(v => (v - m) ** 2))), fam).toBeGreaterThan(0.06);
+      // (2026-11-01, lane AREA) per STOREY over the station's own cells (DESIGN §0: rules over the core, extensions reported
+      // separately): the track tunnels on the main grid are bed-level wet, and with the Beyond the Station area now on 20 % of levels
+      // seed 9001 (every archetype) keeps its tunnels but no annex to dilute them (main incl. tunnels 0.093 vs lower 0.088; the
+      // station's main storey 0.072, unchanged by the extensions: tests/track-ext-core.test.ts decay-window proof)
       for (let L = 0; L < lv.length; L++) {
         const gl = lv[L].grid, cells: number[] = [];
-        for (let i = 0; i < gl.cells.length; i++) if (gl.cells[i] === FLOOR) cells.push(i);
+        for (let i = 0; i < gl.cells.length; i++) if (gl.cells[i] === FLOOR && !isExtensionArea(l.areas[gl.area[i]])) cells.push(i);
         wetBy[lv[L].role].push(mean(cells.map(i => texel(f, L, i, 2))));
       }
       // Wetness is capped (the lower level still reads as its finish with stains, not as a pattern).

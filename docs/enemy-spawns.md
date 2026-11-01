@@ -270,7 +270,8 @@ same family pool and zombie types, same tier.
   1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
   4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
   3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
-  (Before the playtest revision's 5–6 budget.)
+  (Before the playtest revision's 5–6 budget, and before the 2026-11-01 one-roll rule: the annexes — so the service spawns — now
+  exist only on the ~20 % of levels whose Beyond the Station area roll succeeds, docs/track-extensions.md "The area roll".)
 - **Playtest-revision measurement** (fresh New Game path; Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
   5150 / 9090):
   - **Placed:** 5–6 per annex (parity corpus: Subway levels +5 / +6 with one annex, +10 / +11 / +12 with two; Office +10 / +11
