@@ -4,8 +4,8 @@
 // `realize`, structured like lib/blightbelly-clips.mjs (nothing in the shared libs or the other enemies' clips changes).
 //
 // Design: tall (2.15 m), gaunt, hunched; long arms with 0.45 m clawed hands carried hanging FORWARD of the thighs (claw tips
-// below the knee); a slow, long, deliberate stride with the torso leaning in; a loping biped run (deeper lean, arms
-// trailing / pumping, no all-fours); one long reaching right-claw swipe across the front at chest height on a lunge (left
+// below the knee); (user playtest 2026-11-01) a heavy, lumbering, flat-footed stride with big weight shifts and a heavy chase
+// lumber (double support, no flight phase; deeper lean, arms swinging like weights); one long reaching right-claw swipe across the front at chest height on a lunge (left
 // claw following); a sharp flinch; a collapse onto the back (knees buckle, the body topples, floor-solved final pose).
 import {realize, deathFinal} from '../../zombie/lib/clips.mjs';
 import {qSlerp, qRot, qAxis, V} from '../../zombie/lib/pose.mjs';
@@ -24,11 +24,15 @@ function mirrorArm(a) { return {...a, dir: mirrorDir(a.dir), ...(a.hinge ? {hing
  * Clip contract (GLB extras + sidecar). groundSpeed = m/s the in-place locomotion cycle was authored for at timeScale 1;
  * impactTime = seconds into Attack when the right claw tips cross the front centre line at chest height (the hit frame).
  */
+// Task studio-alpha-strainer-lumbering-wetness-20261101-01 (user playtest: "moves to fast, should lumber towards you, but be
+// strong"; "animation needs to fit a big lumbering creature"): Walk 1.8 s / 0.62 m/s -> 2.6 s / 0.42 m/s (wander), the chase
+// clip Run 0.9 s / 2.4 m/s -> 1.6 s / 1.35 m/s — a heavy, long-striding lumber with double support (beta > 0.5: no flight
+// phase) instead of a lope — and Attack 1.4 s (impact 0.6) -> 2.0 s (impact 1.0, on a 30 fps frame): a slower, telegraphed, heavier swipe.
 export const CLIP_SPECS = {
   Idle: {duration: 4.0, loop: true},
-  Walk: {duration: 1.8, loop: true, groundSpeed: 0.62, beta: 0.64},
-  Run: {duration: 0.9, loop: true, groundSpeed: 2.4, beta: 0.38},
-  Attack: {duration: 1.4, loop: false, impactTime: 0.6},
+  Walk: {duration: 2.6, loop: true, groundSpeed: 0.42, beta: 0.68},
+  Run: {duration: 1.6, loop: true, groundSpeed: 1.35, beta: 0.58},
+  Attack: {duration: 2.0, loop: false, impactTime: 1.0},
   Hit: {duration: 0.45, loop: false},
   Death: {duration: 2.1, loop: false},
 };
@@ -134,42 +138,45 @@ function footCycle(phase, {beta, stride, lift, pitchOff = 18, pitchStrike = -6, 
 function walk(rig, t, T, G) {
   const P = basePose();
   const w = TAU * t / T;
-  const fl = footCycle(t / T, {beta: G.beta, stride: G.stride, lift: 0.11, pitchOff: 20, pitchStrike: -8});
-  const fr = footCycle(t / T + 0.5, {beta: G.beta, stride: G.stride, lift: 0.11, pitchOff: 20, pitchStrike: -8});
-  // deliberate: the pelvis rises over each planted foot and sinks at heel strike (twice per cycle), small sway
-  const bob = -0.018 * Math.cos(2 * w);
-  P.hips = [0.025 * Math.sin(w - 0.3), -0.075 + bob, 0];
-  P.hipsRot = [11, 7 * Math.sin(w), 3 * Math.sin(w - 0.3)];
-  P.spine = [4, -3 * Math.sin(w), -2 * Math.sin(w - 0.3)];
-  P.chest = [5 + 1.5 * Math.cos(2 * w), -4 * Math.sin(w), -1.5 * Math.sin(w - 0.3)];
-  // the head stays level and fixed on the prey (counters the torso yaw / bob)
-  P.neck = [-9 - 1.5 * Math.cos(2 * w), 4 * Math.sin(w), 0];
-  P.head = [-7, 3 * Math.sin(w), 0];
-  // arms hang forward and swing loosely opposite the legs, claws trailing
-  P.armL = {...ARM_HANG, dir: [0.3, -0.9, 0.3 - 0.16 * Math.sin(w)], flex: 18 + 8 * Math.max(0, -Math.sin(w)), wrist: -8 + 6 * Math.sin(w - 0.6)};
-  P.armR = mirrorArm({...ARM_HANG, dir: [0.29, -0.9, 0.32 + 0.16 * Math.sin(w)], flex: 20 + 8 * Math.max(0, Math.sin(w)), wrist: -8 - 6 * Math.sin(w - 0.6)});
-  P.legL = {mode: 'ik', z: fl.z, x: 0.0, lift: fl.lift, pitch: fl.pitch, yaw: 4};
-  P.legR = {mode: 'ik', z: fr.z, x: 0.0, lift: fr.lift, pitch: fr.pitch, yaw: -5};
+  // (lumbering) low, flat-footed steps: little lift, the foot lands nearly flat (a heavy plant, not a heel roll)
+  const fl = footCycle(t / T, {beta: G.beta, stride: G.stride, lift: 0.085, pitchOff: 14, pitchStrike: -3});
+  const fr = footCycle(t / T + 0.5, {beta: G.beta, stride: G.stride, lift: 0.085, pitchOff: 14, pitchStrike: -3});
+  // the weight rolls onto each planted foot: a wide side sway, the pelvis drops hard at each footfall and recovers slowly
+  const sway = Math.sin(w - 0.35), drop = Math.pow(Math.max(0, Math.cos(2 * w)), 3);
+  P.hips = [0.07 * sway, -0.085 - 0.04 * drop + 0.01 * Math.cos(2 * w), 0];
+  P.hipsRot = [12 + 1.5 * drop, 8 * Math.sin(w), 6 * sway];
+  P.spine = [5, -4 * Math.sin(w), -3 * sway];
+  P.chest = [6 + 2.5 * drop, -6 * Math.sin(w), -3 * sway]; // the shoulders roll with each step
+  // the heavy head lags the body (a delayed bob) but stays on the prey
+  P.neck = [-10 - 2.5 * Math.pow(Math.max(0, Math.cos(2 * w - 0.6)), 3), 5 * Math.sin(w - 0.4), 2 * sway];
+  P.head = [-7 + 1.5 * drop, 3 * Math.sin(w - 0.5), 0];
+  // the long arms hang like weights: a lagging pendulum swing, the claws dragging low in front
+  P.armL = {...ARM_HANG, dir: [0.32, -0.92, 0.3 - 0.22 * Math.sin(w - 0.7)], flex: 16 + 10 * Math.max(0, -Math.sin(w - 0.7)), wrist: -10 + 7 * Math.sin(w - 1.3)};
+  P.armR = mirrorArm({...ARM_HANG, dir: [0.31, -0.92, 0.32 + 0.22 * Math.sin(w - 0.7)], flex: 18 + 10 * Math.max(0, Math.sin(w - 0.7)), wrist: -10 - 7 * Math.sin(w - 1.3)});
+  P.legL = {mode: 'ik', z: fl.z, x: 0.0, lift: fl.lift, pitch: fl.pitch, yaw: 5};
+  P.legR = {mode: 'ik', z: fr.z, x: 0.0, lift: fr.lift, pitch: fr.pitch, yaw: -6};
   return realize(rig, resolveArms(rig, P));
 }
 
+// (lumbering) the chase clip keeps its contract name 'Run', but it is a heavy, fast, long-striding lumber with double support
+// (no flight phase): deep forward lean, big lateral weight shifts, a pounding footfall, arms swinging wide and low.
 function run(rig, t, T, G) {
   const P = basePose();
   const w = TAU * t / T;
-  const fl = footCycle(t / T, {beta: G.beta, stride: G.stride, lift: 0.2, pitchOff: 26, pitchStrike: -6});
-  const fr = footCycle(t / T + 0.5, {beta: G.beta, stride: G.stride, lift: 0.2, pitchOff: 26, pitchStrike: -6});
-  const bob = 0.035 * Math.cos(2 * w + 0.4);
-  P.hips = [0.03 * Math.sin(w - 0.4), -0.12 + bob, 0.04];
-  P.hipsRot = [20, 9 * Math.sin(w), 4 * Math.sin(w - 0.4)];
-  P.spine = [6, -5 * Math.sin(w), -3 * Math.sin(w - 0.4)];
-  P.chest = [6 + 3 * Math.cos(2 * w), -7 * Math.sin(w), -2 * Math.sin(w)];
-  P.neck = [-11, 4 * Math.sin(w), 0];
-  P.head = [-9 + 2 * Math.cos(2 * w), -3 * Math.sin(w), 2 * Math.sin(w + 1)];
-  // loping arm pump, opposite the legs: claws swing forward low, trail back high
-  P.armL = {...ARM_HANG, dir: [0.32, -0.78 + 0.12 * Math.sin(w + 0.3), 0.2 - 0.55 * Math.sin(w)], flex: 30 + 20 * Math.max(0, -Math.sin(w)), wrist: -14 + 10 * Math.sin(w - 0.8)};
-  P.armR = mirrorArm({...ARM_HANG, dir: [0.32, -0.78 + 0.12 * Math.sin(w + 0.3 + Math.PI), 0.2 + 0.55 * Math.sin(w)], flex: 30 + 20 * Math.max(0, Math.sin(w)), wrist: -14 - 10 * Math.sin(w - 0.8)});
-  P.legL = {mode: 'ik', z: fl.z, x: 0.0, lift: fl.lift, pitch: fl.pitch, yaw: 3};
-  P.legR = {mode: 'ik', z: fr.z, x: 0.0, lift: fr.lift, pitch: fr.pitch, yaw: -4};
+  const fl = footCycle(t / T, {beta: G.beta, stride: G.stride, lift: 0.13, pitchOff: 18, pitchStrike: -4});
+  const fr = footCycle(t / T + 0.5, {beta: G.beta, stride: G.stride, lift: 0.13, pitchOff: 18, pitchStrike: -4});
+  const sway = Math.sin(w - 0.35), pound = Math.pow(Math.max(0, Math.cos(2 * w)), 4);
+  P.hips = [0.085 * sway, -0.12 - 0.055 * pound + 0.012 * Math.cos(2 * w), 0.05];
+  P.hipsRot = [19 + 2 * pound, 10 * Math.sin(w), 7 * sway];
+  P.spine = [7, -6 * Math.sin(w), -3 * sway];
+  P.chest = [7 + 3 * pound, -9 * Math.sin(w), -4 * sway];
+  P.neck = [-12 - 3 * Math.pow(Math.max(0, Math.cos(2 * w - 0.5)), 3), 5 * Math.sin(w - 0.4), 2 * sway];
+  P.head = [-9 + 2 * pound, -3 * Math.sin(w - 0.4), 2 * Math.sin(w + 1)];
+  // heavy arm swing, opposite the legs and lagging: claws sweep forward low, swing back wide
+  P.armL = {...ARM_HANG, dir: [0.36, -0.86 + 0.08 * Math.sin(w + 0.3), 0.22 - 0.45 * Math.sin(w - 0.6)], flex: 26 + 16 * Math.max(0, -Math.sin(w - 0.6)), wrist: -14 + 9 * Math.sin(w - 1.2)};
+  P.armR = mirrorArm({...ARM_HANG, dir: [0.36, -0.86 + 0.08 * Math.sin(w + 0.3 + Math.PI), 0.22 + 0.45 * Math.sin(w - 0.6)], flex: 26 + 16 * Math.max(0, Math.sin(w - 0.6)), wrist: -14 - 9 * Math.sin(w - 1.2)});
+  P.legL = {mode: 'ik', z: fl.z, x: 0.0, lift: fl.lift, pitch: fl.pitch, yaw: 4};
+  P.legR = {mode: 'ik', z: fr.z, x: 0.0, lift: fr.lift, pitch: fr.pitch, yaw: -5};
   return realize(rig, resolveArms(rig, P));
 }
 
@@ -194,9 +201,12 @@ export function attackKeys() {
     armL: {...ARM_HANG, dir: [0.55, -0.7, 0.45], flex: 30, wrist: -12},
     armR: mirrorArm({dir: [-0.08, -0.4, 0.91], flex: 22, wrist: -6, twist: 0, wristSide: 0})};
   const recover = {...B, hips: [0, -0.1, 0.1], hipsRot: [12, 4, 0], legL: {mode: 'ik', z: 0.2, x: 0, lift: 0.02, pitch: 0, yaw: 4}};
+  // (lumbering) a slow, telegraphed coil (0 -> 0.75 s, held a beat), a heavy swipe landing at 1.0 s, a long follow-through and a
+  // slow recovery (the hit pose itself is unchanged: same reach, same chest-height sweep)
+  const coiled = {...windup, chest: V.add(windup.chest, [-1, -3, 0]), hipsRot: V.add(windup.hipsRot, [0, -3, 0])};
   return [
-    {t: 0, p: B}, {t: 0.4, p: windup, ease: 'inOut'}, {t: CLIP_SPECS.Attack.impactTime, p: hit, ease: 'in'}, {t: 0.78, p: follow, ease: 'out'},
-    {t: 1.08, p: recover, ease: 'inOut'}, {t: CLIP_SPECS.Attack.duration, p: B, ease: 'inOut'},
+    {t: 0, p: B}, {t: 0.58, p: windup, ease: 'inOut'}, {t: 0.75, p: coiled, ease: 'out'}, {t: CLIP_SPECS.Attack.impactTime, p: hit, ease: 'in'},
+    {t: 1.25, p: follow, ease: 'out'}, {t: 1.65, p: recover, ease: 'inOut'}, {t: CLIP_SPECS.Attack.duration, p: B, ease: 'inOut'},
   ];
 }
 

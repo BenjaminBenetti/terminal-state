@@ -32,6 +32,7 @@ import {devPistolRequested, makePistolDevPlaceholder, PISTOL_ART_READY, startWea
 import {ConsumeView} from './weapons/consumeView';
 import {buildItemIcons} from './ui/itemIcons';
 import {ZombieActor} from './ai/zombieActor';
+import {StrainerWetTrail} from './ai/strainerTrail';
 import {createEnemyActor, enemyCues, type EnemyActor} from './ai/creatureArchetypes'; // iteration 07 (Lane Q): generic enemy archetypes (rat/dog)
 import {VocalReach} from './ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
 import {FrameBudget} from './core/frameBudget'; // Task frame-budget-deferral-20261030 (lane SCHED): deferred background work
@@ -197,6 +198,7 @@ export class Game {
   private zombieLooks: ZombieLookLibrary | null = null;
   pickups!: PickupManager;
   readonly fx = new Effects();
+  private readonly strainerTrail = new StrainerWetTrail(); // (Strainer wet-shine trail driver; marks live in fx)
   /** Ragdolls (cannon-es) + pooled casings; rebuilt per station, stepped only while playing. */
   readonly physics = new PhysicsSystem(this.scene, this.sfx);
   /** Iteration 06 (Lane D): material damage — craters, debris, per-instance prop damage / breaking, zombie wounds. */
@@ -2257,6 +2259,8 @@ export class Game {
       if (adt > 0) z.animate(adt, out.anim, moved);
       z.syncTransform();
       if (!z.ragdolled) z.root.position.y = b.y; // Lane T: feet on stairs / track bed / underpass / ladder
+      // Task studio-alpha-strainer-lumbering-wetness-20261101-01: the Strainer's bounded wet-shine trail (ai/strainerTrail.ts, fx WET_TRAIL)
+      if (archetypeOf(z) === 'strainer') this.strainerTrail.step(z, b, z.ragdolled, (x, y, wz, size) => this.fx.wet(x, y, wz, size), Math.random); // (visual only: never the game RNG)
       if (adt > 0) z.updateVolumes();
       prof.end(SPAN.anim);
     }

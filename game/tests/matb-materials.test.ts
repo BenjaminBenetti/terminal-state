@@ -144,10 +144,19 @@ describe('fx: particles, decals and tracers as node materials', () => {
   it('decals fade per instance through the opacity node; tracers keep per-vertex alpha', () => {
     const fx = new Effects();
     const decals = meshesOf(fx.group).filter(o => (o as THREE.InstancedMesh).isInstancedMesh) as THREE.InstancedMesh[];
-    expect(decals.length).toBe(4);
+    // hole / metal / wood / blood (Lambert) + the Strainer's wet-shine trail (task studio-alpha-strainer-lumbering-wetness-20261101-01:
+    // a LIT standard, near-mirror film — its shine is the specular highlight), each one fixed ring and one draw
+    expect(decals.length).toBe(5);
+    expect(decals.map(d => d.name).sort()).toEqual(['fx-decals-blood', 'fx-decals-hole', 'fx-decals-metal', 'fx-decals-wet', 'fx-decals-wood']);
     for (const d of decals) {
       const m = d.material as unknown as MeshLambertNodeMaterial;
-      expect(m.isMeshLambertNodeMaterial).toBe(true);
+      if (d.name === 'fx-decals-wet') {
+        const w = d.material as unknown as {isMeshStandardNodeMaterial?: boolean; roughness: number; metalness: number; transparent: boolean; depthWrite: boolean};
+        expect(w.isMeshStandardNodeMaterial).toBe(true);
+        expect(w.roughness).toBeLessThan(0.15);
+        expect(w.metalness).toBe(0);
+        expect(w.transparent && !w.depthWrite).toBe(true);
+      } else expect(m.isMeshLambertNodeMaterial).toBe(true);
       expect(m.opacityNode).toBeTruthy();
       expect(m.polygonOffset).toBe(true);
       expect((d.geometry.attributes.aFade as THREE.InstancedBufferAttribute).isInstancedBufferAttribute).toBe(true);

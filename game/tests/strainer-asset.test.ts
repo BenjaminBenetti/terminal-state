@@ -234,7 +234,14 @@ describe('Strainer derivative (enemy-strainer.glb)', () => {
 // texture / PBR maps Meshy generated (re-encoded only). The round-4 follow-up wrongly replaced them with a Codex projection bake; it
 // was reverted. This contract pins the chain and the exact Meshy-mapped runtime output so a replacement cannot silently return.
 describe('Strainer texture source contract: Codex initial source -> Meshy model -> its Meshy maps kept', () => {
-  const RUNTIME = {bytes: 2_377_612, sha256: '30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a'};
+  // (lumbering rework, user playtest 2026-11-01: the clips changed, so the GLB changed; its three texture images did NOT — they are
+  // pinned below to the round-4 Meshy re-encodes of the original 30d4347c… GLB, byte for byte)
+  const RUNTIME = {bytes: 2_395_736, sha256: '2486d2b99b41303e2b4a1e05762714b5d916c0192ab346636a1e4fd72255a3c4'};
+  const MESHY_IMAGES = {
+    baseColor: 'be4b71251964d3e9d940362130c7816dce8b11bb08474618fc3a5489ce0556b5',
+    metallicRoughness: '956c0f68ec0e8ad0971c84f9a50ac41f06c170e3db4e0972d530fa427289015c',
+    normal: '3319c11d8bddbef5075e064c282cd55fc8b969a1ea82c4d8f3771bef4858ff18',
+  };
   const CODEX_TPOSE = 'bb297b9a04db913e85d51f40ae6d4c4ef9d7539344d87fe00b0198e9ae1987be';
   const MESHY_MAPS = ['base_color.png', 'metallic.png', 'normal.png', 'roughness.png'];
 
@@ -258,13 +265,20 @@ describe('Strainer texture source contract: Codex initial source -> Meshy model 
     expect(readFileSync(pub(SIDECAR), 'utf8')).not.toMatch(/projection|reproject|texture-bake|strainer-back|codex\/strainer/i);
   });
 
-  it('ships exactly the Meshy-mapped runtime GLB (the accepted round-4 output), whose three images are the recorded re-encodes', async () => {
+  it('ships the Meshy-mapped runtime GLB whose three images are EXACTLY the original Meshy re-encodes (no replacement texture)', async () => {
     const bytes = readFileSync(pub(GLB));
     expect({bytes: bytes.length, sha256: sha(bytes)}).toEqual(RUNTIME);
     expect(prov.outputs.glb).toMatchObject(RUNTIME);
     const doc = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(pub(GLB));
+    const mats = doc.getRoot().listMaterials();
+    expect(mats.length).toBe(1);
+    const m = mats[0], img = (t: ReturnType<typeof m.getBaseColorTexture>) => sha(Buffer.from(t!.getImage()!));
+    expect({baseColor: img(m.getBaseColorTexture()), metallicRoughness: img(m.getMetallicRoughnessTexture()), normal: img(m.getNormalTexture())}).toEqual(MESHY_IMAGES);
+    expect(doc.getRoot().listTextures().length).toBe(3);
     const sizes = doc.getRoot().listTextures().map(t => t.getImage()!.byteLength).sort((a, b) => a - b);
     const T = prov.outputs.textures;
     expect(sizes).toEqual([T.baseColor.bytes, T.metallicRoughness.bytes, T.normal.bytes].sort((a, b) => a - b));
+    // the wet look is a RUNTIME layer (ai/strainer.ts STRAINER_WET): the GLB's own material factors stay the Meshy output's
+    expect({roughness: m.getRoughnessFactor(), metallic: m.getMetallicFactor()}).toEqual({roughness: 1, metallic: 1});
   });
 });

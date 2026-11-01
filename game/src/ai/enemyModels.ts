@@ -15,7 +15,7 @@ export const ENEMY_MODEL_FILES: Readonly<Record<string, {url: string; bytes: num
   // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): THE STRAINER (service annexes only: only a layout whose annex
   // roll placed one loads it). `bytes` = the GLB's size (tests/strainer-contract.test.ts checks it). A model that failed to load
   // -> the counted zombie stand-in.
-  enemy_strainer: {url: 'assets/models/enemy-strainer.glb', bytes: 2_377_612},
+  enemy_strainer: {url: 'assets/models/enemy-strainer.glb', bytes: 2_395_736},
 };
 
 /** The lazy enemy model keys a layout's spawns use (sorted; families without a lazy model contribute none). */
