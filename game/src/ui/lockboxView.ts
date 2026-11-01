@@ -310,7 +310,7 @@ export class LockboxView {
     const pk = root.querySelector('.lb-pockets');
     if (pk) pk.textContent = `Pockets · ${inv.pack.length}${ex ? ` (${PACK_SIZE} + ${ex} chest rig)` : ''}`;
     const tt = root.querySelector('.lb-title');
-    if (tt) tt.textContent = `${LOCKBOX_NAME} · ${slots.filter(Boolean).length}/${LOCKBOX_SLOTS} slots used`;
+    if (tt) tt.textContent = `${LOCKBOX_NAME} · ${slots.filter(Boolean).length}/${slots.length} slots used`; // (a runtime count: no bundled '/40' fragment, ci:package)
     const stow = root.querySelector('.lb-stow') as HTMLButtonElement | null;
     if (stow) {
       const worn = inv.worn('backpack');
