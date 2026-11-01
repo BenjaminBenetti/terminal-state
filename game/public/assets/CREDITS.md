@@ -201,3 +201,11 @@ Generated for this project with Codex native image generation (the owned Codex C
 - `assets/textures/mall/ads/ad-sports.jpg` — running shoe, daypack and bottle before a mountain ridge (sports / outdoors) (Codex thread 01a195c2-b42c-7211-89bd-b5e9e14c8a1a)
 - `assets/textures/mall/ads/ad-shopping.jpg` — jewel-tone shopping bags, gift boxes and flowers (mall-wide / general) (Codex thread 01a195c3-7a0d-73e3-96f3-f4cc7232e6c5)
 <!-- END mall-ad-art-20261101 -->
+
+<!-- BEGIN enemy-strainer-20261101 (build-strainer.mjs) -->
+## Beyond the Station round 4: the Strainer (enemy)
+
+Generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose, 2K PBR; 1 attempt, 15 credits) through the Meshy MCP under the user's round-4 task authorization, conditioned on the project's own user-approved front T-pose image of the Strainer (a Codex native image generation made from the project's approved Strainer concept). Rigged and animated locally on CPU by `tools/asset-pipeline/enemy/build-strainer.mjs`: the shared 18-joint skeleton, automatic skin weights and hand-authored procedural clips (not motion capture); the provider's texture maps are resized / re-encoded only (provenance: `assets/derivatives/enemy-strainer.json`). AI-generated asset: provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the input image are kept outside Git.
+
+- `assets/models/enemy-strainer.glb` — the Strainer, a tall clawed drain-filter stalker (Meshy task 01a195f6-f769-7638-9bb6-48d52ba3c491)
+<!-- END enemy-strainer-20261101 -->

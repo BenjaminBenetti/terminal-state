@@ -180,6 +180,12 @@ export interface TrackExtensions {
    * mark at its doorway and the tally inside (planned after the caches on fork `marks:<annexId>`; absent / empty = none).
    */
   cacheMarks?: CacheMark[];
+  /**
+   * (2026-11-01, lane AREA) The level's ONE Beyond the Station area roll (config.ts btsAreaRoll(levelSeed) < BTS_AREA_CHANCE),
+   * recorded by extendTracks on every plan. `present` false = the level has no annex at all (tunnels stay as ordinary tunnels);
+   * true = the planner placed what fits (geometric ineligibility can still leave zero annexes: the log says why).
+   */
+  area?: {roll: number; chance: number; present: boolean};
 }
 
 /**
@@ -276,12 +282,13 @@ export interface TrackExtConfig {
   /** Rock margins (cells) between an extension and the core / another extension group. */
   margin: {core: number; ext: number};
   annex: {
-    /** Chance per eligible tunnel (first straight long enough) to attempt an annex (only without `count`: the original planner). */
-    chance: number;
     /**
      * (GEN-2, optional: the incidence planner) Seeded per-level weights of WANTING 0 / 1 / 2 annexes. The wanted count is then
      * attempted over the level's candidates in a seeded order — eligible tunnels first, then (with `hatch`) the bed ends no
-     * tunnel continues — until it is met or the candidates run out (`chance` is not used). Absent: one `chance` roll per tunnel.
+     * tunnel continues — until it is met or the candidates run out. Absent: the original planner (every eligible tunnel, up to
+     * `max`). (2026-11-01, lane AREA) Either planner runs ONLY when the level's one Beyond the Station area roll succeeded
+     * (config.ts BTS_AREA_CHANCE / btsAreaPresent); the count is then drawn from the weights of 1 and 2 (the zero entry is ignored:
+     * absence is the area roll's), and the old per-eligible-tunnel `chance` roll no longer exists.
      */
     count?: [number, number, number];
     /**
@@ -372,6 +379,11 @@ export interface TrackExtConfig {
 /** Level context of extendTracks. */
 export interface TrackExtContext {
   levelId: string;
+  /**
+   * (2026-11-01, lane AREA) The logical LEVEL seed (the run's per-level seed, ctx.levelSeed / generateStation's seed — never an
+   * attempt seed): the level's one Beyond the Station area roll is btsAreaRoll(levelSeed), the same on every retry / revisit.
+   */
+  levelSeed: number;
   /** 'any' (the Subway: the crop follows the bbox) or 'east-south' (a fixed crop origin: never west / north of it). */
   canvasGrow: 'any' | 'east-south';
   /** Fixed crop origin (canvas cells) for 'east-south'. */

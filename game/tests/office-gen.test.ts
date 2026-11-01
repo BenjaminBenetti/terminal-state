@@ -290,7 +290,8 @@ describe('office level (one continuous layout)', () => {
       }
       expect(core.length).toBeLessThanOrEqual(8 + 7 * 6 + 2); // + office-overhaul: 0-2 on the roof (gen/office/roof.ts)
       // task track1-siren-blightbelly-20261031 (lane SPAWN): + the Blightbelly and the (Office-only) Siren families
-      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie'))).toBe(true);
+      expect(l.zombies.every(z => ['zombie', 'blightbelly', 'siren', 'ratdog'].includes(z.archetype ?? 'zombie')
+        || (z.archetype === 'strainer' && isExtensionArea(l.areas[z.area])))).toBe(true); // round 4 (lane FAMILY): + the Strainer, service annexes only
       for (const z of l.zombies) if (z.level) expect(z.y).toBeCloseTo(l.levels[z.level].baseY, 4);
       pickups += l.pickups.length;
       for (const p of l.pickups) {
@@ -496,9 +497,20 @@ describe('the Subway is unchanged', () => {
   // 42 62c4187f / da0b79d6, 1234 67a308e5 / fcda47b2; seed 1 (no annex) and CORE unchanged)
   // (round 3 — CAUSE: the logical annex layout (spine, lined rooms, districts, hideout room) + the survivor hideout's props / lantern
   // light / gear pickup; stage before: 7 e3af4b69 / 7e118e47, 42 608b33e4 / e7fb9e97, 1234 87eba43d / 35497900; seed 1 and CORE unchanged)
+  // (round 4, task studio-alpha-beyond-station-round4-20261101-01 lane FAMILY — CAUSE: the Strainer 0.08 in the service-annex family
+  // pool (zombies 0.75 -> 0.67, appended last): only the annex service spawns' archetypes move (enemy-spawn-parity stage 13). PROOF
+  // (one-off): re-assigned with the pre-round-4 service pool, every live fingerprint reproduced the stage-before values exactly;
+  // stage before: 7 6dfe8a80 / ea7d8213, 42 bc5c9cde / 809464c2, 1234 1bc68a4 / 640ce0e0; seed 1 and CORE unchanged)
+  // (round 4, task studio-alpha-beyond-station-round4-20261101-01 lane AREA — CAUSE: the Beyond the Station area exists only where the
+  // level's ONE seeded roll succeeds (20 %, gen/trackExt/config.ts btsAreaRoll). PROOF: 7 / 42 roll it ABSENT (u = 0.3195 / 0.7858):
+  // their annexes and annex content are gone, the tunnels stay; 1234 (0.0955) rolls it PRESENT with the same plan and 1 had none —
+  // both unchanged; CORE and the reserve-off HEAD proof unchanged (asserted below). Stage before: 7 6dfe8a80 / ea7d8213, 42 bc5c9cde /
+  // 809464c2)
+  // (round 4 combined: 7 / 42 take the area roll's values (no annex, nothing for the Strainer pool to move); 1234 keeps its annex and
+  // takes the Strainer pool's values)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '6dfe8a80', '7:pistol': 'ea7d8213',
-    '42:rifle': 'bc5c9cde', '42:pistol': '809464c2', '1234:rifle': '1bc68a4', '1234:pistol': '640ce0e0',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '8701b11c', '7:pistol': 'b2cdc4c6',
+    '42:rifle': '5be7cbc8', '42:pistol': '6ab7d217', '1234:rifle': '5795ebde', '1234:pistol': '43055a5a',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

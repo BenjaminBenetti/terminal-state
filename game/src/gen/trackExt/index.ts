@@ -21,10 +21,11 @@ import {Carver, type BedEndInfo, type Carve} from './carve';
 import {reframe} from './core';
 import {adoptComposition} from '../compose';
 import {CORE_XZ_KEYS, isExtensionArea, type CoreXZKey, type TrackExtConfig, type TrackExtContext, type TrackExtensions} from './types';
-import {TRACK_EXT} from './config';
+import {BTS_AREA_CHANCE, TRACK_EXT, btsAreaRoll} from './config';
 
 export * from './types';
 export {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_OFFICE, SUBWAY_WALK_BASELINE_M2, trackExtConfig} from './config'; // (+ TRACK_EXT_MALL: task track3, lane INTEG)
+export {BTS_AREA_CHANCE, BTS_AREA_SALT, btsAreaPresent, btsAreaRoll} from './config'; // (2026-11-01, lane AREA: the one area roll)
 export {copyWindow} from './window';
 export {coreView, hasExtensionGrowth, reframe} from './core';
 export {STATION_ART, HATCH_CLUE_KEEPOUT, endWall, planStationArt, rockSpans, stationArtIssues, stationArtKeepouts, stationArtRecordIssues, wallFacesPlatform, wallSide, artX, type ArtKeepout} from './art'; // (playtest revision, lane ART)
@@ -53,8 +54,15 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
   const C = new Carver(k, cfg, ctx);
   const ext = C.carve.ext;
   const A = cfg.annex;
-  // (GEN-2) the incidence planner: a seeded per-level wanted annex count (own fork: the original planner's draws are untouched)
-  const want = A.count ? Math.min(A.max, rng.fork('annex-count').weighted(A.count.map((w, i) => [i, w] as [number, number]))) : 0;
+  // (2026-11-01, lane AREA) THE level's ONE Beyond the Station area roll: a pure function of the logical level seed (config.ts
+  // btsAreaRoll; no generation stream is consumed, every retry / revisit rolls the same). Failed: no annex is planned at all.
+  const roll = btsAreaRoll(ctx.levelSeed), present = roll < BTS_AREA_CHANCE;
+  ext.area = {roll, chance: BTS_AREA_CHANCE, present};
+  // (GEN-2) the incidence planner: a seeded per-level wanted annex count (own fork: the original planner's draws are untouched) —
+  // (lane AREA) only for a level that has the area, from the weights of 1 / 2 annexes (absence is the area roll's alone; a config
+  // whose 1 / 2 weights are both 0 wants none)
+  const counts = A.count ? A.count.map((w, i) => [i, w] as [number, number]).filter(([i, w]) => i >= 1 && w > 0) : [];
+  const want = present && counts.length ? Math.min(A.max, rng.fork('annex-count').weighted(counts)) : 0;
   let hosts = 0;
   const open: BedEndInfo[] = [];
   // tunnels: bed ends in a seeded order, each on its own fork (independent of the others' draws)
@@ -74,14 +82,19 @@ export function extendTracks(k: Kit, rng: Rng, cfg: TrackExtConfig, ctx: TrackEx
     ln(`annex ${res.annex.id}: ${Math.round(res.annex.areaM2)} m² in ${res.annex.areas.length} areas`);
   };
   const ar = rng.fork('annexes');
-  if (!A.count) {
-    // annexes: up to cfg.annex.max, each on a different eligible tunnel, a seeded chance per eligible tunnel
+  if (!present) {
+    // (lane AREA) the level's one area roll failed: no annex, no hatch — the tunnels stay ordinary tunnels (no door, no clue)
+    for (const tr of ext.tunnels) ext.log.push({trench: tr.trench, from: tr.from, result: `annex: no area (level roll ${roll.toFixed(4)} >= ${BTS_AREA_CHANCE})`});
+  } else if (!A.count) {
+    // annexes: up to cfg.annex.max, each on a different eligible tunnel, in a seeded order. (lane AREA) The old seeded 0.6 chance
+    // per eligible tunnel is replaced by the level's one area roll: every eligible tunnel takes one until the max.
     for (const pt of ar.shuffle(planned.slice())) {
       if (ext.annexes.length >= A.max) break;
       const tr = ext.tunnels[pt.id], ln = (result: string) => ext.log.push({trench: tr.trench, from: tr.from, result});
       if (!C.doorWindow(pt)) { ln('annex: not eligible (first straight too short)'); continue; }
       const fr = rng.fork(`annex:${pt.id}`);
-      if (!fr.chance(A.chance)) { ln('annex: not rolled'); continue; }
+      // the retired per-tunnel roll's draw is still taken (and ignored), so each annex's own stream — its layout — is unchanged
+      fr.next();
       const res = C.planAnnex(pt, ext.annexes.length, fr);
       if (typeof res === 'string') { ln(`annex: omitted (${res})`); continue; }
       addTunnelAnnex(res, tr, ln);

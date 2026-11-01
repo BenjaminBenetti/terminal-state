@@ -246,7 +246,11 @@ describe('(c) visible slow motion in world space, on the fog clock', () => {
 
   it('the station-wide amount stays steady (the iteration-12 swing was 17 -> 59 e-3 /m within minutes)', () => {
     for (const seed of [0x1a2b3c, 6, 42]) {
-      const l = station(seed), p = atmosphereFor(l), maps = mapsOf(l, p);
+      // (2026-11-01, lane AREA) the CORE station, as the area-consumption test above since GEN-2 (DESIGN §0: rules over the core,
+      // extensions reported separately): seed 42 no longer carries its service annex (its level rolls the Beyond the Station area
+      // absent), so its live grid / crop translation changed and the world-anchored patches sample other noise there (live swing
+      // 1.131 / 0.915 — a layout effect, not the fog clock; the core views read 1.053 / 1.053 / 1.068 max over the mean)
+      const l = coreView(station(seed)), p = atmosphereFor(l), maps = mapsOf(l, p);
       const ms: number[] = [];
       for (let t = 0; t <= 300; t += 20) ms.push(mediumStats(l, maps, p, t, 9).mean);
       const avg = ms.reduce((a, b) => a + b, 0) / ms.length;

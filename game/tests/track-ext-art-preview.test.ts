@@ -17,7 +17,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 const GAME = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Seeds (tests/track-ext.test.ts corpora): a tunnel-door annex (split, east tunnel) and a service-hatch annex (island-ends). */
-const TUNNEL_SEED = 4055629249, HATCH_SEED = 2654448106;
+const TUNNEL_SEED = 4055629249, HATCH_SEED = 1514198804; // (lane AREA: was 2654448106, which now rolls the area absent)
 
 describe.runIf(!!process.env.TRACK_EXT_ART_PREVIEW)('station invitation art + extension walls: CPU previews (TRACK_EXT_ART_PREVIEW=1)', () => {
   it('renders the station views, the routes and an annex wall at ~2 m', async () => {

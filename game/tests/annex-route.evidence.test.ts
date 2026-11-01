@@ -8,15 +8,19 @@ import {installCanvasShim, ShimContext} from './helpers/canvas2d';
 import {openableModels} from './helpers/openablesFixture';
 import {freshLayout, walkAnnexRoute, type RouteReport} from './helpers/annexRoute';
 import type {LevelId} from '../src/levels/types';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 let models: Record<string, GLTF> = {};
 beforeAll(async () => { if (process.env.ANNEX_ROUTE) models = await openableModels(); }, 120000);
 
-/** The locked representative sample (REPORT §1): two fresh Subway runs (tunnel + hatch), plus an Office and a Mall annex. */
+/**
+ * The locked representative sample (REPORT §1): two fresh Subway runs (tunnel + hatch), plus an Office and a Mall annex. (2026-11-01,
+ * lane AREA: 1043 / 1002 / 222 / 846932 now roll the area absent — their FRESH replacements, tests/helpers/btsArea.ts.)
+ */
 export const ROUTE_SAMPLE: readonly {level: LevelId; seed: number}[] = [
-  {level: 'subway', seed: 1043}, {level: 'subway', seed: 1002}, {level: 'office', seed: 222}, {level: 'mall', seed: 846932},
+  {level: 'subway', seed: FRESH.subwayTunnel}, {level: 'subway', seed: FRESH.subwayHatch}, {level: 'office', seed: FRESH.office}, {level: 'mall', seed: FRESH.mall},
 ];
 
 describe.runIf(!!process.env.ANNEX_ROUTE)('annex discovery routes (evidence)', () => {

@@ -167,7 +167,7 @@ describe('Siren family: stats from source, registry entry', () => {
     expect(def.stats).toBe(SIREN_STATS);
     expect(def.model).toBe(SIREN_MODEL_KEY);
     expect(def.climbsLadders).toBe(false);
-    expect(Object.keys(ENEMY_ARCHETYPES)).toEqual(['zombie', 'blightbelly', 'siren', 'ratdog']);
+    expect(Object.keys(ENEMY_ARCHETYPES)).toEqual(['zombie', 'blightbelly', 'siren', 'ratdog', 'strainer']); // round 4 (lane FAMILY): + the Strainer, appended last
     const z = {archetype: 'siren', brain: new SirenBrain(0, 0, 0)} as unknown as EnemyActor;
     expect(enemyCues(z)).toBe(SIREN_CUES);
   });

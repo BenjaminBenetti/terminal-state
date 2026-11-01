@@ -14,6 +14,7 @@ import {ZombieBrain, alertListeners, type BrainWorld} from '../../src/ai/brain';
 import {CreatureBrain} from '../../src/ai/creatureActor';
 import {SirenBrain} from '../../src/ai/siren';
 import {BlightbellyBrain} from '../../src/ai/blightbelly';
+import {StrainerBrain} from '../../src/ai/strainer';
 import {moveZombie, sameLevel, settleZombie} from '../../src/ai/motor';
 import {PathService, nearPlayerRule} from '../../src/ai/pathService';
 import {lureWorld} from '../../src/ai/lightLure';
@@ -74,7 +75,8 @@ export function aggroSim(layout: StationLayout, o: AggroOpts) {
     const b = s.archetype === 'ratdog' ? new CreatureBrain(s.x, s.z, s.yaw)
       : s.archetype === 'siren' ? new SirenBrain(s.x, s.z, s.yaw, undefined, true)
         : s.archetype === 'blightbelly' ? new BlightbellyBrain(s.x, s.z, s.yaw)
-          : new ZombieBrain(s.type, s.x, s.z, s.yaw);
+          : s.archetype === 'strainer' ? new StrainerBrain(s.x, s.z, s.yaw) // round 4 (lane FAMILY): annex service spawns only
+            : new ZombieBrain(s.type, s.x, s.z, s.yaw);
     b.y = s.y ?? L.grid(s.level ?? 0).floorAt(s.x, s.z);
     return b;
   });

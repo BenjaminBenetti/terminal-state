@@ -21,8 +21,11 @@ import type {FamilyPool, ZombieTypeRule} from './spawnTables';
 /** The user's initial group size range: every horde group starts with 5..20 members. */
 export const HORDE_GROUP_SIZE = {min: 5, max: 20} as const;
 
-/** Families that never join a standard (ordinary-zombie) horde (final user decision: Sirens are rare ambient only). */
-export const HORDE_FORBIDDEN_FAMILIES: readonly string[] = ['siren'];
+/**
+ * Families that never join a standard (ordinary-zombie) horde (final user decision: Sirens are rare ambient only). Task
+ * studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): + the Strainer (a service-annex lurker only: spawnTables STRAINER_CONTEXTS).
+ */
+export const HORDE_FORBIDDEN_FAMILIES: readonly string[] = ['siren', 'strainer'];
 
 export interface HordeBudget {
   /** Horde members in the whole level (all groups together). */

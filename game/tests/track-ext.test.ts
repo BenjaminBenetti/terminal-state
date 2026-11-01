@@ -5,25 +5,43 @@
 // The core-preservation proofs live in tests/track-ext-core.test.ts, the level coverage in tests/track-ext-coverage.test.ts.
 // GEN-2: the Subway's incidence over the 64-seed corpus (annexes on basically every level, ~a third with two, never more),
 // annex-aware first straights, and SERVICE-HATCH annexes (a door in a bed's side wall where no tunnel continues the end).
+// (2026-11-01, lane AREA) The annexes now exist only on levels whose ONE area roll succeeds (20 %: gen/trackExt/config.ts
+// btsAreaRoll; tests/bts-area.test.ts). The annex samples below keep their size by taking the corpus seeds that roll the area
+// PRESENT with the real roll function (tests/helpers/btsArea.ts); the seeds re-found for a role say so where they are defined.
 import {describe, expect, it} from 'vitest';
 import {generateStation, STATION_EXT_MAX_CELLS} from '../src/gen/station';
 import {generateOfficeLevel, OFFICE_EXT_MAX_CELLS} from '../src/gen/office/index';
 import {CELL, FLOOR, PathFinder, SOLID, VOID} from '../src/gen/grid';
 import {
-  SUBWAY_WALK_BASELINE_M2, TRACK_EXT, TRACK_EXT_STATS, extensionIssues, isExtensionArea, type TrackExtensions,
+  SUBWAY_WALK_BASELINE_M2, TRACK_EXT, TRACK_EXT_STATS, btsAreaPresent, extensionIssues, isExtensionArea, type TrackExtensions,
 } from '../src/gen/trackExt/index';
+import {presentSeeds} from './helpers/btsArea';
 import {buildPath, pointAt, project, walkCells, tubeCells} from '../src/gen/trackExt/path';
 import type {StationLayout} from '../src/gen/stationTypes';
 
-const SUBWAY_SEEDS = Array.from({length: 24}, (_, i) => (i * 2654435761 + 12345) >>> 0);
-/** GEN-2: the 64-seed incidence corpus (the first 24 are SUBWAY_SEEDS). */
-const SUBWAY_CORPUS = Array.from({length: 64}, (_, i) => (i * 2654435761 + 12345) >>> 0);
-const OFFICE_SEEDS = [3, 7922, 15841, 23760, 31679, 39598];
-/** Seeds by annex count (found by the census; deterministic). GEN-2 (core reserve + incidence planner): re-found. */
-const SUBWAY_ANNEX = {0: 2027820797, 1: 4055629249, 2: 2563024239};
-const OFFICE_ANNEX = {0: 31679, 1: 3, 2: 7922};
-/** GEN-2: service-hatch levels — island-ends (one hatch), express (two hatches), interchange (a tunnel annex + a hatch). */
-const SUBWAY_HATCH = {one: 2654448106, two: 1549120013, mixed: 774566179};
+const corpus = (i: number) => (i * 2654435761 + 12345) >>> 0;
+/** The walkable-baseline sample (core only: every level counts, whatever its area roll). */
+const SUBWAY_SEEDS = Array.from({length: 24}, (_, i) => corpus(i));
+/** GEN-2: the 64-seed incidence corpus — (lane AREA) the first 64 corpus seeds whose level rolls the area PRESENT. */
+const SUBWAY_CORPUS = presentSeeds(64, corpus);
+/** The census sample: the first 24 of them (lane AREA: was the first 24 corpus seeds, ~80 % of which now roll the area absent). */
+const SUBWAY_CENSUS = SUBWAY_CORPUS.slice(0, 24);
+/** The Office census: 3 + 7919 k — (lane AREA) the first six that roll the area PRESENT (was k = 0..5: 3, 7922 … 39598). */
+const OFFICE_SEEDS = presentSeeds(6, k => 3 + 7919 * k);
+/**
+ * Seeds by annex count (found by the census; deterministic). GEN-2 (core reserve + incidence planner): re-found. (lane AREA, the one
+ * area roll) 0 = a level rolling the area ABSENT (Subway 2027820797 still; Office 31680 = the first seed >= the old 31679, which now
+ * rolls PRESENT and gets two annexes); 1 / 2 = levels rolling it PRESENT: Subway 4055629249 still, 2 = 3964205382 (the first corpus
+ * seed rolling present with two TUNNEL annexes, was 2563024239); Office 10 / 7926 (the first present seeds >= the old 3 / 7922 with
+ * one / two annexes).
+ */
+const SUBWAY_ANNEX = {0: 2027820797, 1: 4055629249, 2: 3964205382};
+const OFFICE_ANNEX = {0: 31680, 1: 10, 2: 7926};
+/**
+ * GEN-2: service-hatch levels — island-ends (one hatch), express (two hatches), interchange (a tunnel annex + a hatch). (lane AREA)
+ * 1549120013 still rolls PRESENT; one / mixed = the first corpus seeds rolling present in that role (were 2654448106 / 774566179).
+ */
+const SUBWAY_HATCH = {one: 1514198804, two: 1549120013, mixed: 1874796201};
 /** Distinct entry of an annex: its tunnel, or its bed end (service hatch). */
 const entryKey = (a: TrackExtensions['annexes'][number]) => (a.bed ? `bed ${a.bed.trench}${a.bed.from}` : `tunnel ${a.tunnel}`);
 /** Extension group of an annex (its tunnel's; a hatch annex is its own). */
@@ -92,7 +110,7 @@ describe('track extensions — generation', () => {
     const rescued0 = TRACK_EXT_STATS.rescued;
     const t0 = TRACK_EXT_STATS.ms, c0 = TRACK_EXT_STATS.calls;
     const lines: string[] = [];
-    for (const [name, list, budget] of [['Subway', SUBWAY_SEEDS.map(sub), STATION_EXT_MAX_CELLS], ['Office', OFFICE_SEEDS.map(off), OFFICE_EXT_MAX_CELLS]] as const) {
+    for (const [name, list, budget] of [['Subway', SUBWAY_CENSUS.map(sub), STATION_EXT_MAX_CELLS], ['Office', OFFICE_SEEDS.map(off), OFFICE_EXT_MAX_CELLS]] as const) {
       let ends = 0, tunnels = 0, levelsWith = 0, bends = 0, translated = 0, hatches = 0;
       const lens: number[] = [], annexDist = [0, 0, 0], areas: number[] = [], caps: Record<string, number> = {}, cells: number[] = [];
       for (const l of list) {
@@ -164,6 +182,9 @@ describe('track extensions — generation', () => {
   });
 
   it('seeded 0 / 1 / 2-annex levels exist on both levels', () => {
+    // (lane AREA) the zero levels roll the area absent, every other role seed present (the real roll)
+    expect([SUBWAY_ANNEX[0], OFFICE_ANNEX[0]].map(btsAreaPresent)).toEqual([false, false]);
+    expect([SUBWAY_ANNEX[1], SUBWAY_ANNEX[2], OFFICE_ANNEX[1], OFFICE_ANNEX[2], ...Object.values(SUBWAY_HATCH)].every(btsAreaPresent)).toBe(true);
     for (const [n, seed] of Object.entries(SUBWAY_ANNEX)) expect(sub(seed).extensions!.annexes.length, `Subway ${seed}`).toBe(Number(n));
     for (const [n, seed] of Object.entries(OFFICE_ANNEX)) expect(off(seed).extensions!.annexes.length, `Office ${seed}`).toBe(Number(n));
     // GEN-2: service-hatch levels
@@ -284,7 +305,7 @@ describe('track extensions — generation', () => {
 
   it('clues only on tunnels that lead to an annex door, all before it and pointing toward it', () => {
     let clued = 0, annexTunnels = 0;
-    for (const l of [...SUBWAY_SEEDS.map(sub), ...OFFICE_SEEDS.map(off)]) {
+    for (const l of [...SUBWAY_CENSUS.map(sub), ...OFFICE_SEEDS.map(off)]) {
       for (const t of l.extensions!.tunnels) {
         if (!t.doors.length) { expect(t.clues, `${l.seed} tunnel ${t.id}`).toEqual([]); continue; }
         annexTunnels++;

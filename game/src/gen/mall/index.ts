@@ -144,7 +144,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
     if (r.w <= 0 || r.h <= 0) continue;
     x1 = Math.max(x1, r.x + r.w); y1 = Math.max(y1, r.y + r.h);
   }
-  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, mallTrackExtContext(ox, oy, {w: x1 - ox + CROP_MARGIN, h: y1 - oy + CROP_MARGIN}));
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, mallTrackExtContext(ctx.levelSeed, ox, oy, {w: x1 - ox + CROP_MARGIN, h: y1 - oy + CROP_MARGIN}));
 
   // --- Crop: extent of everything carved (the extensions join later, finishExtensions) ----------------------------------------
   const use = Array.from({length: FLOORS + 1}, (_, i) => i);

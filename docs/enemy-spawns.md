@@ -1,7 +1,8 @@
 # Enemy spawns — per-level profiles, room modifiers and the reference
 
 <!-- Task enemy-spawn-tables-20261030 (lane SPAWN); task track1-siren-blightbelly-20261031 (lane SPAWN): families Blightbelly and
-Siren, family eligibility, level tiers. Registering a NEW level or annex zone: docs/level-enemy-contract.md. -->
+Siren, family eligibility, level tiers; task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer (service
+annexes only). Registering a NEW level or annex zone: docs/level-enemy-contract.md. -->
 
 Every logical level has one **enemy spawn profile**. The real level generators read it; nothing else holds spawn numbers. The
 public reference site's Enemy spawns section (`enemies/index.html` → `enemies/<level>.html`) is generated from the same profiles.
@@ -14,8 +15,10 @@ This page explains where the profiles live, what each control and modifier means
 | Export | What it is |
 |---|---|
 | `SPAWN_PROFILES` / `spawnProfile(level)` | One `SpawnProfile` per `LevelId` (`subway`, `office`, `mall`). `Record<LevelId, …>`: a new level does not typecheck until it has one. |
-| `ENEMY_FAMILY_IDS` | The enemy families in registry and roll order: `zombie`, `blightbelly`, `siren`, `ratdog` (= the archetype registry `ENEMY_ARCHETYPES`, `game/src/ai/creatureArchetypes.ts`, same key order). |
-| `familyPool(shares)`, `DEFAULT_FAMILY_SHARES`, `ENEMY_POOL` | A level's pool: blightbelly 0.05 (default ON), siren 0 (default OFF, `OPT_IN_FAMILIES`), ratdog 0.05, zombie the remainder. `ENEMY_POOL` = `familyPool()` = the Subway's. |
+| `ENEMY_FAMILY_IDS` | The enemy families in registry and roll order: `zombie`, `blightbelly`, `siren`, `ratdog`, `strainer` (= the archetype registry `ENEMY_ARCHETYPES`, `game/src/ai/creatureArchetypes.ts`, same key order; the Strainer is appended last). |
+| `familyPool(shares)`, `DEFAULT_FAMILY_SHARES`, `ENEMY_POOL` | A level's pool: blightbelly 0.05 (default ON), siren 0 (default OFF, `OPT_IN_FAMILIES`), ratdog 0.05, strainer 0 (context-locked, below), zombie the remainder. `ENEMY_POOL` = `familyPool()` = the Subway's. |
+| `STRAINER_CONTEXTS`, `CONTEXT_LOCKED_FAMILIES` | The contexts whose OWN pool may give the Strainer weight: `['service']` only. `validateSpawnProfile` rejects a positive Strainer weight in a level pool, in any other context's pool or in a horde pool (`HORDE_FORBIDDEN_FAMILIES`). |
+| `SERVICE_FAMILY_POOL` | The service annexes' own pool: zombie 0.67, blightbelly 0.05, siren 0, ratdog 0.20, strainer 0.08 (see "Service annexes"). |
 | `OFFICE_ENEMY_POOL`, `OFFICE_SIREN_WEIGHT`, `OFFICE_SIREN_ELIGIBILITY` | The Office pool (siren draw weight 0.19) and where an Office Siren may lie dormant. |
 | `markSpawnContext`, `spawnContextOf`, `eligibilityFailure`, `eligibleFamily`, `sealsPassage` | Spawn context tags and the eligibility checks. |
 | `ENEMY_SPAWNS` (+ `ENEMY_SPAWNS_BASELINE`, `ENEMY_POPULATION_SCALE`) | The Subway station count range (the iteration-12 doubled population). |
@@ -193,6 +196,10 @@ separately (`census.horde`) from the ambient contexts.
   (`game/tests/enemy-spawn-parity.test.ts` invariant pins, computed from the untouched main dba90dd sources).
 - **Zombie sub-distributions stay inside the zombie family.** Every spawn keeps its shambler / coated type roll; a Blightbelly /
   Siren ignores it (its own stats; no wardrobe outfit, no coated health).
+- **Strainer (round 4): 0 in every level pool.** Every level pool lists `strainer` explicitly at weight 0, appended LAST in the roll
+  order: the pool total and every band are unchanged, so every core draw of every seed is bit-identical
+  (`game/tests/strainer.test.ts`: 200k rolls per level pool, room modifiers included; core views of the parity pins). Its only
+  weight is the service annexes' 0.08 (below).
 - **Siren draw weight vs placed share.** Only ~11.3 of the ~38.7 slots of an Office run pass `OFFICE_SIREN_ELIGIBILITY`; an
   ineligible draw becomes a zombie. 400-run census (seeds 700000 + 101 k): draw weight 0.12 → 1.28 / run, 0.16 → 1.67, 0.18 → 1.87,
   **0.19 → 1.97 (12.5 % of runs none, max 4 = the cap; histogram 0: 50, 1: 102, 2: 117, 3: 71, 4: 60)**, 0.20 → 2.09. Not a
@@ -223,8 +230,8 @@ sends the draw to `fallback`. Never renormalised, so no other family's draw or s
 <!-- Track 2 — Beyond the Station (lane CONTENT) -->
 
 The track tunnels past the station's bed ends can lead, through a side door, to a seeded **service annex**: a cramped, dark
-back-of-house of plant rooms, stores, closets and 1.5–2 m corridors (`game/src/gen/trackExt/` generates it; 0–2 per level, each
-~25 % of the Subway's walkable exploration area). It is part of its LOGICAL level (docs/level-enemy-contract.md §2): same profile,
+back-of-house of plant rooms, stores, closets and 1.5–2 m corridors (`game/src/gen/trackExt/` generates it; 0–2 per level, only on the
+20 % of levels whose one area roll succeeds — docs/track-extensions.md —, each ~25 % of the Subway's walkable exploration area). It is part of its LOGICAL level (docs/level-enemy-contract.md §2): same profile,
 same family pool and zombie types, same tier.
 
 | Control | Value (`SERVICE_CONTEXT`, `game/src/ai/spawnTables.ts`) |
@@ -251,8 +258,9 @@ same family pool and zombie types, same tier.
 - **Placement.** One run per annex on its own fork (`track-ext-content` → `service:<annex>`), in that annex's areas only, AFTER
   every core spawn (the core's indices, rolls, run-memory keys and parity pins are unchanged) and tagged
   `markSpawnContext(layout, first, 'service')`; `assignEnemyArchetypes(layout, profile)` then runs ONCE over every context.
-- **Families (round 2, R6).** The annexes have their OWN ambient pool, `SERVICE_FAMILY_POOL` (`SpawnContextRule.families` on
-  `SERVICE_CONTEXT`): rat/dog **0.20**, Blightbelly 0.05 (unchanged), Siren 0, ordinary zombies the remainder 0.75. User (round 2):
+- **Families (round 2, R6; round 4).** The annexes have their OWN ambient pool, `SERVICE_FAMILY_POOL` (`SpawnContextRule.families` on
+  `SERVICE_CONTEXT`): rat/dog **0.20**, Blightbelly 0.05 (unchanged), **Strainer 0.08** (round 4), Siren 0, ordinary zombies the
+  remainder **0.67** (0.75 before the Strainer). User (round 2):
   "the rat-dog spawn rate should be boosted to 20% in this area." `assignEnemyArchetypes` reads it only for spawns tagged
   `'service'` (`spawnContextOf`): the same single `enemyRoll(seed, index)`, room modifiers and eligibility on top. Every core
   context keeps the level pool (the same array, so core draws are bit-identical), and hordes are skipped as before.
@@ -261,6 +269,14 @@ same family pool and zombie types, same tier.
     5.0 %); the R6 sample (`service-families.test.ts`: Subway 1043 / 1002, Office 222, Mall 846932) placed 8 of 33 (24 %).
   - **No Siren in an annex:** the service pool lists her at 0, and the Office's `OFFICE_SIREN_ELIGIBILITY.contexts` stays
     `['floor']`; her whole-level rarity and `maxPerLevel` stay level-wide.
+  - **The Strainer (round 4, task studio-alpha-beyond-station-round4-20261101-01):** configured selection share **0.08** per service
+    spawn — the ONLY pool with Strainer weight (`STRAINER_CONTEXTS = ['service']`; 0 in every level pool, every other context and
+    every horde). A configured weight, not an outcome: no Strainer is forced into an annex and none is guaranteed (a 5–6-enemy annex
+    holds about 0.44 on average, often none). Roll bands of the service pool (registry order, Strainer appended last): zombie
+    [0, 0.67), Blightbelly [0.67, 0.72), rat/dog [0.72, 0.92), Strainer [0.92, 1) — the service spawns' rat/dog / Blightbelly bands
+    moved up with the smaller zombie remainder (their shares are exactly as before); every core pool keeps its bands. Node
+    simulation (`game/tests/strainer.test.ts`, 2000 synthetic levels per profile, 16k tagged service spawns each): Strainer
+    7.7–7.9 %, only in service spawns, core picks unchanged. Family details: "The Strainer" below.
 - **Counted separately.** The core contexts' validation counts (Subway `station` ≥ 8; Office `street` / `floor`) and the census /
   parity counts exclude annex spawns (`tests/helpers/enemySpawnParity.ts` `contextCounts` prints them as `+ service N`); the
   reference shows `service` as a zone context, never inside the whole-level total.
@@ -270,7 +286,8 @@ same family pool and zombie types, same tier.
   1.12 annexes per level (3 with none, 15 with one, 6 with two; 6 of the 27 entered by a service hatch), 3.85 placed per annex,
   4.3 service spawns per level (max 10) on top of the station's ~27; Office 10 seeds (3, 7922, 15841, 23760, 31679, 39598, 11, 222,
   3333, 4242) — 1.5 annexes per level, 3.7 placed per annex, 5.6 per level (max 9). No annex run placed fewer than its count.
-  (Before the playtest revision's 5–6 budget.)
+  (Before the playtest revision's 5–6 budget, and before the 2026-11-01 one-roll rule: the annexes — so the service spawns — now
+  exist only on the ~20 % of levels whose Beyond the Station area roll succeeds, docs/track-extensions.md "The area roll".)
 - **Playtest-revision measurement** (fresh New Game path; Subway 1043 / 1002 / 777001 / 777002, Office 222 / 3333, Mall 846932 /
   5150 / 9090):
   - **Placed:** 5–6 per annex (parity corpus: Subway levels +5 / +6 with one annex, +10 / +11 / +12 with two; Office +10 / +11
@@ -279,6 +296,42 @@ same family pool and zombie types, same tier.
   - **Encounters:** ordinary discovery routes (`tests/helpers/annexRoute.ts`, the game's real ZombieBrain) made 1–3 enemies aware
     per route, the first within 0–3 rooms. Before, 0–2 of 3–5 (one route met none). The routes never shoot, so real play
     draws in more.
+
+## The Strainer (`strainer`, round 4)
+
+<!-- Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY). -->
+
+A tall (bind height 2.15 m, slightly taller than a zombie), long-armed, clawed infected — the user's pick for Beyond the Station. A
+NORMAL registered family: `ENEMY_ARCHETYPES.strainer` (`game/src/ai/creatureArchetypes.ts`), stats `STRAINER_STATS` and brain
+`StrainerBrain` (`game/src/ai/strainer.ts`), actor `StrainerActor` (`game/src/ai/strainerActor.ts`), lazy model `enemy_strainer` →
+`assets/models/enemy-strainer.glb` (`game/src/ai/enemyModels.ts`: fetched only for a layout that placed one). It spawns only through
+the ordinary per-spawn family roll of the service annexes (0.08, above) — no special spawner, no forced or guaranteed Strainer.
+
+| Stat | Strainer | Ordinary zombie (shambler) |
+|---|---|---|
+| Health | 200 (2x) | 100 |
+| Claw damage | 13 (1.3x) | 10 |
+| Walk / chase speed | 0.585 (0.9x) / 2.45 m/s (never faster) | 0.65 / 2.55 m/s |
+| Attack range (centre to centre) | 1.931 m = the GLB's 1.631 m claw reach + the player's 0.3 m body radius (long arms) | 1.35 m |
+| Swing / claw contact / cooldown | Attack clip 1.4 s, claws land at 0.6 s (the clip's `attackHitTime`), 0.6 s recovery | 1.1 s / 0.45 s / 0.45 s |
+| Collider radius / turn rate | 0.36 m / 4.0 rad/s | 0.33 m / 4.5 rad/s |
+| Ladders / track bed | never climbs (path requests ignore ladder links) / drops in like every enemy | climbs / drops in |
+| Root scale | its own 0.97–1.03 (crown ≤ 2.215 m, under the 2.3 m annex doors) | 0.95–1.05 |
+
+- **Ordinary melee only:** the zombie brain (sight, chase, search, light lure, one claw swipe per attack with the LOS + reach +
+  facing checks). No acid, ranged, explosion, scream, boss, ceiling, teleport or loot systems. Its hit on the player is a standing
+  humanoid melee hit (melee locations, attacker `strainer`).
+- **Hit zones:** a head sphere at the asset's `headCenter` / `headRadius` (the head is hunched FORWARD of the body; carried on the
+  Head bone, scaled with the actor), a Hips → Neck torso capsule and arm / leg capsules; ordinary body hits elsewhere. Death, corpse
+  volumes and ragdoll (the humanoid rig on the shared 18-joint skeleton) go through the existing contracts; kills persist through
+  the run memory like every enemy.
+- **Audio:** no new clips — the existing zombie calls through the cue adapter (`STRAINER_CUES`: the deep groan voice from its 1.9 m
+  mouth, the ordinary swing / footfalls / death).
+- **No model → counted zombie stand-in** (`createEnemyActor` `fallback`, the Blightbelly's contract; QA `strainers()` / `enemyMix()`).
+- **Asset contract numbers** (`STRAINER_ASSET` = the `enemyStrainer` extras of `enemy-strainer.glb`;
+  `game/tests/strainer-contract.test.ts` checks the agreement): heightM 2.15, headCenter [-0.0006, 1.9481, 0.228] (the crown hunched
+  forward, on the Head bone), headRadius 0.257, reachM 1.631 (horizontal claw reach at the Attack hit frame -> attack range 1.931 m),
+  attackHitTime 0.6 s, Attack clip 1.4 s, Walk / Run ground speeds 0.62 / 2.4 m/s; hit radii torso 0.241 / arm 0.0633 / leg 0.1004.
 
 ## Room modifiers
 
@@ -349,6 +402,10 @@ tiers), `enemies/<level>.html` (profile, eligibility), `enemies/families.html` (
   the untouched rat/dog band, the spawn census (zero Subway Sirens, ~2 Office Sirens / run, ~5 % Blightbelly), context tags,
   once-per-run dead indices.
 - `game/tests/enemy-spawn-tables.test.ts` — coverage, neutral resolution, test-only 0 / 2 modifiers, validation, persistence.
+- `game/tests/strainer.test.ts` (round 4) — the Strainer: registry order (appended last), service 0.08 / explicit 0 elsewhere, the
+  context-lock validation, hordes, bit-identical core picks, the service-annex simulation, stats vs the zombie, the melee brain,
+  the actor / head zone / fallback / ragdoll on a contract-shaped rig, save / load. `game/tests/strainer-asset.test.ts` — the real
+  GLB against the asset contract (skipped until the file exists).
 - `game/tests/enemy-spawn-reference.test.ts` — the reference: coverage, runtime agreement, census, maths, this page's names.
 - `game/tests/annex-content.test.ts` (Track 2) — the `service` zone: declared per annex-bearing level, appended after every core spawn
   and tagged, annex areas only, within the per-annex budget / keep-off / spacing, the core's spawns and families unchanged, no

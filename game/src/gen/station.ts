@@ -347,7 +347,7 @@ function tryGenerate(genSeed: number, seed: number, attempt: number, arch: Arche
   // --- Track 2 (lane GEN): tunnels past the bed ends + service annexes, planned into the virtual canvas on their OWN fork (the
   // main stream is untouched). The crop and every core pass below run exactly as without them; finishExtensions then re-frames
   // the finished core into the extended grid (a pure translation) and stamps them in -------------------------------------------
-  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'subway', canvasGrow: 'any', maxCells: STATION_EXT_MAX_CELLS});
+  const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {levelId: 'subway', levelSeed: seed, canvasGrow: 'any', maxCells: STATION_EXT_MAX_CELLS});
 
   // --- Crop the canvas to the station (iteration 08: every level grid, same bounds) ----------------
   const srcs = k.levelGrids;

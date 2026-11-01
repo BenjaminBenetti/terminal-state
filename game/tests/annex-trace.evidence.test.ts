@@ -30,6 +30,7 @@ import {WorldMaterials} from '../src/world/materials';
 import {ContainerManager} from '../src/world/containers';
 import {STAND_EYE} from '../src/player/player';
 import type {LevelId} from '../src/levels/types';
+import {FRESH} from './helpers/btsArea';
 
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
@@ -113,7 +114,8 @@ function trace(level: LevelId, seed: number) {
 describe.runIf(!!process.env.ANNEX_TRACE)('annex production-path trace (evidence)', () => {
   it('traces the fresh New Game annexes of the sample', () => {
     const which = (process.env.TRACE ?? 'subway').split(',') as LevelId[];
-    const seeds = (process.env.SEEDS ?? '1043,1002,777001,777002').split(',').map(Number);
+    // (lane AREA: defaults rolling the area PRESENT — the FRESH replacements of 1043 / 1002 and the first present seeds after 777001)
+    const seeds = (process.env.SEEDS ?? `${FRESH.subwayTunnel},${FRESH.subwayHatch},777006,777015`).split(',').map(Number);
     mkdirSync('qa-artifacts/annex-trace', {recursive: true});
     for (const level of which) writeFileSync(`qa-artifacts/annex-trace/trace-${level}.json`, JSON.stringify(seeds.map(s => trace(level, s)), null, 1));
   }, 1800000);

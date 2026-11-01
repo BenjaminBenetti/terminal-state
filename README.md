@@ -153,10 +153,11 @@ WASD move · mouse look · Shift sprint · Space jump · C crouch · left click 
 Drop an item by dragging it out of the inventory panel.
 
 **Beyond the Station** (Track 2): the tracks no longer end at a black wall. Drop into a track bed and follow it into a
-finite, curving concrete tunnel that ends at a rubble heap, a bulkhead or a closed gate. Most levels also hide one or two
-**service annexes**: cramped, dark back-of-house rooms with pipes, steam vents, dying lights, a few zombies and some
-picked-over scavenging. You reach them through a side door in a tunnel, or a service hatch in a track-bed wall. Graffiti
-arrows point the way only where a route really exists, and the bed ladders take you back up. See
+finite, curving concrete tunnel that ends at a rubble heap, a bulkhead or a closed gate. About one level in five (a 20 %
+seeded roll per level, on every level type) also hides one or two **service annexes**: cramped, dark back-of-house rooms with
+pipes, steam vents, dying lights, a few zombies and some picked-over scavenging. You reach them through a side door in a
+tunnel, or a service hatch in a track-bed wall. Graffiti arrows point the way only where a route really exists, and the bed
+ladders take you back up. See
 [docs/track-extensions.md](docs/track-extensions.md).
 
 **Office Space overhaul** (task office-overhaul-20261030): every office floor 2–8 is leased to one of **20 fictional
