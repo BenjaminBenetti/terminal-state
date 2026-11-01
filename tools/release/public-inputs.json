@@ -869,6 +869,51 @@
       "sha256": "e046da6e89cbef5ec1a938a4d67ae3483bc724f98f1e273068a5dbf1219787b5"
     },
     {
+      "path": "assets/audio/reactor-breaker.mp3",
+      "bytes": 22987,
+      "sha256": "ea3a5e0912f614954cd6d859d7c4dfe275c708200ad60426879f2e425c7ea944"
+    },
+    {
+      "path": "assets/audio/reactor-fan-loop-loop.mp3",
+      "bytes": 106161,
+      "sha256": "a541ae31c99548788d0e4b00f8c5cfcb4b1b545439d9b0d3254684622350b9b6"
+    },
+    {
+      "path": "assets/audio/reactor-fuse.mp3",
+      "bytes": 17554,
+      "sha256": "781f7234f3bd9f9e17a5c738429e21605516bd472df053c24d621863e366e6f0"
+    },
+    {
+      "path": "assets/audio/reactor-gen-loop-loop.mp3",
+      "bytes": 122044,
+      "sha256": "9232e8c11e41e8f50c7c0e4eec257588b407fa3cd5540f57ee01c39ea76bd705"
+    },
+    {
+      "path": "assets/audio/reactor-gen-start.mp3",
+      "bytes": 90279,
+      "sha256": "680befcbd7304be10649f3f2b32da84b8f32326afc81719dbdeee560f12679b2"
+    },
+    {
+      "path": "assets/audio/reactor-hum-loop.mp3",
+      "bytes": 138344,
+      "sha256": "82de7316b215eff896d4201dcb3ed7afc57a0247a533aee21e0e5d3cb47abc7a"
+    },
+    {
+      "path": "assets/audio/reactor-pump.mp3",
+      "bytes": 77322,
+      "sha256": "3956c3091aa1cf6568df0489b84a239113e927c1e5a1fbcc6ef3488978fc1e4e"
+    },
+    {
+      "path": "assets/audio/reactor-startup.mp3",
+      "bytes": 150883,
+      "sha256": "c3b0c7a33f9fe107084e7f187cbb172d1a3b767e0d600063ec1b14e475f055ab"
+    },
+    {
+      "path": "assets/audio/reactor-valve.mp3",
+      "bytes": 48483,
+      "sha256": "d4aeff363876bdcc5dc3545416efcfcfb331d8e33f40aa37ba8865045231d66b"
+    },
+    {
       "path": "assets/audio/rifle-charge-b-01.mp3",
       "bytes": 2821,
       "sha256": "2d62509d4c42744d0e72433f9fc42d8d7d02afdb3189f96a3c7b9db6e3ab7984"
@@ -1502,6 +1547,11 @@
       "path": "assets/derivatives/audio-iteration12.json",
       "bytes": 18565,
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
+    },
+    {
+      "path": "assets/derivatives/audio-reactor.json",
+      "bytes": 7979,
+      "sha256": "4a97f0348b8dd7a8e77f733abfa845c0a4c90a84cb409267a2617ef7ce6b58b5"
     },
     {
       "path": "assets/derivatives/audio-strainer.json",

@@ -117,6 +117,10 @@ export const CUE_GAIN: Record<CueId, number> = {
   // (~+2 dB over a heavy zombie step at its chase gain), swing -21.1 (~4 dB under the attack snarl), contact -19.3 (between the hurt
   // grunt -18.2 and the foreground hit confirm -20.0), squish -24.3 (~4.5 dB under that confirm, positional: quieter with distance).
   strainerStep: 0.38, strainerSwing: 0.36, strainerContact: 0.6, strainerSquish: 0.32,
+  // Task reactor-build-20261101 (primary): the Reactor's machine set (tools/audio-pipeline/reactor-build.mjs). One-shots are peak
+  // -1 dBFS, the loops RMS -20 dBFS (the bed / flare-loop convention). The generator start is deliberately LOUD (it is the noise that
+  // pulls the dead onto the landing); the running loops sit under combat; the core startup swell is the win's sound.
+  reactorGeneratorStart: 0.85, reactorGeneratorLoop: 0.55, reactorFanLoop: 0.4, reactorBreaker: 0.6, reactorFuse: 0.4, reactorValve: 0.5, reactorPump: 0.55, reactorStartup: 0.8, reactorHum: 0.45,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
