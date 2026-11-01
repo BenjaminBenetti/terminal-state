@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import type {MeshBasicNodeMaterial} from 'three/webgpu';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {canvasTexture} from '../canvasTextures';
 import type {KitGeo, KitMat, KitPlan, KitRef} from './archKit';
@@ -74,7 +75,7 @@ export interface KitBuilt {
   modelSlots: Map<ReactorPiece, InstanceSlot[][]>;
   /** The fan rotor InstancedMesh (instance i = plan.fans[i]) and the per-tier lamp meshes / materials. */
   fanRotors: THREE.InstancedMesh | null;
-  tierLamps: Map<number, {mesh: THREE.InstancedMesh; mat: THREE.MeshBasicNodeMaterial}>;
+  tierLamps: Map<number, {mesh: THREE.InstancedMesh; mat: MeshBasicNodeMaterial}>;
   /** Every geometry created here (released with the world: the game disposes the world group's geometries). */
   geometries: THREE.BufferGeometry[];
 }
@@ -192,7 +193,7 @@ export function buildKitMeshes(group: THREE.Group, plan: KitPlan, mat: (k: Exclu
     addIM(fanRotors, 'blade|rotor', plan.fans.map(f => plan.bandOf(f.hub.y)));
   }
   // --- lamp bulbs / lens glows: one InstancedMesh per tier (material = the tier's power)
-  const tierLamps = new Map<number, {mesh: THREE.InstancedMesh; mat: THREE.MeshBasicNodeMaterial}>();
+  const tierLamps = new Map<number, {mesh: THREE.InstancedMesh; mat: MeshBasicNodeMaterial}>();
   const byTier = new Map<number, number[]>();
   plan.lamps.forEach((l, i) => { let x = byTier.get(l.level); if (!x) byTier.set(l.level, (x = [])); x.push(i); });
   for (const [level, idx] of byTier) {

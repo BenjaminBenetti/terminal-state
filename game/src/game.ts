@@ -72,6 +72,8 @@ import {installStalls, type StallSystem} from './world/stalls'; // Task office-o
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
+import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
+import {REACTOR_MODEL_FILES} from './world/reactor/archAssets'; // task reactor-build-20261101 (lane ARCH): the lead's Reactor GLB kit (level-only)
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
@@ -158,7 +160,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...REACTOR_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -437,6 +439,7 @@ export class Game {
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
+    installReactorArch(this); hookName('reactorArch'); // task reactor-build-20261101 (lane ARCH): Reactor textures preload, model keys, deep haze / far plane / culler distance, kit visuals tick (inert elsewhere)
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
@@ -673,7 +676,7 @@ export class Game {
     this.levelResources.retainOnly(key.level, fn => this.retire(fn)); // lane PACKAGE (track3): the previous level's textures now, its owned GPU resources after the warm-up
     // Task track3-eaton-centre-20261031 (lane PERF): the mall's InstancedMeshes share one program per material (render/instancing.ts:
     // three gives every small InstancedMesh its own program; the atrium shows ~740 at once); Subway / Office build as before.
-    setAttributeInstancing(!!this.layout.mall);
+    setAttributeInstancing(!!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (every tier in view)
     // (lane PERF) in the mall the level's lazy models AND the boot models drop their decoded images once uploaded (GPU textures and
     // what is drawn unchanged; the colour samplers read exact thumbnails: assets/textureRelease.ts)
     if (this.layout.mall) {
@@ -702,12 +705,12 @@ export class Game {
     const farFinder = this.pathfinder.fork(), near = (x: number, z: number, y: number | undefined) => this.nearPlayer(x, z, y);
     // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): an OPEN-ATRIUM level (layout.mall) adds the per-frame chase search
     // cap / seen hand-over slack (ai/chaseShare.ts); every other level constructs the service exactly as before.
-    const atrium = this.layout.mall ? atriumPathOptions((x, z, y) => { const P = this.player; return Math.hypot(x - P.x, z - P.z, (y ?? P.y) - P.y) < PATH_DEFER.nearM; },
+    const atrium = this.layout.mall || this.layout.reactor ? atriumPathOptions((x, z, y) => { const P = this.player; return Math.hypot(x - P.x, z - P.z, (y ?? P.y) - P.y) < PATH_DEFER.nearM; },
       (x, z, y) => { const P = this.player, fy = y ?? P.y, r = this.vocalReach; return atriumNearRule(Math.hypot(x - P.x, z - P.z, fy - P.y), fy - P.y, () => r?.ready ? r.pathTo(x, fy + 1.2, z) : null); }) : undefined;
     // (searchExpand: 26000 as always; a `local` request — only marked in an atrium level — gets ATRIUM_CHASE.localExpand)
     this.pathService = new PathService((ax, az, bx, bz, o) => this.pathfinder.find(ax, az, bx, bz, 0.34, searchExpand(o), o),
       (ax, az, bx, bz, o, chunk) => farFinder.search(ax, az, bx, bz, 0.34, searchExpand(o), o, chunk), this.frameBudget, near, atrium);
-    this.chaseShare = this.layout.mall ? new ChaseShare(this.levels) : null;
+    this.chaseShare = this.layout.mall || this.layout.reactor ? new ChaseShare(this.levels) : null; // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (chase search cap / atrium path options above)
     this.sfx.setVocalReach(this.vocalReach);
     this.physics.build(this.layout); // disposes the previous station's bodies and casings
     // Lane D: index the shared prop renderables for per-instance damage; breaks update holders + ragdoll statics.
@@ -2073,7 +2076,7 @@ export class Game {
     // An open-atrium level (layout.mall) adds the cross-storey rule (ATRIUM_PERCEPTION: x0.7 per storey through the void, at most 3
     // new cross-storey responders per noise); the Subway / Office pass no flag: the established loop.
     alertListeners(this.zombies.map(z => z.brain), P, radius,
-      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall);
+      b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
   }
 
   /**
@@ -2186,9 +2189,9 @@ export class Game {
       // Iteration 12 (AI): light lure — this frame's attracting lights, 3D eye-to-point sight, standable goal near a lit spot (ai/lightLure.ts).
       ...lureWorld(L, this.lightSources),
       // Task track3-eaton-centre-20261031 (lane HORDE, atrium AI): open-atrium chase rules (ai/brain.ts BrainWorld.atrium); absent elsewhere
-      ...(this.layout.mall ? {atrium: true} : {}),
+      ...(this.layout.mall || this.layout.reactor ? {atrium: true} : {}), // (reactor-build, lane ARCH: + the open pit)
       // Task studio-beta-mall-round3-20261031-01 (lane ENEMY, R2): the open-atrium notice rule (ai/brain.ts ATRIUM_PERCEPTION); mall only
-      ...(this.layout.mall ? {atriumNotice: true} : {}),
+      ...(this.layout.mall || this.layout.reactor ? {atriumNotice: true} : {}), // (reactor-build, lane ARCH: + the open pit)
     };
   }
 
