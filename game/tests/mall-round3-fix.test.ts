@@ -5,11 +5,9 @@
 //      the mall escalator's outer cladding starts at the pitch line, outward face only (traversalBuilder buildEscalator, mall only),
 //      glass balustrades are not drawn where they stood in an escalator's cladding / a wall plane or floated (MallArch.railPieces),
 //      a lower open-well band no longer re-draws the faces of the band over it (levelGeometry extractWallFaces, OVERLAP_STATS);
-//    the Subway / Office never take the new paths (no overlapping bands; the Office transit escalators keep their old geometry) — that
-//    check reuses the Subway / Office worlds mall-arch.test.ts already builds ('old levels unchanged').
-//    Speed (CI 30-min budget): ONE generated mall (no track extensions), and only the geometry these checks read — the level geometry's wall faces (exactly
-//    as the builder emits them: extractWallFaces -> MallArch.remapFaces -> the builder's opening split), the traversal visuals
-//    (buildTraversal) and MallArch's escalator soffits / balustrades — instead of a whole buildWorld.
+//    the Subway / Office never take the new paths (no overlapping bands; the Office transit escalators keep their old geometry).
+//    Extra (follow-up): the builder's PUBLISHED wall faces (BuiltWorld.wallFaces) around every escalator carry no duplicate face;
+//    mall-arch.test.ts 'old levels unchanged' repeats the Subway / Office checks on its own Subway 4242 / Office 777 worlds.
 //  - R3 "bakery glass display cases have heavy z fighting issues with them selfs, internal mesh z-fight": bakeryCase (D38
 //    office-bakery-case.glb) — both display shelves, their front lips and the band over the inner pane were coplanar / crossing double
 //    sheets in the double-sided body material; one layer each now (tools/asset-pipeline/props/build-office-overhaul.mjs dedupe).
@@ -23,12 +21,14 @@ import {NodeIO} from '@gltf-transform/core';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {WorldMaterials} from '../src/world/materials';
-import {MallArch, SOFFIT_INSET, mallEscalatorFlights} from '../src/world/mallArch';
-import {buildTraversal, escalatorExtent, type QuadSink} from '../src/world/traversalBuilder';
-import {LevelColumns, OVERLAP_STATS, extractWallFaces, stationLevels, type BuiltFace, type RailRun} from '../src/world/levelGeometry';
-import {levelsOf} from '../src/gen/levels';
+import {buildWorld, type BuiltWorld} from '../src/world/builder';
+import {SOFFIT_INSET, mallEscalatorFlights} from '../src/world/mallArch';
+import {escalatorExtent} from '../src/world/traversalBuilder';
+import {OVERLAP_STATS, type BuiltFace} from '../src/world/levelGeometry';
+import type {WallFace} from '../src/world/wallFaces';
 import {CELL, rampHeight, type Ramp} from '../src/gen/grid';
-import type {StationLayout} from '../src/gen/station';
+import {generateStation, type StationLayout} from '../src/gen/station';
+import {generateOfficeLevel} from '../src/gen/office/index';
 import {COMPANY_ASSETS} from '../src/assets/companyAssets';
 import {BAKERY_LEVELS, openableSpec} from '../src/world/openablesSpec';
 
@@ -111,34 +111,28 @@ function coplanarPairs<T extends {p: V3[]; n: V3}>(tris: readonly T[], dTol: num
 // ---------------------------------------------------------------------------------------------------------------------------------
 // R1: the escalator stack of the real generated mall
 
-interface MallParts { layout: StationLayout; group: THREE.Group; arch: MallArch; rails: RailRun[]; faces: BuiltFace[]; subtracted: number }
-let parts: MallParts | null = null;
-/** One generated mall (seed 12345) and the geometry around its escalators, built through the production entry points. */
-const getMall = async (): Promise<MallParts> => {
-  if (parts) return parts;
-  const {generateMallLevel} = await import('../src/gen/mall/index');
-  // (no track extensions: they join the finished core east / south of it, far from the escalator stack; generation ~2x faster)
-  const layout = generateMallLevel({levelSeed: 12345, startWeapon: 'rifle'} as never, {trackExt: 'none'}) as StationLayout;
-  const m = mats(), levels = stationLevels(layout), cols = new LevelColumns(levels);
-  OVERLAP_STATS.subtracted = 0;
-  const raw = extractWallFaces(layout, levels, cols, {tileLowerHeight: m.tileLowerHeight});
-  const subtracted = OVERLAP_STATS.subtracted;
-  const arch = MallArch.for(layout, m, levels)!;
-  const faces = arch.remapFaces(raw, m.tileLowerHeight);
-  const group = new THREE.Group();
-  const sink: QuadSink = {quad: () => {}}; // flight ceilings / treads go to the architecture accumulator (not read here)
-  buildTraversal(group, layout, m, () => sink, {levels, cols});
-  const add = (mesh: THREE.Mesh | null) => { if (mesh) group.add(mesh); };
-  const rails = [...levelsOf(layout as Parameters<typeof levelsOf>[0]).rails] as RailRun[]; // the mall draws exactly its collision rails
-  const priv = arch as unknown as {buildEscalatorSoffits(a: typeof add): void; buildBalustrades(a: typeof add, r: readonly RailRun[]): void};
-  priv.buildEscalatorSoffits(add);
-  priv.buildBalustrades(add, rails);
-  return (parts = {layout, group, arch, rails, faces, subtracted});
+let real: {layout: StationLayout; w: BuiltWorld; subtracted: number} | null = null;
+const getMall = async () => {
+  if (!real) {
+    const {generateMallLevel} = await import('../src/gen/mall/index');
+    const layout = generateMallLevel({levelSeed: 12345, startWeapon: 'rifle'} as never) as StationLayout;
+    OVERLAP_STATS.subtracted = 0;
+    const w = buildWorld(layout, mats(), {});
+    real = {layout, w, subtracted: OVERLAP_STATS.subtracted};
+  }
+  return real;
 };
-/** The wall faces as the builder emits them (world/builder.ts emitFace: trapezoids; solid parts beside / lintels over openings). */
-function faceTris(faces: readonly BuiltFace[], inBox: (p: V3) => boolean): Tri[] {
+const flightsOf = (layout: StationLayout) => mallEscalatorFlights(layout).map(f => ({...f, r: layout.grid.ramps[f.flight.ramp] as Ramp}));
+const boxOf = (r: Ramp) => ({x0: r.x * CELL - 0.6, x1: (r.x + r.w) * CELL + 0.6, z0: r.y * CELL - 0.6, z1: (r.y + r.h) * CELL + 0.6, y0: Math.min(r.h0, r.h1) - 1.5, y1: Math.max(r.h0, r.h1) + 1.5});
+const inside = (b: ReturnType<typeof boxOf>) => (p: V3) => p[0] >= b.x0 && p[0] <= b.x1 && p[2] >= b.z0 && p[2] <= b.z1 && p[1] >= b.y0 && p[1] <= b.y1;
+/** A mesh's family: the chunk key stripped (balustrade chunks of one material meet at their corners). */
+const family = (m: string) => m.replace(/-\d+:[\d-]+,[\d-]+$/, '');
+
+/** Published wall faces as triangles, the way the builder draws them (world/builder.ts emitFace: trapezoids; solid parts beside /
+ * lintels over openings) — for the extra duplicate-face check on BuiltWorld.wallFaces. */
+function faceTris(faces: readonly (WallFace | BuiltFace)[], inBox: (p: V3) => boolean): Tri[] {
   const out: Tri[] = [];
-  const quad = (f: BuiltFace, a: number, b: number, yb0: number, yb1: number, yt0: number, yt1: number) => {
+  const quad = (f: WallFace, a: number, b: number, yb0: number, yb1: number, yt0: number, yt1: number) => {
     const alongX = Math.abs(f.z0 - f.z1) < 1e-9, plane = alongX ? f.z0 : f.x0;
     const P = (s: number, y: number): V3 => (alongX ? [s, y, plane] : [plane, y, s]);
     const q = [P(a, yb0), P(b, yb1), P(b, yt1), P(a, yt0)];
@@ -147,7 +141,7 @@ function faceTris(faces: readonly BuiltFace[], inBox: (p: V3) => boolean): Tri[]
     for (const t of [[q[0], q[1], q[2]], [q[0], q[2], q[3]]]) {
       const e1 = [0, 1, 2].map(k => t[1][k] - t[0][k]), e2 = [0, 1, 2].map(k => t[2][k] - t[0][k]);
       const area = Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]) / 2;
-      if (area > 1e-9) out.push({p: t, n, area, mesh: 'mall-arch-wall', transparent: false, ds: false});
+      if (area > 1e-9) out.push({p: t, n, area, mesh: `face:${f.finish}`, transparent: false, ds: false});
     }
   };
   for (const f of faces) {
@@ -163,19 +157,14 @@ function faceTris(faces: readonly BuiltFace[], inBox: (p: V3) => boolean): Tri[]
   }
   return out;
 }
-const flightsOf = (layout: StationLayout) => mallEscalatorFlights(layout).map(f => ({...f, r: layout.grid.ramps[f.flight.ramp] as Ramp}));
-const boxOf = (r: Ramp) => ({x0: r.x * CELL - 0.6, x1: (r.x + r.w) * CELL + 0.6, z0: r.y * CELL - 0.6, z1: (r.y + r.h) * CELL + 0.6, y0: Math.min(r.h0, r.h1) - 1.5, y1: Math.max(r.h0, r.h1) + 1.5});
-const inside = (b: ReturnType<typeof boxOf>) => (p: V3) => p[0] >= b.x0 && p[0] <= b.x1 && p[2] >= b.z0 && p[2] <= b.z1 && p[1] >= b.y0 && p[1] <= b.y1;
-/** A mesh's family: the chunk key stripped (balustrade chunks of one material meet at their corners). */
-const family = (m: string) => m.replace(/-\d+:[\d-]+,[\d-]+$/, '');
 
 describe('R1 escalators meet the sloped walls under them without coplanar surfaces (real generated mall)', () => {
   it('around every escalator: no drawn surface shares a plane with another (was 24-43 m2 per flight)', async () => {
-    const {layout, group, faces} = await getMall();
+    const {layout, w} = await getMall();
     const flights = flightsOf(layout);
     expect(flights.length).toBe(3);
     for (const {r, lower, upper} of flights) {
-      const T = [...worldTris(group, inside(boxOf(r))), ...faceTris(faces, inside(boxOf(r)))];
+      const T = worldTris(w.group, inside(boxOf(r)));
       // fightable: opposite faces of single-sided materials never draw together; two transparent (no depth write) never depth-fight;
       // the wall-treatment overlays (wall-detail-*) are another system; one family's own joints (a beam's segments, a rail's corner)
       // share its material — except the architecture, whose duplicated faces carried different texture bases
@@ -188,8 +177,8 @@ describe('R1 escalators meet the sloped walls under them without coplanar surfac
   });
 
   it('soffit sides stand SOFFIT_INSET inside the flight edge lines (the level geometry draws the wall ON the line)', async () => {
-    const {layout, group} = await getMall();
-    const soffit = group.getObjectByName('mall-escalator-soffits') as THREE.Mesh;
+    const {layout, w} = await getMall();
+    const soffit = w.group.getObjectByName('mall-escalator-soffits') as THREE.Mesh;
     expect(soffit).toBeTruthy();
     const T = worldTris(soffit, () => true);
     const sides = T.filter(t => Math.abs(t.n[2]) > 0.99);
@@ -203,9 +192,9 @@ describe('R1 escalators meet the sloped walls under them without coplanar surfac
   });
 
   it('the mall escalator cladding: outward face only, from the pitch line up (no strip in the sloped wall below it)', async () => {
-    const {layout, group} = await getMall();
+    const {layout, w} = await getMall();
     for (const {r, flight, lower, upper} of flightsOf(layout)) {
-      const mesh = group.getObjectByName(`mall-escalators-${lower}-${upper}-stainless`) as THREE.Mesh;
+      const mesh = w.group.getObjectByName(`mall-escalators-${lower}-${upper}-stainless`) as THREE.Mesh;
       const T = worldTris(mesh, () => true);
       for (const [a, out] of [[flight.a0, -1], [flight.a1, 1]] as const) {
         const clad = T.filter(t => t.p.every(p => Math.abs(p[2] - a) < 1e-5) && Math.abs(t.n[2]) > 0.99);
@@ -219,14 +208,14 @@ describe('R1 escalators meet the sloped walls under them without coplanar surfac
   });
 
   it('balustrade glass: never in an escalator cladding plane at its height; the trimmed metres are accounted', async () => {
-    const {layout, group, arch, rails} = await getMall();
-    const st = arch.stats;
+    const {layout, w} = await getMall();
+    const st = w.mallArch!.stats;
     expect(st.balustradeTrimmedM).toBeGreaterThan(20); // the buried / floating scissor-lane guards (~10 m each) + the escalator tops
     expect(st.balustradeTrimmedRuns).toBeGreaterThan(4);
-    const owned = rails.filter(q => arch.ownsRail(q) && !(q as {hidden?: boolean}).hidden);
+    const owned = w.rails.filter(q => w.mallArch!.ownsRail(q) && !(q as {hidden?: boolean}).hidden);
     expect(st.balustradeM + st.balustradeTrimmedM).toBeLessThanOrEqual(owned.reduce((s, q) => s + Math.hypot(q.x1 - q.x0, q.z1 - q.z0), 0) + 1e-6);
     const glass: Tri[] = [];
-    group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.name.startsWith('mall-balustrade-glass')) glass.push(...worldTris(o, () => true)); });
+    w.group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.name.startsWith('mall-balustrade-glass')) glass.push(...worldTris(o, () => true)); });
     for (const {r, flight} of flightsOf(layout)) {
       const {sTop, sBot} = escalatorExtent(r);
       const lo = Math.min(sTop, sBot) - 0.4, hi = Math.max(sTop, sBot) + 0.4;
@@ -242,13 +231,31 @@ describe('R1 escalators meet the sloped walls under them without coplanar surfac
     }
   });
 
-  it('level geometry: the open wells\' overlapping bands are subtracted in the mall (the Subway / Office: mall-arch.test.ts)', async () => {
-    const {subtracted, faces, layout} = await getMall();
+  it('level geometry: the open wells\' overlapping bands are subtracted in the mall, never in the Subway / Office', async () => {
+    const {subtracted} = await getMall();
     expect(subtracted).toBeGreaterThan(0);
-    // no two published faces of the escalator neighbourhood share a plane and a facing over any area (the duplicates were 7-9 m2)
-    for (const {r} of flightsOf(layout)) {
-      const T = faceTris(faces, inside(boxOf(r)));
-      expect(coplanarPairs(T, 0.001).filter(p => !p.opp).reduce((s, p) => s + p.ov, 0)).toBeLessThan(1e-3);
+    for (const layout of [generateStation(24839), generateOfficeLevel({levelSeed: 777, startWeapon: 'pistol'} as never) as StationLayout]) {
+      OVERLAP_STATS.subtracted = 0;
+      const w = buildWorld(layout, mats(), {});
+      expect(OVERLAP_STATS.subtracted).toBe(0);
+      // the Office transit escalators keep their old geometry (both cladding faces, from 5 cm under the pitch)
+      const transit = w.group.getObjectByName('transit-stainless');
+      if (transit) {
+        const t = (layout as {office?: {transit?: {escalators: {flights: number[]}[]}}}).office!.transit!.escalators[0];
+        const q = layout.traversal.stairs[t.flights[0]], r = layout.grid.ramps[q.ramp];
+        const T = worldTris(transit, () => true).filter(x => x.p.every(p => Math.abs(p[0] - q.a0) < 1e-5) && Math.abs(x.n[0]) > 0.99);
+        expect(new Set(T.map(x => Math.sign(x.n[0]))).size).toBe(2);
+        expect(T.some(x => x.p.some(p => p[1] < rampHeight(r, p[2]) - 0.04))).toBe(true);
+      }
+    }
+  });
+
+  it('extra: the published wall faces around every escalator carry no duplicate (the open wells drew slab edges twice, 7-9 m2)', async () => {
+    const {layout, w} = await getMall();
+    for (const {r, lower, upper} of flightsOf(layout)) {
+      const T = faceTris(w.wallFaces, inside(boxOf(r)));
+      expect(T.length, `escalator ${lower}->${upper}: published faces`).toBeGreaterThan(20);
+      expect(coplanarPairs(T, 0.001).filter(p => !p.opp).reduce((s, p) => s + p.ov, 0), `escalator ${lower}->${upper}`).toBeLessThan(1e-3);
     }
   });
 });

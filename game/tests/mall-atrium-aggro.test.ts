@@ -6,8 +6,8 @@
 // within 3D sightRange x 0.75, in its field of view, after 1 s of continuous sight; gunfire heard through the void x0.7 per storey,
 // at most 3 new cross-storey responders per noise; a horde member's cross-storey sighting calls at most 2 mates. Covers: each rule,
 // the gates (no flag = the established perception, byte for byte for the gunfire loop), no blindness for an aware enemy, the dormant
-// Siren untouched. The deterministic before / after scenario on a generated mall (tests/helpers/aggroSim.ts) is in
-// tests/mall-enemy-sample.test.ts (it shares that file's memoized malls).
+// Siren untouched, and a deterministic before / after scenario on generated malls (player at the start, roaming the station and
+// firing a rifle; tests/helpers/aggroSim.ts).
 
 import {describe, expect, it} from 'vitest';
 import {ATRIUM_PERCEPTION, ZombieBrain, alertListeners, hearingMuffle, slabsBetween, type BrainWorld} from '../src/ai/brain';
@@ -16,8 +16,11 @@ import {HordeDirector} from '../src/ai/horde';
 import {placeHordes} from '../src/ai/hordePlace';
 import {MALL_HORDE_RULES, type HordeRules} from '../src/ai/hordeSpec';
 import {levelsOf} from '../src/gen/levels';
-import {Rng} from '../src/core/rng';
+import {Rng, codeToSeed} from '../src/core/rng';
+import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
+import type {StationLayout} from '../src/gen/stationTypes';
 import {ringMallFixture} from './helpers/hordeMallFixture';
+import {aggroSim} from './helpers/aggroSim';
 
 const DT = 1 / 60;
 
@@ -182,5 +185,104 @@ describe('horde call after a cross-storey sighting (HordeDirector.alerted)', () 
   });
 });
 
-// The generated-mall before / after scenario (horde at the rail, firing at the start) lives in tests/mall-enemy-sample.test.ts, on the
-// memoized mall sample it shares with the R8 Siren checks (one set of generations per file).
+/**
+ * A copy of `layout` with one roaming horde (the largest that fits) standing along the void edge of its storey, every placed member
+ * facing down at a pit spot 14.5-18 m away (3D) in clear sight and within 6 m of the first (its call radius): inside the established
+ * 18 m PLAN sight range, beyond the open-atrium notice range (13.5 m 3D). It is the moment the user described (a group on the gallery
+ * above the subway terminal), set up directly instead of waiting for the patrol to get there (organically, e.g. t3a at ~62 s in the
+ * 12-mall census: lanes/ENEMY-evidence in the task folder). Null when no spot fits.
+ */
+function hordeAtTheRail(layout: StationLayout): {layout: StationLayout; spot: {x: number; z: number}; level: number; placed: number; members: number[]} | null {
+  const L = levelsOf(layout), G0 = L.grid(0), M = layout.mall!;
+  const inRect = (x: number, z: number, r: {x0: number; z0: number; x1: number; z1: number}, m = 0) => x >= r.x0 - m && x <= r.x1 + m && z >= r.z0 - m && z <= r.z1 + m;
+  // pit spots under the floor-1 opening (the column open to the roof), every metre
+  const spots: {x: number; y: number; z: number}[] = [];
+  for (let y = 2; y < G0.h - 2; y += 2) for (let x = 2; x < G0.w - 2; x += 2) {
+    const [wx, wz] = G0.center(x, y);
+    if (inRect(wx, wz, M.void.bounds) && G0.walkable(x, y) && G0.circleClear(wx, wz, 0.4)) spots.push({x: wx, y: G0.floorAt(wx, wz), z: wz});
+  }
+  const sees = (x: number, y: number, z: number, s: {x: number; y: number; z: number}) => L.lineOfSight({x, y: y + 1.5, z}, {x: s.x, y: s.y + 1.5, z: s.z});
+  for (const h of [...(layout.hordes ?? [])].sort((p, q) => q.members.length - p.members.length)) {
+    const base = layout.levels[h.level].baseY, G = L.grid(h.level);
+    const op = M.void.openings?.find(o => o.level === h.level)?.bounds ?? M.void.bounds;
+    // the gallery strip along this storey's opening (within 3 m of it), every cell
+    const strip: [number, number, number][] = [];
+    for (let y = 1; y < G.h - 1; y++) for (let x = 1; x < G.w - 1; x++) {
+      const [wx, wz] = G.center(x, y);
+      if (!inRect(wx, wz, op, 3) || !G.walkable(x, y) || !G.circleClear(wx, wz, 0.35)) continue;
+      const f = G.floorAt(wx, wz);
+      if (Math.abs(f - base) <= 0.3) strip.push([wx, wz, f]);
+    }
+    for (const s of spots) {
+      const vis = strip.filter(([x, z, f]) => { const d2 = Math.hypot(x - s.x, z - s.z), d3 = Math.hypot(d2, f - s.y); return d2 <= 17 && d3 > 14.5 && d3 <= 18 && sees(x, f, z, s); });
+      if (vis.length < 6) continue;
+      const c0 = vis.reduce((p, q) => (Math.hypot(q[0] - s.x, q[1] - s.z) < Math.hypot(p[0] - s.x, p[1] - s.z) ? q : p));
+      vis.sort((p, q) => Math.hypot(p[0] - c0[0], p[1] - c0[1]) - Math.hypot(q[0] - c0[0], q[1] - c0[1]));
+      const at: [number, number, number][] = [];
+      for (const c of vis) if (at.length < h.members.length && Math.hypot(c[0] - c0[0], c[1] - c0[1]) <= 5.5 && at.every(q => Math.hypot(q[0] - c[0], q[1] - c[1]) >= 0.9)) at.push(c);
+      if (at.length < 6) continue;
+      const zombies = layout.zombies.map(z => ({...z}));
+      at.forEach(([x, z, y], k) => { Object.assign(zombies[h.members[k]], {x, z, y, yaw: Math.atan2(s.x - x, s.z - z)}); });
+      const node = M.patrol.filter(n => n.level === h.level).reduce((p, q) => (Math.hypot(q.x - c0[0], q.z - c0[1]) < Math.hypot(p.x - c0[0], p.z - c0[1]) ? q : p));
+      const hordes = layout.hordes!.map(q => (q === h ? {...q, startNode: node.id, start: {x: c0[0], y: base, z: c0[1]}} : q));
+      return {layout: {...layout, zombies, hordes}, spot: {x: s.x, z: s.z}, level: h.level, placed: at.length, members: h.members.slice(0, at.length)};
+    }
+  }
+  return null;
+}
+
+describe('the generated mall start: before / after (deterministic scenario)', () => {
+  const has = (LEVEL_IDS as readonly string[]).includes('mall');
+  // each registry mall generated once in this file (the identical call: the scenario and the staged-horde case share m5)
+  const malls = new Map<string, StationLayout>();
+  const mallOf = (code: string): StationLayout => {
+    let l = malls.get(code);
+    if (!l) malls.set(code, (l = LEVELS.mall.generate(LEVELS.mall.entry, {levelSeed: codeToSeed(code)!, startWeapon: 'pistol'})));
+    return l;
+  };
+  (has ? it : it.skip)('player roaming the station (t3a: no shots, 70 s; m5: 30 rifle shots, 60 s): fewer upper-floor responders, no mass stream from one event, station fights kept', () => {
+    const lines: string[] = [];
+    const tot = {before: {upper: 0, burst: 0, calls: 0, station: 0}, after: {upper: 0, burst: 0, calls: 0, station: 0}};
+    // (census, 12 malls x 90 s: lanes/ENEMY-evidence in the task folder. At the time of writing, before the change: t3a — a floor-3 horde
+    // member sighted the player across the void at ~62 s and its call sent 12 mates down at once; m5 firing for 90 s — a call burst of 11)
+    for (const [code, fire] of [['t3a', false], ['m5', true]] as const) {
+      const layout = mallOf(code);
+      const L = levelsOf(layout), sp = layout.playerSpawn, y0 = L.grid(0).floorAt(sp.x, sp.z);
+      const walk: [number, number][] = [];
+      for (const dx of [10, -10, 6, -6]) if (!walk.length && L.walkLineClear(sp.x, y0, sp.z, sp.x + dx, sp.z, 0.4, y0)) walk.push([sp.x + dx, sp.z]);
+      for (const atrium of [false, true]) {
+        // walking up and down the platform; fire = 30 rifle shots (30 m) over 45 s, each killing the nearest station enemy in sight
+        const r = aggroSim(layout, {noise: 30, shots: fire ? Array.from({length: 30}, (_, k) => 3 + k * 1.5) : [], seconds: fire ? 60 : 70, atrium, walk});
+        const k = atrium ? 'after' : 'before';
+        // the largest group set hunting by ONE gunshot / call (same frame, same cause)
+        const ev = new Map<string, number>();
+        for (const u of r.upper) if (u.cause === 'gunfire' || u.cause === 'call') ev.set(`${u.t}|${u.cause}`, (ev.get(`${u.t}|${u.cause}`) ?? 0) + 1);
+        const burst = Math.max(0, ...ev.values()), callBurst = Math.max(0, ...[...ev].filter(([key]) => key.endsWith('call')).map(([, n]) => n));
+        const station = r.responders.filter(u => u.level === 0).length;
+        tot[k].upper += r.upper.length; tot[k].burst = Math.max(tot[k].burst, burst); tot[k].calls += r.callsHeard; tot[k].station += station;
+        lines.push(`${code} ${fire ? 'firing' : 'walking'} (${layout.mall!.variant}, hordes ${(layout.hordes ?? []).map(h => `L${h.level}:${h.members.length}`).join(' ')}) ${k}: upper-floor responders ${r.upper.length}/${r.upperSpawns} ${JSON.stringify(r.upperByCause)}, ` +
+          `reached the station ${r.reached}, largest single-event group ${burst} (calls ${callBurst}), horde calls heard ${r.callsHeard}; station responders ${station} ${JSON.stringify(r.stationByCause)}, kills ${r.kills}`);
+      }
+    }
+    console.info(`[mall atrium aggro] from the start, roaming the platform\n  ${lines.join('\n  ')}`);
+    expect(tot.after.upper).toBeLessThan(tot.before.upper * 0.75);
+    expect(tot.after.burst).toBeLessThanOrEqual(ATRIUM_PERCEPTION.hearCrossMax); // no mass stream from one shot / call
+    expect(tot.after.calls).toBeLessThanOrEqual(tot.before.calls);
+    expect(tot.after.station).toBeGreaterThan(0); // the station fight itself still happens (same-storey perception unchanged)
+  });
+
+  (has ? it : it.skip)('m5, a horde staged at the rail above the pit (2.5 s): before, one sighting sends the crowd (the stream); after, nobody comes', () => {
+    // extra to the roaming / firing scenario above, on its m5 mall (no further generation): the group the user saw streaming down,
+    // set at the void edge directly (hordeAtTheRail) instead of waiting for its patrol to get there
+    const rail = hordeAtTheRail(mallOf('m5'));
+    expect(rail, 'a void-edge strip of a horde storey overlooking the pit').not.toBeNull();
+    const res = [false, true].map(atrium => aggroSim(rail!.layout, {noise: 30, shots: [], seconds: 2.5, atrium, start: rail!.spot}));
+    const burst = (r: (typeof res)[number]) => { const ev = new Map<string, number>(); for (const u of r.upper) if (u.cause === 'call') ev.set(`${u.t}`, (ev.get(`${u.t}`) ?? 0) + 1); return Math.max(0, ...ev.values()); };
+    console.info(`[mall atrium aggro] m5 horde on L${rail!.level} at the rail (${rail!.placed} members): ` + res.map((r, k) => `${k ? 'after' : 'before'} upper-floor responders ${r.upper.length} ${JSON.stringify(r.upperByCause)}, largest call group ${burst(r)}, calls heard ${r.callsHeard}`).join('; '));
+    expect(burst(res[0])).toBeGreaterThan(ATRIUM_PERCEPTION.hearCrossMax); // the stream reproduced before
+    // after: 14.5-18 m across the void — no staged member notices, nobody is called, no stream
+    expect(res[1].upper.filter(u => rail!.members.includes(u.index))).toEqual([]);
+    expect(res[1].callsHeard).toBe(0);
+    expect(res[0].upper.filter(u => rail!.members.includes(u.index)).length).toBe(rail!.placed); // before: the whole staged group came
+  });
+});

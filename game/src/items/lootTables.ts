@@ -1109,6 +1109,8 @@ export const STORAGE_FILL_STOCK_THEMES: readonly LootTheme[] = ['food'];
 const MED_FILL = {cats: ['med', 'drink'], weights: {drink: 0.25}} as const; // (lane PROFILES, mall revision: drink 0.5 -> 0.25)
 const FOOD_FILL = {cats: ['food', 'drink'], weights: {}} as const;
 const ARMS_FILL = {cats: ['ammo', 'flare', 'battery'], weights: {}} as const;
+/** (ci-followup 20261101) a crash cart's drawers: medicine, and spare defibrillator / monitor cells — the only stock that fits its 6.5-7.8 cm upper drawers. */
+const CRASH_CART_FILL = {cats: ['med', 'battery', 'drink'], weights: {drink: 0.25}} as const;
 /** (lane PROFILES, mall revision) a kiosk cart's cupboards: its own snack / drink / cell stock at its row weights. */
 const KIOSK_FILL = {cats: ['food', 'drink', 'battery'], weights: {}} as const;
 const fillRule = (chance: number, area = 0.12, lots: LotRange = [1, 1], o?: {cats: readonly EconCat[]; weights: Readonly<Partial<Record<EconCat, number>>>}): StorageFill =>
@@ -1137,7 +1139,7 @@ export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> =
   // station / office storage in the mall's back rooms, offices, clinic and food units
   cabinetTall: fillRule(0.45), cabinetLow: fillRule(0.45), staffLockers: fillRule(0.2, 0.1), kitchenette: fillRule(0.3, 0.2, [1, 1], FOOD_FILL), desk: fillRule(0.36), monitorDesk: fillRule(0.3),
   filingCabinet: fillRule(0.3), officeFiling: fillRule(0.3), chestFreezer: fillRule(0.2, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.25, 0.12, [1, 1], MED_FILL),
-  labBench: fillRule(0.15, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.3, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.25, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.35),
+  labBench: fillRule(0.15, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.3, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.35, 0.12, [1, 1], CRASH_CART_FILL), /* (ci-followup 20261101: 0.25 -> 0.35, like the dispensary / tool chest) */ rollingToolChest: fillRule(0.35),
 };
 /** (lane SHOPS, R6) multiplier `sales` on the sales floor and `back` on the stock room of each mall program (`mall-<p>` / `mall-<p>-back`). */
 const mallShops = (progs: readonly string[], sales: number, back = sales): Record<string, number> =>
@@ -1169,7 +1171,9 @@ export const MALL_GEAR_PLACE: GearPlacement = {
   items: {
     boots: {...mallShops(['shoes'], 3), ...mallShops(['hardware'], 4), ...mallShops(['outdoors', 'clothing', 'womenswear'], 1.5)},
     gloves: {...mallShops(['hardware'], 6), ...mallShops(['clothing', 'womenswear'], 2), ...mallShops(['outdoors', 'sports'], 1.5)},
-    backpack: {...mallShops(['luggage'], 4), ...mallShops(['outdoors', 'sports'], 2), ...mallShops(['clothing', 'womenswear', 'department'], 1.5)},
+    // (ci-followup 20261101: + shoes x1.5 like its fashion peers — shoe stores stock bags; without it the shoe store was the one wearable-gear
+    // shop with NO daypack affinity, so a mall with a luggage store (its x4 holds ~30 % of the daypack weight) left it at 1.87x per store)
+    backpack: {...mallShops(['luggage'], 4), ...mallShops(['outdoors', 'sports'], 2), ...mallShops(['clothing', 'womenswear', 'department', 'shoes'], 1.5)},
     helmet: {...mallShops(['hardware'], 10), ...mallShops(['outdoors'], 1.5), ...mallShops(MALL_BOUTIQUES, 0.4)},
     armor_vest: {...mallShops(['guns'], 10), 'mall-security': 3, ...mallShops(['sports'], 0.5), ...mallShops(MALL_BOUTIQUES, 0.2)},
     chest_rig: {...mallShops(['guns'], 10), 'mall-security': 3, ...mallShops(['outdoors'], 1.5), ...mallShops(['sports'], 0.5), ...mallShops(MALL_BOUTIQUES, 0.25)},

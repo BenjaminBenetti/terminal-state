@@ -64,7 +64,7 @@ const zRange = (v: unknown, hd: number): [number, number] | undefined => {
   return c === undefined ? undefined : [c - hd, c + hd];
 };
 /** world/containers.ts surfaceOptions() (+ the crate model's lid split): the surfaces the game rolls onto. */
-function surfaceOpts(): SurfaceOptions {
+export function surfaceOpts(): SurfaceOptions { // (exported, ci-followup 20261101: mall-profiles' direct stocking simulation)
   const d = (PROP_DEFS as unknown as Record<string, Dims | undefined>).shelf ?? DEFAULT_SHELF;
   return {
     shelf: {tierY: numList(optional.SHELF_TIER_Y) ?? DEFAULT_SHELF.tierY, w: d.w, d: d.d, h: d.h},

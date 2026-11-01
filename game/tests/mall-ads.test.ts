@@ -82,8 +82,11 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
   });
 
   it('records overlap no prop (mounted ones too), no other record, no wall sign; decals never sit over an entry span', () => {
-    // (CI time, PR #25: violations are collected and asserted once — the same pairs / boxes as one expect per pair)
+    // (CI time, PR #25: violations are collected and asserted once — the same pairs / boxes as one expect per pair; `checked` counts
+    // every pair / box test so the domain stays visible: f5224bd ran ~249k expects here, one per check)
     const bad: string[] = [];
+    let checked = 0;
+    const test = (fail: boolean, msg: () => string) => { checked++; if (fail) bad.push(msg()); };
     for (const seed of SEEDS) {
       const L = get(seed), ads = mallAds(L);
       const boxes = ads.map(ad => adBox(ad));
@@ -94,12 +97,12 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
           if (lv !== ad.level) continue;
           if (ad.kind === 'decal' && (p.kind === 'shopGlazing' || p.kind === 'shopShutter')) continue; // it lies on its glass
           if (p === own) continue; // (R5) a cart header stands on its own cart (its finials reach past the canopy top): the cart test
-          if (ov(boxes[i], b)) bad.push(`seed ${seed} ${ad.shop ?? ad.kind} ${ad.kind} vs ${p.kind}`);
+          test(ov(boxes[i], b), () => `seed ${seed} ${ad.shop ?? ad.kind} ${ad.kind} vs ${p.kind}`);
         }
-        for (const [j, q] of ads.entries()) if (j !== i && q.level === ad.level && ov(boxes[i], boxes[j])) bad.push(`seed ${seed} ${ad.shop} ${ad.kind} vs ${q.kind}`);
+        for (const [j, q] of ads.entries()) if (j !== i && q.level === ad.level) test(ov(boxes[i], boxes[j]), () => `seed ${seed} ${ad.shop} ${ad.kind} vs ${q.kind}`);
         for (const s of L.signs) if ((s.level ?? 0) === ad.level && !s.hang) {
           const sw = (s.w ?? 1.4) / 2;
-          if (ov(boxes[i], {x0: s.x - sw, x1: s.x + sw, z0: s.z - sw, z1: s.z + sw, y0: s.y - 0.35, y1: s.y + 0.35})) bad.push(`seed ${seed} ${ad.shop} ${ad.kind} vs sign`);
+          test(ov(boxes[i], {x0: s.x - sw, x1: s.x + sw, z0: s.z - sw, z1: s.z + sw, y0: s.y - 0.35, y1: s.y + 0.35}), () => `seed ${seed} ${ad.shop} ${ad.kind} vs sign`);
         }
         if (ad.kind === 'decal') {
           // not over the walk-in opening: the decal's span lies on its glazing prop only (the entry span has no glazing)
@@ -107,10 +110,12 @@ describe('D06 / R5 shop ad / merchandising placement records', () => {
           const along = ad.nz !== 0 ? ad.x : ad.z, f = shop.frontage, fs = ad.nz !== 0 ? Math.min(f.x0, f.x1) : Math.min(f.z0, f.z1);
           const e = shopFit(shop)!.entry;
           const e0 = fs + e[0], e1 = fs + e[1];
-          if (!(along + ad.w / 2 <= e0 + 1e-6 || along - ad.w / 2 >= e1 - 1e-6)) bad.push(`seed ${seed} ${ad.shop} decal over the entry`);
+          test(!(along + ad.w / 2 <= e0 + 1e-6 || along - ad.w / 2 >= e1 - 1e-6), () => `seed ${seed} ${ad.shop} decal over the entry`);
         }
       }
     }
+    process.stdout.write(`[mall-ads] overlap checks evaluated: ${checked}\n`);
+    expect(checked).toBeGreaterThan(200000); // the same pair / box domain as f5224bd's one-expect-per-pair loop (~249k)
     expect(bad).toEqual([]);
   });
 

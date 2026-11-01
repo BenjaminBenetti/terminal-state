@@ -105,7 +105,7 @@ zone, accounted separately:
     more eligible slots (a `shop` / `stock-room` room density modifier, or cap 3: 0.8 / cap 3 → 0.92, 4.8 %), and the 29 % of runs
     without any eligible retail room stay Siren-free whatever the weight.
   - **Mall round 3 (R8)** — user: "I've done a bunch of mall runs, and not found a siren ever, confirm that siren can spawn on this level.
-    with chance similar to office space, i.e. average 2 per mall." The runtime path was confirmed end to end (`game/tests/mall-enemy-sample.test.ts`:
+    with chance similar to office space, i.e. average 2 per mall." The runtime path was confirmed end to end (`game/tests/mall-sirens.test.ts`:
     a real generated mall's Sirens → the lazy `enemy_siren` key selected for the mall and shipped in the release allowlist → spawned →
     a dormant `SirenActor` from the real `enemy-siren.glb` with her vein patch on her retail floor); nothing drops her. The cause was
     rarity: on the current generator (48 malls, the seeds above) **mean 0.79, 37.5 % of malls none, max 2**; only ~1.1 of ~15 retail
@@ -115,9 +115,8 @@ zone, accounted separately:
     **mean 1.96 Sirens per mall (Office 1.97), 8.3 % of malls none (Office 12.5 %), max 4**, histogram 0:4 1:12 2:16 3:14 4:2, tuning
     half 2.17 / validation half 1.75, by floor 1 / 2 / 3 = 42 / 27 / 25, the station / annex / hordes 0; eligible slots 3.27 per run;
     core ambient zombie 78.4 %, Siren 10.3 %, Blightbelly 5.5 %, rat/dog 5.8 % (~5.6 % Sirens of all core enemies with the hordes).
-    Evidence: `reference/tasks/mall-round3-20261031/lanes/ENEMY-evidence/r8-*.json`; `game/tests/mall-enemy-sample.test.ts` keeps a
-    5-mall sample (the census's first five seeds: sum 7..15 = mean 1.4..3.0 — a regression guard: standard error ~0.46; the old tuning
-    would pass it ~5 % of the time).
+    Evidence: `reference/tasks/mall-round3-20261031/lanes/ENEMY-evidence/r8-*.json`; `game/tests/mall-sirens.test.ts` keeps a 12-mall
+    sample (mean ≥ 1.5, ≤ 2 malls without one).
   - `budgets.ambient` (`AmbientBudget`): **total 23, per storey 6** (was 69 / 10) — validation keeps every context's count hi within the
     per-storey cap.
 - **Horde pool** — `horde` (`HordeRules`, `game/src/ai/hordeSpec.ts` `MALL_HORDE_RULES`, lane HORDE's model; values lane PROFILES):
@@ -158,7 +157,7 @@ six-ring mall: 0.26; the Office's ambient 0.45; annex `service` 0.23 of tunnel +
 `game.ts` `buildSection` spawns EVERY `layout.zombies` index not killed in the run memory (`run/memory.ts` `enemiesToSpawn`) — hordes and
 the annex's appended `service` spawns included — with no culling, frame-budget or distance gate (actors are added to the scene directly;
 the level culler registers only the holder / shelf-stock groups); the only skip is a Siren whose model is not loaded (counted, warned
-once, never a stand-in; mall round 3: `game/tests/mall-enemy-sample.test.ts` builds the real Siren actors of a generated mall). `spawnEnemy` puts each body at `s.y ?? grid(s.level).floorAt(x, z)`. The test checks on generated malls that
+once, never a stand-in; mall round 3: `game/tests/mall-sirens.test.ts` builds the real Siren actors of a generated mall). `spawnEnemy` puts each body at `s.y ?? grid(s.level).floorAt(x, z)`. The test checks on generated malls that
 every placed spawn (station, retail, horde, annex) stands on walkable floor of its own storey with the runtime support floor at that
 height, and that the station storey and the annex hold stocked loot holders and loose finds.
 
@@ -362,10 +361,10 @@ tiers), `enemies/<level>.html` (profile, eligibility), `enemies/families.html` (
   capacity, ≥ 45 walking m and ≥ 28 m straight from the start, the runtime registration check (every placed spawn on a real floor of
   its storey; station / annex loot present), `applyFamilySpacing` semantics, determinism, and the reference's mall sections (dynamic
   identity). `game/tests/mall-horde.test.ts` — the horde model on a synthetic ring mall + the generated mall (placement, 120 s roam).
-  `game/tests/mall-enemy-sample.test.ts` (mall round 3) — on ONE memoized 5-mall sample: R8's Siren runtime path (lazy model key,
-  release allowlist, spawn, dormant actor from the real GLB, veins) and Siren-count band; R2's before / after scenario (a horde at the
-  rail above the pit, firing at the start; `game/tests/helpers/aggroSim.ts`). `game/tests/mall-atrium-aggro.test.ts` (R2) — the
-  open-atrium perception rules (ai/brain.ts `ATRIUM_PERCEPTION`: cross-storey notice / gunfire / horde-call) as unit tests.
+  `game/tests/mall-sirens.test.ts` (mall round 3, R8) — the Siren runtime path on a real generated mall (lazy model key, release
+  allowlist, spawn, dormant actor from the real GLB, veins) and a 12-mall Siren-count sample. `game/tests/mall-atrium-aggro.test.ts`
+  (R2) — the open-atrium perception (ai/brain.ts `ATRIUM_PERCEPTION`: cross-storey notice / gunfire / horde-call rules) and a
+  before / after start-of-level scenario on generated malls (`game/tests/helpers/aggroSim.ts`).
 
 ```sh
 ./node_modules/.bin/vitest run --config game/vitest.config.ts --maxWorkers=1 --no-file-parallelism \

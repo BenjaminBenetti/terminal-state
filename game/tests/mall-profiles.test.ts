@@ -47,7 +47,7 @@ import {HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules} from '../src/ai/
 import {patrolRouteM} from '../src/ai/hordePlace';
 import {createMemory, enemiesToSpawn} from '../src/run/memory';
 import {buildEnemyReference, ENEMY_LEVEL_ADAPTER} from '../../tools/pages/enemyReference';
-import {compartmentCensus, runCensus, stockedRate, summarize, type CensusSummary, type CompartmentCensus} from './helpers/materialCensus';
+import {compartmentCensus, holderTemplates, runCensus, simulatedStockedRate, stockedRate, summarize, type CensusSummary, type CompartmentCensus} from './helpers/materialCensus';
 import {layoutHolderDetails} from './helpers/lootEconomy';
 
 const MALL = lootProfile('mall');
@@ -208,14 +208,30 @@ describe('normalised material census (placed + reachable, mall vs Office, same m
     expect(exMed.rate).toBeGreaterThan(0.3);
     expect(exMed.rate).toBeLessThan(0.55);
     // the commonly opened drawers / cupboards of shops and stock rooms each hold something often — never every one
+    // Task mall-round3 ci-followup (20261101): the per-kind floor (0.22; the tool chest 0.1) is checked on the 3-mall census when a kind
+    // has >= 24 sampled compartments. Round 3's women's store (in every mall) took the unit seed 222's clinic used to stand in, so the
+    // sample kept only 4 crash carts = 20 compartments: one compartment moves that rate by 5 points (0.20 measured), and the binomial
+    // sd at p ~ 0.3, n = 20 is ~0.10 — 20 compartments cannot carry a 0.22 floor. For a kind with 12-23 sampled compartments the SAME
+    // floor is enforced on a LARGE direct simulation of that kind's stocking through the real production path (items/loot.ts
+    // createHolderState: its own table roll + the mall storage fill + packing on its real surfaces, the census's own holder inputs —
+    // helpers/materialCensus.ts simulatedStockedRate, >= 2,000 holders on deterministic streams), and the small census sample must be
+    // binomially consistent with that simulated rate (within 3 sigma). The 0.22 contract is unchanged.
+    const SIM_HOLDERS = 2000;
+    const tpl = (k: string) => SEEDS.flatMap(s => holderTemplates(mall(s), k, a => !isExt(a)));
     for (const r of rows) {
       if (r.comps < 12) continue; // too few in a 3-mall sample for a rate
       if (r.k === 'medicineDrawerCabinet') { expect(r.rate, r.k).toBeLessThan(0.3); continue; } // 33 pill drawers each: the dressings guard
-      // Task mall-round3-20261031 (R4): with the women's store in every mall seed 222 lost its clinic, leaving 4 crash carts (20
-      // compartments) where one compartment moves the rate by 5 points (measured 0.20; the holder rolls / fill are byte-identical with and
-      // without R6's gear table: lanes/SHOPS-LOOT.part). Small samples (< 24 compartments) keep a looser floor instead of skipping.
-      expect(r.rate, r.k).toBeGreaterThan(r.k === 'rollingToolChest' ? 0.1 : r.comps < 24 ? 0.12 : 0.22);
+      const floor = r.k === 'rollingToolChest' ? 0.1 : 0.22;
       expect(r.rate, r.k).toBeLessThan(0.75);
+      if (r.comps >= 24) { expect(r.rate, r.k).toBeGreaterThan(floor); continue; }
+      const sim = simulatedStockedRate(tpl(r.k), MALL, SIM_HOLDERS);
+      process.stdout.write(`[mall-profiles] ${r.k}: census ${r.stocked} / ${r.comps} = ${r.rate.toFixed(3)}; simulated ${sim.stocked} / ${sim.comps} = ${sim.rate.toFixed(3)} (${sim.holders} holders)\n`);
+      expect(sim.holders, `${r.k} simulated holders`).toBeGreaterThanOrEqual(SIM_HOLDERS);
+      expect(sim.rate, `${r.k} simulated stocked rate`).toBeGreaterThan(floor);
+      expect(sim.rate, `${r.k} simulated stocked rate`).toBeLessThan(0.75);
+      const sd = Math.sqrt(sim.rate * (1 - sim.rate) / r.comps);
+      expect(r.rate, `${r.k} census vs simulated (3 sigma)`).toBeGreaterThanOrEqual(sim.rate - 3 * sd);
+      expect(r.rate, `${r.k} census vs simulated (3 sigma)`).toBeLessThanOrEqual(sim.rate + 3 * sd);
     }
     // what the fill puts inside: mostly the mall's crafting materials and small themed items; ammo only by the gun safe's arms rule;
     // dressings only in medical storage

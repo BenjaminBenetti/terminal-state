@@ -469,6 +469,11 @@ filters 2–5).
   electronics / phone stores (1.4×). Their sales floors are glass display cabinets (which take no salvage by design) and device walls
   (which hold no loot); a salvage-share trial at 0.48 gave only +0.2 / +0.7 parts per store, so it was reverted. Changing that is a
   fit-out decision: a parts-holding fixture in tech stores.
+- **Round-3 CI follow-up (2026-11-01, lane SHOPS):** shoe stores carry the same x1.5 daypack affinity as clothing / womenswear /
+  department (a mall with a luggage store had left the shoe store at 1.87x per store for the daypack). The clinic / first-aid **crash
+  cart** rolls `CRASH_CART` (its medicine + spare defibrillator / monitor cells) and its mall storage fill draws medicine and cells at
+  0.35 (was medicine at 0.25): its four upper drawers are 6.5-7.8 cm deep, so no dressing / kit fits there and they were always empty
+  (2,000 simulated carts: 8.6 % -> 28.5 % of compartments stocked; mall-profiles enforces the 0.22 per-kind floor on that simulation).
 - **Track2 service annex** (at most one per mall, `TRACK_EXT_MALL.annex.max = 1`): annex holders / floor items come from Track2's own
   annex content (finite, seeded once, appended last), rolled under the mall profile — the annex purpose's theme decides any salvage;
   the mall floor program never sees extension areas (they are attached after every core pass); the ONE rare-gear roll, the gas-mask

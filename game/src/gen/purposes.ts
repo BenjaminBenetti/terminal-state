@@ -1089,6 +1089,13 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
   const SPORTS: ItemRows = [['water', 1.6], ['bandage', 1.2], ['chocolate', 0.8], ['juice', 0.6]];
   const PET: ItemRows = [['beans', 2], ['water', 1.4], ['bandage', 0.6]];
   const KIOSK: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
+  /**
+   * Task mall-round3 ci-followup (20261101): the clinic / first-aid crash cart — its medicine (the same rows / lots / empty odds as the
+   * room's default display table) plus SPARE CELLS for the defibrillator / monitor (HOLDER_ALLOW.crashCart already takes 'battery'). Its
+   * four upper drawers are 6.5-7.8 cm deep: no dressing (9.2 cm) or kit (14 cm) fits there, a D cell (6.15 cm) does — before this they
+   * were always empty (2,000 simulated carts: 8.6 % of compartments stocked; mall-profiles' per-kind 0.22 floor).
+   */
+  const CRASH_CART: LootSpec = disp([...MEDS, ['battery', 0.5]], [1, 2], 0.35);
   /** Mall office drawers: personal stock, no sidearm rows (9 mm-only stock is the Office's deliberate rule). */
   const MGMT_DRAWERS: LootSpec = {items: [['chocolate', 1], ['water', 0.8], ['bandage', 0.7], ['chips', 0.5], ['battery', 0.3]], lots: [1, 2], empty: 0.35};
   return Object.fromEntries([
@@ -1107,7 +1114,8 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
     {stock: [['bandage', 3], ['medkit', 0.8], ['water', 0.6]], st: 'pharmacy', floor: {med: 1.6},
       loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}}}, 'Pharmacy dispensary'),
     ...pair('clinic', 'Walk-in clinic', {theme: 'medical', stock: MEDS, till: [['bandage', 1], ['water', 0.6]], light: DIM, floor: {med: 1.6},
-      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}, desk: {items: [['water', 1], ['bandage', 1], ['chocolate', 0.5]], lots: [1, 1], empty: 0.5}}},
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 3], empty: 0.2}, desk: {items: [['water', 1], ['bandage', 1], ['chocolate', 0.5]], lots: [1, 1], empty: 0.5},
+        crashCart: CRASH_CART}},
     {stock: [['bandage', 2.6], ['medkit', 0.8], ['water', 0.8]], floor: {med: 1.4}}, 'Clinic supply room'),
     ...pair('electronics', 'Electronics store', {theme: 'tech', stock: TECH, till: [['water', 1], ['cola', 1], ['battery', 0.6]], st: 'devices', light: LIT},
       {stock: [['battery', 2], ['water', 0.5], ['flare', 0.2]], st: 'devices'}),
@@ -1155,7 +1163,8 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
       loot: {gunLocker: {items: [...A(5.2), ['medkit', 0.3]], lots: [1, 3], empty: 0.25}, monitorDesk: {items: [['cola', 1], ['chocolate', 1], ...A(0.5)], lots: [1, 2], empty: 0.4},
         cabinetTall: disp([...A(1.4), ['bandage', 1], ['medkit', 0.4], ['water', 0.6]], [1, 3], 0.2), staffLockers: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.4}, crate: CACHE_CRATE}})],
     ['mall-first-aid', sales('mall-first-aid', 'Mall first-aid station', {theme: 'medical', stock: MEDS, light: LIT, floor: {med: 2},
-      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 4], empty: 0.15}, desk: {items: [['water', 1], ['bandage', 1]], lots: [1, 1], empty: 0.5}}})],
+      loot: {medCabinet: {items: [['bandage', 3], ['medkit', 1]], lots: [1, 4], empty: 0.15}, desk: {items: [['water', 1], ['bandage', 1]], lots: [1, 1], empty: 0.5},
+        crashCart: CRASH_CART}})],
     ['mall-management', sales('mall-management', 'Mall management office', {theme: 'personal', stock: [['chocolate', 1], ['water', 0.8], ['bandage', 0.6], ['battery', 0.3]], light: DIM,
       loot: {desk: OFFICE_DESK, cabinetLow: MGMT_DRAWERS, cabinetTall: disp([['water', 1], ['bandage', 0.8], ['chocolate', 0.8], ['battery', 0.4]], [1, 3], 0.2)}})],
     ['mall-janitorial', sales('mall-janitorial', 'Janitorial room', {theme: 'service', stock: [['water', 1], ['bandage', 0.6], ['battery', 0.6], ['flare', 0.3]], light: DARK, st: 'cleaning',
