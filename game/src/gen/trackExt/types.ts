@@ -361,7 +361,7 @@ export interface TrackExtConfig {
   /**
    * (GEN-2, optional) Service-hatch annexes (ServiceAnnex.bed): a door in a track bed's side wall near a bed end that no tunnel
    * continues. `s` = range (m) of the door centre's distance from the end face; the opening keeps one wall cell to the end face.
-   * Absent = no hatches (annexes only off tunnels).
+   * Absent = no hatches as ordinary candidates (annexes only off tunnels; the original planner's presence fallback: fallbackHatch).
    */
   hatch?: {s: [number, number]};
   /**
