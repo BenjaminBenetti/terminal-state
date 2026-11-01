@@ -360,11 +360,9 @@ function buildCache(ctx: PlaceCtx, layout: StationLayout, n: ServiceAnnex, a: Ar
  * (-1: none rolled / no free cell).
  */
 function placeGearPiece(layout: StationLayout, rec: AnnexCacheRecord, profile: LootProfile, ctx: PlaceCtx, rng: Rng): number {
-  if (!rng.chance(ANNEX_CACHE_GEAR.chance)) return -1;
-  const rows = annexCacheGearRows(profile).filter(([id]) => isGearItem(id));
-  if (!rows.length) return -1;
-  const itemId = rng.weighted(rows);
-  const filter = itemId === GAS_MASK_ID ? Math.round(FILTER_LIFE_S * (MASK_LOOT.foundFilter[0] + (MASK_LOOT.foundFilter[1] - MASK_LOOT.foundFilter[0]) * rng.next()) * 10) / 10 : undefined;
+  const roll = rollHideoutGear(profile, rng);
+  if (!roll) return -1;
+  const {itemId, filter} = roll;
   const a = layout.areas[rec.area], bed = layout.props[rec.bed], g = ctx.g;
   if (!a || !bed) return -1;
   // the bedside: half a metre out from the bed's front face, at its middle
@@ -385,6 +383,21 @@ function placeGearPiece(layout: StationLayout, rec: AnnexCacheRecord, profile: L
   if (a.level) pk.level = a.level;
   layout.pickups.push(pk);
   return layout.pickups.length - 1;
+}
+
+/**
+ * (round 3) The hideout gear ROLL (ANNEX_CACHE_GEAR): with `chance` one piece by weight from annexCacheGearRows(profile) (real gear
+ * items only); a gas mask with its seeded filter seconds (MASK_LOOT.foundFilter of FILTER_LIFE_S, 0.1 s steps, like the level's mask
+ * find). Null: no piece. Exported for tests (the rate / distribution over many streams).
+ */
+export function rollHideoutGear(profile: LootProfile, rng: Rng): {itemId: string; filter?: number} | null {
+  if (!rng.chance(ANNEX_CACHE_GEAR.chance)) return null;
+  const rows = annexCacheGearRows(profile).filter(([id]) => isGearItem(id));
+  if (!rows.length) return null;
+  const itemId = rng.weighted(rows);
+  if (itemId !== GAS_MASK_ID) return {itemId};
+  const [f0, f1] = MASK_LOOT.foundFilter;
+  return {itemId, filter: Math.round(FILTER_LIFE_S * (f0 + (f1 - f0) * rng.next()) * 10) / 10};
 }
 
 /**
