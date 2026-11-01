@@ -475,13 +475,63 @@ function bistroSets(d: ShopDresser, n: number, zone: {u0: number; u1: number; v0
   }
   return k;
 }
-/** Display mannequins in the shop window beside the entry (facing the gallery). */
-function windowDisplay(d: ShopDresser, kind: PropKind, n: number): number {
+/**
+ * Display mannequins in the shop window beside the entry (facing the gallery). Task mall-round3-20261031 (lane SHOPS, R4): `kind` may be
+ * a list (cycled: a department store's window mixes the female forms with the M07 figure).
+ */
+function windowDisplay(d: ShopDresser, kind: PropKind | readonly PropKind[], n: number): number {
   const {fr, W} = d;
+  const kinds = typeof kind === 'string' ? [kind] : kind;
   let k = 0;
-  const spots = [0.9, W - 0.9, 2.1, W - 2.1].filter(u => u < fr.entry[0] - 0.6 || u > fr.entry[1] + 0.6);
-  for (const u of spots) { if (k >= n) break; if (d.put(kind, u, 1.35, fr.face)) k++; }
+  // (a four-form window — a wide women's showroom — also tries 3.3 m in from each side)
+  const spots = [0.9, W - 0.9, 2.1, W - 2.1, ...(n >= 4 ? [3.3, W - 3.3] : [])].filter(u => u < fr.entry[0] - 0.6 || u > fr.entry[1] + 0.6);
+  for (const u of spots) { if (k >= n) break; if (d.put(kinds[k % kinds.length], u, 1.35, fr.face)) k++; }
   return k;
+}
+
+/**
+ * Task mall-round3-20261031 (lane SHOPS, R4 — user: "This asset will be handy in other spots, because it will be spooooky!"): the
+ * female mannequin's SPOOKY spots outside the fashion floors — a lone form standing in a back room (in a corner facing the wall, or at
+ * the far wall facing the door) of a fashion / department stock room, or in the middle of a stripped vacant unit staring out through
+ * its glass. Seeded on the shop's own `spooky` fork (the shop's other draws are unchanged), bounded per mall (`perMall`), placed through
+ * the shared primitive (never forced, never in a doorway / access strip), standing on the floor; nothing is hung on it (rule 4). The
+ * department floor mixes the forms with the M07 figure (its recipe). A TOPPLED form is not authored (props have no roll / pitch pose):
+ * it topples for real when shot or bumped (light dynamic physics).
+ */
+export const SPOOKY_MANNEQUINS = {
+  perMall: 4,
+  /** Chance per stock room of these programs. */
+  back: {womenswear: 0.7, clothing: 0.45, department: 0.5, shoes: 0.25} as Readonly<Partial<Record<string, number>>>,
+  /** Chance per vacant sales floor. */
+  vacant: 0.4,
+} as const;
+/** One spooky female mannequin in `d`'s room ('back': corner facing the wall / far wall facing the door; 'vacant': mid-floor facing out). */
+function spookyMannequin(d: ShopDresser, mode: 'back' | 'vacant', rng: Rng): PropPlacement | null {
+  const {fr, W, D} = d;
+  if (mode === 'vacant') {
+    for (let t = 0; t < 14; t++) {
+      const u = Math.round(rng.range(Math.min(1.4, W / 2), Math.max(W / 2, W - 1.4)) * 4) / 4, v = Math.round(rng.range(Math.min(2.6, D / 2), Math.max(D / 2, D - 1.4)) * 4) / 4;
+      const [x, z] = uvXZ(fr, u, v);
+      const p = tryPlaceProp(d.ctx, d.a, 'mannequinFemale', r3(x), r3(z), fr.face + rng.range(-0.35, 0.35), {ring: 0.5});
+      if (p) { d.placed.push(p); return p; }
+    }
+    return null;
+  }
+  const faceWall = rng.chance(0.5);
+  const walls: Side[] = faceWall ? rng.shuffle([fr.L, fr.R, fr.back]) : [fr.back, ...rng.shuffle([fr.L, fr.R])];
+  const def = PROP_DEFS.mannequinFemale;
+  for (const wall of walls) {
+    const alongX = wall === 'N' || wall === 'S';
+    const lo = (alongX ? fr.x0 : fr.z0) + def.w / 2 + 0.2, hi = (alongX ? fr.x1 : fr.z1) - def.w / 2 - 0.2;
+    if (hi < lo) continue;
+    // a corner first (facing the wall), else anywhere along the wall
+    for (const along of faceWall ? [lo, hi, (lo + hi) / 2] : [(lo + hi) / 2, lo + (hi - lo) * 0.3, lo + (hi - lo) * 0.7]) {
+      const s = wallSpot(d.a, wall, Math.round(along * 4) / 4, 'mannequinFemale');
+      const p = tryPlaceProp(d.ctx, d.a, 'mannequinFemale', r3(s.x), r3(s.z), faceWall ? s.rot + Math.PI : s.rot, {front: 0.5});
+      if (p) { d.placed.push(p); return p; }
+    }
+  }
+  return null;
 }
 
 /**
@@ -493,6 +543,7 @@ function windowDisplay(d: ShopDresser, kind: PropKind, n: number): number {
  */
 const FOCAL: Partial<Record<MallRecipe, readonly KindV[]>> = {
   guns: [['gunDisplay', 0]], clothing: [['mannequinFull', 0], ['mannequinFull', 1]], department: [['mannequinFull', 0], ['mannequinFull', 1]],
+  womenswear: [['mannequinFemale', 0], ['mannequinFemale', 1]], // task mall-round3-20261031 (lane SHOPS, R4)
   shoes: [['merchTable', 0]], sports: [['merchTable', 0]], outdoors: [['merchTable', 0]], electronics: [['merchTable', 0]], phone: [['techDisplay', 0]],
   books: [['merchTable', 0]], toys: [['giantTeddy', 0]], home: [['merchTable', 0]], beauty: [['glassCounter', 0]], jewelry: [['glassCounter', 0]],
   optical: [['glassCounter', 0]], music: [['merchTable', 0]], pet: [['catTree', 0]], luggage: [['rollingSuitcase', 0], ['rollingSuitcase', 1]],
@@ -649,6 +700,42 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.islands('ottoman', per(d, 80, 1, 2), {u0: 1.2, u1: W - 1.2, v0: D * 0.5, v1: D - 1.6}, {ring: 0.7});
     void fr;
   },
+  /**
+   * Task mall-round3-20261031 (lane SHOPS, R4 — user: "no female clothing store ... Lets get that in, Make sure to make a female
+   * maniqune"): the women's fashion store. A window display of FEMALE mannequins (mannequinFemale: featureless forms, nothing baked on
+   * them), dress bays (the clothing bays' rails with garment groups) on the back wall, handbag / accessory cabinets and tiers, a shoe
+   * wall, fitting rooms in a back corner, the till with an accessories counter, and on the floor dresses on rails, blouse / skirt round
+   * racks, folded-knit tables, a mannequin pair, a lingerie / knitwear dresser and a boutique armchair. Per lot family: a narrow boutique
+   * runs its rails down the unit (aisle view from the door, till + fitting rooms at the far end: cashWrap), a wide showroom shows four
+   * window forms, a big unit a second fitting block.
+   */
+  womenswear(d) {
+    const {W, D, fr} = d;
+    const shape = d.lot?.shape, narrow = shape === 'narrow-deep', wide = shape === 'wide-shallow' || W >= 11;
+    windowDisplay(d, ['mannequinFemale'], wide ? 4 : 2);
+    const fw = PROP_DEFS.fittingRooms.w;
+    const corner = d.rng.chance(0.5) ? 0.25 : W - 0.25 - fw;
+    // (a narrow boutique's back wall often holds its stock-room door: the fitting block then stands against a side wall at the far end)
+    if (!d.backRow([['fittingRooms', 0]], corner, corner + fw + 0.3, {max: 1, front: 1.0})) d.sideRows([['fittingRooms', 0]], Math.max(2.6, D - fw - 1.2), D - 0.2, {max: 1, front: 1.0});
+    // back wall: dress bays between slatwall bays and a cosmetics / accessories tier unit
+    d.backRow([['clothingWallUnit', 0], ['cosmeticsWallUnit', 0], ['clothingWallUnit', 0], ['wallBay', 0]], 0.25, W - 0.25);
+    cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.min(D - 3, Math.max(2.4, D * 0.5)));
+    // side walls: the handbag cabinet, the shoe wall, blouse bays; a lingerie / knitwear dresser
+    const sideA: 'L' | 'R' = d.rng.chance(0.5) ? 'L' : 'R', sideB: 'L' | 'R' = sideA === 'L' ? 'R' : 'L';
+    d.sideRow(sideA, [['glassDisplayCabinet', 0]], 2.4, D - 1.2, {max: 1});
+    d.sideRow(sideB, [['shoeWallDisplay', 0]], 2.4, D - 1.2, {max: 1});
+    d.sideRows([['dresserDrawers', 0]], D * 0.45, D - 1.2, {max: 1});
+    d.sideRows([['clothingWallUnit', 0], ['wallBay', 0]], 2.4, D - 1.2);
+    d.dressWallUnits(0.75);
+    if (W * D >= 140) d.backRow([['fittingRooms', 0]], corner < W / 2 ? W - fw - 0.6 : 0.25, corner < W / 2 ? W - 0.25 : fw + 0.6, {max: 1, front: 1.0});
+    // the floor: dresses on rails (down a narrow unit, else parallel to the windows), blouse / skirt round racks, folded-knit tables
+    d.dressRails(d.islands('garmentRail', per(d, 28, 1, 7), {u0: 1.6, u1: W - 1.6, v0: 2.6, v1: D - 2.2}, {ring: 0.8, along: !narrow}), 0.75);
+    d.dressRails(d.islands('garmentRailRound', per(d, 40, 1, 4), {u0: 1.8, u1: W - 1.8, v0: 2.8, v1: D - 2.4}, {ring: 0.8}), 0.75);
+    d.islands('merchTable', per(d, 75, 1, 3), {u0: 1.6, u1: W - 1.6, v0: 2.4, v1: D - 2.4}, {ring: 0.9});
+    d.islands('mannequinFemale', W * D >= 90 ? 2 : 1, {u0: 1.4, u1: W - 1.4, v0: D * 0.35, v1: D - 2.2}, {ring: 0.6});
+    d.islands(W * D >= 70 ? 'loungeArmchair' : 'ottoman', 1, {u0: 1.2, u1: W - 1.2, v0: D * 0.55, v1: D - 1.6}, {ring: 0.7});
+    void fr;
+  },
   shoes(d) {
     const {W, D} = d;
     windowDisplay(d, 'mannequinFull', 1);
@@ -661,7 +748,7 @@ const RECIPES: Record<MallRecipe, Recipe> = {
   },
   department(d) {
     const {W, D, fr} = d;
-    windowDisplay(d, 'mannequinFull', 3);
+    windowDisplay(d, ['mannequinFemale', 'mannequinFull'], 3); // (R4: the department window mixes the female forms with the M07 figure)
     // cosmetics hall of glass counters in the front third; garment rails / mannequins / tables in the middle; fitting rooms, a bed
     // showroom corner and slatwall bays at the back; two cash wraps
     d.islands('glassCounter', Math.round(Math.min(6, W / 3)), {u0: 2, u1: W - 2, v0: 2.6, v1: Math.max(3.4, D * 0.3)}, {ring: 1.0});
@@ -671,12 +758,18 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     cashWrap(d, [['shopCounter', 0], ['shopCounter', 0]], 2, Math.max(3.5, D * 0.45));
     // cosmetics wall units (lane ASSETS M42) by the cosmetics hall, a dresser (M45) in the home corner at the back
     d.sideRows([['cosmeticsWallUnit', 0]], 2.4, Math.max(3.4, D * 0.3) + 1.2, {max: 2});
+    // Task mall-round3-20261031 (lane SHOPS, R4): a beauty bar by the cosmetics hall — one styling chair facing the side wall (the beauty
+    // store's chair; with womenswear in every mall the beauty store rotates in less often)
+    chair: for (const [u, rot] of [[W - 0.75, OPP_ROT[fr.R]], [0.75, OPP_ROT[fr.L]], [W - 1.6, OPP_ROT[fr.R]], [1.6, OPP_ROT[fr.L]]] as const) {
+      for (let v = 2.6; v < Math.min(D - 1.6, D * 0.7); v += 0.6) if (d.put('salonChair', u, Math.round(v * 4) / 4, rot)) break chair;
+    }
     d.sideRows([['dresserDrawers', 0]], D * 0.6, D - 1.0, {max: 1});
     d.sideRows([['wallBay', 0], ['garmentRail', 0]], 2.4, D - 1.2);
     d.dressWallUnits();
     d.dressRails(d.islands('garmentRail', Math.round(Math.min(8, W * D / 35)), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
     d.dressRails(d.islands('garmentRailRound', per(d, 60, 1, 4), {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.8}));
-    d.islands('mannequinFull', 3, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6});
+    d.islands('mannequinFull', 2, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6});
+    d.islands('mannequinFemale', 2, {u0: 2, u1: W - 2, v0: D * 0.32, v1: D * 0.75}, {ring: 0.6}); // (R4)
     d.islands('merchTable', 3, {u0: 2, u1: W - 2, v0: D * 0.35, v1: D * 0.8}, {ring: 0.9});
     d.islands('displayBed', 1, {u0: 2, u1: W - 2, v0: D * 0.62, v1: D - 2.4}, {ring: 0.9, along: false});
     d.islands('loungeArmchair', 2, {u0: 2, u1: W - 2, v0: D * 0.62, v1: D - 2}, {ring: 0.6});
@@ -983,6 +1076,7 @@ function dressBack(d: ShopDresser, f: MallShopFit): void {
     cafe: [['fridge', 0], ['kitchenette', 0]],
     grocery: [['fridge', 0], ['chestFreezer', 0], ['fridge', 0]],
     clothing: [['garmentRail', 0], ['staffLockers', 0]],
+    womenswear: [['garmentRail', 0], ['staffLockers', 0], ['dresserDrawers', 0]], // task mall-round3-20261031 (lane SHOPS, R4)
     department: [['garmentRail', 0], ['staffLockers', 0], ['desk', 0]],
     pet: [['fridge', 0], ['cabinetTall', 0]],
     arcade: [['electricalPanel', 0], ['cabinetTall', 0]],
@@ -1065,6 +1159,7 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
   };
   const first = layout.props.length;
   const reports: ShopDressReport[] = [];
+  let spooky = 0; // (R4) spooky female mannequins placed in this mall (SPOOKY_MANNEQUINS.perMall)
   for (const s of mall.shops) {
     const fit = shopFit(s);
     const a = layout.areas[s.area];
@@ -1094,12 +1189,17 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
     // the program's FOCAL display on the entry axis, seen from the walkway (placed first: the recipe flows around it)
     focalDisplay(d, fit);
     RECIPES[fit.recipe](d, fit);
+    // (R4) ... and one standing in the middle of some stripped vacant units, staring out through the glass
+    if (fit.kind === 'vacant' && spooky < SPOOKY_MANNEQUINS.perMall) { const r = srng.fork('spooky'); if (r.chance(SPOOKY_MANNEQUINS.vacant) && spookyMannequin(d, 'vacant', r)) spooky++; }
     let backProps = 0;
     if (s.backroom !== undefined && layout.areas[s.backroom]) {
       const b = layout.areas[s.backroom];
       const bctx: PlaceCtx = {...ctxOf(areaLevel(b)), rng: srng.fork('back')};
       const bd = new ShopDresser(layout, bctx, frameOf(b, backFront(layout, b, a)), bctx.rng);
       dressBack(bd, fit);
+      // Task mall-round3-20261031 (lane SHOPS, R4): a spooky lone female mannequin in some fashion / department stock rooms (bounded)
+      const sp = SPOOKY_MANNEQUINS.back[fit.program];
+      if (sp && spooky < SPOOKY_MANNEQUINS.perMall) { const r = srng.fork('spooky'); if (r.chance(sp) && spookyMannequin(bd, 'back', r)) spooky++; }
       backProps = bd.placed.length;
       d.placed.push(...bd.placed);
       if (opts.lights !== false) shopLights(layout, b, 5.0);

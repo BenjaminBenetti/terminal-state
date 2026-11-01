@@ -14,13 +14,17 @@
 // spawn, away from doorways, stairs and other pickups, never in passages, concourses, platforms or stair cores.
 // A backpack placed this way becomes a grounded bag in game (gear/system.ts converts it: E opens it).
 // Both are pure data and deterministic.
+// Task mall-round3-20261031 (lane SHOPS, R6): a level whose loot profile carries a placement bias (LootTables.gearPlace: the mall's
+// MALL_GEAR_PLACE) multiplies each area's spot weight by purpose / piece (gearPlaceFactor) — clothing / outdoors / sports / shoe /
+// luggage / department stores and their stock rooms, per-piece affinities. No bias (the Subway / Office tables, the mask loot) =
+// exactly the same pool and rng draws as before.
 
 import {Rng, hashString} from '../core/rng';
 import {CELL, FLOOR, type Grid} from './grid';
 import {levelDistance} from './levelGen';
 import type {Area, PickupPlacement, StationLayout} from './stationTypes';
 import {GEAR_ITEMS} from '../items/gear';
-import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type LootProfile} from '../items/lootTables';
+import {GEAR_CAP_PER_LEVEL, GEAR_MEAN_PER_LEVEL, gearParams, lootProfile, type GearPlacement, type LootProfile} from '../items/lootTables';
 import type {LevelId} from '../levels/types';
 import {isExtensionArea} from './trackExt/types'; // Track 2 (lane GEN)
 import {coreView, hasExtensionGrowth} from './trackExt/core';
@@ -118,31 +122,45 @@ export function gearAreaWeight(a: Area): number {
   return w;
 }
 
-/** Deterministic placement with the canonical rng (the levels registry calls this once per generated section). */
-export function placeSectionGear(layout: StationLayout, items: readonly GearAssignment[] | undefined): PickupPlacement[] {
+/**
+ * Task mall-round3-20261031 (lane SHOPS, R6): the placement-bias multiplier of area `a` for gear piece `itemId` under a level's
+ * LootTables.gearPlace (1 without a bias / purpose entry). Applied only to areas gearAreaWeight already allows. Exported for tests.
+ */
+export function gearPlaceFactor(place: GearPlacement | undefined, a: Area, itemId: string): number {
+  if (!place || !a.purpose) return 1;
+  return (place.purposes[a.purpose] ?? 1) * (place.items?.[itemId]?.[a.purpose] ?? 1);
+}
+
+/**
+ * Deterministic placement with the canonical rng (the levels registry calls this once per generated section). `profile`: the logical
+ * level's loot profile (lane SHOPS, R6: its LootTables.gearPlace bias, if any; absent / no bias = the unbiased placement).
+ */
+export function placeSectionGear(layout: StationLayout, items: readonly GearAssignment[] | undefined, profile?: LootProfile): PickupPlacement[] {
   if (!items?.length) return [];
-  return placeGear(layout, items, new Rng(hashString('gear-place', (layout.seed >>> 0) ^ 0x3c6ef372)));
+  return placeGear(layout, items, new Rng(hashString('gear-place', (layout.seed >>> 0) ^ 0x3c6ef372)), profile);
 }
 
 /**
  * Appends `items` to `layout.pickups` (count 1 each) in plausible spots; returns the placements (fewer only if the
- * layout has no reachable floor cell at all). Deterministic for (layout, items, rng seed).
+ * layout has no reachable floor cell at all). Deterministic for (layout, items, rng seed, profile). `profile` (lane SHOPS, R6): its
+ * placement bias (LootTables.gearPlace) weighs the area choice; without one the draws are exactly the unbiased ones.
  */
-export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
+export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, profile?: LootProfile): PickupPlacement[] {
+  const place = profile?.tables.gearPlace;
   // Track 2 (lane GEN): a layout whose track extensions grew / translated its grid places its gear in the CORE frame (gen/trackExt
   // coreView: the station exactly as without them), so every choice — areas, cells, anchor-distance ties — is main's; the
   // placements are then translated back into the layout.
   const ext = layout.extensions;
   if (ext && items.length && hasExtensionGrowth(layout)) {
     const core = coreView(layout);
-    const out = placeGearIn(core, items, rng).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
+    const out = placeGearIn(core, items, rng, place).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
     layout.pickups.push(...out);
     return out;
   }
-  return placeGearIn(layout, items, rng);
+  return placeGearIn(layout, items, rng, place);
 }
 
-function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng): PickupPlacement[] {
+function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, place?: GearPlacement): PickupPlacement[] {
   const placed: PickupPlacement[] = [];
   if (!items.length) return placed;
   const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];
@@ -243,9 +261,11 @@ function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rn
   const used = new Set<number>();
   for (const it of items) {
     let done = false;
-    for (let t = 0; t < 16 && !done && pool.length; t++) {
-      const fresh = pool.filter(([a]) => !used.has(a.id));
-      const a = rng.weighted(fresh.length ? fresh : pool);
+    // (lane SHOPS, R6) the level's placement bias for this piece; none = the SAME pool (identical draws). Fallbacks stay unbiased.
+    const choice = place ? pool.map(([a, w]) => [a, w * gearPlaceFactor(place, a, it.itemId)] as [Area, number]).filter(e => e[1] > 0) : pool;
+    for (let t = 0; t < 16 && !done && choice.length; t++) {
+      const fresh = choice.filter(([a]) => !used.has(a.id));
+      const a = rng.weighted(fresh.length ? fresh : choice);
       const cells = cellsOf(a, true);
       if (!cells.length) continue;
       put(a.level ?? 0, a, pickCell(a, cells), it);

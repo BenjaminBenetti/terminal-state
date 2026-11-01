@@ -49,6 +49,7 @@ import {exitHolds, mallInfo, mallLinks, mouthHolds, patrolGraph, runRails, subwa
 import {mallIssues} from './validate';
 import {mallTrackExtContext} from './trackExt'; // lane INTEG (Track2 integration): the mall's extendTracks parameters
 import {placeStreetExits, type DesignedExitEnd} from './exits'; // task mall-round2-20261031 (lane GEN, M09): locked street exits
+import {decayWalkwayLights, type WalkwayLightReport} from './lightDecay'; // task mall-round3-20261031 (lane LIGHT, R7): walkway light decay
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
 
@@ -62,7 +63,7 @@ const ATTEMPTS = 10;
 /** Validation issues of rejected attempts (QA / tests). */
 export const MALL_REJECTS = new Map<string, number>();
 /** Timing of the last generateMallLevel call (ms), its attempts and the last attempt's issues (QA / tests). */
-export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, salt: 0, issues: [] as string[], landmarks: null as LandmarkReport | null, columns: null as ColumnReport | null}; // (+ landmarks: lane ARCH; + columns: lane FIX)
+export const MALL_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, salt: 0, issues: [] as string[], landmarks: null as LandmarkReport | null, columns: null as ColumnReport | null, walkwayLights: null as WalkwayLightReport | null}; // (+ landmarks: lane ARCH; + columns: lane FIX; + walkwayLights: round 3 lane LIGHT)
 
 export interface MallGenOptions {
   /** Force a named variant (tests / QA); default: the level seed's. */
@@ -73,6 +74,8 @@ export interface MallGenOptions {
   trackExt?: TrackExtConfig | 'none';
   /** Task mall-round2-20261031 (lane GEN, M09): the locked street-exit post-pass (default true; false = the core layout only). */
   streetExits?: boolean;
+  /** Task mall-round3-20261031 (lane LIGHT, R7): the walkway light decay pass (default true; false = applyLighting's walkway state). */
+  walkwayDecay?: boolean;
 }
 
 /** The designed street-exit corridor ends of a layout's skeleton (cropped cells), for the post-pass (set by tryLevel). */
@@ -90,7 +93,7 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
   MALL_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, opts.walkwayDecay !== false);
     MALL_GEN_STATS.attempts = attempt + 1;
     MALL_GEN_STATS.salt = MALL_GEN_STATS.carveFails;
     // A program that does not fit re-rolls the frame's free parameters (same variant) for the next attempt.
@@ -123,7 +126,7 @@ const spawnStartCells = (p: SpawnProfile): number => {
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none'): StationLayout | null {
+function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none', walkwayDecay = true): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: MALL_CANVAS.levels, w: MALL_CANVAS.w, h: MALL_CANVAS.h});
   const mc = carveMall(k, rng, f);
@@ -204,6 +207,8 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   applyLighting(layout, rng.fork('lighting'));
   finishTraversal(layout);
   dropFloatingFixtures(layout);
+  // round 3 (lane LIGHT, R7): ~half the public walkway fixtures dead, some flickering / off-colour (own fork: no other draw moves)
+  MALL_GEN_STATS.walkwayLights = walkwayDecay ? decayWalkwayLights(layout, rng.fork('mall-walkway-lights')) : null;
   layout.mall.patrol = patrolGraph(layout, mc, crop, c.flights);
   // Hordes (lane HORDE) never start on a run (its flat top landing included) or in front of a mouth / elevator landing. They read
   // ambient POSITIONS only (keep-off), never families, so the one family roll may run after them.
@@ -294,7 +299,7 @@ function dropFloatingFixtures(layout: StationLayout): number {
 /** QA / tests: one attempt (null when the program does not fit). */
 export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
   const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
-  const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'));
+  const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'), opts.walkwayDecay !== false);
   if (L && opts.streetExits !== false) placeStreetExits(L, DESIGNED_EXITS.get(L) ?? [], ctx.levelSeed);
   return L;
 }

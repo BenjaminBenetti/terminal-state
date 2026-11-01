@@ -17,7 +17,7 @@ import {MALL_DIMS} from '../src/assets/mallDims.generated';
 import {COMMONS} from '../src/gen/mall/commons';
 import {MALL_ALWAYS, MALL_ASSIGN_STATS, MALL_PROGRAMS, MALL_ROTATION, assignMallPrograms, inferLot, mallShopCensus, shopFit} from '../src/gen/mall/shops';
 import {MALL_LOTS, lotSuits} from '../src/gen/mall/lots';
-import {MALL_COMMONS_STATS, MALL_FOCAL, dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
+import {MALL_COMMONS_STATS, MALL_FOCAL, SPOOKY_MANNEQUINS, dressMallShops, frameOf, frontageSide, uvXZ} from '../src/gen/mall/shopsDress';
 import {MALL_FIND_WEAPONS, mallGearSpots, mallShopPose, mallWeaponPlan, placeMallWeapons} from '../src/gen/mall/shopsWeapons';
 import {OPENABLE_AUDIT, OPENABLE_CONTAINER_KINDS, openableSpec} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
@@ -217,6 +217,7 @@ describe('interiors: substantial, distinct, purposeful', () => {
       electronics: [['deviceWall', 'techDisplay', 'tvWall']],
       hardware: [['stockShelf', 'shelf']],
       clothing: [['wallBay', 'clothingWallUnit'], ['shopCounter', 'mannequinFull']],
+      womenswear: [['clothingWallUnit', 'garmentRail', 'garmentRailRound'], ['mannequinFemale'], ['shopCounter', 'glassCounter']], // (R4)
       grocery: [['shopCounter', 'checkoutLane'], ['stockShelf', 'retailGondola'], ['shopCooler', 'produceStand']],
       'food-court': [['shopCounter', 'shopDisplay'], ['grillLine', 'pizzaOven', 'wokLine', 'deliLine', 'blenderBar', 'espressoBar', 'shopBackbar', 'fridge', 'snackRack']],
       cafe: [['shopCounter', 'shopDisplay', 'bakeryCase']],
@@ -650,6 +651,93 @@ describe('weapon plan: per gun shop, loadout-free, accessible, matching ammo, pe
     const [cx, cy] = g.cellOf(pose!.x, pose!.z);
     expect(g.area[g.idx(cx, cy)]).toBe(a.id);
     expect(mallGearSpots(layout).length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Task mall-round3-20261031 (lane SHOPS, R4 — user: "no female clothing store ... which would normally always be in a mall! Lets get
+// that in, Make sure to make a female maniqune. This asset will be handy in other spots, because it will be spooooky!").
+
+describe('R4 womenswear store + the reusable female mannequin', () => {
+  const inArea = (L: StationLayout, area: number, kind: string) => L.props.filter(p => p.area === area && p.kind === kind);
+  it('every mall has a women\'s fashion store (the always set, several lot families), with its own brand pool / purposes / finishes / sign', () => {
+    expect(MALL_ALWAYS).toContain('womenswear');
+    const fams = (Object.values(MALL_LOTS) as (typeof MALL_LOTS)[keyof typeof MALL_LOTS][]).filter(f => f.programs.includes('womenswear')).map(f => f.id);
+    expect(fams.length, fams.join()).toBeGreaterThanOrEqual(5);
+    const d = MALL_PROGRAMS.womenswear, c = MALL_PROGRAMS.clothing;
+    expect(d.purpose).toBe('mall-womenswear');
+    expect(purposeById('mall-womenswear')).toBeDefined();
+    expect(purposeById('mall-womenswear-back')).toBeDefined();
+    expect(d.brands.filter(b => c.brands.includes(b))).toEqual([]);
+    for (const k of [0, 1] as const) expect(d.finishes[k]).not.toEqual(c.finishes[k]);
+    expect(d.sign).not.toEqual(c.sign);
+    let n = 0;
+    for (const s of ROT_SEEDS) {
+      const L = get(s).layout, ws = L.mall!.shops.filter(q => q.program === 'womenswear');
+      expect(ws.length, `seed ${s} womenswear stores`).toBeGreaterThanOrEqual(1);
+      for (const q of ws) {
+        n++;
+        expect(L.areas[q.area].purpose).toBe('mall-womenswear');
+        expect(L.areas[q.area].label.startsWith(q.brand)).toBe(true);
+        expect(lotSuits(q.lot, 'womenswear')).toBe(true);
+      }
+    }
+    expect(n).toBeGreaterThanOrEqual(ROT_SEEDS.length);
+  });
+
+  it('womenswear interiors: female mannequins (window + floor, never the M07 figure), dress bays / rails, fitting rooms, accessories; distinct from the clothing store', () => {
+    let stores = 0, window = 0;
+    const kindsOf = (p: MallProgram) => {
+      const out = new Set<string>();
+      for (const s of SEEDS) {
+        const L = get(s).layout;
+        for (const q of L.mall!.shops.filter(x => x.program === p && x.kind !== 'kiosk')) for (const pr of L.props) if (pr.area === q.area && !['shopGlazing', 'shopShutter', 'cashRegister', 'bin'].includes(pr.kind)) out.add(pr.kind);
+      }
+      return out;
+    };
+    for (const s of ROT_SEEDS) {
+      const L = get(s).layout;
+      for (const q of L.mall!.shops.filter(x => x.program === 'womenswear')) {
+        stores++;
+        const a = L.areas[q.area], f = shopFit(q)!;
+        const fem = inArea(L, a.id, 'mannequinFemale');
+        expect(fem.length, `seed ${s} ${q.id} female mannequins`).toBeGreaterThanOrEqual(1);
+        expect(inArea(L, a.id, 'mannequinFull').length, `${q.id} no M07 figure`).toBe(0);
+        const kinds = new Set(L.props.filter(p => p.area === a.id).map(p => p.kind as string));
+        for (const any of [['clothingWallUnit', 'garmentRail', 'garmentRailRound'], ['shopCounter', 'glassCounter']]) expect(any.some(k => kinds.has(k)), `seed ${s} ${q.id} one of ${any}`).toBe(true);
+        const side = frontageSide(a, q), fs = side === 'N' || side === 'S' ? Math.min(q.frontage.x0, q.frontage.x1) : Math.min(q.frontage.z0, q.frontage.z1);
+        const fr = frameOf(a, side, f.entry, fs);
+        if (fem.some(p => xzV(fr, p.x, p.z) < 1.8 && Math.abs(Math.cos(p.rot - fr.face)) > 0.99)) window++;
+        // rule 4: nothing rides a mannequin (no clothing / loot hung on it)
+        for (const m of fem) expect(L.props.some(p => p.host === L.props.indexOf(m)), `${q.id} something hosted on a mannequin`).toBe(false);
+      }
+    }
+    expect(window / stores, `window displays ${window} / ${stores}`).toBeGreaterThan(0.6);
+    const w = kindsOf('womenswear'), c = kindsOf('clothing');
+    const inter = [...w].filter(k => c.has(k)).length, uni = new Set([...w, ...c]).size;
+    console.info(`[R4 womenswear] stores ${stores}, window ${window}; kinds ${[...w].sort().join(' ')}; jaccard vs clothing ${(inter / uni).toFixed(2)}`);
+    expect(inter / uni, 'womenswear reads differently from the clothing store').toBeLessThan(0.6);
+  });
+
+  it('female mannequins elsewhere are bounded spooky extras: back rooms / vacant units / the department floor, standing on the floor, nothing hung on them', () => {
+    let extras = 0;
+    for (const s of ROT_SEEDS) {
+      const L = get(s).layout;
+      const prog = new Map<number, MallProgram>();
+      const back = new Set<number>();
+      for (const q of L.mall!.shops) { prog.set(q.area, q.program); if (q.backroom !== undefined) { prog.set(q.backroom, q.program); back.add(q.backroom); } }
+      const out = L.props.filter(p => p.kind === 'mannequinFemale' && !(prog.get(p.area) === 'womenswear' && !back.has(p.area)) && prog.get(p.area) !== 'department');
+      extras += out.length;
+      expect(out.length, `seed ${s} spooky extras`).toBeLessThanOrEqual(SPOOKY_MANNEQUINS.perMall);
+      for (const p of out) {
+        expect(back.has(p.area) || prog.get(p.area) === 'vacant', `seed ${s} ${prog.get(p.area)} area ${p.area}`).toBe(true);
+        expect(p.host).toBeUndefined();
+        expect(p.mounted).toBeFalsy();
+        expect(p.y).toBeCloseTo(L.areas[p.area].floorY ?? 0, 3);
+      }
+    }
+    console.info(`[R4 spooky] female mannequins outside the fashion floors over ${ROT_SEEDS.length} synthetic malls: ${extras}`);
+    expect(extras, 'the asset reappears in spooky spots').toBeGreaterThan(0);
   });
 });
 

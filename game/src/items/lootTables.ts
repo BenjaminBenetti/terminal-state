@@ -807,6 +807,18 @@ export const GEAR_CAP_PER_LEVEL = 5;
 export const GEAR_WEIGHTS: Readonly<Record<string, number>> = {armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1};
 export interface GearLoot { mean: number; cap: number; weights: Readonly<Record<string, number>> }
 export const GEAR_LOOT: GearLoot = {mean: GEAR_MEAN_PER_LEVEL, cap: GEAR_CAP_PER_LEVEL, weights: GEAR_WEIGHTS};
+/**
+ * Task mall-round3-20261031 (lane SHOPS, R6): a level's RARE-GEAR PLACEMENT BIAS (LootTables.gearPlace; absent = none, so the Subway
+ * / Office placements stay byte-identical). gen/gearLoot.ts placeGear multiplies an area's gear-spot weight (gearAreaWeight, only
+ * where it is already > 0: never a passage / stair / platform / extension) by `purposes[area.purpose]` and, for the piece being
+ * placed, `items[piece][area.purpose]` (absent: 1). It moves WHERE the level's ONE gear roll lands, never how much gear there is.
+ */
+export interface GearPlacement {
+  /** Multiplier on an area's gear-spot weight by its room purpose (gen/purposes.ts id), for every piece. */
+  purposes: Readonly<Record<string, number>>;
+  /** Per gear piece (items/gear.ts id): an extra multiplier by room purpose (a pair of work boots is likelier in a shoe store). */
+  items?: Readonly<Partial<Record<string, Readonly<Record<string, number>>>>>;
+}
 
 // ---------------------------------------------------------------------------------------
 // Task office-interactions-layout-20261030 (lane ROOF): CURATED REWARDS — a fixed-place payoff with its own curated table.
@@ -922,6 +934,8 @@ export interface LootTables {
    * every Subway / Office table, so their rolls stay byte-identical — tests/loot-golden.test.ts).
    */
   storageFill?: Readonly<Partial<Record<string, StorageFill>>>;
+  /** Task mall-round3-20261031 (lane SHOPS, R6): rare-gear placement bias by room purpose / piece (GearPlacement; absent = none). */
+  gearPlace?: GearPlacement;
 }
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
@@ -1125,8 +1139,43 @@ export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> =
   filingCabinet: fillRule(0.3), officeFiling: fillRule(0.3), chestFreezer: fillRule(0.2, 0.12, [1, 1], FOOD_FILL), examTable: fillRule(0.25, 0.12, [1, 1], MED_FILL),
   labBench: fillRule(0.15, 0.12, [1, 1], MED_FILL), biohazardFridge: fillRule(0.3, 0.12, [1, 1], MED_FILL), crashCart: fillRule(0.25, 0.12, [1, 1], MED_FILL), rollingToolChest: fillRule(0.35),
 };
-/** The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall) + (lane SHOPS, U10) its storage fill. */
-export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL};
+/** (lane SHOPS, R6) multiplier `sales` on the sales floor and `back` on the stock room of each mall program (`mall-<p>` / `mall-<p>-back`). */
+const mallShops = (progs: readonly string[], sales: number, back = sales): Record<string, number> =>
+  Object.fromEntries(progs.flatMap(p => [[`mall-${p}`, sales], [`mall-${p}-back`, back]]));
+/** Fashion / accessory shops: a hard hat or body armour is out of place there. */
+const MALL_BOUTIQUES = ['clothing', 'womenswear', 'shoes', 'luggage', 'department'];
+/**
+ * Task mall-round3-20261031 (lane SHOPS, R6 — user: "clothing stores should have higher gear drop chance (no need to change if this is
+ * already the case). The same idea applies to all stores where the theme would reasonably boost spawn chance of associated loot."):
+ * THE MALL'S RARE-GEAR PLACEMENT BIAS (LootTables.gearPlace, read by gen/gearLoot.ts placeGear). It was NOT the case: a shop's sales
+ * floor weighed 0.4 and its stock room 1.5 whatever it sold, so a clothing store held a piece in ~3 % of runs, like any shop (measured
+ * on 10 generated malls: gear-themed stores 3.4 % per store per run vs 2.4 % elsewhere; 21 % of the gear in them).
+ *  - purposes: the wearable-gear shops (clothing, womenswear, outdoors, sports, shoes, department, luggage) weigh x12 on the sales
+ *    floor (0.4 -> 4.8: the piece lies by a rack / mannequin / counter) and x4 in their stock room (1.5 -> 6);
+ *  - items (per piece; the gear is workwear / kit: items/gear.ts): the work boots -> shoe store x3, hardware x4, outdoors / clothing /
+ *    womenswear x1.5; the work gloves -> hardware x6, clothing / womenswear x2, outdoors / sports x1.5; the daypack -> luggage x4,
+ *    outdoors / sports x2, clothing / womenswear / department x1.5; the hard hat -> hardware x10, outdoors x1.5; the armour vest /
+ *    chest rig -> the gun shop x10 (its benches / pickups leave few free cells), mall security x3 (the rig also outdoors x1.5); the
+ *    hard hat x0.4 and the armour x0.2-0.25 in the boutiques, the armour x0.5 in sporting goods.
+ * Still ONE roll per logical level with the shared GEAR_LOOT count / weights (no mean change): only where the pieces land moves.
+ * Measured (same 10 malls, womenswear on): docs/loot-tables.md "The mall" / tests/mall-themed-loot.test.ts.
+ */
+export const MALL_GEAR_PLACE: GearPlacement = {
+  purposes: mallShops(['clothing', 'womenswear', 'outdoors', 'sports', 'shoes', 'department', 'luggage'], 12, 4),
+  items: {
+    boots: {...mallShops(['shoes'], 3), ...mallShops(['hardware'], 4), ...mallShops(['outdoors', 'clothing', 'womenswear'], 1.5)},
+    gloves: {...mallShops(['hardware'], 6), ...mallShops(['clothing', 'womenswear'], 2), ...mallShops(['outdoors', 'sports'], 1.5)},
+    backpack: {...mallShops(['luggage'], 4), ...mallShops(['outdoors', 'sports'], 2), ...mallShops(['clothing', 'womenswear', 'department'], 1.5)},
+    helmet: {...mallShops(['hardware'], 10), ...mallShops(['outdoors'], 1.5), ...mallShops(MALL_BOUTIQUES, 0.4)},
+    armor_vest: {...mallShops(['guns'], 10), 'mall-security': 3, ...mallShops(['sports'], 0.5), ...mallShops(MALL_BOUTIQUES, 0.2)},
+    chest_rig: {...mallShops(['guns'], 10), 'mall-security': 3, ...mallShops(['outdoors'], 1.5), ...mallShops(['sports'], 0.5), ...mallShops(MALL_BOUTIQUES, 0.25)},
+  },
+};
+/**
+ * The mall's rate tables: the shared base tables + the mall salvage (the floor program MALL_FLOOR is in BASE_TABLES.floor.mall) + (lane
+ * SHOPS, U10) its storage fill + (lane SHOPS, R6) its rare-gear placement bias.
+ */
+export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, storageFill: MALL_STORAGE_FILL, gearPlace: MALL_GEAR_PLACE};
 /**
  * The mall's per-level overrides — the tuning dial on top of MALL_SALVAGE (docs/loot-tables.md "The mall"):
  *  - categoryWeight.material: every material row of the mall's tables (the salvage rows included, and so the storage fill's pools)
@@ -1427,6 +1476,21 @@ export function validateLootProfile(p: LootProfile): string[] {
   weight('tables.gear.mean', t.gear.mean);
   if (!Number.isInteger(t.gear.cap) || t.gear.cap < 0) bad('tables.gear.cap', `${t.gear.cap} is not an integer >= 0`);
   mults('tables.gear.weights', t.gear.weights, k => k in GEAR_ITEMS, 'gear id');
+  // Task mall-round3-20261031 (lane SHOPS, R6): rare-gear placement bias (purpose ids are checked by tests/mall-themed-loot.test.ts)
+  if (t.gearPlace !== undefined) {
+    const gp = t.gearPlace;
+    if (!gp || typeof gp !== 'object') bad('tables.gearPlace', 'not a gear placement bias');
+    else {
+      known('tables.gearPlace', gp, ['purposes', 'items']);
+      if (gp.purposes === undefined) bad('tables.gearPlace.purposes', 'missing');
+      mults('tables.gearPlace.purposes', gp.purposes, k => k.length > 0, 'purpose id');
+      if (gp.items !== undefined && (!gp.items || typeof gp.items !== 'object')) bad('tables.gearPlace.items', 'not a per-piece map');
+      else for (const [id, m] of Object.entries(gp.items ?? {})) {
+        if (!(id in GEAR_ITEMS)) bad(`tables.gearPlace.items.${id}`, 'unknown gear id');
+        mults(`tables.gearPlace.items.${id}`, m ?? {}, k => k.length > 0, 'purpose id');
+      }
+    }
+  }
 
   // --- shared named / openable tables, eligibility, slot map
   const specs: Record<string, LootSpec> = {STORE_DRINKS, STORE_SNACKS, CACHE_CRATE, OFFICE_DESK, OFFICE_DRAWERS, TENANT_SNACKS, TENANT_FRIDGE, TENANT_KITCHEN, TENANT_TABLE, TENANT_MEDS, TENANT_ARMS, TENANT_SUPPLY};

@@ -1115,6 +1115,9 @@ function MALL_PURPOSES(): Record<string, RoomPurpose> {
     ...pair('hardware', 'Hardware store', {theme: 'service', stock: HARDWARE, till: [['water', 1], ['battery', 0.6], ['flare', 0.4]], st: 'parts', floor: {ammo: 0.4, med: 0.4}},
       {stock: [['battery', 1.2], ['flare', 0.8], ['water', 0.8]], st: 'parts'}),
     ...pair('clothing', 'Clothing store', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['bandage', 0.8], ['chocolate', 0.6]]}),
+    // task mall-round3-20261031 (lane SHOPS, R4): the women's fashion store (same personal theme / leftovers as the clothing store;
+    // its rare-gear placement bias lives in the loot tables)
+    ...pair('womenswear', 'Women\'s fashion store', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['bandage', 0.8], ['chocolate', 0.6]]}),
     ...pair('shoes', 'Shoe store', {theme: 'personal', stock: LEFT, warm: true}, {stock: [['water', 1], ['bandage', 0.6], ['chocolate', 0.6]]}),
     ...pair('department', 'Department store', {theme: 'personal', stock: [...LEFT, ['juice', 0.4], ['noodles', 0.3]], warm: true, floor: {med: 0.5, ammo: 0.3}},
       {stock: [['water', 1.2], ['beans', 0.8], ['bandage', 0.8], ['chocolate', 0.6]]}),

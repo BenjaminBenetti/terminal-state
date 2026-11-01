@@ -33,6 +33,8 @@
 // Usage:
 //   node tools/asset-pipeline/props/build-mall-track3.mjs [--policy lean|balanced] [--only M01,M05] [--allowlist-out <file>]
 //        [--no-delivered]   do not rewrite the Track3 delivery note (later local repairs, e.g. lane FIX U06 M35)
+//        [--only M07F]      a LOCAL VARIANT (VARIANTS below: zero-spend derivative of an accepted asset's raw master, e.g. the
+//                           female mannequin M07F = M07 + lib/figure-deform.mjs); provenance under `localDerivatives`
 //   node tools/asset-pipeline/props/build-mall-track3.mjs --dry-run      plan only: verify freezes / ledger / raws, write NOTHING
 //   node tools/asset-pipeline/props/build-mall-track3.mjs --dry-run --fixture <any.glb> --fixture-code M05 [--fixture-front +Z]
 //        exercise the derive path on a local GLB under a manifest spec -> /tmp/track3-fixture/mall-<id>.glb + report (never public)
@@ -46,6 +48,7 @@ import {flatten, clearNodeTransform, transformMesh, transformPrimitive, getBound
 import {GLASS_MATERIAL, components, cleanSupportTexture, cropPartTextures, extentOf, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs';
 import {dedupeCoplanar} from './lib/coplanar-dedupe.mjs'; // Task mall-playtest-revision-20261031 (lane FIX, U06)
 import {cleanPanelGhosts, rebuildPanel, snapVertices} from './lib/panel-repair.mjs'; // Task mall-round2-20261031 (lane PROPS, M04)
+import {deformFigure} from './lib/figure-deform.mjs'; // Task mall-round3-20261031 (lane SHOPS, R4): the female mannequin, a local M07 variant
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -236,6 +239,36 @@ const EDITS = {
       [1.48, 1.5, 0.016, -0.30], [1.925, 1.945, 0.003, -0.42]].map(([y0, y1, tol, z0]) => ({box: {min: [-0.95, y0, z0], max: [0.95, y1, y0 > 1.9 ? 0.47 : 0.35]}, axis: 1, facing: 1, tol,
       slab: [y0, y1], clipOpposite: true, minAxisCos: 0.98})),
     panelGhosts: [{axis: 2, at: 0.468, tol: 0.0085, facing: 1, region: {min: [-0.41, 0.52, 0.455], max: [0.41, 1.88, 0.49]}, all: true, clone: {along: 0, by: 0.45}}]},
+  // --- local variants (VARIANTS below) ---
+  // Task studio-beta-mall-round3-20261031-01 (lane SHOPS, sub-lane SHOPS-MANNEQUIN, R4 — user: "Make sure to make a female maniqune. This
+  // asset will be handy in other spots, because it will be spooooky!"): M07F = the M07 mannequin's raw refine, derived exactly like M07
+  // (front, 1.85 m frame), then deformFigure (lib/figure-deform.mjs; parameters in that frame, measured on CPU slices of M07: crotch 0.97,
+  // pelvis 0.31 m wide at 0.98, waist 0.20 at 1.27, chest 0.25 (girth 0.73, flat) at 1.43, bideltoid 0.39 at 1.48, armpit 1.455, neck
+  // ±0.042 at 1.63, cranium ellipsoid fitted on the back / crown vertices) and a uniform 1.76 m: shoulders x0.88 + 1.2 cm slope, ribcage
+  // x0.90-0.95, waist x0.97, hips x1.10, a subtle two-lobe bust (3.4 cm), arms x0.88 swung 6 deg out (hands clear the hips), calves x0.93,
+  // head x0.92 projected onto a smooth egg head (no nose / lips / eyes / ears). The stand (disc, rod, T-bar) stays rigid. No new geometry.
+  'mannequin-female': {basis: 'local variant of M07: female proportions + featureless egg head by a scripted vertex deformation (lib/figure-deform.mjs); uniform: 1.76 m tall incl. the stand',
+    sizeM: 1.76, sizeAxis: 'h',
+    deform: {armCut: 1.45, legCut: 0.965,
+      lateral: [[0.72, 1.0], [0.86, 1.05], [0.97, 1.1], [1.04, 1.1], [1.14, 1.0], [1.24, 0.97], [1.32, 0.95], [1.4, 0.9], [1.52, 0.88], [1.6, 0.94], [1.64, 1.0]],
+      arms: {seedY: [1.0, 1.4], minAbsX: 0.1, slim: 0.88, bend: [1.44, 1.3], pivot: [0.165, 1.47], outDeg: 6},
+      legs: {slim: [[0.12, 0.97], [0.2, 0.93], [0.6, 0.94], [0.8, 1.0]]},
+      shoulder: {drop: 0.012, x: [0.05, 0.12], y: [1.38, 1.45]},
+      bust: {y: 1.36, x: 0.058, sx: 0.036, syUp: 0.06, syDown: 0.036, depth: 0.034, zFront: [0.035, -0.04]},
+      head: {pivot: [0, 1.62, 0.035], scale: 0.92, blend: [1.56, 1.64]},
+      face: {cranium: {centre: [0, 1.7603, 0.0283], radii: [0.067, 0.0926, 0.0829]}, jaw: {centre: [0, 1.705, 0.012], radii: [0.05, 0.05, 0.062]},
+        neck: {a: [0, 1.56, 0.036], b: [0, 1.7, 0.03], r: 0.041}, k: 0.03, blend: [1.615, 1.655], normalsFrom: 1.615, iterations: 12}}},
+};
+
+// Local VARIANTS (task mall-round3-20261031, lane SHOPS, R4): NEW runtime models derived with ZERO spend — no generation, provider call or
+// download — from an accepted frozen asset's sha-verified raw master through the same derive() path (rotate / size in the SOURCE's frozen
+// frame, texture policy of that frame), then the variant's EDITS entry (its local operations + final size). Code = source code + suffix;
+// library key office-<id>; provenance in `localDerivatives` (the Meshy `outputs` entries are untouched); registry / dims / allowlist /
+// CREDITS entries like any delivered model. Built only when named in --only (or on a full run); otherwise reused when unchanged.
+const VARIANTS = {
+  M07F: {from: 'M07', id: 'mannequin-female', task: 'studio-beta-mall-round3-20261031-01', lane: 'SHOPS (sub-lane SHOPS-MANNEQUIN, item R4)',
+    label: 'female full-figure display mannequin with a featureless egg head on the M07 chrome rod + round base disc (no clothing baked)',
+    role: 'decor/movable', programs: ['womenswear', 'clothing', 'department'], placement: 'free', shopsKind: 'mannequinFemale', target: [0.45, 1.76, 0.43]},
 };
 
 // ---------- records ----------
@@ -458,6 +491,8 @@ async function derive(spec, rawBytes, front, [basePx, otherPx, quality]) {
   let k = 1, split = null, glass = null, ghosts = null;
   const parts = [], edits = {};
   if (E) {
+    // (lane SHOPS, R4) a local variant's figure deformation, in the source's frozen frame (before its final size step)
+    if (E.deform) edits.deformed = deformFigure(doc, E.deform);
     if (E.parts) split = await splitClutter(doc, E);
     if (E.extend) for (const x of E.extend) (edits.extended ??= []).push({from: x.from, to: x.to, tris: extendComps(doc, x)});
     if (E.lidClose) edits.lidClosed = lidCloseComps(doc, E.lidClose);
@@ -634,6 +669,55 @@ for (const [code, {spec, batch, freezeSha, frozenBy, frozenAt}] of [...SPECS].so
   console.log(`${code} ${id}: ${rawTris} tris, ${(rawBytes.length / 1e6).toFixed(2)} MB -> ${(glb.length / 1e3).toFixed(0)} kB (${POLICY} ${tier} step ${step}), dims ${m.dims.join(' x ')}${glb.length > T.budget ? '  OVER BUDGET' : ''}${reuse ? ' (reused)' : ''}${DRY ? ' (dry-run: not written)' : ''}`);
 }
 
+// ---------- local variants (lane SHOPS, R4): zero-spend derivatives of accepted raw masters ----------
+const localOut = [];
+for (const [vcode, V] of Object.entries(VARIANTS).sort(([a], [b]) => (a < b ? -1 : 1))) {
+  const src = SPECS.get(V.from);
+  if (!src) throw new Error(`${vcode}: source ${V.from} is not a frozen asset`);
+  if (SPECS.has(vcode) || [...SPECS.values()].some(x => x.spec.assetId === V.id)) throw new Error(`${vcode} ${V.id}: collides with a frozen asset`);
+  if (companyIds.has(V.id) || fs.existsSync(path.join(PUB, `assets/models/office-${V.id}.glb`))) throw new Error(`${vcode} ${V.id}: library key collision`);
+  const E = EDITS[V.id];
+  if (!E?.sizeM) throw new Error(`${vcode}: EDITS['${V.id}'] with its final sizeM is required`);
+  const j = jobsFor(V.from);
+  if (!j.dl) throw new Error(`${vcode}: source ${V.from} has no accepted, downloaded refine`);
+  const rawBytes = fs.readFileSync(path.join(ASSETS_DIR, j.dl.file));
+  if (sha(rawBytes) !== j.dl.sha256) throw new Error(`raw sha mismatch for ${V.from}: ${j.dl.file}`);
+  const front = j.accepted.front;
+  const spec = {...src.spec, assetId: V.id, code: vcode}; // derive frame = the source's frozen frame (its targetSize / tier)
+  const outRel = outRelOf(V.id), outAbs = path.join(PUB, outRel);
+  const prevV = prevProv?.localDerivatives?.find(o => o.id === V.id);
+  if (fs.existsSync(outAbs) && allow.files.some(f => f.path === outRel) && !prevV) throw new Error(`${outRel} exists and is not this pipeline's file`);
+  const recipeSha256 = sha(JSON.stringify({variant: V, edits: E, lib: fs.readFileSync(path.join(import.meta.dirname, 'lib/figure-deform.mjs'), 'utf8')}));
+  const tier = tierOf(spec), T = POLICIES[POLICY].tiers[tier];
+  const reuse = ONLY && !ONLY.has(vcode) && fs.existsSync(outAbs) && prevV && prevV.from.raw.sha256 === j.dl.sha256 && prevV.recipeSha256 === recipeSha256 && prevV.policy === POLICY
+    && prevV.output.sha256 === sha(fs.readFileSync(outAbs)) ? prevV : null;
+  let glb, scale, step, edits;
+  if (reuse) { glb = fs.readFileSync(outAbs); scale = reuse.scale; step = reuse.textureStep; edits = reuse.edits; }
+  else {
+    for (step = 0; step < T.ladder.length; step++) { ({glb, scale, edits} = await derive(spec, rawBytes, front, T.ladder[step])); if (glb.length <= T.budget) break; }
+    step = Math.min(step, T.ladder.length - 1);
+    tokenCheck(V.id, glb);
+    if (!DRY) fs.writeFileSync(outAbs, glb);
+  }
+  const m = await measure(glb);
+  checkGrounded(V.id, m.b, E.sizeM);
+  if (Math.abs(m.dims[1] - E.sizeM) > 2e-3) throw new Error(`${vcode} not at its real size (${m.dims[1]} != ${E.sizeM})`);
+  const srcOut = outputs.find(o => o.id === src.spec.assetId);
+  localOut.push({code: vcode, id: V.id, key: libraryKey(V.id), task: V.task, lane: V.lane, label: V.label, role: V.role, programs: V.programs, placement: V.placement, shopsKind: V.shopsKind,
+    route: 'LOCAL DERIVATIVE of an accepted asset (no generation, no provider / Meshy call, no download, no new dependency): the source raw master through derive() + a scripted local deformation',
+    spend: {credits: 0, generationPosts: 0, note: 'zero spend; the source asset\'s own Meshy credits are recorded once, in its `outputs` entry'},
+    from: {code: V.from, id: src.spec.assetId, raw: {file: `${TASK_DIR}/assets/${j.dl.file} (raw original, outside Git; read-only)`, sha256: j.dl.sha256, bytes: j.dl.bytes},
+      runtime: srcOut ? {url: srcOut.output.url, sha256: srcOut.output.sha256, bytes: srcOut.output.bytes} : null, meshyTasks: {preview: j.refineAck.preview_task_id, refine: j.dl.task_id},
+      batch: src.batch, freezeSha256: src.freezeSha},
+    recipe: {rebuild: `node tools/asset-pipeline/props/build-mall-track3.mjs --only ${vcode} --no-delivered`, operations: 'derive() exactly as the source (rotateY to front -Z, uniform scale to the source\'s frozen size, grounded, centred), then lib/figure-deform.mjs deformFigure(EDITS deform), then uniform scale to sizeM along sizeAxis (grounded, centred); texture policy / ladder of the source frame; names <id> / mall-<id>',
+      lib: 'tools/asset-pipeline/props/lib/figure-deform.mjs', basis: E.basis, parameters: E.deform},
+    recipeSha256, sizeM: E.sizeM, sizeAxis: E.sizeAxis, target: V.target, scale: +scale.toFixed(6), nativeFront: front, front: '-Z', up: '+Y',
+    policy: POLICY, tier, textureStep: step, textureSizes: {baseColor: T.ladder[step][0], other: T.ladder[step][1], jpegQuality: T.ladder[step][2]}, budget: T.budget,
+    output: {file: `game/public/${outRel}`, url: outRel, sha256: sha(glb), bytes: glb.length, triangles: m.tris, dims: m.dims, overBudget: glb.length > T.budget, gpuTextureBytes: m.gpuBytes},
+    edits, textures: m.textures});
+  console.log(`${vcode} ${V.id} (local variant of ${V.from}): ${(glb.length / 1e3).toFixed(0)} kB (${POLICY} ${tier} step ${step}), ${m.tris} tris, dims ${m.dims.join(' x ')}${glb.length > T.budget ? '  OVER BUDGET' : ''}${reuse ? ' (reused)' : ''}${DRY ? ' (dry-run: not written)' : ''}`);
+}
+
 // ---------- credits / authority summary (whole task, from the ledger) ----------
 const billed = new Map();
 for (const e of ledger) if ((e.event === 'download' || e.event === 'status') && e.task_id && typeof e.consumed_credits === 'number') billed.set(e.task_id, {kind: e.kind, credits: e.consumed_credits});
@@ -658,15 +742,18 @@ const prov = {schema: 'last-line-derivative/1', asset: 'mall-track3-20261031', t
       'every preview billed 5 credits (T2 / T2.5 / 6-lite tier; meshy-6 / 7.1 / latest bill 20) and returned a triangle-only mesh near target_polycount (smart topology) — checked before its refine',
       'the Meshy task GET response does not echo ai_model / model_type, so the request record + billing tier are the model proof']},
   freezes: freezes.map(f => ({batch: f.batch, file: f.file, sha256: f.sha256, frozenBy: f.frozenBy, frozenAt: f.frozenAt, attempts: f.attempts, credits: f.credits})),
-  credits: creditSummary, authorityUse, replacements, outputs, missing};
+  credits: creditSummary, authorityUse, replacements, outputs, missing,
+  // (task mall-round3-20261031, lane SHOPS, R4) zero-spend local variants of accepted assets (VARIANTS): not Meshy outputs, no credits
+  localDerivatives: localOut};
 const provBuf = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
 { const hit = provBuf.toString().match(/.{0,60}(https?:|Signature=|X-Amz|Key-Pair-Id|token=).{0,20}/i); if (hit) throw new Error(`URL/token-like string in public provenance: ...${hit[0]}...`); }
 
 // ---------- allowlist (only this task's paths) ----------
 const MY_PATHS = new Set([PROV_REL, ...[...SPECS.values()].map(v => outRelOf(v.spec.assetId)), ...Object.values(EDITS).flatMap(e => Object.keys(e.parts ?? {}).map(partRelOf)),
-  ...(prevProv?.outputs ?? []).flatMap(o => [o.output.url, ...(o.parts ?? []).map(q => q.output.url)])]);
-const newFiles = DRY ? outputs.flatMap(o => [{path: o.output.url, buf: null, bytes: o.output.bytes, sha256: o.output.sha256}])
-  : outputs.flatMap(o => [o.output.url, ...(o.parts ?? []).map(q => q.output.url)]).map(u => ({path: u, buf: fs.readFileSync(path.join(PUB, u))}));
+  ...(prevProv?.outputs ?? []).flatMap(o => [o.output.url, ...(o.parts ?? []).map(q => q.output.url)]),
+  ...Object.values(VARIANTS).map(v => outRelOf(v.id)), ...(prevProv?.localDerivatives ?? []).map(o => o.output.url)]);
+const newFiles = DRY ? [...outputs, ...localOut].flatMap(o => [{path: o.output.url, buf: null, bytes: o.output.bytes, sha256: o.output.sha256}])
+  : [...outputs.flatMap(o => [o.output.url, ...(o.parts ?? []).map(q => q.output.url)]), ...localOut.map(o => o.output.url)].map(u => ({path: u, buf: fs.readFileSync(path.join(PUB, u))}));
 if (outputs.length) newFiles.push({path: PROV_REL, buf: provBuf});
 const added = newFiles.map(f => ({path: f.path, bytes: f.buf ? f.buf.length : f.bytes, sha256: f.buf ? sha(f.buf) : f.sha256}));
 const kept = allow.files.filter(f => !MY_PATHS.has(f.path));
@@ -677,7 +764,9 @@ allow.files = [...kept, ...added].sort((x, y) => (x.path < y.path ? -1 : x.path 
 const credSrc = fs.readFileSync(CREDITS, 'utf8');
 const credSection = outputs.length ? [CREDITS_BEGIN, "## The Eaton's Center (Track3): mall fixtures, furniture and loose stock", '',
   `Generated for this project with Meshy T2.5 (smart topology; text-to-3D preview + 2K PBR refine) through the Meshy MCP under the user's finite Track3 authorization; runtime derivatives built by \`tools/asset-pipeline/props/build-mall-track3.mjs\` (provenance: \`${PROV_REL}\`). Provider terms apply; unapproved prototypes, no licence or commercial clearance implied. Raw masters are kept outside Git.`, '',
-  ...outputs.map(o => `- \`${o.output.url}\` — ${o.id} (${o.code}; Meshy tasks ${o.tasks.preview} / ${o.tasks.refine})`), CREDITS_END].join('\n') : null;
+  ...outputs.map(o => `- \`${o.output.url}\` — ${o.id} (${o.code}; Meshy tasks ${o.tasks.preview} / ${o.tasks.refine})`),
+  ...localOut.map(o => `- \`${o.output.url}\` — ${o.id} (${o.code}; LOCAL derivative of ${o.from.id} ${o.from.code}: a scripted vertex deformation of its raw master by \`build-mall-track3.mjs\` + \`lib/figure-deform.mjs\` — no generation, zero spend; the source's terms / caveats apply)`),
+  CREDITS_END].join('\n') : null;
 const credRe = new RegExp(`${CREDITS_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${CREDITS_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
 const credNext = credSection ? (credRe.test(credSrc) ? credSrc.replace(credRe, credSection) : `${credSrc.replace(/\n*$/, '\n')}\n${credSection}\n`)
   : credRe.test(credSrc) ? credSrc.replace(credRe, '').replace(/\n{3,}$/, '\n') : credSrc;
@@ -686,19 +775,22 @@ const credNext = credSection ? (credRe.test(credSrc) ? credSrc.replace(credRe, c
 const q = v => (v === null || v === undefined ? 'null' : `'${String(v).replace(/'/g, "\\'")}'`);
 const arr = v => `[${v.join(', ')}]`;
 const specList = [...SPECS.values()].map(v => v.spec).sort((a, b) => (a.code < b.code ? -1 : 1));
-const assetLines = specList.map(s => {
+// (lane SHOPS, R4) local variants sort in after their source code (M07 < M07F < M08)
+const byCode = (a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+const assetLines = [...specList.map(s => {
   const o = outputs.find(x => x.id === s.assetId);
-  return `  '${s.assetId}': {url: ${o && !DRY ? q(o.output.url) : 'null'}, bytes: ${o ? o.output.bytes : 0}, tris: ${o ? o.output.triangles : 0}, code: '${s.code}', key: '${libraryKey(s.assetId)}'},`;
-});
+  return [s.code, `  '${s.assetId}': {url: ${o && !DRY ? q(o.output.url) : 'null'}, bytes: ${o ? o.output.bytes : 0}, tris: ${o ? o.output.triangles : 0}, code: '${s.code}', key: '${libraryKey(s.assetId)}'},`];
+}), ...localOut.map(o => [o.code, `  '${o.id}': {url: ${!DRY ? q(o.output.url) : 'null'}, bytes: ${o.output.bytes}, tris: ${o.output.triangles}, code: '${o.code}', key: '${o.key}'},`])].sort(byCode).map(x => x[1]);
 const partLines = outputs.flatMap(o => (o.parts ?? []).map(p => `  '${p.id}': {url: ${q(p.output.url)}, bytes: ${p.output.bytes}, tris: ${p.output.triangles}, from: '${o.id}'},`));
 const block1 = ['// BEGIN GENERATED (build-mall-track3.mjs) — do not hand-edit between the markers',
   'export const MALL_ASSETS: Readonly<Record<string, MallAssetEntry>> = {', ...assetLines, '};', '',
   'export const MALL_PART_ASSETS: Readonly<Record<string, MallPartEntry>> = {', ...partLines, '};', '// END GENERATED'].join('\n');
 const block2 = ['// BEGIN GENERATED (build-mall-track3.mjs) — do not hand-edit between the markers',
   'export const MALL_DIMS: Readonly<Record<string, readonly [number, number, number]>> = {',
-  ...outputs.filter(() => !DRY).map(o => `  '${o.id}': ${arr(o.output.dims)},`), '};', '',
+  ...[...outputs, ...localOut].filter(() => !DRY).map(o => [o.code, `  '${o.id}': ${arr(o.output.dims)},`]).sort(byCode).map(x => x[1]), '};', '',
   'export const MALL_ASSET_SPECS: Readonly<Record<string, MallAssetSpec>> = {',
-  ...specList.map(s => `  '${s.assetId}': {code: '${s.code}', role: ${q(s.role)}, programs: [${(s.programs ?? []).map(q).join(', ')}], sizeM: ${EDITS[s.assetId]?.sizeM ?? s.targetSize.sizeM}, sizeAxis: '${EDITS[s.assetId]?.sizeAxis ?? s.targetSize.sizeAxis}', target: ${arr([s.targetSize.w, s.targetSize.h, s.targetSize.d])}, placement: ${q(s.placement)}, shopsKind: ${q(s.shopsKind?.kind)}},`),
+  ...[...specList.map(s => [s.code, `  '${s.assetId}': {code: '${s.code}', role: ${q(s.role)}, programs: [${(s.programs ?? []).map(q).join(', ')}], sizeM: ${EDITS[s.assetId]?.sizeM ?? s.targetSize.sizeM}, sizeAxis: '${EDITS[s.assetId]?.sizeAxis ?? s.targetSize.sizeAxis}', target: ${arr([s.targetSize.w, s.targetSize.h, s.targetSize.d])}, placement: ${q(s.placement)}, shopsKind: ${q(s.shopsKind?.kind)}},`]),
+    ...localOut.map(o => [o.code, `  '${o.id}': {code: '${o.code}', role: ${q(o.role)}, programs: [${o.programs.map(q).join(', ')}], sizeM: ${o.sizeM}, sizeAxis: '${o.sizeAxis}', target: ${arr(o.target)}, placement: ${q(o.placement)}, shopsKind: ${q(o.shopsKind)}},`])].sort(byCode).map(x => x[1]),
   '};', '// END GENERATED'].join('\n');
 const re = /\/\/ BEGIN GENERATED[^\n]*\n[\s\S]*?\/\/ END GENERATED/;
 const regNext = [[REGISTRY, block1], [DIMS_TS, block2]].map(([f, blk]) => {

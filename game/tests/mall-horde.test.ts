@@ -116,7 +116,7 @@ function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]},
     },
     rand,
     ...lureWorld(L, {attracting: () => []}),
-    ...(o.atrium ? {atrium: true} : {}),
+    ...(o.atrium ? {atrium: true, atriumNotice: true} : {}), // (mall round 3, lane ENEMY R2: + the game's open-atrium notice rule)
   });
   let frame = 0, raf = 0;
   const live = () => brains.filter((b): b is ZombieBrain => !!b);
@@ -144,7 +144,7 @@ function makeSim(fx: {layout: StationLayout; patrol: readonly MallPatrolNode[]},
         const out = b.update(DT, w);
         prof?.end(S.brain);
         prof?.begin(S.motor);
-        if (out.alerted) director.alerted(b);
+        if (out.alerted) director.alerted(b, o.atrium ? player.y : undefined); // Game.updateZombies (mall round 3: H.alerted(b, p.y))
         if (out.face !== null) {
           let d = out.face - b.yaw;
           d = Math.atan2(Math.sin(d), Math.cos(d));

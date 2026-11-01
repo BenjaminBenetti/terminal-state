@@ -11,18 +11,47 @@
 //    capsules for pharmacy / clinic, balls / runners / peaks for sports / outdoors, and simple pictograms for the rest; aged (sun
 //    fade, grime from the top, scratches, a torn corner on paper posters).
 // Provenance: drawn procedurally at load from these functions + a seed; reproducible; nothing derived from external imagery.
+//
+// Task mall-round3-20261031 (lane SHOPS, R5 — user: "there are no adds ... on kiosks, and as posters in the store and stuff"): + the
+// women's fashion program (womenswear: its own palette / headlines, dress / skirt / coat figures, some with longer hair — generic,
+// featureless), kiosk palettes / motifs from the kiosk brand, food-counter MENU boards (cuisine item lists + prices: generic dishes,
+// no brands), kiosk-cart HEADER signs, lighter window vinyl (white-ish figures + a sale band: readable against a dark shop behind the
+// glass), and planGalleryAds' second tier: backlit WALL LIGHTBOXES (portrait, eye level) on the public walls between openings, each
+// advertising one of the mall's own stores. Same canvas recipes, same provenance.
 
-import type * as THREE from 'three';
+import * as THREE from 'three';
+import {MeshStandardNodeMaterial} from 'three/webgpu';
+import {attribute, texture, uniform} from 'three/tsl';
 import type {MallProgram} from '../gen/mall/mallTypes';
 import type {StationLayout} from '../gen/stationTypes';
 import {CELL} from '../gen/grid';
 import {canvasTexture} from './canvasTextures';
+import {SIGN_ATLAS_CONTEXT, SIGN_ATLAS_UV} from './surfaceNodes';
+
+/** (R5) Backlight gain of the backlit ad faces (QA tune: `__LL.mallAds({glow})`); per face x its aGlow (the record's glow). */
+export const AD_GLOW_DEFAULT = 0.8;
+export const AD_GLOW = uniform(AD_GLOW_DEFAULT);
+
+/**
+ * (R5) The ad atlas material: the builder's sign-atlas program (lit like every wall: the light field) + EMISSIVE backlight = the atlas
+ * colour x the per-instance `aGlow` (0 = paper / vinyl / a dead box) x AD_GLOW — one material per atlas page, no extra draw call.
+ * Cut-out pages (window vinyl): alpha-tested, double-sided, no backlight.
+ */
+export function adAtlasMaterial(atlas: THREE.Texture, cutout: boolean): MeshStandardNodeMaterial {
+  const m = new MeshStandardNodeMaterial({map: atlas, roughness: 0.6});
+  m.contextNode = SIGN_ATLAS_CONTEXT;
+  if (cutout) { m.alphaTest = 0.5; m.side = THREE.DoubleSide; m.transparent = false; m.name = 'mall-ad-decal-atlas'; return m; }
+  m.emissiveNode = texture(atlas, SIGN_ATLAS_UV).rgb.mul(attribute('aGlow', 'float')).mul(AD_GLOW);
+  m.name = 'mall-ad-atlas';
+  return m;
+}
 
 /** One advertisement face (pure data; no collider, never a prop: nothing to open / move / classify). */
 export interface MallAd {
   /** poster = paper in a snap frame on a wall; lightbox = 0.12 m deep box on a wall; billboard = a big framed panel; decal = vinyl
-   *  on shopfront glass (cut-out, both faces). */
-  kind: 'poster' | 'lightbox' | 'billboard' | 'decal';
+   *  on shopfront glass (cut-out, both faces); (R5) menu = a 0.1 m deep backlit menu board on a food counter's wall; cart = a
+   *  double-faced backlit header sign standing on a kiosk cart's canopy (centre = the sign's mid-plane). */
+  kind: 'poster' | 'lightbox' | 'billboard' | 'decal' | 'menu' | 'cart';
   /** Theme: the program it advertises (fashion programs -> dressed adult silhouettes), or 'mall' (centre-wide ads). */
   program: MallProgram | 'mall';
   /** MallShop.id it belongs to (its fictional brand is printed); none = a gallery ad (the mall's own name). */
@@ -34,7 +63,20 @@ export interface MallAd {
   /** Face size (m). */
   w: number; h: number;
   seed: number;
+  /** (R5, = gen/mall/ads.ts MallAdSlot) header / eye / window / display / menu / cart / gallery. */
+  slot?: 'header' | 'eye' | 'window' | 'display' | 'menu' | 'cart' | 'gallery';
+  /** (R5) Backlight of the backlit kinds (1 lit, ~0.3-0.5 dim, 0 dead); absent = unlit (paper / vinyl). Drawn as emissive. */
+  glow?: number;
+  /** (R5) Advertiser of a record without a shop (kiosk carts). */
+  brand?: string;
+  /** (R5) Menu boards: the cuisine / café menu. */
+  cuisine?: string;
 }
+
+/** (R5) Backlit kinds (emissive faces in world/mallArch.ts buildAds). */
+export const LIT_KINDS: ReadonlySet<MallAd['kind']> = new Set(['lightbox', 'billboard', 'menu', 'cart']);
+/** (R5) The backlight level a face is drawn with: the record's glow, else 1 for a backlit kind / 0 for paper / vinyl. */
+export const adGlowOf = (ad: Pick<MallAd, 'kind' | 'glow'>): number => (LIT_KINDS.has(ad.kind) ? Math.max(0, Math.min(1, ad.glow ?? 1)) : 0);
 
 /** The ads lane SHOPS placed (`layout.mall.ads`; read loosely so a layout without the field has none). */
 export function adsOf(layout: StationLayout): MallAd[] {
@@ -47,9 +89,12 @@ export function adsOf(layout: StationLayout): MallAd[] {
 
 /** Palette per theme: background, second background, ink, accent, garment colours. */
 interface AdPalette { bg: string; bg2: string; ink: string; accent: string; cloth: string[] }
-const FASHION: MallProgram[] = ['clothing', 'department', 'shoes', 'beauty', 'jewelry', 'luggage', 'optical'];
+const FASHION: MallProgram[] = ['clothing', 'department', 'shoes', 'beauty', 'jewelry', 'luggage', 'optical', 'womenswear'];
 const PAL: Partial<Record<MallProgram | 'mall', AdPalette>> = {
   clothing: {bg: '#e9dccb', bg2: '#c9a27a', ink: '#2b211a', accent: '#8a3b2e', cloth: ['#7a2e2a', '#2f3b52', '#c8a26a', '#3e4a3a', '#d9cfc0', '#5a4a6a']},
+  // (R5) women's fashion: blush / ivory / plum, jewel-tone garments
+  womenswear: {bg: '#f3e6e4', bg2: '#c98f9a', ink: '#3a1f2b', accent: '#9c3a5a', cloth: ['#9c3a5a', '#e8c9b8', '#2f2a3a', '#c86a6a', '#6a4a7a', '#d9b26a', '#1f4a5a']},
+  kiosk: {bg: '#f2ece0', bg2: '#e0a040', ink: '#2a2420', accent: '#d0402a', cloth: []},
   department: {bg: '#1e2a3a', bg2: '#38506a', ink: '#f2ead8', accent: '#c8a45a', cloth: ['#c8a45a', '#8a1f24', '#e9e1d4', '#2e4a32', '#5a6a8a']},
   shoes: {bg: '#f2f0ea', bg2: '#d8c8a8', ink: '#222224', accent: '#b8463a', cloth: ['#222224', '#b8463a', '#3a5a7a', '#c8a26a']},
   beauty: {bg: '#f2dcd8', bg2: '#d8a8a0', ink: '#5a2e30', accent: '#b0485a', cloth: ['#b0485a', '#f4ece6', '#5a2e30', '#c8a08a']},
@@ -83,6 +128,8 @@ export const adPalette = (p: MallProgram | 'mall'): AdPalette => PAL[p] ?? GENER
 /** Generic headlines per theme (no real brands / products / slogans). */
 const HEADLINES: Partial<Record<MallProgram | 'mall', string[]>> = {
   clothing: ['NEW SEASON', 'THE AUTUMN EDIT', 'LAYER UP', 'WEEKEND READY', 'UP TO 40% OFF'],
+  womenswear: ['THE DRESS EDIT', 'NEW IN: DRESSES', 'COAT WEATHER', 'THE WEEKEND EDIT', 'SPRING COLLECTION', 'UP TO 50% OFF'],
+  kiosk: ['WHILE U WAIT', 'GIFTS & MORE', '2 FOR $10', 'TREAT YOURSELF', 'OPEN TODAY'],
   department: ['GRAND SALE', 'NEW SEASON', 'DRESS THE PART', 'ALL FLOORS -30%'],
   shoes: ['STEP OUT', 'NEW ARRIVALS', 'WALK TALL', '2ND PAIR HALF PRICE'],
   beauty: ['GLOW UP', 'NEW SHADES', 'SELF CARE'], jewelry: ['TIMELESS', 'FOREVER YOURS'], luggage: ['TRAVEL LIGHT', 'GO ANYWHERE'],
@@ -103,7 +150,8 @@ const pick = <T>(a: readonly T[], r: Rnd): T => a[Math.floor(r() * a.length) % a
 
 /** A generic dressed adult figure (front, featureless flat head; standing at foot (x, y), height h). */
 export type FigureStyle = 'coat' | 'dress' | 'suit' | 'casual' | 'skirt';
-export function drawFigure(ctx: Ctx, x: number, y: number, h: number, style: FigureStyle, cloth: string, cloth2: string, skin: string, r: Rnd): void {
+/** (R5) `longHair`: a longer hair shape falling to the shoulders (still a flat silhouette: no face, no likeness). */
+export function drawFigure(ctx: Ctx, x: number, y: number, h: number, style: FigureStyle, cloth: string, cloth2: string, skin: string, r: Rnd, longHair = false): void {
   const u = h / 100; // 100 units tall
   const lean = (r() - 0.5) * 3 * u, hip = r() < 0.5;
   const P = (px: number, py: number): [number, number] => [x + px * u + lean * (1 - py / 100), y - py * u];
@@ -127,6 +175,7 @@ export function drawFigure(ctx: Ctx, x: number, y: number, h: number, style: Fig
     default: poly([[-11, 82], [11, 82], [10, 60], [-10, 60]], cloth2); poly([[-10, 61], [10, 61], [15, 40], [-15, 40]], cloth); break;
   }
   // neck + head (featureless), a hair shape
+  if (longHair) poly([[-6.2, 93], [6.2, 93], [7, 79], [-7, 79]], '#1e1a18'); // (R5) hair behind the shoulders
   poly([[-2.5, 86], [2.5, 86], [2.5, 81], [-2.5, 81]], skin);
   const [hx, hy] = P(0, 92.5);
   ctx.fillStyle = skin; ctx.beginPath(); ctx.ellipse(hx, hy, 5.2 * u, 6.5 * u, 0, 0, Math.PI * 2); ctx.fill();
@@ -251,9 +300,57 @@ function fitText(ctx: Ctx, text: string, x: number, y: number, maxW: number, siz
   return s;
 }
 
-/** Canvas size (px) of an ad face of w x h metres (bounded: posters ~256 px wide, billboards <= 512). */
+/** (R5) The pictogram theme of an ad: kiosks by their brand (phone cases -> phone, candy / pretzels -> sweets, lotto / news -> print). */
+function motifProgram(ad: MallAd, brand: string): MallProgram | 'mall' {
+  if (ad.program !== 'kiosk') return ad.program;
+  const b = brand.toLowerCase();
+  return /phone/.test(b) ? 'phone' : /candy|sweet|pretzel/.test(b) ? 'grocery' : /lotto|news/.test(b) ? 'books' : 'mall';
+}
+
+/** (R5) Generic menu items per cuisine / café menu (gen/mall/shops.ts FOOD_CUISINES / CAFE_MENUS; no brands, no real products). */
+const MENU_ITEMS: Record<string, string[]> = {
+  burger: ['CLASSIC BURGER', 'DOUBLE STACK', 'CHEESE FRIES', 'CHICKEN BURGER', 'MILKSHAKE', 'ONION RINGS'],
+  pizza: ['MARGHERITA', 'PEPPERONI', 'VEGGIE SLICE', 'GARLIC KNOTS', 'SLICE + DRINK', 'CALZONE'],
+  noodles: ['CHOW MEIN', 'PAD THAI', 'SPRING ROLLS', 'FRIED RICE', 'RAMEN BOWL', 'DUMPLINGS'],
+  sushi: ['CALIFORNIA ROLL', 'SALMON NIGIRI', 'BENTO BOX', 'MISO SOUP', 'TEMPURA', 'EDAMAME'],
+  deli: ['TURKEY CLUB', 'PASTRAMI RYE', 'SOUP OF THE DAY', 'CAESAR WRAP', 'COLESLAW', 'BAGEL'],
+  shawarma: ['CHICKEN WRAP', 'FALAFEL PLATE', 'HUMMUS BOWL', 'GARLIC FRIES', 'BEEF PLATE', 'TABBOULEH'],
+  juice: ['GREEN DETOX', 'BERRY BLAST', 'MANGO SMOOTHIE', 'FRESH OJ', 'CARROT GINGER', 'ACAI BOWL'],
+  hotdog: ['CLASSIC DOG', 'CHILI DOG', 'CORN DOG', 'LEMONADE', 'PRETZEL', 'NACHOS'],
+  coffee: ['ESPRESSO', 'CAPPUCCINO', 'LATTE', 'ICED MOCHA', 'CHAI LATTE', 'HOT CHOCOLATE'],
+  donut: ['GLAZED', 'BOSTON CREAM', 'DOZEN BOX', 'SPRINKLES', 'CRULLER', 'COFFEE'],
+  bakery: ['CROISSANT', 'SOURDOUGH', 'MUFFIN', 'CINNAMON ROLL', 'BAGUETTE', 'SCONE'],
+};
+
+/** (R5) A backlit food-counter menu board: the brand strip, 2-3 panels (pictogram + items with prices) on a dark board, lightly aged. */
+function drawMenu(ctx: Ctx, w: number, h: number, r: Rnd, ad: MallAd, brand: string, pal: AdPalette): void {
+  ctx.fillStyle = '#17191b'; ctx.fillRect(0, 0, w, h);
+  const hh = Math.round(h * 0.2);
+  ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, w, hh);
+  fitText(ctx, brand.toUpperCase(), w / 2, hh / 2, w * 0.9, Math.round(hh * 0.72), false, pal.ink);
+  const items = MENU_ITEMS[ad.cuisine ?? ''] ?? MENU_ITEMS[ad.program === 'cafe' ? 'coffee' : 'burger'];
+  const drink = /coffee|juice|donut|bakery/.test(ad.cuisine ?? '') || ad.program === 'cafe';
+  const n = w > h * 3 ? 3 : 2, pw = w / n, body = h - hh;
+  const order = [...items].sort(() => r() - 0.5);
+  for (let i = 0; i < n; i++) {
+    const x0 = i * pw;
+    if (i) { ctx.fillStyle = '#3a3c3e'; ctx.fillRect(x0 - 1, hh + body * 0.06, 2, body * 0.88); }
+    const s = Math.min(pw * 0.34, body * 0.62);
+    drawMotif(ctx, drink ? 'cafe' : 'food-court', x0 + pw * 0.2, hh + body * 0.5, s, pal, r);
+    const lines = 2 + (r() < 0.5 ? 1 : 0);
+    for (let k = 0; k < lines; k++) {
+      const y = hh + body * (lines === 3 ? 0.22 + k * 0.28 : 0.32 + k * 0.36);
+      fitText(ctx, order[(i * 3 + k) % order.length], x0 + pw * 0.4, y, pw * 0.4, Math.round(body * 0.13), false, '#f2ede2', 'left');
+      fitText(ctx, `$${3 + Math.floor(r() * 10)}.${pick(['29', '49', '79', '99'], r)}`, x0 + pw * 0.96, y, pw * 0.16, Math.round(body * 0.13), false, pal.accent, 'right');
+    }
+  }
+  age(ctx, w, h, r, false);
+}
+
+/** Canvas size (px) of an ad face of w x h metres (bounded: posters ~256 px wide, billboards <= 512; R5: menu boards 448 for their
+ *  item lines, faces under 1.8 m on their long side 256 — ~150-210 px / m like the big posters' ~130 — to bound the atlas memory). */
 export function adCanvasSize(ad: Pick<MallAd, 'w' | 'h' | 'kind'>): {w: number; h: number} {
-  const long = ad.kind === 'billboard' ? 512 : 320;
+  const long = ad.kind === 'billboard' ? 512 : ad.kind === 'menu' ? 448 : Math.max(ad.w, ad.h) < 1.8 ? 256 : 320;
   const k = long / Math.max(ad.w, ad.h);
   return {w: Math.max(32, Math.round(ad.w * k / 4) * 4), h: Math.max(32, Math.round(ad.h * k / 4) * 4)};
 }
@@ -268,10 +365,11 @@ export function adTexture(ad: MallAd, brand: string): THREE.CanvasTexture {
   const decal = ad.kind === 'decal';
   return canvasTexture(W, H, 7300 + (ad.seed % 100000), (ctx, w, h, r) => {
     ctx.clearRect(0, 0, w, h);
+    if (ad.kind === 'menu') { drawMenu(ctx, w, h, r, ad, brand, pal); return; } // (R5) food-counter menu board
     const portrait = h > w * 1.15, wide = w > h * 1.6;
     const fashion = ad.program === 'mall' ? r() < 0.6 : FASHION.includes(ad.program as MallProgram);
     const headline = pick(HEADLINES[ad.program] ?? HEADLINES.mall!, r);
-    const serif = ['clothing', 'department', 'jewelry', 'beauty', 'books', 'cafe', 'home', 'luggage', 'florist', 'outdoors'].includes(ad.program);
+    const serif = ['clothing', 'department', 'jewelry', 'beauty', 'books', 'cafe', 'home', 'luggage', 'florist', 'outdoors', 'womenswear'].includes(ad.program);
     if (!decal) {
       // two-tone colour-block background
       ctx.fillStyle = pal.bg; ctx.fillRect(0, 0, w, h);
@@ -284,19 +382,27 @@ export function adTexture(ad: MallAd, brand: string): THREE.CanvasTexture {
     const area = {x0: wide ? w * 0.42 : w * 0.06, x1: w * 0.94, y0: portrait ? h * 0.08 : h * 0.1, y1: portrait ? h - textBand : h * 0.95};
     if (fashion) {
       const n = wide ? 3 : portrait ? (r() < 0.5 ? 1 : 2) : 2;
-      const styles: FigureStyle[] = ['coat', 'dress', 'suit', 'casual', 'skirt'];
+      // (R5) women's fashion: dress / skirt / coat figures, most with longer hair
+      const women = ad.program === 'womenswear';
+      const styles: FigureStyle[] = women ? ['dress', 'skirt', 'coat', 'dress'] : ['coat', 'dress', 'suit', 'casual', 'skirt'];
       const fh = (area.y1 - area.y0) * 0.96, span = area.x1 - area.x0;
       for (let i = 0; i < n; i++) {
         const fx = area.x0 + span * (i + 0.5) / n + (r() - 0.5) * span * 0.06;
         const c1 = pick(pal.cloth.length ? pal.cloth : GENERIC.cloth, r), c2 = pick(pal.cloth.length ? pal.cloth : GENERIC.cloth, r);
-        drawFigure(ctx, fx, area.y1, fh * (0.9 + r() * 0.1), pick(styles, r), c1, c2 === c1 ? '#2a2a2c' : c2, decal ? '#2a2a2c' : pick(['#3a3430', '#5a4a40', '#2a2624', '#6a5a4c'], r), r);
+        // (R5) window vinyl: light figures (they read against the dark shop behind the glass)
+        drawFigure(ctx, fx, area.y1, fh * (0.9 + r() * 0.1), pick(styles, r), c1, c2 === c1 ? '#2a2a2c' : c2, decal ? '#efebe4' : pick(['#3a3430', '#5a4a40', '#2a2624', '#6a5a4c'], r), r, women && r() < 0.75);
       }
     } else {
       const s = Math.min(area.x1 - area.x0, area.y1 - area.y0) * 0.86;
-      drawMotif(ctx, ad.program, (area.x0 + area.x1) / 2, (area.y0 + area.y1) / 2, s, pal, r);
+      drawMotif(ctx, motifProgram(ad, brand), (area.x0 + area.x1) / 2, (area.y0 + area.y1) / 2, s, pal, r);
+    }
+    // (R5) window vinyl: an opaque sale band behind the text (cut-out pages: the band survives the alpha test)
+    if (decal) {
+      ctx.fillStyle = pal.accent;
+      if (wide) ctx.fillRect(w * 0.02, h * 0.2, w * 0.4, h * 0.6); else ctx.fillRect(0, h - textBand * 0.98, w, textBand * 0.96);
     }
     // headline + brand (+ a price / percent tag)
-    const ink = decal ? pal.accent : pal.ink;
+    const ink = decal ? '#f6f3ec' : pal.ink;
     if (wide) {
       fitText(ctx, headline, w * 0.22, h * 0.36, w * 0.38, Math.round(h * 0.2), serif, ink);
       fitText(ctx, brand.toUpperCase(), w * 0.22, h * 0.66, w * 0.38, Math.round(h * 0.11), serif, decal ? ink : pal.accent);
@@ -370,8 +476,80 @@ export function planGalleryAds(walls: readonly AdWall[], layout: StationLayout, 
     if (doors.some(d => ((d as {level?: number}).level ?? 0) === f.level && near((d.x + d.w / 2) * CELL, (d.y + d.h / 2) * CELL, d.w * CELL / 2, d.h * CELL / 2, A.doorClear))) continue;
     if ((layout.signs ?? []).some(sg => (sg.level ?? 0) === f.level && Math.hypot(sg.x - cx, sg.z - cz) < half + 1)) continue;
     if (out.some(o => o.level === f.level && Math.hypot(o.x - cx, o.z - cz) < A.spacing)) continue;
-    out.push({kind: 'billboard', program: 'mall', level: f.level, x: cx, y: base + A.y, z: cz, nx: f.nx, nz: f.nz, w: A.w, h: A.h, seed: (seed + 977 * k++) >>> 0});
+    const bseed = (seed + 977 * k++) >>> 0;
+    out.push({kind: 'billboard', program: 'mall', level: f.level, x: cx, y: base + A.y, z: cz, nx: f.nx, nz: f.nz, w: A.w, h: A.h, seed: bseed, slot: 'gallery', glow: litLevel(bseed)});
     perLevel.set(f.level, (perLevel.get(f.level) ?? 0) + 1);
+  }
+  out.push(...planGalleryLightboxes(sorted, layout, seed, storeyBase, out));
+  return out;
+}
+
+/**
+ * (R5) Gallery wall lightboxes: portrait panel (w x h), centre y above the storey floor, spacing between gallery ads, clearances from
+ * openings (doors, shopfronts, corridor mouths), props at the wall, signs, escalator / stair runs; per-storey cap. Backlit (glow).
+ */
+export const GALLERY_LIGHTBOX = {w: 1.1, h: 1.7, y: 1.4, depth: 0.12, spacing: 4.5, propClear: 0.6, doorClear: 0.6, signClear: 0.4, runClear: 1.8, perStorey: 6} as const;
+
+/** (R5) Static backlight level from a seed (= gen/mall/ads.ts adGlow shares: ~18 % dead, ~15 % dim, the rest lit). */
+function litLevel(seed: number): number {
+  const u = (Math.imul(seed ^ 0x9e3779b9, 0x85ebca6b) >>> 0) / 4294967296, v = (Math.imul(seed ^ 0x27d4eb2f, 0xc2b2ae35) >>> 0) / 4294967296;
+  return u < 0.18 ? 0 : u < 0.33 ? Math.round((0.3 + v * 0.2) * 1000) / 1000 : Math.round((0.85 + v * 0.15) * 1000) / 1000;
+}
+
+/**
+ * (R5) The second gallery tier: backlit wall LIGHTBOXES at eye level on the public walls (courts, corridors, galleries, the plaza)
+ * between their openings — every clear stretch of a run long enough takes panels GALLERY_LIGHTBOX.spacing apart; never within
+ * doorClear of an opening / a door, propClear of a prop at the wall (vending, benches, pylons, carts), signClear of a sign, runClear
+ * of an escalator / stair run, or near another gallery ad; at most perStorey per storey. Each advertises one of the mall's own stores
+ * (fashion weighted x3): shop = its id (the renderer prints its brand), program = its program. Deterministic (fixed order + seed).
+ */
+function planGalleryLightboxes(runs: readonly AdWall[], layout: StationLayout, seed: number, storeyBase: (level: number) => number, taken: readonly MallAd[]): MallAd[] {
+  const L = GALLERY_LIGHTBOX, out: MallAd[] = [];
+  const props = layout.props ?? [], doors = layout.doors ?? [], signs = layout.signs ?? [];
+  const mall = layout.mall as ({shops?: readonly {id: string; program: MallProgram; kind: string}[]; verticals?: readonly {kind: string; lower: number; foot: {x: number; z: number}; head: {x: number; z: number}}[]} | undefined);
+  const tenants = (mall?.shops ?? []).filter(s => s.kind === 'store' || s.kind === 'anchor' || s.kind === 'food');
+  const pool = tenants.flatMap(s => (FASHION.includes(s.program) ? [s, s, s] : [s]));
+  const runsV = mall?.verticals ?? [];
+  const segDist = (px: number, pz: number, a: {x: number; z: number}, b: {x: number; z: number}) => {
+    const dx = b.x - a.x, dz = b.z - a.z, l2 = dx * dx + dz * dz || 1;
+    const t = Math.max(0, Math.min(1, ((px - a.x) * dx + (pz - a.z) * dz) / l2));
+    return Math.hypot(px - a.x - dx * t, pz - a.z - dz * t);
+  };
+  const per = new Map<number, number>();
+  let k = 0;
+  for (const f of runs) {
+    const len = Math.hypot(f.x1 - f.x0, f.z1 - f.z0);
+    if (len < L.w + 0.4) continue;
+    const base = storeyBase(f.level);
+    if (f.y0 > base + L.y - L.h / 2 - 0.1 || f.y1 < base + L.y + L.h / 2 + 0.15) continue;
+    const alongX = Math.abs(f.z1 - f.z0) < 1e-6, a0 = alongX ? Math.min(f.x0, f.x1) : Math.min(f.z0, f.z1);
+    // clear stretches of the run between its openings (+- doorClear)
+    const cuts = (f.ops ?? []).map(o => [Math.max(0, o.s0 - L.doorClear), Math.min(len, o.s1 + L.doorClear)] as const).sort((p, q) => p[0] - q[0]);
+    const stretches: [number, number][] = [];
+    let at = 0;
+    for (const [c0, c1] of [...cuts, [len, len] as const]) { if (c0 - at >= L.w + 0.3) stretches.push([at, c0]); at = Math.max(at, c1); }
+    for (const [s0, s1] of stretches) {
+      const n = Math.max(1, Math.floor((s1 - s0 - L.w - 0.3) / L.spacing) + 1);
+      for (let i = 0; i < n; i++) {
+        if ((per.get(f.level) ?? 0) >= L.perStorey) break;
+        const s = n === 1 ? (s0 + s1) / 2 : s0 + 0.15 + L.w / 2 + i * (s1 - s0 - 0.3 - L.w) / (n - 1);
+        const cx = (alongX ? a0 + s : f.x0) + f.nx * L.depth / 2, cz = (alongX ? f.z0 : a0 + s) + f.nz * L.depth / 2;
+        const half = L.w / 2;
+        const near = (x: number, z: number, hx: number, hz: number, e: number) => alongX
+          ? Math.abs(z - cz) < hz + e && x + hx > cx - half - e && x - hx < cx + half + e
+          : Math.abs(x - cx) < hx + e && z + hz > cz - half - e && z - hz < cz + half + e;
+        if (props.some(p => (p.level ?? 0) === f.level && near(p.x, p.z, p.hx, p.hz, L.propClear))) continue;
+        if (doors.some(d => ((d as {level?: number}).level ?? 0) === f.level && near((d.x + d.w / 2) * CELL, (d.y + d.h / 2) * CELL, d.w * CELL / 2, d.h * CELL / 2, L.doorClear))) continue;
+        if (signs.some(sg => (sg.level ?? 0) === f.level && !sg.hang && Math.abs(sg.y - (base + L.y)) < L.h / 2 + 0.35 + L.signClear && near(sg.x, sg.z, alongX ? (sg.w ?? 1.4) / 2 : 0.2, alongX ? 0.2 : (sg.w ?? 1.4) / 2, L.signClear))) continue;
+        if (runsV.some(v => (v.lower === f.level || v.lower + 1 === f.level) && segDist(cx, cz, v.foot, v.head) < L.runClear)) continue;
+        if ([...taken, ...out].some(o => o.level === f.level && Math.hypot(o.x - cx, o.z - cz) < Math.max(L.spacing * 0.8, (o.w + L.w) / 2 + 1.2))) continue;
+        const sd = (seed ^ 0x5a17c3) + 7919 * k++ >>> 0;
+        const shop = pool.length ? pool[sd % pool.length] : undefined;
+        out.push({kind: 'lightbox', program: shop?.program ?? 'mall', ...(shop ? {shop: shop.id} : {}), level: f.level, x: cx, y: base + L.y, z: cz, nx: f.nx, nz: f.nz, w: L.w, h: L.h,
+          seed: sd, slot: 'gallery', glow: litLevel(sd)});
+        per.set(f.level, (per.get(f.level) ?? 0) + 1);
+      }
+    }
   }
   return out;
 }

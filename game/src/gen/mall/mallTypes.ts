@@ -23,7 +23,9 @@ export const MALL_RINGS = MALL_FLOORS;
 export type MallProgram =
   | 'guns' | 'outdoors' | 'pharmacy' | 'clinic' | 'electronics' | 'phone' | 'hardware' | 'clothing' | 'shoes' | 'department'
   | 'food-court' | 'cafe' | 'grocery' | 'books' | 'toys' | 'sports' | 'jewelry' | 'home' | 'beauty' | 'music' | 'pet'
-  | 'arcade' | 'luggage' | 'optical' | 'florist' | 'kiosk' | 'service' | 'vacant';
+  | 'arcade' | 'luggage' | 'optical' | 'florist' | 'kiosk' | 'service' | 'vacant'
+  // Task mall-round3-20261031 (lane SHOPS, R4): the women's fashion store (gen/mall/shops.ts MALL_PROGRAMS.womenswear)
+  | 'womenswear';
 
 /** What a retail unit is (census distinguishes real stores from kiosks / service rooms). */
 export type MallUnitKind = 'store' | 'anchor' | 'food' | 'kiosk' | 'service' | 'vacant';

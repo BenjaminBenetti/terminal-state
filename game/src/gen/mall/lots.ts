@@ -68,7 +68,8 @@ export interface MallLotFamily {
   /** Recessed units: depth of the public vestibule in front of the frontage (m). */
   recess?: readonly [number, number];
   zones: readonly MallLotZone[];
-  /** Suitable programs, most typical first (lane SHOPS picks among them; the program's own min size still applies). */
+  /** Suitable programs, most typical first (lane SHOPS picks among them; the program's own min size still applies). Task mall-round3-20261031
+   *  (lane SHOPS, R4): 'womenswear' joins the boutique / in-line / corner / showroom / recessed / end families. */
   programs: readonly MallProgram[];
   /** Unit kinds a program in this family usually takes (census). */
   kinds: readonly MallUnitKind[];
@@ -99,49 +100,49 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
   'compact-square': {
     id: 'compact-square', label: 'Compact unit', shape: 'square', width: [5.5, 7.5], depth: [5.5, 7.5], stock: 'small-rear', stockSize: [1.5, 2.5],
     front: 'glazed', frontages: 1, zones: ['atrium', 'corridor', 'court'],
-    programs: ['cafe', 'phone', 'pharmacy', 'jewelry', 'optical', 'beauty', 'florist', 'pet', 'music', 'luggage', 'clinic', 'guns', 'shoes'],
+    programs: ['cafe', 'phone', 'pharmacy', 'jewelry', 'optical', 'beauty', 'florist', 'pet', 'music', 'luggage', 'clinic', 'guns', 'shoes', 'womenswear'],
     kinds: ['store'], service: true, vacant: true, weight: 1.0, maxPerMall: 8,
     layout: 'till by the entry, wall runs on three sides, one centre table / gondola; a small rear store behind a staff door',
   },
   'narrow-boutique': {
     id: 'narrow-boutique', label: 'Narrow boutique', shape: 'narrow-deep', width: [4.5, 6], depth: [9, 13], stock: 'small-rear', stockSize: [2, 2.5],
     front: 'glazed', frontages: 1, zones: ['corridor', 'atrium'],
-    programs: ['clothing', 'shoes', 'jewelry', 'beauty', 'music', 'optical', 'guns', 'phone', 'luggage', 'pharmacy', 'toys'],
+    programs: ['clothing', 'womenswear', 'shoes', 'jewelry', 'beauty', 'music', 'optical', 'guns', 'phone', 'luggage', 'pharmacy', 'toys'],
     kinds: ['store'], service: true, vacant: true, weight: 1.0, maxPerMall: 6,
     layout: 'window display at the front, wall runs down both long sides, the till and fitting / back area at the far end',
   },
   'wide-showroom': {
     id: 'wide-showroom', label: 'Wide showroom', shape: 'wide-shallow', width: [12, 17], depth: [5.5, 7.5], stock: 'side', stockSize: [2.5, 3.5],
     front: 'wide', frontages: 1, zones: ['atrium', 'corridor', 'court'],
-    programs: ['electronics', 'home', 'sports', 'shoes', 'toys', 'outdoors', 'arcade', 'music', 'beauty', 'pharmacy'],
+    programs: ['electronics', 'home', 'sports', 'shoes', 'womenswear', 'toys', 'outdoors', 'arcade', 'music', 'beauty', 'pharmacy'],
     kinds: ['store'], service: false, vacant: true, weight: 1.2, maxPerMall: 4,
     layout: 'long glazed frontage, display islands parallel to it, back-wall bays; the stock closet is a side room at one end',
   },
   'corner-double': {
     id: 'corner-double', label: 'Corner unit', shape: 'corner', width: [8, 12], depth: [8, 11], stock: 'side', stockSize: [2, 3],
     front: 'two-sided', frontages: 2, zones: ['corner'],
-    programs: ['clothing', 'electronics', 'books', 'pharmacy', 'cafe', 'sports', 'toys', 'outdoors', 'home', 'shoes'],
+    programs: ['clothing', 'womenswear', 'electronics', 'books', 'pharmacy', 'cafe', 'sports', 'toys', 'outdoors', 'home', 'shoes'],
     kinds: ['store'], service: false, vacant: true, weight: 1.2, maxPerMall: 3,
     layout: 'entries on two walkways, displays in the glazed corner, the till between the entries, stock behind the solid walls',
   },
   'standard-line': {
     id: 'standard-line', label: 'In-line store', shape: 'rect', width: [8, 11], depth: [9, 12.5], stock: 'service-corridor', stockSize: [2.5, 3.5],
     front: 'glazed', frontages: 1, zones: ['corridor', 'atrium', 'court'],
-    programs: ['clothing', 'books', 'sports', 'outdoors', 'toys', 'hardware', 'pharmacy', 'electronics', 'home', 'pet', 'arcade', 'guns', 'shoes', 'music', 'grocery'],
+    programs: ['clothing', 'womenswear', 'books', 'sports', 'outdoors', 'toys', 'hardware', 'pharmacy', 'electronics', 'home', 'pet', 'arcade', 'guns', 'shoes', 'music', 'grocery'],
     kinds: ['store'], service: true, vacant: true, weight: 1.6, maxPerMall: 8,
     layout: 'gondola aisles perpendicular to the frontage, wall bays, cash wrap near the entry; a rear stockroom, staff door to the service corridor when one runs behind',
   },
   'recessed-arcade': {
     id: 'recessed-arcade', label: 'Recessed arcade unit', shape: 'recessed', width: [6, 8.5], depth: [6.5, 9.5], stock: 'small-rear', stockSize: [1.5, 2.5],
     front: 'glazed', frontages: 1, recess: [2, 3], zones: ['corridor', 'atrium'],
-    programs: ['jewelry', 'optical', 'books', 'clinic', 'beauty', 'music', 'guns', 'luggage', 'florist', 'phone', 'cafe'],
+    programs: ['jewelry', 'optical', 'books', 'clinic', 'beauty', 'womenswear', 'music', 'guns', 'luggage', 'florist', 'phone', 'cafe'],
     kinds: ['store'], service: true, vacant: true, weight: 0.8, maxPerMall: 3,
     layout: 'a small public vestibule (window bays on both sides) leads to the door; inside a counter / cases layout; small rear store',
   },
   'end-unit': {
     id: 'end-unit', label: 'Corridor end unit', shape: 'end', width: [10, 15], depth: [10, 15], stock: 'service-corridor', stockSize: [3, 4],
     front: 'wide', frontages: 1, zones: ['end'],
-    programs: ['books', 'clothing', 'sports', 'arcade', 'toys', 'home', 'outdoors', 'grocery', 'electronics', 'hardware', 'department'],
+    programs: ['books', 'clothing', 'womenswear', 'sports', 'arcade', 'toys', 'home', 'outdoors', 'grocery', 'electronics', 'hardware', 'department'],
     kinds: ['store', 'anchor'], service: false, vacant: true, weight: 1, maxPerMall: 3,
     layout: 'faces straight down the corridor (a focal display on the axis), departments either side of a centre aisle, rear stockroom + service door',
   },

@@ -1495,8 +1495,8 @@
     },
     {
       "path": "assets/derivatives/office-overhaul-20261030.json",
-      "bytes": 286924,
-      "sha256": "912556de9ea3eb57f2711f36a516c5094a484663d0dd22b6e5b78dbc2b429cd4"
+      "bytes": 291540,
+      "sha256": "69a1d61c71e431cdc4bfb7845ddb40c117b1d901d894ea91bb8d33cc93d3c354"
     },
     {
       "path": "assets/derivatives/office-server-rack-r2-20261030.json",
@@ -2015,8 +2015,8 @@
     },
     {
       "path": "assets/models/office-bakery-case.glb",
-      "bytes": 333084,
-      "sha256": "c48e415b93094d81429962f6c53b68cc753201355b17298b38d01d58b3408ae0"
+      "bytes": 333300,
+      "sha256": "da2f2d90a7d9a19f360ac148435baabb83bcdb5733d750ae7d9c3942e7539133"
     },
     {
       "path": "assets/models/office-bean-bag.glb",

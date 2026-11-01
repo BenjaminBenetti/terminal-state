@@ -47,6 +47,7 @@ import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
 import {GLASS_MATERIAL, addPlinth, cleanSupportTexture, cropPartTextures, extentOf, legExtend, scaleAxis, scaleGroundCentre, splitClutter, splitGlass} from './lib/clutter-split.mjs'; // lane FURN (office-props-physics-scale-20261030)
 import {addConsoleBase} from './lib/console-base.mjs'; // task mall-round2-20261031 (lane PROPS, M03)
+import {dedupeCoplanar} from './lib/coplanar-dedupe.mjs'; // task mall-round3-20261031 (lane FIX, R3)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -168,7 +169,27 @@ const FURNITURE = {
     glass: {minY: 0.49, maxX: 0.76},
     parts: {
       'bread': {box: [-0.63, 0.84, 0.02, -0.37, 0.96, 0.32], sizeM: 0.26, sizeAxis: 'longest', longX: true, item: true, label: 'round crusty loaf'},
-    }},
+    },
+    // Task mall-round3-20261031 (lane FIX, R3 — user: "bakery glass display cases have heavy z fighting issues with them selfs, internal
+    // mesh z-fight"): measured on the delivered derivative (final frame, front -Z): both display SHELVES are zero-thickness double sheets
+    // in the double-sided body material — an up-facing pair of triangles and a down-facing 4-triangle fan over the same 1.50 x 0.82 m
+    // quad (top shelf y 1.031..1.041, exactly coplanar; middle shelf y 0.820..0.825, the up pair warped ~0.5 mm across its diagonal so
+    // the layers cross). The trays that cover them are only drawn while pulled out (world/openables.ts pose), so the shut case shows the
+    // shelves through the glass and the two layers (different texels) fight. dedupe (lib/coplanar-dedupe.mjs): ONE up-facing layer per
+    // shelf over the old coverage (the down fan is fully covered: dropped; seen from below, the double-sided up layer shows). Strict
+    // slabs + a box inside the side rails (x +-0.7545, + tol) keep the rail strips at x +-0.77 out. The same defect, seen head-on from the
+    // customer side: each shelf's vertical front LIP (z ~-0.21, 1.54 x 0.09 m) is two warped opposite layers 0-4 mm apart that cross
+    // diagonally, and the band over the inner pane (z -0.297..-0.300, y 1.255..1.283) a flat quad + a 3-triangle fan bulging 2.8 mm:
+    // one customer-facing (-Z) layer kept (the band's uncovered strip of the quad stays, clipped). Positions unchanged (decks / trays /
+    // loot surfaces / collision / dims unchanged).
+    dedupe: [
+      {box: {min: [-0.7545, 1.030, -0.245], max: [0.7545, 1.0425, 0.580]}, axis: 1, facing: 1, tol: 0.0105, slab: [1.030, 1.0425], clipOpposite: true, minAxisCos: 0.99},
+      {box: {min: [-0.7545, 0.819, -0.245], max: [0.7545, 0.8255, 0.580]}, axis: 1, facing: 1, tol: 0.0055, slab: [0.819, 0.8255], clipOpposite: true, minAxisCos: 0.99},
+      {box: {min: [-0.78, 0.735, -0.2145], max: [0.78, 0.829, -0.2085]}, axis: 2, facing: -1, tol: 0.0055, slab: [-0.2145, -0.2085], clipOpposite: true, minAxisCos: 0.99},
+      {box: {min: [-0.78, 0.950, -0.2145], max: [0.78, 1.0415, -0.2085]}, axis: 2, facing: -1, tol: 0.0055, slab: [-0.2145, -0.2085], clipOpposite: true, minAxisCos: 0.99},
+      {box: {min: [-0.9105, 1.2545, -0.3003], max: [0.9205, 1.2832, -0.2969]}, axis: 2, facing: -1, tol: 0.003, slab: [-0.3003, -0.2969], clipOpposite: true, minAxisCos: 0.99},
+    ],
+    dedupeTask: 'mall-round3-20261031 (lane FIX, R3): coplanar / crossing double sheets of the two display shelves (one up-facing layer each), their front lips and the band over the inner pane (one customer-facing layer each)'},
   // E12: 0.86 x 0.39 x 0.90 (knee-high on a standing zombie) -> 1.3 m across: an adult bean bag (the model is a squashed, sat-in bag:
   // ~0.56 m tall at that size).
   'bean-bag': {sizeM: 1.3, sizeAxis: 'longest', basis: '1.3 m across (adult bean bag; the squashed, sat-in shape is ~0.56 m tall)'},
@@ -301,6 +322,9 @@ async function derive(a, rawBytes, front, [basePx, otherPx, quality]) {
     const bb = getBounds(scene);
     k = F.sizeM / extentOf(bb, F.sizeAxis);
     scaleGroundCentre(doc, k);
+    // task mall-round3-20261031 (lane FIX, R3): coplanar duplicate layers, in the final frame (boxes measured on the delivered derivative;
+    // bounds unchanged, so the grounding / centring above stays exact)
+    if (F.dedupe) { edits.coplanarDedupe = F.dedupe.map(d => dedupeCoplanar(doc, d)); edits.coplanarDedupeTask = F.dedupeTask; }
     // where each extracted representative stood, in the runtime body frame (front -Z): k * p - the body's re-centring offset
     const off = [k * (bb.min[0] + bb.max[0]) / 2, k * bb.min[1], k * (bb.min[2] + bb.max[2]) / 2];
     for (const p of split?.parts ?? []) {
@@ -425,7 +449,7 @@ for (const a of ASSETS) {
     output: {file: `game/public/${outRel}`, url: outRel, sha256: sha(glb), bytes: glb.length, triangles: tris, dims, overBudget},
     targetTriangles: a.tris, sizeM: F?.sizeM ?? a.sizeM, sizeAxis: F?.sizeAxis ?? a.sizeAxis, scale: +scale.toFixed(6), nativeFront: front, textureStep: step,
     textureSizes: {baseColor: ladder[step][0], other: ladder[step][1], jpegQuality: ladder[step][2]},
-    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices${F ? `; lane FURN: ${F.parts ? 'loose clutter separated, then ' : ''}${F.consoleBase ? `lifted +${F.consoleBase.dy} m onto a console base (lane PROPS M03), then ` : ''}furniture-only rescale x${furniture.k.toFixed(4)} to ${F.sizeM} m (${F.sizeAxis}), grounded / centred again` : ''}`, front: '-Z', up: '+Y',
+    transform: `rotateY(${({'+Z': '180', '-Z': '0', '+X': '90', '-X': '-90'})[front]}deg) * uniform scale, then grounded (min y = 0) and centred on x/z; baked into vertices${F ? `; lane FURN: ${F.parts ? 'loose clutter separated, then ' : ''}${F.consoleBase ? `lifted +${F.consoleBase.dy} m onto a console base (lane PROPS M03), then ` : ''}furniture-only rescale x${furniture.k.toFixed(4)} to ${F.sizeM} m (${F.sizeAxis}), grounded / centred again${F.dedupe ? '; coplanar duplicate layers reduced to one (lane FIX R3, lib/coplanar-dedupe.mjs)' : ''}` : ''}`, front: '-Z', up: '+Y',
     review: {evidence: j.accepted.evidence ?? null, checks: j.accepted.checks ?? null, observation: j.accepted.observation ?? null},
     ...(NOTES[a.id] ? {note: NOTES[a.id]} : {}), textures,
     // lane FURN (office-props-physics-scale-20261030): furniture-only real size + the separated loose clutter (local operation on this raw)

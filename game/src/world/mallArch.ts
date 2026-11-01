@@ -47,7 +47,7 @@ import {mallTowerRecord} from '../gen/mall/elevator'; // the glass elevator's do
 import {cutOfficeShaftDoors} from './officeProps'; // task mall-playtest-revision (U07): the same landing-doorway cut as the Office
 import {GLASS_RIG} from './elevator';
 import {MALL_EXT_ORDER, buildMallExteriorGas, hazeSat, mallSkyMaterial} from './mallExterior'; // task mall-playtest-revision (U02)
-import {adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06)
+import {adAtlasMaterial, adGlowOf, adTexture, adsOf, planGalleryAds, type AdWall, type MallAd} from './mallAds'; // task mall-playtest-revision (D06); R5: + backlight
 import {buildStreetExit, cutExitOpenings, setStreetHaze, streetExitSpecs, streetExitTune, type StreetExitSpec, type StreetExitStats, type StreetExitTune} from './mallStreetExit'; // task mall-round2 (M09)
 import {FOUNTAIN, PYLON} from '../gen/mall/landmarks'; // landmark dimensions (placement: gen/mall/landmarks.ts)
 
@@ -243,6 +243,7 @@ export const BRAND_STYLE: Record<MallProgram, BrandStyle> = {
   phone: {bg: '#f4f4f2', fg: '#202224', accent: '#e0702a', font: 'rounded', icon: 'phone'},
   hardware: {bg: '#d29a1e', fg: '#1a1a1a', accent: '#1a1a1a', font: 'condensed', icon: 'wrench'},
   clothing: {bg: '#e9e1d4', fg: '#3a2a1e', accent: '#a47a50', font: 'serif', icon: 'hanger'},
+  womenswear: {bg: '#fbf3ef', fg: '#7a2e4a', accent: '#c9a96e', font: 'serif', icon: 'hanger'}, // task mall-round3 (lane SHOPS, R4)
   shoes: {bg: '#222224', fg: '#f2f0ea', accent: '#d8c8a8', font: 'sans', icon: 'shoe'},
   department: {bg: '#1e2a3a', fg: '#efe8d8', accent: '#c8a45a', font: 'serif', icon: 'star'},
   'food-court': {bg: '#b03a2e', fg: '#fff4e0', accent: '#f2c14e', font: 'rounded', icon: 'fork'},
@@ -440,6 +441,8 @@ export interface AtriumStats {
   flatGlazingM2: number;
   /** D06: ad faces drawn (lane SHOPS' records / ARCH's gallery billboards). */
   shopAds: number; galleryAds: number;
+  /** Task mall-round3 (lane SHOPS, R5): backlit ads drawn with glow > 0, ad atlas pages (= face meshes) and their texture MB (mips). */
+  litAds: number; adPages: number; adTextureMB: number;
   /** Task mall-round2 (M09): locked street exits drawn (lane GEN's layout.mall.exits) and the cost of each (meshes = draws, tris). */
   exits: number; exitCost: StreetExitStats[];
   /** Build time of the atrium dressing (ms). */
@@ -479,7 +482,7 @@ export class MallArch {
   /** D06: the ads drawn by the last buildAtrium (lane SHOPS' records + ARCH's gallery billboards). */
   ads: MallAd[] = [];
   readonly dress: MallDressMaterials;
-  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, exits: 0, exitCost: [], ms: 0};
+  stats: AtriumStats = {meshes: 0, triangles: 0, roofPanes: 0, arches: 0, balustradeM: 0, balustradeRuns: 0, columns: 0, signs: 0, blades: 0, labels: 0, banners: 0, downlights: 0, shaftPanels: 0, shaftSpandrels: 0, soffits: 0, droppedFaces: 0, glazing: 0, shutters: 0, partialShutters: 0, fountains: 0, pylons: 0, exteriorGas: 0, exteriorCurtain: 0, flatGlazingM2: 0, shopAds: 0, galleryAds: 0, litAds: 0, adPages: 0, adTextureMB: 0, exits: 0, exitCost: [], ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): MallArch | null {
     return layout.mall ? new MallArch(layout, mats, levels) : null;
@@ -709,7 +712,8 @@ export class MallArch {
       const sp = this.spaceOf(f.area, f.level);
       if (sp.space === 'station') { out.push(f); continue; }
       // D06: long opening-free public walls (courts, corridors, the plaza) are gallery billboard candidates
-      if ((sp.space === 'plaza' || sp.space === 'gallery') && !f.slope && Math.hypot(f.x1 - f.x0, f.z1 - f.z0) >= 3.8) {
+      // (task mall-round3, lane SHOPS R5: runs >= 1.5 m too — the gallery wall lightboxes; billboards still need 3.8 m: planGalleryAds)
+      if ((sp.space === 'plaza' || sp.space === 'gallery') && !f.slope && Math.hypot(f.x1 - f.x0, f.z1 - f.z0) >= 1.5) {
         this.adWalls.push({level: f.level, x0: f.x0, z0: f.z0, x1: f.x1, z1: f.z1, nx: f.nx, nz: f.nz, y0: f.y0, y1: f.y1, ops: f.openings.map(o => ({s0: o.s0, s1: o.s1}))});
       }
       if (sp.space === 'plaza') { out.push({...f, finish: this.wallKey(sp), ...up}); continue; }
@@ -1518,18 +1522,23 @@ export class MallArch {
     this.ads = [...shopAds, ...gallery];
     this.stats.shopAds = shopAds.length;
     this.stats.galleryAds = gallery.length;
+    this.stats.litAds = this.ads.filter(a => adGlowOf(a) > 0).length; // task mall-round3 (lane SHOPS, R5)
     if (!this.ads.length) return;
     const shopBrand = new Map(this.info.shops.map(q => [q.id, q.brand]));
-    const opaque = new Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>(), cut = new Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>();
+    // (task mall-round3, lane SHOPS R5: + glow = the face's backlight, the per-instance aGlow of the emissive atlas material)
+    type Face = {m: THREE.Matrix4; level: number; glow: number};
+    const opaque = new Map<THREE.Texture, Face[]>(), cut = new Map<THREE.Texture, Face[]>();
     const frames = new Map<number, {dark: Mesher; light: Mesher}>();
     const fr = (lv: number) => { let f = frames.get(lv); if (!f) frames.set(lv, (f = {dark: new Mesher(), light: new Mesher()})); return f; };
     const q = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
     for (const ad of this.ads) {
-      // the advertiser: the shop's fictional brand (a vacant unit / a gallery ad: the seeded mall name)
-      const tex = adTexture(ad, ad.shop && ad.program !== 'vacant' ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name);
+      // the advertiser: the shop's fictional brand (a vacant unit / a gallery ad: the seeded mall name; R5: a kiosk cart its own brand)
+      const tex = adTexture(ad, ad.brand ?? (ad.shop && ad.program !== 'vacant' ? shopBrand.get(ad.shop) ?? this.info.name : this.info.name));
+      const glow = adGlowOf(ad);
       const yaw = Math.atan2(ad.nx, ad.nz), alongX = Math.abs(ad.nz) > 0.5;
       // wall-mounted kinds stand on the real wall plane behind the record (whatever its proud offset): probe the storey grid
-      const back = ad.kind === 'decal' ? 0 : this.wallBehind(ad);
+      // (R5: a kiosk-cart header stands free on the cart's canopy: centred on its own mid-plane, like a decal on its glass)
+      const back = ad.kind === 'decal' || ad.kind === 'cart' ? 0 : this.wallBehind(ad);
       const at = (d: number) => new THREE.Vector3(ad.x + ad.nx * (d - back), ad.y, ad.z + ad.nz * (d - back));
       const faceAt = (d: number, turn: number) => new THREE.Matrix4().compose(at(d), q.setFromAxisAngle(UP, yaw + turn), new THREE.Vector3(ad.w, ad.h, 1));
       // a box of size (along the wall) x (height) x (depth from the wall) with its back on the wall plane
@@ -1539,11 +1548,11 @@ export class MallArch {
         m.box(c.x + ox, ad.y + dy, c.z + oz, alongX ? wAlong : d1 - d0, h, alongX ? d1 - d0 : wAlong);
       };
       const F = fr(ad.level);
-      let list = opaque;
+      const list = opaque;
+      const put = (d: number, turn = 0) => (list.get(tex) ?? list.set(tex, []).get(tex)!).push({m: faceAt(d, turn), level: ad.level, glow});
       switch (ad.kind) {
         case 'decal':
-          list = cut;
-          (cut.get(tex) ?? cut.set(tex, []).get(tex)!).push({m: faceAt(0.012, 0), level: ad.level}, {m: faceAt(-0.012, Math.PI), level: ad.level});
+          (cut.get(tex) ?? cut.set(tex, []).get(tex)!).push({m: faceAt(0.012, 0), level: ad.level, glow: 0}, {m: faceAt(-0.012, Math.PI), level: ad.level, glow: 0});
           continue;
         case 'poster': {
           // a snap frame (aluminium) on a dark backing plate
@@ -1552,22 +1561,34 @@ export class MallArch {
             box(F.light, sg * (ad.h / 2 + 0.012), ad.w + 0.05, 0.03, 0, 0.026);
             box(F.light, 0, 0.03, ad.h + 0.05, 0, 0.026, sg * (ad.w / 2 + 0.012));
           }
-          list.get(tex) ?? list.set(tex, []);
-          list.get(tex)!.push({m: faceAt(0.016, 0), level: ad.level});
+          put(0.016);
           break;
         }
         case 'lightbox':
           box(F.dark, 0, ad.w + 0.08, ad.h + 0.08, 0, 0.12);
-          list.get(tex) ?? list.set(tex, []);
-          list.get(tex)!.push({m: faceAt(0.122, 0), level: ad.level});
+          put(0.122);
           break;
+        case 'menu':
+          // (R5) a backlit menu board: a 0.1 m box, a bright trim line along its top and bottom edges
+          box(F.dark, 0, ad.w + 0.06, ad.h + 0.06, 0, 0.1);
+          for (const sg of [-1, 1]) box(F.light, sg * (ad.h / 2 + 0.03), ad.w + 0.06, 0.02, 0.02, 0.104);
+          put(0.102);
+          break;
+        case 'cart': {
+          // (R5) a kiosk cart's header sign: a slim double-faced box standing on the canopy top (its bottom = the record's bottom), a face
+          // on each side (both read from the walkway)
+          const t = 0.06;
+          box(F.dark, 0, ad.w + 0.06, ad.h + 0.06, -t / 2, t / 2);
+          put(t / 2 + 0.002);
+          put(-(t / 2 + 0.002), Math.PI);
+          break;
+        }
         default: {
           // billboard: a deep frame and a lamp bar on two arms over the top edge
           box(F.dark, 0, ad.w + 0.14, ad.h + 0.14, 0, 0.07);
           box(F.dark, ad.h / 2 + 0.2, ad.w * 0.7, 0.07, 0.32, 0.42);
           for (const sg of [-0.3, 0.3]) box(F.dark, ad.h / 2 + 0.13, 0.04, 0.12, 0.04, 0.4, sg * ad.w);
-          list.get(tex) ?? list.set(tex, []);
-          list.get(tex)!.push({m: faceAt(0.072, 0), level: ad.level});
+          put(0.072);
         }
       }
     }
@@ -1615,47 +1636,53 @@ export class MallArch {
     return 0;
   }
 
-  /** Atlas pages of canvas faces: per page and storey ONE instanced plane mesh (cut-out pages: alpha-tested, double-sided). */
-  private buildAtlasFaces(group: THREE.Group, faces: Map<THREE.Texture, {m: THREE.Matrix4; level: number}[]>, name: string, cutout: boolean): void {
-    const texs = [...faces.keys()];
-    const imgs = texs.map(t => t.image as {width: number; height: number});
-    const {cells, pages} = packAtlas(imgs);
-    pages.forEach((Hh, pg) => {
-      const mine = cells.map((c, i) => [c, i] as const).filter(([c]) => c[0] === pg);
-      const atlas = canvasTexture(ATLAS_W, Hh, 9800 + pg + (cutout ? 50 : 0), ctx => {
-        if (cutout) ctx.clearRect(0, 0, ATLAS_W, Hh); else { ctx.fillStyle = '#1f2225'; ctx.fillRect(0, 0, ATLAS_W, Hh); }
-        for (const [[, x, y, w, h], i] of mine) {
-          const img = imgs[i] as unknown as CanvasImageSource;
-          if (!cutout) ctx.drawImage(img, x - 4, y - 4, w + 8, h + 8);
-          ctx.drawImage(img, x, y, w, h);
+  /**
+   * Atlas pages of canvas faces: per page and storey ONE instanced plane mesh (cut-out pages: alpha-tested, double-sided).
+   * Task mall-round3-20261031 (lane SHOPS, R5): packed PER STOREY (a storey's ads share its own pages: with ~2x the faces the meshes
+   * stay ~one per storey and kind instead of pages x storeys, and a culled storey never needs another storey's page); opaque pages
+   * carry the per-instance backlight `aGlow` (world/mallAds.ts adAtlasMaterial: emissive = atlas x aGlow x AD_GLOW).
+   */
+  private buildAtlasFaces(group: THREE.Group, faces: Map<THREE.Texture, {m: THREE.Matrix4; level: number; glow: number}[]>, name: string, cutout: boolean): void {
+    const levels = new Map<number, THREE.Texture[]>();
+    for (const [t, es] of faces) { const lv = es[0].level; (levels.get(lv) ?? levels.set(lv, []).get(lv)!).push(t); }
+    for (const [lv, texs] of [...levels].sort((a, b) => a[0] - b[0])) {
+      const imgs = texs.map(t => t.image as {width: number; height: number});
+      const {cells, pages} = packAtlas(imgs);
+      pages.forEach((Hh, pg) => {
+        const mine = cells.map((c, i) => [c, i] as const).filter(([c]) => c[0] === pg);
+        const atlas = canvasTexture(ATLAS_W, Hh, 9800 + pg + (cutout ? 50 : 0) + lv * 100, ctx => {
+          if (cutout) ctx.clearRect(0, 0, ATLAS_W, Hh); else { ctx.fillStyle = '#1f2225'; ctx.fillRect(0, 0, ATLAS_W, Hh); }
+          for (const [[, x, y, w, h], i] of mine) {
+            const img = imgs[i] as unknown as CanvasImageSource;
+            if (!cutout) ctx.drawImage(img, x - 4, y - 4, w + 8, h + 8);
+            ctx.drawImage(img, x, y, w, h);
+          }
+        });
+        atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
+        const mat = adAtlasMaterial(atlas, cutout);
+        const ms: THREE.Matrix4[] = [], rects: number[] = [], glows: number[] = [];
+        for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
+          ms.push(e.m);
+          rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
+          glows.push(e.glow);
         }
-      });
-      atlas.wrapS = atlas.wrapT = THREE.ClampToEdgeWrapping;
-      const mat = signAtlasMaterial(atlas);
-      mat.name = cutout ? 'mall-ad-decal-atlas' : 'mall-ad-atlas';
-      if (cutout) { mat.alphaTest = 0.5; mat.side = THREE.DoubleSide; mat.transparent = false; }
-      const byLevel = new Map<number, {ms: THREE.Matrix4[]; rects: number[]}>();
-      for (const [[, x, y, w, h], i] of mine) for (const e of faces.get(texs[i])!) {
-        let b = byLevel.get(e.level);
-        if (!b) byLevel.set(e.level, (b = {ms: [], rects: []}));
-        b.ms.push(e.m);
-        b.rects.push(x / ATLAS_W, 1 - (y + h) / Hh, w / ATLAS_W, h / Hh);
-      }
-      for (const [lv, b] of byLevel) {
         const geo = new THREE.PlaneGeometry(1, 1);
-        geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(b.rects), 4));
-        const im = new THREE.InstancedMesh(geo, mat, b.ms.length);
-        b.ms.forEach((m, k) => im.setMatrixAt(k, m));
+        geo.setAttribute('aUvRect', new THREE.InstancedBufferAttribute(new Float32Array(rects), 4));
+        if (!cutout) geo.setAttribute('aGlow', new THREE.InstancedBufferAttribute(new Float32Array(glows), 1));
+        const im = new THREE.InstancedMesh(geo, mat, ms.length);
+        ms.forEach((m, k) => im.setMatrixAt(k, m));
         im.name = `${name}-${pg}-${lv}`;
         im.userData.level = lv;
         im.computeBoundingSphere();
         im.matrixAutoUpdate = false;
         group.add(im);
         this.stats.meshes++;
-        this.stats.triangles += 2 * b.ms.length;
-      }
-    });
-    for (const t of texs) t.dispose();
+        this.stats.triangles += 2 * ms.length;
+        this.stats.adPages++;
+        this.stats.adTextureMB += ATLAS_W * Hh * 4 * 4 / 3 / 1048576;
+      });
+      for (const t of texs) t.dispose();
+    }
   }
 
   /**
@@ -1766,7 +1793,14 @@ export class MallArch {
       if (!r) continue;
       const axisX = r.axis === 'x';
       const P = (s: number, a: number, y: number): [number, number, number] => (axisX ? [s, y, a] : [a, y, s]);
-      const a0 = flight.a0, a1 = flight.a1, D = 0.9;
+      // Task mall-round3-20261031 (lane FIX R1 — user: "z-fighting appears on escalators where they connect slopped walls under
+      // them"): the sides stood ON the flight's edge lines, where the level geometry already draws the sloped wall under the flight
+      // (world/levelGeometry.ts: a neighbour's open band minus the flight's band = the wall from its floor up to the pitch line, or up
+      // to pitch - WALL_SKIRT beside another flight) facing the same way: ~4-9 m2 of coplanar soffit / wall per side per flight.
+      // Inset SOFFIT_INSET inside the edge lines: behind such a wall the side is hidden (1 cm, far above the depth resolution), in its
+      // skirt slot or over open space (no wall: the flight over another's well) it is the visible truss side, flush under the
+      // cladding (traversalBuilder buildEscalator: from the pitch line up).
+      const a0 = flight.a0 + SOFFIT_INSET, a1 = flight.a1 - SOFFIT_INSET, D = 0.9;
       const s0 = r.s0, s1 = r.s1;
       const y0 = rampHeight(r, s0), y1 = rampHeight(r, s1);
       const k = (y1 - y0) / (s1 - s0 || 1);
@@ -1823,6 +1857,9 @@ export class MallArch {
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Helpers
+
+/** Escalator soffit sides stand this far inside the flight's edge lines (m; task mall-round3-20261031 lane FIX R1). */
+export const SOFFIT_INSET = 0.01;
 
 /** Mall escalators: verticals of kind 'escalator' -> levelLinks -> traversal stair flights. */
 export function mallEscalatorFlights(layout: StationLayout): {flight: {ramp: number; a0: number; a1: number}; lower: number; upper: number}[] {

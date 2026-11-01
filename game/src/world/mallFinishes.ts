@@ -92,6 +92,10 @@ export const PROGRAM_FINISH: Record<MallProgram, MallFinishSet> = {
   // Clothing / shoes / department: warm boutique wood; white slatwall shoe wall on travertine; marble anchor store.
   clothing: {wall: W({upper: WALL.plain, upperColor: 0xd9cfc0, lower: WALL.plank, lowerColor: 0xa47a50, lowerTop: 1.0, trim: 0x6a4a30, scale: 0.15, rough: 0.75}),
     floor: F(FLOOR.plank, 0xb08a60, 0x8a6a48, 0x5e4630, 0.18, 1.2, 0.55), ceil: C(CEIL.slats, 0xa07850, 0x2a2420, 0.15)},
+  // Task mall-round3-20261031 (lane SHOPS, R4): women's fashion — blush plaster over a pale oak dado, pale herringbone-like plank floor,
+  // white plaster ceiling (distinct from the clothing store's warm boutique wood)
+  womenswear: {wall: W({upper: WALL.plain, upperColor: 0xead6d2, lower: WALL.plank, lowerColor: 0xd8c4b0, lowerTop: 0.9, trim: 0xb76e79, scale: 0.15, rough: 0.7}),
+    floor: F(FLOOR.plank, 0xd2bea6, 0xbca88e, 0x9a866c, 0.18, 1.2, 0.5), ceil: C(CEIL.plaster, 0xf6f0ec, 0xe2dcd8, 1.2)},
   shoes: {wall: W({upper: WALL.slat, upperColor: 0xe8e6e0, lower: WALL.plain, lowerColor: 0x3a3a3c, lowerTop: 0.45, trim: 0x2a2a2c, scale: 0.15, rough: 0.6}),
     floor: F(FLOOR.stone, 0xc8b89e, 0xa89878, 0x8a7c64, 0.9, 0.6, 0.4), ceil: C(CEIL.plaster, 0xeeeae2, 0xd8d4cc, 1.2)},
   department: {wall: W({upper: WALL.stone, upperColor: 0xdcd6cc, lower: WALL.stone, lowerColor: 0xc4bcae, lowerTop: 0.3, skirt: 0, trim: 0x8a7a62, scale: 1.2, rough: 0.35}),
