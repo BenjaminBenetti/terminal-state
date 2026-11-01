@@ -21,6 +21,9 @@ import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type T
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {TRAIN_DOOR, TRAIN_LIGHTS, PlayerTrainRuntime, installPlayerTrain, interiorLightMounts, trainColliders, type TrainHost} from '../src/world/playerTrain';
 import {viewCost} from '../src/world/playerTrainView';
+import {raycastWorld} from '../src/combat/hitscan';
+import {loadStripped} from './helpers/openablesFixture';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 
 installCanvasShim(false);
 
@@ -126,6 +129,15 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       expect(far.every(d => !d.col.gate), `${level}: far doors open onto the bed`).toBe(true);
       const sp = trainSpawnPose(layout, p);
       expect(host.levels.supportAt(sp.x, sp.z, sp.y)?.floor).toBeCloseTo(p.floorY, 6);
+      // bullets: from the spawn eye the far wall stops a level shot, the car floor a shot straight down, the roof one straight up
+      const eye = {x: sp.x, y: sp.y + STAND_EYE, z: sp.z}, side = trainToWorld(p, 0, 0, 1), dz = side.z - p.z;
+      const wall = raycastWorld(host.levels, layout.props, eye, {x: 0, y: 0, z: dz}, 30, layout.trench.floorY);
+      expect(wall.kind).toBe('prop');
+      expect(Math.abs(worldToTrain(p, eye.x, eye.y, eye.z + dz * wall.t).z)).toBeCloseTo(SPEC.interior.halfWidth, 2);
+      const down = raycastWorld(host.levels, layout.props, eye, {x: 0, y: -1, z: 0}, 30, layout.trench.floorY);
+      expect(eye.y - down.t).toBeCloseTo(p.floorY, 3);
+      const up = raycastWorld(host.levels, layout.props, eye, {x: 0, y: 1, z: 0}, 30, layout.trench.floorY);
+      expect(eye.y + up.t).toBeCloseTo(p.railTopY + SPEC.ceilingY, 3);
       // layout.props (hitscan / statics) and the collision index
       expect(layout.props.length).toBe(props0 + t.layoutBoxes.length);
       expect(host.propIndex).not.toBe(index0);
@@ -155,7 +167,26 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       // cost the car adds (reported): a handful of draws
       const cost = viewCost(t.view.root);
       expect(cost.meshes).toBeLessThanOrEqual(24);
-      console.info(`player train ${level}: ${cost.meshes} meshes / ${cost.tris} tris (procedural shell); volume ${JSON.stringify({x0: t.col.volume.x0, x1: t.col.volume.x1, z0: t.col.volume.z0, z1: t.col.volume.z1})}`);
+      // the procedural surfaces face the way their normals say (winding = shading normal), the lining faces into the car
+      const owned = new Set(t.view.geometries);
+      const inward = new Set(['train-floor', 'train-ceiling', 'train-walls']);
+      const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), n = new THREE.Vector3(), g = new THREE.Vector3();
+      t.view.root.traverse(o => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh || !owned.has(m.geometry)) return;
+        const pos = m.geometry.attributes.position, nor = m.geometry.attributes.normal, idx = m.geometry.index!;
+        for (let i = 0; i < idx.count; i += 3) {
+          a.fromBufferAttribute(pos, idx.getX(i)); b.fromBufferAttribute(pos, idx.getX(i + 1)); c.fromBufferAttribute(pos, idx.getX(i + 2));
+          g.subVectors(b, a).cross(c.clone().sub(a));
+          if (g.lengthSq() < 1e-12) continue; // the lens fans' degenerate halves
+          n.fromBufferAttribute(nor, idx.getX(i));
+          expect(g.dot(n), `${m.name} triangle ${i / 3} winding`).toBeGreaterThan(0);
+          if (inward.has(m.name)) {
+            const ctr = a.clone().add(b).add(c).divideScalar(3);
+            expect(new THREE.Vector3(0, (SPEC.floorY + SPEC.ceilingY) / 2, 0).sub(ctr).dot(n), `${m.name} faces the interior`).toBeGreaterThan(0);
+          }
+        }
+      });
       // teardown: nothing left behind
       const disposed = vi.fn();
       for (const g of t.view.geometries) g.addEventListener('dispose', disposed);
@@ -239,6 +270,18 @@ describe('player train: a real Player walks out of the train and back (Subway)',
       step(host, 6, W());
       expect(local(host, p).x).toBeGreaterThan(SPEC.interior.x0 + host.player.radius - 0.01);
       expect(rt.playerInside()).toBe(true);
+      // a far-side door opens onto the bed: out through it is a drop to the bed floor (no bridge)
+      const fd = t.doors[middleDoor(1)], fdd = fd.col.door;
+      face(host, p, fdd.x, 0);
+      for (let i = 0; i < 240 && Math.abs(local(host, p).x - fdd.x) > 0.1; i++) step(host, DT, W());
+      face(host, p, fdd.x, hw);
+      expect(host.interactHandlers.some(f => f())).toBe(true);
+      step(host, TRAIN_DOOR.time + 0.1);
+      expect(fd.t).toBe(1);
+      face(host, p, fdd.x, 4);
+      step(host, 1.2, W());
+      expect(local(host, p).z).toBeGreaterThan(SPEC.width / 2);
+      expect(host.player.y).toBeCloseTo(t.col.bedY, 2);
     } finally {
       for (const s of host.sectionHooks) s.teardown?.();
     }
@@ -343,5 +386,90 @@ describe('player train: a real Player walks out of the train and back (Subway)',
     const c = trainColliders(SPEC, q, null);
     expect(c.statics.map(s => +(s.x - 10).toFixed(6))).toEqual(a.statics.map(s => +s.x.toFixed(6)));
     expect(interiorLightMounts(SPEC).length).toBe(TRAIN_LIGHTS.interior.count);
+  });
+});
+
+describe('player train: out of the middle platform door and back on every level', () => {
+  for (const level of ['office', 'mall'] as const) {
+    it(`${level}: spawn -> aim + [E] -> platform -> back inside`, () => {
+      const layout = layoutOf(level);
+      const {host} = makeHost(layout);
+      const rt = installPlayerTrain(host);
+      for (const s of host.sectionHooks) s.build?.(layout);
+      const p = host.trainPlacement!, t = rt.train!;
+      try {
+        spawnInside(host, rt, p);
+        const d = t.doors[middleDoor(-1)], dd = d.col.door;
+        face(host, p, dd.x, -SPEC.interior.halfWidth);
+        expect(host.interactHandlers.some(f => f())).toBe(true);
+        step(host, TRAIN_DOOR.time + 0.1);
+        expect(d.col.gate!.open).toBe(true);
+        face(host, p, dd.x, -4);
+        let minY = Infinity;
+        for (let i = 0; i < 120; i++) { step(host, DT, W()); minY = Math.min(minY, host.player.y); }
+        expect(rt.playerInside()).toBe(false);
+        expect(host.player.y).toBeCloseTo(layout.grid.floorAt(host.player.x, host.player.z), 2);
+        face(host, p, dd.x, 0);
+        for (let i = 0; i < 120; i++) { step(host, DT, W()); minY = Math.min(minY, host.player.y); }
+        expect(rt.playerInside()).toBe(true);
+        expect(minY, 'never in the gap / bed').toBeGreaterThan(p.floorY - 0.5);
+      } finally {
+        for (const s of host.sectionHooks) s.teardown?.();
+      }
+    });
+  }
+});
+
+describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
+  let models: {shell: GLTF; door: GLTF; console: GLTF};
+  beforeAll(async () => {
+    models = {shell: await loadStripped(SPEC.models.shell.url), door: await loadStripped(SPEC.models.doorLeaf.url), console: await loadStripped(SPEC.models.console.url)};
+  }, 120000);
+
+  it('shell / leaves / desk placed by the spec; the desk collides; a walk into the cab stops at the desk; the cost', () => {
+    const layout = layoutOf('subway');
+    const {host} = makeHost(layout);
+    const rt = installPlayerTrain(host, {models: () => models});
+    for (const s of host.sectionHooks) s.build?.(layout);
+    const p = host.trainPlacement!, t = rt.train!;
+    try {
+      expect(t.view.source).toMatchObject({shell: 'model', door: 'model', console: 'model'});
+      // the desk: in the cab, on the floor, and a collision box where it is drawn
+      const desk = t.view.fixed.getObjectByName('train-console')!;
+      const bb = new THREE.Box3().setFromObject(desk);
+      const lo = worldToTrain(p, bb.min.x, bb.min.y, bb.min.z), hi = worldToTrain(p, bb.max.x, bb.max.y, bb.max.z);
+      const dx0 = Math.min(lo.x, hi.x), dx1 = Math.max(lo.x, hi.x);
+      expect(dx0).toBeGreaterThan(SPEC.cab.x0);
+      expect(dx1).toBeLessThanOrEqual(SPEC.interior.x1 + 0.01);
+      expect(bb.min.y).toBeCloseTo(p.floorY, 3);
+      expect(t.col.statics.length).toBe(trainColliders(SPEC, p, null).statics.length + 1);
+      // leaves: baked at runtime size (scale ~1), the outer face on doorLeaf.outerZ, the +X leaf mirrored
+      for (const pair of t.view.leaves) {
+        for (const [k, holder] of pair.entries()) {
+          const inner = holder.children[0];
+          expect(Math.abs(inner.scale.x)).toBeCloseTo(1, 2);
+          expect(Math.sign(inner.scale.x)).toBe(k === 1 ? -1 : 1);
+          const lb = new THREE.Box3().setFromObject(holder);
+          const zs = [worldToTrain(p, 0, 0, lb.min.z).z, worldToTrain(p, 0, 0, lb.max.z).z].map(Math.abs);
+          expect(Math.max(...zs)).toBeCloseTo(SPEC.doorLeaf.outerZ, 3);
+        }
+      }
+      // through the partition doorway into the cab: the desk stops the walk
+      spawnInside(host, rt, p);
+      face(host, p, SPEC.cab.x0 - 0.5, 0);
+      step(host, 1.5, W());
+      face(host, p, 20, 0);
+      step(host, 3, W());
+      const q = local(host, p);
+      expect(q.x, 'into the cab').toBeGreaterThan(SPEC.cab.x0 + 0.3);
+      expect(q.x, 'stopped by the desk').toBeLessThan(dx0 - host.player.radius + 0.02);
+      expect(rt.playerInside()).toBe(true);
+      const cost = viewCost(t.view.root);
+      // measured 2026-11-01: 23 meshes / 133,115 triangles (shell 27.0k, desk 11.4k, 12 leaves x 7.9k, lining ~0.3k)
+      expect(cost.meshes).toBeLessThanOrEqual(26);
+      expect(cost.tris).toBeLessThan(160000);
+    } finally {
+      for (const s of host.sectionHooks) s.teardown?.();
+    }
   });
 });

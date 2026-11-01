@@ -375,6 +375,8 @@ export interface DoorRt {
   /** Push-open timer (s). */
   push: number;
   moving: boolean;
+  /** The open fraction the leaves / boxes / gate were last fitted to. */
+  shown: number;
 }
 
 export interface BuiltTrain {
@@ -410,6 +412,7 @@ export class PlayerTrainRuntime {
   private readonly vEye = new THREE.Vector3();
   private readonly vDir = new THREE.Vector3();
   private readonly box = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
+  private readonly nearBodies: {x: number; y: number; z: number; stats: {radius: number}}[] = [];
 
   constructor(readonly host: TrainHost, readonly opts: TrainOptions = {}) {
     this.spec = opts.spec ?? PLAYER_TRAIN_SPEC;
@@ -473,7 +476,7 @@ export class PlayerTrainRuntime {
     const prevIndex = h.propIndex;
     const mine = new Set<PropPlacement>(layoutBoxes);
     const base = prevIndex ? prevIndex.props.filter(q => !mine.has(q)) : h.layout.props.filter(q => !mine.has(q));
-    const doors: DoorRt[] = col.doors.map(dc => ({col: dc, t: 0, target: 0, blocked: false, playerBlocks: false, push: 0, moving: false}));
+    const doors: DoorRt[] = col.doors.map(dc => ({col: dc, t: 0, target: 0, blocked: false, playerBlocks: false, push: 0, moving: false, shown: NaN}));
     for (const d of doors) {
       const dd = d.col.door, hw = spec.interior.halfWidth, out = outerHalf(spec);
       const [a0] = leafSpan(dd, 0, 1, spec.doorLeaf.width), [, b1] = leafSpan(dd, 1, 1, spec.doorLeaf.width);
@@ -580,6 +583,12 @@ export class PlayerTrainRuntime {
     const t = this.train!, h = this.host, p = t.placement, spec = this.spec;
     const hw = spec.interior.halfWidth, out = outerHalf(spec);
     const P = h.player;
+    // bodies near the car only (a cheap reject before the per-door tests)
+    const near = (x: number, z: number) => Math.abs(x - p.x) < spec.length / 2 + 2 && Math.abs(z - p.z) < spec.width + 2;
+    const playerNear = P.alive && near(P.x, P.z);
+    const bodies = this.nearBodies;
+    bodies.length = 0;
+    for (const z of h.zombies) { const b = z.brain; if (b.alive && !z.ragdolled && near(b.x, b.z)) bodies.push(b); }
     for (const d of t.doors) {
       const dd = d.col.door;
       // --- sense: a living body whose circle reaches the leaves' path, or standing on the bridge ---
@@ -588,9 +597,9 @@ export class PlayerTrainRuntime {
         const q = worldToTrain(p, x, y, z), s = q.z * dd.side;
         return Math.abs(q.x - dd.x) < dd.width / 2 + r - 0.05 && s > hw - r && s < Math.max(out + r, d.col.outZ);
       };
-      d.playerBlocks = P.alive && inDoor(P.x, P.y, P.z, P.radius);
+      d.playerBlocks = playerNear && inDoor(P.x, P.y, P.z, P.radius);
       let blocked = d.playerBlocks;
-      if (!blocked) for (const z of h.zombies) { const b = z.brain; if (b.alive && !z.ragdolled && inDoor(b.x, b.y, b.z, b.stats.radius)) { blocked = true; break; } }
+      if (!blocked) for (const b of bodies) if (inDoor(b.x, b.y, b.z, b.stats.radius)) { blocked = true; break; }
       d.blocked = blocked;
       // --- logic: never close on a body; push into a shut door to open it ---
       if (!snap) {
@@ -600,7 +609,7 @@ export class PlayerTrainRuntime {
           this.cue(d, 'reopen');
           if (d.playerBlocks) this.hint('Stand clear of the doors');
         }
-        if (d.target === 0 && d.t < 0.02 && P.alive && this.pushing(d)) {
+        if (d.target === 0 && d.t < 0.02 && playerNear && this.pushing(d)) {
           d.push += dt;
           if (d.push >= TRAIN_DOOR.pushOpen) { d.push = 0; d.target = 1; this.counts.pushOpen++; this.counts.opened++; this.cue(d, 'opening'); }
         } else d.push = 0;
@@ -616,7 +625,9 @@ export class PlayerTrainRuntime {
           if (!moving) this.cue(d, d.t >= 1 ? 'opened' : 'closed');
         }
       }
-      // --- follow: leaves (view + boxes), gate, curb ---
+      // --- follow: leaves (view + boxes), gate, curb (only when the leaves moved) ---
+      if (!snap && d.t === d.shown) continue;
+      d.shown = d.t;
       const e = ease(d.t);
       const pair = t.view.leaves[d.col.index];
       for (const k of [0, 1] as const) {
@@ -686,6 +697,8 @@ export class PlayerTrainRuntime {
   pickDoor(): DoorRt | null {
     const t = this.train, h = this.host;
     if (!t || !h.player.alive) return null;
+    const P = h.player, pl = t.placement;
+    if (Math.abs(P.x - pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(P.z - pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return null;
     const cam = h.camera;
     cam.updateMatrixWorld();
     cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
