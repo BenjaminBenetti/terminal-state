@@ -496,9 +496,14 @@ describe('the Subway is unchanged', () => {
   // 42 62c4187f / da0b79d6, 1234 67a308e5 / fcda47b2; seed 1 (no annex) and CORE unchanged)
   // (round 3 — CAUSE: the logical annex layout (spine, lined rooms, districts, hideout room) + the survivor hideout's props / lantern
   // light / gear pickup; stage before: 7 e3af4b69 / 7e118e47, 42 608b33e4 / e7fb9e97, 1234 87eba43d / 35497900; seed 1 and CORE unchanged)
+  // (round 4, task studio-alpha-beyond-station-round4-20261101-01 lane AREA — CAUSE: the Beyond the Station area exists only where the
+  // level's ONE seeded roll succeeds (20 %, gen/trackExt/config.ts btsAreaRoll). PROOF: 7 / 42 roll it ABSENT (u = 0.3195 / 0.7858):
+  // their annexes and annex content are gone, the tunnels stay; 1234 (0.0955) rolls it PRESENT with the same plan and 1 had none —
+  // both unchanged; CORE and the reserve-off HEAD proof unchanged (asserted below). Stage before: 7 6dfe8a80 / ea7d8213, 42 bc5c9cde /
+  // 809464c2)
   const LIVE: Record<string, string> = {
-    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '6dfe8a80', '7:pistol': 'ea7d8213',
-    '42:rifle': 'bc5c9cde', '42:pistol': '809464c2', '1234:rifle': '1bc68a4', '1234:pistol': '640ce0e0',
+    '1:rifle': '7f9ed442', '1:pistol': '7a1932f', '7:rifle': '8701b11c', '7:pistol': 'b2cdc4c6',
+    '42:rifle': '5be7cbc8', '42:pistol': '6ab7d217', '1234:rifle': '1bc68a4', '1234:pistol': '640ce0e0',
   };
   it('generateStation output for existing seeds is byte-identical to HEAD (reserve-off core view; core = + reserve; live = + track extensions)', () => {
     let replaced = 0;

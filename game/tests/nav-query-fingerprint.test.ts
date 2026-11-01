@@ -182,8 +182,13 @@ const OFFICE_CAB_CORE = '3570ed8b';
 // 0c734d22}; shut and open now differ in `support` only (the cab volume meets a changed live sample); the CORE pins are unchanged)
 // (round 3 — CAUSE: office 4242's annexes re-laid as a logical service area + the hideout's props; shut / open were {lines 0df968c5,
 // circles f02026c5, support 0b0117e0 / 97a0f8c5, rails 78d6afa5, finds 386187a3}; the CORE pins are unchanged)
-const OFFICE_SHUT = {lines: '3cd0eac5', circles: 'd77dd965', support: '4bd716b9', rails: '5b2630e5', finds: '45297202'};
-const OFFICE_OPEN = {lines: '3cd0eac5', circles: 'd77dd965', support: '4952a410', rails: '5b2630e5', finds: '45297202'};
+// (round 4, task studio-alpha-beyond-station-round4-20261101-01 lane AREA — CAUSE: the Beyond the Station area exists only where the
+// level's ONE seeded roll succeeds (20 %, gen/trackExt/config.ts btsAreaRoll). PROOF: office 4242 rolls it ABSENT (u = 0.8394): its
+// annexes and their props are gone, its tunnels stay, so the live world the random queries sample changes (shut = open again); the
+// CORE pins and the near-cab queries are unchanged (asserted above). Shut / open were {lines 3cd0eac5, circles d77dd965, support
+// 4bd716b9 / 4952a410, rails 5b2630e5, finds 45297202}.)
+const OFFICE_SHUT = {lines: 'd7282505', circles: '7cb806c5', support: '977d2241', rails: 'b7981478', finds: '6e7f7767'};
+const OFFICE_OPEN = {lines: 'd7282505', circles: '7cb806c5', support: '977d2241', rails: 'b7981478', finds: '6e7f7767'};
 /** (the near-cab queries only touch the tower: unchanged by the extensions) */
 const OFFICE_CAB = '3570ed8b';
 const SUBWAY = {lines: '4a492dc5', circles: '04796bf8', support: '72973980', rails: '8f361b45', finds: 'a1b21c35'};

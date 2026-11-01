@@ -97,6 +97,13 @@
 // 12. Task studio-alpha-track2-round3 (+ recovery01) — CAUSE: the annexes re-laid as a logical service area (spine, lined rooms,
 //     districts, hideout room: the service spawns land elsewhere) and the hideout's gear pickup appended to the pickups. Moved: ONLY
 //     live annex entries (old values in the helper); station / service counts, core views and invariants unchanged.
+// 13. Task studio-alpha-beyond-station-round4-20261101-01 (lane AREA) — CAUSE: user "drop the spawn chance of the beyond the station
+//     area ... twenty percent ... across all levels": the annexes exist only where the level's ONE seeded roll succeeds
+//     (gen/trackExt/config.ts btsAreaRoll(levelSeed) < BTS_AREA_CHANCE 0.2). Moved: ONLY live entries of levels that LOST their annexes
+//     (they roll the area absent): Subway 7 / 42 / 16920 / 24839 / 40677 / 48596 (now = their reserve-on core views, except 42 / 40677
+//     still translated by their tunnels; no "+ service") and Office 222 / 3333 / 4242 (now = OFFICE_GOLDEN); the present-rolling
+//     1234 / 32758 (same wanted count) and the annex-free 1 / 9001 / 11 are unchanged. Every station / street / floor / roof count,
+//     core view, reserve-off view and invariant is unchanged (asserted every run). Old values beside the pins in the helper.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';

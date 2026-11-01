@@ -151,21 +151,33 @@ export const SUBWAY_GOLDEN: Record<string, readonly [string, string, string]> = 
  * rooms lining corridors, districts, a guaranteed hideout room) and the survivor hideout's appended props / holders / gear pickup;
  * station counts and service counts unchanged; core views and invariants unchanged.) Stage 11 values: 7:rifle b1c2f2b6 / 1d5815a2; 7:pistol b1c2f2b6 / 38baae1c; 42:rifle 74c78b25 / 9be118c8; 42:pistol 74c78b25 / 186f52a5; 1234:rifle a9984c6c / 45845216; 1234:pistol a9984c6c / a9d8de05; 16920:rifle:island-ends e590cc9c / 613f7960; 24839:rifle:express 2973f416 / 0c54c1fa; 32758:rifle:interchange 445e4780 / e2507d64; 40677:rifle:split a56c9a6c / 88097a6a; 48596:rifle:deep 09bdf5c9 / b2698499.
  */
+/*
+ * (stage 13, task studio-alpha-beyond-station-round4-20261101-01, lane AREA — CAUSE: the Beyond the Station area exists only where the
+ * level's ONE seeded roll succeeds (20 %: gen/trackExt/config.ts btsAreaRoll(levelSeed) < BTS_AREA_CHANCE). PROOF: 7 / 42 / 16920 /
+ * 24839 / 40677 / 48596 roll the area ABSENT (u = 0.3195 / 0.7858 / 0.2383 / 0.3311 / 0.9568 / 0.8023): their annexes, service
+ * spawns and annex finds are gone and their live entries equal their reserve-on core views (SUBWAY_GOLDEN_RESERVE) — except 42 /
+ * 40677, whose tunnels still translate the core (same station counts, no service). 1234 (0.0955) and 32758 (0.0097) roll it PRESENT
+ * with the same wanted count: unchanged, as are 1 / 9001 (no annex before either). Every core view, reserve-off and invariant pin is
+ * unchanged (asserted every run).) Stage 12 values: 7:rifle 79ec16c4 / 7cba1dfe; 7:pistol 79ec16c4 / 7d3ccef9 (+ service 5); 42:rifle
+ * 0ce1e145 / f5ae73d6; 42:pistol 0ce1e145 / 7b427094 (+ service 6); 16920:rifle:island-ends f2b75061 / 70f09490 (+ service 12);
+ * 24839:rifle:express 62c94ac6 / bf1afe97 (+ service 5); 40677:rifle:split 208af2d8 / 18da6041 (+ service 6); 48596:rifle:deep
+ * 8b9dfba4 / 140fd37c (+ service 5).
+ */
 export const SUBWAY_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   '1:rifle': ['71fdd11f', '70dde302', 'station 28 (L0 22 L1 2 L2 4)'],
   '1:pistol': ['71fdd11f', '04660593', 'station 28 (L0 22 L1 2 L2 4)'],
-  '7:rifle': ['79ec16c4', '7cba1dfe', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
-  '7:pistol': ['79ec16c4', '7d3ccef9', 'station 23 (L0 18 L1 3 L2 2) + service 5'],
-  '42:rifle': ['0ce1e145', 'f5ae73d6', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
-  '42:pistol': ['0ce1e145', '7b427094', 'station 30 (L0 23 L1 2 L2 5) + service 6'],
+  '7:rifle': ['f5a81d12', 'ea32d883', 'station 23 (L0 18 L1 3 L2 2)'],
+  '7:pistol': ['f5a81d12', 'dd514f9d', 'station 23 (L0 18 L1 3 L2 2)'],
+  '42:rifle': ['5828a296', 'ac66f5ff', 'station 30 (L0 23 L1 2 L2 5)'],
+  '42:pistol': ['5828a296', '316d0fa2', 'station 30 (L0 23 L1 2 L2 5)'],
   '1234:rifle': ['4a3cdf4e', 'f4b76840', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
   '1234:pistol': ['4a3cdf4e', '47dbb51e', 'station 31 (L0 21 L1 6 L2 4) + service 10'],
   '9001:rifle:side-mezzanine': ['b8410519', '0bfe5634', 'station 30 (L0 23 L1 2 L2 5)'],
-  '16920:rifle:island-ends': ['f2b75061', '70f09490', 'station 30 (L0 22 L1 5 L2 3) + service 12'],
-  '24839:rifle:express': ['62c94ac6', 'bf1afe97', 'station 25 (L0 17 L1 4 L2 4) + service 5'],
+  '16920:rifle:island-ends': ['50ada7aa', '4ea2039f', 'station 30 (L0 22 L1 5 L2 3)'],
+  '24839:rifle:express': ['e54ed472', 'ba61040b', 'station 25 (L0 17 L1 4 L2 4)'],
   '32758:rifle:interchange': ['dac885cb', 'a27c94a6', 'station 31 (L0 23 L1 3 L2 5) + service 11'],
-  '40677:rifle:split': ['208af2d8', '18da6041', 'station 23 (L0 18 L1 2 L2 3) + service 6'],
-  '48596:rifle:deep': ['8b9dfba4', '140fd37c', 'station 31 (L0 23 L1 3 L2 5) + service 5'],
+  '40677:rifle:split': ['e83075a4', '25fa2228', 'station 23 (L0 18 L1 2 L2 3)'],
+  '48596:rifle:deep': ['790b8072', 'f0a91704', 'station 31 (L0 23 L1 3 L2 5)'],
 };
 /**
  * Stage 5 (GEN-2): the CORE VIEW of the live Subway layouts — the core station generated with the reserve (a layout change; its
@@ -208,11 +220,12 @@ export const OFFICE_GOLDEN: Record<string, readonly [string, string, string]> = 
 // (stage 10, after main ce83b48: service budget 5-6, O(1) earshot test; stage 9 values 222:pistol 77e4f2eb / c4c75d94, 4242:pistol 776cf71a / fa22f50e)
 // (stage 11, round 2: R6 service family pool / R5 caches; stage 10 values 222:pistol 85d5ef13 / c4c75d94, 3333:pistol a6396e3c / f86503e8, 4242:pistol 175acd3a / fa22f50e)
 // (stage 12, round 3: logical annex layout + hideout; stage 11 values 222:pistol 516b635c / c4c75d94, 3333:pistol be008292 / f86503e8, 4242:pistol 6631013a / fa22f50e)
+// (stage 13, round 4 lane AREA — CAUSE: the one 20 % Beyond the Station area roll per level; PROOF: 222 / 3333 / 4242 roll the area
+// ABSENT (u = 0.5528 / 0.3172 / 0.8394; 11 = 0.4839 had none before either), so no Office parity level carries an annex now and every
+// live entry equals OFFICE_GOLDEN — the core view, unchanged and asserted every run. Stage 12 values 222:pistol f6719782 / bcd1121a
+// (+ service 10), 3333:pistol 649ffc1e / a411517e (+ service 10), 4242:pistol ee2b2e05 / 9bba5dd7 (+ service 11).)
 export const OFFICE_GOLDEN_TRACK2: Record<string, readonly [string, string, string]> = {
   ...OFFICE_GOLDEN,
-  '222:pistol': ['f6719782', 'bcd1121a', 'street 7 f2 3 f3 3 f4 3 f5 3 f6 5 f7 4 f8 6 roof 1 + service 10'],
-  '3333:pistol': ['649ffc1e', 'a411517e', 'street 5 f2 4 f3 4 f4 5 f5 4 f6 4 f7 4 f8 6 roof 2 + service 10'],
-  '4242:pistol': ['ee2b2e05', '9bba5dd7', 'street 8 f2 6 f3 4 f4 6 f5 4 f6 3 f7 5 f8 4 roof 0 + service 11'],
 };
 
 /**

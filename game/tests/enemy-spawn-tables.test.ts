@@ -120,7 +120,8 @@ describe('neutral room modifiers', () => {
       expect([spawnSpecHash(l), pickupHash(l)], `${seed}`).toEqual(SUBWAY_GOLDEN_TRACK2[`${seed}:rifle`].slice(0, 2));
     }
     const o = generateOfficeLevel({levelSeed: 222, startWeapon: 'pistol'}, lootProfile('office'), withRooms(OFFICE, ones));
-    // Track 2 (lane CONTENT): an Office with service annexes: the core view = OFFICE_GOLDEN, the live layout = stage 7
+    // Track 2 (lane CONTENT): an Office with service annexes: the core view = OFFICE_GOLDEN, the live layout = stage 7 (round 4, lane
+    // AREA: 222 now rolls the Beyond the Station area absent — its live entry = OFFICE_GOLDEN, helpers/enemySpawnParity.ts stage 13)
     expect([spawnSpecHash(coreView(o)), pickupHash(coreView(o)), contextCounts(coreView(o))]).toEqual([...OFFICE_GOLDEN['222:pistol']]);
     expect([spawnSpecHash(o), pickupHash(o), contextCounts(o)]).toEqual([...OFFICE_GOLDEN_TRACK2['222:pistol']]);
   });
