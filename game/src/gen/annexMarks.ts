@@ -17,10 +17,12 @@
 //     one too, on the last doorway of its own path;
 //   - inside the hideout (and a second cache), the survivor's TALLY (days counted) on a quiet wall.
 // Placement rule: on a real wall face (the grid cells behind the whole mark + a frame margin are rock, the cells in front are the
-// area's floor), on the doorway's own wall beside its frame (either side, up to 1 m along), else on the perpendicular wall at a corner
-// the doorway meets (the arrow then points into that corner); clear of door frames (frameGap), signs (door plates), props against the
-// wall (anything within `propReach` of the wall reaching the mark's height), steam vents and other marks; under the ceiling. A doorway
-// with no valid spot gets no mark (counted: CacheMarkReport.missed).
+// area's floor), on the doorway's own wall beside its frame (either side, sliding up to `slide` m while no other doorway comes
+// between), else on the perpendicular wall at a corner the doorway meets (within `cornerReach`; the arrow then points into that
+// corner); the full mark first, then a `small` one; heights `heights`; clear of door frames (frameGap), signs (door plates), props
+// against the wall (anything within `propReach` of the wall reaching the mark's height), steam vents and other marks; under the
+// ceiling; and every door mark must READ as its own doorway (readMarkDoor: the player's reading). A doorway with no valid spot gets no
+// mark (counted: CacheMarkReport.missed). Measured: 2 of 2507 path doorways missed over 291 annexes (docs/track-extensions.md).
 
 import type {Rng} from '../core/rng';
 import {CELL, FLOOR, SOLID, type Grid} from './grid';
