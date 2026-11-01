@@ -118,9 +118,10 @@ export const TRAIN_DOOR = {
 
 /** Boot-time lights (candela / m / rad). Head + tail are SpotLights; the interior PointLights take `interior.count` of the mounts. */
 export const TRAIN_LIGHTS = {
-  head: {color: 0xfff1d6, intensity: 60, distance: 32, angle: 0.42, penumbra: 0.55, decay: 1.4, aim: 12, drop: 0.9},
-  tail: {color: 0xff2414, intensity: 8, distance: 9, angle: 0.95, penumbra: 0.6, decay: 2, aim: 4, drop: 0.7},
-  interior: {color: 0xffd7a3, intensity: 4.5, distance: 5.5, decay: 2, count: 3},
+  // (primary, browser A/B pixel check: 60 / 8 / 4.5 left no visible pool beside the 34 cd flashlight; 360 / 160 / 10 cast clearly)
+  head: {color: 0xfff1d6, intensity: 360, distance: 32, angle: 0.42, penumbra: 0.55, decay: 1.4, aim: 12, drop: 0.9},
+  tail: {color: 0xff2414, intensity: 160, distance: 12, angle: 0.95, penumbra: 0.6, decay: 2, aim: 4, drop: 0.7},
+  interior: {color: 0xffd7a3, intensity: 10, distance: 5.5, decay: 2, count: 3},
 } as const;
 
 /** The collision boxes' prop kind: an anchored steel structure (damage/materials.ts NEVER('steel'), not dynamic, not a holder). */
