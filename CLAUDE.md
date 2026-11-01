@@ -17,6 +17,26 @@ local assistant settings. Main backs up old .git/root docs and verifies GitHub
 source/asset hashes before adoption. Never git clean/reset away existing work or
 stage external archives. Never reuse old generation budgets.
 
+## Textures — Codex generates new static artwork (standing user rule, 2026-11-01)
+
+User: "codex is to be used to generate all textures. Except for dynamic stuff ofc".
+
+- **New STATIC texture / artwork sources come from Codex image generation.** That covers ads, posters, signs, decals, labels, fabrics
+  and material / surface artwork. Use the existing owned Codex CLI's native image tool (`.claude/skills/image-delegation`): never
+  hand-draw them in Canvas / SVG / Python / shader code, and never ask Codex to write drawing code instead of generating the image.
+- **Dynamic textures are exempt and may stay code-driven:** runtime-generated or per-seed / per-run composited content (fictional
+  brand names, headlines, menu lines, prices drawn over generated art), animated textures and effects, data textures (light fields,
+  masks, noise, LUTs) and render targets.
+- **Processing is not authoring.** Deterministic processing of approved or generated sources is fine: UV baking, crop / resize, format
+  conversion, mips, PBR derivative maps. It is not a loophole for replacing generated art with hand-drawn art. There is no silent
+  exception for new hand-painted textures.
+- **Provider textures** delivered with an approved model (e.g. a Meshy refine) are generated sources: keep the originals as private
+  raw provenance and the runtime derivatives in the normal pipeline (provenance, allowlist, CREDITS).
+- **Existing approved textures stay** unless a task actually replaces them.
+- **The generation rules above still apply.** Codex image calls need fresh explicit authorization with a count. If Codex image
+  generation or sign-in is unavailable, report the blocker; never substitute another generator, and never label code-drawn output as
+  generated art.
+
 ## Props — core design rules (standing user rule, 2026-10-30)
 
 Every new or changed prop must meet both affordance rules below (1, 2) and both authoring rules (4, 5: no baked loose
