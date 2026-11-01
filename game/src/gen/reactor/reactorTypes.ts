@@ -274,6 +274,24 @@ export interface ReactorArrival {
   maxLength: number;
 }
 
+/**
+ * Task reactor-expansion-20261101 (primary): a SIDE COMPLEX off the main shaft housing one zone's auxiliary generator (bunker / old
+ * mines / waste repository; gen/reactor/complex/*). World metres; areas are layout.areas ids on `level`.
+ */
+export interface ReactorComplexInfo {
+  id: 'bunker' | 'mines' | 'waste';
+  name: string;
+  level: number;
+  zone: number;
+  /** ReactorGenerator.id inside it. */
+  generator: number;
+  areas: readonly number[];
+  rooms: readonly {area: number; key: string; label: string; role: string}[];
+  /** Entrance doorway centre (on the pit-side deck) and the complex's bounds. */
+  entrance: {x: number; z: number; level: number};
+  bounds: ReactorRect;
+}
+
 /** layout.reactor: the whole Reactor in ONE layout (lane GEN writes it; every other lane reads it). */
 export interface ReactorInfo {
   version: 1;
@@ -303,6 +321,8 @@ export interface ReactorInfo {
    * pipe-bank maintenance ladders. Each entry lists the layout.levelLinks ids of that route top-down.
    */
   routes: readonly {kind: 'stairs' | 'bridge' | 'ladder'; links: readonly number[]}[];
+  /** Task reactor-expansion-20261101: the generator side complexes (absent / empty = the generators stand on shaft landings). */
+  complexes?: readonly ReactorComplexInfo[];
 }
 
 /** Tier gas concentrations (uncleared) are a function of depth only: the rim is clean (layout.reactor.tiers[0].zone === -1). */

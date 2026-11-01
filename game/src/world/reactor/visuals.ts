@@ -4,6 +4,8 @@
 // sequence) only CALL it through reactorVisuals() — every call is a no-op while nothing is registered (Node tests, other levels).
 // Pure TS (no three.js import here).
 
+import type {ReactorRunState} from './runState';
+
 export interface ReactorVisuals {
   /** Fan blade speed of ReactorFan `id`, 0 (stopped) .. 1 (full speed); ARCH eases the rotation toward it. */
   setFanSpeed(id: number, speed: number): void;
@@ -13,6 +15,13 @@ export interface ReactorVisuals {
   setCoreGlow(level: number): void;
   /** Powered industrial lighting of one tier (layout.levels index), 0 (dead / emergency only) .. 1 (restored) — lamp emissives. */
   setTierPower(level: number, power: number): void;
+  /**
+   * Task reactor-expansion-20261101 (lane CORE): the restart record (world/reactor/runState.ts) after EVERY change and once on build —
+   * the hero reactor's staged visuals follow it (fuses / control power energise the racks, the breaker lights the machinery, valve +
+   * pump start the BLUE coolant flow, key + rods wake the core / goop / turbines). Idempotent: called again with the same state it does
+   * nothing new (no duplicate one-shots on rebuild / reload). `instant` = restore on build (jump to the stage, no transition).
+   */
+  setRestartState?(state: Readonly<ReactorRunState>, instant: boolean): void;
 }
 
 const NOOP: ReactorVisuals = {setFanSpeed() {}, setGeneratorRunning() {}, setCoreGlow() {}, setTierPower() {}};
