@@ -27,6 +27,7 @@ import {FAN_SOUND, audibleFans, type FanSource} from './fanSound'; // task studi
 import {makeIR} from './reverb';
 import type {ImpactFamily} from '../physics/chunks';
 import {VOCAL_GATE, vocalGain} from '../ai/vocalReach'; // Task office-overhaul-20261030 (lane AUDIO): enemy vocals by navigable route
+import {STRAINER_SWING_PEAK_S} from './manifest.strainer.generated'; // lane AUDIO (strainer squish set): each swing clip's peak time
 
 /**
  * Task office-overhaul-20261030 (lane AUDIO, user #4 "over grunting" through the office floors): navigable route (m) from the
@@ -111,6 +112,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   // vocal (+2.7 LU over a zombie groan, +1.3 over a zombie death; peak -6.7 dBFS, through the existing compressor — no clipping
   // jump); hum -24.3 (soft, ~6 LU under a groan); burst -20.8 with a -1.9 dBFS transient; hiss -24.9 (~ a flesh tear).
   sirenHum: 0.3, sirenScream: 0.9, blightBurst: 0.9, blightHiss: 0.32,
+  // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): the strainer-* clips are peak -1 dBFS (iteration-05
+  // convention); these gains set the mix (derivatives/audio-strainer.json mixCalibration, loudest 50 ms at the source): step -21.7 dB
+  // (~+2 dB over a heavy zombie step at its chase gain), swing -21.1 (~4 dB under the attack snarl), contact -19.3 (between the hurt
+  // grunt -18.2 and the foreground hit confirm -20.0), squish -24.3 (~4.5 dB under that confirm, positional: quieter with distance).
+  strainerStep: 0.38, strainerSwing: 0.36, strainerContact: 0.6, strainerSquish: 0.32,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
@@ -367,6 +373,36 @@ export const TRACK1_VOICE = {
 } as const;
 export const TRACK1_CUE_IDS = ['sirenHum', 'sirenScream', 'blightBurst', 'blightHiss'] as const satisfies readonly CueId[];
 
+/**
+ * Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO; user: "It needs unique 'squishy sounds' to really sell its
+ * swamp creature feel."): the Strainer's OWN Sound Lab cues (clips strainer-*.mp3, tools/audio-pipeline/strainer-build.mjs;
+ * provenance derivatives/audio-strainer.json). All world-placed movement / combat cues (never route-gated like vocals; occlusion
+ * muffles them; footfalls keep the enemy cross-storey step gate). Its VOICE stays the existing zombie calls (ai/strainer.ts).
+ *  - gait: wet squelching footfalls on the foot PLANTS of its own Walk / Run clips (tools/asset-pipeline/enemy/lib/strainer-clips.mjs
+ *    CLIP_SPECS cycle / authored ground speed; footCycle plants the left foot at phase 0 and the right at 0.5). The clip's time scale
+ *    mirrors ai/strainerActor.ts animate (ground speed / (clip ground speed x actor scale), clamped 0.35..1.8), so the cadence follows
+ *    the REAL ground speed. Silent below minSpeed (standing still) and outside the locomotion clips. Shares the enemy 'step' token
+ *    bucket; at most step.max footfalls sound at once (several Strainers never stack into a constant squelch).
+ *  - swing: ONE wet arm-swing whoosh per swing (brain.attackSeq), started so that the clip's loudest 20 ms (STRAINER_SWING_PEAK_S)
+ *    lands on the claw's impact frame (brain attackImpact). A swing that leaves the attack state before its whoosh starts stays
+ *    silent. It carries no impact, so it also sounds on a miss (the arm still swings). At most swing.max at once.
+ *  - contact: the fleshy claw-contact squelch ONLY for a connecting claw (game.ts hurtPlayer, attacker 'strainer'; never on a miss),
+ *    at the player's chest toward the attacker; pri 2 (the shared voice cap never drops it); at most contact.max at once.
+ *  - squish: a short wet squish when it is shot but not killed (EnemyCues.hurt): at most one per squish.minGapS per Strainer
+ *    (shotgun pellets / bursts) and squish.max at once.
+ */
+export const STRAINER_AUDIO = {
+  gait: {Walk: {cycleS: 2.6, groundSpeed: 0.42}, Run: {cycleS: 1.6, groundSpeed: 1.35}, timeScaleMin: 0.35, timeScaleMax: 1.8, minSpeed: 0.15, minGapS: 0.25},
+  /** Footfall voice: call gain min(gainMax, gainBase + gainPerMps x speed) — x0.86 at the 0.42 m/s wander, x1.0 at the 1.35 m/s chase. */
+  step: {ref: 1.5, rolloff: 1.3, maxDist: 20, send: 0.28, max: 3, gainBase: 0.8, gainPerMps: 0.15, gainMax: 1.2, jitter: 0.06, gainJitter: 1.5},
+  /** `fitS`: the whoosh may start this much later than ideal (one frame or two); variants whose peak exceeds the impact are skipped. */
+  swing: {ref: 2, rolloff: 1.15, maxDist: 30, send: 0.4, max: 2, jitter: 0.03, gainJitter: 1, fitS: 0.034},
+  contact: {ref: 1.2, rolloff: 1, maxDist: 8, send: 0.25, max: 2, offsetM: 0.35, chestDropM: 0.35, jitter: 0.04, gainJitter: 1},
+  squish: {ref: 1.8, rolloff: 1.2, maxDist: 26, send: 0.35, max: 2, minGapS: 0.45, jitter: 0.08, gainJitter: 1.5},
+} as const;
+export const STRAINER_CUE_IDS = ['strainerStep', 'strainerSwing', 'strainerContact', 'strainerSquish'] as const satisfies readonly CueId[];
+type StrainerVoiceKind = 'step' | 'swing' | 'contact' | 'squish';
+
 /** Weapon sound kinds (WeaponDef.sound). */
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
@@ -430,6 +466,14 @@ export class Sfx {
   private t1Hisses: Voice[] = [];
   private t1Once = {scream: new WeakSet<object>(), burst: new WeakSet<object>(), hiss: new WeakSet<object>()};
   private t1Stats = {hums: 0, humsSilent: 0, screams: 0, bursts: 0, hisses: 0, repeats: 0};
+  // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): per-Strainer gait phase / swing / squish memories (keyed
+  // by the actor, weak), the sounding voices per Strainer cue (own caps) and counters (debugState().strainer).
+  private sGait = new WeakMap<object, {clip: 'Walk' | 'Run' | null; ph: number; last: number}>();
+  private sSwing = new WeakMap<object, {seq: number; t: number; clip: Clip | null; peak: number; done: boolean}>();
+  private sSwingLast: string | null = null;
+  private sSquishAt = new WeakMap<object, number>();
+  private sVoices: Record<StrainerVoiceKind, Voice[]> = {step: [], swing: [], contact: [], squish: []};
+  private sStats = {steps: 0, swings: 0, contacts: 0, squishes: 0, capped: 0, limited: 0};
   /** Iteration 08 (Lane B): `y` = the source height (3D occlusion through slabs on stacked levels). */
   private occlusion: ((x: number, z: number, y?: number) => number) | null = null;
   // Task office-overhaul-20261030 (lane AUDIO): enemy vocal gate (navigable route) + counters (debugState().vocal).
@@ -575,7 +619,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}; strainer: {voices: Record<StrainerVoiceKind, number>; steps: number; swings: number; contacts: number; squishes: number; capped: number; limited: number}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -589,6 +633,7 @@ export class Sfx {
       vocal: {voices: this.voices.filter(v => v.vocal !== undefined && v.end > (this.ctx?.currentTime ?? 0)).length, gate: !!this.reach, ...this.vstats},
       t1: {humVoices: [...this.t1Hums.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, hissVoices: this.t1Hisses.filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.t1Stats}, // track1 (lane AUDIO)
       drag: {voices: [...this.drags.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.dragStats}, // M01 (lane AUDIO)
+      strainer: {voices: {step: this.sLive('step'), swing: this.sLive('swing'), contact: this.sLive('contact'), squish: this.sLive('squish')}, ...this.sStats}, // lane AUDIO (strainer squish set)
     };
   }
 
@@ -1718,5 +1763,117 @@ export class Sfx {
     for (const src of v.srcs) { try { src.stop(t + f + 0.02); } catch { /* already stopped */ } }
     v.vocal = undefined;
     v.end = Math.min(v.end, t + f + 0.03);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): the Strainer's squish set (Sound Lab clips strainer-*;
+  // silent no-ops when audio is paused / not started or a clip is missing). See STRAINER_AUDIO.
+
+  /**
+   * Per-frame Strainer gait: advances its Walk / Run clip phase like ai/strainerActor.ts does (`clip` = the actor's current clip;
+   * anything else = not walking, `scale` = the actor's root scale) and plays one wet footfall on each foot plant (phase 0.5 / 1.0)
+   * while the real ground speed `speed` (m/s) is >= STRAINER_AUDIO.gait.minSpeed. `y` = feet height.
+   */
+  strainerGait(id: object, x: number, z: number, speed: number, dt: number, clip: string | null, y = 0, scale = 1): void {
+    const G = STRAINER_AUDIO.gait, P = STRAINER_AUDIO.step;
+    let s = this.sGait.get(id);
+    if (!s) { s = {clip: null, ph: 0, last: -Infinity}; this.sGait.set(id, s); }
+    if (clip !== 'Walk' && clip !== 'Run') { s.clip = null; return; }
+    if (s.clip !== clip) { s.clip = clip; s.ph = 0; } // the actor (re)starts a newly played clip at time 0: the left foot planted
+    const spec = G[clip];
+    const ts = Math.max(G.timeScaleMin, Math.min(G.timeScaleMax, speed / (spec.groundSpeed * (scale || 1)))) || 1;
+    const prev = s.ph;
+    s.ph += Math.max(0, dt) * ts / spec.cycleS;
+    const plant = (prev < 0.5 && s.ph >= 0.5) || s.ph >= 1;
+    if (s.ph >= 1) s.ph -= Math.floor(s.ph);
+    const ctx = this.live;
+    if (!plant || !ctx || speed < G.minSpeed || ctx.currentTime - s.last < G.minGapS) return;
+    const L = this.listener;
+    if (Math.hypot(x - L.x, z - L.z) > P.maxDist || !this.stepHeard(x, y, z)) return; // no footfalls through the slab from another storey
+    if (this.sLive('step') >= P.max) { this.sStats.capped++; return; }
+    if (!this.take('step')) return;
+    s.last = ctx.currentTime;
+    const v = this.strainerVoice('step', {at: {x, y: y + 0.05, z}, ref: P.ref, rolloff: P.rolloff, send: P.send, pri: 0, maxDist: P.maxDist,
+      gain: Math.min(P.gainMax, P.gainBase + P.gainPerMps * speed)});
+    if (this.play(v, 'strainerStep', {jitter: P.jitter, gainJitter: P.gainJitter})) this.sStats.steps++;
+  }
+
+  /**
+   * The Strainer's wet arm-swing whoosh for swing `seq` (brain.attackSeq). Call EVERY frame while it is in its attack state, with
+   * the brain's attackImpact (s after the swing started) and the frame dt: the first call of a new swing picks a variant (one whose
+   * peak fits before the impact; never the same as the last swing when there is a choice), later calls count the swing time, and
+   * the whoosh starts once the impact is its peak away — its loudest 20 ms lands on the claw's impact frame. Once per swing.
+   * Returns true on the call that started it.
+   */
+  strainerSwing(id: object, seq: number, impactS: number, dt: number, x: number, y: number, z: number): boolean {
+    const W = STRAINER_AUDIO.swing;
+    let s = this.sSwing.get(id);
+    if (!s || s.seq !== seq) {
+      s = {seq, t: 0, clip: null, peak: 0, done: false};
+      this.sSwing.set(id, s);
+      const all = this.bank.get('strainerSwing'), peakOf = (c: Clip) => STRAINER_SWING_PEAK_S[c.src] ?? 0;
+      if (!all.length) this.bank.pick('strainerSwing'); // counted silent gap (no stand-in sound)
+      else {
+        const fit = all.filter(c => peakOf(c) <= impactS);
+        const pool = fit.length ? fit : [all.reduce((p, c) => (peakOf(c) < peakOf(p) ? c : p))];
+        const fresh = pool.length > 1 ? pool.filter(c => c.src !== this.sSwingLast) : pool;
+        s.clip = fresh[Math.floor(Math.random() * fresh.length)] ?? pool[0];
+        s.peak = peakOf(s.clip);
+        this.sSwingLast = s.clip.src;
+      }
+    } else s.t += Math.max(0, dt);
+    if (s.done) return false;
+    const left = impactS - s.t; // s until the claws land
+    if (left > s.peak + W.fitS) return false;
+    s.done = true;
+    if (!s.clip) return false;
+    const v = this.strainerVoice('swing', {at: {x, y, z}, hrtf: true, ref: W.ref, rolloff: W.rolloff, send: W.send, pri: 1, maxDist: W.maxDist});
+    if (!v || !this.ctx) return false;
+    this.playClip(v, 'strainerSwing', s.clip, {delay: Math.max(0, left - s.peak), jitter: W.jitter, gainJitter: W.gainJitter});
+    this.sStats.swings++;
+    return true;
+  }
+
+  /**
+   * The fleshy claw-contact squelch of a CONNECTING Strainer swipe (game.ts hurtPlayer, attacker 'strainer' — it never runs for a
+   * miss): placed at the player's chest, STRAINER_AUDIO.contact.offsetM toward the attacker at (fromX, fromZ). Returns true when it played.
+   */
+  strainerContact(fromX: number, fromZ: number): boolean {
+    const C = STRAINER_AUDIO.contact, L = this.listener;
+    const dx = fromX - L.x, dz = fromZ - L.z, d = Math.hypot(dx, dz), k = d > 1e-6 ? Math.min(C.offsetM, d) / d : 0;
+    const v = this.strainerVoice('contact', {at: {x: L.x + dx * k, y: L.y - C.chestDropM, z: L.z + dz * k}, ref: C.ref, rolloff: C.rolloff, send: C.send, pri: 2, maxDist: C.maxDist, occlude: false});
+    const ok = !!this.play(v, 'strainerContact', {jitter: C.jitter, gainJitter: C.gainJitter});
+    if (ok) this.sStats.contacts++;
+    return ok;
+  }
+
+  /** A short wet squish at a shot (not killed) Strainer's body: at most one per STRAINER_AUDIO.squish.minGapS per Strainer. Returns true when it played. */
+  strainerSquish(id: object, x: number, y: number, z: number): boolean {
+    const ctx = this.live, Q = STRAINER_AUDIO.squish;
+    if (!ctx) return false;
+    const last = this.sSquishAt.get(id);
+    if (last !== undefined && ctx.currentTime - last < Q.minGapS) { this.sStats.limited++; return false; }
+    const v = this.strainerVoice('squish', {at: {x, y, z}, hrtf: true, ref: Q.ref, rolloff: Q.rolloff, send: Q.send, pri: 1, maxDist: Q.maxDist});
+    if (!this.play(v, 'strainerSquish', {jitter: Q.jitter, gainJitter: Q.gainJitter})) return false;
+    this.sSquishAt.set(id, ctx.currentTime);
+    this.sStats.squishes++;
+    return true;
+  }
+
+  /** Sounding voices of one Strainer cue (drops ended ones). */
+  private sLive(kind: StrainerVoiceKind): number {
+    const now = this.ctx?.currentTime ?? 0;
+    const list = this.sVoices[kind].filter(v => v.end > now);
+    this.sVoices[kind] = list;
+    return list.length;
+  }
+
+  /** A Strainer cue voice within its own cap (STRAINER_AUDIO[kind].max); null = capped / culled / paused. Plays nothing itself. */
+  private strainerVoice(kind: StrainerVoiceKind, o: VoiceOpts & {at: Pos}): Voice | null {
+    if (!this.live) return null;
+    if (this.sLive(kind) >= STRAINER_AUDIO[kind].max) { this.sStats.capped++; return null; }
+    const v = this.voice(o);
+    if (v) this.sVoices[kind].push(v);
+    return v;
   }
 }

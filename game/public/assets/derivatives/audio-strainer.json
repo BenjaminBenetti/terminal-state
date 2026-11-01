@@ -1,0 +1,3099 @@
+{
+ "task": "studio-alpha-strainer-reach-squish-20261101-201110-01",
+ "lane": "AUDIO (Strainer squish set: wet footfalls, arm swing, claw contact, hit squish)",
+ "generatedBy": "tools/audio-pipeline/strainer-build.mjs",
+ "plannedBy": "tools/audio-pipeline/strainer-plan.py",
+ "userRequest": "It needs unique \"squishy sounds\" to really sell its swamp creature feel. (2026-11-01)",
+ "policy": "Sound Lab only (the user's existing local service, bounded Strainer-only authorization: at most ~8 jobs, stop at the first acceptable takes). 7 jobs: batch A (6) + one replacement (batch B) for the one structurally rejected take; no rerolls of acceptable takes; whole-second durations. No synthesis, stock, layering or pitch / rate variants in the files (the game applies its usual small playback-rate jitter). The squish reuses footfall groups of strainer-step-01 that are not shipped as footsteps (no extra job). Takes / slices failing the structural gate are never shipped. The Strainer keeps its existing zombie voice cues (deep groan, alert, attack snarl, death).",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope, groups, spectrogram, pitch track, levels). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "auditioned": false,
+ "soundLab": {
+  "endpoint": "http://10.0.0.59:7871",
+  "kit": {
+   "name": "Last Line Sound Lab CPU",
+   "version": "0.1.0"
+  },
+  "model": "stabilityai/stable-audio-3-small-sfx",
+  "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+  "weightsRepo": "stabilityai/stable-audio-3-optimized",
+  "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+  "profile": "w8a8",
+  "upstreamCode": {
+   "repo": "https://github.com/Stability-AI/stable-audio-3",
+   "commit": "77e0398c26f7d22d801ec1bb036307e8b231f741",
+   "committed": "2026-10-11T03:32:19-04:00",
+   "path": "optimized/tflite",
+   "license": "MIT (code only; does not cover model weights)"
+  },
+  "runner": "tools/audio-pipeline/soundlab_runner.py (flock /tmp/ll-soundlab.lock; SOUND_LAB_MAX_POSTS=6 for batch A, 7 for batch B; allowance 8)",
+  "jobs": 7
+ },
+ "usage": {
+  "allowanceJobs": 8,
+  "posts": 7,
+  "submitted": 7,
+  "succeeded": 7,
+  "failed": 0,
+  "structurallyRejected": [
+   "strainer-swing-02"
+  ],
+  "jobs": [
+   {
+    "clip": "strainer-step-01",
+    "cue": "strainerStep",
+    "seconds": 10,
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202033-2118749099",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-step-01-s01.mp3",
+     "assets/audio/strainer-step-01-s02.mp3",
+     "assets/audio/strainer-step-01-s03.mp3",
+     "assets/audio/strainer-step-01-s04.mp3",
+     "assets/audio/strainer-squish-01.mp3",
+     "assets/audio/strainer-squish-02.mp3"
+    ]
+   },
+   {
+    "clip": "strainer-step-02",
+    "cue": "strainerStep",
+    "seconds": 10,
+    "seed": 831961153,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a large waterlogged creature stomping slowly on webbed feet across a hard floor, each footfall a thick fleshy squish and a splat of slime, irregular separate steps with gaps between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202038-831961153",
+    "rawSha256": "859260bc1d1dbf42abce184bbcda75a4912080c3d52589011e9c4c9370e5da3e",
+    "rawBytes": 1764044,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-step-02-s01.mp3",
+     "assets/audio/strainer-step-02-s02.mp3",
+     "assets/audio/strainer-step-02-s03.mp3",
+     "assets/audio/strainer-step-02-s04.mp3"
+    ]
+   },
+   {
+    "clip": "strainer-swing-01",
+    "cue": "strainerSwing",
+    "seconds": 2,
+    "seed": 1489390564,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a long wet slimy arm swung hard through the air, a single heavy fleshy whoosh with slime and water flung off the limb, no impact, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202042-1489390564",
+    "rawSha256": "c21f1fc890ce7305d19e7cb1a5eed4ac54064a004480ab14eef1ea0cd200846e",
+    "rawBytes": 352844,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-swing-01.mp3"
+    ]
+   },
+   {
+    "clip": "strainer-swing-02",
+    "cue": "strainerSwing",
+    "seconds": 2,
+    "seed": 354030124,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a dripping swamp monster swiping its long clawed arm through the air, one fast wet swoosh with a spray of water droplets, no hit, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202047-354030124",
+    "rawSha256": "3967fe16db9bfd2f7a45224714b38cc23f089b0f458b1b99902495ccfb4d04fe",
+    "rawBytes": 352844,
+    "structuralVerdict": "FAIL: unvoiced (no voice / tone), no narrow tonal band, one connected whoosh",
+    "shipped": []
+   },
+   {
+    "clip": "strainer-contact-01",
+    "cue": "strainerContact",
+    "seconds": 2,
+    "seed": 92008822,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a slimy clawed hand striking a person's body hard, a single heavy wet fleshy slap with a squelch and a splatter of slime, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202051-92008822",
+    "rawSha256": "46c66df17642405a7ffc17e29dfdce70d27d0a633474446b350ec8525a7660c2",
+    "rawBytes": 352844,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-contact-01.mp3"
+    ]
+   },
+   {
+    "clip": "strainer-contact-02",
+    "cue": "strainerContact",
+    "seconds": 2,
+    "seed": 283570265,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a heavy wet blow from a swamp creature's claws hitting a man's chest, a meaty thwack with a sticky squelch, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202056-283570265",
+    "rawSha256": "e889111aba765ec3bac5f604f8dc7eba8c313af00e4058350b3ff81d0f04394d",
+    "rawBytes": 352844,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-contact-02.mp3"
+    ]
+   },
+   {
+    "clip": "strainer-swing-03",
+    "cue": "strainerSwing",
+    "seconds": 2,
+    "seed": 186089081,
+    "steps": 8,
+    "cfg": 1,
+    "prompt": "TrackType: SFX, a fast heavy swipe of a long wet fleshy arm through the air, a single short whoosh of air with a wet slimy flutter, no impact, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "posts": 1,
+    "state": "done",
+    "jobId": "20261101T202258-186089081",
+    "rawSha256": "e969d9d65631b7eee81934de03cd4d9395853f0e4d52f2a6185b8f760c0724a8",
+    "rawBytes": 352844,
+    "structuralVerdict": "PASS",
+    "shipped": [
+     "assets/audio/strainer-swing-03.mp3"
+    ]
+   }
+  ]
+ },
+ "rawArchive": "reference/tasks/strainer-reach-squish-20261101-201110/audio/ (raw WAVs + lab / runner sidecars in raw/, intents / ACKs / terminals in ledger/, runner.log, queue.json, PLAN.json, QC.json + qc/*.png) — private, never in Git",
+ "design": {
+  "strainerStep": "Wet squelching footfalls REPLACING the Strainer's borrowed heavy zombie gait: one variant per wet-footfall group (slap + squelch tail) of two 10 s footstep takes (4 + 4). Played on the foot plants of its own Walk / Run clips (left plant at phase 0, right at 0.5; the actor's clip time scale = ground speed / clip ground speed, clamped 0.35–1.8): silent when standing still (ground speed < 0.15 m/s) and outside the locomotion clips. audio/sfx.ts STRAINER_AUDIO.step.",
+  "strainerSwing": "One wet arm-swing whoosh per swing, aligned so its loudest 20 ms lands on the claw's impact frame (peakFromAudibleStartS per clip; the brain lands the swipe attackImpact s after the swing starts). A swing interrupted (stagger / death) before its whoosh starts stays silent. Plays on a miss too (the arm still swings) — it carries no impact.",
+  "strainerContact": "The fleshy claw-contact squelch: ONLY when the claw connects (brain out.attackHit -> game.ts hurtPlayer, attacker 'strainer'), never on a miss; at the player's chest, toward the attacker.",
+  "strainerSquish": "A short wet squish when the Strainer is shot but not killed (EnemyCues.hurt), rate-limited per Strainer (STRAINER_AUDIO.squish.minGapS) and capped."
+ },
+ "swingPeaks": {
+  "strainer-swing-01": 0.113,
+  "strainer-swing-03": 0.916
+ },
+ "loudness": {
+  "method": "sample-peak normalisation to -1 dBFS (iteration-05 convention); eventLevel = loudest 50 ms RMS (unweighted dBFS); momentary max = ITU-R BS.1770-4 400 ms block (mono)"
+ },
+ "mixCalibration": {
+  "note": "Per-cue level at the source (derivative x CUE_GAIN, before distance / occlusion / master). Reference cues re-derived from their raws + recorded ops. Targets (mixEventLevelDb = loudest 50 ms RMS x CUE_GAIN): strainerStep ~ +2 dB over a heavy zombie step at its chase call gain (coated chase 1.75 m/s: x1.04; the Strainer step call gain at its 1.35 m/s chase is x1.0); swing ~4 dB under the zombie attack snarl; contact ~ between the player hurt grunt and the foreground hit confirm (impactFlesh x HIT_CONFIRM.level 0.65 -> -20.0 dB); squish ~4.5 dB under that hit confirm at the source (positional: quieter with distance).",
+  "new": {
+   "strainerStep": {
+    "variants": 8,
+    "eventLevelDbfs": -13.3,
+    "momentaryMaxLufs": -22.1,
+    "cueGain": 0.38,
+    "mixEventLevelDb": -21.7,
+    "mixMomentaryMaxLufs": -30.5,
+    "mixPeakDbfs": -9.4
+   },
+   "strainerSwing": {
+    "variants": 2,
+    "eventLevelDbfs": -12.2,
+    "momentaryMaxLufs": -17.9,
+    "cueGain": 0.36,
+    "mixEventLevelDb": -21.1,
+    "mixMomentaryMaxLufs": -26.8,
+    "mixPeakDbfs": -9.9
+   },
+   "strainerContact": {
+    "variants": 2,
+    "eventLevelDbfs": -14.9,
+    "momentaryMaxLufs": -21.6,
+    "cueGain": 0.6,
+    "mixEventLevelDb": -19.3,
+    "mixMomentaryMaxLufs": -26,
+    "mixPeakDbfs": -5.4
+   },
+   "strainerSquish": {
+    "variants": 2,
+    "eventLevelDbfs": -14.4,
+    "momentaryMaxLufs": -21.3,
+    "cueGain": 0.32,
+    "mixEventLevelDb": -24.3,
+    "mixMomentaryMaxLufs": -31.1,
+    "mixPeakDbfs": -10.9
+   }
+  },
+  "reference": {
+   "impactFlesh": {
+    "takes": 3,
+    "eventLevelDbfs": -16.3,
+    "momentaryMaxLufs": -18.7,
+    "cueGain": 0.5,
+    "mixEventLevelDb": -22.3,
+    "mixMomentaryMaxLufs": -24.8
+   },
+   "zombieGroanDeep": {
+    "takes": 3,
+    "eventLevelDbfs": -10.7,
+    "momentaryMaxLufs": -14.3,
+    "cueGain": 0.6,
+    "mixEventLevelDb": -15.1,
+    "mixMomentaryMaxLufs": -18.8
+   },
+   "zombieStep": {
+    "takes": 6,
+    "eventLevelDbfs": -13.7,
+    "momentaryMaxLufs": -15.3,
+    "cueGain": 0.26,
+    "mixEventLevelDb": -25.4,
+    "mixMomentaryMaxLufs": -27
+   },
+   "zombieStepHeavy": {
+    "takes": 6,
+    "eventLevelDbfs": -13.5,
+    "momentaryMaxLufs": -20.8,
+    "cueGain": 0.3,
+    "mixEventLevelDb": -24,
+    "mixMomentaryMaxLufs": -31.3
+   },
+   "bodyFall": {
+    "takes": 3,
+    "eventLevelDbfs": -10.8,
+    "momentaryMaxLufs": -17.9,
+    "cueGain": 0.6,
+    "mixEventLevelDb": -15.2,
+    "mixMomentaryMaxLufs": -22.3
+   },
+   "hurt": {
+    "takes": 4,
+    "eventLevelDbfs": -11.3,
+    "momentaryMaxLufs": -17.1,
+    "cueGain": 0.45,
+    "mixEventLevelDb": -18.2,
+    "mixMomentaryMaxLufs": -24
+   },
+   "zombieAttack": {
+    "takes": 3,
+    "eventLevelDbfs": -12.8,
+    "momentaryMaxLufs": -15.8,
+    "cueGain": 0.6,
+    "mixEventLevelDb": -17.2,
+    "mixMomentaryMaxLufs": -20.3
+   },
+   "blightBurst": {
+    "takes": 1,
+    "eventLevelDbfs": -14.4,
+    "momentaryMaxLufs": -19.9,
+    "cueGain": 0.9,
+    "mixEventLevelDb": -15.3,
+    "mixMomentaryMaxLufs": -20.8
+   }
+  }
+ },
+ "qc": {
+  "gate": "strainerVerdict in tools/audio-pipeline/strainer-build.mjs (raw AND derivative must pass)",
+  "rawQc": "reference/tasks/strainer-reach-squish-20261101-201110/audio/QC.json",
+  "images": "reference/tasks/strainer-reach-squish-20261101-201110/audio/qc/*.png (raws), reference/tasks/strainer-reach-squish-20261101-201110/audio/qc/built/*.png (shipped derivatives, pre-MP3)"
+ },
+ "totals": {
+  "derivatives": 14,
+  "bytes": 130818,
+  "cuesCovered": 4,
+  "cues": 4
+ },
+ "gaps": [],
+ "excluded": [
+  {
+   "clip": "strainer-swing-02",
+   "cue": "strainerSwing",
+   "jobId": "20261101T202047-354030124",
+   "rawSha256": "3967fe16db9bfd2f7a45224714b38cc23f089b0f458b1b99902495ccfb4d04fe",
+   "reason": "raw structural gate (swing): unvoiced (no voice / tone), no narrow tonal band, one connected whoosh",
+   "detail": "two separate clusters 1.1 s apart; 87 % of the energy in 300–1000 Hz with a rising ~500 -> 650 Hz pitch track (voiced 44 %): droplet \"bloops\" / a whistle, not a whoosh. Replaced by strainer-swing-03 (plan batch B)."
+  },
+  {
+   "clip": "strainer-step-01",
+   "cue": "strainerSquish",
+   "label": "group 9 @ 8.28 s",
+   "jobId": "20261101T202033-2118749099",
+   "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+   "startS": 8.4151,
+   "reason": "derivative structural gate (stepSlice): decays",
+   "values": {
+    "decays": 11.6
+   }
+  },
+  {
+   "clip": "strainer-step-01",
+   "cue": "strainerSquish",
+   "label": "group 8 @ 7.645 s",
+   "jobId": "20261101T202033-2118749099",
+   "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+   "startS": 7.6583,
+   "reason": "derivative structural gate (stepSlice): decays",
+   "values": {
+    "decays": -2.3
+   }
+  }
+ ],
+ "derivatives": [
+  {
+   "file": "game/public/assets/audio/strainer-step-01-s01.mp3",
+   "url": "assets/audio/strainer-step-01-s01.mp3",
+   "bytes": 9613,
+   "sha256": "9afb7693644d519f053415516846ff540d8b8190f3f64c0eafc1744496d1863a",
+   "cue": "strainerStep",
+   "durationS": 0.55,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 10 @ 9.115 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.55,
+    "peakDbfs": -1,
+    "rmsDbfs": -22.6,
+    "crestDb": 21.6,
+    "clippedFrac": 0,
+    "quietFrac": 0.807,
+    "activeFrac": 0.636,
+    "levelSpreadDb": 10.97,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.05,
+     "riseMs": 45
+    },
+    "decay": {
+     "firstQuarterDb": -15.2,
+     "lastQuarterDb": -44,
+     "lastMinusFirstDb": -28.8,
+     "slopeDbPerS": -46.7,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 758,
+     "flatness": 0.215,
+     "rolloff85Hz": 3778,
+     "bands": {
+      "0-300Hz": 0.605,
+      "300-1000Hz": 0.242,
+      "1000-3000Hz": 0.097,
+      "3000-8000Hz": 0.04,
+      "8000-22050Hz": 0.016
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -21.6,
+     "momentaryMaxLufs": -21.6
+    },
+    "eventLevelDbfs": -12.3,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 10.97,
+        "flatness": 0.215,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 45,
+        "peakS": 0.05
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -28.8,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.55,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.605,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -53.7,
+     "belowDerivativePeakDb": 52.7,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 9.1317,
+     "endS": 9.6817,
+     "groupStartS": 9.115,
+     "groupEndS": 9.64,
+     "leadInSkippedS": 0,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 10.01
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-01-s02.mp3",
+   "url": "assets/audio/strainer-step-01-s02.mp3",
+   "bytes": 8359,
+   "sha256": "690c12f960617eeaf05b419b15a59097a80a69c89ff40d5b80e76fa6a3bef750",
+   "cue": "strainerStep",
+   "durationS": 0.495,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 1 @ 0.44 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.495,
+    "peakDbfs": -1,
+    "rmsDbfs": -22.5,
+    "crestDb": 21.5,
+    "clippedFrac": 0,
+    "quietFrac": 0.765,
+    "activeFrac": 0.667,
+    "levelSpreadDb": 10.92,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.02,
+     "riseMs": 15
+    },
+    "decay": {
+     "firstQuarterDb": -12.7,
+     "lastQuarterDb": -36.1,
+     "lastMinusFirstDb": -23.4,
+     "slopeDbPerS": -67.9,
+     "activeEndS": 0.35
+    },
+    "spectral": {
+     "centroidHz": 325,
+     "flatness": 0.224,
+     "rolloff85Hz": 3859,
+     "bands": {
+      "0-300Hz": 0.8,
+      "300-1000Hz": 0.153,
+      "1000-3000Hz": 0.03,
+      "3000-8000Hz": 0.014,
+      "8000-22050Hz": 0.002
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -22.6,
+     "momentaryMaxLufs": -22.6
+    },
+    "eventLevelDbfs": -12.6,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 10.92,
+        "flatness": 0.224,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 15,
+        "peakS": 0.02
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -23.4,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.495,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.8,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -52.7,
+     "belowDerivativePeakDb": 51.7,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.5072,
+     "endS": 1.0022,
+     "groupStartS": 0.44,
+     "groupEndS": 0.96,
+     "leadInSkippedS": 0.07,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 10.99
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-01-s03.mp3",
+   "url": "assets/audio/strainer-step-01-s03.mp3",
+   "bytes": 9613,
+   "sha256": "9c5d5880b7d3d8ad7704453bc194143f0abc4ed11c7664d3a5d65a328c2e740f",
+   "cue": "strainerStep",
+   "durationS": 0.55,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 3 @ 3.12 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.55,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.7,
+    "crestDb": 20.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.771,
+    "activeFrac": 0.636,
+    "levelSpreadDb": 12.69,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.02,
+     "riseMs": 10
+    },
+    "decay": {
+     "firstQuarterDb": -14.3,
+     "lastQuarterDb": -47.4,
+     "lastMinusFirstDb": -33.1,
+     "slopeDbPerS": -61.6,
+     "activeEndS": 0.55
+    },
+    "spectral": {
+     "centroidHz": 384,
+     "flatness": 0.185,
+     "rolloff85Hz": 3355,
+     "bands": {
+      "0-300Hz": 0.853,
+      "300-1000Hz": 0.106,
+      "1000-3000Hz": 0.016,
+      "3000-8000Hz": 0.019,
+      "8000-22050Hz": 0.007
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.08,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -21.1,
+     "momentaryMaxLufs": -21.1
+    },
+    "eventLevelDbfs": -11.7,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 12.69,
+        "flatness": 0.185,
+        "voicedFrac": 0.08
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 10,
+        "peakS": 0.02
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0.08,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -33.1,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.55,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.853,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -53,
+     "belowDerivativePeakDb": 52,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 3.2233,
+     "endS": 3.7733,
+     "groupStartS": 3.12,
+     "groupEndS": 3.89,
+     "leadInSkippedS": 0.1,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 10.74
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-01-s04.mp3",
+   "url": "assets/audio/strainer-step-01-s04.mp3",
+   "bytes": 6687,
+   "sha256": "72a4d140e86e13332d86dbe43a77438a51981f36175e95eb7ed851c564b1a670",
+   "cue": "strainerStep",
+   "durationS": 0.3848,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 5 @ 5.1 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.385,
+    "peakDbfs": -1,
+    "rmsDbfs": -27.4,
+    "crestDb": 26.4,
+    "clippedFrac": 0,
+    "quietFrac": 0.724,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.55,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.02,
+     "riseMs": 15
+    },
+    "decay": {
+     "firstQuarterDb": -18.7,
+     "lastQuarterDb": -42.8,
+     "lastMinusFirstDb": -24.1,
+     "slopeDbPerS": -70.3,
+     "activeEndS": 0.35
+    },
+    "spectral": {
+     "centroidHz": 4830,
+     "flatness": 0.304,
+     "rolloff85Hz": 5784,
+     "bands": {
+      "0-300Hz": 0.015,
+      "300-1000Hz": 0.006,
+      "1000-3000Hz": 0.167,
+      "3000-8000Hz": 0.748,
+      "8000-22050Hz": 0.065
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.103,
+     "f0MedianHz": 1481,
+     "f0P5Hz": 1479,
+     "f0P95Hz": 1496,
+     "rangeSt": 0.2,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -24.2,
+     "momentaryMaxLufs": -24.2
+    },
+    "eventLevelDbfs": -18.6,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 9.55,
+        "flatness": 0.304,
+        "voicedFrac": 0.103
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 15,
+        "peakS": 0.02
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0.103,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -24.1,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.385,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.015,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -53.8,
+     "belowDerivativePeakDb": 52.8,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 5.1076,
+     "endS": 5.4923,
+     "groupStartS": 5.1,
+     "groupEndS": 5.44,
+     "leadInSkippedS": 0,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 9.88
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-squish-01.mp3",
+   "url": "assets/audio/strainer-squish-01.mp3",
+   "bytes": 7105,
+   "sha256": "d52b9149a05eeee54e245193042760f26bd6e108830379959a7d0d02a95d1e99",
+   "cue": "strainerSquish",
+   "durationS": 0.4,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 2 @ 1.88 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.4,
+    "peakDbfs": -1,
+    "rmsDbfs": -22.2,
+    "crestDb": 21.2,
+    "clippedFrac": 0,
+    "quietFrac": 0.494,
+    "activeFrac": 0.875,
+    "levelSpreadDb": 11.46,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.045,
+     "riseMs": 40
+    },
+    "decay": {
+     "firstQuarterDb": -16.6,
+     "lastQuarterDb": -38.8,
+     "lastMinusFirstDb": -22.2,
+     "slopeDbPerS": -92.7,
+     "activeEndS": 0.35
+    },
+    "spectral": {
+     "centroidHz": 611,
+     "flatness": 0.176,
+     "rolloff85Hz": 3536,
+     "bands": {
+      "0-300Hz": 0.793,
+      "300-1000Hz": 0.135,
+      "1000-3000Hz": 0.019,
+      "3000-8000Hz": 0.034,
+      "8000-22050Hz": 0.018
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -22.9,
+     "momentaryMaxLufs": -22.9
+    },
+    "eventLevelDbfs": -14,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 11.46,
+        "flatness": 0.176,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 40,
+        "peakS": 0.045
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -22.2,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.4,
+       "need": ">= 0.1 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.793,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -51.8,
+     "belowDerivativePeakDb": 50.8,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 1.8803,
+     "endS": 2.2803,
+     "groupStartS": 1.88,
+     "groupEndS": 2.41,
+     "leadInSkippedS": 0,
+     "maxS": 0.4,
+     "note": "a wet-slap group of the footstep take NOT used as a footstep, from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.06,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 11.9
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-squish-02.mp3",
+   "url": "assets/audio/strainer-squish-02.mp3",
+   "bytes": 5433,
+   "sha256": "a7ff61ba76dc8cb31fb6208c47a6bd9cba5882d5dd2018c43623801846ae3f84",
+   "cue": "strainerSquish",
+   "durationS": 0.2896,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-01",
+    "slice": "group 4 @ 4.49 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.wav",
+    "rawSha256": "d9612ae2e84f4d16c8c4c941b598c5131fb2863d4a6e1f13ea6f68dba57eed0b",
+    "rawBytes": 1764044,
+    "labFile": "sfx_slow-heavy-wet-footsteps-of-a-huge-swamp_w8a8_seed2118749099_202033.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.lab.json",
+    "labSidecarSha256": "dc83166ed92d46e361287729efed662a69e91997abc7f4cfe1b50e674a280f80",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-01.sidecar.json",
+    "jobId": "20261101T202033-2118749099",
+    "prompt": "TrackType: SFX, slow heavy wet footsteps of a huge swamp creature, bare slimy feet slapping down one at a time on a wet concrete floor, each step a deep sloppy squelch with a wet slap and a little dripping, distinct separate steps with pauses between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 2118749099,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.29,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.9,
+    "crestDb": 19.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.158,
+    "activeFrac": 1,
+    "levelSpreadDb": 5.57,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.01,
+     "riseMs": 10
+    },
+    "decay": {
+     "firstQuarterDb": -14.9,
+     "lastQuarterDb": -25.7,
+     "lastMinusFirstDb": -10.7,
+     "slopeDbPerS": -49.2,
+     "activeEndS": 0.25
+    },
+    "spectral": {
+     "centroidHz": 2346,
+     "flatness": 0.202,
+     "rolloff85Hz": 3935,
+     "bands": {
+      "0-300Hz": 0.474,
+      "300-1000Hz": 0.02,
+      "1000-3000Hz": 0.118,
+      "3000-8000Hz": 0.353,
+      "8000-22050Hz": 0.035
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -19.6,
+     "momentaryMaxLufs": -19.6
+    },
+    "eventLevelDbfs": -14.8,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 5.57,
+        "flatness": 0.202,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 10,
+        "peakS": 0.01
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -10.7,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.29,
+       "need": ">= 0.1 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.474,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -63.7,
+     "afterGainDbfs": -43.9,
+     "belowDerivativePeakDb": 42.9,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 4.6465,
+     "endS": 4.9361,
+     "groupStartS": 4.49,
+     "groupEndS": 4.895,
+     "leadInSkippedS": 0.15,
+     "maxS": 0.4,
+     "note": "a wet-slap group of the footstep take NOT used as a footstep, from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.06,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 19.8
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-02-s01.mp3",
+   "url": "assets/audio/strainer-step-02-s01.mp3",
+   "bytes": 8777,
+   "sha256": "16a76b467fc4700e9c2336e8c1a1d489918a1a9920d1da2be6b4655362bda61d",
+   "cue": "strainerStep",
+   "durationS": 0.5201,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-02",
+    "slice": "group 1 @ 0.09 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.wav",
+    "rawSha256": "859260bc1d1dbf42abce184bbcda75a4912080c3d52589011e9c4c9370e5da3e",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-large-waterlogged-creature-stomping-sl_w8a8_seed831961153_202038.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.lab.json",
+    "labSidecarSha256": "a0d179caca987f4abb3d32b6cc291685e6ac5a0ddbf0c7538945ac560f31b499",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.sidecar.json",
+    "jobId": "20261101T202038-831961153",
+    "prompt": "TrackType: SFX, a large waterlogged creature stomping slowly on webbed feet across a hard floor, each footfall a thick fleshy squish and a splat of slime, irregular separate steps with gaps between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 831961153,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.52,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.7,
+    "crestDb": 20.7,
+    "clippedFrac": 0,
+    "quietFrac": 0.66,
+    "activeFrac": 0.7,
+    "levelSpreadDb": 11.56,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.03,
+     "riseMs": 25
+    },
+    "decay": {
+     "firstQuarterDb": -12.2,
+     "lastQuarterDb": -46.7,
+     "lastMinusFirstDb": -34.6,
+     "slopeDbPerS": -89.5,
+     "activeEndS": 0.35
+    },
+    "spectral": {
+     "centroidHz": 300,
+     "flatness": 0.075,
+     "rolloff85Hz": 1656,
+     "bands": {
+      "0-300Hz": 0.459,
+      "300-1000Hz": 0.537,
+      "1000-3000Hz": 0.003,
+      "3000-8000Hz": 0.002,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -21.5,
+     "momentaryMaxLufs": -21.5
+    },
+    "eventLevelDbfs": -12,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 11.56,
+        "flatness": 0.075,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 25,
+        "peakS": 0.03
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -34.6,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.52,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.459,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -70.5,
+     "afterGainDbfs": -70.2,
+     "belowDerivativePeakDb": 69.2,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.1363,
+     "endS": 0.6564,
+     "groupStartS": 0.09,
+     "groupEndS": 0.615,
+     "leadInSkippedS": 0.05,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 0.35
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-02-s02.mp3",
+   "url": "assets/audio/strainer-step-02-s02.mp3",
+   "bytes": 9613,
+   "sha256": "b376661642b96ec3a706ed11533e4f5dc63cf1c65f8da2b28da1f438ed8e1845",
+   "cue": "strainerStep",
+   "durationS": 0.55,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-02",
+    "slice": "group 2 @ 1.335 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.wav",
+    "rawSha256": "859260bc1d1dbf42abce184bbcda75a4912080c3d52589011e9c4c9370e5da3e",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-large-waterlogged-creature-stomping-sl_w8a8_seed831961153_202038.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.lab.json",
+    "labSidecarSha256": "a0d179caca987f4abb3d32b6cc291685e6ac5a0ddbf0c7538945ac560f31b499",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.sidecar.json",
+    "jobId": "20261101T202038-831961153",
+    "prompt": "TrackType: SFX, a large waterlogged creature stomping slowly on webbed feet across a hard floor, each footfall a thick fleshy squish and a splat of slime, irregular separate steps with gaps between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 831961153,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.55,
+    "peakDbfs": -1,
+    "rmsDbfs": -22.9,
+    "crestDb": 21.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.679,
+    "activeFrac": 0.636,
+    "levelSpreadDb": 9.01,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.01,
+     "riseMs": 10
+    },
+    "decay": {
+     "firstQuarterDb": -12.8,
+     "lastQuarterDb": -39.6,
+     "lastMinusFirstDb": -26.8,
+     "slopeDbPerS": -81.4,
+     "activeEndS": 0.35
+    },
+    "spectral": {
+     "centroidHz": 239,
+     "flatness": 0.148,
+     "rolloff85Hz": 2389,
+     "bands": {
+      "0-300Hz": 0.908,
+      "300-1000Hz": 0.072,
+      "1000-3000Hz": 0.013,
+      "3000-8000Hz": 0.007,
+      "8000-22050Hz": 0
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -22.8,
+     "momentaryMaxLufs": -22.8
+    },
+    "eventLevelDbfs": -12.8,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 9.01,
+        "flatness": 0.148,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 10,
+        "peakS": 0.01
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -26.8,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.55,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.908,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -70.5,
+     "afterGainDbfs": -64.8,
+     "belowDerivativePeakDb": 63.8,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 1.4293,
+     "endS": 1.9793,
+     "groupStartS": 1.335,
+     "groupEndS": 2.04,
+     "leadInSkippedS": 0.095,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 5.72
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-02-s03.mp3",
+   "url": "assets/audio/strainer-step-02-s03.mp3",
+   "bytes": 9613,
+   "sha256": "493475aceb94c58511ab2ad1eb558791d22004ee586972becd14a0fd1d1de8b4",
+   "cue": "strainerStep",
+   "durationS": 0.55,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-02",
+    "slice": "group 5 @ 5.985 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.wav",
+    "rawSha256": "859260bc1d1dbf42abce184bbcda75a4912080c3d52589011e9c4c9370e5da3e",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-large-waterlogged-creature-stomping-sl_w8a8_seed831961153_202038.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.lab.json",
+    "labSidecarSha256": "a0d179caca987f4abb3d32b6cc291685e6ac5a0ddbf0c7538945ac560f31b499",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.sidecar.json",
+    "jobId": "20261101T202038-831961153",
+    "prompt": "TrackType: SFX, a large waterlogged creature stomping slowly on webbed feet across a hard floor, each footfall a thick fleshy squish and a splat of slime, irregular separate steps with gaps between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 831961153,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.55,
+    "peakDbfs": -1,
+    "rmsDbfs": -22.6,
+    "crestDb": 21.6,
+    "clippedFrac": 0,
+    "quietFrac": 0.468,
+    "activeFrac": 0.909,
+    "levelSpreadDb": 10.27,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.035,
+     "riseMs": 30
+    },
+    "decay": {
+     "firstQuarterDb": -16.1,
+     "lastQuarterDb": -44.8,
+     "lastMinusFirstDb": -28.7,
+     "slopeDbPerS": -67.8,
+     "activeEndS": 0.5
+    },
+    "spectral": {
+     "centroidHz": 623,
+     "flatness": 0.151,
+     "rolloff85Hz": 2795,
+     "bands": {
+      "0-300Hz": 0.592,
+      "300-1000Hz": 0.25,
+      "1000-3000Hz": 0.124,
+      "3000-8000Hz": 0.033,
+      "8000-22050Hz": 0.001
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -23.6,
+     "momentaryMaxLufs": -21.5
+    },
+    "eventLevelDbfs": -13.4,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 10.27,
+        "flatness": 0.151,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 30,
+        "peakS": 0.035
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -28.7,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.55,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.592,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -70.5,
+     "afterGainDbfs": -63,
+     "belowDerivativePeakDb": 62,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 5.9946,
+     "endS": 6.5446,
+     "groupStartS": 5.985,
+     "groupEndS": 6.495,
+     "leadInSkippedS": 0,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 7.55
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-step-02-s04.mp3",
+   "url": "assets/audio/strainer-step-02-s04.mp3",
+   "bytes": 7941,
+   "sha256": "26926d00be566fafc807d48d340b50f2d817e43cd621293347a3c3d2c42ec273",
+   "cue": "strainerStep",
+   "durationS": 0.47,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-step-02",
+    "slice": "group 6 @ 7.285 s",
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.wav",
+    "rawSha256": "859260bc1d1dbf42abce184bbcda75a4912080c3d52589011e9c4c9370e5da3e",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-large-waterlogged-creature-stomping-sl_w8a8_seed831961153_202038.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.lab.json",
+    "labSidecarSha256": "a0d179caca987f4abb3d32b6cc291685e6ac5a0ddbf0c7538945ac560f31b499",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-step-02.sidecar.json",
+    "jobId": "20261101T202038-831961153",
+    "prompt": "TrackType: SFX, a large waterlogged creature stomping slowly on webbed feet across a hard floor, each footfall a thick fleshy squish and a splat of slime, irregular separate steps with gaps between them, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 831961153,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 10,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "stepTake",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.47,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.1,
+    "crestDb": 20.1,
+    "clippedFrac": 0,
+    "quietFrac": 0.473,
+    "activeFrac": 1,
+    "levelSpreadDb": 10.98,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.015,
+     "riseMs": 15
+    },
+    "decay": {
+     "firstQuarterDb": -14.8,
+     "lastQuarterDb": -44.1,
+     "lastMinusFirstDb": -29.3,
+     "slopeDbPerS": -81.9,
+     "activeEndS": 0.45
+    },
+    "spectral": {
+     "centroidHz": 536,
+     "flatness": 0.139,
+     "rolloff85Hz": 2063,
+     "bands": {
+      "0-300Hz": 0.563,
+      "300-1000Hz": 0.33,
+      "1000-3000Hz": 0.076,
+      "3000-8000Hz": 0.029,
+      "8000-22050Hz": 0.002
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -21.5,
+     "momentaryMaxLufs": -21.5
+    },
+    "eventLevelDbfs": -13.3,
+    "verdict": {
+     "kind": "stepSlice",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 10.98,
+        "flatness": 0.139,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": {
+        "riseMs": 15,
+        "peakS": 0.015
+       },
+       "need": "rise <= 120 ms, peak <= 0.25 s",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.25",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": -29.3,
+       "need": "last quarter <= -6 dB vs first",
+       "required": true
+      },
+      {
+       "name": "long enough",
+       "ok": true,
+       "value": 0.47,
+       "need": ">= 0.12 s",
+       "required": true
+      },
+      {
+       "name": "low-end share (0–300 Hz, body)",
+       "value": 0.563,
+       "required": false
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -70.5,
+     "afterGainDbfs": -61.7,
+     "belowDerivativePeakDb": 60.7,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 7.4579,
+     "endS": 7.9278,
+     "groupStartS": 7.285,
+     "groupEndS": 7.87,
+     "leadInSkippedS": 0.16,
+     "maxS": 0.55,
+     "note": "one wet-footfall group (connected active run), from its main transient"
+    },
+    {
+     "op": "fade",
+     "inS": 0.002,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 8.78
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-swing-01.mp3",
+   "url": "assets/audio/strainer-swing-01.mp3",
+   "bytes": 13792,
+   "sha256": "6010c8690e4554661237fc238959aaa092a0514d86ec0e0b2c065b7ea7354fd5",
+   "cue": "strainerSwing",
+   "durationS": 0.8318,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-swing-01",
+    "slice": null,
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-01.wav",
+    "rawSha256": "c21f1fc890ce7305d19e7cb1a5eed4ac54064a004480ab14eef1ea0cd200846e",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-long-wet-slimy-arm-swung-hard-through_w8a8_seed1489390564_202042.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-01.lab.json",
+    "labSidecarSha256": "fcfe160f3c926a17ec6d3d75d4f648e1e6a8b61a9380b62f00b22673e7bc9359",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-01.sidecar.json",
+    "jobId": "20261101T202042-1489390564",
+    "prompt": "TrackType: SFX, a long wet slimy arm swung hard through the air, a single heavy fleshy whoosh with slime and water flung off the limb, no impact, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 1489390564,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "swing",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.832,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.9,
+    "crestDb": 19.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.188,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.92,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.11,
+     "riseMs": 50
+    },
+    "decay": {
+     "firstQuarterDb": -16.3,
+     "lastQuarterDb": -36.8,
+     "lastMinusFirstDb": -20.5,
+     "slopeDbPerS": -46.3,
+     "activeEndS": 0.8
+    },
+    "spectral": {
+     "centroidHz": 2920,
+     "flatness": 0.178,
+     "rolloff85Hz": 3350,
+     "bands": {
+      "0-300Hz": 0.107,
+      "300-1000Hz": 0.159,
+      "1000-3000Hz": 0.402,
+      "3000-8000Hz": 0.245,
+      "8000-22050Hz": 0.087
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0.015,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -19,
+     "momentaryMaxLufs": -15.9
+    },
+    "eventLevelDbfs": -13.4,
+    "verdict": {
+     "kind": "swing",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 9.92,
+        "flatness": 0.178,
+        "voicedFrac": 0.015
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": {
+        "voicedFrac": 0.015,
+        "f0MedianHz": null
+       },
+       "need": "<= 0.2",
+       "required": true
+      },
+      {
+       "name": "no narrow tonal band",
+       "ok": true,
+       "value": {
+        "maxBandShare": 0.402
+       },
+       "need": "no band > 75 % of the energy",
+       "required": true
+      },
+      {
+       "name": "one connected whoosh",
+       "ok": true,
+       "value": {
+        "mainS": 0.76,
+        "mainShare": 1
+       },
+       "need": "main event 0.3–1.4 s holding >= 85 % of the energy",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -62.5,
+     "afterGainDbfs": -57,
+     "belowDerivativePeakDb": 56,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.8318,
+     "startThresholdDbfs": -51.6,
+     "maxGapS": 0.12,
+     "holdMs": 40,
+     "note": "the connected active run holding the take's peak"
+    },
+    {
+     "op": "fade",
+     "inS": 0.006,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 5.46
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ],
+   "peakFromAudibleStartS": 0.113
+  },
+  {
+   "file": "game/public/assets/audio/strainer-contact-01.mp3",
+   "url": "assets/audio/strainer-contact-01.mp3",
+   "bytes": 6687,
+   "sha256": "8d319a62f951a978f7c55116cbd7fd9fabee073eb057d4fc832b845ffa79b25c",
+   "cue": "strainerContact",
+   "durationS": 0.3808,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-contact-01",
+    "slice": null,
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-01.wav",
+    "rawSha256": "46c66df17642405a7ffc17e29dfdce70d27d0a633474446b350ec8525a7660c2",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-slimy-clawed-hand-striking-a-person-s_w8a8_seed92008822_202051.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-01.lab.json",
+    "labSidecarSha256": "9a24d0b5b57be48ac112fd33c5d9a63a62fd2b6c12724e976c4544e7af402995",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-01.sidecar.json",
+    "jobId": "20261101T202051-92008822",
+    "prompt": "TrackType: SFX, a slimy clawed hand striking a person's body hard, a single heavy wet fleshy slap with a squelch and a splatter of slime, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 92008822,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "contact",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.381,
+    "peakDbfs": -1,
+    "rmsDbfs": -23.6,
+    "crestDb": 22.6,
+    "clippedFrac": 0,
+    "quietFrac": 0.613,
+    "activeFrac": 0.857,
+    "levelSpreadDb": 13.55,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.045,
+     "riseMs": 5
+    },
+    "decay": {
+     "firstQuarterDb": -16.8,
+     "lastQuarterDb": -51.2,
+     "lastMinusFirstDb": -34.4,
+     "slopeDbPerS": -135.2,
+     "activeEndS": 0.3
+    },
+    "spectral": {
+     "centroidHz": 2061,
+     "flatness": 0.4,
+     "rolloff85Hz": 5640,
+     "bands": {
+      "0-300Hz": 0.465,
+      "300-1000Hz": 0.055,
+      "1000-3000Hz": 0.262,
+      "3000-8000Hz": 0.16,
+      "8000-22050Hz": 0.059
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -22.5,
+     "momentaryMaxLufs": -22.5
+    },
+    "eventLevelDbfs": -15.9,
+    "verdict": {
+     "kind": "contact",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 13.55,
+        "flatness": 0.4,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": 5,
+       "need": "<= 100 ms",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.2",
+       "required": true
+      },
+      {
+       "name": "short hit",
+       "ok": true,
+       "value": 0.33,
+       "need": "main event <= 0.8 s",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": {
+        "lastMinusFirstDb": -34.4,
+        "slopeDbPerS": -135.2
+       },
+       "need": "last quarter <= -10 dB vs first, slope < 0",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -62.5,
+     "afterGainDbfs": -61.8,
+     "belowDerivativePeakDb": 60.8,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.3808,
+     "startThresholdDbfs": -52.2,
+     "maxGapS": 0.1,
+     "holdMs": 40,
+     "note": "the connected active run holding the take's peak"
+    },
+    {
+     "op": "fade",
+     "inS": 0.0015,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 0.74
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-contact-02.mp3",
+   "url": "assets/audio/strainer-contact-02.mp3",
+   "bytes": 8359,
+   "sha256": "a26305e357e221e2e9d0806c71a565d91c39d7356e48f6f0c5d81d65e5b767cf",
+   "cue": "strainerContact",
+   "durationS": 0.491,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-contact-02",
+    "slice": null,
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-02.wav",
+    "rawSha256": "e889111aba765ec3bac5f604f8dc7eba8c313af00e4058350b3ff81d0f04394d",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-heavy-wet-blow-from-a-swamp-creature-s_w8a8_seed283570265_202056.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-02.lab.json",
+    "labSidecarSha256": "9a9f6fe24fd95fea794a8e1185519b6785c287a7f1f5b5928ff46872c00078db",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-contact-02.sidecar.json",
+    "jobId": "20261101T202056-283570265",
+    "prompt": "TrackType: SFX, a heavy wet blow from a swamp creature's claws hitting a man's chest, a meaty thwack with a sticky squelch, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 283570265,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "contact",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 0.491,
+    "peakDbfs": -1,
+    "rmsDbfs": -21.8,
+    "crestDb": 20.8,
+    "clippedFrac": 0,
+    "quietFrac": 0.237,
+    "activeFrac": 1,
+    "levelSpreadDb": 9.04,
+    "attack": {
+     "onsetS": 0,
+     "peakS": 0.08,
+     "riseMs": 75
+    },
+    "decay": {
+     "firstQuarterDb": -16.3,
+     "lastQuarterDb": -39.1,
+     "lastMinusFirstDb": -22.8,
+     "slopeDbPerS": -72.6,
+     "activeEndS": 0.45
+    },
+    "spectral": {
+     "centroidHz": 1933,
+     "flatness": 0.35,
+     "rolloff85Hz": 5357,
+     "bands": {
+      "0-300Hz": 0.572,
+      "300-1000Hz": 0.052,
+      "1000-3000Hz": 0.106,
+      "3000-8000Hz": 0.207,
+      "8000-22050Hz": 0.062
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -20.7,
+     "momentaryMaxLufs": -20.7
+    },
+    "eventLevelDbfs": -13.9,
+    "verdict": {
+     "kind": "contact",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 9.04,
+        "flatness": 0.35,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "transient onset",
+       "ok": true,
+       "value": 75,
+       "need": "<= 100 ms",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": 0,
+       "need": "<= 0.2",
+       "required": true
+      },
+      {
+       "name": "short hit",
+       "ok": true,
+       "value": 0.45,
+       "need": "main event <= 0.8 s",
+       "required": true
+      },
+      {
+       "name": "decays",
+       "ok": true,
+       "value": {
+        "lastMinusFirstDb": -22.8,
+        "slopeDbPerS": -72.6
+       },
+       "need": "last quarter <= -10 dB vs first, slope < 0",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -62.5,
+     "afterGainDbfs": -61.5,
+     "belowDerivativePeakDb": 60.5,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0,
+     "endS": 0.491,
+     "startThresholdDbfs": -49.9,
+     "maxGapS": 0.1,
+     "holdMs": 40,
+     "note": "the connected active run holding the take's peak"
+    },
+    {
+     "op": "fade",
+     "inS": 0.0015,
+     "outS": 0.08,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 0.99
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ]
+  },
+  {
+   "file": "game/public/assets/audio/strainer-swing-03.mp3",
+   "url": "assets/audio/strainer-swing-03.mp3",
+   "bytes": 19226,
+   "sha256": "346d68dbdb731f617b6814c922e3e95097419878c9285d4ad3c92f149fd556a8",
+   "cue": "strainerSwing",
+   "durationS": 1.1575,
+   "channels": 1,
+   "sampleRate": 44100,
+   "codec": "mp3",
+   "kbps": 128,
+   "source": {
+    "clip": "strainer-swing-03",
+    "slice": null,
+    "rawFile": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-03.wav",
+    "rawSha256": "e969d9d65631b7eee81934de03cd4d9395853f0e4d52f2a6185b8f760c0724a8",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-fast-heavy-swipe-of-a-long-wet-fleshy_w8a8_seed186089081_202258.wav",
+    "labSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-03.lab.json",
+    "labSidecarSha256": "3daa17cb4f44f1bb23127e6ce50ca9d663e531d9d767b7d4e36134b0d082b42f",
+    "runnerSidecar": "reference/tasks/strainer-reach-squish-20261101-201110/audio/raw/strainer-swing-03.sidecar.json",
+    "jobId": "20261101T202258-186089081",
+    "prompt": "TrackType: SFX, a fast heavy swipe of a long wet fleshy arm through the air, a single short whoosh of air with a wet slimy flutter, no impact, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "negativePrompt": "",
+    "seed": 186089081,
+    "steps": 8,
+    "cfg": 1,
+    "seconds": 2,
+    "model": "stabilityai/stable-audio-3-small-sfx",
+    "modelRevision": "05ca3857881c94a2b84026b1111c537d78f5f9f0",
+    "weightsRepo": "stabilityai/stable-audio-3-optimized",
+    "weightsRevision": "08b17423649b5714b22eab20f96bf00751f2358a",
+    "profile": "w8a8",
+    "rawChannels": 2,
+    "rawVerdict": {
+     "kind": "swing",
+     "pass": true,
+     "failed": []
+    }
+   },
+   "structural": {
+    "durationS": 1.158,
+    "peakDbfs": -1,
+    "rmsDbfs": -20.9,
+    "crestDb": 19.9,
+    "clippedFrac": 0,
+    "quietFrac": 0.139,
+    "activeFrac": 0.957,
+    "levelSpreadDb": 7.78,
+    "attack": {
+     "onsetS": 0.005,
+     "peakS": 0.145,
+     "riseMs": 140
+    },
+    "decay": {
+     "firstQuarterDb": -19.1,
+     "lastQuarterDb": -16.3,
+     "lastMinusFirstDb": 2.8,
+     "slopeDbPerS": -197.3,
+     "activeEndS": 1.1
+    },
+    "spectral": {
+     "centroidHz": 622,
+     "flatness": 0.266,
+     "rolloff85Hz": 3161,
+     "bands": {
+      "0-300Hz": 0.601,
+      "300-1000Hz": 0.31,
+      "1000-3000Hz": 0.042,
+      "3000-8000Hz": 0.029,
+      "8000-22050Hz": 0.018
+     }
+    },
+    "pitch": {
+     "voicedFrac": 0,
+     "f0MedianHz": null,
+     "rangeSt": 0,
+     "notes": 0,
+     "noteSteps": 0,
+     "movementSt": 0,
+     "segments": []
+    },
+    "loudness": {
+     "integratedLufs": -23.8,
+     "momentaryMaxLufs": -20
+    },
+    "eventLevelDbfs": -11,
+    "verdict": {
+     "kind": "swing",
+     "pass": true,
+     "failed": [],
+     "criteria": [
+      {
+       "name": "not a broadband noise wall / drone",
+       "ok": true,
+       "value": {
+        "levelSpreadDb": 7.78,
+        "flatness": 0.266,
+        "voicedFrac": 0
+       },
+       "need": "NOT (spread < 2 dB AND flatness >= 0.35 AND voiced < 0.1)",
+       "required": true
+      },
+      {
+       "name": "audible (not near-silent)",
+       "ok": true,
+       "value": -1,
+       "need": "> -45 dBFS",
+       "required": true
+      },
+      {
+       "name": "no clipping",
+       "ok": true,
+       "value": 0,
+       "need": "< 0.0001",
+       "required": true
+      },
+      {
+       "name": "unvoiced (no voice / tone)",
+       "ok": true,
+       "value": {
+        "voicedFrac": 0,
+        "f0MedianHz": null
+       },
+       "need": "<= 0.2",
+       "required": true
+      },
+      {
+       "name": "no narrow tonal band",
+       "ok": true,
+       "value": {
+        "maxBandShare": 0.601
+       },
+       "need": "no band > 75 % of the energy",
+       "required": true
+      },
+      {
+       "name": "one connected whoosh",
+       "ok": true,
+       "value": {
+        "mainS": 1.09,
+        "mainShare": 1
+       },
+       "need": "main event 0.3–1.4 s holding >= 85 % of the energy",
+       "required": true
+      }
+     ]
+    },
+    "noiseFloor": {
+     "takeQuietFloorDbfs": -67.3,
+     "afterGainDbfs": -61.2,
+     "belowDerivativePeakDb": 60.2,
+     "note": "the take's 3rd-percentile 5 ms level (its silence: the Sound Lab decoder idle floor, harmonics of 172.27 Hz) after the applied gain; inside a slice it lies under the sound / the fades"
+    }
+   },
+   "ops": [
+    {
+     "op": "downmix",
+     "to": "mono",
+     "how": "mean of channels"
+    },
+    {
+     "op": "trim",
+     "startS": 0.0852,
+     "endS": 1.2427,
+     "startThresholdDbfs": -49.4,
+     "maxGapS": 0.12,
+     "holdMs": 40,
+     "note": "the connected active run holding the take's peak"
+    },
+    {
+     "op": "fade",
+     "inS": 0.006,
+     "outS": 0.1,
+     "curve": "cosine"
+    },
+    {
+     "op": "normalise",
+     "method": "sample peak",
+     "peakDbfs": -1,
+     "gainDb": 6.12
+    },
+    {
+     "op": "encode",
+     "codec": "mp3",
+     "encoder": "@breezystack/lamejs 1.2.7 (LGPL-3.0, build-time only)",
+     "kbps": 128
+    }
+   ],
+   "peakFromAudibleStartS": 0.916
+  }
+ ]
+}
