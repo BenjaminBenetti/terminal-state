@@ -17,27 +17,33 @@ local assistant settings. Main backs up old .git/root docs and verifies GitHub
 source/asset hashes before adoption. Never git clean/reset away existing work or
 stage external archives. Never reuse old generation budgets.
 
-## Textures — Codex generates new static artwork (standing user rule, 2026-11-01)
+## Textures — Codex for INITIAL sources; Meshy keeps its model maps (standing user rule, 2026-11-01, user-corrected)
 
-User: "codex is to be used to generate all textures. Except for dynamic stuff ofc".
+User: "codex is to be used to generate all textures. Except for dynamic stuff ofc". Correction (2026-11-01): "Of course the meshy model
+used meshy texture maps! Thats the whole point! You do codex -> meshy" — "Codex for initial texture generation!" — "Make sure this
+doesn't happen again".
 
-- **New STATIC texture / artwork sources come from Codex image generation.** That covers ads, posters, signs, decals, labels, fabrics
-  and material / surface artwork. Use the existing owned Codex CLI's native image tool (`.claude/skills/image-delegation`): never
-  hand-draw them in Canvas / SVG / Python / shader code, and never ask Codex to write drawing code instead of generating the image.
+- **Codex is for INITIAL authored static image / texture / concept sources.** That covers ads, posters, signs, decals, labels,
+  fabrics, material / surface artwork, concept art and the conditioning images given to Meshy. Use the existing owned Codex CLI's
+  native image tool (`.claude/skills/image-delegation`): never hand-draw them in Canvas / SVG / Python / shader code, and never ask
+  Codex to write drawing code instead of generating the image.
+- **Downstream model output keeps its maps.** In the approved Codex → Meshy workflow, the texture / PBR maps Meshy generates are part
+  of the model output: KEEP them as the model's runtime maps (re-encoded / packed through the normal derivative pipeline; raw originals
+  stay private provenance). They are NOT a Codex-rule failure: no second Codex retexture / reprojection / replacement pass, no
+  compliance hold, no extra art-approval gate. (This supersedes the round-4 follow-up wording that banned a new model's provider maps;
+  that was a misreading — the Strainer's Meshy maps were restored.)
 - **Dynamic textures are exempt and may stay code-driven:** runtime-generated or per-seed / per-run composited content (fictional
   brand names, headlines, menu lines, prices drawn over generated art), animated textures and effects, data textures (light fields,
   masks, noise, LUTs) and render targets.
 - **Processing is not authoring.** Deterministic processing of approved or generated sources is fine: UV baking, crop / resize, format
-  conversion, mips, PBR derivative maps. It is not a loophole for replacing generated art with hand-drawn art. There is no silent
-  exception for new hand-painted textures.
-- **Provider textures** delivered with a model (e.g. Meshy UV maps) are kept as private, read-only raw provenance. Approving a NEW
-  model does not make its provider maps an approved runtime texture source: a new asset's runtime static textures come from Codex
-  sources (e.g. its approved Codex art projected / baked onto the model's UVs, or new Codex images), never from re-encoded or renamed
-  provider maps. Runtime derivatives go through the normal pipeline (provenance, allowlist, CREDITS).
+  conversion, compression, channel packing, mips, PBR derivative maps. It is not a loophole for replacing generated art with
+  hand-drawn art. There is no silent exception for new hand-painted textures.
 - **Existing approved textures stay** unless a task actually replaces them.
-- **The generation rules above still apply.** Codex image calls need fresh explicit authorization with a count. If Codex image
-  generation or sign-in is unavailable, report the blocker; never substitute another generator, and never label code-drawn output as
-  generated art.
+- **The generation rules above still apply.** Paid generation (Meshy) and Codex image calls each need fresh explicit authorization with
+  a budget / count. If Codex image generation or sign-in is unavailable, report the blocker; never substitute another generator, and
+  never label code-drawn output as generated art.
+- **Ambiguity goes to the user.** Ask the user before materially expanding or reinterpreting this rule; never invent an extra
+  replacement or release gate from it.
 
 ## Props — core design rules (standing user rule, 2026-10-30)
 
