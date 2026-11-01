@@ -6,8 +6,8 @@
  "lane": "ASSET",
  "date": "2026-11-01",
  "generatedBy": "tools/asset-pipeline/enemy/build-strainer.mjs",
- "builtAt": "2026-11-01T08:08:56.604Z",
- "buildSeconds": 14,
+ "builtAt": "2026-11-01T19:31:57.271Z",
+ "buildSeconds": 15,
  "status": {
   "approved": false,
   "gameReady": false,
@@ -150,8 +150,8 @@
  "outputs": {
   "glb": {
    "path": "game/public/assets/models/enemy-strainer.glb",
-   "bytes": 2377612,
-   "sha256": "30d4347c2556f035bc3cd662db4227c2d9255cecf582ea578a35b16b3459736a",
+   "bytes": 2395736,
+   "sha256": "2486d2b99b41303e2b4a1e05762714b5d916c0192ab346636a1e4fd72255a3c4",
    "format": "glTF 2.0 binary; KHR_mesh_quantization (NORMAL int8 normalized; required); JPEG textures; JOINTS_0 u8 / WEIGHTS_0 normalized u8; one SkinnedMesh node"
   },
   "textures": {
@@ -2823,22 +2823,22 @@
     "frames": 121
    },
    "Walk": {
-    "duration": 1.8,
+    "duration": 2.6,
     "loop": true,
-    "frames": 55,
-    "groundSpeed": 0.62
+    "frames": 79,
+    "groundSpeed": 0.42
    },
    "Run": {
-    "duration": 0.9,
+    "duration": 1.6,
     "loop": true,
-    "frames": 28,
-    "groundSpeed": 2.4
+    "frames": 49,
+    "groundSpeed": 1.35
    },
    "Attack": {
-    "duration": 1.4,
+    "duration": 2,
     "loop": false,
-    "frames": 43,
-    "impactTime": 0.6
+    "frames": 61,
+    "impactTime": 1
    },
    "Hit": {
     "duration": 0.45,
@@ -2852,12 +2852,12 @@
    }
   },
   "runtime": {
-   "attackDuration": 1.4,
-   "attackImpact": 0.6,
-   "attackHitTime": 0.6,
+   "attackDuration": 2,
+   "attackImpact": 1,
+   "attackHitTime": 1,
    "attackReachM": 1.631,
-   "walkGroundSpeed": 0.62,
-   "runGroundSpeed": 2.4,
+   "walkGroundSpeed": 0.42,
+   "runGroundSpeed": 1.35,
    "note": "ZombieStats.attackDuration / attackImpact should match Attack (the right claw sweeps through the front at chest height at attackHitTime; reachM = horizontal root -> claw tip at that frame, actor scale 1); locomotion clips are authored in place for groundSpeed at timeScale 1 (ai/zombieActor.ts scales by speed / (groundSpeed x actor scale), clamped 0.35..1.8)"
   },
   "deathSolve": {
@@ -2929,7 +2929,7 @@
    "method": "per frame: Hips raised so the lowest CPU-skinned vertex stays >= 5 mm above the floor (Attack / Hit / Death)",
    "clips": {
     "Attack": {
-     "frames": 13,
+     "frames": 18,
      "maxLiftM": 0.0105
     },
     "Hit": {
@@ -2965,47 +2965,47 @@
     }
    },
    "Walk": {
-    "frames": 55,
-    "minY": -0.0068,
-    "atT": 0.23333,
+    "frames": 79,
+    "minY": -0.0048,
+    "atT": 1.76667,
     "framesBelowMinus1cm": 0,
-    "maxLegReach": 0.9038,
+    "maxLegReach": 0.9019,
     "feet": {
      "L": {
-      "minY": -0.0067,
-      "stanceLowestPointMaxY": 0.0139,
-      "stanceFrames": 30
+      "minY": -0.0048,
+      "stanceLowestPointMaxY": 0.0092,
+      "stanceFrames": 46
      },
      "R": {
-      "minY": -0.0068,
-      "stanceLowestPointMaxY": 0.0139,
-      "stanceFrames": 31
+      "minY": -0.0048,
+      "stanceLowestPointMaxY": 0.0092,
+      "stanceFrames": 47
      }
     }
    },
    "Run": {
-    "frames": 28,
-    "minY": -0.0085,
-    "atT": 0.33333,
+    "frames": 49,
+    "minY": -0.0059,
+    "atT": 0.9,
     "framesBelowMinus1cm": 0,
-    "maxLegReach": 0.9153,
+    "maxLegReach": 0.9964,
     "feet": {
      "L": {
-      "minY": -0.0085,
-      "stanceLowestPointMaxY": 0,
-      "stanceFrames": 8
+      "minY": -0.0059,
+      "stanceLowestPointMaxY": 0.0111,
+      "stanceFrames": 24
      },
      "R": {
-      "minY": -0.007,
-      "stanceLowestPointMaxY": 0.0001,
-      "stanceFrames": 8
+      "minY": -0.0059,
+      "stanceLowestPointMaxY": 0.0111,
+      "stanceFrames": 25
      }
     }
    },
    "Attack": {
-    "frames": 43,
+    "frames": 61,
     "minY": -0.0018,
-    "atT": 0.96667,
+    "atT": 1.5,
     "framesBelowMinus1cm": 0,
     "maxLegReach": 0.8984,
     "feet": {
@@ -3063,14 +3063,14 @@
    "Walk": {
     "maxSlipMps": 0,
     "meanSlipMps": 0,
-    "framesTested": 38,
-    "groundSpeed": 0.62
+    "framesTested": 62,
+    "groundSpeed": 0.42
    },
    "Run": {
     "maxSlipMps": 0,
     "meanSlipMps": 0,
-    "framesTested": 10,
-    "groundSpeed": 2.4
+    "framesTested": 30,
+    "groundSpeed": 1.35
    }
   },
   "clearance": {
@@ -3097,19 +3097,19 @@
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 28
+     "framesTested": 40
     },
     "Run": {
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 14
+     "framesTested": 25
     },
     "Attack": {
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 22
+     "framesTested": 31
     },
     "Hit": {
      "maxDepthM": 0,
@@ -3138,22 +3138,22 @@
      "framesTested": 61
     },
     "Walk": {
-     "maxDepthM": 0.0896,
-     "worstT": 0.46667,
+     "maxDepthM": 0.0918,
+     "worstT": 0.73333,
      "maxVertsDeeperThan1cm": 21,
-     "framesTested": 28
+     "framesTested": 40
     },
     "Run": {
-     "maxDepthM": 0.105,
-     "worstT": 0.6,
-     "maxVertsDeeperThan1cm": 35,
-     "framesTested": 14
+     "maxDepthM": 0.1043,
+     "worstT": 1.46667,
+     "maxVertsDeeperThan1cm": 24,
+     "framesTested": 25
     },
     "Attack": {
-     "maxDepthM": 0.0874,
-     "worstT": 0,
+     "maxDepthM": 0.0884,
+     "worstT": 0.13333,
      "maxVertsDeeperThan1cm": 21,
-     "framesTested": 22
+     "framesTested": 31
     },
     "Hit": {
      "maxDepthM": 0.0874,
@@ -3185,19 +3185,19 @@
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 28
+     "framesTested": 40
     },
     "Run": {
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 14
+     "framesTested": 25
     },
     "Attack": {
      "maxDepthM": 0,
      "worstT": null,
      "maxVertsDeeperThan1cm": 0,
-     "framesTested": 22
+     "framesTested": 31
     },
     "Hit": {
      "maxDepthM": 0,
@@ -3214,9 +3214,9 @@
    }
   },
   "attack": {
-   "hitFrame": 18,
+   "hitFrame": 30,
    "hit": {
-    "t": 0.6,
+    "t": 1,
     "reachM": 1.631,
     "reachR": 1.631,
     "reachL": 1.228,
@@ -3238,12 +3238,12 @@
    },
    "maxReachR": {
     "m": 1.631,
-    "t": 0.6
+    "t": 1
    },
    "centreLineCrossingR": {
-    "t": 0.594,
-    "y": 1.357,
-    "z": 1.595
+    "t": 0.993,
+    "y": 1.358,
+    "z": 1.6
    },
    "handVertices": {
     "L": 779,
@@ -3273,165 +3273,285 @@
     {
      "t": 0.06667,
      "R": [
-      -0.523,
-      0.583,
-      0.686
+      -0.479,
+      0.575,
+      0.705
      ],
-     "reachR": 0.863,
+     "reachR": 0.852,
      "L": [
-      0.444,
-      0.592,
-      0.718
+      0.461,
+      0.578,
+      0.695
      ],
-     "reachL": 0.844,
+     "reachL": 0.833,
      "frontR": [
-      -0.505,
-      0.552,
-      0.692
+      -0.46,
+      0.545,
+      0.71
      ]
     },
     {
      "t": 0.13333,
      "R": [
-      -0.873,
-      0.697,
-      0.397
+      -0.599,
+      0.596,
+      0.648
      ],
-     "reachR": 0.959,
+     "reachR": 0.882,
      "L": [
-      0.335,
-      0.639,
-      0.829
+      0.415,
+      0.614,
+      0.754
      ],
-     "reachL": 0.894,
+     "reachL": 0.86,
      "frontR": [
-      -0.775,
-      0.628,
-      0.533
+      -0.583,
+      0.564,
+      0.653
      ]
     },
     {
      "t": 0.2,
      "R": [
-      -1.234,
-      0.925,
-      0
+      -0.899,
+      0.676,
+      0.374
      ],
-     "reachR": 1.234,
+     "reachR": 0.973,
      "L": [
-      0.17,
-      0.717,
-      0.943
+      0.326,
+      0.646,
+      0.837
      ],
-     "reachL": 0.958,
+     "reachL": 0.899,
      "frontR": [
-      -1.048,
-      0.856,
-      0.164
+      -0.688,
+      0.722,
+      0.514
      ]
     },
     {
      "t": 0.26667,
      "R": [
-      -1.425,
-      1.258,
-      -0.408
+      -1.153,
+      0.837,
+      0.114
      ],
-     "reachR": 1.482,
+     "reachR": 1.159,
      "L": [
-      -0.002,
-      0.84,
-      1.012
+      0.21,
+      0.688,
+      0.919
      ],
-     "reachL": 1.012,
+     "reachL": 0.943,
      "frontR": [
-      -1.082,
-      1.344,
-      -0.217
+      -0.954,
+      0.8,
+      0.272
      ]
     },
     {
      "t": 0.33333,
      "R": [
-      -1.432,
-      1.469,
-      -0.589
+      -1.36,
+      1.015,
+      -0.186
      ],
-     "reachR": 1.548,
+     "reachR": 1.372,
      "L": [
-      -0.144,
-      0.942,
-      1.034
+      0.093,
+      0.772,
+      0.98
      ],
-     "reachL": 1.044,
+     "reachL": 0.984,
      "frontR": [
-      -0.967,
-      1.622,
-      -0.382
+      -1.166,
+      1.067,
+      -0.029
      ]
     },
     {
      "t": 0.4,
      "R": [
-      -1.412,
-      1.56,
-      -0.66
+      -1.429,
+      1.311,
+      -0.451
      ],
-     "reachR": 1.558,
+     "reachR": 1.498,
      "L": [
-      -0.202,
-      0.984,
-      1.036
+      -0.025,
+      0.856,
+      1.017
      ],
-     "reachL": 1.055,
+     "reachL": 1.018,
      "frontR": [
-      -0.946,
-      1.672,
-      -0.431
+      -1.088,
+      1.379,
+      -0.25
      ]
     },
     {
      "t": 0.46667,
      "R": [
-      -1.505,
-      1.564,
-      -0.365
+      -1.437,
+      1.434,
+      -0.562
      ],
-     "reachR": 1.549,
+     "reachR": 1.543,
      "L": [
-      -0.076,
-      0.949,
-      1.073
+      -0.125,
+      0.927,
+      1.033
      ],
-     "reachL": 1.075,
+     "reachL": 1.04,
      "frontR": [
-      -1.086,
-      1.633,
-      -0.23
+      -0.974,
+      1.602,
+      -0.364
      ]
     },
     {
      "t": 0.53333,
      "R": [
-      -1.307,
-      1.526,
-      0.831
+      -1.417,
+      1.539,
+      -0.643
      ],
-     "reachR": 1.549,
+     "reachR": 1.557,
      "L": [
-      0.302,
-      0.861,
-      1.102
+      -0.188,
+      0.973,
+      1.036
      ],
-     "reachL": 1.142,
+     "reachL": 1.053,
      "frontR": [
-      -1.279,
-      1.544,
-      0.84
+      -0.952,
+      1.661,
+      -0.419
      ]
     },
     {
      "t": 0.6,
+     "R": [
+      -1.399,
+      1.563,
+      -0.693
+     ],
+     "reachR": 1.561,
+     "L": [
+      -0.231,
+      0.988,
+      1.032
+     ],
+     "reachL": 1.058,
+     "frontR": [
+      -0.939,
+      1.674,
+      -0.453
+     ]
+    },
+    {
+     "t": 0.66667,
+     "R": [
+      -1.366,
+      1.568,
+      -0.771
+     ],
+     "reachR": 1.569,
+     "L": [
+      -0.301,
+      0.998,
+      1.021
+     ],
+     "reachL": 1.064,
+     "frontR": [
+      -0.919,
+      1.679,
+      -0.506
+     ]
+    },
+    {
+     "t": 0.73333,
+     "R": [
+      -1.351,
+      1.571,
+      -0.804
+     ],
+     "reachR": 1.572,
+     "L": [
+      -0.33,
+      1.003,
+      1.015
+     ],
+     "reachL": 1.067,
+     "frontR": [
+      -0.91,
+      1.681,
+      -0.529
+     ]
+    },
+    {
+     "t": 0.8,
+     "R": [
+      -1.399,
+      1.574,
+      -0.705
+     ],
+     "reachR": 1.567,
+     "L": [
+      -0.282,
+      0.99,
+      1.035
+     ],
+     "reachL": 1.073,
+     "frontR": [
+      -0.938,
+      1.677,
+      -0.463
+     ]
+    },
+    {
+     "t": 0.86667,
+     "R": [
+      -1.544,
+      1.574,
+      -0.147
+     ],
+     "reachR": 1.551,
+     "L": [
+      -0.056,
+      0.932,
+      1.102
+     ],
+     "reachL": 1.103,
+     "frontR": [
+      -1.33,
+      1.561,
+      -0.056
+     ]
+    },
+    {
+     "t": 0.93333,
+     "R": [
+      -1.121,
+      1.52,
+      1.077
+     ],
+     "reachR": 1.554,
+     "L": [
+      0.347,
+      0.845,
+      1.111
+     ],
+     "reachL": 1.164,
+     "frontR": [
+      -1.112,
+      1.527,
+      1.079
+     ]
+    },
+    {
+     "t": 1,
      "R": [
       0.128,
       1.334,
@@ -3451,227 +3571,287 @@
      ]
     },
     {
-     "t": 0.66667,
+     "t": 1.06667,
      "R": [
-      0.632,
-      1.18,
-      1.325
+      0.53,
+      1.199,
+      1.412
      ],
-     "reachR": 1.468,
+     "reachR": 1.508,
      "L": [
-      0.982,
-      0.716,
-      0.733
-     ],
-     "reachL": 1.225,
-     "frontR": [
-      0.539,
-      1.144,
-      1.355
-     ]
-    },
-    {
-     "t": 0.73333,
-     "R": [
-      0.816,
-      1.176,
-      1.109
-     ],
-     "reachR": 1.377,
-     "L": [
-      1.048,
-      0.706,
-      0.635
+      0.951,
+      0.721,
+      0.773
      ],
      "reachL": 1.226,
      "frontR": [
-      0.652,
-      1.094,
-      1.159
-     ]
-    },
-    {
-     "t": 0.8,
-     "R": [
-      0.834,
-      1.169,
-      1.07
-     ],
-     "reachR": 1.357,
-     "L": [
-      1.055,
-      0.701,
-      0.618
-     ],
-     "reachL": 1.223,
-     "frontR": [
-      0.674,
-      1.081,
-      1.122
-     ]
-    },
-    {
-     "t": 0.86667,
-     "R": [
-      0.64,
-      1.005,
-      1.145
-     ],
-     "reachR": 1.311,
-     "L": [
-      0.967,
-      0.643,
-      0.668
-     ],
-     "reachL": 1.175,
-     "frontR": [
-      0.568,
-      0.935,
-      1.154
-     ]
-    },
-    {
-     "t": 0.93333,
-     "R": [
-      0.256,
-      0.726,
-      1.14
-     ],
-     "reachR": 1.169,
-     "L": [
-      0.804,
-      0.585,
-      0.714
-     ],
-     "reachL": 1.075,
-     "frontR": [
-      0.251,
-      0.723,
-      1.141
-     ]
-    },
-    {
-     "t": 1,
-     "R": [
-      -0.171,
-      0.548,
-      0.976
-     ],
-     "reachR": 0.991,
-     "L": [
-      0.632,
-      0.525,
-      0.72
-     ],
-     "reachL": 0.958,
-     "frontR": [
-      -0.155,
-      0.52,
-      0.976
-     ]
-    },
-    {
-     "t": 1.06667,
-     "R": [
-      -0.381,
-      0.515,
-      0.826
-     ],
-     "reachR": 0.91,
-     "L": [
-      0.538,
-      0.52,
-      0.705
-     ],
-     "reachL": 0.887,
-     "frontR": [
-      -0.369,
-      0.486,
-      0.83
+      0.449,
+      1.16,
+      1.438
      ]
     },
     {
      "t": 1.13333,
      "R": [
-      -0.391,
-      0.519,
-      0.813
+      0.741,
+      1.172,
+      1.208
      ],
-     "reachR": 0.902,
+     "reachR": 1.418,
      "L": [
-      0.531,
-      0.524,
-      0.702
+      1.019,
+      0.71,
+      0.681
      ],
-     "reachL": 0.88,
+     "reachL": 1.225,
      "frontR": [
-      -0.38,
-      0.49,
-      0.818
+      0.567,
+      1.108,
+      1.25
      ]
     },
     {
      "t": 1.2,
      "R": [
-      -0.404,
-      0.539,
-      0.788
+      0.828,
+      1.178,
+      1.091
      ],
-     "reachR": 0.886,
+     "reachR": 1.37,
      "L": [
-      0.511,
-      0.511,
-      0.698
+      1.053,
+      0.705,
+      0.627
      ],
-     "reachL": 0.866,
+     "reachL": 1.226,
      "frontR": [
-      -0.379,
-      0.481,
-      0.794
+      0.666,
+      1.093,
+      1.143
      ]
     },
     {
      "t": 1.26667,
      "R": [
-      -0.421,
-      0.564,
-      0.757
+      0.841,
+      1.176,
+      1.067
      ],
-     "reachR": 0.866,
+     "reachR": 1.358,
      "L": [
-      0.496,
-      0.536,
-      0.687
+      1.059,
+      0.703,
+      0.616
      ],
-     "reachL": 0.847,
+     "reachL": 1.225,
      "frontR": [
-      -0.397,
-      0.506,
-      0.763
+      0.681,
+      1.087,
+      1.12
      ]
     },
     {
      "t": 1.33333,
      "R": [
-      -0.436,
-      0.586,
-      0.729
+      0.746,
+      1.076,
+      1.11
      ],
-     "reachR": 0.849,
+     "reachR": 1.337,
      "L": [
-      0.482,
-      0.557,
-      0.676
+      1.01,
+      0.67,
+      0.646
      ],
-     "reachL": 0.83,
+     "reachL": 1.199,
      "frontR": [
-      -0.412,
-      0.528,
-      0.737
+      0.581,
+      1.001,
+      1.144
      ]
     },
     {
      "t": 1.4,
+     "R": [
+      0.51,
+      0.898,
+      1.162
+     ],
+     "reachR": 1.269,
+     "L": [
+      0.908,
+      0.609,
+      0.691
+     ],
+     "reachL": 1.141,
+     "frontR": [
+      0.51,
+      0.898,
+      1.162
+     ]
+    },
+    {
+     "t": 1.46667,
+     "R": [
+      0.195,
+      0.69,
+      1.126
+     ],
+     "reachR": 1.143,
+     "L": [
+      0.778,
+      0.573,
+      0.719
+     ],
+     "reachL": 1.059,
+     "frontR": [
+      0.189,
+      0.687,
+      1.127
+     ]
+    },
+    {
+     "t": 1.53333,
+     "R": [
+      -0.133,
+      0.562,
+      0.998
+     ],
+     "reachR": 1.007,
+     "L": [
+      0.65,
+      0.533,
+      0.72
+     ],
+     "reachL": 0.97,
+     "frontR": [
+      -0.117,
+      0.535,
+      0.999
+     ]
+    },
+    {
+     "t": 1.6,
+     "R": [
+      -0.34,
+      0.525,
+      0.86
+     ],
+     "reachR": 0.925,
+     "L": [
+      0.553,
+      0.496,
+      0.714
+     ],
+     "reachL": 0.903,
+     "frontR": [
+      -0.328,
+      0.497,
+      0.865
+     ]
+    },
+    {
+     "t": 1.66667,
+     "R": [
+      -0.387,
+      0.514,
+      0.82
+     ],
+     "reachR": 0.907,
+     "L": [
+      0.534,
+      0.519,
+      0.704
+     ],
+     "reachL": 0.884,
+     "frontR": [
+      -0.376,
+      0.485,
+      0.824
+     ]
+    },
+    {
+     "t": 1.73333,
+     "R": [
+      -0.395,
+      0.525,
+      0.806
+     ],
+     "reachR": 0.898,
+     "L": [
+      0.527,
+      0.53,
+      0.699
+     ],
+     "reachL": 0.876,
+     "frontR": [
+      -0.383,
+      0.496,
+      0.811
+     ]
+    },
+    {
+     "t": 1.8,
+     "R": [
+      -0.408,
+      0.545,
+      0.781
+     ],
+     "reachR": 0.881,
+     "L": [
+      0.507,
+      0.518,
+      0.695
+     ],
+     "reachL": 0.861,
+     "frontR": [
+      -0.384,
+      0.487,
+      0.786
+     ]
+    },
+    {
+     "t": 1.86667,
+     "R": [
+      -0.424,
+      0.568,
+      0.751
+     ],
+     "reachR": 0.863,
+     "L": [
+      0.493,
+      0.54,
+      0.685
+     ],
+     "reachL": 0.844,
+     "frontR": [
+      -0.4,
+      0.511,
+      0.758
+     ]
+    },
+    {
+     "t": 1.93333,
+     "R": [
+      -0.437,
+      0.587,
+      0.727
+     ],
+     "reachR": 0.848,
+     "L": [
+      0.481,
+      0.558,
+      0.675
+     ],
+     "reachL": 0.829,
+     "frontR": [
+      -0.413,
+      0.529,
+      0.735
+     ]
+    },
+    {
+     "t": 2,
      "R": [
       -0.438,
       0.567,
@@ -3695,19 +3875,20 @@
   },
   "motionStretch": {
    "triangles": 20532,
-   "p50": 1.001,
-   "p99": 1.838,
-   "max": 4.64,
-   "over2x": 101,
-   "over3x": 12,
+   "p50": 1.002,
+   "p99": 1.856,
+   "max": 4.65,
+   "over2x": 109,
+   "over3x": 13,
    "fractionOver": 0.0006,
    "worstClips": {
-    "Attack": 55,
-    "Death": 89,
-    "Hit": 52,
-    "Run": 11
+    "Attack": 61,
+    "Death": 76,
+    "Run": 38,
+    "Hit": 30,
+    "Idle": 2
    },
-   "poses": 112,
+   "poses": 133,
    "method": "per triangle: worst edge length ratio posed / bind over every 3rd frame of all six clips (CPU skinning)"
   }
  },

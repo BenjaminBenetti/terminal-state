@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 import type {AnimName} from './brain';
-import {STRAINER_ASSET, STRAINER_SCALE, StrainerBrain} from './strainer';
+import {STRAINER_ASSET, STRAINER_SCALE, StrainerBrain, STRAINER_WET} from './strainer';
 import type {ZombieSpawn} from '../gen/station';
 import type {Vec3} from '../combat/hitscan';
 import type {HitPart, HitVolume} from './zombieActor';
@@ -115,6 +115,9 @@ export class StrainerActor {
       const clone = (src: THREE.Material) => {
         const mat = src.clone();
         if ((mat as THREE.MeshStandardMaterial).emissive) (mat as THREE.MeshStandardMaterial).emissive = new THREE.Color(0x000000);
+        // the wet finish (user playtest): a runtime layer on the ORIGINAL Meshy maps — lower roughness factor, slightly darker
+        const std = mat as THREE.MeshStandardMaterial;
+        if (std.isMeshStandardMaterial) { std.roughness *= STRAINER_WET.roughnessFactor; std.color.multiplyScalar(STRAINER_WET.darken); }
         this.ownMaterials.add(mat);
         return mat;
       };

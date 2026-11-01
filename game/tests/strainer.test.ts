@@ -13,9 +13,11 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ZOMBIE_STATS, ZombieBrain, type BrainWorld} from '../src/ai/brain';
 import {
-  PLAYER_BODY_RADIUS, STRAINER_ASSET, STRAINER_CUES, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STATS, StrainerBrain, strainerAttackRange,
+  PLAYER_BODY_RADIUS, STRAINER_ASSET, STRAINER_CUES, STRAINER_MAX_TOP_M, STRAINER_SCALE, STRAINER_STAGGER_MIN, STRAINER_STATS, STRAINER_WET, StrainerBrain, strainerAttackRange,
 } from '../src/ai/strainer';
 import {STRAINER_BONES, STRAINER_CLIPS, StrainerActor} from '../src/ai/strainerActor';
+import {STRAINER_TRAIL, StrainerWetTrail} from '../src/ai/strainerTrail';
+import {WET_TRAIL} from '../src/world/fx';
 import {BLIGHTBELLY_STATS} from '../src/ai/blightbelly';
 import {createEnemyActor, ENEMY_ARCHETYPES, enemyCues, archetypeOf, type EnemyActor} from '../src/ai/creatureArchetypes';
 import {assignEnemyArchetypes, enemyRoll, pickEnemyArchetype} from '../src/ai/creatureSpawn';
@@ -251,21 +253,28 @@ describe('Strainer: core / non-service picks bit-identical; service-annex simula
 
 // ---------------------------------------------------------------------------------------------------------------------------
 describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
-  it('stats: health 2x, claws 1.3x, walk 0.9x, chase never faster, longer reach, slightly longer cooldown (read from source)', () => {
+  // (user playtest 2026-11-01: "much to weak", "should lumber towards you, but be strong") — strong, slow, heavy-hitting
+  it('stats: a durable, strong, LUMBERING threat — 6x health, heavy claws, far slower than a zombie, longer reach and recovery', () => {
     const T = STRAINER_STATS;
-    expect(T.hp).toBe(2 * S.hp);
-    expect(T.attackDamage).toBe(Math.round(1.3 * S.attackDamage));
-    expect(T.wanderSpeed).toBeCloseTo(0.9 * S.wanderSpeed, 3);
-    expect(T.chaseSpeed).toBeLessThanOrEqual(S.chaseSpeed);
-    expect(T.chaseSpeed).toBeGreaterThan(0.9 * S.chaseSpeed); // "about the zombie's"
-    expect(T.chaseSpeed).toBeLessThan(3.4); // a walking player outpaces it
+    expect(T.hp).toBe(600);
+    expect(T.hp).toBeGreaterThanOrEqual(5 * S.hp);
+    expect(T.attackDamage).toBe(24);
+    expect(T.attackDamage).toBeGreaterThanOrEqual(2 * S.attackDamage); // strong
+    expect(T.wanderSpeed).toBe(0.4);
+    expect(T.chaseSpeed).toBe(1.35);
+    expect(T.chaseSpeed).toBeLessThan(0.6 * S.chaseSpeed); // it lumbers: far slower than a zombie's chase
+    expect(T.chaseSpeed).toBeLessThan(3.4 / 2); // a walking player (3.4 m/s) easily outpaces it
+    expect(T.chaseSpeed).toBe(STRAINER_ASSET.runGroundSpeed); // the chase clip plays at its authored speed (feet planted, no slide)
+    expect(T.wanderSpeed).toBeCloseTo(STRAINER_ASSET.walkGroundSpeed, 1);
+    expect(T.turnRate!).toBeLessThan(4.5); // a heavy body turns slowly
     expect(T.attackRange).toBeGreaterThan(S.attackRange); // the long arms
     expect(T.attackRange).toBe(strainerAttackRange(STRAINER_ASSET.reachM));
     expect(T.attackRange).toBeCloseTo(STRAINER_ASSET.reachM + PLAYER_BODY_RADIUS, 6);
     expect(T.attackRange / S.attackRange).toBeGreaterThan(1.4); // the GLB's reach: 1.931 / 1.35 = 1.43x
     expect(T.attackRange).toBeLessThanOrEqual(2.3);
-    expect(T.attackCooldown!).toBeGreaterThan(0.45); // the brain's default (the zombie's)
-    expect(T.attackCooldown!).toBeLessThan(1);
+    expect(T.attackCooldown!).toBe(1.0); // a long recovery after the big swing (zombie default 0.45)
+    expect(T.attackDuration).toBeGreaterThan(S.attackDuration); // a slower, telegraphed swipe
+    expect(T.attackImpact).toBeGreaterThan(S.attackImpact);
     expect(T.attackImpact).toBe(STRAINER_ASSET.attackHitTime);
     expect(T.attackDuration).toBe(STRAINER_ASSET.attackDuration);
     expect(T.attackImpact).toBeLessThan(T.attackDuration);
@@ -321,9 +330,9 @@ describe('Strainer: stats vs the ordinary zombie, the melee brain', () => {
     expect(zf.some(o => (o as {noLinks?: boolean}).noLinks === true)).toBe(false);
   });
 
-  it('dies once like every enemy (the brain\'s own contract); 2x the zombie\'s health', () => {
+  it('dies once like every enemy (the brain\'s own contract); 6x the zombie\'s health (user playtest: "much to weak")', () => {
     const b = new StrainerBrain(0, 0, 0);
-    expect(b.damage(S.hp, 0, 2)).toBe(false); // one zombie's worth of health is not enough
+    for (let k = 0; k < 5; k++) expect(b.damage(S.hp, 0, 2), `zombie-worth ${k + 1}`).toBe(false); // five zombies' worth is not enough
     expect(b.alive).toBe(true);
     expect(b.damage(S.hp, 0, 2)).toBe(true);
     expect(b.damage(50, 0, 2)).toBe(false);
@@ -494,5 +503,59 @@ describe('Strainer: actor (shared rig), head zone, fallback, ragdoll, persistenc
     expect(fallback).toBe(false);
     expect(archetypeOf(actor)).toBe('strainer');
     expect(actor.brain.hp).toBe(STRAINER_STATS.hp);
+  });
+});
+
+// Task studio-alpha-strainer-lumbering-wetness-20261101-01 (user playtest): the strong body shrugs off ordinary rounds, the wet
+// finish layers on the original Meshy maps, and the wet-shine trail is bounded, spaced by distance and on the floor it walks on.
+describe('Strainer lumbering / wet (user playtest 2026-11-01)', () => {
+  it('stagger resistance: only a single hit >= STRAINER_STAGGER_MIN staggers it; smaller hits still wake it into a chase', () => {
+    for (const amount of [17, 24, 30, 44]) {
+      const b = new StrainerBrain(0, 0, 0);
+      expect(b.damage(amount, 0, 5), `${amount}`).toBe(false);
+      expect(b.state, `${amount}: no stun-lock`).toBe('chase');
+    }
+    const big = new StrainerBrain(0, 0, 0);
+    big.damage(STRAINER_STAGGER_MIN, 0, 5);
+    expect(big.state).toBe('stagger');
+    const z = new ZombieBrain('shambler', 0, 0, 0);
+    z.damage(24, 0, 5);
+    expect(z.state).toBe('stagger'); // the ordinary zombie is unchanged
+  });
+
+  it('wet finish: a runtime layer on the ORIGINAL material (roughness factor down, colour darker), template untouched', () => {
+    const g = syntheticStrainer();
+    const src = (() => { let m: THREE.MeshStandardMaterial | null = null; g.scene.traverse(o => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) m = s.material as THREE.MeshStandardMaterial; }); return m!; })();
+    src.roughness = 1; src.color.setRGB(1, 1, 1);
+    const a = new StrainerActor(g, spawnAt(0, 0, 0), rng(3));
+    let mat: THREE.MeshStandardMaterial | null = null;
+    a.root.traverse(o => { const s = o as THREE.SkinnedMesh; if (s.isSkinnedMesh) mat = s.material as THREE.MeshStandardMaterial; });
+    expect(mat!.roughness).toBeCloseTo(STRAINER_WET.roughnessFactor, 6);
+    expect(mat!.color.r).toBeCloseTo(STRAINER_WET.darken, 6);
+    expect(src.roughness).toBe(1); // the shared template keeps its own values
+  });
+
+  it('wet-shine trail: one mark per spacing of travel, alternating feet, on the brain floor (storey-aware), bounded per step', () => {
+    const t = new StrainerWetTrail(), key = {}, marks: [number, number, number, number][] = [];
+    const drop = (x: number, y: number, z: number, s: number) => { marks.push([x, y, z, s]); };
+    const b = {x: 0, y: -1.2, z: 0, yaw: 0, alive: true, state: 'chase'};
+    expect(t.step(key, b, false, drop, () => 0.5)).toBe(0); // first sight: no mark
+    for (let i = 0; i < 30; i++) { b.z += 0.1; t.step(key, b, false, drop, () => 0.5); } // 3 m walked
+    expect(marks.length).toBe(Math.floor(3 / STRAINER_TRAIL.spacingM + 1e-9));
+    for (const m of marks) { expect(m[1]).toBeCloseTo(-1.2 + STRAINER_TRAIL.liftM, 6); expect(m[3]).toBeGreaterThanOrEqual(STRAINER_TRAIL.size[0]); expect(m[3]).toBeLessThanOrEqual(STRAINER_TRAIL.size[1]); }
+    expect(Math.sign(marks[0][0])).toBe(-Math.sign(marks[1][0])); // left / right feet
+    for (const m of marks) expect(m[2]).toBeLessThan(b.z); // behind it
+    const n0 = marks.length;
+    for (const state of ['dead', 'climb', 'stagger']) { const d = {...b, state}; d.z += 2; t.step(key, d, false, drop, () => 0.5); b.z = d.z; }
+    t.step(key, {...b, z: b.z + 1}, true, drop, () => 0.5); // ragdolled
+    expect(marks.length).toBe(n0);
+    t.step(key, {...b, z: b.z + 40}, false, drop, () => 0.5); // a placement jump is not a walk
+    expect(marks.length).toBe(n0);
+    const k2 = {}, b2 = {x: 0, y: 0, z: 0, yaw: 0, alive: true, state: 'chase'};
+    t.step(k2, b2, false, drop, () => 0.5);
+    expect(t.step(k2, {...b2, z: 2.9}, false, drop, () => 0.5)).toBeLessThanOrEqual(4); // never unbounded per step
+    // the marks live in ONE fixed instanced ring (fx WET_TRAIL: cap, lifetime): nothing accumulates without bound
+    expect(WET_TRAIL.cap).toBeLessThanOrEqual(64);
+    expect(WET_TRAIL.lifetimeS).toBeLessThanOrEqual(20);
   });
 });

@@ -1,6 +1,6 @@
 // Pooled hit feedback with bounded draw calls regardless of load:
 //  - GPU point particles (2 draw calls): dust/debris/blood/smoke (alpha) + sparks/embers (additive)
-//  - instanced, age-fading decals (<= 4 draw calls): bullet holes per surface + blood splats
+//  - instanced, age-fading decals (<= 5 draw calls): bullet holes per surface + blood splats + the Strainer's wet-shine trail
 //  - one LineSegments buffer for tracers (1 draw call)
 // All pools are fixed-size rings: the oldest entry is recycled, nothing grows.
 // Iteration 06 (Lane D): world / prop hits come through src/damage/system.ts, which adds persistent
@@ -8,7 +8,7 @@
 // small particle chips (decal: false where a persistent mark exists; glass / soft styles added).
 
 import * as THREE from 'three';
-import {LineBasicNodeMaterial, MeshLambertNodeMaterial, PointsNodeMaterial} from 'three/webgpu';
+import {LineBasicNodeMaterial, MeshLambertNodeMaterial, MeshStandardNodeMaterial, PointsNodeMaterial} from 'three/webgpu';
 import {Discard, Fn, attribute, cameraProjectionMatrix, exp, float, instancedDynamicBufferAttribute, materialOpacity, mix, positionView, select, smoothstep, texture, uniform, uv, vec4} from 'three/tsl';
 import {canvasTexture} from './canvasTextures';
 
@@ -195,13 +195,16 @@ class Decals {
   private readonly s = new THREE.Vector3();
   private static readonly Z = new THREE.Vector3(0, 0, 1);
 
-  constructor(readonly cap: number, map: THREE.Texture, readonly lifetime: number, name: string) {
+  constructor(readonly cap: number, map: THREE.Texture, readonly lifetime: number, name: string, glossy?: {color: number; roughness: number; opacity: number}) {
     const geo = new THREE.PlaneGeometry(1, 1);
     this.fade = new THREE.InstancedBufferAttribute(new Float32Array(cap), 1);
     this.fade.setUsage(THREE.DynamicDrawUsage);
     geo.setAttribute('aFade', this.fade);
-    // Iteration 13 (MAT-B): node material; the per-instance fade multiplies the alpha (was GLSL `diffuseColor.a *= vFade`)
-    const mat = new MeshLambertNodeMaterial({map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2});
+    // Iteration 13 (MAT-B): node material; the per-instance fade multiplies the alpha (was GLSL `diffuseColor.a *= vFade`).
+    // (Strainer wet trail) `glossy`: a LIT standard material — a dark, near-mirror film whose shine is the specular highlight
+    const decal = {map, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2};
+    const mat = glossy ? new MeshStandardNodeMaterial({...decal, color: glossy.color, roughness: glossy.roughness, metalness: 0, opacity: glossy.opacity})
+      : new MeshLambertNodeMaterial(decal);
     mat.name = `fx-decal-${name}`;
     mat.opacityNode = (materialOpacity as TNode).mul(attribute('aFade', 'float'));
     this.mesh = new THREE.InstancedMesh(geo, mat, cap);
@@ -253,6 +256,40 @@ class Decals {
 }
 
 const C = (hex: number) => new THREE.Color(hex);
+const UP = new THREE.Vector3(0, 1, 0);
+
+/**
+ * Task studio-alpha-strainer-lumbering-wetness-20261101-01 (user playtest: "should leave a trail of wet shine behind him"): a BOUNDED
+ * wet-shine trail — one instanced ring (WET_TRAIL.cap marks, ONE draw call, oldest recycled, nothing grows) of flat glossy films on
+ * the floor the Strainer walks on, each fading out over WET_TRAIL.lifetimeS. Purely visual: no water physics, no slip, no hazard.
+ */
+export const WET_TRAIL = {
+  cap: 64,
+  lifetimeS: 14,
+  /** A dark, near-mirror, half-transparent film (its shine is the specular highlight of the flashlight / lamps). */
+  film: {color: 0x16150f, roughness: 0.06, opacity: 0.55},
+} as const;
+
+/** The wet film's alpha mask: a soft, irregular puddle blob (a runtime-generated DATA texture, deterministic). */
+function wetMask(): THREE.DataTexture {
+  const n = 64, data = new Uint8Array(n * n * 4);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+    const u = (x + 0.5) / n * 2 - 1, v = (y + 0.5) / n * 2 - 1, a = Math.atan2(v, u);
+    // an irregular rim (a few low harmonics) and a soft edge; slightly elongated (a smear behind the foot)
+    const rim = 0.78 + 0.1 * Math.sin(3 * a + 0.7) + 0.06 * Math.sin(5 * a + 2.1) + 0.04 * Math.sin(8 * a + 4.0);
+    const r = Math.hypot(u * 0.82, v) / rim;
+    const alpha = Math.max(0, Math.min(1, (1 - r) / 0.35)) * (0.85 + 0.15 * Math.sin(9 * u + 4 * v));
+    const i = (y * n + x) * 4;
+    data[i] = data[i + 1] = data[i + 2] = 255;
+    data[i + 3] = Math.round(255 * Math.max(0, Math.min(1, alpha)));
+  }
+  const t = new THREE.DataTexture(data, n, n, THREE.RGBAFormat);
+  t.minFilter = THREE.LinearMipmapLinearFilter;
+  t.magFilter = THREE.LinearFilter;
+  t.generateMipmaps = true;
+  t.needsUpdate = true;
+  return t;
+}
 
 /**
  * Track 2 (VIS): visual, NON-HAZARDOUS steam (service-annex vents; world/trackExt/steam.ts drives it). Its own small ring
@@ -277,7 +314,7 @@ export class Effects {
   /** Track 2 (VIS): the steam ring (STEAM_FX.puffs) and each slot's unlit colour (relit per frame from the light field). */
   private readonly steamRing: Particles;
   private readonly steamBase = new Float32Array(STEAM_FX.puffs * 3);
-  private readonly decals: Record<'hole' | 'metal' | 'wood' | 'blood', Decals>;
+  private readonly decals: Record<'hole' | 'metal' | 'wood' | 'blood' | 'wet', Decals>;
   private time = 0;
   private decalTick = 0;
   // tracers: one LineSegments ring with per-vertex alpha
@@ -347,6 +384,8 @@ export class Effects {
       metal: new Decals(40, holeTex('rgba(150,148,140,0.55)', 'rgba(20,20,22,0.95)', 'rgba(90,90,90,0.25)', 6), 150, 'metal'),
       wood: new Decals(40, holeTex('rgba(60,40,22,0.8)', 'rgba(14,9,5,0.97)', 'rgba(70,48,26,0.7)', 7), 150, 'wood'),
       blood: new Decals(40, bloodTex, 120, 'blood'),
+      // Task studio-alpha-strainer-lumbering-wetness-20261101-01: the Strainer's wet-shine trail (WET_TRAIL; ai/strainerTrail.ts)
+      wet: new Decals(WET_TRAIL.cap, wetMask(), WET_TRAIL.lifetimeS, 'wet', WET_TRAIL.film),
     };
     for (const d of Object.values(this.decals)) this.group.add(d.mesh);
 
@@ -511,8 +550,13 @@ export class Effects {
   }
 
   /** Bounded pool usage (QA/debug). */
-  stats(): {particles: number; sparks: number; decals: number; blood: number; steam: number} {
-    return {particles: this.soft.live, sparks: this.glow.live, decals: this.decals.hole.used + this.decals.metal.used + this.decals.wood.used, blood: this.decals.blood.used, steam: this.steamRing.live};
+  /** One wet-shine mark (WET_TRAIL) flat on the floor at (x, y, z), `size` metres across. */
+  wet(x: number, y: number, z: number, size: number): void {
+    this.decals.wet.add(this.tmp.set(x, y, z), UP, size, this.time);
+  }
+
+  stats(): {particles: number; sparks: number; decals: number; blood: number; steam: number; wet: number} {
+    return {particles: this.soft.live, sparks: this.glow.live, decals: this.decals.hole.used + this.decals.metal.used + this.decals.wood.used, blood: this.decals.blood.used, steam: this.steamRing.live, wet: this.decals.wet.used};
   }
 
   clear(): void {
