@@ -262,8 +262,11 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
   const growthFactor = (g: number) => 1 / (1 + g / L.growthScale);
   const pickOpt = (ok: Opt[]): Opt => rng.weighted(ok.map(o => [o, o.pref * growthFactor(o.g)] as [Opt, number]));
 
-  /** Lays a segment off `from` (a door through the wall between them) and lines it; undone (null) when it carries no room. */
-  const laySeg = (from: Seg, o: Opt, chain: number): Seg | null => {
+  /**
+   * Lays a segment off `from` (a door through the wall between them) and lines it; undone (null) when it carries no room. `pre` runs
+   * between laying the corridor and lining it (the junction: the entry passage takes its staff rooms first) and is undone with it.
+   */
+  const laySeg = (from: Seg, o: Opt, chain: number, pre?: () => void): Seg | null => {
     const m = P.mark(), n0 = laid.length, h0 = halls, fromHall = from.hall;
     const dw = P.wallDoor(from.r, o.r, Math.min(doorW, widthOf(from), o.ax === 'x' ? o.r.h : o.r.w));
     if (!dw) return null;
@@ -272,6 +275,7 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
     const s: Seg = {id, r: o.r, ax: o.ax, depth: from.depth + 1, role: o.role, chain, ends: o.ends, occ: [[], []], slots: [], rooms: 0, hall: false};
     laid.push({id, r: o.r, kind: 'corridor', depth: s.depth, hall: false, host: from.id, endRoom: false});
     segs.push(s);
+    pre?.();
     lineSeg(s);
     if (s.rooms === 0) {
       P.undo(m); laid.length = n0; halls = h0; from.hall = fromHall; segs.pop();
@@ -282,16 +286,20 @@ export function planServiceArea(P: LayoutPrims, rng: Rng, A: AnnexCfg, root: {id
 
   // ---- 1. the junction at the entry passage's far end: the main service corridor across it (T / L) or straight on
   {
+    // (the entry passage is lined right after the junction corridor is laid and before the junction's own rooms: its staff rooms
+    // take the corners, so the way in is never a bare passage where the rock allows rooms)
     const far: 0 | 1 = farHi ? 1 : 0;
     const ok = scoreOpts(endOpts(entry, far, true));
     let J: Seg | null = null;
+    const reset = () => { entry.occ = [[], []]; entry.slots = []; entry.rooms = 0; entry.hall = false; };
     for (let k = 0; k < 4 && ok.length && !J; k++) {
       const o = pickOpt(ok);
       ok.splice(ok.indexOf(o), 1);
-      J = laySeg(entry, o, chains++);
+      J = laySeg(entry, o, chains++, () => lineSeg(entry));
+      if (!J) reset();
     }
     entry.ends[far] = J ? 'link' : 'dead';
-    lineSeg(entry);
+    if (!J) lineSeg(entry);
   }
 
   // ---- 2. growth: extend the spine, grow wings off its slots, until ~the area target
