@@ -39,6 +39,10 @@ export const ICONS: Record<IconKey, string> = {
   ...GEAR_ICONS,
   ...MEDICAL_ICONS,
   ...MATERIAL_ICONS,
+  // task reactor-build-20261101 (lane RESTART): HUD silhouettes (fallback when the 3D icon render is unavailable) — a key on a fob tag;
+  // a fuse cartridge lying along X (ceramic body, end caps, blade contacts)
+  reactorKey: S(`<rect x="4" y="9" width="20" height="14" rx="4"/><circle cx="9" cy="16" r="2.2" fill="${DARK}" opacity="0.55"/><circle cx="29" cy="16" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="38" cy="16" r="5"/><circle cx="38" cy="16" r="1.8" fill="${DARK}" opacity="0.5"/><path d="M42 14.5h18v3h-3v3h-3v-3h-3v3h-3v-3h-6z"/>`),
+  fuseCartridge: S(`<rect x="15" y="8" width="34" height="16" rx="3"/><rect x="11" y="7" width="6" height="18" rx="1.5" opacity="0.75"/><rect x="47" y="7" width="6" height="18" rx="1.5" opacity="0.75"/><rect x="3" y="14" width="9" height="4"/><rect x="52" y="14" width="9" height="4"/><rect x="24" y="12" width="16" height="8" fill="${DARK}" opacity="0.3"/>`),
 };
 
 /** Iteration 12 (LIGHT): small square HUD icons for the light panel (battery meter, flare count). */

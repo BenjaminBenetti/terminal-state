@@ -511,7 +511,8 @@ export class InventoryUI {
         : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
-        : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` : ''); // lane RACK (office-props-physics-scale-20261030)
+        : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
+        : def?.kind === 'part' ? `Reactor restart part — nothing to use by hand: take it to its control and press E there · ${inv.count(def.id)} in pockets / quick slots` : ''); // task reactor-build-20261101 (lane RESTART)
       fx.classList.toggle('refused', !!this.note && this.noteBad);
     }
     const useBtn = $('#btn-inv-use') as HTMLButtonElement;
@@ -519,7 +520,7 @@ export class InventoryUI {
     useBtn.disabled = !def || def.kind !== 'consumable';
     const eq = $('#btn-inv-equip') as HTMLButtonElement;
     eq.textContent = def?.kind === 'gear' ? (worn ? 'Take off' : 'Wear') : 'Equip'; // Iteration 16
-    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || def.kind === 'material' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
+    eq.disabled = !def || def.kind === 'ammo' || def.kind === 'supply' || def.kind === 'material' || def.kind === 'part' || (worn && !!def && isBagItem(def.id)) || (def.kind === 'throwable' && this.selected?.bar === 'throw'); // INTERACT; mask lane: filters are passive
     ($('#btn-inv-drop') as HTMLButtonElement).disabled = !def;
     const v = this.actions.vitals?.();
     const vit = document.querySelector('#inv-vitals');

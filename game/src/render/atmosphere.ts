@@ -34,6 +34,7 @@ import type {AreaKind, Archetype, RoomType, StationLayout} from '../gen/station'
 import {cellFloorFn} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {MAX_SLOTS} from '../world/lightField';
+import {REACTOR_ATMOSPHERE} from '../world/reactor/archHaze'; // task reactor-build-20261101 (lane ARCH)
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
 
@@ -194,12 +195,13 @@ export const ATMOSPHERE_BY_ARCHETYPE: Partial<Record<Archetype, Partial<Atmosphe
   express: {density: 0.019},
 };
 
-export function atmosphereFor(layout: Pick<StationLayout, 'archetype'> | null, base: AtmosphereParams = ATMOSPHERE): AtmosphereParams {
+export function atmosphereFor(layout: (Pick<StationLayout, 'archetype'> & {reactor?: unknown}) | null, base: AtmosphereParams = ATMOSPHERE): AtmosphereParams {
   const o = layout ? ATMOSPHERE_BY_ARCHETYPE[layout.archetype] : undefined;
+  const r = layout?.reactor ? REACTOR_ATMOSPHERE : undefined; // task reactor-build-20261101 (lane ARCH): the Reactor's deep industrial haze
   return {
-    ...base, ...o,
-    areaDensity: {...base.areaDensity, ...o?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity},
-    classDensity: {...base.classDensity, ...o?.classDensity}, classOdds: {...base.classOdds, ...o?.classOdds},
+    ...base, ...o, ...r,
+    areaDensity: {...base.areaDensity, ...o?.areaDensity, ...r?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity, ...r?.levelDensity},
+    classDensity: {...base.classDensity, ...o?.classDensity, ...r?.classDensity}, classOdds: {...base.classOdds, ...o?.classOdds, ...r?.classOdds},
   };
 }
 

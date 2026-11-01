@@ -127,6 +127,13 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
         expect(p.tables.salvage).toBeDefined();
         continue;
       }
+      // Task reactor-build-20261101: the Reactor = the mall's tables (its per-storey floor program serves the tiers) under explicit
+      // category overrides (scarcer ammo / medicine / batteries / materials — tests/reactor-registration.test.ts)
+      if (id === 'reactor') {
+        expect(p.tables).toBe(PROFILES.mall.tables);
+        expect(Object.keys(p.overrides)).toEqual(['categoryWeight']);
+        continue;
+      }
       expect(p.tables).toBe(BASE_TABLES);
       expect(Object.keys(p.overrides)).toEqual([]);
     }

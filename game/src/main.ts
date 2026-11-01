@@ -9,6 +9,7 @@ import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 import {warmupNote} from './render/warmup'; // Iteration 14
 import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
+import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -73,7 +74,7 @@ async function boot(): Promise<void> {
     void game.travel({to: {level: to, section: LEVELS[to].entry}, arrival: {kind: 'start'}, label: `Travelling to ${nameOf(to)}`, via: 'menu'});
   };
   let travelTarget: LevelId | null = null;
-  ['#btn-travel', '#btn-travel-2'].forEach((id, slot) => $(id).addEventListener('click', () => {
+  ['#btn-travel', '#btn-travel-2', '#btn-travel-3'].forEach((id, slot) => $(id).addEventListener('click', () => { // (+ slot 3: task reactor-build-20261101)
     travelTarget = travelTargets(game.run.current.level)[slot] ?? null;
     if (!travelTarget) return;
     $('#confirm-travel .to').textContent = nameOf(travelTarget);
@@ -86,12 +87,12 @@ async function boot(): Promise<void> {
   }
   $('#btn-death-retry').addEventListener('click', () => void game.retryLevel());
   $('#btn-death-new').addEventListener('click', () => void game.newGame(game.run.current.level, {enter: true}));
-  ['#btn-death-new-other', '#btn-death-new-third'].forEach((id, slot) => $(id).addEventListener('click', () => {
+  ['#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth'].forEach((id, slot) => $(id).addEventListener('click', () => {
     const to = travelTargets(game.run.current.level)[slot];
     if (to) void game.newGame(to, {enter: true});
   }));
   $('#btn-win-stay').addEventListener('click', () => game.keepExploring());
-  ['#btn-win-travel', '#btn-win-travel-2'].forEach((id, slot) => $(id).addEventListener('click', () => {
+  ['#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3'].forEach((id, slot) => $(id).addEventListener('click', () => {
     const to = travelTargets(game.run.current.level)[slot];
     if (to) travelTo(to);
   }));
@@ -101,18 +102,19 @@ async function boot(): Promise<void> {
     if (s !== 'paused' && s !== 'dead' && s !== 'won') return;
     closeConfirms();
     const cur = game.run.current, targets = travelTargets(cur.level), other = targets[0];
-    targets.forEach((t, slot) => { for (const id of slot ? ['#btn-travel-2', '#btn-win-travel-2'] : ['#btn-travel', '#btn-win-travel']) $(id).textContent = `Travel to ${nameOf(t)}`; });
+    targets.forEach((t, slot) => { for (const id of [['#btn-travel', '#btn-win-travel'], ['#btn-travel-2', '#btn-win-travel-2'], ['#btn-travel-3', '#btn-win-travel-3']][slot] ?? []) $(id).textContent = `Travel to ${nameOf(t)}`; }); // (+ slot 3: task reactor-build-20261101)
     $('#confirm-travel .to').textContent = nameOf(other);
     $('#pause-run').textContent = `This run: ${nameOf(cur.level)} · ${sectionLabel(cur)}. Travelling keeps everything you carry and your condition; only New game resets them. Nothing is saved when the page reloads.`;
     // a new game rolls fresh seeds: the static (generic) names
     $('#btn-death-new').textContent = `New game · ${LEVELS[cur.level].name}`;
     $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
     if (targets[1]) $('#btn-death-new-third').textContent = `New game · ${LEVELS[targets[1]].name}`;
+    if (targets[2]) $('#btn-death-new-fourth').textContent = `New game · ${LEVELS[targets[2]].name}`;
     const entry = game.run.entry;
     $('#death-note').textContent = entry
       ? `Retry level puts you back where you entered ${nameOf(entry.level)}, exactly as you were then — the same kit, health, food and water, battery and injuries (no free heal or refill) — and the level as you found it. New game resets everything.`
       : 'New game resets everything.';
-    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : 'Station clear';
+    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : 'Station clear';
   });
   // task mall-playtest-revision-20261031 (lane GEN): the title's mall card names the prepared run's seeded mall
   game.stateListeners.push((s: GameState) => {
@@ -120,6 +122,8 @@ async function boot(): Promise<void> {
     const b = document.querySelector('.level-card[data-level="mall"] b');
     if (b) b.textContent = nameOf('mall');
   });
+  // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
+  game.stateListeners.push((st: GameState) => { if (st !== 'title') return; const el = $('#milestone-badge'), t = milestoneBadge(readMilestones()); if (el) { el.textContent = t; el.hidden = !t; } });
   // the title's level choice (before the run starts): rebuilds the prepared run's start (same seeds) and warms it up
   const choice = document.querySelectorAll<HTMLButtonElement>('.level-card');
   const markChoice = (level: LevelId) => { for (const c of choice) c.setAttribute('aria-checked', String(c.dataset.level === level)); };
@@ -200,7 +204,8 @@ async function boot(): Promise<void> {
   // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for the mall (seeded "<Name> Center"); ?level=mall starts there; QA-only
   // ?mallVariant=galleria|oval-court|cross-galleria forces the mall's layout variant for this session)
   setMallVariantOverride(params.get('mallVariant'));
-  const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed'), mall: seedOf('mallSeed')},
+  // (task reactor-build-20261101: + ?reactorSeed=CODE; ?level=reactor starts the title's run in the Reactor)
+  const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed'), mall: seedOf('mallSeed'), reactor: seedOf('reactorSeed')},
     onProgress: (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
   if (game.state === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)
   const note = warmupNote(warm);

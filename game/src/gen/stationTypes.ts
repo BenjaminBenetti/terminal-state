@@ -9,6 +9,7 @@ import type {Traversal} from './traversal';
 import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
+import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import type {TrackExtensions} from './trackExt/types';
 
@@ -50,7 +51,9 @@ export type AreaRole =
   | 'ticket-hall' | 'great-hall' | 'exit-hall' | 'mall' | 'food-hall' | 'line-2'
   // Iteration 08 (Lane A): multi-level program — stair cores (lobby / landing), upper decks over the
   // platforms, crossover bridges and catwalks over the track beds, lower service crossing + gallery.
-  | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery';
+  | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery'
+  // task reactor-build-20261101 (lane GEN): THE REACTOR's pit decks / rooms (gen/reactor; ARCH keys materials off them; additive only)
+  | 'reactor-gallery' | 'reactor-landing' | 'reactor-bridge' | 'reactor-tower' | 'reactor-floor' | 'reactor-room';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 
@@ -296,6 +299,8 @@ export interface StationLayout {
   office?: OfficeTowerInfo;
   /** Task track3-eaton-centre-20261031: The Eaton's Center (LevelId 'mall') — written by gen/mall (lane GEN). */
   mall?: MallInfo;
+  /** Task reactor-build-20261101: THE REACTOR (LevelId 'reactor') — the pit, tiers, gas zones, generators, restart sites (gen/reactor). */
+  reactor?: ReactorInfo;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
   hordes?: HordeGroupSpec[];
   /**

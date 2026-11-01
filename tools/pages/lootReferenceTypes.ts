@@ -424,7 +424,8 @@ export interface FloorProgramInfo {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Special sources (outside the holder tables) — never silently omitted
 
-export type SpecialFamily = 'gear' | 'mask' | 'weapon' | 'starter' | 'reward' | 'fixture' | 'interaction' | 'decoration' | 'floor-moved';
+// (+ 'objective': task reactor-build-20261101 — the Reactor's restart parts, placed once by its generator, never in a loot table)
+export type SpecialFamily = 'gear' | 'mask' | 'weapon' | 'starter' | 'reward' | 'objective' | 'fixture' | 'interaction' | 'decoration' | 'floor-moved';
 
 export interface SpecialItem {
   itemId: string;
