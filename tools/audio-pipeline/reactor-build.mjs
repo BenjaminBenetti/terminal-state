@@ -89,8 +89,11 @@ for (const c of queue.clips) {
   const dur = +(chs[0].length / sr).toFixed(4);
   (manifest[c.cue] ??= []).push({url, dur, ...(loop ? {loop} : {}), src: c.id});
   files.push({url, buf: mp3});
-  prov.push({cue: c.cue, clip: c.id, url, bytes: mp3.length, sha256: sha(mp3), dur, ...(loop ? {loop} : {}), ops,
-    source: {rawSha256: side.rawSha256, seconds: side.request.seconds, seed: side.request.seed, steps: side.request.steps, cfg: side.request.cfg, prompt: side.request.prompt}});
+  const jobId = side.job?.id ?? side.jobId ?? null;
+  if (!/^\d{8}T\d{6}-\d+$/.test(String(jobId))) throw new Error(`${c.id}: no Sound Lab job id in the runner sidecar`);
+  prov.push({cue: c.cue, url, bytes: mp3.length, sha256: sha(mp3), dur, ...(loop ? {loop} : {}), ops,
+    source: {clip: c.id, rawFile: `reference/tasks/reactor-build-20261101-205236/audio/raw/${c.id}.wav`, rawSha256: side.rawSha256, rawBytes: side.rawBytes,
+      labFile: side.labFile, labSidecarSha256: side.labSidecarSha256, jobId, prompt: side.request.prompt, seed: side.request.seed, seconds: side.request.seconds, steps: side.request.steps, cfg: side.request.cfg}});
 }
 for (const cue of CUES_REACTOR) if (!manifest[cue]) throw new Error(`cue ${cue} has no clip`);
 console.log(JSON.stringify(prov.map(p => ({cue: p.cue, url: p.url, bytes: p.bytes, dur: p.dur, loop: p.loop})), null, 1));
@@ -106,11 +109,19 @@ import type {ClipRef} from './manifest.generated';
 export const CLIP_MANIFEST_REACTOR: Readonly<Record<string, readonly ClipRef[]>> = {
 ${Object.entries(manifest).map(([cue, refs]) => ` ${cue}: [\n${refs.map(r => `  ${JSON.stringify(r)},`).join('\n')}\n ],`).join('\n')}
 };
+/** Cues of this build without a clip (none). */
+export const CLIP_GAPS_REACTOR: readonly string[] = [];
+/** Bytes of this build's bundled clips. */
+export const CLIP_BYTES_REACTOR = ${files.reduce((s, f) => s + f.buf.length, 0)};
 `;
 fs.writeFileSync(MANIFEST_TS, ts);
 const provDoc = {schema: 'last-line-derivative/1', asset: 'audio-reactor-20261101', task: TASK, lane: 'primary',
-  status: 'runtime derivatives of the Reactor machine set generated for this project with the existing LOCAL Sound Lab (narrow reactor / generator ambience allowed by the Reactor build brief; 9 jobs of a 12-job cap, every first take accepted); unapproved prototype, no licence or commercial clearance implied; structurally QC-ed, not auditioned by ear on the worker',
-  rebuild: 'node tools/audio-pipeline/reactor-build.mjs', plan: 'tools/audio-pipeline/reactor-plan.py', kbps: KBPS, clips: prov};
+  generatedBy: 'the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (narrow reactor / generator ambience allowed by the Reactor build brief; 9 jobs of a 12-job cap, every first take accepted)',
+  plannedBy: 'tools/audio-pipeline/reactor-plan.py', rebuild: 'node tools/audio-pipeline/reactor-build.mjs',
+  license: {status: 'Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. "Powered by Stability AI" if distributed. Outputs may not be used to build or improve a foundational generative AI model.',
+    kitStatus: 'Conditional. Not commercially cleared by this kit.', review: 'NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope levels per segment). The user taste-tests in game.',
+    gameReady: false, approved: false, notice: 'game/public/assets/audio/NOTICE.md'},
+  kbps: KBPS, derivatives: prov};
 const provBuf = Buffer.from(JSON.stringify(provDoc, null, 1) + '\n');
 { const hit = provBuf.toString().match(/.{0,60}(https?:|Signature=|token=).{0,20}/i); if (hit) throw new Error(`URL-like string in public provenance: ...${hit[0]}...`); }
 fs.writeFileSync(path.join(ROOT, 'game/public', PROV_REL), provBuf);

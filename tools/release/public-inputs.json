@@ -1550,8 +1550,8 @@
     },
     {
       "path": "assets/derivatives/audio-reactor.json",
-      "bytes": 7979,
-      "sha256": "4a97f0348b8dd7a8e77f733abfa845c0a4c90a84cb409267a2617ef7ce6b58b5"
+      "bytes": 11595,
+      "sha256": "21a667dd4d7f84cf902ca3ca424c17d8d77a7755739524479b9b3c0b3b5a116d"
     },
     {
       "path": "assets/derivatives/audio-strainer.json",

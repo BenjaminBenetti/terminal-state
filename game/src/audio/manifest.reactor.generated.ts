@@ -33,3 +33,7 @@ export const CLIP_MANIFEST_REACTOR: Readonly<Record<string, readonly ClipRef[]>>
   {"url":"assets/audio/reactor-hum-loop.mp3","dur":8.6,"loop":{"start":0.3,"length":8},"src":"reactor-hum-01"},
  ],
 };
+/** Cues of this build without a clip (none). */
+export const CLIP_GAPS_REACTOR: readonly string[] = [];
+/** Bytes of this build's bundled clips. */
+export const CLIP_BYTES_REACTOR = 774057;
