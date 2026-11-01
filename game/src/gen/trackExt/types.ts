@@ -343,6 +343,12 @@ export interface TrackExtContext {
   /** Final grid cell budget (W x H): the light field / density maps grow with it. */
   maxCells: number;
   /**
+   * (Round 3, lane LAYOUT addition, OPT-IN; 'east-south' only) The level's own core crop size (cells, from the fixed origin) when its
+   * crop rule keeps more than the extension estimate's 2 cells past the last carved cell (the mall: its exclusive extent + 3, and the
+   * outer corridor's frame) — the grid budget check then uses the exact crop: max(core, extension extent + 3) per axis.
+   */
+  coreCrop?: {w: number; h: number};
+  /**
    * (task track3 lane INTEG addition, OPT-IN; default: every level grid) Level grids that must stay ROCK around / under every
    * extension cell — the storeys of the station itself. Any other storey may stand ABOVE an extension cell when it is solid there or
    * its floor clears the extension's ceiling by EXT_STOREY_SLAB (extensionIssues); its VOID (an atrium / drop) always blocks. For a

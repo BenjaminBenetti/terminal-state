@@ -126,6 +126,10 @@ beds end under the rings' end galleries. The mall therefore declares `rockLevels
 must be rock; another storey may stand above an extension cell when it is solid there or its floor clears the extension's ceiling
 by `EXT_STOREY_SLAB` (0.3 m; the bed ceiling is 4.4 m, ring 1 stands at 5 m), never its VOID (the atrium). The planner's core mask,
 the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels without it (Subway, Office) are unchanged.
+- **Exact budget** (round 3, lane LAYOUT): the mall's crop keeps one cell more than the extension planner's default estimate (its
+  exclusive extent + `CROP_MARGIN`, and the outer corridor's frame), so a long run east could end a few hundred cells past 75k
+  (measured 75,348 on mall 113829 with the round-3 plan). The mall now takes its crop extent before `extendTracks` and passes it as
+  the opt-in `TrackExtContext.coreCrop`; the budget check is then exact (max 74,802 over 20 malls).
 - Hatches stay refused in the mall (both beds of its `sideBlock` are flanked by side platforms), and the west bed end lies behind the
   fixed crop origin (east / south growth only), so a mall has at most ONE tunnel (east) and one annex.
 - Measured (48 generated malls: 16 seeds `9100 + 104729k` x 3 variants; every attempt valid first time, none dropped):

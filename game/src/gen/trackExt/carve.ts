@@ -204,8 +204,9 @@ export class Carver {
   /** Grid cells of the final crop for a bbox (the level's crop rule). */
   private cellsFor(b: {x0: number; y0: number; x1: number; y1: number}): number {
     if (this.ctx.canvasGrow === 'east-south') {
-      const o = this.ctx.origin ?? {x: 0, y: 0};
-      return (b.x1 - o.x + 3) * (b.y1 - o.y + 3);
+      const o = this.ctx.origin ?? {x: 0, y: 0}, cc = this.ctx.coreCrop;
+      // (round 3: a level that declares its exact core crop — the mall — is budgeted on it)
+      return cc ? Math.max(cc.w, b.x1 - o.x + 3) * Math.max(cc.h, b.y1 - o.y + 3) : (b.x1 - o.x + 3) * (b.y1 - o.y + 3);
     }
     return (b.x1 - b.x0 + 5) * (b.y1 - b.y0 + 5);
   }
