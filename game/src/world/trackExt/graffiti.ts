@@ -18,15 +18,18 @@ import * as THREE from 'three';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {float, texture, uv, vertexColor} from 'three/tsl';
 import {canvasTexture} from '../canvasTextures';
-import type {StationArt, TrackTunnel} from '../../gen/trackExt/types';
+import type {CacheMark, StationArt, TrackTunnel} from '../../gen/trackExt/types';
 import type {Trench} from '../../gen/stationTypes';
 import {Acc, hashOf, prng, type V3} from './mesh';
 import type {TunnelFrame} from './frame';
-import {paintPiece, paintServiceStencil, paintWatcher} from './graffitiArt';
+import {paintHideoutMark, paintPiece, paintServiceStencil, paintSurvivorArrow, paintTally, paintWatcher} from './graffitiArt';
 import {bedFrame} from './view';
 
-/** Atlas: 2048 x 1024. Legacy cells 0-7: 512 x 256 (2 columns x 4 rows, left half); art cells 8-11 in the right half. */
-export const ATLAS = {w: 2048, h: 1024, cw: 512, ch: 256} as const;
+/**
+ * Atlas: 2048 x 1280. Legacy cells 0-7: 512 x 256 (2 columns x 4 rows, left half); art cells 8-11 in the right half; (round 3, lane
+ * HIDEOUT) the survivor's trail cells 12-15 in a fifth 256 px row across the bottom (arrow right / left, hideout mark, tally).
+ */
+export const ATLAS = {w: 2048, h: 1280, cw: 512, ch: 256} as const;
 export type ArrowStyle = 'bold' | 'chevron' | 'stencil';
 export const ARROW_STYLES: readonly ArrowStyle[] = ['bold', 'chevron', 'stencil'];
 /** Cell index of an arrow style + direction, the tags and the station-art cells (right / left pairs keep even = right). */
@@ -36,6 +39,10 @@ export const CELL_OF = {
   piece: 8,
   watcher: 9,
   service: (dir: 'left' | 'right') => (dir === 'left' ? 11 : 10),
+  // (round 3, lane HIDEOUT) the survivor's trail (gen/annexMarks.ts)
+  survivor: (dir: 'left' | 'right') => (dir === 'left' ? 13 : 12),
+  hideout: 14,
+  tally: 15,
 } as const;
 /** Pixel rect [x, y, w, h] of an atlas cell (y down). */
 export function cellRect(cell: number): [number, number, number, number] {
@@ -43,6 +50,7 @@ export function cellRect(cell: number): [number, number, number, number] {
   if (cell < 8) return [(cell % 2) * cw, Math.floor(cell / 2) * ch, cw, ch];
   if (cell === 8) return [1024, 0, 1024, 512];
   if (cell === 9) return [1024, 512, 512, 512];
+  if (cell >= 12) return [(cell - 12) * cw, 1024, cw, ch];
   return [1536, cell === 10 ? 512 : 768, 512, 256];
 }
 /** Spray colours (sRGB): red, white, yellow, green, blue, orange. */
@@ -246,6 +254,11 @@ export function paintGraffitiAtlas(ctx: Ctx, w: number, h: number): void {
   cell(CELL_OF.watcher, (rnd, w, h) => paintWatcher(ctx, w, h, rnd));
   cell(CELL_OF.service('right'), (rnd, w, h) => paintServiceStencil(ctx, w, h, rnd, 'right'));
   cell(CELL_OF.service('left'), (rnd, w, h) => paintServiceStencil(ctx, w, h, rnd, 'left'));
+  // (round 3, lane HIDEOUT) the survivor's trail
+  cell(CELL_OF.survivor('right'), (rnd, w, h) => paintSurvivorArrow(ctx, w, h, rnd));
+  cell(CELL_OF.survivor('left'), (rnd, w, h) => paintSurvivorArrow(ctx, w, h, rnd), true);
+  cell(CELL_OF.hideout, (rnd, w, h) => paintHideoutMark(ctx, w, h, rnd));
+  cell(CELL_OF.tally, (rnd, w, h) => paintTally(ctx, w, h, rnd));
 }
 
 let atlasTex: THREE.Texture | null = null;
@@ -373,6 +386,32 @@ export function stationArtDecals(acc: Acc, art: readonly StationArt[], trenches:
     out.push({art: i, kind: a.kind, cell, dir, x, y: a.y, z, w: a.w, h: a.h, color});
   });
   return out;
+}
+
+/**
+ * (round 3, lane HIDEOUT) The survivor's paint: ONE luminous lime for every trail / hideout mark (the player learns to follow that
+ * colour and the circled triangle), a chalky off-white for the tally inside the hideout. Same glow as all graffiti (GRAFFITI_GLOW).
+ */
+export const SURVIVOR_SPRAY = {trail: '#b6ff5c', tally: '#efe9d6'} as const;
+
+/** One placed survivor-mark decal (tests / QA): the record index, its cell, world centre (on the wall plane), size, colour. */
+export interface CacheMarkDecal { mark: number; kind: CacheMark['kind']; cell: number; dir: 'left' | 'right' | null; x: number; y: number; z: number; w: number; h: number; color: string }
+
+/**
+ * (round 3, lane HIDEOUT) Decals of the survivor's trail records (gen/annexMarks.ts) on the annex walls: flat quads on each record's
+ * wall plane (its inward normal), the arrow cell by its direction, the hideout mark, the tally — the same atlas, material and mesh as
+ * every other mark (one draw per level).
+ */
+export function cacheMarkDecals(acc: Acc, marks: readonly CacheMark[]): CacheMarkDecal[] {
+  return marks.map((m, i) => {
+    const cell = m.kind === 'arrow' ? CELL_OF.survivor(m.dir ?? 'right') : m.kind === 'hideout' ? CELL_OF.hideout : CELL_OF.tally;
+    const color = m.kind === 'tally' ? SURVIVOR_SPRAY.tally : SURVIVOR_SPRAY.trail;
+    const o = GRAFFITI.offset;
+    const c: V3 = m.axis === 'z' ? [m.c, m.y, m.plane + m.n * o] : [m.plane + m.n * o, m.y, m.c];
+    const n: V3 = m.axis === 'z' ? [0, 0, m.n] : [m.n, 0, 0];
+    planeStrip(acc, c, n, m.w, m.h, cell, rgbOf(color));
+    return {mark: i, kind: m.kind, cell, dir: m.dir, x: c[0], y: m.y, z: c[2], w: m.w, h: m.h, color};
+  });
 }
 
 /** A flat decal quad on a vertical wall plane (centre `c`, inward normal `n`), unmirrored for a viewer facing the wall. */

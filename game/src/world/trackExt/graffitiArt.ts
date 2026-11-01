@@ -276,3 +276,88 @@ export function paintServiceStencil(ctx: Ctx, cw: number, ch: number, rnd: () =>
   for (let i = 0; i < 4; i++) drip(ctx, x0 + rnd() * tw, y0 + 6 * u, 2 + rnd() * 2, 6 + rnd() * 18, '#ffffff', ay - ah * 1.4);
   for (let i = 0; i < 3; i++) drip(ctx, X(0.05 + rnd() * 0.55), ay + ah * 0.45, 2 + rnd() * 2, 6 + rnd() * 20, '#ffffff', ch - 3);
 }
+
+// ---- the survivor's trail (task studio-alpha-track2-round3-20261031-01, lane HIDEOUT) ------------------------------------------
+// Three more cells (gen/annexMarks.ts records): the survivor's ARROW (the recurring symbol — a circled triangle — and a hand-sprayed
+// arrow; mirrored for left), the HIDEOUT mark (the symbol with a dot + "SAFE") and the TALLY (days counted in groups of five). White
+// strokes for the per-decal tint over a soft dark halo, so they read on pale or dark concrete; drips run down inside the cell.
+
+/** A sprayed stroke: a soft dark halo, white overspray, the white core (tinted per decal). */
+function sprayLine(ctx: Ctx, pts: Pt[], w: number): void {
+  polyStroke(ctx, pts, w * 2.1, '#0b0b10', 0.3);
+  polyStroke(ctx, pts, w * 1.6, '#ffffff', 0.14);
+  polyStroke(ctx, pts, w, '#ffffff', 0.95);
+}
+
+/** A hand-drawn closed ring of radius r (a little wobble, the end overshooting the start like a quick spray loop). */
+function ring(cx: number, cy: number, r: number, rnd: () => number): Pt[] {
+  const pts: Pt[] = [], ph = rnd() * 6.28, a0 = -Math.PI / 2 - 0.25;
+  for (let i = 0; i <= 44; i++) {
+    const a = a0 + (i / 40) * Math.PI * 2, k = 1 + 0.04 * Math.sin(a * 3 + ph) + (rnd() - 0.5) * 0.02;
+    pts.push([cx + Math.cos(a) * r * k, cy + Math.sin(a) * r * k]);
+  }
+  return pts;
+}
+
+/** The survivor symbol: a circled triangle (point up), optionally with a dot in it; a few runs off its bottom. */
+function survivorSymbol(ctx: Ctx, cx: number, cy: number, r: number, rnd: () => number, maxY: number, dot = false): void {
+  const w = r * 0.17;
+  sprayLine(ctx, ring(cx, cy, r, rnd), w);
+  const tri: Pt[] = [0, 1, 2, 3].map(k => {
+    const a = -Math.PI / 2 + (k % 3) * (Math.PI * 2 / 3), rr = r * 0.6;
+    return [cx + Math.cos(a) * rr + (rnd() - 0.5) * 2, cy + Math.sin(a) * rr + r * 0.06 + (rnd() - 0.5) * 2] as Pt;
+  });
+  sprayLine(ctx, tri, w * 0.85);
+  if (dot) { disc(ctx, cx, cy + r * 0.12, w * 1.1, '#0b0b10', 0.3); disc(ctx, cx, cy + r * 0.12, w * 0.8, '#ffffff', 0.95); }
+  for (let i = 0; i < 3; i++) drip(ctx, cx + (rnd() - 0.5) * r * 1.2, cy + r * (0.85 + rnd() * 0.1), 2.5 + rnd() * 2, 8 + rnd() * 26, '#ffffff', maxY);
+}
+
+/** The survivor's trail ARROW pointing right (the atlas mirrors the whole cell for left): the symbol, then the arrow. */
+export function paintSurvivorArrow(ctx: Ctx, cw: number, ch: number, rnd: () => number): void {
+  survivorSymbol(ctx, cw * 0.2, ch * 0.48, ch * 0.32, rnd, ch - 4);
+  const w = ch * 0.085, y = ch * 0.5;
+  const shaft: Pt[] = [];
+  for (let i = 0; i <= 10; i++) { const u = i / 10; shaft.push([cw * (0.42 + 0.45 * u), y + Math.sin(u * 3.1 + rnd()) * 3 + (1 - u) * 4]); }
+  sprayLine(ctx, shaft, w);
+  sprayLine(ctx, [[cw * 0.73, ch * 0.24], [cw * 0.89, y], [cw * 0.73, ch * 0.76]], w);
+  for (let i = 0; i < 3; i++) drip(ctx, cw * (0.46 + rnd() * 0.36), y + w * 0.5, 2 + rnd() * 2.5, 8 + rnd() * 30, '#ffffff', ch - 4);
+}
+
+/** Stroke letters (unit box, x right, y down) of the hideout mark's word. */
+const SAFE_GLYPHS: Record<string, Pt[][]> = {
+  S: [[[1, 0.12], [0.75, 0], [0.22, 0], [0, 0.22], [0.25, 0.46], [0.78, 0.55], [1, 0.78], [0.78, 1], [0.2, 1], [0, 0.88]]],
+  A: [[[0, 1], [0.5, 0], [1, 1]], [[0.2, 0.62], [0.8, 0.62]]],
+  F: [[[1, 0], [0, 0], [0, 1]], [[0, 0.48], [0.72, 0.48]]],
+  E: [[[1, 0], [0, 0], [0, 1], [1, 1]], [[0, 0.5], [0.72, 0.5]]],
+};
+
+/** The HIDEOUT mark (non-directional): the symbol with a dot, "SAFE" in sprayed capitals, an underline swoosh. */
+export function paintHideoutMark(ctx: Ctx, cw: number, ch: number, rnd: () => number): void {
+  survivorSymbol(ctx, cw * 0.17, ch * 0.47, ch * 0.33, rnd, ch - 4, true);
+  const word = 'SAFE', lw = cw * 0.12, lh = ch * 0.44, x0 = cw * 0.37, base = ch * 0.7, w = ch * 0.07;
+  for (let k = 0; k < word.length; k++) {
+    const gx = x0 + k * lw * 1.28, bounce = (rnd() - 0.5) * ch * 0.05;
+    for (const st of SAFE_GLYPHS[word[k]]) sprayLine(ctx, st.map(([u, v]) => [gx + u * lw + (rnd() - 0.5) * 2, base - lh + v * lh + bounce] as Pt), w);
+  }
+  const sw: Pt[] = [];
+  for (let i = 0; i <= 12; i++) { const u = i / 12; sw.push([cw * (0.36 + u * 0.58), base + ch * 0.12 + Math.sin(u * Math.PI) * ch * 0.04 - u * ch * 0.05]); }
+  sprayLine(ctx, sw, w * 0.55);
+  for (let i = 0; i < 3; i++) drip(ctx, x0 + rnd() * lw * 4.5, base + w * 0.4, 2 + rnd() * 2, 6 + rnd() * 20, '#ffffff', ch - 4);
+}
+
+/** The TALLY (non-directional): days counted in groups of five (four strokes and a slash), two rows, the symbol small at the end. */
+export function paintTally(ctx: Ctx, cw: number, ch: number, rnd: () => number): void {
+  const w = ch * 0.045;
+  const group = (x: number, y0: number, y1: number, n: number) => {
+    const gap = cw * 0.026;
+    for (let k = 0; k < Math.min(4, n); k++) {
+      const x1 = x + k * gap + (rnd() - 0.5) * 3;
+      sprayLine(ctx, [[x1, y0 + (rnd() - 0.5) * 4], [x1 + (rnd() - 0.5) * 4, y1 + (rnd() - 0.5) * 4]], w);
+    }
+    if (n >= 5) sprayLine(ctx, [[x - gap * 0.6, y1 - (y1 - y0) * 0.2], [x + gap * 3.6, y0 + (y1 - y0) * 0.2]], w);
+  };
+  for (let g = 0; g < 6; g++) group(cw * (0.06 + g * 0.135), ch * 0.1, ch * 0.42, 5);
+  for (let g = 0; g < 3; g++) group(cw * (0.06 + g * 0.135), ch * 0.55, ch * 0.87, 5);
+  group(cw * (0.06 + 3 * 0.135), ch * 0.55, ch * 0.87, 3);
+  survivorSymbol(ctx, cw * 0.86, ch * 0.7, ch * 0.16, rnd, ch - 4);
+}

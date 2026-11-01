@@ -286,7 +286,7 @@ export function dropExtensions(layout: StationLayout): void {
     const keep = <T extends {area: number}>(list: T[]) => { const k = list.filter(r => r.area < first); list.length = 0; list.push(...k); };
     keep(layout.props); keep(layout.signs); keep(layout.lights); keep(layout.pickups); keep(layout.zombies);
   }
-  ext.tunnels = []; ext.annexes = []; delete ext.vents; delete ext.art; delete ext.machines;
+  ext.tunnels = []; ext.annexes = []; delete ext.vents; delete ext.art; delete ext.machines; delete ext.cacheMarks;
   ext.log.push({trench: -1, from: 'x0', result: 'dropped: the finished layout failed validation with them'});
   if (layout.levels?.length) layout.levels = layout.levels.slice();
 }

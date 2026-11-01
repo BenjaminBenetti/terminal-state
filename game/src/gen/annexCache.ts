@@ -96,6 +96,8 @@ export const ANNEX_CACHE = {
   minHolders: 2,
   /** (round 3) The camp table and what stands on it (local frame of the table: x along it, z toward its front; on its top). */
   table: 'campTable' as PropKind,
+  /** The camp table is placed after this many storage roles (the footlocker and the pantry shelf), before the cabinet / crate. */
+  tableAfter: 2,
   onTable: [['campLantern', 0.43, -0.06], ['campStove', -0.36, -0.03]] as readonly (readonly [PropKind, number, number])[],
   /** (round 3) The lantern's light: a warm light-field source `lift` m over the lantern's base, at `power` (reach ~max(4, 9 sqrt p) m). */
   lantern: {kind: 'campLantern' as PropKind, power: 0.7, lift: 0.2},
@@ -272,33 +274,39 @@ function buildCache(ctx: PlaceCtx, layout: StationLayout, n: ServiceAnnex, a: Ar
   if (!bed) { rollback(ctx); return null; }
   bed.p.variant = rng.int(0, 11); // the sleeping bag's colour (PURPOSE_ACCENT palette)
   const beds: PropPlacement[] = [bed.p];
-  // 2. storage: the footlocker at the foot of the bed (else its head, else any wall), then shelf / cabinet / crate
+  // 2. storage: the footlocker at the foot of the bed (else its head, else any wall), the pantry shelf, then (3.) the camp table with
+  // the lantern / stove on its top (the living space comes before the extra storage), then the kit cabinet / supply crate
   const holders: PropPlacement[] = [];
-  for (const role of C.storage) for (const k of role) {
-    const p = k === 'footlocker' ? (besideBed(ctx, a, bed, k, 1) ?? besideBed(ctx, a, bed, k, -1) ?? onWall(ctx, a, k, ALL_SIDES)?.p ?? null) : onWall(ctx, a, k, ALL_SIDES)?.p ?? null;
-    if (p) { holders.push(p); break; }
-  }
+  let table: PropPlacement | null = null, lantern: PropPlacement | null = null, stove: PropPlacement | null = null;
+  C.storage.forEach((role, ri) => {
+    if (ri === C.tableAfter && !bare) {
+      table = onWall(ctx, a, C.table, quiet)?.p ?? onWall(ctx, a, C.table, ALL_SIDES)?.p ?? null;
+      if (table) {
+        const ti = layout.props.length - 1;
+        for (const [k, lx, lz] of C.onTable) {
+          const q = onHost(ctx, layout, a, table, ti, k, lx, lz);
+          if (q && k === C.lantern.kind) lantern = q; else if (q) stove = q;
+        }
+      }
+    }
+    for (const k of role) {
+      const p = k === 'footlocker' ? (besideBed(ctx, a, bed!, k, 1) ?? besideBed(ctx, a, bed!, k, -1) ?? onWall(ctx, a, k, ALL_SIDES)?.p ?? null) : onWall(ctx, a, k, ALL_SIDES)?.p ?? null;
+      if (p) { holders.push(p); break; }
+    }
+  });
   if (!bare && holders.length < (relaxed ? C.relaxed.minHolders : C.minHolders)) { rollback(ctx); return null; }
   commit(ctx);
-  // 3. a second sleeper's bedroll in a roomy cache (another wall, quiet first)
+  // 4. a second sleeper's bedroll in a roomy cache (another wall, quiet first)
   const roomy = a.w * a.h * CELL * CELL - 4 * layout.props.slice(from.props).reduce((s, p) => s + (p.area === a.id && p.host === undefined && !p.mounted ? p.hx * p.hz : 0), 0);
   if (!relaxed && roomy >= C.secondBed.m2 && rng.chance(C.secondBed.chance)) {
     const b2 = onWall(ctx, a, C.beds[1], quiet.filter(s => s !== bed!.side)) ?? onWall(ctx, a, C.beds[1], ALL_SIDES);
     if (b2) { b2.p.variant = rng.int(0, 11); beds.push(b2.p); }
   }
-  // 4. the camp table with the lantern / stove on its top; else the lantern on the floor at the bed's head
-  const table = onWall(ctx, a, C.table, quiet)?.p ?? onWall(ctx, a, C.table, ALL_SIDES)?.p ?? null;
-  let lantern: PropPlacement | null = null, stove: PropPlacement | null = null;
-  if (table) {
-    const ti = layout.props.length - 1;
-    for (const [k, lx, lz] of C.onTable) {
-      const q = onHost(ctx, layout, a, table, ti, k, lx, lz);
-      if (q && k === C.lantern.kind) lantern = q; else if (q) stove = q;
-    }
-  }
+  // no table: the lantern on the floor at the bed's head (else its foot, else any wall)
   if (!lantern) {
-    lantern = besideBed(ctx, a, bed, C.lantern.kind, -1, 0.12) ?? besideBed(ctx, a, bed, C.lantern.kind, 1, 0.12) ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES)?.p ?? null;
-    if (lantern) lantern.variant = rng.int(0, 11);
+    lantern = besideBed(ctx, a, bed, C.lantern.kind, -1, 0.12) ?? besideBed(ctx, a, bed, C.lantern.kind, 1, 0.12) ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES)?.p
+      ?? onWall(ctx, a, C.lantern.kind, ALL_SIDES, 0)?.p ?? null; // a 17 cm lantern needs no access strip: any free wall cell
+    if (lantern) (lantern as PropPlacement).variant = rng.int(0, 11);
   }
   // 5. camp things: the level's loaded iteration-07 kinds whose own wall placement spec allows this room's purpose (the p7 contract)
   const key = p7AreaKey(a);
@@ -412,28 +420,28 @@ interface WallPlaced { p: PropPlacement; side: Side; along: number }
  * (absolute heights), the mall's real-wall rule, then the dresser's own tryPlaceProp (cells, door zones / cells, keep, access strip
  * `front`, room connectivity). Null when no spot fits.
  */
-function onWall(ctx: PlaceCtx, a: Area, kind: PropKind, sides: readonly Side[]): WallPlaced | null {
+function onWall(ctx: PlaceCtx, a: Area, kind: PropKind, sides: readonly Side[], front: number = ANNEX_CACHE.front): WallPlaced | null {
   const C = ANNEX_CACHE, def = PROP_DEFS[kind], spots: [Side, number][] = [];
   for (const side of sides) {
     const [lo, hi] = wallRange(a, side);
     for (let t = lo + def.w / 2 + 0.05; t <= hi - def.w / 2 - 0.05 + 1e-9; t += C.step) spots.push([side, Math.round(t * 1000) / 1000]);
   }
   for (const [side, along] of ctx.rng.shuffle(spots)) {
-    const p = atWall(ctx, a, kind, side, along);
+    const p = atWall(ctx, a, kind, side, along, front);
     if (p) return {p, side, along};
   }
   return null;
 }
 
 /** `kind` with its back to wall `side` of `a` at `along` (the checks of onWall), or null. */
-function atWall(ctx: PlaceCtx, a: Area, kind: PropKind, side: Side, along: number): PropPlacement | null {
+function atWall(ctx: PlaceCtx, a: Area, kind: PropKind, side: Side, along: number, front: number = ANNEX_CACHE.front): PropPlacement | null {
   const def = PROP_DEFS[kind], base = areaBase(ctx.layout, a);
   const [lo, hi] = wallRange(a, side);
   if (along - def.w / 2 < lo + 0.02 || along + def.w / 2 > hi - 0.02) return null;
   if (!strictWallOk(ctx, a, side, along, kind)) return null;
   const s = wallSpot(a, side, along, kind), {hx, hz} = footprint(kind, s.rot);
   if (propBlocksDoorway(ctx.layout, s.x, s.z, hx, hz, base, def.h)) return null;
-  return tryPlaceProp(ctx, a, kind, s.x, s.z, s.rot, {front: ANNEX_CACHE.front});
+  return tryPlaceProp(ctx, a, kind, s.x, s.z, s.rot, {front});
 }
 
 /**
