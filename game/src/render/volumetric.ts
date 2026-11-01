@@ -25,6 +25,11 @@
 // setGasLayer(slot, field, rect) quantises a storey's field (world/gas/field.ts, ticked by world/gas/system.ts from the frame
 // hooks — never from this render path) into its layer and marks it; the next rendered frame uploads only the marked layers
 // (DataArrayTexture.addLayerUpdate: both backends copy just those layers) and sets the `gasOn` gate.
+//
+// Task reactor-build-20261101 (lane AIR): THE REACTOR's depth gas strata. setStation keys the march program by layout.reactor (the
+// depth term is compiled only there, before the warm-up: no runtime rebuild; every other level keeps the previous key / program);
+// setDepthGas(table) — called by world/reactor/generators.ts only when the clearing changes — copies the strata table / rect /
+// range into the march uniforms and sets the `depthOn` gate (closed once every stratum is clear).
 
 import * as THREE from 'three';
 import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
@@ -46,9 +51,13 @@ import {
 import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iteration 15
 import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
 import {GAS} from '../world/gas/field'; // task gasmask-breach-20261030
+import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR)
 
 /** Task gasmask-breach-20261030: the gas term's look (uniform values only; QA may edit them live). */
 export interface GasLook { ext: number; scatter: number; emission: number; noise: number; tint: [number, number, number] }
+
+/** Task reactor-build-20261101 (lane AIR): the Reactor depth gas's look (uniform values only; QA may edit them live). */
+export interface DepthGasLook { ext: number; scatter: number; emission: number; wisps: number; sheets: number; sheetXZ: number; sheetY: number; tint: [number, number, number] }
 
 export interface AtmosphereLights {
   flashlight: THREE.SpotLight;
@@ -228,6 +237,13 @@ export class VolumetricAtmosphere {
   private gasUploads = 0;
   /** Task gasmask-breach-20261030: the gas term's look (sync copies it into the uniforms). */
   readonly gasLook: GasLook = {ext: GAS.EXT, scatter: GAS.SCATTER, emission: GAS.EMISSION, noise: GAS.NOISE, tint: [...GAS.TINT]};
+  // task reactor-build-20261101 (lane AIR): the depth term is compiled for this station (layout.reactor), any stratum left, uploads
+  private depthCompiled = false;
+  private depthAny = false;
+  private depthUploads = 0;
+  /** Task reactor-build-20261101 (lane AIR): the depth gas's look (syncGas copies it into the uniforms). */
+  readonly depthLook: DepthGasLook = {ext: REACTOR_GAS_LOOK.ext, scatter: REACTOR_GAS_LOOK.scatter, emission: REACTOR_GAS_LOOK.emission, wisps: REACTOR_GAS_LOOK.wisps,
+    sheets: REACTOR_GAS_LOOK.sheets, sheetXZ: REACTOR_GAS_LOOK.sheetXZ, sheetY: REACTOR_GAS_LOOK.sheetY, tint: [...REACTOR_GAS_LOOK.tint]};
   private readonly visData = new Uint8Array(VIS_RES * VIS_RES * VIS_WINDOWS);
   readonly visTex: THREE.DataArrayTexture;
   private readonly lightLayer = new Map<THREE.PointLight, number>();
@@ -408,6 +424,11 @@ export class VolumetricAtmosphere {
     this.gasAny = false;
     this.gasNonZero = 0; // lane BLIGHT
     this.u.gasOn.value = 0;
+    // task reactor-build-20261101 (lane AIR): the depth term exists for a reactor layout only (part of the march key: compiled by the warm-up)
+    this.depthCompiled = !!layout.reactor;
+    this.depthAny = false;
+    this.u.depthOn.value = 0;
+    (this.u.depthTab.array as number[]).fill(0);
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
     this.statsCache = null;
@@ -537,6 +558,39 @@ export class VolumetricAtmosphere {
     u.gasOn.value = this.gasAny ? 1 : 0;
     u.gasK.value.set(g.ext, g.scatter, g.emission, g.noise);
     (u.gasTint.value as THREE.Vector3).set(g.tint[0], g.tint[1], g.tint[2]);
+    if (this.depthCompiled) { // task reactor-build-20261101 (lane AIR): the depth gas gate + look (reactor layouts only)
+      const d = this.depthLook;
+      u.depthOn.value = this.depthAny ? 1 : 0;
+      u.depthK.value.set(d.ext, d.scatter, d.emission, d.wisps);
+      u.depthSheet.value.set(d.sheetXZ, d.sheetY, d.sheets, 0);
+      (u.depthTint.value as THREE.Vector3).set(d.tint[0], d.tint[1], d.tint[2]);
+    }
+  }
+
+  /**
+   * Task reactor-build-20261101 (lane AIR): the Reactor's depth gas strata (world/reactor/air.ts renderTable): the table of c at
+   * evenly spaced heights over [yLo, yHi] (already x (1 − cleared)) inside `rect` -> the march uniforms. Call only when the clearing
+   * changed (a copy of TABLE_N floats, no allocation). Ignored on a station without the compiled term (no layout.reactor) or null.
+   */
+  setDepthGas(d: DepthGasTable | null): void {
+    const u = this.u;
+    if (!this.depthCompiled || !d) { this.depthAny = false; u.depthOn.value = 0; return; }
+    const tab = u.depthTab.array as number[];
+    let any = false;
+    for (let i = 0; i < tab.length; i++) { const v = i < d.table.length ? d.table[i] : 0; tab[i] = v; if (v > 0.002) any = true; }
+    u.depthRect.value.set(d.rect.x0, d.rect.z0, d.rect.x1, d.rect.z1);
+    const span = Math.max(1e-3, d.yHi - d.yLo);
+    u.depthRange.value.set(d.yLo, d.yHi, 1 / span, 0);
+    this.depthAny = any;
+    u.depthOn.value = any ? 1 : 0;
+    this.depthUploads++;
+  }
+
+  /** Task reactor-build-20261101 (lane AIR, QA): the depth gas term's state. */
+  depthDebug(): {compiled: boolean; on: boolean; uploads: number; range: number[]; rect: number[]; max: number; look: DepthGasLook} {
+    const u = this.u, r = u.depthRange.value as THREE.Vector4, q = u.depthRect.value as THREE.Vector4;
+    return {compiled: this.depthCompiled, on: this.depthAny, uploads: this.depthUploads, range: [r.x, r.y], rect: [q.x, q.y, q.z, q.w],
+      max: Math.max(0, ...(u.depthTab.array as number[])), look: {...this.depthLook, tint: [...this.depthLook.tint]}};
   }
 
   /** Storey band (local floor / ceiling) holding (x, y, z) from the density map, or null outside it. */
@@ -757,10 +811,11 @@ export class VolumetricAtmosphere {
     const shadowTex = fl.castShadow ? (fl.shadow.map as unknown as {depthTexture?: THREE.Texture} | null)?.depthTexture ?? null : null;
     const depthTex = (this.scenePass as unknown as {getTexture(n: string): THREE.Texture}).getTexture('depth');
     const steps = this.preset?.steps ?? 24;
-    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}|${this.gasTex.id}`;
+    // task reactor-build-20261101 (lane AIR): + the depth gas variant (a reactor layout only; every other key is unchanged)
+    const key = `${steps}|${depthTex.id}|${shadowTex?.id ?? 'none'}|${this.densityTex.id}|${this.airTex.id}|${this.gasTex.id}${this.depthCompiled ? '|depth' : ''}`;
     if (this.marchMat && key === this.marchKey) return this.marchMat;
     this.marchMat?.dispose();
-    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex, gas: this.gasTex}, {steps});
+    this.marchMat = createMarchMaterial(this.u, {depth: depthTex, noise: this.noise, density: this.densityTex, air: this.airTex, vis: this.visTex, shadow: shadowTex, gas: this.gasTex}, this.depthCompiled ? {steps, depth: true} : {steps});
     this.marchKey = key;
     this.marchBuilds++;
     this.errorChecks = 3; // watch the next frames for WebGPU validation / compilation errors of the new program

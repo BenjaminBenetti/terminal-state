@@ -118,6 +118,7 @@ const F = {
   maskLoot: 'game/src/gen/maskLoot.ts', weaponFinds: 'game/src/gen/weaponFinds.ts', starter: 'game/src/run/starter.ts',
   registry: 'game/src/levels/registry.ts', pistol: 'game/src/weapons/pistol.ts', containers: 'game/src/world/containers.ts',
   dynamicItems: 'game/src/physics/dynamicItems.ts', fillerStock: 'game/src/physics/fillerStock.ts', layout: 'game/src/items/lootLayout.ts',
+  reactorIndex: 'game/src/gen/reactor/index.ts', // task reactor-build-20261101: the Reactor's restart parts (placeComponents)
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
@@ -151,6 +152,8 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (its storey contexts: levelContexts; no tenant floors). Lane
   // INTEG (Track2 integration): its pit station grows service annexes like the Subway / Office (the per-annex floor variant).
   mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // Task reactor-build-20261101 (primary + lane GEN): the Reactor's per-storey mall floor program (gen/mall/supplies.ts placeMallSupplies)
+  reactor: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -183,6 +186,7 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   // task track3-eaton-centre-20261031 (lane PROFILES): The Eaton's Center (the row lists MALL_*_SALVAGE are tables: auto-detected)
   MALL_FLOOR: 'floor program (mall)', MALL_SALVAGE: 'economy.salvage (mall) + holder salvage rows', MALL_TABLES: 'profile tables (mall)',
   MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
+  REACTOR_OVERRIDES: 'levels (profiles: reactor overrides)', REACTOR_PROFILE: 'levels (profiles: reactor)', // task reactor-build-20261101
   // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the per-compartment storage fill (LootTables.storageFill; mall only)
   STORAGE_FILL_CATS: 'economy.storageFill (default categories)', STORAGE_FILL_WEIGHTS: 'economy.storageFill (default category weights)',
   MALL_STORAGE_FILL: 'economy.storageFill (mall) + holder notes',
@@ -1328,6 +1332,16 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     items: kit(start), probability: 'Guaranteed: always exactly these stacks at the start of a run (not per level).',
     knobs: [{what: 'the kit', value: 'starterInventory()', at: B.src.at(F.starter, 'starterInventory'), overrides: ['none']}],
     at: [B.src.at(F.starter, 'starterInventory'), B.src.at(F.pistol, 'startWeaponFor')],
+  });
+
+  // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
+  if (levels.includes('reactor')) add({
+    id: 'reactor-restart-parts', family: 'objective', label: 'Reactor restart parts (startup key + fuse cartridges)', class: 'guaranteed', levels: ['reactor'],
+    summary: 'Placed once per level seed by the Reactor generator (gen/reactor/index.ts placeComponents): the startup key in the rim control office and three fuse cartridges (two needed for the switchgear + one spare) in maintenance stores on tier 3, tier 4 and the core floor — never inside the switchgear room. Finite: no loot table, holder or reward rolls them; using one consumes it.',
+    items: [{itemId: 'reactor_key', count: 1, note: 'rim control office'}, {itemId: 'fuse_cartridge', count: 1, note: 'x3: tier 3 / tier 4 / core-floor stores'}],
+    probability: 'Guaranteed: exactly 1 startup key + 3 fuse cartridges in every Reactor layout.',
+    knobs: [{what: 'the restart parts', value: 'placeComponents()', at: B.src.at(F.reactorIndex, 'placeComponents'), overrides: ['none']}],
+    at: [B.src.at(F.reactorIndex, 'placeComponents')],
   });
 
   // --- curated rewards (the roof cache): one source per reward key a level's generator places

@@ -14,7 +14,7 @@ This page explains where the profiles live, what each control and modifier means
 
 | Export | What it is |
 |---|---|
-| `SPAWN_PROFILES` / `spawnProfile(level)` | One `SpawnProfile` per `LevelId` (`subway`, `office`, `mall`). `Record<LevelId, …>`: a new level does not typecheck until it has one. |
+| `SPAWN_PROFILES` / `spawnProfile(level)` | One `SpawnProfile` per `LevelId` (`subway`, `office`, `mall`, `reactor`). `Record<LevelId, …>`: a new level does not typecheck until it has one. |
 | `ENEMY_FAMILY_IDS` | The enemy families in registry and roll order: `zombie`, `blightbelly`, `siren`, `ratdog`, `strainer` (= the archetype registry `ENEMY_ARCHETYPES`, `game/src/ai/creatureArchetypes.ts`, same key order; the Strainer is appended last). |
 | `familyPool(shares)`, `DEFAULT_FAMILY_SHARES`, `ENEMY_POOL` | A level's pool: blightbelly 0.05 (default ON), siren 0 (default OFF, `OPT_IN_FAMILIES`), ratdog 0.05, strainer 0 (context-locked, below), zombie the remainder. `ENEMY_POOL` = `familyPool()` = the Subway's. |
 | `STRAINER_CONTEXTS`, `CONTEXT_LOCKED_FAMILIES` | The contexts whose OWN pool may give the Strainer weight: `['service']` only. `validateSpawnProfile` rejects a positive Strainer weight in a level pool, in any other context's pool or in a horde pool (`HORDE_FORBIDDEN_FAMILIES`). |
@@ -168,6 +168,33 @@ The reference shows the tier, the dynamic identity, the Siren's eligibility rule
 sampled eligibility census (ambient spawns only), the horde pool (`#horde`) and the ambient budget (`#ambient-budget`) on
 `enemies/mall.html`; `tools/pages/validate.ts` fails a build where one of them has no rendered place, and the census counts horde members
 separately (`census.horde`) from the ambient contexts.
+
+## The Reactor (`reactor`)
+
+<!-- Task reactor-build-20261101 (primary): THE REACTOR, the user-selected B "Industrial Service Cathedral". -->
+
+`REACTOR_SPAWN_PROFILE` (`SPAWN_PROFILES.reactor`, `LEVELS.reactor.tier = 3`) is ONE logical level, `LevelId` `reactor`. It is the
+culminating level: a rim subway station at the TOP of a vertical industrial pit, four walkway tiers going down, and the core floor
+round the dormant reactor vessel. `gen/reactor/index.ts` `generateReactorLevel` generates it once per level seed. Difficulty comes
+from depth, using existing families only: no boss and no new enemy. The ambient runs, each tagged with its context by
+`placeOfficeEnemies` on its own fork:
+
+- **`station`**: the rim storey (platform, rim gallery, rim control office), U{2..4}, mostly zombies. The arrival is safe-ish.
+- **`floor`**: each of the two UPPER walkway tiers (gas zone 1), U{4..6} per tier. Its own pool `familyPool({ratdog: 0.12,
+  blightbelly: 0.04})`: rat/dogs flank on the catwalks.
+- **`ring`**: each of the two DEEP walkway tiers (gas zone 2), U{6..8} per tier. Its own pool `familyPool({ratdog: 0.1, blightbelly:
+  0.14, siren: 0.35})`. A Blightbelly's death puff temporarily re-gasses cleared air.
+- **`pit`**: the core floor and its rooms (pump hall, control room, store), U{7..10}. Its own pool `familyPool({ratdog: 0.08,
+  blightbelly: 0.16, siren: 0.35})`. These are the densest fights.
+- **`service`**: `SERVICE_CONTEXT`, the rim station's Beyond-the-Station annex (`TRACK_EXT_REACTOR.annex.max = 1`, the standard
+  one-roll chance). The Strainer appears there and nowhere else (`STRAINER_CONTEXTS` unchanged).
+- **The Siren is opt-in** via `REACTOR_SIREN_ELIGIBILITY`: contexts `ring` and `pit`, side ROOMS only (the dark alcoves off the
+  galleries), at most **2** per level, ≥ 30 m apart (`REACTOR_SIREN_SPACING`, `applyFamilySpacing`). An ineligible draw falls back
+  to a zombie. The flashlight you need in the gas is also what wakes her.
+- **No horde pool** in the first pass. The noise of a running auxiliary generator pulls EXISTING enemies onto its landing
+  (`world/reactor/generators.ts`, `alertListeners`); nothing spawns.
+- **Census** (12 generated pits, seeds `9100 + 104729k`): ~**36** ambient enemies per run (station 2–4, floor 8–12, ring 13–16, pit
+  7–10, plus a service annex in 1 of 12 runs); Sirens mean **1.0** (max 2); Blightbellies mean 3.2; rat/dogs mean 4.2.
 
 ## Units: what the numbers are
 

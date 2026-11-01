@@ -210,6 +210,29 @@ Generated for this project with Meshy T2.5 image-to-3D (smart topology, T-pose, 
 - `assets/models/enemy-strainer.glb` — the Strainer, a tall clawed drain-filter stalker (Meshy task 01a195f6-f769-7638-9bb6-48d52ba3c491)
 <!-- END enemy-strainer-20261101 -->
 
+<!-- BEGIN reactor-kit-20261101 (build-reactor-kit.mjs) -->
+## The Reactor: industrial kit (B "Industrial Service Cathedral")
+
+Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Codex initial reference images, text-to-3D preview + 2K PBR refine for the two items) through the Meshy MCP under the user's Reactor-only 1000-credit authorization (13 generation attempts, 195 credits billed at build time); the Codex reference images and the three surface sources were generated with Codex's built-in image tool, each with the user-selected B concept attached. Runtime derivatives built by `tools/asset-pipeline/props/build-reactor-kit.mjs` (provenance: `assets/derivatives/reactor-kit-20261101.json`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the concept are kept outside Git.
+
+- `assets/models/reactor-vessel.glb` — the dormant reactor pressure vessel (dome, CRDM housings, nozzles, hazard plinth) (Meshy task 01a198f4-0f17-719d-8ff3-94ba1c1268a8)
+- `assets/models/reactor-aux-generator.glb` — auxiliary diesel generator set on a skid (length along X) (Meshy task 01a198f4-332d-76ed-86d3-cafe459483d5)
+- `assets/models/reactor-crane-trolley.glb` — overhead crane hoist trolley (length along X) (Meshy task 01a198f4-3af8-7606-9a98-c798d50be71b)
+- `assets/models/reactor-crane-hook.glb` — crane hook block (height along Y) (Meshy task 01a198f4-41f7-7710-813c-484b02be8460)
+- `assets/models/reactor-extraction-fan.glb` — wall extraction fan duct housing, empty opening facing +Z (blades procedural) (Meshy task 01a198f9-093d-7257-b5d1-2f386ac74ddb)
+- `assets/models/reactor-switchgear.glb` — one switchgear cabinet section, front +Z (Meshy task 01a198f9-1098-7436-8a57-d6f92157203e)
+- `assets/models/reactor-coolant-pump.glb` — centrifugal coolant pump + motor on plinth (length along X) (Meshy task 01a198f9-18a8-73dc-9fbb-64181af9307f)
+- `assets/models/reactor-control-console.glb` — control room console desk, front +Z (Meshy task 01a198f9-206c-7690-944a-fec0d7c6f89b)
+- `assets/models/reactor-pipe-bank.glb` — stackable 4 m organ-pipe bank module, front +Z, flat-cut ends (Meshy task 01a198f9-286f-73c4-b658-10704a34372a)
+- `assets/models/reactor-coolant-valve.glb` — main coolant gate valve with handwheel (pipe along X) (Meshy task 01a198f9-303f-751d-bbab-a417fb645fa4)
+- `assets/models/reactor-flood-lamp.glb` — caged wall flood lamp on a bracket (instanced) (Meshy task 01a198f9-3771-7247-849b-5a4e6f64db6f)
+- `assets/models/reactor-fuse-cartridge.glb` — item: ceramic cartridge fuse (length along X) (Meshy task 01a198fb-61d2-71e8-97b2-0af06e44edb8)
+- `assets/models/reactor-key.glb` — item: control-room startup key on a red fob (longest extent) (Meshy task 01a198fb-690f-70fd-8d2a-ecb477ff98d6)
+- `assets/textures/reactor/rusted-steel-{color,normal,orm}.jpg` — riveted rusted painted steel plate (Codex colour source; normal / ORM derived locally)
+- `assets/textures/reactor/grating-{color,normal,orm}.jpg` — steel bar grating deck (dark gaps) (Codex colour source; normal / ORM derived locally)
+- `assets/textures/reactor/pit-concrete-{color,normal,orm}.jpg` — board-formed stained pit concrete (Codex colour source; normal / ORM derived locally)
+<!-- END reactor-kit-20261101 -->
+
 <!-- BEGIN player-train-20261101 (build-player-train.mjs) -->
 ## Player train (level one): car shell, driving desk, door leaf, interior textures
 

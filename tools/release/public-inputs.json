@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 25641,
-      "sha256": "adb23e8b2c89819b338bfa30b338ca686716e74b852bdf632eded9a56e140175"
+      "bytes": 28950,
+      "sha256": "03c7eb534ce29b308966afac4e9f304e730a34af011fef6e4a2933b3dec11503"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -869,6 +869,51 @@
       "sha256": "e046da6e89cbef5ec1a938a4d67ae3483bc724f98f1e273068a5dbf1219787b5"
     },
     {
+      "path": "assets/audio/reactor-breaker.mp3",
+      "bytes": 22987,
+      "sha256": "ea3a5e0912f614954cd6d859d7c4dfe275c708200ad60426879f2e425c7ea944"
+    },
+    {
+      "path": "assets/audio/reactor-fan-loop-loop.mp3",
+      "bytes": 106161,
+      "sha256": "a541ae31c99548788d0e4b00f8c5cfcb4b1b545439d9b0d3254684622350b9b6"
+    },
+    {
+      "path": "assets/audio/reactor-fuse.mp3",
+      "bytes": 17554,
+      "sha256": "781f7234f3bd9f9e17a5c738429e21605516bd472df053c24d621863e366e6f0"
+    },
+    {
+      "path": "assets/audio/reactor-gen-loop-loop.mp3",
+      "bytes": 122044,
+      "sha256": "9232e8c11e41e8f50c7c0e4eec257588b407fa3cd5540f57ee01c39ea76bd705"
+    },
+    {
+      "path": "assets/audio/reactor-gen-start.mp3",
+      "bytes": 90279,
+      "sha256": "680befcbd7304be10649f3f2b32da84b8f32326afc81719dbdeee560f12679b2"
+    },
+    {
+      "path": "assets/audio/reactor-hum-loop.mp3",
+      "bytes": 138344,
+      "sha256": "82de7316b215eff896d4201dcb3ed7afc57a0247a533aee21e0e5d3cb47abc7a"
+    },
+    {
+      "path": "assets/audio/reactor-pump.mp3",
+      "bytes": 77322,
+      "sha256": "3956c3091aa1cf6568df0489b84a239113e927c1e5a1fbcc6ef3488978fc1e4e"
+    },
+    {
+      "path": "assets/audio/reactor-startup.mp3",
+      "bytes": 150883,
+      "sha256": "c3b0c7a33f9fe107084e7f187cbb172d1a3b767e0d600063ec1b14e475f055ab"
+    },
+    {
+      "path": "assets/audio/reactor-valve.mp3",
+      "bytes": 48483,
+      "sha256": "d4aeff363876bdcc5dc3545416efcfcfb331d8e33f40aa37ba8865045231d66b"
+    },
+    {
       "path": "assets/audio/rifle-charge-b-01.mp3",
       "bytes": 2821,
       "sha256": "2d62509d4c42744d0e72433f9fc42d8d7d02afdb3189f96a3c7b9db6e3ab7984"
@@ -1504,6 +1549,11 @@
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
     },
     {
+      "path": "assets/derivatives/audio-reactor.json",
+      "bytes": 11595,
+      "sha256": "21a667dd4d7f84cf902ca3ca424c17d8d77a7755739524479b9b3c0b3b5a116d"
+    },
+    {
       "path": "assets/derivatives/audio-strainer.json",
       "bytes": 89623,
       "sha256": "e4b9d387481c3b9c3552afcb06782ce6fbe4ab7e1ba0435b7f2db78989f60382"
@@ -1707,6 +1757,11 @@
       "path": "assets/derivatives/props.json",
       "bytes": 97397,
       "sha256": "676efa0cd0efcb53b91e6c1ad249284a109583764b105d0222fca4a2e4d02149"
+    },
+    {
+      "path": "assets/derivatives/reactor-kit-20261101.json",
+      "bytes": 21689,
+      "sha256": "8e4cdef64977a422e2e6d06df275f82c96d0316c1c5ec1877d07b0e211d7c033"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -3189,6 +3244,71 @@
       "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
     },
     {
+      "path": "assets/models/reactor-aux-generator.glb",
+      "bytes": 1215480,
+      "sha256": "e6aa5f1b8a10c8091d6e9a2ff63a01f7504fad9ca61cadd870c0a0e26e81d36a"
+    },
+    {
+      "path": "assets/models/reactor-control-console.glb",
+      "bytes": 989972,
+      "sha256": "4e22305831c43cfb110e02be644c866988f3d950a8d8bbcd49a5056705dd4e01"
+    },
+    {
+      "path": "assets/models/reactor-coolant-pump.glb",
+      "bytes": 869924,
+      "sha256": "8dacb2129e8ff721cef4e17c5091a7593479586483eecb112ebfac6a7031f40a"
+    },
+    {
+      "path": "assets/models/reactor-coolant-valve.glb",
+      "bytes": 777580,
+      "sha256": "efa9f07a166f0759a6c41187ab91d129ac4b1ddb46dd670d5b7ade2c881a5184"
+    },
+    {
+      "path": "assets/models/reactor-crane-hook.glb",
+      "bytes": 679096,
+      "sha256": "d1d692d1be1707d8d6c467d58df9513df9420486278cfe939f719102a7a343f2"
+    },
+    {
+      "path": "assets/models/reactor-crane-trolley.glb",
+      "bytes": 1106572,
+      "sha256": "00e29e1d47efccf591f46cc129c9add0dd0d7d56cdcfc42187057d805fb64ad6"
+    },
+    {
+      "path": "assets/models/reactor-extraction-fan.glb",
+      "bytes": 902808,
+      "sha256": "9d1e632ca615a4e895fa04d6f2cf6f28d7e3a0fc9d38ba1fc9e52d77fbca9efe"
+    },
+    {
+      "path": "assets/models/reactor-flood-lamp.glb",
+      "bytes": 266632,
+      "sha256": "f710b0f32511690b4169beeda57ad22dd79092d6d134b5d4b488be434742a61a"
+    },
+    {
+      "path": "assets/models/reactor-fuse-cartridge.glb",
+      "bytes": 226784,
+      "sha256": "1ba56d844dcc55ec5cd537e65acc0da143cd9bbbce5fd4801bb06a9de5aa3244"
+    },
+    {
+      "path": "assets/models/reactor-key.glb",
+      "bytes": 185064,
+      "sha256": "dbd67b586c715163508054e313f29f0033b8ea7faccac5dd9ff7b9b95f1415bd"
+    },
+    {
+      "path": "assets/models/reactor-pipe-bank.glb",
+      "bytes": 951472,
+      "sha256": "cac3a2b8e02a07159897bafcd7c699319e3c0461625c3090ca8275444684b884"
+    },
+    {
+      "path": "assets/models/reactor-switchgear.glb",
+      "bytes": 739132,
+      "sha256": "448792e68b86c582dce7dc6b8496fc95223c5245a2deacd1966d95d056737964"
+    },
+    {
+      "path": "assets/models/reactor-vessel.glb",
+      "bytes": 2824764,
+      "sha256": "7e39d047a60dff7f4fca2162a99c788d3efa2b806854e6b208c0aed522909739"
+    },
+    {
       "path": "assets/models/rifle-optic.glb",
       "bytes": 3811688,
       "sha256": "296c2e9ab86a3c2ea5aac91ecb5ac35be37a3149c32159e4047ed10d4ce9693c"
@@ -3457,6 +3577,51 @@
       "path": "assets/textures/platform-working-face-orm.jpg",
       "bytes": 383868,
       "sha256": "84615abbfd9be47e8db07fa5daf921e0c9592b503aa60702e2ac3181d3c9eabd"
+    },
+    {
+      "path": "assets/textures/reactor/grating-color.jpg",
+      "bytes": 242250,
+      "sha256": "87c788a27e09556f1396d4ddd0bb6ce33d68dbb6df7fa9d25e94eb3596a3e028"
+    },
+    {
+      "path": "assets/textures/reactor/grating-normal.jpg",
+      "bytes": 231499,
+      "sha256": "679054ce5ccb9c961d56fed48a5de3878cec7bdc33609ed2800760b36a607720"
+    },
+    {
+      "path": "assets/textures/reactor/grating-orm.jpg",
+      "bytes": 176280,
+      "sha256": "917ae3cf6257edec8ad5f8ed062735510733d25e965b114a7f10c1ef4c73d6b5"
+    },
+    {
+      "path": "assets/textures/reactor/pit-concrete-color.jpg",
+      "bytes": 405719,
+      "sha256": "2e4ad73d30121949c12f9c850c32b863493842480e961ccfc264e646719a39bc"
+    },
+    {
+      "path": "assets/textures/reactor/pit-concrete-normal.jpg",
+      "bytes": 253555,
+      "sha256": "4a5565400326592ee79250e61f9b21aa1425f66317e9735774e30634741fd75a"
+    },
+    {
+      "path": "assets/textures/reactor/pit-concrete-orm.jpg",
+      "bytes": 169154,
+      "sha256": "d3d3a8a8c0648945e7c742bad584b5a6532254236a19874c2ee3012113aedc68"
+    },
+    {
+      "path": "assets/textures/reactor/rusted-steel-color.jpg",
+      "bytes": 384785,
+      "sha256": "67ee73715a44659d093219de165c5b9e151e5e6e15188fa9359317e8fe715e25"
+    },
+    {
+      "path": "assets/textures/reactor/rusted-steel-normal.jpg",
+      "bytes": 276084,
+      "sha256": "80afd54b802af68f73ca276f77b2aad2b6b59a546d6fab05654d5fcd6159bcee"
+    },
+    {
+      "path": "assets/textures/reactor/rusted-steel-orm.jpg",
+      "bytes": 185844,
+      "sha256": "639a45cd6f5a0b0a11dae3e7005392fe4cfc4a7f2c3b656b9e3b8be7c51b74fd"
     },
     {
       "path": "assets/textures/train/train-int-bulkhead.jpg",

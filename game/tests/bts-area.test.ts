@@ -14,6 +14,7 @@ import {describe, expect, it} from 'vitest';
 import {generateAttempt, generateStation, pickArchetype} from '../src/gen/station';
 import {generateOfficeLevel, officeAttempt} from '../src/gen/office/index';
 import {generateMallLevel, mallAttempt} from '../src/gen/mall/index';
+import {generateReactorLevel} from '../src/gen/reactor/index'; // task reactor-build-20261101 (lane GEN): the reactor's core reference
 import {mallVariantOf} from '../src/gen/mall/frame';
 import {BTS_AREA_CHANCE, btsAreaPresent, btsAreaRoll, coreView, isExtensionArea, type TrackExtConfig} from '../src/gen/trackExt/index';
 import {annexCachesOf} from '../src/gen/annexCache';
@@ -41,7 +42,8 @@ const reference = (level: LevelId, levelSeed: number): StationLayout => {
   const cfg = noAnnex(LEVELS[level].trackExtensions as TrackExtConfig);
   return level === 'subway' ? generateStation(levelSeed, {startWeapon: 'pistol', trackExtensions: cfg})
     : level === 'office' ? generateOfficeLevel({levelSeed, startWeapon: 'pistol'}, undefined, undefined, cfg)
-      : generateMallLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg});
+      : level === 'reactor' ? generateReactorLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg}) // task reactor-build-20261101 (lane GEN)
+        : generateMallLevel({levelSeed, startWeapon: 'pistol'}, {trackExt: cfg});
 };
 /**
  * Canonical core view. The mall's locked street-exit halls are an APPEND-ONLY post-pass after the attach (gen/mall/exits.ts): their
@@ -116,7 +118,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     // a pure function of the seed: repeated / interleaved calls agree; no level type has a chance of its own
     for (let i = 0; i < 200; i++) expect(btsAreaRoll(corpus(i))).toBe(btsAreaRoll(corpus(i)));
     for (const id of TRACK_LEVELS) expect('chance' in (LEVELS[id].trackExtensions as TrackExtConfig).annex, id).toBe(false);
-    expect(TRACK_LEVELS).toEqual(['subway', 'office', 'mall']);
+    expect(TRACK_LEVELS).toEqual(['subway', 'office', 'mall', 'reactor']); // (+ reactor: task reactor-build-20261101 — TRACK_EXT_REACTOR)
   });
 
   it('ABSENT on every level type: zero annexes and nothing of the area; the tunnels stay ordinary tunnels', () => {
@@ -240,7 +242,7 @@ describe('the Beyond the Station area roll (one 20 % roll per logical level)', (
     expect(attempts.length).toBeGreaterThanOrEqual(6);
     for (const a of attempts) expect(a.extensions!.area).toEqual({roll: btsAreaRoll(seed), chance: BTS_AREA_CHANCE, present: true});
     // a revisit: the run keeps only the level seeds; the level regenerates identically (the area included)
-    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: PRESENT[0], office: ABSENT[0], mall: PRESENT[1], reactor: ABSENT[1]}, start: {level: 'subway', section: 'main'}, levels: LEVELS});
     for (const level of TRACK_LEVELS) {
       const s = run.seeds[level], first = gen(level, s), again = LEVELS[level].generate('main', {levelSeed: run.seeds[level], startWeapon: 'pistol'} as never);
       expect(again.extensions!.area!.present, level).toBe(btsAreaPresent(s));

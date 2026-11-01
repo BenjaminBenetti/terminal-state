@@ -42,7 +42,19 @@ describe('R6: service-only family pool', () => {
     for (const [id, p] of Object.entries(SPAWN_PROFILES)) {
       expect(validateSpawnProfile(p), id).toEqual([]);
       expect(p.contexts.service?.families, `${id} service`).toBe(SERVICE_FAMILY_POOL);
-      for (const [c, rule] of Object.entries(p.contexts)) if (c !== 'service') expect(rule?.families, `${id} ${c}`).toBeUndefined();
+      // task reactor-build-20261101: the ONE deliberate exception — the Reactor grades its families by DEPTH with its own pools on its
+      // walkway tiers / core floor (REACTOR_SPAWN_PROFILE: 'floor' / 'ring' / 'pit'; docs/enemy-spawns.md "The Reactor"); never a
+      // Strainer there, the Siren only where its eligibility rule lists the context. Every other level / context: the level pool.
+      for (const [c, rule] of Object.entries(p.contexts)) {
+        if (c === 'service') continue;
+        if (id === 'reactor' && ['floor', 'ring', 'pit'].includes(c)) {
+          expect(rule?.families, `${id} ${c}`).toBeDefined();
+          expect(share(rule!.families!, 'strainer'), `${id} ${c}: no Strainer`).toBe(0);
+          if (share(rule!.families!, 'siren') > 0) expect(p.eligibility?.siren?.contexts, `${id} ${c}: Siren rule`).toContain(c);
+          continue;
+        }
+        expect(rule?.families, `${id} ${c}`).toBeUndefined();
+      }
       // the level pools themselves are untouched: never the service pool
       expect(p.families, id).not.toBe(SERVICE_FAMILY_POOL);
       expect(share(p.families, 'ratdog'), id).toBeLessThanOrEqual(0.05);
