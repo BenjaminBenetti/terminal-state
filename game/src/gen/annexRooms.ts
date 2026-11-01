@@ -442,7 +442,7 @@ export function assignAnnexRooms(layout: StationLayout, areas: readonly Area[], 
 /**
  * (Round 3) The hideout's purpose: the deep end's disused maintenance room with the leanest furniture that fits it — an old workshop
  * (a tool locker, maybe a shelf), else a custodial room, else maintenance stores — so the survivor cache (gen/annexCache.ts: a bed,
- * 2-3 storage pieces) has the floor (measured with the round-2 cache placer on 65 annexes: 62 fit as an old workshop / custodial
+ * 2-3 storage pieces) has the floor (measured with the round-2 cache placer on 65 annexes: 63 fit as an old workshop / custodial
  * room, 51 as shelved stores).
  */
 export const HIDEOUT_PURPOSES: readonly string[] = ['workshop', 'custodial-room', 'storage'];

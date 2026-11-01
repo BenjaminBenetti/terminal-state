@@ -72,11 +72,13 @@ revision) the platforms announce every real annex entrance with station-surface 
     segments, bends anywhere) in tight rock; one optional **loop** door (`loopChance`) from a corridor into a corridor / room it
     backs onto, at least 4 door hops apart, never into the hideout;
   - **the hideout** (`ServiceAnnex.hideout`): see "Data model".
-  Measured (broad sample: 200 Subway + 40 Office + 20 Mall levels, 309 annexes, the same 309 as before — incidence unchanged):
-  every room, hall and closet opens onto a corridor (was 59 % of rooms / 35 % of closets; 51 % of all rooms and closets were
-  reachable only through other rooms, chains up to 8), 13.5 corridors per annex, the longest straight corridor run 49.8 m mean /
-  104.5 m max (was 17.7 / 35.5), 9.4 door hops to the deepest room (was 11.2), functional neighbours (generator ↔ electrical,
-  the water rooms together, boiler ↔ pump / stores, turbine ↔ power / water) 76 % (was 55 %), every annex a hideout.
+  Measured (broad sample: 200 Subway + 40 Office + 20 Mall levels; Subway and Mall incidence unchanged, Office 33 / 40 levels with
+  an annex as before, one with two annexes fewer — Office 88109, two tunnels side by side, the first annex now holds the rock in front
+  of the second tunnel's door; 308 annexes): every room, hall and closet opens onto a corridor (was 59 % of rooms / 35 % of closets;
+  51 % of all rooms and closets were reachable only through other rooms, chains up to 8), 13.6 corridors per annex, the longest
+  straight corridor run 51.4 m mean / 109.5 m max (was 17.7 / 35.5), 9.1 door hops to the deepest room (was 11.2), signature rooms
+  in the entry third 7 % (was 22 %), functional neighbours (generator ↔ electrical, the water rooms together, boiler ↔ pump /
+  stores, turbine ↔ power / water) 77 % (was 55 %), every annex a hideout (was: 3 annexes without any room meeting the rule).
 - **Machinery halls** (`annex.hall`, task track2-playtest-revision, lane ROOMS): 2–3 larger, taller rooms per annex
   (9–12 × 12–16 m, ceilings 3.6–4.2 m; `Area.extHall`) inside the SAME area target, so the tight network stays and is
   regularly broken by a big room:
@@ -84,8 +86,8 @@ revision) the platforms announce every real annex entrance with station-surface 
   - (round 3) as a side room of the corridor being lined (one per segment, the least crop growth of 8 seeded spots), else as the
     end room of a run; only while the hall keeps the annex within its target (+ 2 % slack) and the grid budget; at least one per
     annex (ends first, then any corridor side, up to +4 % of the target).
-  Measured (round 3, broad sample): 1–3 halls per annex, mean 2.5 (was 0–3, mean 1.9); the 64-seed incidence is unchanged
-  (0 / 1 / 2 = 4 / 42 / 18, 16 hatches, ratio to the baseline 0.18 / 0.25 / 0.29 min / mean / max).
+  Measured (round 3, broad sample): 2–3 halls per annex, mean 2.5 (was 0–3, mean 1.9); the 64-seed incidence is unchanged
+  (0 / 1 / 2 = 4 / 42 / 18, 16 hatches, ratio to the baseline 0.16 / 0.25 / 0.29 min / mean / max).
 - **Door placement:** a tunnel that hosts an annex gets a first straight of at least 21 m (`annex.hostFirstStraight`), which
   leaves room for the door.
 
@@ -164,9 +166,9 @@ the hatch wall test, `attachExtensions` and `extensionIssues` honour it; levels 
   when none exists, adds one off the deepest corridors (a side bay or an end) or behind a deep room. The purpose pass never gives it a
   machinery signature: it is a disused maintenance room of the deep end's **old stores** (`HIDEOUT_PURPOSES`: an old workshop, else a
   custodial room, else maintenance stores — the leanest furniture that fits). `extensionIssues` reports a hideout that is not a plain
-  room of its annex. Absent = none (readers keep their own fallback). Measured: every annex of the broad sample (309 / 309) has one;
-  the round-2 survivor-cache placer, restricted to the hideout, builds its cache there in 62 of 65 sampled annexes (51 / 65 with
-  shelved `storage` — why the lean purposes).
+  room of its annex. Absent = none (readers keep their own fallback). Measured: every annex of the broad sample (308 / 308) has one;
+  the round-2 survivor-cache placer, restricted to the hideout, builds its cache there in 63 of 65 sampled annexes (51 / 65 when the
+  hideout was shelved `storage` — why the lean purposes).
 
 **Areas:**
 - Extension areas carry `area.ext = 'tunnel' | 'annex'` plus `extId`.
