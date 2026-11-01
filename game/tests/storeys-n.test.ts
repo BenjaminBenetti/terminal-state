@@ -28,7 +28,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 import {CELL, FLOOR, PathFinder} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
 import {generateStation} from '../src/gen/station';
-import {coreView} from '../src/gen/trackExt/index';
+import {coreView, isExtensionArea} from '../src/gen/trackExt/index';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 import {levelIssues} from '../src/gen/levelGen';
@@ -547,6 +547,15 @@ describe('stack validation and the Subway regression', () => {
       return [fnv(f.data), fnv(buildDensityMap(s, atmosphereFor(s)).data), fnv(buildAirMap(s).data), fnv(buildDecayField(s, lv).data)];
     };
     expect(maps(coreView(generateStation(1, {trackExtensions: TRACK_EXT_RESERVE_OFF})))).toEqual(['dc7abbcc', '1095b4d6', 'fb391d51', 'bf7c0c4']);
-    expect(maps(generateStation(1))).toEqual(['912ec1a9', 'fc9cf608', '8285fcc7', '5725b18b']);
+    // PIN HISTORY (2026-11-01, round-4 follow-up lane ENV, authorized by the primary): live decay 5725b18b -> 4c14718a. CAUSE: the
+    // decay field's core window no longer overwrites the EXTENSION cells inside it with the core view's rock texels (world/decay.ts
+    // buildDecayField): station 1's 691 tunnel floor cells inside the window now carry the tunnel rules (wet 0 -> mean 0.371, min
+    // 0.302; neglect 0.879 -> 0.981), its 1783 tunnel cells outside the window are unchanged. PROOF (every run): the texels of every
+    // NON-extension cell hash 728f020e, before and after the change; only extension texels moved (2aa32b94 -> cf8a93e9).
+    const live1 = generateStation(1);
+    expect(maps(live1)).toEqual(['912ec1a9', 'fc9cf608', '8285fcc7', '4c14718a']);
+    const lv1 = stationLevels(live1), f1 = buildDecayField(live1, lv1), coreTexels: number[] = [];
+    lv1.forEach((L, s) => { for (let i = 0; i < L.grid.w * L.grid.h; i++) if (!isExtensionArea(live1.areas[L.grid.area[i]])) for (let c = 0; c < 4; c++) coreTexels.push(f1.data[(s * f1.w * f1.h + i) * 4 + c]); });
+    expect(fnv(coreTexels)).toBe('728f020e');
   });
 });

@@ -17,6 +17,7 @@ import {coreView, isExtensionArea} from '../src/gen/trackExt/index';
 import {LEVELS} from '../src/levels/registry';
 import {isMaskLootItem, placeMaskLoot, placeSectionGear, rollLevelGear} from '../src/levels/gearAdapter';
 import {buildDecayField} from '../src/world/decay';
+import {FLOOR} from '../src/gen/grid';
 import {extractWallFaces, LevelColumns, stationLevels} from '../src/world/levelGeometry';
 import {holderStockSeed} from '../src/world/shelfStockLayout';
 import {TRACK_EXT_RESERVE_OFF, canonDiff, canonLayout} from './helpers/trackExtCore';
@@ -136,14 +137,28 @@ describe('track extensions — the core level is unchanged', () => {
     const e = ext.extensions!;
     expect(e.core.x).toBeGreaterThan(0);
     expect(e.core.y).toBeGreaterThan(0);
-    // decay: every texel of the core window equals the field of the station without extensions
-    const fe = buildDecayField(ext, stationLevels(ext)), fn = buildDecayField(none, stationLevels(none));
-    let diff = 0;
+    // decay: every CORE texel of the core window (every cell that is not an extension cell) equals the field of the station without
+    // extensions. (2026-11-01, round-4 follow-up lane ENV) The extension cells inside the window take the field of the whole grid
+    // (the extension rules: tunnels' damp bed floor, annexes' own leaks / neglect) — they used to keep the station's rock texels there
+    const lve = stationLevels(ext), fe = buildDecayField(ext, lve), fn = buildDecayField(none, stationLevels(none));
+    const whole = buildDecayField({...ext, extensions: undefined}, lve); // no core window: the field of the whole grid
+    let diff = 0, extIn = 0, extOff = 0, rockKept = 0, tunnelIn = 0, tunnelDry = 0;
     for (let L = 0; L < fn.levels; L++) for (let y = 0; y < fn.h; y++) for (let x = 0; x < fn.w; x++) {
-      const a = (L * fn.w * fn.h + y * fn.w + x) * 4, b = (L * fe.w * fe.h + (y + e.core.y) * fe.w + x + e.core.x) * 4;
-      for (let c = 0; c < 4; c++) if (fn.data[a + c] !== fe.data[b + c]) diff++;
+      const gi = (y + e.core.y) * fe.w + x + e.core.x, area = ext.areas[lve[L].grid.area[gi]];
+      const a = (L * fn.w * fn.h + y * fn.w + x) * 4, b = (L * fe.w * fe.h + gi) * 4;
+      if (!isExtensionArea(area)) { for (let c = 0; c < 4; c++) if (fn.data[a + c] !== fe.data[b + c]) diff++; continue; }
+      extIn++;
+      let same = true;
+      for (let c = 0; c < 4; c++) { if (fe.data[b + c] !== whole.data[b + c]) extOff++; if (fe.data[b + c] !== fn.data[a + c]) same = false; }
+      if (same) rockKept++;
+      if (area.ext === 'tunnel' && lve[L].grid.cells[gi] === FLOOR) { tunnelIn++; if (fe.data[b + 2] < 77) tunnelDry++; } // 0.3 -> 77 / 255
     }
     expect(diff).toBe(0);
+    expect(extIn).toBeGreaterThan(0);
+    expect(extOff, 'extension texels inside the core window = the whole grid\'s field').toBe(0);
+    expect(rockKept, 'extension cells inside the core window that kept the station\'s rock texel').toBeLessThan(extIn * 0.05);
+    expect(tunnelIn).toBeGreaterThan(0);
+    expect(tunnelDry, 'tunnel floor inside the core window drier than the bed (0.3)').toBe(0);
     // wall faces: a face of the core station keeps its seed in the extended grid (faces at the tunnel mouths change: < 2 %)
     const facesOf = (l: StationLayout) => extractWallFaces(l, stationLevels(l), new LevelColumns(stationLevels(l)), {tileLowerHeight: 1.2});
     const key = (f: {level: number; x0: number; z0: number; x1: number; z1: number; finish: string; y0: number}, dx: number, dz: number) =>
