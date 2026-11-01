@@ -30,7 +30,7 @@ import {scarceFinds, type Find} from './lootEconomy';
 import {withSalvage} from './lootEconomy'; // Task track3-eaton-centre-20261031 (lane PROFILES): mall salvage rows
 import {
   BASELINE_PROFILE, LEGACY_CATS, catWeight, resolveRows, slotEmpty, slotLots, slotOf,
-  type ItemRows, type LegacyCat, type LootProfile, type LotRange, type OwnTable, type SlotCategory,
+  type ItemRows, type LegacyCat, type LootProfile, type LootSpec, type LotRange, type OwnTable, type SlotCategory,
 } from './lootTables';
 import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
 import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
@@ -156,7 +156,14 @@ export function holderTable(kind: HolderKind, areaType: string, profile: LootPro
   // fixtures (fire / defibrillator cabinets) hold only what is baked into their model.
   const own = containerLoot(kind);
   if (own === null) return {slot, source: 'fixture', empty: 1, lots: [0, 0], rows: []};
-  if (own !== undefined) return resolved(profile, slot, 'own', purposeRows(own, areaType, kind), kind, areaType);
+  if (own !== undefined) {
+    // Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): an EXACT purpose table that names this openable kind EXPLICITLY (the
+    // survivor hideout's footlocker under the 'annex-cache' key) rolls instead of its own table — exactly, like the cache's other holders
+    // (no `default` fallback: every other own-table container keeps its table in every room, as before)
+    const ex = (purposeById(areaType)?.loot as Partial<Record<string, LootSpec>> | undefined)?.[kind];
+    if (ex?.exact) return {...resolved(profile, slot, 'purpose', {items: ex.items, empty: ex.empty ?? 0, lots: ex.lots ?? [1, 1]}, kind, areaType), exact: true};
+    return resolved(profile, slot, 'own', purposeRows(own, areaType, kind), kind, areaType);
+  }
   // Iteration 05: a room/store PURPOSE (gen/purposes.ts) decides what its holders contain
   // (`areaType` is the purpose id when the area has one; plain room types use the legacy tables).
   const spec = purposeLoot(areaType, kind);

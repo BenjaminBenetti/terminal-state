@@ -51,6 +51,8 @@ export const PURPOSE_ACCENT: Partial<Record<PurposePropKind, number[]>> = {
   deviceWall: [0x00acc1, 0x7e57c2, 0x212121],
   // lane CACHE (round 2, R5): sleeping bags — navy, olive drab, rust, faded teal
   palletBed: [0x2c3f5c, 0x4a5a34, 0x7a3a26, 0x2f5a5a],
+  // lane HIDEOUT (round 3): bedroll sleeping bags — burnt orange, forest green, navy, maroon
+  bedroll: [0xa8532a, 0x35563a, 0x27375a, 0x6a2a32],
 };
 
 // ---------------------------------------------------------------------------------------
@@ -799,6 +801,76 @@ function palletBed(): PurposePart[] {
   return out;
 }
 
+/**
+ * Task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): a survivor's floor BEDROLL — a closed-cell foam mat (1.88 x 0.56 m,
+ * 1.5 cm) under a lofted sleeping bag (accent palette, ~9 cm, zip along its front edge, the top turned back at the head end), a rolled
+ * fleece as a pillow and a folded blanket at the foot. Bedding only (like the pallet bed): no loose takeable clutter is baked in. Long
+ * side (X) to a wall, head at -X, front +Z; 1.95 x 0.17 x 0.78 m.
+ */
+function bedroll(): PurposePart[] {
+  return [
+    bb('vinyl', -0.95, 0, -0.28, 0.93, 0.015, 0.28),
+    bb('accent', -0.62, 0.015, -0.36, 0.95, 0.105, 0.36),
+    bb('accent', -0.86, 0.015, -0.33, -0.62, 0.06, 0.33),
+    box('accent', [0.3, 0.025, 0.7], [-0.47, 0.118, 0], 0, 0.05),
+    bb('black', -0.62, 0.098, 0.356, 0.95, 0.103, 0.364),
+    box('paintBlue', [0.24, 0.11, 0.44], [-0.78, 0.07, -0.01], 0, 0.12),
+    bb('paintRed', 0.6, 0.105, -0.3, 0.9, 0.15, 0.08),
+    bb('paintRed', 0.6, 0.128, 0.0, 0.9, 0.131, 0.082),
+  ];
+}
+
+/**
+ * (lane HIDEOUT) The hideout's makeshift CAMP TABLE: a salvaged door panel (1.3 x 0.62 m, 3.8 cm, a lock bore and two hinge plates on
+ * its edges) laid across two piers of cinder blocks (0.39 x 0.19 x 0.18 m blocks, four courses, alternate courses turned). Top 0.75 m.
+ * Its lantern / stove are SEPARATE loose props standing on the top (gen/annexCache.ts, `host`), never baked in.
+ */
+function campTable(): PurposePart[] {
+  const out: PurposePart[] = [];
+  const course = 0.178;
+  [-0.42, 0.42].forEach((cx, pi) => {
+    for (let k = 0; k < 4; k++) {
+      const y0 = k * course, y1 = y0 + course - 0.004, j = ((k + pi) % 3 - 1) * 0.006; // a few mm off true: hand-stacked
+      if (k % 2 === 0) for (const z of [-0.0975, 0.0975]) out.push(bb('concrete', cx - 0.195 + j, y0, z - 0.095, cx + 0.195 + j, y1, z + 0.095));
+      else for (const x of [-0.0975, 0.0975]) out.push(bb('concrete', cx + x - 0.095, y0, -0.195 + j, cx + x + 0.095, y1, 0.195 + j));
+    }
+  });
+  out.push(
+    bb('wood', -0.65, 0.712, -0.31, 0.65, 0.75, 0.31),
+    bb('black', 0.47, 0.72, 0.305, 0.5, 0.742, 0.31),
+    bb('steelBright', -0.45, 0.716, -0.31, -0.37, 0.746, -0.306),
+    bb('steelBright', 0.25, 0.716, -0.31, 0.33, 0.746, -0.306),
+  );
+  return out;
+}
+
+/**
+ * (lane HIDEOUT) A wooden FOOTLOCKER (0.8 x 0.4 x 0.42 m): a hollow box of boards (floor, four walls) on two skids, steel corner caps,
+ * a front band and hasp, rope-grip side handles; the lid (y 0.33..0.385) hinges on its back edge. world/openablesSpec.ts `footlocker`
+ * draws this body minus the lid (bodyPurpose drop) and opens an authored lid over a lined compartment (loot on its floor, y 0.042).
+ */
+function footlocker(): PurposePart[] {
+  const out: PurposePart[] = [
+    bb('wood', -0.38, 0.02, -0.19, 0.38, 0.04, 0.19),
+    bb('wood', -0.4, 0.02, 0.19, 0.4, 0.33, 0.21),
+    bb('wood', -0.4, 0.02, -0.21, 0.4, 0.33, -0.19),
+    bb('wood', -0.4, 0.02, -0.19, -0.38, 0.33, 0.19),
+    bb('wood', 0.38, 0.02, -0.19, 0.4, 0.33, 0.19),
+    bb('black', -0.37, 0, -0.18, -0.29, 0.02, 0.18),
+    bb('black', 0.29, 0, -0.18, 0.37, 0.02, 0.18),
+    bb('steelBright', -0.4, 0.15, 0.21, 0.4, 0.17, 0.213),
+    bb('steelBright', -0.035, 0.27, 0.21, 0.035, 0.325, 0.215),
+    bb('black', -0.405, 0.2, -0.07, -0.4, 0.225, 0.07),
+    bb('black', 0.4, 0.2, -0.07, 0.405, 0.225, 0.07),
+    // the lid (dropped by the openable's authored body; world/openablesSpec.ts re-authors it as the moving part)
+    bb('wood', -0.4, 0.33, -0.21, 0.4, 0.385, 0.21),
+    bb('steelBright', -0.4, 0.355, 0.205, 0.4, 0.37, 0.213),
+    bb('steelBright', -0.035, 0.335, 0.21, 0.035, 0.372, 0.216),
+  ];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) out.push(bb('steelBright', sx > 0 ? 0.375 : -0.4, 0.02, sz > 0 ? 0.185 : -0.21, sx > 0 ? 0.4 : -0.375, 0.33, sz > 0 ? 0.21 : -0.185));
+  return out;
+}
+
 // ---------------------------------------------------------------------------------------
 // Registry
 
@@ -809,6 +881,7 @@ const FACTORIES: Record<PurposePropKind, Factory> = {
   staffLockers, kitchenette, fridge, couch, noticeBoard, janitorCart, mopSink, electricalPanel,
   gunLocker, monitorDesk, medCabinet, safe, signalRack, cartonStack,
   palletBed, // lane CACHE (round 2, R5)
+  bedroll, campTable, footlocker, // lane HIDEOUT (round 3)
 };
 
 /** Every purpose kind with an authored shape (all of them). */
