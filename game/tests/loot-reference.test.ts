@@ -105,8 +105,9 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
       // the Subway / Office: no overrides (the user likes the current rates); task track3-eaton-centre-20261031 (lane PROFILES): the
       // mall's explicit overrides (bio mater item weight) are listed exactly as the profile declares them
       const listed = (knob: 'itemWeight' | 'categoryWeight') => Object.entries(P.overrides[knob] ?? {}).map(([key, multiplier]) => ({knob, key, multiplier}));
-      expect(l.profile.overrides).toEqual(l.id === 'mall' ? [...listed('itemWeight'), ...listed('categoryWeight')] : []);
+      expect(l.profile.overrides).toEqual(l.id === 'mall' || l.id === 'reactor' ? [...listed('itemWeight'), ...listed('categoryWeight')] : []);
       if (l.id === 'mall') expect(Object.keys(P.overrides).sort()).toEqual(['categoryWeight', 'itemWeight']);
+      if (l.id === 'reactor') expect(Object.keys(P.overrides)).toEqual(['categoryWeight']); // task reactor-build-20261101: the culminating level's pressure
     }
     const text = JSON.stringify(r.levels.map(l => [l.id, l.label, l.profile.id]));
     expect(text).not.toMatch(/reduced|deep|baseline/i);
@@ -238,7 +239,7 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
       expect(boxes.map(b => b.chance)).toEqual(thresholdBands(th).probs);
     }
     const families = new Set(r.specials.map(s => s.family));
-    for (const f of ['gear', 'mask', 'weapon', 'starter', 'reward', 'fixture', 'interaction', 'decoration', 'floor-moved']) expect(families, f).toContain(f);
+    for (const f of ['gear', 'mask', 'weapon', 'starter', 'reward', 'objective', 'fixture', 'interaction', 'decoration', 'floor-moved']) expect(families, f).toContain(f);
     for (const k of Object.keys(OPENABLE_SPECS)) if (containerLoot(k) === null) expect(r.specials.map(s => s.id)).toContain(`fixture:${k}`);
     for (const l of Object.keys(MASK_LOOT.levels)) expect(LEVEL_IDS as readonly string[]).toContain(l);
     for (const w of findWeaponsFor(startWeaponFor(false))) expect(WEAPON_FIND_AMMO[w], w).toBeDefined();

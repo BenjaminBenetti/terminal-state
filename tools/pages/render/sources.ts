@@ -12,6 +12,7 @@ const FAMILY_LABEL: Record<SpecialFamily, string> = {
   weapon: 'Weapons and paired ammo',
   starter: 'Starter kit',
   reward: 'Curated rewards (roof cache, roof find)',
+  objective: 'Objective parts (placed once, never looted)',
   fixture: 'Fixtures (fixed contents)',
   interaction: 'Interaction rules (pry, spill, detach)',
   decoration: 'Decoration only',
