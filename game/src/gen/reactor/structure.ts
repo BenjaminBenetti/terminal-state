@@ -160,9 +160,9 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
     const rr = room('switchgear'), f = roomFrame(rc, rr), lv = rr.level;
     const b0 = Math.floor((f.w - 10) / 2);
     const bank = machine(layout, rr, f, 'switchgear', b0, b0 + 10, f.d - 2, f.d, 2.3, [0, -1], 3);
-    const controls = [control(f, lv, 'fuse-0', b0 + 2, f.d - 2, f.d - 3.8, 1.3), control(f, lv, 'fuse-1', b0 + 5, f.d - 2, f.d - 3.8, 1.3), control(f, lv, 'breaker', b0 + 8.5, f.d - 2, f.d - 3.8, 1.4)];
+    const controls = [control(f, lv, 'fuse-0', b0 + 2, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'fuse-1', b0 + 5, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'breaker', b0 + 8.5, f.d - 2, f.d - 4.1, 1.4)];
     sites.push({id: 'switchgear', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [bank]});
-    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.8, 1.6, 1.0));
+    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.9, 1.6, 1.0));
   }
   // Pump hall (core floor): the circulation pump skid (3.5 x 1.5 m) mid-room, the main coolant valve stand in a back corner.
   {
@@ -170,33 +170,33 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
     const pa0 = Math.round(f.w / 2 - 3.5), pd0 = Math.round(f.d / 2 - 0.5);
     const pump = machine(layout, rr, f, 'pump', pa0, pa0 + 7, pd0, pd0 + 3, 1.6, [-1, 0], 1);
     const valve = machine(layout, rr, f, 'valve', f.w - 3, f.w - 1, f.d - 3, f.d - 1, 1.4, [0, -1], 1);
-    const controls = [control(f, lv, 'valve', f.w - 2, f.d - 3, f.d - 4.8, 1.1), control(f, lv, 'pump', pa0 - 0.01, pd0 + 1.5, pd0 + 1.5, 1.0)];
+    const controls = [control(f, lv, 'valve', f.w - 2, f.d - 3, f.d - 5.1, 1.6), control(f, lv, 'pump', pa0 - 0.01, pd0 + 1.5, pd0 + 1.5, 1.2)];
     // the pump's stand point is beside its end face (along -a), not inside the skid
-    const pc = controls[1], at = roomPoint(f, pa0, pd0 + 1.5), st = roomPoint(f, pa0 - 1.8, pd0 + 1.5);
+    const pc = controls[1], at = roomPoint(f, pa0, pd0 + 1.5), st = roomPoint(f, pa0 - 2.1, pd0 + 1.5);
     holds.pop(); keep.pop(); hold(lv, st.x, st.z);
     controls[1] = {...pc, at: {x: at.x, y: pc.at.y, z: at.z}, stand: {x: st.x, z: st.z, yaw: yawToward(at.x - st.x, at.z - st.z), level: lv}, yaw: yawToward(st.x - at.x, st.z - at.z)};
     sites.push({id: 'pumpHall', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [pump, valve]});
-    screens.push(screen(f, lv, 'pumpBoard', f.w / 4, f.d, 0, -1, 1.8, 1.6, 1.0));
+    screens.push(screen(f, lv, 'pumpBoard', f.w / 4, f.d, 0, -1, 1.9, 1.6, 1.0));
   }
   // Control room (core floor): the console (3 m) facing the wide opening onto the vessel; key switch + rod withdrawal at its back.
   {
     const rr = room('control'), f = roomFrame(rc, rr), lv = rr.level;
     const c0 = Math.round(f.w / 2 - 3);
     const console = machine(layout, rr, f, 'console', c0, c0 + 6, 3, 5, 1.1, [0, 1], 4);
-    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 5, 6.8, 1.0), control(f, lv, 'rods', c0 + 4.5, 5, 6.8, 1.0)];
+    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 5, 7.1, 1.1), control(f, lv, 'rods', c0 + 4.5, 5, 7.1, 1.1)];
     sites.push({id: 'control', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [console]});
     // the monitor on the opening wall, in the wider wall segment beside the opening (facing into the room)
     const dA = rr.doorA0 - rr.a0, dB = dA + rr.doorW;
     const a = dA >= f.w - dB ? dA / 2 : (dB + f.w) / 2;
-    screens.push(screen(f, lv, 'controlMonitor', a, 0, 0, 1, 1.9, Math.min(3, Math.max(1.2, (Math.max(dA, f.w - dB) - 1) * CELL)), 1.4));
+    screens.push(screen(f, lv, 'controlMonitor', a, 0, 0, 1, 2.0, Math.min(3, Math.max(1.2, (Math.max(dA, f.w - dB) - 1) * CELL)), 1.4));
   }
   // Rim control office: the pit status board on the back wall (the statusBoard control + the pitBoard screen).
   {
     const rr = room('rimOffice'), f = roomFrame(rc, rr), lv = rr.level;
     const board = machine(layout, rr, f, 'statusBoard', f.w / 2 - 3, f.w / 2 + 3, f.d - 1, f.d, 2.2, [0, -1], 3);
-    const controls = [control(f, lv, 'statusBoard', f.w / 2, f.d - 1, f.d - 2.8, 1.4)];
+    const controls = [control(f, lv, 'statusBoard', f.w / 2, f.d - 1, f.d - 3.1, 1.4)];
     sites.push({id: 'rimOffice', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [board]});
-    screens.push(screen(f, lv, 'pitBoard', f.w / 2, f.d - 1.05, 0, -1, 1.7, 2.4, 1.3));
+    screens.push(screen(f, lv, 'pitBoard', f.w / 2, f.d - 1.05, 0, -1, 1.9, 2.4, 1.3));
   }
   // The control room's opening and every room door stay clear (2 m inside / outside).
   for (const rr of rc.rooms) {
@@ -345,21 +345,28 @@ export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly 
 // ---------------------------------------------------------------------------------------------
 // Lights
 
+/** Emergency decks: lit from the start (steady fixtures) — the stair / generator / route-2 end landings; the rim runs on station power. */
+const EMERGENCY = /^(Generator landing|Stair landing|South landing|Rim )/;
+
 /**
  * Deck fixtures: wall-side lamps along the galleries / landings / terraces every ~7 m (2.6 m up), lamps on the bridges and tower decks,
- * a few round the core floor. Before the restart the pit runs on emergency power: most fixtures dim (power 0.3-0.5), about half dead,
- * some flickering; the rim (station power) stays lit. Every fixture has its storey set (`level`).
+ * a ring of work lamps round the vessel. Lane RESTART's light contract: the pit's POWERED industrial fixtures (galleries, bridges,
+ * towers, pipe terraces, the core ring) are `dying` (flicker circuit 2: held at 0 until the restart, ramped to 1 at the win); the
+ * emergency lamps (the rim on station power, one steady low lamp per stair / generator / route-2 landing) are ordinary steady
+ * fixtures. Nothing else on this level is `dying`. Every fixture has its storey set (`level`).
  */
 export function deckLights(layout: StationLayout, rc: ReactorCarve, rng: Rng): number {
   const before = layout.lights.length;
-  const add = (lv: number, area: number, x: number, z: number, y: number, rot: number) => {
-    const rim = lv === 0;
-    const dead = !rim && rng.chance(0.45);
-    const l: LightPlacement = {x: r3(x), y: r3(y), z: r3(z), rot, area, broken: dead, flicker: !dead && rng.chance(rim ? 0.08 : 0.3), warm: true, power: rim ? r3(rng.range(0.85, 1)) : r3(rng.range(0.3, 0.5)), dying: false};
+  const add = (lv: number, area: number, x: number, z: number, y: number, rot: number, mode: 'rim' | 'emergency' | 'powered') => {
+    const l: LightPlacement = mode === 'powered'
+      ? {x: r3(x), y: r3(y), z: r3(z), rot, area, broken: false, flicker: false, warm: true, power: r3(rng.range(0.85, 1)), dying: true}
+      : {x: r3(x), y: r3(y), z: r3(z), rot, area, broken: false, flicker: false, warm: true, power: mode === 'rim' ? r3(rng.range(0.85, 1)) : r3(rng.range(0.45, 0.6)), dying: false};
     if (lv) l.level = lv;
     layout.lights.push(l);
   };
   for (const d of rc.decks) {
+    const mode = d.level === 0 ? 'rim' : EMERGENCY.test(d.label) ? 'emergency' : 'powered';
+    let placed = 0;
     const r = d.rect, lv = d.level, alongX = r.w >= r.h;
     const len = (alongX ? r.w : r.h) * CELL, step = d.kind === 'bridge' ? 9 : 7;
     const n = Math.max(1, Math.round(len / step));
@@ -374,7 +381,9 @@ export function deckLights(layout: StationLayout, rc: ReactorCarve, rng: Rng): n
       }
       const g = layout.levels[lv].grid, [cx, cy] = g.cellOf(x, z);
       if (!g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] !== FLOOR || g.area[g.idx(cx, cy)] !== d.area || g.ceil[g.idx(cx, cy)] < d.y + 2.9) continue;
-      add(lv, d.area, x, z, d.y + 2.6, alongX ? 0 : Math.PI / 2);
+      // an emergency landing gets one steady lamp; its other fixtures join the powered circuit
+      add(lv, d.area, x, z, d.y + 2.6, alongX ? 0 : Math.PI / 2, mode === 'emergency' && placed > 0 ? 'powered' : mode);
+      placed++;
     }
   }
   // the core floor: a ring of work lamps round the vessel plinth
@@ -384,8 +393,8 @@ export function deckLights(layout: StationLayout, rc: ReactorCarve, rng: Rng): n
     const x = ccx + Math.cos(a) * rr, z = ccz + Math.sin(a) * rr;
     const g = layout.levels[CORE_LEVEL].grid, [cx, cy] = g.cellOf(x, z);
     const i = g.idx(cx, cy), y = rc.bases[CORE_LEVEL] + 3.0;
-    if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i] || g.area[i] !== rc.coreArea || g.ceil[i] < y + 0.3) continue;
-    add(CORE_LEVEL, rc.coreArea, x, z, y, 0);
+    if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || g.blocked[i] || !rc.coreAreas.includes(g.area[i]) || g.ceil[i] < y + 0.3) continue;
+    add(CORE_LEVEL, g.area[i], x, z, y, 0, 'powered');
   }
   return layout.lights.length - before;
 }
@@ -492,7 +501,7 @@ export function mouthHolds(layout: StationLayout, rc: ReactorCarve, links: reado
 
 /** Every pit deck cell (and the core floor) of every storey: held through the station dresser (the decks get their own fixtures). */
 export function deckHolds(layout: StationLayout, rc: ReactorCarve): {level: number; cells: number[]}[] {
-  const ids = new Set([...rc.decks.map(d => d.area), rc.coreArea]);
+  const ids = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
   return layout.levels.map((L: {id: number; grid: Grid}) => {
     const g = L.grid, cells: number[] = [];
     for (let i = 0; i < g.cells.length; i++) if (g.cells[i] === FLOOR && ids.has(g.area[i])) cells.push(i);

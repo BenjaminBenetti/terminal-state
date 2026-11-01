@@ -62,7 +62,8 @@ export interface ReactorCarve {
   terraces: number[];
   /** Vessel cells (canvas = grid cells) on the core grid. */
   vessel: [number, number][];
-  coreArea: number;
+  /** The core floor's sector areas. */
+  coreAreas: number[];
   /** Mirror: canonical px -> canvas x. */
   cx: (px: number) => number;
   rectC: (px: number, pz: number, w: number, h: number) => CellRect;
@@ -230,8 +231,14 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     f.lines.forEach((l, li) => { if (l.tiers.includes(lv)) deck(lv, 'bridge', l.px, gwN, 4, PD - 2 * LANE - gwS - gwN, `Bridge ${li + 1}`, 'reactor-bridge'); });
   }
   // The core floor: the whole pit round the vessel (raised, blocked after the crop) at the bottom.
-  const coreFloor = addPitArea(CORE_LEVEL, rectC(0, 0, PW, PD), 'Core floor', 'reactor-floor');
-  if (!coreFloor) return fail('core-floor');
+  // (six sectors: the spawn / loot caps act per area, and the floor round the vessel is big)
+  const coreAreas: number[] = [];
+  for (let sz = 0; sz < 2; sz++) for (let sx = 0; sx < 3; sx++) {
+    const x0 = Math.round(PW * sx / 3), x1 = Math.round(PW * (sx + 1) / 3), z0 = Math.round(PD * sz / 2), z1 = Math.round(PD * (sz + 1) / 2);
+    const a = addPitArea(CORE_LEVEL, rectC(x0, z0, x1 - x0, z1 - z0), `Core floor · ${sz ? 'south' : 'north'} ${['west', 'centre', 'east'][mirror ? 2 - sx : sx]}`, 'reactor-floor');
+    if (a) coreAreas.push(a.id);
+  }
+  if (!coreAreas.length) return fail('core-floor');
   const vessel: [number, number][] = [];
   {
     const g = grids[CORE_LEVEL], vr = VESSEL.r / CELL, ccx = PW / 2, ccz = PD / 2;
@@ -280,7 +287,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   // --- 5. Rooms cut into the rock behind the decks ----------------------------------------------------------------------------
   const rooms: RoomRec[] = [];
   const deckIds = new Set(decks.map(d => d.area));
-  deckIds.add(coreFloor.id);
+  for (const id of coreAreas) deckIds.add(id);
   type Spec = {key: string; level: number; type: RoomType; label: string; purpose: string; along: [number, number]; depth: [number, number]; walls: WallId[]; door: number; doorH: number; required: boolean};
   const specs: Spec[] = [
     {key: 'switchgear', level: TIERS, type: 'utility', label: 'Switchgear room', purpose: 'electrical-room', along: [18, 20], depth: [12, 14], walls: ['S', 'stair', 'organ', 'N'], door: 4, doorH: CLEAR.door, required: true},
@@ -377,7 +384,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
 
   return {
     f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, decks, runs, rooms, gens, towers, terraces,
-    vessel, coreArea: coreFloor.id, cx, rectC,
+    vessel, coreAreas, cx, rectC,
   };
 }
 

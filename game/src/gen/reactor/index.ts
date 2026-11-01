@@ -148,7 +148,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   const sb = buildSites(layout, rc);
   // --- Dressing: ONE station dresser pass with the pit decks, run mouths, stand points and doors held clear ----------------------
   const before = {lights: layout.lights.length, signs: layout.signs.length};
-  const deckIds = new Set([...rc.decks.map(d => d.area), rc.coreArea]);
+  const deckIds = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
   const release = holdCells(layout, [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds]);
   dress(layout, rng.fork('dress'));
   release();
@@ -183,6 +183,15 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   // finishTraversal's rescue-ladder plate ('EMERGENCY LADDER', storey-less) is not for the maintenance ladders (ARCH marks them)
   layout.signs = layout.signs.filter(s => !lad.ladders.some(q => Math.abs(q.x + 0.95 - s.x) < 1e-6 && Math.abs(q.bottomY + 0.72 - s.y) < 1e-6));
   for (const a of layout.areas) if (deckIds.has(a.id)) a.lighting = a.level ? 'dim' : 'lit';
+  // Lane RESTART's light contract: `dying` = the Reactor's POWERED circuit 2 only (the deck fixtures below): a room's sputtering tube
+  // from applyLighting is dark instead; the restart sites are lit steadily (emergency power) so the player can work there.
+  for (const l of layout.lights) if (l.dying) { l.dying = false; l.broken = true; l.flicker = false; }
+  for (const s of sb.sites) {
+    const a = layout.areas[s.area], own = layout.lights.filter(l => l.area === a.id);
+    for (const l of own) { l.broken = false; l.flicker = false; l.dying = false; l.power = 0.8; }
+    a.lighting = 'lit';
+    if (!own.length) layout.lights.push({x: (a.x + a.w / 2) * CELL, y: a.ceil - 0.05, z: (a.y + a.h / 2) * CELL, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 0.8, dying: false, ...(a.level ? {level: a.level} : {})});
+  }
   deckLights(layout, rc, rng.fork('reactor-deck-lights'));
   const fans = placeFans(layout, rc, rng.fork('reactor-fans'));
   layout.reactor = reactorInfo(layout, rc, rng.fork('reactor-info'), {
