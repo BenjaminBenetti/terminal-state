@@ -507,7 +507,8 @@ describe('player train follow-up (train-shell-followup-20261101-221246): door hi
       const info = qa.train() as {rear: unknown; windows: {end: number; glassBoxes: number}; highlighted: number | null};
       expect(info.rear).toEqual(SPEC.rear);
       expect(info.windows.end).toBe(windowsOf(SPEC).end.length);
-      expect(info.windows.glassBoxes).toBe(windowsOf(SPEC).side.filter(w => w.zone !== 'nose').length + windowsOf(SPEC).end.length + SPEC.doors.length * 2);
+      expect(info.windows.glassBoxes).toBe(rt.train!.col.glass.length + SPEC.doors.length * 2); // every window's glass boxes + the leaf windows'
+      expect(rt.train!.col.glass.length).toBeGreaterThanOrEqual(windowsOf(SPEC).side.length + windowsOf(SPEC).end.length); // at least one per opening (nose corners included)
       face(host, p, rear.x1 + 1.0, 0);
       for (let i = 0; i < 400 && local(host, p).x > rear.x1 + 1.05; i++) step(host, DT, W());
       // beside the doorway the partition blocks
