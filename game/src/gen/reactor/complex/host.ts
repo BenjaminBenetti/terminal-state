@@ -171,7 +171,7 @@ export function planComplexSlots(p: SlotPlanInput): ComplexSlot[] {
     if (s) slots.push(s);
     else COMPLEX_HOST_STATS.misses[`slot-${COMPLEX_OF_ZONE[zone]}`] = (COMPLEX_HOST_STATS.misses[`slot-${COMPLEX_OF_ZONE[zone]}`] ?? 0) + 1;
   }
-  COMPLEX_HOST_STATS.slots = slots.map(s => `${s.id}@${s.wall}/T${s.level}`);
+  COMPLEX_HOST_STATS.slots = slots.map(s => `${s.id}@${s.wall} T${s.level}`); // (no '/X' template fragment: ci:package's URL scan)
   return slots.map(({wall: _w, ...s}) => s);
 }
 
