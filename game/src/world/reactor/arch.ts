@@ -26,6 +26,7 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
+import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -39,6 +40,8 @@ export interface ReactorArchStats {
   /** GEN's light fixtures in the pit drawn as caged lamps (buildLamps). */
   lamps: number;
   ms: number;
+  /** task reactor-expansion-20261101 (lane MINES): the old mine workings' visuals (world/reactor/minesVisuals.ts). */
+  mines?: MinesBuildStats;
 }
 
 /** Areas of the Reactor proper (GEN's 'reactor-*' room types, or any area below the rim). */
@@ -52,6 +55,8 @@ export class ReactorArch {
   readonly info: ReactorInfo;
   /** Per cell of the level grids: 1 = inside the pit outline (the culler's atrium mask; the pit finishes). */
   readonly pitMask: Uint8Array;
+  /** task reactor-expansion-20261101 (lane MINES): areas of the old mine workings (rock walls, caged lamps, timber / rails / models). */
+  readonly mineAreas: ReadonlySet<number>;
   private readonly W: number;
   private readonly H: number;
   /** The core floor's level (the last tier). */
@@ -71,6 +76,7 @@ export class ReactorArch {
     const g0 = levels[0].grid;
     this.W = g0.w; this.H = g0.h;
     this.pitMask = new Uint8Array(this.W * this.H);
+    this.mineAreas = new Set(minesRecord(layout)?.areas ?? []); // (lane MINES)
     const b = this.info.pit.bounds, P = this.info.pit.outline;
     for (let cy = Math.max(0, Math.floor(b.z0 / CELL)); cy < Math.min(this.H, Math.ceil(b.z1 / CELL)); cy++) {
       for (let cx = Math.max(0, Math.floor(b.x0 / CELL)); cx < Math.min(this.W, Math.ceil(b.x1 / CELL)); cx++) {
@@ -99,7 +105,7 @@ export class ReactorArch {
       const mx = alongX ? (f.x0 + f.x1) / 2 : f.x0 + f.nx * CELL / 2, mz = alongX ? f.z0 + f.nz * CELL / 2 : (f.z0 + f.z1) / 2;
       let key: ReactorSurfaceKey | null = null;
       if (this.inPit(mx, mz)) key = 'reactor-wall';
-      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = 'reactor-room-wall';
+      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = this.mineAreas.has(f.area) ? 'reactor-wall' : 'reactor-room-wall'; // (lane MINES: the drifts are rock-cut, not plate)
       if (!key) { out.push(f); continue; }
       this.count(key);
       out.push({...f, finish: key});
@@ -170,8 +176,8 @@ export class ReactorArch {
   // GEN's light fixtures in the pit: caged industrial lamps (the lighting system's tube instance becomes the cage's lens)
 
   /** A real (non-virtual) layout light inside the pit: drawn as a caged lamp, not a Subway tube fixture (rooms keep tubes). */
-  isLamp(l: {x: number; z: number; virtual?: boolean}): boolean {
-    return !l.virtual && this.inPit(l.x, l.z);
+  isLamp(l: {x: number; z: number; virtual?: boolean; area?: number}): boolean {
+    return !l.virtual && (this.inPit(l.x, l.z) || (l.area !== undefined && this.mineAreas.has(l.area))); // (lane MINES: + the mine's caged lamps)
   }
 
   /** The tube instance of a pit lamp as its lens: a 0.2 m glowing square under the cage (0.36 m below the light point). */
@@ -232,6 +238,8 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
+    try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }

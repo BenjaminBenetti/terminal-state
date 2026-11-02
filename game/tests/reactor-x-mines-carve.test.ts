@@ -115,8 +115,6 @@ describe('Reactor mines complex — carver (lane MINES)', () => {
       const fx2 = -Math.sin(G.use.yaw), fz2 = -Math.cos(G.use.yaw);
       const tx = G.foot.x + G.foot.w / 2 - G.use.x, tz = G.foot.y + G.foot.h / 2 - G.use.y;
       expect(fx2 * tx + fz2 * tz).toBeGreaterThan(0);
-      // the cable route runs from the generator to the entrance
-      expect(c.cable.length).toBeGreaterThanOrEqual(3);
     }
   });
 

@@ -96,26 +96,31 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
     const span = (n - 1) * MINES_SETS.pitch, first = s0 + (len - span) / 2;
     const sx = (Wd / 2 - MINES_SETS.standoff) / MINES_ANCHORS.timberSet.postInner, sy = clear / MINES_ANCHORS.timberSet.top;
     const doors = layout.doors.filter(d => d.a === a.id || d.b === a.id);
-    for (let i = 0; i < n; i++) {
-      const s = first + i * MINES_SETS.pitch;
-      // never across an opening in a side wall (the posts would stand in it), never through a prop against the rib or a set piece
-      const blockedByDoor = doors.some(d => {
+    const free = (s: number): boolean => {
+      if (s < s0 + 0.45 || s > s0 + len - 0.45) return false;
+      // never across an opening in a side wall (the posts would stand in it)
+      if (doors.some(d => {
         const vertWall = d.w === 1 && d.h > 1; // an x = const wall
-        const sideWall = alongX ? !vertWall : vertWall;
-        if (!sideWall) return false;
+        if (alongX ? vertWall : !vertWall) return false;
         const d0 = (alongX ? d.x : d.y) * CELL, d1 = (alongX ? d.x + d.w : d.y + d.h) * CELL;
         return s > d0 - 0.45 && s < d1 + 0.45;
-      });
-      const px0 = s - 0.32, px1 = s + 0.32;
-      const blockedByProp = props.some(p => {
+      })) return false;
+      // never through a prop against the rib (the posts stand 0.1 m off the rock, + 3 cm), the rubble slope, or under the cap
+      const px0 = s - 0.3, px1 = s + 0.3; // the set's posts / cap are 0.53 m deep along the drift
+      return !props.some(p => {
         if ((p.level ?? 0) !== level || p.area !== a.id) return false;
         const pa0 = (alongX ? p.x - p.hx : p.z - p.hz), pa1 = (alongX ? p.x + p.hx : p.z + p.hz);
         if (pa1 <= px0 || pa0 >= px1) return false;
         const pc0 = (alongX ? p.z - p.hz : p.x - p.hx), pc1 = (alongX ? p.z + p.hz : p.x + p.hx);
-        // reaches a post zone (0.35 m off either rib) or is a set piece (rubble / carts) anywhere across
-        return p.kind === 'annexMachine' || pc0 < c0 + 0.35 || pc1 > c0 + Wd - 0.35 || p.y + p.h > base + 0.71 * clear - 0.05;
+        return (p.kind === 'annexMachine' && p.variant === MINE_PIECE.rubble) || pc0 < c0 + MINES_SETS.standoff + 0.03 || pc1 > c0 + Wd - MINES_SETS.standoff - 0.03 || p.y + p.h > base + 0.71 * clear - 0.05;
       });
-      if (blockedByDoor || blockedByProp) { plan.stats.setsSkipped++; continue; }
+    };
+    let last = -Infinity;
+    for (let i = 0; i < n; i++) {
+      // the nominal pitch, slid up to 0.7 m off a door / prop (sets keep >= 1.2 m apart)
+      const s = [0, -0.35, 0.35, -0.7, 0.7].map(o => first + i * MINES_SETS.pitch + o).find(q => q - last >= 1.2 && free(q));
+      if (s === undefined) { plan.stats.setsSkipped++; continue; }
+      last = s;
       const m: MinePlace = {x: r3(alongX ? s : mid), y: base, z: r3(alongX ? mid : s), yaw: alongX ? Math.PI / 2 : 0, sx: r3(sx), sy: r3(sy), sz: 1};
       sets.push({a, s, m});
     }

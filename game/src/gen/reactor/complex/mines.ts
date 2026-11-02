@@ -9,22 +9,16 @@
 // on its landing). The returned `dress` hook (./minesDress.ts) furnishes the workings after the crop.
 
 import type {Area} from '../../stationTypes';
-import {CELL} from '../../grid';
 import type {ComplexCarve, ComplexCarveInput, ComplexRoom} from './types';
-import {MINES, planMines, type MinePlan} from './minesPlan';
+import {planMines, type MinePlan} from './minesPlan';
 import {dressMines, type MinesDressInfo} from './minesDress';
 
 /** Human name of the complex. */
 export const MINES_NAME = 'No. 2 workings — old service mine';
 
-/** carveMines' result: the contract plus the lane's extras (the plan for QA / tests, a cable route the host may adopt). */
+/** carveMines' result: the contract plus the plan (QA / tests). The generator's cable is the host's (complex/host.ts complexCable). */
 export interface MinesCarve extends ComplexCarve {
   plan: MinePlan;
-  /**
-   * Cable route from the generator back to the entrance doorway (canvas cells, continuous; `y` = absolute height): along the haulage
-   * drift's wall under the support sets, through each opening below its head. The host may prepend it to ReactorGenerator.cable.
-   */
-  cable: {x: number; z: number; y: number}[];
 }
 
 /** Why the last attempts returned null (QA / tests). */
@@ -45,7 +39,7 @@ export function carveMines(inp: ComplexCarveInput): MinesCarve | null {
     // the magazine / lamp room keep their own stencilled plates (the purpose plates MAINTENANCE STORES / CREW LOCKERS would mislabel
     // them): their parent is the front deck, which they share no door with
     const parent = r.parent && r.part !== 'magazine' && r.part !== 'lamp' ? ids.get(r.parent)!.id : slot.frontArea;
-    const A = k.addArea(r.rect, r.kind, r.type, r2(slot.baseY + r.clear), parent, {...levelOpt, floorY: slot.baseY, label: r.label, publicSpace: false});
+    const A = k.addArea(r.rect, r.kind, r.type, r2(slot.baseY + r.clear), parent, {...levelOpt, floorY: slot.baseY, label: r.label, publicSpace: false}); // (levelOpt carries floorY too)
     A.purpose = r.purpose;
     ids.set(r.key, A);
   }
@@ -64,35 +58,9 @@ export function carveMines(inp: ComplexCarveInput): MinesCarve | null {
   const out: MinesCarve = {
     id: 'mines', slot, areas: plan.rooms.map(r => ids.get(r.key)!.id), entryArea: ids.get('portal')!.id, rooms,
     generator: {area: cavern.id, foot: {...gp.foot}, yaw: gp.yaw, use: {...gp.use}},
-    name: MINES_NAME, plan, cable: cableRoute(plan, slot.baseY),
+    name: MINES_NAME, plan,
     dress: (layout, drng, crop) => dressMines(layout, drng, crop, info),
   };
   MINES_STATS.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   return out;
-}
-
-/**
- * The generator's cable back to the entrance (canvas cells): from the skid's panel end along the haulage route's openings (each crossed
- * 0.3 m in from its jamb, below its head) to the adit mouth. Heights: 2.2 m above the floor in the openings, 2.5 m along the walls.
- */
-function cableRoute(plan: MinePlan, base: number): {x: number; z: number; y: number}[] {
-  const pts: {x: number; z: number; y: number}[] = [];
-  const g = plan.generator;
-  pts.push({x: g.use.x, z: g.use.y, y: r2(base + 2.5)});
-  // the haulage chain from the cavern back to the portal (parent links)
-  const byKey = new Map(plan.rooms.map(r => [r.key, r]));
-  const chain: string[] = ['cavern'];
-  let cur = plan.rooms.filter(r => r.part === 'haulage').slice(-1)[0];
-  while (cur) { chain.push(cur.key); cur = cur.parent ? byKey.get(cur.parent)! : undefined!; if (cur && cur.key === 'portal') { chain.push('portal'); break; } }
-  for (let i = 0; i + 1 < chain.length; i++) {
-    const d = plan.doors.find(q => (q.a === chain[i] && q.b === chain[i + 1]) || (q.b === chain[i] && q.a === chain[i + 1]));
-    if (!d) continue;
-    const along = d.rect.w >= d.rect.h;
-    const x = along ? d.rect.x + 0.6 : d.rect.x + 0.5, z = along ? d.rect.y + 0.5 : d.rect.y + 0.6;
-    pts.push({x, z, y: r2(base + 2.2)});
-  }
-  const e = plan.doors.find(q => q.a === null);
-  if (e) pts.push({x: e.rect.x + (e.rect.w >= e.rect.h ? 0.6 : 0.5), z: e.rect.y + (e.rect.w >= e.rect.h ? 0.5 : 0.6), y: r2(base + 2.2)});
-  void CELL; void MINES;
-  return pts;
 }
