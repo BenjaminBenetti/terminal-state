@@ -35,7 +35,7 @@ export const FIT = {
   layerMax: 0.007,                         // max layer height kept for an outer face (thin closed sheets: 2-4 mm)
   minClear: 0.0015,                        // bind clearance floor
   poseClear: 0.0008,                       // posed clearance floor (any validation pose)
-  poseRounds: 3, posePushMax: 0.012,
+  poseRounds: +(process.env.LING_POSE_ROUNDS ?? 3), posePushMax: 0.012,
   wrapIterations: 14, wrapRadius: [0.035, 0.008],     // spatial smoothing radius of the conformity correction (coarse -> fine)
   pushRadius: 0.012,                       // clearance push dilation radius
   weightSmooth: {iters: 2, lambda: 0.3},
@@ -137,12 +137,25 @@ function dilate(G, NB, need, radius) {
 // ------------------------------------------------------------------------------------------------ 1. landmarks + coarse map
 /** Garment landmarks in the garment frame. */
 export function garmentLandmarks(top, bottom) {
-  const apex = {};
+  // cups: the upper part of the top piece without the strap tops (a bodysuit's belly / a longline's lower band never counts)
+  let y0 = Infinity, y1 = -Infinity; for (let i = 1; i < top.pos.length; i += 3) { y0 = Math.min(y0, top.pos[i]); y1 = Math.max(y1, top.pos[i]); }
+  const apex = capApex(top.pos, 0.02, 0.25, 0.012, [y0 + 0.2 * (y1 - y0), y1 - 0.1 * (y1 - y0)]);
+  return garmentRest(top, bottom, apex);
+}
+/** Symmetric apex: per side the centroid of the most forward `cap` (m) of the piece's vertices with |x| in [x0, x1]; then the mean of
+ *  both sides mirrored (one stray vertex / asymmetric lace scallop never skews a cup). */
+export function capApex(P, x0, x1, cap, yRange = [-Infinity, Infinity]) {
+  const raw = {};
   for (const [side, s] of [['L', 1], ['R', -1]]) {
-    let best = -1;
-    for (let i = 0; i < top.pos.length / 3; i++) { const x = top.pos[i * 3] * s; if (x < 0.02 || x > 0.25) continue; if (best < 0 || top.pos[i * 3 + 2] > top.pos[best * 3 + 2]) best = i; }
-    apex[side] = [top.pos[best * 3], top.pos[best * 3 + 1], top.pos[best * 3 + 2]];
+    let zMax = -Infinity; const ids = [];
+    for (let i = 0; i < P.length / 3; i++) { const x = P[i * 3] * s, y = P[i * 3 + 1]; if (x < x0 || x > x1 || y < yRange[0] || y > yRange[1]) continue; ids.push(i); zMax = Math.max(zMax, P[i * 3 + 2]); }
+    const c = ids.filter(i => P[i * 3 + 2] > zMax - cap);
+    raw[side] = [0, 1, 2].map(k => c.reduce((a, i) => a + P[i * 3 + k], 0) / c.length);
   }
+  const mx = (Math.abs(raw.L[0]) + Math.abs(raw.R[0])) / 2, my = (raw.L[1] + raw.R[1]) / 2, mz = (raw.L[2] + raw.R[2]) / 2;
+  return {L: [mx, my, mz], R: [-mx, my, mz], raw};
+}
+function garmentRest(top, bottom, apex) {
   // crotch: the lowest midline point of the bottom piece's largest component (suspenders / rings are separate components)
   const {label, sizes} = compLabels(bottom);
   const main = [...sizes.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
@@ -178,12 +191,16 @@ export function coarseAlign(B, pieces, GL, opts = FIT) {
   for (const [name, P0] of Object.entries(pieces)) {
     const P = P0.pos, n = P.length / 3, NY = prof.NY;
     const gx = new Float64Array(NY).fill(NaN), gzF = new Float64Array(NY).fill(NaN), gzB = new Float64Array(NY).fill(NaN);
+    // garment extents per bin over a +-2 cm window (a tilted band: front cups and back band are at different heights)
     for (let i = 0; i < n; i++) {
-      const j = Math.round((mapY(P[i * 3 + 1]) - prof.Y0) / prof.YS); if (j < 0 || j >= NY) continue;
-      const ax = Math.abs(P[i * 3]);
-      gx[j] = Number.isNaN(gx[j]) ? ax : Math.max(gx[j], ax);
-      gzF[j] = Number.isNaN(gzF[j]) ? P[i * 3 + 2] : Math.max(gzF[j], P[i * 3 + 2]);
-      gzB[j] = Number.isNaN(gzB[j]) ? P[i * 3 + 2] : Math.min(gzB[j], P[i * 3 + 2]);
+      const j0 = Math.round((mapY(P[i * 3 + 1]) - prof.Y0) / prof.YS);
+      for (let j = j0 - 4; j <= j0 + 4; j++) {
+        if (j < 0 || j >= NY) continue;
+        const ax = Math.abs(P[i * 3]);
+        gx[j] = Number.isNaN(gx[j]) ? ax : Math.max(gx[j], ax);
+        gzF[j] = Number.isNaN(gzF[j]) ? P[i * 3 + 2] : Math.max(gzF[j], P[i * 3 + 2]);
+        gzB[j] = Number.isNaN(gzB[j]) ? P[i * 3 + 2] : Math.min(gzB[j], P[i * 3 + 2]);
+      }
     }
     // body torso cross-section per bin (above the crotch both sides; below it the hip-level is held)
     const sx = new Float64Array(NY).fill(NaN), sz = new Float64Array(NY).fill(NaN), dz = new Float64Array(NY).fill(NaN);
@@ -199,24 +216,24 @@ export function coarseAlign(B, pieces, GL, opts = FIT) {
     }
     const vj = [...valid.keys()].filter(j => valid[j]);
     if (!vj.length) throw new Error(`coarseAlign ${name}: the piece is nowhere a closed tube around the torso`);
-    for (let j = 0; j < NY; j++) if (!valid[j]) { const k = vj.reduce((a, b) => Math.abs(b - j) < Math.abs(a - j) ? b : a); sx[j] = sx[k]; sz[j] = sz[k]; dz[j] = dz[k]; }
-    // clamp to plausible ratios around the vertical scale, smooth (sigma 2 cm)
-    for (let j = 0; j < NY; j++) { sx[j] = Math.min(1.7 * s, Math.max(0.6 * s, sx[j])); sz[j] = Math.min(1.9 * s, Math.max(0.6 * s, sz[j])); }
-    const SX = gauss1(sx, 4), SZ = gauss1(sz, 4), DZ = gauss1(dz, 4);
-    const at = (A, y) => { const f = Math.max(0, Math.min(NY - 1.001, (y - prof.Y0) / prof.YS)), j = Math.floor(f); return A[j] + (A[j + 1] - A[j]) * (f - j); };
+    // ONE horizontal map per piece: the medians over its tube bins (per-height maps tear a tilted band apart; the conformity pass
+    // adapts the shape height by height)
+    const med = a => { const b = Float64Array.from(a).sort(); return b[Math.floor(b.length / 2)]; };
+    const SXc = Math.min(1.7 * s, Math.max(0.6 * s, med(vj.map(j => sx[j])))), SZc = Math.min(1.9 * s, Math.max(0.6 * s, med(vj.map(j => sz[j]))));
+    const DZc = med(vj.map(j => { const b = prof.bins[j]; return (b.zMax + b.zMin) / 2 - (gzF[j] + gzB[j]) / 2 * SZc; }));
     const Q = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) { const y = mapY(P[i * 3 + 1]); Q[i * 3] = P[i * 3] * at(SX, y); Q[i * 3 + 1] = y; Q[i * 3 + 2] = P[i * 3 + 2] * at(SZ, y) + at(DZ, y); }
+    for (let i = 0; i < n; i++) { Q[i * 3] = P[i * 3] * SXc; Q[i * 3 + 1] = mapY(P[i * 3 + 1]); Q[i * 3 + 2] = P[i * 3 + 2] * SZc + DZc; }
+    report.pieces[name] = {tubeBins: vj.length, tubeY: [r4(prof.bins[vj[0]].y), r4(prof.bins[vj[vj.length - 1]].y)], sx: r4(SXc), sz: r4(SZc), dz: r4(DZc)};
     out[name] = {...P0, pos: Q, garmentPos: P};
-    report.pieces[name] = {tubeBins: vj.length, tubeY: [r4(prof.bins[vj[0]].y), r4(prof.bins[vj[vj.length - 1]].y)], sxRange: [r4(Math.min(...SX)), r4(Math.max(...SX))], szRange: [r4(Math.min(...SZ)), r4(Math.max(...SZ))]};
   }
   // cup apices -> breast apices (top piece: lateral + vertical warp fading out at the side seam / band / straps)
   if (out.top) {
     const T = out.top.pos, n = T.length / 3;
-    const ga = {};
-    for (const [side, sg] of [['L', 1], ['R', -1]]) { let best = -1; for (let i = 0; i < n; i++) { const x = T[i * 3] * sg; if (x < 0.02 || x > 0.2) continue; if (best < 0 || T[i * 3 + 2] > T[best * 3 + 2]) best = i; } ga[side] = [T[best * 3], T[best * 3 + 1], T[best * 3 + 2]]; }
+    let ty0 = Infinity, ty1 = -Infinity; for (let i = 1; i < T.length; i += 3) { ty0 = Math.min(ty0, T[i]); ty1 = Math.max(ty1, T[i]); }
+    const ga = capApex(T, 0.02, 0.2, 0.012, [ty0 + 0.2 * (ty1 - ty0), ty1 - 0.1 * (ty1 - ty0)]);
     // symmetric: the mean apex offset of both sides (mirrored in x), capped (an asymmetric / flat chest never tears a cup)
     const cap = v => Math.max(-0.03, Math.min(0.03, v));
-    const mdx = cap(((L.apex.L[0] - ga.L[0]) - (L.apex.R[0] - ga.R[0])) / 2), mdy = cap(((L.apex.L[1] - ga.L[1]) + (L.apex.R[1] - ga.R[1])) / 2);
+    const mdx = cap(L.apex.L[0] - ga.L[0]), mdy = cap(L.apex.L[1] - ga.L[1]);
     const warp = {dx: r4(mdx), dy: r4(mdy)};
     for (const [side, sg] of [['L', 1], ['R', -1]]) {
       const A = ga[side];
@@ -317,15 +334,48 @@ export function verifiedClosest(B, grid, idx, nrm, closedGrid, x, y, z, maxR) {
   return c;
 }
 
+
+/** Torso / leg skin vertices of the fit surface (welded representatives) within `near` of a cloth piece (bind). */
+export function pokeCandidates(B, piece, near = 0.03) {
+  const grid = new TriGrid(piece.pos, piece.idx, 0.02), out = [], seen = new Uint8Array(B.pos.length / 3);
+  for (const v of B.fitIdx) {
+    const r = B.remap[v]; if (seen[r] || B.groups[r] === 2 || B.hair[r]) continue; seen[r] = 1;
+    if (grid.closest(B.pos[r * 3], B.pos[r * 3 + 1], B.pos[r * 3 + 2], near)) out.push(r);
+  }
+  return Uint32Array.from(out);
+}
+/**
+ * Body skin poking through the cloth (between cloth vertices: a nipple / mons / hip bone under a coarse cloth triangle): per welded
+ * cloth vertex the outward push it needs = max over the candidate body vertices whose outward ray, started `depth` inside the skin,
+ * meets one of its triangles before skin + minClear.
+ */
+export function bodyPokeNeeds(bodyPos, bodyNrm, cand, clothPos, clothIdx, G, minClear, depth = 0.008) {
+  const grid = new TriGrid(clothPos, clothIdx, 0.02), need = new Float32Array(G.n);
+  let count = 0;
+  for (const v of cand) {
+    const nx = bodyNrm[v * 3], ny = bodyNrm[v * 3 + 1], nz = bodyNrm[v * 3 + 2];
+    const h = grid.ray(bodyPos[v * 3] - nx * depth, bodyPos[v * 3 + 1] - ny * depth, bodyPos[v * 3 + 2] - nz * depth, nx, ny, nz, depth + minClear);
+    if (!h) continue;
+    const d = depth + minClear - h.t;
+    count++;
+    if (process.env.LING_DEBUG_POKE && d > depth * 0.8 && count < 12) console.log(`      poke body v ${v} at ${[0, 1, 2].map(k => bodyPos[v * 3 + k].toFixed(3)).join(',')} n ${[nx, ny, nz].map(q => q.toFixed(2)).join(',')} hit t ${h.t.toFixed(4)} tri ${[0, 1, 2].map(k => [0, 1, 2].map(q => clothPos[clothIdx[h.tri * 3 + k] * 3 + q].toFixed(3)).join(',')).join(' / ')}`);
+    for (let k = 0; k < 3; k++) { const c = G.remap[clothIdx[h.tri * 3 + k]]; if (d > need[c]) need[c] = d; }
+  }
+  return {need, count};
+}
+
 export function clearancePass(B, piece, G, floor, rounds = 6, push = null, maxStep = 0.02, opts = FIT) {
   const P = piece.pos; let fixed = 0;
+  const cand = piece.pokeCand ??= pokeCandidates(B, piece);
   for (let r = 0; r < rounds; r++) {
     const need = new Float32Array(G.n), dir = new Float32Array(G.n * 3); let any = 0;
+    const poke = bodyPokeNeeds(B.pos, B.nrm, cand, P, piece.idx, G, floor).need;
+    if (process.env.LING_DEBUG) { const top = [...G.uniq].filter(i => poke[i] > 0).sort((a, b) => poke[b] - poke[a]); console.log(`   clear round ${r}: poke vertices ${top.length}`, top.slice(0, 5).map(i => `${(poke[i] * 1000).toFixed(1)}mm@${[0, 1, 2].map(k => P[i * 3 + k].toFixed(3)).join(',')}`).join(' ')); }
     for (const i of G.uniq) {
       const c = verifiedClosest(B, B.fitGrid, B.fitIdx, B.nrm, B.skinGrid, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], 0.08);
       if (!c) continue;
       dir.set(c.n, i * 3);
-      const v = Math.min(maxStep, Math.max(push ? push[i] : 0, floor - c.sd));
+      const v = Math.min(maxStep, Math.max(push ? push[i] : 0, floor - c.sd, poke[i]));
       if (v > 0) { need[i] = v; any++; }
     }
     if (!any) break;
@@ -386,8 +436,9 @@ export function skinWith(mats, pos, joints, weights, nrm = null) {
 }
 
 /** Per welded cloth vertex: the minimum signed distance to the posed FIT surface over the given poses. */
-export function poseMinClearance(B, pieceSets, poses) {
+export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear) {
   const mins = pieceSets.map(p => new Float32Array(p.G.n).fill(Infinity));
+  const pokes = pieceSets.map(p => new Float32Array(p.G.n));
   for (const pose of poses) {
     const mats = pose.mats;
     const bp = skinWith(mats, B.pos, B.joints, B.weights);
@@ -395,13 +446,15 @@ export function poseMinClearance(B, pieceSets, poses) {
     const bn = posedWeldedNormals(B, bp);
     pieceSets.forEach((ps, k) => {
       const gp = skinWith(mats, ps.piece.pos, ps.w.joints, ps.w.weights);
+      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor).need;
+      for (const i of ps.G.uniq) if (pk[i] > pokes[k][i]) { pokes[k][i] = pk[i]; if (process.env.LING_DEBUG) (ps.dbgPoke ??= {})[i] = pose.clip + '@' + pose.t; }
       for (const i of ps.G.uniq) {
         const c = verifiedClosest(B, grid, B.fitIdx, bn, closed, gp[i * 3], gp[i * 3 + 1], gp[i * 3 + 2], 0.06);
-        if (c && c.sd < mins[k][i]) mins[k][i] = c.sd;
+        if (c && c.sd < mins[k][i]) { mins[k][i] = c.sd; if (process.env.LING_DEBUG) { (ps.dbgSd ??= {})[i] = pose.clip + '@' + pose.t + ' tri ' + c.v.map(v => B.groups[v]).join(''); } }
       }
     });
   }
-  return mins;
+  return {mins, pokes};
 }
 
 /** Welded skin normals of a posed body (same welding / skin-only triangles as the bind). */
@@ -446,58 +499,80 @@ export function carryNormals(srcPos, srcNrm, fitPos, G) {
  * @param B loadBody() + worldAt(clip, t) + validation poses B.poses [{clip, t, mats}]
  * @param pieces {top: simplified piece, bottom: simplified piece} (garment frame)
  */
-export function fitSet(B, pieces, opts = FIT) {
+/**
+ * Stage 1 at the source resolution (cleaned, unsimplified pieces): landmark alignment, leg loops, conformity, clearance.
+ * Returns per piece the fitted positions of EVERY source vertex of the piece (same order).
+ */
+export function fitStage1(B, pieces, opts = FIT) {
   const GL = garmentLandmarks(pieces.top, pieces.bottom);
   const A = coarseAlign(B, pieces, GL, opts);
-  const out = {landmarks: {garment: {apex: {L: GL.apex.L.map(r4), R: GL.apex.R.map(r4)}, crotch: GL.crotch.map(r4)}}, align: A.report, pieces: {}};
-  const sets = [];
+  const report = {landmarks: {garment: {apex: {L: GL.apex.L.map(r4), R: GL.apex.R.map(r4)}, crotch: GL.crotch.map(r4)}, body: bodyLandmarkReport(B)}, align: A.report, pieces: {}};
+  const out = {};
   for (const name of ['top', 'bottom']) {
     const piece = A.pieces[name];
     const G = clothGraph(piece);
-    // source normals in the aligned frame (anisotropic map: rotate by the geometric normal change)
     piece.srcNrmAligned = carryNormals(piece.garmentPos, piece.nrm, piece.pos, G);
     const loops = name === 'bottom' ? recentreLegLoops(B, piece) : [];
-    const far = tag => { let m = 0; for (const i of G.uniq) { const c = B.fitGrid.closest(piece.pos[i * 3], piece.pos[i * 3 + 1], piece.pos[i * 3 + 2], 0.3); if (c) m = Math.max(m, c.d); } if (process.env.LING_DEBUG) console.log('   [' + name + '] ' + tag + ' max dist', m.toFixed(4)); };
-    far('coarse');
+    if (opts.snap) opts.snap(name, 'coarse', piece.pos.slice());
     const wrap = shrinkWrap(B, piece, G, name, opts);
-    far('wrap');
+    if (opts.snap) opts.snap(name, 'wrap', piece.pos.slice());
     const fixed = clearancePass(B, piece, G, opts.minClear);
-    far('clear');
-    const w = transferWeights(B, piece, G, opts);
-    sets.push({name, piece, G, w, loops, wrap, bindFixed: fixed});
+    if (opts.snap) opts.snap(name, 'clear', piece.pos.slice());
+    out[name] = piece.pos;
+    report.pieces[name] = {sourceVertices: piece.pos.length / 3, sourceTriangles: piece.idx.length / 3, legLoopsRecentred: loops, wrap: wrap.history.slice(-1)[0], stage1ClearanceRounds: fixed};
   }
-  // 6. pose-aware clearance
+  return {fitted: out, report};
+}
+
+function bodyLandmarkReport(B) { const {profile, crest, ...L} = B.landmarks; return JSON.parse(JSON.stringify(L, (k, v) => typeof v === 'number' ? r4(v) : v)); }
+
+/**
+ * Stage 2 on the runtime (simplified) pieces: `pieces[name]` = {pos (this body's stage-1 positions of the kept vertices), idx, uv,
+ * nrm (source normals), garmentPos (source positions)}; clearance again (now with the coarse runtime triangles: body bumps between
+ * cloth vertices), skin weights, pose-aware clearance through the validation poses, normals, masks.
+ */
+export function fitStage2(B, pieces, stage1Report, opts = FIT) {
+  const out = {...stage1Report, pieces: {...stage1Report.pieces}};
+  const sets = [];
+  for (const name of ['top', 'bottom']) {
+    const piece = pieces[name];
+    const G = clothGraph(piece);
+    const fixed = clearancePass(B, piece, G, opts.minClear);
+    const w = transferWeights(B, piece, G, opts);
+    sets.push({name, piece, G, w, bindFixed: fixed});
+  }
   const poseRounds = [];
   for (let r = 0; r < opts.poseRounds; r++) {
-    const mins = poseMinClearance(B, sets, B.poses);
+    const {mins, pokes} = poseMinClearance(B, sets, B.poses, opts.poseClear);
     let need = 0;
     sets.forEach((s, k) => {
       const push = new Float32Array(s.G.n);
-      for (const i of s.G.uniq) { const d = opts.poseClear - mins[k][i]; if (Number.isFinite(d) && d > 0) { push[i] = Math.min(opts.posePushMax, d + 0.0005); need++; } }
-      s.posePush = (s.posePush ?? 0) + push.reduce((a, b) => a + b, 0);
-      if (need) { clearancePass(B, s.piece, s.G, opts.minClear, 2, push); s.w = transferWeights(B, s.piece, s.G, opts); }
+      let n = 0;
+      for (const i of s.G.uniq) { const d = Math.max(opts.poseClear - mins[k][i], pokes[k][i]); if (Number.isFinite(d) && d > 0) { push[i] = Math.min(opts.posePushMax, d + 0.0005); n++; } }
+      need += n;
+      if (n) { clearancePass(B, s.piece, s.G, opts.minClear, 2, push); s.w = transferWeights(B, s.piece, s.G, opts); }
     });
     poseRounds.push({round: r, verticesNeedingMore: need});
     if (!need) break;
   }
   out.poseRounds = poseRounds;
   for (const s of sets) {
-    const nrm = carryNormals(s.piece.garmentPos, s.piece.nrm, s.piece.pos, s.G);
-    s.nrm = nrm;
-    out.pieces[s.name] = {vertices: s.piece.pos.length / 3, triangles: s.piece.idx.length / 3, legLoopsRecentred: s.loops, wrap: s.wrap.history.slice(-1)[0], bindClearanceFixes: s.bindFixed, weightAnchorsBeyond25cm: s.w.far,
-      };
+    s.nrm = carryNormals(s.piece.garmentPos, s.piece.nrm, s.piece.pos, s.G);
+    out.pieces[s.name] = {...out.pieces[s.name], vertices: s.piece.pos.length / 3, triangles: s.piece.idx.length / 3, bindClearanceRounds: s.bindFixed, weightAnchorsBeyond25cm: s.w.far};
   }
-  // 7. masks
   const bodyMesh = {pos: B.pos, idx: B.idx};
-  for (const s of sets) {
-    const m = coverMask(bodyMesh, {pos: s.piece.pos, idx: s.piece.idx}, {...opts.mask, bodyJoints: B.joints});
-    s.mask = m;
-  }
+  for (const s of sets) s.mask = coverMask(bodyMesh, {pos: s.piece.pos, idx: s.piece.idx}, {...opts.mask, bodyJoints: B.joints});
   const top = sets.find(s => s.name === 'top'), bottom = sets.find(s => s.name === 'bottom');
-  const lm = coverMask({pos: bottom.piece.pos, idx: bottom.piece.idx}, {pos: top.piece.pos, idx: top.piece.idx}, {...opts.layerMask, skipJoints: [], bodyJoints: null});
-  top.hideWear = lm;
-  out.masks = {top: {hidden: top.mask.hidden, total: top.mask.total}, bottom: {hidden: bottom.mask.hidden, total: bottom.mask.total}, bottomUnderTop: {hidden: lm.hidden, total: lm.total}};
+  top.hideWear = coverMask({pos: bottom.piece.pos, idx: bottom.piece.idx}, {pos: top.piece.pos, idx: top.piece.idx}, {...opts.layerMask, skipJoints: [], bodyJoints: null});
+  out.masks = {top: {hidden: top.mask.hidden, total: top.mask.total}, bottom: {hidden: bottom.mask.hidden, total: bottom.mask.total}, bottomUnderTop: {hidden: top.hideWear.hidden, total: top.hideWear.total}};
   return {sets, report: out};
+}
+
+/** Runtime piece of one body from its stage-1 positions and a simplification (vertex subset `srcIndex` of the source piece). */
+export function runtimePiece(srcPiece, fittedPos, simp) {
+  const n = simp.srcIndex.length, pos = new Float32Array(n * 3), garmentPos = new Float32Array(n * 3);
+  simp.srcIndex.forEach((v, i) => { pos.set(fittedPos.subarray(v * 3, v * 3 + 3), i * 3); garmentPos.set(srcPiece.pos.subarray(v * 3, v * 3 + 3), i * 3); });
+  return {pos, idx: simp.idx, uv: simp.uv, nrm: simp.nrm, garmentPos};
 }
 
 function quant(arr, q) { const a = Float32Array.from(arr).sort(); return a[Math.min(a.length - 1, Math.floor(q * (a.length - 1)))]; }

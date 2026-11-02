@@ -31,29 +31,76 @@ export async function loadBody(file) {
   const J = Object.fromEntries(names.map((nm, j) => [nm, [W0[j][12], W0[j][13], W0[j][14]]]));
   const sk = skinMask(pos, idx);
   const hair = Uint8Array.from(sk.skin, v => 1 - v);
+  const relabelled = refineHair(pos, idx, hair);
   const groups = vertexGroups({pos, joints, weights}, names);
   const {remap} = weldMap(pos);
   // arm-group skin that is NOT on the arm's own cylinder (the front armpit fold, the shoulder slope medial of the deltoid) stays part
   // of the fit surface: distance to the arm bones > armOff x the arm's median skin radius (measured on the free upper arm / forearm)
   const armOn = armCylinder(pos, groups, hair, J);
-  const skinTris = [], fitTris = [], legTris = [];
+  const skinTris = [], legTris = [];
   for (let t = 0; t < idx.length; t += 3) {
     const v = [idx[t], idx[t + 1], idx[t + 2]];
     if (v.some(i => hair[i])) continue;
     skinTris.push(...v);
-    if (v.every(i => groups[i] === GROUP.torso || groups[i] === GROUP.leg || (groups[i] === GROUP.arm && !armOn.on[i]))) fitTris.push(...v);
     if (v.every(i => groups[i] === GROUP.leg)) legTris.push(...v);
   }
-  const skinIdx = Uint32Array.from(skinTris), fitIdx = Uint32Array.from(fitTris);
-  const nrm = weldedNormals(pos, skinIdx, remap);
+  const skinIdx = Uint32Array.from(skinTris);
+  // hair FUSED onto the skin (a lock lying on a breast / the shoulder, within fusedHair of the closed skin) is part of the body's outer
+  // surface the cloth sits on; free-hanging hair (the curtain over the back, locks beside the arms) never is
+  const closed = new TriGrid(pos, skinIdx, 0.025);
+  const fused = new Uint8Array(pos.length / 3);
+  for (let i = 0; i < fused.length; i++) { if (!hair[i] || remap[i] !== i) continue; const c = closed.closest(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], 0.006); if (c) fused[i] = 1; }
+  for (let i = 0; i < fused.length; i++) fused[i] = fused[remap[i]];
+  const fitTris = [];
+  for (let t = 0; t < idx.length; t += 3) {
+    const v = [idx[t], idx[t + 1], idx[t + 2]];
+    if (v.some(i => hair[i] && !fused[i])) continue;
+    if (v.every(i => groups[i] === GROUP.torso || groups[i] === GROUP.leg || (groups[i] === GROUP.arm && !armOn.on[i]))) fitTris.push(...v);
+  }
+  const fitIdx = Uint32Array.from(fitTris);
+  // welded normals over the closed skin + fused hair (the fit surface's own normals at fused locks)
+  const nrm = weldedNormals(pos, Uint32Array.from([...skinIdx, ...fitIdx]), remap);
   const facing = bodyFacing(pos, hair, J);
   if (facing.forward[2] !== 1) throw new Error(file + ': body does not face +Z');
   const B = {file, id: ex.id, extras: ex, R, mesh: m, names, J, pos, idx, nrm, joints, weights, hair, groups, remap, skinIdx, fitIdx, legIdx: Uint32Array.from(legTris),
-    nTris: idx.length / 3, geometryHash: ex.geometryHash, skinVertices: sk.skinVertices, facing};
+    nTris: idx.length / 3, geometryHash: ex.geometryHash, skinVertices: sk.skinVertices, hairIslandsRelabelled: relabelled, facing};
   B.fitGrid = new TriGrid(pos, fitIdx, 0.025);
-  B.skinGrid = new TriGrid(pos, skinIdx, 0.025);
+  B.skinGrid = closed;
+  B.fused = fused;
   B.landmarks = measureLandmarks(B);
   return B;
+}
+
+
+/**
+ * Hair mask refinement. The geometric test (open sheets) misses hair strands lying close over the skin (Gaze / Revenant: locks over
+ * the shoulders and chest sides) and flags small patches of real skin under such locks. Strands are OPEN sheets: every vertex within
+ * one ring of a boundary / non-manifold edge (welded) is hair; then hair-labelled islands that are small, contain no such vertex and
+ * are bordered by skin are real skin (relabelled). Returns {strandVertices, relabelled}.
+ */
+function refineHair(pos, idx, hair, maxIsland = 60) {
+  const {remap} = weldMap(pos);
+  const n = pos.length / 3, adj = new Map(), E = new Map();
+  for (let t = 0; t < idx.length; t += 3) for (let k = 0; k < 3; k++) {
+    const a = remap[idx[t + k]], b = remap[idx[t + (k + 1) % 3]]; if (a === b) continue;
+    (adj.get(a) ?? adj.set(a, new Set()).get(a)).add(b); (adj.get(b) ?? adj.set(b, new Set()).get(b)).add(a);
+    const key = a < b ? a * 4294967296 + b : b * 4294967296 + a; E.set(key, (E.get(key) ?? 0) + 1);
+  }
+  const bnd = new Uint8Array(n);
+  for (const [key, c] of E) if (c !== 2) { bnd[Math.floor(key / 4294967296)] = 1; bnd[key % 4294967296] = 1; }
+  const near = bnd.slice();
+  for (let v = 0; v < n; v++) if (bnd[v]) for (const w of adj.get(v) ?? []) near[w] = 1;
+  let strand = 0;
+  for (let v = 0; v < n; v++) if (remap[v] === v && near[v] && !hair[v]) { hair[v] = 1; strand++; }
+  const seen = new Uint8Array(n); let relabelled = 0;
+  for (let i = 0; i < n; i++) {
+    const r = remap[i]; if (r !== i || !hair[r] || seen[r]) continue;
+    const island = [], stack = [r]; seen[r] = 1; let skinBorder = 0, open = 0;
+    while (stack.length) { const v = stack.pop(); island.push(v); if (near[v]) open++; for (const w of adj.get(v) ?? []) { if (hair[w]) { if (!seen[w]) { seen[w] = 1; stack.push(w); } } else skinBorder++; } }
+    if (island.length <= maxIsland && skinBorder > 0 && !open) { for (const v of island) hair[v] = 0; relabelled += island.length; }
+  }
+  for (let i = 0; i < n; i++) hair[i] = hair[remap[i]];
+  return {strandVertices: strand, relabelled};
 }
 
 const segD = (p, a, b) => { const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], ap = [p[0] - a[0], p[1] - a[1], p[2] - a[2]]; const t = Math.max(0, Math.min(1, (ab[0] * ap[0] + ab[1] * ap[1] + ab[2] * ap[2]) / (ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2))); return Math.hypot(ap[0] - t * ab[0], ap[1] - t * ab[1], ap[2] - t * ab[2]); };
@@ -72,7 +119,10 @@ export function armCylinder(pos, groups, hair, J, armOff = 1.3) {
     ds.sort((a, b) => a - b);
     const r = ds.length ? ds[Math.floor(ds.length / 2)] : 0.04;
     radius[side] = r;
-    for (let i = 0; i < n; i++) if (groups[i] === 2 && Math.sign(pos[i * 3]) === sg) on[i] = d[i] < armOff * r ? 1 : 0;
+    // only the shoulder / armpit-fold skin (above the upper-arm joint - 15 cm) may count as off the arm; forearms / hands never
+    // only shoulder / armpit-fold skin MEDIAL of the shoulder joint (and above it - 15 cm) may count as off the arm (the Siren rule);
+    // the upper arm / forearm / hand never
+    for (let i = 0; i < n; i++) if (groups[i] === 2 && Math.sign(pos[i * 3]) === sg) on[i] = d[i] < armOff * r || pos[i * 3 + 1] < U[1] - 0.15 || Math.abs(pos[i * 3]) > Math.abs(U[0]) ? 1 : 0;
   }
   return {on, radius};
 }
@@ -97,28 +147,36 @@ export function measureLandmarks(B) {
   const fitV = new Uint8Array(P.length / 3);
   for (const v of B.fitIdx) fitV[v] = 1;
   const n = P.length / 3;
-  // breast apices: most forward fit vertex per side in the bust band
-  const apex = {};
+  // breast apices: per side, the centroid of the most forward 8 mm cap of the fit surface in the bust band (forward-facing skin), then
+  // made symmetric (mean height / |x| / depth of both sides): one asymmetric vertex never moves a cup
+  const rawApex = {};
   for (const [side, s] of [['L', 1], ['R', -1]]) {
-    let best = -1;
+    const ids = [];
+    let zMax = -Infinity;
     for (let i = 0; i < n; i++) {
-      if (!fitV[i]) continue;
+      if (!fitV[i] || B.nrm[i * 3 + 2] < 0.3) continue;
       const x = P[i * 3] * s, y = P[i * 3 + 1];
       if (x < 0.025 || x > 0.17 || y < J.Chest[1] - 0.14 || y > J.Neck[1] - 0.05) continue;
-      if (best < 0 || P[i * 3 + 2] > P[best * 3 + 2]) best = i;
+      ids.push(i); zMax = Math.max(zMax, P[i * 3 + 2]);
     }
-    apex[side] = [P[best * 3], P[best * 3 + 1], P[best * 3 + 2]];
+    const cap = ids.filter(i => P[i * 3 + 2] > zMax - 0.008);
+    rawApex[side] = [0, 1, 2].map(k => cap.reduce((a, i) => a + P[i * 3 + k], 0) / cap.length);
   }
+  const mx = (Math.abs(rawApex.L[0]) + Math.abs(rawApex.R[0])) / 2, my = (rawApex.L[1] + rawApex.R[1]) / 2, mz = (rawApex.L[2] + rawApex.R[2]) / 2;
+  const apex = {L: [mx, my, mz], R: [-mx, my, mz]};
   const apexY = (apex.L[1] + apex.R[1]) / 2, apexX = (apex.L[0] - apex.R[0]) / 2, apexZ = (apex.L[2] + apex.R[2]) / 2;
-  // crotch: the lowest midline (|x| < 12 mm) fit vertex within 25 cm below the hip joint (the inner thighs of an A-pose body meet in
-  // a V crease up to the perineum, so a vertical midline ray slides up the crease: the lowest midline vertex is the crotch)
+  // crotch (perineum): scanning down the midline (x = 0) from 8 cm above the hip joint, the front (+Z) and back (-Z) skin both exist
+  // above it and close in on each other; the crotch is the last row before the midline first leaves the body (thighs apart) or the
+  // front-back depth collapses below 1 cm (touching thighs: the crease below is not the crotch)
   let crotch = null;
-  for (let i = 0; i < n; i++) {
-    if (!fitV[i] || Math.abs(P[i * 3]) > 0.012) continue;
-    const y = P[i * 3 + 1]; if (y < J.Hips[1] - 0.25 || y > J.Hips[1]) continue;
-    if (!crotch || y < crotch[1]) crotch = [0, y, P[i * 3 + 2]];
+  for (let y = J.Hips[1] + 0.08; y > J.Hips[1] - 0.25; y -= 0.0025) {
+    const hf = B.fitGrid.ray(0, y, 0.6, 0, 0, -1, 1.2), hb = B.fitGrid.ray(0, y, -0.6, 0, 0, 1, 1.2);
+    if (!hf || !hb) break;
+    const zf = 0.6 - hf.t, zb = -0.6 + hb.t;
+    if (zf - zb < 0.01) break;
+    crotch = [0, y, (zf + zb) / 2];
   }
-  if (!crotch) throw new Error(B.id + ': no midline crotch vertex');
+  if (!crotch) throw new Error(B.id + ': no midline crotch');
   // cross-section profile per 5 mm bin of the fit surface: torso (above the crotch: both sides) / per leg (below)
   const Y0 = Math.max(0.3, crotch[1] - 0.35), Y1 = J.Neck[1] + 0.06, YS = 0.005, NY = Math.round((Y1 - Y0) / YS) + 1;
   const prof = Array.from({length: NY}, (_, j) => ({y: Y0 + j * YS, xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity, legs: {L: {xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity}, R: {xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity}}}));
@@ -128,6 +186,14 @@ export function measureLandmarks(B) {
     const x = P[i * 3], z = P[i * 3 + 2], b = prof[j];
     b.xMin = Math.min(b.xMin, x); b.xMax = Math.max(b.xMax, x); b.zMin = Math.min(b.zMin, z); b.zMax = Math.max(b.zMax, z);
     const L = b.legs[x >= 0 ? 'L' : 'R']; L.xMin = Math.min(L.xMin, x); L.xMax = Math.max(L.xMax, x); L.zMin = Math.min(L.zMin, z); L.zMax = Math.max(L.zMax, z);
+  }
+  // a 15k-triangle body has 1-2 cm vertex rows: each bin takes the union of the raw bins within +-1 cm
+  const raw = prof.map(b => ({...b, legs: {L: {...b.legs.L}, R: {...b.legs.R}}}));
+  for (let j = 0; j < NY; j++) {
+    const b = prof[j];
+    for (let d = -2; d <= 2; d++) { const k = j + d; if (k < 0 || k >= NY || !d) continue; const r = raw[k];
+      b.xMin = Math.min(b.xMin, r.xMin); b.xMax = Math.max(b.xMax, r.xMax); b.zMin = Math.min(b.zMin, r.zMin); b.zMax = Math.max(b.zMax, r.zMax);
+      for (const s of ['L', 'R']) { const L = b.legs[s], R = r.legs[s]; L.xMin = Math.min(L.xMin, R.xMin); L.xMax = Math.max(L.xMax, R.xMax); L.zMin = Math.min(L.zMin, R.zMin); L.zMax = Math.max(L.zMax, R.zMax); } }
   }
   const at = y => prof[Math.max(0, Math.min(NY - 1, Math.round((y - Y0) / YS)))];
   // inframammary fold: below the apex, along the apex column, the front z minimum before the belly (search 2-12 cm below)
@@ -148,7 +214,7 @@ export function measureLandmarks(B) {
     for (const z of [J.Neck[2] - 0.01, J.Neck[2], J.Neck[2] + 0.01, J.Neck[2] + 0.02]) { const h = B.fitGrid.ray(s * strapX, J.Neck[1] + 0.3, z, 0, -1, 0, 0.5); if (h) { const y = J.Neck[1] + 0.3 - h.t; if (!top || y > top[1]) top = [s * strapX, y, z]; } }
     crest[side] = top;
   }
-  return {apex, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
+  return {apex, rawApex: {L: rawApex.L.map(r4), R: rawApex.R.map(r4)}, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
     strapX: r4(strapX), crest, profile: {Y0, YS, NY, at, bins: prof}};
 }
 

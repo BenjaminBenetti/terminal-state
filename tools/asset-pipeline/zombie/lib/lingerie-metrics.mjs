@@ -13,7 +13,7 @@
 //    vertex belongs to a body triangle that is not hidden; exposed-hidden = hidden-only vertices not covered in the pose
 //    (see-through risk);
 //  - coverage: body vertices of the breast apex zones (within 3 cm of each apex, facing forward) and of the groin zone (front of the
-//    pubis down to the crotch, |x| < 4.5 cm) whose posed outward ray meets the cloth within 5 cm.
+//    pubis down to the crotch, |x| < 3 cm, up to 7 cm above the crotch) whose posed outward ray meets the cloth within 5 cm.
 import {TriGrid, prepareInner, bindCoverage, auditPose, insideByParity} from './penetration.mjs';
 import {validationPoses} from './lingerie-body.mjs';
 import {skinWith, posedWeldedNormals, clothGraph} from './lingerie-fit.mjs';
@@ -41,7 +41,9 @@ export function coverageZones(B) {
     const x = P[i * 3], y = P[i * 3 + 1], z = P[i * 3 + 2];
     for (const s of ['L', 'R']) { const A = L.apex[s]; if (Math.hypot(x - A[0], y - A[1], z - A[2]) < 0.03 && N[i * 3 + 2] > 0.2) apex.push(i); }
     const c = L.crotch;
-    if (Math.abs(x) < 0.045 && y > c[1] - 0.005 && y < c[1] + 0.085 && (N[i * 3 + 2] > 0.2 || (y < c[1] + 0.025 && N[i * 3 + 1] < -0.2))) groin.push(i);
+    // front of the pubis (facing forward) + the underside at the crotch (facing down); the inner-thigh crease walls of a body whose
+    // thighs touch face sideways and are bridged by the gusset, not covered along their normal
+    if (Math.abs(x) < 0.03 && y > c[1] - 0.005 && y < c[1] + 0.07 && (N[i * 3 + 2] > 0.5 || (y < c[1] + 0.025 && N[i * 3 + 1] < -0.5))) groin.push(i);
   }
   return {apex: Uint32Array.from(apex), groin: Uint32Array.from(groin)};
 }
@@ -59,7 +61,9 @@ export function measureSet(B, pieces, opts = {}) {
   // body: hidden union, eligible = fit-surface vertices
   const nT = B.nTris, hide = new Uint8Array(nT);
   for (const p of pieces) for (let t = 0; t < nT; t++) if (p.hide[t]) hide[t] = 1;
-  const elig = new Uint8Array(B.pos.length / 3); for (const v of B.fitIdx) elig[v] = 1;
+  // audited body: torso / leg skin of the fit surface (arm skin pressing on a side band in a pose is the body's own animation: the
+  // inner arm meets the torso there too; reported by no metric here)
+  const elig = new Uint8Array(B.pos.length / 3); for (const v of B.fitIdx) if (B.groups[v] !== 2) elig[v] = 1;
   const inner = prepareInner({pos: B.pos, idx: B.idx, nrm: B.nrm, joints: B.joints, weights: B.weights}, hide, elig);
   const cover = bindCoverage(inner, pieces.map(p => ({pos: p.pos, idx: p.idx})), {coverDist: 0.04, maxDepth: 0.04});
   let hiddenOnly = 0; for (const i of inner.uniq) if (inner.used[i] && !inner.visible[i]) hiddenOnly++;

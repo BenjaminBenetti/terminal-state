@@ -24,7 +24,7 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {loadRawGarment, cleanAndSplit, simplifyPiece, encodeTextures, sha256File} from './lib/lingerie-garment.mjs';
 import {loadBody, validationPoses, clipDurations} from './lib/lingerie-body.mjs';
-import {fitSet, FIT} from './lib/lingerie-fit.mjs';
+import {fitStage1, fitStage2, runtimePiece, FIT} from './lib/lingerie-fit.mjs';
 import {measureSet, checkLimits, LIMITS} from './lib/lingerie-metrics.mjs';
 import {buildLingerieDocument, writeDoc, docBytes} from './lib/lingerie-glb.mjs';
 import {bitsetBase64} from './lib/variant-glb.mjs';
@@ -62,10 +62,26 @@ async function prepareDesign(id) {
   const raw = await loadRawGarment(path.join(SRC_ROOT, RAW_DIR, D.raw), D.sha256);
   for (const [f, h] of Object.entries(D.textures.sha256)) { const got = sha256File(path.join(SRC_ROOT, RAW_DIR, D.textures.dir, f)); if (got !== h) throw new Error(`${id} ${f}: sha256 ${got} != pinned ${h}`); }
   const cs = cleanAndSplit(raw, {splitY: D.split.y, splitBy: D.split.by, junkMaxTris: 12, junkGap: 0.015, innerGap: 0.004});
+  // source-resolution pieces (compacted, not simplified): the fit runs on these; the runtime simplification happens in BODY space
   const pieces = {};
-  for (const pn of ['top', 'bottom']) pieces[pn] = await simplifyPiece(raw, cs.pieces[pn], {targetTris: Math.round(cs.pieces[pn].length / 3 * D.simplify[pn])});
+  for (const pn of ['top', 'bottom']) pieces[pn] = await simplifyPiece(raw, cs.pieces[pn], {targetTris: null});
   const tx = await encodeTextures(path.join(SRC_ROOT, RAW_DIR, D.textures.dir), TEXTURES);
   return {id, D, raw, cs, pieces, tx};
+}
+
+
+/** Fit one prepared design to bodies: stage 1 at source resolution per body, ONE body-space simplification on the first body's fit
+ *  (shared topology / UVs / indices for every body of the file), stage 2 per body. Returns {simp, fits: [{B, F}]}. */
+async function fitDesign(prep, bodyIds, bodies) {
+  const st = [];
+  for (const bid of bodyIds) { const B = await bodyFor(bid, bodies[bid].file); st.push({B, S1: fitStage1(B, prep.pieces)}); }
+  const simp = {};
+  for (const pn of ['top', 'bottom']) {
+    const src = prep.pieces[pn];
+    simp[pn] = await simplifyPiece({pos: st[0].S1.fitted[pn], nrm: src.nrm, uv: src.uv}, src.idx, {targetTris: Math.round(src.triangles * prep.D.simplify[pn]), targetError: 0.01});
+  }
+  const fits = st.map(({B, S1}) => ({B, F: fitStage2(B, {top: runtimePiece(prep.pieces.top, S1.fitted.top, simp.top), bottom: runtimePiece(prep.pieces.bottom, S1.fitted.bottom, simp.bottom)}, S1.report)}));
+  return {simp, fits};
 }
 
 function fitScore(summary) {
@@ -93,10 +109,9 @@ async function evaluate() {
   const table = {};
   for (const d of designs) {
     const prep = await prepareDesign(d);
-    for (const [bid, b] of Object.entries(bodies)) {
-      const B = await bodyFor(bid, b.file);
+    for (const [bid] of Object.entries(bodies)) {
       const t0 = Date.now();
-      const F = fitSet(B, prep.pieces);
+      const {fits: [{B, F}]} = await fitDesign(prep, [bid], bodies);
       const M = measureSet(B, piecesOf(prep, F), {poses: B.poses});
       const s = fitScore(M.summary);
       (table[d] ??= {})[bid] = {...s, failures: checkLimits(M.summary).length, ms: Date.now() - t0};
@@ -137,10 +152,12 @@ async function build(outRoot) {
     const prep = await prepareDesign(d);
     const D = prep.D, wear = {top: wearableId(d, 'top'), bottom: wearableId(d, 'bottom')};
     const variants = [], perBody = {};
-    for (const bid of [...designBodies[d]].sort((a, b) => BODY_ORDER.indexOf(a) - BODY_ORDER.indexOf(b))) {
-      const B = await bodyFor(bid, bodies[bid].file);
-      const t0 = Date.now();
-      const F = fitSet(B, prep.pieces);
+    const t00 = Date.now();
+    const order = [...designBodies[d]].sort((a, b) => BODY_ORDER.indexOf(a) - BODY_ORDER.indexOf(b));
+    const FD = await fitDesign(prep, order, bodies);
+    for (const [fi, {B, F}] of FD.fits.entries()) {
+      const bid = order[fi];
+      const t0 = t00;
       const M = measureSet(B, piecesOf(prep, F), {poses: B.poses});
       const fails = checkLimits(M.summary);
       const score = fitScore(M.summary);
@@ -159,8 +176,8 @@ async function build(outRoot) {
       summary.fits.push({design: d, body: bid, score: score.score, worst: score.worst, limitsFailed: fails.length, clips: Object.keys(M.summary)});
     }
     const sceneExtras = {id: 'lingerie-' + d, kind: 'lingerie-set', label: D.label, pieces: {upper: wear.top, lower: wear.bottom}, bodies: variants.map(v => v.bodyId), display: {top: `LingerieDisplay_${d}_top`, bottom: `LingerieDisplay_${d}_bottom`, fittedOn: variants[0].bodyId},
-      triangles: {top: prep.pieces.top.triangles, bottom: prep.pieces.bottom.triangles}, provenance: 'generated (Meshy T2.5 image-to-3D from the user reference image; Meshy PBR maps kept)', approved: false, gameReady: false};
-    const doc = buildLingerieDocument({design: d, wearables: wear, baseJpg: prep.tx.baseJpg, mrJpg: prep.tx.mrJpg, pieces: {top: prep.pieces.top, bottom: prep.pieces.bottom}, variants, display: {bodyId: variants[0].bodyId}, sceneExtras, generator: GENERATOR});
+      triangles: {top: FD.simp.top.triangles, bottom: FD.simp.bottom.triangles}, provenance: 'generated (Meshy T2.5 image-to-3D from the user reference image; Meshy PBR maps kept)', approved: false, gameReady: false};
+    const doc = buildLingerieDocument({design: d, wearables: wear, baseJpg: prep.tx.baseJpg, mrJpg: prep.tx.mrJpg, pieces: {top: FD.simp.top, bottom: FD.simp.bottom}, variants, display: {bodyId: variants[0].bodyId}, sceneExtras, generator: GENERATOR});
     const glb = path.join(models, `outfit-lingerie-${d}.glb`);
     await writeDoc(doc, glb);
     const bytes = fs.statSync(glb).size, glbSha = sha256File(glb);
@@ -173,7 +190,7 @@ async function build(outRoot) {
       source: {raw: {file: `${RAW_DIR}/${D.raw}`, sha256Verified: D.sha256, triangles: prep.raw.idx.length / 3, vertices: prep.raw.pos.length / 3, material: prep.raw.material, private: true}, textures: prep.tx.sources.map(s => ({...s, file: `${RAW_DIR}/${D.textures.dir}/${s.name}`})), meshyTask: D.meshyTask, meshyRequest: MESHY_REQUEST,
         reference: {file: `${USER_INPUTS}/${D.reference.file}`, sha256: D.reference.sha256, private: true}},
       cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components, dropped: prep.cs.dropped, split: D.split, note: 'welded components; floating junk / inner shells would be dropped (none found)'},
-      pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {wearable: wear[pn], slot: pn === 'top' ? 'upper' : 'lower', design: pn === 'top' ? D.top : D.bottom, triangles: prep.pieces[pn].triangles, vertices: prep.pieces[pn].vertices, sourceTriangles: prep.pieces[pn].sourceTriangles, simplifyRatio: D.simplify[pn], simplifyError: prep.pieces[pn].error}])),
+      pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {wearable: wear[pn], slot: pn === 'top' ? 'upper' : 'lower', design: pn === 'top' ? D.top : D.bottom, triangles: FD.simp[pn].triangles, vertices: FD.simp[pn].vertices, sourceTriangles: prep.pieces[pn].triangles, simplifyRatio: D.simplify[pn], simplifyError: FD.simp[pn].error, simplifiedIn: `body space (the fit on ${order[0]}), meshoptimizer UV-weighted quadric, attribute seams preserved`}])),
       textures: prep.tx.encoded, displays: disp, fitParams: FIT, limits: LIMITS, perBody,
       limitations: ['Linear-blend skinned with weights transferred from the body: no cloth simulation (no swing / drape).', 'Body triangles enclosed by each piece are hidden while it is worn; very narrow straps hide nothing and rely on their clearance.',
         'The Meshy hidden-side geometry is AI-reconstructed; the lace is a texture on an opaque material (no transparency).', 'Unapproved prototype; gameReady false.']};
