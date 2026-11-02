@@ -16,6 +16,7 @@ import {CLIP_MANIFEST_T1} from './manifest.track1.generated'; // Task track1-sir
 import {CLIP_MANIFEST_STRAINER} from './manifest.strainer.generated'; // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): the Strainer's squish set
 import {CLIP_MANIFEST_REACTOR} from './manifest.reactor.generated'; // task reactor-build-20261101 (primary): the Reactor's machine set
 import {CLIP_MANIFEST_REACTOR_STARTUP} from './manifest.reactorStartup.generated'; // task reactor-playtest-round2-20261102 (lane STARTUP): the startup set
+import {CLIP_MANIFEST_REACTOR_ENDING} from './manifest.reactorEnding.generated'; // task reactor-surface-ending-20261102 (lane AUDIO): the beam ignition + surface rain
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -26,7 +27,7 @@ import {CLIP_MANIFEST_REACTOR_STARTUP} from './manifest.reactorStartup.generated
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -54,6 +55,9 @@ export const CUES = [
   // Task reactor-playtest-round2-20261102 (lane STARTUP, tools/audio-pipeline/reactor-startup-build.mjs): the power-up surge, the ONLINE
   // energy impact, the control-rod drive loop + stop clunk, the machine bed loop, the power-stage contactor thump, the beacon motor loop.
   'reactorSurge', 'reactorOnline', 'reactorRodLoop', 'reactorRodStop', 'reactorBed', 'reactorStage', 'reactorBeacon',
+  // Task reactor-surface-ending-20261102 (lane AUDIO, tools/audio-pipeline/reactor-ending-build.mjs): the blue-beam ignition one-shot
+  // and the surface rain bed loop.
+  'reactorBeam', 'bedRain',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',
