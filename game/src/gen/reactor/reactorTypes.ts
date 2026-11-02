@@ -311,8 +311,11 @@ export interface ReactorCoreFloor {
   ring: {r0: number; r1: number};
   /** The goop pool annulus (+ tower feet): radii, surface height, its floor (the collision band) and cell count. */
   pool: {r0: number; r1: number; surfaceY: number; floorY: number; cells: number};
-  /** Walkable radial bridges over the goop: axis angle (rad, atan2(dz, dx)), clear width, axis endpoints (ring edge -> outer floor). */
-  bridges: readonly {angle: number; width: number; x0: number; z0: number; x1: number; z1: number}[];
+  /**
+   * Walkable radial bridges over the goop: axis angle (rad, atan2(dz, dx)), clear width, the drawn railings' offset from the axis
+   * (the outer envelope of its cell-edge collision rails), axis endpoints (ring edge -> outer floor).
+   */
+  bridges: readonly {angle: number; width: number; rail: number; x0: number; z0: number; x1: number; z1: number}[];
   /** Lattice towers (ReactorInfo.towers index) whose feet stand in the goop. */
   towers: readonly number[];
   /** Coolant loops: each piece's centre (on the goop: y = the pool floor), its yaw (model +X along (cos yaw, -sin yaw)) and prop index. */

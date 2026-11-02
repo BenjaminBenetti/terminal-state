@@ -56,6 +56,11 @@ export const CORE_FLOOR = {
   sgH: 11,
   rcpHalf: 1.45,
   rcpH: 7,
+  /** The vertical pump stands on a plinth this far above the pool floor (its nozzles clear the goop); the manifold's stand top
+   *  (above the deck: the header sits clear of the goop, under a walker's eye line). */
+  rcpLift: 0.6,
+  manifoldBase: -0.2,
+  manifoldH: 2.06,
   rcpAlong: 2.15,
   manifoldHalf: 0.8,
   pieceGap: 0.5,
@@ -307,7 +312,7 @@ export function planLoops(cx: number, cz: number, poolR1: number, bridgeAngles: 
   const arc = (a: number, b: number) => Math.abs(norm(a - b + Math.PI) - Math.PI) * R;
   const placed: {a: number; half: number}[] = [];
   /** Top of a piece above the deck (the pool floor is `depth` below it). */
-  const topOf = (half: number) => (half === F.sgHalf ? F.sgH : half === F.rcpHalf ? F.rcpH : 2.1) - F.depth;
+  const topOf = (half: number) => (half === F.sgHalf ? F.sgH - F.depth : half === F.rcpHalf ? F.rcpH + F.rcpLift - F.depth : F.manifoldBase + F.manifoldH);
   const free = (a: number, half: number): boolean => {
     for (const b of sorted) if (arc(a, b) < half + F.bridgeW / 2 + F.bridgeClear) return false;
     for (const p of placed) if (arc(a, p.a) < half + p.half + F.pieceGap) return false;
@@ -426,7 +431,7 @@ export function finishCoreFloor(layout: StationLayout, cf: CoreFloorCarve, coreA
   const loops: ReactorCoreFloor['loops'][number][] = cf.loops.map(l => ({
     angle: l.angle,
     sg: l.sg ? {...l.sg, prop: roundProp(layout, areaAt(l.sg.x, l.sg.z), l.sg.x, l.sg.z, F.sgHalf - 0.1, F.sgH)} : null,
-    rcp: l.rcp ? {...l.rcp, prop: roundProp(layout, areaAt(l.rcp.x, l.rcp.z), l.rcp.x, l.rcp.z, F.rcpHalf, F.rcpH)} : null,
+    rcp: l.rcp ? {...l.rcp, prop: roundProp(layout, areaAt(l.rcp.x, l.rcp.z), l.rcp.x, l.rcp.z, F.rcpHalf, F.rcpH + F.rcpLift)} : null,
     manifold: l.manifold ? {...l.manifold} : null,
   }));
   const t0 = now();
@@ -556,6 +561,7 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
   // the tower-foot notches keep their (straight) drawn railings; the vessel's own derived rails (its raised top) are never drawn
   let ringRail: number = F.ringR1, outerRail = cf.poolR1;
   let ringMax = 0, outerMin = Infinity;
+  const bridgeHalf = cf.bridges.map(b => b.width / 2);
   const near = (r: number, R: number) => Math.abs(r - R) < 0.75;
   for (const rl of layout.rails) {
     if ((rl.level ?? 0) !== CORE_LEVEL) continue;
@@ -568,10 +574,12 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
     if (!poolSet.has(bi) || poolSet.has(wi)) continue;
     const r = Math.hypot(mx - cf.cx, mz - cf.cz), rMax = Math.max(Math.hypot(rl.x0 - cf.cx, rl.z0 - cf.cz), Math.hypot(rl.x1 - cf.cx, rl.z1 - cf.cz));
     const rMin = Math.min(Math.hypot(rl.x0 - cf.cx, rl.z0 - cf.cz), Math.hypot(rl.x1 - cf.cx, rl.z1 - cf.cz));
-    const onBridge = cf.bridges.some(b => {
+    const onBridge = cf.bridges.some((b, bi) => {
       const ux = Math.cos(b.angle), uz = Math.sin(b.angle), px = mx - cf.cx, pz = mz - cf.cz;
       const along = px * ux + pz * uz, perp = Math.abs(-px * uz + pz * ux);
-      return along > F.ringR1 - 0.6 && along < b.along1 + 0.8 && perp < b.width / 2 + 0.9;
+      if (!(along > F.ringR1 - 0.6 && along < b.along1 + 0.8 && perp < b.width / 2 + 0.9)) return false;
+      for (const [ex, ez] of [[rl.x0, rl.z0], [rl.x1, rl.z1]]) bridgeHalf[bi] = Math.max(bridgeHalf[bi], Math.abs(-(ex - cf.cx) * uz + (ez - cf.cz) * ux));
+      return true;
     });
     if (onBridge) { (rl as {hidden?: boolean}).hidden = true; continue; }
     if (near(r, F.ringR1)) { (rl as {hidden?: boolean}).hidden = true; ringMax = Math.max(ringMax, rMax); continue; }
@@ -592,9 +600,9 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
     };
     layout.lights.push(l);
   }
-  const axis = (b: CoreFloorCarve['bridges'][number]) => {
+  const axis = (b: CoreFloorCarve['bridges'][number], bi: number) => {
     const ux = Math.cos(b.angle), uz = Math.sin(b.angle), a = Math.max(F.ringR1 - 0.6, b.along0 - 0.35), e = b.along1 + 0.35;
-    return {angle: r3(b.angle), width: b.width, x0: r3(cf.cx + ux * a), z0: r3(cf.cz + uz * a), x1: r3(cf.cx + ux * e), z1: r3(cf.cz + uz * e)};
+    return {angle: r3(b.angle), width: b.width, rail: r3(bridgeHalf[bi]), x0: r3(cf.cx + ux * a), z0: r3(cf.cz + uz * a), x1: r3(cf.cx + ux * e), z1: r3(cf.cz + uz * e)};
   };
   return {
     version: 1, x: r3(cf.cx), z: r3(cf.cz), y: base, vesselR: F.vesselR,

@@ -18,11 +18,14 @@
 // Pure data + small helpers (no three.js).
 
 import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES, type ReactorKitModel} from '../../assets/reactorKit.generated';
+import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101 (lane CORE): the hero assembly models
 
 /** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =
   | 'vessel' | 'generator' | 'craneTrolley' | 'craneHook' | 'fanHousing' | 'switchgear' | 'coolantPump' | 'controlConsole'
-  | 'pipeBank' | 'coolantValve' | 'floodLamp';
+  | 'pipeBank' | 'coolantValve' | 'floodLamp'
+  // task reactor-expansion-20261101 (lane CORE): the hero reactor assembly (world/reactor/coreHero.ts; layout.reactor.coreFloor)
+  | 'steamGenerator' | 'rcpVertical' | 'coolantManifold' | 'turbineGenerator';
 
 /**
  * How a delivered model is fitted onto its record (models are real size, +Y up, front +Z, grounded min y 0, centred x / z):
@@ -80,6 +83,12 @@ export const REACTOR_MODELS: Readonly<Record<ReactorPiece, ReactorModelSpec>> = 
   // ~4 k triangles each: the pit-wall / catwalk / gantry lamps take the model (up to the cap, top-down: the clear upper tiers seen
   // from the rim); deeper / railing lamps stay cheap cages (~100 triangles)
   floodLamp: fromKit('floodLamp', REACTOR_KIT.floodLamp, 'real', 32, {plate: [0, 0.36, -0.219], lens: [0, 0.167, 0.212], lensW: 0.17, lensH: 0.24}),
+  // task reactor-expansion-20261101 (lane CORE): the hero assembly (the lead's expansion kit, REACTOR_X_KIT; real size, Meshy maps
+  // kept): a steam generator + vertical reactor coolant pump + coolant manifold per coolant loop (4 loops), one turbine generator
+  steamGenerator: fromKit('steamGenerator', REACTOR_X_KIT.steamGenerator, 'real', 4),
+  rcpVertical: fromKit('rcpVertical', REACTOR_X_KIT.rcpVertical, 'real', 4),
+  coolantManifold: fromKit('coolantManifold', REACTOR_X_KIT.coolantManifold, 'real', 4),
+  turbineGenerator: fromKit('turbineGenerator', REACTOR_X_KIT.turbineGenerator, 'real', 1),
 };
 
 export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
@@ -91,6 +100,9 @@ export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
 export function reactorModelFiles(): Record<string, {url: string; bytes: number}> {
   const out: Record<string, {url: string; bytes: number}> = {};
   for (const m of Object.values(REACTOR_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
+  // task reactor-expansion-20261101 (lane CORE): + the whole expansion kit (hero assembly + the side complexes' set pieces): every
+  // REACTOR_X_KIT url referenced from runtime code (the release packager drops unreferenced GLBs); fetched only when a layout asks
+  for (const m of Object.values(REACTOR_X_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
   return out;
 }
 export const REACTOR_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = reactorModelFiles();
