@@ -608,7 +608,8 @@ export class PlayerTrainRuntime {
       consoleRect = {x0: bb.min.x, x1: bb.max.x, z0: bb.min.z, z1: bb.max.z, top: bb.max.y};
     }
     const bedY = h.layout.trenches?.[p.trenchIndex]?.floorY;
-    const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect});
+    // (the conformal glass's slabs are measured for the cooked car's own windows: a custom spec keeps the flat glass boxes)
+    const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect, glass: spec.windows === PLAYER_TRAIN_SPEC.windows ? TRAIN_GLASS : null});
     // 1. the walkable interior (support / headroom / rays inside), the platform bridges
     h.levels.addDynamicVolume(col.volume);
     // 2. hitscan / physics statics: walls, floor, roof, partition, console, door leaves

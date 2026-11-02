@@ -19,7 +19,7 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
-import type {PlayerTrainSpec, TrainDoorSpec} from './playerTrainSpec';
+import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec, type TrainDoorSpec} from './playerTrainSpec';
 import {cabGlassMaterial} from './elevator';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import * as TRAIN_GEN from '../assets/playerTrain.generated';
@@ -485,7 +485,8 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
     metal.quad([x0, doorTop, dw.z0], [x1, doorTop, dw.z0], [x1, doorTop, dw.z1], [x0, doorTop, dw.z1], [0, -1, 0], [x0, 0], [x1, 0], [x1, 1], [x0, 1]);
   }
   // task train-window-fit: the conformal sheets / reveals of lane ASSETS' glass model, per opening (else the flat pane + sleeve below)
-  const gScene = models.glass?.scene ?? null;
+  // (the sheets are measured for the cooked car's own windows: a spec with other windows keeps the flat panes)
+  const gScene = models.glass && TRAIN_GLASS && spec.windows === PLAYER_TRAIN_SPEC.windows ? models.glass.scene : null;
   gScene?.updateMatrixWorld(true);
   const gNode = (name: string): THREE.Mesh | null => { const o = gScene?.getObjectByName(name) as THREE.Mesh | undefined; return o && o.isMesh ? o : null; };
   const sheetGeos: THREE.BufferGeometry[] = [], revealGeos: THREE.BufferGeometry[] = [];
