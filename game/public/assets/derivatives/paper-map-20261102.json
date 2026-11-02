@@ -1,0 +1,35 @@
+{
+ "task": "studio-alpha-campaign-foundation-20261102-230708-01",
+ "asset": "assets/textures/paper-map.jpg",
+ "kind": "static paper texture of the in-game subway map (the network is drawn dynamically over it)",
+ "source": {
+  "file": "reference/tasks/campaign-foundation-20261102-230708/codex/paper-map-attempt1.png",
+  "sha256": "196e5054cd82284a2608b70701b28d7351cafbd93c84214d393567becd073bb4",
+  "bytes": 3123202,
+  "png": [
+   1536,
+   1024
+  ],
+  "route": "codex-cli built-in image_gen (tools.image_gen__imagegen), text prompt only",
+  "codexSession": "rollout-2026-11-02T23-18-54-01a19e8f-001a-7052-a89e-47f5239c7a69.jsonl",
+  "agentModel": "gpt-6.1-sol",
+  "imageModel": "unreported by the tool",
+  "attempt": 1,
+  "launchesThisTask": 1,
+  "prompt": "reference/tasks/campaign-foundation-20261102-230708/codex/PROMPT-paper.json"
+ },
+ "processing": {
+  "resize": "1152x768 lanczos3",
+  "format": "JPEG mozjpeg q56 4:2:0",
+  "edits": "none (resize + format only)"
+ },
+ "output": {
+  "bytes": 53939,
+  "sha256": "9d1762dd6c7c627845159c3d77d24813347e2bf783e6a7b4af6b842cecba4158"
+ },
+ "status": {
+  "approved": false,
+  "gameReady": true,
+  "licenseClearance": "none implied (AI-generated prototype asset)"
+ }
+}
