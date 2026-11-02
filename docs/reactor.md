@@ -201,6 +201,52 @@ with logical rooms flowing in to one another".
 - **Not varied:** which storey each complex is on (the gas no-deadlock rule, the jam and the spawn contexts depend on it), the
   switchback wall's lane order and the maintenance ladders' corner.
 
+### The waste repository (zone 2, tier 4; lane WASTE, round 2: a seeded room graph)
+`complex/wastePlan.ts` (the plan), `waste.ts` (carver), `wasteDress.ts` (dress hook), `wasteTypes.ts` (decor record),
+`world/reactor/wasteVisuals.ts`. User bullet 7: the fixed band program became a facility grown from the entrance, in the order a
+repository is entered.
+- **The entry chain, always:**
+  - the **receiving bay** over the entrance, which can meet any part of its front wall;
+  - the **health-physics checkpoint** (decon booths, portal monitor) beside or behind the bay;
+  - the **dosimetry & change room** off the checkpoint;
+  - the **vault airlock**: a short run with heavy doors at both ends;
+  - the **sealed vault corridors**: 1–4 runs (straight on, L turns, T branches), grown on demand toward open rock.
+
+  The **drum vault**, **dry-cask hall** and **compactor** hang off the corridors (or each other, through a wide transfer door), each
+  sized and oriented per seed. The **control room** opens off the bay, the checkpoint or the change room.
+- **The service side:** the **generator & ventilation plant** (zone 2's generator) is reached from the bay or the control room. That
+  is through a service corridor (one or two legs) or a direct door, never through the controlled area.
+- **Optional, seeded:**
+  - a second drum vault;
+  - the **hot-cell gallery** (relabelled "Sample counting room" when the dresser's fittings leave no wall for the window);
+  - the sump & pump room;
+  - a switch room;
+  - up to 3 stores in leftover rock: records, spares, filter room. These are dead ends.
+- **Loops:** extra doors where grown rooms share a wall and the function allows it: goods shutters bay → vault / cask hall, plant
+  maintenance doors into the controlled side, vault ↔ compactor, corridor ↔ corridor. Always ≥ 2 independent loops, at most one
+  loop door per room (two per corridor).
+- **Never varies (tested, `tests/reactor-x-waste-graph.ts`):**
+  - the controlled area is entered only through heavy / wide doors (the airlock or a goods shutter);
+  - the plant is reached without entering the controlled area;
+  - every space is connected;
+  - the generator skid and its use clearance;
+  - the switchgear is guaranteed (its home is seeded: control room, plant or switch room);
+  - one cable (the host's);
+  - the map labels.
+- **Dressing:** by room kind and real doors. Vault racks run along or across the hall (the doors pick), with one cross aisle at the
+  main door. Drums awaiting compaction top up a short vault. The cask grid takes its best offset. Fans fall back to the next service
+  room. `WasteDecor.genSign` keeps a clear plant wall for GAS's jam board. No floating beacons (bullet 13).
+- **Variety:**
+  - 24 seeds on ONE fixture slot: 24/24 distinct graphs and layouts, 7 cask-hall and 7 plant positions (3 × 3 slot cells), 18 vault
+    shapes, 1–4 corridor runs, 2–3 loops, 1–5 dead ends;
+  - 24 real levels: 24/24 distinct;
+  - 926–1081 m² of floor (710–847 walkable after dressing), 78–160 drums, 3–6 casks, 12–16 spaces.
+- **Cost:** a plan is ~1 ms (p99 17 attempts of 60, 0 failures in 1500 slots × positions). Real level: carve ~2 ms, dress ~10 ms.
+- **Limits:**
+  - spaces are axis-aligned rectangles;
+  - walkable floor has ~10 m² of margin over the 700 m² test on the densest seeds (big cask halls);
+  - a region smaller than ~72 × 58 cells plans less reliably (the host slot is 80 × 64).
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.

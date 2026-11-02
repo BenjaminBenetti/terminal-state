@@ -1,6 +1,11 @@
 // Task reactor-expansion-20261101 (lane WASTE): THE NUCLEAR-WASTE REPOSITORY carver + dress on a fixture slot (tests/reactor-x-waste-
-// fixture.ts) over >= 8 seeds and every inward side: inside the region, connected to the entrance, every space connected, >= 1 loop
-// (two disjoint routes bay -> plant), the generator reachable with a clear use point, program size, determinism, prop rules, timing.
+// fixture.ts) over >= 8 seeds and every inward side: inside the region, connected to the entrance, every space connected, >= 2 loops,
+// the generator reachable with a clear use point, program size, determinism, prop rules, timing.
+// Task studio-reactor-playtest-round2-20261102 (lane WASTE): the plan is now a SEEDED ROOM GRAPH (user: "Just like the subway it should
+// be random! with logical rooms flowing in to one another!") — the fixed 11-key program, its fixed "two disjoint routes" cut set and
+// the 20 m vault minimum are replaced (intent change, not a coverage cut) by the COHERENCE rules every generation keeps
+// (tests/reactor-x-waste-graph.ts: the logical entry sequence, the sealed controlled area, the service side, >= 2 loops) and the
+// VARIETY the user asked for (24 seeds on ONE slot: distinct graphs, hall positions, vault shapes, optional rooms, switchgear homes).
 import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS} from '../src/gen/props';
@@ -11,7 +16,9 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {WASTE_DRESS_STATS} from '../src/gen/reactor/complex/wasteDress';
 import {WASTE_CARVE_FAILS} from '../src/gen/reactor/complex/waste';
 import {WASTE_DRUM_CAP} from '../src/gen/reactor/complex/wasteTypes';
+import {WASTE_KINDS} from '../src/gen/reactor/complex/wastePlan';
 import {FIX_LEVEL, wasteFixture, type WasteFixture} from './reactor-x-waste-fixture';
+import {WASTE_REQUIRED, wasteCoherence, wasteSignature} from './reactor-x-waste-graph';
 
 const SIDES = ['S', 'E', 'N', 'W'] as const;
 const CASES = Array.from({length: 8}, (_, i) => ({seed: 101 + i * 7, inward: SIDES[i % 4], off: [0, -14, 12, 5, -6, 16, -18, 0][i]}));
@@ -50,7 +57,12 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       expect(C.id).toBe('waste');
       expect(C.areas.length).toBeGreaterThanOrEqual(8);
       expect(C.entryArea).toBe(C.areas[0]);
-      expect(new Set(C.rooms.map(r => r.key))).toEqual(new Set(['bay', 'hp', 'lockers', 'control', 'vault', 'compactor', 'kWest', 'kEast', 'plant', 'pump', 'cask']));
+      // the required spaces (by kind), every space of the program's vocabulary
+      const kinds = new Set(L.reactorWaste!.graph!.rooms.map(r => r.kind));
+      for (const k of WASTE_REQUIRED) expect(kinds.has(k), `seed ${c.seed}: ${k}`).toBe(true);
+      for (const k of kinds) expect(k in WASTE_KINDS, k).toBe(true);
+      expect(C.rooms.map(r => r.area)).toEqual(C.areas);
+      for (const r of C.rooms) expect(r.label.length, r.key).toBeGreaterThan(3);
       // every area inside the region with one cell of wall kept inside its edge (canvas = grid: the fixture crops at the origin)
       for (const id of C.areas) {
         const a = L.areas[id];
@@ -62,7 +74,8 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       // every door of the complex: >= 1.5 m wide (3 cells), >= 2.4 m tall; only the entrance crosses the region edge
       const mine = new Set(C.areas);
       const doors = L.doors.filter(d => mine.has(d.a) || mine.has(d.b));
-      expect(doors.length).toBeGreaterThanOrEqual(13);
+      // (a tree has areas - 1 doors; >= 2 loops add >= 2 more; + the entrance)
+      expect(doors.length).toBeGreaterThanOrEqual(C.areas.length + 2);
       for (const d of doors) {
         expect(Math.max(d.w, d.h) * CELL).toBeGreaterThanOrEqual(1.5);
         expect(d.height).toBeGreaterThanOrEqual(2.4 - 1e-6);
@@ -71,25 +84,31 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       }
       expect(doors.filter(d => d.a === f.slot.frontArea || d.b === f.slot.frontArea).length).toBe(1);
       // halls are tall, rooms 3-3.6 m
-      const ceilOf = (k: string) => L.areas[C.rooms.find(r => r.key === k)!.area].ceil - f.slot.baseY;
-      for (const k of ['bay', 'vault', 'cask']) expect(ceilOf(k)).toBeGreaterThanOrEqual(5.0);
-      for (const k of ['hp', 'lockers', 'control', 'pump']) { expect(ceilOf(k)).toBeGreaterThanOrEqual(3.0); expect(ceilOf(k)).toBeLessThanOrEqual(3.6); }
+      for (const r of L.reactorWaste!.graph!.rooms) {
+        const ceil = L.areas[r.area].ceil - f.slot.baseY;
+        if (['bay', 'vault', 'cask'].includes(r.kind)) expect(ceil, r.key).toBeGreaterThanOrEqual(5.0);
+        if (['hp', 'lockers', 'control', 'pump', 'switch', 'store', 'hotcell'].includes(r.kind)) { expect(ceil, r.key).toBeGreaterThanOrEqual(3.0); expect(ceil, r.key).toBeLessThanOrEqual(3.6); }
+      }
     }
   });
 
-  it('is substantial: >= 700 m² walkable, a long drum vault, a cask hall, >= 11 spaces', () => {
+  it('is substantial: >= 800 m² of floor, a drum vault (>= 14 m long, the vaults >= 110 m²), a cask hall (>= 10.5 m both ways), >= 11 spaces', () => {
     for (const c of CASES) {
-      const f = fx(c), L = f.layout!, C = f.carve!;
+      const f = fx(c), L = f.layout!, C = f.carve!, G = L.reactorWaste!.graph!;
       let cells = 0;
       for (const id of C.areas) { const a = L.areas[id]; cells += a.w * a.h; }
-      expect(cells * CELL * CELL, `seed ${c.seed}`).toBeGreaterThanOrEqual(700);
-      const v = L.areas[C.rooms.find(r => r.key === 'vault')!.area];
-      expect(Math.max(v.w, v.h) * CELL).toBeGreaterThanOrEqual(20);
+      expect(cells * CELL * CELL, `seed ${c.seed}`).toBeGreaterThanOrEqual(800);
+      // (the vault's shape is seeded now: long and narrow or squarer, its racks along or across it)
+      const vaults = G.rooms.filter(r => r.kind === 'vault').map(r => L.areas[r.area]);
+      expect(Math.max(...vaults.map(v => Math.max(v.w, v.h))) * CELL).toBeGreaterThanOrEqual(14);
+      expect(vaults.reduce((n, v) => n + v.w * v.h, 0) * CELL * CELL).toBeGreaterThanOrEqual(110);
+      const k = L.areas[G.rooms.find(r => r.kind === 'cask')!.area];
+      expect(Math.min(k.w, k.h) * CELL).toBeGreaterThanOrEqual(10.5);
       expect(C.areas.length).toBeGreaterThanOrEqual(11);
     }
   });
 
-  it('connects to the entrance: every walkable cell of the complex is reachable from the deck after dressing; >= 1 loop (two disjoint routes bay -> plant)', () => {
+  it('connects to the entrance: every walkable cell of the complex is reachable from the deck after dressing; coherent; >= 2 loops', () => {
     for (const c of CASES) {
       const f = fx(c), L = f.layout!, C = f.carve!, g = L.levels[FIX_LEVEL].grid;
       const d = reach(L, f.deckCell);
@@ -97,13 +116,12 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       let bad = 0;
       for (let i = 0; i < g.cells.length; i++) if (g.cells[i] === FLOOR && !g.blocked[i] && mine.has(g.area[i]) && d[i] < 0) bad++;
       expect(bad, `seed ${c.seed} ${c.inward}: unreachable cells`).toBe(0);
-      // two disjoint routes: the plant stays reachable with the drum vault closed, and with the cask hall closed (ignoring props)
-      const id = (k: string) => C.rooms.find(r => r.key === k)!.area;
-      const plantCell = (): number => { const a = L.areas[id('plant')]; return g.idx(a.x + 1, a.y + 1); };
-      for (const cut of ['vault', 'cask', 'kEast', 'hp']) {
-        const dd = reach(L, f.deckCell, new Set([id(cut)]), true);
-        expect(dd[plantCell()], `seed ${c.seed}: plant unreachable without ${cut}`).toBeGreaterThanOrEqual(0);
-      }
+      // the logical sequence, the sealed controlled area, the service side, >= 2 loops (tests/reactor-x-waste-graph.ts)
+      expect(wasteCoherence(L, f.slot.frontArea), `seed ${c.seed} ${c.inward}`).toEqual([]);
+      // the plant is reached on the cells too with every controlled space closed (the service side: no detour through the vaults)
+      const G = L.reactorWaste!.graph!, ctrl = new Set(G.rooms.filter(r => r.zone === 'controlled').map(r => r.area));
+      const pa = L.areas[G.rooms.find(r => r.kind === 'plant')!.area];
+      expect(reach(L, f.deckCell, ctrl, true)[g.idx(pa.x + 1, pa.y + 1)], `seed ${c.seed}: plant behind the controlled area`).toBeGreaterThanOrEqual(0);
       // the area graph has cycles (doors - areas + 1 >= 2 over the complex + the deck)
       const doors = L.doors.filter(q => mine.has(q.a) && mine.has(q.b));
       expect(doors.length - C.areas.length + 1).toBeGreaterThanOrEqual(2);
@@ -158,7 +176,20 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       expect(n('controlConsole')).toBe(1);
       expect(D.fans.length).toBeGreaterThanOrEqual(1);
       expect(D.stripes.length).toBeGreaterThanOrEqual(6);
-      expect(D.beacons.length).toBeGreaterThanOrEqual(6);
+      // (user bullet 13, via lane PROPS: the floating status beacons are REMOVED — a user-requested removal, not a coverage cut)
+      expect(D.beacons.length).toBe(0);
+      // the generator's sign wall (lane GAS's status / jam board): on a wall of the plant, clear of every plate in the plant
+      const pl = L.areas[f.carve!.generator.area], gs = D.genSign!;
+      expect(gs, `seed ${c.seed}: genSign`).toBeTruthy();
+      const onX = Math.abs(gs.x - pl.x * CELL) < 0.05 || Math.abs(gs.x - (pl.x + pl.w) * CELL) < 0.05, onZ = Math.abs(gs.z - pl.y * CELL) < 0.05 || Math.abs(gs.z - (pl.y + pl.h) * CELL) < 0.05;
+      expect(onX || onZ).toBe(true);
+      expect(gs.x).toBeGreaterThanOrEqual(pl.x * CELL - 0.05); expect(gs.x).toBeLessThanOrEqual((pl.x + pl.w) * CELL + 0.05);
+      expect(gs.z).toBeGreaterThanOrEqual(pl.y * CELL - 0.05); expect(gs.z).toBeLessThanOrEqual((pl.y + pl.h) * CELL + 0.05);
+      for (const sg of L.signs) if ((sg.level ?? 0) === FIX_LEVEL && sg.area === pl.id) expect(Math.hypot(sg.x - gs.x, sg.z - gs.z) > gs.w / 2 + 0.3 || Math.abs(sg.y - gs.y) > 0.6, `sign "${sg.text}" on the generator's sign wall`).toBe(true);
+      // the hot-cell window sits in the hot-cell gallery when the plan keeps one (a gallery whose walls the station dresser's
+      // fittings took is relabelled the sample counting room, its window in the processing room)
+      const hot = D.graph!.rooms.find(r => r.kind === 'hotcell' && r.label === 'Hot-cell gallery'), hw = D.models.find(m => m.piece === 'hotCellWindow')!;
+      if (hot) { const a = L.areas[hot.area]; expect(hw.x >= a.x * CELL - 0.01 && hw.x <= (a.x + a.w) * CELL + 0.01 && hw.z >= a.y * CELL - 0.01 && hw.z <= (a.y + a.h) * CELL + 0.01, `seed ${c.seed}: hot cell in its gallery`).toBe(true); }
       const mine = new Set(f.carve!.areas);
       const tags = L.props.filter(p => p.kind === 'annexMachine' && mine.has(p.area)).map(p => p.purpose);
       expect(tags.filter(t => t === 'waste:rack').length).toBeGreaterThanOrEqual(3);
@@ -224,6 +255,31 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       const kinds = new Set(props.map(p => p.kind));
       expect([...kinds].some(k => ['staffLockers', 'cabinetTall', 'cabinetLow', 'filingCabinet', 'crate', 'firstAidWallKit', 'aedWallCabinet', 'wheelieBin'].includes(k))).toBe(true);
       expect(props.some(p => PROP_PHYSICS[p.kind]?.dynamic)).toBe(true);
+    }
+  });
+
+  it('varies the facility per seed on ONE slot (24 seeds): the graph, hall positions, vault shapes, optional rooms, the switchgear home', () => {
+    const sigs = Array.from({length: 24}, (_, i) => {
+      const f = wasteFixture(500 + i * 13, 'S', {off: 4});
+      expect(wasteCoherence(f.layout!, f.slot.frontArea), `seed ${500 + i * 13}`).toEqual([]);
+      return wasteSignature(f.layout!, f.slot.region, 'S');
+    });
+    const distinct = (k: (s: typeof sigs[number]) => string | number) => new Set(sigs.map(k)).size;
+    // (the fixed program of round 1 had ONE graph, two with its optional link, every hall in the same band)
+    expect(distinct(s => s.topo)).toBeGreaterThanOrEqual(20);
+    expect(distinct(s => s.geo)).toBeGreaterThanOrEqual(18);
+    expect(distinct(s => s.cask)).toBeGreaterThanOrEqual(4);
+    expect(distinct(s => s.plant)).toBeGreaterThanOrEqual(4);
+    expect(distinct(s => s.vault)).toBeGreaterThanOrEqual(10);
+    expect(distinct(s => s.corridors)).toBeGreaterThanOrEqual(2);
+    expect(distinct(s => s.loops)).toBeGreaterThanOrEqual(2);
+    expect(distinct(s => s.deadEnds)).toBeGreaterThanOrEqual(2);
+    expect(distinct(s => s.switchgear)).toBeGreaterThanOrEqual(2);
+    // optional spaces come and go
+    for (const k of ['hotcell', 'pump', 'store']) {
+      const n = sigs.filter(s => s.optional.includes(k)).length;
+      expect(n, k).toBeGreaterThan(0);
+      expect(n, k).toBeLessThan(sigs.length);
     }
   });
 
