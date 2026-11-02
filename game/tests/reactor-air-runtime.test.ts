@@ -151,7 +151,9 @@ describe('reactor air: exposure through the existing gas system', () => {
     (r.h.atmosphere as {active: boolean}).active = false;
     r.tick(0.1);
     expect(r.gas.exposure.source).toBe('depth');
-    expect(r.gas.hud.shown.haze).toBeGreaterThan(0.2);
+    // task reactor-expansion-20261101 (lane GASLIGHT): the fallback is the in-engine fog tint now (no CSS screen haze, CLAUDE.md rule)
+    expect(r.gas.exposure.fallback).toBeGreaterThan(0.2);
+    expect(r.gas.hud.shown.haze).toBe(0);
   });
 
   it('teardown: the depth source never outlives its world (gas.depth null, table withdrawn, HUD line hidden)', () => {

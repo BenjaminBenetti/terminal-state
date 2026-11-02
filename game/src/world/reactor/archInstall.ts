@@ -22,7 +22,9 @@ import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
-export const REACTOR_FOG = {density: 0.0135, color: 0x283020, far: 230} as const;
+// task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Ordinary non-hazard atmospheric fog is not green"): 0x283020 (olive) ->
+// a neutral warm grey — the clean pit air no longer reads like the toxic strata (their own green term), and the strata stand out
+export const REACTOR_FOG = {density: 0.0135, color: 0x2a2925, far: 230} as const;
 
 /** FogExp2 transmittance at distance d. */
 export const reactorFogTransmittance = (d: number, density: number = REACTOR_FOG.density): number => Math.exp(-((d * density) ** 2));

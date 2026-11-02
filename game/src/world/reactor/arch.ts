@@ -27,6 +27,8 @@ import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale,
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
 import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
+import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
+import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -59,6 +61,10 @@ export class ReactorArch {
   private readonly coreLevel: number;
   plan: KitPlan | null = null;
   built: KitBuilt | null = null;
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the mounted pit lamps planned with the kit (model or cage, lens matrix). */
+  mountedLamps: MountedLampRec[] = [];
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky dome + outside gas (null: no opening). */
+  pitSky: PitSkyStats | null = null;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
   readonly stats: ReactorArchStats = {kit: null, meshes: null, models: [], faces: {}, pitCells: 0, lamps: 0, ms: 0};
 
@@ -187,6 +193,7 @@ export class ReactorArch {
     const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
     lights.forEach((l, i) => {
       if (!this.isLamp(l)) return;
+      if (isMounted(l as never)) return; // (lane GASLIGHT) a mounted lamp's bracket / post / cage is planned with the kit (gaslightFixtures.ts)
       lightMats[i].decompose(p, q, s);
       const cage = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.19, p.z), q, new THREE.Vector3(0.26, 0.34, 0.26));
       const hanger = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + 0.22, p.z), q, new THREE.Vector3(0.05, 0.44, 0.05));
@@ -223,10 +230,14 @@ export class ReactorArch {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const loaded = new Set<ReactorPiece>(REACTOR_PIECES.filter(p => REACTOR_MODELS[p].delivered && !!models[REACTOR_MODELS[p].key]));
     try {
-      // task reactor-expansion-20261101 (lane PATHS): the walkable body volume — the kit keeps its steel out of every walkway
-      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
+      // task reactor-expansion-20261101 (lane GASLIGHT): mounted pit fixtures -> their bodies in the kit (no decorative lamps), lenses = tubes
+      const fixtures = this.layout.lights.some(l => isMounted(l));
+      // task reactor-expansion-20261101 (lane PATHS): + the walkable body volume — the kit keeps its steel out of every walkway
+      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures, walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
+      this.mountedLamps = fixtures ? planMountedLamps(this.plan, this.layout.lights, this.mats.fixture) : [];
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
+      if (fixtures) this.stats.lamps = applyMountedLenses(group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, this.mountedLamps);
       this.visuals = new ReactorArchVisuals(this.built, this.plan, dress.glow as MeshBasicNodeMaterial);
       this.stats.kit = this.plan.stats;
       this.stats.meshes = this.built.stats;
@@ -234,6 +245,8 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    // (lane GASLIGHT) the open pit top: the toxic sky + the outside gas sheets above the roof line (the volumetric part is the march's)
+    try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }

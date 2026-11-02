@@ -179,6 +179,12 @@ export interface KitOptions {
   models?: ReadonlySet<ReactorPiece>;
   /** The level's collision rails ARCH draws (ownsRail filtered). */
   rails?: readonly RailRun[];
+  /**
+   * Task reactor-expansion-20261101 (lane GASLIGHT): the layout's pit fixtures are MOUNTED lamps (gen/reactor/gaslightLamps.ts) drawn by
+   * world/reactor/gaslightFixtures.ts planMountedLamps — then the kit plans NO decorative lamps of its own (their per-tier lens glowed
+   * orange and lit nothing: the user's "orange circle … but no light").
+   */
+  fixtures?: boolean;
   /** Task reactor-expansion-20261101 (lane PATHS): the walkable body volume (world/reactor/pathsAudit.ts WalkVolume): planners keep
    *  their steel out of it (braces re-routed / shortened, members skipped or flattened over walkways, tower portals). */
   walk?: KitWalk;
@@ -258,6 +264,7 @@ export class KitPlan {
    * flood-lamp model when `model` (pit walls, catwalks, gantries — up to its cap; callers go top-down), else a cheap cage + bulb.
    */
   lamp(x: number, y: number, z: number, n: {x: number; z: number}, level?: number, model = false): void {
+    if (this.opts.fixtures) return; // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp is a mounted fixture (KitOptions.fixtures)
     if (this.lamps.length >= KIT.maxLamps) return;
     const band = this.bandOf(y);
     const lv = level ?? this.tiers[band]?.level ?? 0;

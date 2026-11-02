@@ -75,7 +75,7 @@ const ALLOW = path.join(root, 'tools/release/public-inputs.json');
 const CREDITS_REL = 'assets/CREDITS.md';
 const CREDITS_BEGIN = '<!-- BEGIN player-train-20261101 (build-player-train.mjs) -->';
 const CREDITS_END = '<!-- END player-train-20261101 -->';
-const MODEL = {shell: 'assets/models/player-train-shell.glb', leaf: 'assets/models/player-train-door-leaf.glb', console: 'assets/models/player-train-console.glb'};
+const MODEL = {shell: 'assets/models/player-train-shell.glb', leaf: 'assets/models/player-train-door-leaf.glb', console: 'assets/models/player-train-console.glb', lockbox: 'assets/models/player-train-lockbox.glb'};
 const TEX_DIR = 'assets/textures/train';
 const CODEX_IDS = [['train-int-wall', 'interior side wall, one window bay (tiles along the car)'], ['train-int-floor', 'ribbed rubber floor (tiles in 2D)'],
   ['train-int-ceiling', 'vented ceiling panels (tiles in 2D)'], ['train-int-bulkhead', 'end bulkhead with a central closed door (one panel)']];
@@ -121,10 +121,20 @@ const REPAIR = {cos: 0.97, gap: 0.003, creaseDeg: 40};
 // side windows stay POCKET_CLEAR away from the open door leaves' wall pockets (an open leaf would show through the glass: lane TRAIN)
 // and are skipped when less than MIN_WIDTH remains (the rear-compartment side windows: the rear door's open leaf covers them)
 const WINDOW = {inset: 0.03, dark: 55, px: 0.01, y: [1.75, 3.1], endZMax: 1.28, endCutMin: 7.26, ring: 0.02, pocketClear: 0.04, slide: 0.01, minWidth: 0.4};
-const SIDE_WINDOW_SEARCH = [{zone: 'cab', x: [5.15, 6.5]}, {zone: 'cab', x: [6.5, 7.08]}, {zone: 'rear', x: [-6.98, -6.3]}];
+// Task studio-beta-train-lockbox-windows-20261101-232156-01 (user: "The windows on the side of the train remain solid. Make them see
+// through!"): every remaining side window too. New entries take their x extent from the upper glass band (above the grab bars and
+// Meshy's baked smear on the far-side double window, where the side gaskets still run), then their y extent over that x span.
+// 'rear' windows lie over the rear door's leaf pocket: cut whole, the parked leaf seen behind the glass like a real pocket door
+// (`pocket` = the parked-leaf span, for lane TRAIN's pocket stop / no sleeve across the pocket). 'nose' windows are the corner wrap of
+// the end windows: their end-side edge runs 1 cm into the end-window hole (one wraparound opening, no opaque sliver between).
+const NEW_WINDOW = {xBand: [2.55, 3.1], noseOverlap: 0.01};
+const SIDE_WINDOW_SEARCH = [{zone: 'cab', x: [5.15, 6.5]}, {zone: 'cab', x: [6.5, 7.08]},
+  {zone: 'saloon', x: [-4.3, -2.55], band: true}, {zone: 'saloon', x: [-2.55, -0.95], band: true}, {zone: 'saloon', x: [1.4, 2.95], band: true},
+  {zone: 'rear', x: [-6.98, -6.3], band: true, pocketDoor: true},
+  {zone: 'nose', x: [7.25, 7.62], band: true, noseEnd: 1}, {zone: 'nose', x: [-7.65, -7.25], band: true, noseEnd: -1}];
 const END_WINDOW_SEARCH = [{z: [-1.5, -0.55]}, {z: [-0.55, 0.55]}, {z: [0.55, 1.5]}];
 const LEAF_WINDOW = {rimMargin: 0.02, topMargin: 0.04, bottom: 0.06, stileGap: 0.015};
-const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: [512, 1024], normal: [256, 512], mr: [128, 256], quality: 85, baked: 'planar front projection'}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
+const TEX = {shell: {base: 2048, normal: 1024, mr: 512, quality: 82}, leaf: {base: [512, 1024], normal: [256, 512], mr: [128, 256], quality: 85, baked: 'planar front projection'}, console: {base: 1024, normal: 512, mr: 256, quality: 85}, lockbox: {base: 1024, normal: 512, mr: 256, quality: 85}, codex: {size: 1024, quality: 85}};
 
 const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
 
@@ -360,10 +370,12 @@ async function bakePlanar(src, maps, box, {w, h, supersample: ss}) {
   return {base: down(out.base, false), mr: down(out.mr, false), normal: down(out.normal, true), misses};
 }
 
-async function finishDoc(doc, name, tex) {
+async function finishDoc(doc, name, tex, {keepNames = false} = {}) {
   const r = doc.getRoot();
-  r.listMeshes().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
-  r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${name}-${i}` : name));
+  if (!keepNames) {
+    r.listMeshes().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
+    r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${name}-${i}` : name));
+  }
   r.listMaterials().forEach((m, i) => m.setName(i ? `${name}-${i}` : name));
   if (tex.baked) await doc.transform(dedup(), prune());
   else await doc.transform(dedup(), prune(),
@@ -517,20 +529,26 @@ const windowsSide = [], windowsEnd = [], windowsSkipped = [];
 const leafW = Math.max(...doorRects.map(d => d.x1 - d.x0)) / 2 + LEAF.overlap;
 const pockets = doorRects.flatMap(d => [[d.x0 - WINDOW.slide - leafW, d.x0 - WINDOW.slide], [d.x1 + WINDOW.slide, d.x1 + WINDOW.slide + leafW]]); // open-leaf x spans
 for (const sd of [-1, 1]) for (const w of SIDE_WINDOW_SEARCH) {
-  const r = rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px});
-  const b = darkBox(r, {dark: WINDOW.dark});
+  let b;
+  if (w.band) {
+    const bx = darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: NEW_WINDOW.xBand[0], v1: NEW_WINDOW.xBand[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
+    const by = bx && darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: bx.u0, u1: bx.u1, v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
+    b = bx && by && {u0: bx.u0, u1: bx.u1, v0: by.v0, v1: by.v1};
+  } else b = darkBox(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: w.x[0], u1: w.x[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: CUT_MIN_Z, px: WINDOW.px}), {dark: WINDOW.dark});
   if (!b) fail(`no ${w.zone} window glass found on side ${sd} in x ${w.x}`);
   const rect = {u0: b.u0 + WINDOW.inset, u1: b.u1 - WINDOW.inset, v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
+  if (w.noseEnd > 0) rect.u1 = b.u1 + NEW_WINDOW.noseOverlap; else if (w.noseEnd < 0) rect.u0 = b.u0 - NEW_WINDOW.noseOverlap;
   const glass = {...rect};
-  let trimmed = false;
+  let trimmed = false, pocket = null;
   for (const [p0, p1] of pockets) {
+    if (w.pocketDoor) { if (rect.u1 > p0 && rect.u0 < p1) pocket = {x0: r4(p0), x1: r4(p1)}; continue; }
     if (rect.u1 <= p0 - WINDOW.pocketClear || rect.u0 >= p1 + WINDOW.pocketClear) continue;
     trimmed = true;
     if ((p0 + p1) / 2 < (rect.u0 + rect.u1) / 2) rect.u0 = Math.max(rect.u0, p1 + WINDOW.pocketClear); else rect.u1 = Math.min(rect.u1, p0 - WINDOW.pocketClear);
   }
   if (trimmed && (rect.u1 - rect.u0 < WINDOW.minWidth || rect.u1 - rect.u0 < 0.6 * (glass.u1 - glass.u0))) { windowsSkipped.push({side: sd, zone: w.zone, glassX: [r3(glass.u0), r3(glass.u1)], why: 'an open door leaf parks in the wall pocket behind it'}); continue; }
   const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'side', sign: sd, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: CUT_MIN_Z, px: WINDOW.px}), rect, WINDOW.ring);
-  windowsSide.push({side: sd, zone: w.zone, x0: r3(rect.u0), x1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinZ: r3(Math.floor(skin * 1000) / 1000)});
+  windowsSide.push({side: sd, zone: w.zone, x0: r3(rect.u0), x1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinZ: r3(Math.floor(skin * 1000) / 1000), ...(pocket ? {pocket} : {})});
 }
 for (const end of [1, -1]) for (const w of END_WINDOW_SEARCH) {
   const r = rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: w.z[0], u1: w.z[1], v0: WINDOW.y[0], v1: WINDOW.y[1], nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px});
@@ -539,6 +557,13 @@ for (const end of [1, -1]) for (const w of END_WINDOW_SEARCH) {
   const rect = {u0: Math.max(-WINDOW.endZMax, b.u0 + WINDOW.inset), u1: Math.min(WINDOW.endZMax, b.u1 - WINDOW.inset), v0: b.v0 + WINDOW.inset, v1: b.v1 - WINDOW.inset};
   const skin = ringMin(rasterFace(shellTris, baseImg, {face: 'end', sign: end, u0: rect.u0 - 0.1, u1: rect.u1 + 0.1, v0: rect.v0 - 0.1, v1: rect.v1 + 0.1, nMin: WINDOW.endCutMin, nMax: 7.95, px: WINDOW.px}), rect, WINDOW.ring);
   windowsEnd.push({end, z0: r3(rect.u0), z1: r3(rect.u1), y0: r3(rect.v0), y1: r3(rect.v1), skinX: r3(Math.floor(skin * 1000) / 1000)});
+}
+// nose windows: the glass plane is where the corner opening meets the end-window hole (the end windows' outer |z|), so a nose pane at
+// |z| skinZ from x0 / x1 to the end pane at skinX closes the wraparound corner (the ring around a corner hole runs onto the end face)
+for (const w of windowsSide.filter(q => q.zone === 'nose')) {
+  const end = Math.sign(w.x0 + w.x1), ends = windowsEnd.filter(e => e.end === end && Math.sign(e.z0 + e.z1) === w.side);
+  if (!ends.length) fail(`nose window ${w.x0}..${w.x1}: no adjacent end window`);
+  w.skinZ = r3(Math.max(...ends.map(e => Math.max(Math.abs(e.z0), Math.abs(e.z1)))));
 }
 let windowArea = 0;
 for (const w of windowsSide) { const c = cutRect(shellTris, {u: 0, v: 1, n: 2, u0: w.x0, u1: w.x1, v0: w.y0, v1: w.y1, sign: w.side, nMin: CUT_MIN_Z}); shellTris = c.tris; windowArea += c.removedArea; }
@@ -625,11 +650,14 @@ checks.endWindows.forEach((n, i) => n && problems.push(`end window ${i} still ha
 for (const w of windowsSide) {
   if (w.zone === 'cab' && (w.x0 < cab.x0 + 0.05 || w.x1 > interior.x1)) problems.push(`cab window ${w.x0}..${w.x1} outside the cab`);
   if (w.y0 < floorY + 0.5 || w.y1 > ceilingY) problems.push(`side window y ${w.y0}..${w.y1} outside the wall`);
-  if (!(w.skinZ > interior.halfWidth)) problems.push(`side window skin ${w.skinZ} inside the lining`);
-  for (const [p0, p1] of pockets) if (w.x1 > p0 - WINDOW.pocketClear + 1e-9 && w.x0 < p1 + WINDOW.pocketClear - 1e-9) problems.push(`side window ${w.x0}..${w.x1} over a leaf pocket ${p0}..${p1}`);
+  if (w.zone === 'nose' ? !(w.skinZ >= 1.2 && Math.min(Math.abs(w.x0), Math.abs(w.x1)) > interior.x1) : !(w.skinZ > interior.halfWidth)) problems.push(`side window skin ${w.skinZ} inside the lining`);
+  if (w.zone === 'saloon' && (w.x0 < interior.x0 || w.x1 > interior.x1 || (w.x1 > cab.x0 && w.x0 < cab.x1))) problems.push(`saloon window ${w.x0}..${w.x1} outside the saloon`);
+  if (w.zone === 'rear' && !w.pocket) problems.push(`rear window ${w.x0}..${w.x1} without its pocket record`);
+  if (!w.pocket) for (const [p0, p1] of pockets) if (w.x1 > p0 - WINDOW.pocketClear + 1e-9 && w.x0 < p1 + WINDOW.pocketClear - 1e-9) problems.push(`side window ${w.x0}..${w.x1} over a leaf pocket ${p0}..${p1}`);
 }
 for (const w of windowsEnd) if (w.z0 < -interior.halfWidth || w.z1 > interior.halfWidth || w.y0 < floorY + 0.5 || w.y1 > ceilingY || !(w.skinX > interior.x1)) problems.push(`end window ${JSON.stringify(w)} outside the end wall`);
 if (windowsEnd.length !== 6) problems.push(`expected 3 windows per end face, cut ${windowsEnd.length}`);
+{ const zc = z => windowsSide.filter(w => w.zone === z).length; if (zc('cab') !== 4 || zc('saloon') !== 6 || zc('rear') !== 2 || zc('nose') !== 4) problems.push(`side windows per zone: cab ${zc('cab')} saloon ${zc('saloon')} rear ${zc('rear')} nose ${zc('nose')}`); }
 for (const k of ['degenerate', 'normalFlip', 'foldOverlaps', 'duplicateOverlaps']) if (censusAfter[k]) problems.push(`repair left ${censusAfter[k]} ${k}`);
 
 // ======================================================================================================================
@@ -721,6 +749,108 @@ if (conOut.dims[2] > 2 * interior.halfWidth - 0.4) problems.push(`console ${conO
 if (consoleSpec.x - conOut.dims[0] / 2 < cab.x0 + 1.0) problems.push('console leaves < 1 m standing room in the cab');
 
 // ======================================================================================================================
+// LOCKBOX (task studio-beta-train-lockbox-windows-20261101-232156-01, user: "I want to add a lock box in the back compartement of the
+// train ... Generate a 3d model for this 50 credit budge"): the ONE accepted Meshy T2.5 refine, cooked as TWO nodes split at the lid
+// seam: `lockbox-body` (an open box: its closing top face removed) and `lockbox-lid` (cap + bands + latch hasps + straps + top corner
+// caps; node origin ON the back hinge line, so rotation.x = -angle opens it upward toward the back). Front (latches) +Z as generated,
+// UNIFORM scale to LOCKBOX.length, grounded, centred. The model is made of stacked closed parts (skid, body, two lid bands, cap), so the
+// split is by part: a part goes with the lid when it reaches well above the seam (= midway between the body's top and the lowest lid
+// band): the hasps hanging from the lid go with it, the body's catches stay. Meshy maps kept (re-encoded only).
+// ======================================================================================================================
+const LB_TASK = 'studio-beta-train-lockbox-windows-20261101-232156-01';
+const LB_DIR = 'reference/tasks/train-lockbox-windows-20261101-232156';
+const LB_MESHY = path.join(root, LB_DIR, 'meshy');
+const LOCKBOX = {length: 1.03, wall: 0.02, floor: 0.02};
+for (const f of ['LEDGER.jsonl', 'MANIFEST.json', 'RAW-SHA256.txt']) if (!fs.existsSync(path.join(LB_MESHY, f))) fail(`missing ${LB_DIR}/meshy/${f} (raw masters live outside Git)`);
+const lbLedger = fs.readFileSync(path.join(LB_MESHY, 'LEDGER.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
+const lbManifest = JSON.parse(fs.readFileSync(path.join(LB_MESHY, 'MANIFEST.json'), 'utf8'));
+const lbSums = new Map(fs.readFileSync(path.join(LB_MESHY, 'RAW-SHA256.txt'), 'utf8').split('\n').filter(Boolean).map(l => { const [h, f] = l.trim().split(/\s+/); return [f, h]; }));
+const lbOpen = lbLedger.find(e => e.event === 'open'), lbClose = lbLedger.find(e => e.event === 'close'), lbLast = lbLedger[lbLedger.length - 1];
+if (!lbClose) fail('lockbox: no close record: generation must be closed before a derivative ships');
+if (lbLast.billed + lbLast.reserved > lbOpen.ceilings.billedPlusReserved || lbLast.attempts > lbOpen.ceilings.attempts || lbLast.attemptedPOSTs > lbOpen.ceilings.attemptedPOSTs || lbLast.accepted !== 1 || lbLast.reserved !== 0)
+  fail(`lockbox ledger outside the authority: ${JSON.stringify(lbLast)}`);
+const lbAccepts = lbLedger.filter(e => e.event === 'accept' && e.part === 'train-lockbox');
+if (lbAccepts.length !== 1) fail(`lockbox: expected exactly one accept, found ${lbAccepts.length}`);
+const lbAcc = (() => {
+  const a = lbAccepts[0], file = [...lbSums.keys()].find(f => f.endsWith(`-refine-${a.taskId.slice(0, 13)}.glb`));
+  if (!file) fail(`lockbox: no raw refine for ${a.taskId} in RAW-SHA256.txt`);
+  const buf = fs.readFileSync(path.join(LB_MESHY, 'raw', file));
+  if (sha(buf) !== lbSums.get(file)) fail(`lockbox: raw sha mismatch ${file}`);
+  const previewFile = [...lbSums.keys()].find(f => f.endsWith(`-preview-${a.previewTaskId.slice(0, 13)}.glb`));
+  const billed = lbLedger.filter(e => e.event === 'status' && e.part === 'train-lockbox' && [a.taskId, a.previewTaskId].includes(e.taskId)).reduce((n, e) => n + (e.consumedCredits ?? 0), 0);
+  return {part: 'train-lockbox', task: a.taskId, preview: a.previewTaskId, file, buf, sha256: lbSums.get(file), previewFile, previewSha256: previewFile ? lbSums.get(previewFile) : null, billed};
+})();
+const lbRaw = await readRaw(lbAcc.buf);
+const lbN = lbRaw.pos.length / 3;
+// position-welded components
+const lbComp = (() => {
+  const key = i => `${Math.round(lbRaw.pos[i * 3] * 1e5)},${Math.round(lbRaw.pos[i * 3 + 1] * 1e5)},${Math.round(lbRaw.pos[i * 3 + 2] * 1e5)}`;
+  const canonical = new Int32Array(lbN), seen = new Map();
+  for (let i = 0; i < lbN; i++) { const k = key(i); if (!seen.has(k)) seen.set(k, i); canonical[i] = seen.get(k); }
+  const par = Int32Array.from({length: lbN}, (_, i) => i), fnd = a => { while (par[a] !== a) { par[a] = par[par[a]]; a = par[a]; } return a; };
+  for (let t = 0; t < lbRaw.idx.length; t += 3) { const a = fnd(canonical[lbRaw.idx[t]]); par[fnd(canonical[lbRaw.idx[t + 1]])] = a; par[fnd(canonical[lbRaw.idx[t + 2]])] = a; }
+  const byRoot = new Map(), of = new Int32Array(lbN);
+  for (let i = 0; i < lbN; i++) {
+    const rt = fnd(canonical[i]);
+    if (!byRoot.has(rt)) byRoot.set(rt, {id: byRoot.size, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], tris: 0});
+    const c = byRoot.get(rt); of[i] = c.id;
+    for (let k = 0; k < 3; k++) { c.min[k] = Math.min(c.min[k], lbRaw.pos[i * 3 + k]); c.max[k] = Math.max(c.max[k], lbRaw.pos[i * 3 + k]); }
+  }
+  const list = [...byRoot.values()].sort((a, b) => a.id - b.id);
+  for (let t = 0; t < lbRaw.idx.length; t += 3) list[of[lbRaw.idx[t]]].tris++;
+  return {list, of};
+})();
+const lbAll = {min: [0, 1, 2].map(k => Math.min(...lbComp.list.map(c => c.min[k]))), max: [0, 1, 2].map(k => Math.max(...lbComp.list.map(c => c.max[k])))};
+// full-footprint parts (x span > 85 %, z span > 85 % of the box): skid / body / lid bands / cap; the body = the tallest of them
+const fullParts = lbComp.list.filter(c => c.max[0] - c.min[0] > 0.85 * (lbAll.max[0] - lbAll.min[0]) && c.max[2] - c.min[2] > 0.85 * (lbAll.max[2] - lbAll.min[2]));
+const lbBody = fullParts.reduce((m, c) => (c.max[1] - c.min[1] > m.max[1] - m.min[1] ? c : m));
+const lidBand = fullParts.filter(c => c !== lbBody && c.min[1] > lbBody.min[1] + 0.5 * (lbBody.max[1] - lbBody.min[1])).sort((a, b) => a.min[1] - b.min[1])[0];
+if (!lidBand) fail('lockbox: no lid part above the body');
+const seamRaw = (lbBody.max[1] + lidBand.min[1]) / 2;
+// a part rides with the lid when it reaches well above the seam (hasps hang from the lid over the body; the body's catches only peek
+// above it): never the body itself
+const LID_REACH = 0.02; // raw units above the seam
+const isLid = c => c !== lbBody && c.max[1] > seamRaw + LID_REACH;
+const lidBack = Math.min(...lbComp.list.filter(c => isLid(c) && fullParts.includes(c)).map(c => c.min[2]));
+const lbK = LOCKBOX.length / (lbAll.max[0] - lbAll.min[0]);
+const lbCentre = [(lbAll.min[0] + lbAll.max[0]) / 2, lbAll.min[1], (lbAll.min[2] + lbAll.max[2]) / 2];
+const lbXf = v => [(v[0] - lbCentre[0]) * lbK, (v[1] - lbCentre[1]) * lbK, (v[2] - lbCentre[2]) * lbK, v[3], v[4], v[5], v[6], v[7]];
+const hinge = {y: r4((seamRaw - lbCentre[1]) * lbK), z: r4((lidBack - lbCentre[2]) * lbK)};
+let lbBodyTris = [], lbLidTris = [], lbTopRemoved = 0;
+for (let t = 0; t < lbRaw.idx.length; t += 3) {
+  const ids = [0, 1, 2].map(j => lbRaw.idx[t + j]), c = lbComp.list[lbComp.of[ids[0]]];
+  const tri = ids.map(i => lbXf(vert(lbRaw, i)));
+  if (isLid(c)) { lbLidTris.push(tri.map(v => [v[0], v[1] - hinge.y, v[2] - hinge.z, ...v.slice(3)])); continue; }
+  if (c === lbBody) { // the body's closing top face goes: the body is an open box under the lid
+    const n = faceNormal(tri), l = Math.hypot(...n);
+    if (l > 0 && n[1] / l > 0.95 && ids.every(i => Math.abs(lbRaw.pos[i * 3 + 1] - lbBody.max[1]) < 0.003)) { lbTopRemoved++; continue; }
+  }
+  lbBodyTris.push(tri);
+}
+{
+  const r = lbRaw.doc.getRoot(), scene = r.getDefaultScene() ?? r.listScenes()[0];
+  const bodyNode = r.listNodes().find(n => n.getMesh()), bodyMesh = bodyNode.getMesh(), mat = lbRaw.prim.getMaterial();
+  writeTris(lbRaw.doc, lbRaw.prim, lbBodyTris);
+  bodyNode.setName('lockbox-body'); bodyMesh.setName('lockbox-body'); mat.setName('player-train-lockbox');
+  const lidPrim = lbRaw.doc.createPrimitive().setMaterial(mat);
+  writeTris(lbRaw.doc, lidPrim, lbLidTris);
+  const lidNode = lbRaw.doc.createNode('lockbox-lid').setMesh(lbRaw.doc.createMesh('lockbox-lid').addPrimitive(lidPrim)).setTranslation([0, hinge.y, hinge.z]);
+  scene.addChild(lidNode);
+}
+const lbOut = await finishDoc(lbRaw.doc, 'player-train-lockbox', TEX.lockbox, {keepNames: true});
+const lbBodyBox = {min: [0, 1, 2].map(k => (lbBody.min[k] - lbCentre[k]) * lbK), max: [0, 1, 2].map(k => (lbBody.max[k] - lbCentre[k]) * lbK)};
+const lockbox = {length: lbOut.dims[0], height: lbOut.dims[1], depth: lbOut.dims[2], seamY: hinge.y, hinge,
+  cavity: {x0: r3(lbBodyBox.min[0] + LOCKBOX.wall), x1: r3(lbBodyBox.max[0] - LOCKBOX.wall), y0: r3(lbBodyBox.min[1] + LOCKBOX.floor), y1: hinge.y,
+    z0: r3(lbBodyBox.min[2] + LOCKBOX.wall), z1: r3(lbBodyBox.max[2] - LOCKBOX.wall)}};
+{
+  const lidMinY = Math.min(...lbLidTris.flatMap(t => t.map(v => v[1]))), lidMinZ = Math.min(...lbLidTris.flatMap(t => t.map(v => v[2])));
+  if (Math.abs(lbOut.dims[0] - LOCKBOX.length) > 2e-3 || Math.abs(lbOut.bounds.min[1]) > 1e-3 || Math.abs(lbOut.bounds.min[0] + lbOut.bounds.max[0]) > 2e-3 || Math.abs(lbOut.bounds.min[2] + lbOut.bounds.max[2]) > 2e-3) problems.push(`lockbox not grounded / centred / sized: ${JSON.stringify(lbOut.bounds)}`);
+  if (lidMinY < -0.06 || lidMinZ < -0.01) problems.push(`lockbox lid geometry far below / behind its hinge (${r3(lidMinY)}, ${r3(lidMinZ)})`);
+  if (!(lbTopRemoved > 0)) problems.push('lockbox body top face not found');
+  if (!(lockbox.cavity.y1 - lockbox.cavity.y0 > 0.2 && lockbox.cavity.x1 - lockbox.cavity.x0 > 0.8 && lockbox.cavity.z1 - lockbox.cavity.z0 > 0.4)) problems.push(`lockbox cavity ${JSON.stringify(lockbox.cavity)}`);
+}
+
+// ======================================================================================================================
 // CODEX TEXTURES (resize + format conversion only)
 // ======================================================================================================================
 const texOut = [];
@@ -739,9 +869,11 @@ const measured = {
   length: fit.length, width: fit.width, floorY, ceilingY, roofY: shellOut.bounds.max[1], interior, cab, doors, console: consoleSpec, lights,
   doorLeaf: {outerZ: leafOuterZ, ...leafSize},
   windows: {side: windowsSide, end: windowsEnd, leaf: {x0: leafWindow.x0, x1: leafWindow.x1, y0: leafWindow.y0, y1: leafWindow.y1}},
+  lockbox,
 };
 const files = {
   'player-train-shell': {url: MODEL.shell, out: shellOut}, 'player-train-door-leaf': {url: MODEL.leaf, out: leafOut}, 'player-train-console': {url: MODEL.console, out: conOut},
+  'player-train-lockbox': {url: MODEL.lockbox, out: lbOut},
 };
 const derivation = {
   shell: {frame: 'raw +X end = front (+X), raw -Z side = platform (-Z); no turn, no mirror', scale: {bodyXZ: S, bodyYAboveUnderside: SY, bodyYBelowUnderside: S, underframe: S, bogieXY: r4(SB), bogieZ: r4(SBZ)},
@@ -750,15 +882,18 @@ const derivation = {
     checks, fit, coverboardClearance: {minYAboveRailOutboard124: coverboardClear, coverboardTop: 0.185},
     repair: {method: 'single coverage of near-coincident parallel faces (|cos| >= ' + REPAIR.cos + ', planes within ' + REPAIR.gap + ' m): faces in priority order (outward body / fitting faces, undercarriage, inward body faces = Meshy fold flaps; larger first), each clipped against the kept faces it overlaps (no vertex moved, attributes interpolated, covered area kept); degenerate faces dropped; vertex normals recomputed from the final faces with a ' + REPAIR.creaseDeg + ' deg crease',
       census: {before: censusBefore, after: censusAfter}, passes: [repaired.passes, repaired2.passes], clippedTriangles: repaired.clippedTriangles + repaired2.clippedTriangles, removedOverlapAreaM2: r3(repaired.removedArea + repaired2.removedArea)},
-    windows: {method: 'the dark glass (base colour luminance < ' + WINDOW.dark + ') inside per-window search boxes on the repaired surface, raster ' + WINDOW.px + ' m; rect = glass box inset ' + WINDOW.inset + ' m (the gasket stays); side windows kept ' + WINDOW.pocketClear + ' m clear of the open-leaf wall pockets; straight through-cuts (|z| > ' + CUT_MIN_Z + ' / |x| > ' + WINDOW.endCutMin + '); skinZ / skinX = the innermost skin on a ' + WINDOW.ring + ' m ring around each cut',
+    windows: {method: 'the dark glass (base colour luminance < ' + WINDOW.dark + ') inside per-window search boxes on the repaired surface, raster ' + WINDOW.px + ' m; rect = glass box inset ' + WINDOW.inset + ' m (the gasket stays); cab / saloon side windows kept ' + WINDOW.pocketClear + ' m clear of the open-leaf wall pockets; saloon / rear / nose windows take their x extent from the upper glass band ' + NEW_WINDOW.xBand + ' (above grab bars and the baked smear); rear windows cut whole over the rear door leaf pocket (pocket recorded: the parked leaf shows behind the glass like a real pocket door); nose windows (the end windows\' corner wrap) run ' + NEW_WINDOW.noseOverlap + ' m into the end-window hole; straight through-cuts (|z| > ' + CUT_MIN_Z + ' / |x| > ' + WINDOW.endCutMin + '); skinZ / skinX = the innermost skin on a ' + WINDOW.ring + ' m ring around each cut',
       removedAreaM2: r3(windowArea), skipped: windowsSkipped}},
   doorLeaf: {window: {...leafWindow, method: 'both glass faces (|n.z| > 0.9, |z| < 7.5 mm) clipped out inside the frame rim (inner edges + ' + LEAF_WINDOW.rimMargin + ' m), below the top rim (- ' + LEAF_WINDOW.topMargin + ' m), from y ' + LEAF_WINDOW.bottom + '; the closing-edge stile carrying the T-handle backplate kept (' + LEAF_WINDOW.stileGap + ' m gap); collision unchanged (lane TRAIN keeps the leaf box)'},
     method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
     rawZ: [r4(lzMin), r4(lzMax)], keptTriangles: keptLeafTris, lod: {...LEAF_LOD, tool: 'meshoptimizer simplify by position on the kept half (borders collapse only along themselves: the mid-plane loop stays on the plane), crease-angle normals, planar front UV; base colour / metallic-roughness / normal re-baked from the clean half by an orthographic +Z projection (normals re-expressed in the new tangent frame); then mirrored', halfTriangles: simplifiedLeafHalf, sourceHalfTriangles: keptLeafTris}, scale: leafScale, frame: 'grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)'},
   console: {method: 'turned -90 deg about Y (native operator side +Z -> -X), uniform scale', scale: CONSOLE.scale, frame: 'grounded, centred; operator side -X, windshield side +X, width along Z'},
+  lockbox: {method: 'split by part at the lid seam (stacked closed parts; seam = midway between the body top and the lowest lid band): a part goes with the lid when it reaches > ' + LID_REACH + ' raw above the seam (bands, cap, straps, top corner caps, the latch / centre hasps hanging over the body), the rest (body, catches, end handles, skid, bottom corner caps) is the body; the body top face removed (open box); uniform scale; the lid node origin on the back hinge line (seam height, lid back face)',
+    seamRaw: r4(seamRaw), scale: r4(lbK), parts: {total: lbComp.list.length, lid: lbComp.list.filter(isLid).length}, triangles: {body: lbBodyTris.length, lid: lbLidTris.length, bodyTopRemoved: lbTopRemoved},
+    frame: 'front (latches) +Z as generated, grounded, centred x / z; nodes lockbox-body (origin) and lockbox-lid (origin = hinge: rotation.x = -angle opens upward toward the back)'},
 };
 const prov = {schema: 'last-line-derivative/1', asset: 'player-train-20261101', task: TASK, lane: 'ASSETS (Studio Beta player train)',
-  status: "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+  status: "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50), plus the rear-compartment LOCKBOX model (Meshy T2.5, the user's lockbox authorization: up to 50 credits; used 15); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
   rebuild: 'node tools/asset-pipeline/train/build-player-train.mjs',
   rawStorage: `${TASK_DIR}/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} + ${TASK_DIR}/codex/<id>/{<id>-original.png, receipt.json, prompt.txt} + SOURCES-SHA256.txt (read-only raw masters, outside Git)`,
   frame: 'train-local: origin = car centre on the track centre line at rail-top height, +X front (cab), +Y up, -Z platform side; metres',
@@ -771,7 +906,12 @@ const prov = {schema: 'last-line-derivative/1', asset: 'player-train-20261101', 
       source: {file: a.file, bytes: a.buf.length, sha256: a.sha256, previewSha256: a.previewSha256},
       derivative: {dims: f.out.dims, triangles: f.out.tris, meshes: f.out.meshes, materials: f.out.materials, textures: f.out.textures, gpuBytesWithMips: f.out.gpuBytesWithMips, texturePolicy: TEX[k]},
       output: {url: f.url, bytes: f.out.glb.length, sha256: sha(f.out.glb)}}];
-  })),
+  }).concat([['train-lockbox', {task: LB_TASK, prompt: lbManifest.parts['train-lockbox'].prompt, texturePrompt: lbManifest.parts['train-lockbox'].texturePrompt, tasks: {preview: lbAcc.preview, refine: lbAcc.task}, billed: lbAcc.billed,
+    source: {file: lbAcc.file, bytes: lbAcc.buf.length, sha256: lbAcc.sha256, previewSha256: lbAcc.previewSha256},
+    derivative: {dims: lbOut.dims, triangles: lbOut.tris, meshes: lbOut.meshes, materials: lbOut.materials, textures: lbOut.textures, gpuBytesWithMips: lbOut.gpuBytesWithMips, texturePolicy: TEX.lockbox},
+    output: {url: MODEL.lockbox, bytes: lbOut.glb.length, sha256: sha(lbOut.glb)}}]])),
+  lockboxLedger: {task: LB_TASK, rawStorage: `${LB_DIR}/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} (read-only raw masters, outside Git)`, attempts: lbLast.attempts, attemptedPOSTs: lbLast.attemptedPOSTs, accepted: lbLast.accepted,
+    credits: {billed: lbLast.billed, reserved: lbLast.reserved, ceiling: lbOpen.ceilings.billedPlusReserved}, close: lbClose.note},
   derivation,
   textures: texOut.map(({s, jpg, rel}) => ({id: s.id, subject: s.subject, source: {file: s.file, sha256: s.r.sha256, bytes: s.r.bytes, width: s.r.width, height: s.r.height},
     codex: {generator: 'Codex native image_gen (owned Codex CLI)', threadId: s.r.codexThreadId, nativeSha256Matches: s.r.nativeSha256Matches, exit: Number(s.r.codexExit), launched: s.r.launched, finished: s.r.finished},
@@ -787,7 +927,8 @@ const gen = `// GENERATED by tools/asset-pipeline/train/build-player-train.mjs �
 // Train-local frame: origin = car centre on the track centre line at RAIL-TOP height, +X front (cab), +Y up, -Z platform side.
 // Shared runtime files (every station level parks the car). Models are baked at their runtime size in their own frames:
 //   shell: train-local (place at the car origin);  door leaf: ONE leaf of a centre-opening pair, grounded / centred, closing edge
-//   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z.
+//   (T-handle) at +X, faces +-Z (mirror x for the other leaf);  console: grounded / centred, operator side -X, width along Z;
+//   lockbox: grounded / centred, front (latches) +Z, nodes 'lockbox-body' + 'lockbox-lid' (origin on the back hinge line).
 export const PLAYER_TRAIN_MODELS = {
 ${Object.entries(files).map(([key, f]) => `  '${key}': {key: '${key}', url: '${f.url}', bytes: ${f.out.glb.length}, tris: ${f.out.tris}, dims: [${f.out.dims.join(', ')}] as const},`).join('\n')}
 } as const;
@@ -817,13 +958,16 @@ ${measured.doors.map(d => `    {side: ${d.side} as const, x: ${d.x}, width: ${d.
   doorLeaf: ${lit(measured.doorLeaf)},
   windows: {
     side: [
-${measured.windows.side.map(w => `      {side: ${w.side} as const, zone: '${w.zone}' as const, x0: ${w.x0}, x1: ${w.x1}, y0: ${w.y0}, y1: ${w.y1}, skinZ: ${w.skinZ}},`).join('\n')}
+${measured.windows.side.map(w => `      {side: ${w.side} as const, zone: '${w.zone}' as const, x0: ${w.x0}, x1: ${w.x1}, y0: ${w.y0}, y1: ${w.y1}, skinZ: ${w.skinZ}${w.pocket ? `, pocket: {x0: ${w.pocket.x0}, x1: ${w.pocket.x1}}` : ''}},`).join('\n')}
     ],
     end: [
 ${measured.windows.end.map(w => `      {end: ${w.end} as const, z0: ${w.z0}, z1: ${w.z1}, y0: ${w.y0}, y1: ${w.y1}, skinX: ${w.skinX}},`).join('\n')}
     ],
     leaf: ${lit(measured.windows.leaf)},
   },
+  /** The rear-compartment lockbox model's own frame (front +Z, grounded, centred): seam height, the lid node's hinge origin, the open
+   *  body's inner box (for the runtime's dark liner). */
+  lockbox: {length: ${lockbox.length}, height: ${lockbox.height}, depth: ${lockbox.depth}, seamY: ${lockbox.seamY}, hinge: ${lit(lockbox.hinge)}, cavity: ${lit(lockbox.cavity)}},
 } as const;
 `;
 
@@ -835,6 +979,7 @@ const credSection = [CREDITS_BEGIN, '## Player train (level one): car shell, dri
   `- \`${MODEL.shell}\` — weathered subway car shell (Meshy tasks ${accepted.shell.preview} / ${accepted.shell.task})`,
   `- \`${MODEL.console}\` — cab driving desk (Meshy tasks ${accepted.console.preview} / ${accepted.console.task})`,
   `- \`${MODEL.leaf}\` — sliding door leaf (Meshy tasks ${accepted.leaf.preview} / ${accepted.leaf.task})`,
+  `- \`${MODEL.lockbox}\` — rear-compartment steel lockbox, split into body + hinged lid (Meshy tasks ${lbAcc.preview} / ${lbAcc.task}; the user's lockbox authorization, ${lbLast.billed} of up to ${lbOpen.ceilings.billedPlusReserved} credits)`,
   ...texOut.map(o => `- \`${o.rel}\` — ${o.s.subject} (Codex thread ${o.s.r.codexThreadId})`), CREDITS_END].join('\n');
 const credRe = new RegExp(`${CREDITS_BEGIN.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[\\s\\S]*?${CREDITS_END.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`);
 const credNext = credRe.test(credSrc) ? credSrc.replace(credRe, credSection) : `${credSrc.replace(/\n*$/, '\n')}\n${credSection}\n`;

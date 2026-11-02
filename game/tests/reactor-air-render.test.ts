@@ -88,13 +88,23 @@ describe('reactor air: VolumetricAtmosphere plumbing (no GPU)', () => {
     expect([r.x, r.y]).toEqual([air.yLo, air.yHi]);
     expect(r.z).toBeCloseTo(1 / (air.yHi - air.yLo), 9);
     expect((a.u.depthRect.value as THREE.Vector4).toArray()).toEqual([0, 0, 80, 80]);
-    // the pit clears: the gate closes (a cleared pit costs one uniform branch per step)
+    // the pit clears: the strata are gone (task reactor-expansion-20261101, lane GASLIGHT: the term stays on for the toxic air above the
+    // OPEN pit top — the fixture's roof is 14 m up — so the gate only closes on a pit without an opening)
     air.clearAll(1, 0);
     air.update(2);
     a.setDepthGas(air.renderTable());
     sync(a);
+    expect(Math.max(...(a.u.depthTab.array as number[]))).toBe(0);
+    expect(a.u.depthOn.value).toBe(1);
+    expect(a.depthDebug()).toMatchObject({compiled: true, on: true, uploads: 2});
+    const shut = fixtureInfo();
+    const flat = new ReactorAir({...shut, pit: {...shut.pit, roofY: shut.pit.rimY}}, {x0: 0, z0: 0, x1: 80, z1: 80}, emptyReactorState(3, 3));
+    flat.clearAll(1, 0);
+    flat.update(2);
+    a.setDepthGas(flat.renderTable());
+    sync(a);
     expect(a.u.depthOn.value).toBe(0);
-    expect(a.depthDebug()).toMatchObject({compiled: true, on: false, uploads: 2});
+    expect(a.depthDebug()).toMatchObject({compiled: true, on: false, uploads: 3});
     // back on another level: everything off again
     a.setStation(base, null);
     sync(a);

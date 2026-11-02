@@ -52,6 +52,10 @@ import {bindFlareVisibility, isFlareLight} from '../world/flareLight'; // Iterat
 import {VF_LIMITS, VF_MARK, createCompositeNode, createFogUniforms, createMarchMaterial, createTemporalMaterial, type FogUniforms} from './volumetricShaders';
 import {GAS} from '../world/gas/field'; // task gasmask-breach-20261030
 import {REACTOR_GAS_LOOK, type DepthGasTable} from '../world/reactor/air'; // task reactor-build-20261101 (lane AIR)
+// task reactor-expansion-20261101 (lane GASLIGHT): the toxic-gas visibility rule — the regional term's outdoor part (the Office roof deck,
+// the Reactor's open pit top), the pit's light shafts, the in-engine fog fallback when the pass is off
+import {PIT_SHAFTS, ROOF_GAS_LOOK, fallbackFog, officeRoofGas, type OutdoorGas, type ShaftSpec} from '../world/gaslightRules';
+import {ROOF_FOG, roofAirOf} from '../world/roofAir';
 
 /** Task gasmask-breach-20261030: the gas term's look (uniform values only; QA may edit them live). */
 export interface GasLook { ext: number; scatter: number; emission: number; noise: number; tint: [number, number, number] }
@@ -241,6 +245,15 @@ export class VolumetricAtmosphere {
   private depthCompiled = false;
   private depthAny = false;
   private depthUploads = 0;
+  // task reactor-expansion-20261101 (lane GASLIGHT): the regional term's outdoor part / the pit's shafts of this station (QA), the shaft
+  // look (gain tunable live), the fallback's eye concentration and the scene fog it borrowed for one direct() frame
+  private depthOutdoor: OutdoorGas | null = null;
+  private depthShafts: ShaftSpec | null = null;
+  readonly shaftLook = {gain: PIT_SHAFTS.gain as number, colour: [...PIT_SHAFTS.colour] as [number, number, number], fade: PIT_SHAFTS.fade as number};
+  private gasFallbackC = 0;
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): frames the in-engine gas fog fallback drew (QA / tests). */
+  gasFallbackFrames = 0;
+  private readonly fogKeep = {color: new THREE.Color(), density: 0};
   /** Task reactor-build-20261101 (lane AIR): the depth gas's look (syncGas copies it into the uniforms). */
   readonly depthLook: DepthGasLook = {ext: REACTOR_GAS_LOOK.ext, scatter: REACTOR_GAS_LOOK.scatter, emission: REACTOR_GAS_LOOK.emission, wisps: REACTOR_GAS_LOOK.wisps,
     sheets: REACTOR_GAS_LOOK.sheets, sheetXZ: REACTOR_GAS_LOOK.sheetXZ, sheetY: REACTOR_GAS_LOOK.sheetY, tint: [...REACTOR_GAS_LOOK.tint]};
@@ -425,10 +438,25 @@ export class VolumetricAtmosphere {
     this.gasNonZero = 0; // lane BLIGHT
     this.u.gasOn.value = 0;
     // task reactor-build-20261101 (lane AIR): the depth term exists for a reactor layout only (part of the march key: compiled by the warm-up)
-    this.depthCompiled = !!layout.reactor;
+    // task reactor-expansion-20261101 (lane GASLIGHT): ... and for the Office roof's outdoor toxic air (the same regional term, outdoor part
+    // only: its exposure is world/roofAir.ts roofBlend x GAS.ROOF_OUTDOOR_C, drawn here by the identical ramp); each with its own look
+    const roof = layout.reactor ? null : roofAirOf(layout);
+    this.depthCompiled = !!layout.reactor || !!roof;
     this.depthAny = false;
     this.u.depthOn.value = 0;
     (this.u.depthTab.array as number[]).fill(0);
+    this.applyDepthLook(roof ? ROOF_GAS_LOOK : REACTOR_GAS_LOOK);
+    this.setOutdoor(null);
+    this.setShafts(null);
+    this.gasFallbackC = 0;
+    if (roof) {
+      const o = officeRoofGas(roof.foot, roof.baseY, ROOF_FOG.below, ROOF_FOG.above, GAS.ROOF_OUTDOOR_C);
+      this.u.depthRect.value.set(o.rect.x0, o.rect.z0, o.rect.x1, o.rect.z1);
+      this.u.depthRange.value.set(roof.baseY - 2, roof.baseY - 1, 1, 0); // no strata: the table (all 0) ends below the deck
+      this.setOutdoor(o);
+      this.depthAny = true;
+      this.u.depthOn.value = 1;
+    }
     this.field = field;
     this.epoch = null; // the fog clock restarts at the station's first frame
     this.statsCache = null;
@@ -564,6 +592,10 @@ export class VolumetricAtmosphere {
       u.depthK.value.set(d.ext, d.scatter, d.emission, d.wisps);
       u.depthSheet.value.set(d.sheetXZ, d.sheetY, d.sheets, 0);
       (u.depthTint.value as THREE.Vector3).set(d.tint[0], d.tint[1], d.tint[2]);
+      // (lane GASLIGHT) the shafts' colour x gain and fade (QA may edit shaftLook live)
+      const sl = this.shaftLook;
+      (u.shaftCol.value as THREE.Vector3).set(sl.colour[0] * sl.gain, sl.colour[1] * sl.gain, sl.colour[2] * sl.gain);
+      u.shaftA.value.w = sl.fade;
     }
   }
 
@@ -581,16 +613,57 @@ export class VolumetricAtmosphere {
     u.depthRect.value.set(d.rect.x0, d.rect.z0, d.rect.x1, d.rect.z1);
     const span = Math.max(1e-3, d.yHi - d.yLo);
     u.depthRange.value.set(d.yLo, d.yHi, 1 / span, 0);
+    // task reactor-expansion-20261101 (lane GASLIGHT): the outdoor air above the open pit top keeps the term on after the strata clear
+    this.setOutdoor(d.outdoor ?? null);
+    this.setShafts(d.shafts ?? null);
+    if (this.depthOutdoor && this.depthOutdoor.c > 0) any = true;
     this.depthAny = any;
     u.depthOn.value = any ? 1 : 0;
     this.depthUploads++;
   }
 
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the regional term's look (per station: the Reactor's strata, the Office roof air). */
+  private applyDepthLook(l: {ext: number; scatter: number; emission: number; wisps: number; sheets: number; sheetXZ: number; sheetY: number; tint: readonly [number, number, number]}): void {
+    const d = this.depthLook;
+    d.ext = l.ext; d.scatter = l.scatter; d.emission = l.emission; d.wisps = l.wisps; d.sheets = l.sheets; d.sheetXZ = l.sheetXZ; d.sheetY = l.sheetY;
+    d.tint = [l.tint[0], l.tint[1], l.tint[2]];
+  }
+
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the outdoor part's uniforms [y0, y1, c, vis] (null: none). */
+  private setOutdoor(o: OutdoorGas | null): void {
+    this.depthOutdoor = o;
+    if (o && o.c > 0) this.u.depthOut.value.set(o.y0, Math.max(o.y1, o.y0 + 1e-3), o.c, o.vis);
+    else this.u.depthOut.value.set(0, 1, 0, 1);
+  }
+
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the pit's light-shaft uniforms (null: off). */
+  private setShafts(s: ShaftSpec | null): void {
+    this.depthShafts = s;
+    const u = this.u;
+    if (!s) { u.shaftDir.value.set(0, -1, 0, 0); return; }
+    const d = PIT_SHAFTS.dir, l = Math.hypot(d[0], d[1], d[2]) || 1;
+    u.shaftDir.value.set(d[0] / l, d[1] / l, d[2] / l, 1);
+    u.shaftRect.value.set(s.rect.x0, s.rect.z0, s.rect.x1, s.rect.z1);
+    u.shaftA.value.set(s.roofY, s.pitch, s.beam0, this.shaftLook.fade);
+    u.shaftB.value.set(s.beamsAlong === 'x' ? 1 : 0, PIT_SHAFTS.beamHalf, PIT_SHAFTS.beamSoft, PIT_SHAFTS.noiseScale);
+    u.shaftC.value.set(PIT_SHAFTS.cover, PIT_SHAFTS.coverSoft, 0, 0);
+  }
+
+  /**
+   * Task reactor-expansion-20261101 (lane GASLIGHT): the eye's gas concentration for the in-engine FALLBACK (world/gas/system.ts, every
+   * frame): while the volumetric pass is off / unsupported / failed, direct() draws the frame with the scene's own FogExp2 tinted toward
+   * the gas green and thickened by it (world/gaslightRules.ts fallbackFog), then restores the fog. No-op while the pass runs.
+   */
+  setGasFallback(c: number): void {
+    this.gasFallbackC = Number.isFinite(c) ? Math.max(0, Math.min(1, c)) : 0;
+  }
+
   /** Task reactor-build-20261101 (lane AIR, QA): the depth gas term's state. */
-  depthDebug(): {compiled: boolean; on: boolean; uploads: number; range: number[]; rect: number[]; max: number; look: DepthGasLook} {
+  depthDebug(): {compiled: boolean; on: boolean; uploads: number; range: number[]; rect: number[]; max: number; look: DepthGasLook; outdoor: OutdoorGas | null; shafts: ShaftSpec | null; fallback: number} {
     const u = this.u, r = u.depthRange.value as THREE.Vector4, q = u.depthRect.value as THREE.Vector4;
     return {compiled: this.depthCompiled, on: this.depthAny, uploads: this.depthUploads, range: [r.x, r.y], rect: [q.x, q.y, q.z, q.w],
-      max: Math.max(0, ...(u.depthTab.array as number[])), look: {...this.depthLook, tint: [...this.depthLook.tint]}};
+      max: Math.max(0, ...(u.depthTab.array as number[])), look: {...this.depthLook, tint: [...this.depthLook.tint]},
+      outdoor: this.depthOutdoor, shafts: this.depthShafts, fallback: this.gasFallbackC}; // (lane GASLIGHT: + outdoor / shafts / fallback)
   }
 
   /** Storey band (local floor / ceiling) holding (x, y, z) from the density map, or null outside it. */
@@ -664,7 +737,9 @@ export class VolumetricAtmosphere {
       const k = l.intensity * p.scatterLightScatter;
       pos[n].set(this.tmp.x, this.tmp.y, this.tmp.z, l.distance);
       col[n].set(l.color.r * k, l.color.g * k, l.color.b * k, l.decay);
-      setWin(n, layer);
+      // task reactor-expansion-20261101 (lane GASLIGHT): `userData.vfOpen` = a light in a big open volume (the Reactor core / coolant glow
+      // in the pit): no occlusion window (it lights the haze and the gas strata everywhere within its distance cutoff, every storey)
+      if (l.userData?.vfOpen) { win[n].set(0, 0, 1, -1); winY[n].set(-1e3, 1e3, 0, 0); } else setWin(n, layer);
       // Iteration 15: the same window occludes the flare's light on surfaces (no glow through walls / slabs)
       if (isFlareLight(l)) {
         const w = this.winState[layer];
@@ -758,8 +833,34 @@ export class VolumetricAtmosphere {
   private direct(scene: THREE.Scene, camera: THREE.Camera): void {
     const r = this.renderer!;
     r.setRenderTarget(null);
-    r.render(scene, camera);
+    this.withGasFog(scene, () => r.render(scene, camera)); // task reactor-expansion-20261101 (lane GASLIGHT): the in-engine gas fallback
     this.historyValid = false;
+  }
+
+  /**
+   * Task reactor-expansion-20261101 (lane GASLIGHT): run a DIRECT draw (no volumetric pass: off / unsupported / failed / Game's bypass)
+   * with the scene's FogExp2 tinted / thickened by the eye's gas (setGasFallback), restored right after — the gas stays visible as
+   * in-engine fog on every material. No gas at the eye: the draw as is.
+   */
+  withGasFog(scene: THREE.Scene, draw: () => void): void {
+    const fog = scene.fog as THREE.FogExp2 | null, gc = this.gasFallbackC;
+    const borrow = gc > 0.005 && !!fog && fog.isFogExp2;
+    if (borrow) this.borrowFog(fog!, gc);
+    try {
+      draw();
+    } finally {
+      if (borrow) { fog!.color.copy(this.fogKeep.color); fog!.density = this.fogKeep.density; }
+    }
+  }
+
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): FogExp2 tinted / thickened by the eye's gas (kept values restored after the draw). */
+  private borrowFog(fog: THREE.FogExp2, c: number): void {
+    this.fogKeep.color.copy(fog.color);
+    this.fogKeep.density = fog.density;
+    const f = fallbackFog(c, {color: [fog.color.r, fog.color.g, fog.color.b], density: fog.density});
+    fog.color.setRGB(f.color[0], f.color[1], f.color[2]);
+    fog.density = f.density;
+    this.gasFallbackFrames++;
   }
 
   /** Low-res march / history targets (MRT: in-scatter + view depth, transmittance). */

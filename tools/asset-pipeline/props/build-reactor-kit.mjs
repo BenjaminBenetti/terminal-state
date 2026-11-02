@@ -232,6 +232,9 @@ fs.writeFileSync(CREDITS, credRe.test(credSrc) ? credSrc.replace(credRe, credSec
 const allow = JSON.parse(fs.readFileSync(ALLOW, 'utf8'));
 const mine = new Set([...written, 'assets/CREDITS.md']);
 const add = [...mine].map(p => { const b = fs.readFileSync(path.join(PUB, p)); return {path: p, bytes: b.length, sha256: sha(b)}; });
-allow.files = [...allow.files.filter(f => !mine.has(f.path) && !/^assets\/(models\/reactor-|textures\/reactor\/)/.test(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
+// (task reactor-expansion-20261101: drop only THIS kit's own stale outputs — other builders' reactor-* files, e.g. the expansion kit
+// (build-reactor-x-kit.mjs), keep their entries)
+const ownModel = new Set(KIT.map(k => `assets/models/reactor-${k.id.replace(/^reactor-/, '')}.glb`));
+allow.files = [...allow.files.filter(f => !mine.has(f.path) && !ownModel.has(f.path) && !/^assets\/textures\/reactor\//.test(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
 fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 console.log('wrote', written.length, 'public files +', path.relative(root, REG), 'CREDITS.md public-inputs.json');

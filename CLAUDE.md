@@ -97,6 +97,25 @@ polish: a prop that looks usable must not silently ship as decoration-only. Chec
    - the scale-check render beside a zombie (rule 5), viewed, with its dimensions and contact recorded;
    - a short serial browser spot check of one representative prop when visuals change (browser rules below).
 
+## Toxic gas is always VISIBLE green volumetric fog (standing user rule, 2026-11-01)
+
+User: "Any time in the game we use toxic gas there must be a volumetric fog effect with green fog to indicate, just like the office
+level! This is core!"
+
+- **Every gameplay-toxic gas renders as visible green volumetric fog that matches its hazard.** On every level, any gas that can hurt
+  the player renders as visible GREEN volumetric fog matching the hazard's actual spatial volume and strength. That covers the
+  Office window-breach gas and roof atmosphere, the Reactor depth-gas zones, Blightbelly temporary puffs, and any future gas. The
+  Office breach gas is the benchmark.
+- **One source of truth for what hurts and what shows.** What looks gassy hurts, and what hurts looks gassy. Exposure and rendering
+  read the same field / function.
+- **Clearing thins the fog visibly as the hazard drops.** Remaining puffs stay visible; nothing vanishes globally.
+- **A worn mask reduces inhalation only.** It never hides the gas.
+- **Ordinary non-hazard atmospheric fog is not green.**
+- **It must be visible at the normal quality settings on both backends** (WebGPU and the WebGL2 fallback). When the volumetric pass
+  is off or unsupported, the existing in-engine fallback must still show the gas. Never fake it with images or CSS overlays.
+- **This is a render / representation rule, not a survival rebalance.** Keep the existing damage, filter and pause rules.
+- **A new gas source ships with a visibility test** (hazard ↔ visual parity).
+
 ## Meshy MCP — key from the environment only
 
 The project MCP entry for Meshy (`docs/meshy.mcp.json`, activated as root `.mcp.json`; see `docs/meshy-mcp.md`) reads
