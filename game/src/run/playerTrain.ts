@@ -4,11 +4,16 @@
 // (gen/playerTrain.ts playerTrainPlacement), built by lane TRAIN. Whatever level the player is in, it is the SAME train: one record
 // per Game, registered as the RunParticipant 'player-train' (Game.wireRunLanes) so NewGame gives a fresh level-one train, Retry
 // restores the record as it was at level entry and Travel carries it unchanged (only `at`, where it is parked, follows the level).
-// It owns no inventory, health, survival, injuries or ammo: spawning in the train refills nothing. Later movement / upgrades extend
+// It owns no player inventory, health, survival, injuries or ammo: spawning in the train refills nothing. Later movement / upgrades extend
 // this record. Pure (no three.js / DOM).
+//
+// Task train-lockbox-windows-20261101-232156 (lane BOX): the record also holds the train's LOCKBOX (run/trainLockbox.ts, 40 slots): saved
+// with the record (`lockbox` in the participant data; an old save without it loads an empty box), emptied by NewGame, kept by Travel.
+// `state` stays the train identity only.
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
+import {TrainLockbox} from './trainLockbox';
 
 /** The level-one train every run starts with. */
 export const PLAYER_TRAIN_L1 = Object.freeze({id: 'player-train-l1', tier: 1});
@@ -35,6 +40,8 @@ function valid(d: unknown): d is PlayerTrainState {
 
 export class PlayerTrainRecord {
   private s: PlayerTrainState = fresh();
+  /** Lane BOX: the train's 40-slot Lockbox (the same object for the whole session; load / reset write it in place). */
+  readonly lockbox = new TrainLockbox();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -50,13 +57,19 @@ export class PlayerTrainRecord {
     this.s.at = {level: key.level, section: key.section};
   }
 
-  /** The run participant: JSON-safe save / exact load (anything malformed loads as a fresh level-one train) / NewGame reset. */
+  /**
+   * The run participant: JSON-safe save / exact load (anything malformed loads as a fresh level-one train) / NewGame reset.
+   * Lane BOX: + the Lockbox contents (`lockbox`; missing / malformed slots load empty).
+   */
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => this.state,
-      load: d => { this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh(); },
-      reset: () => { this.s = fresh(); },
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON()}),
+      load: d => {
+        this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
+        this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
+      },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); },
     };
   }
 }

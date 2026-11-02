@@ -23,6 +23,9 @@ import {TRENCH_DEPTH, type Area, type AreaKind, type AreaRole, type Rect, type R
 import type {ReactorDeck} from './reactorTypes';
 import {carveCoreFloor, type CoreFloorCarve} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {BANK_CELLS, BED, CLEAR, CORE_LEVEL, GEN_LANDING, LANE, ORG, REACTOR_LEVELS, ROOM_MARGIN, TIERS, VESSEL, reactorStoreyLabel, type ReactorFrame} from './frame';
+// task reactor-expansion-20261101 (lane HOST): the side-complex slots (planned before the rooms) and their canvas margin
+import {COMPLEX_MARGIN, planComplexSlots, slotBlocks} from './complex/host';
+import type {ComplexSlot} from './complex/types';
 
 export type CellRect = Rect;
 /** A pit wall in the canonical frame: 'stair' (west), 'organ' (east), 'N', 'S'. */
@@ -67,6 +70,8 @@ export interface ReactorCarve {
   coreAreas: number[];
   /** Task reactor-expansion-20261101 (lane CORE): the core floor's goop pool / bridges / loop layout (gen/reactor/coreFloor.ts). */
   coreFloor: CoreFloorCarve;
+  /** Task reactor-expansion-20261101 (lane HOST): the side-complex slots (canvas cells; gen/reactor/complex/host.ts). */
+  slots: ComplexSlot[];
   /** Mirror: canonical px -> canvas x. */
   cx: (px: number) => number;
   rectC: (px: number, pz: number, w: number, h: number) => CellRect;
@@ -82,9 +87,11 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 export function reactorCanvas(f: ReactorFrame): {W: number; H: number; coreW: number; coreH: number; PX0: number; PZ0: number; minPx: number; maxPx: number} {
   const bedRows = f.double ? BED.double : BED.single;
   const PZ0 = ORG + 3 + bedRows + f.Pd + 1;
-  const minPx = Math.min(-ROOM_MARGIN, -f.shift - TUN - 2), maxPx = Math.max(f.PW + ROOM_MARGIN, -f.shift + f.Lp + TUN + 2);
+  // task reactor-expansion-20261101 (lane HOST): rock for the side complexes beyond the stair / organ / south walls (COMPLEX_MARGIN)
+  const M = Math.max(ROOM_MARGIN, COMPLEX_MARGIN);
+  const minPx = Math.min(-M, -f.shift - TUN - 2), maxPx = Math.max(f.PW + M, -f.shift + f.Lp + TUN + 2);
   const PX0 = f.stairWall === 'W' ? ORG - minPx : ORG + maxPx - f.PW + 1;
-  const coreW = ORG + (maxPx - minPx) + ORG + 1, coreH = PZ0 + f.PD + ROOM_MARGIN + ORG;
+  const coreW = ORG + (maxPx - minPx) + ORG + 1, coreH = PZ0 + f.PD + M + ORG;
   return {W: coreW + 150, H: coreH + 110, coreW, coreH, PX0, PZ0, minPx, maxPx};
 }
 
@@ -287,6 +294,9 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     }
   }
 
+  // --- 4c. Task reactor-expansion-20261101 (lane HOST): the side-complex slots (free rock beside the pit; same-storey rooms avoid them)
+  const slots = planComplexSlots({k, rng: rng.fork('complex-slots'), bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, decks, terraces, cx, rectC});
+
   // --- 5. Rooms cut into the rock behind the decks ----------------------------------------------------------------------------
   const rooms: RoomRec[] = [];
   const deckIds = new Set(decks.map(d => d.area));
@@ -336,6 +346,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
         const r = roomRect(w, a0, wd, 0, dd);
         if (r.x < ORG + 1 || r.y < ORG + 1 || r.x + r.w > cv.coreW - ORG - 1 || r.y + r.h > cv.coreH - ORG - 1) continue;
         if (!k.rectFree(r, lv)) continue;
+        if (slotBlocks(slots, r, lv)) continue; // lane HOST: never in a side complex's region of this storey
         // a door span whose front cells (just inside the pit) are flat deck of this storey
         const dw = Math.min(s.door, wd - 2);
         const offs: number[] = [];
@@ -396,7 +407,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
 
   return {
     f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, decks, runs, rooms, gens, towers, terraces,
-    vessel, coreAreas, cx, rectC, coreFloor,
+    vessel, coreAreas, cx, rectC, coreFloor, slots,
   };
 }
 

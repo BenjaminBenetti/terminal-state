@@ -360,10 +360,13 @@ describe('exposure: one damage calculation per frame from the eye concentration;
     expect(hits.length).toBe(n);
     expect(sys.exposure).toMatchObject({protected: true, dps: 0});
     expect(sys.hud.shown).toMatchObject({tag: 'FILTERING', vignette: 0});
-    // volumetrics off: a haze proportional to the eye concentration (damage never comes from gas you cannot see)
+    // volumetrics off: the eye concentration goes to the IN-ENGINE fog fallback (damage never comes from gas you cannot see). Task
+    // reactor-expansion-20261101 (lane GASLIGHT): was the CSS screen haze (#gas-haze) — CLAUDE.md "Toxic gas is always VISIBLE" forbids
+    // CSS / image overlays: render/volumetric.ts withGasFog tints the scene fog instead (tests/reactor-x-gaslight-visibility.test.ts)
     h.atmosphere.active = false;
     step(0.1);
-    expect(sys.hud.shown.haze).toBeGreaterThan(0.2);
+    expect(sys.exposure.fallback).toBeGreaterThan(0.2);
+    expect(sys.hud.shown.haze).toBe(0);
   });
 
   it('an unprotected 100 hp player standing in a filled room dies (~6 hp/s at eye height); the damage stops with death', () => {
@@ -536,10 +539,11 @@ describe('the Office roof is outdoors: the outside atmosphere through the same e
     expect(sys.hud.shown.tag).toBe('TOXIC GAS');
     expect(sys.hud.shown.hint).toBe('Put on your gas mask (Q)');
     expect(sys.hud.shown.vignette).toBeGreaterThan(0);
-    // the outdoor murk is the scene fog (always drawn): no fallback screen haze, even with volumetrics off
+    // the outdoor murk is the scene fog (always drawn): no fallback fog tint, even with volumetrics off (lane GASLIGHT: in-engine now)
     h.atmosphere.active = false;
     step(0.1);
     expect(sys.hud.shown.haze).toBe(0);
+    expect(sys.exposure.fallback).toBe(0);
     expect(sys.field!.storeys).toEqual([]); // no window broke: the roof needs no breach
   });
 

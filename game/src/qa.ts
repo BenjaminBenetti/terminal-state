@@ -24,11 +24,13 @@ import {mallArchQaApi} from './world/mallAtmosphere'; // Task track3-eaton-centr
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
 import {reactorAirQaApi} from './world/reactor/airQa'; // task reactor-build-20261101 (lane AIR): Reactor depth gas / generators spot-check hooks
 import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor kit summary / draw cost, fog tune, visuals driver
+import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
 import {strainerQaApi} from './ai/strainerQa'; // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): Strainer spot-check hooks
 import {reactorRestartQaApi} from './world/reactor/restartQa'; // task reactor-build-20261101 (lane RESTART): restart state / controls / win spot-check hooks
 import {trainQaApi} from './world/playerTrain'; // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights()
+import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxType('1337'), lockboxQuick / Move / Stow / Close
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
 import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
@@ -355,6 +357,7 @@ export function installQaHooks(game: Game): void {
     ...gasQaApi(game), // Task gasmask-breach-20261030 (lane GAS): windows(level?), windowAim(id), DEBUG windowBreak(id), gas(), gasTune({...})
     ...reactorAirQaApi(game), // task reactor-build-20261101 (lane AIR): reactorAir(), reactorGoGenerator(id), DEBUG reactorStartGenerator(id), reactorClearAll(s), reactorDepthAt(y), reactorGasTune({...})
     ...reactorArchQaApi(game as Parameters<typeof reactorArchQaApi>[0]), // task reactor-build-20261101 (lane ARCH): reactorArch(), reactorFog({density, color}), DEBUG reactorVisualsSet({fan, generator, core, tier})
+    ...gaslightQaApi(game), // task reactor-expansion-20261101 (lane GASLIGHT): gaslight(), gaslightShafts({gain, fade, colour})
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Task track1-siren-blightbelly-20261031 (lane SIREN): sirens(), sirenSystem(), goSiren(i?, dist, face), sirenLight(i?), sirenProbe(i?), aimSiren(i?, part), DEBUG sirenWake(i?) / qaSpawnSiren(dist)
@@ -363,7 +366,8 @@ export function installQaHooks(game: Game): void {
     ...strainerQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task reactor-build-20261101 (lane RESTART): reactorRestart(), reactorGoControl(id), reactorControl(id, {give}), reactorWinFinish()
     ...reactorRestartQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
-    ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn')
+    ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
+    ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);

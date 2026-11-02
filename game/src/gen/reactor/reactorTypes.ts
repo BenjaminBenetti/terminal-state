@@ -290,6 +290,12 @@ export interface ReactorComplexInfo {
   /** Entrance doorway centre (on the pit-side deck) and the complex's bounds. */
   entrance: {x: number; z: number; level: number};
   bounds: ReactorRect;
+  /**
+   * (task reactor-expansion-20261101, lane HOST, additive) The host's slot in world metres: the reserved rock `region` (its pit-side
+   * row is the pit wall), the `entrance` span (in that wall row), the deck area in front, the direction into the complex and the
+   * ceiling cap (absolute) — validation (gen/reactor/complex/host.ts complexIssues) and QA read it.
+   */
+  slot?: {region: ReactorRect; entrance: ReactorRect; frontArea: number; inward: 'N' | 'S' | 'E' | 'W'; ceilMax: number};
 }
 
 /**

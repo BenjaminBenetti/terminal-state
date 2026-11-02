@@ -86,6 +86,8 @@ describe('Reactor generator (lane GEN)', () => {
         expect(g.cable.length).toBeGreaterThanOrEqual(2);
         const lv = levelsOf(L).list[g.use.level].grid, [cx, cy] = lv.cellOf(g.use.x, g.use.z);
         expect(lv.walkable(cx, cy)).toBe(true);
+        // task reactor-expansion-20261101 (lane HOST): a side complex's generator stands in its complex (tests/reactor-x-host-*)
+        if (R.complexes?.some(c => c.generator === g.id)) continue;
         // its landing is >= 8 x 6 m
         const d = R.decks.find(q => q.level === g.level && g.x > q.rect.x0 && g.x < q.rect.x1 && g.z > q.rect.z0 && g.z < q.rect.z1 && q.kind === 'landing')!;
         expect(d).toBeTruthy();
