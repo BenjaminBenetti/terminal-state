@@ -316,13 +316,14 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
       }
       if (ok) break;
     }
-    if (C) {
-      const n = rng.int(2, 3);
+    // timber cribs holding up the stope roofs: the generator cavern (2-3) and the worked-out stope (1-2)
+    for (const [S, n] of [[C, rng.int(2, 3)], ...of('stope').map(a => [a, rng.int(1, 2)] as const)] as const) {
+      if (!S) continue;
       let placed = 0;
       for (let k = 0; k < 40 && placed < n; k++) {
-        const x = (C.x + 2 + rng.next() * (C.w - 4)) * CELL, z = (C.y + 2 + rng.next() * (C.h - 4)) * CELL;
+        const x = (S.x + 2 + rng.next() * (S.w - 4)) * CELL, z = (S.y + 2 + rng.next() * (S.h - 4)) * CELL;
         if (Math.hypot(x - ux * CELL, z - uy * CELL) < 3.5) continue;
-        if (piece(C, 'crib', Math.round(x * 2) / 2, Math.round(z * 2) / 2, 0.7, 0.7, r2(C.ceil - base), {ring: 2})) placed++;
+        if (piece(S, 'crib', Math.round(x * 2) / 2, Math.round(z * 2) / 2, 0.7, 0.7, r2(S.ceil - base), {ring: 2})) placed++;
       }
     }
     for (const X of of('collapse')) {
@@ -359,6 +360,7 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   put(J, 'handTruck', 1);
   put(T, 'gasCylinderCart', 1);
   put(T, 'stepLadder', 1);
+  for (const S of of('stope')) { put(S, 'crate', rng.int(1, 2), {purpose: 'storage'}); put(S, 'tripodWorkLight', rng.chance(0.5) ? 1 : 0); }
   for (const S of of('sump')) { put(S, 'waterPumpSkid', 1); put(S, 'wetDryVac', rng.chance(0.4) ? 1 : 0); }
   for (const X of of('collapse')) put(X, 'foldingBarricade', 1);
   {

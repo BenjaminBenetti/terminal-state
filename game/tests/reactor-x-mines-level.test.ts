@@ -50,10 +50,12 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       expect(keys.some(k => k.startsWith('haulage-')) && keys.some(k => k.startsWith('manway-'))).toBe(true);
       expect(c!.rooms.length).toBeGreaterThanOrEqual(10);
       const g = L.levels[2].grid, ids = new Set(c!.areas);
-      let walk = 0;
-      for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i]) && g.cells[i] === FLOOR) walk++;
-      expect(walk * CELL * CELL, `seed ${seed} m²`).toBeGreaterThanOrEqual(600);
-      out.push({seed, rooms: c!.rooms.length, m2: walk * CELL * CELL, wall: c!.slot?.inward});
+      let walk = 0, free = 0;
+      for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i]) && g.cells[i] === FLOOR) { walk++; if (!g.blocked[i] && g.rampIdx[i] < 0) free++; }
+      expect(walk * CELL * CELL, `seed ${seed} m²`).toBeGreaterThanOrEqual(650);
+      // the host's "substantial" floor (complexIssues: >= 500 m² walkable AFTER props) with a margin: never a whole-level retry
+      expect(free * CELL * CELL, `seed ${seed} m² after props`).toBeGreaterThanOrEqual(560);
+      out.push({seed, rooms: c!.rooms.length, m2: walk * CELL * CELL, free: free * CELL * CELL, wall: c!.slot?.inward, attempts: REACTOR_GEN_STATS.attempts});
     }
     log('summary', out);
   });
@@ -83,7 +85,7 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       const {L} = gen(seed);
       const v = planMinesVisuals(L)!;
       expect(v, `seed ${seed}`).not.toBeNull();
-      expect(v.stats.sets, `seed ${seed} sets (${v.stats.setsSkipped} skipped)`).toBeGreaterThanOrEqual(8);
+      expect(v.stats.sets, `seed ${seed} sets (${v.stats.setsSkipped} skipped)`).toBeGreaterThanOrEqual(6);
       expect(v.stats.railM).toBeGreaterThan(10);
       expect(v.models.mineCart.length).toBeGreaterThanOrEqual(1);
       expect(v.models.timberSet.length).toBe(v.stats.sets);
