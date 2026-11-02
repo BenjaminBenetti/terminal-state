@@ -43,6 +43,7 @@ import {
   roomFrame, roomPoint,
 } from './structure';
 import {reactorIssues} from './validate';
+import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 
 export {reactorFrame, reactorSeed, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
 export {reactorIssues, routeIssues as reactorRouteIssues} from './validate';
@@ -140,6 +141,8 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   registerApertures(layout.levels);
   layout.traversal.ladders = placeLadders(layout);
   const lad = maintenanceLadders(layout, rc);
+  // task reactor-expansion-20261101 (lane CORE): the goop pool blocked, the coolant loops' collision, the turbine generator's wall run
+  const coreFin = finishCoreFloor(layout, rc.coreFloor, rc.coreAreas, layout.levelLinks.flatMap(k => [...(k.lower === CORE_LEVEL ? [k.bottom] : []), ...(k.upper === CORE_LEVEL ? [k.top] : [])]));
   layout.rails = reactorRails(layout);
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
@@ -197,6 +200,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   layout.reactor = reactorInfo(layout, rc, rng.fork('reactor-info'), {
     linkIds, ladderLinks: lad.links, gens: gens.gens, fans, sites: sb.sites, screens: sb.screens, components, start, flights: layout.traversal.stairs,
   });
+  layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record
 
   // --- Track2 attach, then the ONE family roll ---------------------------------------------------------------------------------
   if (ext) {

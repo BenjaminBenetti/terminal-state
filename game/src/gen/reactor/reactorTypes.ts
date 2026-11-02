@@ -292,6 +292,45 @@ export interface ReactorComplexInfo {
   bounds: ReactorRect;
 }
 
+/**
+ * Task reactor-expansion-20261101 (lane CORE, additive): THE CORE FLOOR round the vessel (gen/reactor/coreFloor.ts) — the walkable
+ * SERVICE RING round the vessel, the glowing GOOP POOL round it (non-walkable: blocked cells 1.5 m below the deck, railed on every
+ * edge) crossed by radial BRIDGES, the four COOLANT LOOPS standing in the goop (steam generator + vertical reactor coolant pump +
+ * manifold; collision props) and the TURBINE GENERATOR on the outer floor. World metres, absolute y. Render (world/reactor/core*.ts)
+ * draws the hero assembly from this record.
+ */
+export interface ReactorCoreFloor {
+  version: 1;
+  /** Vessel axis (= core x / z) and the core floor deck height. */
+  x: number;
+  z: number;
+  y: number;
+  /** The vessel's blocked footprint radius (walking stops at its hazard plinth). */
+  vesselR: number;
+  /** Service ring (walkable deck round the vessel) inner / outer radius. */
+  ring: {r0: number; r1: number};
+  /** The goop pool annulus (+ tower feet): radii, surface height, its floor (the collision band) and cell count. */
+  pool: {r0: number; r1: number; surfaceY: number; floorY: number; cells: number};
+  /** Walkable radial bridges over the goop: axis angle (rad, atan2(dz, dx)), clear width, axis endpoints (ring edge -> outer floor). */
+  bridges: readonly {angle: number; width: number; x0: number; z0: number; x1: number; z1: number}[];
+  /** Lattice towers (ReactorInfo.towers index) whose feet stand in the goop. */
+  towers: readonly number[];
+  /** Coolant loops: each piece's centre (on the goop: y = the pool floor), its yaw (model +X along (cos yaw, -sin yaw)) and prop index. */
+  loops: readonly {
+    angle: number;
+    sg: {x: number; z: number; yaw: number; prop: number} | null;
+    rcp: {x: number; z: number; yaw: number; prop: number} | null;
+    manifold: {x: number; z: number; yaw: number} | null;
+  }[];
+  /** The turbine generator on the outer core floor (model +X along `axis`), its collision prop; null when no free wall run. */
+  turbine: {x: number; z: number; axis: 'x' | 'z'; yaw: number; prop: number} | null;
+  /**
+   * Radii of the smooth railings drawn round the goop (the cell-edge collision rails there are `hidden`): the ring's at the outer
+   * envelope of its collision edges, the outer floor's at the inner envelope — a body never reaches past a drawn rail.
+   */
+  rails: {ring: number; outer: number};
+}
+
 /** layout.reactor: the whole Reactor in ONE layout (lane GEN writes it; every other lane reads it). */
 export interface ReactorInfo {
   version: 1;
@@ -323,6 +362,8 @@ export interface ReactorInfo {
   routes: readonly {kind: 'stairs' | 'bridge' | 'ladder'; links: readonly number[]}[];
   /** Task reactor-expansion-20261101: the generator side complexes (absent / empty = the generators stand on shaft landings). */
   complexes?: readonly ReactorComplexInfo[];
+  /** Task reactor-expansion-20261101 (lane CORE, additive): the core floor's ring / goop pool / bridges / loops / turbine. */
+  coreFloor?: ReactorCoreFloor;
 }
 
 /** Tier gas concentrations (uncleared) are a function of depth only: the rim is clean (layout.reactor.tiers[0].zone === -1). */
