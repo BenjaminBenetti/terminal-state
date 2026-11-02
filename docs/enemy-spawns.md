@@ -85,20 +85,24 @@ zone, accounted separately:
     one per mall, never guaranteed: `LINGERIE_STORES_MAX`). Only when the mall has one, `game/src/gen/mall/lingerieSpawns.ts`
     `placeLingerieSpawns` runs ONE store run on its own fork (`mall-lingerie-spawns`, drawn from only then): **U{3..5}** spawns
     (`LINGERIE_ZONE_BUDGET`), `floor(count / 3)` of them on the store's sales floor and the rest (2 / 3 / 4) in its walk-in changing
-    area (`MallShop.changing`: booth interiors + their aisle), spread one per booth first; a share that does not fit moves to the other
-    group. Cells (`LINGERIE_PLACEMENT` + `LINGERIE_SPAWN_RULES`): walkable FLOOR of the store's own sales floor (never its stock room,
-    a gallery or another unit), 3 × 3 clear, reachable and ≥ 36 walking cells from the start, 5 m off the storey's landings, ≥ 4 m from
-    the shopfront(s) (no point-blank variant at the entrance), never on a changing-area OPENING cell (a booth's curtain gap, the aisle
-    cell in front of it; the aisle also keeps the cells next to its openings free), sales-floor cells > 2 cells off the changing area,
-    a 0.5 m disc never splits the storey (`sealsPassage`), 1.4 m from every enemy already on the storey. Every spawn is a shambler,
+    area (`MallShop.changing`: one rect per booth + the aisle), spread one per booth first; a share that does not fit moves to the other
+    group. Stand points (`LINGERIE_PLACEMENT` + `LINGERIE_SPAWN_RULES`): walkable FLOOR of the store's own sales floor (never its
+    stock room, a gallery or another unit), reachable and ≥ 36 walking cells from the start, 5 m off the storey's landings, ≥ 4 m from
+    the shopfront(s) (no point-blank variant at the entrance); in a BOOTH (a changing rect with 1-4 OPENING cells — a walkable
+    neighbour outside the rect: its curtain gap) the centre of a 2 × 2 patch of its cells off the opening row (lane STORE's booths are
+    2 cells wide × 3 deep: the back 2 × 2, on the booth's centre line, clear of both panels); the aisle hosts nobody while the store
+    has booths (nobody waits in front of a booth door or blocks the way to the closed end); on the sales floor a 3 × 3-clear cell
+    more than 2 cells off the changing area and ≥ 2 m from its mouth (`MallShop.changingEntry`); everywhere a 0.5 m disc never splits the storey (`sealsPassage`), 1.4 m from every enemy already on the storey. Every spawn is a shambler,
     tagged `ZombieSpawn.look = 'lingerie'` and the context `lingerie`, and APPENDED after every other spawn of the level (ambient,
     hordes, annex `service`): every existing index — family roll, wardrobe look, kill memory — is unchanged, and a mall without a
     lingerie store is byte-identical to one generated without the pass. Families: the context's OWN pool `LINGERIE_FAMILY_POOL`
     (ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer) through the one `assignEnemyArchetypes`; no eligibility rule
     names it; not in the station / retail counts or the ambient budget. Looks: at spawn time `game/src/ai/spawnLook.ts`
-    `spawnZombieLook` gives exactly these spawns their fitted lingerie set (`game/src/ai/lingerie.ts` `lingerieLook(layout seed, spawn
-    index)`; used only when buildable with an upper AND a lower garment, else the ordinary fully clothed pick) and every other spawn of
-    every level the ordinary wardrobe pick (`pickZombieLook`); both are pure functions of (seed, index), so a variant looks the same on
+    `chooseSpawnLook` gives exactly these spawns their fitted lingerie set — `game/src/ai/lingerie.ts` (lane FIT) `lingerieLook(layout
+    seed, spawn index)`, built by its SEPARATE `createLingerieLibrary` (the ordinary pool can never pick a lingerie garment), used only
+    when that library can build it with an upper AND a lower garment, else the ordinary fully clothed pick; the garments
+    (`LINGERIE_MODEL_FILES`) load lazily, only for a layout holding a lingerie-tagged spawn (`lingerieModelKeysFor`) — and every
+    other spawn of every level the ordinary wardrobe pick (`pickZombieLook`); both are pure functions of (seed, index), so a variant looks the same on
     every revisit / Retry and a killed one stays dead (per-index run memory). AI: the ordinary zombie's — no leash, despawn or teleport.
     Test: `game/tests/mall-lingerie-spawns.test.ts`.
   - `families` = `MALL_ENEMY_POOL` = `familyPool({siren: MALL_SIREN_WEIGHT})`: Blightbelly 0.05 and rat/dog 0.05 (the defaults), the
