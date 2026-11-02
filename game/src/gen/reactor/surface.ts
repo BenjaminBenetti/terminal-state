@@ -516,7 +516,8 @@ function finishIn(layout: StationLayout, c: SurfaceCarve): ReactorSurface | null
     },
     stairs: {
       flights: c.flights.slice(), link: c.link, bottom: {...link.bottom, level: 0}, top: {...link.top, level: SURFACE_LEVEL},
-      rect: {x0: c.stairRect.x * CELL, z0: c.stairRect.y * CELL, x1: (c.stairRect.x + c.stairRect.w) * CELL, z1: (c.stairRect.y + c.stairRect.h) * CELL},
+      // the flights, the turn landing and the upper passage (indoors: the stair up to the plaza's edge)
+      rect: (() => { const a = c.stairRect, u = c.areas.upper; return {x0: Math.min(a.x, u.x) * CELL, z0: Math.min(a.y, u.y) * CELL, x1: Math.max(a.x + a.w, u.x + u.w) * CELL, z1: Math.max(a.y + a.h, u.y + u.h) * CELL}; })(),
     },
     head: {rect: {x0: r3(hx0 - 2 * CELL), z0: r3(hz0 - 2 * CELL), x1: r3(hx1 + 2 * CELL), z1: r3(hz1 + 2 * CELL)}, top: headTop},
     exit: {x: exitP.x, y: p.Ys, z: exitP.z, yaw: r3(yawOut)},
