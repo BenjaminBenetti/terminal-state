@@ -12,7 +12,8 @@
 //    approved crane is unchanged; the trolley tops out at the slab, so no member runs through it);
 //  - the CURB: a closed steel ring girder under the slab round the opening (inner face on the opening radius, ROOF_OPENING.curb wide:
 //    the grid's stepped hole edge hides above its box) and a 0.6 m concrete upstand above the slab — one lathe mesh per material.
-// Instances join the kit's existing 'ibeam|steelDark' band-0 InstancedMesh (no new draw call); the curb adds two merged meshes.
+// Instances join the kit's existing 'ibeam|steelDark' band-0 InstancedMesh (no new draw call); the curb adds two merged meshes and
+// the slab is one mesh (replacing the builder's ~17 roof-line ceiling chunks).
 
 import * as THREE from 'three';
 import {ROOF_OPENING, roofOpeningOf, type RoofOpening} from '../../gen/reactor/roofOpening';
