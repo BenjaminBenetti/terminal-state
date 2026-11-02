@@ -18,7 +18,7 @@ import {WASTE_CARVE_FAILS} from '../src/gen/reactor/complex/waste';
 import {WASTE_DRUM_CAP} from '../src/gen/reactor/complex/wasteTypes';
 import {WASTE_KINDS} from '../src/gen/reactor/complex/wastePlan';
 import {FIX_LEVEL, wasteFixture, type WasteFixture} from './reactor-x-waste-fixture';
-import {WASTE_REQUIRED, wasteCoherence, wasteSignature} from './reactor-x-waste-graph';
+import {WASTE_REQUIRED, wasteCoherence, wasteReservedPieces, wasteSignature} from './reactor-x-waste-graph';
 
 const SIDES = ['S', 'E', 'N', 'W'] as const;
 const CASES = Array.from({length: 8}, (_, i) => ({seed: 101 + i * 7, inward: SIDES[i % 4], off: [0, -14, 12, 5, -6, 16, -18, 0][i]}));
@@ -171,6 +171,8 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       expect(n('storageCask')).toBeGreaterThanOrEqual(2);
       expect(n('deconShower')).toBeGreaterThanOrEqual(1);
       expect(n('hotCellWindow')).toBe(1);
+      // the booths / window by construction: their reserved spans (held through the station dresser pass) hold them
+      expect(wasteReservedPieces(L), `seed ${c.seed}`).toEqual([]);
       // (the real level asserts the console and switchgear per seed: tests/reactor-x-waste-level.test.ts)
       expect(n('switchgear') + n('controlConsole')).toBeGreaterThanOrEqual(1);
       expect(n('controlConsole')).toBe(1);

@@ -35,6 +35,8 @@ export interface WasteCarveRecord {
   genUse: [number, number];
   /** The carve's room records (the host copies their labels into layout.reactor.complexes after the dress: a relabel shows). */
   rooms: ComplexRoom[];
+  /** The guaranteed set pieces' reserved spans (canvas cells, BEFORE the crop): booth / hot-cell window, the room, the rect. */
+  reserve: {what: 'booth' | 'hotcell'; room: WasteKey; side: 0 | 1 | 2 | 3; rect: Rect}[];
 }
 
 export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
@@ -99,11 +101,14 @@ export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
   const useYaw = Math.round(Math.atan2(-face[0], -face[1]) * 1000) / 1000;
 
   const rooms: ComplexRoom[] = plan.rooms.map(s => ({area: ids[s.key], key: s.key, label: s.label, role: WASTE_KINDS[s.kind].role}));
-  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, entrance: {...slot.entrance}, genFoot: foot, genUse: [ux, uy], rooms};
+  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, entrance: {...slot.entrance}, genFoot: foot, genUse: [ux, uy], rooms,
+    reserve: plan.reserve.map(q => ({what: q.what, room: q.room, side: q.side, rect: f.rect(q.r)}))};
   return {
     id: 'waste', slot, areas: plan.rooms.map(s => ids[s.key]), entryArea: ids.bay, rooms,
     generator: {area: plant.id, foot, yaw: Math.round(genYaw * 1000) / 1000, use: {x: ux, y: uy, yaw: useYaw}},
     name: 'Waste repository',
+    // the booth / window spans: the host holds them through the shared station dresser (ComplexCarve.reserve)
+    reserve: rec.reserve.map(q => ({...q.rect})),
     dress: (layout, drng, crop) => dressWaste(layout, drng, crop, rec),
   };
 }

@@ -80,6 +80,24 @@ export function wasteCoherence(L: StationLayout, frontArea: number): string[] {
   return out;
 }
 
+/**
+ * The guaranteed set pieces BY CONSTRUCTION: >= 1 reserved booth span and exactly 1 reserved window span, each holding its piece
+ * (the model's centre inside the span), so `showers + hot cell >= 2` never depends on the shared station dresser's draws.
+ */
+export function wasteReservedPieces(L: StationLayout): string[] {
+  const D = L.reactorWaste, G = D?.graph;
+  if (!D || !G) return ['no room graph'];
+  const out: string[] = [];
+  const booths = G.reserve.filter(q => q.what === 'booth'), hot = G.reserve.filter(q => q.what === 'hotcell');
+  if (!booths.length) out.push('no reserved booth span');
+  if (hot.length !== 1) out.push(`${hot.length} reserved window spans`);
+  for (const q of G.reserve) {
+    const piece = q.what === 'booth' ? 'deconShower' : 'hotCellWindow';
+    if (!D.models.some(m => m.piece === piece && m.x > q.x0 && m.x < q.x1 && m.z > q.z0 && m.z < q.z1)) out.push(`reserved ${q.what} span in ${q.room} empty`);
+  }
+  return out;
+}
+
 /** A space's centre in the slot's local frame (u along the pit wall, v inward), both normalised to [0, 1] over the region. */
 function localOf(region: Rect, inward: 'N' | 'S' | 'E' | 'W', a: Rect): [number, number] {
   const cx = a.x + a.w / 2, cy = a.y + a.h / 2, ux = (cx - region.x) / region.w, uy = (cy - region.y) / region.h;

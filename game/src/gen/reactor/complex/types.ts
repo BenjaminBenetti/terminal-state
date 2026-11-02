@@ -86,6 +86,12 @@ export interface ComplexCarve {
   /** Human name of the complex ("Bunker 7 — civil-defence shelter", "Old service mine", "Waste repository"). */
   name: string;
   /**
+   * Task studio-reactor-playtest-round2-20261102 (lane WASTE, additive, optional): canvas-cell rects the SHARED station dresser must
+   * leave free — the host holds them through that one pass only (not through the complex's own dress), so the carver's guaranteed set
+   * pieces (the waste repository's decon booths / hot-cell window) never depend on the dresser's upstream draws.
+   */
+  reserve?: Rect[];
+  /**
    * Post-crop dressing (the host calls it once, after the station dresser and before the populations): props / fixtures / pickups /
    * decor in WORLD metres (`crop` = the canvas -> grid cell offset the host applied: grid cell = canvas cell - (ox, oy)). Props must
    * follow the root CLAUDE.md prop rules (openable storage opens, movable things move, no baked clutter, real scale).

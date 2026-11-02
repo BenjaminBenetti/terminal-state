@@ -15,7 +15,7 @@ import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {planStoreys} from '../src/world/reactor/mapBoardPlan';
 import {MINES_FIT} from '../src/world/reactor/minesAssets';
-import {cellsOfWorld, wasteCoherence, wasteSignature, type WasteSignature} from './reactor-x-waste-graph';
+import {cellsOfWorld, wasteCoherence, wasteReservedPieces, wasteSignature, type WasteSignature} from './reactor-x-waste-graph';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const cache = new Map<number, {L: StationLayout; carveMs: number; dressMs: number}>();
@@ -93,6 +93,8 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       expect(n('wasteDrum'), `seed ${seed} drums`).toBeGreaterThanOrEqual(60);
       expect(n('storageCask'), `seed ${seed} casks`).toBeGreaterThanOrEqual(2);
       expect(n('deconShower') + n('hotCellWindow'), `seed ${seed} showers / hot cell`).toBeGreaterThanOrEqual(2);
+      // (by construction: the reserved booth / window spans, held clear of the shared station dresser, hold their pieces)
+      expect(wasteReservedPieces(L), `seed ${seed}`).toEqual([]);
       // (user bullet 13, via lane PROPS: no floating status beacons — a user-requested removal)
       expect(D.beacons.length).toBe(0);
       // one generator cable: the host's (panel -> through the entrance -> the fans); the repository draws none of its own
@@ -133,6 +135,8 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       expect(D!.models.filter(m => m.piece === 'switchgear').length, `seed ${seed} switchgear`).toBeGreaterThanOrEqual(1);
       expect(D!.models.filter(m => m.piece === 'controlConsole').length, `seed ${seed} console`).toBe(1);
       expect(D!.models.filter(m => m.piece === 'wasteDrum').length, `seed ${seed} drums`).toBeGreaterThanOrEqual(60);
+      expect(D!.models.filter(m => m.piece === 'deconShower').length + D!.models.filter(m => m.piece === 'hotCellWindow').length, `seed ${seed} showers / hot cell`).toBeGreaterThanOrEqual(2);
+      expect(wasteReservedPieces(L), `seed ${seed}`).toEqual([]);
       expect(complexIssues(L), `seed ${seed}`).toEqual([]);
       const c = L.reactor!.complexes!.find(q => q.id === 'waste')!;
       expect(wasteCoherence(L, c.slot!.frontArea), `seed ${seed}`).toEqual([]);
@@ -149,20 +153,22 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
     expect(distinct(s => s.switchgear)).toBeGreaterThanOrEqual(2);
   });
 
-  it('keeps every guaranteed piece when the shared station dresser\'s draws shift upstream (the mines drill at fits 1.5 / 1.9, 12 seeds)', () => {
-    // (lead / lane PROPS: the drill's real size moves tier 2's dressing, so tier 4 meets a different furnishing: the booths, the
-    // hot-cell window, the casks, the fans, the switchgear, the console, the drums and the graph must not depend on it)
+  it('keeps every guaranteed piece when the shared station dresser\'s draws shift upstream (the mines drill at fits 1.5 / 1.9 / 2, all 24 seeds; fit 1 above)', () => {
+    // (lead / lanes PROPS + BUNKER: the drill's real size / the bunker's rooms move the shared dresser's draws, so tier 4 meets a
+    // different furnishing: the booths, the hot-cell window, the casks, the fans, the switchgear, the console, the drums and the graph
+    // must not depend on it — the booths / window by construction: their reserved spans are held through that dresser pass)
     const keep = MINES_FIT.drillRig;
     try {
-      for (const [fit, seeds] of [[1.9, [1, 2, 3, 4, 5, 6, 7, 8]], [1.5, [9, 12, 15, 18]]] as const) {
+      for (const fit of [1.5, 1.9, 2]) {
         MINES_FIT.drillRig = fit;
-        for (const seed of seeds) {
+        for (let seed = 1; seed <= 24; seed++) {
           const L = LEVELS.reactor.generate('main', {levelSeed: seed});
           const c = L.reactor!.complexes?.find(q => q.id === 'waste');
           expect(c, `fit ${fit} seed ${seed}`).toBeTruthy();
           const D = L.reactorWaste!, n = (p: string) => D.models.filter(m => m.piece === p).length, tag = `fit ${fit} seed ${seed}`;
           expect(n('deconShower') + n('hotCellWindow'), `${tag} showers / hot cell`).toBeGreaterThanOrEqual(2);
           expect(n('hotCellWindow'), tag).toBe(1);
+          expect(wasteReservedPieces(L), tag).toEqual([]);
           expect(n('switchgear'), tag).toBeGreaterThanOrEqual(1);
           expect(n('controlConsole'), tag).toBe(1);
           expect(n('wasteDrum'), tag).toBeGreaterThanOrEqual(60);
@@ -174,7 +180,7 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
         }
       }
     } finally { MINES_FIT.drillRig = keep; }
-  }, 120_000);
+  }, 300_000);
 
   it('carves in < 60 ms and dresses in < 150 ms (mean over the seeds)', () => {
     let carve = 0, dress = 0;

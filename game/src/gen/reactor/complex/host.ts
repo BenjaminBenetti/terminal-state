@@ -262,6 +262,8 @@ export interface HostedGenerators {
   gens: ReactorGenerator[];
   holds: {level: number; cells: number[]}[];
   keep: {level: number; x: number; z: number}[];
+  /** (lane WASTE) The carves' reserved cells (ComplexCarve.reserve): held through the shared station dresser only. */
+  reserve: {level: number; cells: number[]}[];
 }
 
 /**
@@ -272,7 +274,7 @@ export interface HostedGenerators {
  */
 export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: readonly ComplexCarve[]): HostedGenerators {
   const base = buildGenerators(layout, rc);
-  const gens = base.gens.slice(), holds = base.holds.slice(), keep = base.keep.slice();
+  const gens = base.gens.slice(), holds = base.holds.slice(), keep = base.keep.slice(), reserve: HostedGenerators['reserve'] = [];
   for (const c of carves) {
     const s = c.slot, lv = s.level, y = rc.bases[lv], g = layout.levels[lv].grid, f = c.generator.foot;
     const x0 = f.x * CELL, z0 = f.y * CELL, x1 = (f.x + f.w) * CELL, z1 = (f.y + f.h) * CELL, x = (x0 + x1) / 2, z = (z0 + z1) / 2;
@@ -287,6 +289,8 @@ export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: 
       panel: {x: r3(Math.min(x1, Math.max(x0, ux))), y: r3(y + 1.2), z: r3(Math.min(z1, Math.max(z0, uz)))}, cable: [],
     });
     holds.push({level: lv, cells: block(g, uc[0], uc[1], 2)});
+    // (lane WASTE) the carve's reserved set-piece cells: held through the shared station dresser only (gen/reactor/index.ts)
+    if (c.reserve?.length) reserve.push({level: lv, cells: c.reserve.flatMap(r => { const out: number[] = []; for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR) out.push(g.idx(x, y)); return out; })});
     keep.push({level: lv, x: ux, z: uz});
     // the entrance: 3 cells either side of the doorway across its span (+1) held clear, keep points on both sides
     holds.push({level: lv, cells: apron(s).filter(i => g.cells[i] === FLOOR)});
@@ -295,7 +299,7 @@ export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: 
   }
   gens.sort((p, q) => p.zone - q.zone);
   gens.forEach((q, i) => { q.id = i; });
-  return {gens, holds, keep};
+  return {gens, holds, keep, reserve};
 
   function apron(s: ComplexSlot): number[] {
     const g = layout.levels[s.level].grid, E = s.entrance, [dx, dy] = DIRS[s.inward], cells: number[] = [];
