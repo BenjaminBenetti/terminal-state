@@ -18,13 +18,13 @@ import {FLOOR} from '../src/gen/grid';
 import {clearAround} from '../src/gen/stationDress';
 import {generateMallLevel} from '../src/gen/mall/index';
 import type {MallRect} from '../src/gen/mall/mallTypes';
-import {LINGERIE_PURPOSE, LINGERIE_SPAWN_RULES, lingerieStores, placeLingerieSpawns, type LingerieShop} from '../src/gen/mall/lingerieSpawns';
+import {LINGERIE_PURPOSE, LINGERIE_SPAWN_RULES, placeLingerieSpawns, type LingerieShop} from '../src/gen/mall/lingerieSpawns';
 import {LINGERIE_CONTEXT, LINGERIE_FAMILY_POOL, MALL_SPAWN_PROFILE, sealsPassage, spawnContextOf, validateSpawnProfile} from '../src/ai/spawnTables';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {applyFamilySpacing} from '../src/ai/familySpacing';
-import {lingerieLookUsable, spawnZombieLook, type SpawnLookLibrary} from '../src/ai/spawnLook';
-import {lingerieLook} from '../src/ai/lingerie';
-import {pickZombieLook, type WardrobeAvailability, type ZombieLook} from '../src/ai/wardrobe';
+import {chooseSpawnLook, lingerieLookUsable, lingerieModelKeysFor, type SpawnLookLibrary} from '../src/ai/spawnLook';
+import {LINGERIE_BODY_IDS, LINGERIE_MODEL_FILES, lingerieLook} from '../src/ai/lingerie';
+import {pickZombieLook, type LegacyZombieLook, type WardrobeAvailability, type ZombieLook} from '../src/ai/wardrobe';
 import {ZOMBIE_BODIES, ZOMBIE_WEARABLES} from '../src/ai/outfits';
 import type {StationLayout, ZombieSpawn} from '../src/gen/stationTypes';
 
@@ -174,38 +174,54 @@ describe('the store-local pass on a synthetic lingerie store', () => {
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Looks (ai/spawnLook.ts)
 
-/** A look library over the registry defs where every pair fits; `extra` = wearables only the lingerie looks use. */
-function fakeLibrary(lingerie: (look: ZombieLook) => boolean = () => false): SpawnLookLibrary {
-  const available: WardrobeAvailability = {bodies: ZOMBIE_BODIES, wearables: ZOMBIE_WEARABLES, supports: () => true, outfits: ZOMBIE_WEARABLES.filter(w => w.slot === 'upper')};
-  return {available, isValid: look => ('wear' in look && lingerie(look)) || ('wear' in look && ZOMBIE_BODIES.some(b => b.id === look.body))};
-}
+/** The ordinary library stand-in: the registry defs, every pair fitted; it accepts ordinary looks only. */
+const ORDINARY: SpawnLookLibrary = {
+  available: {bodies: ZOMBIE_BODIES, wearables: ZOMBIE_WEARABLES, supports: () => true, outfits: ZOMBIE_WEARABLES.filter(w => w.slot === 'upper')} satisfies WardrobeAvailability,
+  isValid: look => 'wear' in look && ZOMBIE_BODIES.some(b => b.id === look.body) && Object.values(look.wear).every(w => ZOMBIE_WEARABLES.some(x => x.id === w)),
+};
+/** A lingerie library stand-in that builds every look of the lingerie bodies with a top + a bottom of one design. */
+const LINGERIE_LIB = {isValid: (look: ZombieLook | LegacyZombieLook) => 'wear' in look && LINGERIE_BODY_IDS.includes(look.body) && /^lingerie-[a-z]+-top$/.test(look.wear.upper ?? '') && look.wear.lower === look.wear.upper!.replace(/-top$/, '-bottom')};
 const spawn = (look?: 'lingerie'): Pick<ZombieSpawn, 'type' | 'look'> => ({type: 'shambler', ...(look ? {look} : {})});
 
 describe('spawn-time looks', () => {
-  it('every untagged spawn keeps the ordinary wardrobe pick (any seed / index / type)', () => {
-    const lib = fakeLibrary(() => true);
+  it('every untagged spawn keeps the ordinary wardrobe pick from the ordinary library (any seed / index / type), lingerie library or not', () => {
     for (let i = 0; i < 64; i++) for (const type of ['shambler', 'coated'] as const) {
-      expect(spawnZombieLook(1234, i, {type}, lib)).toEqual(pickZombieLook(1234, i, type, lib.available));
+      const ordinary = {look: pickZombieLook(1234, i, type, ORDINARY.available), library: 'ordinary'};
+      expect(chooseSpawnLook(1234, i, {type}, ORDINARY, LINGERIE_LIB)).toEqual(ordinary);
+      expect(chooseSpawnLook(1234, i, {type}, ORDINARY, null)).toEqual(ordinary);
+      // the ordinary pool never yields a lingerie garment (they live in the separate library only)
+      expect(Object.values(ordinary.look.wear).some(w => /^lingerie-/.test(w!))).toBe(false);
     }
   });
 
-  it('a tagged spawn wears its lingerie look only when buildable top AND bottom; else the ordinary, fully clothed pick', () => {
+  it('a tagged spawn wears lingerieLook(seed, index) from the lingerie library only when buildable top AND bottom; else the ordinary, fully clothed pick', () => {
     const set: ZombieLook = {body: 'paleGaze', wear: {upper: 'lingerie-green-top', lower: 'lingerie-green-bottom'}};
-    expect(lingerieLookUsable(set, {isValid: () => true})).toBe(true);
+    expect(lingerieLookUsable(set, LINGERIE_LIB)).toBe(true);
     expect(lingerieLookUsable(set, {isValid: () => false})).toBe(false);
+    expect(lingerieLookUsable(set, null)).toBe(false);
     expect(lingerieLookUsable({body: 'paleGaze', wear: {upper: 'x'}}, {isValid: () => true})).toBe(false);
     expect(lingerieLookUsable({body: 'paleGaze', wear: {lower: 'x'}}, {isValid: () => true})).toBe(false);
     expect(lingerieLookUsable(null, {isValid: () => true})).toBe(false);
-    // the shipped lingerieLook: tagged spawns get it when the library accepts it, else the ordinary pick — never a bare body
-    const accept = fakeLibrary(look => !!look.wear.upper && !!look.wear.lower);
     for (let i = 0; i < 32; i++) {
-      const l = lingerieLook(99, i), got = spawnZombieLook(99, i, spawn('lingerie'), accept);
-      expect(got).toEqual(lingerieLookUsable(l, accept) ? l : pickZombieLook(99, i, 'shambler', accept.available));
-      expect(spawnZombieLook(99, i, spawn('lingerie'), fakeLibrary())).toEqual(lingerieLookUsable(l, fakeLibrary()) ? l : pickZombieLook(99, i, 'shambler', accept.available));
+      const l = lingerieLook(99, i), ordinary = {look: pickZombieLook(99, i, 'shambler', ORDINARY.available), library: 'ordinary'};
+      expect(chooseSpawnLook(99, i, spawn('lingerie'), ORDINARY, LINGERIE_LIB)).toEqual(lingerieLookUsable(l, LINGERIE_LIB) ? {look: l, library: 'lingerie'} : ordinary);
+      // garments not loaded (no lingerie library) / not fitted: the ordinary pick — never a bare or half-dressed body
+      expect(chooseSpawnLook(99, i, spawn('lingerie'), ORDINARY, null)).toEqual(ordinary);
+      expect(chooseSpawnLook(99, i, spawn('lingerie'), ORDINARY, {isValid: () => false})).toEqual(ordinary);
     }
   });
 
-  it('lingerieLook is a pure function of (seed, index)', () => {
-    for (let i = 0; i < 16; i++) expect(lingerieLook(4242, i)).toEqual(lingerieLook(4242, i));
+  it('lingerieLook is a pure function of (seed, index): a lingerie body with a top + a bottom', () => {
+    for (let i = 0; i < 16; i++) {
+      const l = lingerieLook(4242, i);
+      expect(lingerieLook(4242, i)).toEqual(l);
+      expect(LINGERIE_BODY_IDS).toContain(l.body);
+      expect(l.wear.upper && l.wear.lower).toBeTruthy();
+    }
+  });
+
+  it('the lazy garment keys are asked only for a layout holding a lingerie-tagged spawn', () => {
+    expect(lingerieModelKeysFor({zombies: [{x: 0, z: 0, yaw: 0, type: 'shambler', area: 0}]})).toEqual([]);
+    expect(lingerieModelKeysFor({zombies: [{x: 0, z: 0, yaw: 0, type: 'shambler', area: 0, look: 'lingerie'}]})).toEqual(Object.keys(LINGERIE_MODEL_FILES).sort());
   });
 });

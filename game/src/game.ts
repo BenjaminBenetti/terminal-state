@@ -43,7 +43,9 @@ import {spawnProfile} from './ai/spawnTables'; // lane HORDE: the level's horde 
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
 import {ZombieLookLibrary} from './ai/outfits';
-import {spawnZombieLook} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
+import {chooseSpawnLook, lingerieModelKeysFor} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
+import {LINGERIE_MODEL_FILES, createLingerieLibrary} from './ai/lingerie'; // (lane FIT's lazy garments + their separate look library)
+import type {WardrobeLibrary} from './ai/wardrobe';
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
@@ -172,7 +174,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES}); // (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -211,6 +213,8 @@ export class Game {
   enemyFallbacks = 0;
   /** Iteration 05 body x outfit registry/assembler (ai/outfits.ts), built once from the loaded GLBs. */
   private zombieLooks: ZombieLookLibrary | null = null;
+  /** Task mall-lingerie-20261102-221554 (lane CONTEXT): the separate lingerie look library over the loaded lazy garments (rebuilt when they change). */
+  private lingerieLooks: {models: readonly unknown[]; lib: WardrobeLibrary} | null = null;
   pickups!: PickupManager;
   readonly fx = new Effects();
   private readonly strainerTrail = new StrainerWetTrail(); // (Strainer wet-shine trail driver; marks live in fx)
@@ -308,7 +312,8 @@ export class Game {
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
   /** Extra `propModels` keys a section needs besides its p7 props (lane WORLD-GEN: office models): fetched before the build, kept by the trim. */
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor];
+  // (task mall-lingerie-20261102-221554, lane CONTEXT) + the lingerie garments on a layout with lingerie-tagged spawns (the mall's lingerie store only)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieModelKeysFor];
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
@@ -1241,6 +1246,20 @@ export class Game {
    * Zombies wear a seeded body x outfit look (deterministic per station seed + spawn index; 'coated' =
    * heavy coat outfit), falling back to the legacy single template when no registry body is loaded.
    */
+  /**
+   * Task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie look library (lane FIT's createLingerieLibrary) over the boot models
+   * (the pale bodies) + the loaded lazy garments; null while none is loaded. Rebuilt only when the loaded garment set changes.
+   */
+  private lingerieLookLibrary(models: Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>): WardrobeLibrary | null {
+    const lazy = Object.keys(LINGERIE_MODEL_FILES).sort().map(k => [k, this.propModels.get(k)] as const).filter(([, g]) => g);
+    if (!lazy.length) return null;
+    const c = this.lingerieLooks;
+    if (c && c.models.length === lazy.length && c.models.every((g, k) => g === lazy[k][1])) return c.lib;
+    const lib = createLingerieLibrary({...models, ...Object.fromEntries(lazy)});
+    this.lingerieLooks = {models: lazy.map(([, g]) => g), lib};
+    return lib;
+  }
+
   spawnEnemy(s: ZombieSpawn, i: number): EnemyActor {
     const models = this.assets.models as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>;
     const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
@@ -1248,7 +1267,8 @@ export class Game {
     const {actor: z, fallback} = createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), this.rand, () => {
       // task mall-lingerie-20261102-221554 (lane CONTEXT): a spawn tagged look 'lingerie' (the mall lingerie store's variants only)
       // wears its fitted set (ai/lingerie.ts lingerieLook(seed, i), when buildable top + bottom); every other spawn the ordinary pick
-      const source = looks.bodies.length ? looks.build(spawnZombieLook(this.currentSeed, i, s, looks)) : models.zombie;
+      const pick = looks.bodies.length ? chooseSpawnLook(this.currentSeed, i, s, looks, s.look === 'lingerie' ? this.lingerieLookLibrary(models) : null) : null;
+      const source = pick ? (pick.library === 'lingerie' ? this.lingerieLookLibrary(models)! : looks).build(pick.look) : models.zombie;
       if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
       return new ZombieActor(source, s, this.rand);
     });
