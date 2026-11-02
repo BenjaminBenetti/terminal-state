@@ -198,6 +198,8 @@ describe('regression: no steel across the walkways (user: "large steel beams oft
     for (const seed of SEEDS.slice(0, 4)) {
       const L = level(seed), plan = auditPlan(L, auditModels('all'), new WalkVolume(L));
       expect(plan.stats.towers).toBe(L.reactor!.towers.length);
+      expect(plan.stats.decksSupported, `seed ${seed}: every deck keeps its steel`).toBe(plan.stats.decks);
+      expect(plan.stats.braces, `seed ${seed}: knee braces kept where they clear`).toBeGreaterThan(40);
       expect(plan.stats.towerMembers, `seed ${seed}`).toBeGreaterThan(L.reactor!.towers.length * 40);
       const portals = [...plan.parts.values()].flatMap(p => p.list.filter(i => i.tag === 'tower-portal')).length;
       expect(portals, `seed ${seed}: the core floor round the tower foot + the bridge entries`).toBeGreaterThan(0);
