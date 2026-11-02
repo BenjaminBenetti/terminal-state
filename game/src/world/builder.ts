@@ -48,6 +48,7 @@ import {finishResolver, type FinishAt} from './finishAt'; // task reactor-expans
 import {ANNEX_WALL, BOARD_SPAN, annexWallMaterial} from './trackExt/wallFinish'; // Track 2 playtest revision (lane ART) // Track 2 (VIS): tunnels beyond the beds
 import {ReactorArch} from './reactor/arch'; // task reactor-build-20261101 (lane ARCH): THE REACTOR's finishes + industrial kit + pit culling
 import {registerReactorArchVisuals} from './reactor/archVisuals'; // task reactor-build-20261101 (lane ARCH): the ReactorVisuals seam
+import {buildWasteVisuals} from './reactor/wasteVisuals'; // task reactor-expansion-20261101 (lane WASTE): the waste repository's look
 
 class Accum {
   pos: number[] = [];
@@ -712,6 +713,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task reactor-build-20261101 (lane ARCH): the Reactor's industrial kit (deck steel, towers, crane, pipe banks, fans, generators, the
   // vessel, site machines, bands, lamps, railings; world/reactor/arch.ts) + its ReactorVisuals (null for every other world).
   if (reactor) reactor.build(group, rails, models);
+  if (reactor) buildWasteVisuals(group, layout, mats, models); // task reactor-expansion-20261101 (lane WASTE): the waste repository's racks / casks / kit
   registerReactorArchVisuals(reactor ? reactor.visuals : null);
 
   for (const [key, e] of boxes) {

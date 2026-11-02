@@ -80,7 +80,14 @@ export function drawMapFace(ctx: Ctx, W: number, H: number, f: MapFace): void {
   }
   // ladders (H) and room names
   for (const l of f.storey.ladders) text(ctx, l.up && l.down ? 'H' : l.up ? 'H↑' : 'H↓', U(l.x), V(l.z), 14, '#e8e2d0', 'center', 40);
-  for (const rm of f.storey.rooms) text(ctx, rm.label, U(rm.x), V(rm.z), 13, '#dfe6ea', 'center', Math.max(60, 9 * c));
+  // (lead merge fix: a room near the map's edge — e.g. a side complex at the frame's edge — keeps its whole label inside the map)
+  for (const rm of f.storey.rooms) {
+    const mw = Math.max(60, 9 * c);
+    ctx.font = `bold ${fitSize(ctx, rm.label, 13, mw, 'bold')}px ${FONT}`;
+    const hw = Math.min(ctx.measureText(rm.label).width, M.w - 8) / 2; // the label's real half width at its fitted size
+    const lx = Math.min(Math.max(U(rm.x), M.x + hw + 4), M.x + M.w - hw - 4), ly = Math.min(Math.max(V(rm.z), M.y + 10), M.y + M.h - 10);
+    text(ctx, rm.label, lx, ly, 13, '#dfe6ea', 'center', mw);
+  }
   // north arrow
   text(ctx, 'N ↑', M.x + M.w - 8, M.y + 14, 14, '#9fb0b8', 'right', 60);
   // --- the markers

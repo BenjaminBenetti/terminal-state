@@ -22,6 +22,7 @@ import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisual
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
 import {bunkerModelKeysFor} from '../../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
+import {wasteModelKeysFor} from './wasteAssets'; // task reactor-expansion-20261101 (lane WASTE)
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
 // task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Ordinary non-hazard atmospheric fog is not green"): 0x283020 (olive) ->
@@ -55,6 +56,7 @@ export class ReactorArchRuntime {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
     host.sectionModelKeys?.push(layout => minesModelKeysFor(layout)); // task reactor-expansion-20261101 (lane MINES): the mine set pieces
     host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props
+    host.sectionModelKeys?.push(layout => wasteModelKeysFor(layout)); // task reactor-expansion-20261101 (lane WASTE): the waste repository's models
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });
