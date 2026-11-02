@@ -38,8 +38,11 @@ export const SURFACE_LEVEL = REACTOR_LEVELS;
 
 /** The surface exit's tunables (cells = 0.5 m unless noted). */
 export const SURFACE = {
-  /** Deck above the roof line (m): the plaza stands on the roof slab (>= the storey slab rule). */
-  slab: 0.5,
+  /**
+   * Deck above the roof line (m): the plaza stands on the roof slab (>= the storey slab rule), 2 cm over the roof curb's 0.6 m concrete
+   * upstand (world/reactor/roofKit.ts ROOF_KIT.upstandH) — the deck reaches the opening's stepped edge with no curb to trip over.
+   */
+  slab: 0.62,
   /** Nominal open-air band height over the deck (m: headroom / light field only; LevelSky ceil). */
   ceil: 6,
   /** The plaza's boundary parapet line above the deck (m): closed columns are solid up to it. */

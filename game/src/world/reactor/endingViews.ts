@@ -103,13 +103,13 @@ export function buildDoorView(s: Pick<ReactorSurface, 'door'>): DoorView {
 export const RING_VIEW = {posts: 40, postW: 0.07, rail: 0.028, midK: 0.5, apronUp: 0.02} as const;
 
 /**
- * THE BARRIER round the opening on the surface deck (world space): the concrete APRON — a flat annulus from the roof curb's upstand
- * (opening radius + its 0.45 m) out to parapet.r1 a hair over the deck (it covers the opening's cell-stepped deck edge; the upstand
- * stands 8 cm proud of it as the curb) with its outer edge face — and the steel GUARD RAILING on the upstand just inside the radius
+ * THE BARRIER round the opening on the surface deck (world space): the concrete APRON — a flat annulus from the opening radius out to
+ * parapet.r1 a hair over the deck (it covers the roof curb's upstand top, 2 cm under the deck, and the opening's cell-stepped deck
+ * edge) with its outer edge face — and the steel GUARD RAILING side-mounted on the curb's inner face just inside the radius
  * (parapet.r0): posts, a top rail at parapet.top and a mid rail. See-through: the player at the deck edge looks down the shaft.
  */
 export function ringGeometry(s: Pick<ReactorSurface, 'hole' | 'y'>, roofY: number): {apron: THREE.BufferGeometry; rail: THREE.BufferGeometry} {
-  const h = s.hole, V = RING_VIEW, yA = s.y + V.apronUp, rIn = h.r + ROOF_KIT.upstandT, rOut = h.parapet.r1;
+  const h = s.hole, V = RING_VIEW, yA = s.y + V.apronUp, rIn = h.r, rOut = h.parapet.r1;
   const band = (ra: number, ya: number, rb: number, yb2: number) =>
     new THREE.LatheGeometry([new THREE.Vector2(ra, ya), new THREE.Vector2(rb, yb2)], ROOF_KIT.segments).translate(h.x, 0, h.z);
   // three's LatheGeometry faces (dy, -dx) of the profile direction: ascending = outward, inward-going = upward
@@ -117,8 +117,8 @@ export function ringGeometry(s: Pick<ReactorSurface, 'hole' | 'y'>, roofY: numbe
   const apron = mergeLathe(apronParts);
   for (const p of apronParts) p.dispose();
   apron.computeBoundingSphere();
-  // the railing: posts from the upstand top (roofY + upstandH) to the top rail, two torus rails
-  const r = h.parapet.r0, y0 = roofY + ROOF_KIT.upstandH, top = h.parapet.top, parts: THREE.BufferGeometry[] = [];
+  // the railing: posts bolted to the curb's inner face (from 0.3 m under its top) up to the top rail, two torus rails
+  const r = h.parapet.r0, y0 = roofY + ROOF_KIT.upstandH - 0.3, top = h.parapet.top, parts: THREE.BufferGeometry[] = [];
   for (let k = 0; k < V.posts; k++) {
     const a = (k / V.posts) * Math.PI * 2;
     const g = new THREE.BoxGeometry(V.postW, top - y0, V.postW);
@@ -126,7 +126,7 @@ export function ringGeometry(s: Pick<ReactorSurface, 'hole' | 'y'>, roofY: numbe
     g.translate(h.x + Math.cos(a) * r, (y0 + top) / 2, h.z + Math.sin(a) * r);
     parts.push(g);
   }
-  for (const y of [top - V.rail, y0 + (top - y0) * V.midK]) {
+  for (const y of [top - V.rail, s.y + (top - s.y) * V.midK]) {
     const g = new THREE.TorusGeometry(r, V.rail, 6, ROOF_KIT.segments);
     g.rotateX(Math.PI / 2);
     g.translate(h.x, y, h.z);
