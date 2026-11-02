@@ -1,8 +1,9 @@
 // Task reactor-build-20261101 (lane GEN): THE REACTOR (LevelId 'reactor', tier 3) — the WHOLE pit as ONE continuous StationLayout:
 // `generateReactorLevel(ctx)`. Contract: gen/reactor/reactorTypes.ts (layout.reactor). B "Industrial Service Cathedral".
 //
-// levels[0] = the RIM: a subway station at the top of the pit (one platform beside the track bed, 2-3 wide openings onto the rim gallery
-// round most of the pit mouth, the rim control office, a staff room); levels[1..4] = the walkway TIERS going down (steel galleries,
+// levels[0] = the RIM: a subway station at the top of the pit (one platform beside the track bed; task reactor-playtest-round2-20261102,
+// lane ARRIVAL: its openings lead into a small station area, a breached wall and a short tunnel to the rim gallery round most of the pit
+// mouth — gen/reactor/arrival.ts; the rim control office); levels[1..4] = the walkway TIERS going down (steel galleries,
 // generator / stair landings, bridges through lattice towers, rooms cut into the rock); levels[5] = the CORE FLOOR round the vessel
 // (pump hall, control room, a store). Routes: the wall switchbacks (stair wall), the south flight set reached by the bridge / tower line,
 // the maintenance ladders up the organ-pipe terraces. Deterministic from (ctx.levelSeed, ctx.startWeapon); gear is NOT placed here.
@@ -37,13 +38,15 @@ import type {TrackExtConfig} from '../trackExt/types';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS} from '../trackExt/index';
 import {populateExtensions} from '../annexContent';
 import type {ReactorComponent, ReactorPose} from './reactorTypes';
-import {CORE_LEVEL, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
+import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
 import {carveReactor, reactorCanvas, type ReactorCarve} from './carve';
 import {
   buildSites, deckHolds, deckLights, maintenanceLadders, mouthHolds, placeFans, reactorInfo, reactorLinks, reactorRails,
   roomFrame, roomPoint,
 } from './structure';
 import {reactorIssues} from './validate';
+import {approachRecord, arrivalHolds, arrivalLights, arrivalSigns} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+import {sealPockets, suiteHolds, suiteRecord} from './suites'; // (lane ARRIVAL)
 import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 // task reactor-expansion-20261101 (lane HOST): the generator side complexes (bunker / mines / waste) off the main shaft
 import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finishComplexes, hostGenerators, trimCoreCrop, type ComplexCarvers} from './complex/host';
@@ -106,6 +109,12 @@ export function generateReactorLevel(ctx: SectionGenContext, opts: ReactorGenOpt
   throw new Error('reactor level generation failed');
 }
 
+/** The pit's canvas rect grown by PIT_ROCK: no Track2 extension cell inside it (extendTracks keepOut; reactorIssues checks it). */
+export function pitKeepOut(rc: {rectC: ReactorCarve['rectC']; PW: number; PD: number}): {x: number; y: number; w: number; h: number} {
+  const r = rc.rectC(0, 0, rc.PW, rc.PD);
+  return {x: r.x - PIT_ROCK, y: r.y - PIT_ROCK, w: r.w + 2 * PIT_ROCK, h: r.h + 2 * PIT_ROCK};
+}
+
 const startCells = (p: SpawnProfile): number => {
   const c = p.contexts.floor ?? p.contexts.ring ?? p.contexts.station;
   return c?.placement.startCells ?? 36;
@@ -131,6 +140,10 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   // --- Track2 seam: AFTER all carving, BEFORE the crop (plans only; east / south of the fixed origin) ----------------------------
   const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {
     levelId: 'reactor', levelSeed: ctx.levelSeed, canvasGrow: 'east-south', origin: {x: 0, y: 0}, maxCells: REACTOR_EXT_MAX_CELLS, coreCrop: {w: rc.coreW, h: rc.coreH},
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL): the pit is reactor-owned on every storey — its organ-pipe banks / tower-leg
+    // columns are SOLID everywhere but are not rock, and the fans' ducts need PIT_ROCK cells of rock behind the walls: no extension
+    // cell there (an annex corridor once cut through the rim gallery's organ bank)
+    keepOut: [pitKeepOut(rc)],
   });
   // --- Crop (fixed origin: canvas cells = grid cells) ------------------------------------------------------------------------
   const c = cropKit(k, Array.from({length: REACTOR_LEVELS}, (_, i) => i), 0, 0, rc.coreW, rc.coreH);
@@ -160,7 +173,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   // --- Dressing: ONE station dresser pass with the pit decks, run mouths, stand points and doors held clear ----------------------
   const before = {lights: layout.lights.length, signs: layout.signs.length};
   const deckIds = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
-  const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds];
+  const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds, ...arrivalHolds(layout, rc.arrival), ...suiteHolds(layout, rc.suites)];
   const release = holdCells(layout, holds);
   dress(layout, rng.fork('dress'));
   release();
@@ -169,6 +182,11 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   layout.signs = layout.signs.filter((s, i) => i < before.signs || !deckIds.has(s.area) || s.kind === 'service');
   // lane HOST: each complex's own dress hook (world metres, crop {0, 0}), the same cells held clear
   dressComplexes(layout, rng, cxs, holds);
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): furniture pockets of the suites / the station area sealed (the office's rule)
+  for (const s of rc.suites) sealPockets(layout.levels[s.level].grid, [...s.corridors, ...s.rooms].map(id => layout.areas[id]), s.deckDoors);
+  sealPockets(layout.grid, [rc.arrival.hall, ...(rc.arrival.corridor ? [rc.arrival.corridor] : []), ...rc.arrival.rooms, ...rc.arrival.tunnel], rc.arrival.platformDoors);
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): wayfinding plates (platform openings, beside the breach, beside the reveal)
+  { const off = rc.rooms.find(r => r.key === 'rimOffice'); arrivalSigns(layout, rc.arrival, off ? {x: (off.door.x + off.door.w / 2) * CELL, z: (off.door.y + off.door.h / 2) * CELL} : undefined); }
 
   // --- Player start: on the platform in front of the middle opening, looking through it into the pit ------------------------------
   const start = startOf(layout, rc);
@@ -207,6 +225,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
     if (!own.length) layout.lights.push({x: (a.x + a.w / 2) * CELL, y: a.ceil - 0.05, z: (a.y + a.h / 2) * CELL, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 0.8, dying: false, ...(a.level ? {level: a.level} : {})});
   }
   complexLights(layout, cxs); // lane HOST: a complex generator's room is lit steadily, like the restart sites
+  arrivalLights(layout, rc.arrival); // task reactor-playtest-round2-20261102 (lane ARRIVAL): dim steady work lamps down the breach tunnel
   deckLights(layout, rc, rng.fork('reactor-deck-lights'));
   clearEntranceLamps(layout, cxs); // lane HOST: no deck lamp hangs in a complex's doorway
   const fans = placeFans(layout, rc, rng.fork('reactor-fans'));
@@ -214,6 +233,8 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
     linkIds, ladderLinks: lad.links, gens: gens.gens, fans, sites: sb.sites, screens: sb.screens, components, start, flights: layout.traversal.stairs,
   });
   finishComplexes(layout, rc, cxs); // lane HOST: complex generators' cables through their entrances + layout.reactor.complexes
+  layout.reactor.approach = approachRecord(rc.arrival); // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+  layout.reactor.suites = suiteRecord(rc.suites); // (lane ARRIVAL: the seeded rock suites)
   planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top — AFTER every wall carve (incl. the complex entrances)
   clearEntranceLamps(layout, cxs); // (lead merge fix) …and no mounted pit lamp in a complex's doorway band either
   layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record
@@ -228,7 +249,10 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   return layout;
 }
 
-/** Player start: on the platform 1.5 m in front of the middle opening, facing south through it (the pit and the core below). */
+/**
+ * Player start: on the platform in front of the ticket-hall opening, facing south toward it. (task reactor-playtest-round2-20261102,
+ * lane ARRIVAL: the platform no longer opens onto the pit — the opening leads into the station area, the breach and the tunnel.)
+ */
 function startOf(layout: StationLayout, rc: ReactorCarve): ReactorPose {
   const g = layout.grid, P = rc.platform;
   const o = rc.openings[Math.floor(rc.openings.length / 2)];
@@ -243,7 +267,7 @@ function startOf(layout: StationLayout, rc: ReactorCarve): ReactorPose {
     if (ok) { spot = [x, y]; break search; }
   }
   const [wx, wz] = g.center(...(spot ?? [sx0, sy0]));
-  const yaw = Math.PI; // forward = (-sin yaw, -cos yaw) = (0, +1): south, into the pit
+  const yaw = Math.PI; // forward = (-sin yaw, -cos yaw) = (0, +1): south, toward the ticket hall
   layout.playerSpawn = {x: wx, z: wz, yaw};
   return {x: wx, z: wz, yaw, level: 0};
 }

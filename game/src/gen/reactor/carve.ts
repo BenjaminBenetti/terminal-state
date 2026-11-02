@@ -10,7 +10,8 @@
 //     each carved into both storeys' grids (open wells: the flights' bands are capped by the column stack below);
 //  3. the decks per storey: the rim gallery (most of the mouth), the generator / stair landings, the south outer galleries, the north
 //     b-half galleries, the organ-wall ladder terraces, the tower decks and the bridges; the core floor round the vessel;
-//  4. the platform openings onto the rim gallery;
+//  4. the arrival approach (task reactor-playtest-round2-20261102, lane ARRIVAL: platform -> ticket hall -> breach -> tunnel -> the rim
+//     gallery; gen/reactor/arrival.ts) — the platform no longer opens onto the pit;
 //  5. the rooms cut into the rock behind the decks (rim office, stores, switchgear, pump hall, control room, side rooms);
 //  6. the COLUMN STACK: every open column's bands get their ceilings (pit air to the pit roof, capped one slab under the next deck up).
 
@@ -26,6 +27,8 @@ import {BANK_CELLS, BED, CLEAR, CORE_LEVEL, GEN_LANDING, LANE, ORG, REACTOR_LEVE
 // task reactor-expansion-20261101 (lane HOST): the side-complex slots (planned before the rooms) and their canvas margin
 import {COMPLEX_MARGIN, planComplexSlots, slotBlocks} from './complex/host';
 import type {ComplexSlot} from './complex/types';
+import {carveArrival, type ArrivalCarve} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+import {carveSuites, type SuiteRec} from './suites'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
 
 export type CellRect = Rect;
 /** A pit wall in the canonical frame: 'stair' (west), 'organ' (east), 'N', 'S'. */
@@ -52,11 +55,15 @@ export interface ReactorCarve {
   /** Canvas cell of the pit's NW corner, the pit size; the core crop (cells). */
   PX0: number; PZ0: number; PW: number; PD: number;
   coreW: number; coreH: number;
-  /** Station: bed / platform canvas rects, the platform area, openings (door rects), back of house. */
+  /** Station: bed / platform canvas rects, the platform area, openings (door rects: the platform -> ticket hall openings), back of house. */
   bed: CellRect;
   platform: Area;
   openings: CellRect[];
   stationBoh: number[];
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival approach (station area, breach, tunnel, reveal). */
+  arrival: ArrivalCarve;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the seeded rock suites of every storey (gen/reactor/suites.ts). */
+  suites: SuiteRec[];
   decks: DeckRec[];
   runs: RunRec[];
   rooms: RoomRec[];
@@ -86,7 +93,8 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 /** Canvas size (cells) for a frame: the core crop + room east / south for Track2's growth. */
 export function reactorCanvas(f: ReactorFrame): {W: number; H: number; coreW: number; coreH: number; PX0: number; PZ0: number; minPx: number; maxPx: number} {
   const bedRows = f.double ? BED.double : BED.single;
-  const PZ0 = ORG + 3 + bedRows + f.Pd + 1;
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): + the arrival band between the platform and the pit (f.sep rows)
+  const PZ0 = ORG + 3 + bedRows + f.Pd + 1 + f.sep;
   // task reactor-expansion-20261101 (lane HOST): rock for the side complexes beyond the stair / organ / south walls (COMPLEX_MARGIN)
   const M = Math.max(ROOM_MARGIN, COMPLEX_MARGIN);
   const minPx = Math.min(-M, -f.shift - TUN - 2), maxPx = Math.max(f.PW + M, -f.shift + f.Lp + TUN + 2);
@@ -124,6 +132,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   g0.voidFloor = -TRENCH_DEPTH;
   const y1 = bed.y + bed.h;
   const pRect = rectC(plat0, zPlat - PZ0, f.Lp, f.Pd);
+  // (task reactor-playtest-round2-20261102, lane ARRIVAL: the platform rows end f.sep + 1 rows north of the pit's north wall)
   const trench: TrenchCells = {
     x0: bed.x, x1: bed.x + bed.w, y0: bed.y, y1, px0: pRect.x, px1: pRect.x + pRect.w,
     tracks: f.double ? [y1 * CELL - 6.0, y1 * CELL - 2.0] : [y1 * CELL - 2.0], third: f.double ? [-1, -1] : [-1], columns: false, ceil: CLEAR.station,
@@ -204,8 +213,9 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     const laneA = lv % 2 === 0;
     // route 1 (wall switchbacks): along z on the stair wall; lane A runs top at the A end (south, high z), lane B at the B end
     carveRun('stairs', lv, rectC(laneA ? 0 : LANE, PD - u1, LANE, R), 'z', laneA ? 'hi' : 'lo', laneA ? 'A' : 'B');
-    // route 2 (south wall flight set): along x; lane A' top at the near (stair-corner) end
-    const near: 'lo' | 'hi' = mirror ? 'hi' : 'lo', far: 'lo' | 'hi' = mirror ? 'lo' : 'hi';
+    // route 2 (south wall flight set): along x; lane A' top at the near (stair-corner) end (task reactor-playtest-round2-20261102, lane
+    // ARRIVAL: at the FAR end when f.southFlip — the south landings swap ends with it below)
+    const near: 'lo' | 'hi' = mirror !== f.southFlip ? 'hi' : 'lo', far: 'lo' | 'hi' = mirror !== f.southFlip ? 'lo' : 'hi';
     carveRun('bridge', lv, rectC(r0, laneA ? PD - LANE : PD - 2 * LANE, R, LANE), 'x', laneA ? near : far, laneA ? 'A' : 'B');
   }
 
@@ -230,8 +240,8 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     else deck(lv, lv === 1 ? 'landing' : 'stair-landing', 0, 0, lv === 1 ? GEN_LANDING.deep : 8, PD - u1, lv === 1 ? 'Generator landing' : 'Stair landing', 'reactor-landing', 'stair');
     // tower decks (before the bridges: a bridge cell inside a tower deck belongs to the tower)
     f.lines.forEach((l, li) => { if (l.tiers.includes(lv)) deck(lv, 'tower', l.px - 3, l.tz, 10, 10, `Lattice tower ${li + 1}`, 'reactor-tower'); });
-    // the south wall: route-2 end landing (near on even tiers, far on odd), the continuous outer gallery
-    if (even) deck(lv, 'stair-landing', GEN_LANDING.deep, PD - 2 * LANE - gwS, r0 - GEN_LANDING.deep, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
+    // the south wall: route-2 end landing (near on even tiers, far on odd; swapped when f.southFlip), the continuous outer gallery
+    if (even !== f.southFlip) deck(lv, 'stair-landing', GEN_LANDING.deep, PD - 2 * LANE - gwS, r0 - GEN_LANDING.deep, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
     else deck(lv, 'stair-landing', r1, PD - 2 * LANE - gwS, PW - 6 - r1, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
     deck(lv, 'gallery', 0, PD - 2 * LANE - gwS, PW, gwS, 'South gallery', 'reactor-gallery', 'S');
     // organ terrace (ladder deck)
@@ -266,38 +276,20 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     }
   }
 
-  // --- 4. Platform openings onto the rim gallery ----------------------------------------------------------------------------------
+  // --- 4. Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival approach — the platform never opens onto the pit -----
+  // platform -> a small station area (ticket hall + back of house) -> a breached wall -> a short rough tunnel -> the rim gallery reveal
+  // (gen/reactor/arrival.ts; the band of rock is f.sep rows between the platform's south wall and the pit's north wall)
   const rimN = decks.find(d => d.level === 0 && d.wall === 'N');
   if (!rimN) return fail('rim-gallery');
-  const openings: CellRect[] = [];
-  {
-    const n = f.openings, w = 10;
-    for (let i = 0; i < n; i++) {
-      const c = Math.round(PW * (i + 0.5) / n + rng.int(-4, 4));
-      const px = Math.max(2, Math.min(PW - 2 - w, c - w / 2));
-      const r = rectC(px, -1, w, 1);
-      if (r.x < pRect.x + 2 || r.x + r.w > pRect.x + pRect.w - 2) continue;
-      k.carveDoor(r, platform, k.areas[rimN.area], CLEAR.portal, false);
-      openings.push(r);
-    }
-    if (openings.length < 2) return fail('openings');
-  }
-
-  // --- 4b. A little station back of house: a staff room off the platform's stair-side end (south of the platform) ---------------
-  const stationBoh: number[] = [];
-  {
-    const wAlong = f.shift - 7, deep = 9;
-    if (wAlong >= 8) {
-      const r = rectC(plat0 + 2, 0, wAlong, deep);
-      if (k.rectFree(r, 0)) {
-        const a = k.addArea(r, 'room', 'crew-room', CLEAR.store, platform.id, {label: 'Station staff room', publicSpace: false});
-        a.purpose = 'staff-room';
-        const dr = rectC(plat0 + 2 + Math.floor(wAlong / 2) - 2, -1, 4, 1);
-        k.carveDoor(dr, platform, a, CLEAR.door, false, {staff: true});
-        stationBoh.push(a.id);
-      }
-    }
-  }
+  // the carve stream keeps the old platform openings' draws, so every room after this point is placed exactly as before (the
+  // approach draws only from its own fork)
+  for (let i = 0; i < f.openings; i++) rng.int(-4, 4);
+  const arrival = carveArrival({
+    k, rng: rng.fork('arrival'), sep: f.sep, PX0, PZ0, PW, PD, p0: plat0, p1: plat0 + f.Lp, platform, rimN, cx, rectC, coreW: cv.coreW, coreH: cv.coreH,
+  });
+  if (!arrival) return fail('arrival');
+  const openings = arrival.platformDoors;
+  const stationBoh = [arrival.hall.id, ...(arrival.corridor ? [arrival.corridor.id] : []), ...arrival.rooms.map(a => a.id)];
 
   // --- 4c. Task reactor-expansion-20261101 (lane HOST): the side-complex slots (free rock beside the pit; same-storey rooms avoid them)
   const slots = planComplexSlots({k, rng: rng.fork('complex-slots'), bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, decks, terraces, cx, rectC});
@@ -315,14 +307,19 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     {key: 'store3', level: 3, type: 'storage', label: 'Maintenance store', purpose: 'storage', along: [12, 14], depth: [9, 10], walls: ['N', 'S', 'organ', 'stair'], door: 4, doorH: CLEAR.door, required: true},
     {key: 'store4', level: TIERS, type: 'storage', label: 'Maintenance store', purpose: 'storage', along: [10, 14], depth: [8, 10], walls: ['organ', 'stair', 'S', 'N'], door: 4, doorH: CLEAR.door, required: true},
     {key: 'storeCore', level: CORE_LEVEL, type: 'storage', label: 'Maintenance store', purpose: 'storage', along: [10, 14], depth: [8, 10], walls: ['S', 'organ', 'stair', 'N'], door: 4, doorH: CLEAR.door, required: true},
-    {key: 'crew1', level: 1, type: 'crew-room', label: 'Crew room', purpose: 'staff-room', along: [12, 16], depth: [8, 10], walls: ['N', 'stair', 'S', 'organ'], door: 4, doorH: CLEAR.door, required: false},
-    {key: 'work2', level: 2, type: 'utility', label: 'Workshop', purpose: 'workshop', along: [12, 16], depth: [9, 11], walls: ['S', 'organ', 'stair', 'N'], door: 4, doorH: CLEAR.door, required: false},
-    {key: 'side3', level: 3, type: 'utility', label: 'Valve gallery', purpose: 'pump-room', along: [12, 14], depth: [9, 10], walls: ['S', 'stair', 'organ', 'N'], door: 4, doorH: CLEAR.door, required: false},
+    // (task reactor-playtest-round2-20261102, lane ARRIVAL: the fixed optional side rooms — tier-1 crew room, tier-2 workshop, tier-3
+    // valve gallery — became the seeded suites below)
   ];
   for (const s of specs) {
     const rr = placeRoom(s);
     if (!rr && s.required) return fail(`room-${s.key}`);
   }
+  // --- 5b. Task reactor-playtest-round2-20261102 (lane ARRIVAL): the seeded ROCK SUITES (gen/reactor/suites.ts) — corridors and themed
+  // rooms flowing into one another behind the pit walls of every storey (T / L, loops back to the decks, enfilades, back doors)
+  const suites = carveSuites({
+    k, rng: rng.fork('suites'), bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, cx, rectC, deckIds,
+    blocked: (r, lv) => slotBlocks(slots, r, lv), rooms: rooms.map(r => ({key: r.key, level: r.level, area: r.area, rect: r.rect})),
+  });
 
   function wallLen(w: WallId): number { return w === 'stair' || w === 'organ' ? PD : PW; }
   /** Canonical (px, pz) of a room-local cell (a along from a0, d inward from the front wall: d = -1 the wall itself, d = -2 the deck). */
@@ -411,7 +408,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   stackColumns(grids, air, PX0, PZ0, PW, PD, roofY);
 
   return {
-    f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, decks, runs, rooms, gens, towers, terraces,
+    f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, arrival, suites, decks, runs, rooms, gens, towers, terraces,
     vessel, coreAreas, cx, rectC, coreFloor, slots,
   };
 }

@@ -4,7 +4,9 @@
 // World frame (the Office / Mall conventions): x east, z south, y up, metres; CELL = 0.5 m. Canvas cells during generation.
 //
 // CANONICAL FRAME (gen/reactor/carve.ts works in it; the 'E' variants mirror x): the pit is a rectangular shaft PW x PD cells,
-//  - the RIM STATION lies NORTH of the pit (track bed along x, one platform, the rim wall with 2-3 wide openings onto the rim gallery);
+//  - the RIM STATION lies NORTH of the pit (track bed along x, one platform); task reactor-playtest-round2-20261102 (lane ARRIVAL):
+//    `sep` rows of rock separate the platform from the pit's north wall — the arrival approach (station area, breach, tunnel) is cut
+//    into them (gen/reactor/arrival.ts);
 //  - the STAIR WALL (wall switchbacks, generator landings) is WEST (stairWall 'W'; 'E' mirrors), its runs between pz ∈ [PD-u1, PD-u0);
 //    its A end (south corner) holds the rim / tier-2 / tier-4 landings, its B end (north corner) the tier-1 / tier-3 / core ends;
 //  - the SOUTH wall carries the second flight set (route 2, 'bridge' line) with a continuous outer gallery on every tier;
@@ -74,12 +76,22 @@ export interface ReactorFrame {
   Pd: number;
   double: boolean;
   shift: number;
-  /** Platform openings onto the rim gallery (2-3). */
+  /** Platform openings onto the rim gallery (2-3). (task reactor-playtest-round2-20261102: unused since the arrival approach; drawn to keep the stream) */
   openings: number;
   /** Organ bank(s): pz ranges along the organ wall (canonical pit-local), split in one or two banks. */
   banks: [number, number][];
   /** Crane runway axis. */
   craneAxis: 'x' | 'z';
+  /**
+   * Task reactor-playtest-round2-20261102 (lane ARRIVAL): rows of rock between the platform's south wall and the pit's north wall (the
+   * station area + breach tunnel band, gen/reactor/arrival.ts). Its own stream: every other frame parameter is unchanged.
+   */
+  sep: number;
+  /**
+   * Task reactor-playtest-round2-20261102 (lane ARRIVAL, route variety): the south flight set (route 2) runs the other way round — its
+   * lane A tops at the FAR end (from the stair corner), so every tier's south landing swaps ends and the descent zig-zags mirrored.
+   */
+  southFlip: boolean;
 }
 
 /** Session-only QA override of the variant (`?reactorVariant=`); undefined = the seed's. */
@@ -146,8 +158,20 @@ export function reactorFrame(levelSeed: number, force?: string, salt = 0): React
     levelSeed: levelSeed >>> 0, variant: `${stairWall === 'W' ? 'west' : 'east'}-stairs-${twinName}`, stairWall, PW, PD, bases, roofY, R, u0, r0,
     gwR, gwN, gwS, lenN, lines, Lp, Pd: rng.int(14, 18), double: rng.chance(0.5), shift: rng.int(20, 26), openings: rng.int(2, 3), banks,
     craneAxis: rng.chance(0.5) ? 'x' : 'z',
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival band and the south flight set's direction (their own stream; a
+    // salt re-roll re-draws them too; every other frame parameter keeps its old draw)
+    ...(() => { const r2 = new Rng(hashString(`reactor-approach${salt ? `:${salt}` : ''}`, levelSeed >>> 0)); return {sep: r2.int(...ARRIVAL_SEP), southFlip: r2.chance(0.5)}; })(),
   };
 }
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): cells of rock kept round the pit against Track2 extensions (the wall row + the
+ * fans' 1.5 m duct depth; gen/reactor/index.ts pitKeepOut, validate.ts).
+ */
+export const PIT_ROCK = 4;
+
+/** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival band's row range (gen/reactor/arrival.ts ARRIVAL.sep). */
+export const ARRIVAL_SEP: [number, number] = [28, 34];
 
 /** HUD label of a reactor layout level. */
 export function reactorStoreyLabel(level: number): string {

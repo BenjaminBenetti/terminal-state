@@ -116,6 +116,10 @@ export class Carver {
         if (open) base[(y - this.ncy) * this.ncw + (x - this.ncx)] = 1;
       }
     }
+    // (task reactor-playtest-round2-20261102 lane ARRIVAL, opt-in keepOut: reactor-owned space counts as core open)
+    for (const r of ctx.keepOut ?? []) {
+      for (let y = Math.max(this.ncy, r.y); y < Math.min(this.ncy + this.nch, r.y + r.h); y++) for (let x = Math.max(this.ncx, r.x); x < Math.min(this.ncx + this.ncw, r.x + r.w); x++) base[(y - this.ncy) * this.ncw + (x - this.ncx)] = 1;
+    }
     // separable Chebyshev dilation by mc
     const tmp = new Uint8Array(base.length), out = new Uint8Array(base.length);
     const w = this.ncw, h = this.nch;

@@ -195,7 +195,8 @@ from depth, using existing families only: no boss and no new enemy. The ambient 
   (`world/reactor/generators.ts`, `alertListeners`); nothing spawns.
 - **Census** (12 generated pits, seeds `9100 + 104729k`, task reactor-expansion-20261101 with all three side complexes carved and the
   mines follow-up): ~**47** ambient enemies per run (43–50: station 2–4, floor 12–16, ring 18–21, pit 9–12, plus a service annex in 1
-  of 12 runs); Sirens mean **1.6** (max 2); Blightbellies mean 4.3; rat/dogs mean 4.9. The tier counts grew with the complexes (~2,600
+  of 12 runs); Sirens mean **1.5** (max 2; 1.6 before the round-2 rock suites, task reactor-playtest-round2-20261102 lane ARRIVAL:
+  same corpus, ambient counts per context and the other families unchanged); Blightbellies mean 4.3; rat/dogs mean 4.9. The tier counts grew with the complexes (~2,600
   m² of new floor on tiers 1 / 2 / 4) so the shaft is not thinned out.
 - **Density rises with depth by construction:** an upper tier's maximum (8) is a deep tier's minimum. With the complexes' floor the upper
   tiers now place their full draw, so the two upper tiers can never outnumber the two deep ones. Checked on those 12 pits and on the 8

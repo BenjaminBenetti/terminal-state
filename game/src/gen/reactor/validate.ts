@@ -10,17 +10,18 @@
 // - Shared storey rules (levelIssues: slabs / headroom / flights / link landings / railings on apertures / placements), traversal rules,
 //   doorway lanes, Track2 extensions (extensionIssues; the generator drops invalid extensions — never a core retry).
 
-import {CELL, FLOOR} from '../grid';
+import {CELL, FLOOR, SOLID} from '../grid';
 import {levelDistance, levelIssues, type LevelRules} from '../levelGen';
 import {levelsOf} from '../levels';
 import {traversalIssues} from '../traversal';
 import {doorwayIssues} from '../doorways';
 import {extensionIssues} from '../trackExt/index';
 import type {StationLayout} from '../stationTypes';
-import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
+import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, VESSEL} from './frame';
 import {CORE_FLOOR, coreFloorIssues} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
+import {arrivalIssues} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -150,8 +151,23 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   }
   for (const p of layout.pickups) if (onRun(p.level ?? 0, p.x, p.z)) issues.push(`pickup ${p.itemId} on a stair run`);
   issues.push(...extensionIssues(layout, dist));
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): no Track2 extension cell in the pit or its PIT_ROCK rock margin (any storey)
+  {
+    const b = info.pit.bounds, x0 = Math.round(b.x0 / CELL) - PIT_ROCK, x1 = Math.round(b.x1 / CELL) + PIT_ROCK, z0 = Math.round(b.z0 / CELL) - PIT_ROCK, z1 = Math.round(b.z1 / CELL) + PIT_ROCK;
+    let n = 0;
+    for (const L of levels) {
+      const g = L.grid;
+      for (let y = Math.max(0, z0); y < Math.min(g.h, z1); y++) for (let x = Math.max(0, x0); x < Math.min(g.w, x1); x++) {
+        const i = g.idx(x, y);
+        if (g.cells[i] !== SOLID && layout.areas[g.area[i]]?.ext) n++;
+      }
+    }
+    if (n) issues.push(`${n} Track2 cells in the pit's rock margin`);
+  }
   // task reactor-expansion-20261101 (lane HOST): the side complexes (region, entrance, stairs-only reach, no overlap, substantial floor)
   issues.push(...complexIssues(layout));
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): platform -> station area -> breach -> tunnel -> rim; no sight of the pit
+  issues.push(...arrivalIssues(layout));
   return issues;
 }
 
