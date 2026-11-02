@@ -517,7 +517,7 @@ Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
 - The core comes alive (its glow ramps over about 6 s).
 - Then the industrial lighting and fans sequence UP through the pit, tier by tier, from the core floor to the rim, over about 20 s.
   The pit's lamps are flicker circuit 2, held at 0 until now.
-- The pit's gas clears (about 40 s).
+- The pit's gas clears (20 s from 5 s after the rods; was 40 s — see "The surface exit" below).
 - The control monitor and the rim board switch to the surface ventilation network: six pre-existing surface ventilation towers
   receive power one by one.
 - A persistent local milestone "Reactor restarted / run complete" is written (localStorage `terminal-state.milestones.v1`), and the
@@ -525,6 +525,46 @@ Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
 - The canon: the surface gas that turns people into zombies is being pulled out of the air, slowly. It is NOT a cure: the zombies
   stay and nothing despawns.
 - The run continues; nothing is reset.
+
+### The surface exit: the external doors, the stair, the surface storey (task reactor-surface-ending-20261102, lane ENDING)
+User: "speed up gas clear around the reactor by 2x … when the gas is done clearing … "external doors open". There should be an
+external sealed door on the top level … up a set of stairs, towards a surface area … roughly situated around the hole on the roof."
+- **2x clear:** `REACTOR_AIR.CLEAR_ALL_S` 40 -> 20 s (the win's clearAll and AIR's resume on a rebuild): the same front and ramp,
+  drawn = hurting, twice as fast. The core floor is breathable at about 25 s after the rods.
+- **Generation** (`gen/reactor/surface.ts`, its own stream; carved before the pit lamps, finished after them; `layout.reactor.surface`,
+  the contract in `reactorTypes.ts` `ReactorSurface`):
+  - the DOOR: a 2 x 2.8 m opening in a rim pit wall (stair / organ / south, seeded; never the station's north wall) off a flat rim deck
+    clear of stair mouths, ladder heads, plates and props;
+  - the STAIR: a walled U in the rock behind it — the access passage under the plaza's margin, lane A up to a turn landing at half
+    height, lane B (behind a 0.5 m wall) up to the upper passage, which runs back to the plaza. Station-spec flights (10 in all), twin
+    cells on the rim and surface grids, one `LevelLink` rim -> surface;
+  - the SURFACE: `levels[6]` (role 'roof'; the pit storeys stay 0..5, `tiers` unchanged), a deck 0.62 m over the roof line (2 cm over
+    the curb's upstand), the pit roof plus a seeded 7-11 m margin per side with corner rubble bites (~3,500 m² walkable). The opening
+    is its well: the deck stops at its stepped cell edge (hidden collision rails); the core floor's band rises through it, so looks and
+    shots go down the shaft. `levels[0].sky`: ceil = the plaza's band top, `open` = the opening + the plaza, `outdoor` (new
+    `LevelSky.outdoor`): closed columns are open air above the 1.1 m parapet line (`tops` raise the stair head house).
+  - Validation (`surfaceIssues`): the record, the door open at generation, the link, the plaza bounded and >= 1,200 m², nothing
+    walkable inside the opening, and the surface reached ONLY through the door. Track2 keeps out of the stair (its planned rects), and
+    may run under the plaza (`rockLevels` = the pit storeys).
+- **Runtime** (`world/reactor/ending.ts`, `endingLogic.ts`, `endingViews.ts`; `reactor.state.ending` = doors / openedAt / announced /
+  surfaced):
+  - sealed: the doorway's rim cells closed (bodies, bullets, sight, fresh paths), a red lamp, the prompt "External door · SEALED";
+  - the trigger: restarted AND every zone fully clear (never the rod press, never a partial clear) -> the event, persisted at once;
+    the bi-parting leaves slide 3.6 s (the doorway walkable when open), a green lamp;
+  - the message: "External doors open" centre-screen for 10 s of play (a pause / the inventory hides and holds it), then it flies
+    into the left objective and IS its line (`objectiveText.ts` `OBJECTIVE_TEXT.ending`, via `ReactorRestart.objectiveStage`):
+    "External doors open — ▸ Climb to the surface", then "Surface reached — the air is breathable"; storey label "Surface";
+  - a rebuild / revisit / reload starts open and docked (nothing replays); leaving mid-clear opens the doors on the return.
+- **Guidance:** a "SURFACE EXIT" plate over the door, "TO RIM · STATION" at the exit, the floor maps' E mark at the door once open,
+  dim work lamps in the stair. The barrier round the opening: a yellow guard railing on the curb over a concrete apron. Lane SURFACE
+  draws the plaza's edge wall (the builder draws none there) and the city / rain.
+- QA: `__LL.reactorEnding()`; `({online: true})` (the restart chain + the win + the air cleared: the real trigger fires next frame),
+  `({open: true, skipMessage: true})`, `({go: 'door' | 'stairs' | 'top' | 'exit' | 'hole'})`.
+- Tests: `game/tests/reactor-ending.test.ts`. Cost: generation +~75 ms per level in Node (the surface storey in the validator's
+  searches); 6 extra draws (door, barrier) outside the culler.
+- **Limits:** no browser / GPU check in this lane. The AI path graph is built before the doors open mid-visit (enemies do not follow
+  you up until the next build). Bullets pass the drawn railing / apron (no collider). From the plaza the vessel shows only from right
+  at the railing (a 16.8 m hole over a 48 m shaft); the beam and the far pit walls read from anywhere near it.
 
 ### Coming to life: startup audio, orange beacons, the ONLINE sky (task reactor-playtest-round2-20261102, lane STARTUP)
 User: "real punch and depth as the reactor comes to life … spinning orange lights … play noise as the control rods are removed!" and
