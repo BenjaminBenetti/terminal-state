@@ -54,10 +54,15 @@ export const SURFACE = {
   lane: 4,
   turn: 3,
   passH: 3.0,
-  /** The parapet ring round the opening: thickness beyond the opening radius (m), its top above the deck (m), the walk keep-off gap. */
+  /**
+   * The barrier round the opening: a see-through steel guard railing just inside the opening radius (ringIn m inside: on the roof curb's
+   * upstand, never over a walkable cell) ringTop above the deck, over a concrete apron out to ringT beyond the radius (it covers the
+   * opening's cell-stepped deck edge). The walkable deck stops at that stepped edge (cells touching the opening are the hole: hidden
+   * collision rails there): a body stands 0.34-1.05 m from the railing and can look steeply down the shaft at the core.
+   */
   ringT: 0.75,
+  ringIn: 0.06,
   ringTop: 1.1,
-  keepGap: 0.05,
   /** Stair head house: its roof above the upper passage's ceiling (m). */
   headUp: 0.4,
   /** Least walkable plaza (m²). */
@@ -348,7 +353,6 @@ function carveIn(layout: StationLayout, rc: ReactorCarve, p: SurfacePlan): Surfa
   const M = p.margins;
   const plazaRect = rc.rectC(-M.stair, -M.N, rc.PW + M.stair + M.organ, rc.PD + M.N + M.S);
   const o = roofOpeningOf(layout.reactor!)!;
-  const keepR = o.r + SURFACE.ringT + SURFACE.keepGap;
   const bitten = new Uint8Array(W * Hh);
   const exitFront = new Set<number>();
   for (let a = p.a0 - 2; a < p.a0 + DW + 2; a++) for (let d = p.G - 8; d < p.G - 1; d++) exitFront.add(idx(a, d));
@@ -372,7 +376,6 @@ function carveIn(layout: StationLayout, rc: ReactorCarve, p: SurfacePlan): Surfa
     for (let L = 0; L < SURFACE_LEVEL && ok; L++) { const g = layout.levels[L].grid; if (g.cells[i] !== SOLID && g.ceil[i] > p.Ys - SLAB + 1e-3) ok = false; }
     if (!ok) continue;
     stamp(gS, i, plazaArea.id, p.Ys, p.Ys + SURFACE.ceil);
-    if (nx * nx + nz * nz < keepR * keepR) gS.blocked[i] = 1; // under the parapet ring / its keep-off gap: never walked
     plaza.push(i);
   }
   // lights: dim steady work lamps in the passages and the stair (station power: the exit was always wired)
@@ -509,7 +512,8 @@ function finishIn(layout: StationLayout, c: SurfaceCarve): ReactorSurface | null
     version: 1, level: SURFACE_LEVEL, y: p.Ys, ceil: S, parapetY,
     bounds: {x0: r3(bx0), z0: r3(bz0), x1: r3(bx1), z1: r3(bz1)}, walk,
     edges: plazaEdges(gS, new Set(c.plaza), hole),
-    hole: {x: o.x, z: o.z, r: o.r, parapet: {r0: o.r, r1: r3(o.r + SURFACE.ringT), top: r2(p.Ys + SURFACE.ringTop)}, keepR: r3(o.r + SURFACE.ringT + SURFACE.keepGap)},
+    // (the walkable deck never touches the opening's disc: keepR = its radius; the railing ring r0 stands just inside it)
+    hole: {x: o.x, z: o.z, r: o.r, parapet: {r0: r3(o.r - SURFACE.ringIn), r1: r3(o.r + SURFACE.ringT), top: r2(p.Ys + SURFACE.ringTop)}, keepR: o.r},
     door: {
       level: 0, x: c.door.x, y: info.pit.rimY, z: c.door.z, yaw: r3(yawOut), nx: c.door.nx, nz: c.door.nz, w: r2(SURFACE.door.w * CELL), h: SURFACE.door.h,
       rect: {x0: c.door.rect.x * CELL, z0: c.door.rect.y * CELL, x1: (c.door.rect.x + c.door.rect.w) * CELL, z1: (c.door.rect.y + c.door.rect.h) * CELL}, front: c.door.front,

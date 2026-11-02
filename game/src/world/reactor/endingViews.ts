@@ -99,20 +99,43 @@ export function buildDoorView(s: Pick<ReactorSurface, 'door'>): DoorView {
   return view;
 }
 
+/** The barrier's railing sizes (m). */
+export const RING_VIEW = {posts: 40, postW: 0.07, rail: 0.028, midK: 0.5, apronUp: 0.02} as const;
+
 /**
- * THE PARAPET RING round the opening on the surface deck (world space, one lathe mesh; faces out of the solid): inner face on the
- * opening radius from the roof curb's upstand top up to the ring top, the top annulus, the outer face down to the deck.
+ * THE BARRIER round the opening on the surface deck (world space): the concrete APRON — a flat annulus from the roof curb's upstand
+ * (opening radius + its 0.45 m) out to parapet.r1 a hair over the deck (it covers the opening's cell-stepped deck edge; the upstand
+ * stands 8 cm proud of it as the curb) with its outer edge face — and the steel GUARD RAILING on the upstand just inside the radius
+ * (parapet.r0): posts, a top rail at parapet.top and a mid rail. See-through: the player at the deck edge looks down the shaft.
  */
-export function parapetRingGeometry(s: Pick<ReactorSurface, 'hole' | 'y'>, roofY: number): THREE.BufferGeometry {
-  const h = s.hole, r0 = h.parapet.r0, r1 = h.parapet.r1, top = h.parapet.top, yb = roofY + ROOF_KIT.upstandH;
+export function ringGeometry(s: Pick<ReactorSurface, 'hole' | 'y'>, roofY: number): {apron: THREE.BufferGeometry; rail: THREE.BufferGeometry} {
+  const h = s.hole, V = RING_VIEW, yA = s.y + V.apronUp, rIn = h.r + ROOF_KIT.upstandT, rOut = h.parapet.r1;
   const band = (ra: number, ya: number, rb: number, yb2: number) =>
     new THREE.LatheGeometry([new THREE.Vector2(ra, ya), new THREE.Vector2(rb, yb2)], ROOF_KIT.segments).translate(h.x, 0, h.z);
-  // three's LatheGeometry faces (dy, -dx) of the profile direction: ascending = outward (the outer face), outward-going = downward
-  const parts = [band(r0, top, r0, yb), band(r1, top, r0, top), band(r1, s.y - 0.02, r1, top)];
-  const g = mergeLathe(parts);
+  // three's LatheGeometry faces (dy, -dx) of the profile direction: ascending = outward, inward-going = upward
+  const apronParts = [band(rOut, yA, rIn, yA), band(rOut, s.y - 0.03, rOut, yA)];
+  const apron = mergeLathe(apronParts);
+  for (const p of apronParts) p.dispose();
+  apron.computeBoundingSphere();
+  // the railing: posts from the upstand top (roofY + upstandH) to the top rail, two torus rails
+  const r = h.parapet.r0, y0 = roofY + ROOF_KIT.upstandH, top = h.parapet.top, parts: THREE.BufferGeometry[] = [];
+  for (let k = 0; k < V.posts; k++) {
+    const a = (k / V.posts) * Math.PI * 2;
+    const g = new THREE.BoxGeometry(V.postW, top - y0, V.postW);
+    g.rotateY(-a);
+    g.translate(h.x + Math.cos(a) * r, (y0 + top) / 2, h.z + Math.sin(a) * r);
+    parts.push(g);
+  }
+  for (const y of [top - V.rail, y0 + (top - y0) * V.midK]) {
+    const g = new THREE.TorusGeometry(r, V.rail, 6, ROOF_KIT.segments);
+    g.rotateX(Math.PI / 2);
+    g.translate(h.x, y, h.z);
+    parts.push(g);
+  }
+  const rail = mergeLathe(parts);
   for (const p of parts) p.dispose();
-  g.computeBoundingSphere();
-  return g;
+  rail.computeBoundingSphere();
+  return {apron, rail};
 }
 
 function mergeLathe(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {

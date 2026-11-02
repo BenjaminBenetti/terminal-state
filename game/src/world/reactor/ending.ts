@@ -23,7 +23,8 @@ import {surfaceDoorCells} from '../../gen/reactor/surface';
 import {REACTOR_LANE, loadReactorState, type ReactorEndingState} from './runState';
 import {ENDING, coreAirCleared, doorOpenAt, endingStage, messageAt, openedEnding, type MessagePhase} from './endingLogic';
 import {OBJECTIVE_TEXT} from './objectiveText';
-import {buildDoorView, parapetRingGeometry, type DoorView} from './endingViews';
+import {buildDoorView, ringGeometry, type DoorView} from './endingViews';
+import {controlSkin} from './controlsSkin';
 import {reactorRestartOf} from './restart';
 import {reactorAirRuntime} from './generators';
 import {towerCue} from '../towerShared';
@@ -63,7 +64,7 @@ export class ReactorEnding {
   ending: ReactorEndingState = {doors: false, openedAt: 0, announced: false, surfaced: false};
   root: THREE.Group | null = null;
   door: DoorView | null = null;
-  ring: THREE.Mesh | null = null;
+  ring: THREE.Group | null = null;
   /** The doorway's rim-grid cells and their generated state (restored on open / teardown). */
   private doorCells: number[] = [];
   private doorSaved: {cell: number; c: number; a: number; f: number; ceil: number}[] = [];
@@ -139,7 +140,7 @@ export class ReactorEnding {
     this.msgT = null;
     if (this.root) this.host.scene.remove(this.root);
     this.door?.dispose();
-    this.ring?.geometry.dispose();
+    this.ring?.traverse(o => { if ((o as THREE.Mesh).isMesh) (o as THREE.Mesh).geometry.dispose(); });
     this.root = null; this.door = null; this.ring = null;
     this.info = null; this.surface = null;
     this.doorCells = []; this.doorSaved = [];
@@ -361,20 +362,23 @@ export class ReactorEnding {
   }
 }
 
-/** The parapet ring mesh (null without a roof line). Tagged with every storey (seen from the pit through the opening). */
-function buildRing(s: ReactorSurface, info: ReactorInfo, mats: unknown): THREE.Mesh | null {
+/** The barrier round the opening (apron + guard railing; null without a roof line): seen from the plaza and up the shaft. */
+function buildRing(s: ReactorSurface, info: ReactorInfo, mats: unknown): THREE.Group | null {
   try {
-    const g = parapetRingGeometry(s, info.pit.roofY);
-    let mat: THREE.Material | null = null;
+    const {apron, rail} = ringGeometry(s, info.pit.roofY);
+    let concrete: THREE.Material | null = null;
     // the roof curb's concrete (world/reactor/archMaterials.ts reactorDress: the kit's existing material; Node: a plain stand-in)
-    if (mats && typeof document !== 'undefined') { try { mat = reactorDress(mats as WorldMaterials).concrete ?? null; } catch { mat = null; } }
-    const m = new THREE.Mesh(g, mat ?? new THREE.MeshStandardMaterial({color: 0x6c6862, roughness: 0.95}));
-    m.name = 'reactor-ending-parapet-ring';
-    m.matrixAutoUpdate = false;
-    m.updateMatrix();
-    return m;
+    if (mats && typeof document !== 'undefined') { try { concrete = reactorDress(mats as WorldMaterials).concrete ?? null; } catch { concrete = null; } }
+    const grp = new THREE.Group();
+    grp.name = 'reactor-ending-barrier';
+    const a = new THREE.Mesh(apron, concrete ?? new THREE.MeshStandardMaterial({color: 0x6c6862, roughness: 0.95}));
+    a.name = 'reactor-ending-barrier-apron';
+    const r = new THREE.Mesh(rail, controlSkin('yellow'));
+    r.name = 'reactor-ending-barrier-rail';
+    for (const m of [a, r]) { m.matrixAutoUpdate = false; m.updateMatrix(); grp.add(m); }
+    return grp;
   } catch (err) {
-    console.warn('reactor ending: the parapet ring was skipped', err);
+    console.warn('reactor ending: the barrier round the opening was skipped', err);
     return null;
   }
 }
