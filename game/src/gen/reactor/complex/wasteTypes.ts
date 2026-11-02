@@ -2,7 +2,7 @@
 // the side complex off the Reactor's main shaft that houses zone 2's auxiliary generator (the core-floor fans) on tier 4.
 //
 // `layout.reactorWaste` (StationLayout, optional; written by the complex's dress hook after the crop, world metres, absolute y) is the
-// complex's DECOR: the drum racks and their drums, the dry casks, the compactor, ventilation fans, ducts, cable trays, crane runway,
+// complex's DECOR: the drum racks and their drums, the dry casks, the compactor, ventilation fans, ducts, the crane runway,
 // vault-door frames, hazard floor bands and the yellow-green status beacons. world/reactor/wasteVisuals.ts instances it with the
 // Reactor's EXISTING kit materials (archMaterials.ts reactorDress: the lead's Codex rusted-steel / pit-concrete / grating sets, the
 // repo's painted-steel fallbacks) and the lead's approved REACTOR_KIT models where a record names one — never an untextured block,
@@ -60,12 +60,7 @@ export interface WasteDecor {
   beacons: WasteBeacon[];
   models: WasteModel[];
   fans: WasteFan[];
-  /**
-   * The generator's power route out of the complex (world polyline, absolute y): the floor trench from the skid to the plant door, then
-   * the ceiling cable tray through the sealed corridor, the drum vault and the receiving bay to the entrance on the shaft deck. ARCH /
-   * the host may continue ReactorGenerator.cable from its last point.
-   */
-  cable: {x: number; y: number; z: number}[];
+  // (no cable of its own: the generator's power cable is lane HOST's ReactorGenerator.cable — the one cable drawn)
 }
 
 /** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie; the hero models' cooked dims). */
