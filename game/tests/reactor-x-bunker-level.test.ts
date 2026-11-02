@@ -5,7 +5,7 @@
 // lined up with its lane, timing. Focused (no browser).
 import {writeFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
-import {generateReactorLevel, reactorIssues} from '../src/gen/reactor/index';
+import {generateReactorLevel, reactorAttempt, reactorIssues, REACTOR_GEN_STATS} from '../src/gen/reactor/index';
 import {COMPLEX_HOST_STATS, complexIssues} from '../src/gen/reactor/complex/host';
 import {BUNKER_DRESS_STATS} from '../src/gen/reactor/complex/bunkerDress';
 import {BLAST, BUNKER_KINDS, BUNKER_PROP_DEFS} from '../src/gen/reactor/complex/bunkerKinds';
@@ -46,6 +46,7 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
       expect(b.level).toBe(1);
       expect(b.zone).toBe(0);
       expect(issues, `seed ${seed}`).toEqual([]);
+      expect(BUNKER_DRESS_STATS.filled, `seed ${seed} pockets filled`).toBe(0);
     }
     writeFileSync('/tmp/bunker-level-report.txt', report.join('\n'));
   });
@@ -136,6 +137,15 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
       expect(Math.abs(wx - (d.x + d.w / 2) * CELL), tag).toBeLessThan(0.05);
       expect(Math.abs(wz - (d.y + d.h / 2) * CELL), tag).toBeLessThan(0.05);
     }
+  });
+
+  it('never seals a floor pocket: seed 2800420178 attempt 0 (props once closed 3 decontamination cells off) validates, one attempt', () => {
+    const L = reactorAttempt({levelSeed: 2800420178}, 0)!;
+    expect(L).toBeTruthy();
+    expect(reactorIssues(L)).toEqual([]);
+    expect(BUNKER_DRESS_STATS.filled).toBe(0);
+    generateReactorLevel({levelSeed: 2800420178});
+    expect(REACTOR_GEN_STATS.attempts).toBe(1);
   });
 
   it('carves + dresses inside the budget (< 60 ms per level)', () => {

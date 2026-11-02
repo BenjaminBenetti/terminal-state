@@ -18,7 +18,7 @@
 // use point stay clear.
 
 import type {Rng} from '../../../core/rng';
-import {CELL, FLOOR, type Grid} from '../../grid';
+import {CELL, FLOOR, STEP_UP, type Grid} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import type {Area, Door, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import type {ShopMat} from '../../storefronts';
@@ -38,7 +38,7 @@ const sideOfDir = (dx: number, dz: number): Side => (Math.abs(dz) >= Math.abs(dx
 const rotFacing = (dx: number, dz: number): number => (Math.abs(dz) >= Math.abs(dx) ? (dz > 0 ? 0 : Math.PI) : dx > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** QA / tests: what the last dress placed. */
-export const BUNKER_DRESS_STATS = {ms: 0, props: 0, decor: 0, lights: 0, signs: 0, beds: 0, footlockers: 0, tanks: 0, panels: 0, skipped: [] as string[]};
+export const BUNKER_DRESS_STATS = {ms: 0, dropped: 0, filled: 0, props: 0, decor: 0, lights: 0, signs: 0, beds: 0, footlockers: 0, tanks: 0, panels: 0, skipped: [] as string[]};
 
 interface Dx {
   layout: StationLayout;
@@ -55,12 +55,14 @@ interface Dx {
   box(u0: number, u1: number, v0: number, v1: number): {x0: number; z0: number; x1: number; z1: number};
   decor(m: ShopMat, b: {x0: number; z0: number; x1: number; z1: number}, y0: number, y1: number): void;
   doors(a: Area): Door[];
+  /** Cells the host holds clear while this hook runs (blocked now, free floor afterwards): never a pocket wall. */
+  held: Set<number>;
 }
 
 export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; oy: number}, rec: BunkerCarveRec): void {
   const S = BUNKER_DRESS_STATS;
   const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
-  S.props = S.decor = S.lights = S.signs = S.beds = S.footlockers = S.tanks = S.panels = 0;
+  S.props = S.decor = S.lights = S.signs = S.beds = S.footlockers = S.tanks = S.panels = S.dropped = S.filled = 0;
   S.skipped = [];
   const lv = rec.level, g = layout.levels[lv]?.grid;
   if (!g) return;
@@ -83,7 +85,21 @@ export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; 
     },
     decor: (m, b, y0, y1) => { layout.decor.push({m, x0: r3(b.x0), y0: r3(rec.baseY + y0), z0: r3(b.z0), x1: r3(b.x1), y1: r3(rec.baseY + y1), z1: r3(b.z1)}); },
     doors: a => ctx.doorsOf.get(a.id) ?? [],
+    held: new Set<number>(),
   };
+  // the host's holds (entrance apron, use point …): blocked cells of the bunker's window that no prop covers
+  {
+    const covered = new Set<number>();
+    for (const p of layout.props) {
+      if ((p.level ?? 0) !== lv || p.x < (win.x0 - 2) * CELL || p.x > (win.x1 + 2) * CELL || p.z < (win.y0 - 2) * CELL || p.z > (win.y1 + 2) * CELL) continue;
+      const [c0, r0, c1, r1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+      for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (g.inBounds(cx, cy)) covered.add(g.idx(cx, cy));
+    }
+    for (let y = Math.max(0, win.y0); y <= Math.min(g.h - 1, win.y1); y++) for (let x = Math.max(0, win.x0); x <= Math.min(g.w - 1, win.x1); x++) {
+      const i = g.idx(x, y);
+      if (g.cells[i] === FLOOR && g.blocked[i] && !covered.has(i)) D.held.add(i);
+    }
+  }
   // the generator's skid (+ a 1-cell ring) and its use point (+ 2 cells) stay clear of everything placed here
   {
     const fr = f.rect(rec.plan.gen.foot), [ux, uy] = f.cell(rec.plan.gen.use.u, rec.plan.gen.use.v);
@@ -118,6 +134,8 @@ export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; 
   step('hall', () => generatorHall(D));
   step('ducts', () => corridorDucts(D));
   step('signs', () => bunkerSigns(D));
+  // the guarantee: no floor pocket anywhere in the bunker (a prop of this pass that closes one off goes again)
+  sweepPockets(D, areas, p0);
   S.props = layout.props.length - p0; S.decor = layout.decor.length - d0; S.lights = layout.lights.length - l0; S.signs = layout.signs.length - s0;
   S.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
 }
@@ -219,7 +237,7 @@ const doorCount = (D: Dx, a: Area, s: Side) => D.doors(a).filter(d => doorSide(d
  * Deterministic exhaustive wall placement: every 0.25 m along each wall of `sides` (in order), nearest `prefer` (world, along the wall)
  * first; the placement primitive's checks (door zones, access strip, connectivity, real wall behind) decide. Null when nothing fits.
  */
-function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number): PropPlacement | null {
+function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number, pockets = false): PropPlacement | null {
   const w = PROP_DEFS[kind].w;
   for (const sd of sides) {
     const [lo, hi] = wallRange(a, sd);
@@ -229,8 +247,11 @@ function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front:
     ts.sort((p, q) => Math.abs(p - c) - Math.abs(q - c));
     for (const t of ts) {
       const sp = wallSpot(a, sd, t, kind);
+      const n0 = D.layout.props.length;
       const p = tryPlaceProp(D.ctx, a, kind, sp.x, sp.z, sp.rot, {front});
-      if (p && (!isBunkerKind(kind) || sealOrDrop(D, a, p))) return p;
+      if (!p || (isBunkerKind(kind) && !sealOrDrop(D, a, p))) continue;
+      if (pockets && pocketCells(D, a).length) { dropProps(D, n0); continue; }
+      return p;
     }
   }
   return null;
@@ -298,19 +319,103 @@ function entranceFrame(D: Dx): void {
 function lockAndDecon(D: Dx): void {
   const lock = D.area('lock'), decon = D.area('decon');
   const front = sideOfDir(-D.rec.frame.dv[0], -D.rec.frame.dv[1]);
+  // (placeKit's areaConnected scans one cell round an area: the decon owns the 2-cell-deep bulkhead lane, so its count is off —
+  // every placement here is re-checked with the bunker's own height-aware pocket test and taken back when it closes one off)
+  const safe = (a: Area, put: () => unknown): void => {
+    const n0 = D.layout.props.length;
+    put();
+    if (D.layout.props.length > n0 && pocketCells(D, a).length) dropProps(D, n0);
+  };
   if (lock) {
-    placeAgainstWall(D.ctx, lock, 'bench', {sides: [front], front: 0.6, tries: 16});
-    placeAgainstWall(D.ctx, lock, 'noticeBoard', {sides: [front], y: 1.1, tries: 12});
-    placeAgainstWall(D.ctx, lock, 'fireExtinguisher', {sides: [front], front: 0.5, tries: 12});
+    safe(lock, () => placeAgainstWall(D.ctx, lock, 'bench', {sides: [front], front: 0.6, tries: 16}));
+    safe(lock, () => placeAgainstWall(D.ctx, lock, 'noticeBoard', {sides: [front], y: 1.1, tries: 12}));
+    safe(lock, () => placeAgainstWall(D.ctx, lock, 'fireExtinguisher', {sides: [front], front: 0.5, tries: 12}));
   }
   if (decon) {
     const back = OPP[front];
     const sides: Side[] = front === 'N' || front === 'S' ? ['W', 'E'] : ['N', 'S'];
-    placeAgainstWall(D.ctx, decon, 'washCounter', {sides: [back, ...sides], front: 0.7, tries: 20});
-    placeAgainstWall(D.ctx, decon, 'washCounter', {sides: [back, ...sides], front: 0.7, tries: 12});
-    for (const sd of D.rng.shuffle(sides.slice())) if (rowAlongWall(D.ctx, decon, sd, 'staffLockers', {front: 1.0, max: 3}).length) break;
-    placeAgainstWall(D.ctx, decon, 'bench', {sides, front: 0.6, tries: 12});
-    placeAgainstWall(D.ctx, decon, 'bin', {sides: [back, ...sides], tries: 12});
+    for (let i = 0; i < 2; i++) safe(decon, () => scanWall(D, decon, 'washCounter', [back, ...sides], 0.7, undefined, true));
+    for (let i = 0; i < 3; i++) safe(decon, () => scanWall(D, decon, 'staffLockers', sides, 1.0, undefined, true));
+    safe(decon, () => scanWall(D, decon, 'bench', sides, 0.6, undefined, true));
+    safe(decon, () => scanWall(D, decon, 'bin', [back, ...sides], 0, undefined, true));
+  }
+}
+
+/**
+ * Free floor cells of area `a` no walker reaches (height-aware: a step <= STEP_UP), searched from every opening of the area — over
+ * the area's rect + 3 cells (its deep doorway cells: the bulkhead lane belongs to the decon).
+ */
+function pocketCells(D: Dx, a: Area): number[] {
+  const {g} = D;
+  const doors = D.doors(a);
+  const x0 = a.x - 3, y0 = a.y - 3, x1 = a.x + a.w + 2, y1 = a.y + a.h + 2;
+  const inWin = (x: number, y: number) => x >= x0 && y >= y0 && x <= x1 && y <= y1 && g.inBounds(x, y);
+  const free = (i: number) => g.cells[i] === FLOOR && (!g.blocked[i] || D.held.has(i));
+  const seen = new Set<number>(), q: number[] = [];
+  // seeds: the door cells (any area) and their free neighbours
+  for (const d of doors) for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) {
+    const i = g.idx(x, y);
+    if (free(i) && !seen.has(i)) { seen.add(i); q.push(i); }
+  }
+  while (q.length) {
+    const i = q.pop()!, x = i % g.w, y = (i / g.w) | 0;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nx = x + dx, ny = y + dy;
+      if (!inWin(nx, ny)) continue;
+      const j = g.idx(nx, ny);
+      if (seen.has(j) || !free(j) || Math.abs(g.floor[j] - g.floor[i]) > STEP_UP + 1e-6) continue;
+      const aj = g.area[j];
+      if (aj !== a.id && !doors.some(d => nx >= d.x && ny >= d.y && nx < d.x + d.w && ny < d.y + d.h)) continue;
+      seen.add(j); q.push(j);
+    }
+  }
+  const out: number[] = [];
+  for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+    const i = g.idx(x, y);
+    if (g.area[i] === a.id && free(i) && !seen.has(i)) out.push(i);
+  }
+  return out;
+}
+
+/** Takes back every prop from index `n0` (their floor cells back to free floor). */
+function dropProps(D: Dx, n0: number): void {
+  const {g, layout} = D;
+  while (layout.props.length > n0) {
+    const p = layout.props.pop()!;
+    unblockProp(g, p);
+    BUNKER_DRESS_STATS.dropped++;
+  }
+}
+function unblockProp(g: Grid, p: PropPlacement): void {
+  if (p.mounted || p.kind === 'noticeBoard') return;
+  const [c0, r0, c1, r1] = isBunkerKind(p.kind) ? coverCells(p.x, p.z, p.hx, p.hz) : cellsOfBox(p.x, p.z, p.hx, p.hz);
+  for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) if (g.inBounds(cx, cy)) { const i = g.idx(cx, cy); g.blocked[i] = 0; g.sightBlocked[i] = 0; }
+}
+
+/**
+ * The guarantee after the whole pass: a pocket left in any bunker area loses the latest removable prop of this pass bordering it
+ * (never the blast door's anchored parts) until none is left; a pocket with no such prop (none expected) is filled (blocked).
+ */
+function sweepPockets(D: Dx, areas: readonly Area[], p0: number): void {
+  const {g, layout} = D;
+  for (const a of areas) {
+    for (let guard = 0; guard < 24; guard++) {
+      const pocket = pocketCells(D, a);
+      if (!pocket.length) break;
+      const near = new Set<number>();
+      for (const i of pocket) { const x = i % g.w, y = (i / g.w) | 0; for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) near.add(g.idx(x + dx, y + dy)); }
+      let k = -1;
+      for (let i = layout.props.length - 1; i >= p0 && k < 0; i--) {
+        const p = layout.props[i];
+        if ((p.level ?? 0) !== D.lv || p.kind === 'blastDoor' || p.mounted || p.kind === 'noticeBoard') continue;
+        const [c0, r0, c1, r1] = coverCells(p.x, p.z, p.hx, p.hz);
+        for (let cy = r0; cy <= r1 && k < 0; cy++) for (let cx = c0; cx <= c1; cx++) if (near.has(g.idx(cx, cy))) { k = i; break; }
+      }
+      if (k < 0) { for (const i of pocket) if (!D.held.has(i)) g.blocked[i] = 1; BUNKER_DRESS_STATS.filled += pocket.length; break; }
+      unblockProp(g, layout.props[k]);
+      layout.props.splice(k, 1);
+      BUNKER_DRESS_STATS.dropped++;
+    }
   }
 }
 
@@ -326,6 +431,14 @@ function dormitory(D: Dx, a: Area): void {
   const bed = PROP_DEFS.bunkBed, fl = PROP_DEFS.footlocker;
   const rowDepth = bed.w + 0.05 + fl.d;
   const walls = depth >= 2 * rowDepth + 1.3 ? longs : [longs.slice().sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q))[0]];
+  // first the lockers, on the short wall with fewer doors (the bunk rows take the long walls), then the bunks
+  const shorts: Side[] = horiz ? ['W', 'E'] : ['N', 'S'];
+  const sw = shorts.sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q));
+  const midOf = (sd: Side) => { const [lo, hi] = wallRange(a, sd); return walls.length > 1 ? {from: lo + rowDepth + 0.05, to: hi - rowDepth - 0.05} : {}; };
+  if (!rowAlongWall(D.ctx, a, sw[0], 'staffLockers', {front: 1.0, max: 4, ...midOf(sw[0])}).length && !rowAlongWall(D.ctx, a, sw[1], 'staffLockers', {front: 1.0, max: 3, ...midOf(sw[1])}).length) {
+    // both short walls busy (doors, bunk ends): any free wall spot, the long walls too
+    for (let i = 0; i < 2; i++) if (!scanWall(D, a, 'staffLockers', [...sw, ...longs], 1.0)) break;
+  }
   for (const sd of walls) {
     const [lo, hi] = wallRange(a, sd), [nx, nz] = NORMAL[sd], fc = face(a, sd);
     const along = sd === 'N' || sd === 'S';
@@ -345,10 +458,6 @@ function dormitory(D: Dx, a: Area): void {
       if (tryPlaceProp(D.ctx, a, 'footlocker', fx, fz, flRot)) S.footlockers++;
     }
   }
-  // lockers on the short wall with fewer doors, a tall cabinet somewhere
-  const shorts: Side[] = horiz ? ['W', 'E'] : ['N', 'S'];
-  const sw = shorts.sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q));
-  if (!rowAlongWall(D.ctx, a, sw[0], 'staffLockers', {front: 1.0, max: 4}).length) rowAlongWall(D.ctx, a, sw[1], 'staffLockers', {front: 1.0, max: 3});
   if (D.rng.chance(0.6)) placeAgainstWall(D.ctx, a, 'cabinetTall', {front: 0.8, tries: 16});
 }
 
