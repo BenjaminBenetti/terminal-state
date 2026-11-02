@@ -18,6 +18,7 @@ import {emptyReactorState, REACTOR_LANE, type ReactorRunState} from '../src/worl
 import {reactorMounts} from '../src/world/reactor/controlsMount';
 import {screenFacing} from '../src/world/reactor/restartViews';
 import {MAP_BOARD, MAP_SCREENS, PLAN, mapButtons, mapMarkers, planMapBoards, planStoreys, type MarkerSource} from '../src/world/reactor/mapBoardPlan';
+import {reactorJam} from '../src/gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 import {ReactorMapBoards, MAP_REACH} from '../src/world/reactor/mapBoard';
 import {lampSkin} from '../src/world/reactor/controlsSkin';
 import {installCanvasShim} from './helpers/canvas2d';
@@ -90,9 +91,12 @@ for (const seed of SEEDS) {
         const site = r.sites.find(s => s.controls.some(c => c.id === id))!, p = mounts.byId.get(id)!.pick;
         expect(ms.some(m => m.level === site.level && Math.abs(m.x - p.x) < 1e-9 && Math.abs(m.z - p.z) < 1e-9), id).toBe(true);
       }
+      // (lane GAS, design change: the final generator JAMS) its mark is 'jammed' (nothing to do there), the others 'need'
+      const jam = reactorJam(r)!;
+      expect(jam).not.toBeNull();
       for (const g of r.generators) {
         const gm = ms.find(m => m.kind === 'generator' && m.id === g.id)!;
-        expect([gm.level, gm.x, gm.z, gm.state]).toEqual([g.level, g.panel.x, g.panel.z, 'need']);
+        expect([gm.level, gm.x, gm.z, gm.state]).toEqual([g.level, g.panel.x, g.panel.z, g.id === jam.generator ? 'jammed' : 'need']);
         const cx = r.complexes?.find(c => c.generator === g.id);
         if (cx) expect(cx.level).toBe(g.level);
       }
@@ -124,7 +128,9 @@ for (const seed of SEEDS) {
       const done = {...st, fuses: st.fuses.map(() => true), breaker: true, valve: true, pump: true, keyInserted: true, generators: st.generators.map(() => ({started: true, startedAt: 1}))};
       ms = mapMarkers(source(L, done));
       expect(ms.some(m => m.kind === 'fuse' || m.kind === 'key')).toBe(false);
-      for (const k of ['fuseSlot', 'breaker', 'valve', 'pump', 'keyswitch', 'generator'] as const) for (const m of ms.filter(q => q.kind === k)) expect(m.state, k).toBe('done');
+      // (lane GAS) a started flag never un-jams the final generator (its mark stays 'jammed'); the working ones are done
+      const jg = reactorJam(r)!.generator;
+      for (const k of ['fuseSlot', 'breaker', 'valve', 'pump', 'keyswitch', 'generator'] as const) for (const m of ms.filter(q => q.kind === k)) expect(m.state, k).toBe(k === 'generator' && m.id === jg ? 'jammed' : 'done');
       expect(ms.find(m => m.kind === 'rods')!.state).toBe('need');
     });
   });

@@ -23,6 +23,10 @@
 //    then quiet). Existing enemies are drawn to the landing; nothing is spawned.
 //  - AUDIO: named Sound Lab cues through an optional Sfx seam (ReactorSfx below: reactorCue / reactorLoop). Until the lead wires the
 //    clips the methods are absent and everything is silent (no errors, no retries).
+// Task reactor-playtest-round2-20261102 (lane GAS, user design change): THE FINAL GENERATOR JAMS (gen/reactor/gasJam.ts reactorJam: the
+// deepest zone's, in the tier-4 waste repository). Its prompt shows the FAULT lamp; the 2 s hold cranks it for REACTOR_JAM.STALL_S, then
+// the fan drive seizes (a creak + clank, a short alert, the toast "… JAMMED … wear the gas mask …"): it never starts, its zone never
+// clears by generator. The core floor stays gassed until the reactor is online (clearAll). The record keeps `jam` (generator, stalls).
 // Persistence: REACTOR_LANE (run lane store) is shared with lane RESTART — this module writes ONLY `generators` and `zoneClear`, by
 // read-merge-write of the stored record (never a stale whole-record overwrite). Saved on every start / stage reached / clearAll and
 // at teardown; restored on build. Nothing re-rolls: a started generator stays started, a cleared zone stays clear.
@@ -38,6 +42,8 @@ import {REACTOR_LANE, loadReactorState, type ReactorRunState} from './runState';
 import {reactorVisuals, type ReactorVisuals} from './visuals';
 import {REACTOR_AIR, ReactorAir, fanSpool, stageOf, stagedClearTime, type DepthGasSource, type DepthGasTable, type DepthRect} from './air';
 import {ReactorAirHud, type AirTone} from './airHud';
+import {JAM_TEXT, REACTOR_JAM, reactorJam, type ReactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
+import {towerCue} from '../towerShared';
 
 /** Generator interaction / noise tuning (s, m). */
 export const REACTOR_GEN = {
@@ -115,8 +121,11 @@ export interface ReactorAirHost {
   stateListeners?: ((state: never, prev: never) => void)[];
 }
 
-/** A generator's phase: not started, cranking (the start command just given), running. */
-export type GeneratorPhase = 'off' | 'cranking' | 'running';
+/**
+ * A generator's phase: not started, cranking (the start command just given), running. (lane GAS) The jammed final generator: 'jammed'
+ * (seized, its fault lamp flashing), 'stalling' while a start attempt cranks before it seizes.
+ */
+export type GeneratorPhase = 'off' | 'cranking' | 'running' | 'stalling' | 'jammed';
 
 /** Phase of a generator state at game clock `clock`. */
 export function generatorPhase(g: {started: boolean; startedAt: number} | undefined, clock: number): GeneratorPhase {
@@ -210,7 +219,10 @@ export class ReactorAirRuntime {
   hold: {gen: number; t: number; x: number; z: number; clears: number} | null = null;
   readonly hud = new ReactorAirHud();
   /** Counters (QA / tests). */
-  readonly counts = {starts: 0, alerts: 0, pulses: 0, saves: 0, uploads: 0, cues: 0, loops: 0, exhausts: 0};
+  readonly counts = {starts: 0, alerts: 0, pulses: 0, saves: 0, uploads: 0, cues: 0, loops: 0, exhausts: 0, stalls: 0};
+  /** Task reactor-playtest-round2-20261102 (lane GAS): the jammed final generator of this world (null: none) and a running stall. */
+  jam: ReactorJam | null = null;
+  private stallUntil = -Infinity;
   private phases: GeneratorPhase[] = [];
   private fanSent: number[] = [];
   private pulseNext: number[] = [];
@@ -262,6 +274,12 @@ export class ReactorAirRuntime {
     const nz = Math.max(info.zones.length, ...info.zones.map(z => z.id + 1));
     const ng = Math.max(info.generators.length, ...info.generators.map(g => g.id + 1));
     const st = loadReactorState(h.run.laneStore(REACTOR_LANE), ng, nz);
+    // (lane GAS) the jam: always the deepest zone's generator. A record from before the jam that had it started keeps its zone's saved
+    // fraction (nothing ever re-gasses), but the generator itself is jammed now: it is not running.
+    this.jam = reactorJam(info);
+    this.stallUntil = -Infinity;
+    st.jam.generator = this.jam?.generator ?? -1;
+    if (this.jam && st.generators[this.jam.generator]?.started) st.generators[this.jam.generator] = {started: false, startedAt: 0};
     // a start time in the future (a clock anomaly) is rebased so the zone stays where its saved fraction says: never a re-spool
     for (let i = 0; i < st.generators.length; i++) {
       const g = st.generators[i];
@@ -316,6 +334,8 @@ export class ReactorAirRuntime {
     this.target = -1;
     this.uploadedVersion = -1;
     this.hud.clear();
+    this.jam = null; // (lane GAS)
+    this.stallUntil = -Infinity;
   }
 
   private zoneFracOfGen(info: ReactorInfo, st: ReactorRunState, gen: number): number {
@@ -331,6 +351,7 @@ export class ReactorAirRuntime {
       const cur = loadReactorState(this.host.run.laneStore(REACTOR_LANE), s.generators.length, s.zoneClear.length);
       cur.generators = s.generators.map(g => ({started: g.started, startedAt: g.startedAt}));
       cur.zoneClear = s.zoneClear.slice();
+      cur.jam = {...s.jam}; // (lane GAS)
       this.host.run.setLaneStore(REACTOR_LANE, cur);
       this.counts.saves++;
     } catch (err) { console.warn('reactor air: saving the run state failed', err); }
@@ -355,6 +376,7 @@ export class ReactorAirRuntime {
   start(id: number, via: 'hold' | 'qa' = 'hold'): boolean {
     const info = this.info, st = this.state, g = info?.generators.find(q => q.id === id);
     if (!info || !st || !g || st.generators[id]?.started) return false;
+    if (this.jam && id === this.jam.generator) { this.stall(g, via); return false; } // (lane GAS) the final generator jams
     const clock = this.host.clock;
     st.generators[id] = {started: true, startedAt: clock};
     this.counts.starts++;
@@ -366,6 +388,32 @@ export class ReactorAirRuntime {
     this.save();
     if (via === 'hold') this.host.hud.toast(`Auxiliary generator started — Zone ${g.zone + 1} extraction fans spooling up. The noise will draw the infected.`);
     return true;
+  }
+
+  /**
+   * Task reactor-playtest-round2-20261102 (lane GAS): a start attempt on the jammed generator. It cranks for REACTOR_JAM.STALL_S (the
+   * body shakes at the crank level, the starter strains), then seizes (a clank, its fault lamp flashing again). It never starts. The
+   * toast says why and what to do. The stall count persists; a short alert (it is noisy too).
+   */
+  private stall(g: ReactorGenerator, via: 'hold' | 'qa'): void {
+    const st = this.state!, clock = this.host.clock;
+    st.jam = {generator: g.id, stalls: st.jam.stalls + 1, at: clock};
+    this.counts.stalls++;
+    this.stallUntil = clock + REACTOR_JAM.STALL_S;
+    this.phases[g.id] = 'stalling';
+    const v = reactorVisuals();
+    v.setGeneratorRunning(g.id, REACTOR_GEN.CRANK_LEVEL);
+    v.setGeneratorJammed?.(g.id, true);
+    towerCue(this.host.sfx, 'creak', g.panel, {rate: 0.55, gain: 0.9});
+    towerCue(this.host.sfx, 'clank', g.panel, {rate: 0.45, gain: 1, delay: REACTOR_JAM.STALL_S});
+    this.alert(g, REACTOR_GEN.ALERT_PULSE_M);
+    this.save();
+    if (via === 'hold') this.host.hud.toast(JAM_TEXT.stalled(g.zone), true);
+  }
+
+  /** (lane GAS) A start attempt is cranking on the jammed generator right now. */
+  get stalling(): boolean {
+    return this.host.clock < this.stallUntil;
   }
 
   /** Lane RESTART's win: every zone clears over `durationS`. */
@@ -421,8 +469,12 @@ export class ReactorAirRuntime {
     const all = force || v !== this.visualsRef;
     this.visualsRef = v;
     for (const g of info.generators) {
-      const p = generatorPhase(st.generators[g.id], clock);
-      if (all || p !== this.phases[g.id]) v.setGeneratorRunning(g.id, p === 'running' ? 1 : p === 'cranking' ? REACTOR_GEN.CRANK_LEVEL : 0);
+      const jammed = !!this.jam && g.id === this.jam.generator; // (lane GAS)
+      const p: GeneratorPhase = jammed ? (this.stalling ? 'stalling' : 'jammed') : generatorPhase(st.generators[g.id], clock);
+      if (all || p !== this.phases[g.id]) {
+        v.setGeneratorRunning(g.id, p === 'running' ? 1 : p === 'cranking' || p === 'stalling' ? REACTOR_GEN.CRANK_LEVEL : 0);
+        if (jammed) v.setGeneratorJammed?.(g.id, true);
+      }
       this.phases[g.id] = p;
     }
     for (const f of info.fans) {
@@ -542,6 +594,7 @@ export class ReactorAirRuntime {
     if (id < 0) return false;
     this.target = id;
     if (st.generators[id]?.started) return true;
+    if (this.jam && id === this.jam.generator && this.stalling) return true; // (lane GAS) cranking: wait for it to seize
     const p = this.host.player;
     this.hold = {gen: id, t: 0, x: p.x, z: p.z, clears: this.host.input.clears};
     return true;
@@ -582,6 +635,7 @@ export class ReactorAirRuntime {
     if (!a || !st || zone < 0) return {text: 'clean air', tone: 'clear'};
     const f = a.clearOf(zone);
     if (f >= 0.999) return {text: 'air clear', tone: 'clear'};
+    if (zone === a.jammedZone && !a.clearingAll) return {text: JAM_TEXT.hud, tone: 'toxic'}; // (lane GAS) until the reactor is online
     const gid = a.generatorOf(zone), gs = gid >= 0 ? st.generators[gid] : undefined, clock = this.host.clock;
     if (gs?.started && fanSpool(clock - gs.startedAt) < 1 && f <= 0) return {text: 'fans spooling', tone: 'clearing'};
     if ((gs?.started || a.clearingAll) && f < 1) return {text: `air clearing ${Math.floor(f * 100)} %`, tone: 'clearing'};
@@ -597,6 +651,10 @@ export class ReactorAirRuntime {
     if (!g) return null;
     const zone = `Zone ${g.zone + 1}`;
     if (this.hold) return `<b>Hold [E]</b> Starting the auxiliary generator… (${zone} extraction fans)`;
+    if (this.jam && g.id === this.jam.generator) { // (lane GAS) the jammed final generator
+      if (this.stalling) return JAM_TEXT.promptStalling(g.zone);
+      return st.jam.stalls > 0 ? JAM_TEXT.promptJammed(g.zone) : JAM_TEXT.promptTry(g.zone);
+    }
     const p = generatorPhase(st.generators[g.id], this.host.clock);
     if (p === 'off') return `<b>Hold [E]</b> Start auxiliary generator (${zone} extraction fans)`;
     if (p === 'cranking') return `Auxiliary generator cranking… (${zone} extraction fans)`;
@@ -618,13 +676,13 @@ export class ReactorAirRuntime {
   }
 
   /** QA / tests: the generators' live state. */
-  generators(): {id: number; zone: number; level: number; phase: GeneratorPhase; started: boolean; startedAt: number; since: number; spool: number; pulses: number}[] {
+  generators(): {id: number; zone: number; level: number; phase: GeneratorPhase; started: boolean; startedAt: number; since: number; spool: number; pulses: number; jammed: boolean; stalls: number}[] {
     const info = this.info, st = this.state, clock = this.host.clock;
     if (!info || !st) return [];
     return info.generators.map(g => {
-      const gs = st.generators[g.id];
+      const gs = st.generators[g.id], jammed = !!this.jam && g.id === this.jam.generator; // (lane GAS: + jammed / stalls)
       const since = gs?.started ? clock - gs.startedAt : 0;
-      return {id: g.id, zone: g.zone, level: g.level, phase: generatorPhase(gs, clock), started: !!gs?.started, startedAt: gs?.startedAt ?? 0, since, spool: gs?.started ? fanSpool(since) : 0, pulses: Math.max(0, (this.pulseNext[g.id] ?? 1) - 1)};
+      return {id: g.id, zone: g.zone, level: g.level, phase: jammed ? (this.stalling ? 'stalling' : 'jammed') : generatorPhase(gs, clock), started: !!gs?.started, startedAt: gs?.startedAt ?? 0, since, spool: gs?.started ? fanSpool(since) : 0, pulses: Math.max(0, (this.pulseNext[g.id] ?? 1) - 1), jammed, stalls: jammed ? st.jam.stalls : 0};
     });
   }
 }

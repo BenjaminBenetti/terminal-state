@@ -40,6 +40,7 @@ import {reactorMounts, type MountedControl} from './controlsMount'; // task reac
 import {valveWheelPart} from './controlsModel';
 import {recordReactorRestarted} from '../../run/milestones';
 import {rayCylinder, towerCue, type P3} from '../towerShared';
+import {JAM_TEXT, reactorJam, type ReactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 export {preloadReactorItemModels};
 
@@ -124,6 +125,8 @@ export class ReactorRestart {
   private airSig = -1;
   private tierLabel = '';
   private objHtml = '';
+  /** Task reactor-playtest-round2-20261102 (lane GAS): this world's jammed final generator (the core floor stays gassed until online). */
+  private jam: ReactorJam | null = null;
   private objEl: HTMLElement | null = null;
   private coreQ = -1;
   private pumpQ = -1;
@@ -207,6 +210,8 @@ export class ReactorRestart {
     const m = this.model;
     m.tiers = info.tiers;
     m.zones = info.zones;
+    this.jam = reactorJam(info); // (lane GAS)
+    m.jamZone = this.jam?.zone ?? -1;
     m.state = this.state;
     // restore: a restarted reactor is back at its end state (no replay); else every tier dark, the core dormant
     this.win = null;
@@ -564,8 +569,14 @@ export class ReactorRestart {
     m.core = this.win ? coreGlowAt(this.win.t) : 0;
     const pump = this.pumpEntry;
     m.pumpK = s.pump ? (pump ? pump.view.spool : 1) : 0;
-    m.next = nextStepText(s, this.info!, this.host.inv);
+    m.next = nextStepText(s, this.info!, this.host.inv, this.jamGassed() ? {levels: this.jam!.levels, note: JAM_TEXT.next} : null); // (lane GAS: + the mask note)
     return m;
+  }
+
+  /** (lane GAS) The jammed zone is still gassed: the reactor is not online and its air not cleared. */
+  private jamGassed(): boolean {
+    const s = this.state, j = this.jam;
+    return !!s && !!j && !s.restarted && (s.zoneClear[j.zone] ?? 0) < 1;
   }
 
   /** Redraw the screens whose content changed (only after a state / AIR / win-step change — never per frame). */
@@ -594,7 +605,8 @@ export class ReactorRestart {
       st.id = 'reactor-obj-css';
       st.textContent = '#reactor-objective{margin-top:4px;font-size:12px;letter-spacing:.04em;color:var(--cream-dim,#b9b2a1)}'
         + '#reactor-objective .rt.done{color:#7fd38a}#reactor-objective .rt.ready{color:var(--cream,#efe6cf)}#reactor-objective .rt.blocked{opacity:.55}'
-        + '#reactor-objective .tier{margin-top:2px;font-size:11px;opacity:.85}';
+        + '#reactor-objective .tier{margin-top:2px;font-size:11px;opacity:.85}'
+        + '#reactor-objective .jam{margin-top:2px;font-size:11px;color:#ff8a6a}'; // (lane GAS)
       document.head?.appendChild(st);
     }
     let el = document.querySelector('#reactor-objective') as HTMLElement | null;
@@ -610,7 +622,8 @@ export class ReactorRestart {
     const line = s.restarted
       ? (this.win && !this.win.done ? 'Reactor restarted — surface ventilation towers powering up' : 'Reactor running · surface ventilation towers online')
       : `Restart the reactor — ${taskLine(s).html}`;
-    const html = `<div>${line}</div>${this.tierLabel ? `<div class="tier">${this.tierLabel}</div>` : ''}`;
+    const jam = this.jamGassed() ? `<div class="jam">${JAM_TEXT.objective}</div>` : ''; // (lane GAS) the core floor needs the mask
+    const html = `<div>${line}</div>${jam}${this.tierLabel ? `<div class="tier">${this.tierLabel}</div>` : ''}`;
     if (html === this.objHtml) return;
     this.objHtml = html;
     if (this.objEl) this.objEl.innerHTML = html;

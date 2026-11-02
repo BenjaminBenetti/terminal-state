@@ -3,6 +3,12 @@
 // GENERATOR hold / start state machine (hold E 2 s with the ring, cancels, crank -> running, fan spool, staged clearing, alerts +
 // bounded pulses, exhaust, audio seam absent / present), PERSISTENCE through the shared REACTOR_LANE record (RESTART's parts kept,
 // rebuild without re-spool / re-crank), the HUD air line, and the whole generator route walked WITHOUT a mask: no damage, no deadlock.
+// Task reactor-playtest-round2-20261102 (lane GAS, USER DESIGN CHANGE — "the final generator to clear the fog out of the bottom level
+// should jam … you must wear a gas mask down there. Once the reactor comes on line then the fog at the bottom will clear out"): the
+// route WITHOUT a mask now ends at the final generator's deck (it stands in cleared air, as before), but that generator JAMS
+// (gen/reactor/gasJam.ts), so the core floor stays deadly unmasked until the reactor is online. The old "zero damage down to the core
+// floor" walk and the future-start-time case (it used the now jammed generator 2) are rewritten for that intent, not cut: the
+// rebase case runs on a working generator, and the jam has its own state machine / persistence / visuals tests below.
 import {afterEach, beforeEach, describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {GAS} from '../src/world/gas/field';
@@ -14,6 +20,7 @@ import {setReactorVisuals} from '../src/world/reactor/visuals';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {ReactorInfo} from '../src/gen/reactor/reactorTypes';
 import {fixtureInfo, fixtureLayout} from './reactor-air-fixture';
+import {JAM_TEXT, REACTOR_JAM} from '../src/gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 const dpsOf = (c: number) => GAS.DPS_MAX * Math.min(1, Math.max(0, (c - GAS.THRESHOLD) / (1 - GAS.THRESHOLD)));
 
@@ -355,17 +362,36 @@ describe('reactor air: persistence (REACTOR_LANE shared with lane RESTART)', () 
   });
 
   it('a lost / future start time never re-spools from zero: the saved fraction stands', () => {
+    // (lane GAS: on generator 1 — generator 2 is the jammed final one now; its legacy record is the next test)
     const store = new Map<string, unknown>();
     const s = emptyReactorState(3, 3);
-    s.generators[2] = {started: true, startedAt: 1e9};
-    s.zoneClear[2] = 0.5;
+    s.generators[1] = {started: true, startedAt: 1e9};
+    s.zoneClear[1] = 0.5;
     store.set(REACTOR_LANE, s);
     const r = rig(fixtureLayout(), {store});
     r.build();
-    expect(r.rt.state!.zoneClear[2]).toBeCloseTo(0.5, 9);
-    expect(generatorPhase(r.rt.state!.generators[2], r.clock)).toBe('running');
+    expect(r.rt.state!.zoneClear[1]).toBeCloseTo(0.5, 9);
+    expect(generatorPhase(r.rt.state!.generators[1], r.clock)).toBe('running');
     r.run(5);
-    expect(r.rt.state!.zoneClear[2]).toBeGreaterThan(0.5);
+    expect(r.rt.state!.zoneClear[1]).toBeGreaterThan(0.5);
+  });
+
+  it('(lane GAS) a record from before the jam with the final generator started: not running now, its saved fraction stands, never rises', () => {
+    const store = new Map<string, unknown>();
+    const s = emptyReactorState(3, 3);
+    s.generators[2] = {started: true, startedAt: 5};
+    s.zoneClear[2] = 0.5;
+    store.set(REACTOR_LANE, s);
+    const r = rig(fixtureLayout(), {store});
+    r.tick(0.1, 100);
+    r.build();
+    expect(r.rt.state!.generators[2].started).toBe(false);
+    expect(r.rt.generators()[2]).toMatchObject({phase: 'jammed', jammed: true, started: false});
+    r.run(GENERATOR_CLEAR_S);
+    expect(r.rt.state!.zoneClear[2]).toBeCloseTo(0.5, 9); // never re-gassed, never cleared further by the dead generator
+    r.teardown();
+    expect((store.get(REACTOR_LANE) as ReactorRunState).generators[2].started).toBe(false);
+    expect((store.get(REACTOR_LANE) as ReactorRunState).jam.generator).toBe(2);
   });
 
   it('RESTART win: reactorClearAll() clears the whole pit and persists; a restored win mid-clearing resumes', () => {
@@ -389,24 +415,44 @@ describe('reactor air: persistence (REACTOR_LANE shared with lane RESTART)', () 
   });
 });
 
-describe('reactor air: the generator route WITHOUT a mask — no damage, never a deadlock', () => {
-  it('rim generator -> clear -> walk to generator 1 (zone 0 deck) -> ... -> the core floor: zero gas damage', () => {
+describe('reactor air: the generator route WITHOUT a mask — no deadlock down to the final generator, which JAMS (lane GAS design change)', () => {
+  it('rim generator -> clear -> walk to generator 1 (zone 0 deck) -> the final generator: zero gas damage; it jams, the core floor needs the mask until online', () => {
     const layout = fixtureLayout(), info = layout.reactor as ReactorInfo;
     const r = rig(layout);
     r.build();
+    const jam = r.rt.jam!;
+    expect(jam.generator).toBe(2); // the deepest zone's
     for (const g of info.generators) {
       r.goGen(g.id);
       r.run(1); // standing there unmasked, before starting it
       expect(r.gas.exposure.c, `at generator ${g.id}`).toBeLessThan(GAS.THRESHOLD);
       r.holdStart();
-      expect(r.rt.state!.generators[g.id].started).toBe(true);
+      expect(r.rt.state!.generators[g.id].started, `generator ${g.id}`).toBe(g.id !== jam.generator);
       r.run(GENERATOR_CLEAR_S + 1);
     }
-    r.place(40, info.pit.floorY, 40);
-    r.run(3);
-    expect(r.gas.exposure.c).toBeLessThan(GAS.HUD_MIN);
     expect(r.hits).toEqual([]);
     expect(r.gas.exposure.damage).toBe(0);
+    expect(r.rt.state!.zoneClear).toEqual([1, 1, 0]); // the bottom stays gassed
+    // the core floor unmasked is deadly; with the mask (+ filter) the existing protection rule holds
+    r.place(40, info.pit.floorY, 40);
+    r.run(1);
+    expect(r.gas.exposure.c).toBeGreaterThan(0.5);
+    expect(r.hits.length).toBeGreaterThan(0);
+    expect(r.rt.hud.shown).toEqual({text: 'Core floor · Zone 3 · toxic air · fans jammed — gas mask on', tone: 'toxic'});
+    const hurt = r.hits.length;
+    r.gas.protection = () => true;
+    r.run(2);
+    expect(r.hits.length).toBe(hurt);
+    expect(r.gas.exposure.c).toBeGreaterThan(0.5); // the mask never hides the gas: same c, only no damage
+    r.gas.protection = () => false;
+    // the reactor ONLINE (the win's clearAll) clears the bottom: then the core floor breathes
+    expect(reactorClearAll(REACTOR_AIR.CLEAR_ALL_S)).toBe(true);
+    r.run(REACTOR_AIR.CLEAR_ALL_S + 1);
+    expect(r.rt.state!.zoneClear[2]).toBe(1);
+    const n = r.hits.length;
+    r.run(2);
+    expect(r.gas.exposure.c).toBeLessThan(GAS.HUD_MIN);
+    expect(r.hits.length).toBe(n);
     // the same walk straight down without the generators would hurt (the route matters)
     const q = rig(fixtureLayout());
     q.build();
@@ -419,5 +465,100 @@ describe('reactor air: the generator route WITHOUT a mask — no damage, never a
   it('layoutRect covers every level grid', () => {
     expect(layoutRect(fixtureLayout())).toEqual({x0: 0, z0: 0, x1: 80, z1: 80});
     void (null as unknown as ReactorAirRuntime);
+  });
+});
+
+describe('reactor air: the final generator JAMS (task reactor-playtest-round2-20261102, lane GAS — user design change)', () => {
+  it('the hold cranks it, then it seizes: a clear prompt / toast / lamps / sound, never started, its zone never clears, the press is not silent', () => {
+    const jammedCalls: [number, boolean][] = [];
+    setReactorVisuals({setFanSpeed: (id, s) => { calls.fan.set(id, s); }, setGeneratorRunning: (id, l) => { calls.gen.push([id, l]); }, setCoreGlow() {}, setTierPower() {}, setGeneratorJammed: (id, on) => { jammedCalls.push([id, on]); }});
+    const played: [string, number | undefined][] = [];
+    const sfx = {voice: () => ({}), play: (_v: unknown, cue: string, o?: {delay?: number}) => { played.push([cue, o?.delay]); }};
+    const z = brain(26, -20, 48);
+    const r = rig(fixtureLayout(), {sfx, zombies: [z]});
+    r.build();
+    expect(r.rt.jam).toMatchObject({generator: 2, zone: 2});
+    expect(jammedCalls).toContainEqual([2, true]); // its fault lamp flashes from the start (the boards say it too)
+    r.goGen(2);
+    r.tick(0.05);
+    expect(r.prompt()).toBe(JAM_TEXT.promptTry(2));
+    r.holdStart();
+    expect(r.rt.state!.generators[2].started).toBe(false);
+    expect(r.rt.counts.starts).toBe(0);
+    expect(r.rt.counts.stalls).toBe(1);
+    expect(r.toasts.at(-1)).toBe(JAM_TEXT.stalled(2));
+    expect(r.toasts.at(-1)).toMatch(/JAMMED.*gas mask.*online/);
+    expect(calls.gen).toContainEqual([2, REACTOR_GEN.CRANK_LEVEL]); // it cranks (the body shakes)…
+    expect(played.map(p => p[0])).toEqual(['creak', 'clank']); // the starter strains, then the clank of the seize
+    expect(played[1][1]).toBe(REACTOR_JAM.STALL_S);
+    expect(z.heard).toEqual([REACTOR_GEN.ALERT_PULSE_M]); // noisy, but a short attempt
+    expect(r.prompt()).toBe(JAM_TEXT.promptStalling(2));
+    expect(r.pressE()).toBe(true); // consumed while it cranks: no second hold
+    expect(r.rt.hold).toBeNull();
+    r.keys.E = false;
+    r.run(REACTOR_JAM.STALL_S + 0.2);
+    expect(calls.gen.at(-1)).toEqual([2, 0]); // …then it seizes and stands still
+    expect(r.rt.generators()[2]).toMatchObject({phase: 'jammed', jammed: true, stalls: 1, started: false});
+    expect(r.prompt()).toBe(JAM_TEXT.promptJammed(2));
+    // its zone's fans never turn, the bottom never clears by generator — however long you wait
+    r.run(GENERATOR_CLEAR_S * 2);
+    expect(calls.fan.get(4) ?? 0).toBe(0);
+    expect(calls.fan.get(5) ?? 0).toBe(0);
+    expect(r.rt.state!.zoneClear[2]).toBe(0);
+    expect(r.rt.air!.stats().zones[2]).toMatchObject({jammed: true, clear: 0});
+    // try again: the same honest stall (counted), still not started
+    r.goGen(2);
+    r.tick(0.05);
+    r.holdStart();
+    r.run(REACTOR_JAM.STALL_S + 0.2);
+    expect(r.rt.counts.stalls).toBe(2);
+    expect(r.rt.state!.generators[2].started).toBe(false);
+    // the QA start is refused the same way (no back door)
+    expect(r.rt.start(2, 'qa')).toBe(false);
+    expect(r.rt.state!.generators[2].started).toBe(false);
+  });
+
+  it('the working generators are untouched: generator 1 still starts and clears its zone (the jam is only the final one)', () => {
+    const r = rig(fixtureLayout());
+    r.build();
+    r.goGen(1);
+    r.tick(0.05);
+    r.holdStart();
+    expect(r.rt.state!.generators[1].started).toBe(true);
+    r.run(GENERATOR_CLEAR_S + 1);
+    expect(r.rt.state!.zoneClear[1]).toBe(1);
+    expect(r.rt.counts.stalls).toBe(0);
+  });
+
+  it('persistent: the jam record (generator, stalls) is saved, a rebuild / revisit shows the same jam, RESTART\'s parts are kept', () => {
+    const store = new Map<string, unknown>();
+    const r = rig(fixtureLayout(), {store});
+    r.build();
+    r.goGen(2);
+    r.tick(0.05);
+    r.holdStart();
+    const rec = store.get(REACTOR_LANE) as ReactorRunState;
+    expect(rec.jam).toMatchObject({generator: 2, stalls: 1});
+    // RESTART writes its parts (read-merge-write): the jam stays as stored
+    const cur = JSON.parse(JSON.stringify(rec)) as ReactorRunState;
+    cur.fuses = [true, true]; cur.breaker = true;
+    store.set(REACTOR_LANE, cur);
+    r.teardown();
+    const back = store.get(REACTOR_LANE) as ReactorRunState;
+    expect(back.jam).toMatchObject({generator: 2, stalls: 1});
+    expect(back.breaker).toBe(true);
+    // a revisit: jammed at once (no fresh try needed), the stalled prompt, the bottom still gassed
+    const q = rig(fixtureLayout(), {store});
+    q.build();
+    expect(q.rt.state!.jam).toMatchObject({generator: 2, stalls: 1});
+    q.goGen(2);
+    q.tick(0.05);
+    expect(q.prompt()).toBe(JAM_TEXT.promptJammed(2));
+    expect(q.rt.state!.zoneClear[2]).toBe(0);
+    // only the reactor online clears the bottom
+    expect(reactorClearAll(5)).toBe(true);
+    q.run(5.5);
+    expect(q.rt.state!.zoneClear[2]).toBe(1);
+    expect(q.rt.zoneStatus(2)).toEqual({text: 'air clear', tone: 'clear'});
   });
 });

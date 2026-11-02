@@ -198,13 +198,17 @@ export interface NextStepInfo {
   components: readonly {item: string; where: string}[];
 }
 
-/** The pit board's "Next: …" line — where to go and what to do next (the order a crew would follow). */
-export function nextStepText(s: ReactorRunState, info: NextStepInfo, inv: Pick<RestartInventory, 'count'>): string {
+/**
+ * The pit board's "Next: …" line — where to go and what to do next (the order a crew would follow). Task reactor-playtest-round2-20261102
+ * (lane GAS): `mask` = the storeys kept gassed by the jammed generator (gen/reactor/gasJam.ts) and the note a step there gets
+ * (" · gas mask + filters (fans jammed)"); absent / empty = no note.
+ */
+export function nextStepText(s: ReactorRunState, info: NextStepInfo, inv: Pick<RestartInventory, 'count'>, mask?: {levels: readonly number[]; note: string} | null): string {
   if (s.restarted) return 'Reactor running — surface ventilation towers powered';
   const at = (site: string) => {
     const st = info.sites.find(x => x.id === site);
     const tier = st ? info.tiers.find(t => t.level === st.level) : undefined;
-    return tier ? ` (${tier.label})` : '';
+    return tier ? ` (${tier.label})${mask && mask.levels.includes(st!.level) ? ` · ${mask.note}` : ''}` : '';
   };
   const whereOf = (item: string) => info.components.find(c => c.item === item)?.where;
   if (!s.keyInserted && inv.count(REACTOR_KEY_ID) < 1) { const w = whereOf(REACTOR_KEY_ID); return `Next: find the startup key${w ? ` — ${w}` : ''}`; }
