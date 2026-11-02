@@ -3,9 +3,10 @@
 // on each level should be in substantial sub complexes coming off the main shaft. Think bunkers…"). Contract: ./types.ts.
 //
 // The program (./bunkerPlan.ts, a local frame along / into the wall) is mapped onto the slot's canvas region and carved into the
-// shared Kit on the slot's storey: blast-door lock -> decontamination -> muster corridor, a guard post beside the lock (loop 1), two
-// spine corridors to the GENERATOR HALL (loop 2), the mess hall between them (a third way through), dormitories, infirmary, radio
-// room, air filtration plant, latrines, stores, workshop, warden's office …, the switch room and the dead-end ARMOURY off the hall.
+// shared Kit on the slot's storey: blast-door lock -> decontamination -> muster corridor, a guard post beside the lock (a level loop
+// round the threshold), then (task reactor-playtest-round2-20261102, lane BUNKER) a SEEDED ROOM GRAPH: a corridor skeleton with the
+// living / operations / plant rooms grown onto it by function (mess hall, dormitories, latrines, infirmary, radio room, filtration
+// plant, the GENERATOR HALL with its switch room, the dead-end ARMOURY, optional rooms), loop doors, two ways into the hall.
 // Pure: draws only from `inp.rng`; null when the region cannot hold the program (the host keeps the generator on its landing).
 // The `dress` hook (./bunkerDress.ts) furnishes it after the crop.
 
@@ -141,16 +142,17 @@ export function carveBunker(inp: ComplexCarveInput): ComplexCarve | null {
   }
   const keys = plan.rooms.map(p => p.key);
   const rooms: ComplexRoom[] = plan.rooms.map(p => ({area: area[p.key], key: p.key, label: p.label, role: p.role}));
-  // the generator: skid footprint, long axis along local u; use point beside the panel end, facing it
+  // the generator: skid footprint, long axis along the hall's (local u or v); use point beside the panel end, facing it
   const foot = f.rect(plan.gen.foot);
   const [ux, uy] = f.cell(plan.gen.use.u, plan.gen.use.v);
-  const s = plan.gen.end === 'hi' ? -1 : 1; // from the use cell toward the skid along u
-  const yawAlongU = f.du[0] !== 0 ? 0 : r2(Math.PI / 2);
+  const s = plan.gen.end === 'hi' ? -1 : 1; // from the use cell toward the skid along the axis
+  const dir = plan.gen.axis === 'u' ? f.du : f.dv;
+  const yawAlong = dir[0] !== 0 ? 0 : r2(Math.PI / 2);
   const rec: BunkerCarveRec = {plan, frame: f, area, level: lv, baseY: slot.baseY, entrance: {...slot.entrance}, frontArea: slot.frontArea, inward: slot.inward};
   return {
     id: 'bunker', slot, name: BUNKER_NAME,
     areas: keys.map(q => area[q]), entryArea: area.lock, rooms,
-    generator: {area: area.hall, foot, yaw: yawAlongU, use: {x: ux, y: uy, yaw: yawOf(s * f.du[0], s * f.du[1])}},
+    generator: {area: area.hall, foot, yaw: yawAlong, use: {x: ux, y: uy, yaw: yawOf(s * dir[0], s * dir[1])}},
     dress: (layout, drng, crop) => dressBunker(layout, drng, crop, rec),
   };
 }

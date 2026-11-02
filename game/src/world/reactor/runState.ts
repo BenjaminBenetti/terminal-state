@@ -1,6 +1,7 @@
 // Task reactor-build-20261101 (primary): THE REACTOR's one persisted runtime record — the run's 'reactor.state' lane store (run/
 // runState.ts laneStore / setLaneStore, section 'reactor:main'). Pure (no three.js / DOM). Two lanes write disjoint parts of it:
 //  - lane AIR (world/reactor/air.ts + generators): `generators` (started / when) and `zoneClear` (the staged clearing reached);
+//    task reactor-playtest-round2-20261102 (lane GAS): + `jam` (the jammed final generator, gen/reactor/gasJam.ts, and its stalled starts);
 //  - lane RESTART (world/reactor/restart.ts): the restart controls (`fuses`, `breaker`, `valve`, `pump`, `keyInserted`, `rods`) and
 //    the win (`restarted`, `restartedAt`).
 // Saved on section teardown and on every state change (a change is rare: one record write); restored on build. Travel keeps it,
@@ -15,12 +16,20 @@ export interface ReactorGeneratorState {
   startedAt: number;
 }
 
+/** Task reactor-playtest-round2-20261102 (lane GAS): the jam record (lane GAS writes it with `generators` / `zoneClear`). */
+export interface ReactorJamState { generator: number; stalls: number; at: number }
+
 export interface ReactorRunState {
   v: 1;
   /** Per ReactorGenerator.id. */
   generators: ReactorGeneratorState[];
   /** Per ReactorZone.id: cleared fraction reached (0 = uncleared depth gas, 1 = fully cleared). */
   zoneClear: number[];
+  /**
+   * Task reactor-playtest-round2-20261102 (lane GAS): the JAMMED final generator (gen/reactor/gasJam.ts reactorJam; -1 none), how
+   * many starts stalled on it and when the last one did (game clock s). Persistent: a revisit shows the same jam, never a fresh one.
+   */
+  jam: ReactorJamState;
   /** Fuse slots of the switchgear (true = a cartridge is installed; the item was consumed). */
   fuses: boolean[];
   /** Main breaker closed (control power on: needs every fuse slot filled). */
@@ -46,6 +55,7 @@ export function emptyReactorState(generators: number, zones: number): ReactorRun
     v: 1,
     generators: Array.from({length: generators}, () => ({started: false, startedAt: 0})),
     zoneClear: Array.from({length: zones}, () => 0),
+    jam: {generator: -1, stalls: 0, at: 0}, // (lane GAS)
     fuses: Array.from({length: REACTOR_FUSE_SLOTS}, () => false),
     breaker: false, valve: false, pump: false, keyInserted: false, rods: false, restarted: false, restartedAt: 0,
   };
@@ -66,6 +76,11 @@ export function loadReactorState(raw: unknown, generators: number, zones: number
   }
   const zc = Array.isArray(r.zoneClear) ? r.zoneClear : [];
   for (let i = 0; i < zones; i++) s.zoneClear[i] = Math.min(1, Math.max(0, num(zc[i])));
+  const jm = r.jam as Partial<ReactorJamState> | undefined; // (lane GAS)
+  if (jm && typeof jm === 'object') {
+    const g = Math.trunc(num(jm.generator, -1));
+    s.jam = {generator: g >= 0 && g < generators ? g : -1, stalls: Math.max(0, Math.trunc(num(jm.stalls))), at: num(jm.at)};
+  }
   const fz = Array.isArray(r.fuses) ? r.fuses : [];
   for (let i = 0; i < REACTOR_FUSE_SLOTS; i++) s.fuses[i] = bool(fz[i]);
   s.breaker = bool(r.breaker) && s.fuses.every(Boolean);

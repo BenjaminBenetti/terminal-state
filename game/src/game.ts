@@ -47,7 +47,8 @@ import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
 import {ladderTarget, type Ladder} from './gen/traversal';
-import {raycastWorld, rayCapsule, raySphere, type Vec3, type WorldHit} from './combat/hitscan';
+import {raycastWorld, type Vec3, type WorldHit} from './combat/hitscan';
+import {nearestEnemyHit} from './combat/enemyRay'; // lane COMBAT (reactor-playtest-round2): cross-storey bullet / pellet hits
 import {meleeDamage, meleeRayDirs, resolveMelee} from './combat/melee'; // lane KNIFE (knife-melee-20261030)
 import {DAMAGE_MATERIALS, propDamageSpec} from './damage/materials'; // lane KNIFE: blade-on-surface cue / chips
 import {Hud} from './ui/hud';
@@ -86,6 +87,7 @@ import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyM
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart';
+import {installReactorStartup} from './world/reactor/startup'; // task reactor-playtest-round2-20261102 (lane STARTUP): startup audio, orange beacons, the ONLINE sky
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
@@ -483,6 +485,7 @@ export class Game {
     this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
     hookName('sirens');
     installReactorRestart(this); hookName('reactorRestart');
+    installReactorStartup(this); hookName('reactorStartup'); // task reactor-playtest-round2-20261102 (lane STARTUP): after RESTART (reads its record / hold / win clock) — the startup audio director, the orange rotating beacons + their boot-time SpotLights, the blue beam + its boot-time PointLights, the sky over the roof clearing; inert elsewhere
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
@@ -2029,19 +2032,10 @@ export class Game {
       // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
       const wh = raycastWorld(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
-      for (const z of this.zombies) {
-        if (!z.brain.alive) continue;
-        // reject zombies far from the ray
-        const tx = z.brain.x - o.x, tz = z.brain.z - o.z;
-        const along = tx * d.x + tz * d.z;
-        if (along < -1 || along > bestT + 1) continue;
-        const px = o.x + d.x * along, pz = o.z + d.z * along;
-        if ((px - z.brain.x) ** 2 + (pz - z.brain.z) ** 2 > 1.6) continue;
-        for (const v of z.hitVolumes) {
-          const t = v.b ? rayCapsule(o, d, v.a, v.b, v.r) : raySphere(o, d, v.a, v.r);
-          if (t < bestT) { bestT = t; bestZ = z; bestPart = v.part; }
-        }
-      }
+      // Lane COMBAT (reactor-playtest-round2): every live enemy's volumes along the full 3D ray, any storey, culled or not (combat/
+      // enemyRay.ts: the old cheap reject mis-projected pitched rays and skipped enemies up / down stairs, atria and the pit)
+      const eh = nearestEnemyHit(o, d, bestT, this.zombies);
+      if (eh) { bestT = eh.t; bestZ = eh.enemy; bestPart = eh.part; }
       // Lane D: corpses stop (and tear under) bullets too; shots passing close knock loose pickups about.
       const corpse = this.damage.corpseHit(this.zombies, o, d, bestT);
       if (corpse) { bestT = corpse.t; bestZ = null; }

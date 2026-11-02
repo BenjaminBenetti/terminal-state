@@ -18,6 +18,7 @@ import type {ReactorInfo, ReactorScreen} from '../../gen/reactor/reactorTypes';
 import type {StationLayout} from '../../gen/stationTypes';
 import {reactorMounts} from './controlsMount';
 import type {ReactorRunState} from './runState';
+import {JAM_TEXT, reactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 /** Board size (m): the map face; the storey buttons sit in a column at its right edge. */
 export const MAP_BOARD = {w: 1.5, h: 1.25, depth: 0.05, gap: 0.3, centerY: 1.55, buttonR: 0.032, buttonPitch: 0.105, buttonInset: 0.085} as const;
@@ -287,8 +288,11 @@ export interface MapMarker {
   x: number;
   y: number;
   z: number;
-  /** 'need' = still to find / do here (X), 'done' = installed / started (check), 'use' = carried: use it here (X + arrow). */
-  state: 'need' | 'done' | 'use';
+  /**
+   * 'need' = still to find / do here (X), 'done' = installed / started (check), 'use' = carried: use it here (X + arrow). Task
+   * reactor-playtest-round2-20261102 (lane GAS): 'jammed' = the jammed final generator (a slashed ring: nothing to do, its zone gassed).
+   */
+  state: 'need' | 'done' | 'use' | 'jammed';
   /** Generator id / fuse slot (labels). */
   id?: number;
 }
@@ -335,9 +339,22 @@ export function mapMarkers(src: MarkerSource): MapMarker[] {
   at('valve', 'valve', s.valve ? 'done' : 'need');
   at('pump', 'pump', s.pump ? 'done' : 'need');
   at('rods', 'rods', s.rods ? 'done' : 'need');
-  // the generators (in their side complexes): started or not
-  for (const g of info.generators) out.push({kind: 'generator', level: g.level, x: g.panel.x, y: g.panel.y, z: g.panel.z, state: s.generators[g.id]?.started ? 'done' : 'need', id: g.id});
+  // the generators (in their side complexes): started or not; (lane GAS) the final one is jammed
+  const jam = reactorJam(info);
+  for (const g of info.generators) out.push({kind: 'generator', level: g.level, x: g.panel.x, y: g.panel.y, z: g.panel.z, state: jam?.generator === g.id ? 'jammed' : s.generators[g.id]?.started ? 'done' : 'need', id: g.id});
   return out;
+}
+
+/** Task reactor-playtest-round2-20261102 (lane GAS): an open mark the floor counts (X / carried); done and jammed ones are not. */
+export const markerOpen = (m: Pick<MapMarker, 'state'>): boolean => m.state === 'need' || m.state === 'use';
+
+/**
+ * (lane GAS) The floor map's warning banner for storey `level`: the jammed zone's storeys while that zone is still gassed (the reactor
+ * not online), else null.
+ */
+export function storeyWarning(info: Pick<ReactorInfo, 'zones' | 'generators'>, s: Readonly<Pick<ReactorRunState, 'restarted' | 'zoneClear'>>, level: number): string | null {
+  const jam = reactorJam(info);
+  return jam && jam.levels.includes(level) && !s.restarted && (s.zoneClear[jam.zone] ?? 0) < 1 ? JAM_TEXT.map : null;
 }
 
 /** A stable signature of the markers (redraw only on change). */
