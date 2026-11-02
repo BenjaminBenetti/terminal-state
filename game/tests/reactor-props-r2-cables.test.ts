@@ -18,7 +18,8 @@ import {onCable, planBeacons} from '../src/world/reactor/startupBeaconPlan';
 
 installCanvasShim(false);
 // (+4 seeds after ARRIVAL seeded the complex entrance decks: an entrance deck as narrow as its door hid a no-route case)
-const SEEDS = [9100, 218558, 637474, 1, 42, 777, 31337, 2026110, 3, 5];
+// (+2 after BUNKER's last follow-up shifted the layouts: a straight drift run whose common height dipped under the headroom on 218558)
+const SEEDS = [9100, 218558, 637474, 1, 42, 777, 31337, 2026110, 3, 5, 11, 4242];
 const cache = new Map<number, StationLayout>();
 const level = (seed: number) => { let L = cache.get(seed); if (!L) { L = LEVELS.reactor.generate('main', {levelSeed: seed}); cache.set(seed, L); } return L; };
 const complexOf = (L: StationLayout, c: ReactorComplexInfo): CableComplex => ({level: c.level, baseY: L.levels[c.level].baseY, frontArea: c.slot!.frontArea, areas: c.areas});
