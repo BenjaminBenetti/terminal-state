@@ -20,7 +20,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {playerTrainPlacement, trainSpawnPose, trainToWorld, worldToTrain, type TrainPlacement} from '../src/gen/playerTrain';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {TRAIN_DOOR, TRAIN_LIGHTS, PlayerTrainRuntime, installPlayerTrain, interiorLightMounts, trainColliders, trainQaApi, type TrainHost} from '../src/world/playerTrain';
-import {TRAIN_VIEW, leafSpan, viewCost, windowsOf} from '../src/world/playerTrainView';
+import {TRAIN_VIEW, TrainMaterials, WALL_ART_GLASS, buildTrainView, leafSpan, noseCorners, nosePane, viewCost, windowsOf} from '../src/world/playerTrainView';
 import {raycastWorld} from '../src/combat/hitscan';
 import {loadStripped} from './helpers/openablesFixture';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -172,7 +172,7 @@ describe('player train: build at the shared placement (Subway / Office / Mall)',
       for (const l of rt.lights.all) expect(l.castShadow).toBe(false);
       // cost the car adds (reported): a handful of draws
       const cost = viewCost(t.view.root);
-      expect(cost.meshes).toBeLessThanOrEqual(26); // 9 lining + the window glass + 3 fallback skin + 12 fallback leaves
+      expect(cost.meshes).toBeLessThanOrEqual(30); // 9 lining + the window glass + 3 fallback skin + 12 fallback leaves + the Lockbox (body, lid, liner)
       // the procedural surfaces face the way their normals say (winding = shading normal), the lining faces into the car
       const owned = new Set(t.view.geometries);
       const inward = new Set(['train-floor', 'train-ceiling', 'train-walls']);
@@ -507,7 +507,7 @@ describe('player train follow-up (train-shell-followup-20261101-221246): door hi
       const info = qa.train() as {rear: unknown; windows: {end: number; glassBoxes: number}; highlighted: number | null};
       expect(info.rear).toEqual(SPEC.rear);
       expect(info.windows.end).toBe(windowsOf(SPEC).end.length);
-      expect(info.windows.glassBoxes).toBe(windowsOf(SPEC).side.length + windowsOf(SPEC).end.length + SPEC.doors.length * 2);
+      expect(info.windows.glassBoxes).toBe(windowsOf(SPEC).side.filter(w => w.zone !== 'nose').length + windowsOf(SPEC).end.length + SPEC.doors.length * 2);
       face(host, p, rear.x1 + 1.0, 0);
       for (let i = 0; i < 400 && local(host, p).x > rear.x1 + 1.05; i++) step(host, DT, W());
       // beside the doorway the partition blocks
@@ -540,13 +540,30 @@ describe('player train follow-up: see-through windows (glass panes, lining cut-o
     expect(w.leaf, 'the leaf window is published').not.toBeNull();
     const hw = SPEC.interior.halfWidth, rear = SPEC.rear!;
     const pockets = SPEC.doors.flatMap(d => [0, 1].map(k => leafSpan(d, k as 0 | 1, 1, SPEC.doorLeaf.width)));
+    // (task train-lockbox: every intended side window is cut — zones cab / saloon / rear / nose)
+    expect(new Set(w.side.map(s => s.zone))).toEqual(new Set(['cab', 'saloon', 'rear', 'nose']));
     for (const s of w.side) {
-      const inCab = s.x0 >= SPEC.cab.x0 + TRAIN_VIEW.partition && s.x1 <= SPEC.interior.x1 + 1e-6;
-      const inRear = s.x0 >= SPEC.interior.x0 - 1e-6 && s.x1 <= rear.x1 - TRAIN_VIEW.partition;
-      expect(inCab || inRear, `side window ${s.x0}..${s.x1} in the cab or the rear compartment`).toBe(true);
-      for (const [a, b] of pockets) expect(s.x1 <= a + 1e-6 || s.x0 >= b - 1e-6, `side window ${s.x0}..${s.x1} clear of the open leaf ${a.toFixed(3)}..${b.toFixed(3)}`).toBe(true);
-      expect(s.y0).toBeGreaterThan(SPEC.floorY); expect(s.y1).toBeLessThan(SPEC.ceilingY);
-      expect(s.skinZ).toBeGreaterThan(hw); expect(s.skinZ).toBeLessThanOrEqual(SPEC.width / 2 + 1e-6);
+      const tag = `${s.zone} window ${s.x0}..${s.x1} side ${s.side}`;
+      expect(s.y0, tag).toBeGreaterThan(SPEC.floorY); expect(s.y1, tag).toBeLessThan(SPEC.ceilingY);
+      if (s.zone === 'nose') {
+        // beyond a bulkhead, joined to that end's corner end window (one wraparound opening)
+        expect(Math.min(Math.abs(s.x0), Math.abs(s.x1)), tag).toBeGreaterThan(SPEC.interior.x1 - 1e-6);
+        const e = w.end.find(q => noseCorners(SPEC, q).includes(s));
+        expect(e, `${tag}: joined to an end window`).toBeTruthy();
+        continue;
+      }
+      expect(s.skinZ, tag).toBeGreaterThan(hw); expect(s.skinZ, tag).toBeLessThanOrEqual(SPEC.width / 2 + 1e-6);
+      if (s.zone === 'cab') expect(s.x0 >= SPEC.cab.x0 + TRAIN_VIEW.partition && s.x1 <= SPEC.interior.x1 + 1e-6, `${tag} in the cab`).toBe(true);
+      if (s.zone === 'rear') {
+        // in the rear compartment, over the rear door's leaf pocket (a pocket door seen through glass): the pocket is published
+        expect(s.x0 >= SPEC.interior.x0 - 1e-6 && s.x1 <= rear.x1 - TRAIN_VIEW.partition, `${tag} in the rear compartment`).toBe(true);
+        expect(s.pocket, `${tag} names its pocket`).toBeTruthy();
+        const lp = pockets.find(([a, b]) => Math.abs(a - s.pocket!.x0) < 0.002 && Math.abs(b - s.pocket!.x1) < 0.002);
+        expect(lp, `${tag}: the pocket is a real open-leaf span`).toBeTruthy();
+        continue;
+      }
+      if (s.zone === 'saloon') expect(s.x0 > rear.x1 && s.x1 < SPEC.cab.x0, `${tag} in the saloon`).toBe(true);
+      for (const [a, b] of pockets) expect(s.x1 <= a - 0.03 || s.x0 >= b + 0.03, `${tag} clear of the open leaf ${a.toFixed(3)}..${b.toFixed(3)}`).toBe(true);
     }
     for (const e of w.end) {
       expect(e.z0).toBeGreaterThanOrEqual(-hw - 1e-6); expect(e.z1).toBeLessThanOrEqual(hw + 1e-6);
@@ -556,6 +573,80 @@ describe('player train follow-up: see-through windows (glass panes, lining cut-o
     const l = w.leaf!;
     expect(l.x0).toBeGreaterThan(-SPEC.doorLeaf.width / 2); expect(l.x1).toBeLessThan(SPEC.doorLeaf.width / 2);
     expect(l.y0).toBeGreaterThan(0); expect(l.y1).toBeLessThan(SPEC.doorLeaf.height);
+  });
+
+  it('task train-lockbox: the rear windows show the pocket door — nothing of the frame in the leaf\'s slide, a stop post at its parked end; the nose corners close as an L', () => {
+    const view = buildTrainView(SPEC, new TrainMaterials());
+    const trim = view.fixed.getObjectByName('train-trim') as THREE.Mesh, glassM = view.fixed.getObjectByName('train-glass') as THREE.Mesh;
+    const tp = trim.geometry.attributes.position, ti = trim.geometry.index!;
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), c = new THREE.Vector3(), box = new THREE.Box3();
+    const L = SPEC.doorLeaf;
+    for (const w of windowsOf(SPEC).side.filter(q => q.pocket)) {
+      // the leaf's slot inside the pocket span at window height: no trim triangle crosses it (the leaf slides through freely)
+      const z0 = w.side * (L.outerZ - L.thickness), z1 = w.side * L.outerZ;
+      const slot = new THREE.Box3(new THREE.Vector3(w.pocket!.x0, w.y0, Math.min(z0, z1)), new THREE.Vector3(w.pocket!.x1, w.y1, Math.max(z0, z1)));
+      slot.expandByScalar(-0.001);
+      for (let i = 0; i < ti.count; i += 3) {
+        a.fromBufferAttribute(tp, ti.getX(i)); b.fromBufferAttribute(tp, ti.getX(i + 1)); c.fromBufferAttribute(tp, ti.getX(i + 2));
+        box.makeEmpty().expandByPoint(a).expandByPoint(b).expandByPoint(c);
+        const inter = box.clone().intersect(slot);
+        const solid = !inter.isEmpty() && inter.max.x - inter.min.x > 1e-4 && inter.max.y - inter.min.y > 1e-4 && inter.max.z - inter.min.z > 1e-4;
+        const flat = !inter.isEmpty() && [inter.max.x - inter.min.x, inter.max.y - inter.min.y, inter.max.z - inter.min.z].filter(d => d > 1e-4).length >= 2;
+        expect(solid || flat, `trim triangle ${i / 3} in the leaf slot of the ${w.zone} window side ${w.side}`).toBe(false);
+      }
+      // the stop post: its +X face TRAIN_VIEW.pocketStopGap short of the parked leaf's -X end, |z| lining -> skin, window height
+      const px = w.pocket!.x0 - TRAIN_VIEW.pocketStopGap;
+      let post = false;
+      for (let i = 0; i < tp.count; i++) if (Math.abs(tp.getX(i) - px) < 1e-6 && Math.abs(tp.getY(i) - w.y1) < 1e-6 && Math.abs(Math.abs(tp.getZ(i)) - w.skinZ) < 1e-6) post = true;
+      expect(post, `the pocket-end stop post behind the ${w.zone} window side ${w.side}`).toBe(true);
+      // the stop post and frame never reach into the Lockbox (it stands below the sill, inside the lining)
+      const lb = SPEC.lockbox!;
+      expect(w.y0).toBeGreaterThan(SPEC.floorY + lb.height);
+    }
+    // the nose: a side pane at |z| = skinZ from the corner rect's inner edge to the end pane (never outside the skin curve)
+    const gp = glassM.geometry.attributes.position;
+    for (const e of windowsOf(SPEC).end) for (const n of noseCorners(SPEC, e)) {
+      const q = nosePane(e, n), z = n.side * n.skinZ;
+      expect(q.x1 - q.x0).toBeGreaterThan(0.05);
+      expect(Math.min(Math.abs(q.x0), Math.abs(q.x1))).toBeCloseTo(Math.min(Math.abs(n.x0), Math.abs(n.x1)), 6); // from the inner edge
+      expect(Math.max(Math.abs(q.x0), Math.abs(q.x1))).toBeCloseTo(e.skinX, 6); // to the end pane
+      let found = false;
+      for (let i = 0; i < gp.count; i++) if (Math.abs(gp.getZ(i) - z) < 1e-6 && Math.abs(gp.getX(i) - q.x1) < 1e-6 && Math.abs(gp.getY(i) - q.y1) < 1e-6) found = true;
+      expect(found, `nose side pane at z ${z}`).toBe(true);
+    }
+    for (const g of view.geometries) g.dispose();
+  });
+
+  it('task train-lockbox: a newly cut (saloon) window gets the wall art\'s painted glass laid exactly on its hole; the cab walls keep their mapping, continuous on both sides', () => {
+    // a saloon window on each side between the rear and middle doors, plus the cab windows the spec already has
+    const sal = [{side: -1 as const, zone: 'saloon', x0: -3.6, x1: -2.4, y0: 1.98, y1: 2.82, skinZ: 1.46}, {side: 1 as const, zone: 'saloon', x0: -3.6, x1: -2.4, y0: 1.98, y1: 2.82, skinZ: 1.46}];
+    const sp = {...SPEC, windows: {...SPEC.windows, side: [...SPEC.windows.side.filter(w => w.zone === 'cab'), ...sal]}} as typeof SPEC;
+    const view = buildTrainView(sp, new TrainMaterials());
+    const walls = view.fixed.getObjectByName('train-walls') as THREE.Mesh;
+    const pos = walls.geometry.attributes.position, uv = walls.geometry.attributes.uv;
+    const at = (x: number, y: number, z: number) => {
+      const out: [number, number][] = [];
+      for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getX(i) - x) < 1e-6 && Math.abs(pos.getY(i) - y) < 1e-6 && Math.abs(pos.getZ(i) - z) < 1e-6) out.push([uv.getX(i), uv.getY(i)]);
+      return out;
+    };
+    const hw = SPEC.interior.halfWidth;
+    for (const w of sal) {
+      // the hole's corner seen as the viewer's lower-left (from inside: -Z wall = smaller x, +Z wall = larger x) carries the painted
+      // glass's lower-left corner; the upper-right likewise
+      const ll = at(w.side < 0 ? w.x0 : w.x1, w.y0, w.side * hw), ur = at(w.side < 0 ? w.x1 : w.x0, w.y1, w.side * hw);
+      expect(ll.length, 'a lining vertex on the hole corner').toBeGreaterThan(0);
+      for (const [u, v] of ll) { expect(u).toBeCloseTo(WALL_ART_GLASS.u0, 6); expect(v).toBeCloseTo(WALL_ART_GLASS.v0, 6); }
+      for (const [u, v] of ur) { expect(u).toBeCloseTo(WALL_ART_GLASS.u1, 6); expect(v).toBeCloseTo(WALL_ART_GLASS.v1, 6); }
+    }
+    // the cab walls (accepted mapping): every lining vertex shared by two pieces carries ONE uv (no per-piece reversal on +Z)
+    const seen = new Map<string, string>();
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      if (x < SPEC.cab.x0) continue;
+      const k = `${x.toFixed(5)},${pos.getY(i).toFixed(5)},${pos.getZ(i).toFixed(5)}`, u = `${uv.getX(i).toFixed(5)},${uv.getY(i).toFixed(5)}`;
+      if (seen.has(k)) expect(seen.get(k), `uv continuity at ${k}`).toBe(u); else seen.set(k, u);
+    }
+    for (const g of view.geometries) g.dispose();
   });
 
   it('glass in every cut window and leaf window, the lining open behind it, collision unchanged, bullets stop at the glass', () => {
@@ -747,8 +838,16 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
         expect(caster.intersectObject(glassMesh, false).length + caster.intersectObject(t.view.leafGlass!.mesh, false).length, `${what}: through glass`).toBeGreaterThan(0);
       };
       for (const w of WN.side) {
-        const cx = (w.x0 + w.x1) / 2, cy = (w.y0 + w.y1) / 2;
-        clear([cx, cy, 0], [cx, cy, w.side * (w.skinZ + 0.5)], `cab side window x ${w.x0}..${w.x1} side ${w.side}`);
+        const cy = (w.y0 + w.y1) / 2;
+        if (w.zone === 'nose') {
+          // the corner's side pane: from outside, beside the nose, the view goes in through the glass (no skin, no sleeve face first)
+          const e = WN.end.find(q => noseCorners(SPEC, q).includes(w))!, q = nosePane(e, w), cx = (q.x0 + q.x1) / 2;
+          clear([cx, (q.y0 + q.y1) / 2, w.side * 2.5], [cx, (q.y0 + q.y1) / 2, w.side * (w.skinZ - 0.02)], `nose corner x ${w.x0}..${w.x1} side ${w.side}`);
+          continue;
+        }
+        // a window over the rear door's pocket: look past the pocket-end stop post (it stands at the parked leaf's -X end)
+        const cx = w.pocket ? (w.x0 + w.pocket.x0 - TRAIN_VIEW.pocketStopGap - TRAIN_VIEW.pocketStop) / 2 : (w.x0 + w.x1) / 2;
+        clear([cx, cy, 0], [cx, cy, w.side * (w.skinZ + 0.5)], `${w.zone} side window x ${w.x0}..${w.x1} side ${w.side}`);
       }
       for (const w of WN.end) {
         const cz = (w.z0 + w.z1) / 2, cy = (w.y0 + w.y1) / 2;
@@ -779,7 +878,8 @@ describe('player train: the cooked Meshy models (lane ASSETS) in place', () => {
       expect(rt.playerInside()).toBe(true);
       const cost = viewCost(t.view.root);
       // 25 draws: 9 lining + the window glass + shell + desk + 12 leaves + ONE instanced leaf-glass draw (task train-shell-followup)
-      expect(cost.meshes).toBeLessThanOrEqual(26);
+      // + the Lockbox (task train-lockbox: body, lid, liner)
+      expect(cost.meshes).toBeLessThanOrEqual(30);
       expect(cost.tris).toBeLessThan(160000);
     } finally {
       for (const s of host.sectionHooks) s.teardown?.();
