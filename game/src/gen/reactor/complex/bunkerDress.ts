@@ -28,7 +28,7 @@ import {
   type PlaceCtx,
 } from '../../placeKit';
 import type {BunkerCarveRec} from './bunker';
-import {BLAST} from './bunkerKinds';
+import {BLAST, isBunkerKind} from './bunkerKinds';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const OPP: Record<Side, Side> = {N: 'S', S: 'N', E: 'W', W: 'E'};
@@ -125,11 +125,47 @@ export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Placement helpers
 
+/**
+ * Cells a footprint covers by more than 5 mm (placeKit's cellsOfBox forgives 4 cm at each edge): a hero model's visible body never
+ * stands over a walkable cell (user rule: collision matches the visible geometry; lane PATHS' audit).
+ */
+function coverCells(x: number, z: number, hx: number, hz: number): [number, number, number, number] {
+  const e = 0.005;
+  return [Math.floor((x - hx + e) / CELL), Math.floor((z - hz + e) / CELL), Math.floor((x + hx - e) / CELL), Math.floor((z + hz - e) / CELL)];
+}
+
+/**
+ * After a placement of a hero model kind: block the extra cells its footprint covers (coverCells); undone (prop removed) when one of
+ * them is not this area's free floor or the area would split. `p` must be the last prop pushed.
+ */
+function sealOrDrop(D: Dx, a: Area, p: PropPlacement): boolean {
+  const {g, ctx, layout} = D;
+  const [c0, r0, c1, r1] = coverCells(p.x, p.z, p.hx, p.hz);
+  const extra: number[] = [];
+  let ok = true;
+  for (let cy = r0; cy <= r1 && ok; cy++) for (let cx = c0; cx <= c1; cx++) {
+    const i = g.inBounds(cx, cy) ? g.idx(cx, cy) : -1;
+    if (i >= 0 && g.blocked[i]) continue;
+    if (i < 0 || g.cells[i] !== FLOOR || g.area[i] !== a.id || ctx.doorCell[i] || ctx.zone[i] || ctx.keep[i] || ctx.edge[i]) { ok = false; break; }
+    extra.push(i);
+  }
+  if (ok) {
+    for (const i of extra) { g.blocked[i] = 1; if (p.blocksSight) g.sightBlocked[i] = 1; }
+    if (areaConnected(ctx, a)) return true;
+    for (const i of extra) { g.blocked[i] = 0; g.sightBlocked[i] = 0; }
+  }
+  // drop it: its own cells (placed on free cells) back to free floor
+  const [b0, s0, b1, s1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+  for (let cy = s0; cy <= s1; cy++) for (let cx = b0; cx <= b1; cx++) if (g.inBounds(cx, cy)) { const i = g.idx(cx, cy); g.blocked[i] = 0; g.sightBlocked[i] = 0; }
+  if (layout.props[layout.props.length - 1] === p) layout.props.pop();
+  return false;
+}
+
 /** A collision prop over a world AABB (forced: the bunker's own anchored pieces), blocking its floor cells of `areaIds`. */
 function solidProp(D: Dx, kind: PropKind, a: Area, b: {x0: number; z0: number; x1: number; z1: number}, h: number, rot: number, variant: number, sight: boolean): PropPlacement {
   const {g, layout, lv} = D;
   const x = r3((b.x0 + b.x1) / 2), z = r3((b.z0 + b.z1) / 2), hx = r3((b.x1 - b.x0) / 2), hz = r3((b.z1 - b.z0) / 2);
-  const [c0, r0, c1, r1] = cellsOfBox(x, z, hx, hz);
+  const [c0, r0, c1, r1] = coverCells(x, z, hx, hz);
   for (let cy = r0; cy <= r1; cy++) for (let cx = c0; cx <= c1; cx++) {
     if (!g.inBounds(cx, cy)) continue;
     const i = g.idx(cx, cy);
@@ -194,7 +230,7 @@ function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front:
     for (const t of ts) {
       const sp = wallSpot(a, sd, t, kind);
       const p = tryPlaceProp(D.ctx, a, kind, sp.x, sp.z, sp.rot, {front});
-      if (p) return p;
+      if (p && (!isBunkerKind(kind) || sealOrDrop(D, a, p))) return p;
     }
   }
   return null;
@@ -233,8 +269,8 @@ function blastDoor(D: Dx): void {
     D.decor('steelDark', D.box(uo, uo + 3, v, v + 1), y, y + 0.012);
   }
   // amber nosing on the first riser each side (the threshold reads from both rooms)
-  D.decor('plasticSeat', D.box(uo, uo + 3, LD - 2, LD - 1.9), r3(sill / 3) - 0.005, r3(sill / 3) + 0.014);
-  D.decor('plasticSeat', D.box(uo, uo + 3, LD + BW + 1.9, LD + BW + 2), r3(sill / 3) - 0.005, r3(sill / 3) + 0.014);
+  D.decor('plasticSeat', D.box(uo, uo + 3, LD - 3, LD - 2.9), r3(sill / 3) - 0.005, r3(sill / 3) + 0.014);
+  D.decor('plasticSeat', D.box(uo, uo + 3, LD + BW + 2.9, LD + BW + 3), r3(sill / 3) - 0.005, r3(sill / 3) + 0.014);
 }
 
 /** The heavy hazard-striped steel frame round the pit-wall entrance (both faces), the plate over it on the gallery side. */
@@ -288,19 +324,21 @@ function dormitory(D: Dx, a: Area): void {
   const longs: Side[] = horiz ? ['N', 'S'] : ['W', 'E'];
   const depth = (horiz ? a.h : a.w) * CELL;
   const bed = PROP_DEFS.bunkBed, fl = PROP_DEFS.footlocker;
-  const rowDepth = 0.04 + bed.w + 0.06 + fl.d;
+  const rowDepth = bed.w + 0.05 + fl.d;
   const walls = depth >= 2 * rowDepth + 1.3 ? longs : [longs.slice().sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q))[0]];
   for (const sd of walls) {
     const [lo, hi] = wallRange(a, sd), [nx, nz] = NORMAL[sd], fc = face(a, sd);
     const along = sd === 'N' || sd === 'S';
     const bedRot = along ? Math.PI / 2 : 0;
     const flRot = rotFacing(-nx, -nz);
-    const pitch = bed.d + D.rng.range(0.55, 0.7);
-    for (let t = lo + 0.3 + bed.d / 2; t + bed.d / 2 <= hi - 0.3; t += pitch) {
-      const off = 0.04 + bed.w / 2, foff = 0.04 + bed.w + 0.06 + fl.d / 2;
+    // bunks on the cell grid: head against the wall (2.0 m = 4 cells), centres on cell boundaries 1.5 m apart (0.85 m bunk = 2 cells),
+    // so each covers whole cells only (its collision is its visible body); the footlocker in the next cell at its foot
+    const pitch = 1.5;
+    for (let t = Math.ceil((lo + 0.3 + bed.d / 2) / CELL) * CELL + (D.rng.chance(0.5) ? CELL : 0); t + bed.d / 2 <= hi - 0.3; t += pitch) {
+      const off = bed.w / 2, foff = bed.w + 0.05 + fl.d / 2;
       const bx = along ? t : fc - nx * off, bz = along ? fc - nz * off : t;
       const p = tryPlaceProp(D.ctx, a, 'bunkBed', bx, bz, bedRot);
-      if (!p) continue;
+      if (!p || !sealOrDrop(D, a, p)) continue;
       S.beds++;
       if (!D.rng.chance(0.8)) continue;
       const fx = along ? t : fc - nx * foff, fz = along ? fc - nz * foff : t;
@@ -366,6 +404,7 @@ function radioRoom(D: Dx, a: Area): void {
     for (const o of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
       const alongX = ms === 'N' || ms === 'S';
       p = tryPlaceProp(D.ctx, a, 'radioConsole', Math.round((cx + (alongX ? o : 0)) * 4) / 4, Math.round((cz + (alongX ? 0 : o)) * 4) / 4, rotFacing(fx0, fz0), {ring: 0.7});
+      if (p && !sealOrDrop(D, a, p)) p = null;
       if (p) break;
     }
   }
