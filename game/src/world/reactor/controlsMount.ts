@@ -36,7 +36,8 @@ export type HostPiece = 'switchgear' | 'coolantPump' | 'coolantValve' | 'control
  *  - generator: the control box on the +Z long side, face z 0.77, x 1.9..2.3, y 0.85..1.5 (the body side is z 0.59).
  */
 export const HOST_FACES = {
-  switchgear: {doorZ: 0.39, backZ: -0.65, clear: {x0: -0.38, x1: 0.04, y0: 1.12, y1: 1.46}},
+  // frontZ: the outermost front (the lever handle) — it, not the door, stands on the collider's front face (lane PATHS' audit)
+  switchgear: {doorZ: 0.39, frontZ: 0.6502, backZ: -0.65, clear: {x0: -0.38, x1: 0.04, y0: 1.12, y1: 1.46}},
   coolantPump: {endX: -1.75, disc: {y: 1.0, z: 0, r: 0.35}},
   controlConsole: {desk: {zF: 0.4, yF: 0.82, zB: 0.07, yB: 1.01}, clearX: 1.38},
   coolantValve: {wheel: {y: 1.93, r: 0.43, cutY: 1.895}, lamp: {y: 0.96, z: 0.355}},
@@ -184,11 +185,14 @@ function derivedMachine(site: ReactorSite, piece: HostPiece, floorY: number): Re
   const ps = ctl.map(c => (c.at.x - ctl[0].at.x) * tx + (c.at.z - ctl[0].at.z) * tz);
   const [W, , D] = HOST_DIMS[piece];
   const kind: ReactorMachine['kind'] = piece === 'switchgear' ? 'switchgear' : piece === 'coolantPump' ? 'pump' : piece === 'coolantValve' ? 'valve' : 'console';
-  const depth = piece === 'switchgear' ? HOST_FACES.switchgear.doorZ - HOST_FACES.switchgear.backZ : piece === 'coolantPump' ? W : D;
+  const SG = HOST_FACES.switchgear;
+  const depth = piece === 'switchgear' ? SG.frontZ - SG.backZ : piece === 'coolantPump' ? W : D;
   // a derived switchgear bank: whole real-size sections (at least four) across its controls
   const across = piece === 'switchgear' ? Math.max(4, Math.ceil((Math.max(...ps) - Math.min(...ps) + W) / W - 1e-6)) * W : piece === 'coolantPump' ? D : W;
   const mid = (Math.max(...ps) + Math.min(...ps)) / 2;
-  const cx = ctl[0].at.x + tx * mid - fx * depth / 2, cz = ctl[0].at.z + tz * mid - fz * depth / 2;
+  // the footprint front through the controls (the switchgear: its door through them, the handles in front of it)
+  const ahead = piece === 'switchgear' ? SG.frontZ - SG.doorZ : 0;
+  const cx = ctl[0].at.x + tx * mid + fx * (ahead - depth / 2), cz = ctl[0].at.z + tz * mid + fz * (ahead - depth / 2);
   const w = kind === 'pump' ? depth : across, d = kind === 'pump' ? across : depth;
   return {kind, x: cx, z: cz, y: floorY, yaw, w, d, h: HOST_DIMS[piece][1], prop: -1};
 }
@@ -202,12 +206,13 @@ export function machinePlacements(m: ReactorMachine, index: number): HostPlaceme
   const depth = machineDepth(m), across = machineWidth(m);
   switch (piece) {
     case 'switchgear': {
-      // the door plane on the footprint front, n sections stretched to exactly the collider's length
+      // the cabinets' outermost front (the lever handles) on the footprint front, the door 0.26 m behind it, the body's back into the
+      // wall behind the bank; n sections stretched to exactly the collider's length
       const {n, sx} = bankSections(across);
       const W = HOST_DIMS.switchgear[0] * sx;
       const tx = Math.cos(rotFront), tz = -Math.sin(rotFront); // model +X in world
       const frontX = m.x + fx * depth / 2, frontZ = m.z + fz * depth / 2;
-      const ox = frontX - fx * HOST_FACES.switchgear.doorZ, oz = frontZ - fz * HOST_FACES.switchgear.doorZ;
+      const ox = frontX - fx * HOST_FACES.switchgear.frontZ, oz = frontZ - fz * HOST_FACES.switchgear.frontZ;
       const out: HostPlacement[] = [];
       for (let k = 0; k < n; k++) {
         const s = -across / 2 + (k + 0.5) * W;
@@ -218,8 +223,13 @@ export function machinePlacements(m: ReactorMachine, index: number): HostPlaceme
     case 'coolantPump':
       // the long axis (model X) along the footprint's depth, the motor end (-X) at the front: model -X -> front
       return [{piece, x: m.x, y: m.y, z: m.z, rotY: Math.atan2(fz, -fx), sx: 1, sy: 1, sz: 1, machine: index}];
+    case 'coolantValve': {
+      // valves come in sizes: one uniform scale (<= 1) so the valve with its flanges fits its footprint (the collider)
+      const [W, , D] = HOST_DIMS.coolantValve, s = Math.min(1, across / W, depth / D);
+      return [{piece, x: m.x, y: m.y, z: m.z, rotY: rotFront, sx: s, sy: s, sz: s, machine: index}];
+    }
     default:
-      // valve / console: centred on the footprint, front +Z toward the operator
+      // console: centred on the footprint, front +Z toward the operator
       return [{piece, x: m.x, y: m.y, z: m.z, rotY: rotFront, sx: 1, sy: 1, sz: 1, machine: index}];
   }
 }
