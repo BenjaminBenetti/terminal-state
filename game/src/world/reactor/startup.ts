@@ -60,7 +60,7 @@ export class ReactorStartup {
   readonly beaconLights = new BeaconLights();
   readonly beamLights = new BeamLights();
   readonly audio: StartupAudio;
-  /** Lane AUDIO (surface ending): the rain bed — outside on the surface after the win, muffled under the roof (audioRain.ts). */
+  /** Lane AUDIO (surface ending): the rain bed — on the surface plaza after the win, muffled in the stair / head house (audioRain.ts). */
   readonly rain: RainAudio;
   readonly tune = {beaconLight: 1, beamLight: 1};
   /** The host's restart runtime / built Reactor air (tests replace them). */
