@@ -108,7 +108,8 @@ export function roomFrame(rc: ReactorCarve, rr: RoomRec): RoomFrame {
 export const roomPoint = (f: RoomFrame, a: number, d: number): {x: number; z: number} => ({x: r3(f.ox + (a * f.ax + d * f.ix) * CELL), z: r3(f.oz + (a * f.az + d * f.iz) * CELL)});
 
 /** Adds a collision-only machine box ('annexMachine': anchored plant, never storage) and blocks its cells. Returns the prop index. */
-function machineProp(layout: StationLayout, level: number, area: number, x: number, z: number, hx: number, hz: number, h: number, variant: number): number {
+// task reactor-expansion-20261101 (lane HOST): exported — the side complexes' generators use the same anchored collision prop
+export function machineProp(layout: StationLayout, level: number, area: number, x: number, z: number, hx: number, hz: number, h: number, variant: number): number {
   // y: relative to the storey floor here — the dresser's liftLevels lifts every level-tagged prop onto its floor (finishTraversal the rim's)
   const p: PropPlacement = {kind: 'annexMachine', x: r3(x), z: r3(z), y: 0, rot: 0, area, hx: r3(hx), hz: r3(hz), h, blocksSight: h > 1.7, variant, ...(level ? {level} : {})};
   layout.props.push(p);
@@ -303,8 +304,12 @@ function wallOf(rc: ReactorCarve, x: number, z: number): WallId {
   return westIsStair ? 'organ' : 'stair';
 }
 
-/** Cable polyline from a generator's panel along the pit walls (round the corners) to each of its zone's fans in turn. */
-export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly ReactorFan[]): {x: number; y: number; z: number}[] {
+/**
+ * Cable polyline from a generator's panel along the pit walls (round the corners) to each of its zone's fans in turn. (task
+ * reactor-expansion-20261101, lane HOST) `from`: a side complex's generator — the run starts where its cable leaves the entrance,
+ * projected onto that pit wall's plane, instead of at the panel on the stair wall.
+ */
+export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly ReactorFan[], from?: {x: number; y: number; z: number; wall: WallId}): {x: number; y: number; z: number}[] {
   const x0 = Math.min(rc.cx(0), rc.cx(rc.PW - 1)) * CELL + 0.3, x1 = x0 + rc.PW * CELL - 0.6;
   const z0 = rc.PZ0 * CELL + 0.3, z1 = z0 + rc.PD * CELL - 0.6;
   const westIsStair = rc.cx(0) < rc.cx(1);
@@ -315,7 +320,8 @@ export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly 
   };
   const pts: {x: number; y: number; z: number; w: WallId}[] = [];
   const wallX = sx('stair')!;
-  pts.push({x: gen.panel.x, y: gen.panel.y, z: gen.panel.z, w: 'stair'}, {x: wallX, y: gen.y + 2.6, z: gen.panel.z, w: 'stair'});
+  if (from) pts.push({x: sx(from.wall) ?? from.x, y: from.y, z: from.wall === 'N' ? z0 : from.wall === 'S' ? z1 : from.z, w: from.wall}); // lane HOST
+  else pts.push({x: gen.panel.x, y: gen.panel.y, z: gen.panel.z, w: 'stair'}, {x: wallX, y: gen.y + 2.6, z: gen.panel.z, w: 'stair'});
   let rest = fans.slice();
   while (rest.length) {
     const last = pts[pts.length - 1];

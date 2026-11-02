@@ -43,12 +43,17 @@ export interface ComplexSlot {
   ceilMax: number;
 }
 
-/** What a carver receives. `levelOpt` = the AreaOpts level field for the slot's storey ({} on level 0). */
+/**
+ * What a carver receives. `levelOpt` = the AreaOpts level fields for the slot's storey ({} on level 0): spread it into every
+ * k.addArea opts (`{...levelOpt, label, role}`). (task reactor-expansion-20261101, lane HOST, ADDITIVE: it also carries `floorY` =
+ * slot.baseY — Kit.addArea stamps `opts.floorY ?? 0` as the floor of an off-main-level area, so `{level}` alone would put the
+ * complex at y 0.)
+ */
 export interface ComplexCarveInput {
   k: Kit;
   rng: Rng;
   slot: ComplexSlot;
-  levelOpt: {level?: number};
+  levelOpt: {level?: number; floorY?: number};
 }
 
 /** One named space of a complex (for the map boards / HUD / spawns / dressing). */

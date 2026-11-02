@@ -18,6 +18,7 @@ import {doorwayIssues} from '../doorways';
 import {extensionIssues} from '../trackExt/index';
 import type {StationLayout} from '../stationTypes';
 import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
+import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -144,6 +145,8 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   }
   for (const p of layout.pickups) if (onRun(p.level ?? 0, p.x, p.z)) issues.push(`pickup ${p.itemId} on a stair run`);
   issues.push(...extensionIssues(layout, dist));
+  // task reactor-expansion-20261101 (lane HOST): the side complexes (region, entrance, stairs-only reach, no overlap, substantial floor)
+  issues.push(...complexIssues(layout));
   return issues;
 }
 
