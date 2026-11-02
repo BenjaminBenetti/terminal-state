@@ -588,6 +588,53 @@ User: "the reactor needs to have a noise when the blue beam shoots out the top!"
   this lane. There is no separate beam hum loop: the existing core hum and bed carry the running beam.
 - Tests: `game/tests/reactor-ending-audio.test.ts`.
 
+### The surface outside: the ruined city, rain, clear air (task reactor-surface-ending-20261102, lane SURFACE)
+User: "The player will see a city up there, with all the destroyed buildings … It should be raining! And the fog is now cleared! The
+surface is habitable again! (however ofc the city is still destroyed)." Code: `world/reactor/surface{Kit,Site,Plan,Rain,Look,City}.ts`
+and the runtime `surface.ts` (installed after STARTUP). QA: `__LL.reactorSurface({sky, ground, horizon, zenith, clouds, mist})`.
+- **Kit registry** (`surfaceKit.ts` `SURFACE_KIT`, the swap registry): role, lazy key / URL, measured dims, rings, scale band, cap and
+  front axis per entry. Entries: the lead's Meshy kit (`REACTOR_SURFACE_KIT`: high-rise, apartment, garage skeleton, storefront row)
+  and the approved Office exterior (ruined tower / mid-rise, car / bus wrecks, rubble pile, the water tank on a 7 m steel stand). A
+  missing model drops out. The keys load behind the Reactor's loading screen (`sectionModelKeys`).
+- **Site** (`surfaceSite.ts`): lane ENDING's `layout.reactor.surface` (plaza walk rects, edges, opening + keep-off radius, head house,
+  stair). Without it, a provisional pit-roof site. The **eye gate** shows the surface only on / over the plaza and the top of the stair.
+- **City plan** (`surfacePlan.ts`, seeded, pure): a street grid out from the yard (the ring road's legs, cross streets after every
+  34–46 m block). Each block is filled along the frontage facing the yard:
+  - inner blocks: a shallow front row of shops / apartments / garages / mid-rises;
+  - behind them: taller rows, with high-rises standing turned where only their narrow end fits;
+  - the outer blocks: high-rises;
+  - collapsed lots: rubble fields.
+
+  Every model's front is turned to the street. Wrecks crash along the inner streets, and rubble is heaped against the plaza parapet.
+  Guarantees: every footprint lies outside every walk rect, the keep-off radius and the yard, inside its block, overlapping none, and
+  within 175 m of the opening. Measured over 4 seeds: ~50 buildings, 3–9 high-rises over 50 m and 17 vehicles; the inner ring is under
+  40 m.
+- **Rain** (`surfaceRain.ts`): two layers, each one draw of camera-facing streaks placed wholly in the vertex shader. The near layer
+  has 5,200 world-anchored drops in a ±19 m box round the eye; streaks widen to ≥ 1 px with distance. The aperture column has 1,300
+  drops falling through the opening into the pit, fading over 22 m. **Shelter**: every drop is hidden below an R32F rain-floor map
+  (`textureLoad`; CPU mirror `rainFloorAt`): the ground, building tops, the head-house roof, and the floor dropped far into the pit
+  only inside the opening's disc. So nothing in the pit, under the head house or inside a building gets rain.
+- **Look** (`surfaceLook.ts`): unlit node materials, `fog: false`. Lighting: an overcast hemisphere, the beam's blue light near the
+  opening, and a non-toxic blue-grey rain mist (exp2, ~20 % at 100 m). Wet (a dynamic rain effect): darkened, runoff streaks on the
+  facades, a fresnel sky sheen, puddles and rain ripples on the ground (the Codex pit-concrete map) and on a premultiplied film over
+  ENDING's floor. A low wet-concrete parapet stands on the plaza edges. The outdoor sky (follows the eye) has a cloud deck and the
+  beam's glow where it meets the clouds.
+- **Clear air**: STARTUP's ONLINE clearing gates it all. Rain starts as the sky clears; wetness builds over 18 s (a restored world is
+  wet at once). Outside, the pit's olive FogExp2 eases to the rain mist and the far plane rises to 360 m; both are restored exactly
+  inside. STARTUP's cleared dome over the opening is hidden while outside (the outdoor sky replaces it). The open-air storey (role
+  'roof') takes a light march haze (`archHaze.ts` `levelDensity.roof` 0.08: ~10 % over 52 m). The march and its 12-buffer budget are
+  untouched.
+- **Cost**: in the pit, 0 surface draws. After the win, only the aperture column (1 draw, frustum-bounded, from the shaft).
+  Outside: ≤ 27 draws and ~0.4–0.75 M triangles per view (InstancedMesh per model part × quadrant; GLB geometry shared with the
+  library; no shadow casters). Every new material uses ≤ 3 uniform buffers per stage and ≤ 2 textures on both backends.
+- **Audio hook**: `reactorSurfaceAmbience()` = `{outside, open, rain}`. AUDIO's listener rule (`audioRain.ts`) covers the same
+  regions: plaza open, head house / stair sheltered, the pit silent.
+- Tests: `game/tests/reactor-surface-{city,rain}.test.ts` (fixture `reactor-surface-fixture.ts`: ENDING's contract when the layout
+  has it, else a contract-shaped stand-in).
+- **Limits**: no browser / WebGPU check from this lane. The model materials use the Meshy base-colour maps only (unlit outdoor
+  shading, as the Office city does); the normal / ORM maps stay in the files unused here. Bullets pass through the city (scenery
+  beyond the parapet). The tests ran on the stand-in contract until ENDING's generator is merged.
+
 ## The train
 The rim station is a shared Trench beside its start platform, so the shared player train (`gen/playerTrain.ts`
 `playerTrainPlacement`, PR 33) parks there with no train-side change. It sits inside `layout.reactor.arrival`'s stop window, and a
