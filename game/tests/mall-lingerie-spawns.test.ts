@@ -36,6 +36,13 @@ type Grid = StationLayout['levels'][number]['grid'];
 
 const rectDist = (r: MallRect, x: number, z: number) => Math.hypot(Math.max(r.x0 - x, 0, x - r.x1), Math.max(r.z0 - z, 0, z - r.z1));
 const inRect = (r: MallRect, x: number, z: number) => x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1;
+/** A booth variant stands on the corner shared by a walkable 2 x 2 patch (the booth's centre line); every other spawn on a cell centre, 3 x 3 clear. */
+const atPatch = (z: {x: number; z: number}) => Number.isInteger(z.x * 2) && Number.isInteger(z.z * 2);
+function standsClear(g: Grid, z: {x: number; z: number}): boolean {
+  if (atPatch(z)) { const x = Math.round(z.x * 2), y = Math.round(z.z * 2); return g.walkable(x - 1, y - 1) && g.walkable(x, y - 1) && g.walkable(x - 1, y) && g.walkable(x, y); }
+  const [x, y] = g.cellOf(z.x, z.z);
+  return clearAround(g as never, x, y, 1);
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // Synthetic store fixture
@@ -44,7 +51,11 @@ interface Fixture { l: StationLayout; shop: LingerieShop; booths: MallRect[]; ai
 
 /** Seed's mall with its largest single-front (N / S) retail store turned into a lingerie store: booths 2 x 2 m + a 1.5 m aisle. */
 function fixture(seed: number): Fixture {
-  const l = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'});
+  // generated WITHOUT the store-local pass; a real lingerie store of the seed is neutralised (re-labelled a clothing store) so the
+  // fixture's store is the only one the pass sees
+  const {lingerie: _l, ...contexts} = P.contexts;
+  const l = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'}, {spawns: {...P, contexts}});
+  for (const s of lingerieStores(l)) { (s as {program: string}).program = 'clothing'; s.fit = {...s.fit!, purpose: 'mall-clothing'}; }
   const shop = l.mall!.shops.filter(s => s.level >= 1 && s.kind === 'store' && (s.frontages?.length ?? 1) === 1 && (s.frontage.side === 'N' || s.frontage.side === 'S'))
     .sort((a, b) => b.salesArea - a.salesArea)[0] as LingerieShop & {changing?: MallRect[]};
   const a = l.areas[shop.area], g = l.levels[shop.level].grid;
@@ -113,7 +124,10 @@ describe('the store-local pass on a synthetic lingerie store', () => {
         expect(z.area).toBe(shop.area);
         expect(g.area[i]).toBe(shop.area);
         expect(g.walkable(x, y)).toBe(true);
-        expect(clearAround(g as never, x, y, 1)).toBe(true);
+        expect(standsClear(g, z)).toBe(true);
+        // booth variants on a booth's 2 x 2 patch centre, never in the aisle (the store has booths); sales-floor spawns on cell centres
+        expect(atPatch(z)).toBe(booths.some(q => inRect(q, z.x, z.z)));
+        expect(inRect(aisle, z.x, z.z) && !booths.some(q => inRect(q, z.x, z.z))).toBe(false);
         expect(z.y).toBe(g.floorOf(i));
         expect(Math.min(...(shop.frontages ?? [shop.frontage]).map(f => rectDist(f, z.x, z.z)))).toBeGreaterThanOrEqual(LINGERIE_SPAWN_RULES.entryKeepM);
         // never in a curtain gap nor on the cell either side of it (booth front row / aisle cell facing it)
@@ -253,6 +267,7 @@ const WITHOUT = {...P, contexts: CONTEXTS_WITHOUT};
 describe('generated malls: the store-local variants exist only inside a lingerie store', () => {
   it('every lingerie-tagged spawn stands in its store (own sales floor, walkable, off the shopfront), appended last, context lingerie, an ordinary zombie', () => {
     const report: string[] = [];
+    let withStore = 0;
     for (const seed of MALL_SEEDS) {
       const l = mallOf(seed), stores = lingerieStores(l);
       const tagged = l.zombies.map((z, i) => [z, i] as const).filter(([z]) => z.look === 'lingerie');
@@ -263,7 +278,9 @@ describe('generated malls: the store-local variants exist only inside a lingerie
       expect(tagged.length).toBeLessThanOrEqual(LINGERIE_CONTEXT.count[1]);
       expect(tagged.map(([, i]) => i)).toEqual(tagged.map((_, k) => first + k)); // contiguous ...
       expect(first + tagged.length).toBe(l.zombies.length); // ... and last
-      const g = l.levels[shop.level].grid, rects = shop.changing ?? [];
+      const g = l.levels[shop.level].grid, rects = shop.changing ?? [], booths = rects.slice(0, -1);
+      expect(booths.length, `seed ${seed}: ${shop.id} booths`).toBeGreaterThanOrEqual(4);
+      const perBooth = booths.map(() => 0);
       let inChanging = 0;
       for (const [z, i] of tagged) {
         const [x, y] = g.cellOf(z.x, z.z);
@@ -272,16 +289,28 @@ describe('generated malls: the store-local variants exist only inside a lingerie
         expect(z.area === shop.area || l.areas[z.area].purpose === shop.fit?.purpose).toBe(true);
         expect(z.area).not.toBe(shop.backroom);
         expect(g.walkable(x, y)).toBe(true);
-        expect(clearAround(g as never, x, y, 1)).toBe(true);
+        expect(standsClear(g, z)).toBe(true);
         expect(Math.min(...(shop.frontages ?? [shop.frontage]).map(f => rectDist(f, z.x, z.z)))).toBeGreaterThanOrEqual(LINGERIE_SPAWN_RULES.entryKeepM);
         expect(sealsPassage(g, z.x, z.z, LINGERIE_SPAWN_RULES.passageRadiusM)).toBe(false);
         expect([z.type, z.archetype, z.horde]).toEqual(['shambler', 'zombie', undefined]);
         expect(spawnContextOf(l, P, i)).toBe('lingerie');
-        if (rects.some(q => inRect(q, z.x, z.z))) inChanging++;
+        // lane STORE's rects: the booths first, the aisle last — a variant is in a booth (on its 2 x 2 patch centre) or on the sales
+        // floor (off the changing area's mouth), never waiting in the aisle
+        const booth = booths.findIndex(q => inRect(q, z.x, z.z));
+        if (booth >= 0) { inChanging++; perBooth[booth]++; expect(atPatch(z)).toBe(true); }
+        else {
+          expect(rects.some(q => inRect(q, z.x, z.z)), `seed ${seed} #${i} in the aisle`).toBe(false);
+          if (shop.changingEntry) expect(Math.hypot(shop.changingEntry.x - z.x, shop.changingEntry.z - z.z)).toBeGreaterThanOrEqual(LINGERIE_SPAWN_RULES.changingEntryKeepM);
+        }
       }
-      if (rects.length) expect(inChanging, `seed ${seed}: mostly in the changing area`).toBeGreaterThan(tagged.length / 2);
-      report.push(`seed ${seed}: ${shop.id} L${shop.level} ${shop.lot}: ${tagged.length} variants (${inChanging} in the changing area)`);
+      expect(Math.max(0, ...perBooth), `seed ${seed}: one variant per booth`).toBeLessThanOrEqual(1);
+      expect(inChanging, `seed ${seed}: mostly in the changing area`).toBeGreaterThan(tagged.length / 2);
+      withStore++;
+      report.push(`seed ${seed}: ${shop.id} L${shop.level} ${shop.lot}: ${tagged.length} variants (${inChanging} in ${booths.length} booths, ${tagged.length - inChanging} on the sales floor)`);
     }
+    // lane STORE: a lingerie store in about two thirds of malls (never guaranteed)
+    expect(withStore).toBeGreaterThanOrEqual(6);
+    expect(withStore).toBeLessThan(MALL_SEEDS.length);
     process.stdout.write(`\n[mall-lingerie-spawns] generated malls:\n   ${report.join('\n   ')}\n`);
   });
 

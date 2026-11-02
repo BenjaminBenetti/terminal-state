@@ -4,14 +4,16 @@
 // variants inside this store, especially in the changing area." Only when the seeded mall HAS a lingerie store (lane STORE: program
 // 'lingerie', purpose 'mall-lingerie', LARGE lots only, never guaranteed) this pass adds ONE run of the spawn profile's 'lingerie'
 // zone context (ai/spawnTables.ts LINGERIE_CONTEXT, U{3..5} per store) inside that store and nowhere else:
-//  - most of the run in the store's walk-in changing area (MallShop.changing: booth interiors + their aisle), spread one per booth /
-//    rect first; floor(count / 3) on its own sales floor (3 -> 2 + 1, 4 -> 3 + 1, 5 -> 4 + 1); a part that does not fit moves to the
+//  - most of the run in the store's walk-in changing area (MallShop.changing: one rect per booth + the aisle), spread one per booth
+//    first; floor(count / 3) on its own sales floor (3 -> 2 + 1, 4 -> 3 + 1, 5 -> 4 + 1); a part that does not fit moves to the
 //    other group;
-//  - only walkable FLOOR cells of the store's own sales floor (props block: gen/grid.ts walkable), 3 x 3 clear, reachable and >= 36
-//    walking cells from the start (the mall's validation rule), 5 m off the storey's landings, >= 4 m from the shopfront(s) (no
-//    point-blank entry), never on a booth / changing-area opening cell (a booth door or the aisle cell in front of it), sales-floor
-//    spawns >= 2 cells off the changing area (its mouth stays clear), a 0.5 m disc never splits the storey (spawnTables sealsPassage),
-//    1.4 m from every enemy already on the storey;
+//  - only walkable FLOOR of the store's own sales floor (props block: gen/grid.ts walkable), reachable and >= 36 walking cells from
+//    the start (the mall's validation rule), 5 m off the storey's landings, >= 4 m from the shopfront(s) (no point-blank entry):
+//    in a BOOTH (a changing rect with <= 4 opening cells: its curtain gap) the centre of a 2 x 2 patch of its cells off the opening
+//    row (lane STORE's booths are 2 cells wide x 3 deep: the back 2 x 2, on the booth's centre line); the AISLE hosts nobody while
+//    there are booths (nobody waits in front of a booth door or blocks the way to the closed end); the sales floor: cells 3 x 3
+//    clear, > 2 cells off the changing area and >= 2 m from its mouth (MallShop.changingEntry); everywhere a 0.5 m disc never splits
+//    the storey (spawnTables sealsPassage) and 1.4 m from every enemy already on the storey;
 //  - every spawn is an ordinary zombie (the context's own pool: zombie only, via the ONE assignEnemyArchetypes of the generator),
 //    type 'shambler' (no coat roll: the look is the lingerie set), tagged ZombieSpawn.look 'lingerie' and the context 'lingerie';
 //  - APPENDED after every other spawn of the level (ambient, hordes, annex 'service'): every existing spawn index — its family roll,
@@ -20,7 +22,7 @@
 // The AI is the ordinary zombie's: no leash, despawn or teleport — after aggro a variant may follow the player out of the store.
 
 import type {Rng} from '../../core/rng';
-import {FLOOR} from '../grid';
+import {CELL, FLOOR} from '../grid';
 import {levelDistance} from '../levelGen';
 import {clearAround} from '../stationDress';
 import type {StationLayout} from '../stationTypes';
@@ -46,15 +48,18 @@ export const LINGERIE_SPAWN_RULES = {
   /** Sales-floor spawns stay more than this many cells (Chebyshev) off every changing-area cell: its mouth / booth fronts stay clear. */
   changingMarginCells: 2,
   /**
-   * A changing rect with at most this many OPENING cells (a walkable neighbour outside the rect: the curtain gap, <= 2 m) is a booth:
-   * a variant may stand anywhere inside it but on an opening cell. A rect with more (the aisle past the booths) also keeps the cells
-   * next to its openings free: nobody waits in front of a booth door or across the aisle's mouth.
+   * A changing rect with 1..this many OPENING cells (a walkable neighbour outside the rect: the curtain gap, <= 2 m) is a BOOTH: a
+   * variant stands on the centre of a 2 x 2 patch of its cells off the opening row (lane STORE's booths are 2 cells wide x 3 deep:
+   * its back 2 x 2). A rect with more (the aisle past the booths) hosts nobody while the store has booths (nobody waits in front of
+   * a booth door or blocks the way to the closed end); without booths only cells off and not next to its openings.
    */
   boothOpeningCells: 4,
+  /** Sales-floor spawns keep this straight-line distance (m) from the changing area's mouth (MallShop.changingEntry: the free turn). */
+  changingEntryKeepM: 2,
 } as const;
 
-/** A lingerie store's shop record: lane STORE's optional `changing` rects (world metres) of its walk-in changing area. */
-export type LingerieShop = MallShop & {readonly changing?: readonly MallRect[]};
+/** A lingerie store's shop record (lane STORE: MallShop.changing rects of its walk-in changing area, changingEntry its mouth). */
+export type LingerieShop = MallShop;
 
 /** True for the mall's lingerie store (lane STORE's program / purpose). */
 export function isLingerieStore(s: MallShop): boolean {
@@ -77,8 +82,9 @@ export interface LingerieStoreReport {
   placed: number;
   changing: number;
   floor: number;
-  /** Eligible cells: per changing rect (booths / aisle) and on the sales floor. */
+  /** Eligible stand points: per changing rect (booths / aisle) and on the sales floor; booth rects recognised. */
   candidates: {changing: number[]; floor: number};
+  booths: number;
   /** Index of the first spawn of this run in layout.zombies (-1 = none placed). */
   first: number;
 }
@@ -122,6 +128,9 @@ const rectDist = (r: MallRect, x: number, z: number): number =>
 
 const N4 = [[1, 0], [-1, 0], [0, 1], [0, -1]] as const;
 
+/** A candidate stand point: world position and the grid cell it lies in (its area / floor height). */
+interface Cand { i: number; x: number; z: number }
+
 function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: SpawnContextRule, dist: Int32Array[], keep: readonly {level: number; x: number; z: number}[]): LingerieStoreReport {
   const R = LINGERIE_SPAWN_RULES, pl = ctx.placement;
   const lv = shop.level, g = layout.levels[lv].grid, d = dist[lv];
@@ -144,8 +153,8 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
     }
   }
   bx0 = Math.max(1, bx0); by0 = Math.max(1, by0); bx1 = Math.min(g.w - 2, bx1); by1 = Math.min(g.h - 2, by1);
-  // --- changing-area membership (a bit per rect) and its opening cells (a walkable neighbour outside one of the cell's rects: a booth
-  // door, the aisle cell in front of it, the area's mouth)
+  // --- changing-area membership (a bit per rect: walkable cells of the store) and its OPENING cells (a walkable 4-neighbour outside
+  // one of the cell's rects: a booth's curtain-gap row, the aisle cells facing it, the area's mouth)
   const mask = new Map<number, number>();
   rectCells.forEach((q, k) => {
     for (let y = q.y0; y <= q.y1; y++) for (let x = q.x0; x <= q.x1; x++) {
@@ -154,14 +163,16 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
       mask.set(i, (mask.get(i) ?? 0) | (1 << k));
     }
   });
-  const opens = (i: number, m: number): boolean => {
-    const x = i % g.w, y = (i - x) / g.w;
-    return N4.some(([ox, oy]) => g.walkable(x + ox, y + oy) && (m & ~(mask.get(g.idx(x + ox, y + oy)) ?? 0)) !== 0);
-  };
-  // a rect with at most BOOTH_OPENING_CELLS opening cells is a BOOTH (a dead end behind its curtain gap: a variant may stand anywhere
-  // inside off the opening); a wider one (the aisle) also keeps the cells next to its openings free (the way past the booth doors)
   const opening = new Set<number>(), openCount = rects.map(() => 0);
-  for (const [i, m] of mask) if (opens(i, m)) { opening.add(i); for (let k = 0; k < rects.length; k++) if (m & (1 << k)) openCount[k]++; }
+  for (const [i, m] of mask) {
+    const x = i % g.w, y = (i - x) / g.w;
+    if (!N4.some(([ox, oy]) => g.walkable(x + ox, y + oy) && (m & ~(mask.get(g.idx(x + ox, y + oy)) ?? 0)) !== 0)) continue;
+    opening.add(i);
+    for (let k = 0; k < rects.length; k++) if (m & (1 << k)) openCount[k]++;
+  }
+  // a rect with at most boothOpeningCells opening cells is a BOOTH (a dead end behind its curtain gap); a wider one is the AISLE
+  const booth = openCount.map(n => n > 0 && n <= R.boothOpeningCells);
+  const hasBooths = booth.some(Boolean);
   const nextToOpening = (i: number): boolean => { const x = i % g.w, y = (i - x) / g.w; return N4.some(([ox, oy]) => opening.has(g.idx(x + ox, y + oy))); };
   const nearChanging = (x: number, y: number): boolean => {
     const c = R.changingMarginCells;
@@ -169,26 +180,45 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
     return false;
   };
   const fronts = shop.frontages?.length ? shop.frontages : [shop.frontage];
-  const eligible = (x: number, y: number): boolean => {
+  const cellOk = (x: number, y: number): boolean => {
+    if (!g.inBounds(x, y)) return false;
     const i = g.idx(x, y);
-    if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || !own.has(g.area[i]) || !clearAround(g, x, y, pl.clearCells) || !(d[i] >= pl.startCells)) return false;
-    const [cx, cz] = g.center(x, y);
-    if (keep.some(k => k.level === lv && Math.hypot(k.x - cx, k.z - cz) < (pl.landingKeepM ?? 0))) return false;
-    return !fronts.some(f => rectDist(f, cx, cz) < R.entryKeepM);
+    return g.cells[i] === FLOOR && g.walkable(x, y) && g.rampIdx[i] < 0 && own.has(g.area[i]) && d[i] >= pl.startCells;
   };
-  // --- candidates: per changing rect (a cell counts for the first rect holding it) and the sales floor
-  const changing: number[][] = rects.map(() => []), floor: number[] = [];
+  const pointOk = (px: number, pz: number): boolean =>
+    !keep.some(k => k.level === lv && Math.hypot(k.x - px, k.z - pz) < (pl.landingKeepM ?? 0)) && !fronts.some(f => rectDist(f, px, pz) < R.entryKeepM);
+  const cand = (px: number, pz: number): Cand => { const [ax, ay] = g.cellOf(px, pz); return {i: g.idx(ax, ay), x: px, z: pz}; };
+  // --- candidates. Booth k: the centre of every 2 x 2 patch of its own cells off its opening row (a booth is 2 cells wide: the
+  // variant stands on its centre line, clear of both panels). The aisle (only when the store has no booth): cells 3 x 3 clear, off
+  // and not next to an opening. The sales floor: cells 3 x 3 clear, > changingMarginCells off the changing area, off its mouth.
+  const changing: Cand[][] = rects.map(() => []), floor: Cand[] = [];
+  const inRect = (i: number, k: number) => ((mask.get(i) ?? 0) & (1 << k)) !== 0;
+  rectCells.forEach((q, k) => {
+    if (booth[k]) {
+      for (let y = q.y0; y < q.y1; y++) for (let x = q.x0; x < q.x1; x++) {
+        const patch = [g.idx(x, y), g.idx(x + 1, y), g.idx(x, y + 1), g.idx(x + 1, y + 1)];
+        if (!patch.every(i => inRect(i, k) && !opening.has(i)) || ![[0, 0], [1, 0], [0, 1], [1, 1]].every(([ox, oy]) => cellOk(x + ox, y + oy))) continue;
+        const px = (x + 1) * CELL, pz = (y + 1) * CELL;
+        if (pointOk(px, pz)) changing[k].push(cand(px, pz));
+      }
+    } else if (!hasBooths) {
+      for (let y = q.y0; y <= q.y1; y++) for (let x = q.x0; x <= q.x1; x++) {
+        const i = g.idx(x, y);
+        if (!inRect(i, k) || (mask.get(i)! & -mask.get(i)!) !== 1 << k || opening.has(i) || nextToOpening(i) || !cellOk(x, y) || !clearAround(g, x, y, pl.clearCells)) continue;
+        const [px, pz] = g.center(x, y);
+        if (pointOk(px, pz)) changing[k].push({i, x: px, z: pz});
+      }
+    }
+  });
+  const mouth = shop.changingEntry;
   for (let y = by0; y <= by1; y++) for (let x = bx0; x <= bx1; x++) {
-    const i = g.idx(x, y);
-    if (!eligible(x, y)) continue;
-    const m = mask.get(i);
-    if (m !== undefined) {
-      const k = 31 - Math.clz32(m & -m);
-      if (!opening.has(i) && (openCount[k] <= R.boothOpeningCells || !nextToOpening(i))) changing[k].push(i);
-    } else if (!nearChanging(x, y)) floor.push(i);
+    if (mask.has(g.idx(x, y)) || !cellOk(x, y) || !clearAround(g, x, y, pl.clearCells) || nearChanging(x, y)) continue;
+    const [px, pz] = g.center(x, y);
+    if (mouth && Math.hypot(mouth.x - px, mouth.z - pz) < R.changingEntryKeepM) continue;
+    if (pointOk(px, pz)) floor.push({i: g.idx(x, y), x: px, z: pz});
   }
-  const byArea = new Map<number, number[]>();
-  for (const i of [...changing.flat(), ...floor]) { const a = g.area[i]; const l = byArea.get(a); if (l) l.push(i); else byArea.set(a, [i]); }
+  const byArea = new Map<number, Cand[]>();
+  for (const c of [...changing.flat(), ...floor]) { const a = g.area[c.i]; const l = byArea.get(a); if (l) l.push(c); else byArea.set(a, [c]); }
   reportSpawnCandidates(layout, 'lingerie', byArea);
   // --- the run: count, then the changing area (round-robin over its rects in a seeded order: one per booth first), then the sales
   // floor (+ what the changing area could not take), then the changing area again (what the floor could not take)
@@ -197,13 +227,12 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
   quota.changing = count - quota.floor;
   const first = layout.zombies.length;
   const order = r.shuffle(changing.map((_, k) => k).filter(k => changing[k].length > 0));
-  const tryPlace = (cells: readonly number[]): boolean => {
+  const tryPlace = (cells: readonly Cand[]): boolean => {
     for (let t = 0; t < pl.tries; t++) {
-      const i = r.pick(cells), x = i % g.w, y = (i - x) / g.w;
-      const [zx, zz] = g.center(x, y);
-      if (layout.zombies.some(z => (z.level ?? 0) === lv && Math.hypot(z.x - zx, z.z - zz) < pl.spacingM)) continue;
-      if (sealsPassage(g, zx, zz, R.passageRadiusM)) continue;
-      layout.zombies.push({x: zx, z: zz, yaw: r.range(-Math.PI, Math.PI), type: 'shambler', area: g.area[i], ...(lv ? {level: lv, y: g.floorOf(i)} : {}), look: LINGERIE_LOOK});
+      const c = r.pick(cells);
+      if (layout.zombies.some(z => (z.level ?? 0) === lv && Math.hypot(z.x - c.x, z.z - c.z) < pl.spacingM)) continue;
+      if (sealsPassage(g, c.x, c.z, R.passageRadiusM)) continue;
+      layout.zombies.push({x: c.x, z: c.z, yaw: r.range(-Math.PI, Math.PI), type: 'shambler', area: g.area[c.i], ...(lv ? {level: lv, y: g.floorOf(c.i)} : {}), look: LINGERIE_LOOK});
       return true;
     }
     return false;
@@ -229,5 +258,5 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
   inChanging += fillChanging(count - inChanging - onFloor);
   const placed = layout.zombies.length - first;
   return {shop: shop.id, level: lv, count, quota, placed, changing: inChanging, floor: onFloor,
-    candidates: {changing: changing.map(c => c.length), floor: floor.length}, first: placed ? first : -1};
+    candidates: {changing: changing.map(c => c.length), floor: floor.length}, booths: booth.filter(Boolean).length, first: placed ? first : -1};
 }
