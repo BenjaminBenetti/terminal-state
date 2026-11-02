@@ -28,8 +28,13 @@ export const MINES_ANCHORS = {timberSet: {postInner: 1.03, capUnder: 1.79, top: 
  * each mines model (uniform; 1 = the kit's real size). Everything that sizes, places or draws a mines model reads it through
  * minesModelSize / this record: the dress collider, the development heading the planner cuts for the drill, the instance matrices.
  * Lane PROPS owns the drillRig value. A new value needs no re-pin: the heading is sized from it, up to a 7 x 3.0 x 2.4 m rig.
+ *
+ * drillRig (lane PROPS, user: "the drill machine found in the mine area is comically small"): a derived transform of the same cooked GLB
+ * (no re-cook, no new model). Cooked at 3.5 x 1.28 x 0.98 m it was knee / waist high with 0.5 m tyres; x1.9 makes it a compact
+ * face-drill rig: 6.65 m overall (the wheeled carrier 4.04 m, the feed boom beyond it), 2.43 m tall, 1.87 m wide, ~0.95 m tyres
+ * (scale-checked beside a runtime zombie: docs/reactor.md, docs/prop-affordances.md).
  */
-export const MINES_FIT: Record<MinesModel, number> = {timberSet: 1, mineCart: 1, hoistWinch: 1, drillRig: 1};
+export const MINES_FIT: Record<MinesModel, number> = {timberSet: 1, mineCart: 1, hoistWinch: 1, drillRig: 1.9};
 
 /** Real placed size (m) of a mines model: the registry's dims x its fit scale, as [length (model x), height (y), depth (z)]. */
 export function minesModelSize(key: MinesModel): [number, number, number] {

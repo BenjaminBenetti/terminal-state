@@ -6,7 +6,7 @@
 //    concrete / grating sets, the painted-steel fallbacks): rack uprights / beams / decks, plinths, ducts, door frames,
 //    the crane runway, hazard bands (yellow / black), the compactor press, pucks, pipes; procedural stand-ins for a model that failed
 //    to load (Node tests, a 404) — never an untextured block;
-//  - the yellow-green status beacons: unlit glow instances (no light sources: accents cost nothing per frame).
+//  - (no status beacons: task reactor-playtest-round2 lane PROPS removed the floating dome-on-a-black-base markers).
 // Bounded: ~20-40 InstancedMeshes for the whole complex, chunked so frustum culling works, every mesh tagged with its storey for the level
 // culler (userData.levels). Static: no per-frame work. Returns stats (QA / tests).
 
@@ -32,7 +32,6 @@ export interface WasteVisualStats {
 export let WASTE_VISUAL_STATS: WasteVisualStats | null = null;
 
 const CHUNK = 12;
-const BEACON_ON = 0xc8ff3c, BEACON_OFF = 0x1a1e14;
 
 type Geo = 'box' | 'cyl' | 'bulb' | 'blade' | 'tube';
 interface Inst { m: THREE.Matrix4; c?: number }
@@ -75,11 +74,9 @@ export function buildWasteVisuals(group: THREE.Group, layout: StationLayout, mat
       add('box', mat, m, alongX ? (a0 + a1) / 2 : (st.x0 + st.x1) / 2, alongX ? (st.z0 + st.z1) / 2 : (a0 + a1) / 2);
     }
   }
-  // --- beacons: a glowing dome on a black base ---------------------------------------------------------------------------------------
-  for (const bc of D.beacons) {
-    add('box', 'black', boxM(bc.x - 0.07, bc.y - 0.06, bc.z - 0.07, bc.x + 0.07, bc.y, bc.z + 0.07), bc.x, bc.z);
-    add('bulb', 'panelLamp', new THREE.Matrix4().compose(p.set(bc.x, bc.y + 0.05, bc.z), q.identity(), s.set(0.13, 0.13, 0.13)), bc.x, bc.z, bc.on ? BEACON_ON : BEACON_OFF);
-  }
+  // --- (removed, task reactor-playtest-round2-20261102 lane PROPS) the status "beacons": a glowing dome on a black base set 2-22 cm ABOVE
+  // the object it marked (sealed-gate tops, rack ends, door heads) — the user's "strange floating disks with lights on top over some
+  // objects (remove)". They had no function; the decor record's `beacons` are no longer drawn.
   // --- models (or their procedural stand-ins) ----------------------------------------------------------------------------------------
   const placed = new Map<string, {gltf: GLTF; list: THREE.Matrix4[]; xz: [number, number][]}>();
   const placeModel = (piece: string, key: string, m: THREE.Matrix4, x: number, z: number): boolean => {

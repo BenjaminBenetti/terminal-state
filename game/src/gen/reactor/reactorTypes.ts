@@ -98,6 +98,8 @@ export interface ReactorGenerator {
   panel: {x: number; y: number; z: number};
   /** Cable route from the generator to its zone's fans (world polyline, absolute y): ARCH draws it, the lights follow it. */
   cable: readonly {x: number; y: number; z: number}[];
+  /** Task reactor-playtest-round2-20261102 (lane PROPS): the drop rods hanging a complex cable from the ceiling (x / z, rod y0 .. y1). */
+  cableHangers?: readonly {x: number; z: number; y0: number; y1: number}[];
 }
 
 /** A wall-mounted extraction fan (a duct housing in the pit wall; blades spin when its zone's generator runs). */

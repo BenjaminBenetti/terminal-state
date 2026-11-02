@@ -39,6 +39,7 @@ import {carveBunker} from './bunker';
 import {carveMines} from './mines';
 import {carveWaste} from './waste';
 import {COMPLEX_OF_ZONE, type ComplexCarve, type ComplexCarver, type ComplexSlot, type ReactorComplexId} from './types';
+import {ceilingCableRoute} from './propsCable'; // task reactor-playtest-round2-20261102 (lane PROPS): the cable along the ceiling
 
 /** Slot sizes (cells): region along the wall x deep behind it (incl. the pit-wall row), entrance width, entrance margin to the region's along edges. */
 export const COMPLEX_SLOT = {along: 80, deep: 64, door: 6, side: 3} as const;
@@ -367,6 +368,15 @@ export function clearEntranceLamps(layout: StationLayout, carves: readonly Compl
  * the pit wall, then along the pit walls to the zone's fans (structure.ts cableOf).
  */
 function complexCable(layout: StationLayout, rc: ReactorCarve, c: ComplexCarve, gen: ReactorGenerator): {x: number; y: number; z: number}[] {
+  // task reactor-playtest-round2-20261102 (lane PROPS, user: "cables … should be along the roof. Right now they clip awkwardly through the
+  // doorways"): under the ceilings, up and over every door lintel (or through the wall beside its jamb), out through the entrance wall,
+  // then along the pit walls (complex/propsCable.ts); the old single-height route below is the fallback when no ceiling route exists
+  const ceiling = ceilingCableRoute(layout, {level: c.slot.level, baseY: c.slot.baseY, frontArea: c.slot.frontArea, areas: c.areas}, gen);
+  if (ceiling) {
+    gen.cableHangers = ceiling.hangers;
+    const fans = (layout.reactor?.fans ?? []).filter(f => f.zone === gen.zone);
+    return [{...gen.panel}, ...ceiling.pts, ...cableOf(rc, gen, fans, {...ceiling.exit, wall: slotWall(rc, c.slot)})].map(p => ({x: r3(p.x), y: r3(p.y), z: r3(p.z)}));
+  }
   const s = c.slot, g = layout.levels[s.level].grid, ids = new Set(c.areas), E = s.entrance;
   const inE = (x: number, y: number) => x >= E.x && y >= E.y && x < E.x + E.w && y < E.y + E.h;
   // task reactor-expansion-20261101 (lane BUNKER): only cells at the storey floor — the one cable height never runs low over a raised

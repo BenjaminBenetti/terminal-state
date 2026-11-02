@@ -3,9 +3,10 @@
 //  - BODY (into the kit plan, instanced with the rest of the steel; culled per tier band like it): a WALL lamp is the lead's flood-lamp
 //    model on its wall plate (top-down while the model's per-level cap lasts) or a procedural cage on a bracket (wall plate + arm);
 //    a POST lamp is a steel post on the deck's rail line, an arm over the walkway and the cage hanging from its end;
-//  - LENS = the fixture's own tube instance (world/builder.ts light-tubes; world/lights.ts drives its colour from the fixture's
-//    state x circuit level: lit = warm glass, dead / held circuit 2 = dark grey glass), placed on the model's lens face or as the bulb
-//    inside the cage. There is no other lamp emissive in the pit any more (the kit's decorative per-tier lamps are off when fixtures
+//  - GLASS = the jar glow INSIDE the cage (task reactor-playtest-round2 lane PROPS, world/reactor/propsLampGlass.ts: the 'light-glass'
+//    instance of the light, sharing the tubes' colour — world/lights.ts drives it from the fixture's state x circuit level: lit = warm
+//    glass, dead / held circuit 2 = dark grey glass); the light's tube instance is collapsed (it was a flat plate in front of the
+//    model's cage). There is no other lamp emissive in the pit any more (the kit's decorative per-tier lamps are off when fixtures
 //    are given: world/reactor/archKit.ts KitOptions.fixtures) — an orange circle that lights nothing cannot happen.
 // Pure placement maths (three.js matrices only); no per-frame work.
 
@@ -13,6 +14,7 @@ import * as THREE from 'three';
 import type {LightMount, LightPlacement} from '../../gen/stationTypes';
 import {REACTOR_MODELS} from './archAssets';
 import {boxMatrix, type KitPlan} from './archKit';
+import {cageGlass, floodLampGlass, hiddenLens} from './propsLampGlass'; // task reactor-playtest-round2 (lane PROPS): the jar glass
 
 /** A fixture with a mount (the Reactor pit's lamps). */
 export type MountedLight = LightPlacement & {mount: LightMount};
@@ -23,8 +25,12 @@ export const LAMP_BODY = {plate: [0.22, 0.3, 0.04] as const, arm: 0.05, cage: [0
 
 const UP = new THREE.Vector3(0, 1, 0);
 
-/** What planMountedLamps placed for one light (by layout.lights index). */
-export interface MountedLampRec { index: number; model: boolean; lens: THREE.Matrix4 }
+/**
+ * What planMountedLamps placed for one light (by layout.lights index). Task reactor-playtest-round2-20261102 (lane PROPS): `glass` =
+ * the jar glow inside the cage (propsLampGlass.ts, the 'light-glass' instance i); `lens` = the light's TUBE instance, collapsed at the
+ * glass (it was a flat plate in front of the model's cage: the user's "strange box in front of" the lights).
+ */
+export interface MountedLampRec { index: number; model: boolean; lens: THREE.Matrix4; glass: THREE.Matrix4 }
 
 /**
  * Lens matrix that maps the tube instance's geometry (world/builder.ts: box w·0.82 x 0.025 x d·0.42, translated to y −h − 0.004)
@@ -49,22 +55,22 @@ export function bulbLens(l: MountedLight, fixture: {w: number; h: number; d: num
  * Plan every mounted lamp's body into the kit (call after planReactorKit with KitOptions.fixtures set, so the flood-lamp model's cap
  * is still free: wall lamps take it top-down). Returns one record per mounted light with its lens matrix.
  */
-export function planMountedLamps(plan: KitPlan, lights: readonly LightPlacement[], fixture: {w: number; h: number; d: number}): MountedLampRec[] {
+export function planMountedLamps(plan: KitPlan, lights: readonly LightPlacement[], _fixture?: {w: number; h: number; d: number}): MountedLampRec[] {
   const out: MountedLampRec[] = [];
   const order = lights.map((_, i) => i).filter(i => isMounted(lights[i])).sort((a, b) => lights[b].y - lights[a].y || a - b);
-  const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[], lensA = A.lens as readonly number[];
+  const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[];
   for (const i of order) {
     const l = lights[i] as MountedLight, m = l.mount;
     const nl = Math.hypot(m.nx, m.nz) || 1, nx = m.nx / nl, nz = m.nz / nl, yaw = Math.atan2(nx, nz); // local +Z -> n
     if (m.kind === 'wall') {
       const band = plan.bandOf(m.y - 0.2);
       if (plan.canModel('floodLamp')) {
-        // the flood-lamp model: its wall plate on the mount point; its lens face (anchors.lens) is the fixture's glass
+        // the flood-lamp model: its wall plate on the mount point
         const ox = m.x - nx * plate[2], oz = m.z - nz * plate[2], oy = m.y - plate[1];
         plan.placeModel('floodLamp', boxMatrix(ox, oy, oz, 1, 1, 1, yaw), band);
-        const d = lensA[2] + 0.008;
-        const lens = lensMatrix(new THREE.Vector3(ox + nx * d, oy + lensA[1], oz + nz * d), new THREE.Vector3(nx, 0, nz), [A.lensW as number, 0.03, A.lensH as number], fixture);
-        out.push({index: i, model: true, lens});
+        // (lane PROPS, round 2: the glass is the model's own jar inside its cage — never a plate on the cage's front face)
+        const glass = floodLampGlass(ox, oy, oz, yaw);
+        out.push({index: i, model: true, lens: hiddenLens(glass), glass});
         plan.stats.lamps++;
         continue;
       }
@@ -74,7 +80,8 @@ export function planMountedLamps(plan: KitPlan, lights: readonly LightPlacement[
       plan.member('box', 'steelDark', {x: m.x, y: m.y + 0.1, z: m.z}, {x: l.x, y: m.y + 0.1, z: l.z}, LAMP_BODY.arm, LAMP_BODY.arm);
       const c = LAMP_BODY.cage;
       plan.add('cage', 'steelDark', boxMatrix(l.x, l.y, l.z, c[0], c[1], c[2], yaw), band);
-      out.push({index: i, model: false, lens: bulbLens(l, fixture)});
+      const glass = cageGlass(l.x, l.y, l.z, yaw);
+      out.push({index: i, model: false, lens: hiddenLens(glass), glass});
       plan.stats.lamps++;
       continue;
     }
@@ -85,13 +92,14 @@ export function planMountedLamps(plan: KitPlan, lights: readonly LightPlacement[
     plan.member('box', 'steelDark', {x: l.x, y: top - 0.04, z: l.z}, {x: l.x, y: l.y + LAMP_BODY.cage[1] / 2, z: l.z}, 0.02, 0.02);
     const c = LAMP_BODY.cage;
     plan.add('cage', 'steelDark', boxMatrix(l.x, l.y, l.z, c[0], c[1], c[2], yaw), plan.bandOf(m.y + 0.05));
-    out.push({index: i, model: false, lens: bulbLens(l, fixture)});
+    const glass = cageGlass(l.x, l.y, l.z, yaw);
+    out.push({index: i, model: false, lens: hiddenLens(glass), glass});
     plan.stats.lamps++;
   }
   return out;
 }
 
-/** Write the planned lens matrices into the station's tube InstancedMesh (world/builder.ts 'light-tubes'): instance i = light i. */
+/** Write the planned (collapsed) lens matrices into the station's tube InstancedMesh (world/builder.ts 'light-tubes'): instance i = light i. */
 export function applyMountedLenses(tubes: THREE.InstancedMesh | null, recs: readonly MountedLampRec[]): number {
   if (!tubes) return 0;
   let n = 0;

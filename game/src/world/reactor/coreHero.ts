@@ -355,12 +355,12 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
         plan.box('steelDark', gb.x, gb.y, gb.z, 0.12, 0.24, 0.24, -a);
         lamp('valve', gl.x, gl.y, gl.z);
       }
-      // flywheel on the motor top + its status beacon
+      // flywheel on the motor top (task reactor-playtest-round2, lane PROPS: its "status beacon", a black disc + bulb floating over the
+      // open guard ring, is gone — user: "strange floating disks with lights on top over some objects (remove)"; the loop's pump state
+      // shows on the hot-leg instrument box's face-mounted lamp)
       const top = base + H.rcpTop;
       out.wheels.push({kind: 'rcp', x: rcp.x, y: top + 0.08, z: rcp.z, ax: 0, ay: 1, az: 0, r: H.wheelR});
       plan.cyl('tube', 'steelDark', {x: rcp.x, y: top - 0.05, z: rcp.z}, {x: rcp.x, y: top + 0.22, z: rcp.z}, H.wheelR * 2.25); // guard ring
-      plan.cyl('cyl', 'steelDark', {x: rcp.x, y: top + 0.22, z: rcp.z}, {x: rcp.x, y: top + 0.3, z: rcp.z}, 0.3); // beacon base on the guard's hub plate
-      lamp('pump', rcp.x, top + 0.38, rcp.z, 0.1);
     }
     // crossover leg: steam generator bottom -> pump outer nozzle (low over the goop, high over a bridge / tower foot)
     if (sg && rcp) {
@@ -405,9 +405,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
         for (const s of [-1.5, -0.5, 0.5, 1.5]) plan.cyl('cyl', 'pipe', at(a, r + s, mb + 0.9), at(a, r + s, mb + 2.0), 0.22);
         st.procedural++;
       }
-      const ml = at(a, r - 1.95, mb);
-      plan.cyl('cyl', 'steelDark', ml, {...ml, y: mb + 0.07}, 0.16);
-      lamp('valve', ml.x, mb + 0.13, ml.z, 0.065);
+      // (lane PROPS, round 2: no disc + bulb beacon on the stand — the valve state shows on the cold-leg gauge box's face lamp)
       // feed risers from its branches up to the header (the outer end) — the manifold distributes the coolant
       for (const s of [-1.5, 1.5]) {
         const rp = [at(a, r + s, mb + 2.0), at(a, r + s, y0 + H.headerY - 0.55), at(a, rH, y0 + H.headerY - 0.55)];
@@ -643,22 +641,12 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
     run([at(aT, rH, y0 + H.headerY), {x: tb.x, y: y0 + H.headerY + 0.6, z: tb.z}, {x: tb.x, y: y0 + 3.95, z: tb.z}], 0.5, {ignore: true});
   }
 
-  // ---- 6. the restart sites' status lamps: on top of the machine each control sits on ------------------------------------------------
-  for (const site of info.sites) {
-    const floorY = info.tiers.find(t => t.level === site.level)?.baseY;
-    if (floorY === undefined) continue;
-    for (const c of site.controls) {
-      const g: CoreLampGroup | null = c.id === 'fuse-0' ? 'fuse0' : c.id === 'fuse-1' ? 'fuse1' : c.id === 'breaker' ? 'power' : c.id === 'valve' ? 'valve' : c.id === 'pump' ? 'pump' : c.id === 'keyswitch' ? 'key' : c.id === 'rods' ? 'rods' : null;
-      if (!g) continue;
-      const piece: ReactorPiece = g === 'fuse0' || g === 'fuse1' || g === 'power' ? 'switchgear' : g === 'valve' ? 'coolantValve' : g === 'pump' ? 'coolantPump' : 'controlConsole';
-      const dims = REACTOR_MODELS[piece].dims;
-      let bx = c.at.x - c.stand.x, bz = c.at.z - c.stand.z;
-      const bl = Math.hypot(bx, bz) || 1; bx /= bl; bz /= bl;
-      const x = c.at.x + bx * dims[2] * 0.5, z = c.at.z + bz * dims[2] * 0.5, y = floorY + dims[1];
-      plan.cyl('cyl', 'steelDark', {x, y, z}, {x, y: y + 0.07, z}, 0.16);
-      lamp(g, x, y + 0.13, z, 0.065, true);
-    }
-  }
+  // ---- 6. (removed, task reactor-playtest-round2-20261102 lane PROPS) the restart sites' "status lamps on top of the machine": a black
+  // disc + bulb placed from the UNSCALED model height (the valve is drawn at ~0.78 of it, the switchgear stretched) and half the model's
+  // depth past the control point, so they floated over the valve wheel / switchgear / pump / console (user screenshot: "strange floating
+  // disks with lights on top over some objects (remove)"). Every site's state stays on its REAL panel indicators, mounted on the machine
+  // face by the restart overlays (restartViews.ts: fuse / breaker / valve / pump-run / key / rods lamps). Lane STARTUP owns the
+  // properly mounted rotating beacons.
 
   // ---- 7. the glow lights: green low over the goop in the two widest free arcs, blue over the vessel's CRDM platform -----------------
   {
