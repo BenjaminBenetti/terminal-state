@@ -44,6 +44,13 @@ heal · F flashlight · hold G, release to throw the grenade-slot item (flares) 
 Ctrl+Shift+P toggles the performance overlay (see below). Drop an item by dragging it out of the inventory panel (the old G = drop key is gone). Desktop keyboard + mouse only; touch
 is not supported.
 
+Train Lockbox (task train-lockbox-windows-20261101-232156): the big steel box in the player train's rear compartment is your own
+**40-slot storage that travels with the train**. Aim + **E** opens it: your slots on the left, the box on the right; click moves an
+item across, drag / Shift-drag work as in a grounded backpack. The world is not paused. E / 6 / Esc / Tab, walking away or getting hit
+closes it. The contents carry between levels. Retry restores them to the level-entry state with your inventory; New game empties it.
+**Developer code:** with the Lockbox open, type **1 3 3 7** to add the three guns, one of each gear item and a full stack of each ammo
+type (13 slots). It adds all of it or nothing: if there isn't room, nothing changes and a note says how many free slots it needs.
+
 Light survival (iteration 12, `player/flashlight.ts`, `weapons/throwables.ts`): the flashlight runs on a **battery**
 (HUD meter bottom right, above the weapon panel). It starts at 80 % and drains only while the light is on: a full battery
 gives 7 min of continuous light. Above 25 % the beam is steady; below 25 % it flickers — soft irregular dips whose share of
