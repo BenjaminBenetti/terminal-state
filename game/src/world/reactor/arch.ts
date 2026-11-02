@@ -68,6 +68,8 @@ export class ReactorArch {
   readonly pitMask: Uint8Array;
   /** task reactor-expansion-20261101 (lane MINES): areas of the old mine workings (rock walls, caged lamps, timber / rails / models). */
   readonly mineAreas: ReadonlySet<number>;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the breach tunnel's segments (rock-cut: pit concrete walls / floor / ceiling). */
+  readonly roughAreas: ReadonlySet<number>;
   private readonly W: number;
   private readonly H: number;
   /** The core floor's level (the last tier). */
@@ -98,6 +100,7 @@ export class ReactorArch {
     this.W = g0.w; this.H = g0.h;
     this.pitMask = new Uint8Array(this.W * this.H);
     this.mineAreas = new Set(minesRecord(layout)?.areas ?? []); // (lane MINES)
+    this.roughAreas = new Set(this.info.approach?.tunnel ?? []); // (lane ARRIVAL)
     const b = this.info.pit.bounds, P = this.info.pit.outline;
     for (let cy = Math.max(0, Math.floor(b.z0 / CELL)); cy < Math.min(this.H, Math.ceil(b.z1 / CELL)); cy++) {
       for (let cx = Math.max(0, Math.floor(b.x0 / CELL)); cx < Math.min(this.W, Math.ceil(b.x1 / CELL)); cx++) {
@@ -135,7 +138,7 @@ export class ReactorArch {
         if (open === CORE_CELL.pool && f.y1 <= (this.info.coreFloor?.y ?? -Infinity) + 0.05) { this.count('reactor-deck-under'); out.push({...f, finish: 'reactor-deck-under'}); continue; }
       }
       let key: ReactorSurfaceKey | null = null;
-      if (this.inPit(mx, mz)) key = 'reactor-wall';
+      if (this.inPit(mx, mz) || this.roughAreas.has(f.area)) key = 'reactor-wall'; // (lane ARRIVAL: the breach tunnel is rock-cut too)
       else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = this.mineAreas.has(f.area) ? 'reactor-wall' : 'reactor-room-wall'; // (lane MINES: the drifts are rock-cut, not plate)
       if (!key) { out.push(f); continue; }
       this.count(key);
@@ -152,7 +155,7 @@ export class ReactorArch {
     if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : this.coreKinds[i] === CORE_CELL.pool ? CORE_GOOP : CORE_HIDDEN;
     if (this.pitMask[i]) return lvl.id === this.coreLevel ? 'reactor-floor' : 'reactor-grating';
     const a = this.layout.areas[lvl.grid.area[i]];
-    return isReactorArea(a, lvl.id) ? 'reactor-floor' : null;
+    return isReactorArea(a, lvl.id) || this.roughAreas.has(lvl.grid.area[i]) ? 'reactor-floor' : null;
   }
 
   /**
@@ -168,7 +171,7 @@ export class ReactorArch {
       if (this.roofSlab && Math.abs(top - this.info.pit.roofY) < 0.01) return false; // (lane ROOF)
       return top >= this.info.pit.roofY - 0.6 ? 'reactor-roof' : 'reactor-deck-under';
     }
-    return isReactorArea(areaId >= 0 ? this.layout.areas[areaId] : undefined, lvl.id) ? 'reactor-ceil' : null;
+    return isReactorArea(areaId >= 0 ? this.layout.areas[areaId] : undefined, lvl.id) || this.roughAreas.has(areaId) ? 'reactor-ceil' : null;
   }
 
   /** Door opening soffit (null: station rule). */

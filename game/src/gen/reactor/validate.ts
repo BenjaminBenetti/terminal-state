@@ -21,6 +21,7 @@ import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
 import {CORE_FLOOR, coreFloorIssues} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
+import {arrivalIssues} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -152,6 +153,8 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   issues.push(...extensionIssues(layout, dist));
   // task reactor-expansion-20261101 (lane HOST): the side complexes (region, entrance, stairs-only reach, no overlap, substantial floor)
   issues.push(...complexIssues(layout));
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): platform -> station area -> breach -> tunnel -> rim; no sight of the pit
+  issues.push(...arrivalIssues(layout));
   return issues;
 }
 

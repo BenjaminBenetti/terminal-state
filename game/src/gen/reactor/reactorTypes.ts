@@ -373,6 +373,33 @@ export interface ReactorInfo {
   complexes?: readonly ReactorComplexInfo[];
   /** Task reactor-expansion-20261101 (lane CORE, additive): the core floor's ring / goop pool / bridges / loops / turbine. */
   coreFloor?: ReactorCoreFloor;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): platform → station area → breach → tunnel → the rim reveal. */
+  approach?: ReactorApproach;
+}
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival approach on the rim storey (gen/reactor/arrival.ts). The platform
+ * never opens onto the pit: 1-2 openings lead into a small station area (a ticket hall + back of house), one of its walls is broken
+ * through (the BREACH: open cells, no door), a short rough tunnel (segments `tunnel`, rock finishes) bends to a second hole in the pit's
+ * north wall (the REVEAL) onto the rim gallery. World metres; area ids are layout.areas ids on level 0.
+ */
+export interface ReactorApproach {
+  recipe: 'hall' | 'corridor' | 'backroom';
+  /** The ticket hall, the station area (hall first, then the service corridor / rooms), the tunnel segments (breach first). */
+  hall: number;
+  station: readonly number[];
+  tunnel: readonly number[];
+  /** Platform -> hall openings. */
+  doors: readonly ReactorRect[];
+  /** The breached wall cells and the area whose wall it is. */
+  breach: ReactorRect;
+  breachFrom: number;
+  /** The pit-wall cells of the reveal hole and the rim gallery area beyond it. */
+  reveal: ReactorRect;
+  revealDeck: number;
+  /** Tunnel centreline (breach -> reveal, y = the rim) and its length (m). */
+  path: readonly {x: number; z: number}[];
+  length: number;
 }
 
 /** Tier gas concentrations (uncleared) are a function of depth only: the rim is clean (layout.reactor.tiers[0].zone === -1). */
