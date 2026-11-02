@@ -3,7 +3,7 @@
  "asset": "player-train-20261101",
  "task": "studio-beta-player-train-shell-20261101-202805-01",
  "lane": "ASSETS (Studio Beta player train)",
- "status": "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "status": "runtime derivatives of THREE models generated for this project with Meshy T2.5 (smart-topology text-to-3D preview + 2K PBR refine) through the Meshy MCP and FOUR interior textures generated with Codex native image_gen (owned Codex CLI), under the user's player-train authorization (up to 300 Meshy credits; the task used 50), plus the rear-compartment LOCKBOX model (Meshy T2.5, the user's lockbox authorization: up to 50 credits; used 15); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
  "rebuild": "node tools/asset-pipeline/train/build-player-train.mjs",
  "rawStorage": "reference/tasks/player-train-shell-20261101-202805/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} + reference/tasks/player-train-shell-20261101-202805/codex/<id>/{<id>-original.png, receipt.json, prompt.txt} + SOURCES-SHA256.txt (read-only raw masters, outside Git)",
  "frame": "train-local: origin = car centre on the track centre line at rail-top height, +X front (cab), +Y up, -Z platform side; metres",
@@ -54,9 +54,9 @@
     "dims": [
      16.2031,
      3.8508,
-     2.9914
+     2.9866
     ],
-    "triangles": 27495,
+    "triangles": 27566,
     "meshes": 1,
     "materials": 1,
     "textures": [
@@ -98,8 +98,8 @@
    },
    "output": {
     "url": "assets/models/player-train-shell.glb",
-    "bytes": 2545908,
-    "sha256": "bd5f80c4fadcbc4a2b78fed1f8ee7df3158682415ac7e4728795d6e6e7a73163"
+    "bytes": 2542524,
+    "sha256": "def2107d0b66915621fe09929dbe7ab6aecd0e21742ddd39cf303bbdb4da4fed"
    }
   },
   "train-door-leaf": {
@@ -243,7 +243,87 @@
     "bytes": 607856,
     "sha256": "c0ac72b225bc0beaf2a86f22d6b714a266e9f627d0f6f2ea3f6cf904105da66a"
    }
+  },
+  "train-lockbox": {
+   "task": "studio-beta-train-lockbox-windows-20261101-232156-01",
+   "prompt": "one single large heavy-duty steel lockbox storage chest, a long rectangular box about twice as long as it is deep and about as tall as it is deep, sitting flat on the floor on a low steel base skid; a separate thick flat lid on top with a clear horizontal seam all around where the lid meets the box, lid slightly overhanging the front; a long piano hinge along the back top edge; reinforced folded steel corner caps and edge strips; three raised horizontal stiffening ribs pressed into the front and sides; two sturdy steel latch clasps on the front; a folding steel carry handle on each short end; realistic game asset, industrial, weathered: chipped olive green paint, rust on edges, grime; closed lid, single object, no padlock, no text, no logos, no ground plane",
+   "texturePrompt": "weathered industrial steel lockbox: chipped and faded olive green paint over steel, rust streaks and bare worn steel on the edges, corners and lid rim, darker grime in the seams and ribs, scuffed lid top, dull steel latches, hinge and handles, realistic PBR, no text, no logos",
+   "tasks": {
+    "preview": "01a1996f-788c-73a8-b72f-b0cbf80a91ea",
+    "refine": "01a19970-d6a7-7150-ac6c-a68aa972b326"
+   },
+   "billed": 15,
+   "source": {
+    "file": "lockbox-a1-refine-01a19970-d6a7.glb",
+    "bytes": 7073364,
+    "sha256": "b6b9857fedeb64df69651d7cc47ce230146d577694b6548ee118668a27782f7d",
+    "previewSha256": "2295a0ffb8e167a9d34dfcfb709ee083911fd722a8d120f4cd8683e799327976"
+   },
+   "derivative": {
+    "dims": [
+     1.03,
+     0.5555,
+     0.6138
+    ],
+    "triangles": 8578,
+    "meshes": 2,
+    "materials": 1,
+    "textures": [
+     {
+      "slot": "baseColor",
+      "size": [
+       1024,
+       1024
+      ],
+      "mime": "image/jpeg",
+      "bytes": 169827
+     },
+     {
+      "slot": "metallicRoughness",
+      "size": [
+       256,
+       256
+      ],
+      "mime": "image/jpeg",
+      "bytes": 24993
+     },
+     {
+      "slot": "normal",
+      "size": [
+       512,
+       512
+      ],
+      "mime": "image/jpeg",
+      "bytes": 12671
+     }
+    ],
+    "gpuBytesWithMips": 7340031,
+    "texturePolicy": {
+     "base": 1024,
+     "normal": 512,
+     "mr": 256,
+     "quality": 85
+    }
+   },
+   "output": {
+    "url": "assets/models/player-train-lockbox.glb",
+    "bytes": 546116,
+    "sha256": "adac19d46112b49cd046cbf320877536508e8299675a8f17bee6cdc1d3804345"
+   }
   }
+ },
+ "lockboxLedger": {
+  "task": "studio-beta-train-lockbox-windows-20261101-232156-01",
+  "rawStorage": "reference/tasks/train-lockbox-windows-20261101-232156/meshy/{raw/, LEDGER.jsonl, MANIFEST.json, RAW-SHA256.txt} (read-only raw masters, outside Git)",
+  "attempts": 1,
+  "attemptedPOSTs": 2,
+  "accepted": 1,
+  "credits": {
+   "billed": 15,
+   "reserved": 0,
+   "ceiling": 50
+  },
+  "close": "budget CLOSED at the first acceptable: 1 / 3 attempts, 2 / 6 paid POSTs, 15 / 50 credits billed, 0 reserved, 1 / 1 accepted. The unused 35 are not authority. Codex: 0 / 4 calls (none needed)."
  },
  "derivation": {
   "shell": {
@@ -332,6 +412,18 @@
      0,
      0,
      0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
+     0,
      0
     ],
     "endWindows": [
@@ -344,7 +436,7 @@
     ]
    },
    "fit": {
-    "width": 2.9914,
+    "width": 2.9866,
     "length": 16.2031,
     "floorAbovePlatform": 0.125,
     "doorClear": 2.001,
@@ -375,9 +467,9 @@
       "nonManifoldEdges": 0
      },
      "after": {
-      "triangles": 27495,
+      "triangles": 27566,
       "degenerate": 0,
-      "sliver": 916,
+      "sliver": 980,
       "normalFlip": 0,
       "foldOverlaps": 0,
       "foldArea": 0,
@@ -390,32 +482,13 @@
      5,
      4
     ],
-    "clippedTriangles": 2493,
-    "removedOverlapAreaM2": 23.563
+    "clippedTriangles": 2586,
+    "removedOverlapAreaM2": 23.733
    },
    "windows": {
-    "method": "the dark glass (base colour luminance < 55) inside per-window search boxes on the repaired surface, raster 0.01 m; rect = glass box inset 0.03 m (the gasket stays); side windows kept 0.04 m clear of the open-leaf wall pockets; straight through-cuts (|z| > 1.1 / |x| > 7.26); skinZ / skinX = the innermost skin on a 0.02 m ring around each cut",
-    "removedAreaM2": 8.153,
-    "skipped": [
-     {
-      "side": -1,
-      "zone": "rear",
-      "glassX": [
-       -6.82,
-       -6.48
-      ],
-      "why": "an open door leaf parks in the wall pocket behind it"
-     },
-     {
-      "side": 1,
-      "zone": "rear",
-      "glassX": [
-       -6.83,
-       -6.51
-      ],
-      "why": "an open door leaf parks in the wall pocket behind it"
-     }
-    ]
+    "method": "the dark glass (base colour luminance < 55) inside per-window search boxes on the repaired surface, raster 0.01 m; rect = glass box inset 0.03 m (the gasket stays); cab / saloon side windows kept 0.04 m clear of the open-leaf wall pockets; saloon / rear / nose windows take their x extent from the upper glass band 2.55,3.1 (above grab bars and the baked smear); rear windows cut whole over the rear door leaf pocket (pocket recorded: the parked leaf shows behind the glass like a real pocket door); nose windows (the end windows' corner wrap) run 0.01 m into the end-window hole; straight through-cuts (|z| > 1.1 / |x| > 7.26); skinZ / skinX = the innermost skin on a 0.02 m ring around each cut",
+    "removedAreaM2": 17.769,
+    "skipped": []
    }
   },
   "doorLeaf": {
@@ -465,6 +538,21 @@
    "method": "turned -90 deg about Y (native operator side +Z -> -X), uniform scale",
    "scale": 2.05,
    "frame": "grounded, centred; operator side -X, windshield side +X, width along Z"
+  },
+  "lockbox": {
+   "method": "split by part at the lid seam (stacked closed parts; seam = midway between the body top and the lowest lid band): a part goes with the lid when it reaches > 0.02 raw above the seam (bands, cap, straps, top corner caps, the latch / centre hasps hanging over the body), the rest (body, catches, end handles, skid, bottom corner caps) is the body; the body top face removed (open box); uniform scale; the lid node origin on the back hinge line (seam height, lid back face)",
+   "seamRaw": 0.0884,
+   "scale": 1.0845,
+   "parts": {
+    "total": 143,
+    "lid": 79
+   },
+   "triangles": {
+    "body": 3884,
+    "lid": 4694,
+    "bodyTopRemoved": 8
+   },
+   "frame": "front (latches) +Z as generated, grounded, centred x / z; nodes lockbox-body (origin) and lockbox-lid (origin = hinge: rotation.x = -angle opens upward toward the back)"
   }
  },
  "textures": [
@@ -595,7 +683,7 @@
  ],
  "measured": {
   "length": 16.2031,
-  "width": 2.9914,
+  "width": 2.9866,
   "floorY": 0.98,
   "ceilingY": 3.25,
   "roofY": 3.8508,
@@ -754,6 +842,64 @@
      "skinZ": 1.466
     },
     {
+     "side": -1,
+     "zone": "saloon",
+     "x0": -4.04,
+     "x1": -2.88,
+     "y0": 1.97,
+     "y1": 2.83,
+     "skinZ": 1.416
+    },
+    {
+     "side": -1,
+     "zone": "saloon",
+     "x0": -2.3,
+     "x1": -1.15,
+     "y0": 1.97,
+     "y1": 2.83,
+     "skinZ": 1.481
+    },
+    {
+     "side": -1,
+     "zone": "saloon",
+     "x0": 1.59,
+     "x1": 2.74,
+     "y0": 1.96,
+     "y1": 2.82,
+     "skinZ": 1.471
+    },
+    {
+     "side": -1,
+     "zone": "rear",
+     "x0": -6.82,
+     "x1": -6.48,
+     "y0": 1.96,
+     "y1": 2.8,
+     "skinZ": 1.48,
+     "pocket": {
+      "x0": -6.6326,
+      "x1": -6.0246
+     }
+    },
+    {
+     "side": -1,
+     "zone": "nose",
+     "x0": 7.3,
+     "x1": 7.61,
+     "y0": 2.01,
+     "y1": 2.96,
+     "skinZ": 1.28
+    },
+    {
+     "side": -1,
+     "zone": "nose",
+     "x0": -7.62,
+     "x1": -7.3,
+     "y0": 1.91,
+     "y1": 2.96,
+     "skinZ": 1.28
+    },
+    {
      "side": 1,
      "zone": "cab",
      "x0": 5.35,
@@ -770,6 +916,64 @@
      "y0": 1.93,
      "y1": 2.78,
      "skinZ": 1.476
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": -4,
+     "x1": -2.61,
+     "y0": 1.95,
+     "y1": 2.82,
+     "skinZ": 1.473
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": -2.47,
+     "x1": -1.15,
+     "y0": 1.93,
+     "y1": 2.82,
+     "skinZ": 1.473
+    },
+    {
+     "side": 1,
+     "zone": "saloon",
+     "x0": 1.62,
+     "x1": 2.75,
+     "y0": 1.93,
+     "y1": 2.84,
+     "skinZ": 1.479
+    },
+    {
+     "side": 1,
+     "zone": "rear",
+     "x0": -6.83,
+     "x1": -6.57,
+     "y0": 1.93,
+     "y1": 2.79,
+     "skinZ": 1.474,
+     "pocket": {
+      "x0": -6.6326,
+      "x1": -6.0246
+     }
+    },
+    {
+     "side": 1,
+     "zone": "nose",
+     "x0": 7.34,
+     "x1": 7.57,
+     "y0": 1.99,
+     "y1": 2.87,
+     "skinZ": 1.28
+    },
+    {
+     "side": 1,
+     "zone": "nose",
+     "x0": -7.58,
+     "x1": -7.36,
+     "y0": 2,
+     "y1": 2.87,
+     "skinZ": 1.28
     }
    ],
    "end": [
@@ -827,6 +1031,24 @@
     "x1": 0.195,
     "y0": 0.06,
     "y1": 1.922
+   }
+  },
+  "lockbox": {
+   "length": 1.03,
+   "height": 0.5555,
+   "depth": 0.6138,
+   "seamY": 0.3731,
+   "hinge": {
+    "y": 0.3731,
+    "z": -0.3026
+   },
+   "cavity": {
+    "x0": -0.461,
+    "x1": 0.461,
+    "y0": 0.032,
+    "y1": 0.3731,
+    "z0": -0.283,
+    "z1": 0.253
    }
   }
  }

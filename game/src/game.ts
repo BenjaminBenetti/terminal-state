@@ -100,6 +100,7 @@ import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
 import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
+import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -264,6 +265,8 @@ export class Game {
   readonly tower: TowerRuntime;
   /** Task player-train-shell-20261101-202805 (lane TRAIN): the parked player train in the world — the car, its interior volume / colliders, doors, lights (world/playerTrain.ts). */
   readonly trainRuntime: PlayerTrainRuntime;
+  /** Task train-lockbox-windows-20261101-232156 (lane BOX): the Lockbox transfer view / developer drop (ui/lockboxView.ts); the store is playerTrain.lockbox. */
+  readonly lockbox: LockboxSystem;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
    * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
@@ -480,6 +483,8 @@ export class Game {
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
     this.trainRuntime = installPlayerTrain(this, {models: () => trainModelsFrom(this.propModels), textures: () => loadTrainTextures()});
     hookName('train');
+    this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
+    hookName('lockbox');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
@@ -903,6 +908,7 @@ export class Game {
     this.installInventory(inv);
     this.player.alive = this.player.hp > 0;
     restoreParticipants(snap, this.runParticipants);
+    this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); // lane BOX: later stacks never reuse a Lockbox uid
   }
 
   /** Iteration 16: the Retry-level snapshot of the level just entered (carry state + that level's section memories). */

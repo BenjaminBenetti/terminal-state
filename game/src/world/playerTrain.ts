@@ -61,6 +61,7 @@ import {PLAYER_TRAIN_MODELS} from '../assets/playerTrain.generated';
 import {assetUrl} from '../assets/loader';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
 import {highlightMaterial, highlightPulse} from './highlight';
+import {LOCKBOX_MODEL_KEY, LockboxLid, buildLockboxView, lockboxFootprint, poseLid, type LockboxView} from './trainLockbox';
 
 // ---------------------------------------------------------------------------------------------
 // Assets (lane ASSETS' cooked files: assets/playerTrain.generated.ts). The models load through the game's lazy prop library (shared by
@@ -78,7 +79,8 @@ export function playerTrainModelKeys(layout: StationLayout): string[] {
 
 /** The loaded models from the prop library (missing = the procedural fallback for that part). */
 export function trainModelsFrom(lib: {get(key: string): GLTF | undefined}, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TrainModels {
-  return {shell: lib.get(spec.models.shell.key) ?? null, door: lib.get(spec.models.doorLeaf.key) ?? null, console: lib.get(spec.models.console.key) ?? null};
+  return {shell: lib.get(spec.models.shell.key) ?? null, door: lib.get(spec.models.doorLeaf.key) ?? null, console: lib.get(spec.models.console.key) ?? null,
+    lockbox: lib.get(LOCKBOX_MODEL_KEY) ?? null}; // (task train-lockbox: null until lane ASSETS' cooked model is in the catalogue)
 }
 
 let textureCache: Promise<TrainTextures> | null = null;
@@ -251,12 +253,14 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   const G = TRAIN_GLASS_HALF, inset = TRAIN_VIEW.glassInset;
   for (const side of [-1, 1] as const) {
     const cuts = spec.doors.filter(d => d.side === side).map(d => [d.x - d.width / 2, d.x + d.width / 2] as [number, number]);
-    const holes = win.side.filter(w => w.side === side).map(w => [w.x0, w.x1, p.railTopY + w.y0, p.railTopY + w.y1] as [number, number, number, number]);
+    // (the nose corner windows lie inside the end boxes beyond the bulkheads: the end box keeps them; their end panes have glass boxes)
+    const sideWins = win.side.filter(w => w.side === side && w.zone !== 'nose');
+    const holes = sideWins.map(w => [w.x0, w.x1, p.railTopY + w.y0, p.railTopY + w.y1] as [number, number, number, number]);
     for (const [a, b] of spans(-L2, L2, cuts)) {
       statics.push(propBox(p, area, a, b, side * hw, side * out, bedY, H));
       for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, bedY, topY, holes)) shoot.push(propBox(p, area, x0, x1, side * hw, side * out, y0, y1 - y0));
     }
-    for (const w of win.side.filter(q => q.side === side)) {
+    for (const w of sideWins) {
       const zg = side * (w.skinZ - inset);
       glass.push(propBox(p, area, w.x0, w.x1, zg - G, zg + G, p.railTopY + w.y0, w.y1 - w.y0));
     }
@@ -280,6 +284,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   }
   const cr = opt.consoleRect;
   if (cr) statics.push(propBox(p, area, cr.x0, cr.x1, cr.z0, cr.z1, bedY, p.railTopY + cr.top - bedY));
+  // task train-lockbox: the Lockbox — a solid, anchored box (player / enemy collision, bullets, ragdoll statics) to its closed top
+  const lb = spec.lockbox;
+  if (lb) { const fp = lockboxFootprint(lb); statics.push(propBox(p, area, fp.x0, fp.x1, fp.z0, fp.z1, bedY, floorY + lb.height - bedY)); }
   statics.push(propBox(p, area, -L2, L2, -out, out, bedY, floorY - bedY)); // underframe: the floor for bullets, the body for the bed
   shoot.push(...statics.slice(wallsAndEnds), ...glass); // partitions, desk, underframe as they are; the window glass
   // --- overhead (layout.props only) ---
@@ -471,7 +478,7 @@ export class PlayerTrainRuntime {
   target: DoorRt | null = null;
   prompt: string | null = null;
   /** Counters (QA / tests). */
-  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0};
+  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0, lockbox: 0};
   private readonly mats = new TrainMaterials();
   private textures: TrainTextures = {};
   private texturesLoading: Promise<void> | null = null;
@@ -488,7 +495,17 @@ export class PlayerTrainRuntime {
    * (world/highlight.ts: the containers' material swap + pulse). The door it is on, and the highlight clones per leaf base material.
    */
   highlighted: DoorRt | null = null;
+  /** What glows: a door pair, the Lockbox, or nothing. */
+  private hiOwner: DoorRt | 'lockbox' | null = null;
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
+  // ---- task train-lockbox-windows-20261101-232156 (lane TRAIN): the Lockbox world object (world/trainLockbox.ts) — API for lane BOX ----
+  /** Called on [E] while the Lockbox is aimed (closed or open): lane BOX opens its 40-slot view. Null: [E] just toggles the lid. */
+  onLockboxInteract: (() => void) | null = null;
+  /** The Lockbox is under the crosshair right now (within reach, unobstructed: the doors' aim rules). */
+  lockboxAimed = false;
+  /** The built Lockbox view (null: no train / no spec.lockbox) and its lid state. */
+  lockboxView: LockboxView | null = null;
+  lockboxLid = new LockboxLid();
   private time = 0;
   /** Task train-shell-followup: the glass boxes of the built car (windows + leaf windows) — a bullet stopping on one is a glass hit. */
   private glassBoxes = new Set<PropPlacement>();
@@ -547,7 +564,12 @@ export class PlayerTrainRuntime {
     const h = this.host, p = h.trainPlacement ?? null;
     if (!p || !h.levels || !h.layout) { this.lightsOff(); return; }
     const spec = this.spec;
-    const view = buildTrainView(spec, this.mats, this.opts.models?.() ?? {}, this.textures);
+    const models = this.opts.models?.() ?? {};
+    const view = buildTrainView(spec, this.mats, models, this.textures);
+    // task train-lockbox: the Lockbox in the rear compartment (the model when cooked, else its placeholder; never a crash)
+    this.lockboxLid = new LockboxLid();
+    this.lockboxView = spec.lockbox ? buildLockboxView(spec.lockbox, spec.floorY, this.mats, models.lockbox ?? null) : null;
+    if (this.lockboxView) { view.root.add(this.lockboxView.group); view.geometries.push(...this.lockboxView.geometries); }
     const root = view.root;
     root.position.set(p.x, p.railTopY, p.z);
     root.rotation.set(0, p.yaw, 0);
@@ -587,6 +609,7 @@ export class PlayerTrainRuntime {
     h.scene.add(root);
     h.atmosphere?.markShadows(view.fixed, true);
     for (const pair of view.leaves) for (const l of pair) h.atmosphere?.markShadows(l, false);
+    if (this.lockboxView) h.atmosphere?.markShadows(this.lockboxView.group, false); // (the lid moves: not culler-registered either)
     const culler = h.world?.culler as {register?(root: THREE.Object3D): void} | undefined;
     if (culler && typeof culler.register === 'function') culler.register(view.fixed);
     const key = this.sectionKey();
@@ -604,9 +627,11 @@ export class PlayerTrainRuntime {
   }
 
   teardown(): void {
-    this.setHighlight(null); // the leaves get their own materials back before the view goes
+    this.setHighlight(null); // the leaves (and the Lockbox) get their own materials back before the view goes
     const t = this.train;
     this.train = null;
+    this.lockboxView = null;
+    this.lockboxAimed = false;
     this.target = null;
     this.prompt = null;
     this.lightsOff();
@@ -677,8 +702,9 @@ export class PlayerTrainRuntime {
     this.hintT += dt;
     this.time += dt;
     this.applyDoors(dt, false);
+    this.stepLockbox(dt);
     this.updateTarget();
-    if (this.highlighted) highlightPulse(this.hiMats.values(), this.time);
+    if (this.hiOwner) highlightPulse(this.hiMats.values(), this.time);
   }
 
   /** Bodies in each doorway, the door logic, then leaves / boxes / gates / curbs follow. */
@@ -803,12 +829,21 @@ export class PlayerTrainRuntime {
   // -------------------------------------------------------------------------------------------
   // [E]: aim at a doorway (its leaves / opening, either face) within reach, nothing structural in between
 
-  /** The doorway under the crosshair (null: none within reach / blocked). */
+  /** The doorway under the crosshair (null: none within reach / blocked, or the Lockbox is nearer). */
   pickDoor(): DoorRt | null {
+    return this.pickAim().door;
+  }
+
+  /**
+   * What the crosshair is on: the nearest of every doorway's aim box and (task train-lockbox) the Lockbox's closed box, within reach,
+   * with nothing structural in between. At most one of the two is set.
+   */
+  pickAim(): {door: DoorRt | null; lockbox: boolean} {
+    const none = {door: null, lockbox: false};
     const t = this.train, h = this.host;
-    if (!t || !h.player.alive) return null;
+    if (!t || !h.player.alive) return none;
     const P = h.player, pl = t.placement;
-    if (Math.abs(P.x - pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(P.z - pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return null;
+    if (Math.abs(P.x - pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(P.z - pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return none;
     const cam = h.camera;
     cam.updateMatrixWorld();
     cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
@@ -825,17 +860,27 @@ export class PlayerTrainRuntime {
       const hit = rayBox(eye, dir, b as never, bt);
       if (hit !== null && hit < bt) { bt = hit; best = d; }
     }
-    if (!best) return null;
+    let lockbox = false;
+    const lb = this.spec.lockbox;
+    if (lb && this.lockboxView) {
+      const fp = lockboxFootprint(lb), [x0, z0, x1, z1] = worldRect(p, fp.x0, fp.x1, fp.z0, fp.z1), b = this.box;
+      b.min.x = x0; b.min.z = z0; b.max.x = x1; b.max.z = z1;
+      b.min.y = t.col.floorY; b.max.y = t.col.floorY + lb.height;
+      const hit = rayBox(eye, dir, b as never, bt);
+      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = true; }
+    }
+    if (!best && !lockbox) return none;
     const blocked = h.levels.raycast(eye, dir, bt + 0.02);
-    if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return null;
-    return best;
+    if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return none;
+    return {door: best, lockbox};
   }
 
   private updateTarget(): void {
-    const d = this.host.state === 'playing' ? this.pickDoor() : null;
-    this.target = d;
-    this.prompt = d ? this.promptFor(d) : null;
-    this.setHighlight(d); // the glow follows the prompt (same aim / reach / occlusion)
+    const r = this.host.state === 'playing' ? this.pickAim() : {door: null, lockbox: false};
+    this.target = r.door;
+    this.lockboxAimed = r.lockbox;
+    this.prompt = r.door ? this.promptFor(r.door) : r.lockbox ? this.lockboxPrompt() : null;
+    this.setHighlightOwner(r.door ?? (r.lockbox ? 'lockbox' : null)); // the glow follows the prompt (same aim / reach / occlusion)
   }
 
   // -------------------------------------------------------------------------------------------
@@ -853,11 +898,22 @@ export class PlayerTrainRuntime {
 
   /** Swap the aimed pair's leaf materials for their highlight clones (restoring the previous pair's own). */
   setHighlight(d: DoorRt | null): void {
-    if (d === this.highlighted) return;
-    if (this.highlighted && this.train) for (const m of this.leafMeshes(this.highlighted)) m.material = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
-    this.highlighted = d;
-    if (!d) return;
-    for (const m of this.leafMeshes(d)) {
+    this.setHighlightOwner(d);
+  }
+
+  /** The meshes that glow for a highlight owner. */
+  private ownerMeshes(o: DoorRt | 'lockbox'): THREE.Mesh[] {
+    return o === 'lockbox' ? (this.lockboxView?.highlight ?? []) : this.leafMeshes(o);
+  }
+
+  /** Swap the aimed thing's (a door pair's / the Lockbox's) materials for their highlight clones, restoring the previous one's own. */
+  private setHighlightOwner(o: DoorRt | 'lockbox' | null): void {
+    if (o === this.hiOwner) return;
+    if (this.hiOwner && this.train) for (const m of this.ownerMeshes(this.hiOwner)) m.material = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
+    this.hiOwner = o;
+    this.highlighted = o && o !== 'lockbox' ? o : null;
+    if (!o) return;
+    for (const m of this.ownerMeshes(o)) {
       const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
       m.userData.baseMat = base;
       const hi = highlightMaterial(this.hiMats, base);
@@ -876,6 +932,7 @@ export class PlayerTrainRuntime {
       const m = o as THREE.Mesh;
       if (m.isMesh && !m.userData.trainGlass && !Array.isArray(m.material) && !bases.has(m.material)) bases.set(m.material, m);
     });
+    for (const m of this.lockboxView?.highlight ?? []) if (!Array.isArray(m.material) && !bases.has(m.material)) bases.set(m.material, m); // (task train-lockbox)
     for (const [base, hi] of [...this.hiMats]) if (!bases.has(base)) { hi.dispose(); this.hiMats.delete(base); }
     for (const [base, mesh] of bases) {
       const hi = highlightMaterial(this.hiMats, base);
@@ -901,10 +958,51 @@ export class PlayerTrainRuntime {
   /** E handler (Game.interactHandlers): toggles the aimed doorway; true when the train handled the key. */
   interact(): boolean {
     if (!this.train || this.host.state !== 'playing') return false;
-    const d = this.pickDoor();
-    if (!d) return false;
-    this.toggle(d);
+    const r = this.pickAim();
+    if (r.lockbox) { this.lockboxInteract(); return true; }
+    if (!r.door) return false;
+    this.toggle(r.door);
     return true;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Task train-lockbox-windows-20261101-232156: the Lockbox (the world object; lane BOX owns its 40 slots and its view)
+
+  private lockboxPrompt(): string {
+    return this.lockboxLid.target === 0 ? '<b>[E]</b> Open Lockbox' : '<b>[E]</b> Close Lockbox'; // open lid = the view is open (E closes it)
+  }
+
+  /** [E] on the aimed Lockbox: lane BOX's handler (it opens its view and sets the lid), else the lid toggles. */
+  lockboxInteract(): void {
+    if (!this.lockboxView) return;
+    this.counts.lockbox++;
+    if (this.onLockboxInteract) this.onLockboxInteract();
+    else this.setLockboxOpen(this.lockboxLid.target === 0);
+  }
+
+  /** The lid's target (lane BOX: open while its view is open, shut when closed / walked away from). No-op without a Lockbox. */
+  setLockboxOpen(open: boolean): void {
+    if (this.lockboxView) this.lockboxLid.target = open ? 1 : 0;
+  }
+
+  /** World centre of the Lockbox's closed top (lane BOX's walk-away check), or null without one. */
+  lockboxWorld(): {x: number; y: number; z: number} | null {
+    const t = this.train, lb = this.spec.lockbox;
+    if (!t || !lb || !this.lockboxView) return null;
+    return trainToWorld(t.placement, lb.x, this.spec.floorY + lb.height, lb.z);
+  }
+
+  /** The lid follows its target (smoothstep), with the existing cabinet cues. */
+  private stepLockbox(dt: number): void {
+    const v = this.lockboxView, lb = this.spec.lockbox, t = this.train;
+    if (!v || !lb || !t) return;
+    const ev = this.lockboxLid.step(dt);
+    if (ev === null && !this.lockboxLid.moving) return;
+    poseLid(v, lb, this.lockboxLid.eased);
+    if (ev === 'opening' || ev === 'closed') {
+      const c = trainToWorld(t.placement, lb.x, this.spec.floorY + lb.height, lb.z);
+      towerCue(this.host.sfx, ev === 'opening' ? 'cabinetOpen' : 'cabinetClose', {x: c.x, y: c.y, z: c.z}, {rate: ev === 'opening' ? 0.85 : 0.8, gain: 0.8});
+    }
   }
 
   /** Toggle through the door rules (what a real press does): closing is refused while a body is in the doorway. */
@@ -963,6 +1061,12 @@ export class PlayerTrainRuntime {
       target: t && this.target ? t.doors.indexOf(this.target) : null,
       // task train-shell-followup: the glowing door pair, the rear compartment, the see-through windows
       highlighted: t && this.highlighted ? t.doors.indexOf(this.highlighted) : null,
+      // task train-lockbox: the Lockbox world object (lane BOX holds its contents)
+      lockbox: this.spec.lockbox && t ? {
+        source: this.lockboxView?.source ?? null, aimed: this.lockboxAimed, lid: +this.lockboxLid.t.toFixed(2), target: this.lockboxLid.target,
+        world: this.lockboxWorld(), handler: !!this.onLockboxInteract, size: [this.spec.lockbox.length, this.spec.lockbox.height, this.spec.lockbox.depth],
+        at: {x: this.spec.lockbox.x, z: this.spec.lockbox.z},
+      } : null,
       rear: this.spec.rear ?? null,
       windows: (() => { const w = windowsOf(this.spec); return {side: w.side.length, end: w.end.length, leaf: !!w.leaf, glassBoxes: this.glassBoxes.size}; })(),
       prompt: this.prompt,
@@ -1018,10 +1122,21 @@ export function trainQaApi(game: unknown): Record<string, (...a: any[]) => unkno
      * Task train-shell-followup-20261101-221246: stand in the cab facing the windshield ('cab'), in the rear compartment facing the
      * rear windows ('rear'), or back at the start pose facing the middle platform door ('spawn'). False without a train.
      */
-    trainGo: (where: 'cab' | 'rear' | 'spawn' = 'cab') => {
+    trainGo: (where: 'cab' | 'rear' | 'spawn' | 'lockbox' = 'cab') => {
       const r = rt(), t = r?.train;
       if (!r || !t) return false;
       const s = r.spec, P = g.player, end = where === 'rear' ? -1 : 1;
+      if (where === 'lockbox') {
+        // task train-lockbox: in the rear compartment's aisle, ~0.9 m in front of the Lockbox, looking at its lid's front edge
+        const lb = s.lockbox;
+        if (!lb) return false;
+        const fp = lockboxFootprint(lb), front = fp.z0, at = trainToWorld(t.placement, lb.x, s.floorY, front - 0.9);
+        const aim = trainToWorld(t.placement, lb.x, s.floorY + lb.height * 0.8, front);
+        P.x = at.x; P.z = at.z; P.y = at.y; P.vy = 0; P.grounded = true;
+        P.yaw = Math.atan2(-(aim.x - at.x), -(aim.z - at.z));
+        P.pitch = Math.atan2(aim.y - (at.y + 1.62), Math.hypot(aim.x - at.x, aim.z - at.z));
+        return true;
+      }
       if (where === 'spawn') {
         let k = -1;
         for (let j = 0; j < t.doors.length; j++) { const dd = t.doors[j].col.door; if (dd.side < 0 && (k < 0 || Math.abs(dd.x) < Math.abs(t.doors[k].col.door.x))) k = j; }
