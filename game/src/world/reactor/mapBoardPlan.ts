@@ -132,7 +132,8 @@ export function planMapBoards(layout: StationLayout, info: ReactorInfo, facing: 
     const props: PropBox[] = layout.props.filter(p => (p.level ?? 0) === sc.level)
       .map(p => ({x0: p.x - p.hx, z0: p.z - p.hz, x1: p.x + p.hx, z1: p.z + p.hz, y0: p.y + (p.lift ?? 0), y1: p.y + (p.lift ?? 0) + p.h}));
     const pose = (x: number, z: number, n: [number, number], same: boolean): MapBoardPose =>
-      ({screen: id, level: sc.level, x: x + n[0] * (MAP_BOARD.depth + 0.005), y, z: z + n[1] * (MAP_BOARD.depth + 0.005), nx: n[0], nz: n[1], rx: -n[1], rz: n[0], sameWall: same});
+      // right as seen by a viewer facing the board (= the face plane's local +X: rotation.y atan2(nx, nz) maps +X to (nz, -nx))
+      ({screen: id, level: sc.level, x: x + n[0] * (MAP_BOARD.depth + 0.005), y, z: z + n[1] * (MAP_BOARD.depth + 0.005), nx: n[0], nz: n[1], rx: n[1], rz: -n[0], sameWall: same});
     // 1. the screen's own wall (the first solid cell behind the screen: a screen may hang on a machine in front of it), either side
     const rx = -nz, rz = nx;
     let wallD = 0;

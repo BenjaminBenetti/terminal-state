@@ -143,6 +143,17 @@ describe('the runtime: boards in the world, elevator-style storey buttons', () =
       for (const s of h.sectionHooks) s.build?.(L);
       expect(rt.boards.length).toBe(4);
       expect(rt.markers.some(m => m.kind === 'key')).toBe(true);
+      // the drawn buttons are where they are picked, in the face's right column (the viewer's right)
+      const wp = new THREE.Vector3();
+      for (const bd of rt.boards) {
+        bd.root.updateMatrixWorld(true);
+        for (const q of bd.buttons) {
+          q.mesh.getWorldPosition(wp);
+          expect(Math.hypot(wp.x - q.b.x, wp.y - q.b.y, wp.z - q.b.z), `${bd.pose.screen} button L${q.b.level}`).toBeLessThan(0.02);
+          const local = bd.root.worldToLocal(wp.clone());
+          expect(local.x).toBeGreaterThan(MAP_BOARD.w / 2 - 0.15);
+        }
+      }
       const redraws0 = rt.counts.redraws;
       expect(redraws0).toBeGreaterThanOrEqual(4);
       rt.refresh(); rt.refresh();
