@@ -53,7 +53,8 @@ describe('reactor air: the depth term in the march', () => {
 
   it('uniforms: the table size, the gate off, the look', () => {
     const u = createFogUniforms();
-    expect(u.depthTab.array.length).toBe(REACTOR_AIR.TABLE_N);
+    // (lane FOG, task reactor-submit-roof-fog-20261102: the table is a TABLE_N x 1 float data texture, not a uniform array)
+    expect((u.depthTab as unknown as {value: THREE.DataTexture}).value.image.data.length).toBe(REACTOR_AIR.TABLE_N);
     expect(u.depthOn.value).toBe(0);
     expect(u.depthK.value.x).toBeCloseTo(REACTOR_GAS_LOOK.ext, 9);
   });
@@ -83,7 +84,7 @@ describe('reactor air: VolumetricAtmosphere plumbing (no GPU)', () => {
     a.setDepthGas(air.renderTable());
     sync(a);
     expect(a.u.depthOn.value).toBe(1);
-    expect(Float32Array.from(a.u.depthTab.array as number[])).toEqual(air.table);
+    expect(a.depthTable).toEqual(air.table); // the texels the march loads (lane FOG: the table texture's data)
     const r = a.u.depthRange.value as THREE.Vector4;
     expect([r.x, r.y]).toEqual([air.yLo, air.yHi]);
     expect(r.z).toBeCloseTo(1 / (air.yHi - air.yLo), 9);
@@ -94,7 +95,7 @@ describe('reactor air: VolumetricAtmosphere plumbing (no GPU)', () => {
     air.update(2);
     a.setDepthGas(air.renderTable());
     sync(a);
-    expect(Math.max(...(a.u.depthTab.array as number[]))).toBe(0);
+    expect(Math.max(...a.depthTable)).toBe(0);
     expect(a.u.depthOn.value).toBe(1);
     expect(a.depthDebug()).toMatchObject({compiled: true, on: true, uploads: 2});
     const shut = fixtureInfo();
@@ -109,6 +110,6 @@ describe('reactor air: VolumetricAtmosphere plumbing (no GPU)', () => {
     a.setStation(base, null);
     sync(a);
     expect(a.depthDebug()).toMatchObject({compiled: false, on: false});
-    expect(Math.max(...(a.u.depthTab.array as number[]))).toBe(0);
+    expect(Math.max(...a.depthTable)).toBe(0);
   });
 });
