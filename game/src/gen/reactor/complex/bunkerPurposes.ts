@@ -7,8 +7,9 @@
 // appended AFTER every core purpose, so the caps-exhausted fallback (the first slot-compatible purpose) never reaches them — the Subway /
 // Office / Mall back-of-house assignment is unchanged. Ids carry the 'reactor-' prefix (tests/purposes.test.ts counts station purposes
 // without it). Loot: the named tables of items/lootTables.ts only (no new literal item lists); ammo only in the armoury, by rule.
-// Furniture: the lock / decon rules run in the station dresser; the dormitories' beds / footlockers / lockers and the armoury's lockers
-// / crates are placed by the bunker's dress hook (./bunkerDress.ts: barracks rows, real fit), so their rule lists are empty.
+// Furniture: every one of these rooms is furnished by the bunker's dress hook (./bunkerDress.ts) — the lock / decon round the blast
+// door's frame and threshold, the dormitories' bunk rows / footlockers / lockers, the armoury's lockers / crates — so their rule lists
+// are empty (the station dresser only lights them).
 
 import type {RoomPurpose} from '../../purposes';
 import {CACHE_CRATE, GUN_SAFE_ROWS, PERSONAL_ROWS, TENANT_ARMS, TENANT_MEDS, TENANT_SUPPLY} from '../../../items/lootTables';
@@ -23,22 +24,13 @@ export function REACTOR_BUNKER_PURPOSES(): Record<string, RoomPurpose> {
   return {
     [BUNKER_PURPOSE.lock]: {
       ...base, id: BUNKER_PURPOSE.lock, theme: 'service', label: 'Blast-door lock', light: [0.7, 0.3, 0],
-      props: [
-        {kind: 'bench', at: 'wall', wall: 'side', n: [0, 1], chance: 0.6, front: 0.6},
-        {kind: 'noticeBoard', at: 'wall', wall: 'side', n: [1, 1], chance: 0.6, y: 1.1},
-      ],
+      props: [],
       loot: {default: TENANT_SUPPLY},
       floor: {med: 0.2},
     },
     [BUNKER_PURPOSE.decon]: {
       ...base, id: BUNKER_PURPOSE.decon, theme: 'medical', label: 'Decontamination', light: [0.55, 0.45, 0],
-      props: [
-        {kind: 'washCounter', at: 'wall', wall: 'side', n: [1, 1], front: 0.7},
-        {kind: 'staffLockers', at: 'row', wall: 'side', n: [1, 3], front: 1.0},
-        {kind: 'bench', at: 'wall', wall: 'side', n: [1, 1], chance: 0.7, front: 0.6},
-        {kind: 'mopSink', at: 'wall', wall: 'any', n: [0, 1], front: 0.6},
-        {kind: 'bin', at: 'wall', wall: 'any', n: [1, 1]},
-      ],
+      props: [],
       loot: {default: TENANT_MEDS},
       floor: {med: 0.8},
     },

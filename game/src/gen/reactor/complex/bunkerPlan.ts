@@ -23,6 +23,7 @@ import type {Rng} from '../../../core/rng';
 import type {AreaKind, RoomType} from '../../stationTypes';
 import type {ComplexRoom} from './types';
 import {BUNKER_PURPOSE} from './bunkerPurposes';
+import {BLAST} from './bunkerKinds';
 
 /** A local rect: u / v of its first cell, w cells along u, h cells along v. */
 export interface LRect { u: number; v: number; w: number; h: number }
@@ -50,7 +51,7 @@ export interface PlanDoor {
   gap: LRect;
   height: number;
   arch: boolean;
-  kind: 'blast' | 'junction' | 'door';
+  kind: 'blast' | 'junction' | 'door' | 'bulkhead';
 }
 
 export interface BunkerPlan {
@@ -58,20 +59,27 @@ export interface BunkerPlan {
   doors: PlanDoor[];
   /** The generator skid (8 x 4 cells, long axis along u) and the use cell (2 cells off its `end` short side, facing it). */
   gen: {foot: LRect; use: {u: number; v: number}; end: 'lo' | 'hi'};
+  /**
+   * The blast door in the bulkhead: the lane's first cell along u (3 cells wide), the model origin (continuous local cells: model x
+   * along leafSign * u, model z along -v), and the threshold cells' rise (rows v, risers of BLAST.sill / 3 over the lane).
+   */
+  blast: {uo: number; uf: number; vo: number; leafSign: 1 | -1; steps: [number, number][]};
   /** Layout numbers (QA / tests / dressing). */
-  dims: {A: number; Vd: number; vM: number; vS: number; vH: number; uW: number; uE: number; SW: number; MW: number; GD: number; lock: LRect};
+  dims: {A: number; Vd: number; LD: number; BW: number; vM: number; vS: number; vH: number; uW: number; uE: number; SW: number; MW: number; GD: number; lock: LRect};
 }
 
 /** Fixed module sizes (cells, 0.5 m). */
 export const BUNKER = {
-  /** Lock depth / decontamination depth / muster corridor width / spine width / guard post width. */
-  LD: 8, DD: 7, MW: 6, SW: 5, GW: 10,
+  /** Lock depth / bulkhead (blast door) thickness / decontamination depth / muster corridor width / spine width / guard post width. */
+  LD: 9, bulkhead: 2, DD: 7, MW: 6, SW: 5, GW: 10,
+  /** Narrowest lock (cells): the blast-door frame (4.95 m) along its back wall plus a walkway past the open leaf. */
+  lockMinW: 13,
   /** Minimum along / depth (cells) the program needs. */
   minA: 56, minVd: 55,
   /** Clear heights (m): rooms, stores, corridors, the lock, hall side rooms, the hall (target; capped by ceilMax). */
   clear: {room: 3.4, store: 3.2, corridor: 3.2, lock: 4.0, side: 3.6, hall: 6.5},
-  /** Door heights (m): ordinary doors, corridor junctions, the blast door. */
-  door: {room: 2.4, junction: 3.0, blast: 3.0},
+  /** Door heights (m): ordinary doors, corridor junctions, the entrance, the bulkhead lane (threshold sill + 2.26 m). */
+  door: {room: 2.4, junction: 3.0, blast: 3.0, bulkhead: 3.1},
   /** The generator skid footprint (cells along u x along v). */
   skid: {w: 8, d: 4},
 } as const;
@@ -114,10 +122,11 @@ export function splitSpan(S: number, min: number, max: number, rng: Rng): number
 }
 
 /**
- * The bunker program for a region `A` cells along the wall, `Vd` usable cells deep (v in [0, Vd)), the entrance span [e0, e1) along u.
+ * The bunker program for a region `A` cells along the wall, `Vd` usable cells deep (v in [0, Vd)), the entrance span [e0, e1) along u;
+ * `leafSign` = the local u direction of the blast-door model's +x (its open leaf) when its front faces the lock (bunker.ts).
  * Null when it does not fit (the carver then returns null and the host keeps the generator on its landing).
  */
-export function planBunker(A: number, Vd: number, e0: number, e1: number, rng: Rng): BunkerPlan | null {
+export function planBunker(A: number, Vd: number, e0: number, e1: number, leafSign: 1 | -1, rng: Rng): BunkerPlan | null {
   const {LD, DD, MW, SW} = BUNKER;
   if (A < BUNKER.minA || Vd < BUNKER.minVd || e1 - e0 < 2 || e0 < 1 || e1 > A - 1) return null;
   const C = BUNKER.clear, D = BUNKER.door;
@@ -143,33 +152,46 @@ export function planBunker(A: number, Vd: number, e0: number, e1: number, rng: R
     door(a, b, {u: uWall, v, w: 1, h: Math.min(h, v1 - v0)}, kind);
   };
 
-  // --- Front band: lock, decon, guard post ------------------------------------------------------------------------------------
-  const FB = LD + 1 + DD, vM = FB + 1, vS = vM + MW + 1;
+  // --- Front band: lock, the blast-door bulkhead, decon, guard post ----------------------------------------------------------------
+  // The lock (vestibule) behind the entrance; a 2-cell bulkhead holds the BLAST DOOR (REACTOR_X_KIT.blastDoor, grounded, its round leaf
+  // standing open along the lock's side wall on the model's +x side = local `leafSign`); the 3-cell lane through it climbs a raised
+  // threshold (gen/reactor/complex/bunkerKinds.ts BLAST) into the decontamination room.
+  const BW = BUNKER.bulkhead, FB = LD + BW + DD, vM = FB + 1, vS = vM + MW + 1;
   const ew = e1 - e0;
-  const LW = Math.max(12, ew + 4);
-  if (LW > A - 2) return null;
-  const lu0 = Math.max(1, Math.min(A - 1 - LW, Math.round((e0 + e1) / 2 - LW / 2)));
-  if (e0 < lu0 + 1 || e1 > lu0 + LW - 1) return null;
+  const LWmin = BUNKER.lockMinW + rng.int(0, 2);
+  // the leaf's side wall keeps >= 3 cells clear of the entrance (the leaf is 1.75 cells wide along it)
+  const gap = 3 + rng.int(0, 2);
+  const lu0 = Math.max(1, leafSign > 0 ? Math.min(e0 - 1, e1 + gap - LWmin) : e0 - gap);
+  const lu1 = Math.min(A - 1, leafSign > 0 ? e1 + gap : Math.max(e1 + 1, e0 - gap + LWmin));
+  const LW = lu1 - lu0;
+  if (LW < BUNKER.lockMinW || e0 < lu0 + 1 || e1 > lu1 - 1) return null;
+  // the frame: its +x end (the leaf side) against that side wall; the opening's 3-cell lane; the model origin (continuous cells)
+  const fHalf = BLAST.halfW / 0.5, oOff = BLAST.openX / 0.5;
+  const uo = Math.round(leafSign > 0 ? lu1 - fHalf + leafSign * oOff - 1.5 : lu0 + fHalf + leafSign * oOff - 1.5);
+  const uf = uo + 1.5 - leafSign * oOff;
+  if (uf - fHalf < lu0 - 0.7 || uf + fHalf > lu1 + 0.7) return null;
+  const vo = LD + BW / 2 + (BLAST.bodyZ[0] + BLAST.bodyZ[1]) / 2 / 0.5; // model z = 0 (front +z = -v): the body centred in the bulkhead
+  if (vo - BLAST.leaf.z[1] / 0.5 < 0.5) return null; // the open leaf stays inside the lock
+  // the guard post: on the side away from the leaf when it fits (a door into the lock), else beyond it (a door into the decon)
   let GW: number = BUNKER.GW;
-  const loSpace = lu0 - 2, hiSpace = A - 2 - lu0 - LW;
-  let gSide: 'lo' | 'hi';
-  if (loSpace >= GW && hiSpace >= GW) gSide = rng.chance(0.5) ? 'lo' : 'hi';
-  else if (hiSpace >= GW) gSide = 'hi';
-  else if (loSpace >= GW) gSide = 'lo';
-  else { GW = Math.max(loSpace, hiSpace); if (GW < 8) return null; gSide = hiSpace >= loSpace ? 'hi' : 'lo'; }
-  const gu0 = gSide === 'hi' ? lu0 + LW + 1 : lu0 - 1 - GW;
+  const awaySpace = leafSign > 0 ? lu0 - 2 : A - 2 - lu1, leafSpace = leafSign > 0 ? A - 2 - lu1 : lu0 - 2;
+  let away = true;
+  if (awaySpace < GW) { if (leafSpace >= GW) away = false; else { GW = Math.max(awaySpace, leafSpace); if (GW < 8) return null; away = awaySpace >= leafSpace; } }
+  const gHi = away ? leafSign < 0 : leafSign > 0;
+  const gu0 = gHi ? lu1 + 1 : lu0 - 1 - GW;
   const lockR: LRect = {u: lu0, v: 0, w: LW, h: LD};
   room({key: 'lock', label: 'Blast-door lock', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.lock, role: 'entry'}, lockR, '', {clear: C.lock});
   door('', 'lock', {u: e0, v: -1, w: ew, h: 1}, 'blast', D.blast);
-  room({key: 'decon', label: 'Decontamination', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.decon, role: 'room'}, {u: lu0, v: LD + 1, w: LW, h: DD}, 'lock');
-  const innerW = Math.min(5, LW - 4);
-  door('lock', 'decon', {u: lu0 + Math.floor((LW - innerW) / 2), v: LD, w: innerW, h: 1});
+  room({key: 'decon', label: 'Decontamination', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.decon, role: 'room'}, {u: lu0, v: LD + BW, w: LW, h: DD}, 'lock', {clear: C.lock});
+  door('lock', 'decon', {u: uo, v: LD, w: 3, h: BW}, 'bulkhead', D.bulkhead);
   // the muster corridor (full width) behind the front band
   room({key: 'muster', label: 'Muster corridor', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', role: 'corridor'}, {u: 1, v: vM, w: A - 2, h: MW}, 'decon', {clear: C.corridor});
-  door('decon', 'muster', {u: lu0 + Math.floor((LW - 4) / 2) + (rng.chance(0.5) ? -1 : 1), v: FB, w: 4, h: 1});
+  doorU('decon', 'muster', FB, lu0, lu1, 4, rng.range(0.25, 0.75));
   room({key: 'guard', label: 'Guard post', kind: 'room', type: 'utility', purpose: 'security-office', role: 'room'}, {u: gu0, v: 0, w: GW, h: FB}, 'muster');
-  doorV('lock', 'guard', gSide === 'hi' ? lu0 + LW : lu0 - 1, 0, LD, 3, rng.range(0.2, 0.8));
-  doorU('muster', 'guard', FB, gu0, gu0 + GW, 3, gSide === 'hi' ? rng.range(0.4, 1) : rng.range(0, 0.6));
+  if (away) doorV('lock', 'guard', gHi ? lu1 : lu0 - 1, 0, LD - 2, 3, rng.range(0.2, 0.8));
+  else doorV('decon', 'guard', gHi ? lu1 : lu0 - 1, LD + BW + 1, FB, 3, rng.range(0.2, 0.8));
+  doorU('muster', 'guard', FB, gu0, gu0 + GW, 3, gHi ? rng.range(0.4, 1) : rng.range(0, 0.6));
+  const blast = {uo, uf, vo, leafSign, steps: [[LD - 2, 1], [LD - 1, 2], [LD, 3], [LD + 1, 3], [LD + BW, 2], [LD + BW + 1, 1]] as [number, number][]};
 
   // front rooms on both sides of the lock group (they open onto the muster corridor)
   const groupLo = Math.min(lu0, gu0), groupHi = Math.max(lu0 + LW, gu0 + GW);
@@ -247,7 +269,7 @@ export function planBunker(A: number, Vd: number, e0: number, e1: number, rng: R
   doorV('hall', 'armoury', armouryHi ? uO - 1 : uW - 1, vH, vH + GD, 3, rng.range(0.55, 0.9));
 
   // --- Assign the free slots: the dormitory the largest, the filtration plant the next, the rest shuffled ---------------------
-  const order = slots.map((s, i) => i).sort((p, q) => slots[q].r.w * slots[q].r.h - slots[p].r.w * slots[p].r.h || p - q);
+  const order = slots.map((_, i) => i).sort((p, q) => slots[q].r.w * slots[q].r.h - slots[p].r.w * slots[p].r.h || p - q);
   const rest = rng.shuffle(order.slice(2));
   const assign = [...order.slice(0, 2), ...rest];
   const used = new Map<string, number>();
@@ -267,7 +289,7 @@ export function planBunker(A: number, Vd: number, e0: number, e1: number, rng: R
   const end: 'lo' | 'hi' = armouryHi ? 'lo' : 'hi'; // the panel end faces the switch room
   const use = {u: end === 'hi' ? fu0 + gw + 1 : fu0 - 2, v: fv0 + Math.floor(gd / 2)};
   return {
-    rooms, doors, gen: {foot: {u: fu0, v: fv0, w: gw, h: gd}, use, end},
-    dims: {A, Vd, vM, vS, vH, uW, uE, SW, MW, GD, lock: lockR},
+    rooms, doors, gen: {foot: {u: fu0, v: fv0, w: gw, h: gd}, use, end}, blast,
+    dims: {A, Vd, LD, BW, vM, vS, vH, uW, uE, SW, MW, GD, lock: lockR},
   };
 }

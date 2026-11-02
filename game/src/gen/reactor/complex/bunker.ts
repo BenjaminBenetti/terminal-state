@@ -14,6 +14,7 @@ import type {Area, Rect} from '../../stationTypes';
 import type {ComplexCarve, ComplexCarveInput, ComplexRoom} from './types';
 import {BUNKER, planBunker, type BunkerPlan, type LRect} from './bunkerPlan';
 import {dressBunker} from './bunkerDress';
+import {BLAST} from './bunkerKinds';
 
 /** Human name of the complex (HUD / map boards). */
 export const BUNKER_NAME = 'Shelter 7 — civil-defence bunker';
@@ -35,6 +36,11 @@ export interface BunkerFrame {
   cell(u: number, v: number): [number, number];
   du: [number, number];
   dv: [number, number];
+  /** Canvas point (continuous cells) of local (0, 0): local continuous (u, v) -> canvas = origin + u * du + v * dv. */
+  origin: [number, number];
+  /** Local u direction of the blast-door model's +x when its front (+z) faces -v (the lock), and that model yaw. */
+  leafSign: 1 | -1;
+  modelYaw: number;
 }
 
 /** The local frame of a complex slot (u along the pit wall, v into the rock from the row behind the entrance). */
@@ -63,7 +69,12 @@ export function bunkerFrame(inp: Pick<ComplexCarveInput, 'slot'>): BunkerFrame |
   };
   const du: [number, number] = ns ? [1, 0] : [0, 1];
   const dv: [number, number] = inward === 'S' ? [0, 1] : inward === 'N' ? [0, -1] : inward === 'E' ? [1, 0] : [-1, 0];
-  return {A, Vd, e0, e1, rect, cell, du, dv};
+  const origin: [number, number] = inward === 'S' ? [R.x, E.y + 1] : inward === 'N' ? [R.x, E.y] : inward === 'E' ? [E.x + 1, R.y] : [E.x, R.y];
+  // a model facing -v (front +z = F): yaw = atan2(F.x, F.z); its +x = (F.z, -F.x) (three.js Y rotation)
+  const F = [-dv[0], -dv[1]];
+  const X = [F[1], -F[0]];
+  const leafSign: 1 | -1 = X[0] * du[0] + X[1] * du[1] > 0 ? 1 : -1;
+  return {A, Vd, e0, e1, rect, cell, du, dv, origin, leafSign, modelYaw: r2(Math.atan2(F[0], F[1]))};
 }
 
 /** Camera-convention yaw facing canvas direction (dx, dy) (forward = (-sin yaw, -cos yaw); canvas y = world z). */
@@ -87,7 +98,7 @@ export function carveBunker(inp: ComplexCarveInput): ComplexCarve | null {
   const {k, rng, slot, levelOpt} = inp;
   const f = bunkerFrame(inp);
   if (!f) return fail('entrance-shape');
-  const plan = planBunker(f.A, f.Vd, f.e0, f.e1, rng);
+  const plan = planBunker(f.A, f.Vd, f.e0, f.e1, f.leafSign, rng);
   if (!plan) return fail('plan');
   const lv = slot.level, g = k.grid(lv), R = slot.region;
   const front = k.areas[slot.frontArea];
@@ -119,6 +130,14 @@ export function carveBunker(inp: ComplexCarveInput): ComplexCarve | null {
   for (const d of plan.doors) {
     const gap = d.kind === 'blast' ? slot.entrance : f.rect(d.gap);
     k.carveDoor(gap, areaOf(d.a), areaOf(d.b), d.height, d.arch);
+  }
+  // the blast door's raised threshold: three risers up to the sill across the bulkhead lane, three down (cell floors, <= STEP_UP)
+  {
+    const riser = r2(BLAST.sill / 3);
+    for (const [v, n] of plan.blast.steps) for (let u = plan.blast.uo; u < plan.blast.uo + 3; u++) {
+      const [x, y] = f.cell(u, v);
+      g.floor[g.idx(x, y)] = r2(slot.baseY + n * riser);
+    }
   }
   const keys = plan.rooms.map(p => p.key);
   const rooms: ComplexRoom[] = plan.rooms.map(p => ({area: area[p.key], key: p.key, label: p.label, role: p.role}));
