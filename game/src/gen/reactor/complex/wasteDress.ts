@@ -643,6 +643,8 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     const r = turned ? rTurn : rPlan, {rows, units} = turned ? lTurn : lPlan;
     if (turned) R[w0.key] = r;
     for (const u0 of units) {
+      // (no empty racks: once the drum cap is reached the rest of the hall stays open floor)
+      if (stats.drums >= WASTE_DRUM_CAP) break;
       // a unit the station dresser's furnishing gets in the way of shrinks (from either end) down to two bays
       let u: {s0: number; bays: number; t: number} | null = null;
       // (a shorter unit slides along its span, 0.5 m steps, past the furnishing before it shrinks again)

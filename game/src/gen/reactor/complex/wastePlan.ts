@@ -556,8 +556,8 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   if (cyc < 2) return no('loops');
   let cells = 0;
   for (const r of P.rooms) cells += r.r.du * r.r.dv;
-  // (~900 m² in the host's 40 x 32 m slot; a smaller region asks for the same share of its box)
-  if (cells < Math.min(relax ? 3300 : 3600, box.du * box.dv * (relax ? 0.62 : 0.7))) return no('floor');
+  // (~925 m² in the host's 40 x 32 m slot; a smaller region asks for the same share of its box)
+  if (cells < Math.min(relax ? 3400 : 3700, box.du * box.dv * (relax ? 0.64 : 0.72))) return no('floor');
   // --- 11. the zone generator in the plant: the skid along the plant's long side, the use point on its main door's side
   const pl = P.by.plant.r, pd = P.doors.find(d => d.b === 'plant' && !d.loop);
   const g = pd ? doorGapL(P.by[pd.a].r, pl, pd.w, pd.t) : null;
