@@ -208,7 +208,9 @@ export function planBunker(A: number, Vd: number, e0: number, e1: number, leafSi
   room({key: 'guard', label: 'Guard post', kind: 'room', type: 'utility', purpose: 'security-office', role: 'room'}, {u: gu0, v: 0, w: GW, h: FB}, 'muster');
   doorV('lock', 'guard', gHi ? lu1 : lu0 - 1, 0, LD - 2, 3, rng.range(0.2, 0.8));
   doorU('muster', 'guard', FB, gu0, gu0 + GW, 3, gHi ? rng.range(0.4, 1) : rng.range(0, 0.6));
-  const blast = {uo, uf, vo, xs, facing, steps: [[LD - 2, 1], [LD - 1, 2], [LD, 3], [LD + 1, 3], [LD + BW, 2], [LD + BW + 1, 1]] as [number, number][]};
+  // the threshold: the sill level over the bulkhead AND the first row each side (the frame's faces stand 0.29 / 0.49 m proud of the
+  // wall: their plate below the round opening stays under the walking surface), then two risers down to each room's floor
+  const blast = {uo, uf, vo, xs, facing, steps: [[LD - 3, 1], [LD - 2, 2], [LD - 1, 3], [LD, 3], [LD + 1, 3], [LD + BW, 3], [LD + BW + 1, 2], [LD + BW + 2, 1]] as [number, number][]};
 
   // front rooms on both sides of the lock group (they open onto the muster corridor)
   const groupLo = Math.min(lu0, gu0), groupHi = Math.max(lu0 + LW, gu0 + GW);
