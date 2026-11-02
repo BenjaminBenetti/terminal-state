@@ -616,7 +616,8 @@ export class GearSystem {
     return !!this.resume && !this.resume.classList.contains('hidden');
   }
 
-  private showResume(): void {
+  /** "Click to take aim again" (the browser refused to re-take the mouse). Public for the train Lockbox view (lane BOX, train-lockbox-windows-20261101-232156). */
+  showResume(): void {
     if (typeof document === 'undefined') return;
     if (!this.resume) {
       ensureGearStyles();

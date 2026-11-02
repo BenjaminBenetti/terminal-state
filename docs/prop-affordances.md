@@ -264,3 +264,16 @@ Task office-props-physics-scale-20261030 (lane SCALE); root `CLAUDE.md` rules 4 
     main one is usually the work top or seat).
   - Look at the PNG yourself. Typical: desk / worktop 0.72–0.76 m, lab bench ~0.9 m, counters 0.9–1.0 m, chair seat
     ~0.45 m, doors ~2.0 m. A resize also moves the kind's footprint, collider, loot surface / slot heights and hinges.
+
+## 6. Player-train fixtures (not layout prop kinds)
+Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
+they sit outside the two audits; their classification is recorded here.
+- **Lockbox** (`world/trainLockbox.ts` world object, `run/trainLockbox.ts` store, `ui/lockboxView.ts` view):
+  - Storage opens: [E] raises its hinged lid and opens a 40-slot transfer view.
+  - Contents: the player's own storage. It starts EMPTY each run and is never seeded or refilled, so there's no loot table.
+    It is finite, persistent and carried by the run's player-train record: Travel keeps it, Retry restores the level-entry
+    state, New game empties it. The developer code 1337 adds gear only on purpose (`items/devGrant.ts`).
+  - Physics: static, `anchored`: bolted to the car floor, a solid box for player / enemy / hitscan, no physics body.
+  - No baked clutter: the model is just the box, its lid, latches, hinge and handles.
+  - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb`, viewed. 1.03 × 0.556 × 0.614 m,
+    grounded on 4 skid contacts, top at 0.55 m (a footlocker below the 0.98 m window sills).
