@@ -15,11 +15,15 @@
 //  - a plate is clear when its box (wall face + PLATE_CLEAR.depth) keeps PLATE_CLEAR.gap from every kept plate and does not meet a
 //    prop, a decor / waste box, a waste model / fan, a light fixture, the blast door's frame (its feet + the body between them) or
 //    the reserved jam-board wall (WasteDecor.genSign);
-//  - a plate that is not clear: an untouched stock door plate that meets one of the complex's own plates is dropped (the complex
-//    names its doors in its own words, like the bunker's re-lettering), so is a plate whose text a kept plate already says; else it slides
-//    along its own wall (0.25 m steps, small height changes), staying wall-backed (gen/doorways.ts wallBacked: never across an
-//    opening, a plate over a door stays above its lintel), 1.6 m+ over the floor, under the ceiling — the cheapest move wins; if
-//    none fits within reach it is dropped (counted).
+//  - a plate that is not clear:
+//    - an untouched stock door plate that meets one of the complex's own plates is dropped (the complex names its doors in its own
+//      words, like the bunker's re-lettering);
+//    - a plate meaning what a kept plate of the complex says (the one it meets, or one in the same room: 'DECONTAMINATION' /
+//      'DECONTAMINATION · SHELTER 7') is merged into it: the kept plate takes the more specific wording;
+//    - else it moves: along its own wall (0.25 m steps, small height changes), else round the nearer corner onto a return wall of its
+//      room, else narrower (x 0.8 / x 0.65, >= 1 m) — wall-backed (gen/doorways.ts wallBacked: never across an opening, a plate over
+//      a door stays above its lintel), 1.6 m+ over the floor, under the ceiling, within reach; the cheapest move wins. If none fits it
+//      is dropped (counted, logged: PLATE_CLEAR_STATS).
 
 import {CELL} from '../../grid';
 import {signDims, wallBacked} from '../../doorways';

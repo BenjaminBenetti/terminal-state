@@ -4,8 +4,8 @@
 //
 // Root cause (the waste repository's decon shower booths, REACTOR_X_KIT.deconShower, reactor-decon-shower.glb): its thin panels (back
 // wall, side walls, the screen) are ZERO-THICKNESS DOUBLE SHEETS — the same panel twice, once per facing, in one plane — plus stacked
-// same-facing layers within a millimetre (12.6 m2 of opposite-facing and 2.7 m2 of same-facing coplanar overlap in 35.5 m2 of
-// surface; 0.8 m2 of the same-facing pairs within 0.05 mm sample DIFFERENT texels). The GLB's material is double-sided, so both faces
+// same-facing layers within a millimetre (coplanarStats within 1 mm: 16.6 m2 opposite-facing and 3.3 m2 same-facing overlap in 35.5 m2
+// of surface; 1.7 m2 same-facing within 0.05 mm, sampling DIFFERENT texels). The GLB's material is double-sided, so both faces
 // of every sheet pair rendered at the same depth with different texels / flipped normals: heavy z-fighting. The mesh is otherwise a
 // closed, consistently wound shell (signed volume +0.43 m3, 1 inconsistent edge of 14.7 k).
 // The fix: render the booth single-sided (its winding is outward: each side of a sheet pair shows only its own face), drop the faces a
@@ -146,9 +146,10 @@ export function dropHiddenCoplanar(geo: THREE.BufferGeometry, eps = 0.002): THRE
   const pos = new Float32Array(p.count * 3);
   for (let i = 0; i < p.count; i++) { pos[i * 3] = p.getX(i); pos[i * 3 + 1] = p.getY(i); pos[i * 3 + 2] = p.getZ(i); }
   const n = pos.length / 9, T = trisOf(pos, n);
-  const covered = new Uint8Array(n * SAMPLES.length);
+  const covered = new Uint8Array(n * SAMPLES.length), layered = new Uint8Array(n);
   scan(pos, T, eps, (t, k, u, same, ahead) => {
     if (!same) return;
+    layered[t] = layered[u] = 1;
     if (ahead > 1e-6 || (Math.abs(ahead) <= 1e-6 && u < t)) covered[t * SAMPLES.length + k] = 1;
   });
   const keep: number[] = [];
@@ -161,7 +162,8 @@ export function dropHiddenCoplanar(geo: THREE.BufferGeometry, eps = 0.002): THRE
   keep.forEach((t, j) => { for (let v = 0; v < 9; v++) kpos[j * 9 + v] = pos[t * 9 + v]; });
   let recessed = 0;
   for (let it = 0; it < 8; it++) {
-    const K = trisOf(kpos, keep.length), push = new Uint8Array(keep.length);
+    // only the faces of a same-facing stack (within eps) can meet in the band: the rest of the shell is left out of the re-scans
+    const K = trisOf(kpos, keep.length).map((q, j) => (layered[keep[j]] ? q : null)), push = new Uint8Array(keep.length);
     let any = false;
     scan(kpos, K, COPLANAR_BAND, (t, _k, u, same, ahead) => { if (same && (ahead > 1e-7 || (Math.abs(ahead) <= 1e-7 && u < t))) { push[t] = 1; any = true; } });
     if (!any) break;

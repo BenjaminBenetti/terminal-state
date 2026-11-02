@@ -251,6 +251,41 @@ repository is entered.
   - walkable floor has ~10 m² of margin over the 700 m² test on the densest seeds (big cask halls);
   - a region smaller than ~72 × 58 cells plans less reliably (the host slot is 80 × 64).
 
+### Round 3 repairs: the deck under the vessel, the decon booths, the complexes' plates (task reactor-surface-ending-20261102, lane REPAIRS)
+User: "the floor around the reactor does not go under the reactor so there are gaps!", "heavy z-fighting on the nuclear waste area
+emergency wash stations", "some overlapping signs in the sub areas". Tests: `game/tests/reactor-repairs-r3.test.ts` (14 seeds).
+- **The deck under the vessel.**
+  - Cause: the vessel's footprint is blocked cells (centre within 6.6 m) whose own floor is the hidden raised column. The model's
+    plinth is round (6.4 m), and the grating was drawn per walkable cell, so it stopped in a cell-stepped saw-tooth short of the plinth.
+    The void showed in the notches: 23 % of the 6.4–7.2 m band had no floor.
+  - Fix: `ReactorArch.floorFills` → `world/builder.ts` draws the ring's grating at the deck height on every vessel cell. The runs merge
+    into the same `reactor-arch-grating` chunk meshes (no new mesh or draw), and the world-mapped pattern continues. The vessel's cells
+    and the deck cells never overlap, so there is no double floor. The pool, bridges and tower feet are other cells and are untouched.
+  - Collision is unchanged: the vessel stays the blocked, raised column. It is cell-quantised, so its squares reach up to 0.40 m past
+    the round plinth at some angles, and a body stops that much short of the plinth there.
+- **The decon shower booths** (`world/reactor/coplanar.ts`, applied in `wasteVisuals.ts` to that model only).
+  - Cause: the panels of `reactor-decon-shower.glb` are zero-thickness double sheets (the same panel once per facing, in one plane),
+    plus same-facing layers within 1 mm whose texels differ. The GLB's material is double-sided, so both faces drew at the same depth.
+    That is 16.6 m² of opposite-facing and 3.3 m² of same-facing coplanar overlap (within 1 mm) in 35.5 m².
+  - Fix: the booth is drawn single-sided (the shell is closed and outward-wound), with the delivered maps.
+    - The 68 faces that a same-facing face hides completely are dropped.
+    - The 28 partly hidden near-coincident faces are set back 1.5 mm. These are real geometry offsets, not a depth bias.
+  - Result: exact same-facing overlap fell from 1.69 to 0.005 m², and overlap within the 0.3 mm depth band from 2.2 to 0.06 m². The
+    clean-up runs once per loaded model (~0.1–0.2 s in Node).
+  - The procedural stand-in's boxes no longer share face planes.
+  - Not changed: the blast door, switchgear and control console show the same double-sheet pattern (measured). They were not reported.
+- **The complexes' plates** (`gen/reactor/complex/plateClear.ts`, run at the end of host.ts `dressComplexes`, before the cables are
+  routed round the plates).
+  - Cause: four placers stencilled the same walls without seeing each other: the station dresser's stock plates, then each complex's
+    own. They also ignored the blast-door frame, the bunker's ducts, the waste door frames, the fans and wall props. That made 147
+    overlaps on 16 seeds.
+  - Fix: one deterministic clearance pass. The complex's own plates keep priority. An untouched stock door plate on one of them, or a
+    plate that a kept plate of the room already says, is merged into it (the more specific wording wins). Any other plate moves: along
+    its wall, round a corner onto a return wall, or narrower, staying wall-backed and legible.
+  - Over 14 seeds: 770 plates, 134 moved (13 round a corner, 5 narrower), 29 merged and 1 dropped (a stock 'AUTHORIZED PERSONNEL
+    ONLY'). The result is 0 overlaps.
+  - Limit: plates of later passes outside the complexes are not re-checked.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.
