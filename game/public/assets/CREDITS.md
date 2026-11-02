@@ -292,3 +292,15 @@ Community License + Gemma Terms of Use; conditional prototype status, not produc
 - `assets/audio/reactor-stage.mp3` — reactorStage (Sound Lab job 20261102T063859-1388193861)
 - `assets/audio/reactor-beacon-loop.mp3` — reactorBeacon (Sound Lab job 20261102T063904-2058341218)
 <!-- END reactor-startup-audio-20261102 -->
+
+<!-- BEGIN reactor-ending-audio-20261102 (reactor-ending-build.mjs) -->
+## The Reactor: ending audio (the blue-beam ignition, the surface rain)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the surface-
+ending task's blue-beam / rain allowance (2 jobs of a 6-job cap). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+loop, levelling, MP3) built by `tools/audio-pipeline/reactor-ending-build.mjs` (provenance: `assets/derivatives/audio-reactor-ending.json`).
+Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/reactor-beam.mp3` — reactorBeam (Sound Lab job 20261102T214343-1373120250)
+- `assets/audio/surface-rain-loop.mp3` — bedRain (Sound Lab job 20261102T214347-51396616)
+<!-- END reactor-ending-audio-20261102 -->
