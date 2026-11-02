@@ -74,7 +74,7 @@ export function bunkerFrame(inp: Pick<ComplexCarveInput, 'slot'>): BunkerFrame |
   const F = [-dv[0], -dv[1]];
   const X = [F[1], -F[0]];
   const leafSign: 1 | -1 = X[0] * du[0] + X[1] * du[1] > 0 ? 1 : -1;
-  return {A, Vd, e0, e1, rect, cell, du, dv, origin, leafSign, modelYaw: r2(Math.atan2(F[0], F[1]))};
+  return {A, Vd, e0, e1, rect, cell, du, dv, origin, leafSign, modelYaw: Math.atan2(F[0], F[1])};
 }
 
 /** Camera-convention yaw facing canvas direction (dx, dy) (forward = (-sin yaw, -cos yaw); canvas y = world z). */

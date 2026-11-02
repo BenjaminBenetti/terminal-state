@@ -61,9 +61,10 @@ export interface BunkerPlan {
   gen: {foot: LRect; use: {u: number; v: number}; end: 'lo' | 'hi'};
   /**
    * The blast door in the bulkhead: the lane's first cell along u (3 cells wide), the model origin (continuous local cells: model x
-   * along leafSign * u, model z along -v), and the threshold cells' rise (rows v, risers of BLAST.sill / 3 over the lane).
+   * along xs * u, model z along -facing * v; facing 1 = its front / open leaf toward the lock, -1 toward the decon), and the threshold
+   * cells' rise (rows v, risers of BLAST.sill / 3 over the lane).
    */
-  blast: {uo: number; uf: number; vo: number; leafSign: 1 | -1; steps: [number, number][]};
+  blast: {uo: number; uf: number; vo: number; xs: 1 | -1; facing: 1 | -1; steps: [number, number][]};
   /** Layout numbers (QA / tests / dressing). */
   dims: {A: number; Vd: number; LD: number; BW: number; vM: number; vS: number; vH: number; uW: number; uE: number; SW: number; MW: number; GD: number; lock: LRect};
 }
@@ -71,11 +72,11 @@ export interface BunkerPlan {
 /** Fixed module sizes (cells, 0.5 m). */
 export const BUNKER = {
   /** Lock depth / bulkhead (blast door) thickness / decontamination depth / muster corridor width / spine width / guard post width. */
-  LD: 9, bulkhead: 2, DD: 7, MW: 6, SW: 5, GW: 10,
+  LD: 9, bulkhead: 2, DD: 9, MW: 6, SW: 5, GW: 10,
   /** Narrowest lock (cells): the blast-door frame (4.95 m) along its back wall plus a walkway past the open leaf. */
   lockMinW: 13,
   /** Minimum along / depth (cells) the program needs. */
-  minA: 56, minVd: 55,
+  minA: 56, minVd: 57,
   /** Clear heights (m): rooms, stores, corridors, the lock, hall side rooms, the hall (target; capped by ceilMax). */
   clear: {room: 3.4, store: 3.2, corridor: 3.2, lock: 4.0, side: 3.6, hall: 6.5},
   /** Door heights (m): ordinary doors, corridor junctions, the entrance, the bulkhead lane (threshold sill + 2.26 m). */
@@ -91,7 +92,7 @@ const PROGRAM: readonly Prog[] = [
   {key: 'dorm', label: 'Dormitory', kind: 'room', type: 'crew-room', purpose: BUNKER_PURPOSE.dorm, role: 'room'},
   {key: 'filtration', label: 'Air filtration plant', kind: 'room', type: 'utility', purpose: 'ventilation-plant', role: 'room'},
   {key: 'infirmary', label: 'Infirmary', kind: 'room', type: 'crew-room', purpose: 'first-aid-room', role: 'room'},
-  {key: 'radio', label: 'Radio room', kind: 'room', type: 'utility', purpose: 'signal-room', role: 'room'},
+  {key: 'radio', label: 'Radio room', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.radio, role: 'room'},
   {key: 'washroom', label: 'Latrines', kind: 'room', type: 'washroom', purpose: 'washroom', role: 'room'},
   {key: 'stores', label: 'Shelter stores', kind: 'room', type: 'storage', purpose: 'storage', role: 'store', clear: BUNKER.clear.store},
   {key: 'workshop', label: 'Maintenance workshop', kind: 'room', type: 'utility', purpose: 'workshop', role: 'room'},
@@ -153,45 +154,61 @@ export function planBunker(A: number, Vd: number, e0: number, e1: number, leafSi
   };
 
   // --- Front band: lock, the blast-door bulkhead, decon, guard post ----------------------------------------------------------------
-  // The lock (vestibule) behind the entrance; a 2-cell bulkhead holds the BLAST DOOR (REACTOR_X_KIT.blastDoor, grounded, its round leaf
-  // standing open along the lock's side wall on the model's +x side = local `leafSign`); the 3-cell lane through it climbs a raised
-  // threshold (gen/reactor/complex/bunkerKinds.ts BLAST) into the decontamination room.
+  // The lock (vestibule) behind the entrance; a 2-cell bulkhead holds the BLAST DOOR (REACTOR_X_KIT.blastDoor, grounded) whose round
+  // leaf stands open beside the frame on the model's +x side: preferably facing the LOCK (you see the open door as you come in), the
+  // leaf along the lock's side wall away from the entrance - else facing the DECON (the leaf along a decon side wall). The 3-cell lane
+  // through it climbs a raised threshold (gen/reactor/complex/bunkerKinds.ts BLAST). The guard post always opens into the lock (and the
+  // muster corridor): a level way round the threshold.
   const BW = BUNKER.bulkhead, FB = LD + BW + DD, vM = FB + 1, vS = vM + MW + 1;
   const ew = e1 - e0;
-  const LWmin = BUNKER.lockMinW + rng.int(0, 2);
-  // the leaf's side wall keeps >= 3 cells clear of the entrance (the leaf is 1.75 cells wide along it)
-  const gap = 3 + rng.int(0, 2);
-  const lu0 = Math.max(1, leafSign > 0 ? Math.min(e0 - 1, e1 + gap - LWmin) : e0 - gap);
-  const lu1 = Math.min(A - 1, leafSign > 0 ? e1 + gap : Math.max(e1 + 1, e0 - gap + LWmin));
+  const fHalf = BLAST.halfW / 0.5, oOff = BLAST.openX / 0.5, leafW = (BLAST.leaf.x[1] - BLAST.leaf.x[0]) / 0.5;
+  const zc = (BLAST.bodyZ[0] + BLAST.bodyZ[1]) / 2 / 0.5;
+  let GW: number = BUNKER.GW;
+  const LWmin = BUNKER.lockMinW + rng.int(0, 2), gap = 3 + rng.int(0, 2);
+  // facing the lock: the leaf's wall (u side `leafSign`) keeps >= `gap` cells clear of the entrance, the guard on the other side
+  let facing: 1 | -1 = 1, lu0 = 0, lu1 = 0, gHi = false;
+  {
+    const l0 = Math.max(1, leafSign > 0 ? Math.min(e0 - 1, e1 + gap - LWmin) : e0 - gap);
+    const l1 = Math.min(A - 1, leafSign > 0 ? e1 + gap : Math.max(e1 + 1, e0 - gap + LWmin));
+    const leafClear = leafSign > 0 ? l1 - leafW >= e1 + 1 : l0 + leafW <= e0 - 1;
+    const away = leafSign > 0 ? l0 - 2 : A - 2 - l1;
+    if (l1 - l0 >= BUNKER.lockMinW && e0 >= l0 + 1 && e1 <= l1 - 1 && leafClear && away >= GW) { lu0 = l0; lu1 = l1; gHi = leafSign < 0; }
+    else {
+      // facing the decon: the lock round the entrance, the guard on the roomier side
+      facing = -1;
+      const w = Math.max(LWmin, ew + 4);
+      lu0 = Math.max(1, Math.min(A - 1 - w, Math.round((e0 + e1) / 2 - w / 2)));
+      lu1 = lu0 + w;
+      const lo = lu0 - 2, hi = A - 2 - lu1;
+      gHi = hi >= lo;
+      if (Math.max(lo, hi) < GW) { GW = Math.max(lo, hi); if (GW < 8) return null; }
+    }
+  }
   const LW = lu1 - lu0;
   if (LW < BUNKER.lockMinW || e0 < lu0 + 1 || e1 > lu1 - 1) return null;
+  // the model's +x along local u: `leafSign` facing the lock (front +z = -v), reversed facing the decon (front +z = +v)
+  const xs = (facing > 0 ? leafSign : -leafSign) as 1 | -1;
   // the frame: its +x end (the leaf side) against that side wall; the opening's 3-cell lane; the model origin (continuous cells)
-  const fHalf = BLAST.halfW / 0.5, oOff = BLAST.openX / 0.5;
-  const uo = Math.round(leafSign > 0 ? lu1 - fHalf + leafSign * oOff - 1.5 : lu0 + fHalf + leafSign * oOff - 1.5);
-  const uf = uo + 1.5 - leafSign * oOff;
+  const uo = Math.round(xs > 0 ? lu1 - fHalf + xs * oOff - 1.5 : lu0 + fHalf + xs * oOff - 1.5);
+  const uf = uo + 1.5 - xs * oOff;
   if (uf - fHalf < lu0 - 0.7 || uf + fHalf > lu1 + 0.7) return null;
-  const vo = LD + BW / 2 + (BLAST.bodyZ[0] + BLAST.bodyZ[1]) / 2 / 0.5; // model z = 0 (front +z = -v): the body centred in the bulkhead
-  if (vo - BLAST.leaf.z[1] / 0.5 < 0.5) return null; // the open leaf stays inside the lock
-  // the guard post: on the side away from the leaf when it fits (a door into the lock), else beyond it (a door into the decon)
-  let GW: number = BUNKER.GW;
-  const awaySpace = leafSign > 0 ? lu0 - 2 : A - 2 - lu1, leafSpace = leafSign > 0 ? A - 2 - lu1 : lu0 - 2;
-  let away = true;
-  if (awaySpace < GW) { if (leafSpace >= GW) away = false; else { GW = Math.max(awaySpace, leafSpace); if (GW < 8) return null; away = awaySpace >= leafSpace; } }
-  const gHi = away ? leafSign < 0 : leafSign > 0;
+  // model z -> v: facing the lock v = vo - z / 0.5, the decon v = vo + z / 0.5; the body centred in the bulkhead
+  const vo = LD + BW / 2 + facing * zc;
+  const leafTip = vo - facing * BLAST.leaf.z[1] / 0.5;
+  if (facing > 0 ? leafTip < 0.5 : leafTip > LD + BW + DD - 0.5) return null; // the open leaf stays inside its room
   const gu0 = gHi ? lu1 + 1 : lu0 - 1 - GW;
   const lockR: LRect = {u: lu0, v: 0, w: LW, h: LD};
   room({key: 'lock', label: 'Blast-door lock', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.lock, role: 'entry'}, lockR, '', {clear: C.lock});
   door('', 'lock', {u: e0, v: -1, w: ew, h: 1}, 'blast', D.blast);
   room({key: 'decon', label: 'Decontamination', kind: 'room', type: 'utility', purpose: BUNKER_PURPOSE.decon, role: 'room'}, {u: lu0, v: LD + BW, w: LW, h: DD}, 'lock', {clear: C.lock});
   door('lock', 'decon', {u: uo, v: LD, w: 3, h: BW}, 'bulkhead', D.bulkhead);
-  // the muster corridor (full width) behind the front band
+  // the muster corridor (full width) behind the front band; the decon's door to it clear of a leaf along a decon side wall
   room({key: 'muster', label: 'Muster corridor', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', role: 'corridor'}, {u: 1, v: vM, w: A - 2, h: MW}, 'decon', {clear: C.corridor});
-  doorU('decon', 'muster', FB, lu0, lu1, 4, rng.range(0.25, 0.75));
+  doorU('decon', 'muster', FB, lu0 + (facing < 0 && xs < 0 ? 3 : 0), lu1 - (facing < 0 && xs > 0 ? 3 : 0), 4, rng.range(0.25, 0.75));
   room({key: 'guard', label: 'Guard post', kind: 'room', type: 'utility', purpose: 'security-office', role: 'room'}, {u: gu0, v: 0, w: GW, h: FB}, 'muster');
-  if (away) doorV('lock', 'guard', gHi ? lu1 : lu0 - 1, 0, LD - 2, 3, rng.range(0.2, 0.8));
-  else doorV('decon', 'guard', gHi ? lu1 : lu0 - 1, LD + BW + 1, FB, 3, rng.range(0.2, 0.8));
+  doorV('lock', 'guard', gHi ? lu1 : lu0 - 1, 0, LD - 2, 3, rng.range(0.2, 0.8));
   doorU('muster', 'guard', FB, gu0, gu0 + GW, 3, gHi ? rng.range(0.4, 1) : rng.range(0, 0.6));
-  const blast = {uo, uf, vo, leafSign, steps: [[LD - 2, 1], [LD - 1, 2], [LD, 3], [LD + 1, 3], [LD + BW, 2], [LD + BW + 1, 1]] as [number, number][]};
+  const blast = {uo, uf, vo, xs, facing, steps: [[LD - 2, 1], [LD - 1, 2], [LD, 3], [LD + 1, 3], [LD + BW, 2], [LD + BW + 1, 1]] as [number, number][]};
 
   // front rooms on both sides of the lock group (they open onto the muster corridor)
   const groupLo = Math.min(lu0, gu0), groupHi = Math.max(lu0 + LW, gu0 + GW);

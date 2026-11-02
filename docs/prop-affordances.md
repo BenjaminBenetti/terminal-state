@@ -265,6 +265,26 @@ Task office-props-physics-scale-20261030 (lane SCALE); root `CLAUDE.md` rules 4 
   - Look at the PNG yourself. Typical: desk / worktop 0.72–0.76 m, lab bench ~0.9 m, counters 0.9–1.0 m, chair seat
     ~0.45 m, doors ~2.0 m. A resize also moves the kind's footprint, collider, loot surface / slot heights and hinges.
 
+### The Reactor bunker (task reactor-expansion-20261101, lane BUNKER)
+Zone 0's side complex (`game/src/gen/reactor/complex/bunker*.ts`) is furnished with EXISTING kinds by the station dresser (its rooms
+carry existing purposes: guard post `security-office`, infirmary `first-aid-room`, radio room `signal-room`, mess `staff-room`, stores,
+workshop, switch room, filtration plant `ventilation-plant`, generator hall `generator-room`) and by its dress hook (`bunkerDress.ts`:
+footlockers / lockers / gun lockers / cabinets / crates = existing openables and holders, loot from the room's purpose — the four
+`reactor-bunker-*` purposes use named `items/lootTables.ts` tables only; folding chairs / extinguishers keep their dynamic class; the
+day tanks are collision-only `annexMachine` boxes under existing shape-material trims). Four NEW kinds draw the lead's Meshy T2.5 models
+(`REACTOR_X_KIT`, maps kept; `gen/reactor/complex/bunkerKinds.ts` holds their classification, spread into both audits):
+
+| Kind | What | Openables audit | Physics audit | Scale check (`scale-check.mjs --prop <glb> [--scale k]`, viewed beside `lastshift`) |
+|---|---|---|---|---|
+| `bunkBed` | bare steel double bunk | `none` | static `anchored` (~70 kg, bolted in rows) | 2.00 × 1.36 × 0.85 m as cooked; grounded (4 feet); lower deck ~0.25 m, upper deck 1.12 m (a compact shelter bunk) |
+| `radioConsole` | operator's desk built into its radio rack | `exception`: the drawer fronts are the chassis' wired equipment bays (live equipment, not storage) | static `built-in` (~200 kg, cabled) | scaled ×1.125 so the desk top reads 0.73 m: 2.25 × 1.77 × 1.34 m; grounded (13 clusters) |
+| `airFilterUnit` | filter canister bank, blower, stacks on a skid | `exception`: sealed plant, hatches bolted | static `machinery` (~600 kg) | 3.00 × 1.84 × 0.91 m as cooked; grounded (24 clusters); canister tops 1.46 m |
+| `blastDoor` | square frame round a ~2.5 m round opening, the round leaf open at 90° | `exception`: structure; the leaf never closes | static `structure` | 4.95 × 4.00 × 5.45 m as cooked, grounded in the 1 m lock / decon bulkhead; the 1.5 m lane climbs a 0.84 m threshold (three 0.28 m risers each side) so its doorway clear volume (1.3 × 2.1 m) sits inside the round opening (free chord ≥ 1.5 m from 0.79 to 2.97 m). Variant 0 = the leaf (+ render anchor), variant 1 = frame feet / pillar protrusions (collision only) |
+
+- No baked loose clutter: the four models are bare furniture / equipment (no bedding, papers, handsets or tools baked in).
+- Tests: `tests/reactor-x-bunker-carve.test.ts`, `tests/reactor-x-bunker-level.test.ts` (both audits, purpose loot, placements on their
+  floors / inside their ceilings, doorway lanes, the blast door's anchor on the lane).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

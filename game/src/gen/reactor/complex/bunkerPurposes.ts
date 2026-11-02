@@ -17,6 +17,7 @@ import {CACHE_CRATE, GUN_SAFE_ROWS, PERSONAL_ROWS, TENANT_ARMS, TENANT_MEDS, TEN
 /** The bunker purpose ids. */
 export const BUNKER_PURPOSE = {
   lock: 'reactor-bunker-lock', decon: 'reactor-bunker-decon', dorm: 'reactor-bunker-dormitory', armoury: 'reactor-bunker-armoury',
+  radio: 'reactor-bunker-radio',
 } as const;
 
 export function REACTOR_BUNKER_PURPOSES(): Record<string, RoomPurpose> {
@@ -39,6 +40,17 @@ export function REACTOR_BUNKER_PURPOSES(): Record<string, RoomPurpose> {
       props: [],
       loot: {default: {items: PERSONAL_ROWS, lots: [1, 2], empty: 0.35}},
       floor: {med: 0.5, ammo: 0.2},
+    },
+    [BUNKER_PURPOSE.radio]: {
+      ...base, id: BUNKER_PURPOSE.radio, theme: 'service', label: 'Radio room', light: [0.3, 0.5, 0.2],
+      // the side walls: a rack or two and a low cabinet; the far wall stays free for the radio console (bunkerDress.ts)
+      props: [
+        {kind: 'signalRack', at: 'row', wall: 'side', n: [1, 2], front: 1.0},
+        {kind: 'cabinetLow', at: 'wall', wall: 'near', n: [0, 1], front: 0.7},
+        {kind: 'noticeBoard', at: 'wall', wall: 'near', n: [1, 1], chance: 0.6, y: 1.1},
+      ],
+      loot: {cabinetLow: TENANT_SUPPLY, default: TENANT_SUPPLY},
+      floor: {ammo: 0.3, med: 0.3},
     },
     [BUNKER_PURPOSE.armoury]: {
       ...base, id: BUNKER_PURPOSE.armoury, theme: 'security', label: 'Armoury', light: [0.3, 0.45, 0.25],

@@ -1,9 +1,9 @@
 // Task reactor-expansion-20261101 (lane BUNKER): THE BUNKER's dress hook — called by the host once after the crop and the station
-// dresser (which already furnished / lit / plated the rooms of the existing purposes: guard post, infirmary, radio room, mess, stores,
-// workshop, switch room, filtration plant, generator hall), before the populations. World metres, this storey's grid.
+// dresser (which already furnished / lit / plated the rooms of the existing purposes: guard post, infirmary, mess, stores, workshop,
+// switch room, filtration plant, generator hall; the radio room's side racks), before the populations. World metres, this storey's grid.
 //
 //  - the BLAST DOOR (REACTOR_X_KIT.blastDoor, bunkerKinds.ts): leaf + frame collision in the lock / decon bulkhead, a steel-lined lane
-//    over the raised threshold (tread plates), the heavy hazard-striped frame round the pit-wall entrance, the "SHELTER 7" plate on the
+//    over the raised threshold (tread plates), the heavy hazard-striped frame round the pit-wall entrance, the 'SHELTER 7' plate on the
 //    gallery side;
 //  - the lock / decontamination room (bench, suit lockers, wash troughs, bins), the DORMITORIES (barracks rows of REACTOR_X_KIT bunks,
 //    a footlocker at each foot, locker banks), the MESS tables and folding chairs, the ARMOURY (gun lockers, ammunition cabinets, crates:
@@ -24,7 +24,7 @@ import type {Area, Door, Side, SignPlacement, StationLayout} from '../../station
 import type {ShopMat} from '../../storefronts';
 import {signDims, wallSignSpot, propBlocksDoorway} from '../../doorways';
 import {
-  areaConnected, backed, boxClear, cellsOfBox, doorSide, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange,
+  areaConnected, backed, boxClear, cellsOfBox, doorSide, makePlaceCtx, placeAgainstWall, rowAlongWall, tryPlaceProp, wallRange, wallSpot,
   type PlaceCtx,
 } from '../../placeKit';
 import type {BunkerCarveRec} from './bunker';
@@ -38,7 +38,7 @@ const sideOfDir = (dx: number, dz: number): Side => (Math.abs(dz) >= Math.abs(dx
 const rotFacing = (dx: number, dz: number): number => (Math.abs(dz) >= Math.abs(dx) ? (dz > 0 ? 0 : Math.PI) : dx > 0 ? Math.PI / 2 : -Math.PI / 2);
 
 /** QA / tests: what the last dress placed. */
-export const BUNKER_DRESS_STATS = {props: 0, decor: 0, lights: 0, signs: 0, beds: 0, footlockers: 0, tanks: 0, panels: 0, skipped: [] as string[]};
+export const BUNKER_DRESS_STATS = {ms: 0, props: 0, decor: 0, lights: 0, signs: 0, beds: 0, footlockers: 0, tanks: 0, panels: 0, skipped: [] as string[]};
 
 interface Dx {
   layout: StationLayout;
@@ -59,6 +59,7 @@ interface Dx {
 
 export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; oy: number}, rec: BunkerCarveRec): void {
   const S = BUNKER_DRESS_STATS;
+  const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
   S.props = S.decor = S.lights = S.signs = S.beds = S.footlockers = S.tanks = S.panels = 0;
   S.skipped = [];
   const lv = rec.level, g = layout.levels[lv]?.grid;
@@ -118,6 +119,7 @@ export function dressBunker(layout: StationLayout, rng: Rng, crop: {ox: number; 
   step('ducts', () => corridorDucts(D));
   step('signs', () => bunkerSigns(D));
   S.props = layout.props.length - p0; S.decor = layout.decor.length - d0; S.lights = layout.lights.length - l0; S.signs = layout.signs.length - s0;
+  S.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -177,27 +179,50 @@ function mainSide(D: Dx, a: Area): Side | null {
 }
 const doorCount = (D: Dx, a: Area, s: Side) => D.doors(a).filter(d => doorSide(d, a) === s).length;
 
+/**
+ * Deterministic exhaustive wall placement: every 0.25 m along each wall of `sides` (in order), nearest `prefer` (world, along the wall)
+ * first; the placement primitive's checks (door zones, access strip, connectivity, real wall behind) decide. Null when nothing fits.
+ */
+function scanWall(D: Dx, a: Area, kind: PropKind, sides: readonly Side[], front: number, prefer?: number): PropPlacement | null {
+  const w = PROP_DEFS[kind].w;
+  for (const sd of sides) {
+    const [lo, hi] = wallRange(a, sd);
+    const ts: number[] = [];
+    for (let t = lo + w / 2 + 0.1; t <= hi - w / 2 - 0.1 + 1e-6; t += 0.25) ts.push(Math.round(t * 4) / 4);
+    const c = prefer ?? (lo + hi) / 2;
+    ts.sort((p, q) => Math.abs(p - c) - Math.abs(q - c));
+    for (const t of ts) {
+      const sp = wallSpot(a, sd, t, kind);
+      const p = tryPlaceProp(D.ctx, a, kind, sp.x, sp.z, sp.rot, {front});
+      if (p) return p;
+    }
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The blast door (bulkhead between the lock and the decontamination room) and the pit-wall entrance
 
 function blastDoor(D: Dx): void {
   const lock = D.area('lock'), decon = D.area('decon');
   if (!lock || !decon) return;
-  const {uf, vo, leafSign: s, uo} = D.rec.plan.blast;
-  const yaw = D.rec.frame.modelYaw;
-  /** Local box of a model-space box (x along s * u, z along -v). */
-  const mbox = (x0: number, x1: number, z0: number, z1: number) => D.box(uf + s * x0 / CELL, uf + s * x1 / CELL, vo - z0 / CELL, vo - z1 / CELL);
+  const {uf, vo, xs, facing, uo} = D.rec.plan.blast;
+  // facing the lock: the frame's front (+z, the open leaf) toward the lock; facing the decon: a half turn
+  const yaw = facing > 0 ? D.rec.frame.modelYaw : Math.atan2(-Math.sin(D.rec.frame.modelYaw), -Math.cos(D.rec.frame.modelYaw));
+  const front = facing > 0 ? lock : decon, back = facing > 0 ? decon : lock;
+  /** Local box of a model-space box (x along xs * u, z along -facing * v). */
+  const mbox = (x0: number, x1: number, z0: number, z1: number) => D.box(uf + xs * x0 / CELL, uf + xs * x1 / CELL, vo - facing * z0 / CELL, vo - facing * z1 / CELL);
   const zc = (BLAST.bodyZ[0] + BLAST.bodyZ[1]) / 2, half = D.rec.plan.dims.BW / 2 * CELL;
-  const lockFace = zc + half, deconFace = zc - half;
+  const frontFace = zc + half, backFace = zc - half;
   const lx0 = BLAST.openX - BLAST.laneHalf, lx1 = BLAST.openX + BLAST.laneHalf;
-  const hLock = Math.min(BLAST.bodyH, lock.ceil - D.base) - 0.05, hDecon = Math.min(BLAST.bodyH, decon.ceil - D.base) - 0.05;
-  // variant 0: the open round leaf (+ the frame foot on its side) — the render anchor (world/reactor/bunkerModels.ts)
-  solidProp(D, 'blastDoor', lock, mbox(BLAST.leaf.x[0], BLAST.leaf.x[1], BLAST.leaf.z[0], BLAST.leaf.z[1]), BLAST.leaf.h, yaw, 0, true);
+  const hFront = Math.min(BLAST.bodyH, front.ceil - D.base) - 0.05, hBack = Math.min(BLAST.bodyH, back.ceil - D.base) - 0.05;
+  // variant 0: the open round leaf (+ the frame foot on its side) - the render anchor (world/reactor/bunkerModels.ts)
+  solidProp(D, 'blastDoor', front, mbox(BLAST.leaf.x[0], BLAST.leaf.x[1], BLAST.leaf.z[0], BLAST.leaf.z[1]), BLAST.leaf.h, yaw, 0, true);
   // variant 1: the frame's protrusions / feet beside the lane on both faces of the bulkhead
-  solidProp(D, 'blastDoor', lock, mbox(-BLAST.halfW, lx0, lockFace, BLAST.frontFeetZ), hLock, 0, 1, true);
-  solidProp(D, 'blastDoor', lock, mbox(lx1, BLAST.halfW, lockFace, BLAST.frontFeetZ), hLock, 0, 1, true);
-  solidProp(D, 'blastDoor', decon, mbox(-BLAST.halfW, lx0, BLAST.backPlinthZ, deconFace), hDecon, 0, 1, true);
-  solidProp(D, 'blastDoor', decon, mbox(lx1, BLAST.halfW, BLAST.backPlinthZ, deconFace), hDecon, 0, 1, true);
+  solidProp(D, 'blastDoor', front, mbox(-BLAST.halfW, lx0, frontFace, BLAST.frontFeetZ), hFront, 0, 1, true);
+  solidProp(D, 'blastDoor', front, mbox(lx1, BLAST.halfW, frontFace, BLAST.frontFeetZ), hFront, 0, 1, true);
+  solidProp(D, 'blastDoor', back, mbox(-BLAST.halfW, lx0, BLAST.backPlinthZ, backFace), hBack, 0, 1, true);
+  solidProp(D, 'blastDoor', back, mbox(lx1, BLAST.halfW, BLAST.backPlinthZ, backFace), hBack, 0, 1, true);
   // the lane through the bulkhead: steel lining on both jambs (above the threshold), tread plates on the risers
   const {LD, BW} = D.rec.plan.dims;
   const sill = BLAST.sill, top = sill + 2.26;
@@ -334,12 +359,22 @@ function armoury(D: Dx, a: Area): void {
 function radioRoom(D: Dx, a: Area): void {
   const ms = mainSide(D, a) ?? 'S';
   const order: Side[] = [OPP[ms], ...(ms === 'N' || ms === 'S' ? ['W', 'E'] as Side[] : ['N', 'S'] as Side[]), ms];
-  for (const sd of order) {
-    const p = placeAgainstWall(D.ctx, a, 'radioConsole', {sides: [sd], front: 0.9, tries: 18});
-    if (!p) continue;
+  let p = scanWall(D, a, 'radioConsole', order, 0.9);
+  // every wall taken (the dresser's signal racks): a free-standing console island facing the door, a walkway all round
+  if (!p) {
+    const [fx0, fz0] = NORMAL[ms], cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
+    for (const o of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
+      const alongX = ms === 'N' || ms === 'S';
+      p = tryPlaceProp(D.ctx, a, 'radioConsole', Math.round((cx + (alongX ? o : 0)) * 4) / 4, Math.round((cz + (alongX ? 0 : o)) * 4) / 4, rotFacing(fx0, fz0), {ring: 0.7});
+      if (p) break;
+    }
+  }
+  if (p) {
     const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
     const off = PROP_DEFS.radioConsole.d / 2 + 0.45;
     tryPlaceProp(D.ctx, a, 'officeSwivelChair', p.x + fx * off, p.z + fz * off, rotFacing(-fx, -fz), {laneOk: true});
+    // the log / codebook filing cabinet (openable storage)
+    scanWall(D, a, 'filingCabinet', order.slice(1), 0.8);
     return;
   }
   BUNKER_DRESS_STATS.skipped.push('radioConsole: no wall');
@@ -353,7 +388,7 @@ function filtration(D: Dx, a: Area): void {
   let n = 0;
   for (const sd of [far, ...sides]) {
     if (n >= 2) break;
-    if (placeAgainstWall(D.ctx, a, 'airFilterUnit', {sides: [sd], front: 1.0, tries: 18})) n++;
+    if (scanWall(D, a, 'airFilterUnit', [sd], 1.0)) n++;
   }
   if (!n) BUNKER_DRESS_STATS.skipped.push('airFilterUnit: no wall');
   ceilingDuct(D, a, far, 0.62);
@@ -391,8 +426,9 @@ function generatorHall(D: Dx): void {
   {
     const [tx, tz] = D.W(uWall, vMid);
     const t = sbSide === 'N' || sbSide === 'S' ? tx : tz;
-    const placed = rowAlongWall(D.ctx, hall, sbSide, 'electricalPanel', {from: t - 3.4, to: t + 3.4, front: 1.0, max: 4});
-    S.panels = placed.length;
+    let n = rowAlongWall(D.ctx, hall, sbSide, 'electricalPanel', {from: t - 3.4, to: t + 3.4, front: 1.0, max: 4}).length;
+    for (const sd of [sbSide, sideOfDir(f.dv[0], f.dv[1])]) while (n < 2 && scanWall(D, hall, 'electricalPanel', [sd], 1.0, t)) n++;
+    S.panels = n;
   }
   // two diesel day tanks on their bund against the back wall (local +v), clear of the skid
   {
@@ -434,7 +470,7 @@ function dayTank(D: Dx, a: Area, side: Side, t: number): void {
   // bund curb (0.18 m) and its floor
   D.decor('shopFrame', {x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1}, 0, 0.03);
   for (const e of [wallBox(a, side, t - 1.45, t + 1.45, 0.05, 0.13), wallBox(a, side, t - 1.45, t + 1.45, 1.27, 1.35), wallBox(a, side, t - 1.45, t - 1.37, 0.05, 1.35), wallBox(a, side, t + 1.37, t + 1.45, 0.05, 1.35)]) D.decor('steelDark', e, 0, 0.18);
-  // saddles and the tank body, an amber "DIESEL" band, the fill neck / vent and a sight gauge
+  // saddles and the tank body, an amber 'DIESEL' band, the fill neck / vent and a sight gauge
   for (const s of [t - 0.8, t + 0.8]) D.decor('black', wallBox(a, side, s - 0.08, s + 0.08, 0.25, 1.15), 0.03, 0.3);
   D.decor('steelDark', inner, 0.3, 1.45);
   D.decor('plasticSeat', wallBox(a, side, t - 1.21, t + 1.21, 0.19, 1.21), 0.95, 1.08);

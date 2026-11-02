@@ -67,6 +67,24 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   - the generator's skid stands on complex floor, with its panel in reach;
   - the complex is substantial: at least 6 areas and at least 500 m² walkable.
 
+### The bunker — "Shelter 7" (zone 0, tier 1; lane BUNKER)
+`complex/bunker.ts` (carver), `bunkerPlan.ts` (the program in a wall-local frame), `bunkerDress.ts` (dress hook), `bunkerPurposes.ts`
+(its own room purposes), `bunkerKinds.ts` (hero prop kinds), `world/reactor/bunkerModels.ts` (their instanced models).
+- **Program** (15–16 spaces, ~1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
+  - the **blast-door lock** behind the entrance (heavy hazard-striped frame, "SHELTER 7 · CIVIL DEFENCE" plate on the gallery side);
+  - a 1 m **bulkhead** holding the round **blast door** (`REACTOR_X_KIT.blastDoor`, its leaf standing open; a 1.5 m lane over a
+    0.84 m threshold, three 0.28 m risers each side);
+  - **decontamination**, the **guard post** (doors into the lock and the muster corridor: a level way round the threshold);
+  - the **muster corridor** across the bunker, two **spine corridors** to the **generator hall** (two ways in), the **mess hall**
+    between them (opening onto both, sometimes the muster corridor too);
+  - side rooms by size: **dormitories** (bunk rows, footlockers, lockers), air **filtration plant**, **infirmary**, **radio room**
+    (console), **latrines**, stores, workshop, warden's office, ration store, locker room;
+  - off the hall: the **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition cabinets, crates).
+- **The generator**: mid-hall, long axis along the hall, the use point beside the end facing the switch-room side; a grated cable
+  trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund, a second row of fixtures.
+- Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
+  hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.
