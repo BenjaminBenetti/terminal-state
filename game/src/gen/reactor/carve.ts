@@ -161,7 +161,12 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   const towers: TowerRec[] = f.lines.map((l, li) => {
     const tx = l.px - 3, tz = l.tz;
     const legs: [number, number][] = [[tx, tz], [tx + 9, tz], [tx, tz + 9], [tx + 9, tz + 9]];
-    for (const [lx, lz] of legs) reserved[lz * PW + lx] = 1;
+    // task reactor-expansion-20261101 (lane PATHS): a leg stands on its corner POINT (the deck's outer corner): reserve the 2 x 2 cells
+    // round it, so the leg, its foot plate and the bracing never stand in the core floor's / a deck's walkable cells
+    for (const [lx, lz] of legs) {
+      const ox = lx === tx ? -1 : 1, oz = lz === tz ? -1 : 1;
+      for (const [ax, az] of [[0, 0], [ox, 0], [0, oz], [ox, oz]]) { const qx = lx + ax, qz = lz + az; if (qx >= 0 && qz >= 0 && qx < PW && qz < PD) reserved[qz * PW + qx] = 1; }
+    }
     return {line: li, px: tx, pz: tz, legs, tiers: l.tiers};
   });
 

@@ -18,6 +18,7 @@ import {doorwayIssues} from '../doorways';
 import {extensionIssues} from '../trackExt/index';
 import type {StationLayout} from '../stationTypes';
 import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
+import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -106,7 +107,7 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
 
   // --- Railings, vessel ------------------------------------------------------------------------------------------------------
   const Lv = levelsOf(layout);
-  const drops = Lv.unrailedDrops();
+  const drops = Lv.unrailedDrops().filter(d => !dropInLadderOpening(layout, d)); // task reactor-expansion-20261101 (lane PATHS): ladder heads
   if (drops.length) issues.push(`${drops.length} unrailed drops (first at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)} level ${drops[0].level})`);
   {
     const gC = levels[CORE_LEVEL].grid, c = info.core;
@@ -121,7 +122,7 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   }
 
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
-  issues.push(...levelIssues(layout, dist, REACTOR_LEVEL_RULES));
+  issues.push(...excuseDesignedRailGaps(layout, levelIssues(layout, dist, REACTOR_LEVEL_RULES))); // lane PATHS: seams + ladder openings
   issues.push(...traversalIssues(layout));
   issues.push(...doorwayIssues(layout));
 
