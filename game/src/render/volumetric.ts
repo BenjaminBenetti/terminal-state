@@ -30,6 +30,9 @@
 // depth term is compiled only there, before the warm-up: no runtime rebuild; every other level keeps the previous key / program);
 // setDepthGas(table) — called by world/reactor/generators.ts only when the clearing changes — copies the strata table / rect /
 // range into the march uniforms and sets the `depthOn` gate (closed once every stratum is clear).
+// Task reactor-submit-roof-fog-20261102 (lane FOG): the table goes into the march's TABLE_N x 1 float data texture (u.depthTab; one
+// tiny upload per clearing change), not a uniform array — the extra uniform buffer took the depth variant to 13 per fragment stage,
+// over WebGPU's default 12: on WebGPU the Reactor's (and since the outdoor roof air, the Office's) volumetric pass failed outright.
 
 import * as THREE from 'three';
 import {NodeMaterial, NodeUpdateType, QuadMesh, RenderPipeline, RenderTarget, RendererUtils, TempNode, type PassNode, type WebGPURenderer} from 'three/webgpu';
@@ -444,7 +447,8 @@ export class VolumetricAtmosphere {
     this.depthCompiled = !!layout.reactor || !!roof;
     this.depthAny = false;
     this.u.depthOn.value = 0;
-    (this.u.depthTab.array as number[]).fill(0);
+    this.depthTable.fill(0);
+    this.depthTableTex.needsUpdate = true; // (lane FOG) the table texture: zero until the runtime uploads
     this.applyDepthLook(roof ? ROOF_GAS_LOOK : REACTOR_GAS_LOOK);
     this.setOutdoor(null);
     this.setShafts(null);
@@ -607,9 +611,10 @@ export class VolumetricAtmosphere {
   setDepthGas(d: DepthGasTable | null): void {
     const u = this.u;
     if (!this.depthCompiled || !d) { this.depthAny = false; u.depthOn.value = 0; return; }
-    const tab = u.depthTab.array as number[];
+    const tab = this.depthTable; // (lane FOG) the march's table texture (uploaded with the next rendered frame)
     let any = false;
     for (let i = 0; i < tab.length; i++) { const v = i < d.table.length ? d.table[i] : 0; tab[i] = v; if (v > 0.002) any = true; }
+    this.depthTableTex.needsUpdate = true;
     u.depthRect.value.set(d.rect.x0, d.rect.z0, d.rect.x1, d.rect.z1);
     const span = Math.max(1e-3, d.yHi - d.yLo);
     u.depthRange.value.set(d.yLo, d.yHi, 1 / span, 0);
@@ -620,6 +625,16 @@ export class VolumetricAtmosphere {
     this.depthAny = any;
     u.depthOn.value = any ? 1 : 0;
     this.depthUploads++;
+  }
+
+  /** Task reactor-submit-roof-fog-20261102 (lane FOG): the march's depth-table texture (u.depthTab's value; render/volumetricShaders.ts depthTableTexture). */
+  get depthTableTex(): THREE.DataTexture {
+    return (this.u.depthTab as unknown as {value: THREE.DataTexture}).value;
+  }
+
+  /** Task reactor-submit-roof-fog-20261102 (lane FOG): the strata table the march reads (TABLE_N floats; the texture's own data). */
+  get depthTable(): Float32Array {
+    return this.depthTableTex.image.data as Float32Array;
   }
 
   /** Task reactor-expansion-20261101 (lane GASLIGHT): the regional term's look (per station: the Reactor's strata, the Office roof air). */
@@ -662,7 +677,7 @@ export class VolumetricAtmosphere {
   depthDebug(): {compiled: boolean; on: boolean; uploads: number; range: number[]; rect: number[]; max: number; look: DepthGasLook; outdoor: OutdoorGas | null; shafts: ShaftSpec | null; fallback: number} {
     const u = this.u, r = u.depthRange.value as THREE.Vector4, q = u.depthRect.value as THREE.Vector4;
     return {compiled: this.depthCompiled, on: this.depthAny, uploads: this.depthUploads, range: [r.x, r.y], rect: [q.x, q.y, q.z, q.w],
-      max: Math.max(0, ...(u.depthTab.array as number[])), look: {...this.depthLook, tint: [...this.depthLook.tint]},
+      max: Math.max(0, ...this.depthTable), look: {...this.depthLook, tint: [...this.depthLook.tint]},
       outdoor: this.depthOutdoor, shafts: this.depthShafts, fallback: this.gasFallbackC}; // (lane GASLIGHT: + outdoor / shafts / fallback)
   }
 
@@ -928,8 +943,7 @@ export class VolumetricAtmosphere {
     if (!this.marchRT || this.failed) return;
     rendererState = RendererUtils.resetRendererState(renderer, rendererState as never);
     const device = (renderer.backend as unknown as {device?: WebGPUDeviceLike}).device;
-    const scoped = !!device && this.errorChecks > 0;
-    if (scoped) device!.pushErrorScope('validation');
+    let scoped = false;
     try {
       const fl = this.lights.flashlight;
       // the shadow matrix / map of THIS frame (three updated them in the scene pass)
@@ -937,6 +951,11 @@ export class VolumetricAtmosphere {
       u.shadowMatrix.value.copy(fl.shadow.matrix);
       u.shadowBias.value = fl.shadow.bias;
       const march = this.ensureMarch();
+      // task reactor-submit-roof-fog-20261102 (lane FOG): open the error scope AFTER picking / (re)building the program, so a new program's
+      // FIRST frame is watched too — three creates the pipeline layout there outside its own error scope (a rejected layout, like the
+      // 13-uniform-buffer depth variant, now flags the pass failed -> the direct path at once, instead of depending on frame timing)
+      scoped = !!device && this.errorChecks > 0;
+      if (scoped) device!.pushErrorScope('validation');
       u.shadowOn.value = fl.castShadow && fl.shadow.map && (u.flashColor.value as THREE.Vector3).lengthSq() > 0 ? 1 : 0;
       renderer.setRenderTarget(this.marchRT);
       this.quad.material = march;
@@ -1150,6 +1169,7 @@ export class VolumetricAtmosphere {
     this.placeholderDensity.dispose();
     this.placeholderAir.dispose();
     this.placeholderGas.dispose();
+    this.depthTableTex.dispose(); // (lane FOG)
     this.gasData = null;
     this.densityMap = null;
     this.noise.dispose();
