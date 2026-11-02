@@ -94,8 +94,15 @@ describe('builder: a world carrying layout.reactor', () => {
     const n = names(w);
     expect(n.some(x => x.startsWith('reactor-lamp-cage-'))).toBe(true);
     const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
-    w.tubes!.getMatrixAt(0, m); m.decompose(p, q, s);
-    expect(s.x).toBeLessThan(0.5); // shrunk into the cage's lens
+    // task reactor-playtest-round2-20261102 (lane PROPS): the pit lamp's tube is collapsed (column lengths: Matrix4.decompose answers 1
+    // for a singular matrix); its glass is the jar glow in the cage ('light-glass', the tubes' instance colour)
+    w.tubes!.getMatrixAt(0, m);
+    expect(new THREE.Vector3().setFromMatrixColumn(m, 0).length()).toBeLessThan(0.5);
+    const glass = w.group.getObjectByName('light-glass') as THREE.InstancedMesh;
+    expect(glass.instanceColor).toBe(w.tubes!.instanceColor);
+    glass.getMatrixAt(0, m); m.decompose(p, q, s);
+    expect(Math.hypot(p.x - 12, p.z - 6)).toBeLessThan(1e-3); // the jar under the pendant's light point, in its cage
+    expect(p.y).toBeGreaterThan(3.2 - 0.36); expect(p.y).toBeLessThan(3.2);
     w.tubes!.getMatrixAt(2, m); m.decompose(p, q, s);
     expect(s.x).toBeCloseTo(1, 5); // a tube fixture outside the pit
   });

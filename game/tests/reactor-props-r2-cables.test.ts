@@ -14,6 +14,7 @@ import type {ReactorComplexInfo} from '../src/gen/reactor/reactorTypes';
 import {CEILING_CABLE, cableField, ceilingCableIssues, type CableComplex} from '../src/gen/reactor/complex/propsCable';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
+import {onCable, planBeacons} from '../src/world/reactor/startupBeaconPlan';
 
 installCanvasShim(false);
 const SEEDS = [9100, 218558, 637474, 1, 42, 777];
@@ -84,6 +85,13 @@ describe('complex generator cables along the ceiling (bullet 11)', () => {
       }
     }, 120_000);
   }
+
+  it('no orange beacon (lane STARTUP) stands on a generator cable\'s run along the pit wall', () => {
+    for (const seed of SEEDS) {
+      const L = level(seed), gens = L.reactor!.generators;
+      for (const b of planBeacons(L)) expect(onCable(gens, b.x, b.y, b.z, b.nx, b.nz), `seed ${seed} beacon tier ${b.tier} at ${b.x},${b.y},${b.z}`).toBe(false);
+    }
+  }, 120_000);
 
   it('the world draws the trays, wires and drop rods (tagged gen-cable, inside the kit plan the paths audit checks)', () => {
     const L = level(9100), mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});

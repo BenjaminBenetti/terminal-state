@@ -83,6 +83,30 @@ export function walkwayAt(layout: StationLayout, x: number, y: number, z: number
   return false;
 }
 
+/**
+ * Task reactor-playtest-round2-20261102 (lane PROPS): a generator cable (`ReactorGenerator.cable`, planned with the layout before the
+ * beacons) passes within CABLE_CLEAR of the beacon's body — its wall plate, arm, pedestal and head (wall frame about the pedestal top
+ * (x, y, z): along +-0.3 m, out 0 .. 0.55 m, y -0.35 .. +0.45 m) — so the spot is left for another wall lamp.
+ */
+const CABLE_CLEAR = 0.25;
+export function onCable(gens: readonly {cable: readonly {x: number; y: number; z: number}[]}[], x: number, y: number, z: number, nx: number, nz: number): boolean {
+  const C = CABLE_CLEAR;
+  for (const g of gens) {
+    const c = g.cable;
+    for (let k = 0; k + 1 < c.length; k++) {
+      const a = c[k], b = c[k + 1];
+      if (Math.min(a.y, b.y) > y + 0.45 + C + 0.1 || Math.max(a.y, b.y) < y - 0.35 - C - 0.1) continue;
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z) / 0.1));
+      for (let t = 0; t <= n; t++) {
+        const px = a.x + (b.x - a.x) * t / n - x, py = a.y + (b.y - a.y) * t / n - y, pz = a.z + (b.z - a.z) * t / n - z;
+        const out = px * nx + pz * nz, along = -px * nz + pz * nx;
+        if (Math.abs(along) < 0.3 + C && out > -0.05 && out < 0.55 + C && py > -0.35 - C && py < 0.45 + C) return true;
+      }
+    }
+  }
+  return false;
+}
+
 /** The beacons of a Reactor layout (empty elsewhere). */
 export function planBeacons(layout: StationLayout): BeaconSpot[] {
   const info = layout.reactor;
@@ -118,6 +142,7 @@ export function planBeacons(layout: StationLayout): BeaconSpot[] {
     if (openBehind(layout, bx, y + B.plate.y, bz, B.plate.h / 2, B.plate.h / 2 + B.head.h)) continue;
     if (walkwayAt(layout, hx, y, hz) || walkwayAt(layout, m.x + nx * 0.8, y, m.z + nz * 0.8)) continue;
     if (info.fans.some(f => Math.hypot(f.x - m.x, f.y - y, f.z - m.z) < PIT_LAMPS.fanClear + f.radius * 0.5)) continue;
+    if (onCable(info.generators, m.x, y, m.z, nx, nz)) continue; // (lane PROPS) never on a generator cable's run along the pit wall
     if (info.pipeBanks.some(b => {
       if (y < b.y0 - 0.5 || y > b.y1 + 0.5) return false;
       const ex = b.x1 - b.x0, ez = b.z1 - b.z0, L2 = ex * ex + ez * ez;
