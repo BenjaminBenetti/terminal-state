@@ -13,8 +13,12 @@ import * as THREE from 'three';
 import type {ReactorInfo} from '../../gen/reactor/reactorTypes';
 import {MALL_EXT_ORDER, buildMallExteriorGas, mallSkyMaterial} from '../mallExterior';
 
-/** Sky dome radius (m: inside the Reactor's far plane, world/reactor/archInstall.ts REACTOR_FOG.far 230, from anywhere in the pit). */
-export const PIT_SKY = {radius: 190} as const;
+/**
+ * Sky dome radius (m). Every point of the dome must stay inside the Reactor's far plane (world/reactor/archInstall.ts REACTOR_FOG.far
+ * 230) from ANYWHERE in the pit — the core floor sits up to ~50 m below / ~35 m beside the dome centre — or the zenith would clip to
+ * the clear colour (an exposed void through the opening): 150 + 60 < 230.
+ */
+export const PIT_SKY = {radius: 150} as const;
 
 export interface PitSkyStats { dome: boolean; gasLayers: number; curtainOpacity: number; triangles: number }
 

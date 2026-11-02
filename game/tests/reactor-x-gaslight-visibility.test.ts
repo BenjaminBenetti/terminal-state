@@ -13,7 +13,7 @@ import * as THREE from 'three';
 import {CELL, FLOOR, Grid} from '../src/gen/grid';
 import {GAS, gasProfile} from '../src/world/gas/field';
 import {installGas, type GasHost} from '../src/world/gas/system';
-import {ROOF_FOG, roofAirOf, roofBlend} from '../src/world/roofAir';
+import {roofAirOf, roofBlend} from '../src/world/roofAir';
 import {generateStation} from '../src/gen/station';
 import {generateOfficeLevel} from '../src/gen/office/index';
 import {LEVELS} from '../src/levels/registry';
