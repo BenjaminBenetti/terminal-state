@@ -621,7 +621,7 @@ const RING_NAMES: readonly string[] = ['Orbital', 'Belt', 'Ring'];
  * Printed ink colours (legible under a multiply blend on aged paper): five clearly distinct primaries (red, blue, green, amber,
  * purple) are dealt first, in a seeded order; teal / brown / magenta only for a sixth line or more.
  */
-export const LINE_INKS: readonly string[] = ['#c63a2f', '#23599e', '#2f8541', '#e08a1a', '#75429b', '#12817f', '#8a5730', '#b8407a'];
+export const LINE_INKS: readonly string[] = ['#d23c2c', '#2563c4', '#2e9a48', '#f0951c', '#8545b8', '#149a96', '#9a6233', '#cc4488'];
 const PRIMARY_INKS = 5;
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 

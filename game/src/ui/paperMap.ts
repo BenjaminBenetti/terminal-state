@@ -321,7 +321,7 @@ function pencilRing(p: Pt, r: number, color: string, w: number): string {
 
 /** The SVG ink layer of a model (paper coordinates; the sheet transform pans / zooms it with the paper). */
 export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, selected: StationId | null, focused: StationId | null): string {
-  const o: string[] = [`<svg class="pm-ink" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${PAPER.w} ${PAPER.h}" width="${PAPER.w}" height="${PAPER.h}" aria-hidden="true">`];
+  const o: string[] = [`<svg class="pm-ink" viewBox="0 0 ${PAPER.w} ${PAPER.h}" width="${PAPER.w}" height="${PAPER.h}" aria-hidden="true">`];
   // the title band: title, line legend, symbol key
   const b = PAPER.band;
   o.push(`<g class="pm-band">`);
@@ -660,7 +660,7 @@ export class PaperMap {
     this.setView(s, (w - PAPER.w * s) / 2, BAR_H + (h - BAR_H - PAPER.h * s) / 2);
   }
 
-  /** Frame the known stations (zoomed in up to 2.4x the whole-sheet scale; never below it). */
+  /** Frame the known stations (zoomed in up to 1.7x the whole-sheet scale, so the sheet still reads as a map; never below it). */
   fitKnown(): void {
     const st = this.state;
     if (!st) return;
@@ -671,8 +671,11 @@ export class PaperMap {
     const x0 = Math.min(...pts.map(p => p.x)) - pad, x1 = Math.max(...pts.map(p => p.x)) + pad;
     const y0 = Math.min(...pts.map(p => p.y)) - pad, y1 = Math.max(...pts.map(p => p.y)) + pad;
     const {w, h} = this.viewport(), base = this.sheetScale();
-    const s = Math.min(base * 2.4, Math.max(base, Math.min((w - 16) / (x1 - x0), (h - BAR_H - 16) / (y1 - y0))));
-    this.setView(s, w / 2 - ((x0 + x1) / 2) * s, BAR_H + (h - BAR_H) / 2 - ((y0 + y1) / 2) * s);
+    const s = Math.min(base * 1.7, Math.max(base, Math.min((w - 16) / (x1 - x0), (h - BAR_H - 16) / (y1 - y0))));
+    // centred on the known stations, but the sheet keeps covering the screen along any axis where it is larger than it
+    const cover = (t: number, size: number, lo: number, hi: number) => (size > hi - lo ? Math.min(lo, Math.max(hi - size, t)) : lo + (hi - lo - size) / 2);
+    const tx = cover(w / 2 - ((x0 + x1) / 2) * s, PAPER.w * s, 0, w), ty = cover(BAR_H + (h - BAR_H) / 2 - ((y0 + y1) / 2) * s, PAPER.h * s, BAR_H, h);
+    this.setView(s, tx, ty);
   }
 
   /** Zoom by `f` around the screen point (cx, cy) (default: the viewport centre). */
