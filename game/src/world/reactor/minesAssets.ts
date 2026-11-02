@@ -21,6 +21,22 @@ export type MinesModel = keyof typeof MINES_MODELS;
  */
 export const MINES_ANCHORS = {timberSet: {postInner: 1.03, capUnder: 1.79, top: 2.516}, mineCart: {gauge: 0.6}} as const;
 
+/**
+ * Per-model UNIFORM runtime scale of the mines' set pieces (a derived transform of the cooked GLB: no re-cook, no new model). Task
+ * reactor-playtest-round2-20261102 (lane PROPS, user: "the drill machine found in the mine area is comically small"): the drill jumbo was
+ * cooked at 3.5 x 1.28 x 0.98 m — knee / waist high, its tyres 0.5 m. x1.9 makes it a compact face-drill rig: 6.65 m overall (the
+ * wheeled carrier 4.04 m, the feed boom beyond it), 2.43 m tall, 1.87 m wide, ~0.95 m tyres (scale-checked beside a runtime zombie:
+ * docs/reactor.md, docs/prop-affordances.md); inside the 7 x 2.4 x 3.0 m the mines' drill heading allows.
+ * Everything that sizes the drill reads this: the dress collider, the heading, the visuals' instance scale and the paths audit.
+ */
+export const MINES_FIT: Readonly<Record<MinesModel, number>> = {timberSet: 1, mineCart: 1, hoistWinch: 1, drillRig: 1.9};
+
+/** A mines model's runtime size [x length, y height, z depth] (m) = its cooked dims x MINES_FIT. */
+export function minesModelSize(key: MinesModel): [number, number, number] {
+  const [x, y, z] = MINES_MODELS[key].dims, k = MINES_FIT[key];
+  return [x * k, y * k, z * k];
+}
+
 /** Lazy-library file map of the expansion kit (every REACTOR_X_KIT url referenced from runtime code). */
 export const REACTOR_X_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(
   Object.values(REACTOR_X_KIT).map(m => [m.key, {url: m.url, bytes: m.bytes}]));

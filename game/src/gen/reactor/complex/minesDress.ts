@@ -25,6 +25,7 @@ import {
 } from '../../placeKit';
 import type {Area, Door, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import type {MineRoomPlan} from './minesPlan';
+import {minesModelSize} from '../../../world/reactor/minesAssets'; // task reactor-playtest-round2 (lane PROPS): the drill's runtime size
 
 /** What the dress hook knows of the carve (canvas cells: shifted by the crop here). */
 export interface MinesDressInfo {
@@ -42,9 +43,12 @@ export const MINE_PIECE = {cart: 7101, winch: 7102, winze: 7103, drill: 7104, cr
 export type MinePieceId = keyof typeof MINE_PIECE;
 export const MINE_PIECE_OF: Readonly<Record<number, MinePieceId>> = Object.fromEntries(Object.entries(MINE_PIECE).map(([k, v]) => [v, k as MinePieceId]));
 
+/** The drill jumbo's runtime size (m): the cooked model x MINES_FIT.drillRig (task reactor-playtest-round2, lane PROPS: was 3.5 x 1.28). */
+const DRILL = (() => { const [l, h, w] = minesModelSize('drillRig'); return {l: Math.ceil(l * 1000) / 1000, w: Math.ceil(w * 1000) / 1000, h: Math.ceil(h * 100) / 100}; })(); // (rounded up: the model stays inside)
+
 /** Real sizes (m) of the set pieces: footprint along / across their long axis, height (the lead's REACTOR_X_KIT dims). */
 export const MINE_PIECE_SIZE: Readonly<Record<MinePieceId, {l: number; w: number; h: number}>> = {
-  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1}, drill: {l: 3.5, w: 1.0, h: 1.28},
+  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1}, drill: DRILL,
   crib: {l: 1.4, w: 1.4, h: 0}, rubble: {l: 0, w: 0, h: 1.6}, post: {l: 0.53, w: 0.5, h: 0},
 };
 
@@ -314,9 +318,11 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
       for (const side of rng.shuffle(['N', 'S', 'E', 'W'] as Side[])) {
         const alongX = side === 'N' || side === 'S';
         const [lo, hi] = alongX ? [a.x * CELL, (a.x + a.w) * CELL] : [a.y * CELL, (a.y + a.h) * CELL];
-        for (let t = lo + 2.5; t <= hi - 2.5 && !ok; t += 1.0) {
-          const [x, z] = wallXZ(a, side, t, 0.62);
-          if (piece(a, 'drill', x, z, alongX ? 1.75 : 0.5, alongX ? 0.5 : 1.75, 1.28, {ring: 1})) ok = true;
+        // (lane PROPS, round 2: the collider IS the model's runtime footprint and height, its long side 12 cm off the wall)
+        const hl = DRILL.l / 2, hw = DRILL.w / 2;
+        for (let t = lo + hl + 0.75; t <= hi - hl - 0.75 && !ok; t += 1.0) {
+          const [x, z] = wallXZ(a, side, t, hw + 0.12);
+          if (piece(a, 'drill', x, z, alongX ? hl : hw, alongX ? hw : hl, DRILL.h, {ring: 1})) ok = true;
         }
         if (ok) break;
       }

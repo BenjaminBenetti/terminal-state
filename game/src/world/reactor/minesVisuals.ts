@@ -23,7 +23,7 @@ import type {PropPlacement} from '../../gen/props';
 import {MINE_PIECE, MINE_RAIL, alongPolyline, minesRailWorld, timberSetFit, type RailPoint} from '../../gen/reactor/complex/minesDress';
 import type {WorldMaterials} from '../materials';
 import {reactorDress, reactorSurfaceMaterial} from './archMaterials';
-import {MINES_MODELS, type MinesModel} from './minesAssets';
+import {MINES_FIT, MINES_MODELS, type MinesModel} from './minesAssets';
 
 /** One instanced placement: position (bottom centre), yaw, scale. */
 export interface MinePlace { x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number }
@@ -152,7 +152,10 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
     const a = layout.areas[p.area], alongX = p.hx >= p.hz;
     // its back to the nearer wall: the front (+Z) faces into the room
     const yaw = alongX ? (p.z - a.y * CELL < (a.y + a.h) * CELL - p.z ? 0 : Math.PI) : (p.x - a.x * CELL < (a.x + a.w) * CELL - p.x ? Math.PI / 2 : -Math.PI / 2);
-    plan.models.drillRig.push({x: p.x, y: p.y, z: p.z, yaw, sx: 1, sy: 1, sz: 1});
+    // (task reactor-playtest-round2 lane PROPS: at its runtime fit MINES_FIT.drillRig — a real jumbo, not a knee-high toy; the collider
+    // the dress pass placed is minesModelSize('drillRig'))
+    const k = MINES_FIT.drillRig;
+    plan.models.drillRig.push({x: p.x, y: p.y, z: p.z, yaw, sx: k, sy: k, sz: k});
   }
 
   // --- the winze: timber collar, black shaft mouth, guard fence, headframe + sheave + rope ---------------------------------------------
