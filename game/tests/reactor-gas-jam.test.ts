@@ -6,8 +6,12 @@
 //    pump / key (the restart runtime calls the clearing only after the rods);
 //  - the gear path: the guaranteed mask + filters lie UPSTREAM of the jammed zone, in air the working generators clear (no gear lock),
 //    and their filter time covers the real core-floor travel + work (paths on the core floor's grid) with margin;
-//  - every surface agrees: the pit board, the switchgear board, the next step, the objective, the floor maps (marker + banner).
+//  - every surface agrees: the pit board, the switchgear board, the next step, the floor maps (marker + banner).
 // (The generator's stall / prompt / toast / persistence state machine: tests/reactor-air-runtime.test.ts.)
+// Task reactor-surface-ending-20261102 (lane OBJECTIVES, user INTENT CHANGES): "the objective text is to wordy, saying "core floor
+// generator is jammed" … The player will know its jammed when they try to start it" — the HUD objective no longer carries the jam /
+// mask paragraph (asserted ABSENT below; the board marks stay, terse); "the key for reactor start should be on the bottom floor" — the
+// budgeted core route now fetches the key on the core floor (stairs -> valve -> pump -> key -> key switch -> rods).
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
 import {writeFileSync} from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
@@ -99,7 +103,7 @@ describe('reactor gas: the required mask + filters lie upstream with enough filt
   }, 240_000);
 
   for (const seed of SEEDS) {
-    it(`seed ${seed}: the guaranteed upstream filter time covers the real core-floor route (stairs -> valve -> pump -> key switch -> rods -> online) twice over`, () => {
+    it(`seed ${seed}: the guaranteed upstream filter time covers the real core-floor route (stairs -> valve -> pump -> key -> key switch -> rods -> online) twice over`, () => {
       const L = level(seed), r = L.reactor!, {st, air, jam} = upperCleared(L, r);
       const coreLv = jam.levels[0], g = L.levels[coreLv].grid;
       const stand = (id: string) => { for (const s of r.sites) { const c = s.controls.find(q => q.id === id); if (c) return c.stand; } throw new Error(id); };
@@ -119,19 +123,22 @@ describe('reactor gas: the required mask + filters lie upstream with enough filt
       const chain0 = stand('valve');
       const entries = L.levelLinks.filter(l => l.lower === coreLv).map(l => rawDist(l.bottom, chain0)).filter(d => d >= 0);
       expect(entries.length).toBeGreaterThan(0);
-      const chain = ['valve', 'pump', 'keyswitch', 'rods'].map(stand);
+      // (lane OBJECTIVES) the startup key lies on the core floor now: fetched between the pump and the key switch
+      const keyC = r.components.find(c => c.item === 'reactor_key')!, kp = L.pickups[keyC.pickup];
+      expect(keyC.level).toBe(coreLv);
+      const chain = [stand('valve'), stand('pump'), {x: kp.x, z: kp.z, level: keyC.level}, stand('keyswitch'), stand('rods')];
       for (const c of chain) expect(c.level).toBe(coreLv); // the deep tasks are on the jammed storey: the mask is required
       let inner = 0;
       for (let i = 0; i + 1 < chain.length; i++) inner += dist(chain[i], chain[i + 1]);
       const walkM = Math.max(...entries) + inner;
       // after the rods: the clearing starts at WIN.airAtS; the eye at the rods is safe once it drops below the threshold
-      const rods = chain[3];
+      const rods = chain[4];
       air.clearAll(REACTOR_AIR.CLEAR_ALL_S, WIN.airAtS);
       let tClear = WIN.airAtS;
       while (air.depthGasAt(rods.x, L.levels[coreLv].baseY + EYE, rods.z) >= GAS.THRESHOLD && tClear < 200) { tClear += 0.25; air.update(tClear); }
       expect(tClear).toBeLessThan(WIN.airAtS + REACTOR_AIR.CLEAR_ALL_S);
       void st;
-      const work = HOLD_S.valve + HOLD_S.rods + 2 * 1.0; // two presses (pump, key) with their approach
+      const work = HOLD_S.valve + HOLD_S.rods + 3 * 1.0; // three presses (pump, take the key, the key switch) with their approach
       const once = walkM / WALK_SPEED + work + tClear;
       const budget = 2 * (walkM / WALK_SPEED) + work + tClear + 60; // detours + 60 s of fighting
       // the guaranteed supply (the smallest roll): the mask's fitted filter + the spare filters, all upstream (previous test)
@@ -191,7 +198,9 @@ describe('reactor gas: every surface agrees about the jam (lane GAS)', () => {
     expect(draw('switchgearBoard', powered).replace(/ \| /g, ' ')).toContain(JAM_TEXT.switchgear);
     // the next step to the core floor names the mask; a step upstream does not
     const mask = {levels: jam.levels, note: JAM_TEXT.next};
-    expect(nextStepText(powered, r, {count: () => 1}, mask)).toMatch(/pump hall \(Core floor\) · gas mask \+ filters \(fans jammed\)$/);
+    expect(nextStepText(powered, r, {count: () => 1}, mask)).toMatch(/pump hall \(Core floor\) · gas mask$/); // (lane OBJECTIVES: terse)
+    // (lane OBJECTIVES) the key on the core floor: its find step names the mask too
+    expect(nextStepText({...powered, valve: true, pump: true}, r, {count: () => 0}, mask)).toBe('Next: find the startup key — Control room · Core floor · gas mask');
     expect(nextStepText({...st}, r, {count: () => 1}, mask)).not.toContain(JAM_TEXT.next); // fuses first: the switchgear, tier 4
     // the floor maps: the jammed generator's own mark (not an open X), the banner on the core storey only
     const ms = mapMarkers({info: r, state: st, carried: () => 0, pickups: () => [], levelAt: () => 0});
@@ -217,23 +226,26 @@ describe('reactor gas: every surface agrees about the jam (lane GAS)', () => {
     expect(nextStepText(online, r, {count: () => 0}, mask)).not.toContain(JAM_TEXT.next);
   }, 60_000);
 
-  it('the restart runtime: the HUD objective names the mask, and the bottom clears ONLY at online — never at a fuse / breaker / valve / pump / key', () => {
+  // (lane OBJECTIVES, intent change: the HUD objective carried JAM_TEXT.objective "Core floor gassed — its generator is jammed …"; the
+  // user: too wordy, the jam is learnt at the generator) — the objective says NOTHING about the jam / mask in any state now
+  it('the restart runtime: the HUD objective has no jam / mask text, and the bottom clears ONLY at online — never at a fuse / breaker / valve / pump / key', () => {
     const h = fakeHost(), rt = buildRestart(h);
     const cleared: number[] = [];
     rt.clearAir = d => { cleared.push(d); return true; };
     rt.frame(0.3);
-    expect(rt.objective).toContain(JAM_TEXT.objective); // the fixture's deepest zone (its generator) jams too
+    const noJam = (why: string) => expect(rt.objective, why).not.toMatch(/jam|mask|filter|gassed|toxic/i);
+    noJam('fresh'); // the fixture's deepest zone (its generator) jams too
     const give = (id: string) => h.inv.add(h.inv.makeStack(id, 1));
     for (const id of ['fuse-0', 'fuse-1', 'breaker', 'valve', 'pump', 'keyswitch']) {
       expect(rt.qaOperate(id, give).ok, id).toBe(true);
       for (let i = 0; i < 40; i++) rt.frame(0.25); // 10 s after each step
       expect(cleared, `after ${id}`).toEqual([]);
-      expect(rt.objective, `after ${id}`).toContain(JAM_TEXT.objective);
+      noJam(`after ${id}`);
     }
     expect(rt.qaOperate('rods').ok).toBe(true);
     for (let i = 0; i < Math.ceil((WIN.airAtS + 1) / 0.25); i++) rt.frame(0.25);
     expect(cleared).toEqual([WIN.airDurationS]); // once, at online
-    expect(rt.objective).not.toContain(JAM_TEXT.objective);
+    noJam('online');
     void REACTOR_LANE;
   });
 });

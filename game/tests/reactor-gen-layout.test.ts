@@ -105,13 +105,17 @@ describe('Reactor generator (lane GEN)', () => {
       expect(R.sites.find(s => s.id === 'control')!.level).toBe(CORE_LEVEL);
       expect(R.sites.find(s => s.id === 'rimOffice')!.level).toBe(0);
       for (const s of R.sites) for (const m of s.machines ?? []) expect(L.props[m.prop].kind).toBe('annexMachine');
-      // components: the key in the rim office, three fuses in the maintenance stores of tier 3 / tier 4 / the core floor
-      expect(R.components.map(c => [c.item, c.level])).toEqual([['reactor_key', 0], ['fuse_cartridge', 3], ['fuse_cartridge', 4], ['fuse_cartridge', CORE_LEVEL]]);
+      // components: the key in the core floor's control room (task reactor-surface-ending-20261102, lane OBJECTIVES, user intent
+      // change: "the key for reactor start should be on the bottom floor not the top floor"; it was the rim office's), three fuses in the
+      // maintenance stores of tier 3 / tier 4 / the core floor
+      expect(R.components.map(c => [c.item, c.level])).toEqual([['reactor_key', CORE_LEVEL], ['fuse_cartridge', 3], ['fuse_cartridge', 4], ['fuse_cartridge', CORE_LEVEL]]);
+      const ctl = R.sites.find(s => s.id === 'control')!;
       for (const c of R.components) {
         const p = L.pickups[c.pickup];
         expect(p.itemId).toBe(c.item);
         expect(p.count).toBe(1);
-        expect(L.areas[c.area].type).toBe(c.item === 'reactor_key' ? 'agent-office' : 'storage');
+        if (c.item === 'reactor_key') expect(c.area).toBe(ctl.area);
+        else expect(L.areas[c.area].type).toBe('storage');
       }
       expect(R.screens.map(s => s.id).sort()).toEqual(['controlMonitor', 'pitBoard', 'pumpBoard', 'switchgearBoard']);
       // set pieces

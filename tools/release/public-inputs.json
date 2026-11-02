@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 34832,
-      "sha256": "1b306543ba1f7de59bdf8e96e30347f94f12f21e5683a0a26d40f4a809efc058"
+      "bytes": 36115,
+      "sha256": "672c63046c586d45ca6232071f70f912a5d7526101422adadbd067120566ec9a"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1804,6 +1804,11 @@
       "sha256": "8e4cdef64977a422e2e6d06df275f82c96d0316c1c5ec1877d07b0e211d7c033"
     },
     {
+      "path": "assets/derivatives/reactor-surface-kit-20261102.json",
+      "bytes": 7851,
+      "sha256": "3d1375da7d271d8c14ec7272620d74d318d230896566f0a749899bc842b0edc5"
+    },
+    {
       "path": "assets/derivatives/reactor-x-kit-20261101.json",
       "bytes": 28275,
       "sha256": "439c137c2a9ecc534ab2e120bba57e9aa510f4c0ac473e13de1e35d91e5318c3"
@@ -3317,6 +3322,26 @@
       "path": "assets/models/reactor-bunk-bed.glb",
       "bytes": 526052,
       "sha256": "302b9a92e1b314e8630654f1044687fd6a7d57f3d76e55e1e1b34b044e27baba"
+    },
+    {
+      "path": "assets/models/reactor-city-apartment-ruin.glb",
+      "bytes": 696248,
+      "sha256": "b77eb84029c1fa8640e9ad5415053571c7ed5d6aa9981b01aeebf424fff3ccae"
+    },
+    {
+      "path": "assets/models/reactor-city-garage-skeleton.glb",
+      "bytes": 737500,
+      "sha256": "ba8b4a40f5052817b29723ee8965ba9cd769e54dcb83a023b5a73d9035af8e88"
+    },
+    {
+      "path": "assets/models/reactor-city-highrise-ruin.glb",
+      "bytes": 829988,
+      "sha256": "436b4e04ae8b90229d3f1af9c11d7a2c5759726b1d6582a25ea12efc5dfc0ad7"
+    },
+    {
+      "path": "assets/models/reactor-city-storefront-row.glb",
+      "bytes": 734552,
+      "sha256": "5695030eaad786ade6d2ef73bc23ea599b574b81371a5620f905c8ce138731f5"
     },
     {
       "path": "assets/models/reactor-control-console.glb",

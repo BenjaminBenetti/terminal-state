@@ -6,7 +6,8 @@
 //
 // World frame (same conventions as the Office / Mall): x east, z south, y up, metres. ONE continuous layout:
 //  - levels[0] = the RIM: the subway station at the TOP of the pit (platform + track bed: a normal station a train can stop at),
-//    the rim gallery round the pit mouth and the rim control office (the startup key, the pit status board). baseY 0.
+//    the rim gallery round the pit mouth and the rim control office (the pit status board; task reactor-surface-ending-20261102, lane
+//    OBJECTIVES: the startup key moved down to the core floor's control room). baseY 0.
 //  - levels[1..] = the walkway TIERS going DOWN (negative baseY) — steel galleries on the pit walls, landings, bridges across the
 //    pit, lattice-tower decks and the rooms cut into the rock (stores, switchgear, pump hall) — and LAST the CORE FLOOR round the
 //    reactor vessel (the control room overlooks it).

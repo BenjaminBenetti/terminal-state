@@ -37,7 +37,7 @@ import {placeWeaponFinds} from '../weaponFinds';
 import type {TrackExtConfig} from '../trackExt/types';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS} from '../trackExt/index';
 import {populateExtensions} from '../annexContent';
-import type {ReactorComponent, ReactorPose} from './reactorTypes';
+import type {ReactorComponent, ReactorPose, ReactorSite} from './reactorTypes';
 import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
 import {carveReactor, reactorCanvas, type ReactorCarve} from './carve';
 import {
@@ -67,6 +67,9 @@ export interface ReactorGenOptions {
   /** Task reactor-expansion-20261101 (lane HOST): side-complex carver overrides (tests / QA; a missing key = the shipped carver, null = none). */
   complexCarvers?: ComplexCarvers;
 }
+
+/** Task reactor-surface-ending-20261102 (lane OBJECTIVES): the startup key's `where` (its component record: the hints / pit board). */
+export const REACTOR_KEY_WHERE = 'Control room · Core floor';
 
 /** Generation attempts before the last generated layout is returned with its issues. */
 const ATTEMPTS = 8;
@@ -190,8 +193,9 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
 
   // --- Player start: on the platform in front of the middle opening, looking through it into the pit ------------------------------
   const start = startOf(layout, rc);
-  // --- The restart components (finite, placed once): the key in the rim office, three fuses in the maintenance stores --------------
-  const components = placeComponents(layout, rc, rng.fork('reactor-components'));
+  // --- The restart components (finite, placed once): the key in the core floor's control room (lane OBJECTIVES; was the rim office),
+  // three fuses in the maintenance stores ---------------------------------------------------------------------------------------
+  const components = placeComponents(layout, rc, rng.fork('reactor-components'), sb.sites);
 
   // --- Whole-level populations, storey by storey -------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -272,14 +276,20 @@ function startOf(layout: StationLayout, rc: ReactorCarve): ReactorPose {
   return {x: wx, z: wz, yaw, level: 0};
 }
 
-/** The key (rim office) and three fuse cartridges (the maintenance stores of tier 3, tier 4 and the core floor): finite pickups. */
-function placeComponents(layout: StationLayout, rc: ReactorCarve, rng: Rng): ReactorComponent[] {
+/**
+ * The key and three fuse cartridges (the maintenance stores of tier 3, tier 4 and the core floor): finite pickups. Task
+ * reactor-surface-ending-20261102 (lane OBJECTIVES, user: "the key for reactor start should be on the bottom floor not the top floor"):
+ * the startup key lies in the core floor's CONTROL ROOM (it was the rim office's), on the operator side behind the console (the key
+ * switch's own room: fetched and used on the masked core route, nothing gates it), never at a control's stand point.
+ */
+function placeComponents(layout: StationLayout, rc: ReactorCarve, rng: Rng, sites: readonly ReactorSite[]): ReactorComponent[] {
   const out: ReactorComponent[] = [];
-  const put = (key: string, item: ReactorComponent['item'], where: string) => {
+  /** `prefer` (room-local inward depth d in cells, world x / z): narrows the candidate cells when any pass (else every candidate). */
+  const put = (key: string, item: ReactorComponent['item'], where: string, prefer?: (d: number, wx: number, wz: number) => boolean) => {
     const rr = rc.rooms.find(r => r.key === key);
     if (!rr) return;
     const g = layout.levels[rr.level].grid, f = roomFrame(rc, rr);
-    const cells: [number, number][] = [];
+    const cells: [number, number][] = [], best: [number, number][] = [];
     for (let y = rr.rect.y; y < rr.rect.y + rr.rect.h; y++) for (let x = rr.rect.x; x < rr.rect.x + rr.rect.w; x++) {
       const i = g.idx(x, y);
       if (g.cells[i] !== FLOOR || g.blocked[i] || g.area[i] !== rr.area || g.rampIdx[i] >= 0) continue;
@@ -289,20 +299,23 @@ function placeComponents(layout: StationLayout, rc: ReactorCarve, rng: Rng): Rea
       const [wx, wz] = g.center(x, y), door = roomPoint(f, rr.doorA0 - rr.a0 + rr.doorW / 2, 0);
       if (!near || Math.hypot(wx - door.x, wz - door.z) < 2.0) continue;
       cells.push([x, y]);
+      if (prefer?.(((wx - f.ox) * f.ix + (wz - f.oz) * f.iz) / CELL, wx, wz)) best.push([x, y]);
     }
     if (!cells.length) return;
-    const [x, y] = rng.pick(cells);
+    const [x, y] = rng.pick(best.length ? best : cells);
     const [wx, wz] = g.center(x, y);
     const p: PickupPlacement = {itemId: item, count: 1, x: wx, y: g.floorOf(g.idx(x, y)), z: wz, area: rr.area};
     if (rr.level) p.level = rr.level;
     layout.pickups.push(p);
     out.push({item, pickup: layout.pickups.length - 1, level: rr.level, area: rr.area, where});
   };
-  put('rimOffice', 'reactor_key', 'Rim control office');
+  // (lane OBJECTIVES) the key: behind the console (inward depth past its 3..6 cell footprint + the stand row at 7.1), >= 1.2 m from the
+  // key switch / rod control stand points (the structure.ts buildSites console layout)
+  const stands = sites.find(s => s.id === 'control')?.controls.map(c => c.stand) ?? [];
+  put('control', 'reactor_key', REACTOR_KEY_WHERE, (d, wx, wz) => d >= 7.5 && stands.every(s => Math.hypot(wx - s.x, wz - s.z) >= 1.2));
   put('store3', 'fuse_cartridge', 'Maintenance store · Tier 3');
   put('store4', 'fuse_cartridge', 'Maintenance store · Tier 4');
   put('storeCore', 'fuse_cartridge', 'Maintenance store · Core floor');
-  void CELL;
   return out;
 }
 

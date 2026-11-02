@@ -292,3 +292,14 @@ Community License + Gemma Terms of Use; conditional prototype status, not produc
 - `assets/audio/reactor-stage.mp3` — reactorStage (Sound Lab job 20261102T063859-1388193861)
 - `assets/audio/reactor-beacon-loop.mp3` — reactorBeacon (Sound Lab job 20261102T063904-2058341218)
 <!-- END reactor-startup-audio-20261102 -->
+
+<!-- BEGIN reactor-surface-kit-20261102 (build-reactor-surface-kit.mjs) -->
+## The Reactor surface ending: the ruined city round the roof aperture
+
+Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Codex initial reference images made with the user-selected B concept attached) through the Meshy MCP under the user's NEW surface-ending 200-credit authorization (sha256 1eb98c31…); Meshy's PBR maps kept (re-encoded only). Raw masters + provenance stay private / tracked outside the shipped site.
+
+- `assets/models/reactor-city-highrise-ruin.glb` — surface: ruined ~25-storey glass / concrete office tower, top sheared off (Meshy task 01a19e39-ecdb-7658-852c-2f719bef5311)
+- `assets/models/reactor-city-apartment-ruin.glb` — surface: ruined 7-storey brick apartment block with fire escapes, a collapsed corner (Meshy task 01a19e3a-07b5-77b2-ab18-abc2bb8cb7d3)
+- `assets/models/reactor-city-garage-skeleton.glb` — surface: burned-out multi-storey parking garage stripped to its concrete frame (Meshy task 01a19e3a-240a-707c-a7f4-58d6115f7e01)
+- `assets/models/reactor-city-storefront-row.glb` — surface: ruined two-storey corner row of shops (blank signs) (Meshy task 01a19e3a-4200-75cb-ac7f-6377d9f68177)
+<!-- END reactor-surface-kit-20261102 -->
