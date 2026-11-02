@@ -19,6 +19,7 @@ import {CROUCH_EYE, STAND_EYE} from '../src/player/player';
 import {ReactorAir} from '../src/world/reactor/air';
 import {emptyReactorState} from '../src/world/reactor/runState';
 import {layoutRect} from '../src/world/reactor/generators';
+import {btsAreaPresent} from '../src/gen/trackExt/index';
 import {sampleCarver} from './reactor-x-host-fixture';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -288,6 +289,28 @@ describe('Reactor side-complex host: the host path end to end (sample carver)', 
     expect(L.reactor!.complexes!.map(c => c.id)).toEqual(['bunker']);
     // the zones without a complex keep their landing generators
     expect(L.reactor!.generators.filter(g => g.zone > 0).every(g => /^Generator landing/.test(L.areas[g.area].label))).toBe(true);
+  });
+
+  it('a level whose Beyond-the-Station roll succeeds keeps its annex next to the three shipped complexes (regression: tunnel bounding boxes are not overlaps)', () => {
+    // present-roll seeds that lost their annex when complexIssues compared a curved tunnel's area RECT (its bounding box) with the
+    // complexes' rooms: the extension planner keeps a rock margin to every open cell of every storey, so only real cells may count
+    for (const seed of [4201601321, 920538251, 350413600]) {
+      expect(btsAreaPresent(seed)).toBe(true);
+      const L = generateReactorLevel({levelSeed: seed, startWeapon: 'pistol'});
+      expect(L.extensions!.annexes.length, `seed ${seed}`).toBeGreaterThanOrEqual(1);
+      expect(L.extensions!.log.some(g => /dropped/.test(g.result)), `seed ${seed}`).toBe(false);
+      expect((L.reactor!.complexes ?? []).map(c => c.id)).toEqual(['bunker', 'mines', 'waste']);
+      expect(reactorIssues(L)).toEqual([]);
+      // and no extension cell lies in any complex room's columns on any storey
+      const ext = new Set(L.areas.filter(a => a.ext).map(a => a.id));
+      for (const c of L.reactor!.complexes!) for (const id of c.areas) {
+        const a = L.areas[id];
+        for (const lv of L.levels) for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+          const i = lv.grid.idx(x, y);
+          expect(lv.grid.cells[i] !== SOLID && ext.has(lv.grid.area[i])).toBe(false);
+        }
+      }
+    }
   });
 
   it('generates fast with three complexes (report; target < 800 ms per call in Node)', () => {
