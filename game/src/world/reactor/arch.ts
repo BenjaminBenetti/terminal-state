@@ -26,6 +26,7 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
+import {WalkVolume} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -222,7 +223,8 @@ export class ReactorArch {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const loaded = new Set<ReactorPiece>(REACTOR_PIECES.filter(p => REACTOR_MODELS[p].delivered && !!models[REACTOR_MODELS[p].key]));
     try {
-      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r))});
+      // task reactor-expansion-20261101 (lane PATHS): the walkable body volume — the kit keeps its steel out of every walkway
+      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), walk: new WalkVolume(this.layout)});
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
       this.visuals = new ReactorArchVisuals(this.built, this.plan, dress.glow as MeshBasicNodeMaterial);
