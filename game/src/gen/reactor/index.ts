@@ -44,6 +44,7 @@ import {
   roomFrame, roomPoint,
 } from './structure';
 import {reactorIssues} from './validate';
+import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 // task reactor-expansion-20261101 (lane HOST): the generator side complexes (bunker / mines / waste) off the main shaft
 import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finishComplexes, hostGenerators, trimCoreCrop, type ComplexCarvers} from './complex/host';
 
@@ -148,6 +149,8 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   registerApertures(layout.levels);
   layout.traversal.ladders = placeLadders(layout);
   const lad = maintenanceLadders(layout, rc);
+  // task reactor-expansion-20261101 (lane CORE): the goop pool blocked, the coolant loops' collision, the turbine generator's wall run
+  const coreFin = finishCoreFloor(layout, rc.coreFloor, rc.coreAreas, layout.levelLinks.flatMap(k => [...(k.lower === CORE_LEVEL ? [k.bottom] : []), ...(k.upper === CORE_LEVEL ? [k.top] : [])]));
   layout.rails = reactorRails(layout);
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
@@ -213,6 +216,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   finishComplexes(layout, rc, cxs); // lane HOST: complex generators' cables through their entrances + layout.reactor.complexes
   planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top — AFTER every wall carve (incl. the complex entrances)
   clearEntranceLamps(layout, cxs); // (lead merge fix) …and no mounted pit lamp in a complex's doorway band either
+  layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record
 
   // --- Track2 attach, then the ONE family roll ---------------------------------------------------------------------------------
   if (ext) {

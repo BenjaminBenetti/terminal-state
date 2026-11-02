@@ -21,6 +21,9 @@ import {minesModelKeysFor} from './minesAssets'; // task reactor-expansion-20261
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
+import {reactorCoreLights} from './coreLights'; // task reactor-expansion-20261101 (lane CORE)
+import {activeCoreVisuals} from './coreVisuals';
+import {CORE_LOOK} from './coreStages';
 import {bunkerModelKeysFor} from '../../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {wasteModelKeysFor} from './wasteAssets'; // task reactor-expansion-20261101 (lane WASTE)
 
@@ -141,6 +144,12 @@ export function reactorArchQaApi(game: {world?: {reactorArch?: ReactorArch} | nu
       if (o.core !== undefined) v.setCoreGlow(o.core);
       if (o.tier) v.setTierPower(o.tier[0], o.tier[1]);
       return v.state();
+    },
+    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning). */
+    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>} = {}) => {
+      const c = activeCoreVisuals();
+      if (c && o.tune) Object.assign(c.tune, o.tune);
+      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null};
     },
   };
 }

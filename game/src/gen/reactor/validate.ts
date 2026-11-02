@@ -18,6 +18,7 @@ import {doorwayIssues} from '../doorways';
 import {extensionIssues} from '../trackExt/index';
 import type {StationLayout} from '../stationTypes';
 import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
+import {CORE_FLOOR, coreFloorIssues} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
 
@@ -114,13 +115,16 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
     const gC = levels[CORE_LEVEL].grid, c = info.core;
     let n = 0, bad = 0;
     for (let dz = -VESSEL.r + 0.5; dz <= VESSEL.r - 0.5; dz += CELL) for (let dx = -VESSEL.r + 0.5; dx <= VESSEL.r - 0.5; dx += CELL) {
-      if (Math.hypot(dx, dz) > VESSEL.r - 0.6) continue;
+      if (Math.hypot(dx, dz) > CORE_FLOOR.vesselR - 0.6) continue; // task reactor-expansion-20261101 (lane CORE): the blocked footprint (6.6 m)
       const [cx, cy] = gC.cellOf(c.x + dx, c.z + dz), i = gC.idx(cx, cy);
       n++;
-      if (!gC.blocked[i] || gC.floorOf(i) < c.y1 - 0.5) bad++;
+      // task reactor-expansion-20261101 (lane CORE): blocked, its plinth / body a riser no body steps over (no longer a 12 m drum)
+      if (!gC.blocked[i] || gC.floorOf(i) < c.y0 + 1.0) bad++;
     }
     if (!n || bad) issues.push(`vessel: ${bad} of ${n} cells not solid`);
   }
+
+  issues.push(...coreFloorIssues(layout)); // task reactor-expansion-20261101 (lane CORE): the goop pool, bridges, loops
 
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
   issues.push(...excuseDesignedRailGaps(layout, levelIssues(layout, dist, REACTOR_LEVEL_RULES))); // lane PATHS: seams + ladder openings
