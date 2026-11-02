@@ -87,6 +87,11 @@ export interface ReactorFrame {
    * station area + breach tunnel band, gen/reactor/arrival.ts). Its own stream: every other frame parameter is unchanged.
    */
   sep: number;
+  /**
+   * Task reactor-playtest-round2-20261102 (lane ARRIVAL, route variety): the south flight set (route 2) runs the other way round — its
+   * lane A tops at the FAR end (from the stair corner), so every tier's south landing swaps ends and the descent zig-zags mirrored.
+   */
+  southFlip: boolean;
 }
 
 /** Session-only QA override of the variant (`?reactorVariant=`); undefined = the seed's. */
@@ -153,8 +158,9 @@ export function reactorFrame(levelSeed: number, force?: string, salt = 0): React
     levelSeed: levelSeed >>> 0, variant: `${stairWall === 'W' ? 'west' : 'east'}-stairs-${twinName}`, stairWall, PW, PD, bases, roofY, R, u0, r0,
     gwR, gwN, gwS, lenN, lines, Lp, Pd: rng.int(14, 18), double: rng.chance(0.5), shift: rng.int(20, 26), openings: rng.int(2, 3), banks,
     craneAxis: rng.chance(0.5) ? 'x' : 'z',
-    // task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival band (its own stream; a salt re-roll re-draws it too)
-    sep: new Rng(hashString(`reactor-approach${salt ? `:${salt}` : ''}`, levelSeed >>> 0)).int(...ARRIVAL_SEP),
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival band and the south flight set's direction (their own stream; a
+    // salt re-roll re-draws them too; every other frame parameter keeps its old draw)
+    ...(() => { const r2 = new Rng(hashString(`reactor-approach${salt ? `:${salt}` : ''}`, levelSeed >>> 0)); return {sep: r2.int(...ARRIVAL_SEP), southFlip: r2.chance(0.5)}; })(),
   };
 }
 

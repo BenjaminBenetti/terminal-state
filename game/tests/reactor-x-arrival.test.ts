@@ -7,7 +7,7 @@
 import {describe, expect, it} from 'vitest';
 import {generateReactorLevel, reactorIssues} from '../src/gen/reactor/index';
 import {ARRIVAL, ARRIVAL_RECIPES} from '../src/gen/reactor/arrival';
-import {ARRIVAL_SEP} from '../src/gen/reactor/frame';
+import {ARRIVAL_SEP, reactorFrame} from '../src/gen/reactor/frame';
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../src/gen/grid';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {arrivalPose} from '../src/levels/registry';
@@ -137,15 +137,21 @@ describe('the Reactor arrival: platform -> small station area -> breach -> short
         expect(Math.max(sx, sy), `seed ${seed}: seam ${i}`).toBeGreaterThanOrEqual(3);
         expect(Math.min(sx, sy), `seed ${seed}: seam ${i} touches`).toBeGreaterThanOrEqual(0);
       }
-      // support + collision: every tunnel cell flat floor at the rim, >= 2.8 m clear, never blocked (no invisible barrier, no prop)
+      // support + collision: every tunnel cell flat floor at the rim, >= 2.8 m clear (the two ragged holes through the walls >= 2.35 m,
+      // with a jagged top edge), never blocked (no invisible barrier, no prop)
+      const inRect = (x: number, y: number, r: Rect) => x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h;
+      const holeTops = new Set<number>();
       for (const s of segs) for (let y = s.y; y < s.y + s.h; y++) for (let x = s.x; x < s.x + s.w; x++) {
         const i = g.idx(x, y);
         if (g.area[i] !== s.id) continue;
         expect(g.cells[i]).toBe(FLOOR);
         expect(g.floorOf(i)).toBe(0);
-        expect(g.ceil[i]).toBeGreaterThanOrEqual(2.8);
+        const hole = inRect(x, y, br) || inRect(x, y, rv);
+        expect(g.ceil[i]).toBeGreaterThanOrEqual(hole ? ARRIVAL.holeCeil[0] - 1e-3 : 2.8);
+        if (hole) holeTops.add(Math.round(g.ceil[i] * 100));
         expect(g.blocked[i], `seed ${seed}: blocked tunnel cell ${x},${y}`).toBe(0);
       }
+      expect(holeTops.size, `seed ${seed}: jagged hole tops`).toBeGreaterThanOrEqual(3);
       for (const p of L.props) if ((p.level ?? 0) === 0) { const [cx, cy] = g.cellOf(p.x, p.z); expect(tunnel.has(g.area[g.idx(cx, cy)]), `seed ${seed}: ${p.kind} in the tunnel`).toBe(false); }
       // no line of sight from ANY platform cell to the reveal or to the rim gallery's first row (every view into the pit crosses it)
       const open = seeThrough(L), targets: [number, number][] = [];
@@ -216,6 +222,15 @@ describe('the Reactor-wide seeded flow (lane ARRIVAL): station recipes, rock sui
     // room counts per suite vary; every themed storey shows at least two themes over the corpus
     expect(new Set(suites.map(s => s.rooms.length)).size).toBeGreaterThanOrEqual(3);
     for (let lv = 1; lv <= 5; lv++) expect(new Set(suites.filter(s => s.level === lv).map(s => s.theme)).size, `storey ${lv} themes`).toBeGreaterThanOrEqual(2);
+    // the south flight set runs both ways round over the corpus: tier 2's south landing lies at the stair corner or the far end
+    expect(new Set(SEEDS.map(s => reactorFrame(s).southFlip))).toEqual(new Set([true, false]));
+    for (const s of SEEDS) {
+      const L = gen(s), R = L.reactor!, f = reactorFrame(s);
+      const land = L.areas.find(a => a.level === 2 && a.label === 'South landing · Tier 2')!;
+      // near (the stair corner's half of the south wall) unless flipped
+      const wallX = f.stairWall === 'W' ? R.pit.bounds.x0 : R.pit.bounds.x1;
+      expect(Math.abs((land.x + land.w / 2) * CELL - wallX) < (R.pit.bounds.x1 - R.pit.bounds.x0) / 2, `seed ${s}`).toBe(!f.southFlip);
+    }
     // the complexes open off different deck kinds (landings / galleries / terraces), not always the stair landing's centre
     const fronts = new Set(SEEDS.flatMap(s => { const L = gen(s); return (L.reactor!.complexes ?? []).map(c => L.areas[c.slot!.frontArea].role); }));
     expect(fronts.size).toBeGreaterThanOrEqual(2);

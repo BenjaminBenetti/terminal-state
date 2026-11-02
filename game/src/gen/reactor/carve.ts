@@ -213,8 +213,9 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     const laneA = lv % 2 === 0;
     // route 1 (wall switchbacks): along z on the stair wall; lane A runs top at the A end (south, high z), lane B at the B end
     carveRun('stairs', lv, rectC(laneA ? 0 : LANE, PD - u1, LANE, R), 'z', laneA ? 'hi' : 'lo', laneA ? 'A' : 'B');
-    // route 2 (south wall flight set): along x; lane A' top at the near (stair-corner) end
-    const near: 'lo' | 'hi' = mirror ? 'hi' : 'lo', far: 'lo' | 'hi' = mirror ? 'lo' : 'hi';
+    // route 2 (south wall flight set): along x; lane A' top at the near (stair-corner) end (task reactor-playtest-round2-20261102, lane
+    // ARRIVAL: at the FAR end when f.southFlip — the south landings swap ends with it below)
+    const near: 'lo' | 'hi' = mirror !== f.southFlip ? 'hi' : 'lo', far: 'lo' | 'hi' = mirror !== f.southFlip ? 'lo' : 'hi';
     carveRun('bridge', lv, rectC(r0, laneA ? PD - LANE : PD - 2 * LANE, R, LANE), 'x', laneA ? near : far, laneA ? 'A' : 'B');
   }
 
@@ -239,8 +240,8 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     else deck(lv, lv === 1 ? 'landing' : 'stair-landing', 0, 0, lv === 1 ? GEN_LANDING.deep : 8, PD - u1, lv === 1 ? 'Generator landing' : 'Stair landing', 'reactor-landing', 'stair');
     // tower decks (before the bridges: a bridge cell inside a tower deck belongs to the tower)
     f.lines.forEach((l, li) => { if (l.tiers.includes(lv)) deck(lv, 'tower', l.px - 3, l.tz, 10, 10, `Lattice tower ${li + 1}`, 'reactor-tower'); });
-    // the south wall: route-2 end landing (near on even tiers, far on odd), the continuous outer gallery
-    if (even) deck(lv, 'stair-landing', GEN_LANDING.deep, PD - 2 * LANE - gwS, r0 - GEN_LANDING.deep, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
+    // the south wall: route-2 end landing (near on even tiers, far on odd; swapped when f.southFlip), the continuous outer gallery
+    if (even !== f.southFlip) deck(lv, 'stair-landing', GEN_LANDING.deep, PD - 2 * LANE - gwS, r0 - GEN_LANDING.deep, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
     else deck(lv, 'stair-landing', r1, PD - 2 * LANE - gwS, PW - 6 - r1, 2 * LANE + gwS, 'South landing', 'reactor-landing', 'S');
     deck(lv, 'gallery', 0, PD - 2 * LANE - gwS, PW, gwS, 'South gallery', 'reactor-gallery', 'S');
     // organ terrace (ladder deck)

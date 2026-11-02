@@ -39,6 +39,8 @@ export const ARRIVAL = {
   seg: [5, 8] as [number, number],
   boreCeil: [2.9, 3.5] as [number, number],
   lateral: [12, 26] as [number, number],
+  /** Clear height (m) at the bottom of the breach / reveal holes' jagged top edges. */
+  holeCeil: [2.35, 2.6] as [number, number],
   /** Accepted tunnel centreline length (m): "a few tens of metres at most". */
   lengthM: [10, 30] as [number, number],
   /** The reveal hole stays this many cells off the pit's corners. */
@@ -384,6 +386,11 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   path.unshift(toCanvas(s.wallPx + (s.dir > 0 ? 0 : 1), (breachRows.lo + breachRows.hi) / 2));
   const breach = rectC(s.wallPx, breachRows.lo, 1, w0);
   const reveal = rectC(lastR.px, -1, lastR.w, 1);
+  // ragged holes, not doorways: the cells through the two walls get a jagged, lower top edge (per-cell ceilings; >= 2.35 m clear)
+  const g = inp.k.grid(0);
+  for (const [r, lo, span] of [[breach, ARRIVAL.holeCeil[0], 0.35], [reveal, ARRIVAL.holeCeil[1], 0.45]] as const) {
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) g.ceil[g.idx(x, y)] = r2(lo + rng.next() * span);
+  }
   return {segs, breach, reveal, path};
 
   function prevRows(a: Area): {lo: number; hi: number} { return {lo: a.y - inp.PZ0, hi: a.y - inp.PZ0 + a.h}; }
