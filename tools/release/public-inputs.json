@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 33206,
-      "sha256": "ac2f9880a56f281205e0f6f1c258aa740fa8fc29b219585d24013c5e0d7305ae"
+      "bytes": 33358,
+      "sha256": "e75146daa9ddbb7dfa50c1359f634604453901b9709885149bf7c286481bc796"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1725,8 +1725,8 @@
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
-      "bytes": 31318,
-      "sha256": "e917ec8203fd6b0e0570fae6f452e966d5c315d14d47c6d072bb6561055b3d02"
+      "bytes": 37727,
+      "sha256": "7156459985fa01ef6d5e06e417b6ed2ed295e0fb12c96782bc54e38669fbdb0b"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -3244,14 +3244,19 @@
       "sha256": "1106d394775b16e04baad04d55d12bbe97b3407fd5391a208c25bb8239940bae"
     },
     {
+      "path": "assets/models/player-train-glass.glb",
+      "bytes": 355344,
+      "sha256": "9112a6726ce09ff87b75d10bed4e3558f5174df04d6909ebd377c412e61234fb"
+    },
+    {
       "path": "assets/models/player-train-lockbox.glb",
       "bytes": 546116,
       "sha256": "adac19d46112b49cd046cbf320877536508e8299675a8f17bee6cdc1d3804345"
     },
     {
       "path": "assets/models/player-train-shell.glb",
-      "bytes": 2542524,
-      "sha256": "def2107d0b66915621fe09929dbe7ab6aecd0e21742ddd39cf303bbdb4da4fed"
+      "bytes": 2582188,
+      "sha256": "61d9a2ab2e94f0f1b6ff69b9f9bc279449ff18dfaa2f90f5318d544c8e315704"
     },
     {
       "path": "assets/models/reactor-air-filtration-unit.glb",
