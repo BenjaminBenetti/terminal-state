@@ -168,7 +168,7 @@ export class ReactorAir implements DepthGasSource {
   constructor(readonly info: ReactorInfo, readonly rect: DepthRect, readonly state: ReactorRunState) {
     const open = info.pit.roofY > info.pit.rimY + 2; // (lane GASLIGHT)
     this.outdoor = open ? reactorOutdoorGas(info.pit.roofY, rect) : null;
-    this.shafts = open ? pitShaftSpec(info.pit.bounds, info.pit.roofY) : null;
+    this.shafts = open ? pitShaftSpec(info) : null; // (task reactor-submit-roof-fog-20261102, lane ROOF: through the roof opening only)
     const genOf = new Map<number, number>();
     for (const g of info.generators) if (!genOf.has(g.zone)) genOf.set(g.zone, g.id);
     const rim = info.pit.rimY;

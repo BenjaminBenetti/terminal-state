@@ -651,7 +651,10 @@ export class VolumetricAtmosphere {
     else this.u.depthOut.value.set(0, 1, 0, 1);
   }
 
-  /** Task reactor-expansion-20261101 (lane GASLIGHT): the pit's light-shaft uniforms (null: off). */
+  /**
+   * Task reactor-expansion-20261101 (lane GASLIGHT): the pit's light-shaft uniforms (null: off). Task reactor-submit-roof-fog-20261102
+   * (lane ROOF): through the roof's single opening disc (shaftHole), no beam stripes.
+   */
   private setShafts(s: ShaftSpec | null): void {
     this.depthShafts = s;
     const u = this.u;
@@ -659,9 +662,10 @@ export class VolumetricAtmosphere {
     const d = PIT_SHAFTS.dir, l = Math.hypot(d[0], d[1], d[2]) || 1;
     u.shaftDir.value.set(d[0] / l, d[1] / l, d[2] / l, 1);
     u.shaftRect.value.set(s.rect.x0, s.rect.z0, s.rect.x1, s.rect.z1);
-    u.shaftA.value.set(s.roofY, s.pitch, s.beam0, this.shaftLook.fade);
-    u.shaftB.value.set(s.beamsAlong === 'x' ? 1 : 0, PIT_SHAFTS.beamHalf, PIT_SHAFTS.beamSoft, PIT_SHAFTS.noiseScale);
+    u.shaftA.value.set(s.roofY, 0, 0, this.shaftLook.fade);
+    u.shaftB.value.set(0, 0, 0, PIT_SHAFTS.noiseScale);
     u.shaftC.value.set(PIT_SHAFTS.cover, PIT_SHAFTS.coverSoft, 0, 0);
+    u.shaftHole.value.set(s.hole.x, s.hole.z, s.hole.r, Math.min(PIT_SHAFTS.rimSoft, s.hole.r));
   }
 
   /**

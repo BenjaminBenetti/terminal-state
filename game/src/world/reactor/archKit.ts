@@ -27,6 +27,7 @@ import {planReactorCore} from './coreHero'; // task reactor-expansion-20261101 (
 import {GENERATOR_PANEL, generatorPanelPose} from './controlsMount'; // task reactor-expansion-20261101 (lane PATHS): the cable riser
 import {planGeneratorPanel, planMountedSite} from './controlsKit'; // task reactor-expansion-20261101 (lane CONTROLS): mounted controls
 import {generatorPlacement} from './controlsMount';
+import {planPitRoof} from './roofKit'; // task reactor-submit-roof-fog-20261102 (lane ROOF): the solid roof's steel + the opening's curb
 
 /** Unit geometries of the kit (archMeshes.ts kitGeometry). */
 export type KitGeo = 'box' | 'ibeam' | 'cyl' | 'tube' | 'stripe' | 'plane' | 'bulb' | 'cage' | 'blade' | 'wheel';
@@ -784,19 +785,13 @@ function planCrane(plan: KitPlan, c: ReactorCrane): void {
   plan.stats.craneParts += n;
 }
 
-/** Roof girders across the top of the pit (under roofY) — the cathedral's ceiling structure. */
+/**
+ * The cathedral's roof structure under the SOLID pit roof slab (task reactor-submit-roof-fog-20261102, lane ROOF — was an open row of
+ * girders against the whole open top): girders + secondary beams trimmed round the single opening over the core, and its curb ring
+ * (world/reactor/roofKit.ts planPitRoof).
+ */
 function planRoof(plan: KitPlan): void {
-  const {pit} = plan.info, b = pit.bounds;
-  if (!(pit.roofY > pit.rimY + 1.5)) return;
-  const y = pit.roofY - 0.55;
-  const alongX = b.x1 - b.x0 <= b.z1 - b.z0; // span the short way
-  const L0 = alongX ? b.z0 : b.x0, L1 = alongX ? b.z1 : b.x1;
-  const n = Math.max(1, Math.round((L1 - L0) / 6));
-  for (let k = 1; k < n; k++) {
-    const s = L0 + ((L1 - L0) * k) / n;
-    const a = alongX ? {x: b.x0, y, z: s} : {x: s, y, z: b.z0}, c = alongX ? {x: b.x1, y, z: s} : {x: s, y, z: b.z1};
-    if (plan.member('ibeam', 'steelDark', a, c, 0.4, 1.0)) plan.stats.roofBeams++;
-  }
+  planPitRoof(plan);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------

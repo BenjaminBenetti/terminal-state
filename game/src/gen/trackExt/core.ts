@@ -55,15 +55,21 @@ export function reframe(layout: StationLayout, ox: number, oy: number, w: number
   const levels: Level[] = (layout.levels ?? []).map(L => {
     const out: Level = {...L, grid: gridOf(L.grid)};
     if (L.rails) out.rails = L.rails.map(rail);
-    if (L.sky?.tops) {
-      const tops = new Float32Array(w * h), src = L.sky.tops, H = layout.grid.h;
-      for (let y = 0; y < h; y++) {
-        const sy = y + oy;
-        if (sy < 0 || sy >= H) continue;
-        const sx0 = Math.max(0, ox), sx1 = Math.min(W, ox + w);
-        if (sx1 > sx0) tops.set(src.subarray(sy * W + sx0, sy * W + sx1), y * w + (sx0 - ox));
-      }
-      out.sky = {...L.sky, tops};
+    // (task reactor-submit-roof-fog-20261102, lane ROOF: + the roof opening mask, re-windowed the same way)
+    if (L.sky?.tops || L.sky?.open) {
+      const H = layout.grid.h;
+      const win = <A extends Float32Array | Uint8Array>(src: A, dst: A): A => {
+        for (let y = 0; y < h; y++) {
+          const sy = y + oy;
+          if (sy < 0 || sy >= H) continue;
+          const sx0 = Math.max(0, ox), sx1 = Math.min(W, ox + w);
+          if (sx1 > sx0) dst.set(src.subarray(sy * W + sx0, sy * W + sx1) as never, y * w + (sx0 - ox));
+        }
+        return dst;
+      };
+      out.sky = {...L.sky!};
+      if (L.sky!.tops) out.sky.tops = win(L.sky!.tops, new Float32Array(w * h));
+      if (L.sky!.open) out.sky.open = win(L.sky!.open, new Uint8Array(w * h));
     }
     return out;
   });
