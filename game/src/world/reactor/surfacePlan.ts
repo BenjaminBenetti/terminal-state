@@ -27,25 +27,27 @@ export const SURFACE_CITY = {
   /** Block size range (seeded per block along each axis), the cross streets' width, the pavement strip on each street edge. */
   block: [34, 46] as readonly [number, number], street: 12, pavement: 3,
   /** Blocks whose nearest point lies within `radius` of the aperture are built; every footprint stays within `maxR` (draw distance). */
-  radius: 132, maxR: 150,
-  /** The city ground disc's radius (beyond every building; inside the Reactor's 230 m far plane from anywhere on the surface). */
-  ground: 168,
+  radius: 148, maxR: 175,
+  /** The city ground disc's radius (beyond every building; inside the outdoor far plane, surface.ts SURFACE_RT.far, from anywhere on the plaza). */
+  ground: 200,
   /** Building setback from the block edge / the gap between neighbours (seeded ranges). */
   setback: [0.8, 2.6] as readonly [number, number], gap: [0.6, 3.6] as readonly [number, number],
   /** A second (back) row needs this much block depth left behind the front row. */
   backRow: 13,
+  /** The inner blocks' front row (shops, apartments facing the yard) takes at most this depth: the taller back row stands behind it. */
+  frontDepth: 24,
   /** Street clutter: cars / buses / rubble piles on the streets of rings <= clutterRing. */
   clutterRing: 2, cars: 14, buses: 3, streetRubble: 12,
   /** Rubble against the plaza parapet: about one heap per this many metres of edge; the parapet's thickness (surfaceCity.ts). */
-  edgeRubbleEvery: 10, parapetT: 0.32,
+  edgeRubbleEvery: 10, edgeRubbleReserve: 12, parapetT: 0.32,
 } as const;
 
 /** Role mix per ring (the rest of the weight = a collapsed lot). Ring 3+ uses the last row. */
 const RING_MIX: readonly Partial<Record<SurfaceRole | 'collapsed', number>>[] = [
   {},
-  {lowrise: 0.42, midrise: 0.34, tank: 0.05, collapsed: 0.19},
-  {midrise: 0.44, highrise: 0.26, lowrise: 0.1, collapsed: 0.2},
-  {highrise: 0.52, midrise: 0.34, collapsed: 0.14},
+  {lowrise: 0.45, midrise: 0.36, tank: 0.06, collapsed: 0.13},
+  {midrise: 0.46, highrise: 0.3, lowrise: 0.12, collapsed: 0.12},
+  {highrise: 0.56, midrise: 0.34, collapsed: 0.1},
 ];
 
 export type CityKind = 'building' | 'rubble' | 'vehicle' | 'tank';
@@ -82,7 +84,7 @@ export interface SurfaceCityPlan {
   blocks: CityBlock[];
   placements: CityPlacement[];
   groundR: number;
-  stats: {buildings: number; rubble: number; vehicles: number; tanks: number; byEntry: Record<string, number>; collapsedLots: number; maxDist: number};
+  stats: {buildings: number; rubble: number; vehicles: number; tanks: number; byEntry: Record<string, number>; collapsedLots: number; maxDist: number; /** Why lot picks did not fit (fit: the frontage / depth; block / yard / reach / overlap: the jittered footprint). */ rejects: Record<string, number>};
 }
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -170,7 +172,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
     blocks.push({rect, ring: Math.max(Math.abs(i), Math.abs(j)), i, j, collapsed: 0});
   }));
   const placements: CityPlacement[] = [];
-  const used = new Map<string, number>();
+  const used = new Map<string, number>(), rejects: Record<string, number> = {};
   const room = (e: SurfaceKitEntry) => (used.get(e.id) ?? 0) < e.max;
   const inReach = (p: Pick<CityPlacement, 'x' | 'z' | 'yaw' | 'hw' | 'hd'>) => footprintCorners(p).every(([x, z]) => Math.hypot(x - cx, z - cz) <= C.maxR);
   const pick = (list: readonly SurfaceKitEntry[], ring: number): SurfaceKitEntry | null => {
@@ -181,7 +183,8 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
     return ok[ok.length - 1] ?? null;
   };
   const push = (p: CityPlacement) => { placements.push(p); used.set(p.entry, (used.get(p.entry) ?? 0) + 1); };
-  const rubbleEntry = () => kit.rubble.find(room) ?? null;
+  // (the parapet's rubble keeps a reserve of the rubble cap: the lots and the streets stop short of it)
+  const rubbleEntry = (edge = false) => kit.rubble.find(e => (used.get(e.id) ?? 0) < e.max - (edge ? 0 : C.edgeRubbleReserve)) ?? null;
   /** A rubble field over a lot (local frame: centre, along / across axes). */
   const collapsedLot = (bi: number, ring: number, ox: number, oz: number, ux: number, uz: number, w: number, d: number) => {
     blocks[bi].collapsed++;
@@ -191,14 +194,14 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       if (!e) return;
       const s = between(Math.max(e.scale[0], 1.3), e.scale[1]);
       const hw = (e.dims[0] * s) / 2, hd = (e.dims[2] * s) / 2;
-      // place inside the lot (its own footprint fits: scale down to the lot)
-      const fit = Math.min(1, (w / 2) / Math.max(hw, hd), (d / 2) / Math.max(hw, hd));
+      // place inside the lot at any yaw (its footprint's circumradius fits: scale down to the lot)
+      const R0 = Math.hypot(hw, hd), fit = Math.min(1, (w / 2) / R0, (d / 2) / R0);
       const ss = s * fit;
       if (ss < e.scale[0]) continue;
-      const r = Math.max(hw, hd) * fit, au = (rnd() - 0.5) * Math.max(0, w - 2 * r), av = (rnd() - 0.5) * Math.max(0, d - 2 * r);
+      const r = R0 * fit, au = (rnd() - 0.5) * Math.max(0, w - 2 * r), av = (rnd() - 0.5) * Math.max(0, d - 2 * r);
       const p: CityPlacement = {entry: e.id, role: 'rubble', kind: 'rubble', x: r3(ox + ux * au - uz * av), z: r3(oz + uz * au + ux * av), y, yaw: r3(rnd() * Math.PI * 2),
         scale: r3(ss), hw: r3((e.dims[0] * ss) / 2), hd: r3((e.dims[2] * ss) / 2), h: r3(e.dims[1] * ss), ring, tone: r3(rnd()), block: bi};
-      if (placements.some(q => q.block === bi && footprintsOverlap(p, q)) || !inReach(p)) continue;
+      if (!footprintInside(p, blocks[bi].rect) || placements.some(q => q.block === bi && footprintsOverlap(p, q)) || !inReach(p)) continue;
       push(p);
     }
   };
@@ -217,33 +220,39 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       let rr = rnd() * weights.reduce((s, w) => s + w, 0), role: SurfaceRole | 'collapsed' = 'collapsed';
       for (let k = 0; k < roles.length; k++) if ((rr -= weights[k]) <= 0) { role = roles[k][0]; break; }
       const sb = between(C.setback[0], C.setback[1]);
-      const e = role === 'collapsed' ? null : pick(kit[role as SurfaceRole], ring);
-      let placed = false;
-      if (e) {
-        let s = between(e.scale[0], e.scale[1]);
-        const isTank = e.role === 'tank';
-        const fw = (k: number) => e.dims[0] * k + (isTank ? 1.5 : 0), fd = (k: number) => e.dims[2] * k + (isTank ? 1.5 : 0);
-        // shrink inside the band to fit the depth / the frontage left
-        const kMax = Math.min((D - sb - 0.6) / fd(1), (L - u - 0.3) / fw(1));
-        if (kMax >= e.scale[0]) {
-          s = Math.min(s, kMax);
-          const w = fw(s), d = fd(s);
-          const au = u + w / 2, av = sb + d / 2;
-          const x = ox + ux * au + nx * av, z = oz + uz * au + nz * av;
-          // front (model +Z * front) toward the street (-n): rotation.y = atan2(dir.x, dir.z)
-          const fx = -nx * e.front, fz = -nz * e.front;
-          const yaw = Math.atan2(fx, fz) + (isTank ? rnd() * Math.PI * 2 : (rnd() - 0.5) * 0.04);
-          const p: CityPlacement = {entry: e.id, role: e.role, kind: isTank ? 'tank' : 'building', x: r3(x), z: r3(z), y, yaw: r3(yaw), scale: r3(s),
-            hw: r3((e.dims[0] * s) / 2), hd: r3((e.dims[2] * s) / 2), h: r3(e.dims[1] * s + (e.stand ?? 0)), ring, tone: r3(rnd()), block: bi};
-          // the jittered footprint must stay in its block, off the yard and inside the draw distance
-          if (footprintInside(p, blk) && !footprintInRect(p, plaza, 0.5) && inReach(p) && !placements.some(q => q.block === bi && footprintsOverlap(p, q))) {
-            push(p);
-            u += w + between(C.gap[0], C.gap[1]);
-            deepest = Math.max(deepest, sb + d);
-            placed = true;
-          }
-        }
-      }
+      /** Place entry `e` at the cursor (scaled inside its band to fit the depth / the frontage left); false = it does not fit. */
+      const tryPlace = (e: SurfaceKitEntry | null): boolean => {
+        if (!e) return false;
+        const isTank = e.role === 'tank', pad = isTank ? 1.5 : 0;
+        // front to the street; a high-rise that only fits turned stands with its narrow end on the street (front along it)
+        const fit = (turn: boolean) => {
+          const fw = (k: number) => e.dims[turn ? 2 : 0] * k + pad, fd = (k: number) => e.dims[turn ? 0 : 2] * k + pad;
+          return {fw, fd, kMax: Math.min((D - sb - 0.6) / fd(1), (L - u - 0.3) / fw(1)), turn};
+        };
+        let f = fit(false);
+        if (f.kMax < e.scale[0] && e.role === 'highrise') f = fit(true);
+        if (f.kMax < e.scale[0]) { rejects['fit:' + e.role] = (rejects['fit:' + e.role] ?? 0) + 1; return false; }
+        const s = Math.min(between(e.scale[0], e.scale[1]), f.kMax);
+        const w = f.fw(s), d = f.fd(s);
+        const au = u + w / 2, av = sb + d / 2;
+        const x = ox + ux * au + nx * av, z = oz + uz * au + nz * av;
+        // front (model +Z * front) toward the street (-n): rotation.y = atan2(dir.x, dir.z); turned: a quarter turn more
+        const fx = -nx * e.front, fz = -nz * e.front;
+        const yaw = Math.atan2(fx, fz) + (f.turn ? Math.PI / 2 : 0) + (isTank ? rnd() * Math.PI * 2 : (rnd() - 0.5) * 0.04);
+        const p: CityPlacement = {entry: e.id, role: e.role, kind: isTank ? 'tank' : 'building', x: r3(x), z: r3(z), y, yaw: r3(yaw), scale: r3(s),
+          hw: r3((e.dims[0] * s) / 2), hd: r3((e.dims[2] * s) / 2), h: r3(e.dims[1] * s + (e.stand ?? 0)), ring, tone: r3(rnd()), block: bi};
+        // the jittered footprint must stay in its block, off the yard and inside the draw distance
+        const why = !footprintInside(p, blk) ? 'block' : footprintInRect(p, plaza, 0.5) ? 'yard' : !inReach(p) ? 'reach' : placements.some(q => q.block === bi && footprintsOverlap(p, q)) ? 'overlap' : null;
+        if (why) { rejects[why + ':' + e.role] = (rejects[why + ':' + e.role] ?? 0) + 1; return false; }
+        push(p);
+        u += w + between(C.gap[0], C.gap[1]);
+        deepest = Math.max(deepest, sb + d);
+        return true;
+      };
+      // the drawn role, else a smaller one that fits what is left (a mid-rise, a shop row), else a collapsed lot
+      rejects['pick:' + role] = (rejects['pick:' + role] ?? 0) + 1;
+      let placed = role !== 'collapsed' && tryPlace(pick(kit[role as SurfaceRole], ring));
+      if (!placed && role !== 'collapsed') for (const alt of ['midrise', 'lowrise'] as SurfaceRole[]) if (!placed && alt !== role) placed = tryPlace(pick(kit[alt], Math.min(ring, 3)));
       if (!placed) {
         // a collapsed lot (seeded pick, or nothing fits here)
         const w = Math.min(L - u, between(9, 17)), d = Math.min(D - 1, between(9, 18));
@@ -263,11 +272,11 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
     if (alongZ) {
       // the front side is the x edge nearer the centre; rows run along z; n points into the block (away from the yard)
       const s = Math.sign(b.i) || 1, x0 = s > 0 ? r.x0 : r.x1;
-      const d1 = row(bi, b.ring, x0, r.z0, 0, 1, s, 0, H, W, 1);
+      const d1 = row(bi, b.ring, x0, r.z0, 0, 1, s, 0, H, b.ring === 1 ? Math.min(W, C.frontDepth) : W, 1);
       if (W - d1 >= C.backRow) row(bi, b.ring + 1, s > 0 ? r.x1 : r.x0, r.z0, 0, 1, -s, 0, H, W - d1 - 0.8, 1.6);
     } else {
       const s = Math.sign(b.j) || 1, z0 = s > 0 ? r.z0 : r.z1;
-      const d1 = row(bi, b.ring, r.x0, z0, 1, 0, 0, s, W, H, 1);
+      const d1 = row(bi, b.ring, r.x0, z0, 1, 0, 0, s, W, b.ring === 1 ? Math.min(H, C.frontDepth) : H, 1);
       if (H - d1 >= C.backRow) row(bi, b.ring + 1, r.x0, s > 0 ? r.z1 : r.z0, 1, 0, 0, -s, W, H - d1 - 0.8, 1.6);
     }
   });
@@ -278,7 +287,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
   ];
   const clutter = (role: 'car' | 'bus' | 'rubble', n: number) => {
     for (let k = 0, tries = 0; k < n && tries < n * 40 && streets.length; tries++) {
-      const e = pick(kit[role], 0);
+      const e = role === 'rubble' ? rubbleEntry() : pick(kit[role], 0);
       if (!e) return;
       const st = streets[Math.floor(rnd() * streets.length)];
       const wdt = st.a1 - st.a0, s = between(e.scale[0], role === 'rubble' ? Math.min(e.scale[1], 1.5) : e.scale[1]);
@@ -303,10 +312,11 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
     const L = Math.hypot(ed.x1 - ed.x0, ed.z1 - ed.z0);
     if (L < 5) continue;
     for (let m = 0, k = Math.floor(L / C.edgeRubbleEvery + rnd()); m < k; m++) {
-      const e = rubbleEntry();
+      const e = rubbleEntry(true);
       if (!e) break;
-      const s = between(0.5, 1.05), hw = (e.dims[0] * s) / 2, hd = (e.dims[2] * s) / 2, rr = Math.max(hw, hd);
-      const t = between(0.12, 0.88), off = C.parapetT + rr * between(0.55, 0.95);
+      const s = between(0.5, 1.05), hw = (e.dims[0] * s) / 2, hd = (e.dims[2] * s) / 2, rr = Math.hypot(hw, hd);
+      // against the parapet's outer face at any yaw: its circumradius past the wall (never back over the edge onto the deck)
+      const t = between(0.12, 0.88), off = C.parapetT + Math.hypot(hw, hd) + between(0.06, 0.6);
       const p: CityPlacement = {entry: e.id, role: 'rubble', kind: 'rubble', x: r3(ed.x0 + (ed.x1 - ed.x0) * t + ed.nx * off), z: r3(ed.z0 + (ed.z1 - ed.z0) * t + ed.nz * off), y,
         yaw: r3(rnd() * Math.PI * 2), scale: r3(s), hw: r3(hw), hd: r3(hd), h: r3(e.dims[1] * s), ring: 0, tone: r3(rnd()), block: -1, edge: true};
       if (site.walk.some(w => footprintInRect(p, w, 0.05)) || Math.hypot(p.x - cx, p.z - cz) < site.hole.keepR + rr || placements.some(q => footprintsOverlap(p, q, -0.2))) continue;
@@ -325,7 +335,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
     stats: {
       buildings: placements.filter(p => p.kind === 'building').length, rubble: placements.filter(p => p.kind === 'rubble').length,
       vehicles: placements.filter(p => p.kind === 'vehicle').length, tanks: placements.filter(p => p.kind === 'tank').length,
-      byEntry, collapsedLots: blocks.reduce((s, b) => s + b.collapsed, 0), maxDist: r3(maxDist),
+      byEntry, collapsedLots: blocks.reduce((s, b) => s + b.collapsed, 0), maxDist: r3(maxDist), rejects,
     },
   };
 }

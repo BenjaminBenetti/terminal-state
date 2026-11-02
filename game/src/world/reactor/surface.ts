@@ -38,6 +38,8 @@ export const SURFACE_RT = {
   fogS: 1.2,
   /** The beam meets the cloud deck this high over the deck (the outdoor sky's glow point; the beam itself ends at BEAM.aboveRoof). */
   cloudBase: BEAM.aboveRoof - 10,
+  /** Outside, the camera far plane rises to this (the city reaches SURFACE_CITY.maxR 175 m round the opening, the sky dome 320 m round the eye; the pit keeps archInstall.ts REACTOR_FOG.far 230). */
+  far: 360,
 } as const;
 
 /** What the runtime needs from Game (structural: tests drive it with a fake host). */
@@ -75,6 +77,7 @@ export class ReactorSurface {
     return {clear: s?.clear ?? 0, beam: s?.beam ?? 0};
   };
   private fogKeep: {density: number; color: THREE.Color} | null = null;
+  private farKeep: number | null = null;
   private gust = 0;
   private wetInit = false;
   private readonly eye = new THREE.Vector3();
@@ -111,6 +114,7 @@ export class ReactorSurface {
 
   teardown(): void {
     this.restoreFog();
+    this.applyFar(false);
     if (this.view) disposeSurfaceView(this.view);
     this.view = null;
     this.site = null;
@@ -153,6 +157,7 @@ export class ReactorSurface {
       if (dome && clear > 0) dome.visible = false;
     }
     this.applyFog(outside ? clear : 0, dt);
+    this.applyFar(outside);
     const s = this.shown;
     s.outside = outside; s.open = open; s.clear = clear; s.rain = rain; s.wet = SURF_U.wet.value as number; s.column = colOn; s.near = nearOn; s.beam = beam;
     ambience.outside = outside; ambience.open = open; ambience.rain = rain;
@@ -169,6 +174,19 @@ export class ReactorSurface {
     fog.density += (wantD - fog.density) * a;
     fog.color.lerp(new THREE.Color().copy(this.fogKeep.color).lerp(new THREE.Color(H[0], H[1], H[2]), k), a);
     this.shown.fogged = true;
+  }
+
+  /**
+   * Outside: the far plane rises to SURFACE_RT.far (depth precision near the eye is set by the near plane: unchanged); back in the pit
+   * it returns to the value it had — only if it is still ours (another section hook may already have restored its own on teardown).
+   */
+  private applyFar(outside: boolean): void {
+    const cam = this.host.camera;
+    if (outside && this.farKeep === null && cam.far < SURFACE_RT.far) { this.farKeep = cam.far; cam.far = SURFACE_RT.far; cam.updateProjectionMatrix(); }
+    else if (!outside && this.farKeep !== null) {
+      if (cam.far === SURFACE_RT.far) { cam.far = this.farKeep; cam.updateProjectionMatrix(); }
+      this.farKeep = null;
+    }
   }
 
   private restoreFog(): void {

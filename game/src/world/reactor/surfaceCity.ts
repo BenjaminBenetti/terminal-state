@@ -16,8 +16,8 @@ import type {SurfaceSite} from './surfaceSite';
 import {SURFACE_RAIN, RainLayer, buildRainFloor, rainFloorTexture, type RainFloorMap} from './surfaceRain';
 import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial, surfaceWallMaterial} from './surfaceLook';
 
-/** Sky dome radius (follows the eye; inside the Reactor's 230 m far plane, beyond every building from anywhere on the surface). */
-export const SURFACE_SKY = {radius: 205} as const;
+/** Sky dome radius (follows the eye; inside the outdoor far plane surface.ts SURFACE_RT.far 360, beyond every building and the ground disc). */
+export const SURFACE_SKY = {radius: 320} as const;
 /** The ground sits this far under the walk height (lane ENDING's floor covers it on the walk area); the film this far above. */
 export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT} as const;
 
