@@ -36,6 +36,37 @@ outside Git.
   bridge tiers, the tower count and position, and the room order. B's identity (crane, organ wall, generator landings, bridges +
   towers, vessel) is always there.
 
+## Side complexes off the shaft (task reactor-expansion-20261101)
+Each zone's generator lives in a substantial side complex: zone 0 in the **bunker** (tier 1), zone 1 in the **old mines** (tier 2)
+and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/reactor/complex/host.ts`; the contract is
+`complex/types.ts`; the carvers are `complex/{bunker,mines,waste}.ts`.
+- **Slot**: an 80 × 64 cell region (40 × 32 m) of rock behind the stair, organ or south pit wall. The wall is a seeded permutation
+  with a fallback; never the north wall under the station. The region's pit-side row is the pit wall. A carver keeps one cell of
+  wall inside every edge. When planned, the region is solid rock on every storey. Rooms of the same storey avoid it. Rooms of other
+  storeys may lie above or below it: `ceilMax` (the deck above minus a slab) keeps the storeys apart.
+- **Entrance**: a 6-cell (3 m) span of that wall row, in front of flat cells of one deck area (`frontArea`). A landing comes first;
+  on the stair wall this is the old generator landing, now the entrance landing. The carver carves the door from that deck, at
+  least 2.6 m clear.
+- **Order in `generateReactorLevel`**:
+  1. slots (in `carveReactor`, before its rooms);
+  2. carvers (shared Kit, canvas cells, before Track2 and the crop);
+  3. the crop at origin (0, 0), so canvas cells are grid cells;
+  4. the complex generator: an anchored collision prop on the carver's foot, with the panel on the foot edge facing the use point;
+  5. the station dresser (it dresses complex rooms by type and purpose);
+  6. each carve's `dress(layout, rng, {ox: 0, oy: 0})`. Props and lights placed here are **not** lifted, so give them an absolute
+     `y` and `level`;
+  7. populations: the storey's normal enemy and supply runs, keeping off the use point and the entrance;
+  8. `applyLighting`; then the generator room is lit steadily;
+  9. the cable, running from the panel through the complex and the entrance to the zone's fans; then `layout.reactor.complexes`.
+- **Null carver**: the zone keeps its landing generator, and the level stays valid.
+- **Validation** (`complexIssues`, part of `reactorIssues`):
+  - every carved cell lies inside the region;
+  - the entrance door is at least 2 m wide and 2.6 m clear;
+  - the entrance and the generator use point are reachable by stairs only;
+  - the complex does not overlap the pit, the station, other areas or Track2;
+  - the generator's skid stands on complex floor, with its panel in reach;
+  - the complex is substantial: at least 6 areas and at least 500 m² walkable.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.

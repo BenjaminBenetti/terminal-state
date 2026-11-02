@@ -40,6 +40,10 @@
 // - count / take / find / holds / hasRoomFor / allStacks / snapshots include it; consumeAt never touches it.
 // - SNAPSHOT v3 (`melee` + `meleeSelected`). loadJSON migrates v1 / v2 snapshots: see migrateLegacyMelee() (exactly one carried melee
 //   weapon — quick slots first, then pockets — moves into the empty melee slot; never the worn backpack's contents).
+//
+// Task train-lockbox-windows-20261101-232156 (lane BOX): STORE transfers with the train's 40-slot Lockbox (run/trainLockbox.ts) —
+// storeMove / storeQuick / storeWornBag on a slot list the inventory does not own (StoreRef {bar: 'store', index}), through the same
+// move engine. The store takes every item kind (a backpack too, whole with its contents); a backpack leaves it only onto your back.
 
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
@@ -63,6 +67,10 @@ export interface SlotRef { bar: Bar; index: number }
 /** Iteration 16 (GEAR): a slot of a (grounded, open) backpack's own contents. */
 export interface BagRef { bar: 'bag'; index: number }
 export type AnyRef = SlotRef | BagRef;
+/** Task train-lockbox-windows-20261101-232156 (lane BOX): a slot of the train's Lockbox (a slot list outside the inventory). */
+export interface StoreRef { bar: 'store'; index: number }
+/** A player slot or a Lockbox slot (the Lockbox transfer view). */
+export type StoreSideRef = SlotRef | StoreRef;
 
 export const HOTBAR_SIZE = 5;
 export const PACK_SIZE = 12;
@@ -115,6 +123,8 @@ export interface InventoryJSON {
 const NO_SLOTS: (ItemStack | null)[] = Object.freeze([]) as unknown as (ItemStack | null)[];
 const CHEST = GEAR_SLOTS.indexOf('chest');
 const BACK = GEAR_SLOTS.indexOf('backpack');
+/** Lane BOX: a backpack dragged from the Lockbox to a pocket / quick slot. */
+const STORE_BAG_TEXT = 'A backpack does not go in your pockets — click it in the Lockbox to wear it (your back slot must be free).';
 
 /** Deep plain copy of a stack (bag contents included). */
 export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
@@ -148,7 +158,7 @@ export function stacksIn(s: ItemStack | null | undefined): ItemStack[] {
 /** Iteration 16: each inventory instance starts on its own version range, so a swapped-in restored one always redraws. */
 let versionEpoch = 0;
 
-interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag' | 'throw' | 'melee'; list: (ItemStack | null)[]; index: number }
+interface End { kind: 'hotbar' | 'pack' | 'gear' | 'bag' | 'throw' | 'melee' | 'store'; list: (ItemStack | null)[]; index: number }
 
 export class Inventory {
   readonly hotbar: (ItemStack | null)[] = new Array(HOTBAR_SIZE).fill(null);
@@ -607,18 +617,107 @@ export class Inventory {
     return null;
   }
 
+  // --- Task train-lockbox-windows-20261101-232156 (lane BOX): Lockbox transfers (called only through the open Lockbox view) -------
+
+  /**
+   * Drag / drop between the quick slots / pockets / grenade slot / melee slot and a Lockbox slot list (or within either): move,
+   * merge, swap or split under the usual slot rules. Worn gear is out of reach here; a backpack in the Lockbox only leaves onto
+   * your back (storeQuick), never into a pocket.
+   */
+  storeMove(slots: (ItemStack | null)[], from: StoreSideRef, to: StoreSideRef, count?: number): MoveResult {
+    const g = this.storeGuard(slots, from, to);
+    if (g) return g;
+    const a = this.end(from, undefined, slots), b = this.end(to, undefined, slots);
+    if (!a || !b) return this.refuse('bad-ref', 'No such slot.');
+    const r = this.moveEnds(a, b, count);
+    if (r === 'refused' && this.refusal?.code === 'bag-not-pocketable') this.refusal = {code: 'bag-not-pocketable', text: STORE_BAG_TEXT};
+    return r;
+  }
+
+  /**
+   * Click-to-transfer: a Lockbox stack goes to the quick slots / pockets (merging; what does not fit stays in the Lockbox) — a
+   * backpack is WORN instead (the same stack with its contents) when the back slot is free, else refused; a quick-slot / pocket /
+   * grenade / melee stack goes into the Lockbox (merging, then the first empty slot, the same object). Returns how many moved.
+   */
+  storeQuick(slots: (ItemStack | null)[], from: StoreSideRef): number {
+    if (this.storeGuard(slots, from)) return 0;
+    const src = this.end(from, undefined, slots);
+    const st = src?.list[src.index];
+    if (!src || !st) return 0;
+    if (src.kind === 'store') {
+      if (isBagItem(st.itemId)) {
+        if (this.gearSlots[BACK]) { this.refuse('slot-taken', 'You are already wearing a backpack — stow yours in the Lockbox first, then take this one.'); return 0; }
+        src.list[src.index] = null;
+        this.gearSlots[BACK] = st;
+        this.refusal = null;
+        this.version++;
+        return st.count;
+      }
+      const before = st.count;
+      const left = this.add(st, {wear: false});
+      if (left >= before) { this.refuse('no-room', 'No room in your pockets or quick slots.'); return 0; }
+      if (left > 0) st.count = left; // the rest stays in the Lockbox
+      else src.list[src.index] = null;
+      this.refusal = null;
+      this.version++;
+      return before - left;
+    }
+    const def = itemDef(st.itemId), before = st.count;
+    let left = before;
+    if (def.stackMax > 1) for (const s of slots) {
+      if (!s || s.itemId !== st.itemId || s.count >= def.stackMax) continue;
+      const k = Math.min(left, def.stackMax - s.count);
+      s.count += k;
+      left -= k;
+      if (!left) break;
+    }
+    if (left > 0) {
+      const i = slots.indexOf(null);
+      st.count = left;
+      if (i >= 0) { slots[i] = st; src.list[src.index] = null; left = 0; }
+    } else src.list[src.index] = null;
+    const moved = before - left;
+    if (moved <= 0) { this.refuse('no-room', 'The Lockbox is full.'); return 0; }
+    this.settleMelee();
+    this.refusal = null;
+    this.version++;
+    return moved;
+  }
+
+  /** Put the worn backpack (the same stack, contents untouched) into the first free Lockbox slot. */
+  storeWornBag(slots: (ItemStack | null)[]): boolean {
+    if (this.storeGuard(slots)) return false;
+    const st = this.gearSlots[BACK];
+    if (!st) { this.refuse('not-a-bag', 'You are not wearing a backpack.'); return false; }
+    const i = slots.indexOf(null);
+    if (i < 0) { this.refuse('no-room', 'The Lockbox is full.'); return false; }
+    slots[i] = st;
+    this.gearSlots[BACK] = null;
+    this.refusal = null;
+    this.version++;
+    return true;
+  }
+
+  private storeGuard(slots: (ItemStack | null)[], ...refs: StoreSideRef[]): 'refused' | null {
+    if (!Array.isArray(slots) || [this.hotbar, this.pack, this.gearSlots, this.throwSlot, this.meleeSlot].includes(slots)) return this.refuse('bad-ref', 'No such store.');
+    for (const r of refs) if (r?.bar === 'gear') return this.refuse('not-gear', 'Take worn gear off in the inventory (Tab) first.');
+    return null;
+  }
+
   // --- move engine ------------------------------------------------------------------------------------------------------
 
-  private end(ref: AnyRef, bag?: ItemStack): End | null {
+  private end(ref: AnyRef | StoreRef, bag?: ItemStack, store?: (ItemStack | null)[]): End | null {
     if (ref.bar === 'bag') {
       const list = bag?.bag;
       return list && ref.index >= 0 && ref.index < list.length ? {kind: 'bag', list, index: ref.index} : null;
     }
+    if (ref.bar === 'store') return store && Number.isInteger(ref.index) && ref.index >= 0 && ref.index < store.length ? {kind: 'store', list: store, index: ref.index} : null; // lane BOX
     const list = this.list(ref.bar);
     return ref.index >= 0 && ref.index < list.length ? {kind: ref.bar, list, index: ref.index} : null;
   }
 
   private acceptsText(e: End, itemId: string): Refusal | null {
+    if (e.kind === 'store') return null; // lane BOX: the Lockbox takes every item kind (a backpack whole, with its contents)
     const def = itemDef(itemId);
     // Task office-overhaul-20261030 (INTERACT): the grenade slot takes throwables only
     if (e.kind === 'throw' && def.kind !== 'throwable') return {code: 'wrong-slot', text: `Only throwables (flares) go in the grenade slot (G) — not the ${def.short.toLowerCase()}.`};
