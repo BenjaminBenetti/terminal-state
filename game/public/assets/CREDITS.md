@@ -275,3 +275,20 @@ Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Cod
 - `assets/models/reactor-hot-cell-window.glb` — waste: hot-cell window wall section with manipulators (Meshy task 01a19980-a169-77a3-abcc-66ee22bb9ff8)
 - `assets/textures/reactor/mine-rock-{color,normal,orm}.jpg` — blasted mine-drift rock (lane MINES drift walls / ceilings) (Codex colour source; normal / ORM derived locally)
 <!-- END reactor-x-kit-20261101 -->
+
+<!-- BEGIN reactor-startup-audio-20261102 (reactor-startup-build.mjs) -->
+## The Reactor: startup audio (power-up, control rods, beacons)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the round-2
+Reactor brief's startup / control-rod audio allowance (7 jobs of a 12-job cap). Powered by Stability AI. Stability AI
+Community License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives
+(trim, fades, loops, levelling, MP3) built by `tools/audio-pipeline/reactor-startup-build.mjs` (provenance:
+`assets/derivatives/audio-reactor-startup.json`). Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/reactor-surge.mp3` — reactorSurge (Sound Lab job 20261102T063836-737297743)
+- `assets/audio/reactor-online.mp3` — reactorOnline (Sound Lab job 20261102T063841-456197206)
+- `assets/audio/reactor-rod-loop.mp3` — reactorRodLoop (Sound Lab job 20261102T063845-204671000)
+- `assets/audio/reactor-rod-stop.mp3` — reactorRodStop (Sound Lab job 20261102T063850-1318616898)
+- `assets/audio/reactor-bed-loop.mp3` — reactorBed (Sound Lab job 20261102T063854-436372056)
+- `assets/audio/reactor-stage.mp3` — reactorStage (Sound Lab job 20261102T063859-1388193861)
+- `assets/audio/reactor-beacon-loop.mp3` — reactorBeacon (Sound Lab job 20261102T063904-2058341218)
+<!-- END reactor-startup-audio-20261102 -->
