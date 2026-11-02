@@ -73,6 +73,7 @@ import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iterati
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
+import {installReactorCoreLights} from './world/reactor/coreLights'; // task reactor-expansion-20261101 (lane CORE)
 import {REACTOR_MODEL_FILES} from './world/reactor/archAssets'; // task reactor-build-20261101 (lane ARCH): the lead's Reactor GLB kit (level-only)
 import {WASTE_MODEL_FILES} from './world/reactor/wasteAssets'; // task reactor-expansion-20261101 (lane WASTE): the waste set of REACTOR_X_KIT (level-only)
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
@@ -458,6 +459,7 @@ export class Game {
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
     installReactorArch(this); hookName('reactorArch'); // task reactor-build-20261101 (lane ARCH): Reactor textures preload, model keys, deep haze / far plane / culler distance, kit visuals tick (inert elsewhere)
+    installReactorCoreLights(this); hookName('reactorCoreLights'); // task reactor-expansion-20261101 (lane CORE): the reactor's green / blue glow lights (boot-time, intensity-only; inert elsewhere)
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.

@@ -83,7 +83,9 @@ describe('gaslight lamps: real generated Reactors', () => {
         } else {
           // on a free-standing deck's rail line: the foot at the deck top, inside its rect edge; the head over the walkway
           const d = info.decks.find(dd => (dd.kind === 'bridge' || dd.kind === 'tower') && Math.abs(dd.y - m.y) < 0.01 && m.x >= dd.rect.x0 - 0.01 && m.x <= dd.rect.x1 + 0.01 && m.z >= dd.rect.z0 - 0.01 && m.z <= dd.rect.z1 + 0.01);
-          expect(d, `post foot ${m.x},${m.y},${m.z}`).toBeDefined();
+          // task reactor-expansion-20261101 (lane CORE): or a post on the core floor's goop railings (service ring / radial bridges)
+          const cf = info.coreFloor, onCore = !!cf && Math.abs(m.y - cf.y) < 0.01 && Math.hypot(m.x - cf.x, m.z - cf.z) < cf.pool.r1 + 0.5;
+          expect(d ?? (onCore || undefined), `post foot ${m.x},${m.y},${m.z}`).toBeDefined();
           expect(l.y - m.y).toBeCloseTo(PIT_LAMPS.postY, 3);
         }
       }

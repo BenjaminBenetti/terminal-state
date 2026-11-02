@@ -58,6 +58,9 @@ const KIT = [
   {id: 'steam-generator', key: 'steamGenerator', axis: 1, size: 11.0, tex: [1024, 256, 512], what: 'hero: nuclear steam generator / heat-exchanger tower (height along Y)'},
   {id: 'coolant-pump-vertical', key: 'rcpVertical', axis: 1, size: 7.0, tex: [1024, 256, 512], what: 'hero: vertical reactor coolant pump (motor over a spherical casing)'},
   {id: 'coolant-manifold', key: 'coolantManifold', axis: 0, size: 4.5, tex: [1024, 256, 512], what: 'hero: coolant header manifold with branch valves (length along X)'},
+  {id: 'pipe-elbow', key: 'pipeElbow', axis: -1, size: 1.8, tex: [512, 128, 256], what: 'hero: flanged 90-degree coolant pipe elbow (instanced on the loops)'},
+  {id: 'sight-glass-spool', key: 'sightGlassSpool', axis: 0, size: 1.6, tex: [512, 128, 256], what: 'hero: coolant spool with an armoured sight-glass window (blue flow shows through)'},
+  {id: 'crdm-platform', key: 'crdmPlatform', axis: 0, size: 6.6, tex: [1024, 256, 512], what: 'hero: control-rod-drive service platform on the vessel head'},
   {id: 'turbine-generator', key: 'turbineGenerator', axis: 0, size: 10.0, tex: [1024, 256, 512], what: 'hero: steam turbine generator set on its pedestal (length along X)'},
   // lane BUNKER
   {id: 'blast-door', key: 'blastDoor', axis: 1, size: 4.0, tex: [1024, 256, 512], what: 'bunker: round blast door standing open in its frame'},

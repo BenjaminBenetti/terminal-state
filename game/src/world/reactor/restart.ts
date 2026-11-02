@@ -45,7 +45,7 @@ export {preloadReactorItemModels};
 
 /** Reach (m, eye to the control's centre) and pick radius per control (m). */
 export const RESTART_REACH = 2.3;
-const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.45, pump: 0.24, keyswitch: 0.16, rods: 0.3}; // (lane CONTROLS: valve = the model's wheel, r 0.43)
+const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.38, pump: 0.24, keyswitch: 0.16, rods: 0.3}; // (lane CONTROLS: valve = the model's wheel, r 0.43 x its fit scale ~0.78)
 /** The hold ring shows after this much of a hold (a quick tap never flashes it). */
 const RING_DELAY_S = 0.1;
 /** AIR's record / the HUD tier line are polled this often (s). */
@@ -302,6 +302,7 @@ export class ReactorRestart {
     this.applied = v;
     if (!s || !plan) return;
     const n = plan.tiers.length, t = this.win ? this.win.t : -1;
+    v.setRestartState?.(s, true); // task reactor-expansion-20261101 (lane CORE): the hero's stage, restored instantly (build / reload / new visuals)
     v.setCoreGlow(t >= 0 ? coreGlowAt(t) : 0);
     for (let r = 0; r < n; r++) v.setTierPower(plan.tiers[r], t >= 0 ? tierPowerAt(t, r, n) : 0);
     if (t >= 0) for (const id of plan.fans) if (tierPowerAt(t, plan.fanRank.get(id) ?? 0, n) > 0) v.setFanSpeed(id, 1);
@@ -514,6 +515,7 @@ export class ReactorRestart {
     if (!res.ok) { this.counts.refused++; this.host.hud.toast(res.why, !res.done); return {ok: false, why: res.why}; }
     this.counts.completed++;
     this.save();
+    reactorVisuals().setRestartState?.(s, false); // task reactor-expansion-20261101 (lane CORE): every state change -> the hero's stage visuals
     this.syncViews();
     this.version++;
     const e = this.controls.find(x => x.id === id);

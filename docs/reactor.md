@@ -16,6 +16,7 @@ outside Git.
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
 | Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`) |
+| Core floor + hero reactor (task reactor-expansion, lane CORE) | `game/src/gen/reactor/coreFloor.ts` (vessel footprint, service ring, goop pool, bridges, loop / turbine layout, `layout.reactor.coreFloor`); `game/src/world/reactor/{coreHero,coreLiquids,coreStages,coreVisuals,coreLights}.ts` (the assembled structure, the dynamic goop / coolant layer, the staged startup, the glow lights) |
 | Tests | `game/tests/reactor-*.test.ts` (`reactor-level.test.ts` runs every lane on real generated layouts) |
 
 ## The level, top to bottom (one continuous world; the rim at y 0, depth negative)
@@ -24,7 +25,22 @@ outside Git.
   control office holds the startup key and the pit status board.
 - **Four walkway tiers** (about 6 m apart): steel galleries on the pit walls, big landings for the generators, bridges across the
   pit to 1–2 free-standing lattice towers, and side rooms cut into the rock (maintenance stores, the switchgear room on tier 4).
-- **The core floor** (about −30 m): the ring round the domed vessel, the pump hall and the control room overlooking the vessel.
+- **The core floor** (about −30 m): the pump hall, the control room overlooking the vessel, and round the vessel (lane CORE):
+  - the **service ring**, a walkable steel grating deck from the vessel's hazard plinth (6.6 m) to 10 m;
+  - the **glowing green goop pool** from 10 m to 16 m, 1.5 m below the deck. It is non-walkable (blocked cells; no spawn, loot or
+    path), railed on every edge (round railings drawn at the collision envelope) and has no fall-in or damage mechanic;
+  - **3–4 radial bridges** (2.5 m clear, railed, with post lamps) cross the goop to the outer floor;
+  - the **coolant loops** stand in the goop between the bridges. Each loop has a steam generator, a vertical reactor coolant pump on its
+    plinth and a coolant manifold (the lead's Meshy hero models, collision props), plus its hot, cold and crossover legs. The legs
+    cross the ring overhead with at least 2.4 m headroom;
+  - the **steam header ring**, a forest of risers, the circular service gantry, the CRDM service platform on the dome and the
+    **turbine generator** on a wall run of the outer floor;
+  - the lead's hero models through the arch model-swap registry (`archAssets.ts`, one entry each; procedural stand-ins without
+    them): **pipe elbows** at the runs' square bends (scaled to the bore; the straight pipes are cut at their ports), inline
+    **sight-glass spools** on the cold legs and crossovers (the coolant glows in their windows: fill on the valve, streaks with
+    the pump) and the **CRDM service platform** seated on the dome (its housings' top ring carries the rod lamps).
+
+  The vessel's footprint is blocked but no longer a 12 m raised drum (its grid column is not drawn): the vessel model shows.
 - **The pit air rises above the rim** to about +15 m: the crane runway, the trolley and its hanging hook, and the tops of the pipe
   banks.
 - **Routes** (at least two between every consecutive tier pair, recorded in `layout.reactor.routes`):
@@ -113,6 +129,24 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
 The parts are finite: placed once, consumed once, never in a loot table. Every step persists, so a retreat keeps it. The status
 boards (rim pit board, switchgear, pump, control monitor) and the HUD line show each task's state.
 
+**The reactor comes to life step by step** (lane CORE, `world/reactor/coreStages.ts`). The restart runtime sends the persisted record
+through `ReactorVisuals.setRestartState`: once, instantly, on every build or reload, and live after every completed control. So a
+rebuilt world shows exactly the stage reached, with nothing to replay.
+
+| Step | Where it happens | At the core |
+|---|---|---|
+| Nothing done | Fuse lamps red | The goop is dormant but clearly green; two green lights light the structure and the pit's fog from the rim |
+| Fuse seated | That slot's lamp amber | – |
+| Breaker | Every switchgear lamp green | Loop and turbine panel power lamps green |
+| Valve | Valve beacon amber | Sight glasses fill with coolant (3 s), pressure lamps amber, a faint blue light |
+| Pump | Pump beacon blue | Blue flow streams through every loop, the pump flywheels spool up (4 s), the blue light grows |
+| Key | Console key lamp amber | CRDM rod lamps amber |
+| Rods | Console rods lamp green | The core wakes over 6 s: goop brighter and churning, green light ×4, the turbine fan spins up, then the win below |
+
+The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
+volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
+are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
+
 ### Mounted controls (the rule for every control that sits on a 3D model)
 Code: `game/src/world/reactor/controlsMount.ts` (pure, shared by the kit and the restart), `controlsKit.ts` (the machines and the
 generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (moving parts split off a model).
@@ -121,6 +155,12 @@ generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (movi
    the collider (`annexMachine` prop). The model's **measured mounting face** goes on the footprint's front plane, and its long axis
    follows the footprint's long axis. The switchgear bank is stretched to fill its collider exactly.
    - The pump's motor end faces the operator. It used to be turned 90° off its collider.
+   - **The model never stands outside its collider into walkable space** (lane PATHS' audit, `world/reactor/pathsAudit.ts`):
+     - the switchgear's outermost front (the lever handles) is on the collider front, with the door 0.26 m behind it and the
+       cabinet back sunk into the wall;
+     - the coolant valve is drawn at the uniform scale that fits its 1 × 1 m footprint (about 0.78);
+     - the console's collider is 1.5 m deep and 1.55 m tall, covering the model;
+     - collider heights equal the models' heights.
    - A layout without machine records derives one from its controls.
 2. **Measure the face; do not trust the bounding box.** `HOST_FACES` holds faces probed from the cooked GLB vertex data. Use the
    *clear rectangle* of each face: no gauge, lever or hinge under it.

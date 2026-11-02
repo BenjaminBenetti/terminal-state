@@ -111,7 +111,8 @@ export function buildControlView(id: RestartControlId, c: ReactorControl, mount?
   const m = mount ?? fallbackMount(c);
   const skin: SkinKey = m.host ?? hostOfControl(id) ?? 'switchgear';
   const onHost = id === 'valve' && !!host;
-  if (onHost) { root.position.set(host!.x, host!.y, host!.z); root.rotation.y = host!.rotY; } else placeOnMount(root, m);
+  // (the valve: the model frame itself, scale included — a valve is drawn at the size that fits its footprint)
+  if (onHost) { root.position.set(host!.x, host!.y, host!.z); root.rotation.y = host!.rotY; root.scale.set(host!.sx, host!.sy, host!.sz); } else placeOnMount(root, m);
   let spool = 0, pumpOn = false, done = false;
   const view: ControlView = {id, root, get spool() { return spool; }, sync: () => {}, animate: () => {}};
   switch (id) {

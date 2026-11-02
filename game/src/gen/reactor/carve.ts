@@ -21,6 +21,7 @@ import {STAIR, layStairRun, type StairFlight, type StairSpec} from '../traversal
 import {SLAB} from '../levelGen';
 import {TRENCH_DEPTH, type Area, type AreaKind, type AreaRole, type Rect, type RoomType} from '../stationTypes';
 import type {ReactorDeck} from './reactorTypes';
+import {carveCoreFloor, type CoreFloorCarve} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {BANK_CELLS, BED, CLEAR, CORE_LEVEL, GEN_LANDING, LANE, ORG, REACTOR_LEVELS, ROOM_MARGIN, TIERS, VESSEL, reactorStoreyLabel, type ReactorFrame} from './frame';
 // task reactor-expansion-20261101 (lane HOST): the side-complex slots (planned before the rooms) and their canvas margin
 import {COMPLEX_MARGIN, planComplexSlots, slotBlocks} from './complex/host';
@@ -67,6 +68,8 @@ export interface ReactorCarve {
   vessel: [number, number][];
   /** The core floor's sector areas. */
   coreAreas: number[];
+  /** Task reactor-expansion-20261101 (lane CORE): the core floor's goop pool / bridges / loop layout (gen/reactor/coreFloor.ts). */
+  coreFloor: CoreFloorCarve;
   /** Task reactor-expansion-20261101 (lane HOST): the side-complex slots (canvas cells; gen/reactor/complex/host.ts). */
   slots: ComplexSlot[];
   /** Mirror: canonical px -> canvas x. */
@@ -395,12 +398,21 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     if (!at(0, 1, 2, 11, 0) || !at(1, 2, PD - 9, PD - 11, Math.PI) || !at(2, TIERS, PD - 9, PD - 11, Math.PI)) return fail('generators');
   }
 
+  // task reactor-expansion-20261101 (lane CORE): the core floor — vessel footprint, service ring, goop pool, bridges, loop layout
+  const coreFloor = carveCoreFloor({
+    g: grids[CORE_LEVEL], base: bases[CORE_LEVEL], pit: rectC(0, 0, PW, PD), coreAreas, vessel, towers: towers.map(t => rectC(t.px, t.pz, 10, 10)),
+    overhead: decks.filter(d => d.level < CORE_LEVEL).map(d => ({x0: d.rect.x * CELL, z0: d.rect.y * CELL, x1: (d.rect.x + d.rect.w) * CELL, z1: (d.rect.y + d.rect.h) * CELL, y: d.y})),
+    targets: [...rooms.filter(r => r.level === CORE_LEVEL).map(r => ({x: (r.door.x + r.door.w / 2) * CELL, z: (r.door.y + r.door.h / 2) * CELL, w: r.key === 'control' ? 3 : r.key === 'pumpHall' ? 2 : 1})),
+      ...runs.filter(r => r.lower === TIERS).map(r => ({x: (r.rect.x + r.rect.w / 2) * CELL, z: (r.rect.y + r.rect.h / 2) * CELL, w: 1}))],
+  });
+  if (!coreFloor) return fail('core-floor-bridges');
+
   // --- 6. The column stack: ceilings of every open band in the pit (air to the roof, one slab under the next band up) -----------
   stackColumns(grids, air, PX0, PZ0, PW, PD, roofY);
 
   return {
     f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, decks, runs, rooms, gens, towers, terraces,
-    vessel, coreAreas, cx, rectC, slots,
+    vessel, coreAreas, cx, rectC, coreFloor, slots,
   };
 }
 

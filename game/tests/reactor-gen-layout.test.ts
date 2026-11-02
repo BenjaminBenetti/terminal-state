@@ -163,7 +163,9 @@ describe('Reactor generator (lane GEN)', () => {
       const gC = L.levels[CORE_LEVEL].grid, [cx, cy] = gC.cellOf(L.reactor!.core.x, L.reactor!.core.z);
       expect(gC.blocked[gC.idx(cx, cy)]).toBe(1);
       expect(gC.cells[gC.idx(cx, cy)]).toBe(FLOOR);
-      expect(gC.floorOf(gC.idx(cx, cy))).toBeCloseTo(L.reactor!.core.y1);
+      // task reactor-expansion-20261101 (lane CORE): the body column rises to the vessel model's dome (no longer a 12 m drum hiding the model)
+      expect(gC.floorOf(gC.idx(cx, cy))).toBeGreaterThan(L.reactor!.core.y0 + 9);
+      expect(gC.floorOf(gC.idx(cx, cy))).toBeLessThanOrEqual(L.reactor!.core.y1);
       expect(reactorRouteGroups(L).length).toBe(10);
     }
   });

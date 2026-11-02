@@ -139,11 +139,12 @@ describe('Reactor bunker carver (lane BUNKER)', () => {
       for (let y = bh.y; y < bh.y + bh.h; y++) for (let x = bh.x; x < bh.x + bh.w; x++) { floors.add(g.floor[g.idx(x, y)]); ceils.add(g.ceil[g.idx(x, y)]); }
       expect([...floors].map(v => +(v - BASE).toFixed(2)), tag).toEqual([BLAST.sill]);
       expect(Math.min(...ceils) - Math.max(...floors), tag).toBeGreaterThanOrEqual(2.1 + 0.12 - 1e-6);
-      // walking the lane through the bulkhead: every riser <= 0.3 m, back to the room floor 3 cells out on both sides
+      // walking the lane through the bulkhead: every riser <= 0.3 m, the sill level one row out each side (under the frame's
+      // proud faces), back to the room floor 4 cells out on both sides
       const alongX = bh.h === BUNKER.bulkhead;
       for (let a = 0; a < 3; a++) {
         const prof: number[] = [];
-        for (let t = -3; t < BUNKER.bulkhead + 3; t++) {
+        for (let t = -4; t < BUNKER.bulkhead + 4; t++) {
           const [x, y] = alongX ? [bh.x + a, bh.y + t] : [bh.x + t, bh.y + a];
           expect(g.cells[g.idx(x, y)], `${tag} lane ${x},${y}`).toBe(FLOOR);
           prof.push(g.floor[g.idx(x, y)]);

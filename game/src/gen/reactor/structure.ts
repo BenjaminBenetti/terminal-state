@@ -172,8 +172,9 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
   {
     const rr = room('pumpHall'), f = roomFrame(rc, rr), lv = rr.level;
     const pa0 = Math.round(f.w / 2 - 3.5), pd0 = Math.round(f.d / 2 - 0.5);
-    const pump = machine(layout, rr, f, 'pump', pa0, pa0 + 7, pd0, pd0 + 3, 1.6, [-1, 0], 1);
-    const valve = machine(layout, rr, f, 'valve', f.w - 3, f.w - 1, f.d - 3, f.d - 1, 1.4, [0, -1], 1);
+    // task reactor-expansion-20261101 (lane CONTROLS): collider heights = the models' (pump 1.82 m; the valve drawn at 0.78 scale: 1.55 m)
+    const pump = machine(layout, rr, f, 'pump', pa0, pa0 + 7, pd0, pd0 + 3, 1.82, [-1, 0], 1);
+    const valve = machine(layout, rr, f, 'valve', f.w - 3, f.w - 1, f.d - 3, f.d - 1, 1.55, [0, -1], 1);
     const controls = [control(f, lv, 'valve', f.w - 2, f.d - 3, f.d - 5.1, 1.6), control(f, lv, 'pump', pa0 - 0.01, pd0 + 1.5, pd0 + 1.5, 1.2)];
     // the pump's stand point is beside its end face (along -a), not inside the skid
     const pc = controls[1], at = roomPoint(f, pa0, pd0 + 1.5), st = roomPoint(f, pa0 - 2.1, pd0 + 1.5);
@@ -186,8 +187,10 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
   {
     const rr = room('control'), f = roomFrame(rc, rr), lv = rr.level;
     const c0 = Math.round(f.w / 2 - 3);
-    const console = machine(layout, rr, f, 'console', c0, c0 + 6, 3, 5, 1.1, [0, 1], 4);
-    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 5, 7.1, 1.1), control(f, lv, 'rods', c0 + 4.5, 5, 7.1, 1.1)];
+    // task reactor-expansion-20261101 (lane CONTROLS): the console's collider covers the model (1.49 m deep, 1.54 m tall: was 1.0 x 1.1, the
+    // desk ledge / hood stood 0.24 m past it): 1.5 m deep toward the operator, its key switch / rod control on the new front
+    const console = machine(layout, rr, f, 'console', c0, c0 + 6, 3, 6, 1.55, [0, 1], 4);
+    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 6, 7.1, 1.1), control(f, lv, 'rods', c0 + 4.5, 6, 7.1, 1.1)];
     sites.push({id: 'control', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [console]});
     // the monitor on the opening wall, in the wider wall segment beside the opening (facing into the room)
     const dA = rr.doorA0 - rr.a0, dB = dA + rr.doorW;
@@ -250,6 +253,24 @@ function wallFrames(rc: ReactorCarve): WallFrame[] {
   ];
 }
 
+/**
+ * Task reactor-expansion-20261101 (lane HOST): no open cell (any storey) in the two cell rows right behind the pit wall row across the
+ * duct (u ± 3 cells) whose band overlaps the duct's height (hub y ± 1.5 m).
+ */
+function fanBackClear(layout: StationLayout, w: WallFrame, u: number, y: number): boolean {
+  for (let du = -3; du <= 3; du++) for (const v of [-2, -3]) {
+    const [x, z] = w.cell(u + du, v);
+    for (const L of layout.levels) {
+      const g = L.grid;
+      if (!g.inBounds(x, z)) continue;
+      const i = g.idx(x, z);
+      if (g.cells[i] === SOLID) continue;
+      if (g.floorOf(i) < y + 1.5 && g.ceil[i] > y - 1.5) return false;
+    }
+  }
+  return true;
+}
+
 /** Wall extraction fans of every zone: 2-4 per zone on the pit walls between its storeys, clear of decks / stairs where possible. */
 /**
  * (lead merge fix, task reactor-expansion-20261101) True when every storey's grid is closed (rock / not inside an open band) behind the
@@ -299,6 +320,10 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
           // (lead merge fix) the 1.4 m-deep duct housing needs ROCK behind the wall face — never a side-complex room behind it
           const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2) && rockBehind(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
           if (up === undefined) continue;
+          // task reactor-expansion-20261101 (lane HOST): the duct runs 0.7 m back through the 0.5 m pit wall (archKit planFan, radius
+          // 1.3 m) — the first cells behind the wall stay rock at the duct's height on every storey (a side complex / room cut in right
+          // behind the wall would show it)
+          if (!fanBackClear(layout, w, u, rc.bases[lv] + up)) continue;
           cands.push({lv, w, u, x: hx, z: hz, y: r3(rc.bases[lv] + up)});
         }
       }

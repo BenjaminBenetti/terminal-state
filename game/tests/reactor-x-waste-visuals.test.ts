@@ -49,7 +49,7 @@ describe('Reactor waste repository (lane WASTE): runtime visuals', () => {
       for (let i = 0; i < im.count; i++) { im.getMatrixAt(i, m); expect(m.elements.every(Number.isFinite)).toBe(true); }
       expect(im.boundingSphere!.radius).toBeLessThan(40);
     }
-    // inside the complex's bounds (+ the cable's exit over the entrance landing)
+    // inside the complex's bounds (+ the entrance frame's beacons over the landing edge)
     const b = L.reactorWaste!.bounds, box = new THREE.Box3().setFromObject(g);
     expect(box.min.x).toBeGreaterThan(b.x0 - 4); expect(box.max.x).toBeLessThan(b.x1 + 4);
     expect(box.min.z).toBeGreaterThan(b.z0 - 4); expect(box.max.z).toBeLessThan(b.z1 + 4);

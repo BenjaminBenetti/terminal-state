@@ -23,6 +23,7 @@ import type {
 } from '../../gen/reactor/reactorTypes';
 import type {RailRun} from '../../gen/levels';
 import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
+import {planReactorCore} from './coreHero'; // task reactor-expansion-20261101 (lane CORE)
 import {GENERATOR_PANEL, generatorPanelPose} from './controlsMount'; // task reactor-expansion-20261101 (lane PATHS): the cable riser
 import {planGeneratorPanel, planMountedSite} from './controlsKit'; // task reactor-expansion-20261101 (lane CONTROLS): mounted controls
 import {generatorPlacement} from './controlsMount';
@@ -368,6 +369,7 @@ export function planReactorKit(info: ReactorInfo, opts: KitOptions = {}): KitPla
   step(() => planVessel(plan, info.core), 'vessel');
   step(() => { for (const s of info.sites) planSite(plan, s); }, 'sites');
   step(() => { for (const s of info.screens) planScreen(plan, s); }, 'screens');
+  step(() => planReactorCore(plan, info), 'core hero'); // task reactor-expansion-20261101 (lane CORE): the hero assembly (coreHero.ts)
   step(() => { if (opts.rails) planRails(plan, opts.rails); }, 'rails');
   return plan;
 }

@@ -23,7 +23,11 @@ import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // tas
 /** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =
   | 'vessel' | 'generator' | 'craneTrolley' | 'craneHook' | 'fanHousing' | 'switchgear' | 'coolantPump' | 'controlConsole'
-  | 'pipeBank' | 'coolantValve' | 'floodLamp';
+  | 'pipeBank' | 'coolantValve' | 'floodLamp'
+  // task reactor-expansion-20261101 (lane CORE): the hero reactor assembly (world/reactor/coreHero.ts; layout.reactor.coreFloor)
+  | 'steamGenerator' | 'rcpVertical' | 'coolantManifold' | 'turbineGenerator'
+  // (lane CORE follow-up: the lead's pipe elbow / sight-glass spool / CRDM service platform)
+  | 'pipeElbow' | 'sightGlassSpool' | 'crdmPlatform';
 
 /**
  * How a delivered model is fitted onto its record (models are real size, +Y up, front +Z, grounded min y 0, centred x / z):
@@ -81,6 +85,19 @@ export const REACTOR_MODELS: Readonly<Record<ReactorPiece, ReactorModelSpec>> = 
   // ~4 k triangles each: the pit-wall / catwalk / gantry lamps take the model (up to the cap, top-down: the clear upper tiers seen
   // from the rim); deeper / railing lamps stay cheap cages (~100 triangles)
   floodLamp: fromKit('floodLamp', REACTOR_KIT.floodLamp, 'real', 32, {plate: [0, 0.36, -0.219], lens: [0, 0.167, 0.212], lensW: 0.17, lensH: 0.24}),
+  // task reactor-expansion-20261101 (lane CORE): the hero assembly (the lead's expansion kit, REACTOR_X_KIT; real size, Meshy maps
+  // kept): a steam generator + vertical reactor coolant pump + coolant manifold per coolant loop (4 loops), one turbine generator
+  steamGenerator: fromKit('steamGenerator', REACTOR_X_KIT.steamGenerator, 'real', 4),
+  rcpVertical: fromKit('rcpVertical', REACTOR_X_KIT.rcpVertical, 'real', 4),
+  coolantManifold: fromKit('coolantManifold', REACTOR_X_KIT.coolantManifold, 'real', 4),
+  turbineGenerator: fromKit('turbineGenerator', REACTOR_X_KIT.turbineGenerator, 'real', 1),
+  // (lane CORE follow-up) anchors probed from the cooked GLBs (2026-11-02): the elbow stands on its down port (centre (0.385, 0, 0), facing
+  // -Y), its side port faces -X at (-0.9, 1.125, 0), bore OD ~0.73; the spool runs along X, its axis at y 0.355 (OD ~0.71), the armoured
+  // window on +Z (0.66 x 0.17 at y 0.38, face z ~0.405); the CRDM platform's skirt (r ~2.45) sits on the dome, grating deck at +1.82,
+  // the housings' flat top ring at +3.51 (r 1.8), the outer railing at r 3.25 (top ~2.38)
+  pipeElbow: fromKit('pipeElbow', REACTOR_X_KIT.pipeElbow, 'uniform', 24, {down: [0.385, 0, 0], side: [-0.9, 1.125, 0], od: 0.73}),
+  sightGlassSpool: fromKit('sightGlassSpool', REACTOR_X_KIT.sightGlassSpool, 'uniform', 8, {axisY: 0.355, od: 0.71, len: 1.6, window: [0, 0.38, 0.412], windowW: 0.66, windowH: 0.17}),
+  crdmPlatform: fromKit('crdmPlatform', REACTOR_X_KIT.crdmPlatform, 'real', 1, {skirtR: 2.45, deckY: 1.82, topY: 3.51, ringR: 1.8, railR: 3.25, railTop: 2.38}),
 };
 
 export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
@@ -92,7 +109,8 @@ export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
 export function reactorModelFiles(): Record<string, {url: string; bytes: number}> {
   const out: Record<string, {url: string; bytes: number}> = {};
   for (const m of Object.values(REACTOR_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
-  // task reactor-expansion-20261101 (lane BUNKER): + the expansion kit (REACTOR_X_KIT: hero reactor + side-complex set pieces), level-only
+  // task reactor-expansion-20261101 (lane CORE): + the whole expansion kit (hero assembly + the side complexes' set pieces): every
+  // REACTOR_X_KIT url referenced from runtime code (the release packager drops unreferenced GLBs); fetched only when a layout asks
   for (const m of Object.values(REACTOR_X_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
   return out;
 }
