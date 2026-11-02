@@ -128,6 +128,9 @@ import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, w
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
+/** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
+export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train when done.';
+
 export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
@@ -869,7 +872,9 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : key.level === 'reactor' ? 'Restart the reactor' : 'Clear the station'; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
+    // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
+    // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
+    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : SCAVENGE_OBJECTIVE;
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -1929,13 +1934,24 @@ export class Game {
       this.sfx.win();
       this.hud.toast(clearLabel(this.run.current));
     }
-    if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) {
-      this.wonShown = true;
-      const lvl = this.run.current.level, secs = LEVELS[lvl].sections(this.run.seeds[lvl]);
-      if (this.run.levelCleared(lvl, secs)) this.showEnd('won');
-    }
+    // (campaign foundation) a cleared station is only remembered + toasted: no clear modal, nothing is gated on kills
+    if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) this.wonShown = true;
   }
   private wonShown = false;
+
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01: THE campaign win (the Reactor's ending; world/reactor/restart.ts calls
+   * it once). Recorded in the run (saved at the next autosave); exploration goes on — nothing is reset, no modal blocks play.
+   */
+  onCampaignWin(via: string): void {
+    const c = this.run.campaign;
+    if (!c || c.won) return;
+    c.won = {at: new Date().toISOString(), station: c.current, via};
+    this.hud.toast('RUN COMPLETE — the reactor is running. Keep exploring, or head back to the train.');
+    for (const l of this.campaignListeners) l('won');
+  }
+  /** (campaign) listeners for campaign events ('won' | 'autosave' | 'transit'): the menu / HUD / save lanes subscribe. */
+  readonly campaignListeners: ((event: string) => void)[] = [];
 
   private updateCamera(dt: number): void {
     const p = this.player;
@@ -1992,6 +2008,7 @@ export class Game {
       melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
+      objLine: '', // (campaign foundation) the scavenge objective has no kill counter
       area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,

@@ -66,6 +66,11 @@ export interface RestartHost {
   sfx: unknown;
   /** RUN (Game.run is replaced by NewGame: always read through the host). */
   run: RestartRun & {seeds?: Readonly<Record<string, number>>};
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01: the campaign's ONE win hook — called once when the control rods are
+   * withdrawn (the reactor restarted). The surface-ending work may call the same hook from its own final phase instead.
+   */
+  onCampaignWin?: (via: string) => void;
   readonly clock: number;
   state: string;
   /** The station lighting (world/lights.ts; replaced per world build). */
@@ -550,6 +555,7 @@ export class ReactorRestart {
     const run = this.host.run as {seeds?: {reactor?: number}; seedFor?: () => number};
     const seed = run.seedFor?.() ?? run.seeds?.reactor ?? this.host.layout.seed; // (campaign: the Reactor NODE's own seed)
     try { if (this.recordMilestone(seed)) this.counts.milestones++; } catch { /* storage is optional */ }
+    try { this.host.onCampaignWin?.('reactor-restarted'); } catch (err) { console.warn('campaign win hook failed', err); }
   }
 
   /** The lead's Sound Lab machine one-shot (Sfx.reactorCue); an Sfx without it: an existing accepted cue, pitched, as the stand-in. */
