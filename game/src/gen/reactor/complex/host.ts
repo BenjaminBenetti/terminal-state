@@ -335,9 +335,12 @@ export function clearEntranceLamps(layout: StationLayout, carves: readonly Compl
     const a0 = (alongX ? E.x : E.y) * CELL - 0.6, a1 = (alongX ? E.x + E.w : E.y + E.h) * CELL + 0.6;
     const wallC = ((alongX ? E.y : E.x) + 0.5) * CELL;
     for (const l of layout.lights) {
-      if ((l.level ?? 0) !== s.level || l.area !== s.frontArea) continue;
+      // (lead merge fix: lane GASLIGHT's MOUNTED pit lamps carry a bracket record — never slide one along the wall: drop it instead)
+      const mounted = !!(l as {mount?: unknown}).mount;
+      if ((l.level ?? 0) !== s.level || (!mounted && l.area !== s.frontArea)) continue;
       const u = alongX ? l.x : l.z, v = alongX ? l.z : l.x;
       if (u <= a0 || u >= a1 || Math.abs(v - wallC) > 1.0) continue;
+      if (mounted) { drop.add(l); continue; }
       // the nearer jamb side, 0.75 m past the doorway, on the same deck
       const to = u - a0 < a1 - u ? a0 - 0.15 : a1 + 0.15;
       const nx = alongX ? to : l.x, nz = alongX ? l.z : to, [cx, cy] = g.cellOf(nx, nz);

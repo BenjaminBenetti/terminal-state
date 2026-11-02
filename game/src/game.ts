@@ -1432,7 +1432,7 @@ export class Game {
   /** Iteration 13 (CORE): the station straight to the canvas (scene background clears; the renderer's output pass tone-maps). */
   private renderDirect(): void {
     this.renderer.setRenderTarget(null);
-    this.renderer.render(this.scene, this.camera);
+    this.atmosphere.withGasFog(this.scene, () => this.renderer.render(this.scene, this.camera)); // task reactor-expansion-20261101 (lane GASLIGHT): toxic gas stays visible (in-engine fog fallback)
   }
 
   // ---------------------------------------------------------------------------------------

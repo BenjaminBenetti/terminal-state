@@ -24,6 +24,7 @@ import {mallArchQaApi} from './world/mallAtmosphere'; // Task track3-eaton-centr
 import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane GAS): office windows / breach gas spot-check hooks
 import {reactorAirQaApi} from './world/reactor/airQa'; // task reactor-build-20261101 (lane AIR): Reactor depth gas / generators spot-check hooks
 import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor kit summary / draw cost, fog tune, visuals driver
+import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
 import {strainerQaApi} from './ai/strainerQa'; // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): Strainer spot-check hooks
@@ -356,6 +357,7 @@ export function installQaHooks(game: Game): void {
     ...gasQaApi(game), // Task gasmask-breach-20261030 (lane GAS): windows(level?), windowAim(id), DEBUG windowBreak(id), gas(), gasTune({...})
     ...reactorAirQaApi(game), // task reactor-build-20261101 (lane AIR): reactorAir(), reactorGoGenerator(id), DEBUG reactorStartGenerator(id), reactorClearAll(s), reactorDepthAt(y), reactorGasTune({...})
     ...reactorArchQaApi(game as Parameters<typeof reactorArchQaApi>[0]), // task reactor-build-20261101 (lane ARCH): reactorArch(), reactorFog({density, color}), DEBUG reactorVisualsSet({fan, generator, core, tier})
+    ...gaslightQaApi(game), // task reactor-expansion-20261101 (lane GASLIGHT): gaslight(), gaslightShafts({gain, fade, colour})
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Task track1-siren-blightbelly-20261031 (lane SIREN): sirens(), sirenSystem(), goSiren(i?, dist, face), sirenLight(i?), sirenProbe(i?), aimSiren(i?, part), DEBUG sirenWake(i?) / qaSpawnSiren(dist)

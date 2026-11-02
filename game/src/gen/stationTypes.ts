@@ -137,7 +137,15 @@ export interface LightPlacement {
   virtual?: boolean;
   /** Iteration 16 (WORLD-GEN): light colour override (linear RGB, ~unit luminance) for the baked field (daylight). */
   tint?: readonly [number, number, number];
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): where the fixture is MOUNTED (the Reactor pit's caged lamps); absent = ceiling. */
+  mount?: LightMount;
 }
+/**
+ * Task reactor-expansion-20261101 (lane GASLIGHT): a wall-bracket or post-mounted lamp. `x / y / z` = the mount point (the wall face at
+ * the lamp's height, or the post's FOOT on the deck), `nx / nz` = the unit direction the head reaches out along (out of the wall into
+ * the pit / from the post over the walkway); the light point (LightPlacement x / y / z) is the lamp head.
+ */
+export interface LightMount { kind: 'wall' | 'post'; x: number; y: number; z: number; nx: number; nz: number }
 /**
  * Wall-mounted (default) or hanging (`hang`, double-sided) sign. station = name plate, exit/info =
  * wayfinding (dark field, cream text), service = staff-only plate, platform = platform number plate.
