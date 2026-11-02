@@ -1,0 +1,231 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-reactor-startup-20261102",
+ "task": "studio-reactor-playtest-round2-20261102-061947-01",
+ "lane": "STARTUP",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the round-2 brief's reactor startup / control-rod audio allowance; 7 jobs of a 12-job cap, every first take accepted)",
+ "plannedBy": "tools/audio-pipeline/reactor-startup-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/reactor-startup-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope, quiet fraction, spectral centroid, per-second level / centroid, spectrogram). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": "per clip (ops)",
+ "derivatives": [
+  {
+   "cue": "reactorSurge",
+   "url": "assets/audio/reactor-surge.mp3",
+   "bytes": 49528,
+   "sha256": "2d21721b3975df9713de4867663442910813e346e7d32b457fa7cb9951e3263c",
+   "dur": 6.14,
+   "ops": [
+    "mono",
+    "trim 1.6-7.74 s",
+    "cosine fades 0.12 / 0.04 s",
+    "peak -1 dBFS (1.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-surge-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-surge-01.wav",
+    "rawSha256": "a0fb93b7e1e324f6d84955b99d23eeeb4d2fde3db79c09d23e3d50d93bc5e177",
+    "rawBytes": 1411244,
+    "labFile": "sfx_a-giant-nuclear-reactor-powering-up-a-de_w8a8_seed737297743_063836.wav",
+    "labSidecarSha256": "73cc6c42f92487c5b4365b951f5096e332d4ecdbd74bcb73c030c7e84a60052f",
+    "jobId": "20261102T063836-737297743",
+    "prompt": "TrackType: SFX, a giant nuclear reactor powering up: a deep sub-bass rumble that swells and rises steadily in pitch and loudness, a growing electrical hum and whine building up to a powerful peak, a huge energy surge, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 737297743,
+    "seconds": 8,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorOnline",
+   "url": "assets/audio/reactor-online.mp3",
+   "bytes": 32391,
+   "sha256": "af8081e10454e516ee8154d8339c911beff9e1b880570fb814aa7808c3ffa104",
+   "dur": 4,
+   "ops": [
+    "mono",
+    "trim 0-4 s",
+    "cosine fades 0.002 / 0.35 s",
+    "peak -1 dBFS (-0.8 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-online-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-online-01.wav",
+    "rawSha256": "d3d93e9f422ad606decd18aa7d1baa28abaef8dc8149b2d6c6686b3b446459e0",
+    "rawBytes": 882044,
+    "labFile": "sfx_a-massive-deep-energy-impact-one-huge-he_w8a8_seed456197206_063841.wav",
+    "labSidecarSha256": "6d03584f639e05a74db4a52bb3940e0ec38c5a34b697d9a716b2ffaac7206744",
+    "jobId": "20261102T063841-456197206",
+    "prompt": "TrackType: SFX, a massive deep energy impact: one huge heavy boom with a powerful sub-bass thump and a crackling electrical burst, then a long low rumbling tail slowly fading out, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 456197206,
+    "seconds": 5,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorRodLoop",
+   "url": "assets/audio/reactor-rod-loop.mp3",
+   "bytes": 20271,
+   "sha256": "2d5172886e4062142aa0afcef76f654818553291a53367e783b40af7d658e86e",
+   "dur": 2.5,
+   "loop": {
+    "start": 0.1,
+    "length": 2.3
+   },
+   "ops": [
+    "mono",
+    "stationary window from 0.5 s (std 0.75 dB over 0.5 s blocks)",
+    "loop 2.3 s, equal-power crossfade 0.3 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (11.6 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-rod-loop-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-rod-loop-01.wav",
+    "rawSha256": "733d6e00a9b3b69e1f9bbce261f7242dbec3d34fe3e553d8379fb8c67c60402d",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-heavy-industrial-control-rod-drive-mec_w8a8_seed204671000_063845.wav",
+    "labSidecarSha256": "1f07ecf2682c69821235b8641c493d381f121d466585d64d2b284f1bd6e20bb8",
+    "jobId": "20261102T063845-204671000",
+    "prompt": "TrackType: SFX, a heavy industrial control rod drive mechanism moving steadily: a geared electric servo motor whine with a regular mechanical ratchet clicking and a soft hydraulic hiss, constant speed, no changes, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 204671000,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorRodStop",
+   "url": "assets/audio/reactor-rod-stop.mp3",
+   "bytes": 9613,
+   "sha256": "992fd35559944e28a51e3a97351ff73b23bfc3cf683d8595eb5ce44f8b573c84",
+   "dur": 1.15,
+   "ops": [
+    "mono",
+    "trim 0-1.15 s",
+    "cosine fades 0.002 / 0.15 s",
+    "peak -1 dBFS (9.4 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-rod-stop-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-rod-stop-01.wav",
+    "rawSha256": "dbee07191bd3e86f35b67395c8fe3678c87da0d6658df309c44cc436026a38db",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-heavy-steel-mechanism-locking-into-pla_w8a8_seed1318616898_063850.wav",
+    "labSidecarSha256": "243b16f4e6ee3ef454c1d08c70bd5839e1f05f18c31f686907108c16926cc75e",
+    "jobId": "20261102T063850-1318616898",
+    "prompt": "TrackType: SFX, a heavy steel mechanism locking into place: one deep solid metallic clunk with a short hydraulic hiss release, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1318616898,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorBed",
+   "url": "assets/audio/reactor-bed-loop.mp3",
+   "bytes": 43467,
+   "sha256": "565ac8f259388b587369cb04d3ce108c790373b895cfa0f11619a0df1bec5175",
+   "dur": 5.4,
+   "loop": {
+    "start": 0.1,
+    "length": 5.2
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 2.18 dB over 0.5 s blocks)",
+    "loop 5.2 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (-0.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-bed-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-bed-01.wav",
+    "rawSha256": "182a8667bcef8b0e54505477e1836198b0b36cab319f7857215751cf427bda81",
+    "rawBytes": 1764044,
+    "labFile": "sfx_a-huge-power-plant-machine-hall-running_w8a8_seed436372056_063854.wav",
+    "labSidecarSha256": "220dd31d8241edbea1e91525daeeaaa66a62cbe02420c27f75d2262128ce8163",
+    "jobId": "20261102T063854-436372056",
+    "prompt": "TrackType: SFX, a huge power plant machine hall running: a constant deep low electrical drone with a slow heavy mechanical throb, powerful and steady, no changes in speed, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 436372056,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorStage",
+   "url": "assets/audio/reactor-stage.mp3",
+   "bytes": 19435,
+   "sha256": "e3790b80567ffa5ed2c4104c22718913b08982e923121419277793d52864db6a",
+   "dur": 2.4,
+   "ops": [
+    "mono",
+    "trim 0-2.4 s",
+    "cosine fades 0.002 / 0.3 s",
+    "peak -1 dBFS (-0.7 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-stage-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-stage-01.wav",
+    "rawSha256": "cf0e5c87deea9d835c5e92a583201dec6492a29f269882458809abc2d12dd667",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-huge-industrial-electrical-contactor-s_w8a8_seed1388193861_063859.wav",
+    "labSidecarSha256": "f245c6b5283429e84282f34b083da87763d7220bc69467ae63ab39654d719db9",
+    "jobId": "20261102T063859-1388193861",
+    "prompt": "TrackType: SFX, a huge industrial electrical contactor slamming shut: one deep heavy electrical thump with a low bass boom and a short rising transformer hum, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1388193861,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "reactorBeacon",
+   "url": "assets/audio/reactor-beacon-loop.mp3",
+   "bytes": 17972,
+   "sha256": "ca5bfc50b3fb38f8e6f6578fb83b5c642c109ca4870e45c03f302bbbbf348bf3",
+   "dur": 2.2,
+   "loop": {
+    "start": 0.1,
+    "length": 2
+   },
+   "ops": [
+    "mono",
+    "quietest seam from 1.02 s (searched 0.4-1.2 s)",
+    "loop 2 s, equal-power crossfade 0.04 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (12.0 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-beacon-01",
+    "rawFile": "reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/raw/reactor-beacon-01.wav",
+    "rawSha256": "d88b4e8a3d6d4a7681967f82a90249d57da2238832e34066faf6b3c21dfeed5a",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-rotating-warning-beacon-light-running_w8a8_seed2058341218_063904.wav",
+    "labSidecarSha256": "8304f819370abab98038c2f5c327c29a2f6173b43ad790ea5bdd6caeca0f3f1b",
+    "jobId": "20261102T063904-2058341218",
+    "prompt": "TrackType: SFX, a rotating warning beacon light running: a small electric motor whirring steadily with a soft regular rhythmic ticking of its gears, constant speed, no changes, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 2058341218,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}

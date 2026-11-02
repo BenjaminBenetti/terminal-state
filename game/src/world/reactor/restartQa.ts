@@ -6,10 +6,12 @@
 //   __LL.reactorControl(id, {give: true})    operate a control through the real rules (no aim / hold time); `give` = DEBUG: add the
 //                                            part it needs first ('fuse-0' / 'fuse-1' / 'keyswitch')
 //   __LL.reactorWinFinish()                  jump a running win sequence to its end state
+//   __LL.reactorStartup({beaconLight, beamLight})  (lane STARTUP) beacons / beam / sky / outdoor gas / startup audio state; light gains
 
 import type {Game} from '../../game';
 import {reactorRestartOf} from './restart';
 import {reactorMapBoardsOf} from './mapBoard';
+import {reactorStartupOf, type StartupTune} from './startup'; // task reactor-playtest-round2-20261102 (lane STARTUP)
 
 export function reactorRestartQaApi(game: Game, lookAt: (x: number, y: number, z: number) => void, teleport: (x: number, z: number, yaw?: number, level?: number) => boolean) {
   const rt = () => reactorRestartOf(game);
@@ -39,5 +41,13 @@ export function reactorRestartQaApi(game: Game, lookAt: (x: number, y: number, z
       return r.qaOperate(id, give);
     },
     reactorWinFinish: (): boolean => rt()?.qaFinishWin() ?? false,
+    // task reactor-playtest-round2-20261102 (lane STARTUP): __LL.reactorStartup() — beacons (placement, power, lit lights), the beam / sky
+    // state and its lights, the outdoor gas, the director's counters / live loops; __LL.reactorStartup({beaconLight, beamLight}) = light gains
+    reactorStartup: (tune?: StartupTune): object => {
+      const s = reactorStartupOf(game);
+      if (!s) return {installed: false};
+      if (tune) s.setTune(tune);
+      return s.qa();
+    },
   };
 }

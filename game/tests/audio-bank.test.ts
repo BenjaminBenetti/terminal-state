@@ -15,6 +15,7 @@ import {CLIP_BYTES_COUGH, CLIP_GAPS_COUGH, CLIP_MANIFEST_COUGH} from '../src/aud
 import {CLIP_BYTES_T1, CLIP_GAPS_T1, CLIP_MANIFEST_T1} from '../src/audio/manifest.track1.generated'; // Task track1-siren-blightbelly-20261031 (lane AUDIO)
 import {CLIP_BYTES_STRAINER, CLIP_GAPS_STRAINER, CLIP_MANIFEST_STRAINER} from '../src/audio/manifest.strainer.generated'; // strainer squish set (lane AUDIO)
 import {CLIP_BYTES_REACTOR, CLIP_GAPS_REACTOR, CLIP_MANIFEST_REACTOR} from '../src/audio/manifest.reactor.generated'; // task reactor-build-20261101: the Reactor machine set
+import {CLIP_BYTES_REACTOR_STARTUP, CLIP_GAPS_REACTOR_STARTUP, CLIP_MANIFEST_REACTOR_STARTUP} from '../src/audio/manifest.reactorStartup.generated'; // task reactor-playtest-round2-20261102 (lane STARTUP)
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
@@ -22,9 +23,9 @@ import {CLIP_BYTES_REACTOR, CLIP_GAPS_REACTOR, CLIP_MANIFEST_REACTOR} from '../s
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
 // Task track1-siren-blightbelly-20261031 (lane AUDIO): + Siren hum / scream, Blightbelly burst / gas hiss (t1).
 // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / swing / contact / squish.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -71,9 +72,12 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         expect(m.sampleRate).toBe(44100);
         // encoded audio covers the clip (+ loop margins for beds)
         expect(m.samples / m.sampleRate).toBeGreaterThanOrEqual((r.loop ? r.loop.start + r.loop.length : r.dur) - 0.001);
-        // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop
-        if (r.loop) expect(r.loop.length).toBeGreaterThan(cue === 'flareBurn' ? 3 : 5);
-        if (cue === 'flareBurn') expect(r.loop!.length).toBeLessThanOrEqual(4);
+        // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop, and so are (task
+        // reactor-playtest-round2-20261102, lane STARTUP) the control-rod drive (it runs only while the rods move: a 4 s hold) and the
+        // beacon motor (a short mechanical cycle at one beacon) — the Reactor's machine BED stays under the >= 5 s bed rule
+        const SHORT: Record<string, [number, number]> = {flareBurn: [3, 4], reactorRodLoop: [2, 3], reactorBeacon: [1.5, 2.5]};
+        if (r.loop) expect(r.loop.length).toBeGreaterThan(SHORT[cue]?.[0] ?? 5);
+        if (SHORT[cue]) expect(r.loop!.length).toBeLessThanOrEqual(SHORT[cue][1]);
       }
     }
     expect(bytes).toBe(CLIP_BYTES);
@@ -82,7 +86,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
@@ -161,8 +165,8 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       flareIgnite: () => sfx.flareIgnite(2, 1.2, 2), flareOut: () => sfx.flareOut(6, 0.1, 6),
       flareBurnStart: () => { const h = sfx.flareBurnStart(6, 0.1, 6); h.setPos(6.5, 0.1, 6); h.stop(); },
       // task reactor-build-20261101 (primary): the Reactor's machine one-shots + loops
-      reactorCue: () => { for (const c of ['reactorGeneratorStart', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup'] as const) { ctx.currentTime += 1; sfx.reactorCue(c, 4, 1, 4); } },
-      reactorLoop: () => { for (const c of ['reactorGeneratorLoop', 'reactorFanLoop', 'reactorHum'] as const) { const h = sfx.reactorLoop(c, 5, 1, 5); h?.setPos(5.5, 1, 5); h?.stop(); } },
+      reactorCue: () => { for (const c of ['reactorGeneratorStart', 'reactorBreaker', 'reactorFuse', 'reactorValve', 'reactorPump', 'reactorStartup', 'reactorSurge', 'reactorOnline', 'reactorRodStop', 'reactorStage'] as const) { ctx.currentTime += 1; sfx.reactorCue(c, 4, 1, 4, {gain: 0.8, rate: 0.9, delay: 0.1, ref: 8, maxDist: 120, pri: 2}); } },
+      reactorLoop: () => { for (const c of ['reactorGeneratorLoop', 'reactorFanLoop', 'reactorHum', 'reactorBed', 'reactorRodLoop', 'reactorBeacon'] as const) { const h = sfx.reactorLoop(c, 5, 1, 5, {level: 0.5, rate: 0.9}); h?.setPos(5.5, 1, 5); h?.setLevel(1, 0.2); h?.setRate(1.05, 0.2); h?.stop(); } },
       breakage: () => { for (const c of ['breakGlass', 'breakWood', 'debrisFall', 'fleshTear'] as const) { ctx.currentTime += 1; sfx.breakage(c, 3, 1, 3, 0.8); } },
       casing: () => { ctx.currentTime += 1; sfx.casing(1, 0, 1, 3, 'rifle'); sfx.casing(1, 0, 1, 3, 'shell'); }, bodyFall: () => { ctx.currentTime += 1; sfx.bodyFall(1, 0, 1, 0.9); },
       physImpact: () => { for (const f of ['can', 'light', 'heavy', 'prop', 'cardboard', 'flesh', 'stone', 'wood', 'glass', 'metal'] as const) { ctx.currentTime += 1; sfx.physImpact(2, 0.1, 2, 3, f); } },

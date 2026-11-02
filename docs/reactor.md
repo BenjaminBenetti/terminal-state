@@ -12,10 +12,10 @@ outside Git.
 | Generator | `game/src/gen/reactor/{index,frame,carve,structure,validate}.ts` — `generateReactorLevel(ctx, {trackExt})` |
 | Registration | `levels/registry.ts` `LEVELS.reactor` (tier 3), `ai/spawnTables.ts` `REACTOR_SPAWN_PROFILE`, `items/lootTables.ts` `REACTOR_PROFILE`, `gen/maskLoot.ts` (1 mask, 3–5 filters), `gen/trackExt/config.ts` `TRACK_EXT_REACTOR`; title card, travel slot 3, `?level=reactor` / `?reactorSeed=CODE` |
 | Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts` |
-| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts` |
+| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
-| Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`) |
+| Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`), `game/src/audio/manifest.reactorStartup.generated.ts` (7 startup clips; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`) |
 | Core floor + hero reactor (task reactor-expansion, lane CORE) | `game/src/gen/reactor/coreFloor.ts` (vessel footprint, service ring, goop pool, bridges, loop / turbine layout, `layout.reactor.coreFloor`); `game/src/world/reactor/{coreHero,coreLiquids,coreStages,coreVisuals,coreLights}.ts` (the assembled structure, the dynamic goop / coolant layer, the staged startup, the glow lights) |
 | Tests | `game/tests/reactor-*.test.ts` (`reactor-level.test.ts` runs every lane on real generated layouts) |
 
@@ -307,6 +307,41 @@ Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
 - The canon: the surface gas that turns people into zombies is being pulled out of the air, slowly. It is NOT a cure: the zombies
   stay and nothing despawns.
 - The run continues; nothing is reset.
+
+### Coming to life: startup audio, orange beacons, the ONLINE sky (task reactor-playtest-round2-20261102, lane STARTUP)
+User: "real punch and depth as the reactor comes to life … spinning orange lights … play noise as the control rods are removed!" and
+"when the reactor comes online the fog visible through the roof should clear, with a blue beam shooting up in to the sky".
+Code: `world/reactor/startup.ts` (runtime, installed right after the restart), `startupPlan.ts` (the pure score), `startupAudio.ts`,
+`startupBeaconPlan.ts` + `startupBeacons.ts`, `startupSky.ts`. QA: `__LL.reactorStartup({beaconLight, beamLight})`.
+- **Driven only by the restart runtime**: its persisted record (a live change = a stage), its rod hold, its win clock. A build takes a
+  baseline, a restored / QA-jumped clock crosses no cue, and a restarted world is rebuilt at the end state: nothing replays.
+- **Audio** (Sound Lab startup set, 7 jobs of 12; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`; provenance
+  `derivatives/audio-reactor-startup.json`), all world-placed through `Sfx.reactorCue` / `reactorLoop`:
+  - each power stage: a contactor thump at its control, on top of the existing fuse / breaker / valve / pump / key cue;
+  - a deep machine **bed** at the core from the breaker on, louder and faster with every stage;
+  - the **rods**: the drive loop at the console and at the CRDM drives runs while the handle moves (rate rising with it), a heavy
+    stop clunk when they are out, a light clunk if E is let go, silent on pause;
+  - the win: the **surge** at the core as the rods come out (over the existing startup swell), the **ONLINE** impact + a deep thump
+    at 6 s, each tier's lights clunking on up the pit (the existing breaker clip, pitch rising), a beacon motor at the nearest beacon.
+  - Bounded: at most 4 own loops (`MACHINE_LOOP.max` 6 → 10: three generators + three fan zones already filled 6), the surge / ONLINE
+    at voice priority 2.
+- **Beacons**: up to 4 per storey (rim to the core floor, 24 on the QA seeds), on wall brackets 4.1 m over the deck above a mounted
+  wall lamp, re-checked at that height (solid wall behind, no walkway / flight at the head, clear of fans / pipe banks, in an open
+  band); audited as `extraSolids`. Three InstancedMeshes (body, turning lens, additive flare cone), one shared material each. The orange
+  wave starts on the core floor as the rods come out and climbs the pit 6 s ahead of the floodlights. **Real light**: 3 SpotLights
+  created at boot, swept with the 3 powered beacons nearest the eye (within 32 m).
+- **The ONLINE sky** (at 6 s): an additive blue beam (one mesh: core, sheath, collar) from the vessel head up through the roof opening
+  to 120 m above the roof, its head climbing in 1.1 s. Two PointLights created at boot cast its light: mid-pit (also a `vfOpen`
+  scatter light, registered only while the beam is on) and under the opening. Over 28 s the surface air over the roof clears:
+  `reactorOutdoorGas(roofY, rect, clear)` thins and lifts it, written through `ReactorAir.setOutdoorClear`, so the exposure and the
+  march read the same object. The outside gas sheets / curtain fade (`MALL_SKY_U`, restored on teardown) and a cleared-sky dome
+  fades in over the opening. No uniform array was added to the march.
+- **Cost**: 5 lights in the boot light set (intensity only), at most 5 extra scene draws (3 beacon meshes; beam + sky dome only
+  once ONLINE), no shadow casters, 2 × 24 matrices per frame while beacons turn. These sit outside `reactor-cpu-submit.test.ts`'s roots.
+- **Limits**: the audio was never auditioned (structural QC only: `reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/
+  QC.md`); the surge / ONLINE / bed takes are sub-heavy, so on small speakers the existing clips carry the mid-range. No browser or
+  WebGPU check was run in this lane.
+- Tests: `game/tests/reactor-startup.test.ts`.
 
 ## The train
 The rim station is a shared Trench beside its start platform, so the shared player train (`gen/playerTrain.ts`
