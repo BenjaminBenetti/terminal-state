@@ -14,6 +14,7 @@ import {propBlocksDoorway} from '../src/gen/placeKit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {planStoreys} from '../src/world/reactor/mapBoardPlan';
+import {MINES_FIT} from '../src/world/reactor/minesAssets';
 import {cellsOfWorld, wasteCoherence, wasteSignature, type WasteSignature} from './reactor-x-waste-graph';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
@@ -147,6 +148,33 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
     expect(distinct(s => s.corridors)).toBeGreaterThanOrEqual(2);
     expect(distinct(s => s.switchgear)).toBeGreaterThanOrEqual(2);
   });
+
+  it('keeps every guaranteed piece when the shared station dresser\'s draws shift upstream (the mines drill at fits 1.5 / 1.9, 12 seeds)', () => {
+    // (lead / lane PROPS: the drill's real size moves tier 2's dressing, so tier 4 meets a different furnishing: the booths, the
+    // hot-cell window, the casks, the fans, the switchgear, the console, the drums and the graph must not depend on it)
+    const keep = MINES_FIT.drillRig;
+    try {
+      for (const [fit, seeds] of [[1.9, [1, 2, 3, 4, 5, 6, 7, 8]], [1.5, [9, 12, 15, 18]]] as const) {
+        MINES_FIT.drillRig = fit;
+        for (const seed of seeds) {
+          const L = LEVELS.reactor.generate('main', {levelSeed: seed});
+          const c = L.reactor!.complexes?.find(q => q.id === 'waste');
+          expect(c, `fit ${fit} seed ${seed}`).toBeTruthy();
+          const D = L.reactorWaste!, n = (p: string) => D.models.filter(m => m.piece === p).length, tag = `fit ${fit} seed ${seed}`;
+          expect(n('deconShower') + n('hotCellWindow'), `${tag} showers / hot cell`).toBeGreaterThanOrEqual(2);
+          expect(n('hotCellWindow'), tag).toBe(1);
+          expect(n('switchgear'), tag).toBeGreaterThanOrEqual(1);
+          expect(n('controlConsole'), tag).toBe(1);
+          expect(n('wasteDrum'), tag).toBeGreaterThanOrEqual(60);
+          expect(n('storageCask'), tag).toBeGreaterThanOrEqual(2);
+          expect(D.fans.length, tag).toBeGreaterThanOrEqual(1);
+          expect(D.genSign, tag).toBeTruthy();
+          expect(wasteCoherence(L, c!.slot!.frontArea), tag).toEqual([]);
+          expect(complexIssues(L), tag).toEqual([]);
+        }
+      }
+    } finally { MINES_FIT.drillRig = keep; }
+  }, 120_000);
 
   it('carves in < 60 ms and dresses in < 150 ms (mean over the seeds)', () => {
     let carve = 0, dress = 0;

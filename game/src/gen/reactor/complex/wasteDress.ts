@@ -933,6 +933,41 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     doorPlate(R[p], between(p, 'pump'), NAME.pump!, 1.3);
   }
 
+  /**
+   * Up to `max` ventilation fans on plinths backed to room r's walls (passes of [wall, door pad]; the next pass only while none stands):
+   * the plinth, the fan housing record (the hub faces into the room), the duct up to the trunk under the ceiling. Returns the count.
+   */
+  function placeFans(r: RoomF, rr: Rng, max: number, passes: readonly (readonly [Wall, number])[]): number {
+    const top = r.ceil - base, FR = 0.7, FW = 2.6, FD = 1.36, FH = 2.5, plinth = Math.max(0.6, Math.min(1.3, top - FH - 0.5));
+    if (top < plinth + FH + 0.25) return 0;
+    let fans = 0;
+    const wbox = (w: Wall, qa: number, qb: number, da: number, db: number, y0: number, y1: number, m: WasteMat) => {
+      const p = onWall(r, w, qa, da), q = onWall(r, w, qb, db);
+      box(p[0], base + y0, p[1], q[0], base + y1, q[1], m);
+    };
+    const firstPad = passes[0]?.[1];
+    for (const [w, pad] of passes) {
+      if ((fans >= 1 && pad !== firstPad) || fans >= max) break;
+      let lastQ = -Infinity, onThis = 0;
+      for (const q of spots(r, w, rr, 0.25, FW / 2 + 0.3).sort((a, b) => a - b)) {
+        if (fans >= max || q - lastQ < FW + 0.9) continue;
+        if (!wallFree(r, w, q - FW / 2, q + FW / 2, pad)) continue;
+        const alongV = w === 'front' || w === 'back' ? r.au : r.av;
+        const [x, z] = onWall(r, w, q, FD / 2 + 0.05);
+        const hx = alongV[0] ? FW / 2 : FD / 2, hz = alongV[0] ? FD / 2 : FW / 2;
+        if (!solid(r, x, z, hx, hz, plinth + FH, 'waste:fan')) continue;
+        wbox(w, q - FW / 2 + 0.1, q + FW / 2 - 0.1, 0.05, FD + 0.05, 0, plinth, 'concrete');
+        const [hxw, hzw] = onWall(r, w, q, 0.05), n = wallN(r, w);
+        decor.fans.push({x: r3(hxw), y: r3(base + plinth + 1.256), z: r3(hzw), nx: -n[0], nz: -n[1], r: FR});
+        wbox(w, q - 0.55, q + 0.55, 0.05, 0.6, plinth + FH - 0.2, top - 0.05, 'steel');
+        lastQ = q;
+        fans++; onThis++;
+      }
+      if (onThis) wbox(w, 0.3, wallLen(r, w) - 0.3, 0.05, 0.95, top - 0.75, top - 0.05, 'steel');
+    }
+    return fans;
+  }
+
   // =================================================================================================================================
   // GENERATOR & VENTILATION PLANT
   const gfx = (gox + rec.genFoot.w / 2) * CELL, gfz = (goy + rec.genFoot.h / 2) * CELL;
@@ -954,34 +989,11 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       // the plinth: a low concrete pad flush round the skid
       box(x0 - 0.1, base, z0 - 0.1, x1 + 0.1, base + 0.04, z1 + 0.1, 'concrete');
     }
-    // two ventilation fans on plinths against the back wall (else a side wall) + their duct trunk under the ceiling
-    const FR = 0.7, FW = 2.6, FD = 1.36, FH = 2.5, plinth = Math.max(0.6, Math.min(1.3, top - FH - 0.5));
-    let fans = 0;
-    const wbox = (w: Wall, qa: number, qb: number, da: number, db: number, y0: number, y1: number, m: WasteMat) => {
-      const p = onWall(r, w, qa, da), q = onWall(r, w, qb, db);
-      box(p[0], base + y0, p[1], q[0], base + y1, q[1], m);
-    };
-    // (a plant with a door in every wall: the second pass keeps 0.4 m off the jambs)
-    for (const [w, pad] of [...(rr.shuffle(['back', 'front']).concat(['left', 'right']) as Wall[]).map(w => [w, 0.8] as const), ...WALLS.map(w => [w, 0.4] as const)]) {
-      if (fans >= 1 && pad < 0.8) break;
-      if (fans >= 2) break;
-      let lastQ = -Infinity, onThis = 0;
-      for (const q of spots(r, w, rr, 0.25, FW / 2 + 0.3).sort((a, b) => a - b)) {
-        if (fans >= 2 || q - lastQ < FW + 0.9) continue;
-        if (!wallFree(r, w, q - FW / 2, q + FW / 2, pad)) continue;
-        const alongV = w === 'front' || w === 'back' ? r.au : r.av;
-        const [x, z] = onWall(r, w, q, FD / 2 + 0.05);
-        const hx = alongV[0] ? FW / 2 : FD / 2, hz = alongV[0] ? FD / 2 : FW / 2;
-        if (top < plinth + FH + 0.25 || !solid(r, x, z, hx, hz, plinth + FH, 'waste:fan')) continue;
-        // plinth (concrete), the fan housing (the hub faces into the room), the duct up to the trunk
-        wbox(w, q - FW / 2 + 0.1, q + FW / 2 - 0.1, 0.05, FD + 0.05, 0, plinth, 'concrete');
-        const [hxw, hzw] = onWall(r, w, q, 0.05), n = wallN(r, w);
-        decor.fans.push({x: r3(hxw), y: r3(base + plinth + 1.256), z: r3(hzw), nx: -n[0], nz: -n[1], r: FR});
-        wbox(w, q - 0.55, q + 0.55, 0.05, 0.6, plinth + FH - 0.2, top - 0.05, 'steel');
-        lastQ = q;
-        fans++; onThis++;
-      }
-      if (onThis) wbox(w, 0.3, wallLen(r, w) - 0.3, 0.05, 0.95, top - 0.75, top - 0.05, 'steel');
+    // two ventilation fans on plinths against the back wall (else a side wall) + their duct trunk under the ceiling; a plant the
+    // furnishing / its doors leave no wall in: one fan in the next service room, else in a hall it ventilates
+    if (!placeFans(r, rr, 2, [...(rr.shuffle(['back', 'front']).concat(['left', 'right']) as Wall[]).map(w => [w, 0.8] as const), ...WALLS.map(w => [w, 0.4] as const)])) {
+      const next = [R.pump, R.switch, ...plan.rooms.filter(w => w.kind === 'store' && w.zone === 'service').map(w => R[w.key]), R.compactor, R.cask];
+      for (const rm of next) if (rm && placeFans(rm, rr, 1, WALLS.map(w => [w, 0.4] as const))) break;
     }
     lamp(r, r.lu * 0.25, r.lv * 0.3); lamp(r, r.lu * 0.75, r.lv * 0.3); lamp(r, r.lu * 0.5, r.lv * 0.78);
     plate(r, 'back', r.lu / 2, Math.min(top - 0.95, 3.2), 'DANGER · ROTATING MACHINERY', 2.0) || plate(r, 'front', r.lu / 2, Math.min(top - 0.95, 3.2), 'DANGER · ROTATING MACHINERY', 2.0);
