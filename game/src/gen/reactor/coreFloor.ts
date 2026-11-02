@@ -23,7 +23,7 @@
 //  4. coreFloorIssues (validate.ts): the pool blocked + railed, bridges, the vessel solid, the loops on the goop.
 
 import {CELL, FLOOR, SOLID, type Grid} from '../grid';
-import type {LightPlacement, StationLayout} from '../stationTypes';
+import type {LightMount, LightPlacement, StationLayout} from '../stationTypes';
 import type {PropPlacement} from '../props';
 import type {ReactorCoreFloor} from './reactorTypes';
 import {CORE_LEVEL} from './frame';
@@ -551,6 +551,13 @@ function deckConnected(g: Grid, areas: ReadonlySet<number>, pit: {x: number; y: 
 // ---------------------------------------------------------------------------------------------
 // 3. The record, the baked green sources, the smooth-railing seam
 
+/**
+ * The core floor's own lamps (GASLIGHT's mounted-lamp contract, gen/reactor/gaslightLamps.ts: a post on the railing line, its head over
+ * the walkway): one per bridge side pair, four round the service ring between the bridges (clear of the coolant legs overhead).
+ * Head height / arm reach; the first lamp of each set is a steady emergency lamp, the rest join the powered circuit 2.
+ */
+export const CORE_POST_LAMPS = {headY: 2.5, arm: 0.5, emergency: 0.55, powered: 0.9} as const;
+
 /** The baked goop glow: virtual green sources round the loop circle (half steady, half on the powered circuit 2). */
 export const CORE_GLOW_SOURCES = {count: 12, lift: 3.4, tint: [0.32, 1.0, 0.42] as const, power: 1.0} as const;
 
@@ -599,6 +606,37 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
       power: CORE_GLOW_SOURCES.power, dying: k % 2 === 1, level: CORE_LEVEL, virtual: true, tint: CORE_GLOW_SOURCES.tint,
     };
     layout.lights.push(l);
+  }
+  // the mounted post lamps of the bridges and the service ring (real fixtures: the core floor's own light besides the glow)
+  const PL = CORE_POST_LAMPS;
+  const post = (foot: {x: number; z: number}, nx: number, nz: number, emergency: boolean) => {
+    const hx = foot.x + nx * PL.arm, hz = foot.z + nz * PL.arm;
+    const [ix, iz] = g.cellOf(hx, hz);
+    if (!g.inBounds(ix, iz) || g.cells[g.idx(ix, iz)] !== FLOOR || g.blocked[g.idx(ix, iz)]) return;
+    const mount: LightMount = {kind: 'post', x: r3(foot.x), y: base, z: r3(foot.z), nx: r3(nx), nz: r3(nz)};
+    layout.lights.push({
+      x: r3(hx), y: r3(base + PL.headY), z: r3(hz), rot: Math.abs(nx) > Math.abs(nz) ? Math.PI / 2 : 0, area: g.area[g.idx(ix, iz)], broken: false, flicker: false,
+      warm: true, power: emergency ? PL.emergency : PL.powered, dying: !emergency, level: CORE_LEVEL, mount,
+    });
+  };
+  cf.bridges.forEach((b, bi) => {
+    const ux = Math.cos(b.angle), uz = Math.sin(b.angle), nx = -uz, nz = ux, half = bridgeHalf[bi];
+    const mid = (F.ringR1 + cf.poolR1) / 2;
+    [[-1, mid - 1.4], [1, mid + 1.4]].forEach(([side, along], k) => {
+      post({x: cf.cx + ux * along + nx * side * half, z: cf.cz + uz * along + nz * side * half}, -nx * side, -nz * side, k === 0);
+    });
+  });
+  {
+    const legs = fin.loops.flatMap(l => [l.sg, l.rcp].filter((p): p is NonNullable<typeof p> => !!p).map(p => Math.atan2(p.z - cf.cz, p.x - cf.cx)));
+    const dAng = (a: number, b: number) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
+    const bs = cf.bridges.map(b => b.angle).sort((p, q) => p - q);
+    const mids = bs.length ? bs.map((a, i) => (a + (i + 1 < bs.length ? bs[i + 1] : bs[0] + 2 * Math.PI)) / 2) : [0, Math.PI / 2, Math.PI, 1.5 * Math.PI];
+    mids.forEach((m, k) => {
+      const a = [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42].map(o => m + o).find(c => legs.every(l => dAng(c, l) > 0.2) && cf.bridges.every(b => dAng(c, b.angle) > 0.3));
+      if (a === undefined) return;
+      const ux = Math.cos(a), uz = Math.sin(a), r = Math.max(F.ringR1, ringRail);
+      post({x: cf.cx + ux * r, z: cf.cz + uz * r}, -ux, -uz, k % 2 === 0);
+    });
   }
   const axis = (b: CoreFloorCarve['bridges'][number], bi: number) => {
     const ux = Math.cos(b.angle), uz = Math.sin(b.angle), a = Math.max(F.ringR1 - 0.6, b.along0 - 0.35), e = b.along1 + 0.35;

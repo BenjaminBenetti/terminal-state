@@ -20,6 +20,9 @@ import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTextu
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
+import {reactorCoreLights} from './coreLights'; // task reactor-expansion-20261101 (lane CORE)
+import {activeCoreVisuals} from './coreVisuals';
+import {CORE_LOOK} from './coreStages';
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
 // task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Ordinary non-hazard atmospheric fog is not green"): 0x283020 (olive) ->
@@ -135,6 +138,12 @@ export function reactorArchQaApi(game: {world?: {reactorArch?: ReactorArch} | nu
       if (o.core !== undefined) v.setCoreGlow(o.core);
       if (o.tier) v.setTierPower(o.tier[0], o.tier[1]);
       return v.state();
+    },
+    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning). */
+    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>} = {}) => {
+      const c = activeCoreVisuals();
+      if (c && o.tune) Object.assign(c.tune, o.tune);
+      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null};
     },
   };
 }

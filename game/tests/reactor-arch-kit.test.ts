@@ -21,6 +21,7 @@ import {buildKitMeshes, type KitBuilt} from '../src/world/reactor/archMeshes';
 import {ReactorArchVisuals} from '../src/world/reactor/archVisuals';
 import {REACTOR_MODELS, REACTOR_MODEL_FILES, REACTOR_PIECES, REACTOR_TEXTURES, reactorModelKeysFor, reactorTextureLoads, type ReactorPiece} from '../src/world/reactor/archAssets';
 import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES} from '../src/assets/reactorKit.generated';
+import {REACTOR_X_KIT} from '../src/assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101 (lane CORE)
 import {levelOfAsset, assetAllowedIn} from '../src/assets/levelAssets';
 import {ATMOSPHERE, atmosphereFor} from '../src/render/atmosphere';
 import {REACTOR_ATMOSPHERE} from '../src/world/reactor/archHaze';
@@ -251,7 +252,10 @@ describe('visuals API (fans, generators, core glow, tier power)', () => {
 
   it('core glow eases from the faint cold dormant colour to alive; tier power drives one tier material (emergency floor at 0)', () => {
     const cold = glow.color.clone();
-    expect(cold.g).toBeLessThan(0.1);
+    // task reactor-expansion-20261101 (lane CORE): dormant is a CLEAR green now (user: "no green glow from the reactor like in the art")
+    expect(cold.g).toBeGreaterThan(0.25);
+    expect(cold.g).toBeLessThan(0.6);
+    expect(cold.g).toBeGreaterThan(cold.r * 3);
     v.setCoreGlow(1);
     for (let i = 0; i < 300; i++) v.tick(0.05);
     expect(glow.color.g).toBeGreaterThan(0.85);
@@ -272,7 +276,8 @@ describe('GLB swap registry, texture slots, level ownership', () => {
     for (const p of REACTOR_PIECES) {
       const s = REACTOR_MODELS[p];
       expect(s.delivered).toBe(true);
-      expect((REACTOR_KIT as Record<string, {key: string}>)[p].key).toBe(s.key);
+      // (task reactor-expansion-20261101, lane CORE: the hero pieces come from the expansion kit REACTOR_X_KIT)
+      expect(({...REACTOR_KIT, ...REACTOR_X_KIT} as Record<string, {key: string}>)[p].key).toBe(s.key);
       expect(fs.statSync(path.join(GAME, 'public', s.url)).size).toBe(s.bytes);
       expect(s.cap).toBeGreaterThan(0);
     }
