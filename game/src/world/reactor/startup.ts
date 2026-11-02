@@ -19,6 +19,7 @@ import {reactorRestartOf, type ReactorRestart} from './restart';
 import {HOLD_S} from './restartLogic';
 import {planWin, type WinPlan} from './restartWin';
 import {reactorAirRuntime} from './generators';
+import type {ReactorAir} from './air';
 import {coreHeroOf} from './coreHero';
 import type {KitPlan} from './archKit';
 import {STARTUP, beaconPowerAt, beamAt, skyClearAt, stageSnap} from './startupPlan';
@@ -59,6 +60,9 @@ export class ReactorStartup {
   readonly beamLights = new BeamLights();
   readonly audio: StartupAudio;
   readonly tune = {beaconLight: 1, beamLight: 1};
+  /** The host's restart runtime / built Reactor air (tests replace them). */
+  findRestart: () => ReactorRestart | undefined = () => reactorRestartOf(this.host);
+  findAir: () => ReactorAir | null = () => reactorAirRuntime(this.host)?.air ?? null;
   /** Counters (QA / tests). */
   readonly counts = {builds: 0, restored: 0, frames: 0, outdoorWrites: 0};
   /** The last shown state (QA / tests). */
@@ -116,7 +120,8 @@ export class ReactorStartup {
     this.curtain0 = MALL_SKY_U.curtain.value as number;
     this.sites = this.makeSites(info);
     const R = this.restart();
-    const winT = this.winT(R);
+    this.liveT = null;
+    const winT = this.winT(R, 0);
     if (winT !== null) this.counts.restored++;
     this.audio.build(R?.state ? stageSnap(R.state) : {fuses: 0, breaker: false, valve: false, pump: false, key: false, rods: false, restarted: false}, winT, this.plan.tiers.length);
     this.apply(0, winT); // the restored end state at once (no transition)
@@ -141,15 +146,21 @@ export class ReactorStartup {
   }
 
   private restart(): ReactorRestart | undefined {
-    return reactorRestartOf(this.host);
+    return this.findRestart();
   }
 
-  /** The live win clock (null: not restarted; a restarted record without its sequence: done). */
-  private winT(R: ReactorRestart | undefined): number | null {
-    if (!R?.state) return null;
-    if (R.win) return R.win.t;
-    return R.state.restarted ? Infinity : null;
+  /**
+   * The startup clock: the restart's live win clock while its sequence runs; once that sequence is done (it stops stepping at its last
+   * change) this clock runs on with play time, so the sky clearing completes. A world BUILT with the sequence already done (a restored
+   * restart: finish()) or a restarted record without one is at its end (Infinity). null = not restarted.
+   */
+  private winT(R: ReactorRestart | undefined, dt: number): number | null {
+    if (!R?.state) return (this.liveT = null);
+    if (R.win) this.liveT = !R.win.done ? R.win.t : this.liveT === null ? Infinity : this.liveT + dt;
+    else this.liveT = R.state.restarted ? (this.liveT ?? Infinity) : null;
+    return this.liveT;
   }
+  private liveT: number | null = null;
 
   private makeSites(info: ReactorInfo): StartupSites {
     const core = {x: info.core.x, y: (info.core.y0 + info.core.y1) / 2, z: info.core.z};
@@ -200,7 +211,7 @@ export class ReactorStartup {
     if (!this.info) return;
     this.counts.frames++;
     const R = this.restart();
-    const winT = this.winT(R);
+    const winT = this.winT(R, dt);
     this.host.camera.getWorldPosition(this.eye);
     const L = this.p3;
     L.x = this.eye.x; L.y = this.eye.y; L.z = this.eye.z;
@@ -220,7 +231,7 @@ export class ReactorStartup {
     if (beam.on > 0 && !this.scattered && atm?.addScatterLight) this.scattered = !!atm.addScatterLight(this.beamLights.mid);
     else if (beam.on <= 0 && this.scattered) { atm?.removeScatterLight?.(this.beamLights.mid); this.scattered = false; }
     // the surface air over the roof: ONE function for the exposure and the march (ReactorAir.outdoor), the outside gas sheets / curtain
-    const air = reactorAirRuntime(this.host)?.air ?? null;
+    const air = this.findAir();
     if (air?.setOutdoorClear(clear)) this.counts.outdoorWrites++;
     MALL_SKY_U.gas.value = MALL_SKY.gas * (1 - clear);
     MALL_SKY_U.curtain.value = this.curtain0 * (1 - clear);
@@ -243,7 +254,7 @@ export class ReactorStartup {
       beacons: v ? {...v.stats(), perTier: this.byRank.map(l => l.length), at: v.spots.map(s => ({tier: s.tier, level: s.level, x: s.x, y: s.y, z: s.z}))} : null,
       beaconLights: this.beaconLights.lights.map((l, i) => ({beacon: this.beaconLights.assigned[i], intensity: +l.intensity.toFixed(1)})),
       sky: sky?.stats() ?? null, beamLights: this.beamLights.all.map(l => ({name: l.name, intensity: +l.intensity.toFixed(1), at: [+l.position.x.toFixed(2), +l.position.y.toFixed(2), +l.position.z.toFixed(2)]})),
-      scatter: this.scattered, outdoor: reactorAirRuntime(this.host)?.air?.outdoor ?? null,
+      scatter: this.scattered, outdoor: this.findAir()?.outdoor ?? null,
       audio: {...this.audio.counts, loops: this.audio.loops}, counts: {...this.counts}, tune: {...this.tune}, lightsMax: BEACON_LIGHTS.count + 2,
     };
   }

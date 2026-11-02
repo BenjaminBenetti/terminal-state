@@ -89,7 +89,7 @@ export function planBeacons(layout: StationLayout): BeaconSpot[] {
   if (!info) return [];
   const B = BEACONS, cx = info.pit.cx, cz = info.pit.cz;
   const byLevel = new Map<number, {spot: BeaconSpot; ang: number}[]>();
-  for (const l of layout.lights) {
+  for (const l of layout.lights ?? []) {
     const m = l.mount;
     if (!m || m.kind !== 'wall' || l.virtual) continue;
     // the storey the lamp was planned for (its deck = the bracket height - PIT_LAMPS.wallY; a lamp's `level` is the band that holds
