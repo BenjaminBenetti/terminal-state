@@ -547,7 +547,8 @@ export class ReactorRestart {
     this.cue('reactorStartup', {x: info.core.x, y: (info.core.y0 + info.core.y1) / 2, z: info.core.z}, ['trainDistant', {rate: 0.6, gain: 1}]);
     this.host.hud.toast('Control rods withdrawn — the core is waking');
     this.humT = 2.5; // the hum swells in after the startup cue
-    const seed = this.host.run.seeds?.reactor ?? this.host.layout.seed;
+    const run = this.host.run as {seeds?: {reactor?: number}; seedFor?: () => number};
+    const seed = run.seedFor?.() ?? run.seeds?.reactor ?? this.host.layout.seed; // (campaign: the Reactor NODE's own seed)
     try { if (this.recordMilestone(seed)) this.counts.milestones++; } catch { /* storage is optional */ }
   }
 

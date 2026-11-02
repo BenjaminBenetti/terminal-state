@@ -97,6 +97,7 @@ import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLab
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
+import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
@@ -588,7 +589,7 @@ export class Game {
   /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
-    return LEVELS[key.level].generate(key.section, {levelSeed: run.seeds[key.level], startWeapon: this.startWeapon, gear: run.gearFor(key)});
+    return LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key)}); // (campaign: the node's own seed)
   }
 
   /**
@@ -928,9 +929,9 @@ export class Game {
   /** Iteration 16: the Retry-level snapshot of the level just entered (carry state + that level's section memories). */
   private levelEntrySnapshot(): RunSnapshot {
     const k = this.run.current;
-    return takeSnapshot({level: k.level, section: k.section, arrival: this.arrival},
+    return takeSnapshot({level: k.level, section: k.section, station: k.station, arrival: this.arrival},
       {inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery, participants: this.runParticipants, stats: this.stats},
-      this.run.levelMemories(k.level));
+      this.run.scopeMemories(k)); // (campaign: this STATION's memories only)
   }
 
   /** Iteration 16: from a click — audio resumes and pointer lock is requested inside the gesture (the rebuild can outlast it). */
@@ -972,17 +973,20 @@ export class Game {
    * warm-up; otherwise the caller shows the title (boot, the title's level choice). Single flight with travel / retry:
    * resolves null if another lifecycle operation is running.
    */
-  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void} = {}): Promise<WarmupResult | null> {
+  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void; campaign?: CampaignState} = {}): Promise<WarmupResult | null> {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = o.enter ? this.beginGesture() : null;
     const back = this.state;
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
+      // (campaign) a network run starts at the campaign's current station (its archetype builds it, its node seed seeds it)
+      const startNode = o.campaign?.network.nodes.find(n => n.id === o.campaign!.current);
+      if (startNode) level = startNode.archetype;
       const def = LEVELS[level];
       const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
-      const key: SectionKey = {level, section: def.entry};
-      const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
-      const shown = levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
+      const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
+      const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
+      const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
       const ui = this.showLoading(`New run · ${shown}. ${def.blurb}`, `Generating ${shown}…`);
       await nextPaint();
       let layout: StationLayout;
@@ -1017,7 +1021,7 @@ export class Game {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = this.beginGesture();
     const flight = this.lifecycle.run(async () => {
-      const key: SectionKey = {level: snap.level, section: snap.section};
+      const key: SectionKey = snap.station ? {level: snap.level, section: snap.section, station: snap.station} : {level: snap.level, section: snap.section};
       const def = LEVELS[key.level];
       const ui = this.showLoading(`Retry · ${def.name}: back to how you entered it — the same kit, health and supplies as then.`, `Rebuilding ${def.name}…`);
       await nextPaint();
@@ -1025,7 +1029,7 @@ export class Game {
       try { layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, 'dead', ui); return null; }
       await this.warmRun;
       this.leaveSection(false); // this level's memories are replaced by the snapshot's
-      this.run.restoreLevelMemories(snap.level, snap.memories);
+      this.run.restoreScopeMemories(key, snap.memories); // (campaign: this station's memories only)
       this.restoreCarryFrom(snap);
       this.buildSection(key, layout, snap.arrival, false); // (the loading screen keeps saying what Retry restores)
       const w = await this.prepareGraphics(ui);

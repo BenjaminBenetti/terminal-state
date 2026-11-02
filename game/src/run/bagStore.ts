@@ -10,7 +10,10 @@ export const BAG_LANE = 'gear.bags';
 /** 'office:floor-5' -> {level: 'office', section: 'floor-5'}. */
 export function parseSectionId(id: string): SectionKey {
   const i = id.indexOf(':');
-  return i < 0 ? {level: id as LevelId, section: 'main'} : {level: id.slice(0, i) as LevelId, section: id.slice(i + 1)};
+  const head = i < 0 ? id : id.slice(0, i), section = i < 0 ? 'main' : id.slice(i + 1);
+  // (campaign) a station-keyed memory (`st-07:main`): the key round-trips through sectionId by its station (the archetype is not needed)
+  if (/^st-\d+$/.test(head)) return {level: 'subway', section, station: head};
+  return {level: head as LevelId, section};
 }
 
 export interface RunBagStore {
