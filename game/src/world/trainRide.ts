@@ -395,7 +395,9 @@ export class TrainRide {
       step = P.update(cdt, input, this.model.levels, this.model.props, opts);
     } finally {
       [L.x, L.z] = fromStep(P.x, P.z);
-      L.y = P.y; L.yaw = P.yaw; L.vx = P.vx; L.vz = P.vz;
+      // the car floor is flat: a grounded body stands exactly on it (the grid stores float32 heights)
+      L.y = P.grounded && Math.abs(P.y - this.runtime.spec.floorY) < 1e-4 ? this.runtime.spec.floorY : P.y;
+      L.yaw = P.yaw; L.vx = P.vx; L.vz = P.vz;
       this.writePlayer();
     }
     return step;
