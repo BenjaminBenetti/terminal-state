@@ -240,6 +240,14 @@ Nothing solid may stand in walkable space except designed edges (railings on the
   - The collision checks cover rails across a path, the ladder climbs (player and AI) and the designed stand points: link landings,
     ladder feet and heads, controls, generators and the train's doors.
   - It reports hits by kind and location. Pass `areas` to audit one side complex.
+  - **Re-run after a lane lands:** `auditReactorPaths(layout, {models: 'all', meshOf: testMeshOf})` (`testMeshOf` in
+    `game/tests/reactor-x-paths-meshes.ts` reads the cooked GLBs, so portal-shaped models are judged by their real triangles), or the
+    test file `game/tests/reactor-x-paths-audit.test.ts`.
+    - Visuals planned through the kit (`KitPlan.add` / `placeModel` / `merged`) are covered automatically.
+    - Another builder's visuals must be added to `extraSolids()` in `pathsAudit.ts`. Mines, bunker and the map boards are there now.
+    - `PATHS_OWNED_ELSEWHERE` in the test pins other lanes' known findings at their measured depth.
+  - A solid inside its own collision prop's box is not a clip, since the body collides with it. Floor-level detail up to 0.16 m (the mine
+    rails and sleepers) is walked over, like the subway track bed.
 - **The fixes it drove:**
   - A deck record is its real cells (`gen/reactor/pathsGen.ts`), so no stringers hang over a stairwell.
   - No rail runs across a stair mouth or a seam between storeys, and every maintenance ladder head has a 0.9 m opening in the rail.

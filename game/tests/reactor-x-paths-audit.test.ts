@@ -14,6 +14,7 @@ import {
   BODY, WalkVolume, auditModels, auditPlan, auditReactorPaths, obbAabbDepth, obbOf, pathAuditSummary, type PathAuditReport, type PathHit,
 } from '../src/world/reactor/pathsAudit';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {testMeshOf} from './reactor-x-paths-meshes';
 
 /** Both stair walls, single + twin tower variants. */
 const SEEDS = [9100, 218558, 637474, 1, 42, 777, 31337, 2026110];
@@ -25,20 +26,32 @@ const level = (seed: number) => {
 };
 
 /**
- * Intrusions OWNED BY OTHER LANES of this task (the lead drops an entry once that lane is merged and the audit is re-run):
- *  - lane CONTROLS (user points 8 / 10): the restart-site machines ('sites …': the circulation pump model turned 90 deg against its
- *    collision box, the console model overhanging its box, the valve model 4.5 cm past its box);
+ * Intrusions OWNED BY OTHER LANES of this task, each pinned at its measured worst penetration into the walkway (m, beyond the 0.1 m
+ * edge tolerance) so nothing grows unnoticed. The lead drops / tightens an entry once that lane fixes it and the audit is re-run:
+ *  - lane CONTROLS (machines placed from footprints): the switchgear sections' door plane sits ON the collider front, so the cabinet
+ *    parts in front of it stand up to ~0.26 m past the collider; the console model ~0.24 m and the valve ~0.15 m past theirs;
+ *  - lane BUNKER: the blast-door model reaches ~0.29 m past its leaf / frame colliders (the decontamination side); one bunk bed 3 cm;
+ *  - lane MINES: tilted rubble chunks stand up to ~0.38 m out of the rubble collider into the collapsed drift; a timber set beside a
+ *    room door (lamp room / tool room) puts its post 5-6 cm into the door lane;
  *  - lane CORE (user point 15): the procedural FALLBACK vessel plinth flares 0.2 m past the vessel's blocked circle (drawn only when the
  *    vessel model fails to load; the model is clear).
  */
-const PATHS_OWNED_ELSEWHERE: readonly RegExp[] = [/^sites /, /^merged reactor-vessel/];
-const ours = (hits: readonly PathHit[]) => hits.filter(h => !PATHS_OWNED_ELSEWHERE.some(re => re.test(h.kind)));
+const PATHS_OWNED_ELSEWHERE: readonly {re: RegExp; lane: string; max: number}[] = [
+  {re: /^sites /, lane: 'CONTROLS', max: 0.2},
+  {re: /^generators (bulb\|panelLamp|box\|yellow)$/, lane: 'CONTROLS', max: 0.02}, // the procedural-fallback start panel's lever / lamps: 8 mm
+  {re: /^bunker model blastDoor$/, lane: 'BUNKER', max: 0.2},
+  {re: /^bunker model bunkBed$/, lane: 'BUNKER', max: 0.04},
+  {re: /^mines rock$/, lane: 'MINES', max: 0.3},
+  {re: /^mines model timberSet$/, lane: 'MINES', max: 0.07},
+  {re: /^merged reactor-vessel/, lane: 'CORE', max: 0.25},
+];
+const ours = (hits: readonly PathHit[]) => hits.filter(h => !PATHS_OWNED_ELSEWHERE.some(o => o.re.test(h.kind) && h.depth <= o.max));
 
 const reports = new Map<string, PathAuditReport>();
 const audit = (seed: number, models: 'all' | 'none', walkAware = true) => {
   const k = `${seed}:${models}:${walkAware}`;
   let r = reports.get(k);
-  if (!r) { r = auditReactorPaths(level(seed), {models, walkAware}); reports.set(k, r); }
+  if (!r) { r = auditReactorPaths(level(seed), {models, walkAware, meshOf: testMeshOf}); reports.set(k, r); }
   return r;
 };
 
@@ -214,21 +227,34 @@ describe('regression: no steel across the walkways (user: "large steel beams oft
 
 describe('the audit is generic over layout areas (side complexes, rooms): re-run after merging the complexes', () => {
   it('runs on whatever side complexes exist (layout.reactor.complexes): their areas + entrances are clear', () => {
+    let complexes = 0;
     for (const seed of SEEDS.slice(0, 4)) {
       const L = level(seed);
+      expect(audit(seed, 'all').checked.extras, `seed ${seed}: the complexes' own visuals are audited`).toBeGreaterThan(0);
       for (const c of L.reactor!.complexes ?? []) {
-        const rep = auditReactorPaths(L, {models: 'all', areas: new Set(c.areas)});
+        complexes++;
+        const rep = auditReactorPaths(L, {models: 'all', areas: new Set(c.areas), meshOf: testMeshOf});
         expect(rep.checked.boxes, `${c.id}`).toBeGreaterThan(0);
         expect(ours(rep.hits), `seed ${seed} complex ${c.id}\n${pathAuditSummary(rep)}`).toEqual([]);
       }
     }
+    expect(complexes).toBeGreaterThan(0);
   }, 240_000);
+
+  it('portal-shaped models are judged by their real triangles (a timber set over a drift, the blast door in its doorway)', () => {
+    const L = level(SEEDS[0]);
+    const box = auditReactorPaths(L, {models: 'all'}), mesh = audit(SEEDS[0], 'all');
+    const sets = (r: PathAuditReport) => r.hits.filter(h => h.kind === 'mines model timberSet' || h.kind === 'bunker model blastDoor').length;
+    expect(sets(mesh)).toBeLessThanOrEqual(sets(box));
+    const tris = testMeshOf('assets/models/reactor-timber-set.glb');
+    expect(tris && tris.length / 9).toBeGreaterThan(1000);
+  }, 120_000);
 
   it('an area-scoped audit sees only its areas (the rooms cut into the rock: doorways vs the pit-wall steel)', () => {
     const L = level(SEEDS[0]);
     const rooms = new Set(L.areas.filter(a => a.role === 'reactor-room').map(a => a.id));
     expect(rooms.size).toBeGreaterThanOrEqual(6);
-    const rep = auditReactorPaths(L, {models: 'all', areas: rooms});
+    const rep = auditReactorPaths(L, {models: 'all', areas: rooms, meshOf: testMeshOf});
     expect(rep.checked.boxes).toBeGreaterThan(500);
     expect(rep.checked.boxes).toBeLessThan(audit(SEEDS[0], 'all').checked.boxes);
     expect(ours(rep.hits), pathAuditSummary(rep)).toEqual([]);

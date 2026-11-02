@@ -32,11 +32,22 @@ import {PLAYER_TRAIN_SPEC} from '../playerTrainSpec';
 import {inPoly, planReactorKit, type KitGeo, type KitPlan, type KitWalk} from './archKit';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {isMounted, planMountedLamps} from './gaslightFixtures';
+import {planMinesVisuals, type MineBox, type MinePlace} from './minesVisuals';
+import {MINES_ANCHORS, MINES_MODELS, type MinesModel} from './minesAssets';
+import {bunkerModelOrigin, bunkerModelPlacements} from './bunkerModels';
+import {BUNKER_KINDS, BUNKER_MODELS} from '../../gen/reactor/complex/bunkerKinds';
+import {MAP_BOARD, planMapBoards} from './mapBoardPlan';
+import {screenFacing} from './restartViews';
 
 /** The player body (m): radius, height above the floor (1.9 m: a 1.8 m person + margin), floor slack, edge tolerance. */
 export const BODY = {r: 0.3, h: 1.9, foot: 0.03, edge: 0.1} as const;
 /** Penetrations below this (m) are contact, not intrusion. */
 export const PATH_EPS = 0.004;
+/**
+ * A solid whose top stays within this height (m) of every floor it touches is walked over, not into (the mine's rail line on its
+ * sleepers, like the subway track bed's rails): reported as `checked.stepOver`, not as an intrusion.
+ */
+export const STEP_OVER = 0.16;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Geometry: oriented box vs axis-aligned box (separating axes, with the penetration depth), triangle vs axis-aligned box
@@ -341,7 +352,7 @@ const UNIT_LO = [-0.5, -0.5, -0.5] as const, UNIT_HI = [0.5, 0.5, 0.5] as const;
 // ---------------------------------------------------------------------------------------------------------------------------
 // The audit
 
-export type PathSource = 'kit' | 'lamp' | 'model' | 'merged' | 'fan' | 'fixture' | 'rail' | 'prop' | 'ladder';
+export type PathSource = 'kit' | 'lamp' | 'model' | 'merged' | 'fan' | 'fixture' | 'extra' | 'rail' | 'prop' | 'ladder';
 
 /** One intrusion: a solid (or a collision element) in walkable space — the deepest contact of that solid. */
 export interface PathHit {
@@ -366,7 +377,7 @@ export interface PathAuditReport {
   hits: PathHit[];
   /** Hit count per kind. */
   byKind: Record<string, number>;
-  checked: {boxes: number; instances: number; lamps: number; models: number; merged: number; fans: number; fixtures: number; rails: number; ladders: number; stands: number};
+  checked: {boxes: number; instances: number; lamps: number; models: number; merged: number; fans: number; fixtures: number; extras: number; carried: number; stepOver: number; rails: number; ladders: number; stands: number};
 }
 
 export interface PathAuditOptions extends WalkOptions {
@@ -378,6 +389,79 @@ export interface PathAuditOptions extends WalkOptions {
   walkAware?: boolean;
   /** Skip the collision-world checks (rails / props / ladders / stands). */
   kitOnly?: boolean;
+  /**
+   * The delivered models' REAL triangles by site-relative url (glbTriangles of the cooked GLB: Node tests read game/public/<url>).
+   * A model whose box intrudes is then checked triangle by triangle (portal-shaped models: timber sets, the blast door, the vessel);
+   * without it the box (or the measured anchor parts) stands for the model.
+   */
+  meshOf?: (url: string) => Float32Array | null | undefined;
+}
+
+type GltfJson = {
+  nodes?: {mesh?: number; children?: number[]; matrix?: number[]; translation?: number[]; rotation?: number[]; scale?: number[]}[];
+  scenes?: {nodes: number[]}[]; scene?: number;
+  meshes: {primitives: {attributes: {POSITION: number}; indices?: number; mode?: number}[]}[];
+  accessors: {bufferView: number; byteOffset?: number; componentType: number; count: number; type: string}[];
+  bufferViews: {byteOffset?: number; byteLength: number; byteStride?: number}[];
+  extensionsRequired?: string[];
+};
+
+/**
+ * Triangles of an uncompressed binary glTF (positions only): xyz x 3 per triangle in the GLB's scene space (node transforms applied) —
+ * the cooked Reactor models are plain single-mesh GLBs. Throws on anything it cannot read (a compressed / external-buffer file).
+ */
+export function glbTriangles(data: ArrayBuffer | Uint8Array): Float32Array {
+  const u8 = data instanceof Uint8Array ? data : new Uint8Array(data);
+  const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+  if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('glbTriangles: not a GLB');
+  let off = 12, json: GltfJson | null = null, bin: DataView | null = null;
+  while (off + 8 <= u8.byteLength) {
+    const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true);
+    if (type === 0x4e4f534a) json = JSON.parse(new TextDecoder().decode(u8.subarray(off + 8, off + 8 + len))) as GltfJson;
+    else if (type === 0x004e4942) bin = new DataView(u8.buffer, u8.byteOffset + off + 8, len);
+    off += 8 + len;
+  }
+  if (!json || !bin || json.extensionsRequired?.length) throw new Error('glbTriangles: unsupported GLB');
+  const J = json, B = bin, out: number[] = [];
+  const read = (ai: number, k: number, c: number): number => {
+    const a = J.accessors[ai], bv = J.bufferViews[a.bufferView], n = a.type === 'VEC3' ? 3 : 1;
+    const size = a.componentType === 5126 || a.componentType === 5125 ? 4 : a.componentType === 5123 ? 2 : 1;
+    const at = (bv.byteOffset ?? 0) + (a.byteOffset ?? 0) + k * (bv.byteStride ?? n * size) + c * size;
+    switch (a.componentType) {
+      case 5126: return B.getFloat32(at, true);
+      case 5125: return B.getUint32(at, true);
+      case 5123: return B.getUint16(at, true);
+      default: return B.getUint8(at);
+    }
+  };
+  const v = new THREE.Vector3();
+  const walk = (ni: number, parent: THREE.Matrix4) => {
+    const nd = J.nodes![ni];
+    const t = nd.translation ?? [0, 0, 0], r = nd.rotation ?? [0, 0, 0, 1], sc = nd.scale ?? [1, 1, 1];
+    const local = nd.matrix ? new THREE.Matrix4().fromArray(nd.matrix)
+      : new THREE.Matrix4().compose(new THREE.Vector3(t[0], t[1], t[2]), new THREE.Quaternion(r[0], r[1], r[2], r[3]), new THREE.Vector3(sc[0], sc[1], sc[2]));
+    const m = parent.clone().multiply(local);
+    if (nd.mesh !== undefined) for (const pr of J.meshes[nd.mesh].primitives) {
+      if ((pr.mode ?? 4) !== 4) continue;
+      const pa = pr.attributes.POSITION, n = pr.indices !== undefined ? J.accessors[pr.indices].count : J.accessors[pa].count;
+      for (let k = 0; k < n; k++) {
+        const vi = pr.indices !== undefined ? read(pr.indices, k, 0) : k;
+        v.set(read(pa, vi, 0), read(pa, vi, 1), read(pa, vi, 2)).applyMatrix4(m);
+        out.push(v.x, v.y, v.z);
+      }
+    }
+    for (const c of nd.children ?? []) walk(c, m);
+  };
+  const roots = J.scenes?.[J.scene ?? 0]?.nodes ?? (J.nodes ?? []).map((_, i) => i);
+  for (const ri of roots) walk(ri, new THREE.Matrix4());
+  return new Float32Array(out);
+}
+
+/** Bounds of a triangle soup: [x0, y0, z0, x1, y1, z1]. */
+function triBounds(t: Float32Array): [number, number, number, number, number, number] {
+  const b: [number, number, number, number, number, number] = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < t.length; i += 3) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], t[i + k]); b[3 + k] = Math.max(b[3 + k], t[i + k]); }
+  return b;
 }
 
 /** arch.ts ReactorArch.ownsRail without the renderer: the pit-cell mask test at the rail's two sides. */
@@ -417,10 +501,27 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
   const models = auditModels(opts.models);
   const plan = opts.plan ?? auditPlan(layout, models, opts.walkAware === false ? undefined : full);
   const hits: PathHit[] = [];
-  const checked: PathAuditReport['checked'] = {boxes: vol.boxes.length, instances: 0, lamps: 0, models: 0, merged: 0, fans: 0, fixtures: 0, rails: 0, ladders: 0, stands: 0};
+  const checked: PathAuditReport['checked'] = {boxes: vol.boxes.length, instances: 0, lamps: 0, models: 0, merged: 0, fans: 0, fixtures: 0, extras: 0, carried: 0, stepOver: 0, rails: 0, ladders: 0, stands: 0};
   const label = (b: WalkBox) => layout.areas[b.area]?.label ?? `area ${b.area}`;
-  const record = (kind: string, source: PathSource, found: [number, number][]) => {
+  const carried = propCarrier(layout), carriedPoint = propPointCarrier(layout);
+  /** The body boxes a model's triangles (placement m) intrude into, skipping triangles inside a collision prop. */
+  const meshHits = (tris: Float32Array, m: THREE.Matrix4): [number, number][] => {
+    const w = new Float32Array(tris.length), v = new THREE.Vector3();
+    for (let i = 0; i < tris.length; i += 3) { v.set(tris[i], tris[i + 1], tris[i + 2]).applyMatrix4(m); w[i] = v.x; w[i + 1] = v.y; w[i + 2] = v.z; }
+    return triHits(vol, w, carriedPoint);
+  };
+  /** A model box hit refined by its real triangles when the caller provides them. */
+  const refine = (found: [number, number][], m: THREE.Matrix4, url: string): [number, number][] => {
+    if (!found.length) return found;
+    const tris = opts.meshOf?.(url);
+    return tris ? meshHits(tris, m) : found;
+  };
+  const record = (kind: string, source: PathSource, found: [number, number][], o?: Obb | null) => {
     if (!found.length) return;
+    // a solid inside its own collision prop's box (a machine model, a cart, a bunk bed): visual and collision agree — not a clip
+    if (o && carried(o)) { checked.carried++; return; }
+    // floor-level detail the body walks over (rails / sleepers)
+    if (o) { const top = obbBounds(o)[4]; if (found.every(([k]) => top <= vol.boxes[k].y0 - vol.body.foot + STEP_OVER)) { checked.stepOver++; return; } }
     let best = found[0];
     for (const f of found) if (f[1] > best[1]) best = f;
     const b = vol.boxes[best[0]];
@@ -434,7 +535,7 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
     for (const inst of part.list) {
       checked.instances++;
       const o = obbOf(inst.m, ext.lo, ext.hi);
-      if (o) record(`${inst.tag || 'kit'} ${key}`, 'kit', vol.obbHits(o));
+      if (o) record(`${inst.tag || 'kit'} ${key}`, 'kit', vol.obbHits(o), o);
     }
   }
   for (const l of plan.lamps) {
@@ -444,17 +545,25 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
   }
   // --- model placements (real-size dims: base at y 0, centred x / z) ---------------------------------------------------------
   for (const [piece, list] of plan.modelPlacements) {
-    const [W, Hh, D] = REACTOR_MODELS[piece].dims;
+    // a piece outside the registry (a later lane's own model key): its placement's scaled size (size, model space = placement) or skip
+    const spec = (REACTOR_MODELS as Partial<Record<string, (typeof REACTOR_MODELS)[ReactorPiece]>>)[piece];
     for (const p of list) {
       checked.models++;
-      if (piece === 'vessel') {
+      const [W, Hh, D] = spec ? spec.dims : (p.size ?? [0, 0, 0]);
+      if (!spec) {
+        if (!(W > 0)) continue;
+        const E = p.m.elements, k = Math.hypot(E[0], E[1], E[2]) || 1, o = obbOf(p.m, [-W / 2 / k, 0, -D / 2 / k], [W / 2 / k, Hh / k, D / 2 / k]);
+        if (o) record(`${p.tag || 'kit'} model ${piece}`, 'model', vol.obbHits(o), o);
+        continue;
+      }
+      if (piece === 'vessel' && !opts.meshOf?.(REACTOR_MODELS.vessel.url)) {
         // the round vessel: its hazard plinth (the widest solid at body height; the nozzles start above it) as a vertical cylinder
         const E = p.m.elements, s = Math.hypot(E[0], E[1], E[2]), A = REACTOR_MODELS.vessel.anchors!;
         record(`${p.tag || 'kit'} model vessel`, 'model', cylHits(vol, E[12], E[14], (A.plinthR as number) * s, E[13], E[13] + Hh * s));
         continue;
       }
       const o = obbOf(p.m, [-W / 2, 0, -D / 2], [W / 2, Hh, D / 2]);
-      if (o) record(`${p.tag || 'kit'} model ${piece}`, 'model', vol.obbHits(o));
+      if (o) record(`${p.tag || 'kit'} model ${piece}`, 'model', refine(vol.obbHits(o), p.m, spec.url), o);
     }
   }
   // --- merged meshes (exact triangles) ---------------------------------------------------------------------------------------
@@ -477,6 +586,21 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
     const o = obbOf(new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y - 0.19, l.z), new THREE.Quaternion(), new THREE.Vector3(0.26, 0.34, 0.26)), UNIT_LO, UNIT_HI);
     if (o) record('fixture pit-lamp', 'fixture', vol.obbHits(o));
   }
+  // --- the visuals drawn outside the kit: the side complexes' builders (mines workings, bunker models), the map boards ----------
+  for (const x of extraSolids(layout)) {
+    checked.extras++;
+    const found = vol.obbHits(x.o);
+    if (!found.length) continue;
+    if (x.model) {
+      const tris = opts.meshOf?.(x.model.url);
+      let m = x.model.m;
+      if (tris && x.model.recentre) { const b = triBounds(tris); m = m.clone().multiply(new THREE.Matrix4().makeTranslation(-(b[0] + b[3]) / 2, -b[1], -(b[2] + b[5]) / 2)); }
+      if (tris) { record(x.kind, 'extra', meshHits(tris, m), x.o); continue; }
+      const parts = MODEL_PARTS[x.model.url];
+      if (parts) { for (const [lo, hi] of parts) { const po = obbOf(m, lo, hi); if (po) record(x.kind, 'extra', vol.obbHits(po), po); } continue; }
+    }
+    record(x.kind, 'extra', found, x.o);
+  }
   if (!opts.kitOnly) {
     checked.rails = railHits(layout, vol, hits, opts.areas);
     checked.ladders = ladderHits(layout, plan, hits);
@@ -485,6 +609,125 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
   const byKind: Record<string, number> = {};
   for (const h of hits) byKind[h.kind] = (byKind[h.kind] ?? 0) + 1;
   return {hits, byKind, checked};
+}
+
+/**
+ * A collision prop carries the solid: every corner of the oriented box lies inside some prop's box of the layout (rotated, its height
+ * band; grown by BODY.edge) — the body is pushed out of it there (core/physics.ts props), so what is drawn is what collides.
+ */
+export function propCarrier(layout: StationLayout): (o: Obb) => boolean {
+  const props = layout.props;
+  return (o: Obb) => {
+    const bb = obbBounds(o), e = BODY.edge;
+    const near = props.filter(p => {
+      const r = Math.hypot(p.hx, p.hz) + e;
+      return p.x + r > bb[0] && p.x - r < bb[3] && p.z + r > bb[2] && p.z - r < bb[5] && p.y - 0.05 < bb[4] && p.y + p.h + e > bb[1];
+    });
+    if (!near.length) return false;
+    for (let k = 0; k < 8; k++) {
+      const sx = k & 1 ? 1 : -1, sy = k & 2 ? 1 : -1, sz = k & 4 ? 1 : -1;
+      const x = o.c[0] + sx * o.e[0] * o.u[0] + sy * o.e[1] * o.u[3] + sz * o.e[2] * o.u[6];
+      const y = o.c[1] + sx * o.e[0] * o.u[1] + sy * o.e[1] * o.u[4] + sz * o.e[2] * o.u[7];
+      const z = o.c[2] + sx * o.e[0] * o.u[2] + sy * o.e[1] * o.u[5] + sz * o.e[2] * o.u[8];
+      const inside = near.some(p => {
+        if (y < p.y - 0.05 || y > p.y + p.h + e) return false;
+        const c = Math.cos(p.rot ?? 0), s = Math.sin(p.rot ?? 0), dx = x - p.x, dz = z - p.z;
+        // three.js Y rotation: the prop's local (lx, lz) -> world (lx c + lz s, -lx s + lz c)
+        const lx = dx * c - dz * s, lz = dx * s + dz * c;
+        return Math.abs(lx) <= p.hx + e && Math.abs(lz) <= p.hz + e;
+      });
+      if (!inside) return false;
+    }
+    return true;
+  };
+}
+
+/** A point lies inside some collision prop's box (rotated; its height band; grown by BODY.edge). Indexed by cell. */
+export function propPointCarrier(layout: StationLayout): (x: number, y: number, z: number) => boolean {
+  const e = BODY.edge, idx = new Map<number, number[]>();
+  layout.props.forEach((p, k) => {
+    const r = Math.hypot(p.hx, p.hz) + e;
+    for (let cx = Math.floor((p.x - r) / CELL); cx <= Math.floor((p.x + r) / CELL); cx++) for (let cz = Math.floor((p.z - r) / CELL); cz <= Math.floor((p.z + r) / CELL); cz++) {
+      const key = cx * 65536 + cz;
+      let l = idx.get(key);
+      if (!l) idx.set(key, (l = []));
+      l.push(k);
+    }
+  });
+  return (x: number, y: number, z: number) => (idx.get(Math.floor(x / CELL) * 65536 + Math.floor(z / CELL)) ?? []).some(k => {
+    const p = layout.props[k];
+    if (y < p.y - 0.05 || y > p.y + p.h + e) return false;
+    const c = Math.cos(p.rot ?? 0), s = Math.sin(p.rot ?? 0), dx = x - p.x, dz = z - p.z;
+    return Math.abs(dx * c - dz * s) <= p.hx + e && Math.abs(dx * s + dz * c) <= p.hz + e;
+  });
+}
+
+/**
+ * Measured solid PARTS of portal-shaped models (model space), used when the GLB triangles are not provided: the timber set's two posts
+ * and its cap (world/reactor/minesAssets.ts MINES_ANCHORS: inner post faces +-1.03, cap underside 1.79, top 2.516).
+ */
+const MODEL_PARTS: Record<string, [number[], number[]][]> = (() => {
+  const T = MINES_ANCHORS.timberSet, [W, , D] = MINES_MODELS.timberSet.dims;
+  return {[MINES_MODELS.timberSet.url]: [
+    [[-W / 2, 0, -D / 2], [-T.postInner, T.capUnder, D / 2]], [[T.postInner, 0, -D / 2], [W / 2, T.capUnder, D / 2]], [[-W / 2, T.capUnder, -D / 2], [W / 2, T.top, D / 2]],
+  ]};
+})();
+
+/** A visual solid drawn outside the kit plan (tagged); a model also carries its placement (model space -> world) and GLB url. */
+export interface ExtraSolid { kind: string; o: Obb; model?: {m: THREE.Matrix4; url: string; recentre?: number} }
+
+/**
+ * Every visual solid the Reactor draws OUTSIDE the kit plan, as oriented boxes — the generic hook for the side complexes' own builders
+ * (re-run the audit after a complex lands; add its builder's plan here):
+ *  - lane MINES (world/reactor/minesVisuals.ts planMinesVisuals): timber sets / carts / winch / drill models, timber / rail / steel /
+ *    rock boxes (cribs, rubble, the winze, the rail line), sheave wheels (the standing-water surface is a wade-through effect);
+ *  - lane BUNKER (world/reactor/bunkerModels.ts): the hero models on their prop placements (blast door, filtration unit, radio, bunks);
+ *  - lane CONTROLS (world/reactor/mapBoardPlan.ts planMapBoards): the floor-map boards beside the instruction screens.
+ */
+export function extraSolids(layout: StationLayout): ExtraSolid[] {
+  const out: ExtraSolid[] = [];
+  const push = (kind: string, m: THREE.Matrix4, lo: readonly number[], hi: readonly number[], model?: ExtraSolid['model']) => { const o = obbOf(m, lo, hi); if (o) out.push({kind, o, ...(model ? {model} : {})}); };
+  const q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3(), eu = new THREE.Euler(), UP = new THREE.Vector3(0, 1, 0);
+  const mp = planMinesVisuals(layout);
+  if (mp) {
+    for (const [mat, list] of Object.entries(mp.boxes) as [string, MineBox[]][]) {
+      if (mat === 'water') continue;
+      for (const b of list) {
+        eu.set(b.rx ?? 0, b.yaw, b.rz ?? 0, 'YXZ');
+        push(`mines ${mat}`, new THREE.Matrix4().compose(p.set(b.x, b.y, b.z), q.setFromEuler(eu), sc.set(b.w, b.h, b.d)), UNIT_LO, UNIT_HI);
+      }
+    }
+    for (const w of mp.sheaves) push('mines sheave', new THREE.Matrix4().compose(p.set(w.x, w.y, w.z), q.setFromAxisAngle(UP, w.yaw), sc.set(w.r, w.r, w.r)), [-1.08, -1.08, -0.08], [1.08, 1.08, 0.08]);
+    for (const [key, list] of Object.entries(mp.models) as [MinesModel, MinePlace[]][]) {
+      const [W, Hh, D] = MINES_MODELS[key].dims;
+      for (const m of list) {
+        const M = new THREE.Matrix4().compose(p.set(m.x, m.y, m.z), q.setFromAxisAngle(UP, m.yaw), sc.set(m.sx, m.sy, m.sz));
+        push(`mines model ${key}`, M, [-W / 2, 0, -D / 2], [W / 2, Hh, D / 2], {m: M, url: MINES_MODELS[key].url});
+      }
+    }
+  }
+  for (const kind of BUNKER_KINDS) {
+    const spec = BUNKER_MODELS[kind], [W, Hh, D] = spec.model.dims, k = spec.scale;
+    for (const pl of bunkerModelPlacements(layout, kind)) {
+      const [x, z] = bunkerModelOrigin(pl);
+      const M = new THREE.Matrix4().compose(p.set(x, pl.y, z), q.setFromAxisAngle(UP, pl.rot), sc.set(k, k, k));
+      push(`bunker model ${kind}`, M, [-W / 2, 0, -D / 2], [W / 2, Hh, D / 2], {m: M, url: spec.model.url, recentre: 1}); // (bunkerModels.ts re-centres on the measured box)
+    }
+  }
+  const info = layout.reactor;
+  if (info) {
+    const openAt = (x: number, z: number, level: number): boolean => {
+      const g = layout.levels?.[level]?.grid ?? (level === 0 ? layout.grid : null);
+      if (!g) return true;
+      const [cx, cy] = g.cellOf(x, z);
+      return g.inBounds(cx, cy) && g.passable(cx, cy);
+    };
+    for (const b of planMapBoards(layout, info, s => screenFacing(s, openAt))) {
+      const d = MAP_BOARD.depth;
+      push('map board', new THREE.Matrix4().compose(p.set(b.x - b.nx * d / 2, b.y, b.z - b.nz * d / 2), q.setFromAxisAngle(UP, Math.atan2(b.nx, b.nz)), sc.set(MAP_BOARD.w, MAP_BOARD.h, d)), UNIT_LO, UNIT_HI);
+    }
+  }
+  return out;
 }
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -503,27 +746,40 @@ function cylHits(vol: WalkVolume, cx: number, cz: number, r: number, y0: number,
   return out;
 }
 
-/** Body boxes the triangles of a (world-space) geometry intrude into. */
-function triHits(vol: WalkVolume, g: THREE.BufferGeometry): [number, number][] {
-  const pos = g.getAttribute('position');
-  if (!pos) return [];
-  const idx = g.getIndex();
-  const n = idx ? idx.count : pos.count;
-  const seen = new Set<number>(), out: [number, number][] = [];
+/** Body boxes the triangles of a (world-space) geometry / triangle soup intrude into (a triangle inside a collision prop is skipped). */
+function triHits(vol: WalkVolume, g: THREE.BufferGeometry | Float32Array, carried?: (x: number, y: number, z: number) => boolean): [number, number][] {
+  const soup = g instanceof Float32Array ? g : null;
+  const pos = soup ? null : (g as THREE.BufferGeometry).getAttribute('position');
+  if (!soup && !pos) return [];
+  const idx = soup ? null : (g as THREE.BufferGeometry).getIndex();
+  const n = soup ? soup.length / 3 : idx ? idx.count : pos!.count;
+  const depthOf = new Map<number, number>(), out: [number, number][] = [];
   const A = [0, 0, 0], B = [0, 0, 0], C = [0, 0, 0];
-  const get = (k: number, P: number[]) => { const i = idx ? idx.getX(k) : k; P[0] = pos.getX(i); P[1] = pos.getY(i); P[2] = pos.getZ(i); };
+  const get = (k: number, P: number[]) => {
+    if (soup) { P[0] = soup[3 * k]; P[1] = soup[3 * k + 1]; P[2] = soup[3 * k + 2]; return; }
+    const i = idx ? idx.getX(k) : k; P[0] = pos!.getX(i); P[1] = pos!.getY(i); P[2] = pos!.getZ(i);
+  };
   const near: number[] = [];
   for (let t = 0; t + 2 < n; t += 3) {
     get(t, A); get(t + 1, B); get(t + 2, C);
+    if (carried && carried(A[0], A[1], A[2]) && carried(B[0], B[1], B[2]) && carried(C[0], C[1], C[2])) continue;
     const x0 = Math.min(A[0], B[0], C[0]), x1 = Math.max(A[0], B[0], C[0]), z0 = Math.min(A[2], B[2], C[2]), z1 = Math.max(A[2], B[2], C[2]);
     const y0 = Math.min(A[1], B[1], C[1]), y1 = Math.max(A[1], B[1], C[1]);
     for (const k of vol.near(x0, z0, x1, z1, near)) {
-      if (seen.has(k)) continue;
       const b = vol.boxes[k];
       if (y1 <= b.y0 || y0 >= b.y1 || x1 <= b.x0 || x0 >= b.x1 || z1 <= b.z0 || z0 >= b.z1) continue;
-      if (triAabb(A, B, C, [b.x0, b.y0, b.z0, b.x1, b.y1, b.z1])) { seen.add(k); out.push([k, 0.01]); }
+      // penetration: the deepest vertex inside the box (horizontal distance to its nearest side); a crossing triangle counts 5 mm
+      let d = 0.005;
+      for (const P of [A, B, C]) {
+        if (P[1] <= b.y0 || P[1] >= b.y1) continue;
+        d = Math.max(d, Math.min(P[0] - b.x0, b.x1 - P[0], P[2] - b.z0, b.z1 - P[2]));
+      }
+      const had = depthOf.get(k);
+      if (had !== undefined && had >= d) continue;
+      if (triAabb(A, B, C, [b.x0, b.y0, b.z0, b.x1, b.y1, b.z1])) depthOf.set(k, d);
     }
   }
+  for (const [k, d] of depthOf) out.push([k, Math.round(d * 1000) / 1000]);
   return out;
 }
 
