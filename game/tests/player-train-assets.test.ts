@@ -9,7 +9,7 @@ import crypto from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {describe, expect, it} from 'vitest';
 import {NodeIO} from '@gltf-transform/core';
-import {PLAYER_TRAIN_MEASURED, PLAYER_TRAIN_MODELS, PLAYER_TRAIN_TEXTURES} from '../src/assets/playerTrain.generated';
+import {PLAYER_TRAIN_GLASS, PLAYER_TRAIN_MEASURED, PLAYER_TRAIN_MODELS, PLAYER_TRAIN_TEXTURES} from '../src/assets/playerTrain.generated';
 import {levelOfAsset} from '../src/assets/levelAssets';
 import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 
@@ -449,4 +449,70 @@ describe('player train: cooked assets', () => {
     expect(prov.lockboxLedger.credits.billed).toBeLessThanOrEqual(50);
     expect(M.tris).toBeLessThanOrEqual(12000);
   }, 60000);
+
+  // task studio-beta-train-window-fit-20261102-004022-01 (user: "front window is not curved to align with the body ... all windows need
+  // to be better matched to car geometry. there is a seem between the the walls and the roof of the subway cab")
+  it('the shell has no see-through cracks in lane TRAIN\'s probe bands (cove seam, door heads, crescent, roof)', async () => {
+    const tris = await triangles(PLAYER_TRAIN_MODELS['player-train-shell'].url);
+    const hitAlong = (u: number, v: number, ax: [number, number, number], pred: (n: number) => boolean) => tris.some(t => {
+      const [a, b, c] = t, [iu, iv, inn] = ax;
+      if (Math.max(a[iu], b[iu], c[iu]) < u || Math.min(a[iu], b[iu], c[iu]) > u || Math.max(a[iv], b[iv], c[iv]) < v || Math.min(a[iv], b[iv], c[iv]) > v) return false;
+      const d = (b[iu] - a[iu]) * (c[iv] - a[iv]) - (c[iu] - a[iu]) * (b[iv] - a[iv]);
+      if (Math.abs(d) < 1e-14) return false;
+      const p = ((u - a[iu]) * (c[iv] - a[iv]) - (c[iu] - a[iu]) * (v - a[iv])) / d, q = ((b[iu] - a[iu]) * (v - a[iv]) - (u - a[iu]) * (b[iv] - a[iv])) / d;
+      return p >= 0 && q >= 0 && p + q <= 1 && pred(a[inn] + p * (b[inn] - a[inn]) + q * (c[inn] - a[inn]));
+    });
+    const misses: string[] = [];
+    for (let x = -4.4; x <= 6.9; x += 0.1) for (let y = 3.0; y <= 3.12; y += 0.005) if (!hitAlong(x, y, [0, 1, 2], z => z < -1.0)) misses.push(`seam ${x.toFixed(1)},${y.toFixed(3)}`);
+    for (const d of SPEC.doors) for (let x = d.x - d.width / 2 + 0.01; x < d.x + d.width / 2 - 0.01; x += 0.02) for (let y = 2.983; y <= 2.995; y += 0.003) if (!hitAlong(x, y, [0, 1, 2], z => d.side * z > 1.0)) misses.push(`door head ${d.side} ${x.toFixed(2)},${y.toFixed(3)}`);
+    for (let x = 0.8; x <= 3.5; x += 0.05) for (let y = 2.845; y <= 2.94; y += 0.005) if (!(x > 1.62 && x < 2.75 && y < 2.84) && !hitAlong(x, y, [0, 1, 2], z => z > 1.0)) misses.push(`crescent ${x.toFixed(2)},${y.toFixed(3)}`);
+    for (const x of [-3, 0, 2.04, 4]) for (let z = -1.2; z <= 1.2; z += 0.005) if (!hitAlong(x, z, [0, 2, 1], y => y > 3.2)) misses.push(`roof ${x},${z.toFixed(3)}`);
+    expect(misses).toEqual([]);
+  }, 120000);
+
+  it('conformal glass: one sheet per opening (wraps round the nose), local to its window, curved with the body, never through the skin, boxed', async () => {
+    const G = PLAYER_TRAIN_GLASS, W = SPEC.windows;
+    expect(G.url).toBe(PLAYER_TRAIN_MODELS['player-train-glass'].url);
+    expect(fs.statSync(pub(G.url)).size).toBe(G.bytes);
+    const doc = await new NodeIO().read(pub(G.url));
+    const nodes = new Map(doc.getRoot().listNodes().map(n => [n.getName(), n]));
+    // every window has glass: 12 side sheets (non-nose), 6 end sheets (4 of them wraps joined with their nose window), the leaf
+    const side = G.sheets.filter(g => g.kind === 'side'), end = G.sheets.filter(g => g.kind === 'end'), leaf = G.sheets.filter(g => g.kind === 'leaf');
+    expect([side.length, end.length, leaf.length]).toEqual([W.side.filter(w => w.zone !== 'nose').length, W.end.length, 1]);
+    const joined = end.filter(g => 'joined' in g).map(g => (g as {joined: number}).joined).sort((a, b) => a - b);
+    expect(joined).toEqual(W.side.map((w, i) => (w.zone === 'nose' ? i : -1)).filter(i => i >= 0));
+    for (const n of [...G.sheets.map(g => g.node), ...G.reveals]) expect(nodes.has(n), n).toBe(true);
+    const shell = await triangles(PLAYER_TRAIN_MODELS['player-train-shell'].url);
+    const firstHit = (o: V3, d: V3) => { let best = Infinity; for (const [a, b, c] of shell) { const e1 = sub(b, a), e2 = sub(c, a), p = cross(d, e2), det = dot(e1, p); if (Math.abs(det) < 1e-12) continue; const s2 = sub(o, a), u = dot(s2, p) / det; if (u < 0 || u > 1) continue; const q = cross(s2, e1), v = dot(d, q) / det; if (v < 0 || u + v > 1) continue; const t = dot(e2, q) / det; if (t > 0 && t < best) best = t; } return best; };
+    for (const g of G.sheets) {
+      if (g.kind === 'leaf') continue;
+      const P = nodes.get(g.node)!.getMesh()!.listPrimitives()[0].getAttribute('POSITION')!.getArray()!;
+      const pts: V3[] = []; for (let i = 0; i < P.length; i += 3) pts.push([P[i], P[i + 1], P[i + 2]]);
+      expect(g.fitError, g.node).toBeLessThanOrEqual(0.015); // follows the original pane surface
+      expect(g.recess, g.node).toBeLessThanOrEqual(0.04);
+      // local to its window: side sheets inside the rect (+ overlap) in x / y and on the skin side of the lining
+      if (g.kind === 'side') {
+        const w = W.side[g.window];
+        for (const q of pts) { expect(q[0]).toBeGreaterThan(w.x0 - 0.03); expect(q[0]).toBeLessThan(w.x1 + 0.03); expect(q[1]).toBeGreaterThan(w.y0 - 0.03); expect(q[1]).toBeLessThan(w.y1 + 0.03); expect(w.side * q[2]).toBeGreaterThan(SPEC.interior.halfWidth); }
+      } else {
+        const w = W.end[g.window];
+        // beyond the bulkhead, or (a wrap's corner band) beside the lining in the wall cavity: never inside the lining box
+        for (const q of pts) { expect(w.end * q[0] > SPEC.interior.x1 || Math.abs(q[2]) > SPEC.interior.halfWidth, `${g.node} ${q}`).toBe(true); expect(q[1]).toBeGreaterThan(Math.min(w.y0, 1.8) - 0.05); }
+        // the wraps follow the nose's plan curve (not a flat pane): their glass spans > 15 cm in x
+        if ('joined' in g) expect(Math.max(...pts.map(q => q[0])) - Math.min(...pts.map(q => q[0])), g.node).toBeGreaterThan(0.15);
+      }
+      // never through the skin: no shell surface just outward of any sheet point (outward = away from the car core)
+      for (let k = 0; k < pts.length; k += 3) {
+        const q = pts[k], o: V3 = g.kind === 'side' ? [0, 0, Math.sign(q[2])] : (() => { const c: V3 = [Math.sign(q[0]) * 6.5, q[1], 0], d = sub(q, c), l = Math.hypot(d[0], d[2]); return [d[0] / l, 0, d[2] / l] as V3; })();
+        expect(firstHit(q, o), `${g.node} point ${k}`).toBeGreaterThan(0.0005); // the build keeps >= 1 mm (float64); GLB positions are float32
+      }
+      // the hitscan slabs cover the sheet
+      for (const q of pts) expect(g.boxes.some(b => [0, 1, 2].every(a => q[a] >= b.min[a] - 1e-3 && q[a] <= b.max[a] + 1e-3)), g.node).toBe(true);
+    }
+    // the leaf sheet spans the leaf window (leaf frame) at the mid-plane
+    const lb = leaf[0].bounds;
+    expect(lb.min[0]).toBeLessThan(W.leaf.x0); expect(lb.max[0]).toBeGreaterThan(W.leaf.x1);
+    expect(lb.min[1]).toBeLessThan(W.leaf.y0); expect(lb.max[1]).toBeGreaterThan(W.leaf.y1);
+    expect(lb.min[2]).toBe(0); expect(lb.max[2]).toBe(0);
+  }, 180000);
 });

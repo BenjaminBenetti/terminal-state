@@ -1725,8 +1725,8 @@
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
-      "bytes": 37305,
-      "sha256": "a21f15992ffe4d578b27abd94cc746bb9a6f2d1d7b45e2c39bed05a1e01d7b17"
+      "bytes": 37727,
+      "sha256": "7156459985fa01ef6d5e06e417b6ed2ed295e0fb12c96782bc54e38669fbdb0b"
     },
     {
       "path": "assets/derivatives/props-iteration02.json",
@@ -3240,8 +3240,8 @@
     },
     {
       "path": "assets/models/player-train-glass.glb",
-      "bytes": 355436,
-      "sha256": "914673478615e513806cf154840ae9aa3f79e8496f50d8aff52c2636d1e98a1e"
+      "bytes": 355344,
+      "sha256": "9112a6726ce09ff87b75d10bed4e3558f5174df04d6909ebd377c412e61234fb"
     },
     {
       "path": "assets/models/player-train-lockbox.glb",

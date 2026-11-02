@@ -916,7 +916,6 @@ const leafGlass = (() => {
 })();
 for (const g of glassBuilt) {
   if (g.sheet.fitError > 0.025) problems.push(`glass ${g.o.node}: the skin ring is not smooth enough for one sheet (fit error ${r4(g.sheet.fitError)} m)`);
-  if (g.sheet.recess > 0.04) problems.push(`glass ${g.o.node}: recessed ${r4(g.sheet.recess)} m behind the hole edge`);
   if (g.poke) problems.push(`glass ${g.o.node}: ${g.poke} sheet points poke through the skin`);
 }
 const glassDoc = new Document();
@@ -939,8 +938,8 @@ const glassDoc = new Document();
 const glassGlb = Buffer.from(await io.writeBinary(glassDoc));
 const rb = b => ({min: b.min.map(r4), max: b.max.map(r4)});
 const glassSheets = [...glassBuilt.map(g => ({node: g.o.node, kind: g.o.kind === 'side' ? 'side' : 'end', window: g.o.window, ...(g.o.joined !== undefined ? {joined: g.o.joined} : {}),
-  bounds: rb(g.sheet.bounds), boxes: g.sheet.boxes.map(rb), recess: r4(g.sheet.recess), fitError: r4(g.sheet.fitError)})),
-  {node: 'glass-leaf', kind: 'leaf', window: 0, bounds: rb(leafGlass.bounds), boxes: leafGlass.boxes.map(rb), recess: 0, fitError: 0}];
+  bounds: rb(g.sheet.bounds), boxes: g.sheet.boxes.map(rb), recess: r4(g.sheet.recess), tuck: r4(g.sheet.tuck), fitError: r4(g.sheet.fitError)})),
+  {node: 'glass-leaf', kind: 'leaf', window: 0, bounds: rb(leafGlass.bounds), boxes: leafGlass.boxes.map(rb), recess: 0, tuck: 0, fitError: 0}];
 const glassReveals = glassBuilt.map(g => g.o.reveal);
 const glassOut = (() => {
   const all = glassBuilt.flatMap(g => g.sheet.P).concat(glassBuilt.flatMap(g => g.reveal.P));
@@ -989,8 +988,8 @@ const derivation = {
     method: 'clipped at the slab mid-plane z = -0.0155 raw, the clean +Z half kept and mirrored onto -Z (same UVs); the -Z face with the baked figure removed (its atlas region is never sampled)',
     rawZ: [r4(lzMin), r4(lzMax)], keptTriangles: keptLeafTris, lod: {...LEAF_LOD, tool: 'meshoptimizer simplify by position on the kept half (borders collapse only along themselves: the mid-plane loop stays on the plane), crease-angle normals, planar front UV; base colour / metallic-roughness / normal re-baked from the clean half by an orthographic +Z projection (normals re-expressed in the new tangent frame); then mirrored', halfTriangles: simplifiedLeafHalf, sourceHalfTriangles: keptLeafTris}, scale: leafScale, frame: 'grounded, centred, closing edge (T-handle) at +X, faces +-Z; one leaf of a centre-opening pair (mirror x for the other leaf)'},
   console: {method: 'turned -90 deg about Y (native operator side +Z -> -X), uniform scale', scale: CONSOLE.scale, frame: 'grounded, centred; operator side -X, windshield side +X, width along Z'},
-  glass: {method: 'per opening the ORIGINAL pane: the pre-cut shell sampled by rays every ' + GLASS.sampleStep + ' m over the hole (inset ' + GLASS.inset + ' m from the gasket), an inner-envelope least-squares surface (samples standing > ' + GLASS.envelope + ' m proud of the fit dropped, >= 50 % kept; side: z(x, y) / centre end: x(z, y) biquadratic; wrap = outer end window + its nose window as ONE sheet: plan radius about x = +-' + GLASS.wrapAxis + ' cubic(angle) x quadratic(y)); sheet = that surface on a grid over the hole + ' + GLASS.overlap + ' m overlap, recessed >= ' + GLASS.recess + ' m (more where the ring error needs it) behind the hole edge, outward normals; boxes = <= ' + GLASS.maxBoxes + ' axis-aligned slabs; reveals = ruled strips from the hole loop (on the fitted skin) to the lining rect (published rect at |z| ' + INTERIOR_HALF_WIDTH + ' / |x| ' + INTERIOR_HALF_LENGTH + '), the door-leaf slot left open across a pocket',
-    sheets: glassBuilt.map(g => ({node: g.o.node, kind: g.o.kind, paneSamples: g.sheet.samples, kept: g.sheet.kept, fitError: r4(g.sheet.fitError), recess: r4(g.sheet.recess), boxes: g.sheet.boxes.length, boxThick: r4(g.sheet.boxThick), pokeThrough: g.poke, ...(g.o.edges ? {edges: g.o.edges} : {})})),
+  glass: {method: 'per opening the ORIGINAL pane: the pre-cut shell sampled by rays every ' + GLASS.sampleStep + ' m over the hole (inset ' + GLASS.inset + ' m from the gasket), a robust least-squares surface (samples off the fit by > max(' + GLASS.envelope + ' m, 2.5 MAD) on either side dropped iteratively, >= 50 % kept; side: z(x, y) / centre end: x(z, y) biquadratic; wrap = outer end window + its nose window as ONE sheet: plan radius about x = +-' + GLASS.wrapAxis + ' cubic(angle) x quadratic(y)); sheet = that surface on a grid over the hole + ' + GLASS.overlap + ' m overlap, ' + GLASS.recess + ' m behind the fitted pane, rim vertices tucked individually >= ' + GLASS.clearance + ' m behind whatever remains over them (never through the skin), outward normals; boxes = <= ' + GLASS.maxBoxes + ' axis-aligned slabs; reveals = ruled strips from the hole loop (on the fitted skin) to the lining rect (published rect at |z| ' + INTERIOR_HALF_WIDTH + ' / |x| ' + INTERIOR_HALF_LENGTH + '), the door-leaf slot left open across a pocket',
+    sheets: glassBuilt.map(g => ({node: g.o.node, kind: g.o.kind, paneSamples: g.sheet.samples, kept: g.sheet.kept, fitError: r4(g.sheet.fitError), recess: r4(g.sheet.recess), tuck: r4(g.sheet.tuck), boxes: g.sheet.boxes.length, boxThick: r4(g.sheet.boxThick), pokeThrough: g.poke, ...(g.o.edges ? {edges: g.o.edges} : {})})),
     output: {url: MODEL.glass, bytes: glassGlb.length, sha256: sha(glassGlb)}},
   lockbox: {method: 'split by part at the lid seam (stacked closed parts; seam = midway between the body top and the lowest lid band): a part goes with the lid when it reaches > ' + LID_REACH + ' raw above the seam (bands, cap, straps, top corner caps, the latch / centre hasps hanging over the body), the rest (body, catches, end handles, skid, bottom corner caps) is the body; the body top face removed (open box); uniform scale; the lid node origin on the back hinge line (seam height, lid back face)',
     seamRaw: r4(seamRaw), scale: r4(lbK), parts: {total: lbComp.list.length, lid: lbComp.list.filter(isLid).length}, triangles: {body: lbBodyTris.length, lid: lbLidTris.length, bodyTopRemoved: lbTopRemoved},
@@ -1050,7 +1049,7 @@ ${texOut.map(o => `  '${o.s.id}': {url: '${o.rel}', bytes: ${o.jpg.length}, size
 export const PLAYER_TRAIN_GLASS = {
   key: 'player-train-glass', url: '${MODEL.glass}', bytes: ${glassGlb.length},
   sheets: [
-${glassSheets.map(g => `    {node: '${g.node}', kind: '${g.kind}' as const, window: ${g.window}${g.joined !== undefined ? `, joined: ${g.joined}` : ''}, bounds: ${lit(g.bounds)}, boxes: ${lit(g.boxes)}, recess: ${g.recess}, fitError: ${g.fitError}},`).join('\n')}
+${glassSheets.map(g => `    {node: '${g.node}', kind: '${g.kind}' as const, window: ${g.window}${g.joined !== undefined ? `, joined: ${g.joined}` : ''}, bounds: ${lit(g.bounds)}, boxes: ${lit(g.boxes)}, recess: ${g.recess}, tuck: ${g.tuck}, fitError: ${g.fitError}},`).join('\n')}
   ],
   reveals: ${lit(glassReveals)},
 } as const;

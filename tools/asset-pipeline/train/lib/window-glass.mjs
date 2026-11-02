@@ -37,6 +37,22 @@ function farthestHit(cands, o, d) {
   return best;
 }
 
+/** Nearest hit distance > tMin of a ray on the candidate triangles, or NaN. */
+function nearestHit(cands, o, d, tMin) {
+  let best = NaN;
+  for (const [a, b, c] of cands) {
+    const e1 = sub(b, a), e2 = sub(c, a), p = cross(d, e2), det = dot(e1, p);
+    if (Math.abs(det) < 1e-12) continue;
+    const inv = 1 / det, s = sub(o, a), u = dot(s, p) * inv;
+    if (u < -1e-9 || u > 1 + 1e-9) continue;
+    const q = cross(s, e1), v = dot(d, q) * inv;
+    if (v < -1e-9 || u + v > 1 + 1e-9) continue;
+    const t = dot(e2, q) * inv;
+    if (t > tMin && !(t >= best)) best = t;
+  }
+  return best;
+}
+
 /** Least squares: coefficients c for sum_k c_k f_k(u, v) ~ d (normal equations, Gaussian elimination with partial pivoting). */
 function lsq(samples, terms) {
   const n = terms.length, A = Array.from({length: n}, () => new Array(n + 1).fill(0));
@@ -101,10 +117,12 @@ export function buildOpening(shell, preCut, o, opt) {
   const terms = o.kind === 'wrap' ? polyTerms(3, 2) : polyTerms(2, 2);
   let c = lsq(samples, terms), kept = samples;
   const evalN = (un, vn) => terms.reduce((s, t, k) => s + c[k] * t(un, vn), 0);
-  // inner envelope: drop samples standing proud of the fit by > envelope (a skin layer over the pane, trim), keep >= 50 %
-  for (let pass = 0; pass < 4; pass++) {
-    const r = kept.map(s => ({s, r: s.d - evalN(s.u, s.v)}));
-    let next = r.filter(q => q.r <= opt.envelope).map(q => q.s);
+  // robust fit: iteratively drop samples off the fit by > max(envelope, 2.5 x MAD) on EITHER side (a skin layer standing proud over the
+  // pane, a dent or a gasket lip below it), keeping >= 50 %
+  for (let pass = 0; pass < 6; pass++) {
+    const r = kept.map(s => ({s, r: Math.abs(s.d - evalN(s.u, s.v))}));
+    const sorted = r.map(q => q.r).sort((a, b) => a - b), lim = Math.max(opt.envelope, 2.5 * sorted[Math.floor(sorted.length / 2)]);
+    let next = r.filter(q => q.r <= lim).map(q => q.s);
     if (next.length < 0.5 * samples.length) next = r.sort((a, b) => a.r - b.r).slice(0, Math.ceil(0.5 * samples.length)).map(q => q.s);
     if (next.length === kept.length) break;
     kept = next; c = lsq(kept, terms);
@@ -119,9 +137,16 @@ export function buildOpening(shell, preCut, o, opt) {
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) uv.push([su0 + (su1 - su0) * i / (nu - 1), sv0 + (sv1 - sv0) * j / (nv - 1)]);
   // the sheet covers the hole (the union of its rects) + the overlap band only (a wrap's L-shaped union: not its bounding rect)
   const covered = uv.map(([u, v]) => inRects(o.rects, u, v, -ou - 1e-9, -ov - 1e-9));
-  const skinUnder = uv.map(([u, v], k) => (covered[k] ? depthOn(shellC, u, v) : NaN));
-  const recess = Math.max(opt.recess, ...uv.map(([u, v], k) => (Number.isFinite(skinUnder[k]) ? fitAt(u, v) - skinUnder[k] + opt.clearance : -Infinity)));
-  const P = uv.map(([u, v]) => F.point(u, v, fitAt(u, v) - recess));
+  // the INNERMOST remaining surface beyond the lining plane along each grid ray (a gasket back / doubled layer counts too)
+  const innerOn = (u, v) => { const r = F.ray(u, v), t = nearestHit(shellC, r.origin, r.dir, o.lining - r.base); return Number.isFinite(t) ? r.base + t : NaN; };
+  const skinUnder = uv.map(([u, v], k) => (covered[k] ? innerOn(u, v) : NaN));
+  // the visible glass (in the hole) sits `recess` behind the fitted pane; a rim vertex (overlap band) tucks individually behind whatever
+  // remains over it (gasket, frame) by >= clearance, so the sheet never pokes through and the rim stays right behind the gasket
+  const recess = opt.recess;
+  const depthAtK = ([u, v], k) => Math.min(fitAt(u, v) - recess, Number.isFinite(skinUnder[k]) ? skinUnder[k] - opt.clearance : Infinity);
+  const depths = uv.map(depthAtK);
+  const tuck = Math.max(0, ...uv.map(([u, v], k) => fitAt(u, v) - recess - depths[k]));
+  const P = uv.map(([u, v], k) => F.point(u, v, depths[k]));
   const N = [];
   for (let j = 0; j < nv; j++) for (let i = 0; i < nu; i++) {
     const a = P[j * nu + Math.min(nu - 1, i + 1)], b = P[j * nu + Math.max(0, i - 1)], cc = P[Math.min(nv - 1, j + 1) * nu + i], dd = P[Math.max(0, j - 1) * nu + i];
@@ -136,10 +161,13 @@ export function buildOpening(shell, preCut, o, opt) {
     if (dot(cross(sub(P[b], P[a]), sub(P[cI], P[a])), N[a]) >= 0) I.push(a, b, cI, a, cI, d); else I.push(a, cI, b, a, d, cI);
   }
   let poke = 0;
-  uv.forEach(([u, v], k) => { if (Number.isFinite(skinUnder[k]) && skinUnder[k] < fitAt(u, v) - recess + opt.clearance / 2) poke++; });
+  uv.forEach((_, k) => { if (Number.isFinite(skinUnder[k]) && skinUnder[k] < depths[k] + opt.clearance / 2) poke++; });
   const usedV = new Set(I);
-  const sheet = {P, N, I, nu, nv, recess, fitError, samples: samples.length, kept: kept.length, poke, bounds: boundsOf(P.filter((_, k) => usedV.has(k)))};
-  sheet.boxes = slabs(P, nu, nv, opt.boxThick, opt.maxBoxes, usedV);
+  const boxes = slabs(P, nu, nv, opt.boxThick, opt.maxBoxes, usedV);
+  // compact: only the vertices the covered cells use
+  const remap = new Map(), CP = [], CN = [];
+  for (let k = 0; k < P.length; k++) if (usedV.has(k)) { remap.set(k, CP.length); CP.push(P[k]); CN.push(N[k]); }
+  const sheet = {P: CP, N: CN, I: I.map(k => remap.get(k)), nu, nv, recess, tuck, fitError, samples: samples.length, kept: kept.length, poke, bounds: boundsOf(CP), boxes};
   sheet.boxThick = Math.max(...sheet.boxes.map(b => Math.min(b.max[0] - b.min[0], b.max[1] - b.min[1], b.max[2] - b.min[2])));
   // the reveal: the hole's own outline, its outer edge on the REMAINING skin's cut edge (sampled edgeProbe outside the hole; the pane fit
   // where nothing remains), to the lining rect
