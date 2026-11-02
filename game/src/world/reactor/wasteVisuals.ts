@@ -18,6 +18,7 @@ import type {WorldMaterials} from '../materials';
 import {reactorDress} from './archMaterials';
 import {kitGeometry} from './archMeshes';
 import {FAN_HOUSING, WASTE_MODELS} from './wasteAssets';
+import {cleanShell} from './coplanar'; // task studio-reactor-surface-ending-20261102 (lane REPAIRS): the decon booths' z-fighting
 
 export interface WasteVisualStats {
   meshes: number;
@@ -148,8 +149,13 @@ export function buildWasteVisuals(group: THREE.Group, layout: StationLayout, mat
     root.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
     const byChunk = new Map<string, number[]>();
     e2.xz.forEach(([x, z], i) => { const k = chunkOf(x, z); let l = byChunk.get(k); if (!l) byChunk.set(k, (l = [])); l.push(i); });
+    // task studio-reactor-surface-ending-20261102 (lane REPAIRS, user: "heavy z-fighting on the nuclear waste area emergency wash
+    // stations"): the decon shower's panels are zero-thickness double sheets drawn double-sided (world/reactor/coplanar.ts): single-
+    // sided, its hidden coplanar faces dropped (the delivered maps kept)
+    const shell = (mesh: THREE.Mesh) => (piece === 'deconShower' ? cleanShell(mesh) : {geometry: mesh.geometry, material: mesh.material});
     for (const mesh of meshes) for (const [ck, idx] of byChunk) {
-      const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, idx.length);
+      const {geometry, material} = shell(mesh);
+      const im = new THREE.InstancedMesh(geometry, material, idx.length);
       im.name = `reactor-waste-model-${piece}-${ck}`;
       const m = new THREE.Matrix4();
       idx.forEach((i, k) => im.setMatrixAt(k, m.multiplyMatrices(e2.list[i], mesh.matrixWorld)));
@@ -157,7 +163,7 @@ export function buildWasteVisuals(group: THREE.Group, layout: StationLayout, mat
       im.computeBoundingSphere();
       tag(im);
       group.add(im);
-      stats.meshes++; stats.instances += idx.length; stats.triangles += tris(mesh.geometry) * idx.length;
+      stats.meshes++; stats.instances += idx.length; stats.triangles += tris(geometry) * idx.length;
     }
   }
   WASTE_VISUAL_STATS = stats;
@@ -187,8 +193,12 @@ function standIn(md: WasteModel, add: (geo: Geo, mat: WasteMat, m: THREE.Matrix4
       return;
     }
     case 'deconShower': {
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add('box', 'steel', local(a * (md.w / 2 - 0.04), md.h / 2, b * (md.d / 2 - 0.04), 0.06, md.h, 0.06), md.x, md.z);
-      add('box', 'machine', local(0, md.h / 2, -md.d / 2 + 0.03, md.w, md.h, 0.05), md.x, md.z);
+      // (lane REPAIRS) the posts and the back panel stand BETWEEN the base and the roof, the panel inset from the sides and the back posts
+      // just in front of it: no coplanar faces (they were full height / full width and the back posts ran through the panel: their tops
+      // and side faces lay in the base's / roof's / each other's planes)
+      const mid = (md.h - 0.16) / 2 + 0.08, tall = md.h - 0.16;
+      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) add('box', 'steel', local(a * (md.w / 2 - 0.04), mid, b < 0 ? -md.d / 2 + 0.09 : md.d / 2 - 0.04, 0.06, tall, 0.06), md.x, md.z);
+      add('box', 'machine', local(0, mid, -md.d / 2 + 0.03, md.w - 0.04, tall, 0.05), md.x, md.z);
       add('box', 'steel', local(0, md.h - 0.04, 0, md.w, 0.08, md.d), md.x, md.z);
       add('box', 'concrete', local(0, 0.04, 0, md.w, 0.08, md.d), md.x, md.z);
       return;
