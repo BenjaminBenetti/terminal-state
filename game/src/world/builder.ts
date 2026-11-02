@@ -44,6 +44,7 @@ import {MALL_FINISH_ATTR, MallArch, downlightLensMatrix, splitFinishKey} from '.
 import {TrackExtView, buildTrackExtensions, shellDetailFaces, type TrackExtBuilt} from './trackExt';
 import {gensetModelFit} from './trackExt/machines'; // (round 2, R3)
 import {ANNEX_GENSET} from '../assets/annexGenset.generated'; // (round 2, R3)
+import {finishResolver, type FinishAt} from './finishAt'; // task reactor-expansion-20261101 (lane CONTROLS)
 import {ANNEX_WALL, BOARD_SPAN, annexWallMaterial} from './trackExt/wallFinish'; // Track 2 playtest revision (lane ART) // Track 2 (VIS): tunnels beyond the beds
 import {ReactorArch} from './reactor/arch'; // task reactor-build-20261101 (lane ARCH): THE REACTOR's finishes + industrial kit + pit culling
 import {registerReactorArchVisuals} from './reactor/archVisuals'; // task reactor-build-20261101 (lane ARCH): the ReactorVisuals seam
@@ -153,6 +154,8 @@ export interface BuiltWorld {
   trackExt?: TrackExtBuilt;
   /** Task reactor-build-20261101 (lane ARCH): the Reactor's finishes, kit and visuals (world/reactor/arch.ts); Reactor layouts only. */
   reactorArch?: ReactorArch;
+  /** Task reactor-expansion-20261101 (lane CONTROLS): the arch-owned finish key under a structural hit (world/finishAt.ts; null: none). */
+  finishAt?: FinishAt | null;
 }
 
 /** Instanced model chunk size (m): bigger chunks = fewer draw calls, coarser frustum culling. */
@@ -743,7 +746,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}} : reactor ? {atrium: reactor.pitMask} : undefined);
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
-    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {})};
+    ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}),
+    finishAt: finishResolver(levels, faces, office ?? mall ?? reactor ?? null)}; // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts take the drawn finish
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
