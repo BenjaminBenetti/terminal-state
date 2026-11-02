@@ -472,12 +472,10 @@ function mess(D: Dx, a: Area): void {
   const stepL = 3.0, stepC = 3.2;
   const nL = Math.max(1, Math.floor(((horiz ? aw : ah) - 2.4) / stepL) + 1), nC = Math.max(1, Math.floor(((horiz ? ah : aw) - 2.6) / stepC) + 1);
   let n = 0;
-  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
-    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
-    const x = Math.round((ax0 + (horiz ? l : c)) * 4) / 4, z = Math.round((az0 + (horiz ? c : l)) * 4) / 4;
-    const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const put = (x: number, z: number): boolean => {
     const t = tryPlaceProp(D.ctx, a, 'table', x, z, rot);
-    if (!t) continue;
+    if (!t) return false;
     n++;
     // folding chairs at the long sides, facing the table
     for (const sgn of [-1, 1]) {
@@ -488,6 +486,20 @@ function mess(D: Dx, a: Area): void {
         tryPlaceProp(D.ctx, a, 'foldingChair', horiz ? cx + sl : cx, horiz ? cz : cz + sl, horiz ? rotFacing(0, -sgn) : rotFacing(-sgn, 0), {laneOk: true});
       }
     }
+    return true;
+  };
+  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
+    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
+    put(Math.round((ax0 + (horiz ? l : c)) * 4) / 4, Math.round((az0 + (horiz ? c : l)) * 4) / 4);
+  }
+  // (task reactor-playtest-round2-20261102: a seeded mess hall may be a through room with several doors and the dresser's stock on
+  // its walls) fewer than three tables on the even grid: a 0.5 m lattice, nearest the room's centre first
+  if (n < 3) {
+    const spots: [number, number][] = [];
+    for (let x = ax0 + 1.75; x <= ax0 + aw - 1.75 + 1e-6; x += 0.5) for (let z = az0 + 1.75; z <= az0 + ah - 1.75 + 1e-6; z += 0.5) spots.push([r3(x), r3(z)]);
+    const mx = ax0 + aw / 2, mz = az0 + ah / 2;
+    spots.sort((p, q) => Math.hypot(p[0] - mx, p[1] - mz) - Math.hypot(q[0] - mx, q[1] - mz) || p[0] - q[0] || p[1] - q[1]);
+    for (const [x, z] of spots) { if (n >= 3) break; put(x, z); }
   }
 }
 

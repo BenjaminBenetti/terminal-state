@@ -147,7 +147,7 @@ const room = (key: string, label: string, type: RoomType, purpose: string, o: Om
 /** The rooms every shelter has (placed in this order onto the corridor skeleton). */
 const REQUIRED: readonly Spec[] = [
   room('hall', 'Generator hall', 'utility', 'generator-room', {role: 'generator', clear: C.hall, size: [26, 40, 16, 22], parents: {corr: 1, hub: 0.15},
-    wing: 'plant', req: true, door: 'junction', dw: [5, 5], deep: 1.6, loopy: 0.8, cap: [44, 24], maxDoors: 6}),
+    wing: 'plant', req: true, door: 'junction', dw: [5, 5], deep: 0.9, loopy: 0.8, cap: [44, 24], maxDoors: 6}),
   room('switch', 'Switch room', 'utility', 'electrical-room', {clear: C.side, size: [9, 12, 8, 10], parents: {hall: 2}, wing: 'plant', req: true,
     noKids: true, cap: [14, 12]}),
   room('mess', 'Mess hall', 'crew-room', 'staff-room', {role: 'hall', size: [18, 26, 12, 17], parents: {hub: 1, corr: 0.9}, wing: 'living', req: true,
