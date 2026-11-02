@@ -1,56 +1,111 @@
-// Task mall-lingerie-20261102-221554 — TYPED STUB written by lane CONTEXT for lane FIT's API (LANES.md "Contracts" + FIT's contract
-// relayed by the primary): the same exported names and shapes, so the spawn context / look plumbing (ai/spawnLook.ts, game.ts) builds
-// and is tested before lane FIT lands. Lane FIT's real module REPLACES this file when lane/ling-fit is merged.
+// Task studio-beta-mall-lingerie-20261102-221554-01 (lane FIT): the Mall lingerie store's ORDINARY-zombie variants.
 //
-// FIT's contract: each set = two wearables `lingerie-<design>-top` (slot upper) + `lingerie-<design>-bottom` (slot lower) in
-// `outfit-lingerie-<design>.glb` (nodes `Outfit_<wearableId>__<body>`), in a SEPARATE WardrobeLibrary (createLingerieLibrary) so the
-// ordinary pickZombieLook pool can never pick them, loaded lazily (LINGERIE_MODEL_FILES, through Game.propModels).
-// Stub: no set is fitted and no file is listed — the library has nothing to build, so isValid rejects every lingerie look and
-// ai/spawnLook.ts gives the spawn the ordinary, fully clothed wardrobe pick. A body is never shown without a top and a bottom garment.
+// Six lingerie sets (the user's six reference designs, generated as Meshy T2.5 models by the primary, Meshy PBR maps kept) are FITTED
+// offline to the three pale female zombie bodies (tools/asset-pipeline/zombie/build-lingerie.mjs: landmark alignment, non-rigid
+// conformity to the body surface, skin weights transferred from the body, pose-aware clearance through all six clips, covered body
+// triangles hidden). Each set ships as outfit-lingerie-<design>.glb holding TWO wardrobe wearables:
+//   lingerie-<design>-top     slot upper  (bra / bustier / the bodysuit's upper half)
+//   lingerie-<design>-bottom  slot lower  (brief / thong + garter belt, suspender straps, thigh rings / the bodysuit's lower half)
+// so a lingerie look is a normal ZombieLook {body, wear: {upper, lower}} and the pale bodies' `requires: ['upper', 'lower']` holds:
+// a body NEVER appears without both a top and a bottom garment. The one-piece blush bodysuit is cut at the waist into those two
+// halves (both always worn together; they share the vertices along the cut, so it renders as one garment).
+// Isolation: the lingerie wearables are NOT in the ordinary registry (ai/outfits.ts ZOMBIE_WEARABLES) and have weight 0; they are
+// assembled by their OWN WardrobeLibrary (createLingerieLibrary) used only for the store-context spawns (lane CONTEXT: spawns with
+// look 'lingerie'), so the ordinary pickZombieLook pool can never dress anyone in lingerie.
+// Files are loaded lazily (LINGERIE_MODEL_FILES, not the boot MODEL_FILES): only a section whose layout has a lingerie spawn / store.
+// Each GLB also holds static display nodes LingerieDisplay_<design>_top / _bottom (unskinned, same texture) for the store's stock.
+// Content: ordinary zombie clips only (the bodies' own Idle / Walk / Run / Attack / Hit / Death); opaque lace, full coverage.
+// All derivatives are unapproved prototypes (gameReady false).
 
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {hashString, mulberry32} from '../core/rng';
-import {WardrobeLibrary, type WearableDef, type ZombieLook} from './wardrobe';
+import {WardrobeLibrary, type WearableDef, type ZombieBodyDef, type ZombieLook} from './wardrobe';
 import {ZOMBIE_BODIES} from './outfits';
+import {LINGERIE_BUILD} from './lingerie.generated';
 
-/** The six lingerie designs (user reference images; Meshy T2.5 garments fitted by lane FIT). */
-export type LingerieDesign = 'green' | 'purple' | 'blush' | 'black' | 'red' | 'ivory';
-export type LingerieSetId = `lingerie-${LingerieDesign}`;
-export const LINGERIE_DESIGNS: readonly LingerieDesign[] = ['green', 'purple', 'blush', 'black', 'red', 'ivory'];
+/** The three pale female zombie bodies (lane BODY's ordinary-pool bodies) the lingerie sets are fitted to. */
+export const LINGERIE_BODY_IDS = ['paleGaze', 'paleRevenant', 'paleApparition'] as const;
+export type LingerieBodyId = typeof LINGERIE_BODY_IDS[number];
 
-export interface LingerieSetDef {
-  id: LingerieSetId;
+export interface LingerieSet {
+  /** 'lingerie-<design>' */
+  id: string;
+  design: string;
   label: string;
-  /** ZOMBIE_BODIES ids the set is fitted to (lane BODY's pale bodies). */
+  /** Lazy model key of outfit-lingerie-<design>.glb. */
+  model: string;
+  url: string;
+  bytes: number;
+  /** Wardrobe wearable ids per slot. */
+  pieces: {upper: string; lower: string};
+  pieceLabels: {upper: string; lower: string};
+  /** Bodies this set is fitted to (one skinned variant per body). */
   bodies: readonly string[];
+  /** Static display nodes inside the same GLB: centred in x / z, lowest point at y = 0, front +Z, real worn size (fitted on `fittedOn`). */
+  display: {top: string; bottom: string; fittedOn: string; setSizeM: readonly number[] | null};
 }
 
-/** The fitted sets (lane FIT). Stub: none fitted yet. */
-export const LINGERIE_SETS: readonly LingerieSetDef[] = [];
+export const LINGERIE_SETS: readonly LingerieSet[] = LINGERIE_BUILD.map(s => ({
+  id: s.id, design: s.design, label: s.label, model: s.model, url: s.url, bytes: s.bytes,
+  pieces: {upper: s.top, lower: s.bottom}, pieceLabels: {upper: s.topLabel, lower: s.bottomLabel}, bodies: s.bodies, display: s.display,
+}));
 
-/** The three store-local bodies (lane BODY's ZOMBIE_BODIES ids). */
-export const LINGERIE_BODY_IDS = ['paleGaze', 'paleRevenant', 'paleApparition'] as const;
+/** Lazily loaded lingerie set files: model key -> url + exact bytes (progress weight). */
+export const LINGERIE_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(LINGERIE_SETS.map(s => [s.model, {url: s.url, bytes: s.bytes}]));
 
-/** Lazily loaded garment files: library key -> url + bytes (Game.propModels). Stub: none. */
-export const LINGERIE_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = {};
+/** The wardrobe wearables of every set (weight 0: never part of an ordinary selection pool). */
+export const LINGERIE_WEARABLES: readonly WearableDef[] = LINGERIE_SETS.flatMap(s => [
+  {id: s.pieces.upper, slot: 'upper' as const, label: `${s.label}: ${s.pieceLabels.upper}`, model: s.model, weight: 0, tags: ['lingerie', s.id], origin: 'generated' as const},
+  {id: s.pieces.lower, slot: 'lower' as const, label: `${s.label}: ${s.pieceLabels.lower}`, model: s.model, weight: 0, tags: ['lingerie', s.id], origin: 'generated' as const},
+]);
 
-/** The lingerie wearables (top + bottom per set). Stub: none. */
-export const LINGERIE_WEARABLES: readonly WearableDef[] = [];
+const LINGERIE_WEAR_IDS = new Set(LINGERIE_WEARABLES.map(w => w.id));
+export const isLingerieWearable = (id: string | undefined | null): boolean => !!id && LINGERIE_WEAR_IDS.has(id);
 
-/** The separate lingerie look library over the loaded models (the pale bodies + the lingerie wearables only). */
-export function createLingerieLibrary(models: Record<string, GLTF | undefined>): WardrobeLibrary {
-  return new WardrobeLibrary(models, ZOMBIE_BODIES.filter(b => (LINGERIE_BODY_IDS as readonly string[]).includes(b.id)), LINGERIE_WEARABLES);
+/** Every shipped (set, body) fit, in set order. */
+export const LINGERIE_FITS: readonly {set: string; body: string}[] = LINGERIE_SETS.flatMap(s => s.bodies.map(body => ({set: s.id, body})));
+
+/** Registry entries of the pale bodies (lane BODY); contract-identical fallbacks until those land in ZOMBIE_BODIES. */
+function lingerieBodies(bodies: readonly ZombieBodyDef[]): ZombieBodyDef[] {
+  return LINGERIE_BODY_IDS.map(id => bodies.find(b => b.id === id) ?? {id, label: id, model: `zombieBody_${id}`, weight: 0, origin: 'reused' as const, requires: ['upper', 'lower'] as const});
 }
 
 /**
- * The lingerie look of store-local spawn `spawnIndex` of the layout seeded `seed`: deterministic per (seed, index) — the same on every
- * rebuild (revisit, streaming, Retry), independent of every other stream. Stub: a pale body + a design's top + bottom ids (not fitted:
- * the stub library rejects it). FIT: `usable` (optional) restricts the pick to buildable fits (e.g. l => lib.isValid(l)).
+ * The lingerie WardrobeLibrary: the pale bodies + only the lingerie wearables. `models` = the boot models plus the loaded lazy
+ * lingerie files (LINGERIE_MODEL_FILES keys). A set whose file is not loaded (or whose node for a body is missing / stale: the
+ * geometry-hash guard) is simply unavailable; isValid(look) tells.
  */
-export function lingerieLook(seed: number, spawnIndex: number, _usable?: (look: ZombieLook) => boolean): ZombieLook {
-  const rand = mulberry32(hashString(`lingerie-look:${spawnIndex}`, seed >>> 0));
-  rand();
-  const body = LINGERIE_BODY_IDS[Math.floor(rand() * LINGERIE_BODY_IDS.length)];
-  const design = LINGERIE_DESIGNS[Math.floor(rand() * LINGERIE_DESIGNS.length)];
-  return {body, wear: {upper: `lingerie-${design}-top`, lower: `lingerie-${design}-bottom`}};
+export function createLingerieLibrary(models: Record<string, GLTF | undefined>, bodies: readonly ZombieBodyDef[] = ZOMBIE_BODIES): WardrobeLibrary {
+  return new WardrobeLibrary(models, lingerieBodies(bodies), LINGERIE_WEARABLES);
 }
+
+export interface LingerieLook extends ZombieLook {
+  /** 'lingerie-<design>' */
+  set: string;
+}
+
+/**
+ * Deterministic lingerie look for a store-context spawn, by (station seed, spawn index), independent of every other random stream:
+ * a per-seed shuffled order of the shipped (set, body) fits, entered at a per-seed offset and stepped by the spawn index, so a
+ * store's consecutive spawns wear different sets (up to six) and the same (seed, index) always gets the same look (revisit /
+ * streaming / Retry). `usable` (optional, e.g. `look => lib.isValid(look)`) restricts the choice to fits that can be built.
+ * Always both slots: upper = the set's top, lower = its bottom.
+ */
+export function lingerieLook(seed: number, spawnIndex: number, usable?: (look: LingerieLook) => boolean): LingerieLook {
+  const all = LINGERIE_FITS.map(f => { const s = LINGERIE_SETS.find(x => x.id === f.set)!; return {body: f.body, wear: {upper: s.pieces.upper, lower: s.pieces.lower}, set: s.id}; });
+  const fits = usable ? all.filter(l => usable(l)) : all;
+  const pool = fits.length ? fits : all;
+  if (!pool.length) return {body: LINGERIE_BODY_IDS[0], wear: {}, set: ''};
+  const rand = mulberry32(hashString('lingerie-looks', seed >>> 0));
+  rand();
+  const order = pool.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+  const offset = Math.floor(rand() * order.length);
+  const k = order[(offset + Math.max(0, Math.floor(spawnIndex))) % order.length];
+  const l = pool[k];
+  return {body: l.body, wear: {...l.wear}, set: l.set};
+}
+
+/** Static display stock of every set (lane STORE): model key + node names inside that GLB. */
+export const LINGERIE_DISPLAYS: readonly {set: string; model: string; nodes: {top: string; bottom: string}; setSizeM: readonly number[] | null}[] =
+  LINGERIE_SETS.map(s => ({set: s.id, model: s.model, nodes: {top: s.display.top, bottom: s.display.bottom}, setSizeM: s.display.setSizeM}));

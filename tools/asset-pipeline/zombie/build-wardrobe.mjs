@@ -38,6 +38,7 @@ import {garmentCanonical} from './lib/garment.mjs';
 import {pantsStage} from './lib/pants.mjs';
 import {rigidStage} from './lib/rigid.mjs';
 import {reposeTtoA} from './lib/repose.mjs';
+import {reposeTtoAskinned} from './lib/repose-skin.mjs';
 import {hitRadii} from './lib/hit.mjs';
 import {fitVariantsParallel} from './lib/fit-pool.mjs';
 import {coverMask} from './lib/fit.mjs';
@@ -61,9 +62,11 @@ import {NodeIO} from '@gltf-transform/core';
 // touching the stage code (its hash keys the stage cache)
 if (+process.env.LL_THREADS > 0) { const cpus = os.cpus; os.cpus = () => cpus().slice(0, +process.env.LL_THREADS); }
 /** Stage-cache identity of a source: T2.5 sources add the loader (densify) hash and density. */
-const srcKey = src => (src.t25 ? `${src.sha256}|t25:${t25LoaderHash()}|${src.densifyFrac}${src.trimTopCap ? '|trim' + src.trimTopCap : ''}` : src.sha256);
+const srcKey = src => (src.t25 || src.userUpload ? `${src.sha256}|t25:${t25LoaderHash()}|${src.densifyFrac}${src.trimTopCap ? '|trim' + src.trimTopCap : ''}` : src.sha256);
 const git = args => execFileSync('git', ['-C', REPO, ...args], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']});
 const T25_TAG = src => src.t25 ? ` + Meshy T2.5 replacement ${src.t25.asset} ${src.t25.attempt} (task ${src.t25.taskId}; ${T25_TASK})` : '';
+/** Runtime file id of a body: `file` (task contract names, e.g. 'pale-gaze') or the id. */
+const fileIdOf = B => B.def.file ?? B.id;
 
 const ARGS = new Set(process.argv.slice(2));
 const OPT = Object.fromEntries(process.argv.slice(2).filter(a => a.includes('=')).map(a => a.replace(/^--/, '').split('=')));
@@ -79,7 +82,7 @@ const SLOT_ORDER = ['lower', 'upper', 'face', 'head'];
 function guard(file) {
   if (OUT_ROOT) { if (!path.resolve(file).startsWith(OUT_ROOT + path.sep)) throw new Error('dev output outside --out: ' + file); return file; }
   const rel = path.relative(REPO, path.resolve(file));
-  const ok = /^game\/public\/assets\/models\/(zombie-body|outfit)-[a-z0-9]+(-t25)?\.glb$/.test(rel) || /^game\/public\/assets\/derivatives\/(zombie-body-[a-z0-9]+|outfit-[a-z0-9]+|zombie-wardrobe|zombie-variants)\.json$/.test(rel);
+  const ok = /^game\/public\/assets\/models\/(zombie-body|outfit)-[a-z0-9]+(-[a-z0-9]+)*?(-t25)?\.glb$/.test(rel) || /^game\/public\/assets\/derivatives\/(zombie-body-[a-z0-9]+(-[a-z0-9]+)*|outfit-[a-z0-9]+|zombie-wardrobe|zombie-variants)\.json$/.test(rel);
   if (!ok) throw new Error('refusing to write outside the wardrobe derivative outputs: ' + rel);
   return file;
 }
@@ -118,10 +121,11 @@ async function main() {
     console.log(`[body ${def.id}] ${src.file}`);
     const opts = cfgOf(def);
     // stage cache key: only what the mesh/bake stage depends on (labels, traits, weights, skin overrides excluded)
-    const stageKey = Object.fromEntries(['heightM', 'targetTris', 'importance', 'unwrap', 'density', 'bake', 'textures', 'facing', 'repose'].map(k => [k, opts[k] ?? null]));
+    const stageKey = Object.fromEntries(['heightM', 'targetTris', 'importance', 'unwrap', 'density', 'bake', 'textures', 'facing', 'repose', ...(opts.reposeOpts ? ['reposeOpts'] : []), ...(opts.skeleton ? ['skeleton'] : [])].map(k => [k, opts[k] ?? null]));
     const stage = await makeCache({src: srcKey(src), stageKey})('body-' + def.id, async () => {
       const m = await loadSource(src);
-      const r = def.repose === 'T' ? reposeTtoA(m) : m;
+      // 'T-skin' (task mall-lingerie): LBS repose of an unclothed long-haired T-pose source (lib/repose-skin.mjs)
+      const r = def.repose === 'T' ? reposeTtoA(m) : def.repose === 'T-skin' ? await reposeTtoAskinned(m, {heightM: def.heightM, ...def.reposeOpts}) : m;
       const st = await bodyStage(r, opts);
       return r.repose ? {...st, repose: r.repose} : st;
     });
@@ -197,6 +201,9 @@ async function main() {
     if (covers.includes(w.def.slot)) return {ok: false, reason: `body ${B.id} covers the ${w.def.slot} slot (${B.def.traits.note ?? 'own geometry'})`, rule: 'body-covers-slot'};
     const ex = EXCLUDED_PAIRS.find(e => e.body === B.id && e.wearable === w.id);
     if (ex) return {ok: false, reason: ex.reason, rule: 'qa-exclusion'};
+    // task mall-lingerie: a body may ship a COMPACT subset of the wearables that pass on it (shared 200 MiB pack capacity);
+    // --all-wear (dev) fits every wearable to evaluate the full passing list (recorded in wardrobe.config.mjs)
+    if (B.def.wear && !B.def.wear.ids.includes(w.id) && !ARGS.has('--all-wear')) return {ok: false, reason: B.def.wear.reason, rule: 'body-wear-subset'};
     return {ok: true};
   };
   const runPhase = async list => {
@@ -340,7 +347,7 @@ async function main() {
     // T2.5 migration: every CHANGED runtime file gets a new (-t25) URL; a rebuild that is byte-identical to the shipped
     // legacy file keeps that file (not rewritten). KEEP_BODY_FILES bodies (no T2.5 replacement) must also keep their
     // geometry exactly (every wearable variant fitted here indexes it).
-    const legacyBody = path.join(REPO, 'game/public/assets/models', `zombie-body-${B.id}.glb`);
+    const legacyBody = path.join(REPO, 'game/public/assets/models', `zombie-body-${fileIdOf(B)}.glb`);
     if (KEEP_BODY_FILES.includes(B.id)) {
       const ex = await shippedBodyExtras(legacyBody);
       if (ex.geometryHash !== extras.geometryHash) throw new Error(`kept body ${B.id}: rebuilt geometry ${extras.geometryHash} != shipped ${ex.geometryHash} (${path.relative(REPO, legacyBody)})`);
@@ -352,11 +359,11 @@ async function main() {
       console.log(`  KEPT ${path.relative(REPO, legacyBody)} (rebuild byte-identical; not rewritten)`);
       continue;
     }
-    const glb = guard(path.join(MODELS, `zombie-body-${B.id}${T25_SUFFIX}.glb`));
+    const glb = guard(path.join(MODELS, `zombie-body-${fileIdOf(B)}${T25_SUFFIX}.glb`));
     await writeDoc(doc, glb);
     const bytes = fs.statSync(glb).size, sha = sha256File(glb);
-    const manifest = bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit: audit.body, t25: await t25Block(B.src, `game/public/assets/models/zombie-body-${B.id}.glb`, glb)});
-    fs.writeFileSync(guard(path.join(DERIV, `zombie-body-${B.id}.json`)), JSON.stringify(manifest, null, 2) + '\n');
+    const manifest = bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit: audit.body, t25: await t25Block(B.src, `game/public/assets/models/zombie-body-${fileIdOf(B)}.glb`, glb)});
+    fs.writeFileSync(guard(path.join(DERIV, `zombie-body-${fileIdOf(B)}.json`)), JSON.stringify(manifest, null, 2) + '\n');
     summary.bodies[B.id] = {glb: rel(glb), bytes, sha256: sha, triangles: extras.bodyTriangles, vertices: B.low.pos.length / 3, heightM: extras.heightM, hit: B.profile.hit, traits: extras.traits, provenance: provenanceOf(B), t25Source: !!B.src.t25, skeletonIssues: B.stage.issues, lowestSkinnedVertexM: +worst.toFixed(4), motion: audit.body};
     console.log(`  wrote ${rel(glb)} ${bytes} bytes`);
   }
@@ -421,6 +428,7 @@ async function main() {
 const rel = f => OUT_ROOT ? path.relative(OUT_ROOT, f) : path.relative(REPO, f);
 const originOf = X => X.def.origin + T25_TAG(X.src);
 const provenanceOf = X => (X.src.t25 ? 'generated (Meshy T2.5 replacement of the local Pixal3D master)' : X.def.provenance);
+const USER_UPLOAD_NOTE = src => `new body from a user upload (${src.userUpload.name} in ${src.userUpload.zip.name}; task ${src.userUpload.task}): not part of the T2.5 migration, no superseded file`;
 /** True when `doc` serialises to exactly the bytes of the shipped file (then that file is kept, not rewritten). */
 async function sameAsShipped(doc, file) {
   if (!fs.existsSync(file)) return false;
@@ -440,6 +448,10 @@ async function shippedBodyExtras(file) {
  * densification actually applied, and the pushed-history restore record of the superseded runtime path.
  */
 async function t25Block(src, oldRel, glb) {
+  if (src.userUpload) {
+    const m = await loadSource(src); // deterministic: re-derives the densification stats of this exact source
+    return {migration: null, sourceReplaced: false, note: USER_UPLOAD_NOTE(src), densify: m.densify};
+  }
   const out = {migration: T25_TASK, sourceReplaced: !!src.t25};
   if (src.t25) {
     const m = await loadSource(src); // deterministic: re-derives the densification stats of this exact source
@@ -481,7 +493,7 @@ const HONESTY = {sourcesHadSkeleton: false, rig: 'NEW derivative skeleton (share
 
 function srcInfo(s, stageMaster) {
   const rr = f => f && (path.isAbsolute(f) ? path.relative(REPO, f) : f);
-  return {id: s.id, file: rr(s.file), sha256Verified: s.sha256, uploadId: s.uploadId, sourceMetadata: rr(s.metadata), displayName: s.displayName, ledger: s.ledger, ledgerKey: s.ledgerKey, inputPng: rr(s.inputPng), inputPngSha256: s.inputPngSha256, nativeJob: s.jobId, nativeMetadata: rr(s.nativeMetadata), nativeReceipt: rr(s.nativeReceipt), preservedXz: rr(s.preservedXz),
+  return {id: s.id, file: rr(s.file), sha256Verified: s.sha256, uploadId: s.uploadId, ...(s.userUpload ? {userUpload: s.userUpload} : {}), sourceMetadata: rr(s.metadata), displayName: s.displayName, ledger: s.ledger, ledgerKey: s.ledgerKey, inputPng: rr(s.inputPng), inputPngSha256: s.inputPngSha256, nativeJob: s.jobId, nativeMetadata: rr(s.nativeMetadata), nativeReceipt: rr(s.nativeReceipt), preservedXz: rr(s.preservedXz),
     triangles: stageMaster?.triangles, vertices: stageMaster?.vertices, textures: stageMaster?.textures, material: stageMaster?.material};
 }
 
@@ -504,7 +516,9 @@ function bodyManifest(B, {glb, bytes, sha, death, verify, clips, extras, audit, 
       'Procedural (not mocap) clips; no facial rig, no finger or twist bones.',
       'Hidden-side geometry of the source is AI-hallucinated; textures re-baked at 2048 and downsampled to 1024 (MR 256); no normal map.',
       'Joint centres without visible landmarks use anthropometric ratios between measured landmarks.',
-      ...(B.def.repose ? ['Reused T-pose source: arms rotated into the A-pose offline (repose v2: torso flank held fixed below the armpit, cloth fringe hanging under the T-pose sleeves removed); the wide torn jacket sleeves still deform with LBS.'] : []),
+      ...(B.def.repose === 'T' ? ['Reused T-pose source: arms rotated into the A-pose offline (repose v2: torso flank held fixed below the armpit, cloth fringe hanging under the T-pose sleeves removed); the wide torn jacket sleeves still deform with LBS.'] : []),
+      ...(B.def.repose === 'T-skin' ? ['T-pose source: arms brought down into the shared A-pose bind offline by linear-blend skinning on a T-pose analysis rig (lib/repose-skin.mjs; hair never follows the arms); the shoulder / armpit skin carries that LBS deformation, then the normal A-pose rig is built on the result.', 'The Meshy normal map is not kept: the wardrobe body material has no normal map (every body: baked colour + metal-rough only) and the re-unwrapped 15 k-triangle derivative would need a tangent-space re-bake.'] : []),
+      ...(B.def.traits?.nude ? ['Unclothed user-uploaded body: the runtime never shows it without an upper AND a lower garment (traits.requires; ai/outfits.ts nude: build() completes missing required slots).'] : []),
       ...(B.def.traits?.baseLayer ? ['Base-layer body (opaque tank/t-shirt + shorts/briefs + socks as generated); the runtime always gives it pants (traits.requires lower).'] : []),
       'Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false.',
     ]};
