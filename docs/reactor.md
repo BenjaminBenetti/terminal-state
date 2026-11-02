@@ -12,7 +12,7 @@ outside Git.
 | Generator | `game/src/gen/reactor/{index,frame,carve,structure,validate}.ts` — `generateReactorLevel(ctx, {trackExt})` |
 | Registration | `levels/registry.ts` `LEVELS.reactor` (tier 3), `ai/spawnTables.ts` `REACTOR_SPAWN_PROFILE`, `items/lootTables.ts` `REACTOR_PROFILE`, `gen/maskLoot.ts` (1 mask, 3–5 filters), `gen/trackExt/config.ts` `TRACK_EXT_REACTOR`; title card, travel slot 3, `?level=reactor` / `?reactorSeed=CODE` |
 | Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts`; the jammed final generator `game/src/gen/reactor/gasJam.ts` |
-| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
+| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; the HUD objective's strings + builder `game/src/world/reactor/objectiveText.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
 | Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`), `game/src/audio/manifest.reactorStartup.generated.ts` (7 startup clips; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`) |
@@ -23,7 +23,7 @@ outside Git.
 - **Rim** (`levels[0]`): a real subway station. One platform of about 70 m beside a track bed (tunnels continue past the bed ends;
   at most one Beyond-the-Station annex). The platform does not open onto the pit: a small station area, a breached wall and a short
   rough tunnel lead to the railed rim gallery and the first view down to the core (see "Arrival approach and seeded flow"). The rim
-  control office holds the startup key and the pit status board.
+  control office holds the pit status board (the startup key lies on the core floor since lane OBJECTIVES, below).
 - **Four walkway tiers** (about 6 m apart): steel galleries on the pit walls, big landings for the generators, bridges across the
   pit to 1–2 free-standing lattice towers, and side rooms cut into the rock (maintenance stores, the switchgear room on tier 4).
 - **The core floor** (about −30 m): the pump hall, the control room overlooking the vessel, and round the vessel (lane CORE):
@@ -289,12 +289,12 @@ repository is entered.
   - It never starts and its zone is never cleared by a generator: only the reactor online (the win's `clearAll`) clears it, never a
     fuse, the breaker, the valve, the pump or the key. The upper two generators work as before.
   - `reactor.state.jam` keeps the generator and its stalls. A pre-jam record with it started keeps its zone's saved fraction.
-  - **Where the player learns it, before committing:**
-    - the rim pit board (core row "JAMMED · MASK");
-    - the switchgear board once power is on;
-    - the "Next:" step and the HUD objective;
-    - the generator's prompt and the HUD air line ("toxic air · fans jammed — gas mask on");
-    - the floor maps: a ⊘ jammed mark (not an open X) and a red banner on the core storey.
+  - **Where the player learns it** (trimmed by lane OBJECTIVES: no HUD jam paragraph, the jam is learnt at the generator):
+    - the generator itself: its flashing fault lamp, its prompt, the stall and a short toast;
+    - terse board marks: the rim pit board (core row "JAMMED · MASK"), the switchgear board once power is on ("core floor next: gas
+      mask on"), the pit board's "Next:" step (" · gas mask");
+    - the HUD air line says only "toxic air · gas mask on";
+    - the floor maps: a ⊘ jammed mark (not an open X) and a red "TOXIC AIR — GAS MASK REQUIRED" banner on the core storey.
   - **Supplies:** the guaranteed mask and filters (`MASK_LOOT`: 1 mask and 3–5 filters) are placed only on storeys above the jammed
     zone (`placeMaskLoot` → `placeGear` `areaOk`). That air is breathable once the working generators run (checked on 12 seeds).
     - The worst roll gives 503 s of filter time.
@@ -304,7 +304,7 @@ repository is entered.
   "zero damage down to the core floor" walk now ends at the final generator, with the jam asserted.
 
 ## The restart (credible industrial work, no puzzle)
-1. **Startup key**: in the rim control office. It is picked up on the way down.
+1. **Startup key**: in the core floor's control room, the key switch's own room (lane OBJECTIVES; it was the rim office's).
 2. **Control power**:
    - Seat two fuse cartridges in the switchgear on tier 4. Three are placed, in stores on tier 3, tier 4 and the core floor, never
      inside the switchgear room.
@@ -315,6 +315,36 @@ repository is entered.
 
 The parts are finite: placed once, consumed once, never in a loot table. Every step persists, so a retreat keeps it. The status
 boards (rim pit board, switchgear, pump, control monitor) and the HUD line show each task's state.
+
+### Concise objective, the key on the core floor (task reactor-surface-ending-20261102, lane OBJECTIVES)
+User: "the objective text is to wordy, saying "core floor generator is jammed" and all that … The player will know its jammed when they
+try to start it." and "the key for reactor start should be on the bottom floor not the top floor." Both are intent changes.
+- **The HUD objective** (`world/reactor/objectiveText.ts`, every HUD objective string and the pure builder; `restart.ts` renders it):
+  - one line, "Restart the reactor — ✓ Power · ▸ Coolant · Key · Rods": the tasks in route order, done ones ticked, the current one
+    marked; then the storey;
+  - after the rods, "Reactor restarted — …" while the win runs, then "Reactor running · …";
+  - no jam, mask or hazard text. Lane GAS's red paragraph (`JAM_TEXT.objective`) is gone.
+  - The jam is learnt at the generator: the stall, the flashing fault lamp, its prompt and a short toast ("Generator seized: Zone 3
+    fans JAMMED — keep the gas mask on: …").
+  - The mechanics are unchanged: the bottom stays gassed and the mask is needed until online.
+  - Seam for later stages (lane ENDING): `ReactorRestart.objectiveStage` (a provider read at 4 Hz). After the restart its line replaces
+    the post-restart line; its strings go in `OBJECTIVE_TEXT`.
+- **The startup key** lies in the core floor's control room (`gen/reactor/index.ts` placeComponents; `validate.ts` checks it):
+  - on open floor beside a wall or prop, behind the console (the operator side, past its stand row);
+  - at least 1.2 m from the key switch / rod control stand points, out of the doorway lane.
+  - No deadlock: nothing gates the control room. The item id (`reactor_key`), its component record and the run record are unchanged.
+  - The "Next:" step fetches it after the coolant ("find the startup key — Control room · Core floor · gas mask"). A refusal at the
+    key switch says "it lies in this control room".
+  - The floor-map X follows the live pickup, so it is on the core storey. The pit board lists POWER / COOLANT / KEY / RODS in route
+    order. The rim office keeps the pit board (the "RIM CONTROL OFFICE" plate still points there).
+- Tests: `game/tests/reactor-objectives-key.test.ts`:
+  - the objective is short and hazard-free in every state, the stage seam works, the jam feedback is short;
+  - on 12 seeds the key is in the control room: reachable from every way down and back, and the map X is where it lies;
+  - the masked route with the key fetch (stairs → valve → pump → key → switch → rods → online) is covered twice over by the worst
+    filter roll;
+  - persistence.
+  - The superseded assertions are updated with notes: `reactor-gas-jam` (HUD objective, budget chain), `reactor-air-runtime`, `reactor-gen-layout`,
+    `reactor-restart-logic`, `reactor-x-arrival`.
 
 **The reactor comes to life step by step** (lane CORE, `world/reactor/coreStages.ts`). The restart runtime sends the persisted record
 through `ReactorVisuals.setRestartState`: once, instantly, on every build or reload, and live after every completed control. So a

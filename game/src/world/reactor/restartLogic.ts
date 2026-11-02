@@ -11,7 +11,7 @@
 //    withdraw the control rods ('rods': HOLD E 4 s; needs the key in and the pump running) -> THE WIN.
 // Progress is MONOTONIC (nothing is ever undone or re-rolled): a seated cartridge stays seated, the key stays in the switch.
 
-import {REACTOR_FUSE_SLOTS, loadReactorState, reactorTasks, type ReactorRunState, type ReactorTaskStatus} from './runState';
+import {REACTOR_FUSE_SLOTS, loadReactorState, type ReactorRunState} from './runState';
 
 /** The restart controls (ReactorControl.id values this lane operates; GEN places them in layout.reactor.sites[].controls). */
 export type RestartControlId = 'fuse-0' | 'fuse-1' | 'breaker' | 'valve' | 'pump' | 'keyswitch' | 'rods';
@@ -92,7 +92,7 @@ export function blocker(s: ReactorRunState, id: RestartControlId, inv: Pick<Rest
       return !s.breaker ? 'No control power — close the main breaker in the switchgear first' : 'Open the main coolant valve first (hold E on the handwheel)';
     }
     case 'keyswitch':
-      return inv.count(REACTOR_KEY_ID) > 0 ? null : `The key switch needs the startup key — the shift supervisor's key${where(hints.key)}`;
+      return inv.count(REACTOR_KEY_ID) > 0 ? null : `The key switch needs the startup key${where(hints.key)}`; // (lane OBJECTIVES: shorter)
     case 'rods': {
       const miss: string[] = [];
       if (!s.keyInserted) miss.push('the startup key in the switch');
@@ -195,35 +195,40 @@ export function writeRestartState(run: RestartRun, lane: string, generators: num
 export interface NextStepInfo {
   tiers: readonly {level: number; label: string}[];
   sites: readonly {id: string; level: number}[];
-  components: readonly {item: string; where: string}[];
+  /** (lane OBJECTIVES: + level, the component's storey: the mask note of a find on a gassed storey) */
+  components: readonly {item: string; where: string; level?: number}[];
 }
 
 /**
  * The pit board's "Next: …" line — where to go and what to do next (the order a crew would follow). Task reactor-playtest-round2-20261102
  * (lane GAS): `mask` = the storeys kept gassed by the jammed generator (gen/reactor/gasJam.ts) and the note a step there gets
- * (" · gas mask + filters (fans jammed)"); absent / empty = no note.
+ * (" · gas mask"); absent / empty = no note. Task reactor-surface-ending-20261102 (lane OBJECTIVES): the startup key lies in the core
+ * floor's control room now, so it is fetched on the way, AFTER the coolant (route order: fuses, switchgear, pump hall, control room).
  */
 export function nextStepText(s: ReactorRunState, info: NextStepInfo, inv: Pick<RestartInventory, 'count'>, mask?: {levels: readonly number[]; note: string} | null): string {
   if (s.restarted) return 'Reactor running — surface ventilation towers powered';
+  const note = (level: number | undefined) => (mask && level !== undefined && mask.levels.includes(level) ? ` · ${mask.note}` : '');
   const at = (site: string) => {
     const st = info.sites.find(x => x.id === site);
     const tier = st ? info.tiers.find(t => t.level === st.level) : undefined;
-    return tier ? ` (${tier.label})${mask && mask.levels.includes(st!.level) ? ` · ${mask.note}` : ''}` : '';
+    return tier ? ` (${tier.label})${note(st!.level)}` : '';
   };
-  const whereOf = (item: string) => info.components.find(c => c.item === item)?.where;
-  if (!s.keyInserted && inv.count(REACTOR_KEY_ID) < 1) { const w = whereOf(REACTOR_KEY_ID); return `Next: find the startup key${w ? ` — ${w}` : ''}`; }
-  if (!allFuses(s) && inv.count(FUSE_CARTRIDGE_ID) < REACTOR_FUSE_SLOTS - fusesInstalled(s)) { const w = whereOf(FUSE_CARTRIDGE_ID); return `Next: find spare fuse cartridges${w ? ` — ${w}` : ''}`; }
+  const find = (item: string, what: string) => {
+    const c = info.components.find(q => q.item === item);
+    return `Next: find ${what}${c?.where ? ` — ${c.where}` : ''}${note(c?.level)}`;
+  };
+  if (!allFuses(s) && inv.count(FUSE_CARTRIDGE_ID) < REACTOR_FUSE_SLOTS - fusesInstalled(s)) return find(FUSE_CARTRIDGE_ID, 'spare fuse cartridges');
   if (!allFuses(s)) return `Next: replace the burnt fuses — switchgear${at('switchgear')}`;
   if (!s.breaker) return `Next: close the main breaker — switchgear${at('switchgear')}`;
   if (!s.valve) return `Next: open the main coolant valve — pump hall${at('pumpHall')}`;
   if (!s.pump) return `Next: start the circulation pump — pump hall${at('pumpHall')}`;
+  if (!s.keyInserted && inv.count(REACTOR_KEY_ID) < 1) return find(REACTOR_KEY_ID, 'the startup key');
   if (!s.keyInserted) return `Next: insert the startup key — control room${at('control')}`;
   return `Next: withdraw the control rods — control room${at('control')}`;
 }
 
-/** The task statuses (runState.reactorTasks) + a compact ticked line for the HUD ("✓ Key · Power · Coolant · Rods"). */
-export function taskLine(s: ReactorRunState): {tasks: ReturnType<typeof reactorTasks>; html: string} {
-  const tasks = reactorTasks(s);
-  const part = (label: string, st: ReactorTaskStatus) => `<span class="rt ${st}">${st === 'done' ? '✓ ' : ''}${label}</span>`;
-  return {tasks, html: [part('Key', tasks.key), part('Power', tasks.power), part('Coolant', tasks.coolant), part('Rods', tasks.rods)].join(' · ')};
-}
+/**
+ * The task statuses + the compact ticked HUD line. Task reactor-surface-ending-20261102 (lane OBJECTIVES): moved to objectiveText.ts
+ * (every HUD objective string in one file), in route order with the current task marked ("✓ Power · ▸ Coolant · Key · Rods").
+ */
+export {taskLine} from './objectiveText';
