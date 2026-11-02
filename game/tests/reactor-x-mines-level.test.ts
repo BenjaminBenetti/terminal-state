@@ -98,7 +98,7 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
         const [cx, cy] = g.cellOf(m.x, m.z), a = L.areas[g.area[g.idx(cx, cy)]];
         expect(g.cells[g.idx(cx, cy)]).toBe(FLOOR);
         // the whole set (cap ends at +-1.7 x sx) stays inside the drift's one-cell rock walls; both posts are collision boxes there
-        const alongX = a.w >= a.h, Wd = (alongX ? a.h : a.w) * CELL;
+        const alongX = Math.abs(m.yaw - Math.PI / 2) < 1e-6, Wd = (alongX ? a.h : a.w) * CELL; // a set's yaw: across its drift's travel
         expect(1.7 * m.sx).toBeLessThanOrEqual(Wd / 2 + 0.49);
         const mine = posts.filter(p => p.area === a.id && Math.abs((alongX ? p.x : p.z) - (alongX ? m.x : m.z)) < 1e-3);
         expect(mine.length).toBe(2);

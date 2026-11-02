@@ -10,6 +10,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {LEVELS} from '../src/levels/registry';
 import {levelsOf} from '../src/gen/levels';
+import {CELL, FLOOR} from '../src/gen/grid';
 import {generateStation} from '../src/gen/station';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {WorldMaterials} from '../src/world/materials';
@@ -99,6 +100,22 @@ describe('a real Reactor world: shots take the drawn finish', () => {
       for (const dir of [{x: 1, y: 0, z: 0}, {x: -1, y: 0, z: 0}, {x: 0, y: 0, z: 1}, {x: 0, y: 0, z: -1}]) shoot({x: cx, y, z: cz}, dir, 'wall');
       shoot({x: cx, y, z: cz}, {x: 0.02, y: -1, z: 0.01}, 'floor');
       shoot({x: cx, y, z: cz}, {x: 0.02, y: 1, z: 0.01}, 'ceiling');
+    }
+    // task reactor-expansion-20261101 (lane MINES): a site's centre can stand inside its own machine (the pump / console colliders), so
+    // the room walls are ALSO sampled deterministically from clear floor inside every room cut into the rock below the rim (GEN's
+    // 'reactor-room' areas): the two clearest cells nearest each room's centre, shooting at its four walls
+    for (const a of L.areas) {
+      if (a.role !== 'reactor-room' || !(a.level ?? 0)) continue;
+      const G = lv.grid(a.level!), y = (a.floorY ?? 0) + 1.5, mx = a.x + a.w / 2, my = a.y + a.h / 2;
+      const pts: [number, number][] = [];
+      for (let cy = a.y + 1; cy < a.y + a.h - 1; cy++) for (let cx = a.x + 1; cx < a.x + a.w - 1; cx++) {
+        const i = G.idx(cx, cy);
+        if (G.cells[i] === FLOOR && !G.blocked[i] && G.area[i] === a.id && G.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, 0.45)) pts.push([cx, cy]);
+      }
+      pts.sort((p, q) => Math.hypot(p[0] + 0.5 - mx, p[1] + 0.5 - my) - Math.hypot(q[0] + 0.5 - mx, q[1] + 0.5 - my) || p[1] - q[1] || p[0] - q[0]);
+      for (const [px, py] of pts.slice(0, 2)) {
+        for (const dir of [{x: 1, y: 0, z: 0}, {x: -1, y: 0, z: 0}, {x: 0, y: 0, z: 1}, {x: 0, y: 0, z: -1}]) shoot({x: (px + 0.5) * CELL, y, z: (py + 0.5) * CELL}, dir, 'wall');
+      }
     }
     // pit concrete walls, steel gratings and rusted-plate rooms were all struck, and the station rule had them wrong
     expect(seen['reactor-wall']?.n ?? 0, JSON.stringify(seen)).toBeGreaterThan(3);

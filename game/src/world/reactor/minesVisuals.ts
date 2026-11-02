@@ -104,11 +104,13 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
 
   // --- timber support sets: one per pair of post collision boxes the dress pass placed (minesDress.ts placeTimberSets) --------------
   {
-    const seen = new Set<string>();
-    for (const p of of(MINE_PIECE.post)) {
-      const a = layout.areas[p.area], alongX = a.w >= a.h, s = alongX ? p.x : p.z, key = `${a.id}:${Math.round(s * 100)}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+    // the dress pass pushes each set's two posts together (one per rib): the pair shares its position ALONG the drift, so the drift's
+    // direction of travel is the axis on which they agree (a short segment can be wider than it is long)
+    const posts = of(MINE_PIECE.post);
+    for (let k = 0; k + 1 < posts.length; k += 2) {
+      const p = posts[k], q = posts[k + 1], a = layout.areas[p.area];
+      if (q.area !== p.area) continue;
+      const alongX = Math.abs(p.x - q.x) < 1e-3 && Math.abs(p.z - q.z) > 1e-3, s = alongX ? p.x : p.z;
       const Wd = (alongX ? a.h : a.w) * CELL, mid = (alongX ? a.y : a.x) * CELL + Wd / 2, fit = timberSetFit(Wd, a.ceil - base);
       plan.models.timberSet.push({x: r3(alongX ? s : mid), y: base, z: r3(alongX ? mid : s), yaw: alongX ? Math.PI / 2 : 0, sx: r3(fit.sx), sy: r3(fit.sy), sz: 1});
     }

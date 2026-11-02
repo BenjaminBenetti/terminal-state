@@ -52,7 +52,8 @@ export function carveMines(inp: ComplexCarveInput): MinesCarve | null {
   const gp = plan.generator;
   const info: MinesDressInfo = {
     level: slot.level, base: slot.baseY,
-    rooms: plan.rooms.map(r => ({key: r.key, area: ids.get(r.key)!.id, part: r.part})),
+    // a drift's direction of travel on the world axes (canonical depth = canvas y for a N / S inward, x for E / W)
+    rooms: plan.rooms.map(r => ({key: r.key, area: ids.get(r.key)!.id, part: r.part, ...(r.travel ? {axis: (r.travel === 'd') === (slot.inward === 'N' || slot.inward === 'S') ? 'z' as const : 'x' as const} : {})})),
     use: {x: gp.use.x, y: gp.use.y}, foot: {...gp.foot},
   };
   const out: MinesCarve = {
