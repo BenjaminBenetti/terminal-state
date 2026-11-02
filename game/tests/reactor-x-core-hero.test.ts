@@ -64,7 +64,30 @@ describe('hero plan on real layouts', () => {
       expect(hero.flows.filter(f => f.kind === 'cross').length).toBeGreaterThanOrEqual(2);
       expect(hero.stats.pipes).toBeGreaterThan(80);
       expect(hero.stats.risers).toBeGreaterThan(10);
-      expect(hero.stats.crdm).toBeGreaterThan(30);
+      // (follow-up) the lead's CRDM service platform on the dome, pipe elbows at the square bends, sight-glass spools inline
+      expect(count('crdmPlatform')).toBe(1);
+      expect(hero.stats.crdm).toBe(0); // its procedural stand-in is not drawn
+      expect(count('pipeElbow')).toBeGreaterThanOrEqual(4);
+      expect(count('pipeElbow')).toBeLessThanOrEqual(REACTOR_MODELS.pipeElbow.cap);
+      expect(count('sightGlassSpool')).toBeGreaterThanOrEqual(3);
+      expect(hero.windows.length).toBe(count('sightGlassSpool'));
+      // the CRDM platform's skirt sits on the dome: base at the dome height at its skirt radius, centred on the vessel axis
+      plan.modelPlacements.get('crdmPlatform')![0].m.decompose(p, q, s);
+      expect(p.x).toBeCloseTo(cf.x); expect(p.z).toBeCloseTo(cf.z);
+      expect(p.y - cf.y).toBeGreaterThan(9.3); expect(p.y - cf.y).toBeLessThan(9.6);
+      // every elbow's two ports land on the ends of drawn straight pipes (2 cm), every spool's ends on a cut in a coolant run
+      const ends = hero.flows.flatMap(f => (f.segs ?? []).flatMap(g => [g.a, g.b]));
+      const near = (v: THREE.Vector3) => ends.some(e => Math.hypot(e.x - v.x, e.y - v.y, e.z - v.z) < 0.02);
+      const EA = REACTOR_MODELS.pipeElbow.anchors as unknown as {down: number[]; side: number[]};
+      for (const pl of plan.modelPlacements.get('pipeElbow')!) {
+        const dn = new THREE.Vector3(...(EA.down as [number, number, number])).applyMatrix4(pl.m), sd = new THREE.Vector3(...(EA.side as [number, number, number])).applyMatrix4(pl.m);
+        expect(near(dn), `elbow down port ${dn.toArray().map(v => v.toFixed(2))}`).toBe(true);
+        expect(near(sd), `elbow side port ${sd.toArray().map(v => v.toFixed(2))}`).toBe(true);
+      }
+      const SA = REACTOR_MODELS.sightGlassSpool.anchors as unknown as {axisY: number; len: number};
+      for (const pl of plan.modelPlacements.get('sightGlassSpool')!) {
+        for (const x of [-SA.len / 2, SA.len / 2]) expect(near(new THREE.Vector3(x, SA.axisY, 0).applyMatrix4(pl.m)), 'spool end on a cut pipe').toBe(true);
+      }
       expect(hero.stats.gantries).toBeGreaterThanOrEqual(1);
       expect(hero.wheels.filter(w => w.kind === 'rcp').length).toBe(count('rcpVertical'));
       expect(hero.lights.green.length).toBe(2);
@@ -117,6 +140,12 @@ describe('hero plan on real layouts', () => {
       expect(core.stats.goopCells).toBe(R.coreFloor!.pool.cells); // the goop covers every pool cell
       expect(core.stats.flowSegments).toBeGreaterThan(20);
       expect(core.stats.glasses).toBe(hero.glasses.length);
+      expect(core.stats.windows).toBe(hero.windows.length); // the coolant glows in every spool's window
+      // without the models: the procedural CRDM stand-in, collars instead of elbows, no spools
+      const bare = coreHeroOf(planReactorKit(R, {fixtures: true}))!;
+      expect(bare.stats.crdm).toBeGreaterThan(30);
+      expect(bare.stats.elbows).toBe(0);
+      expect(bare.windows.length).toBe(0);
       expect(core.stats.lamps).toBe(hero.lamps.length);
       expect(core.stats.triangles).toBeLessThan(60_000);
       // the goop surface sits on the pool (its surface height) and never above the deck

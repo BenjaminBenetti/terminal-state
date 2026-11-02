@@ -34,7 +34,11 @@ outside Git.
     plinth and a coolant manifold (the lead's Meshy hero models, collision props), plus its hot, cold and crossover legs. The legs
     cross the ring overhead with at least 2.4 m headroom;
   - the **steam header ring**, a forest of risers, the circular service gantry, the CRDM service platform on the dome and the
-    **turbine generator** on a wall run of the outer floor.
+    **turbine generator** on a wall run of the outer floor;
+  - the lead's hero models through the arch model-swap registry (`archAssets.ts`, one entry each; procedural stand-ins without
+    them): **pipe elbows** at the runs' square bends (scaled to the bore; the straight pipes are cut at their ports), inline
+    **sight-glass spools** on the cold legs and crossovers (the coolant glows in their windows: fill on the valve, streaks with
+    the pump) and the **CRDM service platform** seated on the dome (its housings' top ring carries the rod lamps).
 
   The vessel's footprint is blocked but no longer a 12 m raised drum (its grid column is not drawn): the vessel model shows.
 - **The pit air rises above the rim** to about +15 m: the crane runway, the trolley and its hanging hook, and the tops of the pipe
