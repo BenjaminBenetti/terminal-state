@@ -655,13 +655,20 @@ User bullets 10–13. Tests: `game/tests/reactor-props-r2-{lamps,cables,drill}.t
     cabinets) and under what reaches the ceiling band (fixtures, the bunker's corridor ducts, the mines' timber set caps, read from
     their post pairs). It never drops below 2.15 m over the storey floor.
   - **Steps:** a straight run steps only where the open height changes for ≥ 2 m, so there is no saw-tooth between timber sets.
-  - **Walls:** the cable crosses every wall over the door's lintel, as a penetration through the wall above the opening. Under a
-    close ceiling it rises tight to 6 cm under it. Where the lintel has no room or a plate takes it, the cable goes through the wall
-    beside the jamb (≤ 3 cells). It is never in the opening.
-  - **The entrance:** it leaves just over the entrance lintel (or a frame / plate there), then `cableOf` continues along the pit walls
-    to the fans.
-  - **Checks:** `ceilingCableIssues` (door volumes, headroom, ceilings, every obstacle) and `CEILING_CABLE_STATS` (QA).
-  - **Measured** on 6 real seeds × 3 complexes: every route found at generation, 0 issues, about 10–60 ms per complex.
+  - **Walls:** every wall is crossed as a sleeve. The tray rises or falls at a riser cell 1–3 cells back from the wall, where the
+    column is clear from 2.15 m up, and three wires pass through the wall (`cableSleeves`; `archKit` draws only the wires). A crossing
+    goes over the door's lintel, 2 cm above the head and up to 6 cm under the ceiling, so it clears WASTE's frame headers. Where the
+    lintel has no room, it goes through the wall beside the jamb (≤ 3 cells). It is never in the opening under its head. The one
+    exception is an opening whose head is flush with the ceiling (no lintel exists): there the wires hug the ceiling.
+  - **The entrance:** the cable leaves just over the entrance lintel, or beside it onto any pit-deck area in front of it. ARRIVAL's
+    seeded entrance decks can be as narrow as the door. `cableOf` then continues along the pit walls to the fans.
+  - **Fallbacks:** if the layout's obstacles leave no route, the router retries with a bare field: the same door rules, no obstacles.
+    The legacy single-height route is the last resort. Either fallback is recorded in `ReactorGenerator.cableFallback`; the tests
+    require neither.
+  - **Checks:** `ceilingCableIssues` (door volumes, headroom, ceilings, every obstacle; sleeves judged by their wire bundle) and
+    `CEILING_CABLE_STATS` (QA).
+  - **Measured** on 12 real seeds × 3 complexes (all lanes merged): every strict route found at generation, 0 issues, about 10–60 ms
+    per complex. The cable test covers 10 of these seeds.
 - **The drill (12).** `MINES_FIT.drillRig = 1.9` (`world/reactor/minesAssets.ts`). It is a derived transform of the same GLB: no
   re-cook and no byte change. Lane MINES' collider, heading and instance scale read it.
   - Scale check beside zombie lastshift (1.78 m, runtime scale 1): 6.65 × 2.43 × 1.87 m (W × H × D). The wheeled carrier is 4.04 m,
