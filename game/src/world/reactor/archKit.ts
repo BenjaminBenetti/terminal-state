@@ -23,6 +23,8 @@ import type {
 } from '../../gen/reactor/reactorTypes';
 import type {RailRun} from '../../gen/levels';
 import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
+import {planGeneratorPanel, planMountedSite} from './controlsKit'; // task reactor-expansion-20261101 (lane CONTROLS): mounted controls
+import {generatorPlacement} from './controlsMount';
 
 /** Unit geometries of the kit (archMeshes.ts kitGeometry). */
 export type KitGeo = 'box' | 'ibeam' | 'cyl' | 'tube' | 'stripe' | 'plane' | 'bulb' | 'cage' | 'blade' | 'wheel';
@@ -765,9 +767,9 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
   if (plan.canModel('generator')) {
     // the 'generator' model (real size 5.6 x 2.48 x 1.67, length X): one uniform scale inside the record's footprint; its own control
     // box is on its +Z long side, so it turns to face the start panel's side
-    const GD = REACTOR_MODELS.generator.dims, s = Math.min(1.25, w / GD[0], h / GD[1], d / GD[2]);
-    const lz = (g.panel.x - g.x) * Math.sin(yaw) + (g.panel.z - g.z) * Math.cos(yaw);
-    place = boxMatrix(g.x, g.y, g.z, s, s, s, lz >= 0 ? yaw : yaw + Math.PI);
+    // (task reactor-expansion-20261101, lane CONTROLS: an END panel gets the model's flat radiator end — controlsMount.ts generatorPlacement)
+    const GD = REACTOR_MODELS.generator.dims, gp = generatorPlacement(g), s = gp.s;
+    place = boxMatrix(g.x, g.y, g.z, s, s, s, gp.rotY);
     modelIndex = plan.modelPlacements.get('generator')?.length ?? 0;
     plan.placeModel('generator', place, band, [GD[0] * s, GD[1] * s, GD[2] * s]);
   } else {
@@ -781,17 +783,9 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
     push(plan.add('tube', 'pipe', cylMatrix(localPt(o, yaw, w * 0.05, 0.24 + h * 0.66, -d * 0.2), localPt(o, yaw, w * 0.05, 0.24 + h * 1.25, -d * 0.2), 0.24), band)); // exhaust stack
     plan.add('box', 'machine', localBox(o, yaw, w * 0.38, 0.24 + h * 0.75, 0, w * 0.16, h * 0.3, d * 0.5), band); // terminal box
   }
-  // control box at the panel (faces the start pose), two lamps (red = off, green = running)
-  const px = g.panel.x, py = g.panel.y, pz = g.panel.z;
-  let fx = g.use.x - px, fz = g.use.z - pz;
-  const fl = Math.hypot(fx, fz) || 1; fx /= fl; fz /= fl;
-  const pyaw = Math.atan2(fx, fz);
-  plan.add('box', 'machine', boxMatrix(px - fx * 0.12, py, pz - fz * 0.12, 0.62, 0.78, 0.26, pyaw), band);
-  if (py - 0.39 > g.y + 0.1) plan.cyl('tube', 'steelDark', {x: px - fx * 0.12, y: g.y, z: pz - fz * 0.12}, {x: px - fx * 0.12, y: py - 0.39, z: pz - fz * 0.12}, 0.09); // its post
-  plan.add('box', 'yellow', boxMatrix(px + fx * 0.02, py - 0.24, pz + fz * 0.02, 0.12, 0.2, 0.06, pyaw), band); // start lever
-  const c = Math.cos(pyaw), s = Math.sin(pyaw);
-  const lamp = (lx: number, color: number): KitRef => plan.add('bulb', 'panelLamp', boxMatrix(px + lx * c + fx * 0.03, py + 0.24, pz - lx * s + fz * 0.03, 0.08, 0.08, 0.08), band, color)!;
-  const lamps: [KitRef, KitRef] = [lamp(-0.14, 0xff3020), lamp(0.14, 0x103010)];
+  // task reactor-expansion-20261101 (lane CONTROLS): the start control box stands FLUSH on the generator's measured end / side face
+  // toward its panel (controlsKit.ts planGeneratorPanel; on a post to the deck), lever + red / green lamps on its front
+  const lamps: [KitRef, KitRef] = planGeneratorPanel(plan, g, modelIndex >= 0, band);
   plan.generators.push({id: g.id, zone: g.zone, level: g.level, body, lamps, place, size: {w, d, h}, modelIndex});
   plan.stats.generators++;
   // cable run to the zone's fans: a tray + three cables along the polyline
@@ -916,104 +910,15 @@ export function pieceOfControl(id: string): ReactorPiece | null {
   return null;
 }
 
-/** Procedural stand-in sizes (W x H x D, m) when a machine's model is not loaded. */
-const MACHINE_DIMS: Record<'switchgear' | 'coolantPump' | 'coolantValve' | 'controlConsole', readonly [number, number, number]> = {
-  switchgear: [0.8, 2.1, 0.6], coolantPump: [1.8, 1.3, 1.1], coolantValve: [0.9, 1.6, 0.6], controlConsole: [1.6, 1.15, 0.85],
-};
-
+// task reactor-expansion-20261101 (lane CONTROLS): the site machines are placed FROM THEIR MACHINE FOOTPRINTS through the mounted-
+// control rule (world/reactor/controlsKit.ts planMountedSite / controlsMount.ts): measured mounting face on the footprint front, long
+// axis along the footprint (the pump was 90 deg off its collider), the switchgear bank filling its collider; stand-ins share the faces.
 function planSite(plan: KitPlan, site: ReactorSite): void {
-  const floorY = plan.info.tiers.find(t => t.level === site.level)?.baseY;
-  // one machine per piece and facing: a console / pump / valve serves every control of its kind; the switchgear is a BANK of
-  // cabinet sections side by side (4-6, inside the room) behind its fuse / breaker controls
-  const seen = new Map<string, {x: number; z: number}[]>();
-  for (const ctl of site.controls) {
-    const piece = pieceOfControl(ctl.id);
-    if (!piece) continue;
-    let fx = ctl.at.x - ctl.stand.x, fz = ctl.at.z - ctl.stand.z;
-    const fl = Math.hypot(fx, fz);
-    if (fl < 0.05) { fx = -Math.sin(ctl.yaw); fz = -Math.cos(ctl.yaw); } else { fx /= fl; fz /= fl; }
-    // the machine stands behind the control point (away from the stand), its front facing the player
-    const yaw = Math.atan2(-fx, -fz);
-    const fy = floorY !== undefined && ctl.at.y - floorY < 2.5 && ctl.at.y >= floorY - 0.05 ? floorY : ctl.at.y - 1.1;
-    const model = plan.canModel(piece);
-    const [w, h, d] = model ? REACTOR_MODELS[piece].dims : MACHINE_DIMS[piece as keyof typeof MACHINE_DIMS];
-    const cx = ctl.at.x + fx * (d / 2 + 0.02), cz = ctl.at.z + fz * (d / 2 + 0.02);
-    const key = `${piece}|${Math.round(yaw * 10)}`;
-    const prior = seen.get(key) ?? [];
-    // a machine of this kind facing this way already stands within its width: that one serves this control too
-    if (piece === 'switchgear' ? prior.length > 0 : prior.some(p => Math.hypot(p.x - cx, p.z - cz) < w * 0.95)) continue;
-    prior.push({x: cx, z: cz}); seen.set(key, prior);
-    const band = plan.bandOf(fy + 0.1);
-    if (piece === 'switchgear') { planSwitchgearBank(plan, site, {x: cx, z: cz}, fy, yaw, model, prior); continue; }
-    if (model) { plan.placeModel(piece, boxMatrix(cx, fy, cz, 1, 1, 1, yaw), band, [w, h, d]); plan.stats.machines++; continue; }
-    const o = {x: cx, y: fy, z: cz};
-    if (piece === 'coolantPump') {
-      plan.add('box', 'steelDark', localBox(o, yaw, 0, 0.1, 0, w, 0.2, d), band);
-      plan.add('cyl', 'machine', cylMatrix(localPt(o, yaw, -w * 0.45, 0.2 + d * 0.38, 0), localPt(o, yaw, 0.05, 0.2 + d * 0.38, 0), d * 0.76), band); // motor
-      plan.add('cyl', 'pipe', cylMatrix(localPt(o, yaw, 0.15, 0.2 + h * 0.4, -d * 0.4), localPt(o, yaw, 0.15, 0.2 + h * 0.4, d * 0.4), h * 0.62), band); // volute
-      plan.add('tube', 'pipe', cylMatrix(localPt(o, yaw, 0.6, 0.2 + h * 0.4, 0), localPt(o, yaw, 0.6, h + 1.4, 0), 0.32), band); // discharge riser
-    } else if (piece === 'coolantValve') {
-      plan.add('tube', 'pipe', cylMatrix(localPt(o, yaw, 0, 0, -d * 0.2), localPt(o, yaw, 0, h, -d * 0.2), 0.36), band);
-      plan.add('cyl', 'steelDark', cylMatrix(localPt(o, yaw, 0, ctl.at.y - fy - 0.2, -d * 0.2), localPt(o, yaw, 0, ctl.at.y - fy + 0.15, -d * 0.2), 0.55), band); // valve body
-      plan.add('tube', 'steelDark', cylMatrix(localPt(o, yaw, 0, ctl.at.y - fy, -d * 0.2), localPt(o, yaw, 0, ctl.at.y - fy, d * 0.42), 0.06), band); // stem
-      plan.add('wheel', 'yellow', localBox(o, yaw, 0, ctl.at.y - fy, d * 0.42, 0.62, 0.62, 0.62), band); // handwheel (faces the player)
-    } else {
-      plan.add('box', 'machine', localBox(o, yaw, 0, 0.42, -0.05, w, 0.84, d * 0.8), band);
-      const m = localBox(o, yaw, 0, 0.92, 0.05, w, 0.12, d * 0.72);
-      m.multiply(new THREE.Matrix4().makeRotationX(-0.35));
-      plan.add('box', 'steelDark', m, band); // sloped desk
-      plan.add('box', 'black', localBox(o, yaw, 0, 1.25, -d * 0.36, w * 0.9, 0.5, 0.08), band); // instrument hood
-    }
-    plan.stats.machines++;
-  }
+  planMountedSite(plan, site);
 }
 
 /** Cabinet sections per switchgear bank (the 'switchgear' model is ONE section: tiled side by side). */
 export const SWITCHGEAR_SECTIONS = {min: 4, max: 6} as const;
-
-/**
- * A switchgear BANK facing `yaw` (front toward the controls' stand points), covering every fuse / breaker control of the site that
- * faces the same way: 4-6 sections side by side along the wall, inside the room rect (fewer when the wall is shorter).
- */
-function planSwitchgearBank(plan: KitPlan, site: ReactorSite, c: {x: number; z: number}, fy: number, yaw: number, model: boolean, _prior: {x: number; z: number}[]): void {
-  const [w, h, d] = model ? REACTOR_MODELS.switchgear.dims : MACHINE_DIMS.switchgear;
-  const tx = Math.cos(yaw), tz = -Math.sin(yaw); // the bank runs along the section's local X
-  const fx = -Math.sin(yaw), fz = -Math.cos(yaw); // into the wall (away from the player)
-  // the controls this bank serves (same piece + facing): their projections along the bank
-  const proj: number[] = [];
-  for (const ctl of site.controls) {
-    if (pieceOfControl(ctl.id) !== 'switchgear') continue;
-    let gx = ctl.at.x - ctl.stand.x, gz = ctl.at.z - ctl.stand.z;
-    const gl = Math.hypot(gx, gz) || 1; gx /= gl; gz /= gl;
-    if (gx * fx + gz * fz < 0.9) continue;
-    proj.push((ctl.at.x - c.x) * tx + (ctl.at.z - c.z) * tz);
-  }
-  if (!proj.length) proj.push(0);
-  // room extent along the bank line through c (0.1 m margin)
-  const r = site.rect, m = 0.1;
-  let s0 = -Infinity, s1 = Infinity;
-  for (const [p, t, lo, hi] of [[c.x, tx, r.x0 + m, r.x1 - m], [c.z, tz, r.z0 + m, r.z1 - m]] as const) {
-    if (Math.abs(t) < 1e-6) { if (p < lo - 0.5 || p > hi + 0.5) { s0 = 0; s1 = 0; } continue; }
-    const a = (lo - p) / t, b = (hi - p) / t;
-    s0 = Math.max(s0, Math.min(a, b)); s1 = Math.min(s1, Math.max(a, b));
-  }
-  if (!Number.isFinite(s0) || !Number.isFinite(s1) || s1 - s0 < w) { s0 = Math.min(...proj) - w / 2; s1 = Math.max(...proj) + w / 2; }
-  const need = Math.max(...proj) - Math.min(...proj) + w;
-  const n = Math.max(1, Math.min(SWITCHGEAR_SECTIONS.max, Math.max(Math.ceil(need / w - 1e-6), Math.min(SWITCHGEAR_SECTIONS.min, Math.floor((s1 - s0) / w + 1e-6)))));
-  const mid = (Math.min(...proj) + Math.max(...proj)) / 2;
-  const start = Math.max(s0, Math.min(s1 - n * w, mid - (n * w) / 2));
-  const band = plan.bandOf(fy + 0.1);
-  for (let k = 0; k < n; k++) {
-    const s = start + (k + 0.5) * w, x = c.x + tx * s, z = c.z + tz * s;
-    if (model && plan.canModel('switchgear')) { plan.placeModel('switchgear', boxMatrix(x, fy, z, 1, 1, 1, yaw), band, [w, h, d]); continue; }
-    const o = {x, y: fy, z};
-    plan.add('box', 'machine', localBox(o, yaw, 0, h / 2, 0, w - 0.02, h, d), band);
-    plan.add('box', 'steelDark', localBox(o, yaw, 0, h - 0.05, 0, w, 0.1, d + 0.04), band);
-    plan.add('box', 'black', localBox(o, yaw, 0, 1.2, d / 2 + 0.005, w * 0.6, 0.34, 0.02), band); // fuse / breaker panel
-    plan.add('box', 'yellow', localBox(o, yaw, w * 0.3, h * 0.82, d / 2 + 0.006, 0.18, 0.12, 0.012), band); // warning plate
-  }
-  plan.stats.machines += n;
-}
 
 function planScreen(plan: KitPlan, s: ReactorScreen): void {
   if (!(s.w > 0.1 && s.h > 0.1)) return;

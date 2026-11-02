@@ -109,9 +109,11 @@ export function fakeHost(run: RunState = newRun(), inv: Inventory = new Inventor
 export function aimAt(h: FakeHost, rt: ReactorRestart, id: string): void {
   const e = rt.controls.find(x => x.id === id);
   if (!e) throw new Error(`no control ${id}`);
+  // task reactor-expansion-20261101 (lane CONTROLS): the pick volume is the control mounted ON its host face (e.m.pick), not c.at
+  const p = e.m.pick;
   h.player.x = e.c.stand.x; h.player.z = e.c.stand.z; h.player.y = e.c.at.y - 1.2;
   h.camera.position.set(e.c.stand.x, e.c.at.y + 0.1, e.c.stand.z);
-  h.camera.lookAt(e.c.at.x, e.c.at.y, e.c.at.z);
+  h.camera.lookAt(p.x, p.y, p.z);
   h.camera.updateMatrixWorld(true);
 }
 
