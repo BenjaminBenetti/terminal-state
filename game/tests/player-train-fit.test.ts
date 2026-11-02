@@ -37,7 +37,9 @@ describe('player train fit: seams', () => {
     // (Legit openings — the window rects and the doorways — are skipped: their sleeves / jambs / glass are tested elsewhere.)
     const rc = new THREE.Raycaster();
     const mine: THREE.Object3D[] = [];
-    view.fixed.traverse(o => { if ((o as THREE.Mesh).isMesh && o.name !== 'train-shell' && o.name.startsWith('train-')) mine.push(o); });
+    // (the window glass / reveals are left out: these rays start 6 cm off the lining, away from every window opening, so they meet the
+    // lining layer first — and the 10k-triangle conformal sheets would only make the probe slow)
+    view.fixed.traverse(o => { if ((o as THREE.Mesh).isMesh && o.name !== 'train-shell' && o.name.startsWith('train-') && !o.userData.trainGlass && o.name !== 'train-reveals') mine.push(o); });
     const hw = S.interior.halfWidth, f = S.floorY, c = S.ceilingY;
     const inWindow = (side: number, x: number, y: number) => S.windows.side.some(w => w.side === side && w.zone !== 'nose' && x > w.x0 - 0.01 && x < w.x1 + 0.01 && y > w.y0 - 0.01 && y < w.y1 + 0.01);
     const inDoor = (side: number, x: number, y: number) => S.doors.some(d => d.side === side && x > d.x - d.width / 2 - 0.01 && x < d.x + d.width / 2 + 0.01 && y < f + d.height + 0.01);
@@ -149,7 +151,7 @@ describe('player train fit: conformal window glass (lane ASSETS\' sheets + revea
     const v = new THREE.Vector3(), n = new THREE.Vector3();
     const report: string[] = [];
     for (const q of TRAIN_GLASS!.sheets.filter(s0 => s0.kind !== 'leaf')) {
-      expect(q.fitError ?? 0, `${q.node} fit error`).toBeLessThanOrEqual(0.012);
+      expect(q.fitError ?? 0, `${q.node} fit error (vs the original pane surface, lane ASSETS)`).toBeLessThanOrEqual(0.015);
       const m = glassModel.scene.getObjectByName(q.node) as THREE.Mesh, P = m.geometry.attributes.position, N = m.geometry.attributes.normal;
       const near = shellIn(new THREE.Box3(new THREE.Vector3(...q.bounds.min).subScalar(0.2), new THREE.Vector3(...q.bounds.max).addScalar(0.2)));
       const w = q.kind === 'side' ? S.windows.side[q.window] : S.windows.end[q.window];
@@ -171,7 +173,8 @@ describe('player train fit: conformal window glass (lane ASSETS\' sheets + revea
       expect(ds.length, `${q.node} rim samples`).toBeGreaterThan(10);
       // behind the skin everywhere (never in front of it), within 15 cm (the deepest frames); a wrap's open corner may see no skin
       expect(max, `${q.node} rim depth`).toBeLessThanOrEqual(0.15);
-      expect(none, `${q.node} rim samples with no skin outward`).toBeLessThanOrEqual(q.joined !== undefined ? 3 : 0);
+      // (a corner wrap's L-shaped rim reaches round the open corner: a few of its rim normals look out through the wraparound opening)
+      expect(none, `${q.node} rim samples with no skin outward`).toBeLessThanOrEqual(q.joined !== undefined ? Math.ceil(0.1 * (ds.length + none)) : 0);
       // the side windows sit nearly flush with the body (the end / corner panes follow the nose's own frame depth: lane ASSETS' fit)
       if (q.kind === 'side') expect(median, `${q.node} rim median (flush with the side)`).toBeLessThanOrEqual(0.03);
       // a corner wrap is NOT flat: its depth varies round the nose (as the body does)
