@@ -260,3 +260,88 @@ export function darkBoxOccupancy(r, {dark = 55, colFrac = 0.25, rowFrac = 0.25} 
   if (!rr) return null;
   return {u0: u0 + cr[0] * px, u1: u0 + cr[1] * px, v0: v1 - rr[1] * px, v1: v1 - rr[0] * px};
 }
+
+/**
+ * Task studio-beta-train-window-fit-20261102-004022-01 (lane TRAIN's probe: a slit below the platform-side roof cove, slivers above the
+ * door heads, a crescent above a far-side window, slits along the roof): cracks in Meshy's own surface (present in the raw mesh, widened
+ * by the body's vertical stretch), filled by BACKING STRIPS. In a projection (side: u = x, v = y, depth = sign * z; roof: u = x, v = z,
+ * depth = y) the outermost surface is rastered with its texture coordinates; a crack = a run of empty pixels along v bounded by skin on
+ * both sides, <= maxGap long, outside every intended opening. Runs of neighbouring columns merge into quads (<= maxRun along u) placed
+ * `offset` behind the shallower bounding skin (outside the census's coincidence band) and overlapping `margin` behind both skin edges,
+ * textured with the texel of the skin on the run's low-v side (a continuous painted band), normal along the projection. Records
+ * [px, py, pz, nx, ny, nz, u, v, cls].
+ */
+export function crackStrips(tris, {face, sign, u0, u1, v0, v1, nMin, nMax = Infinity, px = 0.01, maxGap = 0.08, intended = () => false, offset = 0.004, margin = 0.01, mergeTol = 0.012, maxRun = 0.5, cls = 0}) {
+  const ax = face === 'side' ? {u: 0, v: 1, n: 2} : {u: 0, v: 2, n: 1};
+  const W = Math.ceil((u1 - u0) / px), H = Math.ceil((v1 - v0) / px);
+  const dep = new Float32Array(W * H).fill(NaN), tu = new Float32Array(W * H), tv = new Float32Array(W * H);
+  for (const t of tris) {
+    if (Math.max(...t.map(q => sign * q[ax.n])) < nMin || Math.min(...t.map(q => sign * q[ax.n])) > nMax) continue;
+    const s = t.map(q => [(q[ax.u] - u0) / px, (v1 - q[ax.v]) / px, sign * q[ax.n]]);
+    const d = (s[1][0] - s[0][0]) * (s[2][1] - s[0][1]) - (s[2][0] - s[0][0]) * (s[1][1] - s[0][1]);
+    if (Math.abs(d) < 1e-12) continue;
+    for (let y = Math.max(0, Math.floor(Math.min(...s.map(q => q[1])))); y <= Math.min(H - 1, Math.ceil(Math.max(...s.map(q => q[1])))); y++)
+      for (let x = Math.max(0, Math.floor(Math.min(...s.map(q => q[0])))); x <= Math.min(W - 1, Math.ceil(Math.max(...s.map(q => q[0])))); x++) {
+        const qx = x + 0.5, qy = y + 0.5;
+        const a = ((s[1][0] - qx) * (s[2][1] - qy) - (s[2][0] - qx) * (s[1][1] - qy)) / d, b = ((s[2][0] - qx) * (s[0][1] - qy) - (s[0][0] - qx) * (s[2][1] - qy)) / d, c = 1 - a - b;
+        if (a < 0 || b < 0 || c < 0) continue;
+        const z = a * s[0][2] + b * s[1][2] + c * s[2][2];
+        if (z < nMin || z > nMax) continue;
+        const i = y * W + x;
+        if (z <= dep[i]) continue;
+        dep[i] = z; tu[i] = a * t[0][6] + b * t[1][6] + c * t[2][6]; tv[i] = a * t[0][7] + b * t[1][7] + c * t[2][7];
+      }
+  }
+  const uOf = x => u0 + (x + 0.5) * px, vOf = y => v1 - (y + 0.5) * px; // image row y grows toward low v
+  // per column: crack runs (rows yTop..yBot empty, surface at yTop - 1 (high v) and yBot + 1 (low v))
+  // an intended opening is a valid bound too: a crack touching a door head / window edge is filled from the opening's exact edge
+  // (bisected) to the skin (no margin into the opening)
+  const edgeV = (u, vIn, vOut) => { let a = vIn, b = vOut; for (let k = 0; k < 20; k++) { const m = (a + b) / 2; if (intended(u, m)) a = m; else b = m; } return b; };
+  const cols = [];
+  for (let x = 0; x < W; x++) {
+    const runs = [];
+    const u = uOf(x), state = k => (!Number.isNaN(dep[k * W + x]) ? 'skin' : intended(u, vOf(k)) ? 'open' : 'hole');
+    let y = 0;
+    while (y < H) {
+      if (state(y) !== 'hole') { y++; continue; }
+      const yTop = y; while (y < H && state(y) === 'hole') y++;
+      const yBot = y - 1;
+      if (yTop === 0 || y >= H) continue; // touches the raster edge: not bounded
+      if ((yBot - yTop + 1) * px > maxGap) continue;
+      const hi = state(yTop - 1), lo = state(yBot + 1);
+      if (hi === 'open' && lo === 'open') continue; // between two openings: nothing to back
+      const hiI = (yTop - 1) * W + x, loI = (yBot + 1) * W + x;
+      const skinI = lo === 'skin' ? loI : hiI;
+      const d = (hi === 'skin' && lo === 'skin' ? Math.min(dep[hiI], dep[loI]) : dep[skinI]) - offset;
+      const vHi = hi === 'open' ? edgeV(u, vOf(yTop - 1), vOf(yTop)) : vOf(yTop) + px / 2 + margin;
+      const vLo = lo === 'open' ? edgeV(u, vOf(yBot + 1), vOf(yBot)) : vOf(yBot) - px / 2 - margin;
+      runs.push({vHi, vLo, d, uv: [tu[skinI], tv[skinI]]});
+    }
+    cols.push(runs);
+  }
+  // merge runs of neighbouring columns into quads
+  const quads = [], used = cols.map(r => r.map(() => false));
+  for (let x = 0; x < W; x++) cols[x].forEach((r, k) => {
+    if (used[x][k]) return;
+    used[x][k] = true;
+    let q = {x0: x, x1: x, vHi: r.vHi, vLo: r.vLo, d: r.d, uv: r.uv, last: r};
+    for (let x2 = x + 1; x2 < W && (x2 - x + 1) * px <= maxRun; x2++) {
+      const k2 = cols[x2].findIndex((s, j) => !used[x2][j] && Math.abs(s.vHi - q.last.vHi) <= mergeTol && Math.abs(s.vLo - q.last.vLo) <= mergeTol);
+      if (k2 < 0) break;
+      const s = cols[x2][k2]; used[x2][k2] = true;
+      q = {...q, x1: x2, vHi: Math.max(q.vHi, s.vHi), vLo: Math.min(q.vLo, s.vLo), d: Math.min(q.d, s.d), last: s};
+    }
+    quads.push(q);
+  });
+  const out = [];
+  for (const q of quads) {
+    const ua = u0 + q.x0 * px, ub = u0 + (q.x1 + 1) * px, va = q.vLo, vb = q.vHi; // margins applied per run (none toward an opening)
+    const pt = (u, v) => { const p = [0, 0, 0]; p[ax.u] = u; p[ax.v] = v; p[ax.n] = sign * q.d; return p; };
+    const n = [0, 0, 0]; n[ax.n] = sign;
+    const rec = p => [...p, ...n, q.uv[0], q.uv[1], cls];
+    const A = rec(pt(ua, va)), B = rec(pt(ub, va)), C = rec(pt(ub, vb)), D = rec(pt(ua, vb));
+    const t1 = [A, B, C], fn = faceNormal(t1);
+    if (dot(fn, n) >= 0) out.push([A, B, C], [A, C, D]); else out.push([A, C, B], [A, D, C]);
+  }
+  return out;
+}
