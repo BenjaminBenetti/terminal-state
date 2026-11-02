@@ -24,6 +24,7 @@ import type {
 import type {RailRun} from '../../gen/levels';
 import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
 import {planReactorCore} from './coreHero'; // task reactor-expansion-20261101 (lane CORE)
+import {LAMP_GLASS} from './propsLampGlass'; // task reactor-playtest-round2 (lane PROPS): the flood lamp's measured glass jar
 import {GENERATOR_PANEL, generatorPanelPose} from './controlsMount'; // task reactor-expansion-20261101 (lane PATHS): the cable riser
 import {planGeneratorPanel, planMountedSite} from './controlsKit'; // task reactor-expansion-20261101 (lane CONTROLS): mounted controls
 import {generatorPlacement} from './controlsMount';
@@ -280,12 +281,14 @@ export class KitPlan {
     // wall, a walkway beyond a deck edge) is not mounted there
     if (this.opts.walk && !this.clear(boxMatrix(x + nx * 0.17, y, z + nz * 0.17, 0.4, 0.5, 0.4, yaw))) return;
     if (model && this.canModel('floodLamp')) {
-      const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[], lens = A.lens as readonly number[];
+      const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[];
       // model origin: its wall plate (local z = plate[2] < 0, centre height plate[1]) on the mount point
       const ox = x - nx * plate[2], oz = z - nz * plate[2], oy = y - plate[1];
       this.placeModel('floodLamp', boxMatrix(ox, oy, oz, 1, 1, 1, yaw), band);
-      const d = lens[2] + 0.008;
-      this.lamps.push({band, level: lv, m: boxMatrix(ox + nx * d, oy + lens[1], oz + nz * d, A.lensW as number, A.lensH as number, 0.03, yaw), dead, tint, model: true, ...(this.tag ? {tag: this.tag} : {})});
+      // task reactor-playtest-round2 (lane PROPS): the lens glow fills the model's glass jar inside its cage (propsLampGlass.ts), never a
+      // flat plate on the cage's front face (the user's "strange box in front of" the lamps)
+      const jx = LAMP_GLASS.jar.x, jz = LAMP_GLASS.jar.z, cy = Math.cos(yaw), sy = Math.sin(yaw);
+      this.lamps.push({band, level: lv, m: boxMatrix(ox + jx * cy + jz * sy, oy + 0.111, oz - jx * sy + jz * cy, 0.18, 0.2, 0.18, yaw), dead, tint, model: true, ...(this.tag ? {tag: this.tag} : {})});
     } else {
       const cx = x + nx * 0.17, cz = z + nz * 0.17;
       this.member('box', 'steelDark', {x, y: y + 0.12, z}, {x: cx, y: y + 0.12, z: cz}, 0.05, 0.05); // bracket arm
