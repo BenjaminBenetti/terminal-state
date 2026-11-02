@@ -46,7 +46,7 @@ export function standInSurface(layout: StationLayout): ReactorSurface {
     hole: {x: o.x, z: o.z, r: o.r, parapet: {r0: o.r, r1: o.r + 0.5, top: y + 1.1}, keepR: o.r + 1.2},
     door: {level: 0, x: cx, y: p.rimY, z: p.bounds.z0, yaw: 0, nx: 0, nz: 1, w: 2, h: 2.4, rect: {x0: cx - 1, z0: p.bounds.z0 - 0.5, x1: cx + 1, z1: p.bounds.z0}, front: 0, cells: []},
     stairs: {flights: [], link: -1, bottom: pt(cx, p.rimY, B.z0 + 3, 0), top: pt(cx, y, B.z0 + 3, layout.levels.length), rect: {x0: cx - 2.5, z0: B.z0 + 0.5, x1: cx + 2.5, z1: B.z0 + 7}},
-    head, exit: {x: cx, y, z: B.z0 + 7.2, yaw: Math.PI}, areas: {lower: -1, stair: -1, upper: -1, plaza: -1},
+    head, exit: {x: cx, y, z: B.z0 + 7.2, yaw: Math.PI}, areas: {lower: -11, stair: -12, upper: -13, plaza: -14}, // (no area grid on the stand-in: ids that match no cell)
   };
 }
 

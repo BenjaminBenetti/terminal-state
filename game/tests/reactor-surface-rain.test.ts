@@ -17,7 +17,8 @@ import {appendFileSync, writeFileSync} from 'node:fs';
 import * as THREE from 'three';
 import {GLSLNodeBuilder, WGSLNodeBuilder, type WebGPURenderer} from 'three/webgpu';
 import {describe, expect, it} from 'vitest';
-import {surfaceSiteOf} from '../src/world/reactor/surfaceSite';
+import {surfaceEyeOpen, surfaceEyeOutside, surfaceSiteOf} from '../src/world/reactor/surfaceSite';
+import {surfaceRainExposure} from '../src/world/reactor/audioRain';
 import {CELL, SOLID} from '../src/gen/grid';
 import {planSurfaceCity, footprintCorners} from '../src/world/reactor/surfacePlan';
 import {SURFACE_RAIN, buildRainFloor, rainsAt} from '../src/world/reactor/surfaceRain';
@@ -269,6 +270,33 @@ describe('the runtime: the eye gate, the win, the mist / far-plane swap, ZERO su
     out(`outside worst ${worstOut} draws, ${Math.round(worstTris / 1000)} k triangles`);
     expect(worstOut).toBeLessThanOrEqual(60);
   }, 600_000);
+
+  it('what you see is what you hear: the visual gate agrees with lane AUDIO\'s rain exposure (audioRain.ts surfaceRainExposure)', () => {
+    let n = 0;
+    for (const seed of SURFACE_SEEDS) {
+      const L = surfaceLayout(seed), info = L.reactor!, s = info.surface!, site = surfaceSiteOf(L)!;
+      const hr = s.head.rect, inHead = (x: number, z: number) => x >= hr.x0 && x <= hr.x1 && z >= hr.z0 && z <= hr.z1;
+      // the open plaza: near rain drawn round the eye + open air <-> the full open rain bed
+      for (const w of s.walk) for (let x = w.x0 + 0.5; x < w.x1; x += 3) for (let z = w.z0 + 0.5; z < w.z1; z += 3) {
+        if (inHead(x, z)) continue;
+        const e = {x, y: s.y + EYE, z};
+        expect(surfaceEyeOpen(site, e)).toBe(true);
+        expect(surfaceRainExposure(s, L.levels, e)).toEqual({level: 1, muffle: 0});
+        n++;
+      }
+      // the head house: outside (the exit's rain in view) but sheltered <-> a muffled bed
+      const he = {x: (hr.x0 + hr.x1) / 2, y: s.y + EYE, z: (hr.z0 + hr.z1) / 2};
+      expect(surfaceEyeOutside(site, he) && !surfaceEyeOpen(site, he)).toBe(true);
+      expect(surfaceRainExposure(s, L.levels, he).muffle).toBeGreaterThan(0.3);
+      // the pit (every deck): nothing drawn round the eye <-> silence
+      for (const d of info.decks) {
+        const e = {x: (d.rect.x0 + d.rect.x1) / 2, y: d.y + EYE, z: (d.rect.z0 + d.rect.z1) / 2};
+        expect(surfaceEyeOutside(site, e)).toBe(false);
+        if (!(e.x >= s.stairs.rect.x0 - 0.5 && e.x <= s.stairs.rect.x1 + 0.5 && e.z >= s.stairs.rect.z0 - 0.5 && e.z <= s.stairs.rect.z1 + 0.5)) expect(surfaceRainExposure(s, L.levels, e).level).toBe(0);
+      }
+    }
+    expect(n).toBeGreaterThan(200);
+  });
 
   it('the plan stays bounded round the opening and its buildings stand on the ground (grounded at the deck height)', () => {
     const L = surfaceLayout(SURFACE_SEEDS[2]), site = surfaceSiteOf(L)!;
