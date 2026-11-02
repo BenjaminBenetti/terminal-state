@@ -599,6 +599,7 @@ export interface MainMenuViewOptions {
 export class MainMenuView {
   private readonly doc: Document;
   private readonly settingsBox: HTMLElement;
+  private readonly head: HTMLElement;
   private readonly body: HTMLElement;
   private lastFocus: string | null = null;
   private visibleFlag = true;
@@ -607,12 +608,13 @@ export class MainMenuView {
   constructor(private readonly root: HTMLElement, readonly ctl: MainMenuController, private readonly o: MainMenuViewOptions = {}) {
     this.doc = root.ownerDocument;
     injectCss(this.doc);
+    this.head = this.doc.createElement('div');
+    this.head.className = 'mm-view mm-head-box';
     this.body = this.doc.createElement('div');
     this.body.className = 'mm-body';
     this.settingsBox = this.doc.createElement('div');
-    this.settingsBox.className = 'mm-settings settings';
-    this.settingsBox.hidden = true;
-    root.append(this.settingsBox, this.body);
+    this.settingsBox.className = 'mm-settings settings hidden'; // (the class, not [hidden]: .settings sets display: grid)
+    root.append(this.head, this.settingsBox, this.body);
     o.settings?.(this.settingsBox);
     ctl.onChange(() => this.render());
     root.addEventListener('keydown', e => this.onKey(e));
@@ -657,18 +659,22 @@ export class MainMenuView {
   render(): void {
     const m = this.ctl.model();
     const d = this.doc;
-    this.settingsBox.hidden = m.view !== 'settings';
+    this.settingsBox.classList.toggle('hidden', m.view !== 'settings');
     const body = this.body;
     // keep the adopted QA button alive across renders
     if (this.o.qaButton?.parentElement) this.o.qaButton.remove();
+    // heading + text above the (persistent, never re-rendered) settings form; the actions and the status below it
+    const head = this.head;
+    head.replaceChildren();
+    head.dataset.view = m.view;
+    const h2 = d.createElement('h2');
+    h2.textContent = m.title;
+    head.append(h2);
+    for (const t of m.text) { const p = d.createElement('p'); p.className = 'mm-text'; p.textContent = t; head.append(p); }
     body.replaceChildren();
     const view = d.createElement('div');
     view.className = 'mm-view';
     view.dataset.view = m.view;
-    const h2 = d.createElement('h2');
-    h2.textContent = m.title;
-    view.append(h2);
-    for (const t of m.text) { const p = d.createElement('p'); p.className = 'mm-text'; p.textContent = t; view.append(p); }
     const rows = d.createElement('div');
     rows.className = 'mm-rows';
     rows.setAttribute('role', 'group');

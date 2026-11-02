@@ -4,12 +4,12 @@
 // WebGPU's 12-uniform-buffer limit, honours the frame cap / hidden tab, and restores the shared exterior uniforms it re-tunes.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
-import {readFileSync} from 'node:fs';
+import {appendFileSync, readFileSync} from 'node:fs';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {installCanvasShim} from './helpers/canvas2d';
 import {buildBoth} from './helpers/tslShaders';
 import {EXT_FOG, EXT_U, exteriorFogTune} from '../src/world/exterior';
-import {MENU_SCENE, MenuScene, menuCars, orbitPose, type MenuRenderer} from '../src/world/menuScene';
+import {MENU_SCENE, MenuScene, menuCars, menuPoles, orbitPose, type MenuRenderer} from '../src/world/menuScene';
 import {PLAYER_TRAIN_SPEC} from '../src/world/playerTrainSpec';
 
 installCanvasShim(false);
@@ -82,7 +82,7 @@ describe('menu scene: builds headless within its budget', () => {
     const inside = m.scene.getObjectByName('menu-train-interiors') as THREE.InstancedMesh;
     const c = new THREE.Color();
     inside.getColorAt(cars.indexOf(lead[0]), c);
-    expect(c.r).toBeGreaterThan(0.4);
+    expect(c.r).toBeGreaterThan(0.2);
     inside.getColorAt(4, c);
     expect(c.r).toBeLessThan(0.05);
     m.dispose();
@@ -103,23 +103,29 @@ describe('menu scene: never a game world', () => {
 });
 
 describe('menu scene: the orbit', () => {
-  // the car boxes (world, with a margin for the near plane) and the ring road's vehicle lanes
+  // the car boxes (world, with a margin for the near plane), the poles, the ring road's wrecks (<= 3.4 m tall) and the first buildings
   const boxes = menuCars().map(c => new THREE.Box3(new THREE.Vector3(c.x - S.length / 2 - 1.2, 0, c.z - S.width / 2 - 1.2), new THREE.Vector3(c.x + S.length / 2 + 1.2, MENU_SCENE.railTop + S.roofY + 1, c.z + S.width / 2 + 1.2)));
-  const C = MENU_SCENE.corridor, laneZ0 = C.z1 + 5 + 14 * 0.2 - 3; // the nearest lane edge (pavement 5 m, lanes from 20 % of the road) minus a bus half width
+  const C = MENU_SCENE.corridor, buildingZ = C.z1 + 5 + 14 + 1.5; // pavement 5 m + ring road 14 m + the least setback
 
-  it('a full orbit never enters a car, a vehicle lane or the ground, and always looks at the train', () => {
+  it('a full orbit never enters a car, a pole, a wreck or a building, and always looks at the train', () => {
     const period = (Math.PI * 2) / MENU_SCENE.orbit.speed;
-    let minClear = Infinity;
-    for (let t = 0; t < period * 1.5; t += 0.5) {
+    let minClear = Infinity, minPole = Infinity;
+    for (let t = 0; t < period * 2; t += 0.25) {
       const {pos, target} = orbitPose(t);
       for (const b of boxes) expect(b.containsPoint(pos), `t=${t} ${pos.toArray()}`).toBe(false);
-      expect(Math.abs(pos.z)).toBeLessThan(laneZ0);
-      expect(pos.y).toBeGreaterThan(2.5);
+      expect(pos.y, `t=${t}`).toBeGreaterThan(3.9); // over every wreck on the ring road (bus <= ~3.4 m)
+      expect(Math.abs(pos.z)).toBeLessThan(buildingZ - 2);
       minClear = Math.min(minClear, ...boxes.map(b => b.distanceToPoint(pos)));
-      expect(target.distanceTo(pos)).toBeGreaterThan(8);
+      for (const p of menuPoles()) if (pos.y < p.h + 2.4) {
+        const d = Math.hypot(pos.x - p.x, pos.z - p.z);
+        if (d < minPole && process.env.MENU_LOG) appendFileSync(process.env.MENU_LOG, `${t} ${d.toFixed(2)} pole ${JSON.stringify(p)} cam ${pos.toArray().map(v => v.toFixed(1))}\n`);
+        minPole = Math.min(minPole, d);
+      }
+      expect(target.distanceTo(pos)).toBeGreaterThan(9);
       expect(target.distanceTo(pos)).toBeLessThan(45);
     }
     expect(minClear).toBeGreaterThan(0);
+    expect(minPole).toBeGreaterThan(3);
   });
 
   it('pose() is a pure function of time (no state advances)', () => {

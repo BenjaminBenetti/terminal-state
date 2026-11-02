@@ -49,21 +49,24 @@ export const MENU_SCENE = {
   derelict: {track: 1, cars: 2, x: -54},
   /**
    * Orbit: an ellipse round the trains (centre, x / z radii +- swing) that never enters a car (its x ends stay >= 4 m past the
-   * train ends, its z extent stays off the ring road's vehicle lanes), eye height (+- swing), angular speed (rad/s), start angle,
-   * and the look-at point (over the lead half of the train).
+   * train ends) or a building, eye height (+- swing) always above the ring road's wrecks, angular speed (rad/s), start angle, and
+   * the look-at point (over the lead half of the train). tests/menu-scene.test.ts sweeps it against the cars, poles and wrecks.
    */
-  orbit: {center: [0, 0, -1] as const, rx: 31, rxSwing: 2, rz: 10.6, rzSwing: 1.2, height: 4.1, heightSwing: 0.9, speed: 0.024, start: 0.9,
-    target: [6, 1.8, -2.2] as const},
+  orbit: {center: [0, 0, -1.5] as const, rx: 32, rxSwing: 2, rz: 14, rzSwing: 1.5, height: 5.1, heightSwing: 0.9, speed: 0.022, start: 1.35,
+    target: [5, 1.7, -2.2] as const},
   fov: 46,
   near: 0.3,
   far: 620,
   /** Frame cap (the diorama moves slowly; menus need no more). */
   fps: 30,
   /** ACES exposure while the menu renders (the game's MOOD.exposure is restored after each menu frame). */
-  exposure: 1.2,
-  /** The menu's green fog (exterior uniforms; restored on deactivate). Lighter than the Office's murk so the train reads at ~25 m. */
-  fog: {color: [0.055, 0.112, 0.046], base: 0.0045, ground: 0.017, height: 9, range: 135, noise: 0.45, drift: 0.55, skyline: 0.16,
-    sun: [0.12, 0.13, 0.06], sky: [0.07, 0.1, 0.062], zenith: [0.045, 0.062, 0.04]} satisfies ExteriorFogTune,
+  exposure: 1.15,
+  /**
+   * The menu's green fog (exterior uniforms; restored on deactivate). Lighter than the Office's murk so the train reads at 15-35 m
+   * and the ruined blocks across the road (40-90 m) stay silhouettes; beyond ~150 m only the murk.
+   */
+  fog: {color: [0.04, 0.086, 0.034], base: 0.0032, ground: 0.012, height: 10, range: 165, noise: 0.5, drift: 0.55, skyline: 0.22,
+    sun: [0.12, 0.13, 0.06], sky: [0.07, 0.1, 0.062], zenith: [0.03, 0.05, 0.03]} satisfies ExteriorFogTune,
   /** Fog wisps (billboards): count, size range (w, h), max opacity, distance band from the orbit centre. */
   wisps: {count: 18, w: [14, 26], h: [5, 9], opacity: 0.34, r: [8, 70]},
   /** The menu draws at most this many meshes (tests). */
@@ -88,6 +91,20 @@ export function menuCars(spec: PlayerTrainSpec = TRAIN): MenuCar[] {
   const t = MENU_SCENE.train, d = MENU_SCENE.derelict;
   for (let i = 0; i < t.cars; i++) out.push({x: t.x + i * L, z: MENU_SCENE.tracks[t.track], yaw: 0, lit: i === t.cars - 1, lead: i === t.cars - 1});
   for (let i = 0; i < d.cars; i++) out.push({x: d.x - i * L, z: MENU_SCENE.tracks[d.track], yaw: Math.PI, lit: false, lead: false});
+  return out;
+}
+
+/** Lamp posts on the corridor curbs (some broken off, a few still lit) and the signal mast ahead of the lead car (pure; tests). */
+export function menuPoles(spec: PlayerTrainSpec = TRAIN): {x: number; z: number; h: number; kind: 'lamp' | 'lit' | 'broken' | 'signal'}[] {
+  const C = MENU_SCENE.corridor, out: {x: number; z: number; h: number; kind: 'lamp' | 'lit' | 'broken' | 'signal'}[] = [];
+  const rnd = mulberry32(MENU_SCENE.seed ^ 0x9e37);
+  // every 34 m on alternating curbs, none inside the orbit's x span (the camera passes over the pavements there; tests sweep it)
+  const xs = [-108, -74, -40, 40, 74, 108].filter(x => x > C.x0 + 2 && x < C.x1 - 2);
+  for (const [k, x] of xs.entries()) {
+    const z = k % 2 ? C.z1 - 0.6 : C.z0 + 0.6, broken = rnd() < 0.3, h = broken ? 2.4 + rnd() * 1.6 : 6.4;
+    out.push({x, z, h, kind: broken ? 'broken' : k % 3 === 1 ? 'lit' : 'lamp'});
+  }
+  out.push({x: MENU_SCENE.train.x + MENU_SCENE.train.cars * spec.length + 6, z: MENU_SCENE.tracks[0] - 2.1, h: 4.4, kind: 'signal'});
   return out;
 }
 
@@ -263,6 +280,8 @@ export class MenuScene {
   private lastDraw = -Infinity;
   /** Frames drawn (QA / tests). */
   frames = 0;
+  /** Seconds added to the orbit clock (QA screenshots of other orbit phases; 0 in play). */
+  timeOffset = 0;
   readonly source: MenuSceneStats['source'];
 
   constructor(assets: MenuSceneAssets = {}) {
@@ -345,27 +364,26 @@ export class MenuScene {
       b.box(cx, 0.46, tc + side * 1.4, len, 0.035, 0.32, COVER);
     }
     for (const z of [C.z0 + 0.25, C.z1 - 0.25]) b.box(cx, 0.45, z, len, 0.9, 0.4, CONCRETE);
-    const rnd = mulberry32(MENU_SCENE.seed ^ 0x9e37);
     const glows: Billboard[] = [];
     const glowColors: THREE.Color[] = [];
-    for (let x = C.x0 + 14, k = 0; x < C.x1 - 10; x += 34, k++) {
-      const z = k % 2 ? C.z1 - 0.6 : C.z0 + 0.6, broken = rnd() < 0.3;
-      const h = broken ? 2.4 + rnd() * 1.6 : 6.4;
-      b.box(x, h / 2 + 0.9, z, 0.18, h, 0.18, POLE);
-      if (!broken) {
-        const dir = z > 0 ? -1 : 1;
-        b.box(x, h + 0.85, z + dir * 0.75, 0.12, 0.12, 1.6, POLE);
-        b.box(x, h + 0.72, z + dir * 1.45, 0.34, 0.16, 0.5, POLE);
-        // two survivors still burn sodium-orange in the murk
-        if (k % 3 === 1) { glows.push({x, y: h + 0.6, z: z + dir * 1.45, w: 2.6, h: 2.6, yawOnly: false}); glowColors.push(new THREE.Color(1.0, 0.55, 0.18).multiplyScalar(0.9)); }
+    for (const p of menuPoles()) {
+      if (p.kind === 'signal') {
+        // a signal mast ahead of the lead car (red aspect)
+        b.box(p.x, p.h / 2, p.z, 0.16, p.h, 0.16, POLE);
+        b.box(p.x, p.h - 0.3, p.z, 0.36, 0.95, 0.28, [0.05, 0.05, 0.05]);
+        glows.push({x: p.x + 0.15, y: p.h - 0.1, z: p.z, w: 0.9, h: 0.9, yawOnly: false});
+        glowColors.push(new THREE.Color(1, 0.08, 0.04).multiplyScalar(1.1));
+        continue;
+      }
+      b.box(p.x, p.h / 2 + 0.9, p.z, 0.18, p.h, 0.18, POLE); // on the curb
+      if (p.kind === 'lamp' || p.kind === 'lit') {
+        const dir = p.z > 0 ? -1 : 1;
+        b.box(p.x, p.h + 0.85, p.z + dir * 0.75, 0.12, 0.12, 1.6, POLE);
+        b.box(p.x, p.h + 0.72, p.z + dir * 1.45, 0.34, 0.16, 0.5, POLE);
+        // a few survivors still burn sodium-orange in the murk
+        if (p.kind === 'lit') { glows.push({x: p.x, y: p.h + 0.6, z: p.z + dir * 1.45, w: 2.6, h: 2.6, yawOnly: false}); glowColors.push(new THREE.Color(1.0, 0.55, 0.18).multiplyScalar(0.9)); }
       }
     }
-    // a signal mast ahead of the lead car (red aspect)
-    const sigX = MENU_SCENE.train.x + MENU_SCENE.train.cars * TRAIN.length + 6, sigZ = MENU_SCENE.tracks[0] - 2.1;
-    b.box(sigX, 2.2, sigZ, 0.16, 4.4, 0.16, POLE);
-    b.box(sigX, 4.1, sigZ, 0.36, 0.95, 0.28, [0.05, 0.05, 0.05]);
-    glows.push({x: sigX + 0.15, y: 4.3, z: sigZ, w: 0.9, h: 0.9, yawOnly: false});
-    glowColors.push(new THREE.Color(1, 0.08, 0.04).multiplyScalar(1.1));
     const merged = this.own(b.geometry());
     const tm = this.mat(trackMaterial());
     const mesh = new THREE.Mesh(merged, tm);
@@ -425,7 +443,7 @@ export class MenuScene {
     const liner = this.own(new THREE.BoxGeometry(I.x1 - I.x0, TRAIN.ceilingY - TRAIN.floorY, I.halfWidth * 2));
     liner.translate((I.x0 + I.x1) / 2, (TRAIN.floorY + TRAIN.ceilingY) / 2, 0);
     this.addInstanced('menu-train-interiors', liner, this.mat(linerMaterial(TRAIN)), cars.map(carMat),
-      cars.map(c => (c.lit ? new THREE.Color(0.95, 0.74, 0.45).multiplyScalar(0.62) : new THREE.Color(0.028, 0.032, 0.027))));
+      cars.map(c => (c.lit ? new THREE.Color(1, 0.6, 0.28).multiplyScalar(0.3) : new THREE.Color(0.022, 0.026, 0.021))));
     // lamps: head lamps of the lead car (+ beams), tail lamps of the last car of the player's train
     const glows = this.pendingGlows;
     const lead = cars.find(c => c.lead)!, tail = cars[0];
@@ -512,7 +530,7 @@ export class MenuScene {
     this.lastDraw = nowMs;
     this.activate();
     const size = renderer.getDrawingBufferSize(this.tmp.v2);
-    this.pose(nowMs / 1000, size.y > 0 ? size.x / size.y : 16 / 9);
+    this.pose(nowMs / 1000 + this.timeOffset, size.y > 0 ? size.x / size.y : 16 / 9);
     const exposure = renderer.toneMappingExposure, target = renderer.getRenderTarget();
     renderer.toneMappingExposure = MENU_SCENE.exposure;
     try {
