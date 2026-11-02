@@ -72,12 +72,22 @@ describe('roof opening: the generator (real Reactors)', () => {
       expect(2 * o.r).toBeLessThan(18.5);
       expect(polyDist(p.outline, o.x, o.z) - o.r - ROOF_OPENING.curb).toBeGreaterThanOrEqual(ROOF_OPENING.band);
       // the sky marking: the rim storey only, at the roof line, with exactly the opening's cells open
-      const sky = L.levels[0].sky!;
+      const sky0 = L.levels[0].sky!;
       expect(L.levels.filter(l => l.sky).length).toBe(1);
-      expect(sky).toMatchObject({y: p.rimY, ceil: p.roofY, top: p.roofY});
-      expect(sky.open).toBeInstanceOf(Uint8Array);
-      expect(sky.open!.length).toBe(g.w * g.h);
-      expect([...sky.open!]).toEqual([...roofOpeningMask(g.w, g.h, o)]);
+      // Task studio-reactor-surface-ending-20261102 (lane ENDING, user: "This door should lead up a set of stairs, towards a surface
+      // area … roughly situated around the hole on the roof"): supersedes "the mask = exactly the opening's cells at the roof line". The
+      // open sky now also covers the walkable SURFACE plaza on the roof (layout.reactor.surface, levels[surface.level]): its band top is
+      // the sky ceil and the opening's column rises through the deck to it; the pit cells keep their roof-line ceiling (< ceil: a real
+      // roof). The opening itself is unchanged: sky.open minus the plaza's cells = exactly roofOpeningMask, checked below as before.
+      const S = info.surface!;
+      expect(S).toBeTruthy();
+      expect(sky0).toMatchObject({y: p.rimY, ceil: S.ceil, top: p.roofY, outdoor: {level: S.level, y: S.parapetY}});
+      expect(sky0.open).toBeInstanceOf(Uint8Array);
+      expect(sky0.open!.length).toBe(g.w * g.h);
+      const holeMask = roofOpeningMask(g.w, g.h, o), gS = L.levels[S.level].grid;
+      sky0.open!.forEach((v, i) => expect(v, `cell ${i}`).toBe(holeMask[i] || (gS.cells[i] === FLOOR && gS.area[i] === S.areas.plaza) ? 1 : 0));
+      for (let i = 0; i < holeMask.length; i++) if (holeMask[i]) expect(gS.cells[i]).toBe(SOLID); // the opening is no deck
+      const sky = {...sky0, open: holeMask}; // the opening's cells (the checks below)
       const cells: number[] = [];
       sky.open!.forEach((v, i) => { if (v) cells.push(i); });
       // one 4-connected component, inside the pit, centred on the core, round: every cell touches the disc, the disc is covered
