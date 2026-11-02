@@ -38,6 +38,7 @@ import {buildGenerators, cableOf, machineProp, rectWorld} from '../structure';
 import {carveBunker} from './bunker';
 import {carveMines} from './mines';
 import {carveWaste} from './waste';
+import {clearComplexPlates} from './plateClear'; // task studio-reactor-surface-ending-20261102 (lane REPAIRS): no overlapping plates
 import {COMPLEX_OF_ZONE, type ComplexCarve, type ComplexCarver, type ComplexSlot, type ReactorComplexId} from './types';
 import {ceilingCableRoute} from './propsCable'; // task reactor-playtest-round2-20261102 (lane PROPS): the cable along the ceiling
 
@@ -323,11 +324,16 @@ export function dressComplexes(layout: StationLayout, rng: Rng, carves: readonly
     const g = layout.levels[z.level].grid;
     for (const i of z.cells) if (!g.blocked[i]) { g.blocked[i] = 1; held.push([g.blocked, i]); }
   }
+  const stockTexts = layout.signs.map(s => s.text); // (lane REPAIRS) the station dresser's plates, before the complexes' own
   try {
     for (const c of carves) c.dress?.(layout, rng.fork(`complex-${c.id}`), {ox: 0, oy: 0});
   } finally {
     for (const [b, i] of held) b[i] = 0;
   }
+  // task studio-reactor-surface-ending-20261102 (lane REPAIRS, user: "some overlapping signs in the sub areas"): every complex plate
+  // clear of every other plate / prop / fixture / frame (moved along its wall, or dropped when redundant / no room) — before the cables
+  // are routed round them
+  clearComplexPlates(layout, carves.map(c => ({level: c.slot.level, areas: c.areas, frontArea: c.slot.frontArea})), stockTexts);
 }
 
 /** After applyLighting: a complex generator's room is lit steadily (emergency power, like the restart sites) so the player can work there. */

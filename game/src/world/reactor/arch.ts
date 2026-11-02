@@ -162,6 +162,32 @@ export class ReactorArch {
   }
 
   /**
+   * Task studio-reactor-surface-ending-20261102 (lane REPAIRS, user: "the floor around the reactor does not go under the reactor so there
+   * are gaps!"): floor runs the builder draws BESIDE the cells' own floors on level index L. The vessel's footprint is blocked cells
+   * whose square reaches past the model's round hazard plinth (cells with their centre within CORE_FLOOR.vesselR 6.6 m; the plinth is
+   * 6.4 m) and whose own floor is not drawn (the hidden column, floorKey) — so the grating stopped in a cell-stepped saw-tooth short of
+   * the plinth, with the void showing in the notches. The deck now continues under the vessel: every vessel cell gets the ring's
+   * grating at the deck height (the same surface key: one world-mapped pattern, the same per-chunk meshes). Collision is unchanged —
+   * the vessel stays the blocked, raised column; the goop pool / bridges are other cells and untouched.
+   */
+  floorFills(L: number): {key: string; x0: number; z0: number; x1: number; z1: number; y: number}[] {
+    const lvl = this.levels[L], cf = this.info.coreFloor;
+    if (!lvl || lvl.id !== this.coreLevel || !cf || !this.coreKinds.length) return [];
+    const out: {key: string; x0: number; z0: number; x1: number; z1: number; y: number}[] = [];
+    const K = this.coreKinds, W = this.W;
+    for (let cy = 0; cy < this.H; cy++) {
+      for (let cx = 0; cx < W;) {
+        if (K[cy * W + cx] !== CORE_CELL.vessel) { cx++; continue; }
+        let e = cx + 1;
+        while (e < W && K[cy * W + e] === CORE_CELL.vessel) e++;
+        out.push({key: 'reactor-grating', x0: cx * CELL, z0: cy * CELL, x1: e * CELL, z1: (cy + 1) * CELL, y: cf.y});
+        cx = e;
+      }
+    }
+    return out;
+  }
+
+  /**
    * Ceiling key of a run (null: builder rule). In the pit: the roof at the top, the deck undersides below. Task reactor-submit-roof-
    * fog-20261102 (lane ROOF): false (none) AT the roof line — the roof slab is one mesh with the opening's round hole (build:
    * roofKit.ts buildRoofSlab), not the builder's per-level / per-chunk runs.

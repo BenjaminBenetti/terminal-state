@@ -25,6 +25,7 @@ import {gasQaApi} from './world/gas/qa'; // Task gasmask-breach-20261030 (lane G
 import {reactorAirQaApi} from './world/reactor/airQa'; // task reactor-build-20261101 (lane AIR): Reactor depth gas / generators spot-check hooks
 import {reactorCpuQaApi} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU): culler decision / A-B
 import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor kit summary / draw cost, fog tune, visuals driver
+import {reactorSurfaceOf, type ReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE)
 import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
@@ -360,6 +361,9 @@ export function installQaHooks(game: Game): void {
     ...reactorCpuQaApi(game as Parameters<typeof reactorCpuQaApi>[0]), // task studio-reactor-submit-roof-fog-20261102 (lane CPU): reactorCpu(), DEBUG reactorCpu({rules: false|true})
     ...reactorArchQaApi(game as Parameters<typeof reactorArchQaApi>[0]), // task reactor-build-20261101 (lane ARCH): reactorArch(), reactorFog({density, color}), DEBUG reactorVisualsSet({fan, generator, core, tier})
     ...gaslightQaApi(game), // task reactor-expansion-20261101 (lane GASLIGHT): gaslight(), gaslightShafts({gain, fade, colour})
+    // task studio-reactor-surface-ending-20261102 (lane SURFACE): reactorSurface({sky, ground, horizon, zenith, clouds, mist}) — the
+    // city plan census, eye gate / rain / wet / fog state, draws and triangles; the outdoor look's uniforms (tune)
+    reactorSurface: (tune?: Parameters<ReactorSurface['qa']>[0]): object => reactorSurfaceOf(game)?.qa(tune) ?? {installed: false},
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Task track1-siren-blightbelly-20261031 (lane SIREN): sirens(), sirenSystem(), goSiren(i?, dist, face), sirenLight(i?), sirenProbe(i?), aimSiren(i?, part), DEBUG sirenWake(i?) / qaSpawnSiren(dist)
