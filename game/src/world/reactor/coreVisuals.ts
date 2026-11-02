@@ -10,6 +10,7 @@ import type {ReactorRunState} from './runState';
 import type {CoreBuilt} from './coreLiquids';
 import type {CoreHeroLayout} from './coreHero';
 import {CORE_LOOK, coreLook, coreStageTargets, easeLevels, lampColor, sameLevels, type CoreLook, type CoreStageLevels} from './coreStages';
+import {COOLANT_NEAR} from './coolantNear'; // task reactor-playtest-round2-20261102 (lane COOLANT)
 
 const zero = (): CoreStageLevels => ({fuse0: 0, fuse1: 0, power: 0, pressure: 0, flow: 0, armed: 0, core: 0});
 
@@ -60,6 +61,11 @@ export class CoreVisuals {
     this.apply(dt);
   }
 
+  /** Task reactor-playtest-round2-20261102 (lane COOLANT): the near goop LOD for the eye (archInstall's frame hook, play only). */
+  lod(eye: {x: number; y: number; z: number}): void {
+    this.built?.near?.update(eye);
+  }
+
   /** The glow lights' candela now (with a slow breathing on the green; coreLights.ts). */
   lightLook(): {readonly green: number; readonly blue: number} {
     const breathe = 1 + 0.06 * Math.sin(this.time * 1.3) + 0.03 * Math.sin(this.time * 3.1 + 1);
@@ -80,6 +86,9 @@ export class CoreVisuals {
     u.flowGlow.value = L.flowGlow;
     u.flowShift.value = this.flowShift;
     u.fill.value = L.fill;
+    // (lane COOLANT) the near goop's clock runs with the pump's flow only (still before it, frozen while paused: no tick); gated by
+    // the pressure level (no near layer before the valve)
+    b.near?.tick(dt * L.flowSpeed * COOLANT_NEAR.speed, this.level.pressure);
     // rotors: only while turning
     const w = b.wheels;
     if (w && dt > 0) {

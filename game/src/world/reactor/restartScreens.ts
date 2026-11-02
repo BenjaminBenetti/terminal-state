@@ -11,6 +11,7 @@
 
 import {REACTOR_FUSE_SLOTS, reactorTasks, type ReactorRunState, type ReactorTaskStatus} from './runState';
 import {VENT_TOWERS, WIN_TEXT, type TowerState} from './restartWin';
+import {JAM_TEXT} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 export type ReactorScreenId = 'pitBoard' | 'controlMonitor' | 'switchgearBoard' | 'pumpBoard';
 
@@ -31,7 +32,15 @@ export interface ScreenModel {
   pumpK: number;
   /** "Next: …" hint for the pit board (where to go next). */
   next: string;
+  /**
+   * Task reactor-playtest-round2-20261102 (lane GAS): the zone whose generator is JAMMED (gen/reactor/gasJam.ts; -1 / absent: none).
+   * While it is not clear the pit board shows it red ("JAMMED · MASK") and the switchgear board warns before the core floor.
+   */
+  jamZone?: number;
 }
+
+/** (lane GAS) The jammed zone is still gassed (not cleared: the reactor is not online yet). */
+export const jamGassed = (m: Pick<ScreenModel, 'state' | 'jamZone'>): boolean => (m.jamZone ?? -1) >= 0 && !m.state.restarted && (m.state.zoneClear[m.jamZone!] ?? 0) < 1;
 
 /** Canvas size (px) of a screen of w x h metres: 512 wide (taller boards 512 tall at most). */
 export function screenPixels(w: number, h: number): {pw: number; ph: number} {
@@ -53,7 +62,7 @@ export function screenKey(id: ReactorScreenId, m: ScreenModel): string {
   const base = `${s.fuses.map(Number).join('')}${+s.breaker}${+s.valve}${+s.pump}${+s.keyInserted}${+s.rods}${+s.restarted}`;
   const towers = m.winT === null ? '' : m.towers.map(t => t[0]).join('');
   switch (id) {
-    case 'switchgearBoard': return base;
+    case 'switchgearBoard': return `${base}|${+jamGassed(m)}`; // (lane GAS: + the jam warning)
     case 'pumpBoard': return `${base}|${Math.round(m.pumpK * 20)}`;
     case 'controlMonitor': return `${base}|${towers}|${m.winT === null ? '' : Math.round(m.core * 20)}`;
     case 'pitBoard': {
@@ -182,9 +191,14 @@ function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
     text(ctx, t.label.toUpperCase(), px + 20, y, size, '#d8d2c2', 'left', 'bold', pw * 0.55 - 26);
     if (t.zone < 0) { text(ctx, 'CLEAN AIR', px + pw - 8, y, Math.round(size * 0.8), '#7fae86', 'right', 'normal', pw * 0.4); return; }
     const z = m.zones[t.zone], clear = Math.max(0, Math.min(1, s.zoneClear[t.zone] ?? 0));
+    const bw = Math.round(pw * 0.3), bx = px + pw - 26 - bw;
+    if (t.zone === m.jamZone && jamGassed(m)) { // (lane GAS) the jammed zone: red fault lamp + "JAMMED · MASK" over the bar
+      lamp(ctx, px + pw - 14, y, size * 0.4, '#e0503c', true);
+      text(ctx, JAM_TEXT.board, bx + bw, y, Math.round(size * 0.78), '#ff6a50', 'right', 'bold', bw + 12);
+      return;
+    }
     const on = !!(z && s.generators[z.generator]?.started);
     lamp(ctx, px + pw - 14, y, size * 0.4, '#63d36e', on);
-    const bw = Math.round(pw * 0.3), bx = px + pw - 26 - bw;
     ctx.fillStyle = '#5a6b2a'; ctx.fillRect(bx, y - 4, bw, 8);
     ctx.fillStyle = '#9fd6a8'; ctx.fillRect(bx, y - 4, Math.round(bw * clear), 8);
   });
@@ -214,7 +228,7 @@ function drawSwitchgear(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   for (let i = 0; i < REACTOR_FUSE_SLOTS; i++, y += rh) row(ctx, w, y, size, `FUSE ${i + 1}`, s.fuses[i] ? 'CARTRIDGE SEATED' : 'BURNT OUT — REPLACE', s.fuses[i] ? '#63d36e' : '#c8473c');
   row(ctx, w, y, size, 'MAIN BREAKER', s.breaker ? 'CLOSED' : 'OPEN', s.breaker ? '#63d36e' : '#e8b13a'); y += rh;
   row(ctx, w, y, size, 'CONTROL POWER', s.breaker ? 'ON' : 'OFF', s.breaker ? '#63d36e' : '#c8473c'); y += rh;
-  const note = s.breaker ? 'Control power on — the control room is live' : s.fuses.every(Boolean) ? 'Hold E on the main breaker to close it' : 'Fit two fuse cartridges, then close the main breaker';
+  const note = s.breaker ? (jamGassed(m) ? JAM_TEXT.switchgear : 'Control power on — the control room is live') : s.fuses.every(Boolean) ? 'Hold E on the main breaker to close it' : 'Fit two fuse cartridges, then close the main breaker'; // (lane GAS: + the jam warning)
   const hs = Math.max(11, Math.round(size * 0.78));
   hint(ctx, note, w / 2, y, hs, '#e8c34a', w - 28, hs * 1.15);
 }

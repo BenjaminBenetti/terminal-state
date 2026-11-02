@@ -8,6 +8,7 @@
 import {CELL} from '../../gen/grid';
 import {fitSize} from './restartScreens';
 import {MAP_BOARD, MARKER_LETTER, MARKER_NAME, PLAN, type MapMarker, type MapPlan, type StoreyPlan} from './mapBoardPlan';
+import {JAM_TEXT} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 type Ctx = CanvasRenderingContext2D;
 const FONT = '"DejaVu Sans Mono", "Courier New", monospace';
@@ -24,6 +25,8 @@ export interface MapFace {
   you: {x: number; z: number; yaw: number} | null;
   /** The board's own position on the shown storey (or null). */
   board: {x: number; z: number} | null;
+  /** Task reactor-playtest-round2-20261102 (lane GAS): a warning banner over the plan (the jammed zone's gassed storey), or none. */
+  warn?: string | null;
 }
 
 function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: string, align: CanvasTextAlign, maxW: number, weight = 'bold'): void {
@@ -90,6 +93,11 @@ export function drawMapFace(ctx: Ctx, W: number, H: number, f: MapFace): void {
   }
   // north arrow
   text(ctx, 'N ↑', M.x + M.w - 8, M.y + 14, 14, '#9fb0b8', 'right', 60);
+  // (lane GAS) the jam banner: this storey's air stays toxic until the reactor is online
+  if (f.warn) {
+    ctx.fillStyle = 'rgba(150,32,22,0.88)'; ctx.fillRect(M.x, M.y + M.h - 30, M.w, 28);
+    text(ctx, f.warn, M.x + M.w / 2, M.y + M.h - 16, 15, '#ffe2d6', 'center', M.w - 16);
+  }
   // --- the markers
   for (const m of f.markers) marker(ctx, U(m.x), V(m.z), m);
   // --- you are here (+ facing) and the board itself
@@ -119,7 +127,7 @@ export function drawMapFace(ctx: Ctx, W: number, H: number, f: MapFace): void {
   // --- the legend of this storey
   const LY = L.legend.y, lw = W - L.col - 20;
   ctx.fillStyle = '#20282c'; ctx.fillRect(10, LY, lw, L.legend.h);
-  text(ctx, 'X STILL NEEDED   ✓ DONE   ◯ CARRIED: USE HERE   ▲ YOU', 18, LY + 16, 14, '#d8d2c2', 'left', lw - 16);
+  text(ctx, 'X STILL NEEDED   ✓ DONE   ◯ CARRIED: USE HERE   ⊘ JAMMED   ▲ YOU', 18, LY + 16, 14, '#d8d2c2', 'left', lw - 16); // (lane GAS: + jammed)
   const groups = new Map<string, {m: MapMarker; n: number}>();
   for (const m of f.markers) { const key = `${m.kind}${m.state}`; const g = groups.get(key); if (g) g.n++; else groups.set(key, {m, n: 1}); }
   const items = [...groups.values()];
@@ -127,9 +135,9 @@ export function drawMapFace(ctx: Ctx, W: number, H: number, f: MapFace): void {
   const colW = lw / 2;
   items.slice(0, 8).forEach(({m, n: cnt}, i) => {
     const x = 18 + (i % 2) * colW, y = LY + 40 + Math.floor(i / 2) * 20;
-    const st = m.state === 'done' ? '✓' : m.state === 'use' ? '◯' : 'X';
-    const name = m.kind === 'generator' ? `${MARKER_NAME.generator}${m.state === 'done' ? ' (running)' : ' (start it)'}` : MARKER_NAME[m.kind];
-    text(ctx, `${st} ${MARKER_LETTER[m.kind]}  ${name}${cnt > 1 ? ` ×${cnt}` : ''}`, x, y, 14, m.state === 'done' ? '#63d36e' : m.state === 'use' ? '#e8b13a' : '#ff6a50', 'left', colW - 12);
+    const st = m.state === 'done' ? '✓' : m.state === 'use' ? '◯' : m.state === 'jammed' ? '⊘' : 'X';
+    const name = m.kind === 'generator' ? (m.state === 'jammed' ? JAM_TEXT.legend : `${MARKER_NAME.generator}${m.state === 'done' ? ' (running)' : ' (start it)'}`) : MARKER_NAME[m.kind]; // (lane GAS: + jammed)
+    text(ctx, `${st} ${MARKER_LETTER[m.kind]}  ${name}${cnt > 1 ? ` ×${cnt}` : ''}`, x, y, 14, m.state === 'done' ? '#63d36e' : m.state === 'use' ? '#e8b13a' : m.state === 'jammed' ? '#ff9a5a' : '#ff6a50', 'left', colW - 12);
   });
   ctx.restore();
 }
@@ -141,6 +149,11 @@ function marker(ctx: Ctx, x: number, y: number, m: MapMarker): void {
   if (m.state === 'done') {
     ctx.strokeStyle = '#63d36e';
     ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x - s * 0.3, y + s * 0.8); ctx.lineTo(x + s, y - s); ctx.stroke();
+  } else if (m.state === 'jammed') { // (lane GAS) a slashed ring: out of order
+    ctx.strokeStyle = '#120a08'; ctx.lineWidth = 7;
+    ctx.beginPath(); ctx.arc(x, y, s * 1.1, 0, Math.PI * 2); ctx.moveTo(x - s * 0.78, y + s * 0.78); ctx.lineTo(x + s * 0.78, y - s * 0.78); ctx.stroke();
+    ctx.strokeStyle = '#ff9a5a'; ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.arc(x, y, s * 1.1, 0, Math.PI * 2); ctx.moveTo(x - s * 0.78, y + s * 0.78); ctx.lineTo(x + s * 0.78, y - s * 0.78); ctx.stroke();
   } else {
     ctx.strokeStyle = '#120a08'; ctx.lineWidth = 7;
     ctx.beginPath(); ctx.moveTo(x - s, y - s); ctx.lineTo(x + s, y + s); ctx.moveTo(x + s, y - s); ctx.lineTo(x - s, y + s); ctx.stroke();

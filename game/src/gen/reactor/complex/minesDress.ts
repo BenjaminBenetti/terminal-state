@@ -25,7 +25,7 @@ import {
 } from '../../placeKit';
 import type {Area, Door, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import type {MineRoomPlan} from './minesPlan';
-import {minesModelSize} from '../../../world/reactor/minesAssets'; // task reactor-playtest-round2 (lane PROPS): the drill's runtime size
+import {minesModelSize} from '../../../world/reactor/minesAssets';
 
 /** What the dress hook knows of the carve (canvas cells: shifted by the crop here). */
 export interface MinesDressInfo {
@@ -43,12 +43,13 @@ export const MINE_PIECE = {cart: 7101, winch: 7102, winze: 7103, drill: 7104, cr
 export type MinePieceId = keyof typeof MINE_PIECE;
 export const MINE_PIECE_OF: Readonly<Record<number, MinePieceId>> = Object.fromEntries(Object.entries(MINE_PIECE).map(([k, v]) => [v, k as MinePieceId]));
 
-/** The drill jumbo's runtime size (m): the cooked model x MINES_FIT.drillRig (task reactor-playtest-round2, lane PROPS: was 3.5 x 1.28). */
-const DRILL = (() => { const [l, h, w] = minesModelSize('drillRig'); return {l: Math.ceil(l * 1000) / 1000, w: Math.ceil(w * 1000) / 1000, h: Math.ceil(h * 100) / 100}; })(); // (rounded up: the model stays inside)
-
-/** Real sizes (m) of the set pieces: footprint along / across their long axis, height (the lead's REACTOR_X_KIT dims). */
+/**
+ * Real sizes (m) of the set pieces: footprint along / across their long axis, height (the lead's REACTOR_X_KIT dims). The drill jumbo's
+ * is read at use from the registry x its runtime fit (world/reactor/minesAssets.ts minesModelSize: lane PROPS scales the rig there).
+ */
 export const MINE_PIECE_SIZE: Readonly<Record<MinePieceId, {l: number; w: number; h: number}>> = {
-  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1}, drill: DRILL,
+  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1},
+  get drill() { const [l, h, w] = minesModelSize('drillRig'); return {l, w, h}; },
   crib: {l: 1.4, w: 1.4, h: 0}, rubble: {l: 0, w: 0, h: 1.6}, post: {l: 0.53, w: 0.5, h: 0},
 };
 
@@ -77,10 +78,11 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const setMask = (arr: Uint8Array, i: number, v: number) => { arr[i] = v; };
 
 /** Stats of the last dress pass (QA / tests). */
-export const MINES_DRESS_STATS = {pieces: {} as Partial<Record<MinePieceId, number>>, props: 0, lights: 0, signs: 0, sets: 0, setRejects: {} as Record<string, number>, ms: 0};
+export const MINES_DRESS_STATS = {pieces: {} as Partial<Record<MinePieceId, number>>, props: 0, lights: 0, signs: 0, sets: 0, setRejects: {} as Record<string, number>, ms: 0, drillIn: '' as string};
 
-/** The timbered spaces: the adit and every drift (the junction, the cavern and the rooms are not). */
-const SET_PARTS: ReadonlySet<MineRoomPlan['part']> = new Set(['portal', 'haulage', 'manway', 'crosscut', 'sump', 'collapse']);
+/** The timbered spaces: the adit and every drift, the development heading and the dead-end drifts (the junction, the cavern, the rooms
+ *  and the stopes are not). */
+const SET_PARTS: ReadonlySet<MineRoomPlan['part']> = new Set(['portal', 'haulage', 'manway', 'airway', 'crosscut', 'branch', 'heading', 'sump', 'collapse']);
 
 /**
  * Timber sets along each drift at MINE_SETS.pitch (slid up to 0.7 m off obstacles; >= 1.2 m apart): both posts as collision boxes on
@@ -177,7 +179,7 @@ function doorMid(d: Rect): {x: number; z: number; vert: boolean} {
 
 /**
  * The haulage rail line (cell units): from just inside the adit mouth (`entry` = the entrance opening), through every opening of the
- * `chain` (adit -> junction -> haulage segments -> cavern; `doors[i]` joins chain[i] and chain[i + 1]) with right-angle bends (the old
+ * `chain` (adit segments -> junction -> haulage segments -> cavern; `doors[i]` joins chain[i] and chain[i + 1]) with right-angle bends (the old
  * line's turnplates), the jog of parallel openings at a segment's middle, ending 3 m into the cavern (the loading point).
  */
 export function railPath(entry: Rect, chain: readonly Rect[], doors: readonly Rect[]): RailPoint[] {
@@ -210,7 +212,9 @@ export function railPath(entry: Rect, chain: readonly Rect[], doors: readonly Re
 /** The rail line of a laid-out mines complex in WORLD metres (grid frame), or [] (no haulage chain / openings missing). */
 export function minesRailWorld(layout: StationLayout, rooms: readonly {key: string; area: number}[]): RailPoint[] {
   const id = (k: string) => rooms.find(r => r.key === k)?.area;
-  const keys = ['portal', 'junction', ...rooms.map(r => r.key).filter(k => k.startsWith('haulage-')).sort((a, b) => +a.slice(8) - +b.slice(8)), 'cavern'];
+  // the chain in drive order: the adit (a dog-leg adds 'portal-1'), the junction, the haulage course, the cavern
+  const seg = (pre: string) => rooms.map(r => r.key).filter(k => k.startsWith(pre) && /^\d+$/.test(k.slice(pre.length))).sort((a, b) => +a.slice(pre.length) - +b.slice(pre.length));
+  const keys = ['portal', ...seg('portal-'), 'junction', ...seg('haulage-'), 'cavern'];
   const chainIds = keys.map(id);
   if (chainIds.some(x => x === undefined)) return [];
   const between = (a: number, b: number): Door | undefined => layout.doors.find(d => (d.a === a && d.b === b) || (d.a === b && d.b === a));
@@ -309,24 +313,36 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
       }
     }
   }
-  // the drill jumbo parked against a cavern wall (else the junction), timber cribs in the stope, rubble choking the collapsed drift
+  // the drill jumbo at its REAL kit size (MINE_PIECE_SIZE.drill: the registry x the runtime fit) parked in the development heading,
+  // centred, its boom end at the face (the far end from the opening; the visuals turn the boom to it); where there is no heading (or it
+  // will not take the rig), against a wall of the cavern / a worked-out stope / the junction. Then timber cribs in the stopes and the
+  // rubble choking the collapsed drift.
   {
-    const C = area('cavern'), J = area('junction');
-    for (const a of [C, J]) {
-      if (!a) continue;
-      let ok = false;
+    const C = area('cavern'), J = area('junction'), S = MINE_PIECE_SIZE.drill, hl = S.l / 2, hw = S.w / 2;
+    MINES_DRESS_STATS.drillIn = '';
+    const Hd = area('heading'), hr = info.rooms.find(q => q.key === 'heading');
+    const hd = Hd ? layout.doors.find(q => q.a === Hd.id || q.b === Hd.id) : undefined;
+    if (Hd && hr && hd) {
+      const alongX = hr.axis ? hr.axis === 'x' : Hd.w >= Hd.h, m = doorMid(hd);
+      const faceHi = alongX ? m.x < Hd.x + Hd.w / 2 : m.z < Hd.y + Hd.h / 2;
+      const lo = (alongX ? Hd.x : Hd.y) * CELL, hi = (alongX ? Hd.x + Hd.w : Hd.y + Hd.h) * CELL;
+      const cc = (alongX ? Hd.y + Hd.h / 2 : Hd.x + Hd.w / 2) * CELL;
+      for (let back = 0.15; back <= 2.4 && !MINES_DRESS_STATS.drillIn; back += 0.25) {
+        const s = faceHi ? hi - back - hl : lo + back + hl;
+        if (piece(Hd, 'drill', r3(alongX ? s : cc), r3(alongX ? cc : s), alongX ? hl : hw, alongX ? hw : hl, r2(S.h), {ring: 1})) MINES_DRESS_STATS.drillIn = 'heading';
+      }
+    }
+    for (const a of [C, ...of('stope'), J]) {
+      if (!a || MINES_DRESS_STATS.drillIn) continue;
       for (const side of rng.shuffle(['N', 'S', 'E', 'W'] as Side[])) {
         const alongX = side === 'N' || side === 'S';
         const [lo, hi] = alongX ? [a.x * CELL, (a.x + a.w) * CELL] : [a.y * CELL, (a.y + a.h) * CELL];
-        // (lane PROPS, round 2: the collider IS the model's runtime footprint and height, its long side 12 cm off the wall)
-        const hl = DRILL.l / 2, hw = DRILL.w / 2;
-        for (let t = lo + hl + 0.75; t <= hi - hl - 0.75 && !ok; t += 1.0) {
+        for (let t = lo + hl + 0.75; t <= hi - hl - 0.75 && !MINES_DRESS_STATS.drillIn; t += 1.0) {
           const [x, z] = wallXZ(a, side, t, hw + 0.12);
-          if (piece(a, 'drill', x, z, alongX ? hl : hw, alongX ? hw : hl, DRILL.h, {ring: 1})) ok = true;
+          if (piece(a, 'drill', x, z, alongX ? hl : hw, alongX ? hw : hl, r2(S.h), {ring: 1})) MINES_DRESS_STATS.drillIn = info.rooms.find(r => r.area === a.id)?.key ?? '?';
         }
-        if (ok) break;
+        if (MINES_DRESS_STATS.drillIn) break;
       }
-      if (ok) break;
     }
     // timber cribs holding up the stope roofs: the generator cavern (2-3) and the worked-out stope (1-2)
     for (const [S, n] of [[C, rng.int(2, 3)], ...of('stope').map(a => [a, rng.int(1, 2)] as const)] as const) {
@@ -342,11 +358,16 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
       // the far end (away from its opening) under a rubble slope, 2.5 m deep, full width
       const d = layout.doors.find(q => q.a === X.id || q.b === X.id);
       if (!d) continue;
-      const alongX = X.w >= X.h, m = doorMid(d);
+      const xr = info.rooms.find(r => r.area === X.id), alongX = xr?.axis ? xr.axis === 'x' : X.w >= X.h, m = doorMid(d);
       const farHi = alongX ? m.x < X.x + X.w / 2 : m.z < X.y + X.h / 2;
-      const depth = 2.5, ax0 = X.x * CELL, az0 = X.y * CELL, ax1 = (X.x + X.w) * CELL, az1 = (X.y + X.h) * CELL;
-      const cx = alongX ? (farHi ? ax1 - depth / 2 : ax0 + depth / 2) : (ax0 + ax1) / 2, cz = alongX ? (az0 + az1) / 2 : (farHi ? az1 - depth / 2 : az0 + depth / 2);
-      piece(X, 'rubble', cx, cz, alongX ? depth / 2 - 0.02 : (ax1 - ax0) / 2 - 0.02, alongX ? (az1 - az0) / 2 - 0.02 : depth / 2 - 0.02, 1.6);
+      const ax0 = X.x * CELL, az0 = X.y * CELL, ax1 = (X.x + X.w) * CELL, az1 = (X.y + X.h) * CELL;
+      // (a shorter slope, set back from the face or trimmed off one rib where an opening's zone reaches in: the drift's own, or a
+      // neighbouring space's opening two cells away through the rock)
+      const [w0, w1] = alongX ? [az0, az1] : [ax0, ax1];
+      done: for (const depth of [2.5, 2.0, 1.5]) for (const back of [0, 0.5, 1.0]) for (const [t0, t1] of [[0, 0], [0.5, 0], [0, 0.5], [0.5, 0.5]]) {
+        const s = farHi ? (alongX ? ax1 : az1) - back - depth / 2 : (alongX ? ax0 : az0) + back + depth / 2, q = (w0 + t0 + w1 - t1) / 2, half = (w1 - t1 - w0 - t0) / 2 - 0.02;
+        if (piece(X, 'rubble', alongX ? s : q, alongX ? q : s, alongX ? depth / 2 - 0.02 : half, alongX ? half : depth / 2 - 0.02, 1.6)) break done;
+      }
     }
   }
 
@@ -381,9 +402,10 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   put(T, 'stepLadder', 1);
   for (const S of of('stope')) { put(S, 'crate', rng.int(1, 2), {purpose: 'storage'}); put(S, 'tripodWorkLight', rng.chance(0.5) ? 1 : 0); }
   for (const S of of('sump')) { put(S, 'waterPumpSkid', 1); put(S, 'wetDryVac', rng.chance(0.4) ? 1 : 0); }
+  for (const Hd of of('heading')) put(Hd, 'crate', 1, {purpose: 'storage'}); // the drill steels' box
   for (const X of of('collapse')) put(X, 'foldingBarricade', 1);
   {
-    const drifts = [...of('haulage'), ...of('manway'), ...of('crosscut')];
+    const drifts = [...of('haulage'), ...of('manway'), ...of('airway'), ...of('crosscut'), ...of('branch')];
     rng.shuffle(drifts);
     put(drifts[0], 'drumFan', 1);
     put(drifts[1], 'crate', 1, {purpose: 'storage'});
@@ -430,6 +452,7 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   signOut(area('refuge'), 'REFUGE CHAMBER');
   for (const S of of('sump')) signOut(S, 'DANGER · FLOODED WORKINGS');
   for (const X of of('collapse')) signOut(X, 'DANGER · BAD GROUND · NO ENTRY');
+  for (const Hd of of('heading')) signOut(Hd, 'DEVELOPMENT HEADING · DRILLING');
   // the way to the generator: at the junction's haulage mouth, the cavern's openings
   {
     const h0 = info.rooms.find(r => r.key === 'haulage-0');

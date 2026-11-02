@@ -22,6 +22,11 @@ export interface ReactorVisuals {
    * nothing new (no duplicate one-shots on rebuild / reload). `instant` = restore on build (jump to the stage, no transition).
    */
   setRestartState?(state: Readonly<ReactorRunState>, instant: boolean): void;
+  /**
+   * Task reactor-playtest-round2-20261102 (lane GAS): generator `id` is JAMMED (gen/reactor/gasJam.ts): its red FAULT lamp flashes
+   * (1.25 Hz) while it stands still. Optional: absent = the steady red "stopped" lamp.
+   */
+  setGeneratorJammed?(id: number, jammed: boolean): void;
 }
 
 const NOOP: ReactorVisuals = {setFanSpeed() {}, setGeneratorRunning() {}, setCoreGlow() {}, setTierPower() {}};

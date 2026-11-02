@@ -19,6 +19,7 @@ import {FILTER_LIFE_S} from '../items/gear';
 import type {LevelId} from '../levels/types';
 import type {PickupPlacement, StationLayout} from './stationTypes';
 import {placeGear, type GearAssignment} from './gearLoot';
+import {reactorJam} from './reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 export const GAS_MASK_ID = 'gas_mask';
 export const GAS_FILTER_ID = 'gas_filter';
@@ -35,6 +36,9 @@ export const MASK_LOOT = {
     mall: {masks: [1, 2], filters: [2, 5]},
     // Task reactor-build-20261101 (primary): the Reactor ALWAYS holds one mask and a real but tight filter supply — the mask + filter
     // route can bypass the generators, but never so many filters that it becomes the default (the generator route needs no mask).
+    // Task reactor-playtest-round2-20261102 (lane GAS): the final generator JAMS (gen/reactor/gasJam.ts), so the core floor NEEDS the
+    // mask until the reactor is online. The same finite supply (>= 52.5 s fitted + 3 x 150 s spare) is now placed only UPSTREAM of the
+    // jammed zone (placeMaskLoot), budgeted in tests/reactor-gas-jam.test.ts against the real core-floor travel / work time.
     reactor: {masks: [1, 1], filters: [3, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
@@ -72,8 +76,12 @@ export function rollMaskLoot(levelSeed: number, levelId: LevelId, sections: read
 /**
  * Places a section's mask / filter assignments as ordinary layout pickups (appended to layout.pickups, count 1 each; a mask's
  * `filter` is copied onto its placement) with the gear placement rules and this lane's own rng. Call AFTER the gear placement.
+ * Task reactor-playtest-round2-20261102 (lane GAS): on the Reactor never on a storey of the jammed gas zone (the core floor): the mask
+ * the deep tasks need lies upstream, reachable mask-free through the working generators (no gear lock).
  */
 export function placeMaskLoot(layout: StationLayout, items: readonly GearAssignment[] | undefined): PickupPlacement[] {
   if (!items?.length) return [];
-  return placeGear(layout, items, new Rng(hashString('mask-place', (layout.seed >>> 0) ^ 0x1f83d9ab)));
+  const jam = layout.reactor ? reactorJam(layout.reactor) : null;
+  const opts = jam ? {areaOk: (a: {level?: number}) => !jam.levels.includes(a.level ?? 0)} : undefined;
+  return placeGear(layout, items, new Rng(hashString('mask-place', (layout.seed >>> 0) ^ 0x1f83d9ab)), undefined, opts);
 }

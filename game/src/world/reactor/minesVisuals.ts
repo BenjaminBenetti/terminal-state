@@ -23,7 +23,7 @@ import type {PropPlacement} from '../../gen/props';
 import {MINE_PIECE, MINE_RAIL, alongPolyline, minesRailWorld, timberSetFit, type RailPoint} from '../../gen/reactor/complex/minesDress';
 import type {WorldMaterials} from '../materials';
 import {reactorDress, reactorSurfaceMaterial} from './archMaterials';
-import {MINES_FIT, MINES_MODELS, type MinesModel} from './minesAssets';
+import {MINES_ANCHORS, MINES_FIT, MINES_MODELS, type MinesModel} from './minesAssets';
 
 /** One instanced placement: position (bottom centre), yaw, scale. */
 export interface MinePlace { x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number }
@@ -148,14 +148,22 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
     const fx = wz ? Math.sign(Math.abs(wz.x - p.x) > Math.abs(wz.z - p.z) ? wz.x - p.x : 0) : 0, fz = wz ? Math.sign(Math.abs(wz.z - p.z) >= Math.abs(wz.x - p.x) ? wz.z - p.z : 0) : 1;
     plan.models.hoistWinch.push({x: p.x, y: p.y, z: p.z, yaw: Math.atan2(fx, fz), sx: 1, sy: 1, sz: 1});
   }
+  // the drill jumbo at its runtime fit (minesAssets MINES_FIT: its collision box is the same real size, minesDress MINE_PIECE_SIZE.drill)
+  const heading = byKey('heading'), fit = MINES_FIT.drillRig, boom = MINES_ANCHORS.drillRig.boom;
   for (const p of of(MINE_PIECE.drill)) {
     const a = layout.areas[p.area], alongX = p.hx >= p.hz;
-    // its back to the nearer wall: the front (+Z) faces into the room
-    const yaw = alongX ? (p.z - a.y * CELL < (a.y + a.h) * CELL - p.z ? 0 : Math.PI) : (p.x - a.x * CELL < (a.x + a.w) * CELL - p.x ? Math.PI / 2 : -Math.PI / 2);
-    // (task reactor-playtest-round2 lane PROPS: at its runtime fit MINES_FIT.drillRig — a real jumbo, not a knee-high toy; the collider
-    // the dress pass placed is minesModelSize('drillRig'))
-    const k = MINES_FIT.drillRig;
-    plan.models.drillRig.push({x: p.x, y: p.y, z: p.z, yaw, sx: k, sy: k, sz: k});
+    let yaw: number;
+    if (heading && a.id === heading.id) {
+      // in the development heading: the boom end (model x * boom) toward the face, the far end from the opening (model x -> world (cos, -sin))
+      const door = layout.doors.find(d => d.a === a.id || d.b === a.id);
+      const dm = door ? (alongX ? door.x + door.w / 2 : door.y + door.h / 2) * CELL : (alongX ? a.x : a.y) * CELL;
+      const sgn = (alongX ? p.x : p.z) > dm ? 1 : -1, fx = alongX ? sgn : 0, fz = alongX ? 0 : sgn;
+      yaw = Math.atan2(-boom * fz, boom * fx);
+    } else {
+      // its back to the nearer wall: the front (+Z) faces into the room
+      yaw = alongX ? (p.z - a.y * CELL < (a.y + a.h) * CELL - p.z ? 0 : Math.PI) : (p.x - a.x * CELL < (a.x + a.w) * CELL - p.x ? Math.PI / 2 : -Math.PI / 2);
+    }
+    plan.models.drillRig.push({x: p.x, y: p.y, z: p.z, yaw, sx: fit, sy: fit, sz: fit});
   }
 
   // --- the winze: timber collar, black shaft mouth, guard fence, headframe + sheave + rope ---------------------------------------------
