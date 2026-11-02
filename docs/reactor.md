@@ -121,6 +121,12 @@ generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (movi
    the collider (`annexMachine` prop). The model's **measured mounting face** goes on the footprint's front plane, and its long axis
    follows the footprint's long axis. The switchgear bank is stretched to fill its collider exactly.
    - The pump's motor end faces the operator. It used to be turned 90° off its collider.
+   - **The model never stands outside its collider into walkable space** (lane PATHS' audit, `world/reactor/pathsAudit.ts`):
+     - the switchgear's outermost front (the lever handles) is on the collider front, with the door 0.26 m behind it and the
+       cabinet back sunk into the wall;
+     - the coolant valve is drawn at the uniform scale that fits its 1 × 1 m footprint (about 0.78);
+     - the console's collider is 1.5 m deep and 1.55 m tall, covering the model;
+     - collider heights equal the models' heights.
    - A layout without machine records derives one from its controls.
 2. **Measure the face; do not trust the bounding box.** `HOST_FACES` holds faces probed from the cooked GLB vertex data. Use the
    *clear rectangle* of each face: no gauge, lever or hinge under it.

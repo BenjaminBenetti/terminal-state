@@ -28,8 +28,8 @@ const level = (seed: number) => {
 /**
  * Intrusions OWNED BY OTHER LANES of this task, each pinned at its measured worst penetration into the walkway (m, beyond the 0.1 m
  * edge tolerance) so nothing grows unnoticed. The lead drops / tightens an entry once that lane fixes it and the audit is re-run:
- *  - lane CONTROLS (machines placed from footprints): the switchgear sections' door plane sits ON the collider front, so the cabinet
- *    parts in front of it stand up to ~0.26 m past the collider; the console model ~0.24 m and the valve ~0.15 m past theirs;
+ *  - (lane CONTROLS fixed its entries: the switchgear's outermost front / the valve at its fit scale / the console's 1.5 m collider and
+ *    the fallback start panel's lever + lamps now stay inside their colliders — the audit proves zero there);
  *  - lane BUNKER: the blast-door model reaches ~0.29 m past its leaf / frame colliders (the decontamination side); one bunk bed 3 cm;
  *  - lane MINES: tilted rubble chunks stand up to ~0.38 m out of the rubble collider into the collapsed drift; a timber set beside a
  *    room door (lamp room / tool room) puts its post 5-6 cm into the door lane;
@@ -37,8 +37,6 @@ const level = (seed: number) => {
  *    vessel model fails to load; the model is clear).
  */
 const PATHS_OWNED_ELSEWHERE: readonly {re: RegExp; lane: string; max: number}[] = [
-  {re: /^sites /, lane: 'CONTROLS', max: 0.2},
-  {re: /^generators (bulb\|panelLamp|box\|yellow)$/, lane: 'CONTROLS', max: 0.02}, // the procedural-fallback start panel's lever / lamps: 8 mm
   {re: /^bunker model blastDoor$/, lane: 'BUNKER', max: 0.2},
   {re: /^bunker model bunkBed$/, lane: 'BUNKER', max: 0.04},
   {re: /^mines rock$/, lane: 'MINES', max: 0.3},

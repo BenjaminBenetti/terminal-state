@@ -10,6 +10,7 @@
 import {beforeAll, describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import {levelsOf} from '../src/gen/levels';
+import {FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {
   EMBED, GENERATOR_PANEL, HOST_FACES, OVERLAY_EXTENT, generatorPanelPose, generatorPlacement, hostToWorld, machineDepth, machineFront,
@@ -160,21 +161,30 @@ for (const seed of SEEDS) {
         const mx = (box.max[0] - box.min[0]) / 2, mz = (box.max[2] - box.min[2]) / 2;
         // long axis: the model's and the collider's agree
         if (Math.abs(prop.hx - prop.hz) > 0.2) expect(mx > mz, `${m.kind} long axis`).toBe(prop.hx > prop.hz);
+        // the model never stands outside its collider into walkable space (lane PATHS' audit rule): its plan box inside the collider
+        // (+1 cm), except a switchgear bank's back, which sinks into the wall behind it
+        const [fx, fz] = machineFront(m);
         if (m.kind === 'switchgear') {
-          // the bank exactly fills the collider along its length, its door plane on the collider's front face
-          const [fx, fz] = machineFront(m);
+          // the bank exactly fills the collider along its length; its outermost front (the lever handles) on the collider's front
+          // face, the door 0.26 m behind it
           const along = Math.abs(fx) > 0.5 ? mz : mx;
           expect(along * 2).toBeCloseTo(machineWidth(m), 2);
           for (const h of hosts) {
-            const d = hostToWorld(h, 0, 1.2, HOST_FACES.switchgear.doorZ);
-            expect((d.x - m.x) * fx + (d.z - m.z) * fz).toBeCloseTo(machineDepth(m) / 2, 3);
+            const f = hostToWorld(h, 0, 1.2, HOST_FACES.switchgear.frontZ), d = hostToWorld(h, 0, 1.2, HOST_FACES.switchgear.doorZ);
+            expect((f.x - m.x) * fx + (f.z - m.z) * fz).toBeCloseTo(machineDepth(m) / 2, 3);
+            expect((d.x - m.x) * fx + (d.z - m.z) * fz).toBeCloseTo(machineDepth(m) / 2 - (HOST_FACES.switchgear.frontZ - HOST_FACES.switchgear.doorZ), 3);
           }
+          const behind = {x: m.x - fx * machineDepth(m) / 2, z: m.z - fz * machineDepth(m) / 2};
+          const g = L.levels[s.site.level].grid, [cx, cy] = g.cellOf(behind.x - fx * 0.25, behind.z - fz * 0.25);
+          expect(g.cells[g.idx(cx, cy)], 'the bank backs onto a wall').not.toBe(FLOOR);
           continue;
         }
-        expect(Math.abs((box.min[0] + box.max[0]) / 2 - prop.x), `${m.kind} centre x`).toBeLessThan(0.12);
-        expect(Math.abs((box.min[2] + box.max[2]) / 2 - prop.z), `${m.kind} centre z`).toBeLessThan(0.12);
-        expect(Math.abs(mx - prop.hx), `${m.kind} extent x`).toBeLessThan(0.3);
-        expect(Math.abs(mz - prop.hz), `${m.kind} extent z`).toBeLessThan(0.3);
+        expect(box.min[0], `${m.kind} x0`).toBeGreaterThan(prop.x - prop.hx - 0.01);
+        expect(box.max[0], `${m.kind} x1`).toBeLessThan(prop.x + prop.hx + 0.01);
+        expect(box.min[2], `${m.kind} z0`).toBeGreaterThan(prop.z - prop.hz - 0.01);
+        expect(box.max[2], `${m.kind} z1`).toBeLessThan(prop.z + prop.hz + 0.01);
+        expect(box.max[1] - box.min[1], `${m.kind} height`).toBeLessThan(prop.h + 0.02);
+        expect(Math.abs(mx - prop.hx) + Math.abs(mz - prop.hz), `${m.kind} fills its collider`).toBeLessThan(0.45);
         if (m.kind === 'pump') {
           // the hit box: model / collider overlap (intersection over union of the plan rects) — it was ~0.3 when 90 deg off
           const ix = Math.max(0, Math.min(box.max[0], prop.x + prop.hx) - Math.max(box.min[0], prop.x - prop.hx));

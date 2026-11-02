@@ -45,7 +45,7 @@ export {preloadReactorItemModels};
 
 /** Reach (m, eye to the control's centre) and pick radius per control (m). */
 export const RESTART_REACH = 2.3;
-const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.45, pump: 0.24, keyswitch: 0.16, rods: 0.3}; // (lane CONTROLS: valve = the model's wheel, r 0.43)
+const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.38, pump: 0.24, keyswitch: 0.16, rods: 0.3}; // (lane CONTROLS: valve = the model's wheel, r 0.43 x its fit scale ~0.78)
 /** The hold ring shows after this much of a hold (a quick tap never flashes it). */
 const RING_DELAY_S = 0.1;
 /** AIR's record / the HUD tier line are polled this often (s). */

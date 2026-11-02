@@ -89,9 +89,10 @@ export function planGeneratorPanel(plan: KitPlan, g: ReactorGenerator, model: bo
   const {w: BW, h: BH, d: BD} = GENERATOR_PANEL;
   plan.add('box', 'machine', boxMatrix(cx, py, cz, BW, BH, BD, yaw), band);
   if (py - BH / 2 > g.y + 0.1) plan.cyl('tube', 'steelDark', {x: cx, y: g.y, z: cz}, {x: cx, y: py - BH / 2 + 0.01, z: cz}, 0.09); // its post
+  // the lever and lamps stand at most 3 cm proud of the box front (lane PATHS' audit: nothing past the generator's collider)
   const fx = cx + n.x * BD / 2, fz = cz + n.z * BD / 2; // the box front
-  plan.add('box', 'yellow', boxMatrix(fx + n.x * 0.03, py - 0.24, fz + n.z * 0.03, 0.12, 0.2, 0.06, yaw), band); // start lever
+  plan.add('box', 'yellow', boxMatrix(fx + n.x * 0.01, py - 0.24, fz + n.z * 0.01, 0.12, 0.2, 0.04, yaw), band); // start lever
   const c = Math.cos(yaw), s = Math.sin(yaw);
-  const lamp = (lx: number, color: number): KitRef => plan.add('bulb', 'panelLamp', boxMatrix(fx + lx * c + n.x * 0.02, py + 0.24, fz - lx * s + n.z * 0.02, 0.08, 0.08, 0.08), band, color)!;
+  const lamp = (lx: number, color: number): KitRef => plan.add('bulb', 'panelLamp', boxMatrix(fx + lx * c - n.x * 0.01, py + 0.24, fz - lx * s - n.z * 0.01, 0.08, 0.08, 0.08), band, color)!;
   return [lamp(-0.14, 0xff3020), lamp(0.14, 0x103010)];
 }
