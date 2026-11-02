@@ -88,3 +88,23 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - Blightbellies are on the deep tiers;
 - at most two sleeping Sirens are in deep side rooms;
 - the Strainer appears only in the rim station's annex.
+
+## Lamps, the open top and gas visibility (expansion lane GASLIGHT)
+- **Every pit lamp is a real, mounted fixture** (`gen/reactor/gaslightLamps.ts` `planPitLamps`, `LightPlacement.mount`):
+  - wall brackets between the pilasters on every storey, clear of openings, pipe banks, fans and any walkway or flight at the head;
+  - posts on the bridges and tower decks.
+
+  `world/reactor/gaslightFixtures.ts` draws the bracket, post and cage (or the flood-lamp model) with the kit. The fixture's tube
+  instance is the lens, so the glass glows exactly when the baked light does. The kit plans no decorative lamps.
+- **Circuits:** the rim is on station power. Every third lamp and the lamps at the generator / stair landings are steady dim emergency
+  lamps. The rest are on the powered circuit 2: dark glass and no light until the restart.
+- **The open top:** `levels[0].sky` sits at the pit roof line (no roof slab; the beam grid stays).
+  - `world/reactor/gaslightSky.ts` draws the Office's toxic sky dome and the outside gas sheets over the opening.
+  - The march's regional term draws the toxic surface air above the roof line (`world/gaslightRules.ts` `reactorOutdoorGas`). The
+    exposure reads the same function, and nothing walkable reaches it.
+  - The same term draws the sky's light shafts into the pit.
+- **Gas visibility** (root `CLAUDE.md` rule): the strata glow toxic green (`REACTOR_GAS_LOOK`) and the clean pit fog is neutral grey.
+  A volumetric pass that is off falls back to the scene fog tinted by the eye's gas (`VolumetricAtmosphere.withGasFog`).
+- **Core glow in the fog:** a `PointLight` added with `addScatterLight` and `userData.vfOpen = true` lights the haze and the strata with
+  no occlusion window (open pit volumes).
+- QA: `__LL.gaslight()` and `__LL.gaslightShafts({gain, fade, colour})`. Tests: `game/tests/reactor-x-gaslight-*.test.ts`.
