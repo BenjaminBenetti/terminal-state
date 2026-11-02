@@ -999,6 +999,8 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
     for (const m of flatWires) plan.add('tube', 'cable', m, plan.bandOf(Math.min(A.y, Bw.y)));
     plan.stats.cables++;
   }
+  // task reactor-playtest-round2-20261102 (lane PROPS): a complex cable hangs from the ceiling on drop rods (gen complex/propsCable.ts)
+  for (const h of g.cableHangers ?? []) plan.cyl('cyl', 'steel', {x: h.x, y: h.y0, z: h.z}, {x: h.x, y: h.y1, z: h.z}, 0.025);
   plan.tag = 'generators';
 }
 
