@@ -5,6 +5,8 @@
 //    level (tick jitters only running generators' few body instances; back to rest once when it stops);
 //  - setCoreGlow(l): the vessel glow target; tick eases it (faint cold glow at 0, a breathing green-white at 1) — one colour;
 //  - setTierPower(level, p): one tier's lamp material colour (emergency floor at 0) — one uniform, O(1).
+//  - setGeneratorJammed(id, on) (task reactor-playtest-round2-20261102, lane GAS): the jammed generator's red lamp FLASHES (JAM_BLINK_HZ;
+//    one instance colour write per flip) while it stands still; cranking / running shows the normal lamps.
 // No allocation per call or per frame (scratch matrices / colours); everything is a no-op for unknown ids.
 
 import * as THREE from 'three';
@@ -27,7 +29,10 @@ const LAMP_OFF = new THREE.Color(0.25, 0.03, 0.02), LAMP_RED = new THREE.Color(1
 const LAMP_GREEN_OFF = new THREE.Color(0.02, 0.08, 0.03), LAMP_GREEN = new THREE.Color(0.2, 1.0, 0.3);
 
 interface FanState { target: number; speed: number; angle: number; basis: THREE.Matrix4; radius: number }
-interface GenState { level: number; body: InstanceSlot[]; red: InstanceSlot | undefined; green: InstanceSlot | undefined; resting: boolean; phase: number }
+interface GenState { level: number; body: InstanceSlot[]; red: InstanceSlot | undefined; green: InstanceSlot | undefined; resting: boolean; phase: number; jammed: boolean; blink: number }
+
+/** (lane GAS) Fault lamp flash rate of a jammed generator (Hz). */
+export const JAM_BLINK_HZ = 1.25;
 
 export class ReactorArchVisuals implements ReactorVisuals {
   private readonly fans: FanState[] = [];
@@ -53,7 +58,7 @@ export class ReactorArchVisuals implements ReactorVisuals {
       plan.fans.forEach((f, i) => { this.fanIndex.set(f.id, i); this.fans.push({target: 0, speed: 0, angle: (f.id * 0.7) % (Math.PI * 2), basis: f.basis, radius: f.radius}); });
       for (const g of plan.generators) {
         const body = g.modelIndex >= 0 ? built.modelSlots.get('generator')?.[g.modelIndex] ?? [] : g.body.map(r => built.slot(r)).filter((s): s is InstanceSlot => !!s);
-        const st: GenState = {level: 0, body, red: built.slot(g.lamps[0]), green: built.slot(g.lamps[1]), resting: true, phase: g.id * 1.37};
+        const st: GenState = {level: 0, body, red: built.slot(g.lamps[0]), green: built.slot(g.lamps[1]), resting: true, phase: g.id * 1.37, jammed: false, blink: -1};
         this.gens.set(g.id, st);
         this.genList.push(st);
       }
@@ -80,6 +85,15 @@ export class ReactorArchVisuals implements ReactorVisuals {
     // panel lamps: red while stopped (dim when cranking), green as it runs
     if (g.red) { g.red.mesh.setColorAt(g.red.index, this.c.copy(LAMP_RED).lerp(LAMP_OFF, Math.min(1, l * 1.6))); markColors(g.red.mesh); }
     if (g.green) { g.green.mesh.setColorAt(g.green.index, this.c.copy(LAMP_GREEN_OFF).lerp(LAMP_GREEN, l)); markColors(g.green.mesh); }
+  }
+
+  /** (lane GAS) Generator `id` jammed: its red fault lamp flashes while it stands still (tick). */
+  setGeneratorJammed(id: number, jammed: boolean): void {
+    const g = this.gens.get(id);
+    if (!g || g.jammed === jammed) return;
+    g.jammed = jammed;
+    g.blink = -1;
+    if (!jammed) this.setGeneratorRunning(id, g.level);
   }
 
   setCoreGlow(level: number): void {
@@ -123,6 +137,10 @@ export class ReactorArchVisuals implements ReactorVisuals {
     // generators
     for (let gi = 0; gi < this.genList.length; gi++) {
       const g = this.genList[gi];
+      if (g.jammed && g.level <= 0 && g.red) { // (lane GAS) the fault lamp flashes: one colour write per flip
+        const on = Math.floor(this.time * JAM_BLINK_HZ * 2) % 2 === 0 ? 1 : 0;
+        if (on !== g.blink) { g.blink = on; g.red.mesh.setColorAt(g.red.index, on ? LAMP_RED : LAMP_OFF); markColors(g.red.mesh); writes++; }
+      } else if (g.jammed) g.blink = -1;
       if (g.level <= 0) {
         if (!g.resting) { for (let k = 0; k < g.body.length; k++) { const s = g.body[k]; s.mesh.setMatrixAt(s.index, s.base); s.mesh.instanceMatrix.needsUpdate = true; writes++; } g.resting = true; }
         continue;
@@ -171,10 +189,10 @@ export class ReactorArchVisuals implements ReactorVisuals {
   }
 
   /** QA / tests: the current visual state. */
-  state(): {fans: {id: number; target: number; speed: number; angle: number}[]; generators: {id: number; level: number}[]; glow: number; glowTarget: number; tiers: {level: number; power: number}[]} {
+  state(): {fans: {id: number; target: number; speed: number; angle: number}[]; generators: {id: number; level: number; jammed: boolean}[]; glow: number; glowTarget: number; tiers: {level: number; power: number}[]} {
     return {
       fans: [...this.fanIndex].map(([id, i]) => ({id, target: this.fans[i].target, speed: this.fans[i].speed, angle: this.fans[i].angle})),
-      generators: [...this.gens].map(([id, g]) => ({id, level: g.level})),
+      generators: [...this.gens].map(([id, g]) => ({id, level: g.level, jammed: g.jammed})),
       glow: this.glow, glowTarget: this.glowTarget,
       tiers: [...this.tiers].map(([level, t]) => ({level, power: t.power})),
     };

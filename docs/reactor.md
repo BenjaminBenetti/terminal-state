@@ -11,11 +11,11 @@ outside Git.
 | Contract (types only) | `game/src/gen/reactor/reactorTypes.ts` (`layout.reactor: ReactorInfo`), `game/src/world/reactor/runState.ts` (the one persisted record, lane store `reactor.state`), `game/src/world/reactor/visuals.ts` (the visuals seam) |
 | Generator | `game/src/gen/reactor/{index,frame,carve,structure,validate}.ts` — `generateReactorLevel(ctx, {trackExt})` |
 | Registration | `levels/registry.ts` `LEVELS.reactor` (tier 3), `ai/spawnTables.ts` `REACTOR_SPAWN_PROFILE`, `items/lootTables.ts` `REACTOR_PROFILE`, `gen/maskLoot.ts` (1 mask, 3–5 filters), `gen/trackExt/config.ts` `TRACK_EXT_REACTOR`; title card, travel slot 3, `?level=reactor` / `?reactorSeed=CODE` |
-| Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts` |
-| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts` |
+| Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts`; the jammed final generator `game/src/gen/reactor/gasJam.ts` |
+| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
-| Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`) |
+| Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`), `game/src/audio/manifest.reactorStartup.generated.ts` (7 startup clips; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`) |
 | Core floor + hero reactor (task reactor-expansion, lane CORE) | `game/src/gen/reactor/coreFloor.ts` (vessel footprint, service ring, goop pool, bridges, loop / turbine layout, `layout.reactor.coreFloor`); `game/src/world/reactor/{coreHero,coreLiquids,coreStages,coreVisuals,coreLights}.ts` (the assembled structure, the dynamic goop / coolant layer, the staged startup, the glow lights) |
 | Tests | `game/tests/reactor-*.test.ts` (`reactor-level.test.ts` runs every lane on real generated layouts) |
 
@@ -90,22 +90,76 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   - the complex is substantial: at least 6 areas and at least 500 m² walkable.
 
 ### The bunker — "Shelter 7" (zone 0, tier 1; lane BUNKER)
-`complex/bunker.ts` (carver), `bunkerPlan.ts` (the program in a wall-local frame), `bunkerDress.ts` (dress hook), `bunkerPurposes.ts`
-(its own room purposes), `bunkerKinds.ts` (hero prop kinds), `world/reactor/bunkerModels.ts` (their instanced models).
-- **Program** (15–16 spaces, ~1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
+`complex/bunker.ts` (carver), `bunkerPlan.ts` (the seeded room graph in a wall-local frame), `bunkerGrow.ts` (its O(1) occupancy),
+`bunkerDress.ts` (dress hook), `bunkerPurposes.ts` (its own room purposes), `bunkerKinds.ts` (hero prop kinds),
+`world/reactor/bunkerModels.ts` (their instanced models).
+- **Program** (15–22 spaces, ~850–1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
   - the **blast-door lock** behind the entrance (heavy hazard-striped frame, "SHELTER 7 · CIVIL DEFENCE" plate on the gallery side);
   - a 1 m **bulkhead** holding the round **blast door** (`REACTOR_X_KIT.blastDoor`, its leaf standing open; a 1.5 m lane over a
     0.84 m threshold, three 0.28 m risers each side);
-  - **decontamination**, the **guard post** (doors into the lock and the muster corridor: a level way round the threshold);
-  - the **muster corridor** across the bunker, two **spine corridors** to the **generator hall** (two ways in), the **mess hall**
-    between them (opening onto both, sometimes the muster corridor too);
-  - side rooms by size: **dormitories** (bunk rows, footlockers, lockers), air **filtration plant**, **infirmary**, **radio room**
-    (console), **latrines**, stores, workshop, warden's office, ration store, locker room;
-  - off the hall: the **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition cabinets, crates).
-- **The generator**: mid-hall, long axis along the hall, the use point beside the end facing the switch-room side; a grated cable
-  trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund, a second row of fixtures.
-- Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
-  hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
+  - **decontamination**, the **guard post** (doors into the lock and onto the clean side, the muster corridor or the decon: a level
+    way round the threshold that the generator cable takes);
+  - the **muster corridor**, more corridors (named by their rooms: quarters / plant / operations corridor, service passage), the
+    **mess hall**, **dormitories** (bunk rows, footlockers, lockers), **latrines**, air **filtration plant**, **infirmary**, **radio
+    room** (console), the **generator hall** with its **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition
+    cabinets, crates; off the guard post, warden's office, hall or a corridor); optional warden's office, ration store, shelter
+    stores, workshop, dormitory B, locker room; spare storerooms.
+- **The generator**: mid-hall along the hall's long axis, the use point beside the end facing the switch room (when it opens off a
+  short wall); a grated cable trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund
+  (scanned along the long walls), a second row of fixtures. 'GENERATOR HALL' plates in every corridor on the way, arrows to the exit.
+- **Seeded room graph** (task reactor-playtest-round2-20261102, user: "much to normal … it should be random! with logical rooms
+  flowing in to one another"). Per seed:
+  - the entry: the door's facing (lock / decon), lock width, decon depth, guard side / width and its clean-side door;
+  - the muster corridor: across behind the entry group, straight in, or beside the decon;
+  - 1–3 more corridors (T branches, L turns, straight runs, sometimes through the mess hall) where the rock can hold rooms;
+  - the rooms grown onto that skeleton by **function**: each room opens only off the rooms it belongs with, and a corridor takes
+    the wing (quarters / plant / operations) of its first room. Candidates are scored for snug packing, no thin rock slivers, wing
+    affinity and seeded jitter. The optional rooms are a seeded subset;
+  - rooms grow into the free rock beside them, then seeded loop doors join corridors / suites that share a wall.
+- **Guarantees**: the generator hall always keeps **two independent ways in** from the muster corridor. Every door is on a shared
+  one-cell wall. The switch room opens only onto the hall. Dormitories never open onto plant rooms. A failed attempt retries on the
+  next rng fork (10 at most; first try ~75 %); plan + carve take ~8 ms.
+- **Measured** (`tests/reactor-x-bunker-carve.test.ts`, 16 seeds on one slot): 16 distinct room graphs (WL hashes) and 16 distinct
+  floor plans up to translation. Both muster kinds, both decon exits and both guard links occur, with 3+ corridor counts / cycle
+  ranks / dead-end counts, 4+ hall positions, both hall axes and 8+ optional-room sets. The real level
+  (`reactor-x-bunker-level.test.ts`) gives 12 seeds, 12 different shelters, all valid.
+
+### The old mines — "No. 2 workings" (zone 1, tier 2; lane MINES, round 2: a seeded drift / room graph)
+`complex/minesPlan.ts` (the plan), `mines.ts` (carver), `minesDress.ts` (dress hook, rail line), `world/reactor/minesVisuals.ts`.
+User bullet 7 ("much to normal … should be random! with logical rooms flowing in to one another"): the fixed program is now a graph
+grown space by space through the rock. Each seed draws a new topology; up to 16 attempts, each its own rng fork.
+- **Always:**
+  - the timbered **adit**: short, long, or a dog-leg along the pit wall;
+  - the **haulage junction** (the adit enters it at a seeded point);
+  - the **main haulage** with its rail line: 1–4 drift segments out of a seeded junction wall (runs, jogs, bends left / right /
+    down). The **generator cavern** sits wherever that course ends, entered at a seeded point of its wall;
+  - at least one **loop** through the cavern, so the generator stope is never a cul-de-sac: the old manway (junction / adit to the
+    cavern) or a return airway (cavern to an earlier haulage segment). A second loop may add a cross-cut between drifts or a manway
+    down to a later segment;
+  - the **development heading**: a dead end off the critical path, sized by `headingFor()` from the drill rig's real size.
+- **Optional, seeded, at logical places** (`MINE_LINKS`; tests check every opening):
+  - lamp / tool rooms by the adit or the junction;
+  - a footwall drift forking off the haulage;
+  - the powder magazine: off a side drift, never off the junction, the adit or the cavern;
+  - the hoist room over its winze, the refuge, the flooded sump (off the cavern / a lower drift), a collapsed drift;
+  - worked-out stopes.
+
+  At least 4 optional kinds per plan. Rooms and dead ends have one opening and never open room to room.
+- **Fill**: the cavern grows into spare rock first, then 1–2 stopes, then the other chambers, until 700 m². In the real level this
+  leaves 579–618 m² free after props over 8 seeds (the floor is 560).
+- **Drill rig**: placed from `minesModelSize('drillRig')` (registry dims × `MINES_FIT`; lane PROPS sets the drill's fit). The dress
+  collider, the heading size and the instance scale all read it. The rig parks centred in the heading with its boom (model −x) to
+  the face. Tests cover fits 1 / 1.5 / 2 and a 7 × 3.0 × 2.4 m envelope.
+- **Variety** over 16 fixture seeds:
+  - 16/16 distinct graphs, 13 haulage courses, 3 course lengths;
+  - 5 cavern places, 3 adit kinds, 6 loop combinations, 16 optional-room sets;
+  - cavern 150–336 m².
+
+  Over 8 real-level seeds the graphs are all distinct. Plan time ~5 ms median; real-level generation median 824 ms (budget 1200).
+- **Limits:**
+  - the cavern lands in the middle third laterally on about 60 % of seeds: it is big;
+  - one or two worked-out stopes appear on almost every seed: they are the area fill;
+  - all spaces are axis-aligned rectangles: no curved or diagonal drifts.
 
 ## Arrival approach and seeded flow (task reactor-playtest-round2-20261102, lane ARRIVAL)
 User: "the reactor pit is to close to the subway stop. You should have to traverse through a small station area, before going through
@@ -148,13 +202,51 @@ with logical rooms flowing in to one another".
   - Stratified and thickening downward, with readable bands; the rim breathes.
   - Exposure goes through the existing threshold / dps / mask + filter / HUD / cough path. The Blightbelly's puffs and every other
     level's gas are unchanged.
-- **Generator route** (no mask needed):
+- **Generator route** (no mask needed down to tier 4):
   - Each zone's auxiliary generator stands in air that is already clean or cleared: tier 1, tier 2 and tier 4.
   - Hold E 2 s to start it. It cranks, then its zone's fans spool and the zone clears in 3 visible stages (top first, about 55 s).
   - The clearing persists, and revisits never re-roll it.
   - A running generator is LOUD: it alerts existing enemies at the landing. Nothing spawns.
-- **Filter route:** wear the mask and spend filters. The level always holds one mask and a tight filter supply, and the core floor is
-  deadly without one. Mixed play (clear what you fight on, mask through what you cross) is expected.
+  - **The final generator (tier 4, the core floor's zone) JAMS** (round 2 design change, "The final generator jams" below). The core
+    floor stays gassed until the reactor is online.
+- **Filter route:** wear the mask and spend filters. The level always holds one mask and a finite filter supply, placed upstream of the
+  core floor. The core floor needs them. Mixed play (clear what you fight on, mask through what you cross) is expected.
+
+### Round 2 gas (task reactor-playtest-round2-20261102, lane GAS)
+- **Knee-high spill (user: "on the level above the level that is covered in fog, there is also fog … make it lower, about knee
+  high").**
+  - Cause: zone 0's band top sat mid-storey, ~3 m above tier 1's deck. With the 2.5 m soft top, its sub-threshold haze stood
+    visibly to 1.65–1.75 m (c ≥ 0.06) and 2.1–2.2 m (c ≥ 0.03) on tier 1, above the gassed tier 2.
+  - Fix: `ZONE0_TOP_ABOVE_DECK` (2.0 m, `gen/reactor/structure.ts`) puts the top at 0.65 m / 1.1 m on tier 1. The eye is clean
+    (0.07 → 0.008) and tier 2's hazard is unchanged (eye 0.22 → 0.215).
+  - The other zones' tops lie 3 m below the deck above, so they spill onto no deck. Render and exposure still read one table.
+- **White haze in the side complexes ("a fog machine party").**
+  - Cause: `archHaze.ts` keyed its room multipliers by area *role*, but the atmosphere looks areas up by *type*, so they never
+    applied. The complex rooms took the Subway's back-of-house values instead: utility 1.4, service corridor 1.35, and the
+    'service' class group (half of the rooms dense, × 1.4). That came on top of the Reactor's denser base and its ground layer.
+  - Fix: every room cut into the rock (`reactorRockRooms`: the complexes' areas + the pit side rooms) takes `rockRoom` (× 0.8,
+    room class odds).
+  - Result, at 1.4 m: the complexes go from 0.082–0.101 to 0.014–0.020 / m (a normal Subway station: 0.025). The pit, the rim
+    and every other level are unchanged. The green strata are a separate term and are untouched.
+- **The final generator jams** (user design change; supersedes "no mask needed all the way down"). Code: `gen/reactor/gasJam.ts`.
+  - **The rule:** the deepest zone's generator, in the tier-4 waste repository, is jammed for the run. The 2 s hold cranks it for
+    2.4 s, then it seizes: a creak and a clank, a short alert, its red fault lamp flashing, and a toast telling you to wear the mask.
+  - It never starts and its zone is never cleared by a generator: only the reactor online (the win's `clearAll`) clears it, never a
+    fuse, the breaker, the valve, the pump or the key. The upper two generators work as before.
+  - `reactor.state.jam` keeps the generator and its stalls. A pre-jam record with it started keeps its zone's saved fraction.
+  - **Where the player learns it, before committing:**
+    - the rim pit board (core row "JAMMED · MASK");
+    - the switchgear board once power is on;
+    - the "Next:" step and the HUD objective;
+    - the generator's prompt and the HUD air line ("toxic air · fans jammed — gas mask on");
+    - the floor maps: a ⊘ jammed mark (not an open X) and a red banner on the core storey.
+  - **Supplies:** the guaranteed mask and filters (`MASK_LOOT`: 1 mask and 3–5 filters) are placed only on storeys above the jammed
+    zone (`placeMaskLoot` → `placeGear` `areaOk`). That air is breathable once the working generators run (checked on 12 seeds).
+    - The worst roll gives 503 s of filter time.
+    - The real core route (farthest stair foot → valve → pump → key switch → rods → online, until the eye is below the threshold)
+      takes 70–76 s, and 165–177 s with ×2 walking and 60 s of fighting. The supply covers it twice over.
+- Tests: `game/tests/reactor-gas-{spill,haze,jam}.test.ts`; the jam state machine is in `reactor-air-runtime.test.ts`. The old
+  "zero damage down to the core floor" walk now ends at the final generator, with the jam asserted.
 
 ## The restart (credible industrial work, no puzzle)
 1. **Startup key**: in the rim control office. It is picked up on the way down.
@@ -186,6 +278,39 @@ rebuilt world shows exactly the stage reached, with nothing to replay.
 The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
 volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
 are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
+
+### The coolant up close (task reactor-playtest-round2-20261102, lane COOLANT)
+User: "coolant should look more like gooop flowing through pipes! its a little flat right now. You can use the current look for far
+away rendering but switch to a high detail at close ish range."
+- **Why it was flat:** the far look (`coreLiquids.ts`, kept for distance) is two thin slots per pipe glowing one constant blue, with dashes
+  scrolling at 3.2 m/s. It has no depth, volume or thickness, and nothing moves at different speeds. The sight glasses are a flat fill.
+- **The near layer** (`world/reactor/coolantNear.ts`, code-driven, no new texture or model):
+  - Glass windows on every coolant pipe sit where the far slots are, but wider, with a steel bezel and ribs every 1.2 m. The ribs are
+    static marks the flow moves past. The sight-glass sleeves and the spool windows are all glass.
+  - Behind the glass, each pixel ray-casts the pipe bore, refracted by the glass. The goop's thickness along the ray gives a depth tint:
+    thin and dark at the walls, deep with an emissive core glow through the middle.
+  - Clumps and strands are 3D noise stretched along the pipe, in a fast core band and a slow wall band (laminar flow, which reads as
+    viscous). A slower wet film streaks the glass. Bubbles ride the top of horizontal runs and rise faster up risers.
+  - While the valve fills the loop, a meniscus rises through every pipe and glass.
+- **State:** before the valve there is no near layer (the far slots show). Once pressurised the goop is still and dim. With the pump it
+  flows (the near clock only advances with the pump's flow speed, about 1.3 m/s on the centreline) and is about 2.5 times brighter. Paused
+  play never ticks. The coolant's blue PointLight is untouched.
+- **LOD:**
+  - Near only inside 8 m, far only beyond 12 m. Between them a static screen-space dither cross-fades, so each pixel draws exactly one of
+    the two looks and nothing pops.
+  - The CPU activates instances by point-to-segment distance: on inside 13.5 m, off beyond 16 m (hysteresis). It re-decides only after
+    the eye moved 0.25 m. The fade never reaches a piece without a near instance.
+  - The near zone grows out from the eye as the valve opens.
+- **Cost:** two InstancedMeshes (tubes, spool windows) share one MeshBasic material: never a shadow caster, plain uniforms only (fade
+  radii, clock). It compiles to 2 uniform buffers per stage on both backends (3 in the vertex stage without attribute instancing) and
+  no texture. The far materials gain no buffer.
+  - Draws: 0 away from the coolant or before the valve, at most 2 on the core floor.
+  - Instances: real layouts peak at about 45 active tubes (cap 96). The layer is about 4,100 triangles at capacity.
+  - The CPU-submit budget (`reactor-cpu-submit.test.ts`) now runs with the pump on and the near layer driven: +0 at its 9 views.
+- Tests: `game/tests/reactor-x-coolant-near.test.ts`. QA: `__LL.reactorCore()` reports `near`; `__LL.reactorCore({near: false})` is an
+  A/B switch to the far look.
+- **Limits:** no fluid simulation. The noise is a look, not a flow field. The near clock wraps after about 14 h of pumping (one pattern
+  jump). Only a CPU mirror of the shader was previewed (in `/tmp`), not the GPU.
 
 ### Mounted controls (the rule for every control that sits on a 3D model)
 Code: `game/src/world/reactor/controlsMount.ts` (pure, shared by the kit and the restart), `controlsKit.ts` (the machines and the
@@ -278,6 +403,41 @@ Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
   stay and nothing despawns.
 - The run continues; nothing is reset.
 
+### Coming to life: startup audio, orange beacons, the ONLINE sky (task reactor-playtest-round2-20261102, lane STARTUP)
+User: "real punch and depth as the reactor comes to life … spinning orange lights … play noise as the control rods are removed!" and
+"when the reactor comes online the fog visible through the roof should clear, with a blue beam shooting up in to the sky".
+Code: `world/reactor/startup.ts` (runtime, installed right after the restart), `startupPlan.ts` (the pure score), `startupAudio.ts`,
+`startupBeaconPlan.ts` + `startupBeacons.ts`, `startupSky.ts`. QA: `__LL.reactorStartup({beaconLight, beamLight})`.
+- **Driven only by the restart runtime**: its persisted record (a live change = a stage), its rod hold, its win clock. A build takes a
+  baseline, a restored / QA-jumped clock crosses no cue, and a restarted world is rebuilt at the end state: nothing replays.
+- **Audio** (Sound Lab startup set, 7 jobs of 12; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`; provenance
+  `derivatives/audio-reactor-startup.json`), all world-placed through `Sfx.reactorCue` / `reactorLoop`:
+  - each power stage: a contactor thump at its control, on top of the existing fuse / breaker / valve / pump / key cue;
+  - a deep machine **bed** at the core from the breaker on, louder and faster with every stage;
+  - the **rods**: the drive loop at the console and at the CRDM drives runs while the handle moves (rate rising with it), a heavy
+    stop clunk when they are out, a light clunk if E is let go, silent on pause;
+  - the win: the **surge** at the core as the rods come out (over the existing startup swell), the **ONLINE** impact + a deep thump
+    at 6 s, each tier's lights clunking on up the pit (the existing breaker clip, pitch rising), a beacon motor at the nearest beacon.
+  - Bounded: at most 4 own loops (`MACHINE_LOOP.max` 6 → 10: three generators + three fan zones already filled 6), the surge / ONLINE
+    at voice priority 2.
+- **Beacons**: up to 4 per storey (rim to the core floor, 24 on the QA seeds), on wall brackets 4.1 m over the deck above a mounted
+  wall lamp, re-checked at that height (solid wall behind, no walkway / flight at the head, clear of fans / pipe banks, in an open
+  band); audited as `extraSolids`. Three InstancedMeshes (body, turning lens, additive flare cone), one shared material each. The orange
+  wave starts on the core floor as the rods come out and climbs the pit 6 s ahead of the floodlights. **Real light**: 3 SpotLights
+  created at boot, swept with the 3 powered beacons nearest the eye (within 32 m).
+- **The ONLINE sky** (at 6 s): an additive blue beam (one mesh: core, sheath, collar) from the vessel head up through the roof opening
+  to 120 m above the roof, its head climbing in 1.1 s. Two PointLights created at boot cast its light: mid-pit (also a `vfOpen`
+  scatter light, registered only while the beam is on) and under the opening. Over 28 s the surface air over the roof clears:
+  `reactorOutdoorGas(roofY, rect, clear)` thins and lifts it, written through `ReactorAir.setOutdoorClear`, so the exposure and the
+  march read the same object. The outside gas sheets / curtain fade (`MALL_SKY_U`, restored on teardown) and a cleared-sky dome
+  fades in over the opening. No uniform array was added to the march.
+- **Cost**: 5 lights in the boot light set (intensity only), at most 5 extra scene draws (3 beacon meshes; beam + sky dome only
+  once ONLINE), no shadow casters, 2 × 24 matrices per frame while beacons turn. These sit outside `reactor-cpu-submit.test.ts`'s roots.
+- **Limits**: the audio was never auditioned (structural QC only: `reference/tasks/reactor-playtest-round2-20261102-061947/audio/raw/
+  QC.md`); the surge / ONLINE / bed takes are sub-heavy, so on small speakers the existing clips carry the mid-range. No browser or
+  WebGPU check was run in this lane.
+- Tests: `game/tests/reactor-startup.test.ts`.
+
 ## The train
 The rim station is a shared Trench beside its start platform, so the shared player train (`gen/playerTrain.ts`
 `playerTrainPlacement`, PR 33) parks there with no train-side change. It sits inside `layout.reactor.arrival`'s stop window, and a
@@ -291,6 +451,23 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - Blightbellies are on the deep tiers;
 - at most two sleeping Sirens are in deep side rooms;
 - the Strainer appears only in the rim station's annex.
+
+### Cross-storey hits (task reactor-playtest-round2-20261102, lane COMBAT; every level)
+User: enemies on another storey (down the stairs, across an atrium, in the pit) could not be damaged, on every level.
+
+- **Root cause:** `Game.fire`'s per-enemy cheap reject. It projected the enemy's feet onto the ray with the unit 3D direction's
+  horizontal parts but never divided by their squared length. On a pitched ray the closest point fell short by D x sin^2(pitch),
+  and an enemy more than 1.26 m from that point was skipped before its hit volumes were tested. Level shots barely pitch.
+  Stairs (25-30 degrees), the atrium and the pit (35-55 degrees) skipped the enemy. The 3D world ray (`Levels.raycast`) was right.
+  Render culling played no part: the hit test never read layers or visibility.
+- **Fix:** `combat/enemyRay.ts` `nearestEnemyHit` is the one bullet / pellet test, used by `Game.fire` (every pellet) and the
+  damage QA shot. Its reject is exact: the ray against the box around the enemy's own volumes. It has no storey filter and no
+  render input, so `CULL_LAYER` / `LevelCuller.track` (PR 39's culling, unchanged) never removes a target. The world hit stays
+  the limit: walls, slabs, closed lift doors and props still stop bullets. Melee, noise, gas, blasts and AI are unchanged.
+- **Tests:** `game/tests/combat-cross-storey.test.ts` uses real Subway / Office / Mall / Reactor layouts and the real enemy
+  actors. It checks every stair link down and up, atrium and pit shots for all five families, slab and closed-door blocks, the
+  pistol / rifle / shotgun parts and pellets, a culled enemy still hit, brute-force parity and the wiring. On the same rays the
+  pre-fix reject skipped 35 of 35 stair shots down, 33 of 35 up and 85 of 87 atrium / pit shots down.
 
 ## Lamps, the open top and gas visibility (expansion lane GASLIGHT)
 - **Every pit lamp is a real, mounted fixture** (`gen/reactor/gaslightLamps.ts` `planPitLamps`, `LightPlacement.mount`):

@@ -51,9 +51,19 @@ export function outdoorGasAt(o: OutdoorGas | null, x: number, y: number, z: numb
  */
 export const REACTOR_OUTDOOR = {c: 0.6, rampLo: 0.6, rampHi: 6, vis: 0.2} as const;
 
-/** The Reactor's outdoor gas over the layout rect: above roofY + rampLo .. + rampHi. */
-export function reactorOutdoorGas(roofY: number, rect: OutdoorGas['rect']): OutdoorGas {
-  return {rect, y0: roofY + REACTOR_OUTDOOR.rampLo, y1: roofY + REACTOR_OUTDOOR.rampHi, c: REACTOR_OUTDOOR.c, vis: REACTOR_OUTDOOR.vis};
+/**
+ * Task reactor-playtest-round2-20261102 (lane STARTUP, user: "when the reactor comes online the fog visible through the roof should
+ * clear, with a blue beam shooting up in to the sky"): the surface air over the roof CLEARS once the reactor is ONLINE. `clear` k in
+ * 0..1 thins the outdoor term (c x (1 - k)) and lifts its ramp (the gas recedes upward, `lift` m at k = 1) — one function, so the
+ * exposure (ReactorAir.depthGasAt) and the march (the same OutdoorGas object, uploaded through setDepthGas) clear together. The timing
+ * (world/reactor/startupPlan.ts skyClearAt): it starts as the beam fires and runs `durationS` s; a rebuilt restarted world is clear.
+ */
+export const REACTOR_SKY_CLEAR = {lift: 14} as const;
+
+/** The Reactor's outdoor gas over the layout rect: above roofY + rampLo .. + rampHi; `clear` (0..1: ONLINE) thins and lifts it. */
+export function reactorOutdoorGas(roofY: number, rect: OutdoorGas['rect'], clear = 0): OutdoorGas {
+  const k = Number.isFinite(clear) ? Math.min(1, Math.max(0, clear)) : 0, up = REACTOR_SKY_CLEAR.lift * k;
+  return {rect, y0: roofY + REACTOR_OUTDOOR.rampLo + up, y1: roofY + REACTOR_OUTDOOR.rampHi + up, c: REACTOR_OUTDOOR.c * (1 - k), vis: REACTOR_OUTDOOR.vis};
 }
 
 /**

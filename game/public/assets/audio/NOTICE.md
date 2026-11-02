@@ -7,7 +7,8 @@ w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio
 (iteration-06 breaking cues i06-*.mp3: ../derivatives/audio-iteration06.json; player gas coughs cough-*.mp3:
 ../derivatives/audio-cough.json; Siren hum / scream and Blightbelly burst / gas hiss t1-*.mp3:
 ../derivatives/audio-track1.json; the Strainer's wet footfalls / arm swing / claw contact / hit squish strainer-*.mp3:
-../derivatives/audio-strainer.json).
+../derivatives/audio-strainer.json; the Reactor machine set reactor-*.mp3: ../derivatives/audio-reactor.json and its startup set (power-up surge, online impact,
+control-rod drive / stop, machine bed, stage thump, beacon motor): ../derivatives/audio-reactor-startup.json).
 
 Powered by Stability AI.
 

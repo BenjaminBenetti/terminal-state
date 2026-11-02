@@ -5,7 +5,8 @@
 
 import * as THREE from 'three';
 import type {Game} from '../game';
-import {raycastWorld, rayCapsule, raySphere, type Vec3} from '../combat/hitscan';
+import {raycastWorld, type Vec3} from '../combat/hitscan';
+import {nearestEnemyHit} from '../combat/enemyRay';
 import {DAMAGE_MATERIALS, STRUCTURAL_CLASS, propDamageSpec, structuralKeyAt} from './materials';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import {PROP_PHYSICS_AUDIT} from './physicsAudit'; // task office-interactions-layout-20261030 (lane PHYS)
@@ -109,10 +110,8 @@ export function damageQaApi(game: Game, lookAt: LookAt, teleport: Teleport) {
       const L = game.layout;
       const wh = raycastWorld(game.levels ?? L.grid, L.props, o, d, 90, L.trench.floorY);
       let bestT = wh.t, bz: (typeof game.zombies)[number] | null = null, part: 'head' | 'torso' | 'limb' = 'torso';
-      for (const z of game.zombies) {
-        if (!z.brain.alive) continue;
-        for (const v of z.hitVolumes) { const t = v.b ? rayCapsule(o, d, v.a, v.b, v.r) : raySphere(o, d, v.a, v.r); if (t < bestT) { bestT = t; bz = z; part = v.part; } }
-      }
+      const eh = nearestEnemyHit(o, d, bestT, game.zombies); // lane COMBAT (reactor-playtest-round2): the same enemy test as Game.fire
+      if (eh) { bestT = eh.t; bz = eh.enemy; part = eh.part; }
       const corpse = game.damage.corpseHit(game.zombies, o, d, bestT);
       if (corpse) { bestT = corpse.t; bz = null; }
       game.damage.beginShot();

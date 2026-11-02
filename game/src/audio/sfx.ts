@@ -121,6 +121,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   // -1 dBFS, the loops RMS -20 dBFS (the bed / flare-loop convention). The generator start is deliberately LOUD (it is the noise that
   // pulls the dead onto the landing); the running loops sit under combat; the core startup swell is the win's sound.
   reactorGeneratorStart: 0.85, reactorGeneratorLoop: 0.55, reactorFanLoop: 0.4, reactorBreaker: 0.6, reactorFuse: 0.4, reactorValve: 0.5, reactorPump: 0.55, reactorStartup: 0.8, reactorHum: 0.45,
+  // Task reactor-playtest-round2-20261102 (lane STARTUP, tools/audio-pipeline/reactor-startup-build.mjs; world/reactor/startupAudio.ts): the
+  // startup set. One-shots peak -1 dBFS, loops RMS -20 dBFS. The ONLINE impact is the loudest Reactor event (the win's hit), the surge
+  // swells under it, the stage thump is the per-step punch (scaled per stage by the director), the rod drive / beacon motor sit under
+  // the machines; the bed is the deep layer that BUILDS with the stages (its level is driven live: MachineLoopHandle.setLevel).
+  reactorSurge: 0.85, reactorOnline: 1, reactorRodLoop: 0.55, reactorRodStop: 0.75, reactorBed: 0.6, reactorStage: 0.75, reactorBeacon: 0.32,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
@@ -367,9 +372,23 @@ interface FlareLoop {
  * (fade -> level -> air / occlusion lowpass -> panner -> master + reverb send) with a bigger reference distance: machines are loud.
  * Bounded: at most MACHINE_LOOP.max loops (the oldest fades to make room); every loop stops on a new world (setWorld).
  */
-export const MACHINE_LOOP = {max: 6, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
-export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum';
-export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup';
+export const MACHINE_LOOP = {max: 10, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 1.5, send: 0.3, far: 70, maxDist: 80} as const;
+// (task reactor-playtest-round2-20261102, lane STARTUP: max 6 -> 10 — three running generators + three fan zones already filled 6, so the
+// restarted core's hum evicted a generator loop that re-requested itself and evicted the next; the startup director adds at most three
+// bounded loops: the machine bed, the rod drive while the rods move, one beacon motor.)
+export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum' | 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon';
+export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup'
+  | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage';
+/** Task reactor-playtest-round2-20261102 (lane STARTUP): a machine one-shot's mix (gain x CUE_GAIN, playback rate, start delay s, panner
+ *  reference distance / audible range m, priority: 2 = never dropped by the voice cap — the win's surge / ONLINE impact). */
+export interface MachineCueOpts { gain?: number; rate?: number; delay?: number; ref?: number; maxDist?: number; pri?: number }
+/** A machine loop's live controls (lane STARTUP: the bed builds with the stages, the rod drive follows the rod motion). */
+export interface MachineLoopHandle extends FlareBurnHandle {
+  /** Level k (x CUE_GAIN; 1 = the cue's mix level), eased with time constant tauS. */
+  setLevel(k: number, tauS?: number): void;
+  /** Playback rate (processing of the clip: the machine spins up / down), eased with time constant tauS. */
+  setRate(r: number, tauS?: number): void;
+}
 const NOOP_FLARE: FlareBurnHandle = {setPos() {}, stop() {}, playing: false};
 
 /**
@@ -1642,8 +1661,9 @@ export class Sfx {
    * Task reactor-build-20261101 (primary): a Reactor machine one-shot at a world point (generator start, breaker, fuse, valve, pump,
    * the core's startup swell). Silent when audio is paused / not started or the clip is missing.
    */
-  reactorCue(cue: MachineCue, x: number, y: number, z: number): void {
-    this.play(this.voice({at: {x, y, z}, ref: MACHINE_LOOP.ref, rolloff: MACHINE_LOOP.rolloff, send: MACHINE_LOOP.send, pri: 1, maxDist: MACHINE_LOOP.maxDist}), cue, {jitter: 0.02, gainJitter: 0.5});
+  reactorCue(cue: MachineCue, x: number, y: number, z: number, o: MachineCueOpts = {}): void {
+    this.play(this.voice({at: {x, y, z}, ref: o.ref ?? MACHINE_LOOP.ref, rolloff: MACHINE_LOOP.rolloff, send: MACHINE_LOOP.send, pri: o.pri ?? 1, maxDist: o.maxDist ?? MACHINE_LOOP.maxDist}), cue,
+      {jitter: 0.02, gainJitter: 0.5, gain: o.gain, rate: o.rate, delay: o.delay}); // (lane STARTUP: + per-call mix)
   }
 
   /**
@@ -1651,7 +1671,7 @@ export class Sfx {
    * extraction fans, the restarted core's hum). Returns a handle like flareBurnStart (no-op when audio is not running or the clip is
    * missing). At most MACHINE_LOOP.max (the oldest fades to make room); all stop on a new world.
    */
-  reactorLoop(cue: MachineLoopCue, x: number, y: number, z: number): FlareBurnHandle | null {
+  reactorLoop(cue: MachineLoopCue, x: number, y: number, z: number, o: {ref?: number; far?: number; level?: number; rate?: number} = {}): MachineLoopHandle | null {
     const ctx = this.live;
     if (!ctx) return null;
     const clip = this.bank.pick(cue);
@@ -1665,15 +1685,16 @@ export class Sfx {
     const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
     src.loopStart = a;
     src.loopEnd = b;
-    src.playbackRate.value = rnd(0.97, 1.03); // two machines never phase into one
+    const jit = rnd(0.97, 1.03); // two machines never phase into one
+    src.playbackRate.value = jit * (o.rate ?? 1);
     const fade = ctx.createGain();
     fade.gain.value = 0;
-    fade.gain.setTargetAtTime(CUE_GAIN[cue], now, MACHINE_LOOP.fadeIn / 3);
+    fade.gain.setTargetAtTime(CUE_GAIN[cue] * (o.level ?? 1), now, MACHINE_LOOP.fadeIn / 3);
     const level = ctx.createGain();
     const filter = ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.Q.value = 0.5;
-    const panner = this.makePanner(ctx, false, MACHINE_LOOP.ref, MACHINE_LOOP.rolloff);
+    const panner = this.makePanner(ctx, false, o.ref ?? MACHINE_LOOP.ref, MACHINE_LOOP.rolloff);
     src.connect(fade).connect(level).connect(filter).connect(panner).connect(this.master);
     const nodes: AudioNode[] = [src, fade, level, filter, panner];
     if (this.reverbIn) {
@@ -1682,7 +1703,7 @@ export class Sfx {
       filter.connect(sn).connect(this.reverbIn);
       nodes.push(sn);
     }
-    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false, far: MACHINE_LOOP.far};
+    const loop: FlareLoop = {src, fade, level, filter, panner, nodes, pos: {x, y, z}, next: 0, stopped: false, far: o.far ?? MACHINE_LOOP.far};
     this.setPannerPos(panner, x, y, z);
     this.loopFilter(loop, true);
     src.onended = () => { for (const n of loop.nodes) { try { n.disconnect(); } catch { /* already gone */ } } loop.nodes.length = 0; };
@@ -1698,6 +1719,19 @@ export class Sfx {
       },
       stop(fadeS?: number) { self.endLoop(loop, fadeS ?? MACHINE_LOOP.fadeOut); },
       get playing() { return !loop.stopped; },
+      // task reactor-playtest-round2-20261102 (lane STARTUP): live level / rate (no new nodes)
+      setLevel(k: number, tauS = 0.4) {
+        const c = self.ctx;
+        if (loop.stopped || !c || !Number.isFinite(k)) return;
+        loop.fade.gain.cancelScheduledValues(c.currentTime);
+        loop.fade.gain.setTargetAtTime(CUE_GAIN[cue] * Math.max(0, k), c.currentTime, Math.max(0.01, tauS));
+      },
+      setRate(r: number, tauS = 0.4) {
+        const c = self.ctx;
+        if (loop.stopped || !c || !Number.isFinite(r)) return;
+        loop.src.playbackRate.cancelScheduledValues(c.currentTime);
+        loop.src.playbackRate.setTargetAtTime(jit * Math.max(0.25, Math.min(4, r)), c.currentTime, Math.max(0.01, tauS));
+      },
     };
   }
 

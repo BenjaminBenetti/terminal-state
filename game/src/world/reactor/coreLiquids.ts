@@ -7,6 +7,8 @@
 //  - the pumps' flywheels / the turbine coupling (one InstancedMesh, the kit's 'blade' rotor), the status lamps (one InstancedMesh,
 //    instance colours set only when a stage level changes).
 // Bounded: 5 meshes, a few thousand triangles; per frame only uniforms + the turning rotors' matrices.
+// Task reactor-playtest-round2-20261102 (lane COOLANT): this flow / glass look is the FAR LOD now; the near goop layer (coolantNear.ts,
+// its own group) takes over close to the eye through a shared per-pixel dither fade (farKeep), so each pixel draws one of the two.
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
@@ -15,6 +17,7 @@ import {CELL, FLOOR, type Grid} from '../../gen/grid';
 import {glowFog} from '../lights';
 import {kitGeometry} from './archMeshes';
 import type {CoreHeroLayout} from './coreHero';
+import {buildCoolantNear, createNearFade, farKeep, type CoolantNear, type NearFade} from './coolantNear'; // (lane COOLANT)
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type N = any;
@@ -40,6 +43,8 @@ export interface CoreBuilt {
   /** Rotor bases (local Z = the axis), radius, kind. */
   wheelInfo: {basis: THREE.Matrix4; r: number; kind: 'rcp' | 'turbine'; angle: number}[];
   lamps: THREE.InstancedMesh | null;
+  /** Task reactor-playtest-round2-20261102 (lane COOLANT): the near goop LOD (its own group: the caller adds it beside `group`). */
+  near: CoolantNear | null;
   geometries: THREE.BufferGeometry[];
   stats: {goopCells: number; flowSegments: number; glasses: number; windows: number; wheels: number; lamps: number; triangles: number};
 }
@@ -70,6 +75,7 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
   }
   // ---- the coolant flow sleeves + sight glasses --------------------------------------------------------------------------------------
   let flow: THREE.Mesh | null = null, glass: THREE.Mesh | null = null;
+  const fade = createNearFade(); // (lane COOLANT) r1 = 0 until the near layer is active: the far look everywhere
   {
     const sl = new SleeveBuilder();
     for (const f of hero.flows) {
@@ -88,12 +94,12 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
       }
     }
     const fg = sl.geometry();
-    if (fg) { geos.push(fg); flow = new THREE.Mesh(fg, flowMaterial(uniforms)); flow.name = 'core-coolant-flow'; tag(flow); }
+    if (fg) { geos.push(fg); flow = new THREE.Mesh(fg, flowMaterial(uniforms, fade)); flow.name = 'core-coolant-flow'; tag(flow); }
     const gl = new SleeveBuilder();
     for (const q of hero.glasses) { gl.tube(q.a, q.b, q.d / 2 + 0.035, 0, Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y, q.b.z - q.a.z), 1); stats.glasses++; }
     for (const w of hero.windows ?? []) { gl.quad(w.m); stats.windows++; } // the sight-glass spools' windows: the coolant glows behind the glass
     const gg = gl.geometry();
-    if (gg) { geos.push(gg); glass = new THREE.Mesh(gg, glassMaterial(uniforms)); glass.name = 'core-sight-glasses'; tag(glass); }
+    if (gg) { geos.push(gg); glass = new THREE.Mesh(gg, glassMaterial(uniforms, fade)); glass.name = 'core-sight-glasses'; tag(glass); }
   }
   // ---- rotors ---------------------------------------------------------------------------------------------------------------------
   let wheels: THREE.InstancedMesh | null = null;
@@ -136,7 +142,10 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
     stats.lamps = hero.lamps.length;
   }
   for (const o of group.children) { const m = o as THREE.Mesh; if (m.isMesh) stats.triangles += ((m.geometry.index?.count ?? m.geometry.attributes.position.count) / 3) * ((m as THREE.InstancedMesh).count ?? 1); }
-  return {group, uniforms, goop, flow, glass, wheels, wheelInfo, lamps, geometries: geos, stats};
+  // ---- (lane COOLANT) the near goop LOD over the same flow pieces / glasses / windows ------------------------------------------------
+  const near = flow || glass ? buildCoolantNear(hero, uniforms, fade, levels) : null;
+  if (near) for (const o of near.group.children) geos.push((o as THREE.Mesh).geometry);
+  return {group, uniforms, goop, flow, glass, wheels, wheelInfo, lamps, near, geometries: geos, stats};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -289,8 +298,9 @@ class SleeveBuilder {
   }
 }
 
-/** Two glowing slots along each coolant pipe streaming dashes downstream; cut out elsewhere (the pipe shows). */
-function flowMaterial(u: CoreUniforms): MeshBasicNodeMaterial {
+/** Two glowing slots along each coolant pipe streaming dashes downstream; cut out elsewhere (the pipe shows). The FAR look: dithered
+ *  out where the near goop layer draws (lane COOLANT `farKeep`). */
+function flowMaterial(u: CoreUniforms, fade: NearFade): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial();
   m.name = 'reactor-coolant-flow';
   const around = fract(n(uv()).x.mul(2));
@@ -301,14 +311,15 @@ function flowMaterial(u: CoreUniforms): MeshBasicNodeMaterial {
   const k = n(attribute('flowK', 'float'));
   const glow = n(u.flowGlow).mul(n(float(0.3)).add(n(dash).mul(0.9))).mul(k);
   m.colorNode = n(vec3(COOLANT.r, COOLANT.g, COOLANT.b)).mul(glow).add(vec3(0.004, 0.012, 0.02));
-  m.opacityNode = slot;
+  m.opacityNode = n(slot).mul(farKeep(fade));
   m.alphaTest = 0.5;
   glowFog(m, 0.5);
   return m;
 }
 
-/** Sight glasses: dark glass that fills with glowing coolant from the bottom (fill), streaking once it flows. */
-function glassMaterial(u: CoreUniforms): MeshBasicNodeMaterial {
+/** Sight glasses: dark glass that fills with glowing coolant from the bottom (fill), streaking once it flows. The FAR look (dithered out
+ *  where the near layer draws). */
+function glassMaterial(u: CoreUniforms, fade: NearFade): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial();
   m.name = 'reactor-sight-glass';
   const v = n(uv()).y;
@@ -317,6 +328,8 @@ function glassMaterial(u: CoreUniforms): MeshBasicNodeMaterial {
   const streak = abs(n(st).sub(0.5)).mul(2);
   const glow = n(full).mul(n(float(0.35)).add(n(u.flowGlow).mul(n(float(0.7)).add(n(streak).mul(0.6)))));
   m.colorNode = n(vec3(0.03, 0.05, 0.06)).add(n(vec3(COOLANT.r, COOLANT.g, COOLANT.b)).mul(glow));
+  m.opacityNode = farKeep(fade);
+  m.alphaTest = 0.5;
   glowFog(m, 0.5);
   return m;
 }

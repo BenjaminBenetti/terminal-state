@@ -311,6 +311,7 @@ export class ReactorArch {
           const cg = this.levels[this.levelIndex(this.coreLevel)]?.grid ?? null;
           this.core = buildCoreLiquids(hero, cg, dress.steelDark, [this.coreLevel, ...this.info.tiers.filter(t => t.level !== this.coreLevel).sort((a, b) => a.baseY - b.baseY).slice(0, 1).map(t => t.level)]);
           group.add(this.core.group);
+          if (this.core.near) group.add(this.core.near.group); // task reactor-playtest-round2-20261102 (lane COOLANT): the near goop LOD
         } catch (e) { console.warn('reactor arch: core layer skipped', e); this.core = null; }
         this.visuals.core = new CoreVisuals(this.core, hero);
       }
@@ -343,6 +344,7 @@ export class ReactorArch {
     if (this.built) this.built.textures.length = 0;
     // task reactor-expansion-20261101 (lane CORE): the dynamic layer's per-build materials (geometries go with the world group)
     if (this.core) for (const o of this.core.group.children) { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m && m !== reactorDress(this.mats).steelDark) m.dispose(); }
+    this.core?.near?.dispose(); // (lane COOLANT) its one shared material
     this.core = null;
     setActiveCoreVisuals(null);
   }

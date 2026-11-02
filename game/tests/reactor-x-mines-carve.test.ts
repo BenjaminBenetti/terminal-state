@@ -1,13 +1,19 @@
 // Task reactor-expansion-20261101 (lane MINES): THE OLD MINE WORKINGS carver on fixture slots (until lane HOST's slot lands): inside the
 // region, connected to the entrance, every space connected, two routes (loop) to the generator cavern, the generator use point clear,
 // program size (>= 600 m², >= 8 spaces), clear heights / openings, determinism, carve time.
+// Task reactor-playtest-round2-20261102 (lane MINES, user bullet 7: the layout "much to normal ... should be random! with logical rooms
+// flowing in to one another"): the plan is now a SEEDED DRIFT / ROOM GRAPH. The fixed program's checks became the graph's guarantees
+// (the adit, junction, haulage course, cavern, development heading always; >= 1 loop; the optional spaces vary by seed) plus VARIETY
+// metrics (distinct topologies over >= 12 seeds) and COHERENCE (logical adjacency MINE_LINKS, dead ends, the rail chain, the heading
+// sized for the drill rig up to the 7 x 3.0 x 2.4 m envelope).
 import {describe, expect, it} from 'vitest';
 import {writeFileSync} from 'node:fs';
 import {Rng} from '../src/core/rng';
-import {FLOOR, SOLID, type Grid} from '../src/gen/grid';
+import {CELL, FLOOR, SOLID, type Grid} from '../src/gen/grid';
 import type {Rect} from '../src/gen/stationTypes';
-import {MINES} from '../src/gen/reactor/complex/minesPlan';
-import {minesFixture, FIX} from './reactor-x-mines-fixture';
+import {MINES, MINE_DRIFTS, MINE_LINKS, headingFor, type MinePart} from '../src/gen/reactor/complex/minesPlan';
+import {MINES_FIT, minesModelSize} from '../src/world/reactor/minesAssets';
+import {minesFixture, mineGraph, mineHops, mineSignature, FIX} from './reactor-x-mines-fixture';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const INWARD = ['S', 'N', 'E', 'W'] as const;
@@ -34,17 +40,18 @@ const cellsOf = (r: Rect, g: Grid) => { const out: number[] = []; for (let y = r
 const inside = (r: Rect, R: Rect, m: number) => r.x >= R.x + m && r.y >= R.y + m && r.x + r.w <= R.x + R.w - m && r.y + r.h <= R.y + R.h - m;
 
 describe('Reactor mines complex — carver (lane MINES)', () => {
-  it('fits the minimum fixture slot (80 x 64) in every inward direction over the sample seeds: >= 8 spaces, >= 600 m², the full program', () => {
+  it('fits the minimum fixture slot (80 x 64) in every inward direction over the sample seeds: >= 10 spaces, >= 700 m², the guaranteed graph', () => {
     const sizes: Record<string, number[]> = {};
     for (const inward of INWARD) for (const seed of SEEDS) {
       const fx = minesFixture(seed, {inward});
       const c = fx.carve;
       expect(c, `${inward} seed ${seed}`).not.toBeNull();
-      const keys = c!.rooms.map(r => r.key);
-      for (const need of ['portal', 'junction', 'cavern', 'hoist', 'magazine', 'lamp', 'tools']) expect(keys, `${inward} ${seed} ${need}`).toContain(need);
-      expect(keys.some(k => k.startsWith('haulage-'))).toBe(true);
-      expect(keys.some(k => k.startsWith('manway-'))).toBe(true);
-      expect(keys.includes('sump') || keys.includes('collapse')).toBe(true);
+      const keys = c!.rooms.map(r => r.key), parts = new Set(c!.plan.rooms.map(r => r.part));
+      // always: the adit, the junction, the haulage, the cavern, the development heading (the drill's), >= 1 loop, >= 4 optional spaces
+      for (const need of ['portal', 'junction', 'cavern', 'heading', 'haulage-0']) expect(keys, `${inward} ${seed} ${need}`).toContain(need);
+      expect(c!.plan.shape.loops.length, `${inward} ${seed} loops`).toBeGreaterThanOrEqual(1);
+      expect(['lamp', 'tools', 'magazine', 'hoist', 'refuge', 'sump', 'collapse', 'stope'].filter(p => parts.has(p as MinePart)).length).toBeGreaterThanOrEqual(4);
+      expect(c!.plan.run, `${inward} ${seed} timbered run`).toBeGreaterThanOrEqual(MINES.minRun);
       expect(c!.rooms.length).toBeGreaterThanOrEqual(10);
       const m2 = c!.plan.cells * 0.25;
       (sizes[inward] ??= []).push(m2);
@@ -83,21 +90,120 @@ describe('Reactor mines complex — carver (lane MINES)', () => {
     }
   });
 
-  it('is one connected network from the deck: every carved cell reachable; two independent routes (haulage / manway) to the cavern', () => {
+  it('is one connected network from the deck: every carved cell reachable; >= 1 loop; the generator cavern always has a second way in', () => {
+    let independent = 0, n = 0;
     for (const inward of INWARD) for (const seed of SEEDS) {
       const fx = minesFixture(seed, {inward});
       const c = fx.carve!, g = fx.k.grid(FIX.level);
       const D = fx.deck, start = [D.x + 1, D.y + 1] as const;
       const seen = flood(g, start[0], start[1]);
       for (const id of c.areas) for (const i of cellsOf(fx.k.areas[id], g)) expect(seen[i], `${inward} ${seed} area ${fx.k.areas[id].label}`).toBe(1);
+      // a loop in the space graph (openings >= spaces: one more than a tree)
+      const G = mineGraph(c.plan);
+      expect(G.edges.length, `${inward} ${seed} cycle`).toBeGreaterThanOrEqual(G.nodes.length);
+      // the generator stope is never a cul-de-sac (the player is not cornered there): a manway / return airway loop runs through it, so
+      // cutting the haulage's last segment leaves the cavern reachable (the old fixed plan's "two routes", generalised to the graph)
       const cav = fx.k.areas[c.generator.area], ci = g.idx(cav.x + 2, cav.y + 2);
-      // the loop: cutting either route leaves the cavern reachable through the other
-      for (const side of ['haulage', 'manway']) {
-        const cut = new Set<number>();
-        for (const r of c.rooms) if (r.key.startsWith(side)) for (const i of cellsOf(fx.k.areas[r.area], g)) cut.add(i);
-        expect(flood(g, start[0], start[1], cut)[ci], `${inward} ${seed}: cavern without the ${side}`).toBe(1);
-      }
+      const haul = c.rooms.filter(r => /^haulage-\d+$/.test(r.key)), last = haul[haul.length - 1];
+      expect(c.plan.shape.loops.some(l => l === 'manway' || l === 'airway'), `${inward} ${seed} cavern loop`).toBe(true);
+      expect(flood(g, start[0], start[1], new Set(cellsOf(fx.k.areas[last.area], g)))[ci], `${inward} ${seed}: cavern without ${last.key}`).toBe(1);
+      // fully independent routes from the junction (cutting EVERY haulage segment) where the loop is the old manway
+      const allHaul = new Set(haul.flatMap(r => cellsOf(fx.k.areas[r.area], g)));
+      if (flood(g, start[0], start[1], allHaul)[ci]) independent++;
+      n++;
     }
+    log('routes', {independent, n});
+    expect(independent, 'some mines keep the old manway as a fully separate second route').toBeGreaterThan(0);
+  });
+
+  it('opens every space logically (MINE_LINKS), dead ends and rooms by one opening, the rail chain contiguous, lamp / tool rooms by the way in', () => {
+    const single: ReadonlySet<MinePart> = new Set(['heading', 'sump', 'collapse', 'lamp', 'tools', 'magazine', 'refuge', 'hoist', 'stope']);
+    for (const inward of INWARD) for (const seed of SEEDS) {
+      const plan = minesFixture(seed, {inward}).carve!.plan, tag = `${inward} ${seed}`;
+      const part = new Map(plan.rooms.map(r => [r.key, r.part]));
+      const {adj} = mineGraph(plan);
+      for (const d of plan.doors) {
+        const a = d.a ? part.get(d.a)! : null, b = part.get(d.b)!;
+        expect(MINE_LINKS[b].includes(a) || (a !== null && MINE_LINKS[a].includes(b)), `${tag}: ${d.a} (${a}) - ${d.b} (${b})`).toBe(true);
+      }
+      for (const r of plan.rooms) {
+        const nb = adj.get(r.key)!;
+        if (single.has(r.part)) {
+          expect(nb.length, `${tag}: ${r.key} openings`).toBe(1);
+          // never room to room: the one neighbour is a passage, the junction or the cavern
+          const p = part.get(nb[0])!;
+          expect(MINE_DRIFTS.has(p) || p === 'junction' || p === 'cavern', `${tag} ${r.key} off ${nb[0]}`).toBe(true);
+        }
+        // passages lead somewhere: every one but a footwall drift (a branch may dead-end) has >= 2 ways (the adit: the entrance + 1)
+        if (MINE_DRIFTS.has(r.part) && r.part !== 'branch') expect(nb.length + (r.key === 'portal' ? 1 : 0), `${tag}: ${r.key} through`).toBeGreaterThanOrEqual(2);
+      }
+      // the rail chain: adit segments -> junction -> haulage-0..n -> cavern, each pair sharing an opening; one course letter per segment
+      const aditSegs = plan.rooms.filter(r => r.part === 'portal').map(r => r.key), haul = plan.rooms.filter(r => /^haulage-\d+$/.test(r.key)).map(r => r.key);
+      const chain = [...aditSegs, 'junction', ...haul, 'cavern'];
+      for (let i = 0; i + 1 < chain.length; i++) expect(adj.get(chain[i])!, `${tag} chain ${chain[i]} -> ${chain[i + 1]}`).toContain(chain[i + 1]);
+      expect(plan.shape.course.length).toBe(haul.length);
+      // the way in: lamp / tool rooms within a few openings of the adit; the magazine >= 2 openings from the junction
+      const hops = mineHops(plan, 'portal');
+      for (const k of ['lamp', 'tools']) if (part.has(k)) expect(hops.get(k)!, `${tag} ${k}`).toBeLessThanOrEqual(k === 'lamp' ? 3 : 4);
+      if (part.has('magazine')) expect(mineHops(plan, 'junction').get('magazine')!, `${tag} magazine`).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('VARIES the mine graph per seed: distinct topologies, courses, cavern places, adits, loops and optional spaces over 16 seeds', () => {
+    const seeds = Array.from({length: 16}, (_, i) => i + 1);
+    const rows = seeds.map(seed => { const p = minesFixture(seed).carve!.plan; return {seed, sig: mineSignature(p), shape: p.shape, cave: p.rooms.find(r => r.key === 'cavern')!.rect, rooms: p.rooms.length}; });
+    const distinct = <T>(f: (r: typeof rows[number]) => T) => new Set(rows.map(f)).size;
+    const optional = ['lamp', 'tools', 'magazine', 'hoist', 'refuge', 'sump', 'collapse', 'branch'];
+    const has = (k: string) => rows.filter(r => r.shape.spaces.includes(k)).length;
+    const caveM2 = rows.map(r => r.cave.w * r.cave.h * CELL * CELL);
+    const metrics = {
+      topologies: distinct(r => r.sig), courses: distinct(r => r.shape.course), courseLengths: distinct(r => r.shape.course.length),
+      cavernPlaces: distinct(r => r.shape.cavern), adits: distinct(r => r.shape.adit.replace(/-[lr]$/, '')), loops: distinct(r => [...r.shape.loops].sort().join('+')),
+      spaceSets: distinct(r => optional.filter(k => r.shape.spaces.includes(k)).join(' ')), roomCounts: distinct(r => r.rooms),
+      caveM2: [Math.min(...caveM2), Math.max(...caveM2)], optional: Object.fromEntries(optional.map(k => [k, has(k)])),
+    };
+    log('variety', {metrics, rows});
+    expect(metrics.topologies, 'every seed its own mine graph').toBe(seeds.length);
+    expect(metrics.courses).toBeGreaterThanOrEqual(7);
+    expect(metrics.courseLengths).toBeGreaterThanOrEqual(3);
+    expect(metrics.cavernPlaces).toBeGreaterThanOrEqual(3);
+    expect(metrics.adits).toBeGreaterThanOrEqual(3);
+    expect(metrics.loops).toBeGreaterThanOrEqual(3);
+    expect(metrics.spaceSets).toBeGreaterThanOrEqual(10);
+    expect(metrics.caveM2[1] / metrics.caveM2[0]).toBeGreaterThanOrEqual(1.4);
+    // each optional space is genuinely optional: present in some mines, absent from others
+    for (const k of optional) { expect(has(k), `${k} sometimes`).toBeGreaterThan(0); expect(has(k), `${k} not always`).toBeLessThan(seeds.length); }
+  });
+
+  it('cuts the development heading for the drill rig at its REAL size (registry x MINES_FIT), off the critical path, up to the 7 x 3.0 x 2.4 m envelope', () => {
+    // the sizing rule itself over the agreed envelope (length 7, height 3.0, width 2.4 m): the rig + clearances inside the heading
+    for (const dims of [minesModelSize('drillRig'), [5, 2.5, 2.0], [7, 3.0, 2.4]] as [number, number, number][]) {
+      const h = headingFor(dims);
+      expect(h.w * CELL - dims[2], `${dims} beside`).toBeGreaterThanOrEqual(2 * MINES.heading.side - 1e-9);
+      // the rig, 0.3 m off the face, clear of the opening's 1 m door zone + the doorway's 0.5 m approach
+      expect(h.l * CELL - dims[0], `${dims} length`).toBeGreaterThanOrEqual(MINES.heading.face + 1.5);
+      expect(h.clear).toBeCloseTo(dims[1] + MINES.heading.headroom, 6);
+    }
+    const fit0 = MINES_FIT.drillRig;
+    try {
+      // end to end at uniform fits up to 2.0 (7.0 x 2.56 x 1.96 m: the largest uniform scale inside the envelope)
+      for (const fit of [1, 1.5, 2]) {
+        MINES_FIT.drillRig = fit;
+        const need = headingFor(minesModelSize('drillRig'));
+        for (const inward of INWARD) for (const seed of SEEDS.slice(0, 4)) {
+          const fx = minesFixture(seed, {inward}), c = fx.carve, tag = `fit ${fit} ${inward} ${seed}`;
+          expect(c, tag).not.toBeNull();
+          const H = c!.plan.rooms.find(r => r.key === 'heading');
+          expect(H, tag).toBeDefined();
+          const across = H!.travel === 'c' ? H!.cr.h : H!.cr.w, along = H!.travel === 'c' ? H!.cr.w : H!.cr.h;
+          expect(across, `${tag} width`).toBeGreaterThanOrEqual(need.w);
+          expect(along, `${tag} length`).toBeGreaterThanOrEqual(need.l);
+          expect(H!.clear, `${tag} clear`).toBeGreaterThanOrEqual(need.clear - 1e-6);
+          // off the critical path: a dead end, never on the way to the generator
+          expect(mineGraph(c!.plan).adj.get('heading')!.length).toBe(1);
+        }
+      }
+    } finally { MINES_FIT.drillRig = fit0; }
   });
 
   it('places the generator in the cavern: skid inside, use point on a clear reachable floor cell beyond its end, facing it', () => {
