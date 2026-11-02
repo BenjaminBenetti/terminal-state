@@ -30,7 +30,8 @@ import type {MineRoomPlan} from './minesPlan';
 export interface MinesDressInfo {
   level: number;
   base: number;
-  rooms: {key: string; area: number; part: MineRoomPlan['part']}[];
+  /** `axis`: a drift's direction of travel (world x / z): its timber sets stand across it. */
+  rooms: {key: string; area: number; part: MineRoomPlan['part']; axis?: 'x' | 'z'}[];
   /** Generator stand point (continuous canvas cells) and skid footprint (canvas cells). */
   use: {x: number; y: number};
   foot: Rect;
@@ -82,12 +83,12 @@ const SET_PARTS: ReadonlySet<MineRoomPlan['part']> = new Set(['portal', 'haulage
  * the rib cells (blocking them where the posts stand proud of the 0.1 m edge allowance), never on an opening's cells / approach, a
  * prop, a fixture or a plate, never splitting the drift; the cap (>= 2.3 m clear) never over a prop. Returns the sets placed.
  */
-function placeTimberSets(ctx: PlaceCtx, layout: StationLayout, drifts: readonly Area[], base: number): number {
+function placeTimberSets(ctx: PlaceCtx, layout: StationLayout, drifts: readonly {a: Area; alongX: boolean}[], base: number): number {
   const g = ctx.g, M = MINE_SETS.model;
   let total = 0;
   const no = (why: string) => { MINES_DRESS_STATS.setRejects[why] = (MINES_DRESS_STATS.setRejects[why] ?? 0) + 1; return false; };
-  for (const a of drifts) {
-    const alongX = a.w >= a.h, len = (alongX ? a.w : a.h) * CELL, Wd = (alongX ? a.h : a.w) * CELL, clear = a.ceil - base;
+  for (const {a, alongX} of drifts) {
+    const len = (alongX ? a.w : a.h) * CELL, Wd = (alongX ? a.h : a.w) * CELL, clear = a.ceil - base;
     const fit = timberSetFit(Wd, clear);
     if (fit.clearH < 2.3 || fit.clearW < 1.2) { no('fit'); continue; }
     const block = fit.proud > 0.12;
@@ -134,23 +135,28 @@ function placeTimberSets(ctx: PlaceCtx, layout: StationLayout, drifts: readonly 
       for (const sg of layout.signs) if ((sg.level ?? 0) === ctx.level && inSlab(sg.x, sg.z, (sg.w ?? 1.2) / 2 + 0.05, (sg.w ?? 1.2) / 2 + 0.05)) return no('plate');
       return true;
     };
-    let last = -Infinity;
-    for (let i = 0; i < n && total < MINE_SETS.cap; i++) {
-      for (const o of [0, -0.35, 0.35, -0.7, 0.7]) {
-        const s = Math.round((first + i * MINE_SETS.pitch + o) * 100) / 100;
-        if (s - last < 1.2 || !clearOf(s)) continue;
-        const before = layout.props.length, held: number[] = [];
-        for (const side of [0, 1] as const) {
-          const b = postBox(s, side), [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
-          if (block) for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const k = g.idx(cx, cy); if (!g.blocked[k]) { g.blocked[k] = 1; held.push(k); } }
-          layout.props.push({kind: 'annexMachine', x: r3(b.x), z: r3(b.z), y: r2(base), rot: 0, area: a.id, hx: r3(b.hx), hz: r3(b.hz), h: r2(clear), blocksSight: false, variant: MINE_PIECE.post, ...(ctx.level ? {level: ctx.level} : {})});
-        }
-        if (block && !areaConnected(ctx, a)) { for (const k of held) g.blocked[k] = 0; layout.props.length = before; continue; }
-        last = s;
-        total++;
-        break;
+    const placed: number[] = [];
+    const far = (q: number) => placed.every(t => Math.abs(t - q) >= 1.2);
+    const put = (q: number): boolean => {
+      if (!far(q) || !clearOf(q)) return false;
+      const before = layout.props.length, held: number[] = [];
+      for (const side of [0, 1] as const) {
+        const b = postBox(q, side), [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+        if (block) for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const k = g.idx(cx, cy); if (!g.blocked[k]) { g.blocked[k] = 1; held.push(k); } }
+        layout.props.push({kind: 'annexMachine', x: r3(b.x), z: r3(b.z), y: r2(base), rot: 0, area: a.id, hx: r3(b.hx), hz: r3(b.hz), h: r2(clear), blocksSight: false, variant: MINE_PIECE.post, ...(ctx.level ? {level: ctx.level} : {})});
       }
+      if (block && !areaConnected(ctx, a)) { for (const k of held) g.blocked[k] = 0; layout.props.length = before; return no('split'); }
+      placed.push(q);
+      total++;
+      return true;
+    };
+    // pass 1: the nominal pitch, each set slid up to 0.7 m off a door / prop / lamp / plate
+    for (let i = 0; i < n && total < MINE_SETS.cap; i++) {
+      for (const o of [0, -0.35, 0.35, -0.7, 0.7]) if (put(Math.round((first + i * MINE_SETS.pitch + o) * 100) / 100)) break;
     }
+    // pass 2 (fill): every 0.25 m spot of the drift still >= 1.2 m from its sets — a drift crowded by openings / furniture keeps the
+    // sets that fit between them, whatever the upstream dressing draws were
+    for (let q = s0 + half + 0.05; q <= s0 + len - half - 0.05 && total < MINE_SETS.cap; q += 0.25) put(Math.round(q * 100) / 100);
   }
   return total;
 }
@@ -338,6 +344,13 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
     }
   }
 
+  // --- timber support sets along the drifts: after the set pieces, before this pass's own props / plates (they work round the posts;
+  //     the station dresser's furniture, lamps and plates are already there and the sets keep off them) ---------------------------
+  MINES_DRESS_STATS.sets = placeTimberSets(ctx, layout, info.rooms.filter(r => SET_PARTS.has(r.part)).map(r => {
+    const a = layout.areas[r.area];
+    return {a, alongX: r.axis ? r.axis === 'x' : a.w >= a.h};
+  }), base);
+
   // --- props of existing kinds by function ---------------------------------------------------------------------------------------
   const pFrom = layout.props.length;
   const put = (a: Area | undefined, kind: PropKind, n: number, o: {sides?: Side[]; front?: number; purpose?: string} = {}) => {
@@ -423,8 +436,6 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   }
   MINES_DRESS_STATS.signs = layout.signs.length - s0;
 
-  // --- timber support sets along the drifts (last: they keep off everything placed above) -----------------------------------------
-  MINES_DRESS_STATS.sets = placeTimberSets(ctx, layout, info.rooms.filter(r => SET_PARTS.has(r.part)).map(r => layout.areas[r.area]), base);
   MINES_DRESS_STATS.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
 }
 
@@ -539,6 +550,9 @@ function sign(layout: StationLayout, g: Grid, a: Area, d: Door, text: string, ba
     if (!ok) continue;
     const x = vert ? (side === 'W' ? a.x * CELL + 0.02 : (a.x + a.w) * CELL - 0.02) : tr.t;
     const z = vert ? tr.t : (side === 'N' ? a.y * CELL + 0.02 : (a.y + a.h) * CELL - 0.02);
+    // never on (or behind) a prop standing at the wall there — a timber post, a cabinet: the plate's box 0.35 m off the wall
+    const px0 = vert ? x - 0.35 : x - tr.w / 2, px1 = vert ? x + 0.35 : x + tr.w / 2, pz0 = vert ? z - tr.w / 2 : z - 0.35, pz1 = vert ? z + tr.w / 2 : z + 0.35;
+    if (layout.props.some(p => (p.level ?? 0) === (a.level ?? 0) && p.x + p.hx > px0 && p.x - p.hx < px1 && p.z + p.hz > pz0 && p.z - p.hz < pz1 && p.y < tr.y + h / 2 && p.y + p.h > tr.y - h / 2)) continue;
     const s: SignPlacement = {x: r3(x), y: r2(tr.y), z: r3(z), rot: side === 'N' ? 0 : side === 'S' ? Math.PI : side === 'W' ? Math.PI / 2 : -Math.PI / 2, kind: 'service', text, area: a.id, w: r2(tr.w), ...(a.level ? {level: a.level} : {})};
     layout.signs.push(s);
     return s;

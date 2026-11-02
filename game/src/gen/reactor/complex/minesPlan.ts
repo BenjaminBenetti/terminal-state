@@ -58,6 +58,8 @@ export interface MineRoomPlan {
   parent: string | null;
   /** What it is in the mine (dressing / visuals): drift segments carry the rail line on the haulage. */
   part: 'portal' | 'junction' | 'haulage' | 'manway' | 'crosscut' | 'cavern' | 'hoist' | 'magazine' | 'lamp' | 'tools' | 'sump' | 'collapse' | 'refuge' | 'stope';
+  /** Direction of travel (canonical: c lateral, d depth): a drift's support sets stand across it, whatever its rect's proportions. */
+  travel?: 'c' | 'd';
 }
 
 export interface MineDoorPlan {
@@ -182,7 +184,7 @@ class Planner {
   }
 
   /** Opening through the one-cell wall between two planned spaces: full overlap (`full`) or `width` cells kept `margin` off the ends. */
-  door(a: string, b: string, kind: MineDoorPlan['kind'], o: {full?: boolean; width?: number; margin?: number; pick?: 'mid' | 'rand'} = {}): boolean {
+  door(a: string, b: string, kind: MineDoorPlan['kind'], o: {full?: boolean; width?: number; margin?: number; pick?: 'mid' | 'rand' | 'lo' | 'hi'} = {}): boolean {
     const A = this.room(a), B = this.room(b);
     if (!A || !B) return false;
     const w = sharedWall(A.cr, B.cr);
@@ -192,7 +194,7 @@ class Planner {
     const width = o.full ? span : Math.min(o.width ?? 3, span);
     if (width < 3) return false;
     const lo = w.s0 + margin, hi = w.s1 - margin - width;
-    const s = o.pick === 'rand' ? this.rng.int(lo, hi) : Math.floor((lo + hi) / 2);
+    const s = o.pick === 'rand' ? this.rng.int(lo, hi) : o.pick === 'lo' ? lo : o.pick === 'hi' ? hi : Math.floor((lo + hi) / 2);
     const cr: CRect = w.horizontal ? {c: s, d: w.line, w: width, h: 1} : {c: w.line, d: s, w: 1, h: width};
     const height = kind === 'room' ? MINES.door.room : MINES.door.set;
     this.doors.push({a, b, rect: this.f.rect(cr.c, cr.d, cr.w, cr.h), height, kind});
@@ -297,7 +299,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
   if (pc0 > f.ec0 || pc0 + pw < f.ec1) return null;
   const pl = rng.int(10, 12);
   if (!P.fits(pc0, f.dPortal, pw, pl - f.dPortal, f.dPortal)) return null;
-  P.add('portal', {c: pc0, d: f.dPortal, w: pw, h: pl - f.dPortal}, {label: 'No. 2 adit', role: 'entry', ...DRIFT, clear: clearOf(MINES.clear.portal), parent: null, part: 'portal'});
+  P.add('portal', {c: pc0, d: f.dPortal, w: pw, h: pl - f.dPortal}, {label: 'No. 2 adit', role: 'entry', ...DRIFT, clear: clearOf(MINES.clear.portal), parent: null, part: 'portal', travel: 'd'});
 
   // --- 2. The haulage junction (old shaft station) --------------------------------------------------------------------------------
   const jd = Math.max(rng.int(9, 11), aw + 2), jd0 = pl + 1;
@@ -361,7 +363,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
       if (lc1 - lc0 < w0 + 2) return false;
       const ld = jd0 + rng.int(0, jd - lw);
       if (!P.fits(lc0, ld, lc1 - lc0, lw)) return false;
-      P.add(key(n), {c: lc0, d: ld, w: lc1 - lc0, h: lw}, {label, role: 'corridor', ...DRIFT, clear, parent: 'junction', part: side});
+      P.add(key(n), {c: lc0, d: ld, w: lc1 - lc0, h: lw}, {label, role: 'corridor', ...DRIFT, clear, parent: 'junction', part: side, travel: 'c'});
       if (!P.door('junction', key(n), 'set', {full: true})) return false;
       from = key(n++);
       segTop = ld + lw + 1;
@@ -378,7 +380,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
     }
     for (const s of segs) {
       if (!P.fits(s.c, s.d, s.w, s.h)) return false;
-      P.add(key(n), s, {label, role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), parent: from, part: side});
+      P.add(key(n), s, {label, role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), parent: from, part: side, travel: 'd'});
       if (!P.door(from, key(n), 'set', {full: true})) return false;
       deep[side].push(key(n));
       from = key(n++);
@@ -402,7 +404,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
       if (c1 - c0 < 6) continue;
       const d = rng.int(o.r0 + 1, o.r1 - xw - 1);
       if (!P.fits(c0, d, c1 - c0, xw)) continue;
-      P.add('crosscut', {c: c0, d, w: c1 - c0, h: xw}, {label: 'Cross-cut', role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), parent: o.m.key, part: 'crosscut'});
+      P.add('crosscut', {c: c0, d, w: c1 - c0, h: xw}, {label: 'Cross-cut', role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), parent: o.m.key, part: 'crosscut', travel: 'c'});
       if (!P.door(o.m.key, 'crosscut', 'set', {full: true}) || !P.door('crosscut', o.h.key, 'set', {full: true})) return null;
       break;
     }
@@ -411,13 +413,15 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
   // --- 6. Rooms: hoist room, magazine, lamp room, tool room, the dead ends, the refuge ---------------------------------------------
   const roomClear = () => clearOf(MINES.clear.room);
   type Cand = {parent: string; side: Side; along: [number, number]; deep: [number, number]};
-  const place = (key: string, cands: Cand[], o: Omit<MineRoomPlan, 'key' | 'cr' | 'rect' | 'parent'>, door: {kind: MineDoorPlan['kind']; full?: boolean; width?: number}): MineRoomPlan | null => {
+  const place = (key: string, cands: Cand[], o: Omit<MineRoomPlan, 'key' | 'cr' | 'rect' | 'parent'>, door: {kind: MineDoorPlan['kind']; full?: boolean; width?: number; pick?: 'lo' | 'hi'}): MineRoomPlan | null => {
     for (const c of cands) {
       if (!P.room(c.parent)) continue;
       const r = P.attach(c.parent, c.side, c.along, c.deep, door.full ? 4 : (door.width ?? 3) + 2);
       if (!r) continue;
-      const room = P.add(key, r, {...o, parent: c.parent});
-      if (!P.door(c.parent, key, door.kind, {full: door.full, width: door.width, pick: door.full ? 'mid' : 'rand'})) { P.undo(); continue; }
+      const room = P.add(key, r, {...o, parent: c.parent, travel: c.side === 'up' || c.side === 'down' ? 'd' : 'c'});
+      // a room off a drift opens near one end of it (the adit's inner end: `pick`), so the drift keeps both ribs for its timber sets
+      const pick = door.full ? 'mid' : /^(portal|haulage-|manway-|crosscut)/.test(c.parent) ? (door.pick ?? 'lo') : 'rand';
+      if (!P.door(c.parent, key, door.kind, {full: door.full, width: door.width, pick})) { P.undo(); continue; }
       return room;
     }
     return null;
@@ -460,8 +464,8 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
       {parent: 'cavern', side: 'down', along: [9, 12], deep: [7, 9]},
     ];
   };
-  const lamp = place('lamp', besideAdit('left'), {label: 'Lamp room', role: 'room', kind: 'room', type: 'crew-room', purpose: 'locker-room', clear: roomClear(), part: 'lamp'}, {kind: 'room', width: 3});
-  const tools = place('tools', besideAdit('right'), {label: 'Mine tool room', role: 'store', kind: 'room', type: 'storage', purpose: 'workshop', clear: roomClear(), part: 'tools'}, {kind: 'room', width: 3});
+  const lamp = place('lamp', besideAdit('left'), {label: 'Lamp room', role: 'room', kind: 'room', type: 'crew-room', purpose: 'locker-room', clear: roomClear(), part: 'lamp'}, {kind: 'room', width: 3, pick: 'hi'});
+  const tools = place('tools', besideAdit('right'), {label: 'Mine tool room', role: 'store', kind: 'room', type: 'storage', purpose: 'workshop', clear: roomClear(), part: 'tools'}, {kind: 'room', width: 3, pick: 'hi'});
   if (!lamp || !tools) return null;
   // the worked-out stope (old No. 1 stope): a second, bare chamber (timber cribs / crates from the dress pass) — placed before the dead
   // ends (it is the program's floor margin: the host counts the floor after the furniture), the largest that fits first
