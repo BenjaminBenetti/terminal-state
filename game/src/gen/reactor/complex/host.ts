@@ -481,6 +481,20 @@ export function complexIssues(layout: StationLayout): string[] {
       if (door.x < ent.x || door.y < ent.y || door.x + door.w > ent.x + ent.w || door.y + door.h > ent.y + ent.h) issues.push(`${tag}: entrance door outside the entrance span`);
       if (Math.max(door.w, door.h) < COMPLEX_MIN.doorCells || door.height < COMPLEX_MIN.doorM - 1e-6) issues.push(`${tag}: entrance ${Math.max(door.w, door.h) * CELL} m wide, ${door.height} m clear`);
     }
+    // the generator: its skid (the anchored collision prop) on complex floor, its panel within reach of the use point
+    if (gen) {
+      const p = layout.props.find(q => q.kind === 'annexMachine' && q.area === gen.area && Math.abs(q.x - gen.x) < 1e-3 && Math.abs(q.z - gen.z) < 1e-3);
+      if (!p) issues.push(`${tag}: generator skid prop missing`);
+      else {
+        let bad = 0;
+        for (let cy = Math.floor((p.z - p.hz + 0.01) / CELL); cy <= Math.floor((p.z + p.hz - 0.01) / CELL); cy++) for (let cx = Math.floor((p.x - p.hx + 0.01) / CELL); cx <= Math.floor((p.x + p.hx - 0.01) / CELL); cx++) {
+          const i = g.idx(cx, cy);
+          if (!g.inBounds(cx, cy) || g.cells[i] !== FLOOR || !ids.has(g.area[i]) || g.rampIdx[i] >= 0) bad++;
+        }
+        if (bad) issues.push(`${tag}: generator skid over ${bad} cells off the complex floor`);
+      }
+      if (Math.hypot(gen.panel.x - gen.use.x, gen.panel.z - gen.use.z) > 2.0) issues.push(`${tag}: generator panel out of reach of its use point`);
+    }
     const at = (x: number, z: number, what: string) => {
       const [cx, cy] = g.cellOf(x, z);
       if (!g.inBounds(cx, cy) || dist[c.level][g.idx(cx, cy)] < 0) issues.push(`${tag}: ${what} unreachable by stairs`);
