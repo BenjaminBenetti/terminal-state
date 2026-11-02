@@ -10,6 +10,8 @@ import {placeHigh, lowPolyAndBake} from './stage-mesh.mjs';
 import {detectSkeleton, JOINTS} from './skeleton.mjs';
 import {computeSkinWeights, JOINT_NAMES} from './skin.mjs';
 import {V} from './pose.mjs';
+import {MeshoptSimplifier} from 'meshoptimizer';
+import {bodyWeights} from '../../enemy/lib/siren-skin.mjs';
 
 const smooth = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 const r4 = v => Array.isArray(v) ? v.map(x => +(+x).toFixed(4)) : +(+v).toFixed(4);
@@ -89,7 +91,16 @@ export async function bodyStage(master, {heightM, facing: forceFacing, ...O}) {
   const pl = placement(master, heightM, facing);
   const high = placeHigh(master, pl);
   const welded = weldByPosition(high.pos, high.nrm, high.idx);
-  const skel = slimSkeleton(detectSkeleton(welded.pos));
+  // task mall-lingerie: a reposed source may carry a per-vertex hair mask (lib/repose-skin.mjs; mapped onto the welded vertices
+  // with the exact-position remap of weldByPosition, for the skin pass) and its T-pose analysis rig; O.skeleton options:
+  // crotch 'midline', neck 'tpose' (neck base / head pivot heights from that rig's hair-aware throat profile)
+  const hairHigh = master.hairMask ? weldedFlags(high.pos, master.hairMask) : null;
+  let skelOpts = null;
+  if (O.skeleton) {
+    const {neck, ...rest} = O.skeleton, tn = master.repose?.skeletonT?.log?.neck;
+    skelOpts = {...rest, ...(neck === 'tpose' && tn ? {neckOverride: {neckBaseY: tn.neckBaseY, headPivotY: tn.headPivotY, source: 'T-pose analysis rig (lib/repose-skin.mjs -> enemy/lib/tpose-skeleton.mjs non-hair throat profile); placement identical (same height / facing / feet)'}} : {})};
+  }
+  const skel = slimSkeleton(skelOpts ? detectSkeleton(welded.pos, skelOpts) : detectSkeleton(welded.pos));
   const issues = validateSkeleton(skel);
   const neckY = skel.neckBaseY;
   const inHand = (p, s) => {
@@ -105,7 +116,9 @@ export async function bodyStage(master, {heightM, facing: forceFacing, ...O}) {
   };
   const r = await lowPolyAndBake(high, master, {targetTris: O.targetTris, importanceOf, faceRegion, unwrapOpts: O.unwrap, bakeSize: O.bake.size, bakeOpts: {cage: O.bake.cage, rayBelow: O.bake.rayBelow}, baseSize: O.textures.baseColor, mrSize: O.textures.metallicRoughness, quality: O.textures.jpegQuality});
   const {nativeBounds, ...plRest} = pl;
-  return {skel, issues, facing: {...fd, used: facing, forced: forceFacing != null}, placement: {...plRest, nativeBounds}, low: r.low,
+  // hair flags on the LOW welded vertices (nearest high welded vertex): the skin pass keeps hair off the arm chains
+  const hairLow = hairHigh ? nearestFlags(welded.pos, hairHigh, r.low.welded.pos) : null;
+  return {skel, issues, facing: {...fd, used: facing, forced: forceFacing != null}, placement: {...plRest, nativeBounds}, low: r.low, ...(hairLow ? {hairLow, hairStats: {highWelded: hairHigh.reduce((a, b) => a + b, 0), lowWelded: hairLow.reduce((a, b) => a + b, 0)}} : {}),
     enc: {baseJpg: r.enc.baseJpg, mrJpg: r.enc.mrJpg, basePreview: r.enc.basePreview}, stats: r.stats,
     master: {id: master.id, uploadId: master.uploadId, file: master.file, sha256: master.sha256Verified, bytes: master.bytes, triangles: master.triangles, vertices: master.vertices, material: master.material,
       textures: {baseColor: [master.baseColor.width, master.baseColor.height, master.baseColor.mimeType], metallicRoughness: [master.metallicRoughness.width, master.metallicRoughness.height, master.metallicRoughness.mimeType]}}};
@@ -120,7 +133,37 @@ export function spreadWeights(low, sw) {
 }
 
 export function bodySkin(stage, skinOptions) {
+  // task mall-lingerie: hair-masked bodies use the shared skinning + the hair post-pass (enemy/lib/siren-skin.mjs: hair never
+  // takes arm weights - long strands beside the shoulders stay with the head / chest in every clip)
+  if (stage.hairLow) return bodyWeights(stage.low.welded, stage.skel, stage.hairLow, skinOptions);
   return computeSkinWeights(stage.low.welded, rigFor(stage.skel), {kind: 'body', ...skinOptions});
+}
+
+/** Per-vertex flags (native order) -> welded vertices (exact-position remap of weldByPosition; any flagged duplicate flags it). */
+function weldedFlags(pos, flags) {
+  const remap = MeshoptSimplifier.generatePositionRemap(pos, 3), n = pos.length / 3;
+  const id = new Int32Array(n).fill(-1); let c = 0;
+  for (let i = 0; i < n; i++) if (remap[i] === i) id[i] = c++;
+  const out = new Uint8Array(c);
+  for (let i = 0; i < n; i++) if (flags[i]) out[id[remap[i]]] = 1;
+  return out;
+}
+
+/** Flag of the nearest source vertex for every target vertex (3 cm spatial hash, widening search). */
+function nearestFlags(srcPos, srcFlags, dstPos) {
+  const cell = 0.03, grid = new Map(), key = (a, b, c) => `${a},${b},${c}`;
+  for (let i = 0; i < srcPos.length / 3; i++) { const k = key(Math.floor(srcPos[i * 3] / cell), Math.floor(srcPos[i * 3 + 1] / cell), Math.floor(srcPos[i * 3 + 2] / cell)); let a = grid.get(k); if (!a) grid.set(k, (a = [])); a.push(i); }
+  const out = new Uint8Array(dstPos.length / 3);
+  for (let j = 0; j < out.length; j++) {
+    const p = [dstPos[j * 3], dstPos[j * 3 + 1], dstPos[j * 3 + 2]], c = p.map(v => Math.floor(v / cell));
+    let best = -1, bd = Infinity;
+    for (let r = 1; r <= 4 && best < 0; r++) for (let dx = -r; dx <= r; dx++) for (let dy = -r; dy <= r; dy++) for (let dz = -r; dz <= r; dz++) {
+      const a = grid.get(key(c[0] + dx, c[1] + dy, c[2] + dz)); if (!a) continue;
+      for (const i of a) { const d = (srcPos[i * 3] - p[0]) ** 2 + (srcPos[i * 3 + 1] - p[1]) ** 2 + (srcPos[i * 3 + 2] - p[2]) ** 2; if (d < bd) { bd = d; best = i; } }
+    }
+    if (best >= 0) out[j] = srcFlags[best];
+  }
+  return out;
 }
 
 const LIMBS = [['L_UpperArm', 'L_Forearm'], ['L_Forearm', 'L_Hand'], ['R_UpperArm', 'R_Forearm'], ['R_Forearm', 'R_Hand'],

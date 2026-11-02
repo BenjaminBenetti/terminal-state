@@ -5,6 +5,8 @@ export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'knife' | 'bench' | 'lig
   // Iteration 06 zombie wardrobe (ai/outfits.ts + ai/wardrobe.ts): bodies (derivatives/zombie-body-*.json) + slot wearables fitted per body (derivatives/outfit-*.json; summary zombie-wardrobe.json).
   // Iteration 07: refitted outside the posed body + cranium-fitted hats; the puffer fails the fit gate on every body (no model key).
   | 'zombieBody_lastshift' | 'zombieBody_courier' | 'zombieBody_agent' | 'zombieBody_scavenger' | 'zombieBody_heavyset' | 'zombieBody_tall'
+  // Task mall-lingerie-20261102 (lane BODY): the three user-uploaded female bodies (derivatives/zombie-body-pale-*.json); always clothed.
+  | 'zombieBody_paleGaze' | 'zombieBody_paleRevenant' | 'zombieBody_paleApparition'
   | 'outfit_coat' | 'outfit_hivis' | 'outfit_hoodie' | 'outfit_blazer' | 'outfit_trench' | 'outfit_flannel' | 'outfit_sweater'
   | 'outfit_cargo' | 'outfit_jeans' | 'outfit_slacks' | 'outfit_hardhat' | 'outfit_cap' | 'outfit_beanie' | 'outfit_gasmask' | 'outfit_respirator'
   // Iteration 07 (Lane Q): rat/dog creature — rigged derivative of the Field Notes quadruped-02 master (derivatives/creature-ratdog.json).
@@ -29,6 +31,10 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   zombieBody_scavenger: {url: 'assets/models/zombie-body-scavenger-t25.glb', bytes: 701_000}, // Meshy T2.5 from a RECREATED reference (user update 01; not an original) of the old upload
   zombieBody_heavyset: {url: 'assets/models/zombie-body-heavyset-t25.glb', bytes: 588_000}, // Meshy T2.5 replacement (lane CHARS) of the iteration-06 base-layer body (always wears pants)
   zombieBody_tall: {url: 'assets/models/zombie-body-tall-t25.glb', bytes: 633_000}, // iteration 06 generated base-layer body (always wears pants)
+  // Task mall-lingerie-20261102 (lane BODY): user-uploaded Meshy AI bodies rigged / fitted by the local wardrobe pipeline (never shown bare)
+  zombieBody_paleGaze: {url: 'assets/models/zombie-body-pale-gaze-t25.glb', bytes: 712_000},
+  zombieBody_paleRevenant: {url: 'assets/models/zombie-body-pale-revenant-t25.glb', bytes: 735_000},
+  zombieBody_paleApparition: {url: 'assets/models/zombie-body-pale-apparition-t25.glb', bytes: 592_000},
   // iteration 07 refit (fewer per-body variants: pairs that still clipped are not shipped)
   outfit_coat: {url: 'assets/models/outfit-coat-t25.glb', bytes: 1_044_000},
   outfit_hivis: {url: 'assets/models/outfit-hivis-t25.glb', bytes: 788_000},

@@ -70,10 +70,13 @@ export function t25Source(asset, pin, densifyFrac, extra = {}) {
   };
 }
 
-/** loadSource + densification for T2.5 sources (other sources load unchanged). */
+/**
+ * loadSource + densification for T2.5 sources and user-uploaded Meshy bodies (`userUpload`, task mall-lingerie: same sparse
+ * smart topology, same densify); other sources load unchanged.
+ */
 export async function loadAnySource(src) {
   let m = await loadSource(src);
-  if (!src.t25) return m;
+  if (!src.t25 && !src.userUpload) return m;
   const b = bounds(m.pos), H = b.max[1] - b.min[1];
   let trim = null;
   if (src.trimTopCap) {

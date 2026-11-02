@@ -37,6 +37,13 @@ export const ZOMBIE_BODIES: readonly ZombieBodyDef[] = [
   // they always get pants at runtime.
   {id: 'heavyset', label: 'Heavyset man (base layer)', model: 'zombieBody_heavyset', weight: 1, origin: 'generated', requires: ['lower'], tags: ['shaved-head', 'base-layer']},
   {id: 'tall', label: 'Tall woman (base layer)', model: 'zombieBody_tall', weight: 1, origin: 'generated', requires: ['lower'], tags: ['short-hair', 'base-layer']},
+  // Task mall-lingerie-20261102 (lane BODY): the three female zombie bodies the user uploaded (Meshy AI exports, rigged / fitted by
+  // the local wardrobe pipeline; derivatives/zombie-body-pale-*.json). Unclothed: they always wear an upper AND a lower garment
+  // (`requires`; `nude` = build() never assembles them bare). Additive variety at HALF the weight of each existing body: together
+  // 1.5 / 7.5 = 20 % of the ordinary-pool zombies (the six existing bodies keep weight 1 each; families / counts / stats unchanged).
+  {id: 'paleGaze', label: 'Pale Gaze', model: 'zombieBody_paleGaze', weight: 0.5, origin: 'uploaded', requires: ['upper', 'lower'], nude: true, tags: ['long-hair', 'pale']},
+  {id: 'paleRevenant', label: 'Pale Revenant', model: 'zombieBody_paleRevenant', weight: 0.5, origin: 'uploaded', requires: ['upper', 'lower'], nude: true, tags: ['long-hair', 'pale']},
+  {id: 'paleApparition', label: 'Pale Apparition', model: 'zombieBody_paleApparition', weight: 0.5, origin: 'uploaded', requires: ['upper', 'lower'], nude: true, tags: ['long-hair', 'pale']},
 ];
 
 export const ZOMBIE_WEARABLES: readonly WearableDef[] = [

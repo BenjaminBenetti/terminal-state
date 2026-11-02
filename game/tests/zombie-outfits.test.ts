@@ -134,15 +134,18 @@ describe('zombie wardrobe registry (real GLBs)', () => {
 
   it('every supported body x wearable pair builds: shared 18-joint skeleton, 6 clips, valid skin data, masked body', () => {
     for (const b of lib.bodies) {
-      checkBuilt({body: b.id, wear: {}});
+      // task mall-lingerie: an unclothed (`nude`) body is never built bare - its looks always carry the required slots
+      if (!b.nude) checkBuilt({body: b.id, wear: {}});
       for (const w of lib.wearables) {
         if (!lib.supports(b.id, w.id)) continue;
         const look: ZombieLook = {body: b.id, wear: {[w.slot]: w.id}};
+        // nude bodies: the pair is built inside a look completed with the first fitted, compatible wearable per required slot
+        if (b.nude) for (const r of b.requires ?? []) if (!look.wear[r]) look.wear[r] = lib.wearables.find(x => x.slot === r && lib.supports(b.id, x.id) && Object.values(look.wear).every(id => lib.compatible(b.id, lib.wearable(id!)!, x)))!.id;
         const {body} = checkBuilt(look);
         const ex = variantExtras(w.id, b.id);
         const hidden = popcount(ex.hideBodyTriangles), full = fullTris(b.id);
         if (ex.hiddenCount != null) expect(ex.hiddenCount).toBe(hidden);
-        expect(body.geometry.index!.count / 3).toBe(full - hidden);
+        if (!b.nude) expect(body.geometry.index!.count / 3).toBe(full - hidden);
         if (w.slot === 'upper' || w.slot === 'lower') expect(hidden, `${b.id}x${w.id}`).toBeGreaterThan(0);
         expect(hidden, `${b.id}x${w.id}`).toBeLessThan(full * 0.6);
       }
@@ -263,7 +266,8 @@ describe('zombie wardrobe registry (real GLBs)', () => {
   });
 
   it('derivative provenance exists for every runtime file and is marked unapproved', () => {
-    for (const d of [...manifestBodies.map(b => `zombie-body-${b.id}`), ...manifestWear.map(w => `outfit-${w.id}`)]) {
+    // derivative manifest name = the runtime file name without '-t25.glb' (task mall-lingerie: zombie-body-pale-gaze for paleGaze)
+    for (const d of [...manifestBodies, ...manifestWear].map(x => fileOf(x.model)!.split('/').pop()!.replace(/(-t25)?\.glb$/, ''))) {
       const j = JSON.parse(readFileSync(fileURLToPath(new URL(`../public/assets/derivatives/${d}.json`, import.meta.url)), 'utf8')) as {status: {approved: boolean; gameReady: boolean}; source: {sha256Verified: string}};
       expect(j.status.approved, d).toBe(false);
       expect(j.status.gameReady, d).toBe(false);

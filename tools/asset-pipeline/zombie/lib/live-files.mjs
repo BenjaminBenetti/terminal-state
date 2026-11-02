@@ -14,15 +14,17 @@ export function liveModelFiles(models = RUNTIME_MODELS) {
   const out = {bodies: {}, wearables: {}};
   if (dir === RUNTIME_MODELS) {
     const src = fs.readFileSync(path.join(REPO, 'game/src/assets/manifest.ts'), 'utf8');
-    for (const m of src.matchAll(/\b(zombieBody|outfit)_([a-z0-9]+):\s*\{url:\s*'assets\/models\/([^']+\.glb)'/g))
+    for (const m of src.matchAll(/\b(zombieBody|outfit)_([A-Za-z0-9]+):\s*\{url:\s*'assets\/models\/([^']+\.glb)'/g))
       (m[1] === 'zombieBody' ? out.bodies : out.wearables)[m[2]] = path.join(dir, m[3]);
     return out;
   }
   for (const f of fs.readdirSync(dir).sort()) {
-    const m = /^(zombie-body|outfit)-([a-z0-9]+)(-t25)?\.glb$/.exec(f);
+    // task mall-lingerie: hyphenated body file ids (zombie-body-pale-gaze-t25.glb) map to the camelCase body id (paleGaze)
+    const m = /^(zombie-body|outfit)-([a-z0-9]+(?:-[a-z0-9]+)*?)(-t25)?\.glb$/.exec(f);
     if (!m) continue;
     const map = m[1] === 'zombie-body' ? out.bodies : out.wearables;
-    if (!map[m[2]] || m[3]) map[m[2]] = path.join(dir, f);
+    const id = m[2].replace(/-([a-z0-9])/g, (_, c) => c.toUpperCase());
+    if (!map[id] || m[3]) map[id] = path.join(dir, f);
   }
   return out;
 }
