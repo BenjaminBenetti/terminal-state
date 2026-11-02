@@ -360,9 +360,14 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
       if (!d) continue;
       const xr = info.rooms.find(r => r.area === X.id), alongX = xr?.axis ? xr.axis === 'x' : X.w >= X.h, m = doorMid(d);
       const farHi = alongX ? m.x < X.x + X.w / 2 : m.z < X.y + X.h / 2;
-      const depth = 2.5, ax0 = X.x * CELL, az0 = X.y * CELL, ax1 = (X.x + X.w) * CELL, az1 = (X.y + X.h) * CELL;
-      const cx = alongX ? (farHi ? ax1 - depth / 2 : ax0 + depth / 2) : (ax0 + ax1) / 2, cz = alongX ? (az0 + az1) / 2 : (farHi ? az1 - depth / 2 : az0 + depth / 2);
-      piece(X, 'rubble', cx, cz, alongX ? depth / 2 - 0.02 : (ax1 - ax0) / 2 - 0.02, alongX ? (az1 - az0) / 2 - 0.02 : depth / 2 - 0.02, 1.6);
+      const ax0 = X.x * CELL, az0 = X.y * CELL, ax1 = (X.x + X.w) * CELL, az1 = (X.y + X.h) * CELL;
+      // (a shorter slope, set back from the face or trimmed off one rib where an opening's zone reaches in: the drift's own, or a
+      // neighbouring space's opening two cells away through the rock)
+      const [w0, w1] = alongX ? [az0, az1] : [ax0, ax1];
+      done: for (const depth of [2.5, 2.0, 1.5]) for (const back of [0, 0.5, 1.0]) for (const [t0, t1] of [[0, 0], [0.5, 0], [0, 0.5], [0.5, 0.5]]) {
+        const s = farHi ? (alongX ? ax1 : az1) - back - depth / 2 : (alongX ? ax0 : az0) + back + depth / 2, q = (w0 + t0 + w1 - t1) / 2, half = (w1 - t1 - w0 - t0) / 2 - 0.02;
+        if (piece(X, 'rubble', alongX ? s : q, alongX ? q : s, alongX ? depth / 2 - 0.02 : half, alongX ? half : depth / 2 - 0.02, 1.6)) break done;
+      }
     }
   }
 

@@ -47,6 +47,8 @@ export const MINES = {
   targetM2: 700, acceptM2: 560,
   /** Timbered drift run (cells along travel: adit + passages) a plan aims for, so the support sets (>= 6) have room between openings. */
   minRun: 60,
+  /** Optional rooms / dead ends / stopes a plan aims for (lamp, tools, magazine, hoist, refuge, sump, collapse, stope). */
+  minRooms: 4,
   /** Clear heights (m): drifts are tall enough that the timber sets keep >= 2.3 m clear. */
   clear: {portal: [3.3, 3.5], junction: [3.6, 3.9], drift: [3.3, 3.5], room: [3.0, 3.2], hoist: 5.2, cavern: [6.5, 8.0], min: 3.0},
   door: {portal: 2.9, set: 2.6, room: 2.3},
@@ -62,6 +64,16 @@ export const MINES = {
 
 /** A rectangle in the canonical frame (c lateral, d depth). */
 export interface CRect { c: number; d: number; w: number; h: number }
+
+/**
+ * The development heading a drill rig of real size [length, height, depth] (m) needs: width / length (cells) and clear height (m) —
+ * the rig centred across with MINES.heading.side each side, its boom MINES.heading.face off the face, MINES.heading.mouth behind it to
+ * the mouth (the opening's 1 m door zone + doorway volume), MINES.heading.headroom over it.
+ */
+export function headingFor(dims: readonly [number, number, number]): {w: number; l: number; clear: number} {
+  const [l, h, w] = dims, H = MINES.heading;
+  return {w: Math.max(H.minW, Math.ceil((w + 2 * H.side) / CELL - 1e-6)), l: Math.ceil((l + H.face + H.mouth) / CELL - 1e-6) + 1, clear: h + H.headroom};
+}
 
 /** What a space is in the mine (dressing / visuals / adjacency): drift parts carry timber sets; the haulage chain carries the rail line. */
 export type MinePart =
@@ -429,15 +441,21 @@ const DRIFT = {kind: 'passage' as AreaKind, type: 'service-corridor' as RoomType
  * mines dress stand where the drift actually ends.
  */
 const DEAD_END = {kind: 'room' as AreaKind, type: 'utility' as RoomType, purpose: ANNEX_PICKED_KEY};
+/** The optional rooms / dead ends / stopes. */
+const OPTIONAL_ROOMS: ReadonlySet<MinePart> = new Set(['lamp', 'tools', 'magazine', 'hoist', 'refuge', 'sump', 'collapse', 'stope']);
+/** How many kinds of optional room a plan has. */
+const roomCount = (rooms: readonly MineRoomPlan[]) => new Set(rooms.filter(r => OPTIONAL_ROOMS.has(r.part)).map(r => r.part)).size;
 
 /** Plans the mines in a slot (the first seeded attempt that reaches the floor target, else the largest accepted); null when none fits. */
 export function planMines(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number): MinePlan | null {
   let best: MinePlan | null = null;
-  const score = (p: MinePlan) => (p.run >= MINES.minRun ? 1e6 : 0) + p.cells;
+  // the aims met (floor target, timbered run, optional spaces), then the floor
+  const met = (p: MinePlan) => +(p.cells * CELL * CELL >= MINES.targetM2) + +(p.run >= MINES.minRun) + +(roomCount(p.rooms) >= MINES.minRooms);
+  const score = (p: MinePlan) => met(p) * 1e6 + p.cells;
   for (let attempt = 0; attempt < MINES.attempts; attempt++) {
     const p = tryPlan(slot, g, rng.fork(`mines-plan-${attempt}`), ceilRel, attempt);
     if (!p) continue;
-    if (p.cells * CELL * CELL >= MINES.targetM2 && p.run >= MINES.minRun) return p;
+    if (met(p) === 3) return p;
     if (!best || score(p) > score(best)) best = p;
   }
   return best && best.cells * 0.25 >= MINES.acceptM2 ? best : null;
@@ -600,15 +618,15 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
       if (b.d + b.h < a.d) { U = b; L = a; uk = bKey; lk = aKey; } else if (!(a.d + a.h < b.d)) continue;
       const map = (segs: CRect[], tr: ('c' | 'd')[]) => cands.push({segs: segs.map(F.b), tr: tr.map(t => (F.t ? (t === 'c' ? 'd' : 'c') : t)), upper: uk, lower: lk});
       const top = U.d + U.h + 1;
-      // straight down between them
+      // (every leg >= 5 cells: a passage, never a slot) straight down between them
       {
         const lo = Math.max(U.c, L.c) + 1, hi = Math.min(U.c + U.w, L.c + L.w) - 1 - w1, h = L.d - 1 - top;
-        if (h >= 3 && hi >= lo) for (let k = 0; k < 3; k++) map([{c: rng.int(lo, hi), d: top, w: w1, h}], ['d']);
+        if (h >= 5 && hi >= lo) for (let k = 0; k < 3; k++) map([{c: rng.int(lo, hi), d: top, w: w1, h}], ['d']);
       }
       if (straight) continue;
       // down out of U, then across into L's near side wall
       {
-        const xlo = U.c + 1, xhi = Math.min(U.c + U.w - 1 - w1, L.c - w1 - 5);
+        const xlo = U.c + 1, xhi = Math.min(U.c + U.w - 1 - w1, L.c - w1 - 7);
         const ylo = Math.max(L.d + 1 + w2, top + w2 + 2), yhi = L.d + L.h - 1;
         if (xhi >= xlo && yhi >= ylo) for (let k = 0; k < 4; k++) {
           const x = rng.int(xlo, xhi), yE = rng.int(ylo, yhi);
@@ -621,7 +639,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
         const xlo = Math.max(L.c + 1 + w2, U.c + U.w + 1 + w2 + 2), xhi = L.c + L.w - 1;
         if (yhi >= ylo && xhi >= xlo) for (let k = 0; k < 4; k++) {
           const y = rng.int(ylo, yhi), xE = rng.int(xlo, xhi), s2 = y + w1 + 1;
-          if (L.d - 1 - s2 >= 3) map([{c: U.c + U.w + 1, d: y, w: xE - (U.c + U.w + 1), h: w1}, {c: xE - w2, d: s2, w: w2, h: L.d - 1 - s2}], ['c', 'd']);
+          if (L.d - 1 - s2 >= 5) map([{c: U.c + U.w + 1, d: y, w: xE - (U.c + U.w + 1), h: w1}, {c: xE - w2, d: s2, w: w2, h: L.d - 1 - s2}], ['c', 'd']);
         }
       }
     }
@@ -665,11 +683,9 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
 
   // --- 6. The development heading: a dead-end drift the drill jumbo (its REAL kit size) parks in, boom to the face -------------------
   {
-    const [dl, dh, dwid] = minesModelSize('drillRig'), H = MINES.heading;
-    if (ceilRel >= dh + H.headroom) {
-      const hw = Math.max(H.minW, Math.ceil((dwid + 2 * H.side) / CELL - 1e-6));
-      const hl = Math.ceil((dl + H.face + H.mouth) / CELL - 1e-6) + 1;
-      const o: SpaceOpt = {label: 'Development heading', role: 'corridor', ...DEAD_END, clear: r2(Math.min(ceilRel, Math.max(dh + H.headroom, rng.range(MINES.clear.drift[0], MINES.clear.drift[1])))), part: 'heading'};
+    const {w: hw, l: hl, clear: hc} = headingFor(minesModelSize('drillRig'));
+    if (ceilRel >= hc) {
+      const o: SpaceOpt = {label: 'Development heading', role: 'corridor', ...DEAD_END, clear: r2(Math.min(ceilRel, Math.max(hc, rng.range(MINES.clear.drift[0], MINES.clear.drift[1])))), part: 'heading'};
       let hd: MineRoomPlan | null = null;
       for (const [p, s] of slotsOf(rng.shuffle([...drifts(), 'junction']), {ends: true})) if ((hd = P.put('heading', p, s, [hw, hw + 1], uniq([hl + rng.int(2, 8), hl + 2, hl]), within, o, {kind: 'set', full: true}))) break;
       if (!hd) return null;
@@ -700,7 +716,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
     hoist: () => place('hoist', slotsOf(rng.shuffle(['junction', ...haul.slice(0, 2), ...ofPart('crosscut', 'manway', 'branch')])), steps(16, 12), steps(11, 8, 1), {label: 'Hoist room', role: 'shaft', kind: 'room', type: 'utility', purpose: 'electrical-closet', clear: r2(Math.min(ceilRel, MINES.clear.hoist)), part: 'hoist'}, roomDoor(4)),
     refuge: () => place('refuge', slotsOf(rng.shuffle([...drifts(), 'junction', 'cavern'])), steps(10, 8, 1), steps(8, 6, 1), {label: 'Refuge chamber', role: 'room', kind: 'room', type: 'crew-room', purpose: 'first-aid-room', clear: roomClear(), part: 'refuge'}, roomDoor()),
     sump: () => place('sump', slotsOf([...rng.shuffle(['cavern', haul[haul.length - 1]]), ...rng.shuffle(ofPart('manway', 'airway'))], {ends: true}), deadW, steps(rng.int(10, 18), 8), {label: 'Flooded sump drift', role: 'corridor', ...DEAD_END, clear: clearOf(MINES.clear.drift), part: 'sump'}, {kind: 'set', full: true}, within),
-    collapse: () => place('collapse', slotsOf(rng.shuffle([...drifts(), 'junction']), {ends: true}), deadW, steps(rng.int(10, 16), 8), {label: 'Collapsed drift', role: 'corridor', ...DEAD_END, clear: clearOf(MINES.clear.drift), part: 'collapse'}, {kind: 'set', full: true}, within),
+    collapse: () => place('collapse', slotsOf(rng.shuffle([...drifts(), 'junction']), {ends: true}), deadW, steps(rng.int(11, 16), 10), {label: 'Collapsed drift', role: 'corridor', ...DEAD_END, clear: clearOf(MINES.clear.drift), part: 'collapse'}, {kind: 'set', full: true}, within),
     stope: () => stope(),
   };
   let stopes = 0;
@@ -713,6 +729,11 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
   // lamp / tool rooms first (the way in is short of rock), then a footwall drift (rooms may open off it), the rest in a seeded order
   const order = [...(['lamp', 'tools'] as const).filter(k => want[k]), ...(want.branch ? ['branch'] : []), ...rng.shuffle(['magazine', 'hoist', 'refuge', 'sump', 'collapse', 'stope'].filter(k => want[k as keyof typeof want]))];
   for (const k of order) if (programs[k]()) shape.spaces.push(k);
+  // at least MINES.minRooms of them: the spaces not drawn try their logical places too (the fill adds stopes after this)
+  for (const k of rng.shuffle(ROOMS.filter(q => !want[q] && q !== 'stope'))) {
+    if (roomCount(P.rooms) >= MINES.minRooms) break;
+    if (programs[k]()) shape.spaces.push(k);
+  }
 
   // --- 8. Fill until the floor target: the cavern grown into spare rock, a worked-out stope or two, the other chambers grown, then
   //        (rarely) more stopes ----------------------------------------------------------------------------------------------------

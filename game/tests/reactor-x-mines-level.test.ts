@@ -2,6 +2,8 @@
 // lane HOST's slot / dresser / populations / lighting): the whole level valid (reactorIssues + complexIssues clean), the mines complex
 // hosting zone 1's generator on tier 2 with its full program (>= 10 spaces, >= 600 m², two routes, the set pieces), the visuals plan
 // (timber sets / rail line / models) derived from it, determinism and the generation budget.
+// Task reactor-playtest-round2-20261102 (lane MINES): the program is a seeded drift / room graph now — the guaranteed spaces (adit,
+// junction, haulage, cavern, development heading), a loop, a distinct graph per level seed, the drill in its heading at the runtime fit.
 import {describe, expect, it} from 'vitest';
 import {writeFileSync} from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
@@ -17,7 +19,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures} from './helpers/openablesFixture';
 import {WorldMaterials} from '../src/world/materials';
-import {minesModelKeysFor, MINES_MODELS, REACTOR_X_MODEL_FILES} from '../src/world/reactor/minesAssets';
+import {minesModelKeysFor, MINES_FIT, MINES_MODELS, REACTOR_X_MODEL_FILES} from '../src/world/reactor/minesAssets';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const cache = new Map<number, {L: StationLayout; ms: number}>();
@@ -44,11 +46,13 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       expect(g1.zone).toBe(1);
       expect(c!.areas).toContain(g1.area);
       expect(c!.rooms.find(r => r.area === g1.area)?.key).toBe('cavern');
-      // the program
+      // the program: since task reactor-playtest-round2-20261102 a seeded drift / room graph — the adit, the junction, the haulage, the
+      // cavern and the development heading always, >= 1 loop (openings >= spaces), the rest seeded
       const keys = c!.rooms.map(r => r.key);
-      for (const k of ['portal', 'junction', 'cavern', 'hoist', 'magazine', 'lamp', 'tools']) expect(keys, `${seed} ${k}`).toContain(k);
-      expect(keys.some(k => k.startsWith('haulage-')) && keys.some(k => k.startsWith('manway-'))).toBe(true);
+      for (const k of ['portal', 'junction', 'cavern', 'heading', 'haulage-0']) expect(keys, `${seed} ${k}`).toContain(k);
       expect(c!.rooms.length).toBeGreaterThanOrEqual(10);
+      const ids0 = new Set(c!.areas), inner = L.doors.filter(d => ids0.has(d.a) && ids0.has(d.b));
+      expect(inner.length, `seed ${seed} loop`).toBeGreaterThanOrEqual(c!.areas.length);
       const g = L.levels[2].grid, ids = new Set(c!.areas);
       let walk = 0, free = 0;
       for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i]) && g.cells[i] === FLOOR) { walk++; if (!g.blocked[i] && g.rampIdx[i] < 0) free++; }
@@ -58,6 +62,26 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       out.push({seed, rooms: c!.rooms.length, m2: walk * CELL * CELL, free: free * CELL * CELL, wall: c!.slot?.inward, attempts: REACTOR_GEN_STATS.attempts});
     }
     log('summary', out);
+  });
+
+  it('is a different mine every generation: distinct space graphs over the 8 level seeds, the drill jumbo in its heading at the runtime fit', () => {
+    const sigs = new Set<string>(), courses = new Set<number>();
+    for (const seed of SEEDS) {
+      const {L} = gen(seed), c = L.reactor!.complexes!.find(q => q.id === 'mines')!;
+      const kind = new Map(c.rooms.map(r => [r.area, r.key.replace(/-\d+$/, '')]));
+      const edges = L.doors.filter(d => kind.has(d.a) && kind.has(d.b)).map(d => [kind.get(d.a)!, kind.get(d.b)!].sort().join('-')).sort();
+      sigs.add(edges.join(','));
+      courses.add(c.rooms.filter(r => /^haulage-\d+$/.test(r.key)).length);
+      const hd = c.rooms.find(r => r.key === 'heading')!;
+      const drill = L.props.filter(p => p.kind === 'annexMachine' && p.variant === MINE_PIECE.drill);
+      expect(drill.length, `seed ${seed} drill`).toBe(1);
+      expect(drill[0].area, `seed ${seed} drill in the heading`).toBe(hd.area);
+      const v = planMinesVisuals(L)!;
+      expect(v.models.drillRig[0].sx).toBe(MINES_FIT.drillRig);
+    }
+    log('variety', {sigs: [...sigs], courses: [...courses]});
+    expect(sigs.size).toBe(SEEDS.length);
+    expect(courses.size).toBeGreaterThanOrEqual(2);
   });
 
   it('dresses the workings in the real level: hoist winch + winze, ore carts, drill, cribs; storage opens; the generator room lit', () => {
