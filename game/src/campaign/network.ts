@@ -647,9 +647,11 @@ function finish(seed: number, b: Board, weights: OrdinaryWeights): SubwayNetwork
   const maxD = Math.max(...dist);
   const lo = maxD >= REACTOR_DEPTH.lo ? REACTOR_DEPTH.lo : MIN_REACTOR_DEPTH;
   const hi = Math.max(lo, Math.min(REACTOR_DEPTH.hi, maxD));
+  // the depth first (uniform over the depths the graph offers in lo..hi), then a station at that depth (termini down-weighted)
   const reactorCands = b.st.map((_, i) => i).filter(i => dist[i] >= lo && dist[i] <= hi);
   if (!reactorCands.length) return null;
-  const reactor = rng.weighted(reactorCands.map(i => [i, (b.adj[i].length === 1 ? 0.55 : 1) * (1 + 0.15 * (dist[i] - lo))] as const));
+  const depth = rng.pick([...new Set(reactorCands.map(i => dist[i]))].sort((x, y) => x - y));
+  const reactor = rng.weighted(reactorCands.filter(i => dist[i] === depth).map(i => [i, b.adj[i].length === 1 ? 0.55 : 1] as const));
   // ordinary archetypes (largest remainder); Office / Mall spread out (not next to the start or each other when avoidable)
   const counts = ordinaryCounts(weights, n - 1);
   if (!((counts.subway ?? 0) >= 1)) throw new Error('network: the Subway weight must leave room for the start station');

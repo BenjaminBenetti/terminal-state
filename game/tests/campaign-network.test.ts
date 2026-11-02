@@ -156,7 +156,7 @@ describe('determinism', () => {
   it('is pinned for one seed (re-pin only for an intended generator change — saves keep their own copy of the network)', () => {
     const net = generateNetwork(20261102);
     expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
-      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 45, lines: 6, start: 'st-00', reactor: 'st-24', fingerprint: 'b5433f'});
+      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 45, lines: 6, start: 'st-00', reactor: 'st-33', fingerprint: '5c0cc91e'});
   });
 
   it('the edge list is sorted and unique, each pair sorted', () => {
