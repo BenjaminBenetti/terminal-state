@@ -19,8 +19,31 @@
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
-import type {PlayerTrainSpec, TrainDoorSpec} from './playerTrainSpec';
+import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec, type TrainDoorSpec} from './playerTrainSpec';
 import {cabGlassMaterial} from './elevator';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import * as TRAIN_GEN from '../assets/playerTrain.generated';
+
+/**
+ * Task train-window-fit-20261102-004022: lane ASSETS' conformal window glass (player-train-glass.glb, train-local; the leaf sheet in
+ * the leaf GLB's frame) — one sheet per opening fitted to the body's own surface (the curved front, the corner wraps, the sides'
+ * tumblehome), and a reveal per opening bridging the skin hole to the lining cut-out. `boxes` = thin slabs following each sheet (hitscan).
+ */
+export interface GlassSheet {
+  node: string; kind: 'end' | 'side' | 'leaf'; window: number; joined?: number; reveal?: string;
+  bounds: {min: readonly number[]; max: readonly number[]};
+  boxes: readonly {min: readonly number[]; max: readonly number[]}[];
+  fitError?: number;
+}
+export interface TrainGlassData { key: string; url: string; bytes: number; sheets: readonly GlassSheet[]; reveals: readonly string[] }
+/** The conformal glass metadata (null until lane ASSETS' glass is cooked). */
+export const TRAIN_GLASS: TrainGlassData | null = (TRAIN_GEN as unknown as {PLAYER_TRAIN_GLASS?: TrainGlassData}).PLAYER_TRAIN_GLASS ?? null;
+/** The sheet of window `index` of `kind` (null: none published). */
+export function glassSheet(kind: GlassSheet['kind'], index: number, data: TrainGlassData | null = TRAIN_GLASS): GlassSheet | null {
+  return data?.sheets.find(q => q.kind === kind && q.window === index) ?? null;
+}
+/** A sheet's reveal node name (published, else the glass node's name with 'reveal-'). */
+export const revealOf = (q: GlassSheet): string => q.reveal ?? q.node.replace(/^glass-/, 'reveal-');
 
 /** The accepted Codex interior textures (runtime JPEGs; null / missing = plain paint). */
 export interface TrainTextures {
@@ -37,6 +60,8 @@ export interface TrainModels {
   console?: GLTF | null;
   /** Task train-lockbox: the cooked Lockbox (world/trainLockbox.ts builds it; missing = its placeholder). */
   lockbox?: GLTF | null;
+  /** Task train-window-fit: lane ASSETS' conformal glass + reveals (missing = the flat panes / sleeves). */
+  glass?: GLTF | null;
 }
 
 /** Thicknesses / tiling (m). */
@@ -45,6 +70,8 @@ export const TRAIN_VIEW = {
   leafClear: 0.01,
   /** Glass panes sit this far inside the cut skin plane (task train-shell-followup). */
   glassInset: 0.004,
+  /** Task train-window-fit: the lining's dark outer face stands this far behind it (m). */
+  backingGap: 0.004,
   /** Task train-lockbox: the pocket-end stop post (x thickness) behind a window over the rear door's leaf pocket, and its gap to the
    *  parked leaf's -X edge (m). */
   pocketStop: 0.02,
@@ -287,6 +314,30 @@ export function rectMinusHoles(a0: number, a1: number, b0: number, b1: number, h
 
 // ---------------------------------------------------------------------------------------------
 
+/** A geometry with exactly position + normal + uv (a zero uv when missing) and an index — mergeable with any other. */
+function stripTo(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', g.attributes.position);
+  if (!g.attributes.normal) g.computeVertexNormals();
+  out.setAttribute('normal', g.attributes.normal);
+  out.setAttribute('uv', g.attributes.uv ?? new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+  out.setIndex(g.index ?? Array.from({length: g.attributes.position.count}, (_, i) => i));
+  return out;
+}
+
+/** Task train-window-fit: back faces of a lining QuadSet's quads (reversed, pushed TRAIN_VIEW.backingGap out along the -normal);
+ *  `keep(centreX)` selects which quads get one. */
+function backFaces(out: QuadSet, src: QuadSet, keep: (cx: number) => boolean): void {
+  const P = src.pos, N = src.nor, g = TRAIN_VIEW.backingGap;
+  for (let q = 0; q < P.length / 12; q++) {
+    const o = q * 12, n: V3 = [-N[o], -N[o + 1], -N[o + 2]];
+    const v = (k: number): V3 => [P[o + k * 3] + n[0] * g, P[o + k * 3 + 1] + n[1] * g, P[o + k * 3 + 2] + n[2] * g];
+    const cx = (P[o] + P[o + 3] + P[o + 6] + P[o + 9]) / 4;
+    if (!keep(cx)) continue;
+    out.quad(v(0), v(3), v(2), v(1), n, [0, 0], [0, 1], [1, 1], [1, 0]);
+  }
+}
+
 /**
  * Builds the train in its local frame. `mats` is the runtime's long-lived material cache; `models` / `textures` whatever is
  * loaded (any may be missing). Pure three.js: no scene, no world pose.
@@ -404,6 +455,15 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
   }
   add(bulk, mats.get('bulkhead', tex.bulkhead), 'train-bulkheads');
 
+  // task train-window-fit: the lining's OUTER face — a dark backing a few mm behind the side walls, the end walls and the ceiling
+  // (the same window holes), facing the void between the lining and the skin. A wall has two faces: without it the void side showed
+  // the culled back of the lining, i.e. straight into the lit car through any crack in the cooked shell (a bright seam line).
+  const backing = new QuadSet();
+  backFaces(backing, wall, () => true);
+  backFaces(backing, bulk, (cx) => Math.abs(Math.abs(cx) - ix1) < 1e-4 || Math.abs(cx - ix0) < 1e-4); // the end walls, not the partitions
+  backFaces(backing, ceil, () => true);
+  add(backing, mats.get('liner'), 'train-lining-backing');
+
   // --- metal trim: door jambs / heads / thresholds through the wall, the partition doorway reveals, kick strip ------------------
   const metal = new QuadSet(), rubber = new QuadSet();
   const jo = jambOut(spec);
@@ -424,14 +484,42 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
     metal.quad([x1, f, dw.z1], [x0, f, dw.z1], [x0, doorTop, dw.z1], [x1, doorTop, dw.z1], [0, 0, -1], [x1, 0], [x0, 0], [x0, 1], [x1, 1]);
     metal.quad([x0, doorTop, dw.z0], [x1, doorTop, dw.z0], [x1, doorTop, dw.z1], [x0, doorTop, dw.z1], [0, -1, 0], [x0, 0], [x1, 0], [x1, 1], [x0, 1]);
   }
+  // task train-window-fit: the conformal sheets / reveals of lane ASSETS' glass model, per opening (else the flat pane + sleeve below)
+  // (the sheets are measured for the cooked car's own windows: a spec with other windows keeps the flat panes)
+  const gScene = models.glass && TRAIN_GLASS && spec.windows === PLAYER_TRAIN_SPEC.windows ? models.glass.scene : null;
+  gScene?.updateMatrixWorld(true);
+  const gNode = (name: string): THREE.Mesh | null => { const o = gScene?.getObjectByName(name) as THREE.Mesh | undefined; return o && o.isMesh ? o : null; };
+  const sheetGeos: THREE.BufferGeometry[] = [], revealGeos: THREE.BufferGeometry[] = [];
+  /** Bake a glass-model node into train-local geometry (position + normal only, merged later). */
+  const bake = (m: THREE.Mesh): THREE.BufferGeometry => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', m.geometry.attributes.position.clone());
+    if (m.geometry.attributes.normal) g.setAttribute('normal', m.geometry.attributes.normal.clone());
+    if (m.geometry.index) g.setIndex(m.geometry.index.clone());
+    g.applyMatrix4(m.matrixWorld);
+    if (!g.attributes.normal) g.computeVertexNormals();
+    return g;
+  };
+  /** Use the conformal sheet (+ reveal) of a window when the glass model carries it; true = the flat pane / sleeve are not built. */
+  const conformal = (kind: 'side' | 'end', index: number): boolean => {
+    const q = gScene ? glassSheet(kind, index) : null, gm = q ? gNode(q.node) : null;
+    if (!q || !gm) return false;
+    sheetGeos.push(bake(gm));
+    const rm = gNode(revealOf(q));
+    if (rm) revealGeos.push(bake(rm));
+    return !!rm; // without its reveal the flat sleeve still closes the void (the sheet replaces only the pane)
+  };
+  const conformalSheet = new Set<string>(); // windows whose flat pane gives way to a sheet
   // (task train-shell-followup) window sleeves: frames closing the void between the lining and the cut skin, around every window
   const glass = new QuadSet();
   const leafSpec = spec.doorLeaf;
   /** Signed z range (s * a .. s * b, ascending) of the |z| interval [a, b] on side s. */
   const zr = (s: -1 | 1, a: number, b: number): [number, number] => [Math.min(s * a, s * b), Math.max(s * a, s * b)];
-  for (const w of win.side) {
+  win.side.forEach((w, wi) => {
     const s = w.side;
-    if (w.zone === 'nose') continue; // (task train-lockbox) the nose corner panes are built with their end window below
+    if (w.zone === 'nose') return; // (task train-lockbox) the nose corner panes are built with their end window below
+    const fitted = conformal('side', wi), sheet = !!(gScene && glassSheet('side', wi) && gNode(glassSheet('side', wi)!.node));
+    if (sheet) conformalSheet.add(`side:${wi}`);
     // task train-lockbox: a rear-compartment window over the rear door's leaf pocket is a pocket door seen through glass — no sleeve
     // face crosses the leaf's slot (|z| of the leaf's faces + 5 mm) inside the pocket span, a slim stop post at the parked leaf's -X end
     const slot = w.pocket ? {x0: w.pocket.x0 - 0.005, x1: w.pocket.x1 + 0.005, a: leafSpec.outerZ - leafSpec.thickness - 0.005, b: leafSpec.outerZ + 0.005} : null;
@@ -439,7 +527,7 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
       const parts: [number, number][] = !slot || x <= slot.x0 || x >= slot.x1 ? [[hw, w.skinZ]] : [[hw, slot.a], [slot.b, w.skinZ]];
       return parts.filter(([a, b]) => b - a > 0.008);
     };
-    if (w.skinZ - hw > 1e-3) {
+    if (!fitted && w.skinZ - hw > 1e-3) {
       for (const [a, b] of zParts(w.x0)) {
         const [zl, zh] = zr(s, a, b);
         metal.quad([w.x0, w.y0, zh], [w.x0, w.y0, zl], [w.x0, w.y1, zl], [w.x0, w.y1, zh], [1, 0, 0], [zh, w.y0], [zl, w.y0], [zl, w.y1], [zh, w.y1]);
@@ -463,16 +551,19 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
       const [zl, zh] = zr(s, hw, w.skinZ), px1 = w.pocket.x0 - TRAIN_VIEW.pocketStopGap;
       metal.box(px1 - TRAIN_VIEW.pocketStop, w.y0, zl, px1, w.y1, zh); // the parked leaf's -X edge rests against it
     }
+    if (sheet) return;
     const zg = s * (w.skinZ - TRAIN_VIEW.glassInset);
     glass.quad([w.x0, w.y0, zg], [w.x1, w.y0, zg], [w.x1, w.y1, zg], [w.x0, w.y1, zg], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
-  }
-  for (const w of win.end) {
+  });
+  win.end.forEach((w, wi) => {
+    const fitted = conformal('end', wi), sheet = !!(gScene && glassSheet('end', wi) && gNode(glassSheet('end', wi)!.node));
+    if (sheet) conformalSheet.add(`end:${wi}`);
     const e = w.end, xl = Math.min(e * (e > 0 ? ix1 : -ix0), e * w.skinX), xh = Math.max(e * (e > 0 ? ix1 : -ix0), e * w.skinX);
     // task train-lockbox: the nose corner window joined to this end window (its wraparound): a side pane at |z| = its skinZ closes
     // the strip of the side hole beside this window's sleeve (NOSE_PANE), and that strip of the sleeve's side face gives way to it
     const nose = noseCorners(spec, w);
     const zFace = (z: number) => nose.find(n => Math.abs(n.side * n.skinZ - z) < 0.02) ?? null;
-    if (xh - xl > 1e-3) {
+    if (!fitted && xh - xl > 1e-3) {
       const sideFace = (z: number, facing: 1 | -1) => {
         const n = zFace(z), panes = n ? [nosePane(w, n)] : [];
         for (const [a, b, y0, y1] of rectMinusHoles(xl, xh, w.y0, w.y1, panes.map(q => [q.x0, q.x1, q.y0, q.y1] as [number, number, number, number]))) {
@@ -485,22 +576,39 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
       metal.quad([xl, w.y1, w.z0], [xh, w.y1, w.z0], [xh, w.y1, w.z1], [xl, w.y1, w.z1], [0, -1, 0], [xl, w.z0], [xh, w.z0], [xh, w.z1], [xl, w.z1]);
       metal.quad([xl, w.y0, w.z1], [xh, w.y0, w.z1], [xh, w.y0, w.z0], [xl, w.y0, w.z0], [0, 1, 0], [xl, w.z1], [xh, w.z1], [xh, w.z0], [xl, w.z0]);
     }
+    if (sheet) return; // the wraparound sheet covers the end window and its nose corner
     const xg = e * (w.skinX - TRAIN_VIEW.glassInset);
     glass.quad([xg, w.y0, w.z1], [xg, w.y0, w.z0], [xg, w.y1, w.z0], [xg, w.y1, w.z1], [1, 0, 0], [0, 0], [1, 0], [1, 1], [0, 1]);
     for (const n of nose) {
       const q = nosePane(w, n), z = n.side * n.skinZ;
       if (q.x1 - q.x0 > 1e-3 && q.y1 - q.y0 > 1e-3) glass.quad([q.x0, q.y0, z], [q.x1, q.y0, z], [q.x1, q.y1, z], [q.x0, q.y1, z], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
     }
-  }
+  });
   add(metal, mats.get('metal'), 'train-trim');
   add(rubber, mats.get('rubber'), 'train-thresholds');
-  if (!glass.empty) {
-    const g = glass.geometry();
+  // the window glass: the flat panes (windows without a sheet) + every conformal sheet, ONE draw; the reveals one draw of trim metal
+  const flat = glass.empty ? null : glass.geometry();
+  const parts = [...(flat ? [stripTo(flat)] : []), ...sheetGeos.map(stripTo)];
+  if (parts.length) {
+    const g = parts.length === 1 ? parts[0] : mergeGeometries(parts, false)!;
+    for (const q of parts) if (q !== g) q.dispose();
+    if (flat && flat !== g) flat.dispose();
+    g.computeBoundingBox(); g.computeBoundingSphere();
     geometries.push(g);
     const m = new THREE.Mesh(g, mats.glass());
     m.name = 'train-glass';
     m.userData.trainGlass = true;
+    m.userData.conformal = sheetGeos.length;
     m.renderOrder = 1; // after the opaque car (transparent: depthWrite off, both faces)
+    fixed.add(m);
+  }
+  if (revealGeos.length) {
+    const rs = revealGeos.map(stripTo), g = rs.length === 1 ? rs[0] : mergeGeometries(rs, false)!;
+    for (const q of rs) if (q !== g) q.dispose();
+    g.computeBoundingBox(); g.computeBoundingSphere();
+    geometries.push(g);
+    const m = new THREE.Mesh(g, mats.get('metal'));
+    m.name = 'train-reveals';
     fixed.add(m);
   }
 
@@ -604,6 +712,9 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
         // (task train-shell-followup) glass in the leaf's cut window, in the leaf's own frame: it slides (and mirrors) with the leaf
         if (win.leaf) {
           leafGlassGeo ??= (() => {
+            // task train-window-fit: lane ASSETS' leaf sheet (leaf GLB frame) when cooked, else a flat pane on the window rect
+            const ls = gScene ? glassSheet('leaf', 0) ?? TRAIN_GLASS?.sheets.find(q => q.kind === 'leaf') ?? null : null, lm = ls ? gNode(ls.node) : null;
+            if (lm) { const g = stripTo(bake(lm)); g.translate(-ctr.x, -ctr.y, -ctr.z); geometries.push(g); return g; }
             const q = new QuadSet(), w = win.leaf!, z = -ctr.z;
             q.quad([w.x0 - ctr.x, w.y0 - ctr.y, z], [w.x1 - ctr.x, w.y0 - ctr.y, z], [w.x1 - ctr.x, w.y1 - ctr.y, z], [w.x0 - ctr.x, w.y1 - ctr.y, z], [0, 0, 1], [0, 0], [1, 0], [1, 1], [0, 1]);
             const g = q.geometry();
