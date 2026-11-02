@@ -124,10 +124,13 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
 
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
+// (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
+// the persisted values live in ui/settingsStore.ts, main.ts copies them in)
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -167,7 +170,13 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high'};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1};
+  // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
+  /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
+  menuRender: ((time: number) => boolean) | null = null;
+  /** A setting changed inside the game (the M mute toggle): main.ts writes it back to the settings store. */
+  onSettingsChanged: ((key: keyof Settings) => void) | null = null;
+  // ==== end lane MENU ====
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
@@ -1297,6 +1306,7 @@ export class Game {
       this.settings.muted = !this.settings.muted;
       this.sfx.setMuted(this.settings.muted);
       ($('#set-mute') as HTMLInputElement).checked = this.settings.muted;
+      this.onSettingsChanged?.('muted'); // (lane MENU: persisted by the settings store)
       if (this.state === 'playing') this.hud.toast(this.settings.muted ? 'Audio muted' : 'Audio on');
     }
     if (this.state === 'playing') {
@@ -1333,8 +1343,9 @@ export class Game {
   // ---------------------------------------------------------------------------------------
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, this.settings.quality === 'high' ? 1.5 : 1);
-    this.renderer.setPixelRatio(this.settings.quality === 'high' ? dpr : Math.min(dpr, 0.85));
+    // task campaign-foundation-20261102 (lane MENU): the native ratio is the existing DPR cap (min(dpr, 1.5) on High; min(dpr, 1, 0.85)
+    // on Low), times the linear render-resolution scale (Native / Half / Quarter) — ui/settingsStore.ts renderPixelRatio
+    this.renderer.setPixelRatio(renderPixelRatio(window.devicePixelRatio || 1, this.settings.quality, this.settings.renderScale));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -1384,6 +1395,12 @@ export class Game {
       if (this.state === 'playing') cpu.deferredMs = fb.run();
       this.prof.lap(SPAN.other); // lane MEASURE
       this.frames++;
+    } else if (this.menuRender && !this.world && (this.state === 'title' || this.state === 'loading')) {
+      // task campaign-foundation-20261102 (lane MENU): the main menu's diorama (world/menuScene.ts; its own frame cap / hidden-tab pause)
+      // until the first world is built — never a world update
+      const r0 = performance.now();
+      cpu.rendered = this.menuRender(time ?? now);
+      cpu.renderMs = performance.now() - r0;
     } else if (this.world) {
       // menus: keep the frozen frame fresh at a low rate
       this.renderT -= dt;
