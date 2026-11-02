@@ -617,8 +617,12 @@ const SUFFIX = {
 
 const LINE_NAMES: readonly string[] = ['Meridian', 'Foundry', 'Harbour', 'Lantern', 'Quarry', 'Canal', 'Tidewater', 'Granary', 'Kestrel', 'Heron', 'Ember', 'Larch', 'Beacon', 'Thistle'];
 const RING_NAMES: readonly string[] = ['Orbital', 'Belt', 'Ring'];
-/** Printed ink colours (legible under a multiply blend on aged paper). */
-export const LINE_INKS: readonly string[] = ['#c63a2f', '#23599e', '#2f8541', '#dd7a1f', '#75429b', '#12817f', '#8a5730', '#b8407a'];
+/**
+ * Printed ink colours (legible under a multiply blend on aged paper): five clearly distinct primaries (red, blue, green, amber,
+ * purple) are dealt first, in a seeded order; teal / brown / magenta only for a sixth line or more.
+ */
+export const LINE_INKS: readonly string[] = ['#c63a2f', '#23599e', '#2f8541', '#e08a1a', '#75429b', '#12817f', '#8a5730', '#b8407a'];
+const PRIMARY_INKS = 5;
 const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-west', 'north', 'north-east'];
 
 // --- finishing --------------------------------------------------------------------------------------------------------------
@@ -628,7 +632,7 @@ function finish(seed: number, b: Board, weights: OrdinaryWeights): SubwayNetwork
   const n = b.st.length;
   const lineSets = b.st.map((_, i) => b.linesOf(i));
   const colourOf: number[] = [];
-  const order = rng.shuffle(LINE_INKS.map((_, i) => i));
+  const order = [...rng.shuffle(LINE_INKS.slice(0, PRIMARY_INKS).map((_, i) => i)), ...rng.shuffle(LINE_INKS.slice(PRIMARY_INKS).map((_, i) => i + PRIMARY_INKS))];
   let ci = 0;
   b.lines.forEach((l, li) => { colourOf[li] = l.kind === 'branch' ? -1 : order[ci++ % order.length]; });
   b.lines.forEach((l, li) => { if (l.kind === 'branch') colourOf[li] = colourOf[l.parent]; });

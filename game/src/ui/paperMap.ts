@@ -66,7 +66,8 @@ const dir8 = (dx: number, dy: number) => { const a = Math.atan2(dy, dx); return 
 const dirDist = (a: number, b: number) => { const d = Math.abs(a - b) % 8; return d > 4 ? 8 - d : d; };
 
 export interface LabelLine { text: string; fs: number; cls: string }
-export interface LabelItem { id: string; x: number; y: number; r: number; dirs: number[]; force: boolean; variants: LabelLine[][] }
+/** A label to place: the dot (centre, clearance radius, its track directions) and its text variants (lines + extra cost). */
+export interface LabelItem { id: string; x: number; y: number; r: number; dirs: number[]; force: boolean; variants: {lines: LabelLine[]; cost: number}[] }
 export interface PlacedLabel { id: string; lines: LabelLine[]; box: Rect; anchor: 'start' | 'middle' | 'end'; tx: number; ty: number; overlap: boolean }
 export interface LabelWorld { bounds: Rect; markers: {id: string; box: Rect}[]; segs: [Pt, Pt][]; blocked: Rect[] }
 
@@ -74,15 +75,19 @@ export interface LabelWorld { bounds: Rect; markers: {id: string; box: Rect}[]; 
 export const textWidth = (l: LabelLine) => l.text.length * l.fs * (l.cls.includes('caps') ? 0.8 : 0.56) + 2;
 const lineH = (l: LabelLine) => l.fs * 1.16;
 
-// candidate positions around a dot: [direction index, x sign, y sign, base cost]
-const CANDS: readonly [number, number, number, number][] = [[0, 1, 0, 0], [4, -1, 0, 0.15], [7, 1, -1, 0.3], [1, 1, 1, 0.35], [5, -1, -1, 0.45], [3, -1, 1, 0.5], [6, 0, -1, 0.6], [2, 0, 1, 0.65]];
+// candidate positions around a dot: [direction index, x sign, y sign, base cost, alignment of a label above / below (-1 left of the
+// dot, 0 centred, 1 right of it)]
+const CANDS: readonly [number, number, number, number, number][] = [
+  [0, 1, 0, 0, 0], [4, -1, 0, 0.15, 0], [7, 1, -1, 0.3, 0], [1, 1, 1, 0.35, 0], [5, -1, -1, 0.45, 0], [3, -1, 1, 0.5, 0],
+  [6, 0, -1, 0.6, 0], [2, 0, 1, 0.65, 0], [6, 0, -1, 0.75, 1], [6, 0, -1, 0.8, -1], [2, 0, 1, 0.85, 1], [2, 0, 1, 0.9, -1],
+];
 
-function candidateBox(it: LabelItem, lines: LabelLine[], ux: number, uy: number): {box: Rect; anchor: PlacedLabel['anchor']; tx: number; ty: number} {
+function candidateBox(it: LabelItem, lines: LabelLine[], ux: number, uy: number, align: number): {box: Rect; anchor: PlacedLabel['anchor']; tx: number; ty: number} {
   const w = Math.max(...lines.map(textWidth)), h = lines.reduce((s, l) => s + lineH(l), 0);
   const gap = it.r + 4, g = ux && uy ? gap * 0.72 : gap;
-  const x0 = ux > 0 ? it.x + g : ux < 0 ? it.x - g - w : it.x - w / 2;
+  const x0 = ux > 0 ? it.x + g : ux < 0 ? it.x - g - w : align > 0 ? it.x - 4 : align < 0 ? it.x + 4 - w : it.x - w / 2;
   const y0 = uy > 0 ? it.y + g : uy < 0 ? it.y - g - h : it.y - h / 2;
-  const anchor = ux > 0 ? 'start' : ux < 0 ? 'end' : 'middle';
+  const anchor = ux > 0 || (!ux && align > 0) ? 'start' : ux < 0 || (!ux && align < 0) ? 'end' : 'middle';
   const box = {x0, y0, x1: x0 + w, y1: y0 + h};
   return {box, anchor, tx: anchor === 'start' ? x0 : anchor === 'end' ? x0 + w : x0 + w / 2, ty: y0 + lines[0].fs * 0.86};
 }
@@ -103,22 +108,21 @@ export function segHitsRect(p: Pt, q: Pt, r: Rect): boolean {
 }
 
 /**
- * Greedy label placement in item order: 8 positions around each dot x the item's text variants (one / two lines), never over
- * another label, a station dot, the title band or outside the border; costs prefer the right, then the left, then the diagonals,
- * away from the station's own track directions and off other track. An item that fits nowhere is hidden (null) unless forced
- * (current / selected / Reactor), which takes its cheapest spot inside the border.
+ * Greedy label placement in item order: 12 positions around each dot x the item's text variants (one / two lines, smaller print
+ * when the zoom keeps it legible), never over another label, a station dot, the title band or outside the border; costs prefer
+ * the right, then the left, the diagonals, above / below, away from the station's own track directions and off other track. An
+ * item that fits nowhere is hidden (null) unless forced (current / selected / Reactor), which takes its cheapest spot.
  */
 export function placeLabels(items: readonly LabelItem[], world: LabelWorld): Map<string, PlacedLabel | null> {
   const out = new Map<string, PlacedLabel | null>();
   const placed: Rect[] = [];
   for (const it of items) {
     let best: PlacedLabel | null = null, bestCost = Infinity, fallback: PlacedLabel | null = null, fallbackCost = Infinity;
-    for (let vi = 0; vi < it.variants.length; vi++) {
-      const lines = it.variants[vi];
-      for (const [d, ux, uy, base] of CANDS) {
-        const c = candidateBox(it, lines, ux, uy);
+    for (const {lines, cost: vcost} of it.variants) {
+      for (const [d, ux, uy, base, align] of CANDS) {
+        const c = candidateBox(it, lines, ux, uy, align);
         if (!inside(c.box, world.bounds) || world.blocked.some(b => rectsOverlap(b, c.box))) continue;
-        let cost = base + vi * 0.35;
+        let cost = base + vcost;
         for (const e of it.dirs) { const dd = dirDist(d, e); cost += dd === 0 ? 2.5 : dd === 1 ? 0.45 : 0; }
         for (const [p, q] of world.segs) if (segHitsRect(p, q, c.box)) cost += 1.4;
         const hard = placed.some(b => rectsOverlap(b, c.box, 1.5)) || world.markers.some(m => m.id !== it.id && rectsOverlap(m.box, c.box, 1));
@@ -258,19 +262,27 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
     return dir8(b.x - a.x, b.y - a.y);
   });
   const prio = (s: MapStation) => (s.current ? 0 : s.node.id === selected ? 1 : s.reactor ? 2 : s.node.id === focused ? 3 : s.can && mode === 'travel' ? 4 : s.hub ? 5 : s.visited ? 6 : 7);
+  // smaller print only where the zoom keeps it at least MIN_LABEL_PX on screen
+  const sizes = [1, 0.84, 0.7].filter((k, i) => !i || fs * k * scale >= MIN_LABEL_PX);
   const items: LabelItem[] = stations.slice().sort((a, b) => prio(a) - prio(b) || (a.node.id < b.node.id ? -1 : 1)).map(s => {
-    const name = {text: s.node.name, fs: s.reactor ? fs * 1.2 : fs, cls: s.reactor ? 'pm-l-reactor' : s.hub || s.current ? 'pm-l-hub' : 'pm-l'};
-    const sub = s.current ? {text: s.reactor ? 'You are here · Reactor' : 'You are here', fs: fs * 0.78, cls: 'pm-l-you caps'}
-      : s.reactor ? {text: 'Reactor', fs: fs * 0.8, cls: 'pm-l-sub caps'} : null;
-    const words = s.node.name.split(' ');
-    const variants: LabelLine[][] = [sub ? [name, sub] : [name]];
-    if (words.length > 1) {
-      let best = 1, diff = Infinity;
-      for (let i = 1; i < words.length; i++) { const d = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length); if (d < diff) { diff = d; best = i; } }
-      const two = [{...name, text: words.slice(0, best).join(' ')}, {...name, text: words.slice(best).join(' ')}];
-      variants.push(sub ? [...two, sub] : two);
-    }
-    return {id: s.node.id, x: s.p.x, y: s.p.y, r: s.r + (s.current ? 5 : 0), dirs: dirsOf(s.node.id), force: s.current || s.reactor || s.node.id === selected || s.node.id === focused, variants};
+    const variants: LabelItem['variants'] = [];
+    sizes.forEach((k, si) => {
+      const f = fs * k;
+      const name = {text: s.node.name, fs: s.reactor ? f * 1.2 : f, cls: s.reactor ? 'pm-l-reactor' : s.hub || s.current ? 'pm-l-hub' : 'pm-l'};
+      const sub = s.current ? {text: s.reactor ? 'You are here · Reactor' : 'You are here', fs: f * 0.86, cls: 'pm-l-you caps'}
+        : s.reactor ? {text: 'Reactor', fs: f * 0.8, cls: 'pm-l-sub caps'} : null;
+      const words = s.node.name.split(' ');
+      variants.push({lines: sub ? [name, sub] : [name], cost: si * 1.6});
+      if (words.length > 1) {
+        let best = 1, diff = Infinity;
+        for (let i = 1; i < words.length; i++) { const d = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length); if (d < diff) { diff = d; best = i; } }
+        const two = [{...name, text: words.slice(0, best).join(' ')}, {...name, text: words.slice(best).join(' ')}];
+        variants.push({lines: sub ? [...two, sub] : two, cost: si * 1.6 + 0.35});
+      }
+    });
+    // clear the pencil marks around the dot: the selection ring, the "one stop away" ring, the you-are-here ring
+    const clear = s.node.id === selected || s.node.id === focused ? 14 : s.can && mode === 'travel' ? 8 : s.current ? 6 : 0;
+    return {id: s.node.id, x: s.p.x, y: s.p.y, r: s.r + clear, dirs: dirsOf(s.node.id), force: s.current || s.reactor || s.node.id === selected || s.node.id === focused, variants};
   });
   const markers = stations.map(s => ({id: s.node.id, box: {x0: s.p.x - s.r - 1, y0: s.p.y - s.r - 1, x1: s.p.x + s.r + 1, y1: s.p.y + s.r + 1}}));
   const labels = placeLabels(items, {bounds: PAPER.area, markers, segs, blocked: [{x0: PAPER.band.x0, y0: PAPER.band.y0, x1: PAPER.band.x1, y1: PAPER.band.y1 + 8}]});
@@ -359,7 +371,7 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   // marks: you are here, selection (pencil), keyboard focus
   o.push(`<g class="pm-marks">`);
   for (const s of m.stations) {
-    if (s.current) o.push(`<circle class="pm-you" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 5)}" fill="none" stroke="${RED}" stroke-width="3"/>`);
+    if (s.current) o.push(`<circle class="pm-you" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 5)}" fill="none" stroke="${RED}" stroke-width="3.4"/>`);
     if (s.node.id === selected) o.push(`<g class="pm-selected">${pencilRing(s.p, s.r + 12, '#262320', 2.6)}</g>`);
     if (s.node.id === focused && focused !== selected) o.push(`<g class="pm-focused">${pencilRing(s.p, s.r + 11, '#1f4f8f', 2)}</g>`);
   }
