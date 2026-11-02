@@ -4,7 +4,7 @@
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {LEVELS} from '../src/levels/registry';
-import {CELL, FLOOR, Grid, PathFinder} from '../src/gen/grid';
+import {CELL, FLOOR, Grid, PathFinder, SOLID} from '../src/gen/grid';
 import {levelsOf, type Level} from '../src/gen/levels';
 import {deriveRails} from '../src/gen/levelGen';
 import {ladderClimbPath, sampleClimb, CLIMB} from '../src/gen/traversal';
@@ -170,7 +170,7 @@ describe('regression: railing cut-outs at the ladders (user: "the railing is not
 });
 
 describe('regression: no steel across the walkways (user: "large steel beams often intersect walk ways")', () => {
-  it('a deck record is the deck itself: every cell of every pit deck rect is flat walkable deck of its storey (no run / bank / leg inside)', () => {
+  it('a deck record is the deck itself: every cell of every pit deck rect is flat deck of its storey or a reserved column (no run inside)', () => {
     for (const seed of SEEDS) {
       const L = level(seed), r = L.reactor!;
       for (const d of r.decks) {
@@ -178,6 +178,7 @@ describe('regression: no steel across the walkways (user: "large steel beams oft
         // (the inline landings between a run's flights are not cell-aligned: sample the rect itself, 5 cm in from its edges)
         for (let z = d.rect.z0 + 0.05; z < d.rect.z1 - 0.04; z += 0.25) for (let x = d.rect.x0 + 0.05; x < d.rect.x1 - 0.04; x += 0.25) {
           const [cx, cy] = g.cellOf(x, z), i = g.idx(cx, cy);
+          if (g.cells[i] === SOLID) continue; // a reserved column inside the deck (tower leg, organ bank): no walkway
           if (g.cells[i] !== FLOOR || Math.abs(g.floorAt(x, z) - d.y) > 0.02) expect.fail(`seed ${seed} ${d.kind} deck on level ${d.level}: ${x.toFixed(2)},${z.toFixed(2)} (cell ${cx},${cy}) is not flat deck at ${d.y}`);
         }
       }

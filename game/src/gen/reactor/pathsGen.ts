@@ -16,7 +16,7 @@
 //     nothing else.
 //  5. FAN CLEARANCE: an extraction fan's housing (the delivered model, ring-fitted to the fan radius) never hangs in walkable space.
 
-import {CELL, FLOOR, STEP_UP, VOID, rampHeight, type Grid} from '../grid';
+import {CELL, FLOOR, SOLID, STEP_UP, VOID, rampHeight, type Grid} from '../grid';
 import {floorNearCell, type Level, type RailRun} from '../levels';
 import {deriveRails} from '../levelGen';
 import type {Ladder} from '../traversal';
@@ -25,17 +25,23 @@ import type {Rect, StationLayout} from '../stationTypes';
 // ---------------------------------------------------------------------------------------------------------------------------
 // 1. Deck footprints
 
-/** The cells of `rect` on grid g that belong to `area` (FLOOR, blocked or not) as row-merged rectangles (canvas = grid cells). */
+/**
+ * The deck's part of `rect` on grid g as row-merged rectangles (canvas = grid cells): its own cells (FLOOR of `area`, blocked or not)
+ * and the reserved solid columns inside it (a tower's corner legs, the organ bank: no walkway there) — never a cell carved as
+ * something else on this storey (a stair run, an earlier deck). A rect that keeps every cell is returned whole.
+ */
 export function deckFootprint(g: Grid, rect: Rect, area: number): Rect[] {
   const out: Rect[] = [];
   let open: Rect[] = [];
+  const mine = (x: number, y: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] === area;
   for (let y = rect.y; y < rect.y + rect.h; y++) {
     const runs: [number, number][] = [];
-    let s = -1;
+    let s = -1, own = false;
     for (let x = rect.x; x <= rect.x + rect.w; x++) {
-      const on = x < rect.x + rect.w && g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] === area;
-      if (on && s < 0) s = x;
-      if (!on && s >= 0) { runs.push([s, x]); s = -1; }
+      const on = x < rect.x + rect.w && g.inBounds(x, y) && (g.cells[g.idx(x, y)] === SOLID || mine(x, y));
+      if (on && s < 0) { s = x; own = false; }
+      if (on && mine(x, y)) own = true;
+      if (!on && s >= 0) { if (own) runs.push([s, x]); s = -1; }
     }
     const next: Rect[] = [];
     for (const [a, b] of runs) {
@@ -85,6 +91,17 @@ export function railBase(r: RailRun, x: number, z: number): number {
   const lx = r.x1 - r.x0, lz = r.z1 - r.z0, l2 = lx * lx + lz * lz;
   const t = l2 > 0 ? Math.max(0, Math.min(1, ((x - r.x0) * lx + (z - r.z0) * lz) / l2)) : 0;
   return r.y0 + (r.y1 - r.y0) * t;
+}
+
+/** A railing of storey `level` stands on the line through (x, z) (within `tol` m) at base height ~y (fixtures mounted on a rail). */
+export function railedAt(layout: StationLayout, level: number, x: number, z: number, y: number, tol = 0.12): boolean {
+  for (const r of layout.rails) {
+    if (r.level !== level) continue;
+    const ex = r.x1 - r.x0, ez = r.z1 - r.z0, L2 = ex * ex + ez * ez || 1;
+    const t = Math.max(0, Math.min(1, ((x - r.x0) * ex + (z - r.z0) * ez) / L2));
+    if (Math.hypot(r.x0 + ex * t - x, r.z0 + ez * t - z) < tol && Math.abs(r.y0 + (r.y1 - r.y0) * t - y) < 0.35) return true;
+  }
+  return false;
 }
 
 /** The unit edge (rail, s0..s1 along it) is a seam: its far side is walkable at its base height. */

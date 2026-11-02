@@ -31,6 +31,7 @@ import {playerTrainPlacement} from '../../gen/playerTrain';
 import {PLAYER_TRAIN_SPEC} from '../playerTrainSpec';
 import {inPoly, planReactorKit, type KitGeo, type KitPlan, type KitWalk} from './archKit';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
+import {isMounted, planMountedLamps} from './gaslightFixtures';
 
 /** The player body (m): radius, height above the floor (1.9 m: a 1.8 m person + margin), floor slack, edge tolerance. */
 export const BODY = {r: 0.3, h: 1.9, foot: 0.03, edge: 0.1} as const;
@@ -394,11 +395,17 @@ export function auditModels(m: PathAuditOptions['models'] = 'all'): ReadonlySet<
   return m;
 }
 
-/** The kit plan exactly as arch.ts builds it (owned, visible rails; the walk volume when walk-aware). */
+/** The world fixture tube size (world/materials.ts WorldMaterials.fixture): the mounted lamps' lens mapping only. */
+const FIXTURE_TUBE = {w: 1.2, h: 0.19, d: 0.18};
+
+/** The kit plan exactly as arch.ts builds it (owned, visible rails; lane GASLIGHT's mounted pit lamps; the walk volume when walk-aware). */
 export function auditPlan(layout: StationLayout, models: ReadonlySet<ReactorPiece>, walk?: KitWalk): KitPlan {
   const info = layout.reactor!;
   const rails = layout.rails.filter(r => !r.hidden && reactorOwnsRail(info, r));
-  return planReactorKit(info, {models, rails, ...(walk ? {walk} : {})});
+  const fixtures = layout.lights.some(l => isMounted(l));
+  const plan = planReactorKit(info, {models, rails, fixtures, ...(walk ? {walk} : {})});
+  if (fixtures) { plan.tag = 'mounted-lamps'; planMountedLamps(plan, layout.lights, FIXTURE_TUBE); plan.tag = ''; }
+  return plan;
 }
 
 /** Runs the whole audit on a generated Reactor layout. */
@@ -464,6 +471,7 @@ export function auditReactorPaths(layout: StationLayout, opts: PathAuditOptions 
   }
   // --- arch.ts's caged fixtures over GEN's pit lights (cage 0.26 x 0.34 under the light point, hanger above) ----------------------
   for (const l of layout.lights) {
+    if (isMounted(l)) continue; // lane GASLIGHT's mounted lamps: their bodies are in the plan (planMountedLamps)
     if ((l as {virtual?: boolean}).virtual || !inPoly(info.pit.outline, (Math.floor(l.x / CELL) + 0.5) * CELL, (Math.floor(l.z / CELL) + 0.5) * CELL)) continue;
     checked.fixtures++;
     const o = obbOf(new THREE.Matrix4().compose(new THREE.Vector3(l.x, l.y - 0.19, l.z), new THREE.Quaternion(), new THREE.Vector3(0.26, 0.34, 0.26)), UNIT_LO, UNIT_HI);
