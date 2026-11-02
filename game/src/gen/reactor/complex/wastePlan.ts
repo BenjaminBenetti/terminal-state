@@ -133,7 +133,8 @@ export const WASTE_KINDS: Readonly<Record<WasteKind, WasteKindSpec>> = {
   // the hall's floor is the racks')
   vault: {zone: 'controlled', kind: 'room', type: 'storage', purpose: 'turbine-hall', label: 'Drum vault A', role: 'hall', clear: 'hall'},
   compactor: {zone: 'controlled', kind: 'room', type: 'utility', purpose: 'custodial-room', label: 'Compactor & processing', role: 'room', clear: 'plant'},
-  hotcell: {zone: 'controlled', kind: 'room', type: 'utility', purpose: 'workshop', label: 'Hot-cell gallery', role: 'room', clear: 'room'},
+  // (the hot-cell gallery: a lightly furnished plant-room purpose — a spares shelf / a crate — so its wall keeps the 3.6 m window)
+  hotcell: {zone: 'controlled', kind: 'room', type: 'utility', purpose: 'ventilation-plant', label: 'Hot-cell gallery', role: 'room', clear: 'room'},
   cask: {zone: 'controlled', kind: 'room', type: 'storage', purpose: 'turbine-hall', label: 'Dry-cask hall', role: 'vault', clear: 'tall'},
   service: {zone: 'service', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', label: 'Service corridor', role: 'corridor', clear: 'corr'},
   plant: {zone: 'service', kind: 'room', type: 'utility', purpose: 'generator-room', label: 'Generator & ventilation plant', role: 'generator', clear: 'plant'},
@@ -206,7 +207,17 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
  * entrance's position) cannot hold it. Deterministic in `rng`.
  */
 export function planWaste(region: Rect, inward: Side, ent: Rect, rng: Rng): WastePlan | null {
-  const f = new WasteFrame(region, inward, rng.chance(0.5));
+  const mirror0 = rng.chance(0.5);
+  // the seeded mirror first; a plan that runs out of attempts tries the other one
+  for (const mirror of [mirror0, !mirror0]) {
+    const p = planIn(new WasteFrame(region, inward, mirror), ent, rng);
+    if (p !== undefined) return p;
+  }
+  return null;
+}
+
+/** Plans in one frame: the plan, null (the region / entrance cannot hold the program) or undefined (every attempt failed). */
+function planIn(f: WasteFrame, ent: Rect, rng: Rng): WastePlan | null | undefined {
   // the entrance in local cells
   let eu0 = Infinity, eu1 = -Infinity, ev = -Infinity;
   for (let y = ent.y; y < ent.y + ent.h; y++) for (let x = ent.x; x < ent.x + ent.w; x++) {
@@ -226,7 +237,7 @@ export function planWaste(region: Rect, inward: Side, ent: Rect, rng: Rng): Wast
     const p = attempt(f, box, entrance, rng, k > WASTE_ATTEMPTS * 2 / 3);
     if (p) { p.stats.attempts = k; return p; }
   }
-  return null;
+  return undefined;
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -463,10 +474,10 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   // --- 4. the sealed vault corridors: runs (straight on, an L turn, a T branch off a run's middle) from the airlock's head, grown as
   // the halls need them (a hall that fits nowhere gets a new run toward open rock), then a few more toward the target count
   const corrs: WasteKey[] = [];
-  const addRun = (bases: readonly WasteKey[]): WasteKey | null => {
+  const addRun = (bases: readonly WasteKey[], len: [number, number] = [10, 26]): WasteKey | null => {
     const key = `k${corrs.length + 1}`, first = !corrs.length;
     for (const base of bases) for (const m of sh<'straight' | 'turn' | 'branch'>(base === 'airlock' ? ['straight', 'turn'] : ['straight', 'turn', 'branch', 'branch'])) {
-      if (P.corridor(key, 'corridor', base, m, first ? [10, 30] : [10, 26], first ? HEAVY_NARROW : JUNCTION)) { corrs.push(key); return key; }
+      if (P.corridor(key, 'corridor', base, m, first ? [10, 30] : len, first ? HEAVY_NARROW : JUNCTION)) { corrs.push(key); return key; }
     }
     return null;
   };
@@ -481,14 +492,16 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   if (!addRun(['airlock'])) return no('corridor');
   const runs = rng.int(2, 4);
   // --- 5. the halls off the corridors: the dry-cask hall, the drum vault, the compactor (each the first corridor side that fits)
+  const TRANSFER: DoorReq = {w: 6, h: 3.6, kind: 'wide'};
   const hallOff = (key: WasteKey, kind: WasteKind, want: Want, door: DoorReq, via: readonly WasteKey[]): boolean => {
-    for (const c of via) if (P.attach(key, kind, c, sh([0, 1, 2, 3] as S4[]), want, door)) return true;
+    for (const c of via) if (P.attach(key, kind, c, sh([0, 1, 2, 3] as S4[]), want, P.by[c].kind === 'cask' || (P.by[c].kind === 'vault' && kind !== 'compactor') ? TRANSFER : door)) return true;
     return false;
   };
   const hall = (key: WasteKey, kind: WasteKind, want: Want, door: DoorReq, extra: readonly WasteKey[] = []): boolean => {
-    if (hallOff(key, kind, want, door, [...sh(corrs.slice()), ...extra])) return true;
-    for (let k = 0; k < 2 && corrs.length < 5; k++) {
-      const run = addRun(runBases());
+    if (hallOff(key, kind, want, door, [...sh(corrs.slice()), ...extra.filter(x => P.by[x])])) return true;
+    // (a short connector is enough to reach the rock a hall needs)
+    for (let k = 0; k < 3 && corrs.length < 6; k++) {
+      const run = addRun(runBases(), [6, 24]);
       if (!run) return false;
       if (hallOff(key, kind, want, door, [run])) return true;
       undo(run);
@@ -497,9 +510,11 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   };
   const halls: [WasteKey, WasteKind, Want, DoorReq][] = [
     ['cask', 'cask', {long: [relax ? 22 : 24, 32], short: [21, 26]}, CASK_DOOR],
-    ['vault', 'vault', {long: [relax ? 28 : 32, 46], short: [16, 22], orient: rng.chance(0.7) ? 'along' : 'any'}, HEAVY],
+    // (the drum vault >= 18 m long x 8 m wide: two rack rows of two units each even with its main door's cross aisle)
+    ['vault', 'vault', {long: [relax ? 30 : 36, 46], short: [16, 22], orient: rng.chance(0.7) ? 'along' : 'any'}, HEAVY],
   ];
-  for (const [key, kind, want, door] of rng.chance(0.5) ? halls : halls.reverse()) if (!hall(key, kind, want, door)) return no(key);
+  // (the two halls may also open off each other: a wide transfer door, casks and drums both move on the same carts)
+  for (const [key, kind, want, door] of rng.chance(0.5) ? halls : halls.reverse()) if (!hall(key, kind, want, door, [key === 'cask' ? 'vault' : 'cask'])) return no(key);
   while (corrs.length < runs) if (!addRun(runBases())) break;
   if (!hall('compactor', 'compactor', {long: [15, 20], short: [13, 17]}, PERSONNEL, ['vault'])) return no('compactor');
   const onCorr = () => sh(corrs.slice());
@@ -523,7 +538,8 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   const growOrder = ['cask', 'vault', 'vault2', 'plant', 'compactor', 'bay', 'hp', 'control', 'lockers', 'hotcell', 'pump', 'switch'];
   for (const k of growOrder) if (P.by[k]) P.grow(P.by[k]);
   let stores = 0;
-  const hosts = sh(P.rooms.filter(r => r.kind !== 'airlock' && r.kind !== 'store').map(r => r.key));
+  // (never off the airlock, another store or a hall: a store's door would cut the racks / the cask grid)
+  const hosts = sh(P.rooms.filter(r => !['airlock', 'store', 'vault', 'cask'].includes(r.kind)).map(r => r.key));
   for (const h of hosts) {
     if (stores >= 3) break;
     const host = P.by[h], key = `store${stores + 1}`;
@@ -623,9 +639,10 @@ function loops(P: Packer, rng: Rng): void {
     if (!s || s.s1 - s.s0 < L.d.w + 2) continue;
     cands.push({a, b, ...L});
   }
-  // a hall takes at most one loop door (every door cuts a cross aisle through the racks / the cask grid)
+  // a room takes at most one loop door (two for a corridor): every door cuts a cross aisle through a hall's racks / cask grid, and the
+  // plant keeps a wall for its fans
   const hallLoops = new Map<WasteKey, number>();
-  const room = (c: {a: WasteRoom; b: WasteRoom}) => [c.a, c.b].every(r => (r.kind !== 'vault' && r.kind !== 'cask') || !hallLoops.get(r.key));
+  const room = (c: {a: WasteRoom; b: WasteRoom}) => [c.a, c.b].every(r => (hallLoops.get(r.key) ?? 0) < (r.kind === 'corridor' ? 2 : 1));
   const open = (c: {a: WasteRoom; b: WasteRoom; d: DoorReq}) => {
     P.door(c.a.key, c.b.key, c.d, true);
     has.add(pairKey(c.a.key, c.b.key));

@@ -1,6 +1,8 @@
 // Task reactor-expansion-20261101 (lane WASTE): THE NUCLEAR-WASTE REPOSITORY in the REAL Reactor level (lane HOST's slot on tier 4,
 // LEVELS.reactor.generate over 8 seeds): carved on every seed, complexIssues / reactorIssues clean, zone 2's generator inside it and
 // reachable by stairs through the entrance, the decor record, the prop rules on the real dressing, carve + dress time. Focused.
+// Task studio-reactor-playtest-round2-20261102 (lane WASTE): the seeded room graph on the REAL slot — coherent on all 24 seeds
+// (tests/reactor-x-waste-graph.ts), map labels for every space, and a different facility per seed (distinct graphs / positions).
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import {reactorIssues} from '../src/gen/reactor/index';
@@ -11,6 +13,8 @@ import {levelDistance} from '../src/gen/levelGen';
 import {propBlocksDoorway} from '../src/gen/placeKit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import type {StationLayout} from '../src/gen/stationTypes';
+import {planStoreys} from '../src/world/reactor/mapBoardPlan';
+import {cellsOfWorld, wasteCoherence, wasteSignature, type WasteSignature} from './reactor-x-waste-graph';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const cache = new Map<number, {L: StationLayout; carveMs: number; dressMs: number}>();
@@ -43,6 +47,22 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       let walk = 0;
       for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i]) && g.cells[i] === FLOOR && !g.blocked[i]) walk++;
       expect(walk * CELL * CELL, `seed ${seed}`).toBeGreaterThanOrEqual(700);
+      // the room graph: the logical entry sequence, the sealed controlled area, the service side, >= 2 loops
+      expect(wasteCoherence(L, c!.slot!.frontArea), `seed ${seed}`).toEqual([]);
+    }
+  });
+
+  it('labels every space for the map boards (the HUD / map label of each room, drawn on its storey\'s plan)', () => {
+    for (const seed of SEEDS) {
+      const {L} = level(seed);
+      const c = L.reactor!.complexes!.find(q => q.id === 'waste')!;
+      const plan = planStoreys(L, L.reactor!), st = plan.storeys.find(q => q.level === c.level)!;
+      for (const r of c.rooms) {
+        expect(r.label.length, r.key).toBeGreaterThan(3);
+        expect(L.areas[r.area].label, r.key).toBe(r.label);
+        expect(st.rooms.some(q => q.label === r.label.toUpperCase()), `seed ${seed}: ${r.label} on the map`).toBe(true);
+      }
+      for (const lb of ['Receiving bay', 'Health-physics checkpoint', 'Vault airlock', 'Dry-cask hall', 'Generator & ventilation plant']) expect(c.rooms.some(r => r.label === lb), lb).toBe(true);
     }
   });
 
@@ -72,6 +92,8 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       expect(n('wasteDrum'), `seed ${seed} drums`).toBeGreaterThanOrEqual(60);
       expect(n('storageCask'), `seed ${seed} casks`).toBeGreaterThanOrEqual(2);
       expect(n('deconShower') + n('hotCellWindow'), `seed ${seed} showers / hot cell`).toBeGreaterThanOrEqual(2);
+      // (user bullet 13, via lane PROPS: no floating status beacons — a user-requested removal)
+      expect(D.beacons.length).toBe(0);
       // one generator cable: the host's (panel -> through the entrance -> the fans); the repository draws none of its own
       expect((D as {cable?: unknown}).cable).toBeUndefined();
       expect(L.reactor!.generators[c.generator].cable.length).toBeGreaterThanOrEqual(2);
@@ -98,7 +120,10 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
     }
   });
 
-  it('every repository gets its control console and switchgear (16 more seeds: the dresser / collider changes of other lanes move wall space)', () => {
+  it('every repository gets its control console and switchgear, coherent (16 more seeds); a different facility per seed over all 24', () => {
+    const sigs: WasteSignature[] = [];
+    const sig = (L: StationLayout) => { const c = L.reactor!.complexes!.find(q => q.id === 'waste')!; sigs.push(wasteSignature(L, cellsOfWorld(c.slot!.region), c.slot!.inward)); };
+    for (const seed of SEEDS) sig(level(seed).L);
     for (let seed = 9; seed <= 24; seed++) {
       const L = LEVELS.reactor.generate('main', {levelSeed: seed});
       const D = L.reactorWaste;
@@ -106,8 +131,21 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       expect(D, `seed ${seed}`).toBeTruthy();
       expect(D!.models.filter(m => m.piece === 'switchgear').length, `seed ${seed} switchgear`).toBeGreaterThanOrEqual(1);
       expect(D!.models.filter(m => m.piece === 'controlConsole').length, `seed ${seed} console`).toBe(1);
+      expect(D!.models.filter(m => m.piece === 'wasteDrum').length, `seed ${seed} drums`).toBeGreaterThanOrEqual(60);
       expect(complexIssues(L), `seed ${seed}`).toEqual([]);
+      const c = L.reactor!.complexes!.find(q => q.id === 'waste')!;
+      expect(wasteCoherence(L, c.slot!.frontArea), `seed ${seed}`).toEqual([]);
+      sig(L);
     }
+    expect(sigs.length).toBeGreaterThanOrEqual(20);
+    const distinct = (k: (s: WasteSignature) => string | number) => new Set(sigs.map(k)).size;
+    expect(distinct(s => s.topo)).toBeGreaterThanOrEqual(sigs.length - 2);
+    expect(distinct(s => s.geo)).toBeGreaterThanOrEqual(sigs.length - 4);
+    expect(distinct(s => s.cask)).toBeGreaterThanOrEqual(4);
+    expect(distinct(s => s.plant)).toBeGreaterThanOrEqual(4);
+    expect(distinct(s => s.vault)).toBeGreaterThanOrEqual(10);
+    expect(distinct(s => s.corridors)).toBeGreaterThanOrEqual(2);
+    expect(distinct(s => s.switchgear)).toBeGreaterThanOrEqual(2);
   });
 
   it('carves in < 60 ms and dresses in < 150 ms (mean over the seeds)', () => {

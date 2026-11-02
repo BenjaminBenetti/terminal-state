@@ -33,6 +33,8 @@ export interface WasteCarveRecord {
   /** Generator footprint / use cell (canvas cells, BEFORE the crop). */
   genFoot: Rect;
   genUse: [number, number];
+  /** The carve's room records (the host copies their labels into layout.reactor.complexes after the dress: a relabel shows). */
+  rooms: ComplexRoom[];
 }
 
 export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
@@ -96,8 +98,8 @@ export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
   const face = alongX ? [Math.sign(-toUse[0]), 0] : [0, Math.sign(-toUse[1])];
   const useYaw = Math.round(Math.atan2(-face[0], -face[1]) * 1000) / 1000;
 
-  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, entrance: {...slot.entrance}, genFoot: foot, genUse: [ux, uy]};
   const rooms: ComplexRoom[] = plan.rooms.map(s => ({area: ids[s.key], key: s.key, label: s.label, role: WASTE_KINDS[s.kind].role}));
+  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, entrance: {...slot.entrance}, genFoot: foot, genUse: [ux, uy], rooms};
   return {
     id: 'waste', slot, areas: plan.rooms.map(s => ids[s.key]), entryArea: ids.bay, rooms,
     generator: {area: plant.id, foot, yaw: Math.round(genYaw * 1000) / 1000, use: {x: ux, y: uy, yaw: useYaw}},

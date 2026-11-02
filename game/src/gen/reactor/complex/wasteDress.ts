@@ -285,6 +285,23 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     stats.solids++;
     return p;
   };
+  /** Whether solid() would take (x, z) +- (hx, hz), height h, with a `ring` (its cell / ring / volume tests; connectivity aside). */
+  const solidFits = (r: RoomF, x: number, z: number, hx: number, hz: number, h: number, ring = 0): boolean => {
+    const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+      if (!g.inBounds(cx, cy)) return false;
+      const i = g.idx(cx, cy);
+      if (g.cells[i] !== FLOOR || g.area[i] !== r.a.id || g.blocked[i] || g.rampIdx[i] >= 0 || ctx.keep[i] || ctx.doorCell[i] || ctx.edge[i] || ctx.zone[i]) return false;
+    }
+    if (ring) {
+      const rc = Math.max(1, Math.round(ring / CELL));
+      for (let cy = y0 - rc; cy <= y1 + rc; cy++) for (let cx = x0 - rc; cx <= x1 + rc; cx++) {
+        if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) continue;
+        if (!g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] !== FLOOR || g.blocked[g.idx(cx, cy)]) return false;
+      }
+    }
+    return h <= r.ceil - base - 0.05 && !propBlocksDoorway(layout, x, z, hx, hz, base, h) && clear3d(x - hx, x + hx, base, base + h, z - hz, z + hz);
+  };
   /**
    * An anchored box (W along the wall, D deep, H tall) with its back to wall w at q, keeping a `front` m access strip of open floor in
    * front of it over its width (operators / doors of switchgear). Returns its centre or null.
@@ -334,6 +351,9 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     layout.lights.push(l);
     stats.lights++;
   };
+  /** Wall spans kept free of plates (the generator's sign wall): area, wall-face point, centre height (absolute), width. */
+  const reserved: {area: number; x: number; z: number; y: number; w: number}[] = [];
+  const onReserved = (area: number, x: number, z: number, y: number, w: number) => reserved.some(q => q.area === area && Math.abs(q.y - y) < 0.6 && Math.hypot(q.x - x, q.z - z) < (q.w + w) / 2 + 0.1);
   /** Stencil plate on wall w at q (local), height y (relative); slides along the wall to a backed spot clear of doors. */
   const plate = (r: RoomF, w: Wall, q: number, y: number, text: string, width = 1.6, area = r.a) => {
     const side = sideOf(wallN(r, w)), len = wallLen(r, w);
@@ -343,6 +363,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       const aq = along(r, w, qq);
       if (!backed(ctx, area, side, aq - width / 2, aq + width / 2, base + y - 0.2)) continue;
       const [x, z] = onWall(r, w, qq, 0.02);
+      if (onReserved(area.id, x, z, base + y, width)) continue;
       const rot = side === 'N' ? 0 : side === 'S' ? Math.PI : side === 'W' ? Math.PI / 2 : -Math.PI / 2;
       layout.signs.push({x: r3(x), y: r3(base + y), z: r3(z), rot, kind: 'service', text, area: area.id, w: width, level});
       stats.signs++;
@@ -384,6 +405,14 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   };
   /** Room frame on the other side of a door from `k` (undefined for the deck). */
   const R2 = (k: WasteKey | 'deck'): RoomF | undefined => (k === 'deck' ? undefined : R[k]);
+  /** Renames a space everywhere it is shown (the area, the plan, the carve's room record the map boards read). */
+  const relabel = (k: WasteKey, label: string) => {
+    const w = plan.by[k];
+    if (!w) return;
+    w.label = label;
+    layout.areas[rec.areas[k]].label = label;
+    for (const q of rec.rooms) if (q.key === k) q.label = label;
+  };
   /** The name a door plate gives a space. */
   const NAME: Partial<Record<WasteKind, string>> = {
     vault: 'DRUM VAULT', cask: 'DRY CASK STORAGE · KEEP 1 M CLEAR', compactor: 'SUPERCOMPACTOR', hotcell: 'HOT CELL · SHIELDED', plant: 'GENERATOR & VENT PLANT',
@@ -479,9 +508,12 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   {
     const r = R.hp, rr = rng.fork('waste-hp');
     const S = WASTE_SIZES.shower;
-    // decon shower booths against a wall of the checkpoint (its first-aid furnishing permitting), else of the change room
+    // decon shower booths against a wall of the checkpoint (its first-aid furnishing permitting), else of the change room, else on a
+    // long wall of the vault airlock or a sealed corridor (showering out of the controlled area; a 1.5 m lane kept past them)
     let booths = 0;
-    for (const rm of [r, R.lockers]) for (const w of ['left', 'front', 'back', 'right'] as Wall[]) {
+    const runs = [R.airlock, ...ofKind('corridor')];
+    for (const rm of [r, R.lockers, ...runs]) for (const w of (runs.includes(rm) ? ['front', 'back'] : ['left', 'front', 'back', 'right']) as Wall[]) {
+      if (booths && runs.includes(rm)) break;
       for (const q of spots(rm, w, rr, 0.25, S.w / 2 + 0.1)) {
         if (booths >= 2) break;
         if (!wallFree(rm, w, q - S.w / 2, q + S.w / 2, 0.5)) continue;
@@ -565,12 +597,16 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     const rr = rng.fork(`waste-${w0.key}`);
     const B = WASTE_SIZES.rackBay, D = WASTE_SIZES.drum;
     const wallGap = 2.0, aisle = 1.4;
-    /** The rack layout of a frame: rows along s (stacked along t), cut by a cross aisle at every door on the front / back walls. */
+    /**
+     * The rack layout of a frame: rows along s (stacked along t), cut by ONE cross aisle at the vault's main door (from the room it
+     * opens off) when that door is on a front / back wall; every other door opens onto the 2 m perimeter aisle along the walls.
+     */
+    const main = treeDoor(w0.key);
     const rackLayout = (r: RoomF) => {
-      // cross-aisle bands (along s) at every door on the front / back walls; the end aisles
       const bands: [number, number][] = [];
-      for (const w of ['front', 'back'] as Wall[]) for (const [a, b] of doorSpans(r, w)) bands.push([a - 0.6, b + 0.6]);
-      const sA = wallGap + 0.3, sB = r.lu - wallGap - 0.3;
+      if (main) { const {w, q0, q1} = doorWall(r, main); if (w === 'front' || w === 'back') bands.push([q0 - 0.6, q1 + 0.6]); }
+      // (the end aisles 1.7 m: the 2 m perimeter aisles run along the long walls; furnishing front strips are kept anyway)
+      const sA = 1.7, sB = r.lu - 1.7;
       // rack row centres along t
       const inner = r.lv - 2 * wallGap;
       const nRows = Math.max(0, Math.floor((inner + aisle) / (B.d + aisle)));
@@ -585,10 +621,14 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
         if (cur < sB) free.push([cur, sB]);
       }
       const units: {s0: number; bays: number; t: number}[] = [];
+      // each free run split into the units (2-4 bays, an aisle between: a cross aisle every ~6 m down the rows) that hold the most bays
       for (const t of rows) for (const [a, b] of free) {
+        const m = Math.floor((b - a + 1e-6) / B.w);
+        let k = 0, best = 0;
+        for (let q = 1; 3 * q - 1 <= m; q++) { const n = Math.min(4 * q, m - (q - 1)); if (n > best) { best = n; k = q; } }
         let s = a;
-        while (b - s >= 2 * B.w - 1e-6) {
-          const n = Math.min(5, Math.floor((b - s + 1e-6) / B.w));
+        for (let i = 0; i < k; i++) {
+          const n = Math.floor(best / k) + (i < best % k ? 1 : 0);
           units.push({s0: s, bays: n, t});
           s += n * B.w + aisle;
         }
@@ -605,7 +645,9 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     for (const u0 of units) {
       // a unit the station dresser's furnishing gets in the way of shrinks (from either end) down to two bays
       let u: {s0: number; bays: number; t: number} | null = null;
-      fit: for (let k = u0.bays; k >= 2; k--) for (const s0 of [u0.s0, u0.s0 + (u0.bays - k) * B.w]) {
+      // (a shorter unit slides along its span, 0.5 m steps, past the furnishing before it shrinks again)
+      const slides = (k: number) => { const out = [u0.s0, u0.s0 + (u0.bays - k) * B.w]; for (let x = u0.s0 + 0.5; x < u0.s0 + (u0.bays - k) * B.w - 0.01; x += 0.5) out.push(x); return out; };
+      fit: for (let k = u0.bays; k >= 2; k--) for (const s0 of slides(k)) {
         if (lsolid(r, s0, s0 + k * B.w, u0.t - B.d / 2, u0.t + B.d / 2, B.top + 0.05, 'waste:rack', {sight: true})) { u = {s0, bays: k, t: u0.t}; break fit; }
       }
       if (!u) continue;
@@ -660,14 +702,14 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   // else of the processing room — the outer wall first (the shielded cell behind it is solid rock) — else the cask hall's / a vault's
   const hotRng = rng.fork('waste-hotcell');
   let hotPlaced = false;
-  const hotCell = (cands: readonly [RoomF | undefined, Wall][]) => {
+  const hotCell = (cands: readonly [RoomF | undefined, Wall][], pad = 0.6) => {
     if (hotPlaced) return;
     const rr = hotRng, HC = WASTE_SIZES.hotCell;
     hot: for (const [rm, w] of cands) {
       if (!rm || rm.ceil - base < HC.h + 0.1) continue;
       const mid = wallLen(rm, w) / 2;
       for (const q of spots(rm, w, rr, 0.25, HC.w / 2 + 0.1).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))) {
-        if (!wallFree(rm, w, q - HC.w / 2, q + HC.w / 2, 0.6)) continue;
+        if (!wallFree(rm, w, q - HC.w / 2, q + HC.w / 2, pad)) continue;
         const [x, z] = onWall(rm, w, q, HC.d / 2);
         const along = w === 'front' || w === 'back' ? rm.au : rm.av;
         const hx = along[0] ? HC.w / 2 : HC.d / 2, hz = along[0] ? HC.d / 2 : HC.w / 2;
@@ -681,8 +723,11 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   const HOT = R.hotcell;
   if (HOT) {
     hotCell(WALLS.map(w => [HOT, w] as [RoomF, Wall]));
+    hotCell(WALLS.map(w => [HOT, w] as [RoomF, Wall]), 0.3);
+    // a gallery whose walls the station dresser's fittings took cannot hold the window: it is the sample counting room instead
+    if (!hotPlaced) relabel('hotcell', 'Sample counting room');
     const p = plan.by.hotcell.parent;
-    doorPlate(R[p], between(p, 'hotcell'), NAME.hotcell!, 1.6);
+    doorPlate(R[p], between(p, 'hotcell'), hotPlaced ? NAME.hotcell! : 'SAMPLE COUNTING · DOSIMETER ON', 1.6);
     lamp(HOT, HOT.lu * 0.5, HOT.lv * 0.5);
   }
   hotCell([[R.compactor, 'right'], [R.compactor, 'back'], [R.compactor, 'left'], [R.compactor, 'front']]);
@@ -700,7 +745,21 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     const turn = a1.n > a0.n || (a1.n === a0.n && rr.chance(0.5));
     const cw = turn ? K.d : K.w, cd = turn ? K.w : K.d, {nu, nv} = turn ? a1 : a0;
     const h = Math.min(K.h, r.ceil - base - 0.3);
-    const su = (r.lu - (nu * cw + (nu - 1) * gap)) / 2, sv = (r.lv - (nv * cd + (nv - 1) * gap)) / 2;
+    // the grid centred, else shifted (up to 1 m each way) to where the hall's doors and the dresser's furnishing leave the most casks
+    // (a dry fit of every slot first; robust to what the station dresser placed before us)
+    const su0 = (r.lu - (nu * cw + (nu - 1) * gap)) / 2, sv0 = (r.lv - (nv * cd + (nv - 1) * gap)) / 2;
+    let su = su0, sv = sv0, bestN = -1;
+    for (const [ds, dt] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [1, 0], [-1, 0], [0, 1], [0, -1], [0.5, 0.5], [-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [1, 1], [-1, -1], [1, -1], [-1, 1]]) {
+      const a = su0 + ds, b2 = sv0 + dt;
+      if (a < 0.6 || b2 < 0.6 || a + nu * cw + (nu - 1) * gap > r.lu - 0.6 || b2 + nv * cd + (nv - 1) * gap > r.lv - 0.6) continue;
+      let n = 0;
+      for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
+        const s = a + i * (cw + gap) + cw / 2, t = b2 + j * (cd + gap) + cd / 2, bx = wb(r, s - cw / 2, s + cw / 2, t - cd / 2, t + cd / 2);
+        if (solidFits(r, (bx.x0 + bx.x1) / 2, (bx.z0 + bx.z1) / 2, (bx.x1 - bx.x0) / 2, (bx.z1 - bx.z0) / 2, h, 0.5)) n++;
+      }
+      if (n > bestN) { bestN = n; su = a; sv = b2; }
+      if (n === nu * nv) break;
+    }
     for (let i = 0; i < nu; i++) for (let j = 0; j < nv; j++) {
       const s = su + i * (cw + gap) + cw / 2, t = sv + j * (cd + gap) + cd / 2;
       if (h < K.h - 0.01) continue; // the hero cask is never squashed: a hall too low keeps its floor clear
@@ -743,6 +802,8 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   // the hot-cell window, if neither the gallery nor the processing room had a wall for it: an inspection cell looking into the cask
   // hall / a vault / the bay / the plant
   hotCell([[R.cask, 'back'], [R.cask, 'right'], [R.cask, 'left'], [R.vault, 'left'], [R.vault, 'right'], [R.bay, 'back'], [R.plant, 'back']]);
+  // (last: any wall of the halls / processing rooms, 0.3 m off the door jambs)
+  for (const rm of [HOT, R.compactor, R.cask, ...ofKind('vault'), R.plant, R.bay, R.pump]) hotCell(WALLS.map(w => [rm, w] as [RoomF | undefined, Wall]), 0.3);
 
   // =================================================================================================================================
   // COMPACTOR & PROCESSING
@@ -777,6 +838,16 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
         }
       }
       break;
+    }
+    // drums AWAITING compaction: banded drum pallets along the processing room's walls (then the bay's) whenever the racks + the
+    // bay's pallets hold fewer than 72 (a narrow vault the dresser's machinery crowds), up to six
+    for (let extra = 0, k = 0; k < 2 && stats.drums < 72 && extra < 6; k++) {
+      const rm = k === 0 ? r : R.bay;
+      for (const w of WALLS) for (const q of spots(rm, w, rr, 0.5, 1.0)) {
+        if (stats.drums >= 72 || extra >= 6) break;
+        const P = WASTE_SIZES.pallet.w;
+        if (wallFree(rm, w, q - P / 2, q + P / 2, 0.8) && drumPallet(rm, w, q)) extra++;
+      }
     }
     // compacted pucks on pallets (anchored, banded)
     let pucks = 0;
@@ -890,12 +961,14 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       const p = onWall(r, w, qa, da), q = onWall(r, w, qb, db);
       box(p[0], base + y0, p[1], q[0], base + y1, q[1], m);
     };
-    for (const w of rr.shuffle(['back', 'front']).concat(['left', 'right']) as Wall[]) {
+    // (a plant with a door in every wall: the second pass keeps 0.4 m off the jambs)
+    for (const [w, pad] of [...(rr.shuffle(['back', 'front']).concat(['left', 'right']) as Wall[]).map(w => [w, 0.8] as const), ...WALLS.map(w => [w, 0.4] as const)]) {
+      if (fans >= 1 && pad < 0.8) break;
       if (fans >= 2) break;
       let lastQ = -Infinity, onThis = 0;
       for (const q of spots(r, w, rr, 0.25, FW / 2 + 0.3).sort((a, b) => a - b)) {
         if (fans >= 2 || q - lastQ < FW + 0.9) continue;
-        if (!wallFree(r, w, q - FW / 2, q + FW / 2, 0.8)) continue;
+        if (!wallFree(r, w, q - FW / 2, q + FW / 2, pad)) continue;
         const alongV = w === 'front' || w === 'back' ? r.au : r.av;
         const [x, z] = onWall(r, w, q, FD / 2 + 0.05);
         const hx = alongV[0] ? FW / 2 : FD / 2, hz = alongV[0] ? FD / 2 : FW / 2;
@@ -976,7 +1049,10 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
         const p0 = onWall(r, w, qq - W / 2, 0), p1 = onWall(r, w, qq + W / 2, 0.15);
         if (!clear3d(Math.min(p0[0], p1[0]), Math.max(p0[0], p1[0]), base + y - 0.6, base + y + 0.6, Math.min(p0[1], p1[1]), Math.max(p0[1], p1[1]))) continue;
         const [x, z] = onWall(r, w, qq, 0.02);
+        // (no plate of the plant already there: the station dresser's, the plant's own)
+        if (layout.signs.some(q => q.area === r.a.id && Math.abs(q.y - (base + y)) < 0.6 && Math.hypot(q.x - x, q.z - z) < ((q.w ?? 1.6) + W) / 2 + 0.1)) continue;
         spot = {x: r3(x), y: r3(base + y), z: r3(z), rot: side === 'N' ? 0 : side === 'S' ? Math.PI : side === 'W' ? Math.PI / 2 : -Math.PI / 2, w: W};
+        reserved.push({area: r.a.id, x, z, y: base + y, w: W});
         plate(r, w, qq + (qq + W + 1.2 < len ? W / 2 + 1.2 : -W / 2 - 1.2), 2.4, 'AUX GENERATOR 3 · CORE-FLOOR FANS', 2.2) || plate(r, sideW === 'left' ? 'right' : 'left', r.lv * 0.6, 2.2, 'AUX GENERATOR 3 · CORE-FLOOR FANS', 2.2);
         break sign;
       }
@@ -993,6 +1069,11 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   }
 
   // --- the record --------------------------------------------------------------------------------------------------------------
+  decor.graph = {
+    rooms: plan.rooms.map(w => ({area: rec.areas[w.key], key: w.key, kind: w.kind, zone: w.zone, label: w.label})),
+    doors: rec.doors.map(q => ({id: q.id, a: q.a, b: q.b, kind: q.kind, loop: !!q.loop})),
+    switchgear: plan.switchgear.slice(),
+  };
   layout.reactorWaste = decor;
   stats.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
   Object.assign(WASTE_DRESS_STATS, stats);

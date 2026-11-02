@@ -67,6 +67,16 @@ export interface WasteDecor {
    * (layout.signs convention) and the clear width (m). Nothing else is placed on it.
    */
   genSign?: {x: number; y: number; z: number; rot: number; w: number};
+  /** The seeded room graph as carved (QA / tests: coherence + variety): every space and every door (a / b = room keys, 'deck'). */
+  graph?: WasteGraph;
+}
+
+/** The repository's room graph (task studio-reactor-playtest-round2-20261102): spaces by kind / zone, doors by kind. */
+export interface WasteGraph {
+  rooms: {area: number; key: string; kind: string; zone: 'clean' | 'controlled' | 'service'; label: string}[];
+  doors: {id: number; a: string; b: string; kind: string; loop: boolean}[];
+  /** The rooms the switchgear tries first (the plan's seeded home order). */
+  switchgear: string[];
 }
 
 /** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie; the hero models' cooked dims). */
