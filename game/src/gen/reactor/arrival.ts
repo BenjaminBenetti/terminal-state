@@ -139,11 +139,20 @@ function tryRecipe(inp: ArrivalInput, recipe: ArrivalRecipe, rng: Rng): ArrivalC
 
   // --- the ticket hall: against the platform wall, somewhere along the platform ------------------------------------------------
   const hw = rng.int(...ARRIVAL.hallAlong), hd = rng.int(...ARRIVAL.hallDeep);
-  const dir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
-  // the reveal column first (the tunnel's down leg), then the station area back from it
+  let dir: 1 | -1 = rng.chance(0.5) ? 1 : -1;
   const bw = rng.int(...ARRIVAL.bore);
-  const dx = rng.int(ARRIVAL.corner, PW - ARRIVAL.corner - bw);
-  const L1 = rng.int(...ARRIVAL.lateral);
+  let L1 = rng.int(...ARRIVAL.lateral);
+  // recipe sizes (drawn up front: they set how far the station area reaches back from the reveal column)
+  const lc = rng.int(10, 18), cw = rng.int(4, 5);
+  const ra = rng.int(10, 13), rd = rng.int(9, 10), over = rng.int(4, Math.max(4, ra - 4));
+  const reach = () => (recipe === 'hall' ? L1 + hw : recipe === 'corridor' ? Math.max(8, L1 - lc) + lc + 1 + hw : L1 + ra - over + hw) + 1;
+  // the reveal column (the tunnel's down leg): where the whole station area still lies under the platform
+  const span = (d: 1 | -1): [number, number] => d > 0 ? [Math.max(ARRIVAL.corner, p0 + 3 + reach()), PW - ARRIVAL.corner - bw] : [ARRIVAL.corner, Math.min(PW - ARRIVAL.corner - bw, p1 - 3 - bw - reach())];
+  let [lo, hi] = span(dir);
+  if (hi < lo) { dir = dir > 0 ? -1 : 1; [lo, hi] = span(dir); }
+  if (hi < lo) { L1 = ARRIVAL.lateral[0]; [lo, hi] = span(dir); }
+  if (hi < lo) return miss('reveal-span');
+  const dx = rng.int(lo, hi);
   let hall: Area | null = null, corridor: Area | null = null, src: Area | null = null;
   const rooms: Area[] = [];
   /** Breach source wall: the column (canonical px) of the wall cell and the rows it may span. */
@@ -170,7 +179,7 @@ function tryRecipe(inp: ArrivalInput, recipe: ArrivalRecipe, rng: Rng): ArrivalC
     src = hall; wallPx = wall; rowLo = B0 + 1; rowHi = B0 + hd - 1;
   } else if (recipe === 'corridor') {
     // hall | staff door | service corridor (side rooms off it) | breach at its far end
-    const lc = rng.int(10, 18), cw = rng.int(4, 5), L2 = Math.max(8, L1 - lc);
+    const L2 = Math.max(8, L1 - lc);
     const wall = dx + (dir > 0 ? 0 : bw) - dir * L2;
     const cpx = dir > 0 ? wall - lc : wall + 1; // corridor columns [cpx, cpx + lc)
     const hpx = dir > 0 ? cpx - 1 - hw : cpx + lc + 1;
@@ -186,23 +195,21 @@ function tryRecipe(inp: ArrivalInput, recipe: ArrivalRecipe, rng: Rng): ArrivalC
     tx.door(rectC(dwc, cpz + Math.floor((cw - Math.min(cw, 4)) / 2), 1, Math.min(cw, 4)), hall, corridor, 2.4, {staff: true});
     // a room off the corridor's south side (rows below it) when the band leaves room
     const spec = program.shift()!;
-    const rd = rng.int(9, 10), ra = Math.min(lc, rng.int(10, 12));
-    const rr: CRect = {px: dir > 0 ? cpx : cpx + lc - ra, pz: cpz + cw + 1, w: ra, h: rd};
+    const ra2 = Math.min(lc, ra);
+    const rr: CRect = {px: dir > 0 ? cpx : cpx + lc - ra2, pz: cpz + cw + 1, w: ra2, h: rd};
     const room = rr.pz + rr.h <= -3 ? sideRoom(spec, rr, corridor) : null;
     if (room) {
       rooms.push(room);
-      const d0 = rng.int(1, Math.max(1, ra - 5));
-      tx.door(rectC(rr.px + d0, cpz + cw, Math.min(4, ra - 2), 1), corridor, room, 2.4, {staff: true});
+      const d0 = rng.int(1, Math.max(1, ra2 - 5));
+      tx.door(rectC(rr.px + d0, cpz + cw, Math.min(4, ra2 - 2), 1), corridor, room, 2.4, {staff: true});
     } else program.unshift(spec);
     src = corridor; wallPx = wall; rowLo = cpz; rowHi = cpz + cw;
   } else {
     // a store / electrical room behind the hall (its door in the hall's south wall); the breach in the room's far side wall
     const spec = rng.pick(BREACH_ROOMS);
-    const rd = rng.int(9, 10), ra = rng.int(10, 13);
     const wall = dx + (dir > 0 ? 0 : bw) - dir * L1;
     const rpx = dir > 0 ? wall - ra : wall + 1;
-    // the hall overlaps the room's columns: its end comes 2-6 cells past the room's near end
-    const over = rng.int(4, Math.max(4, ra - 4));
+    // the hall overlaps the room's columns: its end comes `over` cells past the room's near end
     hall = hallAt(dir > 0 ? rpx + over - hw : rpx + ra - over);
     if (!hall) return tx.abort('hall-fit');
     const rr: CRect = {px: rpx, pz: B0 + hd + 1, w: ra, h: rd};
@@ -296,14 +303,14 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   const path: {x: number; z: number}[] = [];
   const toCanvas = (px: number, pz: number) => ({x: inp.cx(0) < inp.cx(1) ? inp.PX0 + px : inp.PX0 + inp.PW - px, z: inp.PZ0 + pz});
   const add = (r: CRect, allow: Set<number>, label: string): Area | null => {
-    if (!free(r, allow)) return null;
+    if (!free(r, allow)) return miss('bore-1');
     const a = tx.area(rectC(r.px, r.pz, r.w, r.h), 'service', 'service-corridor', r2(rng.range(...ARRIVAL.boreCeil)), s.src.id, {label, publicSpace: false});
     segs.push(a);
     return a;
   };
   // the breach rows: inside the source's wall span, >= 1 cell off its corners
   const w0 = Math.min(rng.int(...ARRIVAL.bore), s.rowHi - s.rowLo);
-  if (w0 < 4) return null;
+  if (w0 < 4) return miss('bore-2');
   let c = s.rowLo + rng.int(0, s.rowHi - s.rowLo - w0) + w0 / 2; // lateral centre row (continuous)
   // lateral leg: from the wall column to the elbow (the reveal column's segment)
   const elbowLo = s.dx - 1, elbowHi = s.dx + s.bw + 1; // elbow columns [lo, hi)
@@ -316,27 +323,30 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
     if (n > 0) { w = rng.int(...ARRIVAL.bore); c += rng.pick([-1, 0, 0, 1]); }
     let lo = Math.round(c - w / 2);
     if (n === 0) lo = breachRows.lo;
-    // keep the overlap with the previous segment (>= 3 rows)
+    // keep the overlap with the previous segment (>= 3 rows) and the leg inside the band (off the platform wall, off the pit wall)
     if (prev) {
       const pr = prevRows(prev);
       lo = Math.max(pr.lo - w + 3, Math.min(pr.hi - 3, lo));
+      lo = Math.max(-inp.sep, Math.min(-3 - w, lo));
+      if (Math.min(pr.hi, lo + w) - Math.max(pr.lo, lo) < 3) return miss('bore-3');
     }
     const r: CRect = {px: s.dir > 0 ? x : x - len + 1, pz: lo, w: len, h: n === 0 ? w0 : w};
-    const allow = new Set<number>(prev ? [prev.id] : [s.src.id]);
+    const allow = new Set<number>(prev ? segs.map(q => q.id) : [s.src.id]);
     const a = add(r, allow, 'Breach tunnel');
-    if (!a) return null;
+    if (!a) return miss('bore-4');
     path.push(toCanvas(r.px + r.w / 2, r.pz + r.h / 2));
     prev = a;
     x += s.dir * len;
   }
-  if (!prev) return null;
+  if (!prev) return miss('bore-5');
   // the elbow: the reveal column's width (+ jitter), the lateral leg's rows
   const pr = prevRows(prev);
   const ew = Math.max(4, Math.min(6, s.bw + 2));
   const elbow: CRect = {px: s.dir > 0 ? elbowLo : elbowHi - ew, pz: pr.lo + rng.int(-1, 1), w: ew, h: Math.max(4, Math.min(6, pr.hi - pr.lo))};
   elbow.pz = Math.max(pr.lo - elbow.h + 3, Math.min(pr.hi - 3, elbow.pz));
-  let ea = add(elbow, new Set([prev.id]), 'Breach tunnel');
-  if (!ea) return null;
+  elbow.pz = Math.max(-inp.sep, Math.min(-3 - elbow.h, elbow.pz));
+  let ea = add(elbow, new Set(segs.map(q => q.id)), 'Breach tunnel');
+  if (!ea) return miss('bore-6');
   path.push(toCanvas(elbow.px + elbow.w / 2, elbow.pz + elbow.h / 2));
   // down leg: from under the elbow to the pit wall row (-1), each segment overlapping the one above by >= 3 columns
   let z = elbow.pz + elbow.h, cc = elbow.px + elbow.w / 2, last: Area = ea;
@@ -349,13 +359,13 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
     lo = Math.max(lastCols.lo - wd + 3, Math.min(lastCols.hi - 3, lo));
     // the reveal (the segment through the pit wall row) stays clear of the pit's corners
     if (z + len - 1 >= -1) lo = Math.max(ARRIVAL.corner, Math.min(inp.PW - ARRIVAL.corner - wd, lo));
-    if (Math.min(lastCols.hi, lo + wd) - Math.max(lastCols.lo, lo) < 3) return null;
+    if (Math.min(lastCols.hi, lo + wd) - Math.max(lastCols.lo, lo) < 3) return miss('bore-7');
     const r: CRect = {px: lo, pz: z, w: wd, h: len};
     // the last segment opens onto the rim gallery (its deck cells are allowed in the margin)
-    const allow = new Set<number>([last.id]);
+    const allow = new Set<number>(segs.map(q => q.id));
     if (z + len - 1 >= -1) allow.add(inp.rimN.area);
     const a = add(r, allow, 'Breach tunnel');
-    if (!a) return null;
+    if (!a) return miss('bore-8');
     path.push(toCanvas(r.px + r.w / 2, r.pz + r.h / 2));
     lastCols = {lo, hi: lo + wd};
     last = a;
@@ -364,7 +374,7 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   }
   // the reveal: the segment's cells in the pit wall row, every one with rim gallery floor right beyond it
   const lastR = prevRect(inp, last);
-  for (let px = lastR.px; px < lastR.px + lastR.w; px++) if (isSolid(px, 0)) return null;
+  for (let px = lastR.px; px < lastR.px + lastR.w; px++) if (isSolid(px, 0)) return miss('bore-9');
   path.push(toCanvas(lastR.px + lastR.w / 2, 0.5));
   // the first point: the breach's middle on the source's side of the wall
   path.unshift(toCanvas(s.wallPx + (s.dir > 0 ? 0 : 1), (breachRows.lo + breachRows.hi) / 2));

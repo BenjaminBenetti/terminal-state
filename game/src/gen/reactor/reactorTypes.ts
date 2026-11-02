@@ -375,6 +375,24 @@ export interface ReactorInfo {
   coreFloor?: ReactorCoreFloor;
   /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): platform → station area → breach → tunnel → the rim reveal. */
   approach?: ReactorApproach;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): the seeded rock suites behind the pit walls (gen/reactor/suites.ts). */
+  suites?: readonly ReactorSuiteInfo[];
+}
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): one seeded rock suite — an entry corridor from a deck door, a T / L cross
+ * corridor, themed rooms off it, sometimes a loop back to a deck, enfilade doors and a back door into a store. Area ids on `level`.
+ */
+export interface ReactorSuiteInfo {
+  level: number;
+  wall: 'stair' | 'organ' | 'N' | 'S';
+  theme: string;
+  corridors: readonly number[];
+  rooms: readonly number[];
+  deckDoors: readonly ReactorRect[];
+  links: readonly (readonly [number, number])[];
+  loop: boolean;
+  shape: 'T' | 'L';
 }
 
 /**

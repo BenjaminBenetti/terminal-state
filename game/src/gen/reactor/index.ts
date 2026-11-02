@@ -46,6 +46,7 @@ import {
 } from './structure';
 import {reactorIssues} from './validate';
 import {approachRecord, arrivalHolds, arrivalLights, arrivalSigns} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+import {sealPockets, suiteHolds, suiteRecord} from './suites'; // (lane ARRIVAL)
 import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 // task reactor-expansion-20261101 (lane HOST): the generator side complexes (bunker / mines / waste) off the main shaft
 import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finishComplexes, hostGenerators, trimCoreCrop, type ComplexCarvers} from './complex/host';
@@ -162,7 +163,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   // --- Dressing: ONE station dresser pass with the pit decks, run mouths, stand points and doors held clear ----------------------
   const before = {lights: layout.lights.length, signs: layout.signs.length};
   const deckIds = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
-  const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds, ...arrivalHolds(layout, rc.arrival)];
+  const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds, ...arrivalHolds(layout, rc.arrival), ...suiteHolds(layout, rc.suites)];
   const release = holdCells(layout, holds);
   dress(layout, rng.fork('dress'));
   release();
@@ -171,6 +172,9 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   layout.signs = layout.signs.filter((s, i) => i < before.signs || !deckIds.has(s.area) || s.kind === 'service');
   // lane HOST: each complex's own dress hook (world metres, crop {0, 0}), the same cells held clear
   dressComplexes(layout, rng, cxs, holds);
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): furniture pockets of the suites / the station area sealed (the office's rule)
+  for (const s of rc.suites) sealPockets(layout.levels[s.level].grid, [...s.corridors, ...s.rooms].map(id => layout.areas[id]), s.deckDoors);
+  sealPockets(layout.grid, [rc.arrival.hall, ...(rc.arrival.corridor ? [rc.arrival.corridor] : []), ...rc.arrival.rooms, ...rc.arrival.tunnel], rc.arrival.platformDoors);
   // task reactor-playtest-round2-20261102 (lane ARRIVAL): wayfinding plates (platform openings, beside the breach, beside the reveal)
   { const off = rc.rooms.find(r => r.key === 'rimOffice'); arrivalSigns(layout, rc.arrival, off ? {x: (off.door.x + off.door.w / 2) * CELL, z: (off.door.y + off.door.h / 2) * CELL} : undefined); }
 
@@ -220,6 +224,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   });
   finishComplexes(layout, rc, cxs); // lane HOST: complex generators' cables through their entrances + layout.reactor.complexes
   layout.reactor.approach = approachRecord(rc.arrival); // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+  layout.reactor.suites = suiteRecord(rc.suites); // (lane ARRIVAL: the seeded rock suites)
   planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top — AFTER every wall carve (incl. the complex entrances)
   clearEntranceLamps(layout, cxs); // (lead merge fix) …and no mounted pit lamp in a complex's doorway band either
   layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record

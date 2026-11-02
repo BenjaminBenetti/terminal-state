@@ -138,7 +138,11 @@ describe('Reactor generator (lane GEN)', () => {
       expect(R.arrival.stop1 - R.arrival.stop0).toBeGreaterThanOrEqual(30);
       expect(R.arrival.doorSide).toBe('S');
       expect(L.trenches[R.arrival.trench].tracks[R.arrival.track]).toBeDefined();
-      expect(L.doors.filter(d => d.a === P.id && L.areas[d.b].role === 'reactor-gallery').length).toBeGreaterThanOrEqual(2);
+      // task reactor-playtest-round2-20261102 (lane ARRIVAL), an INTENT change (user: "the reactor pit is to close to the subway stop"):
+      // the platform no longer opens onto the rim gallery (was >= 2 openings); its 1-2 openings lead into the station area's ticket
+      // hall, and the rim gallery is reached through the breach tunnel (tests/reactor-x-arrival.test.ts)
+      expect(L.doors.filter(d => d.a === P.id && L.areas[d.b].role === 'reactor-gallery').length).toBe(0);
+      expect(L.doors.filter(d => d.a === P.id && d.b === R.approach!.hall).length).toBeGreaterThanOrEqual(1);
       // routes: the wall switchbacks, the south flight set (bridge line) and the maintenance ladders — one link per storey pair each
       expect(R.routes.map(r => [r.kind, r.links.length])).toEqual([['stairs', 5], ['bridge', 5], ['ladder', 5]]);
       for (const r of R.routes) r.links.forEach((id, k) => { expect(L.levelLinks[id].upper).toBe(k); expect(L.levelLinks[id].lower).toBe(k + 1); });
