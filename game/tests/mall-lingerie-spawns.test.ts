@@ -26,7 +26,7 @@ import {LINGERIE_CONTEXT, LINGERIE_FAMILY_POOL, MALL_SPAWN_PROFILE, sealsPassage
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {applyFamilySpacing} from '../src/ai/familySpacing';
 import {chooseSpawnLook, lingerieLookUsable, lingerieModelKeysFor, type SpawnLookLibrary} from '../src/ai/spawnLook';
-import {LINGERIE_BODY_IDS, LINGERIE_MODEL_FILES, lingerieLook} from '../src/ai/lingerie';
+import {LINGERIE_BODY_IDS, LINGERIE_FITS, LINGERIE_MODEL_FILES, LINGERIE_SETS, createLingerieLibrary, isLingerieWearable, lingerieLook} from '../src/ai/lingerie';
 import {pickZombieLook, type LegacyZombieLook, type WardrobeAvailability, type ZombieLook} from '../src/ai/wardrobe';
 import {ZOMBIE_BODIES, ZOMBIE_WEARABLES} from '../src/ai/outfits';
 import type {StationLayout, ZombieSpawn} from '../src/gen/stationTypes';
@@ -207,7 +207,7 @@ describe('spawn-time looks', () => {
       expect(chooseSpawnLook(1234, i, {type}, ORDINARY, LINGERIE_LIB)).toEqual(ordinary);
       expect(chooseSpawnLook(1234, i, {type}, ORDINARY, null)).toEqual(ordinary);
       // the ordinary pool never yields a lingerie garment (they live in the separate library only)
-      expect(Object.values(ordinary.look.wear).some(w => /^lingerie-/.test(w!))).toBe(false);
+      expect(Object.values(ordinary.look.wear).some(w => /^lingerie-/.test(w!) || isLingerieWearable(w))).toBe(false);
     }
   });
 
@@ -228,13 +228,24 @@ describe('spawn-time looks', () => {
     }
   });
 
-  it('lingerieLook is a pure function of (seed, index): a lingerie body with a top + a bottom', () => {
+  it('lingerieLook (lane FIT) is a pure function of (seed, index): a fitted (set, body) with its top + bottom; nothing loaded -> the ordinary pick', () => {
     for (let i = 0; i < 16; i++) {
       const l = lingerieLook(4242, i);
       expect(lingerieLook(4242, i)).toEqual(l);
       expect(LINGERIE_BODY_IDS as readonly string[]).toContain(l.body);
-      expect(l.wear.upper && l.wear.lower).toBeTruthy();
+      if (!LINGERIE_FITS.length) { expect(l.wear).toEqual({}); continue; } // (FIT's table is empty until its build ships the sets)
+      const set = LINGERIE_SETS.find(x => x.id === l.set)!;
+      expect(set.bodies).toContain(l.body);
+      expect(l.wear).toEqual({upper: set.pieces.upper, lower: set.pieces.lower});
+      expect([l.wear.upper, l.wear.lower].every(isLingerieWearable)).toBe(true);
     }
+    // consecutive store spawns wear different fits
+    if (LINGERIE_FITS.length > 1) expect(new Set([0, 1].map(i => JSON.stringify(lingerieLook(77, i)))).size).toBe(2);
+    // the real lingerie library without its lazy garments (or bodies) loaded builds nothing: the tagged spawn takes the ordinary pick
+    const unloaded = createLingerieLibrary({});
+    for (let i = 0; i < 8; i++) expect(chooseSpawnLook(5, i, spawn('lingerie'), ORDINARY, unloaded)).toEqual({look: pickZombieLook(5, i, 'shambler', ORDINARY.available), library: 'ordinary'});
+    // the ordinary registry never lists a lingerie garment (the separate library holds them)
+    expect(ZOMBIE_WEARABLES.some(w => isLingerieWearable(w.id))).toBe(false);
   });
 
   it('the lazy garment keys are asked only for a layout holding a lingerie-tagged spawn', () => {
