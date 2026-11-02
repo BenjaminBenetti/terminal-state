@@ -25,7 +25,9 @@ export type ReactorPiece =
   | 'vessel' | 'generator' | 'craneTrolley' | 'craneHook' | 'fanHousing' | 'switchgear' | 'coolantPump' | 'controlConsole'
   | 'pipeBank' | 'coolantValve' | 'floodLamp'
   // task reactor-expansion-20261101 (lane CORE): the hero reactor assembly (world/reactor/coreHero.ts; layout.reactor.coreFloor)
-  | 'steamGenerator' | 'rcpVertical' | 'coolantManifold' | 'turbineGenerator';
+  | 'steamGenerator' | 'rcpVertical' | 'coolantManifold' | 'turbineGenerator'
+  // (lane CORE follow-up: the lead's pipe elbow / sight-glass spool / CRDM service platform)
+  | 'pipeElbow' | 'sightGlassSpool' | 'crdmPlatform';
 
 /**
  * How a delivered model is fitted onto its record (models are real size, +Y up, front +Z, grounded min y 0, centred x / z):
@@ -89,6 +91,13 @@ export const REACTOR_MODELS: Readonly<Record<ReactorPiece, ReactorModelSpec>> = 
   rcpVertical: fromKit('rcpVertical', REACTOR_X_KIT.rcpVertical, 'real', 4),
   coolantManifold: fromKit('coolantManifold', REACTOR_X_KIT.coolantManifold, 'real', 4),
   turbineGenerator: fromKit('turbineGenerator', REACTOR_X_KIT.turbineGenerator, 'real', 1),
+  // (lane CORE follow-up) anchors probed from the cooked GLBs (2026-11-02): the elbow stands on its down port (centre (0.385, 0, 0), facing
+  // -Y), its side port faces -X at (-0.9, 1.125, 0), bore OD ~0.73; the spool runs along X, its axis at y 0.355 (OD ~0.71), the armoured
+  // window on +Z (0.66 x 0.17 at y 0.38, face z ~0.405); the CRDM platform's skirt (r ~2.45) sits on the dome, grating deck at +1.82,
+  // the housings' flat top ring at +3.51 (r 1.8), the outer railing at r 3.25 (top ~2.38)
+  pipeElbow: fromKit('pipeElbow', REACTOR_X_KIT.pipeElbow, 'uniform', 24, {down: [0.385, 0, 0], side: [-0.9, 1.125, 0], od: 0.73}),
+  sightGlassSpool: fromKit('sightGlassSpool', REACTOR_X_KIT.sightGlassSpool, 'uniform', 8, {axisY: 0.355, od: 0.71, len: 1.6, window: [0, 0.38, 0.412], windowW: 0.66, windowH: 0.17}),
+  crdmPlatform: fromKit('crdmPlatform', REACTOR_X_KIT.crdmPlatform, 'real', 1, {skirtR: 2.45, deckY: 1.82, topY: 3.51, ringR: 1.8, railR: 3.25, railTop: 2.38}),
 };
 
 export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];

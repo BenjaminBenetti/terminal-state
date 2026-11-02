@@ -33,8 +33,11 @@ export type CoreFlowKind = 'hot' | 'cold' | 'cross' | 'feed';
 
 export interface CoreHeroLayout {
   cf: ReactorCoreFloor;
-  /** Coolant runs (polylines) the flow sleeves follow, their pipe diameter. */
-  flows: {kind: CoreFlowKind; pts: P3[]; d: number}[];
+  /** Coolant runs (polylines) the flow sleeves follow, their pipe diameter; `segs` = the straight pipe pieces actually drawn (cut at
+   *  the elbow / spool models; s0 = metres along the run at the piece's start) — the sleeves follow those when present. */
+  flows: {kind: CoreFlowKind; pts: P3[]; d: number; segs?: {a: P3; b: P3; s0: number}[]}[];
+  /** The sight-glass spools' windows (matrix: centre, X = width, Y = height (the fill rises along it), Z = the outward normal). */
+  windows: {m: THREE.Matrix4}[];
   /** Sight-glass sections (they fill when the valve opens; the flow streaks through them when the pump runs). */
   glasses: {a: P3; b: P3; d: number}[];
   /** Rotors: the pumps' flywheels (axis up), the turbine coupling (axis along the shaft). */
@@ -60,12 +63,14 @@ export interface CoreHeroStats {
   gantries: number;
   crdm: number;
   lamps: number;
+  elbows: number;
+  spools: number;
 }
 
 /** Hero tunables (m). */
 export const CORE_HERO = {
   /** Vessel nozzle radius / heights of the hot and cold legs (the model's nozzle band is 1.66 .. 4.15 m above the floor). */
-  nozzleR: 4.7, hotY: 3.3, coldY: 3.0, hotD: 0.86, coldD: 0.74, crossD: 0.72,
+  nozzleR: 4.7, hotY: 3.3, coldY: 3.15, hotD: 0.86, coldD: 0.74, crossD: 0.72,
   /** Clearance over a walkway (bottom of anything crossing the ring / a bridge / the outer floor) and the walk volume of a deck. */
   headroom: 2.4, deckBelow: 1.3, deckAbove: 2.5,
   /** The steam header ring just outside the outer railing (above the deck: over the walkway, under the tier-4 deck steel), its
@@ -106,8 +111,8 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
   const cf = info.coreFloor ?? defaultCoreFloor(info);
   const H = CORE_HERO, F = CORE_FLOOR;
   const C = {x: cf.x, z: cf.z}, y0 = cf.y, yp = cf.pool.floorY;
-  const st: CoreHeroStats = {models: {}, procedural: 0, pipes: 0, flanges: 0, risers: 0, supports: 0, blocked: 0, railMembers: 0, stripes: 0, piers: 0, gantries: 0, crdm: 0, lamps: 0};
-  const out: CoreHeroLayout = {cf, flows: [], glasses: [], wheels: [], lamps: [], lights: {green: [], blue: []}, stats: st};
+  const st: CoreHeroStats = {models: {}, procedural: 0, pipes: 0, flanges: 0, risers: 0, supports: 0, blocked: 0, railMembers: 0, stripes: 0, piers: 0, gantries: 0, crdm: 0, lamps: 0, elbows: 0, spools: 0};
+  const out: CoreHeroLayout = {cf, flows: [], windows: [], glasses: [], wheels: [], lamps: [], lights: {green: [], blue: []}, stats: st};
   const u = (a: number) => ({x: Math.cos(a), z: Math.sin(a)});
   const at = (a: number, r: number, y: number): P3 => ({x: C.x + Math.cos(a) * r, y, z: C.z + Math.sin(a) * r});
   const angOf = (x: number, z: number) => Math.atan2(z - C.z, x - C.x);
@@ -179,16 +184,108 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
     }
     return true;
   };
-  /** A polyline of pipes with elbow collars at the joints; the drawn part (all-or-nothing per segment) is returned. */
-  const run = (pts: P3[], d: number, opt: {ignore?: boolean} = {}): P3[] | null => {
+  // ---- the lead's pipe elbow / sight-glass spool models along the runs (one-entry swap: procedural collars / sleeves without them) ----
+  type Seg = {a: P3; b: P3; s0: number};
+  const EL = REACTOR_MODELS.pipeElbow.anchors as unknown as {down: readonly number[]; side: readonly number[]; od: number};
+  const SP = REACTOR_MODELS.sightGlassSpool.anchors as unknown as {axisY: number; od: number; len: number; window: readonly number[]; windowW: number; windowH: number};
+  const vsub = (a: P3, b: P3): P3 => ({x: a.x - b.x, y: a.y - b.y, z: a.z - b.z});
+  const vlen = (v: P3) => Math.hypot(v.x, v.y, v.z);
+  const vnorm = (v: P3): P3 => { const l = vlen(v) || 1; return {x: v.x / l, y: v.y / l, z: v.z / l}; };
+  const vadd = (a: P3, v: P3, k: number): P3 => ({x: a.x + v.x * k, y: a.y + v.y * k, z: a.z + v.z * k});
+  const capLeft = (p: ReactorPiece) => plan.usesModel(p) && (plan.modelPlacements.get(p)?.length ?? 0) < REACTOR_MODELS[p].cap;
+  const placeScaled = (p: ReactorPiece, m: THREE.Matrix4, s: number, y: number) => {
+    const d = REACTOR_MODELS[p].dims;
+    plan.placeModel(p, m, plan.bandOf(y + 0.05), [d[0] * s, d[1] * s, d[2] * s]);
+    st.models[p] = (st.models[p] ?? 0) + 1;
+  };
+  /**
+   * A pipe-elbow model at the square corner P of a run (legs toward u1 / u2, lengths l1 / l2 free), scaled to the bore: the more vertical
+   * leg takes its down port, the other its side port. Returns the straight pipes' trims at P [leg 1, leg 2], or null (procedural collar).
+   */
+  const elbow = (P: P3, u1: P3, l1: number, u2: P3, l2: number, d: number): [number, number] | null => {
+    if (!capLeft('pipeElbow') || Math.abs(u1.x * u2.x + u1.y * u2.y + u1.z * u2.z) > 0.12) return null;
+    const sc = d / EL.od, cx = EL.down[0], cy = EL.side[1];
+    const down = cy * sc, side = (cx - EL.side[0]) * sc;
+    const swap = Math.abs(u2.y) > Math.abs(u1.y);
+    const ud = swap ? u2 : u1, ld = swap ? l2 : l1, us = swap ? u1 : u2, ls = swap ? l1 : l2;
+    if (ld < down + 0.08 || ls < side + 0.08) return null;
+    const Y = new THREE.Vector3(-ud.x, -ud.y, -ud.z).normalize();
+    const X = new THREE.Vector3(-us.x, -us.y, -us.z);
+    X.addScaledVector(Y, -X.dot(Y)).normalize();
+    const Z = new THREE.Vector3().crossVectors(X, Y);
+    const o = {x: P.x - (X.x * cx + Y.x * cy) * sc, y: P.y - (X.y * cx + Y.y * cy) * sc, z: P.z - (X.z * cx + Y.z * cy) * sc};
+    placeScaled('pipeElbow', new THREE.Matrix4().makeBasis(X.multiplyScalar(sc), Y.multiplyScalar(sc), Z.multiplyScalar(sc)).setPosition(o.x, o.y, o.z), sc, Math.min(o.y, P.y));
+    st.elbows++;
+    return swap ? [side, down] : [down, side];
+  };
+  /**
+   * A sight-glass spool model inline at the middle of a straight piece a -> b, scaled to the bore, its armoured window turned toward
+   * `face` and rolled `roll` rad down about the pipe axis; its window's glow quad is recorded (the coolant fills it). Returns the gap's
+   * half length (the straight pipe is cut there), or null.
+   */
+  const spool = (a: P3, b: P3, d: number, face: P3, roll: number): number | null => {
+    if (!capLeft('sightGlassSpool')) return null;
+    const sc = d / SP.od, half = (SP.len * sc) / 2, L = vlen(vsub(b, a));
+    if (L < 2 * half + 0.4) return null;
+    const M = lerp(a, b, 0.5), dx = vnorm(vsub(b, a));
+    const X = new THREE.Vector3(dx.x, dx.y, dx.z);
+    const Y = Math.abs(X.y) > 0.9 ? new THREE.Vector3(face.x, face.y, face.z) : new THREE.Vector3(0, 1, 0);
+    Y.addScaledVector(X, -Y.dot(X)).normalize();
+    let Z = new THREE.Vector3().crossVectors(X, Y);
+    if (Z.x * face.x + Z.y * face.y + Z.z * face.z < 0) { X.negate(); Z = new THREE.Vector3().crossVectors(X, Y); }
+    const c = Math.cos(roll), sn = Math.sin(roll);
+    const Yr = Y.clone().multiplyScalar(c).addScaledVector(Z, sn), Zr = Z.clone().multiplyScalar(c).addScaledVector(Y, -sn);
+    const o = {x: M.x - Yr.x * SP.axisY * sc, y: M.y - Yr.y * SP.axisY * sc, z: M.z - Yr.z * SP.axisY * sc};
+    placeScaled('sightGlassSpool', new THREE.Matrix4().makeBasis(X.clone().multiplyScalar(sc), Yr.clone().multiplyScalar(sc), Zr.clone().multiplyScalar(sc)).setPosition(o.x, o.y, o.z), sc, o.y - 0.4);
+    const w = SP.window, wc = {x: o.x + (X.x * w[0] + Yr.x * w[1] + Zr.x * w[2]) * sc, y: o.y + (X.y * w[0] + Yr.y * w[1] + Zr.y * w[2]) * sc, z: o.z + (X.z * w[0] + Yr.z * w[1] + Zr.z * w[2]) * sc};
+    out.windows.push({m: new THREE.Matrix4().makeBasis(X.clone().multiplyScalar(SP.windowW * sc), Yr.clone().multiplyScalar(SP.windowH * sc), Zr.clone()).setPosition(wc.x, wc.y, wc.z)});
+    st.spools++;
+    return half;
+  };
+  /**
+   * A polyline of pipes (all-or-nothing): elbow models at its square corners where the legs are long enough (else a collar), an
+   * optional sight-glass spool inline on segment `spool.seg`, flanges at its two ends. Returns the straight pieces drawn (or null).
+   */
+  const run = (pts: P3[], d: number, opt: {ignore?: boolean; spool?: {seg: number; face: P3; roll?: number}} = {}): Seg[] | null => {
     for (let i = 0; i + 1 < pts.length; i++) if (!clear(pts[i], pts[i + 1], d, opt.ignore, i === 0 || i + 2 === pts.length ? 0.6 : 0.05) || intrudesWalk(pts[i], pts[i + 1], d)) { st.blocked++; return null; }
-    for (let i = 0; i + 1 < pts.length; i++) pipe(pts[i], pts[i + 1], d, {ignore: true, endSkip: 10, flanges: i === 0 || i + 2 === pts.length});
-    for (let i = 1; i + 1 < pts.length; i++) {
+    const n = pts.length, tA = new Array(n).fill(0), tB = new Array(n).fill(0), bent = new Array(n).fill(false);
+    for (let i = 1; i + 1 < n; i++) {
+      const v1 = vsub(pts[i - 1], pts[i]), v2 = vsub(pts[i + 1], pts[i]);
+      const e = elbow(pts[i], vnorm(v1), vlen(v1) - tA[i - 1] - 0.05, vnorm(v2), vlen(v2) - 0.05, d);
+      if (e) { tB[i - 1] = e[0]; tA[i] = e[1]; bent[i] = true; }
+    }
+    let gapSeg = -1, gapHalf = 0;
+    if (opt.spool && opt.spool.seg >= 0 && opt.spool.seg + 1 < n) {
+      const k = opt.spool.seg, u = vnorm(vsub(pts[k + 1], pts[k]));
+      const h = spool(vadd(pts[k], u, tA[k]), vadd(pts[k + 1], u, -tB[k]), d, opt.spool.face, opt.spool.roll ?? 0);
+      if (h !== null) { gapSeg = k; gapHalf = h; }
+    }
+    const segs: Seg[] = [];
+    let s = 0;
+    for (let j = 0; j + 1 < n; j++) {
+      const u = vnorm(vsub(pts[j + 1], pts[j])), L = vlen(vsub(pts[j + 1], pts[j]));
+      const a2 = vadd(pts[j], u, tA[j]), b2 = vadd(pts[j + 1], u, -tB[j]), mid = lerp(a2, b2, 0.5);
+      const pieces: [P3, P3][] = j === gapSeg ? [[a2, vadd(mid, u, -gapHalf)], [vadd(mid, u, gapHalf), b2]] : [[a2, b2]];
+      for (const [p0, p1] of pieces) {
+        if (vlen(vsub(p1, p0)) < 0.02) continue;
+        plan.cyl('cyl', 'pipe', p0, p1, d);
+        st.pipes++;
+        segs.push({a: p0, b: p1, s0: s + vlen(vsub(p0, pts[j]))});
+      }
+      s += L;
+    }
+    for (const [p, q] of [[pts[0], pts[1]], [pts[n - 1], pts[n - 2]]] as const) {
+      const u = vnorm(vsub(q, p));
+      plan.cyl('cyl', 'steelDark', vadd(p, u, 0.04), vadd(p, u, 0.2), d * 1.28);
+      st.flanges++;
+    }
+    for (let i = 1; i + 1 < n; i++) {
+      if (bent[i]) continue;
       const p = pts[i], q = pts[i + 1], dl = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) || 1;
       plan.cyl('cyl', 'pipe', {x: p.x - (q.x - p.x) / dl * d * 0.55, y: p.y - (q.y - p.y) / dl * d * 0.55, z: p.z - (q.z - p.z) / dl * d * 0.55}, {x: p.x + (q.x - p.x) / dl * d * 0.55, y: p.y + (q.y - p.y) / dl * d * 0.55, z: p.z + (q.z - p.z) / dl * d * 0.55}, d * 1.12);
       st.flanges++;
     }
-    return pts;
+    return segs;
   };
   const coreBand = plan.bandOf(y0 + 0.1);
   const model = (piece: ReactorPiece, x: number, y: number, z: number, yaw: number): boolean => {
@@ -249,11 +346,12 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       // cold leg: the inner nozzle -> a riser in the goop -> over the ring -> the vessel
       const rr = Math.max(cf.rails.ring + H.coldD / 2 + 0.2, r - 2.45); // the riser stands in the goop, clear of the ring railing
       const cp = [at(a, r - 2.05, ny), at(a, rr, ny), at(a, rr, y0 + H.coldY), at(a, H.nozzleR, y0 + H.coldY)];
-      if (run(cp, H.coldD, {ignore: true})) {
-        out.flows.push({kind: 'cold', pts: cp, d: H.coldD});
-        out.glasses.push({a: at(a, rr, y0 + 0.75), b: at(a, rr, y0 + 2.15), d: H.coldD});
+      const segs = run(cp, H.coldD, {ignore: true, spool: {seg: 2, face: {x: -Math.sin(a), y: 0, z: Math.cos(a)}, roll: 0.6}});
+      if (segs) {
+        out.flows.push({kind: 'cold', pts: cp, d: H.coldD, segs});
+        out.glasses.push({a: at(a, rr, y0 + 0.5), b: at(a, rr, y0 + 1.55), d: H.coldD}); // under the elbow at the riser top
         // the pressure gauge box on the riser (its inner face toward the ring walkway) + its lamp
-        const gb = at(a, rr - H.coldD / 2 - 0.06, y0 + 2.72), gl = at(a, rr - H.coldD / 2 - 0.15, y0 + 2.72);
+        const gb = at(a, rr - H.coldD / 2 - 0.06, y0 + 1.78), gl = at(a, rr - H.coldD / 2 - 0.15, y0 + 1.78);
         plan.box('steelDark', gb.x, gb.y, gb.z, 0.12, 0.24, 0.24, -a);
         lamp('valve', gl.x, gl.y, gl.z);
       }
@@ -276,7 +374,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       const track = (y: number): P3[] => {
         const pts: P3[] = [at(aS, rS + 1.85, yLow), at(aS, rLow, yLow)];
         if (Math.abs(y - yLow) > 0.05) pts.push(at(aS, rLow, y));
-        const n = Math.max(1, Math.ceil(Math.abs(dA) / (Math.PI / 24)));
+        const n = Math.max(1, Math.ceil(Math.abs(dA) / (Math.PI / 16)));
         for (let k = 1; k <= n; k++) pts.push(at(aS + (dA * k) / n, rLow, y));
         if (Math.abs(y - ny) > 0.05) pts.push(at(aP, rLow, ny));
         pts.push(at(aP, rP + 2.05, ny));
@@ -285,8 +383,11 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       const low = track(yLow);
       const lowOk = low.every((p, i) => i + 1 >= low.length || (clear(p, low[i + 1], H.crossD, true, 0.05) && !intrudesWalk(p, low[i + 1], H.crossD)));
       const pts = lowOk ? low : track(y0 + 3.6);
-      if (run(pts, H.crossD, {ignore: true})) {
-        out.flows.push({kind: 'cross', pts, d: H.crossD});
+      const arc0 = lowOk ? 1 : 2, narc = Math.max(1, Math.ceil(Math.abs(dA) / (Math.PI / 16))), mid = arc0 + Math.floor((narc - 1) / 2);
+      const am = aS + dA * ((mid - arc0 + 0.5) / narc);
+      const segs = run(pts, H.crossD, {ignore: true, spool: narc >= 1 ? {seg: mid, face: {x: Math.cos(am), y: 0, z: Math.sin(am)}} : undefined});
+      if (segs) {
+        out.flows.push({kind: 'cross', pts, d: H.crossD, segs});
         // pipe supports down into the goop under the low run
         if (lowOk) for (let i = 2; i < pts.length - 1; i += 2) { plan.member('box', 'steelDark', {x: pts[i].x, y: yp, z: pts[i].z}, {x: pts[i].x, y: pts[i].y - H.crossD / 2, z: pts[i].z}, 0.16, 0.16); st.supports++; }
       }
@@ -310,7 +411,8 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       // feed risers from its branches up to the header (the outer end) — the manifold distributes the coolant
       for (const s of [-1.5, 1.5]) {
         const rp = [at(a, r + s, mb + 2.0), at(a, r + s, y0 + H.headerY - 0.55), at(a, rH, y0 + H.headerY - 0.55)];
-        if (run(rp, 0.26)) { out.flows.push({kind: 'feed', pts: rp, d: 0.26}); st.risers++; }
+        const segs = run(rp, 0.26);
+        if (segs) { out.flows.push({kind: 'feed', pts: rp, d: 0.26, segs}); st.risers++; }
       }
       // its feed into the loop's cold-leg riser (low, along the goop) — only to a pump beside it, no bridge between
       if (rcp) {
@@ -324,7 +426,8 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
           const n = Math.max(1, Math.ceil(Math.abs(dA) / 0.12));
           for (let k = 1; k <= n; k++) fp.push(at(a + (dA * k) / n, rr + 0.5, mb + 0.9));
           fp.push(at(aP, rr, mb + 0.9));
-          if (run(fp, 0.3)) out.flows.push({kind: 'feed', pts: fp, d: 0.3});
+          const segs = run(fp, 0.3);
+          if (segs) out.flows.push({kind: 'feed', pts: fp, d: 0.3, segs});
         }
       }
     }
@@ -384,31 +487,45 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       }
       st.gantries++;
     }
-    // CRDM platform on the dome: grating disc ring, railing, brackets onto the dome, the drive housings + their cable trays
-    const py = y0 + H.crdmY;
-    const prof = [new THREE.Vector2(0.55, -0.06), new THREE.Vector2(H.crdmR, -0.06), new THREE.Vector2(H.crdmR, 0.06), new THREE.Vector2(0.55, 0.06), new THREE.Vector2(0.55, -0.06)];
-    grate.push(T(new THREE.LatheGeometry(prof, 40), py));
-    steel.push(T(new THREE.TorusGeometry(H.crdmR, 0.04, 4, 40).rotateX(Math.PI / 2), py + 1.05));
-    steel.push(T(new THREE.TorusGeometry(H.crdmR, 0.03, 4, 40).rotateX(Math.PI / 2), py + 0.55));
-    for (let k = 0; k < 16; k++) {
-      const a = (k / 16) * Math.PI * 2;
-      plan.member('box', 'steel', at(a, H.crdmR, py), at(a, H.crdmR, py + 1.05), 0.05, 0.05);
-      if (k % 2 === 0) plan.member('box', 'steelDark', at(a, H.crdmR - 0.1, py - 0.08), at(a, 3.9, y0 + F.domeBase + F.domeH * Math.sqrt(Math.max(0, 1 - (3.9 / F.domeR) ** 2)) + 0.05), 0.12, 0.12);
-      lamp(k % 2 ? 'rods' : 'key', at(a, H.crdmR, py + 1.12).x, py + 1.12, at(a, H.crdmR, py + 1.12).z, 0.05);
+    // CRDM service platform on the dome: the lead's model (drive housings on a base with a railed grating ring + ladders; its skirt
+    // seated on the dome) or the procedural stand-in; the rod-position lamps on its housings' top ring; cable trays out to the header
+    const CA = REACTOR_MODELS.crdmPlatform.anchors as unknown as {skirtR: number; deckY: number; topY: number; ringR: number; railR: number; railTop: number};
+    const domeAt = (r: number) => y0 + F.domeBase + F.domeH * Math.sqrt(Math.max(0, 1 - (r / F.domeR) ** 2));
+    const crdmBase = domeAt(CA.skirtR) - 0.03;
+    let trayR = 2.75, trayY = y0 + H.crdmTop + 0.6;
+    if (model('crdmPlatform', C.x, crdmBase, C.z, 0)) {
+      for (let k = 0; k < 12; k++) {
+        const a = (k / 12) * Math.PI * 2, p = at(a, CA.ringR, crdmBase + CA.topY + 0.045);
+        lamp(k % 2 ? 'rods' : 'key', p.x, p.y, p.z, 0.045);
+      }
+      trayR = CA.railR + 0.06; trayY = crdmBase + CA.railTop - 0.12;
+    } else {
+      const py = y0 + H.crdmY;
+      const prof = [new THREE.Vector2(0.55, -0.06), new THREE.Vector2(H.crdmR, -0.06), new THREE.Vector2(H.crdmR, 0.06), new THREE.Vector2(0.55, 0.06), new THREE.Vector2(0.55, -0.06)];
+      grate.push(T(new THREE.LatheGeometry(prof, 40), py));
+      steel.push(T(new THREE.TorusGeometry(H.crdmR, 0.04, 4, 40).rotateX(Math.PI / 2), py + 1.05));
+      steel.push(T(new THREE.TorusGeometry(H.crdmR, 0.03, 4, 40).rotateX(Math.PI / 2), py + 0.55));
+      for (let k = 0; k < 16; k++) {
+        const a = (k / 16) * Math.PI * 2;
+        plan.member('box', 'steel', at(a, H.crdmR, py), at(a, H.crdmR, py + 1.05), 0.05, 0.05);
+        if (k % 2 === 0) plan.member('box', 'steelDark', at(a, H.crdmR - 0.1, py - 0.08), at(a, 3.9, domeAt(3.9) + 0.05), 0.12, 0.12);
+        lamp(k % 2 ? 'rods' : 'key', at(a, H.crdmR, py + 1.12).x, py + 1.12, at(a, H.crdmR, py + 1.12).z, 0.05);
+      }
+      const sp = 0.62;
+      for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) {
+        const x = (i + (j % 2 ? 0.5 : 0)) * sp, z = j * sp * 0.866;
+        if (Math.hypot(x, z) > 2.4) continue;
+        const top = y0 + H.crdmTop + ((i * 7 + j * 3) & 3) * 0.12;
+        plan.cyl('tube', 'pipe', {x: C.x + x, y: py, z: C.z + z}, {x: C.x + x, y: top, z: C.z + z}, 0.2);
+        plan.cyl('cyl', 'steelDark', {x: C.x + x, y: top, z: C.z + z}, {x: C.x + x, y: top + 0.28, z: C.z + z}, 0.28);
+        st.crdm++;
+      }
+      steel.push(T(new THREE.TorusGeometry(2.75, 0.06, 4, 32).rotateX(Math.PI / 2), trayY)); // cable-tray ring over the housings
+      st.procedural++;
     }
-    const sp = 0.62;
-    for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++) {
-      const x = (i + (j % 2 ? 0.5 : 0)) * sp, z = j * sp * 0.866;
-      if (Math.hypot(x, z) > 2.4) continue;
-      const top = y0 + H.crdmTop + ((i * 7 + j * 3) & 3) * 0.12;
-      plan.cyl('tube', 'pipe', {x: C.x + x, y: py, z: C.z + z}, {x: C.x + x, y: top, z: C.z + z}, 0.2);
-      plan.cyl('cyl', 'steelDark', {x: C.x + x, y: top, z: C.z + z}, {x: C.x + x, y: top + 0.28, z: C.z + z}, 0.28);
-      st.crdm++;
-    }
-    steel.push(T(new THREE.TorusGeometry(2.75, 0.06, 4, 32).rotateX(Math.PI / 2), y0 + H.crdmTop + 0.6)); // cable-tray ring over the housings
     // cable trays from the platform out to the steam header (high, over everything)
     for (let k = 0; k < 4; k++) {
-      const a = (k + 0.5) * Math.PI / 2, A = at(a, 2.75, y0 + H.crdmTop + 0.6), B = at(a, rH, y0 + H.headerY + 0.5);
+      const a = (k + 0.5) * Math.PI / 2, A = at(a, trayR, trayY), B = at(a, rH, y0 + H.headerY + 0.5);
       if (!clear(A, B, 0.4, false, 0.2)) { st.blocked++; continue; }
       plan.member('box', 'steelDark', A, B, 0.45, 0.07);
       for (const off of [-0.12, 0, 0.12]) plan.cyl('tube', 'cable', {x: A.x - Math.sin(a) * off, y: A.y + 0.06, z: A.z + Math.cos(a) * off}, {x: B.x - Math.sin(a) * off, y: B.y + 0.06, z: B.z + Math.cos(a) * off}, 0.06);

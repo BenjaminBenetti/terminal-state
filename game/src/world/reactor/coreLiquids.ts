@@ -41,7 +41,7 @@ export interface CoreBuilt {
   wheelInfo: {basis: THREE.Matrix4; r: number; kind: 'rcp' | 'turbine'; angle: number}[];
   lamps: THREE.InstancedMesh | null;
   geometries: THREE.BufferGeometry[];
-  stats: {goopCells: number; flowSegments: number; glasses: number; wheels: number; lamps: number; triangles: number};
+  stats: {goopCells: number; flowSegments: number; glasses: number; windows: number; wheels: number; lamps: number; triangles: number};
 }
 
 /** Goop colours (linear): deep / bright. */
@@ -54,7 +54,7 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
   group.name = 'core-dynamic'; // (not 'reactor-…': ARCH's kit mesh count stays its own)
   const uniforms: CoreUniforms = {time: uniform(0), goop: uniform(0.55), churn: uniform(0.25), flowGlow: uniform(0), flowShift: uniform(0), fill: uniform(0)} as unknown as CoreUniforms;
   const geos: THREE.BufferGeometry[] = [];
-  const stats = {goopCells: 0, flowSegments: 0, glasses: 0, wheels: 0, lamps: 0, triangles: 0};
+  const stats = {goopCells: 0, flowSegments: 0, glasses: 0, windows: 0, wheels: 0, lamps: 0, triangles: 0};
   const tag = (o: THREE.Object3D) => { o.userData.levels = [...levels]; o.matrixAutoUpdate = false; o.updateMatrix(); group.add(o); };
   // ---- the goop -------------------------------------------------------------------------------------------------------------------
   let goop: THREE.Mesh | null = null;
@@ -75,6 +75,10 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
     for (const f of hero.flows) {
       let s = 0;
       const k = f.kind === 'feed' ? 0.6 : f.kind === 'hot' ? 0.9 : 1;
+      if (f.segs) { // the straight pieces actually drawn (cut at the elbow / spool models: the coolant runs on inside them)
+        for (const q of f.segs) { const L = Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y, q.b.z - q.a.z); if (L < 0.05) continue; sl.tube(q.a, q.b, f.d / 2 + 0.014, q.s0, q.s0 + L, k); stats.flowSegments++; }
+        continue;
+      }
       for (let i = 0; i + 1 < f.pts.length; i++) {
         const a = f.pts[i], b = f.pts[i + 1], L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
         if (L < 0.05) continue;
@@ -87,6 +91,7 @@ export function buildCoreLiquids(hero: CoreHeroLayout, core: Grid | null, rotorM
     if (fg) { geos.push(fg); flow = new THREE.Mesh(fg, flowMaterial(uniforms)); flow.name = 'core-coolant-flow'; tag(flow); }
     const gl = new SleeveBuilder();
     for (const q of hero.glasses) { gl.tube(q.a, q.b, q.d / 2 + 0.035, 0, Math.hypot(q.b.x - q.a.x, q.b.y - q.a.y, q.b.z - q.a.z), 1); stats.glasses++; }
+    for (const w of hero.windows ?? []) { gl.quad(w.m); stats.windows++; } // the sight-glass spools' windows: the coolant glows behind the glass
     const gg = gl.geometry();
     if (gg) { geos.push(gg); glass = new THREE.Mesh(gg, glassMaterial(uniforms)); glass.name = 'core-sight-glasses'; tag(glass); }
   }
@@ -256,6 +261,19 @@ class SleeveBuilder {
       const p = base + j * 2;
       this.idx.push(p, p + 2, p + 1, p + 1, p + 2, p + 3);
     }
+  }
+  /** A flat window quad (matrix: centre, X = width, Y = height, Z = normal) 6 mm proud of its face; uv.y rises with the fill. */
+  quad(m: THREE.Matrix4): void {
+    const base = this.pos.length / 3, nrm = new THREE.Vector3().setFromMatrixColumn(m, 2).normalize(), v = new THREE.Vector3();
+    for (const [x, y] of [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]] as const) {
+      v.set(x, y, 0).applyMatrix4(m).addScaledVector(nrm, 0.006);
+      this.pos.push(v.x, v.y, v.z);
+      this.nor.push(nrm.x, nrm.y, nrm.z);
+      this.uvs.push(x + 0.5, y + 0.5);
+      this.s.push(0);
+      this.k.push(1);
+    }
+    this.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
   geometry(): THREE.BufferGeometry | null {
     if (!this.idx.length) return null;
