@@ -31,8 +31,8 @@ const level = (seed: number) => {
  *  - lane CONTROLS (machines placed from footprints): the switchgear sections' door plane sits ON the collider front, so the cabinet
  *    parts in front of it stand up to ~0.26 m past the collider; the console model ~0.24 m and the valve ~0.15 m past theirs;
  *  - lane BUNKER: the blast-door model reaches ~0.29 m past its leaf / frame colliders (the decontamination side); one bunk bed 3 cm;
- *  - lane MINES: tilted rubble chunks stand up to ~0.38 m out of the rubble collider into the collapsed drift; a timber set beside a
- *    room door (lamp room / tool room) puts its post 5-6 cm into the door lane;
+ *  - (lane MINES fixed its two: the rubble chunks are clamped inside the rubble collider; the timber sets stay inside the drift's rock
+ *    walls, their posts are collision boxes and keep off every opening's cells — task reactor-expansion-20261101, lane MINES);
  *  - lane CORE (user point 15): the procedural FALLBACK vessel plinth flares 0.2 m past the vessel's blocked circle (drawn only when the
  *    vessel model fails to load; the model is clear).
  */
@@ -41,8 +41,6 @@ const PATHS_OWNED_ELSEWHERE: readonly {re: RegExp; lane: string; max: number}[] 
   {re: /^generators (bulb\|panelLamp|box\|yellow)$/, lane: 'CONTROLS', max: 0.02}, // the procedural-fallback start panel's lever / lamps: 8 mm
   {re: /^bunker model blastDoor$/, lane: 'BUNKER', max: 0.2},
   {re: /^bunker model bunkBed$/, lane: 'BUNKER', max: 0.04},
-  {re: /^mines rock$/, lane: 'MINES', max: 0.3},
-  {re: /^mines model timberSet$/, lane: 'MINES', max: 0.07},
   {re: /^merged reactor-vessel/, lane: 'CORE', max: 0.25},
 ];
 const ours = (hits: readonly PathHit[]) => hits.filter(h => !PATHS_OWNED_ELSEWHERE.some(o => o.re.test(h.kind) && h.depth <= o.max));

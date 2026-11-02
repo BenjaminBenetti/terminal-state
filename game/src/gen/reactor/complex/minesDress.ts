@@ -37,15 +37,31 @@ export interface MinesDressInfo {
 }
 
 /** `variant` codes of the mines' collision-only set pieces ('annexMachine' props in the mine areas; the visuals key off them). */
-export const MINE_PIECE = {cart: 7101, winch: 7102, winze: 7103, drill: 7104, crib: 7105, rubble: 7106} as const;
+export const MINE_PIECE = {cart: 7101, winch: 7102, winze: 7103, drill: 7104, crib: 7105, rubble: 7106, post: 7107} as const;
 export type MinePieceId = keyof typeof MINE_PIECE;
 export const MINE_PIECE_OF: Readonly<Record<number, MinePieceId>> = Object.fromEntries(Object.entries(MINE_PIECE).map(([k, v]) => [v, k as MinePieceId]));
 
 /** Real sizes (m) of the set pieces: footprint along / across their long axis, height (the lead's REACTOR_X_KIT dims). */
 export const MINE_PIECE_SIZE: Readonly<Record<MinePieceId, {l: number; w: number; h: number}>> = {
   cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1}, drill: {l: 3.5, w: 1.0, h: 1.28},
-  crib: {l: 1.4, w: 1.4, h: 0}, rubble: {l: 0, w: 0, h: 1.6},
+  crib: {l: 1.4, w: 1.4, h: 0}, rubble: {l: 0, w: 0, h: 1.6}, post: {l: 0.53, w: 0.5, h: 0},
 };
+
+/**
+ * TIMBER SUPPORT SETS (the lead's Meshy timberSet: posts' inner faces at x = ±1.03, outer at ±1.5, the cap / lagging to ±1.7 and its
+ * underside at y 1.79 of a 2.516 m model; 0.53 m deep). Every set is scaled so its WHOLE width stays inside the drift's one-cell rock
+ * walls (outer ±1.7 x sx <= rib + 0.48 m: never through a wall into the next space), its top at the drift ceiling; the posts then stand
+ * proud of the rib (0.2-0.5 m) and COLLIDE: each post is a collision box over the rib cell it stands in (MINE_PIECE.post), so what is
+ * drawn is what the body meets. Sets need >= 1.2 m between the posts, keep off openings and props, and slide up to 0.7 m off them.
+ */
+export const MINE_SETS = {pitch: 1.8, cap: 44, endClear: 0.8, rockIn: 0.48, model: {postInner: 1.03, postOuter: 1.5, capOuter: 1.7, capUnder: 1.79, top: 2.516, depth: 0.532}} as const;
+
+/** The set's scale in a drift `Wd` m wide with `clear` m of headroom, and how far its posts stand proud of the rib (m). */
+export function timberSetFit(Wd: number, clear: number): {sx: number; sy: number; proud: number; clearW: number; clearH: number} {
+  const M = MINE_SETS.model;
+  const sx = (Wd / 2 + MINE_SETS.rockIn) / M.capOuter, sy = clear / M.top;
+  return {sx, sy, proud: Wd / 2 - M.postInner * sx, clearW: 2 * M.postInner * sx, clearH: M.capUnder * sy};
+}
 
 /** Narrow-gauge track: gauge (m, rail centres), rail head height above the floor, sleeper pitch / length. */
 export const MINE_RAIL = {gauge: 0.6, railTop: 0.14, pitch: 0.65, sleeper: 1.0} as const;
@@ -56,7 +72,88 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 const setMask = (arr: Uint8Array, i: number, v: number) => { arr[i] = v; };
 
 /** Stats of the last dress pass (QA / tests). */
-export const MINES_DRESS_STATS = {pieces: {} as Partial<Record<MinePieceId, number>>, props: 0, lights: 0, signs: 0, ms: 0};
+export const MINES_DRESS_STATS = {pieces: {} as Partial<Record<MinePieceId, number>>, props: 0, lights: 0, signs: 0, sets: 0, setRejects: {} as Record<string, number>, ms: 0};
+
+/** The timbered spaces: the adit and every drift (the junction, the cavern and the rooms are not). */
+const SET_PARTS: ReadonlySet<MineRoomPlan['part']> = new Set(['portal', 'haulage', 'manway', 'crosscut', 'sump', 'collapse']);
+
+/**
+ * Timber sets along each drift at MINE_SETS.pitch (slid up to 0.7 m off obstacles; >= 1.2 m apart): both posts as collision boxes on
+ * the rib cells (blocking them where the posts stand proud of the 0.1 m edge allowance), never on an opening's cells / approach, a
+ * prop, a fixture or a plate, never splitting the drift; the cap (>= 2.3 m clear) never over a prop. Returns the sets placed.
+ */
+function placeTimberSets(ctx: PlaceCtx, layout: StationLayout, drifts: readonly Area[], base: number): number {
+  const g = ctx.g, M = MINE_SETS.model;
+  let total = 0;
+  const no = (why: string) => { MINES_DRESS_STATS.setRejects[why] = (MINES_DRESS_STATS.setRejects[why] ?? 0) + 1; return false; };
+  for (const a of drifts) {
+    const alongX = a.w >= a.h, len = (alongX ? a.w : a.h) * CELL, Wd = (alongX ? a.h : a.w) * CELL, clear = a.ceil - base;
+    const fit = timberSetFit(Wd, clear);
+    if (fit.clearH < 2.3 || fit.clearW < 1.2) { no('fit'); continue; }
+    const block = fit.proud > 0.12;
+    // blocking both rib cells must leave >= 1.2 m of floor between them
+    if (block && Wd - 2 * CELL < 1.2) { no('narrow'); continue; }
+    const s0 = (alongX ? a.x : a.y) * CELL, c0 = (alongX ? a.y : a.x) * CELL, half = M.depth / 2 + 0.01;
+    const n = Math.max(1, Math.floor((len - 2 * MINE_SETS.endClear) / MINE_SETS.pitch) + 1);
+    const first = s0 + (len - (n - 1) * MINE_SETS.pitch) / 2;
+    const postW = Math.max(0.12, fit.proud + 0.02);
+    const postBox = (s: number, side: 0 | 1) => {
+      const cc = side ? c0 + Wd - postW / 2 : c0 + postW / 2;
+      return alongX ? {x: s, z: cc, hx: half, hz: postW / 2} : {x: cc, z: s, hx: postW / 2, hz: half};
+    };
+    const clearOf = (s: number): boolean => {
+      if (s - half < s0 + 0.05 || s + half > s0 + len - 0.05) return no('span');
+      // the posts' cells: open floor of the drift, off openings (+-1 cell), keep / edge masks and earlier props
+      for (const side of [0, 1] as const) {
+        const b = postBox(s, side), [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+        for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+          if (!g.inBounds(cx, cy)) return no('cell');
+          const i = g.idx(cx, cy);
+          if (ctx.doorCell[i]) return no('opening');
+          if (g.blocked[i]) return no('blocked');
+          if (ctx.keep[i]) return no('keep');
+          if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.rampIdx[i] >= 0 || ctx.edge[i]) return no('cell');
+        }
+        if (propBlocksDoorway(layout, b.x, b.z, b.hx, b.hz, base, clear)) return no('doorway');
+      }
+      // the whole set's slab (both posts + the cap across the drift) clear of every prop box, fixture and plate of the storey
+      const sx0 = s - half, sx1 = s + half;
+      const inSlab = (x: number, z: number, hx: number, hz: number) => {
+        const p0 = (alongX ? x - hx : z - hz), p1 = (alongX ? x + hx : z + hz);
+        const q0 = (alongX ? z - hz : x - hx), q1 = (alongX ? z + hz : x + hx);
+        return p1 > sx0 && p0 < sx1 && q1 > c0 && q0 < c0 + Wd;
+      };
+      for (const p of layout.props) {
+        if ((p.level ?? 0) !== ctx.level || !inSlab(p.x, p.z, p.hx, p.hz)) continue;
+        const pc0 = alongX ? p.z - p.hz : p.x - p.hx, pc1 = alongX ? p.z + p.hz : p.x + p.hx;
+        // against a rib (the posts) or tall enough to reach the cap
+        if (pc0 < c0 + postW + 0.03 || pc1 > c0 + Wd - postW - 0.03 || p.y + p.h > base + fit.clearH - 0.05) return no('prop');
+      }
+      // the drifts' fixtures are caged lamps (0.26 m cage under the light point: world/reactor/arch.ts isLamp): sets hang between them
+      for (const l of layout.lights) if ((l.level ?? 0) === ctx.level && inSlab(l.x, l.z, 0.2, 0.2)) return no('light');
+      for (const sg of layout.signs) if ((sg.level ?? 0) === ctx.level && inSlab(sg.x, sg.z, (sg.w ?? 1.2) / 2 + 0.05, (sg.w ?? 1.2) / 2 + 0.05)) return no('plate');
+      return true;
+    };
+    let last = -Infinity;
+    for (let i = 0; i < n && total < MINE_SETS.cap; i++) {
+      for (const o of [0, -0.35, 0.35, -0.7, 0.7]) {
+        const s = Math.round((first + i * MINE_SETS.pitch + o) * 100) / 100;
+        if (s - last < 1.2 || !clearOf(s)) continue;
+        const before = layout.props.length, held: number[] = [];
+        for (const side of [0, 1] as const) {
+          const b = postBox(s, side), [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+          if (block) for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const k = g.idx(cx, cy); if (!g.blocked[k]) { g.blocked[k] = 1; held.push(k); } }
+          layout.props.push({kind: 'annexMachine', x: r3(b.x), z: r3(b.z), y: r2(base), rot: 0, area: a.id, hx: r3(b.hx), hz: r3(b.hz), h: r2(clear), blocksSight: false, variant: MINE_PIECE.post, ...(ctx.level ? {level: ctx.level} : {})});
+        }
+        if (block && !areaConnected(ctx, a)) { for (const k of held) g.blocked[k] = 0; layout.props.length = before; continue; }
+        last = s;
+        total++;
+        break;
+      }
+    }
+  }
+  return total;
+}
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The rail line (pure geometry: cell units in any frame; shared with the visuals)
@@ -141,6 +238,7 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   const mine = info.rooms.map(r => layout.areas[r.area]);
   const p0 = layout.props.length, l0 = layout.lights.length, s0 = layout.signs.length;
   MINES_DRESS_STATS.pieces = {};
+  MINES_DRESS_STATS.setRejects = {};
   // one placement context on the storey, over the workings' bounding box (+ margin)
   const bb = mine.reduce((m, a) => ({x0: Math.min(m.x0, a.x - 3), y0: Math.min(m.y0, a.y - 3), x1: Math.max(m.x1, a.x + a.w + 3), y1: Math.max(m.y1, a.y + a.h + 3)}), {x0: 1e9, y0: 1e9, x1: -1e9, y1: -1e9});
   const ctx = makePlaceCtx(layout, rng.fork('mines-place'), lv, bb);
@@ -322,6 +420,9 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
     }
   }
   MINES_DRESS_STATS.signs = layout.signs.length - s0;
+
+  // --- timber support sets along the drifts (last: they keep off everything placed above) -----------------------------------------
+  MINES_DRESS_STATS.sets = placeTimberSets(ctx, layout, info.rooms.filter(r => SET_PARTS.has(r.part)).map(r => layout.areas[r.area]), base);
   MINES_DRESS_STATS.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;
 }
 

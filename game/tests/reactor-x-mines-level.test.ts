@@ -83,16 +83,26 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       const {L} = gen(seed);
       const v = planMinesVisuals(L)!;
       expect(v, `seed ${seed}`).not.toBeNull();
-      expect(v.stats.sets, `seed ${seed} sets (${v.stats.setsSkipped} skipped)`).toBeGreaterThanOrEqual(12);
+      expect(v.stats.sets, `seed ${seed} sets (${v.stats.setsSkipped} skipped)`).toBeGreaterThanOrEqual(8);
       expect(v.stats.railM).toBeGreaterThan(10);
       expect(v.models.mineCart.length).toBeGreaterThanOrEqual(1);
       expect(v.models.timberSet.length).toBe(v.stats.sets);
       // the sets clear >= 2.3 m under their cap (0.711 x the drift's clear height) and stand within the drift's floor
       const g = L.levels[2].grid;
+      const posts = L.props.filter(p => p.kind === 'annexMachine' && p.variant === MINE_PIECE.post);
+      expect(posts.length).toBe(2 * v.stats.sets);
       for (const m of v.models.timberSet) {
         expect(1.79 * m.sy).toBeGreaterThanOrEqual(2.3);
-        const [cx, cy] = g.cellOf(m.x, m.z);
+        const [cx, cy] = g.cellOf(m.x, m.z), a = L.areas[g.area[g.idx(cx, cy)]];
         expect(g.cells[g.idx(cx, cy)]).toBe(FLOOR);
+        // the whole set (cap ends at +-1.7 x sx) stays inside the drift's one-cell rock walls; both posts are collision boxes there
+        const alongX = a.w >= a.h, Wd = (alongX ? a.h : a.w) * CELL;
+        expect(1.7 * m.sx).toBeLessThanOrEqual(Wd / 2 + 0.49);
+        const mine = posts.filter(p => p.area === a.id && Math.abs((alongX ? p.x : p.z) - (alongX ? m.x : m.z)) < 1e-3);
+        expect(mine.length).toBe(2);
+        // a post standing proud of the 0.1 m edge allowance blocks its rib cell (nav + the walk volume agree with the collider)
+        const proud = Wd / 2 - 1.03 * m.sx;
+        for (const p of mine) if (proud > 0.12) expect(g.blocked[g.idx(...g.cellOf(p.x, p.z))]).toBe(1);
       }
       expect(minesModelKeysFor(L)).toEqual(Object.values(MINES_MODELS).map(m => m.key));
     }
