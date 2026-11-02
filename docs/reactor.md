@@ -658,7 +658,12 @@ User bullets 10–13. Tests: `game/tests/reactor-props-r2-{lamps,cables,drill}.t
   - **Height:** every run hangs 0.12 m under its ceiling on drop rods. It passes over what stays low (door-frame headers, plates,
     cabinets) and under what reaches the ceiling band (fixtures, the bunker's corridor ducts, the mines' timber set caps, read from
     their post pairs). It never drops below 2.15 m over the storey floor.
-  - **Steps:** a straight run steps only where the open height changes for ≥ 2 m, so there is no saw-tooth between timber sets.
+  - **Free bands:** each cell has a free band [low, top]: the highest free height under the ceiling, down to the highest obstacle the
+    cable passes over, never under the 2.15 m line. The route steps onto a neighbour only where the two bands overlap. A straight run
+    hangs at the top of its cells' common band; where that band is empty it splits into pieces, and steps happen inside the bands.
+    A drift too low for the tray is blocked, and the route takes another way. Cause of the final-head regression (seed 218558,
+    mines): a merged piece's common height used to descend past an obstacle one cell passed over, under the headroom.
+  - **Steps:** a run steps only where the open height changes for ≥ 2 m, so there is no saw-tooth between timber sets.
   - **Walls:** every wall is crossed as a sleeve. The tray rises or falls at a riser cell 1–3 cells back from the wall, where the
     column is clear from 2.15 m up, and three wires pass through the wall (`cableSleeves`; `archKit` draws only the wires). A crossing
     goes over the door's lintel, 2 cm above the head and up to 6 cm under the ceiling, so it clears WASTE's frame headers. Where the
@@ -671,8 +676,8 @@ User bullets 10–13. Tests: `game/tests/reactor-props-r2-{lamps,cables,drill}.t
     require neither.
   - **Checks:** `ceilingCableIssues` (door volumes, headroom, ceilings, every obstacle; sleeves judged by their wire bundle) and
     `CEILING_CABLE_STATS` (QA).
-  - **Measured** on 12 real seeds × 3 complexes (all lanes merged): every strict route found at generation, 0 issues, about 10–60 ms
-    per complex. The cable test covers 10 of these seeds.
+  - **Measured** on 12 real seeds × 3 complexes (final head): every strict route found at generation, 0 issues, about 10–60 ms per
+    complex. The cable test covers all 12 seeds.
 - **The drill (12).** `MINES_FIT.drillRig = 1.9` (`world/reactor/minesAssets.ts`). It is a derived transform of the same GLB: no
   re-cook and no byte change. Lane MINES' collider, heading and instance scale read it.
   - Scale check beside zombie lastshift (1.78 m, runtime scale 1): 6.65 × 2.43 × 1.87 m (W × H × D). The wheeled carrier is 4.04 m,
