@@ -317,23 +317,34 @@ describe('player train: cooked assets', () => {
     expect(rep.census.before.foldOverlaps).toBeGreaterThan(0); // the Meshy folds the repair removed (documented, not silent)
   }, 120000);
 
-  it('windows: cab side + both end faces + the leaf, measured rects on the faces, inside the body, clear of the open-leaf pockets', () => {
+  it('windows: every side window (cab / saloon / rear / nose) + both end faces + the leaf, on the faces, inside the body, pockets handled', () => {
     const {interior: I, cab, doorLeaf: L, windows: Wn} = SPEC;
-    expect(Wn.side.length).toBe(4);
+    const zone = (z: string) => Wn.side.filter(w => w.zone === z);
+    // task lockbox-windows (user: "The windows on the side of the train remain solid. Make them see through!"): all of them, both sides
+    expect([zone('cab').length, zone('saloon').length, zone('rear').length, zone('nose').length]).toEqual([4, 6, 2, 4]);
+    for (const side of [-1, 1] as const) expect(Wn.side.filter(w => w.side === side)).toHaveLength(8);
+    const pocketsOf = (side: number) => SPEC.doors.filter(q => q.side === side).flatMap(d => [[d.x - d.width / 2 - 0.01 - L.width, d.x - d.width / 2 - 0.01], [d.x + d.width / 2 + 0.01, d.x + d.width / 2 + 0.01 + L.width]]);
     for (const w of Wn.side) {
-      expect(w.zone).toBe('cab');
-      expect(w.x0).toBeGreaterThanOrEqual(cab.x0 + 0.05);
-      expect(w.x1).toBeLessThanOrEqual(I.x1);
       expect(w.x1 - w.x0).toBeGreaterThan(0.2);
       expect(w.y0).toBeGreaterThan(SPEC.floorY + 0.5);
       expect(w.y1).toBeLessThan(SPEC.ceilingY);
-      expect(w.skinZ).toBeGreaterThan(L.outerZ); // the glass plane lies outside the leaf / lining zone, on the skin
       expect(w.skinZ).toBeLessThanOrEqual(SPEC.width / 2);
-      // an open leaf parks at |z| outerZ - thickness .. outerZ beside its doorway: never behind a side window
-      for (const d of SPEC.doors.filter(q => q.side === w.side)) for (const [p0, p1] of [[d.x - d.width / 2 - 0.01 - L.width, d.x - d.width / 2 - 0.01], [d.x + d.width / 2 + 0.01, d.x + d.width / 2 + 0.01 + L.width]]) {
-        expect(w.x1 <= p0 - 0.039 || w.x0 >= p1 + 0.039, `window ${w.x0}..${w.x1} vs pocket ${p0}..${p1}`).toBe(true);
+      if (w.zone === 'cab') { expect(w.x0).toBeGreaterThanOrEqual(cab.x0 + 0.05); expect(w.x1).toBeLessThanOrEqual(I.x1); }
+      if (w.zone === 'saloon') { expect(w.x0).toBeGreaterThan(I.x0); expect(w.x1).toBeLessThan(cab.x0); }
+      if (w.zone === 'rear') { expect(w.x0).toBeGreaterThan(I.x0); expect(w.x1).toBeLessThan(SPEC.rear!.x1); }
+      if (w.zone === 'nose') { expect(Math.min(Math.abs(w.x0), Math.abs(w.x1))).toBeGreaterThan(I.x1); expect(w.skinZ).toBeGreaterThan(1.2); } // beyond the bulkheads
+      else expect(w.skinZ).toBeGreaterThan(L.outerZ); // the glass plane lies outside the leaf / lining zone, on the skin
+      if (w.pocket) {
+        // a pocket-door window (rear): the recorded span is the parked leaf behind it, and it really overlaps the window
+        expect(w.zone).toBe('rear');
+        expect(pocketsOf(w.side).some(([p0, p1]) => Math.abs(p0 - w.pocket!.x0) < 2e-3 && Math.abs(p1 - w.pocket!.x1) < 2e-3)).toBe(true);
+        expect(w.pocket.x0 < w.x1 && w.pocket.x1 > w.x0).toBe(true);
+      } else {
+        // an open leaf parks at |z| outerZ - thickness .. outerZ beside its doorway: never behind a plain side window
+        for (const [p0, p1] of pocketsOf(w.side)) expect(w.x1 <= p0 - 0.039 || w.x0 >= p1 + 0.039, `window ${w.x0}..${w.x1} vs pocket ${p0}..${p1}`).toBe(true);
       }
     }
+    expect(zone('rear').every(w => w.pocket)).toBe(true);
     for (const end of [1, -1] as const) {
       const ws = Wn.end.filter(w => w.end === end).sort((a, b) => a.z0 - b.z0);
       expect(ws).toHaveLength(3);
@@ -363,6 +374,10 @@ describe('player train: cooked assets', () => {
     const hits = (box: Box) => tris.filter(t => triBox(box, t)).length;
     for (const w of SPEC.windows.side) {
       const zIn = w.side < 0 ? -2 : I.halfWidth, zOut = w.side < 0 ? -I.halfWidth : 2;
+      if (w.zone === 'nose') { // the corner wrap: open from the end-window hole's edge (|z| skinZ) out
+        expect(hits({min: [w.x0 + 0.01, w.y0 + 0.01, w.side < 0 ? -2 : w.skinZ + 0.01], max: [w.x1 - 0.01, w.y1 - 0.01, w.side < 0 ? -(w.skinZ + 0.01) : 2]}), `nose window ${w.x0}`).toBe(0);
+        continue;
+      }
       expect(hits({min: [w.x0 + 0.01, w.y0 + 0.01, zIn], max: [w.x1 - 0.01, w.y1 - 0.01, zOut]}), `side window ${w.x0}`).toBe(0);
       expect(hits({min: [w.x0, w.y1 + 0.03, zIn], max: [w.x1, w.y1 + 0.08, zOut]}), `skin above ${w.x0}`).toBeGreaterThan(0);
     }
@@ -377,5 +392,61 @@ describe('player train: cooked assets', () => {
     expect(leafHits({min: [lw.x0 + 0.01, lw.y0 + 0.01, -0.005], max: [lw.x1 - 0.01, lw.y1 - 0.01, 0.005]})).toBe(0); // both glass faces gone
     expect(leafHits({min: [lw.x1 + 0.02, lw.y0 + 0.2, -0.03], max: [SPEC.doorLeaf.width / 2, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the stile
     expect(leafHits({min: [-SPEC.doorLeaf.width / 2, lw.y0 + 0.2, -0.03], max: [lw.x0 - 0.005, lw.y1 - 0.2, 0.03]})).toBeGreaterThan(0); // the rim
+  }, 60000);
+
+  // task studio-beta-train-lockbox-windows-20261101-232156-01 (user: "I want to add a lock box in the back compartement of the train")
+  it('lockbox: Meshy model with a body + hinged lid node, real size, grounded / centred, cavity inside the body, provenance pinned', async () => {
+    const M = PLAYER_TRAIN_MODELS['player-train-lockbox'], LB = PLAYER_TRAIN_MEASURED.lockbox;
+    expect(M.url).toBe('assets/models/player-train-lockbox.glb');
+    expect(levelOfAsset(M.url)).toBeNull();
+    expect(LB.length).toBeGreaterThanOrEqual(1.0);
+    expect(LB.length).toBeLessThanOrEqual(1.05);
+    expect([LB.length, LB.height, LB.depth]).toEqual([...M.dims]);
+    const doc = await new NodeIO().read(pub(M.url));
+    const nodes = doc.getRoot().listNodes().filter(n => n.getMesh());
+    expect(nodes.map(n => n.getName()).sort()).toEqual(['lockbox-body', 'lockbox-lid']);
+    const body = nodes.find(n => n.getName() === 'lockbox-body')!, lid = nodes.find(n => n.getName() === 'lockbox-lid')!;
+    expect(body.getTranslation()).toEqual([0, 0, 0]);
+    const lt = lid.getTranslation();
+    expect(lt[0]).toBe(0);
+    expect(lt[1]).toBeCloseTo(LB.hinge.y, 4);
+    expect(lt[2]).toBeCloseTo(LB.hinge.z, 4);
+    expect(LB.seamY).toBe(LB.hinge.y);
+    const verts = (n: typeof body) => { const P = n.getMesh()!.listPrimitives()[0].getAttribute('POSITION')!.getArray()!; const out: V3[] = []; for (let i = 0; i < P.length; i += 3) out.push([P[i], P[i + 1], P[i + 2]]); return out; };
+    const bv = verts(body), lv = verts(lid);
+    const bb = {min: [0, 1, 2].map(k => Math.min(...bv.map(v => v[k]))), max: [0, 1, 2].map(k => Math.max(...bv.map(v => v[k])))};
+    // grounded / centred / front +Z: the whole box spans x / z symmetric about 0 and starts at y 0
+    const all = [...bv, ...lv.map(v => [v[0] + lt[0], v[1] + lt[1], v[2] + lt[2]] as V3)];
+    expect(Math.min(...all.map(v => v[1]))).toBeCloseTo(0, 3);
+    expect(Math.abs(Math.min(...all.map(v => v[0])) + Math.max(...all.map(v => v[0])))).toBeLessThan(2e-3);
+    expect(Math.abs(Math.min(...all.map(v => v[2])) + Math.max(...all.map(v => v[2])))).toBeLessThan(2e-3);
+    // the hinge is the back-top edge: at the seam, at the back; the lid lies in front of / above it (hasps hang a little at the front)
+    expect(LB.hinge.z).toBeLessThan(-0.45 * LB.depth);
+    expect(LB.seamY).toBeGreaterThan(0.5 * LB.height);
+    expect(Math.min(...lv.map(v => v[2]))).toBeGreaterThan(-0.01);
+    expect(Math.min(...lv.map(v => v[1]))).toBeGreaterThan(-0.06);
+    expect(Math.max(...lv.map(v => v[1])) + LB.hinge.y).toBeCloseTo(LB.height, 3);
+    // the body stops at the seam (an open box: no top face; its catches peek a little above), the cavity sits inside it
+    expect(bb.max[1]).toBeLessThan(LB.seamY + 0.02);
+    const C = LB.cavity;
+    expect(C.x0).toBeGreaterThan(bb.min[0]); expect(C.x1).toBeLessThan(bb.max[0]);
+    expect(C.z0).toBeGreaterThan(bb.min[2]); expect(C.z1).toBeLessThan(bb.max[2]);
+    expect(C.y0).toBeGreaterThan(0); expect(C.y1).toBe(LB.seamY);
+    expect(bv.filter(v => v[1] > LB.seamY - 0.01 && Math.abs(v[0]) < C.x1 - 0.05 && v[2] > C.z0 + 0.05 && v[2] < C.z1 - 0.05)).toHaveLength(0); // open top
+    // opened ~100 deg about the hinge (rotation.x = -angle), the lid swings up and back, clear of the cavity
+    const a = -100 * Math.PI / 180;
+    const opened = lv.map(v => [v[0], lt[1] + v[1] * Math.cos(a) - v[2] * Math.sin(a), lt[2] + v[1] * Math.sin(a) + v[2] * Math.cos(a)]);
+    expect(Math.min(...opened.map(v => v[1]))).toBeGreaterThan(LB.seamY - 0.08);
+    expect(Math.max(...opened.map(v => v[2]))).toBeLessThan(C.z0 + 0.1);
+    // provenance: the ONE accepted lockbox refine, its raw hash and the lockbox ledger
+    const m = prov.models['train-lockbox'];
+    expect(m.tasks).toEqual({preview: '01a1996f-788c-73a8-b72f-b0cbf80a91ea', refine: '01a19970-d6a7-7150-ac6c-a68aa972b326'});
+    expect(m.source.sha256).toBe('b6b9857fedeb64df69651d7cc47ce230146d577694b6548ee118668a27782f7d');
+    const b = fs.readFileSync(pub(M.url));
+    expect(m.output).toEqual({url: M.url, bytes: b.length, sha256: sha(b)});
+    expect(m.derivative).toMatchObject({meshes: 2, materials: 1, triangles: M.tris});
+    expect(prov.lockboxLedger).toMatchObject({accepted: 1, credits: {reserved: 0}});
+    expect(prov.lockboxLedger.credits.billed).toBeLessThanOrEqual(50);
+    expect(M.tris).toBeLessThanOrEqual(12000);
   }, 60000);
 });
