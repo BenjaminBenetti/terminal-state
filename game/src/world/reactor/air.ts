@@ -164,6 +164,9 @@ export class ReactorAir implements DepthGasSource {
    */
   readonly outdoor: OutdoorGas | null;
   readonly shafts: ShaftSpec | null;
+  /** Task reactor-playtest-round2-20261102 (lane STARTUP): the ONLINE sky clearing applied to `outdoor` (0..1) and a pending upload. */
+  private outdoorClear = 0;
+  private outdoorDirty = false;
 
   constructor(readonly info: ReactorInfo, readonly rect: DepthRect, readonly state: ReactorRunState) {
     const open = info.pit.roofY > info.pit.rimY + 2; // (lane GASLIGHT)
@@ -210,7 +213,8 @@ export class ReactorAir implements DepthGasSource {
    */
   update(clock: number, force = false): boolean {
     const st = this.state, all = this.all;
-    let changed = force;
+    let changed = force || this.outdoorDirty; // (lane STARTUP: the ONLINE sky clearing changed the outdoor term: re-upload)
+    this.outdoorDirty = false;
     for (const z of this.zones) {
       let f = clamp01(st.zoneClear[z.id] ?? 0);
       const g = z.gen >= 0 ? st.generators[z.gen] : undefined;
@@ -238,6 +242,25 @@ export class ReactorAir implements DepthGasSource {
     const base = new Float64Array(this.clears.length);
     for (const z of this.zones) base[z.id] = this.clears[z.id];
     this.all = {from: clock, dur: Math.max(0.1, durationS), base};
+  }
+
+  /**
+   * Task reactor-playtest-round2-20261102 (lane STARTUP): the surface air over the roof clears as the reactor comes ONLINE — `k` (0..1)
+   * rewrites `outdoor` in place through world/gaslightRules.ts reactorOutdoorGas (thinner, its ramp lifted), so the exposure
+   * (depthGasAt) reads it at once and the next update() re-uploads the render table (the march draws the same object). True = changed.
+   */
+  setOutdoorClear(k: number): boolean {
+    const o = this.outdoor, v = Number.isFinite(k) ? clamp01(k) : 0;
+    if (!o || (Math.abs(v - this.outdoorClear) < REACTOR_AIR.CHANGE_EPS && !(v >= 1 && this.outdoorClear < 1) && !(v <= 0 && this.outdoorClear > 0))) return false;
+    this.outdoorClear = v;
+    Object.assign(o, reactorOutdoorGas(this.info.pit.roofY, this.rect, v));
+    this.outdoorDirty = true;
+    return true;
+  }
+
+  /** Lane STARTUP: the ONLINE sky clearing applied to the outdoor term (0..1). */
+  get outdoorCleared(): number {
+    return this.outdoorClear;
   }
 
   /** A whole-pit clearing is running. */

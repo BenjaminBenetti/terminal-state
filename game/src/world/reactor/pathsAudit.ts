@@ -38,6 +38,7 @@ import {bunkerModelOrigin, bunkerModelPlacements} from './bunkerModels';
 import {BUNKER_KINDS, BUNKER_MODELS} from '../../gen/reactor/complex/bunkerKinds';
 import {MAP_BOARD, planMapBoards} from './mapBoardPlan';
 import {screenFacing} from './restartViews';
+import {BEACONS, planBeacons} from './startupBeaconPlan'; // task reactor-playtest-round2-20261102 (lane STARTUP): the orange beacons
 
 /** The player body (m): radius, height above the floor (1.9 m: a 1.8 m person + margin), floor slack, edge tolerance. */
 export const BODY = {r: 0.3, h: 1.9, foot: 0.03, edge: 0.1} as const;
@@ -725,6 +726,12 @@ export function extraSolids(layout: StationLayout): ExtraSolid[] {
     for (const b of planMapBoards(layout, info, s => screenFacing(s, openAt))) {
       const d = MAP_BOARD.depth;
       push('map board', new THREE.Matrix4().compose(p.set(b.x - b.nx * d / 2, b.y, b.z - b.nz * d / 2), q.setFromAxisAngle(UP, Math.atan2(b.nx, b.nz)), sc.set(MAP_BOARD.w, MAP_BOARD.h, d)), UNIT_LO, UNIT_HI);
+    }
+    // task reactor-playtest-round2-20261102 (lane STARTUP): every beacon's envelope on its wall bracket (plate .. head top, wall face .. pedestal rim)
+    const B = BEACONS;
+    for (const s of planBeacons(layout)) {
+      push('beacon', new THREE.Matrix4().compose(p.set(s.x, s.y, s.z), q.setFromAxisAngle(UP, Math.atan2(s.nx, s.nz)), sc.set(1, 1, 1)),
+        [-B.plate.w / 2, B.plate.y - B.plate.h / 2, 0], [B.plate.w / 2, B.head.h, B.out + B.pedestal.r]);
     }
   }
   return out;
