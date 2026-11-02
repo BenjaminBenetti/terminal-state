@@ -235,6 +235,6 @@ const add = [...mine].map(p => { const b = fs.readFileSync(path.join(PUB, p)); r
 // (task reactor-expansion-20261101: drop only THIS kit's own stale outputs — other builders' reactor-* files, e.g. the expansion kit
 // (build-reactor-x-kit.mjs), keep their entries)
 const ownModel = new Set(KIT.map(k => `assets/models/reactor-${k.id.replace(/^reactor-/, '')}.glb`));
-allow.files = [...allow.files.filter(f => !mine.has(f.path) && !ownModel.has(f.path) && !/^assets\/textures\/reactor\//.test(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
+allow.files = [...allow.files.filter(f => !mine.has(f.path) && !ownModel.has(f.path) && !TEXTURES.some(t => f.path.startsWith(`assets/textures/reactor/${t.name}-`))), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
 fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 console.log('wrote', written.length, 'public files +', path.relative(root, REG), 'CREDITS.md public-inputs.json');

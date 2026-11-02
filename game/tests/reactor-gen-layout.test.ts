@@ -3,6 +3,7 @@
 import {describe, expect, it} from 'vitest';
 import {generateReactorLevel, reactorFrame, reactorIssues, REACTOR_GEN_STATS, CORE_LEVEL, REACTOR_LEVELS} from '../src/gen/reactor/index';
 import {reactorRouteGroups} from '../src/gen/reactor/validate';
+import {dropInLadderOpening} from '../src/gen/reactor/pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {levelsOf} from '../src/gen/levels';
 import {CELL, FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -148,7 +149,8 @@ describe('Reactor generator (lane GEN)', () => {
   it('keeps every drop railed, the vessel solid, enemies off the stairs / keep points and density rising with depth', () => {
     for (const seed of SEEDS.slice(0, 4)) {
       const L = gen(seed), Lv = levelsOf(L);
-      expect(Lv.unrailedDrops()).toEqual([]);
+      // task reactor-expansion-20261101 (lane PATHS): the maintenance ladder heads are the ONLY designed openings in the deck-edge rails
+      expect(Lv.unrailedDrops().filter(d => !dropInLadderOpening(L, d))).toEqual([]);
       const per = L.levels.map(lv => L.zombies.filter(z => (z.level ?? 0) === lv.id && z.horde === undefined && !L.areas[z.area]?.ext).length);
       expect(per[0]).toBeGreaterThanOrEqual(1);
       expect(per[CORE_LEVEL]).toBeGreaterThan(per[0]);

@@ -26,6 +26,7 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
+import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import {MeshBasicNodeMaterial} from 'three/webgpu';
@@ -34,6 +35,8 @@ import {MeshBasicNodeMaterial} from 'three/webgpu';
 import {CORE_CELL, coreCellKinds, coreHeroOf} from './coreHero';
 import {buildCoreLiquids, type CoreBuilt} from './coreLiquids';
 import {CoreVisuals, setActiveCoreVisuals} from './coreVisuals';
+import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
+import {buildBunkerModels} from './bunkerModels'; // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props
 
 export interface ReactorArchStats {
   kit: KitStats | null;
@@ -46,6 +49,8 @@ export interface ReactorArchStats {
   /** GEN's light fixtures in the pit drawn as caged lamps (buildLamps). */
   lamps: number;
   ms: number;
+  /** task reactor-expansion-20261101 (lane MINES): the old mine workings' visuals (world/reactor/minesVisuals.ts). */
+  mines?: MinesBuildStats;
 }
 
 /** Areas of the Reactor proper (GEN's 'reactor-*' room types, or any area below the rim). */
@@ -59,6 +64,8 @@ export class ReactorArch {
   readonly info: ReactorInfo;
   /** Per cell of the level grids: 1 = inside the pit outline (the culler's atrium mask; the pit finishes). */
   readonly pitMask: Uint8Array;
+  /** task reactor-expansion-20261101 (lane MINES): areas of the old mine workings (rock walls, caged lamps, timber / rails / models). */
+  readonly mineAreas: ReadonlySet<number>;
   private readonly W: number;
   private readonly H: number;
   /** The core floor's level (the last tier). */
@@ -86,6 +93,7 @@ export class ReactorArch {
     const g0 = levels[0].grid;
     this.W = g0.w; this.H = g0.h;
     this.pitMask = new Uint8Array(this.W * this.H);
+    this.mineAreas = new Set(minesRecord(layout)?.areas ?? []); // (lane MINES)
     const b = this.info.pit.bounds, P = this.info.pit.outline;
     for (let cy = Math.max(0, Math.floor(b.z0 / CELL)); cy < Math.min(this.H, Math.ceil(b.z1 / CELL)); cy++) {
       for (let cx = Math.max(0, Math.floor(b.x0 / CELL)); cx < Math.min(this.W, Math.ceil(b.x1 / CELL)); cx++) {
@@ -123,7 +131,7 @@ export class ReactorArch {
       }
       let key: ReactorSurfaceKey | null = null;
       if (this.inPit(mx, mz)) key = 'reactor-wall';
-      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = 'reactor-room-wall';
+      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = this.mineAreas.has(f.area) ? 'reactor-wall' : 'reactor-room-wall'; // (lane MINES: the drifts are rock-cut, not plate)
       if (!key) { out.push(f); continue; }
       this.count(key);
       out.push({...f, finish: key});
@@ -205,8 +213,8 @@ export class ReactorArch {
   // GEN's light fixtures in the pit: caged industrial lamps (the lighting system's tube instance becomes the cage's lens)
 
   /** A real (non-virtual) layout light inside the pit: drawn as a caged lamp, not a Subway tube fixture (rooms keep tubes). */
-  isLamp(l: {x: number; z: number; virtual?: boolean}): boolean {
-    return !l.virtual && this.inPit(l.x, l.z);
+  isLamp(l: {x: number; z: number; virtual?: boolean; area?: number}): boolean {
+    return !l.virtual && (this.inPit(l.x, l.z) || (l.area !== undefined && this.mineAreas.has(l.area))); // (lane MINES: + the mine's caged lamps)
   }
 
   /** The tube instance of a pit lamp as its lens: a 0.2 m glowing square under the cage (0.36 m below the light point). */
@@ -260,7 +268,8 @@ export class ReactorArch {
     try {
       // task reactor-expansion-20261101 (lane GASLIGHT): mounted pit fixtures -> their bodies in the kit (no decorative lamps), lenses = tubes
       const fixtures = this.layout.lights.some(l => isMounted(l));
-      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures});
+      // task reactor-expansion-20261101 (lane PATHS): + the walkable body volume — the kit keeps its steel out of every walkway
+      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures, walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
       this.mountedLamps = fixtures ? planMountedLamps(this.plan, this.layout.lights, this.mats.fixture) : [];
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
@@ -285,6 +294,10 @@ export class ReactorArch {
     }
     // (lane GASLIGHT) the open pit top: the toxic sky + the outside gas sheets above the roof line (the volumetric part is the march's)
     try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
+    // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
+    try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }
+    // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (REACTOR_X_KIT models on their prop placements)
+    try { buildBunkerModels(group, this.layout, models); } catch (e) { console.warn('reactor arch: bunker models skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }

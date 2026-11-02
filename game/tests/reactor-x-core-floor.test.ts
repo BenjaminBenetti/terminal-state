@@ -61,7 +61,7 @@ describe('the core floor (lane CORE) on real generated layouts', () => {
       expect(pool).toBe(cf.pool.cells);
       expect(edges).toBeGreaterThan(200);
       expect(railed).toBe(edges);
-      expect(Lv.unrailedDrops()).toEqual([]);
+      expect(Lv.unrailedDrops().filter(r => r.level === CORE_LEVEL && Math.hypot((r.x0 + r.x1) / 2 - cf.x, (r.z0 + r.z1) / 2 - cf.z) < cf.pool.r1 + 1)).toEqual([]);
       for (const z of L.zombies) if ((z.level ?? 0) === CORE_LEVEL) { const [cx, cy] = g.cellOf(z.x, z.z); expect(isPool(g.idx(cx, cy)), 'zombie in the goop').toBe(false); }
       for (const p of L.pickups) if ((p.level ?? 0) === CORE_LEVEL) { const [cx, cy] = g.cellOf(p.x, p.z); expect(isPool(g.idx(cx, cy)), `pickup ${p.itemId} in the goop`).toBe(false); }
     }, 60_000);

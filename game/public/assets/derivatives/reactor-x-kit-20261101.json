@@ -996,5 +996,34 @@
    "sha256": "b42c061fb5683f5de49638b585a8efc5050d4c24d81e58e1977edc6da030efeb"
   }
  ],
- "textures": []
+ "textures": [
+  {
+   "key": "mine-rock",
+   "id": "tex-mine-rock",
+   "what": "blasted mine-drift rock (lane MINES drift walls / ceilings)",
+   "size": 1024,
+   "codex": {
+    "file": "tex-mine-rock-attempt17.png",
+    "sha256": "129498a131f8c7a01294c138169e58c535eb107041a4abd8477266f2a91c4a03",
+    "codexSession": "rollout-2026-11-02T00-36-45-01a199af-ea58-7f91-a776-44609698105f.jsonl"
+   },
+   "files": [
+    {
+     "url": "assets/textures/reactor/mine-rock-color.jpg",
+     "bytes": 437339,
+     "sha256": "3b72e060560ef702ad00b79f854c3802d32fcf9d09588f27fd61c1f09e943bf8"
+    },
+    {
+     "url": "assets/textures/reactor/mine-rock-normal.jpg",
+     "bytes": 364669,
+     "sha256": "b0095cb755a7a45e5e49e8bb10bc0b3f208273c6feee625550f46ab35ad78867"
+    },
+    {
+     "url": "assets/textures/reactor/mine-rock-orm.jpg",
+     "bytes": 189541,
+     "sha256": "eb499fc222620b2dfe2172de6e3c54806f83d4d41ddec76f60f898b9f348d7e7"
+    }
+   ]
+  }
+ ]
 }

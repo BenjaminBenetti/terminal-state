@@ -34,8 +34,10 @@ import {
 } from './restartLogic';
 import {VENT_TOWERS, WinSequence, coreGlowAt, planWin, tierPowerAt, type WinPlan, type WinSink} from './restartWin';
 import {drawReactorScreen, screenKey, screenPixels, type ScreenModel} from './restartScreens';
-import {buildControlView, buildScreenView, controlFront, type ControlView, type ScreenView} from './restartViews';
+import {buildControlView, buildScreenView, fallbackMount, type ControlView, type ScreenView} from './restartViews';
 import {preloadReactorItemModels} from './restartItems';
+import {reactorMounts, type MountedControl} from './controlsMount'; // task reactor-expansion-20261101 (lane CONTROLS): controls ON their host faces
+import {valveWheelPart} from './controlsModel';
 import {recordReactorRestarted} from '../../run/milestones';
 import {rayCylinder, towerCue, type P3} from '../towerShared';
 
@@ -43,7 +45,7 @@ export {preloadReactorItemModels};
 
 /** Reach (m, eye to the control's centre) and pick radius per control (m). */
 export const RESTART_REACH = 2.3;
-const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.3, pump: 0.24, keyswitch: 0.16, rods: 0.3};
+const PICK_R: Readonly<Record<RestartControlId, number>> = {'fuse-0': 0.17, 'fuse-1': 0.17, breaker: 0.24, valve: 0.45, pump: 0.24, keyswitch: 0.16, rods: 0.3}; // (lane CONTROLS: valve = the model's wheel, r 0.43)
 /** The hold ring shows after this much of a hold (a quick tap never flashes it). */
 const RING_DELAY_S = 0.1;
 /** AIR's record / the HUD tier line are polled this often (s). */
@@ -78,7 +80,8 @@ export interface RestartHost {
   world?: {culler?: unknown} | null;
 }
 
-interface ControlEntry { id: RestartControlId; c: ReactorControl; level: number; view: ControlView; fx: number; fz: number; r: number }
+/** A built control: `m` = its mount on the host face (lane CONTROLS); the pick sphere / cues / in-sight point use m.pick, not c.at. */
+interface ControlEntry { id: RestartControlId; c: ReactorControl; level: number; view: ControlView; fx: number; fz: number; r: number; m: MountedControl }
 
 /** The lead's Sfx machine API (audio/sfx.ts MachineCue / MachineLoopCue): duck-typed so tests / an older Sfx stay silent. */
 type RestartCue = 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup';
@@ -168,14 +171,19 @@ export class ReactorRestart {
     this.plan = planWin(info.tiers, info.fans);
     const root = new THREE.Group();
     root.name = 'reactor-restart';
-    for (const site of info.sites) {
+    // task reactor-expansion-20261101 (lane CONTROLS): every control ON its host model's measured face (controlsMount.ts — the same
+    // placements lane ARCH's kit draws the machines with), the valve turning the model's own wheel (controlsModel.ts)
+    const mounts = reactorMounts(info);
+    for (const ms of mounts.sites) {
+      const site = ms.site;
       for (const c of site.controls) {
         if (!isRestartControl(c.id) || this.controls.some(e => e.id === c.id)) continue;
-        const view = buildControlView(c.id, c);
+        const m = ms.mounts.find(q => q.id === c.id) ?? fallbackMount(c);
+        const host = m.placement >= 0 ? ms.hosts[m.placement] : undefined;
+        const view = buildControlView(c.id, c, m, host, c.id === 'valve' ? valveWheelPart() : null);
         view.root.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = site.level; });
         root.add(view.root);
-        const [fx, fz] = controlFront(c);
-        this.controls.push({id: c.id, c, level: site.level, view, fx, fz, r: PICK_R[c.id]});
+        this.controls.push({id: c.id, c, level: site.level, view, fx: m.fx, fz: m.fz, r: PICK_R[c.id], m});
       }
     }
     const openAt = (x: number, z: number, level: number): boolean => {
@@ -389,7 +397,7 @@ export class ReactorRestart {
     D.x = this.vDir.x; D.y = this.vDir.y; D.z = this.vDir.z;
     let best: ControlEntry | null = null, bt = Infinity;
     for (const e of this.controls) {
-      const a = e.c.at, ox = a.x - E.x, oy = a.y - E.y, oz = a.z - E.z;
+      const a = e.m.pick, ox = a.x - E.x, oy = a.y - E.y, oz = a.z - E.z; // (lane CONTROLS: the mounted overlay's centre)
       const dist2 = ox * ox + oy * oy + oz * oz;
       if (dist2 > RESTART_REACH * RESTART_REACH) continue;
       const tca = ox * D.x + oy * D.y + oz * D.z;
@@ -401,7 +409,7 @@ export class ReactorRestart {
     }
     if (!best) return null;
     // in sight: a point just in front of the panel (room side), so a wall between never lets you operate it
-    const a = best.c.at, qx = a.x + best.fx * 0.18, qz = a.z + best.fz * 0.18;
+    const a = best.m.pick, qx = a.x + best.fx * 0.18, qz = a.z + best.fz * 0.18;
     const Q = this.qDir;
     Q.x = qx - E.x; Q.y = a.y - E.y; Q.z = qz - E.z;
     const len = Math.hypot(Q.x, Q.y, Q.z);
@@ -496,7 +504,7 @@ export class ReactorRestart {
   }
 
   private cueAt(e: ControlEntry): P3 {
-    return {x: e.c.at.x + e.fx * 0.1, y: e.c.at.y, z: e.c.at.z + e.fz * 0.1};
+    return {x: e.m.pick.x + e.fx * 0.1, y: e.m.pick.y, z: e.m.pick.z + e.fz * 0.1};
   }
 
   /** A completed press / hold: the rules (restartLogic.operate: the part is consumed exactly once), persistence, feedback, the win. */
@@ -627,7 +635,7 @@ export class ReactorRestart {
     const s = this.state;
     return {
       reactor: !!this.info, state: s ? {fuses: [...s.fuses], breaker: s.breaker, valve: s.valve, pump: s.pump, keyInserted: s.keyInserted, rods: s.rods, restarted: s.restarted, restartedAt: s.restartedAt} : null,
-      tasks: s ? reactorTasks(s) : null, controls: this.controls.map(e => ({id: e.id, level: e.level, at: e.c.at, stand: e.c.stand, done: s ? controlDone(s, e.id) : false})),
+      tasks: s ? reactorTasks(s) : null, controls: this.controls.map(e => ({id: e.id, level: e.level, at: e.c.at, pick: e.m.pick, host: e.m.host, stand: e.c.stand, done: s ? controlDone(s, e.id) : false})),
       screens: this.screens.map(v => ({id: v.id, drawn: v.key !== ''})), target: this.target?.id ?? null, prompt: this.prompt,
       hold: this.hold ? {id: this.hold.e.id, t: +this.hold.t.toFixed(2)} : null,
       win: this.win ? {t: +this.win.t.toFixed(2), done: this.win.done, towers: this.win.towerStates()} : null,

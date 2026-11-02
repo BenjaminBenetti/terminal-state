@@ -18,7 +18,7 @@
 // Pure data + small helpers (no three.js).
 
 import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES, type ReactorKitModel} from '../../assets/reactorKit.generated';
-import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101 (lane CORE): the hero assembly models
+import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101: the expansion's Meshy kit
 
 /** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =

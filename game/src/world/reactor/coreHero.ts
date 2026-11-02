@@ -155,13 +155,18 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
     const ux = Math.cos(b.angle), uz = Math.sin(b.angle), px = p.x - C.x, pz = p.z - C.z;
     return px * ux + pz * uz > 0 && Math.abs(-px * uz + pz * ux) < b.rail + 0.3;
   });
+  /** A run a -> b of diameter d intrudes a walkway's body volume somewhere along it (sampled every 0.25 m)? */
+  const intrudesWalk = (a: P3, b: P3, d: number): boolean => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), n = Math.max(1, Math.ceil(L / 0.25));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t, z = a.z + (b.z - a.z) * t;
+      if (y - d / 2 < y0 + H.headroom && y + d / 2 > y0 - 0.5 && (overWalk(x, z) || overWalk(x + d / 2, z) || overWalk(x - d / 2, z) || overWalk(x, z + d / 2) || overWalk(x, z - d / 2))) return true;
+    }
+    return false;
+  };
   /** A pipe run (+ flanges at its ends / every `fl` m); null when blocked. Pipes over a walkway keep the headroom. */
   const pipe = (a: P3, b: P3, d: number, opt: {flanges?: boolean; ignore?: boolean; endSkip?: number; mat?: 'pipe' | 'steelDark'} = {}): boolean => {
-    if (!clear(a, b, d, opt.ignore, opt.endSkip ?? 0.6)) { st.blocked++; return false; }
-    for (const t of [0.25, 0.5, 0.75]) {
-      const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, y = a.y + (b.y - a.y) * t;
-      if (overWalk(x, z) && y - d / 2 < y0 + H.headroom && y > y0 - 0.5) { st.blocked++; return false; }
-    }
+    if (!clear(a, b, d, opt.ignore, opt.endSkip ?? 0.6) || intrudesWalk(a, b, d)) { st.blocked++; return false; }
     plan.cyl('cyl', opt.mat ?? 'pipe', a, b, d);
     st.pipes++;
     if (opt.flanges !== false) {
@@ -176,7 +181,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
   };
   /** A polyline of pipes with elbow collars at the joints; the drawn part (all-or-nothing per segment) is returned. */
   const run = (pts: P3[], d: number, opt: {ignore?: boolean} = {}): P3[] | null => {
-    for (let i = 0; i + 1 < pts.length; i++) if (!clear(pts[i], pts[i + 1], d, opt.ignore, i === 0 || i + 2 === pts.length ? 0.6 : 0.05)) { st.blocked++; return null; }
+    for (let i = 0; i + 1 < pts.length; i++) if (!clear(pts[i], pts[i + 1], d, opt.ignore, i === 0 || i + 2 === pts.length ? 0.6 : 0.05) || intrudesWalk(pts[i], pts[i + 1], d)) { st.blocked++; return null; }
     for (let i = 0; i + 1 < pts.length; i++) pipe(pts[i], pts[i + 1], d, {ignore: true, endSkip: 10, flanges: i === 0 || i + 2 === pts.length});
     for (let i = 1; i + 1 < pts.length; i++) {
       const p = pts[i], q = pts[i + 1], dl = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) || 1;
@@ -278,7 +283,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
         return pts;
       };
       const low = track(yLow);
-      const lowOk = low.every(p => !overWalk(p.x, p.z) || p.y > y0 + H.headroom) && low.every((p, i) => i + 1 >= low.length || clear(p, low[i + 1], H.crossD, true, 0.05));
+      const lowOk = low.every((p, i) => i + 1 >= low.length || (clear(p, low[i + 1], H.crossD, true, 0.05) && !intrudesWalk(p, low[i + 1], H.crossD)));
       const pts = lowOk ? low : track(y0 + 3.6);
       if (run(pts, H.crossD, {ignore: true})) {
         out.flows.push({kind: 'cross', pts, d: H.crossD});
@@ -307,11 +312,20 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
         const rp = [at(a, r + s, mb + 2.0), at(a, r + s, y0 + H.headerY - 0.55), at(a, rH, y0 + H.headerY - 0.55)];
         if (run(rp, 0.26)) { out.flows.push({kind: 'feed', pts: rp, d: 0.26}); st.risers++; }
       }
-      // its feed into the nearest cold leg riser of the loop (low, over the goop)
+      // its feed into the loop's cold-leg riser (low, along the goop) — only to a pump beside it, no bridge between
       if (rcp) {
-        const aP = angOf(rcp.x, rcp.z), rr = radOf(rcp.x, rcp.z) - 2.45;
-        const fp = [at(a, r - 2.25, mb + 0.9), at(a, rr, mb + 0.9), at(aP, rr, mb + 0.9)];
-        if (fp.every(p => !overWalk(p.x, p.z)) && run(fp, 0.3)) out.flows.push({kind: 'feed', pts: fp, d: 0.3});
+        const aP = angOf(rcp.x, rcp.z), rr = Math.max(cf.rails.ring + H.coldD / 2 + 0.2, radOf(rcp.x, rcp.z) - 2.45);
+        let dA = aP - a;
+        while (dA > Math.PI) dA -= 2 * Math.PI;
+        while (dA < -Math.PI) dA += 2 * Math.PI;
+        const between = cf.bridges.some(b => { let e = b.angle - a; while (e > Math.PI) e -= 2 * Math.PI; while (e < -Math.PI) e += 2 * Math.PI; return dA > 0 ? e > 0 && e < dA : e < 0 && e > dA; });
+        if (Math.abs(dA) < 0.7 && !between) {
+          const fp = [at(a, r - 2.25, mb + 0.9), at(a, rr + 0.5, mb + 0.9)];
+          const n = Math.max(1, Math.ceil(Math.abs(dA) / 0.12));
+          for (let k = 1; k <= n; k++) fp.push(at(a + (dA * k) / n, rr + 0.5, mb + 0.9));
+          fp.push(at(aP, rr, mb + 0.9));
+          if (run(fp, 0.3)) out.flows.push({kind: 'feed', pts: fp, d: 0.3});
+        }
       }
     }
   }

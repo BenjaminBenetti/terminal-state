@@ -65,12 +65,51 @@ export function screenKey(id: ReactorScreenId, m: ScreenModel): string {
 
 type Ctx = CanvasRenderingContext2D;
 
-function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: string, align: CanvasTextAlign = 'left', weight = 'bold'): void {
+const FONT = '"DejaVu Sans Mono", "Courier New", monospace';
+/** Smallest font a screen text shrinks to (px). */
+export const MIN_TEXT_PX = 9;
+
+/**
+ * Task reactor-expansion-20261101 (lane CONTROLS): AUTO-FIT (user feedback: 'instructions on the "Switchgear - control power" sign are
+ * slightly cut off'): the font size (<= `size`, >= MIN_TEXT_PX) at which `s` is at most `maxW` px wide (measured, not guessed).
+ */
+export function fitSize(ctx: Ctx, s: string, size: number, maxW: number, weight = 'bold'): number {
+  let px = Math.max(MIN_TEXT_PX, Math.round(size));
+  if (!(maxW < Infinity)) return px;
+  while (px > MIN_TEXT_PX) {
+    ctx.font = `${weight} ${px}px ${FONT}`;
+    if (ctx.measureText(s).width <= maxW) break;
+    px--;
+  }
+  return px;
+}
+
+/** One line of text, shrunk to fit `maxW` px (default: no limit). */
+function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: string, align: CanvasTextAlign = 'left', weight = 'bold', maxW = Infinity): void {
+  const px = fitSize(ctx, s, size, maxW, weight);
   ctx.fillStyle = color;
-  ctx.font = `${weight} ${size}px "DejaVu Sans Mono", "Courier New", monospace`;
+  ctx.font = `${weight} ${px}px ${FONT}`;
   ctx.textAlign = align;
   ctx.textBaseline = 'middle';
   ctx.fillText(s, x, y);
+}
+
+/**
+ * An instruction line centred at (cx, y) inside `maxW` px: one line when it fits at >= 85 % of `size`, else word-wrapped into two
+ * lines (each fitted) `lineH` px apart about y.
+ */
+function hint(ctx: Ctx, s: string, cx: number, y: number, size: number, color: string, maxW: number, lineH: number, weight = 'normal'): void {
+  if (fitSize(ctx, s, size, maxW, weight) >= Math.round(size * 0.85) || !s.includes(' ')) { text(ctx, s, cx, y, size, color, 'center', weight, maxW); return; }
+  const words = s.split(' ');
+  let best = 1, bd = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const d = Math.abs(words.slice(0, i).join(' ').length - words.slice(i).join(' ').length);
+    if (d < bd) { bd = d; best = i; }
+  }
+  const a = words.slice(0, best).join(' '), b = words.slice(best).join(' ');
+  const px = Math.min(fitSize(ctx, a, size, maxW, weight), fitSize(ctx, b, size, maxW, weight));
+  text(ctx, a, cx, y - lineH / 2, px, color, 'center', weight, maxW);
+  text(ctx, b, cx, y + lineH / 2, px, color, 'center', weight, maxW);
 }
 
 function lamp(ctx: Ctx, x: number, y: number, r: number, color: string, lit: boolean): void {
@@ -85,7 +124,7 @@ function board(ctx: Ctx, w: number, h: number, title: string, band = '#d9a72b'):
   ctx.strokeStyle = '#3a4248'; ctx.lineWidth = 4; ctx.strokeRect(2, 2, w - 4, h - 4);
   const hh = Math.max(34, Math.round(h * 0.13));
   ctx.fillStyle = band; ctx.fillRect(4, 4, w - 8, hh);
-  text(ctx, title, w / 2, 4 + hh / 2, Math.round(hh * 0.52), '#15181a', 'center');
+  text(ctx, title, w / 2, 4 + hh / 2, Math.round(hh * 0.52), '#15181a', 'center', 'bold', w - 28);
   return 4 + hh;
 }
 
@@ -98,9 +137,12 @@ function monitor(ctx: Ctx, w: number, h: number): void {
 
 /** One status row: label left, a lamp + value right. */
 function row(ctx: Ctx, w: number, y: number, size: number, label: string, value: string, color: string, lit = true): void {
-  text(ctx, label, 22, y, size, '#d8d2c2', 'left', 'bold');
+  // label in the left 44 %, value in the right part before the lamp: one size for both, each fitted (never overlapping, never cut)
+  const lw = w * 0.44 - 22, vw = w - 52 - w * 0.46;
+  const px = Math.min(fitSize(ctx, label, size, lw), fitSize(ctx, value, size, vw));
+  text(ctx, label, 22, y, px, '#d8d2c2', 'left', 'bold', lw);
   lamp(ctx, w - 30, y, size * 0.42, color, lit);
-  text(ctx, value, w - 52, y, size, lit ? color : '#7c8284', 'right', 'bold');
+  text(ctx, value, w - 52, y, px, lit ? color : '#7c8284', 'right', 'bold', vw);
 }
 
 function towersView(ctx: Ctx, w: number, h: number, y0: number, m: ScreenModel, green: string, dim: string): void {
@@ -110,21 +152,21 @@ function towersView(ctx: Ctx, w: number, h: number, y0: number, m: ScreenModel, 
   for (let i = 0; i < n; i++) {
     const t = VENT_TOWERS[i], st = m.towers[i] ?? 'standby', y = y0 + 6 + rowH * (i + 0.5);
     const c = st === 'online' ? green : st === 'power' ? '#e8c34a' : dim;
-    text(ctx, `VENT TOWER ${t.id} — ${t.name}`, 18, y, size, st === 'standby' ? dim : '#d6f5dc', 'left');
-    text(ctx, st === 'online' ? 'FANS RUNNING' : st === 'power' ? 'POWER RECEIVED — FANS SPINNING UP' : 'STANDBY', w - 18, y, Math.round(size * 0.85), c, 'right');
+    text(ctx, `VENT TOWER ${t.id} — ${t.name}`, 18, y, size, st === 'standby' ? dim : '#d6f5dc', 'left', 'bold', w * 0.52 - 18);
+    text(ctx, st === 'online' ? 'FANS RUNNING' : st === 'power' ? 'POWER RECEIVED — FANS SPINNING UP' : 'STANDBY', w - 18, y, Math.round(size * 0.85), c, 'right', 'bold', w * 0.45 - 18);
   }
   const fy = h - foot + 6;
   ctx.fillStyle = 'rgba(99,211,110,0.12)'; ctx.fillRect(10, fy - 4, w - 20, foot - 12);
-  text(ctx, WIN_TEXT.status, w / 2, fy + (foot - 12) * 0.3, Math.max(11, Math.round(size * 0.82)), green, 'center');
-  text(ctx, WIN_TEXT.canon, w / 2, fy + (foot - 12) * 0.72, Math.max(10, Math.round(size * 0.74)), '#b9d8bf', 'center', 'normal');
+  text(ctx, WIN_TEXT.status, w / 2, fy + (foot - 12) * 0.3, Math.max(11, Math.round(size * 0.82)), green, 'center', 'bold', w - 28);
+  text(ctx, WIN_TEXT.canon, w / 2, fy + (foot - 12) * 0.72, Math.max(10, Math.round(size * 0.74)), '#b9d8bf', 'center', 'normal', w - 28);
 }
 
 function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   const s = m.state;
   if (s.restarted) {
     monitor(ctx, w, h);
-    text(ctx, 'SURFACE VENTILATION NETWORK', w / 2, 24, 22, '#63d36e', 'center');
-    text(ctx, 'PIT: ALL TIERS POWERED · CORE ONLINE', w / 2, 50, 14, '#9fd6a8', 'center', 'normal');
+    text(ctx, 'SURFACE VENTILATION NETWORK', w / 2, 24, 22, '#63d36e', 'center', 'bold', w - 28);
+    text(ctx, 'PIT: ALL TIERS POWERED · CORE ONLINE', w / 2, 50, 14, '#9fd6a8', 'center', 'normal', w - 28);
     towersView(ctx, w, h, 62, m, '#63d36e', '#4b5a50');
     return;
   }
@@ -137,8 +179,8 @@ function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   m.tiers.forEach((t, i) => {
     const y = py0 + 8 + step * (i + 0.5);
     ctx.fillStyle = hex(t.color); ctx.fillRect(px + 6, y - step * 0.32, 8, step * 0.64);
-    text(ctx, t.label.toUpperCase(), px + 20, y, size, '#d8d2c2', 'left');
-    if (t.zone < 0) { text(ctx, 'CLEAN AIR', px + pw - 8, y, Math.round(size * 0.8), '#7fae86', 'right', 'normal'); return; }
+    text(ctx, t.label.toUpperCase(), px + 20, y, size, '#d8d2c2', 'left', 'bold', pw * 0.55 - 26);
+    if (t.zone < 0) { text(ctx, 'CLEAN AIR', px + pw - 8, y, Math.round(size * 0.8), '#7fae86', 'right', 'normal', pw * 0.4); return; }
     const z = m.zones[t.zone], clear = Math.max(0, Math.min(1, s.zoneClear[t.zone] ?? 0));
     const on = !!(z && s.generators[z.generator]?.started);
     lamp(ctx, px + pw - 14, y, size * 0.4, '#63d36e', on);
@@ -157,11 +199,12 @@ function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   const th = (py1 - py0) / 4, ts = Math.max(11, Math.min(17, Math.round(th * 0.28)));
   items.forEach(([label, st], i) => {
     const y = py0 + th * i + th * 0.32;
-    text(ctx, label, tx, y, ts, '#d8d2c2', 'left');
+    text(ctx, label, tx, y, ts, '#d8d2c2', 'left', 'bold', w - tx - 10);
     lamp(ctx, tx + 8, y + th * 0.34, ts * 0.42, STATUS_COLOR[st], true);
-    text(ctx, STATUS_TEXT[st], tx + 22, y + th * 0.34, ts, STATUS_COLOR[st], 'left');
+    text(ctx, STATUS_TEXT[st], tx + 22, y + th * 0.34, ts, STATUS_COLOR[st], 'left', 'bold', w - tx - 32);
   });
-  text(ctx, m.next, w / 2, h - 26, Math.max(11, Math.min(16, Math.round(w / 34))), '#e8c34a', 'center');
+  const ns = Math.max(11, Math.min(16, Math.round(w / 34)));
+  hint(ctx, m.next, w / 2, h - 26, ns, '#e8c34a', w - 24, ns * 1.15, 'bold');
 }
 
 function drawSwitchgear(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
@@ -171,8 +214,9 @@ function drawSwitchgear(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   for (let i = 0; i < REACTOR_FUSE_SLOTS; i++, y += rh) row(ctx, w, y, size, `FUSE ${i + 1}`, s.fuses[i] ? 'CARTRIDGE SEATED' : 'BURNT OUT — REPLACE', s.fuses[i] ? '#63d36e' : '#c8473c');
   row(ctx, w, y, size, 'MAIN BREAKER', s.breaker ? 'CLOSED' : 'OPEN', s.breaker ? '#63d36e' : '#e8b13a'); y += rh;
   row(ctx, w, y, size, 'CONTROL POWER', s.breaker ? 'ON' : 'OFF', s.breaker ? '#63d36e' : '#c8473c'); y += rh;
-  const hint = s.breaker ? 'Control power on — the control room is live' : s.fuses.every(Boolean) ? 'Hold E on the main breaker to close it' : 'Fit two fuse cartridges, then close the main breaker';
-  text(ctx, hint, w / 2, y, Math.max(11, Math.round(size * 0.78)), '#e8c34a', 'center', 'normal');
+  const note = s.breaker ? 'Control power on — the control room is live' : s.fuses.every(Boolean) ? 'Hold E on the main breaker to close it' : 'Fit two fuse cartridges, then close the main breaker';
+  const hs = Math.max(11, Math.round(size * 0.78));
+  hint(ctx, note, w / 2, y, hs, '#e8c34a', w - 28, hs * 1.15);
 }
 
 function drawPump(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
@@ -183,30 +227,31 @@ function drawPump(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   row(ctx, w, y, size, 'CONTROL POWER', s.breaker ? 'ON' : 'OFF', s.breaker ? '#63d36e' : '#c8473c'); y += rh;
   row(ctx, w, y, size, 'CIRCULATION PUMP', s.pump ? 'RUNNING' : 'STOPPED', s.pump ? '#63d36e' : '#c8473c'); y += rh;
   const flow = s.pump ? m.pumpK : 0;
-  text(ctx, 'FLOW', 22, y, size, '#d8d2c2', 'left');
+  text(ctx, 'FLOW', 22, y, size, '#d8d2c2', 'left', 'bold', 92);
   const bx = 120, bw = w - bx - 70;
   ctx.fillStyle = '#2a2f31'; ctx.fillRect(bx, y - size * 0.4, bw, size * 0.8);
   ctx.fillStyle = '#5fb7d6'; ctx.fillRect(bx, y - size * 0.4, Math.round(bw * flow), size * 0.8);
-  text(ctx, `${Math.round(flow * 100)} %`, w - 18, y, size, '#d8d2c2', 'right'); y += rh;
-  const hint = s.pump ? 'Coolant flowing — the rod control can be armed' : !s.valve ? 'Hold E on the handwheel to open the main valve' : !s.breaker ? 'The pump needs control power (switchgear breaker)' : 'Press E on the pump station to start it';
-  text(ctx, hint, w / 2, y, Math.max(11, Math.round(size * 0.78)), '#e8c34a', 'center', 'normal');
+  text(ctx, `${Math.round(flow * 100)} %`, w - 18, y, size, '#d8d2c2', 'right', 'bold', 48); y += rh;
+  const note = s.pump ? 'Coolant flowing — the rod control can be armed' : !s.valve ? 'Hold E on the handwheel to open the main valve' : !s.breaker ? 'The pump needs control power (switchgear breaker)' : 'Press E on the pump station to start it';
+  const hs = Math.max(11, Math.round(size * 0.78));
+  hint(ctx, note, w / 2, y, hs, '#e8c34a', w - 28, hs * 1.15);
 }
 
 function drawControl(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   const s = m.state;
   monitor(ctx, w, h);
   if (!s.breaker) {
-    text(ctx, 'NO CONTROL POWER', w / 2, h / 2 - 10, 24, '#24452c', 'center');
-    text(ctx, 'standby — switchgear breaker open', w / 2, h / 2 + 18, 13, '#1d3423', 'center', 'normal');
+    text(ctx, 'NO CONTROL POWER', w / 2, h / 2 - 10, 24, '#24452c', 'center', 'bold', w - 28);
+    text(ctx, 'standby — switchgear breaker open', w / 2, h / 2 + 18, 13, '#1d3423', 'center', 'normal', w - 28);
     return;
   }
   if (s.restarted) {
-    text(ctx, 'SURFACE VENTILATION NETWORK', w / 2, 22, 21, '#63d36e', 'center');
-    text(ctx, `CORE OUTPUT ${Math.round(m.core * 100)} % · RODS WITHDRAWN`, w / 2, 46, 14, '#9fd6a8', 'center', 'normal');
+    text(ctx, 'SURFACE VENTILATION NETWORK', w / 2, 22, 21, '#63d36e', 'center', 'bold', w - 28);
+    text(ctx, `CORE OUTPUT ${Math.round(m.core * 100)} % · RODS WITHDRAWN`, w / 2, 46, 14, '#9fd6a8', 'center', 'normal', w - 28);
     towersView(ctx, w, h, 58, m, '#63d36e', '#3f5245');
     return;
   }
-  text(ctx, 'REACTOR CONTROL — STARTUP', w / 2, 24, 21, '#63d36e', 'center');
+  text(ctx, 'REACTOR CONTROL — STARTUP', w / 2, 24, 21, '#63d36e', 'center', 'bold', w - 28);
   const items: [string, string, boolean][] = [
     ['KEY SWITCH', s.keyInserted ? 'RUN' : 'OFF — NO KEY', s.keyInserted],
     ['CONTROL POWER', 'ON', true],
@@ -217,11 +262,12 @@ function drawControl(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   const rh = (h - 92) / items.length, size = Math.max(12, Math.min(19, Math.round(rh * 0.5)));
   items.forEach(([label, value, ok], i) => {
     const y = 52 + rh * (i + 0.5);
-    text(ctx, label, 22, y, size, '#a8e6b4', 'left');
-    text(ctx, value, w - 22, y, size, ok ? '#63d36e' : '#e8b13a', 'right');
+    const px = Math.min(fitSize(ctx, label, size, w * 0.5 - 22), fitSize(ctx, value, size, w * 0.46 - 22));
+    text(ctx, label, 22, y, px, '#a8e6b4', 'left', 'bold', w * 0.5 - 22);
+    text(ctx, value, w - 22, y, px, ok ? '#63d36e' : '#e8b13a', 'right', 'bold', w * 0.46 - 22);
   });
-  const ready = s.keyInserted && s.pump;
-  text(ctx, ready ? '> HOLD E ON THE ROD CONTROL TO WITHDRAW THE RODS' : '> STARTUP INTERLOCK — SEE CHECKLIST', w / 2, h - 22, Math.max(11, Math.round(size * 0.8)), ready ? '#e8c34a' : '#5f8f69', 'center');
+  const ready = s.keyInserted && s.pump, fs = Math.max(11, Math.round(size * 0.8));
+  hint(ctx, ready ? '> HOLD E ON THE ROD CONTROL TO WITHDRAW THE RODS' : '> STARTUP INTERLOCK — SEE CHECKLIST', w / 2, h - 26, fs, ready ? '#e8c34a' : '#5f8f69', w - 28, fs * 1.1, 'bold');
 }
 
 /** Draws screen `id` for model `m` onto a w x h px context. */

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 32524,
-      "sha256": "12d0998052e5b0d80fc19dd72132baeeccdccdd9f8c2b176fcccd48c60d49fbd"
+      "bytes": 32701,
+      "sha256": "c86e5d4d061a6eef1748a129c3cf03d6f338c7cc4f687714fbf452a2d7eabeda"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1765,8 +1765,8 @@
     },
     {
       "path": "assets/derivatives/reactor-x-kit-20261101.json",
-      "bytes": 23348,
-      "sha256": "64b8b1a7109dc6537d11925177303a542abcc81d838c2bafd91c02b5ff7c5674"
+      "bytes": 24281,
+      "sha256": "1fb69c5743005b509487037525f085fa5d951998f7cc90a1973b79e054b0c98f"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -3682,6 +3682,21 @@
       "path": "assets/textures/reactor/grating-orm.jpg",
       "bytes": 176280,
       "sha256": "917ae3cf6257edec8ad5f8ed062735510733d25e965b114a7f10c1ef4c73d6b5"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-color.jpg",
+      "bytes": 437339,
+      "sha256": "3b72e060560ef702ad00b79f854c3802d32fcf9d09588f27fd61c1f09e943bf8"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-normal.jpg",
+      "bytes": 364669,
+      "sha256": "b0095cb755a7a45e5e49e8bb10bc0b3f208273c6feee625550f46ab35ad78867"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-orm.jpg",
+      "bytes": 189541,
+      "sha256": "eb499fc222620b2dfe2172de6e3c54806f83d4d41ddec76f60f898b9f348d7e7"
     },
     {
       "path": "assets/textures/reactor/pit-concrete-color.jpg",

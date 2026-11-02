@@ -25,6 +25,7 @@ import {CELL, FLOOR, SOLID, type Grid} from '../grid';
 import type {LightMount, LightPlacement, StationLayout} from '../stationTypes';
 import type {ReactorInfo} from './reactorTypes';
 import {POWERED_EMERGENCY_EVERY} from './structure';
+import {railedAt} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 
 /** Every lamp tunable (m). */
 export const PIT_LAMPS = {
@@ -179,8 +180,14 @@ export function planPitLamps(layout: StationLayout): PitLampStats {
     for (let k = 0; k < n; k++) {
       const s = (len * (k + 0.5)) / n, side = k % 2 === 0 ? -1 : 1;
       // the foot on the edge (inset), the arm reaching back over the deck
-      const fx = alongX ? r.x0 + s : side < 0 ? r.x0 + PIT_LAMPS.postInset : r.x1 - PIT_LAMPS.postInset;
-      const fz = alongX ? (side < 0 ? r.z0 + PIT_LAMPS.postInset : r.z1 - PIT_LAMPS.postInset) : r.z0 + s;
+      let fx = alongX ? r.x0 + s : side < 0 ? r.x0 + PIT_LAMPS.postInset : r.x1 - PIT_LAMPS.postInset;
+      let fz = alongX ? (side < 0 ? r.z0 + PIT_LAMPS.postInset : r.z1 - PIT_LAMPS.postInset) : r.z0 + s;
+      // task reactor-expansion-20261101 (lane PATHS, audit): the post stands on a RAILED stretch of the edge — the middle of a tower
+      // deck's edge is the bridge's open entry (the post stood in the walkway): slide along the edge to the nearest railed point
+      const onRail = (o: number) => railedAt(layout, d.level, alongX ? fx + o : fx, alongX ? fz : fz + o, d.y);
+      const slide = [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2].find(o => s + o >= 0.3 && s + o <= len - 0.3 && onRail(o - 0.15) && onRail(o + 0.15));
+      if (slide === undefined) { skip('post off rail'); continue; }
+      if (alongX) fx += slide; else fz += slide;
       const nx = alongX ? 0 : -side, nz = alongX ? -side : 0;
       const hx = fx + nx * PIT_LAMPS.postArm, hz = fz + nz * PIT_LAMPS.postArm, hy = d.y + PIT_LAMPS.postY;
       const lv = levelFor(hx, hy, hz, d.level);

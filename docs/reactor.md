@@ -14,6 +14,7 @@ outside Git.
 | Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts` |
 | Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
+| Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
 | Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`) |
 | Core floor + hero reactor (task reactor-expansion, lane CORE) | `game/src/gen/reactor/coreFloor.ts` (vessel footprint, service ring, goop pool, bridges, loop / turbine layout, `layout.reactor.coreFloor`); `game/src/world/reactor/{coreHero,coreLiquids,coreStages,coreVisuals,coreLights}.ts` (the assembled structure, the dynamic goop / coolant layer, the staged startup, the glow lights) |
 | Tests | `game/tests/reactor-*.test.ts` (`reactor-level.test.ts` runs every lane on real generated layouts) |
@@ -79,6 +80,24 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   - the generator's skid stands on complex floor, with its panel in reach;
   - the complex is substantial: at least 6 areas and at least 500 m² walkable.
 
+### The bunker — "Shelter 7" (zone 0, tier 1; lane BUNKER)
+`complex/bunker.ts` (carver), `bunkerPlan.ts` (the program in a wall-local frame), `bunkerDress.ts` (dress hook), `bunkerPurposes.ts`
+(its own room purposes), `bunkerKinds.ts` (hero prop kinds), `world/reactor/bunkerModels.ts` (their instanced models).
+- **Program** (15–16 spaces, ~1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
+  - the **blast-door lock** behind the entrance (heavy hazard-striped frame, "SHELTER 7 · CIVIL DEFENCE" plate on the gallery side);
+  - a 1 m **bulkhead** holding the round **blast door** (`REACTOR_X_KIT.blastDoor`, its leaf standing open; a 1.5 m lane over a
+    0.84 m threshold, three 0.28 m risers each side);
+  - **decontamination**, the **guard post** (doors into the lock and the muster corridor: a level way round the threshold);
+  - the **muster corridor** across the bunker, two **spine corridors** to the **generator hall** (two ways in), the **mess hall**
+    between them (opening onto both, sometimes the muster corridor too);
+  - side rooms by size: **dormitories** (bunk rows, footlockers, lockers), air **filtration plant**, **infirmary**, **radio room**
+    (console), **latrines**, stores, workshop, warden's office, ration store, locker room;
+  - off the hall: the **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition cabinets, crates).
+- **The generator**: mid-hall, long axis along the hall, the use point beside the end facing the switch-room side; a grated cable
+  trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund, a second row of fixtures.
+- Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
+  hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.
@@ -123,6 +142,77 @@ rebuilt world shows exactly the stage reached, with nothing to replay.
 The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
 volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
 are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
+### Mounted controls (the rule for every control that sits on a 3D model)
+Code: `game/src/world/reactor/controlsMount.ts` (pure, shared by the kit and the restart), `controlsKit.ts` (the machines and the
+generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (moving parts split off a model).
+
+1. **Place the host model from its machine footprint, never from a control point.** `ReactorMachine` (x / z / yaw / w / d) is also
+   the collider (`annexMachine` prop). The model's **measured mounting face** goes on the footprint's front plane, and its long axis
+   follows the footprint's long axis. The switchgear bank is stretched to fill its collider exactly.
+   - The pump's motor end faces the operator. It used to be turned 90° off its collider.
+   - A layout without machine records derives one from its controls.
+2. **Measure the face; do not trust the bounding box.** `HOST_FACES` holds faces probed from the cooked GLB vertex data. Use the
+   *clear rectangle* of each face: no gauge, lever or hinge under it.
+   - Example: the switchgear door is at z 0.39, but its bounding box front (the lever handle) is at 0.65. That 0.26 m was the
+     "floating in front of the electrical box" gap.
+   - `game/tests/reactor-x-controls-mount.test.ts` re-probes the GLBs.
+3. **Mount the control in a frame on the face.** The origin is on the face, +Z is the face normal out of the model, +Y is the face's
+   up.
+   - The overlay's back plane sits `EMBED` (1.2 cm) inside the face. Nothing stands in front of the face without a support.
+   - Its extent (`OVERLAY_EXTENT`) is clamped inside the clear rectangle, at the spot nearest the generated control point.
+   - Switchgear controls take distinct cabinet sections.
+   - The console's key switch and rod control sit on its 30° sloped desk.
+   - The pump's start station sits on the motor end cover.
+   - The coolant valve's handwheel **is the model's own wheel**: local mesh separation (every triangle above y 1.895) turns it about
+     the stem. No second wheel is drawn.
+4. **The pick volume is the mounted overlay's centre** (`MountedControl.pick`), not the generated point. The stand point stays GEN's.
+5. **Generators:** the start control box stands flush on the generator model's measured end face (flat radiator end, |x| 2.69) or
+   side face (|z| 0.59), whichever faces its panel point. It is grounded on a post, with the lever and lamps on its front. An end
+   panel turns the model so the flat radiator end faces it.
+6. **Look:** overlay housings take the Codex rusted-steel set (`REACTOR_TEXTURES`), tinted so its mean matches the host's measured
+   paint (`HOST_PAINT` / `HOST_TINT`). Brass, buttons and handles use the existing painted / brushed steel sets. There are no flat
+   untextured blocks.
+7. **Checks:** the tests ray-cast from every overlay into the placed model's triangles on real layouts:
+   - no gap, and nothing poking through;
+   - the model agrees with its collider: long axis, centre, extent;
+   - the generator boxes stand on the model face;
+   - every control is reachable and pickable from its stand point.
+
+### Floor-map boards
+Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
+
+- **Placement:** one physical board (1.5 × 1.25 m) beside each objective instruction board. The pit board, switchgear board, pump
+  board and control monitor each get one.
+  - It goes on the same wall if there is room, else on the nearest wall of the same room.
+  - The wall is solid behind it and the floor in front is open: no doorway, no stair.
+  - No tall prop, machine or wall sign may enter its volume; a low cabinet under it is fine. It keeps clear of other signs, controls
+    and stand points.
+- **The face:** a north-up plan of one storey from that level's real grid: decks, stairs, rooms, the side complexes' rooms, the pit
+  outline and ladders. It also shows:
+  - **X marks** at the ACTUAL positions:
+    - the startup key and fuse cartridges where they lie now (live pickups);
+    - the switchgear fuse slots and breaker, valve, pump, key switch and rods (their mounted overlays);
+    - the three generators (`layout.reactor.generators`, inside their side complexes once carved).
+  - X marks follow the state: carried shows an amber "use it here" ring at the destination; installed or started shows a check.
+  - "You are here" with the facing arrow, a legend of the storey, and per-storey counts of open marks.
+  - It shows no loot and no enemies.
+- **Storey buttons:** small elevator-style buttons in a column at the right edge, one per storey; the lit one is shown. Press E on
+  one (reach 2.3 m, in sight, no enemy in front) to show that storey.
+- **Cost:** the canvas redraws only when its storey, its marks or the quantised "you are here" change. The marks rebuild only when a
+  numeric signature of the record, inventory and live parts changes.
+
+### Instruction boards and bullet impacts
+- **Instruction text auto-fits.** Every line on the status screens is measured and shrunk to its column. Hint lines wrap into two lines
+  rather than being cut. The switchgear instruction board is 2.2 × 1.3 m (it was 1.6 × 1.0 m, and its hint line was cut off).
+- **Bullet impacts take the finish the builder drew.**
+  - `world/finishAt.ts` resolves the arch-owned finish at a structural hit: walls from the remapped faces, floors and ceilings from
+    the arch's own keys.
+  - `damage/impactFinish.ts` maps it to the damage class, which sets the chips, sparks, dust, crater and sound. Pit concrete gives
+    concrete; bar grating, deck undersides, and rusted-plate room walls and trim give structural steel sparks.
+  - The station rule used to answer glazed tile, terrazzo or plaster there.
+  - The Office's drywall, carpet, tile and slab now map too.
+  - A plain Subway station has no arch finish and is unchanged. Knife contacts on surfaces use the same class. Damage numbers are
+    untouched.
 
 ## The win (diegetic, bounded, no cutscene)
 - The core comes alive (its glow ramps over about 6 s).
@@ -169,3 +259,28 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - **Core glow in the fog:** a `PointLight` added with `addScatterLight` and `userData.vfOpen = true` lights the haze and the strata with
   no occlusion window (open pit volumes).
 - QA: `__LL.gaslight()` and `__LL.gaslightShafts({gain, fade, colour})`. Tests: `game/tests/reactor-x-gaslight-*.test.ts`.
+
+## Pathways: the clipping audit (task reactor-expansion-20261101, lane PATHS)
+Nothing solid may stand in walkable space except designed edges (railings on the edge line, wall-flush fittings within 0.1 m).
+- **The audit** (`game/src/world/reactor/pathsAudit.ts`, tests `game/tests/reactor-x-paths-*.test.ts`):
+  - `auditReactorPaths(layout, {models, areas})` checks the body volume of every walkable cell of every storey against every solid
+    the kit draws and against the collision world. The body is 1.9 m tall; stair cells follow their pitch line.
+  - The solids are kit instances, lamps, models, merged meshes, fan rotors and pit fixtures.
+  - The collision checks cover rails across a path, the ladder climbs (player and AI) and the designed stand points: link landings,
+    ladder feet and heads, controls, generators and the train's doors.
+  - It reports hits by kind and location. Pass `areas` to audit one side complex.
+  - **Re-run after a lane lands:** `auditReactorPaths(layout, {models: 'all', meshOf: testMeshOf})` (`testMeshOf` in
+    `game/tests/reactor-x-paths-meshes.ts` reads the cooked GLBs, so portal-shaped models are judged by their real triangles), or the
+    test file `game/tests/reactor-x-paths-audit.test.ts`.
+    - Visuals planned through the kit (`KitPlan.add` / `placeModel` / `merged`) are covered automatically.
+    - Another builder's visuals must be added to `extraSolids()` in `pathsAudit.ts`. Mines, bunker and the map boards are there now.
+    - `PATHS_OWNED_ELSEWHERE` in the test pins other lanes' known findings at their measured depth.
+  - A solid inside its own collision prop's box is not a clip, since the body collides with it. Floor-level detail up to 0.16 m (the mine
+    rails and sleepers) is walked over, like the subway track bed.
+- **The fixes it drove:**
+  - A deck record is its real cells (`gen/reactor/pathsGen.ts`), so no stringers hang over a stairwell.
+  - No rail runs across a stair mouth or a seam between storeys, and every maintenance ladder head has a 0.9 m opening in the rail.
+  - Steel stays out of walkways. The kit consults `WalkVolume` (`KitOptions.walk`): shortened knee braces, fascias and toe plates only
+    on drop edges, post lamps only on railings, tower portals where a walkway crosses a face, flat pilaster straps (none across
+    doorways), cables over the landing and flat on the walls.
+  - Fan housings stay clear of walkways and tower legs stand in reserved 2 x 2 cells.

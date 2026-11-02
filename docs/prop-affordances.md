@@ -265,6 +265,26 @@ Task office-props-physics-scale-20261030 (lane SCALE); root `CLAUDE.md` rules 4 
   - Look at the PNG yourself. Typical: desk / worktop 0.72–0.76 m, lab bench ~0.9 m, counters 0.9–1.0 m, chair seat
     ~0.45 m, doors ~2.0 m. A resize also moves the kind's footprint, collider, loot surface / slot heights and hinges.
 
+### The Reactor bunker (task reactor-expansion-20261101, lane BUNKER)
+Zone 0's side complex (`game/src/gen/reactor/complex/bunker*.ts`) is furnished with EXISTING kinds by the station dresser (its rooms
+carry existing purposes: guard post `security-office`, infirmary `first-aid-room`, radio room `signal-room`, mess `staff-room`, stores,
+workshop, switch room, filtration plant `ventilation-plant`, generator hall `generator-room`) and by its dress hook (`bunkerDress.ts`:
+footlockers / lockers / gun lockers / cabinets / crates = existing openables and holders, loot from the room's purpose — the four
+`reactor-bunker-*` purposes use named `items/lootTables.ts` tables only; folding chairs / extinguishers keep their dynamic class; the
+day tanks are collision-only `annexMachine` boxes under existing shape-material trims). Four NEW kinds draw the lead's Meshy T2.5 models
+(`REACTOR_X_KIT`, maps kept; `gen/reactor/complex/bunkerKinds.ts` holds their classification, spread into both audits):
+
+| Kind | What | Openables audit | Physics audit | Scale check (`scale-check.mjs --prop <glb> [--scale k]`, viewed beside `lastshift`) |
+|---|---|---|---|---|
+| `bunkBed` | bare steel double bunk | `none` | static `anchored` (~70 kg, bolted in rows) | 2.00 × 1.36 × 0.85 m as cooked; grounded (4 feet); lower deck ~0.25 m, upper deck 1.12 m (a compact shelter bunk) |
+| `radioConsole` | operator's desk built into its radio rack | `exception`: the drawer fronts are the chassis' wired equipment bays (live equipment, not storage) | static `built-in` (~200 kg, cabled) | scaled ×1.125 so the desk top reads 0.73 m: 2.25 × 1.77 × 1.34 m; grounded (13 clusters) |
+| `airFilterUnit` | filter canister bank, blower, stacks on a skid | `exception`: sealed plant, hatches bolted | static `machinery` (~600 kg) | 3.00 × 1.84 × 0.91 m as cooked; grounded (24 clusters); canister tops 1.46 m |
+| `blastDoor` | square frame round a ~2.5 m round opening, the round leaf open at 90° | `exception`: structure; the leaf never closes | static `structure` | 4.95 × 4.00 × 5.45 m as cooked, grounded in the 1 m lock / decon bulkhead; the 1.5 m lane climbs a 0.84 m threshold (three 0.28 m risers each side) so its doorway clear volume (1.3 × 2.1 m) sits inside the round opening (free chord ≥ 1.5 m from 0.79 to 2.97 m). Variant 0 = the leaf (+ render anchor), variant 1 = frame feet / pillar protrusions (collision only) |
+
+- No baked loose clutter: the four models are bare furniture / equipment (no bedding, papers, handsets or tools baked in).
+- Tests: `tests/reactor-x-bunker-carve.test.ts`, `tests/reactor-x-bunker-level.test.ts` (both audits, purpose loot, placements on their
+  floors / inside their ceilings, doorway lanes, the blast door's anchor on the lane).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.
@@ -277,3 +297,30 @@ they sit outside the two audits; their classification is recorded here.
   - No baked clutter: the model is just the box, its lid, latches, hinge and handles.
   - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb`, viewed. 1.03 × 0.556 × 0.614 m,
     grounded on 4 skid contacts, top at 0.55 m (a footlocker below the 0.98 m window sills).
+
+## 7. Reactor mines set pieces (not layout prop kinds)
+Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts
+with EXISTING prop kinds (crates, cabinets, lockers, tool chests, gas cylinders, the sump pump, work lights, a drum fan, a barricade,
+wall-mounted phones / first-aid kits / tag board / clock) through the dresser's primitives, so every one keeps its audit rows. The set
+pieces below are collision-only `annexMachine` boxes (`gen/reactor/complex/minesDress.ts` `MINE_PIECE` variants) that
+`world/reactor/minesVisuals.ts` draws with the lead's Meshy models (`REACTOR_X_KIT`, maps kept):
+- **Ore cart** (`mineCart`): static, rail-bound: a ~650 kg steel ore car chocked on its 600 mm rails. A body bump or bullets don't move
+  it. It's an empty open car, not storage.
+- **Hoist winch** (`hoistWinch`): anchored, bolted to its concrete base; machinery, not storage. Beside it is the fenced blind
+  **winze**: a 2 × 2 m collision box for the steel guard fence round the timber collar (you can't fall in).
+- **Drill rig** (`drillRig`): static, too heavy (a rubber-tyred rig of several tonnes); machinery.
+- **Timber cribs / rubble**: structure (stacked crib timbers to the stope roof; the fallen rock choking the collapsed drift).
+- **Timber support sets** (`timberSet`): architecture, with no collision. The posts stand 0.1 m off the rock, inside the player's
+  standoff. A set is never placed across an opening or through a prop against the rib. The cap clears at least 2.3 m.
+- No baked clutter: the models are the machines / timber only. Loot stays in the existing openable holders.
+
+Scale (rule 5), `scale-check.mjs --prop <glb>` beside zombie lastshift (1.78 m, runtime scale 1). Every model is viewed and grounded:
+| Model | Scale | W × H × D | Contacts |
+| --- | --- | --- | --- |
+| Ore cart | 1 | 1.80 × 0.78 × 0.79 m | 4 (wheels; 600 mm gauge) |
+| Hoist winch | 1 | 3.00 × 1.64 × 1.71 m | 4 (the base) |
+| Drill rig | 1 | 3.50 × 1.28 × 0.98 m | 4 (tyres) |
+| Timber set in a 3 m × 3.3 m drift | 1.36, 1.31, 1 | 4.62 × 3.30 × 0.53 m | 13 (post feet) |
+
+The drill rig is compact for a "jumbo": a small single-boom rig, not a full-size jumbo. The timber set is scaled per drift so its
+posts sit at the rock. Its outer 0.6 m per side is buried in the rock, and the clear opening is about 2.8 × 2.35 m.
