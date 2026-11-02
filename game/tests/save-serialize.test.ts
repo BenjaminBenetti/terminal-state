@@ -13,7 +13,13 @@ import {
 } from '../src/save/serialize';
 import {parseSaveText} from '../src/save/validate';
 import {FakeStorage, Harness, LEVELS_STUB, SEEDS, fillInventory, fillLockbox, fixtureCampaign, itemCensus, populateStation, sid} from './helpers/saveFixture';
-import {SaveSlots} from '../src/save/slots';
+import {SaveSlots, type CommitResult} from '../src/save/slots';
+import type {RestoreHandoff, TrainLocalPose} from '../src/save/serialize';
+import type {RunState} from '../src/run/runState';
+import {Inventory} from '../src/items/inventory';
+import {PlayerTrainRecord} from '../src/run/playerTrain';
+import {Survival} from '../src/player/survival';
+import {installCanvasShim} from './helpers/canvas2d';
 
 const key = (i: number, level: 'subway' | 'office' | 'mall' | 'reactor' = 'subway') => ({level, section: 'main', station: sid(i)});
 
@@ -239,11 +245,116 @@ describe('save/serialize: a populated campaign run round-trips', () => {
     expect(itemCensus(b)).toEqual(itemCensus(a));
   });
 
-  it('createRun with the restored campaign keeps seedFor per station', () => {
+  it('createRun with the restored campaign keeps seedFor per station (validated through parseSaveText)', () => {
+    expect(parseSaveText(saveFileText(populated().file())).ok).toBe(true);
     const a = populated();
     const {b} = roundTrip(a);
     const ref = createRun({seeds: SEEDS, start: key(0), levels: LEVELS_STUB, campaign: a.run.campaign});
     for (const i of [0, 1, 2, 39]) expect(b.run.seedFor(key(i))).toBe(ref.seedFor(key(i)));
     expect(b.run.seedFor(key(1))).not.toBe(b.run.seedFor(key(2)));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+describe('Game save / load block (the real game.ts methods on a minimal shell)', async () => {
+  installCanvasShim(false);
+  const {Game} = await import('../src/game');
+  const {FlashlightBattery} = await import('../src/player/flashlight');
+  const {LEVELS} = await import('../src/levels/registry');
+  type G = {
+    run: RunState; inv: Inventory; playerTrain: PlayerTrainRecord; time: number; currentSlot: number | null; saveRevision: number; saves: SaveSlots;
+    trainPlacement: unknown; player: {hp: number; x: number; y: number; z: number; yaw: number; pitch: number; crouched: boolean};
+    wireRunLanes(): void; resetCarry(): void;
+    commitSave(reason: 'departure' | 'arrival' | 'new-game', o?: {slot?: number; overwrite?: boolean; pose?: TrainLocalPose}): CommitResult;
+    applySave(file: unknown): ({ok: true} & RestoreHandoff) | {ok: false; error: string};
+    trainLocalPose(): TrainLocalPose | null;
+    trainLocalToWorld(p: TrainLocalPose): {x: number; y: number; z: number; yaw: number; pitch: number} | null;
+  };
+  function shell(storage: FakeStorage): G {
+    const battery = new FlashlightBattery();
+    const saveValidate = {};
+    const s = {
+      inv: new Inventory(), playerTrain: new PlayerTrainRecord(), runParticipants: [] as {id: string}[], arrival: {kind: 'start'}, startWeapon: 'pistol', bagStoreWired: false,
+      survival: new Survival(), torch: {battery, reset: (c?: number) => battery.reset(c)},
+      player: {hp: 100, stamina: 100, damageTaken: 0, alive: true, x: 0, y: 0, z: 0, yaw: 0, pitch: 0, crouched: false},
+      stats: {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0}, time: 0, trainPlacement: null,
+      run: createRun({seeds: SEEDS, start: key(0), levels: LEVELS, campaign: fixtureCampaign()}),
+      saveValidate, saves: new SaveSlots({storage, validate: saveValidate, listen: false}), currentSlot: null, saveRevision: 0, saveRunId: -1,
+    };
+    Object.setPrototypeOf(s, Game.prototype);
+    return s as unknown as G;
+  }
+
+  it('New Game binds a slot, autosaves continue it, another game loads it (key / pose / transit hand-off) and saves on', () => {
+    const storage = new FakeStorage();
+    const g = shell(storage);
+    g.wireRunLanes();
+    g.resetCarry();
+    g.playerTrain.lockbox.slots[0] = g.inv.makeStack('ammo_9mm', 30);
+    g.run.memory(key(0)).killed = [1, 2, 3];
+    g.time = 512.5;
+    g.run.playtime = 300;
+    expect(g.commitSave('arrival')).toMatchObject({ok: false, code: 'bad-slot'}); // no slot bound yet
+    expect(g.commitSave('new-game', {slot: 2})).toMatchObject({ok: true, meta: {slot: 2, revision: 1, reason: 'new-game'}});
+    expect([g.currentSlot, g.saveRevision]).toEqual([2, 1]);
+    expect(g.commitSave('arrival')).toMatchObject({ok: true, meta: {revision: 2}});
+    const old = g.run;
+    g.run = createRun({seeds: SEEDS, start: key(0), levels: LEVELS, campaign: fixtureCampaign()}); // a new run nobody bound
+    expect(g.commitSave('departure')).toMatchObject({ok: false, code: 'conflict', error: expect.stringMatching(/not the one saved in slot 2/)});
+    g.run = old;
+    expect(g.commitSave('new-game', {slot: 2})).toMatchObject({ok: false, code: 'occupied'}); // a used slot needs the confirmation
+    g.run.campaign!.transit = {from: sid(0), to: sid(1), phase: 'departing', cheat: false};
+    expect(g.commitSave('departure', {pose: {x: 2, z: 0.3, yaw: 1, pitch: 0.1, crouched: true}})).toMatchObject({ok: true, meta: {revision: 3}});
+    // another game (tab / reload) loads slot 2
+    const h = shell(storage);
+    h.wireRunLanes();
+    h.resetCarry();
+    const read = h.saves.read(2);
+    if (!read.ok) throw new Error(read.error);
+    const r = h.applySave(read.file);
+    expect(r).toMatchObject({ok: true, key: key(0), point: 'departure', transit: {from: sid(0), to: sid(1), phase: 'departing', cheat: false}, pose: {x: 2, z: 0.3, yaw: 1, pitch: 0.1, crouched: true}, failed: []});
+    expect(h.run.campaign).toEqual(g.run.campaign);
+    expect([h.time, h.run.playtime]).toEqual([512.5, 300]);
+    expect(h.inv.toJSON()).toEqual(g.inv.toJSON());
+    expect(h.playerTrain.lockbox.toJSON()).toEqual(g.playerTrain.lockbox.toJSON());
+    expect(h.run.peekMemory(key(0))!.killed).toEqual([1, 2, 3]);
+    expect([h.currentSlot, h.saveRevision, h.saves.lastSlot()]).toEqual([2, 3, 2]);
+    expect(h.inv.makeStack('water', 1).uid).toBeGreaterThan(h.playerTrain.lockbox.maxUid());
+    // the loaded game arrives and autosaves; the first game's stale autosave is refused
+    h.run.campaign!.transit = null;
+    h.run.campaign!.current = sid(1);
+    h.run.campaign!.visited.push(sid(1));
+    h.run.current = key(1);
+    expect(h.commitSave('arrival')).toMatchObject({ok: true, meta: {revision: 4, station: fixtureCampaign().network.nodes[1].name}});
+    g.run.campaign!.transit = null;
+    expect(g.commitSave('arrival')).toMatchObject({ok: false, code: 'conflict', error: expect.stringMatching(/newer save in another tab/)});
+  });
+
+  it('applySave of invalid data applies nothing', () => {
+    const g = shell(new FakeStorage());
+    g.wireRunLanes();
+    g.resetCarry();
+    const state = () => JSON.stringify({inv: g.inv.toJSON(), box: g.playerTrain.lockbox.toJSON(), time: g.time, run: g.run.id, slot: g.currentSlot, rev: g.saveRevision});
+    const before = state();
+    expect(g.applySave({format: 'terminal-state-save', v: 9})).toMatchObject({ok: false, error: expect.stringMatching(/newer version/)});
+    expect(g.applySave('junk')).toMatchObject({ok: false});
+    const f = populated().file() as unknown as {run: {clock: number}};
+    f.run.clock = 5; // edited without its checksum
+    expect(g.applySave(f)).toMatchObject({ok: false, error: expect.stringMatching(/checksum/)});
+    expect(state()).toBe(before);
+  });
+
+  it('trainLocalPose / trainLocalToWorld invert each other in a parked train (both car yaws)', () => {
+    const g = shell(new FakeStorage());
+    for (const front of [1, -1] as const) {
+      g.trainPlacement = {x: 40, z: -6, yaw: front === 1 ? 0 : Math.PI, front, railTopY: -0.3, floorY: 0.85, level: 0};
+      const w = g.trainLocalToWorld({x: 2.5, z: -0.4, yaw: 0.3, pitch: 0.2, crouched: false})!;
+      expect(w.y).toBe(0.85);
+      Object.assign(g.player, {x: w.x, y: w.y, z: w.z, yaw: w.yaw, pitch: w.pitch});
+      const back = g.trainLocalPose()!;
+      expect([back.x, back.z, back.yaw, back.pitch].map(v => +v.toFixed(9))).toEqual([2.5, -0.4, 0.3, 0.2]);
+    }
+    g.trainPlacement = null;
+    expect([g.trainLocalPose(), g.trainLocalToWorld({x: 0, z: 0, yaw: 0, pitch: 0, crouched: false})]).toEqual([null, null]);
   });
 });

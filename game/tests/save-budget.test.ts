@@ -44,7 +44,7 @@ function heavyRun(counts: Record<string, LayoutCounts[]>, seed: number): Harness
     }
     if (level === 'reactor') {
       const r = emptyReactorState(4, 3);
-      r.generators = r.generators.map((g, j) => ({started: j < 3, startedAt: j < 3 ? 1200.5 + j * 61.25 : 0}));
+      r.generators = r.generators.map((_, j) => ({started: j < 3, startedAt: j < 3 ? 1200.5 + j * 61.25 : 0}));
       r.zoneClear = [1, 1, 0.66];
       lanes[REACTOR_LANE] = r;
     }
