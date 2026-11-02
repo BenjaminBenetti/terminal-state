@@ -1034,8 +1034,9 @@ function planVessel(plan: KitPlan, c: ReactorCore): void {
     yd = c.y0 + 6.6 * s; domeH = REACTOR_MODELS.vessel.dims[1] * s - 6.6 * s;
     plan.stats.vesselParts += 1;
   } else {
-    // plinth (stepped) + a glowing slot ring on top of it
-    steel.push(T(new THREE.CylinderGeometry(c.radius, c.radius * 1.03, plinthH, 40, 1, false), c.y0 + plinthH / 2));
+    // plinth (stepped) + a glowing slot ring on top of it; its flared foot matches the model's plinth (6.4 / 7 of the radius), clear of
+    // the bridges' and service ring's walk volume (pathway audit)
+    steel.push(T(new THREE.CylinderGeometry(c.radius * 0.89, c.radius * 0.914, plinthH, 40, 1, false), c.y0 + plinthH / 2));
     glow.push(T(new THREE.CylinderGeometry(rv * 1.05, rv * 1.05, 0.14, 40, 1, true), c.y0 + plinthH + 0.07));
   }
   if (!model) {

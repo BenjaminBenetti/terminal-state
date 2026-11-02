@@ -34,11 +34,15 @@ const level = (seed: number) => {
  *    covered cell; bunks sit on whole cells — the audit proves zero there);
  *  - (lane MINES fixed its two: the rubble chunks are clamped inside the rubble collider; the timber sets stay inside the drift's rock
  *    walls, their posts are collision boxes and keep off every opening's cells — the audit proves zero there);
- *  - lane CORE (user point 15): the procedural FALLBACK vessel plinth flares 0.2 m past the vessel's blocked circle (drawn only when the
- *    vessel model fails to load; the model is clear).
+ *  - (the lead fixed CORE's solid one: the procedural FALLBACK vessel plinth flared 0.2 m into the bridge ends; its foot now matches
+ *    the model's plinth radius, 6.4 / 7 of the core radius, and the fallback kit audits clean);
+ *  - lane CORE, the one remaining crossing: the model plinth's emissive hazard BAND (a 0.22 m light strip 4 cm proud of the plinth
+ *    face, 0.3–0.5 m up) crosses the corner of the bridge-end walk cell, whose corner already sits ~7 cm inside the plinth radius
+ *    (within tolerance for the solid model). Crossing only, no vertex inside (triHits' 5 mm floor), not a solid the body passes
+ *    through. Pinned at exactly that floor, so any real growth fails.
  */
 const PATHS_OWNED_ELSEWHERE: readonly {re: RegExp; lane: string; max: number}[] = [
-  {re: /^merged reactor-vessel/, lane: 'CORE', max: 0.25},
+  {re: /^merged reactor-vessel-glow$/, lane: 'CORE', max: 0.005},
 ];
 const ours = (hits: readonly PathHit[]) => hits.filter(h => !PATHS_OWNED_ELSEWHERE.some(o => o.re.test(h.kind) && h.depth <= o.max));
 
