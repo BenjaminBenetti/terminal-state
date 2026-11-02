@@ -410,7 +410,9 @@ export function generatorPanelPose(g: Pick<ReactorGenerator, 'x' | 'y' | 'z' | '
   const ex = model ? P.endX : g.size.w / 2 / p.s, ez = model ? P.sideZ : g.size.d / 2 / p.s;
   const endFace = Math.abs(l.x) / ex >= Math.abs(l.z) / ez;
   const sx = endFace ? Math.sign(l.x) || 1 : 0, sz = endFace ? 0 : Math.sign(l.z) || 1;
-  const face = endFace ? hostToWorld(p, sx * ex, l.y, Math.max(-0.45, Math.min(0.3, l.z))) : hostToWorld(p, Math.max(-ex + 0.5, Math.min(ex - 0.5, l.x)), l.y, sz * ez);
+  // on a side: along the body, short of the model's own control box (x >= 1.9 on the +Z side) so the two never intersect
+  const xMax = model && sz > 0 ? HOST_FACES.generator.box.x0 - (P.w / 2 + 0.05) / p.s : ex - 0.5;
+  const face = endFace ? hostToWorld(p, sx * ex, l.y, Math.max(-0.45, Math.min(0.3, l.z))) : hostToWorld(p, Math.max(-ex + 0.5, Math.min(xMax, l.x)), l.y, sz * ez);
   const n = hostDir(p.rotY, sx, 0, sz);
   return {cx: face.x + n.x * (P.d / 2 - EMBED), py: g.panel.y, cz: face.z + n.z * (P.d / 2 - EMBED), n, face, yaw: Math.atan2(n.x, n.z), endFace};
 }
