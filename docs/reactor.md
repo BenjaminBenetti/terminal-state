@@ -15,6 +15,7 @@ outside Git.
 | Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`) |
+| Core floor + hero reactor (task reactor-expansion, lane CORE) | `game/src/gen/reactor/coreFloor.ts` (vessel footprint, service ring, goop pool, bridges, loop / turbine layout, `layout.reactor.coreFloor`); `game/src/world/reactor/{coreHero,coreLiquids,coreStages,coreVisuals,coreLights}.ts` (the assembled structure, the dynamic goop / coolant layer, the staged startup, the glow lights) |
 | Tests | `game/tests/reactor-*.test.ts` (`reactor-level.test.ts` runs every lane on real generated layouts) |
 
 ## The level, top to bottom (one continuous world; the rim at y 0, depth negative)
@@ -23,7 +24,18 @@ outside Git.
   control office holds the startup key and the pit status board.
 - **Four walkway tiers** (about 6 m apart): steel galleries on the pit walls, big landings for the generators, bridges across the
   pit to 1–2 free-standing lattice towers, and side rooms cut into the rock (maintenance stores, the switchgear room on tier 4).
-- **The core floor** (about −30 m): the ring round the domed vessel, the pump hall and the control room overlooking the vessel.
+- **The core floor** (about −30 m): the pump hall, the control room overlooking the vessel, and round the vessel (lane CORE):
+  - the **service ring**, a walkable steel grating deck from the vessel's hazard plinth (6.6 m) to 10 m;
+  - the **glowing green goop pool** from 10 m to 16 m, 1.5 m below the deck. It is non-walkable (blocked cells; no spawn, loot or
+    path), railed on every edge (round railings drawn at the collision envelope) and has no fall-in or damage mechanic;
+  - **3–4 radial bridges** (2.5 m clear, railed, with post lamps) cross the goop to the outer floor;
+  - the **coolant loops** stand in the goop between the bridges. Each loop has a steam generator, a vertical reactor coolant pump on its
+    plinth and a coolant manifold (the lead's Meshy hero models, collision props), plus its hot, cold and crossover legs. The legs
+    cross the ring overhead with at least 2.4 m headroom;
+  - the **steam header ring**, a forest of risers, the circular service gantry, the CRDM service platform on the dome and the
+    **turbine generator** on a wall run of the outer floor.
+
+  The vessel's footprint is blocked but no longer a 12 m raised drum (its grid column is not drawn): the vessel model shows.
 - **The pit air rises above the rim** to about +15 m: the crane runway, the trolley and its hanging hook, and the tops of the pipe
   banks.
 - **Routes** (at least two between every consecutive tier pair, recorded in `layout.reactor.routes`):
@@ -93,6 +105,24 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
 
 The parts are finite: placed once, consumed once, never in a loot table. Every step persists, so a retreat keeps it. The status
 boards (rim pit board, switchgear, pump, control monitor) and the HUD line show each task's state.
+
+**The reactor comes to life step by step** (lane CORE, `world/reactor/coreStages.ts`). The restart runtime sends the persisted record
+through `ReactorVisuals.setRestartState`: once, instantly, on every build or reload, and live after every completed control. So a
+rebuilt world shows exactly the stage reached, with nothing to replay.
+
+| Step | Where it happens | At the core |
+|---|---|---|
+| Nothing done | Fuse lamps red | The goop is dormant but clearly green; two green lights light the structure and the pit's fog from the rim |
+| Fuse seated | That slot's lamp amber | – |
+| Breaker | Every switchgear lamp green | Loop and turbine panel power lamps green |
+| Valve | Valve beacon amber | Sight glasses fill with coolant (3 s), pressure lamps amber, a faint blue light |
+| Pump | Pump beacon blue | Blue flow streams through every loop, the pump flywheels spool up (4 s), the blue light grows |
+| Key | Console key lamp amber | CRDM rod lamps amber |
+| Rods | Console rods lamp green | The core wakes over 6 s: goop brighter and churning, green light ×4, the turbine fan spins up, then the win below |
+
+The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
+volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
+are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
 
 ## The win (diegetic, bounded, no cutscene)
 - The core comes alive (its glow ramps over about 6 s).

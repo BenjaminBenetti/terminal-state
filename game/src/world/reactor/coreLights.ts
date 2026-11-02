@@ -89,7 +89,7 @@ export class CoreLights {
   frame(): void {
     if (!this.active) return;
     const v = activeCoreVisuals();
-    const L = v ? v.lightLook() : {green: CORE_LOOK.greenDormant, blue: 0};
+    const L = v ? v.lightLook() : DORMANT;
     for (const l of this.green) l.intensity = L.green;
     for (const l of this.blue) l.intensity = L.blue;
   }
@@ -99,6 +99,9 @@ export class CoreLights {
     return {active: this.active, lights: this.all.map(p)};
   }
 }
+
+/** Without the core visuals (a failed core layer): the dormant green glow. */
+const DORMANT = {green: CORE_LOOK.greenDormant, blue: 0} as const;
 
 let installed: CoreLights | null = null;
 /** Installs the reactor glow lights (call once at startup; inert outside the Reactor). */

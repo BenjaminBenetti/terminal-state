@@ -126,7 +126,7 @@ export interface CoreFloorInput {
 /** Why the last core-floor carves failed (QA / tests). */
 export const CORE_FLOOR_FAILS: Record<string, number> = {};
 /** Time (ms) of the last carve / finish (QA / tests: generation stays fast). */
-export const CORE_FLOOR_STATS = {carveMs: 0, finishMs: 0, floods: 0, sections: {} as Record<string, number>};
+export const CORE_FLOOR_STATS = {carveMs: 0, finishMs: 0, floods: 0};
 const now = () => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /** Carves the vessel / ring / goop / bridges into the core grid; null when no bridge set keeps the floor connected. */
@@ -136,14 +136,11 @@ export function carveCoreFloor(o: CoreFloorInput): CoreFloorCarve | null {
 }
 
 function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
-  let tl = now();
-  const lap = (k: string) => { const t = now(); CORE_FLOOR_STATS.sections[k] = t - tl; tl = t; };
   const F = CORE_FLOOR, g = o.g, W = g.w;
   const cx = (o.pit.x + o.pit.w / 2) * CELL, cz = (o.pit.y + o.pit.h / 2) * CELL;
   const rad = (x: number, y: number) => Math.hypot((x + 0.5) * CELL - cx, (y + 0.5) * CELL - cz);
   const areas = new Set(o.coreAreas);
   const X0 = o.pit.x, Y0 = o.pit.y, X1 = o.pit.x + o.pit.w, Y1 = o.pit.y + o.pit.h;
-  lap('vessel0');
   // --- the vessel: blocked footprint r <= vesselR, body column to the dome profile, plinth ring to the plinth top -------------
   const vessel = new Uint8Array(g.cells.length);
   let kept = 0;
@@ -155,7 +152,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     o.vessel[kept++] = o.vessel[k];
   }
   o.vessel.length = kept;
-  lap('masks');
   // --- masks over the pit rect (local indices): core deck cells, tower footprints (+1 cell); walls = everything else ---------------
   const PWc = o.pit.w, PHc = o.pit.h, NL = PWc * PHc;
   const loc = (x: number, y: number) => (y - Y0) * PWc + (x - X0);
@@ -176,7 +172,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
   // pool outer radius: 16 m, or less where the nearest wall / stair run is closer (3 m clear); tower feet stay inside that circle too
   const poolR1 = Math.max(F.poolR1Min, Math.min(F.poolR1, Math.floor((inscribed - F.wallClear) * 2) / 2));
   const footR = inscribed - F.wallClear;
-  lap('goop');
   // --- the goop: the annulus + the tower feet ------------------------------------------------------------------------------------
   const goop = new Uint8Array(g.cells.length);
   const towerGoop: number[][] = o.towers.map(() => []);
@@ -193,7 +188,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
       if (!inAnnulus) towerGoop[tower[i]].push(i);
     }
   }
-  lap('flood');
   // --- the walkable flood (4-connected over the pit rect: core deck cells off the goop / vessel) -----------------------------------
   const queue = new Int32Array(NL + 8), seen = new Uint8Array(NL);
   const walkL = (l: number, i: number) => core[l] === 1 && !vessel[i] && !goop[i];
@@ -221,7 +215,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     }
     return n === total;
   };
-  lap('dirs');
   // --- bridges: compass directions whose 2.5 m strip over the goop misses every tower foot --------------------------------------
   const dirs: {a: number; cells: number[]; along0: number; along1: number}[] = [];
   for (let k = 0; k < 8; k++) {
@@ -247,7 +240,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
   }
   if (dirs.length < F.minBridges) { CORE_FLOOR_FAILS['bridge-dirs'] = (CORE_FLOOR_FAILS['bridge-dirs'] ?? 0) + 1; return null; }
   const tAngles = o.targets.map(t => ({a: Math.atan2(t.z - cz, t.x - cx), w: t.w}));
-  lap('sets');
   const sets: {idx: number[]; score: number}[] = [];
   const pick = (n: number, from: number, cur: number[]) => {
     if (cur.length === n) {
@@ -262,7 +254,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     for (let i = from; i < dirs.length; i++) { cur.push(i); pick(n, i + 1, cur); cur.pop(); }
   };
   for (let n = Math.min(F.bridges, dirs.length); n >= F.minBridges; n--) pick(n, 0, []);
-  lap('sort');
   sets.sort((p, q) => q.score - p.score || (p.idx.join() < q.idx.join() ? -1 : p.idx.join() > q.idx.join() ? 1 : 0));
   const tryTowers = [true, false];
   let chosen: number[] | null = null;
@@ -280,7 +271,6 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     for (const d of dirs) for (const i of d.cells) goop[i] = 1;
   }
   if (!chosen) { CORE_FLOOR_FAILS['bridge-connect'] = (CORE_FLOOR_FAILS['bridge-connect'] ?? 0) + 1; return null; }
-  lap('apply');
   // --- apply: the pool floor --------------------------------------------------------------------------------------------------------
   const pool: number[] = [];
   for (let y = Y0; y < Y1; y++) for (let x = X0; x < X1; x++) {
@@ -298,10 +288,8 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     return r2(e);
   };
   const bridges = chosen.map(di => ({angle: dirs[di].a, width: F.bridgeW, half: envelope(di), along0: dirs[di].along0, along1: dirs[di].along1})).sort((p, q) => p.angle - q.angle);
-  lap('loops');
   const loops = planLoops(cx, cz, poolR1, bridges.map(b => b.angle), o.towers.map(t => ({x0: t.x * CELL, z0: t.y * CELL, x1: (t.x + t.w) * CELL, z1: (t.y + t.h) * CELL})),
     o.overhead.map(d => ({...d, y: d.y - o.base})));
-  lap('end');
   return {pool, W, pit: {...o.pit}, cx, cz, base: o.base, poolR1, bridges, towers: towersIn, loops};
 }
 
