@@ -165,7 +165,8 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
     const bank = machine(layout, rr, f, 'switchgear', b0, b0 + 10, f.d - 2, f.d, 2.3, [0, -1], 3);
     const controls = [control(f, lv, 'fuse-0', b0 + 2, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'fuse-1', b0 + 5, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'breaker', b0 + 8.5, f.d - 2, f.d - 4.1, 1.4)];
     sites.push({id: 'switchgear', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [bank]});
-    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.9, 1.6, 1.0));
+    // task reactor-expansion-20261101 (lane CONTROLS): the instruction board enlarged (was 1.6 x 1.0 m, its hint line was cut off)
+    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.8, 2.2, 1.3));
   }
   // Pump hall (core floor): the circulation pump skid (3.5 x 1.5 m) mid-room, the main coolant valve stand in a back corner.
   {

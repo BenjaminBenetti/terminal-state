@@ -68,13 +68,15 @@ describe('restart controls in the world', () => {
     const h = fakeHost();
     const rt = buildRestart(h);
     const wheel = rt.root!.getObjectByName('reactor-control-valve')!.children.find(c => c.type === 'Group')!;
+    // task reactor-expansion-20261101 (lane CONTROLS): the handwheel is the valve's own rising-stem wheel, turning about the stem (Y)
+    const turned = () => Math.abs(wheel.rotation.y) + Math.abs(wheel.rotation.z);
     aimAt(h, rt, 'valve');
     h.keys.add('KeyE');
     expect(rt.interact()).toBe(true);
     for (let i = 0; i < 10; i++) rt.frame(0.1); // 1 s of 3
     expect(rt.hold?.e.id).toBe('valve');
     expect(h.ring[h.ring.length - 1]).toBeCloseTo(1 / 3, 1);
-    expect(wheel.rotation.z).toBeGreaterThan(1);
+    expect(turned()).toBeGreaterThan(1);
     expect(rt.prompt).toMatch(/Turning the handwheel… 3\d %/);
     expect(h.inputOwners![0]()).toBe(true); // no shot / ADS while holding
     h.keys.delete('KeyE');
@@ -82,7 +84,7 @@ describe('restart controls in the world', () => {
     expect(rt.hold).toBeNull();
     expect(rt.state!.valve).toBe(false);
     expect(h.ring[h.ring.length - 1]).toBeNull();
-    expect(wheel.rotation.z).toBe(0);
+    expect(turned()).toBe(0);
     // look away mid-hold
     h.keys.add('KeyE');
     rt.interact();
@@ -102,7 +104,7 @@ describe('restart controls in the world', () => {
     rt.interact();
     for (let i = 0; i < 31; i++) rt.frame(0.1);
     expect(rt.state!.valve).toBe(true);
-    expect(wheel.rotation.z).toBeCloseTo(2.5 * Math.PI * 2, 5);
+    expect(turned()).toBeCloseTo(2.5 * Math.PI * 2, 5);
     expect(loadReactorState(h.run.laneStore(REACTOR_LANE), 2, 2).valve).toBe(true);
   });
 

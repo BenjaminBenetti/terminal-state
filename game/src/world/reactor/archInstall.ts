@@ -17,9 +17,11 @@ import type {StationLayout} from '../../gen/stationTypes';
 import {MOOD, syncGlowFog} from '../lights';
 import {fogCullDistance} from '../levelCulling';
 import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTexture} from './archAssets';
+import {minesModelKeysFor} from './minesAssets'; // task reactor-expansion-20261101 (lane MINES)
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
+import {bunkerModelKeysFor} from '../../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
 // task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Ordinary non-hazard atmospheric fog is not green"): 0x283020 (olive) ->
@@ -51,6 +53,8 @@ export class ReactorArchRuntime {
 
   constructor(private readonly host: ReactorArchHost) {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
+    host.sectionModelKeys?.push(layout => minesModelKeysFor(layout)); // task reactor-expansion-20261101 (lane MINES): the mine set pieces
+    host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });

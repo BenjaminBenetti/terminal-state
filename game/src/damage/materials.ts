@@ -11,6 +11,7 @@
 import {PROP_DEFS, type PropKind} from '../gen/props';
 import {P7_MODEL_CLASS, P7_PROP_DAMAGE} from '../gen/props07';
 import {OFFICE_PROP_DAMAGE} from '../gen/office/kinds'; // Iteration 16 (WORLD-GEN)
+import {BUNKER_DAMAGE_CLASS} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {officePropPhysics} from '../gen/office/physics'; // Task office-interactions-layout-20261030 (lane PHYS)
 import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
 import type {ShapeMat} from '../gen/propShapes';
@@ -234,6 +235,8 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   ...P7_PROP_DAMAGE,
   // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts).
   ...OFFICE_PROP_DAMAGE,
+  // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (bunks, radio console, filtration unit, blast door): never break
+  ...(Object.fromEntries(Object.entries(BUNKER_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof BUNKER_DAMAGE_CLASS, PropDamageSpec>),
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */

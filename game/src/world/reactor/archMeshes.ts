@@ -12,6 +12,7 @@ import {canvasTexture} from '../canvasTextures';
 import type {KitGeo, KitMat, KitPlan, KitRef} from './archKit';
 import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
 import {LAMP, markerMaterial, tierBulbMaterial} from './archMaterials';
+import {beginHostParts, hostModelGeometry} from './controlsModel'; // task reactor-expansion-20261101 (lane CONTROLS): the valve's own handwheel turns
 
 /** The unit geometries of the kit (see archKit.ts KitGeo). */
 export function kitGeometry(geo: KitGeo): THREE.BufferGeometry {
@@ -89,6 +90,7 @@ const trisOf = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attribu
  * Never throws for a single bad piece (logged, skipped).
  */
 export function buildKitMeshes(group: THREE.Group, plan: KitPlan, mat: (k: Exclude<KitMat, 'marker'>) => THREE.Material, models: Readonly<Record<string, GLTF | undefined>>): KitBuilt {
+  beginHostParts(); // task reactor-expansion-20261101 (lane CONTROLS)
   const stats: KitBuildStats = {meshes: 0, instancedMeshes: 0, mergedMeshes: 0, modelMeshes: 0, instances: 0, triangles: 0, modelInstances: {}, modelTriangles: 0, lampMeshes: 0, labelMeshes: 0, byPart: {}};
   const geos = new Map<KitGeo, THREE.BufferGeometry>();
   const created: THREE.BufferGeometry[] = [];
@@ -168,7 +170,7 @@ export function buildKitMeshes(group: THREE.Group, plan: KitPlan, mat: (k: Exclu
     list.forEach((p, i) => { let l = byBand.get(p.band); if (!l) byBand.set(p.band, (l = [])); l.push(i); });
     for (const mesh of meshes) {
       for (const [band, idx] of byBand) {
-        const im = new THREE.InstancedMesh(mesh.geometry, mesh.material, idx.length);
+        const im = new THREE.InstancedMesh(hostModelGeometry(piece, mesh), mesh.material, idx.length); // (lane CONTROLS: the valve body without its handwheel)
         im.name = `reactor-model-${piece}-b${band}`;
         idx.forEach((i, k) => {
           const base = new THREE.Matrix4().multiplyMatrices(list[i].m, mesh.matrixWorld);

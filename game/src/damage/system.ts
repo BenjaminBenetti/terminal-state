@@ -26,7 +26,8 @@ import {DebrisSystem, type DebrisSpawn} from './debris';
 import {CraterField} from './craters';
 import {PropDamage, type PropBreakEvent, type PropDamageHooks} from './propDamage';
 import {installWounds, woundsOf, type WoundController, type WoundResult, type WoundableActor} from './wounds';
-import {sampleTexture, textureMean} from './sample';
+import {materialBaseColor, sampleTexture, textureMean} from './sample';
+import {finishClass} from './impactFinish'; // task reactor-expansion-20261101 (lane CONTROLS): impacts take the drawn finish
 import {extractPatch, fallbackFlap} from './fleshPatch';
 import {isLootHolderKind} from '../items/loot';
 import type {PhysicsSystem} from '../physics/world';
@@ -62,6 +63,13 @@ export interface DamageHooks extends PropDamageHooks {
   detachLot?(holder: object, lotId: number): PickupLike | null;
   /** Visible loot lots overlapping a world box (a flying item knocks them over). */
   lotsIn?(box: THREE.Box3): readonly {holder: object; lotId: number}[];
+  /**
+   * Task reactor-expansion-20261101 (lane CONTROLS): the arch-owned finish key the builder DREW at a structural hit (world/finishAt.ts:
+   * the Reactor's pit concrete / steel grating / rusted plate, the Office's drywall / carpet …); null = the station rule.
+   */
+  finishAt?: ((kind: 'wall' | 'floor' | 'ceiling', levelIndex: number, x: number, y: number, z: number, nx: number, nz: number) => string | null) | null;
+  /** The material behind a finish key (its texture colours the chips). */
+  finishMaterial?(key: string): THREE.Material | undefined;
 }
 
 /** Bullet impulse handed to a loose item / light prop (N.s per point of weapon damage: rifle ~1.3, buckshot pellet ~0.8). */
@@ -206,11 +214,15 @@ export class DamageSystem {
     const L = this.layout!;
     const G = this.levelGrid(level, point);
     const key = structuralKeyAt(kind, point.x, point.y, point.z, normal.x, normal.z, {grid: G, areas: L.areas, trenches: L.trenches, safetyStrip: this.mats?.scale.safetyEdge.v});
-    const cls = STRUCTURAL_CLASS[key];
+    // task reactor-expansion-20261101 (lane CONTROLS): the finish the arch actually DREW here decides the effect (pit concrete, steel
+    // grating, rusted plate, drywall, carpet …); damage numbers are untouched (structural hits deal no damage — chips / sound / crater only)
+    const fk = this.finishKeyAt(kind, level, point, normal);
+    const fcls = finishClass(fk);
+    const cls = fcls ?? STRUCTURAL_CLASS[key];
     const spec = DAMAGE_MATERIALS[cls];
     // stair flights are a linear ramp for hitscan but drawn as treads: put the chip on the tread top
     if (key === 'stairs' && kind === 'floor') { point = point.clone(); point.y = G.stepAt(point.x, point.z) + 0.001; }
-    const surface = this.structuralColor(key, kind, point, normal, G) ?? new THREE.Color(spec.palette[Math.floor(this.rand() * spec.palette.length)]);
+    const surface = (fcls ? this.finishColor(fk!) : this.structuralColor(key, kind, point, normal, G)) ?? new THREE.Color(spec.palette[Math.floor(this.rand() * spec.palette.length)]);
     const substrate = new THREE.Color(spec.substrate);
     if (key === 'tileLower' || key === 'tileUpper' || key === 'tileShop' || key === 'quarryTile') substrate.lerp(surface, 0.15);
     const dk = (1 - spec.hardness * 0.55) * (shot.pellet ? 0.22 : 0.38) * Math.min(1.5, shot.damage / 24 + 0.2);
@@ -227,6 +239,31 @@ export class DamageSystem {
       this.sfx?.breakage('debrisFall', point.x, point.y, point.z, crater.depth * 0.7);
     }
     return {point: v3(point), normal: v3(normal), object: kind, instanceId: null, material: cls, stage: crater.depth >= 0.99 ? 2 : 1, level: level ?? -1};
+  }
+
+  /** Task reactor-expansion-20261101 (lane CONTROLS): the arch finish key at a structural hit (hooks.finishAt), or null. */
+  finishKeyAt(kind: 'wall' | 'floor' | 'ceiling', level: number | undefined, point: THREE.Vector3, normal: THREE.Vector3): string | null {
+    const f = this.hooks.finishAt;
+    if (!f) return null;
+    const lv = this.query?.levels;
+    const k = !lv || lv.count < 2 ? 0 : level !== undefined && level >= 0 && level < lv.count ? level : lv.levelAt(point.x, point.z, point.y + (kind === 'ceiling' ? -0.05 : 0.05), 0.1);
+    try { return f(kind, Math.max(0, k), point.x, point.y, point.z, normal.x, normal.z); } catch { return null; }
+  }
+
+  /** The damage class at a structural hit: the drawn arch finish's, else the station rule's (knife contacts, QA). */
+  structuralClassAt(kind: 'wall' | 'floor' | 'ceiling', level: number | undefined, point: THREE.Vector3, normal: THREE.Vector3): DamageClass {
+    const fcls = finishClass(this.finishKeyAt(kind, level, point, normal));
+    if (fcls) return fcls;
+    const L = this.layout;
+    if (!L) return 'concrete';
+    return STRUCTURAL_CLASS[structuralKeyAt(kind, point.x, point.y, point.z, normal.x, normal.z, {grid: this.levelGrid(level, point), areas: L.areas, trenches: L.trenches, safetyStrip: this.mats?.scale.safetyEdge.v})];
+  }
+
+  /** Fragment colour of an arch finish: its material's texture mean x colour (null: unreadable). */
+  private finishColor(key: string): THREE.Color | null {
+    const m = this.hooks.finishMaterial?.(key);
+    if (!m) return null;
+    try { return textureMean((m as THREE.MeshStandardMaterial).map) ? materialBaseColor(m) : null; } catch { return null; }
   }
 
   /** Fragment colour of a structural surface at the hit: its own texture where it can be read. */

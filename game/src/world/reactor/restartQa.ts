@@ -9,6 +9,7 @@
 
 import type {Game} from '../../game';
 import {reactorRestartOf} from './restart';
+import {reactorMapBoardsOf} from './mapBoard';
 
 export function reactorRestartQaApi(game: Game, lookAt: (x: number, y: number, z: number) => void, teleport: (x: number, z: number, yaw?: number, level?: number) => boolean) {
   const rt = () => reactorRestartOf(game);
@@ -18,7 +19,17 @@ export function reactorRestartQaApi(game: Game, lookAt: (x: number, y: number, z
       const r = rt(), e = r?.controls.find(x => x.id === id);
       if (!r || !e) return {ok: false, why: r?.info ? `no control '${id}' in this layout` : 'not on the Reactor'};
       const ok = teleport(e.c.stand.x, e.c.stand.z, e.c.stand.yaw, e.c.stand.level);
-      lookAt(e.c.at.x, e.c.at.y, e.c.at.z);
+      lookAt(e.m.pick.x, e.m.pick.y, e.m.pick.z); // (task reactor-expansion-20261101, lane CONTROLS: the control mounted on its host face)
+      return {ok};
+    },
+    // task reactor-expansion-20261101 (lane CONTROLS): the floor-map boards (placement, markers, target, counters) and a walk-up:
+    // stand 0.9 m in front of the map board beside `screen` (default the pit board) looking at its face
+    reactorMaps: () => reactorMapBoardsOf(game)?.qa() ?? {installed: false},
+    reactorGoMap: (screen = 'pitBoard'): {ok: boolean; why?: string} => {
+      const b = reactorMapBoardsOf(game)?.boards.find(q => q.pose.screen === screen);
+      if (!b) return {ok: false, why: `no map board beside '${screen}'`};
+      const p = b.pose, ok = teleport(p.x + p.nx * 0.9, p.z + p.nz * 0.9, Math.atan2(p.nx, p.nz), p.level);
+      lookAt(p.x, p.y, p.z);
       return {ok};
     },
     reactorControl: (id: string, opts: {give?: boolean} = {}): {ok: boolean; why?: string} => {

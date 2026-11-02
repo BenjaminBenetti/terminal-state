@@ -269,4 +269,5 @@ Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Cod
 - `assets/models/reactor-storage-cask.glb` — waste: dry storage cask (Meshy task 01a19980-91fa-71e7-8b9e-b6acf33f3dc7)
 - `assets/models/reactor-decon-shower.glb` — waste: decontamination shower booth (Meshy task 01a19980-99fb-70c8-b1c4-4b47a9d8413f)
 - `assets/models/reactor-hot-cell-window.glb` — waste: hot-cell window wall section with manipulators (Meshy task 01a19980-a169-77a3-abcc-66ee22bb9ff8)
+- `assets/textures/reactor/mine-rock-{color,normal,orm}.jpg` — blasted mine-drift rock (lane MINES drift walls / ceilings) (Codex colour source; normal / ORM derived locally)
 <!-- END reactor-x-kit-20261101 -->

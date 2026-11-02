@@ -83,7 +83,8 @@ import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
-import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart'; // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
+import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart';
+import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
@@ -477,7 +478,8 @@ export class Game {
     this.sectionModelKeys.push(enemyModelKeysFor);
     this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
     hookName('sirens');
-    installReactorRestart(this); hookName('reactorRestart'); // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
+    installReactorRestart(this); hookName('reactorRestart');
+    installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
@@ -760,6 +762,10 @@ export class Game {
       ownMeshes: p => cm.ownMeshes(p),
       onBreak: e => { const h = cm.holderFor(e.prop); if (h) cm.breakHolder(h, e.kind); this.physics.propsChanged(e.prop.x, e.prop.z); },
       pickups: () => this.pickups.list,
+      // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts on an arch-drawn finish (Reactor pit concrete / steel grating /
+      // rusted plate, Office drywall / carpet …) take that finish's class and colour (world/finishAt.ts, damage/impactFinish.ts)
+      finishAt: this.world.finishAt ?? null,
+      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k),
       // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
       physics: this.physics,
       lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),
@@ -2161,7 +2167,8 @@ export class Game {
     } else {
       // blade on a surface: its material's impact cue and a few chips, no crater / prop damage (a knife does not break things)
       const wh = res.hit, n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
-      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls] : DAMAGE_MATERIALS.concrete;
+      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls]
+        : wh.kind === 'wall' || wh.kind === 'floor' || wh.kind === 'ceiling' ? DAMAGE_MATERIALS[this.damage.structuralClassAt(wh.kind, wh.level, point, n)] : DAMAGE_MATERIALS.concrete; // (task reactor-expansion-20261101, lane CONTROLS: the surface's own material)
       this.sfx.impact(point.x, point.y, point.z, spec.sound);
       this.fx.impact(point, n, spec.fx, {decal: false, chips: 2, dust: 0.35});
       this.logMelee({kind: 'world', surface: wh.kind, t: +res.t.toFixed(3)});

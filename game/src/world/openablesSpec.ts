@@ -23,6 +23,7 @@
 // live in items/lootTables.ts, built with items/calibers.ts genericAmmo).
 // Task office-interactions-layout-20261030 (lane OPEN): the office kinds' audit rows live here now (OFFICE_OPEN_AUDIT, typed over OfficeKind).
 import type {OfficeKind} from '../gen/office/kinds';
+import {BUNKER_OPEN_AUDIT} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {MALL_OPEN_AUDIT} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {COMPANY_DIMS} from '../assets/companyDims.generated'; // Task office-props-physics-scale-20261030 (lane FURN): furniture-only rescales
@@ -1383,6 +1384,8 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   // Iteration 16 office kinds + task office-overhaul-20261030 company / supporting kinds (gen/office/kinds.ts OFFICE_KINDS): task
   // office-interactions-layout-20261030 (lane OPEN) classified each one (role, class, reason); the openable ones add their mechanism.
   ...Object.entries(OFFICE_OPEN_AUDIT).map(([kind, e]) => ({kind, cls: e.cls, role: e.role, how: e.cls === 'openable' && isOpenableKind(kind) ? `${e.how}: ${describe(kind)}` : e.how})),
+  // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (gen/reactor/complex/bunkerKinds.ts)
+  ...BUNKER_OPEN_AUDIT,
 ];
 
 function describe(k: OpenableKind): string {

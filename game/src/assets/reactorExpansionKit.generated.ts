@@ -21,3 +21,7 @@ export const REACTOR_X_KIT = {
   deconShower: {key: 'reactor-deconShower', url: 'assets/models/reactor-decon-shower.glb', bytes: 734044, tris: 9739, dims: [1.7554, 2.4, 1.502]},
   hotCellWindow: {key: 'reactor-hotCellWindow', url: 'assets/models/reactor-hot-cell-window.glb', bytes: 1013020, tris: 14806, dims: [3.6048, 3, 1.7629]},
 } as const satisfies Readonly<Record<string, ReactorKitModel>>;
+/** Tileable expansion surface sets: colour / normal / ORM (R ao, G roughness, B metal) JPEGs. */
+export const REACTOR_X_TEXTURES = {
+  'mine-rock': {color: 'assets/textures/reactor/mine-rock-color.jpg', normal: 'assets/textures/reactor/mine-rock-normal.jpg', orm: 'assets/textures/reactor/mine-rock-orm.jpg'},
+} as const;
