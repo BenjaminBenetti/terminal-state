@@ -39,16 +39,17 @@ export function wasteFixture(seed: number, inward: 'N' | 'S' | 'E' | 'W', o: {U?
   const base = FIX_BASES[FIX_LEVEL];
   let deck: Rect, region: Rect, entrance: Rect, deckCell: [number, number];
   const e0 = Math.floor(U / 2) - Math.floor(ew / 2) + off;
+  // (lane HOST's convention: the region's pit-side row IS the pit wall; the entrance span lies in it, in front of the deck)
   switch (inward) {
-    case 'S': deck = {x: 30, y: 10, w: 130, h: 10}; region = {x: 40, y: 21, w: U, h: V}; entrance = {x: 40 + e0, y: 20, w: ew, h: 1}; deckCell = [40 + e0 + 1, 19]; break;
-    case 'N': region = {x: 40, y: 10, w: U, h: V}; entrance = {x: 40 + e0, y: 10 + V, w: ew, h: 1}; deck = {x: 30, y: 11 + V, w: 130, h: 10}; deckCell = [40 + e0 + 1, 11 + V]; break;
-    case 'E': deck = {x: 10, y: 30, w: 10, h: 130}; region = {x: 21, y: 40, w: V, h: U}; entrance = {x: 20, y: 40 + e0, w: 1, h: ew}; deckCell = [19, 40 + e0 + 1]; break;
-    default: region = {x: 10, y: 40, w: V, h: U}; entrance = {x: 10 + V, y: 40 + e0, w: 1, h: ew}; deck = {x: 11 + V, y: 30, w: 10, h: 130}; deckCell = [11 + V, 40 + e0 + 1]; break;
+    case 'S': deck = {x: 30, y: 10, w: 130, h: 10}; region = {x: 40, y: 20, w: U, h: V}; entrance = {x: 40 + e0, y: 20, w: ew, h: 1}; deckCell = [40 + e0 + 1, 19]; break;
+    case 'N': region = {x: 40, y: 10, w: U, h: V}; entrance = {x: 40 + e0, y: 9 + V, w: ew, h: 1}; deck = {x: 30, y: 10 + V, w: 130, h: 10}; deckCell = [40 + e0 + 1, 10 + V]; break;
+    case 'E': deck = {x: 10, y: 30, w: 10, h: 130}; region = {x: 20, y: 40, w: V, h: U}; entrance = {x: 20, y: 40 + e0, w: 1, h: ew}; deckCell = [19, 40 + e0 + 1]; break;
+    default: region = {x: 10, y: 40, w: V, h: U}; entrance = {x: 9 + V, y: 40 + e0, w: 1, h: ew}; deck = {x: 10 + V, y: 30, w: 10, h: 130}; deckCell = [10 + V, 40 + e0 + 1]; break;
   }
   const front = k.addArea(deck, 'concourse', 'concourse', base + 20, -1, {level: FIX_LEVEL, floorY: base, role: 'reactor-landing', label: 'Generator landing · Tier 4'});
   const slot: ComplexSlot = {id: 'waste', zone: 2, level: FIX_LEVEL, baseY: base, region, entrance, frontArea: front.id, inward, ceilMax: base + 5.6};
   const t0 = performance.now();
-  const carve = carveWaste({k, rng: rng.fork('complex-waste'), slot, levelOpt: {level: FIX_LEVEL}});
+  const carve = carveWaste({k, rng: rng.fork('complex-waste'), slot, levelOpt: {level: FIX_LEVEL, floorY: base}});
   const carveMs = performance.now() - t0;
   if (!carve || o.dressIt === false) return {k, slot, carve, layout: null, carveMs, deckCell};
   const c = cropKit(k, [0, 1, 2, 3, 4, 5], 0, 0, W, H);
@@ -73,7 +74,15 @@ export function wasteFixture(seed: number, inward: 'N' | 'S' | 'E' | 'W', o: {U?
   dress(layout, rng.fork('dress'));
   release();
   const firstProp = layout.props.length;
+  // like the host (complex/host.ts dressComplexes): the deck, the use point and the entrance apron (3 cells both sides) held clear
+  const apron: number[] = [];
+  {
+    const E = entrance, dir = {N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0]}[inward], along = E.w > 1 ? [1, 0] : [0, 1], n = Math.max(E.w, E.h);
+    for (let t = -1; t <= n; t++) for (let d = -3; d <= 3; d++) { const x = E.x + along[0] * t + dir[0] * d, y = E.y + along[1] * t + dir[1] * d; if (g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR) apron.push(g.idx(x, y)); }
+  }
+  const release2 = holdCells(layout, [{level: FIX_LEVEL, cells: deckCells}, {level: FIX_LEVEL, cells: useCells}, {level: FIX_LEVEL, cells: apron}]);
   if (o.hook !== false) carve.dress?.(layout, rng.fork('complex-waste-dress'), {ox: c.ox, oy: c.oy});
+  release2();
   applyLighting(layout, rng.fork('lighting'));
   return {k, slot, carve, layout, carveMs, deckCell, firstProp};
 }

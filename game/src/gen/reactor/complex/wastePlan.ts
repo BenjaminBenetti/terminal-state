@@ -153,14 +153,16 @@ export function planWaste(region: Rect, inward: Side, ent: Rect, rng: Rng): Wast
   const jit = [rng.int(-2, 2), rng.int(-2, 2), rng.int(-1, 1), rng.int(-1, 1), rng.int(-1, 1), rng.int(-1, 1)];
   const t = [rng.range(0.25, 0.4), rng.range(0.4, 0.6), rng.range(0.55, 0.75), rng.range(0.3, 0.7), rng.range(0.35, 0.65)];
   const link = rng.chance(0.5);
-  for (const mirror of [flip, !flip]) {
-    const p = tryPlan(new WasteFrame(region, inward, mirror), ent, jit, t, link);
+  // the bay sits over the entrance: in the middle column (the entrance in the middle third of the wall), else at the column's low end
+  // (bayFirst: an entrance near a corner — mirroring brings either corner to the low end)
+  for (const bayFirst of [false, true]) for (const mirror of [flip, !flip]) {
+    const p = tryPlan(new WasteFrame(region, inward, mirror), ent, jit, t, link, bayFirst);
     if (p) return p;
   }
   return null;
 }
 
-function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boolean): WastePlan | null {
+function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boolean, bayFirst: boolean): WastePlan | null {
   // the entrance in local cells
   let eu0 = Infinity, eu1 = -Infinity, ev = -Infinity;
   for (let y = ent.y; y < ent.y + ent.h; y++) for (let x = ent.x; x < ent.x + ent.w; x++) {
@@ -171,28 +173,34 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
   const v0 = Math.max(1, ev + 1);
   const Uw = Math.min(f.U - 2, WASTE_LIMITS.UMAX), Vw = Math.min(f.V - 1 - v0, WASTE_LIMITS.VMAX);
   if (Uw < WASTE_LIMITS.UMIN || Vw < WASTE_LIMITS.VMIN) return null;
-  if (eu0 < 2 || eu1 > f.U - 2) return null;
+  if (eu0 < 1 || eu1 > f.U - 1) return null;
   // the program box along u: as centred on the entrance as the region allows
   const ub0 = clamp(Math.round((eu0 + eu1) / 2 - Uw / 2), 1, f.U - 1 - Uw), ub1 = ub0 + Uw;
   // columns: L (checkpoint / vault / plant side), C (the bay over the entrance), R (control / compactor / airlock side)
   let L = Math.round(Uw * 0.23) + jit[0], R = Math.round(Uw * 0.27) + jit[1];
   const C = Uw - L - R - 2;
   const c0 = () => ub0 + L + 1;
-  if (eu0 - 1 < c0()) { const s = c0() - (eu0 - 1); L -= s; R += s; }
-  if (eu1 + 1 > c0() + C) { const s = eu1 + 1 - (c0() + C); L += s; R -= s; }
+  if (!bayFirst) {
+    if (eu0 - 1 < c0()) { const s = c0() - (eu0 - 1); L -= s; R += s; }
+    if (eu1 + 1 > c0() + C) { const s = eu1 + 1 - (c0() + C); L += s; R -= s; }
+  } else if (eu0 < ub0 || eu1 > ub0 + C - 1) return null; // (the bay's outer wall is the region margin: the span keeps 1 cell off it)
   if (L < 13 || R < 15 || C < 22 || C < eu1 - eu0 + 4) return null;
   const cL = ub0, cC = c0(), cR = cC + C + 1;
+  // the front band's two left columns: [checkpoint | bay] (bay in the middle) or [bay | checkpoint] (bayFirst)
+  const bayU = bayFirst ? ub0 : cC, hpU = bayFirst ? ub0 + C + 1 : cL;
   // bands (the back band deep enough for two rows of dry casks: 2 x 3.23 m + an aisle + wall aisles = 10.5 m = 21 cells)
-  let F = clamp(Math.round(Vw * 0.245) + jit[2], 15, 22), B = clamp(Math.round(Vw * 0.34) + jit[3], 18, 28);
+  // (the front band >= 16 cells: the control room keeps 4.5 m for its console between the dresser's wall racks; the vault >= 16 cells
+  // for two double rack rows; the slot's 64-cell depth gives exactly F 16 + M 16 + K 6 + B 21)
+  let F = clamp(Math.round(Vw * 0.26) + (Vw > 66 ? jit[2] : 0), 16, 22), B = clamp(Math.round(Vw * 0.34) + (Vw > 66 ? jit[3] : 0), 18, 28);
   const K = 6;
   let M = Vw - F - K - B - 3;
-  while (M < 15 && B > 18) { B--; M++; }
-  while (M < 15 && F > 15) { F--; M++; }
+  while (M < 16 && B > 19) { B--; M++; }
+  while (M < 16 && F > 16) { F--; M++; }
   if (M < 14) return null;
   const vF = v0, vM = vF + F + 1, vK = vM + M + 1, vB = vK + K + 1;
   // F splits (front room toward the bay's entrance side, back room behind it)
-  const gA = clamp(Math.ceil((F - 1) * 0.55) + jit[5], 7, F - 7), gB = F - 1 - gA;
-  if (gB < 6 || gA < 7) return null;
+  const gB = clamp(Math.round((F - 1) * 0.4), 6, 8), gA = F - 1 - gB;
+  if (gB < 6 || gA < 8) return null;
   // B splits: plant | pump | cask
   let P = clamp(Math.round(Uw * 0.3), 18, 28), Q = clamp(Math.round(Uw * 0.16), 10, 15);
   let Cw = Uw - P - Q - 2;
@@ -203,8 +211,8 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
   // the cask hall's door to the east corridor half needs >= 8 cells of shared wall
   if (ub1 - Math.max(bCask, cR) < 8) return null;
   const rooms: Record<WasteKey, LRect> = {
-    bay: {u: cC, v: vF, du: C, dv: F},
-    hp: {u: cL, v: vF, du: L, dv: F},
+    bay: {u: bayU, v: vF, du: C, dv: F},
+    hp: {u: hpU, v: vF, du: L, dv: F},
     control: {u: cR, v: vF, du: R, dv: gA},
     lockers: {u: cR, v: vF + gA + 1, du: R, dv: gB},
     vault: {u: cL, v: vM, du: L + 1 + C, dv: M},
@@ -215,14 +223,21 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
     pump: {u: bPump, v: vB, du: Q, dv: B},
     cask: {u: bCask, v: vB, du: Cw, dv: B},
   };
+  // the drum vault's doors share its aisles: the door from the end-column room (checkpoint, or the bay when bayFirst) opens into the
+  // vault's end aisle, the other front door (the middle column) and the heavy door to the sealed corridor face each other across ONE
+  // cross aisle — long unbroken rack runs, sight lines down the rows
+  const endKey: WasteKey = bayFirst ? 'bay' : 'hp', midKey: WasteKey = bayFirst ? 'hp' : 'bay';
+  const midW = midKey === 'bay' ? 8 : 4;
+  const midC = doorCentreU(rooms[midKey], rooms.vault, midW, 0.5);
   const doors: WasteDoorSpec[] = [
     {a: 'bay', b: 'hp', w: 4, h: 2.4, t: t[0], kind: 'personnel'},
-    {a: 'hp', b: 'vault', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
-    {a: 'bay', b: 'control', w: 4, h: 2.4, t: t[0], kind: 'personnel'},
+    {a: 'hp', b: 'vault', w: 4, h: 2.4, t: endKey === 'hp' ? 0 : 0.5, kind: 'personnel'},
+    // the control room opens off the bay (bay in the middle) or off the checkpoint (bayFirst: the checkpoint lies between them)
+    {a: bayFirst ? 'hp' : 'bay', b: 'control', w: 4, h: 2.4, t: t[0], kind: 'personnel'},
     {a: 'control', b: 'lockers', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
     {a: 'lockers', b: 'compactor', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
-    {a: 'bay', b: 'vault', w: 8, h: 3.6, t: 0.5, kind: 'wide'},
-    {a: 'vault', b: 'kWest', w: 5, h: 2.8, t: t[2], kind: 'heavy'},
+    {a: 'bay', b: 'vault', w: 8, h: 3.6, t: endKey === 'bay' ? 0 : 0.5, kind: 'wide'},
+    {a: 'vault', b: 'kWest', w: 5, h: 2.8, t: tAt(rooms.vault, rooms.kWest, 5, midC), kind: 'heavy'},
     {a: 'compactor', b: 'kEast', w: 4, h: 2.4, t: t[3], kind: 'personnel'},
     {a: 'kWest', b: 'kEast', w: 4, h: 2.8, t: 0.5, kind: 'heavy'},
     {a: 'kWest', b: 'plant', w: 5, h: 2.8, t: t[4], kind: 'heavy'},
@@ -268,6 +283,14 @@ export function doorGapL(a: LRect, b: LRect, w: number, t: number): LRect | null
   if (ww < 3) return null;
   const st = s.s0 + 1 + Math.round((room - ww) * t);
   return s.alongU ? {u: st, v: s.line, du: ww, dv: 1} : {u: s.line, v: st, du: 1, dv: ww};
+}
+
+/** The fraction t that centres a `w`-cell door in the shared wall of a and b on local u `c` (clamped). */
+function tAt(a: LRect, b: LRect, w: number, c: number): number {
+  const s = sharedWallL(a, b);
+  if (!s) return 0.5;
+  const room = s.s1 - s.s0 - 2, ww = Math.min(w, room);
+  return room - ww > 0 ? clamp((c - ww / 2 - s.s0 - 1) / (room - ww), 0, 1) : 0.5;
 }
 
 function doorCentreU(a: LRect, b: LRect, w: number, t: number): number {

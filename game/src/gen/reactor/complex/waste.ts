@@ -28,6 +28,8 @@ export interface WasteCarveRecord {
   /** Door ids (layout.doors) by kind, the entrance door and every door of the complex. */
   doors: {id: number; kind: WasteDoorKind | 'entrance'; a: WasteKey | 'deck'; b: WasteKey}[];
   frontArea: number;
+  /** The slot's entrance span (canvas cells, BEFORE the crop). */
+  entrance: Rect;
   /** Generator footprint / use cell (canvas cells, BEFORE the crop). */
   genFoot: Rect;
   genUse: [number, number];
@@ -53,8 +55,7 @@ export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
   const areaOf = (key: WasteKey): Area => k.areas[ids[key]];
   for (const s of WASTE_ROOMS) {
     const ceil = r2(base + Math.min(WASTE_CLEAR[s.clear], maxClear));
-    const a = k.addArea(f.rect(plan.rooms[s.key]), s.kind, s.type, ceil, -1, {...levelOpt, floorY: base, label: s.label, role: 'reactor-room'});
-    if (!levelOpt.level) delete a.floorY;
+    const a = k.addArea(f.rect(plan.rooms[s.key]), s.kind, s.type, ceil, -1, {...levelOpt, ...(levelOpt.level ? {floorY: base} : {}), label: s.label, role: 'reactor-room'});
     a.purpose = s.purpose;
     a.publicSpace = false;
     ids[s.key] = a.id;
@@ -94,7 +95,7 @@ export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
   const face = alongX ? [Math.sign(-toUse[0]), 0] : [0, Math.sign(-toUse[1])];
   const useYaw = Math.round(Math.atan2(-face[0], -face[1]) * 1000) / 1000;
 
-  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, genFoot: foot, genUse: [ux, uy]};
+  const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, entrance: {...slot.entrance}, genFoot: foot, genUse: [ux, uy]};
   const order: WasteKey[] = ['bay', 'hp', 'control', 'lockers', 'vault', 'compactor', 'kWest', 'kEast', 'plant', 'pump', 'cask'];
   const rooms: ComplexRoom[] = WASTE_ROOMS.map(s => ({area: ids[s.key], key: s.key, label: s.label, role: s.role}));
   return {
