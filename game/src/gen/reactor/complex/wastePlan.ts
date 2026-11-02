@@ -129,7 +129,9 @@ export const WASTE_KINDS: Readonly<Record<WasteKind, WasteKindSpec>> = {
   control: {zone: 'clean', kind: 'room', type: 'utility', purpose: 'signal-room', label: 'Repository control room', role: 'room', clear: 'room'},
   airlock: {zone: 'controlled', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', label: 'Vault airlock', role: 'corridor', clear: 'corr'},
   corridor: {zone: 'controlled', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', label: 'Sealed vault corridor', role: 'corridor', clear: 'corr'},
-  vault: {zone: 'controlled', kind: 'room', type: 'storage', purpose: 'storage', label: 'Drum vault A', role: 'hall', clear: 'hall'},
+  // (the drum vault: the anchored-stores hall purpose the cask hall uses — wall lockers / a spares shelf / a crate, no floor scatter:
+  // the hall's floor is the racks')
+  vault: {zone: 'controlled', kind: 'room', type: 'storage', purpose: 'turbine-hall', label: 'Drum vault A', role: 'hall', clear: 'hall'},
   compactor: {zone: 'controlled', kind: 'room', type: 'utility', purpose: 'custodial-room', label: 'Compactor & processing', role: 'room', clear: 'plant'},
   hotcell: {zone: 'controlled', kind: 'room', type: 'utility', purpose: 'workshop', label: 'Hot-cell gallery', role: 'room', clear: 'room'},
   cask: {zone: 'controlled', kind: 'room', type: 'storage', purpose: 'turbine-hall', label: 'Dry-cask hall', role: 'vault', clear: 'tall'},
@@ -191,6 +193,9 @@ export interface WastePlan {
 export const WASTE_LIMITS = {UMIN: 62, VMIN: 56, UMAX: 96, VMAX: 82} as const;
 /** Planning attempts before the carver gives up (each one draws on, deterministic). */
 export const WASTE_ATTEMPTS = 60;
+/** Why planning attempts were rejected (QA / tests: which step of the program ran out of rock). */
+export const WASTE_PLAN_FAILS: Record<string, number> = {};
+const no = (why: string): null => { WASTE_PLAN_FAILS[why] = (WASTE_PLAN_FAILS[why] ?? 0) + 1; return null; };
 /** Corridor width (cells): 3 m. */
 const CW = 6;
 
@@ -218,7 +223,7 @@ export function planWaste(region: Rect, inward: Side, ent: Rect, rng: Rng): Wast
   const box: LRect = {u: ub0, v: v0, du: Uw, dv: Vw};
   const entrance = {u0: eu0, u1: eu1, v: ev};
   for (let k = 1; k <= WASTE_ATTEMPTS; k++) {
-    const p = attempt(f, box, entrance, rng);
+    const p = attempt(f, box, entrance, rng, k > WASTE_ATTEMPTS * 2 / 3);
     if (p) { p.stats.attempts = k; return p; }
   }
   return null;
@@ -434,65 +439,82 @@ function sideRect(p: LRect, s: S4, o: number, a: number, d: number): LRect {
 // ---------------------------------------------------------------------------------------------
 // One planning attempt
 
-function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: number}, rng: Rng): WastePlan | null {
+/** One attempt; `relax` (the last third of the attempts): the halls' minimum sizes and the floor target a little lower. */
+function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: number}, rng: Rng, relax: boolean): WastePlan | null {
   const P = new Packer(box, rng);
   const sh = <T>(a: T[]) => rng.shuffle(a);
   const deepBonus = (w: number) => (r: LRect) => w * (r.v + r.dv / 2 - box.v) / box.dv;
   // --- 1. the receiving bay over the entrance (the entrance anywhere along its front wall, 2 cells off its corners)
   const bayDu = rng.int(20, 30), bayDv = rng.int(14, 20);
   const lo = Math.max(box.u, ent.u1 + 2 - bayDu), hi = Math.min(box.u + box.du - bayDu, ent.u0 - 2);
-  if (hi < lo) return null;
+  if (hi < lo) return no('bay');
   P.add('bay', 'bay', {u: rng.int(lo, hi), v: box.v, du: bayDu, dv: bayDv}, '', true);
   // --- 2. the health-physics checkpoint beside the bay (often front-aligned), sometimes behind it; the change room off it
   const frontAligned = rng.chance(0.6);
   const hpSides = sh([0, 1] as S4[]);
   if (rng.chance(0.25)) hpSides.unshift(3); else hpSides.push(3);
-  if (!P.attach('hp', 'hp', 'bay', hpSides, {long: [13, 18], short: [12, 16], bonus: r => (frontAligned && r.v === box.v ? 2 : 0)}, PERSONNEL)) return null;
+  if (!P.attach('hp', 'hp', 'bay', hpSides, {long: [13, 18], short: [12, 16], bonus: r => (frontAligned && r.v === box.v ? 2 : 0)}, PERSONNEL)) return no('hp');
   // the service side first on some seeds (the plant then claims its corner before the vaults)
   const serviceFirst = rng.chance(0.45);
-  if (serviceFirst && !service(P, rng, box)) return null;
-  if (!P.attach('lockers', 'lockers', 'hp', sh([0, 1, 2, 3] as S4[]), {long: [10, 15], short: [9, 13], bonus: deepBonus(1.5)}, PERSONNEL)) return null;
+  if (serviceFirst && !service(P, rng, box)) return no('service');
+  if (!P.attach('lockers', 'lockers', 'hp', sh([0, 1, 2, 3] as S4[]), {long: [10, 15], short: [9, 13], bonus: deepBonus(1.5)}, PERSONNEL)) return no('lockers');
   // --- 3. the airlock out of the change room (heavy doors both ends), into open rock (inward preferred)
-  if (!P.corridor('airlock', 'airlock', 'lockers', 'side', [8, 13], HEAVY_NARROW, sh([0, 1, 3] as S4[]).concat([2]))) return null;
-  // --- 4. the sealed vault corridors: 2-4 runs (straight on, an L turn, a T branch off a run's middle) from the airlock's head
-  const runs = rng.int(2, 4);
+  if (!P.corridor('airlock', 'airlock', 'lockers', 'side', [8, 13], HEAVY_NARROW, sh([0, 1, 3] as S4[]).concat([2]))) return no('airlock');
+  // --- 4. the sealed vault corridors: runs (straight on, an L turn, a T branch off a run's middle) from the airlock's head, grown as
+  // the halls need them (a hall that fits nowhere gets a new run toward open rock), then a few more toward the target count
   const corrs: WasteKey[] = [];
-  for (let i = 0; i < runs; i++) {
-    const key = `k${i + 1}`;
-    const base = i === 0 ? 'airlock' : rng.chance(0.6) ? corrs[corrs.length - 1] : rng.pick(corrs);
-    const modes: ('straight' | 'turn' | 'branch')[] = i === 0 ? sh(['straight', 'turn']) : sh(['straight', 'turn', 'branch', 'branch']);
-    let done = false;
-    for (const m of modes) {
-      if (m === 'branch' && base === 'airlock') continue;
-      if (P.corridor(key, 'corridor', base, m, i === 0 ? [10, 30] : [10, 26], i === 0 ? HEAVY_NARROW : JUNCTION)) { done = true; break; }
+  const addRun = (bases: readonly WasteKey[]): WasteKey | null => {
+    const key = `k${corrs.length + 1}`, first = !corrs.length;
+    for (const base of bases) for (const m of sh<'straight' | 'turn' | 'branch'>(base === 'airlock' ? ['straight', 'turn'] : ['straight', 'turn', 'branch', 'branch'])) {
+      if (P.corridor(key, 'corridor', base, m, first ? [10, 30] : [10, 26], first ? HEAVY_NARROW : JUNCTION)) { corrs.push(key); return key; }
     }
-    if (done) corrs.push(key);
-    else if (i === 0) return null;
-  }
-  const onCorr = () => sh(corrs.slice());
+    return null;
+  };
+  /** Takes back the last room (and its tree door) when it is `key`. */
+  const undo = (key: WasteKey) => {
+    if (P.rooms[P.rooms.length - 1]?.key !== key) return;
+    P.rooms.pop(); delete P.by[key]; delete P.heads[key]; P.doors.pop();
+    const i = corrs.indexOf(key);
+    if (i >= 0) corrs.splice(i, 1);
+  };
+  const runBases = () => { const c = sh(corrs.slice()); if (corrs.length && rng.chance(0.6)) c.unshift(corrs[corrs.length - 1]); return [...new Set(c)]; };
+  if (!addRun(['airlock'])) return no('corridor');
+  const runs = rng.int(2, 4);
   // --- 5. the halls off the corridors: the dry-cask hall, the drum vault, the compactor (each the first corridor side that fits)
-  const hallOff = (key: WasteKey, kind: WasteKind, want: Want, door: DoorReq, extra: readonly WasteKey[] = []): boolean => {
-    for (const c of [...onCorr(), ...extra]) if (P.attach(key, kind, c, sh([0, 1, 2, 3] as S4[]), want, door)) return true;
+  const hallOff = (key: WasteKey, kind: WasteKind, want: Want, door: DoorReq, via: readonly WasteKey[]): boolean => {
+    for (const c of via) if (P.attach(key, kind, c, sh([0, 1, 2, 3] as S4[]), want, door)) return true;
     return false;
   };
-  const halls: [WasteKey, WasteKind, Want, DoorReq, WasteKey[]][] = [
-    ['cask', 'cask', {long: [24, 32], short: [21, 26]}, CASK_DOOR, []],
-    ['vault', 'vault', {long: [32, 46], short: [14, 20], orient: rng.chance(0.7) ? 'along' : 'any'}, HEAVY, []],
+  const hall = (key: WasteKey, kind: WasteKind, want: Want, door: DoorReq, extra: readonly WasteKey[] = []): boolean => {
+    if (hallOff(key, kind, want, door, [...sh(corrs.slice()), ...extra])) return true;
+    for (let k = 0; k < 2 && corrs.length < 5; k++) {
+      const run = addRun(runBases());
+      if (!run) return false;
+      if (hallOff(key, kind, want, door, [run])) return true;
+      undo(run);
+    }
+    return false;
+  };
+  const halls: [WasteKey, WasteKind, Want, DoorReq][] = [
+    ['cask', 'cask', {long: [relax ? 22 : 24, 32], short: [21, 26]}, CASK_DOOR],
+    ['vault', 'vault', {long: [relax ? 28 : 32, 46], short: [16, 22], orient: rng.chance(0.7) ? 'along' : 'any'}, HEAVY],
   ];
-  for (const [key, kind, want, door, extra] of rng.chance(0.5) ? halls : halls.reverse()) if (!hallOff(key, kind, want, door, extra)) return null;
-  if (!hallOff('compactor', 'compactor', {long: [15, 20], short: [13, 17]}, PERSONNEL, ['vault'])) return null;
+  for (const [key, kind, want, door] of rng.chance(0.5) ? halls : halls.reverse()) if (!hall(key, kind, want, door)) return no(key);
+  while (corrs.length < runs) if (!addRun(runBases())) break;
+  if (!hall('compactor', 'compactor', {long: [15, 20], short: [13, 17]}, PERSONNEL, ['vault'])) return no('compactor');
+  const onCorr = () => sh(corrs.slice());
   // --- 6. the control room off the clean side (the bay, the checkpoint or the change room)
   {
     let ok = false;
     for (const p of sh(['bay', 'hp', 'lockers'])) if (P.attach('control', 'control', p, sh([0, 1, 2, 3] as S4[]), {long: [12, 18], short: [10, 14]}, PERSONNEL)) { ok = true; break; }
-    if (!ok) return null;
+    if (!ok) return no('control');
   }
   // --- 7. the service side (when not first)
-  if (!serviceFirst && !service(P, rng, box)) return null;
+  if (!serviceFirst && !service(P, rng, box)) return no('service');
   // --- 8. optional spaces: a second drum vault, the hot-cell gallery, the sump & pump room, a switch room
   if (rng.chance(0.45)) {
     const via = rng.chance(0.5) ? ['vault', ...onCorr()] : [...onCorr(), 'vault'];
-    for (const p of via) if (P.attach('vault2', 'vault', p, sh([0, 1, 2, 3] as S4[]), {long: [22, 32], short: [13, 17], orient: 'along'}, p === 'vault' ? {w: 6, h: 3.6, kind: 'wide'} : HEAVY)) { P.by.vault2.label = 'Drum vault B'; break; }
+    for (const p of via) if (P.attach('vault2', 'vault', p, sh([0, 1, 2, 3] as S4[]), {long: [22, 32], short: [16, 18], orient: 'along'}, p === 'vault' ? {w: 6, h: 3.6, kind: 'wide'} : HEAVY)) { P.by.vault2.label = 'Drum vault B'; break; }
   }
   if (rng.chance(0.55)) for (const p of sh(['compactor', 'cask', ...corrs])) if (P.attach('hotcell', 'hotcell', p, sh([0, 1, 2, 3] as S4[]), {long: [11, 14], short: [9, 12]}, PERSONNEL)) break;
   if (rng.chance(0.6)) for (const p of sh(['plant', ...(P.by.service ? ['service'] : [])])) if (P.attach('pump', 'pump', p, sh([0, 1, 2, 3] as S4[]), {long: [10, 14], short: [10, 13]}, PERSONNEL)) break;
@@ -515,23 +537,25 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
   loops(P, rng);
   // --- the graph: connected (by construction), >= 2 independent loops, the substance
   const cyc = P.doors.length - P.rooms.length + 1;
-  if (cyc < 2) return null;
+  if (cyc < 2) return no('loops');
   let cells = 0;
   for (const r of P.rooms) cells += r.r.du * r.r.dv;
-  if (cells < 3300) return null;
+  // (~900 m² in the host's 40 x 32 m slot; a smaller region asks for the same share of its box)
+  if (cells < Math.min(relax ? 3300 : 3600, box.du * box.dv * (relax ? 0.62 : 0.7))) return no('floor');
   // --- 11. the zone generator in the plant: the skid along the plant's long side, the use point on its main door's side
   const pl = P.by.plant.r, pd = P.doors.find(d => d.b === 'plant' && !d.loop);
   const g = pd ? doorGapL(P.by[pd.a].r, pl, pd.w, pd.t) : null;
-  if (!g) return null;
+  if (!g) return no('plant-door');
   const gen = placeGen(pl, [g.u + g.du / 2, g.v + g.dv / 2]);
-  if (!gen) return null;
+  if (!gen) return no('generator');
   // every door's gap exists on the final rects
-  for (const d of P.doors) if (!doorGapL(P.by[d.a].r, P.by[d.b].r, d.w, d.t)) return null;
+  for (const d of P.doors) if (!doorGapL(P.by[d.a].r, P.by[d.b].r, d.w, d.t)) return no('door');
   // the dress frames: the bay / cask hall in the complex frame (front = the entrance side), a vault's rack rows along or across it
   const racksAlong: Record<WasteKey, boolean> = {};
   for (const r of P.rooms) {
     if (r.kind === 'bay' || r.kind === 'cask' || r.kind === 'hp' || r.kind === 'lockers') r.alongU = true;
-    else if (r.kind === 'vault') { racksAlong[r.key] = rng.chance(0.72); r.alongU = (r.r.du >= r.r.dv) === racksAlong[r.key]; }
+    // (rows across the hall need its short side >= 9 m: three bays between the end aisles)
+    else if (r.kind === 'vault') { racksAlong[r.key] = Math.min(r.r.du, r.r.dv) < 18 || rng.chance(0.72); r.alongU = (r.r.du >= r.r.dv) === racksAlong[r.key]; }
     else r.alongU = r.r.du >= r.r.dv;
   }
   const sg = sh(['control', 'plant']);
@@ -550,9 +574,14 @@ function service(P: Packer, rng: Rng, box: LRect): boolean {
   if (rng.chance(0.72)) {
     for (const p of from) {
       if (!P.corridor('service', 'service', p, 'side', [6, 24], PERSONNEL, sh([0, 1, 3] as S4[]))) continue;
-      const head = P.heads.service;
-      const sides: S4[] = sh([head, ...LATERAL[head]]);
-      if (P.attach('plant', 'plant', 'service', sides, plantWant, HEAVY)) return true;
+      const off = (c: WasteKey) => { const h = P.heads[c]; return P.attach('plant', 'plant', c, sh([h, ...LATERAL[h]]), plantWant, HEAVY); };
+      if (off('service')) return true;
+      // a second leg (on, or round a corner) toward open rock
+      for (const m of sh<'turn' | 'straight'>(['turn', 'straight'])) {
+        if (!P.corridor('service2', 'service', 'service', m, [6, 20], PERSONNEL)) continue;
+        if (off('service2')) return true;
+        P.rooms.pop(); delete P.by.service2; delete P.heads.service2; P.doors.pop();
+      }
       // the corridor led nowhere: take it back
       P.rooms.pop(); delete P.by.service; delete P.heads.service; P.doors.pop();
     }
@@ -594,15 +623,24 @@ function loops(P: Packer, rng: Rng): void {
     if (!s || s.s1 - s.s0 < L.d.w + 2) continue;
     cands.push({a, b, ...L});
   }
+  // a hall takes at most one loop door (every door cuts a cross aisle through the racks / the cask grid)
+  const hallLoops = new Map<WasteKey, number>();
+  const room = (c: {a: WasteRoom; b: WasteRoom}) => [c.a, c.b].every(r => (r.kind !== 'vault' && r.kind !== 'cask') || !hallLoops.get(r.key));
+  const open = (c: {a: WasteRoom; b: WasteRoom; d: DoorReq}) => {
+    P.door(c.a.key, c.b.key, c.d, true);
+    has.add(pairKey(c.a.key, c.b.key));
+    for (const r of [c.a, c.b]) hallLoops.set(r.key, (hallLoops.get(r.key) ?? 0) + 1);
+  };
   const skipped: typeof cands = [];
   for (const c of cands) {
-    if (rng.chance(c.p)) { P.door(c.a.key, c.b.key, c.d, true); has.add(pairKey(c.a.key, c.b.key)); } else skipped.push(c);
+    if (!room(c)) continue;
+    if (rng.chance(c.p)) open(c); else skipped.push(c);
   }
   // fewer than two loops: the likeliest skipped ones close them
   skipped.sort((x, y) => y.p - x.p);
   for (const c of skipped) {
     if (P.doors.length - P.rooms.length + 1 >= 2) break;
-    P.door(c.a.key, c.b.key, c.d, true);
+    if (room(c)) open(c);
   }
 }
 

@@ -3,7 +3,7 @@
 //
 // `layout.reactorWaste` (StationLayout, optional; written by the complex's dress hook after the crop, world metres, absolute y) is the
 // complex's DECOR: the drum racks and their drums, the dry casks, the compactor, ventilation fans, ducts, the crane runway,
-// vault-door frames, hazard floor bands and the yellow-green status beacons. world/reactor/wasteVisuals.ts instances it with the
+// vault-door frames and hazard floor bands (no floating status beacons: user bullet 13). world/reactor/wasteVisuals.ts instances it with the
 // Reactor's EXISTING kit materials (archMaterials.ts reactorDress: the lead's Codex rusted-steel / pit-concrete / grating sets, the
 // repo's painted-steel fallbacks) and the lead's approved REACTOR_KIT models where a record names one — never an untextured block,
 // never hand-drawn texture art. Every SOLID piece a player could walk into also has an 'annexMachine' collision prop (anchored plant /
@@ -26,7 +26,7 @@ export interface WasteCyl { x: number; y: number; z: number; r: number; h: numbe
 /** A floor hazard band (yellow / black diagonal stripes) over a rectangle, `y` = the floor it lies on. */
 export interface WasteStripe { x0: number; z0: number; x1: number; z1: number; y: number }
 
-/** A status beacon (unlit glow, no light source): yellow-green when `on`, dead grey otherwise. */
+/** A status beacon record (unlit glow). Task studio-reactor-playtest-round2-20261102 (user bullet 13): no longer generated — `beacons` stays []. */
 export interface WasteBeacon { x: number; y: number; z: number; on: boolean }
 
 /**
@@ -61,6 +61,12 @@ export interface WasteDecor {
   models: WasteModel[];
   fans: WasteFan[];
   // (no cable of its own: the generator's power cable is lane HOST's ReactorGenerator.cable — the one cable drawn)
+  /**
+   * Task studio-reactor-playtest-round2-20261102 (lane WASTE): the plant wall spot kept free for the zone-2 generator's status / jam
+   * signage (lane GAS owns what goes there): the wall-face point (absolute y = the board's centre height), the sign rotation
+   * (layout.signs convention) and the clear width (m). Nothing else is placed on it.
+   */
+  genSign?: {x: number; y: number; z: number; rot: number; w: number};
 }
 
 /** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie; the hero models' cooked dims). */
