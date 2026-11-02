@@ -446,7 +446,8 @@ function finishIn(layout: StationLayout, c: SurfaceCarve): ReactorSurface | null
   const headTop = r2(p.Ys + SURFACE.passH + SURFACE.headUp);
   const tops = sky0.tops ?? new Float32Array(W * Hh);
   const head = new Set<number>();
-  const near = [...c.upper, ...c.laneB.filter(i => gS.ceil[i] > parapetY + 1e-3)];
+  // (every indoor column of the exit rising above the deck: the upper passage and lane B's top flights — the head house roofs them all)
+  const near = [...c.upper, ...c.laneB.filter(i => gS.ceil[i] > p.Ys - 0.05)];
   for (const i of near) tops[i] = headTop; // the passage's / flight's own column above its ceiling: solid to the head house roof
   let hx0 = Infinity, hz0 = Infinity, hx1 = -Infinity, hz1 = -Infinity;
   const plazaSet = new Set(c.plaza);

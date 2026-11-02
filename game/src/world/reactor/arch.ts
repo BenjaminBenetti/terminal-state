@@ -173,10 +173,10 @@ export class ReactorArch {
     if (!lvl) return null;
     // task reactor-expansion-20261101 (lane CORE): the vessel column / goop pool floors are not drawn; the ring + bridges are grating
     if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : this.coreKinds[i] === CORE_CELL.pool ? CORE_GOOP : CORE_HIDDEN;
-    // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface plaza is the roof's top — the roof's dark concrete (over the
-    // pit and beyond it alike); its passage the rock-cut concrete floor
+    // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface storey (the plaza on the roof's top, over the pit and beyond
+    // it alike, and its passage): the concrete floor (never the pit's grating; lane SURFACE lays its wet film over the plaza)
     const surf = this.info.surface;
-    if (surf && lvl.id === surf.level) return lvl.grid.area[i] === surf.areas.plaza ? 'reactor-roof' : 'reactor-floor';
+    if (surf && lvl.id === surf.level) return 'reactor-floor';
     if (this.pitMask[i]) return lvl.id === this.coreLevel ? 'reactor-floor' : 'reactor-grating';
     const a = this.layout.areas[lvl.grid.area[i]];
     return isReactorArea(a, lvl.id) || this.roughAreas.has(lvl.grid.area[i]) ? 'reactor-floor' : null;
