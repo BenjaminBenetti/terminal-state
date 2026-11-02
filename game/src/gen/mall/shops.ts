@@ -59,7 +59,8 @@ export type MallRecipe =
   | 'guns' | 'outdoors' | 'pharmacy' | 'clinic' | 'electronics' | 'phone' | 'hardware' | 'clothing' | 'shoes' | 'department' | 'food' | 'cafe'
   | 'grocery' | 'books' | 'toys' | 'sports' | 'jewelry' | 'home' | 'beauty' | 'music' | 'pet' | 'arcade' | 'luggage' | 'optical' | 'florist'
   | 'kiosk' | 'security' | 'first-aid' | 'management' | 'customer-service' | 'janitorial' | 'vacant'
-  | 'womenswear'; // task mall-round3-20261031 (lane SHOPS, R4)
+  | 'womenswear' // task mall-round3-20261031 (lane SHOPS, R4)
+  | 'lingerie'; // task mall-lingerie-20261102 (lane STORE)
 
 export interface MallProgramDef {
   id: MallProgram;
@@ -293,6 +294,21 @@ export const MALL_PROGRAMS: Readonly<Record<MallProgram, MallProgramDef>> = {
     finishes: [F('epoxy-grey', 'block-painted', 'tile-drop', 0x455a64), F('vinyl-oak', 'paint-white', 'tile-drop', 0x1565c0)],
     sign: S(0x263238, 0xffffff, 0xffc107, 'sans'),
   },
+  // Task mall-lingerie-20261102 (lane STORE — user: "one new women's lingerie store ... it must occupy a LARGE store spot only, never a
+  // small one. It has a chance to spawn like any other shop, not guaranteed ... a large fitting/changing area"): the lingerie boutique —
+  // window forms, display busts / tables / drawer chests, mirrors, an ottoman, the till, and a WALK-IN changing area of >= 4 curtained
+  // booths along an aisle (gen/mall/lingerieStore.ts, RECIPES.lingerie). LARGE lot families only (lots.ts: standard-line 8-11 x 9-12.5
+  // and end-unit 10-15 x 10-15); `min` keeps the changing area along the back wall (4 booths + the opening: 8 m wide; 3.5 m deep with
+  // >= 5 m of sales floor in front: 9 m deep) — forced on every such unit of 30 generated malls it fit every time (lanes/STORE.done). Never in MALL_ALWAYS / MALL_ROTATION / the fill: a SIDE program (SIDE_PROGRAMS) placed after them on
+  // its OWN stream with a per-mall chance = its weight (0.6) when a unit suits it, so every other shop keeps its program / brand / fit
+  // (assignMallPrograms step 7b). count [0, 1]: at most one per mall (never scaled). Fictional brands; its own finishes / sign.
+  lingerie: {
+    id: 'lingerie', label: 'Lingerie boutique', brands: ['Velvet Hour', 'Moonlace Intimates', 'Petal Row', 'Ribbon & Rose', 'Nightingale Lingerie'],
+    units: ['store'], min: {area: 72, depth: 9, width: 8}, weight: 0.6, count: [0, 1], rings: [1.2, 1.2, 1.1, 1, 0.8, 0.6],
+    purpose: 'mall-lingerie', back: 'mall-lingerie-back', front: 'glazed', shutter: [0.65, 0.35, 0], recipe: 'lingerie',
+    finishes: [F('carpet-burgundy', 'wallpaper-damask', 'plaster-white', 0xa8456a), F('vinyl-walnut', 'paint-blush', 'plaster-white', 0x2a1e2e)],
+    sign: S(0x2a1626, 0xf4dbe4, 0xc9a96e, 'serif'),
+  },
   vacant: {
     id: 'vacant', label: 'Vacant unit', brands: ['Space Available', 'Coming Soon', 'For Lease'],
     units: ['vacant'], min: {area: 0, depth: 0, width: 0}, weight: 0, count: [0, 99], rings: RINGS_ALL,
@@ -399,8 +415,20 @@ export const MALL_ROTATION: readonly MallProgram[] = ['electronics', 'jewelry', 
   'home', 'florist', 'shoes', 'pet', 'outdoors', 'luggage', 'arcade', 'clinic', 'grocery', 'department'];
 /** Programs of the deep anchor units, in their base order (mallAnchorOrder rotates it per mall). */
 export const MALL_ANCHOR_PROGRAMS: readonly MallProgram[] = ['department', 'grocery', 'home', 'sports', 'outdoors', 'hardware', 'electronics'];
+/**
+ * Task mall-lingerie-20261102 (lane STORE): programs placed AFTER the rotation and the fill, on their own stream (never MALL_ALWAYS /
+ * rotation / fill): the lingerie boutique — its `weight` is its per-mall chance (when a unit suits it), never guaranteed, and it moves no
+ * other shop of an existing mall (assignMallPrograms step 7b).
+ */
+export const SIDE_PROGRAMS: readonly MallProgram[] = ['lingerie'];
+/** Family typicality a side program borrows (its sibling's position in the family's `programs`; lots.ts lists it LAST for stability). */
+const SIDE_TYPICAL: Readonly<Partial<Record<MallProgram, MallProgram>>> = {lingerie: 'womenswear'};
+/** Programs a side program never displaces besides the gun shop / MALL_ALWAYS rule: the anchors (a mall's grocery / department store). */
+const MALL_ANCHOR_ONLY: readonly MallProgram[] = ['department', 'grocery'];
 /** The last assignMallPrograms call's rotation (QA / tests / lanes/SHOPS.done): the order walked and the programs it placed. */
-export const MALL_ASSIGN_STATS: {last: {rotation: MallProgram[]; featured: MallProgram[]} | null} = {last: null};
+export const MALL_ASSIGN_STATS: {last: {rotation: MallProgram[]; featured: MallProgram[];
+  /** (lane STORE) step 7b per side program: its chance roll, eligible units, the unit it took and the program it displaced. */
+  side?: {program: MallProgram; roll: number; eligible: number; unit?: string; displaced?: MallProgram}[]} | null} = {last: null};
 
 /** The mall's rotation order: the ring from a seeded start, adjacent pairs swapped at random (deterministic per rng). */
 export function mallRotation(rng: Rng): MallProgram[] {
@@ -459,7 +487,7 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   const free = () => shops.map((_, i) => i).filter(i => prog[i] === undefined);
   // per-mall maxima scale with the unit count (the catalogue's numbers are for a ~40-unit mall; GEN's rings hold ~13 units each)
   const scale = Math.max(1, shops.length / 40);
-  const cap = (p: MallProgram) => (MALL_PROGRAMS[p].count[1] >= 99 ? 99 : p === 'guns' ? MALL_PROGRAMS[p].count[1] // gun shops stay rare: never scaled
+  const cap = (p: MallProgram) => (MALL_PROGRAMS[p].count[1] >= 99 ? 99 : p === 'guns' || p === 'lingerie' ? MALL_PROGRAMS[p].count[1] // gun shops stay rare / one lingerie boutique: never scaled
     : Math.max(MALL_PROGRAMS[p].count[1], Math.round(MALL_PROGRAMS[p].count[1] * scale)));
   const fits = (i: number, p: MallProgram) => {
     const d = MALL_PROGRAMS[p], s = shops[i];
@@ -547,7 +575,8 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     take(i, p, unitFor(i, p));
     MALL_ASSIGN_STATS.last.featured.push(p);
   }
-  const fillable = (Object.values(MALL_PROGRAMS) as MallProgramDef[]).filter(d => d.weight > 0 || d.id === 'guns' || d.id === 'department' || d.id === 'grocery');
+  const fillable = (Object.values(MALL_PROGRAMS) as MallProgramDef[]).filter(d => (d.weight > 0 || d.id === 'guns' || d.id === 'department' || d.id === 'grocery')
+    && !SIDE_PROGRAMS.includes(d.id)); // (lane STORE: the side programs are placed in step 7b, never here)
   for (const i of free()) {
     const w = (d: MallProgramDef) => (d.weight || 0.3) * typical(i, d.id) * d.rings[floorIdx(i)] * Math.pow(0.3, count.get(d.id) ?? 0);
     let opts3 = fillable.filter(d => suits(i, d.id) && (count.get(d.id) ?? 0) < cap(d.id)).map(d => [d.id, w(d)] as [MallProgram, number]).filter(o => o[1] > 0);
@@ -555,6 +584,42 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     if (!opts3.length) { take(i, area[i] < 30 ? 'kiosk' : 'vacant', area[i] < 30 ? 'kiosk' : 'vacant'); continue; }
     const p = rng.weighted(opts3);
     take(i, p, unitFor(i, p));
+  }
+  // 7b. Task mall-lingerie-20261102 (lane STORE): the SIDE programs (the lingerie boutique), on their OWN stream after every unit has its
+  // program: with the program's per-mall chance (its `weight`), it takes one eligible unit (sideEligible: a large family / size it suits,
+  // a plain glazed store or a vacant unit; never a gun shop, an anchor program or the last of a MALL_ALWAYS program), preferring a vacant
+  // unit, then a second store of the same program (sideScore). The DISPLACED program still draws its brand on the main stream in step 8,
+  // so every other shop of a mall keeps exactly the program, brand, finish, sign, shutter and entry it had without the side program.
+  const side = rng.fork('mall-side-programs');
+  const displaced = new Map<number, MallProgram>();
+  MALL_ASSIGN_STATS.last.side = [];
+  for (const sp of SIDE_PROGRAMS) {
+    if ((count.get(sp) ?? 0) >= cap(sp)) continue; // (forced already)
+    const roll = side.next();
+    const cands = shops.map((_, i) => i).filter(i => sideEligible(i, sp));
+    const placed = cands.length > 0 && roll < MALL_PROGRAMS[sp].weight;
+    let took: {unit: string; displaced: MallProgram} | undefined;
+    if (placed) {
+      const i = side.weighted(cands.map(q => [q, sideScore(q, sp)] as [number, number]));
+      const p = prog[i]!;
+      displaced.set(i, p);
+      count.set(p, (count.get(p) ?? 1) - 1);
+      prog[i] = undefined;
+      take(i, sp, unitFor(i, sp));
+      took = {unit: shops[i].id, displaced: p};
+    }
+    MALL_ASSIGN_STATS.last.side.push({program: sp, roll, eligible: cands.length, ...took});
+  }
+  function sideEligible(i: number, sp: MallProgram): boolean {
+    const p = prog[i];
+    if (!p || p === sp || opts.force?.[shops[i].id] || !suits(i, sp) || (kind[i] !== 'store' && kind[i] !== 'vacant')) return false;
+    if (MALL_PROGRAMS[p].front !== 'glazed' || p === 'guns' || MALL_ANCHOR_ONLY.includes(p)) return false;
+    return !MALL_ALWAYS.includes(p) || (count.get(p) ?? 0) >= 2;
+  }
+  function sideScore(i: number, sp: MallProgram): number {
+    const d = MALL_PROGRAMS[sp], p = prog[i]!;
+    const pref = p === 'vacant' ? 3 : (count.get(p) ?? 0) >= 2 ? 2 : 1;
+    return pref * typical(i, SIDE_TYPICAL[sp] ?? sp) * d.rings[floorIdx(i)] * (1 / (1 + Math.abs(area[i] - d.min.area * 1.8) / (d.min.area + 20)));
   }
   function unitFor(i: number, p: MallProgram): MallUnitKind {
     const d = MALL_PROGRAMS[p], f = lotOf(i);
@@ -585,6 +650,11 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
       brand = d.brands[kioskK++ % d.brands.length];
     } else if (p === 'vacant') {
       brand = rng.pick(d.brands);
+    } else if (displaced.has(i)) {
+      // (lane STORE) a side program's unit: the displaced program draws its brand on the main stream (as in a mall without it), the
+      // side program's own brand comes from the side stream
+      pickBrand(rng, MALL_PROGRAMS[displaced.get(i)!].brands, usedBrands);
+      brand = pickBrand(side, d.brands, usedBrands);
     } else {
       brand = pickBrand(rng, d.brands, usedBrands);
     }
