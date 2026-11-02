@@ -75,7 +75,7 @@ export const ROOF_GAS_LOOK = {
 export const PIT_SHAFTS = {
   dir: [0.2, -1, 0.12] as readonly [number, number, number],
   colour: [0.78, 0.92, 0.62] as readonly [number, number, number],
-  gain: 5.5,
+  gain: 4.5,
   beamHalf: 0.55, beamSoft: 0.7,
   noiseScale: 0.045, cover: 0.5, coverSoft: 0.16,
   fade: 0.045,
