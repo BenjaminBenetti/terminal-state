@@ -745,7 +745,10 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task track3-eaton-centre-20261031 (lane ARCH): in the mall the culler also gets the atrium columns (view-dependent visibility).
   // Task track3-eaton-centre-20261031 (lane PERF): + slab occlusion in the mall (the glazed lift shaft is see-through: levelCulling.ts)
   // Task reactor-build-20261101 (lane ARCH): + the Reactor's pit as the atrium (tiers above / below stay visible through the open pit)
-  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}} : reactor ? {atrium: reactor.pitMask} : undefined);
+  // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the mall's slab / storey occlusion on the Reactor (rooms, side complexes
+  // and holders behind the pit's rock / under the slabs are not submitted); the vessel's undrawn column is see-through, no glass shafts
+  const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
+    : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}} : undefined);
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}),

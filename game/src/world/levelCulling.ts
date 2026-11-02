@@ -52,6 +52,13 @@
 // the former 20 m ATRIUM_MARGIN popped deep back-of-house slivers seen through distant openings (PERF's depth oracle: 22 meshes,
 // 1-8 px, on 17 poses), now 0 — and the start view draws fewer objects than margin + floor-height planes did. Without slabs (QA A/B)
 // the margin rule stands: a mesh of an atrium-visible level renders within ATRIUM_MARGIN of a visible atrium tile. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
+//
+// Task studio-reactor-submit-roof-fog-20261102 (lane CPU, user: "CPU spending around 20ms in 'submit'"): THE REACTOR takes the same
+// slab + same- / cross-storey occlusion (world/builder.ts passes `slabs` for it too). Its pit is the atrium; its rooms, the three side
+// complexes and the tier rooms sit behind the pit's rock walls / under the storey slabs, and from the rim only ~15 % of the submitted
+// draws owned a pixel. The rules are the mall's, unchanged; the Reactor's grid holds one column the builder does NOT draw — the
+// vessel's (the hero model stands there: ReactorArch.occlusionSee) — passed as a `see` rect (open on every storey). `slabs.glass`
+// names the glazed lift shafts of the atrium / aperture rules separately (default: `see`, the mall's shafts); the Reactor has none.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -295,13 +302,14 @@ export class LevelCuller {
   private readonly vp = new THREE.Vector3();
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
-    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
+    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
     if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
-    this.glassShafts = opts?.atrium ? [...(opts.slabs?.see ?? [])] : [];
+    // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
+    this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
   }
 
   /**

@@ -176,7 +176,8 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
   const buckets = new Map<string, {mat: string; geos: THREE.BufferGeometry[]}>();
   const shapes = new Map<string, PurposePart[]>();
   const tmp = new THREE.Color(), paintCol = new THREE.Color();
-  const byStorey = !!(layout as {mall?: unknown}).mall; // task mall-round2 (lane PERF): storey-split chunks, mall only
+  // task mall-round2 (lane PERF): storey-split chunks, mall only (task studio-reactor-submit, lane CPU: + the Reactor's stacked tiers)
+  const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor;
   for (const kind of PURPOSE_PROP_KINDS) {
     if (rendersOwnBody(kind, deps.models)) continue; // iteration 08 (Lane I): openable (lockers, safe) drawn by world/openables.ts
     const list = layout.props.filter(p => p.kind === kind);
