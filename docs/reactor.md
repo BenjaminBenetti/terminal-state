@@ -562,9 +562,11 @@ external sealed door on the top level … up a set of stairs, towards a surface 
   `({open: true, skipMessage: true})`, `({go: 'door' | 'stairs' | 'top' | 'exit' | 'hole'})`.
 - Tests: `game/tests/reactor-ending.test.ts`. Cost: generation +~75 ms per level in Node (the surface storey in the validator's
   searches); 6 extra draws (door, barrier) outside the culler.
-- **Limits:** no browser / GPU check in this lane. The AI path graph is built before the doors open mid-visit (enemies do not follow
-  you up until the next build). Bullets pass the drawn railing / apron (no collider). From the plaza the vessel shows only from right
-  at the railing (a 16.8 m hole over a 48 m shaft); the beam and the far pit walls read from anywhere near it.
+- **Limits:** no browser / GPU check in this lane. The AI path graph and the physics statics are built before a mid-visit opening
+  (enemies do not follow you up, and a thrown item stops in the open doorway, until the next build); the light field is baked with the
+  doorway open. Bullets pass the drawn railing / apron (no collider). From the plaza the vessel shows only from right at the railing
+  (a 16.8 m hole over a 48 m shaft); the beam and the far pit walls read from anywhere near it. From the pit the culler still submits
+  up to ~4 plaza floor chunks (they face up: an over-draw, nothing wrong drawn).
 
 ### Coming to life: startup audio, orange beacons, the ONLINE sky (task reactor-playtest-round2-20261102, lane STARTUP)
 User: "real punch and depth as the reactor comes to life … spinning orange lights … play noise as the control rods are removed!" and

@@ -30,6 +30,13 @@ import {ReactorEnding} from '../src/world/reactor/ending';
 import {OBJECTIVE_TEXT, objectiveHtml} from '../src/world/reactor/objectiveText';
 import {mapMarkers} from '../src/world/reactor/mapBoardPlan';
 import {fakeHost, newRun} from './helpers/reactorRestartFixture';
+import {buildWorld} from '../src/world/builder';
+import {WorldMaterials} from '../src/world/materials';
+import {CULL_LAYER} from '../src/world/levelCulling';
+import {fakeEnvTextures} from './helpers/openablesFixture';
+import {installCanvasShim} from './helpers/canvas2d';
+
+installCanvasShim(false);
 
 const SEEDS = [9100, 218558, 637474, 3, 70];
 const cache = new Map<number, StationLayout>();
@@ -379,6 +386,37 @@ describe('the door, the stair and the surface on real generated Reactors', () =>
       }
     }, 120_000);
   }
+
+  it('seed 9100, the built world: from the railing the level culler shows the pit down the shaft (the core floor drawn); from the rim the plaza deck stays culled under the slab', () => {
+    const L = level(9100), info = L.reactor!, s = info.surface!;
+    const w = buildWorld(L as never, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), {});
+    w.group.updateMatrixWorld(true);
+    const core = info.tiers[info.tiers.length - 1].level;
+    const cam = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 400);
+    // at the railing (the deck's stepped edge, toward the exit), looking steeply down the shaft at the core
+    const ax = s.exit.x - s.hole.x, az = s.exit.z - s.hole.z, L0 = Math.hypot(ax, az), lvs = levelsOf(L);
+    let d = s.hole.r;
+    while (d < s.hole.r + 3 && !lvs.circleClear(s.hole.x + ax / L0 * d, s.hole.z + az / L0 * d, 0.34, s.y)) d += 0.05;
+    cam.position.set(s.hole.x + ax / L0 * d, s.y + EYE, s.hole.z + az / L0 * d);
+    cam.lookAt(info.core.x, info.core.y1, info.core.z);
+    w.culler.update(cam, true);
+    const culled = (m: THREE.Object3D) => ((m.layers.mask >>> 0) === ((1 << CULL_LAYER) >>> 0));
+    let coreShown = 0, coreAll = 0;
+    w.group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.userData.level === core) { coreAll++; if (!culled(o)) coreShown++; } });
+    expect(coreAll).toBeGreaterThan(0);
+    expect(coreShown, 'core-floor meshes drawn from the railing').toBeGreaterThan(0);
+    // from the rim gallery looking up the pit away from the opening: no surface-storey mesh is drawn (they stand over the slab)
+    const b = info.pit.bounds;
+    cam.position.set(b.x0 + 3, 1.6, b.z0 + 3);
+    cam.lookAt(b.x0 + 8, info.pit.roofY, b.z0 + 8);
+    w.culler.update(cam, true);
+    // (known over-draw: the culler joins the surface to the pit's atrium tiles, so up to a few of the plaza's floor chunks — they face
+    // up, invisible from below — are still submitted; nothing else of the surface storey)
+    const shown: string[] = [];
+    w.group.traverse(o => { if ((o as THREE.Mesh).isMesh && o.userData.level === s.level && !culled(o)) shown.push(o.name); });
+    expect(shown.length, shown.join(', ')).toBeLessThanOrEqual(6);
+    expect(shown.every(n => /floor/.test(n)), shown.join(', ')).toBe(true);
+  }, 180_000);
 
   it('deterministic: the same seed gives the same surface exit', () => {
     const a = LEVELS.reactor.generate('main', {levelSeed: SEEDS[1]}), b = level(SEEDS[1]);
