@@ -14,8 +14,9 @@
 //
 // Ops: mono downmix (mean) -> one-shots: trim [a, b] + cosine fades + peak normalisation to -1 dBFS; loops: the most stationary
 //   window (lib/dsp stationaryRegion) or a fixed start -> equal-power crossfaded loop (makeLoop) with periodic decoder margins
-//   (withLoopMargins) + RMS normalisation to -20 dBFS (the bed convention) -> MP3 (lamejs, mono; per-clip bitrate: the bass-heavy
-//   swells / booms / bed at 48-56 kbps, the broadband mechanisms at 64 kbps — the brief's <= 220 KB of new runtime audio).
+//   (withLoopMargins) + RMS normalisation to -20 dBFS (the bed convention) -> MP3 (lamejs, mono, 64 kbps: lamejs keeps 44.1 kHz there —
+//   at 48 / 56 kbps it resamples to 32 kHz, which the bank contract (audio-bank.test.ts) refuses — within the brief's <= 220 KB of new
+//   runtime audio).
 //
 // Usage: SOUND_LAB_AUDIO_DIR=<dir> node tools/audio-pipeline/reactor-startup-build.mjs [--dry-run]
 
@@ -52,16 +53,16 @@ export const CUES_REACTOR_STARTUP = ['reactorSurge', 'reactorOnline', 'reactorRo
  *    boom lands on it: the runtime starts it dur s before the core is fully awake).
  *  - online: broadband transient then a ~3.9 s sub rumble tail.
  *  - rod loop: the steady servo / ratchet body before the take's 3.3 s dropout.
- *  - bed: the take swells in (0-2.5 s) and out (7-10 s); the loop comes from the stationary middle.
+ *  - bed: the take swells in (0-2.5 s) and out (7-10 s); the >= 5 s bed loop (the bank's bed rule) comes from the steadiest window.
  *  - beacon: regular gear ticks; a fixed 2.0 s window with a short crossfade (ticks never smear).
  */
 const PLAN = {
-  'reactor-surge-01': {kind: 'oneshot', a: 1.6, b: 7.74, fadeIn: 0.12, fadeOut: 0.04, kbps: 56},
-  'reactor-online-01': {kind: 'oneshot', a: 0, b: 4.0, fadeIn: 0.002, fadeOut: 0.35, kbps: 56},
+  'reactor-surge-01': {kind: 'oneshot', a: 1.6, b: 7.74, fadeIn: 0.12, fadeOut: 0.04, kbps: 64},
+  'reactor-online-01': {kind: 'oneshot', a: 0, b: 4.0, fadeIn: 0.002, fadeOut: 0.35, kbps: 64},
   'reactor-rod-loop-01': {kind: 'loop', len: 2.3, xf: 0.3, minStart: 0.5, endGuard: 2.8, kbps: 64},
   'reactor-rod-stop-01': {kind: 'oneshot', a: 0, b: 1.15, fadeIn: 0.002, fadeOut: 0.15, kbps: 64},
-  'reactor-bed-01': {kind: 'loop', len: 4, xf: 0.5, minStart: 2.2, endGuard: 3.2, kbps: 48},
-  'reactor-stage-01': {kind: 'oneshot', a: 0, b: 2.4, fadeIn: 0.002, fadeOut: 0.3, kbps: 56},
+  'reactor-bed-01': {kind: 'loop', len: 5.2, xf: 0.5, minStart: 1.5, endGuard: 1.5, kbps: 64},
+  'reactor-stage-01': {kind: 'oneshot', a: 0, b: 2.4, fadeIn: 0.002, fadeOut: 0.3, kbps: 64},
   'reactor-beacon-01': {kind: 'loop', len: 2.0, xf: 0.04, seam: [0.4, 1.2], kbps: 64},
 };
 

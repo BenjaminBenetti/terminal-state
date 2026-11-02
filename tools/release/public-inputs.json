@@ -875,8 +875,8 @@
     },
     {
       "path": "assets/audio/reactor-bed-loop.mp3",
-      "bytes": 25488,
-      "sha256": "1a3f120b7296de1da5f90fdb5f019d241bf753146e45c3f08d857700147d3188"
+      "bytes": 43467,
+      "sha256": "565ac8f259388b587369cb04d3ce108c790373b895cfa0f11619a0df1bec5175"
     },
     {
       "path": "assets/audio/reactor-breaker.mp3",
@@ -910,8 +910,8 @@
     },
     {
       "path": "assets/audio/reactor-online.mp3",
-      "bytes": 28476,
-      "sha256": "873829f72159ae475617aa22f6e55de488aaf0cdf18c708b2d4e971cccea9307"
+      "bytes": 32391,
+      "sha256": "af8081e10454e516ee8154d8339c911beff9e1b880570fb814aa7808c3ffa104"
     },
     {
       "path": "assets/audio/reactor-pump.mp3",
@@ -930,8 +930,8 @@
     },
     {
       "path": "assets/audio/reactor-stage.mp3",
-      "bytes": 17136,
-      "sha256": "8f3a31856b5876c045cee3f5a36408a0d4c951f8d10c639915610a82e07b3f09"
+      "bytes": 19435,
+      "sha256": "e3790b80567ffa5ed2c4104c22718913b08982e923121419277793d52864db6a"
     },
     {
       "path": "assets/audio/reactor-startup.mp3",
@@ -940,8 +940,8 @@
     },
     {
       "path": "assets/audio/reactor-surge.mp3",
-      "bytes": 43344,
-      "sha256": "8a1c5df1fa7656856aa5b1b5432bd49c9e949bd74b217aac9cc65b3b9018f8c4"
+      "bytes": 49528,
+      "sha256": "2d21721b3975df9713de4867663442910813e346e7d32b457fa7cb9951e3263c"
     },
     {
       "path": "assets/audio/reactor-valve.mp3",
@@ -1585,8 +1585,8 @@
     },
     {
       "path": "assets/derivatives/audio-reactor-startup.json",
-      "bytes": 9961,
-      "sha256": "a385ae05badb9969c70852aa20bedbe412dbb80df14c2baa9be5dddfa79cd692"
+      "bytes": 9965,
+      "sha256": "26edc47bf8f95d0f3367e65d33af68ff95a8fb151457803ba1d4a8eb4396ced5"
     },
     {
       "path": "assets/derivatives/audio-reactor.json",

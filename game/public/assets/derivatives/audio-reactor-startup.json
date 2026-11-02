@@ -19,15 +19,15 @@
   {
    "cue": "reactorSurge",
    "url": "assets/audio/reactor-surge.mp3",
-   "bytes": 43344,
-   "sha256": "8a1c5df1fa7656856aa5b1b5432bd49c9e949bd74b217aac9cc65b3b9018f8c4",
+   "bytes": 49528,
+   "sha256": "2d21721b3975df9713de4867663442910813e346e7d32b457fa7cb9951e3263c",
    "dur": 6.14,
    "ops": [
     "mono",
     "trim 1.6-7.74 s",
     "cosine fades 0.12 / 0.04 s",
     "peak -1 dBFS (1.1 dB)",
-    "mp3 mono 56 kbps"
+    "mp3 mono 64 kbps"
    ],
    "source": {
     "clip": "reactor-surge-01",
@@ -47,15 +47,15 @@
   {
    "cue": "reactorOnline",
    "url": "assets/audio/reactor-online.mp3",
-   "bytes": 28476,
-   "sha256": "873829f72159ae475617aa22f6e55de488aaf0cdf18c708b2d4e971cccea9307",
+   "bytes": 32391,
+   "sha256": "af8081e10454e516ee8154d8339c911beff9e1b880570fb814aa7808c3ffa104",
    "dur": 4,
    "ops": [
     "mono",
     "trim 0-4 s",
     "cosine fades 0.002 / 0.35 s",
     "peak -1 dBFS (-0.8 dB)",
-    "mp3 mono 56 kbps"
+    "mp3 mono 64 kbps"
    ],
    "source": {
     "clip": "reactor-online-01",
@@ -136,20 +136,20 @@
   {
    "cue": "reactorBed",
    "url": "assets/audio/reactor-bed-loop.mp3",
-   "bytes": 25488,
-   "sha256": "1a3f120b7296de1da5f90fdb5f019d241bf753146e45c3f08d857700147d3188",
-   "dur": 4.2,
+   "bytes": 43467,
+   "sha256": "565ac8f259388b587369cb04d3ce108c790373b895cfa0f11619a0df1bec5175",
+   "dur": 5.4,
    "loop": {
     "start": 0.1,
-    "length": 4
+    "length": 5.2
    },
    "ops": [
     "mono",
-    "stationary window from 2.5 s (std 1.31 dB over 0.5 s blocks)",
-    "loop 4 s, equal-power crossfade 0.5 s",
+    "stationary window from 1.5 s (std 2.18 dB over 0.5 s blocks)",
+    "loop 5.2 s, equal-power crossfade 0.5 s",
     "margins 0.1 s",
-    "rms -20 dBFS (-0.7 dB)",
-    "mp3 mono 48 kbps"
+    "rms -20 dBFS (-0.1 dB)",
+    "mp3 mono 64 kbps"
    ],
    "source": {
     "clip": "reactor-bed-01",
@@ -169,15 +169,15 @@
   {
    "cue": "reactorStage",
    "url": "assets/audio/reactor-stage.mp3",
-   "bytes": 17136,
-   "sha256": "8f3a31856b5876c045cee3f5a36408a0d4c951f8d10c639915610a82e07b3f09",
+   "bytes": 19435,
+   "sha256": "e3790b80567ffa5ed2c4104c22718913b08982e923121419277793d52864db6a",
    "dur": 2.4,
    "ops": [
     "mono",
     "trim 0-2.4 s",
     "cosine fades 0.002 / 0.3 s",
     "peak -1 dBFS (-0.7 dB)",
-    "mp3 mono 56 kbps"
+    "mp3 mono 64 kbps"
    ],
    "source": {
     "clip": "reactor-stage-01",

@@ -19,7 +19,7 @@ export const CLIP_MANIFEST_REACTOR_STARTUP: Readonly<Record<string, readonly Cli
   {"url":"assets/audio/reactor-rod-stop.mp3","dur":1.15,"src":"reactor-rod-stop-01"},
  ],
  reactorBed: [
-  {"url":"assets/audio/reactor-bed-loop.mp3","dur":4.2,"loop":{"start":0.1,"length":4},"src":"reactor-bed-01"},
+  {"url":"assets/audio/reactor-bed-loop.mp3","dur":5.4,"loop":{"start":0.1,"length":5.2},"src":"reactor-bed-01"},
  ],
  reactorStage: [
   {"url":"assets/audio/reactor-stage.mp3","dur":2.4,"src":"reactor-stage-01"},
@@ -31,4 +31,4 @@ export const CLIP_MANIFEST_REACTOR_STARTUP: Readonly<Record<string, readonly Cli
 /** Cues of this build without a clip (none). */
 export const CLIP_GAPS_REACTOR_STARTUP: readonly string[] = [];
 /** Bytes of this build's bundled clips. */
-export const CLIP_BYTES_REACTOR_STARTUP = 162300;
+export const CLIP_BYTES_REACTOR_STARTUP = 192677;

@@ -72,9 +72,12 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         expect(m.sampleRate).toBe(44100);
         // encoded audio covers the clip (+ loop margins for beds)
         expect(m.samples / m.sampleRate).toBeGreaterThanOrEqual((r.loop ? r.loop.start + r.loop.length : r.dur) - 0.001);
-        // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop
-        if (r.loop) expect(r.loop.length).toBeGreaterThan(cue === 'flareBurn' ? 3 : 5);
-        if (cue === 'flareBurn') expect(r.loop!.length).toBeLessThanOrEqual(4);
+        // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop, and so are (task
+        // reactor-playtest-round2-20261102, lane STARTUP) the control-rod drive (it runs only while the rods move: a 4 s hold) and the
+        // beacon motor (a short mechanical cycle at one beacon) — the Reactor's machine BED stays under the >= 5 s bed rule
+        const SHORT: Record<string, [number, number]> = {flareBurn: [3, 4], reactorRodLoop: [2, 3], reactorBeacon: [1.5, 2.5]};
+        if (r.loop) expect(r.loop.length).toBeGreaterThan(SHORT[cue]?.[0] ?? 5);
+        if (SHORT[cue]) expect(r.loop!.length).toBeLessThanOrEqual(SHORT[cue][1]);
       }
     }
     expect(bytes).toBe(CLIP_BYTES);
