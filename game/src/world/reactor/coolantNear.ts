@@ -52,8 +52,8 @@ export const COOLANT_NEAR = {
   on: 13.5, off: 16,
   /** Re-decide the active set only once the eye moved this far; the fade keeps `guard` inside every inactive piece. */
   move: 0.25, guard: 0.1,
-  /** Instance capacity of the tube mesh (the real layouts peak far below it: reactor-x-coolant-near.test.ts). */
-  tubeCap: 64,
+  /** Instance capacity of the tube mesh (real layouts peak at ~40-45 active: reactor-x-coolant-near.test.ts). */
+  tubeCap: 96,
   /** The goop's centreline speed as a share of the far dashes' speed (CORE_LOOK.flowSpeed: 3.2 m/s -> ~1.3 m/s). */
   speed: 0.4,
   /** The near clock wraps here (m): float32 keeps sub-mm steps; a wrap (one pattern jump) comes after ~14 h of pumping. */
@@ -255,7 +255,7 @@ export function farKeep(f: NearFade): N { return step(nearWeight(f), dither()); 
 
 /** Linear colours: deep / bright goop, the hot core, the wet film, bubble rims, the dark bore wall, the bezel, the glass sheen. */
 const C3 = (r: number, g: number, b: number): N => vec3(r, g, b);
-const LOOK = {deep: [0.01, 0.05, 0.22], bright: [0.18, 0.62, 1.6], core: [0.55, 1.15, 2.1], film: [0.35, 0.8, 1.5], bubble: [0.6, 1.0, 1.6],
+const LOOK = {deep: [0.005, 0.03, 0.16], bright: [0.12, 0.5, 1.45], core: [0.4, 0.95, 1.9], film: [0.35, 0.8, 1.5], bubble: [0.6, 1.0, 1.6],
   wall: [0.006, 0.01, 0.016], bezel: [0.03, 0.033, 0.037], sheen: [0.045, 0.06, 0.075]} as const;
 
 /**
@@ -295,7 +295,8 @@ export function coolantNearMaterial(u: {flowGlow: {value: number}; fill: {value:
         out.assign(vec4(L('bezel'), 1));
         If(n(bez).lessThan(0.5), () => {
           const col = n(L('wall')).toVar();
-          const glowN = n(max(n(u.flowGlow), n(u.fill).mul(0.22))).mul(aLook.y).toVar();
+          // emission: dim and still once pressurised, ~2.5x with the pump (a soft curve: deep saturated blue, never pastel)
+          const em = n(float(0.1)).add(n(max(n(u.flowGlow), n(u.fill).mul(0.22))).mul(0.35)).mul(aLook.y).toVar();
           // ---- the view ray bent by the glass, through the bore cylinder (perpendicular parts: |qp + t Vp| = Ri) ----
           const V = n(refract(V0, Nn, 1 / 1.38)).toVar();
           const VA = n(dot(V, A)).toVar();
@@ -322,25 +323,27 @@ export function coolantNearMaterial(u: {flowGlow: {value: number}; fill: {value:
               const Mp = n(qp.add(Vp.mul(tc))).toVar();
               const rho = n(clamp(length(Mp).div(Ri), 0, 1)).toVar();
               const sM = n(s.add(VA.mul(tc))).toVar();
-              // laminar flow: the middle runs fastest, the walls lag (the shear drags clumps into strands)
-              const sAdv = sM.sub(sh.mul(n(float(1)).sub(rho.mul(rho).mul(0.85))));
-              const pN = n(Mp.mul(n(float(2.4)).div(Ri)).add(A.mul(n(sAdv).mul(1.25)))).add(seed.mul(13.7)).toVar();
-              const n1 = mx_noise_float(pN), n2 = n(mx_noise_float(pN.mul(2.6).add(vec3(5.2, 1.3, 7.7)))).toVar();
-              const clump = n(smoothstep(-0.3, 0.6, n(n1).add(n2.mul(0.4)))).toVar();
+              // laminar flow: a fast core band and a slow wall band (each advected whole, so the blobs keep their size forever: no
+              // unbounded shear), blended by the radius the ray reaches; elongated along the pipe (strands); a finer octave between
+              const pB = n(Mp.mul(n(float(2)).div(Ri))).add(seed.mul(13.7)).toVar();
+              const nC = mx_noise_float(n(pB).add(A.mul(sM.sub(sh).mul(0.7))));
+              const nW = mx_noise_float(n(pB).add(A.mul(sM.sub(sh.mul(0.3)).mul(0.7))).add(vec3(31.4, 17.2, 9.1)));
+              const n2 = n(mx_noise_float(n(pB).mul(2.7).add(A.mul(sM.sub(sh.mul(0.65)).mul(2.4))).add(vec3(5.2, 1.3, 7.7)))).toVar();
+              const clump = n(smoothstep(-0.1, 0.35, n(mix(nC, nW, smoothstep(0.3, 0.85, rho))).add(n2.mul(0.3)))).toVar();
               // thickness -> depth tint (Beer-Lambert-like): thin at the walls, deep through the middle; clumps are denser
               const sig = n(float(3.2)).div(Ri).mul(n(float(0.45)).add(clump.mul(1.1)));
               const Eg = n(n(float(1)).sub(exp(n(sig).mul(cg).negate()))).toVar();
               const core = exp(rho.mul(rho).mul(-3));
-              const goop = n(mix(L('deep'), L('bright'), Eg)).mul(n(float(0.5)).add(clump.mul(0.7)))
-                .add(n(L('core')).mul(n(core).mul(Eg).mul(n(float(0.55)).add(n2.mul(0.45)))));
-              col.assign(mix(col, n(goop).mul(glowN).mul(0.75), Eg));
+              const goop = n(mix(L('deep'), L('bright'), Eg)).mul(n(float(0.22)).add(clump.mul(1.05)))
+                .add(n(L('core')).mul(n(core).mul(Eg).mul(n(float(0.35)).add(clump.mul(0.65)))));
+              col.assign(mix(col, n(goop).mul(em), Eg));
               // the wet film on the glass: slow streaks (the wall barely moves)
               const wet = step(g0, tIn.add(0.002));
               const pE = qp.add(Vp.mul(tIn));
               const sE = s.add(VA.mul(tIn));
               const pF = n(n(pE).mul(n(float(5)).div(Ri))).add(A.mul(n(sE).sub(sh.mul(0.15)).mul(0.45))).add(seed.mul(7.1).add(3));
               const film = n(smoothstep(0.05, 0.6, mx_noise_float(pF))).mul(wet).toVar();
-              col.assign(col.mul(n(float(1)).sub(n(float(1)).sub(film).mul(wet).mul(0.18))).add(n(L('film')).mul(film.mul(glowN).mul(0.3))));
+              col.assign(col.mul(n(float(1)).sub(n(float(1)).sub(film).mul(wet).mul(0.18))).add(n(L('film')).mul(film.mul(em).mul(0.5))));
               // bubbles carried by the flow (riding the top of a horizontal run, rising faster up a riser): two cells along the axis
               const ref = select(abs(A.y).greaterThan(0.9), vec3(1, 0, 0), vec3(0, 1, 0));
               const e1 = n(normalize(cross(A, ref))).toVar(), e2 = n(cross(A, e1)).toVar();
@@ -366,12 +369,12 @@ export function coolantNearMaterial(u: {flowGlow: {value: number}; fill: {value:
                 ring.assign(max(ring, n(smoothstep(0.55, 0.9, x)).mul(n(float(1)).sub(smoothstep(0.9, 1.0, x))).mul(on)));
                 inside.assign(max(inside, n(n(float(1)).sub(smoothstep(0.85, 1.0, x))).mul(on)));
               }
-              col.assign(mix(col, col.mul(0.4), inside.mul(0.7)).add(n(L('bubble')).mul(ring.mul(glowN))));
+              col.assign(mix(col, col.mul(0.4), inside.mul(0.7)).add(n(L('bubble')).mul(ring.mul(em).mul(1.6))));
             });
             // the meniscus while the loop fills: a bright ring where the rising surface meets the glass, a sheen on the surface
             const crosses = n(step(tIn, tS)).mul(step(tS, tOut)).mul(step(n(u.fill), 0.995)).mul(step(0.001, n(u.fill)));
             const rX = length(qp.add(Vp.mul(tS))).div(Ri);
-            col.addAssign(n(L('bright')).mul(n(smoothstep(0.72, 1.0, rX)).mul(0.9).add(0.25).mul(crosses).mul(glowN)));
+            col.addAssign(n(L('bright')).mul(n(smoothstep(0.72, 1.0, rX)).mul(0.9).add(0.25).mul(crosses).mul(em).mul(1.6)));
           });
           // the glass: a grazing sheen
           col.addAssign(n(L('sheen')).mul(pow(n(float(1)).sub(abs(dot(V0, Nn))), 4)));
