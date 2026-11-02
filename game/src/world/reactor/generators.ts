@@ -27,7 +27,7 @@
 // deepest zone's, in the tier-4 waste repository). Its prompt shows the FAULT lamp; the 2 s hold cranks it for REACTOR_JAM.STALL_S, then
 // the fan drive seizes (a creak + clank, a short alert, the toast "… JAMMED … wear the gas mask …"): it never starts, its zone never
 // clears by generator. The core floor stays gassed until the reactor is online (clearAll). The record keeps `jam` (generator, stalls).
-// Persistence: REACTOR_LANE (run lane store) is shared with lane RESTART — this module writes ONLY `generators` and `zoneClear`, by
+// Persistence: REACTOR_LANE (run lane store) is shared with lane RESTART — this module writes ONLY `generators`, `zoneClear` (and `jam`), by
 // read-merge-write of the stored record (never a stale whole-record overwrite). Saved on every start / stage reached / clearAll and
 // at teardown; restored on build. Nothing re-rolls: a started generator stays started, a cleared zone stays clear.
 
