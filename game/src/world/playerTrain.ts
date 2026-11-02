@@ -62,6 +62,23 @@ import {assetUrl} from '../assets/loader';
 import {requestSurfaceAnisotropy, type SurfaceRole} from '../render/anisotropy';
 import {highlightMaterial, highlightPulse} from './highlight';
 import {LOCKBOX_MODEL_KEY, LockboxLid, buildLockboxView, lockboxFootprint, poseLid, type LockboxView} from './trainLockbox';
+import {CONSOLE_PROMPT, consoleLocalRect, type ConsoleRect} from './trainConsole'; // task campaign-foundation (lane RIDE): the driving console
+
+/**
+ * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the link a MOVING car (world/trainRide.ts) gives the runtime.
+ * While it is set the car's pose is the ride's (not the placement): aim / prompts / the Lockbox anchor / cues map through it, the
+ * player never "stands in a doorway" (ride mode keeps them inside the closed-door walls), the doors take no [E] / push while
+ * `doorsLocked`, and with `holdView` a world teardown keeps the view (+ the boot-time lights) for the next station's build to adopt —
+ * one TrainView, never a duplicate. Null = parked: everything exactly as before.
+ */
+export interface TrainRideLink {
+  toWorld(lx: number, ly: number, lz: number): {x: number; y: number; z: number};
+  toLocal(wx: number, wy: number, wz: number): {x: number; y: number; z: number};
+  /** A world direction in the car frame. */
+  dirToLocal(dx: number, dy: number, dz: number): {x: number; y: number; z: number};
+  doorsLocked: boolean;
+  holdView: boolean;
+}
 
 // ---------------------------------------------------------------------------------------------
 // Assets (lane ASSETS' cooked files: assets/playerTrain.generated.ts). The models load through the game's lazy prop library (shared by
@@ -503,7 +520,7 @@ export class PlayerTrainRuntime {
   target: DoorRt | null = null;
   prompt: string | null = null;
   /** Counters (QA / tests). */
-  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0, lockbox: 0};
+  readonly counts = {builds: 0, teardowns: 0, toggles: 0, opened: 0, closed: 0, refused: 0, reopen: 0, pushOpen: 0, glassHits: 0, lockbox: 0, console: 0};
   private readonly mats = new TrainMaterials();
   private textures: TrainTextures = {};
   private texturesLoading: Promise<void> | null = null;
@@ -520,8 +537,19 @@ export class PlayerTrainRuntime {
    * (world/highlight.ts: the containers' material swap + pulse). The door it is on, and the highlight clones per leaf base material.
    */
   highlighted: DoorRt | null = null;
-  /** What glows: a door pair, the Lockbox, or nothing. */
-  private hiOwner: DoorRt | 'lockbox' | null = null;
+  /** What glows: a door pair, the Lockbox, (lane RIDE) the driving console, or nothing. */
+  private hiOwner: DoorRt | 'lockbox' | 'console' | null = null;
+  // ---- task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the driving console + the moving car ----
+  /** [E] on the aimed driving console (the primary opens the campaign map). Null: the console is not an interactable (no prompt). */
+  onConsoleInteract: (() => void) | null = null;
+  /** The console is under the crosshair right now (within reach, unobstructed). */
+  consoleAimed = false;
+  /** The desk's measured train-local box (from the placed model; null without the model: trainConsole.ts dims stand in). */
+  consoleRect: ConsoleRect | null = null;
+  /** The moving car's link (world/trainRide.ts); null while parked. */
+  ride: TrainRideLink | null = null;
+  /** A view kept through a teardown while the ride holds it (the next build adopts it: one TrainView). */
+  private heldView: {view: TrainView; lockboxView: LockboxView | null; lockboxLid: LockboxLid} | null = null;
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
   // ---- task train-lockbox-windows-20261101-232156 (lane TRAIN): the Lockbox world object (world/trainLockbox.ts) — API for lane BOX ----
   /** Called on [E] while the Lockbox is aimed (closed or open): lane BOX opens its 40-slot view. Null: [E] just toggles the lid. */
@@ -590,11 +618,14 @@ export class PlayerTrainRuntime {
     if (!p || !h.levels || !h.layout) { this.lightsOff(); return; }
     const spec = this.spec;
     const models = this.opts.models?.() ?? {};
-    const view = buildTrainView(spec, this.mats, models, this.textures);
+    // (lane RIDE) the car the player rides in IS this station's car: a view held through the last teardown is adopted, not rebuilt
+    const held = this.heldView;
+    this.heldView = null;
+    const view = held ? held.view : buildTrainView(spec, this.mats, models, this.textures);
     // task train-lockbox: the Lockbox in the rear compartment (the model when cooked, else its placeholder; never a crash)
-    this.lockboxLid = new LockboxLid();
-    this.lockboxView = spec.lockbox ? buildLockboxView(spec.lockbox, spec.floorY, this.mats, models.lockbox ?? null) : null;
-    if (this.lockboxView) { view.root.add(this.lockboxView.group); view.geometries.push(...this.lockboxView.geometries); }
+    this.lockboxLid = held ? held.lockboxLid : new LockboxLid();
+    this.lockboxView = held ? held.lockboxView : spec.lockbox ? buildLockboxView(spec.lockbox, spec.floorY, this.mats, models.lockbox ?? null) : null;
+    if (this.lockboxView && !held) { view.root.add(this.lockboxView.group); view.geometries.push(...this.lockboxView.geometries); }
     const root = view.root;
     root.position.set(p.x, p.railTopY, p.z);
     root.rotation.set(0, p.yaw, 0);
@@ -607,6 +638,7 @@ export class PlayerTrainRuntime {
       const bb = new THREE.Box3().setFromObject(desk).applyMatrix4(new THREE.Matrix4().copy(root.matrixWorld).invert());
       consoleRect = {x0: bb.min.x, x1: bb.max.x, z0: bb.min.z, z1: bb.max.z, top: bb.max.y};
     }
+    this.consoleRect = consoleRect; // (lane RIDE: the console's aim box and the ride's local collision use the same desk box)
     const bedY = h.layout.trenches?.[p.trenchIndex]?.floorY;
     // (the conformal glass's slabs are measured for the cooked car's own windows: a custom spec keeps the flat glass boxes)
     const col = trainColliders(spec, p, h.levels, {bedY: Number.isFinite(bedY) ? bedY : undefined, consoleRect, glass: spec.windows === PLAYER_TRAIN_SPEC.windows ? TRAIN_GLASS : null});
@@ -637,11 +669,13 @@ export class PlayerTrainRuntime {
     for (const pair of view.leaves) for (const l of pair) h.atmosphere?.markShadows(l, false);
     if (this.lockboxView) h.atmosphere?.markShadows(this.lockboxView.group, false); // (the lid moves: not culler-registered either)
     const culler = h.world?.culler as {register?(root: THREE.Object3D): void} | undefined;
-    if (culler && typeof culler.register === 'function') culler.register(view.fixed);
+    // (lane RIDE) a car still driving in is never storey / fog culled by its parked box: the ride registers it when it stops
+    if (culler && typeof culler.register === 'function' && !this.ride) culler.register(view.fixed);
     const key = this.sectionKey();
     this.train = {placement: p, view, col, doors, levels: h.levels, layout: h.layout, layoutBoxes, prevIndex, key};
-    // 5. door states remembered for this level in this run (else shut), applied at once
-    const saved = this.memFor().get(key);
+    // 5. door states remembered for this level in this run (else shut), applied at once; (lane RIDE) an arriving car's doors stay
+    //    shut until the player opens them
+    const saved = held || this.ride ? undefined : this.memFor().get(key);
     doors.forEach((d, i) => { d.target = saved?.[i] ?? 0; d.t = d.target; });
     this.applyDoors(0, true);
     this.prepareHighlight(view);
@@ -655,12 +689,16 @@ export class PlayerTrainRuntime {
   teardown(): void {
     this.setHighlight(null); // the leaves (and the Lockbox) get their own materials back before the view goes
     const t = this.train;
+    // (lane RIDE) the riding car leaves with the player: its view, Lockbox and lights stay in the scene for the next build to adopt
+    const keep = !!t && !!this.ride?.holdView;
+    if (keep) this.heldView = {view: t!.view, lockboxView: this.lockboxView, lockboxLid: this.lockboxLid};
     this.train = null;
-    this.lockboxView = null;
+    if (!keep) this.lockboxView = null;
     this.lockboxAimed = false;
+    this.consoleAimed = false;
     this.target = null;
     this.prompt = null;
-    this.lightsOff();
+    if (!keep) this.lightsOff();
     if (!t) return;
     this.memFor().set(t.key, t.doors.map(d => d.target));
     this.glassBoxes = new Set();
@@ -669,9 +707,32 @@ export class PlayerTrainRuntime {
     const props = t.layout.props;
     for (let i = props.length - 1; i >= 0; i--) if (mine.has(props[i])) props.splice(i, 1);
     if (this.host.propIndex !== t.prevIndex && this.host.layout === t.layout) this.host.propIndex = t.prevIndex;
-    this.host.scene.remove(t.view.root);
-    for (const g of t.view.geometries) g.dispose();
+    if (!keep) {
+      this.host.scene.remove(t.view.root);
+      for (const g of t.view.geometries) g.dispose();
+    }
     this.counts.teardowns++;
+  }
+
+  /** (lane RIDE) The car's view right now: the built train's, or the one held through a teardown while riding (null: none). */
+  get view(): TrainView | null {
+    return this.train?.view ?? this.heldView?.view ?? null;
+  }
+
+  /** (lane RIDE) The car's own warm fixture emissive (the transit tunnel's passing lamps reuse it: no new material / art). */
+  tunnelLampMaterial(): THREE.Material {
+    return this.mats.get('fixture');
+  }
+
+  /** (lane RIDE) Drop a held view for good (the ride was reset with no station to adopt it): removed and disposed. */
+  releaseHeldView(): void {
+    const v = this.heldView;
+    this.heldView = null;
+    if (!v) return;
+    if (this.lockboxView === v.lockboxView) this.lockboxView = null;
+    this.host.scene.remove(v.view.root);
+    for (const g of v.view.geometries) g.dispose();
+    this.lightsOff();
   }
 
   private memFor(): Map<string, (0 | 1)[]> {
@@ -695,10 +756,17 @@ export class PlayerTrainRuntime {
   // Lights
 
   private placeLights(p: TrainPlacement): void {
+    this.placeLightsBy(q => trainToWorld(p, q.x, q.y, q.z));
+  }
+
+  /**
+   * The boot-time lights at the car's mounts through a train-local -> world map (the placement, or lane RIDE's moving car pose every
+   * frame): positions / targets / intensities only — the light set never changes.
+   */
+  placeLightsBy(w: (q: {x: number; y: number; z: number}) => {x: number; y: number; z: number}): void {
     const s = this.spec, L = this.lights, H = TRAIN_LIGHTS.head, T = TRAIN_LIGHTS.tail, I = TRAIN_LIGHTS.interior;
     const head = avg(s.lights.head, {x: s.length / 2, y: s.floorY + 0.6, z: 0});
     const tail = avg(s.lights.tail, {x: -s.length / 2, y: s.floorY + 0.6, z: 0});
-    const w = (q: {x: number; y: number; z: number}) => trainToWorld(p, q.x, q.y, q.z);
     const at = (o: THREE.Object3D, q: {x: number; y: number; z: number}) => { const v = w(q); o.position.set(v.x, v.y, v.z); o.updateMatrixWorld(); };
     at(L.head, {x: head.x + 0.05, y: head.y, z: head.z});
     at(L.head.target, {x: head.x + H.aim, y: head.y - H.drop, z: head.z});
@@ -724,10 +792,12 @@ export class PlayerTrainRuntime {
 
   frame(dt: number): void {
     const t = this.train;
-    if (!t) { this.prompt = null; return; }
+    // (lane RIDE) between two stations the riding car has no built train, but its Lockbox / console stay usable (aim in the car frame)
+    const riding = !t && !!this.ride && !!this.heldView;
+    if (!t && !riding) { this.prompt = null; return; }
     this.hintT += dt;
     this.time += dt;
-    this.applyDoors(dt, false);
+    if (t) this.applyDoors(dt, false);
     this.stepLockbox(dt);
     this.updateTarget();
     if (this.hiOwner) highlightPulse(this.hiMats.values(), this.time);
@@ -753,7 +823,7 @@ export class PlayerTrainRuntime {
         const q = worldToTrain(p, x, y, z), s = q.z * dd.side;
         return Math.abs(q.x - dd.x) < dd.width / 2 + r - 0.05 && s > hw - r && s < Math.max(out + r, d.col.outZ);
       };
-      d.playerBlocks = playerNear && inDoor(P.x, P.y, P.z, P.radius);
+      d.playerBlocks = playerNear && !this.ride && inDoor(P.x, P.y, P.z, P.radius); // (lane RIDE: a riding player is inside the closed-door walls)
       let blocked = d.playerBlocks;
       if (!blocked) for (const b of bodies) if (inDoor(b.x, b.y, b.z, b.stats.radius)) { blocked = true; break; }
       d.blocked = blocked;
@@ -765,7 +835,7 @@ export class PlayerTrainRuntime {
           this.cue(d, 'reopen');
           if (d.playerBlocks) this.hint('Stand clear of the doors');
         }
-        if (d.target === 0 && d.t < 0.02 && playerNear && this.pushing(d)) {
+        if (d.target === 0 && d.t < 0.02 && playerNear && !this.ride?.doorsLocked && this.pushing(d)) {
           d.push += dt;
           if (d.push >= TRAIN_DOOR.pushOpen) { d.push = 0; d.target = 1; this.counts.pushOpen++; this.counts.opened++; this.cue(d, 'opening'); }
         } else d.push = 0;
@@ -839,7 +909,7 @@ export class PlayerTrainRuntime {
   private cue(d: DoorRt, what: 'opening' | 'closing' | 'opened' | 'closed' | 'reopen' | 'refused'): void {
     const t = this.train;
     if (!t) return;
-    const dd = d.col.door, c = trainToWorld(t.placement, dd.x, this.spec.floorY + 1.2, dd.side * outerHalf(this.spec));
+    const dd = d.col.door, c = this.carPoint(dd.x, this.spec.floorY + 1.2, dd.side * outerHalf(this.spec))!;
     const at: P3 = {x: c.x, y: c.y, z: c.z};
     const sfx = this.host.sfx;
     switch (what) {
@@ -864,49 +934,98 @@ export class PlayerTrainRuntime {
    * What the crosshair is on: the nearest of every doorway's aim box and (task train-lockbox) the Lockbox's closed box, within reach,
    * with nothing structural in between. At most one of the two is set.
    */
-  pickAim(): {door: DoorRt | null; lockbox: boolean} {
-    const none = {door: null, lockbox: false};
-    const t = this.train, h = this.host;
-    if (!t || !h.player.alive) return none;
-    const P = h.player, pl = t.placement;
-    if (Math.abs(P.x - pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(P.z - pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return none;
+  pickAim(): {door: DoorRt | null; lockbox: boolean; console: boolean} {
+    const none = {door: null, lockbox: false, console: false};
+    const t = this.train, h = this.host, ride = this.ride;
+    if ((!t && !(ride && this.heldView)) || !h.player.alive) return none;
+    // (lane RIDE) everything is tested in the CAR frame: the placement's (parked; exact for yaw 0 / PI) or the moving car's (riding)
+    const P = h.player, pl = this.carLocal(P.x, P.y, P.z)!;
+    if (Math.abs(pl.x) > this.spec.length / 2 + TRAIN_DOOR.reach + 1 || Math.abs(pl.z) > this.spec.width / 2 + TRAIN_DOOR.reach + 2) return none;
     const cam = h.camera;
     cam.updateMatrixWorld();
     cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
-    const eye: P3 = {x: this.vEye.x, y: this.vEye.y, z: this.vEye.z}, dir: P3 = {x: this.vDir.x, y: this.vDir.y, z: this.vDir.z};
-    const hw = this.spec.interior.halfWidth, jo = jambOut(this.spec), p = t.placement;
+    const weye: P3 = {x: this.vEye.x, y: this.vEye.y, z: this.vEye.z}, wdir: P3 = {x: this.vDir.x, y: this.vDir.y, z: this.vDir.z};
+    const eye = this.carLocal(weye.x, weye.y, weye.z)!, dir = this.carDir(wdir.x, wdir.y, wdir.z)!;
+    const hw = this.spec.interior.halfWidth, jo = jambOut(this.spec), fy = this.spec.floorY, b = this.box;
+    const setBox = (x0: number, x1: number, y0: number, y1: number, z0: number, z1: number) => {
+      b.min.x = x0; b.min.y = y0; b.min.z = z0; b.max.x = x1; b.max.y = y1; b.max.z = z1;
+    };
     let best: DoorRt | null = null, bt: number = TRAIN_DOOR.reach;
-    for (const d of t.doors) {
+    // (lane RIDE) locked doors (closing up / moving) are no target: no prompt, no [E]
+    if (t && !ride?.doorsLocked) for (const d of t.doors) {
       const dd = d.col.door;
       const za = dd.side * (hw - 0.03), zb = dd.side * (jo + 0.02);
-      const [x0, z0, x1, z1] = worldRect(p, dd.x - dd.width / 2, dd.x + dd.width / 2, Math.min(za, zb), Math.max(za, zb));
-      const b = this.box;
-      b.min.x = x0; b.min.z = z0; b.max.x = x1; b.max.z = z1;
-      b.min.y = t.col.floorY; b.max.y = t.col.floorY + dd.height;
+      setBox(dd.x - dd.width / 2, dd.x + dd.width / 2, fy, fy + dd.height, Math.min(za, zb), Math.max(za, zb));
       const hit = rayBox(eye, dir, b as never, bt);
       if (hit !== null && hit < bt) { bt = hit; best = d; }
     }
-    let lockbox = false;
+    let lockbox = false, desk = false;
     const lb = this.spec.lockbox;
     if (lb && this.lockboxView) {
-      const fp = lockboxFootprint(lb), [x0, z0, x1, z1] = worldRect(p, fp.x0, fp.x1, fp.z0, fp.z1), b = this.box;
-      b.min.x = x0; b.min.z = z0; b.max.x = x1; b.max.z = z1;
-      b.min.y = t.col.floorY; b.max.y = t.col.floorY + lb.height;
+      const fp = lockboxFootprint(lb);
+      setBox(fp.x0, fp.x1, fy, fy + lb.height, fp.z0, fp.z1);
       const hit = rayBox(eye, dir, b as never, bt);
       if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = true; }
     }
-    if (!best && !lockbox) return none;
-    const blocked = h.levels.raycast(eye, dir, bt + 0.02);
-    if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return none;
-    return {door: best, lockbox};
+    // (lane RIDE) the driving console in the front cab (only while the primary's map is wired)
+    if (this.onConsoleInteract) {
+      const cr = consoleLocalRect(this.spec, this.consoleRect);
+      setBox(cr.x0, cr.x1, fy, cr.top, cr.z0, cr.z1);
+      const hit = rayBox(eye, dir, b as never, bt);
+      if (hit !== null && hit < bt) { bt = hit; best = null; lockbox = false; desk = true; }
+    }
+    if (!best && !lockbox && !desk) return none;
+    // nothing structural in between: the partitions (their walls + doorway heads; the open doorway passes) for the Lockbox / console,
+    // and (parked) the station's levels as before
+    if ((lockbox || desk) && this.partitionBlocks(eye, dir, bt)) return none;
+    if (!ride && t) {
+      const blocked = h.levels.raycast(weye, wdir, bt + 0.02);
+      if (blocked.kind !== 'none' && blocked.t < bt - 0.01) return none;
+    }
+    return {door: best, lockbox, console: desk};
+  }
+
+  /** (lane RIDE) A car-frame ray meets a partition wall / doorway head before `maxT`. */
+  private partitionBlocks(eye: P3, dir: P3, maxT: number): boolean {
+    const s = this.spec, hw = s.interior.halfWidth, pt = TRAIN_VIEW.partition / 2, fy = s.floorY, b = this.box;
+    for (const {x, doorway: dw} of partitionsOf(s)) {
+      for (const [z0, z1, y0, y1] of [[-hw, dw.z0, fy, s.ceilingY], [dw.z1, hw, fy, s.ceilingY], [dw.z0, dw.z1, fy + dw.height, s.ceilingY]]) {
+        b.min.x = x - pt; b.max.x = x + pt; b.min.y = y0; b.max.y = y1; b.min.z = z0; b.max.z = z1;
+        const hit = rayBox(eye, dir, b as never, maxT);
+        if (hit !== null && hit < maxT - 0.01) return true;
+      }
+    }
+    return false;
+  }
+
+  /** (lane RIDE) World -> the car frame: the moving car's pose while riding, else the placement (null: no car). */
+  carLocal(wx: number, wy: number, wz: number): P3 | null {
+    if (this.ride) return this.ride.toLocal(wx, wy, wz);
+    const t = this.train;
+    return t ? worldToTrain(t.placement, wx, wy, wz) : null;
+  }
+
+  /** (lane RIDE) A world direction in the car frame (exact for the parked yaws). */
+  carDir(dx: number, dy: number, dz: number): P3 | null {
+    if (this.ride) return this.ride.dirToLocal(dx, dy, dz);
+    const t = this.train;
+    return t ? {x: dx * t.placement.front, y: dy, z: dz * t.placement.front} : null;
+  }
+
+  /** (lane RIDE) The car frame -> world: the moving car's pose while riding, else the placement (null: no car). */
+  carPoint(lx: number, ly: number, lz: number): P3 | null {
+    if (this.ride) return this.ride.toWorld(lx, ly, lz);
+    const t = this.train;
+    return t ? trainToWorld(t.placement, lx, ly, lz) : null;
   }
 
   private updateTarget(): void {
-    const r = this.host.state === 'playing' ? this.pickAim() : {door: null, lockbox: false};
+    const r = this.host.state === 'playing' ? this.pickAim() : {door: null, lockbox: false, console: false};
     this.target = r.door;
     this.lockboxAimed = r.lockbox;
-    this.prompt = r.door ? this.promptFor(r.door) : r.lockbox ? this.lockboxPrompt() : null;
-    this.setHighlightOwner(r.door ?? (r.lockbox ? 'lockbox' : null)); // the glow follows the prompt (same aim / reach / occlusion)
+    this.consoleAimed = r.console;
+    this.prompt = r.door ? this.promptFor(r.door) : r.lockbox ? this.lockboxPrompt() : r.console ? CONSOLE_PROMPT : null;
+    this.setHighlightOwner(r.door ?? (r.lockbox ? 'lockbox' : r.console ? 'console' : null)); // the glow follows the prompt (same aim / reach / occlusion)
   }
 
   // -------------------------------------------------------------------------------------------
@@ -928,16 +1047,26 @@ export class PlayerTrainRuntime {
   }
 
   /** The meshes that glow for a highlight owner. */
-  private ownerMeshes(o: DoorRt | 'lockbox'): THREE.Mesh[] {
-    return o === 'lockbox' ? (this.lockboxView?.highlight ?? []) : this.leafMeshes(o);
+  private ownerMeshes(o: DoorRt | 'lockbox' | 'console'): THREE.Mesh[] {
+    return o === 'lockbox' ? (this.lockboxView?.highlight ?? []) : o === 'console' ? this.consoleMeshes() : this.leafMeshes(o);
   }
 
-  /** Swap the aimed thing's (a door pair's / the Lockbox's) materials for their highlight clones, restoring the previous one's own. */
-  private setHighlightOwner(o: DoorRt | 'lockbox' | null): void {
+  /** (lane RIDE) The driving desk's meshes (the cooked console model; none without it). */
+  consoleMeshes(): THREE.Mesh[] {
+    const out: THREE.Mesh[] = [];
+    this.view?.fixed.getObjectByName('train-console')?.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !m.userData.highlightPrototype) out.push(m);
+    });
+    return out;
+  }
+
+  /** Swap the aimed thing's (a door pair's / the Lockbox's / the console's) materials for their highlight clones, restoring the previous one's own. */
+  private setHighlightOwner(o: DoorRt | 'lockbox' | 'console' | null): void {
     if (o === this.hiOwner) return;
-    if (this.hiOwner && this.train) for (const m of this.ownerMeshes(this.hiOwner)) m.material = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
+    if (this.hiOwner && (this.train || this.heldView)) for (const m of this.ownerMeshes(this.hiOwner)) m.material = (m.userData.baseMat as THREE.Material | undefined) ?? m.material;
     this.hiOwner = o;
-    this.highlighted = o && o !== 'lockbox' ? o : null;
+    this.highlighted = o && o !== 'lockbox' && o !== 'console' ? o : null;
     if (!o) return;
     for (const m of this.ownerMeshes(o)) {
       const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
@@ -953,12 +1082,18 @@ export class PlayerTrainRuntime {
    * warmed root compiles it on the loading screen, not on the first aim); clones of materials no longer used are released.
    */
   private prepareHighlight(view: TrainView): void {
+    // (lane RIDE) an adopted view already carries the previous build's prototypes: drop them first (never accumulate)
+    for (const c of [...view.root.children]) if (c.userData.highlightPrototype) view.root.remove(c);
     const bases = new Map<THREE.Material, THREE.Mesh>();
     for (const pair of view.leaves) for (const holder of pair) holder.traverse(o => {
       const m = o as THREE.Mesh;
       if (m.isMesh && !m.userData.trainGlass && !Array.isArray(m.material) && !bases.has(m.material)) bases.set(m.material, m);
     });
     for (const m of this.lockboxView?.highlight ?? []) if (!Array.isArray(m.material) && !bases.has(m.material)) bases.set(m.material, m); // (task train-lockbox)
+    view.fixed.getObjectByName('train-console')?.traverse(o => { // (lane RIDE) the driving console glows like the Lockbox
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !Array.isArray(m.material) && !bases.has((m.userData.baseMat as THREE.Material | undefined) ?? m.material)) bases.set((m.userData.baseMat as THREE.Material | undefined) ?? m.material, m);
+    });
     for (const [base, hi] of [...this.hiMats]) if (!bases.has(base)) { hi.dispose(); this.hiMats.delete(base); }
     for (const [base, mesh] of bases) {
       const hi = highlightMaterial(this.hiMats, base);
@@ -983,12 +1118,20 @@ export class PlayerTrainRuntime {
 
   /** E handler (Game.interactHandlers): toggles the aimed doorway; true when the train handled the key. */
   interact(): boolean {
-    if (!this.train || this.host.state !== 'playing') return false;
+    if ((!this.train && !(this.ride && this.heldView)) || this.host.state !== 'playing') return false;
     const r = this.pickAim();
     if (r.lockbox) { this.lockboxInteract(); return true; }
+    if (r.console) { this.consoleInteract(); return true; } // (lane RIDE)
     if (!r.door) return false;
     this.toggle(r.door);
     return true;
+  }
+
+  /** (lane RIDE) [E] on the aimed driving console: the primary's map (no-op while unwired: the console is then no target). */
+  consoleInteract(): void {
+    if (!this.onConsoleInteract) return;
+    this.counts.console++;
+    this.onConsoleInteract();
   }
 
   // -------------------------------------------------------------------------------------------
@@ -1013,20 +1156,20 @@ export class PlayerTrainRuntime {
 
   /** World centre of the Lockbox's closed top (lane BOX's walk-away check), or null without one. */
   lockboxWorld(): {x: number; y: number; z: number} | null {
-    const t = this.train, lb = this.spec.lockbox;
-    if (!t || !lb || !this.lockboxView) return null;
-    return trainToWorld(t.placement, lb.x, this.spec.floorY + lb.height, lb.z);
+    const lb = this.spec.lockbox;
+    if (!lb || !this.lockboxView) return null;
+    return this.carPoint(lb.x, this.spec.floorY + lb.height, lb.z); // (lane RIDE: where the car IS while it moves)
   }
 
   /** The lid follows its target (smoothstep), with the existing cabinet cues. */
   private stepLockbox(dt: number): void {
-    const v = this.lockboxView, lb = this.spec.lockbox, t = this.train;
-    if (!v || !lb || !t) return;
+    const v = this.lockboxView, lb = this.spec.lockbox;
+    if (!v || !lb || (!this.train && !this.ride)) return;
     const ev = this.lockboxLid.step(dt);
     if (ev === null && !this.lockboxLid.moving) return;
     poseLid(v, lb, this.lockboxLid.eased);
     if (ev === 'opening' || ev === 'closed') {
-      const c = trainToWorld(t.placement, lb.x, this.spec.floorY + lb.height, lb.z);
+      const c = this.carPoint(lb.x, this.spec.floorY + lb.height, lb.z)!;
       towerCue(this.host.sfx, ev === 'opening' ? 'cabinetOpen' : 'cabinetClose', {x: c.x, y: c.y, z: c.z}, {rate: ev === 'opening' ? 0.85 : 0.8, gain: 0.8});
     }
   }
@@ -1058,10 +1201,9 @@ export class PlayerTrainRuntime {
 
   /** The player stands inside the car's interior volume. */
   playerInside(): boolean {
-    const t = this.train, P = this.host.player;
-    if (!t) return false;
-    const q = worldToTrain(t.placement, P.x, P.y, P.z), s = this.spec;
-    return P.alive && q.x > s.interior.x0 && q.x < s.interior.x1 && Math.abs(q.z) < s.interior.halfWidth && Math.abs(P.y - t.col.floorY) < 0.3;
+    const P = this.host.player, q = this.carLocal(P.x, P.y, P.z), s = this.spec; // (lane RIDE: the moving car's frame while riding)
+    if (!q) return false;
+    return P.alive && q.x > s.interior.x0 && q.x < s.interior.x1 && Math.abs(q.z) < s.interior.halfWidth && Math.abs(q.y - s.floorY) < 0.3;
   }
 
   /** QA: set a door's target by index (through the rules: a refused close returns 'refused'); null = no such door. */
@@ -1093,6 +1235,9 @@ export class PlayerTrainRuntime {
         world: this.lockboxWorld(), handler: !!this.onLockboxInteract, size: [this.spec.lockbox.length, this.spec.lockbox.height, this.spec.lockbox.depth],
         at: {x: this.spec.lockbox.x, z: this.spec.lockbox.z},
       } : null,
+      // (lane RIDE) the driving console (aim box in the car frame, wired = the primary's map) and the moving-car link
+      console: {aimed: this.consoleAimed, wired: !!this.onConsoleInteract, measured: !!this.consoleRect, box: consoleLocalRect(this.spec, this.consoleRect)},
+      riding: !!this.ride, heldView: !!this.heldView,
       rear: this.spec.rear ?? null,
       windows: (() => { const w = windowsOf(this.spec); return {side: w.side.length, end: w.end.length, leaf: !!w.leaf, glassBoxes: this.glassBoxes.size}; })(),
       prompt: this.prompt,
