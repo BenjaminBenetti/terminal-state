@@ -21,17 +21,41 @@ import {ROOF_OPENING, roofOpeningMask, roofOpeningOf} from '../src/gen/reactor/r
 import {reframe} from '../src/gen/trackExt/core';
 import {LevelColumns, ceilingRuns, stationLevels} from '../src/world/levelGeometry';
 import {planReactorKit, polyDist} from '../src/world/reactor/archKit';
-import {ROOF_KIT, roofKitStats} from '../src/world/reactor/roofKit';
+import {ROOF_KIT, SLAB_HOLE_PAST, buildRoofSlab, roofKitStats} from '../src/world/reactor/roofKit';
+import {ReactorArch} from '../src/world/reactor/arch';
+import {WorldMaterials} from '../src/world/materials';
+import {installCanvasShim} from './helpers/canvas2d';
+import {fakeEnvTextures} from './helpers/openablesFixture';
 import {PIT_SKY, buildPitSky} from '../src/world/reactor/gaslightSky';
 import {REACTOR_FOG} from '../src/world/reactor/archInstall';
 import {PIT_SHAFTS, pitShaftSpec, shaftAt} from '../src/world/gaslightRules';
 import {archFixtureInfo} from './reactor-arch-fixture';
+import {buildWorld} from '../src/world/builder';
+
+installCanvasShim(false);
 
 /** Both stair walls, single + twin towers (the probe: 9100 west single, 637474 / 1 / 42 twin). */
 const SEEDS = [9100, 637474, 1, 42];
 const cache = new Map<number, StationLayout>();
 const level = (seed: number) => { let L = cache.get(seed); if (!L) cache.set(seed, (L = LEVELS.reactor.generate('main', {levelSeed: seed}))); return L; };
 const centre = (i: number, w: number) => ({x: ((i % w) + 0.5) * CELL, z: (Math.floor(i / w) + 0.5) * CELL});
+/** Point (x, z) under the slab mesh (its triangles in plan view); every triangle faces down. */
+function slabCover(m: THREE.Mesh): (x: number, z: number) => boolean {
+  const pos = m.geometry.getAttribute('position'), nrm = m.geometry.getAttribute('normal'), idx = m.geometry.index!;
+  const T: number[][] = [];
+  for (let f = 0; f < idx.count; f += 3) {
+    const v = [idx.getX(f), idx.getX(f + 1), idx.getX(f + 2)];
+    const A = new THREE.Vector3().fromBufferAttribute(pos, v[0]), B = new THREE.Vector3().fromBufferAttribute(pos, v[1]), C = new THREE.Vector3().fromBufferAttribute(pos, v[2]);
+    expect(B.clone().sub(A).cross(C.clone().sub(A)).y).toBeLessThan(0); // wound to face down (the soffit seen from the pit)
+    for (const k of v) expect(nrm.getY(k)).toBeCloseTo(-1, 6);
+    T.push([A.x, A.z, B.x, B.z, C.x, C.z]);
+  }
+  const side = (ax: number, az: number, bx: number, bz: number, px: number, pz: number) => (bx - ax) * (pz - az) - (bz - az) * (px - ax);
+  return (x, z) => T.some(([ax, az, bx, bz, cx, cz]) => {
+    const d1 = side(ax, az, bx, bz, x, z), d2 = side(bx, bz, cx, cz, x, z), d3 = side(cx, cz, ax, az, x, z);
+    return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+  });
+}
 const unit = (x: number, y: number, z: number) => { const l = Math.hypot(x, y, z); return {x: x / l, y: y / l, z: z / l}; };
 
 describe('roof opening: the generator (real Reactors)', () => {
@@ -75,30 +99,41 @@ describe('roof opening: the generator (real Reactors)', () => {
         const a = (k / 64) * Math.PI * 2, [cx, cy] = g.cellOf(o.x + Math.cos(a) * (o.r - 0.01), o.z + Math.sin(a) * (o.r - 0.01));
         expect(sky.open![g.idx(cx, cy)]).toBe(1);
       }
-      // THE SOLID ROOF: every pit column whose pit air reaches the roof line has a ceiling run there, except the opening's
+      // THE SOLID ROOF. The grid: ceiling runs at the roof line never cover an opening cell (the mask), they cover the rest of the
+      // pit's flat cells. The render: ONE slab mesh over the pit outline with the round hole covers every pit column outside the curb
+      // (the open-well wall flights the builder never roofs included), and the arch hands the builder none of its roof-line runs.
       const levels = stationLevels(L), runs = ceilingRuns(levels, new LevelColumns(levels));
       const roofed = new Set<number>();
       for (const r of runs) if (Math.abs(r.y - p.roofY) < 0.01) for (let x = r.x0; x < r.x1; x++) roofed.add(r.row * W + x);
-      let pitRoof = 0, open = 0, legs = 0, missing = 0, overHole = 0, flights = 0;
+      const slab = buildRoofSlab(info, new THREE.MeshBasicMaterial(), {u: 1, v: 1}, L.levels.map(l => l.id))!;
+      expect(slab.name).toBe('reactor-arch-roof');
+      expect(slab.userData.levels).toEqual(L.levels.map(l => l.id));
+      const covers = slabCover(slab);
+      const arch = ReactorArch.for(L, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), L.levels)!;
+      let pitRoof = 0, open = 0, legs = 0, overHole = 0, flights = 0, slabbed = 0;
       for (let i = 0; i < g.cells.length; i++) {
         const c = centre(i, W);
         if (!inOutline(p.outline, c.x, c.z)) continue;
         const atRoof = L.levels.some(lv => lv.grid.cells[i] !== SOLID && lv.grid.hasCeil(i) && lv.grid.ceil[i] >= p.roofY - 0.01);
+        const d = Math.hypot(c.x - o.x, c.z - o.z);
         if (sky.open![i]) {
           if (atRoof) { open++; if (roofed.has(i)) overHole++; }
           else { legs++; expect(L.levels.every(lv => lv.grid.cells[i] === SOLID)).toBe(true); } // a tower leg's reserved column
         } else if (atRoof) {
           pitRoof++;
-          if (!roofed.has(i)) missing++;
-          if (L.levels.some(lv => lv.grid.rampIdx[i] >= 0)) flights++; // the slab spans the open-well wall flights too
+          if (L.levels.some(lv => lv.grid.rampIdx[i] >= 0)) flights++;
         }
+        if (d > o.r + SLAB_HOLE_PAST + 0.05) { expect(covers(c.x, c.z), `slab at ${c.x},${c.z}`).toBe(true); slabbed++; }
+        else if (d < o.r + SLAB_HOLE_PAST - 0.05) expect(covers(c.x, c.z)).toBe(false);
+        if (atRoof && roofed.has(i)) expect(arch.ceilKey(0, -1, i, p.roofY)).toBe(false);
       }
       expect(open + legs).toBe(cells.length); // the opening is pit air up to the roof line (or a tower leg's solid column)
       expect(legs).toBeLessThan(cells.length * 0.03);
       expect(overHole).toBe(0);
-      expect(missing).toBe(0);
-      expect(flights).toBeGreaterThan(20);
+      expect(flights).toBeGreaterThan(20); // wall flights reach the roof line: the slab spans them
       expect(pitRoof).toBeGreaterThan(open * 5); // a roof with a hole, not a hole with a rim
+      expect(slabbed).toBeGreaterThan(pitRoof * 0.95);
+      expect(arch.ceilKey(0, -1, cells[0], p.roofY - 8)).toBe('reactor-deck-under'); // deck undersides below stay the builder's
     }, 120_000);
   }
 
@@ -237,6 +272,29 @@ describe('roof opening: the kit (girders under the slab, trimmed round the curb,
       mask.forEach((v, i) => { if (!v) return; const c = centre(i, 400); expect(Math.hypot(c.x - o.x, c.z - o.z) + CELL * Math.SQRT1_2).toBeLessThan(o.r + ROOF_OPENING.curb); });
     }, 120_000);
   }
+
+  it('the built world (real seed 9100): ONE roof slab mesh (no builder roof-line chunks), the curb meshes, the sky — a cheap roof', () => {
+    const L = level(9100), info = L.reactor!, o = roofOpeningOf(info)!;
+    const w = buildWorld(L as never, new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}), {});
+    const count = new Map<string, number>();
+    let roofTris = 0;
+    w.group.traverse(m => {
+      const mesh = m as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      count.set(mesh.name, (count.get(mesh.name) ?? 0) + 1);
+      if (/^reactor-arch-roof$|^reactor-roof-curb-/.test(mesh.name)) roofTris += (mesh.geometry.index ? mesh.geometry.index.count : mesh.geometry.getAttribute('position').count) / 3;
+    });
+    expect(count.get('reactor-arch-roof')).toBe(1); // (the builder's roof-line runs were ~17 per-level / per-chunk meshes)
+    expect(count.get('reactor-roof-curb-steel')).toBe(1);
+    expect(count.get('reactor-roof-curb-concrete')).toBe(1);
+    expect(count.get('pit-sky')).toBe(1);
+    expect(roofTris).toBeLessThan(1200);
+    const slab = w.group.getObjectByName('reactor-arch-roof') as THREE.Mesh;
+    expect(slab.material).toBe(w.reactorArch!.material('reactor-roof')); // the builder's own roof surface material
+    expect(w.reactorArch!.pitSky!.opening).toEqual(o);
+    const roofParts = w.reactorArch!.built!.stats.byPart['ibeam|steelDark'];
+    expect(roofParts.meshes).toBeLessThanOrEqual(w.reactorArch!.plan!.tiers.length); // the roof steel joins the existing per-band mesh
+  }, 180_000);
 
   it('no opening (the pit too narrow for the curb + the solid band): the roof stays closed — no curb, the beams run through, no sky', () => {
     const base = archFixtureInfo();

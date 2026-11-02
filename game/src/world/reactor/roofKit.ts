@@ -2,8 +2,9 @@
 // User: "the roof, is not looking correct … I want a single hole above the reactor not a totally open roof."
 //
 // Root cause (the previous build): the generator opened the whole pit top (levels[0].sky without a mask: no roof slab anywhere) and
-// planRoof drew a bare row of I-beams spanning it against the green sky. Now (gen/reactor/roofOpening.ts): the slab is the pit cells'
-// ceiling at roofY again (the builder's dark concrete 'reactor-roof' surface) except the opening's cells, and this plans the steel that
+// planRoof drew a bare row of I-beams spanning it against the green sky. Now (gen/reactor/roofOpening.ts): the roof line is solid
+// except the opening's cells (rays), the SLAB is one mesh over the pit with a round hole (buildRoofSlab: the builder's dark concrete
+// 'reactor-roof' surface material, one draw instead of the builder's per-level / per-chunk ceiling runs) and this plans the steel that
 // carries it, as kit instances / two merged meshes (no new art payload: the kit's existing steel / concrete materials):
 //  - PRIMARY GIRDERS spanning the short way ~6 m apart (the old grid's lines and section) and SECONDARY BEAMS across them ~3 m apart,
 //    their tops just under the slab: a structural grid read from every tier. Each runs wall to wall inside the pit outline, TRIMMED at
@@ -15,6 +16,7 @@
 
 import * as THREE from 'three';
 import {ROOF_OPENING, roofOpeningOf, type RoofOpening} from '../../gen/reactor/roofOpening';
+import type {ReactorInfo} from '../../gen/reactor/reactorTypes';
 import type {KitPlan} from './archKit';
 
 /** The roof steel tunables (m). */
@@ -147,6 +149,40 @@ export function planPitRoof(plan: KitPlan): RoofKitStats {
     st.curb = true;
   }
   return st;
+}
+
+/** The slab's hole radius beyond the opening radius: inside the ring girder's box (hidden by it from below and from the opening). */
+export const SLAB_HOLE_PAST = ROOF_OPENING.curb / 2;
+
+/**
+ * THE ROOF SLAB: ONE mesh (the builder's dark concrete 'reactor-roof' surface material, its UV scale) over the whole pit outline at
+ * roofY, facing down, with a true round hole (radius + SLAB_HOLE_PAST) over the opening — or none without an opening. It replaces
+ * the builder's per-level / per-48 m-chunk ceiling runs at the roof line (ReactorArch.ceilKey skips those: up to ~17 draws -> 1) and
+ * also spans the open-well wall flights the builder never roofs. Tagged with every storey for the level culler (seen from them all
+ * through the pit, like the sky dome). Null: no roof column.
+ */
+export function buildRoofSlab(info: Pick<ReactorInfo, 'pit' | 'core'>, material: THREE.Material, scale: {u: number; v: number}, levels: readonly number[]): THREE.Mesh | null {
+  const p = info.pit;
+  if (!(p.roofY > p.rimY + 1.5) || p.outline.length < 3) return null;
+  const shape = new THREE.Shape(p.outline.map(q => new THREE.Vector2(q.x, q.z)));
+  const o = roofOpeningOf(info);
+  if (o) {
+    const rh = o.r + SLAB_HOLE_PAST, n = ROOF_KIT.segments;
+    shape.holes.push(new THREE.Path(Array.from({length: n}, (_, k) => new THREE.Vector2(o.x + Math.cos((k / n) * Math.PI * 2) * rh, o.z + Math.sin((k / n) * Math.PI * 2) * rh))));
+  }
+  const g = new THREE.ShapeGeometry(shape, 1);
+  // shape (x, z) in the XY plane facing +z -> world XZ at roofY facing down (rotateX +90 deg: (x, y, 0) -> (x, 0, y), +z -> -y)
+  g.rotateX(Math.PI / 2);
+  g.translate(0, p.roofY, 0);
+  const uv = g.getAttribute('uv') as THREE.BufferAttribute; // (x, z) in metres -> the builder's ceilRect UVs (x / u, z / v)
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) / scale.u, uv.getY(i) / scale.v);
+  g.computeBoundingSphere();
+  const m = new THREE.Mesh(g, material);
+  m.name = 'reactor-arch-roof';
+  m.userData.levels = [...levels];
+  m.matrixAutoUpdate = false;
+  m.updateMatrix();
+  return m;
 }
 
 /**

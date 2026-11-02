@@ -29,6 +29,7 @@ import {ReactorArchVisuals} from './archVisuals';
 import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
+import {buildRoofSlab} from './roofKit'; // task reactor-submit-roof-fog-20261102 (lane ROOF): the roof slab with the opening's hole
 import {MeshBasicNodeMaterial} from 'three/webgpu';
 // task reactor-expansion-20261101 (lane CORE): the hero reactor (the vessel's hidden grid column, the goop pool, the grating ring /
 // bridges; the dynamic goop / coolant / rotors / lamps layer and its staged visuals)
@@ -74,8 +75,10 @@ export class ReactorArch {
   built: KitBuilt | null = null;
   /** Task reactor-expansion-20261101 (lane GASLIGHT): the mounted pit lamps planned with the kit (model or cage, lens matrix). */
   mountedLamps: MountedLampRec[] = [];
-  /** Task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky dome + outside gas (null: no opening). */
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the roof opening's sky dome + outside gas (null: no opening). */
   pitSky: PitSkyStats | null = null;
+  /** Task reactor-submit-roof-fog-20261102 (lane ROOF): the arch draws the pit's roof slab (one mesh, the opening's hole). */
+  readonly roofSlab: boolean;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
   /** Task reactor-expansion-20261101 (lane CORE): per core-grid cell — vessel (not drawn: the model is), goop pool, grating deck. */
   readonly coreKinds: Uint8Array;
@@ -100,6 +103,7 @@ export class ReactorArch {
         if (inPoly(P, (cx + 0.5) * CELL, (cy + 0.5) * CELL)) { this.pitMask[cy * this.W + cx] = 1; this.stats.pitCells++; }
       }
     }
+    this.roofSlab = this.info.pit.roofY > this.info.pit.rimY + 1.5; // (lane ROOF: roofKit.ts buildRoofSlab's condition)
     const tiers = [...this.info.tiers].sort((p, q) => p.baseY - q.baseY);
     this.coreLevel = tiers[0]?.level ?? -1;
     const cg = levels[this.levelIndex(this.coreLevel)]?.grid; // task reactor-expansion-20261101 (lane CORE)
@@ -150,12 +154,17 @@ export class ReactorArch {
     return isReactorArea(a, lvl.id) ? 'reactor-floor' : null;
   }
 
-  /** Ceiling key of a run (null: builder rule). In the pit: the roof at the top, the deck undersides below. */
-  ceilKey(L: number, areaId: number, i?: number, y?: number): string | null {
+  /**
+   * Ceiling key of a run (null: builder rule). In the pit: the roof at the top, the deck undersides below. Task reactor-submit-roof-
+   * fog-20261102 (lane ROOF): false (none) AT the roof line — the roof slab is one mesh with the opening's round hole (build:
+   * roofKit.ts buildRoofSlab), not the builder's per-level / per-chunk runs.
+   */
+  ceilKey(L: number, areaId: number, i?: number, y?: number): string | false | null {
     const lvl = this.levels[L];
     if (!lvl) return null;
     if (i !== undefined && this.pitMask[i]) {
       const top = y ?? cellCeil(lvl.grid, i);
+      if (this.roofSlab && Math.abs(top - this.info.pit.roofY) < 0.01) return false; // (lane ROOF)
       return top >= this.info.pit.roofY - 0.6 ? 'reactor-roof' : 'reactor-deck-under';
     }
     return isReactorArea(areaId >= 0 ? this.layout.areas[areaId] : undefined, lvl.id) ? 'reactor-ceil' : null;
@@ -292,7 +301,13 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
-    // (lane GASLIGHT) the open pit top: the toxic sky + the outside gas sheets above the roof line (the volumetric part is the march's)
+    // task reactor-submit-roof-fog-20261102 (lane ROOF): the roof slab — one mesh over the pit, the opening's round hole (ceilKey skips
+    // the builder's roof-line runs)
+    try {
+      const slab = this.roofSlab ? buildRoofSlab(this.info, reactorSurfaceMaterial(this.mats, 'reactor-roof'), reactorSurfaceScale(this.mats, 'reactor-roof'), this.levels.map(l => l.id)) : null;
+      if (slab) { group.add(slab); this.count('reactor-roof'); }
+    } catch (e) { console.warn('reactor arch: roof slab skipped', e); }
+    // (lane GASLIGHT) the toxic sky + the outside gas sheets above the roof line, seen through the opening (lane ROOF: only through it)
     try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
     // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
     try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }

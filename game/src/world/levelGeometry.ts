@@ -725,8 +725,7 @@ export interface CeilRun { level: number; row: number; x0: number; x1: number; y
 
 /**
  * Ceiling runs of every level: each open, non-ramp cell's band ceiling, unless another band of the
- * column starts right there (the space continues upward). `skip` excludes cells (door rects). (Ramp cells under a masked roof
- * slab — LevelSky.open — at its roof line too: task reactor-submit-roof-fog-20261102, lane ROOF.)
+ * column starts right there (the space continues upward). `skip` excludes cells (door rects).
  */
 export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: number, i: number) => boolean): CeilRun[] {
   const out: CeilRun[] = [];
@@ -734,20 +733,15 @@ export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: 
   const W = cols.W, H = cols.H;
   const ok = (L: number, i: number): number => {
     const g = levels[L].grid;
-    if (!isOpenCell(g.cells[i]) || (skip && skip(L, i))) return NaN;
-    const ramp = g.rampIdx[i] >= 0, top = ramp && g.hasCeil(i) ? g.ceil[i] : cellCeil(g, i);
-    const roofLine = !!sky && top >= sky.ceil - 0.01;
+    if (!isOpenCell(g.cells[i]) || g.rampIdx[i] >= 0 || (skip && skip(L, i))) return NaN;
     // Task office-overhaul-20261030 (lane STRUCT): open sky (the roof's nominal band top, the hatch shaft above it): no ceiling.
     // Task reactor-submit-roof-fog-20261102 (lane ROOF): with an opening mask (LevelSky.open) only its cells; the rest keep the roof.
-    if (roofLine && (!sky!.open || sky!.open[i] === 1)) return NaN;
-    // A flight's cell has no flat ceiling (its own ceiling follows the pitch) — except (lane ROOF) under a masked roof slab: the open
-    // well flights up the Reactor pit wall reach the roof line (their band top), and the slab spans them (no strip of sky over the stairs).
-    if (ramp && !(roofLine && sky!.open)) return NaN;
+    if (sky && cellCeil(g, i) >= sky.ceil - 0.01 && (!sky.open || sky.open[i] === 1)) return NaN;
     // Deduplicated away (identical band of a lower level id)?
     let mine = false;
     for (let k = 0; k < cols.count(i); k++) if (cols.level(i, k) === L) { mine = true; break; }
     if (!mine) return NaN;
-    const c = top;
+    const c = cellCeil(g, i);
     for (let k = 0; k < cols.count(i); k++) {
       const M = cols.level(i, k);
       if (M === L) continue;
