@@ -19,7 +19,23 @@ export type MinesModel = keyof typeof MINES_MODELS;
  * underside at y = 1.79 (clear opening 2.06 x 1.79 m at scale 1, top 2.516 m); the ore cart's wheels at z = ±0.30 (600 mm gauge), its
  * wheelbase along x.
  */
-export const MINES_ANCHORS = {timberSet: {postInner: 1.03, capUnder: 1.79, top: 2.516}, mineCart: {gauge: 0.6}} as const;
+export const MINES_ANCHORS = {timberSet: {postInner: 1.03, capUnder: 1.79, top: 2.516}, mineCart: {gauge: 0.6}, drillRig: {boom: -1}} as const;
+// (drillRig.boom: the drill boom / rod end of the rig lies at model -x — vertex profile of the cooked GLB, 2026-11-02: the x slices at
+// -1.75 .. -0.9 m are 0.2-0.35 m wide and 0.8-1.28 m up, the carrier behind them the full 0.98 m wide down to the wheels.)
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane MINES, agreed with the lead for lane PROPS' drill-scale fix): the RUNTIME FIT scale of
+ * each mines model (uniform; 1 = the kit's real size). Everything that sizes, places or draws a mines model reads it through
+ * minesModelSize / this record: the dress collider, the development heading the planner cuts for the drill, the instance matrices.
+ * Lane PROPS owns the drillRig value. A new value needs no re-pin: the heading is sized from it, up to a 7 x 3.0 x 2.4 m rig.
+ */
+export const MINES_FIT: Record<MinesModel, number> = {timberSet: 1, mineCart: 1, hoistWinch: 1, drillRig: 1};
+
+/** Real placed size (m) of a mines model: the registry's dims x its fit scale, as [length (model x), height (y), depth (z)]. */
+export function minesModelSize(key: MinesModel): [number, number, number] {
+  const [x, y, z] = MINES_MODELS[key].dims, s = MINES_FIT[key];
+  return [x * s, y * s, z * s];
+}
 
 /** Lazy-library file map of the expansion kit (every REACTOR_X_KIT url referenced from runtime code). */
 export const REACTOR_X_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = Object.fromEntries(

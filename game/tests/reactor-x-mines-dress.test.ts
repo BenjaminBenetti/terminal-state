@@ -8,8 +8,10 @@ import {doorwayIssues} from '../src/gen/doorways';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {MINE_PIECE, MINE_PIECE_OF, MINES_DRESS_STATS, alongPolyline, minesRailWorld} from '../src/gen/reactor/complex/minesDress';
+import {MINE_PIECE, MINE_PIECE_OF, MINE_PIECE_SIZE, MINES_DRESS_STATS, alongPolyline, minesRailWorld} from '../src/gen/reactor/complex/minesDress';
 import {minesFixture, minesLayout, FIX, type MinesFixture} from './reactor-x-mines-fixture';
+import {MINES_ANCHORS, MINES_FIT, minesModelSize} from '../src/world/reactor/minesAssets';
+import {planMinesVisuals} from '../src/world/reactor/minesVisuals';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const INWARD = ['S', 'E', 'N', 'W'] as const;
@@ -60,6 +62,8 @@ describe('Reactor mines complex — dress (lane MINES)', () => {
       if (n('winch') && n('winze')) hoists++;
       expect(n('cart'), `${seed} ${inward} carts`).toBeGreaterThanOrEqual(1);
       expect(n('drill')).toBe(1);
+      // the drill jumbo parks in the development heading (task reactor-playtest-round2-20261102)
+      expect(pieces.find(p => p.variant === MINE_PIECE.drill)!.area, `${seed} ${inward} drill in the heading`).toBe(fx.carve!.rooms.find(r => r.key === 'heading')!.area);
       expect(n('crib')).toBeGreaterThanOrEqual(1);
       if (fx.carve!.rooms.some(r => r.key === 'collapse')) expect(n('rubble'), `${seed} ${inward} rubble`).toBe(1);
       // carts stand on the rail line, along it
@@ -85,10 +89,13 @@ describe('Reactor mines complex — dress (lane MINES)', () => {
         expect(p.y).toBeGreaterThanOrEqual(g.floorOf(i) - 0.02);
         expect(p.y + p.h).toBeLessThanOrEqual(g.ceil[i] + 0.05);
       }
-      // the magazine's storage opens (crates / cabinets / shelving through the existing openables)
-      const mag = fx.carve!.rooms.find(r => r.key === 'magazine')!;
-      const store = props.filter(p => p.area === mag.area && ['openable', 'existing', 'open'].includes(openCls.get(p.kind) ?? ''));
-      expect(store.length, `${seed} magazine storage`).toBeGreaterThanOrEqual(2);
+      // the magazine's storage opens (crates / cabinets / shelving through the existing openables) — an optional space since the seeded
+      // graph (task reactor-playtest-round2-20261102): checked where the mine has one
+      const mag = fx.carve!.rooms.find(r => r.key === 'magazine');
+      if (mag) {
+        const store = props.filter(p => p.area === mag.area && ['openable', 'existing', 'open'].includes(openCls.get(p.kind) ?? ''));
+        expect(store.length, `${seed} magazine storage`).toBeGreaterThanOrEqual(2);
+      }
       // no doorway of the workings is crossed by a prop, plate or fixture
       const doors = new Set(L.doors.filter(d => mine.has(d.a) || mine.has(d.b)).map(d => d.id));
       const bad = doorwayIssues(L).filter(s => doors.has(+s.split(' ')[1]));
@@ -109,7 +116,7 @@ describe('Reactor mines complex — dress (lane MINES)', () => {
       expect(lights.filter(l => l.area === fx.carve!.generator.area).length).toBeGreaterThanOrEqual(4);
       const signs = L.signs.filter(s => s.level === FIX.level && (mine.has(s.area) || s.area === fx.deck.id));
       expect(signs.some(s => s.area === fx.deck.id && /ADIT/.test(s.text)), `${seed} ${inward} adit plate`).toBe(true);
-      expect(signs.some(s => /MAGAZINE/.test(s.text))).toBe(true);
+      if (fx.carve!.rooms.some(r => r.key === 'magazine')) expect(signs.some(s => /MAGAZINE/.test(s.text))).toBe(true);
       expect(signs.some(s => /GENERATOR/.test(s.text))).toBe(true);
       for (const s of signs) { expect(s.y).toBeGreaterThan(FIX.baseY + 1.5); expect(s.kind).toBe('service'); }
     }
@@ -127,6 +134,43 @@ describe('Reactor mines complex — dress (lane MINES)', () => {
       // right-angle runs only (plus the short jogs between parallel openings)
       for (let i = 0; i + 1 < rail.length; i++) { const dx = Math.abs(rail[i + 1].x - rail[i].x), dz = Math.abs(rail[i + 1].z - rail[i].z); expect(Math.min(dx, dz)).toBeLessThan(1e-6); }
     }
+  });
+
+  it('parks the drill jumbo at its REAL kit size (registry x MINES_FIT, lane PROPS\' value) in the heading, boom to the face, at fits up to 2.0', () => {
+    const fit0 = MINES_FIT.drillRig;
+    try {
+      for (const fit of [1, 1.5, 2]) {
+        MINES_FIT.drillRig = fit;
+        const [L, H, Wd] = minesModelSize('drillRig');
+        expect(MINE_PIECE_SIZE.drill).toEqual({l: L, w: Wd, h: H});
+        for (const [seed, inward] of cases().slice(0, 4)) {
+          const fx = minesFixture(seed, {inward}), Lo = minesLayout(fx, seed), tag = `fit ${fit} ${seed} ${inward}`;
+          const hd = fx.carve!.rooms.find(r => r.key === 'heading')!;
+          const drill = Lo.props.filter(p => p.kind === 'annexMachine' && p.variant === MINE_PIECE.drill);
+          expect(drill.length, tag).toBe(1);
+          const p = drill[0], alongX = p.hx >= p.hz;
+          expect(p.area, `${tag} in the heading`).toBe(hd.area);
+          // the collider IS the rig's real footprint / height (what you see is what you bump into)
+          expect(2 * (alongX ? p.hx : p.hz)).toBeCloseTo(L, 2);
+          expect(2 * (alongX ? p.hz : p.hx)).toBeCloseTo(Wd, 2);
+          expect(p.h).toBeCloseTo(H, 2);
+          const a = Lo.areas[hd.area];
+          expect(p.y + p.h).toBeLessThanOrEqual(a.ceil + 1e-6);
+          // the visuals: the model at the same fit, its boom end (model x * MINES_ANCHORS.drillRig.boom) toward the face, away from the
+          // heading's opening (a minimal Reactor record on the fixture layout)
+          const c = fx.carve!;
+          (Lo as {reactor?: unknown}).reactor = {complexes: [{id: 'mines', level: FIX.level, areas: c.areas, rooms: c.rooms}], generators: []};
+          const v = planMinesVisuals(Lo)!;
+          expect(v.models.drillRig.length).toBe(1);
+          const m = v.models.drillRig[0];
+          expect([m.sx, m.sy, m.sz]).toEqual([fit, fit, fit]);
+          const door = Lo.doors.find(d => d.a === a.id || d.b === a.id)!;
+          const toFace = {x: p.x - (door.x + door.w / 2) * CELL, z: p.z - (door.y + door.h / 2) * CELL};
+          const b = MINES_ANCHORS.drillRig.boom, boom = {x: b * Math.cos(m.yaw), z: -b * Math.sin(m.yaw)};
+          expect(boom.x * toFace.x + boom.z * toFace.z, `${tag} boom to the face`).toBeGreaterThan(0.5 * Math.hypot(toFace.x, toFace.z));
+        }
+      }
+    } finally { MINES_FIT.drillRig = fit0; }
   });
 
   it('dresses fast (< ~40 ms)', () => {

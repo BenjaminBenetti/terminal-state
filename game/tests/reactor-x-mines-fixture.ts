@@ -9,6 +9,7 @@ import type {Level} from '../src/gen/levels';
 import type {Area, Rect, StationLayout} from '../src/gen/stationTypes';
 import type {ComplexSlot} from '../src/gen/reactor/complex/types';
 import {carveMines, type MinesCarve} from '../src/gen/reactor/complex/mines';
+import type {MinePlan} from '../src/gen/reactor/complex/minesPlan';
 
 export const FIX = {W: 230, H: 220, level: 2, baseY: -12, ceilMax: -6.3, deckDepth: 8} as const;
 
@@ -54,4 +55,29 @@ export function minesLayout(fx: MinesFixture, seed: number): StationLayout {
   fx.carve?.dress?.(layout, rng.fork('mines-dress'), {ox: 0, oy: 0});
   applyLighting(layout, rng.fork('lighting'));
   return layout;
+}
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane MINES): a plan's TOPOLOGY signature — the adit, the haulage course, where the cavern sits
+ * and the multiset of openings by part pair (sizes / positions ignored): two plans with the same signature are the same mine graph.
+ */
+export function mineSignature(plan: MinePlan): string {
+  const part = new Map(plan.rooms.map(r => [r.key, r.part]));
+  const edges = plan.doors.filter(d => d.a).map(d => [part.get(d.a!)!, part.get(d.b)!].sort().join('-')).sort();
+  return [plan.shape.adit, plan.shape.course, plan.shape.cavern, edges.join(',')].join('|');
+}
+
+/** The plan's space graph: node keys, internal openings (a, b), adjacency. */
+export function mineGraph(plan: MinePlan): {nodes: string[]; edges: [string, string][]; adj: Map<string, string[]>} {
+  const nodes = plan.rooms.map(r => r.key), edges = plan.doors.filter(d => d.a).map(d => [d.a!, d.b] as [string, string]);
+  const adj = new Map(nodes.map(k => [k, [] as string[]]));
+  for (const [a, b] of edges) { adj.get(a)!.push(b); adj.get(b)!.push(a); }
+  return {nodes, edges, adj};
+}
+
+/** Graph distance (openings) from `from` to every space. */
+export function mineHops(plan: MinePlan, from: string): Map<string, number> {
+  const {adj} = mineGraph(plan), dist = new Map([[from, 0]]), q = [from];
+  for (let h = 0; h < q.length; h++) for (const n of adj.get(q[h]) ?? []) if (!dist.has(n)) { dist.set(n, dist.get(q[h])! + 1); q.push(n); }
+  return dist;
 }
