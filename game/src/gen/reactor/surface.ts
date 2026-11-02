@@ -453,7 +453,7 @@ function finishIn(layout: StationLayout, c: SurfaceCarve): ReactorSurface | null
   const near = [...c.upper, ...c.laneB.filter(i => gS.ceil[i] > p.Ys - 0.05)];
   for (const i of near) tops[i] = headTop; // the passage's / flight's own column above its ceiling: solid to the head house roof
   let hx0 = Infinity, hz0 = Infinity, hx1 = -Infinity, hz1 = -Infinity;
-  const plazaSet = new Set(c.plaza);
+  const plazaId = c.areas.plaza.id, plazaSet = {has: (j: number) => gS.cells[j] === FLOOR && gS.area[j] === plazaId};
   for (const i of near) {
     const x = i % W, y = (i - x) / W;
     for (let oy = -2; oy <= 2; oy++) for (let ox = -2; ox <= 2; ox++) {
@@ -515,7 +515,7 @@ function finishIn(layout: StationLayout, c: SurfaceCarve): ReactorSurface | null
   const rec: ReactorSurface = {
     version: 1, level: SURFACE_LEVEL, y: p.Ys, ceil: S, parapetY,
     bounds: {x0: r3(bx0), z0: r3(bz0), x1: r3(bx1), z1: r3(bz1)}, walk,
-    edges: plazaEdges(gS, new Set(c.plaza), hole),
+    edges: plazaEdges(gS, plazaSet, hole),
     // (the walkable deck never touches the opening's disc: keepR = its radius; the railing ring r0 stands just inside it)
     hole: {x: o.x, z: o.z, r: o.r, parapet: {r0: r3(o.r - SURFACE.ringIn), r1: r3(o.r + SURFACE.ringT), top: r2(p.Ys + SURFACE.ringTop)}, keepR: o.r},
     door: {
@@ -597,10 +597,11 @@ function walkRects(g: Grid, ok: (i: number) => boolean): ReactorRect[] {
 }
 
 /** The plaza's outer boundary: cell edges between a plaza cell and a closed cell (not the opening), merged into straight runs. */
-function plazaEdges(g: Grid, plaza: ReadonlySet<number>, hole: readonly number[]): ReactorSurfaceEdge[] {
-  const holeSet = new Set(hole), W = g.w;
+function plazaEdges(g: Grid, plaza: {has(i: number): boolean}, hole: readonly number[]): ReactorSurfaceEdge[] {
+  const holeM = new Uint8Array(g.w * g.h), W = g.w;
+  for (const i of hole) holeM[i] = 1;
   const out: ReactorSurfaceEdge[] = [];
-  const closed = (x: number, y: number) => !g.inBounds(x, y) || (!plaza.has(g.idx(x, y)) && !holeSet.has(g.idx(x, y)) && g.cells[g.idx(x, y)] === SOLID);
+  const closed = (x: number, y: number) => !g.inBounds(x, y) || (g.cells[g.idx(x, y)] === SOLID && !holeM[g.idx(x, y)]);
   for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0], [1, 0]] as const) {
     const alongX = dx === 0;
     for (let a = 0; a < (alongX ? g.h : W); a++) {
