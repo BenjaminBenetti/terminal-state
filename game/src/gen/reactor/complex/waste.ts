@@ -1,8 +1,8 @@
 // Task reactor-expansion-20261101 (lane WASTE): THE NUCLEAR-WASTE REPOSITORY carver — a substantial side complex off the Reactor's main
 // shaft (tier 4) housing zone 2's auxiliary generator (the third generator: it powers the core floor's fans). Contract: ./types.ts.
 //
-// carveWaste(inp) plans the program in the slot's region (./wastePlan.ts: receiving bay on the entrance, health-physics checkpoint +
-// dosimetry / change room, control room + security office, the long DRUM VAULT, the compactor, the sealed-vault corridor split by a
+// carveWaste(inp) plans the program in the slot's region (./wastePlan.ts: receiving bay on the entrance, health-physics checkpoint,
+// control room + dosimetry / change room, the long DRUM VAULT, the compactor, the sealed-vault corridor split by a
 // heavy airlock door, the generator / ventilation plant, the sump & pump room and the DRY-CASK HALL; >= 2 disjoint routes from the bay
 // to the plant), carves it as areas of the slot's storey with doors, opens the entrance from the shaft deck and places the zone
 // generator in the plant. The returned `dress` hook (./wasteDress.ts) furnishes it after the crop. Pure: draws only from inp.rng.
@@ -95,7 +95,7 @@ export function carveWaste(inp: ComplexCarveInput): ComplexCarve | null {
   const useYaw = Math.round(Math.atan2(-face[0], -face[1]) * 1000) / 1000;
 
   const rec: WasteCarveRecord = {plan, level, baseY: base, areas: ids, doors, frontArea: slot.frontArea, genFoot: foot, genUse: [ux, uy]};
-  const order: WasteKey[] = ['bay', 'hp', 'lockers', 'control', 'security', 'vault', 'compactor', 'kWest', 'kEast', 'plant', 'pump', 'cask'];
+  const order: WasteKey[] = ['bay', 'hp', 'control', 'lockers', 'vault', 'compactor', 'kWest', 'kEast', 'plant', 'pump', 'cask'];
   const rooms: ComplexRoom[] = WASTE_ROOMS.map(s => ({area: ids[s.key], key: s.key, label: s.label, role: s.role}));
   return {
     id: 'waste', slot, areas: order.map(q => ids[q]), entryArea: ids.bay, rooms,

@@ -5,13 +5,13 @@
 // (u, v) by its `inward` side, optionally mirrored along u (seeded). Bands, front (v small) to back:
 //
 //      v ┌──────────────┬──────────────────────┬────────────────┐
-//   F    │ HP checkpoint│                      │ Control room   │   F: the receiving bay on the entrance (truck dock, roller-shutter
-//        │──────────────│    RECEIVING BAY     │────────────────│      frame), the health-physics checkpoint + dosimetry / change
-//        │ Dosimetry /  │   (entry, tall)      │ Security &     │      room on one side, the control room + security office on the
-//        │ change room  │                      │ records office │      other;
+//   F    │              │                      │ Control room   │   F: the receiving bay on the entrance (truck dock, roller-shutter
+//        │ HEALTH-      │    RECEIVING BAY     │────────────────│      frame), the health-physics checkpoint (decon showers, portal
+//        │ PHYSICS      │   (entry, tall)      │ Dosimetry /    │      monitor) on one side, the control room + the dosimetry / change
+//        │ CHECKPOINT   │                      │ change room    │      room (lockers) on the other;
 //        ├──────────────┴──────────────────────┼────────────────┤
 //   M    │        DRUM VAULT (long hall,       │ Compactor &    │   M: the long drum vault (racked drums in rows, aisles along u),
-//        │        racks in rows along u)       │ processing     │      the compactor / processing room;
+//        │        racks in rows along u)       │ processing     │      the compactor / processing room (hot-cell window);
 //        ├─────────────────────────────────────┼────────────────┤
 //   K    │   Sealed vault corridor (west)   ║ heavy door ║ (east)│   K: the sealed-vault corridor, split by a heavy airlock door;
 //        ├──────────────┬────────┬────────────┴────────────────┤
@@ -19,9 +19,9 @@
 //        │ VENT PLANT   │ pumps  │     (casks in a grid, tall)  │      fans, cable trench), the sump & pump room, the dry-cask hall.
 //        └──────────────┴────────┴─────────────────────────────┘
 //
-// Two disjoint routes bay -> plant: (A) bay -> drum vault -> corridor (west) -> plant; (B) bay -> control -> security -> compactor ->
-// corridor (east) -> cask hall -> sump & pumps -> plant. More loops: bay -> HP -> change room -> vault; the airlock between the two
-// corridor halves; optionally vault <-> compactor. 12 spaces, ~800-1200 m² walkable.
+// Two disjoint routes bay -> plant: (A) bay -> drum vault -> corridor (west) -> plant; (B) bay -> control -> change room -> compactor
+// -> corridor (east) -> cask hall -> sump & pumps -> plant. More loops: bay -> HP checkpoint -> vault; the airlock between the two
+// corridor halves; optionally vault <-> compactor. 11 spaces, ~900-1200 m² walkable.
 
 import type {Rng} from '../../../core/rng';
 import type {AreaKind, Rect, RoomType, Side} from '../../stationTypes';
@@ -94,7 +94,7 @@ export class WasteFrame {
   }
 }
 
-export type WasteKey = 'bay' | 'hp' | 'lockers' | 'control' | 'security' | 'vault' | 'compactor' | 'kWest' | 'kEast' | 'plant' | 'pump' | 'cask';
+export type WasteKey = 'bay' | 'hp' | 'lockers' | 'control' | 'vault' | 'compactor' | 'kWest' | 'kEast' | 'plant' | 'pump' | 'cask';
 
 /** Ceiling class of a space: rooms 3.4 m, corridors 3.2 m, the plant 4.8 m, halls 6 m, the cask hall as tall as the slot allows. */
 export type WasteClear = 'room' | 'corr' | 'plant' | 'hall' | 'tall';
@@ -117,7 +117,6 @@ export const WASTE_ROOMS: readonly WasteRoomSpec[] = [
   {key: 'hp', kind: 'room', type: 'crew-room', purpose: 'first-aid-room', label: 'Health-physics checkpoint', role: 'room', clear: 'room'},
   {key: 'lockers', kind: 'room', type: 'crew-room', purpose: 'locker-room', label: 'Dosimetry & change room', role: 'room', clear: 'room'},
   {key: 'control', kind: 'room', type: 'utility', purpose: 'signal-room', label: 'Repository control room', role: 'room', clear: 'room'},
-  {key: 'security', kind: 'room', type: 'crew-room', purpose: 'security-office', label: 'Security & records office', role: 'room', clear: 'room'},
   {key: 'vault', kind: 'room', type: 'storage', purpose: 'storage', label: 'Drum vault', role: 'hall', clear: 'hall'},
   {key: 'compactor', kind: 'room', type: 'utility', purpose: 'custodial-room', label: 'Compactor & processing', role: 'room', clear: 'plant'},
   {key: 'kWest', kind: 'service', type: 'service-corridor', purpose: 'service-corridor', label: 'Sealed vault corridor', role: 'corridor', clear: 'corr'},
@@ -151,7 +150,7 @@ const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
  */
 export function planWaste(region: Rect, inward: Side, ent: Rect, rng: Rng): WastePlan | null {
   const flip = rng.chance(0.5);
-  const jit = [rng.int(-2, 2), rng.int(-2, 2), rng.int(-1, 2), rng.int(-2, 2), rng.int(-1, 1), rng.int(-1, 1)];
+  const jit = [rng.int(-2, 2), rng.int(-2, 2), rng.int(-1, 1), rng.int(-1, 1), rng.int(-1, 1), rng.int(-1, 1)];
   const t = [rng.range(0.25, 0.4), rng.range(0.4, 0.6), rng.range(0.55, 0.75), rng.range(0.3, 0.7), rng.range(0.35, 0.65)];
   const link = rng.chance(0.5);
   for (const mirror of [flip, !flip]) {
@@ -183,18 +182,17 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
   if (eu1 + 1 > c0() + C) { const s = eu1 + 1 - (c0() + C); L += s; R -= s; }
   if (L < 13 || R < 15 || C < 22 || C < eu1 - eu0 + 4) return null;
   const cL = ub0, cC = c0(), cR = cC + C + 1;
-  // bands
-  let F = clamp(Math.round(Vw * 0.27) + jit[2], 15, 22), B = clamp(Math.round(Vw * 0.31) + jit[3], 16, 26);
+  // bands (the back band deep enough for two rows of dry casks: 2 x 3.23 m + an aisle + wall aisles = 10.5 m = 21 cells)
+  let F = clamp(Math.round(Vw * 0.245) + jit[2], 15, 22), B = clamp(Math.round(Vw * 0.34) + jit[3], 18, 28);
   const K = 6;
   let M = Vw - F - K - B - 3;
-  while (M < 14 && B > 16) { B--; M++; }
-  while (M < 14 && F > 15) { F--; M++; }
+  while (M < 15 && B > 18) { B--; M++; }
+  while (M < 15 && F > 15) { F--; M++; }
   if (M < 14) return null;
   const vF = v0, vM = vF + F + 1, vK = vM + M + 1, vB = vK + K + 1;
   // F splits (front room toward the bay's entrance side, back room behind it)
-  const fA = Math.ceil((F - 1) * 0.55) + jit[4], fB = F - 1 - fA;
-  const gA = Math.ceil((F - 1) * 0.55) + jit[5], gB = F - 1 - gA;
-  if (fB < 6 || gB < 6 || fA < 7 || gA < 7) return null;
+  const gA = clamp(Math.ceil((F - 1) * 0.55) + jit[5], 7, F - 7), gB = F - 1 - gA;
+  if (gB < 6 || gA < 7) return null;
   // B splits: plant | pump | cask
   let P = clamp(Math.round(Uw * 0.3), 18, 28), Q = clamp(Math.round(Uw * 0.16), 10, 15);
   let Cw = Uw - P - Q - 2;
@@ -206,10 +204,9 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
   if (ub1 - Math.max(bCask, cR) < 8) return null;
   const rooms: Record<WasteKey, LRect> = {
     bay: {u: cC, v: vF, du: C, dv: F},
-    hp: {u: cL, v: vF, du: L, dv: fA},
-    lockers: {u: cL, v: vF + fA + 1, du: L, dv: fB},
+    hp: {u: cL, v: vF, du: L, dv: F},
     control: {u: cR, v: vF, du: R, dv: gA},
-    security: {u: cR, v: vF + gA + 1, du: R, dv: gB},
+    lockers: {u: cR, v: vF + gA + 1, du: R, dv: gB},
     vault: {u: cL, v: vM, du: L + 1 + C, dv: M},
     compactor: {u: cR, v: vM, du: R, dv: M},
     kWest: {u: cL, v: vK, du: L + 1 + C, dv: K},
@@ -220,11 +217,10 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
   };
   const doors: WasteDoorSpec[] = [
     {a: 'bay', b: 'hp', w: 4, h: 2.4, t: t[0], kind: 'personnel'},
-    {a: 'hp', b: 'lockers', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
-    {a: 'lockers', b: 'vault', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
+    {a: 'hp', b: 'vault', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
     {a: 'bay', b: 'control', w: 4, h: 2.4, t: t[0], kind: 'personnel'},
-    {a: 'control', b: 'security', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
-    {a: 'security', b: 'compactor', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
+    {a: 'control', b: 'lockers', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
+    {a: 'lockers', b: 'compactor', w: 4, h: 2.4, t: t[1], kind: 'personnel'},
     {a: 'bay', b: 'vault', w: 8, h: 3.6, t: 0.5, kind: 'wide'},
     {a: 'vault', b: 'kWest', w: 5, h: 2.8, t: t[2], kind: 'heavy'},
     {a: 'compactor', b: 'kEast', w: 4, h: 2.4, t: t[3], kind: 'personnel'},
@@ -235,14 +231,18 @@ function tryPlan(f: WasteFrame, ent: Rect, jit: number[], t: number[], link: boo
     {a: 'pump', b: 'cask', w: 4, h: 2.4, t: 0.7, kind: 'personnel'},
   ];
   if (link) doors.push({a: 'vault', b: 'compactor', w: 4, h: 2.4, t: 0.5, kind: 'personnel'});
-  // the generator: skid (8 x 4 cells = 4 x 2 m, long axis along u) centred in the plant, its use cell beyond the end toward the door
+  // the generator: skid (8 x 4 cells = 4 x 2 m, long axis along u) in the middle of the plant, its use cell one free cell beyond the
+  // skid's end on the plant door's side, >= 5 cells (2.5 m) from the side wall (wall fittings + their access strips never reach it)
   const pl = rooms.plant;
   const dU = doorCentreU(rooms.kWest, pl, 5, t[4]);
-  const fu = pl.u + Math.floor((pl.du - 8) / 2), fv = pl.v + Math.max(4, Math.floor((pl.dv - 4) / 2) + 1);
+  const lowSide = dU < pl.u + pl.du / 2;
+  const slack = Math.max(0, Math.floor((pl.du - 17) / 2));
+  const fu = lowSide ? pl.u + 7 + slack : pl.u + pl.du - 15 - slack;
+  const fv = pl.v + Math.max(4, Math.floor((pl.dv - 4) / 2) + 1);
   if (fv + 4 > pl.v + pl.dv - 3) return null;
   const foot: LRect = {u: fu, v: fv, du: 8, dv: 4};
-  const use: [number, number] = dU < fu + 4 ? [fu - 2, fv + 2] : [fu + 9, fv + 2];
-  if (use[0] - 2 < pl.u || use[0] + 2 >= pl.u + pl.du) return null;
+  const use: [number, number] = lowSide ? [fu - 2, fv + 2] : [fu + 9, fv + 2];
+  if (use[0] - 5 < pl.u || use[0] + 5 >= pl.u + pl.du || fu < pl.u + 2 || fu + 8 > pl.u + pl.du - 2) return null;
   return {frame: f, rooms, doors, entrance: {u0: eu0, u1: eu1, v: ev}, gen: {foot, use}};
 }
 

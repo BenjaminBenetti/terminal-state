@@ -29,10 +29,23 @@ export interface WasteStripe { x0: number; z0: number; x1: number; z1: number; y
 /** A status beacon (unlit glow, no light source): yellow-green when `on`, dead grey otherwise. */
 export interface WasteBeacon { x: number; y: number; z: number; on: boolean }
 
-/** An approved Reactor kit model placed in the complex (REACTOR_KIT piece; real size, front +Z rotated by `yaw` about y). */
-export interface WasteModel { piece: 'switchgear' | 'controlConsole' | 'coolantValve' | 'coolantPump'; x: number; y: number; z: number; yaw: number; w: number; d: number; h: number }
+/**
+ * The lead's approved models the complex places: REACTOR_KIT pieces (switchgear, control console, coolant valve) and the expansion's
+ * waste set (assets/reactorExpansionKit.generated.ts REACTOR_X_KIT: wasteDrum, storageCask, deconShower, hotCellWindow).
+ */
+export type WasteModelPiece = 'switchgear' | 'controlConsole' | 'coolantValve' | 'wasteDrum' | 'storageCask' | 'deconShower' | 'hotCellWindow';
 
-/** A wall ventilation fan: hub centre (absolute y), the wall's outward normal (into the room), duct ring radius (m). */
+/**
+ * An approved model placed in the complex: real size (the cooked dims), base centre (x, y, z), front +Z turned by `yaw` about +y
+ * (three.js rotation.y: front = (sin yaw, cos yaw)). w / d / h = its footprint / height as placed (collision / fallback box).
+ */
+export interface WasteModel { piece: WasteModelPiece; x: number; y: number; z: number; yaw: number; w: number; d: number; h: number }
+
+/**
+ * A ventilation fan standing against a wall (on its plinth): (x, z) = the wall face point behind the hub, y = the hub height
+ * (absolute), (nx, nz) = the normal from the wall into the room, r = duct ring radius (m). Drawn as the lead's REACTOR_KIT fan housing
+ * (back flange on the wall) with its rotor, or a procedural duct ring when the model is not loaded.
+ */
 export interface WasteFan { x: number; y: number; z: number; nx: number; nz: number; r: number }
 
 export interface WasteDecor {
@@ -47,21 +60,32 @@ export interface WasteDecor {
   beacons: WasteBeacon[];
   models: WasteModel[];
   fans: WasteFan[];
+  /**
+   * The generator's power route out of the complex (world polyline, absolute y): the floor trench from the skid to the plant door, then
+   * the ceiling cable tray through the sealed corridor, the drum vault and the receiving bay to the entrance on the shaft deck. ARCH /
+   * the host may continue ReactorGenerator.cable from its last point.
+   */
+  cable: {x: number; y: number; z: number}[];
 }
 
-/** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie). */
+/** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie; the hero models' cooked dims). */
 export const WASTE_SIZES = {
-  /** A 200 L steel drum: 0.585 m diameter x 0.88 m (ISO 15750). */
-  drum: {r: 0.29, h: 0.88},
-  /** Drum rack bay: 2 drums across (1.4 m), 2 deep back-to-back (1.3 m), 2 tiers (beam at 1.05 m, top rail 2.2 m). */
-  rackBay: {w: 1.4, d: 1.3, tier: 1.05, top: 2.2},
-  /** Banded 4-drum pallet: 1.2 x 1.2 m, deck 0.14 m. */
-  pallet: {w: 1.2, deck: 0.14},
-  /** Dry storage cask (vertical concrete overpack): ~3.3 m diameter, 5.0-5.8 m tall (ceiling permitting). */
-  cask: {r: 1.65, h: 5.4, minH: 4.2},
-  /** Decon shower stall 1.0 x 1.0 x 2.3 m. */
-  shower: {w: 1.0, h: 2.3},
+  /** A 200 L steel drum (REACTOR_X_KIT.wasteDrum 0.63 x 0.90 x 0.63). */
+  drum: {r: 0.315, h: 0.9},
+  /** Drum rack bay: 2 drums across (1.4 m), 2 deep back-to-back (1.3 m), 2 tiers (deck at 1.06 m, top rail 2.2 m). */
+  rackBay: {w: 1.4, d: 1.3, tier: 1.06, top: 2.2},
+  /** Banded 4-drum pallet: 1.3 x 1.3 m steel skid, deck 0.12 m. */
+  pallet: {w: 1.3, deck: 0.12},
+  /** Vented dry storage cask (REACTOR_X_KIT.storageCask 3.88 x 4.60 x 3.23). */
+  cask: {w: 3.88, h: 4.6, d: 3.23},
+  /** Decon shower booth (REACTOR_X_KIT.deconShower 1.76 x 2.40 x 1.50). */
+  shower: {w: 1.76, h: 2.4, d: 1.5},
+  /** Hot-cell window wall section with two manipulator arms (REACTOR_X_KIT.hotCellWindow 3.60 x 3.00 x 1.76), set into a wall. */
+  hotCell: {w: 3.6, h: 3.0, d: 1.76},
 } as const;
+
+/** Most hero drums instanced in one complex (~3 k triangles each: the racks hold at most this many; the rest of a rack stays empty). */
+export const WASTE_DRUM_CAP = 160;
 
 /** Collision-prop purpose tags (QA) of the complex's anchored decor. */
 export type WasteTag = 'waste:rack' | 'waste:pallet' | 'waste:cask' | 'waste:shower' | 'waste:compactor' | 'waste:conveyor' | 'waste:machine' | 'waste:fan' | 'waste:door-leaf' | 'waste:portal';
