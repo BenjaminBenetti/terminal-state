@@ -1168,7 +1168,7 @@ export const MALL_STORAGE_FILL: Readonly<Partial<Record<string, StorageFill>>> =
 const mallShops = (progs: readonly string[], sales: number, back = sales): Record<string, number> =>
   Object.fromEntries(progs.flatMap(p => [[`mall-${p}`, sales], [`mall-${p}-back`, back]]));
 /** Fashion / accessory shops: a hard hat or body armour is out of place there. */
-const MALL_BOUTIQUES = ['clothing', 'womenswear', 'shoes', 'luggage', 'department'];
+const MALL_BOUTIQUES = ['clothing', 'womenswear', 'shoes', 'luggage', 'department', 'lingerie']; // (+ task mall-lingerie-20261102, lane STORE)
 /**
  * Task mall-round3-20261031 (lane SHOPS, R6 — user: "clothing stores should have higher gear drop chance (no need to change if this is
  * already the case). The same idea applies to all stores where the theme would reasonably boost spawn chance of associated loot."):

@@ -246,6 +246,7 @@ export const BRAND_STYLE: Record<MallProgram, BrandStyle> = {
   hardware: {bg: '#d29a1e', fg: '#1a1a1a', accent: '#1a1a1a', font: 'condensed', icon: 'wrench'},
   clothing: {bg: '#e9e1d4', fg: '#3a2a1e', accent: '#a47a50', font: 'serif', icon: 'hanger'},
   womenswear: {bg: '#fbf3ef', fg: '#7a2e4a', accent: '#c9a96e', font: 'serif', icon: 'hanger'}, // task mall-round3 (lane SHOPS, R4)
+  lingerie: {bg: '#2a1626', fg: '#f4dbe4', accent: '#c9a96e', font: 'serif', icon: 'hanger'}, // task mall-lingerie-20261102 (lane STORE): plum / blush / gold
   shoes: {bg: '#222224', fg: '#f2f0ea', accent: '#d8c8a8', font: 'sans', icon: 'shoe'},
   department: {bg: '#1e2a3a', fg: '#efe8d8', accent: '#c8a45a', font: 'serif', icon: 'star'},
   'food-court': {bg: '#b03a2e', fg: '#fff4e0', accent: '#f2c14e', font: 'rounded', icon: 'fork'},
