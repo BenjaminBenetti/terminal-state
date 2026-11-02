@@ -46,7 +46,8 @@ export function chooseSpawnLook(
   seed: number, index: number, s: Pick<ZombieSpawn, 'type' | 'look'>, ordinary: SpawnLookLibrary, lingerie?: Pick<SpawnLookLibrary, 'isValid'> | null, pool?: ZombiePool,
 ): SpawnLookChoice {
   if (s.look === 'lingerie') {
-    const look = lingerieLook(seed, index);
+    // (lane FIT's optional `usable`: the per-seed fit order stepped by the index, restricted to the fits this library can build)
+    const look = lingerieLook(seed, index, lingerie ? l => lingerie.isValid(l) : undefined);
     if (lingerieLookUsable(look, lingerie)) return {look, library: 'lingerie'};
   }
   return {look: pickZombieLook(seed, index, s.type, ordinary.available, pool), library: 'ordinary'};

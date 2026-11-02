@@ -17,9 +17,12 @@ import {Rng, hashString} from '../src/core/rng';
 import {FLOOR} from '../src/gen/grid';
 import {clearAround} from '../src/gen/stationDress';
 import {generateMallLevel} from '../src/gen/mall/index';
+import {LEVELS} from '../src/levels/registry';
+import type {LevelId} from '../src/levels/types';
+import {createMemory, enemiesToSpawn} from '../src/run/memory';
 import type {MallRect} from '../src/gen/mall/mallTypes';
-import {LINGERIE_PURPOSE, LINGERIE_SPAWN_RULES, placeLingerieSpawns, type LingerieShop} from '../src/gen/mall/lingerieSpawns';
-import {LINGERIE_CONTEXT, LINGERIE_FAMILY_POOL, MALL_SPAWN_PROFILE, sealsPassage, spawnContextOf, validateSpawnProfile} from '../src/ai/spawnTables';
+import {LINGERIE_PURPOSE, LINGERIE_SPAWN_RULES, lingerieStores, placeLingerieSpawns, type LingerieShop} from '../src/gen/mall/lingerieSpawns';
+import {LINGERIE_CONTEXT, LINGERIE_FAMILY_POOL, MALL_SPAWN_PROFILE, sealsPassage, spawnContextOf, spawnProfile as spawnProfileOf, validateSpawnProfile} from '../src/ai/spawnTables';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {applyFamilySpacing} from '../src/ai/familySpacing';
 import {chooseSpawnLook, lingerieLookUsable, lingerieModelKeysFor, type SpawnLookLibrary} from '../src/ai/spawnLook';
@@ -180,7 +183,7 @@ const ORDINARY: SpawnLookLibrary = {
   isValid: look => 'wear' in look && ZOMBIE_BODIES.some(b => b.id === look.body) && Object.values(look.wear).every(w => ZOMBIE_WEARABLES.some(x => x.id === w)),
 };
 /** A lingerie library stand-in that builds every look of the lingerie bodies with a top + a bottom of one design. */
-const LINGERIE_LIB = {isValid: (look: ZombieLook | LegacyZombieLook) => 'wear' in look && LINGERIE_BODY_IDS.includes(look.body) && /^lingerie-[a-z]+-top$/.test(look.wear.upper ?? '') && look.wear.lower === look.wear.upper!.replace(/-top$/, '-bottom')};
+const LINGERIE_LIB = {isValid: (look: ZombieLook | LegacyZombieLook) => 'wear' in look && (LINGERIE_BODY_IDS as readonly string[]).includes(look.body) && /^lingerie-[a-z]+-top$/.test(look.wear.upper ?? '') && look.wear.lower === look.wear.upper!.replace(/-top$/, '-bottom')};
 const spawn = (look?: 'lingerie'): Pick<ZombieSpawn, 'type' | 'look'> => ({type: 'shambler', ...(look ? {look} : {})});
 
 describe('spawn-time looks', () => {
@@ -203,7 +206,7 @@ describe('spawn-time looks', () => {
     expect(lingerieLookUsable({body: 'paleGaze', wear: {lower: 'x'}}, {isValid: () => true})).toBe(false);
     expect(lingerieLookUsable(null, {isValid: () => true})).toBe(false);
     for (let i = 0; i < 32; i++) {
-      const l = lingerieLook(99, i), ordinary = {look: pickZombieLook(99, i, 'shambler', ORDINARY.available), library: 'ordinary'};
+      const l = lingerieLook(99, i, look => LINGERIE_LIB.isValid(look)), ordinary = {look: pickZombieLook(99, i, 'shambler', ORDINARY.available), library: 'ordinary'};
       expect(chooseSpawnLook(99, i, spawn('lingerie'), ORDINARY, LINGERIE_LIB)).toEqual(lingerieLookUsable(l, LINGERIE_LIB) ? {look: l, library: 'lingerie'} : ordinary);
       // garments not loaded (no lingerie library) / not fitted: the ordinary pick — never a bare or half-dressed body
       expect(chooseSpawnLook(99, i, spawn('lingerie'), ORDINARY, null)).toEqual(ordinary);
@@ -215,7 +218,7 @@ describe('spawn-time looks', () => {
     for (let i = 0; i < 16; i++) {
       const l = lingerieLook(4242, i);
       expect(lingerieLook(4242, i)).toEqual(l);
-      expect(LINGERIE_BODY_IDS).toContain(l.body);
+      expect(LINGERIE_BODY_IDS as readonly string[]).toContain(l.body);
       expect(l.wear.upper && l.wear.lower).toBeTruthy();
     }
   });
@@ -223,5 +226,121 @@ describe('spawn-time looks', () => {
   it('the lazy garment keys are asked only for a layout holding a lingerie-tagged spawn', () => {
     expect(lingerieModelKeysFor({zombies: [{x: 0, z: 0, yaw: 0, type: 'shambler', area: 0}]})).toEqual([]);
     expect(lingerieModelKeysFor({zombies: [{x: 0, z: 0, yaw: 0, type: 'shambler', area: 0, look: 'lingerie'}]})).toEqual(Object.keys(LINGERIE_MODEL_FILES).sort());
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Generated levels: scope, accounting, parity without a store, determinism, persistence
+
+/** Order-sensitive fingerprint of a whole layout (records + every typed array of the grids; shared references hashed once each time). */
+function layoutHash(l: StationLayout): string {
+  let h = 2166136261;
+  const mix = (t: string) => { h = hashString(t, h); };
+  const json = JSON.stringify(l, (_k, v) => {
+    if (ArrayBuffer.isView(v)) { const b = new Uint8Array(v.buffer, v.byteOffset, v.byteLength); let x = 2166136261; for (let i = 0; i < b.length; i++) x = Math.imul(x ^ b[i], 16777619); return `#${b.length}:${x >>> 0}`; }
+    return v;
+  });
+  mix(json);
+  return (h >>> 0).toString(16);
+}
+
+const MALL_SEEDS = Array.from({length: 16}, (_, k) => (k % 2 === 0 ? 9100 + 104729 * (k >> 1) : 50021 + 7919 * (k >> 1)));
+const malls = new Map<number, StationLayout>();
+const mallOf = (seed: number) => { let l = malls.get(seed); if (!l) malls.set(seed, (l = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'}))); return l; };
+const {lingerie: _lingerie, ...CONTEXTS_WITHOUT} = P.contexts;
+const WITHOUT = {...P, contexts: CONTEXTS_WITHOUT};
+
+describe('generated malls: the store-local variants exist only inside a lingerie store', () => {
+  it('every lingerie-tagged spawn stands in its store (own sales floor, walkable, off the shopfront), appended last, context lingerie, an ordinary zombie', () => {
+    const report: string[] = [];
+    for (const seed of MALL_SEEDS) {
+      const l = mallOf(seed), stores = lingerieStores(l);
+      const tagged = l.zombies.map((z, i) => [z, i] as const).filter(([z]) => z.look === 'lingerie');
+      if (!stores.length) { expect(tagged, `seed ${seed}: no store, no variants`).toEqual([]); report.push(`seed ${seed}: no lingerie store`); continue; }
+      expect(stores.length).toBeLessThanOrEqual(1);
+      const shop = stores[0], first = l.zombies.findIndex(z => z.look === 'lingerie');
+      expect(tagged.length, `seed ${seed}: ${shop.id}`).toBeGreaterThanOrEqual(1);
+      expect(tagged.length).toBeLessThanOrEqual(LINGERIE_CONTEXT.count[1]);
+      expect(tagged.map(([, i]) => i)).toEqual(tagged.map((_, k) => first + k)); // contiguous ...
+      expect(first + tagged.length).toBe(l.zombies.length); // ... and last
+      const g = l.levels[shop.level].grid, rects = shop.changing ?? [];
+      let inChanging = 0;
+      for (const [z, i] of tagged) {
+        const [x, y] = g.cellOf(z.x, z.z);
+        expect(z.level, `seed ${seed} #${i}`).toBe(shop.level);
+        expect(g.area[g.idx(x, y)]).toBe(z.area);
+        expect(z.area === shop.area || l.areas[z.area].purpose === shop.fit?.purpose).toBe(true);
+        expect(z.area).not.toBe(shop.backroom);
+        expect(g.walkable(x, y)).toBe(true);
+        expect(clearAround(g as never, x, y, 1)).toBe(true);
+        expect(Math.min(...(shop.frontages ?? [shop.frontage]).map(f => rectDist(f, z.x, z.z)))).toBeGreaterThanOrEqual(LINGERIE_SPAWN_RULES.entryKeepM);
+        expect(sealsPassage(g, z.x, z.z, LINGERIE_SPAWN_RULES.passageRadiusM)).toBe(false);
+        expect([z.type, z.archetype, z.horde]).toEqual(['shambler', 'zombie', undefined]);
+        expect(spawnContextOf(l, P, i)).toBe('lingerie');
+        if (rects.some(q => inRect(q, z.x, z.z))) inChanging++;
+      }
+      if (rects.length) expect(inChanging, `seed ${seed}: mostly in the changing area`).toBeGreaterThan(tagged.length / 2);
+      report.push(`seed ${seed}: ${shop.id} L${shop.level} ${shop.lot}: ${tagged.length} variants (${inChanging} in the changing area)`);
+    }
+    process.stdout.write(`\n[mall-lingerie-spawns] generated malls:\n   ${report.join('\n   ')}\n`);
+  });
+
+  it('without a lingerie store the level is byte-identical to a generation without the pass; with one, only the appended variants differ', () => {
+    for (const seed of MALL_SEEDS.slice(0, 8)) {
+      const a = mallOf(seed), b = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'}, {spawns: WITHOUT});
+      const n = a.zombies.filter(z => z.look === 'lingerie').length;
+      if (!lingerieStores(a).length) { expect(n).toBe(0); expect(layoutHash(a), `seed ${seed}`).toBe(layoutHash(b)); continue; }
+      // the store's variants are the only difference: every other spawn (index, family, position) and every other record is identical
+      expect(JSON.stringify(a.zombies.slice(0, a.zombies.length - n))).toBe(JSON.stringify(b.zombies));
+      const tail = a.zombies.splice(a.zombies.length - n);
+      try { expect(layoutHash(a), `seed ${seed}`).toBe(layoutHash(b)); } finally { a.zombies.push(...tail); }
+      for (let i = 0; i < b.zombies.length; i++) expect(spawnContextOf(a, P, i)).toBe(spawnContextOf(b, WITHOUT, i));
+    }
+  });
+
+  it('deterministic across rebuilds (revisit / streaming / Retry regenerate the same spawns and looks); kills by index never come back', () => {
+    const seed = MALL_SEEDS.find(s => lingerieStores(mallOf(s)).length) ?? MALL_SEEDS[0];
+    const a = mallOf(seed), b = generateMallLevel({levelSeed: seed, startWeapon: 'pistol'});
+    expect(JSON.stringify(b.zombies)).toBe(JSON.stringify(a.zombies));
+    const look = (l: StationLayout) => l.zombies.map((z, i) => chooseSpawnLook(l.seed, i, z, ORDINARY, LINGERIE_LIB));
+    expect(look(b)).toEqual(look(a));
+    look(a).forEach((c, i) => expect(c.library).toBe(a.zombies[i].look === 'lingerie' && lingerieLookUsable(lingerieLook(a.seed, i, look => LINGERIE_LIB.isValid(look)), LINGERIE_LIB) ? 'lingerie' : 'ordinary'));
+    // a killed variant stays dead on the rebuilt section (per-index memory): no reroll, no duplicate respawn
+    const mem = createMemory({level: 'mall', section: 'main'});
+    const tagged = a.zombies.flatMap((z, i) => (z.look === 'lingerie' ? [i] : []));
+    mem.killed.push(...tagged.slice(0, 2));
+    const live = enemiesToSpawn(b.zombies.length, mem);
+    expect(live.filter(i => tagged.slice(0, 2).includes(i))).toEqual([]);
+    expect(live.length).toBe(b.zombies.length - Math.min(2, tagged.length));
+    expect(new Set(live).size).toBe(live.length);
+  });
+});
+
+describe('no lingerie leak to any other level', () => {
+  const LEVELS_TO_SCAN: [LevelId, number[]][] = [['subway', [11, 222, 3333]], ['office', [11, 222]], ['reactor', [11, 222]]];
+  it('Subway / Office / Reactor: no spawn carries the lingerie look or context; every look is the ordinary pick; no garment is fetched', () => {
+    for (const [id, seeds] of LEVELS_TO_SCAN) for (const seed of seeds) {
+      const l = LEVELS[id].generate('main', {levelSeed: seed, startWeapon: 'pistol'});
+      expect(l.zombies.length, `${id} ${seed}`).toBeGreaterThan(0);
+      expect(l.zombies.filter(z => z.look !== undefined), `${id} ${seed}`).toEqual([]);
+      expect(lingerieStores(l)).toEqual([]);
+      expect(lingerieModelKeysFor(l)).toEqual([]);
+      l.zombies.forEach((z, i) => {
+        expect(spawnContextOf(l, spawnProfileOf(id), i)).not.toBe('lingerie');
+        expect(chooseSpawnLook(l.seed, i, z, ORDINARY, LINGERIE_LIB)).toEqual({look: pickZombieLook(l.seed, i, z.type, ORDINARY.available), library: 'ordinary'});
+      });
+    }
+  });
+
+  it('the mall: hordes, annex spawns, ambient spawns (other stores, even inside the lingerie store) keep the ordinary pick', () => {
+    for (const seed of MALL_SEEDS) {
+      const l = mallOf(seed);
+      l.zombies.forEach((z, i) => {
+        if (z.look === 'lingerie') return;
+        expect(spawnContextOf(l, P, i)).not.toBe('lingerie');
+        expect(chooseSpawnLook(l.seed, i, z, ORDINARY, LINGERIE_LIB).library).toBe('ordinary');
+      });
+      if (!lingerieStores(l).length) expect(lingerieModelKeysFor(l)).toEqual([]);
+    }
   });
 });
