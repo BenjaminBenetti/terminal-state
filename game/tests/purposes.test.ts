@@ -319,7 +319,8 @@ describe('purposes in generated levels', () => {
     // Iteration 16: the office tower's purposes ('office-*', gen/office/*) never fill station slots. Task track3-eaton-centre-20261031
     // (lane SHOPS): nor do The Eaton's Center's ('mall-*', preset per shop by gen/mall/shops.ts; weight 0).
     // Track 2 (lane CONTENT): the service-annex holder loot keys ('annex-stash', 'annex-picked') are prop-level keys, never an area's.
-    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('mall-') && !p.id.startsWith('annex-')).length - 2);
+    // task reactor-expansion-20261101 (lane BUNKER): nor do the Reactor side complexes' own purposes ('reactor-*', preset; weight 0).
+    expect(seenBack.size).toBe(Object.values(ROOM_PURPOSES).filter(p => (!p.requires || p.requires.some(isP7Kind)) && !p.id.startsWith('office-') && !p.id.startsWith('mall-') && !p.id.startsWith('annex-') && !p.id.startsWith('reactor-')).length - 2);
   });
 
   it('coolers / display cases: loot sits on the measured open-front shelves (Lane A), never in front of the glass', () => {

@@ -180,11 +180,11 @@ from depth, using existing families only: no boss and no new enemy. The ambient 
 `placeOfficeEnemies` on its own fork:
 
 - **`station`**: the rim storey (platform, rim gallery, rim control office), U{2..4}, mostly zombies. The arrival is safe-ish.
-- **`floor`**: each of the two UPPER walkway tiers (gas zone 1), U{4..6} per tier. Its own pool `familyPool({ratdog: 0.12,
+- **`floor`**: each of the two UPPER walkway tiers (gas zone 1) including the BUNKER (tier 1) and MINES (tier 2) side complexes, U{6..8} per tier. Its own pool `familyPool({ratdog: 0.12,
   blightbelly: 0.04})`: rat/dogs flank on the catwalks.
-- **`ring`**: each of the two DEEP walkway tiers (gas zone 2), U{6..8} per tier. Its own pool `familyPool({ratdog: 0.1, blightbelly:
+- **`ring`**: each of the two DEEP walkway tiers (gas zone 2) including the WASTE repository (tier 4), U{8..11} per tier. Its own pool `familyPool({ratdog: 0.1, blightbelly:
   0.14, siren: 0.35})`. A Blightbelly's death puff temporarily re-gasses cleared air.
-- **`pit`**: the core floor and its rooms (pump hall, control room, store), U{7..10}. Its own pool `familyPool({ratdog: 0.08,
+- **`pit`**: the core floor and its rooms (pump hall, control room, store), U{9..12}. Its own pool `familyPool({ratdog: 0.08,
   blightbelly: 0.16, siren: 0.35})`. These are the densest fights.
 - **`service`**: `SERVICE_CONTEXT`, the rim station's Beyond-the-Station annex (`TRACK_EXT_REACTOR.annex.max = 1`, the standard
   one-roll chance). The Strainer appears there and nowhere else (`STRAINER_CONTEXTS` unchanged).
@@ -193,8 +193,13 @@ from depth, using existing families only: no boss and no new enemy. The ambient 
   to a zombie. The flashlight you need in the gas is also what wakes her.
 - **No horde pool** in the first pass. The noise of a running auxiliary generator pulls EXISTING enemies onto its landing
   (`world/reactor/generators.ts`, `alertListeners`); nothing spawns.
-- **Census** (12 generated pits, seeds `9100 + 104729k`): ~**36** ambient enemies per run (station 2–4, floor 8–12, ring 13–16, pit
-  7–10, plus a service annex in 1 of 12 runs); Sirens mean **1.0** (max 2); Blightbellies mean 3.2; rat/dogs mean 4.2.
+- **Census** (12 generated pits, seeds `9100 + 104729k`, task reactor-expansion-20261101 with all three side complexes carved and the
+  mines follow-up): ~**47** ambient enemies per run (43–50: station 2–4, floor 12–16, ring 18–21, pit 9–12, plus a service annex in 1
+  of 12 runs); Sirens mean **1.6** (max 2); Blightbellies mean 4.3; rat/dogs mean 4.9. The tier counts grew with the complexes (~2,600
+  m² of new floor on tiers 1 / 2 / 4) so the shaft is not thinned out.
+- **Density rises with depth by construction:** an upper tier's maximum (8) is a deep tier's minimum. With the complexes' floor the upper
+  tiers now place their full draw, so the two upper tiers can never outnumber the two deep ones. Checked on those 12 pits and on the 8
+  standard seeds 1–8 (upper pair 12–16, deep pair 16–21).
 
 ## Units: what the numbers are
 

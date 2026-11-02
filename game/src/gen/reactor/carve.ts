@@ -21,7 +21,11 @@ import {STAIR, layStairRun, type StairFlight, type StairSpec} from '../traversal
 import {SLAB} from '../levelGen';
 import {TRENCH_DEPTH, type Area, type AreaKind, type AreaRole, type Rect, type RoomType} from '../stationTypes';
 import type {ReactorDeck} from './reactorTypes';
+import {carveCoreFloor, type CoreFloorCarve} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 import {BANK_CELLS, BED, CLEAR, CORE_LEVEL, GEN_LANDING, LANE, ORG, REACTOR_LEVELS, ROOM_MARGIN, TIERS, VESSEL, reactorStoreyLabel, type ReactorFrame} from './frame';
+// task reactor-expansion-20261101 (lane HOST): the side-complex slots (planned before the rooms) and their canvas margin
+import {COMPLEX_MARGIN, planComplexSlots, slotBlocks} from './complex/host';
+import type {ComplexSlot} from './complex/types';
 
 export type CellRect = Rect;
 /** A pit wall in the canonical frame: 'stair' (west), 'organ' (east), 'N', 'S'. */
@@ -64,6 +68,10 @@ export interface ReactorCarve {
   vessel: [number, number][];
   /** The core floor's sector areas. */
   coreAreas: number[];
+  /** Task reactor-expansion-20261101 (lane CORE): the core floor's goop pool / bridges / loop layout (gen/reactor/coreFloor.ts). */
+  coreFloor: CoreFloorCarve;
+  /** Task reactor-expansion-20261101 (lane HOST): the side-complex slots (canvas cells; gen/reactor/complex/host.ts). */
+  slots: ComplexSlot[];
   /** Mirror: canonical px -> canvas x. */
   cx: (px: number) => number;
   rectC: (px: number, pz: number, w: number, h: number) => CellRect;
@@ -79,9 +87,11 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 export function reactorCanvas(f: ReactorFrame): {W: number; H: number; coreW: number; coreH: number; PX0: number; PZ0: number; minPx: number; maxPx: number} {
   const bedRows = f.double ? BED.double : BED.single;
   const PZ0 = ORG + 3 + bedRows + f.Pd + 1;
-  const minPx = Math.min(-ROOM_MARGIN, -f.shift - TUN - 2), maxPx = Math.max(f.PW + ROOM_MARGIN, -f.shift + f.Lp + TUN + 2);
+  // task reactor-expansion-20261101 (lane HOST): rock for the side complexes beyond the stair / organ / south walls (COMPLEX_MARGIN)
+  const M = Math.max(ROOM_MARGIN, COMPLEX_MARGIN);
+  const minPx = Math.min(-M, -f.shift - TUN - 2), maxPx = Math.max(f.PW + M, -f.shift + f.Lp + TUN + 2);
   const PX0 = f.stairWall === 'W' ? ORG - minPx : ORG + maxPx - f.PW + 1;
-  const coreW = ORG + (maxPx - minPx) + ORG + 1, coreH = PZ0 + f.PD + ROOM_MARGIN + ORG;
+  const coreW = ORG + (maxPx - minPx) + ORG + 1, coreH = PZ0 + f.PD + M + ORG;
   return {W: coreW + 150, H: coreH + 110, coreW, coreH, PX0, PZ0, minPx, maxPx};
 }
 
@@ -161,7 +171,12 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   const towers: TowerRec[] = f.lines.map((l, li) => {
     const tx = l.px - 3, tz = l.tz;
     const legs: [number, number][] = [[tx, tz], [tx + 9, tz], [tx, tz + 9], [tx + 9, tz + 9]];
-    for (const [lx, lz] of legs) reserved[lz * PW + lx] = 1;
+    // task reactor-expansion-20261101 (lane PATHS): a leg stands on its corner POINT (the deck's outer corner): reserve the 2 x 2 cells
+    // round it, so the leg, its foot plate and the bracing never stand in the core floor's / a deck's walkable cells
+    for (const [lx, lz] of legs) {
+      const ox = lx === tx ? -1 : 1, oz = lz === tz ? -1 : 1;
+      for (const [ax, az] of [[0, 0], [ox, 0], [0, oz], [ox, oz]]) { const qx = lx + ax, qz = lz + az; if (qx >= 0 && qz >= 0 && qx < PW && qz < PD) reserved[qz * PW + qx] = 1; }
+    }
     return {line: li, px: tx, pz: tz, legs, tiers: l.tiers};
   });
 
@@ -284,6 +299,9 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     }
   }
 
+  // --- 4c. Task reactor-expansion-20261101 (lane HOST): the side-complex slots (free rock beside the pit; same-storey rooms avoid them)
+  const slots = planComplexSlots({k, rng: rng.fork('complex-slots'), bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, decks, terraces, cx, rectC});
+
   // --- 5. Rooms cut into the rock behind the decks ----------------------------------------------------------------------------
   const rooms: RoomRec[] = [];
   const deckIds = new Set(decks.map(d => d.area));
@@ -333,6 +351,7 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
         const r = roomRect(w, a0, wd, 0, dd);
         if (r.x < ORG + 1 || r.y < ORG + 1 || r.x + r.w > cv.coreW - ORG - 1 || r.y + r.h > cv.coreH - ORG - 1) continue;
         if (!k.rectFree(r, lv)) continue;
+        if (slotBlocks(slots, r, lv)) continue; // lane HOST: never in a side complex's region of this storey
         // a door span whose front cells (just inside the pit) are flat deck of this storey
         const dw = Math.min(s.door, wd - 2);
         const offs: number[] = [];
@@ -379,12 +398,21 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
     if (!at(0, 1, 2, 11, 0) || !at(1, 2, PD - 9, PD - 11, Math.PI) || !at(2, TIERS, PD - 9, PD - 11, Math.PI)) return fail('generators');
   }
 
+  // task reactor-expansion-20261101 (lane CORE): the core floor — vessel footprint, service ring, goop pool, bridges, loop layout
+  const coreFloor = carveCoreFloor({
+    g: grids[CORE_LEVEL], base: bases[CORE_LEVEL], pit: rectC(0, 0, PW, PD), coreAreas, vessel, towers: towers.map(t => rectC(t.px, t.pz, 10, 10)),
+    overhead: decks.filter(d => d.level < CORE_LEVEL).map(d => ({x0: d.rect.x * CELL, z0: d.rect.y * CELL, x1: (d.rect.x + d.rect.w) * CELL, z1: (d.rect.y + d.rect.h) * CELL, y: d.y})),
+    targets: [...rooms.filter(r => r.level === CORE_LEVEL).map(r => ({x: (r.door.x + r.door.w / 2) * CELL, z: (r.door.y + r.door.h / 2) * CELL, w: r.key === 'control' ? 3 : r.key === 'pumpHall' ? 2 : 1})),
+      ...runs.filter(r => r.lower === TIERS).map(r => ({x: (r.rect.x + r.rect.w / 2) * CELL, z: (r.rect.y + r.rect.h / 2) * CELL, w: 1}))],
+  });
+  if (!coreFloor) return fail('core-floor-bridges');
+
   // --- 6. The column stack: ceilings of every open band in the pit (air to the roof, one slab under the next band up) -----------
   stackColumns(grids, air, PX0, PZ0, PW, PD, roofY);
 
   return {
     f, bases, PX0, PZ0, PW, PD, coreW: cv.coreW, coreH: cv.coreH, bed, platform, openings, stationBoh, decks, runs, rooms, gens, towers, terraces,
-    vessel, coreAreas, cx, rectC,
+    vessel, coreAreas, cx, rectC, coreFloor, slots,
   };
 }
 

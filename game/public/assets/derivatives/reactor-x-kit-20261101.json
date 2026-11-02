@@ -1,0 +1,1209 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "reactor-x-kit-20261101",
+ "task": "studio-reactor-expansion-20261101-232350-01",
+ "lane": "primary (sole Meshy / Codex producer)",
+ "status": "runtime derivatives of NEW Reactor models generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP, from Codex initial reference images (and three Codex tileable surface sources) each generated WITH the user-selected B concept image attached; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "selectedReference": {
+  "file": "B-service-cathedral-attempt2.png (private, outside Git)",
+  "sha256": "d7e5821d6146af0c4ee0cbe1485c8863c825156a227e5a132992bfe99e9df340"
+ },
+ "authority": {
+  "userGenerationApprovalSha256": "6b48670afdab946a2b1ee8cae4cbae842f84da8f0206f5b3a40eb4018d4357f0",
+  "caps": {
+   "credits": 1000,
+   "attempts": 50,
+   "paidPosts": 100
+  }
+ },
+ "rebuild": "node tools/asset-pipeline/props/build-reactor-x-kit.mjs",
+ "rawStorage": "reference/tasks/reactor-expansion-20261101-232350/meshy/raw/<asset>/attempt-<n>/ (immutable native GLBs + maps, read-only) + meshy/LEDGER.jsonl + MANIFEST.json; Codex originals reference/tasks/reactor-expansion-20261101-232350/art/codex/ (read-only) + ATTEMPTS.jsonl; outside Git",
+ "modelProof": {
+  "requested": "image-to-3d: ai_model meshy-t2.5, model_type smart-topology, should_texture, texture_resolution 2k, enable_pbr, target_formats [glb]; text-to-3d: preview ai_model meshy-t2.5 smart-topology + refine (enable_pbr, 2k, ai_model omitted: inherits the preview)",
+  "evidence": [
+   "exact create arguments in the fsynced ledger intent line before each paid call; ack with the returned task id right after",
+   "billing tier: image-to-3d 15 (T2 / T2.5 textured; 7.1 / 6 / latest bill 30), text preview 5 (7.1 / 6 / latest bill 20), refine 10",
+   "the Meshy task GET response does not echo ai_model / model_type: the request record + billing tier are the model proof"
+  ]
+ },
+ "texturePolicy": "Meshy maps kept channel for channel (re-encoded JPEG: base / metallicRoughness / normal per KIT.tex); surface sets: Codex colour source + normal / ORM derived locally from its luminance (no generation)",
+ "ledger": {
+  "attempts": 19,
+  "attemptedPOSTs": 19,
+  "billed": 285,
+  "reserved": 0,
+  "accepted": 19
+ },
+ "models": [
+  {
+   "key": "steamGenerator",
+   "id": "steam-generator",
+   "url": "assets/models/reactor-steam-generator.glb",
+   "bytes": 1584992,
+   "tris": 23798,
+   "dims": [
+    4.707,
+    11,
+    4.7691
+   ],
+   "what": "hero: nuclear steam generator / heat-exchanger tower (height along Y)",
+   "scale": 11.55875,
+   "rawExtent": [
+    0.4072,
+    0.9517,
+    0.4126
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 251453
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 17095
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 27452
+    }
+   ],
+   "task": "01a19978-a39f-7084-b518-edc27ccd8711",
+   "credits": 15,
+   "codexInput": {
+    "file": "steam-generator-attempt1.png",
+    "sha256": "3851b58ccb8775d69ee7c87bb72f62fde553d9392bc4dc71a049284d427f13a2",
+    "codexSession": "rollout-2026-11-01T23-34-23-01a19976-cd96-7cf1-9b62-b0b8c82de01a.jsonl"
+   },
+   "source": {
+    "file": "raw/steam-generator/attempt-1/model.glb",
+    "sha256": "8d4524e185fa0e729897ef4581abb2f4d15a65bda3e6625aa5421b3ab071ede2"
+   },
+   "sha256": "facb77b406006ce6b9503853caf62c08eb54b367a9fce5ec2323ce4667ee0517"
+  },
+  {
+   "key": "rcpVertical",
+   "id": "coolant-pump-vertical",
+   "url": "assets/models/reactor-coolant-pump-vertical.glb",
+   "bytes": 1277200,
+   "tris": 18921,
+   "dims": [
+    4.274,
+    7,
+    2.8481
+   ],
+   "what": "hero: vertical reactor coolant pump (motor over a spherical casing)",
+   "scale": 7.35557,
+   "rawExtent": [
+    0.5811,
+    0.9517,
+    0.3872
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 236344
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 22714
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 28031
+    }
+   ],
+   "task": "01a19978-aaed-7429-9b6a-576cee00fd77",
+   "credits": 15,
+   "codexInput": {
+    "file": "coolant-pump-vertical-attempt2.png",
+    "sha256": "2ec6695b8165a50954ee1494e0c4994725e74dfc1b3ac80f0a5a7d7ebd45ab20",
+    "codexSession": "rollout-2026-11-01T23-35-01-01a19977-6769-7070-b680-6c9e2dbc4098.jsonl"
+   },
+   "source": {
+    "file": "raw/coolant-pump-vertical/attempt-2/model.glb",
+    "sha256": "1542b8e118476bbdc1282692e988b26f8cebce025bf8312d5ef3a14fb12788d0"
+   },
+   "sha256": "6c9a5f92acecc2a4cd38a026807beafa2a7447dfc5801f80cbd78ed3b98736f3"
+  },
+  {
+   "key": "coolantManifold",
+   "id": "coolant-manifold",
+   "url": "assets/models/reactor-coolant-manifold.glb",
+   "bytes": 1111468,
+   "tris": 14057,
+   "dims": [
+    4.5,
+    2.0628,
+    1.5781
+   ],
+   "what": "hero: coolant header manifold with branch valves (length along X)",
+   "scale": 4.70445,
+   "rawExtent": [
+    0.9565,
+    0.4385,
+    0.3354
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 271572
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 21455
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 40033
+    }
+   ],
+   "task": "01a19980-3288-7587-8eff-68479e594a27",
+   "credits": 15,
+   "codexInput": {
+    "file": "coolant-manifold-attempt3.png",
+    "sha256": "2da2f2ec4ed4e4535b730ebe644331cb4cd8738e7addc3f94d2f829f6cc60fcd",
+    "codexSession": "rollout-2026-11-01T23-35-39-01a19977-fbff-7c52-a3f0-1fa20675ac52.jsonl"
+   },
+   "source": {
+    "file": "raw/coolant-manifold/attempt-3/model.glb",
+    "sha256": "f7043fe9f36d82b7f558c864e1640d18cdb9943e54830c01a8da853857eec4c6"
+   },
+   "sha256": "86e1839f770ae1f5e275aef79b36a5c1fc585819daf2a3dcc127bc7ca139ebea"
+  },
+  {
+   "key": "pipeElbow",
+   "id": "pipe-elbow",
+   "url": "assets/models/reactor-pipe-elbow.glb",
+   "bytes": 310584,
+   "tris": 6021,
+   "dims": [
+    1.8,
+    1.574,
+    1.0342
+   ],
+   "what": "hero: flanged 90-degree coolant pipe elbow (instanced on the loops)",
+   "scale": 1.88949,
+   "rawExtent": [
+    0.9526,
+    0.833,
+    0.5474
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 70704
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5112
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5922
+    }
+   ],
+   "task": "01a199ea-a0b7-706f-8bac-cb6f2305afc9",
+   "credits": 15,
+   "codexInput": {
+    "file": "pipe-elbow-attempt18.png",
+    "sha256": "42f0273c2e947bd6e03fe35772c3cc27f2a46dc559c5a61dec6bbc36691b831d",
+    "codexSession": "rollout-2026-11-02T01-38-40-01a199e8-99d7-7a11-a030-a2656fab9bad.jsonl"
+   },
+   "source": {
+    "file": "raw/pipe-elbow/attempt-17/model.glb",
+    "sha256": "81633cebc25991e28aebe3807b699e64c5604d3bef6e1c5977190950c163eaf8"
+   },
+   "sha256": "ddf07f25db922a4464db4882f8c6e6f9850e236692d69189289955b75e3f2fb4"
+  },
+  {
+   "key": "sightGlassSpool",
+   "id": "sight-glass-spool",
+   "url": "assets/models/reactor-sight-glass-spool.glb",
+   "bytes": 394796,
+   "tris": 8080,
+   "dims": [
+    1.6,
+    0.714,
+    0.8116
+   ],
+   "what": "hero: coolant spool with an armoured sight-glass window (blue flow shows through)",
+   "scale": 1.69256,
+   "rawExtent": [
+    0.9453,
+    0.4219,
+    0.4795
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 87392
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7861
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7443
+    }
+   ],
+   "task": "01a199ea-a788-77fd-88cf-5fab64abe728",
+   "credits": 15,
+   "codexInput": {
+    "file": "sight-glass-spool-attempt19.png",
+    "sha256": "a0042c56f45886c9fecda7cf89533f02f37ca9437da018f8491a429f97f1d003",
+    "codexSession": "rollout-2026-11-02T01-39-24-01a199e9-4568-7cf1-8cfa-2da27efe89be.jsonl"
+   },
+   "source": {
+    "file": "raw/sight-glass-spool/attempt-18/model.glb",
+    "sha256": "e52c6c6b389b497513181e8b8c7f2194e8f22b253c21562ac7ef1e16e696500b"
+   },
+   "sha256": "3e79103bf2c3afbc3c3d1cfb6877f205f3ee21fd98d70bf097fb2923b3173144"
+  },
+  {
+   "key": "crdmPlatform",
+   "id": "crdm-platform",
+   "url": "assets/models/reactor-crdm-platform.glb",
+   "bytes": 1392716,
+   "tris": 18200,
+   "dims": [
+    6.6,
+    3.5155,
+    6.6543
+   ],
+   "what": "hero: control-rod-drive service platform on the vessel head",
+   "scale": 6.9495,
+   "rawExtent": [
+    0.9497,
+    0.5059,
+    0.9575
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 274782
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18012
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 37500
+    }
+   ],
+   "task": "01a199ea-aede-7356-a52f-5e880fa017d0",
+   "credits": 15,
+   "codexInput": {
+    "file": "crdm-platform-attempt20.png",
+    "sha256": "d7f6176c2949d3348f6bc42c63465acc0c9c848116473d85cab00b4576d7f8c2",
+    "codexSession": "rollout-2026-11-02T01-39-58-01a199e9-ccca-7840-bba8-5f4085ad789d.jsonl"
+   },
+   "source": {
+    "file": "raw/crdm-platform/attempt-19/model.glb",
+    "sha256": "ab2761418ba1cc3b089b9692363b53b00c378c8800ee93fcfac6326613cd31da"
+   },
+   "sha256": "e18832253cba039a988e9d614aac3d7038bf628dc00a77217ca6324a855e3e84"
+  },
+  {
+   "key": "turbineGenerator",
+   "id": "turbine-generator",
+   "url": "assets/models/reactor-turbine-generator.glb",
+   "bytes": 1517844,
+   "tris": 23237,
+   "dims": [
+    10,
+    3.8347,
+    2.8593
+   ],
+   "what": "hero: steam turbine generator set on its pedestal (length along X)",
+   "scale": 10.51335,
+   "rawExtent": [
+    0.9512,
+    0.3647,
+    0.272
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 202132
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14765
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 24359
+    }
+   ],
+   "task": "01a19980-3950-73dd-b1ef-76ce8ffe9845",
+   "credits": 15,
+   "codexInput": {
+    "file": "turbine-generator-attempt4.png",
+    "sha256": "74d554a145220ae0698068ec3b6e70aa4d97622fccededfcd4c3c62a9e160a81",
+    "codexSession": "rollout-2026-11-01T23-36-18-01a19978-945b-7632-8a7c-72c351d57364.jsonl"
+   },
+   "source": {
+    "file": "raw/turbine-generator/attempt-4/model.glb",
+    "sha256": "595d76166ad32088ecd25417f4ad661ed79001a035eb88882fdcf6c68e6600b8"
+   },
+   "sha256": "14c43fcda505aeb0e38df7dd01623a83735e345a7ce53e3d1fed53fbbe199187"
+  },
+  {
+   "key": "blastDoor",
+   "id": "blast-door",
+   "url": "assets/models/reactor-blast-door.glb",
+   "bytes": 1047160,
+   "tris": 14158,
+   "dims": [
+    4.9463,
+    4,
+    5.4487
+   ],
+   "what": "bunker: round blast door standing open in its frame",
+   "scale": 5.71668,
+   "rawExtent": [
+    0.8652,
+    0.6997,
+    0.9531
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 273697
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16888
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 42721
+    }
+   ],
+   "task": "01a19980-4120-738a-96bc-0e1f94f7f58d",
+   "credits": 15,
+   "codexInput": {
+    "file": "blast-door-attempt5.png",
+    "sha256": "a3731e3c7c856c7824136ceecc5470c0a461d3a6c92e91204c1ea46b15a4de4c",
+    "codexSession": "rollout-2026-11-01T23-36-52-01a19979-1746-7fe1-9783-a9a14ee3a0d6.jsonl"
+   },
+   "source": {
+    "file": "raw/blast-door/attempt-5/model.glb",
+    "sha256": "83a983d91554ede4840670f9a8eb4b08711e840d697095d2ae320b98e8c2afbd"
+   },
+   "sha256": "8880fb5ab8624be2270a3be2b093c3fcbb37524a8b84643a1ebafcfaf1bd07a0"
+  },
+  {
+   "key": "airFilter",
+   "id": "air-filtration-unit",
+   "url": "assets/models/reactor-air-filtration-unit.glb",
+   "bytes": 914412,
+   "tris": 14629,
+   "dims": [
+    3,
+    1.8437,
+    0.9118
+   ],
+   "what": "bunker: air filtration / ventilation plant unit",
+   "scale": 3.14915,
+   "rawExtent": [
+    0.9526,
+    0.5854,
+    0.2896
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 191666
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18589
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26596
+    }
+   ],
+   "task": "01a19980-495b-73c0-becc-106067533df2",
+   "credits": 15,
+   "codexInput": {
+    "file": "air-filtration-unit-attempt6.png",
+    "sha256": "36589a6e9ea49f73b67ae78bbea9b573b2863e13b1d9f9dc1f15cc0900688635",
+    "codexSession": "rollout-2026-11-01T23-37-25-01a19979-9987-7251-b8b0-bdeef0b93924.jsonl"
+   },
+   "source": {
+    "file": "raw/air-filtration-unit/attempt-6/model.glb",
+    "sha256": "134d7ae91f7ffb57e0aa5bd40f3de0fe5d54153f8615eab76e37fea2e9058c06"
+   },
+   "sha256": "e353d60a94470f4527032cc4e0b46310705cb01893d815139b5e1227a9f8474b"
+  },
+  {
+   "key": "radioConsole",
+   "id": "radio-console",
+   "url": "assets/models/reactor-radio-console.glb",
+   "bytes": 819308,
+   "tris": 11427,
+   "dims": [
+    2,
+    1.5698,
+    1.1889
+   ],
+   "what": "bunker: built-in radio communications desk (nothing loose)",
+   "scale": 2.10267,
+   "rawExtent": [
+    0.9512,
+    0.7466,
+    0.5654
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 212987
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18909
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 32359
+    }
+   ],
+   "task": "01a19980-5112-7565-86c5-ef699ab4ad3c",
+   "credits": 15,
+   "codexInput": {
+    "file": "radio-console-attempt7.png",
+    "sha256": "ba8a6c91064731f9ae5123cd49cfe9b652593c098edf1e4d2a68634bd4099cff",
+    "codexSession": "rollout-2026-11-01T23-38-32-01a1997a-9fcb-74f3-9637-7d1160dec043.jsonl"
+   },
+   "source": {
+    "file": "raw/radio-console/attempt-7/model.glb",
+    "sha256": "5ec673ab7dc87949feab95ec15048c12a9b3db486cdc1d479dcb40fb90b0a78f"
+   },
+   "sha256": "c651418fe07a4617699953f6a5021caff462071f88101740b46578a51baf393c"
+  },
+  {
+   "key": "bunkBed",
+   "id": "bunk-bed",
+   "url": "assets/models/reactor-bunk-bed.glb",
+   "bytes": 526052,
+   "tris": 6958,
+   "dims": [
+    2,
+    1.3618,
+    0.8533
+   ],
+   "what": "bunker: steel double bunk bed (bare mattresses)",
+   "scale": 2.10808,
+   "rawExtent": [
+    0.9487,
+    0.646,
+    0.4048
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 151620
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13165
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16049
+    }
+   ],
+   "task": "01a19980-58e9-735f-be9d-5ee9422f64e3",
+   "credits": 15,
+   "codexInput": {
+    "file": "bunk-bed-attempt8.png",
+    "sha256": "5a89f108ccbfa5a22bcc842eb187052b2bd7af5fc2039e8504f1d22419cf43de",
+    "codexSession": "rollout-2026-11-01T23-39-13-01a1997b-3e2a-7c51-a271-ea311d9eaf28.jsonl"
+   },
+   "source": {
+    "file": "raw/bunk-bed/attempt-8/model.glb",
+    "sha256": "9557e6770d01c77e0df1697771172a0d2dfa3c7ae8c348582d977ef065b6c528"
+   },
+   "sha256": "302b9a92e1b314e8630654f1044687fd6a7d57f3d76e55e1e1b34b044e27baba"
+  },
+  {
+   "key": "mineCart",
+   "id": "mine-cart",
+   "url": "assets/models/reactor-mine-cart.glb",
+   "bytes": 652700,
+   "tris": 7991,
+   "dims": [
+    1.8,
+    0.7833,
+    0.7944
+   ],
+   "what": "mines: narrow-gauge ore cart (empty)",
+   "scale": 1.88949,
+   "rawExtent": [
+    0.9526,
+    0.4146,
+    0.4204
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 231566
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 17045
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 28178
+    }
+   ],
+   "task": "01a19980-6058-76f4-853c-29228126da55",
+   "credits": 15,
+   "codexInput": {
+    "file": "mine-cart-attempt9.png",
+    "sha256": "1155883c3d099ea5d8f6ca2eb0170a88a861d967aa21997c45157451a5d617ca",
+    "codexSession": "rollout-2026-11-01T23-39-44-01a1997b-b785-7eb3-9165-a4fc1c0f54b1.jsonl"
+   },
+   "source": {
+    "file": "raw/mine-cart/attempt-9/model.glb",
+    "sha256": "1af4b00e862a8a042e1f3bdf4a6ab9f7fdd8bb234cea8b3248b5a8f02c9afeee"
+   },
+   "sha256": "d76d613d38a9af62db051a04d6159707665d698cf0d0d7d0133ff1459e5d7f8d"
+  },
+  {
+   "key": "timberSet",
+   "id": "timber-set",
+   "url": "assets/models/reactor-timber-set.glb",
+   "bytes": 531396,
+   "tris": 5852,
+   "dims": [
+    3.4,
+    2.5158,
+    0.5323
+   ],
+   "what": "mines: tunnel timber support set (posts + cap)",
+   "scale": 3.55084,
+   "rawExtent": [
+    0.9575,
+    0.7085,
+    0.1499
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 264480
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13237
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 34705
+    }
+   ],
+   "task": "01a19980-7222-7535-ae88-019a643cc95e",
+   "credits": 15,
+   "codexInput": {
+    "file": "timber-set-attempt10.png",
+    "sha256": "81cb2a41c7706716f9737f61deef6a4d87038dfaeae157dbcf0e0617b30b05f4",
+    "codexSession": "rollout-2026-11-01T23-40-15-01a1997c-30a1-7153-8d7a-c32b97c67aeb.jsonl"
+   },
+   "source": {
+    "file": "raw/timber-set/attempt-10/model.glb",
+    "sha256": "cb172ef5b25053b18a238b7269efb01413531ce7a0e3cbde5d103d3859bb6b26"
+   },
+   "sha256": "a26f1fad9d64129dd6902beda901946fe3ac1c229141b327ac2cb9df46b63d42"
+  },
+  {
+   "key": "hoistWinch",
+   "id": "hoist-winch",
+   "url": "assets/models/reactor-hoist-winch.glb",
+   "bytes": 1091428,
+   "tris": 13725,
+   "dims": [
+    3,
+    1.6421,
+    1.7066
+   ],
+   "what": "mines: electric hoist winch on its base",
+   "scale": 3.14593,
+   "rawExtent": [
+    0.9536,
+    0.522,
+    0.5425
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 298668
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20372
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41688
+    }
+   ],
+   "task": "01a19980-7a6c-7636-9a4c-9d97718acd29",
+   "credits": 15,
+   "codexInput": {
+    "file": "hoist-winch-attempt11.png",
+    "sha256": "ea7ee2f34ed6382774a9ed7e4a86e9f4c1828dd710ae31db525e535e7ec08676",
+    "codexSession": "rollout-2026-11-01T23-40-50-01a1997c-b92d-71c3-aafc-ca6fa99520d0.jsonl"
+   },
+   "source": {
+    "file": "raw/hoist-winch/attempt-11/model.glb",
+    "sha256": "168a79f2b0a60f24b23132bce0554ec5c4fdb92c8d84ec6d792e67b48c780a06"
+   },
+   "sha256": "eacba0ad8f03942e566fc58ad6c837dc4af94f3eea9a61710efe5574c3864bb0"
+  },
+  {
+   "key": "drillRig",
+   "id": "rock-drill-rig",
+   "url": "assets/models/reactor-rock-drill-rig.glb",
+   "bytes": 1141504,
+   "tris": 14879,
+   "dims": [
+    3.5,
+    1.2784,
+    0.9824
+   ],
+   "what": "mines: pneumatic drill rig on a carriage",
+   "scale": 3.65155,
+   "rawExtent": [
+    0.9585,
+    0.3501,
+    0.269
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 280103
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20802
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 41998
+    }
+   ],
+   "task": "01a19980-824d-74b8-9d7c-a7bb86a478cf",
+   "credits": 15,
+   "codexInput": {
+    "file": "rock-drill-rig-attempt12.png",
+    "sha256": "baba3b4c2854a8977c472315cdf6ed16007f5d0f7e7b0dc0731deb2b15e70b51",
+    "codexSession": "rollout-2026-11-01T23-41-23-01a1997d-3c28-7b02-a533-8cdc3e4f3c25.jsonl"
+   },
+   "source": {
+    "file": "raw/rock-drill-rig/attempt-12/model.glb",
+    "sha256": "140b2e6db9163c0618824f3483260e74fb36f1a5520eed3aff3d70da4a567fe7"
+   },
+   "sha256": "0e572d3210c3e61227561bf04d18daf1c1f371d5ab1c6ce81153b7a15e12b931"
+  },
+  {
+   "key": "wasteDrum",
+   "id": "waste-drum",
+   "url": "assets/models/reactor-waste-drum.glb",
+   "bytes": 236504,
+   "tris": 2965,
+   "dims": [
+    0.6262,
+    0.9,
+    0.6313
+   ],
+   "what": "waste: 200 L waste drum (instanced)",
+   "scale": 0.94864,
+   "rawExtent": [
+    0.6602,
+    0.9487,
+    0.6655
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 88133
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 9677
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 8337
+    }
+   ],
+   "task": "01a19980-89fa-7669-b411-f0a5867105ab",
+   "credits": 15,
+   "codexInput": {
+    "file": "waste-drum-attempt13.png",
+    "sha256": "0561faa391799efac62d1a49d9c6c9cfd9224eab0a8d7a22c04d5e6351d95f52",
+    "codexSession": "rollout-2026-11-01T23-41-58-01a1997d-c2f6-70f1-829d-f3deb1265bc3.jsonl"
+   },
+   "source": {
+    "file": "raw/waste-drum/attempt-13/model.glb",
+    "sha256": "e03bf9039a054ff08a22338a429c0ee4bfd0b170c8b1a03edd2b79e4c1adf909"
+   },
+   "sha256": "b1909d0dfbdece4ff365fbf1b769f6448559449666805757a94583fe165a8c32"
+  },
+  {
+   "key": "storageCask",
+   "id": "storage-cask",
+   "url": "assets/models/reactor-storage-cask.glb",
+   "bytes": 884248,
+   "tris": 9283,
+   "dims": [
+    3.8793,
+    4.6,
+    3.2292
+   ],
+   "what": "waste: dry storage cask",
+   "scale": 4.82375,
+   "rawExtent": [
+    0.8042,
+    0.9536,
+    0.6694
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 316829
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 27960
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 46070
+    }
+   ],
+   "task": "01a19980-91fa-71e7-8b9e-b6acf33f3dc7",
+   "credits": 15,
+   "codexInput": {
+    "file": "storage-cask-attempt14.png",
+    "sha256": "07d02b48631c1c3f54ecabb236d937a4b751cd0ab461179eda13506b2b9c3aae",
+    "codexSession": "rollout-2026-11-01T23-42-27-01a1997e-35a9-71c1-9a94-3828f0b75ae7.jsonl"
+   },
+   "source": {
+    "file": "raw/storage-cask/attempt-14/model.glb",
+    "sha256": "65a0ace97a84df089f12574bf50af6fcd947820fc9d43882ce98bdaf3bb233e1"
+   },
+   "sha256": "e99b0cc51fdbf9d20ab2fe39c83bba8dddc4585f400f7fd1a3db4438d36dc969"
+  },
+  {
+   "key": "deconShower",
+   "id": "decon-shower",
+   "url": "assets/models/reactor-decon-shower.glb",
+   "bytes": 734044,
+   "tris": 9739,
+   "dims": [
+    1.7554,
+    2.4,
+    1.502
+   ],
+   "what": "waste: decontamination shower booth",
+   "scale": 2.51933,
+   "rawExtent": [
+    0.6968,
+    0.9526,
+    0.5962
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 229485
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 20977
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 30515
+    }
+   ],
+   "task": "01a19980-99fb-70c8-b1c4-4b47a9d8413f",
+   "credits": 15,
+   "codexInput": {
+    "file": "decon-shower-attempt15.png",
+    "sha256": "10a2de27134a9e513a735d279f9eeca28ca0a1f3c71c91d7add25fdea10f36ea",
+    "codexSession": "rollout-2026-11-01T23-43-05-01a1997e-ca04-7251-930f-aafef697afa3.jsonl"
+   },
+   "source": {
+    "file": "raw/decon-shower/attempt-15/model.glb",
+    "sha256": "8060cafa9b9709c5ab5c0a03104371daedf9f6cf95b18a2e3bdb222c064c68ec"
+   },
+   "sha256": "f776c52afde68f6041891308057ba7a512c340396245d858156a43b3b4d70da4"
+  },
+  {
+   "key": "hotCellWindow",
+   "id": "hot-cell-window",
+   "url": "assets/models/reactor-hot-cell-window.glb",
+   "bytes": 1013020,
+   "tris": 14806,
+   "dims": [
+    3.6048,
+    3,
+    1.7629
+   ],
+   "what": "waste: hot-cell window wall section with manipulators",
+   "scale": 3.76471,
+   "rawExtent": [
+    0.9575,
+    0.7969,
+    0.4683
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 260618
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 16332
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 36812
+    }
+   ],
+   "task": "01a19980-a169-77a3-abcc-66ee22bb9ff8",
+   "credits": 15,
+   "codexInput": {
+    "file": "hot-cell-window-attempt16.png",
+    "sha256": "ac744d27bad13f63c1ae1dbad09381af87cff51c818ef18fe353f32013b3c214",
+    "codexSession": "rollout-2026-11-01T23-43-38-01a1997f-4ae0-70f1-8661-de5d4baa8866.jsonl"
+   },
+   "source": {
+    "file": "raw/hot-cell-window/attempt-16/model.glb",
+    "sha256": "067ab45e6bafd13c3b8ef89200c2fe0d56ed9502a8fa2ead9e4ebc8cb33d72a6"
+   },
+   "sha256": "b42c061fb5683f5de49638b585a8efc5050d4c24d81e58e1977edc6da030efeb"
+  }
+ ],
+ "textures": [
+  {
+   "key": "mine-rock",
+   "id": "tex-mine-rock",
+   "what": "blasted mine-drift rock (lane MINES drift walls / ceilings)",
+   "size": 1024,
+   "codex": {
+    "file": "tex-mine-rock-attempt17.png",
+    "sha256": "129498a131f8c7a01294c138169e58c535eb107041a4abd8477266f2a91c4a03",
+    "codexSession": "rollout-2026-11-02T00-36-45-01a199af-ea58-7f91-a776-44609698105f.jsonl"
+   },
+   "files": [
+    {
+     "url": "assets/textures/reactor/mine-rock-color.jpg",
+     "bytes": 437339,
+     "sha256": "3b72e060560ef702ad00b79f854c3802d32fcf9d09588f27fd61c1f09e943bf8"
+    },
+    {
+     "url": "assets/textures/reactor/mine-rock-normal.jpg",
+     "bytes": 364669,
+     "sha256": "b0095cb755a7a45e5e49e8bb10bc0b3f208273c6feee625550f46ab35ad78867"
+    },
+    {
+     "url": "assets/textures/reactor/mine-rock-orm.jpg",
+     "bytes": 189541,
+     "sha256": "eb499fc222620b2dfe2172de6e3c54806f83d4d41ddec76f60f898b9f348d7e7"
+    }
+   ]
+  }
+ ]
+}

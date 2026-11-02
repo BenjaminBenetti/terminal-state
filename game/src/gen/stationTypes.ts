@@ -10,6 +10,7 @@ import type {EnemyArchetypeId} from '../ai/creatureSpawn';
 import type {CompanyId, RoofInfo, TenantFloor, TransitInfo} from './office/overhaulTypes';
 import type {MallInfo} from './mall/mallTypes';
 import type {ReactorInfo} from './reactor/reactorTypes'; // task reactor-build-20261101 (primary): THE REACTOR
+import type {WasteDecor} from './reactor/complex/wasteTypes'; // task reactor-expansion-20261101 (lane WASTE): the waste repository decor
 import type {HordeGroupSpec} from '../ai/hordeSpec'; // Task track3-eaton-centre-20261031 (lane HORDE)
 import type {TrackExtensions} from './trackExt/types';
 
@@ -137,7 +138,15 @@ export interface LightPlacement {
   virtual?: boolean;
   /** Iteration 16 (WORLD-GEN): light colour override (linear RGB, ~unit luminance) for the baked field (daylight). */
   tint?: readonly [number, number, number];
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): where the fixture is MOUNTED (the Reactor pit's caged lamps); absent = ceiling. */
+  mount?: LightMount;
 }
+/**
+ * Task reactor-expansion-20261101 (lane GASLIGHT): a wall-bracket or post-mounted lamp. `x / y / z` = the mount point (the wall face at
+ * the lamp's height, or the post's FOOT on the deck), `nx / nz` = the unit direction the head reaches out along (out of the wall into
+ * the pit / from the post over the walkway); the light point (LightPlacement x / y / z) is the lamp head.
+ */
+export interface LightMount { kind: 'wall' | 'post'; x: number; y: number; z: number; nx: number; nz: number }
 /**
  * Wall-mounted (default) or hanging (`hang`, double-sided) sign. station = name plate, exit/info =
  * wayfinding (dark field, cream text), service = staff-only plate, platform = platform number plate.
@@ -301,6 +310,8 @@ export interface StationLayout {
   mall?: MallInfo;
   /** Task reactor-build-20261101: THE REACTOR (LevelId 'reactor') — the pit, tiers, gas zones, generators, restart sites (gen/reactor). */
   reactor?: ReactorInfo;
+  /** task reactor-expansion-20261101 (lane WASTE): the waste repository's decor (gen/reactor/complex/wasteTypes.ts; world/reactor/wasteVisuals.ts). */
+  reactorWaste?: WasteDecor;
   /** Task track3-eaton-centre-20261031 (lane HORDE): roaming horde groups (ai/hordePlace.ts); absent = none (Subway, Office). */
   hordes?: HordeGroupSpec[];
   /**

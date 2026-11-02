@@ -26,7 +26,17 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
-import type {MeshBasicNodeMaterial} from 'three/webgpu';
+import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
+import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
+import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
+import {MeshBasicNodeMaterial} from 'three/webgpu';
+// task reactor-expansion-20261101 (lane CORE): the hero reactor (the vessel's hidden grid column, the goop pool, the grating ring /
+// bridges; the dynamic goop / coolant / rotors / lamps layer and its staged visuals)
+import {CORE_CELL, coreCellKinds, coreHeroOf} from './coreHero';
+import {buildCoreLiquids, type CoreBuilt} from './coreLiquids';
+import {CoreVisuals, setActiveCoreVisuals} from './coreVisuals';
+import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
+import {buildBunkerModels} from './bunkerModels'; // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props
 
 export interface ReactorArchStats {
   kit: KitStats | null;
@@ -39,6 +49,8 @@ export interface ReactorArchStats {
   /** GEN's light fixtures in the pit drawn as caged lamps (buildLamps). */
   lamps: number;
   ms: number;
+  /** task reactor-expansion-20261101 (lane MINES): the old mine workings' visuals (world/reactor/minesVisuals.ts). */
+  mines?: MinesBuildStats;
 }
 
 /** Areas of the Reactor proper (GEN's 'reactor-*' room types, or any area below the rim). */
@@ -52,13 +64,23 @@ export class ReactorArch {
   readonly info: ReactorInfo;
   /** Per cell of the level grids: 1 = inside the pit outline (the culler's atrium mask; the pit finishes). */
   readonly pitMask: Uint8Array;
+  /** task reactor-expansion-20261101 (lane MINES): areas of the old mine workings (rock walls, caged lamps, timber / rails / models). */
+  readonly mineAreas: ReadonlySet<number>;
   private readonly W: number;
   private readonly H: number;
   /** The core floor's level (the last tier). */
   private readonly coreLevel: number;
   plan: KitPlan | null = null;
   built: KitBuilt | null = null;
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the mounted pit lamps planned with the kit (model or cage, lens matrix). */
+  mountedLamps: MountedLampRec[] = [];
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky dome + outside gas (null: no opening). */
+  pitSky: PitSkyStats | null = null;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
+  /** Task reactor-expansion-20261101 (lane CORE): per core-grid cell — vessel (not drawn: the model is), goop pool, grating deck. */
+  readonly coreKinds: Uint8Array;
+  /** Task reactor-expansion-20261101 (lane CORE): the dynamic hero layer (goop, coolant flow, rotors, status lamps). */
+  core: CoreBuilt | null = null;
   readonly stats: ReactorArchStats = {kit: null, meshes: null, models: [], faces: {}, pitCells: 0, lamps: 0, ms: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): ReactorArch | null {
@@ -71,6 +93,7 @@ export class ReactorArch {
     const g0 = levels[0].grid;
     this.W = g0.w; this.H = g0.h;
     this.pitMask = new Uint8Array(this.W * this.H);
+    this.mineAreas = new Set(minesRecord(layout)?.areas ?? []); // (lane MINES)
     const b = this.info.pit.bounds, P = this.info.pit.outline;
     for (let cy = Math.max(0, Math.floor(b.z0 / CELL)); cy < Math.min(this.H, Math.ceil(b.z1 / CELL)); cy++) {
       for (let cx = Math.max(0, Math.floor(b.x0 / CELL)); cx < Math.min(this.W, Math.ceil(b.x1 / CELL)); cx++) {
@@ -79,6 +102,8 @@ export class ReactorArch {
     }
     const tiers = [...this.info.tiers].sort((p, q) => p.baseY - q.baseY);
     this.coreLevel = tiers[0]?.level ?? -1;
+    const cg = levels[this.levelIndex(this.coreLevel)]?.grid; // task reactor-expansion-20261101 (lane CORE)
+    this.coreKinds = cg && this.coreLevel > 0 ? coreCellKinds(this.info, cg, CELL) : new Uint8Array(0);
   }
 
   private count(k: string): void { this.stats.faces[k] = (this.stats.faces[k] ?? 0) + 1; }
@@ -97,9 +122,16 @@ export class ReactorArch {
     for (const f of faces) {
       const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
       const mx = alongX ? (f.x0 + f.x1) / 2 : f.x0 + f.nx * CELL / 2, mz = alongX ? f.z0 + f.nz * CELL / 2 : (f.z0 + f.z1) / 2;
+      // task reactor-expansion-20261101 (lane CORE): the vessel's grid column is not drawn (the hero model is); the goop pool's walls
+      // under the deck (bridge sides, ring / outer edges) are rusted steel plate
+      if (f.level === this.coreLevel && this.coreKinds.length) {
+        const open = this.coreKind(mx, mz), solid = this.coreKind(alongX ? mx : f.x0 - f.nx * CELL / 2, alongX ? f.z0 - f.nz * CELL / 2 : mz);
+        if (open === CORE_CELL.vessel || solid === CORE_CELL.vessel) continue;
+        if (open === CORE_CELL.pool && f.y1 <= (this.info.coreFloor?.y ?? -Infinity) + 0.05) { this.count('reactor-deck-under'); out.push({...f, finish: 'reactor-deck-under'}); continue; }
+      }
       let key: ReactorSurfaceKey | null = null;
       if (this.inPit(mx, mz)) key = 'reactor-wall';
-      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = 'reactor-room-wall';
+      else if (isReactorArea(f.area >= 0 ? this.layout.areas[f.area] : undefined, f.level)) key = this.mineAreas.has(f.area) ? 'reactor-wall' : 'reactor-room-wall'; // (lane MINES: the drifts are rock-cut, not plate)
       if (!key) { out.push(f); continue; }
       this.count(key);
       out.push({...f, finish: key});
@@ -111,6 +143,8 @@ export class ReactorArch {
   floorKey(L: number, i: number): string | null {
     const lvl = this.levels[L];
     if (!lvl) return null;
+    // task reactor-expansion-20261101 (lane CORE): the vessel column / goop pool floors are not drawn; the ring + bridges are grating
+    if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : this.coreKinds[i] === CORE_CELL.pool ? CORE_GOOP : CORE_HIDDEN;
     if (this.pitMask[i]) return lvl.id === this.coreLevel ? 'reactor-floor' : 'reactor-grating';
     const a = this.layout.areas[lvl.grid.area[i]];
     return isReactorArea(a, lvl.id) ? 'reactor-floor' : null;
@@ -151,13 +185,22 @@ export class ReactorArch {
   }
 
   scale(key: string): {u: number; v: number} | undefined {
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return {u: 1, v: 1}; // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? reactorSurfaceScale(this.mats, key) : undefined;
   }
   material(key: string): THREE.Material | undefined {
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return coreHiddenMaterial(); // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? reactorSurfaceMaterial(this.mats, key) : undefined;
   }
   meshName(key: string): string | undefined {
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return `reactor-arch-${key.slice(8)}`; // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? `reactor-arch-${key.slice(8)}` : undefined;
+  }
+
+  /** Task reactor-expansion-20261101 (lane CORE): the core-floor cell kind at a world point (0 = none). */
+  private coreKind(x: number, z: number): number {
+    const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
+    return cx >= 0 && cy >= 0 && cx < this.W && cy < this.H ? this.coreKinds[cy * this.W + cx] ?? 0 : 0;
   }
 
   /** Rail runs ARCH draws (rusted steel, instanced): every railing of the Reactor proper; the rim station's own rails stay. */
@@ -170,8 +213,8 @@ export class ReactorArch {
   // GEN's light fixtures in the pit: caged industrial lamps (the lighting system's tube instance becomes the cage's lens)
 
   /** A real (non-virtual) layout light inside the pit: drawn as a caged lamp, not a Subway tube fixture (rooms keep tubes). */
-  isLamp(l: {x: number; z: number; virtual?: boolean}): boolean {
-    return !l.virtual && this.inPit(l.x, l.z);
+  isLamp(l: {x: number; z: number; virtual?: boolean; area?: number}): boolean {
+    return !l.virtual && (this.inPit(l.x, l.z) || (l.area !== undefined && this.mineAreas.has(l.area))); // (lane MINES: + the mine's caged lamps)
   }
 
   /** The tube instance of a pit lamp as its lens: a 0.2 m glowing square under the cage (0.36 m below the light point). */
@@ -186,6 +229,7 @@ export class ReactorArch {
     const p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
     lights.forEach((l, i) => {
       if (!this.isLamp(l)) return;
+      if (isMounted(l as never)) return; // (lane GASLIGHT) a mounted lamp's bracket / post / cage is planned with the kit (gaslightFixtures.ts)
       lightMats[i].decompose(p, q, s);
       const cage = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y - 0.19, p.z), q, new THREE.Vector3(0.26, 0.34, 0.26));
       const hanger = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + 0.22, p.z), q, new THREE.Vector3(0.05, 0.44, 0.05));
@@ -222,16 +266,38 @@ export class ReactorArch {
     const t0 = typeof performance !== 'undefined' ? performance.now() : 0;
     const loaded = new Set<ReactorPiece>(REACTOR_PIECES.filter(p => REACTOR_MODELS[p].delivered && !!models[REACTOR_MODELS[p].key]));
     try {
-      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r))});
+      // task reactor-expansion-20261101 (lane GASLIGHT): mounted pit fixtures -> their bodies in the kit (no decorative lamps), lenses = tubes
+      const fixtures = this.layout.lights.some(l => isMounted(l));
+      // task reactor-expansion-20261101 (lane PATHS): + the walkable body volume — the kit keeps its steel out of every walkway
+      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures, walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
+      this.mountedLamps = fixtures ? planMountedLamps(this.plan, this.layout.lights, this.mats.fixture) : [];
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
+      if (fixtures) this.stats.lamps = applyMountedLenses(group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, this.mountedLamps);
       this.visuals = new ReactorArchVisuals(this.built, this.plan, dress.glow as MeshBasicNodeMaterial);
+      // task reactor-expansion-20261101 (lane CORE): the hero's dynamic layer + its staged visuals (setRestartState lands there)
+      const hero = coreHeroOf(this.plan);
+      if (hero) {
+        try {
+          const cg = this.levels[this.levelIndex(this.coreLevel)]?.grid ?? null;
+          this.core = buildCoreLiquids(hero, cg, dress.steelDark, [this.coreLevel, ...this.info.tiers.filter(t => t.level !== this.coreLevel).sort((a, b) => a.baseY - b.baseY).slice(0, 1).map(t => t.level)]);
+          group.add(this.core.group);
+        } catch (e) { console.warn('reactor arch: core layer skipped', e); this.core = null; }
+        this.visuals.core = new CoreVisuals(this.core, hero);
+      }
+      setActiveCoreVisuals(this.visuals.core);
       this.stats.kit = this.plan.stats;
       this.stats.meshes = this.built.stats;
       this.stats.models = [...this.plan.modelPlacements.keys()].filter(p => !!this.built!.modelSlots.get(p));
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    // (lane GASLIGHT) the open pit top: the toxic sky + the outside gas sheets above the roof line (the volumetric part is the march's)
+    try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
+    // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
+    try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }
+    // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (REACTOR_X_KIT models on their prop placements)
+    try { buildBunkerModels(group, this.layout, models); } catch (e) { console.warn('reactor arch: bunker models skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }
@@ -240,10 +306,25 @@ export class ReactorArch {
   dispose(): void {
     for (const t of this.built?.textures ?? []) t.dispose();
     if (this.built) this.built.textures.length = 0;
+    // task reactor-expansion-20261101 (lane CORE): the dynamic layer's per-build materials (geometries go with the world group)
+    if (this.core) for (const o of this.core.group.children) { const m = (o as THREE.Mesh).material as THREE.Material | undefined; if (m && m !== reactorDress(this.mats).steelDark) m.dispose(); }
+    this.core = null;
+    setActiveCoreVisuals(null);
   }
 
   /** Summary (QA / tests). */
   summary(): {stats: ReactorArchStats; visuals: ReturnType<ReactorArchVisuals['state']>} {
     return {stats: this.stats, visuals: this.visuals.state()};
   }
+}
+
+/** Task reactor-expansion-20261101 (lane CORE): the surface key of grid geometry the hero replaces (the vessel column, the pool floor). */
+export const CORE_HIDDEN = 'reactor-core-hidden';
+/** The goop pool's floor (under the goop mesh): not drawn either; its own key so a bullet into the goop is not a concrete hit. */
+export const CORE_GOOP = 'reactor-core-goop';
+let hidden: MeshBasicNodeMaterial | null = null;
+/** Never drawn (material.visible = false): shared, made once. */
+function coreHiddenMaterial(): MeshBasicNodeMaterial {
+  if (!hidden) { hidden = new MeshBasicNodeMaterial(); hidden.name = CORE_HIDDEN; hidden.visible = false; }
+  return hidden;
 }

@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 29358,
-      "sha256": "f858a649860b52c223bdb23889f823db6577e66157995d1beac42c2ee11d8011"
+      "bytes": 33358,
+      "sha256": "e75146daa9ddbb7dfa50c1359f634604453901b9709885149bf7c286481bc796"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1764,6 +1764,11 @@
       "sha256": "8e4cdef64977a422e2e6d06df275f82c96d0316c1c5ec1877d07b0e211d7c033"
     },
     {
+      "path": "assets/derivatives/reactor-x-kit-20261101.json",
+      "bytes": 28275,
+      "sha256": "439c137c2a9ecc534ab2e120bba57e9aa510f4c0ac473e13de1e35d91e5318c3"
+    },
+    {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
       "bytes": 10032,
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
@@ -3254,14 +3259,39 @@
       "sha256": "61d9a2ab2e94f0f1b6ff69b9f9bc279449ff18dfaa2f90f5318d544c8e315704"
     },
     {
+      "path": "assets/models/reactor-air-filtration-unit.glb",
+      "bytes": 914412,
+      "sha256": "e353d60a94470f4527032cc4e0b46310705cb01893d815139b5e1227a9f8474b"
+    },
+    {
       "path": "assets/models/reactor-aux-generator.glb",
       "bytes": 1215480,
       "sha256": "e6aa5f1b8a10c8091d6e9a2ff63a01f7504fad9ca61cadd870c0a0e26e81d36a"
     },
     {
+      "path": "assets/models/reactor-blast-door.glb",
+      "bytes": 1047160,
+      "sha256": "8880fb5ab8624be2270a3be2b093c3fcbb37524a8b84643a1ebafcfaf1bd07a0"
+    },
+    {
+      "path": "assets/models/reactor-bunk-bed.glb",
+      "bytes": 526052,
+      "sha256": "302b9a92e1b314e8630654f1044687fd6a7d57f3d76e55e1e1b34b044e27baba"
+    },
+    {
       "path": "assets/models/reactor-control-console.glb",
       "bytes": 989972,
       "sha256": "4e22305831c43cfb110e02be644c866988f3d950a8d8bbcd49a5056705dd4e01"
+    },
+    {
+      "path": "assets/models/reactor-coolant-manifold.glb",
+      "bytes": 1111468,
+      "sha256": "86e1839f770ae1f5e275aef79b36a5c1fc585819daf2a3dcc127bc7ca139ebea"
+    },
+    {
+      "path": "assets/models/reactor-coolant-pump-vertical.glb",
+      "bytes": 1277200,
+      "sha256": "6c9a5f92acecc2a4cd38a026807beafa2a7447dfc5801f80cbd78ed3b98736f3"
     },
     {
       "path": "assets/models/reactor-coolant-pump.glb",
@@ -3284,6 +3314,16 @@
       "sha256": "00e29e1d47efccf591f46cc129c9add0dd0d7d56cdcfc42187057d805fb64ad6"
     },
     {
+      "path": "assets/models/reactor-crdm-platform.glb",
+      "bytes": 1392716,
+      "sha256": "e18832253cba039a988e9d614aac3d7038bf628dc00a77217ca6324a855e3e84"
+    },
+    {
+      "path": "assets/models/reactor-decon-shower.glb",
+      "bytes": 734044,
+      "sha256": "f776c52afde68f6041891308057ba7a512c340396245d858156a43b3b4d70da4"
+    },
+    {
       "path": "assets/models/reactor-extraction-fan.glb",
       "bytes": 902808,
       "sha256": "9d1e632ca615a4e895fa04d6f2cf6f28d7e3a0fc9d38ba1fc9e52d77fbca9efe"
@@ -3299,9 +3339,24 @@
       "sha256": "1ba56d844dcc55ec5cd537e65acc0da143cd9bbbce5fd4801bb06a9de5aa3244"
     },
     {
+      "path": "assets/models/reactor-hoist-winch.glb",
+      "bytes": 1091428,
+      "sha256": "eacba0ad8f03942e566fc58ad6c837dc4af94f3eea9a61710efe5574c3864bb0"
+    },
+    {
+      "path": "assets/models/reactor-hot-cell-window.glb",
+      "bytes": 1013020,
+      "sha256": "b42c061fb5683f5de49638b585a8efc5050d4c24d81e58e1977edc6da030efeb"
+    },
+    {
       "path": "assets/models/reactor-key.glb",
       "bytes": 185064,
       "sha256": "dbd67b586c715163508054e313f29f0033b8ea7faccac5dd9ff7b9b95f1415bd"
+    },
+    {
+      "path": "assets/models/reactor-mine-cart.glb",
+      "bytes": 652700,
+      "sha256": "d76d613d38a9af62db051a04d6159707665d698cf0d0d7d0133ff1459e5d7f8d"
     },
     {
       "path": "assets/models/reactor-pipe-bank.glb",
@@ -3309,14 +3364,59 @@
       "sha256": "cac3a2b8e02a07159897bafcd7c699319e3c0461625c3090ca8275444684b884"
     },
     {
+      "path": "assets/models/reactor-pipe-elbow.glb",
+      "bytes": 310584,
+      "sha256": "ddf07f25db922a4464db4882f8c6e6f9850e236692d69189289955b75e3f2fb4"
+    },
+    {
+      "path": "assets/models/reactor-radio-console.glb",
+      "bytes": 819308,
+      "sha256": "c651418fe07a4617699953f6a5021caff462071f88101740b46578a51baf393c"
+    },
+    {
+      "path": "assets/models/reactor-rock-drill-rig.glb",
+      "bytes": 1141504,
+      "sha256": "0e572d3210c3e61227561bf04d18daf1c1f371d5ab1c6ce81153b7a15e12b931"
+    },
+    {
+      "path": "assets/models/reactor-sight-glass-spool.glb",
+      "bytes": 394796,
+      "sha256": "3e79103bf2c3afbc3c3d1cfb6877f205f3ee21fd98d70bf097fb2923b3173144"
+    },
+    {
+      "path": "assets/models/reactor-steam-generator.glb",
+      "bytes": 1584992,
+      "sha256": "facb77b406006ce6b9503853caf62c08eb54b367a9fce5ec2323ce4667ee0517"
+    },
+    {
+      "path": "assets/models/reactor-storage-cask.glb",
+      "bytes": 884248,
+      "sha256": "e99b0cc51fdbf9d20ab2fe39c83bba8dddc4585f400f7fd1a3db4438d36dc969"
+    },
+    {
       "path": "assets/models/reactor-switchgear.glb",
       "bytes": 739132,
       "sha256": "448792e68b86c582dce7dc6b8496fc95223c5245a2deacd1966d95d056737964"
     },
     {
+      "path": "assets/models/reactor-timber-set.glb",
+      "bytes": 531396,
+      "sha256": "a26f1fad9d64129dd6902beda901946fe3ac1c229141b327ac2cb9df46b63d42"
+    },
+    {
+      "path": "assets/models/reactor-turbine-generator.glb",
+      "bytes": 1517844,
+      "sha256": "14c43fcda505aeb0e38df7dd01623a83735e345a7ce53e3d1fed53fbbe199187"
+    },
+    {
       "path": "assets/models/reactor-vessel.glb",
       "bytes": 2824764,
       "sha256": "7e39d047a60dff7f4fca2162a99c788d3efa2b806854e6b208c0aed522909739"
+    },
+    {
+      "path": "assets/models/reactor-waste-drum.glb",
+      "bytes": 236504,
+      "sha256": "b1909d0dfbdece4ff365fbf1b769f6448559449666805757a94583fe165a8c32"
     },
     {
       "path": "assets/models/rifle-optic.glb",
@@ -3602,6 +3702,21 @@
       "path": "assets/textures/reactor/grating-orm.jpg",
       "bytes": 176280,
       "sha256": "917ae3cf6257edec8ad5f8ed062735510733d25e965b114a7f10c1ef4c73d6b5"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-color.jpg",
+      "bytes": 437339,
+      "sha256": "3b72e060560ef702ad00b79f854c3802d32fcf9d09588f27fd61c1f09e943bf8"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-normal.jpg",
+      "bytes": 364669,
+      "sha256": "b0095cb755a7a45e5e49e8bb10bc0b3f208273c6feee625550f46ab35ad78867"
+    },
+    {
+      "path": "assets/textures/reactor/mine-rock-orm.jpg",
+      "bytes": 189541,
+      "sha256": "eb499fc222620b2dfe2172de6e3c54806f83d4d41ddec76f60f898b9f348d7e7"
     },
     {
       "path": "assets/textures/reactor/pit-concrete-color.jpg",

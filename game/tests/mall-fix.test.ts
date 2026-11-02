@@ -191,12 +191,13 @@ describe('U04 round atrium columns: generation-time records', () => {
     expect(c([0.5, -1, 0], [0, 1, 0])).toBeNull(); // vertical, outside
   });
 
-  it('only gen/mall/columns.ts sets `round` (Subway / Office props keep their box collision)', () => {
+  it('only gen/mall/columns.ts and the Reactor\'s round machines (core vessel, waste casks / drums) set `round` (Subway / Office props keep their box collision)', () => {
     const src = path.join(REPO, 'game/src');
     const hits: string[] = [];
     const walk = (d: string) => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else if (/\.ts$/.test(f) && fs.readFileSync(q, 'utf8').split('\n').some(l => !/^\s*(\/\/|\*)/.test(l) && /\.round = true|round: true/.test(l))) hits.push(path.relative(src, q)); } }; // code lines only (doc comments may name the flag)
     walk(src);
-    expect(hits).toEqual(['gen/mall/columns.ts']);
+    // task reactor-expansion-20261101: the Reactor's core vessel (coreFloor.ts) and waste repository casks (wasteDress.ts) are cylinders
+    expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts']);
   });
 });
 

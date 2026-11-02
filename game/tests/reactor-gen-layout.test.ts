@@ -3,6 +3,7 @@
 import {describe, expect, it} from 'vitest';
 import {generateReactorLevel, reactorFrame, reactorIssues, REACTOR_GEN_STATS, CORE_LEVEL, REACTOR_LEVELS} from '../src/gen/reactor/index';
 import {reactorRouteGroups} from '../src/gen/reactor/validate';
+import {dropInLadderOpening} from '../src/gen/reactor/pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {levelsOf} from '../src/gen/levels';
 import {CELL, FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
@@ -86,6 +87,8 @@ describe('Reactor generator (lane GEN)', () => {
         expect(g.cable.length).toBeGreaterThanOrEqual(2);
         const lv = levelsOf(L).list[g.use.level].grid, [cx, cy] = lv.cellOf(g.use.x, g.use.z);
         expect(lv.walkable(cx, cy)).toBe(true);
+        // task reactor-expansion-20261101 (lane HOST): a side complex's generator stands in its complex (tests/reactor-x-host-*)
+        if (R.complexes?.some(c => c.generator === g.id)) continue;
         // its landing is >= 8 x 6 m
         const d = R.decks.find(q => q.level === g.level && g.x > q.rect.x0 && g.x < q.rect.x1 && g.z > q.rect.z0 && g.z < q.rect.z1 && q.kind === 'landing')!;
         expect(d).toBeTruthy();
@@ -146,7 +149,8 @@ describe('Reactor generator (lane GEN)', () => {
   it('keeps every drop railed, the vessel solid, enemies off the stairs / keep points and density rising with depth', () => {
     for (const seed of SEEDS.slice(0, 4)) {
       const L = gen(seed), Lv = levelsOf(L);
-      expect(Lv.unrailedDrops()).toEqual([]);
+      // task reactor-expansion-20261101 (lane PATHS): the maintenance ladder heads are the ONLY designed openings in the deck-edge rails
+      expect(Lv.unrailedDrops().filter(d => !dropInLadderOpening(L, d))).toEqual([]);
       const per = L.levels.map(lv => L.zombies.filter(z => (z.level ?? 0) === lv.id && z.horde === undefined && !L.areas[z.area]?.ext).length);
       expect(per[0]).toBeGreaterThanOrEqual(1);
       expect(per[CORE_LEVEL]).toBeGreaterThan(per[0]);
@@ -159,7 +163,9 @@ describe('Reactor generator (lane GEN)', () => {
       const gC = L.levels[CORE_LEVEL].grid, [cx, cy] = gC.cellOf(L.reactor!.core.x, L.reactor!.core.z);
       expect(gC.blocked[gC.idx(cx, cy)]).toBe(1);
       expect(gC.cells[gC.idx(cx, cy)]).toBe(FLOOR);
-      expect(gC.floorOf(gC.idx(cx, cy))).toBeCloseTo(L.reactor!.core.y1);
+      // task reactor-expansion-20261101 (lane CORE): the body column rises to the vessel model's dome (no longer a 12 m drum hiding the model)
+      expect(gC.floorOf(gC.idx(cx, cy))).toBeGreaterThan(L.reactor!.core.y0 + 9);
+      expect(gC.floorOf(gC.idx(cx, cy))).toBeLessThanOrEqual(L.reactor!.core.y1);
       expect(reactorRouteGroups(L).length).toBe(10);
     }
   });

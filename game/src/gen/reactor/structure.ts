@@ -16,6 +16,7 @@ import type {
 } from './reactorTypes';
 import {BANK_CELLS, CORE_LEVEL, GENSET, TIERS, VESSEL, reactorStoreyLabel} from './frame';
 import type {CellRect, ReactorCarve, RoomRec, RunRec, WallId} from './carve';
+import {deckFootprint, fanClear, pathRails} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export const rectWorld = (r: CellRect): ReactorRect => ({x0: r3(r.x * CELL), z0: r3(r.y * CELL), x1: r3((r.x + r.w) * CELL), z1: r3((r.y + r.h) * CELL)});
@@ -25,7 +26,7 @@ export const yawToward = (dx: number, dz: number) => r3(Math.atan2(-dx, -dz));
 /** Tier marker band colours (rim, tiers 1..4, core). */
 export const TIER_COLORS = [0xd8d4c8, 0xd9b23a, 0xd9792e, 0xb53a2e, 0x7a4ab0, 0x3aa6a0];
 /** Uncleared depth-gas concentrations per zone (top / bottom) — lane AIR owns the final tuning. */
-export const ZONE_GAS: readonly [number, number][] = [[0.14, 0.32], [0.45, 0.65], [0.8, 0.9]];
+export const ZONE_GAS: readonly [number, number][] = [[0.10, 0.32], [0.45, 0.65], [0.8, 0.9]]; // (task reactor-expansion-20261101: zone 0 top 0.14 -> 0.10 — the first generator, now in the tier-1 bunker, stands in visible haze BELOW the 0.12 damage threshold even at crouch eye: the generator route never needs a mask)
 /** Gas zone of a storey: -1 the rim, 0 = tiers 1-2, 1 = tiers 3-4, 2 = the core floor. */
 export const zoneOfLevel = (lv: number): number => (lv === 0 ? -1 : lv === CORE_LEVEL ? 2 : lv <= 2 ? 0 : 1);
 
@@ -76,7 +77,8 @@ export function maintenanceLadders(layout: StationLayout, rc: ReactorCarve): {la
 export function reactorRails(layout: StationLayout): RailRun[] {
   const base = deriveRails(layout.levels);
   const extra = new Levels(layout.levels, layout.levelLinks, base).unrailedDrops();
-  return [...base, ...extra.map(r => ({...r, h: r.h ?? 1.1}))];
+  // task reactor-expansion-20261101 (lane PATHS): no rail across a stair mouth / storey seam; real openings at the ladder heads
+  return pathRails(layout, [...base, ...extra.map(r => ({...r, h: r.h ?? 1.1}))]);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -108,7 +110,8 @@ export function roomFrame(rc: ReactorCarve, rr: RoomRec): RoomFrame {
 export const roomPoint = (f: RoomFrame, a: number, d: number): {x: number; z: number} => ({x: r3(f.ox + (a * f.ax + d * f.ix) * CELL), z: r3(f.oz + (a * f.az + d * f.iz) * CELL)});
 
 /** Adds a collision-only machine box ('annexMachine': anchored plant, never storage) and blocks its cells. Returns the prop index. */
-function machineProp(layout: StationLayout, level: number, area: number, x: number, z: number, hx: number, hz: number, h: number, variant: number): number {
+// task reactor-expansion-20261101 (lane HOST): exported — the side complexes' generators use the same anchored collision prop
+export function machineProp(layout: StationLayout, level: number, area: number, x: number, z: number, hx: number, hz: number, h: number, variant: number): number {
   // y: relative to the storey floor here — the dresser's liftLevels lifts every level-tagged prop onto its floor (finishTraversal the rim's)
   const p: PropPlacement = {kind: 'annexMachine', x: r3(x), z: r3(z), y: 0, rot: 0, area, hx: r3(hx), hz: r3(hz), h, blocksSight: h > 1.7, variant, ...(level ? {level} : {})};
   layout.props.push(p);
@@ -162,14 +165,16 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
     const bank = machine(layout, rr, f, 'switchgear', b0, b0 + 10, f.d - 2, f.d, 2.3, [0, -1], 3);
     const controls = [control(f, lv, 'fuse-0', b0 + 2, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'fuse-1', b0 + 5, f.d - 2, f.d - 4.1, 1.3), control(f, lv, 'breaker', b0 + 8.5, f.d - 2, f.d - 4.1, 1.4)];
     sites.push({id: 'switchgear', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [bank]});
-    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.9, 1.6, 1.0));
+    // task reactor-expansion-20261101 (lane CONTROLS): the instruction board enlarged (was 1.6 x 1.0 m, its hint line was cut off)
+    screens.push(screen(f, lv, 'switchgearBoard', 0, f.d / 2, 1, 0, 1.8, 2.2, 1.3));
   }
   // Pump hall (core floor): the circulation pump skid (3.5 x 1.5 m) mid-room, the main coolant valve stand in a back corner.
   {
     const rr = room('pumpHall'), f = roomFrame(rc, rr), lv = rr.level;
     const pa0 = Math.round(f.w / 2 - 3.5), pd0 = Math.round(f.d / 2 - 0.5);
-    const pump = machine(layout, rr, f, 'pump', pa0, pa0 + 7, pd0, pd0 + 3, 1.6, [-1, 0], 1);
-    const valve = machine(layout, rr, f, 'valve', f.w - 3, f.w - 1, f.d - 3, f.d - 1, 1.4, [0, -1], 1);
+    // task reactor-expansion-20261101 (lane CONTROLS): collider heights = the models' (pump 1.82 m; the valve drawn at 0.78 scale: 1.55 m)
+    const pump = machine(layout, rr, f, 'pump', pa0, pa0 + 7, pd0, pd0 + 3, 1.82, [-1, 0], 1);
+    const valve = machine(layout, rr, f, 'valve', f.w - 3, f.w - 1, f.d - 3, f.d - 1, 1.55, [0, -1], 1);
     const controls = [control(f, lv, 'valve', f.w - 2, f.d - 3, f.d - 5.1, 1.6), control(f, lv, 'pump', pa0 - 0.01, pd0 + 1.5, pd0 + 1.5, 1.2)];
     // the pump's stand point is beside its end face (along -a), not inside the skid
     const pc = controls[1], at = roomPoint(f, pa0, pd0 + 1.5), st = roomPoint(f, pa0 - 2.1, pd0 + 1.5);
@@ -182,8 +187,10 @@ export function buildSites(layout: StationLayout, rc: ReactorCarve): SiteBuild {
   {
     const rr = room('control'), f = roomFrame(rc, rr), lv = rr.level;
     const c0 = Math.round(f.w / 2 - 3);
-    const console = machine(layout, rr, f, 'console', c0, c0 + 6, 3, 5, 1.1, [0, 1], 4);
-    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 5, 7.1, 1.1), control(f, lv, 'rods', c0 + 4.5, 5, 7.1, 1.1)];
+    // task reactor-expansion-20261101 (lane CONTROLS): the console's collider covers the model (1.49 m deep, 1.54 m tall: was 1.0 x 1.1, the
+    // desk ledge / hood stood 0.24 m past it): 1.5 m deep toward the operator, its key switch / rod control on the new front
+    const console = machine(layout, rr, f, 'console', c0, c0 + 6, 3, 6, 1.55, [0, 1], 4);
+    const controls = [control(f, lv, 'keyswitch', c0 + 1.5, 6, 7.1, 1.1), control(f, lv, 'rods', c0 + 4.5, 6, 7.1, 1.1)];
     sites.push({id: 'control', level: lv, area: rr.area, rect: rectWorld(rr.rect), controls, machines: [console]});
     // the monitor on the opening wall, in the wider wall segment beside the opening (facing into the room)
     const dA = rr.doorA0 - rr.a0, dB = dA + rr.doorW;
@@ -246,13 +253,54 @@ function wallFrames(rc: ReactorCarve): WallFrame[] {
   ];
 }
 
+/**
+ * Task reactor-expansion-20261101 (lane HOST): no open cell (any storey) in the two cell rows right behind the pit wall row across the
+ * duct (u ± 3 cells) whose band overlaps the duct's height (hub y ± 1.5 m).
+ */
+function fanBackClear(layout: StationLayout, w: WallFrame, u: number, y: number): boolean {
+  for (let du = -3; du <= 3; du++) for (const v of [-2, -3]) {
+    const [x, z] = w.cell(u + du, v);
+    for (const L of layout.levels) {
+      const g = L.grid;
+      if (!g.inBounds(x, z)) continue;
+      const i = g.idx(x, z);
+      if (g.cells[i] === SOLID) continue;
+      if (g.floorOf(i) < y + 1.5 && g.ceil[i] > y - 1.5) return false;
+    }
+  }
+  return true;
+}
+
 /** Wall extraction fans of every zone: 2-4 per zone on the pit walls between its storeys, clear of decks / stairs where possible. */
+/**
+ * (lead merge fix, task reactor-expansion-20261101) True when every storey's grid is closed (rock / not inside an open band) behind the
+ * wall face for a fan housing's depth (1.5 m) across its disc (hub y ± r): a side-complex room behind the pit wall rejects the spot.
+ */
+function rockBehind(layout: StationLayout, hx: number, hz: number, nx: number, nz: number, y: number, r: number): boolean {
+  const tx = -nz, tz = nx;
+  for (let d = 0.3; d <= 1.55; d += 0.25) for (let t = -r; t <= r + 1e-6; t += 0.4) {
+    const px = hx - nx * d + tx * t, pz = hz - nz * d + tz * t;
+    for (const L of layout.levels) {
+      const g = L.grid, [cx, cy] = g.cellOf(px, pz);
+      if (!g.inBounds(cx, cy)) continue;
+      const i = g.idx(cx, cy);
+      if (g.cells[i] === SOLID) continue;
+      const f = g.floorOf(i), c = g.ceil[i] || f + 3;
+      if (y + r > f && y - r < c) return false;
+    }
+  }
+  return true;
+}
+
 export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): ReactorFan[] {
   const fans: ReactorFan[] = [];
   const walls = wallFrames(rc);
   const zoneLevels = [[1, 2], [3, 4], [CORE_LEVEL]];
   zoneLevels.forEach((lvs, zone) => {
-    for (const strict of [true, false]) {
+    // task reactor-expansion-20261101 (lane PATHS): passes 0 / 1 (strict / any wall) keep the fan's housing out of walkable space
+    // (pathsGen.fanClear: the hub 3.2, 4.2 or 5.2 m above the deck); pass 2 is the old fallback
+    for (const pass of [0, 1, 2]) {
+      const strict = pass === 0;
       const cands: {lv: number; w: WallFrame; u: number; x: number; z: number; y: number}[] = [];
       for (const lv of lvs) {
         const g = layout.levels[lv].grid;
@@ -268,7 +316,15 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
           }
           if (!ok) continue;
           const [x, z] = w.cell(u, 0);
-          cands.push({lv, w, u, x: r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), z: r3((z + 0.5) * CELL - w.nz * 0.5 * CELL), y: r3(rc.bases[lv] + 3.2)});
+          const hx = r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), hz = r3((z + 0.5) * CELL - w.nz * 0.5 * CELL);
+          // (lead merge fix) the 1.4 m-deep duct housing needs ROCK behind the wall face — never a side-complex room behind it
+          const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2) && rockBehind(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
+          if (up === undefined) continue;
+          // task reactor-expansion-20261101 (lane HOST): the duct runs 0.7 m back through the 0.5 m pit wall (archKit planFan, radius
+          // 1.3 m) — the first cells behind the wall stay rock at the duct's height on every storey (a side complex / room cut in right
+          // behind the wall would show it)
+          if (!fanBackClear(layout, w, u, rc.bases[lv] + up)) continue;
+          cands.push({lv, w, u, x: hx, z: hz, y: r3(rc.bases[lv] + up)});
         }
       }
       if (cands.length < 2) continue;
@@ -303,8 +359,12 @@ function wallOf(rc: ReactorCarve, x: number, z: number): WallId {
   return westIsStair ? 'organ' : 'stair';
 }
 
-/** Cable polyline from a generator's panel along the pit walls (round the corners) to each of its zone's fans in turn. */
-export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly ReactorFan[]): {x: number; y: number; z: number}[] {
+/**
+ * Cable polyline from a generator's panel along the pit walls (round the corners) to each of its zone's fans in turn. (task
+ * reactor-expansion-20261101, lane HOST) `from`: a side complex's generator — the run starts where its cable leaves the entrance,
+ * projected onto that pit wall's plane, instead of at the panel on the stair wall.
+ */
+export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly ReactorFan[], from?: {x: number; y: number; z: number; wall: WallId}): {x: number; y: number; z: number}[] {
   const x0 = Math.min(rc.cx(0), rc.cx(rc.PW - 1)) * CELL + 0.3, x1 = x0 + rc.PW * CELL - 0.6;
   const z0 = rc.PZ0 * CELL + 0.3, z1 = z0 + rc.PD * CELL - 0.6;
   const westIsStair = rc.cx(0) < rc.cx(1);
@@ -315,7 +375,8 @@ export function cableOf(rc: ReactorCarve, gen: ReactorGenerator, fans: readonly 
   };
   const pts: {x: number; y: number; z: number; w: WallId}[] = [];
   const wallX = sx('stair')!;
-  pts.push({x: gen.panel.x, y: gen.panel.y, z: gen.panel.z, w: 'stair'}, {x: wallX, y: gen.y + 2.6, z: gen.panel.z, w: 'stair'});
+  if (from) pts.push({x: sx(from.wall) ?? from.x, y: from.y, z: from.wall === 'N' ? z0 : from.wall === 'S' ? z1 : from.z, w: from.wall}); // lane HOST
+  else pts.push({x: gen.panel.x, y: gen.panel.y, z: gen.panel.z, w: 'stair'}, {x: wallX, y: gen.y + 2.6, z: gen.panel.z, w: 'stair'});
   let rest = fans.slice();
   while (rest.length) {
     const last = pts[pts.length - 1];
@@ -440,7 +501,9 @@ export function reactorInfo(layout: StationLayout, rc: ReactorCarve, rng: Rng, i
   }));
   for (const g of inp.gens) g.cable = cableOf(rc, g, inp.fans.filter(f => f.zone === g.zone));
   // decks: every carved deck + the inline landings between the flights of each run
-  const decks: ReactorDeck[] = rc.decks.map(d => ({kind: d.kind, level: d.level, rect: rectWorld(d.rect), y: d.y}));
+  // task reactor-expansion-20261101 (lane PATHS): a deck is its ACTUAL cells (a run / earlier deck / reserved cell inside its rect is not
+  // deck: no steel hung over a stairwell through the deck plane)
+  const decks: ReactorDeck[] = rc.decks.flatMap(d => deckFootprint(layout.levels[d.level].grid, d.rect, d.area).map(r => ({kind: d.kind, level: d.level, rect: rectWorld(r), y: d.y})));
   for (const run of rc.runs) {
     const fl = run.flights.map(i => inp.flights[i]);
     for (let i = 0; i + 1 < fl.length; i++) {

@@ -17,12 +17,20 @@ import type {StationLayout} from '../../gen/stationTypes';
 import {MOOD, syncGlowFog} from '../lights';
 import {fogCullDistance} from '../levelCulling';
 import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTexture} from './archAssets';
+import {minesModelKeysFor} from './minesAssets'; // task reactor-expansion-20261101 (lane MINES)
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
+import {reactorCoreLights} from './coreLights'; // task reactor-expansion-20261101 (lane CORE)
+import {activeCoreVisuals} from './coreVisuals';
+import {CORE_LOOK} from './coreStages';
+import {bunkerModelKeysFor} from '../../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
+import {wasteModelKeysFor} from './wasteAssets'; // task reactor-expansion-20261101 (lane WASTE)
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
-export const REACTOR_FOG = {density: 0.0135, color: 0x283020, far: 230} as const;
+// task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Ordinary non-hazard atmospheric fog is not green"): 0x283020 (olive) ->
+// a neutral warm grey — the clean pit air no longer reads like the toxic strata (their own green term), and the strata stand out
+export const REACTOR_FOG = {density: 0.0135, color: 0x2a2925, far: 230} as const;
 
 /** FogExp2 transmittance at distance d. */
 export const reactorFogTransmittance = (d: number, density: number = REACTOR_FOG.density): number => Math.exp(-((d * density) ** 2));
@@ -49,6 +57,9 @@ export class ReactorArchRuntime {
 
   constructor(private readonly host: ReactorArchHost) {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
+    host.sectionModelKeys?.push(layout => minesModelKeysFor(layout)); // task reactor-expansion-20261101 (lane MINES): the mine set pieces
+    host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props
+    host.sectionModelKeys?.push(layout => wasteModelKeysFor(layout)); // task reactor-expansion-20261101 (lane WASTE): the waste repository's models
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });
@@ -133,6 +144,12 @@ export function reactorArchQaApi(game: {world?: {reactorArch?: ReactorArch} | nu
       if (o.core !== undefined) v.setCoreGlow(o.core);
       if (o.tier) v.setTierPower(o.tier[0], o.tier[1]);
       return v.state();
+    },
+    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning). */
+    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>} = {}) => {
+      const c = activeCoreVisuals();
+      if (c && o.tune) Object.assign(c.tune, o.tune);
+      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null};
     },
   };
 }

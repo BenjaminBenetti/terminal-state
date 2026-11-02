@@ -73,7 +73,9 @@ import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iterati
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
+import {installReactorCoreLights} from './world/reactor/coreLights'; // task reactor-expansion-20261101 (lane CORE)
 import {REACTOR_MODEL_FILES} from './world/reactor/archAssets'; // task reactor-build-20261101 (lane ARCH): the lead's Reactor GLB kit (level-only)
+import {WASTE_MODEL_FILES} from './world/reactor/wasteAssets'; // task reactor-expansion-20261101 (lane WASTE): the waste set of REACTOR_X_KIT (level-only)
 import {attributeInstancing, setAttributeInstancing} from './render/instancing'; // Task track3-eaton-centre-20261031 (lane PERF): shared instancing programs in the mall
 import {collectTextures, modelTextures, releaseModelTexturesAfterUpload, stageUploads, textureReleaseStats, trackUploads} from './assets/textureRelease'; // (lane PERF) mall: decoded images freed after upload, uploads staged
 import {installGas, type GasSystem} from './world/gas/system'; // Task gasmask-breach-20261030 (lane GAS): breakable office windows, breach gas, exposure
@@ -83,7 +85,8 @@ import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
-import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart'; // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
+import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart';
+import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
@@ -165,7 +168,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES}); // Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -456,6 +459,7 @@ export class Game {
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
     installReactorArch(this); hookName('reactorArch'); // task reactor-build-20261101 (lane ARCH): Reactor textures preload, model keys, deep haze / far plane / culler distance, kit visuals tick (inert elsewhere)
+    installReactorCoreLights(this); hookName('reactorCoreLights'); // task reactor-expansion-20261101 (lane CORE): the reactor's green / blue glow lights (boot-time, intensity-only; inert elsewhere)
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
@@ -477,7 +481,8 @@ export class Game {
     this.sectionModelKeys.push(enemyModelKeysFor);
     this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
     hookName('sirens');
-    installReactorRestart(this); hookName('reactorRestart'); // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
+    installReactorRestart(this); hookName('reactorRestart');
+    installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool
@@ -760,6 +765,10 @@ export class Game {
       ownMeshes: p => cm.ownMeshes(p),
       onBreak: e => { const h = cm.holderFor(e.prop); if (h) cm.breakHolder(h, e.kind); this.physics.propsChanged(e.prop.x, e.prop.z); },
       pickups: () => this.pickups.list,
+      // task reactor-expansion-20261101 (lane CONTROLS): bullet impacts on an arch-drawn finish (Reactor pit concrete / steel grating /
+      // rusted plate, Office drywall / carpet …) take that finish's class and colour (world/finishAt.ts, damage/impactFinish.ts)
+      finishAt: this.world.finishAt ?? null,
+      finishMaterial: k => this.world.officeArch?.material(k) ?? this.world.mallArch?.material(k) ?? this.world.reactorArch?.material(k),
       // Iteration 07 (Lane K): shot items move — rigid items / chunks, loot lots lifted off holders (same item / count, never duplicated)
       physics: this.physics,
       lots: (o, d, maxT) => cm.shotLots(o, d, maxT).map(l => ({holder: l.holder, lotId: l.lotId, t: l.t})),
@@ -1432,7 +1441,7 @@ export class Game {
   /** Iteration 13 (CORE): the station straight to the canvas (scene background clears; the renderer's output pass tone-maps). */
   private renderDirect(): void {
     this.renderer.setRenderTarget(null);
-    this.renderer.render(this.scene, this.camera);
+    this.atmosphere.withGasFog(this.scene, () => this.renderer.render(this.scene, this.camera)); // task reactor-expansion-20261101 (lane GASLIGHT): toxic gas stays visible (in-engine fog fallback)
   }
 
   // ---------------------------------------------------------------------------------------
@@ -2161,7 +2170,8 @@ export class Game {
     } else {
       // blade on a surface: its material's impact cue and a few chips, no crater / prop damage (a knife does not break things)
       const wh = res.hit, n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
-      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls] : DAMAGE_MATERIALS.concrete;
+      const spec = wh.kind === 'prop' && wh.prop !== undefined && props[wh.prop] ? DAMAGE_MATERIALS[propDamageSpec(props[wh.prop].kind).cls]
+        : wh.kind === 'wall' || wh.kind === 'floor' || wh.kind === 'ceiling' ? DAMAGE_MATERIALS[this.damage.structuralClassAt(wh.kind, wh.level, point, n)] : DAMAGE_MATERIALS.concrete; // (task reactor-expansion-20261101, lane CONTROLS: the surface's own material)
       this.sfx.impact(point.x, point.y, point.z, spec.sound);
       this.fx.impact(point, n, spec.fx, {decal: false, chips: 2, dust: 0.35});
       this.logMelee({kind: 'world', surface: wh.kind, t: +res.t.toFixed(3)});

@@ -14,12 +14,15 @@ import {setReactorVisuals} from './visuals';
 import type {KitPlan} from './archKit';
 import type {InstanceSlot, KitBuilt} from './archMeshes';
 import {LAMP} from './archMaterials';
+import type {CoreVisuals} from './coreVisuals'; // task reactor-expansion-20261101 (lane CORE)
+import type {ReactorRunState} from './runState';
 
 /** Rotor speed at fan speed 1 (rev / s), spool time constant (s), core glow ease (1 / s), generator jitter amplitude (m). */
 export const ARCH_VISUALS = {fanRevPerS: 1.6, fanEase: 1.4, glowEase: 0.6, jitter: 0.006} as const;
 
-/** Glow colours (linear RGB): dormant cold (faint) and alive. */
-const GLOW_COLD = new THREE.Color(0.02, 0.07, 0.055), GLOW_ALIVE = new THREE.Color(0.55, 1.0, 0.72);
+/** Glow colours (linear RGB): dormant and alive. Task reactor-expansion-20261101 (lane CORE): the dormant vessel glow is a clear green
+ *  (user: "there is no green glow from the reactor like shown in the art"), the alive one a hot green-white. */
+const GLOW_COLD = new THREE.Color(0.06, 0.42, 0.12), GLOW_ALIVE = new THREE.Color(0.75, 1.6, 0.9);
 const LAMP_OFF = new THREE.Color(0.25, 0.03, 0.02), LAMP_RED = new THREE.Color(1.0, 0.16, 0.08);
 const LAMP_GREEN_OFF = new THREE.Color(0.02, 0.08, 0.03), LAMP_GREEN = new THREE.Color(0.2, 1.0, 0.3);
 
@@ -42,6 +45,8 @@ export class ReactorArchVisuals implements ReactorVisuals {
   private readonly c = new THREE.Color();
   /** Per-frame counters (QA / tests): instance matrices written by the last tick. */
   lastTickWrites = 0;
+  /** Task reactor-expansion-20261101 (lane CORE): the hero reactor's staged visuals (arch.ts sets it). */
+  core: CoreVisuals | null = null;
 
   constructor(private readonly built: KitBuilt | null, plan: KitPlan | null, private readonly glowMat: MeshBasicNodeMaterial | null) {
     if (plan && built) {
@@ -79,6 +84,12 @@ export class ReactorArchVisuals implements ReactorVisuals {
 
   setCoreGlow(level: number): void {
     this.glowTarget = Math.max(0, Math.min(1, Number.isFinite(level) ? level : 0));
+    this.core?.setCoreGlow(this.glowTarget); // task reactor-expansion-20261101 (lane CORE)
+  }
+
+  /** Task reactor-expansion-20261101 (lane CORE): the restart record -> the hero's staged visuals (idempotent; instant on build). */
+  setRestartState(state: Readonly<ReactorRunState>, instant: boolean): void {
+    this.core?.setRestartState(state, instant);
   }
 
   setTierPower(level: number, power: number): void {
@@ -95,6 +106,7 @@ export class ReactorArchVisuals implements ReactorVisuals {
   tick(dt: number): void {
     if (!(dt > 0)) return;
     this.time += dt;
+    this.core?.tick(dt); // task reactor-expansion-20261101 (lane CORE)
     let writes = 0;
     // fans
     let fanMoved = false;

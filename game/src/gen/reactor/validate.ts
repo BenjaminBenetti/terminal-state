@@ -18,6 +18,9 @@ import {doorwayIssues} from '../doorways';
 import {extensionIssues} from '../trackExt/index';
 import type {StationLayout} from '../stationTypes';
 import {CORE_LEVEL, REACTOR_LEVELS, VESSEL} from './frame';
+import {CORE_FLOOR, coreFloorIssues} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
+import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
+import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -106,22 +109,25 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
 
   // --- Railings, vessel ------------------------------------------------------------------------------------------------------
   const Lv = levelsOf(layout);
-  const drops = Lv.unrailedDrops();
+  const drops = Lv.unrailedDrops().filter(d => !dropInLadderOpening(layout, d)); // task reactor-expansion-20261101 (lane PATHS): ladder heads
   if (drops.length) issues.push(`${drops.length} unrailed drops (first at ${drops[0].x0.toFixed(1)},${drops[0].z0.toFixed(1)} level ${drops[0].level})`);
   {
     const gC = levels[CORE_LEVEL].grid, c = info.core;
     let n = 0, bad = 0;
     for (let dz = -VESSEL.r + 0.5; dz <= VESSEL.r - 0.5; dz += CELL) for (let dx = -VESSEL.r + 0.5; dx <= VESSEL.r - 0.5; dx += CELL) {
-      if (Math.hypot(dx, dz) > VESSEL.r - 0.6) continue;
+      if (Math.hypot(dx, dz) > CORE_FLOOR.vesselR - 0.6) continue; // task reactor-expansion-20261101 (lane CORE): the blocked footprint (6.6 m)
       const [cx, cy] = gC.cellOf(c.x + dx, c.z + dz), i = gC.idx(cx, cy);
       n++;
-      if (!gC.blocked[i] || gC.floorOf(i) < c.y1 - 0.5) bad++;
+      // task reactor-expansion-20261101 (lane CORE): blocked, its plinth / body a riser no body steps over (no longer a 12 m drum)
+      if (!gC.blocked[i] || gC.floorOf(i) < c.y0 + 1.0) bad++;
     }
     if (!n || bad) issues.push(`vessel: ${bad} of ${n} cells not solid`);
   }
 
+  issues.push(...coreFloorIssues(layout)); // task reactor-expansion-20261101 (lane CORE): the goop pool, bridges, loops
+
   // --- Shared rules -----------------------------------------------------------------------------------------------------------
-  issues.push(...levelIssues(layout, dist, REACTOR_LEVEL_RULES));
+  issues.push(...excuseDesignedRailGaps(layout, levelIssues(layout, dist, REACTOR_LEVEL_RULES))); // lane PATHS: seams + ladder openings
   issues.push(...traversalIssues(layout));
   issues.push(...doorwayIssues(layout));
 
@@ -144,6 +150,8 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   }
   for (const p of layout.pickups) if (onRun(p.level ?? 0, p.x, p.z)) issues.push(`pickup ${p.itemId} on a stair run`);
   issues.push(...extensionIssues(layout, dist));
+  // task reactor-expansion-20261101 (lane HOST): the side complexes (region, entrance, stairs-only reach, no overlap, substantial floor)
+  issues.push(...complexIssues(layout));
   return issues;
 }
 

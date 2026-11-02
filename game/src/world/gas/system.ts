@@ -53,7 +53,9 @@ export interface GasHost {
   layout: StationLayout;
   /** The office tower runtime (its windows: plans + merged view; null on the Subway). */
   tower: {office: {info: {exterior: {x0: number; z0: number; x1: number; z1: number}}; windows: {plans: WindowPlan[]; view: WindowView} | null} | null};
-  atmosphere: {active: boolean; setGasLayer(slot: number, field: ArrayLike<number>, rect: {x0: number; y0: number; w: number; h: number}): void};
+  atmosphere: {active: boolean; setGasLayer(slot: number, field: ArrayLike<number>, rect: {x0: number; y0: number; w: number; h: number}): void;
+    /** Task reactor-expansion-20261101 (lane GASLIGHT): the in-engine fog fallback's eye concentration (render/volumetric.ts). */
+    setGasFallback?(c: number): void};
   atmosphereBypass?: string | null;
   fx?: {impact(pos: THREE.Vector3, normal: THREE.Vector3, surface: 'glass', opts?: {decal?: boolean; chips?: number; dust?: number}): void} | null;
   damage?: {burst(point: THREE.Vector3, normal: THREE.Vector3, dir: THREE.Vector3, cls: 'glass', surface: THREE.Color, k?: number, sizeK?: number): number} | null;
@@ -87,6 +89,8 @@ export interface GasExposure {
   puff?: number;
   /** Task reactor-build-20261101 (lane AIR): the Reactor depth gas at the eye (QA; `c` is the max of the parts). */
   depth?: number;
+  /** Task reactor-expansion-20261101 (lane GASLIGHT): the concentration handed to the in-engine fog fallback (0 while the pass draws the gas). */
+  fallback?: number;
 }
 
 const GLASS = new THREE.Color(0xc9d8dc);
@@ -105,7 +109,7 @@ export class GasSystem {
   /** Integration point: the HUD hint while in gas ("Put on your gas mask (Q)" / "No filter" …). */
   hintFor: (protectedNow: boolean) => string = p => (p ? '' : 'Put on your gas mask (Q)');
   /** This frame's exposure. */
-  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0}; // (+ depth: lane AIR)
+  readonly exposure: GasExposure = {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0}; // (+ depth: lane AIR; + fallback: lane GASLIGHT)
   /** Task track1-siren-blightbelly-20261031 (lane BLIGHT): temporary local puffs of the current world (any level / storey). */
   readonly puffs = new GasPuffs();
   /** Task gas-mask-roof-feedback-20261030 (item 10): the office roof (its outside atmosphere; null on the Subway / between worlds). */
@@ -172,7 +176,8 @@ export class GasSystem {
     this.puffs.clear(); // lane BLIGHT: temporary puffs never outlive their world (never saved: no re-emission on a revisit)
     this.puffs.world = null;
     this.depth = null; // task reactor-build-20261101 (lane AIR): the Reactor runtime sets it again after this build (never outlives its world)
-    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0});
+    Object.assign(this.exposure, {c: 0, protected: false, dps: 0, damage: 0, outdoor: 0, source: null, puff: 0, depth: 0, fallback: 0});
+    this.host.atmosphere.setGasFallback?.(0); // (lane GASLIGHT) no fallback fog outlives its world
     this.hud.clear();
   }
 
@@ -330,7 +335,7 @@ export class GasSystem {
   frame(dt: number): void {
     const f = this.field, roof = this.roof, P = this.puffs;
     const D = this.depth && this.host.layout.reactor ? this.depth : null; // task reactor-build-20261101 (lane AIR): only on the Reactor
-    if (!f && !roof && !P.active && !D) { this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas
+    if (!f && !roof && !P.active && !D) { if (this.exposure.fallback) { this.exposure.fallback = 0; this.host.atmosphere.setGasFallback?.(0); } this.hud.clear(); return; } // lane BLIGHT: + one boolean (no puff); lane AIR: + no depth gas (lane GASLIGHT: the fallback closes with the last puff)
     if (f) f.tick(dt);
     if (P.active) P.tick(dt);
     this.upload();
@@ -355,7 +360,12 @@ export class GasSystem {
     // the fallback haze stands in for the volumetric breach gas only: the roof's outdoor murk is the scene fog, always drawn. Lane AIR:
     // and for the Reactor's volumetric depth strata (the same eye concentration)
     const haze = (!!this.host.atmosphereBypass || !this.host.atmosphere.active) && (e.source === 'field' || e.source === 'depth');
-    this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze});
+    // task reactor-expansion-20261101 (lane GASLIGHT, CLAUDE.md "Toxic gas is always VISIBLE"): the fallback is IN-ENGINE now — the
+    // volumetric pass's direct() frame tints / thickens the scene fog by this eye concentration (render/volumetric.ts setGasFallback),
+    // never the old CSS screen haze; the mask (protection) never changes it
+    e.fallback = haze ? c : 0;
+    this.host.atmosphere.setGasFallback?.(e.fallback);
+    this.hud.update({c, protected: prot, dps, dpsMax: GAS.DPS_MAX, min: GAS.HUD_MIN, hint: c >= GAS.HUD_MIN ? this.hintFor(prot) : '', haze: false});
   }
 }
 

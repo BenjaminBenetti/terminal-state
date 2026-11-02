@@ -248,3 +248,30 @@ Models generated for this project with Meshy T2.5 (smart topology; text-to-3D pr
 - `assets/textures/train/train-int-ceiling.jpg` — vented ceiling panels (tiles in 2D) (Codex thread 01a198d1-c556-7673-a111-b1b56f00891f)
 - `assets/textures/train/train-int-bulkhead.jpg` — end bulkhead with a central closed door (one panel) (Codex thread 01a198d2-7511-7f32-93e6-c6155d93261b)
 <!-- END player-train-20261101 -->
+
+<!-- BEGIN reactor-x-kit-20261101 (build-reactor-x-kit.mjs) -->
+## The Reactor expansion: hero reactor assembly + side-complex kit (B "Industrial Service Cathedral")
+
+Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Codex initial reference images, text-to-3D preview + 2K PBR refine for the two items) through the Meshy MCP under the user's NEW Reactor-expansion 1000-credit authorization (19 generation attempts, 285 credits billed at build time); the Codex reference images and the three surface sources were generated with Codex's built-in image tool, each with the user-selected B concept attached. Runtime derivatives built by `tools/asset-pipeline/props/build-reactor-x-kit.mjs` (provenance: `assets/derivatives/reactor-x-kit-20261101.json`). Provider terms apply; unapproved prototype, no licence or commercial clearance implied. Raw masters and the concept are kept outside Git.
+
+- `assets/models/reactor-steam-generator.glb` — hero: nuclear steam generator / heat-exchanger tower (height along Y) (Meshy task 01a19978-a39f-7084-b518-edc27ccd8711)
+- `assets/models/reactor-coolant-pump-vertical.glb` — hero: vertical reactor coolant pump (motor over a spherical casing) (Meshy task 01a19978-aaed-7429-9b6a-576cee00fd77)
+- `assets/models/reactor-coolant-manifold.glb` — hero: coolant header manifold with branch valves (length along X) (Meshy task 01a19980-3288-7587-8eff-68479e594a27)
+- `assets/models/reactor-pipe-elbow.glb` — hero: flanged 90-degree coolant pipe elbow (instanced on the loops) (Meshy task 01a199ea-a0b7-706f-8bac-cb6f2305afc9)
+- `assets/models/reactor-sight-glass-spool.glb` — hero: coolant spool with an armoured sight-glass window (blue flow shows through) (Meshy task 01a199ea-a788-77fd-88cf-5fab64abe728)
+- `assets/models/reactor-crdm-platform.glb` — hero: control-rod-drive service platform on the vessel head (Meshy task 01a199ea-aede-7356-a52f-5e880fa017d0)
+- `assets/models/reactor-turbine-generator.glb` — hero: steam turbine generator set on its pedestal (length along X) (Meshy task 01a19980-3950-73dd-b1ef-76ce8ffe9845)
+- `assets/models/reactor-blast-door.glb` — bunker: round blast door standing open in its frame (Meshy task 01a19980-4120-738a-96bc-0e1f94f7f58d)
+- `assets/models/reactor-air-filtration-unit.glb` — bunker: air filtration / ventilation plant unit (Meshy task 01a19980-495b-73c0-becc-106067533df2)
+- `assets/models/reactor-radio-console.glb` — bunker: built-in radio communications desk (nothing loose) (Meshy task 01a19980-5112-7565-86c5-ef699ab4ad3c)
+- `assets/models/reactor-bunk-bed.glb` — bunker: steel double bunk bed (bare mattresses) (Meshy task 01a19980-58e9-735f-be9d-5ee9422f64e3)
+- `assets/models/reactor-mine-cart.glb` — mines: narrow-gauge ore cart (empty) (Meshy task 01a19980-6058-76f4-853c-29228126da55)
+- `assets/models/reactor-timber-set.glb` — mines: tunnel timber support set (posts + cap) (Meshy task 01a19980-7222-7535-ae88-019a643cc95e)
+- `assets/models/reactor-hoist-winch.glb` — mines: electric hoist winch on its base (Meshy task 01a19980-7a6c-7636-9a4c-9d97718acd29)
+- `assets/models/reactor-rock-drill-rig.glb` — mines: pneumatic drill rig on a carriage (Meshy task 01a19980-824d-74b8-9d7c-a7bb86a478cf)
+- `assets/models/reactor-waste-drum.glb` — waste: 200 L waste drum (instanced) (Meshy task 01a19980-89fa-7669-b411-f0a5867105ab)
+- `assets/models/reactor-storage-cask.glb` — waste: dry storage cask (Meshy task 01a19980-91fa-71e7-8b9e-b6acf33f3dc7)
+- `assets/models/reactor-decon-shower.glb` — waste: decontamination shower booth (Meshy task 01a19980-99fb-70c8-b1c4-4b47a9d8413f)
+- `assets/models/reactor-hot-cell-window.glb` — waste: hot-cell window wall section with manipulators (Meshy task 01a19980-a169-77a3-abcc-66ee22bb9ff8)
+- `assets/textures/reactor/mine-rock-{color,normal,orm}.jpg` — blasted mine-drift rock (lane MINES drift walls / ceilings) (Codex colour source; normal / ORM derived locally)
+<!-- END reactor-x-kit-20261101 -->

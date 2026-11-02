@@ -20,6 +20,7 @@ import {Kit} from '../stationKit';
 import type {Level, LevelLink} from '../levels';
 import {levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
+import {planPitLamps} from './gaslightLamps'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {finishTraversal, placeLadders} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
 import {spawnProfile, type SpawnContextId, type SpawnProfile} from '../../ai/spawnTables';
@@ -39,10 +40,13 @@ import type {ReactorComponent, ReactorPose} from './reactorTypes';
 import {CORE_LEVEL, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
 import {carveReactor, reactorCanvas, type ReactorCarve} from './carve';
 import {
-  buildGenerators, buildSites, deckHolds, deckLights, maintenanceLadders, mouthHolds, placeFans, reactorInfo, reactorLinks, reactorRails,
+  buildSites, deckHolds, deckLights, maintenanceLadders, mouthHolds, placeFans, reactorInfo, reactorLinks, reactorRails,
   roomFrame, roomPoint,
 } from './structure';
 import {reactorIssues} from './validate';
+import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
+// task reactor-expansion-20261101 (lane HOST): the generator side complexes (bunker / mines / waste) off the main shaft
+import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finishComplexes, hostGenerators, trimCoreCrop, type ComplexCarvers} from './complex/host';
 
 export {reactorFrame, reactorSeed, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
 export {reactorIssues, routeIssues as reactorRouteIssues} from './validate';
@@ -57,6 +61,8 @@ export interface ReactorGenOptions {
   spawns?: SpawnProfile;
   /** The level's track-extension declaration (LEVELS.reactor.trackExtensions); 'none' = no extensions. */
   trackExt?: TrackExtConfig | 'none';
+  /** Task reactor-expansion-20261101 (lane HOST): side-complex carver overrides (tests / QA; a missing key = the shipped carver, null = none). */
+  complexCarvers?: ComplexCarvers;
 }
 
 /** Generation attempts before the last generated layout is returned with its issues. */
@@ -80,7 +86,7 @@ export function generateReactorLevel(ctx: SectionGenContext, opts: ReactorGenOpt
   REACTOR_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, opts.complexCarvers);
     REACTOR_GEN_STATS.attempts = attempt + 1;
     if (!layout) { REACTOR_GEN_STATS.carveFails++; f = reactorFrame(ctx.levelSeed, f.stairWall, REACTOR_GEN_STATS.carveFails); continue; }
     let issues = reactorIssues(layout, {startCells: startCells(spawns)});
@@ -113,12 +119,15 @@ export function reactorSpawnContext(lv: number): SpawnContextId {
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none'): StationLayout | null {
+function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none', carvers?: ComplexCarvers): StationLayout | null {
   const rng = new Rng(genSeed);
   const cv = reactorCanvas(f);
   const k = new Kit(rng, {levels: REACTOR_LEVELS, w: cv.W, h: cv.H});
   const rc = carveReactor(k, rng, f);
   if (!rc) return null;
+  // --- Task reactor-expansion-20261101 (lane HOST): the side complexes, each carver once in its slot (before Track2 / the crop) -----
+  const cxs = carveComplexes(k, rng, rc, carvers);
+  trimCoreCrop(k, rc); // the crop holds what was carved east / south (unused complex rock stays out of the grids)
   // --- Track2 seam: AFTER all carving, BEFORE the crop (plans only; east / south of the fixed origin) ----------------------------
   const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {
     levelId: 'reactor', levelSeed: ctx.levelSeed, canvasGrow: 'east-south', origin: {x: 0, y: 0}, maxCells: REACTOR_EXT_MAX_CELLS, coreCrop: {w: rc.coreW, h: rc.coreH},
@@ -140,21 +149,26 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   registerApertures(layout.levels);
   layout.traversal.ladders = placeLadders(layout);
   const lad = maintenanceLadders(layout, rc);
+  // task reactor-expansion-20261101 (lane CORE): the goop pool blocked, the coolant loops' collision, the turbine generator's wall run
+  const coreFin = finishCoreFloor(layout, rc.coreFloor, rc.coreAreas, layout.levelLinks.flatMap(k => [...(k.lower === CORE_LEVEL ? [k.bottom] : []), ...(k.upper === CORE_LEVEL ? [k.top] : [])]));
   layout.rails = reactorRails(layout);
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Machines (collision props) before the dresser: the dresser furnishes round them --------------------------------------------
-  const gens = buildGenerators(layout, rc);
+  const gens = hostGenerators(layout, rc, cxs); // lane HOST: the landing generators + the complexes' (ids in zone order)
   const sb = buildSites(layout, rc);
   // --- Dressing: ONE station dresser pass with the pit decks, run mouths, stand points and doors held clear ----------------------
   const before = {lights: layout.lights.length, signs: layout.signs.length};
   const deckIds = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
-  const release = holdCells(layout, [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds]);
+  const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds];
+  const release = holdCells(layout, holds);
   dress(layout, rng.fork('dress'));
   release();
   // the dresser's fixtures / plates over the open pit decks are dropped (the decks get their own fixtures below)
   layout.lights = layout.lights.filter((l, i) => i < before.lights || !deckIds.has(l.area));
   layout.signs = layout.signs.filter((s, i) => i < before.signs || !deckIds.has(s.area) || s.kind === 'service');
+  // lane HOST: each complex's own dress hook (world metres, crop {0, 0}), the same cells held clear
+  dressComplexes(layout, rng, cxs, holds);
 
   // --- Player start: on the platform in front of the middle opening, looking through it into the pit ------------------------------
   const start = startOf(layout, rc);
@@ -192,11 +206,17 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
     a.lighting = 'lit';
     if (!own.length) layout.lights.push({x: (a.x + a.w / 2) * CELL, y: a.ceil - 0.05, z: (a.y + a.h / 2) * CELL, rot: a.w >= a.h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 0.8, dying: false, ...(a.level ? {level: a.level} : {})});
   }
+  complexLights(layout, cxs); // lane HOST: a complex generator's room is lit steadily, like the restart sites
   deckLights(layout, rc, rng.fork('reactor-deck-lights'));
+  clearEntranceLamps(layout, cxs); // lane HOST: no deck lamp hangs in a complex's doorway
   const fans = placeFans(layout, rc, rng.fork('reactor-fans'));
   layout.reactor = reactorInfo(layout, rc, rng.fork('reactor-info'), {
     linkIds, ladderLinks: lad.links, gens: gens.gens, fans, sites: sb.sites, screens: sb.screens, components, start, flights: layout.traversal.stairs,
   });
+  finishComplexes(layout, rc, cxs); // lane HOST: complex generators' cables through their entrances + layout.reactor.complexes
+  planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top — AFTER every wall carve (incl. the complex entrances)
+  clearEntranceLamps(layout, cxs); // (lead merge fix) …and no mounted pit lamp in a complex's doorway band either
+  layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record
 
   // --- Track2 attach, then the ONE family roll ---------------------------------------------------------------------------------
   if (ext) {
@@ -265,5 +285,5 @@ function placeComponents(layout: StationLayout, rc: ReactorCarve, rng: Rng): Rea
 /** QA / tests: one attempt (null when the program does not fit). */
 export function reactorAttempt(ctx: SectionGenContext, attempt: number, opts: ReactorGenOptions & {salt?: number} = {}): StationLayout | null {
   const f = reactorFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = reactorSeed(ctx.levelSeed);
-  return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile(REACTOR_ID), opts.spawns ?? spawnProfile(REACTOR_ID), opts.trackExt ?? trackExtConfig('reactor'));
+  return tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile(REACTOR_ID), opts.spawns ?? spawnProfile(REACTOR_ID), opts.trackExt ?? trackExtConfig('reactor'), opts.complexCarvers);
 }
