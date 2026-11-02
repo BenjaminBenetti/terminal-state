@@ -37,12 +37,18 @@ export const CEILING_CABLE = {
   under: 0.08, over: 0.03,
   /** An obstacle's footprint grown by this (tray half-width 0.16 + margin) covers a cell centre. */
   grow: 0.25,
-  /** Over a door: the cable centre at least this above its head (the body 10 cm over the lintel). */
-  lintel: 0.175,
+  /** Over a door: the cable centre at least this above its head (the body 2 cm over it: inside the wall above the opening). */
+  lintel: 0.095,
+  /** At a wall crossing the centre may rise to this under the ceiling (body top 1.25 cm under it) to clear a lintel close under it. */
+  tight: 0.06,
+  /** Out of the entrance onto the pit wall: at most this over the deck (or just over the entrance lintel): the old pit-side height. */
+  pitY: 2.6,
   /** Wall cells beside a door's jamb a crossing may use when the lintel leaves no room. */
   besideReach: 3,
   /** Drop rods (hangers) along the runs, m apart; the longest drop drawn. */
   hangerPitch: 1.6, hangerMax: 3.2,
+  /** A straight run steps to a new height where its cells' open height changes by more than `step` for at least `minPiece` cells. */
+  step: 0.3, minPiece: 4,
   /** Route costs: per cell, a turn, an interior cell (no wall beside it), a cell whose ceiling band is taken, a crossing beside a jamb. */
   cost: {cell: 1, turn: 3, interior: 0.3, low: 4, beside: 3},
   /** The cable body about its centre (tray bottom, wires top). */
@@ -89,7 +95,8 @@ export function cableObstacles(layout: StationLayout, level: number, base: numbe
   }
   for (const l of layout.lights) {
     if (l.virtual || (l.level ?? 0) !== level || !near(l.x, l.z, 1)) continue;
-    const top = Math.max(ceilAt(l.x, l.z), l.y + 0.45); // a hung fixture's rods / a pendant's hanger reach the ceiling
+    // a hung fixture's rods / a pendant's hanger reach a ceiling over it (a lamp under open pit air stands on its own bracket)
+    const ceil = ceilAt(l.x, l.z), top = ceil - l.y < 2 ? Math.max(ceil, l.y + 0.45) : l.y + 0.45;
     if (l.mount) { box(l.x, l.z, 0.3, 0.3, l.y - 0.4, l.y + 0.3); box(l.mount.x, l.mount.z, 0.3, 0.3, l.mount.y - 0.3, l.mount.y + 0.3); continue; }
     const [hx, hz] = rotHalf(0.65, 0.2, l.rot);
     box(l.x, l.z, Math.max(hx, 0.2), Math.max(hz, 0.2), l.y - 0.4, top);
@@ -181,6 +188,10 @@ export interface CableField {
   bx0: number; by0: number; bx1: number; by1: number;
   room(i: number, deck?: boolean): boolean;
   open(i: number): boolean;
+  /** The highest cable centre at or under y0 clear of every obstacle over all the cells. */
+  common(cells: readonly number[], y0: number): number;
+  /** The obstacles (indices into `obst`) whose grown footprint covers cell i and reach the cable band. */
+  over(i: number): readonly number[];
 }
 
 /** The ceiling field (see CableField) or why there is none. */
@@ -225,18 +236,46 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
       l.push(k);
     }
   });
-  for (const [i, ks] of forbid) {
-    let y = top[i], moved = true;
+  // the highest centre at or under `y0` outside every forbidden range of cell i (and the obstacle that set it, -1: none)
+  const descend = (i: number, y0: number): [number, number] => {
+    let y = y0, by = -1, moved = true;
+    const ks = forbid.get(i) ?? [];
     while (moved) {
       moved = false;
       for (const k of ks) {
         const o = obst[k];
         // (strictly above the forbidden range's floor: y only falls, so this ends)
-        if (y > o.y0 - C.under + 1e-6 && y < o.y1 - C.body[0] + C.over) { y = o.y0 - C.under; lowBy[i] = k; capped[i] = o.cap ? 1 : 0; moved = true; }
+        if (y > o.y0 - C.under + 1e-6 && y < o.y1 - C.body[0] + C.over) { y = o.y0 - C.under; by = k; moved = true; }
       }
     }
+    return [y, by];
+  };
+  for (const i of forbid.keys()) {
+    const [y, k] = descend(i, top[i]);
     top[i] = y;
+    if (k >= 0) { lowBy[i] = k; capped[i] = obst[k].cap ? 1 : 0; }
   }
+  // the lowest centre at or over `y0` outside every forbidden range of cell i
+  const ascend = (i: number, y0: number): number => {
+    let y = y0, moved = true;
+    const ks = forbid.get(i) ?? [];
+    while (moved) {
+      moved = false;
+      for (const k of ks) {
+        const o = obst[k], hiY = o.y1 - C.body[0] + C.over;
+        if (y > o.y0 - C.under && y < hiY - 1e-6) { y = hiY; moved = true; }
+      }
+    }
+    return y;
+  };
+  // the highest centre at or under `y0` clear of every forbidden range of all `cells` (a run, a crossing's two ends)
+  const common = (cells: readonly number[], y0: number): number => {
+    let y = y0;
+    for (let it = 0; it < 16; it++) { let lo = y; for (const i of cells) lo = Math.min(lo, descend(i, lo)[0]); if (lo >= y - 1e-6) break; y = lo; }
+    return y;
+  };
+  // a wall crossing may hug the ceiling tighter (C.tight) to pass over a lintel that is close under it (a 3.0 m door in a 3.2 m corridor)
+  const tightTop = (i: number) => g.ceil[i] - C.drop >= top[i] - 1e-6 ? descend(i, g.ceil[i] - C.tight)[0] : top[i];
   const minY = base + C.minY;
   const open = (i: number) => top[i] >= minY;
   // wall crossings at every door: over its lintel (through the wall above the opening) or beside its jambs (through solid wall)
@@ -259,8 +298,19 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
           wallOk = inSpan ? !!doorCell[wi] : g.cells[wi] !== FLOOR;
         }
         if (!wallOk) continue;
-        const y = Math.min(top[ei], top[xi]);
+        let y = common([ei, xi], Math.min(top[ei], top[xi]));
+        if (inSpan && y < head + C.lintel) y = common([ei, xi], Math.min(tightTop(ei), tightTop(xi))); // hug the ceiling over a lintel close under it
         if (inSpan && y < head + C.lintel) continue; // no room over this lintel: a beside crossing instead
+        if (y < minY) continue;
+        // out through the ENTRANCE wall just over its lintel (or low beside it): the pit-side run continues near the old cable height
+        // along the pit wall, clear of the gallery steel of the storey above
+        if (d === entrance) {
+          // (the lowest such height clear of both ends' obstacles: over a frame header / plate on the wall faces, never through it)
+          let yl = inSpan ? Math.max(head + C.lintel + 0.05, base + C.pitY) : base + Math.max(C.minY, C.pitY);
+          for (let it = 0; it < 8; it++) { const up = Math.max(ascend(ei, yl), ascend(xi, yl)); if (up <= yl + 1e-6) break; yl = up; }
+          if (yl < y) y = yl;
+          if (inSpan && y < head + C.lintel) continue;
+        }
         const off = inSpan ? 0 : sp < s0 ? s0 - sp : sp - s1 + 1;
         const cost = T + 1 + (inSpan ? 0 : C.cost.beside + off);
         crossings.push({door: d, e: ei, x: xi, dir: axis === 0 ? 0 : 2, kind: inSpan ? 'lintel' : 'beside', y, cost});
@@ -268,7 +318,7 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
       }
     }
   }
-  return {g, base, ids, front, doors, entrance, top, lowBy, capped, obst, crossings, bx0, by0, bx1, by1, room, open};
+  return {g, base, ids, front, doors, entrance, top, lowBy, capped, obst, crossings, bx0, by0, bx1, by1, room, open, common, over: (i: number) => forbid.get(i) ?? []};
 }
 
 /**
@@ -278,7 +328,7 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
 export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: ReactorGenerator): CeilingCableRoute | null {
   const t0 = now(), lv = c.level, C = CEILING_CABLE, F = cableField(layout, c);
   if (typeof F === 'string') { stat(lv, F, 0, 0, t0); return null; }
-  const {g, ids, front, entrance, top, lowBy, capped, obst, crossings, bx0, by0, bx1, by1, room, open} = F;
+  const {g, ids, front, entrance, top, lowBy, obst, crossings, bx0, by0, bx1, by1, room, open, common, over} = F;
   const minY = c.baseY + C.minY;
   const byEntry = new Map<number, Crossing[]>();
   for (const x of crossings) { let l = byEntry.get(x.e); if (!l) byEntry.set(x.e, (l = [])); l.push(x); }
@@ -337,7 +387,38 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
   type Run = {cells: number[]; y: number};
   const runs: Run[] = [];
   let cur: number[] = [path[0].i];
-  const flush = () => { if (cur.length) runs.push({cells: cur, y: Math.min(...cur.map(i => top[i]))}); };
+  const flush = () => { if (cur.length) runs.push({cells: cur, y: common(cur, Math.min(...cur.map(i => top[i])))}); };
+  // the cable body at centre y over cell i, or a vertical leg from lo to hi there, meets no obstacle over the cell
+  const clearSpan = (i: number, lo: number, hi: number) => over(i).every(k => obst[k].y0 >= hi + C.body[1] + C.over - 1e-6 || obst[k].y1 <= lo + C.body[0] - C.over + 1e-6);
+  /**
+   * A straight run in PIECES: cells grouped by their own open height (within C.step), each piece at the common height of its cells, a
+   * piece shorter than C.minPiece cells merged into its lower neighbour (no saw-tooth between the timber sets); a step between pieces
+   * is a vertical leg at the higher piece's end cell (it must be clear there, else the two merge).
+   */
+  const pieces = (cells: readonly number[]): Run[] => {
+    let ps: Run[] = [];
+    for (const i of cells) {
+      const last = ps[ps.length - 1];
+      if (last && Math.abs(top[i] - last.y) <= C.step) { last.cells.push(i); last.y = common(last.cells, Math.min(last.y, top[i])); }
+      else ps.push({cells: [i], y: common([i], top[i])});
+    }
+    for (let changed = true; changed && ps.length > 1;) {
+      changed = false;
+      for (let k = 0; k < ps.length && !changed; k++) {
+        const a = ps[k], b = ps[k + 1];
+        const short = a.cells.length < C.minPiece && (k > 0 || k + 1 < ps.length);
+        const stepAt = b ? (b.y < a.y ? a.cells[a.cells.length - 1] : b.cells[0]) : -1;
+        const blocked = b ? !clearSpan(stepAt, Math.min(a.y, b.y), Math.max(a.y, b.y)) : false;
+        if (!short && !blocked) continue;
+        // merge into the lower neighbour (or the next one when blocked)
+        const prev = ps[k - 1], j = blocked ? k + 1 : !prev ? k + 1 : !b ? k - 1 : prev.y <= b.y ? k - 1 : k + 1;
+        const lo = Math.min(k, j), hi = Math.max(k, j), m = [...ps[lo].cells, ...ps[hi].cells];
+        ps = [...ps.slice(0, lo), {cells: m, y: common(m, Math.min(ps[lo].y, ps[hi].y))}, ...ps.slice(hi + 1)];
+        changed = true;
+      }
+    }
+    return ps;
+  };
   const crossAfter: (Crossing | null)[] = [];
   for (let k = 1; k < path.length; k++) {
     const p = path[k];
@@ -366,10 +447,32 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
     put(fx, yr, fz);
   }
   const crossed: CeilingCableRoute['crossings'] = [];
+  const hangers: CableHanger[] = [];
   runs.forEach((r, k) => {
-    const [ax, az] = ctr(r.cells[0]), [bx, bz] = ctr(r.cells[r.cells.length - 1]);
-    put(ax, r.y, az);
-    put(bx, r.y, bz);
+    const ps = pieces(r.cells);
+    ps.forEach((pc, q) => {
+      const [ax, az] = ctr(pc.cells[0]), [bx, bz] = ctr(pc.cells[pc.cells.length - 1]);
+      put(ax, pc.y, az);
+      put(bx, pc.y, bz);
+      const nx = ps[q + 1];
+      if (nx) {
+        // the step: down at this piece's end, or up at the next piece's start
+        if (nx.y < pc.y) put(bx, nx.y, bz);
+        else { const [sx, sz] = ctr(nx.cells[0]); put(sx, pc.y, sz); }
+      }
+      // drop rods along the piece: to the ceiling, or to the timber cap right over the tray (never from a fixture / sign / duct)
+      const L = Math.hypot(bx - ax, bz - az);
+      if (pc.cells.length < 2 || L < 0.4) return;
+      const n = Math.max(1, Math.round(L / C.hangerPitch));
+      for (let h = 0; h <= n; h++) {
+        const t = (h + 0.5) / (n + 1), x = ax + (bx - ax) * t, z = az + (bz - az) * t, [cx, cy] = g.cellOf(x, z), i = g.idx(cx, cy);
+        if (top[i] === -Infinity) continue;
+        const y0 = pc.y + C.body[1];
+        let y1 = g.ceil[i], cap = true;
+        for (const kk of over(i)) { const o = obst[kk]; if (o.y0 >= y0 - 1e-6 && o.y0 < y1) { y1 = o.y0; cap = !!o.cap; } else if (o.y0 < y0 && o.y1 > y0) cap = false; }
+        if (cap && y1 - y0 > 0.02 && y1 - y0 < C.hangerMax) hangers.push({x: r3(x), z: r3(z), y0: r3(y0), y1: r3(y1)});
+      }
+    });
     const cr = crossAfter[k];
     if (cr) {
       // up (or down) at the wall to the crossing height, through the wall, then to the next run's height on the far side
@@ -380,19 +483,6 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
     }
   });
   const last = pts[pts.length - 1];
-  // drop rods along the runs (to the ceiling, or to the cap a mines run hangs under; never from a fixture / sign)
-  const hangers: CableHanger[] = [];
-  for (const r of runs) {
-    if (r.cells.length < 2) continue;
-    const [ax, az] = ctr(r.cells[0]), [bx, bz] = ctr(r.cells[r.cells.length - 1]), L = Math.hypot(bx - ax, bz - az);
-    const n = Math.max(1, Math.round(L / C.hangerPitch));
-    for (let k = 0; k <= n; k++) {
-      const t = (k + 0.5) / (n + 1), x = ax + (bx - ax) * t, z = az + (bz - az) * t, [cx, cy] = g.cellOf(x, z), i = g.idx(cx, cy);
-      if (top[i] === -Infinity || (lowBy[i] >= 0 && !capped[i])) continue;
-      const y0 = r.y + C.body[1], y1 = lowBy[i] >= 0 ? top[i] + C.under : g.ceil[i];
-      if (y1 - y0 > 0.02 && y1 - y0 < C.hangerMax) hangers.push({x: r3(x), z: r3(z), y0: r3(y0), y1: r3(y1)});
-    }
-  }
   stat(lv, 'ok', crossings.length, 0, t0);
   return {pts, exit: {...last}, hangers, crossings: crossed};
 }
@@ -408,6 +498,10 @@ export function ceilingCableIssues(layout: StationLayout, c: CableComplex, gen: 
   const doors = layout.doors.filter(d => (d.level ?? 0) === c.level && (ids.has(d.a) || ids.has(d.b)));
   const pts = gen.cable.slice(0, upTo + 1);
   const [lo, hi] = CEILING_CABLE.body, hw = 0.16;
+  let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
+  for (const p of pts) { bx0 = Math.min(bx0, p.x); bz0 = Math.min(bz0, p.z); bx1 = Math.max(bx1, p.x); bz1 = Math.max(bz1, p.z); }
+  // every obstacle but the generator's own collision box (the riser rises from its control box)
+  const obst = cableObstacles(layout, c.level, base, [bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1], g).filter(o => !(gen.x > o.x0 && gen.x < o.x1 && gen.z > o.z0 && gen.z < o.z1 && o.y0 <= gen.y + 0.05));
   for (let k = 0; k + 1 < pts.length; k++) {
     const a = pts[k], b = pts[k + 1], L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), n = Math.max(1, Math.ceil(L / 0.1));
     for (let t = 0; t <= n; t++) {
@@ -416,6 +510,13 @@ export function ceilingCableIssues(layout: StationLayout, c: CableComplex, gen: 
       for (const d of doors) {
         const x0 = d.x * CELL, z0 = d.y * CELL, x1 = (d.x + d.w) * CELL, z1 = (d.y + d.h) * CELL, head = base + d.height;
         if (x + hw > x0 + 0.02 && x - hw < x1 - 0.02 && z + hw > z0 + 0.02 && z - hw < z1 - 0.02 && y + lo < head) { out.push(`segment ${k}: in door ${d.id}'s opening (head ${head.toFixed(2)}) at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`); break; }
+      }
+      if (k >= 1) for (const o of obst) {
+        // the body (tray -0.075 .. wires +0.0475, 0.16 m either side; a vertical leg's tray is no wider) against the obstacle (2 cm slack)
+        if (x + hw - 0.02 > o.x0 && x - hw + 0.02 < o.x1 && z + hw - 0.02 > o.z0 && z - hw + 0.02 < o.z1 && y + hi - 0.02 > o.y0 && y + lo + 0.02 < o.y1) {
+          out.push(`segment ${k}: through an obstacle (${o.y0.toFixed(2)}..${o.y1.toFixed(2)}${o.cap ? ' cap' : ''}) at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`);
+          break;
+        }
       }
       const [cx, cy] = g.cellOf(x, z);
       if (g.inBounds(cx, cy)) {
