@@ -52,6 +52,7 @@ import {placeStreetExits, type DesignedExitEnd} from './exits'; // task mall-rou
 import {decayWalkwayLights, type WalkwayLightReport} from './lightDecay'; // task mall-round3-20261031 (lane LIGHT, R7): walkway light decay
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
 import {populateExtensions} from '../annexContent'; // Track 2 (lane CONTENT): the extensions' appended content
+import {placeLingerieSpawns, retagLingerieSpawns} from './lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): store-local variants
 
 export {MALL_VARIANTS, mallFrame, mallVariantOf, mallVariantV2Of, mallStoreyLabel, setMallVariantOverride, type MallVariant} from './frame';
 export {mallIssues, mallVoidCells, mallRouteGroups} from './validate';
@@ -102,6 +103,7 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
     // Track2 (lane INTEG): extensions never decide a retry (the core keeps its attempt): drop them and re-check the core.
     if (issues.length && (layout.extensions?.tunnels.length || layout.extensions?.annexes.length)) {
       dropExtensions(layout);
+      retagLingerieSpawns(layout); // lane CONTEXT: the store-local spawns moved down past the dropped 'service' spawns (per-index tags)
       issues = mallIssues(layout, {startCells: spawnStartCells(spawns)});
       if (!issues.length) TRACK_EXT_STATS.rescued++;
     }
@@ -225,8 +227,13 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
     populateExtensions(layout, rng, {loot, spawns, dressRng: rng.fork('dress')});
   }
   layout.mall.subwayRoot = subwayRoot(layout, mc, crop); // DERIVED report: now from the real extensions
+  // Task mall-lingerie-20261102-221554 (lane CONTEXT): the optional lingerie store's STORE-LOCAL variants (the 'lingerie' zone context,
+  // tagged look 'lingerie') — LAST, after the hordes and the annex 'service' spawns: every existing spawn keeps its index (family roll,
+  // look, kill memory); own fork, drawn from only when the mall has a lingerie store (none: the layout is byte-identical).
+  placeLingerieSpawns(layout, rng.fork('mall-lingerie-spawns'), field.keep, spawns);
   // Track1 contract (lane INTEG): the ambient runs above were tagged 'pit' / 'ring' by placeOfficeEnemies, the hordes 'horde', the
-  // annex runs 'service' (markSpawnContext); ONE family roll after every context (horde members keep their pool's family: skipped),
+  // annex runs 'service' (markSpawnContext), the lingerie store's 'lingerie' (lane CONTEXT: its own pool = ordinary zombies only);
+  // ONE family roll after every context (horde members keep their pool's family: skipped),
   // then the mall's Siren spacing (FamilySpacing: the cap + 30 m, jointly) — RNG-free. The roll is per spawn index: appending the
   // annex spawns after the hordes leaves every ambient draw unchanged.
   assignEnemyArchetypes(layout, spawns);

@@ -42,7 +42,8 @@ import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from './ai/
 import {spawnProfile} from './ai/spawnTables'; // lane HORDE: the level's horde patrol rules
 import {HOOK_SLOTS, S as SPAN, UpdateProfiler} from './debug/updateProfile'; // Task frame-budget-deferral-20261030 (lane MEASURE): opt-in frame profiler
 import type {ZombieSpawn} from './gen/station';
-import {ZombieLookLibrary, pickZombieLook} from './ai/outfits';
+import {ZombieLookLibrary} from './ai/outfits';
+import {spawnZombieLook} from './ai/spawnLook'; // task mall-lingerie-20261102-221554 (lane CONTEXT): ordinary pick, or the lingerie store's variants' set
 import {alertListeners, type BrainWorld} from './ai/brain';
 import {lureWorld} from './ai/lightLure'; // Iteration 12 (AI): light attracts enemies
 import {moveZombie, sameLevel, settleZombie} from './ai/motor';
@@ -1245,7 +1246,9 @@ export class Game {
     const looks = (this.zombieLooks ??= new ZombieLookLibrary(models));
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): + the lazily loaded enemy models of this layout (ai/enemyModels.ts)
     const {actor: z, fallback} = createEnemyActor(s, withEnemyModels(models, k => this.propModels.get(k)), this.rand, () => {
-      const source = looks.bodies.length ? looks.build(pickZombieLook(this.currentSeed, i, s.type, looks.available)) : models.zombie;
+      // task mall-lingerie-20261102-221554 (lane CONTEXT): a spawn tagged look 'lingerie' (the mall lingerie store's variants only)
+      // wears its fitted set (ai/lingerie.ts lingerieLook(seed, i), when buildable top + bottom); every other spawn the ordinary pick
+      const source = looks.bodies.length ? looks.build(spawnZombieLook(this.currentSeed, i, s, looks)) : models.zombie;
       if (!source) throw new Error('no zombie body model loaded (registry bodies and legacy zombie-rigged.glb both missing)');
       return new ZombieActor(source, s, this.rand);
     });
