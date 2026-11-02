@@ -156,6 +156,12 @@ function checkChanging(L: StationLayout, s: MallShop, tag: string): void {
   // a mirror inside every booth (on its partition face); the sales floor may hang more full-length mirrors on its walls
   const booth = (p: {x: number; z: number}, b: {x0: number; z0: number; x1: number; z1: number}) => p.x > b.x0 - 0.3 && p.x < b.x1 + 0.3 && p.z > b.z0 - 0.3 && p.z < b.z1 + 0.3;
   for (const b of booths) expect(mine.filter(p => p.kind === 'fittingMirror' && booth(p, b)).length, `${tag}: booth mirror`).toBeGreaterThanOrEqual(1);
+  // each curtain hangs gathered beside a partition and its rail (local +x) runs across ITS booth's opening
+  for (const c of mine.filter(p => p.kind === 'fittingCurtain')) {
+    const [dx, dz] = [Math.cos(c.rot), -Math.sin(c.rot)];
+    const mid = {x: c.x + dx * 0.7, z: c.z + dz * 0.7};
+    expect(booths.some(b => mid.x > b.x0 && mid.x < b.x1 && mid.z > b.z0 && mid.z < b.z1), `${tag}: curtain rail across a booth opening`).toBe(true);
+  }
   for (const p of mine.filter(p => (BOOTH_KINDS as readonly string[]).includes(p.kind))) {
     expect(dynamicKind(p.kind)).toBe(false);
     expect(p.y).toBeCloseTo(a.floorY ?? 0, 3);
