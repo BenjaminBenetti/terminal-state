@@ -64,7 +64,7 @@ export const SURFACE_KIT: readonly SurfaceKitEntry[] = [
   {id: 'ruinedMidrise', role: 'midrise', ...office('ruined-midrise'), rings: [1, 9], scale: [0.85, 1.1], max: 10, weight: 2.2, front: -1, source: 'office'},
   {id: 'carWreck', role: 'car', ...office('car-wreck'), rings: [0, 2], scale: [0.95, 1.05], max: 16, weight: 1, front: -1, longX: true, source: 'office'},
   {id: 'busWreck', role: 'bus', ...office('bus-wreck'), rings: [0, 2], scale: [0.97, 1.03], max: 3, weight: 1, front: -1, longX: true, source: 'office'},
-  {id: 'rubblePile', role: 'rubble', ...office('rubble-pile'), rings: [0, 9], scale: [0.7, 2.6], max: 46, weight: 1, front: -1, source: 'office'},
+  {id: 'rubblePile', role: 'rubble', ...office('rubble-pile'), rings: [0, 9], scale: [0.7, 2.6], max: 36, weight: 1, front: -1, source: 'office'},
   {id: 'waterTower', role: 'tank', key: 'office-water-tower', url: tank.url ?? '', dims: (tank.dims ?? [4.6, 4.5, 4.6]) as readonly [number, number, number],
     rings: [1, 3], scale: [0.95, 1.1], max: 4, weight: 1, front: -1, stand: 7, source: 'company'},
 ];

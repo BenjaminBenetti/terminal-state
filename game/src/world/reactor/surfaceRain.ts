@@ -263,6 +263,10 @@ export class RainLayer {
     this.u.disc.value.set(o.x, o.z, Math.max(0.5, o.r - 0.25), 1);
     this.u.fade.value.set(site.y, C.fade);
     this.u.reach.value = 0;
+    // the column's drops never leave this box: an honest bound, so the frustum drops it when the opening is out of view
+    const B = this.u.boxSize.value, M = this.u.boxMin.value;
+    this.mesh.geometry.boundingSphere = new THREE.Sphere(new THREE.Vector3(M.x + B.x / 2, M.y + B.y / 2, M.z + B.z / 2), Math.hypot(B.x, B.y, B.z) / 2 + 1);
+    this.mesh.frustumCulled = true;
   }
 
   stats(): RainLayerStats {

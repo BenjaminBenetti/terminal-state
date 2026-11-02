@@ -67,6 +67,8 @@ export const reactorSurfaceOf = (host: object): ReactorSurface | undefined => ru
 export class ReactorSurface {
   site: SurfaceSite | null = null;
   plan: SurfaceCityPlan | null = null;
+  /** The pit's shaft rect (the aperture column is drawn only with the eye in it). */
+  pit: {x0: number; z0: number; x1: number; z1: number} | null = null;
   view: SurfaceView | null = null;
   /** The last shown state (QA / tests). */
   readonly shown = {outside: false, open: false, clear: 0, rain: 0, wet: 0, column: false, near: false, fogged: false, beam: 0};
@@ -100,6 +102,7 @@ export class ReactorSurface {
     if (!site || !layout.reactor) return;
     const lib = this.host.propModels;
     this.site = site;
+    this.pit = {...layout.reactor.pit.bounds};
     this.plan = planSurfaceCity(site, layout.seed >>> 0, key => !!lib?.get(key), layout.reactor.pit.bounds);
     this.view = buildSurfaceView(site, this.plan, key => lib?.get(key), (reactorTexture('pitConcrete', 'color') as THREE.Texture | undefined) ?? null, layout.seed >>> 0, SURFACE_KIT);
     SURF_U.beam.value.set(site.hole.x, site.hole.z, 0, 0);
@@ -146,7 +149,9 @@ export class ReactorSurface {
     const nearOn = outside && rain > 0.001;
     v.near.mesh.visible = nearOn;
     if (nearOn) { v.near.follow(eye); v.near.tick(dt, this.gust); v.near.u.on.value = rain; v.near.u.px.value = px; v.near.u.beam.value.z = beam; }
-    const colOn = !outside && rain > 0.001 && Math.hypot(eye.x - site.hole.x, eye.z - site.hole.z) < SURFACE_RT.columnReach && eye.y < site.y;
+    // (in the pit's open shaft only: never from the rock rooms / complexes behind its walls)
+    const pb = this.pit, inShaft = !!pb && eye.x > pb.x0 - 1 && eye.x < pb.x1 + 1 && eye.z > pb.z0 - 1 && eye.z < pb.z1 + 1;
+    const colOn = !outside && rain > 0.001 && inShaft && Math.hypot(eye.x - site.hole.x, eye.z - site.hole.z) < SURFACE_RT.columnReach && eye.y < site.y;
     v.column.mesh.visible = colOn;
     if (colOn) { v.column.tick(dt, this.gust); v.column.u.on.value = rain; v.column.u.px.value = px; v.column.u.beam.value.z = beam; }
     if (outside) {
