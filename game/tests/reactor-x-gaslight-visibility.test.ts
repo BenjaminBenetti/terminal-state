@@ -28,6 +28,7 @@ import {MOOD} from '../src/world/lights';
 import {
   GAS_FALLBACK, PIT_SHAFTS, REACTOR_OUTDOOR, ROOF_GAS_LOOK, fallbackFog, gasGlow, gasOpacity, greenness, luminance, outdoorGasAt, pitShaftSpec, shaftAt,
 } from '../src/world/gaslightRules';
+import {roofOpeningOf} from '../src/gen/reactor/roofOpening';
 import {compileQuad} from './helpers/fogCompile';
 import {fixtureInfo} from './reactor-air-fixture';
 
@@ -38,7 +39,8 @@ const hexRgb = (h: number): [number, number, number] => { const c = new THREE.Co
 function renderC(u: FogUniforms, x: number, y: number, z: number): {strata: number; outdoor: number} {
   const r = u.depthRect.value as THREE.Vector4, g = u.depthRange.value as THREE.Vector4, o = u.depthOut.value as THREE.Vector4;
   if (!(u.depthOn.value > 0.5) || x < r.x || x > r.z || z < r.y || z > r.w) return {strata: 0, outdoor: 0};
-  const tab = u.depthTab.array as number[], N = REACTOR_AIR.TABLE_N;
+  // (lane FOG, task reactor-submit-roof-fog-20261102: the strata table is the march's TABLE_N x 1 float texture — read its texels)
+  const tab = (u.depthTab as unknown as {value: THREE.DataTexture}).value.image.data as Float32Array, N = REACTOR_AIR.TABLE_N;
   const fu = Math.min(1, Math.max(0, (y - g.x) * g.z)) * (N - 1), fl = Math.min(Math.floor(fu), N - 2);
   const strata = y < g.y ? tab[fl] + (tab[fl + 1] - tab[fl]) * (fu - fl) : 0;
   return {strata, outdoor: o.z * sstep(o.x, o.y, y)};
@@ -259,31 +261,42 @@ describe('gaslight: the reactor march variant, the shafts, the open scatter ligh
     }
   });
 
-  it('shafts: only inside the pit below the roof line, striped by the beams, fading with depth; the uniforms follow the pit', () => {
-    const info = fixtureInfo(), s = pitShaftSpec(info.pit.bounds, info.pit.roofY);
-    expect(shaftAt(s, 40, info.pit.roofY + 1, 40)).toBe(0);
+  // task reactor-submit-roof-fog-20261102 (lane ROOF): the shafts come through the roof's single opening over the core only (was: the
+  // whole open top, striped by the open beam grid)
+  it('shafts: only through the roof OPENING (soft rim, none under the solid roof), fading with depth; the uniforms follow the opening', () => {
+    const info = fixtureInfo(), s = pitShaftSpec(info)!, o = roofOpeningOf(info)!;
+    expect(s.hole).toEqual({x: o.x, z: o.z, r: o.r});
+    const d = PIT_SHAFTS.dir, Y = info.pit.roofY;
+    /** The shaft at height y on the ray whose roof-plane crossing is (hole centre + (dx, dz)). */
+    const at = (y: number, dx: number, dz: number) => { const t = Y - y; return shaftAt(s, o.x + dx + (d[0] / -d[1]) * t, y, o.z + dz + (d[2] / -d[1]) * t); };
+    expect(shaftAt(s, o.x, Y + 1, o.z)).toBe(0); // above the roof
     expect(shaftAt(s, 10, -5, 10)).toBe(0); // outside the pit
-    let lit = 0, dark = 0, maxTop = 0, maxDeep = 0;
-    for (let x = 21; x < 59; x += 0.25) {
-      const top = shaftAt(s, x, info.pit.roofY - 2, 40), deep = shaftAt(s, x, info.pit.floorY + 2, 40);
-      if (top > 0.2) lit++; else dark++;
-      maxTop = Math.max(maxTop, top); maxDeep = Math.max(maxDeep, deep);
+    expect(shaftAt(s, info.pit.bounds.x0 + 2, Y - 2, info.pit.bounds.z0 + 2)).toBe(0); // under the solid roof
+    const top = at(Y - 2, 0, 0);
+    expect(top).toBeGreaterThan(0.8);
+    expect(at(Y - 2, o.r - PIT_SHAFTS.rimSoft - 0.05, 0)).toBeCloseTo(top, 6); // full inside the rim
+    expect(at(Y - 2, o.r - 0.6, 0)).toBeLessThan(top); // the soft rim
+    expect(at(Y - 2, o.r + 0.01, 0)).toBe(0); // the curb's edge: nothing past it
+    expect(at(Y - 2, 0, -(o.r + 0.5))).toBe(0);
+    // a sweep across the pit just under the roof: lit exactly over the opening's chord
+    let lit = 0, outside = 0;
+    for (let x = info.pit.bounds.x0; x < info.pit.bounds.x1; x += 0.1) {
+      const t = 2, qx = x - (d[0] / -d[1]) * t, v = shaftAt(s, x, Y - t, o.z + (d[2] / -d[1]) * t);
+      if (v > 0) { lit++; if (Math.abs(qx - o.x) >= o.r) outside++; }
     }
-    // beams cross the short way: sample across them (the long axis of the fixture is equal: 40 x 40 m, beams along x, stripes in z)
-    let stripes = 0;
-    for (let z = 21; z < 59; z += 0.25) if (shaftAt(s, 40, info.pit.roofY - 2, z) < 0.05) stripes++;
-    expect(lit).toBeGreaterThan(20);
-    expect(stripes).toBeGreaterThan(4);
-    expect(maxDeep).toBeLessThan(maxTop);
-    void dark;
+    expect(lit * 0.1).toBeGreaterThan(2 * o.r - 0.3);
+    expect(lit * 0.1).toBeLessThan(2 * o.r + 0.2);
+    expect(outside).toBe(0);
+    expect(at(info.pit.floorY + 2, 0, 0)).toBeLessThan(top); // fades with depth
     const a = atmo();
     a.setStation({...generateStation(5), reactor: info} as StationLayout, null);
     a.setDepthGas(new ReactorAir(info, {x0: 0, z0: 0, x1: 80, z1: 80}, emptyReactorState(3, 3)).renderTable());
     sync(a);
-    const d = a.u.shaftDir.value as THREE.Vector4, A = a.u.shaftA.value as THREE.Vector4;
-    expect(d.w).toBe(1);
-    expect(d.y).toBeLessThan(-0.9);
+    const dir = a.u.shaftDir.value as THREE.Vector4, A = a.u.shaftA.value as THREE.Vector4, H = a.u.shaftHole.value as THREE.Vector4;
+    expect(dir.w).toBe(1);
+    expect(dir.y).toBeLessThan(-0.9);
     expect(A.x).toBe(info.pit.roofY);
+    expect([H.x, H.y, H.z, H.w]).toEqual([o.x, o.z, o.r, Math.min(PIT_SHAFTS.rimSoft, o.r)]);
     expect((a.u.shaftCol.value as THREE.Vector3).y).toBeCloseTo(PIT_SHAFTS.colour[1] * PIT_SHAFTS.gain, 6);
     expect(outdoorGasAt(a.depthDebug().outdoor, 40, info.pit.roofY + 9, 40)).toBeCloseTo(REACTOR_OUTDOOR.c, 6);
   });

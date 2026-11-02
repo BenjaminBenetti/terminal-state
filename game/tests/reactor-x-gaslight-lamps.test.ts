@@ -5,7 +5,8 @@
 //  - the circuits: the rim steady, emergency lamps steady, the rest on circuit 2 (dark until the restart) — a lit lamp lights the pit
 //    around it, a held one lights nothing and its glass reads dead (the tube instance IS its lens);
 //  - the kit draws no decorative emissive lamps any more; the bodies are instanced with the kit;
-//  - the open roof: levels[0].sky at the roof line (no ceiling, rays leave), the sky dome + outside gas over the opening.
+//  - the roof opening (task reactor-submit-roof-fog-20261102, lane ROOF — was the whole top open): levels[0].sky at the roof line
+//    with the opening mask (the slab elsewhere, rays leave only through the hole), the sky dome + outside gas over the opening.
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {LEVELS} from '../src/levels/registry';
@@ -24,6 +25,7 @@ import {buildWorld} from '../src/world/builder';
 import {StationLighting} from '../src/world/lights';
 import {LAMP_BODY, isMounted} from '../src/world/reactor/gaslightFixtures';
 import {buildPitSky, PIT_SKY} from '../src/world/reactor/gaslightSky';
+import {roofOpeningOf} from '../src/gen/reactor/roofOpening'; // task reactor-submit-roof-fog-20261102 (lane ROOF)
 import {REACTOR_FOG} from '../src/world/reactor/archInstall';
 import type {ReactorInfo} from '../src/gen/reactor/reactorTypes';
 
@@ -120,18 +122,22 @@ describe('gaslight lamps: real generated Reactors', () => {
     expect(restored).toBeGreaterThan(held * 3); // the held ones cast once powered (the restart)
   }, 120_000);
 
-  it('the open roof: the rim storey is an open-sky storey at the roof line; no ceiling there; rays leave the pit upward, walls still stop them', () => {
-    const L = level(SEEDS[0]), info = L.reactor!;
-    expect(L.levels[0].sky).toEqual({y: info.pit.rimY, ceil: info.pit.roofY, top: info.pit.roofY});
+  // task reactor-submit-roof-fog-20261102 (lane ROOF, user: "a single hole above the reactor not a totally open roof"): was the whole
+  // top open (no ceiling over any pit cell); the full opening checks are game/tests/reactor-x-roof-opening.test.ts
+  it('the roof opening: the rim storey opens to the sky at the roof line ONLY over the core; the roof slab elsewhere; walls stop rays', () => {
+    const L = level(SEEDS[0]), info = L.reactor!, o = roofOpeningOf(info)!;
+    expect(L.levels[0].sky).toMatchObject({y: info.pit.rimY, ceil: info.pit.roofY, top: info.pit.roofY});
+    expect(L.levels[0].sky!.open).toBeInstanceOf(Uint8Array);
     expect(L.levels.filter(l => l.sky).length).toBe(1);
     const levels = stationLevels(L), runs = ceilingRuns(levels, new LevelColumns(levels));
     const b = info.pit.bounds, inPit = (r: {row: number; x0: number; x1: number}) => (r.row + 0.5) * CELL > b.z0 && (r.row + 0.5) * CELL < b.z1 && (r.x1 * CELL) > b.x0 && r.x0 * CELL < b.x1;
-    expect(runs.filter(r => inPit(r) && r.y >= info.pit.roofY - 0.6)).toEqual([]);
-    const lv = levelsOf(L), cx = (b.x0 + b.x1) / 2, cz = (b.z0 + b.z1) / 2;
-    const up = lv.raycast({x: cx, y: 2, z: cz}, {x: 0.05, y: 1, z: 0.03}, 200);
-    expect(up.kind).toBe('none');
-    const side = lv.raycast({x: cx, y: 4, z: cz}, {x: 1, y: 0, z: 0}, 200);
-    expect(side.kind).toBe('wall');
+    const roof = runs.filter(r => inPit(r) && r.y >= info.pit.roofY - 0.6);
+    expect(roof.length).toBeGreaterThan(50);
+    for (const r of roof) for (let x = r.x0; x < r.x1; x++) expect(Math.hypot((x + 0.5) * CELL - o.x, (r.row + 0.5) * CELL - o.z)).toBeGreaterThan(o.r - CELL);
+    const lv = levelsOf(L);
+    expect(lv.raycast({x: o.x, y: 2, z: o.z}, {x: 0.05, y: 1, z: 0.03}, 200).kind).toBe('none');
+    expect(lv.raycast({x: b.x0 + 3, y: 2, z: b.z0 + 3}, {x: 0, y: 1, z: 0}, 200).kind).toBe('ceiling');
+    expect(lv.raycast({x: o.x, y: 4, z: o.z}, {x: 1, y: 0, z: 0}, 200).kind).toBe('wall');
   }, 60_000);
 });
 
@@ -204,21 +210,28 @@ describe('gaslight lamps: the world (bodies in the kit, the tube instance is the
     lp.dispose();
   });
 
-  it('the open pit top: a sky dome over the opening (inside the far plane) + the outside gas sheets / curtain, on every pit storey', () => {
-    const {w} = world(), arch = w.reactorArch!;
-    expect(arch.pitSky).toMatchObject({dome: true});
-    expect(arch.pitSky!.gasLayers).toBeGreaterThan(3);
+  // task reactor-submit-roof-fog-20261102 (lane ROOF): the sky is built over the roof's single OPENING (none: a closed roof)
+  it('the roof opening: a sky dome over the opening (inside the far plane) + the outside gas sheets / curtain, on every pit storey', () => {
+    // the world fixture's 11 m pit has no room for an opening (curb + solid band): a closed roof, no sky
+    const {w} = world();
+    expect(w.reactorArch!.pitSky).toBeNull();
+    expect(w.group.getObjectByName('pit-sky')).toBeUndefined();
+    // the kit fixture's 44 x 36 m pit: the opening over the core, the sky over it
+    const info = archFixtureInfo(), o = roofOpeningOf(info)!, group = new THREE.Group();
+    const st = buildPitSky(group, info, [0, 1, 2, 3, 4])!;
+    expect(st).toMatchObject({dome: true, opening: o});
+    expect(st.gasLayers).toBeGreaterThan(3);
     const names: string[] = [];
-    w.group.traverse(o => { if ((o as THREE.Mesh).isMesh) names.push(o.name); });
+    group.traverse(m => { if ((m as THREE.Mesh).isMesh) { names.push(m.name); expect(m.userData.levels).toEqual([0, 1, 2, 3, 4]); } });
     for (const n of ['pit-sky', 'pit-exterior-gas', 'pit-exterior-gas-curtain']) expect(names).toContain(n);
-    const sky = w.group.getObjectByName('pit-sky') as THREE.Mesh;
-    expect(sky.position.y).toBeCloseTo(8.4, 6);
+    const sky = group.getObjectByName('pit-sky') as THREE.Mesh;
+    expect([sky.position.x, sky.position.y, sky.position.z]).toEqual([o.x, info.pit.roofY, o.z]);
     expect((sky.material as THREE.Material & {fog: boolean}).fog).toBe(false);
     // every dome point inside the far plane from anywhere in a real pit (the core floor ~50 m below / ~35 m beside the centre)
     const real = level(SEEDS[0]).reactor!.pit, rb = real.bounds;
     const worst = PIT_SKY.radius + Math.hypot((rb.x1 - rb.x0) / 2, (rb.z1 - rb.z0) / 2, real.roofY - real.floorY);
     expect(worst).toBeLessThan(REACTOR_FOG.far);
-    // no roof opening: nothing built
+    // no roof column: nothing built
     const g = new THREE.Group();
     expect(buildPitSky(g, {...archFixtureInfo(), pit: {...archFixtureInfo().pit, roofY: 0.5}} as ReactorInfo, [0])).toBeNull();
     expect(g.children.length).toBe(0);

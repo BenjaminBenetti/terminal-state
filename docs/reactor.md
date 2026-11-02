@@ -260,7 +260,8 @@ Existing families only. Density and the nastier families rise with depth (`docs/
   instance is the lens, so the glass glows exactly when the baked light does. The kit plans no decorative lamps.
 - **Circuits:** the rim is on station power. Every third lamp and the lamps at the generator / stair landings are steady dim emergency
   lamps. The rest are on the powered circuit 2: dark glass and no light until the restart.
-- **The open top:** `levels[0].sky` sits at the pit roof line (no roof slab; the beam grid stays).
+- **The sky through the roof opening** (was the whole top open; see "The roof opening" below): `levels[0].sky` sits at the pit roof
+  line with a mask of the opening's cells.
   - `world/reactor/gaslightSky.ts` draws the Office's toxic sky dome and the outside gas sheets over the opening.
   - The march's regional term draws the toxic surface air above the roof line (`world/gaslightRules.ts` `reactorOutdoorGas`). The
     exposure reads the same function, and nothing walkable reaches it.
@@ -270,6 +271,63 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - **Core glow in the fog:** a `PointLight` added with `addScatterLight` and `userData.vfOpen = true` lights the haze and the strata with
   no occlusion window (open pit volumes).
 - QA: `__LL.gaslight()` and `__LL.gaslightShafts({gain, fade, colour})`. Tests: `game/tests/reactor-x-gaslight-*.test.ts`.
+
+### Fog visibility root cause (task reactor-submit-roof-fog-20261102, lane FOG)
+User (WebGPU, quality high): "the fog is still not visible … volumetric fog is not working on this level."
+- **Cause: a WebGPU binding limit, not the look.** Every TSL `uniformArray` is its own uniform buffer. three's `WebGPURenderer`
+  requests no raised limits, so the device has WebGPU's default of 12 uniform buffers per shader stage. The base march fragment
+  declares exactly 12. The depth-gas variant added the strata table as one more array: 13.
+  - WebGPU rejected that pipeline layout, the pass flagged itself failed and the level rendered directly, with no volumetric fog.
+    The user's overlay shows 4 / 5 render passes: the direct path's count. The fog pipeline draws 6 / 7.
+  - The failure latches for the session. The Office compiles the same variant for its roof air since the expansion, so it was
+    affected on WebGPU too.
+  - The lead's llvmpipe WebGL2 spot check has more than 12 fragment uniform blocks, so it ran and hid the bug. The earlier "make the
+    gas greener" round could not help: the program never ran.
+- **Fix:** the strata table is now a 64 × 1 float data texture read with `textureLoad`. It holds the same Float32 values with the same
+  interpolation. Every march variant declares 12 uniform buffers (base and depth alike, both backends), and the depth term costs one
+  sampled texture (9 of 16).
+  - **The march is at the limit.** A new array in it must replace one, never add one.
+  - `runFog` now opens its error scope after (re)building the program. A rejected program falls back on its first frame instead of
+    depending on frame timing.
+- **Ruled out:** the level-change order (`setStation` → section hooks → `setDepthGas`, the same as a boot), uniform array updates,
+  the HIGH preset's march cap (52 m reaches the core floor), the source rect and the gates. None depend on the eye's exposure.
+- Tests: `game/tests/reactor-x-fog-webgpu-limits.test.ts` covers the binding budget per variant and backend, view rays from the
+  clean rim (drawn = hazard, green and visibly dense), clearing, level change = boot and the error-scope order.
+
+### The roof opening (task reactor-submit-roof-fog-20261102, lane ROOF)
+User: "I want a single hole above the reactor not a totally open roof."
+- **Cause:** the expansion's `openPitRoof` marked the whole rim storey as open sky (`levels[0].sky` with no mask). So no roof slab was
+  built over any pit cell, and only a row of girders stood against the green sky.
+- **The rule** (`gen/reactor/roofOpening.ts` `roofOpeningOf`): one round opening centred on the core.
+  - Its radius is 1.2 × the core radius: a 16.8 m diameter over the 7 m vessel. The vessel and its service ring read through it from
+    every tier.
+  - It is clamped to leave the curb plus at least 6 m of solid roof to every pit wall. On real pits the clamp never bites: about 11 m
+    of roof remains each side.
+  - A pit with no room for it keeps a closed roof: no sky and no shafts.
+  - Every reader derives the opening from `layout.reactor`, so nothing is stored twice.
+- **Generator:** `levels[0].sky.open` (`gen/levels.ts` `LevelSky.open`) marks only the cells that touch the disc.
+  - Rays leave into the sky only through those cells. Every other band top at the roof line is a ceiling, and closed columns are
+    solid at every height.
+  - The Office's unmasked roof is unchanged. The mask is re-windowed with the grids on Track 2 growth (`gen/trackExt/core.ts`).
+- **The roof** (`world/reactor/roofKit.ts`):
+  - **The slab** is one mesh: the builder's dark `reactor-roof` concrete over the pit outline, with a true round hole.
+    `ReactorArch.ceilKey` hands the builder none of its roof-line runs: about 17 per-level / per-chunk meshes become 1. The slab also
+    spans the open-well wall flights, which the builder never roofed.
+  - **The steel grid** under the slab: the old girder lines plus secondary beams 3 m apart, as instances of the existing band-0
+    I-beam mesh (no new draw call).
+  - Every member is trimmed into the curb ring and kept out of the crane trolley's body. No beam crosses the hole.
+  - **The curb:** a closed steel ring girder under the slab (1.3 m wide; the grid's stepped hole edge hides above it) and a 0.6 m
+    concrete upstand. They are two lathe meshes using existing kit materials.
+- **Through the hole only:**
+  - The sky dome (centred over the opening, inside the far plane) and the outside gas sheets are covered everywhere else by the slab,
+    the curb and the walls.
+  - The march stops at the slab, so the toxic outdoor air (`reactorOutdoorGas`, unchanged: what hurts is what shows, and nothing
+    walkable reaches it) shows only through the opening.
+  - The light shafts (`PIT_SHAFTS`, `shaftAt`) fall only through the opening disc, with a soft 1.5 m rim. The march reads one plain
+    `shaftHole` vec4 (no new uniform array). Their direction is steepened to [0.1, −1, 0.06], so the column lands on the reactor.
+- **Known:** the towers' reserved leg columns (concrete-faced, core floor to the roof line) can meet the curb ring when a tower stands
+  about 10 m from the core. They read as columns carrying the ring.
+- Tests: `game/tests/reactor-x-roof-opening.test.ts`, plus the updated `reactor-x-gaslight-*.test.ts`.
 
 ## Pathways: the clipping audit (task reactor-expansion-20261101, lane PATHS)
 Nothing solid may stand in walkable space except designed edges (railings on the edge line, wall-flush fittings within 0.1 m).
@@ -295,3 +353,51 @@ Nothing solid may stand in walkable space except designed edges (railings on the
     on drop edges, post lamps only on railings, tower portals where a walkway crosses a face, flat pilaster straps (none across
     doorways), cables over the landing and flat on the walls.
   - Fan housings stay clear of walkways and tower legs stand in reserved 2 x 2 cells.
+
+## CPU submission (task reactor-submit-roof-fog-20261102, lane CPU)
+The user's frames were CPU-bound in render submit: 21.7 ms for 1,230 draws on the rim gallery and 15.3 ms for 1,048 draws looking
+down the pit, against about 4 ms of GPU (WebGPU). That is about 15–18 µs of CPU per draw: each draw is a three r186 render object
+(node / uniform / binding refresh plus encoded commands), in the scene pass and, for casters, again in the flashlight's shadow pass.
+The fix cuts the number of render objects. Nothing drawn changes.
+
+**Root causes** (seed 000070S; Node census on the real build path):
+- The culler knew the pit only as an atrium, so every storey seen through the pit counted as visible. From the rim gallery, about 600
+  scene draws were submitted and only about 90 owned a visible pixel (depth oracle). The rest were rooms, the three side complexes,
+  holders and dressing behind the pit's rock or under the storey slabs.
+- Holders, openables and purpose dressing were chunked in 12 m cells across all six stacked storeys. A chunk could only be culled when
+  every storey in it was hidden.
+- The enemies (3–5 skinned meshes each, in both passes) and the floor pickups were frustum-culled only. Looking down from the rim, 32
+  enemies were in the cone and 13 of them were behind rock.
+- The procedural kit was one InstancedMesh per part and depth band (about 19 parts × 6 bands). From the pit, nearly every band is in
+  view, so the same instances cost about six draws per pass.
+
+**Changes:**
+- `world/levelCulling.ts`: the mall's exact slab and same- / cross-storey occlusion now also runs on the Reactor (`world/builder.ts`).
+  The vessel's grid column, which the builder does not draw, counts as see-through (`ReactorArch.occlusionSee`).
+- `LevelCuller.track`, through the runtime `world/reactor/cpuActorCulling.ts`: enemies and pickups are decided by the same rules on
+  every update. An enemy's box is its meshes' cull spheres at the root's current transform. Ragdolls are never hidden.
+- The mall's storey-split chunks and the per-storey, culler-decided loot display now cover the Reactor too (`byStorey`).
+- `world/reactor/archMeshes.ts`: one InstancedMesh per kit part. The instances, materials and transforms are the same; no uniforms
+  were added.
+
+**Before → after** (draws per frame, scene + shadow pass; static world, holders, loot display, enemies and pickups; feature branch with
+ROOF and FOG):
+
+| Seed / pose | Before | After |
+|---|---|---|
+| 000070S rim gallery (along it) | 1,005 | 486 |
+| 000070S rim, looking down at the core | 1,032 | 614 |
+| 000070S tier-2 deck, across the pit | 956 | 561 |
+| Worst of 9 views (3 seeds) | 1,165 | 714 |
+| Sum over 77 oracle poses (decks of every tier, core ring, complex rooms) | 55,130 | 26,132 |
+
+**Evidence and limits:**
+- Correctness: on 77 poses the depth oracle finds no culled mesh visible from the eye. Nothing the new rules hide is seen by the
+  flashlight within its 30 m. None of 2,731 hidden enemy / pickup boxes owns a pixel from either view.
+- The culler costs more per moving frame: in Node on the studio pod, `culler.update` went from 0.71 ms to 1.42 ms (tracking sync
+  0.02 ms). This is part of render submit, against 400–500 fewer draws.
+- These are Node estimates of three's render lists, not native timings. No FPS is claimed.
+- Viewmodel, post quads, restart controls and map boards are not counted. Pickups use stand-in item models in Node.
+- The shadow pass still draws every caster in the torch cone.
+- `game/tests/reactor-cpu-submit.test.ts` pins the budget and the oracles; `LL_REACTOR_CPU_OUT=/tmp/x.txt` writes the numbers.
+- QA: `__LL.reactorCpu()` reports the culler's decision, and `__LL.reactorCpu({rules: false|true})` is a browser A/B switch.

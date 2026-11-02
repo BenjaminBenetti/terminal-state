@@ -122,7 +122,7 @@ describe('render cost (bounded): procedural kit and with the delivered models', 
     return {plan, built, group};
   };
 
-  it('procedural: <= 150 draw calls, bounded instances / triangles, one InstancedMesh per (part, band), every mesh tagged', () => {
+  it('procedural: <= 150 draw calls, bounded instances / triangles, one InstancedMesh per part (task studio-reactor-submit, lane CPU: was per (part, band)), every mesh tagged', () => {
     const {plan, built, group} = build(false);
     const ms = meshesOf(group);
     expect(ms.length).toBe(built.stats.meshes);
@@ -130,7 +130,7 @@ describe('render cost (bounded): procedural kit and with the delivered models', 
     expect(plan.instanceCount).toBeLessThan(20000);
     expect(built.stats.triangles).toBeLessThan(900_000);
     const names = new Set(ms.map(m => m.name));
-    expect(names.size).toBe(ms.length - 0); // unique per (part, band)
+    expect(names.size).toBe(ms.length - 0); // unique per part
     for (const m of ms) if (m.name !== 'reactor-fan-rotors') expect(Array.isArray(m.userData.levels) && m.userData.levels.length > 0, m.name).toBe(true);
     expect(built.stats.modelMeshes).toBe(0);
     out('procedural', {draws: ms.length, instances: plan.instanceCount, triangles: Math.round(built.stats.triangles), byPart: built.stats.byPart});

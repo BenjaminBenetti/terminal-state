@@ -542,7 +542,9 @@ export class ContainerManager {
       l.push(matrix.clone());
     }
     // Task mall-round2-20261031 (lane PERF): in the mall the chunks are per storey too (a batch spanning two storeys was never culled)
-    const byStorey = !!(layout as {mall?: unknown}).mall;
+    // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the Reactor (six tiers stacked round / behind the pit; its culler has
+    // the same slab / storey occlusion, so the per-storey loot display batches are decided like the mall's)
+    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor;
     this.openables.finish(byStorey);
     // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props.
     for (const [kind, mats4] of placements) {

@@ -580,7 +580,7 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
  */
 function clipSkyFaces(faces: BuiltFace[], levels: Level[], W: number): BuiltFace[] {
   const skyLv = levels.find(l => l.sky);
-  if (!skyLv) return faces;
+  if (!skyLv || skyLv.sky!.open) return faces; // (task reactor-submit-roof-fog-20261102, lane ROOF: a roof OPENING keeps every column solid)
   const sky = skyLv.sky!;
   const out: BuiltFace[] = [];
   for (const f of faces) {
@@ -735,7 +735,8 @@ export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: 
     const g = levels[L].grid;
     if (!isOpenCell(g.cells[i]) || g.rampIdx[i] >= 0 || (skip && skip(L, i))) return NaN;
     // Task office-overhaul-20261030 (lane STRUCT): open sky (the roof's nominal band top, the hatch shaft above it): no ceiling.
-    if (sky && cellCeil(g, i) >= sky.ceil - 0.01) return NaN;
+    // Task reactor-submit-roof-fog-20261102 (lane ROOF): with an opening mask (LevelSky.open) only its cells; the rest keep the roof.
+    if (sky && cellCeil(g, i) >= sky.ceil - 0.01 && (!sky.open || sky.open[i] === 1)) return NaN;
     // Deduplicated away (identical band of a lower level id)?
     let mine = false;
     for (let k = 0; k < cols.count(i); k++) if (cols.level(i, k) === L) { mine = true; break; }

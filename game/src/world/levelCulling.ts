@@ -52,6 +52,13 @@
 // the former 20 m ATRIUM_MARGIN popped deep back-of-house slivers seen through distant openings (PERF's depth oracle: 22 meshes,
 // 1-8 px, on 17 poses), now 0 — and the start view draws fewer objects than margin + floor-height planes did. Without slabs (QA A/B)
 // the margin rule stands: a mesh of an atrium-visible level renders within ATRIUM_MARGIN of a visible atrium tile. Without `opts.atrium` (every Subway station, the Office) nothing here runs: identical behaviour and stats.
+//
+// Task studio-reactor-submit-roof-fog-20261102 (lane CPU, user: "CPU spending around 20ms in 'submit'"): THE REACTOR takes the same
+// slab + same- / cross-storey occlusion (world/builder.ts passes `slabs` for it too). Its pit is the atrium; its rooms, the three side
+// complexes and the tier rooms sit behind the pit's rock walls / under the storey slabs, and from the rim only ~15 % of the submitted
+// draws owned a pixel. The rules are the mall's, unchanged; the Reactor's grid holds one column the builder does NOT draw — the
+// vessel's (the hero model stands there: ReactorArch.occlusionSee) — passed as a `see` rect (open on every storey). `slabs.glass`
+// names the glazed lift shafts of the atrium / aperture rules separately (default: `see`, the mall's shafts); the Reactor has none.
 
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
@@ -61,6 +68,8 @@ import type {LevelResolver} from './builder';
 
 /** Layer that no camera renders: culled meshes live here. */
 export const CULL_LAYER = 31;
+/** Layers.mask of an object set to CULL_LAYER only (three: (1 << layer | 0) >>> 0). */
+const CULL_MASK = (1 << CULL_LAYER | 0) >>> 0;
 /** A level's mesh renders if its X/Z box comes within this distance of a visible portal tile (m). */
 export const PORTAL_MARGIN = 12;
 /** Portal tiles beyond this distance are not tested (fog makes them invisible; FogExp2 0.043 -> ~1% at 50 m). */
@@ -222,6 +231,11 @@ interface Entry {
 }
 /** Task track3 (lane ARCH): an atrium tile — open void columns joining every level in `levels`. */
 interface AtriumTile { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[]; levels: number[] }
+/**
+ * Task studio-reactor-submit-roof-fog-20261102 (lane CPU): a MOVING object (an enemy, a loose pickup) the culler decides on every
+ * update from a box it asks for then (`box`: false = no bounds now, never hidden); its meshes go to CULL_LAYER while hidden.
+ */
+interface Tracked { obj: THREE.Object3D; box: (out: THREE.Box3) => boolean; meshes: THREE.Object3D[]; masks: number[]; hidden: boolean }
 
 export class LevelCuller {
   readonly entries: Entry[] = [];
@@ -293,15 +307,21 @@ export class LevelCuller {
   private occlTopHi = -Infinity;
   private occlState = false;
   private readonly vp = new THREE.Vector3();
+  /** Task studio-reactor-submit (lane CPU): moving objects decided by their box every update (see track()); none unless registered. */
+  private readonly tracked = new Map<THREE.Object3D, Tracked>();
+  private readonly trackEntry = {obj: new THREE.Object3D(), level: NaN, levels: [] as readonly number[], x0: 0, z0: 0, x1: 0, z1: 0, y0: 0, y1: 0, mask: 0, culled: false} as Entry;
+  /** Tracked objects hidden at the last update (0 unless track() is used: the Reactor's runtime). */
+  trackedCulled = 0;
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
-    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
+    opts?: {atrium?: Uint8Array; slabs?: {see?: readonly {x0: number; z0: number; x1: number; z1: number}[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]}}) {
     this.levelIds = levels.map(l => l.id);
     this.allLevelIds = new Set(this.levelIds);
     if (levels.length > 1) this.buildPortals(opts?.atrium);
     if (levels.length > 1 && opts?.slabs) this.buildSlabs(opts.slabs.see ?? []);
     if (levels.length > 1 && opts?.slabs) this.buildOcclusion(opts.slabs.see ?? []);
-    this.glassShafts = opts?.atrium ? [...(opts.slabs?.see ?? [])] : [];
+    // (task studio-reactor-submit, lane CPU: `glass` when given — the Reactor's see-through vessel column is no lift shaft — else `see`)
+    this.glassShafts = opts?.atrium ? [...(opts.slabs?.glass ?? opts.slabs?.see ?? [])] : [];
   }
 
   /**
@@ -938,7 +958,7 @@ export class LevelCuller {
     const q = camera.quaternion, l = this.last;
     const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
     if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
-      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(camera); return; }
+      && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(camera); this.decideTracked(camera); return; }
     Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
     const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
@@ -1034,6 +1054,65 @@ export class LevelCuller {
     this.slabCulled = slab;
     this.occlusionCulled = occl;
     this.apertureCulled = apCulled;
+    this.decideTracked(camera);
+  }
+
+  /**
+   * Task studio-reactor-submit-roof-fog-20261102 (lane CPU): decide a MOVING object every update by the box `box` reports then (world
+   * space; false = none: shown). Only with the slab / storey occlusion data (the mall's and the Reactor's cullers; false elsewhere —
+   * nothing tracked). The box is decided like a registered mesh tagged with EVERY level: fog distance, the slab planes, then the
+   * same- / cross-storey occlusion per storey slice of the box (eye + `viewpoints`: the flashlight's shadow pass keeps what it sees).
+   * The portal / atrium level rules are not applied (the box alone decides). A hidden object's meshes (collected when it hides) go
+   * to CULL_LAYER and get their masks back when shown, untracked, or reset().
+   */
+  track(obj: THREE.Object3D, box: (out: THREE.Box3) => boolean): boolean {
+    if (!this.occl.length) return false;
+    if (!this.tracked.has(obj)) this.tracked.set(obj, {obj, box, meshes: [], masks: [], hidden: false});
+    return true;
+  }
+
+  /** Stop deciding `obj` (shown again). */
+  untrack(obj: THREE.Object3D): void {
+    const t = this.tracked.get(obj);
+    if (!t) return;
+    this.showTracked(t);
+    this.tracked.delete(obj);
+  }
+
+  /** Objects currently tracked (QA / tests). */
+  get trackedCount(): number { return this.tracked.size; }
+
+  private showTracked(t: Tracked): void {
+    if (!t.hidden) return;
+    t.meshes.forEach((m, i) => { if (m.layers.mask === CULL_MASK) m.layers.mask = t.masks[i]; });
+    t.meshes.length = t.masks.length = 0;
+    t.hidden = false;
+  }
+
+  private decideTracked(camera: THREE.Camera): void {
+    if (!this.tracked.size) { this.trackedCulled = 0; return; }
+    const e = this.eye, me = camera.matrixWorld.elements, en = this.trackEntry;
+    const fl = Math.hypot(me[8], me[9], me[10]) || 1;
+    const fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
+    (en as {levels: readonly number[]}).levels = this.levelIds;
+    let n = 0;
+    for (const t of this.tracked.values()) {
+      let hide = false;
+      if (this.enabled && t.box(this.box) && !this.box.isEmpty()) {
+        const b = this.box;
+        en.x0 = b.min.x; en.y0 = b.min.y; en.z0 = b.min.z; en.x1 = b.max.x; en.y1 = b.max.y; en.z1 = b.max.z;
+        const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
+        hide = depth > this.maxDistance
+          || (this.slabs && this.slabPlanes.length > 0 && this.slabHidden(en, e))
+          || (this.occlusion && this.occlState && (en.occ = this.occlusionLevel(en)) !== -1 && this.occludedNow(en));
+      }
+      if (hide && !t.hidden) {
+        t.obj.traverse(o => { if ((o as THREE.Mesh).isMesh || (o as THREE.Points).isPoints || (o as THREE.Line).isLine) { t.meshes.push(o); t.masks.push(o.layers.mask); o.layers.set(CULL_LAYER); } });
+        t.hidden = true;
+      } else if (!hide && t.hidden) this.showTracked(t);
+      if (t.hidden) n++;
+    }
+    this.trackedCulled = n;
   }
 
   /**
@@ -1250,6 +1329,7 @@ export class LevelCuller {
   /** Show everything again (debug / before disposal). */
   reset(): void {
     for (const en of this.entries) if (en.culled) { en.obj.layers.mask = en.mask; en.culled = false; en.occluded = false; }
+    for (const t of this.tracked.values()) this.showTracked(t); // (task studio-reactor-submit, lane CPU: tracked moving objects too)
   }
 }
 
