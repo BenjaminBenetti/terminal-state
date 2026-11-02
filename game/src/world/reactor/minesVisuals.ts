@@ -1,8 +1,9 @@
 // Task reactor-expansion-20261101 (lane MINES): the RUNTIME LOOK of the old mine workings (installed from ReactorArch.build: one tagged
 // line in world/reactor/arch.ts). Everything is derived from the generated layout (layout.reactor.complexes 'mines' + its areas, doors
 // and the dress pass's collision set pieces, gen/reactor/complex/minesDress.ts MINE_PIECE), so what you see is where you collide:
-//  - TIMBER SUPPORT SETS along every drift (the lead's Meshy timberSet, instanced; scaled to the drift so the posts stand 0.1 m off the
-//    rock and the cap clears >= 2.3 m — never across an opening, never through a prop against the rib);
+//  - TIMBER SUPPORT SETS along every drift (the lead's Meshy timberSet, instanced) on the post collision boxes the dress pass placed
+//    (minesDress.ts placeTimberSets: the whole set inside the drift's rock walls, posts proud of the rib and colliding, cap >= 2.3 m
+//    clear, never on an opening's cells, a prop, a lamp or a plate);
 //  - the narrow-gauge RAIL LINE (600 mm: rail steel on timber sleepers, steel turnplates at the bends) from the adit mouth through the
 //    junction and the haulage to the stope's loading point; it stops short of anything standing on it;
 //  - the ORE CARTS / HOIST WINCH / DRILL JUMBO models on their collision boxes (Meshy maps kept), the WINZE (timber collar, a black
@@ -17,12 +18,12 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu';
 import {CELL} from '../../gen/grid';
-import type {Area, StationLayout} from '../../gen/stationTypes';
+import type {StationLayout} from '../../gen/stationTypes';
 import type {PropPlacement} from '../../gen/props';
-import {MINE_PIECE, MINE_RAIL, alongPolyline, minesRailWorld, type RailPoint} from '../../gen/reactor/complex/minesDress';
+import {MINE_PIECE, MINE_RAIL, alongPolyline, minesRailWorld, timberSetFit, type RailPoint} from '../../gen/reactor/complex/minesDress';
 import type {WorldMaterials} from '../materials';
 import {reactorDress, reactorSurfaceMaterial} from './archMaterials';
-import {MINES_ANCHORS, MINES_MODELS, type MinesModel} from './minesAssets';
+import {MINES_MODELS, type MinesModel} from './minesAssets';
 
 /** One instanced placement: position (bottom centre), yaw, scale. */
 export interface MinePlace { x: number; y: number; z: number; yaw: number; sx: number; sy: number; sz: number }
@@ -40,12 +41,30 @@ export interface MinesVisualPlan {
   stats: {sets: number; setsSkipped: number; railM: number; sleepers: number; cribs: number; rubble: number; water: number};
 }
 
-/** Pitch (m) of the support sets along a drift, the most sets per level (triangle bound), the post's standoff from the rock (m). */
-export const MINES_SETS = {pitch: 2.1, cap: 44, standoff: 0.1, endClear: 0.8} as const;
-
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 /** Deterministic 0..1 hash of a few numbers (rubble chunk sizes / tilts). */
 const hash = (...v: number[]): number => { let h = 2166136261; for (const x of v) { h ^= Math.round(x * 1000); h = Math.imul(h, 16777619); } return ((h >>> 0) % 10007) / 10007; };
+
+/**
+ * A box clamped INSIDE a collision prop's box (axis-aligned annexMachine: x / z +- hx / hz, y base .. base + h), 1 cm in: its rotated
+ * extent (yaw, then the x / z tilts, 'YXZ') is measured, the box shrunk if it cannot fit, then its centre moved in.
+ */
+function within(p: PropPlacement, base: number, b: MineBox): MineBox {
+  const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(b.rx ?? 0, b.yaw, b.rz ?? 0, 'YXZ')).elements;
+  // column-major: R[c * 4 + r]
+  const ext = (k: number, hw: number, hh: number, hd: number) => Math.abs(R[k]) * hw + Math.abs(R[4 + k]) * hh + Math.abs(R[8 + k]) * hd;
+  const lim = [p.hx - 0.01, p.h / 2 - 0.01, p.hz - 0.01];
+  let w = b.w, h = b.h, d = b.d;
+  const e0 = [ext(0, w / 2, h / 2, d / 2), ext(1, w / 2, h / 2, d / 2), ext(2, w / 2, h / 2, d / 2)];
+  const f = Math.min(1, ...e0.map((e, k) => lim[k] / Math.max(e, 1e-6)));
+  if (f < 1) { w *= f; h *= f; d *= f; }
+  const e = [ext(0, w / 2, h / 2, d / 2), ext(1, w / 2, h / 2, d / 2), ext(2, w / 2, h / 2, d / 2)];
+  const cl = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  return {...b, w, h, d,
+    x: r3(cl(b.x, p.x - p.hx + 0.01 + e[0], p.x + p.hx - 0.01 - e[0])),
+    y: r3(cl(b.y, base + 0.01 + e[1], base + p.h - 0.01 - e[1])),
+    z: r3(cl(b.z, p.z - p.hz + 0.01 + e[2], p.z + p.hz - 0.01 - e[2]))};
+}
 
 interface MinesRec { level: number; base: number; rooms: {key: string; area: number}[]; areas: number[] }
 
@@ -64,7 +83,6 @@ export function isMineArea(layout: StationLayout, area: number | undefined): boo
   return !!c && c.areas.includes(area);
 }
 
-const DRIFT_KEYS = /^(portal|haulage-\d+|manway-\d+|crosscut|sump|collapse)$/;
 
 export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null {
   const rec = minesRecord(layout);
@@ -84,52 +102,18 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
   const byKey = (k: string) => { const r = rec.rooms.find(q => q.key === k); return r ? layout.areas[r.area] : undefined; };
   const box = (m: MineMat, b: MineBox) => { plan.boxes[m].push(b); };
 
-  // --- timber support sets along the drifts --------------------------------------------------------------------------------------
-  const sets: {a: Area; s: number; m: MinePlace}[] = [];
-  for (const r of rec.rooms) {
-    if (!DRIFT_KEYS.test(r.key)) continue;
-    const a = layout.areas[r.area];
-    const alongX = a.w >= a.h, len = (alongX ? a.w : a.h) * CELL, Wd = (alongX ? a.h : a.w) * CELL, clear = a.ceil - base;
-    if (clear < 2.9 || Wd < 1.8) continue;
-    const s0 = (alongX ? a.x : a.y) * CELL, c0 = (alongX ? a.y : a.x) * CELL, mid = c0 + Wd / 2;
-    const n = Math.max(1, Math.floor((len - 2 * MINES_SETS.endClear) / MINES_SETS.pitch) + 1);
-    const span = (n - 1) * MINES_SETS.pitch, first = s0 + (len - span) / 2;
-    const sx = (Wd / 2 - MINES_SETS.standoff) / MINES_ANCHORS.timberSet.postInner, sy = clear / MINES_ANCHORS.timberSet.top;
-    const doors = layout.doors.filter(d => d.a === a.id || d.b === a.id);
-    const free = (s: number): boolean => {
-      if (s < s0 + 0.45 || s > s0 + len - 0.45) return false;
-      // never across an opening in a side wall (the posts would stand in it)
-      if (doors.some(d => {
-        const vertWall = d.w === 1 && d.h > 1; // an x = const wall
-        if (alongX ? vertWall : !vertWall) return false;
-        const d0 = (alongX ? d.x : d.y) * CELL, d1 = (alongX ? d.x + d.w : d.y + d.h) * CELL;
-        return s > d0 - 0.45 && s < d1 + 0.45;
-      })) return false;
-      // never through a prop against the rib (the posts stand 0.1 m off the rock, + 3 cm), the rubble slope, or under the cap
-      const px0 = s - 0.3, px1 = s + 0.3; // the set's posts / cap are 0.53 m deep along the drift
-      return !props.some(p => {
-        if ((p.level ?? 0) !== level || p.area !== a.id) return false;
-        const pa0 = (alongX ? p.x - p.hx : p.z - p.hz), pa1 = (alongX ? p.x + p.hx : p.z + p.hz);
-        if (pa1 <= px0 || pa0 >= px1) return false;
-        const pc0 = (alongX ? p.z - p.hz : p.x - p.hx), pc1 = (alongX ? p.z + p.hz : p.x + p.hx);
-        return (p.kind === 'annexMachine' && p.variant === MINE_PIECE.rubble) || pc0 < c0 + MINES_SETS.standoff + 0.03 || pc1 > c0 + Wd - MINES_SETS.standoff - 0.03 || p.y + p.h > base + 0.71 * clear - 0.05;
-      });
-    };
-    let last = -Infinity;
-    for (let i = 0; i < n; i++) {
-      // the nominal pitch, slid up to 0.7 m off a door / prop (sets keep >= 1.2 m apart)
-      const s = [0, -0.35, 0.35, -0.7, 0.7].map(o => first + i * MINES_SETS.pitch + o).find(q => q - last >= 1.2 && free(q));
-      if (s === undefined) { plan.stats.setsSkipped++; continue; }
-      last = s;
-      const m: MinePlace = {x: r3(alongX ? s : mid), y: base, z: r3(alongX ? mid : s), yaw: alongX ? Math.PI / 2 : 0, sx: r3(sx), sy: r3(sy), sz: 1};
-      sets.push({a, s, m});
+  // --- timber support sets: one per pair of post collision boxes the dress pass placed (minesDress.ts placeTimberSets) --------------
+  {
+    const seen = new Set<string>();
+    for (const p of of(MINE_PIECE.post)) {
+      const a = layout.areas[p.area], alongX = a.w >= a.h, s = alongX ? p.x : p.z, key = `${a.id}:${Math.round(s * 100)}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const Wd = (alongX ? a.h : a.w) * CELL, mid = (alongX ? a.y : a.x) * CELL + Wd / 2, fit = timberSetFit(Wd, a.ceil - base);
+      plan.models.timberSet.push({x: r3(alongX ? s : mid), y: base, z: r3(alongX ? mid : s), yaw: alongX ? Math.PI / 2 : 0, sx: r3(fit.sx), sy: r3(fit.sy), sz: 1});
     }
+    plan.stats.sets = plan.models.timberSet.length;
   }
-  // the triangle bound: keep every set of the adit / haulage, thin the rest evenly
-  const keep = sets.length <= MINES_SETS.cap ? sets : sets.filter((q, i) => /^(No\. 2 adit|Main haulage)/.test(q.a.label) || i % Math.ceil(sets.length / MINES_SETS.cap) === 0).slice(0, MINES_SETS.cap);
-  plan.stats.setsSkipped += sets.length - keep.length;
-  for (const q of keep) plan.models.timberSet.push(q.m);
-  plan.stats.sets = keep.length;
 
   // --- the rail line -------------------------------------------------------------------------------------------------------------
   const rail = minesRailWorld(layout, rec.rooms);
@@ -217,14 +201,15 @@ export function planMinesVisuals(layout: StationLayout): MinesVisualPlan | null 
       const s = pc + sgn * (t - 0.5) * L, c = (alongX ? p.z : p.x) + u * Wd * 0.9;
       const hgt = 0.25 + t * (p.h - 0.3), size = 0.35 + hash(s, c) * 0.45;
       const x = alongX ? s : c, z = alongX ? c : s;
-      box('rock', {x: r3(x), y: base + Math.max(size / 2, hgt - size / 2), z: r3(z), w: size, h: size * (0.7 + hash(c, s) * 0.5), d: size * (0.8 + hash(s + 1, c) * 0.4), yaw: hash(x, z) * Math.PI, rx: (hash(z, x) - 0.5) * 0.6, rz: (hash(x + z) - 0.5) * 0.6});
+      // every chunk lies INSIDE the rubble's collision box (its rotated extent clamped in): what you see is what you bump into
+      box('rock', within(p, base, {x: r3(x), y: base + Math.max(size / 2, hgt - size / 2), z: r3(z), w: size, h: size * (0.7 + hash(c, s) * 0.5), d: size * (0.8 + hash(s + 1, c) * 0.4), yaw: hash(x, z) * Math.PI, rx: (hash(z, x) - 0.5) * 0.6, rz: (hash(x + z) - 0.5) * 0.6}));
       // the fill under the chunks (the slope itself): one slice across the drift per step along it
       const cross = alongX ? p.z : p.x;
-      if (j === 0) box('rock', {x: alongX ? s : cross, y: base + hgt / 2, z: alongX ? cross : s, w: alongX ? L / 6 + 0.02 : Wd, h: hgt, d: alongX ? Wd : L / 6 + 0.02, yaw: 0});
+      if (j === 0) box('rock', within(p, base, {x: alongX ? s : cross, y: base + hgt / 2, z: alongX ? cross : s, w: alongX ? L / 6 : Wd, h: hgt, d: alongX ? Wd : L / 6, yaw: 0}));
       n++;
     }
     const cx = pc - sgn * L * 0.35;
-    box('timber', {x: alongX ? cx : p.x, y: base + 0.45, z: alongX ? p.z : cx, w: alongX ? 0.25 : Wd * 0.95, h: 0.25, d: alongX ? Wd * 0.95 : 0.25, yaw: 0, ...(alongX ? {rx: 0.35} : {rz: 0.35})});
+    box('timber', within(p, base, {x: alongX ? cx : p.x, y: base + 0.45, z: alongX ? p.z : cx, w: alongX ? 0.25 : Wd * 0.95, h: 0.25, d: alongX ? Wd * 0.95 : 0.25, yaw: 0, ...(alongX ? {rx: 0.35} : {rz: 0.35})}));
     plan.stats.rubble += n;
   }
 

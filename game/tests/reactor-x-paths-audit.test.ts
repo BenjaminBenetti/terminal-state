@@ -32,14 +32,12 @@ const level = (seed: number) => {
  *    the fallback start panel's lever + lamps now stay inside their colliders — the audit proves zero there);
  *  - (lane BUNKER fixed its entries: the blast-door threshold runs past the frame faces and the model colliders block every
  *    covered cell; bunks sit on whole cells — the audit proves zero there);
- *  - lane MINES: tilted rubble chunks stand up to ~0.38 m out of the rubble collider into the collapsed drift; a timber set beside a
- *    room door (lamp room / tool room) puts its post 5-6 cm into the door lane;
+ *  - (lane MINES fixed its two: the rubble chunks are clamped inside the rubble collider; the timber sets stay inside the drift's rock
+ *    walls, their posts are collision boxes and keep off every opening's cells — the audit proves zero there);
  *  - lane CORE (user point 15): the procedural FALLBACK vessel plinth flares 0.2 m past the vessel's blocked circle (drawn only when the
  *    vessel model fails to load; the model is clear).
  */
 const PATHS_OWNED_ELSEWHERE: readonly {re: RegExp; lane: string; max: number}[] = [
-  {re: /^mines rock$/, lane: 'MINES', max: 0.3},
-  {re: /^mines model timberSet$/, lane: 'MINES', max: 0.07},
   {re: /^merged reactor-vessel/, lane: 'CORE', max: 0.25},
 ];
 const ours = (hits: readonly PathHit[]) => hits.filter(h => !PATHS_OWNED_ELSEWHERE.some(o => o.re.test(h.kind) && h.depth <= o.max));

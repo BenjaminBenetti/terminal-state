@@ -27,12 +27,16 @@ import {ANNEX_PICKED_KEY} from '../../../items/lootTables';
 export const MINES = {
   /** Usable canonical extents a plan needs (cells, inside the region's rock margin). */
   minW: 52, minD: 50,
-  /** Target walkable floor (m²) and the floor a plan must at least reach to be used. */
-  targetM2: 600, acceptM2: 430,
+  /**
+   * Target / accepted plan floor (m², every carved cell incl. openings). The host's "substantial" floor (500 m²) is counted AFTER the
+   * furniture, set pieces and timber posts block their cells (~100-140 m² in the real level), so the plan aims >= 700 and never ships
+   * under 560 (the stope / dead ends grow first when there is rock to spare).
+   */
+  targetM2: 700, acceptM2: 560,
   /** Clear heights (m): drifts are tall enough that the timber sets keep >= 2.3 m clear. */
   clear: {portal: [3.3, 3.5], junction: [3.6, 3.9], drift: [3.3, 3.5], room: [3.0, 3.2], hoist: 5.2, cavern: [6.5, 8.0], min: 3.0},
   door: {portal: 2.9, set: 2.6, room: 2.3},
-  attempts: 10,
+  attempts: 14,
 } as const;
 
 /** A rectangle in the canonical frame (c lateral, d depth). */
@@ -53,7 +57,7 @@ export interface MineRoomPlan {
   /** The plan key of the space it opens from (null: the slot's front deck). */
   parent: string | null;
   /** What it is in the mine (dressing / visuals): drift segments carry the rail line on the haulage. */
-  part: 'portal' | 'junction' | 'haulage' | 'manway' | 'crosscut' | 'cavern' | 'hoist' | 'magazine' | 'lamp' | 'tools' | 'sump' | 'collapse' | 'refuge';
+  part: 'portal' | 'junction' | 'haulage' | 'manway' | 'crosscut' | 'cavern' | 'hoist' | 'magazine' | 'lamp' | 'tools' | 'sump' | 'collapse' | 'refuge' | 'stope';
 }
 
 export interface MineDoorPlan {
@@ -313,15 +317,15 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
 
   // --- 3. The generator cavern (the stope) -------------------------------------------------------------------------------------
   const top = jBot + 1, avail = D - top;
-  const cd = clamp(big ? rng.int(20, 26) : rng.int(16, 20), 14, avail - 13);
+  const cd = clamp(big ? rng.int(22, 28) : rng.int(16, 20), 14, avail - 13);
   if (cd < 14) return null;
   let pillar = avail - 1 - cd, below = 0;
   if (pillar > 22) { below = pillar - rng.int(15, 19); pillar -= below; }
   const cTop = top + pillar + 1;
-  let cw = clamp(big ? rng.int(38, 50) : rng.int(30, 38), 28, W);
+  let cw = clamp(big ? rng.int(44, 54) : rng.int(30, 38), 28, W);
   let cl = -1;
   for (const shift of [rng.int(-4, 4), 0, -6, 6, -12, 12, -20, 20]) {
-    for (const w of [cw, cw - 6, cw - 10]) {
+    for (const w of [cw, cw - 6, cw - 12, cw - 18]) {
       if (w < 28) continue;
       const c = clamp(Math.round(jc0 + jw / 2 - w / 2) + shift, 0, W - w);
       if (P.fits(c, cTop, w, cd)) { cl = c; cw = w; break; }
@@ -459,6 +463,21 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
   const lamp = place('lamp', besideAdit('left'), {label: 'Lamp room', role: 'room', kind: 'room', type: 'crew-room', purpose: 'locker-room', clear: roomClear(), part: 'lamp'}, {kind: 'room', width: 3});
   const tools = place('tools', besideAdit('right'), {label: 'Mine tool room', role: 'store', kind: 'room', type: 'storage', purpose: 'workshop', clear: roomClear(), part: 'tools'}, {kind: 'room', width: 3});
   if (!lamp || !tools) return null;
+  // the worked-out stope (old No. 1 stope): a second, bare chamber (timber cribs / crates from the dress pass) — placed before the dead
+  // ends (it is the program's floor margin: the host counts the floor after the furniture), the largest that fits first
+  place('stope', rng.shuffle<Cand>([
+    {parent: 'cavern', side: 'left', along: [10, 18], deep: [8, 16]},
+    {parent: 'cavern', side: 'right', along: [10, 18], deep: [8, 16]},
+  ]).concat(<Cand[]>[
+    {parent: 'cavern', side: 'down', along: [12, 18], deep: [8, 12]},
+    {parent: lastM, side: 'left', along: [10, 16], deep: [8, 14]},
+    {parent: lastH, side: 'right', along: [10, 16], deep: [8, 14]},
+    {parent: m0, side: 'left', along: [10, 14], deep: [8, 14]},
+    {parent: h0, side: 'right', along: [10, 14], deep: [8, 14]},
+    ...(hasX ? [{parent: 'crosscut', side: 'down' as Side, along: [10, 16] as [number, number], deep: [8, 10] as [number, number]}] : []),
+    {parent: 'junction', side: 'left', along: [8, 12], deep: [8, 14]},
+    {parent: 'junction', side: 'right', along: [8, 12], deep: [8, 14]},
+  ]), {label: 'Worked-out stope No. 1', role: 'hall', ...DEAD_END, clear: r2(Math.max(MINES.clear.min, Math.min(ceilRel, rng.range(4.2, 5.2)))), part: 'stope'}, {kind: 'set', width: 6});
   // the flooded sump drift (below / beside the cavern) and the collapsed drift (continuing a lateral leg / off the junction)
   const sumpLen: [number, number] = [8, big ? 18 : 12], deadW: [number, number] = [5, 6];
   const sump = place('sump', rng.shuffle<Cand>([

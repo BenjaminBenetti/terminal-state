@@ -310,8 +310,10 @@ pieces below are collision-only `annexMachine` boxes (`gen/reactor/complex/mines
   **winze**: a 2 × 2 m collision box for the steel guard fence round the timber collar (you can't fall in).
 - **Drill rig** (`drillRig`): static, too heavy (a rubber-tyred rig of several tonnes); machinery.
 - **Timber cribs / rubble**: structure (stacked crib timbers to the stope roof; the fallen rock choking the collapsed drift).
-- **Timber support sets** (`timberSet`): architecture, with no collision. The posts stand 0.1 m off the rock, inside the player's
-  standoff. A set is never placed across an opening or through a prop against the rib. The cap clears at least 2.3 m.
+- **Timber support sets** (`timberSet`): anchored structure (posts wedged against the rock). Each post is a collision box over the rib
+  cell it stands in (`MINE_PIECE.post`), and that cell is blocked where the post stands more than 0.12 m proud of the rib. The whole
+  set (its cap ends) stays inside the drift's rock walls, so it never pokes into the next space. A set is never placed on an opening's
+  cells, a prop, a lamp or a plate. The cap clears at least 2.3 m.
 - No baked clutter: the models are the machines / timber only. Loot stays in the existing openable holders.
 
 Scale (rule 5), `scale-check.mjs --prop <glb>` beside zombie lastshift (1.78 m, runtime scale 1). Every model is viewed and grounded:
@@ -320,7 +322,8 @@ Scale (rule 5), `scale-check.mjs --prop <glb>` beside zombie lastshift (1.78 m, 
 | Ore cart | 1 | 1.80 × 0.78 × 0.79 m | 4 (wheels; 600 mm gauge) |
 | Hoist winch | 1 | 3.00 × 1.64 × 1.71 m | 4 (the base) |
 | Drill rig | 1 | 3.50 × 1.28 × 0.98 m | 4 (tyres) |
-| Timber set in a 3 m × 3.3 m drift | 1.36, 1.31, 1 | 4.62 × 3.30 × 0.53 m | 13 (post feet) |
+| Timber set in a 3 m × 3.3 m drift (first fit, viewed) | 1.36, 1.31, 1 | 4.62 × 3.30 × 0.53 m | 13 (post feet) |
 
-The drill rig is compact for a "jumbo": a small single-boom rig, not a full-size jumbo. The timber set is scaled per drift so its
-posts sit at the rock. Its outer 0.6 m per side is buried in the rock, and the clear opening is about 2.8 × 2.35 m.
+The drill rig is compact for a "jumbo": a small single-boom rig, not a full-size jumbo. The timber set is now scaled per drift by
+`timberSetFit`: its cap ends reach the rib + 0.48 m (x ≈ 1.16 in a 3 m drift). Its posts then stand about 0.3 m proud, leaving a clear
+opening of about 2.4 × 2.35 m.
