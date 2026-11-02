@@ -27,6 +27,7 @@ import type {LightMount, LightPlacement, StationLayout} from '../stationTypes';
 import type {PropPlacement} from '../props';
 import type {ReactorCoreFloor} from './reactorTypes';
 import {CORE_LEVEL} from './frame';
+import {pitLampStats} from './gaslightLamps';
 
 /** Core floor dimensions (m). */
 export const CORE_FLOOR = {
@@ -614,6 +615,9 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
       x: r3(hx), y: r3(base + PL.headY), z: r3(hz), rot: Math.abs(nx) > Math.abs(nz) ? Math.PI / 2 : 0, area: g.area[g.idx(ix, iz)], broken: false, flicker: false,
       warm: true, power: emergency ? PL.emergency : PL.powered, dying: !emergency, level: CORE_LEVEL, mount,
     });
+    // GASLIGHT's pit-lamp record counts every mounted pit lamp (its post lamps on the core floor's bridges / ring are these)
+    const st = pitLampStats(layout);
+    if (st) { st.post++; if (emergency) st.steady++; else st.dying++; }
     return true;
   };
   cf.bridges.forEach((b, bi) => {
