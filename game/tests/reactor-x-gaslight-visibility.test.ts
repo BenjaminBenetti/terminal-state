@@ -27,7 +27,10 @@ import {REACTOR_FOG} from '../src/world/reactor/archInstall';
 import {MOOD} from '../src/world/lights';
 import {
   GAS_FALLBACK, PIT_SHAFTS, REACTOR_OUTDOOR, ROOF_GAS_LOOK, fallbackFog, gasGlow, gasOpacity, greenness, luminance, outdoorGasAt, pitShaftSpec, shaftAt,
+  reactorOutdoorGas,
 } from '../src/world/gaslightRules';
+import {WIN} from '../src/world/reactor/restartWin';
+import {skyClearAt} from '../src/world/reactor/startupPlan';
 import {roofOpeningOf} from '../src/gen/reactor/roofOpening';
 import {compileQuad} from './helpers/fogCompile';
 import {fixtureInfo} from './reactor-air-fixture';
@@ -102,8 +105,21 @@ describe('gaslight: hazard <-> render parity (one function per source)', () => {
       expect(air.depthGasAt(cx, y, cz)).toBe(0);
       expect(renderC(a.u, cx, y, cz)).toEqual({strata: 0, outdoor: 0});
     }
-    // the toxic sky is out of reach: nothing walkable at or above the roof line on any storey
-    for (const lv of L.levels) for (let i = 0; i < lv.grid.cells.length; i++) if (lv.grid.cells[i] === FLOOR) expect(lv.grid.floor[i]).toBeLessThan(info.pit.roofY - 5);
+    // the toxic sky is out of reach — task studio-reactor-surface-ending-20261102 (lane ENDING, user: "This door should lead up a set of
+    // stairs, towards a surface area … The surface is habitable again!"): supersedes "nothing walkable at or above the roof line". The
+    // only walkable cells up there are the surface exit's (the plaza on the roof, its upper passage, the stair's top flights), sealed
+    // behind the exterior door until the core air has cleared after ONLINE; by then the outdoor air over them is gone (nothing drawn,
+    // nothing breathed: the same function)
+    const S = info.surface!, exit = new Set([S.areas.plaza, S.areas.upper, S.areas.stair]);
+    const opened = reactorOutdoorGas(info.pit.roofY, layoutRect(L), skyClearAt(WIN.airAtS + REACTOR_AIR.CLEAR_ALL_S));
+    let up = 0;
+    for (const lv of L.levels) for (let i = 0; i < lv.grid.cells.length; i++) {
+      if (lv.grid.cells[i] !== FLOOR || lv.grid.floor[i] < info.pit.roofY - 5) continue;
+      expect(exit.has(lv.grid.area[i]), `walkable at ${lv.grid.floor[i]} on level ${lv.id}`).toBe(true);
+      const x = ((i % lv.grid.w) + 0.5) * CELL, z = (Math.floor(i / lv.grid.w) + 0.5) * CELL;
+      if (up++ % 7 === 0) expect(outdoorGasAt(opened, x, lv.grid.floor[i] + 1.6, z)).toBe(0);
+    }
+    expect(up).toBeGreaterThan(1000);
     // the deadly core floor draws dense green strata; the outdoor air above the top is the surface atmosphere
     expect(renderC(a.u, cx, info.pit.floorY + 1.6, cz).strata).toBeGreaterThan(0.7);
     // balance: the uncleared column is substantial green murk from the rim, yet the core still reads through it (its glow / CORE's lights)
