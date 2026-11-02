@@ -251,6 +251,23 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - at most two sleeping Sirens are in deep side rooms;
 - the Strainer appears only in the rim station's annex.
 
+### Cross-storey hits (task reactor-playtest-round2-20261102, lane COMBAT; every level)
+User: enemies on another storey (down the stairs, across an atrium, in the pit) could not be damaged, on every level.
+
+- **Root cause:** `Game.fire`'s per-enemy cheap reject. It projected the enemy's feet onto the ray with the unit 3D direction's
+  horizontal parts but never divided by their squared length. On a pitched ray the closest point fell short by D x sin^2(pitch),
+  and an enemy more than 1.26 m from that point was skipped before its hit volumes were tested. Level shots barely pitch.
+  Stairs (25-30 degrees), the atrium and the pit (35-55 degrees) skipped the enemy. The 3D world ray (`Levels.raycast`) was right.
+  Render culling played no part: the hit test never read layers or visibility.
+- **Fix:** `combat/enemyRay.ts` `nearestEnemyHit` is the one bullet / pellet test, used by `Game.fire` (every pellet) and the
+  damage QA shot. Its reject is exact: the ray against the box around the enemy's own volumes. It has no storey filter and no
+  render input, so `CULL_LAYER` / `LevelCuller.track` (PR 39's culling, unchanged) never removes a target. The world hit stays
+  the limit: walls, slabs, closed lift doors and props still stop bullets. Melee, noise, gas, blasts and AI are unchanged.
+- **Tests:** `game/tests/combat-cross-storey.test.ts` uses real Subway / Office / Mall / Reactor layouts and the real enemy
+  actors. It checks every stair link down and up, atrium and pit shots for all five families, slab and closed-door blocks, the
+  pistol / rifle / shotgun parts and pellets, a culled enemy still hit, brute-force parity and the wiring. On the same rays the
+  pre-fix reject skipped 35 of 35 stair shots down, 33 of 35 up and 85 of 87 atrium / pit shots down.
+
 ## Lamps, the open top and gas visibility (expansion lane GASLIGHT)
 - **Every pit lamp is a real, mounted fixture** (`gen/reactor/gaslightLamps.ts` `planPitLamps`, `LightPlacement.mount`):
   - wall brackets between the pilasters on every storey, clear of openings, pipe banks, fans and any walkway or flight at the head;
