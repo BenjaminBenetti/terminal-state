@@ -21,7 +21,8 @@ outside Git.
 
 ## The level, top to bottom (one continuous world; the rim at y 0, depth negative)
 - **Rim** (`levels[0]`): a real subway station. One platform of about 70 m beside a track bed (tunnels continue past the bed ends;
-  at most one Beyond-the-Station annex). Wide openings onto the railed rim gallery give the first view down to the core. The rim
+  at most one Beyond-the-Station annex). The platform does not open onto the pit: a small station area, a breached wall and a short
+  rough tunnel lead to the railed rim gallery and the first view down to the core (see "Arrival approach and seeded flow"). The rim
   control office holds the startup key and the pit status board.
 - **Four walkway tiers** (about 6 m apart): steel galleries on the pit walls, big landings for the generators, bridges across the
   pit to 1–2 free-standing lattice towers, and side rooms cut into the rock (maintenance stores, the switchgear room on tier 4).
@@ -51,6 +52,8 @@ outside Git.
   Retreat is the same world back up.
 - **Seeded variation within the kit:** which wall hosts the switchbacks / pipe organ / generator landings, the gallery arcs, the
   bridge tiers, the tower count and position, and the room order. B's identity (crane, organ wall, generator landings, bridges +
+  Since round 2 (lane ARRIVAL) also: the arrival recipe, the rock suites of every storey, the complexes' entrance spots and the south
+  flight set's direction (below).
   towers, vessel) is always there.
 
 ## Side complexes off the shaft (task reactor-expansion-20261101)
@@ -61,8 +64,10 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   with a fallback; never the north wall under the station. The region's pit-side row is the pit wall. A carver keeps one cell of
   wall inside every edge. When planned, the region is solid rock on every storey. Rooms of the same storey avoid it. Rooms of other
   storeys may lie above or below it: `ceilMax` (the deck above minus a slab) keeps the storeys apart.
-- **Entrance**: a 6-cell (3 m) span of that wall row, in front of flat cells of one deck area (`frontArea`). A landing comes first;
-  on the stair wall this is the old generator landing, now the entrance landing. The carver carves the door from that deck, at
+- **Entrance**: a 6-cell (3 m) span of that wall row, in front of flat cells of one deck area (`frontArea`). Round 2 (lane ARRIVAL):
+  the deck is drawn by weight (landings 3, stair landings / galleries 2, terraces 1) and the spot along it is seeded; the region stays
+  centred on it where the canvas allows. On the stair wall's generator landing it becomes the entrance landing; a vacated generator
+  landing elsewhere is a plain "Wall landing". The carver carves the door from that deck, at
   least 2.6 m clear.
 - **Order in `generateReactorLevel`**:
   1. slots (in `carveReactor`, before its rooms);
@@ -101,6 +106,41 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund, a second row of fixtures.
 - Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
   hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
+
+## Arrival approach and seeded flow (task reactor-playtest-round2-20261102, lane ARRIVAL)
+User: "the reactor pit is to close to the subway stop. You should have to traverse through a small station area, before going through
+a hole in a wall, through a small tunnel, then you hit the reactor area!" and "the layout … is much to normal … it should be random!
+with logical rooms flowing in to one another".
+- **The approach** (`gen/reactor/arrival.ts`, `layout.reactor.approach`): `frame.sep` (28–34 cells, 14–17 m of rock) now separates the
+  platform from the pit's north wall. One route on the rim storey, no teleport, no barrier: platform → 1–2 openings ("RIM ACCESS") →
+  a ticket hall (+ 0–3 back-of-house rooms, sometimes a service corridor) → the **breach**: open cells through one of its walls (no
+  door, no frame, a jagged top edge ≥ 2.35 m) → a **rough tunnel** (ragged segments 2–3 m wide, ceilings 2.9–3.5 m, pit-concrete
+  rock finishes via `ReactorArch.roughAreas`, dim work lamps, 10–30 m with at least one bend) → the **reveal**, a second ragged hole
+  through the pit's north wall onto the rim gallery ("RIM CONTROL OFFICE" plate beside it).
+  - Recipes: `hall` (the hall's end wall breached), `corridor` (the far end of a service corridor), `backroom` (the side wall of an
+    electrical room / store behind the hall). Hall size and position, direction, lengths, jitter and the reveal column are seeded.
+  - `arrivalIssues` (in `reactorIssues`): the platform opens only into the hall; the rim gallery is reachable on foot and NOT with the
+    breach closed; no straight sight line from any platform cell through the reveal; the tunnel length in range.
+  - Unchanged: the trench, the train placement and its spawn seam (`layout.reactor.start` = the platform in front of a hall opening),
+    the rim office, key, pit board and map boards (the carve stream keeps the old openings' draws: every restart room is placed as
+    before), the Track2 annex.
+- **Rock suites** (`gen/reactor/suites.ts`, `layout.reactor.suites`): the fixed tier-1 crew room / tier-2 workshop / tier-3 valve
+  gallery became a seeded graph grammar on every storey (rim 0–1, tiers and core 1–2 suites): an entry corridor from a deck door, a T
+  or L cross corridor, themed rooms in program order (crew facilities / maintenance up top, valve rooms / cable vaults mid-shaft, the
+  electrical annex / coolant services deep, health physics / reactor services on the core floor, crane services on the rim), sometimes
+  a loop back to a deck, enfilade doors, a back door into a store. Rooms keep one rock cell to everything they do not join, avoid the
+  storey's complex region, keep a slab to every other storey and leave the two rock rows behind the pit wall to the fans. Furniture
+  pockets are sealed (the office's rule).
+- **Routes:** `frame.southFlip` runs the south flight set the other way round (its landings swap ends).
+- **Determinism:** the approach, the south flip and `sep` use their own streams / forks; the restart rooms and the frame keep their
+  old draws. Tests: `game/tests/reactor-x-arrival.test.ts` (16 seeds: route order, breach-only access, sight, length, support,
+  train, rim objective; distinct topology signatures; coherence; determinism).
+- **Census and cost:** ambient enemies per context, Blightbellies, rat/dogs, floor pickups, mask and filters are unchanged on the
+  12-pit corpus (docs/enemy-spawns.md); Sirens 1.58 → 1.50 per run (1.13 → 1.50 on seeds 1–8; suite rooms are >= 5 x 5 m, so the
+  deep ones qualify as her dark alcoves); loot holders 197 → 260 per run (+32 %, the new rooms' furniture); generation ~+20 % (Node
+  median ~0.77 s); render-submit budget worst pose 714 → 757 draws (cap 790).
+- **Not varied:** which storey each complex is on (the gas no-deadlock rule, the jam and the spawn contexts depend on it), the
+  switchback wall's lane order and the maintenance ladders' corner.
 
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
@@ -241,7 +281,8 @@ Code: `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`.
 ## The train
 The rim station is a shared Trench beside its start platform, so the shared player train (`gen/playerTrain.ts`
 `playerTrainPlacement`, PR 33) parks there with no train-side change. It sits inside `layout.reactor.arrival`'s stop window, and a
-start arrival spawns in the car. `layout.reactor.start` stays the platform start for callers without a train.
+start arrival spawns in the car. `layout.reactor.start` stays the platform start for callers without a train (round 2: in front of a
+ticket-hall opening, facing it).
 
 ## Enemies
 Existing families only. Density and the nastier families rise with depth (`docs/enemy-spawns.md` "The Reactor"):

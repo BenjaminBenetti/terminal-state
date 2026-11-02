@@ -213,9 +213,10 @@ function trySuite(inp: SuiteInput, lv: number, theme: {name: string; rooms: Room
     const aEnd = cross.a0 + cross.wa;
     while (a < aEnd - 4 && program.length) {
       const def = program[0];
-      const wa = Math.min(def.small ? rng.int(5, 6) : rng.int(9, 14), aEnd - a);
-      if (wa < (def.small ? 5 : 9)) break;
-      const dd = side === 'far' ? (def.small ? rng.int(5, 6) : rng.int(9, 11)) : Math.min(nearDepth, def.small ? 6 : rng.int(7, 10));
+      // rooms >= 5 x 5 m (the purposes' minimum furnished sizes; a deep storey's room is a Siren's dark alcove: >= 100 cells)
+      const wa = Math.min(def.small ? rng.int(5, 6) : rng.int(10, 15), aEnd - a);
+      if (wa < (def.small ? 5 : 10)) break;
+      const dd = side === 'far' ? (def.small ? rng.int(5, 6) : rng.int(10, 12)) : Math.min(nearDepth, def.small ? 6 : rng.int(8, 11));
       const d0 = side === 'far' ? Lc + cw2 + 1 : Lc - 1 - dd;
       // near side: never across the entry corridor's span
       const p = plan(a, wa, d0, dd);
