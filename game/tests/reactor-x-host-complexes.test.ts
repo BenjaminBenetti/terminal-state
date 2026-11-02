@@ -177,9 +177,9 @@ describe('Reactor side-complex host: the host path end to end (sample carver)', 
         const g = R.generators[c.generator], grid = L.levels[g.level].grid, ids = new Set(c.areas), front = c.slot!.frontArea;
         const base = L.levels[c.level].baseY, cc = {level: c.level, baseY: base, frontArea: front, areas: c.areas};
         expect(g.cable[0]).toEqual(g.panel);
-        // the exit: the first point on the deck in front of the entrance (after the panel's riser)
-        const area = (p: {x: number; z: number}) => { const [cx, cy] = grid.cellOf(p.x, p.z); return grid.area[grid.idx(cx, cy)]; };
-        const k = g.cable.findIndex((p, i) => i > 0 && area(p) === front);
+        // the exit: the first point (after the panel's riser) on a pit-deck cell beyond the entrance wall
+        const inDoor = (cx: number, cy: number) => L.doors.some(d => (ids.has(d.a) || ids.has(d.b)) && cx >= d.x && cx < d.x + d.w && cy >= d.y && cy < d.y + d.h);
+        const k = g.cable.findIndex((p, i) => { if (i < 2) return false; const [cx, cy] = grid.cellOf(p.x, p.z), j = grid.idx(cx, cy); return grid.cells[j] === FLOOR && !ids.has(grid.area[j]) && !inDoor(cx, cy); });
         expect(k, `seed ${seed} ${c.id}`).toBeGreaterThan(1);
         expect(ceilingCableIssues(L, cc, g, k), `seed ${seed} ${c.id}`).toEqual([]);
         // every interior sample hangs over complex floor, or crosses a wall at a doorway (over its lintel / beside its jamb)
@@ -189,6 +189,7 @@ describe('Reactor side-complex host: the host path end to end (sample carver)', 
             const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, [cx, cy] = grid.cellOf(x, z), j = grid.idx(cx, cy);
             const nearDoor = L.doors.some(d => (ids.has(d.a) || ids.has(d.b)) && cx >= d.x - CEILING_CABLE.besideReach - 1 && cx < d.x + d.w + CEILING_CABLE.besideReach + 1 && cy >= d.y - CEILING_CABLE.besideReach - 1 && cy < d.y + d.h + CEILING_CABLE.besideReach + 1);
             expect((grid.cells[j] === FLOOR && (ids.has(grid.area[j]) || grid.area[j] === front)) || nearDoor, `seed ${seed} ${c.id} segment ${i}`).toBe(true);
+
           }
         }
         // then out along the pit walls to every fan of its zone

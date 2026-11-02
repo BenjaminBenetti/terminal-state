@@ -386,9 +386,12 @@ function complexCable(layout: StationLayout, rc: ReactorCarve, c: ComplexCarve, 
   const ceiling = ceilingCableRoute(layout, {level: c.slot.level, baseY: c.slot.baseY, frontArea: c.slot.frontArea, areas: c.areas}, gen);
   if (ceiling) {
     gen.cableHangers = ceiling.hangers;
+    gen.cableSleeves = ceiling.sleeves.map(i => i + 1); // (+ the panel point prepended)
+    if (ceiling.bare) gen.cableFallback = 'bare';
     const fans = (layout.reactor?.fans ?? []).filter(f => f.zone === gen.zone);
     return [{...gen.panel}, ...ceiling.pts, ...cableOf(rc, gen, fans, {...ceiling.exit, wall: slotWall(rc, c.slot)})].map(p => ({x: r3(p.x), y: r3(p.y), z: r3(p.z)}));
   }
+  gen.cableFallback = 'legacy';
   const s = c.slot, g = layout.levels[s.level].grid, ids = new Set(c.areas), E = s.entrance;
   const inE = (x: number, y: number) => x >= E.x && y >= E.y && x < E.x + E.w && y < E.y + E.h;
   // task reactor-expansion-20261101 (lane BUNKER): only cells at the storey floor — the one cable height never runs low over a raised
