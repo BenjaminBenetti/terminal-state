@@ -57,7 +57,7 @@ export const JAM_TEXT = {
   promptJammed: (zone: number) => `Auxiliary generator JAMMED — ${zoneName(zone)} fan drive seized · <b>Hold [E]</b> try again`,
   promptStalling: (zone: number) => `Auxiliary generator cranking… (${zoneName(zone)} extraction fans)`,
   /** The toast when a start stalls (short: the jam is learnt here). */
-  stalled: (zone: number) => `The generator seizes: ${zoneName(zone)} fan drive JAMMED. The core floor stays gassed until the reactor is online.`,
+  stalled: (zone: number) => `The generator seizes: ${zoneName(zone)} fan drive JAMMED. Gas mask on — the core floor stays gassed until the reactor is online.`,
   /** HUD air line on a jammed zone's storey: toxic, nothing about the jam. */
   hud: 'toxic air · gas mask on',
   /** Pit board row (the zone's clearing bar is replaced while it stays gassed). */
