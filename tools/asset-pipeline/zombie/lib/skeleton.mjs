@@ -15,7 +15,16 @@ export const JOINTS = [
 
 const r3 = v => v.map(x => +x.toFixed(4));
 
-export function detectSkeleton(pos) {
+/**
+ * opts (task mall-lingerie, unclothed long-haired bodies; all default off = the original detector, unchanged):
+ *   crotch: 'midline' - inner thighs that touch merge the 2 cm slice clusters just above the knees, so the crotch is the
+ *     lowest height whose midline strip |x| < 8 mm holds surface in two consecutive slices (perineum), and leg sections of a
+ *     slice whose cluster spans both thighs are split at x = 0;
+ *   neckOverride: {neckBaseY, headPivotY, source} - long hair hanging round the neck widens every neck slice (the width-ratio
+ *     neck base lands on the shoulders), so these heights come from a hair-aware measurement (the T-pose analysis rig's
+ *     non-hair throat profile, lib/repose-skin.mjs); joint depth (z) stays measured here.
+ */
+export function detectSkeleton(pos, opts = {}) {
   const log = {};
   const n = pos.length / 3;
   let H = 0; for (let i = 0; i < n; i++) H = Math.max(H, pos[i * 3 + 1]);
@@ -29,7 +38,13 @@ export function detectSkeleton(pos) {
   const footIds = {L: [], R: []};
   for (let i = 0; i < n; i++) if (pos[i * 3 + 1] < 0.04) (pos[i * 3] > 0 ? footIds.L : footIds.R).push(i);
   const foot = {L: summarize(pos, footIds.L), R: summarize(pos, footIds.R)};
-  const legCluster = (y, side) => at(y).clusters.filter(c => Math.abs(c.bx) < 0.35 && (side === 'L' ? c.bx > 0 : c.bx < 0)).sort((a, b) => b.count - a.count)[0];
+  const legCluster = opts.crotch !== 'midline' ? (y, side) => at(y).clusters.filter(c => Math.abs(c.bx) < 0.35 && (side === 'L' ? c.bx > 0 : c.bx < 0)).sort((a, b) => b.count - a.count)[0] : (y, side) => {
+    const legs = at(y).clusters.filter(c => Math.abs(c.bx) < 0.35);
+    if (!legs.some(c => c.minX < 0 && c.maxX > 0)) return legs.filter(c => (side === 'L' ? c.bx > 0 : c.bx < 0)).sort((a, b) => b.count - a.count)[0];
+    // touching thighs: one cluster spans both legs -> its vertices split at x = 0 (|x| < 0.2 m: never a hand)
+    const ids = legs.flatMap(c => c.ids).filter(i => Math.abs(pos[i * 3]) < 0.2 && (side === 'L' ? pos[i * 3] > 0 : pos[i * 3] < 0));
+    return ids.length ? summarize(pos, ids) : undefined;
+  };
   const ext = (y, side) => { const c = legCluster(y, side); return c ? c.maxZ - c.minZ : NaN; };
   const shinDepth = median([0.15, 0.17, 0.19, 0.21, 0.23].map(y => (ext(y, 'L') + ext(y, 'R')) / 2));
   let ankleTransition = 0.12;
@@ -39,7 +54,10 @@ export function detectSkeleton(pos) {
 
   // --- crotch: lowest height where the two leg clusters merge ---
   let crotchY = null;
-  for (let y = 0.3; y < H * 0.7; y += step) {
+  if (opts.crotch === 'midline') {
+    const mid = y => { let c = 0; for (const i of buckets[Math.floor(y / step)] ?? []) if (Math.abs(pos[i * 3]) < 0.008) c++; return c; };
+    for (let y = 0.3; y < H * 0.7; y += step) if (mid(y) >= 3 && mid(y + step) >= 3) { crotchY = y; break; }
+  } else for (let y = 0.3; y < H * 0.7; y += step) {
     const legs = at(y).clusters.filter(c => Math.abs(c.bx) < 0.35);
     if (legs.length === 1 && legs[0].minX < 0 && legs[0].maxX > 0) { crotchY = y; break; }
   }
@@ -88,8 +106,12 @@ export function detectSkeleton(pos) {
   for (let y = armpitY + 0.1; y < H - 0.12; y += step) { const w = torsoW(y); if (w < neckW) { neckW = w; neckMinY = y; } }
   let neckBaseY = neckMinY;
   for (let y = neckMinY; y > armpitY; y -= step) { if (torsoW(y) > 1.9 * neckW) { neckBaseY = y + step; break; } }
-  const headPivotY = neckBaseY + 0.4 * (H - neckBaseY);
+  let headPivotY = neckBaseY + 0.4 * (H - neckBaseY);
   log.neck = {neckMinY: +neckMinY.toFixed(3), neckWidth: +neckW.toFixed(4), neckBaseY: +neckBaseY.toFixed(3), headTop: +H.toFixed(4), headPivotY: +headPivotY.toFixed(3), method: 'narrowest slice above shoulders; base where width >1.9x neck; head pivot at 40% base->top'};
+  if (opts.neckOverride) {
+    neckBaseY = opts.neckOverride.neckBaseY; headPivotY = opts.neckOverride.headPivotY;
+    log.neck = {...log.neck, override: {neckBaseY: +neckBaseY.toFixed(3), headPivotY: +headPivotY.toFixed(3), source: opts.neckOverride.source}};
+  }
 
   // --- shoulders: acromion = where the top-surface slope (neck -> lateral) steepens past -0.8;
   //     glenohumeral centre 5 cm below and 2 cm medial of it, centred in the shoulder slab depth.
