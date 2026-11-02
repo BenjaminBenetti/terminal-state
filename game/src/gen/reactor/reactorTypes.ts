@@ -425,10 +425,10 @@ export interface ReactorSurface {
   hole: {x: number; z: number; r: number; parapet: {r0: number; r1: number; top: number}; keepR: number};
   /**
    * The sealed exterior door in the rim pit wall: centre (floor y), facing (yaw, camera convention: forward = out into the pit), its
-   * outward normal (into the pit), clear width / height, the door cells' world rect, the rim deck area in front, the grid cells of the
-   * opening on layout.levels[door.level] (the runtime blocks them while sealed).
+   * outward normal (into the pit), clear width / height, the opening's world rect (its cells on layout.levels[door.level]: the runtime
+   * blocks them while sealed — gen/reactor/surface.ts surfaceDoorCells), the rim deck area in front.
    */
-  door: {level: number; x: number; y: number; z: number; yaw: number; nx: number; nz: number; w: number; h: number; rect: ReactorRect; front: number; cells: readonly number[]};
+  door: {level: number; x: number; y: number; z: number; yaw: number; nx: number; nz: number; w: number; h: number; rect: ReactorRect; front: number};
   /** The stair: traversal.stairs ids (bottom first), the LevelLink id rim -> surface, its foot (rim) and head (surface) points, footprint. */
   stairs: {flights: readonly number[]; link: number; bottom: ReactorPoint; top: ReactorPoint; rect: ReactorRect};
   /** The stair head house on the plaza (closed box over the stair's upper end): footprint, top (absolute y). */
