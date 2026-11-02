@@ -303,3 +303,15 @@ Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Cod
 - `assets/models/reactor-city-garage-skeleton.glb` — surface: burned-out multi-storey parking garage stripped to its concrete frame (Meshy task 01a19e3a-240a-707c-a7f4-58d6115f7e01)
 - `assets/models/reactor-city-storefront-row.glb` — surface: ruined two-storey corner row of shops (blank signs) (Meshy task 01a19e3a-4200-75cb-ac7f-6377d9f68177)
 <!-- END reactor-surface-kit-20261102 -->
+
+<!-- BEGIN reactor-ending-audio-20261102 (reactor-ending-build.mjs) -->
+## The Reactor: ending audio (the blue-beam ignition, the surface rain)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the surface-
+ending task's blue-beam / rain allowance (2 jobs of a 6-job cap). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+loop, levelling, MP3) built by `tools/audio-pipeline/reactor-ending-build.mjs` (provenance: `assets/derivatives/audio-reactor-ending.json`).
+Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/reactor-beam.mp3` — reactorBeam (Sound Lab job 20261102T214343-1373120250)
+- `assets/audio/surface-rain-loop.mp3` — bedRain (Sound Lab job 20261102T214347-51396616)
+<!-- END reactor-ending-audio-20261102 -->

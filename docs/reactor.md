@@ -12,7 +12,7 @@ outside Git.
 | Generator | `game/src/gen/reactor/{index,frame,carve,structure,validate}.ts` — `generateReactorLevel(ctx, {trackExt})` |
 | Registration | `levels/registry.ts` `LEVELS.reactor` (tier 3), `ai/spawnTables.ts` `REACTOR_SPAWN_PROFILE`, `items/lootTables.ts` `REACTOR_PROFILE`, `gen/maskLoot.ts` (1 mask, 3–5 filters), `gen/trackExt/config.ts` `TRACK_EXT_REACTOR`; title card, travel slot 3, `?level=reactor` / `?reactorSeed=CODE` |
 | Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts`; the jammed final generator `game/src/gen/reactor/gasJam.ts` |
-| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
+| Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; the HUD objective's strings + builder `game/src/world/reactor/objectiveText.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
 | Assets | `game/src/assets/reactorKit.generated.ts` (13 Meshy T2.5 models + 3 Codex surface sets; `tools/asset-pipeline/props/build-reactor-kit.mjs`), `game/src/audio/manifest.reactor.generated.ts` (9 Sound Lab clips; `tools/audio-pipeline/reactor-{plan.py,build.mjs}`), `game/src/audio/manifest.reactorStartup.generated.ts` (7 startup clips; `tools/audio-pipeline/reactor-startup-{plan.py,build.mjs}`) |
@@ -23,7 +23,7 @@ outside Git.
 - **Rim** (`levels[0]`): a real subway station. One platform of about 70 m beside a track bed (tunnels continue past the bed ends;
   at most one Beyond-the-Station annex). The platform does not open onto the pit: a small station area, a breached wall and a short
   rough tunnel lead to the railed rim gallery and the first view down to the core (see "Arrival approach and seeded flow"). The rim
-  control office holds the startup key and the pit status board.
+  control office holds the pit status board (the startup key lies on the core floor since lane OBJECTIVES, below).
 - **Four walkway tiers** (about 6 m apart): steel galleries on the pit walls, big landings for the generators, bridges across the
   pit to 1–2 free-standing lattice towers, and side rooms cut into the rock (maintenance stores, the switchgear room on tier 4).
 - **The core floor** (about −30 m): the pump hall, the control room overlooking the vessel, and round the vessel (lane CORE):
@@ -251,6 +251,41 @@ repository is entered.
   - walkable floor has ~10 m² of margin over the 700 m² test on the densest seeds (big cask halls);
   - a region smaller than ~72 × 58 cells plans less reliably (the host slot is 80 × 64).
 
+### Round 3 repairs: the deck under the vessel, the decon booths, the complexes' plates (task reactor-surface-ending-20261102, lane REPAIRS)
+User: "the floor around the reactor does not go under the reactor so there are gaps!", "heavy z-fighting on the nuclear waste area
+emergency wash stations", "some overlapping signs in the sub areas". Tests: `game/tests/reactor-repairs-r3.test.ts` (14 seeds).
+- **The deck under the vessel.**
+  - Cause: the vessel's footprint is blocked cells (centre within 6.6 m) whose own floor is the hidden raised column. The model's
+    plinth is round (6.4 m), and the grating was drawn per walkable cell, so it stopped in a cell-stepped saw-tooth short of the plinth.
+    The void showed in the notches: 23 % of the 6.4–7.2 m band had no floor.
+  - Fix: `ReactorArch.floorFills` → `world/builder.ts` draws the ring's grating at the deck height on every vessel cell. The runs merge
+    into the same `reactor-arch-grating` chunk meshes (no new mesh or draw), and the world-mapped pattern continues. The vessel's cells
+    and the deck cells never overlap, so there is no double floor. The pool, bridges and tower feet are other cells and are untouched.
+  - Collision is unchanged: the vessel stays the blocked, raised column. It is cell-quantised, so its squares reach up to 0.40 m past
+    the round plinth at some angles, and a body stops that much short of the plinth there.
+- **The decon shower booths** (`world/reactor/coplanar.ts`, applied in `wasteVisuals.ts` to that model only).
+  - Cause: the panels of `reactor-decon-shower.glb` are zero-thickness double sheets (the same panel once per facing, in one plane),
+    plus same-facing layers within 1 mm whose texels differ. The GLB's material is double-sided, so both faces drew at the same depth.
+    That is 16.6 m² of opposite-facing and 3.3 m² of same-facing coplanar overlap (within 1 mm) in 35.5 m².
+  - Fix: the booth is drawn single-sided (the shell is closed and outward-wound), with the delivered maps.
+    - The 68 faces that a same-facing face hides completely are dropped.
+    - The 28 partly hidden near-coincident faces are set back 1.5 mm. These are real geometry offsets, not a depth bias.
+  - Result: exact same-facing overlap fell from 1.69 to 0.005 m², and overlap within the 0.3 mm depth band from 2.2 to 0.06 m². The
+    clean-up runs once per loaded model (~0.1–0.2 s in Node).
+  - The procedural stand-in's boxes no longer share face planes.
+  - Not changed: the blast door, switchgear and control console show the same double-sheet pattern (measured). They were not reported.
+- **The complexes' plates** (`gen/reactor/complex/plateClear.ts`, run at the end of host.ts `dressComplexes`, before the cables are
+  routed round the plates).
+  - Cause: four placers stencilled the same walls without seeing each other: the station dresser's stock plates, then each complex's
+    own. They also ignored the blast-door frame, the bunker's ducts, the waste door frames, the fans and wall props. That made 147
+    overlaps on 16 seeds.
+  - Fix: one deterministic clearance pass. The complex's own plates keep priority. An untouched stock door plate on one of them, or a
+    plate that a kept plate of the room already says, is merged into it (the more specific wording wins). Any other plate moves: along
+    its wall, round a corner onto a return wall, or narrower, staying wall-backed and legible.
+  - Over 14 seeds: 770 plates, 134 moved (13 round a corner, 5 narrower), 29 merged and 1 dropped (a stock 'AUTHORIZED PERSONNEL
+    ONLY'). The result is 0 overlaps.
+  - Limit: plates of later passes outside the complexes are not re-checked.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.
@@ -289,12 +324,12 @@ repository is entered.
   - It never starts and its zone is never cleared by a generator: only the reactor online (the win's `clearAll`) clears it, never a
     fuse, the breaker, the valve, the pump or the key. The upper two generators work as before.
   - `reactor.state.jam` keeps the generator and its stalls. A pre-jam record with it started keeps its zone's saved fraction.
-  - **Where the player learns it, before committing:**
-    - the rim pit board (core row "JAMMED · MASK");
-    - the switchgear board once power is on;
-    - the "Next:" step and the HUD objective;
-    - the generator's prompt and the HUD air line ("toxic air · fans jammed — gas mask on");
-    - the floor maps: a ⊘ jammed mark (not an open X) and a red banner on the core storey.
+  - **Where the player learns it** (trimmed by lane OBJECTIVES: no HUD jam paragraph, the jam is learnt at the generator):
+    - the generator itself: its flashing fault lamp, its prompt, the stall and a short toast;
+    - terse board marks: the rim pit board (core row "JAMMED · MASK"), the switchgear board once power is on ("core floor next: gas
+      mask on"), the pit board's "Next:" step (" · gas mask");
+    - the HUD air line says only "toxic air · gas mask on";
+    - the floor maps: a ⊘ jammed mark (not an open X) and a red "TOXIC AIR — GAS MASK REQUIRED" banner on the core storey.
   - **Supplies:** the guaranteed mask and filters (`MASK_LOOT`: 1 mask and 3–5 filters) are placed only on storeys above the jammed
     zone (`placeMaskLoot` → `placeGear` `areaOk`). That air is breathable once the working generators run (checked on 12 seeds).
     - The worst roll gives 503 s of filter time.
@@ -304,7 +339,7 @@ repository is entered.
   "zero damage down to the core floor" walk now ends at the final generator, with the jam asserted.
 
 ## The restart (credible industrial work, no puzzle)
-1. **Startup key**: in the rim control office. It is picked up on the way down.
+1. **Startup key**: in the core floor's control room, the key switch's own room (lane OBJECTIVES; it was the rim office's).
 2. **Control power**:
    - Seat two fuse cartridges in the switchgear on tier 4. Three are placed, in stores on tier 3, tier 4 and the core floor, never
      inside the switchgear room.
@@ -315,6 +350,36 @@ repository is entered.
 
 The parts are finite: placed once, consumed once, never in a loot table. Every step persists, so a retreat keeps it. The status
 boards (rim pit board, switchgear, pump, control monitor) and the HUD line show each task's state.
+
+### Concise objective, the key on the core floor (task reactor-surface-ending-20261102, lane OBJECTIVES)
+User: "the objective text is to wordy, saying "core floor generator is jammed" and all that … The player will know its jammed when they
+try to start it." and "the key for reactor start should be on the bottom floor not the top floor." Both are intent changes.
+- **The HUD objective** (`world/reactor/objectiveText.ts`, every HUD objective string and the pure builder; `restart.ts` renders it):
+  - one line, "Restart the reactor — ✓ Power · ▸ Coolant · Key · Rods": the tasks in route order, done ones ticked, the current one
+    marked; then the storey;
+  - after the rods, "Reactor restarted — …" while the win runs, then "Reactor running · …";
+  - no jam, mask or hazard text. Lane GAS's red paragraph (`JAM_TEXT.objective`) is gone.
+  - The jam is learnt at the generator: the stall, the flashing fault lamp, its prompt and a short toast ("Generator seized: Zone 3
+    fans JAMMED — keep the gas mask on: …").
+  - The mechanics are unchanged: the bottom stays gassed and the mask is needed until online.
+  - Seam for later stages (lane ENDING): `ReactorRestart.objectiveStage` (a provider read at 4 Hz). After the restart its line replaces
+    the post-restart line; its strings go in `OBJECTIVE_TEXT`.
+- **The startup key** lies in the core floor's control room (`gen/reactor/index.ts` placeComponents; `validate.ts` checks it):
+  - on open floor beside a wall or prop, behind the console (the operator side, past its stand row);
+  - at least 1.2 m from the key switch / rod control stand points, out of the doorway lane.
+  - No deadlock: nothing gates the control room. The item id (`reactor_key`), its component record and the run record are unchanged.
+  - The "Next:" step fetches it after the coolant ("find the startup key — Control room · Core floor · gas mask"). A refusal at the
+    key switch says "it lies in this control room".
+  - The floor-map X follows the live pickup, so it is on the core storey. The pit board lists POWER / COOLANT / KEY / RODS in route
+    order. The rim office keeps the pit board (the "RIM CONTROL OFFICE" plate still points there).
+- Tests: `game/tests/reactor-objectives-key.test.ts`:
+  - the objective is short and hazard-free in every state, the stage seam works, the jam feedback is short;
+  - on 12 seeds the key is in the control room: reachable from every way down and back, and the map X is where it lies;
+  - the masked route with the key fetch (stairs → valve → pump → key → switch → rods → online) is covered twice over by the worst
+    filter roll;
+  - persistence.
+  - The superseded assertions are updated with notes: `reactor-gas-jam` (HUD objective, budget chain), `reactor-air-runtime`, `reactor-gen-layout`,
+    `reactor-restart-logic`, `reactor-x-arrival`.
 
 **The reactor comes to life step by step** (lane CORE, `world/reactor/coreStages.ts`). The restart runtime sends the persisted record
 through `ReactorVisuals.setRestartState`: once, instantly, on every build or reload, and live after every completed control. So a
@@ -495,6 +560,33 @@ Code: `world/reactor/startup.ts` (runtime, installed right after the restart), `
   QC.md`); the surge / ONLINE / bed takes are sub-heavy, so on small speakers the existing clips carry the mid-range. No browser or
   WebGPU check was run in this lane.
 - Tests: `game/tests/reactor-startup.test.ts`.
+
+### The beam ignition and the surface rain (task reactor-surface-ending-20261102, lane AUDIO)
+User: "the reactor needs to have a noise when the blue beam shoots out the top!" and "It should be raining!".
+- **Clips**: 2 Sound Lab jobs of the task's 6 (`tools/audio-pipeline/reactor-ending-{plan.py,build.mjs}`; provenance
+  `derivatives/audio-reactor-ending.json`; private QC `reference/tasks/reactor-surface-ending-20261102-213051/audio/raw/QC.md`).
+  `reactor-beam.mp3` is a whoosh swell, a broadband crack and a decaying column hum (3.1 s). `surface-rain-loop.mp3` is a 5.2 s
+  loop. Together they are 68,753 B (64 kbps mono).
+- **The ignition** is win cue `beam` (`startupPlan.ts beamCueAt`). It starts `BEAM_IGNITION_CRACK_S` (0.421 s, measured by the
+  builder) before ONLINE, so its swell leads in and its crack lands as the beam fires (within one frame on the real runtime).
+  - It plays once, at the point of the beam column nearest the listener (heard from the rim), high-passed at 120 Hz, at priority 2.
+  - It follows the startup set's no-replay rules: a restored world, a QA jump or a revisit never repeats it.
+  - The ONLINE impact and its deep thump drop to 0.7 / 0.6 to make room (`STARTUP_MIX`). The builder's worst-case sum at ONLINE
+    went from +1.0 dBFS (before the beam) to −0.68 dBFS at the compressor input, with the same loudness (±0.5 LU).
+- **The rain** is `world/reactor/audioRain.ts` (driven by the startup runtime) into `Sfx.rainBed`: one looping channel on the
+  ambient bus, created on first use.
+  - It plays only after the win: the ONLINE sky's clearing gates it.
+  - By default it follows lane ENDING's `layout.reactor.surface`:
+    - the plaza: full and open;
+    - the head house: muffled, opening up towards the exit;
+    - the stair: muffled, fading in as you climb;
+    - the lower passage: faint;
+    - anywhere else: silent.
+  - The hook `setRainExposure(host, eye => ({level, muffle}) | null)` overrides the rule. A layout without a surface falls back to
+    the roof line.
+- **Limits**: never auditioned (structural QC only). The ignition is low-mid heavy outside its crack. No browser check was run in
+  this lane. There is no separate beam hum loop: the existing core hum and bed carry the running beam.
+- Tests: `game/tests/reactor-ending-audio.test.ts`.
 
 ### The surface outside: the ruined city, rain, clear air (task reactor-surface-ending-20261102, lane SURFACE)
 User: "The player will see a city up there, with all the destroyed buildings … It should be raining! And the fog is now cleared! The

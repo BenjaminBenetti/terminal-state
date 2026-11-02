@@ -45,7 +45,8 @@ export function reactorInfoFixture(): ReactorInfo {
       {id: 'control', level: 3, area: 4, rect: {x0: 10, z0: 30, x1: 18, z1: 36}, controls: [ctl('keyswitch', 12, -22.9, 30, 3), ctl('rods', 15, -22.8, 30, 3)]},
     ],
     components: [
-      {item: 'reactor_key', pickup: 0, level: 0, area: 1, where: 'rim control office'},
+      // task reactor-surface-ending-20261102 (lane OBJECTIVES): the key lies in the core floor's control room (was the rim office)
+      {item: 'reactor_key', pickup: 0, level: 3, area: 4, where: 'Control room · Core floor'},
       {item: 'fuse_cartridge', pickup: 1, level: 2, area: 5, where: 'Tier 2 stores'},
       {item: 'fuse_cartridge', pickup: 2, level: 2, area: 5, where: 'Tier 2 stores'},
     ],

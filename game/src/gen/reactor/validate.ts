@@ -5,7 +5,8 @@
 //   only: the maintenance ladders are not required); every site control's stand point, every component and every generator's use point.
 // - ROUTES: removing any ONE stair run (route 1 or route 2) leaves every storey reachable: >= 2 independent routes per storey pair.
 // - Gas: generator k powering zone k stands on the rim / in a zone above k (generator 0 may stand on tier 1, the thin top haze).
-// - Components: one key in the rim office, three fuses (never inside the switchgear room); everything on a flat walkable floor cell.
+// - Components: one key in the core floor's control room (task reactor-surface-ending-20261102, lane OBJECTIVES; was the rim office),
+//   three fuses (never inside the switchgear room); everything on a flat walkable floor cell.
 // - Railings on every drop (Levels.unrailedDrops empty); the vessel solid (raised + blocked) on the core floor; the start clear.
 // - Shared storey rules (levelIssues: slabs / headroom / flights / link landings / railings on apertures / placements), traversal rules,
 //   doorway lanes, Track2 extensions (extensionIssues; the generator drops invalid extensions — never a core retry).
@@ -100,8 +101,9 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   // --- Components -----------------------------------------------------------------------------------------------------------
   const keys = info.components.filter(c => c.item === 'reactor_key'), fuses = info.components.filter(c => c.item === 'fuse_cartridge');
   if (keys.length !== 1 || fuses.length !== 3) issues.push(`components: ${keys.length} keys, ${fuses.length} fuses`);
-  const office = info.sites.find(s => s.id === 'rimOffice'), sw = info.sites.find(s => s.id === 'switchgear');
-  if (keys[0] && office && keys[0].area !== office.area) issues.push('the key is not in the rim office');
+  // task reactor-surface-ending-20261102 (lane OBJECTIVES): the key lies in the core floor's control room (the key switch's room)
+  const ctrl = info.sites.find(s => s.id === 'control'), sw = info.sites.find(s => s.id === 'switchgear');
+  if (keys[0] && ctrl && (keys[0].area !== ctrl.area || keys[0].level !== ctrl.level)) issues.push('the key is not in the control room');
   for (const f of fuses) {
     const p = layout.pickups[f.pickup];
     if (sw && p && (f.area === sw.area || (p.x > sw.rect.x0 && p.x < sw.rect.x1 && p.z > sw.rect.z0 && p.z < sw.rect.z1 && (p.level ?? 0) === sw.level))) issues.push('a fuse inside the switchgear room');

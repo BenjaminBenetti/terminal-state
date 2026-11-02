@@ -82,7 +82,9 @@ describe('reactor restart rules', () => {
     expect(controlPrompt(s, 'valve', inv, 0.5)).toContain('50 %');
     expect(controlPrompt(s, 'rods', inv)).toMatch(/^Control rods · needs/);
     expect(blocker(s, 'valve', inv)).toBeNull();
-    expect(taskLine(s).html).toBe('<span class="rt ready">Key</span> · <span class="rt ready">Power</span> · <span class="rt blocked">Coolant</span> · <span class="rt blocked">Rods</span>');
+    // task reactor-surface-ending-20261102 (lane OBJECTIVES, intent change): ROUTE order (the key lies on the core floor now), the
+    // current task marked (was "Key · Power · Coolant · Rods", unmarked)
+    expect(taskLine(s).html).toBe('<span class="rt ready now">▸ Power</span> · <span class="rt blocked">Coolant</span> · <span class="rt ready">Key</span> · <span class="rt blocked">Rods</span>');
     s.keyInserted = true;
     expect(taskLine(s).html).toContain('<span class="rt done">✓ Key</span>');
   });
@@ -90,12 +92,14 @@ describe('reactor restart rules', () => {
   it('the next-step line walks the crew order and names the sites / where the parts are', () => {
     const info = reactorInfoFixture();
     const s = emptyReactorState(2, 2);
-    expect(nextStepText(s, info, withParts(0, 0))).toBe('Next: find the startup key — rim control office');
+    // (lane OBJECTIVES, intent change) the key lies in the core floor's control room: fetched after the coolant, not first
+    expect(nextStepText(s, info, withParts(0, 0))).toBe('Next: find spare fuse cartridges — Tier 2 stores');
     expect(nextStepText(s, info, withParts(0, 1))).toBe('Next: find spare fuse cartridges — Tier 2 stores');
-    expect(nextStepText(s, info, withParts(2, 1))).toBe('Next: replace the burnt fuses — switchgear (Tier 2)');
+    expect(nextStepText(s, info, withParts(2, 0))).toBe('Next: replace the burnt fuses — switchgear (Tier 2)');
     s.fuses = [true, true];
     expect(nextStepText(s, info, withParts(0, 1))).toBe('Next: close the main breaker — switchgear (Tier 2)');
     s.breaker = true; s.valve = true; s.pump = true;
+    expect(nextStepText(s, info, withParts(0, 0))).toBe('Next: find the startup key — Control room · Core floor');
     expect(nextStepText(s, info, withParts(0, 1))).toBe('Next: insert the startup key — control room (Core floor)');
     s.keyInserted = true;
     expect(nextStepText(s, info, withParts(0, 0))).toBe('Next: withdraw the control rods — control room (Core floor)');

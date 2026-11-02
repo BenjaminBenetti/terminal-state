@@ -26,7 +26,8 @@ import {STARTUP, beaconPowerAt, beamAt, skyClearAt, stageSnap} from './startupPl
 import {StartupAudio, type StartupSfx, type StartupSites} from './startupAudio';
 import {planBeacons, type BeaconSpot} from './startupBeaconPlan';
 import {BEACON_LIGHTS, BeaconLights, BeaconVisuals} from './startupBeacons';
-import {BeamLights, OnlineSky} from './startupSky';
+import {BeamLights, OnlineSky, beamSpan} from './startupSky';
+import {RainAudio, type RainSfx} from './audioRain'; // task reactor-surface-ending-20261102 (lane AUDIO): the surface rain bed
 
 interface P3 { x: number; y: number; z: number }
 
@@ -59,6 +60,8 @@ export class ReactorStartup {
   readonly beaconLights = new BeaconLights();
   readonly beamLights = new BeamLights();
   readonly audio: StartupAudio;
+  /** Lane AUDIO (surface ending): the rain bed — on the surface plaza after the win, muffled in the stair / head house (audioRain.ts). */
+  readonly rain: RainAudio;
   readonly tune = {beaconLight: 1, beamLight: 1};
   /** The host's restart runtime / built Reactor air (tests replace them). */
   findRestart: () => ReactorRestart | undefined = () => reactorRestartOf(this.host);
@@ -71,6 +74,8 @@ export class ReactorStartup {
   private rank = new Map<number, number>();
   private byRank: BeaconSpot[][] = [];
   private sites: StartupSites | null = null;
+  /** The built layout's storeys (lane AUDIO: the surface rain rule reads their area grids). */
+  private levels: StationLayout['levels'] = [];
   private scattered = false;
   private curtain0 = MALL_SKY.curtain as number;
   private readonly eye = new THREE.Vector3();
@@ -78,6 +83,7 @@ export class ReactorStartup {
 
   constructor(readonly host: StartupHost) {
     this.audio = new StartupAudio(() => (host.sfx ?? null) as StartupSfx | null);
+    this.rain = new RainAudio(host, () => (host.sfx ?? null) as RainSfx | null);
   }
 
   install(): this {
@@ -101,6 +107,7 @@ export class ReactorStartup {
     if (!info) return;
     const h = this.host;
     this.info = info;
+    this.levels = layout.levels ?? [];
     this.counts.builds++;
     this.plan = planWin(info.tiers, info.fans);
     this.rank = new Map(this.plan.tiers.map((lv, r) => [lv, r]));
@@ -129,6 +136,7 @@ export class ReactorStartup {
 
   teardown(): void {
     this.audio.teardown();
+    this.rain.stop();
     if (this.scattered) { this.host.atmosphere?.removeScatterLight?.(this.beamLights.mid); this.scattered = false; }
     this.beaconLights.off();
     this.beamLights.set(0);
@@ -140,6 +148,7 @@ export class ReactorStartup {
     this.beacons = null;
     this.sky = null;
     this.info = null;
+    this.levels = [];
     this.plan = null;
     this.sites = null;
     this.byRank = [];
@@ -166,6 +175,7 @@ export class ReactorStartup {
     const core = {x: info.core.x, y: (info.core.y0 + info.core.y1) / 2, z: info.core.z};
     const blue = coreHeroOf(this.host.world?.reactorArch?.plan ?? null)?.lights.blue[0];
     const crdm = blue ? {x: blue.x, y: blue.y - 1.6, z: blue.z} : {x: info.core.x, y: info.core.y1 + 1, z: info.core.z};
+    const span = beamSpan(info); // lane AUDIO: the beam column (base on the vessel .. its head in the sky)
     const ctl = new Map<string, P3>();
     const near = (list: readonly BeaconSpot[], L: P3, max: number): P3 | null => {
       let best: P3 | null = null, bd = max;
@@ -174,6 +184,7 @@ export class ReactorStartup {
     };
     return {
       core, crdm,
+      beam: L => ({x: span.x, y: Math.min(span.y1, Math.max(span.y0, L.y)), z: span.z}),
       control: id => {
         let p = ctl.get(id);
         if (!p) {
@@ -220,6 +231,7 @@ export class ReactorStartup {
       this.audio.frame(dt, stageSnap(R.state), hold, winT, this.sites, L);
     }
     this.apply(dt, winT);
+    this.rain.frame(dt, L, this.shown.clear, this.info, this.levels); // lane AUDIO: after the win only (the sky's clearing gates it)
   }
 
   /** The visible state at win time `winT` (null: not restarted): beam + its lights, the sky / outdoor gas, the beacons + their lights. */
@@ -255,7 +267,7 @@ export class ReactorStartup {
       beaconLights: this.beaconLights.lights.map((l, i) => ({beacon: this.beaconLights.assigned[i], intensity: +l.intensity.toFixed(1)})),
       sky: sky?.stats() ?? null, beamLights: this.beamLights.all.map(l => ({name: l.name, intensity: +l.intensity.toFixed(1), at: [+l.position.x.toFixed(2), +l.position.y.toFixed(2), +l.position.z.toFixed(2)]})),
       scatter: this.scattered, outdoor: this.findAir()?.outdoor ?? null,
-      audio: {...this.audio.counts, loops: this.audio.loops}, counts: {...this.counts}, tune: {...this.tune}, lightsMax: BEACON_LIGHTS.count + 2,
+      audio: {...this.audio.counts, loops: this.audio.loops}, rain: {...this.rain.shown}, counts: {...this.counts}, tune: {...this.tune}, lightsMax: BEACON_LIGHTS.count + 2,
     };
   }
 
