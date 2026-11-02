@@ -250,6 +250,24 @@ function wallFrames(rc: ReactorCarve): WallFrame[] {
   ];
 }
 
+/**
+ * Task reactor-expansion-20261101 (lane HOST): no open cell (any storey) in the two cell rows right behind the pit wall row across the
+ * duct (u ± 3 cells) whose band overlaps the duct's height (hub y ± 1.5 m).
+ */
+function fanBackClear(layout: StationLayout, w: WallFrame, u: number, y: number): boolean {
+  for (let du = -3; du <= 3; du++) for (const v of [-2, -3]) {
+    const [x, z] = w.cell(u + du, v);
+    for (const L of layout.levels) {
+      const g = L.grid;
+      if (!g.inBounds(x, z)) continue;
+      const i = g.idx(x, z);
+      if (g.cells[i] === SOLID) continue;
+      if (g.floorOf(i) < y + 1.5 && g.ceil[i] > y - 1.5) return false;
+    }
+  }
+  return true;
+}
+
 /** Wall extraction fans of every zone: 2-4 per zone on the pit walls between its storeys, clear of decks / stairs where possible. */
 export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): ReactorFan[] {
   const fans: ReactorFan[] = [];
@@ -278,6 +296,10 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
           const hx = r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), hz = r3((z + 0.5) * CELL - w.nz * 0.5 * CELL);
           const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
           if (up === undefined) continue;
+          // task reactor-expansion-20261101 (lane HOST): the duct runs 0.7 m back through the 0.5 m pit wall (archKit planFan, radius
+          // 1.3 m) — the first cells behind the wall stay rock at the duct's height on every storey (a side complex / room cut in right
+          // behind the wall would show it)
+          if (!fanBackClear(layout, w, u, rc.bases[lv] + up)) continue;
           cands.push({lv, w, u, x: hx, z: hz, y: r3(rc.bases[lv] + up)});
         }
       }
