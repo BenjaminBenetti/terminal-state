@@ -54,7 +54,7 @@ import {CELL, STEP_UP} from '../gen/grid';
 import type {WarmupRegistry} from '../render/warmup';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec, type TrainDoorSpec} from './playerTrainSpec';
 import {RAIL_TOP_ABOVE_BED, playerTrainPlacement, trainToWorld, worldToTrain, type TrainPlacement} from '../gen/playerTrain';
-import {TRAIN_VIEW, TrainMaterials, buildTrainView, jambOut, leafSpan, outerHalf, partitionsOf, rectMinusHoles, viewCost, windowsOf, type TrainModels, type TrainTextures, type TrainView} from './playerTrainView';
+import {TRAIN_GLASS, TRAIN_VIEW, TrainMaterials, buildTrainView, glassSheet, jambOut, leafSpan, noseCorners, nosePane, outerHalf, partitionsOf, rectMinusHoles, viewCost, windowsOf, type TrainGlassData, type TrainModels, type TrainTextures, type TrainView} from './playerTrainView';
 import {rayBox, towerCue, type P3} from './towerShared';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PLAYER_TRAIN_MODELS} from '../assets/playerTrain.generated';
@@ -80,7 +80,8 @@ export function playerTrainModelKeys(layout: StationLayout): string[] {
 /** The loaded models from the prop library (missing = the procedural fallback for that part). */
 export function trainModelsFrom(lib: {get(key: string): GLTF | undefined}, spec: PlayerTrainSpec = PLAYER_TRAIN_SPEC): TrainModels {
   return {shell: lib.get(spec.models.shell.key) ?? null, door: lib.get(spec.models.doorLeaf.key) ?? null, console: lib.get(spec.models.console.key) ?? null,
-    lockbox: lib.get(LOCKBOX_MODEL_KEY) ?? null}; // (task train-lockbox: null until lane ASSETS' cooked model is in the catalogue)
+    lockbox: lib.get(LOCKBOX_MODEL_KEY) ?? null, // (task train-lockbox: null until lane ASSETS' cooked model is in the catalogue)
+    glass: TRAIN_GLASS ? lib.get(TRAIN_GLASS.key) ?? null : null}; // (task train-window-fit: the conformal glass + reveals)
 }
 
 let textureCache: Promise<TrainTextures> | null = null;
@@ -234,7 +235,7 @@ function spans(lo: number, hi: number, cuts: [number, number][]): [number, numbe
  * The car's colliders at `p`. `levels` (without the car's volume) finds the platform gap beside each door; `consoleRect` = the
  * desk's local footprint + height when its model is placed. Pure: nothing is registered here.
  */
-export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | null, opt: {bedY?: number; area?: number; consoleRect?: {x0: number; x1: number; z0: number; z1: number; top: number} | null} = {}): TrainColliders {
+export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | null, opt: {bedY?: number; area?: number; consoleRect?: {x0: number; x1: number; z0: number; z1: number; top: number} | null; glass?: TrainGlassData | null} = {}): TrainColliders {
   const hw = spec.interior.halfWidth, out = outerHalf(spec), L2 = spec.length / 2;
   const floorY = p.railTopY + spec.floorY, ceilY = p.railTopY + spec.ceilingY, topY = p.railTopY + spec.roofY;
   const bedY = opt.bedY ?? p.railTopY - RAIL_TOP_ABOVE_BED;
@@ -250,7 +251,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
   const statics: PropPlacement[] = [];
   // hitscan / ragdoll statics: the same boxes with the cut windows open, a thin glass box in each (task train-shell-followup)
   const win = windowsOf(spec), shoot: PropPlacement[] = [], glass: PropPlacement[] = [];
-  const G = TRAIN_GLASS_HALF, inset = TRAIN_VIEW.glassInset;
+  const G = TRAIN_GLASS_HALF, inset = TRAIN_VIEW.glassInset, glassData = opt.glass === undefined ? TRAIN_GLASS : opt.glass;
+  /** A sheet slab (train-local min / max) as a world box. */
+  const slab = (b: {min: readonly number[]; max: readonly number[]}) => propBox(p, area, b.min[0], b.max[0], b.min[2], b.max[2], p.railTopY + b.min[1], b.max[1] - b.min[1]);
   for (const side of [-1, 1] as const) {
     const cuts = spec.doors.filter(d => d.side === side).map(d => [d.x - d.width / 2, d.x + d.width / 2] as [number, number]);
     // (the nose corner windows lie inside the end boxes beyond the bulkheads: the end box keeps them; their end panes have glass boxes)
@@ -261,6 +264,9 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
       for (const [x0, x1, y0, y1] of rectMinusHoles(a, b, bedY, topY, holes)) shoot.push(propBox(p, area, x0, x1, side * hw, side * out, y0, y1 - y0));
     }
     for (const w of sideWins) {
+      // task train-window-fit: a window with a conformal sheet stops shots on the sheet's own slabs (they follow its curve)
+      const q = glassSheet('side', win.side.indexOf(w), glassData);
+      if (q && q.boxes.length) { for (const b of q.boxes) glass.push(slab(b)); continue; }
       const zg = side * (w.skinZ - inset);
       glass.push(propBox(p, area, w.x0, w.x1, zg - G, zg + G, p.railTopY + w.y0, w.y1 - w.y0));
     }
@@ -269,11 +275,30 @@ export function trainColliders(spec: PlayerTrainSpec, p: Pose, levels: Levels | 
     const xa = end > 0 ? spec.interior.x1 : -L2, xb = end > 0 ? L2 : spec.interior.x0; // front end (behind the cab's front wall) / rear end
     statics.push(propBox(p, area, xa, xb, -out, out, bedY, H));
     const holes = win.end.filter(w => w.end === end).map(w => [w.z0, w.z1, p.railTopY + w.y0, p.railTopY + w.y1] as [number, number, number, number]);
-    for (const [z0, z1, y0, y1] of rectMinusHoles(-out, out, bedY, topY, holes)) shoot.push(propBox(p, area, xa, xb, z0, z1, y0, y1 - y0));
-    for (const w of win.end.filter(q => q.end === end)) {
+    // task train-window-fit: the nose corners open the end box too (x-limited), so a shot at a corner from the side meets its glass
+    const noses = win.side.filter(w => w.zone === 'nose' && Math.sign(w.x0 + w.x1) === end);
+    const xs = [...new Set([xa, xb, ...noses.flatMap(n => [Math.max(xa, Math.min(xb, n.x0)), Math.max(xa, Math.min(xb, n.x1))])])].sort((u, v) => u - v);
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const x0 = xs[i], x1 = xs[i + 1], mid = (x0 + x1) / 2;
+      if (x1 - x0 < 1e-4) continue;
+      const nh = noses.filter(n => n.x0 < mid && n.x1 > mid).map(n => {
+        const [za, zb] = n.side < 0 ? [-out, -n.skinZ] : [n.skinZ, out];
+        return [za, zb, p.railTopY + n.y0, p.railTopY + n.y1] as [number, number, number, number];
+      });
+      for (const [z0, z1, y0, y1] of rectMinusHoles(-out, out, bedY, topY, [...holes, ...nh])) shoot.push(propBox(p, area, x0, x1, z0, z1, y0, y1 - y0));
+    }
+    win.end.forEach((w, wi) => {
+      if (w.end !== end) return;
+      const q = glassSheet('end', wi, glassData);
+      if (q && q.boxes.length) { for (const b of q.boxes) glass.push(slab(b)); return; }
       const xg = end * (w.skinX - inset);
       glass.push(propBox(p, area, xg - G, xg + G, w.z0, w.z1, p.railTopY + w.y0, w.y1 - w.y0));
-    }
+      // the flat corner: its side pane (behind the end pane's plane) stops a shot from the side
+      for (const n of noseCorners(spec, w)) {
+        const np = nosePane(w, n), z = n.side * n.skinZ;
+        glass.push(propBox(p, area, np.x0, np.x1, z - G, z + G, p.railTopY + np.y0, np.y1 - np.y0));
+      }
+    });
   }
   const wallsAndEnds = statics.length;
   // the partitions with their open doorways: the cab's and (task train-shell-followup) the rear compartment's
