@@ -22,7 +22,8 @@ import {bunkerModelOrigin, bunkerModelPlacements} from '../src/world/reactor/bun
 import {planStoreys} from '../src/world/reactor/mapBoardPlan';
 import type {StationLayout} from '../src/gen/stationTypes';
 
-const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+// (+ 21, 23, 218558: lane ARRIVAL's seeded entrances once gave their narrow dormitories only 2-3 bunks — every dormitory sleeps >= 4)
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 21, 23, 218558];
 const cache = new Map<number, StationLayout>();
 const ms: number[] = [];
 const gen = (seed: number) => {
@@ -77,6 +78,11 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
       const L = gen(seed), tag = `seed ${seed}`;
       const inRoom = (key: string, kind: string) => { const r = room(L, key); return r ? L.props.filter(p => p.area === r.area && p.kind === kind).length : -1; };
       expect(inRoom('dorm', 'bunkBed'), tag).toBeGreaterThanOrEqual(4);
+      // every dormitory (Dormitory B too) sleeps >= 4, whatever its seeded shape / doors
+      for (const r of bunkerOf(L).rooms.filter(q => L.areas[q.area].purpose === 'reactor-bunker-dormitory')) {
+        const a = L.areas[r.area];
+        expect(L.props.filter(p => p.area === r.area && p.kind === 'bunkBed').length, `${tag} ${r.key} ${a.w}x${a.h}`).toBeGreaterThanOrEqual(4);
+      }
       expect(inRoom('dorm', 'footlocker'), tag).toBeGreaterThanOrEqual(2);
       expect(inRoom('dorm', 'staffLockers'), tag).toBeGreaterThanOrEqual(1);
       expect(inRoom('armoury', 'gunLocker'), tag).toBeGreaterThanOrEqual(2);

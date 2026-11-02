@@ -118,7 +118,10 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   - rooms grow into the free rock beside them, then seeded loop doors join corridors / suites that share a wall.
 - **Guarantees**: the generator hall always keeps **two independent ways in** from the muster corridor. Every door is on a shared
   one-cell wall. The switch room opens only onto the hall. Dormitories never open onto plant rooms. A failed attempt retries on the
-  next rng fork (10 at most; first try ~75 %); plan + carve take ~8 ms.
+  next rng fork (10 at most; first try ~75 %); plan + carve take ~8 ms. Rooms are sized for their hero pieces (dormitories deep
+  enough for two footlocker rows, radio room / filtration plant with two doors at most, the hall with at most three side rooms),
+  and the dress scans every wall spot before an island / compact fallback: every dormitory sleeps >= 4, and the console, filter
+  unit and day tanks always fit (60-seed real-level sweep).
 - **Measured** (`tests/reactor-x-bunker-carve.test.ts`, 16 seeds on one slot): 16 distinct room graphs (WL hashes) and 16 distinct
   floor plans up to translation. Both muster kinds, both decon exits and both guard links occur, with 3+ corridor counts / cycle
   ranks / dead-end counts, 4+ hall positions, both hall axes and 8+ optional-room sets. The real level

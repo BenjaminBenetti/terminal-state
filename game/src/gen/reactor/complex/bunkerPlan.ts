@@ -138,6 +138,11 @@ interface Spec extends Prog {
   loopy?: number;
   /** Door cap (default 3; the big halls take more: side rooms + two ways in). */
   maxDoors?: number;
+  /**
+   * Child-room cap (task reactor-playtest-round2-20261102: a hall ringed by side rooms kept no wall for its day tanks, nor a door slot
+   * for its second way in).
+   */
+  kids?: number;
 }
 
 const C = BUNKER.clear;
@@ -147,21 +152,21 @@ const room = (key: string, label: string, type: RoomType, purpose: string, o: Om
 /** The rooms every shelter has (placed in this order onto the corridor skeleton). */
 const REQUIRED: readonly Spec[] = [
   room('hall', 'Generator hall', 'utility', 'generator-room', {role: 'generator', clear: C.hall, size: [26, 40, 16, 22], parents: {corr: 1, hub: 0.15},
-    wing: 'plant', req: true, door: 'junction', dw: [5, 5], deep: 0.9, loopy: 0.8, cap: [44, 24], maxDoors: 6}),
+    wing: 'plant', req: true, door: 'junction', dw: [5, 5], deep: 0.9, loopy: 0.8, cap: [44, 24], maxDoors: 6, kids: 3}),
   room('switch', 'Switch room', 'utility', 'electrical-room', {clear: C.side, size: [9, 12, 8, 10], parents: {hall: 2}, wing: 'plant', req: true,
     noKids: true, cap: [14, 12]}),
   room('mess', 'Mess hall', 'crew-room', 'staff-room', {role: 'hall', size: [18, 26, 12, 17], parents: {hub: 1, corr: 0.9}, wing: 'living', req: true,
     door: 'junction', dw: [4, 5], cap: [30, 20], avoid: ['hall', 'switch'], maxDoors: 5}),
-  room('dorm', 'Dormitory', 'crew-room', BUNKER_PURPOSE.dorm, {size: [16, 22, 11, 16], parents: {corr: 1, hub: 0.35}, wing: 'living', req: true,
-    cap: [26, 18], avoid: ['hall', 'switch', 'filtration']}),
+  room('dorm', 'Dormitory', 'crew-room', BUNKER_PURPOSE.dorm, {size: [16, 22, 13, 16], parents: {corr: 1, hub: 0.35}, wing: 'living', req: true,
+    kids: 1, cap: [26, 18], avoid: ['hall', 'switch', 'filtration']}),
   room('washroom', 'Latrines', 'washroom', 'washroom', {size: [9, 12, 8, 10], parents: {corr: 1, dorm: 0.9, hub: 0.5}, wing: 'living', req: true,
     near: 'dorm', cap: [14, 12]}),
-  room('filtration', 'Air filtration plant', 'utility', 'ventilation-plant', {size: [11, 16, 9, 12], parents: {corr: 1, hall: 0.8, hub: 0.3},
-    wing: 'plant', req: true, cap: [18, 14]}),
+  room('filtration', 'Air filtration plant', 'utility', 'ventilation-plant', {size: [13, 17, 10, 13], parents: {corr: 1, hall: 0.8, hub: 0.3},
+    wing: 'plant', req: true, maxDoors: 2, cap: [19, 14]}),
   room('infirmary', 'Infirmary', 'crew-room', 'first-aid-room', {size: [10, 14, 10, 12], parents: {hub: 1.2, corr: 0.6, decon: 0.5}, wing: 'ops',
     req: true, cap: [16, 14], avoid: ['hall', 'switch']}),
-  room('radio', 'Radio room', 'utility', BUNKER_PURPOSE.radio, {size: [9, 12, 9, 11], parents: {hub: 1, guard: 0.8, warden: 1, corr: 0.5}, wing: 'ops',
-    req: true, cap: [14, 12]}),
+  room('radio', 'Radio room', 'utility', BUNKER_PURPOSE.radio, {size: [12, 14, 11, 13], parents: {hub: 1, guard: 0.8, warden: 1, corr: 0.5}, wing: 'ops', maxDoors: 2,
+    req: true, cap: [16, 14]}),
   room('armoury', 'Armoury', 'storage', BUNKER_PURPOSE.armoury, {role: 'vault', clear: C.side, size: [9, 12, 9, 11],
     parents: {guard: 1.3, warden: 1.1, hall: 0.8, hub: 0.3, corr: 0.25}, wing: 'ops', req: true, leaf: true, cap: [14, 12]}),
 ];
@@ -175,13 +180,13 @@ const OPTIONAL: readonly Spec[] = [
     wing: 'plant', cap: [16, 13]}),
   room('workshop', 'Maintenance workshop', 'utility', 'workshop', {size: [10, 14, 10, 12], parents: {corr: 1, hall: 0.9}, wing: 'plant',
     cap: [16, 14], avoid: ['dorm', 'dorm2']}),
-  room('dorm2', 'Dormitory B', 'crew-room', BUNKER_PURPOSE.dorm, {size: [15, 20, 11, 14], parents: {corr: 1, hub: 0.3}, wing: 'living',
-    cap: [24, 16], avoid: ['hall', 'switch', 'filtration']}),
+  room('dorm2', 'Dormitory B', 'crew-room', BUNKER_PURPOSE.dorm, {size: [15, 20, 13, 15], parents: {corr: 1, hub: 0.3}, wing: 'living',
+    kids: 1, cap: [24, 16], avoid: ['hall', 'switch', 'filtration']}),
   room('lockers', 'Locker room', 'crew-room', 'locker-room', {size: [9, 12, 10, 11], parents: {corr: 1, dorm: 0.7, decon: 0.6, hub: 0.6},
     wing: 'living', cap: [14, 12]}),
 ];
 const SPARE: Spec = room('store', 'Storeroom', 'storage', 'storage', {role: 'store', clear: C.store, size: [8, 12, 8, 10],
-  parents: {corr: 1, hub: 0.8, hall: 0.4, workshop: 0.5, mess: 0.4, infirmary: 0.4, filtration: 0.4, guard: 0.3, warden: 0.3, radio: 0.3}, cap: [13, 11]});
+  parents: {corr: 1, hub: 0.8, hall: 0.4, workshop: 0.5, mess: 0.4, infirmary: 0.4, filtration: 0.4, guard: 0.3, warden: 0.3}, cap: [13, 11]});
 
 const CORRIDOR: Omit<Prog, 'key' | 'label'> = {kind: 'service', type: 'service-corridor', purpose: 'service-corridor', role: 'corridor', clear: C.corridor};
 /** Corridor names by the wing of the rooms on them. */
@@ -198,6 +203,8 @@ interface Node extends PlanRoom {
   cap: readonly [number, number];
   depth: number;
   maxDoors: number;
+  /** Child rooms it may take. */
+  kidCap: number;
   /** Walls a child / loop door may use: side -> allowed span [s0, s1) along it, false = none (absent = the whole wall). */
   walls?: Partial<Record<LSide, readonly [number, number] | false>>;
 }
@@ -236,7 +243,7 @@ class Planner {
     const n: Node = {
       key: p.key, label: p.label, role: p.role, kind: p.kind, type: p.type, purpose: p.purpose, r, clear: p.clear ?? C.room,
       parent: parent?.key ?? '', id: this.nodes.length, fixed: false, leaf: false, kids: true, cap: p.cap ?? [40, 30],
-      depth: parent ? parent.depth + 1 : 0, maxDoors: isCorr(p as PlanRoom) ? 12 : 3, ...o,
+      depth: parent ? parent.depth + 1 : 0, maxDoors: isCorr(p as PlanRoom) ? 12 : 3, kidCap: 99, ...o,
     };
     this.nodes.push(n);
     this.occ.mark(r, n.id);
@@ -302,7 +309,7 @@ class Planner {
     for (const n of this.nodes) {
       if (!n.kids || n.leaf) continue;
       const w = sp.parents[cls(n)];
-      if (w === undefined || this.doorsOf(n) >= n.maxDoors) continue;
+      if (w === undefined || this.doorsOf(n) >= n.maxDoors || this.edges.filter(e => e.a === n.id && !e.loop).length >= n.kidCap) continue;
       parents.push([n, w]);
     }
     if (!parents.length) return null;
@@ -351,7 +358,7 @@ class Planner {
       .sort((a, b) => b.s - a.s);
     const dw = sp.dw ? rng.int(sp.dw[0], sp.dw[1]) : rng.int(3, 4);
     for (const best of ranked) {
-      const n = this.add({...sp, key}, best.r, best.p, {leaf: !!sp.leaf, kids: !sp.leaf && !sp.noKids, cap: sp.cap ?? [40, 30], maxDoors: sp.leaf ? 1 : sp.maxDoors ?? 3, wing: sp.wing});
+      const n = this.add({...sp, key}, best.r, best.p, {leaf: !!sp.leaf, kids: !sp.leaf && !sp.noKids, cap: sp.cap ?? [40, 30], maxDoors: sp.leaf ? 1 : sp.maxDoors ?? 3, kidCap: sp.kids ?? 99, wing: sp.wing});
       this.link(best.p, n, sp.door ?? 'door', dw);
       // a room that needs its own neighbour (the hall's switch room) takes the next candidate when that one does not fit
       if (then && !then(n)) { this.undo(n); continue; }
