@@ -451,8 +451,8 @@ function pickup(v: unknown, path: string): void {
     const q = i >= 4 && i <= 7;
     num(t[i], `${path}[${i}]`, q ? -1.0001 : -1e5, q ? 1.0001 : 1e5);
   }
-  if (t.length === 12) int(t[11], `${path}[11]`, 0, 1e6);
-  if (t.length === 14) { int(t[11], `${path}[11]`, -1, 1e6); int(t[12], `${path}[12]`, 0, 1e6); int(t[13], `${path}[13]`, 0, 1e6); }
+  if (t.length === 12) int(t[11], `${path}[11]`, 0, 1e9);
+  if (t.length === 14) { int(t[11], `${path}[11]`, -1, 1e9); int(t[12], `${path}[12]`, 0, 1e9); int(t[13], `${path}[13]`, 0, 1e9); }
 }
 
 function holder(v: unknown, path: string): void {
@@ -465,7 +465,7 @@ function holder(v: unknown, path: string): void {
     int(t[2], `${path}[2]`, 0, 2 ** len - 1);
     from = 3;
   }
-  for (let i = from; i < t.length; i++) int(t[i], `${path}[${i}]`, 0, 1e6);
+  for (let i = from; i < t.length; i++) int(t[i], `${path}[${i}]`, 0, 1e9);
 }
 
 const MEMORY_KEYS = ['visits', 'pickups', 'holders', 'killed', 'cleared', 'lanes'];

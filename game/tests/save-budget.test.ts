@@ -7,7 +7,10 @@
 import {describe, expect, it} from 'vitest';
 import {mkdirSync, writeFileSync} from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
-import {isLootHolderKind} from '../src/items/loot';
+import {createHolderState, isContainerKind, isLootHolderKind, type HolderKind} from '../src/items/loot';
+import {holderSurfaces, type Dims} from '../src/items/lootLayout';
+import {PROP_DEFS} from '../src/gen/props';
+import {lootProfile} from '../src/items/lootTables';
 import {holderKey} from '../src/run/memory';
 import {emptyReactorState, REACTOR_LANE} from '../src/world/reactor/runState';
 import {WINDOWS_LANE} from '../src/world/windowBreach';
@@ -17,14 +20,35 @@ import {saveFileText} from '../src/save/serialize';
 import {SAVE_LIMITS} from '../src/save/validate';
 import {SaveSlots, STORAGE_BUDGET_CHARS} from '../src/save/slots';
 import {utf8Bytes} from '../src/save/checksum';
-import {FakeStorage, Harness, archetypeOf, fillInventory, fillLockbox, fixtureNetwork, populateStation, sid} from './helpers/saveFixture';
+import {FakeStorage, Harness, archetypeOf, fillInventory, fillLockbox, fixtureNetwork, populateStation, sid, type RolledHolder} from './helpers/saveFixture';
 
-interface LayoutCounts { holderKeys: string[]; pickups: number; zombies: number }
+interface LayoutCounts { rolled: RolledHolder[]; lots: number; pickups: number; zombies: number }
 
+/** A real layout's holders with their rolled lots (as the loot-economy census rolls them: index per group, the holder's purpose). */
 function layoutCounts(level: LevelId, seed: number): LayoutCounts {
   const lay = LEVELS[level].generate('main', {levelSeed: seed});
-  const holderKeys = lay.props.filter(p => isLootHolderKind(p.kind as string)).map(p => holderKey(p.kind as string, p.level, p.x, p.z));
-  return {holderKeys: [...new Set(holderKeys)], pickups: lay.pickups.length, zombies: lay.zombies.length};
+  const profile = lootProfile(level);
+  let ci = 0, si = 0, fallback = 0;
+  const seen = new Set<string>(), rolled: RolledHolder[] = [];
+  for (const p of lay.props) {
+    const kind = p.kind as string;
+    if (!isLootHolderKind(kind)) continue;
+    const index = isContainerKind(kind) ? ci++ : si++;
+    const key = holderKey(kind, p.level, p.x, p.z);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const area = lay.areas[p.area];
+    try {
+      const def = (PROP_DEFS as unknown as Record<string, Dims | undefined>)[kind] ?? {w: 1, d: 1, h: 1};
+      const st = createHolderState(lay.seed, index, kind as HolderKind, p.purpose ?? area?.purpose ?? area?.type ?? 'default', holderSurfaces(kind as never, def), undefined, profile);
+      rolled.push({key, lots: st.lots.map(l => l.id), open: st.open, searched: st.searched, ...(st.seen ? {seen: [...st.seen]} : {})});
+    } catch {
+      fallback++;
+      rolled.push({key, lots: [index * 1000, index * 1000 + 1, index * 1000 + 2], open: false, searched: false});
+    }
+  }
+  expect(fallback).toBeLessThan(rolled.length * 0.2);
+  return {rolled, lots: rolled.reduce((a, h) => a + h.lots.length, 0), pickups: lay.pickups.length, zombies: lay.zombies.length};
 }
 
 /** A run with all 40 stations visited and heavily played, departing st-38 for the Reactor. */
@@ -48,7 +72,7 @@ function heavyRun(counts: Record<string, LayoutCounts[]>, seed: number): Harness
       r.zoneClear = [1, 1, 0.66];
       lanes[REACTOR_LANE] = r;
     }
-    populateStation(h, {level, section: 'main', station: sid(i)}, {seed: seed * 100 + i, holderKeys: c.holderKeys, layoutPickups: c.pickups, dropped: 30, zombies: c.zombies, bags: 2, lanes});
+    populateStation(h, {level, section: 'main', station: sid(i)}, {seed: seed * 100 + i, rolled: c.rolled, layoutPickups: c.pickups, dropped: 30, zombies: c.zombies, bags: 2, lanes});
   }
   h.run.current = {level: 'subway', section: 'main', station: sid(38)};
   h.run.playtime = 5 * 3600 + 1234.5;
@@ -91,7 +115,7 @@ describe('save budget: three heavily played 40-station slots fit localStorage', 
     }
     const used = storage.used(), saves = sizes.reduce((a, s) => a + s.chars, 0);
     const report = {
-      layouts: Object.fromEntries(Object.entries(counts).map(([l, cs]) => [l, cs.map(c => ({holders: c.holderKeys.length, pickups: c.pickups, zombies: c.zombies}))])),
+      layouts: Object.fromEntries(Object.entries(counts).map(([l, cs]) => [l, cs.map(c => ({holders: c.rolled.length, rolledLots: c.lots, pickups: c.pickups, zombies: c.zombies}))])),
       perSlot: sizes, threeSlotsChars: saves, totalStorageChars: used, budgetChars: STORAGE_BUDGET_CHARS,
       usedFraction: +(used / STORAGE_BUDGET_CHARS).toFixed(4), marginChars: STORAGE_BUDGET_CHARS - used,
       importLimitBytes: SAVE_LIMITS.fileBytes, largestSlotBytes: Math.max(...sizes.map(s => s.bytes)),

@@ -167,8 +167,13 @@ export function fillLockbox(h: Harness, bags = 8, seed = 8): void {
   }
 }
 
+/** A holder as rolled for a real layout (createHolderState): its key and initial state. */
+export interface RolledHolder { key: string; lots: number[]; open: boolean; searched: boolean; seen?: boolean[] }
+
 export interface PopulateOptions {
-  /** Holder keys (captureHolders keys of the layout); default: `holders` synthetic ones. */
+  /** Real rolled holders (the player then searched about half of them and took ~40 % of what was in those). */
+  rolled?: RolledHolder[];
+  /** Holder keys (captureHolders keys of the layout); default: `holders` synthetic ones. Lot ids as the game rolls them (index * 1000 + i). */
   holderKeys?: string[];
   holders?: number;
   /** Generated pickups still lying there (layoutIndex), dropped / spilled ones (fromLot for half). */
@@ -187,11 +192,20 @@ const f = (r: () => number, s: number): number => (r() * 2 - 1) * s;
 export function populateStation(h: Harness, key: SectionKey, o: PopulateOptions = {}): void {
   const r = mulberry32(o.seed ?? 1), mem = h.run.memory(key);
   mem.visits = 1 + Math.floor(r() * 3);
-  const keys = o.holderKeys ?? Array.from({length: o.holders ?? 40}, (_, i) => holderKey(['shelf', 'cabinetTall', 'crate', 'desk', 'stockShelf'][i % 5], 0, f(r, 60), f(r, 20)));
-  for (const k of keys) {
-    const rec: HolderRecord = {lots: Array.from({length: Math.floor(r() * 6)}, (_, j) => j * 2 + Math.floor(r() * 2)), open: r() < 0.6, searched: r() < 0.5};
-    if (r() < 0.2) rec.seen = Array.from({length: 2 + Math.floor(r() * 3)}, () => r() < 0.5);
-    mem.holders[k] = rec;
+  if (o.rolled) {
+    for (const h0 of o.rolled) {
+      const searched = h0.searched || r() < 0.5;
+      const rec: HolderRecord = {lots: searched ? h0.lots.filter(() => r() < 0.6) : [...h0.lots], open: h0.open || (searched && r() < 0.5), searched};
+      if (h0.seen) rec.seen = h0.seen.map(() => searched && r() < 0.7);
+      mem.holders[h0.key] = rec;
+    }
+  } else {
+    const keys = o.holderKeys ?? Array.from({length: o.holders ?? 40}, (_, i) => holderKey(['shelf', 'cabinetTall', 'crate', 'desk', 'stockShelf'][i % 5], 0, f(r, 60), f(r, 20)));
+    keys.forEach((k, i) => {
+      const rec: HolderRecord = {lots: Array.from({length: Math.floor(r() * 6)}, (_, j) => i * 1000 + j * 2 + Math.floor(r() * 2)), open: r() < 0.6, searched: r() < 0.5};
+      if (r() < 0.2) rec.seen = Array.from({length: 2 + Math.floor(r() * 3)}, () => r() < 0.5);
+      mem.holders[k] = rec;
+    });
   }
   const pickups: PickupRecord[] = [];
   const rec = (layoutIndex?: number, lot?: boolean): PickupRecord => {

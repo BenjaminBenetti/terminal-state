@@ -44,6 +44,7 @@ export function defaultSaveStorage(): SaveStorage | null {
 
 export type SlotErrorCode = 'bad-slot' | 'unavailable' | 'empty' | 'invalid' | 'too-large' | 'quota' | 'conflict' | 'occupied' | 'write-failed';
 export type SlotFailure = {ok: false; code: SlotErrorCode; error: string};
+type Summary = {ok: true; meta: SaveMeta} | {ok: false; error: string};
 
 export interface SlotView {
   slot: number;
@@ -125,7 +126,8 @@ export class SaveSlots {
   private readonly storage: SaveStorage | null;
   private readonly opts: ValidateOptions;
   private readonly now: () => Date;
-  private readonly cache = new Map<number, {text: string; result: ReturnType<typeof parseSaveText>}>();
+  /** Per slot: the validation summary of its stored text (only the metadata is kept, not the parsed run). */
+  private readonly cache = new Map<number, {text: string; summary: Summary}>();
   private readonly listeners = new Set<(c: SlotChange) => void>();
   private readonly onStorage = (e: StorageEventLike): void => this.handleStorageEvent(e);
   private listening = false;
@@ -198,13 +200,17 @@ export class SaveSlots {
     try { return {ok: true, text: this.storage.getItem(STORAGE_KEYS.slot(slot))}; } catch (e) { return isSecurityError(e) ? failure('unavailable', UNAVAILABLE) : failure('write-failed', `The browser could not read save slot ${slot} (${errName(e) || 'storage error'}).`); }
   }
 
-  /** Validate stored text (cached per slot while the text is unchanged). */
-  private parsed(slot: number, text: string): ReturnType<typeof parseSaveText> {
+  /** Validate stored text, keeping its summary per slot while the text is unchanged. */
+  private parsed(slot: number, text: string): Summary {
     const c = this.cache.get(slot);
-    if (c && c.text === text) return c.result;
-    const result = parseSaveText(text, this.opts);
-    this.cache.set(slot, {text, result});
-    return result;
+    if (c && c.text === text) return c.summary;
+    return this.remember(slot, text, parseSaveText(text, this.opts));
+  }
+
+  private remember(slot: number, text: string, p: ReturnType<typeof parseSaveText>): Summary {
+    const summary: Summary = p.ok ? {ok: true, meta: p.value.meta} : {ok: false, error: p.error};
+    this.cache.set(slot, {text, summary});
+    return summary;
   }
 
   /** The stored revision of a slot: 0 = empty, -1 = unreadable / invalid (only an explicit overwrite replaces it). */
@@ -214,7 +220,7 @@ export class SaveSlots {
     if (!r.ok) return -1;
     if (r.text === null) return 0;
     const p = this.parsed(slot, r.text);
-    return p.ok ? p.value.meta.revision : -1;
+    return p.ok ? p.meta.revision : -1;
   }
 
   list(): SlotView[] {
@@ -225,7 +231,7 @@ export class SaveSlots {
       if (!r.ok) { out.push({slot, empty: true, valid: false, meta: null, error: r.error, last: false, chars: 0}); continue; }
       if (r.text === null) { out.push({slot, empty: true, valid: false, meta: null, error: null, last: false, chars: 0}); continue; }
       const p = this.parsed(slot, r.text);
-      out.push({slot, empty: false, valid: p.ok, meta: p.ok ? p.value.meta : null, error: p.ok ? null : p.error, last: last === slot, chars: key.length + r.text.length});
+      out.push({slot, empty: false, valid: p.ok, meta: p.ok ? {...p.meta} : null, error: p.ok ? null : p.error, last: last === slot, chars: key.length + r.text.length});
     }
     return out;
   }
@@ -236,9 +242,10 @@ export class SaveSlots {
     const r = this.raw(slot);
     if (!r.ok) return r;
     if (r.text === null) return failure('empty', `Save slot ${slot} is empty.`);
-    const p = this.parsed(slot, r.text);
+    const p = parseSaveText(r.text, this.opts); // (a fresh, fully validated copy)
+    this.remember(slot, r.text, p);
     if (!p.ok) return failure('invalid', p.error);
-    return {ok: true, file: structuredClone(p.value), chars: STORAGE_KEYS.slot(slot).length + r.text.length};
+    return {ok: true, file: p.value, chars: STORAGE_KEYS.slot(slot).length + r.text.length};
   }
 
   /**
@@ -252,7 +259,7 @@ export class SaveSlots {
     const r = this.raw(slot);
     if (!r.ok) return r;
     const stored = r.text === null ? null : this.parsed(slot, r.text);
-    const prev = stored === null ? 0 : stored.ok ? stored.value.meta.revision : -1;
+    const prev = stored === null ? 0 : stored.ok ? stored.meta.revision : -1;
     if (o.overwrite !== true) {
       if (o.expectRevision !== undefined) {
         if (r.text === null && o.expectRevision > 0) return failure('conflict', `Not saved — slot ${slot} was deleted in another tab. Choose a slot to save this run again.`);
@@ -272,7 +279,7 @@ export class SaveSlots {
     let back: string | null = null;
     try { back = this.storage.getItem(key); } catch { /* reported below */ }
     if (back !== text) return failure('write-failed', `The browser did not keep the save in slot ${slot} (another tab may have written it at the same moment).`);
-    this.cache.set(slot, {text, result: v});
+    this.remember(slot, text, v);
     let warning: string | undefined;
     try { this.storage.setItem(STORAGE_KEYS.lastSlot, String(slot)); } catch { warning = 'Saved, but the Continue pointer could not be updated.'; }
     this.emit({slot, external: false});
@@ -324,7 +331,7 @@ export class SaveSlots {
     if (r.text === null) return failure('empty', `Save slot ${slot} is empty — nothing to export.`);
     const p = this.parsed(slot, r.text);
     if (!p.ok) return failure('invalid', p.error);
-    return {ok: true, filename: exportFilename(slot, p.value.meta.savedAt), blob: saveBlob(r.text), text: r.text, meta: p.value.meta};
+    return {ok: true, filename: exportFilename(slot, p.meta.savedAt), blob: saveBlob(r.text), text: r.text, meta: {...p.meta}};
   }
 
   /** Validate an import candidate without writing (the menu shows its metadata in the replace confirmation). */
