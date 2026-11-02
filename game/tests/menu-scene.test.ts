@@ -32,8 +32,10 @@ class FakeRenderer implements MenuRenderer {
   renders = 0;
   exposureSeen: number[] = [];
   info = {reset() {}};
+  target: unknown = 'icon-target';
   getDrawingBufferSize(t: THREE.Vector2): THREE.Vector2 { return t.set(1920, 1080); }
-  setRenderTarget(): void {}
+  getRenderTarget(): unknown { return this.target; }
+  setRenderTarget(t: unknown): void { this.target = t; }
   render(): void { this.renders++; this.exposureSeen.push(this.toneMappingExposure); }
 }
 
@@ -145,6 +147,7 @@ describe('menu scene: rendering cost and the shared uniforms', () => {
       expect(drawn).toBeLessThanOrEqual(31);
       expect(r.exposureSeen.every(e => e === MENU_SCENE.exposure)).toBe(true);
       expect(r.toneMappingExposure).toBe(0.78);
+      expect(r.target).toBe('icon-target'); // a render target set by someone else (the boot's icon renders) is left as found
       g.document!.hidden = true;
       const before = r.renders;
       for (let t = 2000; t < 3000; t += 16) m.render(r, t);

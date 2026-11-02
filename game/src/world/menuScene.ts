@@ -513,14 +513,16 @@ export class MenuScene {
     this.activate();
     const size = renderer.getDrawingBufferSize(this.tmp.v2);
     this.pose(nowMs / 1000, size.y > 0 ? size.x / size.y : 16 / 9);
-    const exposure = renderer.toneMappingExposure;
+    const exposure = renderer.toneMappingExposure, target = renderer.getRenderTarget();
     renderer.toneMappingExposure = MENU_SCENE.exposure;
     try {
       renderer.info.reset();
       renderer.setRenderTarget(null);
       renderer.render(this.scene, this.camera);
     } finally {
+      // the boot's item-icon renders (game.load) may be between two awaits with their own target: leave it as found
       renderer.toneMappingExposure = exposure;
+      renderer.setRenderTarget(target);
     }
     this.frames++;
     return true;
@@ -570,7 +572,8 @@ export interface MenuRenderer {
   toneMappingExposure: number;
   info: {reset(): void};
   getDrawingBufferSize(target: THREE.Vector2): THREE.Vector2;
-  setRenderTarget(t: null): void;
+  getRenderTarget(): unknown;
+  setRenderTarget(t: unknown): void;
   render(scene: THREE.Scene, camera: THREE.Camera): unknown;
 }
 

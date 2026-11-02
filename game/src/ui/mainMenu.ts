@@ -575,7 +575,7 @@ const CSS = `
 .mm-settings.settings { grid-template-columns: 1fr; gap: 9px; margin: 4px 0 12px; }
 .settings .set-note { grid-column: 1 / -1; font-size: 12px; color: var(--cream-dim); }
 .settings select { max-width: 62%; }
-.settings .set-readout { font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
+.settings .set-readout { grid-column: 1 / -1; font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
 .loading-card { position: relative; z-index: 1; margin: auto; }
 @media (max-width: 760px) { .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); } }
 `;
