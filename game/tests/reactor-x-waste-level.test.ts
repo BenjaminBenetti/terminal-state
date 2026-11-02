@@ -72,7 +72,9 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       expect(n('wasteDrum'), `seed ${seed} drums`).toBeGreaterThanOrEqual(60);
       expect(n('storageCask'), `seed ${seed} casks`).toBeGreaterThanOrEqual(2);
       expect(n('deconShower') + n('hotCellWindow'), `seed ${seed} showers / hot cell`).toBeGreaterThanOrEqual(2);
-      expect(D.cable.length).toBeGreaterThanOrEqual(6);
+      // one generator cable: the host's (panel -> through the entrance -> the fans); the repository draws none of its own
+      expect((D as {cable?: unknown}).cable).toBeUndefined();
+      expect(L.reactor!.generators[c.generator].cable.length).toBeGreaterThanOrEqual(2);
       expect(n('switchgear'), `seed ${seed} switchgear`).toBeGreaterThanOrEqual(1);
       expect(n('controlConsole'), `seed ${seed} console`).toBe(1);
       expect(D.fans.length, `seed ${seed} fans`).toBeGreaterThanOrEqual(1);
@@ -93,6 +95,18 @@ describe('Reactor waste repository (lane WASTE) in the real level', () => {
       const signs = L.signs.filter(s => ids.has(s.area));
       expect(signs.length).toBeGreaterThanOrEqual(8);
       for (const s of signs) expect(s.level).toBe(c.level);
+    }
+  });
+
+  it('every repository gets its control console and switchgear (16 more seeds: the dresser / collider changes of other lanes move wall space)', () => {
+    for (let seed = 9; seed <= 24; seed++) {
+      const L = LEVELS.reactor.generate('main', {levelSeed: seed});
+      const D = L.reactorWaste;
+      if (!L.reactor!.complexes?.some(q => q.id === 'waste')) continue; // (a seed whose slot the host could not plan keeps its landing generator)
+      expect(D, `seed ${seed}`).toBeTruthy();
+      expect(D!.models.filter(m => m.piece === 'switchgear').length, `seed ${seed} switchgear`).toBeGreaterThanOrEqual(1);
+      expect(D!.models.filter(m => m.piece === 'controlConsole').length, `seed ${seed} console`).toBe(1);
+      expect(complexIssues(L), `seed ${seed}`).toEqual([]);
     }
   });
 

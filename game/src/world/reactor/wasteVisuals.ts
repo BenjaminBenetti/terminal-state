@@ -3,7 +3,7 @@
 //  - the lead's approved models where loaded (REACTOR_X_KIT waste drums in the racks, dry casks, decon booths, the hot-cell window;
 //    REACTOR_KIT switchgear / console / fan housings), real size, Meshy materials kept — one InstancedMesh per (model mesh, 12 m chunk);
 //  - everything else from the Reactor's EXISTING kit materials (archMaterials.ts reactorDress: the lead's Codex rusted-steel / pit-
-//    concrete / grating sets, the painted-steel fallbacks): rack uprights / beams / decks, plinths, ducts, cable trays, door frames,
+//    concrete / grating sets, the painted-steel fallbacks): rack uprights / beams / decks, plinths, ducts, door frames,
 //    the crane runway, hazard bands (yellow / black), the compactor press, pucks, pipes; procedural stand-ins for a model that failed
 //    to load (Node tests, a 404) — never an untextured block;
 //  - the yellow-green status beacons: unlit glow instances (no light sources: accents cost nothing per frame).

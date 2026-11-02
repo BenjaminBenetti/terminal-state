@@ -159,7 +159,6 @@ describe('Reactor waste repository (lane WASTE): carve on a fixture slot', () =>
       expect(D.fans.length).toBeGreaterThanOrEqual(1);
       expect(D.stripes.length).toBeGreaterThanOrEqual(6);
       expect(D.beacons.length).toBeGreaterThanOrEqual(6);
-      expect(D.cable.length).toBeGreaterThanOrEqual(6);
       const mine = new Set(f.carve!.areas);
       const tags = L.props.filter(p => p.kind === 'annexMachine' && mine.has(p.area)).map(p => p.purpose);
       expect(tags.filter(t => t === 'waste:rack').length).toBeGreaterThanOrEqual(3);

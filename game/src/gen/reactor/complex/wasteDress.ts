@@ -11,8 +11,9 @@
 //  - DRY-CASK HALL: a grid of vented casks (REACTOR_X_KIT.storageCask) with painted keep-clear squares, the overhead crane runway;
 //  - compactor: the supercompactor press, its roller feed, compacted-puck pallets, the hot-cell window set into the wall
 //    (REACTOR_X_KIT.hotCellWindow), a crush-zone band;
-//  - sealed corridor: heavy steel door frames, airlock bands, the cable tray; sump: the sump grating, risers;
-//  - generator / ventilation plant: two wall fans on plinths with their duct, switchgear, the cable trench from the skid, a keep-clear band
+//  - sealed corridor: heavy steel door frames, airlock bands; sump: the sump grating, risers;
+//  - generator / ventilation plant: two wall fans on plinths with their duct, switchgear (guaranteed: a fallback through the program's
+//    rooms), the floor trench from the skid to it, a keep-clear band
 //    round the skid (the GENERATOR model itself is ARCH's, from layout.reactor.generators);
 //  - stencil plates on every door ("DRUM VAULT A · LOW-LEVEL WASTE", "AUX GENERATOR 3 · CORE-FLOOR FANS" …), generic hazard plates only.
 // Prop rules: storage placed here OPENS (existing openables; contents from the room purpose's loot table), loose things are existing
@@ -60,7 +61,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   const ctx: PlaceCtx = makePlaceCtx(layout, rng.fork('waste-place'), level, {x0: cx0 - 3, y0: cy0 - 3, x1: cx1 + 3, y1: cy1 + 3});
   const decor: WasteDecor = {
     version: 1, level, bounds: {x0: cx0 * CELL, z0: cy0 * CELL, x1: cx1 * CELL, z1: cy1 * CELL},
-    boxes: [], cyls: [], stripes: [], beacons: [], models: [], fans: [], cable: [],
+    boxes: [], cyls: [], stripes: [], beacons: [], models: [], fans: [],
   };
   const props0 = layout.props.length;
   const stats = {props: 0, solids: 0, drums: 0, casks: 0, racks: 0, lights: 0, signs: 0, models: 0, ms: 0, firstProp: props0};
@@ -283,6 +284,25 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     if (!solid(r, x, z, hx, hz, H, tag, {zoneOk: o.zoneOk})) return null;
     for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) ctx.keep[g.idx(cx, cy)] = 1;
     return [x, z];
+  };
+  /**
+   * Up to `max` switchgear cabinets (REACTOR_KIT, 1.1 x 1.3 x 2.2 m) backed to the given walls of room r, each with a `front` m access
+   * strip; the walls are tried in order, positions low-to-high. Returns their centres.
+   */
+  const SG = {w: 1.1, d: 1.3, h: 2.2};
+  let sgCount = 0;
+  const switchgearAt = (r: RoomF, walls: readonly Wall[], max: number, front: number, rr: Rng): V2[] => {
+    const out: V2[] = [];
+    for (const w of walls) for (const q of spots(r, w, rr, 0.25, SG.w / 2 + 0.15).sort((a, b) => a - b)) {
+      if (out.length >= max) return out;
+      const at = wallSolid(r, w, q, SG.w, SG.d, SG.h, 'waste:machine', front, {zoneOk: front < 0.9});
+      if (!at) continue;
+      model('switchgear', at[0], at[1], yawInto(r, w), SG.w, SG.d, SG.h);
+      beacon(at[0], base + SG.h + 0.1, at[1], rr.chance(0.65));
+      out.push(at);
+      sgCount++;
+    }
+    return out;
   };
   /** Collision box of a local rect (s0..s1, t0..t1). */
   const lsolid = (r: RoomF, s0: number, s1: number, t0: number, t1: number, h: number, tag: WasteTag, o: {ring?: number; zoneOk?: boolean; sight?: boolean} = {}) => {
@@ -509,16 +529,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       break wall;
     }
     // switchgear lineup (front access strip 0.9 m)
-    const SG = {w: 1.1, d: 1.3, h: 2.2};
-    let sg = 0;
-    for (const w of ['right', 'back', 'front', 'left'] as Wall[]) for (const q of spots(r, w, rr, 0.25, 0.7).sort((a, b) => a - b)) {
-      if (sg >= 2) break;
-      const at = wallSolid(r, w, q, SG.w, SG.d, SG.h, 'waste:machine', 0.9);
-      if (!at) continue;
-      model('switchgear', at[0], at[1], yawInto(r, w), SG.w, SG.d, SG.h);
-      beacon(at[0], base + SG.h + 0.1, at[1], rr.chance(0.6));
-      sg++;
-    }
+    switchgearAt(r, ['right', 'back', 'front', 'left'], 2, 0.9, rr);
     putWall(r, rr.pick(['front', 'back', 'left'] as Wall[]), 'filingCabinet', spots(r, 'front', rr), {front: 0.8});
     const bd = doorRec('bay', 'control'), hd2 = doorRec('hp', 'control');
     if (bd) doorPlate(R.bay, bd, 'REPOSITORY CONTROL', 1.5); else doorPlate(R.hp, hd2, 'REPOSITORY CONTROL', 1.5);
@@ -853,21 +864,9 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     const pdoor = doorRec('kWest', 'plant');
     const doorS = pdoor ? (dspan(r, pdoor)[0] + dspan(r, pdoor)[1]) / 2 : r.lu / 2;
     const sideW: Wall = doorS < r.lu / 2 ? 'right' : 'left';
-    const SG = {w: 1.1, d: 1.3, h: 2.2};
-    let swS: V2 | null = null;
-    for (const q of spots(r, sideW, rr, 0.25, 0.8).sort((a, b) => b - a)) {
-      if (!wallFree(r, sideW, q - SG.w / 2 - 0.6, q + SG.w / 2 + 0.6, 0.8)) continue;
-      const [x, z] = onWall(r, sideW, q, SG.d / 2 + 0.04);
-      const hx = r.au[0] ? SG.d / 2 : SG.w / 2, hz = r.au[0] ? SG.w / 2 : SG.d / 2;
-      if (!solid(r, x, z, hx, hz, SG.h, 'waste:machine')) continue;
-      model('switchgear', x, z, yawInto(r, sideW), SG.w, SG.d, SG.h);
-      beacon(x, base + SG.h + 0.1, z, rr.chance(0.7));
-      swS = [x, z];
-      // its twin beside it
-      const [x2, z2] = onWall(r, sideW, q - SG.w - 0.05, SG.d / 2 + 0.04);
-      if (wallFree(r, sideW, q - 1.5 * SG.w - 0.6, q - SG.w / 2, 0.8) && solid(r, x2, z2, hx, hz, SG.h, 'waste:machine')) model('switchgear', x2, z2, yawInto(r, sideW), SG.w, SG.d, SG.h);
-      break;
-    }
+    // the plant's switchgear: the side wall away from the door first, then the other walls (fans keep the back wall when they took it)
+    const sw = switchgearAt(r, [sideW, sideW === 'right' ? 'left' : 'right', 'front', 'back'], 2, 0.9, rr);
+    const swS: V2 | null = sw[0] ?? null;
     // cable trench: from the skid to the switchgear (floor grating strip, axis-aligned)
     if (swS) {
       const tw = 0.2;
@@ -881,42 +880,16 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   }
 
   // =================================================================================================================================
-  // THE CABLE ROUTE: trench from the skid to the plant door, the ceiling tray through the corridor, the vault and the bay to the entrance
-  {
-    const ty = base + 2.6, gF = R.plant;
-    const dc = (d: Door | undefined): V2 | null => (d ? [(d.x + d.w / 2) * CELL, (d.y + d.h / 2) * CELL] : null);
-    const pDoor = dc(doorRec('kWest', 'plant')), vDoor = dc(doorRec('vault', 'kWest')), bDoor = dc(doorRec('bay', 'vault')), eDoor = dc(doorRec('deck', 'bay'));
-    if (pDoor && vDoor && bDoor && eDoor) {
-      // local (s along u, t along v) in the region frame through world points: use the plant room's axes (same for every room)
-      const S = (p: V2) => p[0] * gF.au[0] + p[1] * gF.au[1], T = (p: V2) => p[0] * gF.av[0] + p[1] * gF.av[1];
-      const W = (s: number, t: number): V2 => {
-        // invert: world = s * au + t * av (axes are orthonormal and axis-aligned)
-        return [s * gF.au[0] + t * gF.av[0], s * gF.au[1] + t * gF.av[1]];
-      };
-      const tk = (T(pt(R.kWest, 0, 0)) + T(pt(R.kWest, 0, R.kWest.lv))) / 2;
-      const tv = (T(pt(R.vault, 0, 0)) + T(pt(R.vault, 0, R.vault.lv))) / 2;
-      const tb = (T(pt(R.bay, 0, 0)) + T(pt(R.bay, 0, R.bay.lv))) / 2;
-      const g0: V2 = [gfx, gfz];
-      const path: [V2, number][] = [
-        [g0, base + 0.02], [W(S(pDoor), T(g0)), base + 0.02], [pDoor, base + 0.02], [pDoor, ty],
-        [W(S(pDoor), tk), ty], [W(S(vDoor), tk), ty], [vDoor, ty], [W(S(vDoor), tv), ty], [W(S(bDoor), tv), ty], [bDoor, ty],
-        [W(S(bDoor), tb), ty], [W(S(eDoor), tb), ty], [eDoor, ty],
-      ];
-      for (const [p, y] of path) {
-        const last = decor.cable[decor.cable.length - 1];
-        if (last && Math.abs(last.x - p[0]) < 1e-3 && Math.abs(last.z - p[1]) < 1e-3 && Math.abs(last.y - y) < 1e-3) continue;
-        decor.cable.push({x: r3(p[0]), y: r3(y), z: r3(p[1])});
-      }
-      // trays (steel channel + the black cable bundle) between consecutive points at tray height; the floor trench in the plant
-      for (let i = 0; i + 1 < decor.cable.length; i++) {
-        const a = decor.cable[i], b = decor.cable[i + 1];
-        if (Math.abs(a.y - b.y) > 0.01) { box(a.x - 0.12, a.y, a.z - 0.12, a.x + 0.12, b.y, a.z + 0.12, 'cable'); continue; }
-        const alongX = Math.abs(a.x - b.x) > Math.abs(a.z - b.z), hw = 0.22;
-        const x0 = Math.min(a.x, b.x) - (alongX ? 0 : hw), x1 = Math.max(a.x, b.x) + (alongX ? 0 : hw), z0 = Math.min(a.z, b.z) - (alongX ? hw : 0), z1 = Math.max(a.z, b.z) + (alongX ? hw : 0);
-        if (a.y < base + 0.1) { box(x0, base, z0, x1, base + 0.012, z1, 'grating'); continue; }
-        box(x0, a.y, z0, x1, a.y + 0.04, z1, 'steel');
-        box(x0 + (alongX ? 0 : 0.06), a.y + 0.04, z0 + (alongX ? 0.06 : 0), x1 - (alongX ? 0 : 0.06), a.y + 0.1, z1 - (alongX ? 0.06 : 0), 'cable');
-      }
+  // SWITCHGEAR, GUARANTEED: every repository has its switchgear. When neither the control room nor the plant kept a wall for it (the
+  // station dresser's furnishing, the fans), the other rooms of the program are tried, then with a shorter (0.5 m) access strip.
+  // (The generator's power CABLE is lane HOST's ReactorGenerator.cable — panel -> through the complex -> out of the entrance -> the
+  // zone's fans — the one cable drawn; the repository adds no tray of its own.)
+  if (!sgCount) {
+    const rr = rng.fork('waste-switchgear'), all: Wall[] = ['back', 'left', 'right', 'front'];
+    const rooms = [R.control, R.plant, R.lockers, R.compactor, R.pump, R.bay, R.cask, R.vault, R.hp];
+    for (const front of [0.9, 0.5]) {
+      for (const rm of rooms) if (!sgCount) switchgearAt(rm, all, 1, front, rr);
+      if (sgCount) break;
     }
   }
 
