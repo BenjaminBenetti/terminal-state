@@ -106,6 +106,13 @@ import {applyHolders, captureHolders, capturePickups, restorePickup} from './run
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
+// --- save / load (lane SAVE) imports: task studio-alpha-campaign-foundation-20261102-230708-01 ---
+import {SaveSlots, type CommitResult} from './save/slots';
+import {captureRun, clampTrainLocal, deriveMeta, installRestore, makeSaveFile, prepareRestore, type PreparedRestore, type RestoreHandoff, type SaveFileV1Like, type SavePoint, type TrainLocalPose} from './save/serialize';
+import {validateSaveFile, type ValidateOptions} from './save/validate';
+import {trainSpawnLocal, trainToWorld, worldToTrain} from './gen/playerTrain';
+import {PLAYER_TRAIN_SPEC} from './world/playerTrainSpec';
+// --- end save / load (lane SAVE) imports ---
 import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -933,6 +940,116 @@ export class Game {
       {inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery, participants: this.runParticipants, stats: this.stats},
       this.run.scopeMemories(k)); // (campaign: this STATION's memories only)
   }
+
+  // --- save / load (lane SAVE) ---------------------------------------------------------------------------------------------------
+  // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): capture / apply of a CAMPAIGN run's save (save/*.ts). The
+  // primary's travel orchestrator calls commitSave at the three autosave points — DEPARTURE (after the departing station's world was
+  // torn down, campaign.transit set), ARRIVAL (the train stopped at the new station), NEW GAME (the start station) — and applySave
+  // (after it tore the live world down with leaveSection(false)) before it builds / resumes the returned key. The menu lane reaches
+  // the three slots through `saves` (list / read / delete / exportFile / importFile) and loads through applySave. Builds nothing.
+  /** Lane NET's graph validator goes here once merged (`saveValidate.validateNetwork = validateNetwork`); read by saves + decodeSave. */
+  readonly saveValidate: ValidateOptions = {};
+  /** The three localStorage save slots of this browser + origin (save/slots.ts). */
+  readonly saves = new SaveSlots({validate: this.saveValidate});
+  /** The slot this run saves into (null: not bound — a New Game / a load binds one). */
+  currentSlot: number | null = null;
+  /** The revision of currentSlot this run last wrote / loaded (an autosave never replaces another tab's newer revision). */
+  saveRevision = 0;
+  /** RunState.id bound to currentSlot (an autosave of any OTHER run is refused, so a new run never overwrites an old slot silently). */
+  private saveRunId = -1;
+
+  /** The player's pose in the parked player train's local frame (null: no train in this level). */
+  trainLocalPose(): TrainLocalPose | null {
+    const p = this.trainPlacement;
+    if (!p) return null;
+    const q = worldToTrain(p, this.player.x, this.player.y, this.player.z);
+    const yaw = this.player.yaw - p.yaw;
+    return {x: q.x, z: q.z, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)), pitch: this.player.pitch, crouched: this.player.crouched};
+  }
+
+  /** A saved train-local pose in the parked train (kept inside the car) as a world pose on its interior floor; null without a train. */
+  trainLocalToWorld(pose: TrainLocalPose): {x: number; y: number; z: number; yaw: number; pitch: number; crouched: boolean; level: number} | null {
+    const p = this.trainPlacement;
+    if (!p) return null;
+    const c = clampTrainLocal(pose, PLAYER_TRAIN_SPEC.interior);
+    const w = trainToWorld(p, c.x, PLAYER_TRAIN_SPEC.floorY, c.z);
+    return {x: w.x, y: p.floorY, z: w.z, yaw: p.yaw + c.yaw, pitch: c.pitch, crouched: c.crouched, level: p.level};
+  }
+
+  /**
+   * The current campaign run as a save envelope (SaveSlots.commit finalises meta.slot / revision / savedAt). `pose`: the player's
+   * train-local pose (default: measured in the parked train, else the train's spawn point). Throws SaveError when the run cannot be
+   * saved faithfully (no campaign; a run participant failed to save) — nothing is written then.
+   */
+  captureSave(reason: SavePoint, o: {slot?: number; pose?: TrainLocalPose} = {}): SaveFileV1Like {
+    this.wireRunLanes();
+    const pose = o.pose ?? this.trainLocalPose() ?? {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false};
+    const run = captureRun({run: this.run, inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery,
+      participants: this.runParticipants, stats: this.stats, clock: this.time, pose, point: reason});
+    return makeSaveFile(run, deriveMeta(run, {slot: o.slot ?? this.currentSlot ?? 1, revision: this.saveRevision, savedAt: new Date().toISOString(), reason}));
+  }
+
+  /**
+   * Capture + write. An AUTOSAVE (departure / arrival) goes into the slot bound to this run and refuses to replace another tab's
+   * newer save; NEW GAME (or an explicit other `slot`) writes an empty slot, or a used one only with `overwrite` (the player
+   * confirmed), and binds the run to it. Never throws: {ok: false, error} = nothing was saved (the previous save is intact).
+   */
+  commitSave(reason: SavePoint, o: {slot?: number; overwrite?: boolean; pose?: TrainLocalPose} = {}): CommitResult {
+    const bind = reason === 'new-game' || (o.slot !== undefined && o.slot !== this.currentSlot);
+    const slot = bind ? o.slot : this.currentSlot;
+    if (slot === undefined || slot === null) return {ok: false, code: 'bad-slot', error: 'Not saved: choose a save slot for this run first.'};
+    if (!bind && this.saveRunId !== this.run.id) return {ok: false, code: 'conflict', error: `Not saved: this run is not the one saved in slot ${slot}.`};
+    let file: SaveFileV1Like;
+    try { file = this.captureSave(reason, {slot, pose: o.pose}); } catch (err) { return {ok: false, code: 'invalid', error: `Not saved: ${String((err as Error)?.message ?? err)}`}; }
+    const r = this.saves.commit(slot, file, o.overwrite ? {overwrite: true} : bind ? {} : {expectRevision: this.saveRevision});
+    if (r.ok) { this.currentSlot = slot; this.saveRevision = r.meta.revision; this.saveRunId = this.run.id; }
+    return r;
+  }
+
+  /** Validate + decode a save WITHOUT touching the live game (its `run` can prepare the target section before the teardown). */
+  decodeSave(file: unknown): {ok: true; restore: PreparedRestore & {slot: number; revision: number}} | {ok: false; error: string} {
+    const v = validateSaveFile(file, this.saveValidate);
+    if (!v.ok) return v;
+    try {
+      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}));
+      return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
+    } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
+  }
+
+  /**
+   * Install a decoded save: the run (campaign, every station's memory, the Retry snapshot, playtime), the carried inventory / vitals /
+   * survival / battery / stats, every run participant (train + Lockbox, injuries, gear, gas mask), the uid counters and the game
+   * clock; binds the run to its slot. CALL ONLY AFTER the live world was torn down (leaveSection(false)): lane teardown hooks write
+   * into the CURRENT run. Returns where to build (no transit: `key`, the player at `pose` in the parked train — trainLocalToWorld) or
+   * the journey to resume once (`transit`: from the tunnel to transit.to).
+   */
+  installSave(p: PreparedRestore & {slot: number; revision: number}): RestoreHandoff {
+    this.wireRunLanes();
+    const {failed} = installRestore(p, {
+      setRun: run => { this.run = run; },
+      installInventory: inv => this.installInventory(inv),
+      reserveUids: max => { this.inv.reserveUids(max); this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); },
+      player: this.player, survival: this.survival, battery: this.torch.battery,
+      resetBattery: charge => this.torch.reset(charge),
+      participants: this.runParticipants, stats: this.stats,
+      setClock: t => { this.time = t; },
+    });
+    this.torch.battery.update(0); // output from the restored flags
+    this.arrival = {...p.run.arrival};
+    this.currentSlot = p.slot;
+    this.saveRevision = p.revision;
+    this.saveRunId = p.run.id;
+    this.saves.setLastSlot(p.slot);
+    return {key: {...p.key}, pose: {...p.pose}, transit: p.transit ? {...p.transit} : null, point: p.point, failed};
+  }
+
+  /** decodeSave + installSave (invalid -> {ok: false, error} and NOTHING was applied). Same teardown rule as installSave. */
+  applySave(file: unknown): ({ok: true} & RestoreHandoff) | {ok: false; error: string} {
+    const d = this.decodeSave(file);
+    if (!d.ok) return d;
+    return {ok: true, ...this.installSave(d.restore)};
+  }
+  // --- end save / load (lane SAVE) -----------------------------------------------------------------------------------------------
 
   /** Iteration 16: from a click — audio resumes and pointer lock is requested inside the gesture (the rebuild can outlast it). */
   private beginGesture(): Promise<boolean> {
