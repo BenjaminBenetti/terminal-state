@@ -105,6 +105,8 @@ export interface CoreFloorCarve {
   bridges: {angle: number; width: number; half: number; along0: number; along1: number}[];
   /** rc.towers indices whose feet stand in the goop. */
   towers: number[];
+  /** Their feet (world rects incl. the 1-cell goop margin): the notches they cut keep their straight cell railings drawn. */
+  towerFeet: {x0: number; z0: number; x1: number; z1: number}[];
   loops: CoreLoopPlan[];
 }
 
@@ -291,7 +293,8 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
   const bridges = chosen.map(di => ({angle: dirs[di].a, width: F.bridgeW, half: envelope(di), along0: dirs[di].along0, along1: dirs[di].along1})).sort((p, q) => p.angle - q.angle);
   const loops = planLoops(cx, cz, poolR1, bridges.map(b => b.angle), o.towers.map(t => ({x0: t.x * CELL, z0: t.y * CELL, x1: (t.x + t.w) * CELL, z1: (t.y + t.h) * CELL})),
     o.overhead.map(d => ({...d, y: d.y - o.base})));
-  return {pool, W, pit: {...o.pit}, cx, cz, base: o.base, poolR1, bridges, towers: towersIn, loops};
+  const towerFeet = towersIn.map(ti => { const t = o.towers[ti]; return {x0: (t.x - 1) * CELL, z0: (t.y - 1) * CELL, x1: (t.x + t.w + 1) * CELL, z1: (t.y + t.h + 1) * CELL}; });
+  return {pool, W, pit: {...o.pit}, cx, cz, base: o.base, poolR1, bridges, towers: towersIn, towerFeet, loops};
 }
 
 
@@ -575,6 +578,8 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
     const wi = g.idx(wx, wz), bi = g.idx(bx, bz);
     const vesselSide = g.blocked[wi] && !poolSet.has(wi) && Math.hypot(mx - cf.cx, mz - cf.cz) <= F.vesselR + 0.5;
     if (vesselSide) { (rl as {hidden?: boolean}).hidden = true; continue; }
+    // a tower foot's notch keeps its straight (cell-edge) railing drawn: the round railings stop at it
+    if (cf.towerFeet.some(t => mx > t.x0 - 0.3 && mx < t.x1 + 0.3 && mz > t.z0 - 0.3 && mz < t.z1 + 0.3)) continue;
     if (!poolSet.has(bi) || poolSet.has(wi)) continue;
     const r = Math.hypot(mx - cf.cx, mz - cf.cz), rMax = Math.max(Math.hypot(rl.x0 - cf.cx, rl.z0 - cf.cz), Math.hypot(rl.x1 - cf.cx, rl.z1 - cf.cz));
     const rMin = Math.min(Math.hypot(rl.x0 - cf.cx, rl.z0 - cf.cz), Math.hypot(rl.x1 - cf.cx, rl.z1 - cf.cz));
