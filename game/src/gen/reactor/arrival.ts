@@ -319,7 +319,9 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   let prev: Area | null = null, w = w0;
   const breachRows = {lo: Math.round(c - w0 / 2), hi: Math.round(c - w0 / 2) + w0};
   for (let n = 0; (s.dir > 0 ? x < end : x > end); n++) {
-    const len = Math.min(rng.int(...ARRIVAL.seg), Math.abs(end - x));
+    const rem = Math.abs(end - x);
+    let len = Math.min(rng.int(...ARRIVAL.seg), rem);
+    if (rem - len < 4) len = rem; // no sliver segment at the end of the leg
     if (n > 0) { w = rng.int(...ARRIVAL.bore); c += rng.pick([-1, 0, 0, 1]); }
     let lo = Math.round(c - w / 2);
     if (n === 0) lo = breachRows.lo;
@@ -327,7 +329,7 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
     if (prev) {
       const pr = prevRows(prev);
       lo = Math.max(pr.lo - w + 3, Math.min(pr.hi - 3, lo));
-      lo = Math.max(-inp.sep, Math.min(-3 - w, lo));
+      lo = Math.max(-inp.sep, Math.min(-5 - w, lo));
       if (Math.min(pr.hi, lo + w) - Math.max(pr.lo, lo) < 3) return miss('bore-3');
     }
     const r: CRect = {px: s.dir > 0 ? x : x - len + 1, pz: lo, w: len, h: n === 0 ? w0 : w};
@@ -344,7 +346,8 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   const ew = Math.max(4, Math.min(6, s.bw + 2));
   const elbow: CRect = {px: s.dir > 0 ? elbowLo : elbowHi - ew, pz: pr.lo + rng.int(-1, 1), w: ew, h: Math.max(4, Math.min(6, pr.hi - pr.lo))};
   elbow.pz = Math.max(pr.lo - elbow.h + 3, Math.min(pr.hi - 3, elbow.pz));
-  elbow.pz = Math.max(-inp.sep, Math.min(-3 - elbow.h, elbow.pz));
+  elbow.pz = Math.max(-inp.sep, Math.min(-5 - elbow.h, elbow.pz));
+  if (Math.min(pr.hi, elbow.pz + elbow.h) - Math.max(pr.lo, elbow.pz) < 3) return miss('bore-elbow');
   let ea = add(elbow, new Set(segs.map(q => q.id)), 'Breach tunnel');
   if (!ea) return miss('bore-6');
   path.push(toCanvas(elbow.px + elbow.w / 2, elbow.pz + elbow.h / 2));
@@ -352,7 +355,8 @@ function boreRoute(inp: ArrivalInput, rng: Rng, tx: Txn, free: (r: CRect, allow:
   let z = elbow.pz + elbow.h, cc = elbow.px + elbow.w / 2, last: Area = ea;
   let lastCols = {lo: elbow.px, hi: elbow.px + elbow.w};
   while (z <= -1) {
-    const len = Math.min(rng.int(...ARRIVAL.seg), -1 - z + 1);
+    let len = Math.min(rng.int(...ARRIVAL.seg), -z);
+    if (-z - len < 4) len = -z; // the reveal segment is never a sliver
     const wd = rng.int(...ARRIVAL.bore);
     cc += rng.pick([-1, 0, 0, 1]);
     let lo = Math.round(cc - wd / 2);

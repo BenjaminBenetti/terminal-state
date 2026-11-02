@@ -138,8 +138,20 @@ export function planComplexSlots(p: SlotPlanInput): ComplexSlot[] {
       const off = w === 'S' ? Math.abs(p.cx(mpx) - (d.rect.x + d.rect.w / 2)) : Math.abs(p.PZ0 + mpz - (d.rect.y + d.rect.h / 2));
       cands.push({a, front, rank: KIND_RANK[d.kind] ?? 3, off, tie: rng.next()});
     }
-    cands.sort((q, r) => q.rank - r.rank || q.off - r.off || q.tie - r.tie);
-    for (const c of cands) {
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL, flow variety): WHERE the entrance opens is seeded — a deck of the wall drawn
+    // by weight (landings 3, stair landings / galleries 2, terraces 1), then a position along it (was: always the best-ranked deck's
+    // centre); the region stays centred on the entrance where the canvas allows (the carvers' contract is unchanged)
+    const byDeck = new Map<number, typeof cands>();
+    for (const c of cands) (byDeck.get(c.front) ?? byDeck.set(c.front, []).get(c.front)!).push(c);
+    const keyed = [...byDeck.keys()].map(id => ({id, key: Math.pow(rng.next(), 1 / ([3, 2, 2][byDeck.get(id)![0].rank] ?? 1))}));
+    keyed.sort((p, q) => q.key - p.key || p.id - q.id);
+    const ordered = keyed.flatMap(({id}) => {
+      const list = byDeck.get(id)!.slice().sort((q, r) => q.off - r.off || q.tie - r.tie);
+      // a seeded spot first (anywhere along the deck), then the rest from the deck's centre outward
+      const first = list[Math.floor(rng.next() * list.length)];
+      return [first, ...list.filter(c => c !== first)];
+    });
+    for (const c of ordered) {
       // region along span [a0, a0 + A) holding the entrance `side` cells in from its ends; the south wall's stays within the pit's
       // along range (the stair / organ regions may run past the pit's south corners: the regions never meet)
       let lo = c.a + EW + side - A, hi = c.a - side;
@@ -434,6 +446,9 @@ export function finishComplexes(layout: StationLayout, rc: ReactorCarve, carves:
     });
   }
   info.complexes = out;
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): a shaft landing whose generator moved into a complex opening elsewhere is a
+  // plain wall landing now (HUD label; its emergency lamp was planned under the old name and stays)
+  for (const a of layout.areas) if (/^Generator landing/.test(a.label) && !info.generators.some(g => g.area === a.id)) a.label = a.label.replace(/^Generator landing/, 'Wall landing');
 }
 
 // ---------------------------------------------------------------------------------------------
