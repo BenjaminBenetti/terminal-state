@@ -21,7 +21,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR, type Grid} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import {
-  areaConnected, backed, cellsOfBox, makePlaceCtx, placeAgainstWall, propBlocksDoorway, setMask, tryPlaceProp, WALL_ROT, wallXZ, type PlaceCtx,
+  areaConnected, backed, cellsOfBox, makePlaceCtx, placeAgainstWall, propBlocksDoorway, WALL_ROT, wallXZ, type PlaceCtx,
 } from '../../placeKit';
 import type {Area, Door, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import type {MineRoomPlan} from './minesPlan';
@@ -43,7 +43,7 @@ export const MINE_PIECE_OF: Readonly<Record<number, MinePieceId>> = Object.fromE
 
 /** Real sizes (m) of the set pieces: footprint along / across their long axis, height (the lead's REACTOR_X_KIT dims). */
 export const MINE_PIECE_SIZE: Readonly<Record<MinePieceId, {l: number; w: number; h: number}>> = {
-  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.4, w: 2.4, h: 1.1}, drill: {l: 3.5, w: 1.0, h: 1.28},
+  cart: {l: 1.8, w: 0.8, h: 0.79}, winch: {l: 3.0, w: 1.71, h: 1.64}, winze: {l: 2.0, w: 2.0, h: 1.1}, drill: {l: 3.5, w: 1.0, h: 1.28},
   crib: {l: 1.4, w: 1.4, h: 0}, rubble: {l: 0, w: 0, h: 1.6},
 };
 
@@ -52,6 +52,8 @@ export const MINE_RAIL = {gauge: 0.6, railTop: 0.14, pitch: 0.65, sleeper: 1.0} 
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const r2 = (v: number) => Math.round(v * 100) / 100;
+/** Mask write (this pass opens no placement transaction). */
+const setMask = (arr: Uint8Array, i: number, v: number) => { arr[i] = v; };
 
 /** Stats of the last dress pass (QA / tests). */
 export const MINES_DRESS_STATS = {pieces: {} as Partial<Record<MinePieceId, number>>, props: 0, lights: 0, signs: 0, ms: 0};
@@ -144,13 +146,13 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   const ctx = makePlaceCtx(layout, rng.fork('mines-place'), lv, bb);
   // keep: the generator's stand point (5 x 5 cells), its skid ring, the rail line (lane: floor props never stand on it)
   const ux = info.use.x - crop.ox, uy = info.use.y - crop.oy;
-  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const x = Math.floor(ux) + dx, y = Math.floor(uy) + dy; if (g.inBounds(x, y)) setMask(ctx, ctx.keep, g.idx(x, y), 1); }
+  for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const x = Math.floor(ux) + dx, y = Math.floor(uy) + dy; if (g.inBounds(x, y)) setMask(ctx.keep, g.idx(x, y), 1); }
   const F = {x: info.foot.x - crop.ox, y: info.foot.y - crop.oy, w: info.foot.w, h: info.foot.h};
-  for (let y = F.y - 1; y < F.y + F.h + 1; y++) for (let x = F.x - 1; x < F.x + F.w + 1; x++) if (g.inBounds(x, y)) setMask(ctx, ctx.keep, g.idx(x, y), 1);
+  for (let y = F.y - 1; y < F.y + F.h + 1; y++) for (let x = F.x - 1; x < F.x + F.w + 1; x++) if (g.inBounds(x, y)) setMask(ctx.keep, g.idx(x, y), 1);
   const rail = minesRailWorld(layout, info.rooms);
   for (const p of alongPolyline(rail, 0.25)) {
     const [cx, cy] = g.cellOf(p.x, p.z);
-    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (g.inBounds(cx + dx, cy + dy) && Math.hypot((cx + dx + 0.5) * CELL - p.x, (cy + dy + 0.5) * CELL - p.z) < 0.75) setMask(ctx, ctx.lane, g.idx(cx + dx, cy + dy), 1);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (g.inBounds(cx + dx, cy + dy) && Math.hypot((cx + dx + 0.5) * CELL - p.x, (cy + dy + 0.5) * CELL - p.z) < 0.75) setMask(ctx.lane, g.idx(cx + dx, cy + dy), 1);
   }
   const lift = (from: number) => { for (let i = from; i < layout.props.length; i++) { const p = layout.props[i]; p.y = r2(p.y + base); } };
 
@@ -160,6 +162,27 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
     if (p) MINES_DRESS_STATS.pieces[id] = (MINES_DRESS_STATS.pieces[id] ?? 0) + 1;
     return p;
   };
+  // the hoist first (the hero piece): a fenced blind winze and its winch (drum toward the winze) in the hoist room; where the room's
+  // fittings leave no space, by the junction's or the cavern's wall (an old winze broken through there)
+  {
+    const tryRoom = (H: Area): boolean => {
+      const alongX = H.w >= H.h, ax0 = H.x * CELL, az0 = H.y * CELL, ax1 = (H.x + H.w) * CELL, az1 = (H.y + H.h) * CELL;
+      for (const f of [0.3, 0.7, 0.5, 0.2, 0.8, 0.4, 0.6]) for (const q of [0.5, 0.35, 0.65, 0.25, 0.75]) {
+        // winze 2.0 m square (fenced collar), the winch 3.0 x 1.7 beside it along the long axis, 0.5 m between them (cell-aligned)
+        const wx = alongX ? ax0 + (ax1 - ax0) * f : ax0 + (ax1 - ax0) * q, wz = alongX ? az0 + (az1 - az0) * q : az0 + (az1 - az0) * f;
+        const sx = Math.round(wx * 2) / 2, sz = Math.round(wz * 2) / 2;
+        const before = layout.props.length;
+        if (!piece(H, 'winze', sx, sz, 1.0, 1.0, 1.1, {ring: 1})) continue;
+        const sgn = f < 0.5 ? 1 : -1;
+        const cx = alongX ? sx + sgn * 3.0 : sx, cz = alongX ? sz : sz + sgn * 3.0;
+        if (piece(H, 'winch', cx, cz, alongX ? 1.5 : 0.86, alongX ? 0.86 : 1.5, 1.64, {ring: 1})) return true;
+        unplace(ctx, layout, before); // no room for the winch beside it: the winze comes back out
+        MINES_DRESS_STATS.pieces.winze = (MINES_DRESS_STATS.pieces.winze ?? 1) - 1;
+      }
+      return false;
+    };
+    for (const a of [area('hoist'), area('junction'), area('cavern')]) if (a && tryRoom(a)) break;
+  }
   // ore carts on the haulage line: one on the drift, one by the loading point in the cavern, one more by the junction now and then
   {
     const haul = new Set([...of('haulage'), ...of('junction'), ...of('cavern')].map(a => a.id));
@@ -174,28 +197,6 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
         if (!a || !haul.has(a.id)) continue;
         const along = Math.abs(s.dx) > 0.5;
         if (piece(a, 'cart', s.x, s.z, along ? 0.9 : 0.4, along ? 0.4 : 0.9, 0.8, {lane: true})) { placed++; break; }
-      }
-    }
-  }
-  // the hoist: a fenced blind winze and its winch (drum toward the winze) in the hoist room
-  {
-    const H = area('hoist');
-    if (H) {
-      const alongX = H.w >= H.h, ax0 = H.x * CELL, az0 = H.y * CELL, ax1 = (H.x + H.w) * CELL, az1 = (H.y + H.h) * CELL;
-      const tries: [number, number][] = [];
-      for (const f of [0.3, 0.7, 0.5, 0.2, 0.8]) for (const q of [0.5, 0.35, 0.65]) tries.push([f, q]);
-      for (const [f, q] of tries) {
-        // winze 2.4 m square, the winch 3.0 x 1.7 beside it along the long axis
-        const wx = alongX ? ax0 + (ax1 - ax0) * f : ax0 + (ax1 - ax0) * q, wz = alongX ? az0 + (az1 - az0) * q : az0 + (az1 - az0) * f;
-        const before = layout.props.length;
-        const wz0 = piece(H, 'winze', wx, wz, 1.2, 1.2, 1.1, {ring: 1});
-        if (!wz0) continue;
-        const sgn = f < 0.5 ? 1 : -1;
-        const cx = alongX ? wx + sgn * (1.2 + 0.5 + 1.5) : wx, cz = alongX ? wz : wz + sgn * (1.2 + 0.5 + 1.5);
-        if (piece(H, 'winch', cx, cz, alongX ? 1.5 : 0.86, alongX ? 0.86 : 1.5, 1.64, {ring: 1})) break;
-        // no room for the winch beside it: take the winze back
-        unplace(ctx, layout, before);
-        MINES_DRESS_STATS.pieces.winze = (MINES_DRESS_STATS.pieces.winze ?? 1) - 1;
       }
     }
   }
@@ -251,11 +252,11 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
   const M = area('magazine'), C = area('cavern'), T = area('tools'), Lr = area('lamp'), J = area('junction');
   put(M, 'crate', rng.int(3, 5), {purpose: 'storage'});
   put(C, 'crate', rng.int(2, 3), {purpose: 'storage'});
-  put(C, 'cableSpool', 1);
+  put(C, 'palletJack', 1);
   put(C, 'gasCylinderCart', 1);
   put(C, 'airCompressor', 1);
   put(C, 'tripodWorkLight', 2);
-  put(J, 'cableSpool', 1);
+  put(J, 'crate', 1, {purpose: 'storage'});
   put(J, 'handTruck', 1);
   put(T, 'gasCylinderCart', 1);
   put(T, 'stepLadder', 1);
@@ -266,7 +267,7 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
     rng.shuffle(drifts);
     put(drifts[0], 'drumFan', 1);
     put(drifts[1], 'crate', 1, {purpose: 'storage'});
-    put(drifts[2], 'cableSpool', 1);
+    put(drifts[2], 'gasCylinderCart', 1);
   }
   // wall mounts: the lamp room's tag board + check-in clock, mine phones at the junction / cavern, first-aid kits
   mount(ctx, Lr, 'keyCabinet', 1.3, base);
@@ -350,9 +351,9 @@ function placeMachine(ctx: PlaceCtx, a: Area, x: number, z: number, hx: number, 
   if (propBlocksDoorway(ctx.layout, x, z, hx, hz, base, h)) return null;
   if (base + h > a.ceil + 0.05) return null;
   const blocksSight = h > 1.7;
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(ctx, g.blocked, i, 1); if (blocksSight) setMask(ctx, g.sightBlocked, i, 1); }
+  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(g.blocked, i, 1); if (blocksSight) setMask(g.sightBlocked, i, 1); }
   if (!areaConnected(ctx, a)) {
-    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(ctx, g.blocked, i, 0); setMask(ctx, g.sightBlocked, i, 0); }
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(g.blocked, i, 0); setMask(g.sightBlocked, i, 0); }
     return null;
   }
   const p: PropPlacement = {kind: 'annexMachine', x: r3(x), z: r3(z), y: r2(base), rot: 0, area: a.id, hx: r3(hx), hz: r3(hz), h: r2(h), blocksSight, variant, ...(ctx.level ? {level: ctx.level} : {})};
@@ -366,7 +367,7 @@ function unplace(ctx: PlaceCtx, layout: StationLayout, from: number): void {
   while (layout.props.length > from) {
     const p = layout.props.pop()!;
     const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
-    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(ctx, g.blocked, i, 0); setMask(ctx, g.sightBlocked, i, 0); }
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); setMask(g.blocked, i, 0); setMask(g.sightBlocked, i, 0); }
   }
 }
 
@@ -397,7 +398,7 @@ function mount(ctx: PlaceCtx, a: Area | undefined, kind: PropKind, y: number, ba
       if (ctx.layout.props.some(p => (p.level ?? 0) === ctx.level && p.x + p.hx > x - hx && p.x - p.hx < x + hx && p.z + p.hz > z - hz && p.z - p.hz < z + hz && p.y + p.h > base + y && p.y < base + y + def.h)) continue;
       if (propBlocksDoorway(ctx.layout, x, z, hx, hz, base + y, def.h)) continue;
       const p: PropPlacement = {kind, x: r3(x), z: r3(z), y: r2(y), rot, area: a.id, hx, hz, h: def.h, blocksSight: false, variant: 0, mounted: true, ...(ctx.level ? {level: ctx.level} : {})};
-      if (y < 2) for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) setMask(ctx, ctx.keep, g.idx(cx, cy), 1);
+      if (y < 2) for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) setMask(ctx.keep, g.idx(cx, cy), 1);
       ctx.layout.props.push(p);
       return p;
     }

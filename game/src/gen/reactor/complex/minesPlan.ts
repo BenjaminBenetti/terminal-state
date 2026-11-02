@@ -21,6 +21,7 @@ import type {Rng} from '../../../core/rng';
 import {SOLID, type Grid} from '../../grid';
 import type {AreaKind, Rect, RoomType} from '../../stationTypes';
 import type {ComplexRoom, ComplexSlot} from './types';
+import {ANNEX_PICKED_KEY} from '../../../items/lootTables';
 
 /** Sizes (cells: 0.5 m) and clear heights (m above the storey floor) of the program. */
 export const MINES = {
@@ -251,7 +252,13 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The program
 
+/** Drifts: service-corridor passages (the station composer's service clusters: work lights, maintenance bays, caches, safety points). */
 const DRIFT = {kind: 'passage' as AreaKind, type: 'service-corridor' as RoomType, purpose: 'service-corridor'};
+/**
+ * Dead ends (flooded sump, collapsed drift): bare rooms the dresser leaves empty (the picked-over purpose: no furniture rules, no
+ * generated-prop uses, no plate), so the sump pump / barricade / rubble of the mines dress stand where the drift actually ends.
+ */
+const DEAD_END = {kind: 'room' as AreaKind, type: 'utility' as RoomType, purpose: ANNEX_PICKED_KEY};
 
 /** Plans the mines in a slot (the best of a few seeded attempts); null when no attempt fits the program. */
 export function planMines(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number): MinePlan | null {
@@ -420,7 +427,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
     ...(hasX ? [{parent: 'crosscut', side: 'down' as Side, along: [12, 16] as [number, number], deep: [8, 10] as [number, number]}, {parent: 'crosscut', side: 'up' as Side, along: [12, 16] as [number, number], deep: [8, 10] as [number, number]}] : []),
     {parent: m0, side: 'left', along: [12, 16], deep: [10, 12]},
     {parent: h0, side: 'right', along: [12, 16], deep: [10, 12]},
-  ], {label: 'Hoist room', role: 'shaft', kind: 'room', type: 'utility', purpose: 'electrical-room', clear: r2(Math.min(ceilRel, MINES.clear.hoist)), part: 'hoist'}, {kind: 'room', width: 4});
+  ], {label: 'Hoist room', role: 'shaft', kind: 'room', type: 'utility', purpose: 'electrical-closet', clear: r2(Math.min(ceilRel, MINES.clear.hoist)), part: 'hoist'}, {kind: 'room', width: 4});
   if (!hoist) return null;
   for (const k of [...segsOf('manway').map(r => r.key), ...(hasX ? ['crosscut'] : [])]) if (sharedWall(hoist.cr, P.room(k)!.cr) && P.door(k, 'hoist', 'room', {width: 3, pick: 'rand'})) break;
   // the powder magazine: off the cross-cut / a drift, away from the main haulage where the rock allows
@@ -454,7 +461,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
   if (!lamp || !tools) return null;
   // the flooded sump drift (below / beside the cavern) and the collapsed drift (continuing a lateral leg / off the junction)
   const sumpLen: [number, number] = [8, big ? 18 : 12], deadW: [number, number] = [5, 6];
-  const sump = place('sump', rng.shuffle([
+  const sump = place('sump', rng.shuffle<Cand>([
     ...(below >= 9 ? [{parent: 'cavern', side: 'down' as Side, along: deadW, deep: sumpLen}] : []),
     {parent: 'cavern', side: 'left', along: deadW, deep: sumpLen},
     {parent: 'cavern', side: 'right', along: deadW, deep: sumpLen},
@@ -462,7 +469,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
     {parent: lastM, side: 'left', along: deadW, deep: sumpLen},
     {parent: lastH, side: 'right', along: deadW, deep: sumpLen},
     {parent: 'cavern', side: 'down', along: deadW, deep: [8, 9]},
-  ]), {label: 'Flooded sump drift', role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), part: 'sump'}, {kind: 'set', full: true});
+  ]), {label: 'Flooded sump drift', role: 'corridor', ...DEAD_END, clear: clearOf(MINES.clear.drift), part: 'sump'}, {kind: 'set', full: true});
   const legH = P.rooms.find(r => r.part === 'haulage' && r.cr.h <= 8 && r.cr.w > r.cr.h)?.key, legM = P.rooms.find(r => r.part === 'manway' && r.cr.h <= 8 && r.cr.w > r.cr.h)?.key;
   const collapse = place('collapse', [
     ...(legH ? [{parent: legH, side: 'right' as Side, along: [5, 6] as [number, number], deep: [8, 16] as [number, number]}] : []),
@@ -471,7 +478,7 @@ function tryPlan(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number, attempt:
     {parent: 'junction', side: 'right', along: [5, 6], deep: [8, 14]},
     {parent: m0, side: 'left', along: [5, 6], deep: [8, 14]},
     {parent: h0, side: 'right', along: [5, 6], deep: [8, 14]},
-  ], {label: 'Collapsed drift', role: 'corridor', ...DRIFT, clear: clearOf(MINES.clear.drift), part: 'collapse'}, {kind: 'set', full: true});
+  ], {label: 'Collapsed drift', role: 'corridor', ...DEAD_END, clear: clearOf(MINES.clear.drift), part: 'collapse'}, {kind: 'set', full: true});
   if (!sump && !collapse) return null;
   // the refuge chamber (optional)
   place('refuge', [
