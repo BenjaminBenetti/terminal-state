@@ -39,7 +39,8 @@ const hexRgb = (h: number): [number, number, number] => { const c = new THREE.Co
 function renderC(u: FogUniforms, x: number, y: number, z: number): {strata: number; outdoor: number} {
   const r = u.depthRect.value as THREE.Vector4, g = u.depthRange.value as THREE.Vector4, o = u.depthOut.value as THREE.Vector4;
   if (!(u.depthOn.value > 0.5) || x < r.x || x > r.z || z < r.y || z > r.w) return {strata: 0, outdoor: 0};
-  const tab = u.depthTab.array as number[], N = REACTOR_AIR.TABLE_N;
+  // (lane FOG, task reactor-submit-roof-fog-20261102: the strata table is the march's TABLE_N x 1 float texture — read its texels)
+  const tab = (u.depthTab as unknown as {value: THREE.DataTexture}).value.image.data as Float32Array, N = REACTOR_AIR.TABLE_N;
   const fu = Math.min(1, Math.max(0, (y - g.x) * g.z)) * (N - 1), fl = Math.min(Math.floor(fu), N - 2);
   const strata = y < g.y ? tab[fl] + (tab[fl + 1] - tab[fl]) * (fu - fl) : 0;
   return {strata, outdoor: o.z * sstep(o.x, o.y, y)};
