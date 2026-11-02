@@ -76,8 +76,10 @@ const KIT = [
   {id: 'hot-cell-window', key: 'hotCellWindow', axis: 1, size: 3.0, tex: [1024, 256, 512], what: 'waste: hot-cell window wall section with manipulators'},
 ];
 /** Codex surface sources -> tileable sets: colour (resized), normal from luminance height, ORM (AO / roughness / metal). */
-/** (the expansion kit ships models only; the surface sets come from build-reactor-kit.mjs) */
-const TEXTURES = [];
+/** Codex surface sources of the expansion (the original three sets come from build-reactor-kit.mjs). */
+const TEXTURES = [
+  {id: 'tex-mine-rock', name: 'mine-rock', size: 1024, strength: 2.6, metal: 0.0, rough: [0.72, 0.96], what: 'blasted mine-drift rock (lane MINES drift walls / ceilings)'},
+];
 
 // ---------- records ----------
 const ledger = fs.readFileSync(path.join(MESHY, 'LEDGER.jsonl'), 'utf8').split('\n').filter(Boolean).map(l => JSON.parse(l));
@@ -221,6 +223,10 @@ import type {ReactorKitModel} from './reactorKit.generated';
 export const REACTOR_X_KIT = {
 ${kitOut.map(k => `  ${k.key}: {key: 'reactor-${k.key}', url: '${k.url}', bytes: ${k.bytes}, tris: ${k.tris}, dims: [${k.dims.join(', ')}]},`).join('\n')}
 } as const satisfies Readonly<Record<string, ReactorKitModel>>;
+/** Tileable expansion surface sets: colour / normal / ORM (R ao, G roughness, B metal) JPEGs. */
+export const REACTOR_X_TEXTURES = {
+${texOut.map(t => `  '${t.key}': {color: '${t.files[0].url}', normal: '${t.files[1].url}', orm: '${t.files[2].url}'},`).join('\n')}
+} as const;
 `;
 fs.writeFileSync(REG, reg);
 const credSrc = fs.readFileSync(CREDITS, 'utf8');
@@ -235,6 +241,6 @@ const mine = new Set([...written, 'assets/CREDITS.md']);
 const add = [...mine].map(p => { const b = fs.readFileSync(path.join(PUB, p)); return {path: p, bytes: b.length, sha256: sha(b)}; });
 // drop only THIS kit's own stale outputs (build-reactor-kit.mjs's models / textures keep their entries)
 const ownModel = new Set(KIT.map(k => `assets/models/reactor-${k.id.replace(/^reactor-/, '')}.glb`));
-allow.files = [...allow.files.filter(f => !mine.has(f.path) && !ownModel.has(f.path)), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
+allow.files = [...allow.files.filter(f => !mine.has(f.path) && !ownModel.has(f.path) && !TEXTURES.some(t => f.path.startsWith(`assets/textures/reactor/${t.name}-`))), ...add].sort((x, y) => (x.path < y.path ? -1 : x.path > y.path ? 1 : 0));
 fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 console.log('wrote', written.length, 'public files +', path.relative(root, REG), 'CREDITS.md public-inputs.json');

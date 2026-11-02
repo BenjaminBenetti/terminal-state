@@ -277,3 +277,30 @@ they sit outside the two audits; their classification is recorded here.
   - No baked clutter: the model is just the box, its lid, latches, hinge and handles.
   - Scale (rule 5): `scale-check.mjs --prop game/public/assets/models/player-train-lockbox.glb`, viewed. 1.03 × 0.556 × 0.614 m,
     grounded on 4 skid contacts, top at 0.55 m (a footlocker below the 0.98 m window sills).
+
+## 7. Reactor mines set pieces (not layout prop kinds)
+Task reactor-expansion-20261101 (lane MINES). The old mine workings off tier 2 (`gen/reactor/complex/mines*.ts`) dress their drifts
+with EXISTING prop kinds (crates, cabinets, lockers, tool chests, gas cylinders, the sump pump, work lights, a drum fan, a barricade,
+wall-mounted phones / first-aid kits / tag board / clock) through the dresser's primitives, so every one keeps its audit rows. The set
+pieces below are collision-only `annexMachine` boxes (`gen/reactor/complex/minesDress.ts` `MINE_PIECE` variants) that
+`world/reactor/minesVisuals.ts` draws with the lead's Meshy models (`REACTOR_X_KIT`, maps kept):
+- **Ore cart** (`mineCart`): static, rail-bound: a ~650 kg steel ore car chocked on its 600 mm rails. A body bump or bullets don't move
+  it. It's an empty open car, not storage.
+- **Hoist winch** (`hoistWinch`): anchored, bolted to its concrete base; machinery, not storage. Beside it is the fenced blind
+  **winze**: a 2 × 2 m collision box for the steel guard fence round the timber collar (you can't fall in).
+- **Drill rig** (`drillRig`): static, too heavy (a rubber-tyred rig of several tonnes); machinery.
+- **Timber cribs / rubble**: structure (stacked crib timbers to the stope roof; the fallen rock choking the collapsed drift).
+- **Timber support sets** (`timberSet`): architecture, with no collision. The posts stand 0.1 m off the rock, inside the player's
+  standoff. A set is never placed across an opening or through a prop against the rib. The cap clears at least 2.3 m.
+- No baked clutter: the models are the machines / timber only. Loot stays in the existing openable holders.
+
+Scale (rule 5), `scale-check.mjs --prop <glb>` beside zombie lastshift (1.78 m, runtime scale 1). Every model is viewed and grounded:
+| Model | Scale | W × H × D | Contacts |
+| --- | --- | --- | --- |
+| Ore cart | 1 | 1.80 × 0.78 × 0.79 m | 4 (wheels; 600 mm gauge) |
+| Hoist winch | 1 | 3.00 × 1.64 × 1.71 m | 4 (the base) |
+| Drill rig | 1 | 3.50 × 1.28 × 0.98 m | 4 (tyres) |
+| Timber set in a 3 m × 3.3 m drift | 1.36, 1.31, 1 | 4.62 × 3.30 × 0.53 m | 13 (post feet) |
+
+The drill rig is compact for a "jumbo": a small single-boom rig, not a full-size jumbo. The timber set is scaled per drift so its
+posts sit at the rock. Its outer 0.6 m per side is buried in the rock, and the clear opening is about 2.8 × 2.35 m.

@@ -17,6 +17,7 @@ import type {StationLayout} from '../../gen/stationTypes';
 import {MOOD, syncGlowFog} from '../lights';
 import {fogCullDistance} from '../levelCulling';
 import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTexture} from './archAssets';
+import {minesModelKeysFor} from './minesAssets'; // task reactor-expansion-20261101 (lane MINES)
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
@@ -51,6 +52,7 @@ export class ReactorArchRuntime {
 
   constructor(private readonly host: ReactorArchHost) {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
+    host.sectionModelKeys?.push(layout => minesModelKeysFor(layout)); // task reactor-expansion-20261101 (lane MINES): the mine set pieces
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });

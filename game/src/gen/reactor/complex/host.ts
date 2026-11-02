@@ -348,6 +348,14 @@ export function clearEntranceLamps(layout: StationLayout, carves: readonly Compl
     }
   }
   if (drop.size) layout.lights = layout.lights.filter(l => !drop.has(l));
+  // (lead merge fix) keep lane GASLIGHT's pit-lamp stats true to the lamps left (gen/reactor/gaslightLamps.ts pitLampStats)
+  const st = (layout as unknown as {pitLamps?: {wall: number; post: number; steady: number; dying: number}}).pitLamps;
+  if (st) for (const l of drop) {
+    const m = l.mount;
+    if (!m) continue;
+    if (m.kind === 'wall') st.wall--; else st.post--;
+    if (l.dying) st.dying--; else st.steady--;
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
