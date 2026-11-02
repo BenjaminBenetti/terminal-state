@@ -18,6 +18,7 @@
 // Pure data + small helpers (no three.js).
 
 import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES, type ReactorKitModel} from '../../assets/reactorKit.generated';
+import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101: the expansion's Meshy kit
 
 /** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =
@@ -91,6 +92,8 @@ export const REACTOR_PIECES = Object.keys(REACTOR_MODELS) as ReactorPiece[];
 export function reactorModelFiles(): Record<string, {url: string; bytes: number}> {
   const out: Record<string, {url: string; bytes: number}> = {};
   for (const m of Object.values(REACTOR_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
+  // task reactor-expansion-20261101 (lane BUNKER): + the expansion kit (REACTOR_X_KIT: hero reactor + side-complex set pieces), level-only
+  for (const m of Object.values(REACTOR_X_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
   return out;
 }
 export const REACTOR_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = reactorModelFiles();

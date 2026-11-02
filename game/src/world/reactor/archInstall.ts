@@ -20,6 +20,7 @@ import {REACTOR_LEVEL, reactorModelKeysFor, reactorTextureLoads, setReactorTextu
 import {activeReactorArchVisuals, registerReactorArchVisuals} from './archVisuals';
 import {releaseReactorMaterials} from './archMaterials';
 import type {ReactorArch} from './arch';
+import {bunkerModelKeysFor} from '../../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 
 /** The Reactor's scene fog (FogExp2): deep olive industrial haze, and the camera far plane. */
 export const REACTOR_FOG = {density: 0.0135, color: 0x283020, far: 230} as const;
@@ -49,6 +50,7 @@ export class ReactorArchRuntime {
 
   constructor(private readonly host: ReactorArchHost) {
     host.sectionModelKeys?.push(layout => reactorModelKeysFor(layout as {reactor?: unknown}));
+    host.sectionModelKeys?.push(layout => ((layout as {reactor?: unknown}).reactor ? bunkerModelKeysFor(layout) : [])); // (lane BUNKER) hero props
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });

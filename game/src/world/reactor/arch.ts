@@ -26,6 +26,7 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
+import {buildBunkerModels} from './bunkerModels'; // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -232,6 +233,8 @@ export class ReactorArch {
     } catch (e) {
       console.warn('reactor arch: kit skipped', e);
     }
+    // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (REACTOR_X_KIT models on their prop placements)
+    try { buildBunkerModels(group, this.layout, models); } catch (e) { console.warn('reactor arch: bunker models skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }
