@@ -280,6 +280,9 @@ export function carveReactor(k: Kit, rng: Rng, f: ReactorFrame): ReactorCarve | 
   // (gen/reactor/arrival.ts; the band of rock is f.sep rows between the platform's south wall and the pit's north wall)
   const rimN = decks.find(d => d.level === 0 && d.wall === 'N');
   if (!rimN) return fail('rim-gallery');
+  // the carve stream keeps the old platform openings' draws, so every room after this point is placed exactly as before (the
+  // approach draws only from its own fork)
+  for (let i = 0; i < f.openings; i++) rng.int(-4, 4);
   const arrival = carveArrival({
     k, rng: rng.fork('arrival'), sep: f.sep, PX0, PZ0, PW, PD, p0: plat0, p1: plat0 + f.Lp, platform, rimN, cx, rectC, coreW: cv.coreW, coreH: cv.coreH,
   });

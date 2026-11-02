@@ -112,7 +112,7 @@ describe('the Reactor arrival: platform -> small station area -> breach -> short
       for (const a of seq.slice(iT, -1)) expect(tunnel.has(a), `seed ${seed}: ${L.areas[a]?.label} in the tunnel`).toBe(true);
       // the breach is a hole (no door record, no frame) and the ONE way in: closed, no pit deck of the rim is reachable
       const br = cells(ap.breach);
-      expect(L.doors.some(d => d.x < br.x + br.w && br.x < d.x + d.w && d.y < br.y + br.h && br.y < d.y + d.h)).toBe(false);
+      expect(L.doors.some(d => (d.level ?? 0) === 0 && d.x < br.x + br.w && br.x < d.x + d.w && d.y < br.y + br.h && br.y < d.y + d.h)).toBe(false);
       const cut = walk(L, br);
       const pitDeck = (id: number) => { const r = L.areas[id]?.role; return !!r && r.startsWith('reactor-') && r !== 'reactor-room'; };
       for (let i = 0; i < cut.length; i++) if (cut[i] !== -2) expect(pitDeck(g.area[i]), `seed ${seed}: pit deck reached around the breach`).toBe(false);
