@@ -25,6 +25,8 @@ const QUADS = 4;
 
 export interface SurfaceView {
   root: THREE.Group;
+  /** Everything seen only from outside (the eye gate toggles it); the aperture rain column sits beside it under `root`. */
+  outdoor: THREE.Group;
   city: THREE.Group;
   ground: THREE.Mesh;
   parapet: THREE.Mesh | null;
@@ -186,10 +188,12 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
  * `concrete`: the Reactor's pit-concrete colour map (null: a flat tone).
  */
 export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, models: (key: string) => GLTF | undefined, concrete: THREE.Texture | null, seed: number, kit: readonly SurfaceKitEntry[] = SURFACE_KIT): SurfaceView {
-  const root = new THREE.Group(), city = new THREE.Group();
+  const root = new THREE.Group(), outdoor = new THREE.Group(), city = new THREE.Group();
   root.name = 'reactor-surface';
   city.name = 'reactor-surface-city';
-  root.add(city);
+  outdoor.name = 'reactor-surface-outdoor';
+  root.add(outdoor);
+  outdoor.add(city);
   root.visible = false;
   const own: SurfaceView['own'] = {geometries: [], textures: [], materials: []};
   const instanced: THREE.InstancedMesh[] = [], drawn: Record<string, number> = {};
@@ -245,7 +249,7 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   const ground = new THREE.Mesh(gg, gmat);
   ground.name = 'reactor-surface-ground';
   ground.matrixAutoUpdate = false;
-  root.add(ground);
+  outdoor.add(ground);
   tris += triCount(gg);
   // --- the plaza parapet (wet concrete) ---
   const pg = parapetGeometry(site);
@@ -257,7 +261,7 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
     parapet = new THREE.Mesh(pg, pm);
     parapet.name = 'reactor-surface-parapet';
     parapet.matrixAutoUpdate = false;
-    root.add(parapet);
+    outdoor.add(parapet);
     tris += triCount(pg);
   }
   // --- the wet film over the walkable floor ---
@@ -271,7 +275,7 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
     film.name = 'reactor-surface-film';
     film.matrixAutoUpdate = false;
     film.renderOrder = 1;
-    root.add(film);
+    outdoor.add(film);
     tris += triCount(fg);
   }
   // --- the outdoor sky (follows the eye: the runtime moves it) ---
@@ -284,7 +288,7 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   sky.name = 'reactor-surface-sky';
   sky.frustumCulled = false;
   sky.renderOrder = -4.5; // (world/mallExterior.ts MALL_EXT_ORDER: over the pit's murk dome -5, under the gas sheets / curtain)
-  root.add(sky);
+  outdoor.add(sky);
   tris += triCount(sg);
   // --- rain (the shelter map shared by both layers) ---
   const floor = buildRainFloor(site, plan);
@@ -293,9 +297,10 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   const near = new RainLayer('reactor-surface-rain', SURFACE_RAIN.near.count, ft, floor, seed ^ 0x2a1);
   const column = new RainLayer('reactor-surface-rain-aperture', SURFACE_RAIN.column.count, ft, floor, seed ^ 0x3b7);
   column.column(site);
-  root.add(near.mesh, column.mesh);
+  outdoor.add(near.mesh);
+  root.add(column.mesh);
   for (const o of [ground, film, sky, parapet]) if (o) { o.castShadow = o.receiveShadow = false; o.updateMatrix(); }
-  return {root, city, ground, parapet, film, sky, near, column, floor, instanced, own, drawn, tris};
+  return {root, outdoor, city, ground, parapet, film, sky, near, column, floor, instanced, own, drawn, tris};
 }
 
 /** Release what the view owns (the kit's GLB geometry / maps stay with the library; model materials stay cached). */

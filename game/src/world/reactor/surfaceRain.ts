@@ -16,7 +16,7 @@
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
-import {Fn, abs, attribute, cameraPosition, clamp, cross, float, floor, int, ivec2, length, max, min, mix, normalize, smoothstep, texture, uniform, varying, vec2, vec3, vec4} from 'three/tsl';
+import {Fn, abs, attribute, cameraPosition, clamp, cross, float, floor, int, ivec2, length, max, min, mix, normalize, smoothstep, texture, uniform, varying, vec3, vec4} from 'three/tsl';
 import type {ReactorRect} from '../../gen/reactor/reactorTypes';
 import {footprintCorners, type SurfaceCityPlan} from './surfacePlan';
 import type {SurfaceSite} from './surfaceSite';
@@ -193,7 +193,7 @@ function rainMaterial(u: RainUniforms, floorTex: THREE.DataTexture, m: RainFloor
   const toEye = n(head).sub(cameraPosition);
   const dist = n(length(toEye)).toVar('rainDist');
   const hd = n(length(n(toEye).xz));
-  const reachK = n(n(u.reach).greaterThan(0).select(float(1).sub(smoothstep(n(u.reach).mul(0.62), u.reach, hd)), float(1)));
+  const reachK = n(n(u.reach).greaterThan(0).select(float(1).sub(smoothstep(n(u.reach).mul(0.62), n(u.reach), hd)), float(1)));
   const nearK = n(smoothstep(0.35, 1.3, dist));
   const w = n(max(float(R.width), dist.mul(u.px).mul(R.pxK))).toVar('rainW');
   const vis = n(above.and(inDisc).select(float(1), float(0))).mul(depthK).mul(reachK).mul(nearK).mul(u.on).toVar('rainVis');
