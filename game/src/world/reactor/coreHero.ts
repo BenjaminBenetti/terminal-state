@@ -196,8 +196,8 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
   };
   const lamp = (group: CoreLampGroup, x: number, y: number, z: number, r = 0.055, site = false) => { out.lamps.push({group, x, y, z, r, site}); st.lamps++; };
 
-  const rT = Math.min(cf.rails.outer - 0.25, (cf.ring.r1 + cf.pool.r1) / 2 + F.sgHalf + 0.25); // outer pipe track over the goop
-  const rH = cf.rails.outer + H.headerOut; // the steam header ring (over the outer floor's edge, high)
+  // ---- 1. the coolant loops ---------------------------------------------------------------------------------------------------------
+  const rH =cf.rails.outer + H.headerOut; // the steam header ring (over the outer floor's edge, high)
   for (const loop of cf.loops) {
     const sg = loop.sg, rcp = loop.rcp, mf = loop.manifold;
     // steam generator (11 m, standing in the goop on its skirt)
