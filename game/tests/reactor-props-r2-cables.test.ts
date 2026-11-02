@@ -17,14 +17,20 @@ import {buildWorld} from '../src/world/builder';
 import {onCable, planBeacons} from '../src/world/reactor/startupBeaconPlan';
 
 installCanvasShim(false);
-const SEEDS = [9100, 218558, 637474, 1, 42, 777];
+// (+4 seeds after ARRIVAL seeded the complex entrance decks: an entrance deck as narrow as its door hid a no-route case)
+const SEEDS = [9100, 218558, 637474, 1, 42, 777, 31337, 2026110, 3, 5];
 const cache = new Map<number, StationLayout>();
 const level = (seed: number) => { let L = cache.get(seed); if (!L) { L = LEVELS.reactor.generate('main', {levelSeed: seed}); cache.set(seed, L); } return L; };
 const complexOf = (L: StationLayout, c: ReactorComplexInfo): CableComplex => ({level: c.level, baseY: L.levels[c.level].baseY, frontArea: c.slot!.frontArea, areas: c.areas});
-/** The index of the cable's exit point: the first point (after the panel) on the deck in front of the complex entrance. */
+/** The index of the cable's exit point: the first point (after the panel's riser) on a pit-deck cell beyond the complex's entrance wall. */
 function exitIndex(L: StationLayout, c: ReactorComplexInfo): number {
-  const g = L.reactor!.generators[c.generator], grid = L.levels[c.level].grid;
-  return g.cable.findIndex((p, i) => { if (i === 0) return false; const [cx, cy] = grid.cellOf(p.x, p.z); return grid.area[grid.idx(cx, cy)] === c.slot!.frontArea; });
+  const g = L.reactor!.generators[c.generator], grid = L.levels[c.level].grid, ids = new Set(c.areas);
+  const inDoor = (cx: number, cy: number) => L.doors.some(d => (ids.has(d.a) || ids.has(d.b)) && cx >= d.x && cx < d.x + d.w && cy >= d.y && cy < d.y + d.h);
+  return g.cable.findIndex((p, i) => {
+    if (i < 2) return false;
+    const [cx, cy] = grid.cellOf(p.x, p.z), j = grid.idx(cx, cy);
+    return grid.cells[j] === FLOOR && !ids.has(grid.area[j]) && !inDoor(cx, cy);
+  });
 }
 
 describe('complex generator cables along the ceiling (bullet 11)', () => {
@@ -40,6 +46,9 @@ describe('complex generator cables along the ceiling (bullet 11)', () => {
         expect(g.cable[0], tag).toEqual(g.panel);
         const k = exitIndex(L, c);
         expect(k, `${tag}: the cable leaves through the entrance`).toBeGreaterThan(2);
+        expect(g.cableFallback, `${tag}: the strict ceiling route (not bare / legacy)`).toBeUndefined();
+        expect(g.cableSleeves?.length ?? 0, `${tag}: wall sleeves`).toBeGreaterThan(0);
+        expect(g.cableSleeves!.includes(k - 1), `${tag}: the exit is the entrance sleeve's far end`).toBe(true);
         const E = F.entrance, ex = g.cable[k], [ecx, ecy] = grid.cellOf(ex.x, ex.z);
         expect(ecx >= E.x - CEILING_CABLE.besideReach - 1 && ecx < E.x + E.w + CEILING_CABLE.besideReach + 1 && ecy >= E.y - CEILING_CABLE.besideReach - 1 && ecy < E.y + E.h + CEILING_CABLE.besideReach + 1, `${tag}: exit at the entrance`).toBe(true);
         for (const fid of R.zones[c.zone].fans) {
@@ -59,7 +68,7 @@ describe('complex generator cables along the ceiling (bullet 11)', () => {
           const L2 = Math.hypot(dx, dz), n = Math.max(1, Math.ceil(L2 / 0.25)), samples: number[] = [];
           for (let t = 0; t <= n; t++) {
             const x = a.x + (b.x - a.x) * t / n, z = a.z + (b.z - a.z) * t / n, [cx, cy] = grid.cellOf(x, z), j = grid.idx(cx, cy);
-            const room = grid.cells[j] === FLOOR && (F.ids.has(grid.area[j]) || grid.area[j] === F.front) && !F.doors.some(d => cx >= d.x && cx < d.x + d.w && cy >= d.y && cy < d.y + d.h);
+            const room = (grid.cells[j] === FLOOR && F.ids.has(grid.area[j]) && !F.doors.some(d => cx >= d.x && cx < d.x + d.w && cy >= d.y && cy < d.y + d.h)) || F.deck(j);
             if (!room) {
               // a wall / door cell: only at a doorway of the complex (over its lintel or within reach of its jamb)
               const R2 = CEILING_CABLE.besideReach;
@@ -72,7 +81,8 @@ describe('complex generator cables along the ceiling (bullet 11)', () => {
           }
           // "along the roof": a straight tray hangs within 0.55 m of the lowest roof along it — the room's ceiling, or the timber cap /
           // fixture / duct it passes under
-          if (!samples.length) continue;
+          // (a wall sleeve's height is set by the lintel / jamb it passes and, at the entrance, by the pit-side run: not a tray run)
+          if (!samples.length || g.cableSleeves!.includes(i)) continue;
           const roof = Math.min(...samples.map(j => F.lowBy[j] >= 0 ? Math.min(grid.ceil[j], F.obst[F.lowBy[j]].y0) : grid.ceil[j]));
           level0 += samples.length;
           if (a.y >= roof - 0.55) near += samples.length;

@@ -100,6 +100,10 @@ export interface ReactorGenerator {
   cable: readonly {x: number; y: number; z: number}[];
   /** Task reactor-playtest-round2-20261102 (lane PROPS): the drop rods hanging a complex cable from the ceiling (x / z, rod y0 .. y1). */
   cableHangers?: readonly {x: number; z: number; y0: number; y1: number}[];
+  /** (lane PROPS) indices i of `cable` whose segment i -> i + 1 is a wall SLEEVE (wires only, through a wall over a lintel / beside a jamb). */
+  cableSleeves?: readonly number[];
+  /** (lane PROPS) set when the ceiling route had to ignore the layout's obstacles ('bare') or fell back to the old routing ('legacy'). */
+  cableFallback?: 'bare' | 'legacy';
 }
 
 /** A wall-mounted extraction fan (a duct housing in the pit wall; blades spin when its zone's generator runs). */

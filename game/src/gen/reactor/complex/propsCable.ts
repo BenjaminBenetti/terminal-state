@@ -50,7 +50,7 @@ export const CEILING_CABLE = {
   /** A straight run steps to a new height where its cells' open height changes by more than `step` for at least `minPiece` cells. */
   step: 0.3, minPiece: 4,
   /** Route costs: per cell, a turn, an interior cell (no wall beside it), a cell whose ceiling band is taken, a crossing beside a jamb. */
-  cost: {cell: 1, turn: 3, interior: 0.3, low: 4, beside: 3},
+  cost: {cell: 1, turn: 3, interior: 0.3, low: 4, beside: 3, flush: 12},
   /** The cable body about its centre (tray bottom, wires top). */
   body: [-0.075, 0.0475] as const,
 } as const;
@@ -64,8 +64,12 @@ export interface CeilingCableRoute {
   exit: CablePoint;
   /** Drop rods from the tray to the ceiling / the cap it hangs under. */
   hangers: CableHanger[];
-  /** Wall crossings: over a lintel / beside a jamb (door id). */
-  crossings: {door: number; kind: 'lintel' | 'beside'; y: number}[];
+  /** Wall crossings: over a lintel / beside a jamb / flush under the ceiling over a ceiling-high opening (door id). */
+  crossings: {door: number; kind: 'lintel' | 'beside' | 'flush'; y: number}[];
+  /** Indices i of `pts` whose segment i -> i + 1 is a wall SLEEVE (wires only, no tray). */
+  sleeves: number[];
+  /** The route ignores the layout's obstacles (no strict route existed): the door rules still hold. */
+  bare: boolean;
 }
 
 /** An axis-aligned obstacle box (absolute y); `cap` = structure the cable may hang under (a timber set's cap). */
@@ -144,7 +148,7 @@ const stat = (level: number, result: string, crossings = 0, open = 0, t0 = 0) =>
 };
 const now = () => (typeof performance !== 'undefined' ? performance.now() : 0);
 
-export type Crossing = {door: Door; e: number; x: number; dir: number; kind: 'lintel' | 'beside'; y: number; cost: number};
+export type Crossing = {door: Door; e: number; x: number; dir: number; kind: 'lintel' | 'beside' | 'flush'; y: number; cost: number};
 const DX = [1, -1, 0, 0], DY = [0, 0, 1, -1];
 
 /** A small binary min-heap of [cost, state]. */
@@ -186,7 +190,10 @@ export interface CableField {
   obst: Obst[]; crossings: Crossing[];
   /** Route cells' bounds (cells). */
   bx0: number; by0: number; bx1: number; by1: number;
+  /** A route cell of the complex (`deck`: or a pit-deck cell in front of the entrance, any deck area). */
   room(i: number, deck?: boolean): boolean;
+  /** A pit-deck cell in front of the entrance (where the cable leaves the complex). */
+  deck(i: number): boolean;
   open(i: number): boolean;
   /** The highest cable centre at or under y0 clear of every obstacle over all the cells. */
   common(cells: readonly number[], y0: number): number;
@@ -194,8 +201,14 @@ export interface CableField {
   over(i: number): readonly number[];
 }
 
-/** The ceiling field (see CableField) or why there is none. */
-export function cableField(layout: StationLayout, c: CableComplex): CableField | string {
+/** The wire bundle of a wall sleeve (the tray stops at the riser; three wires pass through the wall): about the centre, half-width. */
+export const SLEEVE = {lo: -0.0075, hi: 0.0475, hw: 0.12, slack: 0.005, lintel: 0.02, flush: 0.08, back: 3} as const;
+
+/**
+ * The ceiling field (see CableField) or why there is none. `bare`: no obstacles (the router's last resort — the door rules still hold:
+ * never through an opening).
+ */
+export function cableField(layout: StationLayout, c: CableComplex, opts: {bare?: boolean} = {}): CableField | string {
   const g = layout.levels[c.level]?.grid, base = c.baseY, C = CEILING_CABLE, lv = c.level;
   if (!g) return 'no grid';
   const ids = new Set(c.areas), front = c.frontArea;
@@ -205,20 +218,26 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
   if (!entrance) return 'no entrance door';
   const doorCell = new Uint8Array(g.w * g.h);
   for (const d of doors) for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) if (g.inBounds(x, y)) doorCell[g.idx(x, y)] = 1;
-  const room = (i: number, deck = false): boolean => g.cells[i] === FLOOR && !doorCell[i] && (ids.has(g.area[i]) || (deck && g.area[i] === front))
-    && g.floor[i] <= base + 0.01 && g.floor[i] >= base - 0.5;
+  const reach = C.besideReach + SLEEVE.back + 1;
+  const nearEntrance = (i: number) => {
+    const x = i % g.w, y = (i / g.w) | 0;
+    return Math.abs(x + 0.5 - (entrance.x + entrance.w / 2)) <= entrance.w / 2 + reach && Math.abs(y + 0.5 - (entrance.y + entrance.h / 2)) <= entrance.h / 2 + reach;
+  };
+  // a pit-deck cell in front of the entrance: any deck area at the storey's floor (ARRIVAL seeds the entrance deck: it may be narrow)
+  const deck = (i: number): boolean => g.cells[i] === FLOOR && !doorCell[i] && !ids.has(g.area[i]) && g.area[i] >= 0 && Math.abs(g.floor[i] - base) <= 0.01 && nearEntrance(i);
+  const room = (i: number, withDeck = false): boolean => g.cells[i] === FLOOR && !doorCell[i]
+    && ((ids.has(g.area[i]) && g.floor[i] <= base + 0.01 && g.floor[i] >= base - 0.5) || (withDeck && deck(i)));
   // the obstacle field: per cell, the highest cable centre with nothing above it in the ceiling band (and whether a cap / fixture sets it)
   const top = new Float32Array(g.w * g.h).fill(-Infinity), lowBy = new Int32Array(g.w * g.h).fill(-1), capped = new Uint8Array(g.w * g.h);
   let bx0 = Infinity, by0 = Infinity, bx1 = -Infinity, by1 = -Infinity;
   for (let y = 0; y < g.h; y++) for (let x = 0; x < g.w; x++) {
     const i = g.idx(x, y);
     if (!room(i, true)) continue;
-    if (g.area[i] === front && (Math.abs(x + 0.5 - (entrance.x + entrance.w / 2)) > entrance.w / 2 + C.besideReach + 2 || Math.abs(y + 0.5 - (entrance.y + entrance.h / 2)) > entrance.h / 2 + C.besideReach + 2)) continue;
     top[i] = g.ceil[i] - C.drop;
     bx0 = Math.min(bx0, x); by0 = Math.min(by0, y); bx1 = Math.max(bx1, x); by1 = Math.max(by1, y);
   }
   if (bx0 > bx1) return 'no cells';
-  const obst = cableObstacles(layout, lv, base, [bx0 * CELL - 1, by0 * CELL - 1, (bx1 + 1) * CELL + 1, (by1 + 1) * CELL + 1], g);
+  const obst = opts.bare ? [] : cableObstacles(layout, lv, base, [bx0 * CELL - 1, by0 * CELL - 1, (bx1 + 1) * CELL + 1, (by1 + 1) * CELL + 1], g);
   // every obstacle over a cell forbids the cable centre from just under its underside to just over its top: the cable hangs as high as
   // it can under the ceiling, over what stays below it (a door frame's header, a wall plate, a cabinet), under what reaches the ceiling
   // band (a fixture, a duct, a timber cap)
@@ -255,80 +274,103 @@ export function cableField(layout: StationLayout, c: CableComplex): CableField |
     top[i] = y;
     if (k >= 0) { lowBy[i] = k; capped[i] = obst[k].cap ? 1 : 0; }
   }
-  // the lowest centre at or over `y0` outside every forbidden range of cell i
-  const ascend = (i: number, y0: number): number => {
-    let y = y0, moved = true;
-    const ks = forbid.get(i) ?? [];
-    while (moved) {
-      moved = false;
-      for (const k of ks) {
-        const o = obst[k], hiY = o.y1 - C.body[0] + C.over;
-        if (y > o.y0 - C.under && y < hiY - 1e-6) { y = hiY; moved = true; }
-      }
-    }
-    return y;
-  };
   // the highest centre at or under `y0` clear of every forbidden range of all `cells` (a run, a crossing's two ends)
   const common = (cells: readonly number[], y0: number): number => {
     let y = y0;
     for (let it = 0; it < 16; it++) { let lo = y; for (const i of cells) lo = Math.min(lo, descend(i, lo)[0]); if (lo >= y - 1e-6) break; y = lo; }
     return y;
   };
-  // a wall crossing may hug the ceiling tighter (C.tight) to pass over a lintel that is close under it (a 3.0 m door in a 3.2 m corridor)
-  const tightTop = (i: number) => g.ceil[i] - C.drop >= top[i] - 1e-6 ? descend(i, g.ceil[i] - C.tight)[0] : top[i];
   const minY = base + C.minY;
   const open = (i: number) => top[i] >= minY;
-  // wall crossings at every door: over its lintel (through the wall above the opening) or beside its jambs (through solid wall)
+  // --- WALL CROSSINGS at every door, as SLEEVES: the tray rises / falls at a riser cell (1-3 cells back from the wall, its column clear
+  // from the headroom up), three wires cross the wall: over the door's lintel (through the wall above the opening), beside its jambs
+  // (through solid wall, within C.besideReach cells), or — only where the opening's head is flush with the ceiling (no lintel to pass
+  // over) — hugging the ceiling. Never through an opening under its head.
+  const colClear = (i: number, y: number) => (forbid.get(i) ?? []).every(k => obst[k].y0 >= Math.max(y, top[i]) + C.body[1] + C.over - 1e-6 || obst[k].y1 <= minY + C.body[0] - C.over + 1e-6);
   const crossings: Crossing[] = [];
+  const W = SLEEVE;
   for (const d of doors) {
-    const head = base + d.height;
+    const head = base + d.height, isEntrance = d === entrance;
+    const inner = ids.has(d.b) ? d.b : d.a; // the complex side of the entrance
+    const sideOk = (i: number, other: number) => isEntrance
+      ? (deck(i) ? !deck(other) && g.area[other] === inner : g.area[i] === inner && deck(other))
+      : g.area[i] !== g.area[other] && ((g.area[i] === d.a && g.area[other] === d.b) || (g.area[i] === d.b && g.area[other] === d.a));
+    const near = obst.filter(o => o.x1 > (d.x - reach) * CELL && o.x0 < (d.x + d.w + reach) * CELL && o.z1 > (d.y - reach) * CELL && o.z0 < (d.y + d.h + reach) * CELL && o.y1 > band);
     for (const axis of [0, 1]) { // 0: through the wall along x (a wall running along z), 1: along y
       const T = axis === 0 ? d.w : d.h, s0 = axis === 0 ? d.y : d.x, s1 = s0 + (axis === 0 ? d.h : d.w);
+      const at = (sp: number, t: number) => (axis === 0 ? g.idx(d.x + t, sp) : g.idx(sp, d.y + t)); // t: -k .. T - 1 + k across the wall
       for (let sp = s0 - C.besideReach; sp < s1 + C.besideReach; sp++) {
-        const [ex, ey] = axis === 0 ? [d.x - 1, sp] : [sp, d.y - 1], [xx, xy] = axis === 0 ? [d.x + d.w, sp] : [sp, d.y + d.h];
-        if (!g.inBounds(ex, ey) || !g.inBounds(xx, xy)) continue;
-        const ei = g.idx(ex, ey), xi = g.idx(xx, xy);
-        if (!open(ei) || !open(xi)) continue;
-        const ea = g.area[ei], xa = g.area[xi];
-        if (ea === xa || !((ea === d.a && xa === d.b) || (ea === d.b && xa === d.a))) continue;
+        if (axis === 0 ? !g.inBounds(d.x - SLEEVE.back, sp) || !g.inBounds(d.x + d.w - 1 + SLEEVE.back, sp) : !g.inBounds(sp, d.y - SLEEVE.back) || !g.inBounds(sp, d.y + d.h - 1 + SLEEVE.back)) continue;
         const inSpan = sp >= s0 && sp < s1;
         let wallOk = true;
-        for (let k = 0; k < T && wallOk; k++) {
-          const wi = axis === 0 ? g.idx(d.x + k, sp) : g.idx(sp, d.y + k);
-          wallOk = inSpan ? !!doorCell[wi] : g.cells[wi] !== FLOOR;
-        }
+        for (let t = 0; t < T && wallOk; t++) { const wi = at(sp, t); wallOk = inSpan ? !!doorCell[wi] : g.cells[wi] !== FLOOR; }
         if (!wallOk) continue;
-        let y = common([ei, xi], Math.min(top[ei], top[xi]));
-        if (inSpan && y < head + C.lintel) y = common([ei, xi], Math.min(tightTop(ei), tightTop(xi))); // hug the ceiling over a lintel close under it
-        if (inSpan && y < head + C.lintel) continue; // no room over this lintel: a beside crossing instead
-        if (y < minY) continue;
-        // out through the ENTRANCE wall just over its lintel (or low beside it): the pit-side run continues near the old cable height
-        // along the pit wall, clear of the gallery steel of the storey above
-        if (d === entrance) {
-          // (the lowest such height clear of both ends' obstacles: over a frame header / plate on the wall faces, never through it)
-          let yl = inSpan ? Math.max(head + C.lintel + 0.05, base + C.pitY) : base + Math.max(C.minY, C.pitY);
-          for (let it = 0; it < 8; it++) { const up = Math.max(ascend(ei, yl), ascend(xi, yl)); if (up <= yl + 1e-6) break; yl = up; }
-          if (yl < y) y = yl;
-          if (inSpan && y < head + C.lintel) continue;
-        }
+        const e1 = at(sp, -1), x1 = at(sp, T);
+        if (!room(e1, isEntrance) || !room(x1, isEntrance) || !sideOk(e1, x1)) continue;
+        const ceilAdj = Math.min(g.ceil[e1], g.ceil[x1]);
+        const kind: Crossing['kind'] = !inSpan ? 'beside' : head >= ceilAdj - W.flush ? 'flush' : 'lintel';
         const off = inSpan ? 0 : sp < s0 ? s0 - sp : sp - s1 + 1;
-        const cost = T + 1 + (inSpan ? 0 : C.cost.beside + off);
-        crossings.push({door: d, e: ei, x: xi, dir: axis === 0 ? 0 : 2, kind: inSpan ? 'lintel' : 'beside', y, cost});
-        crossings.push({door: d, e: xi, x: ei, dir: axis === 0 ? 1 : 3, kind: inSpan ? 'lintel' : 'beside', y, cost});
+        // the nearest riser cells (same area as the wall-side cell) whose columns are clear
+        let found = false;
+        for (let k = 1; k <= W.back && !found; k++) for (const [ke, kx] of [[k, k], [k, k - 1], [k - 1, k]] as [number, number][]) {
+          if (ke < 1 || kx < 1 || found) continue;
+          const ei = at(sp, -ke), xi = at(sp, T - 1 + kx);
+          if (!open(ei) || !open(xi) || g.area[ei] !== g.area[e1] || g.area[xi] !== g.area[x1]) continue;
+          let mid = true;
+          for (let t = -ke + 1; t < 0 && mid; t++) mid = room(at(sp, t), isEntrance) && g.area[at(sp, t)] === g.area[e1];
+          for (let t = T; t < T - 1 + kx && mid; t++) mid = room(at(sp, t), isEntrance) && g.area[at(sp, t)] === g.area[x1];
+          if (!mid) continue;
+          // the sleeve's height: under every ceiling it passes, over the lintel (or flush under the ceiling), clear of every obstacle
+          let yHi = Math.min(descend(ei, g.ceil[ei] - C.tight)[0], descend(xi, g.ceil[xi] - C.tight)[0]);
+          for (let t = -ke; t < T - 1 + kx + 1; t++) { const ci = at(sp, t); if (t < 0 || t >= T) yHi = Math.min(yHi, g.ceil[ci] - W.hi - W.slack); }
+          yHi = Math.min(yHi, ceilAdj - W.hi - W.slack);
+          const yLo = kind === 'lintel' ? head + W.lintel - W.lo : kind === 'flush' ? Math.max(minY, ceilAdj - W.flush - 0.06) : minY;
+          if (yHi < yLo) continue;
+          const [ax, az] = [((ei % g.w) + 0.5) * CELL, (((ei / g.w) | 0) + 0.5) * CELL], [xx, xz] = [((xi % g.w) + 0.5) * CELL, (((xi / g.w) | 0) + 0.5) * CELL];
+          const sx0 = Math.min(ax, xx) - (axis === 0 ? 0 : W.hw), sx1 = Math.max(ax, xx) + (axis === 0 ? 0 : W.hw);
+          const sz0 = Math.min(az, xz) - (axis === 0 ? W.hw : 0), sz1 = Math.max(az, xz) + (axis === 0 ? W.hw : 0);
+          const ok = (y: number) => y >= yLo - 1e-6 && y <= yHi + 1e-6 && colClear(ei, y) && colClear(xi, y)
+            && near.every(o => !(o.x1 > sx0 && o.x0 < sx1 && o.z1 > sz0 && o.z0 < sz1 && o.y1 > y + W.lo - W.slack && o.y0 < y + W.hi + W.slack));
+          // candidate heights: the bounds and every obstacle edge; the entrance takes the lowest from just over its lintel (the pit-side
+          // run continues near the old cable height, clear of the gallery steel above), every other door the highest (along the ceiling)
+          const cand = [yHi, yLo];
+          for (const o of near) cand.push(o.y1 - W.lo + W.slack + 1e-4, o.y0 - W.hi - W.slack - 1e-4);
+          for (const kk of [...(forbid.get(ei) ?? []), ...(forbid.get(xi) ?? [])]) cand.push(obst[kk].y1 - C.body[0] + C.over + 1e-4);
+          const target = isEntrance ? Math.max(yLo, base + C.pitY, kind === 'lintel' ? head + W.lintel - W.lo + 0.05 : -Infinity) : -Infinity;
+          const sorted = [...new Set(cand.map(v => Math.round(v * 1e4) / 1e4))].filter(v => v >= yLo - 1e-6 && v <= yHi + 1e-6);
+          const ys = isEntrance ? [...sorted.filter(v => v >= target).sort((p, q) => p - q), ...sorted.filter(v => v < target).sort((p, q) => q - p)] : sorted.sort((p, q) => q - p);
+          const y = ys.find(ok);
+          if (y === undefined) continue;
+          const cost = T + 1 + (ke - 1) + (kx - 1) + (kind === 'lintel' ? 0 : kind === 'beside' ? C.cost.beside + off : C.cost.flush);
+          crossings.push({door: d, e: ei, x: xi, dir: axis === 0 ? 0 : 2, kind, y, cost});
+          crossings.push({door: d, e: xi, x: ei, dir: axis === 0 ? 1 : 3, kind, y, cost});
+          found = true;
+        }
       }
     }
   }
-  return {g, base, ids, front, doors, entrance, top, lowBy, capped, obst, crossings, bx0, by0, bx1, by1, room, open, common, over: (i: number) => forbid.get(i) ?? []};
+  return {g, base, ids, front, doors, entrance, top, lowBy, capped, obst, crossings, bx0, by0, bx1, by1, room, deck, open, common, over: (i: number) => forbid.get(i) ?? []};
 }
 
 /**
  * The ceiling route of a complex generator's cable: from its panel's riser to the deck side of the complex entrance (see the header).
- * `pts[0]` is the riser top over the panel; host.ts prepends the panel and appends cableOf from `exit`. Null: no route.
+ * `pts[0]` is the riser top over the panel; host.ts prepends the panel and appends cableOf from `exit`. Tries the layout's obstacles
+ * first, then a bare field (no obstacles, same door rules: never through an opening); null only without a grid / an entrance door.
  */
 export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: ReactorGenerator): CeilingCableRoute | null {
-  const t0 = now(), lv = c.level, C = CEILING_CABLE, F = cableField(layout, c);
-  if (typeof F === 'string') { stat(lv, F, 0, 0, t0); return null; }
-  const {g, ids, front, entrance, top, lowBy, obst, crossings, bx0, by0, bx1, by1, room, open, common, over} = F;
+  const t0 = now();
+  for (const bare of [false, true]) {
+    const F = cableField(layout, c, {bare});
+    if (typeof F === 'string') { stat(c.level, F, 0, 0, t0); return null; }
+    const r = routeOn(F, c, gen, t0, bare);
+    if (r) return r;
+  }
+  return null;
+}
+
+function routeOn(F: CableField, c: CableComplex, gen: ReactorGenerator, t0: number, bare: boolean): CeilingCableRoute | null {
+  const lv = c.level, C = CEILING_CABLE;
+  const {g, ids, entrance, top, lowBy, obst, crossings, bx0, by0, bx1, by1, room, deck, open, common, over} = F;
   const minY = c.baseY + C.minY;
   const byEntry = new Map<number, Crossing[]>();
   for (const x of crossings) { let l = byEntry.get(x.e); if (!l) byEntry.set(x.e, (l = [])); l.push(x); }
@@ -351,18 +393,18 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
     const [d0, st] = heap.pop();
     if (d0 > dist[st]) continue;
     const i = st >> 2, dir = st & 3;
-    if (g.area[i] === front) { goal = st; break; }
+    if (deck(i)) { goal = st; break; }
     const x = i % g.w, y = (i / g.w) | 0;
     for (let k = 0; k < 4; k++) {
       const nx = x + DX[k], ny = y + DY[k];
       if (!g.inBounds(nx, ny)) continue;
       const j = g.idx(nx, ny);
-      if (!open(j) || g.area[j] === front || !room(j)) continue; // the deck is reached only through the entrance wall
+      if (!open(j) || !room(j)) continue; // the deck is reached only through the entrance wall
       const nd = d0 + cellCost(j) + (k === dir ? 0 : C.cost.turn), ns = j * 4 + k;
       if (nd < dist[ns]) { dist[ns] = nd; prev[ns] = st; via.delete(ns); heap.push(nd, ns); }
     }
     for (const cr of byEntry.get(i) ?? []) {
-      if (g.area[cr.x] === front && cr.door !== entrance) continue;
+      if (deck(cr.x) && cr.door !== entrance) continue;
       const nd = d0 + cr.cost + (cr.dir === dir ? 0 : C.cost.turn), ns = cr.x * 4 + cr.dir;
       if (nd < dist[ns]) { dist[ns] = nd; prev[ns] = st; via.set(ns, cr); heap.push(nd, ns); }
     }
@@ -430,7 +472,7 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
   }
   flush();
   // the last run is the deck cell beyond the entrance wall: the cable leaves there at the crossing's height (cableOf takes over)
-  if (runs.length > 1 && runs[runs.length - 1].cells.every(i => g.area[i] === front)) runs.pop();
+  if (runs.length > 1 && runs[runs.length - 1].cells.every(i => deck(i))) runs.pop();
   const ctr = (i: number): [number, number] => [((i % g.w) + 0.5) * CELL, (((i / g.w) | 0) + 0.5) * CELL];
   const pts: CablePoint[] = [];
   const put = (x: number, y: number, z: number) => {
@@ -447,7 +489,7 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
     put(fx, yr, fz);
   }
   const crossed: CeilingCableRoute['crossings'] = [];
-  const hangers: CableHanger[] = [];
+  const hangers: CableHanger[] = [], sleeves: number[] = [];
   runs.forEach((r, k) => {
     const ps = pieces(r.cells);
     ps.forEach((pc, q) => {
@@ -479,40 +521,58 @@ export function ceilingCableRoute(layout: StationLayout, c: CableComplex, gen: R
       const [ex, ez] = ctr(cr.e), [xx, xz] = ctr(cr.x);
       put(ex, cr.y, ez);
       put(xx, cr.y, xz);
+      sleeves.push(pts.length - 2);
       crossed.push({door: cr.door.id, kind: cr.kind, y: r3(cr.y)});
     }
   });
   const last = pts[pts.length - 1];
-  stat(lv, 'ok', crossings.length, 0, t0);
-  return {pts, exit: {...last}, hangers, crossings: crossed};
+  stat(lv, bare ? 'ok (bare)' : 'ok', crossings.length, 0, t0);
+  return {pts, exit: {...last}, hangers, crossings: crossed, sleeves, bare};
 }
 
 /**
- * Issues of a generated complex cable (tests / QA): every interior point of `gen.cable` up to the entrance exit stands at least
- * CEILING_CABLE.minY over the storey (bar the riser over the panel), under the ceilings of the cells it hangs in, and no cable
- * segment enters a door opening's volume (the door rect from the floor up to its head) of the complex or its entrance.
+ * Issues of a generated complex cable (tests / QA) up to the entrance exit `upTo` (an index of `gen.cable`): every interior point stands
+ * at least CEILING_CABLE.minY over the storey (bar the riser over the panel), under the ceilings of the cells it hangs in, clear of every
+ * obstacle of the layout, and no segment enters a door opening's volume (the door rect from the floor up to its head) of the complex or
+ * its entrance — a wall SLEEVE (`gen.cableSleeves`) is judged by its wire bundle; over an opening whose head is flush with the ceiling
+ * (no lintel to pass over) the sleeve may hug the ceiling.
  */
 export function ceilingCableIssues(layout: StationLayout, c: CableComplex, gen: ReactorGenerator, upTo: number): string[] {
   const g = layout.levels[c.level].grid, base = c.baseY, out: string[] = [];
   const ids = new Set(c.areas);
   const doors = layout.doors.filter(d => (d.level ?? 0) === c.level && (ids.has(d.a) || ids.has(d.b)));
-  const pts = gen.cable.slice(0, upTo + 1);
-  const [lo, hi] = CEILING_CABLE.body, hw = 0.16;
+  // the lowest ceiling beside each door (its two sides): an opening within SLEEVE.flush of it has no lintel
+  const ceilBeside = new Map<number, number>();
+  for (const d of doors) {
+    let m = Infinity;
+    for (let y = d.y - 1; y <= d.y + d.h; y++) for (let x = d.x - 1; x <= d.x + d.w; x++) {
+      if (!g.inBounds(x, y) || (x >= d.x && x < d.x + d.w && y >= d.y && y < d.y + d.h)) continue;
+      const i = g.idx(x, y);
+      if (g.cells[i] === FLOOR) m = Math.min(m, g.ceil[i]);
+    }
+    ceilBeside.set(d.id, m);
+  }
+  const pts = gen.cable.slice(0, upTo + 1), sleeves = new Set(gen.cableSleeves ?? []);
   let bx0 = Infinity, bz0 = Infinity, bx1 = -Infinity, bz1 = -Infinity;
   for (const p of pts) { bx0 = Math.min(bx0, p.x); bz0 = Math.min(bz0, p.z); bx1 = Math.max(bx1, p.x); bz1 = Math.max(bz1, p.z); }
   // every obstacle but the generator's own collision box (the riser rises from its control box)
   const obst = cableObstacles(layout, c.level, base, [bx0 - 1, bz0 - 1, bx1 + 1, bz1 + 1], g).filter(o => !(gen.x > o.x0 && gen.x < o.x1 && gen.z > o.z0 && gen.z < o.z1 && o.y0 <= gen.y + 0.05));
   for (let k = 0; k + 1 < pts.length; k++) {
     const a = pts[k], b = pts[k + 1], L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), n = Math.max(1, Math.ceil(L / 0.1));
+    // the body: tray -0.075 .. wires +0.0475, 0.16 m either side (a vertical leg's tray is no wider); a sleeve: the wire bundle only
+    const sleeve = sleeves.has(k), lo = sleeve ? SLEEVE.lo : CEILING_CABLE.body[0], hi = sleeve ? SLEEVE.hi : CEILING_CABLE.body[1], hw = sleeve ? SLEEVE.hw : 0.16;
     for (let t = 0; t <= n; t++) {
       const x = a.x + (b.x - a.x) * t / n, y = a.y + (b.y - a.y) * t / n, z = a.z + (b.z - a.z) * t / n;
       if (k >= 2 && y < base + CEILING_CABLE.minY - 1e-3) out.push(`segment ${k}: ${y.toFixed(2)} under the headroom at ${x.toFixed(1)},${z.toFixed(1)}`);
       for (const d of doors) {
         const x0 = d.x * CELL, z0 = d.y * CELL, x1 = (d.x + d.w) * CELL, z1 = (d.y + d.h) * CELL, head = base + d.height;
-        if (x + hw > x0 + 0.02 && x - hw < x1 - 0.02 && z + hw > z0 + 0.02 && z - hw < z1 - 0.02 && y + lo < head) { out.push(`segment ${k}: in door ${d.id}'s opening (head ${head.toFixed(2)}) at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`); break; }
+        const flush = head >= (ceilBeside.get(d.id) ?? Infinity) - SLEEVE.flush;
+        if (x + hw > x0 + 0.02 && x - hw < x1 - 0.02 && z + hw > z0 + 0.02 && z - hw < z1 - 0.02 && y + lo < head && !(sleeve && flush && y + hi <= (ceilBeside.get(d.id) ?? 0) + 1e-3 && y + lo >= head - SLEEVE.flush - 0.06)) {
+          out.push(`segment ${k}: in door ${d.id}'s opening (head ${head.toFixed(2)}) at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`);
+          break;
+        }
       }
       if (k >= 1) for (const o of obst) {
-        // the body (tray -0.075 .. wires +0.0475, 0.16 m either side; a vertical leg's tray is no wider) against the obstacle (2 cm slack)
         if (x + hw - 0.02 > o.x0 && x - hw + 0.02 < o.x1 && z + hw - 0.02 > o.z0 && z - hw + 0.02 < o.z1 && y + hi - 0.02 > o.y0 && y + lo + 0.02 < o.y1) {
           out.push(`segment ${k}: through an obstacle (${o.y0.toFixed(2)}..${o.y1.toFixed(2)}${o.cap ? ' cap' : ''}) at ${x.toFixed(2)},${y.toFixed(2)},${z.toFixed(2)}`);
           break;

@@ -958,16 +958,25 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
   // walkway runs FLAT on its pit wall (tray on edge, cables in its plane, < 0.1 m off the wall); a leg that still would is left out
   plan.tag = 'gen-cable';
   const pts = g.cable.map(p => ({x: p.x, y: p.y, z: p.z}));
+  let shift = 0;
   if (plan.walk && pts.length >= 2) {
     const pp = generatorPanelPose(g, modelIndex >= 0); // (lane CONTROLS' flush control box: the riser leaves its top)
     pts.splice(0, 1, {x: pp.cx, y: pp.py + GENERATOR_PANEL.h / 2, z: pp.cz}, {x: pp.cx, y: Math.max(pts[1].y, g.y + 2.6), z: pp.cz});
+    shift = 1;
   }
+  // task reactor-playtest-round2-20261102 (lane PROPS): a wall SLEEVE (gen complex/propsCable.ts) is the wire bundle alone through the wall
+  const sleeves = new Set((g.cableSleeves ?? []).map(i => i + shift));
   const walls = plan.walk ? pitEdges(plan.info) : [];
   for (let i = 0; i + 1 < pts.length; i++) {
     const a = pts[i], b = pts[i + 1];
     const dx = b.x - a.x, dz = b.z - a.z, dl = Math.hypot(dx, dz) || 1;
     const tray = memberMatrix({x: a.x, y: a.y - 0.05, z: a.z}, {x: b.x, y: b.y - 0.05, z: b.z}, 0.32, 0.05);
     const wires = [-0.09, 0, 0.09].map(off => cylMatrix({x: a.x - dz / dl * off, y: a.y + 0.02, z: a.z + dx / dl * off}, {x: b.x - dz / dl * off, y: b.y + 0.02, z: b.z + dx / dl * off}, 0.055));
+    if (sleeves.has(i)) {
+      for (const m of wires) plan.add('tube', 'cable', m, plan.bandOf(Math.min(a.y, b.y) + 0.02 + 0.05));
+      plan.stats.cables++;
+      continue;
+    }
     if (!plan.walk || (plan.clear(tray) && wires.every(m => plan.clear(m)))) {
       plan.add('box', 'steelDark', tray, plan.bandOf(Math.min(a.y, b.y) - 0.05 + 0.05));
       for (const m of wires) plan.add('tube', 'cable', m, plan.bandOf(Math.min(a.y, b.y) + 0.02 + 0.05));
