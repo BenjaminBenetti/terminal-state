@@ -6,7 +6,7 @@
 import {describe, expect, it} from 'vitest';
 import {
   BASELINE_PROFILE, BASE_TABLES, CACHE_CRATE, ECON_CATS, HOLDER_SLOTS, LEGACY_POOL, OFFICE_DESK, OFFICE_ROWS, OPENABLE_TABLES, PROFILES,
-  SLOT_CATEGORIES, STORE_DRINKS, TENANT_ARMS, TOILET_ROWS, catWeight, econCat, floorChance, floorCount, gearParams, keepChance, lootProfile,
+  REACTOR_FILL_SCALE, SLOT_CATEGORIES, STORE_DRINKS, TENANT_ARMS, TOILET_ROWS, catWeight, econCat, floorChance, floorCount, gearParams, keepChance, lootProfile,
   resolveRows, slotEmpty, slotLots, validateLootProfile, type EconCat, type LootProfile, type OwnTable,
 } from '../src/items/lootTables';
 import {
@@ -130,8 +130,17 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
       // Task reactor-build-20261101: the Reactor = the mall's tables (its per-storey floor program serves the tiers) under explicit
       // category overrides (scarcer ammo / medicine / batteries / materials — tests/reactor-registration.test.ts)
       if (id === 'reactor') {
-        expect(p.tables).toBe(PROFILES.mall.tables);
-        expect(Object.keys(p.overrides)).toEqual(['categoryWeight']);
+        // task reactor-playtest-round2-20261102 (lane ARRIVAL), an intent change (the lead: hold the Reactor's total loot after the
+        // round-2 rooms added ~45 % holders): the mall's tables except the storage fill, whose every rule is the mall's with its chance
+        // scaled by REACTOR_FILL_SCALE; + slot overrides (fewer lots per ordinary holder, emptier containers)
+        for (const [k, v] of Object.entries(PROFILES.mall.tables)) if (k !== 'storageFill') expect((p.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
+        for (const [k, f] of Object.entries(PROFILES.mall.tables.storageFill ?? {})) {
+          const r = p.tables.storageFill?.[k];
+          expect({...r, chance: 0}, k).toEqual({...f, chance: 0});
+          expect(r!.chance, k).toBeCloseTo(f!.chance * REACTOR_FILL_SCALE, 3);
+        }
+        expect(Object.keys(p.overrides)).toEqual(['categoryWeight', 'slot']);
+        expect(validateLootProfile(p)).toEqual([]);
         continue;
       }
       expect(p.tables).toBe(BASE_TABLES);
