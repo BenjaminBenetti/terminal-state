@@ -82,7 +82,7 @@ export async function loadRuntime() {
   const G = path.join(GAME, 'src').split(path.sep).join('/');
   const entry = [
     `export {PROP_DEFS} from '${G}/gen/props';`,
-    `export {isOfficeKind, officeKindAsset, officeModelKey, OFFICE_KINDS} from '${G}/gen/office/kinds';`,
+    `export {isOfficeKind, officeKindAsset, officeModelKey, OFFICE_KINDS, officeShape} from '${G}/gen/office/kinds';`,
     `export {COMPANY_KINDS, WATER_TOWER_STAND} from '${G}/gen/office/companyKinds';`,
     `export {openableSpec} from '${G}/world/openablesSpec';`,
     `export {isContainerKind} from '${G}/items/loot';`,
@@ -157,6 +157,14 @@ export async function resolveKind(kind) {
   if (kind !== 'fareGate' && rt.MODEL_FOR[kind]) {
     const key = rt.MODEL_FOR[kind], file = modelFileOf(rt, key);
     if (file) return {kind, file, path: 'Subway model (world/builder.ts MODEL_FOR addInstancedModel)', fit: {type: 'box', ...box}, turn: false, lift: 0, def, modelKey: key};
+  }
+  // task mall-lingerie-20261102 (lane STORE): an office / company / mall kind without a delivered model renders its procedural box form
+  // (gen/office/kinds.ts officeShape -> mallShape …) exactly as world/officeProps.ts buildOfficeProp's boxParts instances it (prop frame, metres)
+  if (rt.isOfficeKind(kind) && !(asset && modelFileOf(rt, rt.officeModelKey(asset)))) {
+    const parts = rt.officeShape(kind);
+    if (parts?.length) return {kind, file: path.join(GAME, 'src/gen/office/kinds.ts'), parts, accent: 0xe8e4dc,
+      path: 'procedural office / mall box form (gen/office/kinds.ts officeShape; world/officeProps.ts boxParts)', fit: null, turn: false, lift: 0, def, modelKey: null,
+      notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key (the accent material renders white in the game)']};
   }
   // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): a purpose kind without a runtime model renders its AUTHORED box parts
   // (gen/purposeShapes.ts purposePropShape, variant 0) exactly as world/storefrontBuilder.ts buildPurposeProps builds them: prop frame,

@@ -466,6 +466,8 @@ export interface AssignOpts {
    * units are taken first; everything else is assigned as usual.
    */
   force?: Readonly<Record<string, MallProgram>>;
+  /** Task mall-lingerie-20261102 (lane STORE): tests / QA — false skips the side programs (step 7b): the mall as it was without them. */
+  sidePrograms?: boolean;
 }
 
 /**
@@ -587,20 +589,23 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   }
   // 7b. Task mall-lingerie-20261102 (lane STORE): the SIDE programs (the lingerie boutique), on their OWN stream after every unit has its
   // program: with the program's per-mall chance (its `weight`), it takes one eligible unit (sideEligible: a large family / size it suits,
-  // a plain glazed store or a vacant unit; never a gun shop, an anchor program or the last of a MALL_ALWAYS program), preferring a vacant
-  // unit, then a second store of the same program (sideScore). The DISPLACED program still draws its brand on the main stream in step 8,
-  // so every other shop of a mall keeps exactly the program, brand, finish, sign, shutter and entry it had without the side program.
+  // a plain glazed store or a vacant unit; never a gun shop, an anchor program or the last of a MALL_ALWAYS program): a vacant unit when
+  // there is one, else a second store of the same program, else a program's only store (sideTier; seeded by size / floor fit: sideScore).
+  // The DISPLACED program still draws its brand on the main stream in step 8, so every other shop of a mall keeps exactly the program,
+  // brand, finish, sign, shutter and entry it had without the side program (measured: 160 generated malls, lanes/STORE.done).
   const side = rng.fork('mall-side-programs');
   const displaced = new Map<number, MallProgram>();
   MALL_ASSIGN_STATS.last.side = [];
-  for (const sp of SIDE_PROGRAMS) {
+  for (const sp of opts.sidePrograms === false ? [] : SIDE_PROGRAMS) {
     if ((count.get(sp) ?? 0) >= cap(sp)) continue; // (forced already)
     const roll = side.next();
     const cands = shops.map((_, i) => i).filter(i => sideEligible(i, sp));
     const placed = cands.length > 0 && roll < MALL_PROGRAMS[sp].weight;
     let took: {unit: string; displaced: MallProgram} | undefined;
     if (placed) {
-      const i = side.weighted(cands.map(q => [q, sideScore(q, sp)] as [number, number]));
+      // the best tier only (a vacant unit, else a second store of a program, else a program's only store), seeded by size / floor fit
+      const top = Math.max(...cands.map(sideTier));
+      const i = side.weighted(cands.filter(q => sideTier(q) === top).map(q => [q, sideScore(q, sp)] as [number, number]));
       const p = prog[i]!;
       displaced.set(i, p);
       count.set(p, (count.get(p) ?? 1) - 1);
@@ -616,10 +621,14 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
     if (MALL_PROGRAMS[p].front !== 'glazed' || p === 'guns' || MALL_ANCHOR_ONLY.includes(p)) return false;
     return !MALL_ALWAYS.includes(p) || (count.get(p) ?? 0) >= 2;
   }
+  /** Displacement tier of a unit: 3 vacant, 2 a second store of its program, 1 its program's only store (the mall would lose it). */
+  function sideTier(i: number): number {
+    const p = prog[i]!;
+    return p === 'vacant' ? 3 : (count.get(p) ?? 0) >= 2 ? 2 : 1;
+  }
   function sideScore(i: number, sp: MallProgram): number {
-    const d = MALL_PROGRAMS[sp], p = prog[i]!;
-    const pref = p === 'vacant' ? 3 : (count.get(p) ?? 0) >= 2 ? 2 : 1;
-    return pref * typical(i, SIDE_TYPICAL[sp] ?? sp) * d.rings[floorIdx(i)] * (1 / (1 + Math.abs(area[i] - d.min.area * 1.8) / (d.min.area + 20)));
+    const d = MALL_PROGRAMS[sp];
+    return typical(i, SIDE_TYPICAL[sp] ?? sp) * d.rings[floorIdx(i)] * (1 / (1 + Math.abs(area[i] - d.min.area * 1.8) / (d.min.area + 20)));
   }
   function unitFor(i: number, p: MallProgram): MallUnitKind {
     const d = MALL_PROGRAMS[p], f = lotOf(i);
