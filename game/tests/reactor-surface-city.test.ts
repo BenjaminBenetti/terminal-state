@@ -19,7 +19,7 @@ import {REACTOR_SURFACE_KIT} from '../src/assets/reactorSurfaceKit.generated';
 import {SURFACE_KIT, resolveSurfaceKit, surfaceModelKeys, type SurfaceRole} from '../src/world/reactor/surfaceKit';
 import {SURFACE_CITY, footprintCorners, footprintInRect, footprintInside, footprintsOverlap, planSurfaceCity, streetMaskAt, surfacePlaza} from '../src/world/reactor/surfacePlan';
 import {surfaceEyeOpen, surfaceEyeOutside, surfaceSiteOf} from '../src/world/reactor/surfaceSite';
-import {streetMaskRows} from '../src/world/reactor/surfaceCity';
+import {filmGeometry, onWalk, parapetGeometry, streetMaskRows} from '../src/world/reactor/surfaceCity';
 import {SURFACE_CATALOGUE, SURFACE_SEEDS, inCatalogue, surfaceLayout, surfaceModels} from './reactor-surface-fixture';
 import {LEVELS} from '../src/levels/registry';
 
@@ -138,6 +138,33 @@ describe('the city plan on real Reactor layouts (lane ENDING\'s surface contract
     const none = planSurfaceCity(site, 1, () => false, L.reactor!.pit.bounds);
     expect(none.placements.length).toBe(0);
     expect(none.blocks.length).toBeGreaterThan(10);
+  });
+});
+
+describe('the plaza parapet / the wet film against lane ENDING\'s walk cells', () => {
+  it('the parapet stands only beyond the edges (never inside a walk rect, up to the parapet line); the film only on walk, outside keepR', () => {
+    for (const seed of SURFACE_SEEDS) {
+      const L = surfaceLayout(seed), site = surfaceSiteOf(L)!;
+      const pg = parapetGeometry(site)!, fg = filmGeometry(site)!;
+      const p = pg.getAttribute('position');
+      let top = -Infinity;
+      for (let i = 0; i < p.count; i += 3) {
+        // every triangle's centroid off the walkable interior
+        const cx = (p.getX(i) + p.getX(i + 1) + p.getX(i + 2)) / 3, cz = (p.getZ(i) + p.getZ(i + 1) + p.getZ(i + 2)) / 3;
+        expect(onWalk(site, cx, cz), `parapet triangle at ${cx.toFixed(2)}, ${cz.toFixed(2)}`).toBe(false);
+        top = Math.max(top, p.getY(i), p.getY(i + 1), p.getY(i + 2));
+      }
+      expect(top).toBeCloseTo(site.parapetY, 5);
+      const f = fg.getAttribute('position');
+      for (let i = 0; i < f.count; i += 3) {
+        const cx = (f.getX(i) + f.getX(i + 1) + f.getX(i + 2)) / 3, cz = (f.getZ(i) + f.getZ(i + 1) + f.getZ(i + 2)) / 3;
+        expect(site.walk.some(w => cx >= w.x0 && cx <= w.x1 && cz >= w.z0 && cz <= w.z1)).toBe(true);
+        expect(Math.hypot(cx - site.hole.x, cz - site.hole.z)).toBeGreaterThan(site.hole.keepR);
+        expect(site.shelters.some(s => cx > s.rect.x0 && cx < s.rect.x1 && cz > s.rect.z0 && cz < s.rect.z1)).toBe(false);
+      }
+      out(`seed ${seed}: parapet ${p.count / 3} triangles over ${site.edges.length} edges, film ${f.count / 6} cells`);
+      pg.dispose(); fg.dispose();
+    }
   });
 });
 
