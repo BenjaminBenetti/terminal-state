@@ -16,6 +16,7 @@ import type {
 } from './reactorTypes';
 import {BANK_CELLS, CORE_LEVEL, GENSET, TIERS, VESSEL, reactorStoreyLabel} from './frame';
 import type {CellRect, ReactorCarve, RoomRec, RunRec, WallId} from './carve';
+import {deckFootprint, fanClear, pathRails} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export const rectWorld = (r: CellRect): ReactorRect => ({x0: r3(r.x * CELL), z0: r3(r.y * CELL), x1: r3((r.x + r.w) * CELL), z1: r3((r.y + r.h) * CELL)});
@@ -76,7 +77,8 @@ export function maintenanceLadders(layout: StationLayout, rc: ReactorCarve): {la
 export function reactorRails(layout: StationLayout): RailRun[] {
   const base = deriveRails(layout.levels);
   const extra = new Levels(layout.levels, layout.levelLinks, base).unrailedDrops();
-  return [...base, ...extra.map(r => ({...r, h: r.h ?? 1.1}))];
+  // task reactor-expansion-20261101 (lane PATHS): no rail across a stair mouth / storey seam; real openings at the ladder heads
+  return pathRails(layout, [...base, ...extra.map(r => ({...r, h: r.h ?? 1.1}))]);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -254,7 +256,10 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
   const walls = wallFrames(rc);
   const zoneLevels = [[1, 2], [3, 4], [CORE_LEVEL]];
   zoneLevels.forEach((lvs, zone) => {
-    for (const strict of [true, false]) {
+    // task reactor-expansion-20261101 (lane PATHS): passes 0 / 1 (strict / any wall) keep the fan's housing out of walkable space
+    // (pathsGen.fanClear: the hub 3.2, 4.2 or 5.2 m above the deck); pass 2 is the old fallback
+    for (const pass of [0, 1, 2]) {
+      const strict = pass === 0;
       const cands: {lv: number; w: WallFrame; u: number; x: number; z: number; y: number}[] = [];
       for (const lv of lvs) {
         const g = layout.levels[lv].grid;
@@ -270,7 +275,10 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
           }
           if (!ok) continue;
           const [x, z] = w.cell(u, 0);
-          cands.push({lv, w, u, x: r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), z: r3((z + 0.5) * CELL - w.nz * 0.5 * CELL), y: r3(rc.bases[lv] + 3.2)});
+          const hx = r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), hz = r3((z + 0.5) * CELL - w.nz * 0.5 * CELL);
+          const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
+          if (up === undefined) continue;
+          cands.push({lv, w, u, x: hx, z: hz, y: r3(rc.bases[lv] + up)});
         }
       }
       if (cands.length < 2) continue;
@@ -447,7 +455,9 @@ export function reactorInfo(layout: StationLayout, rc: ReactorCarve, rng: Rng, i
   }));
   for (const g of inp.gens) g.cable = cableOf(rc, g, inp.fans.filter(f => f.zone === g.zone));
   // decks: every carved deck + the inline landings between the flights of each run
-  const decks: ReactorDeck[] = rc.decks.map(d => ({kind: d.kind, level: d.level, rect: rectWorld(d.rect), y: d.y}));
+  // task reactor-expansion-20261101 (lane PATHS): a deck is its ACTUAL cells (a run / earlier deck / reserved cell inside its rect is not
+  // deck: no steel hung over a stairwell through the deck plane)
+  const decks: ReactorDeck[] = rc.decks.flatMap(d => deckFootprint(layout.levels[d.level].grid, d.rect, d.area).map(r => ({kind: d.kind, level: d.level, rect: rectWorld(r), y: d.y})));
   for (const run of rc.runs) {
     const fl = run.flights.map(i => inp.flights[i]);
     for (let i = 0; i + 1 < fl.length; i++) {

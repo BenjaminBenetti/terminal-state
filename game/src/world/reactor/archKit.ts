@@ -23,6 +23,7 @@ import type {
 } from '../../gen/reactor/reactorTypes';
 import type {RailRun} from '../../gen/levels';
 import {REACTOR_MODELS, type ReactorPiece} from './archAssets';
+import {GENERATOR_PANEL, generatorPanelPose} from './controlsMount'; // task reactor-expansion-20261101 (lane PATHS): the cable riser
 import {planGeneratorPanel, planMountedSite} from './controlsKit'; // task reactor-expansion-20261101 (lane CONTROLS): mounted controls
 import {generatorPlacement} from './controlsMount';
 
@@ -32,7 +33,7 @@ export type KitGeo = 'box' | 'ibeam' | 'cyl' | 'tube' | 'stripe' | 'plane' | 'bu
 export type KitMat = 'steel' | 'steelDark' | 'yellow' | 'black' | 'pipe' | 'machine' | 'grating' | 'band' | 'vessel' | 'glow' | 'panelLamp' | 'cable' | 'concrete' | 'marker';
 
 /** One instance: its matrix and depth band (index into KitPlan.tiers, top-down); optional per-instance colour (0xRRGGBB). */
-export interface KitInst { m: THREE.Matrix4; band: number; color?: number }
+export interface KitInst { m: THREE.Matrix4; band: number; color?: number; tag?: string } // task reactor-expansion-20261101 (lane PATHS): + tag (audit kind)
 export interface KitPart { geo: KitGeo; mat: KitMat; list: KitInst[] }
 /** An addressable instance (part key + its index in that part's list). */
 export interface KitRef { part: string; index: number }
@@ -50,7 +51,7 @@ export interface KitGenerator {
   modelIndex: number;
 }
 /** A lamp's emissive part (procedural bulb in a cage, or the lens overlay of a flood-lamp model): per-tier material (setTierPower). */
-export interface KitLamp { band: number; level: number; m: THREE.Matrix4; dead: boolean; tint: number; model: boolean }
+export interface KitLamp { band: number; level: number; m: THREE.Matrix4; dead: boolean; tint: number; model: boolean; tag?: string } // task reactor-expansion-20261101 (lane PATHS): + tag
 
 /** Merged unique geometry (vessel, hook, gantries) in world space, per material. */
 export interface KitMerged { mat: KitMat; geos: THREE.BufferGeometry[]; band: number; name: string }
@@ -187,6 +188,17 @@ export interface KitOptions {
    * orange and lit nothing: the user's "orange circle … but no light").
    */
   fixtures?: boolean;
+  /** Task reactor-expansion-20261101 (lane PATHS): the walkable body volume (world/reactor/pathsAudit.ts WalkVolume): planners keep
+   *  their steel out of it (braces re-routed / shortened, members skipped or flattened over walkways, tower portals). */
+  walk?: KitWalk;
+}
+
+/** Task reactor-expansion-20261101 (lane PATHS): what the planners ask of the walkable body volume (pathsAudit.ts implements it). */
+export interface KitWalk {
+  /** A unit-geometry instance (matrix m, local box lo..hi, default the unit cube) would stand in walkable space. */
+  intrudes(m: THREE.Matrix4, lo?: readonly number[], hi?: readonly number[]): boolean;
+  /** Walkable body bands [y0, y1] (merged) whose footprint touches the world rect. */
+  bandsIn(x0: number, z0: number, x1: number, z1: number): {y0: number; y1: number}[];
 }
 
 export class KitPlan {
@@ -198,7 +210,7 @@ export class KitPlan {
   /** Marker labels (stencilled text plates on the bands): plane matrix + text + band. */
   readonly labels: {m: THREE.Matrix4; text: string; band: number; color: number; aspect: number}[] = [];
   /** Model placements per delivered piece (matrices fit by arch.ts). */
-  readonly modelPlacements = new Map<ReactorPiece, {m: THREE.Matrix4; band: number; size?: readonly [number, number, number]}[]>();
+  readonly modelPlacements = new Map<ReactorPiece, {m: THREE.Matrix4; band: number; size?: readonly [number, number, number]; tag?: string}[]>();
   readonly stats: KitStats = {
     decks: 0, decksSupported: 0, deckBeams: 0, braces: 0, trusses: 0, stripes: 0, toePlates: 0, towers: 0, towerMembers: 0, craneParts: 0,
     pipes: 0, flanges: 0, catwalks: 0, fans: 0, generators: 0, vesselParts: 0, crdm: 0, gantries: 0, machines: 0, screens: 0, cables: 0,
@@ -207,6 +219,9 @@ export class KitPlan {
   /** Tiers top-down (baseY descending): bands are indices into this. */
   readonly tiers: readonly {level: number; baseY: number; index: number}[];
   readonly seed: number;
+  /** Task reactor-expansion-20261101 (lane PATHS): the planner tag stamped on every instance / lamp / model placement added while it is
+   *  set (world/reactor/pathsAudit.ts reports intrusions by it); planReactorKit's steps set it to their name. */
+  tag = '';
 
   constructor(readonly info: ReactorInfo, private readonly opts: KitOptions = {}) {
     this.tiers = [...info.tiers].sort((a, b) => b.baseY - a.baseY).map(t => ({level: t.level, baseY: t.baseY, index: t.index}));
@@ -232,7 +247,9 @@ export class KitPlan {
     const key = `${geo}|${mat}`;
     let p = this.parts.get(key);
     if (!p) this.parts.set(key, (p = {geo, mat, list: []}));
-    p.list.push(color === undefined ? {m, band} : {m, band, color});
+    const inst: KitInst = color === undefined ? {m, band} : {m, band, color};
+    if (this.tag) inst.tag = this.tag; // task reactor-expansion-20261101 (lane PATHS)
+    p.list.push(inst);
     return {part: key, index: p.list.length - 1};
   }
   /** Member between two points (box or I-beam section). */
@@ -257,17 +274,20 @@ export class KitPlan {
     const h = kitHash(x, y, z, this.seed);
     const dead = h < 0.1, tint = 0.82 + 0.18 * kitHash(z, x, 3);
     const nl = Math.hypot(n.x, n.z) || 1, nx = n.x / nl, nz = n.z / nl, yaw = Math.atan2(nx, nz); // local +Z -> n
+    // task reactor-expansion-20261101 (lane PATHS): a lamp whose head would hang in walkable space (over a stair flight passing the
+    // wall, a walkway beyond a deck edge) is not mounted there
+    if (this.opts.walk && !this.clear(boxMatrix(x + nx * 0.17, y, z + nz * 0.17, 0.4, 0.5, 0.4, yaw))) return;
     if (model && this.canModel('floodLamp')) {
       const A = REACTOR_MODELS.floodLamp.anchors!, plate = A.plate as readonly number[], lens = A.lens as readonly number[];
       // model origin: its wall plate (local z = plate[2] < 0, centre height plate[1]) on the mount point
       const ox = x - nx * plate[2], oz = z - nz * plate[2], oy = y - plate[1];
       this.placeModel('floodLamp', boxMatrix(ox, oy, oz, 1, 1, 1, yaw), band);
       const d = lens[2] + 0.008;
-      this.lamps.push({band, level: lv, m: boxMatrix(ox + nx * d, oy + lens[1], oz + nz * d, A.lensW as number, A.lensH as number, 0.03, yaw), dead, tint, model: true});
+      this.lamps.push({band, level: lv, m: boxMatrix(ox + nx * d, oy + lens[1], oz + nz * d, A.lensW as number, A.lensH as number, 0.03, yaw), dead, tint, model: true, ...(this.tag ? {tag: this.tag} : {})});
     } else {
       const cx = x + nx * 0.17, cz = z + nz * 0.17;
       this.member('box', 'steelDark', {x, y: y + 0.12, z}, {x: cx, y: y + 0.12, z: cz}, 0.05, 0.05); // bracket arm
-      this.lamps.push({band, level: lv, m: boxMatrix(cx, y, cz, 0.2, 0.26, 0.2, yaw), dead, tint, model: false});
+      this.lamps.push({band, level: lv, m: boxMatrix(cx, y, cz, 0.2, 0.26, 0.2, yaw), dead, tint, model: false, ...(this.tag ? {tag: this.tag} : {})});
       this.add('cage', 'steelDark', boxMatrix(cx, y, cz, 0.26, 0.34, 0.26, yaw), band);
     }
     this.stats.lamps++;
@@ -276,6 +296,49 @@ export class KitPlan {
     let l = this.modelPlacements.get(piece);
     if (!l) this.modelPlacements.set(piece, (l = []));
     l.push(size ? {m, band, size} : {m, band});
+    if (this.tag) l[l.length - 1].tag = this.tag; // task reactor-expansion-20261101 (lane PATHS)
+  }
+  /** Task reactor-expansion-20261101 (lane PATHS): the walkable body volume, when the builder gave one. */
+  get walk(): KitWalk | undefined { return this.opts.walk; }
+  /** Task reactor-expansion-20261101 (lane PATHS): an instance (matrix m, local box lo..hi) stays out of the walkable body volume
+   *  (always, without one). */
+  clear(m: THREE.Matrix4 | null, lo?: readonly number[], hi?: readonly number[]): boolean {
+    return !!m && (!this.opts.walk || !this.opts.walk.intrudes(m, lo, hi));
+  }
+  /** Task reactor-expansion-20261101 (lane PATHS): `member`, only when it stays out of the walkable body volume. */
+  memberClear(geo: 'box' | 'ibeam', mat: KitMat, a: P3, b: P3, w: number, h: number, up?: THREE.Vector3): KitRef | null {
+    const m = memberMatrix(a, b, w, h, up);
+    return m && this.clear(m) ? this.add(geo, mat, m, this.bandOf(Math.min(a.y, b.y) + 0.05)) : null;
+  }
+  private railIndex: Map<number, RailRun[]> | null = null;
+  /** Task reactor-expansion-20261101 (lane PATHS): the plan knows the level's railings (KitOptions.rails). */
+  get hasRails(): boolean { return !!this.opts.rails; }
+  /**
+   * Task reactor-expansion-20261101 (lane PATHS): a railing (KitOptions.rails) stands on the line through (x, z) at base height ~y —
+   * deck-edge toe plates and post lamps belong to railed edges only. True when the plan has no rails (fixtures).
+   */
+  railed(x: number, z: number, y: number): boolean {
+    const rails = this.opts.rails;
+    if (!rails) return true;
+    const key = (cx: number, cz: number) => cx * 65536 + cz;
+    if (!this.railIndex) {
+      this.railIndex = new Map();
+      for (const r of rails) {
+        for (let cx = Math.floor((Math.min(r.x0, r.x1) - 0.2) / 0.5); cx <= Math.floor((Math.max(r.x0, r.x1) + 0.2) / 0.5); cx++) {
+          for (let cz = Math.floor((Math.min(r.z0, r.z1) - 0.2) / 0.5); cz <= Math.floor((Math.max(r.z0, r.z1) + 0.2) / 0.5); cz++) {
+            let l = this.railIndex.get(key(cx, cz));
+            if (!l) this.railIndex.set(key(cx, cz), (l = []));
+            l.push(r);
+          }
+        }
+      }
+    }
+    for (const r of this.railIndex.get(key(Math.floor(x / 0.5), Math.floor(z / 0.5))) ?? []) {
+      const ex = r.x1 - r.x0, ez = r.z1 - r.z0, L2 = ex * ex + ez * ez || 1;
+      const t = Math.max(0, Math.min(1, ((x - r.x0) * ex + (z - r.z0) * ez) / L2));
+      if (Math.hypot(r.x0 + ex * t - x, r.z0 + ez * t - z) < 0.12 && Math.abs(r.y0 + (r.y1 - r.y0) * t - y) < 0.35) return true;
+    }
+    return false;
   }
   /** The piece's model is loaded (arch.ts: KitOptions.models). */
   usesModel(piece: ReactorPiece): boolean { return !!this.opts.models?.has(piece); }
@@ -291,7 +354,7 @@ export class KitPlan {
 /** Builds the whole kit plan of a Reactor (decks, towers, crane, pipe banks, fans, generators, vessel, sites, screens, cables, bands). */
 export function planReactorKit(info: ReactorInfo, opts: KitOptions = {}): KitPlan {
   const plan = new KitPlan(info, opts);
-  const step = (fn: () => void, what: string) => { try { fn(); } catch (e) { console.warn(`reactor kit: ${what} skipped`, e); } };
+  const step = (fn: () => void, what: string) => { plan.tag = what; try { fn(); } catch (e) { console.warn(`reactor kit: ${what} skipped`, e); } plan.tag = ''; }; // lane PATHS: + tag
   step(() => planWallRibs(plan), 'wall ribs');
   step(() => planMarkers(plan), 'markers');
   step(() => planWallLamps(plan), 'wall lamps'); // first: the flood-lamp model's cap goes to the pit walls, top tier down
@@ -341,13 +404,42 @@ function planWallRibs(plan: KitPlan): void {
       const x = e.a.x + tx * s + e.nx * 0.2, z = e.a.z + tz * s + e.nz * 0.2;
       // flange faces the pit: section y (depth) along the inward normal, x along the wall
       const up = new THREE.Vector3(e.nx, 0, e.nz);
+      // task reactor-expansion-20261101 (lane PATHS): where a walkway runs along the wall here (a gallery, a stair flight, a doorway)
+      // the pilaster is a flat strap flush on the wall (4 cm) instead of the 0.38 m deep I-beam the body would walk through
+      const hx = Math.abs(tx) * 0.21 + Math.abs(e.nx) * 0.19, hz = Math.abs(tz) * 0.21 + Math.abs(e.nz) * 0.19;
+      const bands = plan.walk ? plan.walk.bandsIn(x - hx, z - hz, x + hx, z + hz) : [];
+      // a DOORWAY in the wall here (walkable cells behind the wall line: a platform opening, a room door): no pilaster across it up to
+      // its lintel (the opening's floor + 2.45 m)
+      const bx = x - e.nx * 0.33, bz = z - e.nz * 0.33, dh = {x: Math.abs(tx) * 0.32 + Math.abs(e.nx) * 0.1, z: Math.abs(tz) * 0.32 + Math.abs(e.nz) * 0.1}; // (+ the jamb's edge tolerance)
+      const doors = plan.walk ? plan.walk.bandsIn(bx - dh.x, bz - dh.z, bx + dh.x, bz + dh.z) : [];
+      const wx = x - e.nx * 0.165, wz = z - e.nz * 0.165; // the strap: 0.02 .. 0.05 m off the wall
       for (let i = 0; i + 1 < cuts.length; i++) {
         const y0 = cuts[i + 1], y1 = cuts[i];
         if (y1 - y0 < 0.3) continue;
-        const m = memberMatrix({x, y: y0, z}, {x, y: y1, z}, 0.42, 0.36, up);
-        plan.add('ibeam', 'steelDark', m, plan.bandOf(y0 + 0.05));
+        // pieces: 0 = the I-beam, 1 = the flat strap, 2 = nothing (a doorway)
+        let pieces: [number, number, number][] = [[y0, y1, 0]];
+        const cut = (c0: number, c1: number, kind: number) => {
+          const next: [number, number, number][] = [];
+          for (const [p, q, k] of pieces) {
+            if (k >= kind || c1 <= p || c0 >= q) { next.push([p, q, k]); continue; }
+            if (c0 > p) next.push([p, c0, k]);
+            next.push([Math.max(p, c0), Math.min(q, c1), kind]);
+            if (c1 < q) next.push([c1, q, k]);
+          }
+          pieces = next;
+        };
+        for (const b of doors) cut(b.y0 - 0.05, b.y0 + 2.45, 2);
+        for (const b of bands) cut(b.y0 - 0.05, b.y1 + 0.1, 1);
+        for (const [p, q, kind] of pieces) {
+          if (q - p < 0.05 || kind === 2) continue;
+          const flat = kind === 1;
+          plan.tag = flat ? 'wall-strap' : 'wall ribs';
+          const m = flat ? memberMatrix({x: wx, y: p, z: wz}, {x: wx, y: q, z: wz}, 0.42, 0.03, up) : memberMatrix({x, y: p, z}, {x, y: q, z}, 0.42, 0.36, up);
+          plan.add(flat ? 'box' : 'ibeam', 'steelDark', m, plan.bandOf(p + 0.05));
+        }
         plan.stats.ribs++;
       }
+      plan.tag = 'wall ribs';
     }
   }
 }
@@ -431,21 +523,27 @@ function planDeck(plan: KitPlan, d: ReactorDeck): void {
   const L = alongX ? w : dz, B = alongX ? dz : w;
   const P = (s: number, t: number, y: number): P3 => (alongX ? {x: r.x0 + s, y, z: r.z0 + t} : {x: r.x0 + t, y, z: r.z0 + s});
   let beams = 0;
+  // task reactor-expansion-20261101 (lane PATHS): every member of the deck steel stays out of the walkable body volume (memberClear;
+  // the deck rects are the decks' ACTUAL cells: gen/reactor/pathsGen.ts deckFootprint) — sub-tags name the audit kinds
+  plan.tag = 'deck-beam';
   // stringers: both long edges + every ~stringerPitch between
   const ns = Math.max(1, Math.round(B / KIT.stringerPitch));
   for (let k = 0; k <= ns; k++) {
     const t = Math.min(B - 0.12, Math.max(0.12, (B * k) / ns));
-    if (plan.member('ibeam', 'steel', P(0, t, yc), P(L, t, yc), KIT.beamWidth, depth)) beams++;
+    if (plan.memberClear('ibeam', 'steel', P(0, t, yc), P(L, t, yc), KIT.beamWidth, depth)) beams++;
   }
   // cross beams (slightly shallower, under the stringers' flange line)
   const nc = Math.max(1, Math.round(L / KIT.crossPitch));
   for (let k = 0; k <= nc; k++) {
     const s = Math.min(L - 0.1, Math.max(0.1, (L * k) / nc));
-    if (plan.member('ibeam', 'steelDark', P(s, 0.05, yc - 0.04), P(s, B - 0.05, yc - 0.04), KIT.beamWidth * 0.8, depth * 0.8)) beams++;
+    if (plan.memberClear('ibeam', 'steelDark', P(s, 0.05, yc - 0.04), P(s, B - 0.05, yc - 0.04), KIT.beamWidth * 0.8, depth * 0.8)) beams++;
   }
   plan.stats.deckBeams += beams;
   const edges = deckEdges(plan.info, d);
-  // knee braces back to the wall (galleries, landings, stair landings): from under the outer part of the deck down to the wall
+  // knee braces back to the wall (galleries, landings, stair landings): from under the outer part of the deck down to the wall —
+  // lane PATHS: a brace that would cross a walkway below (a stair flight along the same wall) is shortened (reach / drop x 0.6, x 0.35)
+  // or left out with its plate and corbel
+  plan.tag = 'deck-brace';
   const wallEdges = edges.filter(e => e.kind === 'wall');
   let braces = 0;
   if (d.kind !== 'bridge' && d.kind !== 'tower') {
@@ -458,27 +556,37 @@ function planDeck(plan: KitPlan, d: ReactorDeck): void {
         const tx = (e.x1 - e.x0) / (e.len || 1), tz = (e.z1 - e.z0) / (e.len || 1);
         const wx = e.x0 + tx * s + e.nx * 0.08, wz = e.z0 + tz * s + e.nz * 0.08; // on the wall plane
         const ix = -e.nx, iz = -e.nz; // into the deck
-        const top = {x: wx + ix * reach, y: yb - depth, z: wz + iz * reach};
-        const foot = {x: wx, y: yb - depth - drop, z: wz};
-        if (plan.member('box', 'steel', foot, top, 0.16, 0.16)) braces++;
-        plan.box('steelDark', foot.x + ix * 0.04, foot.y, foot.z + iz * 0.04, Math.abs(e.nx) > 0 ? 0.08 : 0.42, 0.5, Math.abs(e.nz) > 0 ? 0.08 : 0.42); // wall plate
-        plan.box('steelDark', wx + ix * 0.25, yb - depth / 2, wz + iz * 0.25, Math.abs(e.nx) > 0 ? 0.5 : 0.3, depth, Math.abs(e.nz) > 0 ? 0.5 : 0.3); // corbel under the edge beam
+        const corbel = boxMatrix(wx + ix * 0.25, yb - depth / 2, wz + iz * 0.25, Math.abs(e.nx) > 0 ? 0.5 : 0.3, depth, Math.abs(e.nz) > 0 ? 0.5 : 0.3);
+        if (!plan.clear(corbel)) continue;
+        for (const f of [1, 0.6, 0.35]) {
+          const top = {x: wx + ix * reach * f, y: yb - depth, z: wz + iz * reach * f};
+          const foot = {x: wx, y: yb - depth - Math.max(0.45, drop * f), z: wz};
+          const brace = memberMatrix(foot, top, 0.16, 0.16);
+          const plate = boxMatrix(foot.x + ix * 0.04, foot.y, foot.z + iz * 0.04, Math.abs(e.nx) > 0 ? 0.08 : 0.42, 0.5, Math.abs(e.nz) > 0 ? 0.08 : 0.42);
+          if (!plan.clear(brace) || !plan.clear(plate)) continue;
+          plan.add('box', 'steel', brace, plan.bandOf(foot.y + 0.05));
+          braces++;
+          plan.add('box', 'steelDark', plate, plan.bandOf(foot.y - 0.25 + 0.05)); // wall plate
+          plan.add('box', 'steelDark', corbel, plan.bandOf(yb - depth + 0.05)); // corbel under the edge beam
+          break;
+        }
       }
     }
   }
   plan.stats.braces += braces;
   // bridges: Warren trusses under both long sides (B's lattice bridges)
+  plan.tag = 'bridge-truss';
   if (d.kind === 'bridge') {
     const yt = yb - depth, ybot = yb - KIT.trussDepth;
     for (const t of [0.1, B - 0.1]) {
-      plan.member('ibeam', 'steel', P(0, t, ybot), P(L, t, ybot), 0.18, 0.24);
+      plan.memberClear('ibeam', 'steel', P(0, t, ybot), P(L, t, ybot), 0.18, 0.24);
       const np = Math.max(2, Math.round(L / KIT.trussPanel));
       for (let k = 0; k <= np; k++) {
         const s = (L * k) / np;
-        plan.member('box', 'steel', P(s, t, ybot), P(s, t, yt), 0.12, 0.12);
+        plan.memberClear('box', 'steel', P(s, t, ybot), P(s, t, yt), 0.12, 0.12);
         if (k < np) {
           const s2 = (L * (k + 1)) / np;
-          plan.member('box', 'steel', k % 2 ? P(s, t, yt) : P(s, t, ybot), k % 2 ? P(s2, t, ybot) : P(s2, t, yt), 0.11, 0.11);
+          plan.memberClear('box', 'steel', k % 2 ? P(s, t, yt) : P(s, t, ybot), k % 2 ? P(s2, t, ybot) : P(s2, t, yt), 0.11, 0.11);
         }
       }
       plan.stats.trusses++;
@@ -487,28 +595,49 @@ function planDeck(plan: KitPlan, d: ReactorDeck): void {
     const np = Math.max(2, Math.round(L / KIT.trussPanel));
     for (let k = 0; k < np; k += 2) {
       const s = (L * k) / np, s2 = (L * Math.min(np, k + 1)) / np;
-      plan.member('box', 'steelDark', P(s, 0.1, ybot), P(s2, B - 0.1, ybot), 0.07, 0.07);
-      plan.member('box', 'steelDark', P(s, B - 0.1, ybot), P(s2, 0.1, ybot), 0.07, 0.07);
+      plan.memberClear('box', 'steelDark', P(s, 0.1, ybot), P(s2, B - 0.1, ybot), 0.07, 0.07);
+      plan.memberClear('box', 'steelDark', P(s, B - 0.1, ybot), P(s2, 0.1, ybot), 0.07, 0.07);
     }
   }
   if (beams > 0) plan.stats.decksSupported++;
-  // open edges: black fascia channel with hazard stripes, toe plate, lamps
+  // open edges: black fascia channel with hazard stripes, toe plate, lamps — task reactor-expansion-20261101 (lane PATHS): only along
+  // the edge's DROP spans: never across a stair mouth or a seam where the walkway continues (the fascia would stand in the flight's
+  // first treads), the toe plate and the post lamps only where a railing stands (KitPlan.railed; no lamp floats over a walkway)
   const stripeEdges = d.kind === 'bridge' || d.kind === 'landing' || d.kind === 'stair-landing' || d.kind === 'tower';
+  const fine = !!plan.walk || plan.hasRails;
   for (const e of edges) {
     if (e.kind !== 'open') continue;
     const tx = (e.x1 - e.x0) / (e.len || 1), tz = (e.z1 - e.z0) / (e.len || 1);
-    const ox = e.nx * 0.02, oz = e.nz * 0.02;
-    const a = {x: e.x0 + ox, y: d.y - KIT.fascia / 2, z: e.z0 + oz}, b = {x: e.x1 + ox, y: d.y - KIT.fascia / 2, z: e.z1 + oz};
-    plan.member('box', 'black', a, b, 0.04, KIT.fascia);
-    // toe plate on the deck top
     const ti = 0.03;
-    plan.member('box', 'steel', {x: e.x0 - e.nx * ti, y: d.y + KIT.toe / 2, z: e.z0 - e.nz * ti}, {x: e.x1 - e.nx * ti, y: d.y + KIT.toe / 2, z: e.z1 - e.nz * ti}, 0.012, KIT.toe);
-    plan.stats.toePlates++;
+    const at = (s: number, off: number, y: number): P3 => ({x: e.x0 + tx * s + e.nx * off, y, z: e.z0 + tz * s + e.nz * off});
+    const fascia = (s0: number, s1: number) => memberMatrix(at(s0, 0.02, d.y - KIT.fascia / 2), at(s1, 0.02, d.y - KIT.fascia / 2), 0.04, KIT.fascia);
+    const toe = (s0: number, s1: number) => memberMatrix(at(s0, -ti, d.y + KIT.toe / 2), at(s1, -ti, d.y + KIT.toe / 2), 0.012, KIT.toe);
+    const spans = (ok: (s0: number, s1: number) => boolean): [number, number][] => {
+      if (!fine) return [[0, e.len]];
+      const out: [number, number][] = [], n = Math.max(1, Math.round(e.len / 0.25));
+      for (let k = 0; k < n; k++) {
+        const s0 = (e.len * k) / n, s1 = (e.len * (k + 1)) / n;
+        if (!ok(s0, s1)) continue;
+        const last = out[out.length - 1];
+        if (last && Math.abs(last[1] - s0) < 1e-6) last[1] = s1; else out.push([s0, s1]);
+      }
+      return out;
+    };
+    const fasc = spans((s0, s1) => plan.clear(fascia(s0, s1)));
+    const toes = spans((s0, s1) => { const p = at((s0 + s1) / 2, 0, d.y); return plan.railed(p.x, p.z, d.y) && plan.clear(toe(s0, s1)); });
+    plan.tag = 'deck-fascia';
+    for (const [s0, s1] of fasc) if (s1 - s0 > 0.05) plan.member('box', 'black', at(s0, 0.02, d.y - KIT.fascia / 2), at(s1, 0.02, d.y - KIT.fascia / 2), 0.04, KIT.fascia);
+    // toe plate on the deck top
+    plan.tag = 'deck-toe';
+    for (const [s0, s1] of toes) if (s1 - s0 > 0.05) plan.member('box', 'steel', at(s0, -ti, d.y + KIT.toe / 2), at(s1, -ti, d.y + KIT.toe / 2), 0.012, KIT.toe);
+    if (toes.length) plan.stats.toePlates++;
+    plan.tag = 'deck-stripes';
     if (stripeEdges && plan.stats.stripes < KIT.maxStripes) {
       const n = Math.floor(e.len / KIT.stripePitch);
       const yaw = Math.atan2(e.nx, e.nz);
       for (let k = 0; k < n && plan.stats.stripes < KIT.maxStripes; k++) {
         const s = (k + 0.5) * KIT.stripePitch;
+        if (!fasc.some(([a, b]) => s - KIT.stripePitch / 2 >= a - 1e-6 && s + KIT.stripePitch / 2 <= b + 1e-6)) continue; // on the fascia
         const x = e.x0 + tx * s + e.nx * 0.045, z = e.z0 + tz * s + e.nz * 0.045;
         // the stripe parallelogram leans along the edge: its local X must follow the edge tangent
         const m = boxMatrix(x, d.y - KIT.fascia / 2, z, KIT.stripePitch, KIT.fascia * 0.9, 1, yaw);
@@ -517,14 +646,17 @@ function planDeck(plan: KitPlan, d: ReactorDeck): void {
       }
     }
     // lamps on the railing posts of the open edges
+    plan.tag = 'deck-lamp';
     if (d.kind !== 'stair-landing') {
       const n = Math.floor(e.len / KIT.lampPitch);
       for (let k = 0; k < n; k++) {
         const s = (k + 0.5) * (e.len / n);
+        if (fine && !toes.some(([a, b]) => s >= a - 1e-6 && s <= b + 1e-6)) continue; // a lamp needs its railing post
         plan.lamp(e.x0 + tx * s + e.nx * 0.05, d.y + 1.18, e.z0 + tz * s + e.nz * 0.05, {x: e.nx, z: e.nz}, d.level);
       }
     }
   }
+  plan.tag = 'decks';
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -544,10 +676,36 @@ function planTower(plan: KitPlan, t: ReactorTower): void {
     for (let f = 0; f < 4; f++) {
       const [ax, az] = corners[f], [bx, bz] = corners[(f + 1) % 4];
       const A = (y: number) => ({x: t.x + ax, y, z: t.z + az}), B = (y: number) => ({x: t.x + bx, y, z: t.z + bz});
-      if (plan.member('box', 'steel', A(yb - 0.1), B(yb - 0.1), KIT.girt, KIT.girt)) n++;
-      // X-bracing per storey and face
-      if (plan.member('box', 'steel', A(ya + 0.15), B(yb - 0.2), KIT.brace, KIT.brace)) n++;
-      if (plan.member('box', 'steel', B(ya + 0.15), A(yb - 0.2), KIT.brace, KIT.brace)) n++;
+      const girt = memberMatrix(A(yb - 0.1), B(yb - 0.1), KIT.girt, KIT.girt);
+      const x1 = memberMatrix(A(ya + 0.15), B(yb - 0.2), KIT.brace, KIT.brace), x2 = memberMatrix(B(ya + 0.15), A(yb - 0.2), KIT.brace, KIT.brace);
+      if (!plan.walk || (plan.clear(girt) && plan.clear(x1) && plan.clear(x2))) {
+        if (plan.member('box', 'steel', A(yb - 0.1), B(yb - 0.1), KIT.girt, KIT.girt)) n++;
+        // X-bracing per storey and face
+        if (plan.member('box', 'steel', A(ya + 0.15), B(yb - 0.2), KIT.brace, KIT.brace)) n++;
+        if (plan.member('box', 'steel', B(ya + 0.15), A(yb - 0.2), KIT.brace, KIT.brace)) n++;
+        continue;
+      }
+      // task reactor-expansion-20261101 (lane PATHS): a walkway crosses this face (a bridge entering the tower deck, the core floor
+      // round the tower's foot): a PORTAL — a header girt over each walk band, the X-bracing only in the free height between the bands
+      // (under-deck steel kept clear below a band), nothing standing in the walkway
+      plan.tag = 'tower-portal';
+      const pa = A(0), pb = B(0);
+      const bands = plan.walk.bandsIn(Math.min(pa.x, pb.x) - 0.05, Math.min(pa.z, pb.z) - 0.05, Math.max(pa.x, pb.x) + 0.05, Math.max(pa.z, pb.z) + 0.05)
+        .filter(b => b.y1 > ya - 0.8 && b.y0 < yb + 0.3);
+      let free: [number, number][] = [[ya + 0.15, yb - 0.1]];
+      for (const b of bands) {
+        const c0 = b.y0 - 0.8, c1 = b.y1 + 0.3, next: [number, number][] = [];
+        for (const [p, q] of free) { if (c1 <= p || c0 >= q) next.push([p, q]); else { if (c0 > p) next.push([p, c0]); if (c1 < q) next.push([c1, q]); } }
+        free = next;
+      }
+      for (const [p, q] of free) {
+        if (q - p < 0.9) continue;
+        if (plan.memberClear('box', 'steel', A(p), B(q), KIT.brace, KIT.brace)) n++;
+        if (plan.memberClear('box', 'steel', B(p), A(q), KIT.brace, KIT.brace)) n++;
+      }
+      for (const b of bands) if (b.y1 + 0.2 > ya && b.y1 + 0.2 < yb - 0.3 && plan.memberClear('box', 'steel', A(b.y1 + 0.2), B(b.y1 + 0.2), KIT.girt, KIT.girt)) n++;
+      if (plan.memberClear('box', 'steel', A(yb - 0.1), B(yb - 0.1), KIT.girt, KIT.girt)) n++;
+      plan.tag = 'towers';
     }
     if (s % 2 === 1) plan.lamp(t.x + t.hx + KIT.leg / 2, ya + sh * 0.5, t.z + t.hz, {x: 1, z: 0}, plan.tiers[plan.bandOf(ya + sh * 0.5)]?.level);
   }
@@ -795,16 +953,53 @@ function planGenerator(plan: KitPlan, g: ReactorGenerator): void {
   const lamps: [KitRef, KitRef] = planGeneratorPanel(plan, g, modelIndex >= 0, band);
   plan.generators.push({id: g.id, zone: g.zone, level: g.level, body, lamps, place, size: {w, d, h}, modelIndex});
   plan.stats.generators++;
-  // cable run to the zone's fans: a tray + three cables along the polyline
-  for (let i = 0; i + 1 < g.cable.length; i++) {
-    const a = g.cable[i], b = g.cable[i + 1];
-    plan.member('box', 'steelDark', {x: a.x, y: a.y - 0.05, z: a.z}, {x: b.x, y: b.y - 0.05, z: b.z}, 0.32, 0.05);
-    for (const off of [-0.09, 0, 0.09]) {
-      const dx = b.x - a.x, dz = b.z - a.z, dl = Math.hypot(dx, dz) || 1, ox = -dz / dl * off, oz = dx / dl * off;
-      plan.cyl('tube', 'cable', {x: a.x + ox, y: a.y + 0.02, z: a.z + oz}, {x: b.x + ox, y: b.y + 0.02, z: b.z + oz}, 0.055);
+  // cable run to the zone's fans: a tray + three cables along the polyline — task reactor-expansion-20261101 (lane PATHS): with the
+  // walk volume the first leg rises at the control box to 2.6 m and crosses the landing over head height; a leg that would cross a
+  // walkway runs FLAT on its pit wall (tray on edge, cables in its plane, < 0.1 m off the wall); a leg that still would is left out
+  plan.tag = 'gen-cable';
+  const pts = g.cable.map(p => ({x: p.x, y: p.y, z: p.z}));
+  if (plan.walk && pts.length >= 2) {
+    const pp = generatorPanelPose(g, modelIndex >= 0); // (lane CONTROLS' flush control box: the riser leaves its top)
+    pts.splice(0, 1, {x: pp.cx, y: pp.py + GENERATOR_PANEL.h / 2, z: pp.cz}, {x: pp.cx, y: Math.max(pts[1].y, g.y + 2.6), z: pp.cz});
+  }
+  const walls = plan.walk ? pitEdges(plan.info) : [];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i], b = pts[i + 1];
+    const dx = b.x - a.x, dz = b.z - a.z, dl = Math.hypot(dx, dz) || 1;
+    const tray = memberMatrix({x: a.x, y: a.y - 0.05, z: a.z}, {x: b.x, y: b.y - 0.05, z: b.z}, 0.32, 0.05);
+    const wires = [-0.09, 0, 0.09].map(off => cylMatrix({x: a.x - dz / dl * off, y: a.y + 0.02, z: a.z + dx / dl * off}, {x: b.x - dz / dl * off, y: b.y + 0.02, z: b.z + dx / dl * off}, 0.055));
+    if (!plan.walk || (plan.clear(tray) && wires.every(m => plan.clear(m)))) {
+      plan.add('box', 'steelDark', tray, plan.bandOf(Math.min(a.y, b.y) - 0.05 + 0.05));
+      for (const m of wires) plan.add('tube', 'cable', m, plan.bandOf(Math.min(a.y, b.y) + 0.02 + 0.05));
+      plan.stats.cables++;
+      continue;
     }
+    // flat on the nearest pit wall (the leg's points moved onto the wall plane, 3.5 cm off it)
+    const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+    let wall: (typeof walls)[number] | null = null, wd = Infinity;
+    for (const e of walls) {
+      const ex = (e.b.x - e.a.x) / e.len, ez = (e.b.z - e.a.z) / e.len, s = Math.max(0, Math.min(e.len, (mx - e.a.x) * ex + (mz - e.a.z) * ez));
+      const dd = Math.hypot(e.a.x + ex * s - mx, e.a.z + ez * s - mz);
+      if (dd < wd) { wd = dd; wall = e; }
+    }
+    if (!wall || wd > 0.6) continue;
+    const W = wall, n = new THREE.Vector3(W.nx, 0, W.nz);
+    const onWall = (p: P3, off: number): P3 => { const d0 = (p.x - W.a.x) * W.nx + (p.z - W.a.z) * W.nz; return {x: p.x + W.nx * (off - d0), y: p.y, z: p.z + W.nz * (off - d0)}; };
+    const A = onWall(a, 0.035), Bw = onWall(b, 0.035);
+    const dir = new THREE.Vector3(Bw.x - A.x, Bw.y - A.y, Bw.z - A.z);
+    if (dir.lengthSq() < 1e-6) continue;
+    dir.normalize();
+    const q = new THREE.Vector3().crossVectors(n, dir).normalize();
+    const flat = memberMatrix(A, Bw, 0.32, 0.03, n);
+    const flatWires = [-0.09, 0, 0.09].map(off => cylMatrix(
+      {x: A.x + q.x * off + W.nx * 0.035, y: A.y + q.y * off, z: A.z + q.z * off + W.nz * 0.035},
+      {x: Bw.x + q.x * off + W.nx * 0.035, y: Bw.y + q.y * off, z: Bw.z + q.z * off + W.nz * 0.035}, 0.045));
+    if (!plan.clear(flat) || !flatWires.every(m => plan.clear(m))) continue;
+    plan.add('box', 'steelDark', flat!, plan.bandOf(Math.min(A.y, Bw.y)));
+    for (const m of flatWires) plan.add('tube', 'cable', m, plan.bandOf(Math.min(A.y, Bw.y)));
     plan.stats.cables++;
   }
+  plan.tag = 'generators';
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -951,11 +1146,14 @@ function planRails(plan: KitPlan, rails: readonly RailRun[]): void {
     const H = r.h ?? 1.05;
     const P = (s: number, dy: number): P3 => { const u = s / len; return {x: r.x0 + (r.x1 - r.x0) * u, y: r.y0 + (r.y1 - r.y0) * u + dy, z: r.z0 + (r.z1 - r.z0) * u}; };
     const sloped = Math.abs(r.y1 - r.y0) > 1e-3;
+    // task reactor-expansion-20261101 (lane PATHS): a sloped member's end faces are square to the pitch, so their low corners overshot
+    // the rail's end into the landing at a stair mouth by (h / 2) tan(pitch): pull each end in by that much
+    const tan = Math.abs(r.y1 - r.y0) / len, end = (h: number) => Math.min(len / 2 - 0.01, (h / 2) * tan);
     let n = 0;
-    if (plan.member('box', 'steel', P(0, H), P(len, H), 0.05, 0.05)) n++;
-    if (plan.member('box', 'steel', P(0, 0.55), P(len, 0.55), 0.035, 0.035)) n++;
+    if (plan.member('box', 'steel', P(end(0.05), H), P(len - end(0.05), H), 0.05, 0.05)) n++;
+    if (plan.member('box', 'steel', P(end(0.035), 0.55), P(len - end(0.035), 0.55), 0.035, 0.035)) n++;
     if (!sloped) { if (plan.member('box', 'steelDark', P(0.02, 0.06), P(len - 0.02, 0.06), 0.015, 0.11)) n++; }
-    else if (plan.member('box', 'steelDark', P(0, -0.04), P(len, -0.04), 0.06, 0.32)) n++;
+    else if (plan.member('box', 'steelDark', P(end(0.32), -0.04), P(len - end(0.32), -0.04), 0.06, 0.32)) n++;
     const np = Math.max(1, Math.ceil(len / 1.25));
     for (let k = 0; k <= np; k++) {
       const s = Math.min(len - 0.03, Math.max(0.03, (len * k) / np));

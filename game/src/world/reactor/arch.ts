@@ -26,6 +26,7 @@ import {buildKitMeshes, kitGeometry, type KitBuildStats, type KitBuilt} from './
 import {isReactorKey, reactorDress, reactorSurfaceMaterial, reactorSurfaceScale, type ReactorSurfaceKey} from './archMaterials';
 import {REACTOR_MODELS, REACTOR_PIECES, type ReactorPiece} from './archAssets';
 import {ReactorArchVisuals} from './archVisuals';
+import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansion-20261101 (lane PATHS)
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
@@ -238,7 +239,8 @@ export class ReactorArch {
     try {
       // task reactor-expansion-20261101 (lane GASLIGHT): mounted pit fixtures -> their bodies in the kit (no decorative lamps), lenses = tubes
       const fixtures = this.layout.lights.some(l => isMounted(l));
-      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures});
+      // task reactor-expansion-20261101 (lane PATHS): + the walkable body volume — the kit keeps its steel out of every walkway
+      this.plan = planReactorKit(this.info, {models: loaded, rails: rails.filter(r => !(r as {hidden?: boolean}).hidden && this.ownsRail(r)), fixtures, walk: new WalkVolume(this.layout, {regions: kitWalkRegions(this.info)})});
       this.mountedLamps = fixtures ? planMountedLamps(this.plan, this.layout.lights, this.mats.fixture) : [];
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);

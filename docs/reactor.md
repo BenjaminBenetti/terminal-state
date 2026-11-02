@@ -230,3 +230,28 @@ Existing families only. Density and the nastier families rise with depth (`docs/
 - **Core glow in the fog:** a `PointLight` added with `addScatterLight` and `userData.vfOpen = true` lights the haze and the strata with
   no occlusion window (open pit volumes).
 - QA: `__LL.gaslight()` and `__LL.gaslightShafts({gain, fade, colour})`. Tests: `game/tests/reactor-x-gaslight-*.test.ts`.
+
+## Pathways: the clipping audit (task reactor-expansion-20261101, lane PATHS)
+Nothing solid may stand in walkable space except designed edges (railings on the edge line, wall-flush fittings within 0.1 m).
+- **The audit** (`game/src/world/reactor/pathsAudit.ts`, tests `game/tests/reactor-x-paths-*.test.ts`):
+  - `auditReactorPaths(layout, {models, areas})` checks the body volume of every walkable cell of every storey against every solid
+    the kit draws and against the collision world. The body is 1.9 m tall; stair cells follow their pitch line.
+  - The solids are kit instances, lamps, models, merged meshes, fan rotors and pit fixtures.
+  - The collision checks cover rails across a path, the ladder climbs (player and AI) and the designed stand points: link landings,
+    ladder feet and heads, controls, generators and the train's doors.
+  - It reports hits by kind and location. Pass `areas` to audit one side complex.
+  - **Re-run after a lane lands:** `auditReactorPaths(layout, {models: 'all', meshOf: testMeshOf})` (`testMeshOf` in
+    `game/tests/reactor-x-paths-meshes.ts` reads the cooked GLBs, so portal-shaped models are judged by their real triangles), or the
+    test file `game/tests/reactor-x-paths-audit.test.ts`.
+    - Visuals planned through the kit (`KitPlan.add` / `placeModel` / `merged`) are covered automatically.
+    - Another builder's visuals must be added to `extraSolids()` in `pathsAudit.ts`. Mines, bunker and the map boards are there now.
+    - `PATHS_OWNED_ELSEWHERE` in the test pins other lanes' known findings at their measured depth.
+  - A solid inside its own collision prop's box is not a clip, since the body collides with it. Floor-level detail up to 0.16 m (the mine
+    rails and sleepers) is walked over, like the subway track bed.
+- **The fixes it drove:**
+  - A deck record is its real cells (`gen/reactor/pathsGen.ts`), so no stringers hang over a stairwell.
+  - No rail runs across a stair mouth or a seam between storeys, and every maintenance ladder head has a 0.9 m opening in the rail.
+  - Steel stays out of walkways. The kit consults `WalkVolume` (`KitOptions.walk`): shortened knee braces, fascias and toe plates only
+    on drop edges, post lamps only on railings, tower portals where a walkway crosses a face, flat pilaster straps (none across
+    doorways), cables over the landing and flat on the walls.
+  - Fan housings stay clear of walkways and tower legs stand in reserved 2 x 2 cells.
