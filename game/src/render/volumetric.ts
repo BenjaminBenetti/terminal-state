@@ -943,8 +943,7 @@ export class VolumetricAtmosphere {
     if (!this.marchRT || this.failed) return;
     rendererState = RendererUtils.resetRendererState(renderer, rendererState as never);
     const device = (renderer.backend as unknown as {device?: WebGPUDeviceLike}).device;
-    const scoped = !!device && this.errorChecks > 0;
-    if (scoped) device!.pushErrorScope('validation');
+    let scoped = false;
     try {
       const fl = this.lights.flashlight;
       // the shadow matrix / map of THIS frame (three updated them in the scene pass)
@@ -952,6 +951,11 @@ export class VolumetricAtmosphere {
       u.shadowMatrix.value.copy(fl.shadow.matrix);
       u.shadowBias.value = fl.shadow.bias;
       const march = this.ensureMarch();
+      // task reactor-submit-roof-fog-20261102 (lane FOG): open the error scope AFTER picking / (re)building the program, so a new program's
+      // FIRST frame is watched too — three creates the pipeline layout there outside its own error scope (a rejected layout, like the
+      // 13-uniform-buffer depth variant, now flags the pass failed -> the direct path at once, instead of depending on frame timing)
+      scoped = !!device && this.errorChecks > 0;
+      if (scoped) device!.pushErrorScope('validation');
       u.shadowOn.value = fl.castShadow && fl.shadow.map && (u.flashColor.value as THREE.Vector3).lengthSq() > 0 ? 1 : 0;
       renderer.setRenderTarget(this.marchRT);
       this.quad.material = march;

@@ -255,6 +255,37 @@ describe('the depth gas is visible from OUTSIDE it: view rays from the clean rim
   });
 });
 
+describe('a rejected fog program falls back deterministically', () => {
+  /** A recording stand-in for WebGPURenderer with a WebGPU-like device (what runFog touches; no GPU). */
+  const fakeRenderer = (events: string[], err: string | null) => {
+    const r = {
+      toneMapping: 0, toneMappingExposure: 1, outputColorSpace: '', autoClear: true,
+      backend: {device: {pushErrorScope: () => { events.push('push'); }, popErrorScope: () => { events.push('pop'); return Promise.resolve(err ? {message: err} : null); }}},
+      getRenderTarget: () => null, getActiveCubeFace: () => 0, getActiveMipmapLevel: () => 0, getRenderObjectFunction: () => null, getPixelRatio: () => 1,
+      getMRT: () => null, getClearColor: (c: THREE.Color) => c, getClearAlpha: () => 1, getScissorTest: () => false,
+      setRenderTarget() {}, setRenderObjectFunction() {}, setPixelRatio() {}, setMRT() {}, setClearColor() {}, setScissorTest() {},
+      render: (o: {material: {name: string}}) => { events.push(`draw ${o.material.name}`); },
+    };
+    return r as unknown as Parameters<VolumetricAtmosphere['runFog']>[0];
+  };
+  it('the frame that (re)builds the march is inside the WebGPU error scope: a rejected pipeline layout flags the pass failed (direct path next frame)', async () => {
+    const a = atmo();
+    a.setStation({...generateStation(5), reactor: reactor().reactor} as StationLayout, null);
+    const p = a as unknown as {marchRT: unknown; scenePass: unknown; errorChecks: number; history: unknown};
+    p.marchRT = {textures: [new THREE.Texture(), new THREE.Texture()]};
+    p.scenePass = {getTexture: () => new THREE.DepthTexture(8, 8)};
+    p.history = null;
+    p.errorChecks = 0; // the previous program's watch is over (as on any level change after the first frames)
+    const events: string[] = [];
+    a.runFog(fakeRenderer(events, 'The number of uniform buffers (13) in the Fragment stage exceeds the maximum per-stage limit (12).'));
+    // the build frame: scope opened before the march draw, closed after it
+    expect(events).toEqual(['push', 'draw volumetric-march', 'pop']);
+    await Promise.resolve(); await Promise.resolve();
+    expect(a.failed).toMatch(/rejected by WebGPU: The number of uniform buffers \(13\)/);
+    expect(a.active).toBe(false); // -> VolumetricAtmosphere.render draws the station directly (with the in-engine gas fallback)
+  });
+});
+
 describe('level change == boot: travelling into the Reactor keys the same term, gate and table as booting into it', () => {
   const state = (a: VolumetricAtmosphere) => {
     const d = a.depthDebug();

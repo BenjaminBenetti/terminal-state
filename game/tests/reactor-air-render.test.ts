@@ -54,7 +54,7 @@ describe('reactor air: the depth term in the march', () => {
   it('uniforms: the table size, the gate off, the look', () => {
     const u = createFogUniforms();
     // (lane FOG, task reactor-submit-roof-fog-20261102: the table is a TABLE_N x 1 float data texture, not a uniform array)
-    expect((u.depthTab as unknown as {value: THREE.DataTexture}).value.image.data.length).toBe(REACTOR_AIR.TABLE_N);
+    expect(((u.depthTab as unknown as {value: THREE.DataTexture}).value.image.data as Float32Array).length).toBe(REACTOR_AIR.TABLE_N);
     expect(u.depthOn.value).toBe(0);
     expect(u.depthK.value.x).toBeCloseTo(REACTOR_GAS_LOOK.ext, 9);
   });
