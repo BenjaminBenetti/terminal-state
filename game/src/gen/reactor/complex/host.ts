@@ -457,6 +457,7 @@ export function complexIssues(layout: StationLayout): string[] {
   const seen = new Set<string>();
   const cellsOf = (r: {x0: number; z0: number; x1: number; z1: number}): Rect => ({x: Math.round(r.x0 / CELL), y: Math.round(r.z0 / CELL), w: Math.round((r.x1 - r.x0) / CELL), h: Math.round((r.z1 - r.z0) / CELL)});
   const pit = cellsOf(info.pit.bounds);
+  const extIds = new Set(layout.areas.filter(a => a.ext).map(a => a.id));
   for (const c of list) {
     const tag = `complex ${c.id}`;
     if (seen.has(c.id)) issues.push(`${tag} twice`);
@@ -514,16 +515,29 @@ export function complexIssues(layout: StationLayout): string[] {
     };
     at(c.entrance.x, c.entrance.z, 'entrance');
     if (gen) at(gen.use.x, gen.use.z, 'generator use point');
-    // no overlap: the pit, the rim station (level 0, outside the pit), any other area of the storey, Track2 extension areas
+    // no overlap: the pit, the rim station (level 0, outside the pit), any other area of the storey (Kit areas are exact rects)
     for (const id of c.areas) {
       const a = layout.areas[id];
       if (!a) continue;
       if (overlaps(a, pit)) issues.push(`${tag}: area ${id} over the pit`);
+      // Track2 extension cells (a tunnel's area rect is only the bounding box of its curved bore): no extension cell in the complex's
+      // columns on any storey (the planner keeps its rock margin to every open cell of every storey)
+      if (extIds.size) {
+        let n = 0;
+        for (const L of levels) {
+          const gL = L.grid;
+          for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) {
+            if (!gL.inBounds(x, y)) continue;
+            const i = gL.idx(x, y);
+            if (gL.cells[i] !== SOLID && extIds.has(gL.area[i])) n++;
+          }
+        }
+        if (n) issues.push(`${tag}: area ${id} under ${n} Track2 cells`);
+      }
       for (const b of layout.areas) {
-        if (ids.has(b.id) || !overlaps(a, b)) continue;
+        if (ids.has(b.id) || b.ext || !overlaps(a, b)) continue;
         const lvB = b.level ?? 0;
-        if (b.ext) issues.push(`${tag}: area ${id} under Track2 area ${b.id}`);
-        else if (lvB === c.level) issues.push(`${tag}: area ${id} overlaps area ${b.id}`);
+        if (lvB === c.level) issues.push(`${tag}: area ${id} overlaps area ${b.id}`);
         else if (lvB === 0 && b.role !== 'reactor-room' && !overlaps(b, pit)) issues.push(`${tag}: area ${id} under the rim station (${b.label})`);
       }
       for (const t of layout.trenches) {
