@@ -16,12 +16,15 @@
 //  - PERSISTENCE: f is a pure function of (clock − startedAt) and only ever rises; ReactorRunState.zoneClear keeps the highest value
 //    reached (max with the curve): a rebuild replays from the saved fraction / startedAt (no re-spool, nothing re-rolls).
 //  - The RESTART win: clearAll(durationS) takes every zone to 1 (the pit clears).
+//  - Task reactor-playtest-round2-20261102 (lane GAS): the JAMMED zone (gen/reactor/gasJam.ts: the deepest zone, its generator jammed)
+//    never takes a generator's staged clearing: only clearAll (the reactor online) clears it. Its saved fraction still stands.
 //  - RENDER / EXPOSURE share ONE table: TABLE_N samples of c over [yLo, yHi], linear between samples — depthGasAt() reads exactly
 //    what the volumetric march integrates (the march only adds mean-1 wisps / sheets on top), so what looks gassy hurts.
 
 import type {ReactorInfo} from '../../gen/reactor/reactorTypes';
 import type {ReactorRunState} from './runState';
 import {outdoorGasAt, pitShaftSpec, reactorOutdoorGas, type OutdoorGas, type ShaftSpec} from '../gaslightRules'; // task reactor-expansion-20261101 (lane GASLIGHT)
+import {reactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 
 /** Every depth-gas tuning value (times s, lengths m). */
 export const REACTOR_AIR = {
@@ -140,7 +143,7 @@ export interface ReactorAirStats {
   yLo: number; yHi: number; rect: DepthRect;
   tableMax: number;
   clearingAll: boolean;
-  zones: {id: number; yTop: number; yBottom: number; cTop: number; cBottom: number; generator: number; clear: number; stage: number}[];
+  zones: {id: number; yTop: number; yBottom: number; cTop: number; cBottom: number; generator: number; clear: number; stage: number; jammed: boolean}[];
 }
 
 /** The depth gas of one built Reactor (a ReactorRunState is shared with the generators runtime; zoneClear lives there). */
@@ -167,11 +170,14 @@ export class ReactorAir implements DepthGasSource {
   /** Task reactor-playtest-round2-20261102 (lane STARTUP): the ONLINE sky clearing applied to `outdoor` (0..1) and a pending upload. */
   private outdoorClear = 0;
   private outdoorDirty = false;
+  /** Task reactor-playtest-round2-20261102 (lane GAS): the jammed zone (ReactorZone.id, -1 none): cleared only by clearAll. */
+  readonly jammedZone: number;
 
   constructor(readonly info: ReactorInfo, readonly rect: DepthRect, readonly state: ReactorRunState) {
     const open = info.pit.roofY > info.pit.rimY + 2; // (lane GASLIGHT)
     this.outdoor = open ? reactorOutdoorGas(info.pit.roofY, rect) : null;
     this.shafts = open ? pitShaftSpec(info) : null; // (task reactor-submit-roof-fog-20261102, lane ROOF: through the roof opening only)
+    this.jammedZone = reactorJam(info)?.zone ?? -1; // (lane GAS)
     const genOf = new Map<number, number>();
     for (const g of info.generators) if (!genOf.has(g.zone)) genOf.set(g.zone, g.id);
     const rim = info.pit.rimY;
@@ -218,7 +224,7 @@ export class ReactorAir implements DepthGasSource {
     for (const z of this.zones) {
       let f = clamp01(st.zoneClear[z.id] ?? 0);
       const g = z.gen >= 0 ? st.generators[z.gen] : undefined;
-      if (g?.started && Number.isFinite(clock)) f = Math.max(f, stagedClear(clock - g.startedAt));
+      if (g?.started && z.id !== this.jammedZone && Number.isFinite(clock)) f = Math.max(f, stagedClear(clock - g.startedAt)); // (lane GAS: never the jammed zone)
       if (all && Number.isFinite(clock)) { const b = all.base[z.id] ?? 0; f = Math.max(f, b + (1 - b) * smooth((clock - all.from) / all.dur)); }
       if (f > (st.zoneClear[z.id] ?? 0)) st.zoneClear[z.id] = f;
       this.clears[z.id] = f;
@@ -316,7 +322,7 @@ export class ReactorAir implements DepthGasSource {
     for (let i = 0; i < this.table.length; i++) if (this.table[i] > tableMax) tableMax = this.table[i];
     return {
       version: this.version, yLo: this.yLo, yHi: this.yHi, rect: {...this.rect}, tableMax, clearingAll: !!this.all,
-      zones: this.zones.map(z => ({id: z.id, yTop: z.yTop, yBottom: z.yBottom, cTop: z.cTop, cBottom: z.cBottom, generator: z.gen, clear: this.clears[z.id], stage: stageOf(this.clears[z.id])})),
+      zones: this.zones.map(z => ({id: z.id, yTop: z.yTop, yBottom: z.yBottom, cTop: z.cTop, cBottom: z.cBottom, generator: z.gen, clear: this.clears[z.id], stage: stageOf(this.clears[z.id]), jammed: z.id === this.jammedZone})),
     };
   }
 }

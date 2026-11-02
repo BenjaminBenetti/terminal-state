@@ -2,6 +2,9 @@
 // fixtures; this file joins them on the generator's output: the restart chain is complete and usable, the generator route never
 // needs a mask (no gas deadlock), the mask route is real (the deep air hurts), the kit plans every set piece within a bounded cost,
 // and the level regenerates identically. Pure (no renderer / DOM).
+// Task reactor-playtest-round2-20261102 (lane GAS, user design change): the final generator now JAMS (gen/reactor/gasJam.ts), so the
+// generator route needs no mask down to the final generator's deck, and the core floor needs the mask until the reactor is online
+// (tests/reactor-gas-jam.test.ts: the rule, the upstream supply, the filter budget, the surfaces).
 import {describe, expect, it} from 'vitest';
 import {LEVELS, arrivalPose} from '../src/levels/registry';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
@@ -13,6 +16,7 @@ import {emptyReactorState} from '../src/world/reactor/runState';
 import {RESTART_CONTROL_IDS} from '../src/world/reactor/restartLogic';
 import {planReactorKit} from '../src/world/reactor/archKit';
 import {MASK_LOOT} from '../src/gen/maskLoot';
+import {reactorJam} from '../src/gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [9100, 218558, 637474];
@@ -86,7 +90,7 @@ describe('the Reactor on real generated layouts', () => {
       for (const id of ['pitBoard', 'switchgearBoard', 'pumpBoard', 'controlMonitor'] as const) expect(r.screens.some(s => s.id === id), id).toBe(true);
     }, 60_000);
 
-    it(`seed ${seed}: generator route without a mask (each generator stands in clean / cleared air) and a real mask route (the deep air hurts)`, () => {
+    it(`seed ${seed}: generator route without a mask (each generator stands in clean / cleared air); the final one jams, so the core floor needs the mask`, () => {
       const L = level(seed), r = L.reactor!, rect = layoutRect(L);
       const st = emptyReactorState(r.generators.length, r.zones.length);
       const fresh = new ReactorAir(r, rect, st);
@@ -105,7 +109,14 @@ describe('the Reactor on real generated layouts', () => {
         const y = L.levels[g.use.level].baseY + EYE;
         expect(air.depthGasAt(g.use.x, y, g.use.z), `generator ${g.id} (zone ${g.zone}) use point`).toBeLessThan(GAS.THRESHOLD);
       }
-      // the guaranteed mask + a tight filter supply (the filter route never depends on an earlier level)
+      // (lane GAS) the final generator jams: with every working generator's zone cleared the core floor is still deadly unmasked
+      const jam = reactorJam(r)!;
+      const s3 = emptyReactorState(r.generators.length, r.zones.length);
+      for (const z of r.zones) if (z.id !== jam.zone) s3.zoneClear[z.id] = 1;
+      const air3 = new ReactorAir(r, rect, s3);
+      air3.update(0, true);
+      expect(air3.depthGasAt(r.core.x + r.core.radius + 3, core.baseY + EYE, r.core.z)).toBeGreaterThan(0.5);
+      // the guaranteed mask + a finite filter supply (the filter route never depends on an earlier level)
       expect(MASK_LOOT.levels.reactor.masks[0]).toBeGreaterThanOrEqual(1);
     }, 60_000);
 

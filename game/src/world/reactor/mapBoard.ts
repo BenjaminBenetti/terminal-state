@@ -19,7 +19,7 @@ import {REACTOR_LANE, loadReactorState, type ReactorRunState} from './runState';
 import {reactorRestartOf} from './restart';
 import {screenFacing} from './restartViews';
 import {controlSkin, lampSkin} from './controlsSkin';
-import {MAP_BOARD, MAP_PX, mapButtons, mapMarkers, markerSig, planMapBoards, planStoreys, type MapBoardPose, type MapButton, type MapMarker, type MapPlan} from './mapBoardPlan';
+import {MAP_BOARD, MAP_PX, mapButtons, mapMarkers, markerOpen, markerSig, planMapBoards, planStoreys, storeyWarning, type MapBoardPose, type MapButton, type MapMarker, type MapPlan} from './mapBoardPlan';
 import {drawMapFace} from './mapBoardDraw';
 import {rayCylinder, towerCue, type P3} from '../towerShared';
 
@@ -80,6 +80,8 @@ export class ReactorMapBoards {
   private pollT = 0;
   private srcSig = NaN;
   private markerKey = '';
+  /** Task reactor-playtest-round2-20261102 (lane GAS): the jam warning banner per tier index (null: none). */
+  private warns: (string | null)[] = [];
   private readonly vEye = new THREE.Vector3();
   private readonly vDir = new THREE.Vector3();
   private readonly eye: P3 = {x: 0, y: 0, z: 0};
@@ -199,6 +201,7 @@ export class ReactorMapBoards {
     for (const f of s.fuses) mix(f ? 1 : 2);
     mix(+s.breaker); mix(+s.valve); mix(+s.pump); mix(+s.keyInserted); mix(+s.rods);
     for (const g of s.generators) mix(g.started ? 3 : 4);
+    mix(+s.restarted); for (const c of s.zoneClear) mix(c >= 1 ? 5 : 6); // (lane GAS) the jam warning banner follows the air
     mix(this.host.inv.count('reactor_key')); mix(this.host.inv.count('fuse_cartridge'));
     for (const p of this.host.pickups?.list ?? []) {
       const id = p.stack.itemId;
@@ -223,6 +226,8 @@ export class ReactorMapBoards {
         levelAt: (x, z, y) => { try { const l = this.host.levels.levelAt(x, z, y + 0.1); return l >= 0 ? l : 0; } catch { return 0; } },
       });
       this.markerKey = markerSig(this.markers);
+      this.warns = info.tiers.map(t => storeyWarning(info, s, t.level)); // (lane GAS) per tier index (levels are tier levels)
+      this.markerKey += `|${this.warns.map(w => (w ? 1 : 0)).join('')}`;
       this.counts.markerBuilds++;
     }
     for (const b of this.boards) this.redraw(b);
@@ -252,7 +257,8 @@ export class ReactorMapBoards {
     drawMapFace(ctx, MAP_PX.w, MAP_PX.h, {
       plan, storey, markers: this.markers.filter(m => m.level === b.selected), you,
       board: b.selected === b.pose.level ? {x: b.pose.x, z: b.pose.z} : null,
-      floors: levels.map(l => ({level: l, label: info.tiers.find(t => t.level === l)?.label ?? `L${l}`, need: this.markers.filter(m => m.level === l && m.state !== 'done').length, selected: l === b.selected, here: l === here})),
+      floors: levels.map(l => ({level: l, label: info.tiers.find(t => t.level === l)?.label ?? `L${l}`, need: this.markers.filter(m => m.level === l && markerOpen(m)).length, selected: l === b.selected, here: l === here})), // (lane GAS: jammed is not open)
+      warn: this.warns[info.tiers.findIndex(t => t.level === b.selected)] ?? null, // (lane GAS) the jam banner on a gassed storey
     });
     b.texture.needsUpdate = true;
     this.counts.redraws++;

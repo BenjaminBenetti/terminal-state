@@ -34,7 +34,7 @@ import type {AreaKind, Archetype, RoomType, StationLayout} from '../gen/station'
 import {cellFloorFn} from '../world/lightField';
 import {stationLevels} from '../world/levelGeometry';
 import {MAX_SLOTS} from '../world/lightField';
-import {REACTOR_ATMOSPHERE} from '../world/reactor/archHaze'; // task reactor-build-20261101 (lane ARCH)
+import {REACTOR_ATMOSPHERE, reactorRockRooms} from '../world/reactor/archHaze'; // task reactor-build-20261101 (lane ARCH); (+ rock rooms: task reactor-playtest-round2-20261102, lane GAS)
 
 export type AtmosphereQuality = 'off' | 'low' | 'high';
 
@@ -108,6 +108,12 @@ export interface AtmosphereParams {
   classOdds: Record<AreaGroup, {clear: number; dense: number}>;
   /** Surfaces also receive the flashlight shadow (consistent with the shadowed beam). */
   surfaceShadows: boolean;
+  /**
+   * Task reactor-playtest-round2-20261102 (lane GAS): the haze of a level's ROOMS CUT INTO THE ROCK (world/reactor/archHaze.ts
+   * reactorRockRooms: the Reactor's side complexes + its pit side rooms): this multiplier and class group replace the area's type /
+   * kind lookup. Only the Reactor sets it; absent = every area exactly as before.
+   */
+  rockRoom?: {density: number; group: AreaGroup};
 }
 
 /** Area groups for the clear / dense draw. */
@@ -478,16 +484,21 @@ function hash32(x: number): number {
   return (h ^ (h >>> 16)) >>> 0;
 }
 
+/** Task reactor-playtest-round2-20261102 (lane GAS): the params' rock-room haze for area `index`, or null (not one / not set). */
+function rockRoomOf(layout: Pick<StationLayout, 'areas'>, index: number, p: Partial<Pick<AtmosphereParams, 'rockRoom'>>): AtmosphereParams['rockRoom'] | null {
+  return p.rockRoom && reactorRockRooms(layout).has(index) ? p.rockRoom : null;
+}
+
 /** Seeded class of area `index` (deterministic per station seed + area; never depends on time or the camera). */
-export function areaClassOf(layout: Pick<StationLayout, 'seed' | 'areas'>, index: number, p: Pick<AtmosphereParams, 'classOdds'>): AreaClass {
+export function areaClassOf(layout: Pick<StationLayout, 'seed' | 'areas'>, index: number, p: Pick<AtmosphereParams, 'classOdds'> & Partial<Pick<AtmosphereParams, 'rockRoom'>>): AreaClass {
   const a = layout.areas[index];
   if (!a) return 'normal';
-  const odds = p.classOdds[areaGroup(a)];
+  const odds = p.classOdds[rockRoomOf(layout, index, p)?.group ?? areaGroup(a)]; // (lane GAS: + the rock rooms' group)
   const u = hash32((layout.seed >>> 0) ^ Math.imul(index + 1, 0x9e3779b1) ^ 0x5f0c1a7d) / 4294967296;
   return u < odds.clear ? 'clear' : u < odds.clear + odds.dense ? 'dense' : 'normal';
 }
 
-export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'classDensity' | 'classOdds'>>, grid: Grid = layout.grid): number {
+export function areaMultiplier(layout: StationLayout, i: number, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'classDensity' | 'classOdds' | 'rockRoom'>>, grid: Grid = layout.grid): number {
   const g = grid, ad = p.areaDensity;
   if (g.cells[i] === VOID) return ad.trackBed ?? ad.default ?? 1;
   const ai = g.area[i];
@@ -495,12 +506,12 @@ export function areaMultiplier(layout: StationLayout, i: number, p: Pick<Atmosph
   if (!a) return ad.default ?? 1;
   // Track 2 (lane GEN): a track tunnel continues the bed (its group: the track bed); annex rooms / corridors go by their type
   if (a.ext === 'tunnel') return ad.trackBed ?? ad.default ?? 1;
-  const base = ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1;
+  const base = rockRoomOf(layout, ai, p)?.density ?? ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1; // (lane GAS: + the rock rooms)
   if (!p.classDensity || !p.classOdds) return base;
   return base * p.classDensity[areaClassOf(layout, ai, p as Pick<AtmosphereParams, 'classOdds'>)];
 }
 
-export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds'>>): DensityMap {
+export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams, 'areaDensity'> & Partial<Pick<AtmosphereParams, 'levelDensity' | 'classDensity' | 'classOdds' | 'rockRoom'>>): DensityMap {
   // Task office-seamless-20261029: every level (the light field's slots; was capped at 4).
   const levels = stationLevels(layout).slice(0, MAX_SLOTS);
   const g0 = layout.grid, W = g0.w, H = g0.h, n = W * H, S = levels.length;
@@ -583,8 +594,8 @@ export function buildDensityMap(layout: StationLayout, p: Pick<AtmosphereParams,
   });
   const areas = p.classDensity && p.classOdds ? layout.areas.map((a, i) => {
     const cls = areaClassOf(layout, i, p as Pick<AtmosphereParams, 'classOdds'>);
-    const ad = p.areaDensity;
-    return {cls, group: areaGroup(a), mult: (ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1) * p.classDensity![cls]};
+    const ad = p.areaDensity, rr = rockRoomOf(layout, i, p); // (lane GAS: + the rock rooms)
+    return {cls, group: rr?.group ?? areaGroup(a), mult: (rr?.density ?? ad[a.type] ?? ad[a.kind] ?? ad.default ?? 1) * p.classDensity![cls]};
   }) : undefined;
   return {w: W, h: H, slots: S, data, yMin, yRange, cell: CELL, areas, ...(layerY ? {layerY} : {})};
 }

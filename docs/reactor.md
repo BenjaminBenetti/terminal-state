@@ -11,7 +11,7 @@ outside Git.
 | Contract (types only) | `game/src/gen/reactor/reactorTypes.ts` (`layout.reactor: ReactorInfo`), `game/src/world/reactor/runState.ts` (the one persisted record, lane store `reactor.state`), `game/src/world/reactor/visuals.ts` (the visuals seam) |
 | Generator | `game/src/gen/reactor/{index,frame,carve,structure,validate}.ts` — `generateReactorLevel(ctx, {trackExt})` |
 | Registration | `levels/registry.ts` `LEVELS.reactor` (tier 3), `ai/spawnTables.ts` `REACTOR_SPAWN_PROFILE`, `items/lootTables.ts` `REACTOR_PROFILE`, `gen/maskLoot.ts` (1 mask, 3–5 filters), `gen/trackExt/config.ts` `TRACK_EXT_REACTOR`; title card, travel slot 3, `?level=reactor` / `?reactorSeed=CODE` |
-| Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts` |
+| Air (gas + generators) | `game/src/world/reactor/{air,generators,airHud,airQa}.ts`; the exposure term in `world/gas/system.ts`; the reactor-only march term in `render/volumetric*.ts`; the jammed final generator `game/src/gen/reactor/gasJam.ts` |
 | Restart + win | `game/src/world/reactor/{restart,restartLogic,restartWin,restartScreens,restartViews,restartItems,restartQa}.ts`; `run/milestones.ts`; coming to life (startup audio, beacons, the ONLINE sky): `game/src/world/reactor/startup*.ts` |
 | Rendering (the kit) | `game/src/world/reactor/{arch,archKit,archMeshes,archMaterials,archAssets,archVisuals,archHaze,archInstall}.ts` |
 | Mounted controls, floor maps, impacts | `game/src/world/reactor/{controlsMount,controlsKit,controlsSkin,controlsModel}.ts`, `game/src/world/reactor/mapBoard{,Plan,Draw}.ts`, `game/src/world/finishAt.ts` + `game/src/damage/impactFinish.ts` (see "Mounted controls" / "Floor-map boards" below) |
@@ -145,13 +145,51 @@ grown space by space through the rock. Each seed draws a new topology; up to 16 
   - Stratified and thickening downward, with readable bands; the rim breathes.
   - Exposure goes through the existing threshold / dps / mask + filter / HUD / cough path. The Blightbelly's puffs and every other
     level's gas are unchanged.
-- **Generator route** (no mask needed):
+- **Generator route** (no mask needed down to tier 4):
   - Each zone's auxiliary generator stands in air that is already clean or cleared: tier 1, tier 2 and tier 4.
   - Hold E 2 s to start it. It cranks, then its zone's fans spool and the zone clears in 3 visible stages (top first, about 55 s).
   - The clearing persists, and revisits never re-roll it.
   - A running generator is LOUD: it alerts existing enemies at the landing. Nothing spawns.
-- **Filter route:** wear the mask and spend filters. The level always holds one mask and a tight filter supply, and the core floor is
-  deadly without one. Mixed play (clear what you fight on, mask through what you cross) is expected.
+  - **The final generator (tier 4, the core floor's zone) JAMS** (round 2 design change, "The final generator jams" below). The core
+    floor stays gassed until the reactor is online.
+- **Filter route:** wear the mask and spend filters. The level always holds one mask and a finite filter supply, placed upstream of the
+  core floor. The core floor needs them. Mixed play (clear what you fight on, mask through what you cross) is expected.
+
+### Round 2 gas (task reactor-playtest-round2-20261102, lane GAS)
+- **Knee-high spill (user: "on the level above the level that is covered in fog, there is also fog … make it lower, about knee
+  high").**
+  - Cause: zone 0's band top sat mid-storey, ~3 m above tier 1's deck. With the 2.5 m soft top, its sub-threshold haze stood
+    visibly to 1.65–1.75 m (c ≥ 0.06) and 2.1–2.2 m (c ≥ 0.03) on tier 1, above the gassed tier 2.
+  - Fix: `ZONE0_TOP_ABOVE_DECK` (2.0 m, `gen/reactor/structure.ts`) puts the top at 0.65 m / 1.1 m on tier 1. The eye is clean
+    (0.07 → 0.008) and tier 2's hazard is unchanged (eye 0.22 → 0.215).
+  - The other zones' tops lie 3 m below the deck above, so they spill onto no deck. Render and exposure still read one table.
+- **White haze in the side complexes ("a fog machine party").**
+  - Cause: `archHaze.ts` keyed its room multipliers by area *role*, but the atmosphere looks areas up by *type*, so they never
+    applied. The complex rooms took the Subway's back-of-house values instead: utility 1.4, service corridor 1.35, and the
+    'service' class group (half of the rooms dense, × 1.4). That came on top of the Reactor's denser base and its ground layer.
+  - Fix: every room cut into the rock (`reactorRockRooms`: the complexes' areas + the pit side rooms) takes `rockRoom` (× 0.8,
+    room class odds).
+  - Result, at 1.4 m: the complexes go from 0.082–0.101 to 0.014–0.020 / m (a normal Subway station: 0.025). The pit, the rim
+    and every other level are unchanged. The green strata are a separate term and are untouched.
+- **The final generator jams** (user design change; supersedes "no mask needed all the way down"). Code: `gen/reactor/gasJam.ts`.
+  - **The rule:** the deepest zone's generator, in the tier-4 waste repository, is jammed for the run. The 2 s hold cranks it for
+    2.4 s, then it seizes: a creak and a clank, a short alert, its red fault lamp flashing, and a toast telling you to wear the mask.
+  - It never starts and its zone is never cleared by a generator: only the reactor online (the win's `clearAll`) clears it, never a
+    fuse, the breaker, the valve, the pump or the key. The upper two generators work as before.
+  - `reactor.state.jam` keeps the generator and its stalls. A pre-jam record with it started keeps its zone's saved fraction.
+  - **Where the player learns it, before committing:**
+    - the rim pit board (core row "JAMMED · MASK");
+    - the switchgear board once power is on;
+    - the "Next:" step and the HUD objective;
+    - the generator's prompt and the HUD air line ("toxic air · fans jammed — gas mask on");
+    - the floor maps: a ⊘ jammed mark (not an open X) and a red banner on the core storey.
+  - **Supplies:** the guaranteed mask and filters (`MASK_LOOT`: 1 mask and 3–5 filters) are placed only on storeys above the jammed
+    zone (`placeMaskLoot` → `placeGear` `areaOk`). That air is breathable once the working generators run (checked on 12 seeds).
+    - The worst roll gives 503 s of filter time.
+    - The real core route (farthest stair foot → valve → pump → key switch → rods → online, until the eye is below the threshold)
+      takes 70–76 s, and 165–177 s with ×2 walking and 60 s of fighting. The supply covers it twice over.
+- Tests: `game/tests/reactor-gas-{spill,haze,jam}.test.ts`; the jam state machine is in `reactor-air-runtime.test.ts`. The old
+  "zero damage down to the core floor" walk now ends at the final generator, with the jam asserted.
 
 ## The restart (credible industrial work, no puzzle)
 1. **Startup key**: in the rim control office. It is picked up on the way down.
