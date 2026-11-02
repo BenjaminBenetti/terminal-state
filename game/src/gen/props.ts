@@ -3,6 +3,7 @@
 
 import {P7_PROP_DEFS, type P7Kind} from './props07';
 import {OFFICE_PROP_DEFS, type OfficeKind} from './office/kinds'; // Iteration 16 (WORLD-GEN)
+import {BUNKER_PROP_DEFS, type BunkerKind} from './reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -30,7 +31,9 @@ export type PropKind =
   // Iteration 07 (Lane P2): NEW generated prop types (gen/props07.ts; lazy-loaded p7-*.glb models, measured footprints).
   | P7Kind
   // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts; Meshy office models, procedural fallbacks).
-  | OfficeKind;
+  | OfficeKind
+  // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (REACTOR_X_KIT models; gen/reactor/complex/bunkerKinds.ts).
+  | BunkerKind;
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -173,6 +176,8 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   ...P7_PROP_DEFS,
   // --- Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts) ---
   ...OFFICE_PROP_DEFS,
+  // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (real size, gen/reactor/complex/bunkerKinds.ts)
+  ...BUNKER_PROP_DEFS,
 };
 
 /**

@@ -29,6 +29,7 @@ import {ReactorArchVisuals} from './archVisuals';
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import {buildMinesVisuals, minesRecord, type MinesBuildStats} from './minesVisuals'; // task reactor-expansion-20261101 (lane MINES): the old mine workings' look
+import {buildBunkerModels} from './bunkerModels'; // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props
 import type {MeshBasicNodeMaterial} from 'three/webgpu';
 
 export interface ReactorArchStats {
@@ -253,6 +254,8 @@ export class ReactorArch {
     try { this.pitSky = buildPitSky(group, this.info, this.levels.map(l => l.id)); } catch (e) { console.warn('reactor arch: pit sky skipped', e); }
     // task reactor-expansion-20261101 (lane MINES): timber sets, rail line, carts / winch / drill, winze headframe, cribs, rubble, water
     try { if (this.mineAreas.size) this.stats.mines = buildMinesVisuals(group, this.layout, this.mats, models); } catch (e) { console.warn('reactor arch: mines skipped', e); }
+    // task reactor-expansion-20261101 (lane BUNKER): the bunker's hero props (REACTOR_X_KIT models on their prop placements)
+    try { buildBunkerModels(group, this.layout, models); } catch (e) { console.warn('reactor arch: bunker models skipped', e); }
     this.stats.ms = (typeof performance !== 'undefined' ? performance.now() : 0) - t0;
     return this.stats;
   }

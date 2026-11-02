@@ -18,6 +18,7 @@ import {isP7Kind, p7Spec} from '../gen/props07';
 import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
 import {dynamicKind} from '../physics/dynamicItems';
+import {BUNKER_STATIC} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 
 export interface PhysAuditRow {
   kind: string;
@@ -111,6 +112,8 @@ const SUBWAY_STATIC: Readonly<Record<string, readonly [StaticWhy, string]>> = {
   waterPumpSkid: ['anchored', 'water pump skid bolted down and plumbed'],
   waterHeaterTank: ['fixture', 'plumbed water heater tank'],
   emergencyCallPoint: ['anchored', 'emergency call point post'],
+  // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (gen/reactor/complex/bunkerKinds.ts)
+  ...BUNKER_STATIC,
 };
 
 function subwayRow(kind: string): PhysAuditRow | null {
