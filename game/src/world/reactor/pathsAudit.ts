@@ -155,6 +155,8 @@ export interface WalkBox { x0: number; y0: number; z0: number; x1: number; y1: n
 export interface WalkOptions {
   /** Only these area ids (e.g. one side complex); default every walkable cell. */
   areas?: ReadonlySet<number>;
+  /** Only cells inside these world rects (the runtime build: where the kit places anything — kitWalkRegions); default everywhere. */
+  regions?: readonly {x0: number; z0: number; x1: number; z1: number}[];
   /** Body overrides (tests). */
   body?: Partial<typeof BODY>;
 }
@@ -180,7 +182,9 @@ export class WalkVolume implements KitWalk {
     const open = (g: Grid, i: number) => (g.cells[i] === FLOOR || g.cells[i] === VOID) && !g.blocked[i];
     const voidY = layout.trench?.floorY;
     // the collision railings' cell edges (a railing is a designed edge: the side it stands on is a boundary) with their base heights
-    const railEdge = new Map<string, number[]>();
+    // numeric edge ids: a vertical cell edge (line lx, row cy) = 2 (cy (W + 1) + lx), a horizontal one (col cx, line ly) = that + 1
+    const W1 = this.W + 1, vKey = (lx: number, cy: number) => 2 * (cy * W1 + lx), hKey = (cx: number, ly: number) => 2 * (ly * W1 + cx) + 1;
+    const railEdge = new Map<number, number[]>();
     for (const r of layout.rails ?? []) {
       const len = Math.hypot(r.x1 - r.x0, r.z1 - r.z0);
       if (len < 0.02) continue;
@@ -188,7 +192,7 @@ export class WalkVolume implements KitWalk {
       if (!alongZ && !alongX) continue;
       for (let s = Math.min(0.05, len / 2); s < len; s += 0.1) {
         const u = s / len, x = r.x0 + (r.x1 - r.x0) * u, z = r.z0 + (r.z1 - r.z0) * u, y = r.y0 + (r.y1 - r.y0) * u;
-        const key = alongZ ? `v:${Math.round(x / CELL)}:${Math.floor(z / CELL)}` : `h:${Math.floor(x / CELL)}:${Math.round(z / CELL)}`;
+        const key = alongZ ? vKey(Math.round(x / CELL), Math.floor(z / CELL)) : hKey(Math.floor(x / CELL), Math.round(z / CELL));
         let l = railEdge.get(key);
         if (!l) railEdge.set(key, (l = []));
         if (!l.some(q => Math.abs(q - y) < 0.05)) l.push(y);
@@ -199,8 +203,8 @@ export class WalkVolume implements KitWalk {
     const cont = (cx: number, cy: number, dx: number, dy: number, f: number, ex: number, ez: number): boolean => {
       const nx = cx + dx, ny = cy + dy;
       if (nx < 0 || ny < 0 || nx >= this.W || ny >= this.H) return false;
-      const rk = dx ? `v:${dx > 0 ? cx + 1 : cx}:${cy}` : `h:${cx}:${dy > 0 ? cy + 1 : cy}`;
-      if (railEdge.get(rk)?.some(y => Math.abs(y - f) < 0.6)) return false;
+      const rl = railEdge.size ? railEdge.get(dx ? vKey(dx > 0 ? cx + 1 : cx, cy) : hKey(cx, dy > 0 ? cy + 1 : cy)) : undefined;
+      if (rl) for (const y of rl) if (Math.abs(y - f) < 0.6) return false;
       const j = ny * this.W + nx;
       for (const M of levels) {
         const gm = M.grid;
@@ -210,22 +214,35 @@ export class WalkVolume implements KitWalk {
       return false;
     };
     const per = new Int32Array(this.W * this.H);
+    let inside: Uint8Array | null = null;
+    if (opts.regions) {
+      inside = new Uint8Array(this.W * this.H);
+      for (const r of opts.regions) {
+        for (let cy = Math.max(0, Math.floor(r.z0 / CELL)); cy <= Math.min(this.H - 1, Math.floor(r.z1 / CELL)); cy++) {
+          for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx <= Math.min(this.W - 1, Math.floor(r.x1 / CELL)); cx++) inside[cy * this.W + cx] = 1;
+        }
+      }
+    }
     for (const L of levels) {
       const g = L.grid;
       for (let cy = 0; cy < this.H; cy++) for (let cx = 0; cx < this.W; cx++) {
         const i = cy * this.W + cx;
-        if (!open(g, i)) continue;
+        if ((inside && !inside[i]) || !open(g, i)) continue;
         const area = g.area[i];
         if (opts.areas && !opts.areas.has(area)) continue;
         const ri = g.rampIdx[i];
         // a stair cell carved into two storey grids is one band: keep the first storey's copy
-        if (ri >= 0 && levels.some(M => M.id < L.id && M.grid.rampIdx[i] === ri && M.grid.ramps[ri] === g.ramps[ri])) continue;
+        if (ri >= 0) {
+          let dup = false;
+          for (const M of levels) if (M.id < L.id && M.grid.rampIdx[i] === ri && M.grid.ramps[ri] === g.ramps[ri]) { dup = true; break; }
+          if (dup) continue;
+        }
         const x0 = cx * CELL, z0 = cy * CELL, x1 = x0 + CELL, z1 = z0 + CELL;
-        const sides = [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => {
-          const ex = dx ? (dx > 0 ? x1 : x0) : x0 + CELL / 2, ez = dy ? (dy > 0 ? z1 : z0) : z0 + CELL / 2;
-          return cont(cx, cy, dx, dy, floorNearCell(g, i, cx, cy, ex, ez, voidY), ex, ez) ? 0 : edge;
-        });
-        const [sE, sW, sS, sN] = sides;
+        const xm = x0 + CELL / 2, zm = z0 + CELL / 2;
+        const sE = cont(cx, cy, 1, 0, floorNearCell(g, i, cx, cy, x1, zm, voidY), x1, zm) ? 0 : edge;
+        const sW = cont(cx, cy, -1, 0, floorNearCell(g, i, cx, cy, x0, zm, voidY), x0, zm) ? 0 : edge;
+        const sS = cont(cx, cy, 0, 1, floorNearCell(g, i, cx, cy, xm, z1, voidY), xm, z1) ? 0 : edge;
+        const sN = cont(cx, cy, 0, -1, floorNearCell(g, i, cx, cy, xm, z0, voidY), xm, z0) ? 0 : edge;
         if (ri < 0) {
           const f = g.floorOf(i);
           this.boxes.push({x0: x0 + sW, y0: f + foot, z0: z0 + sN, x1: x1 - sE, y1: f + bh, z1: z1 - sS, level: L.id, cell: i, area, ramp: false});
@@ -304,6 +321,20 @@ export class WalkVolume implements KitWalk {
 }
 
 const scratch: number[] = [];
+
+/**
+ * The world rects the kit planner places anything in (runtime WalkVolume regions): the pit outline's bounds + 3 m (decks, towers, wall
+ * steel, doorways in the pit walls) and every generator's panel / cable run + 3 m (a generator in a side complex draws its riser and
+ * cable there). The tests audit the whole level (no regions).
+ */
+export function kitWalkRegions(info: ReactorInfo): {x0: number; z0: number; x1: number; z1: number}[] {
+  const m = 3, b = info.pit.bounds, out = [{x0: b.x0 - m, z0: b.z0 - m, x1: b.x1 + m, z1: b.z1 + m}];
+  for (const g of info.generators) {
+    const pts = [{x: g.x, z: g.z}, g.panel, ...g.cable];
+    out.push({x0: Math.min(...pts.map(p => p.x)) - m, z0: Math.min(...pts.map(p => p.z)) - m, x1: Math.max(...pts.map(p => p.x)) + m, z1: Math.max(...pts.map(p => p.z)) + m});
+  }
+  return out;
+}
 const UNIT_LO = [-0.5, -0.5, -0.5] as const, UNIT_HI = [0.5, 0.5, 0.5] as const;
 
 // ---------------------------------------------------------------------------------------------------------------------------
