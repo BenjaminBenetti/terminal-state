@@ -54,11 +54,13 @@ export const REACTOR_AIR = {
  * read in the dark, B's luminous yellow-green), wisp + horizontal sheet modulation (mean 1), sheet noise scales, linear tint.
  */
 export const REACTOR_GAS_LOOK = {
-  // task reactor-expansion-20261101 (lane GASLIGHT, user: "the toxic gas is not visible!"): ext 0.12 -> 0.3, emission 0.08 -> 0.25,
-  // tint [0.5, 0.62, 0.22] -> greener. Root cause: at 0.12 / m x c (zone 1 top c 0.14 = 0.017 / m) the strata barely dimmed the pit
-  // and their unlit glow (tint x emission, at most 0.04 linear) sat under the olive scene fog of a pit whose powered lamps are dead
-  // until the restart: the deadly air read like ordinary murk. Now the strata glow a clear toxic green that thickens with depth.
-  ext: 0.3, scatter: 0.6, emission: 0.25, wisps: 0.35,
+  // task reactor-expansion-20261101 (lane GASLIGHT, user: "the toxic gas is not visible!"): ext 0.12 -> 0.18, emission 0.08 -> 0.3,
+  // tint [0.5, 0.62, 0.22] -> greener. Root cause: the strata's unlit glow (tint x emission: at most 0.045 linear luminance, a
+  // yellow-grey) sat under the OLIVE scene fog (world/reactor/archInstall.ts REACTOR_FOG, now neutral) of a pit whose powered lamps
+  // are dark until the restart, so nothing lit them either: the deadly air read like ordinary murk. Now they glow a clear toxic green
+  // (0.19 luminance when thick) that thickens with depth; the extinction is raised only a little so the core still reads from the rim
+  // (straight down ~12 % transmittance through the uncleared column; the vessel's emissive glow / lane CORE's open scatter lights).
+  ext: 0.18, scatter: 0.6, emission: 0.3, wisps: 0.35,
   sheets: 0.45, sheetXZ: 0.035, sheetY: 0.32,
   tint: [0.38, 0.74, 0.18] as readonly [number, number, number],
 } as const;

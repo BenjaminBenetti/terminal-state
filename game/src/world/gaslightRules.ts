@@ -42,7 +42,7 @@ export function outdoorGasAt(o: OutdoorGas | null, x: number, y: number, z: numb
  * stand below it; no deck, ladder or stair reaches it — the rim is at 0, the roof 14-18 m up). c = the Office roof's outdoor air
  * (the same surface atmosphere); vis thins the look so the sky still reads through it from the rim.
  */
-export const REACTOR_OUTDOOR = {c: 0.6, rampLo: 0.6, rampHi: 6, vis: 0.15} as const;
+export const REACTOR_OUTDOOR = {c: 0.6, rampLo: 0.6, rampHi: 6, vis: 0.2} as const;
 
 /** The Reactor's outdoor gas over the layout rect: above roofY + rampLo .. + rampHi. */
 export function reactorOutdoorGas(roofY: number, rect: OutdoorGas['rect']): OutdoorGas {

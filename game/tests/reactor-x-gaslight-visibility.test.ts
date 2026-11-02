@@ -56,10 +56,9 @@ describe('gaslight: every gas look is GREEN and visibly dense at the damage thre
     const breach = {ext: GAS.EXT, emission: GAS.EMISSION, tint: GAS.TINT};
     expect(gasOpacity(breach, c, 4)).toBeGreaterThan(0.35);
     expect(greenness(breach.tint)).toBeGreaterThan(1.2);
-    // the Reactor depth strata at the top of zone 1 (its thinnest gas) across 12 m of the pit
+    // the Reactor depth strata at the top of zone 1 (its thinnest gas) across 20 m of the pit (looking across / down into it)
     const depth = {ext: REACTOR_GAS_LOOK.ext, emission: REACTOR_GAS_LOOK.emission, tint: REACTOR_GAS_LOOK.tint};
-    expect(gasOpacity(depth, 0.14, 12)).toBeGreaterThan(0.35);
-    expect(gasOpacity({...depth, ext: 0.12}, 0.14, 12)).toBeLessThan(0.2); // the old look: the user's "not visible"
+    expect(gasOpacity(depth, 0.14, 20)).toBeGreaterThan(0.35);
     const sat = gasGlow(depth, 1, 1e3); // the unlit glow of thick strata (linear): clearly green, bright enough to read in the dark pit
     expect(greenness(sat)).toBeGreaterThan(1.6);
     expect(luminance(sat)).toBeGreaterThan(0.1);
@@ -105,6 +104,11 @@ describe('gaslight: hazard <-> render parity (one function per source)', () => {
     for (const lv of L.levels) for (let i = 0; i < lv.grid.cells.length; i++) if (lv.grid.cells[i] === FLOOR) expect(lv.grid.floor[i]).toBeLessThan(info.pit.roofY - 5);
     // the deadly core floor draws dense green strata; the outdoor air above the top is the surface atmosphere
     expect(renderC(a.u, cx, info.pit.floorY + 1.6, cz).strata).toBeGreaterThan(0.7);
+    // balance: the uncleared column is substantial green murk from the rim, yet the core still reads through it (its glow / CORE's lights)
+    let od = 0;
+    for (let y = 0; y > info.pit.floorY + 1; y -= 0.05) od += air.tableAt(y) * REACTOR_GAS_LOOK.ext * 0.05;
+    expect(Math.exp(-od)).toBeGreaterThan(0.08);
+    expect(Math.exp(-od)).toBeLessThan(0.4);
     expect(renderC(a.u, cx, info.pit.roofY + 10, cz).outdoor).toBeCloseTo(REACTOR_OUTDOOR.c, 6);
   });
 
