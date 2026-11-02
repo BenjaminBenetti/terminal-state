@@ -68,15 +68,16 @@ if (OUT) writeFileSync(OUT, '');
 
 /**
  * The budget: scene + flashlight-shadow draws per representative pose (static world + holders + loot display + enemies + pickups).
- * Measured with these fixes (lane CPU) on 000070S / 637474 / 218558; before them (main d53ae24, static world only — enemies and
- * pickups not even counted) the same poses drew 822 / 941 / 846 (000070S), 992 / 913 / 910 (637474). A budget failure means the
- * Reactor's submitted work grew: measure again (LL_REACTOR_CPU_OUT) and decide consciously before raising a cap.
+ * Measured with lane CPU's fixes on the feature branch with ROOF + FOG merged (000070S / 637474 / 218558): worst 714 (637474 mid-deck),
+ * total 5,328 over the 9 views; the same harness on the branch WITHOUT them: docs/reactor.md "CPU submission" (e.g. 000070S rim gallery
+ * 1,001 -> 486, rim down to the core 1,061 -> 614, mid-tier deck 954 -> 561). A budget failure means the Reactor's submitted work
+ * grew: measure again (LL_REACTOR_CPU_OUT) and decide consciously before raising a cap.
  */
 const BUDGET = {
-  /** Worst pose over the three seeds (scene + shadow), and the sum over the 9 seed x pose views. */
-  worst: 820, total: 6000,
-  /** The occlusion + tracking must remove at least this share of the rules-off draws on the rim views (measured 35-50 %). */
-  rimCut: 0.25,
+  /** Worst pose over the three seeds (scene + shadow; measured 714), and the sum over the 9 seed x pose views (measured 5,328). */
+  worst: 790, total: 5850,
+  /** The slab / storey occlusion + tracking must remove at least this share of the rules-off draws on every rim view (measured 25-46 %). */
+  rimCut: 0.2,
 } as const;
 
 // ---------------------------------------------------------------------------------------------------------------------------
