@@ -321,9 +321,12 @@ Scale (rule 5), `scale-check.mjs --prop <glb>` beside zombie lastshift (1.78 m, 
 | --- | --- | --- | --- |
 | Ore cart | 1 | 1.80 × 0.78 × 0.79 m | 4 (wheels; 600 mm gauge) |
 | Hoist winch | 1 | 3.00 × 1.64 × 1.71 m | 4 (the base) |
-| Drill rig | 1 | 3.50 × 1.28 × 0.98 m | 4 (tyres) |
+| Drill rig (round 2: `MINES_FIT.drillRig`) | 1.9 | 6.65 × 2.43 × 1.87 m (carrier 4.04 m) | 10 clusters, all on the 4 tyres |
 | Timber set in a 3 m × 3.3 m drift (first fit, viewed) | 1.36, 1.31, 1 | 4.62 × 3.30 × 0.53 m | 13 (post feet) |
 
-The drill rig is compact for a "jumbo": a small single-boom rig, not a full-size jumbo. The timber set is now scaled per drift by
+The drill rig was cooked at 3.50 × 1.28 × 0.98 m: knee / waist high, with 0.5 m tyres (user: "comically small"). Task
+reactor-playtest-round2 (lane PROPS) draws it at a derived uniform fit of 1.9, with no re-cook: a compact single-boom face-drill rig
+with ~0.95 m tyres, the carrier frame at head height and the boom to 2.43 m. Its collider, heading and placement read
+`minesModelSize`. The timber set is now scaled per drift by
 `timberSetFit`: its cap ends reach the rib + 0.48 m (x ≈ 1.16 in a 3 m drift). Its posts then stand about 0.3 m proud, leaving a clear
 opening of about 2.4 × 2.35 m.

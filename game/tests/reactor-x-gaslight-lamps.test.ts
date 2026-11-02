@@ -161,24 +161,33 @@ describe('gaslight lamps: the world (bodies in the kit, the tube instance is the
     return {L, w: buildWorld(L as never, mats(), {})};
   }
 
-  it('mounted lamps: bodies planned with the kit, NO decorative emissive lamps, lens = the fixture tube at the lamp head', () => {
+  // task reactor-playtest-round2-20261102 (lane PROPS): the glass is the jar glow inside the cage ('light-glass', sharing the tubes'
+  // colour); the light's tube instance is collapsed (it was the flat plate in front of the cage: "strange box in front of" the lamps)
+  it('mounted lamps: bodies planned with the kit, NO decorative emissive lamps, the glass = a jar inside the cage at the lamp head', () => {
     const {L, w} = world(), arch = w.reactorArch!;
     expect(arch.plan!.lamps).toEqual([]); // no per-tier KitLamp lenses (the orange circles)
     expect(arch.built!.tierLamps.size).toBe(0);
     expect(arch.mountedLamps.length).toBe(3);
     expect(arch.stats.lamps).toBe(3);
+    const glass = w.group.getObjectByName('light-glass') as THREE.InstancedMesh;
+    expect(glass).toBe(arch.lampGlass);
+    expect(glass.instanceColor).toBe(w.tubes!.instanceColor); // the lighting's per-fixture colour IS the glass colour
+    expect(glass.material).toBe(w.tubes!.material);
     const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), s = new THREE.Vector3();
     for (const r of arch.mountedLamps) {
       const l = L.lights[r.index];
       expect(isMounted(l)).toBe(true);
       w.tubes!.getMatrixAt(r.index, m);
       m.elements.forEach((v, k) => expect(v).toBeCloseTo(r.lens.elements[k], 4)); // (the instance buffer is float32)
-      // the lens box's centre (the tube geometry's centre mapped through the matrix) sits at the head
-      const c = new THREE.Vector3(0, -0.19 - 0.004, 0).applyMatrix4(m);
-      if (!r.model) expect(c.distanceTo(new THREE.Vector3(l.x, l.y, l.z))).toBeLessThan(1e-3);
+      expect([0, 1, 2].map(k => new THREE.Vector3().setFromMatrixColumn(m, k).length())).toEqual([0, 0, 0]); // the tube box is collapsed: no plate
+      glass.getMatrixAt(r.index, m);
+      m.elements.forEach((v, k) => expect(v).toBeCloseTo(r.glass.elements[k], 4));
+      // the jar's centre (half its height up the lathe) sits at the head: the cage's centre / inside the model's cage
+      const c = new THREE.Vector3(0, 0.111, 0).applyMatrix4(m);
+      if (!r.model) expect(c.distanceTo(new THREE.Vector3(l.x, l.y, l.z))).toBeLessThan(0.01);
       else expect(c.distanceTo(new THREE.Vector3(l.x, l.y, l.z))).toBeLessThan(0.35);
       m.decompose(p, q, s);
-      expect(Math.max(s.x * 1.2 * 0.82, s.z * 0.17 * 0.42)).toBeLessThan(0.3); // a small lens, not a 1 m tube
+      expect(Math.max(s.x, s.y, s.z) * 0.214).toBeLessThan(0.25); // a small jar, not a 1 m tube
     }
     // the tube fixture outside the pit stays a tube
     w.tubes!.getMatrixAt(3, m); m.decompose(p, q, s);

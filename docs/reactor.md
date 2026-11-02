@@ -273,12 +273,15 @@ rebuilt world shows exactly the stage reached, with nothing to replay.
 | Step | Where it happens | At the core |
 |---|---|---|
 | Nothing done | Fuse lamps red | The goop is dormant but clearly green; two green lights light the structure and the pit's fog from the rim |
-| Fuse seated | That slot's lamp amber | – |
-| Breaker | Every switchgear lamp green | Loop and turbine panel power lamps green |
-| Valve | Valve beacon amber | Sight glasses fill with coolant (3 s), pressure lamps amber, a faint blue light |
-| Pump | Pump beacon blue | Blue flow streams through every loop, the pump flywheels spool up (4 s), the blue light grows |
-| Key | Console key lamp amber | CRDM rod lamps amber |
-| Rods | Console rods lamp green | The core wakes over 6 s: goop brighter and churning, green light ×4, the turbine fan spins up, then the win below |
+| Fuse seated | That slot's panel lamp green | – |
+| Breaker | The breaker's lamps: amber off, green on | Loop and turbine panel power lamps green |
+| Valve | The valve's lamp red, then green | Sight glasses fill with coolant (3 s), pressure lamps amber, a faint blue light |
+| Pump | The pump's run lamp green | Blue flow streams through every loop, the pump flywheels spool up (4 s), the blue light grows |
+| Key | The key switch lamp amber, then green | CRDM rod lamps amber |
+| Rods | The rod control's four task lamps green | The core wakes over 6 s: goop brighter and churning, green light ×4, the turbine fan spins up, then the win below |
+
+The "where it happens" lamps are the mounted panel lamps of the restart overlays (`restartViews.ts`; round 2, lane PROPS: the disc + bulb
+"status lamps on top of the machine" are gone, see below).
 
 The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
 volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
@@ -576,6 +579,56 @@ Nothing solid may stand in walkable space except designed edges (railings on the
     on drop edges, post lamps only on railings, tower portals where a walkway crosses a face, flat pilaster straps (none across
     doorways), cables over the landing and flat on the walls.
   - Fan housings stay clear of walkways and tower legs stand in reserved 2 x 2 cells.
+
+### Round 2 props: lamp glass, ceiling cables, the drill, no floating beacons (task reactor-playtest-round2-20261102, lane PROPS)
+User bullets 10–13. Tests: `game/tests/reactor-props-r2-{lamps,cables,drill}.test.ts`.
+- **"Strange box in front of" the lights (10).**
+  - **Cause:** every pit / mine lamp's glass was the station's flat tube instance (`light-tubes`). On the flood-lamp model it became a
+    0.17 × 0.24 m opaque plate 1 cm in front of the cage, placed on the GLB's bounding-box "lens face", not on its glass jar.
+    Procedural cages showed a glowing cube, and the mines' pendants a glowing square under the cage.
+  - **Fix:** `world/reactor/propsLampGlass.ts`. The glass is a jar-shaped lathe glow inside each cage. On the model it sits between
+    the measured glass (≤ 0.081 m off the jar axis) and the cage bars (≥ 0.094 m). Procedural cages get the same jar scaled in.
+  - It is one InstancedMesh (`light-glass`, one extra draw call) over the tubes' light indices. It shares their `instanceColor` and
+    material, so `world/lights.ts` still drives lit, held circuit-2 and flickering glass per fixture. The lamp's tube instance is
+    collapsed. The cast light and the housings are unchanged.
+- **Floating discs with lights on top (13).** These were removed:
+  - `coreHero.ts`: the restart sites' disc + bulb "on top of the machine". It was placed from the unscaled model height, so it
+    floated over the valve wheel, switchgear, pump and console. Also removed: the beacon over each pump's open flywheel guard, and
+    the one on each manifold stand.
+  - `wasteVisuals.ts`: the waste repository's dome-on-a-black-base beacons, 2–22 cm above racks, gates and door heads.
+
+  The state lamps are the overlays' mounted panel lamps (table above) and the core's box-face lamps. Lane STARTUP owns the
+  rotating beacons.
+- **Guide cables along the roof (11).** Source: `gen/reactor/complex/propsCable.ts`; `host.ts` uses it, with the old route as the
+  fallback.
+  - **Was:** one height for the whole complex (≤ 0.25 m under the lowest door head: ~2.15 m), string-pulled diagonally across rooms
+    and straight through the top of every door opening.
+  - **Route:** a least-cost route over whatever rooms the carver generated, from the use point to the entrance. It runs in straight
+    axis-aligned runs, prefers walls, and pays extra where something takes the ceiling band.
+  - **Height:** every run hangs 0.12 m under its ceiling on drop rods. It passes over what stays low (door-frame headers, plates,
+    cabinets) and under what reaches the ceiling band (fixtures, the bunker's corridor ducts, the mines' timber set caps, read from
+    their post pairs). It never drops below 2.15 m over the storey floor.
+  - **Steps:** a straight run steps only where the open height changes for ≥ 2 m, so there is no saw-tooth between timber sets.
+  - **Walls:** the cable crosses every wall over the door's lintel, as a penetration through the wall above the opening. Under a
+    close ceiling it rises tight to 6 cm under it. Where the lintel has no room or a plate takes it, the cable goes through the wall
+    beside the jamb (≤ 3 cells). It is never in the opening.
+  - **The entrance:** it leaves just over the entrance lintel (or a frame / plate there), then `cableOf` continues along the pit walls
+    to the fans.
+  - **Checks:** `ceilingCableIssues` (door volumes, headroom, ceilings, every obstacle) and `CEILING_CABLE_STATS` (QA).
+  - **Measured** on 6 real seeds × 3 complexes: every route found at generation, 0 issues, about 10–60 ms per complex.
+- **The drill (12).** `MINES_FIT.drillRig = 1.9` (`world/reactor/minesAssets.ts`). It is a derived transform of the same GLB: no
+  re-cook and no byte change. Lane MINES' collider, heading and instance scale read it.
+  - Scale check beside zombie lastshift (1.78 m, runtime scale 1): 6.65 × 2.43 × 1.87 m (W × H × D). The wheeled carrier is 4.04 m,
+    the boom reaches 2.43 m, and the tyres are about 0.95 m.
+  - It is grounded with 10 contact clusters, all on the 4 tyres (gap 0).
+  - It was 3.50 × 1.28 × 0.98 m.
+- **Limits:**
+  - No browser check. The lamp glass is checked against the cooked GLB's vertices, not a GPU render.
+  - The pit-side part of the cable is the old `cableOf` along the pit walls. It now starts about 0.6–2.4 m higher, just over the
+    entrance lintel; it is not re-routed. STARTUP's beacons are planned after the cables, so `planBeacons` now skips any wall-lamp
+    spot whose bracket / head envelope comes within 0.25 m of a generator cable (`onCable`). It was 0 m on 11 of 18 cables over 6
+    seeds; it is now ≥ 0.29 m beyond the envelope, and at least 2 beacons per tier remain.
+  - The timber caps come from the post pairs that `minesDress` places. If MINES changes that convention, update `cableObstacles`.
 
 ## CPU submission (task reactor-submit-roof-fog-20261102, lane CPU)
 The user's frames were CPU-bound in render submit: 21.7 ms for 1,230 draws on the rim gallery and 15.3 ms for 1,048 draws looking

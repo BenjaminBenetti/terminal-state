@@ -21,6 +21,7 @@ import {emptyReactorState} from '../src/world/reactor/runState';
 import {layoutRect} from '../src/world/reactor/generators';
 import {btsAreaPresent} from '../src/gen/trackExt/index';
 import {sampleCarver} from './reactor-x-host-fixture';
+import {CEILING_CABLE, ceilingCableIssues} from '../src/gen/reactor/complex/propsCable';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const S = sampleCarver();
@@ -166,23 +167,28 @@ describe('Reactor side-complex host: the host path end to end (sample carver)', 
     }
   });
 
-  it('routes each complex generator cable from its panel through the entrance (inside the complex, under its ceilings) to the zone\'s fans', () => {
+  // task reactor-playtest-round2-20261102 (lane PROPS, intent change from the user's "cables … should be along the roof. Right now they
+  // clip awkwardly through the doorways"): the cable hangs under the ceilings and crosses every wall OVER the door's lintel or through
+  // the wall beside its jamb (complex/propsCable.ts) — no longer through the door openings under their heads
+  it('routes each complex generator cable from its panel along the ceilings, out through the entrance wall, to the zone\'s fans', () => {
     for (const seed of SEEDS.slice(0, 6)) {
       const L = gen(seed), R = L.reactor!;
       for (const c of R.complexes!) {
-        const g = R.generators[c.generator], grid = L.levels[g.level].grid, ids = new Set(c.areas), E = c.slot!.entrance;
+        const g = R.generators[c.generator], grid = L.levels[g.level].grid, ids = new Set(c.areas), front = c.slot!.frontArea;
+        const base = L.levels[c.level].baseY, cc = {level: c.level, baseY: base, frontArea: front, areas: c.areas};
         expect(g.cable[0]).toEqual(g.panel);
-        // the doorway: a cable point in the entrance span
-        const k = g.cable.findIndex(p => p.x >= E.x0 - 1e-6 && p.x <= E.x1 + 1e-6 && p.z >= E.z0 - 1e-6 && p.z <= E.z1 + 1e-6);
-        expect(k, `seed ${seed} ${c.id}`).toBeGreaterThan(0);
-        // every interior segment stays on complex floor (or the doorway), under the ceiling
+        // the exit: the first point on the deck in front of the entrance (after the panel's riser)
+        const area = (p: {x: number; z: number}) => { const [cx, cy] = grid.cellOf(p.x, p.z); return grid.area[grid.idx(cx, cy)]; };
+        const k = g.cable.findIndex((p, i) => i > 0 && area(p) === front);
+        expect(k, `seed ${seed} ${c.id}`).toBeGreaterThan(1);
+        expect(ceilingCableIssues(L, cc, g, k), `seed ${seed} ${c.id}`).toEqual([]);
+        // every interior sample hangs over complex floor, or crosses a wall at a doorway (over its lintel / beside its jamb)
         for (let i = 1; i < k; i++) {
           const a = g.cable[i], b = g.cable[i + 1];
           for (let t = 0; t <= 1; t += 0.05) {
             const x = a.x + (b.x - a.x) * t, z = a.z + (b.z - a.z) * t, [cx, cy] = grid.cellOf(x, z), j = grid.idx(cx, cy);
-            const inE = x >= E.x0 - 1e-6 && x <= E.x1 + 1e-6 && z >= E.z0 - 1e-6 && z <= E.z1 + 1e-6;
-            expect(grid.cells[j] === FLOOR && (ids.has(grid.area[j]) || inE), `seed ${seed} ${c.id} segment ${i}`).toBe(true);
-            expect(a.y).toBeLessThan(grid.ceil[j]);
+            const nearDoor = L.doors.some(d => (ids.has(d.a) || ids.has(d.b)) && cx >= d.x - CEILING_CABLE.besideReach - 1 && cx < d.x + d.w + CEILING_CABLE.besideReach + 1 && cy >= d.y - CEILING_CABLE.besideReach - 1 && cy < d.y + d.h + CEILING_CABLE.besideReach + 1);
+            expect((grid.cells[j] === FLOOR && (ids.has(grid.area[j]) || grid.area[j] === front)) || nearDoor, `seed ${seed} ${c.id} segment ${i}`).toBe(true);
           }
         }
         // then out along the pit walls to every fan of its zone

@@ -31,6 +31,7 @@ import {WalkVolume, kitWalkRegions} from './pathsAudit'; // task reactor-expansi
 import {applyMountedLenses, isMounted, planMountedLamps, type MountedLampRec} from './gaslightFixtures'; // task reactor-expansion-20261101 (lane GASLIGHT)
 import {buildPitSky, type PitSkyStats} from './gaslightSky'; // task reactor-expansion-20261101 (lane GASLIGHT): the open pit top's sky + outside gas
 import {buildRoofSlab} from './roofKit'; // task reactor-submit-roof-fog-20261102 (lane ROOF): the roof slab with the opening's hole
+import {buildLampGlass, cageGlass} from './propsLampGlass'; // task reactor-playtest-round2-20261102 (lane PROPS): the lamps' jar glass
 import {MeshBasicNodeMaterial} from 'three/webgpu';
 // task reactor-expansion-20261101 (lane CORE): the hero reactor (the vessel's hidden grid column, the goop pool, the grating ring /
 // bridges; the dynamic goop / coolant / rotors / lamps layer and its staged visuals)
@@ -80,6 +81,8 @@ export class ReactorArch {
   mountedLamps: MountedLampRec[] = [];
   /** Task reactor-expansion-20261101 (lane GASLIGHT): the roof opening's sky dome + outside gas (null: no opening). */
   pitSky: PitSkyStats | null = null;
+  /** Task reactor-playtest-round2-20261102 (lane PROPS): the lamps' jar glass ('light-glass': instance i = light i; null: no lamps). */
+  lampGlass: THREE.InstancedMesh | null = null;
   /** Task reactor-submit-roof-fog-20261102 (lane ROOF): the arch draws the pit's roof slab (one mesh, the opening's hole). */
   readonly roofSlab: boolean;
   visuals: ReactorArchVisuals = new ReactorArchVisuals(null, null, null);
@@ -303,6 +306,11 @@ export class ReactorArch {
       const dress = reactorDress(this.mats);
       this.built = buildKitMeshes(group, this.plan, k => dress[k], models);
       if (fixtures) this.stats.lamps = applyMountedLenses(group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, this.mountedLamps);
+      // task reactor-playtest-round2-20261102 (lane PROPS): the glass of every pit / mine lamp is a jar INSIDE its cage (the mounted
+      // lamps' planned glass, the pendant cages' below their hangers), sharing the tubes' colour; their flat tube boxes collapse
+      const glass = new Map<number, THREE.Matrix4>(this.mountedLamps.map(r => [r.index, r.glass]));
+      this.layout.lights.forEach((l, i) => { if (!glass.has(i) && this.isLamp(l) && !isMounted(l)) glass.set(i, cageGlass(l.x, l.y - 0.19, l.z, l.rot)); });
+      this.lampGlass = buildLampGlass(group, group.getObjectByName('light-tubes') as THREE.InstancedMesh | null ?? null, glass);
       this.visuals = new ReactorArchVisuals(this.built, this.plan, dress.glow as MeshBasicNodeMaterial);
       // task reactor-expansion-20261101 (lane CORE): the hero's dynamic layer + its staged visuals (setRestartState lands there)
       const hero = coreHeroOf(this.plan);
