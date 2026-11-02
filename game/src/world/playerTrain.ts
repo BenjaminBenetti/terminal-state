@@ -548,6 +548,8 @@ export class PlayerTrainRuntime {
   consoleRect: ConsoleRect | null = null;
   /** The moving car's link (world/trainRide.ts); null while parked. */
   ride: TrainRideLink | null = null;
+  /** A build while riding skipped the culler registration: the ride registers the car when it parks. */
+  cullerPending = false;
   /** A view kept through a teardown while the ride holds it (the next build adopts it: one TrainView). */
   private heldView: {view: TrainView; lockboxView: LockboxView | null; lockboxLid: LockboxLid} | null = null;
   private readonly hiMats = new Map<THREE.Material, THREE.MeshStandardMaterial>();
@@ -670,7 +672,7 @@ export class PlayerTrainRuntime {
     if (this.lockboxView) h.atmosphere?.markShadows(this.lockboxView.group, false); // (the lid moves: not culler-registered either)
     const culler = h.world?.culler as {register?(root: THREE.Object3D): void} | undefined;
     // (lane RIDE) a car still driving in is never storey / fog culled by its parked box: the ride registers it when it stops
-    if (culler && typeof culler.register === 'function' && !this.ride) culler.register(view.fixed);
+    if (culler && typeof culler.register === 'function') { if (!this.ride) culler.register(view.fixed); else this.cullerPending = true; }
     const key = this.sectionKey();
     this.train = {placement: p, view, col, doors, levels: h.levels, layout: h.layout, layoutBoxes, prevIndex, key};
     // 5. door states remembered for this level in this run (else shut), applied at once; (lane RIDE) an arriving car's doors stay

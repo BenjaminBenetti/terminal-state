@@ -366,7 +366,7 @@ export class TrainRide {
     if (!this.riding) return;
     const d = this.departing, a = this.arriving;
     this.departing = this.arriving = null;
-    this.exitRide(false);
+    this.exitRide();
     d?.resolve({status: 'refused', reason: 'aborted', message: REFUSAL_TEXT.aborted});
     a?.resolve({status: 'refused', reason: 'aborted', message: REFUSAL_TEXT.aborted});
   }
@@ -494,7 +494,7 @@ export class TrainRide {
     this.departing = null;
     this.counts.refused++;
     this.lastRefusal = reason;
-    this.exitRide(false);
+    this.exitRide();
     if (reason !== 'aborted') this.toast(REFUSAL_TEXT[reason], true);
     d?.resolve({status: 'refused', reason, message: REFUSAL_TEXT[reason]});
   }
@@ -608,12 +608,12 @@ export class TrainRide {
     const a = this.arriving;
     this.arriving = null;
     const reversed = this.reversed;
-    this.exitRide(true);
+    this.exitRide();
     a?.resolve({status: 'stopped', via: plan?.kind ?? 'tunnel', end: plan?.end ?? 'x0', reversed});
   }
 
   /** Leave ride mode: the car parked at the runtime's placement (exact), the player at the same car-local pose there. */
-  private exitRide(stopped: boolean): void {
+  private exitRide(): void {
     const rt = this.runtime, t = rt.train;
     this.transit.leaveTransit();
     this.phase = 'idle';
@@ -630,7 +630,7 @@ export class TrainRide {
       root.rotation.set(0, t.placement.yaw, 0);
       root.updateMatrixWorld(true);
       rt.placeLightsBy(q => carToWorld(this.pose, q.x, q.y, q.z, {x: 0, y: 0, z: 0}));
-      this.registerWithCuller(t.view.fixed, stopped);
+      this.registerWithCuller(t.view.fixed);
       // the player in the parked car: same local pose, the floor exactly, normal physics from here
       this.local.y = rt.spec.floorY;
       this.writePlayer();
@@ -686,10 +686,12 @@ export class TrainRide {
     if (v && cul && typeof cul.release === 'function') { cul.release([v.fixed]); this.released = v.fixed; }
   }
 
-  private registerWithCuller(fixed: THREE.Object3D, stopped: boolean): void {
+  /** Parked again: back in the CURRENT world's culler when it was released here or a build while riding skipped it. */
+  private registerWithCuller(fixed: THREE.Object3D): void {
     const cul = this.host.world?.culler as {register?(o: THREE.Object3D): void} | undefined;
-    if ((this.released === fixed || stopped) && cul && typeof cul.register === 'function') cul.register(fixed);
+    if ((this.released === fixed || this.runtime.cullerPending) && cul && typeof cul.register === 'function') cul.register(fixed);
     this.released = null;
+    this.runtime.cullerPending = false;
   }
 
   // -------------------------------------------------------------------------------------------

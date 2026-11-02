@@ -829,8 +829,10 @@ export class Game {
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
-    // (lane RIDE) a player riding the moving train keeps their car-local pose: the ride writes the world pose every frame
-    if (this.trainRide?.riding && !fresh) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
+    // (lane RIDE) a player riding the moving train keeps their car-local pose: the ride writes the world pose every frame (a NEW game
+    // ends any ride first)
+    if (fresh) this.trainRide?.reset();
+    if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
     else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
