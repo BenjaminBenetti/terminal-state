@@ -45,6 +45,12 @@ export const LINGERIE_SPAWN_RULES = {
   passageRadiusM: 0.5,
   /** Sales-floor spawns stay more than this many cells (Chebyshev) off every changing-area cell: its mouth / booth fronts stay clear. */
   changingMarginCells: 2,
+  /**
+   * A changing rect with at most this many OPENING cells (a walkable neighbour outside the rect: the curtain gap, <= 2 m) is a booth:
+   * a variant may stand anywhere inside it but on an opening cell. A rect with more (the aisle past the booths) also keeps the cells
+   * next to its openings free: nobody waits in front of a booth door or across the aisle's mouth.
+   */
+  boothOpeningCells: 4,
 } as const;
 
 /** A lingerie store's shop record: lane STORE's optional `changing` rects (world metres) of its walk-in changing area. */
@@ -148,10 +154,15 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
       mask.set(i, (mask.get(i) ?? 0) | (1 << k));
     }
   });
-  const opening = (i: number, m: number): boolean => {
+  const opens = (i: number, m: number): boolean => {
     const x = i % g.w, y = (i - x) / g.w;
     return N4.some(([ox, oy]) => g.walkable(x + ox, y + oy) && (m & ~(mask.get(g.idx(x + ox, y + oy)) ?? 0)) !== 0);
   };
+  // a rect with at most BOOTH_OPENING_CELLS opening cells is a BOOTH (a dead end behind its curtain gap: a variant may stand anywhere
+  // inside off the opening); a wider one (the aisle) also keeps the cells next to its openings free (the way past the booth doors)
+  const opening = new Set<number>(), openCount = rects.map(() => 0);
+  for (const [i, m] of mask) if (opens(i, m)) { opening.add(i); for (let k = 0; k < rects.length; k++) if (m & (1 << k)) openCount[k]++; }
+  const nextToOpening = (i: number): boolean => { const x = i % g.w, y = (i - x) / g.w; return N4.some(([ox, oy]) => opening.has(g.idx(x + ox, y + oy))); };
   const nearChanging = (x: number, y: number): boolean => {
     const c = R.changingMarginCells;
     for (let oy = -c; oy <= c; oy++) for (let ox = -c; ox <= c; ox++) if (mask.has(g.idx(x + ox, y + oy))) return true;
@@ -171,8 +182,10 @@ function placeStore(layout: StationLayout, shop: LingerieShop, r: Rng, ctx: Spaw
     const i = g.idx(x, y);
     if (!eligible(x, y)) continue;
     const m = mask.get(i);
-    if (m !== undefined) { if (!opening(i, m)) changing[31 - Math.clz32(m & -m)].push(i); }
-    else if (!nearChanging(x, y)) floor.push(i);
+    if (m !== undefined) {
+      const k = 31 - Math.clz32(m & -m);
+      if (!opening.has(i) && (openCount[k] <= R.boothOpeningCells || !nextToOpening(i))) changing[k].push(i);
+    } else if (!nearChanging(x, y)) floor.push(i);
   }
   const byArea = new Map<number, number[]>();
   for (const i of [...changing.flat(), ...floor]) { const a = g.area[i]; const l = byArea.get(a); if (l) l.push(i); else byArea.set(a, [i]); }
