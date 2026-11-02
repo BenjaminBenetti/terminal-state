@@ -194,11 +194,12 @@ export function reactorRouteGroups(layout: StationLayout): {id: string; cells: n
 /** Removing any ONE stair run must leave every storey reachable from the start (>= 2 independent routes; ladders not counted). */
 export function routeIssues(layout: StationLayout, sx: number, sy: number): string[] {
   const out: string[] = [];
-  const levels = layout.levels;
-  const links = layout.levelLinks.filter(k => k.kind !== 'ladder');
   // (task studio-reactor-surface-ending-20261102, lane ENDING) the surface exit is a dead-end pocket behind its one door (its stair is
-  // its only route by design, surfaceIssues checks it): the route checks keep its door shut and skip its storey
-  const surf = layout.reactor?.surface, door = surf ? surfaceDoorCells(surf, layout.grid) : [];
+  // its only route by design, surfaceIssues checks it): the route checks keep its door shut (the searches never enter it) and skip its
+  // storey (the same levels array: its cached arrays are reused)
+  const surf = layout.reactor?.surface, levels = layout.levels;
+  const links = layout.levelLinks.filter(k => k.kind !== 'ladder');
+  const door = surf ? surfaceDoorCells(surf, layout.grid) : [];
   const doorSaved = door.map(i => layout.grid.blocked[i]);
   for (const i of door) layout.grid.blocked[i] = 1;
   try {

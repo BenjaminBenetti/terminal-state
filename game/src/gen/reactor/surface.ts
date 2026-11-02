@@ -24,7 +24,7 @@
 import {Rng, hashString} from '../../core/rng';
 import {CELL, FLOOR, SOLID, Grid} from '../grid';
 import {STAIR, layStairRun, stairRunCells, type StairFlight} from '../traversal';
-import {SLAB, levelDistance, setApertureMask} from '../levelGen';
+import {SLAB, setApertureMask} from '../levelGen';
 import type {Level, LevelSky, RailRun} from '../levels';
 
 import type {Area, AreaKind, AreaRole, LightPlacement, Rect, RoomType, StationLayout} from '../stationTypes';
@@ -649,16 +649,16 @@ export function surfaceIssues(layout: StationLayout, dist?: Int32Array[]): strin
   for (const id of s.stairs.flights) if (!layout.traversal.stairs[id]) out.push(`surface: flight ${id} missing`);
   // walkable plaza: size, keep-off, enclosure
   let cells = 0, inner = 0, leak = 0;
-  const kr2 = s.hole.keepR * s.hole.keepR;
+  const kr2 = s.hole.keepR * s.hole.keepR, gw = g.w, gh = g.h, hx = s.hole.x, hz = s.hole.z, plazaId = s.areas.plaza;
   for (let i = 0; i < g.cells.length; i++) {
-    if (g.cells[i] !== FLOOR || g.area[i] !== s.areas.plaza) continue;
-    const x = i % g.w, y = (i - x) / g.w;
+    if (g.cells[i] !== FLOOR || g.area[i] !== plazaId) continue;
+    const x = i % gw, y = (i - x) / gw;
     if (!g.blocked[i]) {
       cells++;
-      const nx = Math.max(x * CELL, Math.min((x + 1) * CELL, s.hole.x)) - s.hole.x, nz = Math.max(y * CELL, Math.min((y + 1) * CELL, s.hole.z)) - s.hole.z;
+      const nx = Math.max(x * CELL, Math.min((x + 1) * CELL, hx)) - hx, nz = Math.max(y * CELL, Math.min((y + 1) * CELL, hz)) - hz;
       if (nx * nx + nz * nz < kr2 - 1e-6) inner++;
     }
-    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (!g.inBounds(x + dx, y + dy)) leak++;
+    if (x === 0 || y === 0 || x === gw - 1 || y === gh - 1) leak++;
   }
   if (cells * CELL * CELL < SURFACE.minWalkM2) out.push(`surface: ${(cells * CELL * CELL).toFixed(0)} m² walkable`);
   if (inner) out.push(`surface: ${inner} walkable cells inside the opening's keep-off ring`);
@@ -668,14 +668,29 @@ export function surfaceIssues(layout: StationLayout, dist?: Int32Array[]): strin
     const shut: [number, number][] = doorCells.map(i => [i, g0.blocked[i]]);
     for (const i of doorCells) g0.blocked[i] = 1;
     try {
-      // from the exit (on the plaza) with the door shut: the start is never reached (the surface + stair are a sealed pocket)
-      const [ex, ez] = g.cellOf(s.exit.x, s.exit.z);
-      const d = reachFrom(layout, ex, ez, s.level);
-      const [sx, sz] = g0.cellOf(info.start.x, info.start.z);
-      if (d[0][g0.idx(sx, sz)] >= 0) out.push('surface: the start is reachable from the surface with the door shut');
-      let n = 0;
-      for (let i = 0; i < g.cells.length; i++) if (d[s.level][i] >= 0) n++;
-      if (n < 4) out.push('surface: the exit is not on the plaza');
+      // from the exit (on the plaza) with the door shut, on foot (the rim and surface grids: a stair cell is open on both at one height):
+      // the surface + stair are a sealed pocket — never a cell outside the exit's own areas
+      const mine = new Set([s.areas.plaza, s.areas.upper, s.areas.stair, s.areas.lower]);
+      const [ex, ez] = g.cellOf(s.exit.x, s.exit.z), W = g.w, n = g.cells.length;
+      const grids = [g0, g], seen = [new Uint8Array(n), new Uint8Array(n)], q: number[] = [];
+      const open = (k: number, i: number) => grids[k].cells[i] === FLOOR && !grids[k].blocked[i];
+      if (open(1, g.idx(ex, ez))) { seen[1][g.idx(ex, ez)] = 1; q.push(n + g.idx(ex, ez)); }
+      let count = 0, leak = -1;
+      while (q.length && leak < 0) {
+        const v = q.pop()!, k = v >= n ? 1 : 0, i = v - k * n, G = grids[k], f = G.floorOf(i);
+        count++;
+        if (!mine.has(G.area[i])) { leak = i; break; }
+        const o = 1 - k; // the twin (a stair cell carved into both grids)
+        if (!seen[o][i] && open(o, i) && Math.abs(grids[o].floorOf(i) - f) < 0.05) { seen[o][i] = 1; q.push(o * n + i); }
+        const x = i % W, sk = seen[k];
+        for (let t = 0; t < 4; t++) {
+          const j = t === 0 ? (x > 0 ? i - 1 : -1) : t === 1 ? (x < W - 1 ? i + 1 : -1) : t === 2 ? i - W : i + W;
+          if (j < 0 || j >= n || sk[j] || !open(k, j) || Math.abs(G.floorOf(j) - f) > 0.45) continue;
+          sk[j] = 1; q.push(k * n + j);
+        }
+      }
+      if (leak >= 0) out.push(`surface: the pocket leaks with the door shut (cell ${leak % W},${Math.floor(leak / W)})`);
+      if (count < 100) out.push('surface: the exit is not on the plaza');
     } finally { for (const [i, b] of shut) g0.blocked[i] = b; }
   }
   return out;
@@ -686,8 +701,4 @@ export function surfaceDoorCells(s: Pick<ReactorSurface, 'door'>, g: Pick<Grid, 
   const r = s.door.rect, out: number[] = [];
   for (let y = Math.round(r.z0 / CELL); y < Math.round(r.z1 / CELL); y++) for (let x = Math.round(r.x0 / CELL); x < Math.round(r.x1 / CELL); x++) if (g.inBounds(x, y)) out.push(g.idx(x, y));
   return out;
-}
-
-function reachFrom(layout: StationLayout, sx: number, sz: number, level = 0): Int32Array[] {
-  return levelDistance(layout.levels, sx, sz, level, layout.levelLinks);
 }
