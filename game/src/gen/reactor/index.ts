@@ -174,7 +174,7 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   const before = {lights: layout.lights.length, signs: layout.signs.length};
   const deckIds = new Set([...rc.decks.map(d => d.area), ...rc.coreAreas]);
   const holds = [...deckHolds(layout, rc), ...mouthHolds(layout, rc, links), ...sb.holds, ...gens.holds, ...arrivalHolds(layout, rc.arrival), ...suiteHolds(layout, rc.suites)];
-  const release = holdCells(layout, holds);
+  const release = holdCells(layout, [...holds, ...gens.reserve]); // (lane WASTE: + the complexes' reserved set-piece spans, this pass only)
   dress(layout, rng.fork('dress'));
   release();
   // the dresser's fixtures / plates over the open pit decks are dropped (the decks get their own fixtures below)

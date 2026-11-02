@@ -165,6 +165,9 @@ export interface WasteRoom {
   alongU: boolean;
 }
 
+/** A reserved wall span (local cells, flush with side `side` of its room: 0 u-, 1 u+, 2 v-, 3 v+) of a guaranteed set piece. */
+export interface WasteReserve { what: 'booth' | 'hotcell'; room: WasteKey; side: 0 | 1 | 2 | 3; r: LRect }
+
 export type WasteDoorKind = 'personnel' | 'wide' | 'heavy';
 export interface WasteDoorSpec {
   a: WasteKey; b: WasteKey; w: number; h: number; t: number; kind: WasteDoorKind;
@@ -186,6 +189,8 @@ export interface WastePlan {
   switchgear: WasteKey[];
   /** The drum vaults' rack rows run along the vault's long axis (else across it, off a spine aisle), per vault key. */
   racksAlong: Record<WasteKey, boolean>;
+  /** The guaranteed set pieces' wall spans (held clear of the shared station dresser; the dress hook places the pieces there first). */
+  reserve: WasteReserve[];
   /** QA: planning attempts used, independent loops, dead-end spaces. */
   stats: {attempts: number; loops: number; deadEnds: number};
 }
@@ -574,12 +579,62 @@ function attempt(f: WasteFrame, box: LRect, ent: {u0: number; u1: number; v: num
     else if (r.kind === 'vault') { racksAlong[r.key] = Math.min(r.r.du, r.r.dv) < 18 || rng.chance(0.72); r.alongU = (r.r.du >= r.r.dv) === racksAlong[r.key]; }
     else r.alongU = r.r.du >= r.r.dv;
   }
+  // --- 12. the guaranteed set pieces' wall spans, held clear of the shared station dresser (ComplexCarve.reserve)
+  const reserve = reserveSpans(P, rng);
+  if (!reserve) return no('reserve');
+  // a gallery whose walls cannot take the window is the sample counting room (the window goes into the processing room / a hall)
+  if (P.by.hotcell && !reserve.some(q => q.what === 'hotcell' && q.room === 'hotcell')) P.by.hotcell.label = 'Sample counting room';
   const sg = sh(['control', 'plant']);
   if (P.by.switch && rng.chance(0.75)) sg.unshift('switch');
   const deg = new Map<string, number>();
   for (const d of P.doors) { deg.set(d.a, (deg.get(d.a) ?? 0) + 1); deg.set(d.b, (deg.get(d.b) ?? 0) + 1); }
   const deadEnds = P.rooms.filter(r => (deg.get(r.key) ?? 0) + (r.key === 'bay' ? 1 : 0) === 1).length;
-  return {frame: f, rooms: P.rooms, by: P.by, doors: P.doors, entrance: ent, gen, switchgear: sg, racksAlong, stats: {attempts: 0, loops: cyc, deadEnds}};
+  return {frame: f, rooms: P.rooms, by: P.by, doors: P.doors, entrance: ent, gen, switchgear: sg, racksAlong, reserve, stats: {attempts: 0, loops: cyc, deadEnds}};
+}
+
+/**
+ * The wall spans of the GUARANTEED set pieces, chosen on the final rooms and held clear of the shared station dresser by the host (so
+ * the dresser's draws upstream can never take them): up to two decon-booth spans (5 x 5 cells: the 1.76 x 1.5 m booth + its front)
+ * in the checkpoint, else the change room, else one on a long wall of the airlock (4 deep: a 1 m lane kept); the hot-cell window's
+ * span (9 x 5 cells: 3.6 x 1.76 m + its front) in the gallery, else the processing room, the cask hall, a vault. Every span keeps
+ * >= 3 cells from every door gap of its room and a cell from the other spans. Null when there is no booth span or no window span.
+ */
+function reserveSpans(P: Packer, rng: Rng): WasteReserve[] | null {
+  const gaps = new Map<WasteKey, LRect[]>();
+  for (const d of P.doors) {
+    const g = doorGapL(P.by[d.a].r, P.by[d.b].r, d.w, d.t)!;
+    for (const k of [d.a, d.b]) { let l = gaps.get(k); if (!l) gaps.set(k, (l = [])); l.push(g); }
+  }
+  // (the bay's entrance gap is never near a reserved room: the spans lie in the checkpoint, change room, airlock and the halls)
+  const apart = (a: LRect, b: LRect, m: number) => a.u + a.du + m <= b.u || b.u + b.du + m <= a.u || a.v + a.dv + m <= b.v || b.v + b.dv + m <= a.v;
+  const out: WasteReserve[] = [];
+  const take = (what: WasteReserve['what'], keys: readonly WasteKey[], along: number, deep: number, n: number, sides: readonly S4[] = [0, 1, 2, 3]): number => {
+    let got = 0;
+    for (const key of keys) {
+      const room = P.by[key];
+      if (!room || got >= n) continue;
+      const R = room.r, cands: {side: S4; r: LRect}[] = [];
+      for (const side of sides) {
+        const alongU = side === 2 || side === 3, len = alongU ? R.du : R.dv, across = alongU ? R.dv : R.du;
+        if (len < along || across < deep + 2) continue;
+        for (let o = 0; o + along <= len; o++) {
+          const r: LRect = side === 0 ? {u: R.u, v: R.v + o, du: deep, dv: along} : side === 1 ? {u: R.u + R.du - deep, v: R.v + o, du: deep, dv: along}
+            : side === 2 ? {u: R.u + o, v: R.v, du: along, dv: deep} : {u: R.u + o, v: R.v + R.dv - deep, du: along, dv: deep};
+          if ((gaps.get(key) ?? []).every(g => apart(r, g, 3)) && out.every(q => apart(r, q.r, 1))) cands.push({side, r});
+        }
+      }
+      for (const c of rng.shuffle(cands)) {
+        if (got >= n) break;
+        if (!out.every(q => apart(c.r, q.r, 1))) continue;
+        out.push({what, room: key, side: c.side, r: c.r});
+        got++;
+      }
+    }
+    return got;
+  };
+  if (!take('booth', ['hp', 'lockers'], 5, 5, 2) && !take('booth', ['airlock'], 5, 4, 1, P.heads.airlock === 0 || P.heads.airlock === 1 ? [2, 3] : [0, 1])) return null;
+  if (!take('hotcell', ['hotcell', 'compactor', 'cask', 'vault', 'vault2'], 9, 5, 1)) return null;
+  return out;
 }
 
 /** The service side: a service corridor off the bay / the control room to the plant (or the plant straight off the bay). */

@@ -405,6 +405,20 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   };
   /** Room frame on the other side of a door from `k` (undefined for the deck). */
   const R2 = (k: WasteKey | 'deck'): RoomF | undefined => (k === 'deck' ? undefined : R[k]);
+  /**
+   * A reserved set-piece span (rec.reserve: held clear of the shared station dresser by the host) as a wall of its room's frame and
+   * the span's middle along that wall (m).
+   */
+  const reservedAt = (res: WasteCarveRecord['reserve'][number]): {rm: RoomF; w: Wall; q: number} | null => {
+    const rm = R[res.room];
+    if (!rm) return null;
+    // the plan's side (0 u-, 1 u+, 2 v-, 3 v+ of the complex frame) -> the room frame's wall with that outward normal
+    const n: V2 = res.side === 0 ? [-dU[0], -dU[1]] : res.side === 1 ? [dU[0], dU[1]] : res.side === 2 ? [-dV[0], -dV[1]] : [dV[0], dV[1]];
+    const w = WALLS.find(x => { const m = wallN(rm, x); return m[0] === n[0] && m[1] === n[1]; });
+    if (!w) return null;
+    const c = res.rect, [cs, ct] = loc(rm, (c.x - crop.ox + c.w / 2) * CELL, (c.y - crop.oy + c.h / 2) * CELL);
+    return {rm, w, q: w === 'front' || w === 'back' ? cs : ct};
+  };
   /** Renames a space everywhere it is shown (the area, the plan, the carve's room record the map boards read). */
   const relabel = (k: WasteKey, label: string) => {
     const w = plan.by[k];
@@ -511,18 +525,24 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     // decon shower booths against a wall of the checkpoint (its first-aid furnishing permitting), else of the change room, else on a
     // long wall of the vault airlock or a sealed corridor (showering out of the controlled area; a 1.5 m lane kept past them)
     let booths = 0;
+    const booth = (rm: RoomF, w: Wall, q: number): boolean => {
+      if (booths >= 2) return false;
+      const [x, z] = onWall(rm, w, q, S.d / 2 + 0.04);
+      const along = w === 'front' || w === 'back' ? rm.au : rm.av;
+      const hx = along[0] ? S.w / 2 : S.d / 2, hz = along[0] ? S.d / 2 : S.w / 2;
+      if (!solid(rm, x, z, hx, hz, S.h, 'waste:shower', {zoneOk: true})) return false;
+      model('deconShower', x, z, yawInto(rm, w), S.w, S.d, S.h);
+      booths++;
+      return true;
+    };
+    // the plan's reserved booth spans first (the host held them through the shared dresser: by construction, not by luck)
+    for (const res of rec.reserve) if (res.what === 'booth') { const at = reservedAt(res); if (at) booth(at.rm, at.w, at.q); }
     const runs = [R.airlock, ...ofKind('corridor')];
     for (const rm of [r, R.lockers, ...runs]) for (const w of (runs.includes(rm) ? ['front', 'back'] : ['left', 'front', 'back', 'right']) as Wall[]) {
       if (booths && runs.includes(rm)) break;
       for (const q of spots(rm, w, rr, 0.25, S.w / 2 + 0.1)) {
         if (booths >= 2) break;
-        if (!wallFree(rm, w, q - S.w / 2, q + S.w / 2, 0.5)) continue;
-        const [x, z] = onWall(rm, w, q, S.d / 2 + 0.04);
-        const along = w === 'front' || w === 'back' ? rm.au : rm.av;
-        const hx = along[0] ? S.w / 2 : S.d / 2, hz = along[0] ? S.d / 2 : S.w / 2;
-        if (!solid(rm, x, z, hx, hz, S.h, 'waste:shower', {zoneOk: true})) continue;
-        model('deconShower', x, z, yawInto(rm, w), S.w, S.d, S.h);
-        booths++;
+        if (wallFree(rm, w, q - S.w / 2, q + S.w / 2, 0.5)) booth(rm, w, q);
       }
     }
     // walk-through portal monitor: two detector columns (0.3 x 0.6 m) either side of a 1.2 m lane, a header beam
@@ -703,7 +723,21 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   // THE HOT-CELL WINDOW (before the casks / the press claim the floor): set into a wall of the hot-cell gallery when the plan has one,
   // else of the processing room — the outer wall first (the shielded cell behind it is solid rock) — else the cask hall's / a vault's
   const hotRng = rng.fork('waste-hotcell');
-  let hotPlaced = false;
+  let hotPlaced = false, hotRoom: RoomF | null = null;
+  /** The window backed to wall w of rm at q (its solid, the model). */
+  const hotAt = (rm: RoomF, w: Wall, q: number): boolean => {
+    const HC = WASTE_SIZES.hotCell;
+    if (hotPlaced || rm.ceil - base < HC.h + 0.1) return false;
+    const [x, z] = onWall(rm, w, q, HC.d / 2);
+    const along = w === 'front' || w === 'back' ? rm.au : rm.av;
+    const hx = along[0] ? HC.w / 2 : HC.d / 2, hz = along[0] ? HC.d / 2 : HC.w / 2;
+    if (!solid(rm, x, z, hx, hz, HC.h, 'waste:machine', {zoneOk: true})) return false;
+    model('hotCellWindow', x, z, yawInto(rm, w), HC.w, HC.d, HC.h);
+    hotPlaced = true; hotRoom = rm;
+    return true;
+  };
+  // the plan's reserved window span first (held through the shared dresser)
+  for (const res of rec.reserve) if (res.what === 'hotcell') { const at = reservedAt(res); if (at) hotAt(at.rm, at.w, at.q); }
   const hotCell = (cands: readonly [RoomF | undefined, Wall][], pad = 0.6) => {
     if (hotPlaced) return;
     const rr = hotRng, HC = WASTE_SIZES.hotCell;
@@ -711,13 +745,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       if (!rm || rm.ceil - base < HC.h + 0.1) continue;
       const mid = wallLen(rm, w) / 2;
       for (const q of spots(rm, w, rr, 0.25, HC.w / 2 + 0.1).sort((a, b) => Math.abs(a - mid) - Math.abs(b - mid))) {
-        if (!wallFree(rm, w, q - HC.w / 2, q + HC.w / 2, pad)) continue;
-        const [x, z] = onWall(rm, w, q, HC.d / 2);
-        const along = w === 'front' || w === 'back' ? rm.au : rm.av;
-        const hx = along[0] ? HC.w / 2 : HC.d / 2, hz = along[0] ? HC.d / 2 : HC.w / 2;
-        if (!solid(rm, x, z, hx, hz, HC.h, 'waste:machine', {zoneOk: true})) continue;
-        model('hotCellWindow', x, z, yawInto(rm, w), HC.w, HC.d, HC.h);
-        hotPlaced = true;
+        if (!wallFree(rm, w, q - HC.w / 2, q + HC.w / 2, pad) || !hotAt(rm, w, q)) continue;
         break hot;
       }
     }
@@ -726,10 +754,10 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   if (HOT) {
     hotCell(WALLS.map(w => [HOT, w] as [RoomF, Wall]));
     hotCell(WALLS.map(w => [HOT, w] as [RoomF, Wall]), 0.3);
-    // a gallery whose walls the station dresser's fittings took cannot hold the window: it is the sample counting room instead
-    if (!hotPlaced) relabel('hotcell', 'Sample counting room');
+    // a gallery the window is not in (the plan's span lay elsewhere, or its walls were taken) is the sample counting room instead
+    if (hotRoom !== HOT) relabel('hotcell', 'Sample counting room');
     const p = plan.by.hotcell.parent;
-    doorPlate(R[p], between(p, 'hotcell'), hotPlaced ? NAME.hotcell! : 'SAMPLE COUNTING · DOSIMETER ON', 1.6);
+    doorPlate(R[p], between(p, 'hotcell'), hotRoom === HOT ? NAME.hotcell! : 'SAMPLE COUNTING · DOSIMETER ON', 1.6);
     lamp(HOT, HOT.lu * 0.5, HOT.lv * 0.5);
   }
   hotCell([[R.compactor, 'right'], [R.compactor, 'back'], [R.compactor, 'left'], [R.compactor, 'front']]);
@@ -1087,6 +1115,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
     rooms: plan.rooms.map(w => ({area: rec.areas[w.key], key: w.key, kind: w.kind, zone: w.zone, label: w.label})),
     doors: rec.doors.map(q => ({id: q.id, a: q.a, b: q.b, kind: q.kind, loop: !!q.loop})),
     switchgear: plan.switchgear.slice(),
+    reserve: rec.reserve.map(q => ({what: q.what, room: q.room, x0: (q.rect.x - crop.ox) * CELL, z0: (q.rect.y - crop.oy) * CELL, x1: (q.rect.x + q.rect.w - crop.ox) * CELL, z1: (q.rect.y + q.rect.h - crop.oy) * CELL})),
   };
   layout.reactorWaste = decor;
   stats.ms = (typeof performance !== 'undefined' ? performance.now() : Date.now()) - t0;

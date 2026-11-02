@@ -77,6 +77,8 @@ export interface WasteGraph {
   doors: {id: number; a: string; b: string; kind: string; loop: boolean}[];
   /** The rooms the switchgear tries first (the plan's seeded home order). */
   switchgear: string[];
+  /** The guaranteed set pieces' reserved spans (world rects; held clear of the shared station dresser): booth / hot-cell window. */
+  reserve: {what: 'booth' | 'hotcell'; room: string; x0: number; z0: number; x1: number; z1: number}[];
 }
 
 /** Real sizes (m) of the repository's stored goods and kit (scale: the 1.8 m player / zombie; the hero models' cooked dims). */
