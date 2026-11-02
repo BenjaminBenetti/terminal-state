@@ -147,20 +147,26 @@ export function measureLandmarks(B) {
   const fitV = new Uint8Array(P.length / 3);
   for (const v of B.fitIdx) fitV[v] = 1;
   const n = P.length / 3;
-  // breast apices: per side, the centroid of the most forward 8 mm cap of the fit surface in the bust band (forward-facing skin), then
-  // made symmetric (mean height / |x| / depth of both sides): one asymmetric vertex never moves a cup
+  // breast apices: the front profile z(x, y) of the fit surface (rays along -Z, 5 mm grid over the bust band) and its vertical
+  // prominence p = z(y) - (z(y + 5 cm) + z(y - 6 cm)) / 2: the breast mound stands out of the profile even where the belly / rib
+  // cage reaches as far forward (Apparition); per side the centroid of the cells within 3 mm of the best prominence (2 cm around
+  // it); the score adds the forwardness z itself (the nipple is both the most prominent and the most forward point of the mound),
+  // then made symmetric
   const rawApex = {};
+  const zf = (x, y) => { const h = B.fitGrid.ray(x, y, 0.6, 0, 0, -1, 1.2); return h ? 0.6 - h.t : null; };
   for (const [side, s] of [['L', 1], ['R', -1]]) {
-    const ids = [];
-    let zMax = -Infinity;
-    for (let i = 0; i < n; i++) {
-      if (!fitV[i] || B.nrm[i * 3 + 2] < 0.3) continue;
-      const x = P[i * 3] * s, y = P[i * 3 + 1];
-      if (x < 0.025 || x > 0.17 || y < J.Chest[1] - 0.14 || y > J.Neck[1] - 0.05) continue;
-      ids.push(i); zMax = Math.max(zMax, P[i * 3 + 2]);
+    const cells = [];
+    // the front of the chest only: medial of the arm (|x| <= 11 cm), every sample on the front half and the profile continuous
+    const zc = J.Chest[2];
+    for (let x = 0.025; x <= 0.11 + 1e-9; x += 0.005) for (let y = J.Chest[1] - 0.16; y <= J.Neck[1] - 0.06 + 1e-9; y += 0.005) {
+      const z = zf(s * x, y), za = zf(s * x, y + 0.05), zb = zf(s * x, y - 0.06);
+      if (z == null || za == null || zb == null || za < zc || zb < zc || Math.abs(z - za) > 0.06 || Math.abs(z - zb) > 0.06) continue;
+      cells.push([s * x, y, z, z - (za + zb) / 2 + z]); // score: prominence + forwardness
     }
-    const cap = ids.filter(i => P[i * 3 + 2] > zMax - 0.008);
-    rawApex[side] = [0, 1, 2].map(k => cap.reduce((a, i) => a + P[i * 3 + k], 0) / cap.length);
+    const best = cells.reduce((a, c) => (c[3] > a[3] ? c : a));
+    const cap = cells.filter(c => c[3] > best[3] - 0.003 && Math.hypot(c[0] - best[0], c[1] - best[1]) < 0.02);
+    rawApex[side] = [0, 1, 2].map(k => cap.reduce((a, c) => a + c[k], 0) / cap.length);
+    rawApex[side].prominence = best[3];
   }
   const mx = (Math.abs(rawApex.L[0]) + Math.abs(rawApex.R[0])) / 2, my = (rawApex.L[1] + rawApex.R[1]) / 2, mz = (rawApex.L[2] + rawApex.R[2]) / 2;
   const apex = {L: [mx, my, mz], R: [-mx, my, mz]};
@@ -214,7 +220,7 @@ export function measureLandmarks(B) {
     for (const z of [J.Neck[2] - 0.01, J.Neck[2], J.Neck[2] + 0.01, J.Neck[2] + 0.02]) { const h = B.fitGrid.ray(s * strapX, J.Neck[1] + 0.3, z, 0, -1, 0, 0.5); if (h) { const y = J.Neck[1] + 0.3 - h.t; if (!top || y > top[1]) top = [s * strapX, y, z]; } }
     crest[side] = top;
   }
-  return {apex, rawApex: {L: rawApex.L.map(r4), R: rawApex.R.map(r4)}, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
+  return {apex, rawApex: {L: rawApex.L.map(r4), R: rawApex.R.map(r4), prominenceMM: [r4(rawApex.L.prominence * 1000), r4(rawApex.R.prominence * 1000)]}, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
     strapX: r4(strapX), crest, profile: {Y0, YS, NY, at, bins: prof}};
 }
 

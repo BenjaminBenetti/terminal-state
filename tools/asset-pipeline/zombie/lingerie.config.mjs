@@ -45,7 +45,8 @@ export const DESIGNS = {
     raw: 'ivory-a1-01a19e62-d9b6.glb', sha256: '88f514bcbe44ccc422e0bdb6cdc587227f25b89e6150b8210f9b4a73d5091b13', meshyTask: '01a19e62-d9b6-72db-8f53-e376dc05e28e',
     textures: tex('ivory-a1-01a19e62-d9b6', 'dd740dcc6fac3b6c5934e7f08ce688b82acc0daf998f45c30fff49e2befc757c', '9bcb848e8eec5583f2612a3660328dc880f681cf5e2f9c390f6718eddc6c5ae4', 'e7808202def6e9c40f135aa5406562bc88a2bbf9cdeb4661ab5c6f9773bd6c06', '416af593be1c9a136eceae1fabbc53533e216859db9b93b2d0a995c897f2b780'),
     reference: {file: 'VeniceAI_M52skrui8zNLGE_2.png', sha256: '15e88f70706f0426a3121459920b5b7560ac15afb7613c9ea3923a8c87d504db'},
-    split: {y: 0, by: 'component'}, simplify: {top: 0.3, bottom: 0.3}},
+    // Meshy generated the thong reversed (full V panel at the back, tiny gusset at the front): mirrored front-to-back (lib/lingerie-garment.mjs)
+    split: {y: 0, by: 'component'}, simplify: {top: 0.3, bottom: 0.3}, mirror: {component: 1, belowY: -0.17}},
 };
 export const DESIGN_ORDER = ['green', 'purple', 'blush', 'black', 'red', 'ivory'];
 

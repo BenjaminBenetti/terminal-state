@@ -61,7 +61,7 @@ async function prepareDesign(id) {
   const D = DESIGNS[id];
   const raw = await loadRawGarment(path.join(SRC_ROOT, RAW_DIR, D.raw), D.sha256);
   for (const [f, h] of Object.entries(D.textures.sha256)) { const got = sha256File(path.join(SRC_ROOT, RAW_DIR, D.textures.dir, f)); if (got !== h) throw new Error(`${id} ${f}: sha256 ${got} != pinned ${h}`); }
-  const cs = cleanAndSplit(raw, {splitY: D.split.y, splitBy: D.split.by, junkMaxTris: 12, junkGap: 0.015, innerGap: 0.004});
+  const cs = cleanAndSplit(raw, {splitY: D.split.y, splitBy: D.split.by, junkMaxTris: 12, junkGap: 0.015, innerGap: 0.004, mirror: D.mirror});
   // source-resolution pieces (compacted, not simplified): the fit runs on these; the runtime simplification happens in BODY space
   const pieces = {};
   for (const pn of ['top', 'bottom']) pieces[pn] = await simplifyPiece(raw, cs.pieces[pn], {targetTris: null});
@@ -189,7 +189,7 @@ async function build(outRoot) {
       outputs: {glb: {path: path.relative(outRoot, glb), bytes, sha256: glbSha, format: 'glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned display nodes LingerieDisplay_<design>_top/_bottom reusing the first body\'s accessors'}},
       source: {raw: {file: `${RAW_DIR}/${D.raw}`, sha256Verified: D.sha256, triangles: prep.raw.idx.length / 3, vertices: prep.raw.pos.length / 3, material: prep.raw.material, private: true}, textures: prep.tx.sources.map(s => ({...s, file: `${RAW_DIR}/${D.textures.dir}/${s.name}`})), meshyTask: D.meshyTask, meshyRequest: MESHY_REQUEST,
         reference: {file: `${USER_INPUTS}/${D.reference.file}`, sha256: D.reference.sha256, private: true}},
-      cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components, dropped: prep.cs.dropped, split: D.split, note: 'welded components; floating junk / inner shells would be dropped (none found)'},
+      cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components, dropped: prep.cs.dropped, split: D.split, mirrored: prep.cs.mirrored, note: 'welded components; floating junk / inner shells would be dropped (none found)'},
       pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {wearable: wear[pn], slot: pn === 'top' ? 'upper' : 'lower', design: pn === 'top' ? D.top : D.bottom, triangles: FD.simp[pn].triangles, vertices: FD.simp[pn].vertices, sourceTriangles: prep.pieces[pn].triangles, simplifyRatio: D.simplify[pn], simplifyError: FD.simp[pn].error, simplifiedIn: `body space (the fit on ${order[0]}), meshoptimizer UV-weighted quadric, attribute seams preserved`}])),
       textures: prep.tx.encoded, displays: disp, fitParams: FIT, limits: LIMITS, perBody,
       limitations: ['Linear-blend skinned with weights transferred from the body: no cloth simulation (no swing / drape).', 'Body triangles enclosed by each piece are hidden while it is worn; very narrow straps hide nothing and rely on their clearance.',
