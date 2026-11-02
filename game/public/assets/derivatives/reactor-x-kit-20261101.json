@@ -28,11 +28,11 @@
  },
  "texturePolicy": "Meshy maps kept channel for channel (re-encoded JPEG: base / metallicRoughness / normal per KIT.tex); surface sets: Codex colour source + normal / ORM derived locally from its luminance (no generation)",
  "ledger": {
-  "attempts": 16,
-  "attemptedPOSTs": 16,
-  "billed": 240,
+  "attempts": 19,
+  "attemptedPOSTs": 19,
+  "billed": 285,
   "reserved": 0,
-  "accepted": 16
+  "accepted": 19
  },
  "models": [
   {
@@ -214,6 +214,186 @@
     "sha256": "f7043fe9f36d82b7f558c864e1640d18cdb9943e54830c01a8da853857eec4c6"
    },
    "sha256": "86e1839f770ae1f5e275aef79b36a5c1fc585819daf2a3dcc127bc7ca139ebea"
+  },
+  {
+   "key": "pipeElbow",
+   "id": "pipe-elbow",
+   "url": "assets/models/reactor-pipe-elbow.glb",
+   "bytes": 310584,
+   "tris": 6021,
+   "dims": [
+    1.8,
+    1.574,
+    1.0342
+   ],
+   "what": "hero: flanged 90-degree coolant pipe elbow (instanced on the loops)",
+   "scale": 1.88949,
+   "rawExtent": [
+    0.9526,
+    0.833,
+    0.5474
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 70704
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5112
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 5922
+    }
+   ],
+   "task": "01a199ea-a0b7-706f-8bac-cb6f2305afc9",
+   "credits": 15,
+   "codexInput": {
+    "file": "pipe-elbow-attempt18.png",
+    "sha256": "42f0273c2e947bd6e03fe35772c3cc27f2a46dc559c5a61dec6bbc36691b831d",
+    "codexSession": "rollout-2026-11-02T01-38-40-01a199e8-99d7-7a11-a030-a2656fab9bad.jsonl"
+   },
+   "source": {
+    "file": "raw/pipe-elbow/attempt-17/model.glb",
+    "sha256": "81633cebc25991e28aebe3807b699e64c5604d3bef6e1c5977190950c163eaf8"
+   },
+   "sha256": "ddf07f25db922a4464db4882f8c6e6f9850e236692d69189289955b75e3f2fb4"
+  },
+  {
+   "key": "sightGlassSpool",
+   "id": "sight-glass-spool",
+   "url": "assets/models/reactor-sight-glass-spool.glb",
+   "bytes": 394796,
+   "tris": 8080,
+   "dims": [
+    1.6,
+    0.714,
+    0.8116
+   ],
+   "what": "hero: coolant spool with an armoured sight-glass window (blue flow shows through)",
+   "scale": 1.69256,
+   "rawExtent": [
+    0.9453,
+    0.4219,
+    0.4795
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 87392
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      128,
+      128
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7861
+    },
+    {
+     "slot": "normal",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 7443
+    }
+   ],
+   "task": "01a199ea-a788-77fd-88cf-5fab64abe728",
+   "credits": 15,
+   "codexInput": {
+    "file": "sight-glass-spool-attempt19.png",
+    "sha256": "a0042c56f45886c9fecda7cf89533f02f37ca9437da018f8491a429f97f1d003",
+    "codexSession": "rollout-2026-11-02T01-39-24-01a199e9-4568-7cf1-8cfa-2da27efe89be.jsonl"
+   },
+   "source": {
+    "file": "raw/sight-glass-spool/attempt-18/model.glb",
+    "sha256": "e52c6c6b389b497513181e8b8c7f2194e8f22b253c21562ac7ef1e16e696500b"
+   },
+   "sha256": "3e79103bf2c3afbc3c3d1cfb6877f205f3ee21fd98d70bf097fb2923b3173144"
+  },
+  {
+   "key": "crdmPlatform",
+   "id": "crdm-platform",
+   "url": "assets/models/reactor-crdm-platform.glb",
+   "bytes": 1392716,
+   "tris": 18200,
+   "dims": [
+    6.6,
+    3.5155,
+    6.6543
+   ],
+   "what": "hero: control-rod-drive service platform on the vessel head",
+   "scale": 6.9495,
+   "rawExtent": [
+    0.9497,
+    0.5059,
+    0.9575
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 274782
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 18012
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 37500
+    }
+   ],
+   "task": "01a199ea-aede-7356-a52f-5e880fa017d0",
+   "credits": 15,
+   "codexInput": {
+    "file": "crdm-platform-attempt20.png",
+    "sha256": "d7f6176c2949d3348f6bc42c63465acc0c9c848116473d85cab00b4576d7f8c2",
+    "codexSession": "rollout-2026-11-02T01-39-58-01a199e9-ccca-7840-bba8-5f4085ad789d.jsonl"
+   },
+   "source": {
+    "file": "raw/crdm-platform/attempt-19/model.glb",
+    "sha256": "ab2761418ba1cc3b089b9692363b53b00c378c8800ee93fcfac6326613cd31da"
+   },
+   "sha256": "e18832253cba039a988e9d614aac3d7038bf628dc00a77217ca6324a855e3e84"
   },
   {
    "key": "turbineGenerator",

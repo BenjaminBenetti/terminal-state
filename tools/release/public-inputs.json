@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 32701,
-      "sha256": "c86e5d4d061a6eef1748a129c3cf03d6f338c7cc4f687714fbf452a2d7eabeda"
+      "bytes": 33206,
+      "sha256": "ac2f9880a56f281205e0f6f1c258aa740fa8fc29b219585d24013c5e0d7305ae"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1765,8 +1765,8 @@
     },
     {
       "path": "assets/derivatives/reactor-x-kit-20261101.json",
-      "bytes": 24281,
-      "sha256": "1fb69c5743005b509487037525f085fa5d951998f7cc90a1973b79e054b0c98f"
+      "bytes": 28275,
+      "sha256": "439c137c2a9ecc534ab2e120bba57e9aa510f4c0ac473e13de1e35d91e5318c3"
     },
     {
       "path": "assets/derivatives/rifle-optic-iteration04.json",
@@ -3309,6 +3309,11 @@
       "sha256": "00e29e1d47efccf591f46cc129c9add0dd0d7d56cdcfc42187057d805fb64ad6"
     },
     {
+      "path": "assets/models/reactor-crdm-platform.glb",
+      "bytes": 1392716,
+      "sha256": "e18832253cba039a988e9d614aac3d7038bf628dc00a77217ca6324a855e3e84"
+    },
+    {
       "path": "assets/models/reactor-decon-shower.glb",
       "bytes": 734044,
       "sha256": "f776c52afde68f6041891308057ba7a512c340396245d858156a43b3b4d70da4"
@@ -3354,6 +3359,11 @@
       "sha256": "cac3a2b8e02a07159897bafcd7c699319e3c0461625c3090ca8275444684b884"
     },
     {
+      "path": "assets/models/reactor-pipe-elbow.glb",
+      "bytes": 310584,
+      "sha256": "ddf07f25db922a4464db4882f8c6e6f9850e236692d69189289955b75e3f2fb4"
+    },
+    {
       "path": "assets/models/reactor-radio-console.glb",
       "bytes": 819308,
       "sha256": "c651418fe07a4617699953f6a5021caff462071f88101740b46578a51baf393c"
@@ -3362,6 +3372,11 @@
       "path": "assets/models/reactor-rock-drill-rig.glb",
       "bytes": 1141504,
       "sha256": "0e572d3210c3e61227561bf04d18daf1c1f371d5ab1c6ce81153b7a15e12b931"
+    },
+    {
+      "path": "assets/models/reactor-sight-glass-spool.glb",
+      "bytes": 394796,
+      "sha256": "3e79103bf2c3afbc3c3d1cfb6877f205f3ee21fd98d70bf097fb2923b3173144"
     },
     {
       "path": "assets/models/reactor-steam-generator.glb",
