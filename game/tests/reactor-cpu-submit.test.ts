@@ -1,23 +1,25 @@
 // Task studio-reactor-submit-roof-fog-20261102 (lane CPU, user: "Performance is very poor. Again it is a CPU time issue. GPU time is
 // good. CPU spending around 20ms in 'submit' phase"): the Reactor's render-object budget per representative pose, measured in Node on
-// the REAL build path (generated layout, the game's world / holders / shelf stock / loot display builders, stripped models), like
-// mall-budget.test.ts.
+// the REAL build path (generated layout, the game's world / holders / shelf stock / loot display builders, the real enemies and the
+// floor pickups, stripped models), like mall-budget.test.ts.
 //
 // The user's perf overlay (WebGPU, quality high): rim gallery 1,230 draws / 5 passes / 21.7 ms render submit, looking down the pit
-// 1,048 draws / 15.3 ms, against ~4 ms GPU — ~15-18 us of CPU encoding per draw. Every draw is a three r186 render object: its node /
-// uniform / binding refresh and its encoded commands, in the scene pass AND (casters) the flashlight's shadow pass. Lane CPU's census
-// (game/tests/reactor-cpu-submit.test.ts numbers; docs/reactor.md "CPU submission"): from the rim only ~15 % of the submitted scene
-// draws own a visible pixel (depth oracle) — the rest were rooms, the three side complexes, holders and dressing behind the pit's rock
-// walls / under the storeys' slabs, drawn because the culler only knew the pit as an atrium (every tier visible through it).
+// 1,048 draws / 15.3 ms, against ~4 ms GPU — ~15-18 us of CPU per draw. Every draw is a three r186 render object: its node / uniform /
+// binding refresh and its encoded commands, in the scene pass AND (casters) the flashlight's shadow pass. Lane CPU's census (docs/
+// reactor.md "CPU submission"): from the rim only ~15 % of the submitted scene draws owned a visible pixel (depth oracle) — the rest
+// were rooms, the three side complexes, holders, dressing and enemies behind the pit's rock walls / under the storey slabs, drawn
+// because the culler knew the pit only as an atrium (every tier visible through it) and moving objects were frustum-culled only.
 // Fixes pinned here:
-//  - world/levelCulling.ts slab + same- / cross-storey OCCLUSION (the mall's exact rules, lane PERF) now also on the Reactor
-//    (world/builder.ts; the vessel's undrawn grid column counts as see-through: ReactorArch.occlusionSee);
+//  - world/levelCulling.ts slab + same- / cross-storey OCCLUSION (the mall's exact rules, lane PERF) on the Reactor too
+//    (world/builder.ts; the vessel's undrawn grid column is see-through: ReactorArch.occlusionSee);
 //  - storey-split chunks for the Reactor's holders / openables / purpose dressing and the per-storey, culler-decided loot display
 //    (world/containers.ts, world/openables.ts, world/storefrontBuilder.ts: the mall's byStorey switch, now mall || reactor);
-//  - correctness: a depth-buffered oracle (eye, and the flashlight's shadow camera within its range) finds no visible mesh hidden.
+//  - enemies and pickups decided by the same rules from their boxes every update (LevelCuller.track, world/reactor/cpuActorCulling.ts);
+//  - correctness: a depth-buffered oracle — the eye, and the flashlight's shadow camera within its range — finds no visible mesh hidden,
+//    and no hidden enemy / pickup whose whole cull box shows a pixel.
 // Estimates mirror three r186's render lists (one draw per visible mesh x material group in the frustum; transparent double-sided:
-// two), the flashlight pass = castShadow meshes in its SpotLightShadow frustum on the camera's layers. Static world + holders + shelf
-// stock + loot display only (no enemies / pickups / viewmodel / post quads): Node estimates, not native measurements.
+// two), the flashlight pass = castShadow meshes in its SpotLightShadow frustum on the camera's layers. No viewmodel / post quads /
+// restart controls / map boards (a few dozen, culler-registered): Node estimates, never native timings.
 // LL_REACTOR_CPU_OUT=/tmp/x.txt writes the per-pose numbers (vitest hides console output).
 import {appendFileSync, writeFileSync} from 'node:fs';
 import * as THREE from 'three';
@@ -27,14 +29,17 @@ import {ShimContext, installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
 import {visibleMeshes} from './helpers/visibleMeshes';
 import {LEVELS} from '../src/levels/registry';
-import {codeToSeed} from '../src/core/rng';
-import {CELL, FLOOR} from '../src/gen/grid';
+import {codeToSeed, mulberry32} from '../src/core/rng';
+import {CELL, FLOOR, Grid} from '../src/gen/grid';
+import type {Level} from '../src/gen/levels';
+import {LevelColumns} from '../src/world/levelGeometry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {ContainerManager} from '../src/world/containers';
 import {ShelfStock} from '../src/world/shelfStock';
-import {CULL_LAYER, fogCullDistance} from '../src/world/levelCulling';
+import {PickupManager} from '../src/world/pickups';
+import {CULL_LAYER, LevelCuller, fogCullDistance} from '../src/world/levelCulling';
 import {p7ModelKeysFor, P7_FILES} from '../src/gen/props07';
 import {selectLevelKeys} from '../src/assets/levelAssets';
 import {MODEL_FILES} from '../src/assets/manifest';
@@ -42,11 +47,17 @@ import {lootProfile} from '../src/items/lootTables';
 import {Inventory} from '../src/items/inventory';
 import {markShadows} from '../src/render/volumetric';
 import {setAttributeInstancing} from '../src/render/instancing';
+import {ZombieLookLibrary} from '../src/ai/outfits';
+import {pickZombieLook} from '../src/ai/wardrobe';
+import {ZombieActor} from '../src/ai/zombieActor';
+import {createEnemyActor, type EnemyActor} from '../src/ai/creatureArchetypes';
+import {ENEMY_MODEL_FILES, enemyModelKeysFor} from '../src/ai/enemyModels';
 import {REACTOR_MODEL_FILES, reactorModelKeysFor} from '../src/world/reactor/archAssets';
 import {WASTE_MODEL_FILES, wasteModelKeysFor} from '../src/world/reactor/wasteAssets';
 import {minesModelKeysFor} from '../src/world/reactor/minesAssets';
 import {bunkerModelKeysFor} from '../src/gen/reactor/complex/bunkerKinds';
 import {REACTOR_FOG} from '../src/world/reactor/archInstall';
+import {ReactorCpuCulling} from '../src/world/reactor/cpuActorCulling';
 
 installCanvasShim(false);
 for (const k of ['clip', 'rect']) (ShimContext.prototype as unknown as Record<string, unknown>)[k] ??= () => {};
@@ -55,22 +66,39 @@ const OUT = process.env.LL_REACTOR_CPU_OUT;
 const out = (s: string) => { if (OUT) appendFileSync(OUT, s + '\n'); };
 if (OUT) writeFileSync(OUT, '');
 
+/**
+ * The budget: scene + flashlight-shadow draws per representative pose (static world + holders + loot display + enemies + pickups).
+ * Measured with these fixes (lane CPU) on 000070S / 637474 / 218558; before them (main d53ae24, static world only — enemies and
+ * pickups not even counted) the same poses drew 822 / 941 / 846 (000070S), 992 / 913 / 910 (637474). A budget failure means the
+ * Reactor's submitted work grew: measure again (LL_REACTOR_CPU_OUT) and decide consciously before raising a cap.
+ */
+const BUDGET = {
+  /** Worst pose over the three seeds (scene + shadow), and the sum over the 9 seed x pose views. */
+  worst: 820, total: 6000,
+  /** The occlusion + tracking must remove at least this share of the rules-off draws on the rim views (measured 35-50 %). */
+  rimCut: 0.25,
+} as const;
+
 // ---------------------------------------------------------------------------------------------------------------------------
 // The real Reactor (the game's build path: Game.buildSection order)
 
-const CATALOGUE = {...P7_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES} as Record<string, {url: string; bytes: number}>;
+const CATALOGUE = {...P7_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...ENEMY_MODEL_FILES} as Record<string, {url: string; bytes: number}>;
 const modelCache = new Map<string, Promise<GLTF>>();
 const loadModel = (url: string) => { let m = modelCache.get(url); if (!m) modelCache.set(url, (m = loadStripped(url))); return m; };
 
-type RealReactor = {layout: StationLayout; world: ReturnType<typeof buildWorld>; cm: ContainerManager; roots: THREE.Object3D[]};
+type RealReactor = {
+  layout: StationLayout; world: ReturnType<typeof buildWorld>; cm: ContainerManager;
+  /** Static roots (world, holders + loot display, shelf stock) and the moving ones (enemy roots, the pickups group). */
+  roots: THREE.Object3D[]; enemies: EnemyActor[]; pickups: PickupManager; dyn: THREE.Object3D[]; tracking: ReactorCpuCulling;
+};
 const reactors = new Map<number, Promise<RealReactor>>();
 function realReactor(seed: number): Promise<RealReactor> {
   let r = reactors.get(seed);
   if (!r) reactors.set(seed, (r = (async () => {
     const layout = LEVELS.reactor.generate('main', {levelSeed: seed});
-    // the lazy working set as Game.modelKeysFor selects it on a Reactor layout (props + the arch / mines / bunker / waste kits)
+    // the lazy working set as Game.modelKeysFor selects it on a Reactor layout (props + the arch / mines / bunker / waste kits + enemies)
     const keys = selectLevelKeys('reactor', [...new Set([...p7ModelKeysFor(layout), ...reactorModelKeysFor(layout as never), ...minesModelKeysFor(layout as never),
-      ...bunkerModelKeysFor(layout), ...wasteModelKeysFor(layout as never)])], CATALOGUE).keys;
+      ...bunkerModelKeysFor(layout), ...wasteModelKeysFor(layout as never), ...enemyModelKeysFor(layout)])], CATALOGUE).keys;
     const models: Record<string, GLTF> = {};
     for (const k of keys) if (CATALOGUE[k]) models[k] = await loadModel(CATALOGUE[k].url);
     for (const [k, f] of Object.entries(MODEL_FILES as Record<string, {url: string}>)) models[k] ??= await loadModel(f.url);
@@ -89,9 +117,26 @@ function realReactor(seed: number): Promise<RealReactor> {
     world.culler.register(cm.group);
     world.culler.register(stock.group);
     world.culler.maxDistance = Math.min(fogCullDistance(REACTOR_FOG.density), REACTOR_FOG.far); // archInstall.ts apply()
+    // the enemies exactly as Game.spawnEnemy builds them (seeded looks, archetype actors, the floor height, shadow casters)
+    const looks = new ZombieLookLibrary(models);
+    const rand = mulberry32(seed ^ 0x5bd1e995);
+    const enemies = layout.zombies.map((s, i) => {
+      const {actor} = createEnemyActor(s, models, rand, () => new ZombieActor(looks.build(pickZombieLook(seed, i, s.type, looks.available)), s, rand));
+      actor.brain.y = actor.root.position.y = s.y ?? layout.levels[s.level ?? 0].grid.floorAt(s.x, s.z);
+      actor.syncTransform();
+      markShadows(actor.root, false, false);
+      return actor;
+    });
+    // the floor pickups (item stand-ins where the item models are not registered in Node)
+    const pickups = new PickupManager({});
+    const inv = new Inventory();
+    for (const p of layout.pickups) pickups.add(inv.makeStack(p.itemId, p.count), p.x, p.y, p.z, p.yaw ?? 0);
     const roots = [world.group, cm.group, stock.group];
-    for (const o of roots) o.updateMatrixWorld(true);
-    return {layout, world, cm, roots};
+    const dyn = [...enemies.map(e => e.root), pickups.group];
+    for (const o of [...roots, ...dyn]) o.updateMatrixWorld(true);
+    const host = {frameHooks: [] as ((dt: number) => void)[], sectionHooks: [] as {teardown?(): void}[], layout, world, zombies: enemies, pickups};
+    const tracking = new ReactorCpuCulling(host);
+    return {layout, world, cm, roots, enemies, pickups, dyn, tracking};
   })()));
   return r;
 }
@@ -113,7 +158,9 @@ function keyPoses(layout: StationLayout): Pose[] {
   const g = long.rect, alongX = g.x1 - g.x0 >= g.z1 - g.z0;
   const gx = alongX ? g.x0 + 1.5 : (g.x0 + g.x1) / 2, gz = alongX ? (g.z0 + g.z1) / 2 : g.z0 + 1.5;
   const poses: Pose[] = [{name: 'rim-gallery', x: gx, y: long.y + EYE, z: gz, yaw: alongX ? yawTo(gx, gz, g.x1, gz) : yawTo(gx, gz, gx, g.z1), pitch: -0.1}];
-  const cx = (g.x0 + g.x1) / 2, cz = (g.z0 + g.z1) / 2, d = Math.hypot(core.x - cx, core.z - cz);
+  // at the gallery's pit edge (0.6 m inside the rail, like the screenshot: leaning over the railing), looking down at the core
+  const cx = alongX ? (g.x0 + g.x1) / 2 : core.x < (g.x0 + g.x1) / 2 ? g.x0 + 0.6 : g.x1 - 0.6;
+  const cz = alongX ? (core.z < (g.z0 + g.z1) / 2 ? g.z0 + 0.6 : g.z1 - 0.6) : (g.z0 + g.z1) / 2, d = Math.hypot(core.x - cx, core.z - cz);
   poses.push({name: 'rim-down', x: cx, y: long.y + EYE, z: cz, yaw: yawTo(cx, cz, core.x, core.z), pitch: Math.atan2(core.y0 + 3 - (long.y + EYE), d)});
   const tier = r.tiers.find(t => t.index === 2) ?? r.tiers[2];
   const mid = r.decks.filter(q => q.level === tier.level && q.kind !== 'stair-landing').sort((a, b) => (b.rect.x1 - b.rect.x0) * (b.rect.z1 - b.rect.z0) - (a.rect.x1 - a.rect.x0) * (a.rect.z1 - a.rect.z0))[0];
@@ -136,17 +183,17 @@ function oraclePoses(layout: StationLayout): Pose[] {
   const cf = r.coreFloor;
   if (cf) {
     const g = layout.levels[layout.levels.length - 1].grid;
-    for (let k = 0; k < 8; k++) {
+    for (let k = 0, n = 0; k < 8 && n < 4; k++) {
       const a = k * Math.PI / 4, rr = (cf.ring.r0 + cf.ring.r1) / 2, x = cf.x + Math.cos(a) * rr, z = cf.z + Math.sin(a) * rr;
       const [cx, cy] = g.cellOf(x, z);
       if (!g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] !== FLOOR || g.blocked[g.idx(cx, cy)]) continue;
-      out.push({name: 'core-ring', x, y: cf.y + EYE, z, yaw: k % 2 ? yawTo(x, z, cf.x, cf.z) : yawTo(x, z, cf.x, cf.z) + Math.PI, pitch: k % 4 === 1 ? 0.35 : -0.1});
-      if (out.filter(p => p.name === 'core-ring').length >= 4) break;
+      out.push({name: 'core-ring', x, y: cf.y + EYE, z, yaw: yawTo(x, z, cf.x, cf.z) + (k % 2 ? 0 : Math.PI), pitch: k % 4 === 1 ? 0.35 : -0.1});
+      n++;
     }
   }
   for (const c of r.complexes ?? []) {
     for (const rm of c.rooms.filter((_, i) => i % 3 === 0)) {
-      const a = layout.areas[rm.area], lv = layout.levels[a.level ?? 0], g = lv.grid;
+      const a = layout.areas[rm.area], g = layout.levels[a.level ?? 0].grid;
       const x = (a.x + a.w / 2) * CELL, z = (a.y + a.h / 2) * CELL, [cx, cy] = g.cellOf(x, z);
       if (!g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] !== FLOOR) continue;
       out.push({name: `${c.id}-${rm.key}`, x, y: g.floor[g.idx(cx, cy)] + EYE, z, yaw: (a.id * 2.4) % (2 * Math.PI), pitch: -0.1});
@@ -195,7 +242,9 @@ function renderDraws(roots: readonly THREE.Object3D[], cam: THREE.Camera, caster
       if (!(im.isInstancedMesh && im.count === 0)) {
         let inView = true;
         if (m.frustumCulled !== false) {
-          if (im.isInstancedMesh) { if (!im.boundingSphere) im.computeBoundingSphere(); sph.copy(im.boundingSphere!); } else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sph.copy(m.geometry.boundingSphere!); }
+          const own = (m as unknown as {boundingSphere?: THREE.Sphere | null}).boundingSphere; // InstancedMesh / SkinnedMesh (the actors set one)
+          if (im.isInstancedMesh && !own) im.computeBoundingSphere();
+          if (own || im.isInstancedMesh) sph.copy((m as unknown as {boundingSphere: THREE.Sphere}).boundingSphere); else { if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere(); sph.copy(m.geometry.boundingSphere!); }
           inView = fr.intersectsSphere(sph.applyMatrix4(m.matrixWorld));
         }
         if (inView) {
@@ -213,57 +262,170 @@ function renderDraws(roots: readonly THREE.Object3D[], cam: THREE.Camera, caster
 const CULLED = (1 << CULL_LAYER) >>> 0;
 const isCulled = (m: THREE.Object3D) => (m.layers.mask >>> 0) === CULLED;
 
-/** Scene + flashlight-shadow draws at a pose (the loot display filled for this eye, the culler forced), and the torch. */
-function measure(R: RealReactor, p: Pose): {scene: number; shadow: number; cam: THREE.PerspectiveCamera; torch: THREE.SpotLight} {
+interface Measured { scene: number; shadow: number; dynScene: number; dynShadow: number; cam: THREE.PerspectiveCamera; torch: THREE.SpotLight }
+
+/**
+ * Scene + flashlight-shadow draws at a pose: the loot display filled for this eye, the moving objects tracked (the game's frame hook)
+ * or not, the culler forced. `rules: false` = the Reactor culler's slab / occlusion rules and the tracking off (the atrium rule alone).
+ */
+function measure(R: RealReactor, p: Pose, rules = true): Measured {
   const cam = eyeCam(p), torch = torchOn(cam);
-  const {world, cm, roots} = R;
-  world.culler.viewpoints = [torch];
+  const {world, cm, roots, dyn, tracking} = R;
+  const c = world.culler;
+  c.viewpoints = [torch];
+  c.slabs = c.occlusion = rules;
   // the loot display as the game fills it for this eye (ContainerManager.target sets the eye; update refreshes the lots)
   (cm as unknown as {lastEye: THREE.Vector3}).lastEye.copy(cam.position);
   (cm as unknown as {dirty: boolean}).dirty = true;
   cm.update(0.2, 0);
-  for (const o of roots) o.updateMatrixWorld(true);
-  world.culler.update(cam, true);
+  for (const o of [...roots, ...dyn]) o.updateMatrixWorld(true);
+  if (rules) tracking.sync(); else tracking.clear();
+  c.update(cam, true);
   torch.shadow.camera.layers.mask = cam.layers.mask;
-  return {scene: renderDraws(roots, cam), shadow: renderDraws(roots, torch.shadow.camera, true), cam, torch};
+  const dynScene = renderDraws(dyn, cam), dynShadow = renderDraws(dyn, torch.shadow.camera, true);
+  return {scene: renderDraws(roots, cam) + dynScene, shadow: renderDraws(roots, torch.shadow.camera, true) + dynShadow, dynScene, dynShadow, cam, torch};
 }
+const done = (m: Measured) => m.cam.remove(m.torch, m.torch.target);
 
 // ---------------------------------------------------------------------------------------------------------------------------
 
 const SEEDS = [codeToSeed('000070S')!, 637474, 218558]; // (000070S = 9100: the lead's Reactor QA seed; reactor-level.test.ts's seeds)
 
 describe('the REAL Reactor: render objects per representative pose (scene + flashlight shadow pass)', () => {
-  it('census per seed / pose', async () => {
+  it('rim gallery / rim down to the core / mid-tier deck within budget on three seeds; the rules cut the rim views', async () => {
+    let worst = 0, total = 0;
     for (const seed of SEEDS) {
       const R = await realReactor(seed);
       for (const p of keyPoses(R.layout)) {
-        const m = measure(R, p);
-        out(`seed ${seed} ${p.name} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(2)} pitch ${p.pitch.toFixed(2)}): scene ${m.scene} + shadow ${m.shadow} = ${m.scene + m.shadow}; culled ${R.world.culler.stats.culled}`);
-        m.cam.remove(m.torch, m.torch.target);
+        const off = measure(R, p, false);
+        done(off);
+        const on = measure(R, p);
+        const c = R.world.culler;
+        out(`seed ${seed} ${p.name} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(2)} pitch ${p.pitch.toFixed(2)}): `
+          + `rules off ${off.scene} + ${off.shadow} = ${off.scene + off.shadow} (enemies / pickups ${off.dynScene} + ${off.dynShadow}) | `
+          + `on ${on.scene} + ${on.shadow} = ${on.scene + on.shadow} (enemies / pickups ${on.dynScene} + ${on.dynShadow}); slab ${c.slabCulled}, occluded ${c.occlusionCulled}, tracked hidden ${c.trackedCulled} / ${c.trackedCount}`);
+        expect(on.scene + on.shadow, `${seed} ${p.name}`).toBeLessThanOrEqual(off.scene + off.shadow); // the rules only remove work
+        if (p.name.startsWith('rim')) expect(on.scene + on.shadow, `${seed} ${p.name} cut`).toBeLessThanOrEqual((off.scene + off.shadow) * (1 - BUDGET.rimCut));
+        worst = Math.max(worst, on.scene + on.shadow);
+        total += on.scene + on.shadow;
+        done(on);
       }
     }
-    expect(true).toBe(true);
-  }, 600_000);
+    out(`worst ${worst}, total ${total}`);
+    expect(worst).toBeLessThanOrEqual(BUDGET.worst);
+    expect(total).toBeLessThanOrEqual(BUDGET.total);
+  }, 900_000);
 
-  it('oracle: no mesh with visible pixels is culled (eye), poses across every tier / complex / the core ring', async () => {
+  it('oracle: no visible mesh is culled (eye, any rule); nothing the new rules hide is seen by the flashlight; no hidden enemy / pickup box shows', async () => {
     const R = await realReactor(SEEDS[0]);
-    const all = new THREE.Group();
-    let checked = 0, bad = 0;
+    const all = new THREE.Group(), withProxies = new THREE.Group();
+    const proxyMat = new THREE.MeshBasicMaterial({side: THREE.DoubleSide, transparent: true, depthWrite: false}); // tested, never occludes
+    let checked = 0, bad = 0, torchBad = 0, boxBad = 0, hiddenBoxes = 0, newHidden = 0;
+    const c = R.world.culler;
     try {
       for (const o of R.roots) all.add(o);
       for (const p of oraclePoses(R.layout)) {
+        // the meshes the atrium rule alone shows and the new rules hide (slab / storey occlusion)
+        const off = measure(R, p, false);
+        done(off);
+        const shownOff = new Set<THREE.Object3D>();
+        for (const o of R.roots) o.traverse(x => { if ((x as THREE.Mesh).isMesh && !isCulled(x)) shownOff.add(x); });
         const m = measure(R, p);
+        const fresh = new Set<THREE.Object3D>();
+        for (const o of R.roots) o.traverse(x => { if ((x as THREE.Mesh).isMesh && isCulled(x) && shownOff.has(x)) fresh.add(x); });
+        newHidden += fresh.size;
         const fromEye = visibleMeshes(all, m.cam, 256, 134, {minPx: 1});
         const hidden = [...fromEye].filter(([mesh]) => isCulled(mesh)).map(([mesh, n]) => `${p.name}: ${mesh.name} ${n}px`);
-        out(`oracle ${p.name} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(2)} pitch ${p.pitch}): scene ${m.scene} + shadow ${m.shadow}, eye-visible ${fromEye.size}, visible-but-culled ${hidden.length} ${hidden.slice(0, 4).join(' ')}`);
-        bad += hidden.length;
+        // the flashlight's shadow camera (its 30 m range: three's SpotLightShadow far = distance) on every other pose
+        let tb: string[] = [];
+        if (checked % 2 === 0) {
+          const fromTorch = visibleMeshes(all, m.torch.shadow.camera as THREE.PerspectiveCamera, 128, 128, {minPx: 1, maxDist: m.torch.distance});
+          tb = [...fromTorch].filter(([mesh]) => fresh.has(mesh)).map(([mesh, n]) => `${p.name} torch: ${mesh.name} ${n}px`);
+        }
+        // every hidden enemy / pickup: its whole cull box (the box the culler decided) owns no pixel from the eye or the torch
+        const boxes: THREE.Mesh[] = [];
+        const tracked = (c as unknown as {tracked: Map<THREE.Object3D, {box(o: THREE.Box3): boolean; hidden: boolean}>}).tracked;
+        for (const t of tracked.values()) {
+          if (!t.hidden) continue;
+          const b = new THREE.Box3();
+          t.box(b);
+          const px = new THREE.Mesh(new THREE.BoxGeometry(b.max.x - b.min.x, b.max.y - b.min.y, b.max.z - b.min.z), proxyMat);
+          px.position.copy(b.getCenter(new THREE.Vector3()));
+          px.name = 'tracked-box';
+          boxes.push(px);
+        }
+        hiddenBoxes += boxes.length;
+        let bb: string[] = [];
+        if (boxes.length) {
+          for (const o of R.roots) withProxies.add(o);
+          withProxies.add(...boxes);
+          const eyeBoxes = visibleMeshes(withProxies, m.cam, 256, 134, {minPx: 1});
+          const torchBoxes = visibleMeshes(withProxies, m.torch.shadow.camera as THREE.PerspectiveCamera, 128, 128, {minPx: 1, maxDist: m.torch.distance});
+          bb = boxes.filter(b => eyeBoxes.has(b) || torchBoxes.has(b)).map(b => `${p.name}: box at ${b.position.toArray().map(v => v.toFixed(1))} ${eyeBoxes.get(b) ?? 0}/${torchBoxes.get(b) ?? 0}px`);
+          withProxies.remove(...boxes);
+          for (const o of R.roots) all.add(o);
+          for (const b of boxes) b.geometry.dispose();
+        }
+        out(`oracle ${p.name} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(2)} pitch ${p.pitch}): ${off.scene} + ${off.shadow} -> ${m.scene} + ${m.shadow}, `
+          + `eye-visible ${fromEye.size}, newly hidden ${fresh.size}, tracked hidden ${boxes.length}; visible-but-culled ${hidden.length} ${hidden.slice(0, 3).join(' ')}; torch ${tb.length} ${tb.slice(0, 3).join(' ')}; boxes ${bb.length} ${bb.slice(0, 3).join(' ')}`);
+        bad += hidden.length; torchBad += tb.length; boxBad += bb.length;
+        expect(hidden).toEqual([]);
+        expect(tb).toEqual([]);
+        expect(bb).toEqual([]);
         checked++;
-        m.cam.remove(m.torch, m.torch.target);
+        done(m);
       }
     } finally {
       for (const o of [...all.children]) all.remove(o);
+      for (const o of [...withProxies.children]) withProxies.remove(o);
+      c.viewpoints = [];
+      c.slabs = c.occlusion = true;
     }
-    out(`oracle poses ${checked}, visible-but-culled ${bad}`);
+    out(`oracle poses ${checked}: visible-but-culled ${bad}, torch ${torchBad}, hidden enemy / pickup boxes ${hiddenBoxes} (visible ${boxBad}); meshes the new rules hid ${newHidden}`);
     expect(checked).toBeGreaterThan(30);
+    expect(newHidden).toBeGreaterThan(0); // the rules actually cull on these poses
+    expect(hiddenBoxes).toBeGreaterThan(0); // and the tracked enemies / pickups too
   }, 900_000);
+
+  it('tracked moving objects: decided every update from their current box, shown again when moved into view / untracked; none without occlusion data', async () => {
+    const R = await realReactor(SEEDS[0]);
+    const c = R.world.culler;
+    const p = keyPoses(R.layout)[1]; // rim down to the core
+    const g = new THREE.Group(), mesh = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshStandardMaterial());
+    g.add(mesh);
+    const r = R.layout.reactor!, pit = r.pit.bounds;
+    const q = new THREE.Vector3();
+    const box = (o: THREE.Box3) => { o.min.set(q.x - 0.3, q.y - 0.3, q.z - 0.3); o.max.set(q.x + 0.3, q.y + 0.3, q.z + 0.3); return true; };
+    expect(c.track(g, box)).toBe(true);
+    try {
+      const m = measure(R, p);
+      const fr = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(m.cam.projectionMatrix, m.cam.matrixWorldInverse));
+      // a point in the view cone behind the rock (a candidate the rules hide), found by scanning round the pit on every tier
+      let found: THREE.Vector3 | null = null;
+      for (const t of r.tiers) for (let x = pit.x0 - 24; x <= pit.x1 + 24 && !found; x += 4) for (let z = pit.z0 - 24; z <= pit.z1 + 24 && !found; z += 4) {
+        q.set(x, t.baseY + 1, z);
+        if (!fr.containsPoint(q)) continue;
+        c.update(m.cam);
+        if (isCulled(mesh)) found = q.clone();
+      }
+      expect(found, 'a hidden probe position in view').not.toBeNull();
+      // into the open pit air 12 m along the view axis: shown at the next update (the camera did not move)
+      q.copy(m.cam.position).addScaledVector(m.cam.getWorldDirection(new THREE.Vector3()), 12);
+      c.update(m.cam);
+      expect(isCulled(mesh)).toBe(false);
+      q.copy(found!);
+      c.update(m.cam);
+      expect(isCulled(mesh)).toBe(true);
+      expect(c.trackedCulled).toBeGreaterThan(0);
+      c.untrack(g);
+      expect(isCulled(mesh)).toBe(false); // untracked: its layers back
+      out(`tracked probe: hidden at ${found!.toArray().map(v => v.toFixed(1))}, shown over the core`);
+      done(m);
+    } finally {
+      c.untrack(g);
+    }
+    // a culler without slab / storey occlusion data (Subway / Office) tracks nothing
+    const grid = new Grid(8, 8), lv = [{id: 0, role: 'main', grid, baseY: 0} as unknown as Level];
+    expect(new LevelCuller(lv, new LevelColumns(lv), () => 0).track(g, box)).toBe(false);
+  }, 600_000);
 });
