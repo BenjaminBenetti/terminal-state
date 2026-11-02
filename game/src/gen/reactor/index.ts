@@ -316,7 +316,6 @@ function placeComponents(layout: StationLayout, rc: ReactorCarve, rng: Rng, site
   put('store3', 'fuse_cartridge', 'Maintenance store · Tier 3');
   put('store4', 'fuse_cartridge', 'Maintenance store · Tier 4');
   put('storeCore', 'fuse_cartridge', 'Maintenance store · Core floor');
-  void CELL;
   return out;
 }
 

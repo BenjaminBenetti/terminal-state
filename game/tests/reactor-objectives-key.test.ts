@@ -8,6 +8,7 @@
 //      core route with the guaranteed upstream filter time covering that route twice over, its map X where it actually lies, nothing
 //      pointing at the rim office any more, the item id / record / persistence unchanged.
 import {describe, expect, it} from 'vitest';
+import {appendFileSync} from 'node:fs';
 import {LEVELS} from '../src/levels/registry';
 import {rollLevelGear} from '../src/levels/gearAdapter';
 import {REACTOR_KEY_WHERE} from '../src/gen/reactor/index';
@@ -153,8 +154,11 @@ describe('(3) the startup key on the core floor (lane OBJECTIVES)', () => {
       expect(g.cells[i] === FLOOR && !g.blocked[i] && g.rampIdx[i] < 0 && g.area[i] === ctl.area, `seed ${seed}: open floor`).toBe(true);
       expect(Math.abs(kp.y - core.baseY), `seed ${seed}: on the deck`).toBeLessThan(0.3);
       expect(kp.x > ctl.rect.x0 && kp.x < ctl.rect.x1 && kp.z > ctl.rect.z0 && kp.z < ctl.rect.z1, `seed ${seed}: in the room`).toBe(true);
-      // never under the operator's feet at the console (the key switch / rod control stand points)
+      // never under the operator's feet at the console (the key switch / rod control stand points), on the operator side of the console
+      // (beyond its front face: forward(yaw) = (-sin yaw, -cos yaw) faces the operator), not out by the vessel opening
       for (const c of ctl.controls) expect(Math.hypot(kp.x - c.stand.x, kp.z - c.stand.z), `seed ${seed}: off the ${c.id} stand`).toBeGreaterThanOrEqual(1.2);
+      const con = ctl.machines!.find(m => m.kind === 'console')!;
+      expect((kp.x - con.x) * -Math.sin(con.yaw) + (kp.z - con.z) * -Math.cos(con.yaw), `seed ${seed}: operator side`).toBeGreaterThan(con.d / 2 + 0.5);
       // reachable on foot (the core grid) from every way down onto the core floor, back up again, and from it the key switch: no lock
       const field = g.distanceField(cx, cy);
       const downs = L.levelLinks.filter(k => k.lower === core.level);
@@ -209,6 +213,8 @@ describe('(3) the startup key on the core floor (lane OBJECTIVES)', () => {
       const budget = 2 * (walkM / WALK_SPEED) + work + tClear + 60; // detours + 60 s of fighting
       const minSupply = FILTER_LIFE_S * MASK_LOOT.foundFilter[0] + FILTER_LIFE_S * MASK_LOOT.levels.reactor.filters[0];
       expect(minSupply, `seed ${seed}: walk ${walkM.toFixed(0)} m, budget ${budget.toFixed(0)} s`).toBeGreaterThanOrEqual(2 * budget);
+      const detour = dist(chain[1], chain[2]) + dist(chain[2], chain[3]) - dist(chain[1], chain[3]);
+      if (process.env.LL_OBJ_OUT) appendFileSync(process.env.LL_OBJ_OUT, `seed ${seed}: walk ${walkM.toFixed(0)} m (key detour ${detour.toFixed(1)} m), clear ${tClear.toFixed(1)} s, budget ${budget.toFixed(0)} s, worst-roll supply ${minSupply.toFixed(0)} s\n`);
     }
   }, 300_000);
 
