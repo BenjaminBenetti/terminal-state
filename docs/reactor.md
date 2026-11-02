@@ -526,6 +526,33 @@ Code: `world/reactor/startup.ts` (runtime, installed right after the restart), `
   WebGPU check was run in this lane.
 - Tests: `game/tests/reactor-startup.test.ts`.
 
+### The beam ignition and the surface rain (task reactor-surface-ending-20261102, lane AUDIO)
+User: "the reactor needs to have a noise when the blue beam shoots out the top!" and "It should be raining!".
+- **Clips**: 2 Sound Lab jobs of the task's 6 (`tools/audio-pipeline/reactor-ending-{plan.py,build.mjs}`; provenance
+  `derivatives/audio-reactor-ending.json`; private QC `reference/tasks/reactor-surface-ending-20261102-213051/audio/raw/QC.md`).
+  `reactor-beam.mp3` is a whoosh swell, a broadband crack and a decaying column hum (3.1 s). `surface-rain-loop.mp3` is a 5.2 s
+  loop. Together they are 68,753 B (64 kbps mono).
+- **The ignition** is win cue `beam` (`startupPlan.ts beamCueAt`). It starts `BEAM_IGNITION_CRACK_S` (0.421 s, measured by the
+  builder) before ONLINE, so its swell leads in and its crack lands as the beam fires (within one frame on the real runtime).
+  - It plays once, at the point of the beam column nearest the listener (heard from the rim), high-passed at 120 Hz, at priority 2.
+  - It follows the startup set's no-replay rules: a restored world, a QA jump or a revisit never repeats it.
+  - The ONLINE impact and its deep thump drop to 0.7 / 0.6 to make room (`STARTUP_MIX`). The builder's worst-case sum at ONLINE
+    went from +1.0 dBFS (before the beam) to −0.68 dBFS at the compressor input, with the same loudness (±0.5 LU).
+- **The rain** is `world/reactor/audioRain.ts` (driven by the startup runtime) into `Sfx.rainBed`: one looping channel on the
+  ambient bus, created on first use.
+  - It plays only after the win: the ONLINE sky's clearing gates it.
+  - By default it follows lane ENDING's `layout.reactor.surface`:
+    - the plaza: full and open;
+    - the head house: muffled, opening up towards the exit;
+    - the stair: muffled, fading in as you climb;
+    - the lower passage: faint;
+    - anywhere else: silent.
+  - The hook `setRainExposure(host, eye => ({level, muffle}) | null)` overrides the rule. A layout without a surface falls back to
+    the roof line.
+- **Limits**: never auditioned (structural QC only). The ignition is low-mid heavy outside its crack. No browser check was run in
+  this lane. There is no separate beam hum loop: the existing core hum and bed carry the running beam.
+- Tests: `game/tests/reactor-ending-audio.test.ts`.
+
 ## The train
 The rim station is a shared Trench beside its start platform, so the shared player train (`gen/playerTrain.ts`
 `playerTrainPlacement`, PR 33) parks there with no train-side change. It sits inside `layout.reactor.arrival`'s stop window, and a

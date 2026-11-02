@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 36115,
-      "sha256": "672c63046c586d45ca6232071f70f912a5d7526101422adadbd067120566ec9a"
+      "bytes": 37082,
+      "sha256": "a69d0395616a24fe516f4c497cc40a35a4107d94072a8eb5e94a88a4b8bc2797"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1540,
-      "sha256": "b030ebc5ed2f8c31c660c170c204ac349a83bccf683048f612964a7a6165de00"
+      "bytes": 1685,
+      "sha256": "185c70795086cc92b4784324d5dab24ef3d0f139dd578b88dbc466143b56e3bc"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -874,6 +874,11 @@
       "sha256": "ca5bfc50b3fb38f8e6f6578fb83b5c642c109ca4870e45c03f302bbbbf348bf3"
     },
     {
+      "path": "assets/audio/reactor-beam.mp3",
+      "bytes": 25286,
+      "sha256": "85dac8228804da2c887286a4b6a806824b512f27134af63595ac6a45942cc870"
+    },
+    {
       "path": "assets/audio/reactor-bed-loop.mp3",
       "bytes": 43467,
       "sha256": "565ac8f259388b587369cb04d3ce108c790373b895cfa0f11619a0df1bec5175"
@@ -1354,6 +1359,11 @@
       "sha256": "346d68dbdb731f617b6814c922e3e95097419878c9285d4ad3c92f149fd556a8"
     },
     {
+      "path": "assets/audio/surface-rain-loop.mp3",
+      "bytes": 43467,
+      "sha256": "b19fddcad570035abef20a3e086b3f6f09ed30081ccb391c8db6a443d906b654"
+    },
+    {
       "path": "assets/audio/t1-blight-burst-01.mp3",
       "bytes": 9613,
       "sha256": "4cdb84d572f390c7dfe50c77847a256169d124a04bde0b924f957f2e76a41e9c"
@@ -1582,6 +1592,11 @@
       "path": "assets/derivatives/audio-iteration12.json",
       "bytes": 18565,
       "sha256": "d9f003bd4157f8ae320333a77de17d1386749315ea4762395e5b2d8d9f18ee05"
+    },
+    {
+      "path": "assets/derivatives/audio-reactor-ending.json",
+      "bytes": 6129,
+      "sha256": "30d97aec4c5b53cf02e646d9c43cce4e4672ec4e603c6a289d1c34b2110fde92"
     },
     {
       "path": "assets/derivatives/audio-reactor-startup.json",
