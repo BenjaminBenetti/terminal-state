@@ -105,8 +105,8 @@
   "outputs": {
     "glb": {
       "path": "game/public/assets/models/outfit-beanie-t25.glb",
-      "bytes": 262260,
-      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
+      "bytes": 340436,
+      "sha256": "3f693eec5ec9f05b7d052327e48379d769fea73ed7ec6c75d5a8cc90fbd2813f",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -203,7 +203,7 @@
         26,
         30
       ],
-      "workers": 1
+      "workers": 32
     },
     "textures": {
       "baseColor": 512,
@@ -1107,6 +1107,338 @@
           "Death": 2,
           "Idle": 6,
           "Hit": 4
+        },
+        "poses": 85
+      }
+    },
+    "paleGaze": {
+      "node": "Outfit_beanie__paleGaze",
+      "kind": "rigid",
+      "fit": {
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.21,
+          "envelopeBreadthM": 0.1834,
+          "envelopeLengthM": 0.21,
+          "topM": 1.6251,
+          "meshTopM": 1.64,
+          "browY": 1.5201,
+          "noseY": 1.4751,
+          "hairAllowanceM": {
+            "sides": 0.0067,
+            "top": 0.0149
+          }
+        },
+        "item": {
+          "widthM": 0.1912,
+          "lengthM": 0.2377,
+          "heightM": 0.1418,
+          "bandWidthM": 0.1897,
+          "bandLengthM": 0.2377,
+          "bandY": 1.5621,
+          "bandAboveBrowM": 0.042,
+          "topAboveCraniumM": 0.0363,
+          "crownClearanceM": 0.0307,
+          "eyeLiftM": 0
+        },
+        "seat": {
+          "pitchDeg": 0,
+          "liftM": 0.012,
+          "rimContactVerticesBefore": 43,
+          "rimContactVerticesAfter": 35,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0059,
+          "bandClearFrontBackM": 0.0126,
+          "rings": [
+            {
+              "y": 1.5161,
+              "clearSideM": 0.0053,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.5189,
+              "clearSideM": 0.0057,
+              "clearFrontBackM": 0.0044
+            },
+            {
+              "y": 1.5218,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0048
+            },
+            {
+              "y": 1.5246,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0051
+            },
+            {
+              "y": 1.5274,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.005
+            },
+            {
+              "y": 1.5303,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.0045
+            },
+            {
+              "y": 1.5331,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.006
+            },
+            {
+              "y": 1.536,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0064
+            },
+            {
+              "y": 1.5388,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.0082
+            },
+            {
+              "y": 1.5416,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0084
+            },
+            {
+              "y": 1.5445,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0106
+            },
+            {
+              "y": 1.5473,
+              "clearSideM": 0.0059,
+              "clearFrontBackM": 0.0112
+            }
+          ]
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1244,
+          "bandToCraniumBreadth": 1.116
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.6928,
+            0.5685,
+            0.8233
+          ],
+          "translate": [
+            0,
+            1.5076,
+            -0.0551
+          ]
+        },
+        "bulkHeadM": 0.0064
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0064
+      },
+      "hiddenBodyTriangles": 903,
+      "hiddenFraction": 0.0603,
+      "mask": {
+        "hidden": 903,
+        "total": 14985,
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
+      },
+      "motionStretch": {
+        "triangles": 2199,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Idle": 10,
+          "Walk": 4,
+          "Attack": 8,
+          "Run": 2,
+          "Death": 4
+        },
+        "poses": 85
+      }
+    },
+    "paleApparition": {
+      "node": "Outfit_beanie__paleApparition",
+      "kind": "rigid",
+      "fit": {
+        "mode": "hat07: cranium-fitted band + crown (lib/headwear.mjs)",
+        "cranium": {
+          "breadthM": 0.17,
+          "lengthM": 0.2015,
+          "envelopeBreadthM": 0.1789,
+          "envelopeLengthM": 0.2015,
+          "topM": 1.6637,
+          "meshTopM": 1.6701,
+          "browY": 1.5587,
+          "noseY": 1.5137,
+          "hairAllowanceM": {
+            "sides": 0.0044,
+            "top": 0.0064
+          }
+        },
+        "item": {
+          "widthM": 0.1912,
+          "lengthM": 0.2252,
+          "heightM": 0.1378,
+          "bandWidthM": 0.1897,
+          "bandLengthM": 0.2252,
+          "bandY": 1.6007,
+          "bandAboveBrowM": 0.042,
+          "topAboveCraniumM": 0.0334,
+          "crownClearanceM": 0.0279,
+          "eyeLiftM": 0
+        },
+        "seat": {
+          "pitchDeg": 0,
+          "liftM": 0.012,
+          "rimContactVerticesBefore": 34,
+          "rimContactVerticesAfter": 16,
+          "method": "forward pitch 0-8 deg about the band centre + lift 0-12 mm minimising head vertices sitting over the rim (eye line kept clear)"
+        },
+        "containment": {
+          "bandClearSideM": 0.0059,
+          "bandClearFrontBackM": 0.0101,
+          "rings": [
+            {
+              "y": 1.5556,
+              "clearSideM": 0.0053,
+              "clearFrontBackM": 0.0212
+            },
+            {
+              "y": 1.5584,
+              "clearSideM": 0.0057,
+              "clearFrontBackM": 0.0168
+            },
+            {
+              "y": 1.5611,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0172
+            },
+            {
+              "y": 1.5639,
+              "clearSideM": 0.0055,
+              "clearFrontBackM": 0.0154
+            },
+            {
+              "y": 1.5666,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.0049
+            },
+            {
+              "y": 1.5694,
+              "clearSideM": 0.0043,
+              "clearFrontBackM": 0.004
+            },
+            {
+              "y": 1.5722,
+              "clearSideM": 0.0046,
+              "clearFrontBackM": 0.0048
+            },
+            {
+              "y": 1.5749,
+              "clearSideM": 0.004,
+              "clearFrontBackM": 0.0051
+            },
+            {
+              "y": 1.5777,
+              "clearSideM": 0.0042,
+              "clearFrontBackM": 0.0063
+            },
+            {
+              "y": 1.5804,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0065
+            },
+            {
+              "y": 1.5832,
+              "clearSideM": 0.0047,
+              "clearFrontBackM": 0.0082
+            },
+            {
+              "y": 1.5859,
+              "clearSideM": 0.0059,
+              "clearFrontBackM": 0.0088
+            }
+          ]
+        },
+        "ratios": {
+          "widthToCraniumBreadth": 1.1244,
+          "bandToCraniumBreadth": 1.116
+        },
+        "params": {
+          "bandLevel": 0.3,
+          "gapSide": 0.004,
+          "gapFB": 0.004,
+          "gapTop": -0.004,
+          "thick": 0.004,
+          "bandAboveBrow": 0.03,
+          "syClamped": true
+        },
+        "transform": {
+          "scale": [
+            0.6928,
+            0.5522,
+            0.7798
+          ],
+          "translate": [
+            0.0016,
+            1.5474,
+            -0.0312
+          ]
+        },
+        "bulkHeadM": 0.0064
+      },
+      "collisionTarget": "none (rigid contact solve)",
+      "pushOut": null,
+      "transfer": {
+        "method": "rigid: 100% Head"
+      },
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0064
+      },
+      "hiddenBodyTriangles": 473,
+      "hiddenFraction": 0.0316,
+      "mask": {
+        "hidden": 473,
+        "total": 14989,
+        "method": "Head triangles entirely above the hat band - 4 mm and inside the band ellipse x 1.3 (hair compressed under the hat), plus head triangles the rim / cuff sits under (>= 2 vertices whose inward ray meets the item within 30 mm); face / ears / nape below the band stay visible"
+      },
+      "motionStretch": {
+        "triangles": 2199,
+        "p50": 1,
+        "p99": 1,
+        "max": 1,
+        "over2x": 0,
+        "over3x": 0,
+        "fractionOver": 0,
+        "worstClips": {
+          "Death": 4,
+          "Attack": 4,
+          "Run": 8,
+          "Walk": 6,
+          "Idle": 4
         },
         "poses": 85
       }
