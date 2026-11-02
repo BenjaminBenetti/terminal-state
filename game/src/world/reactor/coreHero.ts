@@ -65,7 +65,7 @@ export interface CoreHeroStats {
 /** Hero tunables (m). */
 export const CORE_HERO = {
   /** Vessel nozzle radius / heights of the hot and cold legs (the model's nozzle band is 1.66 .. 4.15 m above the floor). */
-  nozzleR: 5.3, hotY: 3.3, coldY: 3.0, hotD: 0.86, coldD: 0.74, crossD: 0.72,
+  nozzleR: 4.7, hotY: 3.3, coldY: 3.0, hotD: 0.86, coldD: 0.74, crossD: 0.72,
   /** Clearance over a walkway (bottom of anything crossing the ring / a bridge / the outer floor) and the walk volume of a deck. */
   headroom: 2.4, deckBelow: 1.3, deckAbove: 2.5,
   /** The steam header ring just outside the outer railing (above the deck: over the walkway, under the tier-4 deck steel), its
@@ -196,7 +196,6 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
   };
   const lamp = (group: CoreLampGroup, x: number, y: number, z: number, r = 0.055, site = false) => { out.lamps.push({group, x, y, z, r, site}); st.lamps++; };
 
-  // ---- 1. the coolant loops ---------------------------------------------------------------------------------------------------------
   const rT = Math.min(cf.rails.outer - 0.25, (cf.ring.r1 + cf.pool.r1) / 2 + F.sgHalf + 0.25); // outer pipe track over the goop
   const rH = cf.rails.outer + H.headerOut; // the steam header ring (over the outer floor's edge, high)
   for (const loop of cf.loops) {
@@ -243,7 +242,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       }
       const ny = base + H.rcpNozzle;
       // cold leg: the inner nozzle -> a riser in the goop -> over the ring -> the vessel
-      const rr = r - 2.45;
+      const rr = Math.max(cf.rails.ring + H.coldD / 2 + 0.2, r - 2.45); // the riser stands in the goop, clear of the ring railing
       const cp = [at(a, r - 2.05, ny), at(a, rr, ny), at(a, rr, y0 + H.coldY), at(a, H.nozzleR, y0 + H.coldY)];
       if (run(cp, H.coldD, {ignore: true})) {
         out.flows.push({kind: 'cold', pts: cp, d: H.coldD});
@@ -262,22 +261,23 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
     }
     // crossover leg: steam generator bottom -> pump outer nozzle (low over the goop, high over a bridge / tower foot)
     if (sg && rcp) {
-      const aS = angOf(sg.x, sg.z), aP = angOf(rcp.x, rcp.z), rP = radOf(rcp.x, rcp.z);
+      const aS = angOf(sg.x, sg.z), aP = angOf(rcp.x, rcp.z), rP = radOf(rcp.x, rcp.z), rS = radOf(sg.x, sg.z);
+      // the low track: over the goop (its bottom 0.4 m above the surface), under the outer edge fascia, outside the pieces' skirts
+      const yLow = yp + 0.8, rLow = Math.min(cf.rails.outer - 0.45, rS + 2.25);
       let dA = aP - aS;
       while (dA > Math.PI) dA -= 2 * Math.PI;
       while (dA < -Math.PI) dA += 2 * Math.PI;
       const ny = yp + F.rcpLift + H.rcpNozzle;
       const track = (y: number): P3[] => {
-        const pts: P3[] = [at(aS, radOf(sg.x, sg.z) + F.sgHalf - 0.25, yp + 1.2)];
-        pts.push(at(aS, rT, yp + 1.2));
-        if (Math.abs(y - (yp + 1.2)) > 0.05) pts.push(at(aS, rT, y));
+        const pts: P3[] = [at(aS, rS + 1.85, yLow), at(aS, rLow, yLow)];
+        if (Math.abs(y - yLow) > 0.05) pts.push(at(aS, rLow, y));
         const n = Math.max(1, Math.ceil(Math.abs(dA) / (Math.PI / 24)));
-        for (let k = 1; k <= n; k++) pts.push(at(aS + (dA * k) / n, rT, y));
-        if (Math.abs(y - ny) > 0.05) pts.push(at(aP, rT, ny));
+        for (let k = 1; k <= n; k++) pts.push(at(aS + (dA * k) / n, rLow, y));
+        if (Math.abs(y - ny) > 0.05) pts.push(at(aP, rLow, ny));
         pts.push(at(aP, rP + 2.05, ny));
         return pts;
       };
-      const low = track(yp + 1.2);
+      const low = track(yLow);
       const lowOk = low.every(p => !overWalk(p.x, p.z) || p.y > y0 + H.headroom) && low.every((p, i) => i + 1 >= low.length || clear(p, low[i + 1], H.crossD, true, 0.05));
       const pts = lowOk ? low : track(y0 + 3.6);
       if (run(pts, H.crossD, {ignore: true})) {
