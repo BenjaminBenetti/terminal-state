@@ -236,6 +236,11 @@ describe('root cause: the pre-fix reject skipped enemies on pitched rays; the ex
       }
     }
     expect(hits).toBeGreaterThan(1500); // (aims jittered +-0.25 m round a volume; a fifth of the rays stop short at a 'world' hit)
+    // cost (logged only): a 9-pellet pull against 150 live enemies (the five actors repeated), every enemy tested on every pellet
+    const crowd = Array.from({length: 150}, (_, i) => enemies[i % enemies.length]);
+    const t0 = performance.now();
+    for (let n = 0; n < 200; n++) for (let p = 0; p < 9; p++) nearestEnemyHit({x: 0, y: 2, z: 0}, dirTo({x: 0, y: 2, z: 0}, {x: 20 + p, y: 0, z: 20 + n % 7}), 90, crowd);
+    out(`nearestEnemyHit: ${((performance.now() - t0) / 200).toFixed(3)} ms per 9-pellet pull vs 150 enemies (Node)`);
     // dead enemies / empty volumes are never hit
     const dead = place('zombie', {x: 50, y: 0, z: 50});
     const o = {x: 45, y: 6, z: 50}, d = dirTo(o, aimPoint(dead, 'torso'));
