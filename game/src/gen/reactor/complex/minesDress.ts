@@ -173,9 +173,10 @@ export function dressMines(layout: StationLayout, rng: Rng, crop: {ox: number; o
         const sx = Math.round(wx * 2) / 2, sz = Math.round(wz * 2) / 2;
         const before = layout.props.length;
         if (!piece(H, 'winze', sx, sz, 1.0, 1.0, 1.1, {ring: 1})) continue;
+        // the winch's front (its drum's rope side) faces the winze: its long axis (the drum axis) runs across the winze direction
         const sgn = f < 0.5 ? 1 : -1;
-        const cx = alongX ? sx + sgn * 3.0 : sx, cz = alongX ? sz : sz + sgn * 3.0;
-        if (piece(H, 'winch', cx, cz, alongX ? 1.5 : 0.86, alongX ? 0.86 : 1.5, 1.64, {ring: 1})) return true;
+        const cx = alongX ? sx + sgn * 2.4 : sx, cz = alongX ? sz : sz + sgn * 2.4;
+        if (piece(H, 'winch', cx, cz, alongX ? 0.86 : 1.5, alongX ? 1.5 : 0.86, 1.64, {ring: 1})) return true;
         unplace(ctx, layout, before); // no room for the winch beside it: the winze comes back out
         MINES_DRESS_STATS.pieces.winze = (MINES_DRESS_STATS.pieces.winze ?? 1) - 1;
       }
