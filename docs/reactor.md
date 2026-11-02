@@ -191,7 +191,8 @@ with logical rooms flowing in to one another".
   train, rim objective; distinct topology signatures; coherence; determinism).
 - **Census and cost:** ambient enemies per context, Blightbellies, rat/dogs, floor pickups, mask and filters are unchanged on the
   12-pit corpus (docs/enemy-spawns.md); Sirens 1.58 → 1.50 per run (1.13 → 1.50 on seeds 1–8; suite rooms are >= 5 x 5 m, so the
-  deep ones qualify as her dark alcoves); loot holders 197 → 260 per run (+32 %, the new rooms' furniture); generation ~+20 % (Node
+  deep ones qualify as her dark alcoves); loot holders 197 → 260 per run (+32 %, the new rooms' furniture; the level's loot TOTAL is held at its previous level by
+  the Reactor profile, docs/loot-tables.md "The Reactor"); generation ~+20 % (Node
   median ~0.77 s); render-submit budget worst pose 714 → 757 draws (cap 790).
 - **Track2 stays out of the pit** (a lead-reported bug: on 637474 an annex corridor cut through the rim gallery's organ-pipe bank):
   the bank / tower-leg columns are SOLID on every storey, so the extension planner took them for rock. `extendTracks` now gets the

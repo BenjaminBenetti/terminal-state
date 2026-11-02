@@ -544,6 +544,23 @@ cartons 38 %, totes 42 %, dressers 48 %, tall / low cabinets 58 % / 51 %, desks 
 drawers 27 %, staff lockers 37 %, kitchenettes 30 %, tool chests 22 %, pill drawers 23 % (SHOPS' first fill: 17 % overall; before it
 ~5 %). What the fill puts inside per run: materials 84 units, dressings 11, food 6, drink 4, torch cells 6, flares 2.5.
 
+
+## The Reactor (`reactor`)
+
+`PROFILES.reactor` = `REACTOR_PROFILE`: the mall's tables under the culminating level's pressure (`categoryWeight`: ammo 0.75, med 0.8,
+battery 0.85, material 0.2). Task reactor-playtest-round2-20261102 (lane ARRIVAL): the round-2 rooms (the arrival station area, the
+rock suites, the complexes' room graphs) brought ~45 % more furnished holders, so the level's TOTAL loot is held at its previous level:
+- `overrides.slot`: every ordinary holder rolls fewer lots (`lots` × `REACTOR_PICKED_OVER` 0.7 on container / shelf / surface /
+  countertop / vend / cold / medical / junk / stash) and containers are emptier (`empty` × 1.45). The armoury's gun lockers (`arms`),
+  the fixtures and the floor program are untouched.
+- `tables` = `REACTOR_TABLES`: `MALL_TABLES` with every storage-fill rule's `chance` × `REACTOR_FILL_SCALE` 0.65 (the fill tops up
+  every compartment a holder's own roll left empty, so fewer lots alone would only move units into it). The mall is unchanged.
+- Measured (holder lots as `ContainerManager.build` rolls them + floor pickups; 16 pits: seeds `9100 + 104729k`, k < 12, and 1–4; base
+  main `d147830` vs the round-2 feature head), units per run: total 801 → 1053 without the hold → 820 with it (+2.3 %); ammo 661 →
+  677, med 10.1 → 10.1, food 12.1 → 11.6, drink 10.4 → 9.6, batteries 6.4 → 7.3, flares 6.0 → 6.8, materials 90 → 93. The new rooms
+  are mostly service rooms, so their finds lean to batteries / flares. Floor pickups, the key, the fuses and the gas mask / filters
+  (`gen/maskLoot.ts`) are unchanged.
+
 ## Verify
 
 - `tests/loot-golden.test.ts` hashes current behaviour:
