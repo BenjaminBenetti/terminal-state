@@ -7,6 +7,9 @@
 // 'electrical-room', magazine 'storage', refuge 'first-aid-room', the cavern 'generator-room'), the openings between them and the
 // entrance doorway from the front deck. A plan that does not fit returns null BEFORE anything is written (the host keeps the generator
 // on its landing). The returned `dress` hook (./minesDress.ts) furnishes the workings after the crop.
+// Task reactor-playtest-round2-20261102 (lane MINES): the plan is a seeded drift / room graph (./minesPlan.ts): which spaces exist, how
+// many drift segments, and where the cavern / heading / rooms sit vary per seed; keys stay stable per part (portal, portal-1, junction,
+// haulage-<i> in drive order, cavern, heading, manway-<i>, airway-<i>, crosscut-<i>, branch, stope, stope-<i>, …).
 
 import type {Area} from '../../stationTypes';
 import type {ComplexCarve, ComplexCarveInput, ComplexRoom} from './types';

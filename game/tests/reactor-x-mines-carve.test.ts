@@ -90,8 +90,8 @@ describe('Reactor mines complex — carver (lane MINES)', () => {
     }
   });
 
-  it('is one connected network from the deck: every carved cell reachable; >= 1 loop; a cavern on a loop keeps a second way in', () => {
-    let twoWays = 0, n = 0;
+  it('is one connected network from the deck: every carved cell reachable; >= 1 loop; the generator cavern always has a second way in', () => {
+    let independent = 0, n = 0;
     for (const inward of INWARD) for (const seed of SEEDS) {
       const fx = minesFixture(seed, {inward});
       const c = fx.carve!, g = fx.k.grid(FIX.level);
@@ -101,17 +101,19 @@ describe('Reactor mines complex — carver (lane MINES)', () => {
       // a loop in the space graph (openings >= spaces: one more than a tree)
       const G = mineGraph(c.plan);
       expect(G.edges.length, `${inward} ${seed} cycle`).toBeGreaterThanOrEqual(G.nodes.length);
-      // the manway / return airway loops run through the cavern: cutting the haulage's last segment leaves the cavern reachable
+      // the generator stope is never a cul-de-sac (the player is not cornered there): a manway / return airway loop runs through it, so
+      // cutting the haulage's last segment leaves the cavern reachable (the old fixed plan's "two routes", generalised to the graph)
       const cav = fx.k.areas[c.generator.area], ci = g.idx(cav.x + 2, cav.y + 2);
       const haul = c.rooms.filter(r => /^haulage-\d+$/.test(r.key)), last = haul[haul.length - 1];
-      const cut = new Set(cellsOf(fx.k.areas[last.area], g));
-      const reached = flood(g, start[0], start[1], cut)[ci] === 1;
-      if (c.plan.shape.loops.some(l => l === 'manway' || l === 'airway')) expect(reached, `${inward} ${seed}: cavern without ${last.key}`).toBe(true);
-      if (reached) twoWays++;
+      expect(c.plan.shape.loops.some(l => l === 'manway' || l === 'airway'), `${inward} ${seed} cavern loop`).toBe(true);
+      expect(flood(g, start[0], start[1], new Set(cellsOf(fx.k.areas[last.area], g)))[ci], `${inward} ${seed}: cavern without ${last.key}`).toBe(1);
+      // fully independent routes from the junction (cutting EVERY haulage segment) where the loop is the old manway
+      const allHaul = new Set(haul.flatMap(r => cellsOf(fx.k.areas[r.area], g)));
+      if (flood(g, start[0], start[1], allHaul)[ci]) independent++;
       n++;
     }
-    // most mines give the generator stope two ways in (the player is not cornered there)
-    expect(twoWays / n).toBeGreaterThanOrEqual(0.6);
+    log('routes', {independent, n});
+    expect(independent, 'some mines keep the old manway as a fully separate second route').toBeGreaterThan(0);
   });
 
   it('opens every space logically (MINE_LINKS), dead ends and rooms by one opening, the rail chain contiguous, lamp / tool rooms by the way in', () => {

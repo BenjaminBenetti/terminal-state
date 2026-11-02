@@ -449,13 +449,14 @@ const roomCount = (rooms: readonly MineRoomPlan[]) => new Set(rooms.filter(r => 
 /** Plans the mines in a slot (the first seeded attempt that reaches the floor target, else the largest accepted); null when none fits. */
 export function planMines(slot: ComplexSlot, g: Grid, rng: Rng, ceilRel: number): MinePlan | null {
   let best: MinePlan | null = null;
-  // the aims met (floor target, timbered run, optional spaces), then the floor
-  const met = (p: MinePlan) => +(p.cells * CELL * CELL >= MINES.targetM2) + +(p.run >= MINES.minRun) + +(roomCount(p.rooms) >= MINES.minRooms);
+  // the aims met (floor target, timbered run, optional spaces, the cavern on a loop: a second way in), then the floor
+  const met = (p: MinePlan) => +(p.cells * CELL * CELL >= MINES.targetM2) + +(p.run >= MINES.minRun) + +(roomCount(p.rooms) >= MINES.minRooms)
+    + +p.shape.loops.some(l => l === 'manway' || l === 'airway');
   const score = (p: MinePlan) => met(p) * 1e6 + p.cells;
   for (let attempt = 0; attempt < MINES.attempts; attempt++) {
     const p = tryPlan(slot, g, rng.fork(`mines-plan-${attempt}`), ceilRel, attempt);
     if (!p) continue;
-    if (met(p) === 3) return p;
+    if (met(p) === 4) return p;
     if (!best || score(p) > score(best)) best = p;
   }
   return best && best.cells * 0.25 >= MINES.acceptM2 ? best : null;

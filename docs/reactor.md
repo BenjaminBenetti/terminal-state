@@ -102,6 +102,43 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
 - Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
   hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
 
+### The old mines — "No. 2 workings" (zone 1, tier 2; lane MINES, round 2: a seeded drift / room graph)
+`complex/minesPlan.ts` (the plan), `mines.ts` (carver), `minesDress.ts` (dress hook, rail line), `world/reactor/minesVisuals.ts`.
+User bullet 7 ("much to normal … should be random! with logical rooms flowing in to one another"): the fixed program is now a graph
+grown space by space through the rock. Each seed draws a new topology; up to 16 attempts, each its own rng fork.
+- **Always:**
+  - the timbered **adit**: short, long, or a dog-leg along the pit wall;
+  - the **haulage junction** (the adit enters it at a seeded point);
+  - the **main haulage** with its rail line: 1–4 drift segments out of a seeded junction wall (runs, jogs, bends left / right /
+    down). The **generator cavern** sits wherever that course ends, entered at a seeded point of its wall;
+  - at least one **loop** through the cavern, so the generator stope is never a cul-de-sac: the old manway (junction / adit to the
+    cavern) or a return airway (cavern to an earlier haulage segment). A second loop may add a cross-cut between drifts or a manway
+    down to a later segment;
+  - the **development heading**: a dead end off the critical path, sized by `headingFor()` from the drill rig's real size.
+- **Optional, seeded, at logical places** (`MINE_LINKS`; tests check every opening):
+  - lamp / tool rooms by the adit or the junction;
+  - a footwall drift forking off the haulage;
+  - the powder magazine: off a side drift, never off the junction, the adit or the cavern;
+  - the hoist room over its winze, the refuge, the flooded sump (off the cavern / a lower drift), a collapsed drift;
+  - worked-out stopes.
+
+  At least 4 optional kinds per plan. Rooms and dead ends have one opening and never open room to room.
+- **Fill**: the cavern grows into spare rock first, then 1–2 stopes, then the other chambers, until 700 m². In the real level this
+  leaves 579–618 m² free after props over 8 seeds (the floor is 560).
+- **Drill rig**: placed from `minesModelSize('drillRig')` (registry dims × `MINES_FIT`; lane PROPS sets the drill's fit). The dress
+  collider, the heading size and the instance scale all read it. The rig parks centred in the heading with its boom (model −x) to
+  the face. Tests cover fits 1 / 1.5 / 2 and a 7 × 3.0 × 2.4 m envelope.
+- **Variety** over 16 fixture seeds:
+  - 16/16 distinct graphs, 13 haulage courses, 3 course lengths;
+  - 5 cavern places, 3 adit kinds, 6 loop combinations, 16 optional-room sets;
+  - cavern 150–336 m².
+
+  Over 8 real-level seeds the graphs are all distinct. Plan time ~5 ms median; real-level generation median 824 ms (budget 1200).
+- **Limits:**
+  - the cavern lands in the middle third laterally on about 60 % of seeds: it is big;
+  - one or two worked-out stopes appear on almost every seed: they are the area fill;
+  - all spaces are axis-aligned rectangles: no curved or diagonal drifts.
+
 ## Gas: two approaches, no deadlock
 - **Depth gas** (`ReactorAir`, a pure function of height): three zones.
   - Zone ids are 0-based: tiers 1–2, tiers 3–4, the core floor.

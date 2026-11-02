@@ -53,6 +53,8 @@ describe('Reactor mines complex — in the real level (lane MINES)', () => {
       expect(c!.rooms.length).toBeGreaterThanOrEqual(10);
       const ids0 = new Set(c!.areas), inner = L.doors.filter(d => ids0.has(d.a) && ids0.has(d.b));
       expect(inner.length, `seed ${seed} loop`).toBeGreaterThanOrEqual(c!.areas.length);
+      // the generator stope is never a cul-de-sac: two openings into the workings (the haulage + a manway / return airway)
+      expect(inner.filter(d => d.a === g1.area || d.b === g1.area).length, `seed ${seed} cavern ways in`).toBeGreaterThanOrEqual(2);
       const g = L.levels[2].grid, ids = new Set(c!.areas);
       let walk = 0, free = 0;
       for (let i = 0; i < g.cells.length; i++) if (ids.has(g.area[i]) && g.cells[i] === FLOOR) { walk++; if (!g.blocked[i] && g.rampIdx[i] < 0) free++; }
