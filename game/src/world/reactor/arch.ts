@@ -10,7 +10,8 @@
 //     frames, cable runs, tier bands + stencilled labels, wall pilasters, lamps, rusted railings (the collision rails, ownsRail) —
 //     with the lead's Meshy models swapped in where loaded (archAssets.ts registry).
 //  3. SIGHT: `pitMask` (cells inside the pit outline) is the level culler's ATRIUM mask (world/levelCulling.ts): every tier stays
-//     visible through the open pit while closed rooms behind the rock cull.
+//     visible through the open pit while closed rooms behind the rock cull. Task studio-reactor-submit-roof-fog-20261102 (lane CPU):
+//     + the culler's slab / storey OCCLUSION (the mall's rules), with `occlusionSee()` (the vessel's undrawn column) see-through.
 //  4. VISUALS: `visuals` implements ReactorVisuals (archVisuals.ts); the builder registers it (registerReactorArchVisuals).
 
 import * as THREE from 'three';
@@ -204,6 +205,22 @@ export class ReactorArch {
   meshName(key: string): string | undefined {
     if (key === CORE_HIDDEN || key === CORE_GOOP) return `reactor-arch-${key.slice(8)}`; // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? `reactor-arch-${key.slice(8)}` : undefined;
+  }
+
+  /**
+   * Task studio-reactor-submit-roof-fog-20261102 (lane CPU): rects the level culler's slab / storey OCCLUSION must treat as open
+   * (world/levelCulling.ts `slabs.see`). Its rules hold where the builder draws a face on every boundary between free space and a
+   * closed grid column; the vessel's column is the one closed column it does NOT draw (remapFaces / floorKey hide it: the hero model
+   * stands there instead, rounder than its cell footprint) — its bounding rect (every vessel cell) is see-through. Empty without one.
+   */
+  occlusionSee(): {x0: number; z0: number; x1: number; z1: number}[] {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (let i = 0; i < this.coreKinds.length; i++) {
+      if (this.coreKinds[i] !== CORE_CELL.vessel) continue;
+      const cx = i % this.W, cy = (i - cx) / this.W;
+      x0 = Math.min(x0, cx * CELL); x1 = Math.max(x1, (cx + 1) * CELL); z0 = Math.min(z0, cy * CELL); z1 = Math.max(z1, (cy + 1) * CELL);
+    }
+    return Number.isFinite(x0) ? [{x0, z0, x1, z1}] : [];
   }
 
   /** Task reactor-expansion-20261101 (lane CORE): the core-floor cell kind at a world point (0 = none). */

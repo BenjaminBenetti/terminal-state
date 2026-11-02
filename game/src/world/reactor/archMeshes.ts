@@ -1,6 +1,6 @@
 // Task reactor-build-20261101 (lane ARCH): the Reactor kit plan (archKit.ts) -> render objects. Unit geometries are built once per
-// world; every (part, depth band) becomes ONE InstancedMesh tagged with the tiers that see it (userData.levels: the level culler
-// draws it when one of them is current / seen through the pit), unique pieces one merged mesh per material, delivered models one
+// world; every part becomes ONE InstancedMesh (task studio-reactor-submit, lane CPU: was one per (part, depth band)) tagged with the
+// tiers that see it (userData.levels: the level culler draws it when one of them is current / seen through the pit), unique pieces one merged mesh per material, delivered models one
 // InstancedMesh per (model mesh, band) carrying the Meshy materials unchanged. Lamp bulbs / lens glows are one InstancedMesh per
 // tier (its material = that tier's power), fan rotors one InstancedMesh (spun by the visuals), panel lamps instance colours.
 
@@ -114,27 +114,29 @@ export function buildKitMeshes(group: THREE.Group, plan: KitPlan, mat: (k: Exclu
     const p = (stats.byPart[partKey] ??= {instances: 0, meshes: 0, triangles: 0});
     p.instances += im.count; p.meshes++; p.triangles += t;
   };
-  // --- instanced parts, chunked per band
+  // --- instanced parts: ONE InstancedMesh per part (task studio-reactor-submit-roof-fog-20261102, lane CPU — it was one per (part, depth
+  // band): ~19 parts x 6 bands, and from the rim / any deck nearly every band of every part is in view, so each band cost its own draw
+  // in the scene AND the flashlight's shadow pass for the same instances, materials and transforms. One mesh per part draws exactly the
+  // same instances (GPU: ~120 k procedural kit triangles at most, ~4 ms GPU headroom), tagged with every band's levels. Lane CPU's
+  // census over 77 poses (game/tests/reactor-cpu-submit.test.ts): -20 % submitted draws; the rim / deck views -10..-17 %.)
   const slots = new Map<string, InstanceSlot[]>();
   for (const [key, part] of plan.parts) {
-    const byBand = new Map<number, number[]>();
-    part.list.forEach((inst, i) => { let l = byBand.get(inst.band); if (!l) byBand.set(inst.band, (l = [])); l.push(i); });
+    if (!part.list.length) continue;
     const per: InstanceSlot[] = new Array(part.list.length);
     const material = part.mat === 'marker' ? null : mat(part.mat);
     if (!material) continue;
     const colored = part.list.some(x => x.color !== undefined);
     const c = new THREE.Color();
-    for (const [band, idx] of byBand) {
-      const im = new THREE.InstancedMesh(geoOf(part.geo), material, idx.length);
-      im.name = `reactor-${part.geo}-${part.mat}-b${band}`;
-      idx.forEach((i, k) => {
-        const inst = part.list[i];
-        im.setMatrixAt(k, inst.m);
-        if (colored) im.setColorAt(k, c.setHex(inst.color ?? 0xffffff));
-        per[i] = {mesh: im, index: k, base: inst.m};
-      });
-      addIM(im, key, [band]);
-    }
+    const im = new THREE.InstancedMesh(geoOf(part.geo), material, part.list.length);
+    im.name = `reactor-${part.geo}-${part.mat}`;
+    const bands = new Set<number>();
+    part.list.forEach((inst, k) => {
+      im.setMatrixAt(k, inst.m);
+      if (colored) im.setColorAt(k, c.setHex(inst.color ?? 0xffffff));
+      per[k] = {mesh: im, index: k, base: inst.m};
+      bands.add(inst.band);
+    });
+    addIM(im, key, bands);
     slots.set(key, per);
   }
   // --- merged unique pieces
