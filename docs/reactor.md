@@ -85,22 +85,39 @@ and zone 2 in the **waste repository** (tier 4). The host is `game/src/gen/react
   - the complex is substantial: at least 6 areas and at least 500 m² walkable.
 
 ### The bunker — "Shelter 7" (zone 0, tier 1; lane BUNKER)
-`complex/bunker.ts` (carver), `bunkerPlan.ts` (the program in a wall-local frame), `bunkerDress.ts` (dress hook), `bunkerPurposes.ts`
-(its own room purposes), `bunkerKinds.ts` (hero prop kinds), `world/reactor/bunkerModels.ts` (their instanced models).
-- **Program** (15–16 spaces, ~1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
+`complex/bunker.ts` (carver), `bunkerPlan.ts` (the seeded room graph in a wall-local frame), `bunkerGrow.ts` (its O(1) occupancy),
+`bunkerDress.ts` (dress hook), `bunkerPurposes.ts` (its own room purposes), `bunkerKinds.ts` (hero prop kinds),
+`world/reactor/bunkerModels.ts` (their instanced models).
+- **Program** (15–22 spaces, ~850–1000 m² walkable, rooms 3.2–4.0 m clear, the hall up to `ceilMax`):
   - the **blast-door lock** behind the entrance (heavy hazard-striped frame, "SHELTER 7 · CIVIL DEFENCE" plate on the gallery side);
   - a 1 m **bulkhead** holding the round **blast door** (`REACTOR_X_KIT.blastDoor`, its leaf standing open; a 1.5 m lane over a
     0.84 m threshold, three 0.28 m risers each side);
-  - **decontamination**, the **guard post** (doors into the lock and the muster corridor: a level way round the threshold);
-  - the **muster corridor** across the bunker, two **spine corridors** to the **generator hall** (two ways in), the **mess hall**
-    between them (opening onto both, sometimes the muster corridor too);
-  - side rooms by size: **dormitories** (bunk rows, footlockers, lockers), air **filtration plant**, **infirmary**, **radio room**
-    (console), **latrines**, stores, workshop, warden's office, ration store, locker room;
-  - off the hall: the **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition cabinets, crates).
-- **The generator**: mid-hall, long axis along the hall, the use point beside the end facing the switch-room side; a grated cable
-  trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund, a second row of fixtures.
-- Seeded variation: the blast door's facing (its leaf in the lock or the decon), the guard post side, room widths / row splits,
-  hall depth, which room takes which slot, door positions, the armoury side, the muster-to-mess opening.
+  - **decontamination**, the **guard post** (doors into the lock and onto the clean side, the muster corridor or the decon: a level
+    way round the threshold that the generator cable takes);
+  - the **muster corridor**, more corridors (named by their rooms: quarters / plant / operations corridor, service passage), the
+    **mess hall**, **dormitories** (bunk rows, footlockers, lockers), **latrines**, air **filtration plant**, **infirmary**, **radio
+    room** (console), the **generator hall** with its **switch room** and the dead-end **armoury** (the reward: gun lockers, ammunition
+    cabinets, crates; off the guard post, warden's office, hall or a corridor); optional warden's office, ration store, shelter
+    stores, workshop, dormitory B, locker room; spare storerooms.
+- **The generator**: mid-hall along the hall's long axis, the use point beside the end facing the switch room (when it opens off a
+  short wall); a grated cable trench to the switchboard panels on that wall, a hazard outline, two diesel day tanks on their bund
+  (scanned along the long walls), a second row of fixtures. 'GENERATOR HALL' plates in every corridor on the way, arrows to the exit.
+- **Seeded room graph** (task reactor-playtest-round2-20261102, user: "much to normal … it should be random! with logical rooms
+  flowing in to one another"). Per seed:
+  - the entry: the door's facing (lock / decon), lock width, decon depth, guard side / width and its clean-side door;
+  - the muster corridor: across behind the entry group, straight in, or beside the decon;
+  - 1–3 more corridors (T branches, L turns, straight runs, sometimes through the mess hall) where the rock can hold rooms;
+  - the rooms grown onto that skeleton by **function**: each room opens only off the rooms it belongs with, and a corridor takes
+    the wing (quarters / plant / operations) of its first room. Candidates are scored for snug packing, no thin rock slivers, wing
+    affinity and seeded jitter. The optional rooms are a seeded subset;
+  - rooms grow into the free rock beside them, then seeded loop doors join corridors / suites that share a wall.
+- **Guarantees**: the generator hall always keeps **two independent ways in** from the muster corridor. Every door is on a shared
+  one-cell wall. The switch room opens only onto the hall. Dormitories never open onto plant rooms. A failed attempt retries on the
+  next rng fork (10 at most; first try ~75 %); plan + carve take ~8 ms.
+- **Measured** (`tests/reactor-x-bunker-carve.test.ts`, 16 seeds on one slot): 16 distinct room graphs (WL hashes) and 16 distinct
+  floor plans up to translation. Both muster kinds, both decon exits and both guard links occur, with 3+ corridor counts / cycle
+  ranks / dead-end counts, 4+ hall positions, both hall axes and 8+ optional-room sets. The real level
+  (`reactor-x-bunker-level.test.ts`) gives 12 seeds, 12 different shelters, all valid.
 
 ### The old mines — "No. 2 workings" (zone 1, tier 2; lane MINES, round 2: a seeded drift / room graph)
 `complex/minesPlan.ts` (the plan), `mines.ts` (carver), `minesDress.ts` (dress hook, rail line), `world/reactor/minesVisuals.ts`.

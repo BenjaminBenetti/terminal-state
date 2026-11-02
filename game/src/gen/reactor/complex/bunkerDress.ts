@@ -10,7 +10,10 @@
 //    the dead-end reward), the RADIO CONSOLE, the AIR FILTRATION UNITS;
 //  - the GENERATOR HALL: switchboard panels where the cable trench meets the wall, two diesel day tanks on their bund, the hazard-striped
 //    skid outline, a second row of fixtures, its plates;
-//  - ventilation ducts under the corridor ceilings, door plates in the bunker's own words, wayfinding in the muster corridor.
+//  - ventilation ducts under the corridor ceilings, door plates in the bunker's own words, 'GENERATOR HALL' wayfinding in every
+//    corridor on the way there.
+// (task reactor-playtest-round2-20261102, lane BUNKER: the rooms come from the SEEDED room graph of ./bunkerPlan.ts — the hall lies
+// along local u or v, any corridor may carry the route; nothing here assumes the old fixed band / spine plan.)
 // Every storage placed opens (footlockers, lockers, cabinets, crates, gun lockers: existing openables / holders, loot by the room's
 // purpose); loose things move (folding chairs, extinguishers); anchored plant / bunks / the console / the door are classified
 // (bunkerKinds.ts, docs/prop-affordances.md). Machinery boxes / trims are layout.decor (existing shape materials) over collision-only
@@ -469,12 +472,10 @@ function mess(D: Dx, a: Area): void {
   const stepL = 3.0, stepC = 3.2;
   const nL = Math.max(1, Math.floor(((horiz ? aw : ah) - 2.4) / stepL) + 1), nC = Math.max(1, Math.floor(((horiz ? ah : aw) - 2.6) / stepC) + 1);
   let n = 0;
-  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
-    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
-    const x = Math.round((ax0 + (horiz ? l : c)) * 4) / 4, z = Math.round((az0 + (horiz ? c : l)) * 4) / 4;
-    const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const put = (x: number, z: number): boolean => {
     const t = tryPlaceProp(D.ctx, a, 'table', x, z, rot);
-    if (!t) continue;
+    if (!t) return false;
     n++;
     // folding chairs at the long sides, facing the table
     for (const sgn of [-1, 1]) {
@@ -485,6 +486,20 @@ function mess(D: Dx, a: Area): void {
         tryPlaceProp(D.ctx, a, 'foldingChair', horiz ? cx + sl : cx, horiz ? cz : cz + sl, horiz ? rotFacing(0, -sgn) : rotFacing(-sgn, 0), {laneOk: true});
       }
     }
+    return true;
+  };
+  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
+    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
+    put(Math.round((ax0 + (horiz ? l : c)) * 4) / 4, Math.round((az0 + (horiz ? c : l)) * 4) / 4);
+  }
+  // (task reactor-playtest-round2-20261102: a seeded mess hall may be a through room with several doors and the dresser's stock on
+  // its walls) fewer than three tables on the even grid: a 0.5 m lattice, nearest the room's centre first
+  if (n < 3) {
+    const spots: [number, number][] = [];
+    for (let x = ax0 + 1.75; x <= ax0 + aw - 1.75 + 1e-6; x += 0.5) for (let z = az0 + 1.75; z <= az0 + ah - 1.75 + 1e-6; z += 0.5) spots.push([r3(x), r3(z)]);
+    const mx = ax0 + aw / 2, mz = az0 + ah / 2;
+    spots.sort((p, q) => Math.hypot(p[0] - mx, p[1] - mz) - Math.hypot(q[0] - mx, q[1] - mz) || p[0] - q[0] || p[1] - q[1]);
+    for (const [x, z] of spots) { if (n >= 3) break; put(x, z); }
   }
 }
 
@@ -546,59 +561,72 @@ function filtration(D: Dx, a: Area): void {
 // The generator hall
 
 function generatorHall(D: Dx): void {
-  const hall = D.area('hall');
-  if (!hall) return;
+  const hall = D.area('hall'), H = D.rec.plan.rooms.find(r => r.key === 'hall')?.r;
+  if (!hall || !H) return;
   const S = BUNKER_DRESS_STATS;
   const {plan, frame: f} = D.rec;
-  const ft = plan.gen.foot, end = plan.gen.end;
-  const uEnd = end === 'hi' ? ft.u + ft.w : ft.u;
-  const vMid = ft.v + ft.h / 2;
-  // the switchboard wall: the hall wall beyond the skid's panel end (local +-u)
+  // (task reactor-playtest-round2-20261102, lane BUNKER: the seeded hall lies along local u or v — everything here works in the
+  // skid's along / across frame; LA maps it back to local (u, v))
+  const ft = plan.gen.foot, end = plan.gen.end, axU = plan.gen.axis === 'u';
+  const LA = (al: number, ac: number): [number, number] => (axU ? [al, ac] : [ac, al]);
+  const boxLA = (a0: number, a1: number, c0: number, c1: number) => { const [u0, v0] = LA(a0, c0), [u1, v1] = LA(a1, c1); return D.box(u0, u1, v0, v1); };
+  const fa0 = axU ? ft.u : ft.v, faL = axU ? ft.w : ft.h, fc0 = axU ? ft.v : ft.u, fcL = axU ? ft.h : ft.w;
+  const ha0 = axU ? H.u : H.v, haL = axU ? H.w : H.h, hc0 = axU ? H.v : H.u;
+  const dirA = axU ? f.du : f.dv, dirC = axU ? f.dv : f.du;
+  const aEnd = end === 'hi' ? fa0 + faL : fa0;
+  const cMid = fc0 + fcL / 2;
+  // the switchboard wall: the hall wall beyond the skid's panel end
   const sgn = end === 'hi' ? 1 : -1;
-  const sbSide = sideOfDir(sgn * f.du[0], sgn * f.du[1]);
-  const uWall = end === 'hi' ? plan.dims.uE + plan.dims.SW : plan.dims.uW; // the hall's wall line in that direction
+  const sbSide = sideOfDir(sgn * dirA[0], sgn * dirA[1]);
+  const aWall = end === 'hi' ? ha0 + haL : ha0; // the hall's wall line in that direction
   // cable trench: a grated channel from the skid's panel end to the switchboard wall (floor finish, 0.6 m wide)
   {
-    const a0 = Math.min(uEnd, uWall), a1 = Math.max(uEnd, uWall);
-    D.decor('grille', D.box(a0, a1, vMid - 0.6, vMid + 0.6), 0, 0.014);
-    D.decor('steelDark', D.box(a0, a1, vMid - 0.7, vMid - 0.6), 0, 0.018);
-    D.decor('steelDark', D.box(a0, a1, vMid + 0.6, vMid + 0.7), 0, 0.018);
+    const a0 = Math.min(aEnd, aWall), a1 = Math.max(aEnd, aWall);
+    D.decor('grille', boxLA(a0, a1, cMid - 0.6, cMid + 0.6), 0, 0.014);
+    D.decor('steelDark', boxLA(a0, a1, cMid - 0.7, cMid - 0.6), 0, 0.018);
+    D.decor('steelDark', boxLA(a0, a1, cMid + 0.6, cMid + 0.7), 0, 0.018);
   }
   // hazard outline round the skid (0.6 m out), amber
   {
     const m = 1.2, w = 0.2;
-    const u0 = ft.u - m, u1 = ft.u + ft.w + m, v0 = ft.v - m, v1 = ft.v + ft.h + m;
-    for (const b of [D.box(u0, u1, v0, v0 + w), D.box(u0, u1, v1 - w, v1), D.box(u0, u0 + w, v0, v1), D.box(u1 - w, u1, v0, v1)]) D.decor('plasticSeat', b, 0, 0.008);
+    const a0 = fa0 - m, a1 = fa0 + faL + m, c0 = fc0 - m, c1 = fc0 + fcL + m;
+    for (const b of [boxLA(a0, a1, c0, c0 + w), boxLA(a0, a1, c1 - w, c1), boxLA(a0, a0 + w, c0, c1), boxLA(a1 - w, a1, c0, c1)]) D.decor('plasticSeat', b, 0, 0.008);
   }
   // the switchboard: a row of panels on that wall, centred on the trench
   {
-    const [tx, tz] = D.W(uWall, vMid);
+    const [tx, tz] = D.W(...LA(aWall, cMid));
     const t = sbSide === 'N' || sbSide === 'S' ? tx : tz;
     let n = rowAlongWall(D.ctx, hall, sbSide, 'electricalPanel', {from: t - 3.4, to: t + 3.4, front: 1.0, max: 4}).length;
-    for (const sd of [sbSide, sideOfDir(f.dv[0], f.dv[1])]) while (n < 2 && scanWall(D, hall, 'electricalPanel', [sd], 1.0, t)) n++;
+    for (const sd of [sbSide, sideOfDir(dirC[0], dirC[1]), sideOfDir(-dirC[0], -dirC[1])]) while (n < 2 && scanWall(D, hall, 'electricalPanel', [sd], 1.0, t)) n++;
     S.panels = n;
   }
-  // two diesel day tanks on their bund against the back wall (local +v), clear of the skid
+  // two diesel day tanks on their bund against a long wall (the one with fewer doors first; then the other, then the short wall facing
+  // the switchboard), clear of the skid: every 0.25 m along the wall, nearest ~4.2 m off the skid's centre first (the seeded halls
+  // are narrower / shorter than the old fixed one: the station dresser's stock may hold any fixed spot)
   {
-    const back = sideOfDir(f.dv[0], f.dv[1]);
-    const [lo, hi] = wallRange(hall, back);
-    const [gx, gz] = D.W(ft.u + ft.w / 2, vMid);
-    const tc = back === 'N' || back === 'S' ? gx : gz;
-    for (const off of D.rng.shuffle([-4.2, 4.2, -7.0, 7.0])) {
+    const longs = [sideOfDir(dirC[0], dirC[1]), sideOfDir(-dirC[0], -dirC[1])].sort((p, q) => doorCount(D, hall, p) - doorCount(D, hall, q));
+    const [gx, gz] = D.W(...LA(fa0 + faL / 2, cMid));
+    for (const back of [...longs, OPP[sbSide]]) {
       if (S.tanks >= 2) break;
-      const t = tc + off;
-      if (t - 1.45 < lo + 0.4 || t + 1.45 > hi - 0.4) continue;
-      const b = wallBox(hall, back, t - 1.45, t + 1.45, 0.05, 1.35);
-      if (!freeFor(D, hall, b) || propBlocksDoorway(D.layout, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2, D.base, 1.8)) continue;
-      dayTank(D, hall, back, t);
-      S.tanks++;
+      const [lo, hi] = wallRange(hall, back);
+      const tc = back === 'N' || back === 'S' ? gx : gz;
+      const ts: number[] = [];
+      for (let t = lo + 1.85; t <= hi - 1.85 + 1e-6; t += 0.25) ts.push(r3(t));
+      ts.sort((p, q) => Math.abs(Math.abs(p - tc) - 4.2) - Math.abs(Math.abs(q - tc) - 4.2) || p - q);
+      for (const t of ts) {
+        if (S.tanks >= 2) break;
+        const b = wallBox(hall, back, t - 1.45, t + 1.45, 0.05, 1.35);
+        if (!freeFor(D, hall, b) || propBlocksDoorway(D.layout, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2, D.base, 1.8)) continue;
+        dayTank(D, hall, back, t);
+        S.tanks++;
+      }
     }
   }
   // a second row of fixtures (the dresser hung one down the middle)
   {
     const own = D.layout.lights.filter(l => l.area === hall.id);
-    const [ax, az] = D.W(ft.u + ft.w / 2, ft.v + ft.h / 2);
-    const [bx, bz] = D.W(ft.u + ft.w / 2, plan.dims.vH + 3);
+    const [ax, az] = D.W(...LA(fa0 + faL / 2, cMid));
+    const [bx, bz] = D.W(...LA(fa0 + faL / 2, hc0 + 3));
     const dx = bx - ax, dz = bz - az;
     const rel = hall.ceil - D.base, y = r3(D.base + (rel > 4.65 ? 4.5 : rel - 0.02));
     for (const l of own.slice(0, 3)) {
@@ -646,13 +674,15 @@ function ceilingDuct(D: Dx, a: Area, side: Side, w = 0.45): void {
   }
 }
 
+/** A duct along one long wall of every corridor (the one with fewer doors; task reactor-playtest-round2-20261102: the seeded corridors). */
 function corridorDucts(D: Dx): void {
-  const f = D.rec.frame;
-  const muster = D.area('muster');
-  if (muster) ceilingDuct(D, muster, sideOfDir(-f.dv[0], -f.dv[1]));
-  for (const key of ['spineW', 'spineE']) {
-    const a = D.area(key);
-    if (a) ceilingDuct(D, a, sideOfDir((key === 'spineW' ? -1 : 1) * f.du[0], (key === 'spineW' ? -1 : 1) * f.du[1]));
+  for (const p of D.rec.plan.rooms) {
+    if (p.role !== 'corridor') continue;
+    const a = D.area(p.key);
+    if (!a) continue;
+    const longs: Side[] = a.w >= a.h ? ['N', 'S'] : ['W', 'E'];
+    longs.sort((s, t) => doorCount(D, a, s) - doorCount(D, a, t));
+    ceilingDuct(D, a, longs[0]);
   }
 }
 
@@ -726,20 +756,46 @@ function bunkerSigns(D: Dx): void {
       wallSign(D, lock, side, side === 'N' || side === 'S' ? x : z, Math.min(lock.ceil - D.base - 0.35, 3.55), {kind: 'info', text: 'DECONTAMINATION · SHELTER 7', w: 2.4});
     }
   }
-  // the muster corridor: the way to the generator hall (both spines lead there) on the wall facing the decontamination door, the arrow
-  // toward the nearer spine mouth (for a reader facing the wall, i.e. looking along +v: right = (-fwd.z, fwd.x))
-  {
-    const muster = D.area('muster'), decon = D.area('decon');
-    const d = muster && decon ? D.doors(muster).find(q => q.a === decon.id || q.b === decon.id) : undefined;
-    if (muster && d) {
-      const side = sideOfDir(f.dv[0], f.dv[1]);
-      const cx = (d.x + d.w / 2) * CELL, cz = (d.y + d.h / 2) * CELL;
-      const {uW, uE, SW, vS} = rec.plan.dims;
-      const mouths = [D.W(uW + SW / 2, vS), D.W(uE + SW / 2, vS)];
-      const m = mouths.reduce((p, q) => (Math.hypot(q[0] - cx, q[1] - cz) < Math.hypot(p[0] - cx, p[1] - cz) ? q : p));
-      const right = [-f.dv[1], f.dv[0]];
-      const arrow = (m[0] - cx) * right[0] + (m[1] - cz) * right[1] > 0 ? 'right' : 'left';
-      wallSign(D, muster, side, side === 'N' || side === 'S' ? cx : cz, 2.25, {kind: 'info', text: 'GENERATOR HALL', w: 1.9, arrow});
+  wayfinding(D);
+}
+
+/**
+ * (task reactor-playtest-round2-20261102, lane BUNKER) The way to the generator hall through the SEEDED room graph: the shortest door
+ * path from the decontamination room to the hall; in every corridor on it a 'GENERATOR HALL' plate on the wall facing the door you
+ * came in by, its arrow toward the door you leave by (for a reader facing the wall: right = (-fwd.z, fwd.x)).
+ */
+function wayfinding(D: Dx): void {
+  const {layout, rec} = D;
+  const start = rec.area.decon, goal = rec.area.hall;
+  if (start === undefined || goal === undefined) return;
+  const mine = new Set(Object.values(rec.area));
+  const prev = new Map<number, Door | null>([[start, null]]), q = [start];
+  for (let h = 0; h < q.length && !prev.has(goal); h++) {
+    for (const d of D.doors(layout.areas[q[h]])) {
+      const o = d.a === q[h] ? d.b : d.a;
+      if (!mine.has(o) || prev.has(o) || o === rec.area.lock) continue;
+      prev.set(o, d);
+      q.push(o);
     }
+  }
+  if (!prev.has(goal)) return;
+  const path: {area: number; via: Door}[] = [];
+  for (let x = goal; prev.get(x);) { const d = prev.get(x)!; path.unshift({area: x, via: d}); x = d.a === x ? d.b : d.a; }
+  const corridors = new Set(rec.plan.rooms.filter(p => p.role === 'corridor').map(p => rec.area[p.key]));
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = layout.areas[path[i].area];
+    if (!corridors.has(a.id)) continue;
+    const din = path[i].via, dout = path[i + 1].via;
+    const side = OPP[doorSide(din, a)];
+    const alongX = side === 'N' || side === 'S';
+    const cx = (din.x + din.w / 2) * CELL, cz = (din.y + din.h / 2) * CELL;
+    const ox = (dout.x + dout.w / 2) * CELL, oz = (dout.y + dout.h / 2) * CELL;
+    const fwd = NORMAL[side], right = [-fwd[1], fwd[0]];
+    const sx = alongX ? cx : face(a, side), sz = alongX ? face(a, side) : cz;
+    const proj = (ox - sx) * right[0] + (oz - sz) * right[1];
+    const arrow = Math.abs(proj) < 1.2 ? 'up' : proj > 0 ? 'right' : 'left';
+    const t = alongX ? cx : cz, toward = Math.sign(proj) * (alongX ? right[0] : right[1]);
+    // that wall spot taken (a door opposite): 1.6 m along the wall toward the way out
+    for (const dt of [0, 1.6 * (toward || 1), -1.6 * (toward || 1)]) if (wallSign(D, a, side, t + dt, 2.25, {kind: 'info', text: 'GENERATOR HALL', w: 1.9, arrow})) break;
   }
 }
