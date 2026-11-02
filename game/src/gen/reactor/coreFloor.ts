@@ -100,7 +100,8 @@ export interface CoreFloorCarve {
   cz: number;
   base: number;
   poolR1: number;
-  bridges: {angle: number; width: number; along0: number; along1: number}[];
+  /** Bridges: axis angle, clear width, the walkable envelope's half width (the drawn railings), the goop span along the axis. */
+  bridges: {angle: number; width: number; half: number; along0: number; along1: number}[];
   /** rc.towers indices whose feet stand in the goop. */
   towers: number[];
   loops: CoreLoopPlan[];
@@ -289,7 +290,14 @@ function carveCore(o: CoreFloorInput): CoreFloorCarve | null {
     pool.push(i);
   }
   const towersIn = o.towers.map((t, ti) => ({t, ti})).filter(({ti}) => pool.some(i => tower[i] === ti)).map(q => q.ti);
-  const bridges = chosen.map(di => ({angle: dirs[di].a, width: F.bridgeW, along0: dirs[di].along0, along1: dirs[di].along1})).sort((p, q) => p.angle - q.angle);
+  // each bridge's walkable envelope: its strip cells' farthest edge from the axis (axis-aligned 1.5 m, diagonal ~1.6 m)
+  const envelope = (di: number): number => {
+    const ux = Math.cos(dirs[di].a), uz = Math.sin(dirs[di].a), corner = (CELL / 2) * (Math.abs(ux) + Math.abs(uz));
+    let e = 0;
+    for (const i of dirs[di].cells) { const x = i % W, y = (i - x) / W; e = Math.max(e, Math.abs(-((x + 0.5) * CELL - cx) * uz + ((y + 0.5) * CELL - cz) * ux) + corner); }
+    return r2(e);
+  };
+  const bridges = chosen.map(di => ({angle: dirs[di].a, width: F.bridgeW, half: envelope(di), along0: dirs[di].along0, along1: dirs[di].along1})).sort((p, q) => p.angle - q.angle);
   lap('loops');
   const loops = planLoops(cx, cz, poolR1, bridges.map(b => b.angle), o.towers.map(t => ({x0: t.x * CELL, z0: t.y * CELL, x1: (t.x + t.w) * CELL, z1: (t.y + t.h) * CELL})),
     o.overhead.map(d => ({...d, y: d.y - o.base})));
@@ -568,7 +576,7 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
   // the tower-foot notches keep their (straight) drawn railings; the vessel's own derived rails (its raised top) are never drawn
   let ringRail: number = F.ringR1, outerRail = cf.poolR1;
   let ringMax = 0, outerMin = Infinity;
-  const bridgeHalf = cf.bridges.map(b => b.width / 2);
+  const bridgeHalf = cf.bridges.map(b => b.half);
   const near = (r: number, R: number) => Math.abs(r - R) < 0.75;
   for (const rl of layout.rails) {
     if ((rl.level ?? 0) !== CORE_LEVEL) continue;
@@ -584,9 +592,7 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
     const onBridge = cf.bridges.some((b, bi) => {
       const ux = Math.cos(b.angle), uz = Math.sin(b.angle), px = mx - cf.cx, pz = mz - cf.cz;
       const along = px * ux + pz * uz, perp = Math.abs(-px * uz + pz * ux);
-      if (!(along > F.ringR1 - 0.6 && along < b.along1 + 0.8 && perp < b.width / 2 + 0.9)) return false;
-      for (const [ex, ez] of [[rl.x0, rl.z0], [rl.x1, rl.z1]]) bridgeHalf[bi] = Math.max(bridgeHalf[bi], Math.abs(-(ex - cf.cx) * uz + (ez - cf.cz) * ux));
-      return true;
+      return along > F.ringR1 - 0.6 && along < b.along1 + 0.8 && perp < bridgeHalf[bi] + 0.3;
     });
     if (onBridge) { (rl as {hidden?: boolean}).hidden = true; continue; }
     if (near(r, F.ringR1)) { (rl as {hidden?: boolean}).hidden = true; ringMax = Math.max(ringMax, rMax); continue; }
@@ -609,15 +615,18 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
   }
   // the mounted post lamps of the bridges and the service ring (real fixtures: the core floor's own light besides the glow)
   const PL = CORE_POST_LAMPS;
-  const post = (foot: {x: number; z: number}, nx: number, nz: number, emergency: boolean) => {
+  const post = (foot: {x: number; z: number}, nx: number, nz: number, emergency: boolean): boolean => {
     const hx = foot.x + nx * PL.arm, hz = foot.z + nz * PL.arm;
-    const [ix, iz] = g.cellOf(hx, hz);
-    if (!g.inBounds(ix, iz) || g.cells[g.idx(ix, iz)] !== FLOOR || g.blocked[g.idx(ix, iz)]) return;
+    const [ix, iz] = g.cellOf(hx, hz), [fx, fz] = g.cellOf(foot.x - nx * 0.3, foot.z - nz * 0.3);
+    const deck = (a: number, b: number) => g.inBounds(a, b) && g.cells[g.idx(a, b)] === FLOOR && !g.blocked[g.idx(a, b)];
+    // the head over a walkway; the foot on the rail line with the goop just beyond it
+    if (!deck(ix, iz) || deck(fx, fz)) return false;
     const mount: LightMount = {kind: 'post', x: r3(foot.x), y: base, z: r3(foot.z), nx: r3(nx), nz: r3(nz)};
     layout.lights.push({
       x: r3(hx), y: r3(base + PL.headY), z: r3(hz), rot: Math.abs(nx) > Math.abs(nz) ? Math.PI / 2 : 0, area: g.area[g.idx(ix, iz)], broken: false, flicker: false,
       warm: true, power: emergency ? PL.emergency : PL.powered, dying: !emergency, level: CORE_LEVEL, mount,
     });
+    return true;
   };
   cf.bridges.forEach((b, bi) => {
     const ux = Math.cos(b.angle), uz = Math.sin(b.angle), nx = -uz, nz = ux, half = bridgeHalf[bi];
@@ -631,11 +640,15 @@ export function coreFloorRecord(layout: StationLayout, cf: CoreFloorCarve, fin: 
     const dAng = (a: number, b: number) => Math.abs(((a - b + 3 * Math.PI) % (2 * Math.PI)) - Math.PI);
     const bs = cf.bridges.map(b => b.angle).sort((p, q) => p - q);
     const mids = bs.length ? bs.map((a, i) => (a + (i + 1 < bs.length ? bs[i + 1] : bs[0] + 2 * Math.PI)) / 2) : [0, Math.PI / 2, Math.PI, 1.5 * Math.PI];
+    const offs = [0];
+    for (let o = 0.07; o < 0.7; o += 0.07) offs.push(o, -o);
     mids.forEach((m, k) => {
-      const a = [0, 0.14, -0.14, 0.28, -0.28, 0.42, -0.42].map(o => m + o).find(c => legs.every(l => dAng(c, l) > 0.2) && cf.bridges.every(b => dAng(c, b.angle) > 0.3));
-      if (a === undefined) return;
-      const ux = Math.cos(a), uz = Math.sin(a), r = Math.max(F.ringR1, ringRail);
-      post({x: cf.cx + ux * r, z: cf.cz + uz * r}, -ux, -uz, k % 2 === 0);
+      const r = Math.max(F.ringR1, ringRail);
+      for (const o of offs) {
+        const a = m + o, ux = Math.cos(a), uz = Math.sin(a);
+        if (!legs.every(l => dAng(a, l) > 0.2) || !cf.bridges.every(b => dAng(a, b.angle) > 0.3)) continue;
+        if (post({x: cf.cx + ux * r, z: cf.cz + uz * r}, -ux, -uz, k % 2 === 0)) break;
+      }
     });
   }
   const axis = (b: CoreFloorCarve['bridges'][number], bi: number) => {

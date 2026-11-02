@@ -73,8 +73,9 @@ export const CORE_HERO = {
   headerY: 3.7, headerOut: 0.55, headerD: 0.7, risers: 18, riserTop: 22,
   /** The circular service gantry round the vessel (radii, height above the deck) and the CRDM platform. */
   gantryR0: 7.0, gantryR1: 8.3, gantryY: 6.9, crdmY: 10.15, crdmR: 3.3, crdmTop: 12.6,
-  /** Pump nozzle height above its base, flywheel radius. */
-  rcpNozzle: 1.0, wheelR: 0.7,
+  /** Measured on the lead's models (probe 2026-11-02): the vertical pump's nozzle axis above its base (nozzle tips at +-2.13 along X),
+   *  its motor top; the steam generator's shell radius at the hot-leg height; the turbine generator's housing top over its exciter end. */
+  rcpNozzle: 1.25, rcpTop: 6.9, wheelR: 0.7, sgShellR: 2.05, turbineFanX: 4.0, turbineTop: 2.68,
 } as const;
 
 const layouts = new WeakMap<KitPlan, CoreHeroLayout>();
@@ -213,7 +214,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       }
       const a = angOf(sg.x, sg.z), r = radOf(sg.x, sg.z);
       // hot leg: vessel nozzle -> the steam generator's inner side
-      const hp = [at(a, H.nozzleR, y0 + H.hotY), at(a, r - F.sgHalf + 0.15, y0 + H.hotY)];
+      const hp = [at(a, H.nozzleR, y0 + H.hotY), at(a, r - H.sgShellR + 0.15, y0 + H.hotY)];
       if (pipe(hp[0], hp[1], H.hotD, {ignore: true})) {
         out.flows.push({kind: 'hot', pts: hp, d: H.hotD});
         // a saddle hanger from the gantry ring above where it crosses it
@@ -248,12 +249,12 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
         out.flows.push({kind: 'cold', pts: cp, d: H.coldD});
         out.glasses.push({a: at(a, rr, y0 + 0.75), b: at(a, rr, y0 + 2.15), d: H.coldD});
         // the pressure gauge box on the riser (its inner face toward the ring walkway) + its lamp
-        const gb = at(a, rr - H.coldD / 2 - 0.06, y0 + 2.35), gl = at(a, rr - H.coldD / 2 - 0.15, y0 + 2.35);
+        const gb = at(a, rr - H.coldD / 2 - 0.06, y0 + 2.72), gl = at(a, rr - H.coldD / 2 - 0.15, y0 + 2.72);
         plan.box('steelDark', gb.x, gb.y, gb.z, 0.12, 0.24, 0.24, -a);
         lamp('valve', gl.x, gl.y, gl.z);
       }
       // flywheel on the motor top + its status beacon
-      const top = base + F.rcpH;
+      const top = base + H.rcpTop;
       out.wheels.push({kind: 'rcp', x: rcp.x, y: top + 0.08, z: rcp.z, ax: 0, ay: 1, az: 0, r: H.wheelR});
       plan.cyl('tube', 'steelDark', {x: rcp.x, y: top - 0.05, z: rcp.z}, {x: rcp.x, y: top + 0.22, z: rcp.z}, H.wheelR * 2.25); // guard ring
       plan.cyl('cyl', 'steelDark', {x: rcp.x, y: top + 0.22, z: rcp.z}, {x: rcp.x, y: top + 0.3, z: rcp.z}, 0.3); // beacon base on the guard's hub plate
@@ -302,7 +303,7 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       plan.cyl('cyl', 'steelDark', ml, {...ml, y: mb + 0.07}, 0.16);
       lamp('valve', ml.x, mb + 0.13, ml.z, 0.065);
       // feed risers from its branches up to the header (the outer end) — the manifold distributes the coolant
-      for (const s of [0.6, 1.4]) {
+      for (const s of [-1.5, 1.5]) {
         const rp = [at(a, r + s, mb + 2.0), at(a, r + s, y0 + H.headerY - 0.55), at(a, rH, y0 + H.headerY - 0.55)];
         if (run(rp, 0.26)) { out.flows.push({kind: 'feed', pts: rp, d: 0.26}); st.risers++; }
       }
@@ -497,8 +498,10 @@ export function planReactorCore(plan: KitPlan, info: ReactorInfo): CoreHeroLayou
       plan.cyl('cyl', 'vessel', {x: tb.x + ax * 0.2, y: y0 + 1.9, z: tb.z + az * 0.2}, {x: tb.x + ax * 4.4, y: y0 + 1.9, z: tb.z + az * 4.4}, 2.3);
       st.procedural++;
     }
-    out.wheels.push({kind: 'turbine', x: tb.x + ax * 5.12, y: y0 + 1.9, z: tb.z + az * 5.12, ax, ay: 0, az, r: 0.78});
-    plan.cyl('tube', 'steelDark', {x: tb.x + ax * 5.02, y: y0 + 1.9, z: tb.z + az * 5.02}, {x: tb.x + ax * 5.3, y: y0 + 1.9, z: tb.z + az * 5.3}, 1.9); // coupling guard
+    // the exciter's cooling fan on the generator housing top (inside its collision box: never in the walkway)
+    const fp = {x: tb.x + ax * H.turbineFanX, y: y0 + H.turbineTop, z: tb.z + az * H.turbineFanX};
+    out.wheels.push({kind: 'turbine', x: fp.x, y: fp.y + 0.1, z: fp.z, ax: 0, ay: 1, az: 0, r: 0.55});
+    plan.cyl('tube', 'steelDark', {...fp, y: fp.y - 0.02}, {...fp, y: fp.y + 0.22}, 1.25); // fan guard ring
     // its status panel on the pit wall behind it (above the casing), facing out
     const wx = tb.x - fx * 1.49, wz = tb.z - fz * 1.49;
     plan.box('machine', wx + fx * 0.08, y0 + 4.45, wz + fz * 0.08, 0.9, 0.55, 0.14, tb.yaw);
