@@ -353,3 +353,51 @@ Nothing solid may stand in walkable space except designed edges (railings on the
     on drop edges, post lamps only on railings, tower portals where a walkway crosses a face, flat pilaster straps (none across
     doorways), cables over the landing and flat on the walls.
   - Fan housings stay clear of walkways and tower legs stand in reserved 2 x 2 cells.
+
+## CPU submission (task reactor-submit-roof-fog-20261102, lane CPU)
+The user's frames were CPU-bound in render submit: 21.7 ms for 1,230 draws on the rim gallery and 15.3 ms for 1,048 draws looking
+down the pit, against about 4 ms of GPU (WebGPU). That is about 15–18 µs of CPU per draw: each draw is a three r186 render object
+(node / uniform / binding refresh plus encoded commands), in the scene pass and, for casters, again in the flashlight's shadow pass.
+The fix cuts the number of render objects. Nothing drawn changes.
+
+**Root causes** (seed 000070S; Node census on the real build path):
+- The culler knew the pit only as an atrium, so every storey seen through the pit counted as visible. From the rim gallery, about 600
+  scene draws were submitted and only about 90 owned a visible pixel (depth oracle). The rest were rooms, the three side complexes,
+  holders and dressing behind the pit's rock or under the storey slabs.
+- Holders, openables and purpose dressing were chunked in 12 m cells across all six stacked storeys. A chunk could only be culled when
+  every storey in it was hidden.
+- The enemies (3–5 skinned meshes each, in both passes) and the floor pickups were frustum-culled only. Looking down from the rim, 32
+  enemies were in the cone and 13 of them were behind rock.
+- The procedural kit was one InstancedMesh per part and depth band (about 19 parts × 6 bands). From the pit, nearly every band is in
+  view, so the same instances cost about six draws per pass.
+
+**Changes:**
+- `world/levelCulling.ts`: the mall's exact slab and same- / cross-storey occlusion now also runs on the Reactor (`world/builder.ts`).
+  The vessel's grid column, which the builder does not draw, counts as see-through (`ReactorArch.occlusionSee`).
+- `LevelCuller.track`, through the runtime `world/reactor/cpuActorCulling.ts`: enemies and pickups are decided by the same rules on
+  every update. An enemy's box is its meshes' cull spheres at the root's current transform. Ragdolls are never hidden.
+- The mall's storey-split chunks and the per-storey, culler-decided loot display now cover the Reactor too (`byStorey`).
+- `world/reactor/archMeshes.ts`: one InstancedMesh per kit part. The instances, materials and transforms are the same; no uniforms
+  were added.
+
+**Before → after** (draws per frame, scene + shadow pass; static world, holders, loot display, enemies and pickups; feature branch with
+ROOF and FOG):
+
+| Seed / pose | Before | After |
+|---|---|---|
+| 000070S rim gallery (along it) | 1,005 | 486 |
+| 000070S rim, looking down at the core | 1,032 | 614 |
+| 000070S tier-2 deck, across the pit | 956 | 561 |
+| Worst of 9 views (3 seeds) | 1,165 | 714 |
+| Sum over 77 oracle poses (decks of every tier, core ring, complex rooms) | 55,130 | 26,132 |
+
+**Evidence and limits:**
+- Correctness: on 77 poses the depth oracle finds no culled mesh visible from the eye. Nothing the new rules hide is seen by the
+  flashlight within its 30 m. None of 2,731 hidden enemy / pickup boxes owns a pixel from either view.
+- The culler costs more per moving frame: in Node on the studio pod, `culler.update` went from 0.71 ms to 1.42 ms (tracking sync
+  0.02 ms). This is part of render submit, against 400–500 fewer draws.
+- These are Node estimates of three's render lists, not native timings. No FPS is claimed.
+- Viewmodel, post quads, restart controls and map boards are not counted. Pickups use stand-in item models in Node.
+- The shadow pass still draws every caster in the torch cone.
+- `game/tests/reactor-cpu-submit.test.ts` pins the budget and the oracles; `LL_REACTOR_CPU_OUT=/tmp/x.txt` writes the numbers.
+- QA: `__LL.reactorCpu()` reports the culler's decision, and `__LL.reactorCpu({rules: false|true})` is a browser A/B switch.

@@ -28,6 +28,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {ShimContext, installCanvasShim} from './helpers/canvas2d';
 import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
 import {visibleMeshes} from './helpers/visibleMeshes';
+import {compileNodeMaterial} from './helpers/nodeCompile';
 import {LEVELS} from '../src/levels/registry';
 import {codeToSeed, mulberry32} from '../src/core/rng';
 import {CELL, FLOOR, Grid} from '../src/gen/grid';
@@ -46,7 +47,7 @@ import {MODEL_FILES} from '../src/assets/manifest';
 import {lootProfile} from '../src/items/lootTables';
 import {Inventory} from '../src/items/inventory';
 import {markShadows} from '../src/render/volumetric';
-import {setAttributeInstancing} from '../src/render/instancing';
+import {attributeInstancing, setAttributeInstancing} from '../src/render/instancing';
 import {ZombieLookLibrary} from '../src/ai/outfits';
 import {pickZombieLook} from '../src/ai/wardrobe';
 import {ZombieActor} from '../src/ai/zombieActor';
@@ -69,8 +70,8 @@ if (OUT) writeFileSync(OUT, '');
 /**
  * The budget: scene + flashlight-shadow draws per representative pose (static world + holders + loot display + enemies + pickups).
  * Measured with lane CPU's fixes on the feature branch with ROOF + FOG merged (000070S / 637474 / 218558): worst 714 (637474 mid-deck),
- * total 5,328 over the 9 views; the same harness on the branch WITHOUT them: docs/reactor.md "CPU submission" (e.g. 000070S rim gallery
- * 1,001 -> 486, rim down to the core 1,061 -> 614, mid-tier deck 954 -> 561). A budget failure means the Reactor's submitted work
+ * total 5,328 over the 9 views; the same harness on the branch WITHOUT them (docs/reactor.md "CPU submission"): worst 1,165, total 9,307
+ * (000070S rim gallery 1,005 -> 486, rim down to the core 1,032 -> 614, mid-tier deck 956 -> 561). A budget failure means the Reactor's submitted work
  * grew: measure again (LL_REACTOR_CPU_OUT) and decide consciously before raising a cap.
  */
 const BUDGET = {
@@ -425,8 +426,72 @@ describe('the REAL Reactor: render objects per representative pose (scene + flas
     } finally {
       c.untrack(g);
     }
+    // the runtime (Game's frame hook): every live enemy / pickup tracked; a ragdolled enemy released (shown, never re-tracked); a
+    // pickup taken (gone from the list) untracked and shown; teardown shows everything
+    const m2 = measure(R, keyPoses(R.layout)[0]);
+    const hiddenEnemy = R.enemies.find(z => z.root.children.length && (() => { let h = false; z.root.traverse(o => { if ((o as THREE.Mesh).isMesh && isCulled(o)) h = true; }); return h; })());
+    expect(hiddenEnemy, 'an enemy hidden behind rock from the rim gallery').toBeTruthy();
+    const tracked0 = c.trackedCount;
+    expect(tracked0).toBe(R.enemies.length + R.pickups.list.length);
+    const shown = (o: THREE.Object3D) => { let ok = true; o.traverse(x => { if ((x as THREE.Mesh).isMesh && isCulled(x)) ok = false; }); return ok; };
+    (hiddenEnemy as {ragdolled: boolean}).ragdolled = true;
+    try {
+      R.tracking.sync();
+      expect(shown(hiddenEnemy!.root)).toBe(true);
+      expect(c.trackedCount).toBe(tracked0 - 1);
+      c.update(m2.cam, true);
+      expect(shown(hiddenEnemy!.root)).toBe(true); // released: never hidden again
+    } finally {
+      (hiddenEnemy as {ragdolled: boolean}).ragdolled = false;
+    }
+    const pk = R.pickups.list.find(q => !shown(q.obj));
+    if (pk) {
+      const i = R.pickups.list.indexOf(pk);
+      (R.pickups.list as unknown as typeof pk[]).splice(i, 1);
+      R.tracking.sync();
+      expect(shown(pk.obj)).toBe(true);
+      (R.pickups.list as unknown as typeof pk[]).splice(i, 0, pk);
+    }
+    R.tracking.clear();
+    expect(c.trackedCount).toBe(0);
+    for (const z of R.enemies) expect(shown(z.root)).toBe(true);
+    done(m2);
     // a culler without slab / storey occlusion data (Subway / Office) tracks nothing
     const grid = new Grid(8, 8), lv = [{id: 0, role: 'main', grid, baseY: 0} as unknown as Level];
     expect(new LevelCuller(lv, new LevelColumns(lv), () => 0).track(g, box)).toBe(false);
+  }, 600_000);
+
+  it('one InstancedMesh per kit part: every band\'s instances, one tag set, the same program as a small instanced mesh (no new uniform buffer)', async () => {
+    const R = await realReactor(SEEDS[0]);
+    const plan = R.world.reactorArch!.plan!, kit: THREE.InstancedMesh[] = [];
+    R.world.group.traverse(o => { const m = o as THREE.InstancedMesh; if (m.isInstancedMesh && /^reactor-(box|ibeam|cyl|tube|stripe|plane|cage|bulb)-/.test(m.name) && !/-b\d+$/.test(m.name)) kit.push(m); });
+    const names = new Set(kit.map(m => m.name));
+    expect(names.size).toBe(kit.length); // one mesh per (geo, material) part
+    let inst = 0;
+    for (const [key, part] of plan.parts) {
+      if (part.mat === 'marker' || !part.list.length) continue;
+      const m = kit.find(x => x.name === `reactor-${part.geo}-${part.mat}`);
+      expect(m, key).toBeTruthy();
+      expect(m!.count, key).toBe(part.list.length);
+      inst += m!.count;
+      const want = new Set(part.list.flatMap(q => plan.bandLevels(q.band)));
+      expect(new Set(m!.userData.levels as number[]), key).toEqual(want); // tagged with every band's tiers
+    }
+    expect(inst).toBe([...plan.parts.values()].filter(p => p.mat !== 'marker').reduce((n, p) => n + p.list.length, 0));
+    // the merged mesh compiles to exactly the program a small (per-band sized) InstancedMesh of the same part does on the Reactor's
+    // attribute-instancing path: same uniform buffers / textures (WebGPU's 12-per-stage budget untouched), no per-mesh instance block
+    const was = attributeInstancing();
+    try {
+      setAttributeInstancing(true);
+      const big = [...kit].sort((a, b) => b.count - a.count)[0];
+      const a = compileNodeMaterial(new THREE.InstancedMesh(big.geometry, big.material, big.count));
+      const b = compileNodeMaterial(new THREE.InstancedMesh(big.geometry, big.material, 3));
+      expect(a.vertex).toBe(b.vertex);
+      expect(a.fragment).toBe(b.fragment);
+      expect(a.vertex).not.toMatch(/NodeBuffer_\d+/);
+      out(`kit: ${kit.length} part meshes, ${inst} instances; largest ${big.name} x ${big.count}: same program as x 3`);
+    } finally {
+      setAttributeInstancing(was);
+    }
   }, 600_000);
 });
