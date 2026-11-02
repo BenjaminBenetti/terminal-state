@@ -174,6 +174,26 @@ export function surfaceSteelMaterial(): MeshBasicNodeMaterial {
 }
 
 /**
+ * Wet cast concrete (the plaza parapet): the Reactor's Codex pit-concrete colour map world-mapped (vertical faces: along the face x
+ * height; tops: x / z; 2.4 m tiles; a flat tone when absent), darkened by the rain, runoff streaks, the sky sheen on its top.
+ */
+export function surfaceWallMaterial(concrete: THREE.Texture | null): MeshBasicNodeMaterial {
+  const m = new MeshBasicNodeMaterial({name: 'reactor-surface-wall', fog: false});
+  m.colorNode = Fn(() => {
+    const nn = n(normalWorld).toVar('swN'), p = n(positionWorld);
+    const top = n(abs(nn.y).greaterThan(0.5));
+    const along = n(dot(n(p).xz, n(vec2(n(nn).z.negate(), n(nn).x))));
+    const st = n(top.select(n(p).xz, n(vec2(along, n(p).y)))).div(2.4);
+    const base = n(concrete ? n(texture(concrete, st)).rgb.mul(0.9) : vec3(0.4, 0.39, 0.37));
+    const drip = n(wmNoise(n(vec3(n(along).mul(3.1), n(p).y.mul(0.5).add(n(time).mul(0.3)), 0.7))));
+    const streak = n(smoothstep(0.55, 0.85, drip)).mul(float(1).sub(abs(nn.y))).mul(0.3);
+    const col = n(base).mul(float(1).sub(n(SURF_U.wet).mul(float(SURFACE_LOOK.wetDark).add(streak)))).mul(outdoorLight(nn)).add(sheen(nn, n(top.select(float(0.9), float(0.3))).mul(SURFACE_LOOK.sheen)));
+    return vec4(mist(col), 1);
+  })();
+  return m;
+}
+
+/**
  * Rain ripples on a flat wet surface at world xz: expanding rings in a jittered 0.55 m grid (each cell its own phase), 0..1.
  */
 const ripples = (xz: N): N => {

@@ -14,12 +14,12 @@ import {SURFACE_KIT, type SurfaceKitEntry} from './surfaceKit';
 import {SURFACE_CITY, footprintCorners, type SurfaceCityPlan} from './surfacePlan';
 import type {SurfaceSite} from './surfaceSite';
 import {SURFACE_RAIN, RainLayer, buildRainFloor, rainFloorTexture, type RainFloorMap} from './surfaceRain';
-import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial} from './surfaceLook';
+import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial, surfaceWallMaterial} from './surfaceLook';
 
 /** Sky dome radius (follows the eye; inside the Reactor's 230 m far plane, beyond every building from anywhere on the surface). */
 export const SURFACE_SKY = {radius: 205} as const;
 /** The ground sits this far under the walk height (lane ENDING's floor covers it on the walk area); the film this far above. */
-export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5} as const;
+export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT} as const;
 
 const QUADS = 4;
 
@@ -27,6 +27,7 @@ export interface SurfaceView {
   root: THREE.Group;
   city: THREE.Group;
   ground: THREE.Mesh;
+  parapet: THREE.Mesh | null;
   film: THREE.Mesh | null;
   sky: THREE.Mesh;
   near: RainLayer;
@@ -92,9 +93,9 @@ function standGeometry(w: number, d: number, h: number): THREE.BufferGeometry {
   return g;
 }
 
-/** The walkable floor's wet film: 1 m cells over the walk rects, none over the aperture (+ its curb) or under a shelter. */
+/** The walkable floor's wet film: 1 m cells over the walk rects, none inside the opening's keep-off radius or under a shelter. */
 export function filmGeometry(site: SurfaceSite): THREE.BufferGeometry | null {
-  const pos: number[] = [], y = site.y + SURFACE_LAYERS.filmAbove, o = site.hole, keep = o.r + 0.6;
+  const pos: number[] = [], y = site.y + SURFACE_LAYERS.filmAbove, o = site.hole, keep = Math.max(o.keepR, o.r + 0.6);
   const seen = new Set<string>();
   for (const r of site.walk) {
     for (let z = Math.floor(r.z0); z < r.z1; z++) for (let x = Math.floor(r.x0); x < r.x1; x++) {
@@ -102,10 +103,8 @@ export function filmGeometry(site: SurfaceSite): THREE.BufferGeometry | null {
       if (x1 - x0 < 0.05 || z1 - z0 < 0.05) continue;
       const k = `${x},${z}`;
       if (seen.has(k)) continue;
-      // the cell's farthest corner from the aperture: the whole cell clear of the opening and its curb
-      const nx = Math.max(Math.abs(x0 - o.x), Math.abs(x1 - o.x)), nz = Math.max(Math.abs(z0 - o.z), Math.abs(z1 - o.z));
-      const near = Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z));
-      if (near < keep && Math.hypot(nx, nz) > 0) continue;
+      // the whole cell clear of the opening's keep-off radius (its nearest point outside it)
+      if (Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z)) < keep) continue;
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       if (site.shelters.some(s => cx >= s.rect.x0 && cx <= s.rect.x1 && cz >= s.rect.z0 && cz <= s.rect.z1)) continue;
       seen.add(k);
@@ -120,7 +119,44 @@ export function filmGeometry(site: SurfaceSite): THREE.BufferGeometry | null {
   return g;
 }
 
-/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out (the curb's upstand covers the edge). */
+/** Strictly inside a walkable cell rect. */
+export const onWalk = (site: Pick<SurfaceSite, 'walk'>, x: number, z: number): boolean =>
+  site.walk.some(r => x > r.x0 + 1e-3 && x < r.x1 - 1e-3 && z > r.z0 + 1e-3 && z < r.z1 - 1e-3);
+
+/**
+ * The PLAZA PARAPET: a low wet-concrete wall on the outer side of every boundary edge (lane ENDING's contract: the boundary columns are
+ * solid up to parapetY, so this is where the body stops); a corner post closes every convex corner (a post that would stand on a
+ * walkable cell — a concave corner, already closed by its two walls — is skipped). One merged mesh, never inside `walk`.
+ */
+export function parapetGeometry(site: SurfaceSite): THREE.BufferGeometry | null {
+  const T = SURFACE_LAYERS.parapetT, H = site.parapetY - site.y + SURFACE_LAYERS.groundBelow, y0 = site.y - SURFACE_LAYERS.groundBelow;
+  if (!(H > 0.2) || !site.edges.length) return null;
+  const parts: THREE.BufferGeometry[] = [];
+  const add = (sx: number, sz: number, x: number, z: number) => {
+    const g = new THREE.BoxGeometry(sx, H, sz);
+    g.translate(x, y0 + H / 2, z);
+    g.deleteAttribute('uv');
+    parts.push(g.toNonIndexed());
+    g.dispose();
+  };
+  for (const e of site.edges) {
+    const L = Math.hypot(e.x1 - e.x0, e.z1 - e.z0);
+    if (L < 0.05) continue;
+    const ux = (e.x1 - e.x0) / L, uz = (e.z1 - e.z0) / L, alongX = Math.abs(ux) >= Math.abs(uz);
+    add(alongX ? L : T, alongX ? T : L, (e.x0 + e.x1) / 2 + e.nx * T / 2, (e.z0 + e.z1) / 2 + e.nz * T / 2);
+    for (const [px, pz, s] of [[e.x0, e.z0, -1], [e.x1, e.z1, 1]] as const) {
+      const qx = px + s * ux * T / 2 + e.nx * T / 2, qz = pz + s * uz * T / 2 + e.nz * T / 2;
+      if (!onWalk(site, qx, qz)) add(T, T, qx, qz);
+    }
+  }
+  if (!parts.length) return null;
+  const g = mergeGeometries(parts, false)!;
+  for (const p of parts) p.dispose();
+  g.computeBoundingSphere();
+  return g;
+}
+
+/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out. */
 export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'groundR'>): THREE.BufferGeometry {
   const o = site.hole, R = plan.groundR, segs = 96;
   // shape coordinates (x, -z): rotateX(-90 deg) maps (x, y, 0) -> (x, 0, -y) = (x, 0, z), its +Z normal -> +Y (facing up)
@@ -129,7 +165,8 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
     const a = (k / segs) * Math.PI * 2, x = o.x + Math.cos(a) * R, z = o.z + Math.sin(a) * R;
     if (k === 0) shape.moveTo(x, -z); else shape.lineTo(x, -z);
   }
-  const hole = new THREE.Path(), rh = o.r + 0.4;
+  // the opening cut out under ENDING's parapet ring / the roof curb's upstand (both hide the edge)
+  const hole = new THREE.Path(), rh = Math.max(o.r + 0.05, Math.min(o.r + 0.4, o.ringR0 + 0.05));
   for (let k = 0; k <= 64; k++) {
     const a = (k / 64) * Math.PI * 2, x = o.x + Math.cos(a) * rh, z = o.z + Math.sin(a) * rh;
     if (k === 0) hole.moveTo(x, -z); else hole.lineTo(x, -z);
@@ -210,6 +247,19 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   ground.matrixAutoUpdate = false;
   root.add(ground);
   tris += triCount(gg);
+  // --- the plaza parapet (wet concrete) ---
+  const pg = parapetGeometry(site);
+  let parapet: THREE.Mesh | null = null;
+  if (pg) {
+    own.geometries.push(pg);
+    const pm = surfaceWallMaterial(concrete);
+    own.materials.push(pm);
+    parapet = new THREE.Mesh(pg, pm);
+    parapet.name = 'reactor-surface-parapet';
+    parapet.matrixAutoUpdate = false;
+    root.add(parapet);
+    tris += triCount(pg);
+  }
   // --- the wet film over the walkable floor ---
   const fg = filmGeometry(site);
   let film: THREE.Mesh | null = null;
@@ -244,8 +294,8 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   const column = new RainLayer('reactor-surface-rain-aperture', SURFACE_RAIN.column.count, ft, floor, seed ^ 0x3b7);
   column.column(site);
   root.add(near.mesh, column.mesh);
-  for (const o of [ground, film, sky]) if (o) { o.castShadow = o.receiveShadow = false; o.updateMatrix(); }
-  return {root, city, ground, film, sky, near, column, floor, instanced, own, drawn, tris};
+  for (const o of [ground, film, sky, parapet]) if (o) { o.castShadow = o.receiveShadow = false; o.updateMatrix(); }
+  return {root, city, ground, parapet, film, sky, near, column, floor, instanced, own, drawn, tris};
 }
 
 /** Release what the view owns (the kit's GLB geometry / maps stay with the library; model materials stay cached). */

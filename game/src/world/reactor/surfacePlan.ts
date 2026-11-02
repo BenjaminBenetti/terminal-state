@@ -36,6 +36,8 @@ export const SURFACE_CITY = {
   backRow: 13,
   /** Street clutter: cars / buses / rubble piles on the streets of rings <= clutterRing. */
   clutterRing: 2, cars: 14, buses: 3, streetRubble: 12,
+  /** Rubble against the plaza parapet: about one heap per this many metres of edge; the parapet's thickness (surfaceCity.ts). */
+  edgeRubbleEvery: 10, parapetT: 0.32,
 } as const;
 
 /** Role mix per ring (the rest of the weight = a collapsed lot). Ring 3+ uses the last row. */
@@ -61,8 +63,10 @@ export interface CityPlacement {
   ring: number;
   /** Seeded per-instance tone (0..1): the builder's subtle tint variation. */
   tone: number;
-  /** Index into plan.blocks (-1: street clutter). */
+  /** Index into plan.blocks (-1: street clutter / the parapet's rubble). */
   block: number;
+  /** Rubble heaped against the plaza parapet (inside the yard's kerb, outside every walkable cell). */
+  edge?: true;
 }
 
 export interface CityBlock { rect: ReactorRect; ring: number; i: number; j: number; collapsed: number }
@@ -294,6 +298,21 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
   clutter('bus', C.buses);
   clutter('car', C.cars);
   clutter('rubble', C.streetRubble);
+  // --- rubble heaped against the plaza parapet's outer face (beyond the edges: never on a walkable cell, never near the opening) ---
+  for (const ed of site.edges) {
+    const L = Math.hypot(ed.x1 - ed.x0, ed.z1 - ed.z0);
+    if (L < 5) continue;
+    for (let m = 0, k = Math.floor(L / C.edgeRubbleEvery + rnd()); m < k; m++) {
+      const e = rubbleEntry();
+      if (!e) break;
+      const s = between(0.5, 1.05), hw = (e.dims[0] * s) / 2, hd = (e.dims[2] * s) / 2, rr = Math.max(hw, hd);
+      const t = between(0.12, 0.88), off = C.parapetT + rr * between(0.55, 0.95);
+      const p: CityPlacement = {entry: e.id, role: 'rubble', kind: 'rubble', x: r3(ed.x0 + (ed.x1 - ed.x0) * t + ed.nx * off), z: r3(ed.z0 + (ed.z1 - ed.z0) * t + ed.nz * off), y,
+        yaw: r3(rnd() * Math.PI * 2), scale: r3(s), hw: r3(hw), hd: r3(hd), h: r3(e.dims[1] * s), ring: 0, tone: r3(rnd()), block: -1, edge: true};
+      if (site.walk.some(w => footprintInRect(p, w, 0.05)) || Math.hypot(p.x - cx, p.z - cz) < site.hole.keepR + rr || placements.some(q => footprintsOverlap(p, q, -0.2))) continue;
+      push(p);
+    }
+  }
   // --- stats ---
   const byEntry: Record<string, number> = {};
   let maxDist = 0;
