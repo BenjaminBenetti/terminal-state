@@ -147,6 +147,39 @@ The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot
 volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
 are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
 
+### The coolant up close (task reactor-playtest-round2-20261102, lane COOLANT)
+User: "coolant should look more like gooop flowing through pipes! its a little flat right now. You can use the current look for far
+away rendering but switch to a high detail at close ish range."
+- **Why it was flat:** the far look (`coreLiquids.ts`, kept for distance) is two thin slots per pipe glowing one constant blue, with dashes
+  scrolling at 3.2 m/s. It has no depth, volume or thickness, and nothing moves at different speeds. The sight glasses are a flat fill.
+- **The near layer** (`world/reactor/coolantNear.ts`, code-driven, no new texture or model):
+  - Glass windows on every coolant pipe sit where the far slots are, but wider, with a steel bezel and ribs every 1.2 m. The ribs are
+    static marks the flow moves past. The sight-glass sleeves and the spool windows are all glass.
+  - Behind the glass, each pixel ray-casts the pipe bore, refracted by the glass. The goop's thickness along the ray gives a depth tint:
+    thin and dark at the walls, deep with an emissive core glow through the middle.
+  - Clumps and strands are 3D noise stretched along the pipe, in a fast core band and a slow wall band (laminar flow, which reads as
+    viscous). A slower wet film streaks the glass. Bubbles ride the top of horizontal runs and rise faster up risers.
+  - While the valve fills the loop, a meniscus rises through every pipe and glass.
+- **State:** before the valve there is no near layer (the far slots show). Once pressurised the goop is still and dim. With the pump it
+  flows (the near clock only advances with the pump's flow speed, about 1.3 m/s on the centreline) and is about 2.5 times brighter. Paused
+  play never ticks. The coolant's blue PointLight is untouched.
+- **LOD:**
+  - Near only inside 8 m, far only beyond 12 m. Between them a static screen-space dither cross-fades, so each pixel draws exactly one of
+    the two looks and nothing pops.
+  - The CPU activates instances by point-to-segment distance: on inside 13.5 m, off beyond 16 m (hysteresis). It re-decides only after
+    the eye moved 0.25 m. The fade never reaches a piece without a near instance.
+  - The near zone grows out from the eye as the valve opens.
+- **Cost:** two InstancedMeshes (tubes, spool windows) share one MeshBasic material: never a shadow caster, plain uniforms only (fade
+  radii, clock). It compiles to 2 uniform buffers per stage on both backends (3 in the vertex stage without attribute instancing) and
+  no texture. The far materials gain no buffer.
+  - Draws: 0 away from the coolant or before the valve, at most 2 on the core floor.
+  - Instances: real layouts peak at about 45 active tubes (cap 96). The layer is about 4,100 triangles at capacity.
+  - The CPU-submit budget (`reactor-cpu-submit.test.ts`) now runs with the pump on and the near layer driven: +0 at its 9 views.
+- Tests: `game/tests/reactor-x-coolant-near.test.ts`. QA: `__LL.reactorCore()` reports `near`; `__LL.reactorCore({near: false})` is an
+  A/B switch to the far look.
+- **Limits:** no fluid simulation. The noise is a look, not a flow field. The near clock wraps after about 14 h of pumping (one pattern
+  jump). Only a CPU mirror of the shader was previewed (in `/tmp`), not the GPU.
+
 ### Mounted controls (the rule for every control that sits on a 3D model)
 Code: `game/src/world/reactor/controlsMount.ts` (pure, shared by the kit and the restart), `controlsKit.ts` (the machines and the
 generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (moving parts split off a model).

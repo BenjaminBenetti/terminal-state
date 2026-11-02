@@ -21,7 +21,9 @@ import {planReactorKit} from '../src/world/reactor/archKit';
 import {REACTOR_MODELS, REACTOR_PIECES} from '../src/world/reactor/archAssets';
 import {coreHeroOf, type CoreHeroLayout} from '../src/world/reactor/coreHero';
 import {buildCoreLiquids, type CoreBuilt} from '../src/world/reactor/coreLiquids';
-import {CoreVisuals} from '../src/world/reactor/coreVisuals';
+import {CoreVisuals, setActiveCoreVisuals} from '../src/world/reactor/coreVisuals';
+import {ReactorArchVisuals, registerReactorArchVisuals} from '../src/world/reactor/archVisuals';
+import {ReactorArchRuntime} from '../src/world/reactor/archInstall';
 import {CORE_LOOK, coreLook, coreStageTargets} from '../src/world/reactor/coreStages';
 import {COOLANT_NEAR, CoolantNearLod, coolantNearPieces, nearPieceDistance, nearWeightAt, type NearPiece} from '../src/world/reactor/coolantNear';
 import {emptyReactorState, type ReactorRunState} from '../src/world/reactor/runState';
@@ -220,6 +222,11 @@ describe('state gating (CoreVisuals.setRestartState): off before the valve, stil
     }
     expect(near.fade.r1.value).toBeCloseTo(full);
     expect(near.state().draws).toBeGreaterThanOrEqual(1);
+    // the QA A/B switch (__LL.reactorCore({near: false})): the far look everywhere, nothing drawn; back on restores it
+    near.setEnabled(false);
+    expect([near.fade.r1.value, near.state().draws]).toEqual([0, 0]);
+    near.setEnabled(true);
+    expect(near.fade.r1.value).toBeCloseTo(full);
     run(v, 4);
     expect(v.level.pressure).toBe(1);
     expect(core.uniforms.fill.value).toBe(1);
@@ -256,6 +263,36 @@ describe('state gating (CoreVisuals.setRestartState): off before the valve, stil
     expect(near.clock.value).toBeCloseTo(fullSpeed * 0.5, 3);
     // the blue light the coolant casts is the stage look's, untouched by the near layer
     expect(w.lightLook().blue).toBeCloseTo(coreLook(coreStageTargets(PUMPING)).blue);
+  });
+});
+
+describe('the runtime wiring (archInstall): the frame hook drives the LOD from the camera; the warm-up pool holds the hidden layer', () => {
+  it('play frame -> CoreVisuals.lod(camera.position); pool -> [near group] while a Reactor core is active, [] otherwise', () => {
+    const core = coreOf(SEEDS[0]), near = core.near!, v = new CoreVisuals(core, heroOf(SEEDS[0]));
+    const pools = new Map<string, () => readonly THREE.Object3D[]>();
+    const frameHooks: ((dt: number) => void)[] = [];
+    const camera = new THREE.PerspectiveCamera();
+    new ReactorArchRuntime({scene: new THREE.Scene(), camera, sectionHooks: [], frameHooks, warmRegistry: {addPool: (n, r) => { pools.set(n, r); }}});
+    const pool = pools.get('reactor-coolant-near')!;
+    expect(pool).toBeTruthy();
+    const arch = new ReactorArchVisuals(null, null, null);
+    arch.core = v;
+    try {
+      setActiveCoreVisuals(v);
+      registerReactorArchVisuals(arch);
+      expect(pool()).toEqual([near.group]);
+      v.setRestartState(PUMPING, true);
+      const p = near.pieces.find(q => q.kind === 0)!;
+      camera.position.set(p.a.x, p.a.y + 1, p.a.z);
+      const decided = near.lod.counts.decided;
+      for (const f of frameHooks) f(0.016);
+      expect(near.lod.counts.decided).toBe(decided + 1);
+      expect(near.state().draws).toBeGreaterThanOrEqual(1);
+    } finally {
+      registerReactorArchVisuals(null);
+      setActiveCoreVisuals(null);
+    }
+    expect(pool()).toEqual([]);
   });
 });
 

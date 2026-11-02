@@ -444,6 +444,8 @@ export class CoolantNear {
   readonly clock = uniform(0) as unknown as {value: number};
   /** Pressure level last applied (0: valve shut -> no near layer). */
   pressure = 0;
+  /** QA A/B (`__LL.reactorCore({near: false})`): off = the far look everywhere. */
+  enabled = true;
   readonly stats: {pieces: number; tubes: number; windows: number; tubeCap: number; triangles: number};
   /** Per-piece instance data (matrix 16, aAx 4, aDir 4, aLook 4, aFill 2). */
   private readonly data: Float32Array;
@@ -503,7 +505,7 @@ export class CoolantNear {
   /** Fade radii + visibility from the LOD and the pressure gate (the near zone grows out from the eye as the valve opens). */
   private applyFade(): void {
     const g = this.pressure <= 0 ? 0 : this.pressure >= COOLANT_NEAR.gate ? 1 : smooth(this.pressure / COOLANT_NEAR.gate);
-    const r1 = this.lod.r1 * g;
+    const r1 = this.enabled ? this.lod.r1 * g : 0;
     this.fade.r1.value = r1;
     this.fade.r0.value = Math.max(0, r1 - COOLANT_NEAR.band);
     const on = r1 > 0;
@@ -534,12 +536,15 @@ export class CoolantNear {
     }
   }
 
+  /** QA A/B switch (the far look everywhere while off). */
+  setEnabled(on: boolean): void { this.enabled = on; this.applyFade(); }
+
   /** Draws this layer adds now (0 / 1 / 2). */
   draws(): number { return (this.tubes.mesh.visible && this.tubes.mesh.count ? 1 : 0) + (this.windows?.mesh.visible && this.windows.mesh.count ? 1 : 0); }
 
   /** QA / tests. */
-  state(): {r0: number; r1: number; tubes: number; windows: number; draws: number; clock: number; pressure: number; counts: CoolantNearLod['counts']} {
-    return {r0: this.fade.r0.value, r1: this.fade.r1.value, tubes: this.tubes.mesh.count, windows: this.windows?.mesh.count ?? 0, draws: this.draws(),
+  state(): {enabled: boolean; r0: number; r1: number; tubes: number; windows: number; draws: number; clock: number; pressure: number; counts: CoolantNearLod['counts']} {
+    return {enabled: this.enabled, r0: this.fade.r0.value, r1: this.fade.r1.value, tubes: this.tubes.mesh.count, windows: this.windows?.mesh.count ?? 0, draws: this.draws(),
       clock: this.clock.value, pressure: this.pressure, counts: {...this.lod.counts}};
   }
 

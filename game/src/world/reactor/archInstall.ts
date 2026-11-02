@@ -149,11 +149,13 @@ export function reactorArchQaApi(game: {world?: {reactorArch?: ReactorArch} | nu
       if (o.tier) v.setTierPower(o.tier[0], o.tier[1]);
       return v.state();
     },
-    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning). */
-    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>} = {}) => {
+    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning).
+     *  (lane COOLANT) `near`: the near goop LOD on / off (A/B against the far look); the result carries its state. */
+    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>; near?: boolean} = {}) => {
       const c = activeCoreVisuals();
       if (c && o.tune) Object.assign(c.tune, o.tune);
-      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null};
+      if (o.near !== undefined) c?.built?.near?.setEnabled(o.near);
+      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null, near: c?.built?.near?.state() ?? null};
     },
   };
 }
