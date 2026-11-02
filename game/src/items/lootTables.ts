@@ -1222,9 +1222,30 @@ export const MALL_TABLES: LootTables = {...BASE_TABLES, salvage: MALL_SALVAGE, s
 export const MALL_OVERRIDES: LootOverrides = {categoryWeight: {material: 0.25}, itemWeight: {[BIO_MATER]: 1.5}};
 /** (mall revision, U01) the label is the generic one: the mall's display name is seeded per run ("<Name> Center", gen/mall/names.ts). */
 export const MALL_PROFILE: LootProfile = {id: 'mall', label: 'Mall (seeded "<Name> Center")', tables: MALL_TABLES, overrides: MALL_OVERRIDES};
+/** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the Reactor's lot-range multiplier on ordinary holders (REACTOR_OVERRIDES.slot). */
+export const REACTOR_PICKED_OVER = 0.7;
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): the Reactor's storage-fill chance multiplier. The mall's fill tops up EVERY
+ * compartment a holder's own roll left empty (batteries, flares, the crafting materials), so fewer lots alone would only move units into
+ * the fill; the Reactor's tables are the mall's with this one rule scaled (REACTOR_TABLES). The mall itself is unchanged.
+ */
+export const REACTOR_FILL_SCALE = 0.65;
+export const REACTOR_TABLES: LootTables = {
+  ...MALL_TABLES,
+  storageFill: Object.fromEntries(Object.entries(MALL_STORAGE_FILL).map(([k, f]) => [k, {...f!, chance: f!.chance * REACTOR_FILL_SCALE}])),
+};
 /** Task reactor-build-20261101 (primary): THE REACTOR (tier 3) — MALL_TABLES under scarcer ammo / medicine / batteries. */
-export const REACTOR_OVERRIDES: LootOverrides = {categoryWeight: {ammo: 0.75, med: 0.8, battery: 0.85, material: 0.2}};
-export const REACTOR_PROFILE: LootProfile = {id: 'reactor', label: 'Reactor', tables: MALL_TABLES, overrides: REACTOR_OVERRIDES};
+export const REACTOR_OVERRIDES: LootOverrides = {
+  categoryWeight: {ammo: 0.75, med: 0.8, battery: 0.85, material: 0.2},
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): the round-2 rooms (rock suites, the arrival station area, the complexes' room
+  // graphs) brought ~45 % more furnished holders; the level's TOTAL loot stays at its previous level — every ordinary holder rolls
+  // fewer lots (picked over before you got there). The armoury's gun lockers (arms), the fixtures and the floor finds are untouched.
+  slot: {
+    ...Object.fromEntries((['shelf', 'surface', 'countertop', 'vend', 'cold', 'medical', 'junk', 'stash'] as const).map(s => [s, {lots: REACTOR_PICKED_OVER}])),
+    container: {lots: REACTOR_PICKED_OVER, empty: 1.45},
+  },
+};
+export const REACTOR_PROFILE: LootProfile = {id: 'reactor', label: 'Reactor', tables: REACTOR_TABLES, overrides: REACTOR_OVERRIDES};
 
 /**
  * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level

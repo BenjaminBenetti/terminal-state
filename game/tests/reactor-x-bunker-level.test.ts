@@ -3,6 +3,8 @@
 // reachability, placements on their floors), zone 0's generator in the generator hall, the dress hook's furniture / hero props /
 // machinery / plates where they belong (prop rules: storage opens, kinds classified, loot from the room's purpose), the blast door
 // lined up with its lane, timing. Focused (no browser).
+// Task reactor-playtest-round2-20261102 (lane BUNKER): 12 seeds (the seeded room graph: each level's shelter a different room graph /
+// floor plan in the real host slot, every room on the floor-map boards with its label).
 import {writeFileSync} from 'node:fs';
 import {describe, expect, it} from 'vitest';
 import {generateReactorLevel, reactorAttempt, reactorIssues, REACTOR_GEN_STATS} from '../src/gen/reactor/index';
@@ -17,9 +19,11 @@ import {purposeLoot} from '../src/gen/purposes';
 import {holderTable, isLootHolderKind} from '../src/items/loot';
 import {lootProfile} from '../src/items/lootTables';
 import {bunkerModelOrigin, bunkerModelPlacements} from '../src/world/reactor/bunkerModels';
+import {planStoreys} from '../src/world/reactor/mapBoardPlan';
 import type {StationLayout} from '../src/gen/stationTypes';
 
-const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
+// (+ 21, 23, 218558: lane ARRIVAL's seeded entrances once gave their narrow dormitories only 2-3 bunks — every dormitory sleeps >= 4)
+const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 21, 23, 218558];
 const cache = new Map<number, StationLayout>();
 const ms: number[] = [];
 const gen = (seed: number) => {
@@ -74,6 +78,11 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
       const L = gen(seed), tag = `seed ${seed}`;
       const inRoom = (key: string, kind: string) => { const r = room(L, key); return r ? L.props.filter(p => p.area === r.area && p.kind === kind).length : -1; };
       expect(inRoom('dorm', 'bunkBed'), tag).toBeGreaterThanOrEqual(4);
+      // every dormitory (Dormitory B too) sleeps >= 4, whatever its seeded shape / doors
+      for (const r of bunkerOf(L).rooms.filter(q => L.areas[q.area].purpose === 'reactor-bunker-dormitory')) {
+        const a = L.areas[r.area];
+        expect(L.props.filter(p => p.area === r.area && p.kind === 'bunkBed').length, `${tag} ${r.key} ${a.w}x${a.h}`).toBeGreaterThanOrEqual(4);
+      }
       expect(inRoom('dorm', 'footlocker'), tag).toBeGreaterThanOrEqual(2);
       expect(inRoom('dorm', 'staffLockers'), tag).toBeGreaterThanOrEqual(1);
       expect(inRoom('armoury', 'gunLocker'), tag).toBeGreaterThanOrEqual(2);
@@ -146,6 +155,28 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
     expect(BUNKER_DRESS_STATS.filled).toBe(0);
     generateReactorLevel({levelSeed: 2800420178});
     expect(REACTOR_GEN_STATS.attempts).toBe(1);
+  });
+
+  it('every level seed builds a different shelter (room graph + floor plan up to translation); every room is on the map boards', () => {
+    const graphs = new Set<string>(), plans = new Set<string>();
+    for (const seed of SEEDS) {
+      const L = gen(seed), b = bunkerOf(L), tag = `seed ${seed}`;
+      const key = new Map(b.rooms.map(r => [r.area, r.key.replace(/^corr\d+$/, 'corr').replace(/\d+$/, '')]));
+      const ids = new Set(b.areas);
+      const pairs = L.doors.filter(d => ids.has(d.a) && ids.has(d.b)).map(d => [key.get(d.a)!, key.get(d.b)!].sort().join('-')).sort();
+      graphs.add(`${b.rooms.map(r => key.get(r.area)).sort().join(',')}|${pairs.join(',')}`);
+      const lock = L.areas[room(L, 'lock')!.area];
+      plans.add(b.rooms.map(r => { const a = L.areas[r.area]; return `${key.get(r.area)}:${a.x - lock.x},${a.y - lock.y},${a.w}x${a.h}`; }).sort().join(' '));
+      // the floor-map boards label every bunker space (corridors by the wing of the rooms on them)
+      const st = planStoreys(L, L.reactor!).storeys.find(s => s.level === b.level)!;
+      for (const r of b.rooms) {
+        const a = L.areas[r.area];
+        expect(st.rooms.some(q => q.label === r.label.toUpperCase() && Math.abs(q.x - (a.x + a.w / 2) * CELL) < 1e-6), `${tag} ${r.key} on the map`).toBe(true);
+        if (r.role === 'corridor') expect(r.label, tag).toMatch(/^(Muster corridor|Quarters corridor|Plant corridor|Operations corridor|Service passage)( [B-D])?$/);
+      }
+    }
+    expect(graphs.size).toBe(SEEDS.length);
+    expect(plans.size).toBe(SEEDS.length);
   });
 
   it('carves + dresses inside the budget (< 60 ms per level)', () => {

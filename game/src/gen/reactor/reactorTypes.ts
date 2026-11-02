@@ -98,6 +98,12 @@ export interface ReactorGenerator {
   panel: {x: number; y: number; z: number};
   /** Cable route from the generator to its zone's fans (world polyline, absolute y): ARCH draws it, the lights follow it. */
   cable: readonly {x: number; y: number; z: number}[];
+  /** Task reactor-playtest-round2-20261102 (lane PROPS): the drop rods hanging a complex cable from the ceiling (x / z, rod y0 .. y1). */
+  cableHangers?: readonly {x: number; z: number; y0: number; y1: number}[];
+  /** (lane PROPS) indices i of `cable` whose segment i -> i + 1 is a wall SLEEVE (wires only, through a wall over a lintel / beside a jamb). */
+  cableSleeves?: readonly number[];
+  /** (lane PROPS) set when the ceiling route had to ignore the layout's obstacles ('bare') or fell back to the old routing ('legacy'). */
+  cableFallback?: 'bare' | 'legacy';
 }
 
 /** A wall-mounted extraction fan (a duct housing in the pit wall; blades spin when its zone's generator runs). */
@@ -373,6 +379,51 @@ export interface ReactorInfo {
   complexes?: readonly ReactorComplexInfo[];
   /** Task reactor-expansion-20261101 (lane CORE, additive): the core floor's ring / goop pool / bridges / loops / turbine. */
   coreFloor?: ReactorCoreFloor;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): platform → station area → breach → tunnel → the rim reveal. */
+  approach?: ReactorApproach;
+  /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): the seeded rock suites behind the pit walls (gen/reactor/suites.ts). */
+  suites?: readonly ReactorSuiteInfo[];
+}
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): one seeded rock suite — an entry corridor from a deck door, a T / L cross
+ * corridor, themed rooms off it, sometimes a loop back to a deck, enfilade doors and a back door into a store. Area ids on `level`.
+ */
+export interface ReactorSuiteInfo {
+  level: number;
+  wall: 'stair' | 'organ' | 'N' | 'S';
+  theme: string;
+  corridors: readonly number[];
+  rooms: readonly number[];
+  deckDoors: readonly ReactorRect[];
+  links: readonly (readonly [number, number])[];
+  loop: boolean;
+  shape: 'T' | 'L';
+}
+
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival approach on the rim storey (gen/reactor/arrival.ts). The platform
+ * never opens onto the pit: 1-2 openings lead into a small station area (a ticket hall + back of house), one of its walls is broken
+ * through (the BREACH: open cells, no door), a short rough tunnel (segments `tunnel`, rock finishes) bends to a second hole in the pit's
+ * north wall (the REVEAL) onto the rim gallery. World metres; area ids are layout.areas ids on level 0.
+ */
+export interface ReactorApproach {
+  recipe: 'hall' | 'corridor' | 'backroom';
+  /** The ticket hall, the station area (hall first, then the service corridor / rooms), the tunnel segments (breach first). */
+  hall: number;
+  station: readonly number[];
+  tunnel: readonly number[];
+  /** Platform -> hall openings. */
+  doors: readonly ReactorRect[];
+  /** The breached wall cells and the area whose wall it is. */
+  breach: ReactorRect;
+  breachFrom: number;
+  /** The pit-wall cells of the reveal hole and the rim gallery area beyond it. */
+  reveal: ReactorRect;
+  revealDeck: number;
+  /** Tunnel centreline (breach -> reveal, y = the rim) and its length (m). */
+  path: readonly {x: number; z: number}[];
+  length: number;
 }
 
 /** Tier gas concentrations (uncleared) are a function of depth only: the rim is clean (layout.reactor.tiers[0].zone === -1). */

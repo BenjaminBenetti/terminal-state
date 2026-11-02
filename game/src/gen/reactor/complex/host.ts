@@ -39,6 +39,7 @@ import {carveBunker} from './bunker';
 import {carveMines} from './mines';
 import {carveWaste} from './waste';
 import {COMPLEX_OF_ZONE, type ComplexCarve, type ComplexCarver, type ComplexSlot, type ReactorComplexId} from './types';
+import {ceilingCableRoute} from './propsCable'; // task reactor-playtest-round2-20261102 (lane PROPS): the cable along the ceiling
 
 /** Slot sizes (cells): region along the wall x deep behind it (incl. the pit-wall row), entrance width, entrance margin to the region's along edges. */
 export const COMPLEX_SLOT = {along: 80, deep: 64, door: 6, side: 3} as const;
@@ -138,8 +139,20 @@ export function planComplexSlots(p: SlotPlanInput): ComplexSlot[] {
       const off = w === 'S' ? Math.abs(p.cx(mpx) - (d.rect.x + d.rect.w / 2)) : Math.abs(p.PZ0 + mpz - (d.rect.y + d.rect.h / 2));
       cands.push({a, front, rank: KIND_RANK[d.kind] ?? 3, off, tie: rng.next()});
     }
-    cands.sort((q, r) => q.rank - r.rank || q.off - r.off || q.tie - r.tie);
-    for (const c of cands) {
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL, flow variety): WHERE the entrance opens is seeded — a deck of the wall drawn
+    // by weight (landings 3, stair landings / galleries 2, terraces 1), then a position along it (was: always the best-ranked deck's
+    // centre); the region stays centred on the entrance where the canvas allows (the carvers' contract is unchanged)
+    const byDeck = new Map<number, typeof cands>();
+    for (const c of cands) (byDeck.get(c.front) ?? byDeck.set(c.front, []).get(c.front)!).push(c);
+    const keyed = [...byDeck.keys()].map(id => ({id, key: Math.pow(rng.next(), 1 / ([3, 2, 2][byDeck.get(id)![0].rank] ?? 1))}));
+    keyed.sort((p, q) => q.key - p.key || p.id - q.id);
+    const ordered = keyed.flatMap(({id}) => {
+      const list = byDeck.get(id)!.slice().sort((q, r) => q.off - r.off || q.tie - r.tie);
+      // a seeded spot first (anywhere along the deck), then the rest from the deck's centre outward
+      const first = list[Math.floor(rng.next() * list.length)];
+      return [first, ...list.filter(c => c !== first)];
+    });
+    for (const c of ordered) {
       // region along span [a0, a0 + A) holding the entrance `side` cells in from its ends; the south wall's stays within the pit's
       // along range (the stair / organ regions may run past the pit's south corners: the regions never meet)
       let lo = c.a + EW + side - A, hi = c.a - side;
@@ -249,6 +262,8 @@ export interface HostedGenerators {
   gens: ReactorGenerator[];
   holds: {level: number; cells: number[]}[];
   keep: {level: number; x: number; z: number}[];
+  /** (lane WASTE) The carves' reserved cells (ComplexCarve.reserve): held through the shared station dresser only. */
+  reserve: {level: number; cells: number[]}[];
 }
 
 /**
@@ -259,7 +274,7 @@ export interface HostedGenerators {
  */
 export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: readonly ComplexCarve[]): HostedGenerators {
   const base = buildGenerators(layout, rc);
-  const gens = base.gens.slice(), holds = base.holds.slice(), keep = base.keep.slice();
+  const gens = base.gens.slice(), holds = base.holds.slice(), keep = base.keep.slice(), reserve: HostedGenerators['reserve'] = [];
   for (const c of carves) {
     const s = c.slot, lv = s.level, y = rc.bases[lv], g = layout.levels[lv].grid, f = c.generator.foot;
     const x0 = f.x * CELL, z0 = f.y * CELL, x1 = (f.x + f.w) * CELL, z1 = (f.y + f.h) * CELL, x = (x0 + x1) / 2, z = (z0 + z1) / 2;
@@ -274,6 +289,8 @@ export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: 
       panel: {x: r3(Math.min(x1, Math.max(x0, ux))), y: r3(y + 1.2), z: r3(Math.min(z1, Math.max(z0, uz)))}, cable: [],
     });
     holds.push({level: lv, cells: block(g, uc[0], uc[1], 2)});
+    // (lane WASTE) the carve's reserved set-piece cells: held through the shared station dresser only (gen/reactor/index.ts)
+    if (c.reserve?.length) reserve.push({level: lv, cells: c.reserve.flatMap(r => { const out: number[] = []; for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR) out.push(g.idx(x, y)); return out; })});
     keep.push({level: lv, x: ux, z: uz});
     // the entrance: 3 cells either side of the doorway across its span (+1) held clear, keep points on both sides
     holds.push({level: lv, cells: apron(s).filter(i => g.cells[i] === FLOOR)});
@@ -282,7 +299,7 @@ export function hostGenerators(layout: StationLayout, rc: ReactorCarve, carves: 
   }
   gens.sort((p, q) => p.zone - q.zone);
   gens.forEach((q, i) => { q.id = i; });
-  return {gens, holds, keep};
+  return {gens, holds, keep, reserve};
 
   function apron(s: ComplexSlot): number[] {
     const g = layout.levels[s.level].grid, E = s.entrance, [dx, dy] = DIRS[s.inward], cells: number[] = [];
@@ -367,6 +384,18 @@ export function clearEntranceLamps(layout: StationLayout, carves: readonly Compl
  * the pit wall, then along the pit walls to the zone's fans (structure.ts cableOf).
  */
 function complexCable(layout: StationLayout, rc: ReactorCarve, c: ComplexCarve, gen: ReactorGenerator): {x: number; y: number; z: number}[] {
+  // task reactor-playtest-round2-20261102 (lane PROPS, user: "cables … should be along the roof. Right now they clip awkwardly through the
+  // doorways"): under the ceilings, up and over every door lintel (or through the wall beside its jamb), out through the entrance wall,
+  // then along the pit walls (complex/propsCable.ts); the old single-height route below is the fallback when no ceiling route exists
+  const ceiling = ceilingCableRoute(layout, {level: c.slot.level, baseY: c.slot.baseY, frontArea: c.slot.frontArea, areas: c.areas}, gen);
+  if (ceiling) {
+    gen.cableHangers = ceiling.hangers;
+    gen.cableSleeves = ceiling.sleeves.map(i => i + 1); // (+ the panel point prepended)
+    if (ceiling.bare) gen.cableFallback = 'bare';
+    const fans = (layout.reactor?.fans ?? []).filter(f => f.zone === gen.zone);
+    return [{...gen.panel}, ...ceiling.pts, ...cableOf(rc, gen, fans, {...ceiling.exit, wall: slotWall(rc, c.slot)})].map(p => ({x: r3(p.x), y: r3(p.y), z: r3(p.z)}));
+  }
+  gen.cableFallback = 'legacy';
   const s = c.slot, g = layout.levels[s.level].grid, ids = new Set(c.areas), E = s.entrance;
   const inE = (x: number, y: number) => x >= E.x && y >= E.y && x < E.x + E.w && y < E.y + E.h;
   // task reactor-expansion-20261101 (lane BUNKER): only cells at the storey floor — the one cable height never runs low over a raised
@@ -434,6 +463,9 @@ export function finishComplexes(layout: StationLayout, rc: ReactorCarve, carves:
     });
   }
   info.complexes = out;
+  // task reactor-playtest-round2-20261102 (lane ARRIVAL): a shaft landing whose generator moved into a complex opening elsewhere is a
+  // plain wall landing now (HUD label; its emergency lamp was planned under the old name and stays)
+  for (const a of layout.areas) if (/^Generator landing/.test(a.label) && !info.generators.some(g => g.area === a.id)) a.label = a.label.replace(/^Generator landing/, 'Wall landing');
 }
 
 // ---------------------------------------------------------------------------------------------

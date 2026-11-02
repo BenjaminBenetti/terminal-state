@@ -411,6 +411,12 @@ export interface TrackExtContext {
    * level whose upper storeys overhang the whole station far above it (The Eaton's Center: rings >= 5 m above the 4.4 m bed ceiling).
    */
   rockLevels?: readonly number[];
+  /**
+   * (task reactor-playtest-round2-20261102 lane ARRIVAL addition, OPT-IN) Canvas cell rects counted as CORE OPEN space whatever their
+   * cells hold: no extension cell within margin.core of them. For a level whose structures are SOLID on every storey but are not rock
+   * (the Reactor pit's organ-pipe banks / tower-leg columns) or need rock left round them (the pit walls' fan ducts).
+   */
+  keepOut?: readonly {x: number; y: number; w: number; h: number}[];
 }
 
 /** True for areas of the track extensions (tunnels / annexes): every core pass skips them. */

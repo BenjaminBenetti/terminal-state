@@ -143,9 +143,11 @@ export function placeSectionGear(layout: StationLayout, items: readonly GearAssi
 /**
  * Appends `items` to `layout.pickups` (count 1 each) in plausible spots; returns the placements (fewer only if the
  * layout has no reachable floor cell at all). Deterministic for (layout, items, rng seed, profile). `profile` (lane SHOPS, R6): its
- * placement bias (LootTables.gearPlace) weighs the area choice; without one the draws are exactly the unbiased ones.
+ * placement bias (LootTables.gearPlace) weighs the area choice; without one the draws are exactly the unbiased ones. Task
+ * reactor-playtest-round2-20261102 (lane GAS): `opts.areaOk` keeps the finds out of areas it rejects (every pool and fallback; the
+ * Reactor's mask loot: never in the jammed gas zone). Absent = exactly the previous draws.
  */
-export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, profile?: LootProfile): PickupPlacement[] {
+export function placeGear(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, profile?: LootProfile, opts?: {areaOk?(a: Area): boolean}): PickupPlacement[] {
   const place = profile?.tables.gearPlace;
   // Track 2 (lane GEN): a layout whose track extensions grew / translated its grid places its gear in the CORE frame (gen/trackExt
   // coreView: the station exactly as without them), so every choice — areas, cells, anchor-distance ties — is main's; the
@@ -153,14 +155,14 @@ export function placeGear(layout: StationLayout, items: readonly GearAssignment[
   const ext = layout.extensions;
   if (ext && items.length && hasExtensionGrowth(layout)) {
     const core = coreView(layout);
-    const out = placeGearIn(core, items, rng, place).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
+    const out = placeGearIn(core, items, rng, place, opts?.areaOk).map(p => ({...p, x: p.x + ext.shift.x, z: p.z + ext.shift.z}));
     layout.pickups.push(...out);
     return out;
   }
-  return placeGearIn(layout, items, rng, place);
+  return placeGearIn(layout, items, rng, place, opts?.areaOk);
 }
 
-function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, place?: GearPlacement): PickupPlacement[] {
+function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rng: Rng, place?: GearPlacement, areaOk?: (a: Area) => boolean): PickupPlacement[] {
   const placed: PickupPlacement[] = [];
   if (!items.length) return placed;
   const levels = layout.levels?.length ? layout.levels : [{id: 0, role: 'main' as const, grid: layout.grid, baseY: 0}];
@@ -257,7 +259,7 @@ function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rn
     layout.pickups.push(p);
     placed.push(p);
   };
-  const pool = layout.areas.map(a => [a, gearAreaWeight(a)] as [Area, number]).filter(e => e[1] > 0);
+  const pool = layout.areas.map(a => [a, gearAreaWeight(a)] as [Area, number]).filter(e => e[1] > 0 && (!areaOk || areaOk(e[0]))); // (lane GAS: + areaOk)
   const used = new Set<number>();
   for (const it of items) {
     let done = false;
@@ -283,7 +285,7 @@ function placeGearIn(layout: StationLayout, items: readonly GearAssignment[], rn
       const g = L.grid, cells: number[] = [];
       for (let i = 0; i < g.cells.length; i++) {
         const a = layout.areas[g.area[i]];
-        if (cellOk(null, L.id, i, false) && (!a || gearAreaWeight(a) > 0)) cells.push(i);
+        if (cellOk(null, L.id, i, false) && (!a || (gearAreaWeight(a) > 0 && (!areaOk || areaOk(a))))) cells.push(i); // (lane GAS: + areaOk)
       }
       if (cells.length) { const i = rng.pick(cells); put(L.id, layout.areas[g.area[i]] ?? null, i, it); break; }
     }

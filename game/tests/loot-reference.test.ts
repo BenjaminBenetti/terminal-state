@@ -105,9 +105,12 @@ describe('loot reference: coverage (unknown registrations fail)', () => {
       // the Subway / Office: no overrides (the user likes the current rates); task track3-eaton-centre-20261031 (lane PROFILES): the
       // mall's explicit overrides (bio mater item weight) are listed exactly as the profile declares them
       const listed = (knob: 'itemWeight' | 'categoryWeight') => Object.entries(P.overrides[knob] ?? {}).map(([key, multiplier]) => ({knob, key, multiplier}));
-      expect(l.profile.overrides).toEqual(l.id === 'mall' || l.id === 'reactor' ? [...listed('itemWeight'), ...listed('categoryWeight')] : []);
+      // task reactor-playtest-round2-20261102 (lane ARRIVAL): + the Reactor's slot overrides (the total-loot hold after the round-2 rooms)
+      const slots = Object.entries(P.overrides.slot ?? {}).flatMap(([key, o]) => [
+        ...(o?.empty !== undefined ? [{knob: 'slot.empty', key, multiplier: o.empty}] : []), ...(o?.lots !== undefined ? [{knob: 'slot.lots', key, multiplier: o.lots}] : [])]);
+      expect(l.profile.overrides).toEqual(l.id === 'mall' || l.id === 'reactor' ? [...listed('itemWeight'), ...listed('categoryWeight'), ...slots] : []);
       if (l.id === 'mall') expect(Object.keys(P.overrides).sort()).toEqual(['categoryWeight', 'itemWeight']);
-      if (l.id === 'reactor') expect(Object.keys(P.overrides)).toEqual(['categoryWeight']); // task reactor-build-20261101: the culminating level's pressure
+      if (l.id === 'reactor') expect(Object.keys(P.overrides)).toEqual(['categoryWeight', 'slot']); // task reactor-build-20261101: the culminating level's pressure (+ round 2: the total-loot hold)
     }
     const text = JSON.stringify(r.levels.map(l => [l.id, l.label, l.profile.id]));
     expect(text).not.toMatch(/reduced|deep|baseline/i);

@@ -92,10 +92,12 @@ describe('hero plan on real layouts', () => {
       expect(hero.wheels.filter(w => w.kind === 'rcp').length).toBe(count('rcpVertical'));
       expect(hero.lights.green.length).toBe(2);
       expect(hero.lights.blue.length).toBe(1);
-      // status lamps at the restart sites (switchgear fuses / breaker, valve, pump, console key / rods) and at the core
-      const siteGroups = new Set(hero.lamps.filter(l => l.site).map(l => l.group));
-      expect(siteGroups).toEqual(new Set(['fuse0', 'fuse1', 'power', 'valve', 'pump', 'key', 'rods']));
-      expect(hero.lamps.filter(l => !l.site).length).toBeGreaterThan(20);
+      // status lamps at the core only. Task reactor-playtest-round2-20261102 (lane PROPS, intent change from the user's "strange floating
+      // disks with lights on top over some objects (remove)"): the restart sites' disc + bulb "on top of the machine" lamps floated over
+      // the valve wheel / switchgear / pump / console and are gone; each site's state is on its mounted panel lamps (restartViews.ts)
+      expect(hero.lamps.filter(l => l.site)).toEqual([]);
+      expect(new Set(hero.lamps.map(l => l.group))).toEqual(new Set(['power', 'valve', 'pump', 'key', 'rods']));
+      expect(hero.lamps.length).toBeGreaterThan(20);
     }, 60_000);
 
     it(`seed ${seed}: nothing of the hero in a walkway (ring / bridges / outer floor keep the headroom) or a deck's walk volume`, () => {

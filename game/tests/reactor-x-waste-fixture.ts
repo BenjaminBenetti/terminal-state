@@ -68,7 +68,10 @@ export function wasteFixture(seed: number, inward: 'N' | 'S' | 'E' | 'W', o: {U?
   for (let y = gf.y; y < gf.y + gf.h; y++) for (let x = gf.x; x < gf.x + gf.w; x++) genCells.push(g.idx(x, y));
   const useCells: number[] = [];
   for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) useCells.push(g.idx(gu.x + dx, gu.y + dy));
-  const release = holdCells(layout, [{level: FIX_LEVEL, cells: deckCells}, {level: FIX_LEVEL, cells: useCells}]);
+  // (like the host, task studio-reactor-playtest-round2-20261102: + the carve's reserved set-piece spans, through this pass only)
+  const reserved: number[] = [];
+  for (const r of carve.reserve ?? []) for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (g.cells[g.idx(x, y)] === FLOOR) reserved.push(g.idx(x, y));
+  const release = holdCells(layout, [{level: FIX_LEVEL, cells: deckCells}, {level: FIX_LEVEL, cells: useCells}, {level: FIX_LEVEL, cells: reserved}]);
   // the skid stays blocked (the host's collision machine)
   for (const i of genCells) g.blocked[i] = 1;
   dress(layout, rng.fork('dress'));

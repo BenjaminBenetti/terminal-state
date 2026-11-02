@@ -59,6 +59,7 @@ import {minesModelKeysFor} from '../src/world/reactor/minesAssets';
 import {bunkerModelKeysFor} from '../src/gen/reactor/complex/bunkerKinds';
 import {REACTOR_FOG} from '../src/world/reactor/archInstall';
 import {ReactorCpuCulling} from '../src/world/reactor/cpuActorCulling';
+import {emptyReactorState} from '../src/world/reactor/runState';
 
 installCanvasShim(false);
 for (const k of ['clip', 'rect']) (ShimContext.prototype as unknown as Record<string, unknown>)[k] ??= () => {};
@@ -270,9 +271,11 @@ interface Measured { scene: number; shadow: number; dynScene: number; dynShadow:
  * Scene + flashlight-shadow draws at a pose: the loot display filled for this eye, the moving objects tracked (the game's frame hook)
  * or not, the culler forced. `rules: false` = the Reactor culler's slab / occlusion rules and the tracking off (the atrium rule alone).
  */
-function measure(R: RealReactor, p: Pose, rules = true): Measured {
+function measure(R: RealReactor, p: Pose, rules = true, near = false): Measured {
   const cam = eyeCam(p), torch = torchOn(cam);
   const {world, cm, roots, dyn, tracking} = R;
+  // task reactor-playtest-round2-20261102 (lane COOLANT): the near coolant LOD as the frame hook drives it for this eye (budget poses)
+  if (near) world.reactorArch?.visuals.core?.lod(cam.position);
   const c = world.culler;
   c.viewpoints = [torch];
   c.slabs = c.occlusion = rules;
@@ -298,11 +301,15 @@ describe('the REAL Reactor: render objects per representative pose (scene + flas
     let worst = 0, total = 0;
     for (const seed of SEEDS) {
       const R = await realReactor(seed);
+      // (lane COOLANT) the coolant pumping (the near goop layer's most expensive state), reset after: the oracle runs without it
+      const vis = R.world.reactorArch!.visuals, pumping = {...emptyReactorState(3, 3), fuses: [true, true], breaker: true, valve: true, pump: true};
+      vis.setRestartState(pumping, true);
       for (const p of keyPoses(R.layout)) {
-        const off = measure(R, p, false);
+        const off = measure(R, p, false, true);
         done(off);
-        const on = measure(R, p);
+        const on = measure(R, p, true, true);
         const c = R.world.culler;
+        out(`seed ${seed} ${p.name}: near coolant draws ${R.world.reactorArch!.core?.near?.draws() ?? 0}`);
         out(`seed ${seed} ${p.name} (${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} yaw ${p.yaw.toFixed(2)} pitch ${p.pitch.toFixed(2)}): `
           + `rules off ${off.scene} + ${off.shadow} = ${off.scene + off.shadow} (enemies / pickups ${off.dynScene} + ${off.dynShadow}) | `
           + `on ${on.scene} + ${on.shadow} = ${on.scene + on.shadow} (enemies / pickups ${on.dynScene} + ${on.dynShadow}); slab ${c.slabCulled}, occluded ${c.occlusionCulled}, tracked hidden ${c.trackedCulled} / ${c.trackedCount}`);
@@ -312,6 +319,7 @@ describe('the REAL Reactor: render objects per representative pose (scene + flas
         total += on.scene + on.shadow;
         done(on);
       }
+      vis.setRestartState(emptyReactorState(3, 3), true); // (lane COOLANT) back to dormant: no near layer
     }
     out(`worst ${worst}, total ${total}`);
     expect(worst).toBeLessThanOrEqual(BUDGET.worst);

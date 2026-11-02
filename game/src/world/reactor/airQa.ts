@@ -34,6 +34,7 @@ export function reactorAirQaApi(game: unknown) {
         table: a ? Array.from(a.table, r3) : [],
         generators: r?.generators().map(q => ({...q, startedAt: r3(q.startedAt), since: r3(q.since), spool: r3(q.spool)})) ?? [],
         target: r?.target ?? -1, hold: r?.holdProgress ?? null, prompt: r?.prompt() ?? null, hud: r ? {...r.hud.shown} : null, counts: r ? {...r.counts} : null,
+        jam: r?.jam ? {...r.jam, stalls: r.state?.jam.stalls ?? 0, stalling: r.stalling} : null, // (task reactor-playtest-round2-20261102, lane GAS)
         render: g.atmosphere?.depthDebug?.() ?? null,
       };
     },
@@ -50,8 +51,8 @@ export function reactorAirQaApi(game: unknown) {
       g.camera?.updateMatrixWorld(true);
       return {ok: true, id, zone: gen.zone, level: gen.level, stand: [r3(x), r3(gen.y), r3(z)], panel: [r3(gen.panel.x), r3(gen.panel.y), r3(gen.panel.z)], depthAtEye: r3(r.air?.depthGasAt(x, P.eye, z) ?? 0)};
     },
-    /** DEBUG: start generator `id` now (as if its hold completed: crank, cue, alert, persisted). */
-    reactorStartGenerator: (id = 0) => ({ok: rt()?.start(id, 'qa') ?? false, id}),
+    /** DEBUG: start generator `id` now (as if its hold completed: crank, cue, alert, persisted). (lane GAS) The jammed one stalls: ok false. */
+    reactorStartGenerator: (id = 0) => ({ok: rt()?.start(id, 'qa') ?? false, id, jammed: rt()?.jam?.generator === id}),
     /** Lane RESTART's win clearing: every zone clears over `s` seconds. */
     reactorClearAll: (s?: number) => ({ok: rt()?.clearAll(s) ?? false}),
     /** The depth gas at height y (x / z default: the player's). */

@@ -47,6 +47,8 @@ export interface ReactorArchHost {
   sectionModelKeys?: ((layout: StationLayout) => readonly string[])[];
   levelResources?: LevelResourcesLike;
   world?: {culler?: {maxDistance: number}; reactorArch?: ReactorArch} | null;
+  /** Task reactor-playtest-round2-20261102 (lane COOLANT): the loading-screen warm-up's pools (the near coolant layer is hidden at build). */
+  warmRegistry?: {addPool(name: string, roots: () => readonly THREE.Object3D[]): void};
 }
 
 export class ReactorArchRuntime {
@@ -62,7 +64,9 @@ export class ReactorArchRuntime {
     host.sectionModelKeys?.push(layout => wasteModelKeysFor(layout)); // task reactor-expansion-20261101 (lane WASTE): the waste repository's models
     host.sectionPreloads?.push(layout => this.preload(layout));
     host.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
-    host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) v.tick(dt); });
+    // (lane COOLANT) + the near coolant LOD for the eye (camera.position: the world eye, set by Game.updateCamera)
+    host.frameHooks.push(dt => { const v = activeReactorArchVisuals(); if (v) { v.tick(dt); v.core?.lod(host.camera.position); } });
+    host.warmRegistry?.addPool('reactor-coolant-near', () => { const g = activeCoreVisuals()?.built?.near?.group; return g ? [g] : []; });
   }
 
   /** The Codex surface sets behind the Reactor's loading screen (any other level: nothing). */
@@ -145,11 +149,13 @@ export function reactorArchQaApi(game: {world?: {reactorArch?: ReactorArch} | nu
       if (o.tier) v.setTierPower(o.tier[0], o.tier[1]);
       return v.state();
     },
-    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning). */
-    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>} = {}) => {
+    /** Task reactor-expansion-20261101 (lane CORE): the hero's stage / look / lights; `tune` overrides CORE_LOOK keys (browser tuning).
+     *  (lane COOLANT) `near`: the near goop LOD on / off (A/B against the far look); the result carries its state. */
+    reactorCore: (o: {tune?: Partial<Record<keyof typeof CORE_LOOK, number>>; near?: boolean} = {}) => {
       const c = activeCoreVisuals();
       if (c && o.tune) Object.assign(c.tune, o.tune);
-      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null};
+      if (o.near !== undefined) c?.built?.near?.setEnabled(o.near);
+      return {core: c?.state() ?? null, lights: reactorCoreLights()?.qa() ?? null, arch: game.world?.reactorArch?.core?.stats ?? null, near: c?.built?.near?.state() ?? null};
     },
   };
 }

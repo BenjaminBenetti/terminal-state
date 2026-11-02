@@ -10,7 +10,10 @@
 //    the dead-end reward), the RADIO CONSOLE, the AIR FILTRATION UNITS;
 //  - the GENERATOR HALL: switchboard panels where the cable trench meets the wall, two diesel day tanks on their bund, the hazard-striped
 //    skid outline, a second row of fixtures, its plates;
-//  - ventilation ducts under the corridor ceilings, door plates in the bunker's own words, wayfinding in the muster corridor.
+//  - ventilation ducts under the corridor ceilings, door plates in the bunker's own words, 'GENERATOR HALL' wayfinding in every
+//    corridor on the way there.
+// (task reactor-playtest-round2-20261102, lane BUNKER: the rooms come from the SEEDED room graph of ./bunkerPlan.ts — the hall lies
+// along local u or v, any corridor may carry the route; nothing here assumes the old fixed band / spine plan.)
 // Every storage placed opens (footlockers, lockers, cabinets, crates, gun lockers: existing openables / holders, loot by the room's
 // purpose); loose things move (folding chairs, extinguishers); anchored plant / bunks / the console / the door are classified
 // (bunkerKinds.ts, docs/prop-affordances.md). Machinery boxes / trims are layout.decor (existing shape materials) over collision-only
@@ -426,38 +429,60 @@ function sweepPockets(D: Dx, areas: readonly Area[], p0: number): void {
 function dormitory(D: Dx, a: Area): void {
   const S = BUNKER_DRESS_STATS;
   const horiz = a.w >= a.h;
-  const longs: Side[] = horiz ? ['N', 'S'] : ['W', 'E'];
+  const byDoors = (p: Side, q: Side) => doorCount(D, a, p) - doorCount(D, a, q);
+  const longs: Side[] = (horiz ? ['N', 'S'] as Side[] : ['W', 'E'] as Side[]).sort(byDoors);
+  const shorts: Side[] = (horiz ? ['W', 'E'] as Side[] : ['N', 'S'] as Side[]).sort(byDoors);
   const depth = (horiz ? a.h : a.w) * CELL;
   const bed = PROP_DEFS.bunkBed, fl = PROP_DEFS.footlocker;
   const rowDepth = bed.w + 0.05 + fl.d;
-  const walls = depth >= 2 * rowDepth + 1.3 ? longs : [longs.slice().sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q))[0]];
-  // first the lockers, on the short wall with fewer doors (the bunk rows take the long walls), then the bunks
-  const shorts: Side[] = horiz ? ['W', 'E'] : ['N', 'S'];
-  const sw = shorts.sort((p, q) => doorCount(D, a, p) - doorCount(D, a, q));
-  const midOf = (sd: Side) => { const [lo, hi] = wallRange(a, sd); return walls.length > 1 ? {from: lo + rowDepth + 0.05, to: hi - rowDepth - 0.05} : {}; };
-  if (!rowAlongWall(D.ctx, a, sw[0], 'staffLockers', {front: 1.0, max: 4, ...midOf(sw[0])}).length && !rowAlongWall(D.ctx, a, sw[1], 'staffLockers', {front: 1.0, max: 3, ...midOf(sw[1])}).length) {
+  // both long walls carry a footlocker row when the room leaves an aisle between them, else the one with fewer doors
+  const twoRows = depth >= 2 * rowDepth + 1.3;
+  const walls = twoRows ? longs : [longs[0]];
+  // first the lockers, on the short wall with fewer doors, clear of the bunk rows' corners (task reactor-playtest-round2-20261102: in a
+  // one-row room too — the lockers once took the row's first bunk spot)
+  const midOf = (sd: Side): {from?: number; to?: number} => {
+    const [lo, hi] = wallRange(a, sd);
+    if (twoRows) return {from: lo + rowDepth + 0.05, to: hi - rowDepth - 0.05};
+    return longs[0] === 'N' || longs[0] === 'W' ? {from: lo + rowDepth + 0.05} : {to: hi - rowDepth - 0.05};
+  };
+  if (!rowAlongWall(D.ctx, a, shorts[0], 'staffLockers', {front: 1.0, max: 4, ...midOf(shorts[0])}).length && !rowAlongWall(D.ctx, a, shorts[1], 'staffLockers', {front: 1.0, max: 3, ...midOf(shorts[1])}).length) {
     // both short walls busy (doors, bunk ends): any free wall spot, the long walls too
-    for (let i = 0; i < 2; i++) if (!scanWall(D, a, 'staffLockers', [...sw, ...longs], 1.0)) break;
+    for (let i = 0; i < 2; i++) if (!scanWall(D, a, 'staffLockers', [...shorts, ...longs], 1.0)) break;
   }
-  for (const sd of walls) {
+  let beds = 0, lockers = 0;
+  /**
+   * A bunk row against wall `sd`: bunks on the cell grid — head against the wall (2.0 m = 4 cells), centres on cell boundaries (0.85 m
+   * bunk = 2 cells) at least 1.5 m apart, so each covers whole cells only (its collision is its visible body) — trying EVERY boundary
+   * along the wall (a door zone or a locker costs one spot, not the rest of the row), seeded scan direction; a footlocker in the next
+   * cell at a bunk's foot (`withLockers`; the first two of the room always).
+   */
+  const row = (sd: Side, withLockers: boolean): void => {
     const [lo, hi] = wallRange(a, sd), [nx, nz] = NORMAL[sd], fc = face(a, sd);
     const along = sd === 'N' || sd === 'S';
-    const bedRot = along ? Math.PI / 2 : 0;
-    const flRot = rotFacing(-nx, -nz);
-    // bunks on the cell grid: head against the wall (2.0 m = 4 cells), centres on cell boundaries 1.5 m apart (0.85 m bunk = 2 cells),
-    // so each covers whole cells only (its collision is its visible body); the footlocker in the next cell at its foot
-    const pitch = 1.5;
-    for (let t = Math.ceil((lo + 0.3 + bed.d / 2) / CELL) * CELL + (D.rng.chance(0.5) ? CELL : 0); t + bed.d / 2 <= hi - 0.3; t += pitch) {
-      const off = bed.w / 2, foff = bed.w + 0.05 + fl.d / 2;
+    const bedRot = along ? Math.PI / 2 : 0, flRot = rotFacing(-nx, -nz);
+    const off = bed.w / 2, foff = bed.w + 0.05 + fl.d / 2;
+    const ts: number[] = [];
+    for (let t = Math.ceil((lo + 0.3 + bed.d / 2) / CELL) * CELL; t + bed.d / 2 <= hi - 0.3 + 1e-6; t += CELL) ts.push(r3(t));
+    if (D.rng.chance(0.5)) ts.reverse();
+    let last = -Infinity;
+    for (const t of ts) {
+      if (Math.abs(t - last) < 1.5 - 1e-6) continue;
       const bx = along ? t : fc - nx * off, bz = along ? fc - nz * off : t;
       const p = tryPlaceProp(D.ctx, a, 'bunkBed', bx, bz, bedRot);
       if (!p || !sealOrDrop(D, a, p)) continue;
-      S.beds++;
-      if (!D.rng.chance(0.8)) continue;
+      last = t;
+      beds++; S.beds++;
+      if (!withLockers || (lockers >= 2 && !D.rng.chance(0.8))) continue;
       const fx = along ? t : fc - nx * foff, fz = along ? fc - nz * foff : t;
-      if (tryPlaceProp(D.ctx, a, 'footlocker', fx, fz, flRot)) S.footlockers++;
+      if (tryPlaceProp(D.ctx, a, 'footlocker', fx, fz, flRot)) { lockers++; S.footlockers++; }
     }
-  }
+  };
+  for (const sd of walls) row(sd, true);
+  // a narrow room or doors in the way (task reactor-playtest-round2-20261102: every dormitory sleeps >= 4): the other long wall (the
+  // bunks' feet across a ~1 m aisle, no footlockers there), then the short walls
+  if (beds < 4 && !twoRows) row(longs[1], false);
+  for (const sd of shorts) if (beds < 4) row(sd, false);
+  if (beds < 4) S.skipped.push(`dormitory ${a.label}: ${beds} bunks`);
   if (D.rng.chance(0.6)) placeAgainstWall(D.ctx, a, 'cabinetTall', {front: 0.8, tries: 16});
 }
 
@@ -469,12 +494,10 @@ function mess(D: Dx, a: Area): void {
   const stepL = 3.0, stepC = 3.2;
   const nL = Math.max(1, Math.floor(((horiz ? aw : ah) - 2.4) / stepL) + 1), nC = Math.max(1, Math.floor(((horiz ? ah : aw) - 2.6) / stepC) + 1);
   let n = 0;
-  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
-    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
-    const x = Math.round((ax0 + (horiz ? l : c)) * 4) / 4, z = Math.round((az0 + (horiz ? c : l)) * 4) / 4;
-    const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const rot = horiz ? Math.PI / 2 : 0; // the table's long side (d 1.6) along the room's long axis
+  const put = (x: number, z: number): boolean => {
     const t = tryPlaceProp(D.ctx, a, 'table', x, z, rot);
-    if (!t) continue;
+    if (!t) return false;
     n++;
     // folding chairs at the long sides, facing the table
     for (const sgn of [-1, 1]) {
@@ -485,6 +508,20 @@ function mess(D: Dx, a: Area): void {
         tryPlaceProp(D.ctx, a, 'foldingChair', horiz ? cx + sl : cx, horiz ? cz : cz + sl, horiz ? rotFacing(0, -sgn) : rotFacing(-sgn, 0), {laneOk: true});
       }
     }
+    return true;
+  };
+  for (let i = 0; i < nL && n < 6; i++) for (let k = 0; k < nC && n < 6; k++) {
+    const l = ((horiz ? aw : ah) - (nL - 1) * stepL) / 2 + i * stepL, c = ((horiz ? ah : aw) - (nC - 1) * stepC) / 2 + k * stepC;
+    put(Math.round((ax0 + (horiz ? l : c)) * 4) / 4, Math.round((az0 + (horiz ? c : l)) * 4) / 4);
+  }
+  // (task reactor-playtest-round2-20261102: a seeded mess hall may be a through room with several doors and the dresser's stock on
+  // its walls) fewer than three tables on the even grid: a 0.5 m lattice, nearest the room's centre first
+  if (n < 3) {
+    const spots: [number, number][] = [];
+    for (let x = ax0 + 1.75; x <= ax0 + aw - 1.75 + 1e-6; x += 0.5) for (let z = az0 + 1.75; z <= az0 + ah - 1.75 + 1e-6; z += 0.5) spots.push([r3(x), r3(z)]);
+    const mx = ax0 + aw / 2, mz = az0 + ah / 2;
+    spots.sort((p, q) => Math.hypot(p[0] - mx, p[1] - mz) - Math.hypot(q[0] - mx, q[1] - mz) || p[0] - q[0] || p[1] - q[1]);
+    for (const [x, z] of spots) { if (n >= 3) break; put(x, z); }
   }
 }
 
@@ -507,16 +544,8 @@ function radioRoom(D: Dx, a: Area): void {
   const ms = mainSide(D, a) ?? 'S';
   const order: Side[] = [OPP[ms], ...(ms === 'N' || ms === 'S' ? ['W', 'E'] as Side[] : ['N', 'S'] as Side[]), ms];
   let p = scanWall(D, a, 'radioConsole', order, 0.9);
-  // every wall taken (the dresser's signal racks): a free-standing console island facing the door, a walkway all round
-  if (!p) {
-    const [fx0, fz0] = NORMAL[ms], cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
-    for (const o of [0, 0.5, -0.5, 1, -1, 1.5, -1.5]) {
-      const alongX = ms === 'N' || ms === 'S';
-      p = tryPlaceProp(D.ctx, a, 'radioConsole', Math.round((cx + (alongX ? o : 0)) * 4) / 4, Math.round((cz + (alongX ? 0 : o)) * 4) / 4, rotFacing(fx0, fz0), {ring: 0.7});
-      if (p && !sealOrDrop(D, a, p)) p = null;
-      if (p) break;
-    }
-  }
+  // every wall taken (the dresser's signal racks, doors): a free-standing console island facing the door, a walkway all round
+  if (!p) p = island(D, a, 'radioConsole', ms, 0.7);
   if (p) {
     const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
     const off = PROP_DEFS.radioConsole.d / 2 + 0.45;
@@ -534,71 +563,104 @@ function filtration(D: Dx, a: Area): void {
   const far = OPP[ms];
   const sides: Side[] = ms === 'N' || ms === 'S' ? ['W', 'E'] : ['N', 'S'];
   let n = 0;
-  for (const sd of [far, ...sides]) {
+  for (const sd of [far, ...sides, ms]) {
     if (n >= 2) break;
     if (scanWall(D, a, 'airFilterUnit', [sd], 1.0)) n++;
   }
+  // (task reactor-playtest-round2-20261102) every wall taken by the dresser's plant stock / doors: one unit free-standing on its skid
+  if (!n && island(D, a, 'airFilterUnit', ms, 0.7)) n++;
   if (!n) BUNKER_DRESS_STATS.skipped.push('airFilterUnit: no wall');
   ceilingDuct(D, a, far, 0.62);
+}
+
+/**
+ * (task reactor-playtest-round2-20261102, lane BUNKER) A hero piece free-standing in room `a`, its front toward wall `face`, a
+ * walkway `ring` all round: the whole room on a 0.25 m lattice, nearest its centre first (the seeded rooms' doors / the dresser's
+ * stock may hold every wall spot).
+ */
+function island(D: Dx, a: Area, kind: PropKind, face: Side, ring: number): PropPlacement | null {
+  const [fx, fz] = NORMAL[face], cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;
+  const spots: [number, number][] = [];
+  for (let x = a.x * CELL + 1.2; x <= (a.x + a.w) * CELL - 1.2 + 1e-6; x += 0.25) for (let z = a.y * CELL + 1.2; z <= (a.y + a.h) * CELL - 1.2 + 1e-6; z += 0.25) spots.push([r3(x), r3(z)]);
+  spots.sort((s, t) => Math.hypot(s[0] - cx, s[1] - cz) - Math.hypot(t[0] - cx, t[1] - cz) || s[0] - t[0] || s[1] - t[1]);
+  for (const [x, z] of spots) {
+    const p = tryPlaceProp(D.ctx, a, kind, x, z, rotFacing(fx, fz), {ring});
+    if (p && sealOrDrop(D, a, p)) return p;
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
 // The generator hall
 
 function generatorHall(D: Dx): void {
-  const hall = D.area('hall');
-  if (!hall) return;
+  const hall = D.area('hall'), H = D.rec.plan.rooms.find(r => r.key === 'hall')?.r;
+  if (!hall || !H) return;
   const S = BUNKER_DRESS_STATS;
   const {plan, frame: f} = D.rec;
-  const ft = plan.gen.foot, end = plan.gen.end;
-  const uEnd = end === 'hi' ? ft.u + ft.w : ft.u;
-  const vMid = ft.v + ft.h / 2;
-  // the switchboard wall: the hall wall beyond the skid's panel end (local +-u)
+  // (task reactor-playtest-round2-20261102, lane BUNKER: the seeded hall lies along local u or v — everything here works in the
+  // skid's along / across frame; LA maps it back to local (u, v))
+  const ft = plan.gen.foot, end = plan.gen.end, axU = plan.gen.axis === 'u';
+  const LA = (al: number, ac: number): [number, number] => (axU ? [al, ac] : [ac, al]);
+  const boxLA = (a0: number, a1: number, c0: number, c1: number) => { const [u0, v0] = LA(a0, c0), [u1, v1] = LA(a1, c1); return D.box(u0, u1, v0, v1); };
+  const fa0 = axU ? ft.u : ft.v, faL = axU ? ft.w : ft.h, fc0 = axU ? ft.v : ft.u, fcL = axU ? ft.h : ft.w;
+  const ha0 = axU ? H.u : H.v, haL = axU ? H.w : H.h, hc0 = axU ? H.v : H.u;
+  const dirA = axU ? f.du : f.dv, dirC = axU ? f.dv : f.du;
+  const aEnd = end === 'hi' ? fa0 + faL : fa0;
+  const cMid = fc0 + fcL / 2;
+  // the switchboard wall: the hall wall beyond the skid's panel end
   const sgn = end === 'hi' ? 1 : -1;
-  const sbSide = sideOfDir(sgn * f.du[0], sgn * f.du[1]);
-  const uWall = end === 'hi' ? plan.dims.uE + plan.dims.SW : plan.dims.uW; // the hall's wall line in that direction
+  const sbSide = sideOfDir(sgn * dirA[0], sgn * dirA[1]);
+  const aWall = end === 'hi' ? ha0 + haL : ha0; // the hall's wall line in that direction
   // cable trench: a grated channel from the skid's panel end to the switchboard wall (floor finish, 0.6 m wide)
   {
-    const a0 = Math.min(uEnd, uWall), a1 = Math.max(uEnd, uWall);
-    D.decor('grille', D.box(a0, a1, vMid - 0.6, vMid + 0.6), 0, 0.014);
-    D.decor('steelDark', D.box(a0, a1, vMid - 0.7, vMid - 0.6), 0, 0.018);
-    D.decor('steelDark', D.box(a0, a1, vMid + 0.6, vMid + 0.7), 0, 0.018);
+    const a0 = Math.min(aEnd, aWall), a1 = Math.max(aEnd, aWall);
+    D.decor('grille', boxLA(a0, a1, cMid - 0.6, cMid + 0.6), 0, 0.014);
+    D.decor('steelDark', boxLA(a0, a1, cMid - 0.7, cMid - 0.6), 0, 0.018);
+    D.decor('steelDark', boxLA(a0, a1, cMid + 0.6, cMid + 0.7), 0, 0.018);
   }
   // hazard outline round the skid (0.6 m out), amber
   {
     const m = 1.2, w = 0.2;
-    const u0 = ft.u - m, u1 = ft.u + ft.w + m, v0 = ft.v - m, v1 = ft.v + ft.h + m;
-    for (const b of [D.box(u0, u1, v0, v0 + w), D.box(u0, u1, v1 - w, v1), D.box(u0, u0 + w, v0, v1), D.box(u1 - w, u1, v0, v1)]) D.decor('plasticSeat', b, 0, 0.008);
+    const a0 = fa0 - m, a1 = fa0 + faL + m, c0 = fc0 - m, c1 = fc0 + fcL + m;
+    for (const b of [boxLA(a0, a1, c0, c0 + w), boxLA(a0, a1, c1 - w, c1), boxLA(a0, a0 + w, c0, c1), boxLA(a1 - w, a1, c0, c1)]) D.decor('plasticSeat', b, 0, 0.008);
   }
   // the switchboard: a row of panels on that wall, centred on the trench
   {
-    const [tx, tz] = D.W(uWall, vMid);
+    const [tx, tz] = D.W(...LA(aWall, cMid));
     const t = sbSide === 'N' || sbSide === 'S' ? tx : tz;
     let n = rowAlongWall(D.ctx, hall, sbSide, 'electricalPanel', {from: t - 3.4, to: t + 3.4, front: 1.0, max: 4}).length;
-    for (const sd of [sbSide, sideOfDir(f.dv[0], f.dv[1])]) while (n < 2 && scanWall(D, hall, 'electricalPanel', [sd], 1.0, t)) n++;
+    for (const sd of [sbSide, sideOfDir(dirC[0], dirC[1]), sideOfDir(-dirC[0], -dirC[1])]) while (n < 2 && scanWall(D, hall, 'electricalPanel', [sd], 1.0, t)) n++;
     S.panels = n;
   }
-  // two diesel day tanks on their bund against the back wall (local +v), clear of the skid
+  // two diesel day tanks on their bund against a long wall (the one with fewer doors first; then the other, then the short wall facing
+  // the switchboard), clear of the skid: every 0.25 m along the wall, nearest ~4.2 m off the skid's centre first (the seeded halls
+  // are narrower / shorter than the old fixed one: the station dresser's stock may hold any fixed spot)
   {
-    const back = sideOfDir(f.dv[0], f.dv[1]);
-    const [lo, hi] = wallRange(hall, back);
-    const [gx, gz] = D.W(ft.u + ft.w / 2, vMid);
-    const tc = back === 'N' || back === 'S' ? gx : gz;
-    for (const off of D.rng.shuffle([-4.2, 4.2, -7.0, 7.0])) {
-      if (S.tanks >= 2) break;
-      const t = tc + off;
-      if (t - 1.45 < lo + 0.4 || t + 1.45 > hi - 0.4) continue;
-      const b = wallBox(hall, back, t - 1.45, t + 1.45, 0.05, 1.35);
-      if (!freeFor(D, hall, b) || propBlocksDoorway(D.layout, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2, D.base, 1.8)) continue;
-      dayTank(D, hall, back, t);
-      S.tanks++;
+    const longs = [sideOfDir(dirC[0], dirC[1]), sideOfDir(-dirC[0], -dirC[1])].sort((p, q) => doorCount(D, hall, p) - doorCount(D, hall, q));
+    const [gx, gz] = D.W(...LA(fa0 + faL / 2, cMid));
+    // the 2.9 m tanks first; a hall ringed by doors / stock takes compact 2.0 m ones
+    for (const hl of [1.45, 1.0]) for (const back of [...longs, OPP[sbSide], sbSide]) {
+      if (S.tanks >= 2 || (hl < 1.45 && S.tanks >= 1)) break;
+      const [lo, hi] = wallRange(hall, back);
+      const tc = back === 'N' || back === 'S' ? gx : gz;
+      const ts: number[] = [];
+      for (let t = lo + hl + 0.4; t <= hi - hl - 0.4 + 1e-6; t += 0.25) ts.push(r3(t));
+      ts.sort((p, q) => Math.abs(Math.abs(p - tc) - 4.2) - Math.abs(Math.abs(q - tc) - 4.2) || p - q);
+      for (const t of ts) {
+        if (S.tanks >= 2) break;
+        const b = wallBox(hall, back, t - hl, t + hl, 0.05, 1.35);
+        if (!freeFor(D, hall, b) || propBlocksDoorway(D.layout, (b.x0 + b.x1) / 2, (b.z0 + b.z1) / 2, (b.x1 - b.x0) / 2, (b.z1 - b.z0) / 2, D.base, 1.8)) continue;
+        dayTank(D, hall, back, t, hl);
+        S.tanks++;
+      }
     }
   }
   // a second row of fixtures (the dresser hung one down the middle)
   {
     const own = D.layout.lights.filter(l => l.area === hall.id);
-    const [ax, az] = D.W(ft.u + ft.w / 2, ft.v + ft.h / 2);
-    const [bx, bz] = D.W(ft.u + ft.w / 2, plan.dims.vH + 3);
+    const [ax, az] = D.W(...LA(fa0 + faL / 2, cMid));
+    const [bx, bz] = D.W(...LA(fa0 + faL / 2, hc0 + 3));
     const dx = bx - ax, dz = bz - az;
     const rel = hall.ceil - D.base, y = r3(D.base + (rel > 4.65 ? 4.5 : rel - 0.02));
     for (const l of own.slice(0, 3)) {
@@ -611,19 +673,20 @@ function generatorHall(D: Dx): void {
 }
 
 /** A diesel day tank: a painted steel tank on saddles inside a low spill bund, fill neck and gauge; collision-only footprint. */
-function dayTank(D: Dx, a: Area, side: Side, t: number): void {
-  const b = wallBox(a, side, t - 1.45, t + 1.45, 0.05, 1.35);
+function dayTank(D: Dx, a: Area, side: Side, t: number, hl = 1.45): void {
+  // `hl`: the bund's half length (1.45 m: the 2.9 m tank; 1.0 m: the compact one) — every part scales off its ends
+  const b = wallBox(a, side, t - hl, t + hl, 0.05, 1.35);
   solidProp(D, 'annexMachine', a, b, 1.6, 0, 0, false);
-  const inner = wallBox(a, side, t - 1.2, t + 1.2, 0.2, 1.2);
+  const inner = wallBox(a, side, t - hl + 0.25, t + hl - 0.25, 0.2, 1.2);
   // bund curb (0.18 m) and its floor
   D.decor('shopFrame', {x0: b.x0, z0: b.z0, x1: b.x1, z1: b.z1}, 0, 0.03);
-  for (const e of [wallBox(a, side, t - 1.45, t + 1.45, 0.05, 0.13), wallBox(a, side, t - 1.45, t + 1.45, 1.27, 1.35), wallBox(a, side, t - 1.45, t - 1.37, 0.05, 1.35), wallBox(a, side, t + 1.37, t + 1.45, 0.05, 1.35)]) D.decor('steelDark', e, 0, 0.18);
+  for (const e of [wallBox(a, side, t - hl, t + hl, 0.05, 0.13), wallBox(a, side, t - hl, t + hl, 1.27, 1.35), wallBox(a, side, t - hl, t - hl + 0.08, 0.05, 1.35), wallBox(a, side, t + hl - 0.08, t + hl, 0.05, 1.35)]) D.decor('steelDark', e, 0, 0.18);
   // saddles and the tank body, an amber 'DIESEL' band, the fill neck / vent and a sight gauge
-  for (const s of [t - 0.8, t + 0.8]) D.decor('black', wallBox(a, side, s - 0.08, s + 0.08, 0.25, 1.15), 0.03, 0.3);
+  for (const s of [t - hl + 0.65, t + hl - 0.65]) D.decor('black', wallBox(a, side, s - 0.08, s + 0.08, 0.25, 1.15), 0.03, 0.3);
   D.decor('steelDark', inner, 0.3, 1.45);
-  D.decor('plasticSeat', wallBox(a, side, t - 1.21, t + 1.21, 0.19, 1.21), 0.95, 1.08);
-  D.decor('kitchenSteel', wallBox(a, side, t + 0.6, t + 0.75, 0.6, 0.75), 1.45, 1.6);
-  D.decor('kitchenSteel', wallBox(a, side, t - 0.75, t - 0.65, 0.55, 0.65), 1.45, 1.58);
+  D.decor('plasticSeat', wallBox(a, side, t - hl + 0.24, t + hl - 0.24, 0.19, 1.21), 0.95, 1.08);
+  D.decor('kitchenSteel', wallBox(a, side, t + hl - 0.85, t + hl - 0.7, 0.6, 0.75), 1.45, 1.6);
+  D.decor('kitchenSteel', wallBox(a, side, t - hl + 0.7, t - hl + 0.8, 0.55, 0.65), 1.45, 1.58);
   D.decor('black', wallBox(a, side, t - 0.15, t + 0.15, 1.2, 1.215), 0.45, 1.3);
 }
 
@@ -646,13 +709,15 @@ function ceilingDuct(D: Dx, a: Area, side: Side, w = 0.45): void {
   }
 }
 
+/** A duct along one long wall of every corridor (the one with fewer doors; task reactor-playtest-round2-20261102: the seeded corridors). */
 function corridorDucts(D: Dx): void {
-  const f = D.rec.frame;
-  const muster = D.area('muster');
-  if (muster) ceilingDuct(D, muster, sideOfDir(-f.dv[0], -f.dv[1]));
-  for (const key of ['spineW', 'spineE']) {
-    const a = D.area(key);
-    if (a) ceilingDuct(D, a, sideOfDir((key === 'spineW' ? -1 : 1) * f.du[0], (key === 'spineW' ? -1 : 1) * f.du[1]));
+  for (const p of D.rec.plan.rooms) {
+    if (p.role !== 'corridor') continue;
+    const a = D.area(p.key);
+    if (!a) continue;
+    const longs: Side[] = a.w >= a.h ? ['N', 'S'] : ['W', 'E'];
+    longs.sort((s, t) => doorCount(D, a, s) - doorCount(D, a, t));
+    ceilingDuct(D, a, longs[0]);
   }
 }
 
@@ -726,20 +791,46 @@ function bunkerSigns(D: Dx): void {
       wallSign(D, lock, side, side === 'N' || side === 'S' ? x : z, Math.min(lock.ceil - D.base - 0.35, 3.55), {kind: 'info', text: 'DECONTAMINATION · SHELTER 7', w: 2.4});
     }
   }
-  // the muster corridor: the way to the generator hall (both spines lead there) on the wall facing the decontamination door, the arrow
-  // toward the nearer spine mouth (for a reader facing the wall, i.e. looking along +v: right = (-fwd.z, fwd.x))
-  {
-    const muster = D.area('muster'), decon = D.area('decon');
-    const d = muster && decon ? D.doors(muster).find(q => q.a === decon.id || q.b === decon.id) : undefined;
-    if (muster && d) {
-      const side = sideOfDir(f.dv[0], f.dv[1]);
-      const cx = (d.x + d.w / 2) * CELL, cz = (d.y + d.h / 2) * CELL;
-      const {uW, uE, SW, vS} = rec.plan.dims;
-      const mouths = [D.W(uW + SW / 2, vS), D.W(uE + SW / 2, vS)];
-      const m = mouths.reduce((p, q) => (Math.hypot(q[0] - cx, q[1] - cz) < Math.hypot(p[0] - cx, p[1] - cz) ? q : p));
-      const right = [-f.dv[1], f.dv[0]];
-      const arrow = (m[0] - cx) * right[0] + (m[1] - cz) * right[1] > 0 ? 'right' : 'left';
-      wallSign(D, muster, side, side === 'N' || side === 'S' ? cx : cz, 2.25, {kind: 'info', text: 'GENERATOR HALL', w: 1.9, arrow});
+  wayfinding(D);
+}
+
+/**
+ * (task reactor-playtest-round2-20261102, lane BUNKER) The way to the generator hall through the SEEDED room graph: the shortest door
+ * path from the decontamination room to the hall; in every corridor on it a 'GENERATOR HALL' plate on the wall facing the door you
+ * came in by, its arrow toward the door you leave by (for a reader facing the wall: right = (-fwd.z, fwd.x)).
+ */
+function wayfinding(D: Dx): void {
+  const {layout, rec} = D;
+  const start = rec.area.decon, goal = rec.area.hall;
+  if (start === undefined || goal === undefined) return;
+  const mine = new Set(Object.values(rec.area));
+  const prev = new Map<number, Door | null>([[start, null]]), q = [start];
+  for (let h = 0; h < q.length && !prev.has(goal); h++) {
+    for (const d of D.doors(layout.areas[q[h]])) {
+      const o = d.a === q[h] ? d.b : d.a;
+      if (!mine.has(o) || prev.has(o) || o === rec.area.lock) continue;
+      prev.set(o, d);
+      q.push(o);
     }
+  }
+  if (!prev.has(goal)) return;
+  const path: {area: number; via: Door}[] = [];
+  for (let x = goal; prev.get(x);) { const d = prev.get(x)!; path.unshift({area: x, via: d}); x = d.a === x ? d.b : d.a; }
+  const corridors = new Set(rec.plan.rooms.filter(p => p.role === 'corridor').map(p => rec.area[p.key]));
+  for (let i = 0; i + 1 < path.length; i++) {
+    const a = layout.areas[path[i].area];
+    if (!corridors.has(a.id)) continue;
+    const din = path[i].via, dout = path[i + 1].via;
+    const side = OPP[doorSide(din, a)];
+    const alongX = side === 'N' || side === 'S';
+    const cx = (din.x + din.w / 2) * CELL, cz = (din.y + din.h / 2) * CELL;
+    const ox = (dout.x + dout.w / 2) * CELL, oz = (dout.y + dout.h / 2) * CELL;
+    const fwd = NORMAL[side], right = [-fwd[1], fwd[0]];
+    const sx = alongX ? cx : face(a, side), sz = alongX ? face(a, side) : cz;
+    const proj = (ox - sx) * right[0] + (oz - sz) * right[1];
+    const arrow = Math.abs(proj) < 1.2 ? 'up' : proj > 0 ? 'right' : 'left';
+    const t = alongX ? cx : cz, toward = Math.sign(proj) * (alongX ? right[0] : right[1]);
+    // that wall spot taken (a door opposite): 1.6 m along the wall toward the way out
+    for (const dt of [0, 1.6 * (toward || 1), -1.6 * (toward || 1)]) if (wallSign(D, a, side, t + dt, 2.25, {kind: 'info', text: 'GENERATOR HALL', w: 1.9, arrow})) break;
   }
 }
