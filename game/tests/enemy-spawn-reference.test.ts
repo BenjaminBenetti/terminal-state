@@ -8,6 +8,7 @@
 //    constants (Siren hp = 2 x the shambler's), eligibility rules === the profile, the eligibility census === a fresh generation.
 
 import {describe, expect, it} from 'vitest';
+import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's lingerie store zone
 import {trackExtConfig} from '../src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone; task mall-playtest-revision-20261031: per level — the mall grows at most 1)
 import {existsSync, readFileSync} from 'node:fs';
 import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
@@ -105,10 +106,11 @@ describe('enemy spawn reference: runtime agreement', () => {
         expect([c.placement.triesPerArea, c.placement.spacing.metres]).toEqual([pl.tries, pl.spacingM]);
         expect(c.placement.keepAway[0]).toMatchObject({value: pl.startCells, metres: pl.startCells * CELL});
         // Track 2 (lane CONTENT): the 'service' annex context is a ZONE (one run per seeded annex, 0-TRACK_EXT.annex.max per level),
-        // reported separately: never part of the whole-level total
-        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service');
+        // reported separately: never part of the whole-level total; task mall-lingerie-20261102-221554 (lane CONTEXT): so is the mall's
+        // 'lingerie' store context (one run per lingerie store, 0-LINGERIE_STORES_MAX per mall)
+        expect(!!c.zone, `${L.id} ${c.id} zone`).toBe(c.id === 'service' || c.id === 'lingerie');
         if (c.zone) {
-          const max = trackExtConfig(L.id as LevelId).annex.max;
+          const max = c.id === 'lingerie' ? LINGERIE_STORES_MAX : trackExtConfig(L.id as LevelId).annex.max;
           expect(c.zone.runsPerLevel).toEqual({lo: 0, hi: max});
           expect(c.zone.perLevelMax).toBe(max * pc.count[1]);
           continue;
