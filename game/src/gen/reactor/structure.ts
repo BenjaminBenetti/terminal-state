@@ -27,6 +27,14 @@ export const yawToward = (dx: number, dz: number) => r3(Math.atan2(-dx, -dz));
 export const TIER_COLORS = [0xd8d4c8, 0xd9b23a, 0xd9792e, 0xb53a2e, 0x7a4ab0, 0x3aa6a0];
 /** Uncleared depth-gas concentrations per zone (top / bottom) — lane AIR owns the final tuning. */
 export const ZONE_GAS: readonly [number, number][] = [[0.10, 0.32], [0.45, 0.65], [0.8, 0.9]]; // (task reactor-expansion-20261101: zone 0 top 0.14 -> 0.10 — the first generator, now in the tier-1 bunker, stands in visible haze BELOW the 0.12 damage threshold even at crouch eye: the generator route never needs a mask)
+/**
+ * Task reactor-playtest-round2-20261102 (lane GAS; user: "on the level above the level that is covered in fog, there is also fog … make
+ * it lower, about knee high"): zone 0's band TOP sits this far above tier 1's deck. It was mid-storey (rim / tier 1, ~3 m above the
+ * deck): with the 2.5 m soft top (world/reactor/air.ts TRANSITION_M) its haze stood visibly to ~1.8 m (c >= 0.06) / ~2.2 m (c >= 0.03)
+ * on tier 1, above the gassed tier 2. Now it ends about knee high (~0.6 m / ~1.1 m), the eye clean; tier 2's hazard is unchanged. The
+ * other zones' tops stay mid-storey: they lie 3 m below the deck above, so they spill onto no deck. Render = exposure (one table).
+ */
+export const ZONE0_TOP_ABOVE_DECK = 2.0;
 /** Gas zone of a storey: -1 the rim, 0 = tiers 1-2, 1 = tiers 3-4, 2 = the core floor. */
 export const zoneOfLevel = (lv: number): number => (lv === 0 ? -1 : lv === CORE_LEVEL ? 2 : lv <= 2 ? 0 : 1);
 
@@ -494,7 +502,7 @@ export function reactorInfo(layout: StationLayout, rc: ReactorCarve, rng: Rng, i
   const roleOf = (lv: number): ReactorTierRole => (lv === 0 ? 'rim' : lv === CORE_LEVEL ? 'core' : lv <= 2 ? 'upper' : lv === 3 ? 'middle' : 'deep');
   const tiers: ReactorTier[] = bases.map((y, lv) => ({level: lv, index: lv, role: roleOf(lv), label: reactorStoreyLabel(lv), baseY: y, zone: zoneOfLevel(lv), color: TIER_COLORS[lv]}));
   const mid = (a: number, c: number) => r3((bases[a] + bases[c]) / 2);
-  const bands: [number, number][] = [[mid(0, 1), mid(2, 3)], [mid(2, 3), mid(4, 5)], [mid(4, 5), bases[CORE_LEVEL]]];
+  const bands: [number, number][] = [[Math.min(mid(0, 1), r3(bases[1] + ZONE0_TOP_ABOVE_DECK)), mid(2, 3)], [mid(2, 3), mid(4, 5)], [mid(4, 5), bases[CORE_LEVEL]]]; // (lane GAS: zone 0's knee-high top)
   const zones: ReactorZone[] = bands.map(([yTop, yBottom], id) => ({
     id, yTop, yBottom, cTop: ZONE_GAS[id][0], cBottom: ZONE_GAS[id][1], levels: tiers.filter(t => t.zone === id).map(t => t.level),
     generator: inp.gens.find(g => g.zone === id)?.id ?? -1, fans: inp.fans.filter(f => f.zone === id).map(f => f.id),
