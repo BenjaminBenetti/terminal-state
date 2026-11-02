@@ -28,7 +28,8 @@ const cache = new Map<string, StationLayout>();
 const gen = (seed: number, mode: 'null' | 'sample' = 'sample') => {
   const key = `${mode}:${seed}`;
   let L = cache.get(key);
-  if (!L) { L = generateReactorLevel({levelSeed: seed}, mode === 'sample' ? SAMPLE : {}); cache.set(key, L); }
+  // task reactor-expansion-20261101 (lane WASTE): 'null' = explicit null carvers (the shipped carvers are real complexes now)
+  if (!L) { L = generateReactorLevel({levelSeed: seed}, mode === 'sample' ? SAMPLE : {complexCarvers: {bunker: null, mines: null, waste: null}}); cache.set(key, L); }
   return L;
 };
 const DIR = {N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0]} as const;
