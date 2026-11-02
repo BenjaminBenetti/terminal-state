@@ -260,7 +260,8 @@ Existing families only. Density and the nastier families rise with depth (`docs/
   instance is the lens, so the glass glows exactly when the baked light does. The kit plans no decorative lamps.
 - **Circuits:** the rim is on station power. Every third lamp and the lamps at the generator / stair landings are steady dim emergency
   lamps. The rest are on the powered circuit 2: dark glass and no light until the restart.
-- **The open top:** `levels[0].sky` sits at the pit roof line (no roof slab; the beam grid stays).
+- **The sky through the roof opening** (was the whole top open; see "The roof opening" below): `levels[0].sky` sits at the pit roof
+  line with a mask of the opening's cells.
   - `world/reactor/gaslightSky.ts` draws the Office's toxic sky dome and the outside gas sheets over the opening.
   - The march's regional term draws the toxic surface air above the roof line (`world/gaslightRules.ts` `reactorOutdoorGas`). The
     exposure reads the same function, and nothing walkable reaches it.
@@ -292,6 +293,41 @@ User (WebGPU, quality high): "the fog is still not visible … volumetric fog is
   the HIGH preset's march cap (52 m reaches the core floor), the source rect and the gates. None depend on the eye's exposure.
 - Tests: `game/tests/reactor-x-fog-webgpu-limits.test.ts` covers the binding budget per variant and backend, view rays from the
   clean rim (drawn = hazard, green and visibly dense), clearing, level change = boot and the error-scope order.
+
+### The roof opening (task reactor-submit-roof-fog-20261102, lane ROOF)
+User: "I want a single hole above the reactor not a totally open roof."
+- **Cause:** the expansion's `openPitRoof` marked the whole rim storey as open sky (`levels[0].sky` with no mask). So no roof slab was
+  built over any pit cell, and only a row of girders stood against the green sky.
+- **The rule** (`gen/reactor/roofOpening.ts` `roofOpeningOf`): one round opening centred on the core.
+  - Its radius is 1.2 × the core radius: a 16.8 m diameter over the 7 m vessel. The vessel and its service ring read through it from
+    every tier.
+  - It is clamped to leave the curb plus at least 6 m of solid roof to every pit wall. On real pits the clamp never bites: about 11 m
+    of roof remains each side.
+  - A pit with no room for it keeps a closed roof: no sky and no shafts.
+  - Every reader derives the opening from `layout.reactor`, so nothing is stored twice.
+- **Generator:** `levels[0].sky.open` (`gen/levels.ts` `LevelSky.open`) marks only the cells that touch the disc.
+  - Rays leave into the sky only through those cells. Every other band top at the roof line is a ceiling, and closed columns are
+    solid at every height.
+  - The Office's unmasked roof is unchanged. The mask is re-windowed with the grids on Track 2 growth (`gen/trackExt/core.ts`).
+- **The roof** (`world/reactor/roofKit.ts`):
+  - **The slab** is one mesh: the builder's dark `reactor-roof` concrete over the pit outline, with a true round hole.
+    `ReactorArch.ceilKey` hands the builder none of its roof-line runs: about 17 per-level / per-chunk meshes become 1. The slab also
+    spans the open-well wall flights, which the builder never roofed.
+  - **The steel grid** under the slab: the old girder lines plus secondary beams 3 m apart, as instances of the existing band-0
+    I-beam mesh (no new draw call).
+  - Every member is trimmed into the curb ring and kept out of the crane trolley's body. No beam crosses the hole.
+  - **The curb:** a closed steel ring girder under the slab (1.3 m wide; the grid's stepped hole edge hides above it) and a 0.6 m
+    concrete upstand. They are two lathe meshes using existing kit materials.
+- **Through the hole only:**
+  - The sky dome (centred over the opening, inside the far plane) and the outside gas sheets are covered everywhere else by the slab,
+    the curb and the walls.
+  - The march stops at the slab, so the toxic outdoor air (`reactorOutdoorGas`, unchanged: what hurts is what shows, and nothing
+    walkable reaches it) shows only through the opening.
+  - The light shafts (`PIT_SHAFTS`, `shaftAt`) fall only through the opening disc, with a soft 1.5 m rim. The march reads one plain
+    `shaftHole` vec4 (no new uniform array). Their direction is steepened to [0.1, −1, 0.06], so the column lands on the reactor.
+- **Known:** the towers' reserved leg columns (concrete-faced, core floor to the roof line) can meet the curb ring when a tower stands
+  about 10 m from the core. They read as columns carrying the ring.
+- Tests: `game/tests/reactor-x-roof-opening.test.ts`, plus the updated `reactor-x-gaslight-*.test.ts`.
 
 ## Pathways: the clipping audit (task reactor-expansion-20261101, lane PATHS)
 Nothing solid may stand in walkable space except designed edges (railings on the edge line, wall-flush fittings within 0.1 m).

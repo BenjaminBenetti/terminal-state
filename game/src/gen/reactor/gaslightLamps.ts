@@ -17,8 +17,10 @@
 //    tube instance is the lens, so the glass glows exactly as the fixture's baked light does);
 //  - the circuit contract is kept: the rim on station power, a steady dim emergency lamp every POWERED_EMERGENCY_EVERY-th lamp and at
 //    the generator / stair landings, the rest on the POWERED circuit 2 (`dying`: held at 0 until the restart, ramped at the win);
-//  - the OPEN ROOF: levels[0].sky (gen/levels.ts LevelSky) at the pit roof line — the pit's roof slab is not built, rays leave into the
-//    sky above it (world/reactor/gaslightSky.ts draws the toxic sky and the outdoor gas; world/gaslightRules.ts the gas above it).
+//  - the ROOF OPENING (task reactor-submit-roof-fog-20261102, lane ROOF — was the whole pit top open): levels[0].sky (gen/levels.ts
+//    LevelSky) at the pit roof line with an `open` mask of ONE round hole over the core (gen/reactor/roofOpening.ts) — the roof slab
+//    stands everywhere else, rays leave into the sky only through the hole (world/reactor/gaslightSky.ts draws the toxic sky and the
+//    outdoor gas; world/gaslightRules.ts the gas above it and the light shafts through the hole).
 // Deterministic (hash of the position, no RNG draws): the rest of the generator's output is unchanged.
 
 import {CELL, FLOOR, SOLID, type Grid} from '../grid';
@@ -26,6 +28,7 @@ import type {LightMount, LightPlacement, StationLayout} from '../stationTypes';
 import type {ReactorInfo} from './reactorTypes';
 import {POWERED_EMERGENCY_EVERY} from './structure';
 import {railedAt} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
+import {openPitRoofOpening} from './roofOpening'; // task reactor-submit-roof-fog-20261102 (lane ROOF): one opening, not an open top
 
 /** Every lamp tunable (m). */
 export const PIT_LAMPS = {
@@ -207,21 +210,20 @@ export function planPitLamps(layout: StationLayout): PitLampStats {
     else { l.power = lerp(PIT_LAMPS.powered); l.dying = true; st.dying++; }
     layout.lights.push(l);
   });
-  // 5. THE OPEN ROOF: the rim storey is an open-sky storey above the pit roof line (no roof slab over the pit; rays leave into the sky)
+  // 5. THE ROOF OPENING (lane ROOF): the solid pit roof with one hole over the core (only the hole's columns open to the sky)
   openPitRoof(layout, info);
   Object.defineProperty(layout, 'pitLamps', {value: st, enumerable: false, configurable: true});
   return st;
 }
 
 /**
- * The pit top opens to the sky: levels[0].sky (gen/levels.ts LevelSky) with its band top / closed-column top at the pit roof line —
- * ceilings at or above it are not built (the pit's roof slab: only its open beam grid stays, world/reactor/archKit.ts planRoof) and
- * rays leaving the pit above it fly into the open sky. Nothing walkable comes near it (the rim is at 0, the roof 14-18 m up).
+ * Task reactor-submit-roof-fog-20261102 (lane ROOF, user: "I want a single hole above the reactor not a totally open roof"): the pit
+ * roof is SOLID with ONE round opening over the core (gen/reactor/roofOpening.ts): levels[0].sky at the roof line with `open` = the
+ * opening's cells only — every other pit cell keeps its roof slab ceiling (rays hit it; world/levelGeometry.ts builds it), rays
+ * leaving through the opening fly into the sky. (Was: the whole pit top open, no slab at all.) Nothing walkable comes near it.
  */
 export function openPitRoof(layout: StationLayout, info: ReactorInfo): void {
-  const roofY = info.pit.roofY;
-  if (!(roofY > info.pit.rimY + 2) || !layout.levels.length || layout.levels.some(l => l.sky)) return;
-  layout.levels[0].sky = {y: info.pit.rimY, ceil: roofY, top: roofY};
+  openPitRoofOpening(layout, info);
 }
 
 /** QA / tests: the stats of the last planPitLamps on this layout (null when it never ran). */
