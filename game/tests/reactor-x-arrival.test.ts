@@ -7,7 +7,8 @@
 import {describe, expect, it} from 'vitest';
 import {generateReactorLevel, reactorIssues} from '../src/gen/reactor/index';
 import {ARRIVAL, ARRIVAL_RECIPES} from '../src/gen/reactor/arrival';
-import {ARRIVAL_SEP, reactorFrame} from '../src/gen/reactor/frame';
+import {ARRIVAL_SEP, PIT_ROCK, reactorFrame} from '../src/gen/reactor/frame';
+import {btsAreaPresent} from '../src/gen/trackExt/index';
 import {CELL, FLOOR, SOLID, VOID, type Grid} from '../src/gen/grid';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {arrivalPose} from '../src/levels/registry';
@@ -277,4 +278,27 @@ describe('the Reactor-wide seeded flow (lane ARRIVAL): station recipes, rock sui
     }
     expect(JSON.stringify(gen(1).reactor!.approach)).not.toBe(JSON.stringify(gen(2).reactor!.approach));
   });
+});
+
+describe('Track2 stays out of the pit (lane ARRIVAL guard: extendTracks keepOut = the pit + PIT_ROCK cells)', () => {
+  it('no extension cell in the pit or its rock margin on any storey; the 20 % annex still appears on present rolls', () => {
+    // 637474: the lead's case (an annex service corridor through the rim gallery's organ-pipe bank once the drill fit shifted the
+    // stream), the host test's present seeds, then the first present seeds of the track-extension census corpus
+    const present: number[] = [637474, 4201601321, 920538251, 350413600];
+    for (let i = 0; present.length < 14; i++) { const s = (i * 2654435761 + 12345) >>> 0; if (btsAreaPresent(s) && !present.includes(s)) present.push(s); }
+    let annexes = 0;
+    for (const seed of present) {
+      const L = generateReactorLevel({levelSeed: seed}), R = L.reactor!;
+      expect(reactorIssues(L), `seed ${seed}`).toEqual([]);
+      if (btsAreaPresent(seed) && L.extensions!.annexes.length) annexes++;
+      const b = R.pit.bounds, x0 = Math.round(b.x0 / CELL) - PIT_ROCK, x1 = Math.round(b.x1 / CELL) + PIT_ROCK, z0 = Math.round(b.z0 / CELL) - PIT_ROCK, z1 = Math.round(b.z1 / CELL) + PIT_ROCK;
+      let n = 0;
+      for (const lv of L.levels) for (let y = z0; y < z1; y++) for (let x = x0; x < x1; x++) {
+        const i = lv.grid.idx(x, y);
+        if (lv.grid.cells[i] !== SOLID && L.areas[lv.grid.area[i]]?.ext) n++;
+      }
+      expect(n, `seed ${seed}: Track2 cells by the pit`).toBe(0);
+    }
+    expect(annexes).toBe(present.filter(s => btsAreaPresent(s)).length);
+  }, 240_000);
 });

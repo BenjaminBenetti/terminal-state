@@ -193,6 +193,11 @@ with logical rooms flowing in to one another".
   12-pit corpus (docs/enemy-spawns.md); Sirens 1.58 → 1.50 per run (1.13 → 1.50 on seeds 1–8; suite rooms are >= 5 x 5 m, so the
   deep ones qualify as her dark alcoves); loot holders 197 → 260 per run (+32 %, the new rooms' furniture); generation ~+20 % (Node
   median ~0.77 s); render-submit budget worst pose 714 → 757 draws (cap 790).
+- **Track2 stays out of the pit** (a lead-reported bug: on 637474 an annex corridor cut through the rim gallery's organ-pipe bank):
+  the bank / tower-leg columns are SOLID on every storey, so the extension planner took them for rock. `extendTracks` now gets the
+  pit grown by `PIT_ROCK` (4 cells: the wall row + the fans' duct depth) as an opt-in `keepOut` (counted as core open space), and
+  `reactorIssues` rejects any extension cell there (extensions are dropped, never a core retry). Every BTS-present roll checked still
+  gets its annex.
 - **Not varied:** which storey each complex is on (the gas no-deadlock rule, the jam and the spawn contexts depend on it), the
   switchback wall's lane order and the maintenance ladders' corner.
 

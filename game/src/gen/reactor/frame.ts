@@ -164,6 +164,12 @@ export function reactorFrame(levelSeed: number, force?: string, salt = 0): React
   };
 }
 
+/**
+ * Task reactor-playtest-round2-20261102 (lane ARRIVAL): cells of rock kept round the pit against Track2 extensions (the wall row + the
+ * fans' 1.5 m duct depth; gen/reactor/index.ts pitKeepOut, validate.ts).
+ */
+export const PIT_ROCK = 4;
+
 /** Task reactor-playtest-round2-20261102 (lane ARRIVAL): the arrival band's row range (gen/reactor/arrival.ts ARRIVAL.sep). */
 export const ARRIVAL_SEP: [number, number] = [28, 34];
 

@@ -38,7 +38,7 @@ import type {TrackExtConfig} from '../trackExt/types';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS} from '../trackExt/index';
 import {populateExtensions} from '../annexContent';
 import type {ReactorComponent, ReactorPose} from './reactorTypes';
-import {CORE_LEVEL, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
+import {CORE_LEVEL, PIT_ROCK, REACTOR_LEVELS, reactorFrame, reactorSeed, type ReactorFrame} from './frame';
 import {carveReactor, reactorCanvas, type ReactorCarve} from './carve';
 import {
   buildSites, deckHolds, deckLights, maintenanceLadders, mouthHolds, placeFans, reactorInfo, reactorLinks, reactorRails,
@@ -109,6 +109,12 @@ export function generateReactorLevel(ctx: SectionGenContext, opts: ReactorGenOpt
   throw new Error('reactor level generation failed');
 }
 
+/** The pit's canvas rect grown by PIT_ROCK: no Track2 extension cell inside it (extendTracks keepOut; reactorIssues checks it). */
+export function pitKeepOut(rc: {rectC: ReactorCarve['rectC']; PW: number; PD: number}): {x: number; y: number; w: number; h: number} {
+  const r = rc.rectC(0, 0, rc.PW, rc.PD);
+  return {x: r.x - PIT_ROCK, y: r.y - PIT_ROCK, w: r.w + 2 * PIT_ROCK, h: r.h + 2 * PIT_ROCK};
+}
+
 const startCells = (p: SpawnProfile): number => {
   const c = p.contexts.floor ?? p.contexts.ring ?? p.contexts.station;
   return c?.placement.startCells ?? 36;
@@ -134,6 +140,10 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   // --- Track2 seam: AFTER all carving, BEFORE the crop (plans only; east / south of the fixed origin) ----------------------------
   const ext = trackExt === 'none' ? null : extendTracks(k, rng.fork('track-ext'), trackExt, {
     levelId: 'reactor', levelSeed: ctx.levelSeed, canvasGrow: 'east-south', origin: {x: 0, y: 0}, maxCells: REACTOR_EXT_MAX_CELLS, coreCrop: {w: rc.coreW, h: rc.coreH},
+    // task reactor-playtest-round2-20261102 (lane ARRIVAL): the pit is reactor-owned on every storey — its organ-pipe banks / tower-leg
+    // columns are SOLID everywhere but are not rock, and the fans' ducts need PIT_ROCK cells of rock behind the walls: no extension
+    // cell there (an annex corridor once cut through the rim gallery's organ bank)
+    keepOut: [pitKeepOut(rc)],
   });
   // --- Crop (fixed origin: canvas cells = grid cells) ------------------------------------------------------------------------
   const c = cropKit(k, Array.from({length: REACTOR_LEVELS}, (_, i) => i), 0, 0, rc.coreW, rc.coreH);
