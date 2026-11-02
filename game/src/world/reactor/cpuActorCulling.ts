@@ -143,8 +143,27 @@ export function installReactorCpuCulling(host: ReactorCpuCullingHost): ReactorCp
   return (installed = new ReactorCpuCulling(host));
 }
 
-/** QA: what is tracked (and how many the culler hides now). */
-export function reactorCpuCullingQa(game: {world?: {culler?: unknown} | null}): {actors: number; pickups: number; released: number; hidden: number} | null {
-  if (!installed) return null;
-  return {...installed.stats, hidden: (game.world?.culler as {trackedCulled?: number} | undefined)?.trackedCulled ?? 0};
+interface CullerStats {
+  stats: {culled: number; registered: number}; slabCulled: number; occlusionCulled: number; trackedCulled: number; trackedCount: number;
+  slabs: boolean; occlusion: boolean; update(camera: THREE.Camera, force?: boolean): void;
+}
+
+/**
+ * QA hooks (qa.ts `__LL`): `reactorCpu()` — the level culler's last decision (meshes culled, by the slab / storey occlusion, tracked
+ * enemies / pickups hidden) and what this runtime tracks; `reactorCpu({rules: false})` = DEBUG A/B: the Reactor culler's slab / storey
+ * occlusion off (the atrium rule alone, as before lane CPU; tracked objects then only fog-culled, i.e. shown), `{rules: true}` back on. null off the Reactor.
+ */
+export function reactorCpuQaApi(game: {world?: {culler?: unknown} | null; layout?: {reactor?: unknown} | null; camera?: THREE.Camera}) {
+  return {
+    reactorCpu: (o: {rules?: boolean} = {}) => {
+      const c = game.world?.culler as CullerStats | undefined;
+      if (!installed || !game.layout?.reactor || !c) return null;
+      if (o.rules !== undefined) {
+        c.slabs = c.occlusion = o.rules;
+        if (game.camera) c.update(game.camera, true);
+      }
+      return {rules: c.slabs && c.occlusion, culled: c.stats.culled, registered: c.stats.registered, slabCulled: c.slabCulled, occlusionCulled: c.occlusionCulled,
+        trackedHidden: c.trackedCulled, tracked: c.trackedCount, ...installed.stats};
+    },
+  };
 }

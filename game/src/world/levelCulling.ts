@@ -1090,7 +1090,7 @@ export class LevelCuller {
   }
 
   private decideTracked(camera: THREE.Camera): void {
-    if (!this.tracked.size) return;
+    if (!this.tracked.size) { this.trackedCulled = 0; return; }
     const e = this.eye, me = camera.matrixWorld.elements, en = this.trackEntry;
     const fl = Math.hypot(me[8], me[9], me[10]) || 1;
     const fx = -me[8] / fl, fy = -me[9] / fl, fz = -me[10] / fl;
