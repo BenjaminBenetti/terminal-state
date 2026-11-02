@@ -251,6 +251,26 @@ function wallFrames(rc: ReactorCarve): WallFrame[] {
 }
 
 /** Wall extraction fans of every zone: 2-4 per zone on the pit walls between its storeys, clear of decks / stairs where possible. */
+/**
+ * (lead merge fix, task reactor-expansion-20261101) True when every storey's grid is closed (rock / not inside an open band) behind the
+ * wall face for a fan housing's depth (1.5 m) across its disc (hub y ± r): a side-complex room behind the pit wall rejects the spot.
+ */
+function rockBehind(layout: StationLayout, hx: number, hz: number, nx: number, nz: number, y: number, r: number): boolean {
+  const tx = -nz, tz = nx;
+  for (let d = 0.3; d <= 1.55; d += 0.25) for (let t = -r; t <= r + 1e-6; t += 0.4) {
+    const px = hx - nx * d + tx * t, pz = hz - nz * d + tz * t;
+    for (const L of layout.levels) {
+      const g = L.grid, [cx, cy] = g.cellOf(px, pz);
+      if (!g.inBounds(cx, cy)) continue;
+      const i = g.idx(cx, cy);
+      if (g.cells[i] === SOLID) continue;
+      const f = g.floorOf(i), c = g.ceil[i] || f + 3;
+      if (y + r > f && y - r < c) return false;
+    }
+  }
+  return true;
+}
+
 export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): ReactorFan[] {
   const fans: ReactorFan[] = [];
   const walls = wallFrames(rc);
@@ -276,7 +296,8 @@ export function placeFans(layout: StationLayout, rc: ReactorCarve, rng: Rng): Re
           if (!ok) continue;
           const [x, z] = w.cell(u, 0);
           const hx = r3((x + 0.5) * CELL - w.nx * 0.5 * CELL), hz = r3((z + 0.5) * CELL - w.nz * 0.5 * CELL);
-          const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
+          // (lead merge fix) the 1.4 m-deep duct housing needs ROCK behind the wall face — never a side-complex room behind it
+          const up = pass === 2 ? 3.2 : [3.2, 4.2, 5.2].find(h => fanClear(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2) && rockBehind(layout, hx, hz, w.nx, w.nz, rc.bases[lv] + h, 1.2)); // lane PATHS
           if (up === undefined) continue;
           cands.push({lv, w, u, x: hx, z: hz, y: r3(rc.bases[lv] + up)});
         }
