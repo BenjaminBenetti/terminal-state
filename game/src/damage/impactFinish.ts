@@ -16,6 +16,9 @@ const REACTOR: Readonly<Record<string, DamageClass>> = {
   'reactor-wall': 'concrete', 'reactor-roof': 'concrete', 'reactor-floor': 'concrete', 'reactor-ceil': 'concrete',
   'reactor-grating': 'steel', 'reactor-deck-under': 'steel', 'reactor-room-wall': 'steel', 'reactor-trim': 'steel',
 };
+/** Task reactor-expansion-20261101 (lane CORE): the hero core's undrawn grid keys — the vessel's column = the steel vessel; the goop
+ *  pool's floor (under the goop) = a soft wet hit (no sparks / dust). */
+const REACTOR_CORE: Readonly<Record<string, DamageClass>> = {'reactor-core-hidden': 'steel', 'reactor-core-goop': 'rubber'};
 
 const OFFICE_FLOOR: Readonly<Record<string, DamageClass>> = {
   carpet: 'fabric', vinyl: 'plastic', tile: 'tile', wet: 'tile', stone: 'terrazzo', concrete: 'concrete', wood: 'wood', server: 'laminate',
@@ -27,6 +30,7 @@ const OFFICE_CEIL: Readonly<Record<string, DamageClass>> = {grid: 'plaster', pla
 export function finishClass(key: string | null | undefined): DamageClass | null {
   if (!key) return null;
   if (key in REACTOR) return REACTOR[key];
+  if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
   if (key.startsWith('office-')) {
     const base = key.split('@')[0];

@@ -144,7 +144,7 @@ export class ReactorArch {
     const lvl = this.levels[L];
     if (!lvl) return null;
     // task reactor-expansion-20261101 (lane CORE): the vessel column / goop pool floors are not drawn; the ring + bridges are grating
-    if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : CORE_HIDDEN;
+    if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : this.coreKinds[i] === CORE_CELL.pool ? CORE_GOOP : CORE_HIDDEN;
     if (this.pitMask[i]) return lvl.id === this.coreLevel ? 'reactor-floor' : 'reactor-grating';
     const a = this.layout.areas[lvl.grid.area[i]];
     return isReactorArea(a, lvl.id) ? 'reactor-floor' : null;
@@ -185,15 +185,15 @@ export class ReactorArch {
   }
 
   scale(key: string): {u: number; v: number} | undefined {
-    if (key === CORE_HIDDEN) return {u: 1, v: 1}; // task reactor-expansion-20261101 (lane CORE)
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return {u: 1, v: 1}; // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? reactorSurfaceScale(this.mats, key) : undefined;
   }
   material(key: string): THREE.Material | undefined {
-    if (key === CORE_HIDDEN) return coreHiddenMaterial(); // task reactor-expansion-20261101 (lane CORE)
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return coreHiddenMaterial(); // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? reactorSurfaceMaterial(this.mats, key) : undefined;
   }
   meshName(key: string): string | undefined {
-    if (key === CORE_HIDDEN) return 'reactor-arch-core-hidden'; // task reactor-expansion-20261101 (lane CORE)
+    if (key === CORE_HIDDEN || key === CORE_GOOP) return `reactor-arch-${key.slice(8)}`; // task reactor-expansion-20261101 (lane CORE)
     return isReactorKey(key) ? `reactor-arch-${key.slice(8)}` : undefined;
   }
 
@@ -320,6 +320,8 @@ export class ReactorArch {
 
 /** Task reactor-expansion-20261101 (lane CORE): the surface key of grid geometry the hero replaces (the vessel column, the pool floor). */
 export const CORE_HIDDEN = 'reactor-core-hidden';
+/** The goop pool's floor (under the goop mesh): not drawn either; its own key so a bullet into the goop is not a concrete hit. */
+export const CORE_GOOP = 'reactor-core-goop';
 let hidden: MeshBasicNodeMaterial | null = null;
 /** Never drawn (material.visible = false): shared, made once. */
 function coreHiddenMaterial(): MeshBasicNodeMaterial {

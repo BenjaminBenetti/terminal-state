@@ -142,6 +142,7 @@ rebuilt world shows exactly the stage reached, with nothing to replay.
 The glow lights are 2 green + 1 blue unshadowed PointLights created once at boot (intensity-only changes). Two of them are the
 volumetric march's scatter lights with `userData.vfOpen`. Baked tinted virtual light-field sources over the goop add to them: half
 are steady, half are on the powered circuit. QA: `__LL.reactorCore({tune})`.
+
 ### Mounted controls (the rule for every control that sits on a 3D model)
 Code: `game/src/world/reactor/controlsMount.ts` (pure, shared by the kit and the restart), `controlsKit.ts` (the machines and the
 generator start boxes), `controlsSkin.ts` (their look), `controlsModel.ts` (moving parts split off a model).

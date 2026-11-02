@@ -137,7 +137,7 @@ describe('the world build carries the hero (real layout)', () => {
     // the builder's meshes: the hidden key carries the vessel column / pool floor (never drawn), rusted plate lines the goop walls
     const byName = new Map<string, THREE.Mesh>();
     w.group.traverse(o => { if ((o as THREE.Mesh).isMesh) byName.set(o.name, o as THREE.Mesh); });
-    const hidden = [...byName.values()].filter(m => m.name.startsWith('reactor-arch-core-hidden'));
+    const hidden = [...byName.values()].filter(m => m.name.startsWith('reactor-arch-core-hidden') || m.name.startsWith('reactor-arch-core-goop'));
     expect(hidden.length).toBeGreaterThan(0);
     for (const m of hidden) expect((m.material as THREE.Material).visible).toBe(false);
     expect(arch.stats.faces['reactor-deck-under']).toBeGreaterThan(50);
