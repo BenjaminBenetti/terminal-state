@@ -25,7 +25,7 @@ export const yawToward = (dx: number, dz: number) => r3(Math.atan2(-dx, -dz));
 /** Tier marker band colours (rim, tiers 1..4, core). */
 export const TIER_COLORS = [0xd8d4c8, 0xd9b23a, 0xd9792e, 0xb53a2e, 0x7a4ab0, 0x3aa6a0];
 /** Uncleared depth-gas concentrations per zone (top / bottom) — lane AIR owns the final tuning. */
-export const ZONE_GAS: readonly [number, number][] = [[0.14, 0.32], [0.45, 0.65], [0.8, 0.9]];
+export const ZONE_GAS: readonly [number, number][] = [[0.10, 0.32], [0.45, 0.65], [0.8, 0.9]]; // (task reactor-expansion-20261101: zone 0 top 0.14 -> 0.10 — the first generator, now in the tier-1 bunker, stands in visible haze BELOW the 0.12 damage threshold even at crouch eye: the generator route never needs a mask)
 /** Gas zone of a storey: -1 the rim, 0 = tiers 1-2, 1 = tiers 3-4, 2 = the core floor. */
 export const zoneOfLevel = (lv: number): number => (lv === 0 ? -1 : lv === CORE_LEVEL ? 2 : lv <= 2 ? 0 : 1);
 
