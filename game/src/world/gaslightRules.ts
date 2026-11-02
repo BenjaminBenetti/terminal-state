@@ -5,12 +5,16 @@
 //    hurts (world/gas/system.ts exposure, world/reactor/air.ts depthGasAt) and what shows (render/volumetricShaders.ts depth term's
 //    outdoor part): the Office roof deck (y0 / y1 = world/roofAir.ts's ramp round the deck, c = GAS.ROOF_OUTDOOR_C) and the Reactor's
 //    OPEN pit top (above the pit roof line: out of every player's reach, so the toxic sky never hurts anyone who can stand there).
-//  - LIGHT SHAFTS through the open pit top (B's shafts): a directional sky light that reaches a march point through the roof
-//    opening, striped by the roof beams' shadows and broken into patches by the drifting outdoor gas; it lights the haze AND the
-//    gas strata (in-scatter only — surfaces keep the baked fixture field).
+//  - LIGHT SHAFTS through the pit roof's single opening (B's shafts; task reactor-submit-roof-fog-20261102, lane ROOF: one round hole
+//    over the core, was the whole open top): a directional sky light that reaches a march point through the opening disc, soft at its
+//    rim and broken into patches by the drifting outdoor gas; it lights the haze AND the gas strata (in-scatter only — surfaces keep
+//    the baked fixture field).
 //  - The FALLBACK when the volumetric pass is off / unsupported / failed: the scene's own FogExp2 is tinted toward the gas green and
 //    thickened by the eye concentration for the frame (render/volumetric.ts direct(); in-engine fog, never a CSS / image overlay).
 //  - CPU mirrors for the visibility tests: opacity of a gas over a view path and its saturated glow colour.
+
+import type {ReactorInfo} from '../gen/reactor/reactorTypes';
+import {roofOpeningOf} from '../gen/reactor/roofOpening';
 
 /** Outdoor (regional) gas above a height inside a world rect: c(y) = c · smoothstep(y0, y1, y). */
 export interface OutdoorGas {
@@ -38,9 +42,12 @@ export function outdoorGasAt(o: OutdoorGas | null, x: number, y: number, z: numb
 }
 
 /**
- * The Reactor's open pit top: the toxic surface atmosphere starts above the pit roof line (pit.roofY: the crane runway / pipe tops
+ * The Reactor's surface air: the toxic outdoor atmosphere starts above the pit roof line (pit.roofY: the crane runway / pipe tops
  * stand below it; no deck, ladder or stair reaches it — the rim is at 0, the roof 14-18 m up). c = the Office roof's outdoor air
- * (the same surface atmosphere); vis thins the look so the sky still reads through it from the rim.
+ * (the same surface atmosphere); vis thins the look so the sky still reads through it from the rim. Task reactor-submit-roof-fog-
+ * 20261102 (lane ROOF): the roof is solid now except its single opening over the core, so the march (which stops at the first
+ * surface) shows this air only THROUGH the opening; it stays the whole layout rect above the roof line (the outdoors is everywhere
+ * up there: the view through the hole keeps its depth at any angle) and the exposure reads the same function.
  */
 export const REACTOR_OUTDOOR = {c: 0.6, rampLo: 0.6, rampHi: 6, vis: 0.2} as const;
 
@@ -68,55 +75,54 @@ export const ROOF_GAS_LOOK = {
 } as const;
 
 /**
- * Light shafts through the open pit top (the Reactor variant of the march only): the sky light's travel direction (normalised in
- * use: steep, a little slanted like B), its linear colour x gain, the roof-beam stripes (beam half shadow width, soft edge), the
- * outdoor gas patches (noise scale, coverage) and the fade with depth below the roof (1/m).
+ * Light shafts through the pit roof's single OPENING (the Reactor variant of the march only): the sky light's travel direction
+ * (normalised in use: steep, a little slanted like B — task reactor-submit-roof-fog-20261102, lane ROOF: [0.2, -1, 0.12] ->
+ * [0.1, -1, 0.06] so the one column through the hole over the core falls on the reactor, ~5 m off its axis at the core floor instead
+ * of ~11 m), its linear colour x gain, the soft rim of the column (the curb's penumbra, m), the outdoor gas patches (noise scale,
+ * coverage) and the fade with depth below the roof (1/m). (Was: the whole open pit top, striped by the open beam grid's shadows; the
+ * grid is now under a solid roof, no beam crosses the opening.)
  */
 export const PIT_SHAFTS = {
-  dir: [0.2, -1, 0.12] as readonly [number, number, number],
+  dir: [0.1, -1, 0.06] as readonly [number, number, number],
   colour: [0.78, 0.92, 0.62] as readonly [number, number, number],
   gain: 4.5,
-  beamHalf: 0.55, beamSoft: 0.7,
+  rimSoft: 1.5,
   noiseScale: 0.045, cover: 0.5, coverSoft: 0.16,
   fade: 0.045,
 } as const;
 
-/** Shaft geometry of one Reactor: the opening rect (the pit outline's bounds), the roof line, the beams (axis + pitch + origin). */
+/**
+ * Shaft geometry of one Reactor: the pit (the march's bound: shafts only inside it, below the roof line), the roof line and the roof
+ * OPENING the sky light falls through (a disc in the roof plane: gen/reactor/roofOpening.ts roofOpeningOf).
+ */
 export interface ShaftSpec {
   rect: {x0: number; z0: number; x1: number; z1: number};
   roofY: number;
-  /** Beams span along x (their shadows stripe along z: the coordinate across them is z) when 'x', else along z. */
-  beamsAlong: 'x' | 'z';
-  /** First beam coordinate (across) and the pitch between beams (m). */
-  beam0: number;
-  pitch: number;
+  hole: {x: number; z: number; r: number};
 }
 
-/** The shaft spec of a Reactor pit (mirrors world/reactor/archKit.ts planRoof: the beams span the SHORT way, ~6 m apart). */
-export function pitShaftSpec(b: {x0: number; z0: number; x1: number; z1: number}, roofY: number): ShaftSpec {
-  const spanX = b.x1 - b.x0 <= b.z1 - b.z0; // beams run along x (span the short way) when the pit is narrower in x
-  const L0 = spanX ? b.z0 : b.x0, L1 = spanX ? b.z1 : b.x1;
-  const n = Math.max(1, Math.round((L1 - L0) / 6));
-  return {rect: {...b}, roofY, beamsAlong: spanX ? 'x' : 'z', beam0: L0, pitch: (L1 - L0) / n};
+/** The shaft spec of a Reactor pit: through its roof opening only (null: a closed roof, no shafts). */
+export function pitShaftSpec(info: Pick<ReactorInfo, 'pit' | 'core'>): ShaftSpec | null {
+  const o = roofOpeningOf(info);
+  return o ? {rect: {...info.pit.bounds}, roofY: info.pit.roofY, hole: {x: o.x, z: o.z, r: o.r}} : null;
 }
 
 /**
  * CPU mirror of the shaft light at a world point (the march's term without the drifting patch noise: `patch` = the noise value
- * there, 1 = fully open sky): 0 outside the pit / above the roof / where the slanted ray leaves through the walls; beam shadows;
- * the fade with depth. Returns the light intensity factor (multiply PIT_SHAFTS.colour x gain).
+ * there, 1 = fully open sky): 0 outside the pit / above the roof / where the slanted ray toward the sky meets the solid roof (outside
+ * the opening disc); the soft rim inside the disc's edge; the fade with depth. Returns the light intensity factor (multiply
+ * PIT_SHAFTS.colour x gain).
  */
 export function shaftAt(s: ShaftSpec, x: number, y: number, z: number, patch = 1): number {
   const r = s.rect;
   if (x < r.x0 || x > r.x1 || z < r.z0 || z > r.z1 || y >= s.roofY) return 0;
   const d = PIT_SHAFTS.dir, t = s.roofY - y; // toward the sky: -dir, reaching the roof plane after t / |dir.y|
   const qx = x - d[0] / -d[1] * t, qz = z - d[2] / -d[1] * t;
-  if (qx < r.x0 || qx > r.x1 || qz < r.z0 || qz > r.z1) return 0;
-  const across = s.beamsAlong === 'x' ? qz : qx;
-  const f = ((across - s.beam0) / s.pitch) % 1, fr = f < 0 ? f + 1 : f;
-  const dist = Math.min(fr, 1 - fr) * s.pitch;
-  const stripe = sstep(PIT_SHAFTS.beamHalf, PIT_SHAFTS.beamHalf + PIT_SHAFTS.beamSoft, dist);
+  const dq = Math.hypot(qx - s.hole.x, qz - s.hole.z);
+  if (dq >= s.hole.r) return 0;
+  const rim = 1 - sstep(s.hole.r - Math.min(PIT_SHAFTS.rimSoft, s.hole.r), s.hole.r, dq);
   const open = sstep(PIT_SHAFTS.cover - PIT_SHAFTS.coverSoft, PIT_SHAFTS.cover + PIT_SHAFTS.coverSoft, patch);
-  return stripe * open * Math.exp(-PIT_SHAFTS.fade * t);
+  return rim * open * Math.exp(-PIT_SHAFTS.fade * t);
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------

@@ -51,7 +51,7 @@ export const VF_MARK = {march: 'vfMarchAcc', temporal: 'vfTemporalOut', composit
 type N = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 const n = (x: unknown): N => x;
 const {
-  Fn, If, Loop, clamp, dot, exp, float, floor, fract, getScreenPosition, getViewPosition, int, interleavedGradientNoise, ivec2, length,
+  Fn, If, Loop, clamp, dot, exp, float, floor, getScreenPosition, getViewPosition, int, interleavedGradientNoise, ivec2, length,
   max, min, mix, outputStruct, pow, property, screenCoordinate, select, smoothstep, sqrt, texture, texture3D, textureSize,
   uniform, uniformArray, uv, vec2, vec3, vec4,
 } = TSL as unknown as Record<string, N>;
@@ -94,11 +94,13 @@ export function createFogUniforms() {
     depthK: uniform(new THREE.Vector4(REACTOR_GAS_LOOK.ext, REACTOR_GAS_LOOK.scatter, REACTOR_GAS_LOOK.emission, REACTOR_GAS_LOOK.wisps)),
     depthSheet: uniform(new THREE.Vector4(REACTOR_GAS_LOOK.sheetXZ, REACTOR_GAS_LOOK.sheetY, REACTOR_GAS_LOOK.sheets, 0)), depthTint: uniform(new THREE.Vector3(...REACTOR_GAS_LOOK.tint)),
     // task reactor-expansion-20261101 (lane GASLIGHT): the regional term's OUTDOOR part [y0, y1, c, vis] (world/gaslightRules.ts outdoorGasAt:
-    // the Office roof deck air / the Reactor's open pit top; c 0 = none) and the pit's sky LIGHT SHAFTS — dir (normalised) + on, opening
-    // rect, [roofY, pitch, beam0, fade], [beams along x ? 1 : 0, beamHalf, beamSoft, noise scale], [cover, coverSoft, 0, 0], colour x gain
+    // the Office roof deck air / the Reactor's surface air; c 0 = none) and the pit's sky LIGHT SHAFTS — dir (normalised) + on, the pit
+    // rect (their bound), [roofY, -, -, fade], [-, -, -, noise scale], [cover, coverSoft, 0, 0], colour x gain; task reactor-submit-roof-
+    // fog-20261102 (lane ROOF): + the roof OPENING they fall through [x, z, radius, rim soft] (the beam stripes went with the open top)
     depthOut: uniform(new THREE.Vector4(0, 1, 0, 1)),
     shaftDir: uniform(new THREE.Vector4(0, -1, 0, 0)), shaftRect: uniform(new THREE.Vector4(0, 0, 0, 0)), shaftA: uniform(new THREE.Vector4(0, 6, 0, 0.05)),
     shaftB: uniform(new THREE.Vector4(1, 0.5, 0.7, 0.045)), shaftC: uniform(new THREE.Vector4(0.5, 0.16, 0, 0)), shaftCol: uniform(new THREE.Vector3()),
+    shaftHole: uniform(new THREE.Vector4(0, 0, 0, 1)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -376,26 +378,24 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
           const md = max(length(mv), 1e-4).toVar();
           L.addAssign(n(u.muzzleColor).mul(distAtt(max(md, 0.5), n(u.muzzleRange).x, n(u.muzzleRange).y).mul(phaseOf(u, dot(mv.div(md), n(dir).negate())))));
         });
-        // task reactor-expansion-20261101 (lane GASLIGHT): the sky's LIGHT SHAFTS through the open pit top (reactor-variant programs only;
-        // world/gaslightRules.ts shaftAt): toward the sky up to the roof plane, inside the opening, beam-shadow stripes x drifting gas
-        // patches x the fade with depth; it lights the haze and every gas term like any other light
+        // task reactor-expansion-20261101 (lane GASLIGHT): the sky's LIGHT SHAFTS into the pit (reactor-variant programs only;
+        // world/gaslightRules.ts shaftAt): toward the sky up to the roof plane — task reactor-submit-roof-fog-20261102 (lane ROOF): inside
+        // the roof's single OPENING disc (soft rim; was the whole open top striped by its beams) — x drifting gas patches x the fade with
+        // depth; it lights the haze and every gas term like any other light
         if (o.depth) {
           If(n(u.shaftDir).w.greaterThan(0.5), () => {
-            const sd = n(u.shaftDir), sr = n(u.shaftRect), sa = n(u.shaftA), sb2 = n(u.shaftB), sc2 = n(u.shaftC);
+            const sd = n(u.shaftDir), sr = n(u.shaftRect), sa = n(u.shaftA), sb2 = n(u.shaftB), sc2 = n(u.shaftC), sh0 = n(u.shaftHole);
             const inPit = n(p).x.greaterThanEqual(sr.x).and(n(p).x.lessThanEqual(sr.z)).and(n(p).z.greaterThanEqual(sr.y)).and(n(p).z.lessThanEqual(sr.w)).and(n(p).y.lessThan(sa.x));
             If(inPit, () => {
               const tUp = n(sa.x).sub(n(p).y).toVar();
               const k = tUp.div(max(n(sd.y).negate(), 0.05));
               const q = n(p).xz.sub(vec2(sd.x, sd.z).mul(k)).toVar();
-              const inOpen = q.x.greaterThanEqual(sr.x).and(q.x.lessThanEqual(sr.z)).and(q.y.greaterThanEqual(sr.y)).and(q.y.lessThanEqual(sr.w));
-              If(inOpen, () => {
-                const across = select(n(sb2.x).greaterThan(0.5), q.y, q.x);
-                const fr = n(fract(across.sub(sa.z).div(max(sa.y, 0.5))));
-                const bd = min(fr, float(1).sub(fr)).mul(sa.y);
-                const stripe = smoothstep(sb2.y, n(sb2.y).add(sb2.z), bd);
+              const dq = n(length(q.sub(vec2(sh0.x, sh0.y)))).toVar();
+              If(dq.lessThan(sh0.z), () => {
+                const rim = float(1).sub(smoothstep(n(sh0.z).sub(sh0.w), sh0.z, dq));
                 const pn = n(noiseT.sample(vec3(q.x.mul(sb2.w), 0.37, q.y.mul(sb2.w)).add(u.offAir)).level(0)).r;
                 const openSky = smoothstep(n(sc2.x).sub(sc2.y), n(sc2.x).add(sc2.y), pn);
-                const sh = n(stripe).mul(openSky).mul(exp(n(sa.w).negate().mul(tUp)));
+                const sh = n(rim).mul(openSky).mul(exp(n(sa.w).negate().mul(tUp)));
                 L.addAssign(n(u.shaftCol).mul(sh).mul(phaseOf(u, dot(sd.xyz, n(dir).negate()))));
               });
             });

@@ -59,6 +59,13 @@ export interface LevelSky {
   top: number;
   /** Per grid cell: absolute top of a taller closed structure (elevator overrun); 0 = `top`. */
   tops?: Float32Array;
+  /**
+   * Task reactor-submit-roof-fog-20261102 (lane ROOF): a ROOF OPENING mask (per grid cell, 1 = open). Present: only those columns'
+   * band tops at or above `ceil` open to the sky (the Reactor pit's single hole over the core); every other band top there is a real
+   * ceiling and closed columns are solid at every height (no open air above `top` / `tops`, no face clipping). Absent: every column
+   * (the Office's open roof deck).
+   */
+  open?: Uint8Array;
 }
 
 export interface Level {
@@ -338,9 +345,14 @@ export class Levels implements NavLevels {
   /** Open sky at height y entering closed column i (out of the grid: i < 0): above the column's solid top. */
   private openAir(i: number, y: number): boolean {
     const s = this.sky;
-    if (!s || y <= s.y) return false;
+    if (!s || y <= s.y || s.open) return false; // (lane ROOF: with an opening mask the closed columns are solid at every height)
     const t = i >= 0 && s.tops ? s.tops[i] : 0;
     return y > (t > 0 ? t : s.top);
+  }
+  /** Task reactor-submit-roof-fog-20261102 (lane ROOF): column i's band top at / above sky.ceil opens to the sky (LevelSky.open). */
+  private skyOpen(i: number): boolean {
+    const s = this.sky;
+    return !!s && (!s.open || (i >= 0 && s.open[i] === 1));
   }
   get main(): Grid {
     return this.list[0].grid;
@@ -925,7 +937,7 @@ export class Levels implements NavLevels {
       }
       if (d.y < 0) { const t = (f - o.y) / d.y; return t >= 0 && t < tMax ? {t, kind: 'floor', level: lid[k], nx: 0, ny: 1, nz: 0, cell: i} : none(); }
       // Task office-overhaul-20261030 (lane STRUCT): an open-sky band top is no surface (the ray flies into the sky).
-      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax && !(this.sky && c >= this.sky.ceil - 1e-3) ? {t, kind: 'ceiling', level: lid[k], nx: 0, ny: -1, nz: 0, cell: i} : none(); }
+      if (d.y > 0) { const t = (c - o.y) / d.y; return t >= 0 && t < tMax && !(this.skyOpen(i) && c >= this.sky!.ceil - 1e-3) ? {t, kind: 'ceiling', level: lid[k], nx: 0, ny: -1, nz: 0, cell: i} : none(); } // (lane ROOF: + skyOpen)
       return none();
     }
     const ux = d.x / hl, uz = d.z / hl;
@@ -978,7 +990,7 @@ export class Levels implements NavLevels {
           if (down ? fm < yh - 1e-4 && cm >= yh - 1e-4 : cm > yh + 1e-4 && fm <= yh + 1e-4) { next = m; break; }
         }
         if (next < 0) return down ? {t: th, kind: 'floor', level: lid[cur], nx: 0, ny: 1, nz: 0, cell: i}
-          : this.sky && yh >= this.sky.ceil - 1e-3 ? none() : {t: th, kind: 'ceiling', level: lid[cur], nx: 0, ny: -1, nz: 0, cell: i};
+          : this.skyOpen(i) && yh >= this.sky!.ceil - 1e-3 ? none() : {t: th, kind: 'ceiling', level: lid[cur], nx: 0, ny: -1, nz: 0, cell: i}; // (lane ROOF: + skyOpen)
         cur = next; t0 = th;
       }
       if (tB >= tMax) return none();
