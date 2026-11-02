@@ -164,6 +164,25 @@ export function planMapBoards(layout: StationLayout, info: ReactorInfo, facing: 
         }
       }
     }
+    // 3. (lead merge fix: a crowded room — every wall taken by doors / machines / dressing) the nearest free wall within 9 m on the
+    // same storey, any area (e.g. the corridor / deck just outside the room's door)
+    if (!best) {
+      let bd = Infinity;
+      for (let i = 0; i < g.cells.length; i++) {
+        if (!openCell(g, i, doors)) continue;
+        const cx0 = (i % g.w + 0.5) * CELL, cz0 = (Math.floor(i / g.w) + 0.5) * CELL;
+        if (Math.abs(cx0 - sc.x) > 9 || Math.abs(cz0 - sc.z) > 9) continue;
+        if (Math.abs(g.floorOf(i) - floorY) > 0.05) continue;
+        for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+          const j = cellAt(g, cx0 + dx * CELL, cz0 + dz * CELL);
+          if (j < 0 || g.cells[j] === FLOOR) continue;
+          const wx = cx0 + dx * CELL / 2, wz = cz0 + dz * CELL / 2, n: [number, number] = [-dx, -dz];
+          const d = Math.hypot(wx - sc.x, wz - sc.z);
+          if (d >= bd || d > 8.5) continue;
+          if (fits(g, doors, wx, wz, n[0], n[1], -n[1], n[0], y0, y1, keep, props)) { bd = d; best = pose(wx, wz, n, false); }
+        }
+      }
+    }
     if (best) out.push(best);
   }
   return out;
