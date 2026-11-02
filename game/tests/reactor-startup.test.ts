@@ -22,7 +22,7 @@ import {HOLD_S, FUSE_CARTRIDGE_ID, REACTOR_KEY_ID} from '../src/world/reactor/re
 import {ReactorRestart} from '../src/world/reactor/restart';
 import {setReactorVisuals} from '../src/world/reactor/visuals';
 import {STAGE_THUMP, STARTUP, beamAt, beaconPowerAt, bedAt, cuesCrossed, rodRate, skyClearAt, stageEvents, winCues, type StageSnap} from '../src/world/reactor/startupPlan';
-import {STARTUP_MIX, StartupAudio, type StartupSfx, type StartupSites} from '../src/world/reactor/startupAudio';
+import {StartupAudio, type StartupSfx, type StartupSites} from '../src/world/reactor/startupAudio';
 import {BEACONS, openBehind, planBeacons, walkwayAt} from '../src/world/reactor/startupBeaconPlan';
 import {BEACON_LIGHTS, BeaconLights, BeaconVisuals, beaconBodyGeometry, beaconDomeGeometry} from '../src/world/reactor/startupBeacons';
 import {BEAM, OnlineSky, beamSpan} from '../src/world/reactor/startupSky';
@@ -35,7 +35,7 @@ import {roofOpeningOf} from '../src/gen/reactor/roofOpening';
 import {VolumetricAtmosphere} from '../src/render/volumetric';
 import type {FogUniforms} from '../src/render/volumetricShaders';
 import {MALL_SKY, MALL_SKY_U} from '../src/world/mallExterior';
-import {aimAt, buildRestart, fakeHost, type FakeHost} from './helpers/reactorRestartFixture';
+import {aimAt, fakeHost, type FakeHost} from './helpers/reactorRestartFixture';
 
 afterEach(() => { setReactorVisuals(null); MALL_SKY_U.gas.value = MALL_SKY.gas; });
 
