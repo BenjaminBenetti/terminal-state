@@ -358,7 +358,9 @@ export function clearEntranceLamps(layout: StationLayout, carves: readonly Compl
 function complexCable(layout: StationLayout, rc: ReactorCarve, c: ComplexCarve, gen: ReactorGenerator): {x: number; y: number; z: number}[] {
   const s = c.slot, g = layout.levels[s.level].grid, ids = new Set(c.areas), E = s.entrance;
   const inE = (x: number, y: number) => x >= E.x && y >= E.y && x < E.x + E.w && y < E.y + E.h;
-  const ok = (x: number, y: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && (ids.has(g.area[g.idx(x, y)]) || inE(x, y));
+  // task reactor-expansion-20261101 (lane BUNKER): only cells at the storey floor — the one cable height never runs low over a raised
+  // threshold (the bunker's blast-door lane, 0.84 m up: the cable goes round through the guard post)
+  const ok = (x: number, y: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && (ids.has(g.area[g.idx(x, y)]) || inE(x, y)) && g.floor[g.idx(x, y)] <= s.baseY + 0.01;
   const [sx, sy] = g.cellOf(gen.use.x, gen.use.z), {mid} = entranceCells(s);
   // BFS (4-neighbour) from the use cell to the entrance's middle cell
   const prev = new Map<number, number>(), start = g.idx(sx, sy), goal = g.idx(mid[0], mid[1]);

@@ -24,11 +24,13 @@ import {sampleCarver} from './reactor-x-host-fixture';
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8];
 const S = sampleCarver();
 const SAMPLE = {complexCarvers: {bunker: S, mines: S, waste: S}};
+// task reactor-expansion-20261101 (lane BUNKER): 'null' = explicit null carvers (the shipped bunker carver is real now; the stubs' level)
+const NULLS = {complexCarvers: {bunker: null, mines: null, waste: null}};
 const cache = new Map<string, StationLayout>();
 const gen = (seed: number, mode: 'null' | 'sample' = 'sample') => {
   const key = `${mode}:${seed}`;
   let L = cache.get(key);
-  if (!L) { L = generateReactorLevel({levelSeed: seed}, mode === 'sample' ? SAMPLE : {}); cache.set(key, L); }
+  if (!L) { L = generateReactorLevel({levelSeed: seed}, mode === 'sample' ? SAMPLE : NULLS); cache.set(key, L); }
   return L;
 };
 const DIR = {N: [0, -1], S: [0, 1], E: [1, 0], W: [-1, 0]} as const;

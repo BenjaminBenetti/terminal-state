@@ -56,6 +56,15 @@ describe('the bunker in the real Reactor level (lane BUNKER)', () => {
       expect(gen0.area, `seed ${seed}`).toBe(room(L, 'hall')!.area);
       expect(L.levels[1].grid.circleClear(gen0.use.x, gen0.use.z, 0.3), `seed ${seed}`).toBe(true);
       expect(b.generator).toBe(gen0.id);
+      // its cable (host: through the complex and out of the entrance) keeps head height over every bunker floor it crosses — it goes
+      // round the blast door's raised threshold
+      const g = L.levels[1].grid, ids = new Set(b.areas), c = gen0.cable;
+      for (let i = 1; i + 1 < c.length; i++) for (let t = 0; t <= 16; t++) {
+        const x = c[i].x + (c[i + 1].x - c[i].x) * t / 16, z = c[i].z + (c[i + 1].z - c[i].z) * t / 16, y = c[i].y + (c[i + 1].y - c[i].y) * t / 16;
+        const [cx, cy] = g.cellOf(x, z);
+        if (!g.inBounds(cx, cy) || !ids.has(g.area[g.idx(cx, cy)]) || g.cells[g.idx(cx, cy)] !== FLOOR) continue;
+        expect(y - g.floorOf(g.idx(cx, cy)), `seed ${seed} cable over ${cx},${cy}`).toBeGreaterThanOrEqual(1.95);
+      }
     }
   });
 
