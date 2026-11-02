@@ -628,15 +628,17 @@ export const REACTOR_SPAWN_PROFILE: SpawnProfile = {
   id: 'reactor', label: 'Reactor', families: familyPool(), zombieTypes: ZOMBIE_TYPES,
   contexts: {
     station: {label: 'Rim (station, rim gallery, rim office)', count: [2, 4], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}},
-    floor: {label: 'Upper walkway tier (zone 1; each of tiers 1-2)', count: [4, 6], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_UPPER_POOL},
-    ring: {label: 'Deep walkway tier (zone 2; each of tiers 3-4)', count: [6, 8], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_DEEP_POOL},
-    pit: {label: 'Core floor (vessel ring, pump hall, control room)', count: [7, 10], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_CORE_POOL},
+    floor: {label: 'Upper walkway tier (zone 1; each of tiers 1-2)', count: [6, 9], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_UPPER_POOL},
+    ring: {label: 'Deep walkway tier (zone 2; each of tiers 3-4)', count: [8, 11], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_DEEP_POOL},
+    pit: {label: 'Core floor (vessel ring, pump hall, control room)', count: [9, 12], placement: MALL_PLACEMENT, accept: {min: null, max: 'count'}, families: REACTOR_CORE_POOL},
     service: SERVICE_CONTEXT,
   },
   rooms: {},
   eligibility: {siren: REACTOR_SIREN_ELIGIBILITY},
   spacing: {siren: REACTOR_SIREN_SPACING},
-  budgets: {ambient: {total: 4 + 6 * 2 + 8 * 2 + 10, perStorey: 10}},
+  // (task reactor-expansion-20261101: the side complexes add ~2,600 m² of floor to tiers 1 / 2 / 4 — the tier counts grow with them so the
+  // shaft is not thinned out; still rising with depth)
+  budgets: {ambient: {total: 4 + 9 * 2 + 11 * 2 + 12, perStorey: 12}},
 };
 
 /**
