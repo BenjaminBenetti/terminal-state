@@ -33,6 +33,7 @@ import {applyFamilySpacing} from '../../ai/familySpacing'; // lane INTEG (Track1
 import {lootProfile, type LootProfile} from '../../items/lootTables';
 import type {SectionGenContext} from '../../levels/types';
 import type {StationLayout} from '../stationTypes';
+import type {MallProgram} from './mallTypes';
 import {cropKit} from '../office/common';
 import {holdCells} from '../office/transit';
 import {placeOfficeEnemies, type SpawnField} from '../office/spawns';
@@ -76,6 +77,8 @@ export interface MallGenOptions {
   streetExits?: boolean;
   /** Task mall-round3-20261031 (lane LIGHT, R7): the walkway light decay pass (default true; false = applyLighting's walkway state). */
   walkwayDecay?: boolean;
+  /** Task mall-lingerie-20261102 (lane STORE): tests / QA — force programs onto shop ids (assignMallPrograms AssignOpts.force). */
+  shopForce?: Readonly<Record<string, MallProgram>>;
 }
 
 /** The designed street-exit corridor ends of a layout's skeleton (cropped cells), for the post-pass (set by tryLevel). */
@@ -93,7 +96,7 @@ export function generateMallLevel(ctx: SectionGenContext, opts: MallGenOptions =
   MALL_GEN_STATS.carveFails = 0;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, opts.walkwayDecay !== false);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, opts.walkwayDecay !== false, opts.shopForce);
     MALL_GEN_STATS.attempts = attempt + 1;
     MALL_GEN_STATS.salt = MALL_GEN_STATS.carveFails;
     // A program that does not fit re-rolls the frame's free parameters (same variant) for the next attempt.
@@ -126,7 +129,8 @@ const spawnStartCells = (p: SpawnProfile): number => {
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none', walkwayDecay = true): StationLayout | null {
+function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none' = 'none', walkwayDecay = true,
+  shopForce?: Readonly<Record<string, MallProgram>>): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: MALL_CANVAS.levels, w: MALL_CANVAS.w, h: MALL_CANVAS.h});
   const mc = carveMall(k, rng, f);
@@ -182,7 +186,7 @@ function tryLevel(f: MallFrame, genSeed: number, seed: number, attempt: number, 
   layout.mall = mallInfo(layout, mc, crop, c.flights, linkIds, start);
   // [lane SHOPS seam] programs / kinds / brands / fits of layout.mall.shops + their areas' purposes / labels (own fork); SHOPS'
   // interior dressing joins here too (after the station dresser, before the populations: loot follows the purposes).
-  assignMallPrograms(layout, rng.fork('mall-shops'));
+  assignMallPrograms(layout, rng.fork('mall-shops'), shopForce ? {force: shopForce} : {});
   // lane SHOPS: interiors (after the station dresser: absolute heights; stock rooms it furnished only gain the program's pieces),
   // then the gun shops' weapon finds (one plan per logical run from the level seed + start weapon; layout pickups, remembered).
   dressMallShops(layout, rng.fork('mall-shop-dress'), {frame: 'absolute'});
@@ -301,7 +305,7 @@ function dropFloatingFixtures(layout: StationLayout): number {
 /** QA / tests: one attempt (null when the program does not fit). */
 export function mallAttempt(ctx: SectionGenContext, attempt: number, opts: MallGenOptions & {salt?: number} = {}): StationLayout | null {
   const f = mallFrame(ctx.levelSeed, opts.variant, opts.salt ?? 0), seed = mallSeed(ctx.levelSeed);
-  const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'), opts.walkwayDecay !== false);
+  const L = tryLevel(f, attempt === 0 ? seed : hashString('retry' + attempt, seed), seed, attempt, ctx, opts.loot ?? lootProfile('mall'), opts.spawns ?? spawnProfile('mall'), opts.trackExt ?? trackExtConfig('mall'), opts.walkwayDecay !== false, opts.shopForce);
   if (L && opts.streetExits !== false) placeStreetExits(L, DESIGNED_EXITS.get(L) ?? [], ctx.levelSeed);
   return L;
 }

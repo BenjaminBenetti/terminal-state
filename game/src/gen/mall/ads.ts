@@ -90,7 +90,8 @@ export interface MallAdsReport {
 }
 
 /** Fashion programs: window decals x1-2 + a lightbox by the window display (the fashion campaign artwork on the faces). */
-export const FASHION: ReadonlySet<MallProgram> = new Set(['clothing', 'shoes', 'department', 'beauty', 'sports', 'jewelry', 'optical', 'outdoors', 'luggage', 'womenswear']);
+export const FASHION: ReadonlySet<MallProgram> = new Set(['clothing', 'shoes', 'department', 'beauty', 'sports', 'jewelry', 'optical', 'outdoors', 'luggage', 'womenswear',
+  'lingerie']); // (task mall-lingerie-20261102, lane STORE)
 /** (R5) Eye-level poster: face size ranges, bottom / top above the floor (m), clear gap to other records. */
 export const EYE_POSTER = {w: [0.6, 0.85], h: [0.85, 1.2], bottom: 1.0, top: 2.3, gap: 0.3} as const;
 /** (R5) Food-counter menu board: width / height ranges, lowest bottom, clearance over the kitchen line, box depth (m). */

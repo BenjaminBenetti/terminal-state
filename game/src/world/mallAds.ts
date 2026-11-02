@@ -95,11 +95,13 @@ export function adsOf(layout: StationLayout): MallAd[] {
  *  accent (brand line, roundel, vinyl sale band). */
 interface AdPalette { bg: string; bg2: string; ink: string; accent: string }
 /** Fashion programs (planGalleryLightboxes weights their stores x3). */
-const FASHION: MallProgram[] = ['clothing', 'department', 'shoes', 'beauty', 'jewelry', 'luggage', 'optical', 'womenswear'];
+const FASHION: MallProgram[] = ['clothing', 'department', 'shoes', 'beauty', 'jewelry', 'luggage', 'optical', 'womenswear', 'lingerie'];
 const PAL: Partial<Record<MallProgram | 'mall', AdPalette>> = {
   clothing: {bg: '#e9dccb', bg2: '#c9a27a', ink: '#2b211a', accent: '#8a3b2e'},
   // (R5) women's fashion: blush / ivory / plum
   womenswear: {bg: '#f3e6e4', bg2: '#c98f9a', ink: '#3a1f2b', accent: '#9c3a5a'},
+  // (task mall-lingerie-20261102, lane STORE) the lingerie boutique: plum / blush / gold
+  lingerie: {bg: '#2a1626', bg2: '#b9788c', ink: '#f4dbe4', accent: '#c9a96e'},
   kiosk: {bg: '#f2ece0', bg2: '#e0a040', ink: '#2a2420', accent: '#d0402a'},
   department: {bg: '#1e2a3a', bg2: '#38506a', ink: '#f2ead8', accent: '#c8a45a'},
   shoes: {bg: '#f2f0ea', bg2: '#d8c8a8', ink: '#222224', accent: '#b8463a'},
@@ -135,6 +137,7 @@ export const adPalette = (p: MallProgram | 'mall'): AdPalette => PAL[p] ?? GENER
 const HEADLINES: Partial<Record<MallProgram | 'mall', string[]>> = {
   clothing: ['NEW SEASON', 'THE AUTUMN EDIT', 'LAYER UP', 'WEEKEND READY', 'UP TO 40% OFF'],
   womenswear: ['THE DRESS EDIT', 'NEW IN: DRESSES', 'COAT WEATHER', 'THE WEEKEND EDIT', 'SPRING COLLECTION', 'UP TO 50% OFF'],
+  lingerie: ['THE LACE EDIT', 'FREE FITTING SERVICE', 'NEW IN: SILK', 'BRA FIT WEEK', '3 FOR 2 BRIEFS'],
   kiosk: ['WHILE U WAIT', 'GIFTS & MORE', '2 FOR $10', 'TREAT YOURSELF', 'OPEN TODAY'],
   department: ['GRAND SALE', 'NEW SEASON', 'DRESS THE PART', 'ALL FLOORS -30%'],
   shoes: ['STEP OUT', 'NEW ARRIVALS', 'WALK TALL', '2ND PAIR HALF PRICE'],
@@ -160,7 +163,7 @@ const pick = <T>(a: readonly T[], r: Rnd): T => a[Math.floor(r() * a.length) % a
  * (the typecheck keeps it so; tests: every id is a shipped image).
  */
 export const PROGRAM_ART: Readonly<Record<MallProgram | 'mall', readonly AdArtId[]>> = {
-  womenswear: ['womenswear'], clothing: ['menswear', 'womenswear'], department: ['menswear', 'womenswear'], shoes: ['womenswear', 'menswear'],
+  womenswear: ['womenswear'], lingerie: ['womenswear'], clothing: ['menswear', 'womenswear'], department: ['menswear', 'womenswear'], shoes: ['womenswear', 'menswear'],
   optical: ['womenswear', 'menswear'], jewelry: ['womenswear'], luggage: ['menswear'],
   'food-court': ['food'], grocery: ['food'], cafe: ['cafe'],
   electronics: ['electronics'], phone: ['electronics'], arcade: ['electronics'], music: ['electronics'],

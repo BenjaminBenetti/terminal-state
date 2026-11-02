@@ -111,6 +111,7 @@ import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
 import {MALL_MODEL_FILES} from './assets/mallAssets'; // Task track3-eaton-centre-20261031 (lane ASSETS): mall-art models (keys office-<id>, level-only paths assets/models/mall-*.glb), fetched only for the keys a mall layout places
+import {lingerieDisplayModelKeys} from './gen/mall/lingerieStore'; // task mall-lingerie-20261102 (lane STORE): the store's display sets (lane FIT's files)
 import {officeModelKeysFor} from './gen/office/index'; // Iteration 16 (lane WORLD-GEN): the office models a section placed
 import {preloadOfficeAssets} from './world/officeProps'; // Iteration 16 (lane WORLD-GEN): carpet / ceiling / partition textures
 import {placementBox} from './items/lootLayout';
@@ -307,7 +308,8 @@ export class Game {
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
   /** Extra `propModels` keys a section needs besides its p7 props (lane WORLD-GEN: office models): fetched before the build, kept by the trim. */
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
-  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor];
+  // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
+  readonly sectionModelKeys: ((layout: StationLayout) => readonly string[])[] = [officeModelKeysFor, gensetModelKeysFor, lingerieDisplayModelKeys];
   /** One lifecycle operation at a time: travel, new game, retry level. */
   private readonly lifecycle = new SingleFlight();
   /** Live pickups that are (what is left of) a generated layout pickup -> its layout.pickups index. */
