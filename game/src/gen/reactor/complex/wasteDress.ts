@@ -164,6 +164,8 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
   };
   const stripe = (r: RoomF, s0: number, s1: number, t0: number, t1: number) => { const b = wb(r, s0, s1, t0, t1); decor.stripes.push({x0: r3(b.x0), z0: r3(b.z0), x1: r3(b.x1), z1: r3(b.z1), y: base}); };
   const beacon = (x: number, y: number, z: number, on: boolean) => decor.beacons.push({x: r3(x), y: r3(y), z: r3(z), on});
+  /** A beacon over a world (x, z) point at absolute height y. */
+  const beaconAt = (p: V2, y: number, on: boolean) => beacon(p[0], y, p[1], on);
   const model = (piece: WasteModelPiece, x: number, z: number, yaw: number, w: number, d: number, h: number, y = base) => {
     decor.models.push({piece, x: r3(x), y: r3(y), z: r3(z), yaw: r3(yaw), w, d, h});
     stats.models++;
@@ -360,8 +362,8 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
         lbox(r, s0 - 0.25, s1 + 0.25, 0.5, 0.56, dh + 0.1, dh + 0.3, 'yellow');
       }
       stripe(r, s0, s1, 0.15, 0.75);
-      beacon(...pt(r, s0 - 0.07, 0.25), base + dh + 0.12, true);
-      beacon(...pt(r, s1 + 0.07, 0.25), base + dh + 0.12, true);
+      beaconAt(pt(r, s0 - 0.07, 0.25), base + dh + 0.12, true);
+      beaconAt(pt(r, s1 + 0.07, 0.25), base + dh + 0.12, true);
       // the wayfinding plate on the DECK side of the entrance: centred over the opening on the pit-wall face, facing the shaft
       const front = layout.areas[rec.frontArea];
       const [, , te] = dspan(r, ent);
@@ -712,7 +714,7 @@ export function dressWaste(layout: StationLayout, rng: Rng, crop: {ox: number; o
       decor.cyls.push({x: r3(cx), y: r3(base + 1.25), z: r3(cz), r: 0.5, h: 0.35, m: 'steelDark'});
       stripe(r, s - PW / 2 - 0.6, s + PW / 2 + 0.6, t - PD / 2 - 0.6, t - PD / 2 - 0.2);
       stripe(r, s - PW / 2 - 0.6, s + PW / 2 + 0.6, t + PD / 2 + 0.2, t + PD / 2 + 0.6);
-      beacon(...pt(r, s + PW / 2 - 0.2, t - PD / 2 + 0.2), base + PH + 0.1, true);
+      beaconAt(pt(r, s + PW / 2 - 0.2, t - PD / 2 + 0.2), base + PH + 0.1, true);
       // roller feed bed on the press's -s side
       const fs1 = s - PW / 2 - 1.25, fs0 = fs1 - 2.6;
       if (!turn && fs0 > 1.2 && lsolid(r, fs0, fs1, t - 0.45, t + 0.45, 0.9, 'waste:conveyor', {zoneOk: false, sight: false})) {
