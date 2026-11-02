@@ -271,6 +271,28 @@ Existing families only. Density and the nastier families rise with depth (`docs/
   no occlusion window (open pit volumes).
 - QA: `__LL.gaslight()` and `__LL.gaslightShafts({gain, fade, colour})`. Tests: `game/tests/reactor-x-gaslight-*.test.ts`.
 
+### Fog visibility root cause (task reactor-submit-roof-fog-20261102, lane FOG)
+User (WebGPU, quality high): "the fog is still not visible … volumetric fog is not working on this level."
+- **Cause: a WebGPU binding limit, not the look.** Every TSL `uniformArray` is its own uniform buffer. three's `WebGPURenderer`
+  requests no raised limits, so the device has WebGPU's default of 12 uniform buffers per shader stage. The base march fragment
+  declares exactly 12. The depth-gas variant added the strata table as one more array: 13.
+  - WebGPU rejected that pipeline layout, the pass flagged itself failed and the level rendered directly, with no volumetric fog.
+    The user's overlay shows 4 / 5 render passes: the direct path's count. The fog pipeline draws 6 / 7.
+  - The failure latches for the session. The Office compiles the same variant for its roof air since the expansion, so it was
+    affected on WebGPU too.
+  - The lead's llvmpipe WebGL2 spot check has more than 12 fragment uniform blocks, so it ran and hid the bug. The earlier "make the
+    gas greener" round could not help: the program never ran.
+- **Fix:** the strata table is now a 64 × 1 float data texture read with `textureLoad`. It holds the same Float32 values with the same
+  interpolation. Every march variant declares 12 uniform buffers (base and depth alike, both backends), and the depth term costs one
+  sampled texture (9 of 16).
+  - **The march is at the limit.** A new array in it must replace one, never add one.
+  - `runFog` now opens its error scope after (re)building the program. A rejected program falls back on its first frame instead of
+    depending on frame timing.
+- **Ruled out:** the level-change order (`setStation` → section hooks → `setDepthGas`, the same as a boot), uniform array updates,
+  the HIGH preset's march cap (52 m reaches the core floor), the source rect and the gates. None depend on the eye's exposure.
+- Tests: `game/tests/reactor-x-fog-webgpu-limits.test.ts` covers the binding budget per variant and backend, view rays from the
+  clean rim (drawn = hazard, green and visibly dense), clearing, level change = boot and the error-scope order.
+
 ## Pathways: the clipping audit (task reactor-expansion-20261101, lane PATHS)
 Nothing solid may stand in walkable space except designed edges (railings on the edge line, wall-flush fittings within 0.1 m).
 - **The audit** (`game/src/world/reactor/pathsAudit.ts`, tests `game/tests/reactor-x-paths-*.test.ts`):

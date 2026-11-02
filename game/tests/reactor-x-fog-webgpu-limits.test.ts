@@ -31,9 +31,10 @@ import {REACTOR_FOG} from '../src/world/reactor/archInstall';
 import {greenness, luminance} from '../src/world/gaslightRules';
 import {compileOutputNode, compileQuad} from './helpers/fogCompile';
 
-const LOG = '/tmp/fog-lane-limits.txt';
-const log = (s: string) => appendFileSync(LOG, `${s}\n`);
-writeFileSync(LOG, '');
+/** FOG_LIMITS_LOG=/tmp/x.txt: per-variant binding counts and per-ray numbers (vitest swallows console output). */
+const LOG = process.env.FOG_LIMITS_LOG;
+const log = (s: string) => { if (LOG) appendFileSync(LOG, `${s}\n`); };
+if (LOG) writeFileSync(LOG, '');
 
 /** WebGPU's DEFAULT per-stage limits (what a device gets when nothing higher is requested: three requests nothing). */
 const WEBGPU_DEFAULT = {uniformBuffers: 12, sampledTextures: 16, samplers: 16} as const;
