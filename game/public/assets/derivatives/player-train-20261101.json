@@ -56,7 +56,7 @@
      3.8508,
      2.9866
     ],
-    "triangles": 27566,
+    "triangles": 28140,
     "meshes": 1,
     "materials": 1,
     "textures": [
@@ -98,8 +98,8 @@
    },
    "output": {
     "url": "assets/models/player-train-shell.glb",
-    "bytes": 2542524,
-    "sha256": "def2107d0b66915621fe09929dbe7ab6aecd0e21742ddd39cf303bbdb4da4fed"
+    "bytes": 2582188,
+    "sha256": "61d9a2ab2e94f0f1b6ff69b9f9bc279449ff18dfaa2f90f5318d544c8e315704"
    }
   },
   "train-door-leaf": {
@@ -380,7 +380,7 @@
      1
     ],
     "removedAreaM2": 19.324,
-    "innerSkinZ": 1.3655,
+    "innerSkinZ": 1.3641,
     "recessPlaneZ": {
      "platform": 1.38,
      "far": 1.3836
@@ -454,6 +454,11 @@
    },
    "repair": {
     "method": "single coverage of near-coincident parallel faces (|cos| >= 0.97, planes within 0.003 m): faces in priority order (outward body / fitting faces, undercarriage, inward body faces = Meshy fold flaps; larger first), each clipped against the kept faces it overlaps (no vertex moved, attributes interpolated, covered area kept); degenerate faces dropped; vertex normals recomputed from the final faces with a 40 deg crease",
+    "crackFill": {
+     "method": "backing strips behind Meshy's own surface cracks (raw mesh, widened by the body stretch): in the side / roof projections, runs of empty pixels <= 0.08 m (roof 0.13 m) bounded by skin on both sides (or skin and a door / window edge, filled from the opening's exact edge) and outside every door / window, raster 0.003 m, merged into quads <= 0.5 m, 0.004 m behind the skin with 0.01 m overlap, textured with the adjacent skin texel",
+     "strips": 276,
+     "stripTrianglesKept": 574
+    },
     "census": {
      "before": {
       "triangles": 28806,
@@ -467,9 +472,9 @@
       "nonManifoldEdges": 0
      },
      "after": {
-      "triangles": 27566,
+      "triangles": 28140,
       "degenerate": 0,
-      "sliver": 980,
+      "sliver": 990,
       "normalFlip": 0,
       "foldOverlaps": 0,
       "foldArea": 0,
@@ -538,6 +543,238 @@
    "method": "turned -90 deg about Y (native operator side +Z -> -X), uniform scale",
    "scale": 2.05,
    "frame": "grounded, centred; operator side -X, windshield side +X, width along Z"
+  },
+  "glass": {
+   "method": "per opening the ORIGINAL pane: the pre-cut shell sampled by rays every 0.03 m over the hole (inset 0.01 m from the gasket), an inner-envelope least-squares surface (samples standing > 0.004 m proud of the fit dropped, >= 50 % kept; side: z(x, y) / centre end: x(z, y) biquadratic; wrap = outer end window + its nose window as ONE sheet: plan radius about x = +-6.5 cubic(angle) x quadratic(y)); sheet = that surface on a grid over the hole + 0.015 m overlap, recessed >= 0.005 m (more where the ring error needs it) behind the hole edge, outward normals; boxes = <= 8 axis-aligned slabs; reveals = ruled strips from the hole loop (on the fitted skin) to the lining rect (published rect at |z| 1.3 / |x| 7.25), the door-leaf slot left open across a pocket",
+   "sheets": [
+    {
+     "node": "glass-side--1-0",
+     "kind": "side",
+     "paneSamples": 924,
+     "kept": 792,
+     "fitError": 0.008,
+     "recess": 0.0164,
+     "boxes": 8,
+     "boxThick": 0.0206,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side--1-1",
+     "kind": "side",
+     "paneSamples": 270,
+     "kept": 251,
+     "fitError": 0.0034,
+     "recess": 0.0208,
+     "boxes": 1,
+     "boxThick": 0.0097,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side--1-2",
+     "kind": "side",
+     "paneSamples": 1064,
+     "kept": 623,
+     "fitError": 0.0047,
+     "recess": 0.0353,
+     "boxes": 8,
+     "boxThick": 0.0312,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side--1-3",
+     "kind": "side",
+     "paneSamples": 1064,
+     "kept": 966,
+     "fitError": 0.0042,
+     "recess": 0.005,
+     "boxes": 1,
+     "boxThick": 0.0167,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side--1-4",
+     "kind": "side",
+     "paneSamples": 1064,
+     "kept": 890,
+     "fitError": 0.0042,
+     "recess": 0.0095,
+     "boxes": 1,
+     "boxThick": 0.0109,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side--1-5",
+     "kind": "side",
+     "paneSamples": 308,
+     "kept": 301,
+     "fitError": 0.0036,
+     "recess": 0.007,
+     "boxes": 1,
+     "boxThick": 0.0052,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-8",
+     "kind": "side",
+     "paneSamples": 957,
+     "kept": 749,
+     "fitError": 0.0042,
+     "recess": 0.005,
+     "boxes": 1,
+     "boxThick": 0.0044,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-9",
+     "kind": "side",
+     "paneSamples": 280,
+     "kept": 265,
+     "fitError": 0.0038,
+     "recess": 0.0051,
+     "boxes": 1,
+     "boxThick": 0.0145,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-10",
+     "kind": "side",
+     "paneSamples": 1334,
+     "kept": 982,
+     "fitError": 0.0106,
+     "recess": 0.0107,
+     "boxes": 8,
+     "boxThick": 0.0331,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-11",
+     "kind": "side",
+     "paneSamples": 1276,
+     "kept": 920,
+     "fitError": 0.0066,
+     "recess": 0.0087,
+     "boxes": 8,
+     "boxThick": 0.0243,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-12",
+     "kind": "side",
+     "paneSamples": 1110,
+     "kept": 976,
+     "fitError": 0.0037,
+     "recess": 0.005,
+     "boxes": 1,
+     "boxThick": 0.0094,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-side-+1-13",
+     "kind": "side",
+     "paneSamples": 224,
+     "kept": 209,
+     "fitError": 0.0051,
+     "recess": 0.0056,
+     "boxes": 1,
+     "boxThick": 0.0072,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-end-+1-0",
+     "kind": "wrap",
+     "paneSamples": 903,
+     "kept": 452,
+     "fitError": 0.0102,
+     "recess": 0.0154,
+     "boxes": 24,
+     "boxThick": 0.0496,
+     "pokeThrough": 0,
+     "edges": {
+      "endInner": 0.512,
+      "endOuter": 0.9516,
+      "noseNear": 0.7317,
+      "noseFar": 1.0527
+     }
+    },
+    {
+     "node": "glass-end-+1-1",
+     "kind": "end",
+     "paneSamples": 944,
+     "kept": 472,
+     "fitError": 0.0073,
+     "recess": 0.0069,
+     "boxes": 8,
+     "boxThick": 0.0479,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-end-+1-2",
+     "kind": "wrap",
+     "paneSamples": 822,
+     "kept": 422,
+     "fitError": 0.0101,
+     "recess": 0.0278,
+     "boxes": 24,
+     "boxThick": 0.0616,
+     "pokeThrough": 0,
+     "edges": {
+      "endInner": 0.5138,
+      "endOuter": 0.9519,
+      "noseNear": 0.7622,
+      "noseFar": 1.0151
+     }
+    },
+    {
+     "node": "glass-end--1-3",
+     "kind": "wrap",
+     "paneSamples": 1002,
+     "kept": 514,
+     "fitError": 0.009,
+     "recess": 0.0338,
+     "boxes": 24,
+     "boxThick": 0.0427,
+     "pokeThrough": 0,
+     "edges": {
+      "endInner": 0.4887,
+      "endOuter": 0.9325,
+      "noseNear": 0.7332,
+      "noseFar": 1.0618
+     }
+    },
+    {
+     "node": "glass-end--1-4",
+     "kind": "end",
+     "paneSamples": 952,
+     "kept": 889,
+     "fitError": 0.0042,
+     "recess": 0.005,
+     "boxes": 1,
+     "boxThick": 0.0168,
+     "pokeThrough": 0
+    },
+    {
+     "node": "glass-end--1-5",
+     "kind": "wrap",
+     "paneSamples": 840,
+     "kept": 420,
+     "fitError": 0.007,
+     "recess": 0.0268,
+     "boxes": 24,
+     "boxThick": 0.0422,
+     "pokeThrough": 0,
+     "edges": {
+      "endInner": 0.5069,
+      "endOuter": 0.9177,
+      "noseNear": 0.7875,
+      "noseFar": 1.0111
+     }
+    }
+   ],
+   "output": {
+    "url": "assets/models/player-train-glass.glb",
+    "bytes": 355436,
+    "sha256": "914673478615e513806cf154840ae9aa3f79e8496f50d8aff52c2636d1e98a1e"
+   }
   },
   "lockbox": {
    "method": "split by part at the lid seam (stacked closed parts; seam = midway between the body top and the lowest lid band): a part goes with the lid when it reaches > 0.02 raw above the seam (bands, cap, straps, top corner caps, the latch / centre hasps hanging over the body), the rest (body, catches, end handles, skid, bottom corner caps) is the body; the body top face removed (open box); uniform scale; the lid node origin on the back hinge line (seam height, lid back face)",
@@ -816,7 +1053,7 @@
    }
   },
   "doorLeaf": {
-   "outerZ": 1.359,
+   "outerZ": 1.358,
    "width": 0.608,
    "height": 2.031,
    "thickness": 0.045
