@@ -44,8 +44,8 @@
   "outputs": {
     "glb": {
       "path": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
-      "bytes": 734712,
-      "sha256": "b7d3bc56e19db1decf8193f755054f46145eb55ba33f163e494639f41e9b2a9c",
+      "bytes": 733304,
+      "sha256": "15e61adf055bc9e6e4a1c752d121c5562b1640f90fa1c457e7dd4826c35fc8c4",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -169,8 +169,18 @@
         "armFromVerticalDegAfter": 34
       }
     },
-    "verticesMoved": 32315,
+    "verticesMoved": 31004,
     "vertices": 188262,
+    "chestWallGuard": {
+      "armpitY": 1.2717,
+      "medialOfX": 0.1491,
+      "fadeM": [
+        0.0047,
+        0.0373
+      ],
+      "rowsChanged": 3376,
+      "armWeightMovedToChest": 315.5944
+    },
     "hair": {
       "rule": {
         "lumMax": 80,
@@ -605,8 +615,8 @@
   "skinOverrides": null,
   "mesh": {
     "node": "ZombieBody",
-    "vertices": 13553,
-    "triangles": 14997,
+    "vertices": 13507,
+    "triangles": 14996,
     "simplify": {
       "targetTris": 15000,
       "errorMetric": "position quadric (normal attribute weight 0: fewest folds/slivers in comparison)",
@@ -615,18 +625,18 @@
         "Prune",
         "Regularize"
       ],
-      "resultTris": 14997,
-      "resultVerts": 10231,
-      "relativeError": 0.00478,
-      "absoluteErrorM": 0.00794
+      "resultTris": 14996,
+      "resultVerts": 10245,
+      "relativeError": 0.00468,
+      "absoluteErrorM": 0.00777
     },
     "unwrap": {
-      "initialCharts": 1348,
-      "charts": 991,
-      "mergedSmallCharts": 357,
-      "texelsPerMetreBase": 349,
-      "uvAreaFill": 0.339,
-      "uvMirroredFaces": 1,
+      "initialCharts": 1295,
+      "charts": 984,
+      "mergedSmallCharts": 311,
+      "texelsPerMetreBase": 348.9,
+      "uvAreaFill": 0.34,
+      "uvMirroredFaces": 4,
       "coneDeg": 66,
       "validDot": 0.15,
       "minChartFaces": 80,
@@ -635,13 +645,13 @@
       "packAtlas": 1024
     },
     "bake": {
-      "texels": 1396980,
-      "coverage": 0.333,
+      "texels": 1399780,
+      "coverage": 0.334,
       "missed": 0,
-      "farOver1cm": 85984,
-      "distMedianMm": 0.66,
-      "distP99Mm": 11.99,
-      "cageRayHits": 501156,
+      "farOver1cm": 86864,
+      "distMedianMm": 0.65,
+      "distP99Mm": 11.98,
+      "cageRayHits": 497575,
       "cageM": 0.015,
       "rayBelowM": 0.004,
       "method": "closest facing-compatible point, overridden by first front-facing hit of a cage ray (P+N*cage -> -N) when within 1.2 cm of it",
@@ -1111,11 +1121,11 @@
   "skinning": {
     "method": "skin.mjs region classification + chain weights + masked Laplacian smoothing (same as zombie-rigged body)",
     "regionVertexCounts": {
-      "legR": 345,
-      "torso": 8786,
-      "legL": 340,
-      "armR": 386,
-      "armL": 374
+      "legR": 347,
+      "torso": 8775,
+      "legL": 349,
+      "armR": 395,
+      "armL": 379
     },
     "armVerticesAdoptedOutsideFlood": {
       "L": 6,
@@ -1126,9 +1136,9 @@
     "smoothLambda": 0.5,
     "armRule": "wall",
     "hair": {
-      "hairVertices": 6205,
-      "hairVerticesWithArmWeights": 338,
-      "reassignedFromNearestTorsoVertex": 338,
+      "hairVertices": 6216,
+      "hairVerticesWithArmWeights": 323,
+      "reassignedFromNearestTorsoVertex": 323,
       "rule": "hair never takes arm weights: rows with any arm share copy the nearest non-hair torso vertex, arm share stripped, renormalised"
     }
   },
@@ -1149,43 +1159,43 @@
     "limb": {
       "L_UpperArm": {
         "length": 0.2133,
-        "radius": 0.0384,
-        "samples": 23
+        "radius": 0.0403,
+        "samples": 25
       },
       "L_Forearm": {
         "length": 0.1809,
         "radius": 0.0348,
-        "samples": 24
+        "samples": 23
       },
       "R_UpperArm": {
         "length": 0.2133,
-        "radius": 0.0384,
-        "samples": 28
+        "radius": 0.0403,
+        "samples": 25
       },
       "R_Forearm": {
         "length": 0.1809,
         "radius": 0.0348,
-        "samples": 24
+        "samples": 25
       },
       "L_Thigh": {
         "length": 0.3722,
-        "radius": 0.0688,
+        "radius": 0.0687,
         "samples": 96
       },
       "L_Shin": {
         "length": 0.372,
-        "radius": 0.0439,
-        "samples": 65
+        "radius": 0.0454,
+        "samples": 66
       },
       "R_Thigh": {
         "length": 0.3722,
-        "radius": 0.0688,
-        "samples": 97
+        "radius": 0.0687,
+        "samples": 99
       },
       "R_Shin": {
         "length": 0.372,
-        "radius": 0.0439,
-        "samples": 67
+        "radius": 0.0454,
+        "samples": 68
       }
     },
     "head": {
@@ -1198,11 +1208,11 @@
         "d": 0.1858
       },
       "waist": {
-        "w": 0.274,
-        "d": 0.1703
+        "w": 0.2741,
+        "d": 0.169
       },
       "hips": {
-        "w": 0.3223,
+        "w": 0.3305,
         "d": 0.2001
       }
     },
@@ -1283,106 +1293,101 @@
         null,
         null,
         null,
+        [
+          0.3166,
+          0.1711,
+          -0.0015,
+          -0.0371
+        ],
         null,
+        [
+          0.3155,
+          0.1547,
+          -0.0001,
+          -0.0468
+        ],
+        null,
+        [
+          0.2961,
+          0.1684,
+          0.0137,
+          -0.0507
+        ],
+        [
+          0.3281,
+          0.1857,
+          0.0008,
+          -0.0537
+        ],
+        [
+          0.3183,
+          0.1891,
+          0.0021,
+          -0.0581
+        ],
         null,
         [
           0.3305,
-          0.1667,
-          0.0024,
-          -0.0408
-        ],
-        [
-          0.2593,
-          0.179,
-          0.0285,
-          -0.0392
-        ],
-        [
-          0.2949,
-          0.1687,
-          0.0131,
-          -0.0504
-        ],
-        [
-          0.3286,
-          0.1789,
-          0.0011,
-          -0.0503
-        ],
-        [
-          0.31,
-          0.1922,
-          0.0084,
-          -0.0548
-        ],
-        [
-          0.3079,
-          0.1921,
-          -0.0116,
-          -0.0534
-        ],
-        [
-          0.3223,
           0.2001,
-          0.0028,
+          0.0012,
           -0.0653
         ],
         [
-          0.3044,
-          0.191,
-          -0.0086,
-          -0.0576
-        ],
-        [
-          0.2904,
-          0.203,
-          0.0176,
-          -0.0659
+          0.3227,
+          0.1914,
+          0.0005,
+          -0.0578
         ],
         null,
+        null,
         [
-          0.2852,
+          0.2817,
           0.1987,
-          0.0145,
+          0.0128,
           -0.0685
         ],
-        null,
+        [
+          0.3083,
+          0.1931,
+          0.003,
+          -0.0689
+        ],
         null,
         [
-          0.2989,
+          0.2888,
           0.1974,
-          0.0027,
+          -0.0024,
           -0.0643
         ],
         null,
         [
-          0.2983,
-          0.2012,
-          0.0017,
-          -0.0571
+          0.2963,
+          0.1973,
+          0.0007,
+          -0.0551
         ],
         null,
         null,
         [
-          0.2545,
+          0.254,
           0.2013,
-          0.0187,
+          0.0185,
           -0.0497
         ],
         null,
         null,
         [
-          0.2798,
-          0.1894,
-          0.0018,
-          -0.0356
-        ],
-        [
-          0.274,
-          0.1703,
-          -0.0006,
+          0.2783,
+          0.1908,
+          0.0011,
           -0.0363
         ],
+        [
+          0.2741,
+          0.169,
+          -0.0005,
+          -0.0356
+        ],
         null,
         null,
         null,
@@ -1398,14 +1403,14 @@
         null,
         null,
         [
-          0.2569,
-          0.138,
-          0.006,
-          -0.011
+          0.2671,
+          0.1582,
+          0.0077,
+          -0.008
         ],
         [
           0.2868,
-          0.1594,
+          0.1593,
           0.0013,
           -0.0081
         ],
@@ -1428,82 +1433,82 @@
           -0.0327
         ],
         [
-          0.2866,
+          0.2876,
           0.1792,
-          -0.0063,
+          -0.0068,
           -0.0486
         ],
         [
           0.2979,
-          0.1895,
+          0.2098,
           -0.0034,
-          -0.0495
+          -0.0393
         ],
         [
-          0.2874,
+          0.2876,
           0.2232,
-          0.0024,
+          -0.0043,
           -0.0386
         ],
         [
-          0.309,
-          0.206,
-          0.0018,
-          -0.0387
-        ],
-        [
-          0.3004,
-          0.2171,
-          -0.0047,
+          0.3044,
+          0.2068,
+          0.0041,
           -0.0383
         ],
         [
-          0.2875,
-          0.217,
-          -0.0014,
-          -0.0374
+          0.3013,
+          0.2169,
+          -0.0043,
+          -0.0384
         ],
         [
-          0.3024,
+          0.2944,
+          0.2215,
+          0.0009,
+          -0.0378
+        ],
+        [
+          0.3025,
           0.2172,
-          -0.0016,
+          -0.0017,
           -0.0416
         ],
         [
-          0.2919,
-          0.204,
-          0.0086,
-          -0.0516
+          0.2964,
+          0.2012,
+          0.0064,
+          -0.053
         ],
         [
-          0.2689,
-          0.2157,
-          0.0165,
-          -0.0475
+          0.2721,
+          0.2236,
+          0.015,
+          -0.0435
         ],
         [
-          0.2465,
-          0.2349,
-          0.005,
-          -0.0413
+          0.2475,
+          0.209,
+          0.002,
+          -0.0543
         ],
         [
-          0.242,
-          0.2297,
-          0,
-          -0.0481
+          0.2407,
+          0.2163,
+          -0.0007,
+          -0.0548
         ],
         [
-          0.2358,
-          0.2209,
-          0.0022,
-          -0.056
+          0.22,
+          0.2197,
+          0.0056,
+          -0.0566
         ],
         [
           0.239,
-          0.2214,
+          0.2274,
           -0.0002,
-          -0.0591
+          -0.0561
         ],
         [
           0.2387,
@@ -1518,10 +1523,10 @@
           -0.065
         ],
         [
-          0.2846,
-          0.2148,
-          0.0039,
-          -0.0663
+          0.2833,
+          0.2144,
+          0.0033,
+          -0.0661
         ],
         [
           0.2932,
@@ -1530,22 +1535,22 @@
           -0.0682
         ],
         [
-          0.2965,
+          0.296,
           0.2059,
-          0.0015,
+          0.0018,
           -0.0705
         ],
         [
-          0.2953,
+          0.296,
           0.2032,
-          -0.0014,
+          -0.0018,
           -0.0717
         ],
         [
-          0.3018,
-          0.1969,
-          0.0012,
-          -0.0739
+          0.3029,
+          0.1976,
+          0.0007,
+          -0.0736
         ],
         [
           0.3066,
@@ -1554,9 +1559,9 @@
           -0.0721
         ],
         [
-          0.2753,
-          0.1927,
-          0.0092,
+          0.2741,
+          0.1926,
+          0.0086,
           -0.0707
         ],
         [
@@ -1573,14 +1578,14 @@
         ],
         [
           0.2104,
-          0.1929,
+          0.1954,
           -0.0032,
-          -0.058
+          -0.0568
         ],
         [
-          0.2082,
+          0.21,
           0.1903,
-          -0.0004,
+          0.0004,
           -0.0508
         ],
         [
@@ -1603,9 +1608,9 @@
         ],
         [
           0.1972,
-          0.1852,
+          0.1861,
           -0.0051,
-          -0.0474
+          -0.0478
         ],
         [
           0.2018,
@@ -1632,9 +1637,9 @@
           -0.0486
         ],
         [
-          0.1954,
+          0.1929,
           0.1861,
-          0.0009,
+          0.0021,
           -0.0504
         ],
         [
@@ -1675,9 +1680,9 @@
         ],
         [
           0.1613,
-          0.1818,
+          0.1762,
           0.0009,
-          -0.0499
+          -0.0527
         ],
         [
           0.1596,
@@ -1704,15 +1709,15 @@
           -0.0376
         ],
         [
-          0.1033,
+          0.1024,
           0.1451,
-          0.0009,
+          0.0013,
           -0.0384
         ],
         [
-          0.0768,
-          0.1238,
-          0.0013,
+          0.076,
+          0.1186,
+          0.0017,
           -0.0371
         ],
         [
@@ -1726,9 +1731,9 @@
     },
     "hit": {
       "head": 0.1158,
-      "torso": 0.1261,
-      "arm": 0.05,
-      "leg": 0.0789,
+      "torso": 0.1269,
+      "arm": 0.0507,
+      "leg": 0.0799,
       "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
     }
   },
@@ -1780,31 +1785,37 @@
       "durationS": 1.6,
       "loop": false,
       "keyframes": 49,
-      "maxLegReach": 1.1304
+      "maxLegReach": 1.105
     }
   ],
   "death": {
-    "hipsY": -0.6819,
+    "hipsY": -0.6799,
     "tune": {
-      "hipsPitch": -91.047,
-      "hipsRoll": 12,
-      "neck": -13.141,
-      "head": -14.75,
-      "headYaw": -38,
+      "hipsPitch": -82.727,
+      "hipsRoll": -4.75,
+      "neck": -26.148,
+      "head": -24.75,
+      "headYaw": -20,
       "armLz": -0.694,
-      "armRz": -0.206,
+      "armRz": -0.431,
       "footLz": 0.5,
       "footRz": 0.258
     },
     "lowestPointPerRegionM": {
-      "torso": 0.027,
-      "pelvis": 0.034,
+      "torso": 0.104,
+      "pelvis": 0.041,
+      "armR": 0.039,
       "legR": 0.007,
-      "legL": 0.005,
-      "armL": 0.023,
-      "armR": 0.015,
-      "head": 0.026,
-      "outfit.head": 0.01
+      "legL": 0.003,
+      "armL": 0.11,
+      "head": 0.081,
+      "outfit.torso": 0.01,
+      "outfit.pelvis": 0.014,
+      "outfit.head": 0.052,
+      "outfit.armR": 0.01,
+      "outfit.armL": 0.082,
+      "outfit.legR": 0.03,
+      "outfit.legL": 0
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -1813,6 +1824,31 @@
       "Idle": {
         "maxLegReach": 0.9634,
         "body": {
+          "minY": -0.0003,
+          "atT": 1.03333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0003,
+          "atT": 1.03333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0003,
+          "atT": 1.03333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0003,
+          "atT": 1.03333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0003,
+          "atT": 1.03333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
           "minY": -0.0003,
           "atT": 1.03333,
           "framesBelowMinus1cm": 0
@@ -1830,6 +1866,31 @@
           "atT": 0.53333,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hoodie": {
+          "minY": -0.0003,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0003,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0003,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0003,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0003,
+          "atT": 0.53333,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_cap": {
           "minY": -0.0003,
           "atT": 0.53333,
@@ -1839,6 +1900,31 @@
       "Run": {
         "maxLegReach": 1.0002,
         "body": {
+          "minY": -0.0007,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0007,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0007,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0007,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0007,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
           "minY": -0.0007,
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
@@ -1856,6 +1942,31 @@
           "atT": 0,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hoodie": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_cap": {
           "minY": -0.0003,
           "atT": 0,
@@ -1869,6 +1980,31 @@
           "atT": 0.26667,
           "framesBelowMinus1cm": 0
         },
+        "Outfit_hoodie": {
+          "minY": -0.0003,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0003,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0003,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0003,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
+          "minY": -0.0003,
+          "atT": 0.26667,
+          "framesBelowMinus1cm": 0
+        },
         "Outfit_cap": {
           "minY": -0.0003,
           "atT": 0.26667,
@@ -1876,8 +2012,33 @@
         }
       },
       "Death": {
-        "maxLegReach": 1.1304,
+        "maxLegReach": 1.105,
         "body": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hoodie": {
+          "minY": -0.0095,
+          "atT": 1.1,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_flannel": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_jeans": {
+          "minY": -0.0022,
+          "atT": 1.1,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_slacks": {
+          "minY": -0.0003,
+          "atT": 0,
+          "framesBelowMinus1cm": 0
+        },
+        "Outfit_hardhat": {
           "minY": -0.0003,
           "atT": 0,
           "framesBelowMinus1cm": 0
@@ -1890,18 +2051,18 @@
       }
     },
     "motionStretch": {
-      "triangles": 14997,
-      "p50": 1.065,
-      "p99": 2.745,
-      "max": 8.91,
-      "over2x": 484,
-      "over3x": 107,
-      "fractionOver": 0.0071,
+      "triangles": 14996,
+      "p50": 1.066,
+      "p99": 2.802,
+      "max": 8.27,
+      "over2x": 559,
+      "over3x": 113,
+      "fractionOver": 0.0075,
       "worstClips": {
-        "Run": 40,
-        "Death": 100,
-        "Hit": 8,
-        "Attack": 3
+        "Run": 44,
+        "Death": 96,
+        "Hit": 7,
+        "Attack": 4
       },
       "poses": 85,
       "method": "per triangle: worst edge length ratio posed/bind over every 3rd frame of all six clips (CPU skinning); body alone"
@@ -1916,6 +2077,5 @@
     "The Meshy normal map is not kept: the wardrobe body material has no normal map (every body: baked colour + metal-rough only) and the re-unwrapped 15 k-triangle derivative would need a tangent-space re-bake.",
     "Unclothed user-uploaded body: the runtime never shows it without an upper AND a lower garment (traits.requires; ai/outfits.ts nude: build() completes missing required slots).",
     "Unapproved prototype: appearance, anatomy, deformation, performance and licensing not certified; gameReady false."
-  ],
-  "wip": "lane BODY WIP (dev build --bodies=... --wear=cap): geometry / rig / textures final for the stage; the Death clip is re-solved against the fitted wardrobe in the full build (geometryHash unchanged)"
+  ]
 }
