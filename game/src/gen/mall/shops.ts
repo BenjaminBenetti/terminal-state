@@ -466,6 +466,8 @@ export interface AssignOpts {
    * units are taken first; everything else is assigned as usual.
    */
   force?: Readonly<Record<string, MallProgram>>;
+  /** Task mall-lingerie-20261102 (lane STORE): tests / QA — false skips the side programs (step 7b): the mall as it was without them. */
+  sidePrograms?: boolean;
 }
 
 /**
@@ -593,7 +595,7 @@ export function assignMallPrograms(layout: StationLayout, rng: Rng, opts: Assign
   const side = rng.fork('mall-side-programs');
   const displaced = new Map<number, MallProgram>();
   MALL_ASSIGN_STATS.last.side = [];
-  for (const sp of SIDE_PROGRAMS) {
+  for (const sp of opts.sidePrograms === false ? [] : SIDE_PROGRAMS) {
     if ((count.get(sp) ?? 0) >= cap(sp)) continue; // (forced already)
     const roll = side.next();
     const cands = shops.map((_, i) => i).filter(i => sideEligible(i, sp));
