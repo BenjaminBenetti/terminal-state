@@ -45,6 +45,8 @@ export const TRAIN_VIEW = {
   leafClear: 0.01,
   /** Glass panes sit this far inside the cut skin plane (task train-shell-followup). */
   glassInset: 0.004,
+  /** Task train-window-fit: the lining's dark outer face stands this far behind it (m). */
+  backingGap: 0.004,
   /** Task train-lockbox: the pocket-end stop post (x thickness) behind a window over the rear door's leaf pocket, and its gap to the
    *  parked leaf's -X edge (m). */
   pocketStop: 0.02,
@@ -287,6 +289,19 @@ export function rectMinusHoles(a0: number, a1: number, b0: number, b1: number, h
 
 // ---------------------------------------------------------------------------------------------
 
+/** Task train-window-fit: back faces of a lining QuadSet's quads (reversed, pushed TRAIN_VIEW.backingGap out along the -normal);
+ *  `keep(centreX)` selects which quads get one. */
+function backFaces(out: QuadSet, src: QuadSet, keep: (cx: number) => boolean): void {
+  const P = src.pos, N = src.nor, g = TRAIN_VIEW.backingGap;
+  for (let q = 0; q < P.length / 12; q++) {
+    const o = q * 12, n: V3 = [-N[o], -N[o + 1], -N[o + 2]];
+    const v = (k: number): V3 => [P[o + k * 3] + n[0] * g, P[o + k * 3 + 1] + n[1] * g, P[o + k * 3 + 2] + n[2] * g];
+    const cx = (P[o] + P[o + 3] + P[o + 6] + P[o + 9]) / 4;
+    if (!keep(cx)) continue;
+    out.quad(v(0), v(3), v(2), v(1), n, [0, 0], [0, 1], [1, 1], [1, 0]);
+  }
+}
+
 /**
  * Builds the train in its local frame. `mats` is the runtime's long-lived material cache; `models` / `textures` whatever is
  * loaded (any may be missing). Pure three.js: no scene, no world pose.
@@ -403,6 +418,15 @@ export function buildTrainView(spec: PlayerTrainSpec, mats: TrainMaterials, mode
     }
   }
   add(bulk, mats.get('bulkhead', tex.bulkhead), 'train-bulkheads');
+
+  // task train-window-fit: the lining's OUTER face — a dark backing a few mm behind the side walls, the end walls and the ceiling
+  // (the same window holes), facing the void between the lining and the skin. A wall has two faces: without it the void side showed
+  // the culled back of the lining, i.e. straight into the lit car through any crack in the cooked shell (a bright seam line).
+  const backing = new QuadSet();
+  backFaces(backing, wall, () => true);
+  backFaces(backing, bulk, (cx) => Math.abs(Math.abs(cx) - ix1) < 1e-4 || Math.abs(cx - ix0) < 1e-4); // the end walls, not the partitions
+  backFaces(backing, ceil, () => true);
+  add(backing, mats.get('liner'), 'train-lining-backing');
 
   // --- metal trim: door jambs / heads / thresholds through the wall, the partition doorway reveals, kick strip ------------------
   const metal = new QuadSet(), rubber = new QuadSet();
