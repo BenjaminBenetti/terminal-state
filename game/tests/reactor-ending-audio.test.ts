@@ -23,7 +23,8 @@ import {ReactorRestart} from '../src/world/reactor/restart';
 import {FUSE_CARTRIDGE_ID, REACTOR_KEY_ID} from '../src/world/reactor/restartLogic';
 import {setReactorVisuals} from '../src/world/reactor/visuals';
 import {beamSpan} from '../src/world/reactor/startupSky';
-import {RAIN_AUDIO, RainAudio, defaultRainExposure, rainExposureOf, rainMix, setRainExposure, type RainSfx} from '../src/world/reactor/audioRain';
+import {RAIN_AUDIO, RainAudio, defaultRainExposure, rainExposureOf, rainMix, setRainExposure, surfaceRainExposure, type RainSfx} from '../src/world/reactor/audioRain';
+import type {ReactorSurface} from '../src/gen/reactor/reactorTypes';
 import {BEAM_IGNITION_CRACK_S, CLIP_BYTES_REACTOR_ENDING, CLIP_MANIFEST_REACTOR_ENDING} from '../src/audio/manifest.reactorEnding.generated';
 import {CUE_GAIN, RAIN_BED, Sfx} from '../src/audio/sfx';
 import {MALL_SKY, MALL_SKY_U} from '../src/world/mallExterior';
@@ -234,7 +235,7 @@ describe('the mix (shipped calibration) and the bytes', () => {
 
 describe('the surface rain', () => {
   const ROOF = 14;
-  it('default exposure: full in the open over the roof, muffled + fading under it, nothing deep inside', () => {
+  it('roof-line fallback (no surface contract): full in the open over the roof, muffled + fading just under it, nothing deeper', () => {
     expect(defaultRainExposure(ROOF + 1.6, ROOF)).toEqual({level: 1, muffle: 0});
     const top = defaultRainExposure(ROOF + 0.4, ROOF); // coming up the last steps
     expect(top.muffle).toBeGreaterThan(0); expect(top.muffle).toBeLessThan(1); expect(top.level).toBeGreaterThan(RAIN_AUDIO.indoorLevel);
@@ -243,6 +244,46 @@ describe('the surface rain', () => {
     expect(defaultRainExposure(ROOF - 20, ROOF).level).toBe(0);
     let prev = Infinity;
     for (let y = ROOF + 3; y > ROOF - 12; y -= 0.25) { const e = defaultRainExposure(y, ROOF); expect(e.level).toBeLessThanOrEqual(prev + 1e-9); prev = e.level; } // monotone going down
+  });
+
+  // lane ENDING's contract (gen/reactor/reactorTypes.ts ReactorSurface), hand-built: the door on the rim (level 0, y 0) at x 0..2,
+  // a stair climbing z 24 -> 30 to the deck (y 15, level 6), the head house x 0..6 / z 30..36 with its exit at x 6.5, the plaza beyond
+  const A = {lower: 101, stair: 102, upper: 103, plaza: 104};
+  const SURF = {version: 1, level: 6, y: 15, ceil: 30, parapetY: 16.1, bounds: {x0: 0, z0: 10, x1: 40, z1: 50}, walk: [], edges: [],
+    hole: {x: 20, z: 20, r: 8, parapet: {r0: 8, r1: 8.3, top: 16.1}, keepR: 9},
+    door: {level: 0, x: 1, y: 0, z: 20, yaw: 0, nx: 1, nz: 0, w: 1.6, h: 2.4, rect: {x0: 0, z0: 19, x1: 2, z1: 21}, front: 7, cells: []},
+    stairs: {flights: [], link: 0, bottom: {x: 3, y: 0, z: 24, level: 0}, top: {x: 3, y: 15, z: 30, level: 6}, rect: {x0: 0, z0: 23.5, x1: 6, z1: 30}},
+    head: {rect: {x0: 0, z0: 30, x1: 6, z1: 36}, top: 18}, exit: {x: 6.5, y: 15, z: 33, yaw: 0}, areas: A} as ReactorSurface;
+  const inR = (x: number, z: number, x0: number, z0: number, x1: number, z1: number) => x >= x0 && x <= x1 && z >= z0 && z <= z1;
+  const LEVELS6 = [{grid: {areaAt: (x: number, z: number) => (inR(x, z, 0, 18, 2, 23.5) ? A.lower : 1)}}, undefined, undefined, undefined, undefined, undefined,
+    {grid: {areaAt: (x: number, z: number) => (inR(x, z, 0, 30, 6, 36) ? A.upper : inR(x, z, 0, 23.5, 6, 30) ? A.stair : A.plaza)}}];
+
+  it('the surface rule (lane ENDING contract): plaza open; head house / stair muffled, fading in as they climb; nothing elsewhere', () => {
+    const at = (x: number, y: number, z: number) => surfaceRainExposure(SURF, LEVELS6, {x, y, z});
+    expect(at(20, 16.6, 40)).toEqual({level: 1, muffle: 0}); // the plaza
+    expect(at(20, 16.0, 40)).toEqual({level: 1, muffle: 0}); // crouched on the plaza
+    expect(at(20, 1.6, 5)).toEqual({level: 0, muffle: 1}); // the rim storey
+    expect(at(20, -22.4, 20)).toEqual({level: 0, muffle: 1}); // the core floor
+    // the climb: behind the door -> up the stair -> the head house -> its exit -> the plaza: louder and opener every step
+    const path = [at(1, 1.6, 21), at(3, 1.8, 24.5), at(3, 6.6, 26.5), at(3, 11.6, 28.5), at(3, 16.6, 31), at(1, 16.6, 35), at(5.5, 16.6, 33), at(9, 16.6, 33)];
+    expect(path[0]).toEqual({level: RAIN_AUDIO.lowerLevel, muffle: 1});
+    for (const e of path.slice(1, 4)) expect(e.muffle).toBe(1); // the stair: sheltered
+    for (let i = 1; i < path.length; i++) expect(path[i].level, `step ${i}`).toBeGreaterThanOrEqual(path[i - 1].level - 1e-9);
+    expect(path[6].level).toBeGreaterThan(path[5].level); // the exit end of the head house is louder than its far end ...
+    expect(path[6].muffle).toBeLessThan(path[5].muffle); // ... and opener
+    expect(path[7]).toEqual({level: 1, muffle: 0});
+    // the runtime chooses it whenever the Reactor carries a surface contract (the hook still wins)
+    const host = {}, r = recSfx(), rain = new RainAudio(host, () => r.sfx), info = {pit: {roofY: 14}, surface: SURF} as never;
+    for (let i = 0; i < 12; i++) rain.frame(FRAME, {x: 3, y: 11.6, z: 28.5}, 1, info, LEVELS6);
+    expect(rain.shown.source).toBe('surface');
+    expect(r.rain[r.rain.length - 1].muffle).toBe(1);
+    for (let i = 0; i < 12; i++) rain.frame(FRAME, {x: 20, y: 1.6, z: 5}, 1, info, LEVELS6); // the rim storey: the roof line would not matter
+    expect(r.rain[r.rain.length - 1].level).toBe(0);
+    setRainExposure(host, () => ({level: 0.3, muffle: 0.2}));
+    for (let i = 0; i < 12; i++) rain.frame(FRAME, {x: 20, y: 16.6, z: 40}, 1, info, LEVELS6);
+    expect(rain.shown.source).toBe('hook');
+    expect(r.rain[r.rain.length - 1]).toEqual({level: 0.3, muffle: 0.2});
+    setRainExposure(host, null);
   });
 
   it('only after the win: the sky\'s clearing gates it at every height; a registered surface exposure wins', () => {
@@ -255,12 +296,12 @@ describe('the surface rain', () => {
     expect(r.rain.filter(q => q.level > 0)).toEqual([]);
     rain.frame(FRAME, {x: 0, y: ROOF + 2, z: 0}, 1, info);
     expect(r.rain[r.rain.length - 1]).toEqual({level: 1, muffle: 0});
-    expect(rain.shown.source).toBe('default');
+    expect(rain.shown.source).toBe('roofline');
     setRainExposure(host, eye => (eye.x > 5 ? {level: 0.4, muffle: 0.8} : null)); // lane SURFACE: a shelter at x > 5
     expect(rainExposureOf(host)).toBeTypeOf('function');
     for (let i = 0; i < 12; i++) rain.frame(FRAME, {x: 9, y: ROOF + 2, z: 0}, 1, info);
     expect(r.rain[r.rain.length - 1]).toEqual({level: 0.4, muffle: 0.8});
-    expect(rain.shown.source).toBe('surface');
+    expect(rain.shown.source).toBe('hook');
     for (let i = 0; i < 12; i++) rain.frame(FRAME, {x: 0, y: ROOF + 2, z: 0}, 1, info); // null: the default rule
     expect(r.rain[r.rain.length - 1]).toEqual({level: 1, muffle: 0});
     setRainExposure(host, null);

@@ -74,6 +74,8 @@ export class ReactorStartup {
   private rank = new Map<number, number>();
   private byRank: BeaconSpot[][] = [];
   private sites: StartupSites | null = null;
+  /** The built layout's storeys (lane AUDIO: the surface rain rule reads their area grids). */
+  private levels: StationLayout['levels'] = [];
   private scattered = false;
   private curtain0 = MALL_SKY.curtain as number;
   private readonly eye = new THREE.Vector3();
@@ -105,6 +107,7 @@ export class ReactorStartup {
     if (!info) return;
     const h = this.host;
     this.info = info;
+    this.levels = layout.levels ?? [];
     this.counts.builds++;
     this.plan = planWin(info.tiers, info.fans);
     this.rank = new Map(this.plan.tiers.map((lv, r) => [lv, r]));
@@ -145,6 +148,7 @@ export class ReactorStartup {
     this.beacons = null;
     this.sky = null;
     this.info = null;
+    this.levels = [];
     this.plan = null;
     this.sites = null;
     this.byRank = [];
@@ -227,7 +231,7 @@ export class ReactorStartup {
       this.audio.frame(dt, stageSnap(R.state), hold, winT, this.sites, L);
     }
     this.apply(dt, winT);
-    this.rain.frame(dt, L, this.shown.clear, this.info); // lane AUDIO: after the win only (the sky's clearing gates it)
+    this.rain.frame(dt, L, this.shown.clear, this.info, this.levels); // lane AUDIO: after the win only (the sky's clearing gates it)
   }
 
   /** The visible state at win time `winT` (null: not restarted): beam + its lights, the sky / outdoor gas, the beacons + their lights. */
