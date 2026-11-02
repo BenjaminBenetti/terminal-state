@@ -6,9 +6,9 @@
 // lights, maintenance bays, caches; rooms: their purpose rules — lockers in the lamp room, tool chests in the tool room, panels in the
 // hoist room, shelving / cabinets / crates in the magazine, first-aid cabinets in the refuge). This pass adds what makes it a MINE:
 //  - SET PIECES (collision-only 'annexMachine' boxes; the visuals draw the lead's Meshy models / timber on them, keyed by `variant`):
-//    ore carts on the rail line, the hoist winch beside a fenced blind winze, a drill jumbo, timber cribs holding up the stope roof, the
+//    ore carts on the rail line, the hoist winch beside a fenced blind winze, a drill rig, timber cribs holding up the stope roof, the
 //    rubble choking the collapsed drift. Classification (docs/prop-affordances.md "Reactor mines"): anchored set pieces of the workings
-//    — a ~650 kg ore car chocked on its rails, a winch bolted to its concrete base, a ~10 t drill jumbo, cribs / rubble: no storage, a
+//    — a ~650 kg ore car chocked on its rails, a winch bolted to its concrete base, a several-tonne drill rig, cribs / rubble: no storage, a
 //    body or a bullet does not move them (physics audit 'annexMachine' = machinery). Storage stays the existing openable holders.
 //  - PROPS of existing kinds by real function (crates of the magazine, cable spools, gas cylinders, the sump pump, work lights, a
 //    drum fan, a barricade before the bad ground, the lamp room's tag board / clock, mine phones, first-aid kits): placed through the
