@@ -83,7 +83,8 @@ import {installBlightBurst, type BlightBurstSystem, type BlightEnemy} from './ai
 import {ENEMY_MODEL_FILES, enemyModelKeysFor, withEnemyModels} from './ai/enemyModels'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): level-specific (lazy) enemy models
 import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren lifecycle / persistence / veins
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
-import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart'; // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
+import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart';
+import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
 import type {StationLayout as Iter16Layout} from './gen/stationTypes';
 // Iteration 16 (lane RUN): logical levels / sections, travel, run carryover (levels/registry.ts, run/*)
@@ -477,7 +478,8 @@ export class Game {
     this.sectionModelKeys.push(enemyModelKeysFor);
     this.sirens = installSirens(this); // Task track1-siren-blightbelly-20261031 (lane SIREN): frame hook (wake memory, vein fades), section teardown, warm pool 'siren-veins'
     hookName('sirens');
-    installReactorRestart(this); hookName('reactorRestart'); // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
+    installReactorRestart(this); hookName('reactorRestart');
+    installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
     // stalls; its E handler / prompt come after the others): section hooks (the car at game.trainPlacement, interior volume + colliders, built
     // synchronously before the first update), frame hook (doors), E + prompt, the boot-time head / tail / interior lights, warm pool

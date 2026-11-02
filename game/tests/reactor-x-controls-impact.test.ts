@@ -73,8 +73,8 @@ describe('a real Reactor world: shots take the drawn finish', () => {
       const wh = raycastWorld(lv, L.props, o, d, 40, L.trench.floorY);
       if (wh.kind === 'none' || wh.kind === 'prop' || (expectKind && wh.kind !== expectKind)) return null;
       const p = new THREE.Vector3(o.x + d.x * wh.t, o.y + d.y * wh.t, o.z + d.z * wh.t), n = new THREE.Vector3(wh.nx, wh.ny, wh.nz);
-      const key = w.finishAt!(wh.kind as 'wall', wh.level, p.x, p.y, p.z, wh.nx, wh.nz);
-      const G = lv.grid(Math.max(0, wh.level));
+      const key = w.finishAt!(wh.kind as 'wall', wh.level ?? 0, p.x, p.y, p.z, wh.nx, wh.nz);
+      const G = lv.grid(Math.max(0, wh.level ?? 0));
       const old = STRUCTURAL_CLASS[structuralKeyAt(wh.kind, p.x, p.y, p.z, wh.nx, wh.nz, {grid: G, areas: L.areas, trenches: L.trenches})];
       const info = dmg.hitWorld(wh, p, new THREE.Vector3(d.x, d.y, d.z), {damage: 30, pellet: false, weapon: 'rifle'} as never);
       const c = calls[calls.length - 1];

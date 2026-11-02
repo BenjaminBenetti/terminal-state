@@ -53,25 +53,33 @@ function cellAt(g: Grid, x: number, z: number): number {
   return g.inBounds(cx, cy) ? cy * g.w + cx : -1;
 }
 
-/** Walkable, unblocked floor cell (not a door: doors are kept clear). */
+/** Floor cell a board may stand over: walkable, not a stair, not a doorway (doors are kept clear). */
 function openCell(g: Grid, i: number, doors: ReadonlySet<number>): boolean {
-  return i >= 0 && g.cells[i] === FLOOR && !g.blocked[i] && g.rampIdx[i] < 0 && !doors.has(i);
+  return i >= 0 && g.cells[i] === FLOOR && g.rampIdx[i] < 0 && !doors.has(i);
 }
 
 interface Keepout { x: number; z: number; r: number }
+/** A prop's plan box and vertical range (absolute). */
+interface PropBox { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number }
 
 /**
- * A board centred at (cx, cz) on a wall whose room side is n and running along r: the wall is solid behind its whole span, the floor in
- * front is open (no door, machine, stair), and it keeps clear of every keepout (other signs / boards, controls, their stand points).
+ * A board centred at (cx, cz) on a wall whose room side is n and running along r, its face from y0 to y1: the wall is solid behind its
+ * whole span, the floor in front is open (no door, no stair), no prop reaches into its volume (a low cabinet under it is fine; a tall
+ * one, a machine or a wall-mounted sign is not), and it keeps clear of every keepout (other signs / boards, controls, stand points).
  */
-function fits(g: Grid, doors: ReadonlySet<number>, cx: number, cz: number, nx: number, nz: number, rx: number, rz: number, keep: readonly Keepout[]): boolean {
-  const half = MAP_BOARD.w / 2 + 0.1;
-  for (let s = -half; s <= half + 1e-6; s += 0.25) {
-    const px = cx + rx * s, pz = cz + rz * s;
+function fits(g: Grid, doors: ReadonlySet<number>, cx: number, cz: number, nx: number, nz: number, rx: number, rz: number, y0: number, y1: number, keep: readonly Keepout[], props: readonly PropBox[]): boolean {
+  const half = MAP_BOARD.w / 2 + 0.1, steps = Math.ceil((2 * half) / 0.2);
+  for (let k = 0; k <= steps; k++) {
+    const s = -half + (2 * half * k) / steps, px = cx + rx * s, pz = cz + rz * s;
     const behind = cellAt(g, px - nx * 0.25, pz - nz * 0.25), front = cellAt(g, px + nx * 0.3, pz + nz * 0.3), front2 = cellAt(g, px + nx * 0.8, pz + nz * 0.8);
     if (behind < 0 || g.cells[behind] === FLOOR) return false;
     if (!openCell(g, front, doors) || !openCell(g, front2, doors)) return false;
   }
+  // the board's volume: its span, out to 0.6 m from the wall, its height (+5 cm)
+  const xs = [cx - rx * half, cx + rx * half, cx - rx * half + nx * 0.6, cx + rx * half + nx * 0.6];
+  const zs = [cz - rz * half, cz + rz * half, cz - rz * half + nz * 0.6, cz + rz * half + nz * 0.6];
+  const vx0 = Math.min(...xs), vx1 = Math.max(...xs), vz0 = Math.min(...zs), vz1 = Math.max(...zs);
+  for (const p of props) if (p.x1 > vx0 && p.x0 < vx1 && p.z1 > vz0 && p.z0 < vz1 && p.y1 > y0 - 0.05 && p.y0 < y1) return false;
   for (const k of keep) {
     // distance from the keepout to the board's span segment
     const dx = k.x - cx, dz = k.z - cz, t = Math.max(-MAP_BOARD.w / 2, Math.min(MAP_BOARD.w / 2, dx * rx + dz * rz));
@@ -120,16 +128,21 @@ export function planMapBoards(layout: StationLayout, info: ReactorInfo, facing: 
     }
     const [nx, nz] = facing(sc);
     const floorY = info.tiers.find(t => t.level === sc.level)?.baseY ?? 0;
-    const y = floorY + MAP_BOARD.centerY;
+    const y = floorY + MAP_BOARD.centerY, y0 = y - MAP_BOARD.h / 2, y1 = y + MAP_BOARD.h / 2;
+    const props: PropBox[] = layout.props.filter(p => (p.level ?? 0) === sc.level)
+      .map(p => ({x0: p.x - p.hx, z0: p.z - p.hz, x1: p.x + p.hx, z1: p.z + p.hz, y0: p.y + (p.lift ?? 0), y1: p.y + (p.lift ?? 0) + p.h}));
     const pose = (x: number, z: number, n: [number, number], same: boolean): MapBoardPose =>
       ({screen: id, level: sc.level, x: x + n[0] * (MAP_BOARD.depth + 0.005), y, z: z + n[1] * (MAP_BOARD.depth + 0.005), nx: n[0], nz: n[1], rx: -n[1], rz: n[0], sameWall: same});
-    // 1. the screen's own wall, either side, stepping outward
+    // 1. the screen's own wall (the first solid cell behind the screen: a screen may hang on a machine in front of it), either side
     const rx = -nz, rz = nx;
+    let wallD = 0;
+    for (let d = 0; d <= 1.5; d += 0.05) { const i = cellAt(g, sc.x - nx * (d + 0.01), sc.z - nz * (d + 0.01)); if (i < 0 || g.cells[i] !== FLOOR) { wallD = d; break; } }
+    const wx0 = sc.x - nx * wallD, wz0 = sc.z - nz * wallD;
     let best: MapBoardPose | null = null;
-    for (let off = sc.w / 2 + MAP_BOARD.gap + MAP_BOARD.w / 2; off < sc.w / 2 + 3.2 && !best; off += 0.25) {
+    for (let off = sc.w / 2 + MAP_BOARD.gap + MAP_BOARD.w / 2; off < sc.w / 2 + 3.5 && !best; off += 0.25) {
       for (const side of [1, -1]) {
-        const cx = sc.x + rx * off * side, cz = sc.z + rz * off * side;
-        if (fits(g, doors, cx, cz, nx, nz, rx, rz, keep)) { best = pose(cx, cz, [nx, nz], true); break; }
+        const cx = wx0 + rx * off * side, cz = wz0 + rz * off * side;
+        if (fits(g, doors, cx, cz, nx, nz, rx, rz, y0, y1, keep, props)) { best = pose(cx, cz, [nx, nz], true); break; }
       }
     }
     // 2. another wall of the same room, nearest the screen
@@ -146,7 +159,7 @@ export function planMapBoards(layout: StationLayout, info: ReactorInfo, facing: 
           const wx = cx0 + dx * CELL / 2, wz = cz0 + dz * CELL / 2, n: [number, number] = [-dx, -dz];
           const d = Math.hypot(wx - sc.x, wz - sc.z);
           if (d >= bd || d > 9) continue;
-          if (fits(g, doors, wx, wz, n[0], n[1], -n[1], n[0], keep)) { bd = d; best = pose(wx, wz, n, false); }
+          if (fits(g, doors, wx, wz, n[0], n[1], -n[1], n[0], y0, y1, keep, props)) { bd = d; best = pose(wx, wz, n, false); }
         }
       }
     }
