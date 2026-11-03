@@ -125,10 +125,10 @@ export class SaveError extends Error {
   }
 }
 
-/** The game build that writes a save (Vite's mode when bundled; tests: 'test'). */
+/** The game build that writes a save: the package version + Vite's mode ('production' / 'development'; vitest: 'test'). */
 export const SAVE_BUILD: string = (() => {
   const env = (import.meta as unknown as {env?: Record<string, unknown>}).env;
-  const mode = typeof env?.MODE === 'string' ? env.MODE : 'test';
+  const mode = typeof env?.MODE === 'string' ? env.MODE : 'web';
   return `terminal-state 0.0.0 (${mode})`;
 })();
 
