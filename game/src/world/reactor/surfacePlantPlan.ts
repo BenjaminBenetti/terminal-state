@@ -52,6 +52,8 @@ export interface VentTowerPlan {
   bladeR: number;
   rev: number;
   phase: number;
+  /** (lane PLANT follow-up 2) Its red obstruction lights' pulse phase (cycles, 0..1): the second tower half a cycle off the first. */
+  blink: number;
   /** The whole tower's footprint (plinth + fan overhang + the duct run to the parapet): reserved. */
   footprint: CityFootprint;
 }
@@ -217,7 +219,7 @@ export function planSurfacePlant(site: SurfaceSite, seed: number, _pit?: Reactor
       id: towers.length, x: r3(cx), z: r3(cz), yaw, hw, hd, h: H,
       fan: {radius: r3(R), hubY: r3(y + hub), axis: 'side'},
       side: {nx: s.nx, nz: s.nz}, y, plinth: {hw: r3(hw + P.plinthPad), hd: r3(hd + P.plinthPad), h: P.plinthH}, reach: r3(reach),
-      fanScale: r3(fanScale), bladeR: r3(FAN_ANCHORS.bladeR * fanScale), rev: r3(between(P.rev)), phase: r3(rnd() * Math.PI * 2), footprint,
+      fanScale: r3(fanScale), bladeR: r3(FAN_ANCHORS.bladeR * fanScale), rev: r3(between(P.rev)), phase: r3(rnd() * Math.PI * 2), blink: 0, footprint,
     };
   };
   /** Lateral candidates on side s: off the aperture's axis by the seeded offset (preferred sign first), then wider / narrower. */
@@ -255,6 +257,8 @@ export function planSurfacePlant(site: SurfaceSite, seed: number, _pit?: Reactor
     const t = place(s, sign);
     if (t) towers.push({...t, id: towers.length});
   }
+  // the obstruction lights' pulse phase per tower (no rng draw: the towers / collar keep their seeded values): half a cycle apart
+  for (const t of towers) t.blink = r3((t.id * 0.5 + (t.phase / (Math.PI * 2)) * 0.2) % 1);
   // --- the duct run of each tower: plenum against the parapet, the duct on sleepers into the stack's base ---
   for (const tw of towers) {
     const fr = {x: tw.x, z: tw.z, yaw: tw.yaw}, zFace = tw.hd, zPar = tw.hd + tw.reach; // local z of the stack face / the parapet's outer face
