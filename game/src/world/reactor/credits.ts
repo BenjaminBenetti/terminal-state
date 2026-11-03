@@ -81,6 +81,8 @@ export class ReactorCredits {
   private pollT = 0;
   private polledSurfaced = false;
   private lastPress = -Infinity;
+  /** Frames run since the last state change (the frame hook runs only in play). */
+  private playFrames = 0;
   private readonly visible: () => boolean;
   private readonly makeView: (h: CreditsViewHandlers) => CreditsView | null;
   private readonly now: () => number;
@@ -149,15 +151,20 @@ export class ReactorCredits {
 
   frame(dt: number): void {
     if (!this.info || !this.surface) return;
+    this.playFrames++;
+    if (this.state.done) {
+      // Enter = the end card's button (pointer locked: the mouse needs Esc first; the hint says so). Only from the SECOND frame of
+      // play on: an Enter that resumed play (a focused pause-screen button) was pressed before this play began.
+      if (this.cardLive && this.host.state === 'playing' && this.playFrames > 1) {
+        const p = this.host.input?.pressed;
+        if (p && ENTER_KEYS.some(k => p.has(k))) this.press();
+      }
+      return; // (finished: nothing to count)
+    }
     const g = this.readGate(dt);
     this.gate = g;
-    if (!this.state.done) this.applyEvents(stepCredits(this.state, dt, g));
+    this.applyEvents(stepCredits(this.state, dt, g));
     if (this.view && !this.cardLive) this.view.setProgress(scrollProgress(this.state));
-    // Enter = the end card's button (pointer locked: the mouse needs Esc first; the hint says so)
-    if (this.cardLive && g.playing) {
-      const p = this.host.input?.pressed;
-      if (p && ENTER_KEYS.some(k => p.has(k))) this.press();
-    }
   }
 
   /** This frame's gate (the clocks' conditions). */
@@ -226,6 +233,7 @@ export class ReactorCredits {
   }
 
   private onState(s: string): void {
+    this.playFrames = 0;
     this.view?.setMode(this.modeFor(s));
   }
 

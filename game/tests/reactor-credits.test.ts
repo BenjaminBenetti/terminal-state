@@ -284,6 +284,20 @@ describe('the runtime (fake host)', () => {
     expect(c.counts).toMatchObject({presses: 1, saves: 1, left: 1, leftUnsaved: 0});
   });
 
+  it('an Enter that resumed play (pressed on a focused pause-screen button) is not also a Main Menu press', () => {
+    const h = fakeHost();
+    const {c} = install(h);
+    build(h);
+    c.qa({end: true});
+    setState(h, 'paused');
+    setState(h, 'playing');
+    enter(h); // the first frame of play still carries the press that resumed it
+    expect(h.commitEndingSave).not.toHaveBeenCalled();
+    enter(h); // a fresh Enter in play
+    expect(h.commitEndingSave).toHaveBeenCalledTimes(1);
+    expect(h.state).toBe('title');
+  });
+
   it('a failed save shows its error and leaves only on a second, separate press (WITHOUT saving again); one press never counts twice', () => {
     const h = fakeHost({save: () => ({ok: false, error: "Not saved: this browser's storage for the game is full. Slot 2 still holds its previous save."})});
     const {c, clock} = install(h);
