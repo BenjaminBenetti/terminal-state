@@ -1,0 +1,196 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "mall-lingerie-ad-art-20261103",
+ "task": "studio-beta-mall-lingerie-store-polish-20261103-045922-01",
+ "lane": "primary (lingerie store polish)",
+ "status": "runtime derivatives of FOUR static lingerie-boutique ad artworks generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization via Main (\"use codex to generate appropriate adds for this sort of store\"; 4 accepted of 4 attempts, cap 8), each made with the user's own garment reference PNG(s) attached as design references (listed per file by name + sha256; the references stay private); product-only, no people; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "game/src/world/mallAds.ts adTexture / drawMenu: the art is cover-cropped under the code-driven fictional brand, headline, price roundel, menu lines and aging overlay (dynamic text, exempt per root CLAUDE.md)",
+ "rebuild": "node tools/asset-pipeline/mall-ads/build-lingerie-ad-art.mjs",
+ "rawStorage": "reference/tasks/mall-lingerie-store-polish-20261103-045922/codex/ad-lingerie-<theme>/{ad-lingerie-<theme>-original.png, receipt.json, prompt.txt, inputs.txt, codex-events.jsonl} + SOURCES-SHA256.txt + ATTEMPTS.jsonl (read-only raw masters, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "resize": {
+   "width": 512,
+   "height": 512,
+   "fit": "fill (square source: aspect kept, nothing cropped)",
+   "kernel": "lanczos3"
+  },
+  "colour": "sRGB, alpha none",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/mall-ads/build-lingerie-ad-art.mjs"
+ },
+ "files": [
+  {
+   "id": "ad-lingerie-flatlay",
+   "subject": "flat-lay of the emerald longline lace set and the black balconette lace set on blush satin (user designs 9gPhXy5tx6G6iW_0 / M52skrui8zNLGE_0)",
+   "source": {
+    "file": "ad-lingerie-flatlay/ad-lingerie-flatlay-original.png",
+    "sha256": "35711c4e65b26c208253182876ccd9ba1cbb2852dd588cc277c55569868e8b05",
+    "bytes": 2566467,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a19fcb-df74-7c82-a95b-58ecbf9b1da9",
+    "nativeOutput": "exec-e8ed6b2c-502b-43c3-bdf8-ffcc3068e06c.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-03T05:05:00Z",
+    "finished": "2026-11-03T05:06:03Z"
+   },
+   "prompt": "Lingerie boutique product advertisement, top-down flat-lay photograph: two lingerie sets laid neatly side by side on smooth blush-pink silk satin — the emerald-green floral lace longline underwire bra with its matching high-waist lace brief (Image 1), and the black floral lace balconette underwire bra with its matching lace brief (Image 2) — exactly those designs; a few scattered pale rose petals and a soft satin ribbon as accents.\n\nStyle for the whole ad set: polished, tasteful contemporary lingerie-boutique catalogue / advertising photography for a shopping mall, soft warm high-key studio lighting, elegant blush, cream and deep-rose colour grade, shallow depth of field, crisp focus on the garments, premium retail campaign look. Product photography ONLY: no people, no models, no body parts, no mannequin heads or faces. Composition: square canvas, the product group in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "designReferences": [
+    {
+     "file": "VeniceAI_9gPhXy5tx6G6iW_0.png",
+     "sha256": "f0efd4a92c60f4507fc516783f246d8a0ea269e1256eefdc97d9676a1ad5bb13",
+     "note": "the user's own garment reference (private, not shipped)"
+    },
+    {
+     "file": "VeniceAI_M52skrui8zNLGE_0.png",
+     "sha256": "ff5f69c93b961f88ea784fad3c5007c1c38cdbabe29d26522fa51419250c5a6e",
+     "note": "the user's own garment reference (private, not shipped)"
+    }
+   ],
+   "output": {
+    "url": "assets/textures/mall/ads-lingerie/ad-lingerie-flatlay.jpg",
+    "bytes": 39990,
+    "sha256": "5538c0b6fba070226f967954dc795faae366e43cba1cf8d00f4e759d2afa2b6b",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-lingerie-dressform",
+   "subject": "the plum lace strapless bustier with suspenders and brief on a vintage dress form (user design 9gPhXy5tx6G6iW_1)",
+   "source": {
+    "file": "ad-lingerie-dressform/ad-lingerie-dressform-original.png",
+    "sha256": "d4b2849484fc4cf60852a1fef07fd3a26360414f8584d80b8b20e86e186d57b5",
+    "bytes": 1957047,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a19fcc-fd70-7c42-882c-5048d842ba89",
+    "nativeOutput": "exec-cbca616e-dc9f-4e64-b869-994a9c049f1e.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-03T05:06:13Z",
+    "finished": "2026-11-03T05:07:10Z"
+   },
+   "prompt": "Lingerie boutique product advertisement: the plum-purple floral lace strapless bustier corset with front criss-cross lacing and four suspender straps, with its matching lace brief (Image 1, exactly that design), displayed on a vintage headless dressmaker's dress form (a cream linen torso form on a turned wooden stand, no head, no arms) in an elegant boutique corner with a soft velvet drape and warm side light.\n\nStyle for the whole ad set: polished, tasteful contemporary lingerie-boutique catalogue / advertising photography for a shopping mall, soft warm high-key studio lighting, elegant blush, cream and deep-rose colour grade, shallow depth of field, crisp focus on the garments, premium retail campaign look. Product photography ONLY: no people, no models, no body parts, no mannequin heads or faces. Composition: square canvas, the product group in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "designReferences": [
+    {
+     "file": "VeniceAI_9gPhXy5tx6G6iW_1.png",
+     "sha256": "491d05b1de02e7e6c35934076f882a5e0829cab4029ac890e0587158d09a6514",
+     "note": "the user's own garment reference (private, not shipped)"
+    }
+   ],
+   "output": {
+    "url": "assets/textures/mall/ads-lingerie/ad-lingerie-dressform.jpg",
+    "bytes": 31608,
+    "sha256": "b81255c34f6f4b097f27ec9265f3799e5f819df929f4600e62dcb30c22e96055",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-lingerie-hangers",
+   "subject": "the crimson plunge bra + garter set and the ivory bralette + garter set on satin hangers (user designs M52skrui8zNLGE_1 / _2)",
+   "source": {
+    "file": "ad-lingerie-hangers/ad-lingerie-hangers-original.png",
+    "sha256": "524093046f51ef53864eea3d8e633f616fc651d6e3755b934318537ecc07aa42",
+    "bytes": 1949850,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a19fcd-dd71-77c2-ad3b-1173da5e02ef",
+    "nativeOutput": "exec-0b46bccb-db98-4eee-86ad-d10e4c4efe46.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-03T05:07:11Z",
+    "finished": "2026-11-03T05:08:23Z"
+   },
+   "prompt": "Lingerie boutique product advertisement: lingerie hanging on padded blush satin hangers from a slim polished brass clothing rail — the crimson-red lace plunge bra and the crimson lace garter belt with suspender straps (Image 1), and the ivory lace bralette with the ivory lace garter belt (Image 2), exactly those designs, hung neatly side by side with gentle spacing, a soft cream wall and a sheer curtain behind.\n\nStyle for the whole ad set: polished, tasteful contemporary lingerie-boutique catalogue / advertising photography for a shopping mall, soft warm high-key studio lighting, elegant blush, cream and deep-rose colour grade, shallow depth of field, crisp focus on the garments, premium retail campaign look. Product photography ONLY: no people, no models, no body parts, no mannequin heads or faces. Composition: square canvas, the product group in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "designReferences": [
+    {
+     "file": "VeniceAI_M52skrui8zNLGE_1.png",
+     "sha256": "c01f15dd897b405ddafcb5cb3e18479c9fde50299421df34449a47fc0e2a2677",
+     "note": "the user's own garment reference (private, not shipped)"
+    },
+    {
+     "file": "VeniceAI_M52skrui8zNLGE_2.png",
+     "sha256": "15e88f70706f0426a3121459920b5b7560ac15afb7613c9ea3923a8c87d504db",
+     "note": "the user's own garment reference (private, not shipped)"
+    }
+   ],
+   "output": {
+    "url": "assets/textures/mall/ads-lingerie/ad-lingerie-hangers.jpg",
+    "bytes": 30904,
+    "sha256": "0e02d71d6831dc2ee80404ffb43a27079ae9e6579a15904d33cef453f33ccb62",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  },
+  {
+   "id": "ad-lingerie-giftbox",
+   "subject": "the blush lace plunge bodysuit folded in a ribboned gift box (user design 9gPhXy5tx6G6iW_2)",
+   "source": {
+    "file": "ad-lingerie-giftbox/ad-lingerie-giftbox-original.png",
+    "sha256": "4ac24827bfb0435994140f891db14d251a69c4d4cb936f425bd365a6fdc3f50b",
+    "bytes": 2354526,
+    "width": 1254,
+    "height": 1254,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "receiptGenerator": "Codex native built-in image_gen (Codex CLI codex exec)",
+    "threadId": "01a19fce-fa07-76b0-9686-25cdde8264a5",
+    "nativeOutput": "exec-a4e7f91d-69ca-4690-bc10-54abff062a8b.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-03T05:08:23Z",
+    "finished": "2026-11-03T05:09:48Z"
+   },
+   "prompt": "Lingerie boutique product advertisement: the blush-pink lace and mesh plunge bodysuit with thin straps (Image 1, exactly that design) neatly folded in an open luxury gift box lined with white tissue paper, the lid leaning beside it, tied with a wide dusty-rose satin ribbon, on a soft cream marble surface with a small spray of pale flowers.\n\nStyle for the whole ad set: polished, tasteful contemporary lingerie-boutique catalogue / advertising photography for a shopping mall, soft warm high-key studio lighting, elegant blush, cream and deep-rose colour grade, shallow depth of field, crisp focus on the garments, premium retail campaign look. Product photography ONLY: no people, no models, no body parts, no mannequin heads or faces. Composition: square canvas, the product group in the upper two thirds with a generous uncluttered margin on all sides, and the lower third a calm, plain, softly lit background area (headline text is added later by the game, so leave room). Fictional and unbranded: absolutely NO text, NO letters, NO numbers, NO logos, NO brand names, NO trademarks, NO watermarks, NO signage, NO price tags, no labels. One single image, not a collage, not a multi-panel layout, no borders or frames.\n",
+   "designReferences": [
+    {
+     "file": "VeniceAI_9gPhXy5tx6G6iW_2.png",
+     "sha256": "bd1a327c52af12f406d532b018a8350796574534b81b913d38e69d59129e9932",
+     "note": "the user's own garment reference (private, not shipped)"
+    }
+   ],
+   "output": {
+    "url": "assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg",
+    "bytes": 32607,
+    "sha256": "2404e8b9c458dd60a1b8cab1e431a68b8bb3ece4d37a3efc0751becc17a8d2d9",
+    "width": 512,
+    "height": 512,
+    "format": "jpeg"
+   }
+  }
+ ]
+}

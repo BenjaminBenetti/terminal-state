@@ -56,7 +56,9 @@ function coreGeometry(L: StationLayout): string {
   const m = L.mall!;
   return createHash('sha1').update(JSON.stringify([
     L.areas.filter(a => keep(a.id)).map(a => [a.id, a.x, a.y, a.w, a.h, a.kind, a.type, a.level ?? 0, Math.round(a.ceil * 1000), a.parent, a.role ?? '', a.publicSpace]),
-    L.doors.filter(d => keep(d.a) && keep(d.b)).map(d => [d.x, d.y, d.w, d.h, d.a, d.b, Math.round(d.height * 1000), !!d.shopfront, !!d.staff, d.level ?? 0]),
+    // (task store-polish-20261103, lane STORE: a shop's OWN interior doorways (a === b: the lingerie changing suite's room / suite doors,
+    // carved by the shop fit-out after the GEN pass) are not GEN geometry)
+    L.doors.filter(d => keep(d.a) && keep(d.b) && d.a !== d.b).map(d => [d.x, d.y, d.w, d.h, d.a, d.b, Math.round(d.height * 1000), !!d.shopfront, !!d.staff, d.level ?? 0]),
     m.shops.map(q => [q.id, q.area, q.backroom ?? -1, q.level, q.lot, q.zone, q.frontages, q.salesArea, q.depth, q.width]),
     L.traversal.stairs.filter(f => keep(f.area)).map(f => [f.area, f.axis, f.s0, f.s1, f.h0, f.h1, f.a0, f.a1]),
     m.verticals, m.void, m.storeys, m.galleries, m.corridors, m.service, m.start,

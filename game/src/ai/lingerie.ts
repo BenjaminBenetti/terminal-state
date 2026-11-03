@@ -13,7 +13,8 @@
 // assembled by their OWN WardrobeLibrary (createLingerieLibrary) used only for the store-context spawns (lane CONTEXT: spawns with
 // look 'lingerie'), so the ordinary pickZombieLook pool can never dress anyone in lingerie.
 // Files are loaded lazily (LINGERIE_MODEL_FILES, not the boot MODEL_FILES): only a section whose layout has a lingerie spawn / store.
-// Each GLB also holds static display nodes LingerieDisplay_<design>_top / _bottom (unskinned, same texture) for the store's stock.
+// Each GLB also holds the store's stock (task store-polish, unskinned, same texture): LingerieMannequin_<design>_top / _bottom (the set
+// fitted to the Mall's female display mannequin, in that model's frame) and hanging rack items LingerieHang_<design>_<item> (on hangers).
 // Content: ordinary zombie clips only (the bodies' own Idle / Walk / Run / Attack / Hit / Death); opaque lace, full coverage.
 // All derivatives are unapproved prototypes (gameReady false).
 
@@ -41,13 +42,30 @@ export interface LingerieSet {
   pieceLabels: {upper: string; lower: string};
   /** Bodies this set is fitted to (one skinned variant per body). */
   bodies: readonly string[];
-  /** Static display nodes inside the same GLB: centred in x / z, lowest point at y = 0, front +Z, real worn size (fitted on `fittedOn`). */
-  display: {top: string; bottom: string; fittedOn: string; setSizeM: readonly number[] | null};
+  /**
+   * Static (unskinned) nodes of the set FITTED to the Mall's female display mannequin (mannequinFemale / 'mannequin-female'), in that
+   * model's own frame (identity node transform, front -Z): a dressed mannequin = the mannequin prop + these nodes under the same
+   * world matrix.
+   */
+  mannequin: {top: string; bottom: string};
+  /** Hanging rack items: origin = the hook resting on the rail (+Y up, front +Z, hanging below); garment + chrome hanger primitives. */
+  hang: readonly LingerieHangItem[];
+}
+export interface LingerieHangItem {
+  node: string;
+  /** 'top' | 'bottom' | 'set' (a one-piece set hangs whole). */
+  item: string;
+  hanger: string;
+  dropM: number;
+  widthM: number;
+  depthM: number;
+  spacingFaceOutM: number;
+  spacingSideOnM: number;
 }
 
 export const LINGERIE_SETS: readonly LingerieSet[] = LINGERIE_BUILD.map(s => ({
   id: s.id, design: s.design, label: s.label, model: s.model, url: s.url, bytes: s.bytes,
-  pieces: {upper: s.top, lower: s.bottom}, pieceLabels: {upper: s.topLabel, lower: s.bottomLabel}, bodies: s.bodies, display: s.display,
+  pieces: {upper: s.top, lower: s.bottom}, pieceLabels: {upper: s.topLabel, lower: s.bottomLabel}, bodies: s.bodies, mannequin: s.mannequin, hang: s.hang,
 }));
 
 /** Lazily loaded lingerie set files: model key -> url + exact bytes (progress weight). */
@@ -106,6 +124,11 @@ export function lingerieLook(seed: number, spawnIndex: number, usable?: (look: L
   return {body: l.body, wear: {...l.wear}, set: l.set};
 }
 
-/** Static display stock of every set (lane STORE): model key + node names inside that GLB. */
-export const LINGERIE_DISPLAYS: readonly {set: string; model: string; nodes: {top: string; bottom: string}; setSizeM: readonly number[] | null}[] =
-  LINGERIE_SETS.map(s => ({set: s.id, model: s.model, nodes: {top: s.display.top, bottom: s.display.bottom}, setSizeM: s.display.setSizeM}));
+/** The Mall female display mannequin's model key (MALL_KIND_ASSET.mannequinFemale) the LingerieMannequin_* nodes are fitted to. */
+export const LINGERIE_MANNEQUIN_MODEL = 'mannequin-female';
+/** Dressed-mannequin stock of every set (lane STORE): the outfit file's model key + the mannequin node names inside it. */
+export const LINGERIE_MANNEQUIN_SETS: readonly {set: string; design: string; model: string; nodes: {top: string; bottom: string}}[] =
+  LINGERIE_SETS.map(s => ({set: s.id, design: s.design, model: s.model, nodes: s.mannequin}));
+/** Hanging rack stock of every set (lane STORE): the outfit file's model key + its hanging items. */
+export const LINGERIE_HANG_SETS: readonly {set: string; design: string; model: string; items: readonly LingerieHangItem[]}[] =
+  LINGERIE_SETS.map(s => ({set: s.id, design: s.design, model: s.model, items: s.hang}));
