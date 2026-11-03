@@ -51,11 +51,118 @@ screen, before its build and this warm-up. Release and limits are covered in `ga
 
 - **Never** compile into a different render target, camera or scene than the one that will draw the object. three
   keys node builds and pipelines by the render context, so a "warm" pipeline in the wrong context is a second cold one.
+  The context also includes the **call depth**: the atmosphere draws the station inside its RenderPipeline (depth 1),
+  while `compileAsync` asks for depth 0. Compile station content through `runWarmup` (host `sceneDepth`),
+  `prepareObjects(..., depth)` or `compileItemsLive`, never with a bare `renderer.compileAsync` (see below).
 - Pool roots must be **in the station scene**. A pool's hidden objects are made visible only for the duration of a
   `compileAsync` call, which draws nothing.
 - Lights: change only `intensity`. Adding or removing lights, or toggling `light.visible`, changes three's light set,
   and then every lit material rebuilds.
 - The warm-up must not touch gameplay: no update tick, no timers, no sounds, no simulated firing or throwing.
+
+## Camera-turn CPU in the mall and after the train (task studio-performance-recorder-20261103, lane RENDER-CPU)
+
+The user reported stutter on newly seen content when turning in the mall, on hardware WebGPU with the `full`
+warm-up, and also in the Reactor after train journeys.
+
+The measurements below ran in Node. They use three r186's real `WebGPURenderer` (WebGPU backend, and also WebGL 2)
+on a no-op GPU device (`tests/helpers/fakeWebgpu.ts`). Node builds, render objects and material cache-key rebuilds
+are counted inside three. The scenes are the real mall (t3a) and Reactor (9100) on the game's build path. They are
+drawn through a PassNode inside a RenderPipeline, as `render/volumetric.ts` does. These counts are
+backend-independent JavaScript work. The milliseconds are Node figures on a shared pod, a trend only and not native.
+
+Root causes, and their fixes:
+
+1. **Wrong render context.** three r186 keys `RenderContexts` by target, MRT **and call depth**. The material cache
+   key, and with it the node build and the render object, includes the context id. `compileAsync` always uses
+   depth 0, but the station draws at depth 1. So the materials stage compiled every representative into a context
+   that no real frame ever looks up. Only the casters, which the shadow stage draws in real hidden frames, and the
+   final view frame were warm. Every non-caster group (glass, unlit glows, emissive cards) and every pooled object
+   was built on first sight.
+   - A three-only probe shows it: 4 builds during `compileAsync`, then 5 more on the first pipeline frame.
+   - Fix: `render/renderContextDepth.ts`. One hidden frame with the camera layers empty measures the depth at which
+     the scene-pass target is drawn (`Game.sceneDepth`). `compileAtDepth` then runs the station compile at that
+     depth.
+2. **Holder contents hidden at warm-up.** The loot display has one batch per item and storey: about 180
+   InstancedMeshes, each with its own node build. These batches, and the holders' interiors, stay invisible until
+   used, and they were not in a pool. They are now covered by the `'holders'` pool (`containers.group`).
+3. **Gaps in the hidden frames:**
+   - pooled casters got no shadow frame, and an InstancedMesh's shadow variant is its own node build;
+   - three draws a shadow map only when a *receiver* draws, so a chunk of enemies or loot batches never drew its
+     shadow variants;
+   - every object that a representative covers still creates its own render objects (bindings, uniform buffers,
+     geometry buffers) on first view, in each pass.
+
+   Now pooled casters get frames, every chunk holds a receiver, and in `full` mode every renderable is drawn once
+   (`plan.others`).
+4. **Per-frame shadow re-keying (ongoing, not first-use).** The shadow pass shares one override material per light,
+   and three copies each caster's `alphaTest` onto it. A value crossing 0 bumps `version`. In the mall, alpha-tested
+   wall-detail decals, banners and ad cut-outs sit between opaque casters, so every caster re-keyed and fully
+   refreshed every frame: 70–260 key rebuilds per frame.
+   - Fix: `render/shadowOverride.ts` draws alpha-tested casters with a twin of the shadow material, so neither
+     material ever crosses 0.
+   - The shadow shaders per caster are identical and the caster set is the same (`rendercpu-warmup-context.test.ts`,
+     on both backends).
+5. **The campaign journey had no warm-up.** `Game.travelToStation` never runs the loading-screen warm-up. Its
+   background compile drew `world.group` alone into the canvas context at depth 0, skipping culled meshes, holders,
+   stock, enemies and pickups, and it stopped after 8 s.
+   - Now `render/journeyCompile.ts` prepares the next station for the whole ride, and after it until done. It is
+     time-sliced through the frame-budget scheduler (`core/frameBudget.ts`), never holds a frame and never touches the
+     canvas. The arrival still waits at most 8 s.
+   - The warm-up planner picks the items, nearest the arrival first: representatives, then (`full`) every other
+     renderable.
+   - **Scene pass:** one asynchronous `compileAsync` chunk in flight, into the scene pass's context. The chunk is
+     isolated on a spare layer (30) for the synchronous call and restored at once.
+   - **Flashlight shadow variants:** `compileAsync` cannot build these. It records the shared shadow override by
+     reference and builds after the per-caster nodes are restored. Instead, each step draws a few casters off-screen:
+     `renderer.render(scene, twin camera)` into the scene pass's own target, nested at the real frame's depth. One
+     receiver sits on the twin's layer, which triggers the shadow node. The casters sit on layer 29, which only the
+     light's shadow camera renders for that call. The next frame re-renders the target and the shadow map before
+     anything composites. No hidden frame and no arrival pause are needed.
+   - New game, Continue, Continue with a journey in progress, and menu travel all run `prepareGraphics` after the
+     build, so they get all of the above.
+
+Node builds / new render objects / key rebuilds after the warm-up, summed over yaw sweeps (16 steps a pose):
+
+| Station / route | Before | After |
+|---|---|---|
+| Mall t3a, 6 poses, `full` warm-up (fix 1 alone: 26 / ~520 / –) | 67 builds / ~640 ROs / ~3,800–4,400 keys per sweep | **0 / 0 / 0** |
+| Reactor 9100, rim platform / rim gallery / tier-2 deck (without fix 1, others on) | 20 / 92 / ~1,300–2,000 keys per sweep | **0 / 0 / 0** |
+| Reactor 9100, journey route, 12 s ride (720 frames), 8 steps a pose | 360 builds / 882 ROs | 80 / 374 (scene 704 / 1,960 and shadows 1,012 / 1,808 done at arrival) |
+| Reactor 9100, journey route, the job left to finish | 360 / 882 | **0 / 0 / 0** (finished after 1,157 frames, about 19 s) |
+| Mall t3a, journey route, 12 s ride (720 frames), 6 poses | 700 builds / 1,385 ROs | 112 / 364 (scene 928 / 2,114 and shadows 1,396 / 1,961 done at arrival) |
+| Mall t3a, journey route, the job left to finish | 700 / 1,385 | **0 / 0 / 0** (finished after about 1,190 frames, about 20 s) |
+
+In the journey rows, the ride is simulated in Node. Each frame is the real frame, then the scheduler's `run()`
+inside the native 60 Hz budget (11.67 ms), then 10 ms of idle time in which three's yielded compile slices run.
+Builds cost Node-speed CPU, so a native ride covers about the same or more. Added CPU per ride frame:
+at most one scene chunk start and one shadow draw of at most 8 casters per frame, with
+  the scheduler's steps averaging 3.1–3.6 ms a frame (Node). A single step with a fresh build reached 13–19 ms, over
+  the 11.67 ms budget, so the bound is the budget plus one step; at most one overdue step per 2 s runs regardless.
+
+- **Warm-up time** (Node, mall): 26.3 s → 18.5 s. Nothing is built twice any more, and the shadow stage's real
+  frames no longer compile scene-pass builds. Reactor: 28.5 s → 15.1 s.
+- **Steady-state frame** (Node, second sweep, the scene + shadow passes' three JS): about 30–40 % less with the
+  shadow twin. Examples: mall start view 29 → 17 ms, ring edge 33 → 20 ms; Reactor start 14.6 → 10.8 ms.
+- **The culler** (`world/levelCulling.ts`) runs a full update on every turning frame.
+  - Its position-only results are now cached per eye position: slab tests, atrium / portal sight tests, exit-opening
+    rays. The hot loop no longer allocates per entry.
+  - Mall t3a, turning in place at 3° a frame, 2,160 frames: median 2.10 → 1.39 ms, p95 3.41 → 2.04 ms.
+  - Decisions are identical to fresh computation on 240 sweep and walk cameras (`rendercpu-culler.test.ts`).
+  - PR 42's lingerie store added 14 culler entries (1,897 → 1,911) and no measurable culler cost.
+
+Limits:
+- These are Node counts of three's JavaScript. GPU driver work behind the API calls (WGSL → native, pipeline
+  creation, uploads) is counted but not timed, and no native frame time is claimed.
+- **Journey timing.** On a large station, a 12 s ride does not cover everything at Node build speed. The rest
+  continues after arrival in spare frame time, nearest first.
+- **Journey slicing granularity.** three's asynchronous build slices run between frames and are not budgeted by
+  the scheduler. Each slice is one build stage; the largest seen in Node was 22 ms.
+- Things created on use after the warm-up, outside pools, still build cold: shelf-stock pieces knocked loose
+  (`shelfStock.ts` creates their InstancedMesh then) and loot highlight copies (first hover per item type).
+- Harnesses: `rendercpu-submit-investigate.test.ts` (`LL_RCPU_SUBMIT_OUT=…`, `LL_RCPU_LEVEL=reactor`,
+  `LL_RCPU_ROUTE=journey-old|journey-new|journey-sliced`, `LL_RCPU_RIDE_FRAMES`, `LL_RCPU_IDLE_MS`, `LL_RCPU_SHADOW_FIX=1`, `LL_RCPU_NO_DEPTH=1`) and
+  `rendercpu-cullprof-investigate.test.ts` (`LL_RCPU_PROF_OUT=…`). Both are env-gated and skipped in CI.
 
 ## Lifecycle and guarantees
 
