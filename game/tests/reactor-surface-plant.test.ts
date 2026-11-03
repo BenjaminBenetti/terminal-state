@@ -18,8 +18,10 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {describe, expect, it} from 'vitest';
 import {surfaceSiteOf, type SurfaceSite} from '../src/world/reactor/surfaceSite';
 import {footprintCorners, footprintsOverlap, planSurfaceCity, type CityFootprint} from '../src/world/reactor/surfacePlan';
-import {FAN_ANCHORS, SURFACE_PLANT, planSurfacePlant, plantLocal, type SurfacePlantPlan, type VentTowerPlan} from '../src/world/reactor/surfacePlantPlan';
-import {PLANT_FAN_KEY, buildSurfacePlant} from '../src/world/reactor/surfacePlant';
+import {FAN_ANCHORS, SURFACE_COLLAR, SURFACE_PLANT, planSurfacePlant, plantLocal, type SurfacePlantPlan, type VentTowerPlan} from '../src/world/reactor/surfacePlantPlan';
+import {PLANT_FAN_KEY, buildSurfacePlant, filmGapGeometry} from '../src/world/reactor/surfacePlant';
+import {filmGeometry} from '../src/world/reactor/surfaceCity';
+import {RING_VIEW} from '../src/world/reactor/endingViews';
 import {REACTOR_MODELS} from '../src/world/reactor/archAssets';
 import {ReactorSurface} from '../src/world/reactor/surface';
 import {SURFACE_SEEDS, fakeSurfaceHost, inCatalogue, poseCamera, surfaceLayout} from './reactor-surface-fixture';
@@ -178,10 +180,11 @@ describe('the surface plant builder', () => {
     expect(v.housings[0].count).toBe(n);
     expect(v.housings[0].geometry).toBe(fan.geometry); // the library's geometry, shared
     expect(v.stats.model).toBe(true);
-    expect(v.stats.draws).toBeLessThanOrEqual(6);
-    out(`builder: ${v.stats.draws} draws, ${v.stats.tris} triangles (fake housing), ${plan.parts.length} parts`);
+    expect(v.stats.draws).toBeLessThanOrEqual(8); // (5 for the towers / wall + 3 for the flat collar: concrete, hatching, film gap)
+    out(`builder: ${v.stats.draws} draws, ${v.stats.tris} triangles (fake housing), ${plan.parts.length} parts; collar ${JSON.stringify(v.stats.collar)}`);
     v.root.traverse(o => { if ((o as THREE.Mesh).isMesh) { expect((o as THREE.Mesh).castShadow, o.name).toBe(false); expect((o as THREE.Mesh).receiveShadow).toBe(false); } });
-    // every merged vertex off the walkable cells and outside keepR; grounded (nothing far below the deck)
+    // every merged vertex outside keepR; off the walkable cells unless it is a FLAT overlay (the collar layer: at most maxUp over the
+    // deck — the raised structures' footprints are pinned off the walk by the plan test); grounded (nothing far below the deck)
     const h = site.hole;
     let minY = Infinity;
     for (const m of v.meshes.filter(m => !(m as THREE.InstancedMesh).isInstancedMesh)) {
@@ -189,7 +192,7 @@ describe('the surface plant builder', () => {
       for (let i = 0; i < p.count; i++) {
         const x = p.getX(i), y = p.getY(i), z = p.getZ(i);
         minY = Math.min(minY, y);
-        expect(site.walk.some(w => x > w.x0 + 0.002 && x < w.x1 - 0.002 && z > w.z0 + 0.002 && z < w.z1 - 0.002), `${m.name} vertex ${x},${z} on the walk`).toBe(false);
+        if (y > site.y + SURFACE_COLLAR.maxUp + 1e-6) expect(site.walk.some(w => x > w.x0 + 0.002 && x < w.x1 - 0.002 && z > w.z0 + 0.002 && z < w.z1 - 0.002), `${m.name} raised vertex ${x},${y},${z} on the walk`).toBe(false);
         expect(Math.hypot(x - h.x, z - h.z)).toBeGreaterThan(h.keepR);
       }
     }
@@ -311,6 +314,104 @@ describe('the surface plant builder', () => {
     for (let f = 0; f < 120; f++) v.tick(1 / 60, true, 1);
     expect(v.fans[0].speed).toBeGreaterThan(0.3);
     v.dispose();
+  });
+});
+
+describe('the flat engineered collar round the aperture (no collision: a flat overlay on the deck)', () => {
+  /** Every vertex of a mesh (world: the plant's meshes have identity transforms). */
+  const verts = (m: THREE.Mesh) => { const p = m.geometry.getAttribute('position'), out: THREE.Vector3[] = []; for (let i = 0; i < p.count; i++) out.push(new THREE.Vector3().fromBufferAttribute(p, i)); return out; };
+  /** The axis-aligned rects of a cell-quad film geometry (6 vertices per cell). */
+  const rects = (g: THREE.BufferGeometry | null) => {
+    const out: {x0: number; z0: number; x1: number; z1: number}[] = [];
+    if (!g) return out;
+    const p = g.getAttribute('position');
+    for (let i = 0; i < p.count; i += 6) {
+      let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+      for (let k = 0; k < 6; k++) { x0 = Math.min(x0, p.getX(i + k)); x1 = Math.max(x1, p.getX(i + k)); z0 = Math.min(z0, p.getZ(i + k)); z1 = Math.max(z1, p.getZ(i + k)); }
+      out.push({x0, z0, x1, z1});
+    }
+    return out;
+  };
+
+  it('flat (<= 2 cm over the deck), on the walk / the ring footprint, outside the opening, faces up; deterministic, 16..24 segments', () => {
+    for (const sd of SEEDS) {
+      const {site, plan, pit, seed} = planOf(sd);
+      const c = plan.collar, h = site.hole;
+      expect(JSON.stringify(planSurfacePlant(site, seed, pit).collar)).toBe(JSON.stringify(c));
+      expect(c.segments).toBeGreaterThanOrEqual(16);
+      expect(c.segments).toBeLessThanOrEqual(24);
+      expect(c.x).toBe(h.x);
+      expect(c.z).toBe(h.z);
+      expect(c.kerb[0]).toBeGreaterThanOrEqual(h.ringR1); // outward from the railing ring's apron
+      expect(c.drain[1] - h.ringR1).toBeGreaterThan(3.5);
+      expect(c.drain[1] - h.ringR1).toBeLessThan(5);
+      const v = buildSurfacePlant(site, plan, () => undefined, {concrete: null, steel: null, grating: null});
+      try {
+        const col = v.collar.concrete!, hat = v.collar.hatch!, fg = v.collar.film!;
+        expect(col && hat && fg).toBeTruthy();
+        const inWalk = (x: number, z: number) => site.walk.some(w => x >= w.x0 - 1e-3 && x <= w.x1 + 1e-3 && z >= w.z0 - 1e-3 && z <= w.z1 + 1e-3);
+        const onRing = (x: number, z: number) => { const r = Math.hypot(x - h.x, z - h.z); return r >= h.ringR0 - 1e-3 && r <= h.ringR1 + 1e-3; };
+        for (const m of [col, hat, fg]) {
+          for (const p of verts(m)) {
+            expect(p.y, `${m.name} raised`).toBeLessThanOrEqual(site.y + SURFACE_COLLAR.maxUp + 1e-6);
+            expect(p.y).toBeGreaterThan(site.y);
+            expect(Math.hypot(p.x - h.x, p.z - h.z), `${m.name} inside the opening`).toBeGreaterThanOrEqual(h.r);
+            expect(inWalk(p.x, p.z) || onRing(p.x, p.z), `${m.name} vertex ${p.x},${p.z} off the walk / ring`).toBe(true);
+          }
+          // every triangle faces up (seen from above; no back faces culled away)
+          const ps = verts(m);
+          for (let i = 0; i < ps.length; i += 3) expect(new THREE.Vector3().subVectors(ps[i + 1], ps[i]).cross(new THREE.Vector3().subVectors(ps[i + 2], ps[i])).y, m.name).toBeGreaterThan(0);
+        }
+        // the collar's concrete: only the annulus kerb .. ring B, never past the drainage channel
+        for (const p of verts(col)) { const r = Math.hypot(p.x - h.x, p.z - h.z); expect(r).toBeGreaterThanOrEqual(c.kerb[0] - 1e-3); expect(r).toBeLessThanOrEqual(c.rings[1][1] + 1e-3); }
+        // the steel / grille batches near the aperture (anchor plates, bolt heads, the channel) are flat too
+        for (const m of v.meshes.filter(q => /plant-(steel|grille)$/.test(q.name))) for (const p of verts(m)) {
+          if (Math.hypot(p.x - h.x, p.z - h.z) < c.drain[1] + 0.2) expect(p.y, m.name).toBeLessThanOrEqual(site.y + SURFACE_COLLAR.maxUp + 1e-6);
+        }
+        // depth: the collar layer between the deck (no offset) and the film (lane SURFACE's -2): the film still draws over it
+        const film = (fg.material as THREE.Material);
+        for (const m of [col, hat]) {
+          const mt = m.material as THREE.Material;
+          expect(mt.polygonOffset).toBe(true);
+          expect(mt.polygonOffsetFactor).toBeLessThan(0);
+          expect(mt.polygonOffsetFactor).toBeGreaterThan(film.polygonOffsetFactor);
+        }
+        expect(fg.renderOrder).toBe(1);
+        expect(film.transparent && !film.depthWrite).toBe(true);
+        // the segments: precast pieces with joints (the concrete is not one solid disc: points on a joint line are bare)
+        const ra = (c.rings[0][0] + c.rings[0][1]) / 2, jointA = c.phase; // a radial joint of ring A
+        const tri = verts(col);
+        const covered = (x: number, z: number) => { for (let i = 0; i < tri.length; i += 3) { const [a, b, q] = [tri[i], tri[i + 1], tri[i + 2]]; const d = (b.x - a.x) * (q.z - a.z) - (q.x - a.x) * (b.z - a.z); const u = ((b.x - x) * (q.z - z) - (q.x - x) * (b.z - z)) / d, w = ((q.x - x) * (a.z - z) - (a.x - x) * (q.z - z)) / d; if (u >= 0 && w >= 0 && u + w <= 1) return true; } return false; };
+        expect(covered(h.x + Math.cos(jointA) * ra, h.z + Math.sin(jointA) * ra)).toBe(false);
+        expect(covered(h.x + Math.cos(jointA + Math.PI / c.segments) * ra, h.z + Math.sin(jointA + Math.PI / c.segments) * ra)).toBe(true);
+        out(`seed ${sd} collar: ${c.segments} segments, radii ${c.kerb[0]}..${c.drain[1]}; ${JSON.stringify(v.stats.collar)}; ${RING_VIEW.posts} anchor plates`);
+      } finally {
+        v.dispose();
+      }
+    }
+  }, 300_000);
+
+  it('lane SURFACE\'s wet film + the collar\'s film gap cover the collar\'s walk exactly once (no dry seam, no double darkening)', () => {
+    for (const sd of SEEDS.slice(0, 4)) {
+      const {site, plan} = planOf(sd);
+      const h = site.hole, reach = plan.collar.drain[1] + 0.6;
+      const film = rects(filmGeometry(site)), gap = rects(filmGapGeometry(site, reach));
+      expect(gap.length).toBeGreaterThan(0);
+      const inR = (r: {x0: number; z0: number; x1: number; z1: number}, x: number, z: number) => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
+      let samples = 0;
+      for (let x = h.x - reach; x <= h.x + reach; x += 0.237) for (let z = h.z - reach; z <= h.z + reach; z += 0.229) {
+        const r = Math.hypot(x - h.x, z - h.z);
+        if (r < h.ringR1 || r > plan.collar.drain[1] + 0.3) continue; // the collar (the apron hides the film inside r1)
+        if (!site.walk.some(w => inR(w, x, z))) continue;
+        if (site.shelters.some(s => inR(s.rect, x, z))) continue;
+        const n = film.filter(q => inR(q, x, z)).length + gap.filter(q => inR(q, x, z)).length;
+        expect(n, `seed ${sd} at ${x.toFixed(2)},${z.toFixed(2)} (r ${r.toFixed(2)})`).toBe(1);
+        samples++;
+      }
+      expect(samples).toBeGreaterThan(1000);
+      // the gap film lies at the film's own height, never over the opening
+      for (const q of gap) expect(Math.hypot(Math.max(h.x - q.x1, 0, q.x0 - h.x), Math.max(h.z - q.z1, 0, q.z0 - h.z))).toBeGreaterThanOrEqual(h.keepR - 1e-6);
+    }
   });
 });
 

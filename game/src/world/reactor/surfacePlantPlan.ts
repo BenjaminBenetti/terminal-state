@@ -67,14 +67,46 @@ export interface PlantPart extends CityFootprint {
   tower: number;
 }
 
+/**
+ * (lane PLANT follow-up) THE ENGINEERED COLLAR round the aperture — a FLAT overlay on the deck (no collision: nothing raised more than
+ * SURFACE_COLLAR.maxUp over site.y; it may lie on walk cells like lane SURFACE's wet film, never inside the opening radius). Radii are
+ * metres from the aperture's centre, outward from the railing ring's apron (hole.parapet.r1): the anchor kerb (one precast piece per
+ * railing post, a steel anchor plate on each), the yellow safety hatching on the dark deck, two rings of precast segments (staggered
+ * radial joints), the steel drainage-channel grating.
+ */
+export interface CollarPlan {
+  x: number; z: number;
+  kerb: [number, number];
+  hatch: [number, number];
+  rings: [number, number][];
+  drain: [number, number];
+  /** Precast segments per ring (seeded 16..24), their angular phase (rad), the expansion joint width (m). */
+  segments: number;
+  phase: number;
+  joint: number;
+}
+
 export interface SurfacePlantPlan {
   towers: VentTowerPlan[];
   /** Footprints the city must leave free (towers, plant structures beyond the parapet). */
   reserved: CityFootprint[];
   /** (lane PLANT) The compound wall's piers / buttresses and the duct runs (plenum, duct, sleepers). */
   parts: PlantPart[];
+  /** (lane PLANT follow-up) The flat collar round the aperture. */
+  collar: CollarPlan;
   stats: {towers: number; piers: number; tried: number; why: Record<string, number>};
 }
+
+/** The collar's tunables (m). */
+export const SURFACE_COLLAR = {
+  /** Band widths outward from the apron's edge (hole.parapet.r1): anchor kerb, hatching, the two precast rings, the drainage channel. */
+  kerbW: 0.42, hatchW: 0.48, ringW: [1.6, 1.8] as readonly [number, number], drainW: 0.3,
+  /** A hair off the apron's outer edge face. */
+  gap: 0.006,
+  segments: [16, 24] as readonly [number, number], joint: 0.04,
+  /** Heights over the deck: the precast collar, the hatching, the channel grating; the steel anchor plates / bolt heads; the cap. */
+  up: 0.006, hatchUp: 0.009, drainUp: 0.007, plateUp: 0.0105, boltUp: 0.016, maxUp: 0.02,
+} as const;
 
 /** The plant's tunables (m, rev / s). */
 export const SURFACE_PLANT = {
@@ -266,5 +298,13 @@ export function planSurfacePlant(site: SurfaceSite, seed: number, _pit?: Reactor
       piers++;
     }
   }
-  return {towers, reserved: [...reservedTowers], parts, stats: {towers: towers.length, piers, tried, why}};
+  // --- the flat collar round the aperture (its own seeded draws, after everything above: the towers / piers keep their values) ---
+  const C = SURFACE_COLLAR, r1 = h.ringR1 + C.gap;
+  const kerb: [number, number] = [r3(r1), r3(r1 + C.kerbW)], hatch: [number, number] = [kerb[1], r3(kerb[1] + C.hatchW)];
+  const ringA: [number, number] = [hatch[1], r3(hatch[1] + C.ringW[0])], ringB: [number, number] = [ringA[1], r3(ringA[1] + C.ringW[1])];
+  const collar: CollarPlan = {
+    x: h.x, z: h.z, kerb, hatch, rings: [ringA, ringB], drain: [ringB[1], r3(ringB[1] + C.drainW)],
+    segments: C.segments[0] + Math.floor(rnd() * (C.segments[1] - C.segments[0] + 1)), phase: r3(rnd() * Math.PI * 2), joint: C.joint,
+  };
+  return {towers, reserved: [...reservedTowers], parts, collar, stats: {towers: towers.length, piers, tried, why}};
 }
