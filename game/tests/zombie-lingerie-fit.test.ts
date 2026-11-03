@@ -13,6 +13,7 @@
 import {describe, expect, it, beforeAll} from 'vitest';
 import * as THREE from 'three';
 import {existsSync, readFileSync, statSync} from 'node:fs';
+import {createHash} from 'node:crypto';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -68,6 +69,17 @@ describe('lingerie registry', () => {
     for (const s of LINGERIE_SETS) {
       expect(LINGERIE_WEARABLES.find(w => w.id === s.pieces.upper)?.slot).toBe('upper');
       expect(LINGERIE_WEARABLES.find(w => w.id === s.pieces.lower)?.slot).toBe('lower');
+    }
+  });
+
+  it('allowlists every lingerie runtime file and derivative with its exact bytes / sha256', () => {
+    const allow = new Map((JSON.parse(readFileSync(path.join(ROOT, 'tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]}).files.map(f => [f.path, f]));
+    const files = [...LINGERIE_SETS.flatMap(s => [s.url, `assets/derivatives/outfit-lingerie-${s.design}.json`]), 'assets/derivatives/zombie-lingerie.json'];
+    for (const f of files) {
+      const b = readFileSync(path.join(PUB, f)), e = allow.get(f);
+      expect(e, f).toBeTruthy();
+      expect(e!.bytes, f).toBe(b.length);
+      expect(e!.sha256, f).toBe(createHash('sha256').update(b).digest('hex'));
     }
   });
 

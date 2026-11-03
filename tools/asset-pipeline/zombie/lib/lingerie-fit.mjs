@@ -336,12 +336,15 @@ export function pokeCandidates(B, piece, near = 0.03) {
  * cloth vertex the outward push it needs = max over the candidate body vertices whose outward ray, started `depth` inside the skin,
  * meets one of its triangles before skin + minClear.
  */
-export function bodyPokeNeeds(bodyPos, bodyNrm, cand, clothPos, clothIdx, G, minClear, depth = 0.008) {
+export function bodyPokeNeeds(bodyPos, bodyNrm, cand, clothPos, clothIdx, G, minClear, depth0 = 0.008, local = null) {
   const grid = new TriGrid(clothPos, clothIdx, 0.02), need = new Float32Array(G.n);
   let count = 0;
   for (const v of cand) {
+    const depth = local?.deepAboveY != null && local.bodyBind[v * 3 + 1] > local.deepAboveY ? local.deepDepth : depth0;
     const nx = bodyNrm[v * 3], ny = bodyNrm[v * 3 + 1], nz = bodyNrm[v * 3 + 2];
-    const h = grid.ray(bodyPos[v * 3] - nx * depth, bodyPos[v * 3 + 1] - ny * depth, bodyPos[v * 3 + 2] - nz * depth, nx, ny, nz, depth + minClear);
+    // local: only cloth anchored (bind) near this body vertex counts (a deep ray must not reach cloth across a thin body part)
+    const skip = local ? t => { for (let k = 0; k < 3; k++) { const c = clothIdx[t * 3 + k], a = local.anchor; if (Math.hypot(a[c * 3] - local.bodyBind[v * 3], a[c * 3 + 1] - local.bodyBind[v * 3 + 1], a[c * 3 + 2] - local.bodyBind[v * 3 + 2]) < local.radius) return false; } return true; } : null;
+    const h = grid.ray(bodyPos[v * 3] - nx * depth, bodyPos[v * 3 + 1] - ny * depth, bodyPos[v * 3 + 2] - nz * depth, nx, ny, nz, depth + minClear, 0, skip);
     if (!h) continue;
     const d = depth + minClear - h.t;
     count++;
@@ -426,6 +429,12 @@ export function skinWith(mats, pos, joints, weights, nrm = null) {
 
 /** Per welded cloth vertex: the minimum signed distance to the posed FIT surface over the given poses. */
 export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear) {
+  for (const ps of pieceSets) {
+    // bind anchors (closest fit-surface point) of every cloth vertex
+    const P = ps.piece.pos, a = new Float32Array(P.length);
+    for (let i = 0; i < P.length / 3; i++) { const c = B.fitGrid.closest(P[i * 3], P[i * 3 + 1], P[i * 3 + 2], 0.25); if (c) a.set(c.q.slice(0, 3), i * 3); else a.set(P.subarray(i * 3, i * 3 + 3), i * 3); }
+    ps.anchor = a;
+  }
   const mins = pieceSets.map(p => new Float32Array(p.G.n).fill(Infinity));
   const pokes = pieceSets.map(p => new Float32Array(p.G.n));
   for (const pose of poses) {
@@ -435,7 +444,9 @@ export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear)
     const bn = posedWeldedNormals(B, bp);
     pieceSets.forEach((ps, k) => {
       const gp = skinWith(mats, ps.piece.pos, ps.w.joints, ps.w.weights);
-      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor, 0.02).need; // posed skin can bulge through by more (deltoid in Attack)
+      // posed shoulder skin can bulge through a strap by more (the deltoid / trapezius in Attack): deeper rays there (above the bust
+      // + 8 cm), restricted to cloth anchored near the body vertex; 8 mm elsewhere
+      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor, 0.008, {anchor: ps.anchor, bodyBind: B.pos, radius: 0.04, deepAboveY: B.landmarks.apexY + 0.08, deepDepth: 0.02}).need;
       for (const i of ps.G.uniq) if (pk[i] > pokes[k][i]) pokes[k][i] = pk[i];
       for (const i of ps.G.uniq) {
         const c = verifiedClosest(B, grid, B.fitIdx, bn, closed, gp[i * 3], gp[i * 3 + 1], gp[i * 3 + 2], 0.06);

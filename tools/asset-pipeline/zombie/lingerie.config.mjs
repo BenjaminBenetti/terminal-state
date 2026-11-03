@@ -59,14 +59,15 @@ export const BODIES = {
 export const BODY_ORDER = ['paleGaze', 'paleRevenant', 'paleApparition'];
 
 /**
- * Shipped fits: every design on exactly one body, two designs per body (capacity: ~1.6 MB for the six sets incl. displays).
- * Chosen from `build-lingerie.mjs --evaluate` (all 18 design x body fits measured through the six clips; see
- * derivatives/zombie-lingerie.json `evaluation`): the assignment with the best worst-case fit score under that constraint.
+ * Shipped fits: every design on exactly one body, two designs per body (~1.6 MB for the six sets incl. displays).
+ * Chosen by `build-lingerie.mjs --evaluate` (all 18 design x body fits measured through the six clips: lingerie.evaluation.json,
+ * summarised in derivatives/zombie-lingerie.json `evaluation`): the assignment with the best worst-case fit score (9.46; 15 of the 18
+ * fits pass every limit; green x Gaze, purple x Apparition and red x Revenant do not and are not shipped).
  */
 export const ASSIGNMENT = {
-  paleGaze: ['purple', 'blush'],
+  paleGaze: ['purple', 'red'],
   paleRevenant: ['black', 'ivory'],
-  paleApparition: ['green', 'red'],
+  paleApparition: ['green', 'blush'],
 };
 
 export const TEXTURES = {baseSize: 1024, baseQuality: 82, mrSize: 256, mrQuality: 85};

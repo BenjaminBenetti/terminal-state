@@ -172,8 +172,13 @@ async function build(outRoot) {
       variants.push({bodyId: bid, jointPos: B.J,
         top: {pos: top.piece.pos, nrm: top.nrm, joints: top.w.joints, weights: top.w.weights, extras: ex(top, 'upper', top.hideWear)},
         bottom: {pos: bottom.piece.pos, nrm: bottom.nrm, joints: bottom.w.joints, weights: bottom.w.weights, extras: ex(bottom, 'lower', null)}});
-      perBody[bid] = {fit: F.report, metrics: {score, limitsFailed: fails, perClip: M.summary, poses: M.poses, coverageZones: M.zones}, masks: F.report.masks};
-      summary.fits.push({design: d, body: bid, score: score.score, worst: score.worst, limitsFailed: fails.length, clips: Object.keys(M.summary)});
+      // compact per-clip record (worst frame per clip); the strap / leg-part (region) worsts go to the summary
+      const compact = Object.fromEntries(Object.entries(M.summary).map(([c, S]) => [c, {frames: S.frames, pieces: Object.fromEntries(Object.entries(S.pieces).map(([pn, P]) => [pn, (({regions, ...r}) => r)(P)])), body: (({covered, hiddenOnly, ...r}) => r)(S.body), coverage: S.coverage}]));
+      const regions = {};
+      for (const S of Object.values(M.summary)) for (const [pn, P] of Object.entries(S.pieces)) for (const [rn, R] of Object.entries(P.regions ?? {})) { if (rn === 'core') continue; const q = regions[`${pn}.${rn === 'upper' ? 'straps / upper edge' : 'suspenders / thigh rings'}`] ??= {penetration: 0, hover: 0, gapP95MM: 0}; q.penetration = Math.max(q.penetration, R.penetration); q.hover = Math.max(q.hover, R.hover); q.gapP95MM = Math.max(q.gapP95MM, R.gapP95MM); }
+      const {masks, ...fitRep} = F.report;
+      perBody[bid] = {fit: fitRep, masks, metrics: {score, limitsFailed: fails, poses: M.poses, coverageZones: M.zones, perClip: compact}};
+      summary.fits.push({design: d, body: bid, score: score.score, worst: score.worst, regionsWorst: regions, limitsFailed: fails.length, clips: Object.keys(M.summary), poses: M.poses});
     }
     const sceneExtras = {id: 'lingerie-' + d, kind: 'lingerie-set', label: D.label, pieces: {upper: wear.top, lower: wear.bottom}, bodies: variants.map(v => v.bodyId), display: {top: `LingerieDisplay_${d}_top`, bottom: `LingerieDisplay_${d}_bottom`, fittedOn: variants[0].bodyId},
       triangles: {top: FD.simp.top.triangles, bottom: FD.simp.bottom.triangles}, provenance: 'generated (Meshy T2.5 image-to-3D from the user reference image; Meshy PBR maps kept)', approved: false, gameReady: false};
@@ -189,12 +194,13 @@ async function build(outRoot) {
       outputs: {glb: {path: path.relative(outRoot, glb), bytes, sha256: glbSha, format: 'glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned display nodes LingerieDisplay_<design>_top/_bottom reusing the first body\'s accessors'}},
       source: {raw: {file: `${RAW_DIR}/${D.raw}`, sha256Verified: D.sha256, triangles: prep.raw.idx.length / 3, vertices: prep.raw.pos.length / 3, material: prep.raw.material, private: true}, textures: prep.tx.sources.map(s => ({...s, file: `${RAW_DIR}/${D.textures.dir}/${s.name}`})), meshyTask: D.meshyTask, meshyRequest: MESHY_REQUEST,
         reference: {file: `${USER_INPUTS}/${D.reference.file}`, sha256: D.reference.sha256, private: true}},
-      cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components, dropped: prep.cs.dropped, split: D.split, mirrored: prep.cs.mirrored, note: 'welded components; floating junk / inner shells would be dropped (none found)'},
+      cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components.length, componentsTop: prep.cs.components.filter(c => c.piece === 'top').length, componentsBottom: prep.cs.components.filter(c => c.piece === 'bottom').length, splitComponents: prep.cs.components.filter(c => c.piece === 'split').length,
+        smallestGapToOthers: Math.max(0, ...prep.cs.components.map(c => c.gapToOthers ?? 0)), dropped: prep.cs.dropped, split: D.split, mirrored: prep.cs.mirrored, note: 'welded components (UV seams joined); a floating component (<= 12 triangles, > 15 mm from the rest) or an inner shell would be dropped: none found (every small component is a slider, clip, ring, bow, lacing or boning piece touching the set)'},
       pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {wearable: wear[pn], slot: pn === 'top' ? 'upper' : 'lower', design: pn === 'top' ? D.top : D.bottom, triangles: FD.simp[pn].triangles, vertices: FD.simp[pn].vertices, sourceTriangles: prep.pieces[pn].triangles, simplifyRatio: D.simplify[pn], simplifyError: FD.simp[pn].error, simplifiedIn: `body space (the fit on ${order[0]}), meshoptimizer UV-weighted quadric, attribute seams preserved`}])),
-      textures: prep.tx.encoded, displays: disp, fitParams: FIT, limits: LIMITS, perBody,
+      textures: prep.tx.encoded, displays: disp.map(({note, ...r}) => r), perBody,
       limitations: ['Linear-blend skinned with weights transferred from the body: no cloth simulation (no swing / drape).', 'Body triangles enclosed by each piece are hidden while it is worn; very narrow straps hide nothing and rely on their clearance.',
         'The Meshy hidden-side geometry is AI-reconstructed; the lace is a texture on an opaque material (no transparency).', 'Unapproved prototype; gameReady false.']};
-    fs.writeFileSync(path.join(deriv, `outfit-lingerie-${d}.json`), JSON.stringify(manifest, null, 2) + '\n');
+    fs.writeFileSync(path.join(deriv, `outfit-lingerie-${d}.json`), JSON.stringify(manifest, null, 1) + '\n');
     summary.sets.push({id: 'lingerie-' + d, design: d, label: D.label, model: `outfit_lingerie_${d}`, glb: path.relative(outRoot, glb), bytes, sha256: glbSha, bodies: variants.map(v => v.bodyId), pieces: {upper: wear.top, lower: wear.bottom}, textures: {baseColorBytes: prep.tx.encoded.baseColor.bytes, metallicRoughnessBytes: prep.tx.encoded.metallicRoughness.bytes}, triangles: sceneExtras.triangles});
     generated.push({id: 'lingerie-' + d, design: d, label: D.label, model: `outfit_lingerie_${d}`, url: `assets/models/outfit-lingerie-${d}.glb`, bytes, top: wear.top, bottom: wear.bottom, topLabel: D.top, bottomLabel: D.bottom, bodies: variants.map(v => v.bodyId),
       display: {top: `LingerieDisplay_${d}_top`, bottom: `LingerieDisplay_${d}_bottom`, fittedOn: variants[0].bodyId, setSizeM: disp[0]?.setSizeM ?? null}});
@@ -205,10 +211,10 @@ async function build(outRoot) {
   const evaluation = fs.existsSync(evalFile) ? JSON.parse(fs.readFileSync(evalFile, 'utf8')) : null;
   const out = {schema: 'terminal-state/zombie-lingerie@1', title: 'Lingerie store variants: Meshy lingerie sets fitted to the pale female zombie bodies (prototype derivatives)', status: STATUS, task: LINGERIE_TASK, authoredOn: AUTHORED_ON,
     assignment: assign, bodies: Object.fromEntries(Object.entries(bodies).map(([k, v]) => [k, v.file])), totalBytes, totalMB: +(totalBytes / 1e6).toFixed(3), ...summary,
-    validation: {step: VALIDATION_STEP, clips: Object.keys(clipDurations([...poseCache.values()][0] ?? {R: {anims: []}})), method: 'lib/lingerie-metrics.mjs'},
-    evaluation: evaluation && {method: evaluation.method, chosen: evaluation.chosen, table: evaluation.table},
+    validation: {step: VALIDATION_STEP, clips: Object.keys(clipDurations([...poseCache.values()][0] ?? {R: {anims: []}})), method: 'lib/lingerie-metrics.mjs'}, fitParams: FIT,
+    evaluation: evaluation && {method: evaluation.method, chosen: evaluation.chosen, scores: Object.fromEntries(Object.entries(evaluation.table).map(([d, t]) => [d, Object.fromEntries(Object.entries(t).map(([b, e]) => [b, e.score]))]))},
     rebuild: 'node tools/asset-pipeline/zombie/build-lingerie.mjs (raw Meshy sources are private: reference/tasks/mall-lingerie-20261102-221554/meshy/raw)'};
-  fs.writeFileSync(path.join(deriv, 'zombie-lingerie.json'), JSON.stringify(out, null, 2) + '\n');
+  fs.writeFileSync(path.join(deriv, 'zombie-lingerie.json'), JSON.stringify(out, null, 1) + '\n');
   const ts = `// GENERATED by tools/asset-pipeline/zombie/build-lingerie.mjs (task ${LINGERIE_TASK}, lane FIT) - do not edit.
 // The shipped lingerie set files: model key, url, exact bytes, wearable ids (top = slot upper, bottom = slot lower), the bodies each
 // set is fitted to, and the static display nodes inside the same GLB (sharing its texture). Logic: ai/lingerie.ts.
