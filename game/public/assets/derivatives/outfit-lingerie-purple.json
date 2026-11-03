@@ -1,7 +1,7 @@
 {
  "schema": "the-last-line/derivative-manifest@1",
  "asset": "outfit-lingerie-purple",
- "title": "Lingerie set \"Plum lace strapless bustier with suspenders + brief\" - fitted per body + static display (prototype)",
+ "title": "Lingerie set \"Plum lace strapless bustier with suspenders + brief\" - fitted per body + dressed display mannequin + rack stock (prototype)",
  "status": {
   "approved": false,
   "gameReady": false,
@@ -20,9 +20,9 @@
  "outputs": {
   "glb": {
    "path": "game/public/assets/models/outfit-lingerie-purple.glb",
-   "bytes": 251088,
-   "sha256": "751010d57d8e45dbf940bf0a09c495fc2dce03f62e7137be9ad67f6910035b69",
-   "format": "glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned display nodes LingerieDisplay_<design>_top/_bottom reusing the first body's accessors"
+   "bytes": 373344,
+   "sha256": "864344af456cebf9d2241656f360ed7b573043e532d2f704ca3491eb752deea7",
+   "format": "glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned LingerieMannequin_<design>_top/_bottom (the female display mannequin's own frame) and hanging rack items LingerieHang_<design>_<item> (garment + procedural chrome hanger primitives)"
   }
  },
  "source": {
@@ -147,66 +147,6 @@
    "packing": "R 1 (unused), G Meshy roughness, B Meshy metallic"
   }
  },
- "displays": [
-  {
-   "node": "LingerieDisplay_purple_top",
-   "design": "purple",
-   "piece": "top",
-   "wearable": "lingerie-purple-top",
-   "fittedOn": "paleGaze",
-   "setSizeM": [
-    0.295,
-    0.5171,
-    0.2317
-   ],
-   "pieceBounds": {
-    "min": [
-     -0.1475,
-     0.2431,
-     -0.1096
-    ],
-    "max": [
-     0.1475,
-     0.5171,
-     0.1159
-    ]
-   },
-   "toBodySpace": [
-    0.00178,
-    0.76809,
-    -0.02308
-   ]
-  },
-  {
-   "node": "LingerieDisplay_purple_bottom",
-   "design": "purple",
-   "piece": "bottom",
-   "wearable": "lingerie-purple-bottom",
-   "fittedOn": "paleGaze",
-   "setSizeM": [
-    0.295,
-    0.5171,
-    0.2317
-   ],
-   "pieceBounds": {
-    "min": [
-     -0.1415,
-     0,
-     -0.1158
-    ],
-    "max": [
-     0.1361,
-     0.2842,
-     0.0841
-    ]
-   },
-   "toBodySpace": [
-    0.00178,
-    0.76809,
-    -0.02308
-   ]
-  }
- ],
  "perBody": {
   "paleGaze": {
    "fit": {
@@ -640,6 +580,239 @@
     }
    }
   }
+ },
+ "mannequin": {
+  "task": "studio-beta-mall-lingerie-store-polish-20261103-045922-01",
+  "model": "mannequin-female",
+  "file": "game/public/assets/models/mall-mannequin-female.glb",
+  "sha256": "8124dcab904357a1ec0036def8d9e6b023e0e3a8be62b25339f1d80849e0129e",
+  "frame": "mall-mannequin-female.glb model frame: origin at the base centre on the floor, front -Z, metres (identity node transform)",
+  "nodes": {
+   "top": "LingerieMannequin_purple_top",
+   "bottom": "LingerieMannequin_purple_bottom"
+  },
+  "measured": {
+   "heightM": 1.75,
+   "feetTopY": 0.035,
+   "handBottomY": [
+    0.85,
+    0.85
+   ],
+   "neckY": 1.425,
+   "armpitY": 1.335,
+   "shoulderHalfWidthM": 0.1744,
+   "shoulderJointX": 0.1344,
+   "groups": {
+    "torso": 710,
+    "head": 306,
+    "arm": 733,
+    "leg": 1036,
+    "base": 686
+   },
+   "fitTriangles": 1491
+  },
+  "fit": {
+   "align": {
+    "verticalScale": 0.5024,
+    "mapY": {
+     "garmentCrotchY": -0.4104,
+     "bodyCrotchY": 0.9575,
+     "garmentApexY": 0.3625,
+     "bodyApexY": 1.3458
+    },
+    "pieces": {
+     "top": {
+      "tubeBins": 58,
+      "tubeY": [
+       1.1325,
+       1.4175
+      ],
+      "sx": 0.5381,
+      "sz": 0.4459,
+      "dz": -0.0232
+     },
+     "bottom": {
+      "tubeBins": 44,
+      "tubeY": [
+       0.9575,
+       1.1725
+      ],
+      "sx": 0.6202,
+      "sz": 0.512,
+      "dz": 0.0004
+     }
+    },
+    "apexWarp": {
+     "dx": 0.0128,
+     "dy": 0.0021
+    },
+    "strapWarp": {
+     "L": {
+      "strapless": true,
+      "topY": 1.4028
+     },
+     "R": {
+      "strapless": true,
+      "topY": 1.4031
+     }
+    }
+   },
+   "pieces": {
+    "top": {
+     "sourceVertices": 5740,
+     "sourceTriangles": 6105,
+     "legLoopsRecentred": [],
+     "wrap": {
+      "it": 13,
+      "radiusMM": 8,
+      "meanAbsErrMM": 0.72,
+      "far": 0
+     },
+     "stage1ClearanceRounds": 1091,
+     "coverageGuard": {
+      "zone": "breast apex (2 cm)",
+      "vertices": 3,
+      "shiftM": 0,
+      "bindCoverage": 1
+     },
+     "vertices": 2416,
+     "triangles": 1832,
+     "runtimeClearanceRounds": 771
+    },
+    "bottom": {
+     "sourceVertices": 2127,
+     "sourceTriangles": 2212,
+     "legLoopsRecentred": [],
+     "wrap": {
+      "it": 13,
+      "radiusMM": 8,
+      "meanAbsErrMM": 0.51,
+      "far": 0
+     },
+     "stage1ClearanceRounds": 871,
+     "coverageGuard": {
+      "zone": "genital V",
+      "vertices": 6,
+      "shiftM": 0,
+      "bindCoverage": 1
+     },
+     "vertices": 998,
+     "triangles": 750,
+     "runtimeClearanceRounds": 833
+    }
+   },
+   "cutVerticesJoined": 0
+  },
+  "metrics": {
+   "pieces": {
+    "top": {
+     "penetration": 0,
+     "deep": 0,
+     "hover": 0,
+     "edgeHover": 0,
+     "minSdMM": 2,
+     "gapP50MM": 3.54,
+     "gapP95MM": 5.06,
+     "gapMaxMM": 8.84
+    },
+    "bottom": {
+     "penetration": 0,
+     "deep": 0,
+     "hover": 0,
+     "edgeHover": 0,
+     "minSdMM": 2,
+     "gapP50MM": 3.18,
+     "gapP95MM": 6.97,
+     "gapMaxMM": 14.17
+    }
+   },
+   "figurePokeVertices": 0,
+   "coverage": {
+    "apex": 1,
+    "groin": 1,
+    "groinCore": 1
+   }
+  },
+  "limitsFailed": [],
+  "method": "the worn-variant fit (lib/lingerie-fit.mjs stage 1) on the static mannequin mesh (lib/lingerie-mannequin.mjs: slice landmarks, arm / head / base groups), the design's runtime vertices / UVs / indices, clearance incl. figure poke-through; no skin"
+ },
+ "hang": {
+  "task": "studio-beta-mall-lingerie-store-polish-20261103-045922-01",
+  "hanger": {
+   "width": 0.3,
+   "hookInnerR": 0.012,
+   "wireR": 0.0022,
+   "neckY": -0.045,
+   "tipY": -0.1,
+   "barY": -0.105,
+   "clipBarY": -0.05,
+   "clipX": 0.12,
+   "clipJaw": [
+    -0.055,
+    -0.095
+   ]
+  },
+  "items": [
+   {
+    "node": "LingerieHang_purple_top",
+    "item": "top",
+    "pieces": [
+     "top"
+    ],
+    "hanger": "clip",
+    "hangPoints": "top edge in the clip jaws (x +-0.12)",
+    "kz": 0.55,
+    "dropM": 0.3199,
+    "widthM": 0.312,
+    "depthM": 0.108,
+    "garmentBounds": {
+     "min": [
+      -0.1325,
+      -0.3199,
+      -0.0673
+     ],
+     "max": [
+      0.121,
+      -0.0789,
+      0.0407
+     ]
+    },
+    "spacingM": {
+     "faceOut": 0.332,
+     "sideOn": 0.128
+    }
+   },
+   {
+    "node": "LingerieHang_purple_bottom",
+    "item": "bottom",
+    "pieces": [
+     "bottom"
+    ],
+    "hanger": "clip",
+    "hangPoints": "top edge in the clip jaws (x +-0.12)",
+    "kz": 0.32,
+    "dropM": 0.2782,
+    "widthM": 0.312,
+    "depthM": 0.0673,
+    "garmentBounds": {
+     "min": [
+      -0.1404,
+      -0.2782,
+      -0.0214
+     ],
+     "max": [
+      0.1377,
+      -0.019,
+      0.0458
+     ]
+    },
+    "spacingM": {
+     "faceOut": 0.332,
+     "sideOn": 0.0873
+    }
+   }
+  ],
+  "method": "the mannequin-fitted pieces hung on procedural chrome hangers (strap crests on the wire hanger arms; strapless tops / bottoms in clip jaws), depth relaxed (lib/lingerie-hang.mjs); UVs / texture unchanged"
  },
  "limitations": [
   "Linear-blend skinned with weights transferred from the body: no cloth simulation (no swing / drape).",

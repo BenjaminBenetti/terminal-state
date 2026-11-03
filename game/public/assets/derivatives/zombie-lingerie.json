@@ -28,8 +28,8 @@
   "paleRevenant": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
   "paleApparition": "game/public/assets/models/zombie-body-pale-apparition-t25.glb"
  },
- "totalBytes": 1599780,
- "totalMB": 1.6,
+ "totalBytes": 2472088,
+ "totalMB": 2.472,
  "sets": [
   {
    "id": "lingerie-green",
@@ -37,8 +37,8 @@
    "label": "Emerald lace longline bra + high-waist brief",
    "model": "outfit_lingerie_green",
    "glb": "game/public/assets/models/outfit-lingerie-green.glb",
-   "bytes": 265284,
-   "sha256": "701b1076cd1b8da4a9ba9c75ff639c1e40b7f90c7bace3ad57bad7957f1b095a",
+   "bytes": 380144,
+   "sha256": "f1d7d0b08bc0c3d1444e68df1a0dc1e5bed9fc65c7e3e82e5e010b865ec5b875",
    "bodies": [
     "paleApparition"
    ],
@@ -46,6 +46,57 @@
     "upper": "lingerie-green-top",
     "lower": "lingerie-green-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_green_top",
+     "bottom": "LingerieMannequin_green_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0.0196,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.57,
+       "gapP95MM": 7.05,
+       "gapMaxMM": 29.46
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.02,
+       "gapP95MM": 4.38,
+       "gapMaxMM": 7.65
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_green_top",
+     "hanger": "wire",
+     "dropM": 0.3231,
+     "widthM": 0.312
+    },
+    {
+     "node": "LingerieHang_green_bottom",
+     "hanger": "clip",
+     "dropM": 0.3049,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 138241,
     "metallicRoughnessBytes": 6921
@@ -61,8 +112,8 @@
    "label": "Plum lace strapless bustier with suspenders + brief",
    "model": "outfit_lingerie_purple",
    "glb": "game/public/assets/models/outfit-lingerie-purple.glb",
-   "bytes": 251088,
-   "sha256": "751010d57d8e45dbf940bf0a09c495fc2dce03f62e7137be9ad67f6910035b69",
+   "bytes": 373344,
+   "sha256": "864344af456cebf9d2241656f360ed7b573043e532d2f704ca3491eb752deea7",
    "bodies": [
     "paleGaze"
    ],
@@ -70,6 +121,57 @@
     "upper": "lingerie-purple-top",
     "lower": "lingerie-purple-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_purple_top",
+     "bottom": "LingerieMannequin_purple_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.54,
+       "gapP95MM": 5.06,
+       "gapMaxMM": 8.84
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.18,
+       "gapP95MM": 6.97,
+       "gapMaxMM": 14.17
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_purple_top",
+     "hanger": "clip",
+     "dropM": 0.3199,
+     "widthM": 0.312
+    },
+    {
+     "node": "LingerieHang_purple_bottom",
+     "hanger": "clip",
+     "dropM": 0.2782,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 121476,
     "metallicRoughnessBytes": 5209
@@ -85,8 +187,8 @@
    "label": "Blush lace plunge bodysuit",
    "model": "outfit_lingerie_blush",
    "glb": "game/public/assets/models/outfit-lingerie-blush.glb",
-   "bytes": 215676,
-   "sha256": "59b731340b6201301f71450cfbf452126ca07dad4b9e049c662f00e3255b8593",
+   "bytes": 371508,
+   "sha256": "9df5bfe5b106306b87c8254f362390105f5139daf32860ebd851556dc7bbbc83",
    "bodies": [
     "paleApparition"
    ],
@@ -94,6 +196,51 @@
     "upper": "lingerie-blush-top",
     "lower": "lingerie-blush-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_blush_top",
+     "bottom": "LingerieMannequin_blush_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0.0028,
+       "edgeHover": 0.019,
+       "minSdMM": 2,
+       "gapP50MM": 3.55,
+       "gapP95MM": 7.89,
+       "gapMaxMM": 38.77
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.14,
+       "gapP95MM": 4.34,
+       "gapMaxMM": 8.76
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_blush_set",
+     "hanger": "wire",
+     "dropM": 0.6046,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 54798,
     "metallicRoughnessBytes": 3665
@@ -109,8 +256,8 @@
    "label": "Black lace balconette bra + brief",
    "model": "outfit_lingerie_black",
    "glb": "game/public/assets/models/outfit-lingerie-black.glb",
-   "bytes": 321964,
-   "sha256": "c026dc53cf43a90ea48cc0f64101faab07e2e689581aff92288323f9f9e82eb8",
+   "bytes": 508776,
+   "sha256": "d25a8829fad0ffec4a607703b739d55d44c3f8c0c50e2b6179ac399c9956d698",
    "bodies": [
     "paleRevenant"
    ],
@@ -118,6 +265,57 @@
     "upper": "lingerie-black-top",
     "lower": "lingerie-black-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_black_top",
+     "bottom": "LingerieMannequin_black_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0.0358,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.56,
+       "gapP95MM": 11.25,
+       "gapMaxMM": 49.64
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.17,
+       "gapP95MM": 5.38,
+       "gapMaxMM": 12.93
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_black_top",
+     "hanger": "wire",
+     "dropM": 0.3073,
+     "widthM": 0.312
+    },
+    {
+     "node": "LingerieHang_black_bottom",
+     "hanger": "clip",
+     "dropM": 0.3072,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 126087,
     "metallicRoughnessBytes": 8067
@@ -133,8 +331,8 @@
    "label": "Crimson lace plunge bra + garter belt + thong",
    "model": "outfit_lingerie_red",
    "glb": "game/public/assets/models/outfit-lingerie-red.glb",
-   "bytes": 355572,
-   "sha256": "4c097870de8678ff28a1bd03e39295a32b370edf9773edc1339bef55f40d1e23",
+   "bytes": 516400,
+   "sha256": "bf32f60f4ec306fcbf0550e3768bb8ec90da973319f4873fba08b02440a64472",
    "bodies": [
     "paleGaze"
    ],
@@ -142,6 +340,57 @@
     "upper": "lingerie-red-top",
     "lower": "lingerie-red-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_red_top",
+     "bottom": "LingerieMannequin_red_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0.0316,
+       "minSdMM": 2,
+       "gapP50MM": 3.7,
+       "gapP95MM": 25.47,
+       "gapMaxMM": 39.04
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.25,
+       "gapP95MM": 5.18,
+       "gapMaxMM": 10.3
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_red_top",
+     "hanger": "wire",
+     "dropM": 0.2896,
+     "widthM": 0.312
+    },
+    {
+     "node": "LingerieHang_red_bottom",
+     "hanger": "clip",
+     "dropM": 0.3518,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 186502,
     "metallicRoughnessBytes": 8865
@@ -157,8 +406,8 @@
    "label": "Ivory lace bralette + garter belt + thong + thigh rings",
    "model": "outfit_lingerie_ivory",
    "glb": "game/public/assets/models/outfit-lingerie-ivory.glb",
-   "bytes": 190196,
-   "sha256": "07a781c84d984f34a9538f557442eb36031c4a352fe528e453f09a806be27963",
+   "bytes": 321916,
+   "sha256": "350ea62e43a55b4fc2d67152593f76c5a62d67ba689bae3cd7e23c6b14d39beb",
    "bodies": [
     "paleRevenant"
    ],
@@ -166,6 +415,57 @@
     "upper": "lingerie-ivory-top",
     "lower": "lingerie-ivory-bottom"
    },
+   "mannequin": {
+    "nodes": {
+     "top": "LingerieMannequin_ivory_top",
+     "bottom": "LingerieMannequin_ivory_bottom"
+    },
+    "metrics": {
+     "pieces": {
+      "top": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0.0045,
+       "edgeHover": 0.0523,
+       "minSdMM": 2,
+       "gapP50MM": 3.61,
+       "gapP95MM": 10.7,
+       "gapMaxMM": 45.85
+      },
+      "bottom": {
+       "penetration": 0,
+       "deep": 0,
+       "hover": 0,
+       "edgeHover": 0,
+       "minSdMM": 2,
+       "gapP50MM": 3.21,
+       "gapP95MM": 4.76,
+       "gapMaxMM": 7.62
+      }
+     },
+     "figurePokeVertices": 0,
+     "coverage": {
+      "apex": 1,
+      "groin": 1,
+      "groinCore": 1
+     }
+    },
+    "limitsFailed": 0
+   },
+   "hang": [
+    {
+     "node": "LingerieHang_ivory_top",
+     "hanger": "wire",
+     "dropM": 0.3205,
+     "widthM": 0.312
+    },
+    {
+     "node": "LingerieHang_ivory_bottom",
+     "hanger": "clip",
+     "dropM": 0.3496,
+     "widthM": 0.312
+    }
+   ],
    "textures": {
     "baseColorBytes": 50339,
     "metallicRoughnessBytes": 6130
