@@ -118,7 +118,7 @@ const familyOf = rel => /^assets\/(?:models\/mall-|textures\/mall\/)/.test(rel) 
   : /^assets\/(?:models\/office-|textures\/office\/)/.test(rel) ? 'office'
   : /^assets\/(?:models\/reactor-|textures\/reactor\/)/.test(rel) ? 'reactor' : 'shared'; // (reactor-build, lane ARCH)
 const tally = keys => Object.fromEntries(keys.map(k => [k, {files: 0, bytes: 0}]));
-export function sizeReport(entries, excludedBytes = []) {
+export function sizeReport(entries, excludedBytes = [], excludedProvenanceBytes = []) {
   const byType = tally(REPORT_TYPES), models = tally(REPORT_FAMILIES), textures = tally(REPORT_FAMILIES);
   for (const e of entries) {
     const t = typeOf(e.path), fam = t === 'models' ? models : t === 'textures' ? textures : null;
@@ -127,7 +127,8 @@ export function sizeReport(entries, excludedBytes = []) {
   }
   const largestFiles = [...entries].sort((a, b) => b.bytes - a.bytes || (a.path < b.path ? -1 : 1)).slice(0, 5).map(e => ({path: e.path, bytes: e.bytes}));
   return {byType, levelFamilies: {models, textures}, largestFiles,
-    excludedUnreferencedModelBytes: excludedBytes.reduce((s, b) => s + b, 0)};
+    excludedUnreferencedModelBytes: excludedBytes.reduce((s, b) => s + b, 0),
+    excludedUnreferencedProvenanceBytes: excludedProvenanceBytes.reduce((s, b) => s + b, 0)};
 }
 
 // Advisory only — NOT a CI limit: the existing static playtest host accepts at most 200 MiB. Above it, Main serves the same
@@ -144,6 +145,7 @@ export function reportLines(m) {
     `  textures by family: ${part(r.levelFamilies.textures)}`,
     `  largest: ${r.largestFiles.map(e => `${e.path} ${fmt(e.bytes)} B`).join(', ')}`,
     `  excluded ${m.excludedUnreferencedModels.length} unreferenced models (${fmt(r.excludedUnreferencedModelBytes)} B; tracked build inputs, not shipped).`,
+    `  excluded ${(m.excludedUnreferencedProvenance ?? []).length} unreferenced provenance JSON (${fmt(r.excludedUnreferencedProvenanceBytes ?? 0)} B; tracked provenance, not shipped).`,
     `  delivery advisory (not a CI limit): static host max ${fmt(STATIC_HOST_ADVISORY_BYTES)} B — ${fits
       ? `fits (${fmt(STATIC_HOST_ADVISORY_BYTES - m.totalBytes)} B headroom)`
       : `exceeds by ${fmt(m.totalBytes - STATIC_HOST_ADVISORY_BYTES)} B: use the dynamic app (tools/deploy/dynamic-app/CONTRACT.md)`}.`,
@@ -183,10 +185,14 @@ export function packageSite({root = ROOT, commit, output} = {}) {
     || all.filter(p => bundlePath(p) && p.endsWith('.css')).length !== 1) fail('Expected exactly one game JS and CSS entry');
   // Deliberately IDENTICAL to the old helper's --drop-unreferenced-models rule.
   const code = all.filter(f => /\.(js|html)$/.test(f)).map(f => fs.readFileSync(path.join(dist, f), 'utf8')).join('\n');
-  const excludedUnreferencedModels = [];
+  const excludedUnreferencedModels = [], excludedUnreferencedProvenance = [];
   const files = all.filter(f => {
-    if (!/^assets\/models\/[^/]+\.glb$/.test(f) || code.includes(f)) return true;
-    excludedUnreferencedModels.push(f); return false;
+    if (/^assets\/models\/[^/]+\.glb$/.test(f) && !code.includes(f)) { excludedUnreferencedModels.push(f); return false; }
+    // Task reactor-surface-ending-20261102 (lead, release capacity): the same rule for the provenance JSON under assets/derivatives/
+    // (tracked build provenance; CREDITS.md + audio/NOTICE.md carry the shipped notices). A provenance file no runtime code names
+    // by path is never fetched by the game: it stays in Git / game/public (still allowlisted + hash-checked above), not shipped.
+    if (/^assets\/derivatives\/[^/]+\.json$/.test(f) && !code.includes(f)) { excludedUnreferencedProvenance.push(f); return false; }
+    return true;
   });
   const fileSet = new Set(files);
   for (const rel of files.filter(f => /\.(js|html|css)$/.test(f))) checkRuntime(fs.readFileSync(path.join(dist, rel), 'utf8'), rel, fileSet);
@@ -199,8 +205,9 @@ export function packageSite({root = ROOT, commit, output} = {}) {
   const manifest = {schema:'terminal-state-static-ci-v1', commit, entry:'index.html', base:'./',
     fileCount:entries.length, totalBytes, publicInputPolicySha256:digest(fs.readFileSync(path.join(root,'tools/release/public-inputs.json'))),
     checks:{publicInputsVerified:inputs.length, relativeUrls:true, noSymlinks:true, maxFileBytes:MAX_FILE, maxFiles:MAX_FILES, maxTotalBytes:null},
-    report:sizeReport(entries, excludedUnreferencedModels.map(rel => fs.statSync(path.join(dist, rel)).size)),
-    excludedUnreferencedModels, files:entries};
+    report:sizeReport(entries, excludedUnreferencedModels.map(rel => fs.statSync(path.join(dist, rel)).size),
+      excludedUnreferencedProvenance.map(rel => fs.statSync(path.join(dist, rel)).size)),
+    excludedUnreferencedModels, excludedUnreferencedProvenance, files:entries};
   for (const e of entries) {
     const dest = path.join(output, 'site', e.path);
     fs.mkdirSync(path.dirname(dest), {recursive:true});

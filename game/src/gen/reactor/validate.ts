@@ -5,7 +5,8 @@
 //   only: the maintenance ladders are not required); every site control's stand point, every component and every generator's use point.
 // - ROUTES: removing any ONE stair run (route 1 or route 2) leaves every storey reachable: >= 2 independent routes per storey pair.
 // - Gas: generator k powering zone k stands on the rim / in a zone above k (generator 0 may stand on tier 1, the thin top haze).
-// - Components: one key in the rim office, three fuses (never inside the switchgear room); everything on a flat walkable floor cell.
+// - Components: one key in the core floor's control room (task reactor-surface-ending-20261102, lane OBJECTIVES; was the rim office),
+//   three fuses (never inside the switchgear room); everything on a flat walkable floor cell.
 // - Railings on every drop (Levels.unrailedDrops empty); the vessel solid (raised + blocked) on the core floor; the start clear.
 // - Shared storey rules (levelIssues: slabs / headroom / flights / link landings / railings on apertures / placements), traversal rules,
 //   doorway lanes, Track2 extensions (extensionIssues; the generator drops invalid extensions — never a core retry).
@@ -22,6 +23,7 @@ import {CORE_FLOOR, coreFloorIssues} from './coreFloor'; // task reactor-expansi
 import {dropInLadderOpening, excuseDesignedRailGaps} from './pathsGen'; // task reactor-expansion-20261101 (lane PATHS)
 import {complexIssues} from './complex/host'; // task reactor-expansion-20261101 (lane HOST)
 import {arrivalIssues} from './arrival'; // task reactor-playtest-round2-20261102 (lane ARRIVAL)
+import {SURFACE_LEVEL, surfaceDoorCells, surfaceIssues} from './surface'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
 
 export const REACTOR_LEVEL_RULES: LevelRules = {minLevels: REACTOR_LEVELS, overlapRoles: [], maxRiser: 0.19, minFlightWidth: 1.5};
 
@@ -30,12 +32,15 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   const info = layout.reactor;
   if (!info) return ['no reactor record'];
   const levels = layout.levels, g0 = layout.grid;
-  if (levels.length !== REACTOR_LEVELS || levels.length > 8) return [`${levels.length} levels`];
+  // (task studio-reactor-surface-ending-20261102, lane ENDING: + the surface storey above the pit, levels[SURFACE_LEVEL])
+  const surf = info.surface ? 1 : 0;
+  if (levels.length !== REACTOR_LEVELS + surf || levels.length > 8) return [`${levels.length} levels`];
   if (g0.w * g0.h > 90_000) issues.push(`grid ${g0.w} x ${g0.h} cells`); // the ~300 x 300 cell budget (Track2 growth included)
   for (const L of levels) {
     if (L.id !== levels.indexOf(L)) issues.push(`level ${L.id} id mismatch`);
     if (L.grid.w !== g0.w || L.grid.h !== g0.h) issues.push(`level ${L.id} grid size differs`);
-    if (L.id > 0 && !(L.baseY < levels[L.id - 1].baseY)) issues.push(`level ${L.id} not below level ${L.id - 1}`);
+    if (L.id > 0 && L.id < REACTOR_LEVELS && !(L.baseY < levels[L.id - 1].baseY)) issues.push(`level ${L.id} not below level ${L.id - 1}`);
+    if (L.id === SURFACE_LEVEL && !(L.baseY > info.pit.roofY)) issues.push('the surface storey is not above the pit roof');
   }
   if (info.tiers.length !== REACTOR_LEVELS || info.tiers.some((t, i) => t.level !== i || Math.abs(t.baseY - levels[i].baseY) > 1e-6)) issues.push('tier records');
 
@@ -100,8 +105,9 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   // --- Components -----------------------------------------------------------------------------------------------------------
   const keys = info.components.filter(c => c.item === 'reactor_key'), fuses = info.components.filter(c => c.item === 'fuse_cartridge');
   if (keys.length !== 1 || fuses.length !== 3) issues.push(`components: ${keys.length} keys, ${fuses.length} fuses`);
-  const office = info.sites.find(s => s.id === 'rimOffice'), sw = info.sites.find(s => s.id === 'switchgear');
-  if (keys[0] && office && keys[0].area !== office.area) issues.push('the key is not in the rim office');
+  // task reactor-surface-ending-20261102 (lane OBJECTIVES): the key lies in the core floor's control room (the key switch's room)
+  const ctrl = info.sites.find(s => s.id === 'control'), sw = info.sites.find(s => s.id === 'switchgear');
+  if (keys[0] && ctrl && (keys[0].area !== ctrl.area || keys[0].level !== ctrl.level)) issues.push('the key is not in the control room');
   for (const f of fuses) {
     const p = layout.pickups[f.pickup];
     if (sw && p && (f.area === sw.area || (p.x > sw.rect.x0 && p.x < sw.rect.x1 && p.z > sw.rect.z0 && p.z < sw.rect.z1 && (p.level ?? 0) === sw.level))) issues.push('a fuse inside the switchgear room');
@@ -168,6 +174,8 @@ export function reactorIssues(layout: StationLayout, opts: {startCells?: number;
   issues.push(...complexIssues(layout));
   // task reactor-playtest-round2-20261102 (lane ARRIVAL): platform -> station area -> breach -> tunnel -> rim; no sight of the pit
   issues.push(...arrivalIssues(layout));
+  // task studio-reactor-surface-ending-20261102 (lane ENDING): the door -> stair -> bounded surface, reached only through the door
+  issues.push(...surfaceIssues(layout, dist));
   return issues;
 }
 
@@ -186,19 +194,28 @@ export function reactorRouteGroups(layout: StationLayout): {id: string; cells: n
 /** Removing any ONE stair run must leave every storey reachable from the start (>= 2 independent routes; ladders not counted). */
 export function routeIssues(layout: StationLayout, sx: number, sy: number): string[] {
   const out: string[] = [];
-  const levels = layout.levels;
+  // (task studio-reactor-surface-ending-20261102, lane ENDING) the surface exit is a dead-end pocket behind its one door (its stair is
+  // its only route by design, surfaceIssues checks it): the route checks keep its door shut (the searches never enter it) and skip its
+  // storey (the same levels array: its cached arrays are reused)
+  const surf = layout.reactor?.surface, levels = layout.levels;
   const links = layout.levelLinks.filter(k => k.kind !== 'ladder');
+  const door = surf ? surfaceDoorCells(surf, layout.grid) : [];
+  const doorSaved = door.map(i => layout.grid.blocked[i]);
+  for (const i of door) layout.grid.blocked[i] = 1;
+  try {
   for (const grp of reactorRouteGroups(layout)) {
     const saved = levels.map(L => grp.cells.map(i => L.grid.blocked[i]));
     for (const L of levels) for (const i of grp.cells) L.grid.blocked[i] = 1;
     const d = levelDistance(levels, sx, sy, 0, links);
     levels.forEach((L, li) => grp.cells.forEach((i, k) => { L.grid.blocked[i] = saved[li][k]; }));
     for (let lv = 1; lv < levels.length; lv++) {
+      if (lv === SURFACE_LEVEL) continue;
       const g = levels[lv].grid;
       let any = false;
       for (let i = 0; i < g.cells.length && !any; i++) if (d[lv][i] >= 0 && g.cells[i] === FLOOR && g.rampIdx[i] < 0) any = true;
       if (!any) out.push(`level ${lv} unreachable without ${grp.id}`);
     }
   }
+  } finally { door.forEach((i, k) => { layout.grid.blocked[i] = doorSaved[k]; }); }
   return out;
 }

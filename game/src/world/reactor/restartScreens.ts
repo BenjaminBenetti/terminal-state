@@ -3,7 +3,7 @@
 // they show changes (the standing art rule's dynamic exemption: runtime data, not authored artwork). Pure drawing on a 2D context
 // (tests use the canvas shim):
 //  - 'pitBoard' (rim): the pit section (tiers top-down, each zone's generator lamp + gas clearing from runState.generators /
-//    zoneClear, the core at the bottom) and the four tasks KEY / POWER / COOLANT / RODS (✓ / READY / BLOCKED) + the next step;
+//    zoneClear, the core at the bottom) and the four tasks POWER / COOLANT / KEY / RODS (✓ / READY / BLOCKED) + the next step;
 //    after the restart: the SURFACE VENTILATION NETWORK view;
 //  - 'switchgearBoard': fuse slots, main breaker, control power;  'pumpBoard': valve, power, pump, flow;
 //  - 'controlMonitor': dark "NO CONTROL POWER" until the breaker closes, then the startup checklist; after the restart: the
@@ -209,7 +209,8 @@ function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
   text(ctx, 'CORE', px + pw / 2, cy, 11, '#d8d2c2', 'center');
   // --- the tasks (right) ---
   const tasks = reactorTasks(s), tx = px + pw + 14;
-  const items: [string, ReactorTaskStatus][] = [['STARTUP KEY', tasks.key], ['CONTROL POWER', tasks.power], ['COOLANT', tasks.coolant], ['CONTROL RODS', tasks.rods]];
+  // (task reactor-surface-ending-20261102, lane OBJECTIVES) route order, as the HUD: the key lies in the core floor's control room now
+  const items: [string, ReactorTaskStatus][] = [['CONTROL POWER', tasks.power], ['COOLANT', tasks.coolant], ['STARTUP KEY', tasks.key], ['CONTROL RODS', tasks.rods]];
   const th = (py1 - py0) / 4, ts = Math.max(11, Math.min(17, Math.round(th * 0.28)));
   items.forEach(([label, st], i) => {
     const y = py0 + th * i + th * 0.32;

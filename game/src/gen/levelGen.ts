@@ -480,6 +480,15 @@ export function registerApertures(levels: readonly Level[]): void {
     if (any) APERTURES.set(L.grid, m); else APERTURES.delete(L.grid);
   }
 }
+/**
+ * Task studio-reactor-surface-ending-20261102 (lane ENDING): register ONE level's aperture mask computed by the caller with
+ * registerApertures' exact rule (gen/reactor/surface.ts: the surface storey's roof opening) — the other levels' masks are unchanged,
+ * so the whole-stack pass is skipped. null removes it.
+ */
+export function setApertureMask(g: Grid, m: Uint8Array | null): void {
+  if (m) APERTURES.set(g, m); else APERTURES.delete(g);
+}
+
 /** Aperture mask of a level grid (registered for generated stations), or undefined. */
 export function apertureOf(g: Grid): Uint8Array | undefined {
   return APERTURES.get(g);

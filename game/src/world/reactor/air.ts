@@ -45,8 +45,12 @@ export const REACTOR_AIR = {
   BAND_STRENGTH: 0.8,
   /** Samples of the shared render / exposure table (render/volumetricShaders.ts uniform array size). */
   TABLE_N: 64,
-  /** The RESTART win's default whole-pit clearing time. */
-  CLEAR_ALL_S: 40,
+  /**
+   * The RESTART win's default whole-pit clearing time. Task studio-reactor-surface-ending-20261102 (lane ENDING, user: "speed up gas clear
+   * around the reactor by 2x"): 40 -> 20 s (the core floor's jammed zone clears only through this; its completion opens the exterior
+   * doors, world/reactor/ending.ts). The same staged front / smooth ramp: drawn = hurting, it just runs twice as fast.
+   */
+  CLEAR_ALL_S: 20,
   /** A zone fraction change below this does not rebuild the table (no uniform upload). */
   CHANGE_EPS: 1 / 1024,
 } as const;

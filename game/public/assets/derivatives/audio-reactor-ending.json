@@ -1,0 +1,187 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-reactor-ending-20261102",
+ "task": "studio-reactor-surface-ending-20261102-213051-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's blue-beam / rain allowance; 2 jobs of a 6-job cap, every first take accepted)",
+ "plannedBy": "tools/audio-pipeline/reactor-ending-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/reactor-ending-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (envelope, the crack above 2 kHz, quiet fraction, spectral centroid, per-0.25 s level / centroid, spectrogram). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": "per clip (ops)",
+ "beamIgnition": {
+  "crack": {
+   "onsetS": 0.45,
+   "peakS": 0.48,
+   "riseOverSwellDb": 21.8,
+   "fromPlayStartS": 0.421,
+   "leadOffsetS": 0.0289
+  },
+  "mix": {
+   "cueGain": 1,
+   "callGain": 0.75,
+   "highpassHz": 120,
+   "onlineGain": 0.7,
+   "onlineThumpGain": 0.6
+  }
+ },
+ "mixCalibration": {
+  "moment": "ONLINE (the beam fires) = t 0 s; peak window -1 .. +2 s, loudness window -0.5 .. +3.5 s",
+  "masterVolume": 0.7,
+  "gainJitterDb": 0.5,
+  "distance": "unity (the listener within every panner reference: the loudest case)",
+  "cueGains": {
+   "reactorSurge": 0.85,
+   "reactorOnline": 1,
+   "reactorStage": 0.75,
+   "reactorBreaker": 0.6,
+   "reactorBeam": 1
+  },
+  "mix": {
+   "before": {
+    "online": 1,
+    "thump": 1,
+    "beam": 0
+   },
+   "after": {
+    "online": 0.7,
+    "thump": 0.6,
+    "beam": 0.75
+   },
+   "beamHighpassHz": 120,
+   "thumpRate": 0.62,
+   "tierGain": 0.85,
+   "tierRate": 0.82
+  },
+  "layers": [
+   {
+    "name": "surge (its hard cut)",
+    "cueGain": 0.85,
+    "callGain": 1,
+    "rate": 1,
+    "startS": -6
+   },
+   {
+    "name": "ONLINE impact",
+    "cueGain": 1,
+    "callGain": {
+     "before": 1,
+     "after": 0.7
+    },
+    "rate": 1,
+    "startS": 0
+   },
+   {
+    "name": "deep stage thump (rate 0.62)",
+    "cueGain": 0.75,
+    "callGain": {
+     "before": 1,
+     "after": 0.6
+    },
+    "rate": 0.62,
+    "startS": 0
+   },
+   {
+    "name": "core-floor tier clunk (breaker, rate 0.82)",
+    "cueGain": 0.51,
+    "callGain": 1,
+    "rate": 0.82,
+    "startS": 0
+   },
+   {
+    "name": "BEAM ignition (high-passed)",
+    "cueGain": 1,
+    "callGain": {
+     "before": 0,
+     "after": 0.75
+    },
+    "rate": 1,
+    "startS": -0.421,
+    "highpassHz": 120
+   }
+  ],
+  "before": {
+   "peakDbfs": 1,
+   "peakAtS": 0.006,
+   "momentaryMaxLufs": -13.6,
+   "integratedLufs": -18.6
+  },
+  "after": {
+   "peakDbfs": -0.68,
+   "peakAtS": 0.058,
+   "momentaryMaxLufs": -14.1,
+   "integratedLufs": -18.7
+  },
+  "note": "sample-exact sum of the rebuilt derivatives (pre-MP3 PCM), reverb sends excluded. \"No clipping\" bound: after.peakDbfs < 0 dBFS at the master compressor input (before the beam the ONLINE moment already peaked over full scale there)."
+ },
+ "derivatives": [
+  {
+   "cue": "reactorBeam",
+   "url": "assets/audio/reactor-beam.mp3",
+   "bytes": 25286,
+   "sha256": "85dac8228804da2c887286a4b6a806824b512f27134af63595ac6a45942cc870",
+   "dur": 3.12,
+   "ops": [
+    "mono",
+    "trim 0.08-3.2 s",
+    "cosine fades 0.03 / 0.3 s",
+    "peak -1 dBFS (2.2 dB)",
+    "crack onset 0.45 s (peak 0.48 s, +21.8 dB over the swell above 2 kHz)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "reactor-beam-01",
+    "rawFile": "reference/tasks/reactor-surface-ending-20261102-213051/audio/raw/raw/reactor-beam-01.wav",
+    "rawSha256": "db5036b8aabc40a8b007da15f02b8f20e37b70847d1b3eb86b73882f7f22957d",
+    "rawBytes": 882044,
+    "labFile": "sfx_a-giant-blue-energy-beam-igniting-and-bl_w8a8_seed1373120250_214343.wav",
+    "labSidecarSha256": "6c5b265f4ad346676b87dd446316a748be9269e454c49a478fec4bc4716f528a",
+    "jobId": "20261102T214343-1373120250",
+    "prompt": "TrackType: SFX, a giant blue energy beam igniting and blasting straight up into the sky: one sharp deep electric impact boom with a bright crackling zap, then a powerful rising whoosh into a roaring electrical plasma column hum that slowly fades out, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1373120250,
+    "seconds": 5,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "bedRain",
+   "url": "assets/audio/surface-rain-loop.mp3",
+   "bytes": 43467,
+   "sha256": "b19fddcad570035abef20a3e086b3f6f09ed30081ccb391c8db6a443d906b654",
+   "dur": 5.4,
+   "loop": {
+    "start": 0.1,
+    "length": 5.2
+   },
+   "ops": [
+    "mono",
+    "stationary window from 3.5 s (std 0.67 dB over 0.5 s blocks, searched from 3.5 s)",
+    "loop 5.2 s, equal-power crossfade 0.5 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (4.5 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "surface-rain-01",
+    "rawFile": "reference/tasks/reactor-surface-ending-20261102-213051/audio/raw/raw/surface-rain-01.wav",
+    "rawSha256": "a6f86f2689fc4675e66e9c0b4919aec06999ff16c6fd409b7da1f00b941c1d7f",
+    "rawBytes": 1764044,
+    "labFile": "sfx_ambience-of-steady-heavy-rain-falling-ou_w8a8_seed51396616_214347.wav",
+    "labSidecarSha256": "e1c0207b8a65a4e2d41a3955af6d3c0349a76c53f615b00d7af564a239d3e547",
+    "jobId": "20261102T214347-51396616",
+    "prompt": "TrackType: SFX, ambience of steady heavy rain falling outdoors on an empty city street: a dense constant hiss of raindrops with soft pattering splashes on concrete, puddles and metal debris, constant intensity, no changes, no thunder, no wind, no traffic, no voices, no music.",
+    "seed": 51396616,
+    "seconds": 10,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}

@@ -27,6 +27,30 @@ test('relative wrapper, exact copied hashes, metadata and same model filter',t=>
   for(const e of m.files) {const b=fs.readFileSync(path.join(f.root,'artifacts/terminal-state-web/site',e.path));assert.equal(sha(b),e.sha256);assert.equal(b.length,e.bytes);}
   assert.throws(f.run,/already exists/);
 });
+test('provenance JSON follows the model rule: unreferenced -> tracked + allowlisted, not shipped; referenced by path -> shipped',t=>{
+  // Task reactor-surface-ending-20261102 (lead, release capacity)
+  const root=fs.mkdtempSync(path.join(os.tmpdir(),'terminal-state-package-'));
+  t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const put=(rel,body)=>{const p=path.join(root,rel);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,body);};
+  const files=[['assets/models/live.glb','live'],['assets/derivatives/live-prov.json','{"a":1}'],['assets/derivatives/old-prov.json','{"provenance":"xxxx"}']];
+  for(const [rel,b] of files) {put(`game/public/${rel}`,b);put(`dist/game/${rel}`,b);}
+  put('tools/release/public-inputs.json',JSON.stringify({schema:'terminal-state-public-inputs-v1',files:files.map(([rel,b])=>({path:rel,bytes:Buffer.byteLength(b),sha256:sha(b)}))}));
+  put('dist/game/index.html','<script type="module" src="./assets/index-test.js"></script><link rel="stylesheet" href="./assets/index-test.css">');
+  put('dist/game/assets/index-test.js','fetch("assets/models/live.glb"); const prov = "assets/derivatives/live-prov.json";');
+  put('dist/game/assets/index-test.css','body {color:red}');
+  const m=packageSite({root,commit});
+  assert.deepEqual(m.excludedUnreferencedProvenance,['assets/derivatives/old-prov.json']);
+  assert.equal(m.report.excludedUnreferencedProvenanceBytes,Buffer.byteLength('{"provenance":"xxxx"}'));
+  assert(m.files.some(e=>e.path==='assets/derivatives/live-prov.json'));
+  assert(!m.files.some(e=>e.path==='assets/derivatives/old-prov.json'));
+  assert(!fs.existsSync(path.join(root,'artifacts/terminal-state-web/site/assets/derivatives/old-prov.json')));
+  assert(fs.existsSync(path.join(root,'game/public/assets/derivatives/old-prov.json'))); // still a tracked input
+  assert.match(reportLines(m).join('\n'),/excluded 1 unreferenced provenance JSON \(\d+ B; tracked provenance, not shipped\)/);
+  // a changed provenance input is still rejected (the allowlist / hash review is unchanged)
+  put('game/public/assets/derivatives/old-prov.json','{"provenance":"evil"}');
+  fs.rmSync(path.join(root,'artifacts'),{recursive:true,force:true});
+  assert.throws(()=>packageSite({root,commit}),/Unreviewed/);
+});
 test('reject source, archives, dot files and unexpected outputs',t=>{
   for(const name of ['source.ts','map.js.map','raw.zip','.env','credentials.json']) {
     const f=fixture(t);f.put(`dist/game/assets/${name}`,'secret');assert.throws(f.run,/Unsafe|Unallowlisted/);

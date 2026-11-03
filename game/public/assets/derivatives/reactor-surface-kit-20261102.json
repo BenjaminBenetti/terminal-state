@@ -1,0 +1,280 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "reactor-surface-kit-20261102",
+ "task": "studio-reactor-surface-ending-20261102-213051-01",
+ "lane": "primary (sole Meshy / Codex producer)",
+ "status": "runtime derivatives of NEW Reactor surface-ending city models generated for this project with Meshy T2.5 (smart topology) through the Meshy MCP, from Codex initial reference images (and three Codex tileable surface sources) each generated WITH the user-selected B concept image attached; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "selectedReference": {
+  "file": "B-service-cathedral-attempt2.png (private, outside Git)",
+  "sha256": "d7e5821d6146af0c4ee0cbe1485c8863c825156a227e5a132992bfe99e9df340"
+ },
+ "authority": {
+  "userGenerationApprovalSha256": "1eb98c310d518f7762254fff11c30b5d455adbc87eb970877d1b6761dcab2247",
+  "caps": {
+   "credits": 200,
+   "attempts": 12,
+   "paidPosts": 24
+  }
+ },
+ "rebuild": "node tools/asset-pipeline/props/build-reactor-surface-kit.mjs",
+ "rawStorage": "reference/tasks/reactor-surface-ending-20261102-213051/meshy/raw/<asset>/attempt-<n>/ (immutable native GLBs + maps, read-only) + meshy/LEDGER.jsonl + MANIFEST.json; Codex originals reference/tasks/reactor-surface-ending-20261102-213051/art/codex/ (read-only) + ATTEMPTS.jsonl; outside Git",
+ "modelProof": {
+  "requested": "image-to-3d: ai_model meshy-t2.5, model_type smart-topology, should_texture, texture_resolution 2k, enable_pbr, target_formats [glb]; text-to-3d: preview ai_model meshy-t2.5 smart-topology + refine (enable_pbr, 2k, ai_model omitted: inherits the preview)",
+  "evidence": [
+   "exact create arguments in the fsynced ledger intent line before each paid call; ack with the returned task id right after",
+   "billing tier: image-to-3d 15 (T2 / T2.5 textured; 7.1 / 6 / latest bill 30), text preview 5 (7.1 / 6 / latest bill 20), refine 10",
+   "the Meshy task GET response does not echo ai_model / model_type: the request record + billing tier are the model proof"
+  ]
+ },
+ "texturePolicy": "Meshy maps kept channel for channel (re-encoded JPEG: base / metallicRoughness / normal per KIT.tex); surface sets: Codex colour source + normal / ORM derived locally from its luminance (no generation)",
+ "ledger": {
+  "attempts": 4,
+  "attemptedPOSTs": 4,
+  "billed": 60,
+  "reserved": 0,
+  "accepted": 4
+ },
+ "models": [
+  {
+   "key": "cityHighrise",
+   "id": "city-highrise-ruin",
+   "url": "assets/models/reactor-city-highrise-ruin.glb",
+   "bytes": 829988,
+   "tris": 10133,
+   "dims": [
+    37.8078,
+    75,
+    21.4616
+   ],
+   "what": "surface: ruined ~25-storey glass / concrete office tower, top sheared off",
+   "scale": 78.76927,
+   "rawExtent": [
+    0.48,
+    0.9521,
+    0.2725
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 227725
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 14546
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 31653
+    }
+   ],
+   "task": "01a19e39-ecdb-7658-852c-2f719bef5311",
+   "credits": 15,
+   "codexInput": {
+    "file": "city-highrise-ruin-attempt1.png",
+    "sha256": "d91cb169d742b98de8d3ed771e780cb576ce5763fe8e359d27e20fa3744b2f98",
+    "codexSession": "rollout-2026-11-02T21-41-47-01a19e36-13bc-7e11-bb61-9ac7db6d6734.jsonl"
+   },
+   "source": {
+    "file": "raw/city-highrise-ruin/attempt-1/model.glb",
+    "sha256": "7a70926f99c4db31b3b893098a9ad458ab0d90c792721f5f009ff1590b3301ef"
+   },
+   "sha256": "436b4e04ae8b90229d3f1af9c11d7a2c5759726b1d6582a25ea12efc5dfc0ad7"
+  },
+  {
+   "key": "cityApartment",
+   "id": "city-apartment-ruin",
+   "url": "assets/models/reactor-city-apartment-ruin.glb",
+   "bytes": 696248,
+   "tris": 8161,
+   "dims": [
+    27.2958,
+    24,
+    21.0141
+   ],
+   "what": "surface: ruined 7-storey brick apartment block with fire escapes, a collapsed corner",
+   "scale": 28.84508,
+   "rawExtent": [
+    0.9463,
+    0.832,
+    0.7285
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 187610
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10022
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 17896
+    }
+   ],
+   "task": "01a19e3a-07b5-77b2-ab18-abc2bb8cb7d3",
+   "credits": 15,
+   "codexInput": {
+    "file": "city-apartment-ruin-attempt2.png",
+    "sha256": "8b64ba32e5bc6c5277dd189b119989ee854d70c16bac052c05b8916b158ba41d",
+    "codexSession": "rollout-2026-11-02T21-42-41-01a19e36-eba9-7fd1-873b-6f1f25da09f2.jsonl"
+   },
+   "source": {
+    "file": "raw/city-apartment-ruin/attempt-2/model.glb",
+    "sha256": "dae548b821330664fe452e81884e173beb5c26a5307fc29f219f63cdfb1e40e0"
+   },
+   "sha256": "b77eb84029c1fa8640e9ad5415053571c7ed5d6aa9981b01aeebf424fff3ccae"
+  },
+  {
+   "key": "cityGarage",
+   "id": "city-garage-skeleton",
+   "url": "assets/models/reactor-city-garage-skeleton.glb",
+   "bytes": 737500,
+   "tris": 8850,
+   "dims": [
+    18.3543,
+    16,
+    16.7722
+   ],
+   "what": "surface: burned-out multi-storey parking garage stripped to its concrete frame",
+   "scale": 19.28666,
+   "rawExtent": [
+    0.9517,
+    0.8296,
+    0.8696
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 224347
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 13199
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26119
+    }
+   ],
+   "task": "01a19e3a-240a-707c-a7f4-58d6115f7e01",
+   "credits": 15,
+   "codexInput": {
+    "file": "city-garage-skeleton-attempt3.png",
+    "sha256": "0389f47ce1f8e177d9e0c70930b1c7aabdd26f81250e304fe339520d3283980d",
+    "codexSession": "rollout-2026-11-02T21-43-37-01a19e37-c5c1-7203-b1ea-5c64d9c38275.jsonl"
+   },
+   "source": {
+    "file": "raw/city-garage-skeleton/attempt-3/model.glb",
+    "sha256": "3d99feb727473a8fe124dea3a14912d5ffebb32a52eabfe8846ea51f6b28494d"
+   },
+   "sha256": "ba8b4a40f5052817b29723ee8965ba9cd769e54dcb83a023b5a73d9035af8e88"
+  },
+  {
+   "key": "cityStorefronts",
+   "id": "city-storefront-row",
+   "url": "assets/models/reactor-city-storefront-row.glb",
+   "bytes": 734552,
+   "tris": 7733,
+   "dims": [
+    13.131,
+    8,
+    13.4138
+   ],
+   "what": "surface: ruined two-storey corner row of shops (blank signs)",
+   "scale": 14.12414,
+   "rawExtent": [
+    0.9297,
+    0.5664,
+    0.9497
+   ],
+   "textures": [
+    {
+     "slot": "baseColor",
+     "size": [
+      1024,
+      1024
+     ],
+     "mime": "image/jpeg",
+     "bytes": 211394
+    },
+    {
+     "slot": "metallicRoughness",
+     "size": [
+      256,
+      256
+     ],
+     "mime": "image/jpeg",
+     "bytes": 10858
+    },
+    {
+     "slot": "normal",
+     "size": [
+      512,
+      512
+     ],
+     "mime": "image/jpeg",
+     "bytes": 26597
+    }
+   ],
+   "task": "01a19e3a-4200-75cb-ac7f-6377d9f68177",
+   "credits": 15,
+   "codexInput": {
+    "file": "city-storefront-row-attempt4.png",
+    "sha256": "7c379fa299c7654112c1ecd9d35c0a5a2e0e2377ba875c183af9468ad6a90fcb",
+    "codexSession": "rollout-2026-11-02T21-44-38-01a19e38-b30c-7091-9437-758ec8216171.jsonl"
+   },
+   "source": {
+    "file": "raw/city-storefront-row/attempt-4/model.glb",
+    "sha256": "9e8b2aa366dec64e3548e6283e38b59504eda96ce023ff45eedfb44211ee8c06"
+   },
+   "sha256": "5695030eaad786ade6d2ef73bc23ea599b574b81371a5620f905c8ce138731f5"
+  }
+ ],
+ "textures": []
+}

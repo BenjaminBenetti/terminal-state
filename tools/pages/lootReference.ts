@@ -1340,8 +1340,8 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
   if (levels.includes('reactor')) add({
     id: 'reactor-restart-parts', family: 'objective', label: 'Reactor restart parts (startup key + fuse cartridges)', class: 'guaranteed', levels: ['reactor'],
-    summary: 'Placed once per level seed by the Reactor generator (gen/reactor/index.ts placeComponents): the startup key in the rim control office and three fuse cartridges (two needed for the switchgear + one spare) in maintenance stores on tier 3, tier 4 and the core floor — never inside the switchgear room. Finite: no loot table, holder or reward rolls them; using one consumes it.',
-    items: [{itemId: 'reactor_key', count: 1, note: 'rim control office'}, {itemId: 'fuse_cartridge', count: 1, note: 'x3: tier 3 / tier 4 / core-floor stores'}],
+    summary: 'Placed once per level seed by the Reactor generator (gen/reactor/index.ts placeComponents): the startup key in the core floor\'s control room (the key switch\'s room; task reactor-surface-ending-20261102, it was the rim control office) and three fuse cartridges (two needed for the switchgear + one spare) in maintenance stores on tier 3, tier 4 and the core floor — never inside the switchgear room. Finite: no loot table, holder or reward rolls them; using one consumes it.',
+    items: [{itemId: 'reactor_key', count: 1, note: 'core-floor control room'}, {itemId: 'fuse_cartridge', count: 1, note: 'x3: tier 3 / tier 4 / core-floor stores'}],
     probability: 'Guaranteed: exactly 1 startup key + 3 fuse cartridges in every Reactor layout.',
     knobs: [{what: 'the restart parts', value: 'placeComponents()', at: B.src.at(F.reactorIndex, 'placeComponents'), overrides: ['none']}],
     at: [B.src.at(F.reactorIndex, 'placeComponents')],

@@ -417,6 +417,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
         x = e;
       }
     }
+    // task studio-reactor-surface-ending-20261102 (lane REPAIRS): floor runs an arch adds beside the cells' own floors (the Reactor's
+    // core deck continued under the vessel; merged into the same per-chunk accumulators: no new mesh)
+    if (reactor) for (const q of reactor.floorFills(L)) floorRect(q.key, id, q.x0, q.z0, q.x1, q.z1, q.y);
   }
   // Door rects: ceiling at the opening (storefront heads stay at the opening head, not the shutter line).
   const doorMask = levels.map(() => new Uint8Array(n0));
