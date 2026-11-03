@@ -40,7 +40,7 @@ export const SURFACE_RT = {
   fogS: 1.2,
   /** The beam meets the cloud deck this high over the deck (the outdoor sky's glow point; the beam itself ends at BEAM.aboveRoof). */
   cloudBase: BEAM.aboveRoof - 10,
-  /** Outside, the camera far plane rises to this (the city reaches SURFACE_CITY.maxR 175 m round the opening, the sky dome 320 m round the eye; the pit keeps archInstall.ts REACTOR_FOG.far 230). */
+  /** Outside, the camera far plane rises to this (every roof stays within 344 m of the plaza — the city reaches ~280 m round the opening, the sky dome 352 m round the eye; the pit keeps archInstall.ts REACTOR_FOG.far 230). */
   far: 360,
 } as const;
 
