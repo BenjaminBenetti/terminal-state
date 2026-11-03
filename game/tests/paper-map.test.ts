@@ -276,15 +276,17 @@ describe('the overlay', () => {
     dom.key('Tab', {shiftKey: true});
     expect(map.focused).toBe(seenTab[seenTab.length - 1]);
     expect(dom.doc.querySelector('.pm-focused')).not.toBeNull();
-    // arrows: the target lies in the arrow's direction from the focused station
-    const lay = paperLayout(net);
+    // arrows (travel mode): the destination in the arrow's direction from the train's station
+    const lay = paperLayout(net), here = lay.get(s.current)!;
+    let moved = 0;
     for (const [code, axis, sign] of [['ArrowRight', 'x', 1], ['ArrowLeft', 'x', -1], ['ArrowDown', 'y', 1], ['ArrowUp', 'y', -1]] as const) {
       const from = map.focused!;
       dom.key(code);
       const to = map.focused!;
-      if (to !== from) expect(Math.sign(lay.get(to)![axis] - lay.get(from)![axis])).toBe(sign);
+      if (to !== from) { moved++; expect(Math.sign(lay.get(to)![axis] - here[axis])).toBe(sign); }
       expect(dests).toContain(to);
     }
+    expect(moved).toBeGreaterThan(0);
     const target = map.focused!;
     const enter = dom.key('Enter');
     expect([enter.defaultPrevented, map.selected, calls.confirm]).toEqual([true, target, []]);
@@ -298,6 +300,9 @@ describe('the overlay', () => {
 
   it('view mode is read-only: details without Depart; the current station is not selectable', () => {
     const s = atHub();
+    open(s); // travel first: a reopen at the same view must re-print, not keep the travel marks
+    expect(dom.doc.querySelectorAll('.pm-hints circle').length).toBe(destinations(s).length);
+    map.close();
     open(s, 'view');
     expect(dom.doc.querySelector('.pm-mode')!.textContent).toMatch(/View only/);
     expect(dom.doc.querySelectorAll('.pm-hints circle').length).toBe(0);

@@ -501,6 +501,7 @@ export class PaperMap {
     this.selected = null;
     this.focused = null;
     this.note = '';
+    this.model = null; // a reopen always re-prints (the view may be unchanged while the state is not)
     this.matcher.reset();
     this.openFlag = true;
     this.mount();
@@ -621,11 +622,16 @@ export class PaperMap {
     return this.setFocus(next.node.id);
   }
 
-  /** Move the keyboard focus by arrow direction. */
+  /**
+   * Move the keyboard focus by arrow direction: in travel mode (the destinations ring the train) the destination in that direction
+   * FROM THE CURRENT STATION; in view mode / with the cheat, the next station in that direction from the focused one.
+   */
   focusDir(dir: 'left' | 'right' | 'up' | 'down'): StationId | null {
     const ms = this.model?.stations ?? [];
-    const from = ms.find(s => s.node.id === this.focused)?.p ?? ms.find(s => s.current)?.p;
-    const cands = this.focusables().filter(s => s.node.id !== this.focused).map(s => ({id: s.node.id, x: s.p.x, y: s.p.y}));
+    const radial = this.mode === 'travel' && !this.state?.cheat;
+    const here = ms.find(s => s.current)?.p;
+    const from = radial ? here : ms.find(s => s.node.id === this.focused)?.p ?? here;
+    const cands = this.focusables().filter(s => radial || s.node.id !== this.focused).map(s => ({id: s.node.id, x: s.p.x, y: s.p.y}));
     if (!from || !cands.length) return this.focusNext(1);
     const id = pickByDirection(from, cands, dir);
     return id ? this.setFocus(id) : this.focused;
