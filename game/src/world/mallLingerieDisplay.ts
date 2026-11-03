@@ -3,10 +3,12 @@
 // LINGERIE_DISPLAY_SOURCE: the same prop-library key the store-local zombies wear). Called by world/officeProps.ts buildOfficeProp for the
 // set kinds; returns null while the file is not loaded (or has no display nodes) — the procedural stand-in renders then.
 //
-// Frame (lane FIT, 2026-11-02): each display node is an unskinned mesh at REAL worn size (the set as fitted on a pale body), front +Z;
-// the node's extras `lingerieDisplay.toBodySpace` is the translation that puts it at its worn height in body space (feet at y 0) — drawn
-// exactly there on the display form's origin (its base: the set placement's y - LINGERIE_SET_Y0), no scale. Without the extras: the
-// nodes' union bounds stand on the set placement's base, centred, unscaled. Geometry / materials stay owned by the model library.
+// Frame (lane FIT c1a3816, measured on the files): each display node is an unskinned mesh at REAL worn size (the set as fitted on a pale
+// body), front +Z; its vertices are in body space and its translation centres the set's bounds in x / z with the lowest point at y 0;
+// extras `lingerieDisplay.toBodySpace` is the OFFSET back to body space (translation + toBodySpace = 0). Drawn on the display form's
+// origin (its base: the set placement's y - LINGERIE_SET_Y0) at its worn HEIGHT (translation y + toBodySpace y) and CENTRED in x / z (the
+// node's own centring translation: the form is centred under the set), unscaled. Without the extras: the nodes' union bounds stand on the
+// set placement's base, centred. Geometry / materials stay owned by the model library.
 
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -42,8 +44,8 @@ export function buildLingerieDisplay(group: THREE.Group, kind: PropKind, list: r
     while (node && !names.has(node.name)) node = node.parent;
     const t = (node?.userData as {lingerieDisplay?: {toBodySpace?: readonly number[]}} | undefined)?.lingerieDisplay?.toBodySpace;
     if (!node || !t || t.length < 3) return new THREE.Matrix4().multiplyMatrices(fallback, mesh.matrixWorld);
-    // the node's own world matrix with its translation replaced by toBodySpace (under its parent), then the mesh below the node
-    const nodeLocal = new THREE.Matrix4().compose(new THREE.Vector3(t[0], t[1], t[2]), node.quaternion, node.scale);
+    // the node at its worn height (+ toBodySpace y), still centred in x / z (under its parent), then the mesh below the node
+    const nodeLocal = new THREE.Matrix4().compose(new THREE.Vector3(node.position.x, node.position.y + t[1], node.position.z), node.quaternion, node.scale);
     const nodeBody = node.parent ? new THREE.Matrix4().multiplyMatrices(node.parent.matrixWorld, nodeLocal) : nodeLocal;
     const below = new THREE.Matrix4().copy(node.matrixWorld).invert().multiply(mesh.matrixWorld);
     return nodeBody.multiply(below);

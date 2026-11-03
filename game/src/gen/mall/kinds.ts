@@ -152,12 +152,12 @@ const SPECS = {
   lingerieBust: {box: [0.42, 0.32, 1.48], cls: 'fabric'},
   /** The six lingerie display sets (the user's designs), riders on a display bust at its torso (LINGERIE_SET_Y0 above the bust's base):
    *  procedural stand-ins until lane FIT's compact static display derivative maps in (MALL_KIND_ASSET). Opaque, never see-through. */
-  lingerieSetGreen: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
-  lingerieSetPurple: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
-  lingerieSetBlush: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
-  lingerieSetBlack: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
-  lingerieSetRed: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
-  lingerieSetIvory: {box: [0.36, 0.24, 0.92], cls: 'fabric'},
+  lingerieSetGreen: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  lingerieSetPurple: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  lingerieSetBlush: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  lingerieSetBlack: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  lingerieSetRed: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  lingerieSetIvory: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
   // --- task track3 (lane ARCH): landmarks / navigation (gen/mall/landmarks.ts places them, world/mallArch.ts draws them) ---
   /** Pit-plaza fountain basin: square stone basin with a 0.4 m sitting ledge (half size 1.6 m; a 1.25 m fallback). */
   fountainBasin: {box: [3.2, 3.2, 0.5], cls: 'terrazzo'},
@@ -281,16 +281,19 @@ export const MALL_RIDER_KINDS: readonly MallKind[] = ['garmentHangingGroup', 'wo
   'lingerieSetGreen', 'lingerieSetPurple', 'lingerieSetBlush', 'lingerieSetBlack', 'lingerieSetRed', 'lingerieSetIvory'];
 /**
  * Task mall-lingerie-20261102 (lane STORE): the lingerie display sets by design (the user's six reference designs, lane FIT's LINGERIE_SETS
- * order) and where one sits on its display form: the set's box spans LINGERIE_SET_Y0 (mid-thigh: the longest suspender straps) to the
- * strap tops (y0 + h) above the form's base. Lane FIT's display meshes are drawn at their real worn size in BODY space on the form's
- * origin (world/mallLingerieDisplay.ts: node extras `lingerieDisplay.toBodySpace`), the form built to the pale bodies' proportions.
+ * order) and where one sits on its display form: the set's box spans LINGERIE_SET_Y0 (the suspender ends, ~0.74 m) to the strap tops
+ * (y0 + h = 1.52) above the form's base. Lane FIT's display meshes are drawn at their real worn height (body space) centred on the form
+ * (world/mallLingerieDisplay.ts); the form sits INSIDE every set (c1a3816, measured per 0.15 m height band: hips x +-0.14 / z +-0.11,
+ * waist x +-0.12, bust x +-0.15 / z +-0.12 — qa-artifacts/lingerie/store/fitcheck).
  */
 export const LINGERIE_SET_KINDS = {
   green: 'lingerieSetGreen', purple: 'lingerieSetPurple', blush: 'lingerieSetBlush', black: 'lingerieSetBlack', red: 'lingerieSetRed', ivory: 'lingerieSetIvory',
 } as const satisfies Record<string, MallKind>;
-export const LINGERIE_SET_Y0 = 0.52;
+export const LINGERIE_SET_Y0 = 0.72;
 /** The display bust's torso in its prop frame (m): hips / waist / bust / shoulder heights and half widths (lingerieBust shape below). */
-export const LINGERIE_BUST = {thighY: 0.5, hipY: 0.92, waistY: 1.08, bustY: 1.24, shoulderY: 1.4, hipHalfW: 0.17, waistHalfW: 0.13, bustHalfW: 0.16, depth: 0.24} as const;
+export const LINGERIE_BUST = {thighY: 0.5, hipY: 0.92, waistY: 1.08, bustY: 1.24, shoulderY: 1.4, hipHalfW: 0.115, waistHalfW: 0.1, bustHalfW: 0.125, depth: 0.19,
+  /** the hips sit a little back (the briefs' fronts are 8 cm before the set's centre, their backs 10 cm behind it) */
+  hipDepth: 0.16, hipZ: -0.01} as const;
 
 /** Exposed loot surfaces of the open mall holders and of the bookcase (an openable container: its shelves + its drawers' trays). */
 export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, readonly SurfaceSpec[]>> = {
@@ -825,12 +828,12 @@ export function mallShape(kind: MallKind): ShapePart[] {
         box('steelDark', [0.06, 0.025, 0.3], [0, 0.0125, 0]),
         box('steelBright', [0.025, B.thighY - 0.025, 0.025], [0, 0.025 + (B.thighY - 0.025) / 2, 0]),
         // the padded form in stacked slabs (upper thighs, hips, waist, bust, shoulders), a neck cap — a featureless form
-        box('black', [0.13, B.hipY - 0.07 - B.thighY, B.depth * 0.62], [-0.075, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, 0]),
-        box('black', [0.13, B.hipY - 0.07 - B.thighY, B.depth * 0.62], [0.075, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, 0]),
-        box('black', [B.hipHalfW * 2, 0.14, B.depth * 0.95], [0, B.hipY + 0.0, 0]),
+        box('black', [0.1, B.hipY - 0.07 - B.thighY, B.hipDepth * 0.8], [-0.058, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, B.hipZ]),
+        box('black', [0.1, B.hipY - 0.07 - B.thighY, B.hipDepth * 0.8], [0.058, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, B.hipZ]),
+        box('black', [B.hipHalfW * 2, 0.14, B.hipDepth], [0, B.hipY, B.hipZ]),
         box('black', [B.waistHalfW * 2, 0.16, B.depth * 0.8], [0, B.waistY, 0]),
         box('black', [B.bustHalfW * 2, 0.16, B.depth], [0, B.bustY, 0.005]),
-        box('black', [w * 0.9, 0.08, B.depth * 0.85], [0, B.shoulderY - 0.02, 0]),
+        box('black', [0.3, 0.08, B.depth * 0.85], [0, B.shoulderY - 0.02, 0]),
         box('steelBright', [0.07, h - B.shoulderY - 0.02, 0.07], [0, B.shoulderY + 0.02 + (h - B.shoulderY - 0.02) / 2, 0]),
       ];
     }

@@ -298,8 +298,8 @@ no model / texture file, no generation); the rest of the store uses existing kin
 | `fittingBench` | built-in timber booth bench on two brackets | `none` (no lid / drawer) | static `built-in` | 1.42 × 0.45 × 0.40 m; grounded (4 bracket contacts); seat 0.45 m |
 | `fittingMirror` | full-length mirror in a thin frame | `none` | static `mounted` (screwed to a partition / wall) | 0.60 × 1.54 × 0.02 m glass + frame from 0.33 m: wall-mounted, intentionally off the floor |
 | `fittingCurtain` | booth curtain gathered open beside a partition, its rail across the opening overhead | `none` | static `mounted` (cloth on a fixed rail) | 1.46 × 2.00 × 0.12 m (rail span); the drape hangs 0.08 m above the floor; rail 2.0 m |
-| `lingerieBust` | padded torso-to-mid-thigh display form on a pole and a three-foot base (pale-body proportions) | `none` | **dynamic** 5 kg `pad`, fit 1.2 (tips over) | 0.38 × 1.48 × 0.30 m; grounded (base feet); shoulders 1.40, bust 1.24, hips 0.92 m |
-| `lingerieSet<Design>` ×6 | the six display sets — riders on a display form (lane FIT's display meshes at worn size; procedural stand-ins until loaded) | `none` | static `host decor`, **rides** the form (MALL_RIDER_KINDS) | stand-in 0.36 × 0.54 × 0.29 m on the form's torso (0.86-1.40 m); collider 0.52-1.44 m (suspenders to mid-thigh) |
+| `lingerieBust` | padded torso-to-mid-thigh display form on a pole and a three-foot base (pale-body proportions, INSIDE every set) | `none` | **dynamic** 5 kg `pad`, fit 1.2 (tips over) | 0.36 × 1.48 × 0.30 m (base feet); grounded; shoulders 1.40, bust 1.24 (x ±0.125), hips 0.92 (x ±0.115, z -0.09..0.07), thighs to 0.50 m |
+| `lingerieSet<Design>` ×6 | the six display sets — riders on a display form: lane FIT's display meshes (c1a3816) at worn height, centred, unscaled; procedural stand-ins until loaded | `none` | static `host decor`, **rides** the form (MALL_RIDER_KINDS) | FIT meshes 0.74-1.50 m on the form (CPU render: qa-artifacts/lingerie/store/fitcheck/sets-on-form.png); stand-in 0.28 × 0.54 × 0.24 m; collider 0.72-1.52 m |
 
 - Changing area: 4-6 booths (2 × 3 free cells each: 1.44 m between the panels, 1.5 m deep in front of the bench) along a 1.5 m aisle on the
   back wall, a 1.5 m opening from the sales floor, every free cell reserved; the pieces share their 0.5 m cell column, so the planner
@@ -307,7 +307,7 @@ no model / texture file, no generation); the rest of the store uses existing kin
 - No baked loose clutter: the booth pieces are structure (panels, a built-in bench, a screwed mirror, a curtain on its rail); the display
   sets are separate riders on the form; the store's finds are real loot in its holders (drawer chests, the till, tables, bays).
 - Renders: `node tools/asset-pipeline/props/scale-check.mjs --kind fittingPartition --kind fittingBackPanel --kind fittingBench
-  --kind fittingMirror` and `--kind fittingCurtain --kind lingerieBust --kind lingerieSetRed --lift 0.52` (the tool now renders office /
+  --kind fittingMirror` and `--kind fittingCurtain --kind lingerieBust --kind lingerieSetRed --lift 0.72` (the tool now renders office /
   mall procedural box forms too), viewed beside zombie `lastshift` at runtime scale 1.0.
 - Tests: `tests/mall-lingerie-store.test.ts`.
 
