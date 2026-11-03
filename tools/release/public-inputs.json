@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 35984,
-      "sha256": "c63df34a23402e15799e37b1867c91ad0005aab2d5e0b3bb5c5c2bf667d552d7"
+      "bytes": 37608,
+      "sha256": "cb723c442ca3a9876e2043e793f7a4e639c5eb7526364b0e71285eb90139094e"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1739,6 +1739,36 @@
       "sha256": "4f882ea77206bd52d446c5a2777640c45a72bf040b371423db59c5dec9f6adde"
     },
     {
+      "path": "assets/derivatives/outfit-lingerie-black.json",
+      "bytes": 15463,
+      "sha256": "432684bd703f8a4f52702bb8533e7ee07035b92cdc64c047a9e27eae4d3895e0"
+    },
+    {
+      "path": "assets/derivatives/outfit-lingerie-blush.json",
+      "bytes": 15457,
+      "sha256": "066fad804f1d003c1368780840f75dcafe407d2bccc1013dcda4991d6b901686"
+    },
+    {
+      "path": "assets/derivatives/outfit-lingerie-green.json",
+      "bytes": 15447,
+      "sha256": "a5c1089c0d8a099204ecb5ef4e0babf087280ed6b432101c87306ccb819c6853"
+    },
+    {
+      "path": "assets/derivatives/outfit-lingerie-ivory.json",
+      "bytes": 16163,
+      "sha256": "c3332c00fe759ce2cd21acec31684f2358bb93f644ea3d5fc47f361ff34266c0"
+    },
+    {
+      "path": "assets/derivatives/outfit-lingerie-purple.json",
+      "bytes": 15499,
+      "sha256": "56bef29ee4915293b3255b04846e946c133e6757544c7c82c6213fa591eb72c1"
+    },
+    {
+      "path": "assets/derivatives/outfit-lingerie-red.json",
+      "bytes": 15430,
+      "sha256": "56e9977c126078d8fd25c156e510353e284eac91c27da11e804047eaafa586b3"
+    },
+    {
       "path": "assets/derivatives/outfit-puffer.json",
       "bytes": 3920,
       "sha256": "4f1c0f65669e95a67e003a8c77e47c492c6d93799ee54731e2c35af2e4639ff1"
@@ -1867,6 +1897,11 @@
       "path": "assets/derivatives/zombie-body-tall.json",
       "bytes": 44404,
       "sha256": "a49628ea440b68f6325a70058eded2ba6a3073bee8d04449b680a6b58e6b424d"
+    },
+    {
+      "path": "assets/derivatives/zombie-lingerie.json",
+      "bytes": 10807,
+      "sha256": "7e71b08c32bbb7bcab67e2bad85857b8b7e0cc1b2f6ccd66cd444a73fd4627da"
     },
     {
       "path": "assets/derivatives/zombie-rigged.json",
@@ -2757,6 +2792,36 @@
       "path": "assets/models/outfit-jeans-t25.glb",
       "bytes": 954576,
       "sha256": "6bd4f0ec9f40cb89fd941e78d4284499360fe5cca208030becfbf4d267e71e8f"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-black.glb",
+      "bytes": 321964,
+      "sha256": "c026dc53cf43a90ea48cc0f64101faab07e2e689581aff92288323f9f9e82eb8"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-blush.glb",
+      "bytes": 215676,
+      "sha256": "59b731340b6201301f71450cfbf452126ca07dad4b9e049c662f00e3255b8593"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-green.glb",
+      "bytes": 265284,
+      "sha256": "701b1076cd1b8da4a9ba9c75ff639c1e40b7f90c7bace3ad57bad7957f1b095a"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-ivory.glb",
+      "bytes": 190196,
+      "sha256": "07a781c84d984f34a9538f557442eb36031c4a352fe528e453f09a806be27963"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-purple.glb",
+      "bytes": 251088,
+      "sha256": "751010d57d8e45dbf940bf0a09c495fc2dce03f62e7137be9ad67f6910035b69"
+    },
+    {
+      "path": "assets/models/outfit-lingerie-red.glb",
+      "bytes": 355572,
+      "sha256": "4c097870de8678ff28a1bd03e39295a32b370edf9773edc1339bef55f40d1e23"
     },
     {
       "path": "assets/models/outfit-puffer.glb",
