@@ -296,7 +296,9 @@ describe('generated malls: the store-local variants exist only inside a lingerie
       expect(tagged.map(([, i]) => i)).toEqual(tagged.map((_, k) => first + k)); // contiguous ...
       expect(first + tagged.length).toBe(l.zombies.length); // ... and last
       const g = l.levels[shop.level].grid, rects = shop.changing ?? [], booths = rects.slice(0, -1);
-      expect(booths.length, `seed ${seed}: ${shop.id} booths`).toBeGreaterThanOrEqual(4);
+      // (task store-polish-20261103, lane STORE: the changing area is now a walled SUITE of 3-4 real rooms off a corridor — rooms first,
+      // the corridor last; a room is a booth here: one 2-cell doorway)
+      expect(booths.length, `seed ${seed}: ${shop.id} booths`).toBeGreaterThanOrEqual(3);
       const perBooth = booths.map(() => 0);
       let inChanging = 0;
       for (const [z, i] of tagged) {
