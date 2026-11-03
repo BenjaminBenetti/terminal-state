@@ -52,3 +52,16 @@ export function compileAtDepth<T>(renderer: unknown, depth: number, call: () => 
   rc.get = function (this: ContextsLike, t: unknown, mrt: unknown = null, d = 0) { return get.call(this, t, mrt, d === 0 ? depth : d); };
   try { return call(); } finally { rc.get = get; }
 }
+
+/**
+ * Task studio-performance-recorder-20261103 (lane RENDER-CPU, journey follow-up): run `call` (a synchronous `renderer.render`) as if it
+ * were nested `offset` levels deep: every context it asks for (the scene pass, and the flashlight's shadow pass nested in it) is the
+ * one the real frame uses at that nesting. The clear-only context (-1) is left alone. offset 0 / no internal: as is.
+ */
+export function renderAtDepthOffset<T>(renderer: unknown, offset: number, call: () => T): T {
+  const rc = offset > 0 ? contexts(renderer) : null;
+  if (!rc) return call();
+  const get = rc.get;
+  rc.get = function (this: ContextsLike, t: unknown, mrt: unknown = null, d = 0) { return get.call(this, t, mrt, d >= 0 ? d + offset : d); };
+  try { return call(); } finally { rc.get = get; }
+}

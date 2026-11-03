@@ -142,9 +142,10 @@ import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, r
 import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
-import {WarmupRegistry, compileItemsLive, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {WarmupRegistry, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
+import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
@@ -416,6 +417,7 @@ export class Game {
   /** Lane RENDER-CPU: the render-context call depth each scene-pass target is drawn at (render/renderContextDepth.ts), once measured. */
   private readonly sceneDepths = new WeakMap<object, number>();
   private sceneDepthLast: number | null = null;
+  private journeyCompile: JourneyCompile | null = null;
   /**
    * Iteration 14: what the warm-up prepares besides the discovered station scene (docs/rendering-warmup.md): effect pools /
    * runtime prototypes in the scene, and render passes with their own scene / camera / target.
@@ -1305,18 +1307,18 @@ export class Game {
    * culled meshes (off the camera layers), the holders / loot display / shelf stock / enemies / pickups (outside world.group) and the
    * hidden-until-used holder contents were never projected at all. Now the warm-up's own planner picks the station's representatives
    * (pools included; 'full': every other renderable too, for its own render objects), nearest the arrival first, and
-   * render/warmup.ts compileItemsLive compiles them chunk by chunk into the scene pass's target at its call depth — the scene is
-   * projected synchronously per call and restored at once, so the riding frames never draw anything differently. Bounded as before
-   * (8 s, then the car arrives regardless); 'view' (software rasterizer): the representatives within 24 m of the arrival only. Not
-   * covered without real frames: the flashlight's shadow-map variants (the loading-screen routes' hidden frames do those).
+   * render/journeyCompile.ts prepares them for the WHOLE ride (and after it, until done), time-sliced through the frame-budget
+   * scheduler: the scene pass's node builds / render objects into its real render context and, side by side ('full', flashlight casting), the
+   * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
+   * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
   private async backgroundCompile(): Promise<void> {
     if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return;
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return;
-    const t0 = performance.now(), gen = this.stationGen;
+    this.journeyCompile?.cancel();
+    const t0 = performance.now();
     const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : this.camera.getWorldPosition(new THREE.Vector3());
-    let compiled = 0, planned = 0;
     try {
       const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
       const depth = this.sceneDepth(false); // (measured by this session's loading-screen warm-up: the atmosphere pipeline persists)
@@ -1325,11 +1327,21 @@ export class Game {
       const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(near) - sphere.radius); };
       const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
       const items = [...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])];
-      planned = items.length;
-      compiled = await compileItemsLive(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, items, plan.renderables, target, depth,
-        {deadline: t0 + 8000, alive: () => gen === this.stationGen && !this.gpu?.deviceLost});
+      const casters = mode === 'full' && this.flashlight.castShadow ? byNear([...plan.items, ...plan.others].filter(i => i.caster)) : [];
+      const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
+      const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver}).start());
+      // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
+      await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
+      const st = job.stats;
+      console.info(`Terminal State: next station prepared during the ride (${mode}) — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters} at arrival after ${((performance.now() - t0) / 1000).toFixed(1)} s (continuing in spare frame time)`);
+      void job.done.then(() => console.info(`Terminal State: journey compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${job.stats.steps} steps (max ${job.stats.stepMaxMs.toFixed(1)} ms), ${((performance.now() - t0) / 1000).toFixed(1)} s`));
     } catch (err) { console.warn('campaign: background compile failed', err); }
-    console.info(`Terminal State: background compile of the next station (${mode}) ${compiled}/${planned} objects in ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  }
+
+  /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
+  get journeyCompileStats(): JourneyCompile['stats'] | null {
+    return this.journeyCompile?.stats ?? null;
   }
   // --- end campaign (primary) ----------------------------------------------------------------------------------------------------
 

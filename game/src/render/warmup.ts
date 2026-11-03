@@ -351,6 +351,20 @@ function only(s: readonly Snap[], chunk: readonly WarmItem[], cameraMask: number
   for (const i of chunk) { i.object.visible = true; for (const f of i.flips) f.visible = true; }
 }
 
+/**
+ * Lane RENDER-CPU (journey follow-up): run `fn` synchronously with exactly `chunk` of `renderables` on the camera layers (unculled, its
+ * hidden chain visible), then restore every snapshotted state at once (a frame drawn later sees nothing changed).
+ */
+export function withOnly<T>(renderables: readonly Renderable[], chunk: readonly WarmItem[], cameraMask: number, fn: () => T): T {
+  const snap = snapshot([...renderables, ...chunk.flatMap(i => i.flips)]);
+  try {
+    only(snap, chunk, cameraMask);
+    return fn();
+  } finally {
+    restore(snap);
+  }
+}
+
 const emptyStages = (): Record<WarmupStage, WarmupStageReport> => ({
   materials: {done: 0, total: 0, ms: 0}, passes: {done: 0, total: 0, ms: 0}, shadows: {done: 0, total: 0, ms: 0}, view: {done: 0, total: 0, ms: 0},
 });
