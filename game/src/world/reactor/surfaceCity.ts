@@ -26,8 +26,12 @@ import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, s
  * disc (SURFACE_CITY.ground) runs on under the dome to its horizon.
  */
 export const SURFACE_SKY = {radius: 352} as const;
-/** The ground sits this far under the walk height (lane ENDING's floor covers it on the walk area); the film this far above. */
-export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT} as const;
+/**
+ * The ground sits this far under the walk height (lane ENDING's floor covers it on the walk area); the film this far above; every city
+ * instance (grounded models, min y 0, planned at the deck height) is seated `sink` m down so its base meets / bites into the ground disc
+ * (never a hairline of sky under a facade).
+ */
+export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT, sink: 0.06} as const;
 /** Culling sectors round the aperture: the near city's entries per quadrant, the far skyline's per octant. */
 export const SURFACE_SECTORS = {near: 4, far: 8} as const;
 
@@ -241,12 +245,12 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
     for (const [pi, part] of modelParts(gltf).entries()) {
       const mat = surfaceModelMaterial(part.material);
       byQuad.forEach((ql, qi) => addInstanced(`reactor-surface-${e.id}-${pi}-q${qi}`, part.geometry, mat,
-        ql.map(p => place(p.x, p.y + (e.stand ?? 0) * p.scale, p.z, p.yaw, p.scale).multiply(part.matrix))));
+        ql.map(p => place(p.x, p.y - SURFACE_LAYERS.sink + (e.stand ?? 0) * p.scale, p.z, p.yaw, p.scale).multiply(part.matrix))));
     }
     if (e.stand) {
       const sg = standGeometry(e.dims[0], e.dims[2], e.stand);
       own.geometries.push(sg);
-      addInstanced(`reactor-surface-${e.id}-stand`, sg, steel, list.map(p => place(p.x, p.y, p.z, p.yaw, p.scale)));
+      addInstanced(`reactor-surface-${e.id}-stand`, sg, steel, list.map(p => place(p.x, p.y - SURFACE_LAYERS.sink, p.z, p.yaw, p.scale)));
     }
   }
   // --- the ground (street mask rows: a 1-D data texture) ---

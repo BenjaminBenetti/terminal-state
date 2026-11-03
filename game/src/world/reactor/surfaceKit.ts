@@ -80,10 +80,10 @@ export const SURFACE_KIT: readonly SurfaceKitEntry[] = [
     rings: [1, 3], scale: [0.95, 1.1], max: 4, weight: 1, front: -1, stand: 7, source: 'company'},
   // --- the far skyline (task reactor-surface-redesign-credits-20261103, lane CITY): the same models, larger, out in the mist ---
   // (the cheapest silhouettes per triangle lead: the 75 m Meshy high-rise is 10 k triangles; the bulkier ruins add broken tops)
-  {id: 'skyHighrise', role: 'highrise', ...kit(S.cityHighrise), rings: [3, 99], scale: [0.95, 1.4], max: 34, weight: 4.2, front: 1, skyline: true, source: 'reactor-surface'},
-  {id: 'skyTower', role: 'highrise', ...office('ruined-tower'), rings: [3, 99], scale: [0.95, 1.3], max: 9, weight: 1.4, front: -1, skyline: true, source: 'office'},
-  {id: 'skyApartment', role: 'midrise', ...kit(S.cityApartment), rings: [3, 99], scale: [1.25, 1.75], max: 16, weight: 2.2, front: 1, skyline: true, source: 'reactor-surface'},
-  {id: 'skyMidrise', role: 'midrise', ...office('ruined-midrise'), rings: [3, 99], scale: [1.15, 1.6], max: 8, weight: 0.9, front: -1, skyline: true, source: 'office'},
+  {id: 'skyHighrise', role: 'highrise', ...kit(S.cityHighrise), rings: [3, 99], scale: [0.95, 1.4], max: 30, weight: 3, front: 1, skyline: true, source: 'reactor-surface'},
+  {id: 'skyTower', role: 'highrise', ...office('ruined-tower'), rings: [3, 99], scale: [0.95, 1.3], max: 10, weight: 2.2, front: -1, skyline: true, source: 'office'},
+  {id: 'skyApartment', role: 'midrise', ...kit(S.cityApartment), rings: [3, 99], scale: [1.25, 1.75], max: 16, weight: 2.4, front: 1, skyline: true, source: 'reactor-surface'},
+  {id: 'skyMidrise', role: 'midrise', ...office('ruined-midrise'), rings: [3, 99], scale: [1.15, 1.6], max: 10, weight: 1.4, front: -1, skyline: true, source: 'office'},
 ];
 
 /** Registry entry by id (undefined: not registered). */

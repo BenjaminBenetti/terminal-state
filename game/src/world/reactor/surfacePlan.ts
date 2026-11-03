@@ -44,6 +44,9 @@ export const SURFACE_CITY = {
   /** Blocks whose nearest point lies within `radius` of the aperture are built; every footprint stays within `maxR` (draw distance:
    *  surfaceCity.ts SURFACE_SKY.radius round any plaza eye, inside the outdoor far plane surface.ts SURFACE_RT.far). */
   radius: 172, maxR: 280,
+  /** No roof corner farther than this from any plaza eye (the bounds' corners + the eye gate's pad), measured in 3-D from the ground:
+   *  inside the outdoor sky dome's nearest facet (surfaceCity.ts SURFACE_SKY.radius) and the far plane (surface.ts SURFACE_RT.far). */
+  viewR: 344, eyePad: 2,
   /** The carriageways / pavements fade out between streetsR - streetFade and streetsR (the outskirts beyond have no streets). */
   streetsR: 212, streetFade: 14,
   /** The city ground disc's radius: beyond every building and the outdoor sky dome round any plaza eye (the ground meets the sky). */
@@ -62,13 +65,15 @@ export const SURFACE_CITY = {
   outer: {per: [1, 3] as readonly [number, number], collapsed: 0.12, scaleMax: 1.2},
   /** The outskirts belt: two staggered rows (centre radius bands); the skyline peaks (one per sector, at this chance); turned share;
    *  yaw jitter (rad) off facing the city. */
-  belt: {rows: [[216, 234], [246, 262]] as readonly (readonly [number, number])[], sectors: 12, peak: 0.85, turned: 0.3, jitter: 0.42,
+  belt: {rows: [[216, 234], [246, 262]] as readonly (readonly [number, number])[], sectors: 14, peak: 0.85, turned: 0.3, jitter: 0.42,
     /** The vista terminators' / closure buildings' radial depth cap (m): two rows fit between the streets and maxR. */
-    depth: 28},
+    depth: 28,
+    /** Belt plans tried (each from its own seeded stream) until the horizon closes; the best stands. */
+    attempts: 4},
   /** Horizon closure: eye points every `eyeStep` m along the plaza edges (`eyeIn` m inside the deck); bearings seeing through wider
    *  than `minGap` rad get a belt building; every footprint's bearing span counts `margin` rad narrower each side (slack for the eyes
    *  between the samples); at most `fillers` closure buildings. */
-  closure: {eyeStep: 5, eyeIn: 0.5, minGap: 0.0015, margin: 0.004, fillers: 60},
+  closure: {eyeStep: 4, eyeIn: 0.4, minGap: 0.0015, margin: 0.006, fillers: 60},
   /** Triangle budget (model triangles over every instance): the whole city / the outer blocks' share of it. */
   tris: {total: 1_450_000, outer: 260_000},
 } as const;
@@ -256,13 +261,20 @@ const rectDist = (r: ReactorRect, x: number, z: number) => Math.hypot(Math.max(r
  * rect (kept inside the yard). `reserved`: footprints no pass may build on (the PLANT's lots). Same inputs, same plan.
  */
 export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key: string) => boolean, pit?: ReactorRect, reserved: readonly CityFootprint[] = []): SurfaceCityPlan {
-  const C = SURFACE_CITY, rnd = mulberry32((seed ^ 0x5c17e5) >>> 0);
+  const C = SURFACE_CITY;
+  // (one seeded stream; the belt's retries switch it to streams derived from the seed)
+  let rng = mulberry32((seed ^ 0x5c17e5) >>> 0);
+  const rnd = () => rng();
   const all = resolveSurfaceKit(available);
   const split = (skyline: boolean) => Object.fromEntries(Object.entries(all).map(([r, l]) => [r, l.filter(e => !!e.skyline === skyline)])) as Record<SurfaceRole, SurfaceKitEntry[]>;
   // the near rows / clutter pick the city entries; the outer blocks and the belt the far-skyline entries
   const kit = split(false), sky = split(true);
   const plaza = surfacePlaza(site, pit), cx = site.hole.x, cz = site.hole.z, y = site.y;
   const between = (a: number, b: number) => a + (b - a) * rnd();
+  const sb0 = site.bounds, E = C.eyePad;
+  const farEyes = [[sb0.x0 - E, sb0.z0 - E], [sb0.x1 + E, sb0.z0 - E], [sb0.x0 - E, sb0.z1 + E], [sb0.x1 + E, sb0.z1 + E]];
+  /** Every roof corner inside viewR of every plaza eye (3-D, from the ground). */
+  const inView = (p: CityPlacement) => footprintCorners(p).every(([x, z]) => farEyes.every(([ex, ez]) => Math.hypot(x - ex, z - ez, p.h) <= C.viewR));
   // --- the street grid: block intervals outward on each side of the yard (the ring road's legs first; larger blocks from outerRing) ---
   const sideIntervals = (lo: number, hi: number, centre: number): {blocks: [number, number][]; gaps: [number, number][]} => {
     const blocks: [number, number][] = [[lo, hi]], gaps: [number, number][] = [];
@@ -494,7 +506,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       const fx = r.x1 - r.x0 - 2 * (ax + sb), fz = r.z1 - r.z0 - 2 * (az + sb);
       if (fx < 0 || fz < 0) { reject('fit:outer'); continue; }
       const p = mk(e, r.x0 + sb + ax + rnd() * fx, r.z0 + sb + az + rnd() * fz, yaw, s, b.ring, bi);
-      const why = !footprintInside(p, r) ? 'block' : !inReach(p) ? 'reach' : onReserved(p) ? 'reserved' : placements.some(q => q.block === bi && footprintsOverlap(p, q, -1.5)) ? 'overlap' : null;
+      const why = !footprintInside(p, r) ? 'block' : !inReach(p) || !inView(p) ? 'reach' : onReserved(p) ? 'reserved' : placements.some(q => q.block === bi && footprintsOverlap(p, q, -1.5)) ? 'overlap' : null;
       if (why) { reject(why + ':outer'); continue; }
       push(p);
       outerCount++;
@@ -514,6 +526,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       if (Math.hypot(x - cx, z - cz) > C.maxR) return 'reach';
       x0 = Math.min(x0, x); x1 = Math.max(x1, x); z0 = Math.min(z0, z); z1 = Math.max(z1, z);
     }
+    if (!inView(p)) return 'reach';
     const boxHits = (r: ReactorRect, pad: number) => x1 > r.x0 - pad && x0 < r.x1 + pad && z1 > r.z0 - pad && z0 < r.z1 + pad;
     if (boxHits(plaza, 2) && footprintInRect(p, plaza, 2)) return 'yard';
     if (footprintDist(p, cx, cz) < C.streetsR && strips.some(s => boxHits(s, 0.5) && footprintInRect(p, s, 0.5))) return 'street';
@@ -524,129 +537,156 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
   const beltAt = (e: SurfaceKitEntry, s: number, th: number, rad: number, turned: boolean, jit: number, ring: number, kind: NonNullable<CityPlacement['belt']>) =>
     mk(e, cx + Math.cos(th) * rad, cz + Math.sin(th) * rad, yawToward(e, -Math.cos(th), -Math.sin(th)) + (turned ? Math.PI / 2 : 0) + jit, s, ring, -1, kind);
   const B = C.belt, rows = B.rows;
-  // --- VISTA TERMINATORS: the ring road's four legs run straight out from the yard — each end gets a tall building across its axis,
-  //     just past the street grid's circle (a terminated vista: the eye looking down the street ends on a facade, not the horizon) ---
-  let vistas = 0;
-  const legs: [number, number, 'x' | 'z'][] = [
-    ...X.gaps.filter(gp => gp[0] === plaza.x1 || gp[1] === plaza.x0).map(gp => [gp[0], gp[1], 'x'] as [number, number, 'x']),
-    ...Z.gaps.filter(gp => gp[0] === plaza.z1 || gp[1] === plaza.z0).map(gp => [gp[0], gp[1], 'z'] as [number, number, 'z']),
-  ];
-  for (const [a, b, ax] of legs) for (const dir of [1, -1]) {
-    const e = pickSky('highrise', undefined, shallow);
-    if (!e) break;
-    let s = shallowScale(e);
-    // across the street (front facing back down it, toward the yard), centred on its axis (+ a little seeded drift along the frontage)
-    const off = (a + b) / 2 - (ax === 'x' ? cx : cz) + (rnd() - 0.5) * 6;
-    for (let t = 0; t < 5; t++, s = Math.max(e.scale[0], s * 0.92)) {
-      // (its near face just clear of the street grid's circle; further out on a retry)
-      const along = C.streetsR + e.dims[2] * s * 0.5 + 1.5 + t * 6;
-      const x = ax === 'x' ? cx + off : cx + dir * along, z = ax === 'x' ? cz + dir * along : cz + off;
-      const p = mk(e, x, z, yawToward(e, ax === 'x' ? 0 : -dir, ax === 'x' ? -dir : 0) + (rnd() - 0.5) * 0.08, s, C.outerRing + 1, -1, 'vista');
-      const why = beltWhy(p);
-      if (!why) { push(p); vistas++; break; }
-      reject(why + ':vista');
-    }
-  }
-  // --- THE HORIZON CLOSURE: stand a belt building across every eye-level bearing that still sees through the city (first, while
-  //     the belt is free: the street vistas get their buildings), then THE SKYLINE PEAKS round it, then the closure once more ---
-  const eyes = closureEyes(site);
-  const W = C.closure;
-  const spansOf = (eye: readonly [number, number]) => placements.filter(p => p.kind === 'building').map(p => bearingSpan(p, eye[0], eye[1])).filter((s): s is [number, number] => !!s);
-  const spans = eyes.map(spansOf);
-  // each eye's open bearings (recomputed only where a new building crosses one of them)
-  const gaps = spans.map(l => openBearings(l, W.margin, W.minGap));
-  const crosses = (sp: readonly [number, number], gl: readonly [number, number][]) =>
-    gl.some(([a, b]) => [-TAU, 0, TAU].some(o => sp[0] + o < b && sp[1] + o > a));
-  // a slot that failed three times (seen from neighbouring eyes it is the same place out on the belt) is not tried again
-  const failed = new Map<string, number>(), tried = new Set<string>();
-  let fillers = 0;
-  /** Every eye's spans / open bearings gain a new building's. */
-  const addSpans = (p: CityPlacement) => spans.forEach((l, k) => {
-    const sp = bearingSpan(p, eyes[k][0], eyes[k][1]);
-    if (!sp) return;
-    l.push(sp);
-    if (crosses(sp, gaps[k])) gaps[k] = openBearings(l, W.margin, W.minGap);
-  });
-  const closureOn = sky.highrise.length + sky.midrise.length > 0;
-  const close = () => {
-    for (let it = 0; closureOn && fillers < W.fillers && it < W.fillers * 3; it++) {
-      // the widest open bearing over every eye (skipping tried / failed slots)
-      let ei = -1, g: [number, number] = [0, 0], key = '', slot = '';
-      for (let k = 0; k < eyes.length; k++) {
-        for (const o of gaps[k]) {
-          if (ei >= 0 && o[1] - o[0] <= g[1] - g[0]) continue;
-          const kk = `${k}:${Math.round(o[0] * 400)}`, m = (o[0] + o[1]) / 2;
-          const sl = `${Math.round((eyes[k][0] + Math.cos(m) * 240 - cx) / 12)},${Math.round((eyes[k][1] + Math.sin(m) * 240 - cz) / 12)}`;
-          if (tried.has(kk) || (failed.get(sl) ?? 0) >= 3) continue;
-          ei = k; g = o; key = kk; slot = sl;
-        }
+  /** THE BELT STAGE (vistas, closure, peaks, closure): its building counts and the bearings still open over the closure's eyes. */
+  const beltStage = () => {
+    // --- VISTA TERMINATORS: the ring road's four legs run straight out from the yard — each end gets a tall building across its
+    //     axis, just past the street grid's circle (a terminated vista: the eye looking down the street ends on a facade, not the horizon) ---
+    let vistas = 0;
+    const legs: [number, number, 'x' | 'z'][] = [
+      ...X.gaps.filter(gp => gp[0] === plaza.x1 || gp[1] === plaza.x0).map(gp => [gp[0], gp[1], 'x'] as [number, number, 'x']),
+      ...Z.gaps.filter(gp => gp[0] === plaza.z1 || gp[1] === plaza.z0).map(gp => [gp[0], gp[1], 'z'] as [number, number, 'z']),
+    ];
+    for (const [a, b, ax] of legs) for (const dir of [1, -1]) {
+      const e = pickSky('highrise', undefined, shallow);
+      if (!e) break;
+      let s = shallowScale(e);
+      // across the street (front facing back down it, toward the yard), centred on its axis (+ a little seeded drift along the frontage)
+      const off = (a + b) / 2 - (ax === 'x' ? cx : cz) + (rnd() - 0.5) * 6;
+      for (let t = 0; t < 5; t++, s = Math.max(e.scale[0], s * 0.92)) {
+        // (its near face just clear of the street grid's circle; further out on a retry)
+        const along = C.streetsR + e.dims[2] * s * 0.5 + 1.5 + t * 6;
+        const x = ax === 'x' ? cx + off : cx + dir * along, z = ax === 'x' ? cz + dir * along : cz + off;
+        const p = mk(e, x, z, yawToward(e, ax === 'x' ? 0 : -dir, ax === 'x' ? -dir : 0) + (rnd() - 0.5) * 0.08, s, C.outerRing + 1, -1, 'vista');
+        const why = beltWhy(p);
+        if (!why) { push(p); vistas++; break; }
+        reject(why + ':vista');
       }
-      if (ei < 0) break;
-      tried.add(key);
-      const [ex, ez] = eyes[ei], ox = ex - cx, oz = ez - cz;
-      let done = false;
-      for (let t = 0; !done && t < 6; t++) {
-        // shallow buildings facing the city (the row behind stays free for the next slot); a turned one only as the last resort
-        const turned = t === 5, ent = pickSky(t % 3 === 2 ? 'midrise' : 'highrise', undefined, shallow);
-        if (!ent) break;
-        const s = t < 2 ? shallowScale(ent) : ent.scale[0], jit = (rnd() - 0.5) * (turned ? 0.06 : 0.2);
-        // facing the city: the half-width it shows the eye (the front; turned: the side) and its radial half-depth
-        const half = (turned ? ent.dims[2] : ent.dims[0]) * s * 0.5, depth = (turned ? ent.dims[0] : ent.dims[2]) * s * 0.5;
-        // radii along the ray: just clear of the street grid's circle first, out to the farthest that keeps its corners inside maxR,
-        // then nearer (between the outer blocks, off their streets)
-        const rMax = Math.sqrt(Math.max(0, C.maxR * C.maxR - half * half)) - depth - 1.5, r0 = Math.min(rMax, C.streetsR + depth + 1);
-        const radii = [0, 1, 0.5, 0.25, 0.75].map(f => r0 + (rMax - r0) * f).concat([r0 - 12, r0 - 24]);
-        for (const rad of radii) {
-          if (done) break;
-          // the bearings it may stand at and still close the gap (its span seen from the eye, a little narrowed); a gap wider than one
-          // building closes from its start (the next round takes the rest)
-          const reachT = Math.hypot(ox, oz) + rad, al = Math.atan((half - 1.5) / reachT) - 2 * W.margin;
-          if (al <= 0) continue;
-          const lo = g[1] + W.margin - al, hi = g[0] - W.margin + al;
-          const mids = lo <= hi ? [0.5, 0.12, 0.88].map(f => lo + (hi - lo) * f) : [g[0] - W.margin + al];
-          for (const mid of mids) {
-            const dx = Math.cos(mid), dz = Math.sin(mid), bb = ox * dx + oz * dz, disc = bb * bb - (ox * ox + oz * oz - rad * rad);
-            if (disc < 0) continue;
-            const dist = -bb + Math.sqrt(disc), px = ex + dx * dist, pz = ez + dz * dist;
-            const ring = C.outerRing + 1 + (rad >= rows[rows.length - 1][0] ? rows.length - 1 : 0);
-            const p = beltAt(ent, s, Math.atan2(pz - cz, px - cx), rad, turned, jit, ring, 'closure');
-            const why = beltWhy(p);
-            if (why) { reject(why + ':closure'); continue; }
-            push(p);
-            fillers++;
-            addSpans(p);
-            done = true;
-            break;
+    }
+    // --- THE HORIZON CLOSURE: stand a belt building across every eye-level bearing that still sees through the city (first, while
+    //     the belt is free: the street vistas get their buildings), then THE SKYLINE PEAKS round it, then the closure once more ---
+    const eyes = closureEyes(site);
+    const W = C.closure;
+    const spansOf = (eye: readonly [number, number]) => placements.filter(p => p.kind === 'building').map(p => bearingSpan(p, eye[0], eye[1])).filter((s): s is [number, number] => !!s);
+    const spans = eyes.map(spansOf);
+    // each eye's open bearings (recomputed only where a new building crosses one of them)
+    const gaps = spans.map(l => openBearings(l, W.margin, W.minGap));
+    const crosses = (sp: readonly [number, number], gl: readonly [number, number][]) =>
+      gl.some(([a, b]) => [-TAU, 0, TAU].some(o => sp[0] + o < b && sp[1] + o > a));
+    // a slot that failed three times (seen from neighbouring eyes it is the same place out on the belt) is not tried again
+    const failed = new Map<string, number>(), tried = new Set<string>();
+    let fillers = 0;
+    /** Every eye's spans / open bearings gain a new building's. */
+    const addSpans = (p: CityPlacement) => spans.forEach((l, k) => {
+      const sp = bearingSpan(p, eyes[k][0], eyes[k][1]);
+      if (!sp) return;
+      l.push(sp);
+      if (crosses(sp, gaps[k])) gaps[k] = openBearings(l, W.margin, W.minGap);
+    });
+    const closureOn = sky.highrise.length + sky.midrise.length > 0;
+    const close = () => {
+      for (let it = 0; closureOn && fillers < W.fillers && it < W.fillers * 3; it++) {
+        // the widest open bearing over every eye (skipping tried / failed slots)
+        let ei = -1, g: [number, number] = [0, 0], key = '', slot = '';
+        for (let k = 0; k < eyes.length; k++) {
+          for (const o of gaps[k]) {
+            if (ei >= 0 && o[1] - o[0] <= g[1] - g[0]) continue;
+            const kk = `${k}:${Math.round(o[0] * 400)}`, m = (o[0] + o[1]) / 2;
+            const sl = `${Math.round((eyes[k][0] + Math.cos(m) * 240 - cx) / 12)},${Math.round((eyes[k][1] + Math.sin(m) * 240 - cz) / 12)}`;
+            if (tried.has(kk) || (failed.get(sl) ?? 0) >= 3) continue;
+            ei = k; g = o; key = kk; slot = sl;
           }
         }
+        if (ei < 0) break;
+        tried.add(key);
+        const [ex, ez] = eyes[ei], ox = ex - cx, oz = ez - cz;
+        let done = false;
+        for (let t = 0; !done && t < 6; t++) {
+          // shallow buildings facing the city (the row behind stays free for the next slot); a turned one only as the last resort
+          const turned = t === 5, ent = pickSky(t % 3 === 2 || rnd() < 0.4 ? 'midrise' : 'highrise', undefined, shallow);
+          if (!ent) break;
+          const s = t < 2 ? shallowScale(ent) : ent.scale[0], jit = (rnd() - 0.5) * (turned ? 0.06 : 0.2);
+          // facing the city: the half-width it shows the eye (the front; turned: the side) and its radial half-depth
+          const half = (turned ? ent.dims[2] : ent.dims[0]) * s * 0.5, depth = (turned ? ent.dims[0] : ent.dims[2]) * s * 0.5;
+          // radii along the ray: just clear of the street grid's circle first, out to the farthest that keeps its corners inside maxR,
+          // then nearer (between the outer blocks, off their streets)
+          const rMax = Math.sqrt(Math.max(0, C.maxR * C.maxR - half * half)) - depth - 1.5, r0 = Math.min(rMax, C.streetsR + depth + 1);
+          const radii = [0, 1, 0.5, 0.25, 0.75].map(f => r0 + (rMax - r0) * f).concat([r0 - 12, r0 - 24]);
+          for (const rad of radii) {
+            if (done) break;
+            // the bearings it may stand at and still close the gap (its span seen from the eye, a little narrowed); a gap wider than one
+            // building closes from its start (the next round takes the rest)
+            const reachT = Math.hypot(ox, oz) + rad, al = Math.atan((half - 1.5) / reachT) - 2 * W.margin;
+            if (al <= 0) continue;
+            const lo = g[1] + W.margin - al, hi = g[0] - W.margin + al;
+            const mids = lo <= hi ? [0.5, 0.12, 0.88].map(f => lo + (hi - lo) * f) : [g[0] - W.margin + al];
+            for (const mid of mids) {
+              const dx = Math.cos(mid), dz = Math.sin(mid), bb = ox * dx + oz * dz, disc = bb * bb - (ox * ox + oz * oz - rad * rad);
+              if (disc < 0) continue;
+              const dist = -bb + Math.sqrt(disc), px = ex + dx * dist, pz = ez + dz * dist;
+              const ring = C.outerRing + 1 + (rad >= rows[rows.length - 1][0] ? rows.length - 1 : 0);
+              const p = beltAt(ent, s, Math.atan2(pz - cz, px - cx), rad, turned, jit, ring, 'closure');
+              const why = beltWhy(p);
+              if (why) { reject(why + ':closure'); continue; }
+              push(p);
+              fillers++;
+              addSpans(p);
+              done = true;
+              break;
+            }
+          }
+        }
+        if (!done) { failed.set(slot, (failed.get(slot) ?? 0) + 1); reject('dead:closure'); }
       }
-      if (!done) { failed.set(slot, (failed.get(slot) ?? 0) + 1); reject('dead:closure'); }
+    };
+    close();
+    // --- the skyline peaks: one per sector (seeded), the tallest silhouettes ---
+    let peaks = 0;
+    const a0 = rnd() * TAU;
+    for (let k = 0; k < B.sectors; k++) {
+      if (rnd() > B.peak) continue;
+      // the tallest silhouettes (most high-rises, scaled toward the top of their band); a few bearings / both rows in its sector
+      const e = pickSky(rnd() < 0.7 ? 'highrise' : 'midrise');
+      if (!e) break;
+      const turned = rnd() < B.turned, jit = (rnd() - 0.5) * 2 * B.jitter;
+      let s = between((e.scale[0] + e.scale[1]) / 2, e.scale[1]);
+      for (let t = 0; t < 8; t++) {
+        const th = a0 + ((k + 0.1 + 0.8 * rnd()) * TAU) / B.sectors;
+        const ri = (k + t) % rows.length, rad = between(rows[ri][0], rows[ri][1]);
+        const p = beltAt(e, s, th, rad, turned, jit, C.outerRing + 1 + ri, 'peak');
+        const why = beltWhy(p);
+        if (!why) { push(p); addSpans(p); peaks++; break; }
+        reject(why + ':peak');
+        if (t % 2) s = Math.max(e.scale[0], s * 0.9);
+      }
     }
+    tried.clear();
+    close();
+    const open = closureOn ? spans.reduce((s, l) => s + openBearings(l, 0, W.minGap).length, 0) : 0;
+    return {vistas, peaks, fillers, open};
   };
-  close();
-  // --- the skyline peaks: one per sector (seeded), the tallest silhouettes ---
-  let peaks = 0;
-  const a0 = rnd() * TAU;
-  for (let k = 0; k < B.sectors; k++) {
-    if (rnd() > B.peak) continue;
-    // the tallest silhouettes (most high-rises, scaled toward the top of their band); a few bearings / both rows in its sector
-    const e = pickSky(rnd() < 0.8 ? 'highrise' : 'midrise');
-    if (!e) break;
-    const turned = rnd() < B.turned, jit = (rnd() - 0.5) * 2 * B.jitter;
-    let s = between((e.scale[0] + e.scale[1]) / 2, e.scale[1]);
-    for (let t = 0; t < 6; t++) {
-      const th = a0 + ((k + 0.1 + 0.8 * rnd()) * TAU) / B.sectors;
-      const ri = (k + t) % rows.length, rad = between(rows[ri][0], rows[ri][1]);
-      const p = beltAt(e, s, th, rad, turned, jit, C.outerRing + 1 + ri, 'peak');
-      const why = beltWhy(p);
-      if (!why) { push(p); addSpans(p); peaks++; break; }
-      reject(why + ':peak');
-      if (t % 2) s = Math.max(e.scale[0], s * 0.9);
+  // a belt that leaves the horizon open (a slot no model fits) is planned again from a derived stream (deterministic; the best kept)
+  const snapN = placements.length, snapUsed = new Map(used), snapTris = tris;
+  let best: {res: ReturnType<typeof beltStage>; placed: CityPlacement[]; used: Map<string, number>; tris: number} | null = null;
+  for (let attempt = 0; attempt < C.belt.attempts; attempt++) {
+    if (attempt) {
+      placements.length = snapN;
+      used.clear();
+      for (const [k, v] of snapUsed) used.set(k, v);
+      tris = snapTris;
+      rng = mulberry32(((seed ^ 0xb317) + attempt * 0x9e3779b1) >>> 0);
     }
+    const res = beltStage();
+    if (!best || res.open < best.res.open) best = {res, placed: placements.slice(snapN), used: new Map(used), tris};
+    if (res.open === 0) break;
+    reject('retry:belt');
   }
-  tried.clear();
-  close();
-  const open = closureOn ? spans.reduce((s, l) => s + openBearings(l, 0, W.minGap).length, 0) : 0;
+  // (the best attempt stands)
+  placements.length = snapN;
+  placements.push(...best!.placed);
+  used.clear();
+  for (const [k, v] of best!.used) used.set(k, v);
+  tris = best!.tris;
+  const {vistas, peaks, fillers, open} = best!.res;
   // --- stats ---
   const byEntry: Record<string, number> = {};
   let maxDist = 0;
