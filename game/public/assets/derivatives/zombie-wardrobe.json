@@ -5,7 +5,7 @@
     "approved": false,
     "gameReady": false
   },
-  "authoredOn": "2026-10-30",
+  "authoredOn": "2026-11-03",
   "canonicalBody": "lastshift",
   "slots": [
     "lower",
@@ -50,7 +50,7 @@
     ]
   },
   "counts": {
-    "bodies": 6,
+    "bodies": 9,
     "wearables": 15,
     "perSlotWearables": {
       "lower": 3,
@@ -58,8 +58,8 @@
       "face": 2,
       "head": 3
     },
-    "pairs": 73,
-    "looks": 1312,
+    "pairs": 91,
+    "looks": 1348,
     "perBody": {
       "lastshift": {
         "pairs": 13,
@@ -120,6 +120,36 @@
           "head": 3
         },
         "compositions": 288
+      },
+      "paleGaze": {
+        "pairs": 6,
+        "perSlot": {
+          "lower": 2,
+          "upper": 2,
+          "face": 0,
+          "head": 2
+        },
+        "compositions": 12
+      },
+      "paleRevenant": {
+        "pairs": 6,
+        "perSlot": {
+          "lower": 2,
+          "upper": 2,
+          "face": 0,
+          "head": 2
+        },
+        "compositions": 12
+      },
+      "paleApparition": {
+        "pairs": 6,
+        "perSlot": {
+          "lower": 2,
+          "upper": 2,
+          "face": 0,
+          "head": 2
+        },
+        "compositions": 12
       }
     },
     "definitions": {
@@ -129,11 +159,39 @@
   },
   "excluded": [
     {
+      "body": "paleRevenant",
+      "wearable": "cargo",
+      "slot": "lower",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "jeans",
+      "slot": "lower",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "slacks",
+      "slot": "lower",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
       "body": "scavenger",
       "wearable": "hardhat",
       "slot": "head",
       "rule": "body-covers-slot",
       "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "hardhat",
+      "slot": "head",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
     },
     {
       "body": "scavenger",
@@ -143,11 +201,25 @@
       "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
     },
     {
+      "body": "paleApparition",
+      "wearable": "cap",
+      "slot": "head",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
       "body": "scavenger",
       "wearable": "beanie",
       "slot": "head",
       "rule": "body-covers-slot",
       "reason": "body scavenger covers the head slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "beanie",
+      "slot": "head",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
     },
     {
       "body": "scavenger",
@@ -157,11 +229,158 @@
       "reason": "body scavenger covers the face slot (own hood + built-in gas mask)"
     },
     {
+      "body": "paleGaze",
+      "wearable": "gasmask",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "gasmask",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "gasmask",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
       "body": "scavenger",
       "wearable": "respirator",
       "slot": "face",
       "rule": "body-covers-slot",
       "reason": "body scavenger covers the face slot (own hood + built-in gas mask)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "respirator",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "respirator",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "respirator",
+      "slot": "face",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on the pale bodies: hides the user-supplied face (and the shared pack capacity)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "coat",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the parka hangs open down the front and shows the bare torso (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "coat",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the parka hangs open down the front and shows the bare torso (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "coat",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the parka hangs open down the front and shows the bare torso (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "trench",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "trench",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "trench",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "hivis",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: a sleeveless vest with open sides over bare skin (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "hivis",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: a sleeveless vest with open sides over bare skin (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "hivis",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: a sleeveless vest with open sides over bare skin (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "blazer",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the open-front blazer shows the bare chest (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "blazer",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the open-front blazer shows the bare chest (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "blazer",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on an unclothed body: the open-front blazer shows the bare chest (coverage rule: tops cover fully)"
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "flannel",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "sweater",
+      "slot": "upper",
+      "rule": "body-wear-subset",
+      "reason": "not shipped on this body: compact subset for the shared 200 MiB static pack (two uppers, two lowers, two hats per pale body; dev evaluation --all-wear in the lane BODY record)"
     },
     {
       "body": "agent",
@@ -1102,6 +1321,44 @@
           "pass": true
         },
         {
+          "body": "paleGaze",
+          "wearable": "hoodie",
+          "covered": 4015,
+          "bind": 0.0015,
+          "animated": 0.0032,
+          "extreme": 0.0017,
+          "layers": {
+            "cargo": {
+              "covered": 368,
+              "animated": 0
+            },
+            "jeans": {
+              "covered": 355,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
+          "body": "paleRevenant",
+          "wearable": "hoodie",
+          "covered": 3568,
+          "bind": 0.0034,
+          "animated": 0.005,
+          "extreme": 0.0036,
+          "layers": {
+            "jeans": {
+              "covered": 423,
+              "animated": 0
+            },
+            "slacks": {
+              "covered": 479,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
           "body": "lastshift",
           "wearable": "blazer",
           "covered": 2576,
@@ -1378,6 +1635,44 @@
           "pass": true
         },
         {
+          "body": "paleRevenant",
+          "wearable": "flannel",
+          "covered": 3933,
+          "bind": 0.0033,
+          "animated": 0.0081,
+          "extreme": 0.0031,
+          "layers": {
+            "jeans": {
+              "covered": 482,
+              "animated": 0
+            },
+            "slacks": {
+              "covered": 564,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
+          "body": "paleApparition",
+          "wearable": "flannel",
+          "covered": 2987,
+          "bind": 0.0023,
+          "animated": 0.0033,
+          "extreme": 0.003,
+          "layers": {
+            "cargo": {
+              "covered": 524,
+              "animated": 0.0019
+            },
+            "slacks": {
+              "covered": 562,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
           "body": "lastshift",
           "wearable": "sweater",
           "covered": 2332,
@@ -1516,6 +1811,44 @@
           "pass": true
         },
         {
+          "body": "paleGaze",
+          "wearable": "sweater",
+          "covered": 4079,
+          "bind": 0.0029,
+          "animated": 0.0049,
+          "extreme": 0.0064,
+          "layers": {
+            "cargo": {
+              "covered": 282,
+              "animated": 0
+            },
+            "jeans": {
+              "covered": 279,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
+          "body": "paleApparition",
+          "wearable": "sweater",
+          "covered": 2833,
+          "bind": 0.0004,
+          "animated": 0.0021,
+          "extreme": 0.0014,
+          "layers": {
+            "cargo": {
+              "covered": 336,
+              "animated": 0
+            },
+            "slacks": {
+              "covered": 370,
+              "animated": 0
+            }
+          },
+          "pass": true
+        },
+        {
           "body": "lastshift",
           "wearable": "cargo",
           "covered": 1635,
@@ -1569,6 +1902,26 @@
           "body": "tall",
           "wearable": "cargo",
           "covered": 1905,
+          "bind": 0,
+          "animated": 0,
+          "extreme": 0,
+          "layers": {},
+          "pass": true
+        },
+        {
+          "body": "paleGaze",
+          "wearable": "cargo",
+          "covered": 709,
+          "bind": 0,
+          "animated": 0.0014,
+          "extreme": 0,
+          "layers": {},
+          "pass": true
+        },
+        {
+          "body": "paleApparition",
+          "wearable": "cargo",
+          "covered": 1285,
           "bind": 0,
           "animated": 0,
           "extreme": 0,
@@ -1636,6 +1989,26 @@
           "pass": true
         },
         {
+          "body": "paleGaze",
+          "wearable": "jeans",
+          "covered": 711,
+          "bind": 0,
+          "animated": 0.0028,
+          "extreme": 0,
+          "layers": {},
+          "pass": true
+        },
+        {
+          "body": "paleRevenant",
+          "wearable": "jeans",
+          "covered": 771,
+          "bind": 0,
+          "animated": 0,
+          "extreme": 0.0013,
+          "layers": {},
+          "pass": true
+        },
+        {
           "body": "lastshift",
           "wearable": "slacks",
           "covered": 1647,
@@ -1694,13 +2067,33 @@
           "extreme": 0,
           "layers": {},
           "pass": true
+        },
+        {
+          "body": "paleRevenant",
+          "wearable": "slacks",
+          "covered": 779,
+          "bind": 0,
+          "animated": 0,
+          "extreme": 0,
+          "layers": {},
+          "pass": true
+        },
+        {
+          "body": "paleApparition",
+          "wearable": "slacks",
+          "covered": 1295,
+          "bind": 0,
+          "animated": 0,
+          "extreme": 0,
+          "layers": {},
+          "pass": true
         }
       ],
       "layerIncompatible": []
     }
   },
-  "totalBytes": 13023828,
-  "totalMB": 13.02,
+  "totalBytes": 16570056,
+  "totalMB": 16.57,
   "bodies": {
     "lastshift": {
       "glb": "game/public/assets/models/zombie-body-lastshift-t25.glb",
@@ -1930,6 +2323,135 @@
         },
         "poses": 85
       }
+    },
+    "paleGaze": {
+      "glb": "game/public/assets/models/zombie-body-pale-gaze-t25.glb",
+      "bytes": 707900,
+      "sha256": "e4ca91a100673fc967987c2f896fb95e0e93f385b36ef676a40d24143c356434",
+      "triangles": 14985,
+      "vertices": 13910,
+      "heightM": 1.64,
+      "hit": {
+        "head": 0.1254,
+        "torso": 0.1,
+        "arm": 0.05,
+        "leg": 0.0726,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "requires": [
+          "upper",
+          "lower"
+        ],
+        "nude": true,
+        "note": "unclothed user-uploaded body: always wears an upper AND a lower garment"
+      },
+      "provenance": "user-uploaded",
+      "t25Source": false,
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.01,
+      "motion": {
+        "triangles": 14985,
+        "p50": 1.066,
+        "p99": 2.586,
+        "max": 7.34,
+        "over2x": 379,
+        "over3x": 97,
+        "fractionOver": 0.0065,
+        "worstClips": {
+          "Death": 101,
+          "Run": 22,
+          "Attack": 21,
+          "Hit": 8
+        },
+        "poses": 85
+      }
+    },
+    "paleRevenant": {
+      "glb": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
+      "bytes": 733304,
+      "sha256": "8c25eb7e6c4b7f474c4f35f43b8923ff30804e687c85b036f89c1c1ab6f4e15d",
+      "triangles": 14996,
+      "vertices": 13507,
+      "heightM": 1.66,
+      "hit": {
+        "head": 0.1158,
+        "torso": 0.1269,
+        "arm": 0.05,
+        "leg": 0.0799,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "requires": [
+          "upper",
+          "lower"
+        ],
+        "nude": true,
+        "note": "unclothed user-uploaded body: always wears an upper AND a lower garment"
+      },
+      "provenance": "user-uploaded",
+      "t25Source": false,
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0097,
+      "motion": {
+        "triangles": 14996,
+        "p50": 1.064,
+        "p99": 2.8,
+        "max": 8.28,
+        "over2x": 560,
+        "over3x": 114,
+        "fractionOver": 0.0076,
+        "worstClips": {
+          "Run": 42,
+          "Death": 98,
+          "Hit": 7,
+          "Attack": 4
+        },
+        "poses": 85
+      }
+    },
+    "paleApparition": {
+      "glb": "game/public/assets/models/zombie-body-pale-apparition-t25.glb",
+      "bytes": 593440,
+      "sha256": "981a00337776b3dae885a7ba8f7015f9dad61c63417a92b7a61f67dd87c10278",
+      "triangles": 14989,
+      "vertices": 10174,
+      "heightM": 1.67,
+      "hit": {
+        "head": 0.1138,
+        "torso": 0.1066,
+        "arm": 0.05,
+        "leg": 0.0788,
+        "method": "torso: median quarter (width+depth) of skin torso-region rows over Spine..Chest+5cm; head: mean half extents above the neck; limbs: mean measured radii x1.35 (arm) / x1.4 (leg)"
+      },
+      "traits": {
+        "requires": [
+          "upper",
+          "lower"
+        ],
+        "nude": true,
+        "note": "unclothed user-uploaded body: always wears an upper AND a lower garment"
+      },
+      "provenance": "user-uploaded",
+      "t25Source": false,
+      "skeletonIssues": [],
+      "lowestSkinnedVertexM": -0.0136,
+      "motion": {
+        "triangles": 14989,
+        "p50": 1.027,
+        "p99": 2.39,
+        "max": 9.46,
+        "over2x": 279,
+        "over3x": 85,
+        "fractionOver": 0.0057,
+        "worstClips": {
+          "Death": 55,
+          "Attack": 61,
+          "Run": 16,
+          "Idle": 19
+        },
+        "poses": 85
+      }
     }
   },
   "wearables": {
@@ -1992,8 +2514,8 @@
       "slot": "upper",
       "kind": "garment",
       "glb": "game/public/assets/models/outfit-hoodie-t25.glb",
-      "bytes": 822928,
-      "sha256": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b",
+      "bytes": 1079796,
+      "sha256": "b0d827ca0c1a14360e018abb8d7fde7c9cc98ee933dab6a95ad4551c4320c92a",
       "triangles": 7491,
       "vertices": 5000,
       "heavy": false,
@@ -2004,7 +2526,9 @@
         "courier",
         "scavenger",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleRevenant"
       ]
     },
     "blazer": {
@@ -2030,8 +2554,8 @@
       "slot": "upper",
       "kind": "garment",
       "glb": "game/public/assets/models/outfit-flannel-t25.glb",
-      "bytes": 622104,
-      "sha256": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3",
+      "bytes": 843464,
+      "sha256": "09b7e3f2853e2a40d749b21abdf86d760c1415aabdac02435e14f419c725846c",
       "triangles": 6500,
       "vertices": 4258,
       "heavy": false,
@@ -2041,15 +2565,17 @@
         "lastshift",
         "courier",
         "heavyset",
-        "tall"
+        "tall",
+        "paleRevenant",
+        "paleApparition"
       ]
     },
     "sweater": {
       "slot": "upper",
       "kind": "garment",
       "glb": "game/public/assets/models/outfit-sweater-t25.glb",
-      "bytes": 518580,
-      "sha256": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760",
+      "bytes": 739552,
+      "sha256": "afc69fb41c72f3136a8275131b17c373a6aca2c73d14c1e2c155fc9618f15a67",
       "triangles": 6488,
       "vertices": 4253,
       "heavy": false,
@@ -2058,15 +2584,17 @@
       "bodies": [
         "courier",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleApparition"
       ]
     },
     "cargo": {
       "slot": "lower",
       "kind": "pants",
       "glb": "game/public/assets/models/outfit-cargo-t25.glb",
-      "bytes": 760232,
-      "sha256": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788",
+      "bytes": 960716,
+      "sha256": "f7411ef49b59da9e4af710af8c34b860fe224c0239c885baca5aca5480cccbb1",
       "triangles": 5991,
       "vertices": 3911,
       "heavy": false,
@@ -2078,15 +2606,17 @@
         "scavenger",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleApparition"
       ]
     },
     "jeans": {
       "slot": "lower",
       "kind": "pants",
       "glb": "game/public/assets/models/outfit-jeans-t25.glb",
-      "bytes": 766276,
-      "sha256": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401",
+      "bytes": 954576,
+      "sha256": "6bd4f0ec9f40cb89fd941e78d4284499360fe5cca208030becfbf4d267e71e8f",
       "triangles": 5999,
       "vertices": 3658,
       "heavy": false,
@@ -2098,15 +2628,17 @@
         "scavenger",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleRevenant"
       ]
     },
     "slacks": {
       "slot": "lower",
       "kind": "pants",
       "glb": "game/public/assets/models/outfit-slacks-t25.glb",
-      "bytes": 687316,
-      "sha256": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096",
+      "bytes": 876052,
+      "sha256": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
       "triangles": 5985,
       "vertices": 3664,
       "heavy": false,
@@ -2118,15 +2650,17 @@
         "scavenger",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleRevenant",
+        "paleApparition"
       ]
     },
     "hardhat": {
       "slot": "head",
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-hardhat-t25.glb",
-      "bytes": 273028,
-      "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
+      "bytes": 352460,
+      "sha256": "994bbc71496b5b069a9e5679f9389acce30e300ba1969c8eebc6005d48cb42bd",
       "triangles": 2198,
       "vertices": 1387,
       "heavy": false,
@@ -2137,15 +2671,17 @@
         "courier",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleRevenant",
+        "paleApparition"
       ]
     },
     "cap": {
       "slot": "head",
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-cap-t25.glb",
-      "bytes": 250812,
-      "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
+      "bytes": 328068,
+      "sha256": "791f2a93cb19cef4d35b721a70f232663ab96b86b956a7213c3c8edf9db95fd2",
       "triangles": 2200,
       "vertices": 1345,
       "heavy": false,
@@ -2156,15 +2692,17 @@
         "courier",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleRevenant"
       ]
     },
     "beanie": {
       "slot": "head",
       "kind": "rigid",
       "glb": "game/public/assets/models/outfit-beanie-t25.glb",
-      "bytes": 262260,
-      "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
+      "bytes": 340436,
+      "sha256": "0d2f80988ad2db03a80e93f2bfc1fbbb57133b68fbc444bb8e04cf31b7cd607f",
       "triangles": 2199,
       "vertices": 1363,
       "heavy": false,
@@ -2175,7 +2713,9 @@
         "courier",
         "agent",
         "heavyset",
-        "tall"
+        "tall",
+        "paleGaze",
+        "paleApparition"
       ]
     },
     "gasmask": {
@@ -2489,6 +3029,36 @@
       }
     },
     {
+      "body": "paleGaze",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4727,
+      "bulkM": {
+        "torso": 0.0281,
+        "arm": 0.0247
+      },
+      "motion": {
+        "over": 137,
+        "fraction": 0.0183,
+        "max": 12.13
+      }
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "hoodie",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4444,
+      "bulkM": {
+        "torso": 0.0285,
+        "arm": 0.0244
+      },
+      "motion": {
+        "over": 216,
+        "fraction": 0.0288,
+        "max": 16.43
+      }
+    },
+    {
       "body": "lastshift",
       "wearable": "blazer",
       "slot": "upper",
@@ -2624,6 +3194,36 @@
       }
     },
     {
+      "body": "paleRevenant",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 6117,
+      "bulkM": {
+        "torso": 0.0216,
+        "arm": 0.0217
+      },
+      "motion": {
+        "over": 78,
+        "fraction": 0.012,
+        "max": 13.21
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "flannel",
+      "slot": "upper",
+      "hiddenBodyTriangles": 6058,
+      "bulkM": {
+        "torso": 0.0213,
+        "arm": 0.0223
+      },
+      "motion": {
+        "over": 105,
+        "fraction": 0.0162,
+        "max": 8.1
+      }
+    },
+    {
       "body": "courier",
       "wearable": "sweater",
       "slot": "upper",
@@ -2666,6 +3266,36 @@
         "over": 130,
         "fraction": 0.02,
         "max": 8.55
+      }
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 4934,
+      "bulkM": {
+        "torso": 0.0235,
+        "arm": 0.0215
+      },
+      "motion": {
+        "over": 112,
+        "fraction": 0.0173,
+        "max": 25.53
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "sweater",
+      "slot": "upper",
+      "hiddenBodyTriangles": 5161,
+      "bulkM": {
+        "torso": 0.023,
+        "arm": 0.0221
+      },
+      "motion": {
+        "over": 128,
+        "fraction": 0.0197,
+        "max": 8.51
       }
     },
     {
@@ -2765,6 +3395,38 @@
       }
     },
     {
+      "body": "paleGaze",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1162,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.023
+      },
+      "motion": {
+        "over": 63,
+        "fraction": 0.0105,
+        "max": 11.76
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "cargo",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2195,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0203
+      },
+      "motion": {
+        "over": 83,
+        "fraction": 0.0139,
+        "max": 11.4
+      }
+    },
+    {
       "body": "lastshift",
       "wearable": "jeans",
       "slot": "lower",
@@ -2858,6 +3520,38 @@
         "over": 0,
         "fraction": 0,
         "max": 2.75
+      }
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1174,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0211
+      },
+      "motion": {
+        "over": 90,
+        "fraction": 0.015,
+        "max": 12.11
+      }
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "jeans",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1230,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0191
+      },
+      "motion": {
+        "over": 81,
+        "fraction": 0.0135,
+        "max": 9.96
       }
     },
     {
@@ -2957,6 +3651,38 @@
       }
     },
     {
+      "body": "paleRevenant",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 1284,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0164
+      },
+      "motion": {
+        "over": 62,
+        "fraction": 0.0104,
+        "max": 8.48
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "slacks",
+      "slot": "lower",
+      "hiddenBodyTriangles": 2274,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "leg": 0.0157
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 2.36
+      }
+    },
+    {
       "body": "lastshift",
       "wearable": "hardhat",
       "slot": "head",
@@ -3029,6 +3755,38 @@
         "torso": 0,
         "arm": 0,
         "head": 0.0219
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 627,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.022
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "hardhat",
+      "slot": "head",
+      "hiddenBodyTriangles": 565,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.022
       },
       "motion": {
         "over": 0,
@@ -3117,6 +3875,38 @@
       }
     },
     {
+      "body": "paleGaze",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 1005,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0083
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "paleRevenant",
+      "wearable": "cap",
+      "slot": "head",
+      "hiddenBodyTriangles": 800,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0083
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
       "body": "lastshift",
       "wearable": "beanie",
       "slot": "head",
@@ -3189,6 +3979,38 @@
         "torso": 0,
         "arm": 0,
         "head": 0.0062
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "paleGaze",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 903,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0064
+      },
+      "motion": {
+        "over": 0,
+        "fraction": 0,
+        "max": 1
+      }
+    },
+    {
+      "body": "paleApparition",
+      "wearable": "beanie",
+      "slot": "head",
+      "hiddenBodyTriangles": 473,
+      "bulkM": {
+        "torso": 0,
+        "arm": 0,
+        "head": 0.0064
       },
       "motion": {
         "over": 0,
@@ -4608,8 +5430,343 @@
           "poses": 85
         }
       }
+    },
+    "paleGaze": {
+      "body": {
+        "triangles": 14985,
+        "p50": 1.066,
+        "p99": 2.586,
+        "max": 7.34,
+        "over2x": 379,
+        "over3x": 97,
+        "fractionOver": 0.0065,
+        "worstClips": {
+          "Death": 101,
+          "Run": 22,
+          "Attack": 21,
+          "Hit": 8
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "hoodie": {
+          "triangles": 7491,
+          "p50": 1.104,
+          "p99": 4.068,
+          "max": 12.13,
+          "over2x": 325,
+          "over3x": 137,
+          "fractionOver": 0.0183,
+          "worstClips": {
+            "Attack": 53,
+            "Death": 17,
+            "Run": 6
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6488,
+          "p50": 1.113,
+          "p99": 4.13,
+          "max": 25.53,
+          "over2x": 278,
+          "over3x": 112,
+          "fractionOver": 0.0173,
+          "worstClips": {
+            "Attack": 34,
+            "Run": 21,
+            "Death": 12
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5991,
+          "p50": 1.086,
+          "p99": 3.041,
+          "max": 11.76,
+          "over2x": 183,
+          "over3x": 63,
+          "fractionOver": 0.0105,
+          "worstClips": {
+            "Run": 29,
+            "Death": 32
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5999,
+          "p50": 1.087,
+          "p99": 3.817,
+          "max": 12.11,
+          "over2x": 230,
+          "over3x": 90,
+          "fractionOver": 0.015,
+          "worstClips": {
+            "Death": 23,
+            "Run": 39
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2200,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 6,
+            "Run": 4,
+            "Attack": 10,
+            "Idle": 6
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2199,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Idle": 10,
+            "Walk": 4,
+            "Attack": 8,
+            "Run": 2,
+            "Hit": 2
+          },
+          "poses": 85
+        }
+      }
+    },
+    "paleRevenant": {
+      "body": {
+        "triangles": 14996,
+        "p50": 1.064,
+        "p99": 2.8,
+        "max": 8.28,
+        "over2x": 560,
+        "over3x": 114,
+        "fractionOver": 0.0076,
+        "worstClips": {
+          "Run": 42,
+          "Death": 98,
+          "Hit": 7,
+          "Attack": 4
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "hoodie": {
+          "triangles": 7491,
+          "p50": 1.109,
+          "p99": 5.618,
+          "max": 16.43,
+          "over2x": 477,
+          "over3x": 216,
+          "fractionOver": 0.0288,
+          "worstClips": {
+            "Attack": 11,
+            "Run": 37,
+            "Death": 28
+          },
+          "poses": 85
+        },
+        "flannel": {
+          "triangles": 6500,
+          "p50": 1.118,
+          "p99": 3.411,
+          "max": 13.21,
+          "over2x": 265,
+          "over3x": 78,
+          "fractionOver": 0.012,
+          "worstClips": {
+            "Run": 36,
+            "Attack": 10,
+            "Death": 21
+          },
+          "poses": 85
+        },
+        "jeans": {
+          "triangles": 5999,
+          "p50": 1.07,
+          "p99": 3.408,
+          "max": 9.96,
+          "over2x": 181,
+          "over3x": 81,
+          "fractionOver": 0.0135,
+          "worstClips": {
+            "Run": 51,
+            "Death": 10
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5985,
+          "p50": 1.073,
+          "p99": 3.07,
+          "max": 8.48,
+          "over2x": 156,
+          "over3x": 62,
+          "fractionOver": 0.0104,
+          "worstClips": {
+            "Run": 55,
+            "Death": 6
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2198,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 12,
+            "Attack": 2,
+            "Walk": 2,
+            "Idle": 6,
+            "Run": 2
+          },
+          "poses": 85
+        },
+        "cap": {
+          "triangles": 2200,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Walk": 2,
+            "Death": 8,
+            "Idle": 12,
+            "Run": 2
+          },
+          "poses": 85
+        }
+      }
+    },
+    "paleApparition": {
+      "body": {
+        "triangles": 14989,
+        "p50": 1.027,
+        "p99": 2.39,
+        "max": 9.46,
+        "over2x": 279,
+        "over3x": 85,
+        "fractionOver": 0.0057,
+        "worstClips": {
+          "Death": 55,
+          "Attack": 61,
+          "Run": 16,
+          "Idle": 19
+        },
+        "poses": 85
+      },
+      "wearables": {
+        "flannel": {
+          "triangles": 6500,
+          "p50": 1.1,
+          "p99": 4.007,
+          "max": 8.1,
+          "over2x": 272,
+          "over3x": 105,
+          "fractionOver": 0.0162,
+          "worstClips": {
+            "Run": 13,
+            "Attack": 30,
+            "Death": 23
+          },
+          "poses": 85
+        },
+        "sweater": {
+          "triangles": 6488,
+          "p50": 1.101,
+          "p99": 3.748,
+          "max": 8.51,
+          "over2x": 341,
+          "over3x": 128,
+          "fractionOver": 0.0197,
+          "worstClips": {
+            "Attack": 39,
+            "Death": 24,
+            "Run": 4
+          },
+          "poses": 85
+        },
+        "cargo": {
+          "triangles": 5991,
+          "p50": 1.047,
+          "p99": 4.724,
+          "max": 11.4,
+          "over2x": 180,
+          "over3x": 83,
+          "fractionOver": 0.0139,
+          "worstClips": {
+            "Death": 33,
+            "Run": 28
+          },
+          "poses": 85
+        },
+        "slacks": {
+          "triangles": 5985,
+          "p50": 1.059,
+          "p99": 1.876,
+          "max": 2.36,
+          "over2x": 38,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Run": 48,
+            "Death": 14
+          },
+          "poses": 85
+        },
+        "hardhat": {
+          "triangles": 2198,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 6,
+            "Hit": 2,
+            "Walk": 2,
+            "Run": 6,
+            "Idle": 4,
+            "Attack": 4
+          },
+          "poses": 85
+        },
+        "beanie": {
+          "triangles": 2199,
+          "p50": 1,
+          "p99": 1,
+          "max": 1,
+          "over2x": 0,
+          "over3x": 0,
+          "fractionOver": 0,
+          "worstClips": {
+            "Death": 2,
+            "Attack": 4,
+            "Run": 8,
+            "Walk": 6,
+            "Idle": 4
+          },
+          "poses": 85
+        }
+      }
     }
   },
   "rebuild": "node --max-old-space-size=24000 tools/asset-pipeline/zombie/build-wardrobe.mjs && node tools/asset-pipeline/zombie/qa/wardrobe-sheets.mjs",
-  "buildSeconds": 612
+  "buildSeconds": 863
 }

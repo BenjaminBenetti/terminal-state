@@ -45,6 +45,16 @@ export function deliveredIndex() {
 }
 
 /**
+ * Repo-relative path of a delivery path (absolute in DELIVERED.json): reference/ may be a symlink to the studio mount (git
+ * worktrees), so a path under its real location maps back to 'reference/...' (identical to path.relative in the main checkout).
+ */
+export function repoRel(f) {
+  let real = null;
+  try { real = fs.realpathSync(path.join(REPO, 'reference')); } catch { /* no reference mount */ }
+  return real && f.startsWith(real + path.sep) ? path.join('reference', path.relative(real, f)) : path.relative(REPO, f);
+}
+
+/**
  * Source record for an accepted T2.5 delivery.
  * @param asset inventory master id (e.g. 'body:heavyset')
  * @param pin {sha256, attempt?} the native GLB this build is pinned to
@@ -65,15 +75,18 @@ export function t25Source(asset, pin, densifyFrac, extra = {}) {
     inputPng: d.inputImage, inputPngSha256: d.inputImageSha256, jobId: d.taskId, displayName: asset,
     t25: {asset, attempt: d.attempt, taskId: d.taskId, provider: 'Meshy meshy_image_to_3d (ai_model meshy-t2.5, model_type smart-topology, 2K PBR textures, single original front/reference image)',
       args: d.args, nativeGlb: path.relative(REPO, file), nativeSha256: d.sha256, nativeBytes: d.bytes, nativeTriangles: d.tris, nativeVertices: d.verts, nativeBBox: d.bbox,
-      nativeTextures: d.textures, inputImage: d.inputImage && path.relative(REPO, d.inputImage), inputImageSha256: d.inputImageSha256, review: d.review, reviewNote: d.reviewNote,
+      nativeTextures: d.textures, inputImage: d.inputImage && repoRel(d.inputImage), inputImageSha256: d.inputImageSha256, review: d.review, reviewNote: d.reviewNote,
       delivered: path.relative(REPO, T25_DELIVERED)},
   };
 }
 
-/** loadSource + densification for T2.5 sources (other sources load unchanged). */
+/**
+ * loadSource + densification for T2.5 sources and user-uploaded Meshy bodies (`userUpload`, task mall-lingerie: same sparse
+ * smart topology, same densify); other sources load unchanged.
+ */
 export async function loadAnySource(src) {
   let m = await loadSource(src);
-  if (!src.t25) return m;
+  if (!src.t25 && !src.userUpload) return m;
   const b = bounds(m.pos), H = b.max[1] - b.min[1];
   let trim = null;
   if (src.trimTopCap) {
