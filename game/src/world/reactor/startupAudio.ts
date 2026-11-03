@@ -13,14 +13,19 @@
 // Bounded: at most 4 loops of its own (bed, two rod drives while the rods move, one beacon motor) + one-shots through the shared voice
 // cap (the surge / ONLINE impact at priority 2). Nothing replays on a build / reload / revisit (the baseline is taken at build; a
 // restored or QA-jumped win clock crosses no cue). Silent when audio is not running (the Sfx returns null / no-ops).
+// Task reactor-surface-ending-20261102 (lane AUDIO; user: "the reactor needs to have a noise when the blue beam shoots out the top!"):
+// + the BEAM IGNITION — ONE one-shot on the same win clock (cue 'beam', startupPlan.ts beamCueAt: its whoosh swell leads in so its
+// crack lands as the beam fires), at the point of the beam column nearest the listener (pit-wide: heard from the rim), high-passed (the
+// ONLINE impact keeps the sub) at priority 2; the ONLINE impact and its deep thump make room for it (STARTUP_MIX.online*: the
+// worst-case sum stays under full scale — derivatives/audio-reactor-ending.json mixCalibration). Same no-replay rules as every win cue.
 
 import type {StageEvent, StageSnap, WinCue} from './startupPlan';
 import {STAGE_THUMP, bedAt, cuesCrossed, rodRate, stageEvents, winCues} from './startupPlan';
 
 interface P3 { x: number; y: number; z: number }
-type Cue = 'reactorStage' | 'reactorRodStop' | 'reactorSurge' | 'reactorOnline' | 'reactorBreaker';
+type Cue = 'reactorStage' | 'reactorRodStop' | 'reactorSurge' | 'reactorOnline' | 'reactorBreaker' | 'reactorBeam';
 type LoopCue = 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon';
-interface CueOpts { gain?: number; rate?: number; delay?: number; ref?: number; maxDist?: number; pri?: number }
+interface CueOpts { gain?: number; rate?: number; delay?: number; ref?: number; maxDist?: number; pri?: number; filter?: {type: 'highpass' | 'lowpass'; freq: number; q?: number} }
 /** What the director needs from audio/sfx.ts (duck-typed: tests record, an older Sfx stays silent). */
 export interface StartupSfx {
   reactorCue?(cue: Cue, x: number, y: number, z: number, o?: CueOpts): void;
@@ -44,6 +49,9 @@ export const STARTUP_MIX = {
   beaconNear: 18, beaconRef: 1.5, pickS: 0.5,
   /** A loop request that came back null (audio not running yet) is retried after this long. */
   retryS: 1,
+  /** Lane AUDIO (the beam ignition): its gain (x CUE_GAIN), its high-pass (Hz), and the ONLINE impact / deep thump gains with it
+   *  (lane STARTUP had 1 / 1). Calibrated together: derivatives/audio-reactor-ending.json mixCalibration (reactor-ending-build.mjs). */
+  beamGain: 0.75, beamHighpassHz: 120, onlineGain: 0.7, onlineThumpGain: 0.6,
 } as const;
 
 /** Where the director's sounds come from (the runtime fills it per world). */
@@ -57,15 +65,17 @@ export interface StartupSites {
   tier(rank: number, listener: P3): P3 | null;
   /** The nearest turning beacon head within `near` m of the listener, null = none. */
   beacon(listener: P3, near: number): P3 | null;
+  /** Lane AUDIO: the point of the beam column nearest the listener (absent: the core). */
+  beam?(listener: P3): P3;
 }
 
 /** Counters (QA / tests). */
-export interface StartupAudioCounts { stage: number; rodLoops: number; rodStops: number; rodLetGo: number; surge: number; online: number; tiers: number; bedStarts: number; beacon: number; replaysBlocked: number }
+export interface StartupAudioCounts { stage: number; rodLoops: number; rodStops: number; rodLetGo: number; surge: number; online: number; tiers: number; bedStarts: number; beacon: number; replaysBlocked: number; beam: number }
 
 const STAGE_SITE: Readonly<Record<StageEvent, 'fuse-1' | 'breaker' | 'valve' | 'pump' | 'keyswitch' | 'rods'>> = {fuse: 'fuse-1', fuses: 'fuse-1', breaker: 'breaker', valve: 'valve', pump: 'pump', key: 'keyswitch', rods: 'rods'};
 
 export class StartupAudio {
-  readonly counts: StartupAudioCounts = {stage: 0, rodLoops: 0, rodStops: 0, rodLetGo: 0, surge: 0, online: 0, tiers: 0, bedStarts: 0, beacon: 0, replaysBlocked: 0};
+  readonly counts: StartupAudioCounts = {stage: 0, rodLoops: 0, rodStops: 0, rodLetGo: 0, surge: 0, online: 0, tiers: 0, bedStarts: 0, beacon: 0, replaysBlocked: 0, beam: 0};
   bed: StartupLoop | null = null;
   rod: StartupLoop | null = null;
   crdm: StartupLoop | null = null;
@@ -153,9 +163,13 @@ export class StartupAudio {
     if (winT !== null) {
       for (const c of cuesCrossed(this.cues, this.lastWinT, winT)) {
         if (c.kind === 'surge') { this.cue(sfx, 'reactorSurge', sites.core, {gain: 1, ref: STARTUP_MIX.coreRef, maxDist: STARTUP_MIX.coreMax, pri: 2}); this.counts.surge++; }
-        else if (c.kind === 'online') {
-          this.cue(sfx, 'reactorOnline', sites.core, {gain: 1, ref: STARTUP_MIX.coreRef, maxDist: STARTUP_MIX.coreMax, pri: 2});
-          this.cue(sfx, 'reactorStage', sites.core, {gain: 1, rate: 0.62, ref: STARTUP_MIX.coreRef, maxDist: 160, pri: 2});
+        else if (c.kind === 'beam') { // lane AUDIO: the ignition (its crack lands on ONLINE), at the beam column nearest the listener
+          this.cue(sfx, 'reactorBeam', sites.beam?.(listener) ?? sites.core, {gain: STARTUP_MIX.beamGain, ref: STARTUP_MIX.coreRef, maxDist: STARTUP_MIX.coreMax, pri: 2,
+            filter: {type: 'highpass', freq: STARTUP_MIX.beamHighpassHz}});
+          this.counts.beam++;
+        } else if (c.kind === 'online') {
+          this.cue(sfx, 'reactorOnline', sites.core, {gain: STARTUP_MIX.onlineGain, ref: STARTUP_MIX.coreRef, maxDist: STARTUP_MIX.coreMax, pri: 2});
+          this.cue(sfx, 'reactorStage', sites.core, {gain: STARTUP_MIX.onlineThumpGain, rate: 0.62, ref: STARTUP_MIX.coreRef, maxDist: 160, pri: 2});
           this.counts.online++;
         } else {
           const at = sites.tier(c.rank ?? 0, listener);

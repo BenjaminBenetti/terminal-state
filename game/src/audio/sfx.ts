@@ -126,6 +126,10 @@ export const CUE_GAIN: Record<CueId, number> = {
   // swells under it, the stage thump is the per-step punch (scaled per stage by the director), the rod drive / beacon motor sit under
   // the machines; the bed is the deep layer that BUILDS with the stages (its level is driven live: MachineLoopHandle.setLevel).
   reactorSurge: 0.85, reactorOnline: 1, reactorRodLoop: 0.55, reactorRodStop: 0.75, reactorBed: 0.6, reactorStage: 0.75, reactorBeacon: 0.32,
+  // Task reactor-surface-ending-20261102 (lane AUDIO, tools/audio-pipeline/reactor-ending-build.mjs): the blue-beam ignition (peak -1 dBFS;
+  // its per-call mix, high-pass and the room the ONLINE impact makes for it: world/reactor/startupAudio.ts STARTUP_MIX, calibrated in
+  // derivatives/audio-reactor-ending.json mixCalibration) and the surface rain bed (RMS -20 dBFS; its level: RAIN_BED).
+  reactorBeam: 1, bedRain: 1,
   hurt: 0.45, death: 0.55, heartbeat: 0.4, breath: 0.12, cough: 0.38, // cough: restrained player vocal (gas feedback), below hurt
   bedWind: 1, bedRumble: 1, bedHvac: 1, bedFridge: 1, bedBuzz: 1,
   drip: 0.2, creak: 0.26, clank: 0.2, trainDistant: 0.55, flicker: 0.1,
@@ -378,10 +382,20 @@ export const MACHINE_LOOP = {max: 10, ref: 4, rolloff: 1, fadeIn: 1.2, fadeOut: 
 // bounded loops: the machine bed, the rod drive while the rods move, one beacon motor.)
 export type MachineLoopCue = 'reactorGeneratorLoop' | 'reactorFanLoop' | 'reactorHum' | 'reactorBed' | 'reactorRodLoop' | 'reactorBeacon';
 export type MachineCue = 'reactorGeneratorStart' | 'reactorBreaker' | 'reactorFuse' | 'reactorValve' | 'reactorPump' | 'reactorStartup'
-  | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage';
+  | 'reactorSurge' | 'reactorOnline' | 'reactorRodStop' | 'reactorStage' | 'reactorBeam';
 /** Task reactor-playtest-round2-20261102 (lane STARTUP): a machine one-shot's mix (gain x CUE_GAIN, playback rate, start delay s, panner
- *  reference distance / audible range m, priority: 2 = never dropped by the voice cap — the win's surge / ONLINE impact). */
-export interface MachineCueOpts { gain?: number; rate?: number; delay?: number; ref?: number; maxDist?: number; pri?: number }
+ *  reference distance / audible range m, priority: 2 = never dropped by the voice cap — the win's surge / ONLINE impact).
+ *  Task reactor-surface-ending-20261102 (lane AUDIO): + an optional filter on the clip (the beam ignition is high-passed: processing). */
+export interface MachineCueOpts { gain?: number; rate?: number; delay?: number; ref?: number; maxDist?: number; pri?: number; filter?: FilterSpec }
+
+/**
+ * Task reactor-surface-ending-20261102 (lane AUDIO; user: "It should be raining!"): the surface RAIN bed — ONE page-lifetime looping
+ * channel (the Sound Lab rain loop, created the first time rain is asked for, never re-created): loop -> gain -> low-pass -> the ambient
+ * bus (pause mute, shot ducking). Sfx.rainBed(level, muffle) sets it: `level` 0..1 = how much rain reaches the listener (0 = none: the
+ * world/reactor/audioRain.ts director decides — outside on the surface after the win), `muffle` 0..1 = sheltered (indoors / the
+ * stairwell: the low-pass closes to `muffledHz` and the level drops to `shelterLevel`). Gains are eased (`tauS`), never stepped.
+ */
+export const RAIN_BED = {gain: 0.34, openHz: 18000, muffledHz: 700, shelterLevel: 0.45, tauS: 0.5} as const;
 /** A machine loop's live controls (lane STARTUP: the bed builds with the stages, the rod drive follows the rod motion). */
 export interface MachineLoopHandle extends FlareBurnHandle {
   /** Level k (x CUE_GAIN; 1 = the cue's mix level), eased with time constant tauS. */
@@ -497,6 +511,8 @@ export class Sfx {
   private flareLoops: FlareLoop[] = [];
   /** Task reactor-build-20261101: the Reactor's machine loops (bounded: MACHINE_LOOP.max). */
   private machineLoops: FlareLoop[] = [];
+  /** Task reactor-surface-ending-20261102 (lane AUDIO): the surface rain bed's one channel (RAIN_BED; null until rain is first asked for). */
+  private rain: {g: GainNode; lp: BiquadFilterNode; src: AudioBufferSourceNode | null; level: number; muffle: number} | null = null;
   // Task track1-siren-blightbelly-20261031 (lane AUDIO): the sounding hum phrase per Siren, the live gas hisses, once-per-enemy memories and counters (debugState().t1).
   private t1Hums = new Map<object, Voice>();
   private t1Hisses: Voice[] = [];
@@ -655,7 +671,7 @@ export class Sfx {
   }
 
   /** QA/test view of the audio lifecycle, the clip bank and the spatial/ambient systems. */
-  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}; strainer: {voices: Record<StrainerVoiceKind, number>; steps: number; swings: number; contacts: number; squishes: number; capped: number; limited: number}} {
+  debugState(): {contexts: number; state: string; desired: Desired; ambientLoops: number; ambientSources: number; sounds: number; room: RoomKind; area: string; floor: string; voices: number; hrtfVoices: number; panners: number; convolvers: number; dropped: number; culled: number; emitters: number; emitterOn: boolean; fans: {sources: number; channels: number; active: number; looping: number}; beds: Record<string, number>; bedsPlaying: string[]; listener: {x: number; y: number; z: number; yaw: number}; bank: ReturnType<ClipBank['stats']>; confirmVoices: number; confirms: number; flareLoops: number; vocal: {voices: number; gate: boolean; played: number; gated: number; sight: number; capped: number; stolen: number; steps: number}; t1: {humVoices: number; hissVoices: number; hums: number; humsSilent: number; screams: number; bursts: number; hisses: number; repeats: number}; drag: {voices: number; ticks: number; stops: number; capped: number; handoffs: number}; strainer: {voices: Record<StrainerVoiceKind, number>; steps: number; swings: number; contacts: number; squishes: number; capped: number; limited: number}; rain: {level: number; muffle: number; looping: boolean}} {
     const beds: Record<string, number> = {};
     for (const k of ['wind', 'rumble', 'hvac', 'fridge', 'buzz'] as const) beds[k] = this.profile[k];
     return {
@@ -670,6 +686,7 @@ export class Sfx {
       t1: {humVoices: [...this.t1Hums.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, hissVoices: this.t1Hisses.filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.t1Stats}, // track1 (lane AUDIO)
       drag: {voices: [...this.drags.values()].filter(v => v.end > (this.ctx?.currentTime ?? 0)).length, ...this.dragStats}, // M01 (lane AUDIO)
       strainer: {voices: {step: this.sLive('step'), swing: this.sLive('swing'), contact: this.sLive('contact'), squish: this.sLive('squish')}, ...this.sStats}, // lane AUDIO (strainer squish set)
+      rain: {level: Math.max(0, this.rain?.level ?? 0), muffle: Math.max(0, this.rain?.muffle ?? 0), looping: !!this.rain?.src}, // lane AUDIO (surface ending)
     };
   }
 
@@ -1663,7 +1680,7 @@ export class Sfx {
    */
   reactorCue(cue: MachineCue, x: number, y: number, z: number, o: MachineCueOpts = {}): void {
     this.play(this.voice({at: {x, y, z}, ref: o.ref ?? MACHINE_LOOP.ref, rolloff: MACHINE_LOOP.rolloff, send: MACHINE_LOOP.send, pri: o.pri ?? 1, maxDist: o.maxDist ?? MACHINE_LOOP.maxDist}), cue,
-      {jitter: 0.02, gainJitter: 0.5, gain: o.gain, rate: o.rate, delay: o.delay}); // (lane STARTUP: + per-call mix)
+      {jitter: 0.02, gainJitter: 0.5, gain: o.gain, rate: o.rate, delay: o.delay, filter: o.filter}); // (lane STARTUP: + per-call mix; lane AUDIO: + filter)
   }
 
   /**
@@ -1733,6 +1750,35 @@ export class Sfx {
         loop.src.playbackRate.setTargetAtTime(jit * Math.max(0.25, Math.min(4, r)), c.currentTime, Math.max(0.01, tauS));
       },
     };
+  }
+
+  /**
+   * Task reactor-surface-ending-20261102 (lane AUDIO): the surface rain bed (RAIN_BED). `level` 0..1 (0 = silent), `muffle` 0..1
+   * (sheltered: low-passed and quieter). Cheap when unchanged; the channel and its one looping source are created once, the first time
+   * rain is heard (never before the clip is decoded: no silent-play counting while it loads).
+   */
+  rainBed(level: number, muffle = 0): void {
+    const ctx = this.ctx, bus = this.ambBus;
+    if (!ctx || !bus) return;
+    const lv = clamp01(Number.isFinite(level) ? level : 0), mf = clamp01(Number.isFinite(muffle) ? muffle : 0);
+    let r = this.rain;
+    if (!r) {
+      if (lv <= 0) return;
+      const g = ctx.createGain();
+      g.gain.value = 0;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.frequency.value = RAIN_BED.openHz; lp.Q.value = 0.5;
+      g.connect(lp).connect(bus);
+      r = this.rain = {g, lp, src: null, level: -1, muffle: -1};
+    }
+    if (!r.src && lv > 0 && this.bank.has('bedRain')) { const clip = this.bank.pick('bedRain'); if (clip) r.src = this.loopSource(clip, r.g); }
+    if (Math.abs(lv - r.level) < 0.004 && Math.abs(mf - r.muffle) < 0.004) return;
+    r.level = lv; r.muffle = mf;
+    const t = ctx.currentTime;
+    r.g.gain.cancelScheduledValues(t);
+    r.g.gain.setTargetAtTime(RAIN_BED.gain * AMBIENT_LEVEL * lv * (1 - (1 - RAIN_BED.shelterLevel) * mf), t, RAIN_BED.tauS / 3);
+    r.lp.frequency.cancelScheduledValues(t);
+    r.lp.frequency.setTargetAtTime(RAIN_BED.openHz * Math.pow(RAIN_BED.muffledHz / RAIN_BED.openHz, mf), t, RAIN_BED.tauS / 3);
   }
 
   /** Task reactor-build-20261101: fade out every machine loop (new world). */

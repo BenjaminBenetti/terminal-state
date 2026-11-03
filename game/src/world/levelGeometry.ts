@@ -580,16 +580,20 @@ export function extractWallFaces(layout: Pick<StationLayout, 'grid' | 'areas'> &
  */
 function clipSkyFaces(faces: BuiltFace[], levels: Level[], W: number): BuiltFace[] {
   const skyLv = levels.find(l => l.sky);
-  if (!skyLv || skyLv.sky!.open) return faces; // (task reactor-submit-roof-fog-20261102, lane ROOF: a roof OPENING keeps every column solid)
+  // (task reactor-submit-roof-fog-20261102, lane ROOF: a roof OPENING keeps every column solid — task studio-reactor-surface-ending-
+  // 20261102, lane ENDING: except over its outdoor storey (LevelSky.outdoor: the Reactor's surface plaza), whose faces stand only as
+  // high as its parapet line / a structure's top, like the Office roof's)
+  if (!skyLv || (skyLv.sky!.open && !skyLv.sky!.outdoor)) return faces;
   const sky = skyLv.sky!;
+  const lid = sky.open ? sky.outdoor!.level : skyLv.id, top0 = sky.open ? sky.outdoor!.y : sky.top;
   const out: BuiltFace[] = [];
   for (const f of faces) {
-    if (f.level !== skyLv.id) { out.push(f); continue; }
+    if (f.level !== lid) { out.push(f); continue; }
     // The column behind the face at its midpoint (the face normal points into the open band).
     const bx = (f.x0 + f.x1) / 2 - f.nx * CELL / 2, bz = (f.z0 + f.z1) / 2 - f.nz * CELL / 2;
     const cx = Math.floor(bx / CELL), cy = Math.floor(bz / CELL);
     const t = sky.tops && cx >= 0 && cy >= 0 ? sky.tops[cy * W + cx] : 0;
-    const top = t > 0 ? t : sky.top;
+    const top = t > 0 ? t : top0;
     if (f.y0 >= top - MIN_H) continue;
     if (f.y1 <= top) { out.push(f); continue; }
     out.push({...f, y1: top, openings: f.openings.map(o => ({...o, top: Math.min(o.top, top)})), ...(f.slope ? {slope: {...f.slope, t0: Math.min(f.slope.t0, top), t1: Math.min(f.slope.t1, top)}} : {})});

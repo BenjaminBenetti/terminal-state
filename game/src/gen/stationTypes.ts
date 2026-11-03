@@ -54,7 +54,9 @@ export type AreaRole =
   // platforms, crossover bridges and catwalks over the track beds, lower service crossing + gallery.
   | 'stair-core' | 'landing' | 'upper-concourse' | 'crossover' | 'catwalk' | 'overlook' | 'service-crossing' | 'service-gallery'
   // task reactor-build-20261101 (lane GEN): THE REACTOR's pit decks / rooms (gen/reactor; ARCH keys materials off them; additive only)
-  | 'reactor-gallery' | 'reactor-landing' | 'reactor-bridge' | 'reactor-tower' | 'reactor-floor' | 'reactor-room';
+  | 'reactor-gallery' | 'reactor-landing' | 'reactor-bridge' | 'reactor-tower' | 'reactor-floor' | 'reactor-room'
+  // task studio-reactor-surface-ending-20261102 (lane ENDING): the open-air surface plaza on the roof round the opening (gen/reactor/surface.ts)
+  | 'reactor-surface';
 
 export interface Rect { x: number; y: number; w: number; h: number }
 

@@ -52,7 +52,9 @@ function seeThrough(L: StationLayout): (x: number, y: number) => boolean {
     if (!g0.inBounds(x, y)) return false;
     const i = g0.idx(x, y);
     if (g0.cells[i] === FLOOR || g0.cells[i] === VOID) return true;
-    for (const lv of L.levels) if (lv.id && lv.grid.cells[i] !== SOLID && lv.grid.ceil[i] > -0.5) return true;
+    // (task studio-reactor-surface-ending-20261102, lane ENDING: a band wholly above the rim's eyes — the surface plaza on the roof, the
+    // exit stair's upper flights — carries no sight line at the rim: only bands spanning the rim's eye height count)
+    for (const lv of L.levels) if (lv.id && lv.grid.cells[i] !== SOLID && lv.grid.ceil[i] > -0.5 && lv.grid.floorOf(i) < 1.7) return true;
     return false;
   };
 }
@@ -180,14 +182,15 @@ describe('the Reactor arrival: platform -> small station area -> breach -> short
     }
   });
 
-  it('the rim objective adapts: the rim office and its key are reached on foot from the reveal; a plate beside the reveal points at the office', () => {
+  // task reactor-surface-ending-20261102 (lane OBJECTIVES, user intent change): the startup key moved down to the core floor's control
+  // room (tests/reactor-objectives-key.test.ts); the rim office keeps the pit status board, so ITS board is what the reveal leads to
+  it('the rim objective adapts: the rim office and its pit status board are reached on foot from the reveal; a plate beside the reveal points at the office', () => {
     let plates = 0;
     for (const seed of SEEDS) {
       const L = gen(seed), R = L.reactor!, g = L.levels[0].grid, prev = walk(L);
-      const key = R.components.find(c => c.item === 'reactor_key')!, kp = L.pickups[key.pickup];
-      const [kx, ky] = g.cellOf(kp.x, kp.z);
-      expect(prev[g.idx(kx, ky)], `seed ${seed}: key reached on foot`).not.toBe(-2);
-      const office = R.sites.find(s => s.id === 'rimOffice')!;
+      const office = R.sites.find(s => s.id === 'rimOffice')!, bs = office.controls.find(c => c.id === 'statusBoard')!.stand;
+      const [kx, ky] = g.cellOf(bs.x, bs.z);
+      expect(prev[g.idx(kx, ky)], `seed ${seed}: the pit board reached on foot`).not.toBe(-2);
       const sign = L.signs.find(s => s.text === 'RIM CONTROL OFFICE');
       if (sign) {
         plates++;

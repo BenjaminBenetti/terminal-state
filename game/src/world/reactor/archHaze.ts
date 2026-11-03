@@ -35,6 +35,11 @@ export const REACTOR_ATMOSPHERE: Partial<AtmosphereParams> = {
   areaDensity: {'reactor-gallery': 1.15, 'reactor-bridge': 1.2, 'reactor-room': 0.85, 'reactor-control': 0.7} as AtmosphereParams['areaDensity'],
   // (lane GAS) rooms cut into the rock: a normal room's haze (x 0.8 of the Reactor base ~= the Subway's normal room), room class odds
   rockRoom: {density: 0.8, group: 'room'},
+  // task studio-reactor-surface-ending-20261102 (lane SURFACE, user: "the fog is now cleared! The surface is habitable again!"): the
+  // open-air SURFACE storey (lane ENDING's layout.reactor.surface level, role 'roof') takes a light outdoor haze — the Reactor's base x
+  // 0.08 (~0.002 / m: ~10 % over the march's 52 m, was the shared roof default x 0.35: ~40 %), so the march never veils the city. The
+  // pit storeys have no 'roof' role: unchanged.
+  levelDensity: {roof: 0.08},
 };
 
 const ROCK = new WeakMap<object, {n: number; set: ReadonlySet<number>}>();
