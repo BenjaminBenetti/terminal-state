@@ -27,8 +27,10 @@ import {loadBody, validationPoses, clipDurations} from './lib/lingerie-body.mjs'
 import {fitStage1, fitStage2, runtimePiece, FIT} from './lib/lingerie-fit.mjs';
 import {measureSet, checkLimits, LIMITS} from './lib/lingerie-metrics.mjs';
 import {buildLingerieDocument, writeDoc, docBytes} from './lib/lingerie-glb.mjs';
+import {loadMannequin, fitMannequin, measureMannequin, toModelFrame} from './lib/lingerie-mannequin.mjs';
+import {hangerMeshes, hangTransform, applyHang, hangRecord, hangNormals, HANGER} from './lib/lingerie-hang.mjs';
 import {bitsetBase64} from './lib/variant-glb.mjs';
-import {LINGERIE_TASK, AUTHORED_ON, RAW_DIR, USER_INPUTS, MESHY_REQUEST, DESIGNS, DESIGN_ORDER, BODIES, BODY_ORDER, ASSIGNMENT, TEXTURES, VALIDATION_STEP} from './lingerie.config.mjs';
+import {LINGERIE_TASK, AUTHORED_ON, RAW_DIR, USER_INPUTS, MESHY_REQUEST, DESIGNS, DESIGN_ORDER, BODIES, BODY_ORDER, ASSIGNMENT, TEXTURES, VALIDATION_STEP, MANNEQUIN, MANNEQUIN_LIMITS, POLISH_TASK} from './lingerie.config.mjs';
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 // private sources (reference/ is its own ignored checkout): this repository's, else the main checkout of a git worktree, else
@@ -138,6 +140,39 @@ async function evaluate() {
   console.log('chosen', JSON.stringify(out.chosen));
 }
 
+
+/** Limit check of a static mannequin fit (measureMannequin summary). */
+function checkMannequin(S, lim = MANNEQUIN_LIMITS) {
+  const f = [];
+  for (const [pn, P] of Object.entries(S.pieces)) {
+    if (P.penetration > lim.penetration) f.push(`mannequin ${pn}: penetration ${P.penetration} > ${lim.penetration}`);
+    if (P.deep > lim.deep) f.push(`mannequin ${pn}: deep ${P.deep} > ${lim.deep}`);
+    if (P.minSdMM < lim.minSdMM) f.push(`mannequin ${pn}: min sd ${P.minSdMM} mm < ${lim.minSdMM}`);
+    if (P.hover > lim.hover) f.push(`mannequin ${pn}: hover ${P.hover} > ${lim.hover}`);
+    if (P.edgeHover > lim.edgeHover) f.push(`mannequin ${pn}: free-edge hover ${P.edgeHover} > ${lim.edgeHover}`);
+  }
+  if (S.body.pokeVisible > lim.pokeVisibleCount) f.push(`mannequin: ${S.body.pokeVisible} figure vertices poke through the cloth > ${lim.pokeVisibleCount}`);
+  if (S.coverage.apex < 1) f.push(`mannequin: bust apex coverage ${S.coverage.apex} < 1`);
+  if (S.coverage.groinCore < 1) f.push(`mannequin: groin core coverage ${S.coverage.groinCore} < 1`);
+  return f;
+}
+
+/** Hanging rack items of a design from its mannequin fit (working frame): a one-piece set hangs whole, else top + bottom apart. */
+function hangItems(d, MQ, M) {
+  const top = MQ.pieces.top.pos;
+  let maxY = -Infinity; for (let i = 1; i < top.length; i += 3) maxY = Math.max(maxY, top[i]);
+  const strapped = maxY > M.landmarks.apexY + 0.08;
+  const defs = DESIGNS[d].split.by === 'triangle' ? [{item: 'set', pieces: ['top', 'bottom'], kind: 'strapped', kz: 0.55}]
+    : [{item: 'top', pieces: ['top'], kind: strapped ? 'strapped' : 'clip', kz: 0.55}, {item: 'bottom', pieces: ['bottom'], kind: 'clip', kz: 0.32}];
+  return defs.map(def => {
+    const t = hangTransform(MQ.pieces[def.pieces[0]].pos, def.kind, def.kz);
+    const garments = def.pieces.map(pn => ({piece: pn, pos: applyHang(MQ.pieces[pn].pos, t), nrm: hangNormals(MQ.pieces[pn].nrm, def.kz)}));
+    const rec = hangRecord(garments.map(g => g.pos), t);
+    if (rec.widthM > 0.45) throw new Error(`hang item ${d} ${def.item}: ${rec.widthM} m wide (> 0.45)`);
+    return {item: def.item, hanger: def.kind === 'strapped' ? 'wire' : 'clip', garments, extras: rec};
+  });
+}
+
 async function build(outRoot) {
   const bodies = resolveBodies(), assign = resolveAssignment();
   const models = path.join(outRoot, 'game/public/assets/models'), deriv = path.join(outRoot, 'game/public/assets/derivatives'), gen = path.join(outRoot, 'game/src/ai');
@@ -147,6 +182,11 @@ async function build(outRoot) {
   const designs = (OPT.designs ? OPT.designs.split(',') : DESIGN_ORDER).filter(d => designBodies[d]);
   for (const d of DESIGN_ORDER) if (!OPT.designs && !OPT.assign && !designBodies[d]) throw new Error(`design ${d} is not assigned to any body`);
   const summary = {sets: [], fits: [], gate: {limits: LIMITS, failures: []}};
+  // task store-polish: the female display mannequin (M81) the store dresses, pinned by sha256
+  const mqFile = path.join(REPO, MANNEQUIN.file);
+  if (sha256File(mqFile) !== MANNEQUIN.sha256) throw new Error(`mannequin ${MANNEQUIN.file}: sha256 differs from the pinned ${MANNEQUIN.sha256}`);
+  const MQB = await loadMannequin(mqFile);
+  const hangers = hangerMeshes();
   const generated = [];
   for (const d of designs) {
     const prep = await prepareDesign(d);
@@ -180,30 +220,46 @@ async function build(outRoot) {
       perBody[bid] = {fit: fitRep, masks, metrics: {score, limitsFailed: fails, poses: M.poses, coverageZones: M.zones, perClip: compact}};
       summary.fits.push({design: d, body: bid, score: score.score, worst: score.worst, regionsWorst: regions, limitsFailed: fails.length, clips: Object.keys(M.summary), poses: M.poses});
     }
-    const sceneExtras = {id: 'lingerie-' + d, kind: 'lingerie-set', label: D.label, pieces: {upper: wear.top, lower: wear.bottom}, bodies: variants.map(v => v.bodyId), display: {top: `LingerieDisplay_${d}_top`, bottom: `LingerieDisplay_${d}_bottom`, fittedOn: variants[0].bodyId},
+    // task store-polish: the set fitted to the static female display mannequin (same kept vertices / UVs / indices) + hanging rack items
+    const MQ = fitMannequin(MQB, prep.pieces, FD.simp);
+    const MS = measureMannequin(MQB, MQ.pieces), mFails = checkMannequin(MS);
+    console.log(`[mannequin] ${d}: ${JSON.stringify({top: (({regions, ...r}) => r)(MS.pieces.top), bottom: (({regions, ...r}) => r)(MS.pieces.bottom), poke: MS.body.pokeVisible, coverage: MS.coverage})}; ${mFails.length} limit failures`);
+    for (const f of mFails) console.log('   ! ' + f);
+    if (mFails.length) summary.gate.failures.push({design: d, body: 'mannequinFemale', failures: mFails});
+    const items = hangItems(d, MQ, MQB);
+    const mqMetrics = {pieces: Object.fromEntries(Object.entries(MS.pieces).map(([pn, P]) => [pn, (({regions, ...r}) => r)(P)])), figurePokeVertices: MS.body.pokeVisible, coverage: MS.coverage};
+    const mannequinNodes = {top: `LingerieMannequin_${d}_top`, bottom: `LingerieMannequin_${d}_bottom`};
+    const sceneExtras = {id: 'lingerie-' + d, kind: 'lingerie-set', label: D.label, pieces: {upper: wear.top, lower: wear.bottom}, bodies: variants.map(v => v.bodyId),
+      mannequin: {...mannequinNodes, model: MANNEQUIN.key, frame: MANNEQUIN.frame}, hang: items.map(it => `LingerieHang_${d}_${it.item}`),
       triangles: {top: FD.simp.top.triangles, bottom: FD.simp.bottom.triangles}, provenance: 'generated (Meshy T2.5 image-to-3D from the user reference image; Meshy PBR maps kept)', approved: false, gameReady: false};
-    const doc = buildLingerieDocument({design: d, wearables: wear, baseJpg: prep.tx.baseJpg, mrJpg: prep.tx.mrJpg, pieces: {top: FD.simp.top, bottom: FD.simp.bottom}, variants, display: {bodyId: variants[0].bodyId}, sceneExtras, generator: GENERATOR});
+    const doc = buildLingerieDocument({design: d, wearables: wear, baseJpg: prep.tx.baseJpg, mrJpg: prep.tx.mrJpg, pieces: {top: FD.simp.top, bottom: FD.simp.bottom}, variants, sceneExtras, generator: GENERATOR,
+      mannequin: {pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {pos: toModelFrame(MQ.pieces[pn].pos), nrm: toModelFrame(MQ.pieces[pn].nrm)}])), extras: {mannequin: MANNEQUIN.key, mannequinFile: MANNEQUIN.file, mannequinSha256: MANNEQUIN.sha256, frame: MANNEQUIN.frame, metrics: mqMetrics}},
+      hang: {hangers, items: items.map(it => ({...it, extras: {...it.extras, frame: 'origin = the hook resting on the rail, +Y up, front +Z, hanging below'}}))}});
     const glb = path.join(models, `outfit-lingerie-${d}.glb`);
     await writeDoc(doc, glb);
     const bytes = fs.statSync(glb).size, glbSha = sha256File(glb);
-    const disp = doc.getRoot().listNodes().filter(n => n.getName().startsWith('LingerieDisplay_')).map(n => ({node: n.getName(), ...n.getExtras().lingerieDisplay}));
-    const manifest = {schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-lingerie-' + d, title: `Lingerie set "${D.label}" - fitted per body + static display (prototype)`, status: STATUS, task: LINGERIE_TASK, authoredOn: AUTHORED_ON,
+    const manifest = {schema: 'the-last-line/derivative-manifest@1', asset: 'outfit-lingerie-' + d, title: `Lingerie set "${D.label}" - fitted per body + dressed display mannequin + rack stock (prototype)`, status: STATUS, task: LINGERIE_TASK, authoredOn: AUTHORED_ON,
       origin: `Meshy T2.5 image-to-3D (task ${D.meshyTask}) from the user-supplied reference ${D.reference.file}; generated by the primary (sole Meshy submitter) under the user's 200-credit clothing approval; lane FIT fitted it locally`,
       provenance: 'generated (Meshy T2.5 image-to-3D from the user reference image; Meshy PBR maps kept: base colour + metallic / roughness re-encoded, normal map not shipped)',
       honesty: {generation: 'no generation / inference / network service was used by this builder', fitting: 'CPU landmark alignment + non-rigid conformity to the body surface + weight transfer from the body + pose-aware clearance (lib/lingerie-fit.mjs); no cloth simulation', texture: 'Meshy base colour / roughness / metallic maps resized and re-encoded only (no retexture, no painting)'},
-      outputs: {glb: {path: path.relative(outRoot, glb), bytes, sha256: glbSha, format: 'glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned display nodes LingerieDisplay_<design>_top/_bottom reusing the first body\'s accessors'}},
+      outputs: {glb: {path: path.relative(outRoot, glb), bytes, sha256: glbSha, format: 'glTF 2.0 binary, KHR_mesh_quantization (NORMAL i8, TEXCOORD_0 u16); one OPAQUE double-sided material (base colour JPEG + metallicRoughness JPEG); per piece shared TEXCOORD_0 / indices; per fitted body two SkinnedMesh nodes (Outfit_<wearable>__<body>) + a prefixed skeleton copy; unskinned LingerieMannequin_<design>_top/_bottom (the female display mannequin\'s own frame) and hanging rack items LingerieHang_<design>_<item> (garment + procedural chrome hanger primitives)'}},
       source: {raw: {file: `${RAW_DIR}/${D.raw}`, sha256Verified: D.sha256, triangles: prep.raw.idx.length / 3, vertices: prep.raw.pos.length / 3, material: prep.raw.material, private: true}, textures: prep.tx.sources.map(s => ({...s, file: `${RAW_DIR}/${D.textures.dir}/${s.name}`})), meshyTask: D.meshyTask, meshyRequest: MESHY_REQUEST,
         reference: {file: `${USER_INPUTS}/${D.reference.file}`, sha256: D.reference.sha256, private: true}},
       cleaning: {degenerateTriangles: prep.cs.degenerate, components: prep.cs.components.length, componentsTop: prep.cs.components.filter(c => c.piece === 'top').length, componentsBottom: prep.cs.components.filter(c => c.piece === 'bottom').length, splitComponents: prep.cs.components.filter(c => c.piece === 'split').length,
         smallestGapToOthers: Math.max(0, ...prep.cs.components.map(c => c.gapToOthers ?? 0)), dropped: prep.cs.dropped, split: D.split, mirrored: prep.cs.mirrored, note: 'welded components (UV seams joined); a floating component (<= 12 triangles, > 15 mm from the rest) or an inner shell would be dropped: none found (every small component is a slider, clip, ring, bow, lacing or boning piece touching the set)'},
       pieces: Object.fromEntries(['top', 'bottom'].map(pn => [pn, {wearable: wear[pn], slot: pn === 'top' ? 'upper' : 'lower', design: pn === 'top' ? D.top : D.bottom, triangles: FD.simp[pn].triangles, vertices: FD.simp[pn].vertices, sourceTriangles: prep.pieces[pn].triangles, simplifyRatio: D.simplify[pn], simplifyError: FD.simp[pn].error, simplifiedIn: `body space (the fit on ${order[0]}), meshoptimizer UV-weighted quadric, attribute seams preserved`}])),
-      textures: prep.tx.encoded, displays: disp.map(({note, ...r}) => r), perBody,
+      textures: prep.tx.encoded, perBody,
+      mannequin: {task: POLISH_TASK, model: MANNEQUIN.key, file: MANNEQUIN.file, sha256: MANNEQUIN.sha256, frame: MANNEQUIN.frame, nodes: mannequinNodes, measured: MQB.measured, fit: (({landmarks, align, pieces, cutVerticesJoined}) => ({align, pieces, cutVerticesJoined}))(MQ.report), metrics: mqMetrics, limitsFailed: mFails,
+        method: 'the worn-variant fit (lib/lingerie-fit.mjs stage 1) on the static mannequin mesh (lib/lingerie-mannequin.mjs: slice landmarks, arm / head / base groups), the design\'s runtime vertices / UVs / indices, clearance incl. figure poke-through; no skin'},
+      hang: {task: POLISH_TASK, hanger: HANGER, items: items.map(it => ({node: `LingerieHang_${d}_${it.item}`, item: it.item, pieces: it.garments.map(g => g.piece), ...it.extras})),
+        method: 'the mannequin-fitted pieces hung on procedural chrome hangers (strap crests on the wire hanger arms; strapless tops / bottoms in clip jaws), depth relaxed (lib/lingerie-hang.mjs); UVs / texture unchanged'},
       limitations: ['Linear-blend skinned with weights transferred from the body: no cloth simulation (no swing / drape).', 'Body triangles enclosed by each piece are hidden while it is worn; very narrow straps hide nothing and rely on their clearance.',
         'The Meshy hidden-side geometry is AI-reconstructed; the lace is a texture on an opaque material (no transparency).', 'Unapproved prototype; gameReady false.']};
     fs.writeFileSync(path.join(deriv, `outfit-lingerie-${d}.json`), JSON.stringify(manifest, null, 1) + '\n');
-    summary.sets.push({id: 'lingerie-' + d, design: d, label: D.label, model: `outfit_lingerie_${d}`, glb: path.relative(outRoot, glb), bytes, sha256: glbSha, bodies: variants.map(v => v.bodyId), pieces: {upper: wear.top, lower: wear.bottom}, textures: {baseColorBytes: prep.tx.encoded.baseColor.bytes, metallicRoughnessBytes: prep.tx.encoded.metallicRoughness.bytes}, triangles: sceneExtras.triangles});
+    summary.sets.push({id: 'lingerie-' + d, design: d, label: D.label, model: `outfit_lingerie_${d}`, glb: path.relative(outRoot, glb), bytes, sha256: glbSha, bodies: variants.map(v => v.bodyId), pieces: {upper: wear.top, lower: wear.bottom},
+      mannequin: {nodes: mannequinNodes, metrics: mqMetrics, limitsFailed: mFails.length}, hang: items.map(it => ({node: `LingerieHang_${d}_${it.item}`, hanger: it.hanger, dropM: it.extras.dropM, widthM: it.extras.widthM})), textures: {baseColorBytes: prep.tx.encoded.baseColor.bytes, metallicRoughnessBytes: prep.tx.encoded.metallicRoughness.bytes}, triangles: sceneExtras.triangles});
     generated.push({id: 'lingerie-' + d, design: d, label: D.label, model: `outfit_lingerie_${d}`, url: `assets/models/outfit-lingerie-${d}.glb`, bytes, top: wear.top, bottom: wear.bottom, topLabel: D.top, bottomLabel: D.bottom, bodies: variants.map(v => v.bodyId),
-      display: {top: `LingerieDisplay_${d}_top`, bottom: `LingerieDisplay_${d}_bottom`, fittedOn: variants[0].bodyId, setSizeM: disp[0]?.setSizeM ?? null}});
+      mannequin: mannequinNodes, hang: items.map(it => ({node: `LingerieHang_${d}_${it.item}`, item: it.item, hanger: it.hanger, dropM: it.extras.dropM, widthM: it.extras.widthM, depthM: it.extras.depthM, spacingFaceOutM: it.extras.spacingM.faceOut, spacingSideOnM: it.extras.spacingM.sideOn}))});
     console.log(`  wrote ${path.relative(outRoot, glb)} ${bytes} bytes (base colour ${prep.tx.encoded.baseColor.bytes}, MR ${prep.tx.encoded.metallicRoughness.bytes})`);
   }
   const totalBytes = summary.sets.reduce((a, s) => a + s.bytes, 0);
@@ -217,11 +273,15 @@ async function build(outRoot) {
   fs.writeFileSync(path.join(deriv, 'zombie-lingerie.json'), JSON.stringify(out, null, 1) + '\n');
   const ts = `// GENERATED by tools/asset-pipeline/zombie/build-lingerie.mjs (task ${LINGERIE_TASK}, lane FIT) - do not edit.
 // The shipped lingerie set files: model key, url, exact bytes, wearable ids (top = slot upper, bottom = slot lower), the bodies each
-// set is fitted to, and the static display nodes inside the same GLB (sharing its texture). Logic: ai/lingerie.ts.
+// set is fitted to, the static nodes fitted to the female display mannequin and the hanging rack items inside the same GLB (sharing its
+// texture). Logic: ai/lingerie.ts.
 export interface LingerieBuildSet {
   id: string; design: string; label: string; model: string; url: string; bytes: number;
   top: string; bottom: string; topLabel: string; bottomLabel: string; bodies: readonly string[];
-  display: {top: string; bottom: string; fittedOn: string; setSizeM: readonly number[] | null};
+  /** Static nodes of the set fitted to the female display mannequin (mannequinFemale), in that model's own frame (identity node). */
+  mannequin: {top: string; bottom: string};
+  /** Hanging rack items (origin = the hook resting on the rail, +Y up, front +Z, hanging below). */
+  hang: readonly {node: string; item: string; hanger: string; dropM: number; widthM: number; depthM: number; spacingFaceOutM: number; spacingSideOnM: number}[];
 }
 export const LINGERIE_BUILD: readonly LingerieBuildSet[] = ${JSON.stringify(generated, null, 2).replace(/"([a-zA-Z]+)":/g, '$1:').replace(/"/g, "'")};
 `;

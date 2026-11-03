@@ -2,7 +2,8 @@
 // Task studio-beta-mall-lingerie-20261102-221554-01 (lane FIT): CPU contact sheets of the SHIPPED lingerie fits (no GPU / browser).
 //   node tools/asset-pipeline/zombie/qa/lingerie-sheets.mjs [outDir=qa-artifacts/lingerie/fit/sheets] [--designs=a,b]
 // Per fit (LINGERIE build table): the body with its runtime hide mask + both pieces, textured, in the bind pose (front / side /
-// back) and sampled frames of the six clips (Idle, Walk, Run, Attack, Hit, Death), plus the display nodes alone. Output is QA
+// back) and sampled frames of the six clips (Idle, Walk, Run, Attack, Hit, Death), plus the store stock (the set on the female display
+// mannequin + its hanging rack items on a rail). Output is QA
 // evidence only (qa-artifacts is ignored by Git).
 import fs from 'node:fs';
 import path from 'node:path';
@@ -13,7 +14,13 @@ import {loadBody, skinMats} from '../lib/lingerie-body.mjs';
 import {skinWith} from '../lib/lingerie-fit.mjs';
 import {loadShippedFit} from '../lib/lingerie-metrics.mjs';
 import {decodeTexture, renderPanels} from '../../enemy/lib/siren-render.mjs';
-import {BODIES} from '../lingerie.config.mjs';
+import {BODIES, MANNEQUIN} from '../lingerie.config.mjs';
+
+async function loadMannequinMesh() {
+  const d = await new NodeIO().registerExtensions(ALL_EXTENSIONS).read(path.join(REPO, MANNEQUIN.file));
+  const p = d.getRoot().listMeshes()[0].listPrimitives()[0];
+  return {pos: Float32Array.from(p.getAttribute('POSITION').getArray()), idx: p.getIndices().getArray(), uv: Float32Array.from(p.getAttribute('TEXCOORD_0').getArray()), tex: await decodeTexture(p.getMaterial().getBaseColorTexture().getImage(), 512)};
+}
 
 const REPO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const args = process.argv.slice(2);
@@ -47,8 +54,14 @@ for (const set of S.sets) {
     await renderPanels(panels, path.join(OUT, `${set.design}-${bodyId}.png`), {w: 300, h: 420, cols: panels.length, title: `${set.label} fitted to ${bodyId} (shipped GLB, CPU render)`});
     console.log('wrote', path.relative(REPO, path.join(OUT, `${set.design}-${bodyId}.png`)));
   }
-  // display nodes alone (static stock)
-  const disp = doc.getRoot().listNodes().filter(n => n.getName().startsWith('LingerieDisplay_'));
-  const meshes = disp.map(n => { const p = n.getMesh().listPrimitives()[0], t = n.getTranslation(); const P = Float32Array.from(p.getAttribute('POSITION').getArray()); for (let i = 0; i < P.length; i += 3) { P[i] += t[0]; P[i + 1] += t[1]; P[i + 2] += t[2]; } const a = p.getAttribute('TEXCOORD_0'); return {pos: P, idx: p.getIndices().getArray(), uv: Float32Array.from(a.getArray(), v => a.getNormalized() ? v / 65535 : v), tex: gtex}; });
-  await renderPanels([0, 45, 180].map(y => ({title: `${set.id} display yaw ${y}`, meshes, cam: {yawDeg: y, cx: 0, cy: 0.42, height: 0.95}, floorY: 0})), path.join(OUT, `${set.design}-display.png`), {w: 300, h: 420, cols: 3});
+  // store stock (task store-polish): the set on the female display mannequin (its own frame) + the hanging rack items on a rail
+  const mq = await loadMannequinMesh();
+  const nodeMesh = (name, prim = 0) => { const n = doc.getRoot().listNodes().find(x => x.getName() === name); if (!n) return null; return n.getMesh().listPrimitives().map(p => { const a = p.getAttribute('TEXCOORD_0'); return {pos: Float32Array.from(p.getAttribute('POSITION').getArray()), idx: p.getIndices().getArray(), uv: a ? Float32Array.from(a.getArray(), v => a.getNormalized() ? v / 65535 : v) : null, tex: a ? gtex : null, color: a ? undefined : [200, 202, 208]}; }); };
+  const dressed = [mq, ...nodeMesh(`LingerieMannequin_${set.design}_top`), ...nodeMesh(`LingerieMannequin_${set.design}_bottom`)];
+  const rail = 1.53, items = (set.hang ?? []).length ? set.hang.map(h => h.node) : doc.getRoot().listNodes().filter(n => n.getName().startsWith('LingerieHang_')).map(n => n.getName());
+  const rack = [{pos: Float32Array.from([-0.45, rail + 0.012, -0.004, 0.45, rail + 0.012, -0.004, 0.45, rail, -0.004, -0.45, rail, -0.004]), idx: Uint16Array.from([0, 1, 2, 0, 2, 3]), color: [150, 150, 160]}];
+  items.forEach((name, k) => { for (const m of nodeMesh(name)) { const P = Float32Array.from(m.pos); for (let i = 0; i < P.length; i += 3) { P[i] += (k - (items.length - 1) / 2) * 0.34; P[i + 1] += rail; } rack.push({...m, pos: P}); } });
+  await renderPanels([{title: `${set.id} on the female mannequin (front)`, meshes: dressed, cam: {yawDeg: 180, cx: 0, cy: 1.0, height: 1.9}}, {title: 'mannequin side', meshes: dressed, cam: {yawDeg: 90, cx: 0, cy: 1.0, height: 1.9}},
+    {title: 'mannequin back', meshes: dressed, cam: {yawDeg: 0, cx: 0, cy: 1.0, height: 1.9}}, {title: `${set.id} rack items on a 1.53 m rail`, meshes: rack, cam: {yawDeg: 0, cx: 0, cy: 1.3, height: 0.7}, ruler: false}, {title: 'rack items, side', meshes: rack, cam: {yawDeg: 60, cx: 0, cy: 1.3, height: 0.7}, ruler: false}],
+    path.join(OUT, `${set.design}-stock.png`), {w: 300, h: 420, cols: 5});
 }

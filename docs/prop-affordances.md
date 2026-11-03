@@ -285,31 +285,32 @@ day tanks are collision-only `annexMachine` boxes under existing shape-material 
 - Tests: `tests/reactor-x-bunker-carve.test.ts`, `tests/reactor-x-bunker-level.test.ts` (both audits, purpose loot, placements on their
   floors / inside their ceilings, doorway lanes, the blast door's anchor on the lane).
 
-### The Mall lingerie boutique (task mall-lingerie-20261102, lane STORE)
-Program `lingerie` (gen/mall/shops.ts; large standard-line / end units only, a per-mall chance, never guaranteed). Its WALK-IN changing
-area (`gen/mall/lingerieStore.ts`) is built from local procedural fixtures in the shop fit-out style (box parts, existing shape materials,
-no model / texture file, no generation); the rest of the store uses existing kinds (busts below are the one movable newcomer). Both audits:
-`gen/mall/kinds.ts` MALL_OPEN_AUDIT / MALL_PHYS (spread into OPENABLE_AUDIT / PROP_PHYSICS_AUDIT).
+### The Mall lingerie boutique (task mall-lingerie-20261102 / store-polish-20261103, lane STORE)
+Program `lingerie` (gen/mall/shops.ts; large standard-line / end units only, a per-mall chance, never guaranteed). Polish (user: "The
+chaining rooms are like boxes placed in the store ... It should be built, with normal walls, as like an actually ROOM"): the changing
+SUITE is now real level geometry carved into the shop's grid by `gen/mall/lingerieStore.ts` placeChangingSuite — one-cell (0.5 m) SOLID
+walls to the shop ceiling, framed doorways (layout.doors, a = b = the sales floor, lowered lintel ceiling at 2.3 m), 3-4 private rooms
+(1.5 x 2.0 m inside) off a 1.0-1.5 m corridor along the back wall, the suite's 1.5 m doorway onto the sales floor; nav / collision /
+hitscan / sight come from the grid like every wall. The first version's free-standing booth panels (`fittingPartition`,
+`fittingBackPanel`, `fittingCurtain`) and the black box display form (`lingerieBust`) are DELETED. The sales floor follows the clothing
+stores (rails, round racks, clothing bays hung with lingerie, dressed mannequins). Both audits: `gen/mall/kinds.ts` MALL_OPEN_AUDIT /
+MALL_PHYS (spread into OPENABLE_AUDIT / PROP_PHYSICS_AUDIT).
 
 | Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
 |---|---|---|---|---|
-| `fittingPartition` | booth side panel (laminate on a steel foot channel, top cap) | `none` | static `partition` (floor channel + ceiling track) | 2.00 × 2.10 × 0.08 m; grounded (foot channel); top 2.10 m — open above, a head clear of the 1.78 m zombie |
-| `fittingBackPanel` | booth back panel between two partitions, two coat hooks (built-in hardware) | `none` | static `partition` | 1.44 × 2.10 × 0.13 m (hooks); grounded |
-| `fittingBench` | built-in timber booth bench on two brackets | `none` (no lid / drawer) | static `built-in` | 1.42 × 0.45 × 0.40 m; grounded (4 bracket contacts); seat 0.45 m |
-| `fittingMirror` | full-length mirror in a thin frame | `none` | static `mounted` (screwed to a partition / wall) | 0.60 × 1.54 × 0.02 m glass + frame from 0.33 m: wall-mounted, intentionally off the floor |
-| `fittingCurtain` | booth curtain gathered open beside a partition, its rail across the opening overhead | `none` | static `mounted` (cloth on a fixed rail) | 1.46 × 2.00 × 0.12 m (rail span); the drape hangs 0.08 m above the floor; rail 2.0 m |
-| `lingerieBust` | padded torso-to-mid-thigh display form on a pole and a three-foot base (pale-body proportions, INSIDE every set) | `none` | **dynamic** 5 kg `pad`, fit 1.2 (tips over) | 0.36 × 1.48 × 0.30 m (base feet); grounded; shoulders 1.40, bust 1.24 (x ±0.125), hips 0.92 (x ±0.115, z -0.09..0.07), thighs to 0.50 m |
-| `lingerieSet<Design>` ×6 | the six display sets — riders on a display form: lane FIT's display meshes (c1a3816) at worn height, centred, unscaled; procedural stand-ins until loaded | `none` | static `host decor`, **rides** the form (MALL_RIDER_KINDS) | FIT meshes 0.74-1.50 m on the form (CPU render: qa-artifacts/lingerie/store/fitcheck/sets-on-form.png); stand-in 0.28 × 0.54 × 0.24 m; collider 0.72-1.52 m |
+| `fittingBench` | built-in timber bench on two brackets against a room's back wall | `none` (no lid / drawer) | static `built-in` | 1.42 × 0.45 × 0.40 m; grounded (4 bracket contacts); seat 0.45 m |
+| `fittingMirror` | mirror (0.6 x 1.4 m glass from 0.55 m) in a thin frame: each room's side wall by the bench, a full-length one on a sales-floor wall | `none` | static `mounted` (screwed to the wall) | 0.60 × 1.44 × 0.02 m from 0.53 m: wall-mounted, intentionally off the floor (its 0.5 m strip of room floor is kept off the nav grid) |
+| `lingerieSet<Design>` ×6 | the six sets DRESSED ON the existing female mannequin (`mannequinFemale`, M81): riders sharing its x / z / yaw; lane FIT's mannequin-fitted meshes under the mannequin's exact runtime transform; procedural stand-ins until loaded | `none` | static `host decor`, **rides** the mannequin (MALL_RIDER_KINDS) | the dressed M81 0.44 × 1.75 × 0.35 m, grounded on its base (CPU render: qa-artifacts/lingerie/store/polish/dressed-mannequins.png); collider 0.76-1.44 m |
+| `lingerieRackRow` | lingerie on hangers hooked side-on along a garment rail (1.53 m) / clothing bay rail (1.915 m): lane FIT's LingerieHang items, seeded designs / pattern (variant) | `none` | static `host decor`, **rides** its rail | items drop 0.28-0.60 m below the rail (hem >= 0.9 m on a rail); rider box 1.42 × 0.32 × 0.62 m (CPU render: polish/hung-racks.png) |
+| `lingerieRackRing` | the same round a round rack's ring (1.31 m) | `none` | static `host decor`, **rides** its rack | hem >= 0.69 m; rider box 1.1 × 1.1 × 0.62 m |
 
-- Changing area: 4-6 booths (2 × 3 free cells each: 1.44 m between the panels, 1.5 m deep in front of the bench) along a 1.5 m aisle on the
-  back wall, a 1.5 m opening from the sales floor, every free cell reserved; the pieces share their 0.5 m cell column, so the planner
-  validates every cell and the room's connectivity itself (forceProp inside a placeKit transaction, rolled back on failure).
-- No baked loose clutter: the booth pieces are structure (panels, a built-in bench, a screwed mirror, a curtain on its rail); the display
-  sets are separate riders on the form; the store's finds are real loot in its holders (drawer chests, the till, tables, bays).
-- Renders: `node tools/asset-pipeline/props/scale-check.mjs --kind fittingPartition --kind fittingBackPanel --kind fittingBench
-  --kind fittingMirror` and `--kind fittingCurtain --kind lingerieBust --kind lingerieSetRed --lift 0.72` (the tool now renders office /
-  mall procedural box forms too), viewed beside zombie `lastshift` at runtime scale 1.0.
-- Tests: `tests/mall-lingerie-store.test.ts`.
+- No baked loose clutter: the rooms' bench / mirror are built-in fixtures; the stock is separate riders on mannequins / rails; the store's
+  finds are real loot in its holders (drawer chests, the till, tables, bays).
+- Renders: `node tools/asset-pipeline/props/scale-check.mjs --kind fittingBench --kind fittingMirror --kind lingerieRackRow --lift 0.91
+  --kind lingerieRackRing --lift 0.69` (stand-ins) and the composed real-stock renders above (`--prop <glb> --turn` for the mannequin),
+  viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/mall-lingerie-store.test.ts` (rooms enclosed by walls + one framed doorway each, validation clean, enemy paths, the floor's
+  racks / dressed mannequins / stock), `tests/lingerie-mannequin-fit.test.ts` (lane FIT), `tests/mall-lingerie-spawns.test.ts` (lane CONTEXT).
 
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so

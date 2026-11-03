@@ -458,6 +458,8 @@ export const CONTROLS: [string, string][] = [
   // Task office-overhaul-20261030 (INTERACT, #1): hold E on a grounded bag to pick it up and wear it
   ['Backpack: hold it (slot 6) · set it down · open it (world keeps running) · pick it up', '6 · click · tap E · hold E'],
   ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
+  // task studio-performance-recorder-20261103-043629 (lane RECORDER): debug/perfRecorderUi.ts RECORDER_KEYS (also Pause → Performance)
+  ['Performance recording: start / stop · mark a stutter', 'F8 · F9'],
 ];
 
 export function renderControls(el: HTMLElement): void {

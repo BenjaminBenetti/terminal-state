@@ -154,11 +154,13 @@ export class PerfOverlay {
   frame(time: number, cpuMs: number): void {
     const c = this.host.frameCpu;
     this.history.push({time, cpuMs, updateMs: c.updateMs, renderMs: c.renderMs, deferredMs: c.deferredMs ?? 0, rendered: c.rendered, frameId: c.rendered ? this.host.renderer.info.frame : -1});
-    if (!this.visible) return;
+    if (!this.visible) {
+      // task studio-performance-recorder-20261103 (lane RECORDER): a recording keeps GPU timing on with the overlay hidden
+      if (this.gpuTap) { try { this.pollGpu(c.rendered); } catch { this.setGpuTap(null); } }
+      return;
+    }
     try {
-      // no GPU queries during the loading-screen warm-up (it owns the renderer) or after a device loss
-      this.gpuTimer.setEnabled(!this.host.warming && !this.host.gpu?.deviceLost);
-      if (c.rendered) this.gpuTimer.poll(t => { this.history.assignGpu(t.frame, t.ms); });
+      this.pollGpu(c.rendered);
       if (time - this.lastText >= TEXT_MS || time < this.lastText) {
         this.lastText = time;
         this.updateText(time);
@@ -168,6 +170,23 @@ export class PerfOverlay {
       this.fail(err);
     }
   }
+
+  /** No GPU queries during the loading-screen warm-up (it owns the renderer) or after a device loss; results go to the history (+ the tap). */
+  private pollGpu(rendered: boolean): void {
+    this.gpuTimer.setEnabled(!this.host.warming && !this.host.gpu?.deviceLost);
+    if (rendered) this.gpuTimer.poll(t => { this.history.assignGpu(t.frame, t.ms); this.gpuTap?.(t.frame, t.ms); });
+  }
+
+  /**
+   * Task studio-performance-recorder-20261103-043629 (lane RECORDER): the performance recorder's GPU timing tap (debug/perfRecorderHooks.ts).
+   * While set, GPU timing stays on and is polled even with the overlay hidden, and every resolved frame total is also handed to it;
+   * clearing it (recording stopped) switches the timer off again unless the overlay is shown.
+   */
+  setGpuTap(fn: ((frameId: number, ms: number) => void) | null): void {
+    this.gpuTap = fn;
+    if (!fn && !this.visible) this.gpuTimer.setEnabled(false);
+  }
+  private gpuTap: ((frameId: number, ms: number) => void) | null = null;
 
   toggle(): void {
     if (this.visible) this.hide(); else this.show();

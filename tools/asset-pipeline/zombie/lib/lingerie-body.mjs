@@ -229,10 +229,12 @@ export function measureLandmarks(B) {
   // cross-section profile per 5 mm bin of the fit surface: torso (above the crotch: both sides) / per leg (below)
   const Y0 = Math.max(0.3, crotch[1] - 0.35), Y1 = J.Neck[1] + 0.06, YS = 0.005, NY = Math.round((Y1 - Y0) / YS) + 1;
   const prof = Array.from({length: NY}, (_, j) => ({y: Y0 + j * YS, xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity, legs: {L: {xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity}, R: {xMin: Infinity, xMax: -Infinity, zMin: Infinity, zMax: -Infinity}}}));
-  for (let i = 0; i < n; i++) {
-    if (!fitV[i]) continue;
-    const y = P[i * 3 + 1], j = Math.round((y - Y0) / YS); if (j < 0 || j >= NY) continue;
-    const x = P[i * 3], z = P[i * 3 + 2], b = prof[j];
+  // profile points: the fit vertices, or (a sparse low-poly figure: the mannequin) dense surface samples of the fit triangles
+  const PP = B.profilePts ?? P, nP = B.profilePts ? B.profilePts.length / 3 : n;
+  for (let i = 0; i < nP; i++) {
+    if (!B.profilePts && !fitV[i]) continue;
+    const y = PP[i * 3 + 1], j = Math.round((y - Y0) / YS); if (j < 0 || j >= NY) continue;
+    const x = PP[i * 3], z = PP[i * 3 + 2], b = prof[j];
     b.xMin = Math.min(b.xMin, x); b.xMax = Math.max(b.xMax, x); b.zMin = Math.min(b.zMin, z); b.zMax = Math.max(b.zMax, z);
     const L = b.legs[x >= 0 ? 'L' : 'R']; L.xMin = Math.min(L.xMin, x); L.xMax = Math.max(L.xMax, x); L.zMin = Math.min(L.zMin, z); L.zMax = Math.max(L.zMax, z);
   }
@@ -255,6 +257,9 @@ export function measureLandmarks(B) {
   // widest hip between the crotch and the hip joint
   let hip = null;
   for (let y = crotch[1]; y <= J.Hips[1] + 0.02; y += YS) { const b = at(y); const w = b.xMax - b.xMin; if (Number.isFinite(w) && (!hip || w > hip.w)) hip = {y, w}; }
+  // (a figure measured before its hip joint is known - the mannequin's provisional pass - may leave these empty: neutral fallbacks)
+  waist ??= {y: (J.Hips[1] + fold[0]) / 2, w: 0};
+  hip ??= {y: crotch[1], w: 0};
   // shoulder crest at the strap line: |x| = 0.72 x the shoulder joint's |x| (medial on the trapezius)
   const strapX = 0.72 * Math.abs(J.L_UpperArm[0]);
   const crest = {};

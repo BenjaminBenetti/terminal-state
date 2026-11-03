@@ -349,6 +349,15 @@ export class Grid {
     return true;
   }
 
+  /**
+   * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): sample 0 of walkLineClearH (the start point itself), shared
+   * by every walk from a whatever its end — false = every walkLineClearH(ax, az, *, *, r) is false (its exact first iteration).
+   */
+  walkStartClearH(ax: number, az: number, r: number): boolean {
+    const f = this.floorAt(ax, az);
+    return this.circleClearH(ax, az, r, f);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Reachability
 
@@ -430,6 +439,14 @@ export interface NavLevels {
   walkLineClear(ax: number, ay: number, az: number, bx: number, bz: number, r: number, by?: number): boolean;
   /** Neighbour steps (level, cell a <-> cell b) a railing closes (deck edges, stairwells, flight sides). */
   blockedEdges?(): readonly {level: number; a: number; b: number}[];
+  /**
+   * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): walkLineClear's sample 0 at a (shared by every walk from a:
+   * false = every walk from a is blocked), and a walk BATCH around synchronous string pulling (per-column answers remembered
+   * between begin and end; gen/levels.ts beginWalkBatch). Optional: without them the string pulling runs as before.
+   */
+  walkStartClear?(ax: number, ay: number, az: number, r: number): boolean;
+  beginWalkBatch?(): void;
+  endWalkBatch?(): void;
 }
 
 /** Clear height a nav cell must offer on stacked stations (m; zombies stoop). */
@@ -452,6 +469,16 @@ export const PULL_PROBE_UNITS = 48;
 export interface PathFinderOptions {
   /** Level distance fields for the A* heuristic (default: when the stack has >= LEVEL_HEURISTIC_MIN_LEVELS levels). */
   levelHeuristic?: boolean;
+}
+
+/** lane AI-CPU: the state of one PathFinder.search() A* run (PathFinder.expand), kept across its chunk boundaries. */
+interface AStarRun {
+  cur: number; goal: number; maxExpand: number; drops: boolean; useLinks: boolean; W: number; H: number; NC: number;
+  /** Heuristic inputs (search()'s h): goal cell, level distance field + node index, entry term, goal level's node range. */
+  tx: number; ty: number; LD: Float32Array | null; LN: Int32Array; entry: number; lo: number; hi: number;
+  chunk: number; work: number; expanded: number; found: boolean;
+  /** Resumed after a chunk boundary: the next pop runs without a new work unit (the unit was counted before the yield). */
+  resume: boolean;
 }
 
 /**
@@ -674,23 +701,7 @@ export class PathFinder {
     this.heap[k] = i;
     this.heapF[k] = f;
   }
-  private pop(): number {
-    const top = this.heap[0];
-    const lastI = this.heap[--this.heapSize], lastF = this.heapF[this.heapSize];
-    let k = 0;
-    for (;;) {
-      let c = 2 * k + 1;
-      if (c >= this.heapSize) break;
-      if (c + 1 < this.heapSize && this.heapF[c + 1] < this.heapF[c]) c++;
-      if (this.heapF[c] >= lastF) break;
-      this.heap[k] = this.heap[c];
-      this.heapF[k] = this.heapF[c];
-      k = c;
-    }
-    this.heap[k] = lastI;
-    this.heapF[k] = lastF;
-    return top;
-  }
+  // (lane AI-CPU: the heap's pop lives in expand(), on local variables — the only caller)
   /** Level index (list position) an actor with feet at y stands on at (x, z); main level when unknown. */
   private levelOf(x: number, z: number, y: number | undefined): number {
     if (!this.src || y === undefined) return 0;
@@ -699,6 +710,147 @@ export class PathFinder {
     const k = this.src.list.findIndex(l => l.id === s.level);
     return k < 0 ? 0 : k;
   }
+  /**
+   * lane AI-CPU: search()'s A* loop (verbatim), out of the generator: runs until the heap is empty, the goal is closed or the
+   * expansion bound is hit (true), or until `chunk` work units were spent since the last resume (false: the caller yields, then
+   * calls again — the same pop continues). The heap push / pop (this.push / this.pop) and the heuristic h are inlined on local
+   * variables (the same comparisons on the same Float32 keys, the same growth): a finder and its fork() have different object
+   * shapes, and per-call `this` property access in the hot loop measured ~2x slower in the game-like (two-finder) setting.
+   */
+  private expand(s: AStarRun): boolean {
+    const {cur, goal, maxExpand, drops, useLinks, W, H, NC, chunk, tx, ty, LD, LN, entry, lo, hi} = s;
+    const walk = this.walk, gArr = this.g, stamp = this.stamp, closed = this.closed, came = this.came, cameLink = this.cameLink, wallCost = this.wallCost, fl = this.fl, linkFlag = this.linkFlag, twinFlag = this.twinFlag, eb = this.edgeBlock;
+    const links = this.links, twins = this.twins, linkMap = this.linkMap;
+    let heap = this.heap, heapF = this.heapF, size = this.heapSize;
+    // search()'s h (octile; on tall stacks off the goal's level max(octile, levelDist + entry))
+    const h = (node: number, x: number, y: number): number => {
+      const dx = x > tx ? x - tx : tx - x, dy = y > ty ? y - ty : ty - y;
+      const o = dx > dy ? dx + 0.4142 * dy : dy + 0.4142 * dx;
+      if (!LD || (node >= lo && node < hi)) return o;
+      const d = LD[LN[node]] + entry;
+      return d > o ? d : o;
+    };
+    // this.push (verbatim on the locals; growth writes the new arrays back)
+    const push = (i: number, f: number): void => {
+      if (size >= heap.length) {
+        const nh = new Int32Array(heap.length * 2), nf = new Float32Array(heap.length * 2);
+        nh.set(heap); nf.set(heapF);
+        heap = this.heap = nh; heapF = this.heapF = nf;
+      }
+      let k = size++;
+      while (k > 0) {
+        const p = (k - 1) >> 1;
+        if (heapF[p] <= f) break;
+        heap[k] = heap[p];
+        heapF[k] = heapF[p];
+        k = p;
+      }
+      heap[k] = i;
+      heapF[k] = f;
+    };
+    let work = s.work, expanded = s.expanded;
+    while (size > 0) {
+      if (s.resume) s.resume = false;
+      else if (++work > chunk) { work = 1; s.work = work; s.expanded = expanded; s.resume = true; this.heapSize = size; return false; }
+      // this.pop (verbatim on the locals)
+      const c = heap[0];
+      {
+        const lastI = heap[--size], lastF = heapF[size];
+        let k = 0;
+        for (;;) {
+          let q = 2 * k + 1;
+          if (q >= size) break;
+          if (q + 1 < size && heapF[q + 1] < heapF[q]) q++;
+          if (heapF[q] >= lastF) break;
+          heap[k] = heap[q];
+          heapF[k] = heapF[q];
+          k = q;
+        }
+        heap[k] = lastI;
+        heapF[k] = lastF;
+      }
+      if (closed[c] === cur) continue;
+      closed[c] = cur;
+      if (c === goal) { s.found = true; break; }
+      if (++expanded > maxExpand) break;
+      const lv = Math.floor(c / NC), ci = c - lv * NC;
+      const cx = ci % W, cy = (ci - cx) / W;
+      const gc = gArr[c], fc = fl[c];
+      for (let oy = -1; oy <= 1; oy++) {
+        if (cy + oy < 0 || cy + oy >= H) continue;
+        for (let ox = -1; ox <= 1; ox++) {
+          if (!ox && !oy) continue;
+          if (cx + ox < 0 || cx + ox >= W) continue;
+          const n = c + ox + oy * W;
+          if (!walk[n] || closed[n] === cur) continue;
+          const diag = ox !== 0 && oy !== 0;
+          const dh = fl[n] - fc;
+          let extra = 0;
+          if (dh > NAV_STEP || dh < -NAV_STEP) {
+            if (dh > 0 || !drops || diag || dh < -MAX_DROP) continue;
+            extra = DROP_COST;
+          }
+          if (diag) {
+            const a1 = c + ox, a2 = c + oy * W;
+            if (!walk[a1] || !walk[a2] || Math.abs(fl[a1] - fc) > NAV_STEP || Math.abs(fl[a2] - fc) > NAV_STEP) continue;
+          }
+          if (eb) {
+            const bx = ox > 0 ? 1 : 2, by = oy > 0 ? 4 : 8;
+            if (!diag ? eb[c] & (ox ? bx : by) : (eb[c] & (bx | by)) || (eb[c + ox] & by) || (eb[c + oy * W] & bx)) continue;
+          }
+          const ng = gc + (diag ? 1.4142 : 1) + wallCost[n] + extra;
+          if (stamp[n] !== cur || ng < gArr[n]) {
+            const hn = h(n, cx + ox, cy + oy);
+            if (hn === Infinity) continue;
+            stamp[n] = cur;
+            gArr[n] = ng;
+            came[n] = c;
+            cameLink[n] = 0;
+            push(n, ng + hn);
+          }
+        }
+      }
+      if (twinFlag[c]) {
+        // the same stair cell on another level (free hand-over)
+        for (const n of twins.get(c)!) {
+          if (closed[n] === cur) continue;
+          const ng = gc + 0.01;
+          if (stamp[n] !== cur || ng < gArr[n]) {
+            const hn = h(n, cx, cy);
+            if (hn === Infinity) continue;
+            stamp[n] = cur;
+            gArr[n] = ng;
+            came[n] = c;
+            cameLink[n] = 0;
+            push(n, ng + hn);
+          }
+        }
+      }
+      if (useLinks && linkFlag[c]) {
+        for (const li of linkMap.get(c)!) {
+          const l = links[li];
+          const n = l.a === c ? l.b : l.a;
+          if (!walk[n] || closed[n] === cur) continue;
+          const ng = gc + l.cost;
+          if (stamp[n] !== cur || ng < gArr[n]) {
+            const nc = n - Math.floor(n / NC) * NC, nx = nc % W;
+            const hn = h(n, nx, (nc - nx) / W);
+            if (hn === Infinity) continue;
+            stamp[n] = cur;
+            gArr[n] = ng;
+            came[n] = c;
+            cameLink[n] = li + 1;
+            push(n, ng + hn);
+          }
+        }
+      }
+    }
+    this.heapSize = size;
+    s.work = work;
+    s.expanded = expanded;
+    return true;
+  }
+
   /**
    * Returns world-space waypoints (cell centres string-pulled; ladder ends marked; on stacked
    * stations each with its floor height) or null.
@@ -756,7 +908,7 @@ export class PathFinder {
     this.cur++;
     if (this.cur === 0xffffffff) { this.stamp.fill(0); this.closed.fill(0); this.cur = 1; }
     const cur = this.cur;
-    const walk = this.walk, gArr = this.g, stamp = this.stamp, closed = this.closed, came = this.came, cameLink = this.cameLink, wallCost = this.wallCost, fl = this.fl, linkFlag = this.linkFlag, twinFlag = this.twinFlag, eb = this.edgeBlock;
+    const gArr = this.g, stamp = this.stamp, came = this.came, cameLink = this.cameLink, fl = this.fl;
     const drops = !!opts.drops;
     const links = this.links, useLinks = !opts.noLinks;
     this.heapSize = 0;
@@ -785,88 +937,16 @@ export class PathFinder {
       const d = LD[LN[node]] + entry;
       return d > o ? d : o;
     } : (_node: number, x: number, y: number) => h2(x, y);
+    // Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): the A* loop runs in a plain method (expand(): the same h,
+    // inlined), not in this generator — engines do not on-stack-replace a generator's loop, so a long search ran its loop in the
+    // unoptimized tiers (measured on the Mall: one 22k-expansion search 92 ms on its first run, still 58-62 ms on the next two;
+    // the plain loop optimizes on the second). The same loop, the same work units / chunk boundaries (expand() returns at each one
+    // and is resumed after the yield).
+    const run: AStarRun = {cur, goal, maxExpand, drops, useLinks, W, H, NC, tx, ty, LD, LN, entry, lo, hi, chunk, work, expanded: 0, found: false, resume: false};
     this.push(start, h(start, sx, sy));
-    let expanded = 0;
-    let found = false;
-    while (this.heapSize > 0) {
-      if (++work > chunk) { work = 1; yield; } // lane SCHED: a resumable search's chunk boundary (never with chunk = Infinity)
-      const c = this.pop();
-      if (closed[c] === cur) continue;
-      closed[c] = cur;
-      if (c === goal) { found = true; break; }
-      if (++expanded > maxExpand) break;
-      const lv = Math.floor(c / NC), ci = c - lv * NC;
-      const cx = ci % W, cy = (ci - cx) / W;
-      const gc = gArr[c], fc = fl[c];
-      for (let oy = -1; oy <= 1; oy++) {
-        if (cy + oy < 0 || cy + oy >= H) continue;
-        for (let ox = -1; ox <= 1; ox++) {
-          if (!ox && !oy) continue;
-          if (cx + ox < 0 || cx + ox >= W) continue;
-          const n = c + ox + oy * W;
-          if (!walk[n] || closed[n] === cur) continue;
-          const diag = ox !== 0 && oy !== 0;
-          const dh = fl[n] - fc;
-          let extra = 0;
-          if (dh > NAV_STEP || dh < -NAV_STEP) {
-            if (dh > 0 || !drops || diag || dh < -MAX_DROP) continue;
-            extra = DROP_COST;
-          }
-          if (diag) {
-            const a1 = c + ox, a2 = c + oy * W;
-            if (!walk[a1] || !walk[a2] || Math.abs(fl[a1] - fc) > NAV_STEP || Math.abs(fl[a2] - fc) > NAV_STEP) continue;
-          }
-          if (eb) {
-            const bx = ox > 0 ? 1 : 2, by = oy > 0 ? 4 : 8;
-            if (!diag ? eb[c] & (ox ? bx : by) : (eb[c] & (bx | by)) || (eb[c + ox] & by) || (eb[c + oy * W] & bx)) continue;
-          }
-          const ng = gc + (diag ? 1.4142 : 1) + wallCost[n] + extra;
-          if (stamp[n] !== cur || ng < gArr[n]) {
-            const hn = h(n, cx + ox, cy + oy);
-            if (hn === Infinity) continue;
-            stamp[n] = cur;
-            gArr[n] = ng;
-            came[n] = c;
-            cameLink[n] = 0;
-            this.push(n, ng + hn);
-          }
-        }
-      }
-      if (twinFlag[c]) {
-        // the same stair cell on another level (free hand-over)
-        for (const n of this.twins.get(c)!) {
-          if (closed[n] === cur) continue;
-          const ng = gc + 0.01;
-          if (stamp[n] !== cur || ng < gArr[n]) {
-            const hn = h(n, cx, cy);
-            if (hn === Infinity) continue;
-            stamp[n] = cur;
-            gArr[n] = ng;
-            came[n] = c;
-            cameLink[n] = 0;
-            this.push(n, ng + hn);
-          }
-        }
-      }
-      if (useLinks && linkFlag[c]) {
-        for (const li of this.linkMap.get(c)!) {
-          const l = links[li];
-          const n = l.a === c ? l.b : l.a;
-          if (!walk[n] || closed[n] === cur) continue;
-          const ng = gc + l.cost;
-          if (stamp[n] !== cur || ng < gArr[n]) {
-            const nc = n - Math.floor(n / NC) * NC, nx = nc % W;
-            const hn = h(n, nx, (nc - nx) / W);
-            if (hn === Infinity) continue;
-            stamp[n] = cur;
-            gArr[n] = ng;
-            came[n] = c;
-            cameLink[n] = li + 1;
-            this.push(n, ng + hn);
-          }
-        }
-      }
-    }
+    while (!this.expand(run)) yield; // lane SCHED: a resumable search's chunk boundary (never with chunk = Infinity)
+    work = run.work;
+    const expanded = run.expanded, found = run.found;
     this.lastExpanded = expanded;
     if (!found) return null;
     const cells: number[] = [], via: number[] = [];
@@ -880,6 +960,13 @@ export class PathFinder {
     let anchor: [number, number, number] = [ax, az, multi && opts.ay !== undefined ? opts.ay : fl[start]];
     const clear = (a: [number, number, number], b: [number, number, number]) =>
       src ? src.walkLineClear(a[0], a[2], a[1], b[0], b[1], radius, b[2]) : ga.walkLineClearH(a[0], a[1], b[0], b[1], radius);
+    // Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): sample 0 of every probe from an anchor is the anchor
+    // itself (walkLineClear's t = 0 sample does not depend on the probe's end): when it is blocked (an anchor hugging a wall:
+    // measured ~60 % of the Mall's failing probes) every probe from that anchor fails, so they are not run — the same j, the same
+    // work units / chunk boundaries. A walk batch (Levels.beginWalkBatch) remembers the per-column answers between yields.
+    const startClear = (a: [number, number, number]) =>
+      src ? (src.walkStartClear ? src.walkStartClear(a[0], a[2], a[1], radius) : true) : ga.walkStartClearH(a[0], a[1], radius);
+    const batch = src && src.beginWalkBatch && src.endWalkBatch ? src as Required<Pick<NavLevels, 'beginWalkBatch' | 'endWalkBatch'>> : null;
     const emit = (p: [number, number, number], link?: number) => { out.push(multi ? [p[0], p[1], link, p[2]] : link === undefined ? [p[0], p[1]] : [p[0], p[1], link]); };
     const segment = function* (from: number, to: number, end: [number, number, number]): Generator<void, void, void> {
       const pts: [number, number, number][] = [];
@@ -889,9 +976,12 @@ export class PathFinder {
       while (i < pts.length) {
         let j = Math.min(pts.length - 1, i + 48);
         // (j > i && !clear(anchor, pts[j])) j-- — the same probes in the same order; lane SCHED: a chunk boundary between probes
+        // lane AI-CPU: `start` = the anchor's sample 0 (-1: not evaluated since the batch (re)started: a yield may change the world)
+        let start = -1;
         while (j > i) {
-          if ((work += PULL_PROBE_UNITS) > chunk) { work = PULL_PROBE_UNITS; yield; }
-          if (clear(anchor, pts[j])) break;
+          if ((work += PULL_PROBE_UNITS) > chunk) { work = PULL_PROBE_UNITS; batch?.endWalkBatch(); yield; batch?.beginWalkBatch(); start = -1; }
+          if (start < 0) start = startClear(anchor) ? 1 : 0;
+          if (start === 1 && clear(anchor, pts[j])) break;
           j--;
         }
         emit(pts[j]);
@@ -899,18 +989,23 @@ export class PathFinder {
         i = j + 1;
       }
     };
-    let segStart = 0;
-    for (let k = 1; k < cells.length; k++) {
-      if (via[k] < 0) continue;
-      const l = links[via[k]];
-      const fromA = l.a === cells[k - 1];
-      const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
-      yield* segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
-      emit([pe.x, pe.z, pe.y], l.id);
-      anchor = [pe.x, pe.z, pe.y];
-      segStart = k;
+    batch?.beginWalkBatch();
+    try {
+      let segStart = 0;
+      for (let k = 1; k < cells.length; k++) {
+        if (via[k] < 0) continue;
+        const l = links[via[k]];
+        const fromA = l.a === cells[k - 1];
+        const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
+        yield* segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
+        emit([pe.x, pe.z, pe.y], l.id);
+        anchor = [pe.x, pe.z, pe.y];
+        segStart = k;
+      }
+      yield* segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
+    } finally {
+      batch?.endWalkBatch();
     }
-    yield* segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
     return out;
   }
 }

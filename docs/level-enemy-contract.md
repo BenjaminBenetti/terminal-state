@@ -126,3 +126,22 @@ profile, family list, tier or guarantee.
       pages:check`. The reference then lists the level, its tier, family shares, contexts and eligibility automatically.
 - [ ] Travel UI helpers in `game/src/levels/registry.ts` (`otherLevel`, `travelTargets`, `sectionLabel`, `clearLabel`): generalised for
       three levels with the mall (task track3); a new level adds its labels there.
+
+## 5. Enemy AI CPU: path searches (task studio-performance-recorder-20261103-043629-01, lane AI-CPU)
+
+Measured on the Mall with the real enemies (Node: `game/tests/helpers/aiCpuSim.ts` runs `Game.updateZombies` with the real actors,
+horde director, path service, chase share, vocal field and flashlight lure; `game/tests/ai-cpu-mall.test.ts`,
+`LL_AICPU_OUT=/tmp/x.txt` prints the numbers): brains / sight, motor, the vocal field and animation are a steady 1–2 ms per frame
+for ~45 enemies; the AI's spike frames are single **synchronous path searches** (20–35 ms, the worst 50–95 ms). Camera turning
+only reaches the AI through the flashlight: its moving spot keeps investigating enemies re-planning (immediate searches).
+
+The search (`gen/grid.ts` `PathFinder`, `gen/levels.ts` walk tests) returns exactly what it returned before — the same paths,
+expansions and chunk yields, pinned against an executable copy of the old search (`game/tests/helpers/pathRef.ts`) on every
+level — at roughly a third of the cost:
+- A* runs in a plain method (`expand`), not inside the `search` generator (engines do not optimize a long generator loop in place).
+- String pulling skips probes whose shared first sample (the anchor) is blocked, and runs its walks in a **walk batch**
+  (`Levels.beginWalkBatch` / `endWalkBatch`): per-column band summaries and a cheapest-first order of the same conjunction.
+
+Rules for changes here: a batch never spans a yield or a grid / volume change (runtime grid edits — the Reactor ending's doors,
+the train-ride grids — happen outside path searches); keep `ai-cpu-mall.test.ts` (reference equality, batch = plain walks with a
+volume, the real-actor sim's identical behaviour) green; never trade a search's result for speed.

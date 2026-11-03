@@ -163,7 +163,8 @@ const pick = <T>(a: readonly T[], r: Rnd): T => a[Math.floor(r() * a.length) % a
  * (the typecheck keeps it so; tests: every id is a shipped image).
  */
 export const PROGRAM_ART: Readonly<Record<MallProgram | 'mall', readonly AdArtId[]>> = {
-  womenswear: ['womenswear'], lingerie: ['womenswear'], clothing: ['menswear', 'womenswear'], department: ['menswear', 'womenswear'], shoes: ['womenswear', 'menswear'],
+  womenswear: ['womenswear'], lingerie: ['lingerie-flatlay', 'lingerie-dressform', 'lingerie-hangers', 'lingerie-giftbox'], // lingerie: its own Codex art (store polish)
+  clothing: ['menswear', 'womenswear'], department: ['menswear', 'womenswear'], shoes: ['womenswear', 'menswear'],
   optical: ['womenswear', 'menswear'], jewelry: ['womenswear'], luggage: ['menswear'],
   'food-court': ['food'], grocery: ['food'], cafe: ['cafe'],
   electronics: ['electronics'], phone: ['electronics'], arcade: ['electronics'], music: ['electronics'],

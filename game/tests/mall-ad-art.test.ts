@@ -1,5 +1,5 @@
 // Task studio-beta-mall-round4-20261101-01 (lane ADS — user: "use codex to produce images for the adds, not draw them by hand :P"): the
-// mall ad ARTWORK comes from the eight Codex-generated images (assets/mallAdArt.ts; runtime derivatives assets/textures/mall/ads/*.jpg,
+// mall ad ARTWORK comes from the Codex-generated images (eight round-4 + the lingerie boutique's four, task mall-lingerie-store-polish-20261103-045922) (assets/mallAdArt.ts; runtime derivatives assets/textures/mall/ads/*.jpg,
 // tools/asset-pipeline/mall-ads/build-ad-art.mjs, provenance assets/derivatives/mall-ad-art-20261101.json), never hand-drawn:
 //  - every ad program / cuisine / kiosk brand maps to a shipped image (world/mallAds.ts adArtOf);
 //  - the files exist (512 px JPEG), are allowlisted byte-exact, level-only (mall), credited, and the provenance carries the Codex
@@ -14,7 +14,7 @@ import {existsSync, readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
 import {ShimCanvas, installCanvasShim} from './helpers/canvas2d';
-import {AD_ART_FOCUS, AD_ART_IDS, AD_ART_MENU_CROPS, AD_ART_URLS, adArtStats, mallAdArt, mallAdArtSummary, preloadMallAdArt, releaseMallAdArt, setMallAdArt,
+import {AD_ART_FOCUS, AD_ART_IDS, AD_ART_LINGERIE_IDS, AD_ART_ROUND4_IDS, AD_ART_MENU_CROPS, AD_ART_URLS, adArtStats, mallAdArt, mallAdArtSummary, preloadMallAdArt, releaseMallAdArt, setMallAdArt,
   type AdArtId, type AdArtImage} from '../src/assets/mallAdArt';
 import {CUISINE_ART, PROGRAM_ART, adArtOf, adCanvasSize, adPalette, adTexture, coverWindow, cropWindow, type MallAd} from '../src/world/mallAds';
 import {CAFE_MENUS, FOOD_CUISINES, MALL_PROGRAMS} from '../src/gen/mall/shops';
@@ -28,12 +28,18 @@ const PUB = fileURLToPath(new URL('../public/', import.meta.url));
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
 const sha = (b: Buffer) => createHash('sha256').update(b).digest('hex');
 const PROV_REL = 'assets/derivatives/mall-ad-art-20261101.json';
+// task mall-lingerie-store-polish-20261103-045922: the lingerie boutique's own four Codex artworks (a sibling builder + provenance)
+const LINGERIE_PROV_REL = 'assets/derivatives/mall-lingerie-ad-art-20261103.json';
+const ART_SETS = [
+  {prov: PROV_REL, ids: AD_ART_ROUND4_IDS as readonly AdArtId[], rebuild: 'node tools/asset-pipeline/mall-ads/build-ad-art.mjs', credits: 'mall-ad-art-20261101'},
+  {prov: LINGERIE_PROV_REL, ids: AD_ART_LINGERIE_IDS as readonly AdArtId[], rebuild: 'node tools/asset-pipeline/mall-ads/build-lingerie-ad-art.mjs', credits: 'mall-lingerie-ad-art-20261103'},
+];
 const ad = (o: Partial<MallAd> & Pick<MallAd, 'kind' | 'program' | 'w' | 'h'>): MallAd => ({level: 1, x: 0, y: 2, z: 0, nx: 0, nz: 1, seed: 4242, ...o});
 const PROGRAMS = [...Object.keys(MALL_PROGRAMS), 'mall'] as (MallProgram | 'mall')[];
 const MENU_BURGER = ['CLASSIC BURGER', 'DOUBLE STACK', 'CHEESE FRIES', 'CHICKEN BURGER', 'MILKSHAKE', 'ONION RINGS'];
 
 describe('program -> Codex artwork mapping', () => {
-  it('every program, cuisine and kiosk brand maps to one of the eight shipped images; every image is used', () => {
+  it('every program, cuisine and kiosk brand maps to one of the twelve shipped images; every image is used; the lingerie boutique uses only its own art', () => {
     expect(new Set(Object.keys(PROGRAM_ART))).toEqual(new Set(PROGRAMS));
     const used = new Set<AdArtId>();
     for (const p of PROGRAMS) {
@@ -43,6 +49,8 @@ describe('program -> Codex artwork mapping', () => {
     }
     expect([...used].sort()).toEqual([...AD_ART_IDS].sort());
     for (const c of [...FOOD_CUISINES, ...CAFE_MENUS]) expect(AD_ART_IDS, c).toContain(CUISINE_ART[c]);
+    expect([...PROGRAM_ART.lingerie].sort()).toEqual([...AD_ART_LINGERIE_IDS].sort());
+    for (const p of PROGRAMS) if (p !== 'lingerie') for (const id of PROGRAM_ART[p]) expect(AD_ART_LINGERIE_IDS as readonly string[], `${p} -> ${id}`).not.toContain(id);
   });
 
   it('the themes: fashion -> people, food / cafe -> food photos, electronics, health, sports, everything else -> shopping', () => {
@@ -72,14 +80,18 @@ describe('program -> Codex artwork mapping', () => {
 describe('runtime files, allowlist, provenance, credits', () => {
   const allow = JSON.parse(readFileSync(`${ROOT}tools/release/public-inputs.json`, 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
   const entry = (p: string) => allow.files.find(f => f.path === p);
-  const prov = JSON.parse(readFileSync(`${PUB}${PROV_REL}`, 'utf8')) as {generator: string; rebuild: string; recipe: {resize: {kernel: string}}; files: {id: string; source: {sha256: string; width: number; height: number; file: string}; codex: {generator: string; threadId: string; nativeSha256Matches: boolean; exit: number}; prompt: string; output: {url: string; bytes: number; sha256: string; width: number; height: number}}[]};
+  type Prov = {generator: string; rebuild: string; recipe: {resize: {kernel: string}}; files: {id: string; source: {sha256: string; width: number; height: number; file: string}; codex: {generator: string; threadId: string; nativeSha256Matches: boolean; exit: number}; prompt: string; output: {url: string; bytes: number; sha256: string; width: number; height: number}}[]};
+  const provOf = (rel: string) => JSON.parse(readFileSync(`${PUB}${rel}`, 'utf8')) as Prov;
 
-  it('eight 512 px JPEGs, level-only (mall), allowlisted byte-exact, each with its Codex receipt in the provenance', () => {
-    expect(prov.files.map(f => f.id)).toEqual(AD_ART_IDS.map(id => `ad-${id}`));
+  it('twelve 512 px JPEGs (eight round-4 + four lingerie), level-only (mall), allowlisted byte-exact, each with its Codex receipt in its provenance', () => {
+   expect([...ART_SETS.flatMap(t => t.ids)]).toEqual([...AD_ART_IDS]);
+   for (const set of ART_SETS) {
+    const prov = provOf(set.prov);
+    expect(prov.files.map(f => f.id)).toEqual(set.ids.map(id => `ad-${id}`));
     expect(prov.generator).toBe('Codex native image_gen (owned Codex CLI)');
-    expect(prov.rebuild).toBe('node tools/asset-pipeline/mall-ads/build-ad-art.mjs');
+    expect(prov.rebuild).toBe(set.rebuild);
     expect(prov.recipe.resize.kernel).toBe('lanczos3');
-    for (const id of AD_ART_IDS) {
+    for (const id of set.ids) {
       const url = AD_ART_URLS[id], file = `${PUB}${url}`;
       expect(existsSync(file), url).toBe(true);
       const b = readFileSync(file);
@@ -105,22 +117,25 @@ describe('runtime files, allowlist, provenance, credits', () => {
       expect(p.codex.exit).toBe(0);
       expect(p.prompt).toMatch(/NO text/);
     }
-    expect(new Set(prov.files.map(f => f.codex.threadId)).size).toBe(8);
-    expect(new Set(prov.files.map(f => f.source.sha256)).size).toBe(8);
+    expect(new Set(prov.files.map(f => f.codex.threadId)).size).toBe(set.ids.length);
+    expect(new Set(prov.files.map(f => f.source.sha256)).size).toBe(set.ids.length);
+   }
   });
 
   it('the provenance and CREDITS are allowlisted at their current bytes; no URLs, tokens or local paths in public provenance', () => {
-    for (const rel of [PROV_REL, 'assets/CREDITS.md']) {
+    for (const rel of [PROV_REL, LINGERIE_PROV_REL, 'assets/CREDITS.md']) {
       const b = readFileSync(`${PUB}${rel}`);
       expect(entry(rel), rel).toEqual({path: rel, bytes: b.length, sha256: sha(b)});
     }
-    const text = readFileSync(`${PUB}${PROV_REL}`, 'utf8');
-    expect(text).not.toMatch(/https?:|Signature=|X-Amz|Key-Pair-Id|token=|api[_-]?key|\/home\/|\/workspaces\//i);
     const credits = readFileSync(`${PUB}assets/CREDITS.md`, 'utf8');
-    const sec = credits.slice(credits.indexOf('<!-- BEGIN mall-ad-art-20261101'), credits.indexOf('<!-- END mall-ad-art-20261101 -->'));
-    expect(sec).toMatch(/Codex native image generation/);
-    expect(sec).toMatch(/no licence or commercial clearance implied/);
-    for (const id of AD_ART_IDS) expect(sec).toContain(`\`${AD_ART_URLS[id]}\``);
+    for (const set of ART_SETS) {
+      const text = readFileSync(`${PUB}${set.prov}`, 'utf8');
+      expect(text).not.toMatch(/https?:|Signature=|X-Amz|Key-Pair-Id|token=|api[_-]?key|\/home\/|\/workspaces\//i);
+      const sec = credits.slice(credits.indexOf(`<!-- BEGIN ${set.credits}`), credits.indexOf(`<!-- END ${set.credits} -->`));
+      expect(sec).toMatch(/Codex native image generation/);
+      expect(sec).toMatch(/no licence or commercial clearance implied/);
+      for (const id of set.ids) expect(sec).toContain(`\`${AD_ART_URLS[id]}\``);
+    }
   });
 });
 
@@ -348,7 +363,7 @@ describe('pixels (rasterizing shim): the subject in view, the band under the tex
 });
 
 describe('loader: held only between the mall preload and its atlas build; other levels load none', () => {
-  it('preload decodes the eight files (deduplicated, failures absent), release closes them', async () => {
+  it('preload decodes the twelve files (deduplicated, failures absent), release closes them', async () => {
     releaseMallAdArt();
     const asked: string[] = [], imgs: AdArtImage[] = [];
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -361,9 +376,9 @@ describe('loader: held only between the mall preload and its atlas build; other 
     expect(b).toEqual(a);
     expect(mallAdArt('health')).toBeNull();
     expect(mallAdArtSummary().held).toEqual(a);
-    expect(adArtStats.loaded - before.loaded).toBe(7);
+    expect(adArtStats.loaded - before.loaded).toBe(AD_ART_IDS.length - 1);
     expect(adArtStats.failed - before.failed).toBe(1);
-    expect(releaseMallAdArt()).toBe(7);
+    expect(releaseMallAdArt()).toBe(AD_ART_IDS.length - 1);
     for (const i of imgs) expect(i.close).toHaveBeenCalledTimes(1);
     expect(mallAdArtSummary().held).toEqual([]);
   });
@@ -378,7 +393,7 @@ describe('loader: held only between the mall preload and its atlas build; other 
       if (fail) expect(run).toThrow('boom'); else run();
       expect(seen).toBe(img);
       expect(host.adArt.loaded).toEqual([...AD_ART_IDS]);
-      expect(host.adArt.released).toBe(8);
+      expect(host.adArt.released).toBe(AD_ART_IDS.length);
       expect(mallAdArtSummary().held).toEqual([]);
     }
   });
