@@ -115,7 +115,7 @@ export interface SaveMeta {
   stationsVisited: number;
   networkSeed: number;
   won: boolean;
-  /** Why this write happened ('departure' | 'arrival' | 'new-game' | 'import'). */
+  /** Why this write happened ('departure' | 'arrival' | 'new-game' | 'ending' (the Reactor credits' Main Menu) | 'import'). */
   reason: string;
   /** The game build that wrote it. */
   build: string;
