@@ -1308,7 +1308,7 @@ export class Game {
    * hidden-until-used holder contents were never projected at all. Now the warm-up's own planner picks the station's representatives
    * (pools included; 'full': every other renderable too, for its own render objects), nearest the arrival first, and
    * render/journeyCompile.ts prepares them for the WHOLE ride (and after it, until done), time-sliced through the frame-budget
-   * scheduler: the scene pass's node builds / render objects into its real render context, then ('full', flashlight casting) the
+   * scheduler: the scene pass's node builds / render objects into its real render context and, side by side ('full', flashlight casting), the
    * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
    * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */

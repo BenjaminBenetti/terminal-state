@@ -69,7 +69,7 @@ export interface JourneyCompileStats {
  * measured step (doubled while a step stays under shadowTargetMs, halved above 3 x that). maxStaleMs: active ms a queued step waits
  * before it may run once over budget.
  */
-export const JOURNEY_COMPILE = {chunk: 16, shadowChunk: 16, shadowTargetMs: 2, key: 'render.journey-compile', priority: -1, maxStaleMs: 2000} as const;
+export const JOURNEY_COMPILE = {chunk: 16, shadowChunk: 8, shadowTargetMs: 1.5, key: 'render.journey-compile', priority: -1, maxStaleMs: 2000} as const;
 
 type Lane = 'scene' | 'shadow';
 
@@ -180,6 +180,8 @@ export class JourneyCompile {
     const saved: [THREE.Object3D, number, boolean, boolean][] = [];
     const keep = (o: THREE.Object3D) => { saved.push([o, o.layers.mask, o.visible, o.frustumCulled]); };
     const shadowMasks = this.shadowLights.map(l => l.shadow.camera.layers.mask);
+    // (a dark torch does not auto-update its shadow map — volumetric.ts — so the draw asks for one; the request flag is restored)
+    const shadowNeeds = this.shadowLights.map(l => l.shadow.needsUpdate);
     // (the step runs after this frame's render, which brought every world matrix up to date: no second whole-scene update here)
     const autoWorld = scene.matrixWorldAutoUpdate;
     scene.matrixWorldAutoUpdate = false;
@@ -190,11 +192,11 @@ export class JourneyCompile {
       for (const [i, m] of objects) masks.set(i.object, ((masks.get(i.object) ?? 0) | m) >>> 0);
       for (const [i] of objects) { i.object.layers.mask = masks.get(i.object)!; i.object.visible = true; i.object.frustumCulled = false; for (const f of i.flips) f.visible = true; }
       for (const l of this.lights) l.layers.mask = (l.layers.mask | PREP_MASK) >>> 0;
-      for (const l of this.shadowLights) l.shadow.camera.layers.mask = CASTER_MASK;
+      for (const l of this.shadowLights) { l.shadow.camera.layers.mask = CASTER_MASK; l.shadow.needsUpdate = true; }
       return fn(v);
     } finally {
       for (let k = saved.length - 1; k >= 0; k--) { const [o, m, vis, fc] = saved[k]; o.layers.mask = m; o.visible = vis; o.frustumCulled = fc; }
-      this.shadowLights.forEach((l, k) => { l.shadow.camera.layers.mask = shadowMasks[k]; });
+      this.shadowLights.forEach((l, k) => { l.shadow.camera.layers.mask = shadowMasks[k]; l.shadow.needsUpdate = shadowNeeds[k]; });
       scene.matrixWorldAutoUpdate = autoWorld;
     }
   }
