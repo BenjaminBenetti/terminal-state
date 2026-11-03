@@ -406,6 +406,19 @@ export interface MachineLoopHandle extends FlareBurnHandle {
 const NOOP_FLARE: FlareBurnHandle = {setPos() {}, stop() {}, playing: false};
 
 /**
+ * Task studio-beta-campaign-polish-20261103-063841-01 (lane TRAIN, item 17): a non-positional looping layer of the moving player train
+ * (Sfx.rideLoop). Level k multiplies the cue's mix gain (CUE_GAIN); rate / lowpass are processing of the clip; all eased (tauS).
+ */
+export interface RideLoopHandle {
+  setLevel(k: number, tauS?: number): void;
+  setRate(r: number, tauS?: number): void;
+  setLowpass(hz: number, tauS?: number): void;
+  /** Fade out (s) and release. Idempotent. */
+  stop(fadeS?: number): void;
+  readonly playing: boolean;
+}
+
+/**
  * Task track1-siren-blightbelly-20261031 (lane AUDIO): the new enemies' Sound Lab cues (clips t1-*.mp3, tools/audio-pipeline/build-track1.mjs; provenance
  * derivatives/audio-track1.json). All world-placed. The hum is an enemy VOCAL ('idle': navigable-route gate, vocal cap, occlusion /
  * storey rules — vocal()); the wake scream an 'alert' vocal (sight rule + alert bias, pri 2); the burst / hiss are combat cues (never
@@ -1791,6 +1804,69 @@ export class Sfx {
   stopFlares(fadeS = 0.1): void {
     for (const l of this.flareLoops.slice()) this.endLoop(l, fadeS);
     this.flareLoops = [];
+  }
+
+  /**
+   * Task studio-beta-campaign-polish-20261103-063841-01 (lane TRAIN, item 17): a NON-positional looping layer of the moving player train
+   * (the listener rides in the car) — an existing bed loop through a lowpass into the MASTER (the volume setting applies; pause / menus
+   * silence it with the master). Starts silent; setLevel / setRate / setLowpass follow the car's speed; stop() fades it out and releases
+   * its nodes. Null when audio is not running or the clip is missing. The caller owns the lifecycle (world/trainRideAudio.ts stops it on
+   * the stop at a platform, a reset, a failed journey and dispose): nothing here is tied to a station world.
+   */
+  rideLoop(cue: 'bedRumble' | 'bedWind', o: {send?: number} = {}): RideLoopHandle | null {
+    const ctx = this.live;
+    if (!ctx) return null;
+    const clip = this.bank.pick(cue);
+    if (!clip) return null;
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = clip.buffer;
+    src.loop = true;
+    const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+    src.loopStart = a;
+    src.loopEnd = b;
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 800;
+    filter.Q.value = 0.5;
+    const fade = ctx.createGain();
+    fade.gain.value = 0;
+    src.connect(filter).connect(fade).connect(this.master);
+    const nodes: AudioNode[] = [src, filter, fade];
+    const send = o.send ?? 0;
+    if (send > 0.001 && this.reverbIn) {
+      const sn = ctx.createGain();
+      sn.gain.value = send;
+      fade.connect(sn).connect(this.reverbIn);
+      nodes.push(sn);
+    }
+    let stopped = false;
+    src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
+    src.start(now, a + Math.random() * Math.max(0, b - a));
+    this.soundsStarted++;
+    const self = this, base = CUE_GAIN[cue];
+    const ease = (prm: AudioParam, v: number, tauS: number) => {
+      const c = self.ctx;
+      if (stopped || !c || !Number.isFinite(v)) return;
+      prm.cancelScheduledValues(c.currentTime);
+      prm.setTargetAtTime(v, c.currentTime, Math.max(0.01, tauS));
+    };
+    return {
+      setLevel(k: number, tauS = 0.3) { ease(fade.gain, base * Math.max(0, k), tauS); },
+      setRate(r: number, tauS = 0.3) { ease(src.playbackRate, Math.max(0.25, Math.min(4, r)), tauS); },
+      setLowpass(hz: number, tauS = 0.3) { ease(filter.frequency, Math.max(40, Math.min(20000, hz)), tauS); },
+      stop(fadeS = 0.4) {
+        if (stopped) return;
+        stopped = true;
+        const c = self.ctx;
+        if (!c) return;
+        const t = c.currentTime, f = Math.max(0.01, fadeS);
+        fade.gain.cancelScheduledValues(t);
+        fade.gain.setTargetAtTime(0, t, f / 3);
+        try { src.stop(t + f + 0.05); } catch { /* already stopped */ }
+      },
+      get playing() { return !stopped; },
+    };
   }
 
   /** Air absorption + occlusion lowpass and level for one loop (same law as voice()); silent but alive beyond FLARE_LOOP.far. */

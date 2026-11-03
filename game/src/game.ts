@@ -1223,6 +1223,7 @@ export class Game {
     const sens = this.settings.sens * 0.0022;
     p.yaw -= inp.dx * sens;
     p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
+    if (inp.hit('KeyF')) this.toggleFlashlight(); // task campaign-polish (lane TRAIN, item 15): the dark transit — the flashlight stays usable
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
