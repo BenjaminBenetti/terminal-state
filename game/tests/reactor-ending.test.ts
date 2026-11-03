@@ -255,6 +255,13 @@ describe('the centre message, the objective and persistence', () => {
     h.camera.updateMatrixWorld(true);
     h.frameHooks.forEach(f => f(0.1));
     expect(e.prompt).toBeNull();
+    // (lead QA) while the leaves slide open the doors are open in the record: the prompt never says SEALED then
+    e.qaOpen(true);
+    h.camera.lookAt(d.x, d.y + 1.4, d.z);
+    h.camera.updateMatrixWorld(true);
+    h.frameHooks.forEach(f => f(0.05));
+    if (e.sealed) expect(e.prompt).toBe(OBJECTIVE_TEXT.ending.opening);
+    expect(e.prompt).not.toBe(OBJECTIVE_TEXT.ending.sealed);
     const src = (st: ReactorRunState) => ({info: L.reactor!, state: st, carried: () => 0, pickups: () => [], levelAt: () => 0});
     expect(mapMarkers(src(restartedState(L, 0.5))).some(m => m.kind === 'exit')).toBe(false);
     const ex = mapMarkers(src(restartedState(L, 1))).find(m => m.kind === 'exit')!;

@@ -37,6 +37,8 @@ export const OBJECTIVE_TEXT = {
     storey: 'Surface',
     /** The sealed door's prompt (before the core's air has cleared) and the open door's. */
     sealed: 'External door · SEALED — opens when the core air has cleared',
+    /** While the leaves slide open (the doors are already open in the run record). */
+    opening: 'External door · opening…',
     open: 'External door · open — stair to the surface',
   },
 } as const;

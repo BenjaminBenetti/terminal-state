@@ -336,7 +336,9 @@ export class ReactorEnding {
     cam.getWorldPosition(this.vEye); cam.getWorldDirection(this.vDir);
     const ox = cx - this.vEye.x, oy = cy - this.vEye.y, oz = cz - this.vEye.z, L = Math.hypot(ox, oy, oz);
     const facing = (this.vEye.x - d.x) * d.nx + (this.vEye.z - d.z) * d.nz > 0; // on the deck side
-    this.prompt = facing && L < ENDING.promptM && (ox * this.vDir.x + oy * this.vDir.y + oz * this.vDir.z) / Math.max(L, 1e-6) > ENDING.promptCos ? OBJECTIVE_TEXT.ending.sealed : null;
+    // (lead QA: while the leaves are still sliding the doors ARE open in the record; never say "SEALED" then)
+    this.prompt = facing && L < ENDING.promptM && (ox * this.vDir.x + oy * this.vDir.y + oz * this.vDir.z) / Math.max(L, 1e-6) > ENDING.promptCos
+      ? (this.openT !== null ? OBJECTIVE_TEXT.ending.opening : OBJECTIVE_TEXT.ending.sealed) : null;
   }
 
   // -------------------------------------------------------------------------------------------
