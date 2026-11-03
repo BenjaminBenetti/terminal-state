@@ -1298,7 +1298,7 @@ export class Game {
     if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
     // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
-    const d = await (this.trainRide.depart as (journey?: {route: readonly string[]}) => ReturnType<TrainRide['depart']>).call(this.trainRide, {route: plan.route});
+    const d = await this.trainRide.depart({route: plan.route});
     if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
