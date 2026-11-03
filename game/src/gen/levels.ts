@@ -34,7 +34,7 @@
 // and physics bodies at their deck height; bullets / sight pass an open 'railing' but not a solid
 // 'parapet'. The main-level platform edge (1.15 m into the track bed) is a drop, not a rail.
 
-import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type StandPoint} from './grid';
+import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type Ramp, type StandPoint} from './grid';
 
 /** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). 'roof' (task
  *  office-overhaul-20261030, lane STRUCT): the open-sky roof deck on top of the tower (outdoor air; see Level.sky). */
@@ -204,6 +204,39 @@ function volumeBand(c: VolumeColumn, nl: number): boolean {
   for (let k = 0; k < nl; k++) if (c.hide[k] && Math.abs(c.at[k] - v.floorY) < GATE_MATCH) return false;
   VB.floor = v.floorY; VB.ceil = v.floorY + g.height;
   return true;
+}
+
+/** lane AI-CPU: walkLineBatch tests every WALK_STRIDE-th sample's circle during its feet chain (evaluation order only). */
+export const WALK_STRIDE = 6;
+
+/**
+ * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): a walk batch's column summaries (Levels.beginWalkBatch).
+ * Column i is summarized on its first query in the batch (stamp === epoch): kind 1 = no dynamic volume — then `n` = its open
+ * levels in index order, each flat (the exact floorNearCell / ceilNearCell values) or a ramp (its inputs: walkBand evaluates the
+ * same ramp height at each query point), with its blocked flag; kind 0 (a volume column) = the original per-query code.
+ */
+interface WalkMemo {
+  stamp: Uint32Array; epoch: number; kind: Uint8Array; n: Uint8Array;
+  /**
+   * Per column NL slots, its k-th open level: `t` 0 = flat (floor `f`, ceiling `c`), 1 / 2 = a ramp along x / z (`ramp`; `c` = the
+   * cell's ceiling cap, `has` = the cell has a set height: ceilNearCell's min); `blk` = a blocking prop of that level.
+   */
+  f: Float64Array; c: Float64Array; blk: Uint8Array; t: Uint8Array; has: Uint8Array; ramp: (Ramp | null)[];
+}
+
+/**
+ * lane AI-CPU: floor (into WB.f) and ceiling (WB.c) of summary slot `q` of column (cx, cy) at query point (x, z): floorNearCell /
+ * ceilNearCell's values (the same ramp height of the same clamped coordinate for a ramp slot).
+ */
+const WB = {f: 0, c: 0};
+function walkBand(M: WalkMemo, q: number, cx: number, cy: number, x: number, z: number): void {
+  const t = M.t[q];
+  if (t === 0) { WB.f = M.f[q]; WB.c = M.c[q]; return; }
+  const R = M.ramp[q]!;
+  const h = rampHeight(R, t === 1 ? clamp(x, cx * CELL, (cx + 1) * CELL) : clamp(z, cy * CELL, (cy + 1) * CELL));
+  WB.f = h;
+  const c = h + R.headroom;
+  WB.c = M.has[q] ? Math.min(c, M.c[q]) : c;
 }
 
 /** The grid band of level index k (floor f) in a volume column is hidden right now. */
@@ -581,6 +614,60 @@ export class Levels implements NavLevels {
     const cx = Math.floor(wx / CELL), cy = Math.floor(wz / CELL);
     if (!g0.inBounds(cx, cy)) return -Infinity;
     const i = cy * g0.w + cx;
+    // lane AI-CPU: inside a walk batch a summarized column answers from its summary (the same loop over its open levels in index
+    // order, the same values; see beginWalkBatch)
+    const M = this.walkMemo;
+    if (M !== null && this.walkColumn(M, i, cx, cy, wx, wz) === 1) {
+      const NL = this.list.length, o = i * NL, n = M.n[i];
+      let has = false, best = 0;
+      for (let p = 0; p < n; p++) {
+        walkBand(M, o + p, cx, cy, wx, wz);
+        const f = WB.f;
+        if (f > y + tol) continue;
+        if (WB.c >= y - CAP_TOL && (!has || f > best)) { has = true; best = f; }
+      }
+      return has ? best : -Infinity;
+    }
+    return this.supportFloorCol(i, cx, cy, wx, wz, y, tol);
+  }
+
+  /**
+   * lane AI-CPU: column i's batch summary kind (computed on its first query in the batch): 1 = summarized (no dynamic volume: its
+   * open levels in index order — flat floor / ceiling or the ramp, blocked flag), 0 = a volume column (the per-query code).
+   */
+  private walkColumn(M: WalkMemo, i: number, cx: number, cy: number, wx: number, wz: number): number {
+    if (M.stamp[i] === M.epoch) return M.kind[i];
+    M.stamp[i] = M.epoch;
+    const NL = this.list.length;
+    if (this.vcol(i)) return (M.kind[i] = 0);
+    const o = i * NL;
+    let n = 0;
+    for (let k = 0; k < NL; k++) {
+      const g = this.list[k].grid;
+      if (!isOpen(g, i)) continue;
+      const q = o + n, r = g.rampIdx[i];
+      if (r < 0) {
+        // flat: neither value depends on the query point (the same calls the per-query code makes)
+        M.t[q] = 0;
+        M.f[q] = floorNearCell(g, i, cx, cy, wx, wz);
+        M.c[q] = ceilNearCell(g, i, cx, cy, wx, wz);
+      } else {
+        // a ramp: floorNearCell / ceilNearCell's inputs (walkBand evaluates them at each query point)
+        const R = g.ramps[r];
+        M.t[q] = R.axis === 'x' ? 1 : 2;
+        M.ramp[q] = R;
+        M.has[q] = g.ceil[i] !== 0 || g.floor[i] !== 0 ? 1 : 0;
+        M.c[q] = g.ceil[i];
+      }
+      M.blk[q] = g.blocked[i] ? 1 : 0;
+      n++;
+    }
+    M.n[i] = n;
+    return (M.kind[i] = 1);
+  }
+
+  /** supportFloorIn's column body (verbatim). */
+  private supportFloorCol(i: number, cx: number, cy: number, wx: number, wz: number, y: number, tol: number): number {
     let has = false, best = 0;
     const vc = this.vcol(i);
     for (let k = 0; k < this.list.length; k++) {
@@ -770,7 +857,18 @@ export class Levels implements NavLevels {
     }
     this.railIndex = m;
     this.railMask = mask;
+    // lane AI-CPU: the same lists as rail numbers in flat arrays (column k: list[start[k] .. start[k + 1]), in list order), and a
+    // per-query stamp per rail: railCrosses tests a rail listed in several columns of its box once (an OR: the same answer)
+    const arr = this.rails, id = new Map<RailRun, number>(arr.map((r, i) => [r, i]));
+    const start = new Int32Array(g0.w * g0.h + 1);
+    for (const [k, a] of m) start[k + 1] = a.length;
+    for (let k = 0; k < g0.w * g0.h; k++) start[k + 1] += start[k];
+    const list = new Int32Array(start[g0.w * g0.h]);
+    for (const [k, a] of m) for (let p = 0; p < a.length; p++) list[start[k] + p] = id.get(a[p])!;
+    this.railCsr = {start, list, arr, stamp: new Uint32Array(arr.length), epoch: 0};
   }
+  /** lane AI-CPU: railIndex as flat arrays (+ the dedup stamps of railCrosses). */
+  private railCsr: {start: Int32Array; list: Int32Array; arr: readonly RailRun[]; stamp: Uint32Array; epoch: number} | null = null;
 
   private buildRails(): RailRun[] {
     const out: RailRun[] = [];
@@ -1042,35 +1140,107 @@ export class Levels implements NavLevels {
     const g0 = this.main;
     const x0 = Math.floor((wx - r) / CELL), x1 = Math.floor((wx + r) / CELL);
     const y0 = Math.floor((wz - r) / CELL), y1 = Math.floor((wz + r) / CELL);
+    // lane AI-CPU: inside a walk batch (string pulling) a summarized column answers from its summary (cellClear's loop, the same values)
+    const M = this.walkMemo, NL = this.list.length;
     for (let cy = y0; cy <= y1; cy++) {
       for (let cx = x0; cx <= x1; cx++) {
+        // lane AI-CPU: a column whose nearest point is not within r cannot fail the circle whatever it holds — the distance test
+        // first (was: after the column's band test; the same predicate, `return false` iff some column within r has no band)
+        const nx = Math.max(cx * CELL, Math.min(wx, (cx + 1) * CELL));
+        const nz = Math.max(cy * CELL, Math.min(wz, (cy + 1) * CELL));
+        if (!((wx - nx) ** 2 + (wz - nz) ** 2 < r * r)) continue;
         let ok = false;
         if (g0.inBounds(cx, cy)) {
           const i = cy * g0.w + cx;
-          const vc = this.vcol(i);
-          const NL = this.list.length, h = this.clearHint < NL ? this.clearHint : 0;
-          for (let q = 0; q < NL; q++) {
-            // lane MEASURE: the hinted level first, then the others in index order (each exactly once; no side effects)
-            const k = q === 0 ? h : q <= h ? q - 1 : q;
-            const g = this.list[k].grid;
-            if (!isOpen(g, i) || g.blocked[i]) continue;
-            const f = floorNearCell(g, i, cx, cy, wx, wz);
-            if (Math.abs(f - feet) > NAV_STEP) continue;
-            if (vc && gridHidden(vc, k, f)) continue;
-            if (ceilNearCell(g, i, cx, cy, wx, wz) < Math.max(f, feet) + BODY_CLEAR) continue;
-            ok = true;
-            this.clearHint = k;
-            break;
-          }
-          if (!ok && vc) for (const c of vc) if (volumeBand(c, this.list.length) && Math.abs(VB.floor - feet) <= NAV_STEP && VB.ceil >= Math.max(VB.floor, feet) + BODY_CLEAR) { ok = true; break; }
+          if (M !== null && this.walkColumn(M, i, cx, cy, wx, wz) === 1) {
+            // an existence test over the open, unblocked levels (any order gives cellClear's answer)
+            const o = i * NL, n = M.n[i], B = M.blk;
+            for (let p = 0; p < n; p++) {
+              if (B[o + p]) continue;
+              walkBand(M, o + p, cx, cy, wx, wz);
+              const f = WB.f;
+              if (Math.abs(f - feet) > NAV_STEP) continue;
+              if (WB.c < Math.max(f, feet) + BODY_CLEAR) continue;
+              ok = true;
+              break;
+            }
+          } else ok = this.cellClear(i, cx, cy, wx, wz, feet);
         }
-        if (ok) continue;
-        const nx = Math.max(cx * CELL, Math.min(wx, (cx + 1) * CELL));
-        const nz = Math.max(cy * CELL, Math.min(wz, (cy + 1) * CELL));
-        if ((wx - nx) ** 2 + (wz - nz) ** 2 < r * r) return false;
+        if (!ok) return false;
       }
     }
     return !this.railCrosses(wx, wz, wx, wz, r, feet);
+  }
+
+  /**
+   * One column of circleClear: some band (grid level, or a volume) a body with feet at `feet` can stand in at column i — floor
+   * (nearest point to (wx, wz)) within NAV_STEP, no blocking prop of that level, BODY_CLEAR headroom. (The body of circleClear's
+   * cell loop, verbatim: the hinted level first, then the others in index order; each exactly once; an existence test.)
+   */
+  private cellClear(i: number, cx: number, cy: number, wx: number, wz: number, feet: number): boolean {
+    const vc = this.vcol(i);
+    const NL = this.list.length, h = this.clearHint < NL ? this.clearHint : 0;
+    for (let q = 0; q < NL; q++) {
+      // lane MEASURE: the hinted level first, then the others in index order (each exactly once; no side effects)
+      const k = q === 0 ? h : q <= h ? q - 1 : q;
+      const g = this.list[k].grid;
+      if (!isOpen(g, i) || g.blocked[i]) continue;
+      const f = floorNearCell(g, i, cx, cy, wx, wz);
+      if (Math.abs(f - feet) > NAV_STEP) continue;
+      if (vc && gridHidden(vc, k, f)) continue;
+      if (ceilNearCell(g, i, cx, cy, wx, wz) < Math.max(f, feet) + BODY_CLEAR) continue;
+      this.clearHint = k;
+      return true;
+    }
+    if (vc) for (const c of vc) if (volumeBand(c, this.list.length) && Math.abs(VB.floor - feet) <= NAV_STEP && VB.ceil >= Math.max(VB.floor, feet) + BODY_CLEAR) return true;
+    return false;
+  }
+
+  // -------------------------------------------------------------------------------------------
+  // Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): WALK BATCHES — the measured Mall CPU spikes were single
+  // synchronous path searches (tests/ai-cpu-mall.test.ts: 20-35 ms frames, ~75 % of it string pulling: ~1,000-1,800 walkLineClear
+  // probes per search, 99 % of them failing). Inside a batch (PathFinder's string pulling between two of its yields: synchronous
+  // code that never changes a grid or a volume) every column a query touches is SUMMARIZED once (walkColumn(): its open levels'
+  // floor / ceiling / blocked flag, read from the grids exactly as the per-query code reads them) and circleClear's column test /
+  // supportFloorIn run the same comparisons over the summary — the same answers for any feet height, without re-reading four
+  // level grids for every overlapping sample of every probe (a ramp slot keeps its ramp: walkBand computes the same height at the
+  // query point). Columns of a dynamic volume are not summarized; they, and every query outside a batch, run the original
+  // code. Every batch starts with no summary (the grids / volumes may change between batches: the Reactor ending's doors, the
+  // elevator cab), so nothing is ever remembered across a yield or a frame.
+
+  /** The open batch's summaries (null = no batch: every query computes); the reused tables. */
+  private walkMemo: WalkMemo | null = null;
+  private walkMemoStore: WalkMemo | null = null;
+
+  /** Start a walk batch (PathFinder string pulling): no column summarized yet. */
+  beginWalkBatch(): void {
+    let M = this.walkMemoStore;
+    if (!M) {
+      const n = this.main.w * this.main.h, NL = this.list.length;
+      M = this.walkMemoStore = {stamp: new Uint32Array(n), epoch: 0, kind: new Uint8Array(n), n: new Uint8Array(n),
+        f: new Float64Array(n * NL), c: new Float64Array(n * NL), blk: new Uint8Array(n * NL), t: new Uint8Array(n * NL), has: new Uint8Array(n * NL), ramp: new Array<Ramp | null>(n * NL).fill(null)};
+    }
+    // a fresh epoch: every summary of an earlier batch is void (wrap: clear the stamps, no stale slot can ever match)
+    if (M.epoch >= 0xfffffffe) { M.stamp.fill(0); M.epoch = 0; }
+    M.epoch++;
+    this.walkMemo = M;
+  }
+
+  /** End the walk batch (before any yield / return of the search that opened it). */
+  endWalkBatch(): void {
+    this.walkMemo = null;
+  }
+
+  /**
+   * Sample 0 of walkLineClear (the start point a itself), which every walk from a shares whatever its end: false = every
+   * walkLineClear(ax, ay, az, *, *, r, *) is false. The exact first iteration of walkLineClear's sample loop (t = 0).
+   */
+  walkStartClear(ax: number, ay: number, az: number, r: number): boolean {
+    const f0 = this.supportFloorIn(ax, az, ay + 0.05, NAV_STEP);
+    const feet = f0 === -Infinity ? ay : f0;
+    const s = this.supportFloorIn(ax, az, feet, NAV_STEP);
+    if (s === -Infinity || Math.abs(s - feet) > 0.3) return false;
+    return this.circleClear(ax, az, r, s);
   }
 
   /**
@@ -1084,6 +1254,7 @@ export class Levels implements NavLevels {
     // lane MEASURE: supportIn(…)?.floor without allocating a Support per sample (A* string pulling calls this ~10^5 times a path)
     const f0 = this.supportFloorIn(ax, az, ay + 0.05, NAV_STEP);
     let feet = f0 === -Infinity ? ay : f0;
+    if (this.walkMemo !== null) return this.walkLineBatch(ax, az, bx, bz, r, by, steps, feet); // lane AI-CPU (string pulling)
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
@@ -1096,21 +1267,59 @@ export class Levels implements NavLevels {
     return by === undefined || Math.abs(feet - by) <= 0.35;
   }
 
+  /**
+   * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): walkLineClear inside a walk batch — the SAME answer: the
+   * walk is the conjunction of every sample's support step (the feet chain), every sample's circle at its feet, the segment's rail
+   * test and the end-height test, and every one of them is a pure query, so only the order of evaluation changes. The feet chain
+   * (cheap: one column per sample) runs first, testing every WALK_STRIDE-th sample's circle on the way (a probe that fails mostly
+   * fails at a railing / wall it runs into over a run of consecutive samples: measured 99 % of the Mall's string-pulling probes
+   * fail, 81 % of those at a railing), then the end height, then the other samples' circles in order, then the segment's rails.
+   */
+  private walkLineBatch(ax: number, az: number, bx: number, bz: number, r: number, by: number | undefined, steps: number, feet: number): boolean {
+    let fs = this.walkFeet;
+    if (fs.length < steps + 1) fs = this.walkFeet = new Float64Array(Math.max(steps + 1, fs.length * 2));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
+      const s = this.supportFloorIn(px, pz, feet, NAV_STEP);
+      if (s === -Infinity || Math.abs(s - feet) > 0.3) return false;
+      feet = s;
+      fs[i] = s;
+      if (i % WALK_STRIDE === 0 && !this.circleClear(px, pz, r, feet)) return false;
+    }
+    if (!(by === undefined || Math.abs(feet - by) <= 0.35)) return false;
+    for (let i = 0; i <= steps; i++) {
+      if (i % WALK_STRIDE === 0) continue;
+      const t = i / steps;
+      const px = ax + (bx - ax) * t, pz = az + (bz - az) * t;
+      if (!this.circleClear(px, pz, r, fs[i])) return false;
+    }
+    return !this.railCrosses(ax, az, bx, bz, r * 0.5, feet);
+  }
+  /** lane AI-CPU: walkLineBatch's feet chain (reused). */
+  private walkFeet = new Float64Array(256);
+
   /** Whether a railing at about `feet` height lies within `r` of the segment a-b. */
   railCrosses(ax: number, az: number, bx: number, bz: number, r: number, feet: number): boolean {
     if (!this.rails.length) return false;
     if (!this.railIndex) this.buildRailIndex();
-    const g0 = this.main, mask = this.railMask!, index = this.railIndex!;
+    const g0 = this.main, mask = this.railMask!, C = this.railCsr!;
     const x0 = Math.floor((Math.min(ax, bx) - r) / CELL), x1 = Math.floor((Math.max(ax, bx) + r) / CELL);
     const y0 = Math.floor((Math.min(az, bz) - r) / CELL), y1 = Math.floor((Math.max(az, bz) + r) / CELL);
+    const mx = (ax + bx) / 2, mz = (az + bz) / 2;
+    // lane AI-CPU: each rail once per query (a rail is listed in every column of its box), in the columns' list order
+    const ep = C.epoch = C.epoch >= 0xfffffffe ? (C.stamp.fill(0), 1) : C.epoch + 1;
+    const start = C.start, list = C.list, stamp = C.stamp;
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
       if (!g0.inBounds(cx, cy)) continue;
       const k = cy * g0.w + cx;
       if (!mask[k]) continue; // lane MEASURE: no rail at this column (the typed array before the map lookup)
-      const list = index.get(k);
-      if (!list) continue;
-      for (const rl of list) {
-        const base = Levels.railBaseAt(rl, (ax + bx) / 2, (az + bz) / 2);
+      for (let p = start[k], e = start[k + 1]; p < e; p++) {
+        const ri = list[p];
+        if (stamp[ri] === ep) continue;
+        stamp[ri] = ep;
+        const rl = C.arr[ri];
+        const base = Levels.railBaseAt(rl, mx, mz);
         if (feet > base + (rl.h ?? RAIL_H) - 0.3 || feet < base - 0.6) continue;
         if (segSegDist(ax, az, bx, bz, rl.x0, rl.z0, rl.x1, rl.z1) < r + RAIL_HALF) return true;
       }
@@ -1327,14 +1536,19 @@ export function rayCylinder(o: Vec3, d: Vec3, cx: number, cz: number, r: number,
 }
 
 /** Distance between segments p0-p1 and q0-q1 in the XZ plane. */
+/** Distance from point p to segment (x0, z0)-(x1, z1) (segSegDist's helper; lane AI-CPU: module-level, no closure per call). */
+function ptSeg(px: number, pz: number, x0: number, z0: number, x1: number, z1: number): number {
+  const lx = x1 - x0, lz = z1 - z0, l2 = lx * lx + lz * lz;
+  const t = l2 > 0 ? clamp(((px - x0) * lx + (pz - z0) * lz) / l2, 0, 1) : 0;
+  return Math.hypot(px - (x0 + lx * t), pz - (z0 + lz * t));
+}
+/** Orientation sign of r relative to p -> q (segSegDist's helper). */
+function orient(px: number, pz: number, qx: number, qz: number, rx: number, rz: number): number {
+  return Math.sign((qx - px) * (rz - pz) - (qz - pz) * (rx - px));
+}
 function segSegDist(ax: number, az: number, bx: number, bz: number, cx: number, cz: number, dx: number, dz: number): number {
-  const ptSeg = (px: number, pz: number, x0: number, z0: number, x1: number, z1: number) => {
-    const lx = x1 - x0, lz = z1 - z0, l2 = lx * lx + lz * lz;
-    const t = l2 > 0 ? clamp(((px - x0) * lx + (pz - z0) * lz) / l2, 0, 1) : 0;
-    return Math.hypot(px - (x0 + lx * t), pz - (z0 + lz * t));
-  };
   // proper intersection
-  const o = (px: number, pz: number, qx: number, qz: number, rx: number, rz: number) => Math.sign((qx - px) * (rz - pz) - (qz - pz) * (rx - px));
+  const o = orient;
   const o1 = o(ax, az, bx, bz, cx, cz), o2 = o(ax, az, bx, bz, dx, dz), o3 = o(cx, cz, dx, dz, ax, az), o4 = o(cx, cz, dx, dz, bx, bz);
   if (o1 !== o2 && o3 !== o4 && o1 * o2 <= 0 && o3 * o4 <= 0 && (o1 || o2) && (o3 || o4)) return 0;
   return Math.min(ptSeg(ax, az, cx, cz, dx, dz), ptSeg(bx, bz, cx, cz, dx, dz), ptSeg(cx, cz, ax, az, bx, bz), ptSeg(dx, dz, ax, az, bx, bz));
