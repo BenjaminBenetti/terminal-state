@@ -207,10 +207,18 @@ seed) as well.
   31 Subway (including the start), 4 Office and 4 Mall (`ORDINARY_WEIGHTS` in `src/campaign/types.ts` is configurable), plus
   exactly one Reactor several hops from the start. A station (`StationId`, e.g. `st-07`) is not a level type: each node has its
   own seed, gear roll, section memories, Retry scope and printed name (shown on its signs, the HUD, the map and saves).
+- **Maintenance Route** (task campaign-polish-20261103, lane MAP; `addMaintenanceRoute` in `src/campaign/network.ts`): the
+  Reactor always has a bypass. One ordinary Subway stop of the 31 sits beside the Reactor, printed "Maintenance Route", on a
+  dashed service line from a station before the Reactor to the station(s) beyond it, so the Reactor never gates the rest of the
+  network. The console's reveal at the approach shows it next to the Reactor. The Reactor is never a terminus. Saves made
+  before this get it once on load (`upgradeCampaign` in `src/campaign/discovery.ts`): one station that save never showed is
+  moved and renamed. Ids, types, seeds, visited / known, the pending journey and every remembered world stay unchanged.
 - **Map and console** (`src/ui/paperMap.ts`, `src/world/trainConsole.ts`): the map is a crumpled paper sheet (Codex
   source art, `assets/textures/paper-map.jpg`) with code-drawn lines and names. New game shows only the starting stop.
   The driving console in the train's front cab (E) opens it and reveals the current stop and its neighbours. The Reactor
-  appears only once discovered. Pick an adjacent stop and confirm to travel. Typing `1337` while the map is open reveals
+  appears only once discovered. Pick an adjacent stop, or any visited station reachable over visited track (one continuous
+  journey along the shortest such route, ties by id; nothing on the way is loaded), and confirm to travel. The details card sits
+  beside the selected node; each stop prints its type icon (Subway, Office, Mall, Reactor, Maintenance Route). Typing `1337` while the map is open reveals
   everything and allows travel anywhere for the rest of that run (it is saved with the run; separate from the Lockbox code).
 - **The journey** (`Game.travelToStation`, `src/world/trainRide.ts`): the occupied train closes its doors and pulls into a dark
   transit tunnel. You can walk, look and change gear inside while the old station is torn down (every change kept in its

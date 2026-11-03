@@ -105,7 +105,7 @@ import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (la
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
-import {arrive as arriveCampaign, canTravel, enableCheat, neighbors, newCampaign, revealAround} from './campaign/discovery';
+import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
 import {PaperMap} from './ui/paperMap';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
@@ -1072,7 +1072,14 @@ export class Game {
     const v = validateSaveFile(file, this.saveValidate);
     if (!v.ok) return v;
     try {
-      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}));
+      // (campaign-polish lane MAP) a save made before the Maintenance Route existed gets it here, once (minimal, deterministic; the next
+      // autosave stores it): campaign/discovery.ts upgradeCampaign
+      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}), (c, remembered) => {
+        const u = upgradeCampaign(c, {remembered});
+        if (u.status === 'added') console.info(`Terminal State: save compatibility — ${u.node} (${u.tier} station) became the Maintenance Route beside the Reactor (${u.info?.kind}, approach ${u.info?.approach}).`);
+        else if (u.status === 'unchanged') console.warn(`Terminal State: save compatibility — no Maintenance Route could be added to this older save (${u.reason}); it loads unchanged.`);
+        return u.state;
+      });
       return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
     } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
   }
@@ -1272,7 +1279,11 @@ export class Game {
   }
 
   /**
-   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat).
+   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat, or —
+   * campaign-polish lane MAP — a VISITED station over a route of visited stations: campaign/discovery.ts travelPlan). A multi-hop trip
+   * is ONE continuous journey: one departure, one transit (the ride gets the route), only the destination prepared / built / arrived
+   * at — the stations passed are never loaded, looted, revealed or healed at; one departure autosave (the transit carries its route),
+   * one arrival autosave.
    * 1. depart (refused unless the player is inside; doors close; the car pulls into the tunnel and loops in the transit);
    * 2. the old world is torn down (every delta flushed into the run) and the DEPARTURE autosave commits the pending journey;
    * 3. the next station is prepared and built while the car runs through the dark tunnel (its pipelines compiled in the background);
@@ -1283,9 +1294,11 @@ export class Game {
     const run = this.run, c0 = run.campaign;
     if (!c0) return {ok: false, error: 'No campaign run.'};
     if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
-    if (!canTravel(c0, to)) return {ok: false, error: 'That station cannot be reached from here.'};
+    const plan = travelPlan(c0, to);
+    if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
-    const d = await this.trainRide.depart();
+    // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
+    const d = await (this.trainRide.depart as (journey?: {route: readonly string[]}) => ReturnType<TrainRide['depart']>).call(this.trainRide, {route: plan.route});
     if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
@@ -1297,8 +1310,7 @@ export class Game {
       // pipeline releases (Iteration 14) wait until the next station has rendered at the platform: Subway -> Subway shares those
       // programs, and releasing them first recompiles them all on arrival (on a software rasterizer that memory is never returned)
       this.leaveSection(true);
-      const adjacent = neighbors(run.campaign!.network, from).includes(to);
-      run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
+      run.campaign = {...run.campaign!, transit: transitOf(run.campaign!, plan)};
       const s1 = this.commitSave('departure', {pose});
       if (!s1.ok && this.currentSlot !== null) this.hud.toast(s1.error, true);
       for (const l of this.campaignListeners) l('transit');

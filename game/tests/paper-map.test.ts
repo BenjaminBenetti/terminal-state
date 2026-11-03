@@ -178,10 +178,19 @@ describe('the overlay', () => {
     expect([esc.defaultPrevented, map.isOpen, calls.close, calls.confirm]).toEqual([true, false, 1, []]);
   });
 
-  it('known stations that are not one stop away are printed but not selectable (unless the cheat is on)', () => {
+  it('known stations that are not one stop away (and never visited) are printed but not selectable (unless the cheat is on)', () => {
     const a = neighbors(net, net.start)[0], b = neighbors(net, a).find(x => x !== net.start && !neighbors(net, x).includes(net.start))!;
     const s = walk(start(), [a, b]);
-    const far = s.known.find(k => k !== s.current && !neighbors(net, s.current).includes(k))!;
+    // campaign-polish (lane MAP): a VISITED station two stops back IS a destination (over the visited route; the card names it)
+    open(s);
+    expect(hit(net.start)!.classList.contains('pm-can')).toBe(true);
+    dom.click(hit(net.start));
+    expect(map.selected).toBe(net.start);
+    expect(panel().textContent).toMatch(/2 stops via/);
+    expect(dom.doc.querySelector('.pm-route')).not.toBeNull();
+    map.cancel();
+    expect(dom.doc.querySelector('.pm-route')).toBeNull();
+    const far = s.known.find(k => k !== s.current && !neighbors(net, s.current).includes(k) && !s.visited.includes(k))!;
     expect(far).toBeDefined();
     open(s);
     expect(hits()).toContain(far);
@@ -301,7 +310,7 @@ describe('the overlay', () => {
   it('view mode is read-only: details without Depart; the current station is not selectable', () => {
     const s = atHub();
     open(s); // travel first: a reopen at the same view must re-print, not keep the travel marks
-    expect(dom.doc.querySelectorAll('.pm-hints circle').length).toBe(destinations(s).length);
+    expect(dom.doc.querySelectorAll('.pm-hints circle').length).toBe(destinations(s).filter(d => neighbors(net, s.current).includes(d)).length); // one stop away
     map.close();
     open(s, 'view');
     expect(dom.doc.querySelector('.pm-mode')!.textContent).toMatch(/View only/);
