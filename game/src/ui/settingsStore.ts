@@ -8,19 +8,25 @@
 //    apply for this session (`persistent` false; the UI says so).
 //  - Session overrides (?quality=low for slow software renderers) apply on top WITHOUT being persisted; changing that setting
 //    explicitly persists the new choice and drops the override.
-//  - Render resolution: Native / Half / Quarter = a LINEAR scale (1 / 0.5 / 0.25) of the drawing buffer's width AND height,
-//    relative to the native buffer of the EXISTING DPR cap design (game.ts resize(): min(devicePixelRatio, 1.5) on High;
-//    min(devicePixelRatio, 1, 0.85) on Low). It is not a quality preset: no geometry / light / fog / detail change. Quality keeps
-//    only its own documented effects (that DPR cap, render/atmosphere.ts ATMOSPHERE_QUALITY: fog march scale / steps / shadow
-//    map / MSAA) and never overrides the scale: pixel ratio = nativePixelRatio(dpr, quality) x renderScale.
+//  - Render resolution: a LINEAR scale of the drawing buffer's width AND height, relative to the native buffer of the EXISTING
+//    DPR cap design (game.ts resize(): min(devicePixelRatio, 1.5) on High; min(devicePixelRatio, 1, 0.85) on Low). It is not a
+//    quality preset: no geometry / light / fog / detail change. Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU,
+//    item 8): a 25-100 % slider in 1 % steps (stored as the fraction 0.25..1 in 0.01 steps, so the old Native / Half / Quarter
+//    records 1 / 0.5 / 0.25 read EXACTLY as 100 / 50 / 25 %; anything else is rounded to a whole percent and clamped, a
+//    non-number falls back to 100 %). Quality keeps only its own effects (that DPR cap, render/atmosphere.ts ATMOSPHERE_QUALITY:
+//    fog march scale / steps, flashlight shadow map, MSAA — see qualityDescription) and never overrides the scale: pixel ratio =
+//    nativePixelRatio(dpr, quality) x renderScale.
 //  - Master volume 0..1 (shown as 0-100 %) is what Sfx.setVolume takes; mute is separate and respected (Sfx.setMuted).
 //  - Train sway 0..1 (shown as 0-100 %; 0 = off): the moving train's jostle roll / pitch on the view (world/trainRide.ts).
 
 import {STORAGE_KEYS} from '../campaign/types';
 
 export type Quality = 'low' | 'high';
-/** Linear render-resolution scale of width and height (1 = native, 0.5 = half, 0.25 = quarter). */
-export type RenderScale = 1 | 0.5 | 0.25;
+/** Linear render-resolution scale of width and height: 0.25..1 in whole-percent steps (1 = native). */
+export type RenderScale = number;
+/** The slider's bounds in percent (lane MENU, item 8): 25-100 %, 1 % steps. */
+export const RENDER_PERCENT = {min: 25, max: 100, step: 1} as const;
+/** The former Native / Half / Quarter choices (stored records with these values migrate to exactly 100 / 50 / 25 %). */
 export const RENDER_SCALES: readonly RenderScale[] = [1, 0.5, 0.25];
 
 export interface GameSettings {
@@ -58,6 +64,18 @@ export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', '
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
+/** A render scale (fraction) -> the whole percent shown (25..100; a non-number = 100). */
+export function renderPercent(scale: unknown): number {
+  const n = num(scale);
+  return n === null ? RENDER_PERCENT.max : clamp(Math.round(n * 100), RENDER_PERCENT.min, RENDER_PERCENT.max);
+}
+
+/** A slider percent -> the render scale stored (whole percent, clamped to 25..100; a non-number = 1). */
+export function renderScaleFromPercent(p: unknown): RenderScale {
+  const n = num(p);
+  return n === null ? 1 : clamp(Math.round(n), RENDER_PERCENT.min, RENDER_PERCENT.max) / 100;
+}
+
 /** One field, validated: the value to use and whether it had to be fixed (missing fields are not "fixed", just defaulted). */
 function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[K]; fixed: boolean} {
   const d = SETTINGS_DEFAULTS[k];
@@ -74,8 +92,13 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
       return typeof raw === 'boolean' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'quality':
       return raw === 'low' || raw === 'high' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
-    case 'renderScale':
-      return RENDER_SCALES.includes(raw as RenderScale) ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
+    case 'renderScale': {
+      // lane MENU (item 8): any finite fraction -> its whole percent (clamped 25..100 %); 1 / 0.5 / 0.25 stay exactly themselves
+      const n = num(raw);
+      if (n === null) return {value: d, fixed: true};
+      const v = renderPercent(n) / 100;
+      return {value: v as GameSettings[K], fixed: Math.abs(v - n) > 1e-9};
+    }
   }
   return {value: d, fixed: true};
 }
@@ -121,9 +144,9 @@ export function nativePixelRatio(dpr: number, quality: Quality): number {
   return quality === 'high' ? capped : Math.min(capped, 0.85);
 }
 
-/** The renderer pixel ratio: native (DPR cap x Quality) x the linear render scale. */
+/** The renderer pixel ratio: native (DPR cap x Quality) x the linear render scale (sanitized: whole percent, 25..100 %). */
 export function renderPixelRatio(dpr: number, quality: Quality, scale: RenderScale): number {
-  return nativePixelRatio(dpr, quality) * (RENDER_SCALES.includes(scale) ? scale : 1);
+  return nativePixelRatio(dpr, quality) * (renderPercent(scale) / 100);
 }
 
 /** Drawing-buffer size (device pixels, rounded like three's setSize) for a CSS viewport. */
@@ -134,24 +157,87 @@ export function drawingBufferSize(cssW: number, cssH: number, dpr: number, quali
 
 const fmtRatio = (r: number) => `${Number(r.toFixed(2))}×`;
 
-/** Option labels for the render-resolution select (the Native label says when the DPR / Low cap applies). */
-export function renderScaleOptions(dpr: number, quality: Quality): {value: RenderScale; label: string}[] {
+/** What 100 % means here: the native pixel ratio, and which cap applies ("1×", "1.5×, DPR-capped", "0.85×, Low quality cap"). */
+export function nativeRatioLabel(dpr: number, quality: Quality): string {
   const d = Number.isFinite(dpr) && dpr > 0 ? dpr : 1;
   const nat = nativePixelRatio(d, quality);
-  const native = nat < d - 1e-6
-    ? (quality === 'low' ? `Native (capped ${fmtRatio(nat)} by Low quality)` : `Native (DPR-capped ${fmtRatio(nat)})`)
-    : `Native (${fmtRatio(nat)})`;
-  return [
-    {value: 1, label: native},
-    {value: 0.5, label: 'Half (½ width and height)'},
-    {value: 0.25, label: 'Quarter (¼ width and height)'},
-  ];
+  return nat < d - 1e-6 ? (quality === 'low' ? `${fmtRatio(nat)}, Low quality cap` : `${fmtRatio(nat)}, DPR-capped`) : fmtRatio(nat);
 }
 
-/** "Renders 960 × 540 (of 1920 × 1080 native)". */
+/** "Renders 960 × 540 (native 1920 × 1080)" — the drawing buffer the slider gives on this screen. */
 export function renderScaleReadout(cssW: number, cssH: number, dpr: number, quality: Quality, scale: RenderScale): string {
   const cur = drawingBufferSize(cssW, cssH, dpr, quality, scale), nat = drawingBufferSize(cssW, cssH, dpr, quality, 1);
-  return scale === 1 ? `Renders ${nat.w} × ${nat.h}` : `Renders ${cur.w} × ${cur.h} (native ${nat.w} × ${nat.h})`;
+  return renderPercent(scale) === 100 ? `Renders ${nat.w} × ${nat.h} (native)` : `Renders ${cur.w} × ${cur.h} (native ${nat.w} × ${nat.h})`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Quality: what it ACTUALLY controls (lane MENU, item 7)
+
+/** The fields of render/atmosphere.ts QualityPreset the description reads (injected: this module stays free of the renderer). */
+export interface QualityPresetLike { scale: number; maxPixels: number; steps: number; shadowMapSize: number; msaa: number }
+
+/** The setting's honest name: it changes the volumetric fog, the flashlight shadow, anti-aliasing (and the pixel-ratio cap). */
+export const QUALITY_LABEL = 'Fog, shadows & anti-aliasing';
+/** The choices (values unchanged: 'high' / 'low'). */
+export const QUALITY_OPTIONS: readonly {value: Quality; label: string}[] = [{value: 'high', label: 'High'}, {value: 'low', label: 'Low (faster)'}];
+
+const fraction = (f: number) => (Math.abs(f - 0.5) < 1e-9 ? '½' : Math.abs(f - 0.25) < 1e-9 ? '¼' : `${Math.round(f * 100)} %`);
+
+/**
+ * One line saying exactly what `q` does, from the real preset (render/atmosphere.ts ATMOSPHERE_QUALITY[q]) and the real DPR cap
+ * (nativePixelRatio): fog march resolution (cap) and steps, the flashlight shadow map, MSAA, the pixel-ratio cap. Without a preset
+ * it names the same effects without numbers.
+ */
+export function qualityDescription(q: Quality, preset?: QualityPresetLike | null): string {
+  const cap = q === 'high' ? `pixel ratio up to ${fmtRatio(nativePixelRatio(1e9, q))}` : `pixel ratio capped at ${fmtRatio(nativePixelRatio(1e9, q))}`;
+  if (!preset) return `Volumetric fog resolution and steps · flashlight shadow resolution · anti-aliasing · ${cap}`;
+  const w = Math.round(Math.sqrt(preset.maxPixels * 16 / 9)), h = Math.round(w * 9 / 16);
+  return `Fog at ${fraction(preset.scale)} resolution (≤ ${w}×${h}), ${preset.steps} steps · ${preset.shadowMapSize} px flashlight shadow · `
+    + `${preset.msaa > 0 ? `${preset.msaa}× MSAA` : 'no MSAA'} · ${cap}`;
+}
+
+// ---------------------------------------------------------------------------------------------
+// Coalesced apply (lane MENU, item 8: a slider drag never re-sizes the renderer per input event)
+
+/** Timer functions (tests inject fakes). */
+export interface CoalesceTimers { set(fn: () => void, ms: number): unknown; clear(handle: unknown): void }
+
+/**
+ * Keeps only the LATEST pushed value and applies it once the input has been still for `delayMs` (a drag), or at once on flush()
+ * (the slider's change event: release / a keyboard step). Each apply runs at most once per burst; flush() with nothing pending is a
+ * no-op.
+ */
+export class CoalescedApply<T> {
+  private pending: {v: T} | null = null;
+  private timer: unknown = null;
+  applied = 0;
+
+  constructor(private readonly apply: (v: T) => void, private readonly delayMs = 160,
+    private readonly timers: CoalesceTimers = {set: (fn, ms) => setTimeout(fn, ms), clear: h => clearTimeout(h as ReturnType<typeof setTimeout>)}) {}
+
+  push(v: T): void {
+    this.pending = {v};
+    if (this.timer !== null) this.timers.clear(this.timer);
+    this.timer = this.timers.set(() => { this.timer = null; this.flush(); }, this.delayMs);
+  }
+
+  flush(): void {
+    if (this.timer !== null) { this.timers.clear(this.timer); this.timer = null; }
+    const p = this.pending;
+    this.pending = null;
+    if (!p) return;
+    this.applied++;
+    this.apply(p.v);
+  }
+
+  /** Drop a pending value (the form unmounts). */
+  cancel(): void {
+    if (this.timer !== null) this.timers.clear(this.timer);
+    this.timer = null;
+    this.pending = null;
+  }
+
+  get busy(): boolean { return this.pending !== null; }
 }
 
 // ---------------------------------------------------------------------------------------------
