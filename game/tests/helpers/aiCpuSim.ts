@@ -89,13 +89,22 @@ export interface AiCpuSimOpts {
   seed?: number;
   /** Frame dt (s); default 1/60. */
   dt?: number;
+  /**
+   * The frame budget's clock: 'real' (performance.now: background chunks run in measured spare time, as in the game) or 'virtual'
+   * (0.05 ms per clock read: the chunk schedule depends only on the work structure — deterministic, for behaviour comparisons).
+   */
+  clock?: 'real' | 'virtual';
+  /** A/B: other Levels / PathFinder implementations with the same API (e.g. a pre-change copy); default the game's. */
+  impl?: {Levels: new (levels: never, links: never, rails: never) => Levels; PathFinder: new (src: never) => PathFinder};
 }
 
 export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
   // a private Levels (levelsOf caches one per layout: the instrumentation below must not leak into other users of the layout)
-  const L: Levels = layout.levels?.length ? new Levels(layout.levels, layout.levelLinks ?? [], layout.rails) : new Levels([{id: 0, role: 'main', grid: layout.grid, baseY: 0}], layout.levelLinks ?? [], layout.rails);
+  const LC = (o.impl?.Levels ?? Levels) as unknown as new (l: unknown, k: unknown, r: unknown) => Levels;
+  const L: Levels = layout.levels?.length ? new LC(layout.levels, layout.levelLinks ?? [], layout.rails) : new LC([{id: 0, role: 'main', grid: layout.grid, baseY: 0}], layout.levelLinks ?? [], layout.rails);
   const props = new PropIndex(L, layout.props);
-  const pf = new PathFinder(L), farFinder = pf.fork();
+  const PC = (o.impl?.PathFinder ?? PathFinder) as unknown as new (src: Levels) => PathFinder;
+  const pf = new PC(L), farFinder = pf.fork();
   const dt = o.dt ?? 1 / 60;
   const route = o.route?.length ? o.route : [{x: layout.playerSpawn.x, z: layout.playerSpawn.z, y: L.grid(0).floorAt(layout.playerSpawn.x, layout.playerSpawn.z)}];
   const player = {x: route[0].x, y: route[0].y, z: route[0].z, eye: route[0].y + STAND_EYE, yaw: layout.playerSpawn.yaw, alive: true, radius: 0.3};
@@ -131,7 +140,8 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
     return r;
   };
   // --- the game's wiring (Game.buildSection) ---
-  const fb = new FrameBudget();
+  let vt = 0;
+  const fb = o.clock === 'virtual' ? new FrameBudget({now: () => (vt += 0.05)}) : new FrameBudget();
   const reach = new VocalReach(L);
   reach.attachScheduler(fb);
   const nearPlayer = (x: number, z: number, y: number | undefined) => {
@@ -243,6 +253,7 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
     step(): FrameCost {
       frame++; t += dt;
       raf += dt * 1000;
+      if (o.clock === 'virtual' && vt < raf) vt = raf; // (the virtual clock: frame starts on the rAF grid, 0.05 ms per read within it)
       cost = {frame, ai: 0, vocal: 0, horde: 0, brain: 0, path: 0, motor: 0, anim: 0, mixer: 0, volumes: 0, cues: 0, searches: 0, expanded: 0, probes: 0, pullMs: 0,
         queued: 0, shared: 0, los: 0, walk: 0, deferred: 0, alerted: 0, animated: 0};
       walkPlayer();
