@@ -8,14 +8,17 @@
 //   3. at most four internal frames (toward the aperture + a tower, toward the far city on two headings, the credits);
 //   4. the credits: fast-forward the 30 s count (QA hook), the column top-right, the end card, Main Menu -> the menu (a scratch run has
 //      no campaign: no save).
-//   npm run build && node tools/qa/reactor-surface-check.mjs [reactorSeedCode] [outDir]
+//   npm run build && node tools/qa/reactor-surface-check.mjs [reactorSeedCode] [outDir] [--views]
+//   --views: instead of 3 / 4, four framed views from the ring round the opening (the collar + each tower, the far city away from the
+//   head house, the collar looking down at the railing)
 import fs from 'node:fs';
 import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
 import {serveStatic} from './static-server.mjs';
 
-const code = process.argv[2] ?? '000070S';
-const out = path.resolve(process.argv[3] ?? 'qa-artifacts/reactor-surface-browser');
+const ARGS = process.argv.slice(2), VIEWS = ARGS.includes('--views'), POS = ARGS.filter(a => !a.startsWith('--'));
+const code = POS[0] ?? '000070S';
+const out = path.resolve(POS[1] ?? (VIEWS ? 'qa-artifacts/reactor-surface-views' : 'qa-artifacts/reactor-surface-browser'));
 const STOP_GIB = 5.75;
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -65,6 +68,26 @@ await withBrowserLock(async () => {
     await waitGame(2, 120);
     const s2 = await surf();
     step('fans turning', {angle0: s1.plant?.angle, angle1: s2.plant?.angle, speed: s2.plant?.speed});
+    if (VIEWS) {
+      const g = await ev(() => { const s = window.__game.layout.reactor.surface; return {hole: s.hole, y: s.y, exit: s.exit, towers: (window.__LL.reactorSurface().plant?.towers ?? [])}; });
+      const h = g.hole, R = h.keepR + 2.5;
+      const at = (tx, tz, r) => { const dx = tx - h.x, dz = tz - h.z, l = Math.hypot(dx, dz) || 1; return [h.x + dx / l * r, h.z + dz / l * r]; };
+      const views = [];
+      for (const t of g.towers.slice(0, 2)) views.push({name: `tower-${views.length + 1}`, p: at(t.x, t.z, R), look: [t.x, g.y + 10, t.z]});
+      const ax = h.x - g.exit.x, az = h.z - g.exit.z, al = Math.hypot(ax, az) || 1;
+      const pc = [h.x + ax / al * (h.keepR + 6), h.z + az / al * (h.keepR + 6)];
+      views.push({name: 'far-city', p: pc, look: [pc[0] + ax / al * 120, g.y + 9, pc[1] + az / al * 120]});
+      const pd = at(g.exit.x, g.exit.z, h.keepR + 4.2);
+      views.push({name: 'collar', p: pd, look: [h.x, g.y - 0.5, h.z]});
+      for (const v of views) {
+        if (!headroom(v.name)) break;
+        const ok = await ev((v) => { const r = window.__LL.teleport(v.p[0], v.p[1], undefined, window.__game.layout.reactor.surface.level); window.__LL.lookAt(v.look[0], v.look[1], v.look[2]); return r; }, v);
+        await waitGame(1.5, 120);
+        await page.screenshot({path: path.join(out, `${v.name}.png`)});
+        step(`view ${v.name} (internal)`, {teleported: ok, p: v.p.map(n => +n.toFixed(1))});
+      }
+      return;
+    }
     // 3. frames (internal evidence; at most four)
     const look = (dx, dy, dz) => ev((d) => { const g = window.__game, p = g.player; window.__LL.lookAt(p.x + d[0], p.y + 1.6 + d[1], p.z + d[2]); }, [dx, dy, dz]);
     const hole = await ev(() => { const s = window.__game.layout.reactor.surface; return {x: s.hole.x, z: s.hole.z, y: s.y}; });
