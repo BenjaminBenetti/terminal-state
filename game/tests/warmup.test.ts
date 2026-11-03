@@ -7,7 +7,7 @@ import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import {MeshStandardNodeMaterial} from 'three/webgpu';
 import {
-  WarmupRegistry, geometryKey, planWarmup, prepareObjects, runWarmup, warmKeys, warmupLabel, warmupNote,
+  WARMUP_DEFAULTS, WarmupRegistry, geometryKey, planWarmup, prepareObjects, runWarmup, warmKeys, warmupLabel, warmupNote,
   type WarmupHost, type WarmupProgress, type WarmupRenderer,
 } from '../src/render/warmup';
 import {CULL_LAYER} from '../src/world/levelCulling';
@@ -148,7 +148,7 @@ describe('warm-up discovery (planWarmup)', () => {
     expect(objs).not.toContain(s.hiddenUnpooled);
     const proto = plan.items.find(i => i.object === s.protoMesh)!;
     expect(proto.flips).toEqual([s.proto, s.protoInner]); // the whole hidden chain inside the pool
-    expect(proto.caster).toBe(false); // pooled things never get shadow frames
+    expect(proto.caster).toBe(false); // (castShadow off; lane RENDER-CPU: a pooled CASTER gets shadow frames too, its chain flipped)
     expect(plan.items.find(i => i.object === s.sparks)!.flips).toEqual([s.sparks]);
     expect(plan.items.find(i => i.object === s.floor)!.caster).toBe(true);
     // the plan only reads
@@ -233,10 +233,16 @@ describe('warm-up runner lifecycle (runWarmup)', () => {
     expect(vmCall.objects).toContain(rifle);
     expect(vmCall.visibleDuring.get(held)).toBe(true);
     expect(res.stages.passes).toMatchObject({done: 1, total: 1});
-    // shadow frames: casters only, chunked, torch lit during them and restored after
+    // hidden frames, torch lit during them and restored after: the casters' shadow variants (task studio-performance-recorder-20261103,
+    // lane RENDER-CPU RE-PIN: pooled casters too), then ('full') every other renderable once for its own render objects; chunked, and
+    // every chunk holds a shadow RECEIVER (three draws a shadow map only when a receiver draws)
     const casters = plan.items.filter(i => i.caster).map(i => i.object);
-    expect(log.frames.length).toBe(Math.ceil(casters.length / 2));
-    expect(new Set(log.frames.flat())).toEqual(new Set(casters));
+    const others = plan.others.map(i => i.object);
+    expect(others).toEqual(expect.arrayContaining(s.walls.filter(w => !casters.includes(w)))); // the walls the representative covers
+    expect(log.frames.length).toBe(Math.ceil((casters.length + others.length) / 2));
+    expect(new Set(log.frames.flat())).toEqual(new Set([...casters, ...others]));
+    for (const f of log.frames) expect(f.some(o => o.receiveShadow)).toBe(true);
+    expect(res.plan.others).toBe(others.length);
     expect(log.torchDuringFrames.every(v => v === 34)).toBe(true);
     expect(s.light.intensity).toBe(0);
     expect(log.hide).toEqual([true, false]);
@@ -303,16 +309,26 @@ describe('warm-up runner lifecycle (runWarmup)', () => {
     expect(warmupNote(res)).toMatch(/failed/);
   });
 
-  it('no flashlight shadow (quality off): no hidden frames; registry names reported', async () => {
+  it('no flashlight shadow (quality off): no shadow frames (\'full\' still draws the non-representatives once; \'view\' nothing); registry names reported', async () => {
+    // (task studio-performance-recorder-20261103, lane RENDER-CPU RE-PIN: 'full' draws every renderable a representative covers once,
+    // for its own render objects; without the torch shadow those frames are all there is, and no caster-only frame is added)
     const s = station();
     s.light.castShadow = false;
     const r = new FakeRenderer();
     const {host, log} = hostFor(s, r);
     const res = await runWarmup(host, {yieldFrame: async () => {}});
-    expect(log.frames.length).toBe(0);
-    expect(log.hide).toEqual([false]);
-    expect(res.stages.shadows.total).toBe(0);
+    const plan = planWarmup(s.scene, {mode: 'full', cameraMask: 1, pools: [s.fx, s.proto]});
+    expect(log.frames.length).toBe(Math.ceil(plan.others.length / WARMUP_DEFAULTS.frameChunk));
+    expect(new Set(log.frames.flat())).toEqual(new Set(plan.others.map(i => i.object)));
+    expect(res.stages.shadows.total).toBe(log.frames.length);
     expect(res.pools).toEqual(['effects', 'prototypes']);
+    const v = station();
+    v.light.castShadow = false;
+    const rv = hostFor(v, new FakeRenderer(), {mode: 'view'});
+    const resV = await runWarmup(rv.host, {yieldFrame: async () => {}});
+    expect(rv.log.frames.length).toBe(0);
+    expect(rv.log.hide).toEqual([false]);
+    expect(resV.stages.shadows.total).toBe(0);
   });
 
   it('registry: named passes / pools replace by name and reject empty names', () => {
