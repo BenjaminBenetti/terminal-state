@@ -12,7 +12,13 @@
 // Synthetic fixture: a real generated mall whose largest single-front retail store is re-purposed as a lingerie store with booths
 // (partition cells blocked) + an aisle at its back wall — the pass on its own, independent of lane STORE's dressing.
 
-import {describe, expect, it} from 'vitest';
+import {beforeAll, describe, expect, it} from 'vitest';
+import path from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {NodeIO} from '@gltf-transform/core';
+import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
+import {MODEL_FILES} from '../src/assets/manifest';
 import {Rng, hashString} from '../src/core/rng';
 import {FLOOR} from '../src/gen/grid';
 import {clearAround} from '../src/gen/stationDress';
@@ -382,5 +388,58 @@ describe('no lingerie leak to any other level', () => {
       });
       if (!lingerieStores(l).length) expect(lingerieModelKeysFor(l)).toEqual([]);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------------------
+// End to end with lane FIT's real assets: the shipped pale bodies + outfit-lingerie-*.glb through the real createLingerieLibrary
+
+const PUB = fileURLToPath(new URL('../public', import.meta.url));
+async function loadStripped(file: string): Promise<GLTF> {
+  const io = new NodeIO().registerExtensions(ALL_EXTENSIONS);
+  const doc = await io.read(file);
+  for (const t of doc.getRoot().listTextures()) t.dispose(); // node has no image decoder
+  const bin = await io.writeBinary(doc);
+  return new Promise<GLTF>((res, rej) => new GLTFLoader().parse(bin.buffer.slice(bin.byteOffset, bin.byteOffset + bin.byteLength) as ArrayBuffer, '', res, rej));
+}
+
+describe('end to end: a real store\'s variants wear the real fitted sets', () => {
+  const models: Record<string, GLTF> = {};
+  beforeAll(async () => {
+    for (const id of LINGERIE_BODY_IDS) {
+      const key = ZOMBIE_BODIES.find(b => b.id === id)?.model, f = key ? (MODEL_FILES as Record<string, {url: string} | undefined>)[key] : undefined;
+      if (key && f) models[key] = await loadStripped(path.join(PUB, f.url));
+    }
+    for (const [key, f] of Object.entries(LINGERIE_MODEL_FILES)) models[key] = await loadStripped(path.join(PUB, f.url));
+  }, 120_000);
+
+  it('every tagged spawn of a lingerie store builds its set (top + bottom on a pale body) from the lingerie library; consecutive variants differ', () => {
+    expect(LINGERIE_FITS.length, 'lane FIT ships the six fits').toBe(6);
+    const lib = createLingerieLibrary(models); // = game.ts lingerieLookLibrary(boot models + the loaded lazy garments)
+    let checked = 0;
+    for (const seed of MALL_SEEDS.filter(sd => lingerieStores(mallOf(sd)).length).slice(0, 4)) {
+      const l = mallOf(seed), tagged = l.zombies.flatMap((z, i) => (z.look === 'lingerie' ? [i] : []));
+      // the section asks for every garment file (lane FIT's keys), only because it holds tagged spawns
+      expect(lingerieModelKeysFor(l)).toEqual(Object.keys(LINGERIE_MODEL_FILES).sort());
+      const sets: string[] = [];
+      for (const i of tagged) {
+        const pick = chooseSpawnLook(l.seed, i, l.zombies[i], ORDINARY, lib);
+        expect(pick.library, `seed ${seed} #${i}`).toBe('lingerie');
+        const look = pick.look as ZombieLook & {set?: string};
+        const set = LINGERIE_SETS.find(x => x.id === look.set)!;
+        expect(set.bodies).toContain(look.body);
+        expect(look.wear).toEqual({upper: set.pieces.upper, lower: set.pieces.lower});
+        const app = lib.build(look);
+        expect(app.look).toEqual({body: look.body, wear: look.wear});
+        expect(app.meshes.map(m => m.slot).sort()).toEqual(['body', 'lower', 'upper']);
+        expect(app.meshes.filter(m => m.slot !== 'body').every(m => isLingerieWearable(m.wearable))).toBe(true);
+        sets.push(`${look.body}:${look.set}`);
+        checked++;
+      }
+      for (let k = 1; k < sets.length; k++) expect(sets[k], `seed ${seed}: consecutive variants`).not.toBe(sets[k - 1]);
+      // every other spawn of the level keeps the ordinary pick, the lingerie library loaded or not
+      l.zombies.forEach((z, i) => { if (z.look !== 'lingerie') expect(chooseSpawnLook(l.seed, i, z, ORDINARY, lib).library).toBe('ordinary'); });
+    }
+    expect(checked).toBeGreaterThanOrEqual(8);
   });
 });
