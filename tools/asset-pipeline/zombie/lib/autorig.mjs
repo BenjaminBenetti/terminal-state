@@ -97,8 +97,9 @@ export async function bodyStage(master, {heightM, facing: forceFacing, ...O}) {
   const hairHigh = master.hairMask ? weldedFlags(high.pos, master.hairMask) : null;
   let skelOpts = null;
   if (O.skeleton) {
-    const {neck, ...rest} = O.skeleton, tn = master.repose?.skeletonT?.log?.neck;
-    skelOpts = {...rest, ...(neck === 'tpose' && tn ? {neckOverride: {neckBaseY: tn.neckBaseY, headPivotY: tn.headPivotY, source: 'T-pose analysis rig (lib/repose-skin.mjs -> enemy/lib/tpose-skeleton.mjs non-hair throat profile); placement identical (same height / facing / feet)'}} : {})};
+    const {neck, arms, ...rest} = O.skeleton, tn = master.repose?.skeletonT?.log?.neck, ta = master.repose?.armJointsA;
+    skelOpts = {...rest, ...(neck === 'tpose' && tn ? {neckOverride: {neckBaseY: tn.neckBaseY, headPivotY: tn.headPivotY, source: 'T-pose analysis rig (lib/repose-skin.mjs -> enemy/lib/tpose-skeleton.mjs non-hair throat profile); placement identical (same height / facing / feet)'}} : {}),
+      ...(arms === 'tpose' && ta ? {armJoints: {...ta, source: 'T-pose analysis rig elbow / wrist (enemy/lib/tpose-skeleton.mjs: arm sections perpendicular to the horizontal arm) carried through the repose arm rotation (lib/repose-skin.mjs)'}} : {})};
   }
   const skel = slimSkeleton(skelOpts ? detectSkeleton(welded.pos, skelOpts) : detectSkeleton(welded.pos));
   const issues = validateSkeleton(skel);

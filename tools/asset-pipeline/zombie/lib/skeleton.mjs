@@ -20,6 +20,8 @@ const r3 = v => v.map(x => +x.toFixed(4));
  *   crotch: 'midline' - inner thighs that touch merge the 2 cm slice clusters just above the knees, so the crotch is the
  *     lowest height whose midline strip |x| < 8 mm holds surface in two consecutive slices (perineum), and leg sections of a
  *     slice whose cluster spans both thighs are split at x = 0;
+ *   armJoints: {L: {elbow, wrist}, R: {elbow, wrist}, source} - elbow / wrist joints from the T-pose analysis rig rotated into the
+ *     bind (see below);
  *   neckOverride: {neckBaseY, headPivotY, source} - long hair hanging round the neck widens every neck slice (the width-ratio
  *     neck base lands on the shoulders), so these heights come from a hair-aware measurement (the T-pose analysis rig's
  *     non-hair throat profile, lib/repose-skin.mjs); joint depth (z) stays measured here.
@@ -184,6 +186,16 @@ export function detectSkeleton(pos, opts = {}) {
     const x = (a[0] - b[0]) / 2, y = (a[1] + b[1]) / 2, z = (a[2] + b[2]) / 2;
     obj.L[k] = [x, y, z]; obj.R[k] = [-x, y, z];
   }
+  // opts.armJoints {L: {elbow, wrist}, R} (task mall-lingerie): elbow / wrist JOINTS from a T-pose analysis rig rotated into this
+  // bind (thin zombie forearms fool the min-radius wrist search here); symmetrised like the measured pairs. Only the joints:
+  // arms[] (hand importance / region seeds) stays measured, so the mesh stages are unaffected.
+  let armJ = null;
+  if (opts.armJoints) {
+    const sym = k => { const a = opts.armJoints.L[k], b = opts.armJoints.R[k]; const x = (a[0] - b[0]) / 2, y = (a[1] + b[1]) / 2, z = (a[2] + b[2]) / 2; return [[x, y, z], [-x, y, z]]; };
+    const [eL, eR] = sym('elbow'), [wL, wR] = sym('wrist');
+    armJ = {L: {elbow: eL, wrist: wL}, R: {elbow: eR, wrist: wR}};
+    log.armOverride = {elbow: r3(eL), wrist: r3(wL), measuredElbow: r3(arms.L.elbow), measuredWrist: r3(arms.L.wrist), source: opts.armJoints.source};
+  }
   const spineZ = y => { const c = central(at(y)); return c.minZ + 0.42 * (c.maxZ - c.minZ); };
   const spineY = hipY + 0.30 * (neckBaseY - hipY), chestY = hipY + 0.66 * (neckBaseY - hipY);
   const neckC = central(at(neckMinY));
@@ -194,8 +206,8 @@ export function detectSkeleton(pos, opts = {}) {
     Chest: [0, chestY, spineZ(chestY)],
     Neck: [0, neckBaseY, neckC.bz - 0.01],
     Head: [0, headPivotY, neckC.bz],
-    L_UpperArm: arms.L.shoulder, L_Forearm: arms.L.elbow, L_Hand: arms.L.wrist,
-    R_UpperArm: arms.R.shoulder, R_Forearm: arms.R.elbow, R_Hand: arms.R.wrist,
+    L_UpperArm: arms.L.shoulder, L_Forearm: armJ ? armJ.L.elbow : arms.L.elbow, L_Hand: armJ ? armJ.L.wrist : arms.L.wrist,
+    R_UpperArm: arms.R.shoulder, R_Forearm: armJ ? armJ.R.elbow : arms.R.elbow, R_Hand: armJ ? armJ.R.wrist : arms.R.wrist,
     L_Thigh: legs.L.hip, L_Shin: legs.L.knee, L_Foot: legs.L.ankle,
     R_Thigh: legs.R.hip, R_Shin: legs.R.knee, R_Foot: legs.R.ankle,
   };

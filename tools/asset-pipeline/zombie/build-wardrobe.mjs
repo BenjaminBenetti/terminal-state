@@ -32,7 +32,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import v8 from 'node:v8';
 import {REPO, sha256File} from './lib/master.mjs';
-import {loadAnySource as loadSource, t25LoaderHash, restoreRecord, T25_TASK, T25_SUFFIX} from './lib/t25.mjs';
+import {loadAnySource as loadSource, t25LoaderHash, restoreRecord, repoRel, T25_TASK, T25_SUFFIX} from './lib/t25.mjs';
 import {bodyStage, bodySkin, bodyProfile, spreadWeights, rigFor, trimArmTorsoBridges} from './lib/autorig.mjs';
 import {garmentCanonical} from './lib/garment.mjs';
 import {pantsStage} from './lib/pants.mjs';
@@ -93,6 +93,11 @@ function codeHash() {
     h.update(fs.readFileSync(new URL(f, import.meta.url)));
   return h.digest('hex').slice(0, 12);
 }
+function reposeSkinCodeHash() {
+  const h = crypto.createHash('sha256');
+  for (const f of ['lib/repose-skin.mjs', '../enemy/lib/tpose-skeleton.mjs', '../enemy/lib/siren-skin.mjs', '../enemy/lib/surface.mjs']) h.update(fs.readFileSync(new URL(f, import.meta.url)));
+  return h.digest('hex').slice(0, 12);
+}
 function makeCache(extraKey) {
   return async (key, fn) => {
     if (!ARGS.has('--reuse')) return fn();
@@ -122,6 +127,8 @@ async function main() {
     const opts = cfgOf(def);
     // stage cache key: only what the mesh/bake stage depends on (labels, traits, weights, skin overrides excluded)
     const stageKey = Object.fromEntries(['heightM', 'targetTris', 'importance', 'unwrap', 'density', 'bake', 'textures', 'facing', 'repose', ...(opts.reposeOpts ? ['reposeOpts'] : []), ...(opts.skeleton ? ['skeleton'] : [])].map(k => [k, opts[k] ?? null]));
+    // 'T-skin' bodies: the LBS repose code (and the enemy-pipeline libraries it runs) keys their stage too (not in codeHash)
+    if (def.repose === 'T-skin') stageKey.reposeCode = reposeSkinCodeHash();
     const stage = await makeCache({src: srcKey(src), stageKey})('body-' + def.id, async () => {
       const m = await loadSource(src);
       // 'T-skin' (task mall-lingerie): LBS repose of an unclothed long-haired T-pose source (lib/repose-skin.mjs)
@@ -203,7 +210,7 @@ async function main() {
     if (ex) return {ok: false, reason: ex.reason, rule: 'qa-exclusion'};
     // task mall-lingerie: a body may ship a COMPACT subset of the wearables that pass on it (shared 200 MiB pack capacity);
     // --all-wear (dev) fits every wearable to evaluate the full passing list (recorded in wardrobe.config.mjs)
-    if (B.def.wear && !B.def.wear.ids.includes(w.id) && !ARGS.has('--all-wear')) return {ok: false, reason: B.def.wear.reason, rule: 'body-wear-subset'};
+    if (B.def.wear && !B.def.wear.ids.includes(w.id) && !ARGS.has('--all-wear')) return {ok: false, reason: B.def.wear.notes?.[w.id] ?? B.def.wear.reason, rule: 'body-wear-subset'};
     return {ok: true};
   };
   const runPhase = async list => {
@@ -492,7 +499,7 @@ const STATUS = {approved: false, gameReady: false, stage: 'unapproved prototype 
 const HONESTY = {sourcesHadSkeleton: false, rig: 'NEW derivative skeleton (shared 18-joint naming/hierarchy) and automatic skin weights created by this CPU pipeline', animation: 'hand-authored procedural keyframes (same clip functions for every body, sampled with each body\'s own joint positions) - NOT motion capture', generation: 'no AI generation, inference, model download or network service was used by this builder'};
 
 function srcInfo(s, stageMaster) {
-  const rr = f => f && (path.isAbsolute(f) ? path.relative(REPO, f) : f);
+  const rr = f => f && (path.isAbsolute(f) ? repoRel(f) : f);
   return {id: s.id, file: rr(s.file), sha256Verified: s.sha256, uploadId: s.uploadId, ...(s.userUpload ? {userUpload: s.userUpload} : {}), sourceMetadata: rr(s.metadata), displayName: s.displayName, ledger: s.ledger, ledgerKey: s.ledgerKey, inputPng: rr(s.inputPng), inputPngSha256: s.inputPngSha256, nativeJob: s.jobId, nativeMetadata: rr(s.nativeMetadata), nativeReceipt: rr(s.nativeReceipt), preservedXz: rr(s.preservedXz),
     triangles: stageMaster?.triangles, vertices: stageMaster?.vertices, textures: stageMaster?.textures, material: stageMaster?.material};
 }

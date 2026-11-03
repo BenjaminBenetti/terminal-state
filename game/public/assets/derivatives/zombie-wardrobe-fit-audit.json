@@ -1,27 +1,30 @@
 {
  "schema": "the-last-line/wardrobe-fit-audit@1",
- "generatedAt": "2026-10-30T02:10:48.451Z",
+ "generatedAt": "2026-11-03T00:13:40.968Z",
  "method": "tools/asset-pipeline/zombie/qa/fit-audit.mjs on the shipped GLBs (every 2nd frame of all six clips + bind + 3 ragdoll-like extreme poses); lib/penetration.mjs: fraction of the covered OUTER-HULL body vertices (footwear excluded) that are VISIBLE (used by an unhidden triangle) and lie outside the cloth while the cloth's outward face is under the skin; layering = outer-wall pants vertices (not hidden by hideWear) poking through the upper",
  "models": {
-  "outfit-beanie-t25.glb": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
+  "outfit-beanie-t25.glb": "0d2f80988ad2db03a80e93f2bfc1fbbb57133b68fbc444bb8e04cf31b7cd607f",
   "outfit-blazer-t25.glb": "8a25514379680f4a2b8aa2940253f996c1b99f35bef253c7573a0197b0937b24",
-  "outfit-cap-t25.glb": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
-  "outfit-cargo-t25.glb": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788",
+  "outfit-cap-t25.glb": "791f2a93cb19cef4d35b721a70f232663ab96b86b956a7213c3c8edf9db95fd2",
+  "outfit-cargo-t25.glb": "f7411ef49b59da9e4af710af8c34b860fe224c0239c885baca5aca5480cccbb1",
   "outfit-coat-t25.glb": "0f8dd368762e5f7e8bda487e4113451731b8e06a6f1dff7da0f1c8401104c34c",
-  "outfit-flannel-t25.glb": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3",
+  "outfit-flannel-t25.glb": "09b7e3f2853e2a40d749b21abdf86d760c1415aabdac02435e14f419c725846c",
   "outfit-gasmask-t25.glb": "bcf9111618d67e99ee140d4e6cc3a53a3eb0083998d5b717fb02935e7aef67ed",
-  "outfit-hardhat-t25.glb": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
+  "outfit-hardhat-t25.glb": "994bbc71496b5b069a9e5679f9389acce30e300ba1969c8eebc6005d48cb42bd",
   "outfit-hivis-t25.glb": "1208db45cf9fc9ecaf86687799578358fefa3f0cb3341e2862eb5c7385a518d7",
-  "outfit-hoodie-t25.glb": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b",
-  "outfit-jeans-t25.glb": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401",
+  "outfit-hoodie-t25.glb": "b0d827ca0c1a14360e018abb8d7fde7c9cc98ee933dab6a95ad4551c4320c92a",
+  "outfit-jeans-t25.glb": "6bd4f0ec9f40cb89fd941e78d4284499360fe5cca208030becfbf4d267e71e8f",
   "outfit-respirator-t25.glb": "c0893abdcc36ebe37c2ea613ca32c1701740cc5dd7563f5ab471ed8d3d035687",
-  "outfit-slacks-t25.glb": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096",
-  "outfit-sweater-t25.glb": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760",
+  "outfit-slacks-t25.glb": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
+  "outfit-sweater-t25.glb": "afc69fb41c72f3136a8275131b17c373a6aca2c73d14c1e2c155fc9618f15a67",
   "outfit-trench-t25.glb": "2a280c631f4eabd0f6d59873013511f623577d6cb20a438037b95ff5bde42959",
   "zombie-body-agent-t25.glb": "406c3aa40e086b13b7ed2263d7d4dd5c8a7f8b49f818be339a65b9f67aece27e",
   "zombie-body-courier-t25.glb": "be7b01ecd1259293b4f34713a2a76821514f55fef7cbcae504b27dfbafa2fc04",
   "zombie-body-heavyset-t25.glb": "6638029e9032cd1a2b4760183afb36f0dd42468fe4f49e5cebe6197380b67d3f",
   "zombie-body-lastshift-t25.glb": "8214232e2bcda8f40b6828b0468be9b51373f9f988cdff8ffb4573c0496cc7f7",
+  "zombie-body-pale-apparition-t25.glb": "981a00337776b3dae885a7ba8f7015f9dad61c63417a92b7a61f67dd87c10278",
+  "zombie-body-pale-gaze-t25.glb": "e4ca91a100673fc967987c2f896fb95e0e93f385b36ef676a40d24143c356434",
+  "zombie-body-pale-revenant-t25.glb": "8c25eb7e6c4b7f474c4f35f43b8923ff30804e687c85b036f89c1c1ab6f4e15d",
   "zombie-body-scavenger-t25.glb": "b8acc6a5937a3e96d053be9845bbf0b520d1584c5f642142da7f909b579a376d",
   "zombie-body-tall-t25.glb": "fa26aa32701d1eae50a6ee0f54299a0b9810e74d9afd0c41c136e970e5cda314"
  },
@@ -30,6 +33,317 @@
   "after": "game/public/assets/models",
   "every": 2
  },
+ "merges": [
+  {
+   "generatedAt": "2026-11-03T00:13:40.968Z",
+   "task": "studio-beta-mall-lingerie-20261102-221554-01",
+   "models": "game/public/assets/models",
+   "every": 2,
+   "added": {
+    "pairs": 91,
+    "layering": 102,
+    "bodyUnderLayers": 102
+   },
+   "keys": [
+    "agent:beanie",
+    "agent:cap",
+    "agent:cargo",
+    "agent:gasmask",
+    "agent:hardhat",
+    "agent:jeans",
+    "agent:respirator",
+    "agent:slacks",
+    "courier:beanie",
+    "courier:blazer",
+    "courier:blazer+cargo|body",
+    "courier:blazer+cargo|cargo",
+    "courier:blazer+jeans|body",
+    "courier:blazer+jeans|jeans",
+    "courier:blazer+slacks|body",
+    "courier:blazer+slacks|slacks",
+    "courier:cap",
+    "courier:cargo",
+    "courier:coat",
+    "courier:coat+cargo|body",
+    "courier:coat+cargo|cargo",
+    "courier:coat+jeans|body",
+    "courier:coat+jeans|jeans",
+    "courier:coat+slacks|body",
+    "courier:coat+slacks|slacks",
+    "courier:flannel",
+    "courier:flannel+cargo|body",
+    "courier:flannel+cargo|cargo",
+    "courier:flannel+jeans|body",
+    "courier:flannel+jeans|jeans",
+    "courier:flannel+slacks|body",
+    "courier:flannel+slacks|slacks",
+    "courier:gasmask",
+    "courier:hardhat",
+    "courier:hivis",
+    "courier:hivis+cargo|body",
+    "courier:hivis+cargo|cargo",
+    "courier:hivis+jeans|body",
+    "courier:hivis+jeans|jeans",
+    "courier:hivis+slacks|body",
+    "courier:hivis+slacks|slacks",
+    "courier:hoodie",
+    "courier:hoodie+cargo|body",
+    "courier:hoodie+cargo|cargo",
+    "courier:hoodie+jeans|body",
+    "courier:hoodie+jeans|jeans",
+    "courier:hoodie+slacks|body",
+    "courier:hoodie+slacks|slacks",
+    "courier:jeans",
+    "courier:respirator",
+    "courier:slacks",
+    "courier:sweater",
+    "courier:sweater+cargo|body",
+    "courier:sweater+cargo|cargo",
+    "courier:sweater+jeans|body",
+    "courier:sweater+jeans|jeans",
+    "courier:sweater+slacks|body",
+    "courier:sweater+slacks|slacks",
+    "courier:trench",
+    "courier:trench+cargo|body",
+    "courier:trench+cargo|cargo",
+    "courier:trench+jeans|body",
+    "courier:trench+jeans|jeans",
+    "courier:trench+slacks|body",
+    "courier:trench+slacks|slacks",
+    "heavyset:beanie",
+    "heavyset:blazer",
+    "heavyset:blazer+cargo|body",
+    "heavyset:blazer+cargo|cargo",
+    "heavyset:blazer+jeans|body",
+    "heavyset:blazer+jeans|jeans",
+    "heavyset:blazer+slacks|body",
+    "heavyset:blazer+slacks|slacks",
+    "heavyset:cap",
+    "heavyset:cargo",
+    "heavyset:coat",
+    "heavyset:coat+cargo|body",
+    "heavyset:coat+cargo|cargo",
+    "heavyset:coat+jeans|body",
+    "heavyset:coat+jeans|jeans",
+    "heavyset:coat+slacks|body",
+    "heavyset:coat+slacks|slacks",
+    "heavyset:flannel",
+    "heavyset:flannel+cargo|body",
+    "heavyset:flannel+cargo|cargo",
+    "heavyset:flannel+jeans|body",
+    "heavyset:flannel+jeans|jeans",
+    "heavyset:flannel+slacks|body",
+    "heavyset:flannel+slacks|slacks",
+    "heavyset:gasmask",
+    "heavyset:hardhat",
+    "heavyset:hivis",
+    "heavyset:hivis+cargo|body",
+    "heavyset:hivis+cargo|cargo",
+    "heavyset:hivis+jeans|body",
+    "heavyset:hivis+jeans|jeans",
+    "heavyset:hivis+slacks|body",
+    "heavyset:hivis+slacks|slacks",
+    "heavyset:hoodie",
+    "heavyset:hoodie+cargo|body",
+    "heavyset:hoodie+cargo|cargo",
+    "heavyset:hoodie+jeans|body",
+    "heavyset:hoodie+jeans|jeans",
+    "heavyset:hoodie+slacks|body",
+    "heavyset:hoodie+slacks|slacks",
+    "heavyset:jeans",
+    "heavyset:respirator",
+    "heavyset:slacks",
+    "heavyset:sweater",
+    "heavyset:sweater+cargo|body",
+    "heavyset:sweater+cargo|cargo",
+    "heavyset:sweater+jeans|body",
+    "heavyset:sweater+jeans|jeans",
+    "heavyset:sweater+slacks|body",
+    "heavyset:sweater+slacks|slacks",
+    "heavyset:trench",
+    "heavyset:trench+cargo|body",
+    "heavyset:trench+cargo|cargo",
+    "heavyset:trench+jeans|body",
+    "heavyset:trench+jeans|jeans",
+    "heavyset:trench+slacks|body",
+    "heavyset:trench+slacks|slacks",
+    "lastshift:beanie",
+    "lastshift:blazer",
+    "lastshift:blazer+cargo|body",
+    "lastshift:blazer+cargo|cargo",
+    "lastshift:blazer+jeans|body",
+    "lastshift:blazer+jeans|jeans",
+    "lastshift:blazer+slacks|body",
+    "lastshift:blazer+slacks|slacks",
+    "lastshift:cap",
+    "lastshift:cargo",
+    "lastshift:coat",
+    "lastshift:coat+cargo|body",
+    "lastshift:coat+cargo|cargo",
+    "lastshift:coat+jeans|body",
+    "lastshift:coat+jeans|jeans",
+    "lastshift:coat+slacks|body",
+    "lastshift:coat+slacks|slacks",
+    "lastshift:flannel",
+    "lastshift:flannel+cargo|body",
+    "lastshift:flannel+cargo|cargo",
+    "lastshift:flannel+jeans|body",
+    "lastshift:flannel+jeans|jeans",
+    "lastshift:flannel+slacks|body",
+    "lastshift:flannel+slacks|slacks",
+    "lastshift:gasmask",
+    "lastshift:hardhat",
+    "lastshift:hivis",
+    "lastshift:hivis+cargo|body",
+    "lastshift:hivis+cargo|cargo",
+    "lastshift:hivis+jeans|body",
+    "lastshift:hivis+jeans|jeans",
+    "lastshift:hivis+slacks|body",
+    "lastshift:hivis+slacks|slacks",
+    "lastshift:hoodie",
+    "lastshift:hoodie+cargo|body",
+    "lastshift:hoodie+cargo|cargo",
+    "lastshift:hoodie+jeans|body",
+    "lastshift:hoodie+jeans|jeans",
+    "lastshift:hoodie+slacks|body",
+    "lastshift:hoodie+slacks|slacks",
+    "lastshift:jeans",
+    "lastshift:respirator",
+    "lastshift:slacks",
+    "paleApparition:beanie",
+    "paleApparition:cargo",
+    "paleApparition:flannel",
+    "paleApparition:flannel+cargo|body",
+    "paleApparition:flannel+cargo|cargo",
+    "paleApparition:flannel+slacks|body",
+    "paleApparition:flannel+slacks|slacks",
+    "paleApparition:hardhat",
+    "paleApparition:slacks",
+    "paleApparition:sweater",
+    "paleApparition:sweater+cargo|body",
+    "paleApparition:sweater+cargo|cargo",
+    "paleApparition:sweater+slacks|body",
+    "paleApparition:sweater+slacks|slacks",
+    "paleGaze:beanie",
+    "paleGaze:cap",
+    "paleGaze:cargo",
+    "paleGaze:hoodie",
+    "paleGaze:hoodie+cargo|body",
+    "paleGaze:hoodie+cargo|cargo",
+    "paleGaze:hoodie+jeans|body",
+    "paleGaze:hoodie+jeans|jeans",
+    "paleGaze:jeans",
+    "paleGaze:sweater",
+    "paleGaze:sweater+cargo|body",
+    "paleGaze:sweater+cargo|cargo",
+    "paleGaze:sweater+jeans|body",
+    "paleGaze:sweater+jeans|jeans",
+    "paleRevenant:cap",
+    "paleRevenant:flannel",
+    "paleRevenant:flannel+jeans|body",
+    "paleRevenant:flannel+jeans|jeans",
+    "paleRevenant:flannel+slacks|body",
+    "paleRevenant:flannel+slacks|slacks",
+    "paleRevenant:hardhat",
+    "paleRevenant:hoodie",
+    "paleRevenant:hoodie+jeans|body",
+    "paleRevenant:hoodie+jeans|jeans",
+    "paleRevenant:hoodie+slacks|body",
+    "paleRevenant:hoodie+slacks|slacks",
+    "paleRevenant:jeans",
+    "paleRevenant:slacks",
+    "scavenger:blazer",
+    "scavenger:blazer+cargo|body",
+    "scavenger:blazer+cargo|cargo",
+    "scavenger:blazer+jeans|body",
+    "scavenger:blazer+jeans|jeans",
+    "scavenger:blazer+slacks|body",
+    "scavenger:blazer+slacks|slacks",
+    "scavenger:cargo",
+    "scavenger:coat",
+    "scavenger:coat+cargo|body",
+    "scavenger:coat+cargo|cargo",
+    "scavenger:coat+jeans|body",
+    "scavenger:coat+jeans|jeans",
+    "scavenger:coat+slacks|body",
+    "scavenger:coat+slacks|slacks",
+    "scavenger:hivis",
+    "scavenger:hivis+cargo|body",
+    "scavenger:hivis+cargo|cargo",
+    "scavenger:hivis+jeans|body",
+    "scavenger:hivis+jeans|jeans",
+    "scavenger:hivis+slacks|body",
+    "scavenger:hivis+slacks|slacks",
+    "scavenger:hoodie",
+    "scavenger:hoodie+cargo|body",
+    "scavenger:hoodie+cargo|cargo",
+    "scavenger:hoodie+jeans|body",
+    "scavenger:hoodie+jeans|jeans",
+    "scavenger:hoodie+slacks|body",
+    "scavenger:hoodie+slacks|slacks",
+    "scavenger:jeans",
+    "scavenger:slacks",
+    "tall:beanie",
+    "tall:blazer",
+    "tall:blazer+cargo|body",
+    "tall:blazer+cargo|cargo",
+    "tall:blazer+jeans|body",
+    "tall:blazer+jeans|jeans",
+    "tall:blazer+slacks|body",
+    "tall:blazer+slacks|slacks",
+    "tall:cap",
+    "tall:cargo",
+    "tall:coat",
+    "tall:coat+cargo|body",
+    "tall:coat+cargo|cargo",
+    "tall:coat+jeans|body",
+    "tall:coat+jeans|jeans",
+    "tall:coat+slacks|body",
+    "tall:coat+slacks|slacks",
+    "tall:flannel",
+    "tall:flannel+cargo|body",
+    "tall:flannel+cargo|cargo",
+    "tall:flannel+jeans|body",
+    "tall:flannel+jeans|jeans",
+    "tall:flannel+slacks|body",
+    "tall:flannel+slacks|slacks",
+    "tall:gasmask",
+    "tall:hardhat",
+    "tall:hivis",
+    "tall:hivis+cargo|body",
+    "tall:hivis+cargo|cargo",
+    "tall:hivis+jeans|body",
+    "tall:hivis+jeans|jeans",
+    "tall:hivis+slacks|body",
+    "tall:hivis+slacks|slacks",
+    "tall:hoodie",
+    "tall:hoodie+cargo|body",
+    "tall:hoodie+cargo|cargo",
+    "tall:hoodie+jeans|body",
+    "tall:hoodie+jeans|jeans",
+    "tall:hoodie+slacks|body",
+    "tall:hoodie+slacks|slacks",
+    "tall:jeans",
+    "tall:respirator",
+    "tall:slacks",
+    "tall:sweater",
+    "tall:sweater+cargo|body",
+    "tall:sweater+cargo|cargo",
+    "tall:sweater+jeans|body",
+    "tall:sweater+jeans|jeans",
+    "tall:sweater+slacks|body",
+    "tall:sweater+slacks|slacks",
+    "tall:trench",
+    "tall:trench+cargo|body",
+    "tall:trench+cargo|cargo",
+    "tall:trench+jeans|body",
+    "tall:trench+jeans|jeans",
+    "tall:trench+slacks|body",
+    "tall:trench+slacks|slacks"
+   ],
+   "note": "full re-audit of every shipped pair / layering on the rebuilt GLBs (the previous after block is fully replaced); the iteration-06 before block is kept from the previous summary"
+  }
+ ],
  "after": {
   "pairs": {
    "lastshift:beanie": {
@@ -1408,6 +1722,342 @@
      "clip": "ragdoll-crumple",
      "t": 0
     }
+   },
+   "paleApparition:beanie": {
+    "slot": "head",
+    "covered": 265,
+    "bind": 0.0415,
+    "animated": 0.0226,
+    "animatedMean": 0.0174,
+    "extreme": 0.0377,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 16,
+    "regionPoke": {
+     "head": 16
+    },
+    "worst": {
+     "frac": 0.0415,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "paleGaze:beanie": {
+    "slot": "head",
+    "covered": 927,
+    "bind": 0.0076,
+    "animated": 0.0108,
+    "animatedMean": 0.0072,
+    "extreme": 0.0227,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 43,
+    "regionPoke": {
+     "head": 43
+    },
+    "worst": {
+     "frac": 0.0227,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleGaze:cap": {
+    "slot": "head",
+    "covered": 863,
+    "bind": 0.0081,
+    "animated": 0.0093,
+    "animatedMean": 0.008,
+    "extreme": 0.0093,
+    "maxExposedHidden": 8,
+    "everPokeVisibleVertices": 11,
+    "regionPoke": {
+     "head": 11
+    },
+    "worst": {
+     "frac": 0.0093,
+     "clip": "Run",
+     "t": 0.5333
+    }
+   },
+   "paleApparition:cargo": {
+    "slot": "lower",
+    "covered": 1286,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:cargo": {
+    "slot": "lower",
+    "covered": 708,
+    "bind": 0,
+    "animated": 0.0014,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {
+     "waist/hip": 1
+    },
+    "worst": {
+     "frac": 0.0014,
+     "clip": "Death",
+     "t": 1
+    }
+   },
+   "paleRevenant:cap": {
+    "slot": "head",
+    "covered": 684,
+    "bind": 0.0395,
+    "animated": 0.0395,
+    "animatedMean": 0.0395,
+    "extreme": 0.0395,
+    "maxExposedHidden": 4,
+    "everPokeVisibleVertices": 27,
+    "regionPoke": {
+     "head": 27
+    },
+    "worst": {
+     "frac": 0.0395,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "paleApparition:hardhat": {
+    "slot": "head",
+    "covered": 292,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleApparition:flannel": {
+    "slot": "upper",
+    "covered": 2987,
+    "bind": 0.0023,
+    "animated": 0.0027,
+    "animatedMean": 0.0019,
+    "extreme": 0.003,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 18,
+    "regionPoke": {
+     "underarm": 3,
+     "head": 2,
+     "shoulder": 13
+    },
+    "worst": {
+     "frac": 0.003,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleRevenant:hardhat": {
+    "slot": "head",
+    "covered": 701,
+    "bind": 0.0071,
+    "animated": 0.0071,
+    "animatedMean": 0.0071,
+    "extreme": 0.0071,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 5,
+    "regionPoke": {
+     "head": 5
+    },
+    "worst": {
+     "frac": 0.0071,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "paleRevenant:flannel": {
+    "slot": "upper",
+    "covered": 3934,
+    "bind": 0.0033,
+    "animated": 0.0081,
+    "animatedMean": 0.0016,
+    "extreme": 0.0031,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 67,
+    "regionPoke": {
+     "underarm": 19,
+     "chest": 2,
+     "arm": 4,
+     "shoulder": 20,
+     "head": 22
+    },
+    "worst": {
+     "frac": 0.0081,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "paleRevenant:jeans": {
+    "slot": "lower",
+    "covered": 771,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.0013,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {
+     "thigh": 1
+    },
+    "worst": {
+     "frac": 0.0013,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleGaze:jeans": {
+    "slot": "lower",
+    "covered": 711,
+    "bind": 0,
+    "animated": 0.0028,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 3,
+    "regionPoke": {
+     "waist/hip": 3
+    },
+    "worst": {
+     "frac": 0.0028,
+     "clip": "Death",
+     "t": 1
+    }
+   },
+   "paleRevenant:slacks": {
+    "slot": "lower",
+    "covered": 779,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleApparition:slacks": {
+    "slot": "lower",
+    "covered": 1295,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:hoodie": {
+    "slot": "upper",
+    "covered": 4016,
+    "bind": 0.0015,
+    "animated": 0.0035,
+    "animatedMean": 0.0018,
+    "extreme": 0.0017,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 30,
+    "regionPoke": {
+     "head": 12,
+     "chest": 2,
+     "arm": 1,
+     "shoulder": 13,
+     "underarm": 2
+    },
+    "worst": {
+     "frac": 0.0035,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleRevenant:hoodie": {
+    "slot": "upper",
+    "covered": 3571,
+    "bind": 0.0039,
+    "animated": 0.0056,
+    "animatedMean": 0.0017,
+    "extreme": 0.0036,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 36,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 3,
+     "chest": 3,
+     "shoulder": 19,
+     "head": 4
+    },
+    "worst": {
+     "frac": 0.0056,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "paleApparition:sweater": {
+    "slot": "upper",
+    "covered": 2832,
+    "bind": 0.0004,
+    "animated": 0.0025,
+    "animatedMean": 0.0005,
+    "extreme": 0.0014,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 18,
+    "regionPoke": {
+     "underarm": 4,
+     "shoulder": 13,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0025,
+     "clip": "Death",
+     "t": 0.8667
+    }
+   },
+   "paleGaze:sweater": {
+    "slot": "upper",
+    "covered": 4079,
+    "bind": 0.0029,
+    "animated": 0.0049,
+    "animatedMean": 0.0029,
+    "extreme": 0.0059,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 40,
+    "regionPoke": {
+     "head": 22,
+     "arm": 2,
+     "shoulder": 9,
+     "underarm": 6,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0059,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
    }
   },
   "layering": {
@@ -2759,6 +3409,186 @@
      "frac": 0.0013,
      "clip": "Idle",
      "t": 1.8667
+    }
+   },
+   "paleApparition:flannel+slacks": {
+    "covered": 562,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleApparition:flannel+cargo": {
+    "covered": 524,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0.0019,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 1,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0.0019,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleApparition:sweater+cargo": {
+    "covered": 336,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleApparition:sweater+slacks": {
+    "covered": 370,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:hoodie+cargo": {
+    "covered": 368,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:hoodie+jeans": {
+    "covered": 355,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:sweater+cargo": {
+    "covered": 282,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleGaze:sweater+jeans": {
+    "covered": 279,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleRevenant:flannel+jeans": {
+    "covered": 482,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleRevenant:flannel+slacks": {
+    "covered": 564,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleRevenant:hoodie+jeans": {
+    "covered": 423,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
+    }
+   },
+   "paleRevenant:hoodie+slacks": {
+    "covered": 479,
+    "bind": 0,
+    "animated": 0,
+    "animatedMean": 0,
+    "extreme": 0,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 0,
+    "regionPoke": {},
+    "worst": {
+     "frac": 0,
+     "clip": null,
+     "t": 0
     }
    }
   },
@@ -4559,24 +5389,270 @@
      "clip": "ragdoll-crumple",
      "t": 0
     }
+   },
+   "paleApparition:flannel+cargo": {
+    "covered": 3971,
+    "bind": 0.0018,
+    "animated": 0.0018,
+    "animatedMean": 0.0015,
+    "extreme": 0.0023,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 18,
+    "regionPoke": {
+     "underarm": 3,
+     "head": 2,
+     "shoulder": 13
+    },
+    "worst": {
+     "frac": 0.0023,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleApparition:sweater+cargo": {
+    "covered": 3916,
+    "bind": 0.0003,
+    "animated": 0.0015,
+    "animatedMean": 0.0003,
+    "extreme": 0.001,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 17,
+    "regionPoke": {
+     "underarm": 4,
+     "shoulder": 12,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleApparition:flannel+slacks": {
+    "covered": 3984,
+    "bind": 0.0018,
+    "animated": 0.0018,
+    "animatedMean": 0.0015,
+    "extreme": 0.0023,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 18,
+    "regionPoke": {
+     "underarm": 3,
+     "head": 2,
+     "shoulder": 13
+    },
+    "worst": {
+     "frac": 0.0023,
+     "clip": "ragdoll-crumple",
+     "t": 0
+    }
+   },
+   "paleApparition:sweater+slacks": {
+    "covered": 3929,
+    "bind": 0.0003,
+    "animated": 0.0015,
+    "animatedMean": 0.0003,
+    "extreme": 0.001,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 17,
+    "regionPoke": {
+     "underarm": 4,
+     "shoulder": 12,
+     "arm": 1
+    },
+    "worst": {
+     "frac": 0.0015,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleGaze:sweater+cargo": {
+    "covered": 4671,
+    "bind": 0.0026,
+    "animated": 0.0043,
+    "animatedMean": 0.0026,
+    "extreme": 0.0051,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 38,
+    "regionPoke": {
+     "head": 21,
+     "arm": 2,
+     "shoulder": 8,
+     "underarm": 6,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0051,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "paleGaze:hoodie+cargo": {
+    "covered": 4569,
+    "bind": 0.0013,
+    "animated": 0.0031,
+    "animatedMean": 0.0016,
+    "extreme": 0.0015,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 28,
+    "regionPoke": {
+     "head": 11,
+     "chest": 2,
+     "arm": 1,
+     "shoulder": 12,
+     "underarm": 2
+    },
+    "worst": {
+     "frac": 0.0031,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleGaze:sweater+jeans": {
+    "covered": 4676,
+    "bind": 0.0026,
+    "animated": 0.0045,
+    "animatedMean": 0.0026,
+    "extreme": 0.0051,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 39,
+    "regionPoke": {
+     "head": 21,
+     "arm": 2,
+     "waist/hip": 1,
+     "shoulder": 8,
+     "underarm": 6,
+     "chest": 1
+    },
+    "worst": {
+     "frac": 0.0051,
+     "clip": "ragdoll-twist",
+     "t": 0
+    }
+   },
+   "paleRevenant:flannel+jeans": {
+    "covered": 4532,
+    "bind": 0.0029,
+    "animated": 0.0062,
+    "animatedMean": 0.0014,
+    "extreme": 0.0026,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 63,
+    "regionPoke": {
+     "underarm": 19,
+     "chest": 2,
+     "arm": 4,
+     "shoulder": 17,
+     "head": 21
+    },
+    "worst": {
+     "frac": 0.0062,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleRevenant:flannel+slacks": {
+    "covered": 4536,
+    "bind": 0.0029,
+    "animated": 0.0062,
+    "animatedMean": 0.0014,
+    "extreme": 0.0026,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 63,
+    "regionPoke": {
+     "underarm": 19,
+     "chest": 2,
+     "arm": 4,
+     "shoulder": 17,
+     "head": 21
+    },
+    "worst": {
+     "frac": 0.0062,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleGaze:hoodie+jeans": {
+    "covered": 4574,
+    "bind": 0.0013,
+    "animated": 0.0033,
+    "animatedMean": 0.0016,
+    "extreme": 0.0015,
+    "maxExposedHidden": 0,
+    "everPokeVisibleVertices": 29,
+    "regionPoke": {
+     "head": 11,
+     "chest": 2,
+     "waist/hip": 1,
+     "arm": 1,
+     "shoulder": 12,
+     "underarm": 2
+    },
+    "worst": {
+     "frac": 0.0033,
+     "clip": "Death",
+     "t": 0.9333
+    }
+   },
+   "paleRevenant:hoodie+slacks": {
+    "covered": 4197,
+    "bind": 0.0033,
+    "animated": 0.0026,
+    "animatedMean": 0.0015,
+    "extreme": 0.0031,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 27,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 3,
+     "chest": 3,
+     "shoulder": 10,
+     "head": 4
+    },
+    "worst": {
+     "frac": 0.0033,
+     "clip": "Bind",
+     "t": 0
+    }
+   },
+   "paleRevenant:hoodie+jeans": {
+    "covered": 4193,
+    "bind": 0.0033,
+    "animated": 0.0026,
+    "animatedMean": 0.0015,
+    "extreme": 0.0031,
+    "maxExposedHidden": 1,
+    "everPokeVisibleVertices": 27,
+    "regionPoke": {
+     "underarm": 7,
+     "arm": 3,
+     "chest": 3,
+     "shoulder": 10,
+     "head": 4
+    },
+    "worst": {
+     "frac": 0.0033,
+     "clip": "Bind",
+     "t": 0
+    }
    }
   },
   "aggregate": {
    "garments": {
-    "n": 48,
+    "n": 60,
     "maxBind": 0.0053,
-    "maxAnimated": 0.0056,
-    "maxExtreme": 0.0054,
-    "meanAnimated": 0.0017,
-    "totalEverPokeVisibleVertices": 569
+    "maxAnimated": 0.0081,
+    "maxExtreme": 0.0059,
+    "meanAnimated": 0.0019,
+    "totalEverPokeVisibleVertices": 783
    },
    "headwear": {
-    "n": 15,
+    "n": 21,
     "maxBind": 0.0891,
     "maxAnimated": 0.0891,
     "maxExtreme": 0.0891,
-    "meanAnimated": 0.0211,
-    "totalEverPokeVisibleVertices": 203
+    "meanAnimated": 0.0194,
+    "totalEverPokeVisibleVertices": 305
    },
    "face": {
     "n": 10,

@@ -39,6 +39,29 @@ async function hairMask(master, rule) {
   return out;
 }
 
+const ss = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+function chestWallGuard(P, sw, skel, k) {
+  const ARMJ = new Set(['L_UpperArm', 'L_Forearm', 'L_Hand', 'R_UpperArm', 'R_Forearm', 'R_Hand'].map(n => JOINT_NAMES.indexOf(n)));
+  const CHEST = JOINT_NAMES.indexOf('Chest');
+  const armpitY = skel.armpitY, xMax = Math.min(Math.abs(skel.joints.L_UpperArm[0]), Math.abs(skel.joints.R_UpperArm[0])) + 0.03 * k;
+  let rows = 0, moved = 0;
+  for (let i = 0; i < P.length / 3; i++) {
+    const y = P[i * 3 + 1];
+    if (Math.abs(P[i * 3]) > xMax || y > armpitY - 0.005 * k) continue;
+    const f = ss(armpitY - 0.04 * k, armpitY - 0.005 * k, y);
+    let take = 0;
+    for (let s = 0; s < 4; s++) if (ARMJ.has(sw.joints[i * 4 + s]) && sw.weights[i * 4 + s] > 0) { const d = sw.weights[i * 4 + s] * (1 - f); sw.weights[i * 4 + s] -= d; take += d; }
+    if (take <= 0) continue;
+    rows++; moved += take;
+    const row = new Map();
+    for (let s = 0; s < 4; s++) if (sw.weights[i * 4 + s] > 0) row.set(sw.joints[i * 4 + s], (row.get(sw.joints[i * 4 + s]) ?? 0) + sw.weights[i * 4 + s]);
+    row.set(CHEST, (row.get(CHEST) ?? 0) + take);
+    const e = [...row.entries()].filter(([, w]) => w > 1e-6).sort((a, b) => b[1] - a[1] || a[0] - b[0]).slice(0, 4), t = e.reduce((a, x) => a + x[1], 0);
+    for (let s = 0; s < 4; s++) { sw.joints[i * 4 + s] = e[s]?.[0] ?? 0; sw.weights[i * 4 + s] = e[s] ? e[s][1] / t : 0; }
+  }
+  return {armpitY: r4(armpitY), medialOfX: r4(xMax), fadeM: [r4(0.005 * k), r4(0.04 * k)], rowsChanged: rows, armWeightMovedToChest: r4(moved)};
+}
+
 /**
  * @param master loadAnySource result (native frame, densified)
  * @param opts {heightM, hair: {lumMax, satMin?, satLumMax?, minY?}, upperArmFromVerticalDeg = 34, smoothIters = 4}
@@ -88,6 +111,11 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
     hairCut = {shoulderJointHalfWidthM: r4(xMax), colourHairVertices: hairW.reduce((a, b) => a + b, 0), lateralRemoved: hairW.reduce((a, h, i) => a + (h && Math.abs(WP[i * 3]) >= xMax ? 1 : 0), 0), dilatedRings: hair.dilate ?? 2, dilatedVertices: dilated};
   }
   const sw = bodyWeights(welded, skel, hairWeights, {smoothIters});
+  // chest wall guard (lib/repose.mjs torso guard, for skin weights): in a T-pose nothing below the armpit belongs to an arm,
+  // so arm influences on the chest-side skin medial of the shoulder joint fade out from 0.5 cm to 4 cm (x H / 1.78) below
+  // the armpit (their share goes to Chest); otherwise the armpit / breast-side skin is dragged down with the arm and folds
+  // into flaps in front of the breasts
+  const guard = chestWallGuard(welded.pos, sw, skel, heightM / 1.78);
   // target pose: each upper arm rolls about +Z through its shoulder until shoulder -> wrist is upperArmFromVerticalDeg from -Y
   const J = skel.joints, rig = new Rig(skel), rot = {}, sides = {};
   for (const s of ['L', 'R']) {
@@ -99,6 +127,8 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
     sides[s] = {armFromVerticalDegBefore: +now.toFixed(1), rotationDeg: +(-sg * delta).toFixed(1), shoulderJointM: r4(J[s + '_UpperArm']), wristJointM: r4(J[s + '_Hand'])};
   }
   const world = rig.fk({hips: [0, 0, 0], rot});
+  // the T-rig's elbow / wrist carried into the A-pose bind (FK of the same rotation): offered to the A-pose skeleton
+  const armJointsA = Object.fromEntries(['L', 'R'].map(s => [s, {elbow: r4(world[s + '_Forearm'].pos), wrist: r4(world[s + '_Hand'].pos)}]));
   const Pw = skinPositions({pos: welded.pos, joints: sw.joints, weights: sw.weights}, skel, world);
   for (const s of ['L', 'R']) { const d = V.sub(world[s + '_Hand'].pos, world[s + '_UpperArm'].pos); sides[s].armFromVerticalDegAfter = +(Math.atan2((s === 'L' ? 1 : -1) * d[0], -d[1]) * 180 / Math.PI).toFixed(1); }
   // back to native: inverse of similarity(scale, pivot, flipFacing, offset 0)
@@ -117,12 +147,13 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
   if (hairWeights) for (let i = 0; i < hairWeights.length; i++) if (hairWeights[i]) for (let k = 0; k < 4; k++) if (ARM.has(sw.joints[i * 4 + k]) && sw.weights[i * 4 + k] > 0) { hairArm++; break; }
   const b0 = bounds(master.pos), b1 = bounds(out);
   const log = {version: 'skin-1', method: 'linear-blend-skinning repose (lib/repose-skin.mjs): T-pose skeleton (enemy/lib/tpose-skeleton.mjs, dense surface samples, hair ignored) + shared zombie skin weights with the hair post-pass (enemy/lib/siren-skin.mjs bodyWeights); each UpperArm rolled about +Z through its shoulder joint to the A-pose bind angle; topology / UVs / textures unchanged',
-    upperArmFromVerticalDeg, analysisHeightM: heightM, facing: fd, sides, verticesMoved: moved, vertices: nN,
+    upperArmFromVerticalDeg, analysisHeightM: heightM, facing: fd, sides, armJointsA, verticesMoved: moved, vertices: nN,
+    chestWallGuard: guard,
     hair: hair ? {rule: hair, nativeVertices: hairV.reduce((a, b) => a + b, 0), weldedVertices: hairW.reduce((a, b) => a + b, 0), weightMask: hairCut, weldedHairVerticesWithArmWeights: hairArm, weights: sw.stats.hair} : null,
     skeletonT: {joints: Object.fromEntries(Object.entries(J).map(([k, v]) => [k, r4(v)])), log: skel.log},
     nativeBoundsBefore: {min: r4(b0.min), max: r4(b0.max)}, nativeBoundsAfter: {min: r4(b1.min), max: r4(b1.max)}};
   // hair flags per native vertex (the weight mask: colour rule, medial of the shoulders, dilated) for the A-pose stage: left out
   // of the skeleton measurements and kept off the arm chains by the final skinning (lib/autorig.mjs bodyStage / bodySkin)
   const hairFlags = hairWeights ? Uint8Array.from({length: nN}, (_, i) => hairWeights[map[i]]) : null;
-  return {...master, pos: out, nrm: computeNormals(out, master.idx), repose: log, ...(hairFlags ? {hairMask: hairFlags} : {})};
+  return {...master, pos: out, nrm: computeNormals(out, master.idx), repose: {...log}, armJointsA, ...(hairFlags ? {hairMask: hairFlags} : {})};
 }
