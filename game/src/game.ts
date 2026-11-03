@@ -142,7 +142,10 @@ import {createGameRenderer, describeBackend, maxTexture3DSize, recordGpuError, r
 import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
-import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {WarmupRegistry, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
+import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
+import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 
@@ -412,6 +415,10 @@ export class Game {
   /** Iteration 14: the last warm-up's result (loading note, QA `__LL.warmup()`). */
   warmup: WarmupResult | null = null;
   private warmRun: Promise<WarmupResult> | null = null;
+  /** Lane RENDER-CPU: the render-context call depth each scene-pass target is drawn at (render/renderContextDepth.ts), once measured. */
+  private readonly sceneDepths = new WeakMap<object, number>();
+  private sceneDepthLast: number | null = null;
+  private journeyCompile: JourneyCompile | null = null;
   /**
    * Iteration 14: what the warm-up prepares besides the discovered station scene (docs/rendering-warmup.md): effect pools /
    * runtime prototypes in the scene, and render passes with their own scene / camera / target.
@@ -430,6 +437,7 @@ export class Game {
     // WebGL 2 backend; ?renderer=webgl2 forces the fallback. Nothing renders / compiles before initRenderer() resolves.
     this.gpuBoot = createGameRenderer(canvas, rendererRequest(location.search, globalThis.navigator as {gpu?: unknown} | undefined, globalThis.isSecureContext !== false));
     this.renderer = this.gpuBoot.renderer;
+    installShadowAlphaTwin(this.renderer); // task studio-performance-recorder-20261103 (lane RENDER-CPU): no per-frame shadow re-keying
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = MOOD.exposure;
@@ -472,6 +480,10 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    // Task studio-performance-recorder-20261103 (lane RENDER-CPU): the holders' contents hidden until used — the loot display's
+    // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
+    // interiors (shown when opened) — compile with the station instead of on first sight
+    this.warmRegistry.addPool('holders', () => (this.containers ? [this.containers.group] : []));
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -1316,34 +1328,50 @@ export class Game {
   }
 
   /**
-   * The next station's pipelines compiled WITHOUT hiding the canvas or holding frames (the player is riding through the tunnel):
-   * renderer.compileAsync over the new world with frustum culling lifted for the call (shadow / fog-pass variants are not covered:
-   * the first frames in a new view may still compile a few). Bounded; failures only log.
+   * The next station's pipelines compiled WITHOUT hiding the canvas or holding frames (the player is riding through the tunnel).
+   * Task studio-performance-recorder-20261103 (lane RENDER-CPU; user: "the lag is also bad in reactor … the new loading transitions in
+   * the train … might be skipping the warmup / compile step"): this journey route is the one that never runs the loading-screen
+   * warm-up, and its former compile could not prepare the station — it compiled `world.group` alone at the top level into the CANVAS
+   * context (no render target set), while the station draws into the atmosphere's scene pass one call level deeper
+   * (render/renderContextDepth.ts): a different render context, so every node build and render object was made again on arrival;
+   * culled meshes (off the camera layers), the holders / loot display / shelf stock / enemies / pickups (outside world.group) and the
+   * hidden-until-used holder contents were never projected at all. Now the warm-up's own planner picks the station's representatives
+   * (pools included; 'full': every other renderable too, for its own render objects), nearest the arrival first, and
+   * render/journeyCompile.ts prepares them for the WHOLE ride (and after it, until done), time-sliced through the frame-budget
+   * scheduler: the scene pass's node builds / render objects into its real render context and, side by side ('full', flashlight casting), the
+   * shadow-map variants by off-screen draws nested at the real frame's depth. The arrival still waits at most 8 s for the scene-pass
+   * phase; nothing holds a frame or hides the canvas. 'view' (software rasterizer): the representatives within 24 m only.
    */
   private async backgroundCompile(): Promise<void> {
-    const root = this.world?.group as THREE.Object3D | undefined;
-    const r = this.renderer as unknown as {compileAsync?: (o: THREE.Object3D, c: THREE.Camera, s?: THREE.Scene) => Promise<unknown>};
-    if (!root || typeof r.compileAsync !== 'function' || !this.renderer.initialized) return;
-    // the warm-up's own mode rule (render/warmup.ts): 'full' on a hardware GPU = the whole station; 'view' on a software rasterizer =
-    // only what stands within 24 m of the arrival (a full compile there costs GiBs of program memory); 'off' = none
+    if (!this.world || !this.renderer.initialized || this.gpu?.deviceLost) return;
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return;
-    const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : null;
-    const box = new THREE.Box3(), sphere = new THREE.Sphere();
-    const flipped: THREE.Object3D[] = [], hidden: THREE.Object3D[] = [];
-    root.updateMatrixWorld(true);
-    root.traverse(o => {
-      if (!(o as THREE.Mesh).isMesh) return;
-      if (mode === 'view' && near) {
-        box.setFromObject(o); box.getBoundingSphere(sphere);
-        if (sphere.center.distanceTo(near) - sphere.radius > 24) { if (o.visible) { o.visible = false; hidden.push(o); } return; }
-      }
-      if (o.frustumCulled) { o.frustumCulled = false; flipped.push(o); }
-    });
+    this.journeyCompile?.cancel();
     const t0 = performance.now();
-    try { await Promise.race([r.compileAsync(root, this.camera, this.scene), new Promise(res => setTimeout(res, 8000))]); } catch (err) { console.warn('campaign: background compile failed', err); }
-    finally { for (const o of flipped) o.frustumCulled = true; for (const o of hidden) o.visible = true; }
-    console.info(`Terminal State: background compile of the next station (${mode}, ${flipped.length} meshes) ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : this.camera.getWorldPosition(new THREE.Vector3());
+    try {
+      const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+      const depth = this.sceneDepth(false); // (measured by this session's loading-screen warm-up: the atmosphere pipeline persists)
+      const plan = planWarmup(this.scene, {mode, cameraMask: this.camera.layers.mask, pools: this.warmRegistry.poolRoots(), near: mode === 'view' ? {center: near, radius: 24} : undefined});
+      const sphere = new THREE.Sphere(), box = new THREE.Box3();
+      const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(near) - sphere.radius); };
+      const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
+      const items = [...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])];
+      const casters = mode === 'full' && this.flashlight.castShadow ? byNear([...plan.items, ...plan.others].filter(i => i.caster)) : [];
+      const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
+      const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver}).start());
+      // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
+      await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
+      const st = job.stats;
+      console.info(`Terminal State: next station prepared during the ride (${mode}) — scene ${st.sceneDone}/${st.sceneItems}, shadows ${st.shadowDone}/${st.casters} at arrival after ${((performance.now() - t0) / 1000).toFixed(1)} s (continuing in spare frame time)`);
+      void job.done.then(() => console.info(`Terminal State: journey compile ${job.stats.phase} — scene ${job.stats.sceneDone}/${job.stats.sceneItems}, shadows ${job.stats.shadowDone}/${job.stats.casters}, ${job.stats.steps} steps (max ${job.stats.stepMaxMs.toFixed(1)} ms), ${((performance.now() - t0) / 1000).toFixed(1)} s`));
+    } catch (err) { console.warn('campaign: background compile failed', err); }
+  }
+
+  /** Lane RENDER-CPU: the journey's background preparation of the next station (render/journeyCompile.ts; QA / tests). */
+  get journeyCompileStats(): JourneyCompile['stats'] | null {
+    return this.journeyCompile?.stats ?? null;
   }
   // --- end campaign (primary) ----------------------------------------------------------------------------------------------------
 
@@ -1568,7 +1596,38 @@ export class Game {
    */
   prepareBeforeShow(root: THREE.Object3D): Promise<void> {
     const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
-    return prepareObjects(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, root, target);
+    return prepareObjects(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, root, target, this.sceneDepth(false));
+  }
+
+  /**
+   * Task studio-performance-recorder-20261103 (lane RENDER-CPU): the render-context call depth the station's scene pass is drawn at
+   * (render/renderContextDepth.ts: three r186 keys render contexts — and so node builds — by it; the atmosphere draws the station
+   * inside its RenderPipeline). Measured once per scene-pass target with one hidden frame that draws nothing of the scene (camera
+   * layers empty), only when `measure` (the warm-up: frames are held, the canvas is hidden for it); otherwise the known value or 0.
+   * The direct path (no atmosphere target) is a top-level render: 0.
+   */
+  private sceneDepth(measure: boolean): number {
+    const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+    if (!target || typeof target !== 'object') return 0;
+    const known = this.sceneDepths.get(target);
+    if (known !== undefined) return known;
+    if (!measure) return this.sceneDepthLast ?? 0; // (a rebuilt pipeline keeps its structure: the last measured depth)
+    const mask = this.camera.layers.mask, shown = this.canvas.style.visibility;
+    let depth: number | null = null;
+    try {
+      this.canvas.style.visibility = 'hidden';
+      this.camera.layers.mask = 0; // (nothing of the scene draws; the pipeline's passes run as in a real frame)
+      depth = renderContextDepth(this.renderer, target, () => this.drawFrame());
+    } catch (err) {
+      console.warn('lane RENDER-CPU: scene-pass depth probe failed; compiling at the top level', err);
+    } finally {
+      this.camera.layers.mask = mask;
+      this.canvas.style.visibility = shown;
+    }
+    this.atmosphere.resetHistory();
+    this.sceneDepths.set(target, depth ?? 0);
+    if (depth !== null) this.sceneDepthLast = depth;
+    return depth ?? 0;
   }
 
   /**
@@ -1644,6 +1703,7 @@ export class Game {
       finish: () => { this.world.culler.update(this.camera, true); this.atmosphere.resetHistory(); this.render(); },
       hide: hidden => { this.canvas.style.visibility = hidden ? 'hidden' : ''; },
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
+      sceneDepth: () => this.sceneDepth(true), // lane RENDER-CPU: compile into the context the real frame draws the station in
     }, {
       onProgress: (p: WarmupProgress) => { if (bar) bar.style.width = `${Math.floor(p.done / Math.max(1, p.total) * 100)}%`; label.textContent = warmupLabel(p); },
     });
