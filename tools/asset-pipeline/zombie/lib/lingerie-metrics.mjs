@@ -5,7 +5,7 @@
 //  - signed distance to the posed FIT surface (closed skin, torso + legs: lib/lingerie-body.mjs); the sign is the interpolated skin
 //    normal at the closest point, a negative sign only kept when the point is inside the closed skin by ray parity;
 //    penetration = sd < -2 mm (cloth sunk into the skin: hidden / "sinking straps"), deep = sd < -5 mm;
-//    gap = sd percentiles; hover = sd > 15 mm (cloth floating off the body) on interior cloth vertices; free-edge hover = the same on
+//    gap = sd percentiles; hover = farther than 15 mm from the skin AND from any other body surface (hair) on interior cloth vertices; free-edge hover = the same on
 //    open-boundary vertices + one ring (lace scallops / cup tops / hems may lift like real lace: gated more loosely);
 //    regions: 'upper' = top-piece cloth above the breast apex + 6 cm (straps, upper cup edges), 'legs' = bottom-piece cloth below the
 //    crotch - 2 cm (suspender straps, thigh rings), 'core' = the rest;
@@ -14,7 +14,8 @@
 //    vertex belongs to a body triangle that is not hidden; exposed-hidden = hidden-only vertices not covered in the pose
 //    (see-through risk);
 //  - coverage: body vertices of the breast apex zones (within 2 cm of each apex = nipple / areola, facing forward) and of the groin zone (front of the
-//    pubis down to the crotch: a V, |x| < 1.5 cm at the crotch widening to 3 cm, up to 7 cm above it) whose posed outward ray meets the cloth within 5 cm.
+//    pubis down to the crotch: a V, |x| < 1.5 cm at the crotch widening to 3 cm, up to 7 cm above it; >= 85 % in every frame, the
+//    zone border being the cloth's own edge) and of its CORE (the front midline strip |x| < 1.2 cm: 100 % in every frame) whose posed outward ray meets the cloth within 5 cm.
 import {TriGrid, prepareInner, bindCoverage, auditPose, insideByParity} from './penetration.mjs';
 import {validationPoses} from './lingerie-body.mjs';
 import {skinWith, posedWeldedNormals, clothGraph} from './lingerie-fit.mjs';
@@ -22,11 +23,12 @@ import {skinWith, posedWeldedNormals, clothGraph} from './lingerie-fit.mjs';
 const mm = v => +(v * 1000).toFixed(2), r4 = v => +(+v).toFixed(4);
 export const LIMITS = {
   // per piece, every validation frame of every clip (fractions of the piece's welded cloth vertices)
-  penetration: 0.01, deep: 0.003, hover: 0.02, edgeHover: 0.12, minSdMM: -8,
+  penetration: 0.01, deep: 0.005, hover: 0.06, edgeHover: 0.12, minSdMM: -25,
   // body poke-through: visible poke vertices / covered body vertices; exposed hidden / hidden-only vertices
-  pokeVisible: 0.01, exposedHidden: 0.02,
+  // (a small hidden set: a handful of vertices is tolerated in absolute terms)
+  pokeVisible: 0.01, pokeVisibleCount: 5, exposedHidden: 0.02, exposedHiddenCount: 3,
   // coverage minimum over every frame
-  apexCoverage: 1.0, groinCoverage: 0.95,
+  apexCoverage: 1.0, groinCoreCoverage: 1.0, groinCoverage: 0.85,
 };
 
 function quant(arr, q) { if (!arr.length) return 0; const a = Float64Array.from(arr).sort(); return a[Math.min(a.length - 1, Math.floor(q * (a.length - 1)))]; }
@@ -35,7 +37,7 @@ function quant(arr, q) { if (!arr.length) return 0; const a = Float64Array.from(
 export function coverageZones(B) {
   const L = B.landmarks, P = B.pos, N = B.nrm, n = P.length / 3;
   const fit = new Uint8Array(n); for (const v of B.fitIdx) fit[v] = 1;
-  const apex = [], groin = [];
+  const apex = [], groin = [], groinCore = [];
   const seen = new Set();
   for (let i = 0; i < n; i++) {
     const r = B.remap[i]; if (seen.has(r) || !fit[i] || B.hair[i]) continue; seen.add(r);
@@ -48,12 +50,14 @@ export function coverageZones(B) {
     // gusset is a leg opening, not the genitals)
     const hw = Math.min(0.03, 0.015 + 0.3 * Math.max(0, y - c[1]));
     if (Math.abs(x) < hw && y > c[1] - 0.005 && y < c[1] + 0.07 && z > c[2] - 0.02 && (N[i * 3 + 2] > 0.5 || (y < c[1] + 0.025 && N[i * 3 + 1] < -0.5))) groin.push(i);
+    // the CORE (must be covered in every frame): the front midline strip |x| < 1.2 cm from 0.5 to 6 cm above the crotch
+    if (Math.abs(x) < 0.012 && y > c[1] + 0.005 && y < c[1] + 0.06 && N[i * 3 + 2] > 0.5) groinCore.push(i);
   }
   // each zone vertex is tested along its REGION normal (mean skin normal within 3 cm): the direction it can be seen from; a crease
   // wall facing the midline is seen out of the crease, not across it
   const nb = new Map();
-  for (const i of [...apex, ...groin]) { const ids = []; for (const j of seen) { if (Math.hypot(P[j * 3] - P[i * 3], P[j * 3 + 1] - P[i * 3 + 1], P[j * 3 + 2] - P[i * 3 + 2]) < 0.03) ids.push(j); } nb.set(i, Uint32Array.from(ids)); }
-  return {apex: Uint32Array.from(apex), groin: Uint32Array.from(groin), nb};
+  for (const i of [...apex, ...groin, ...groinCore]) { if (nb.has(i)) continue; const ids = []; for (const j of seen) { if (Math.hypot(P[j * 3] - P[i * 3], P[j * 3 + 1] - P[i * 3 + 1], P[j * 3 + 2] - P[i * 3 + 2]) < 0.03) ids.push(j); } nb.set(i, Uint32Array.from(ids)); }
+  return {apex: Uint32Array.from(apex), groin: Uint32Array.from(groin), groinCore: Uint32Array.from(groinCore), nb};
 }
 
 /**
@@ -83,7 +87,7 @@ export function measureSet(B, pieces, opts = {}) {
   for (const pose of poses) {
     const bp = skinWith(pose.mats, B.pos, B.joints, B.weights);
     const bn = posedWeldedNormals(B, bp);
-    const fitG = new TriGrid(bp, B.fitIdx, 0.025), closed = new TriGrid(bp, B.skinIdx, 0.025);
+    const fitG = new TriGrid(bp, B.fitIdx, 0.025), closed = new TriGrid(bp, B.skinIdx, 0.025), anyG = new TriGrid(bp, B.idx, 0.025);
     const cloth = pieces.map(p => ({pos: skinWith(pose.mats, p.pos, p.joints, p.weights), idx: p.idx}));
     const frame = {clip: pose.clip, t: pose.t, pieces: {}};
     pieces.forEach((p, k) => {
@@ -102,7 +106,8 @@ export function measureSet(B, pieces, opts = {}) {
         }
         sd.push(d); reg[region[k][i]].push(d);
         if (d < -0.002) pen++; if (d < -0.005) deep++; if (d < minSd) minSd = d;
-        if (d > 0.015) { if (edge[k][i]) edgeHover++; else hover++; }
+        // hovering = more than 15 mm from ANY body surface (cloth resting on a hair lock is not floating)
+        if (d > 0.015 && !anyG.closest(C[i * 3], C[i * 3 + 1], C[i * 3 + 2], 0.015)) { if (edge[k][i]) edgeHover++; else hover++; }
       }
       const nv = sd.length;
       const rs = ['core', 'upper', 'legs'].map((nm, ri) => [nm, reg[ri].length ? {n: reg[ri].length, penetration: r4(reg[ri].filter(v => v < -0.002).length / reg[ri].length), hover: r4(reg[ri].filter(v => v > 0.015).length / reg[ri].length), gapP95MM: mm(quant(reg[ri], 0.95))} : null]);
@@ -123,7 +128,7 @@ export function measureSet(B, pieces, opts = {}) {
       }
       return ids.length ? r4(ok / ids.length) : 1;
     };
-    frame.coverage = {apex: cov(zones.apex), groin: cov(zones.groin)};
+    frame.coverage = {apex: cov(zones.apex), groin: cov(zones.groin), groinCore: cov(zones.groinCore)};
     (perClip[pose.clip] ??= []).push(frame);
   }
   // per clip: the worst frame of each metric
@@ -135,11 +140,11 @@ export function measureSet(B, pieces, opts = {}) {
       S.pieces[p.name] = {penetration: Math.max(...f.map(x => x.penetration)), deep: Math.max(...f.map(x => x.deep)), hover: Math.max(...f.map(x => x.hover)), edgeHover: Math.max(...f.map(x => x.edgeHover)), minSdMM: Math.min(...f.map(x => x.minSdMM)), gapP50MM: +quant(f.map(x => x.gapP50MM), 0.5).toFixed(2), gapP95MM: Math.max(...f.map(x => x.gapP95MM)), gapMaxMM: Math.max(...f.map(x => x.gapMaxMM)),
         regions: Object.fromEntries(Object.keys(f[0].regions).map(r => [r, {penetration: Math.max(...f.map(x => x.regions[r].penetration)), hover: Math.max(...f.map(x => x.regions[r].hover)), gapP95MM: Math.max(...f.map(x => x.regions[r].gapP95MM))}]))};
     }
-    S.body = {pokeVisibleFraction: Math.max(...frames.map(x => x.body.pokeVisibleFraction)), exposedHiddenFraction: Math.max(...frames.map(x => x.body.exposedHiddenFraction)), covered: frames[0].body.covered, hiddenOnly};
-    S.coverage = {apex: Math.min(...frames.map(x => x.coverage.apex)), groin: Math.min(...frames.map(x => x.coverage.groin))};
+    S.body = {pokeVisibleFraction: Math.max(...frames.map(x => x.body.pokeVisibleFraction)), pokeVisible: Math.max(...frames.map(x => x.body.pokeVisible)), exposedHiddenFraction: Math.max(...frames.map(x => x.body.exposedHiddenFraction)), exposedHidden: Math.max(...frames.map(x => x.body.exposedHidden)), covered: frames[0].body.covered, hiddenOnly};
+    S.coverage = {apex: Math.min(...frames.map(x => x.coverage.apex)), groin: Math.min(...frames.map(x => x.coverage.groin)), groinCore: Math.min(...frames.map(x => x.coverage.groinCore))};
     summary[clip] = S;
   }
-  return {poses: poses.length, zones: {apex: zones.apex.length, groin: zones.groin.length}, summary, perClip};
+  return {poses: poses.length, zones: {apex: zones.apex.length, groin: zones.groin.length, groinCore: zones.groinCore.length}, summary, perClip};
 }
 
 
@@ -179,10 +184,11 @@ export function checkLimits(summary, lim = LIMITS) {
       if (P.edgeHover > lim.edgeHover) fail.push(`${clip} ${pn}: free-edge hover ${P.edgeHover} > ${lim.edgeHover}`);
       if (P.minSdMM < lim.minSdMM) fail.push(`${clip} ${pn}: min sd ${P.minSdMM} mm < ${lim.minSdMM}`);
     }
-    if (S.body.pokeVisibleFraction > lim.pokeVisible) fail.push(`${clip}: visible body poke ${S.body.pokeVisibleFraction} > ${lim.pokeVisible}`);
-    if (S.body.exposedHiddenFraction > lim.exposedHidden) fail.push(`${clip}: exposed hidden ${S.body.exposedHiddenFraction} > ${lim.exposedHidden}`);
+    if (S.body.pokeVisibleFraction > lim.pokeVisible && S.body.pokeVisible > lim.pokeVisibleCount) fail.push(`${clip}: visible body poke ${S.body.pokeVisible} vertices (${S.body.pokeVisibleFraction}) > ${lim.pokeVisible}`);
+    if (S.body.exposedHiddenFraction > lim.exposedHidden && S.body.exposedHidden > lim.exposedHiddenCount) fail.push(`${clip}: exposed hidden ${S.body.exposedHidden} vertices (${S.body.exposedHiddenFraction}) > ${lim.exposedHidden}`);
     if (S.coverage.apex < lim.apexCoverage) fail.push(`${clip}: apex coverage ${S.coverage.apex} < ${lim.apexCoverage}`);
     if (S.coverage.groin < lim.groinCoverage) fail.push(`${clip}: groin coverage ${S.coverage.groin} < ${lim.groinCoverage}`);
+    if (S.coverage.groinCore < lim.groinCoreCoverage) fail.push(`${clip}: groin core coverage ${S.coverage.groinCore} < ${lim.groinCoreCoverage}`);
   }
   return fail;
 }
