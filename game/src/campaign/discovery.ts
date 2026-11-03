@@ -237,7 +237,8 @@ export interface CampaignUpgrade {
  * change is network-level (campaign/network.ts addMaintenanceRoute): ONE station the player has never seen (not known, not visited,
  * no memory, not on the journey) — preferably a terminus — moves beside the Reactor, is printed "Maintenance Route", and a short
  * service line joins it to the Reactor's approach and beyond. When every candidate was seen, a station that was only SHOWN (known,
- * never visited, no memory) may move instead and is hidden again (it is re-revealed at the approach). Impossible -> unchanged.
+ * never visited, no memory) may move instead and is hidden again (it is re-revealed at the approach; a 1337 cheat run shows every
+ * station, so there it stays shown). Impossible -> unchanged.
  * `remembered`: station ids with saved world memory (section keys / the Retry snapshot). Idempotent.
  */
 export function upgradeCampaign(state: CampaignState, o: {remembered?: Iterable<StationId>} = {}): CampaignUpgrade {
@@ -250,11 +251,12 @@ export function upgradeCampaign(state: CampaignState, o: {remembered?: Iterable<
   const trace: string[] = [];
   const tiers: ['unseen' | 'unvisited', Set<StationId>][] = [['unseen', new Set([...fixed, ...state.known])], ['unvisited', fixed]];
   for (const [tier, keep] of tiers) {
-    if (tier === 'unvisited' && state.cheat) break; // with the cheat every station is shown: nothing moves that the player saw
     const got = addMaintenanceRoute(net, {keep, trace});
     if (!got) continue;
     const {network, ...info} = got;
-    const known = tier === 'unvisited' ? state.known.filter(k => k !== got.node) : state.known;
+    // a shown-but-unvisited station that moved is hidden again (re-revealed at the approach) — except under the 1337 cheat, which
+    // shows every station by definition (a cheat run can only take that tier: nothing is unseen there)
+    const known = tier === 'unvisited' && !state.cheat ? state.known.filter(k => k !== got.node) : state.known;
     return {state: {...state, network, known}, status: 'added', node: got.node, tier, info};
   }
   return {state, status: 'unchanged', reason: trace.join('; ') || 'no candidate'};

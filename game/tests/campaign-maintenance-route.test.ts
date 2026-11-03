@@ -172,10 +172,15 @@ describe('older saves: the deterministic compatibility update', () => {
       expect(u.state.won).toEqual(mid.won);
       expect(validateCampaign(u.state)).toEqual([]);
       if (u.node) expect([...mid.known, to].includes(u.node)).toBe(false);
-      // the cheat shows every station: only an unseen one could move, so the update is skipped (reported), never a seen station moved
-      const cheat = upgradeCampaign({...mid, cheat: true, known: net.nodes.map(n => n.id)});
-      expect(cheat.status).toBe('unchanged');
-      expect(cheat.reason).toBeTruthy();
+      // a 1337 cheat run shows every station: a never-visited one (no memory, not on the journey) moves; everything stays shown
+      const all = net.nodes.map(n => n.id);
+      const cheat = upgradeCampaign({...mid, cheat: true, known: all}, {remembered: mid.visited});
+      if (cheat.status === 'added') {
+        expect(cheat.tier).toBe('unvisited');
+        expect([...mid.visited, to].includes(cheat.node!)).toBe(false);
+        expect(cheat.state.known).toEqual(all);
+        expect(validateCampaign(cheat.state)).toEqual([]);
+      } else expect(cheat.reason).toBeTruthy();
     }
   });
 
