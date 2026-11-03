@@ -15,10 +15,11 @@
 //  - THE COMPOUND WALL: buttressed concrete PIERS along every parapet edge (~6 m rhythm), flush with the parapet's inner face and
 //    rising above it, each with a raking buttress on the city side — the plaza parapet reads as a heavy purpose-built retaining wall;
 //  - TWO VENT TOWERS (one when only one fits) in the ring road just beyond the parapet: the side OPPOSITE the stair head house (the
-//    first view when stepping out) and one lateral side, offset off the aperture's axis (never behind the beam from the exit). Each a
-//    concrete stack on a plinth with corner pilasters, string courses, a cap and a steel louvred discharge cowl, side intake grilles,
-//    and ONE big extraction fan on the face toward the plaza (axis horizontal, the housing's +Z), a steel service platform under it
-//    and a caged ladder;
+//    first view when stepping out; off the exit -> aperture sight line, so the beam never stands in front of its fan) and the lateral
+//    side on the other side of that axis. Each a two-stage concrete ventilation stack (22-27 m) on a plinth: corner pilasters, string
+//    courses, a set-back upper stage with an exhaust louvre band, a cap and a steel louvred discharge cowl, intake grilles on its
+//    sides, and ONE big extraction fan (ring radius 2.1-2.4 m, rotor 2.0-2.3 m) on the face toward the plaza (axis horizontal = the housing's +Z), a
+//    steel service platform under it, knee braces and a caged ladder;
 //  - THE DUCT RUN linking each tower to the yard: a concrete PLENUM against the parapet's outer face (an intake grille above the
 //    parapet line, facing the plaza) and a steel duct on concrete sleepers into the tower's base.
 // Footprints are oriented rects (surfacePlan.ts CityFootprint); the towers / plenums / ducts are `reserved` for the city.
