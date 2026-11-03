@@ -21,6 +21,7 @@ import {reactorStartupOf} from './startup';
 import {reactorTexture} from './archAssets';
 import {surfaceModelKeys, SURFACE_KIT} from './surfaceKit';
 import {planSurfaceCity, type SurfaceCityPlan} from './surfacePlan';
+import {planSurfacePlant, type SurfacePlantPlan} from './surfacePlantPlan';
 import {surfaceEyeOpen, surfaceEyeOutside, surfaceSiteOf, type SurfaceSite} from './surfaceSite';
 import {buildSurfaceView, disposeSurfaceView, type SurfaceView} from './surfaceCity';
 import {SURFACE_LOOK, SURF_U, surfaceTune} from './surfaceLook';
@@ -67,6 +68,8 @@ export const reactorSurfaceOf = (host: object): ReactorSurface | undefined => ru
 export class ReactorSurface {
   site: SurfaceSite | null = null;
   plan: SurfaceCityPlan | null = null;
+  /** The plant round the aperture (surfacePlantPlan.ts): vent towers, reserved lots. */
+  plant: SurfacePlantPlan | null = null;
   /** The pit's shaft rect (the aperture column is drawn only with the eye in it). */
   pit: {x0: number; z0: number; x1: number; z1: number} | null = null;
   view: SurfaceView | null = null;
@@ -103,7 +106,9 @@ export class ReactorSurface {
     const lib = this.host.propModels;
     this.site = site;
     this.pit = {...layout.reactor.pit.bounds};
-    this.plan = planSurfaceCity(site, layout.seed >>> 0, key => !!lib?.get(key), layout.reactor.pit.bounds);
+    // (task reactor-surface-redesign-credits-20261103: the plant first — its towers / structures reserve their lots in the city)
+    this.plant = planSurfacePlant(site, layout.seed >>> 0, layout.reactor.pit.bounds);
+    this.plan = planSurfaceCity(site, layout.seed >>> 0, key => !!lib?.get(key), layout.reactor.pit.bounds, this.plant.reserved);
     this.view = buildSurfaceView(site, this.plan, key => lib?.get(key), (reactorTexture('pitConcrete', 'color') as THREE.Texture | undefined) ?? null, layout.seed >>> 0, SURFACE_KIT);
     SURF_U.beam.value.set(site.hole.x, site.hole.z, 0, 0);
     SURF_U.beamTop.value.set(site.hole.x, site.y + SURFACE_RT.cloudBase, site.hole.z);
@@ -122,6 +127,7 @@ export class ReactorSurface {
     this.view = null;
     this.site = null;
     this.plan = null;
+    this.plant = null;
     ambience.outside = ambience.open = false;
     ambience.rain = 0;
     SURF_U.wet.value = 0;

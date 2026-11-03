@@ -73,6 +73,13 @@ export interface CityPlacement {
 
 export interface CityBlock { rect: ReactorRect; ring: number; i: number; j: number; collapsed: number }
 
+/**
+ * An oriented footprint on the ground (centre x / z, half extents along its own x / z, three.js yaw). Task reactor-surface-redesign-
+ * credits-20261103 (primary contract): the PLANT's reserved lots (surfacePlantPlan.ts: the vent towers, the plant structures round the
+ * yard) — the city never builds, heaps rubble or parks a wreck on one.
+ */
+export type CityFootprint = Pick<CityPlacement, 'x' | 'z' | 'yaw' | 'hw' | 'hd'>;
+
 export interface SurfaceCityPlan {
   /** Aperture centre (the city's centre) and the yard (plaza) rect. */
   centre: {x: number; z: number};
@@ -136,7 +143,7 @@ const rectDist = (r: ReactorRect, x: number, z: number) => Math.hypot(Math.max(r
  * Plan the city. `available(key)`: is the model delivered (the lazy library has it / the catalogue lists it). `pit`: the pit's roof
  * rect (kept inside the yard). Same inputs, same plan.
  */
-export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key: string) => boolean, pit?: ReactorRect): SurfaceCityPlan {
+export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key: string) => boolean, pit?: ReactorRect, reserved: readonly CityFootprint[] = []): SurfaceCityPlan {
   const C = SURFACE_CITY, rnd = mulberry32((seed ^ 0x5c17e5) >>> 0);
   const kit = resolveSurfaceKit(available);
   const plaza = surfacePlaza(site, pit), cx = site.hole.x, cz = site.hole.z, y = site.y;
@@ -175,6 +182,8 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
   const used = new Map<string, number>(), rejects: Record<string, number> = {};
   const room = (e: SurfaceKitEntry) => (used.get(e.id) ?? 0) < e.max;
   const inReach = (p: Pick<CityPlacement, 'x' | 'z' | 'yaw' | 'hw' | 'hd'>) => footprintCorners(p).every(([x, z]) => Math.hypot(x - cx, z - cz) <= C.maxR);
+  /** On a reserved (plant) lot? */
+  const onReserved = (p: CityFootprint) => reserved.some(r => footprintsOverlap(p, r));
   const pick = (list: readonly SurfaceKitEntry[], ring: number): SurfaceKitEntry | null => {
     const ok = list.filter(e => ring >= e.rings[0] && ring <= e.rings[1] && room(e));
     const tot = ok.reduce((s, e) => s + e.weight, 0);
@@ -201,7 +210,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       const r = R0 * fit, au = (rnd() - 0.5) * Math.max(0, w - 2 * r), av = (rnd() - 0.5) * Math.max(0, d - 2 * r);
       const p: CityPlacement = {entry: e.id, role: 'rubble', kind: 'rubble', x: r3(ox + ux * au - uz * av), z: r3(oz + uz * au + ux * av), y, yaw: r3(rnd() * Math.PI * 2),
         scale: r3(ss), hw: r3((e.dims[0] * ss) / 2), hd: r3((e.dims[2] * ss) / 2), h: r3(e.dims[1] * ss), ring, tone: r3(rnd()), block: bi};
-      if (!footprintInside(p, blocks[bi].rect) || placements.some(q => q.block === bi && footprintsOverlap(p, q)) || !inReach(p)) continue;
+      if (!footprintInside(p, blocks[bi].rect) || placements.some(q => q.block === bi && footprintsOverlap(p, q)) || !inReach(p) || onReserved(p)) continue;
       push(p);
     }
   };
@@ -242,7 +251,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
         const p: CityPlacement = {entry: e.id, role: e.role, kind: isTank ? 'tank' : 'building', x: r3(x), z: r3(z), y, yaw: r3(yaw), scale: r3(s),
           hw: r3((e.dims[0] * s) / 2), hd: r3((e.dims[2] * s) / 2), h: r3(e.dims[1] * s + (e.stand ?? 0)), ring, tone: r3(rnd()), block: bi};
         // the jittered footprint must stay in its block, off the yard and inside the draw distance
-        const why = !footprintInside(p, blk) ? 'block' : footprintInRect(p, plaza, 0.5) ? 'yard' : !inReach(p) ? 'reach' : placements.some(q => q.block === bi && footprintsOverlap(p, q)) ? 'overlap' : null;
+        const why = !footprintInside(p, blk) ? 'block' : footprintInRect(p, plaza, 0.5) ? 'yard' : !inReach(p) ? 'reach' : onReserved(p) ? 'reserved' : placements.some(q => q.block === bi && footprintsOverlap(p, q)) ? 'overlap' : null;
         if (why) { rejects[why + ':' + e.role] = (rejects[why + ':' + e.role] ?? 0) + 1; return false; }
         push(p);
         u += w + between(C.gap[0], C.gap[1]);
@@ -299,7 +308,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       const yaw = role === 'rubble' ? rnd() * Math.PI * 2 : base + (rnd() < 0.5 ? 0 : Math.PI) + (rnd() - 0.5) * (role === 'car' ? 1.2 : 0.35);
       const p: CityPlacement = {entry: e.id, role, kind: role === 'rubble' ? 'rubble' : 'vehicle', x: r3(x), z: r3(z), y, yaw: r3(yaw), scale: r3(s),
         hw: r3((e.dims[0] * s) / 2), hd: r3((e.dims[2] * s) / 2), h: r3(e.dims[1] * s), ring: 0, tone: r3(rnd()), block: -1};
-      if (footprintInRect(p, plaza, 1) || !inReach(p) || placements.some(q => footprintsOverlap(p, q, -0.4))) continue;
+      if (footprintInRect(p, plaza, 1) || !inReach(p) || onReserved(p) || placements.some(q => footprintsOverlap(p, q, -0.4))) continue;
       push(p);
       k++;
     }
@@ -319,7 +328,7 @@ export function planSurfaceCity(site: SurfaceSite, seed: number, available: (key
       const t = between(0.12, 0.88), off = C.parapetT + Math.hypot(hw, hd) + between(0.06, 0.6);
       const p: CityPlacement = {entry: e.id, role: 'rubble', kind: 'rubble', x: r3(ed.x0 + (ed.x1 - ed.x0) * t + ed.nx * off), z: r3(ed.z0 + (ed.z1 - ed.z0) * t + ed.nz * off), y,
         yaw: r3(rnd() * Math.PI * 2), scale: r3(s), hw: r3(hw), hd: r3(hd), h: r3(e.dims[1] * s), ring: 0, tone: r3(rnd()), block: -1, edge: true};
-      if (site.walk.some(w => footprintInRect(p, w, 0.05)) || Math.hypot(p.x - cx, p.z - cz) < site.hole.keepR + rr || placements.some(q => footprintsOverlap(p, q, -0.2))) continue;
+      if (site.walk.some(w => footprintInRect(p, w, 0.05)) || Math.hypot(p.x - cx, p.z - cz) < site.hole.keepR + rr || onReserved(p) || placements.some(q => footprintsOverlap(p, q, -0.2))) continue;
       push(p);
     }
   }
