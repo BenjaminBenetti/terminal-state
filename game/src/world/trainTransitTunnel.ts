@@ -28,7 +28,7 @@ import {MeshBasicNodeMaterial} from 'three/webgpu';
 import type {WorldMaterials} from './materials';
 import {BOARD_SPAN, tunnelShellMaterial} from './trackExt/wallFinish';
 import {RAIL_TOP_ABOVE_BED, RAIL_GAUGE_HALF} from '../gen/playerTrain';
-import {MOOD, displayReferred, glowFog, glowMaterial} from './lights';
+import {displayReferred, glowFog, glowMaterial} from './lights';
 
 export const TRANSIT = {
   /** World position of the riding car's local origin (rail top at the car centre) while in transit. */
@@ -48,10 +48,13 @@ export const TRANSIT = {
    * (-1: local -Z, opposite the third rail), the lens centre `lensY` above the rail top (window / windscreen height). Housing / lens
    * sizes (along x, height y, depth z, m); the lens sits `lensUp` above the housing centre on its -X face (toward the oncoming car).
    * `count` instances cover the drawn length; `ahead` = the next signal's distance ahead of the car when the transit starts.
+   * Sight: the lens takes the full scene fog (`fog` x density: ~10 % left at 35 m, ~1 % at 48 m in the indoor murk) and the glow card
+   * fades out by `glowFar` m (the station glow-card material's far fade): a signal emerges from the dark ~40 m ahead and is gone from
+   * sight ~48 m away — the ride's hand-over band (RIDE.signalBand) relies on it.
    */
   signal: {
     step: 110, side: -1, lensY: 2.55, housing: [0.3, 0.62, 0.26] as const, lens: [0.05, 0.17, 0.17] as const, lensUp: 0.14, wallGap: 0.03,
-    lensColor: 0xff2a12, glowColor: [2.4, 0.16, 0.06] as const, glowCard: [0.6, 1.2] as const, count: 4, ahead: 60,
+    lensColor: 0xff2a12, glowColor: [2.4, 0.16, 0.06] as const, glowCard: [0.6, 1.2] as const, count: 4, ahead: 60, fog: 1, glowFar: 48,
   },
 } as const;
 
@@ -110,10 +113,10 @@ export function transitMaterials(mats: WorldMaterials): TransitMaterials {
     floorTile: sc.ballast, ceilTile: sc.ceiling};
 }
 
-/** The red signal lens: a flat emissive like the light tubes (display-referred, the tubes' gentler glow fog: reads through the haze). */
+/** The red signal lens: a flat emissive like the light tubes (display-referred; the tubes' glow-fog hook at the full scene density). */
 export function signalLensMaterial(): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({name: 'transit-signal-lens', color: TRANSIT.signal.lensColor});
-  glowFog(m, MOOD.glowFog);
+  glowFog(m, TRANSIT.signal.fog);
   displayReferred(m);
   return m;
 }
@@ -215,7 +218,7 @@ export class TrainTransitTunnel {
     // item 15: the red signals — housings (dark steel), lenses (red emissive), glow cards (additive; the station glow-card material)
     const S = T.signal, n = S.count;
     const lens = m.lens ?? this.own(signalLensMaterial());
-    const glow = m.glow ?? this.own(glowMaterial(70));
+    const glow = m.glow ?? this.own(glowMaterial(S.glowFar));
     const inst = (g: THREE.BufferGeometry, mat: THREE.Material, name: string): THREE.InstancedMesh => {
       this.geometries.push(g);
       const im = new THREE.InstancedMesh(g, mat, n);
