@@ -616,7 +616,7 @@ const CSS = `
 .mm-extras .actions { margin: 4px 0 2px; }
 /* the centred submenu dialog over a light dimmer (the diorama stays visible around it) */
 .mm-overlay { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(5, 7, 6, 0.42); overflow: auto; }
-.mm-dialog.panel { width: min(600px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 26px 30px 18px; margin: auto; }
+.mm-dialog.panel { width: min(600px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 26px 30px 18px; margin: auto; background: rgba(29, 32, 35, 0.95); }
 .mm-dialog[data-view="new"], .mm-dialog[data-view="slots"] { width: min(880px, 100%); }
 .mm-dialog[data-view="controls"] { width: min(940px, 100%); }
 .mm-dialog h2 { font-size: 22px; letter-spacing: 0.06em; margin: 4px 0 12px; }
