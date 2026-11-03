@@ -30,6 +30,9 @@
 //  3. shadows: a few REAL frames through the game's own render path (scene pass + flashlight shadow pass + fog passes +
 //     output + overlay composite) with the canvas hidden and the torch lit, each showing one chunk of casters
 //     (unculled), so every caster's shadow variant compiles.
+//     Task studio-performance-recorder-20261103 (lane RENDER-CPU): pooled casters too, a shadow receiver in every chunk (three
+//     draws a shadow map only when a receiver draws), and in 'full' every other renderable once (its own render objects); stage 1
+//     compiles at the scene pass's render-context CALL DEPTH (host.sceneDepth, render/renderContextDepth.ts).
 //  4. view: everything is restored exactly (layers, visibility, frustum flags, render target, MRT, torch), the culler
 //     re-runs, the fog history is dropped and one normal frame renders the real view; then the canvas shows.
 // Bounded: chunks, a wall-time budget (checked between chunks; a running chunk always finishes so the renderer state is
