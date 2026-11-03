@@ -198,10 +198,26 @@ done (or says it is partial / failed). `?warmup=off|view|full` overrides (softwa
 Goal: clear the station (kill every infected). Death → "New station" (fresh seed) or "Retry this
 station" (same seed, this session only).
 
+## Main menu, settings and URL parameters (task campaign-foundation-20261102, lane MENU)
+Every load opens the **main menu** (`src/ui/mainMenu.ts`) beside a real-time diorama (`src/world/menuScene.ts`: the ruined
+city in green fog, surface tracks, the player train; render only, no world state). Boot builds the renderer and the diorama
+first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
+level is built before New game / Continue. Settings (sensitivity, invert, FOV 60-100, master volume 0-100 %, mute, quality,
+render resolution Native / Half / Quarter = a linear width-and-height scale over the DPR-capped native buffer, not a
+quality preset) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+the same store. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
+which starts a normal new game at that level.
+
+QA automation: `?qa=1` keeps the old automation contract — the menu waits behind the loading card while a **scratch run**
+of the URL's level / seeds is prepared (never saved, no slot), then `__LL.state() === 'title'`, `__LL.ready()` is true and
+`#btn-start` ("QA quick start", the menu's first item) enters it. `?qa=1&qaPrebuild=0` shows the real menu (diorama,
+settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds the scratch run when clicked.
+
 ## URL parameters (optional, session-only)
-- `?seed=CODE` — replay a station code shown in the pause menu (debug/share). Reloading without it
-  always makes a new station.
-- `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset).
+- `?seed=CODE` — replay a station code shown in the pause menu (debug/share): the menu's Dev start (Subway seed).
+  Reloading without it always makes a new station. (`?officeSeed=` / `?mallSeed=` / `?reactorSeed=`, `?level=` likewise.)
+- `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset). Session-only: it
+  overrides the stored Quality without changing it.
 - `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):

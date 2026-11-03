@@ -297,11 +297,15 @@ async function boot(): Promise<void> {
   };
   try { await gpuReady; } catch (err) { await fatal(err); return; }
 
-  // 1. the diorama (only what the menu needs; a small indicator; failures leave the plain backdrop)
-  if (!qaPrebuild) {
+  // 1. the diorama (only what the menu needs; a small indicator; failures leave the plain backdrop). The game files start after
+  // it, or after MENU_FIRST_MS on a slow connection (the two then share the network; both are safe to interleave: the menu frame
+  // leaves the renderer's target / exposure as it found them)
+  const MENU_FIRST_MS = 4000;
+  let sceneBusy = !qaPrebuild;
+  const menuTask = qaPrebuild ? Promise.resolve() : (async () => {
     try {
       bootUi(0, 'Preparing the scene…', false);
-      const assets = await loadMenuAssets(game, f => bootUi(f, `Preparing the scene · ${Math.round(f * 100)} %`, false));
+      const assets = await loadMenuAssets(game, f => { if (sceneBusy) bootUi(f, `Preparing the scene · ${Math.round(f * 100)} %`, false); });
       if (game.state === 'title' && !game.world) {
         const scene = new MenuScene(assets);
         await scene.compile(game.renderer); // every diorama pipeline before it is shown (no cold compile on screen)
@@ -319,8 +323,12 @@ async function boot(): Promise<void> {
       }
     } catch (err) {
       console.warn('main menu: the diorama could not be built (plain backdrop kept)', err);
+    } finally {
+      sceneBusy = false;
     }
-  }
+  })();
+  await Promise.race([menuTask, new Promise(r => setTimeout(r, MENU_FIRST_MS))]);
+  sceneBusy = false; // from here the line reports the game files
 
   // 2. the heavy game boot assets in the background (New game / Continue wait for them)
   try {
