@@ -29,6 +29,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     const log: string[] = [];
     const commits: {reason: string; campaign: {current: string; transit: unknown; visited: string[]}}[] = [];
     const prepared = new Map<string, number>();
+    const journeys: (readonly string[] | null)[] = [];
     const s: Record<string, unknown> = {
       inv: new Inventory(), playerTrain: new PlayerTrainRecord(), runParticipants: [], arrival: {kind: 'start'}, startWeapon: 'pistol', bagStoreWired: false,
       survival: new Survival(), torch: {battery, reset: (c?: number) => battery.reset(c)},
@@ -40,7 +41,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
       hud: {toast: (t: string) => log.push(`toast:${t}`)},
       trainRide: {
         riding: false,
-        depart: async () => { log.push('depart'); return o.depart === 'outside' ? {status: 'refused', reason: 'outside', message: 'Board the train first'} : {status: 'in-tunnel', via: 'tunnel', end: 'x1', dir: 1}; },
+        depart: async (j?: {route: readonly string[]}) => { log.push('depart'); journeys.push(j?.route ?? null); return o.depart === 'outside' ? {status: 'refused', reason: 'outside', message: 'Board the train first'} : {status: 'in-tunnel', via: 'tunnel', end: 'x1', dir: 1}; },
         state: () => ({local: {x: 1.5, z: -0.4, yaw: 0.3}}),
         transitFailed: (r: string) => log.push(`transitFailed:${r.slice(0, 20)}`),
         arrive: async () => { log.push('arrive'); return {status: 'stopped', via: 'tunnel', end: 'x0', reversed: false}; },
@@ -77,7 +78,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     expect(g.commitSave('new-game', {slot: 1})).toMatchObject({ok: true});
     log.length = 0;
     commits.length = 0;
-    return {g, log, commits, prepared};
+    return {g, log, commits, prepared, journeys};
   }
 
   it('the journey: depart -> teardown -> departure autosave (journey pending) -> prepare / build -> arrive -> arrival autosave', async () => {
@@ -133,6 +134,50 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     expect(b.g.run.campaign).toMatchObject({current: sid(1), transit: null});
     expect(b.log.filter(l => l.startsWith('prepare') || l.startsWith('build') || l.startsWith('leave'))).toEqual(['prepare:st-01', 'leave:false:st-00', 'build:st-01']);
     expect(a.g.saves.list().find(v => v.slot === 1)!.meta).toMatchObject({reason: 'arrival'});
+  });
+
+  // campaign-polish (lane MAP), item 13: a MULTI-HOP journey to a visited station is ONE continuous journey
+  it('multi-hop to a visited station: one departure with the route, only the destination prepared / built, one arrival; nothing on the way touched', async () => {
+    const {g, log, commits, journeys} = shell();
+    // the run walked st-00 -> st-03 earlier (the fixture's red line is a chain); st-01 / st-02 hold their own remembered worlds
+    g.run.campaign = {...g.run.campaign!, current: sid(3), visited: [sid(0), sid(1), sid(2), sid(3)], known: [sid(0), sid(1), sid(2), sid(3), sid(4)]};
+    g.run.current = key(3);
+    for (const i of [1, 2]) g.run.memory(key(i)).visits = 2;
+    const before = {mem1: JSON.stringify(g.run.peekMemory(key(1))), mem2: JSON.stringify(g.run.peekMemory(key(2))), hp: (g as unknown as {player: {hp: number}}).player.hp};
+    expect(g.commitSave('arrival')).toMatchObject({ok: true});
+    log.length = 0; commits.length = 0;
+    expect(await g.travelToStation(sid(0))).toEqual({ok: true});
+    expect(log.filter(l => !l.startsWith('toast'))).toEqual(['depart', 'leave:true:st-03', 'save:departure', 'prepare:st-00', 'build:st-00', 'arrive', 'save:arrival']);
+    expect(journeys).toEqual([[sid(3), sid(2), sid(1), sid(0)]]); // the ride got the route (lane TRAIN: depart(journey))
+    expect(commits.map(c => c.reason)).toEqual(['departure', 'arrival']); // exactly once each
+    expect(commits[0].campaign).toMatchObject({current: sid(3), transit: {from: sid(3), to: sid(0), phase: 'departing', cheat: false, route: [sid(3), sid(2), sid(1), sid(0)]}});
+    expect(commits[1].campaign).toMatchObject({current: sid(0), transit: null});
+    expect(g.run.campaign!.visited).toEqual([sid(0), sid(1), sid(2), sid(3)]);
+    expect(g.run.campaign!.known).toEqual([sid(0), sid(1), sid(2), sid(3), sid(4)]); // no reveal on the way
+    expect([JSON.stringify(g.run.peekMemory(key(1))), JSON.stringify(g.run.peekMemory(key(2)))]).toEqual([before.mem1, before.mem2]);
+    expect((g as unknown as {player: {hp: number}}).player.hp).toBe(before.hp); // no healing
+  });
+
+  it('a visited station cut off over visited track is refused before anything moves; a known unvisited far station too', async () => {
+    const {g, log} = shell();
+    g.run.campaign = {...g.run.campaign!, current: sid(0), visited: [sid(0), sid(5)], known: [sid(0), sid(1), sid(5), sid(6)]};
+    expect(await g.travelToStation(sid(5))).toMatchObject({ok: false});
+    expect(await g.travelToStation(sid(6))).toMatchObject({ok: false});
+    expect(log).toEqual([]);
+  });
+
+  it('a multi-hop DEPARTURE save resumes once on Continue: the run arrives at the destination only', async () => {
+    const a = shell();
+    a.g.run.campaign = {...a.g.run.campaign!, current: sid(3), visited: [sid(0), sid(1), sid(2), sid(3)], known: [sid(0), sid(1), sid(2), sid(3)],
+      transit: {from: sid(3), to: sid(0), phase: 'departing', cheat: false, route: [sid(3), sid(2), sid(1), sid(0)]}};
+    a.g.run.current = key(3);
+    expect(a.g.commitSave('departure', {pose: {x: 1, z: 0, yaw: 0, pitch: 0, crouched: false}})).toMatchObject({ok: true});
+    const b = shell();
+    (b.g as unknown as {saves: SaveSlots}).saves = a.g.saves;
+    expect(await b.g.continueCampaign(1)).toEqual({ok: true});
+    expect(b.g.run.campaign).toMatchObject({current: sid(0), transit: null});
+    expect(b.log.filter(l => l.startsWith('prepare') || l.startsWith('build'))).toEqual(['prepare:st-00', 'build:st-00']);
+    expect(a.g.saves.list().find(v => v.slot === 1)!.meta).toMatchObject({reason: 'arrival', station: b.g.run.node(sid(0))!.name});
   });
 
   it('the WIN is the habitable surface: with the surface ending the rods only bring the reactor online; ending.surfaced wins once', () => {
