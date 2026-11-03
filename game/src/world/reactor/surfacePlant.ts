@@ -20,9 +20,13 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {modelParts} from '../exterior';
 import {kitGeometry} from './archMeshes';
 import {REACTOR_MODELS, reactorTexture} from './archAssets';
-import {surfaceModelMaterial, surfaceWallMaterial} from './surfaceLook';
-import {FAN_ANCHORS, SURFACE_PLANT, type PlantPart, type SurfacePlantPlan, type VentTowerPlan} from './surfacePlantPlan';
+import {surfaceFilmMaterial, surfaceModelMaterial, surfaceWallMaterial} from './surfaceLook';
+import {FAN_ANCHORS, SURFACE_COLLAR, SURFACE_PLANT, type CollarPlan, type PlantPart, type SurfacePlantPlan, type VentTowerPlan} from './surfacePlantPlan';
 import type {SurfaceSite} from './surfaceSite';
+import {SURFACE_LAYERS} from './surfaceCity';
+import {RING_VIEW} from './endingViews';
+import {controlSkin} from './controlsSkin';
+import {cloneSurfaceMaterial} from '../materials';
 
 /** The existing colour maps the plant reuses (null: a flat tone — Node tests / a failed fetch). */
 export interface PlantTextures { concrete: THREE.Texture | null; steel: THREE.Texture | null; grating: THREE.Texture | null }
@@ -50,7 +54,9 @@ export interface SurfacePlantView {
   fans: PlantRotor[];
   /** The rotors have started (the surface showed with the facility online): they keep turning from then on. */
   started: boolean;
-  stats: {towers: number; parts: number; draws: number; tris: number; model: boolean};
+  stats: {towers: number; parts: number; draws: number; tris: number; model: boolean; collar: {segments: number; tris: number; filmGap: number}};
+  /** (lane PLANT follow-up) The flat collar's meshes: the precast concrete, the yellow hatching, the wet film over the film's bare cells. */
+  collar: {concrete: THREE.Mesh | null; hatch: THREE.Mesh | null; film: THREE.Mesh | null};
   /** Per frame: `shown` = the surface view is visible (the eye outside), `power` = STARTUP's clearing 0..1. Returns matrices written. */
   tick(dt: number, shown: boolean, power?: number): number;
   dispose(): void;
@@ -140,7 +146,7 @@ function ladder(b: Batch, f: THREE.Matrix4, lx: number, zf: number, y0: number, 
  * Build the plant (a group to add under the surface view's `outdoor`). `models(key)`: the lazy library's GLTF (the fan housing:
  * PLANT_FAN_KEY; undefined = a procedural steel housing stands in). `tex`: the existing colour maps (default: the Reactor's).
  */
-export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY'>, plan: SurfacePlantPlan, models: (key: string) => GLTF | undefined, tex: PlantTextures = plantTextures()): SurfacePlantView {
+export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'hole' | 'walk' | 'shelters'>, plan: SurfacePlantPlan, models: (key: string) => GLTF | undefined, tex: PlantTextures = plantTextures()): SurfacePlantView {
   const root = new THREE.Group();
   root.name = 'reactor-surface-plant';
   const concrete = new Batch(), steel = new Batch(), grille = new Batch();
@@ -165,12 +171,40 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY'>, pla
     fans.push({basis, radius: tw.bladeR, angle: tw.phase, speed: 0, rev: tw.rev});
   }
   // --- materials (existing maps through the wet outdoor look; owned per build) ---
-  const mats = {concrete: surfaceWallMaterial(tex.concrete), steel: surfaceWallMaterial(tex.steel), grille: surfaceWallMaterial(tex.grating)};
-  for (const [name, b, mt] of [['concrete', concrete, mats.concrete], ['steel', steel, mats.steel], ['grille', grille, mats.grille]] as const) {
+  // --- the flat collar round the aperture (its anchor plates / channel edges join the steel batch, the channel grating the grille's) ---
+  const collarB = new Batch(), hatchB = new Batch();
+  collarGeometry(plan.collar, site, collarB, hatchB, steel, grille);
+  const mats = {concrete: surfaceWallMaterial(tex.concrete), steel: surfaceWallMaterial(tex.steel), grille: surfaceWallMaterial(tex.grating), collar: surfaceWallMaterial(tex.concrete)};
+  // depth: the flat collar layer (6-16 mm over the deck) sits between the deck (no offset) and lane SURFACE's wet film (-2): its pieces
+  // pulled toward the eye by one step (the plates / bolt heads one unit more), the film still drawn over them (puddles, ripples)
+  for (const [m, f, u] of [[mats.collar, -1, -1], [mats.steel, -1, -2], [mats.grille, -1, -1]] as const) { m.polygonOffset = true; m.polygonOffsetFactor = f; m.polygonOffsetUnits = u; }
+  mats.collar.name = 'reactor-surface-plant-collar';
+  for (const [name, b, mt] of [['concrete', concrete, mats.concrete], ['steel', steel, mats.steel], ['grille', grille, mats.grille], ['collar', collarB, mats.collar]] as const) {
     const m = b.build(`reactor-surface-plant-${name}`, mt);
     if (m) { meshes.push(m); own.geometries.push(m.geometry); tris += triCount(m.geometry); }
   }
-  own.materials.push(mats.concrete, mats.steel, mats.grille);
+  own.materials.push(mats.concrete, mats.steel, mats.grille, mats.collar);
+  // the hatching: the railing's own safety yellow (ENDING's controlSkin('yellow')), cloned for its depth offset
+  const yellow = cloneSurfaceMaterial(controlSkin('yellow'));
+  yellow.polygonOffset = true; yellow.polygonOffsetFactor = -1; yellow.polygonOffsetUnits = -1;
+  own.materials.push(yellow);
+  const hatch = hatchB.build('reactor-surface-plant-collar-hatching', yellow);
+  if (hatch) { meshes.push(hatch); own.geometries.push(hatch.geometry); tris += triCount(hatch.geometry); }
+  // lane SURFACE's wet film skips the cells near the opening: the same film material over exactly the walk the film leaves bare round
+  // the collar, so the wet sheen / puddles / ripples run on uninterrupted across it
+  const fg = filmGapGeometry(site, plan.collar.drain[1] + 0.6);
+  let film: THREE.Mesh | null = null;
+  if (fg) {
+    const fm = surfaceFilmMaterial();
+    own.materials.push(fm);
+    own.geometries.push(fg);
+    film = new THREE.Mesh(fg, fm);
+    film.name = 'reactor-surface-plant-film-gap';
+    film.renderOrder = 1;
+    meshes.push(film);
+    tris += triCount(fg);
+  }
+  const collarMesh = meshes.find(m => m.name === 'reactor-surface-plant-collar') ?? null;
   // --- the fan housings: the cooked GLB's parts, instanced once per part (the library's geometry; its Meshy maps, the outdoor look) ---
   if (gltf) {
     for (const [pi, part] of modelParts(gltf).entries()) {
@@ -218,7 +252,9 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY'>, pla
   rotors?.computeBoundingSphere(); // (a rotor's disc bounds do not change with its angle)
   const view: SurfacePlantView = {
     root, meshes, housings, rotors, fans, started: false,
-    stats: {towers: plan.towers.length, parts: plan.parts.length, draws: meshes.length, tris, model: !!gltf},
+    stats: {towers: plan.towers.length, parts: plan.parts.length, draws: meshes.length, tris, model: !!gltf,
+      collar: {segments: plan.collar.segments, tris: (collarMesh ? triCount(collarMesh.geometry) : 0) + (hatch ? triCount(hatch.geometry) : 0), filmGap: fg ? triCount(fg) : 0}},
+    collar: {concrete: collarMesh, hatch, film},
     tick(dt: number, shown: boolean, power = 1): number {
       if (!(dt > 0) || !fans.length) return 0;
       const target = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 0));
@@ -361,4 +397,128 @@ function towerGeometry(tw: VentTowerPlan, f: THREE.Matrix4, concrete: Batch, ste
     const pod = new THREE.CylinderGeometry(ringR * 0.3, ringR * 0.3, depth * 0.5, 16);
     steel.geo(f, pod, new THREE.Matrix4().makeRotationX(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0, hub, zFace + depth * 0.35)));
   }
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The flat collar round the aperture (lane PLANT follow-up: flat overlays may lie on the walk, nothing raised over maxUp)
+
+/** On a walkable cell rect (edges inclusive: the rects share their boundaries). */
+const onWalkAt = (site: Pick<SurfaceSite, 'walk'>, x: number, z: number) => site.walk.some(r => x >= r.x0 - 1e-4 && x <= r.x1 + 1e-4 && z >= r.z0 - 1e-4 && z <= r.z1 + 1e-4);
+
+type XZ = readonly [number, number];
+
+/** Flat triangles facing up at height y from a quad's four (x, z) corners in order round it. */
+function flatQuad(pos: number[], q: readonly XZ[], y: number): void {
+  const tri = (a: XZ, b: XZ, c: XZ) => {
+    // ((b - a) x (c - a)).y = (bz - az)(cx - ax) - (bx - ax)(cz - az): keep it positive (facing up)
+    const up = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
+    const [p, r] = up >= 0 ? [b, c] : [c, b];
+    pos.push(a[0], y, a[1], p[0], y, p[1], r[0], y, r[1]);
+  };
+  tri(q[0], q[1], q[2]);
+  tri(q[0], q[2], q[3]);
+}
+
+function flatGeometry(pos: number[]): THREE.BufferGeometry | null {
+  if (!pos.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+  return g;
+}
+
+/**
+ * One precast piece: the annular sector [ra, rb] x [a0, a1] round (cx, cz), inset by half a joint on every side (constant-width
+ * joints: the radial edges are offset lines, not rays), tessellated to follow the arcs; a sub-quad with a corner off the walk is
+ * dropped (the collar never leaves the walkable deck).
+ */
+function sector(pos: number[], site: Pick<SurfaceSite, 'walk'>, cx: number, cz: number, ra: number, rb: number, a0: number, a1: number, y: number, j: number): void {
+  const r0 = ra + j / 2, r1 = rb - j / 2;
+  if (!(r1 > r0)) return;
+  const nr = Math.max(1, Math.ceil((r1 - r0) / 0.9)), na = Math.max(1, Math.ceil(((a1 - a0) * r1) / 0.35));
+  const at = (i: number, k: number): XZ => {
+    const r = r0 + ((r1 - r0) * i) / nr, d = j / 2 / r, a = a0 + d + ((a1 - a0 - 2 * d) * k) / na;
+    return [cx + Math.cos(a) * r, cz + Math.sin(a) * r];
+  };
+  for (let i = 0; i < nr; i++) for (let k = 0; k < na; k++) {
+    const q = [at(i, k), at(i, k + 1), at(i + 1, k + 1), at(i + 1, k)];
+    if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(pos, q, y);
+  }
+}
+
+/**
+ * THE COLLAR's flat pieces into their batches: the anchor kerb (one precast piece per railing post, its joints half way between the
+ * posts), two rings of precast segments (the outer ring's radial joints staggered half a segment), the yellow hatching stripes on the
+ * dark deck between the kerb and the rings, a steel anchor plate + four bolt heads at every railing post on the kerb, the drainage
+ * channel's grating with its two steel edge angles. Everything at most SURFACE_COLLAR.maxUp over the deck.
+ */
+function collarGeometry(c: CollarPlan, site: Pick<SurfaceSite, 'y' | 'walk'>, collar: Batch, hatch: Batch, steel: Batch, grille: Batch): void {
+  const C = SURFACE_COLLAR, y = site.y, I = new THREE.Matrix4(), TAU = Math.PI * 2;
+  const NP = RING_VIEW.posts, step = TAU / NP;
+  const con: number[] = [];
+  for (let k = 0; k < NP; k++) sector(con, site, c.x, c.z, c.kerb[0], c.kerb[1], (k - 0.5) * step, (k + 0.5) * step, y + C.up, c.joint);
+  const N = c.segments, seg = TAU / N;
+  c.rings.forEach(([ra, rb], ri) => { for (let k = 0; k < N; k++) { const a = c.phase + (k + ri * 0.5) * seg; sector(con, site, c.x, c.z, ra, rb, a, a + seg, y + C.up, c.joint); } });
+  const cg = flatGeometry(con);
+  if (cg) collar.geo(I, cg);
+  // the hatching: 45-degree yellow stripes across the band (pitch ~0.5 m along its mid circle), the deck between them
+  const hp: number[] = [], [h0, h1] = c.hatch, hm = (h0 + h1) / 2, n = Math.round((TAU * hm) / 0.5), w = 0.25, lean = h1 - h0;
+  const onArc = (r: number, s: number): XZ => [c.x + Math.cos(s / hm) * r, c.z + Math.sin(s / hm) * r];
+  for (let k = 0; k < n; k++) {
+    const s0 = (k / n) * TAU * hm;
+    const q = [onArc(h0 + 0.02, s0), onArc(h0 + 0.02, s0 + w), onArc(h1 - 0.02, s0 + w + lean), onArc(h1 - 0.02, s0 + lean)];
+    if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(hp, q, y + C.hatchUp);
+  }
+  const hg = flatGeometry(hp);
+  if (hg) hatch.geo(I, hg);
+  // the anchor plates (+ four bolt heads) at every railing post, on the kerb (local +Z radially outward, X along the ring)
+  const km = (c.kerb[0] + c.kerb[1]) / 2, pt = C.plateUp - C.up;
+  for (let k = 0; k < NP; k++) {
+    const a = k * step, x = c.x + Math.cos(a) * km, z = c.z + Math.sin(a) * km;
+    if (!onWalkAt(site, x, z)) continue;
+    const f = frameM(x, y, z, Math.atan2(Math.cos(a), Math.sin(a)));
+    steel.box(f, 0, C.up + pt / 2, 0, 0.2, pt, 0.26);
+    for (const bx of [-0.06, 0.06]) for (const bz of [-0.08, 0.08]) steel.box(f, bx, (C.plateUp + C.boltUp) / 2, bz, 0.035, C.boltUp - C.plateUp, 0.035);
+  }
+  // the drainage channel: the grating ring between two steel edge angles
+  const gp: number[] = [], sp: number[] = [], [d0, d1] = c.drain, nd = Math.ceil((TAU * d1) / 0.35);
+  const P2 = (r: number, a: number): XZ => [c.x + Math.cos(a) * r, c.z + Math.sin(a) * r];
+  for (let k = 0; k < nd; k++) {
+    const a0 = (k / nd) * TAU, a1 = ((k + 1) / nd) * TAU;
+    for (const [ra, rb, out, yy] of [[d0 + 0.03, d1 - 0.03, gp, y + C.drainUp], [d0, d0 + 0.03, sp, y + C.drainUp + 0.002], [d1 - 0.03, d1, sp, y + C.drainUp + 0.002]] as const) {
+      const q = [P2(ra, a0), P2(ra, a1), P2(rb, a1), P2(rb, a0)];
+      if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(out, q, yy);
+    }
+  }
+  const gg = flatGeometry(gp), sg = flatGeometry(sp);
+  if (gg) grille.geo(I, gg);
+  if (sg) steel.geo(I, sg);
+}
+
+/**
+ * The wet film's bare walk round the collar: lane SURFACE's film (surfaceCity.ts filmGeometry) lays 1 m cells over the walk rects and
+ * leaves out every cell within the opening's keep-off distance (max(keepR, r + 0.6)) and, through its per-cell dedupe, the second
+ * rect's share of a 1 m cell split by a walk-rect boundary. This mirrors that loop exactly and emits the pieces it leaves bare (never
+ * under a shelter) within `reach` of the aperture's centre: the film + this cover the collar's walk exactly once (the test pins it
+ * against filmGeometry itself).
+ */
+export function filmGapGeometry(site: Pick<SurfaceSite, 'y' | 'walk' | 'hole' | 'shelters'>, reach: number): THREE.BufferGeometry | null {
+  const pos: number[] = [], y = site.y + SURFACE_LAYERS.filmAbove, o = site.hole, keep = Math.max(o.keepR, o.r + 0.6);
+  const seen = new Set<string>();
+  for (const r of site.walk) {
+    for (let z = Math.floor(r.z0); z < r.z1; z++) for (let x = Math.floor(r.x0); x < r.x1; x++) {
+      const x0 = Math.max(x, r.x0), x1 = Math.min(x + 1, r.x1), z0 = Math.max(z, r.z0), z1 = Math.min(z + 1, r.z1);
+      if (x1 - x0 < 0.05 || z1 - z0 < 0.05) continue;
+      const k = `${x},${z}`;
+      const near = Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z));
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const sheltered = site.shelters.some(s => cx >= s.rect.x0 && cx <= s.rect.x1 && cz >= s.rect.z0 && cz <= s.rect.z1);
+      if (!seen.has(k) && near >= keep && !sheltered) { seen.add(k); continue; } // the film's own cell
+      if (sheltered || near > reach) continue;
+      pos.push(x0, y, z0, x0, y, z1, x1, y, z1, x0, y, z0, x1, y, z1, x1, y, z0);
+    }
+  }
+  const g = flatGeometry(pos);
+  g?.computeBoundingSphere();
+  return g;
 }
