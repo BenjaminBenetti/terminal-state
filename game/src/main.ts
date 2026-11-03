@@ -360,8 +360,10 @@ async function boot(): Promise<void> {
   // it, or after MENU_FIRST_MS on a slow connection (the two then share the network; both are safe to interleave: the menu frame
   // leaves the renderer's target / exposure as it found them)
   const MENU_FIRST_MS = 4000;
-  let sceneBusy = !qaPrebuild;
-  const menuTask = qaPrebuild ? Promise.resolve() : (async () => {
+  let sceneBusy = !qaPrebuild && !(qa && params.get('menuScene') === '0');
+  // (primary, QA only: ?qa=1&menuScene=0 skips the diorama — software-GL browser checks of the campaign loop stay under the memory guard)
+  const menuSceneOff = qa && params.get('menuScene') === '0';
+  const menuTask = qaPrebuild || menuSceneOff ? Promise.resolve() : (async () => {
     try {
       bootUi(0, 'Preparing the scene…', false);
       const assets = await loadMenuAssets(game, f => { if (sceneBusy) bootUi(f, `Preparing the scene · ${Math.round(f * 100)} %`, false); });

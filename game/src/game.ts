@@ -1142,7 +1142,7 @@ export class Game {
       const h = this.installSave(d.restore);
       if (h.transit) {
         // the journey resumes once: the run arrives at the destination (the departure station was already left and saved)
-        this.run.campaign = arriveCampaign(this.run.campaign!, h.transit.to);
+        this.run.campaign = {...arriveCampaign(this.run.campaign!, h.transit.to), transit: null};
       }
       this.buildSection(key, layout, {kind: 'start'}, false);
       const wp = this.trainLocalToWorld(h.pose);
@@ -1185,6 +1185,19 @@ export class Game {
     else this.setState(back);
   }
 
+  private campaignTickT = 0;
+  /**
+   * (campaign) ~1 Hz: the Reactor's persisted ending phase (reactor.state.ending, the surface-ending contract) — the player reaching the
+   * surface WINS the run once (no modal; the ending's own message is never replayed).
+   */
+  private campaignTick(dt: number): void {
+    const c = this.run.campaign;
+    if (!c || c.won || this.run.current.level !== 'reactor' || (this.campaignTickT -= dt) > 0) return;
+    this.campaignTickT = 1;
+    const st = this.run.laneStore<{ending?: {surfaced?: boolean}}>('reactor.state');
+    if (st?.ending?.surfaced === true) this.onCampaignWin('surface');
+  }
+
   /** True while no station world exists during a journey (the old one torn down, the next not built yet). */
   private transitGap = false;
 
@@ -1222,6 +1235,10 @@ export class Game {
       await this.warmRun;
       this.transitGap = true;
       this.leaveSection(true); // the departing station's every delta goes into its memory (one world per station)
+      // the old world's deferred GPU releases go NOW (a frame later: nothing renders it any more) — a journey has no warm-up to wait
+      // for, and keeping them until the arrival would hold two stations' GPU data at once (memory over pipeline-cache reuse)
+      await nextPaint();
+      this.flushRetired();
       const adjacent = neighbors(run.campaign!.network, from).includes(to);
       run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
       const s1 = this.commitSave('departure', {pose});
@@ -2071,6 +2088,7 @@ export class Game {
     if (this.run.campaign) this.run.playtime += dt; // (campaign) save metadata
     // (campaign, primary) between the old world's teardown and the next one's build only the riding car exists: no world system runs
     if (this.transitGap) { this.updateTransitGap(dt); return; }
+    this.campaignTick(dt);
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
@@ -2296,6 +2314,9 @@ export class Game {
   onCampaignWin(via: string): void {
     const c = this.run.campaign;
     if (!c || c.won) return;
+    // the user's win is the habitable SURFACE: where the Reactor has its surface ending (reactor-surface-ending: layout.reactor.surface,
+    // reactor.state.ending.surfaced), the rods only bring the reactor ONLINE — the win waits for the surface (campaignTick)
+    if (via === 'reactor-restarted' && (this.layout as {reactor?: {surface?: unknown}}).reactor?.surface) return;
     c.won = {at: new Date().toISOString(), station: c.current, via};
     this.hud.toast('RUN COMPLETE — the reactor is running. Keep exploring, or head back to the train.');
     for (const l of this.campaignListeners) l('won');
