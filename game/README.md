@@ -216,6 +216,12 @@ seed) as well.
   transit tunnel. You can walk, look and change gear inside while the old station is torn down (every change kept in its
   memory) and the next one is generated, built and compiled in the background, with jostle. The car then emerges at the new
   platform and stops. There is no static loading screen. A destination that cannot be generated twice sends the train back.
+  The car always runs cab first: it leaves through the front end of its track and comes into the next station through the
+  end behind the parked car, so it never reverses. Where clear rock lies behind a bed end, the transit box continues it as a
+  stub. Where rooms lie behind it, the car hands over at the end face. The transit is very dark, with red signals passing
+  about every 110 m. The only light is the car's own lights and the flashlight (F also works between worlds). The ride sound
+  uses existing Sound Lab beds and cues: a rumble and an air loop blended by speed, rail-joint clacks and the brakes. It stops
+  at the platform and goes quiet in menus.
 - **Autosaves** (`src/save/`): the new game, the departure (with the journey pending) and the arrival each write the active slot.
   Continue resumes the last slot. A save taken mid-journey (a crash in the tunnel) resumes that journey once, arriving at
   the destination. There are three slots (`terminal-state.save.slot{1,2,3}.v1`, compact checksummed JSON, atomic writes,
