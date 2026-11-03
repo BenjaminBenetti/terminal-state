@@ -122,6 +122,14 @@ describe('the surface plant plan on real Reactor layouts', () => {
         const [fx, fz] = plantLocal(pl, 0, pl.hd);
         expect(site.edges.some(e => e.nx === t.side.nx && e.nz === t.side.nz && Math.abs((e.nx ? fx - e.x0 : fz - e.z0) * (e.nx || e.nz) - SURFACE_PLANT.parapetT) < 0.05)).toBe(true);
       }
+      // the first view outside: from the exit, every tower's fan stands clear of the beam's column (>= 10 degrees off the aperture)
+      const ex = surfaceLayout(sd).reactor!.surface!.exit;
+      for (const t of plan.towers) {
+        const bh = Math.atan2(h.z - ex.z, h.x - ex.x), bt = Math.atan2(t.z - ex.z, t.x - ex.x);
+        const d = Math.abs(((bt - bh + 3 * Math.PI) % (2 * Math.PI)) - Math.PI) * 180 / Math.PI;
+        out(`  tower ${t.id}: ${d.toFixed(1)} deg off the beam from the exit`);
+        expect(d, `${sd} tower ${t.id} behind the beam from the exit`).toBeGreaterThan(10);
+      }
       if (plan.towers.length === 2) {
         const [a, b] = plan.towers;
         expect(footprintsOverlap(a.footprint, b.footprint)).toBe(false);

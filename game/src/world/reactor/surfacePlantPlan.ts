@@ -196,10 +196,25 @@ export function planSurfacePlant(site: SurfaceSite, seed: number, _pit?: Reactor
     }
     return null;
   };
-  // (the far tower stands off the axis AWAY from the first lateral side: the two spread across the view from the exit)
-  const away = opposite.nx !== 0 ? -laterals[0].nz : -laterals[0].nx;
-  const first = place(opposite, away || (rnd() < 0.5 ? 1 : -1));
-  if (first) towers.push(first);
+  // the far tower: off the sight line from the exit (the head house) through the aperture, so the beam never stands in front of its
+  // fan in the first view outside (no exit known: a seeded side of the axis)
+  let sign = rnd() < 0.5 ? 1 : -1;
+  if (sh) {
+    const runZ = opposite.nx !== 0, line = opposite.nx > 0 ? B.x1 : opposite.nx < 0 ? B.x0 : opposite.nz > 0 ? B.z1 : B.z0;
+    const ea = runZ ? (sh.x0 + sh.x1) / 2 : (sh.z0 + sh.z1) / 2, eb = runZ ? (sh.z0 + sh.z1) / 2 : (sh.x0 + sh.x1) / 2;
+    const ha = runZ ? h.x : h.z, hb = runZ ? h.z : h.x;
+    if (Math.abs(ha - ea) > 1) {
+      const tl = eb + ((hb - eb) * (line - ea)) / (ha - ea); // where the sight line meets the far side
+      if (Math.abs(tl - hb) > 1.5) sign = tl > hb ? -1 : 1;
+    }
+  }
+  const first = place(opposite, sign);
+  if (first) {
+    towers.push(first);
+    // the lateral tower on the other side of the axis from it: the two spread across the view from the exit
+    const along = (q: Side) => (opposite.nx !== 0 ? q.nz : q.nx);
+    laterals.sort((a, b) => (along(a) === -sign ? 0 : 1) - (along(b) === -sign ? 0 : 1));
+  }
   for (const s of first ? laterals : [...laterals, opposite]) {
     if (towers.length >= P.towers) break;
     // (the lateral tower leans toward the far half of its side: away from the exit, so both stand in the exit's view)
