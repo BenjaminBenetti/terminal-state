@@ -15,6 +15,7 @@ import {MALL_ALWAYS, MALL_ASSIGN_STATS, MALL_PROGRAMS, MALL_ROTATION, SIDE_PROGR
 import {MALL_LOTS, MALL_LOT_IDS, lotSuits, lotsForProgram} from '../src/gen/mall/lots';
 import {LINGERIE_SET_KINDS, LINGERIE_SET_Y0, MALL_OPEN_AUDIT, MALL_PHYS, MALL_RIDER_KINDS} from '../src/gen/mall/kinds';
 import {CHANGING, LINGERIE_DESIGNS, LINGERIE_DISPLAY_SOURCE, lingerieDisplayModelKeys} from '../src/gen/mall/lingerieStore';
+import {LINGERIE_DISPLAYS} from '../src/ai/lingerie';
 import {dressMallShops} from '../src/gen/mall/shopsDress';
 import {generateMallLevel} from '../src/gen/mall/index';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
@@ -272,6 +273,13 @@ describe('fixtures: audits, physics, the display-set seam', () => {
     expect(LINGERIE_DESIGNS).toEqual(['green', 'purple', 'blush', 'black', 'red', 'ivory']);
     expect(LINGERIE_DISPLAY_SOURCE.modelKey('red')).toBe('outfit_lingerie_red');
     expect(LINGERIE_DISPLAY_SOURCE.nodes('blush')).toEqual(['LingerieDisplay_blush_top', 'LingerieDisplay_blush_bottom']);
+    // the store's derived keys / node names are exactly lane FIT's exported display table (one per design)
+    expect(LINGERIE_DISPLAYS.map(d => d.set)).toEqual(LINGERIE_DESIGNS.map(d => `lingerie-${d}`));
+    for (const d of LINGERIE_DESIGNS) {
+      const f = LINGERIE_DISPLAYS.find(x => x.set === `lingerie-${d}`)!;
+      expect(LINGERIE_DISPLAY_SOURCE.modelKey(d)).toBe(f.model);
+      expect(LINGERIE_DISPLAY_SOURCE.nodes(d)).toEqual([f.nodes.top, f.nodes.bottom]);
+    }
     const L = mall(WITH[0]);
     const keys = lingerieDisplayModelKeys(L);
     expect(keys.length).toBeGreaterThan(0);
