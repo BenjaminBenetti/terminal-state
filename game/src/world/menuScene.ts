@@ -53,7 +53,14 @@ export const MENU_SCENE = {
    * the look-at point (over the lead half of the train). tests/menu-scene.test.ts sweeps it against the cars, poles and wrecks.
    */
   orbit: {center: [0, 0, -1.5] as const, rx: 32, rxSwing: 2, rz: 14, rzSwing: 1.5, height: 5.1, heightSwing: 0.9, speed: 0.022, start: 1.35,
-    target: [5, 1.7, -2.2] as const},
+    target: [5, 1.7, -2.2] as const,
+    /**
+     * Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU, item 1): the orbit time (s) the diorama OPENS at — the framing
+     * this same orbit used to reach ~25 s in (the user's favourite view, closing in on the train). The very first drawn frame is
+     * orbitPose(startAt) (the camera is posed there before the pipelines compile: no fly-through, no fast-forward flash); the slow
+     * orbit then runs on from it at its normal speed. orbitPose itself is unchanged.
+     */
+    startAt: 25},
   fov: 46,
   near: 0.3,
   far: 620,
@@ -282,6 +289,8 @@ export class MenuScene {
   frames = 0;
   /** Seconds added to the orbit clock (QA screenshots of other orbit phases; 0 in play). */
   timeOffset = 0;
+  /** rAF time (ms) of the first drawn frame: the orbit clock starts there at MENU_SCENE.orbit.startAt (lane MENU, item 1). */
+  private clockStart: number | null = null;
   readonly source: MenuSceneStats['source'];
 
   constructor(assets: MenuSceneAssets = {}) {
@@ -301,7 +310,16 @@ export class MenuScene {
     this.source = {train: train.shell ? 'model' : 'none', leaves: train.leaves ? 'model' : 'none', heroes: this.exterior.used.heroes, props: this.exterior.used.props};
     for (const im of this.instanced) im.computeBoundingSphere();
     this.scene.traverse(o => { o.castShadow = false; o.receiveShadow = false; });
-    this.pose(0, 16 / 9);
+    this.pose(MENU_SCENE.orbit.startAt, 16 / 9); // (lane MENU, item 1: compiled and first seen at the opening framing)
+  }
+
+  /**
+   * The orbit time (s) at rAF time `nowMs` (lane MENU, item 1): MENU_SCENE.orbit.startAt at the first drawn frame, then real seconds
+   * on from there (+ the QA timeOffset). Never the page's age: a diorama that appears late does not jump ahead.
+   */
+  orbitTime(nowMs: number): number {
+    if (this.clockStart === null) this.clockStart = nowMs;
+    return MENU_SCENE.orbit.startAt + Math.max(0, nowMs - this.clockStart) / 1000 + this.timeOffset;
   }
 
   /** Apply the menu's look to the shared exterior uniforms (saved for deactivate). Idempotent. */
@@ -530,7 +548,7 @@ export class MenuScene {
     this.lastDraw = nowMs;
     this.activate();
     const size = renderer.getDrawingBufferSize(this.tmp.v2);
-    this.pose(nowMs / 1000 + this.timeOffset, size.y > 0 ? size.x / size.y : 16 / 9);
+    this.pose(this.orbitTime(nowMs), size.y > 0 ? size.x / size.y : 16 / 9);
     const exposure = renderer.toneMappingExposure, target = renderer.getRenderTarget();
     renderer.toneMappingExposure = MENU_SCENE.exposure;
     try {
