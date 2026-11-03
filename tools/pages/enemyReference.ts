@@ -37,6 +37,7 @@ import type {LevelId} from '../../game/src/levels/types';
 import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
+import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
 import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
@@ -92,12 +93,14 @@ const F = {
   mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
+  // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's optional lingerie store's store-local zone context
+  lingerieSpawns: 'game/src/gen/mall/lingerieSpawns.ts',
 } as const;
 
 /** The game modules whose exported values the reference reads (this file's imports). Other files appear only as source links. */
 export const ENEMY_GENERATED_FROM: readonly string[] = [
   F.tables, F.archetypes, F.registry, F.frame, F.grid, F.stationKit, F.purposes, F.pistol, F.spawn, F.brain, F.blightbelly, F.siren, F.creatureActor,
-  F.contract, F.mallTypes, F.trackExt, F.strainer,
+  F.contract, F.mallTypes, F.trackExt, F.strainer, F.lingerieSpawns,
 ].slice().sort();
 
 /**
@@ -192,6 +195,20 @@ export function ruleRows(value: object, prefix = ''): {what: string; value: numb
 const SERVICE_ZONE_NOTE = 'A PER-ANNEX ZONE BUDGET: one run per seeded service annex (0 to TRACK_EXT.annex.max per level, a generation census quantity — see docs/enemy-spawns.md "Service annexes"), on the annex\'s own fork, appended after every core spawn and tagged \'service\'. It is additive to the core contexts and NOT in the whole-level total above; the level\'s zombie types apply; its spawns draw from the annexes\' OWN family pool (SERVICE_FAMILY_POOL: a configured 20 % rat/dog selection share, Blightbelly 5 %, Strainer 8 % (the only pool that enables it: STRAINER_CONTEXTS), no Siren — per-spawn probabilities, not quotas; the sampled census shows the placed outcome). No guarantee. Killed annex enemies stay dead for the run (per-index memory).';
 
 /**
+ * Task mall-lingerie-20261102-221554 (lane CONTEXT): how the lingerie store's zone context relates to the mall (shown with the context),
+ * the store-local eligibility line and the placement steps of gen/mall/lingerieSpawns.ts placeLingerieSpawns (not the generic area order).
+ */
+const LINGERIE_ZONE_NOTE = `A STORE-LOCAL ZONE BUDGET: one run per lingerie store — the store is a seeded shop program on a LARGE lot (0 to ${LINGERIE_STORES_MAX} per mall, never guaranteed) — on its own fork (mall-lingerie-spawns), appended after EVERY other spawn of the mall (ambient, hordes, annex 'service') and tagged 'lingerie' (spawn context and ZombieSpawn.look). It is additive to the core contexts and NOT in the whole-level total or the ambient budget; its spawns draw from the store's OWN family pool (LINGERIE_FAMILY_POOL: ordinary zombies only — no Blightbelly, Siren, rat/dog or Strainer), are shamblers, and wear a fitted lingerie set at spawn time (ai/lingerie.ts lingerieLook(level seed, spawn index)) — a wardrobe look of the zombie family, never a new family. Every other spawn of every level keeps the ordinary wardrobe pick. No leash: after aggro they may follow the player out of the store. Killed variants stay dead for the run (per-index memory); a mall without a lingerie store has none.`;
+const LINGERIE_ZONE_WHERE = `the lingerie store's own sales floor only (never its stock room, a gallery or another unit), ≥ ${LINGERIE_SPAWN_RULES.entryKeepM} m from its shopfront(s): in a BOOTH (a changing rect with 1-${LINGERIE_SPAWN_RULES.boothOpeningCells} opening cells — its curtain gap) the centre of a 2 × 2 patch of its walkable cells off the opening row (the booth's centre line); the aisle hosts nobody while the store has booths; on the sales floor a 3 × 3-clear cell > ${LINGERIE_SPAWN_RULES.changingMarginCells} cells off the changing area and ≥ ${LINGERIE_SPAWN_RULES.changingEntryKeepM} m from its mouth; everywhere a ${LINGERIE_SPAWN_RULES.passageRadiusM} m disc around the spawn never splits the storey (fair passage)`;
+const LINGERIE_ZONE_EXPLAIN: readonly string[] = [
+  `Only when the mall has a lingerie store: draw count = U{${ST.LINGERIE_CONTEXT.count[0]}..${ST.LINGERIE_CONTEXT.count[1]}} (one draw per store, rng.int); every one a shambler (no coat roll: the look is a lingerie set).`,
+  `Split: floor(count / ${LINGERIE_SPAWN_RULES.floorEvery}) on the store's sales floor, the rest in its walk-in changing area (MallShop.changing: one rect per booth + the aisle) — 3 → 2 + 1, 4 → 3 + 1, 5 → 4 + 1.`,
+  `The changing area first: its booth rects in a seeded order, round-robin — one spawn per booth per pass (spread over the booths), each from up to ${ST.LINGERIE_PLACEMENT.tries} random picks of that booth's stand points; then the sales floor takes its share plus what the changing area could not hold; then the changing area takes what the floor could not.`,
+  `A pick is taken when it is ≥ ${ST.LINGERIE_PLACEMENT.spacingM} m from every enemy already on the storey and its fair-passage disc never splits the floor. Spacing and eligible floor can leave a run short of its count (placed < count); a run never regenerates the level.`,
+  'Each placed spawn is an ordinary zombie (the store\'s own pool, rolled by the one family roll at the end).',
+];
+
+/**
  * GENERATOR ADAPTER: which generator reads each level's profile and how often each context runs per level. These are code paths
  * of the generators (not data), declared here — `Record<LevelId, …>` makes a new level fail to typecheck until it is documented,
  * and game/tests/enemy-spawn-reference.test.ts checks that the contexts declared here === the profile's === the ones the real
@@ -204,7 +221,7 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
    * `hook`: a DATA-HOOK context the generator does not run yet (0 runs; task track3-eaton-centre-20261031, lane PROFILES).
    * `zone` (Track 2): a same-world zone context — one run per seeded zone, `runsPerLevel` zones per level (never in the total).
    */
-  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number; hook?: string; zone?: {runsPerLevel: readonly [number, number]; note: string}}>>>;
+  contexts: Readonly<Partial<Record<SpawnContextId, {storeys: string; runs: number; hook?: string; zone?: {runsPerLevel: readonly [number, number]; note: string; where?: string; explain?: readonly string[]}}>>>;
 }>> = {
   subway: {
     generator: {fn: 'generateStation', file: F.station,
@@ -229,13 +246,16 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // mallNameOf(levelSeed)); LevelId 'mall', tier 2; the compact design has ${MALL_RINGS} retail floors (MALL_RINGS = MALL_FLOORS)
   mall: {
     generator: {fn: 'generateMallLevel', file: F.mallIndex,
-      note: `ONE continuous level (LevelId 'mall', tier 2; its display name is seeded per run: "<Name> Center", gen/mall/names.ts mallNameOf(levelSeed) — the same seed always gives the same name) — the subway station at the bottom of a small glass atrium and ${MALL_RINGS} retail floors above it, generated once per level seed: placeOfficeEnemies runs the pit context once (the station storey) and the ring context once per retail floor, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_MALL.annex.max}) is attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
+      note: `ONE continuous level (LevelId 'mall', tier 2; its display name is seeded per run: "<Name> Center", gen/mall/names.ts mallNameOf(levelSeed) — the same seed always gives the same name) — the subway station at the bottom of a small glass atrium and ${MALL_RINGS} retail floors above it, generated once per level seed: placeOfficeEnemies runs the pit context once (the station storey) and the ring context once per retail floor, each on its own fork (mall-enemies-<storey>) and tags its spawns with the context; the roaming hordes (the separate horde pool, tagged '${HORDE_CONTEXT}') follow from ai/hordePlace.ts placeHordes; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_MALL.annex.max}) is attached and placeServiceSpawns (gen/annexContent.ts, fork "track-ext-content") runs the service context once per seeded service annex, appended last; then (task mall-lingerie-20261102-221554) the optional lingerie store's store-local run (gen/mall/lingerieSpawns.ts placeLingerieSpawns, fork "mall-lingerie-spawns": the lingerie context, at most ${LINGERIE_STORES_MAX} store) is appended after those; assignEnemyArchetypes rolls every family ONCE at the end (horde members keep their own pool's family; Siren eligibility included) and applyFamilySpacing keeps the Sirens of the whole mall apart (cap and spacing jointly). Moving between storeys never rerolls anything.`},
     contexts: {
       pit: {storeys: 'the subway station storey at the bottom of the atrium (level 0: platforms, Fountain court, station back of house)', runs: 1},
       ring: {storeys: `one retail floor (each of levels 1..${MALL_RINGS}: atrium court galleries, corridor wings, shops, stock rooms, service corridors)`, runs: MALL_RINGS},
       // lane INTEG (Track2 integration): the station's service annex — the same zone context as the Subway / Office; the mall grows at
       // most TRACK_EXT_MALL.annex.max (1) annex (task mall-playtest-revision-20261031, lane GEN)
       service: {storeys: 'one seeded service annex off the east track tunnel of the station (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_MALL.annex.max], note: SERVICE_ZONE_NOTE}},
+      // task mall-lingerie-20261102-221554 (lane CONTEXT): the optional lingerie store (0..LINGERIE_STORES_MAX per mall) — store-local
+      lingerie: {storeys: 'the lingerie store of one retail floor (its walk-in changing area first, then its sales floor; nowhere else)', runs: 1,
+        zone: {runsPerLevel: [0, LINGERIE_STORES_MAX], note: LINGERIE_ZONE_NOTE, where: LINGERIE_ZONE_WHERE, explain: LINGERIE_ZONE_EXPLAIN}},
     },
   },
   // Task reactor-build-20261101 (primary + lane GEN): THE REACTOR — depth-graded contexts (the rim, upper / deep walkway tiers, the core
@@ -668,14 +688,14 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
         ...(storeyed ? ['not a stair ramp, not in a stair-role area, the area on its own storey', `≥ ${pl.landingKeepM ?? 0} m from every keep point of the storey`] : []),
         'the area\'s effective weight (area weight × room intensity) > 0',
       ];
-      const explanation = [
+      const explanation = a.zone?.explain ? [...a.zone.explain] : [
         `Draw count = U{${c.count[0]}..${c.count[1]}} (one draw per run), then the zombie types of that many spawns.`,
         'Collect every eligible cell, grouped by area; order the areas by a weighted shuffle (Efraimidis–Spirakis keys u^(1/weight)).',
         `For each cap pass (${pl.caps.passes.join(', ')}), walk the order: an area below its cap gets up to ${pl.tries} random cell picks; the first pick ≥ ${pl.spacingM} m from every enemy already placed${storeyed ? ' on that storey' : ''} takes one spawn.`,
         'Stop when the count is reached. Spacing, caps and eligible floor can leave a run short of its count (placed < count); validation regenerates the attempt where the profile requires it.',
         'Each placed spawn is then a family by its own roll (see the family pool) — independent of the area unless a room modifier says otherwise.',
       ];
-      if (a.zone) eligibility.push(`an area of the zone (one service annex), ≥ ${pl.landingKeepM ?? 0} m from the annex's entry door (its keep point)`);
+      if (a.zone) eligibility.push(a.zone.where ?? `an area of the zone (one service annex), ≥ ${pl.landingKeepM ?? 0} m from the annex's entry door (its keep point)`);
       return {
         id, label: c.label, storeys: a.storeys, runs: a.runs,
         count: {lo: c.count[0], hi: c.count[1], mean: mean(c.count[0], c.count[1]), distribution: `uniform integer U{${c.count[0]}..${c.count[1]}} (rng.int, inclusive)`},

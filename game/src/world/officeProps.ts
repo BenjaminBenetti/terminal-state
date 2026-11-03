@@ -24,6 +24,7 @@ import {OFFICE_KIND_ASSET, isOfficeKind, officeKindAsset, officeModelKey, office
 import type {StationLayout} from '../gen/stationTypes';
 import {loadOfficeAsset, loadOfficeTexture, type OfficeAssetId, type OfficeTextureId} from '../assets/officeAssets';
 import {canvasTexture} from './canvasTextures';
+import {buildLingerieDisplay, isLingerieSetKind} from './mallLingerieDisplay'; // task mall-lingerie-20261102 (lane STORE)
 import {shapeMaterials} from './shapeMaterials';
 import type {WorldMaterials, MatKey} from './materials';
 
@@ -118,6 +119,8 @@ export function buildOfficeProp(group: THREE.Group, kind: PropKind, list: PropPl
   const level = list[0].level ?? 0;
   void layout;
   if (kind === 'cubiclePartition') return partitions(group, list, wm, level);
+  // task mall-lingerie-20261102 (lane STORE): the lingerie display sets from lane FIT's display meshes (procedural stand-in until loaded)
+  if (isLingerieSetKind(kind)) { const n = buildLingerieDisplay(group, kind, list, lib, level); if (n !== null) return n; }
   // Task office-overhaul-20261030 (lane TENANTS): company / supporting kinds map to lane ASSETS' company models (companyAssets.ts
   // COMPANY_MODEL_FILES, the same `office-<assetId>` library keys, loaded before entry via officeModelKeysFor); box forms until then.
   const asset = officeKindAsset(kind);

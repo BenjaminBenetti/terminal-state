@@ -25,7 +25,8 @@ import {HORDE_AI, HordeDirector, slotOffset} from '../src/ai/horde';
 import {ChaseShare, atriumNearRule, atriumPathOptions, searchExpand} from '../src/ai/chaseShare';
 import {patrolRouteM, placeHordes} from '../src/ai/hordePlace';
 import {HORDE_FORBIDDEN_FAMILIES, HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules, type HordeRules} from '../src/ai/hordeSpec';
-import {ENEMY_FAMILY_IDS, SERVICE_ZONE_BUDGET, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {ENEMY_FAMILY_IDS, LINGERIE_ZONE_BUDGET, SERVICE_ZONE_BUDGET, SPAWN_PROFILES, validateSpawnProfile} from '../src/ai/spawnTables';
+import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT)
 import {isExtensionArea} from '../src/gen/trackExt/types';
 import {assignEnemyArchetypes} from '../src/ai/creatureSpawn';
 import {enemiesToSpawn, mergeKilled, createMemory, cloneMemory} from '../src/run/memory';
@@ -827,7 +828,10 @@ describe('the generated mall (lane GEN) — when registered', () => {
       for (const [, n] of perStorey) expect(n).toBeLessThanOrEqual(rules.budget.perStorey);
       // ambient and horde pools never mix: every non-horde core enemy is ambient, and the ambient count stays within its own budget
       // (task mall-playtest-revision-20261031, lane PROFILES: the Track2 annex's 'service' spawns are accounted separately)
-      const ambient = layout.zombies.filter(z => z.horde === undefined && !layout.areas[z.area]?.ext).length;
+      // (task mall-lingerie-20261102-221554, lane CONTEXT: the lingerie store's store-local variants — look 'lingerie', the 'lingerie' zone
+      // context — are accounted separately too, against their own per-store zone budget)
+      const ambient = layout.zombies.filter(z => z.horde === undefined && !layout.areas[z.area]?.ext && z.look !== 'lingerie').length;
+      expect(layout.zombies.filter(z => z.look === 'lingerie').length).toBeLessThanOrEqual(LINGERIE_ZONE_BUDGET[1] * LINGERIE_STORES_MAX);
       // (playtest revision: the annex 'service' spawns, checked against their own per-annex zone budget below)
       const service = layout.zombies.filter(z => z.horde === undefined && isExtensionArea(layout.areas[z.area])).length;
       const amb = (SPAWN_PROFILES as Record<string, (typeof SPAWN_PROFILES)['subway']>).mall.budgets?.ambient;

@@ -54,6 +54,7 @@ import {dressMallCommons, type CommonsReport} from './commons';
 import {placeMallAds, type MallAdsReport} from './ads'; // Task mall-playtest-revision-20261031 (lane SHOPS, D06)
 import {inferLot, shopFit, type MallRecipe, type MallShopFit} from './shops';
 import {mallLot, type MallLotFamily} from './lots'; // Task mall-playtest-revision-20261031 (lane GEN's lot families)
+import {CHANGING_ROWS, dressBust, placeChangingArea} from './lingerieStore'; // task mall-lingerie-20261102 (lane STORE)
 
 // ---------------------------------------------------------------------------------------------
 // Frame of one unit: u along the frontage (0 at the x0 / z0 end), v depth from the frontage into the unit.
@@ -140,6 +141,8 @@ export class ShopDresser {
   readonly placed: PropPlacement[] = [];
   /** Task mall-playtest-revision-20261031 (lane SHOPS, D02): the unit's lot family (gen/mall/lots.ts; inferred for lot-less units). */
   lot?: MallLotFamily;
+  /** Task mall-lingerie-20261102 (lane STORE): the shop record being dressed (a recipe may record on it: MallShop.changing). */
+  shop?: MallShop;
   constructor(readonly layout: StationLayout, readonly ctx: PlaceCtx, readonly fr: ShopFrame, readonly rng: Rng) {}
   get W(): number { return this.fr.W; }
   get D(): number { return this.fr.D; }
@@ -478,12 +481,13 @@ const per = (d: ShopDresser, m2: number, lo: number, hi: number) => Math.max(lo,
  * near side wall, the wall-backed back counter (lane ASSETS M01 `mallCashwrapCounter`: 5 drawers + a cupboard to the staff side,
  * an open niche, the hutch) when the wall there is free (a recipe that runs the wrap before its side rows gets it most often).
  */
-function cashWrap(d: ShopDresser, kinds: readonly KindV[], n: number, v = 2.0, back = true): PropPlacement[] {
+function cashWrap(d: ShopDresser, kinds: readonly KindV[], n: number, v = 2.0, back = true, side?: 'L' | 'R'): PropPlacement[] {
   const {W, fr} = d;
   // Task mall-playtest-revision-20261031 (lane SHOPS, D02): a narrow deep boutique has its till at the far end (lots.ts layout intent)
   if (d.lot?.shape === 'narrow-deep' && d.D >= 8) { v = Math.max(v, d.D - 2.6); back = false; }
   const entryMid = (fr.entry[0] + fr.entry[1]) / 2;
-  const leftSide = entryMid > W / 2; // entry on the right half -> wrap on the left
+  // entry on the right half -> wrap on the left (task mall-lingerie-20261102, lane STORE: `side` forces it, off the changing area)
+  const leftSide = side ? side === 'L' : entryMid > W / 2;
   const len = kinds.slice(0, n).reduce((s, [k]) => s + slot(PROP_DEFS[k].w), 0) || slot(PROP_DEFS.shopCounter.w) * n;
   const u0 = leftSide ? 1.0 : Math.max(1.0, W - 1.0 - len), u1 = Math.min(W - 1.0, u0 + len + 0.01);
   const run = d.counterRun(kinds, v, u0, u1, {max: n});
@@ -786,6 +790,66 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     d.islands('mannequinFemale', W * D >= 90 ? 2 : 1, {u0: 1.4, u1: W - 1.4, v0: D * 0.35, v1: D - 2.2}, {ring: 0.6});
     d.islands(W * D >= 70 ? 'loungeArmchair' : 'ottoman', 1, {u0: 1.2, u1: W - 1.2, v0: D * 0.55, v1: D - 1.6}, {ring: 0.7});
     void fr;
+  },
+  /**
+   * Task mall-lingerie-20261102 (lane STORE — user: "Make the store match its theme with a large fitting/changing area"): the lingerie
+   * boutique. FIRST the walk-in changing area (gen/mall/lingerieStore.ts: >= 4 curtained booths with a bench and a mirror each along a
+   * 1.5 m aisle, entered through a 1.5 m opening; recorded on the shop for the store-local spawns), then the window (female forms and
+   * dressed display busts either side of the entry), a pair of dressed busts on the entry axis, the till off the changing area, drawer
+   * chests (the lingerie drawers: openable holders), an accessories cabinet and a fragrance tier unit, slatwall bays, folded-stock tables,
+   * dressed busts on the floor, a couple of robe rails, full-length wall mirrors, and an ottoman by the changing area for whoever waits.
+   * Loot: the existing mall holders under `mall-lingerie` (personal theme like womenswear).
+   */
+  lingerie(d) {
+    const {W, D, fr} = d;
+    const ch = placeChangingArea(d, d.shop);
+    // the changing area's extent in this frame (u along the frontage, v depth): the floor in front of / beside it is the sales floor
+    let vMax = D, uMin = 0, uMax = W;
+    if (ch) {
+      const a = xzUV(fr, ch.zone.x0, ch.zone.z0), b = xzUV(fr, ch.zone.x1, ch.zone.z1);
+      const zu0 = Math.min(a[0], b[0]), zu1 = Math.max(a[0], b[0]), zv0 = Math.min(a[1], b[1]);
+      if (ch.wall === fr.back) vMax = zv0; else if (zu0 < W / 2) uMin = zu1; else uMax = zu0;
+    }
+    const zoneSide: 'L' | 'R' | undefined = !ch || ch.wall === fr.back ? undefined : uMin > 0 ? 'L' : 'R';
+    let design = d.rng.int(0, 5);
+    const dress = (from: number) => { for (const p of d.placed.slice(from)) if (p.kind === 'lingerieBust') dressBust(d, p, design++); };
+    // the window: female forms + dressed busts beside the entry, facing the gallery
+    let from = d.placed.length;
+    windowDisplay(d, W >= 11 ? ['lingerieBust', 'mannequinFemale'] : ['lingerieBust', 'lingerieBust'], W >= 11 ? 4 : 2);
+    dress(from);
+    // the focal pair of dressed busts on the entry axis, just past the entry keep-out
+    from = d.placed.length;
+    const um = (fr.entry[0] + fr.entry[1]) / 2, vf = Math.min(Math.max(2.6, D * 0.3), Math.max(2.6, vMax - 2.4));
+    for (const du of [-0.45, 0.45]) for (const [eu, ev] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5]]) {
+      const u = Math.round((um + du + eu) * 4) / 4;
+      if (u > uMin + 0.6 && u < uMax - 0.6 && d.put('lingerieBust', u, Math.round((vf + ev) * 4) / 4, fr.face, {ring: 0.45})) break;
+    }
+    dress(from);
+    // the till off the changing area (a back changing area: in front of it)
+    cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.min(Math.max(2.4, D * 0.4), Math.max(2.4, vMax - CHANGING_ROWS * 0.5 - 0.3)), true, zoneSide === 'L' ? 'R' : zoneSide === 'R' ? 'L' : undefined);
+    // walls: the lingerie drawer chests, an accessories cabinet, a fragrance tier unit, slatwall bays; full-length mirrors
+    const sideA: 'L' | 'R' = zoneSide ? (zoneSide === 'L' ? 'R' : 'L') : d.rng.chance(0.5) ? 'L' : 'R';
+    const sideB: 'L' | 'R' = sideA === 'L' ? 'R' : 'L';
+    const v1 = Math.min(D, vMax) - 1.0;
+    d.sideRows([['dresserDrawers', 0]], 2.4, v1, {max: 2});
+    d.sideRow(sideA, [['glassDisplayCabinet', 0]], 2.4, v1, {max: 1});
+    d.sideRow(sideB, [['cosmeticsWallUnit', 0]], 2.4, v1, {max: 1});
+    if (vMax >= D) d.backRow([['dresserDrawers', 0], ['wallBay', 0], ['cosmeticsWallUnit', 0], ['wallBay', 0]], Math.max(0.25, uMin + 0.25), Math.min(W - 0.25, uMax - 0.25));
+    d.sideRows([['wallBay', 0], ['dresserDrawers', 0]], 2.4, v1);
+    d.againstWall('fittingMirror', 2, {front: 0.9});
+    // the floor: folded-stock tables, dressed busts, a couple of robe rails, an ottoman by the changing area's opening
+    const zone = {u0: Math.max(1.6, uMin + 1.2), u1: Math.min(W - 1.6, uMax - 1.2), v0: 2.6, v1: Math.max(2.6, vMax - 1.6)};
+    d.islands('merchTable', per(d, 60, 1, 3), zone, {ring: 0.9});
+    from = d.placed.length;
+    d.islands('lingerieBust', per(d, 28, 2, 5), zone, {ring: 0.5});
+    dress(from);
+    d.dressRails(d.islands('garmentRail', per(d, 60, 1, 2), zone, {ring: 0.8}), 0.6);
+    if (ch) {
+      const [eu, ev] = xzUV(fr, ch.entry.x, ch.entry.z);
+      ottoman: for (const du of [1.4, -1.4, 2.0, -2.0]) for (const dv of [-1.0, -1.5]) {
+        if (d.put('ottoman', Math.round((eu + du) * 4) / 4, Math.round((ev + (ch.wall === fr.back ? dv : 0)) * 4) / 4, fr.face, {ring: 0.5})) break ottoman;
+      }
+    } else d.islands('ottoman', 1, zone, {ring: 0.7});
   },
   shoes(d) {
     const {W, D} = d;
@@ -1129,6 +1193,7 @@ function dressBack(d: ShopDresser, f: MallShopFit): void {
     grocery: [['fridge', 0], ['chestFreezer', 0], ['fridge', 0]],
     clothing: [['garmentRail', 0], ['staffLockers', 0]],
     womenswear: [['garmentRail', 0], ['staffLockers', 0], ['dresserDrawers', 0]], // task mall-round3-20261031 (lane SHOPS, R4)
+    lingerie: [['dresserDrawers', 0], ['staffLockers', 0], ['garmentRail', 0], ['cabinetTall', 0]], // task mall-lingerie-20261102 (lane STORE)
     department: [['garmentRail', 0], ['staffLockers', 0], ['desk', 0]],
     pet: [['fridge', 0], ['cabinetTall', 0]],
     arcade: [['electricalPanel', 0], ['cabinetTall', 0]],
@@ -1224,6 +1289,7 @@ export function dressMallShops(layout: StationLayout, rng: Rng, opts: MallDressO
     const fr = frameOf(a, side, fit.entry, frontStart);
     const d = new ShopDresser(layout, ctx, fr, srng);
     d.lot = mallLot(s.lot ?? inferLot(s, s.salesArea || a.w * a.h * CELL * CELL));
+    d.shop = s; // (lane STORE)
     if (opts.fronts !== false) shopfront(layout, ctx, s, fit, fr);
     // the way in stays open: a 2 m deep keep-out behind the entry span (open counter fronts — food units, kiosks — serve over the
     // counter from the gallery: their door zone is enough; other open fronts keep a 3 m wide walk-in lane)
