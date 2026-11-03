@@ -1070,6 +1070,8 @@ export class VolumetricAtmosphere {
     u.pocketDense.value = p.pocketDense;
     u.detail.value = p.detail;
     u.ground.value.set(p.ground, p.groundHeight, p.groundVariation);
+    // (task reactor-surface-redesign-credits-20261103) the Reactor's outdoor haze cap (read by reactor-variant programs only)
+    if (p.skyCap) u.skyCap.value.set(p.skyCap.y0, Math.max(p.skyCap.y1, p.skyCap.y0 + 0.01), 0, 1); else u.skyCap.value.set(0, 1, 0, 0);
     u.warp.value = p.warp;
     u.ext.value.set(p.patchExtinction, p.smokeExtinction, p.smokeScatter);
     u.phase.value.set(p.anisotropy, p.backAnisotropy, p.backScatter);

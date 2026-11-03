@@ -353,8 +353,7 @@ async function boot(): Promise<void> {
     if (!game.run.campaign) { game.setState('title'); return; }
     if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; b.title = autosaveNote(); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
     b.dataset.armed = ''; b.textContent = 'Main menu';
-    game.trainRide.reset();
-    game.setState('title');
+    game.returnToMenu(); // (trainRide.reset + the title; lane CREDITS' end card takes the same path after its save)
   });
   toMenu(mainMenuButton('#pause', 'btn-main-menu'));
   toMenu(mainMenuButton('#death', 'btn-death-menu'));

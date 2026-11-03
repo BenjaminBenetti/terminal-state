@@ -27,6 +27,7 @@ import {reactorCpuQaApi} from './world/reactor/cpuActorCulling'; // task studio-
 import {reactorArchQaApi} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor kit summary / draw cost, fog tune, visuals driver
 import {reactorSurfaceOf, type ReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE)
 import {reactorEndingQaApi} from './world/reactor/endingQa'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
+import {reactorCreditsOf, type ReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS)
 import {gaslightQaApi} from './world/gaslightQa'; // task reactor-expansion-20261101 (lane GASLIGHT): gas visibility / pit lamps / open sky state, shaft tune
 import {blightbellyQaApi} from './ai/blightbellyQa'; // Task track1-siren-blightbelly-20261031 (lane BLIGHT): Blightbelly burst / blast / gas puff spot-check hooks
 import {sirenQaApi} from './ai/sirenQa'; // Task track1-siren-blightbelly-20261031 (lane SIREN): Siren state / wake / veins spot-check hooks
@@ -369,6 +370,9 @@ export function installQaHooks(game: Game): void {
     // task studio-reactor-surface-ending-20261102 (lane ENDING): reactorEnding({online, open, skipMessage, go: 'door' | 'stairs' | 'top' |
     // 'exit' | 'hole'}) — the exterior door's phase / seal / the centre message / the objective stage; force the clear-complete state, poses
     ...reactorEndingQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
+    // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): reactorCredits({skip: s, start, end, press, reset})
+    // — the credits record / phase / gate / counters; QA fast-forward of the 30 s count and the scroll, the end card's button
+    reactorCredits: (cmd?: Parameters<ReactorCredits['qa']>[0]): object => reactorCreditsOf(game)?.qa(cmd) ?? {installed: false},
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // Task track1-siren-blightbelly-20261031 (lane SIREN): sirens(), sirenSystem(), goSiren(i?, dist, face), sirenLight(i?), sirenProbe(i?), aimSiren(i?, part), DEBUG sirenWake(i?) / qaSpawnSiren(dist)

@@ -543,7 +543,7 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
   const point = oneOf(r.point, `${path}.point`, SAVE_POINTS);
   const c = campaign(r.campaign, `${path}.campaign`, o.validateNetwork);
-  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : 'a new-game'} save during a journey`);
+  if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : 'a new-game'} save during a journey`);
   const seeds = obj(r.seeds, `${path}.seeds`);
   only(seeds, `${path}.seeds`, SAVE_ARCHETYPES);
   for (const l of SAVE_ARCHETYPES) int(seeds[l], `${path}.seeds.${l}`, 0, UINT32);

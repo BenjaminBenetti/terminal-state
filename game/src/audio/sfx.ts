@@ -395,7 +395,9 @@ export interface MachineCueOpts { gain?: number; rate?: number; delay?: number; 
  * world/reactor/audioRain.ts director decides — outside on the surface after the win), `muffle` 0..1 = sheltered (indoors / the
  * stairwell: the low-pass closes to `muffledHz` and the level drops to `shelterLevel`). Gains are eased (`tauS`), never stepped.
  */
-export const RAIN_BED = {gain: 0.34, openHz: 18000, muffledHz: 700, shelterLevel: 0.45, tauS: 0.5} as const;
+// (task reactor-surface-redesign-credits-20261103, user: "the rain effect is to loud, drop its sound by about 50%": the bed's own gain
+// 0.34 -> 0.17; the master volume, the shelter muffle and every other bus unchanged)
+export const RAIN_BED = {gain: 0.17, openHz: 18000, muffledHz: 700, shelterLevel: 0.45, tauS: 0.5} as const;
 /** A machine loop's live controls (lane STARTUP: the bed builds with the stages, the rod drive follows the rod motion). */
 export interface MachineLoopHandle extends FlareBurnHandle {
   /** Level k (x CUE_GAIN; 1 = the cue's mix level), eased with time constant tauS. */
