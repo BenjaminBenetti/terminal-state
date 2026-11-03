@@ -306,7 +306,7 @@ describe('Q: on / off and arbitration (GasMaskSystem.press)', () => {
     expect(game).toMatch(/const laneOwns = this\.inputOwners\.some\(f => f\(\)\)/);
     expect(game).toMatch(/this\.aiming = [^\n]*!laneOwns/);
     expect(game).toMatch(/const flareOwns = this\.flareHold\.active \|\| this\.lmbLatch \|\| laneOwns/);
-    expect(game).toMatch(/held: inp\.mouse\[0\] && !flareOwns, pressed: inp\.mousePressed\[0\] && !flareOwns/);
+    expect(game).toMatch(/held: inp\.mouse\[0\] && !flareOwns(?: && !rideHolster)?, pressed: inp\.mousePressed\[0\] && !flareOwns/);
     expect(game).toMatch(/if \(this\.gasMask\.transitioning\) return;/);
   });
 
