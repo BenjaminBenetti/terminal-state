@@ -34,7 +34,7 @@
 // and physics bodies at their deck height; bullets / sight pass an open 'railing' but not a solid
 // 'parapet'. The main-level platform edge (1.15 m into the track bed) is a drop, not a rail.
 
-import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type StandPoint} from './grid';
+import {CELL, FLOOR, VOID, STEP_UP, NAV_STEP, MAX_DROP, rampHeight, stepTop, type Grid, type NavLevels, type CrossLink, type Ramp, type StandPoint} from './grid';
 
 /** 'office' (task office-seamless-20261029): a tower storey above the lobby (dry indoor air, office walls). 'roof' (task
  *  office-overhaul-20261030, lane STRUCT): the open-sky roof deck on top of the tower (outdoor air; see Level.sky). */
@@ -217,8 +217,26 @@ export const WALK_STRIDE = 6;
 
 interface WalkMemo {
   stamp: Uint32Array; epoch: number; kind: Uint8Array; n: Uint8Array;
-  /** Per column NL slots: floor, ceiling, blocked (1) of its k-th open level. */
-  f: Float64Array; c: Float64Array; blk: Uint8Array;
+  /**
+   * Per column NL slots, its k-th open level: `t` 0 = flat (floor `f`, ceiling `c`), 1 / 2 = a ramp along x / z (`ramp`; `c` = the
+   * cell's ceiling cap, `has` = the cell has a set height: ceilNearCell's min); `blk` = a blocking prop of that level.
+   */
+  f: Float64Array; c: Float64Array; blk: Uint8Array; t: Uint8Array; has: Uint8Array; ramp: (Ramp | null)[];
+}
+
+/**
+ * lane AI-CPU: floor (into WB.f) and ceiling (WB.c) of summary slot `q` of column (cx, cy) at query point (x, z): floorNearCell /
+ * ceilNearCell's values (the same ramp height of the same clamped coordinate for a ramp slot).
+ */
+const WB = {f: 0, c: 0};
+function walkBand(M: WalkMemo, q: number, cx: number, cy: number, x: number, z: number): void {
+  const t = M.t[q];
+  if (t === 0) { WB.f = M.f[q]; WB.c = M.c[q]; return; }
+  const R = M.ramp[q]!;
+  const h = rampHeight(R, t === 1 ? clamp(x, cx * CELL, (cx + 1) * CELL) : clamp(z, cy * CELL, (cy + 1) * CELL));
+  WB.f = h;
+  const c = h + R.headroom;
+  WB.c = M.has[q] ? Math.min(c, M.c[q]) : c;
 }
 
 /** The grid band of level index k (floor f) in a volume column is hidden right now. */
@@ -600,12 +618,13 @@ export class Levels implements NavLevels {
     // order, the same values; see beginWalkBatch)
     const M = this.walkMemo;
     if (M !== null && this.walkColumn(M, i, cx, cy, wx, wz) === 1) {
-      const NL = this.list.length, o = i * NL, n = M.n[i], F = M.f, C = M.c;
+      const NL = this.list.length, o = i * NL, n = M.n[i];
       let has = false, best = 0;
       for (let p = 0; p < n; p++) {
-        const f = F[o + p];
+        walkBand(M, o + p, cx, cy, wx, wz);
+        const f = WB.f;
         if (f > y + tol) continue;
-        if (C[o + p] >= y - CAP_TOL && (!has || f > best)) { has = true; best = f; }
+        if (WB.c >= y - CAP_TOL && (!has || f > best)) { has = true; best = f; }
       }
       return has ? best : -Infinity;
     }
@@ -621,16 +640,26 @@ export class Levels implements NavLevels {
     M.stamp[i] = M.epoch;
     const NL = this.list.length;
     if (this.vcol(i)) return (M.kind[i] = 0);
-    for (let k = 0; k < NL; k++) if (this.list[k].grid.rampIdx[i] >= 0) return (M.kind[i] = 0);
     const o = i * NL;
     let n = 0;
     for (let k = 0; k < NL; k++) {
       const g = this.list[k].grid;
       if (!isOpen(g, i)) continue;
-      // (no ramp: neither value depends on the query point; the same calls the per-query code makes)
-      M.f[o + n] = floorNearCell(g, i, cx, cy, wx, wz);
-      M.c[o + n] = ceilNearCell(g, i, cx, cy, wx, wz);
-      M.blk[o + n] = g.blocked[i] ? 1 : 0;
+      const q = o + n, r = g.rampIdx[i];
+      if (r < 0) {
+        // flat: neither value depends on the query point (the same calls the per-query code makes)
+        M.t[q] = 0;
+        M.f[q] = floorNearCell(g, i, cx, cy, wx, wz);
+        M.c[q] = ceilNearCell(g, i, cx, cy, wx, wz);
+      } else {
+        // a ramp: floorNearCell / ceilNearCell's inputs (walkBand evaluates them at each query point)
+        const R = g.ramps[r];
+        M.t[q] = R.axis === 'x' ? 1 : 2;
+        M.ramp[q] = R;
+        M.has[q] = g.ceil[i] !== 0 || g.floor[i] !== 0 ? 1 : 0;
+        M.c[q] = g.ceil[i];
+      }
+      M.blk[q] = g.blocked[i] ? 1 : 0;
       n++;
     }
     M.n[i] = n;
@@ -1125,12 +1154,13 @@ export class Levels implements NavLevels {
           const i = cy * g0.w + cx;
           if (M !== null && this.walkColumn(M, i, cx, cy, wx, wz) === 1) {
             // an existence test over the open, unblocked levels (any order gives cellClear's answer)
-            const o = i * NL, n = M.n[i], F = M.f, C = M.c, B = M.blk;
+            const o = i * NL, n = M.n[i], B = M.blk;
             for (let p = 0; p < n; p++) {
               if (B[o + p]) continue;
-              const f = F[o + p];
+              walkBand(M, o + p, cx, cy, wx, wz);
+              const f = WB.f;
               if (Math.abs(f - feet) > NAV_STEP) continue;
-              if (C[o + p] < Math.max(f, feet) + BODY_CLEAR) continue;
+              if (WB.c < Math.max(f, feet) + BODY_CLEAR) continue;
               ok = true;
               break;
             }
@@ -1188,7 +1218,7 @@ export class Levels implements NavLevels {
     if (!M) {
       const n = this.main.w * this.main.h, NL = this.list.length;
       M = this.walkMemoStore = {stamp: new Uint32Array(n), epoch: 0, kind: new Uint8Array(n), n: new Uint8Array(n),
-        f: new Float64Array(n * NL), c: new Float64Array(n * NL), blk: new Uint8Array(n * NL)};
+        f: new Float64Array(n * NL), c: new Float64Array(n * NL), blk: new Uint8Array(n * NL), t: new Uint8Array(n * NL), has: new Uint8Array(n * NL), ramp: new Array<Ramp | null>(n * NL).fill(null)};
     }
     // a fresh epoch: every summary of an earlier batch is void (wrap: clear the stamps, no stale slot can ever match)
     if (M.epoch >= 0xfffffffe) { M.stamp.fill(0); M.epoch = 0; }
