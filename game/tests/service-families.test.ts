@@ -6,7 +6,7 @@ import {describe, expect, it} from 'vitest';
 import {writeFileSync} from 'node:fs';
 import {assignEnemyArchetypes, enemyRoll, pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {
-  DEFAULT_FAMILY_SHARES, ENEMY_POOL, SERVICE_CONTEXT, SERVICE_FAMILY_POOL, SERVICE_FAMILY_SHARES, SERVICE_ZONE_BUDGET, SPAWN_PROFILES,
+  DEFAULT_FAMILY_SHARES, ENEMY_POOL, LINGERIE_FAMILY_POOL, SERVICE_CONTEXT, SERVICE_FAMILY_POOL, SERVICE_FAMILY_SHARES, SERVICE_ZONE_BUDGET, SPAWN_PROFILES,
   spawnContextOf, validateSpawnProfile, type SpawnProfile,
 } from '../src/ai/spawnTables';
 import {isExtensionArea} from '../src/gen/trackExt/types';
@@ -51,6 +51,13 @@ describe('R6: service-only family pool', () => {
           expect(rule?.families, `${id} ${c}`).toBeDefined();
           expect(share(rule!.families!, 'strainer'), `${id} ${c}: no Strainer`).toBe(0);
           if (share(rule!.families!, 'siren') > 0) expect(p.eligibility?.siren?.contexts, `${id} ${c}: Siren rule`).toContain(c);
+          continue;
+        }
+        // task mall-lingerie-20261102-221554 (lane CONTEXT): the second deliberate exception — the mall lingerie store's store-local zone
+        // ('lingerie', LINGERIE_FAMILY_POOL) is ordinary zombies only (its variants are a wardrobe look of the zombie family)
+        if (id === 'mall' && c === 'lingerie') {
+          expect(rule?.families, `${id} ${c}`).toBe(LINGERIE_FAMILY_POOL);
+          expect(rule!.families!.filter(([, w]) => w > 0)).toEqual([['zombie', 1]]);
           continue;
         }
         expect(rule?.families, `${id} ${c}`).toBeUndefined();

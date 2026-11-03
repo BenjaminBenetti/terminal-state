@@ -41,7 +41,8 @@ import {
 } from '../src/ai/spawnTables';
 import {assignEnemyArchetypes, pickEnemyArchetype} from '../src/ai/creatureSpawn';
 import {applyFamilySpacing} from '../src/ai/familySpacing';
-import {SERVICE_CONTEXT} from '../src/ai/spawnTables';
+import {LINGERIE_CONTEXT, SERVICE_CONTEXT} from '../src/ai/spawnTables';
+import {LINGERIE_STORES_MAX} from '../src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT)
 import {TRACK_EXT_MALL, isExtensionArea} from '../src/gen/trackExt/index'; // lane INTEG (Track2 integration)
 import {HORDE_GROUP_SIZE, MALL_HORDE_RULES, validateHordeRules} from '../src/ai/hordeSpec';
 import {patrolRouteM} from '../src/ai/hordePlace';
@@ -253,8 +254,9 @@ describe('mall spawn profile', () => {
     expect(LEVELS.mall.name).toBe(MALL_GENERIC_NAME);
     expect(P.label).toMatch(/<Name> Center/);
     expect(validateSpawnProfile(P)).toEqual([]);
-    expect(Object.keys(P.contexts).sort()).toEqual(['pit', 'ring', 'service']);
-    expect(declaredSpawnContexts(P).sort()).toEqual([HORDE_CONTEXT, 'pit', 'ring', 'service'].sort());
+    // (task mall-lingerie-20261102-221554, lane CONTEXT: + 'lingerie', the optional lingerie store's store-local zone)
+    expect(Object.keys(P.contexts).sort()).toEqual(['lingerie', 'pit', 'ring', 'service']);
+    expect(declaredSpawnContexts(P).sort()).toEqual([HORDE_CONTEXT, 'lingerie', 'pit', 'ring', 'service'].sort());
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.ring!.runs).toBe(MALL_RINGS);
     // (mall revision, D07) re-proportioned to the compact mall: the counts of one run per storey
     expect(P.contexts.pit!.count).toEqual([3, 5]);
@@ -267,6 +269,12 @@ describe('mall spawn profile', () => {
     expect(ENEMY_LEVEL_ADAPTER.mall.contexts.service!.zone?.runsPerLevel).toEqual([0, TRACK_EXT_MALL.annex.max]);
     expect(TRACK_EXT_MALL.annex.max).toBe(1);
     expect(MALL_SIREN_ELIGIBILITY.contexts).not.toContain('service'); // no Siren in an annex
+    // lane CONTEXT: the lingerie store's zone — once per store (0..1 per mall), its own zombie-only pool, no Siren rule names it
+    expect(P.contexts.lingerie).toBe(LINGERIE_CONTEXT);
+    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.lingerie!.runs).toBe(1);
+    expect(ENEMY_LEVEL_ADAPTER.mall.contexts.lingerie!.zone?.runsPerLevel).toEqual([0, LINGERIE_STORES_MAX]);
+    expect(MALL_SIREN_ELIGIBILITY.contexts).not.toContain('lingerie');
+    expect(LINGERIE_CONTEXT.families!.filter(([, w]) => w > 0)).toEqual([['zombie', 1]]);
     // Track1 pool: every family in registry order, Blightbelly / rat-dog 5 % ambient, the Siren's census-tuned draw weight (not the Office's)
     expect(P.families).toEqual(familyPool({siren: MALL_SIREN_WEIGHT}));
     expect(P.families.map(([f]) => f)).toEqual([...ENEMY_FAMILY_IDS]);
@@ -324,12 +332,13 @@ describe('mall spawn profile', () => {
     expect(rule.contexts).toEqual(['ring']);
   });
 
-  it('generated mall: exactly pit + ring (+ service) asked; per-storey ambient within counts / budgets; Sirens eligible + spaced; hordes within route capacity, out of sight; separate accounting; deterministic', () => {
+  it('generated mall: exactly pit + ring (+ service, lingerie) asked; per-storey ambient within counts / budgets; Sirens eligible + spaced; hordes within route capacity, out of sight; separate accounting; deterministic', () => {
     const seen = new Set<string>();
     const contexts = new Proxy(P.contexts, {get: (t, k) => { if (typeof k === 'string') seen.add(k); return Reflect.get(t, k); }});
     const watched = generateMallLevel({levelSeed: SEEDS[0], startWeapon: 'pistol'}, {spawns: {...P, contexts} as SpawnProfile});
-    // (lane INTEG: Track2's populateExtensions reads the 'service' zone context on every call, annexes or not)
-    expect([...seen].filter(k => k in P.contexts).sort()).toEqual(['pit', 'ring', 'service']);
+    // (lane INTEG: Track2's populateExtensions reads the 'service' zone context on every call, annexes or not; lane CONTEXT: the
+    // lingerie pass reads its 'lingerie' zone context on every call, store or not)
+    expect([...seen].filter(k => k in P.contexts).sort()).toEqual(['lingerie', 'pit', 'ring', 'service']);
     // determinism: the watched profile is the same data -> the identical level as the registry's generation
     const l0 = mall(SEEDS[0]);
     expect(JSON.stringify(watched.zombies)).toBe(JSON.stringify(l0.zombies));
@@ -342,18 +351,25 @@ describe('mall spawn profile', () => {
       const ctx = (i: number) => spawnContextOf(l, P, i);
       // (Track2 integration: 'service' annex spawns are appended last, tagged, and NOT part of the station / retail counts)
       const service = l.zombies.filter((z, i) => z.horde === undefined && ctx(i) === 'service');
-      const ambient = l.zombies.filter((z, i) => z.horde === undefined && ctx(i) !== 'service'), horde = l.zombies.filter(z => z.horde !== undefined);
+      // (lane CONTEXT: the lingerie store's store-local spawns are a zone of their own: not ambient, never counted with the storeys)
+      const store = l.zombies.filter((z, i) => z.horde === undefined && ctx(i) === 'lingerie');
+      expect(store.every(z => z.look === 'lingerie' && z.archetype === 'zombie')).toBe(true);
+      expect(l.zombies.filter(z => z.look === 'lingerie')).toEqual(store);
+      const ambient = l.zombies.filter((z, i) => z.horde === undefined && ctx(i) !== 'service' && ctx(i) !== 'lingerie'), horde = l.zombies.filter(z => z.horde !== undefined);
       expect(service.every(z => isExtensionArea(l.areas[z.area]))).toBe(true);
       expect(service.length).toBeLessThanOrEqual((l.extensions?.annexes.length ?? 0) * SERVICE_CONTEXT.count[1]);
       expect(l.extensions?.annexes.length ?? 0).toBeLessThanOrEqual(TRACK_EXT_MALL.annex.max);
       expect(service.every(z => z.archetype !== 'siren')).toBe(true);
       // every spawn carries its declared context: ambient 'pit' (storey 0) / 'ring' (storeys 1..3), horde members 'horde'
-      l.zombies.forEach((z, i) => expect(ctx(i), `seed ${seed} #${i}`).toBe(z.horde !== undefined ? HORDE_CONTEXT : isExtensionArea(l.areas[z.area]) ? 'service' : (z.level ?? 0) === 0 ? 'pit' : 'ring'));
-      // order: ambient, then hordes, then the annex 'service' spawns (the family roll and run memory key on the index)
+      l.zombies.forEach((z, i) => expect(ctx(i), `seed ${seed} #${i}`).toBe(z.horde !== undefined ? HORDE_CONTEXT : z.look === 'lingerie' ? 'lingerie' : isExtensionArea(l.areas[z.area]) ? 'service' : (z.level ?? 0) === 0 ? 'pit' : 'ring'));
+      // order: ambient, then hordes, then the annex 'service' spawns, then the lingerie store's (the family roll and run memory key on
+      // the index)
       const firstHorde = l.zombies.findIndex(z => z.horde !== undefined);
-      if (firstHorde >= 0) expect(l.zombies.slice(firstHorde).every((z, k) => z.horde !== undefined || ctx(firstHorde + k) === 'service')).toBe(true);
+      if (firstHorde >= 0) expect(l.zombies.slice(firstHorde).every((z, k) => z.horde !== undefined || ctx(firstHorde + k) === 'service' || ctx(firstHorde + k) === 'lingerie')).toBe(true);
       const firstService = l.zombies.findIndex((_, i) => ctx(i) === 'service');
-      if (firstService >= 0) expect(l.zombies.slice(firstService).every((_, k) => ctx(firstService + k) === 'service')).toBe(true);
+      if (firstService >= 0) expect(l.zombies.slice(firstService).every((_, k) => ctx(firstService + k) === 'service' || ctx(firstService + k) === 'lingerie')).toBe(true);
+      const firstStore = l.zombies.findIndex((_, i) => ctx(i) === 'lingerie');
+      if (firstStore >= 0) expect(l.zombies.slice(firstStore).every((_, k) => ctx(firstStore + k) === 'lingerie')).toBe(true);
       // ambient: per storey within its context's count range, total within the ambient budget, families from the pool
       const perStorey: number[] = [];
       for (let lv = 0; lv <= MALL_RINGS; lv++) {
@@ -487,7 +503,8 @@ describe('reference coverage (the generated pages document the mall automaticall
     expect(m.name).toBe(MALL_GENERIC_NAME);
     expect(JSON.stringify(m)).not.toMatch(/Eaton/);
     expect(m.generator.note).toMatch(/<Name> Center/);
-    expect(m.contexts.map(c => [c.id, c.runs])).toEqual([['pit', 1], ['ring', MALL_RINGS], ['service', 1]]);
+    expect(m.contexts.map(c => [c.id, c.runs])).toEqual([['pit', 1], ['ring', MALL_RINGS], ['service', 1], ['lingerie', 1]]); // (+ lane CONTEXT's store zone)
+    expect(m.contexts.find(c => c.id === 'lingerie')!.zone).toMatchObject({runsPerLevel: {lo: 0, hi: LINGERIE_STORES_MAX}}); // (a zone: not in the total)
     expect(m.contexts.find(c => c.id === 'service')!.zone).toMatchObject({runsPerLevel: {lo: 0, hi: TRACK_EXT_MALL.annex.max}}); // (Track2: a zone, not in the total)
     const S = spawnProfile('mall');
     expect(m.total.mean).toBe((S.contexts.pit!.count[0] + S.contexts.pit!.count[1]) / 2 + MALL_RINGS * (S.contexts.ring!.count[0] + S.contexts.ring!.count[1]) / 2);

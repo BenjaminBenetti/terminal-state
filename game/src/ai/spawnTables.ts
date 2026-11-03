@@ -210,15 +210,19 @@ export type RoomModifiers = Readonly<Record<string, RoomModifier>>;
  * Lane INTEG (Track1 integration): 'horde' = HORDE_CONTEXT, the tag of the SEPARATE roaming-horde pool's members. It is never a
  * `contexts` entry: a profile declares it by declaring `horde` (HordeRules: groups x size, budgets, placement) — see
  * declaredSpawnContexts. No ambient family rule (eligibility) can name it, so no ambient roll ever reaches a horde member.
+ * Task mall-lingerie-20261102-221554 (lane CONTEXT): 'lingerie' = the STORE-LOCAL zone context of the mall's optional lingerie store
+ * (LINGERIE_CONTEXT; gen/mall/lingerieSpawns.ts): once per lingerie store (0..1 per mall), inside that store only (its walk-in
+ * changing area first, then its sales floor), appended after every other spawn of the level (annex 'service' spawns included),
+ * ordinary zombies only (its own pool), every spawn tagged ZombieSpawn.look 'lingerie' (the lingerie-set look at spawn time).
  */
-export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde';
+export type SpawnContextId = 'station' | 'street' | 'floor' | 'roof' | 'pit' | 'ring' | 'service' | 'horde' | 'lingerie';
 /**
  * Track 2 (lane CONTENT): 'service' = ONE run per seeded SERVICE ANNEX of a track-bearing level (gen/annexContent.ts
  * placeServiceSpawns; 0-2 annexes per level): a per-annex ZONE BUDGET placed in that annex's areas only, on its own fork, appended
  * after every core spawn and tagged markSpawnContext(…, 'service'); excluded from the core station / street / floor counts and
  * reported separately. No family is enabled by it (the Office's Siren eligibility lists only 'floor').
  */
-export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde'];
+export const SPAWN_CONTEXT_IDS: readonly SpawnContextId[] = ['station', 'street', 'floor', 'roof', 'pit', 'ring', 'service', 'horde', 'lingerie'];
 /** Lane INTEG: the context tag of horde members (ai/hordePlace.ts placeHordes tags every member it appends). */
 export const HORDE_CONTEXT = 'horde' as const satisfies SpawnContextId;
 
@@ -549,6 +553,40 @@ export const MALL_HORDE: HordeRules = {
   placement: MALL_HORDE_RULES.placement,
   patrol: MALL_HORDE_RULES.patrol,
 };
+/**
+ * Task mall-lingerie-20261102-221554 (lane CONTEXT; user: "make store-local ordinary-zombie variants using these specific bodies dressed
+ * in the supplied lingerie designs … Spawn these variants inside this store, especially in the changing area"): THE STORE-LOCAL ZONE
+ * BUDGET of the mall's optional lingerie store — spawns ONE store run tries to place, rng.int(lo, hi) per lingerie store (0..1 per mall:
+ * the store is a seeded program, never guaranteed), ADDITIVE to the core contexts (never in the station / retail counts or the ambient
+ * budget). E 4: the store's ambient share is unchanged (the ring run may already put shop-weighted spawns on its sales floor); these
+ * are the extra store-local variants, most of them in the walk-in changing area (gen/mall/lingerieSpawns.ts LINGERIE_SPAWN_RULES).
+ */
+export const LINGERIE_ZONE_BUDGET: readonly [number, number] = [3, 5];
+/**
+ * The lingerie store's placement (gen/mall/lingerieSpawns.ts placeLingerieSpawns reads it): the store's own sales floor only (room
+ * type 'shop' of THAT unit — never its stock room, a gallery or another unit), one cap pass holding the whole run, 24 tries per pick,
+ * 1.4 m spacing (booths are small: one variant per booth, never two bodies in one spot), >= 36 walking cells from the start (the mall's
+ * validation rule), 3 x 3 clear, 5 m off every stair / escalator / elevator landing (the mall's keep points). The store-specific
+ * rules (the changing area first, the shopfront / booth-opening keep-offs, fair passage) are LINGERIE_SPAWN_RULES.
+ */
+export const LINGERIE_PLACEMENT: PlacementRules = {
+  areaWeights: {
+    rules: [{when: {type: ['shop']}, weight: 1, why: 'the lingerie store\'s own sales floor (its walk-in changing area first)'}],
+    otherwise: 0, otherwiseWhy: 'nowhere outside the lingerie store: never its stock room, a gallery, another unit or another storey',
+  },
+  caps: {passes: [LINGERIE_ZONE_BUDGET[1]], rules: []},
+  tries: 24, spacingM: 1.4, startCells: 36, clearCells: 1, landingKeepM: 5,
+};
+/**
+ * The lingerie store's OWN family pool: ordinary zombies only (Blightbelly / Siren / rat-dog / Strainer weight 0 — the store-local
+ * variants are wardrobe looks of the zombie family, never another family). The level's pool and every other context are untouched.
+ */
+export const LINGERIE_FAMILY_POOL: FamilyPool = familyPool({blightbelly: 0, siren: 0, ratdog: 0, strainer: 0});
+/** The 'lingerie' zone context of the mall (once per lingerie store; never regenerates a level: no accepted minimum). */
+export const LINGERIE_CONTEXT: SpawnContextRule = {
+  label: 'Lingerie store (per store: changing area + sales floor)', count: LINGERIE_ZONE_BUDGET, placement: LINGERIE_PLACEMENT,
+  accept: {min: null, max: 'count'}, families: LINGERIE_FAMILY_POOL,
+};
 /** The mall's spawn profile (SPAWN_PROFILES.mall). The label is the generic one: the display name is seeded per run ("<Name> Center"). */
 export const MALL_SPAWN_PROFILE: SpawnProfile = {
   id: 'mall', label: 'Mall (seeded "<Name> Center")', families: MALL_ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
@@ -560,6 +598,9 @@ export const MALL_SPAWN_PROFILE: SpawnProfile = {
     // lane INTEG (Track2 integration): the pit station's service annexes (LEVELS.mall.trackExtensions) — Track2's per-annex zone
     // budget, as on the Subway / Office (logical-level inheritance; not in MALL_SIREN_ELIGIBILITY.contexts: no Siren in an annex).
     service: SERVICE_CONTEXT,
+    // task mall-lingerie-20261102-221554 (lane CONTEXT): the optional lingerie store's store-local zone (appended last; ordinary
+    // zombies only; not in MALL_SIREN_ELIGIBILITY.contexts)
+    lingerie: LINGERIE_CONTEXT,
   },
   rooms: {},
   eligibility: {siren: MALL_SIREN_ELIGIBILITY},

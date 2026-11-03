@@ -280,8 +280,11 @@ describe('spawn census (real generators)', () => {
       });
       if (id === 'mall') {
         expect(l.zombies.some(z => z.horde !== undefined)).toBe(true);
-        // (Track2 integration: + 'service' spawns when the level grew a service annex — appended last, tagged, ambient families)
-        expect(new Set(l.zombies.flatMap((z, i) => (z.horde === undefined && spawnContextOf(l, p, i) !== 'service' ? [spawnContextOf(l, p, i)] : [])))).toEqual(new Set(['pit', 'ring']));
+        // (Track2 integration: + 'service' spawns when the level grew a service annex — appended last, tagged, ambient families;
+        // task mall-lingerie-20261102-221554, lane CONTEXT: + 'lingerie' spawns when it has a lingerie store — appended last, zombies only)
+        const zone = (i: number) => spawnContextOf(l, p, i) === 'service' || spawnContextOf(l, p, i) === 'lingerie';
+        expect(new Set(l.zombies.flatMap((z, i) => (z.horde === undefined && !zone(i) ? [spawnContextOf(l, p, i)] : [])))).toEqual(new Set(['pit', 'ring']));
+        l.zombies.forEach((z, i) => expect(spawnContextOf(l, p, i) === 'lingerie').toBe(z.look === 'lingerie'));
         expect(l.zombies.filter(z => z.archetype === 'siren').length).toBeLessThanOrEqual(MALL_SIREN_ELIGIBILITY.maxPerLevel!);
       }
     }
