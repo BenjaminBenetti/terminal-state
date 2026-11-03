@@ -230,7 +230,7 @@ describe('the REAL mall (t3a): warm-up coverage on the real build path', () => {
     expect(src).toMatch(/prepareObjects\([^)]*this\.sceneDepth\(false\)\)/);
     // the journey route (no loading-screen warm-up) compiles in the station's context too
     const bg = src.slice(src.indexOf('private async backgroundCompile('), src.indexOf('// --- end campaign (primary)'));
-    expect(bg).toMatch(/compileItemsLive\(/);
+    expect(bg).toMatch(/new JourneyCompile\(\{[^}]*scheduler: this\.frameBudget/); // (time-sliced for the whole ride: tests/rendercpu-journey-compile.test.ts)
     expect(bg).toMatch(/this\.atmosphere\.warmTarget\(this\.scene, this\.camera\)/);
     expect(bg).toMatch(/this\.sceneDepth\(false\)/);
   }, 240_000);
