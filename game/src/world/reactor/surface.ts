@@ -22,6 +22,7 @@ import {reactorTexture} from './archAssets';
 import {surfaceModelKeys, SURFACE_KIT} from './surfaceKit';
 import {planSurfaceCity, type SurfaceCityPlan} from './surfacePlan';
 import {planSurfacePlant, type SurfacePlantPlan} from './surfacePlantPlan';
+import {buildSurfacePlant, type SurfacePlantView} from './surfacePlant';
 import {surfaceEyeOpen, surfaceEyeOutside, surfaceSiteOf, type SurfaceSite} from './surfaceSite';
 import {buildSurfaceView, disposeSurfaceView, type SurfaceView} from './surfaceCity';
 import {SURFACE_LOOK, SURF_U, surfaceTune} from './surfaceLook';
@@ -73,6 +74,8 @@ export class ReactorSurface {
   /** The pit's shaft rect (the aperture column is drawn only with the eye in it). */
   pit: {x0: number; z0: number; x1: number; z1: number} | null = null;
   view: SurfaceView | null = null;
+  /** The plant's view (surfacePlant.ts: the compound wall, the duct runs, the vent towers and their spinning fans) under view.outdoor. */
+  plantView: SurfacePlantView | null = null;
   /** The last shown state (QA / tests). */
   readonly shown = {outside: false, open: false, clear: 0, rain: 0, wet: 0, column: false, near: false, fogged: false, beam: 0};
   readonly counts = {builds: 0, frames: 0};
@@ -113,6 +116,8 @@ export class ReactorSurface {
     SURF_U.beam.value.set(site.hole.x, site.hole.z, 0, 0);
     SURF_U.beamTop.value.set(site.hole.x, site.y + SURFACE_RT.cloudBase, site.hole.z);
     for (const L of [this.view.near, this.view.column]) L.u.beam.value.set(site.hole.x, site.hole.z, 0, 0);
+    this.plantView = buildSurfacePlant(site, this.plant, key => lib?.get(key));
+    this.view.outdoor.add(this.plantView.root);
     this.host.scene.add(this.view.root);
     this.view.root.visible = true;
     this.view.outdoor.visible = false;
@@ -123,6 +128,8 @@ export class ReactorSurface {
   teardown(): void {
     this.restoreFog();
     this.applyFar(false);
+    this.plantView?.dispose();
+    this.plantView = null;
     if (this.view) disposeSurfaceView(this.view);
     this.view = null;
     this.site = null;
@@ -149,6 +156,7 @@ export class ReactorSurface {
     SURF_U.beam.value.z = beam;
     const outside = surfaceEyeOutside(site, eye), open = outside && surfaceEyeOpen(site, eye);
     v.outdoor.visible = outside;
+    this.plantView?.tick(dt, outside, clear); // (the fans spool up when the surface first shows ONLINE, then turn steadily)
     // the near rain round the eye (outside) / the column through the aperture (from the pit)
     this.gust += dt;
     const px = (2 * Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2)) / Math.max(240, this.host.renderer?.domElement?.height ?? 1080);
