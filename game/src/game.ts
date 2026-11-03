@@ -94,6 +94,7 @@ import {installReactorRestart, preloadReactorItemModels} from './world/reactor/r
 import {installReactorStartup} from './world/reactor/startup'; // task reactor-playtest-round2-20261102 (lane STARTUP): startup audio, orange beacons, the ONLINE sky
 import {installReactorEnding} from './world/reactor/ending'; // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior door -> surface
 import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
+import {installReactorCredits} from './world/reactor/credits'; // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): the end credits
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
@@ -540,6 +541,10 @@ export class Game {
     installReactorStartup(this); hookName('reactorStartup'); // task reactor-playtest-round2-20261102 (lane STARTUP): after RESTART (reads its record / hold / win clock) — the startup audio director, the orange rotating beacons + their boot-time SpotLights, the blue beam + its boot-time PointLights, the sky over the roof clearing; inert elsewhere
     installReactorSurface(this); hookName('reactorSurface'); // task studio-reactor-surface-ending-20261102 (lane SURFACE): after STARTUP (reads its ONLINE sky) — the ruined city, rain, clear sky / mist round the roof aperture, shown only with the eye outside; inert elsewhere
     installReactorEnding(this); hookName('reactorEnding'); // task studio-reactor-surface-ending-20261102 (lane ENDING): after RESTART / AIR (reads their live state; its objective stage) — the sealed exterior door, its opening once the core air cleared, the centre "External doors open" message docking into the objective, the parapet ring round the opening; inert elsewhere
+    // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): after ENDING (reads its live surfaced phase /
+    // message) — 30 s of active play on the surface -> the slow top-right credits -> "Thank you for playing" + Main Menu (commitEndingSave,
+    // returnToMenu); its own lane store 'reactor.credits'; inert elsewhere
+    installReactorCredits(this); hookName('reactorCredits');
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the
@@ -1064,6 +1069,25 @@ export class Game {
     const r = this.saves.commit(slot, file, o.overwrite ? {overwrite: true} : bind ? {} : {expectRevision: this.saveRevision});
     if (r.ok) { this.currentSlot = slot; this.saveRevision = r.meta.revision; this.saveRunId = this.run.id; }
     return r;
+  }
+
+  /**
+   * Task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): THE ENDING SAVE — the Reactor credits' "Main
+   * Menu" commits the run (reason 'ending') before it returns to the menu. The live station's deltas go into the run memory first by the
+   * same NON-destructive captures a teardown makes (loose items / holders / kills, the grounded bags: the world stays live and a later
+   * teardown captures again), so nothing carried is still lying in the saved station. A save's pose is train-local: Continue resumes at
+   * the parked train's spawn point at this station. null = nothing to save (a run without a campaign: QA / legacy scratch runs).
+   */
+  commitEndingSave(): CommitResult | null {
+    if (!this.run.campaign) return null;
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); }
+    return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
+  }
+
+  /** The campaign's return to the main menu (main.ts pause / death "Main menu"; lane CREDITS' end card): the moving ride reset, the title. */
+  returnToMenu(): void {
+    this.trainRide.reset();
+    this.setState('title');
   }
 
   /** Validate + decode a save WITHOUT touching the live game (its `run` can prepare the target section before the teardown). */

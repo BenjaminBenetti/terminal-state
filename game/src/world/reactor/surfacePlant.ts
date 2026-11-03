@@ -1,0 +1,630 @@
+// Task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane PLANT): BUILDS the surface plant from its pure plan
+// (surfacePlantPlan.ts) — the buttressed compound wall round the yard, the duct runs and the VENT TOWERS with the Reactor's existing big
+// extraction fan (REACTOR_MODELS.fanHousing, the cooked Meshy GLB with its own maps) and the procedural 'blade' rotor
+// (archMeshes.ts kitGeometry) that SPINS. User: "there should be a ventilation tower or two, visible, use the existing big fan assets
+// to build this. The fans must spin."
+//
+// One group under the surface view's `outdoor` group (the eye gate hides it in the pit: 0 draws there). Budget: ONE merged mesh per
+// material (concrete / rusted steel / grille), the fan housing's GLB parts instanced once per part (the library's geometry, shared, never
+// copied), ONE InstancedMesh for every rotor (DynamicDrawUsage): per frame only the rotors' instance matrices (one small upload). No
+// shadow casters, no particles, no physics bodies, nothing walkable (the plan keeps every footprint off site.walk).
+// Materials: existing textures only — the Reactor's Codex pit-concrete / rusted-steel / grating colour maps through lane SURFACE's wet
+// outdoor look (surfaceLook.ts surfaceWallMaterial: world-mapped, darkened by the rain, runoff streaks, the sky sheen, the rain mist);
+// the housing keeps its Meshy maps through surfaceModelMaterial (the city's outdoor look). No new texture, no generation.
+// Spin: the rotors rest until the surface first shows with the facility ONLINE (STARTUP's clearing), then spool up smoothly
+// (SURFACE_PLANT.spinUpS) and turn steadily — the blades about the fan's own axis (the housing's +Z), never the housing.
+
+import * as THREE from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
+import {modelParts} from '../exterior';
+import {kitGeometry} from './archMeshes';
+import {REACTOR_MODELS, reactorTexture} from './archAssets';
+import {surfaceFilmMaterial, surfaceModelMaterial, surfaceWallMaterial} from './surfaceLook';
+import {FAN_ANCHORS, SURFACE_COLLAR, SURFACE_PLANT, type CollarPlan, type PlantPart, type SurfacePlantPlan, type VentTowerPlan} from './surfacePlantPlan';
+import type {SurfaceSite} from './surfaceSite';
+import {SURFACE_LAYERS} from './surfaceCity';
+import {RING_VIEW} from './endingViews';
+import {controlSkin} from './controlsSkin';
+import {cloneSurfaceMaterial} from '../materials';
+import {PLANT_LOOK, plantGlowMaterial, plantLampMaterial, towerConcreteMaterial} from './surfacePlantLook';
+
+/** The existing colour maps the plant reuses (null: a flat tone — Node tests / a failed fetch). */
+export interface PlantTextures { concrete: THREE.Texture | null; steel: THREE.Texture | null; grating: THREE.Texture | null }
+
+/** The Reactor's resolved Codex colour maps (archInstall's section preload): pit concrete, rusted steel, grating. */
+export const plantTextures = (): PlantTextures => ({
+  concrete: (reactorTexture('pitConcrete', 'color') as THREE.Texture | undefined) ?? null,
+  steel: (reactorTexture('rustedSteel', 'color') as THREE.Texture | undefined) ?? null,
+  grating: (reactorTexture('grating', 'color') as THREE.Texture | undefined) ?? null,
+});
+
+/** The lazy-library key of the fan housing model. */
+export const PLANT_FAN_KEY = REACTOR_MODELS.fanHousing.key;
+
+/** A lamp head of the towers' dressing (world): kind, tower, centre, head size (m), colour, pulse (phase cycles, depth 0 = steady). */
+export interface PlantLamp { kind: 'obstruction' | 'work'; tower: number; x: number; y: number; z: number; size: readonly [number, number, number]; color: readonly [number, number, number]; blink: readonly [number, number] }
+/** A glow card (world centre, card size, pull toward the eye, colour, pulse): one per lamp + a halo behind each rotor. */
+export interface PlantCard { kind: 'obstruction' | 'work' | 'halo'; tower: number; x: number; y: number; z: number; w: number; h: number; pull: number; color: readonly [number, number, number]; blink: readonly [number, number] }
+
+/** One spinning rotor: its basis (local Z = the fan's axis, at the blades' centre), radius, angle, speed (0..1), rev / s at full. */
+export interface PlantRotor { basis: THREE.Matrix4; radius: number; angle: number; speed: number; rev: number }
+
+export interface SurfacePlantView {
+  root: THREE.Group;
+  /** Merged structure meshes (concrete, steel, grille) and the instanced fan housings (one per GLB part). */
+  meshes: THREE.Mesh[];
+  housings: THREE.InstancedMesh[];
+  /** ONE InstancedMesh for every rotor (instance i = plan.towers[i]'s fan). */
+  rotors: THREE.InstancedMesh | null;
+  fans: PlantRotor[];
+  /** The rotors have started (the surface showed with the facility online): they keep turning from then on. */
+  started: boolean;
+  stats: {towers: number; parts: number; draws: number; tris: number; model: boolean; collar: {segments: number; tris: number; filmGap: number}};
+  /** (lane PLANT follow-up) The flat collar's meshes: the precast concrete, the yellow hatching, the wet film over the film's bare cells. */
+  collar: {concrete: THREE.Mesh | null; hatch: THREE.Mesh | null; film: THREE.Mesh | null};
+  /**
+   * (lane PLANT follow-up 2) The towers' night dressing: the lighter tower concrete (with the sodium wash round each fan), the lamp
+   * heads (red obstruction lights pulsing out of phase per tower, steady sodium work lights) and their additive glow cards (+ a warm
+   * halo behind each rotor); `lamps` = per lamp / card: kind, tower, world position, pulse (phase, depth). QA: `tune` (tone, wash).
+   */
+  dressing: {
+    towers: THREE.Mesh | null; heads: THREE.InstancedMesh | null; glows: THREE.InstancedMesh | null;
+    lamps: PlantLamp[]; cards: PlantCard[];
+    tune: {tone: {value: number}; wash: {value: number}} | null;
+  };
+  /** Per frame: `shown` = the surface view is visible (the eye outside), `power` = STARTUP's clearing 0..1. Returns matrices written. */
+  tick(dt: number, shown: boolean, power?: number): number;
+  dispose(): void;
+}
+
+const UP = new THREE.Vector3(0, 1, 0);
+const frameM = (x: number, y: number, z: number, yaw: number) => new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(UP, yaw), new THREE.Vector3(1, 1, 1));
+const triCount = (g: THREE.BufferGeometry) => (g.index ? g.index.count : g.attributes.position.count) / 3;
+
+/** Non-indexed position + normal parts merged into one geometry per material. */
+class Batch {
+  readonly parts: THREE.BufferGeometry[] = [];
+  private add(g: THREE.BufferGeometry, m: THREE.Matrix4): void {
+    if (g.getAttribute('uv')) g.deleteAttribute('uv');
+    g.applyMatrix4(m);
+    const n = g.index ? g.toNonIndexed() : g;
+    if (n !== g) g.dispose();
+    this.parts.push(n);
+  }
+  /** A box (w x h x d) centred at local (lx, ly, lz) of frame `f`, optionally pitched about its local X. */
+  box(f: THREE.Matrix4, lx: number, ly: number, lz: number, w: number, h: number, d: number, pitch = 0): void {
+    if (!(w > 0 && h > 0 && d > 0)) return;
+    const g = new THREE.BoxGeometry(w, h, d);
+    if (pitch) g.rotateX(pitch);
+    g.translate(lx, ly, lz);
+    this.add(g, f);
+  }
+  /** A wedge: x +-hw, z -hd..+hd, bottom y0, top falling from y1 (at -hd) to y1b (at +hd) — local frame `f`. */
+  wedge(f: THREE.Matrix4, hw: number, hd: number, y0: number, y1: number, y1b: number): void {
+    const g = new THREE.BoxGeometry(2 * hw, 1, 2 * hd).toNonIndexed();
+    const p = g.getAttribute('position') as THREE.BufferAttribute;
+    for (let i = 0; i < p.count; i++) {
+      const z = p.getZ(i), top = p.getY(i) > 0, k = (z + hd) / (2 * hd);
+      p.setY(i, top ? y1 + (y1b - y1) * k : y0);
+    }
+    g.computeVertexNormals();
+    this.add(g, f);
+  }
+  /** Any geometry in frame `f` (local transform `m` first). */
+  geo(f: THREE.Matrix4, g: THREE.BufferGeometry, m?: THREE.Matrix4): void {
+    if (m) g.applyMatrix4(m);
+    this.add(g, f);
+  }
+  build(name: string, material: THREE.Material): THREE.Mesh | null {
+    if (!this.parts.length) return null;
+    const g = mergeGeometries(this.parts, false);
+    for (const p of this.parts) p.dispose();
+    this.parts.length = 0;
+    if (!g) return null;
+    g.computeBoundingSphere();
+    const m = new THREE.Mesh(g, material);
+    m.name = name;
+    return m;
+  }
+}
+
+/** A railing along local x from x0 to x1 at local z (posts every ~1.4 m, top + mid rail) on a deck at local y. */
+function railing(b: Batch, f: THREE.Matrix4, a0: number, a1: number, at: number, y: number, alongX: boolean): void {
+  const L = Math.abs(a1 - a0), n = Math.max(1, Math.round(L / 1.4)), H = 1.1;
+  const P = (a: number, yy: number, w: number, h: number, d: number) => (alongX ? b.box(f, a, yy, at, w, h, d) : b.box(f, at, yy, a, d, h, w));
+  for (let k = 0; k <= n; k++) P(a0 + ((a1 - a0) * k) / n, y + H / 2, 0.06, H, 0.06);
+  P((a0 + a1) / 2, y + H - 0.03, L + 0.06, 0.06, 0.06);
+  P((a0 + a1) / 2, y + H * 0.5, L + 0.04, 0.045, 0.045);
+  P((a0 + a1) / 2, y + 0.08, L, 0.14, 0.02); // toe board
+}
+
+/** A caged ladder up the face at local z = zf (facing +Z), centred on x = lx, from y0 to y1 (frame `f`). */
+function ladder(b: Batch, f: THREE.Matrix4, lx: number, zf: number, y0: number, y1: number): void {
+  const L = y1 - y0, z = zf + 0.22;
+  for (const s of [-0.23, 0.23]) b.box(f, lx + s, y0 + L / 2 + 0.5, z, 0.06, L + 1.0, 0.07); // stiles (past the deck: a handhold)
+  for (let yy = y0 + 0.3; yy < y1; yy += 0.3) b.box(f, lx, yy, z, 0.46, 0.035, 0.035);
+  for (const s of [-0.23, 0.23]) for (let yy = y0 + 0.15; yy < y1; yy += Math.max(1.2, L / 3)) b.box(f, lx + s, yy, zf + 0.11, 0.05, 0.05, 0.22); // wall brackets
+  // the cage: hoops (a U of three bars) every 0.9 m from 2.4 m up, three vertical bars
+  const c0 = y0 + 2.4, cz0 = z + 0.04, cz1 = z + 0.72, hx = 0.38;
+  if (c0 < y1 - 0.3) {
+    for (let yy = c0; yy <= y1 + 0.9; yy += 0.9) {
+      b.box(f, lx - hx, yy, (cz0 + cz1) / 2, 0.05, 0.05, cz1 - cz0);
+      b.box(f, lx + hx, yy, (cz0 + cz1) / 2, 0.05, 0.05, cz1 - cz0);
+      b.box(f, lx, yy, cz1, 2 * hx + 0.05, 0.05, 0.05);
+    }
+    const top = y1 + 0.9, mid = (c0 + top) / 2, h = top - c0;
+    for (const [x, zz] of [[lx - hx, cz1 - 0.2], [lx + hx, cz1 - 0.2], [lx, cz1]] as const) b.box(f, x, mid, zz, 0.04, h, 0.04);
+  }
+}
+
+/**
+ * Build the plant (a group to add under the surface view's `outdoor`). `models(key)`: the lazy library's GLTF (the fan housing:
+ * PLANT_FAN_KEY; undefined = a procedural steel housing stands in). `tex`: the existing colour maps (default: the Reactor's).
+ */
+export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'hole' | 'walk' | 'shelters'>, plan: SurfacePlantPlan, models: (key: string) => GLTF | undefined, tex: PlantTextures = plantTextures()): SurfacePlantView {
+  const root = new THREE.Group();
+  root.name = 'reactor-surface-plant';
+  const concrete = new Batch(), steel = new Batch(), grille = new Batch();
+  const own = {geometries: [] as THREE.BufferGeometry[], materials: [] as THREE.Material[]};
+  const meshes: THREE.Mesh[] = [], housings: THREE.InstancedMesh[] = [];
+  let tris = 0;
+  const P = SURFACE_PLANT;
+  // --- the compound wall and the duct runs ---
+  for (const p of plan.parts) partGeometry(p, site.parapetY, concrete, steel, grille);
+  // --- the towers ---
+  const gltf = plan.towers.length ? models(PLANT_FAN_KEY) : undefined;
+  const fans: PlantRotor[] = [];
+  const housingMats: THREE.Matrix4[] = [];
+  const towerC = new Batch(), lamps: PlantLamp[] = [], cards: PlantCard[] = [];
+  for (const tw of plan.towers) {
+    const f = frameM(tw.x, tw.y, tw.z, tw.yaw);
+    towerGeometry(tw, f, towerC, steel, grille, !gltf);
+    towerLamps(tw, f, steel, lamps, cards);
+    const s = tw.fanScale, zModel = tw.hd - FAN_ANCHORS.back * s; // the back flange on the stack's front face
+    const hub = tw.fan.hubY - tw.y;
+    housingMats.push(f.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3(0, hub - FAN_ANCHORS.ringY * s, zModel), new THREE.Quaternion(), new THREE.Vector3(s, s, s))));
+    // the rotor: basis = the tower's frame at the blades' centre (local Z = the fan's axis toward the plaza, Y up)
+    const basis = f.clone().multiply(new THREE.Matrix4().makeTranslation(0, hub, zModel + FAN_ANCHORS.bladeZ * s));
+    fans.push({basis, radius: tw.bladeR, angle: tw.phase, speed: 0, rev: tw.rev});
+  }
+  // --- materials (existing maps through the wet outdoor look; owned per build) ---
+  // the towers' concrete: its own instance of the wall finish, lighter, + the sodium wash round each fan (follow-up 2)
+  const tc = towerConcreteMaterial(tex.concrete, plan.towers.map(t => ({x: t.x + Math.sin(t.yaw) * t.hd, y: t.fan.hubY, z: t.z + Math.cos(t.yaw) * t.hd, r: FAN_ANCHORS.ringR * t.fanScale, nx: Math.sin(t.yaw), nz: Math.cos(t.yaw)})));
+  own.materials.push(tc.material);
+  const towersMesh = towerC.build('reactor-surface-plant-towers', tc.material);
+  if (towersMesh) { meshes.push(towersMesh); own.geometries.push(towersMesh.geometry); tris += triCount(towersMesh.geometry); }
+  // --- the flat collar round the aperture (its anchor plates / channel edges join the steel batch, the channel grating the grille's) ---
+  const collarB = new Batch(), hatchB = new Batch();
+  collarGeometry(plan.collar, site, collarB, hatchB, steel, grille);
+  const mats = {concrete: surfaceWallMaterial(tex.concrete), steel: surfaceWallMaterial(tex.steel), grille: surfaceWallMaterial(tex.grating), collar: surfaceWallMaterial(tex.concrete)};
+  // depth: the flat collar layer (6-16 mm over the deck) sits between the deck (no offset) and lane SURFACE's wet film (-2): its pieces
+  // pulled toward the eye by one step (the plates / bolt heads one unit more), the film still drawn over them (puddles, ripples)
+  for (const [m, f, u] of [[mats.collar, -1, -1], [mats.steel, -1, -2], [mats.grille, -1, -1]] as const) { m.polygonOffset = true; m.polygonOffsetFactor = f; m.polygonOffsetUnits = u; }
+  mats.collar.name = 'reactor-surface-plant-collar';
+  for (const [name, b, mt] of [['concrete', concrete, mats.concrete], ['steel', steel, mats.steel], ['grille', grille, mats.grille], ['collar', collarB, mats.collar]] as const) {
+    const m = b.build(`reactor-surface-plant-${name}`, mt);
+    if (m) { meshes.push(m); own.geometries.push(m.geometry); tris += triCount(m.geometry); }
+  }
+  own.materials.push(mats.concrete, mats.steel, mats.grille, mats.collar);
+  // the hatching: the railing's own safety yellow (ENDING's controlSkin('yellow')), cloned for its depth offset
+  const yellow = cloneSurfaceMaterial(controlSkin('yellow'));
+  yellow.polygonOffset = true; yellow.polygonOffsetFactor = -1; yellow.polygonOffsetUnits = -1;
+  own.materials.push(yellow);
+  const hatch = hatchB.build('reactor-surface-plant-collar-hatching', yellow);
+  if (hatch) { meshes.push(hatch); own.geometries.push(hatch.geometry); tris += triCount(hatch.geometry); }
+  // lane SURFACE's wet film skips the cells near the opening: the same film material over exactly the walk the film leaves bare round
+  // the collar, so the wet sheen / puddles / ripples run on uninterrupted across it
+  const fg = filmGapGeometry(site, plan.collar.drain[1] + 0.6);
+  let film: THREE.Mesh | null = null;
+  if (fg) {
+    const fm = surfaceFilmMaterial();
+    own.materials.push(fm);
+    own.geometries.push(fg);
+    film = new THREE.Mesh(fg, fm);
+    film.name = 'reactor-surface-plant-film-gap';
+    film.renderOrder = 1;
+    meshes.push(film);
+    tris += triCount(fg);
+  }
+  const collarMesh = meshes.find(m => m.name === 'reactor-surface-plant-collar') ?? null;
+  // --- the fan housings: the cooked GLB's parts, instanced once per part (the library's geometry; its Meshy maps, the outdoor look) ---
+  if (gltf) {
+    for (const [pi, part] of modelParts(gltf).entries()) {
+      const im = new THREE.InstancedMesh(part.geometry, surfaceModelMaterial(part.material), housingMats.length);
+      im.name = `reactor-surface-plant-fan-housing-${pi}`;
+      housingMats.forEach((m, i) => im.setMatrixAt(i, new THREE.Matrix4().multiplyMatrices(m, part.matrix)));
+      im.instanceMatrix.needsUpdate = true;
+      im.computeBoundingSphere();
+      housings.push(im);
+      meshes.push(im);
+      tris += triCount(part.geometry) * housingMats.length;
+    }
+  }
+  // --- the rotors: ONE InstancedMesh (the Reactor's 'blade' rotor: unit radius in local XY, axis +Z), rusted steel ---
+  let rotors: THREE.InstancedMesh | null = null;
+  if (fans.length) {
+    const g = kitGeometry('blade');
+    own.geometries.push(g);
+    const src = new THREE.MeshStandardMaterial({map: tex.steel, color: 0x8c8780});
+    const rm = surfaceModelMaterial(src);
+    src.dispose();
+    rotors = new THREE.InstancedMesh(g, rm, fans.length);
+    rotors.name = 'reactor-surface-plant-fan-rotors';
+    rotors.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    meshes.push(rotors);
+    tris += triCount(g) * fans.length;
+  }
+  // --- the towers' lamp heads (ONE InstancedMesh: unlit, pulsing by TSL time) and their glow cards (ONE additive InstancedMesh) ---
+  let heads: THREE.InstancedMesh | null = null, glows: THREE.InstancedMesh | null = null;
+  const m4 = new THREE.Matrix4(), cc = new THREE.Color();
+  if (lamps.length) {
+    const g = kitGeometry('bulb');
+    own.geometries.push(g);
+    const blink = new THREE.InstancedBufferAttribute(new Float32Array(lamps.length * 4), 4);
+    lamps.forEach((l, i) => blink.setXYZW(i, l.blink[0], l.blink[1], 0, 0));
+    const lm = plantLampMaterial(blink);
+    own.materials.push(lm);
+    heads = new THREE.InstancedMesh(g, lm, lamps.length);
+    heads.name = 'reactor-surface-plant-lamps';
+    lamps.forEach((l, i) => {
+      heads!.setMatrixAt(i, m4.makeScale(l.size[0], l.size[1], l.size[2]).setPosition(l.x, l.y, l.z));
+      heads!.setColorAt(i, cc.setRGB(l.color[0], l.color[1], l.color[2]));
+    });
+    heads.computeBoundingSphere();
+    meshes.push(heads);
+    tris += triCount(g) * lamps.length;
+  }
+  if (cards.length) {
+    const g = new THREE.PlaneGeometry(1, 1);
+    own.geometries.push(g);
+    const card = new THREE.InstancedBufferAttribute(new Float32Array(cards.length * 4), 4), blink = new THREE.InstancedBufferAttribute(new Float32Array(cards.length * 4), 4);
+    cards.forEach((c, i) => { card.setXYZW(i, c.w, c.h, c.pull, 0); blink.setXYZW(i, c.blink[0], c.blink[1], 0, 0); });
+    const gm = plantGlowMaterial(card, blink);
+    own.materials.push(gm);
+    glows = new THREE.InstancedMesh(g, gm, cards.length);
+    glows.name = 'reactor-surface-plant-glows';
+    cards.forEach((c, i) => { glows!.setMatrixAt(i, m4.makeTranslation(c.x, c.y, c.z)); glows!.setColorAt(i, cc.setRGB(c.color[0], c.color[1], c.color[2])); });
+    glows.renderOrder = 2; // (after the wet film)
+    glows.frustumCulled = false; // (camera-facing cards: their instance bounds are only the centres)
+    meshes.push(glows);
+    tris += 2 * cards.length;
+  }
+  for (const m of meshes) {
+    m.castShadow = m.receiveShadow = false;
+    m.matrixAutoUpdate = false;
+    m.updateMatrix();
+    root.add(m);
+  }
+  const mt = new THREE.Matrix4(), rz = new THREE.Matrix4(), sv = new THREE.Vector3();
+  const write = (): number => {
+    if (!rotors) return 0;
+    for (let i = 0; i < fans.length; i++) {
+      const fa = fans[i];
+      rotors.setMatrixAt(i, mt.copy(fa.basis).multiply(rz.makeRotationZ(fa.angle)).scale(sv.setScalar(fa.radius)));
+    }
+    rotors.instanceMatrix.needsUpdate = true;
+    return fans.length;
+  };
+  write();
+  rotors?.computeBoundingSphere(); // (a rotor's disc bounds do not change with its angle)
+  const view: SurfacePlantView = {
+    root, meshes, housings, rotors, fans, started: false,
+    stats: {towers: plan.towers.length, parts: plan.parts.length, draws: meshes.length, tris, model: !!gltf,
+      collar: {segments: plan.collar.segments, tris: (collarMesh ? triCount(collarMesh.geometry) : 0) + (hatch ? triCount(hatch.geometry) : 0), filmGap: fg ? triCount(fg) : 0}},
+    collar: {concrete: collarMesh, hatch, film},
+    dressing: {towers: towersMesh, heads, glows, lamps, cards, tune: towersMesh ? {tone: tc.tone, wash: tc.wash} : null},
+    tick(dt: number, shown: boolean, power = 1): number {
+      if (!(dt > 0) || !fans.length) return 0;
+      const target = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 0));
+      if (!view.started) { if (!shown || target <= 0) return 0; view.started = true; }
+      const ease = 1 - Math.exp(-dt / P.spinUpS);
+      for (const fa of fans) {
+        fa.speed += (target - fa.speed) * ease;
+        if (Math.abs(fa.speed - target) < 1e-3) fa.speed = target;
+        fa.angle = (fa.angle + fa.speed * fa.rev * Math.PI * 2 * dt) % (Math.PI * 2);
+      }
+      return shown ? write() : 0;
+    },
+    dispose(): void {
+      root.removeFromParent();
+      for (const h of housings) h.dispose();
+      rotors?.dispose();
+      heads?.dispose();
+      glows?.dispose();
+      for (const g of own.geometries) g.dispose();
+      for (const m of own.materials) m.dispose();
+    },
+  };
+  return view;
+}
+
+/** A plan part (compound wall pier / buttress, plenum, duct, sleeper) into its batch. */
+function partGeometry(p: PlantPart, parapetY: number, concrete: Batch, steel: Batch, grille: Batch): void {
+  const f = frameM(p.x, 0, p.z, p.yaw), H = p.y1 - p.y0, yc = (p.y0 + p.y1) / 2;
+  switch (p.kind) {
+    case 'pier':
+      concrete.box(f, 0, yc, 0, 2 * p.hw, H, 2 * p.hd);
+      // a cap: overhangs the sides and the city face, never inward past the pier's inner face (the walk boundary side, local -Z)
+      concrete.box(f, 0, p.y1 + 0.06, 0.04, 2 * p.hw + 0.1, 0.12, 2 * p.hd + 0.08);
+      break;
+    case 'buttress':
+      concrete.wedge(f, p.hw, p.hd, p.y0, p.y1, p.y1b ?? p.y0 + 0.3);
+      break;
+    case 'plenum': {
+      // local +Z faces the plaza (the parapet): the concrete box, a cap overhanging the three city sides, the intake grille above the
+      // parapet line on the plaza face (a hair proud: still beyond the parapet's outer face)
+      concrete.box(f, 0, yc, 0, 2 * p.hw, H, 2 * p.hd);
+      concrete.box(f, 0, p.y1 + 0.09, -0.06, 2 * p.hw + 0.24, 0.18, 2 * p.hd + 0.12);
+      const g0 = parapetY + 0.18, g1 = p.y1 - 0.32;
+      if (g1 - g0 > 0.4) {
+        grille.box(f, 0, (g0 + g1) / 2, p.hd - 0.002, 2 * p.hw - 0.7, g1 - g0, 0.012);
+        // its frame (steel angle round the grille)
+        for (const yy of [g0 - 0.04, g1 + 0.04]) steel.box(f, 0, yy, p.hd - 0.004, 2 * p.hw - 0.6, 0.08, 0.016);
+        for (const xx of [-(p.hw - 0.33), p.hw - 0.33]) steel.box(f, xx, (g0 + g1) / 2, p.hd - 0.004, 0.08, g1 - g0 + 0.16, 0.016);
+      }
+      // a grille on its top too (the intake from above)
+      grille.box(f, 0, p.y1 + 0.185, -0.06, 2 * p.hw - 0.6, 0.012, 2 * p.hd - 0.5);
+      break;
+    }
+    case 'duct': {
+      steel.box(f, 0, yc, 0, 2 * p.hw, H, 2 * p.hd);
+      // flanged joints every ~1.6 m
+      const L = 2 * p.hd, n = Math.max(1, Math.round(L / 1.6));
+      for (let k = 1; k < n; k++) steel.box(f, 0, yc, -p.hd + (L * k) / n, 2 * p.hw + 0.16, H + 0.16, 0.12);
+      break;
+    }
+    case 'sleeper':
+      concrete.box(f, 0, yc, 0, 2 * p.hw, H, 2 * p.hd);
+      break;
+  }
+}
+
+/**
+ * One vent tower in its frame `f` (origin = the stack's centre at the deck, local +Z = toward the plaza): a stepped plinth, the stack
+ * with corner pilasters and string courses, a cap and a steel louvred discharge cowl, intake grilles on its sides, the service platform
+ * under the fan with its railing and knee braces, a caged ladder up from the plinth, the grille behind the rotor (and a procedural steel
+ * housing only when the GLB is missing).
+ */
+function towerGeometry(tw: VentTowerPlan, f: THREE.Matrix4, concrete: Batch, steel: Batch, grille: Batch, procedural: boolean): void {
+  const {hw, hd, h: H} = tw, pl = tw.plinth, s = tw.fanScale, hub = tw.fan.hubY - tw.y;
+  // plinth (two steps)
+  const p0 = pl.h * 0.65;
+  concrete.box(f, 0, (p0 - 0.1) / 2, 0, 2 * pl.hw, p0 + 0.1, 2 * pl.hd);
+  concrete.box(f, 0, (p0 + pl.h) / 2, 0, 2 * pl.hw - 0.7, pl.h - p0, 2 * pl.hd - 0.7);
+  // the stack in two stages: the lower (the fan's) full size, a ledge, the upper set back — a ventilation shaft, not an office block
+  const top = hub + (FAN_ANCHORS.plateH - FAN_ANCHORS.ringY) * s;
+  const yS = Math.min(H - 4.4, Math.max(H * 0.6, top + 1.6)), hw2 = hw - 0.55, hd2 = hd - 0.55;
+  concrete.box(f, 0, (pl.h + yS) / 2, 0, 2 * hw, yS - pl.h, 2 * hd);
+  concrete.box(f, 0, (yS + H) / 2, 0, 2 * hw2, H - yS, 2 * hd2);
+  concrete.box(f, 0, yS + 0.06, 0, 2 * hw + 0.5, 0.42, 2 * hd + 0.5); // the ledge (a weathered drip course)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    concrete.box(f, sx * hw, (pl.h + yS) / 2, sz * hd, 0.8, yS - pl.h, 0.8);
+    concrete.box(f, sx * hw2, (yS + H) / 2, sz * hd2, 0.7, H - yS, 0.7);
+  }
+  // intake grilles on both side faces of the lower stage at the fan's height (framed in concrete); string courses clear of them
+  const gy = hub, gh = 3.2, gd = 2 * hd - 2.2;
+  for (let yy = pl.h + 3.8; yy < yS - 1.2; yy += 4.6) if (Math.abs(yy - gy) > gh / 2 + 0.5) concrete.box(f, 0, yy, 0, 2 * hw + 0.24, 0.3, 2 * hd + 0.24);
+  for (const sx of [-1, 1]) {
+    grille.box(f, sx * (hw + 0.02), gy, 0, 0.03, gh, gd);
+    for (const yy of [gy - gh / 2 - 0.1, gy + gh / 2 + 0.1]) concrete.box(f, sx * (hw + 0.08), yy, 0, 0.16, 0.2, gd + 0.4);
+    for (const zz of [-gd / 2 - 0.1, gd / 2 + 0.1]) concrete.box(f, sx * (hw + 0.08), gy, zz, 0.16, gh + 0.4, 0.2);
+  }
+  // the exhaust louvre band round the top of the upper stage (all four faces, a concrete sill under it)
+  const lb1 = H - 0.7, lb0 = Math.max(yS + 1.2, H - 3.9), ly = (lb0 + lb1) / 2, lh = lb1 - lb0;
+  grille.box(f, 0, ly, hd2 + 0.02, 2 * hw2 - 1.0, lh, 0.03);
+  grille.box(f, 0, ly, -hd2 - 0.02, 2 * hw2 - 1.0, lh, 0.03);
+  grille.box(f, hw2 + 0.02, ly, 0, 0.03, lh, 2 * hd2 - 1.0);
+  grille.box(f, -hw2 - 0.02, ly, 0, 0.03, lh, 2 * hd2 - 1.0);
+  concrete.box(f, 0, lb0 - 0.12, 0, 2 * hw2 + 0.2, 0.24, 2 * hd2 + 0.2);
+  // cap + the louvred discharge cowl (steel box, grille faces, a roof plate)
+  concrete.box(f, 0, H + 0.25, 0, 2 * hw2 + 0.9, 0.5, 2 * hd2 + 0.9);
+  const cw = 2 * hw2 - 1.0, cd = 2 * hd2 - 1.0, c0 = H + 0.5, ch = 2.2;
+  steel.box(f, 0, c0 + ch / 2, 0, cw, ch, cd);
+  grille.box(f, 0, c0 + ch / 2, cd / 2 + 0.012, cw - 0.5, ch - 0.5, 0.02);
+  grille.box(f, 0, c0 + ch / 2, -cd / 2 - 0.012, cw - 0.5, ch - 0.5, 0.02);
+  grille.box(f, cw / 2 + 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
+  grille.box(f, -cw / 2 - 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
+  steel.box(f, 0, c0 + ch + 0.08, 0, cw + 0.6, 0.16, cd + 0.6);
+  // the fan: the grille disc behind the rotor (inside the duct ring, just off the face), the service platform under the housing
+  const zFace = hd, ringR = FAN_ANCHORS.ringR * s;
+  const disc = new THREE.CircleGeometry(ringR * 1.06, 40);
+  grille.geo(f, disc, new THREE.Matrix4().makeTranslation(0, hub, zFace + 0.03));
+  const plateW = FAN_ANCHORS.plateW * s, depth = FAN_ANCHORS.depth * s;
+  const yP = hub - FAN_ANCHORS.ringY * s - 0.3, px = plateW / 2 + 0.45, pz1 = zFace + depth + 0.7;
+  grille.box(f, 0, yP - 0.03, (zFace + pz1) / 2, 2 * px, 0.06, pz1 - zFace);
+  steel.box(f, 0, yP - 0.14, pz1 - 0.06, 2 * px, 0.16, 0.12); // the deck's edge beams
+  for (const sx of [-1, 1]) steel.box(f, sx * (px - 0.06), yP - 0.14, (zFace + pz1) / 2, 0.12, 0.16, pz1 - zFace);
+  railing(steel, f, -px, px, pz1 - 0.05, yP, true);
+  railing(steel, f, zFace + 0.1, pz1 - 0.05, -px + 0.05, yP, false);
+  railing(steel, f, zFace + 0.1, pz1 - 0.05, px - 0.05, yP, false);
+  // knee braces from the stack face to the deck's front edge
+  const kz0 = zFace + 0.1, ky0 = yP - 2.3, kz1 = pz1 - 0.3, ky1 = yP - 0.2, kl = Math.hypot(kz1 - kz0, ky1 - ky0);
+  for (const sx of [-1, 1]) {
+    steel.box(f, sx * (px - 0.25), (ky0 + ky1) / 2, (kz0 + kz1) / 2, 0.14, 0.14, kl, -Math.atan2(ky1 - ky0, kz1 - kz0));
+    steel.box(f, sx * (px - 0.25), ky0, zFace + 0.06, 0.3, 0.4, 0.12); // its wall plate
+  }
+  // the caged ladder from the plinth up to the platform (beside the duct)
+  ladder(steel, f, px - 0.75, zFace, pl.h, yP);
+  if (procedural) {
+    // (the fan housing GLB is missing: a steel duct ring, a frame plate round it and the motor pod — the rotor still spins inside)
+    const zc = zFace + depth * 0.55;
+    const tube = new THREE.CylinderGeometry(ringR * 1.08, ringR * 1.08, depth * 0.9, 28, 1, true);
+    steel.geo(f, tube, new THREE.Matrix4().makeRotationX(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0, hub, zc)));
+    const fw = plateW, bt = (plateW - 2 * ringR * 1.08) / 2;
+    for (const [lx, ly, w, hh] of [[0, ringR * 1.08 + bt / 2, fw, bt], [0, -ringR * 1.08 - bt / 2, fw, bt], [ringR * 1.08 + bt / 2, 0, bt, 2 * ringR * 1.08], [-ringR * 1.08 - bt / 2, 0, bt, 2 * ringR * 1.08]] as const) {
+      steel.box(f, lx, hub + ly, zFace + 0.2, w, hh, 0.4);
+    }
+    const pod = new THREE.CylinderGeometry(ringR * 0.3, ringR * 0.3, depth * 0.5, 16);
+    steel.geo(f, pod, new THREE.Matrix4().makeRotationX(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0, hub, zFace + depth * 0.35)));
+  }
+}
+
+/**
+ * The tower's NIGHT DRESSING (follow-up 2: the towers must read from the plaza in the rainy dusk), in its frame `f`:
+ *  - four red aviation OBSTRUCTION LIGHTS on short steel posts at the cap's corners (round the discharge cowl), pulsing at ~1 Hz,
+ *    the tower's own phase (VentTowerPlan.blink: the two towers half a cycle apart), each with a red glow card;
+ *  - three warm sodium WORK LIGHTS (steady): on the service platform's two front railing posts and on a bracket over the fan housing,
+ *    each under a steel hood, with a warm glow card; and a warm HALO card behind the rotor (the blades turn against it).
+ * The lamp heads go to `lamps`, the cards to `cards`; their posts / hoods / brackets into the steel batch.
+ */
+function towerLamps(tw: VentTowerPlan, f: THREE.Matrix4, steel: Batch, lamps: PlantLamp[], cards: PlantCard[]): void {
+  const L = PLANT_LOOK, {hw, hd, h: H} = tw, s = tw.fanScale, hub = tw.fan.hubY - tw.y;
+  const hw2 = hw - 0.55, hd2 = hd - 0.55, capTop = H + 0.5, v = new THREE.Vector3();
+  const world = (lx: number, ly: number, lz: number) => v.set(lx, ly, lz).applyMatrix4(f).clone();
+  const put = (kind: PlantLamp['kind'], lx: number, ly: number, lz: number, size: readonly [number, number, number], color: readonly [number, number, number], glow: readonly [number, number, number], card: number, blink: readonly [number, number]) => {
+    const p = world(lx, ly, lz);
+    lamps.push({kind, tower: tw.id, x: p.x, y: p.y, z: p.z, size, color, blink});
+    cards.push({kind, tower: tw.id, x: p.x, y: p.y, z: p.z, w: card, h: card, pull: 0.35, color: glow, blink});
+  };
+  // the obstruction lights: a post + base plate at each cap corner, the red dome on top
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const lx = sx * (hw2 + 0.22), lz = sz * (hd2 + 0.22);
+    steel.box(f, lx, capTop + 0.02, lz, 0.22, 0.04, 0.22);
+    steel.box(f, lx, capTop + 0.27, lz, 0.07, 0.5, 0.07);
+    put('obstruction', lx, capTop + 0.62, lz, [0.26, 0.24, 0.26], L.red, L.redGlow, 2.6, [tw.blink, 1]);
+  }
+  // the work lights: on the platform's front corner posts (aimed back at the fan) and over the housing
+  const plateW = FAN_ANCHORS.plateW * s, depth = FAN_ANCHORS.depth * s;
+  const yP = hub - FAN_ANCHORS.ringY * s - 0.3, px = plateW / 2 + 0.45, pz1 = hd + depth + 0.7;
+  for (const sx of [-1, 1]) {
+    const lx = sx * (px - 0.05), ly = yP + 1.1 + 0.2, lz = pz1 - 0.05;
+    steel.box(f, lx, ly - 0.14, lz, 0.06, 0.2, 0.06); // the stalk off the post's top
+    steel.box(f, lx, ly + 0.13, lz, 0.42, 0.05, 0.3); // the hood
+    put('work', lx, ly, lz, [0.34, 0.2, 0.26], L.sodium, L.sodiumGlow, 2.2, [0, 0]);
+  }
+  // (the boom lamp out over the housing's front, seen from the plaza over the ring's top: it shines down onto the fan)
+  const top = hub + (FAN_ANCHORS.plateH - FAN_ANCHORS.ringY) * s, oy = top + 0.45, oz = hd + depth * 0.85;
+  steel.box(f, 0, oy + 0.2, (hd + oz) / 2, 0.1, 0.1, oz - hd); // the boom off the stack face
+  const kl = Math.hypot(0.9, oz - hd - 0.4);
+  steel.box(f, 0, oy + 0.2 + 0.45, hd + (oz - hd - 0.4) / 2, 0.06, 0.06, kl, Math.atan2(0.9, oz - hd - 0.4)); // its tie back to the face
+  steel.box(f, 0, oy + 0.13, oz, 0.44, 0.05, 0.32); // the hood
+  put('work', 0, oy, oz, [0.36, 0.2, 0.28], L.sodium, L.sodiumGlow, 2.2, [0, 0]);
+  // the warm halo behind the rotor (between the grille disc and the blades: never pulled in front of them)
+  const p = world(0, hub, hd + 0.12);
+  cards.push({kind: 'halo', tower: tw.id, x: p.x, y: p.y, z: p.z, w: 2.5 * FAN_ANCHORS.ringR * s, h: 2.5 * FAN_ANCHORS.ringR * s, pull: 0, color: L.halo, blink: [0, 0]});
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------
+// The flat collar round the aperture (lane PLANT follow-up: flat overlays may lie on the walk, nothing raised over maxUp)
+
+/** On a walkable cell rect (edges inclusive: the rects share their boundaries). */
+const onWalkAt = (site: Pick<SurfaceSite, 'walk'>, x: number, z: number) => site.walk.some(r => x >= r.x0 - 1e-4 && x <= r.x1 + 1e-4 && z >= r.z0 - 1e-4 && z <= r.z1 + 1e-4);
+
+type XZ = readonly [number, number];
+
+/** Flat triangles facing up at height y from a quad's four (x, z) corners in order round it. */
+function flatQuad(pos: number[], q: readonly XZ[], y: number): void {
+  const tri = (a: XZ, b: XZ, c: XZ) => {
+    // ((b - a) x (c - a)).y = (bz - az)(cx - ax) - (bx - ax)(cz - az): keep it positive (facing up)
+    const up = (b[1] - a[1]) * (c[0] - a[0]) - (b[0] - a[0]) * (c[1] - a[1]);
+    const [p, r] = up >= 0 ? [b, c] : [c, b];
+    pos.push(a[0], y, a[1], p[0], y, p[1], r[0], y, r[1]);
+  };
+  tri(q[0], q[1], q[2]);
+  tri(q[0], q[2], q[3]);
+}
+
+function flatGeometry(pos: number[]): THREE.BufferGeometry | null {
+  if (!pos.length) return null;
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(pos.map((_, i) => (i % 3 === 1 ? 1 : 0)), 3));
+  return g;
+}
+
+/**
+ * One precast piece: the annular sector [ra, rb] x [a0, a1] round (cx, cz), inset by half a joint on every side (constant-width
+ * joints: the radial edges are offset lines, not rays), tessellated to follow the arcs; a sub-quad with a corner off the walk is
+ * dropped (the collar never leaves the walkable deck).
+ */
+function sector(pos: number[], site: Pick<SurfaceSite, 'walk'>, cx: number, cz: number, ra: number, rb: number, a0: number, a1: number, y: number, j: number): void {
+  const r0 = ra + j / 2, r1 = rb - j / 2;
+  if (!(r1 > r0)) return;
+  const nr = Math.max(1, Math.ceil((r1 - r0) / 0.9)), na = Math.max(1, Math.ceil(((a1 - a0) * r1) / 0.35));
+  const at = (i: number, k: number): XZ => {
+    const r = r0 + ((r1 - r0) * i) / nr, d = j / 2 / r, a = a0 + d + ((a1 - a0 - 2 * d) * k) / na;
+    return [cx + Math.cos(a) * r, cz + Math.sin(a) * r];
+  };
+  for (let i = 0; i < nr; i++) for (let k = 0; k < na; k++) {
+    const q = [at(i, k), at(i, k + 1), at(i + 1, k + 1), at(i + 1, k)];
+    if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(pos, q, y);
+  }
+}
+
+/**
+ * THE COLLAR's flat pieces into their batches: the anchor kerb (one precast piece per railing post, its joints half way between the
+ * posts), two rings of precast segments (the outer ring's radial joints staggered half a segment), the yellow hatching stripes on the
+ * dark deck between the kerb and the rings, a steel anchor plate + four bolt heads at every railing post on the kerb, the drainage
+ * channel's grating with its two steel edge angles. Everything at most SURFACE_COLLAR.maxUp over the deck.
+ */
+function collarGeometry(c: CollarPlan, site: Pick<SurfaceSite, 'y' | 'walk'>, collar: Batch, hatch: Batch, steel: Batch, grille: Batch): void {
+  const C = SURFACE_COLLAR, y = site.y, I = new THREE.Matrix4(), TAU = Math.PI * 2;
+  const NP = RING_VIEW.posts, step = TAU / NP;
+  const con: number[] = [];
+  for (let k = 0; k < NP; k++) sector(con, site, c.x, c.z, c.kerb[0], c.kerb[1], (k - 0.5) * step, (k + 0.5) * step, y + C.up, c.joint);
+  const N = c.segments, seg = TAU / N;
+  c.rings.forEach(([ra, rb], ri) => { for (let k = 0; k < N; k++) { const a = c.phase + (k + ri * 0.5) * seg; sector(con, site, c.x, c.z, ra, rb, a, a + seg, y + C.up, c.joint); } });
+  const cg = flatGeometry(con);
+  if (cg) collar.geo(I, cg);
+  // the hatching: 45-degree yellow stripes across the band (pitch ~0.5 m along its mid circle), the deck between them
+  const hp: number[] = [], [h0, h1] = c.hatch, hm = (h0 + h1) / 2, n = Math.round((TAU * hm) / 0.5), w = 0.25, lean = h1 - h0;
+  const onArc = (r: number, s: number): XZ => [c.x + Math.cos(s / hm) * r, c.z + Math.sin(s / hm) * r];
+  for (let k = 0; k < n; k++) {
+    const s0 = (k / n) * TAU * hm;
+    const q = [onArc(h0 + 0.02, s0), onArc(h0 + 0.02, s0 + w), onArc(h1 - 0.02, s0 + w + lean), onArc(h1 - 0.02, s0 + lean)];
+    if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(hp, q, y + C.hatchUp);
+  }
+  const hg = flatGeometry(hp);
+  if (hg) hatch.geo(I, hg);
+  // the anchor plates (+ four bolt heads) at every railing post, on the kerb (local +Z radially outward, X along the ring)
+  const km = (c.kerb[0] + c.kerb[1]) / 2, pt = C.plateUp - C.up;
+  for (let k = 0; k < NP; k++) {
+    const a = k * step, x = c.x + Math.cos(a) * km, z = c.z + Math.sin(a) * km;
+    if (!onWalkAt(site, x, z)) continue;
+    const f = frameM(x, y, z, Math.atan2(Math.cos(a), Math.sin(a)));
+    steel.box(f, 0, C.up + pt / 2, 0, 0.2, pt, 0.26);
+    for (const bx of [-0.06, 0.06]) for (const bz of [-0.08, 0.08]) steel.box(f, bx, (C.plateUp + C.boltUp) / 2, bz, 0.035, C.boltUp - C.plateUp, 0.035);
+  }
+  // the drainage channel: the grating ring between two steel edge angles
+  const gp: number[] = [], sp: number[] = [], [d0, d1] = c.drain, nd = Math.ceil((TAU * d1) / 0.35);
+  const P2 = (r: number, a: number): XZ => [c.x + Math.cos(a) * r, c.z + Math.sin(a) * r];
+  for (let k = 0; k < nd; k++) {
+    const a0 = (k / nd) * TAU, a1 = ((k + 1) / nd) * TAU;
+    for (const [ra, rb, out, yy] of [[d0 + 0.03, d1 - 0.03, gp, y + C.drainUp], [d0, d0 + 0.03, sp, y + C.drainUp + 0.002], [d1 - 0.03, d1, sp, y + C.drainUp + 0.002]] as const) {
+      const q = [P2(ra, a0), P2(ra, a1), P2(rb, a1), P2(rb, a0)];
+      if (q.every(([x, z]) => onWalkAt(site, x, z))) flatQuad(out, q, yy);
+    }
+  }
+  const gg = flatGeometry(gp), sg = flatGeometry(sp);
+  if (gg) grille.geo(I, gg);
+  if (sg) steel.geo(I, sg);
+}
+
+/**
+ * The wet film's bare walk round the collar: lane SURFACE's film (surfaceCity.ts filmGeometry) lays 1 m cells over the walk rects and
+ * leaves out every cell within the opening's keep-off distance (max(keepR, r + 0.6)) (its dedupe is keyed by the clipped cell, so a
+ * 1 m cell split by a walk-rect boundary gets both halves). This mirrors that loop exactly and emits the pieces it leaves bare (never
+ * under a shelter) within `reach` of the aperture's centre: the film + this cover the collar's walk exactly once (the test pins it
+ * against filmGeometry itself).
+ */
+export function filmGapGeometry(site: Pick<SurfaceSite, 'y' | 'walk' | 'hole' | 'shelters'>, reach: number): THREE.BufferGeometry | null {
+  const pos: number[] = [], y = site.y + SURFACE_LAYERS.filmAbove, o = site.hole, keep = Math.max(o.keepR, o.r + 0.6);
+  const seen = new Set<string>();
+  for (const r of site.walk) {
+    for (let z = Math.floor(r.z0); z < r.z1; z++) for (let x = Math.floor(r.x0); x < r.x1; x++) {
+      const x0 = Math.max(x, r.x0), x1 = Math.min(x + 1, r.x1), z0 = Math.max(z, r.z0), z1 = Math.min(z + 1, r.z1);
+      if (x1 - x0 < 0.05 || z1 - z0 < 0.05) continue;
+      const k = `${x0},${z0}`; // (the film's own key: surfaceCity.ts filmGeometry)
+      const near = Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z));
+      const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+      const sheltered = site.shelters.some(s => cx >= s.rect.x0 && cx <= s.rect.x1 && cz >= s.rect.z0 && cz <= s.rect.z1);
+      if (!seen.has(k) && near >= keep && !sheltered) { seen.add(k); continue; } // the film's own cell
+      if (sheltered || near > reach) continue;
+      pos.push(x0, y, z0, x0, y, z1, x1, y, z1, x0, y, z0, x1, y, z1, x1, y, z0);
+    }
+  }
+  const g = flatGeometry(pos);
+  g?.computeBoundingSphere();
+  return g;
+}

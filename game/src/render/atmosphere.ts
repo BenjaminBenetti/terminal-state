@@ -114,6 +114,12 @@ export interface AtmosphereParams {
    * kind lookup. Only the Reactor sets it; absent = every area exactly as before.
    */
   rockRoom?: {density: number; group: AreaGroup};
+  /**
+   * Task reactor-surface-redesign-credits-20261103 (primary): the Reactor's OUTDOOR haze cap — the haze term fades out between these
+   * absolute heights over its surface deck (gas / smoke / depth strata untouched), so no lit haze column rises into the open sky.
+   * Only a Reactor layout with a surface exit sets it (atmosphereFor); absent = exactly as before.
+   */
+  skyCap?: {y0: number; y1: number};
 }
 
 /** Area groups for the clear / dense draw. */
@@ -201,11 +207,17 @@ export const ATMOSPHERE_BY_ARCHETYPE: Partial<Record<Archetype, Partial<Atmosphe
   express: {density: 0.019},
 };
 
+/** The Reactor's outdoor haze cap over its surface deck (m above the deck): full haze below `from`, none above `to`. */
+export const REACTOR_SKY_CAP = {from: 2.5, to: 5.5} as const;
+
 export function atmosphereFor(layout: (Pick<StationLayout, 'archetype'> & {reactor?: unknown}) | null, base: AtmosphereParams = ATMOSPHERE): AtmosphereParams {
   const o = layout ? ATMOSPHERE_BY_ARCHETYPE[layout.archetype] : undefined;
   const r = layout?.reactor ? REACTOR_ATMOSPHERE : undefined; // task reactor-build-20261101 (lane ARCH): the Reactor's deep industrial haze
+  // (task reactor-surface-redesign-credits-20261103: over the Reactor's surface deck, a few metres of mist and then open air)
+  const deck = (layout?.reactor as {surface?: {y?: unknown}} | undefined)?.surface?.y;
+  const cap = typeof deck === 'number' && Number.isFinite(deck) ? {skyCap: {y0: deck + REACTOR_SKY_CAP.from, y1: deck + REACTOR_SKY_CAP.to}} : undefined;
   return {
-    ...base, ...o, ...r,
+    ...base, ...o, ...r, ...cap,
     areaDensity: {...base.areaDensity, ...o?.areaDensity, ...r?.areaDensity}, levelDensity: {...base.levelDensity, ...o?.levelDensity, ...r?.levelDensity},
     classDensity: {...base.classDensity, ...o?.classDensity, ...r?.classDensity}, classOdds: {...base.classOdds, ...o?.classOdds, ...r?.classOdds},
   };
@@ -885,7 +897,8 @@ export function mediumAt(p: V3, maps: MediumMaps, params: AtmosphereParams, t: n
   const [mult, floorY] = map ? sampleDensityLayer(map, p[0], p[2], slot) : [1, 0];
   const h = p[1] - floorY;
   const hf = Math.min(2.5, Math.max(0.25, Math.exp(-params.heightFalloff * (h - params.refHeight))));
-  const base0 = params.density * mult;
+  const cap = params.skyCap, capF = cap ? 1 - smoothstep(cap.y0, cap.y1, p[1]) : 1; // (the Reactor's outdoor haze cap: the march mirror)
+  const base0 = params.density * mult * capF;
   const amt = params.noiseAmount;
   if (!noise || !motion || amt <= 0) {
     const g0 = params.ground * mult * Math.exp(-Math.max(h, 0) / Math.max(params.groundHeight, 0.05));

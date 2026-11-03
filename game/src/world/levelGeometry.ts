@@ -586,14 +586,20 @@ function clipSkyFaces(faces: BuiltFace[], levels: Level[], W: number): BuiltFace
   if (!skyLv || (skyLv.sky!.open && !skyLv.sky!.outdoor)) return faces;
   const sky = skyLv.sky!;
   const lid = sky.open ? sky.outdoor!.level : skyLv.id, top0 = sky.open ? sky.outdoor!.y : sky.top;
+  // Task reactor-surface-redesign-credits-20261103 (primary; user screenshot "strange floating walls on the surface"): with an outdoor
+  // storey over a roof opening, the OTHER storeys' faces stop at the open-sky band's top too. The pit tiers' edge cells without a
+  // ceiling keep a nominal open band (floor + 40 m); the outdoor storey's band in the next column subtracted it only up to its own top
+  // (sky.ceil, deck + 6 m), so the rest stood above the yard as flat-bottomed, saw-toothed slabs. Nothing of a storey under the roof
+  // is outside above that line (a taller structure: sky.tops, as for the outdoor storey's own faces).
+  const otherTop = sky.open ? sky.ceil : Infinity;
   const out: BuiltFace[] = [];
   for (const f of faces) {
-    if (f.level !== lid) { out.push(f); continue; }
+    if (f.level !== lid && !(f.y1 > otherTop)) { out.push(f); continue; }
     // The column behind the face at its midpoint (the face normal points into the open band).
     const bx = (f.x0 + f.x1) / 2 - f.nx * CELL / 2, bz = (f.z0 + f.z1) / 2 - f.nz * CELL / 2;
     const cx = Math.floor(bx / CELL), cy = Math.floor(bz / CELL);
     const t = sky.tops && cx >= 0 && cy >= 0 ? sky.tops[cy * W + cx] : 0;
-    const top = t > 0 ? t : top0;
+    const top = t > 0 ? Math.max(t, f.level === lid ? 0 : otherTop) : f.level === lid ? top0 : otherTop;
     if (f.y0 >= top - MIN_H) continue;
     if (f.y1 <= top) { out.push(f); continue; }
     out.push({...f, y1: top, openings: f.openings.map(o => ({...o, top: Math.min(o.top, top)})), ...(f.slope ? {slope: {...f.slope, t0: Math.min(f.slope.t0, top), t1: Math.min(f.slope.t1, top)}} : {})});
