@@ -1192,7 +1192,7 @@ function serviceLinks(net: SubwayNetwork, R: StationId, lineId: (i: number) => s
     const comp = componentsWithout(adj, R);
     const home = comp.get(net.start)!;
     if (new Set(comp.values()).size <= 1) return;
-    const dR = hops(adj, R);
+    const dR = hops(adj, R), dS = hops(adj, net.start), depth = dS.get(R)!;
     const pos = new Map(net.nodes.map(n => [n.id, n]));
     const edges = net.edges.map(([a, b]) => ({a, b, pa: pos.get(a)!, pb: pos.get(b)!}));
     let pick: {a: StationId; b: StationId; score: number[]} | null = null;
@@ -1200,6 +1200,7 @@ function serviceLinks(net: SubwayNetwork, R: StationId, lineId: (i: number) => s
       if (na.id === R || comp.get(na.id) !== home) continue;
       for (const nb of net.nodes) {
         if (nb.id === R || comp.get(nb.id) === home || adj.get(na.id)!.includes(nb.id)) continue;
+        if (dS.get(na.id)! + 1 + (dR.get(nb.id) ?? 99) < depth) continue; // never a shortcut that brings the Reactor nearer the start
         const dx = Math.abs(na.x - nb.x), dy = Math.abs(na.y - nb.y), c = Math.max(dx, dy) / u;
         if (c < 2 - EPS || c > BYPASS.steps + EPS) continue;
         const a = Math.abs(dx - dy) < EPS || dx < EPS || dy < EPS ? 0 : 1;
