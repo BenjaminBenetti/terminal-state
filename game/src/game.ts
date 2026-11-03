@@ -98,6 +98,9 @@ import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
+import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
+import {arrive as arriveCampaign, canTravel, enableCheat, neighbors, newCampaign, revealAround} from './campaign/discovery';
+import {PaperMap} from './ui/paperMap';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
@@ -134,7 +137,7 @@ import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
 
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
 
 /** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
 export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train when done.';
@@ -515,6 +518,7 @@ export class Game {
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
     this.trainRide = installTrainRide(this, this.trainRuntime);
+    this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
@@ -966,7 +970,7 @@ export class Game {
   // (after it tore the live world down with leaveSection(false)) before it builds / resumes the returned key. The menu lane reaches
   // the three slots through `saves` (list / read / delete / exportFile / importFile) and loads through applySave. Builds nothing.
   /** Lane NET's graph validator goes here once merged (`saveValidate.validateNetwork = validateNetwork`); read by saves + decodeSave. */
-  readonly saveValidate: ValidateOptions = {};
+  readonly saveValidate: ValidateOptions = {validateNetwork: n => { const e = validateNetwork(n); return e.length ? {ok: false, errors: e} : null; }}; // (primary: lane NET's graph validator)
   /** The three localStorage save slots of this browser + origin (save/slots.ts). */
   readonly saves = new SaveSlots({validate: this.saveValidate});
   /** The slot this run saves into (null: not bound — a New Game / a load binds one). */
@@ -1068,6 +1072,192 @@ export class Game {
     return {ok: true, ...this.installSave(d.restore)};
   }
   // --- end save / load (lane SAVE) -----------------------------------------------------------------------------------------------
+
+  // --- campaign (primary, task studio-alpha-campaign-foundation-20261102-230708-01) -----------------------------------------------
+  /** The paper subway map overlay (ui/paperMap.ts; lazily mounted). */
+  private paperMapUi: PaperMap | null = null;
+  private get paperMap(): PaperMap { return (this.paperMapUi ??= new PaperMap({})); }
+  /** The state the travel map was opened from ('map' while open). */
+  private mapBack: GameState | null = null;
+
+  /**
+   * NEW GAME (campaign): a fresh network (its own seed), the start station, the chosen slot (an occupied one only with `overwrite` =
+   * the player confirmed). `dev`: a menu dev start — the run starts at the network's first node of that archetype (its own world)
+   * instead of the start station. Resolves after the station is built and play entered (from a click); the new-game save is written
+   * right away (a failure is reported, the run goes on unsaved).
+   */
+  async newCampaign(slot: number, o: {overwrite?: boolean; networkSeed?: number; dev?: {level?: LevelId}} = {}): Promise<{ok: true; saved: boolean; error?: string} | {ok: false; error: string}> {
+    if (this.lifecycle.busy) return {ok: false, error: 'Busy — try again in a moment.'};
+    const view = this.saves.list().find(v => v.slot === slot);
+    if (!view) return {ok: false, error: `There is no save slot ${slot}.`};
+    if (!view.empty && !o.overwrite) return {ok: false, error: `Slot ${slot} is in use — confirm overwriting it first.`};
+    const net = generateNetwork(o.networkSeed ?? freshSeed());
+    let state = newCampaign(net);
+    const devNode = o.dev?.level ? net.nodes.find(n => n.archetype === o.dev!.level) : undefined;
+    if (devNode && devNode.id !== state.current) state = {...state, current: devNode.id, known: [devNode.id], visited: [devNode.id]};
+    const w = await this.newGame(net.nodes.find(n => n.id === state.current)!.archetype, {campaign: state, enter: true});
+    if (!w) return {ok: false, error: 'The new game could not start.'};
+    const r = this.commitSave('new-game', {slot, overwrite: !view.empty});
+    if (!r.ok) { this.hud.toast(r.error, true); return {ok: true, saved: false, error: r.error}; }
+    this.saves.setLastSlot(slot);
+    return {ok: true, saved: true};
+  }
+
+  /**
+   * CONTINUE / LOAD: the slot's run (default: the last-used valid slot). Validated + decoded first (nothing live is touched by a bad
+   * save), the target station prepared, then the old world torn down, the run installed and the station built with the player at
+   * the saved train-local pose in the parked train; a save taken at a DEPARTURE resumes that journey once (from the tunnel).
+   */
+  async continueCampaign(slot?: number): Promise<{ok: true} | {ok: false; error: string}> {
+    if (this.lifecycle.busy) return {ok: false, error: 'Busy — try again in a moment.'};
+    const n = slot ?? this.saves.continueSlot();
+    if (n === null || n === undefined) return {ok: false, error: 'There is no save to continue.'};
+    const raw = this.saves.read(n);
+    if (!raw.ok) return {ok: false, error: raw.error};
+    const d = this.decodeSave(raw.file);
+    if (!d.ok) return d;
+    const lock = this.beginGesture();
+    const back = this.state;
+    const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
+      const run = d.restore.run, c = run.campaign!;
+      const resuming = !!c.transit;
+      const node = run.node(resuming ? c.transit!.to : c.current)!;
+      const key: SectionKey = {level: node.archetype, section: 'main', station: node.id};
+      const ui = this.showLoading(`Continue · ${node.name}${resuming ? ' — the train is on its way' : ''}.`, `Preparing ${node.name}…`);
+      await nextPaint();
+      let layout: StationLayout;
+      try { layout = await this.prepareSection(key, run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return {ok: false, error: 'The station could not be prepared.'}; }
+      await this.warmRun;
+      this.leaveSection(false); // the old run's world goes (its lanes write into the OLD run); then the save's run is installed
+      const h = this.installSave(d.restore);
+      if (h.transit) {
+        // the journey resumes once: the run arrives at the destination (the departure station was already left and saved)
+        this.run.campaign = arriveCampaign(this.run.campaign!, h.transit.to);
+      }
+      this.buildSection(key, layout, {kind: 'start'}, false);
+      const wp = this.trainLocalToWorld(h.pose);
+      if (wp) { this.player.place(wp.x, wp.z, wp.yaw, wp.y); this.player.pitch = wp.pitch; }
+      if (h.transit) this.run.entry = this.levelEntrySnapshot();
+      this.updateStationIntro();
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return {ok: false, error: 'The graphics device was lost.'};
+      this.readyLine(ui, w);
+      if (h.transit) { const r = this.commitSave('arrival'); if (!r.ok) this.hud.toast(r.error, true); }
+      if (h.failed.length) this.hud.toast(`Some saved parts could not be restored: ${h.failed.join(', ')}`, true);
+      void lock.then(() => this.enterPlay());
+      return {ok: true};
+    });
+    return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /** The train console: the paper map in TRAVEL mode (the current station + every one-hop neighbour revealed and remembered). */
+  openTravelMap(mode: 'travel' | 'view' = 'travel'): boolean {
+    const run = this.run;
+    if (!run.campaign || this.mapBack) return false;
+    if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current);
+    this.mapBack = this.state;
+    this.setState('map');
+    this.paperMap.open({
+      state: run.campaign, mode,
+      onConfirm: to => { this.closeTravelMap(); void this.travelToStation(to); },
+      onClose: () => this.closeTravelMap(),
+      onCheat: () => (run.campaign = enableCheat(run.campaign!)),
+    });
+    return true;
+  }
+
+  private closeTravelMap(): void {
+    if (!this.mapBack) return;
+    const back = this.mapBack;
+    this.mapBack = null;
+    if (this.paperMap.isOpen) this.paperMap.close();
+    if (back === 'playing' || back === 'map') void this.enterPlay();
+    else this.setState(back);
+  }
+
+  /** True while no station world exists during a journey (the old one torn down, the next not built yet). */
+  private transitGap = false;
+
+  /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
+  private updateTransitGap(dt: number): void {
+    const inp = this.input, p = this.player;
+    const sens = this.settings.sens * 0.0022;
+    p.yaw -= inp.dx * sens;
+    p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
+    if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+    this.updateCamera(dt);
+    inp.endFrame?.();
+  }
+
+  /**
+   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat).
+   * 1. depart (refused unless the player is inside; doors close; the car pulls into the tunnel and loops in the transit);
+   * 2. the old world is torn down (every delta flushed into the run) and the DEPARTURE autosave commits the pending journey;
+   * 3. the next station is prepared and built while the car runs through the dark tunnel (its pipelines compiled in the background);
+   * 4. the car arrives and stops at the platform; the run arrives (visited) and the ARRIVAL autosave commits.
+   * A destination that cannot be prepared (twice) sends the train back to the station it left; nothing is lost.
+   */
+  async travelToStation(to: string): Promise<{ok: true} | {ok: false; error: string}> {
+    const run = this.run, c0 = run.campaign;
+    if (!c0) return {ok: false, error: 'No campaign run.'};
+    if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
+    if (!canTravel(c0, to)) return {ok: false, error: 'That station cannot be reached from here.'};
+    const target = run.node(to)!;
+    const d = await this.trainRide.depart();
+    if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
+      const from = run.campaign!.current;
+      const ride = this.trainRide.state();
+      const pose: TrainLocalPose = {x: ride.local.x, z: ride.local.z, yaw: ride.local.yaw, pitch: this.player.pitch, crouched: this.player.crouched};
+      await this.warmRun;
+      this.transitGap = true;
+      this.leaveSection(true); // the departing station's every delta goes into its memory (one world per station)
+      const adjacent = neighbors(run.campaign!.network, from).includes(to);
+      run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
+      const s1 = this.commitSave('departure', {pose});
+      if (!s1.ok && this.currentSlot !== null) this.hud.toast(s1.error, true);
+      for (const l of this.campaignListeners) l('transit');
+      let dest = target, layout: StationLayout | null = null, key: SectionKey = {level: dest.archetype, section: 'main', station: dest.id};
+      for (const attempt of [0, 1, 2]) {
+        if (attempt === 2) { dest = run.node(from)!; key = {level: dest.archetype, section: 'main', station: dest.id}; this.hud.toast(`${target.name} cannot be reached — the train returns to ${dest.name}.`, true); }
+        try { layout = await this.prepareSection(key, run); break; } catch (err) { console.warn('campaign: preparing', key, 'failed', err); this.trainRide.transitFailed(String((err as Error)?.message ?? err)); }
+      }
+      if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
+      await this.warmRun;
+      this.buildSection(key, layout, {kind: 'start'}, false); // the riding car is adopted at the new placement (lane RIDE)
+      this.transitGap = false;
+      await this.backgroundCompile();
+      const a = await this.trainRide.arrive();
+      if (a.status !== 'stopped') console.warn('campaign: arrival', a);
+      run.campaign = {...arriveCampaign(run.campaign!, dest.id), transit: null};
+      run.entry = this.levelEntrySnapshot();
+      this.updateStationIntro();
+      const s2 = this.commitSave('arrival');
+      if (!s2.ok && this.currentSlot !== null) this.hud.toast(s2.error, true);
+      this.hud.toast(`${dest.name} — ${archetypeLabel(dest.archetype)}`);
+      for (const l of this.campaignListeners) l('arrived');
+      return {ok: true};
+    });
+    return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /**
+   * The next station's pipelines compiled WITHOUT hiding the canvas or holding frames (the player is riding through the tunnel):
+   * renderer.compileAsync over the new world with frustum culling lifted for the call (shadow / fog-pass variants are not covered:
+   * the first frames in a new view may still compile a few). Bounded; failures only log.
+   */
+  private async backgroundCompile(): Promise<void> {
+    const root = this.world?.group as THREE.Object3D | undefined;
+    const r = this.renderer as unknown as {compileAsync?: (o: THREE.Object3D, c: THREE.Camera, s?: THREE.Scene) => Promise<unknown>};
+    if (!root || typeof r.compileAsync !== 'function' || !this.renderer.initialized) return;
+    const flipped: THREE.Object3D[] = [];
+    root.traverse(o => { if ((o as THREE.Mesh).isMesh && o.frustumCulled) { o.frustumCulled = false; flipped.push(o); } });
+    const t0 = performance.now();
+    try { await Promise.race([r.compileAsync(root, this.camera, this.scene), new Promise(res => setTimeout(res, 8000))]); } catch (err) { console.warn('campaign: background compile failed', err); }
+    finally { for (const o of flipped) o.frustumCulled = true; }
+    console.info(`Terminal State: background compile of the next station ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  }
+  // --- end campaign (primary) ----------------------------------------------------------------------------------------------------
 
   /** Iteration 16: from a click — audio resumes and pointer lock is requested inside the gesture (the rebuild can outlast it). */
   private beginGesture(): Promise<boolean> {
@@ -1860,6 +2050,9 @@ export class Game {
     prof.lap(SPAN.input);
     this.time += dt;
     this.stats.time += dt;
+    if (this.run.campaign) this.run.playtime += dt; // (campaign) save metadata
+    // (campaign, primary) between the old world's teardown and the next one's build only the riding car exists: no world system runs
+    if (this.transitGap) { this.updateTransitGap(dt); return; }
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
