@@ -497,8 +497,8 @@ function collarGeometry(c: CollarPlan, site: Pick<SurfaceSite, 'y' | 'walk'>, co
 
 /**
  * The wet film's bare walk round the collar: lane SURFACE's film (surfaceCity.ts filmGeometry) lays 1 m cells over the walk rects and
- * leaves out every cell within the opening's keep-off distance (max(keepR, r + 0.6)) and, through its per-cell dedupe, the second
- * rect's share of a 1 m cell split by a walk-rect boundary. This mirrors that loop exactly and emits the pieces it leaves bare (never
+ * leaves out every cell within the opening's keep-off distance (max(keepR, r + 0.6)) (its dedupe is keyed by the clipped cell, so a
+ * 1 m cell split by a walk-rect boundary gets both halves). This mirrors that loop exactly and emits the pieces it leaves bare (never
  * under a shelter) within `reach` of the aperture's centre: the film + this cover the collar's walk exactly once (the test pins it
  * against filmGeometry itself).
  */
@@ -509,7 +509,7 @@ export function filmGapGeometry(site: Pick<SurfaceSite, 'y' | 'walk' | 'hole' | 
     for (let z = Math.floor(r.z0); z < r.z1; z++) for (let x = Math.floor(r.x0); x < r.x1; x++) {
       const x0 = Math.max(x, r.x0), x1 = Math.min(x + 1, r.x1), z0 = Math.max(z, r.z0), z1 = Math.min(z + 1, r.z1);
       if (x1 - x0 < 0.05 || z1 - z0 < 0.05) continue;
-      const k = `${x},${z}`;
+      const k = `${x0},${z0}`; // (the film's own key: surfaceCity.ts filmGeometry)
       const near = Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z));
       const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
       const sheltered = site.shelters.some(s => cx >= s.rect.x0 && cx <= s.rect.x1 && cz >= s.rect.z0 && cz <= s.rect.z1);

@@ -119,7 +119,9 @@ export function filmGeometry(site: SurfaceSite): THREE.BufferGeometry | null {
     for (let z = Math.floor(r.z0); z < r.z1; z++) for (let x = Math.floor(r.x0); x < r.x1; x++) {
       const x0 = Math.max(x, r.x0), x1 = Math.min(x + 1, r.x1), z0 = Math.max(z, r.z0), z1 = Math.min(z + 1, r.z1);
       if (x1 - x0 < 0.05 || z1 - z0 < 0.05) continue;
-      const k = `${x},${z}`;
+      // (keyed by the CLIPPED cell: a 1 m cell split by a walk-rect boundary gets both halves — keyed by the whole cell, the second
+      // rect's half was skipped and left a 0.5 m dry strip along that boundary; exact duplicates still draw once)
+      const k = `${x0},${z0}`;
       if (seen.has(k)) continue;
       // the whole cell clear of the opening's keep-off radius (its nearest point outside it)
       if (Math.hypot(Math.max(o.x - x1, 0, x0 - o.x), Math.max(o.z - z1, 0, z0 - o.z)) < keep) continue;
