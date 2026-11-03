@@ -269,8 +269,8 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
     sizes.forEach((k, si) => {
       const f = fs * k;
       const name = {text: s.node.name, fs: s.reactor ? f * 1.2 : f, cls: s.reactor ? 'pm-l-reactor' : s.hub || s.current ? 'pm-l-hub' : 'pm-l'};
-      const sub = s.current ? {text: s.reactor ? 'You are here · Reactor' : 'You are here', fs: f * 0.86, cls: 'pm-l-you caps'}
-        : s.reactor ? {text: 'Reactor', fs: f * 0.8, cls: 'pm-l-sub caps'} : null;
+      const sub = s.current ? {text: s.reactor ? 'YOU ARE HERE · REACTOR' : 'YOU ARE HERE', fs: f * 0.86, cls: 'pm-l-you caps'}
+        : s.reactor ? {text: 'REACTOR', fs: f * 0.8, cls: 'pm-l-sub caps'} : null;
       const words = s.node.name.split(' ');
       variants.push({lines: sub ? [name, sub] : [name], cost: si * 1.6});
       if (words.length > 1) {

@@ -127,11 +127,11 @@ describe('the overlay', () => {
     const text = inkText();
     for (const n of net.nodes) expect([n.id, text.includes(n.name)]).toEqual([n.id, s.known.includes(n.id)]);
     expect(dom.doc.querySelector('.pm-reactor')).toBeNull();
-    expect(text).not.toMatch(/Reactor/);
+    expect(text).not.toMatch(/reactor/i);
     expect(dom.doc.querySelectorAll('.pm-track polyline').length).toBeGreaterThan(0);
     expect(dom.doc.querySelector('.pm-mode')!.textContent).toContain(net.nodes.find(n => n.id === net.start)!.name);
     expect(dom.doc.querySelector('.pm-you')).not.toBeNull();
-    expect(text).toMatch(/You are here/);
+    expect(text).toMatch(/YOU ARE HERE/);
     // walk to the Reactor: its mark appears exactly when it becomes known (standing one hop away)
     const route = routeTo(net, net.reactor);
     let st = s;
