@@ -341,7 +341,9 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
   - Meshy generated the ivory thong front-to-back, so it was mirrored to match the reference: full front panel, narrow back.
 - The Meshy base colour is re-encoded at 1024 and metallic / roughness packed at 256; the normal map is not shipped. No
   retexturing or painting. Opaque material (the lace is texture only).
-- Each file also holds unskinned display nodes for the store's stock. Provenance: `assets/derivatives/outfit-lingerie-*.json` and
+- Each file also holds the store's stock (store-polish task, unskinned, same texture): the set fitted to the Mall's existing female
+  display mannequin (M81, `mall-mannequin-female.glb`), and hanging rack items on simple procedural chrome hangers (plain
+  hardware geometry, no texture). Provenance: `assets/derivatives/outfit-lingerie-*.json` and
   `assets/derivatives/zombie-lingerie.json`.
 - Raw Meshy outputs and the user references stay private (studio reference task folder plus a local backup). Unapproved
   prototypes; no commercial clearance implied. Ordinary zombie clips only.
@@ -351,3 +353,14 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
 
 - `assets/textures/paper-map.jpg` — the blank old folded paper sheet of the in-game subway map. Generated for this project with Codex's built-in image tool (one call under the task's 8-call authorization); runtime derivative by `tools/asset-pipeline/campaign/build-paper-map.mjs` (resize + JPEG only; provenance: `assets/derivatives/paper-map-20261102.json`). The lines, stations and labels are drawn at runtime. AI-generated asset: unapproved prototype, no licence or commercial clearance implied. The raw master is kept outside Git.
 <!-- END paper-map-20261102 -->
+
+<!-- BEGIN mall-lingerie-ad-art-20261103 (build-lingerie-ad-art.mjs) -->
+## Mall lingerie boutique: advertising artwork
+
+Generated for this project with Codex native image generation (the owned Codex CLI's built-in image_gen tool) under the user's explicit authorization (4 images, task studio-beta-mall-lingerie-store-polish-20261103-045922-01), each made with the user's own lingerie design reference photos attached; runtime derivatives (512 px JPEG, resize + format conversion only) built by `tools/asset-pipeline/mall-ads/build-lingerie-ad-art.mjs` (provenance with prompts, Codex thread ids and source / reference hashes: `assets/derivatives/mall-lingerie-ad-art-20261103.json`). Product-only and unbranded; the fictional brand names and headlines drawn over them in game are generated at runtime. Provider terms apply; unapproved prototypes, no licence or commercial clearance implied. Raw masters and the user references are kept outside Git.
+
+- `assets/textures/mall/ads-lingerie/ad-lingerie-flatlay.jpg` — flat-lay of the emerald longline lace set and the black balconette lace set on blush satin (user designs 9gPhXy5tx6G6iW_0 / M52skrui8zNLGE_0) (Codex thread 01a19fcb-df74-7c82-a95b-58ecbf9b1da9)
+- `assets/textures/mall/ads-lingerie/ad-lingerie-dressform.jpg` — the plum lace strapless bustier with suspenders and brief on a vintage dress form (user design 9gPhXy5tx6G6iW_1) (Codex thread 01a19fcc-fd70-7c42-882c-5048d842ba89)
+- `assets/textures/mall/ads-lingerie/ad-lingerie-hangers.jpg` — the crimson plunge bra + garter set and the ivory bralette + garter set on satin hangers (user designs M52skrui8zNLGE_1 / _2) (Codex thread 01a19fcd-dd71-77c2-ad3b-1173da5e02ef)
+- `assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg` — the blush lace plunge bodysuit folded in a ribboned gift box (user design 9gPhXy5tx6G6iW_2) (Codex thread 01a19fce-fa07-76b0-9686-25cdde8264a5)
+<!-- END mall-lingerie-ad-art-20261103 -->

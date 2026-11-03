@@ -4,7 +4,7 @@
 //  - registry: every design used, two per body, fitted only to the lingerie bodies, lazily loaded (not boot MODEL_FILES), exact
 //    bytes, never part of the ordinary wardrobe registry / pool;
 //  - files: OPAQUE materials (JPEG base colour, no alpha / blend / transmission), skinned variant nodes per fitted body with the
-//    wardrobe extras + geometry-hash guard matching the body GLB, static display nodes sharing the material;
+//    wardrobe extras + geometry-hash guard matching the body GLB (the store's mannequin / rack stock: lingerie-mannequin-fit.test.ts);
 //  - wardrobe integration (three.js GLTFLoader + the real WardrobeLibrary): every fit builds with BOTH a top and a bottom, body
 //    triangles under the cloth hidden; the ordinary library + pickZombieLook never yield a lingerie wearable;
 //  - lingerieLook: deterministic by (seed, spawn index), only shipped fits, both slots, consecutive spawns vary;
@@ -19,7 +19,7 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
-import {LINGERIE_SETS, LINGERIE_MODEL_FILES, LINGERIE_WEARABLES, LINGERIE_FITS, LINGERIE_BODY_IDS, LINGERIE_DISPLAYS, createLingerieLibrary, lingerieLook, isLingerieWearable} from '../src/ai/lingerie';
+import {LINGERIE_SETS, LINGERIE_MODEL_FILES, LINGERIE_WEARABLES, LINGERIE_FITS, LINGERIE_BODY_IDS, createLingerieLibrary, lingerieLook, isLingerieWearable} from '../src/ai/lingerie';
 import {ZOMBIE_BODIES, ZOMBIE_WEARABLES, ZombieLookLibrary, pickZombieLook} from '../src/ai/outfits';
 import {MODEL_FILES} from '../src/assets/manifest';
 import type {ZombieType} from '../src/gen/stationTypes';
@@ -100,8 +100,10 @@ describe('lingerie GLBs', () => {
   it('use opaque materials only (JPEG base colour, no alpha / blend / transmission) and keep the Meshy metallic-roughness map', async () => {
     for (const s of LINGERIE_SETS) {
       const doc = await io().read(path.join(PUB, s.url));
-      const mats = doc.getRoot().listMaterials();
+      // the lace material (+ task store-polish: the rack items' untextured chrome hanger material)
+      const mats = doc.getRoot().listMaterials().filter(m => m.getName() !== 'LingerieHanger');
       expect(mats.length, s.id).toBe(1);
+      for (const m of doc.getRoot().listMaterials().filter(x => x.getName() === 'LingerieHanger')) { expect(m.getAlphaMode()).toBe('OPAQUE'); expect(m.getBaseColorTexture()).toBeNull(); }
       for (const m of mats) {
         expect(m.getAlphaMode()).toBe('OPAQUE');
         expect(m.getBaseColorFactor()[3]).toBe(1);
@@ -132,18 +134,8 @@ describe('lingerie GLBs', () => {
           expect(m.skeleton.bones.length).toBe(18);
         }
       }
-      const d = LINGERIE_DISPLAYS.find(x => x.set === s.id)!;
-      const box = new THREE.Box3();
-      g.scene.updateMatrixWorld(true);
-      for (const n of [d.nodes.top, d.nodes.bottom]) {
-        const m = g.scene.getObjectByName(n) as THREE.Mesh;
-        expect(m?.isMesh && !(m as THREE.SkinnedMesh).isSkinnedMesh, n).toBe(true);
-        box.expandByObject(m);
-      }
-      expect(box.min.y).toBeCloseTo(0, 3);
-      expect(Math.abs((box.min.x + box.max.x) / 2)).toBeLessThan(0.002);
-      expect(box.max.y - box.min.y).toBeGreaterThan(0.3);
-      expect(box.max.y - box.min.y).toBeLessThan(1.0);
+      // task store-polish: the old box-form display nodes are superseded by the mannequin / rack stock
+      g.scene.traverse(o => expect(o.name.startsWith('LingerieDisplay_'), o.name).toBe(false));
     }
   });
 });
