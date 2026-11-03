@@ -19,7 +19,7 @@
 // Asset ids are basenames + a category (never URLs / query strings); nothing about saves, inventory, input or the account is read.
 
 import * as THREE from 'three';
-import {FrameInput, PerfCapture, assetId, chunkHash, reportFileName, stateCode, F, type LongFrameEntry, type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
+import {FrameInput, PerfCapture, ST_PLAYING, assetId, chunkHash, reportFileName, stateCode, F, type LongFrameEntry, type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
 import {SPAN_COUNT, type UpdateProfiler} from './updateProfile';
 import type {GpuInfo} from '../render/backend';
 import type {GpuTimingSupport} from './gpuTimer';
@@ -103,6 +103,8 @@ interface WrapSpec {
   name: string;
   kind: string;
   async?: boolean;
+  /** A lifecycle entry point: every level build / warm-up inside it is labelled with this load route. */
+  route?: string;
   detail?: (args: unknown[], game: RecorderGame) => Record<string, unknown> | null;
   result?: (r: unknown) => Record<string, unknown> | null;
 }
@@ -129,13 +131,14 @@ const GAME_WRAPS: WrapSpec[] = [
   }},
   {name: 'stageLevelTextures', kind: 'warmup.textures', async: true},
   {name: 'backgroundCompile', kind: 'compile.background', async: true, detail: () => ({note: 'CPU-side compileAsync request span; GPU / driver pipeline compile completion is not observable'})},
-  {name: 'travel', kind: 'travel', async: true, detail: a => { const q = a[0] as {to?: {level?: unknown; section?: unknown}; via?: unknown} | undefined; return {to: str(q?.to?.level), section: str(q?.to?.section), via: str(q?.via)}; },
+  {name: 'travel', kind: 'travel', async: true, route: 'menu-travel', detail: a => { const q = a[0] as {to?: {level?: unknown; section?: unknown}; via?: unknown} | undefined; return {to: str(q?.to?.level), section: str(q?.to?.section), via: str(q?.via)}; },
     result: r => ({status: str((r as {status?: unknown} | null)?.status)})},
-  {name: 'travelToStation', kind: 'journey', async: true, detail: a => ({to: str(a[0])}), result: r => ({ok: (r as {ok?: unknown} | null)?.ok === true})},
-  {name: 'newGame', kind: 'lifecycle.newGame', async: true, detail: a => ({level: str(a[0])})},
-  {name: 'newCampaign', kind: 'lifecycle.newCampaign', async: true},
-  {name: 'continueCampaign', kind: 'lifecycle.continue', async: true},
-  {name: 'retryLevel', kind: 'lifecycle.retry', async: true},
+  {name: 'travelToStation', kind: 'journey', async: true, route: 'travel-arrival', detail: a => ({to: str(a[0])}), result: r => ({ok: (r as {ok?: unknown} | null)?.ok === true})},
+  {name: 'newGame', kind: 'lifecycle.newGame', async: true, route: 'new-game', detail: a => ({level: str(a[0])})},
+  {name: 'newCampaign', kind: 'lifecycle.newCampaign', async: true, route: 'new-campaign'},
+  {name: 'continueCampaign', kind: 'lifecycle.continue', async: true, route: 'continue'},
+  {name: 'retryLevel', kind: 'lifecycle.retry', async: true, route: 'retry'},
+  {name: 'rewarmAfterSettings', kind: 'warmup.rewarm', async: true, route: 'settings-rewarm'},
   {name: 'commitSave', kind: 'save.write', detail: a => ({reason: str(a[0])}), result: r => { const c = r as {ok?: unknown; code?: unknown} | null; return {ok: c?.ok === true, code: str(c?.code)}; }},
   {name: 'spawnEnemy', kind: 'enemy.spawn', detail: a => { const s = a[0] as {archetype?: unknown; look?: unknown} | undefined; return {archetype: str(s?.archetype) ?? 'zombie', look: str(s?.look)}; }},
 ];
@@ -200,6 +203,17 @@ export class PerfRecorderController {
   private readonly assetsOpen = new Map<string, {t: number; depth: number; firstEnd: number; id: string; category: string}>();
   private buildDepth = 0;
   private spawnAgg = {count: 0, ms: 0, maxMs: 0};
+  /** Lifecycle entry points in flight (outermost first): the load route of a level build / warm-up. */
+  private routes: string[] = [];
+  /** A level was built at this time (performance.now()) and the player has not had control since; -1 = none pending. */
+  private pendingControl = -1;
+  private pendingRoute = '';
+  // first-use preparation (three internals, hooked while recording): counts / CPU ms since the last frame sample
+  private readonly fu = {builds: 0, buildMs: 0, async: 0, pipes: 0, pipeMs: 0, progs: 0, progMs: 0};
+  private renderDepth = 0;
+  private nbT0 = -1;
+  private fuHooks: string[] = [];
+  private fuMissing: string[] = [];
   private readonly unlisten: (() => void)[] = [];
   private gpuTap = false;
 
@@ -248,7 +262,17 @@ export class PerfRecorderController {
       i.enemies = g.zombies.length;
       const p = g.player;
       i.yaw = p.yaw; i.pitch = p.pitch; i.x = p.x; i.y = p.y; i.z = p.z;
+      const fu = this.fu;
+      i.fuOn = this.fuMissing.length === 0 && this.fuHooks.length > 0;
+      i.nodeBuilds = fu.builds; i.nodeBuildMs = fu.buildMs; i.asyncBuilds = fu.async; i.pipelinesCreated = fu.pipes; i.pipelineMs = fu.pipeMs; i.programsCreated = fu.progs; i.programMs = fu.progMs;
+      fu.builds = fu.buildMs = fu.async = fu.pipes = fu.pipeMs = fu.progs = fu.progMs = 0;
+      this.nbT0 = -1;
       const cap = this.capture.frame(i, g.prof);
+      if (this.pendingControl >= 0 && i.state === ST_PLAYING && (fl & (F.warming | F.transition)) === 0) {
+        this.capture.event(t1, 'control.returned', null, {route: this.pendingRoute, sinceBuildMs: r2(t1 - this.pendingControl)});
+        this.capture.segmentControl(t1);
+        this.pendingControl = -1;
+      }
       if (t1 - this.lastSlow >= SLOW_MS) this.slowSample(t1);
       if (cap) this.stop(cap === 1 ? 'auto-cap-frames' : 'auto-cap-duration', 'auto');
       else if (g.gpu?.deviceLost) this.stop('device-lost', 'auto');
@@ -283,10 +307,16 @@ export class PerfRecorderController {
     this.ovSum = this.ovMax = this.ovN = 0;
     this.buildDepth = 0;
     this.spawnAgg = {count: 0, ms: 0, maxMs: 0};
+    this.routes = [];
+    this.pendingControl = -1;
+    this.renderDepth = 0;
+    this.nbT0 = -1;
+    this.fu.builds = this.fu.buildMs = this.fu.async = this.fu.pipes = this.fu.pipeMs = this.fu.progs = this.fu.progMs = 0;
     this.startedAtUTC = new Date().toISOString();
     this.install();
     this.capture.event(t, 'recording.start', null, {by: str(by, 16), state: str(this.g.state, 16)});
-    this.worldSegment(t);
+    this.worldSegment(t, undefined, 'recording-start', !this.x.world); // (the main menu: no level yet)
+    if (this.x.world) this.capture.segmentControl(t); // a level already running: its first-use work from here on counts as after control
     this.emit();
     return true;
   }
@@ -388,7 +418,14 @@ export class PerfRecorderController {
       {id: 'renderer.newTextures / newGeometries / newPrograms', available: this.capture.seen.textures, source: 'renderer.info.memory counters, net change per frame'},
       {id: 'renderer.newNodeBuilds', available: this.capture.seen.nodes, source: 'three internal NodeManager.nodeBuilderCache.size (net change)', note: 'TSL material node builds on the CPU (first sight of a material / geometry / lights combination)'},
       {id: 'renderer.newPipelines', available: this.capture.seen.pipelines, source: 'three internal Pipelines.caches.size (net change)', note: 'pipelines REQUESTED on the CPU; the driver / GPU shader compile and its completion are NOT observable'},
-      {id: 'shaderCompileTime', available: false, source: 'none', note: 'not observable from a web page; see newPipelines / newPrograms / newNodeBuilds and the frame CPU'},
+      {id: 'firstUse.nodeBuilds / nodeBuildMs / asyncBuilds', available: this.capture.seen.firstUse, source: this.fuHooks.length ? `three r186 internals hooked while recording: ${this.fuHooks.join(', ')}` : 'none',
+        note: this.fuMissing.length ? `unavailable: ${this.fuMissing.join(', ')}` : 'TSL node builds completed inside synchronous renders, with their CPU ms; builds outside a render (compileAsync / warm-up) are counted, not timed'},
+      {id: 'firstUse.pipelines / pipelineMs', available: this.capture.seen.firstUse, source: 'Pipelines._getRenderPipeline (new render pipeline requests)', note: 'GPU pipeline compile time not observable; CPU-side request span only (inside renders)'},
+      {id: 'firstUse.programs / programMs', available: this.capture.seen.firstUse, source: 'backend.createProgram (new shader programs)', note: 'CPU-side shader module / shader compile request only; driver compile completion not observable'},
+      {id: 'loadRoute', available: true, source: 'Game lifecycle entry points in flight (travelToStation / travel / newGame / newCampaign / continueCampaign / retryLevel / rewarmAfterSettings)', note: 'labels every level build, warm-up and event; world.segments[].route'},
+      {id: 'warmupStages', available: true, source: 'Game.prepareGraphics result (render/warmup.ts WarmupResult: status, mode, per-stage done / total / ms)', note: "stage start times are derived (the stages run in order materials, passes, shadows, view); the journey's background compile is a single CPU span"},
+      {id: 'controlReturned', available: true, source: 'the first frame after a level build in state playing with no warm-up and no lifecycle operation in flight', note: 'for a train journey: after the arrival and its save'},
+      {id: 'shaderCompileTime', available: false, source: 'none', note: 'GPU pipeline compile time not observable from a web page; CPU-side build / request spans only (firstUse.*)'},
       {id: 'culling.culled', available: this.capture.seen.culled, source: 'LevelCuller.stats.culled', note: 'meshes hidden after the last full culler update (net; per-update show / hide counts are not instrumented)'},
       {id: 'enemies', available: true, source: 'Game.zombies.length'},
       {id: 'camera', available: true, source: 'player look (yaw / pitch) every frame; position at the camera cadence', note: 'recoil / sway / train tilt excluded'},
@@ -452,11 +489,38 @@ export class PerfRecorderController {
     }
   }
 
-  private worldSegment(t: number, key?: SectionKeyLike): void {
-    const g = this.g, cur = key && typeof key === 'object' ? key : g.run?.current;
-    const name = this.x.layout?.name;
-    this.capture.world(t, {level: str(cur?.level), section: str(cur?.section), station: str(cur?.station), seed: Number.isFinite(g.seed) ? g.seed >>> 0 : null,
-      seedCode: Number.isFinite(g.seed) ? seedToCode(g.seed) : null, name: typeof name === 'string' ? name.slice(0, 64) : null});
+  private worldSegment(t: number, key: SectionKeyLike | undefined, route: string, noWorld = false): void {
+    const g = this.g, cur = noWorld ? undefined : key && typeof key === 'object' ? key : g.run?.current;
+    const name = noWorld ? null : this.x.layout?.name, seed = !noWorld && Number.isFinite(g.seed) ? g.seed >>> 0 : null;
+    this.capture.world(t, {level: str(cur?.level), section: str(cur?.section), station: str(cur?.station), seed, seedCode: seed === null ? null : seedToCode(seed),
+      name: typeof name === 'string' ? name.slice(0, 64) : null, route});
+  }
+
+  /** The load route of what runs now: the outermost lifecycle entry point in flight ('other' outside one). */
+  private route(): string {
+    return this.routes[0] ?? 'other';
+  }
+
+  /**
+   * A finished warm-up (WarmupResult): one 'warmup.stage' span per stage (materials -> passes -> shadows -> view run in that order;
+   * their start times are derived from the stage durations, aligned to the warm-up's end) and the level segment's warm-up record.
+   */
+  private warmupStages(t: number, dur: number, result: unknown, route: string): void {
+    const w = result as {status?: unknown; mode?: unknown; ms?: unknown; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
+    if (!w) return;
+    const status = str(w.status), mode = str(w.mode);
+    const stages: Record<string, unknown> = {};
+    const order = ['materials', 'passes', 'shadows', 'view'].map(name => {
+      const st = w.stages?.[name];
+      return {name, st, ms: st && typeof st.ms === 'number' && Number.isFinite(st.ms) ? Math.max(0, st.ms) : 0};
+    }).filter(x => x.st);
+    let end = t - order.reduce((sum, x) => sum + x.ms, 0);
+    for (const {name, st, ms} of order) {
+      stages[name] = {done: st!.done ?? null, total: st!.total ?? null, ms: r2(ms)};
+      end += ms;
+      if (ms > 0) this.capture.event(end, 'warmup.stage', ms, {stage: name, done: st!.done ?? null, total: st!.total ?? null, status, mode, route, timing: 'derived from the stage durations'});
+    }
+    this.capture.segmentWarmup({kind: 'prepareGraphics', route, status, mode, ms: typeof w.ms === 'number' ? r2(w.ms) : null, spanMs: r2(dur), stages});
   }
 
   // --- install / uninstall (start / stop) ---
@@ -466,6 +530,7 @@ export class PerfRecorderController {
     for (const spec of GAME_WRAPS) this.wrap(this.g, spec);
     const ride = this.x.trainRide;
     if (ride) for (const spec of RIDE_WRAPS) this.wrap(ride, spec);
+    this.installFirstUse();
     this.installManager();
     this.installObservers();
     this.installPage();
@@ -503,24 +568,87 @@ export class PerfRecorderController {
       if (!self.recording) return fn.apply(this, args);
       const t0 = self.now();
       if (spec.name === 'buildSection') { self.buildDepth++; self.spawnAgg = {count: 0, ms: 0, maxMs: 0}; }
+      const route = spec.route;
+      if (route) self.routes.push(route);
+      const unroute = () => { if (route) { const j = self.routes.lastIndexOf(route); if (j >= 0) self.routes.splice(j, 1); } };
       let r: unknown;
       try {
         r = fn.apply(this, args);
       } catch (err) {
         if (spec.name === 'buildSection') self.buildDepth--;
         self.hookDone(spec, args, undefined, t0, err);
+        unroute();
         throw err;
       }
       if (spec.async && r && typeof (r as Promise<unknown>).then === 'function') {
-        (r as Promise<unknown>).then(v => self.hookDone(spec, args, v, t0, null), (e: unknown) => self.hookDone(spec, args, undefined, t0, e));
+        (r as Promise<unknown>).then(v => { self.hookDone(spec, args, v, t0, null); unroute(); }, (e: unknown) => { self.hookDone(spec, args, undefined, t0, e); unroute(); });
         return r;
       }
       if (spec.name === 'buildSection') self.buildDepth--;
       self.hookDone(spec, args, r, t0, null);
+      unroute();
       return r;
     };
     obj[spec.name] = wrapper;
     this.wrapped.push({obj, name: spec.name, wrapper, orig, own});
+  }
+
+  /** Wrap `obj[name]` (own-property wrapper, removed at stop) with `make(orig)`; false when there is no such method. */
+  private patch(obj: object | null | undefined, name: string, make: (orig: (...a: unknown[]) => unknown) => (...a: unknown[]) => unknown): boolean {
+    const o = obj as Record<string, unknown> | null | undefined;
+    const orig = o?.[name];
+    if (!o || typeof orig !== 'function') return false;
+    const own = Object.prototype.hasOwnProperty.call(o, name);
+    const wrapper = make(orig as (...a: unknown[]) => unknown);
+    o[name] = wrapper;
+    this.wrapped.push({obj: o, name, wrapper, orig, own});
+    return true;
+  }
+
+  /**
+   * First-use preparation counters (three r186 internals; installed only while recording, and only on cache-miss paths except the
+   * per-call render depth): renderer.render (sync render depth), NodeManager._createNodeBuilder -> _createNodeBuilderState (a TSL
+   * node build: timed when it runs inside a sync render, counted as async otherwise), Pipelines._getRenderPipeline (a new render
+   * pipeline request) and backend.createProgram (a new shader program). Missing internals: listed, and the columns are null.
+   */
+  private installFirstUse(): void {
+    this.fuHooks = [];
+    this.fuMissing = [];
+    const r = this.g.renderer as unknown as {render?: unknown; backend?: object; _nodes?: object | null; _pipelines?: object | null};
+    if (!this.g.renderer.initialized) { this.fuMissing.push('renderer not initialized at start'); return; }
+    const self = this, now = this.now;
+    const hook = (label: string, obj: object | null | undefined, name: string, make: (orig: (...a: unknown[]) => unknown) => (...a: unknown[]) => unknown) => {
+      if (this.patch(obj, name, make)) this.fuHooks.push(label); else this.fuMissing.push(label);
+    };
+    hook('renderer.render', r, 'render', orig => function (this: unknown, ...a: unknown[]) {
+      self.renderDepth++;
+      try { return orig.apply(this, a); } finally { self.renderDepth--; }
+    });
+    hook('NodeManager._createNodeBuilder', r._nodes, '_createNodeBuilder', orig => function (this: unknown, ...a: unknown[]) {
+      if (self.recording && self.renderDepth > 0 && self.nbT0 < 0) self.nbT0 = now(); // (a TSL error re-creates it: one span)
+      return orig.apply(this, a);
+    });
+    hook('NodeManager._createNodeBuilderState', r._nodes, '_createNodeBuilderState', orig => function (this: unknown, ...a: unknown[]) {
+      const res = orig.apply(this, a);
+      if (self.recording) {
+        if (self.renderDepth > 0) { self.fu.builds++; if (self.nbT0 >= 0) { self.fu.buildMs += now() - self.nbT0; self.nbT0 = -1; } } else self.fu.async++;
+      }
+      return res;
+    });
+    hook('Pipelines._getRenderPipeline', r._pipelines, '_getRenderPipeline', orig => function (this: unknown, ...a: unknown[]) {
+      if (!self.recording) return orig.apply(this, a);
+      self.fu.pipes++;
+      if (self.renderDepth === 0) return orig.apply(this, a);
+      const t0 = now();
+      try { return orig.apply(this, a); } finally { self.fu.pipeMs += now() - t0; }
+    });
+    hook('backend.createProgram', r.backend, 'createProgram', orig => function (this: unknown, ...a: unknown[]) {
+      if (!self.recording) return orig.apply(this, a);
+      self.fu.progs++;
+      if (self.renderDepth === 0) return orig.apply(this, a);
+      const t0 = now();
+      try { return orig.apply(this, a); } finally { self.fu.progMs += now() - t0; }
+    });
   }
 
   private hookDone(spec: WrapSpec, args: unknown[], result: unknown, t0: number, err: unknown): void {
@@ -531,14 +659,21 @@ export class PerfRecorderController {
         const a = this.spawnAgg; a.count++; a.ms += dur; if (dur > a.maxMs) a.maxMs = dur;
         return;
       }
-      const data: Record<string, unknown> = {...(spec.detail?.(args, this.g) ?? {}), ...(err ? {failed: true} : spec.result?.(result) ?? {})};
+      const route = this.route();
+      const data: Record<string, unknown> = {...(spec.detail?.(args, this.g) ?? {}), ...(err ? {failed: true} : spec.result?.(result) ?? {}), route};
       if (spec.name === 'buildSection') {
         const a = this.spawnAgg;
         data.enemySpawns = a.count; data.enemySpawnMs = r2(a.ms); data.enemySpawnMaxMs = r2(a.maxMs);
         data.enemies = this.g.zombies.length;
       }
       this.capture.event(t, spec.kind, dur, data);
-      if (spec.name === 'buildSection' && !err) this.worldSegment(t, args[0] as SectionKeyLike | undefined); // the key it built (run.current may follow later)
+      if (spec.name === 'buildSection' && !err) {
+        this.worldSegment(t, args[0] as SectionKeyLike | undefined, route); // the key it built (run.current may follow later)
+        this.pendingControl = t;
+        this.pendingRoute = route;
+      }
+      if (spec.name === 'prepareGraphics' && !err) this.warmupStages(t, dur, result, route);
+      if (spec.name === 'backgroundCompile' && !err) this.capture.segmentWarmup({kind: 'backgroundCompile', route, ms: r2(dur), note: 'renderer.compileAsync over the new level while the train rides (CPU request span; no hidden frames)'});
     } catch { /* an instrumentation detail never breaks the game method */ }
   }
 

@@ -221,13 +221,36 @@ describe('perf recorder core: summaries', () => {
 
 // ==== the game / browser side ===================================================================================================
 
+/** three r186's first-use internals as the hooks see them (NodeManager / Pipelines / backend / Renderer.render). */
+class FakeNodes { nodeBuilderCache = new Map<unknown, unknown>(); _createNodeBuilder(_o?: unknown) { return {}; } _createNodeBuilderState(_b: unknown) { return {}; } }
+class FakePipelines { caches = new Map<unknown, unknown>(); _getRenderPipeline(..._a: unknown[]) { const p = {}; this.caches.set(p, p); return p; } }
+class FakeBackend { createProgram(_p: unknown) { return undefined; } }
+class FakeRenderer {
+  initialized = true;
+  info = {frame: 0, render: {drawCalls: 812, frameCalls: 5, triangles: 1.2e6}, memory: {textures: 300, geometries: 900, programs: 60}};
+  _nodes = new FakeNodes(); _pipelines = new FakePipelines(); backend = new FakeBackend();
+  /** First-use work the next render() does: node builds (ms each), pipelines, programs. */
+  todo = {builds: [] as number[], pipes: 0, progs: 0};
+  clock: {t: number} | null = null;
+  getPixelRatio() { return 1.5; }
+  render(_s?: unknown, _c?: unknown) {
+    for (const ms of this.todo.builds) this.build(ms);
+    for (let k = 0; k < this.todo.pipes; k++) this._pipelines._getRenderPipeline();
+    for (let k = 0; k < this.todo.progs; k++) this.backend.createProgram({});
+    this.todo = {builds: [], pipes: 0, progs: 0};
+  }
+  /** One TSL node build (inside a render when called from render(); a compileAsync-style build otherwise). */
+  build(ms: number) { const b = this._nodes._createNodeBuilder({}); if (this.clock) this.clock.t += ms; const st = this._nodes._createNodeBuilderState(b); this._nodes.nodeBuilderCache.set(st, st); }
+}
+
 class FakeGame {
   state = 'playing';
   warming = false;
   frameCpu = {updateMs: 2, renderMs: 3, deferredMs: 0.5, rendered: true};
   prof = new UpdateProfiler(64);
-  renderer = {initialized: true, getPixelRatio: () => 1.5, info: {frame: 0, render: {drawCalls: 812, frameCalls: 5, triangles: 1.2e6}, memory: {textures: 300, geometries: 900, programs: 60}},
-    _nodes: {nodeBuilderCache: new Map<string, number>()}, _pipelines: {caches: new Map<string, number>()}};
+  renderer = new FakeRenderer();
+  world: {culler: {stats: {culled: number; level: number}}} | null = {culler: {stats: {culled: 120, level: 1}}};
+  warmGate: Promise<void> = Promise.resolve();
   canvas = {width: 1920, height: 1080};
   settings = {quality: 'high', renderScale: 1, fov: 80};
   gpu = null;
@@ -236,7 +259,6 @@ class FakeGame {
   seed = 0x1234abcd;
   run = {current: {level: 'mall', section: 'main', station: 's07'}};
   stateListeners: ((s: string, p: string) => void)[] = [];
-  world = {culler: {stats: {culled: 120, level: 1}}};
   trainRide = new FakeRide();
   lifecycle = {busy: false};
   layout = {name: 'Galleria Center'};
@@ -251,7 +273,38 @@ class FakeGame {
   spawnEnemy(_s: unknown) { this.zombies.push(0); return {}; }
   leaveSection() { this.calls.push('leave'); }
   commitSave(reason: string) { this.calls.push('save'); return {ok: true, meta: {revision: 3, secret: 'SAVE-SECRET'}, reason}; }
-  async prepareGraphics() { return {status: 'complete', mode: 'full', ms: 1234.5, reason: 'x?y=1', plan: {items: 4}, stages: {materials: {done: 4, total: 4, ms: 900}}, passes: ['a'], pools: []}; }
+  async prepareGraphics() {
+    this.warming = true;
+    this.renderer.build(3); // a compileAsync-style build (outside a render)
+    await this.warmGate;
+    this.warming = false;
+    return {status: 'complete', mode: 'full', ms: 1234.5, reason: 'x?y=1', plan: {items: 4}, passes: ['a'], pools: [],
+      stages: {materials: {done: 4, total: 4, ms: 900}, passes: {done: 3, total: 3, ms: 200}, shadows: {done: 2, total: 2, ms: 100}, view: {done: 1, total: 1, ms: 30}}};
+  }
+  /** Game.newGame's order: prepare (assets) -> leave -> build -> warm-up -> play. */
+  async newGame(level: string) {
+    await this.prepareSection({level, section: 'main'});
+    this.leaveSection();
+    this.setState('loading');
+    this.buildSection({level, section: 'main', station: 's09'});
+    const w = await this.prepareGraphics();
+    this.setState('playing');
+    return w;
+  }
+  /** Game.travelToStation's order: depart, leave, prepare, build in the tunnel, background compile (no warm-up), arrive, save. */
+  async travelToStation(to: string) {
+    this.lifecycle.busy = true;
+    await this.trainRide.depart();
+    this.leaveSection();
+    await this.prepareSection({level: 'reactor', section: 'main', station: to});
+    this.buildSection({level: 'reactor', section: 'main', station: to});
+    await this.backgroundCompile();
+    await this.trainRide.arrive();
+    this.commitSave('arrival');
+    this.lifecycle.busy = false;
+    return {ok: true};
+  }
+  async backgroundCompile() { this.renderer.build(7); }
 }
 class FakeRide { riding = false; async depart() { return {status: 'in-tunnel'}; } async arrive() { return {status: 'stopped'}; } }
 
@@ -266,7 +319,7 @@ function playFrame(g: FakeGame, ctl: PerfRecorderController, clock: {t: number},
   p.lap(S.input); clock.t += 0.5;
   p.lap(S.ai); p.begin(S.brain); p.begin(S.path); clock.t += aiMs; p.end(S.path); p.end(S.brain);
   p.lap(S.cull); clock.t += 0.3;
-  p.lap(S.draw); clock.t += 2;
+  p.lap(S.draw); g.renderer.render(); clock.t += 2;
   p.frameEnd();
   g.renderer.info.frame++;
   clock.t += 12;
@@ -360,7 +413,7 @@ describe('perf recorder controller: recording', () => {
     expect(cap.spans.available).toBe(true);
     expect(cap['renderer.newNodeBuilds'].available).toBe(true);
     expect(cap.gpu.available).toBe(false);
-    expect(cap.lifecycleEvents.note).toMatch(/missing: .*travel/); // the fake has no travel(): reported, not a crash
+    expect(cap.lifecycleEvents.note).toMatch(/missing: .*stageLevelTextures/); // the fake has no stageLevelTextures(): reported, not a crash
     expect(r.summary.gameplay.interval.frames).toBeGreaterThan(5);
     expect(r.capture.overhead.frames).toBe(14);
   });
@@ -542,6 +595,11 @@ describe('perf recorder: keys, file name, build identity, game seams', () => {
     for (const f of files) expect(readFileSync(new URL(`../src/${f}`, import.meta.url), 'utf8'), f).not.toMatch(/['"]F[89]['"]/);
   });
 
+  it('the title / pause controls list shows the recorder keys', async () => {
+    const {CONTROLS} = await import('../src/ui/hud');
+    expect(CONTROLS.some(([a, k]) => /performance recording/i.test(a) && k === `${RECORDER_KEYS.toggle} · ${RECORDER_KEYS.mark}`)).toBe(true);
+  });
+
   it('report file name terminal-state-perf-<build>-<UTC date>.json; the build hash comes from a hashed chunk name only', () => {
     const at = new Date(Date.UTC(2026, 10, 3, 5, 7, 9));
     expect(reportFileName('B1x2Y3z4', at)).toBe('terminal-state-perf-B1x2Y3z4-20261103-050709Z.json');
@@ -710,5 +768,94 @@ describe('perf recorder UI: the Performance section, badge and download', () => 
     expect(ui.ctl.phase).toBe('ready');
     expect(urls).toHaveLength(0);
     expect(doc.getElementById('perf-rec-badge')!.textContent).toMatch(/report ready \(stopped at the frame limit\)/);
+  });
+});
+
+describe('perf recorder: load routes, warm-up stage spans, control returned and first-use work after it', () => {
+  it('labels each level build with its route and splits first-use preparation into before / after the player had control', async () => {
+    const clock = {t: 1000};
+    vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    const g = new FakeGame();
+    g.renderer.clock = clock;
+    const ctl = new PerfRecorderController(asGame(g), quick);
+    ctl.start('qa');
+    expect(Object.prototype.hasOwnProperty.call(g.renderer, 'render')).toBe(true); // hooked while recording
+    for (let k = 0; k < 3; k++) playFrame(g, ctl, clock);
+    g.renderer.todo.builds = [4];
+    playFrame(g, ctl, clock); // frame 3: a node build in a running level (segment 0, after control)
+    // NEW GAME: prepare -> build -> warm-up (held open over two loading frames) -> play
+    let open!: () => void;
+    g.warmGate = new Promise<void>(r => { open = r; });
+    clock.t += 1; // (a level build always comes after the rAF timestamp of the frame before it)
+    const p = g.newGame('mall');
+    await new Promise(r => setTimeout(r, 0));
+    expect(g.state).toBe('loading');
+    playFrame(g, ctl, clock); playFrame(g, ctl, clock); // frames 4-5: loading + warming (the warm-up's async build lands in frame 4)
+    open();
+    await p;
+    playFrame(g, ctl, clock); // frame 6: playing, no warm-up, no lifecycle op -> control returned
+    g.renderer.todo = {builds: [2, 3], pipes: 2, progs: 1};
+    playFrame(g, ctl, clock); // frame 7: first use AFTER the warm-up (what it did not cover)
+    // TRAVEL BY TRAIN: no warm-up, a background compile in the tunnel
+    clock.t += 1;
+    await g.travelToStation('s21');
+    playFrame(g, ctl, clock); // control returned after the arrival
+    await ctl.stop('manual', 'qa');
+    // every hook is gone again
+    for (const [o, k] of [[g.renderer, 'render'], [g.renderer._nodes, '_createNodeBuilder'], [g.renderer._nodes, '_createNodeBuilderState'], [g.renderer._pipelines, '_getRenderPipeline'], [g.renderer.backend, 'createProgram']] as const) {
+      expect(Object.prototype.hasOwnProperty.call(o, k), k).toBe(false);
+    }
+    const r = ctl.reportObject() as any;
+    const segs = r.world.segments;
+    expect(segs.map((x: any) => x.route)).toEqual(['recording-start', 'new-game', 'travel-arrival']);
+    expect(segs[1]).toMatchObject({level: 'mall', station: 's09'});
+    expect(segs[1].warmups).toEqual([expect.objectContaining({kind: 'prepareGraphics', route: 'new-game', status: 'complete', mode: 'full', ms: 1234.5,
+      stages: expect.objectContaining({materials: {done: 4, total: 4, ms: 900}, view: {done: 1, total: 1, ms: 30}})})]);
+    expect(segs[2].warmups).toEqual([expect.objectContaining({kind: 'backgroundCompile', route: 'travel-arrival'})]);
+    expect(segs.every((x: any) => x.controlT !== null)).toBe(true);
+    const ev = (kind: string) => r.events.list.filter((e: any) => e.kind === kind);
+    expect(ev('level.build').map((e: any) => e.route)).toEqual(['new-game', 'travel-arrival']);
+    expect(ev('level.prepare').map((e: any) => e.route)).toEqual(['new-game', 'travel-arrival']);
+    expect(ev('warmup')[0]).toMatchObject({route: 'new-game', status: 'complete', mode: 'full'});
+    const stages = ev('warmup.stage');
+    expect(stages.map((e: any) => e.stage)).toEqual(['materials', 'passes', 'shadows', 'view']);
+    expect(stages.map((e: any) => e.dur)).toEqual([900, 200, 100, 30]);
+    for (let k = 1; k < 4; k++) expect(stages[k].t).toBeCloseTo(stages[k - 1].t + stages[k - 1].dur, 1); // back to back, ending with the warm-up
+    expect(ev('control.returned').map((e: any) => e.route)).toEqual(['new-game', 'travel-arrival']);
+    expect(ev('save.write')[0]).toMatchObject({route: 'travel-arrival', reason: 'arrival'});
+    const cols = r.frames.columns;
+    expect(cols.nodeBuilds[3]).toBe(1);
+    expect(cols.nodeBuildMs[3]).toBe(400);
+    expect(cols.asyncBuilds[4]).toBe(1);
+    expect([cols.nodeBuilds[7], cols.nodeBuildMs[7], cols.pipelinesCreated[7], cols.programsCreated[7]]).toEqual([2, 500, 2, 1]);
+    const fu = r.summary.firstUse;
+    expect(fu.available).toBe(true);
+    expect(fu.segments[0].afterControl).toMatchObject({nodeBuilds: 1, nodeBuildMs: 4});
+    expect(fu.segments[1].beforeControl).toMatchObject({asyncBuilds: 1, nodeBuilds: 0});
+    expect(fu.segments[1].afterControl).toMatchObject({nodeBuilds: 2, nodeBuildMs: 5, pipelines: 2, programs: 1, framesWithFirstUse: 1});
+    expect(fu.segments[1].afterControl.worst[0]).toMatchObject({frame: 7, nodeBuilds: 2});
+    expect(cols.asyncBuilds[8]).toBe(1); // the background compile's build (compileAsync, outside a render)
+    expect(fu.gameplayAfterControl.nodeBuilds).toBe(3);
+    const cap = Object.fromEntries((r.capabilities as any[]).map(c => [c.id, c]));
+    expect(cap['firstUse.nodeBuilds / nodeBuildMs / asyncBuilds'].available).toBe(true);
+    expect(cap['firstUse.pipelines / pipelineMs'].note).toMatch(/GPU pipeline compile time not observable/);
+    expect(cap.shaderCompileTime.available).toBe(false);
+    expect(r.worst.gameplay.find((f: any) => f.frame === 7)?.firstUse).toMatchObject({nodeBuilds: 2, pipelines: 2, programs: 1});
+  });
+
+  it('first-use columns are null (and listed as unavailable) when three\'s internals are not there', async () => {
+    const g = new FakeGame();
+    (g.renderer as unknown as {_nodes: unknown})._nodes = {nodeBuilderCache: new Map()};
+    let now = 0;
+    const ctl = new PerfRecorderController(asGame(g), {...quick, now: () => now});
+    ctl.start();
+    for (let k = 0; k < 5; k++) { now += 16; ctl.frame(now, 3); }
+    await ctl.stop();
+    const r = ctl.reportObject() as any;
+    expect(r.frames.columns.nodeBuilds.every((v: unknown) => v === null)).toBe(true);
+    const c = r.capabilities.find((x: any) => x.id === 'firstUse.nodeBuilds / nodeBuildMs / asyncBuilds');
+    expect(c.available).toBe(false);
+    expect(c.note).toMatch(/unavailable: .*_createNodeBuilder/);
+    expect(Object.prototype.hasOwnProperty.call(g.renderer, 'render')).toBe(false); // the hooks that did install are removed too
   });
 });

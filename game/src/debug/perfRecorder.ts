@@ -115,6 +115,13 @@ export class FrameInput {
   culled = -1; enemies = 0;
   /** Player look (radians) and position (m); storey = the culler's level of the eye. */
   yaw = 0; pitch = 0; x = 0; y = 0; z = 0; storey = 0;
+  /**
+   * First-use preparation since the previous sample (three r186 internals, hooked while recording; fuOn = false: unavailable):
+   * TSL node builds completed inside a synchronous renderer.render() and their CPU ms, node builds completed outside one
+   * (compileAsync / warm-up), pipelines requested (+ CPU ms inside renders), shader programs created (+ CPU ms inside renders).
+   */
+  fuOn = false;
+  nodeBuilds = 0; nodeBuildMs = 0; asyncBuilds = 0; pipelinesCreated = 0; pipelineMs = 0; programsCreated = 0; programMs = 0;
 }
 
 /** The UpdateProfiler's ring (debug/updateProfile.ts) as the recorder reads it. */
@@ -158,6 +165,12 @@ export interface WorldSegment {
   seed: number | null;
   seedCode: string | null;
   name?: string | null;
+  /** How the level was reached: travel-arrival (train transit), new-game, new-campaign, continue, retry, menu-travel, recording-start, other. */
+  route?: string | null;
+  /** Warm-ups / background compiles run for this level (status / mode / ms; stage times in the events). */
+  warmups?: Record<string, unknown>[];
+  /** When the player had control again (state playing, no warm-up, no lifecycle operation in flight); null = not within the capture. */
+  controlT?: number | null;
 }
 
 /** Everything the report says besides the capture itself (the hooks collect it; all fields optional / nullable). */
@@ -231,10 +244,12 @@ export class PerfCapture {
   private dTex!: Int16Array; private dGeo!: Int16Array; private dProg!: Int16Array; private dNode!: Int16Array; private dPipe!: Int16Array;
   private culled!: Int32Array; private enemies!: Uint16Array; private yaw!: Float32Array; private pitch!: Float32Array;
   private spanMs!: Float32Array; private spanCalls!: Uint16Array;
+  private fuBuilds!: Uint16Array; private fuBuildMs!: Float32Array; private fuAsync!: Uint16Array; private fuPipes!: Uint16Array; private fuPipeMs!: Float32Array;
+  private fuProgs!: Uint16Array; private fuProgMs!: Float32Array;
   // --- running state ---
   private prev = {textures: -1, geometries: -1, programs: -1, nodes: -1, pipelines: -1};
   /** Counters that were ever available in this capture (null in the report otherwise). */
-  readonly seen = {textures: false, geometries: false, programs: false, nodes: false, pipelines: false, culled: false, gpu: false, spans: false};
+  readonly seen = {textures: false, geometries: false, programs: false, nodes: false, pipelines: false, culled: false, gpu: false, spans: false, firstUse: false};
   private profHead = -1;
   private gapPending = false;
   private markPending = false;
@@ -282,6 +297,8 @@ export class PerfCapture {
     this.dTex = new Int16Array(N); this.dGeo = new Int16Array(N); this.dProg = new Int16Array(N); this.dNode = new Int16Array(N); this.dPipe = new Int16Array(N);
     this.culled = new Int32Array(N); this.enemies = new Uint16Array(N); this.yaw = new Float32Array(N); this.pitch = new Float32Array(N);
     this.spanMs = new Float32Array(N * SPAN_COUNT); this.spanCalls = new Uint16Array(N * SPAN_COUNT);
+    this.fuBuilds = new Uint16Array(N); this.fuBuildMs = new Float32Array(N); this.fuAsync = new Uint16Array(N); this.fuPipes = new Uint16Array(N); this.fuPipeMs = new Float32Array(N);
+    this.fuProgs = new Uint16Array(N); this.fuProgMs = new Float32Array(N);
     const C = Math.max(1, Math.floor(this.caps.camera));
     this.camT = new Float64Array(C); this.camX = new Float32Array(C); this.camY = new Float32Array(C); this.camZ = new Float32Array(C); this.camS = new Int8Array(C);
     this.allocated = true;
@@ -357,6 +374,10 @@ export class PerfCapture {
     this.culled[k] = i.culled; if (i.culled >= 0) s.culled = true;
     this.enemies[k] = Math.min(65535, Math.max(0, i.enemies));
     this.yaw[k] = i.yaw; this.pitch[k] = i.pitch;
+    if (i.fuOn) s.firstUse = true;
+    const c16 = (v: number) => (v > 65535 ? 65535 : v < 0 ? 0 : v);
+    this.fuBuilds[k] = c16(i.nodeBuilds); this.fuBuildMs[k] = i.nodeBuildMs; this.fuAsync[k] = c16(i.asyncBuilds);
+    this.fuPipes[k] = c16(i.pipelinesCreated); this.fuPipeMs[k] = i.pipelineMs; this.fuProgs[k] = c16(i.programsCreated); this.fuProgMs[k] = i.programMs;
     // the profiler's newest slot is this frame's when its head moved since the previous sample (it records only frames in which
     // the world updated); profHead = -1: no baseline yet (the profiler was off), so this frame only sets it
     const o = k * SPAN_COUNT;
@@ -451,7 +472,21 @@ export class PerfCapture {
   world(now: number, seg: Omit<WorldSegment, 't'>): void {
     if (!this.on) return;
     if (this.worlds.length >= this.caps.worlds) { this.worlds.shift(); this.worldsDropped++; }
-    this.worlds.push({t: now - this.t0, ...seg});
+    this.worlds.push({warmups: [], controlT: null, ...seg, t: now - this.t0});
+  }
+
+  /** A warm-up / background compile for the current level (newest segment). */
+  segmentWarmup(w: Record<string, unknown>): void {
+    const seg = this.worlds[this.worlds.length - 1];
+    if (!this.on || !seg) return;
+    if ((seg.warmups ??= []).length < 16) seg.warmups.push(w);
+  }
+
+  /** The player has control again in the current level (newest segment), at `now`. */
+  segmentControl(now: number): void {
+    const seg = this.worlds[this.worlds.length - 1];
+    if (!this.on || !seg || (seg.controlT !== null && seg.controlT !== undefined)) return;
+    seg.controlT = now - this.t0;
   }
 
   /** An asynchronous GPU time for the drawn frame `frameId` (debug/gpuTimer.ts); false when that frame is not (recently) recorded. */
@@ -469,7 +504,7 @@ export class PerfCapture {
   bytes(): number {
     if (!this.allocated) return 0;
     const N = this.t.length;
-    return N * (8 + 4 * 5 + 1 + 2 + 8 + 4 + 4 + 2 + 2 * 5 + 4 + 2 + 4 + 4) + N * SPAN_COUNT * 6 + this.camT.length * (8 + 12 + 1);
+    return N * (8 + 4 * 5 + 1 + 2 + 8 + 4 + 4 + 2 + 2 * 5 + 4 + 2 + 4 + 4 + 2 * 4 + 4 * 3) + N * SPAN_COUNT * 6 + this.camT.length * (8 + 12 + 1);
   }
 
   // ==== read-out ===================================================================================================================
@@ -565,14 +600,39 @@ export class PerfCapture {
     summary.spans = {frames: spanFrames, spikeFrames: spikeSpanFrames, note: 'ms per gameplay frame (inclusive: a nested span is also inside its parent); spikeMean = mean over gameplay frames with interval > 33.3 ms', list: spans};
     yield;
     // --- correlation counts: what the gameplay spikes coincide with (base rates over all gameplay frames beside them) ---
-    const CORR = ['turning', 'newNodeBuilds', 'newPipelines', 'newPrograms', 'newTextures', 'newGeometries', 'cullingChanged', 'pathSearches', 'riding', 'mainThreadOutsideGame'] as const;
+    const CORR = ['turning', 'newNodeBuilds', 'newPipelines', 'newPrograms', 'newTextures', 'newGeometries', 'cullingChanged', 'pathSearches', 'riding', 'mainThreadOutsideGame', 'firstUse'] as const;
     const cf = new Uint32Array(CORR.length), cs = new Uint32Array(CORR.length), cn = new Uint32Array(2);
     for (let k0 = 0; k0 < n; k0 += RANGE) { this.corrRange(k0, Math.min(n, k0 + RANGE), interval, cat, yawRate, cf, cs, cn); yield; }
     const corrFrames = cn[0], corrSpikes = cn[1];
     const with_: Record<string, {frames: number; spikes: number}> = {};
     CORR.forEach((key, c) => { with_[key] = {frames: cf[c], spikes: cs[c]}; });
-    summary.correlation = {note: `gameplay frames (frames) and gameplay spikes over 33.3 ms (spikes) that coincide with each condition; turning = yaw rate over ${TURN_DEG_S} deg per s in the preceding ${TURN_WINDOW_MS} ms; new* = net renderer counter increase in that frame; pathSearches = the profiler counted A* searches; mainThreadOutsideGame = interval minus game CPU over 33.3 ms (browser, GC, GPU wait or other tasks)`,
+    summary.correlation = {note: `gameplay frames (frames) and gameplay spikes over 33.3 ms (spikes) that coincide with each condition; turning = yaw rate over ${TURN_DEG_S} deg per s in the preceding ${TURN_WINDOW_MS} ms; new* = net renderer counter increase in that frame; pathSearches = the profiler counted A* searches; firstUse = a TSL node build / pipeline / shader program was created inside that frame's renders; mainThreadOutsideGame = interval minus game CPU over 33.3 ms (browser, GC, GPU wait or other tasks)`,
       frames: corrFrames, spikes: corrSpikes, with: with_};
+    yield;
+    // --- first use: preparation work per level, before vs after the player had control (does the warm-up cover gameplay?) ---
+    const fuSegs: Record<string, unknown>[] = [];
+    const fuTotal = this.fuAcc();
+    for (let s = 0, k = 0; s < this.worlds.length; s++) {
+      const seg = this.worlds[s], tEnd = s + 1 < this.worlds.length ? this.worlds[s + 1].t : Infinity;
+      while (k < n && this.t[k] < seg.t) k++;
+      let k1 = k;
+      while (k1 < n && this.t[k1] < tEnd) k1++;
+      const ctl = seg.controlT ?? null;
+      const before = this.fuAcc(), after = this.fuAcc();
+      this.fuRange(k, k1, ctl, interval, cat, before, after);
+      this.fuRange(k, k1, ctl, interval, cat, null, fuTotal);
+      fuSegs.push({t: r2(seg.t), level: seg.level, station: seg.station, route: seg.route ?? null, warmups: seg.warmups ?? [],
+        controlReturnedT: ctl === null ? null : r2(ctl), controlAfterMs: ctl === null ? null : r2(ctl - seg.t),
+        beforeControl: this.fuOut(before), afterControl: this.fuOut(after)});
+      k = k1;
+      yield;
+    }
+    summary.firstUse = {
+      available: this.seen.firstUse,
+      note: 'three r186 first-use preparation, counted per frame: nodeBuilds = TSL node builds completed inside synchronous renders (nodeBuildMs = their CPU ms), asyncBuilds = node builds completed outside a render (compileAsync / warm-up), pipelines = render pipelines requested (pipelineMs = CPU ms of the requests inside renders), programs = shader programs created (programMs likewise). afterControl = frames from the moment the player had control again (gameplay and transition frames); work there is first-use preparation the warm-up did not cover. The GPU / driver compile time is NOT observable: CPU-side spans only.',
+      gameplayAfterControl: this.fuOut(fuTotal),
+      segments: fuSegs,
+    };
     yield;
     // --- worst frames with timelines (bounded top-N selection, no full sort) ---
     const evs = this.eventsInOrder();
@@ -666,6 +726,9 @@ export class PerfCapture {
       newPrograms: 'net change of renderer.info.memory.programs (shader programs)', newNodeBuilds: 'net change of three NodeManager.nodeBuilderCache (TSL material builds on the CPU)',
       newPipelines: 'net change of three Pipelines.caches (pipelines requested on the CPU; driver compile not observable)',
       culled: 'meshes the level culler currently hides (-1: no culler)', enemies: 'enemy actors in the level', yaw: '0.1 degree (player look)', pitch: '0.1 degree (player look)',
+      nodeBuilds: 'TSL node builds completed inside synchronous renders since the previous frame (null: hooks unavailable)', nodeBuildMs: '0.01 ms CPU of those builds',
+      asyncBuilds: 'node builds completed outside a render (compileAsync / warm-up)', pipelinesCreated: 'render pipelines requested (any path)',
+      pipelineMs: '0.01 ms CPU of the pipeline requests inside renders (driver compile not observable)', programsCreated: 'shader programs created', programMs: '0.01 ms CPU of the program creation inside renders',
     })},`);
     parts.push('"columns":{');
     // one column = `"name":[v,v,…]`, written in chunks (a yield every CHUNK values; the parts are only ever concatenated)
@@ -708,6 +771,14 @@ export class PerfCapture {
     yield* col('enemies', k => this.enemies[k]);
     yield* col('yaw', k => Math.round(wrapDeg(this.yaw[k]) * 10));
     yield* col('pitch', k => Math.round(this.pitch[k] * 1800 / Math.PI));
+    const fu = this.seen.firstUse;
+    yield* col('nodeBuilds', k => (fu ? this.fuBuilds[k] : 'null'));
+    yield* col('nodeBuildMs', k => (fu ? q100(this.fuBuildMs[k]) : 'null'));
+    yield* col('asyncBuilds', k => (fu ? this.fuAsync[k] : 'null'));
+    yield* col('pipelinesCreated', k => (fu ? this.fuPipes[k] : 'null'));
+    yield* col('pipelineMs', k => (fu ? q100(this.fuPipeMs[k]) : 'null'));
+    yield* col('programsCreated', k => (fu ? this.fuProgs[k] : 'null'));
+    yield* col('programMs', k => (fu ? q100(this.fuProgMs[k]) : 'null'));
     parts.push('}}');
     // spans: top-level laps per frame (0.01 ms; 0 = no profiler sample, see flags.spans) + names
     parts.push(`,"spans":{"names":${JSON.stringify(spanNames)},"parents":${JSON.stringify(PARENT.map(p => (p >= 0 ? spanNames[p] : null)))},`);
@@ -808,12 +879,55 @@ export class PerfCapture {
       if ((fl & F.spans) !== 0 && this.spanCalls[k * SPAN_COUNT + S.path] > 0) { cf[7]++; cs[7] += spike; }
       if ((fl & F.riding) !== 0) { cf[8]++; cs[8] += spike; }
       if (interval[k] - this.cpu[k] > SPIKE_MS) { cf[9]++; cs[9] += spike; }
+      if (this.fuBuilds[k] > 0 || this.fuPipes[k] > 0 || this.fuProgs[k] > 0) { cf[10]++; cs[10] += spike; }
     }
   }
 
+  private fuAcc() {
+    return {frames: 0, nodeBuilds: 0, nodeBuildMs: 0, asyncBuilds: 0, pipelines: 0, pipelineMs: 0, programs: 0, programMs: 0, framesWithFirstUse: 0, spikesWithFirstUse: 0,
+      netNodeBuilds: 0, netPipelines: 0, newTextures: 0, worst: [] as number[]};
+  }
+
+  /**
+   * First-use sums of frames [k0, k1): frames before `ctl` (capture ms; null = never) go to `before` (null: skipped), the gameplay /
+   * transition frames from it on to `after`; `after.worst` keeps the 5 frames with the most first-use CPU ms.
+   */
+  private fuRange(k0: number, k1: number, ctl: number | null, interval: Float64Array, cat: Uint8Array, before: ReturnType<PerfCapture['fuAcc']> | null, after: ReturnType<PerfCapture['fuAcc']>): void {
+    const ms = (k: number) => this.fuBuildMs[k] + this.fuPipeMs[k] + this.fuProgMs[k];
+    for (let k = k0; k < k1; k++) {
+      const post = ctl !== null && this.t[k] >= ctl;
+      if (post && cat[k] !== C_GAMEPLAY && cat[k] !== C_TRANSITION) continue;
+      const a = post ? after : before;
+      if (!a) continue;
+      a.frames++;
+      a.nodeBuilds += this.fuBuilds[k]; a.nodeBuildMs += this.fuBuildMs[k]; a.asyncBuilds += this.fuAsync[k];
+      a.pipelines += this.fuPipes[k]; a.pipelineMs += this.fuPipeMs[k]; a.programs += this.fuProgs[k]; a.programMs += this.fuProgMs[k];
+      if (this.dNode[k] > 0) a.netNodeBuilds += this.dNode[k];
+      if (this.dPipe[k] > 0) a.netPipelines += this.dPipe[k];
+      if (this.dTex[k] > 0) a.newTextures += this.dTex[k];
+      if (this.fuBuilds[k] > 0 || this.fuPipes[k] > 0 || this.fuProgs[k] > 0) {
+        a.framesWithFirstUse++;
+        if (interval[k] > SPIKE_MS) a.spikesWithFirstUse++;
+        if (post) {
+          const w = a.worst, v = ms(k);
+          if (w.length < 5 || v > ms(w[w.length - 1])) { w.push(k); w.sort((x, y) => ms(y) - ms(x)); if (w.length > 5) w.pop(); }
+        }
+      }
+    }
+  }
+
+  private fuOut(a: ReturnType<PerfCapture['fuAcc']>): Record<string, unknown> {
+    return {frames: a.frames, nodeBuilds: a.nodeBuilds, nodeBuildMs: r2(a.nodeBuildMs), asyncBuilds: a.asyncBuilds, pipelines: a.pipelines, pipelineMs: r2(a.pipelineMs),
+      programs: a.programs, programMs: r2(a.programMs), framesWithFirstUse: a.framesWithFirstUse, spikesWithFirstUse: a.spikesWithFirstUse,
+      netNodeBuilds: a.netNodeBuilds, netPipelines: a.netPipelines, newTextures: a.newTextures,
+      worst: a.worst.map(k => ({frame: k, t: r2(this.t[k]), intervalMs: k + 1 < this.n ? r2(this.t[k + 1] - this.t[k]) : null, cpuMs: r2(this.cpu[k]),
+        nodeBuilds: this.fuBuilds[k], nodeBuildMs: r2(this.fuBuildMs[k]), pipelines: this.fuPipes[k], pipelineMs: r2(this.fuPipeMs[k]), programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k])}))};
+  }
+
+  /** The kept events by start time (recorded at their end, so the ring order is not time order). */
   private eventsInOrder(): EventRec[] {
     const e = this.events;
-    return this.eventsDropped > 0 ? [...e.slice(this.evHead), ...e.slice(0, this.evHead)] : e.slice();
+    return (this.eventsDropped > 0 ? [...e.slice(this.evHead), ...e.slice(0, this.evHead)] : e.slice()).sort((a, b) => a.t - b.t);
   }
 
   private resourcesInOrder(): ResourceEntry[] {
@@ -861,6 +975,8 @@ export class PerfCapture {
       renderer: {draws: this.draws[k], triangles: this.tris[k], passes: this.passes[k],
         newTextures: this.seen.textures ? this.dTex[k] : null, newGeometries: this.seen.geometries ? this.dGeo[k] : null, newPrograms: this.seen.programs ? this.dProg[k] : null,
         newNodeBuilds: this.seen.nodes ? this.dNode[k] : null, newPipelines: this.seen.pipelines ? this.dPipe[k] : null},
+      firstUse: this.seen.firstUse ? {nodeBuilds: this.fuBuilds[k], nodeBuildMs: r2(this.fuBuildMs[k]), asyncBuilds: this.fuAsync[k], pipelines: this.fuPipes[k], pipelineMs: r2(this.fuPipeMs[k]),
+        programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k])} : null,
       world: {culled: this.culled[k] >= 0 ? this.culled[k] : null, culledDelta, enemies: this.enemies[k]},
       camera: {yawDeg: r2(wrapDeg(this.yaw[k])), pitchDeg: r2(this.pitch[k] * 180 / Math.PI), yawRateDegPerSec: Math.round(yawRate[k]), pose, poseColumns: ['x', 'y', 'z', 'storey', 'ageMs']},
       spans,
