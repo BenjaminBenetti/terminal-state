@@ -1196,7 +1196,7 @@ export class Game {
     p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
     this.updateCamera(dt);
-    inp.endFrame?.();
+    this.trainRide.tiltCamera(this.camera);
   }
 
   /**

@@ -15,7 +15,6 @@ import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/sett
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
 import {setSkylineTexture} from './world/exterior';
-import {SAVE_SLOTS} from './campaign/types';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -57,19 +56,46 @@ function devStartFromUrl(p: URLSearchParams, qaMode: boolean): DevStart | null {
 }
 
 /**
- * The menu's host until the save system lands (primary + lane SAVE replace this with their MenuHost): no persistent saves, every slot
- * is listed empty; New game starts a run (not written anywhere yet); Continue / Load / Import / Export are unavailable.
+ * Task studio-alpha-campaign-foundation-20261102-230708-01 (primary): THE menu host — the 3 localStorage slots (lane SAVE's SaveSlots,
+ * slots 1..3; the menu's 0-based slot n is save slot n + 1), New game = a fresh campaign network into the chosen slot (the menu has
+ * already confirmed an overwrite), Continue / Load = Game.continueCampaign, Export = a .json download, Import = a validated replace
+ * into the chosen slot (the menu has already confirmed it), Delete = that slot only.
  */
-function sessionMenuHost(startRun: (level: LevelId, seeds: Partial<Record<LevelId, number>>) => Promise<void>): MenuHost {
-  const none = 'Saving is not available in this build yet.';
+function campaignMenuHost(game: Game, ready: () => boolean): MenuHost {
+  const fail = (e: string): never => { throw new Error(e); };
   return {
-    listSlots: (): SlotView[] => Array.from({length: SAVE_SLOTS}, (_, slot) => ({slot, empty: true, valid: false})),
-    lastSlot: () => null,
-    newGame: (_slot, dev) => startRun(dev?.level ?? 'subway', dev?.seeds ?? {}),
-    continueGame: () => Promise.reject(new Error(none)),
-    exportSlot: () => { throw new Error(none); },
-    importFile: () => Promise.resolve({ok: false, error: none}),
-    deleteSlot: () => {},
+    listSlots: (): SlotView[] => game.saves.list().map(v => ({slot: v.slot - 1, empty: v.empty, valid: v.valid, ...(v.meta ? {meta: v.meta} : {}), ...(v.error ? {error: v.error} : {})})),
+    lastSlot: () => { const n = game.saves.lastSlot(); return n === null ? null : n - 1; },
+    newGame: async (slot, dev) => {
+      if (!ready()) fail('the game files are still loading');
+      const r = await game.newCampaign(slot + 1, {overwrite: true, dev: dev ? {level: dev.level} : undefined});
+      if (!r.ok) fail(r.error);
+    },
+    continueGame: async slot => {
+      if (!ready()) fail('the game files are still loading');
+      const r = await game.continueCampaign(slot === undefined ? undefined : slot + 1);
+      if (!r.ok) fail(r.error);
+    },
+    exportSlot: slot => {
+      const r = game.saves.exportFile(slot + 1);
+      if (!r.ok) fail(r.error);
+      const e = r as {filename: string; blob: Blob};
+      const url = URL.createObjectURL(e.blob), a = document.createElement('a');
+      a.href = url; a.download = e.filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+    importFile: async (slot, file) => {
+      const r = await game.saves.importFile(slot + 1, file, {confirmReplace: true});
+      if (!r.ok) return {ok: false, error: r.error};
+      if (game.currentSlot === slot + 1) game.currentSlot = null; // the replaced slot no longer belongs to the run in memory
+      return {ok: true};
+    },
+    deleteSlot: slot => {
+      const r = game.saves.delete(slot + 1);
+      if (!r.ok) fail(r.error);
+      if (game.currentSlot === slot + 1) game.currentSlot = null;
+    },
   };
 }
 
@@ -237,7 +263,7 @@ async function boot(): Promise<void> {
       if (w.status === 'cancelled') throw new Error('the graphics device was lost');
     });
   };
-  const host: MenuHost = sessionMenuHost(startRun); // (primary + lane SAVE: the persistent host replaces this)
+  const host: MenuHost = campaignMenuHost(game, () => booted); // (primary: the 3 persistent slots; sessionMenuHost kept for tests / QA)
   const menu = new MainMenuController(host, {
     dev, devLevels: LEVEL_IDS, levelName: l => LEVELS[l].name, pickFile: pickJsonFile,
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
@@ -281,6 +307,39 @@ async function boot(): Promise<void> {
     showError('The graphics device was lost — rendering stopped.', [text, 'Reload the page to restart (your browser or GPU driver reset the device).']);
     game.state = 'error';
   };
+  // ==== task studio-alpha-campaign-foundation-20261102-230708-01 (primary): campaign runs in the pause / death screens ============
+  // A campaign run travels only by its train (the console's map): the legacy level travel + per-level new-game buttons are hidden; a
+  // "Main menu" button returns to the menu after a confirmation that says what the last autosave holds (nothing after it is saved).
+  const mainMenuButton = (parentSel: string, id: string): HTMLButtonElement => {
+    const b = document.createElement('button');
+    b.id = id; b.type = 'button'; b.textContent = 'Main menu';
+    document.querySelector(`${parentSel} .actions`)?.appendChild(b);
+    return b;
+  };
+  const autosaveNote = (): string => {
+    const slot = game.currentSlot;
+    const v = slot ? game.saves.list().find(x => x.slot === slot) : undefined;
+    if (!slot || !v?.meta) return 'This run has no save yet — leaving now loses it.';
+    const at = new Date(v.meta.savedAt), when = isNaN(at.getTime()) ? v.meta.savedAt : at.toLocaleString();
+    return `Last autosave (slot ${slot}): ${when}, at ${v.meta.station} (${v.meta.reason}). Progress since then is NOT saved — the game saves at every train departure and arrival.`;
+  };
+  const toMenu = (b: HTMLButtonElement) => b.addEventListener('click', () => {
+    if (!game.run.campaign) { game.setState('title'); return; }
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; b.title = autosaveNote(); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
+    b.dataset.armed = ''; b.textContent = 'Main menu';
+    game.trainRide.reset();
+    game.setState('title');
+  });
+  toMenu(mainMenuButton('#pause', 'btn-main-menu'));
+  toMenu(mainMenuButton('#death', 'btn-death-menu'));
+  const legacyRunUi = ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-new-game', '#btn-death-new', '#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth',
+    '#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-new'];
+  game.stateListeners.push((s: GameState) => {
+    const campaign = !!game.run.campaign;
+    for (const id of legacyRunUi) document.querySelector(id)?.classList.toggle('hidden', campaign);
+    if (s !== 'paused') { const b = document.getElementById('btn-main-menu'); if (b) { b.dataset.armed = ''; b.textContent = 'Main menu'; } }
+  });
+
   if (qaPrebuild) game.setState('loading'); // (QA: the loading card until the scratch run is ready, as the old boot)
   else { titleEl.dataset.mode = 'menu'; game.setState('title'); }
   requestAnimationFrame(loop);
