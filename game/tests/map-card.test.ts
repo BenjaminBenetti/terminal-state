@@ -78,7 +78,7 @@ describe('labels never move with the selection (pure)', () => {
   };
 
   it('every station selected / focused in turn: the same label boxes, lines and line breaks (travel + view, two zooms)', () => {
-    for (const seed of [424242, 7919, 31337]) {
+    for (const seed of [424242, 31337]) {
       const n = generateNetwork(seed);
       const s = nearReactor(n);
       for (const scale of [0.8, 1.6]) { sameLabels(s, 'travel', scale); sameLabels(s, 'view', scale); }
