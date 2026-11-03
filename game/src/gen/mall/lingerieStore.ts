@@ -37,6 +37,7 @@ import {DOOR_HEIGHT, type Door, type Side} from '../stationTypes';
 import type {MallShop} from './mallTypes';
 import {GARMENT_RAIL_Y, LINGERIE_RACK, LINGERIE_SET_KINDS, LINGERIE_SET_Y0} from './kinds';
 import {frameOf, uvXZ, xzUV, type ShopDresser, type ShopFrame} from './shopsDress';
+import {LINGERIE_BUILD} from '../../ai/lingerie.generated'; // lane FIT's build table (pure data): the stock's node names / sizes
 
 /** Changing-suite geometry (cells of 0.5 m unless noted). */
 export const CHANGING_SUITE = {
@@ -273,21 +274,23 @@ export function rackStock(code: number): {a: (typeof LINGERIE_DESIGNS)[number]; 
 }
 
 // ---------------------------------------------------------------------------------------------
-// Lane FIT seam (polish, 2026-11-03): in each `outfit-lingerie-<design>.glb` (prop-library key outfit_lingerie_<design>, lane FIT's
-// LINGERIE_MODEL_FILES — the SAME files the store-local zombies wear: no extra bytes), unskinned static nodes:
+// Lane FIT seam (polish, 2026-11-03; lane FIT 31772e0): in each `outfit-lingerie-<design>.glb` (prop-library key = its LINGERIE_BUILD model,
+// lane FIT's LINGERIE_MODEL_FILES — the SAME files the store-local zombies wear: no extra bytes), unskinned static nodes:
 //  - LingerieMannequin_<design>_top / _bottom: the set fitted offline to the female mannequin's mesh, in the mannequin model's LOCAL frame
 //    (identity node transform): drawn under the mannequin prop's exact runtime transform;
-//  - LingerieHang_<design>_top / _bottom: one hanging item each (lace garment + its hanger), origin = the hook's contact point on the rail,
-//    +Y up, the garment's front +Z; extras `lingerieHang` {dropM, widthM, depthM, spacingM}.
+//  - LingerieHang_<design>_<item>: one hanging item each (lace garment + its hanger, the hanger the last primitive), origin = the hook's
+//    contact point on the rail, +Y up, the garment's front +Z, hanger width along x; the one-piece blush set hangs whole.
+// The data (node names, drops, widths, spacings) is lane FIT's generated build table (ai/lingerie.generated.ts: pure data).
 // World/mallLingerieDisplay.ts renders both; until the files are in the prop library the riders draw their procedural stand-ins.
 
+const BUILD = (design: string) => LINGERIE_BUILD.find(s => s.design === design);
 export const LINGERIE_DISPLAY_SOURCE = {
   /** Prop-library key of a design's outfit file (lane FIT's LINGERIE_MODEL_FILES key). */
-  modelKey: (design: string) => `outfit_lingerie_${design}`,
-  /** The mannequin-fitted set nodes of a design (blush may be two halves: whichever exist render). */
-  mannequinNodes: (design: string) => [`LingerieMannequin_${design}_top`, `LingerieMannequin_${design}_bottom`],
-  /** The hanging items of a design (top / bottom). */
-  hangNodes: (design: string) => [`LingerieHang_${design}_top`, `LingerieHang_${design}_bottom`],
+  modelKey: (design: string) => BUILD(design)?.model ?? `outfit_lingerie_${design}`,
+  /** The mannequin-fitted set nodes of a design (blush as two halves: whichever exist render). */
+  mannequinNodes: (design: string) => { const b = BUILD(design); return b ? [b.mannequin.top, b.mannequin.bottom] : []; },
+  /** The hanging items of a design (top / bottom, or the whole set): node name, drop / width (m), side-on pitch along a rail (m). */
+  hangItems: (design: string): readonly {node: string; item: string; dropM: number; widthM: number; spacingSideOnM: number; spacingFaceOutM: number}[] => BUILD(design)?.hang ?? [],
   /** The female mannequin's model key (the set nodes share its runtime transform). */
   mannequinModelKey: 'office-mannequin-female',
 } as const;

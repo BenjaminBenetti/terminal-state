@@ -17,7 +17,7 @@ import {MALL_ALWAYS, MALL_ASSIGN_STATS, MALL_PROGRAMS, MALL_ROTATION, SIDE_PROGR
 import {MALL_LOTS, MALL_LOT_IDS, lotSuits, lotsForProgram} from '../src/gen/mall/lots';
 import {GARMENT_RAIL_Y, LINGERIE_RACK, LINGERIE_SET_KINDS, LINGERIE_SET_Y0, MALL_OPEN_AUDIT, MALL_PHYS, MALL_RIDER_KINDS} from '../src/gen/mall/kinds';
 import {CHANGING_SUITE, LINGERIE_DESIGNS, LINGERIE_DISPLAY_SOURCE, lingerieDisplayModelKeys, rackCode, rackStock, suiteCols, suiteRows} from '../src/gen/mall/lingerieStore';
-import {LINGERIE_MODEL_FILES} from '../src/ai/lingerie';
+import {LINGERIE_HANG_SETS, LINGERIE_MANNEQUIN_MODEL, LINGERIE_MANNEQUIN_SETS, LINGERIE_MODEL_FILES} from '../src/ai/lingerie';
 import {dressMallShops} from '../src/gen/mall/shopsDress';
 import {generateMallLevel, mallIssues} from '../src/gen/mall/index';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
@@ -291,7 +291,7 @@ describe('fixtures: audits, physics, the display / hanging-stock seam', () => {
       expect(MALL_RIDER_KINDS).toContain(k);
       expect(ridesHost(k)).toBe(true);
     }
-    // real-world sizes: the bench seat 0.45 m, the mirror to 1.97 m, the stock's longest drop 0.55 m under a rail
+    // real-world sizes: the bench seat 0.45 m, the mirror to 1.97 m, the stock's longest drop 0.62 m under a rail
     expect(PROP_DEFS.fittingBench.h).toBe(0.45);
     expect(PROP_DEFS.fittingMirror.h).toBe(1.97);
     expect(LINGERIE_RACK.drop).toBeLessThanOrEqual(GARMENT_RAIL_Y.garmentRailRound! - 0.15);
@@ -302,9 +302,18 @@ describe('fixtures: audits, physics, the display / hanging-stock seam', () => {
     expect(LINGERIE_DESIGNS).toEqual(['green', 'purple', 'blush', 'black', 'red', 'ivory']);
     expect(LINGERIE_DISPLAY_SOURCE.modelKey('red')).toBe('outfit_lingerie_red');
     expect(LINGERIE_DISPLAY_SOURCE.mannequinNodes('blush')).toEqual(['LingerieMannequin_blush_top', 'LingerieMannequin_blush_bottom']);
-    expect(LINGERIE_DISPLAY_SOURCE.hangNodes('green')).toEqual(['LingerieHang_green_top', 'LingerieHang_green_bottom']);
-    // the keys are lane FIT's registered outfit files (the same files the store-local zombies wear)
-    for (const d of LINGERIE_DESIGNS) expect(LINGERIE_MODEL_FILES[LINGERIE_DISPLAY_SOURCE.modelKey(d)], d).toBeDefined();
+    // the keys / nodes are exactly lane FIT's exported stock tables (the same files the store-local zombies wear)
+    for (const d of LINGERIE_DESIGNS) {
+      expect(LINGERIE_MODEL_FILES[LINGERIE_DISPLAY_SOURCE.modelKey(d)], d).toBeDefined();
+      const m = LINGERIE_MANNEQUIN_SETS.find(q => q.design === d)!, h = LINGERIE_HANG_SETS.find(q => q.design === d)!;
+      expect(LINGERIE_DISPLAY_SOURCE.modelKey(d)).toBe(m.model);
+      expect(LINGERIE_DISPLAY_SOURCE.mannequinNodes(d)).toEqual([m.nodes.top, m.nodes.bottom]);
+      expect(LINGERIE_DISPLAY_SOURCE.hangItems(d).map(q => q.node)).toEqual(h.items.map(q => q.node));
+      // every hung item clears the floor on the lowest rail (the round rack's ring) and fits the rider box
+      for (const q of h.items) { expect(q.dropM).toBeLessThanOrEqual(LINGERIE_RACK.drop); expect(GARMENT_RAIL_Y.garmentRailRound! - q.dropM).toBeGreaterThan(0.6); }
+    }
+    expect(LINGERIE_MANNEQUIN_MODEL).toBe('mannequin-female');
+    expect(LINGERIE_DISPLAY_SOURCE.mannequinModelKey).toBe(`office-${LINGERIE_MANNEQUIN_MODEL}`);
     const L = mall(WITH[0]);
     const keys = lingerieDisplayModelKeys(L);
     expect(keys.length).toBeGreaterThan(0);

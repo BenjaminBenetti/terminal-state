@@ -147,12 +147,12 @@ const SPECS = {
   lingerieSetBlack: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
   lingerieSetRed: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
   lingerieSetIvory: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
-  /** Lingerie hanging stock on a straight rail (garment rail 1.53 m / clothing bay 1.915 m): a face-out row of hangers along the rail
-   *  (lane FIT's LingerieHang_* items: lace garment + its hanger), the row's designs / pieces seeded per placement (variant). Box = the
-   *  hung row (its top on the rail line, the longest drop below); a rider on its rail. */
-  lingerieRackRow: {box: [1.4, 0.24, 0.55], cls: 'fabric'},
-  /** The same stock round a round rack's ring (1.31 m), face-out all round. */
-  lingerieRackRing: {box: [1.1, 1.1, 0.55], cls: 'fabric'},
+  /** Lingerie hanging stock on a straight rail (garment rail 1.53 m / clothing bay 1.915 m): hangers hooked on the rail side-on, packed
+   *  like a real rack (lane FIT's LingerieHang_* items: lace garment + its hanger), the designs / pieces seeded per placement (variant).
+   *  Box = the hung row (its top on the rail line, the longest drop below, the hanger width across); a rider on its rail. */
+  lingerieRackRow: {box: [1.4, 0.32, 0.62], cls: 'fabric'},
+  /** The same stock round a round rack's ring (1.31 m), hangers hooked side-on all round. */
+  lingerieRackRing: {box: [1.1, 1.1, 0.62], cls: 'fabric'},
   // --- task track3 (lane ARCH): landmarks / navigation (gen/mall/landmarks.ts places them, world/mallArch.ts draws them) ---
   /** Pit-plaza fountain basin: square stone basin with a 0.4 m sitting ledge (half size 1.6 m; a 1.25 m fallback). */
   fountainBasin: {box: [3.2, 3.2, 0.5], cls: 'terrazzo'},
@@ -289,8 +289,8 @@ export const LINGERIE_SET_Y0 = 0.76;
 export const MANNEQUIN_TORSO = {hipY: 0.92, waistY: 1.08, bustY: 1.24, shoulderY: 1.4, hipHalfW: 0.16, waistHalfW: 0.13, bustHalfW: 0.16, depth: 0.2} as const;
 /** The hanging-stock riders and their host rails: rail height (GARMENT_RAIL_Y), usable rail half length / ring radius (m). */
 export const LINGERIE_RACK = {
-  /** Longest drop of a hung item below the rail (m; lane FIT's purple bustier ~0.5) — the rider box's height. */
-  drop: 0.55,
+  /** Longest drop of a hung item below the rail (m; lane FIT's items drop 0.28-0.36 m, the one-piece blush set 0.60) — the rider box's height. */
+  drop: 0.62,
   /** Hosts: straight rails (face-out row along the host's x, half length) and the round rack (ring radius). */
   row: {garmentRail: 0.66, clothingWallUnit: 1.08} as Readonly<Partial<Record<MallKind, number>>>,
   ring: {garmentRailRound: 0.5} as Readonly<Partial<Record<MallKind, number>>>,

@@ -7,9 +7,10 @@
 //    the placement's x / z / yaw at the mannequin's base x FLIP (the office / mall GLBs face -Z) x officeProps' uniform fit k = min(def.w /
 //    size.x, def.d / size.z) x the model's bounds centred in x / z with its lowest point on the floor (read from the loaded mannequin model;
 //    its measured bounds are centred, so the fallback is the identity).
-//  - HANGING STOCK (lingerieRackRow on a garment rail / clothing bay, lingerieRackRing on a round rack): LingerieHang_<design>_top / _bottom
-//    items (lace garment + its hanger; origin = the hook's contact point on the rail, +Y up, front +Z; extras lingerieHang {widthM, dropM})
-//    hung face-out along the rail line / round the ring, the designs / pieces / pattern from the rider's stock code (rackStock).
+//  - HANGING STOCK (lingerieRackRow on a garment rail / clothing bay, lingerieRackRing on a round rack): LingerieHang_<design>_<item> items
+//    (lace garment + its hanger; origin = the hook's contact point on the rail, +Y up, front +Z, hanger width along x) hooked SIDE-ON on
+//    the rail line / round the ring (the hanger across the rail, as a hanger really hangs) at lane FIT's side-on pitch, the designs /
+//    items / pattern from the rider's stock code (rackStock).
 // Static, unskinned, one InstancedMesh per mesh primitive per storey and kind, named prop-<kind> (the damage / physics render index maps
 // every instance to its rider, so the stock rides its host). Geometry / materials stay owned by the model library.
 
@@ -17,10 +18,12 @@ import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/stationTypes';
-import {GARMENT_RAIL_Y, LINGERIE_RACK, LINGERIE_SET_Y0} from '../gen/mall/kinds';
+import {LINGERIE_RACK, LINGERIE_SET_Y0} from '../gen/mall/kinds';
 import {LINGERIE_DISPLAY_SOURCE, lingerieSetDesign, rackStock} from '../gen/mall/lingerieStore';
 
 const UP = new THREE.Vector3(0, 1, 0);
+/** Side-on pitch along a rail = lane FIT's spacingSideOnM x this (a shop rack with room to browse, not crammed). */
+const PACK = 1.05;
 type Lib = Readonly<Record<string, GLTF | undefined>>;
 
 /** Is `kind` one of the store's display-stock kinds (dressed sets, hanging stock)? */
@@ -83,59 +86,56 @@ export function buildLingerieDisplay(group: THREE.Group, kind: PropKind, list: r
     return list.length;
   }
   if (kind !== 'lingerieRackRow' && kind !== 'lingerieRackRing') return null;
-  // hanging stock: every design used must have both items
-  const items = new Map<string, {meshes: THREE.Mesh[]; width: number}>();
+  // hanging stock: every item of every design used must be in its file
+  const items = new Map<string, {meshes: THREE.Mesh[]; pitch: number}[]>();
   for (const p of list) {
     const r = rackStock(p.variant);
-    for (const d of [r.a, r.b]) for (const piece of ['top', 'bottom'] as const) {
-      const key = `${d}:${piece}`;
-      if (items.has(key)) continue;
-      const nodes = nodeMeshes(lib[LINGERIE_DISPLAY_SOURCE.modelKey(d)], [LINGERIE_DISPLAY_SOURCE.hangNodes(d)[piece === 'top' ? 0 : 1]]);
-      if (!nodes) return null;
-      const ex = (nodes[0].node.userData as {lingerieHang?: {widthM?: number}}).lingerieHang;
-      const box = new THREE.Box3();
-      for (const m of nodes[0].meshes) box.expandByObject(m);
-      items.set(key, {meshes: nodes[0].meshes, width: ex?.widthM ?? box.getSize(new THREE.Vector3()).x});
+    for (const d of [r.a, r.b]) {
+      if (items.has(d)) continue;
+      const defs = LINGERIE_DISPLAY_SOURCE.hangItems(d);
+      if (!defs.length) return null;
+      const got: {meshes: THREE.Mesh[]; pitch: number}[] = [];
+      for (const def of defs) {
+        const nodes = nodeMeshes(lib[LINGERIE_DISPLAY_SOURCE.modelKey(d)], [def.node]);
+        if (!nodes) return null;
+        got.push({meshes: nodes[0].meshes, pitch: Math.max(0.06, def.spacingSideOnM * PACK)});
+      }
+      items.set(d, got);
     }
   }
   const batches = new Map<THREE.Mesh, THREE.Matrix4[]>();
-  const put = (base: THREE.Matrix4, key: string, x: number, z: number, yaw: number) => {
-    const it = items.get(key)!;
+  const put = (base: THREE.Matrix4, it: {meshes: THREE.Mesh[]}, x: number, z: number, yaw: number) => {
     const at = new THREE.Matrix4().multiplyMatrices(base, new THREE.Matrix4().compose(new THREE.Vector3(x, 0, z), new THREE.Quaternion().setFromAxisAngle(UP, yaw), new THREE.Vector3(1, 1, 1)));
     for (const m of it.meshes) { let l = batches.get(m); if (!l) batches.set(m, (l = [])); l.push(new THREE.Matrix4().multiplyMatrices(at, m.matrixWorld)); }
   };
   for (const p of list) {
     const host = layout && p.host !== undefined ? layout.props[p.host] : undefined;
     const r = rackStock(p.variant);
-    // the rail line: the rider box's top (rail height above the host base)
-    const rail = host ? (GARMENT_RAIL_Y[host.kind as keyof typeof GARMENT_RAIL_Y] ?? LINGERIE_RACK.drop) - (p.y - host.y) : LINGERIE_RACK.drop;
-    const base = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + rail, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
-    const pattern = r.seed % 3;
-    const keyOf = (i: number, n: number) => {
-      const d = i < n / 2 ? r.a : r.b;
-      const piece = pattern === 0 ? (i % 2 ? 'bottom' : 'top') : pattern === 1 ? (i % Math.max(1, Math.ceil(n / 2)) < Math.ceil(n / 4) ? 'top' : 'bottom') : (i < n / 2 ? 'top' : 'bottom');
-      return `${d}:${piece}`;
+    // the rail line: the rider box's top (= the host's rail height)
+    const base = new THREE.Matrix4().compose(new THREE.Vector3(p.x, p.y + p.h, p.z), new THREE.Quaternion().setFromAxisAngle(UP, p.rot), new THREE.Vector3(1, 1, 1));
+    // the sequence along the rail: design A's items then design B's, each design's items alternating (pattern 0) or in blocks (1)
+    const pattern = r.seed % 2;
+    const pick = (k: number, n: number) => {
+      const its = items.get(k < n / 2 ? r.a : r.b)!, j = k < n / 2 ? k : k - Math.ceil(n / 2);
+      return its[pattern === 0 ? j % its.length : Math.min(its.length - 1, Math.floor(j * its.length / Math.max(1, Math.ceil(n / 2))))];
     };
-    const gap = 0.04;
     if (kind === 'lingerieRackRow') {
-      const half = (host ? LINGERIE_RACK.row[host.kind as keyof typeof LINGERIE_RACK.row] : undefined) ?? 0.66;
-      // face-out along the rail: as many as fit, centred
-      const seq: string[] = [];
-      let used = 0;
-      for (let i = 0; i < 24; i++) {
-        const k = keyOf(i, 8), w = items.get(k)!.width + gap;
-        if (used + w > 2 * half) break;
-        seq.push(k); used += w;
-      }
+      // hangers hooked side-on along the rail (hanger width across it, garments facing along it), packed, centred, a little seeded slack
+      const half = ((host ? LINGERIE_RACK.row[host.kind as keyof typeof LINGERIE_RACK.row] : undefined) ?? 0.66) - 0.04 - (r.seed % 5) * 0.03;
+      const avg = [...items.get(r.a)!, ...items.get(r.b)!].reduce((t, q) => t + q.pitch, 0) / (items.get(r.a)!.length + items.get(r.b)!.length);
+      const n = Math.max(2, Math.floor((2 * half) / avg));
+      const seq = Array.from({length: n}, (_, k) => pick(k, n));
+      const used = seq.reduce((t, q) => t + q.pitch, 0);
       let x = -used / 2;
-      for (const k of seq) { const w = items.get(k)!.width + gap; put(base, k, x + w / 2, 0, 0); x += w; }
+      for (const it of seq) { put(base, it, x + it.pitch / 2, 0, Math.PI / 2); x += it.pitch; }
     } else {
       const R = (host ? LINGERIE_RACK.ring[host.kind as keyof typeof LINGERIE_RACK.ring] : undefined) ?? 0.5;
-      const wMax = Math.max(...[...items.values()].map(v => v.width)) + gap;
-      const n = Math.max(3, Math.min(12, Math.floor((2 * Math.PI * R) / wMax)));
-      for (let i = 0; i < n; i++) {
-        const th = (i / n) * Math.PI * 2 + (r.seed % 7) * 0.1;
-        put(base, keyOf(i, n), R * Math.cos(th), R * Math.sin(th), Math.PI / 2 - th);
+      const avg = [...items.get(r.a)!, ...items.get(r.b)!].reduce((t, q) => t + q.pitch, 0) / (items.get(r.a)!.length + items.get(r.b)!.length);
+      const n = Math.max(4, Math.min(32, Math.floor((2 * Math.PI * R) / (avg * 1.4))));
+      const th0 = (r.seed % 12) * (Math.PI / 6);
+      for (let k = 0; k < n; k++) {
+        const th = th0 + (k / n) * Math.PI * 2;
+        put(base, pick(k, n), R * Math.cos(th), R * Math.sin(th), -th); // hanger radial (hooked on the ring), garment tangential
       }
     }
   }
