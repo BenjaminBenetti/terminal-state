@@ -341,7 +341,9 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
   - Meshy generated the ivory thong front-to-back, so it was mirrored to match the reference: full front panel, narrow back.
 - The Meshy base colour is re-encoded at 1024 and metallic / roughness packed at 256; the normal map is not shipped. No
   retexturing or painting. Opaque material (the lace is texture only).
-- Each file also holds unskinned display nodes for the store's stock. Provenance: `assets/derivatives/outfit-lingerie-*.json` and
+- Each file also holds the store's stock (store-polish task, unskinned, same texture): the set fitted to the Mall's existing female
+  display mannequin (M81, `mall-mannequin-female.glb`), and hanging rack items on simple procedural chrome hangers (plain
+  hardware geometry, no texture). Provenance: `assets/derivatives/outfit-lingerie-*.json` and
   `assets/derivatives/zombie-lingerie.json`.
 - Raw Meshy outputs and the user references stay private (studio reference task folder plus a local backup). Unapproved
   prototypes; no commercial clearance implied. Ordinary zombie clips only.

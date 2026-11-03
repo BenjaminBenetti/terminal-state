@@ -73,3 +73,15 @@ export const ASSIGNMENT = {
 export const TEXTURES = {baseSize: 1024, baseQuality: 82, mrSize: 256, mrQuality: 85};
 /** Validation poses: every 0.1 s (= every 3rd frame at 30 fps) of all six clips + each clip's last frame. */
 export const VALIDATION_STEP = 0.1;
+
+// ---------------------------------------------------------------------------------------------------- task store-polish (lane FIT)
+export const POLISH_TASK = 'studio-beta-mall-lingerie-store-polish-20261103-045922-01';
+/**
+ * The Mall's female display mannequin the lingerie boutique dresses (M81: the accepted Meshy T2.5 model, cooked by
+ * tools/asset-pipeline/props/build-mall-track3.mjs; MALL_KIND_ASSET.mannequinFemale 'mannequin-female'), pinned by sha256. The
+ * LingerieMannequin_* nodes are in THIS model's own frame (identity node transform): drawn under the mannequin prop's transform.
+ */
+export const MANNEQUIN = {file: 'game/public/assets/models/mall-mannequin-female.glb', sha256: '8124dcab904357a1ec0036def8d9e6b023e0e3a8be62b25339f1d80849e0129e', key: 'mannequin-female',
+  frame: 'mall-mannequin-female.glb model frame: origin at the base centre on the floor, front -Z, metres (identity node transform)'};
+/** Static fit limits on the mannequin (drawn whole: nothing hidden, so nothing may poke through). */
+export const MANNEQUIN_LIMITS = {penetration: 0.005, deep: 0, minSdMM: -3, hover: 0.06, edgeHover: 0.12, pokeVisibleCount: 3};

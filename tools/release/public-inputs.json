@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 40519,
-      "sha256": "a5147c1c2dba42607adced08e3a1c660584e4cc4ca0b71afa9d8267c3dd959a4"
+      "bytes": 40737,
+      "sha256": "3f08869eaa7f6e465e8ed2c85a1c07db1c2310ee7de3c123cbcf13d015f09d41"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1755,33 +1755,33 @@
     },
     {
       "path": "assets/derivatives/outfit-lingerie-black.json",
-      "bytes": 15463,
-      "sha256": "432684bd703f8a4f52702bb8533e7ee07035b92cdc64c047a9e27eae4d3895e0"
+      "bytes": 19626,
+      "sha256": "37bfcf73cc132bd4ef8098c97b2e54fe2a0a541870bf72c615a58c1930d8e938"
     },
     {
       "path": "assets/derivatives/outfit-lingerie-blush.json",
-      "bytes": 15457,
-      "sha256": "066fad804f1d003c1368780840f75dcafe407d2bccc1013dcda4991d6b901686"
+      "bytes": 19135,
+      "sha256": "22ea121f08482fcdebcf163aed93b254112d5ccb204b6a25cc3908ea888783c4"
     },
     {
       "path": "assets/derivatives/outfit-lingerie-green.json",
-      "bytes": 15447,
-      "sha256": "a5c1089c0d8a099204ecb5ef4e0babf087280ed6b432101c87306ccb819c6853"
+      "bytes": 19602,
+      "sha256": "aaebe1b9da57f6973112fa7df35d45af48ba75764f586b4be16a243a157f2fbf"
     },
     {
       "path": "assets/derivatives/outfit-lingerie-ivory.json",
-      "bytes": 16163,
-      "sha256": "c3332c00fe759ce2cd21acec31684f2358bb93f644ea3d5fc47f361ff34266c0"
+      "bytes": 20585,
+      "sha256": "07b8e81406013df847e2912b89c1e8e5d32c3303d287b7bafe5fd18a7d08cbde"
     },
     {
       "path": "assets/derivatives/outfit-lingerie-purple.json",
-      "bytes": 15499,
-      "sha256": "56bef29ee4915293b3255b04846e946c133e6757544c7c82c6213fa591eb72c1"
+      "bytes": 19646,
+      "sha256": "d3c4421b083f77fac13484fd4c48d45c8476d368c4f55ca7fa96622feaefc438"
     },
     {
       "path": "assets/derivatives/outfit-lingerie-red.json",
-      "bytes": 15430,
-      "sha256": "56e9977c126078d8fd25c156e510353e284eac91c27da11e804047eaafa586b3"
+      "bytes": 19602,
+      "sha256": "736fa0081ad25e0d5d42dede4b556bf13b705d289d1ca5e72df133daf5f5527a"
     },
     {
       "path": "assets/derivatives/outfit-puffer.json",
@@ -1925,8 +1925,8 @@
     },
     {
       "path": "assets/derivatives/zombie-lingerie.json",
-      "bytes": 10807,
-      "sha256": "7e71b08c32bbb7bcab67e2bad85857b8b7e0cc1b2f6ccd66cd444a73fd4627da"
+      "bytes": 16648,
+      "sha256": "04497376a3d690da2e92f23186bba03cd33da2725398133cc227ddb072f73b4e"
     },
     {
       "path": "assets/derivatives/zombie-rigged.json",
@@ -2820,33 +2820,33 @@
     },
     {
       "path": "assets/models/outfit-lingerie-black.glb",
-      "bytes": 321964,
-      "sha256": "c026dc53cf43a90ea48cc0f64101faab07e2e689581aff92288323f9f9e82eb8"
+      "bytes": 508776,
+      "sha256": "d25a8829fad0ffec4a607703b739d55d44c3f8c0c50e2b6179ac399c9956d698"
     },
     {
       "path": "assets/models/outfit-lingerie-blush.glb",
-      "bytes": 215676,
-      "sha256": "59b731340b6201301f71450cfbf452126ca07dad4b9e049c662f00e3255b8593"
+      "bytes": 371508,
+      "sha256": "9df5bfe5b106306b87c8254f362390105f5139daf32860ebd851556dc7bbbc83"
     },
     {
       "path": "assets/models/outfit-lingerie-green.glb",
-      "bytes": 265284,
-      "sha256": "701b1076cd1b8da4a9ba9c75ff639c1e40b7f90c7bace3ad57bad7957f1b095a"
+      "bytes": 380144,
+      "sha256": "f1d7d0b08bc0c3d1444e68df1a0dc1e5bed9fc65c7e3e82e5e010b865ec5b875"
     },
     {
       "path": "assets/models/outfit-lingerie-ivory.glb",
-      "bytes": 190196,
-      "sha256": "07a781c84d984f34a9538f557442eb36031c4a352fe528e453f09a806be27963"
+      "bytes": 321916,
+      "sha256": "350ea62e43a55b4fc2d67152593f76c5a62d67ba689bae3cd7e23c6b14d39beb"
     },
     {
       "path": "assets/models/outfit-lingerie-purple.glb",
-      "bytes": 251088,
-      "sha256": "751010d57d8e45dbf940bf0a09c495fc2dce03f62e7137be9ad67f6910035b69"
+      "bytes": 373344,
+      "sha256": "864344af456cebf9d2241656f360ed7b573043e532d2f704ca3491eb752deea7"
     },
     {
       "path": "assets/models/outfit-lingerie-red.glb",
-      "bytes": 355572,
-      "sha256": "4c097870de8678ff28a1bd03e39295a32b370edf9773edc1339bef55f40d1e23"
+      "bytes": 516400,
+      "sha256": "bf32f60f4ec306fcbf0550e3768bb8ec90da973319f4873fba08b02440a64472"
     },
     {
       "path": "assets/models/outfit-puffer.glb",

@@ -11,6 +11,9 @@
 //    UV / index accessors (zero extra geometry or texture bytes): the set holding its fitted shape, translated so the set stands
 //    centred on y = 0 (extras lingerieDisplay: size; toBodySpace = the OFFSET to add to the node translation for the body frame,
 //    i.e. translation + toBodySpace = 0: the vertices themselves are in body space);
+//  - task store-polish: unskinned `LingerieMannequin_<design>_top` / `_bottom` (the set fitted to the female display mannequin, in that
+//    model's own frame: identity node, front -Z) and hanging rack items `LingerieHang_<design>_<item>` (garment primitive(s) + a
+//    procedural chrome hanger primitive; origin = where the hook rests on the rail) sharing the lace material / UV / indices;
 //  - scene extras zombieWearable {id, kind: 'lingerie-set', pieces, bodies, ...} WITHOUT a scene-level `slot` (the file holds one
 //    wearable of each of two slots; WardrobeLibrary only rejects a file whose scene slot disagrees).
 import {Document, NodeIO} from '@gltf-transform/core';
@@ -84,6 +87,31 @@ export function buildLingerieDocument(o) {
       scene.addChild(doc.createNode(nodeName).setMesh(doc.createMesh(nodeName).addPrimitive(prim)).setTranslation(t).setExtras({lingerieDisplay: {design: o.design, piece: pn, wearable: o.wearables[pn], fittedOn: o.display.bodyId,
         setSizeM: size, pieceBounds: {min: [0, 1, 2].map(k => +(pm[k] + t[k]).toFixed(4)), max: [0, 1, 2].map(k => +(px[k] + t[k]).toFixed(4))}, toBodySpace: t.map(v => -v),
         note: 'static (unskinned) display stock: the set holding its fitted shape on that body, standing centred on y = 0 (front +Z); shares the worn variant geometry + texture'}}));
+    }
+  }
+  // ---- task store-polish: static nodes on the female display mannequin + hanging rack items (shared lace material / UV / indices)
+  if (o.mannequin) {
+    for (const pn of ['top', 'bottom']) {
+      const m = o.mannequin.pieces[pn];
+      const prim = doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', acc(doc, buf, 'VEC3', Float32Array.from(m.pos))).setAttribute('NORMAL', acc(doc, buf, 'VEC3', qNormals(m.nrm), true))
+        .setAttribute('TEXCOORD_0', shared[pn].uv).setIndices(shared[pn].idx);
+      const nodeName = `LingerieMannequin_${o.design}_${pn}`;
+      scene.addChild(doc.createNode(nodeName).setMesh(doc.createMesh(nodeName).addPrimitive(prim)).setExtras({lingerieMannequin: {design: o.design, piece: pn, wearable: o.wearables[pn], ...o.mannequin.extras}}));
+    }
+  }
+  if (o.hang) {
+    // one chrome hanger material + one accessor set per hanger type for the whole file (untextured procedural hardware)
+    const hmat = doc.createMaterial('LingerieHanger').setAlphaMode('OPAQUE').setBaseColorFactor([0.72, 0.73, 0.75, 1]).setMetallicFactor(0.85).setRoughnessFactor(0.35);
+    const hacc = {};
+    for (const [k, h] of Object.entries(o.hang.hangers)) hacc[k] = {P: acc(doc, buf, 'VEC3', Float32Array.from(h.pos)), N: acc(doc, buf, 'VEC3', qNormals(h.nrm), true), I: acc(doc, buf, 'SCALAR', Uint16Array.from(h.idx))};
+    for (const it of o.hang.items) {
+      const nodeName = `LingerieHang_${o.design}_${it.item}`;
+      const mesh = doc.createMesh(nodeName);
+      for (const g of it.garments) mesh.addPrimitive(doc.createPrimitive().setMaterial(mat).setAttribute('POSITION', acc(doc, buf, 'VEC3', Float32Array.from(g.pos))).setAttribute('NORMAL', acc(doc, buf, 'VEC3', qNormals(g.nrm), true))
+        .setAttribute('TEXCOORD_0', shared[g.piece].uv).setIndices(shared[g.piece].idx));
+      const h = hacc[it.hanger];
+      mesh.addPrimitive(doc.createPrimitive().setMaterial(hmat).setAttribute('POSITION', h.P).setAttribute('NORMAL', h.N).setIndices(h.I));
+      scene.addChild(doc.createNode(nodeName).setMesh(mesh).setExtras({lingerieHang: {design: o.design, item: it.item, pieces: it.garments.map(g => g.piece), ...it.extras}}));
     }
   }
   return doc;
