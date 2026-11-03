@@ -480,35 +480,34 @@ export class PerfCapture {
     for (;;) { const r = g.next(); if (r.done) return r.value.join(''); }
   }
 
-  /** Report JSON as text parts, yielding between the heavy steps (never one long task on the main thread). */
-  async serialize(meta: ReportMeta, yieldFn: () => Promise<void>): Promise<string[]> {
+  /**
+   * Report JSON as text parts, giving the main thread back (`yieldFn`) whenever a run of steps has taken `budgetMs` — never one
+   * long task (the game keeps rendering while a report is prepared after a key / auto stop during play).
+   */
+  async serialize(meta: ReportMeta, yieldFn: () => Promise<void>, budgetMs = 4): Promise<string[]> {
     const g = this.build(meta);
-    for (;;) { const r = g.next(); if (r.done) return r.value; await yieldFn(); }
+    const clock = typeof performance !== 'undefined' ? () => performance.now() : () => Date.now();
+    let t = clock();
+    for (;;) {
+      const r = g.next();
+      if (r.done) return r.value;
+      if (clock() - t >= budgetMs) { await yieldFn(); t = clock(); }
+    }
   }
 
   /** The report built step by step (each `yield` is a point where the caller may give the main thread back). */
   private *build(meta: ReportMeta): Generator<void, string[], void> {
     const n = this.n, caps = this.caps;
     // --- derived per-frame values ---
+    // (the heavy per-frame loops live in plain methods — loops inside a generator run unoptimized — called over ranges, so
+    // every step between two yields stays a few ms)
+    const RANGE = 4096;
     const interval = new Float64Array(n), cat = new Uint8Array(n), yawRate = new Float32Array(n);
     let gapCount = 0;
-    for (let k = 0; k < n; k++) {
-      const iv = k + 1 < n ? this.t[k + 1] - this.t[k] : NaN;
-      interval[k] = iv;
-      const fl = this.flags[k], st = this.state[k];
-      const gap = (fl & (F.gap | F.hidden)) !== 0 || (iv === iv && iv - this.cpu[k] > GAP_MS);
-      if (gap) gapCount++;
-      cat[k] = gap ? C_HIDDEN : fl & F.warming ? C_WARMUP : st === ST_LOADING ? C_LOADING : st === ST_TITLE ? C_MENU
-        : st === ST_PLAYING ? (fl & (F.transition | F.stateChange) ? C_TRANSITION : fl & F.unfocused ? C_UNFOCUSED : C_GAMEPLAY) : C_MENU;
-    }
-    // yaw rate over the preceding TURN_WINDOW_MS (sliding window)
-    for (let k = 0, j = 0; k < n; k++) {
-      while (j < k && this.t[k] - this.t[j + 1] >= TURN_WINDOW_MS) j++;
-      const dt = this.t[k] - this.t[j];
-      yawRate[k] = j < k && dt > 0 ? Math.abs(angleDelta(this.yaw[j], this.yaw[k])) * 180 / Math.PI / (dt / 1000) : 0;
-    }
+    for (let k0 = 0; k0 < n; k0 += RANGE) { gapCount += this.deriveRange(k0, Math.min(n, k0 + RANGE), interval, cat); yield; }
+    this.yawRates(yawRate);
     yield;
-    // --- distributions ---
+    // --- distributions (each one sort of at most caps.frames values: one step) ---
     const scratch = new Float64Array(n);
     const distOf = (pick: (k: number) => boolean, val: (k: number) => number): Dist => {
       let m = 0;
@@ -517,94 +516,94 @@ export class PerfCapture {
     };
     const gameplay = (k: number) => cat[k] === C_GAMEPLAY && interval[k] === interval[k];
     const summary: Record<string, unknown> = {};
-    summary.gameplay = {
-      note: 'state playing, no lifecycle transition / state change / warm-up / hidden tab / gap / focus loss in the frame; interval = rAF to rAF',
-      interval: distOf(gameplay, k => interval[k]),
-      cpu: distOf(gameplay, k => this.cpu[k]),
-      update: distOf(gameplay, k => this.upd[k]),
-      renderSubmit: distOf(gameplay, k => this.ren[k]),
-      deferred: distOf(gameplay, k => this.def[k]),
-      gpu: this.seen.gpu ? distOf(k => gameplay(k) && this.gpu[k] === this.gpu[k], k => this.gpu[k]) : null,
-      timeMs: (() => { let s = 0; for (let k = 0; k < n; k++) if (gameplay(k)) s += interval[k]; return r2(s); })(),
+    const gp: Record<string, unknown> = {note: 'state playing, no lifecycle transition / state change / warm-up / hidden tab / gap / focus loss in the frame; interval = rAF to rAF'};
+    gp.interval = distOf(gameplay, k => interval[k]); yield;
+    gp.cpu = distOf(gameplay, k => this.cpu[k]); yield;
+    gp.update = distOf(gameplay, k => this.upd[k]); yield;
+    gp.renderSubmit = distOf(gameplay, k => this.ren[k]); yield;
+    gp.deferred = distOf(gameplay, k => this.def[k]); yield;
+    gp.gpu = this.seen.gpu ? distOf(k => gameplay(k) && this.gpu[k] === this.gpu[k], k => this.gpu[k]) : null;
+    /** Frames matching `pick` and the sum of their intervals (a plain closure: optimizable, unlike a loop in this generator). */
+    const countWhere = (pick: (k: number) => boolean): [number, number] => {
+      let frames = 0, ms = 0;
+      for (let k = 0; k < n; k++) if (pick(k)) { frames++; if (interval[k] === interval[k]) ms += interval[k]; }
+      return [frames, ms];
     };
+    gp.timeMs = r2(countWhere(gameplay)[1]);
+    summary.gameplay = gp;
     yield;
     const byCategory: Record<string, unknown> = {};
     for (let c = 0; c < CATEGORIES.length; c++) {
-      let frames = 0, ms = 0;
-      for (let k = 0; k < n; k++) if (cat[k] === c) { frames++; if (interval[k] === interval[k]) ms += interval[k]; }
+      const [frames, ms] = countWhere(k => cat[k] === c);
       if (!frames) continue;
       const d = c === C_HIDDEN ? null : distOf(k => cat[k] === c && interval[k] === interval[k], k => interval[k]);
       byCategory[CATEGORIES[c]] = {frames, timeMs: r2(ms), interval: d};
+      yield;
     }
     summary.byCategory = byCategory;
     const byState: Record<string, number> = {};
-    for (let k = 0; k < n; k++) { const nm = STATE_NAMES[this.state[k]] ?? 'other'; byState[nm] = (byState[nm] ?? 0) + 1; }
+    const stateN = new Uint32Array(STATE_NAMES.length);
+    ((st: Uint8Array) => { for (let k = 0; k < n; k++) if (st[k] < stateN.length) stateN[st[k]]++; })(this.state);
+    STATE_NAMES.forEach((nm, c) => { if (stateN[c]) byState[nm] = stateN[c]; });
     summary.framesByState = byState;
     summary.gaps = gapCount;
     yield;
-    // --- spans over gameplay frames with a profiler sample ---
+    // --- spans over gameplay frames with a profiler sample (one pass for the sums, then one sort per span) ---
     const spanNames = meta.spanNames.length === SPAN_COUNT ? meta.spanNames : Array.from({length: SPAN_COUNT}, (_, j) => meta.spanNames[j] ?? `span${j}`);
     const withSpans = (k: number) => gameplay(k) && (this.flags[k] & F.spans) !== 0;
-    let spanFrames = 0, spikeSpanFrames = 0;
-    for (let k = 0; k < n; k++) if (withSpans(k)) { spanFrames++; if (interval[k] > SPIKE_MS) spikeSpanFrames++; }
+    const callSum = new Float64Array(SPAN_COUNT), anyN = new Uint32Array(SPAN_COUNT), spikeSum = new Float64Array(SPAN_COUNT), spanN = new Uint32Array(2);
+    for (let k0 = 0; k0 < n; k0 += RANGE) { this.spanSums(k0, Math.min(n, k0 + RANGE), interval, cat, callSum, anyN, spikeSum, spanN); yield; }
+    const spanFrames = spanN[0], spikeSpanFrames = spanN[1];
     const spans: Record<string, unknown>[] = [];
     for (let j = 0; j < SPAN_COUNT; j++) {
-      let calls = 0, any = 0, spikeSum = 0;
-      for (let k = 0; k < n; k++) {
-        if (!withSpans(k)) continue;
-        const o = k * SPAN_COUNT + j;
-        calls += this.spanCalls[o];
-        if (this.spanCalls[o] > 0 || this.spanMs[o] > 0) any++;
-        if (interval[k] > SPIKE_MS) spikeSum += this.spanMs[o];
-      }
-      if (!any) continue;
+      if (!anyN[j]) continue;
       const d = distOf(withSpans, k => this.spanMs[k * SPAN_COUNT + j]);
       spans.push({name: spanNames[j], parent: PARENT[j] >= 0 ? spanNames[PARENT[j]] : null, mean: d.mean, p95: d.p95, p99: d.p99, max: d.max,
-        callsPerFrame: spanFrames ? r2(calls / spanFrames) : 0, spikeMean: spikeSpanFrames ? r2(spikeSum / spikeSpanFrames) : null});
-      if (j % 6 === 5) yield;
+        callsPerFrame: spanFrames ? r2(callSum[j] / spanFrames) : 0, spikeMean: spikeSpanFrames ? r2(spikeSum[j] / spikeSpanFrames) : null});
+      yield;
     }
     summary.spans = {frames: spanFrames, spikeFrames: spikeSpanFrames, note: 'ms per gameplay frame (inclusive: a nested span is also inside its parent); spikeMean = mean over gameplay frames with interval > 33.3 ms', list: spans};
     yield;
     // --- correlation counts: what the gameplay spikes coincide with (base rates over all gameplay frames beside them) ---
-    const keys: [string, (k: number) => boolean][] = [
-      ['turning', k => yawRate[k] > TURN_DEG_S],
-      ['newNodeBuilds', k => this.dNode[k] > 0],
-      ['newPipelines', k => this.dPipe[k] > 0],
-      ['newPrograms', k => this.dProg[k] > 0],
-      ['newTextures', k => this.dTex[k] > 0],
-      ['newGeometries', k => this.dGeo[k] > 0],
-      ['cullingChanged', k => k > 0 && this.culled[k] >= 0 && this.culled[k - 1] >= 0 && this.culled[k] !== this.culled[k - 1]],
-      ['pathSearches', k => (this.flags[k] & F.spans) !== 0 && this.spanCalls[k * SPAN_COUNT + S.path] > 0],
-      ['riding', k => (this.flags[k] & F.riding) !== 0],
-      ['mainThreadOutsideGame', k => interval[k] - this.cpu[k] > SPIKE_MS],
-    ];
+    const CORR = ['turning', 'newNodeBuilds', 'newPipelines', 'newPrograms', 'newTextures', 'newGeometries', 'cullingChanged', 'pathSearches', 'riding', 'mainThreadOutsideGame'] as const;
+    const cf = new Uint32Array(CORR.length), cs = new Uint32Array(CORR.length), cn = new Uint32Array(2);
+    for (let k0 = 0; k0 < n; k0 += RANGE) { this.corrRange(k0, Math.min(n, k0 + RANGE), interval, cat, yawRate, cf, cs, cn); yield; }
+    const corrFrames = cn[0], corrSpikes = cn[1];
     const with_: Record<string, {frames: number; spikes: number}> = {};
-    for (const [key] of keys) with_[key] = {frames: 0, spikes: 0};
-    let corrFrames = 0, corrSpikes = 0;
-    for (let k = 0; k < n; k++) {
-      if (!gameplay(k)) continue;
-      const spike = interval[k] > SPIKE_MS;
-      corrFrames++;
-      if (spike) corrSpikes++;
-      for (const [key, test] of keys) if (test(k)) { const c = with_[key]; c.frames++; if (spike) c.spikes++; }
-    }
+    CORR.forEach((key, c) => { with_[key] = {frames: cf[c], spikes: cs[c]}; });
     summary.correlation = {note: `gameplay frames (frames) and gameplay spikes over 33.3 ms (spikes) that coincide with each condition; turning = yaw rate over ${TURN_DEG_S} deg per s in the preceding ${TURN_WINDOW_MS} ms; new* = net renderer counter increase in that frame; pathSearches = the profiler counted A* searches; mainThreadOutsideGame = interval minus game CPU over 33.3 ms (browser, GC, GPU wait or other tasks)`,
       frames: corrFrames, spikes: corrSpikes, with: with_};
     yield;
-    // --- worst frames with timelines ---
+    // --- worst frames with timelines (bounded top-N selection, no full sort) ---
     const evs = this.eventsInOrder();
     const lfs = this.longFrames.slice().sort((a, b) => a.start - b.start);
-    const worst = (pick: (k: number) => boolean, by: (k: number) => number, count: number) => {
-      const idx: number[] = [];
-      for (let k = 0; k < n; k++) if (pick(k)) idx.push(k);
-      idx.sort((a, b) => by(b) - by(a));
-      return idx.slice(0, count).map(k => this.frameDetail(k, interval, cat, yawRate, evs, lfs, spanNames));
+    yield;
+    const topN = (pick: (k: number) => boolean, by: (k: number) => number, count: number): number[] => {
+      const top: number[] = [];
+      for (let k = 0; k < n; k++) {
+        if (!pick(k)) continue;
+        const v = by(k);
+        if (top.length === count && v <= by(top[count - 1])) continue;
+        let at = top.length;
+        while (at > 0 && by(top[at - 1]) < v) at--;
+        top.splice(at, 0, k);
+        if (top.length > count) top.pop();
+      }
+      return top;
     };
+    const detail = function* (this: PerfCapture, idx: number[]): Generator<void, unknown[], void> {
+      const out: unknown[] = [];
+      for (const k of idx) { out.push(this.frameDetail(k, interval, cat, yawRate, evs, lfs, spanNames)); if (out.length % 6 === 0) yield; }
+      return out;
+    };
+    const wGame = topN(gameplay, k => interval[k], caps.worst); yield;
+    const wCpu = topN(gameplay, k => this.cpu[k], Math.ceil(caps.worst / 2)); yield;
+    const wAny = topN(k => cat[k] !== C_HIDDEN && cat[k] !== C_GAMEPLAY && interval[k] === interval[k], k => interval[k], Math.ceil(caps.worst / 2)); yield;
     const worstOut = {
       note: 'the slowest frames by interval (gameplay; then any non-hidden frame) and by game CPU, each with its spans, renderer counter changes, camera, the frames around it, and the events / long frames near it',
-      gameplay: worst(gameplay, k => interval[k], caps.worst),
-      gameplayByCpu: worst(gameplay, k => this.cpu[k], Math.ceil(caps.worst / 2)),
-      anyState: worst(k => cat[k] !== C_HIDDEN && cat[k] !== C_GAMEPLAY && interval[k] === interval[k], k => interval[k], Math.ceil(caps.worst / 2)),
+      gameplay: yield* detail.call(this, wGame),
+      gameplayByCpu: yield* detail.call(this, wCpu),
+      anyState: yield* detail.call(this, wAny),
     };
     yield;
     // --- spike detail: every nested span of the worst spike frames (gameplay / transition) ---
@@ -666,26 +665,46 @@ export class PerfCapture {
       culled: 'meshes the level culler currently hides (-1: no culler)', enemies: 'enemy actors in the level', yaw: '0.1 degree (player look)', pitch: '0.1 degree (player look)',
     })},`);
     parts.push('"columns":{');
-    let firstCol = true;
-    const col = (name: string, get: (k: number) => string) => {
-      let s = `${firstCol ? '' : ','}${JSON.stringify(name)}:[`;
-      firstCol = false;
-      for (let k = 0; k < n; k++) s += (k ? ',' : '') + get(k);
-      parts.push(s + ']');
+    // one column = `"name":[v,v,…]`, written in chunks (a yield every CHUNK values; the parts are only ever concatenated)
+    const CHUNK = 4096;
+    const buf: (string | number)[] = new Array(CHUNK);
+    const column = function* (head: string, get: (k: number) => string | number): Generator<void, void, void> {
+      parts.push(head + '[');
+      for (let k0 = 0; k0 < n; k0 += CHUNK) {
+        const m = Math.min(CHUNK, n - k0);
+        buf.length = m;
+        for (let j = 0; j < m; j++) buf[j] = get(k0 + j);
+        parts.push((k0 ? ',' : '') + buf.join(','));
+        yield;
+      }
+      parts.push(']');
     };
-    const ms = (a: ArrayLike<number>) => (k: number) => String(q100(a[k]));
-    col('t', ms(this.t)); yield;
-    col('interval', k => (interval[k] === interval[k] ? String(q100(interval[k])) : 'null'));
-    col('cpu', ms(this.cpu)); col('update', ms(this.upd)); yield;
-    col('render', ms(this.ren)); col('deferred', ms(this.def));
-    col('gpu', k => (this.gpu[k] === this.gpu[k] ? String(q100(this.gpu[k])) : 'null')); yield;
-    col('state', k => String(this.state[k])); col('category', k => String(cat[k])); col('flags', k => String(this.flags[k])); yield;
-    col('draws', k => String(this.draws[k])); col('triangles', k => String(this.tris[k])); col('passes', k => String(this.passes[k])); yield;
-    const dcol = (name: string, a: Int16Array, avail: boolean) => col(name, k => (avail ? String(a[k]) : 'null'));
-    dcol('newTextures', this.dTex, this.seen.textures); dcol('newGeometries', this.dGeo, this.seen.geometries); dcol('newPrograms', this.dProg, this.seen.programs);
-    dcol('newNodeBuilds', this.dNode, this.seen.nodes); dcol('newPipelines', this.dPipe, this.seen.pipelines); yield;
-    col('culled', k => String(this.culled[k])); col('enemies', k => String(this.enemies[k])); yield;
-    col('yaw', k => String(Math.round(wrapDeg(this.yaw[k]) * 10))); col('pitch', k => String(Math.round(this.pitch[k] * 1800 / Math.PI))); yield;
+    let firstCol = true;
+    const col = (name: string, get: (k: number) => string | number) => { const h = `${firstCol ? '' : ','}${JSON.stringify(name)}:`; firstCol = false; return column(h, get); };
+    const nn = (v: number) => (v === v ? q100(v) : 'null');
+    yield* col('t', k => q100(this.t[k]));
+    yield* col('interval', k => nn(interval[k]));
+    yield* col('cpu', k => q100(this.cpu[k]));
+    yield* col('update', k => q100(this.upd[k]));
+    yield* col('render', k => q100(this.ren[k]));
+    yield* col('deferred', k => q100(this.def[k]));
+    yield* col('gpu', k => nn(this.gpu[k]));
+    yield* col('state', k => this.state[k]);
+    yield* col('category', k => cat[k]);
+    yield* col('flags', k => this.flags[k]);
+    yield* col('draws', k => this.draws[k]);
+    yield* col('triangles', k => this.tris[k]);
+    yield* col('passes', k => this.passes[k]);
+    const dcol = (name: string, a: Int16Array, avail: boolean) => col(name, k => (avail ? a[k] : 'null'));
+    yield* dcol('newTextures', this.dTex, this.seen.textures);
+    yield* dcol('newGeometries', this.dGeo, this.seen.geometries);
+    yield* dcol('newPrograms', this.dProg, this.seen.programs);
+    yield* dcol('newNodeBuilds', this.dNode, this.seen.nodes);
+    yield* dcol('newPipelines', this.dPipe, this.seen.pipelines);
+    yield* col('culled', k => this.culled[k]);
+    yield* col('enemies', k => this.enemies[k]);
+    yield* col('yaw', k => Math.round(wrapDeg(this.yaw[k]) * 10));
+    yield* col('pitch', k => Math.round(this.pitch[k] * 1800 / Math.PI));
     parts.push('}}');
     // spans: top-level laps per frame (0.01 ms; 0 = no profiler sample, see flags.spans) + names
     parts.push(`,"spans":{"names":${JSON.stringify(spanNames)},"parents":${JSON.stringify(PARENT.map(p => (p >= 0 ? spanNames[p] : null)))},`);
@@ -693,15 +712,12 @@ export class PerfCapture {
     let firstSpan = true;
     for (let j = 0; j < SPAN_COUNT; j++) {
       if (PARENT[j] !== -1) continue;
-      let s = `${firstSpan ? '' : ','}${JSON.stringify(spanNames[j])}:[`;
+      const h = `${firstSpan ? '' : ','}${JSON.stringify(spanNames[j])}:`;
       firstSpan = false;
-      for (let k = 0; k < n; k++) s += (k ? ',' : '') + q100(this.spanMs[k * SPAN_COUNT + j]);
-      parts.push(s + ']');
-      if (j % 4 === 3) yield;
+      yield* column(h, k => q100(this.spanMs[k * SPAN_COUNT + j]));
     }
-    parts.push('}');
+    parts.push('}}');
     put('spikeDetail', spikeDetail);
-    parts.push('}');
     yield;
     // secondary buffers
     put('events', {count: evs.length, dropped: this.eventsDropped, note: 't = start (ms since capture start); dur = null when only the moment is known',
@@ -728,6 +744,68 @@ export class PerfCapture {
       note: 'performance.memory (Chromium only, coarse / approximate); empty when unavailable'});
     parts.push('}');
     return parts;
+  }
+
+  /** Frames [k0, k1): interval (to the next rAF) and category; returns the gaps among them. */
+  private deriveRange(k0: number, k1: number, interval: Float64Array, cat: Uint8Array): number {
+    const n = this.n;
+    let gaps = 0;
+    for (let k = k0; k < k1; k++) {
+      const iv = k + 1 < n ? this.t[k + 1] - this.t[k] : NaN;
+      interval[k] = iv;
+      const fl = this.flags[k], st = this.state[k];
+      const gap = (fl & (F.gap | F.hidden)) !== 0 || (iv === iv && iv - this.cpu[k] > GAP_MS);
+      if (gap) gaps++;
+      cat[k] = gap ? C_HIDDEN : fl & F.warming ? C_WARMUP : st === ST_LOADING ? C_LOADING : st === ST_TITLE ? C_MENU
+        : st === ST_PLAYING ? (fl & (F.transition | F.stateChange) ? C_TRANSITION : fl & F.unfocused ? C_UNFOCUSED : C_GAMEPLAY) : C_MENU;
+    }
+    return gaps;
+  }
+
+  /** Yaw rate (deg/s) of every frame over the preceding TURN_WINDOW_MS (sliding window). */
+  private yawRates(out: Float32Array): void {
+    const n = this.n;
+    for (let k = 0, j = 0; k < n; k++) {
+      while (j < k && this.t[k] - this.t[j + 1] >= TURN_WINDOW_MS) j++;
+      const dt = this.t[k] - this.t[j];
+      out[k] = j < k && dt > 0 ? Math.abs(angleDelta(this.yaw[j], this.yaw[k])) * 180 / Math.PI / (dt / 1000) : 0;
+    }
+  }
+
+  /** Span sums over the gameplay frames with a profiler sample in [k0, k1); counts[0] += frames, counts[1] += spike frames. */
+  private spanSums(k0: number, k1: number, interval: Float64Array, cat: Uint8Array, callSum: Float64Array, anyN: Uint32Array, spikeSum: Float64Array, counts: Uint32Array): void {
+    for (let k = k0; k < k1; k++) {
+      if (cat[k] !== C_GAMEPLAY || interval[k] !== interval[k] || (this.flags[k] & F.spans) === 0) continue;
+      counts[0]++;
+      const spike = interval[k] > SPIKE_MS, o = k * SPAN_COUNT;
+      if (spike) counts[1]++;
+      for (let j = 0; j < SPAN_COUNT; j++) {
+        const c = this.spanCalls[o + j], v = this.spanMs[o + j];
+        callSum[j] += c;
+        if (c > 0 || v > 0) anyN[j]++;
+        if (spike) spikeSum[j] += v;
+      }
+    }
+  }
+
+  /** Correlation counts over the gameplay frames in [k0, k1) (condition c: cf[c] frames, cs[c] of them spikes; cn = frames, spikes). */
+  private corrRange(k0: number, k1: number, interval: Float64Array, cat: Uint8Array, yawRate: Float32Array, cf: Uint32Array, cs: Uint32Array, cn: Uint32Array): void {
+    for (let k = k0; k < k1; k++) {
+      if (cat[k] !== C_GAMEPLAY || interval[k] !== interval[k]) continue;
+      const spike = interval[k] > SPIKE_MS ? 1 : 0;
+      cn[0]++; cn[1] += spike;
+      const fl = this.flags[k];
+      if (yawRate[k] > TURN_DEG_S) { cf[0]++; cs[0] += spike; }
+      if (this.dNode[k] > 0) { cf[1]++; cs[1] += spike; }
+      if (this.dPipe[k] > 0) { cf[2]++; cs[2] += spike; }
+      if (this.dProg[k] > 0) { cf[3]++; cs[3] += spike; }
+      if (this.dTex[k] > 0) { cf[4]++; cs[4] += spike; }
+      if (this.dGeo[k] > 0) { cf[5]++; cs[5] += spike; }
+      if (k > 0 && this.culled[k] >= 0 && this.culled[k - 1] >= 0 && this.culled[k] !== this.culled[k - 1]) { cf[6]++; cs[6] += spike; }
+      if ((fl & F.spans) !== 0 && this.spanCalls[k * SPAN_COUNT + S.path] > 0) { cf[7]++; cs[7] += spike; }
+      if ((fl & F.riding) !== 0) { cf[8]++; cs[8] += spike; }
+      if (interval[k] - this.cpu[k] > SPIKE_MS) { cf[9]++; cs[9] += spike; }
+    }
   }
 
   private eventsInOrder(): EventRec[] {

@@ -348,10 +348,12 @@ export class PerfRecorderController {
   }
 
   private async prepare(gen: number): Promise<PerfReport | null> {
+    const yieldFn = this.opts.yieldFn ?? (() => new Promise<void>(r => setTimeout(r, 0)));
+    await yieldFn(); // never inside the frame / key handler that stopped the capture
+    if (gen !== this.gen) return null;
     const t0 = this.now();
     try {
       const meta = this.meta();
-      const yieldFn = this.opts.yieldFn ?? (() => new Promise<void>(r => setTimeout(r, 0)));
       const parts = await this.capture.serialize(meta, yieldFn);
       if (gen !== this.gen) return null; // cleared / restarted meanwhile
       let bytes = 0;
@@ -450,8 +452,8 @@ export class PerfRecorderController {
     }
   }
 
-  private worldSegment(t: number): void {
-    const g = this.g, cur = g.run?.current;
+  private worldSegment(t: number, key?: SectionKeyLike): void {
+    const g = this.g, cur = key && typeof key === 'object' ? key : g.run?.current;
     const name = this.x.layout?.name;
     this.capture.world(t, {level: str(cur?.level), section: str(cur?.section), station: str(cur?.station), seed: Number.isFinite(g.seed) ? g.seed >>> 0 : null,
       seedCode: Number.isFinite(g.seed) ? seedToCode(g.seed) : null, name: typeof name === 'string' ? name.slice(0, 64) : null});
@@ -536,7 +538,7 @@ export class PerfRecorderController {
         data.enemies = this.g.zombies.length;
       }
       this.capture.event(t, spec.kind, dur, data);
-      if (spec.name === 'buildSection' && !err) this.worldSegment(t);
+      if (spec.name === 'buildSection' && !err) this.worldSegment(t, args[0] as SectionKeyLike | undefined); // the key it built (run.current may follow later)
     } catch { /* an instrumentation detail never breaks the game method */ }
   }
 
@@ -681,6 +683,7 @@ export class PerfRecorderController {
   }
 }
 
+interface SectionKeyLike { level?: string; section?: string; station?: string }
 interface LoafLike {
   startTime?: number; duration?: number; blockingDuration?: number; renderStart?: number; styleAndLayoutStart?: number;
   scripts?: {invokerType?: unknown; invoker?: unknown; sourceFunctionName?: unknown; sourceURL?: unknown; duration?: number; forcedStyleAndLayoutDuration?: number}[];
