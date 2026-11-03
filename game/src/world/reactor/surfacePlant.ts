@@ -295,26 +295,40 @@ function towerGeometry(tw: VentTowerPlan, f: THREE.Matrix4, concrete: Batch, ste
   const p0 = pl.h * 0.65;
   concrete.box(f, 0, (p0 - 0.1) / 2, 0, 2 * pl.hw, p0 + 0.1, 2 * pl.hd);
   concrete.box(f, 0, (p0 + pl.h) / 2, 0, 2 * pl.hw - 0.7, pl.h - p0, 2 * pl.hd - 0.7);
-  // the stack, corner pilasters, string courses
-  concrete.box(f, 0, (pl.h + H) / 2, 0, 2 * hw, H - pl.h, 2 * hd);
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) concrete.box(f, sx * hw, (pl.h + H) / 2, sz * hd, 0.8, H - pl.h, 0.8);
-  const gy = Math.min(H - 4.5, hub + 3.4), gh = 3.2, gd = 2 * hd - 2.2; // (the side intake grilles' band: no course crosses it)
-  for (let yy = pl.h + 3.8; yy < H - 1.5; yy += 4.6) if (Math.abs(yy - gy) > gh / 2 + 0.5) concrete.box(f, 0, yy, 0, 2 * hw + 0.24, 0.3, 2 * hd + 0.24);
-  // cap + the louvred discharge cowl (steel box, grille faces, a roof plate)
-  concrete.box(f, 0, H + 0.275, 0, 2 * hw + 1.0, 0.55, 2 * hd + 1.0);
-  const cw = 2 * hw - 1.4, cd = 2 * hd - 1.4, c0 = H + 0.55, ch = 2.4;
-  steel.box(f, 0, c0 + ch / 2, 0, cw, ch, cd);
-  grille.box(f, 0, c0 + ch / 2, cd / 2 + 0.012, cw - 0.5, ch - 0.5, 0.02);
-  grille.box(f, 0, c0 + ch / 2, -cd / 2 - 0.012, cw - 0.5, ch - 0.5, 0.02);
-  grille.box(f, cw / 2 + 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
-  grille.box(f, -cw / 2 - 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
-  steel.box(f, 0, c0 + ch + 0.08, 0, cw + 0.5, 0.16, cd + 0.5);
-  // intake grilles on both side faces (between two courses, framed in concrete)
+  // the stack in two stages: the lower (the fan's) full size, a ledge, the upper set back — a ventilation shaft, not an office block
+  const top = hub + (FAN_ANCHORS.plateH - FAN_ANCHORS.ringY) * s;
+  const yS = Math.min(H - 4.4, Math.max(H * 0.6, top + 1.6)), hw2 = hw - 0.55, hd2 = hd - 0.55;
+  concrete.box(f, 0, (pl.h + yS) / 2, 0, 2 * hw, yS - pl.h, 2 * hd);
+  concrete.box(f, 0, (yS + H) / 2, 0, 2 * hw2, H - yS, 2 * hd2);
+  concrete.box(f, 0, yS + 0.06, 0, 2 * hw + 0.5, 0.42, 2 * hd + 0.5); // the ledge (a weathered drip course)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    concrete.box(f, sx * hw, (pl.h + yS) / 2, sz * hd, 0.8, yS - pl.h, 0.8);
+    concrete.box(f, sx * hw2, (yS + H) / 2, sz * hd2, 0.7, H - yS, 0.7);
+  }
+  // intake grilles on both side faces of the lower stage at the fan's height (framed in concrete); string courses clear of them
+  const gy = hub, gh = 3.2, gd = 2 * hd - 2.2;
+  for (let yy = pl.h + 3.8; yy < yS - 1.2; yy += 4.6) if (Math.abs(yy - gy) > gh / 2 + 0.5) concrete.box(f, 0, yy, 0, 2 * hw + 0.24, 0.3, 2 * hd + 0.24);
   for (const sx of [-1, 1]) {
     grille.box(f, sx * (hw + 0.02), gy, 0, 0.03, gh, gd);
     for (const yy of [gy - gh / 2 - 0.1, gy + gh / 2 + 0.1]) concrete.box(f, sx * (hw + 0.08), yy, 0, 0.16, 0.2, gd + 0.4);
     for (const zz of [-gd / 2 - 0.1, gd / 2 + 0.1]) concrete.box(f, sx * (hw + 0.08), gy, zz, 0.16, gh + 0.4, 0.2);
   }
+  // the exhaust louvre band round the top of the upper stage (all four faces, a concrete sill under it)
+  const lb1 = H - 0.7, lb0 = Math.max(yS + 1.2, H - 3.9), ly = (lb0 + lb1) / 2, lh = lb1 - lb0;
+  grille.box(f, 0, ly, hd2 + 0.02, 2 * hw2 - 1.0, lh, 0.03);
+  grille.box(f, 0, ly, -hd2 - 0.02, 2 * hw2 - 1.0, lh, 0.03);
+  grille.box(f, hw2 + 0.02, ly, 0, 0.03, lh, 2 * hd2 - 1.0);
+  grille.box(f, -hw2 - 0.02, ly, 0, 0.03, lh, 2 * hd2 - 1.0);
+  concrete.box(f, 0, lb0 - 0.12, 0, 2 * hw2 + 0.2, 0.24, 2 * hd2 + 0.2);
+  // cap + the louvred discharge cowl (steel box, grille faces, a roof plate)
+  concrete.box(f, 0, H + 0.25, 0, 2 * hw2 + 0.9, 0.5, 2 * hd2 + 0.9);
+  const cw = 2 * hw2 - 1.0, cd = 2 * hd2 - 1.0, c0 = H + 0.5, ch = 2.2;
+  steel.box(f, 0, c0 + ch / 2, 0, cw, ch, cd);
+  grille.box(f, 0, c0 + ch / 2, cd / 2 + 0.012, cw - 0.5, ch - 0.5, 0.02);
+  grille.box(f, 0, c0 + ch / 2, -cd / 2 - 0.012, cw - 0.5, ch - 0.5, 0.02);
+  grille.box(f, cw / 2 + 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
+  grille.box(f, -cw / 2 - 0.012, c0 + ch / 2, 0, 0.02, ch - 0.5, cd - 0.5);
+  steel.box(f, 0, c0 + ch + 0.08, 0, cw + 0.6, 0.16, cd + 0.6);
   // the fan: the grille disc behind the rotor (inside the duct ring, just off the face), the service platform under the housing
   const zFace = hd, ringR = FAN_ANCHORS.ringR * s;
   const disc = new THREE.CircleGeometry(ringR * 1.06, 40);

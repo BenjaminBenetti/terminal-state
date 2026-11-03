@@ -143,7 +143,7 @@ describe('the surface plant plan on real Reactor layouts', () => {
       expect(piers.length).toBe(plan.stats.piers);
       expect(piers.length).toBeGreaterThanOrEqual(20);
       expect(plan.parts.filter(p => p.kind === 'buttress').length).toBe(piers.length);
-      for (const p of piers) expect(p.y1).toBeGreaterThan(site.parapetY + 0.5);
+      for (const p of piers) expect(p.y1).toBeGreaterThan(site.parapetY + 0.3);
       // the city honours the reserved lots: no building, wreck or rubble heap on them
       const city = planSurfaceCity(site, seed, inCatalogue, pit, plan.reserved);
       for (const q of city.placements) for (const r of plan.reserved) expect(footprintsOverlap(q, r), `${sd} city ${q.entry} on a plant lot`).toBe(false);

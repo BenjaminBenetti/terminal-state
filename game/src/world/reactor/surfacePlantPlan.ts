@@ -80,7 +80,7 @@ export const SURFACE_PLANT = {
   /** Towers wanted (fewer when the yard has no room). */
   towers: 2,
   /** The fan's rotor-ring radius (seeded); the stack's width = the housing plate (3.714 x radius) + this margin; its depth; height. */
-  fanR: [1.8, 2.0] as readonly [number, number],
+  fanR: [2.1, 2.4] as readonly [number, number],
   stackMargin: [1.4, 1.8] as readonly [number, number],
   stackD: [6.0, 7.0] as readonly [number, number],
   height: [22, 27] as readonly [number, number],
@@ -89,14 +89,14 @@ export const SURFACE_PLANT = {
   /** Plinth: margin round the stack, height. */
   plinthPad: 1.0, plinthH: 1.0,
   /** The parapet's outer face -> the plinth's front (the duct run; the fan housing overhangs it high up). */
-  gap: [4.2, 5.4] as readonly [number, number],
+  gap: [4.7, 5.6] as readonly [number, number],
   /** Tower centre offset along its side from the aperture's projection (off the beam's axis). */
   lateral: [9, 15] as readonly [number, number],
   /** Plenum (against the parapet's outer face): half width, depth, height above the deck. Duct: width, height, bottom. */
   plenum: {hw: 2.7, d: 1.7, h: 3.1},
   duct: {w: 3.4, h: 2.2, bottom: 1.15},
   /** Compound wall: pier rhythm (m), width along the edge, depth beyond the parapet, height over the parapet line; buttress length / width. */
-  pierEvery: 6, pierW: 0.62, pierOut: 0.42, pierUp: 0.85, buttress: 1.35, buttressW: 0.42,
+  pierEvery: 6, pierW: 0.8, pierOut: 0.42, pierUp: 0.45, buttress: 1.35, buttressW: 0.5,
   /** The lane SURFACE parapet's thickness (surfacePlan.ts SURFACE_CITY.parapetT): the piers' depth starts behind it. */
   parapetT: 0.32,
   /** Inner faces stand this far off the walk boundary (never on a walkable cell). */
@@ -196,7 +196,9 @@ export function planSurfacePlant(site: SurfaceSite, seed: number, _pit?: Reactor
     }
     return null;
   };
-  const first = place(opposite, rnd() < 0.5 ? 1 : -1);
+  // (the far tower stands off the axis AWAY from the first lateral side: the two spread across the view from the exit)
+  const away = opposite.nx !== 0 ? -laterals[0].nz : -laterals[0].nx;
+  const first = place(opposite, away || (rnd() < 0.5 ? 1 : -1));
   if (first) towers.push(first);
   for (const s of first ? laterals : [...laterals, opposite]) {
     if (towers.length >= P.towers) break;
