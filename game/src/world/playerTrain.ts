@@ -721,11 +721,6 @@ export class PlayerTrainRuntime {
     return this.train?.view ?? this.heldView?.view ?? null;
   }
 
-  /** (lane RIDE) The car's own warm fixture emissive (the transit tunnel's passing lamps reuse it: no new material / art). */
-  tunnelLampMaterial(): THREE.Material {
-    return this.mats.get('fixture');
-  }
-
   /** (lane RIDE) Drop a held view for good (the ride was reset with no station to adopt it): removed and disposed. */
   releaseHeldView(): void {
     const v = this.heldView;

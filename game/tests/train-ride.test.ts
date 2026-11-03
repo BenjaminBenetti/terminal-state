@@ -265,15 +265,22 @@ describe('the car pose: local <-> world maps, the jostle', () => {
 // Routes per archetype
 
 describe('routes: departure / arrival plans', () => {
-  it('Subway / Office / Mall run through a tunnel on the car\'s track (front preferred); island-ends falls back to the bed end', () => {
+  // task campaign-polish (lane TRAIN, item 16): FRONT FIRST both ways — the departure always takes the FRONT end, the arrival always comes
+  // out of the REAR end (the car never runs rear first and never reverses); a tunnel when one continues that end, else its bed end
+  it('Subway / Office / Mall / island-ends: the departure takes the FRONT end, the arrival comes out of the REAR end (tunnel, else bed end)', () => {
     for (const [tag, L] of [['subway', SUBWAY()], ['office', OFFICE()], ['mall', MALL()], ['island-ends', ISLAND()]] as const) {
       const p = playerTrainPlacement(L)!;
-      const d = departurePlan(L, p);
+      const d = departurePlan(L, p), a = arrivalPlan(L, p);
+      const frontEnd = p.front > 0 ? 'x1' : 'x0', rearEnd = p.front > 0 ? 'x0' : 'x1';
+      expect(d.end, `${tag}: departure end`).toBe(frontEnd);
+      expect(a.end, `${tag}: arrival end`).toBe(rearEnd);
+      expect(departDir(d), tag).toBe(1);
+      expect(arriveDir(a), tag).toBe(1);
       const tunnels = (L.extensions?.tunnels ?? []).filter(t => t.trench === p.trenchIndex);
-      if (!tunnels.length) { expect(d.kind, tag).toBe('bed-end'); expect(d.sgn, `${tag}: front end`).toBe(1); continue; }
-      expect(d.kind, tag).toBe('tunnel');
-      const frontEnd = p.front > 0 ? 'x1' : 'x0';
-      if (tunnels.some(t => t.from === frontEnd)) expect(d.end, `${tag}: front preferred`).toBe(frontEnd);
+      expect(d.kind, `${tag}: departure kind`).toBe(tunnels.some(t => t.from === frontEnd) ? 'tunnel' : 'bed-end');
+      expect(a.kind, `${tag}: arrival kind`).toBe(tunnels.some(t => t.from === rearEnd) ? 'tunnel' : 'bed-end');
+      for (const pl of [d, a]) if (pl.kind === 'bed-end') expect(pl.uEdge).toBeCloseTo(pl.uMouth - SPEC.length / 2 - RIDE_ROUTE.planeClear, 9);
+      if (d.kind !== 'tunnel') continue;
       // the route starts at the car centre, runs along the bed to the mouth, then inside the tunnel corridor at the track's offset
       const s0 = d.route.at(0);
       expect(Math.hypot(s0.x - p.x, s0.z - p.z)).toBeLessThan(1e-9);
@@ -287,13 +294,6 @@ describe('routes: departure / arrival plans', () => {
       const rp = routePose(d, 0, RIDE.bogie);
       expect(Math.hypot(rp.x - p.x, rp.z - p.z)).toBeLessThan(1e-9);
       expect(rp.ax).toBeCloseTo(p.front, 12);
-      // arrivals: a tunnel end in the wanted direction when one exists, else the other tunnel end (the transit reverses)
-      for (const dir of [1, -1] as const) {
-        const a = arrivalPlan(L, p, dir);
-        expect(a.kind).toBe('tunnel');
-        const want = -dir * p.front > 0 ? 'x1' : 'x0';
-        if (tunnels.some(t => t.from === want)) expect(arriveDir(a), `${tag} dir ${dir}`).toBe(dir);
-      }
       expect(departDir(d)).toBe(d.sgn);
     }
   });
@@ -303,16 +303,17 @@ describe('routes: departure / arrival plans', () => {
 // The transit tunnel
 
 describe('the transit tunnel', () => {
-  it('six draws, periodic, far from every station world; the offset wraps (no drift)', () => {
+  // task campaign-polish (lane TRAIN, item 15): the warm lamps became red signals (housings / lenses / glow cards in one sub-group)
+  it('eight draws, periodic, far from every station world; the offset wraps (no drift)', () => {
     const m = () => new THREE.MeshBasicMaterial();
-    const tt = new TrainTransitTunnel().build({wall: m(), ceiling: m(), floor: m(), rail: m(), sleeper: m(), lamp: m()});
-    expect(tt.stats.meshes).toBe(6);
-    expect(tt.group.children.length).toBe(6);
+    const tt = new TrainTransitTunnel().build({wall: m(), ceiling: m(), floor: m(), rail: m(), sleeper: m(), lens: m(), glow: m()});
+    expect(tt.stats.meshes).toBe(8);
+    expect(tt.group.children.length).toBe(6); // 5 tunnel meshes + the signal sub-group (3 instanced meshes)
+    expect(tt.signals.children.length).toBe(3);
     expect(tt.active).toBe(false);
     tt.enterTransit();
     expect(tt.active).toBe(true);
     expect(TRANSIT.half % TRANSIT.period).toBe(0);
-    expect(TRANSIT.period % TRANSIT.lampStep).toBe(0);
     expect(Math.abs(TRANSIT.period / TRANSIT.sleeperStep - Math.round(TRANSIT.period / TRANSIT.sleeperStep))).toBeLessThan(1e-9);
     expect(Math.hypot(TRANSIT.origin.x, TRANSIT.origin.z)).toBeGreaterThan(1500);
     for (let i = 0; i < 100000; i++) tt.advance(15 / 60);

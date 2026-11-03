@@ -6,23 +6,23 @@
 // the map) and drives this API; this file owns the motion, ride mode and the transit tunnel.
 //
 // API (TrainRide; Game.trainRide):
-//   depart(): Promise<DepartResult>   refuses ('refused' + reason: no-train / dead / climbing / busy / outside / door-blocked /
+//   depart(journey?): Promise<DepartResult>  refuses ('refused' + reason: no-train / dead / climbing / busy / outside / door-blocked /
 //                                     aborted) unless the player stands inside the parked car; closes every side door (the
 //                                     runtime's door animation and rules: a blocked door re-opens, the close is re-tried every
 //                                     RIDE.closeRetry s, reported after RIDE.closeTimeout s), then the car pulls away with an
-//                                     ease-in (jerk-limited) acceleration along its track into the bed end's tunnel (front end
-//                                     preferred, else rear-first through the rear end's tunnel, else the front bed end's black end
-//                                     plane: the documented fallback) and resolves {status: 'in-tunnel'} once the whole car is in
-//                                     the dark — at that moment the car is handed to the TRANSIT loop automatically.
+//                                     ease-in (jerk-limited) acceleration FRONT FIRST along its track out of the FRONT end (its
+//                                     tunnel, else its bed end) and resolves {status: 'in-tunnel'} once the car is in the dark — at
+//                                     that moment the car is handed to the TRANSIT loop automatically. `journey` (lane MAP's
+//                                     RideJourney: route = [current, ..., destination] over track edges) only lengthens the minimum
+//                                     transit a little per extra hop (bounded); the portal never depends on it.
 //   enterTransit(): boolean           hand the departing car to the transit loop now (idempotent; depart() does it itself).
 //   leaveTransit()                    hide the transit tunnel (arrive() does it when the car enters the next station).
 //   arrive(): Promise<ArriveResult>   after the primary built the next station (PlayerTrainRuntime adopted the riding car's view at
-//                                     the new placement): after at least RIDE.minTransit s in transit (reversing first when the
-//                                     arrival tunnel needs the other direction), the car enters that station's tunnel on the
-//                                     placement's track (or the bed end), keeps the player at the same car-local pose, brakes and
-//                                     stops EXACTLY at the placement, then ride mode ends (normal player physics in the parked
-//                                     car's DynamicVolume; doors shut until the player opens them) -> {status: 'stopped'}.
-//                                     Called before the car reached the transit, it waits for it.
+//                                     the new placement): after at least the journey's minimum transit, the car comes out of the
+//                                     REAR end of that station's track (its tunnel, else its bed end) FRONT FIRST, keeps the player
+//                                     at the same car-local pose, brakes and stops EXACTLY at the placement, then ride mode ends
+//                                     (normal player physics in the parked car's DynamicVolume; doors shut until the player opens
+//                                     them) -> {status: 'stopped'}. Called before the car reached the transit, it waits for it.
 //   transitFailed(reason)             the primary's load failed: nothing changes (the car keeps looping; QA shows the reason).
 //   reset()                           hard stop (new game / load / death): ride mode ends, pending promises resolve 'aborted'.
 //   riding / phase / state()          'idle' | 'closing' | 'departing' | 'transit' | 'arriving' (+ QA readout).
@@ -41,14 +41,24 @@
 // pose (no double bob). Everything that reads the player's world pose (camera, flashlight, viewmodel, held items, gear, inventory,
 // the Lockbox by aim in the car frame, audio listener) keeps working; the station world's train colliders are ignored while riding.
 //
-// TRANSIT (trainTransitTunnel.ts): the car stands at TRANSIT.origin (yaw 0) and the procedural tunnel scrolls past it at up to
-// RIDE.cruise m/s with lamps passing the windows; nothing moves in world space, so the primary's main-thread hitches (0.3-2 s world
-// builds) only advance the clamped dt: the motion continues sensibly after each, no teleport, no drift. A failed load keeps it
-// looping (the player is always inside the car's walls: never in the void).
+// TRANSIT (trainTransitTunnel.ts): the car stands at TRANSIT.origin with the yaw it had and the procedural tunnel scrolls past it at
+// up to RIDE.cruise m/s with red signals passing the windows; nothing moves in world space, so the primary's main-thread hitches
+// (0.3-2 s world builds) only advance the clamped dt: the motion continues sensibly after each, no teleport, no drift. A failed load
+// keeps it looping (the player is always inside the car's walls: never in the void).
 //
-// AUDIO: existing Sound Lab cues only, through the Sfx master: 'bedRumble' (the under-floor motor / wheel rumble, re-struck in
-// overlapping faded windows, rate and gain with speed), 'trainDistant' (a low-passed run layer at speed), 'clank' (each bogie over a
-// rail joint; the brake release; the stop), 'creak' (the brakes). The doors use the runtime's own cues.
+// Task studio-beta-campaign-polish-20261103-063841-01 (lane TRAIN):
+//  - item 15: the transit is VERY DARK (no warm lamps; while it shows, the scene fog is the indoor tunnel murk — a level's own fog,
+//    e.g. the mall's grey haze, is held and given back when the car leaves the transit; uniform values only) with red signals at a
+//    metro block spacing scrolling at the car's speed. Lights: the car's boot-time lights and the flashlight only. The station light
+//    field reads zero this far from any station (tests), so nothing else lights the box.
+//  - item 16: FRONT FIRST always: the transit only ever runs +X (no reverse velocity, no dwell, no reversal); the car's yaw is carried
+//    into the transit and turned (bounded rate, the whole view with it) toward the arrival heading — no 180-degree snap. A bed end is
+//    crossed through a stub (the transit box continuing a clear end; the end plane hidden while the car passes) or, where rooms stand
+//    behind the end face, at its edge (the car never passes the plane). The hand-overs wait until no signal is in sight.
+//    Spent brass lying in the car rides with it (Physics casings: relocate / carry by the car's pose change).
+//  - item 17: the sound (trainRideAudio.ts): continuous rumble / air loops blended by speed (start / cruise / decel / stop), the run
+//    layer, rail-joint clacks, brake release / brake / stop one-shots — stopped on the stop, reset, a failed journey and dispose,
+//    silenced on pause / menus. The doors use the runtime's own cues.
 
 import * as THREE from 'three';
 import type {MoveInput, Player} from '../player/player';
@@ -64,8 +74,10 @@ import {
   RIDE_JOSTLE, buildRideLocalModel, carToWorld, fromStep, insideInterior, jostleAt, placementPose, rotateToLocal, toStep, worldToCar,
   wrapAngle, yawCS, yawOfAxis, type CarPose, type Jostle, type P3, type RideLocalModel,
 } from './trainRideLocal';
-import {RIDE_ROUTE, arriveDir, arrivalPlan, departDir, departurePlan, routePose, type RidePlan} from './trainRideRoute';
-import {TRANSIT, TrainTransitTunnel, transitMaterials} from './trainTransitTunnel';
+import {arrivalPlan, bedEndClear, departurePlan, routePose, type RideLevels, type RidePlan} from './trainRideRoute';
+import {TRANSIT, TrainTransitTunnel, transitMaterials, type TransitMaterials} from './trainTransitTunnel';
+import {TrainRideAudio} from './trainRideAudio';
+import {MOOD, syncGlowFog} from './lights';
 
 /** Motion tuning (m, s, m/s, m/s², m/s³). */
 export const RIDE = {
@@ -83,8 +95,19 @@ export const RIDE = {
   creep: 0.35,
   /** At least this long in transit before the car leaves for the next station. */
   minTransit: 6,
-  /** A reversal in transit rests this long at zero. */
-  reverseDwell: 1.4,
+  /** Multi-hop journeys (lane MAP): + hopTransit s per hop beyond the first, at most hopTransitCap s in all (bounded: survival time). */
+  hopTransit: 2, hopTransitCap: 6,
+  /** Item 16: in transit the car's yaw turns toward the arrival heading at most this fast (rad/s; the whole view turns with it). */
+  yawRate: 0.8,
+  /**
+   * Item 15: once the arrival is planned the transit shows no new signal; the car leaves the transit only when no shown signal stands
+   * within this band (m along the car from its centre: behind, ahead) — the fog hides anything beyond it, so nothing pops.
+   */
+  signalBand: [-48, 48] as const,
+  /** Item 16: a stub's first signal beyond the end face on a departure (m); on an arrival this far behind the car's start. */
+  stubSignal: 50, stubSignalBehind: 60,
+  /** Item 16: an arrival stub (and its hidden end plane) goes once the car's trailing end is this far inside the station (m). */
+  stubRelease: 20,
   /** Door closing: retry a re-opened (blocked) door every closeRetry s, give up after closeTimeout s. */
   closeRetry: 1.2, closeTimeout: 9,
   /** Bogie half spacing (m): the body rides the chord between the bogies. */
@@ -96,7 +119,16 @@ export const RIDE = {
 export type RidePhase = 'idle' | 'closing' | 'departing' | 'transit' | 'arriving';
 export type RideRefusal = 'no-train' | 'dead' | 'climbing' | 'busy' | 'outside' | 'door-blocked' | 'aborted' | 'not-riding';
 export type DepartResult = {status: 'in-tunnel'; via: 'tunnel' | 'bed-end'; end: 'x0' | 'x1'; dir: 1 | -1} | {status: 'refused'; reason: RideRefusal; message: string};
+/** `reversed` is always false since item 16 (kept for the API: the car never reverses). */
 export type ArriveResult = {status: 'stopped'; via: 'tunnel' | 'bed-end'; end: 'x0' | 'x1'; reversed: boolean} | {status: 'refused'; reason: RideRefusal; message: string};
+/** How a plan's end is crossed: a station tunnel, a stub continuing a clear bed end, or a bed end's edge (rooms behind it). */
+export type CrossMode = 'tunnel' | 'stub' | 'edge';
+
+/**
+ * Lane MAP's multi-hop journey (task campaign-polish): route[0] = the current station, route[last] = the destination, consecutive
+ * pairs are track edges (length 2 = one hop). One continuous ride; the intermediates are never built.
+ */
+export interface RideJourney { route: readonly string[] }
 
 const REFUSAL_TEXT: Record<RideRefusal, string> = {
   'no-train': 'There is no train here',
@@ -118,7 +150,9 @@ export interface RideHost {
   hud: {toast(text: string, warn?: boolean): void};
   sfx: unknown;
   state: string;
-  world?: {culler?: unknown} | null;
+  world?: {culler?: unknown; group?: THREE.Object3D} | null;
+  /** Physics (structural, read as BrassHost): spent brass lying in the riding car moves with it (physics/casings.ts relocate / carry). */
+  physics?: unknown;
   mats?: WorldMaterials | null;
   warmRegistry?: WarmupRegistry;
   gear?: {placeRules?: ((x: number, y: number, z: number, level: number) => string | null)[]} | null;
@@ -131,20 +165,17 @@ export interface RideOptions {
   jostle?: () => number;
   /** Toast refusals / notes on the HUD (default true). */
   toasts?: boolean;
+  /** Tests: the transit's materials when the host has no world material cache. */
+  transitMaterials?: () => TransitMaterials;
+}
+
+/** The casings surface the ride uses (physics/casings.ts CasingSystem). */
+interface BrassHost {
+  casings?: {relocate?(move: (x: number, y: number, z: number) => [number, number] | null): void; carry?(inside: (x: number, y: number, z: number) => boolean, dy: number): void};
 }
 
 interface Local { x: number; y: number; z: number; yaw: number; vx: number; vz: number }
 type Pending<T> = {resolve: (v: T) => void} | null;
-
-/** Plays an EXISTING cue through the Sfx master, non-positional (the listener rides in the car); guarded, best effort. */
-function rideCue(sfx: unknown, cue: string, o: {rate?: number; gain?: number; maxDur?: number; fadeOut?: number; delay?: number; filter?: {type: BiquadFilterType; freq: number; q?: number}} = {}): void {
-  const s = sfx as {voice?(o: object): unknown; play?(v: unknown, cue: string, o?: object): unknown} | null;
-  if (!s || typeof s.voice !== 'function' || typeof s.play !== 'function') return;
-  try {
-    const v = s.voice({send: 0.22, pri: 1});
-    if (v) s.play(v, cue, {jitter: 0.03, gainJitter: 0.5, ...o});
-  } catch { /* audio is best-effort */ }
-}
 
 export class TrainRide {
   phase: RidePhase = 'idle';
@@ -154,9 +185,9 @@ export class TrainRide {
   readonly pose: CarPose = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0};
   readonly base: CarPose = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0};
   readonly jostle: Jostle = {lateral: 0, roll: 0, pitch: 0, bump: 0};
-  /** Speed along the motion (m/s, >= 0) and its direction relative to the car (+1 front-first). */
+  /** Speed along the motion (m/s, >= 0) and its direction relative to the car (+1 front-first: always, since item 16). */
   speed = 0;
-  dir: 1 | -1 = 1;
+  readonly dir: 1 | -1 = 1;
   /** Car-centre position on the current station plan's route. */
   u = 0;
   plan: RidePlan | null = null;
@@ -165,12 +196,18 @@ export class TrainRide {
   /** Total distance travelled this ride (jostle joints) and the ride clock. */
   dist = 0;
   clock = 0;
-  /** Transit: signed velocity along the car's local +X, seconds in transit, the reversal dwell. */
+  /** Transit: velocity along the car's local +X (never negative), seconds in transit. */
   transitV = 0;
   transitT = 0;
   readonly transit: TrainTransitTunnel;
+  /** Item 17: the sound. */
+  readonly audio: TrainRideAudio;
+  /** This ride's journey (hops) and its minimum transit (s). */
+  journey: {route: string[]; hops: number; minTransit: number} = {route: [], hops: 1, minTransit: RIDE.minTransit};
+  /** How the current plan's end is crossed (item 16). */
+  cross: CrossMode = 'tunnel';
   /** QA. */
-  readonly counts = {departs: 0, refused: 0, arrivals: 0, handovers: 0, reversals: 0, clampedSteps: 0, closeRetries: 0, fireBlocked: 0, dropsBlocked: 0};
+  readonly counts = {departs: 0, refused: 0, arrivals: 0, handovers: 0, reversals: 0, clampedSteps: 0, closeRetries: 0, fireBlocked: 0, dropsBlocked: 0, stubs: 0, edges: 0, fogHolds: 0, brassCarried: 0, signalWaits: 0};
   lastRefusal: RideRefusal | null = null;
   failure: string | null = null;
   readonly model: RideLocalModel;
@@ -179,18 +216,24 @@ export class TrainRide {
   private accelNow = 0;
   private closeT = 0;
   private retryT = 0;
-  private dwellT = 0;
-  private reversed = false;
   private arrivalReady = false;
   private arrivalPlanned: RidePlan | null = null;
+  private arrivalCross: CrossMode = 'tunnel';
+  private arrivalU = 0;
   private departing: Pending<DepartResult> = null;
   private arriving: Pending<ArriveResult> = null;
   private noteT = 1e9;
-  private audioT = {rumble: 1e9, run: 1e9, joints: [0, 0]};
   private brakeCued = false;
   private released: THREE.Object3D | null = null;
+  /** Item 16: the station's black end plane hidden while the car passes through a stub (restored after). */
+  private hiddenPlane: THREE.Object3D | null = null;
+  /** Item 15: the level's own scene fog while the transit shows the tunnel murk (given back on leaving the transit). */
+  private fogHeld: {color: THREE.Color; density: number} | null = null;
+  private readonly prevPose: CarPose = {x: 0, y: 0, z: 0, yaw: 0, pitch: 0, roll: 0};
   private readonly tmp: P3 = {x: 0, y: 0, z: 0};
   private readonly tmp2: P3 = {x: 0, y: 0, z: 0};
+  private readonly tmp3: P3 = {x: 0, y: 0, z: 0};
+  private readonly fogColor = new THREE.Color(MOOD.fogColor);
   private readonly rp = {x: 0, z: 0, ax: 1, az: 0};
   private readonly qTilt = new THREE.Quaternion();
   private readonly qYaw = new THREE.Quaternion();
@@ -202,6 +245,7 @@ export class TrainRide {
   constructor(readonly host: RideHost, readonly runtime: PlayerTrainRuntime, readonly opts: RideOptions = {}) {
     this.model = buildRideLocalModel(runtime.spec, runtime.consoleRect);
     this.transit = new TrainTransitTunnel();
+    this.audio = new TrainRideAudio(() => this.host.sfx);
     const self = this;
     this.link = {
       toWorld: (lx, ly, lz) => carToWorld(self.pose, lx, ly, lz, {x: 0, y: 0, z: 0}),
@@ -218,10 +262,14 @@ export class TrainRide {
     h.scene.add(this.transit.group);
     this.ensureTransit();
     // the tunnel is built before the first station's warm-up (the world materials exist by then), so its pipelines compile there
-    h.sectionHooks?.push({build: () => this.ensureTransit()});
+    // a teardown: the old world's end plane / fog are its own again (its atmosphere restores its fog itself; the next one re-applies)
+    h.sectionHooks?.push({build: () => this.ensureTransit(), teardown: () => { this.hiddenPlane = null; this.fogHeld = null; }});
     h.warmRegistry?.addPool('train-transit', () => (this.transitBuilt ? [this.transit.group] : []));
     h.gear?.placeRules?.push(() => (this.riding ? 'Not while the train is moving' : null));
-    h.stateListeners?.push(((state: string) => { if (state === 'dead' || state === 'title' || state === 'error') this.reset(); }) as (s: never, p: never) => void);
+    h.stateListeners?.push(((state: string) => {
+      if (state === 'dead' || state === 'title' || state === 'error') this.reset();
+      else if (state !== 'playing') this.audio.silence(); // pause / inventory / a map or any menu: the ride sound goes quiet with it
+    }) as (s: never, p: never) => void);
     return this;
   }
 
@@ -243,9 +291,11 @@ export class TrainRide {
 
   /** The transit tunnel's meshes (once, from the world's material cache; without one the tunnel stays empty). */
   private ensureTransit(): void {
-    if (this.transitBuilt || !this.host.mats) return;
+    if (this.transitBuilt) return;
+    const make = this.host.mats ? () => transitMaterials(this.host.mats!) : this.opts.transitMaterials;
+    if (!make) return;
     try {
-      this.transit.build(transitMaterials(this.host.mats, this.runtime.tunnelLampMaterial()));
+      this.transit.build(make());
       this.transitBuilt = true;
     } catch (err) { console.warn('train ride: transit tunnel unavailable', err); }
   }
@@ -253,7 +303,11 @@ export class TrainRide {
   // -------------------------------------------------------------------------------------------
   // Departure
 
-  depart(): Promise<DepartResult> {
+  /** One hop (the original call; the perf recorder wraps this method by name). */
+  depart(): Promise<DepartResult>;
+  /** A journey (lane MAP's RideJourney: [current, ..., destination]); undefined = one hop. */
+  depart(journey: RideJourney | undefined): Promise<DepartResult>;
+  depart(journey?: RideJourney): Promise<DepartResult> {
     const rt = this.runtime, P = this.host.player, t = rt.train;
     const refuse = (reason: RideRefusal): Promise<DepartResult> => {
       this.counts.refused++;
@@ -270,17 +324,17 @@ export class TrainRide {
     this.counts.departs++;
     this.lastRefusal = null;
     this.failure = null;
+    this.journey = journeyOf(journey);
     // ride mode from now on: the car frame at the placement (the player is held inside the closed-door walls while they shut)
     this.placement = p;
-    this.plan = departurePlan(t.layout, p, rt.spec);
-    this.dir = departDir(this.plan);
+    this.plan = departurePlan(t.layout, p, rt.spec); // item 16: the FRONT end, always (sgn +1)
+    this.cross = this.crossOf(this.plan, t.layout, p);
     this.u = 0;
     this.speed = 0;
     this.accelNow = 0;
     this.dist = 0;
     this.clock = 0;
-    this.audioT.joints = [Math.floor(-RIDE_JOSTLE.bogie / RIDE_JOSTLE.jointStep), Math.floor(RIDE_JOSTLE.bogie / RIDE_JOSTLE.jointStep)];
-    this.reversed = false;
+    this.audio.begin(0);
     this.arrivalReady = false;
     this.arrivalPlanned = null;
     Object.assign(this.base, placementPose(p));
@@ -317,12 +371,14 @@ export class TrainRide {
     if (this.phase !== 'departing') return false;
     this.ensureTransit();
     this.counts.handovers++;
-    this.transitV = this.dir * this.speed;
+    this.transitV = this.speed;
     this.transitT = 0;
-    this.dwellT = 0;
-    this.transit.enterTransit();
+    // the car keeps its yaw (no world-yaw snap); a stub continues seamlessly around it, else the next signal waits out of sight
+    if (this.cross === 'stub' && this.transit.mode === 'stub') this.transit.handOver(this.base.x, this.base.z);
+    else { this.transit.enterTransit(this.base.yaw); this.transit.setSignalAhead(TRANSIT.signal.ahead); }
+    this.restorePlane(); // (the car has left the station: its end plane is whole again)
     this.setPhase('transit');
-    Object.assign(this.base, {x: TRANSIT.origin.x, y: TRANSIT.origin.y, z: TRANSIT.origin.z, yaw: this.continuousYaw(0), pitch: 0, roll: 0});
+    Object.assign(this.base, {x: TRANSIT.origin.x, y: TRANSIT.origin.y, z: TRANSIT.origin.z, pitch: 0, roll: 0});
     const d = this.departing;
     this.departing = null;
     d?.resolve({status: 'in-tunnel', via: this.plan?.kind ?? 'tunnel', end: this.plan?.end ?? 'x0', dir: this.dir});
@@ -332,6 +388,7 @@ export class TrainRide {
   /** Hide the transit tunnel (the car is in a station again). */
   leaveTransit(): void {
     this.transit.leaveTransit();
+    this.releaseFog();
   }
 
   // -------------------------------------------------------------------------------------------
@@ -363,6 +420,7 @@ export class TrainRide {
 
   /** Hard stop (new game / load / death): ride mode ends; a parked car (if any) gets its placement pose back. */
   reset(): void {
+    this.audio.stop(0.1);
     if (!this.riding) return;
     const d = this.departing, a = this.arriving;
     this.departing = this.arriving = null;
@@ -456,6 +514,7 @@ export class TrainRide {
     this.clock += dt;
     this.phaseT += dt;
     this.noteT += dt;
+    Object.assign(this.prevPose, this.pose);
     switch (this.phase) {
       case 'closing': this.stepClosing(dt); break;
       case 'departing': this.stepDeparting(dt); break;
@@ -465,7 +524,9 @@ export class TrainRide {
     if (!this.riding) return;
     this.composePose();
     this.applyView();
-    this.stepAudio(dt);
+    this.carryBrass(this.prevPose);
+    if (this.phase === 'transit') this.holdFog();
+    this.audio.step(dt, this.speed, this.dist, this.phase === 'arriving');
   }
 
   private stepClosing(dt: number): void {
@@ -476,8 +537,9 @@ export class TrainRide {
       if (this.closeT >= RIDE.departDelay) {
         this.releaseFromCuller();
         this.setPhase('departing');
-        rideCue(this.host.sfx, 'clank', {rate: 0.7, gain: 0.45, filter: {type: 'lowpass', freq: 1400}}); // the brake release
-        rideCue(this.host.sfx, 'creak', {rate: 0.55, gain: 0.35, delay: 0.15, filter: {type: 'lowpass', freq: 1600}});
+        if (this.cross === 'stub') this.placeStub(this.plan!, this.placement!, RIDE.stubSignal);
+        this.audio.cue('clank', {rate: 0.7, gain: 0.45, filter: {type: 'lowpass', freq: 1400}}); // the brake release
+        this.audio.cue('creak', {rate: 0.55, gain: 0.35, delay: 0.15, filter: {type: 'lowpass', freq: 1600}});
       }
       return;
     }
@@ -511,12 +573,9 @@ export class TrainRide {
     const du = ((v0 + this.speed) / 2) * dt;
     this.u += du;
     this.dist += du;
-    let hand = this.u >= plan.uDark || this.u >= plan.uMax;
-    if (plan.kind === 'bed-end') {
-      // the documented fallback: into the black end plane; hand over before the camera would reach it (or the car is half through)
-      const cam = this.u + plan.sgn * this.local.x;
-      hand = cam + RIDE_ROUTE.planeClear >= plan.uMouth || this.u >= plan.uMouth + this.runtime.spec.length / 2 - 1;
-    }
+    // a tunnel / a stub: the whole car in the dark (uDark); a bed end's edge: the cab's nose just inside the black end plane (uEdge)
+    const hand = this.cross === 'edge' ? this.u >= plan.uEdge : this.u >= plan.uDark || this.u >= plan.uMax;
+    if (this.cross === 'edge') this.u = Math.min(this.u, plan.uEdge);
     this.u = Math.min(this.u, plan.uMax);
     this.poseOnRoute();
     if (hand) this.enterTransit();
@@ -525,35 +584,36 @@ export class TrainRide {
   private stepTransit(dt: number): void {
     this.transitT += dt;
     const rt = this.runtime;
-    // the arrival: once the primary built the next station and the car has run long enough, approach its entry velocity
-    let target = this.dir * RIDE.cruise;
-    if (this.arrivalReady && rt.train && this.transitT >= RIDE.minTransit) {
+    // the arrival: once the primary built the next station and the car has run long enough, approach its entry velocity front first
+    let target: number = RIDE.cruise;
+    if (this.arrivalReady && rt.train && this.transitT >= this.journey.minTransit) {
       if (!this.arrivalPlanned || this.placement !== rt.train.placement) {
         this.placement = rt.train.placement;
-        this.arrivalPlanned = arrivalPlan(rt.train.layout, rt.train.placement, this.dir, rt.spec);
+        this.arrivalPlanned = arrivalPlan(rt.train.layout, rt.train.placement, rt.spec); // item 16: the REAR end, cab first
+        this.arrivalCross = this.crossOf(this.arrivalPlanned, rt.train.layout, rt.train.placement);
+        this.arrivalU = this.arrivalCross === 'edge' ? this.arrivalPlanned.uEdge : this.arrivalPlanned.uDark;
       }
-      const plan = this.arrivalPlanned, adir = arriveDir(plan);
-      const vEntry = Math.min(RIDE.arriveMax, Math.sqrt(2 * RIDE.brake * Math.max(0.5, plan.uDark)));
-      target = adir * vEntry;
-      if (adir !== this.dir && Math.abs(this.transitV) < 0.05) {
-        // a reversal: rest a moment at zero, then run the other way
-        this.transitV = 0;
-        this.dwellT += dt;
-        if (this.dwellT < RIDE.reverseDwell) { this.speed = 0; this.transit.advance(0); return; }
-        this.dir = adir;
-        this.reversed = true;
-        this.counts.reversals++;
-        this.dwellT = 0;
-        this.accelNow = 0;
+      const plan = this.arrivalPlanned, u0 = this.arrivalU;
+      const vEntry = Math.min(RIDE.arriveMax, Math.sqrt(2 * RIDE.brake * Math.max(0.5, u0)));
+      target = vEntry;
+      // the car's yaw turns toward the arrival heading (bounded rate; the box and the view turn with it: nothing visible changes)
+      const r = routePose(plan, u0, RIDE.bogie, this.rp);
+      const want = this.continuousYaw(yawOfAxis(r.ax, r.az)), dy = want - this.base.yaw, maxTurn = RIDE.yawRate * dt;
+      this.base.yaw = Math.abs(dy) <= maxTurn ? want : this.base.yaw + Math.sign(dy) * maxTurn;
+      this.transit.setYaw(this.base.yaw);
+      // no new signal comes into sight from here on; the car leaves when none is in sight
+      const [lo, hi] = RIDE.signalBand;
+      this.transit.hideSignalsOutside(lo, hi);
+      const clear = this.transit.signalsWithin(lo, hi) === 0;
+      if (Math.abs(this.transitV - target) < 0.06 && this.base.yaw === want) {
+        if (clear) { this.beginArrival(plan, u0, vEntry); return; }
+        this.counts.signalWaits++;
       }
-      if (adir === this.dir && Math.abs(this.transitV - target) < 0.06) { this.beginArrival(plan, vEntry); return; }
-      if (adir !== this.dir) target = 0;
     }
     const w0 = this.transitV, gap = target - w0;
     if (Math.abs(gap) > 1e-9) {
-      const speeding = Math.abs(target) > Math.abs(w0) && Math.sign(target) === Math.sign(w0 || target);
       let a: number;
-      if (speeding) { this.accelNow = Math.min(RIDE.accel, this.accelNow + RIDE.jerk * dt); a = this.accelNow; } else { this.accelNow = 0; a = RIDE.transitBrake; }
+      if (gap > 0) { this.accelNow = Math.min(RIDE.accel, this.accelNow + RIDE.jerk * dt); a = this.accelNow; } else { this.accelNow = 0; a = RIDE.transitBrake; }
       this.transitV = Math.abs(gap) <= a * dt ? target : w0 + Math.sign(gap) * a * dt;
     }
     const ds = ((w0 + this.transitV) / 2) * dt;
@@ -562,13 +622,16 @@ export class TrainRide {
     this.speed = Math.abs(this.transitV);
   }
 
-  private beginArrival(plan: RidePlan, vEntry: number): void {
+  private beginArrival(plan: RidePlan, u0: number, vEntry: number): void {
     this.plan = plan;
-    this.u = plan.uDark;
+    this.cross = this.arrivalCross;
+    this.u = u0;
     this.speed = vEntry;
-    this.transitV = this.dir * vEntry;
+    this.transitV = vEntry;
     this.brakeCued = false;
+    this.releaseFog();
     this.transit.leaveTransit();
+    if (this.cross === 'stub') this.placeStub(plan, this.placement!, u0 - plan.uMouth + RIDE.stubSignalBehind);
     this.counts.handovers++;
     this.setPhase('arriving');
     this.base.y = this.placement!.railTopY;
@@ -580,7 +643,7 @@ export class TrainRide {
     const d = this.u; // remaining distance to the placement (the car runs -u to 0)
     const v = this.speed, brakeDist = (v * v) / (2 * RIDE.brake);
     const b = d > brakeDist + 0.01 ? 0 : (v * v) / (2 * Math.max(1e-4, d));
-    if (b > 0 && !this.brakeCued) { this.brakeCued = true; rideCue(this.host.sfx, 'creak', {rate: 0.5, gain: 0.5, filter: {type: 'lowpass', freq: 1800}}); }
+    if (b > 0 && !this.brakeCued) { this.brakeCued = true; this.audio.cue('creak', {rate: 0.5, gain: 0.5, filter: {type: 'lowpass', freq: 1800}}); }
     let vn = Math.max(0, v - b * dt);
     if (vn < RIDE.creep && d > 1e-4) vn = RIDE.creep;
     const step = ((v + vn) / 2) * dt;
@@ -595,25 +658,28 @@ export class TrainRide {
     this.dist += step;
     this.speed = vn;
     this.poseOnRoute();
-    void plan;
+    // a stub's job is done once the whole car is well inside the station: the box goes, the end plane is whole again
+    if (this.transit.mode === 'stub' && plan.uMouth - (this.u + this.runtime.spec.length / 2) >= RIDE.stubRelease) { this.transit.leaveTransit(); this.restorePlane(); }
   }
 
   /** The stop: exactly at the placement; ride mode ends (normal physics in the parked car), the promise resolves. */
   private stop(): void {
     const plan = this.plan;
-    rideCue(this.host.sfx, 'clank', {rate: 0.85, gain: 0.45, filter: {type: 'lowpass', freq: 1500}});
+    this.audio.cue('clank', {rate: 0.85, gain: 0.45, filter: {type: 'lowpass', freq: 1500}});
     this.counts.arrivals++;
     const a = this.arriving;
     this.arriving = null;
-    const reversed = this.reversed;
     this.exitRide();
-    a?.resolve({status: 'stopped', via: plan?.kind ?? 'tunnel', end: plan?.end ?? 'x0', reversed});
+    a?.resolve({status: 'stopped', via: plan?.kind ?? 'tunnel', end: plan?.end ?? 'x0', reversed: false});
   }
 
   /** Leave ride mode: the car parked at the runtime's placement (exact), the player at the same car-local pose there. */
   private exitRide(): void {
     const rt = this.runtime, t = rt.train;
     this.transit.leaveTransit();
+    this.releaseFog();
+    this.restorePlane();
+    this.audio.stop();
     this.phase = 'idle';
     this.speed = 0;
     this.transitV = 0;
@@ -693,31 +759,102 @@ export class TrainRide {
   }
 
   // -------------------------------------------------------------------------------------------
-  // Audio (existing cues; Sfx master)
+  // Item 16: crossing a bed end, brass; item 15: the transit fog
 
-  private stepAudio(dt: number): void {
-    const v = this.speed, sfx = this.host.sfx;
-    if (!sfx || v < 0.3) { this.audioT.rumble = this.audioT.run = 1e9; return; }
-    const k = Math.min(1, v / RIDE.cruise);
-    this.audioT.rumble += dt;
-    if (this.audioT.rumble >= 4.2) {
-      this.audioT.rumble = 0;
-      rideCue(sfx, 'bedRumble', {rate: 0.78 + 0.32 * k, gain: 0.22 + 0.33 * k, maxDur: 6.2, fadeOut: 1.8, filter: {type: 'lowpass', freq: 650 + 500 * k}});
-    }
-    this.audioT.run += dt;
-    if (k > 0.35 && this.audioT.run >= 7) {
-      this.audioT.run = 0;
-      rideCue(sfx, 'trainDistant', {rate: 0.6 + 0.25 * k, gain: 0.25 * k, maxDur: 8.5, fadeOut: 2.2, filter: {type: 'lowpass', freq: 1100}});
-    }
-    // each bogie over a rail joint
-    const J = RIDE_JOSTLE;
-    [-J.bogie, J.bogie].forEach((b, i) => {
-      const n = Math.floor((this.dist + b) / J.jointStep);
-      if (n !== this.audioT.joints[i]) {
-        this.audioT.joints[i] = n;
-        rideCue(sfx, 'clank', {rate: 1.45 + 0.4 * k, gain: 0.06 + 0.1 * k, maxDur: 0.35, fadeOut: 0.08, filter: {type: 'lowpass', freq: 1700}});
-      }
+  /** How a plan's end is crossed: its tunnel; else a stub when the corridor beyond the end face is clear and the box exists; else the edge. */
+  private crossOf(plan: RidePlan, layout: StationLayout, p: TrainPlacement): CrossMode {
+    if (plan.kind === 'tunnel') return 'tunnel';
+    const mode: CrossMode = this.transitBuilt && bedEndClear(this.host.levels as RideLevels, layout, p, plan.end) ? 'stub' : 'edge';
+    if (mode === 'stub') this.counts.stubs++; else this.counts.edges++;
+    return mode;
+  }
+
+  /**
+   * The transit box as a STUB continuing the plan's bed end (from its end face outward), the station's black end plane hidden while the
+   * car passes; the group's +X = the car's front (departure: outward; arrival: inward). `firstSignal` = the first shown signal's
+   * distance beyond the end face.
+   */
+  private placeStub(plan: RidePlan, p: TrainPlacement, firstSignal: number): void {
+    const t = this.runtime.train?.layout.trenches[p.trenchIndex];
+    if (!t) return;
+    const e = plan.end === 'x1' ? 1 : -1;
+    this.transit.placeStub({x: plan.end === 'x1' ? t.x1 : t.x0, y: p.railTopY, z: p.z}, {x: e, z: 0}, yawOfAxis(plan.sgn * e, 0), firstSignal);
+    this.hidePlane(p.trenchIndex, plan.end);
+  }
+
+  /** world/builder.ts tags each bed end's black plane (userData.bedEndVoid = 'trench:end'): hidden while a stub stands behind it. */
+  private hidePlane(trench: number, end: 'x0' | 'x1'): void {
+    this.restorePlane();
+    const root = this.host.world?.group, key = `${trench}:${end}`;
+    if (!root) return;
+    let found: THREE.Object3D | null = null;
+    root.traverse(o => { if (!found && o.userData.bedEndVoid === key) found = o; });
+    const plane = found as THREE.Object3D | null;
+    if (plane && plane.visible) { plane.visible = false; this.hiddenPlane = plane; }
+  }
+
+  private restorePlane(): void {
+    if (this.hiddenPlane) this.hiddenPlane.visible = true;
+    this.hiddenPlane = null;
+  }
+
+  /**
+   * Spent brass lying in the car rides with it: every live casing inside the car's interior at the previous pose goes to the same
+   * car-local point at the new pose (x / z by relocate, y by carry). Resting casings are not stepped, so they stay put on the car floor;
+   * a station teardown clears them with the rest of its physics.
+   */
+  private carryBrass(prev: CarPose): void {
+    const cs = (this.host.physics as BrassHost | null | undefined)?.casings, c = this.pose;
+    if (!cs || typeof cs.relocate !== 'function') return;
+    if (prev.x === c.x && prev.y === c.y && prev.z === c.z && prev.yaw === c.yaw && prev.pitch === c.pitch && prev.roll === c.roll) return;
+    const spec = this.runtime.spec, I = spec.interior, q = this.tmp3, w = this.tmp2;
+    const inside = (x: number, y: number, z: number, pose: CarPose) => {
+      worldToCar(pose, x, y, z, q);
+      return q.x > I.x0 && q.x < I.x1 && Math.abs(q.z) < I.halfWidth && q.y > spec.floorY - 0.25 && q.y < spec.ceilingY;
+    };
+    const moved = new Set<string>();
+    cs.relocate((x, y, z) => {
+      if (!inside(x, y, z, prev)) return null;
+      carToWorld(c, q.x, q.y, q.z, w);
+      this.counts.brassCarried++;
+      moved.add(`${w.x.toFixed(5)},${w.z.toFixed(5)}`);
+      return [w.x, w.z];
     });
+    const dy = c.y - prev.y;
+    if (moved.size && Math.abs(dy) > 1e-9 && typeof cs.carry === 'function') cs.carry((x, _y, z) => moved.has(`${x.toFixed(5)},${z.toFixed(5)}`), dy);
+  }
+
+  /**
+   * While the transit shows, the scene fog is the indoor tunnel murk (MOOD): a level's own fog (the mall's grey haze, a surface mist)
+   * is held and given back when the car leaves the transit — uniform values only (no new fog uniform). Whatever the level writes in the
+   * meantime (a build during the ride) becomes the held value.
+   */
+  private holdFog(): void {
+    const fog = this.host.scene.fog as THREE.FogExp2 | null;
+    if (!fog || !(fog as THREE.FogExp2).isFogExp2) return;
+    if (fog.density === MOOD.fogDensity && fog.color.equals(this.fogColor)) return;
+    this.fogHeld = {color: fog.color.clone(), density: fog.density};
+    this.counts.fogHolds++;
+    fog.density = MOOD.fogDensity;
+    fog.color.copy(this.fogColor);
+    syncGlowFog(fog);
+  }
+
+  private releaseFog(): void {
+    const held = this.fogHeld, fog = this.host.scene.fog as THREE.FogExp2 | null;
+    this.fogHeld = null;
+    if (!held || !fog || !(fog as THREE.FogExp2).isFogExp2) return;
+    fog.density = held.density;
+    fog.color.copy(held.color);
+    syncGlowFog(fog);
+  }
+
+  /** Dispose (the game going away): ride mode ends, the sound stops, the transit's GPU resources go. */
+  dispose(): void {
+    this.reset();
+    this.audio.stop(0);
+    this.transit.dispose();
+    this.transitBuilt = false;
   }
 
   // -------------------------------------------------------------------------------------------
@@ -729,8 +866,12 @@ export class TrainRide {
     return {
       phase: this.phase, riding: this.riding, moving: this.moving,
       plan: this.plan ? {kind: this.plan.kind, end: this.plan.end, tunnel: this.plan.tunnel, sgn: this.plan.sgn, uMouth: r(this.plan.uMouth), uDark: r(this.plan.uDark), uMax: r(this.plan.uMax)} : null,
-      u: r(this.u), speed: r(this.speed), dir: this.dir, dist: r(this.dist, 1), clock: r(this.clock, 2),
-      transit: {active: this.transit.active, offset: r(this.transit.offset), v: r(this.transitV), t: r(this.transitT, 2), built: this.transitBuilt, meshes: this.transit.stats.meshes},
+      u: r(this.u), speed: r(this.speed), dir: this.dir, dist: r(this.dist, 1), clock: r(this.clock, 2), cross: this.cross,
+      journey: {route: [...this.journey.route], hops: this.journey.hops, minTransit: this.journey.minTransit},
+      transit: {active: this.transit.active, mode: this.transit.mode, offset: r(this.transit.offset), v: r(this.transitV), t: r(this.transitT, 2), built: this.transitBuilt, meshes: this.transit.stats.meshes,
+        yaw: r(this.transit.yaw, 5), signals: this.transit.signalOffsets().map(v => r(v, 1))},
+      audio: {playing: this.audio.playing, rumble: r(this.audio.level.rumble), air: r(this.audio.level.air), counts: {...this.audio.counts}},
+      fogHeld: !!this.fogHeld, planeHidden: !!this.hiddenPlane,
       car: {x: r(this.pose.x), y: r(this.pose.y), z: r(this.pose.z), yaw: r(this.pose.yaw, 5), pitch: r(this.pose.pitch, 5), roll: r(this.pose.roll, 5)},
       local: {x: r(this.local.x), y: r(this.local.y), z: r(this.local.z), yaw: r(this.local.yaw, 4)},
       jostle: {lateral: r(this.jostle.lateral, 4), roll: r(this.jostle.roll, 5), pitch: r(this.jostle.pitch, 5), bump: r(this.jostle.bump, 4), intensity: this.intensity()},
@@ -754,6 +895,16 @@ export class TrainRide {
     if (!this.riding) return {depart, arrive: null};
     return {depart, arrive: await this.arrive()};
   }
+}
+
+/**
+ * A journey's ride parameters (lane MAP's RideJourney; none = one hop): hops = route edges (>= 1), the minimum transit = RIDE.minTransit
+ * + RIDE.hopTransit per hop beyond the first, at most RIDE.hopTransitCap extra.
+ */
+export function journeyOf(j?: RideJourney | null): {route: string[]; hops: number; minTransit: number} {
+  const route = Array.isArray(j?.route) ? j!.route.filter(s => typeof s === 'string') : [];
+  const hops = Math.max(1, route.length - 1);
+  return {route, hops, minTransit: RIDE.minTransit + Math.min(RIDE.hopTransitCap, RIDE.hopTransit * (hops - 1))};
 }
 
 /** Installs the ride (one call in the Game constructor, after the train runtime). */

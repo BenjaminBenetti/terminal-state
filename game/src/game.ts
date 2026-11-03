@@ -106,7 +106,7 @@ import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (la
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
-import {arrive as arriveCampaign, canTravel, enableCheat, neighbors, newCampaign, revealAround} from './campaign/discovery';
+import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
 import {PaperMap} from './ui/paperMap';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
@@ -148,6 +148,7 @@ import {renderContextDepth} from './render/renderContextDepth'; // task studio-p
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
+import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
 
@@ -1095,7 +1096,14 @@ export class Game {
     const v = validateSaveFile(file, this.saveValidate);
     if (!v.ok) return v;
     try {
-      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}));
+      // (campaign-polish lane MAP) a save made before the Maintenance Route existed gets it here, once (minimal, deterministic; the next
+      // autosave stores it): campaign/discovery.ts upgradeCampaign
+      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}), (c, remembered) => {
+        const u = upgradeCampaign(c, {remembered});
+        if (u.status === 'added') console.info(`Terminal State: save compatibility — ${u.node} (${u.tier} station) became the Maintenance Route beside the Reactor (${u.info?.kind}, approach ${u.info?.approach}).`);
+        else if (u.status === 'unchanged') console.warn(`Terminal State: save compatibility — no Maintenance Route could be added to this older save (${u.reason}); it loads unchanged.`);
+        return u.state;
+      });
       return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
     } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
   }
@@ -1185,7 +1193,7 @@ export class Game {
       const resuming = !!c.transit;
       const node = run.node(resuming ? c.transit!.to : c.current)!;
       const key: SectionKey = {level: node.archetype, section: 'main', station: node.id};
-      const ui = this.showLoading(`Continue · ${node.name}${resuming ? ' — the train is on its way' : ''}.`, `Preparing ${node.name}…`);
+      const ui = this.showLoading(node.name, `Preparing ${node.name}…`); // (lane MENU, campaign polish item 9: the location name only)
       await nextPaint();
       let layout: StationLayout;
       try { layout = await this.prepareSection(key, run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return {ok: false, error: 'The station could not be prepared.'}; }
@@ -1210,6 +1218,35 @@ export class Game {
       return {ok: true};
     });
     return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /**
+   * Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU, DEATH): what the death screen's "Load last save" would restore —
+   * the ACTIVE slot (the one this run is bound to) and its latest valid PERSISTED save, or why there is none (not a campaign run, no
+   * slot bound, storage unavailable, the slot empty / unreadable). Read-only: nothing is written or erased.
+   */
+  lastSaveStatus(): LastSaveStatus {
+    if (!this.run.campaign) return {ok: false, reason: 'no-campaign', message: 'This run is not saved.'};
+    const slot = this.currentSlot;
+    if (slot === null) return {ok: false, reason: 'no-slot', message: 'This run has no save to load.'};
+    let v: ReturnType<SaveSlots['list']>[number] | undefined;
+    try { v = this.saves.list().find(x => x.slot === slot); } catch { v = undefined; }
+    if (!v || (v.empty && v.error)) return {ok: false, reason: 'unavailable', message: 'Saves are unavailable in this browser.'};
+    if (v.empty) return {ok: false, reason: 'empty', message: `Save slot ${slot} is empty.`};
+    if (!v.valid || !v.meta) return {ok: false, reason: 'invalid', message: `The save in slot ${slot} cannot be loaded${v.error ? ` (${v.error.slice(0, 120)})` : ''}.`};
+    return {ok: true, slot, meta: v.meta};
+  }
+
+  /**
+   * (lane MENU, DEATH) "Load last save": the active slot's latest valid persisted save through the SAME path as the main menu's
+   * Continue (continueCampaign: read + validate + decode before anything live is touched; the save's station is prepared, then the
+   * dead world is torn down and the run installed). Never saves the dead state, never erases or invalidates the slot, never starts a
+   * New Game; other slots are untouched. No valid save -> {ok: false} with the honest reason and nothing changes.
+   */
+  async loadLastSave(): Promise<{ok: true} | {ok: false; error: string}> {
+    const st = this.lastSaveStatus();
+    if (!st.ok) return {ok: false, error: st.message};
+    return this.continueCampaign(st.slot);
   }
 
   /** The train console: the paper map in TRAVEL mode (the current station + every one-hop neighbour revealed and remembered). */
@@ -1259,13 +1296,18 @@ export class Game {
     const sens = this.settings.sens * 0.0022;
     p.yaw -= inp.dx * sens;
     p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
+    if (inp.hit('KeyF')) this.toggleFlashlight(); // task campaign-polish (lane TRAIN, item 15): the dark transit — the flashlight stays usable
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
     this.updateCamera(dt);
     this.trainRide.tiltCamera(this.camera);
   }
 
   /**
-   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat).
+   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat, or —
+   * campaign-polish lane MAP — a VISITED station over a route of visited stations: campaign/discovery.ts travelPlan). A multi-hop trip
+   * is ONE continuous journey: one departure, one transit (the ride gets the route), only the destination prepared / built / arrived
+   * at — the stations passed are never loaded, looted, revealed or healed at; one departure autosave (the transit carries its route),
+   * one arrival autosave.
    * 1. depart (refused unless the player is inside; doors close; the car pulls into the tunnel and loops in the transit);
    * 2. the old world is torn down (every delta flushed into the run) and the DEPARTURE autosave commits the pending journey;
    * 3. the next station is prepared and built while the car runs through the dark tunnel (its pipelines compiled in the background);
@@ -1276,9 +1318,11 @@ export class Game {
     const run = this.run, c0 = run.campaign;
     if (!c0) return {ok: false, error: 'No campaign run.'};
     if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
-    if (!canTravel(c0, to)) return {ok: false, error: 'That station cannot be reached from here.'};
+    const plan = travelPlan(c0, to);
+    if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
-    const d = await this.trainRide.depart();
+    // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
+    const d = await this.trainRide.depart({route: plan.route});
     if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
@@ -1290,8 +1334,7 @@ export class Game {
       // pipeline releases (Iteration 14) wait until the next station has rendered at the platform: Subway -> Subway shares those
       // programs, and releasing them first recompiles them all on arrival (on a software rasterizer that memory is never returned)
       this.leaveSection(true);
-      const adjacent = neighbors(run.campaign!.network, from).includes(to);
-      run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
+      run.campaign = {...run.campaign!, transit: transitOf(run.campaign!, plan)};
       const s1 = this.commitSave('departure', {pose});
       if (!s1.ok && this.currentSlot !== null) this.hud.toast(s1.error, true);
       for (const l of this.campaignListeners) l('transit');
@@ -1375,11 +1418,15 @@ export class Game {
     return this.input.lock();
   }
 
-  /** Iteration 16: the title panel as the loading screen (menu travel, new game, retry). */
-  private showLoading(intro: string, label: string): WarmupUi {
+  /**
+   * Iteration 16: the title panel as the loading screen (menu travel, new game, retry, Continue). Lane MENU (campaign polish item 9):
+   * `place` = the destination's location name, the screen's only text; `label` = the progress line (kept for the hooks, visually
+   * hidden).
+   */
+  private showLoading(place: string, label: string): WarmupUi {
     this.lifecycleCounts.loading++;
     const ui = titleWarmupUi();
-    $('#station-intro').textContent = intro;
+    $('#station-intro').textContent = place;
     if (ui.bar) ui.bar.style.width = '0%';
     ui.label.textContent = label;
     if (ui.button) ui.button.disabled = true;
@@ -1422,7 +1469,7 @@ export class Game {
       const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
       const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
-      const ui = this.showLoading(`New run · ${shown}. ${def.blurb}`, `Generating ${shown}…`);
+      const ui = this.showLoading(shown, `Generating ${shown}…`); // (lane MENU, campaign polish item 9: the location name only)
       await nextPaint();
       let layout: StationLayout;
       try { layout = await this.prepareSection(key, run, o.onProgress ?? this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return null; }
@@ -1458,7 +1505,8 @@ export class Game {
     const flight = this.lifecycle.run(async () => {
       const key: SectionKey = snap.station ? {level: snap.level, section: snap.section, station: snap.station} : {level: snap.level, section: snap.section};
       const def = LEVELS[key.level];
-      const ui = this.showLoading(`Retry · ${def.name}: back to how you entered it — the same kit, health and supplies as then.`, `Rebuilding ${def.name}…`);
+      const place = (snap.station ? this.run.node?.(snap.station)?.name : undefined) ?? levelDisplayName(key.level, this.run.seeds[key.level]);
+      const ui = this.showLoading(place, `Rebuilding ${def.name}…`); // (lane MENU, campaign polish item 9: the location name only)
       await nextPaint();
       let layout: StationLayout;
       try { layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, 'dead', ui); return null; }
@@ -1518,7 +1566,7 @@ export class Game {
       this.cancelFlareHold();
       this.aiming = false;
       const shown = levelDisplayName(req.to.level, this.run.seeds[req.to.level]); // (lane GEN: the seeded mall name)
-      const ui = this.showLoading(`${req.label}. Your inventory, gear, health, food and water, battery and injuries come with you.`, `Building ${shown} · ${sectionLabel(req.to)}…`);
+      const ui = this.showLoading(shown, `Building ${shown} · ${sectionLabel(req.to)}…`); // (lane MENU, campaign polish item 9: the location name only)
       let built = false;
       try {
         await nextPaint();
@@ -1619,18 +1667,17 @@ export class Game {
     return depth ?? 0;
   }
 
-  /** Iteration 14: the title / loading screen's station line (boot and restarts). */
+  /**
+   * Iteration 14: the title / loading screen's station line (boot and restarts). Task studio-beta-campaign-polish-20261103-063841-01
+   * (lane MENU, item 9): ONLY the location name (ui/loadingScreen.ts loadingPlaceName: the campaign node's name, else the layout's /
+   * the mall's seeded name) — the infected count and the "clear them out" objective text are gone.
+   */
   updateStationIntro(): void {
-    // Iteration 16 (RUN) / 17: per level — what is still alive here (kills earlier in the run stay dead)
-    const k = this.run.current, n = this.zombies.filter(z => z.brain.alive).length;
-    // (task track3-eaton-centre-20261031, lane GEN: + the mall; task mall-playtest-revision-20261031: its seeded name, three floors)
-    $('#station-intro').textContent = k.level === 'office'
-      ? `Office Space — ${this.layout.name} and the tower above it, lobby to floor 8. ${n} infected reported in the station and on the floors. Clear them out.`
-      : k.level === 'mall'
-        ? `${this.layout.mall?.name ?? levelDisplayName('mall', this.run.seeds.mall)} — a subway station under a glass atrium and three floors of shops above it. ${n} infected reported in the station and the mall. Clear them out.`
-        : k.level === 'reactor' // task reactor-build-20261101: THE REACTOR
-          ? `Reactor — a station on the rim of the reactor pit. The core lies dormant far below, under bands of gas. ${n} infected reported in the pit. Restart the reactor: restore the auxiliary generators or mask up, find the startup key and the fuses, bring the coolant and the core back.`
-          : `${this.layout.name}. ${n} infected reported below street level. Clear them out.`;
+    const k = this.run.current;
+    $('#station-intro').textContent = loadingPlaceName({
+      node: k.station ? this.run.node?.(k.station) ?? null : null, level: k.level,
+      layoutName: this.layout?.name, mallName: this.layout?.mall?.name, levelName: levelDisplayName(k.level, this.run.seeds[k.level]),
+    });
   }
 
   /**

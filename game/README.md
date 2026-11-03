@@ -196,8 +196,10 @@ does not stutter on shader / pipeline compilation. The bar counts real work; it 
 done (or says it is partial / failed). `?warmup=off|view|full` overrides (software rasterizers default to `view`).
 
 Goal (campaign): "Scavenge for resources. Return to the train when done." There is no kill goal; the Reactor's objective is
-to restart it. On death a campaign run offers "Retry level" (this station, from your arrival there) or "Main menu", which leaves after
-a confirmation naming the last autosave. Legacy dev runs keep "New station" (fresh seed) as well.
+to restart it. On death a campaign run offers "Load last save" (task campaign-polish-20261103: the active slot's latest valid save,
+loaded through the same path as the menu's Continue; nothing is saved or erased on death; without a valid save the button is disabled
+and says why) or "Main menu", which leaves after a confirmation naming the last autosave. Legacy dev runs keep "New station" (fresh
+seed) as well.
 
 ## Campaign (task campaign-foundation-20261102)
 - **Network** (`src/campaign/network.ts`): New game rolls a seeded, subway-like network of 40 stations on printed lines
@@ -205,15 +207,29 @@ a confirmation naming the last autosave. Legacy dev runs keep "New station" (fre
   31 Subway (including the start), 4 Office and 4 Mall (`ORDINARY_WEIGHTS` in `src/campaign/types.ts` is configurable), plus
   exactly one Reactor several hops from the start. A station (`StationId`, e.g. `st-07`) is not a level type: each node has its
   own seed, gear roll, section memories, Retry scope and printed name (shown on its signs, the HUD, the map and saves).
+- **Maintenance Route** (task campaign-polish-20261103, lane MAP; `addMaintenanceRoute` in `src/campaign/network.ts`): the
+  Reactor always has a bypass. One ordinary Subway stop of the 31 sits beside the Reactor, printed "Maintenance Route", on a
+  dashed service line from a station before the Reactor to the station(s) beyond it, so the Reactor never gates the rest of the
+  network. The console's reveal at the approach shows it next to the Reactor. The Reactor is never a terminus. Saves made
+  before this get it once on load (`upgradeCampaign` in `src/campaign/discovery.ts`): one station that save never showed is
+  moved and renamed. Ids, types, seeds, visited / known, the pending journey and every remembered world stay unchanged.
 - **Map and console** (`src/ui/paperMap.ts`, `src/world/trainConsole.ts`): the map is a crumpled paper sheet (Codex
   source art, `assets/textures/paper-map.jpg`) with code-drawn lines and names. New game shows only the starting stop.
   The driving console in the train's front cab (E) opens it and reveals the current stop and its neighbours. The Reactor
-  appears only once discovered. Pick an adjacent stop and confirm to travel. Typing `1337` while the map is open reveals
+  appears only once discovered. Pick an adjacent stop, or any visited station reachable over visited track (one continuous
+  journey along the shortest such route, ties by id; nothing on the way is loaded), and confirm to travel. The details card sits
+  beside the selected node; each stop prints its type icon (Subway, Office, Mall, Reactor, Maintenance Route). Typing `1337` while the map is open reveals
   everything and allows travel anywhere for the rest of that run (it is saved with the run; separate from the Lockbox code).
 - **The journey** (`Game.travelToStation`, `src/world/trainRide.ts`): the occupied train closes its doors and pulls into a dark
   transit tunnel. You can walk, look and change gear inside while the old station is torn down (every change kept in its
   memory) and the next one is generated, built and compiled in the background, with jostle. The car then emerges at the new
   platform and stops. There is no static loading screen. A destination that cannot be generated twice sends the train back.
+  The car always runs cab first: it leaves through the front end of its track and comes into the next station through the
+  end behind the parked car, so it never reverses. Where clear rock lies behind a bed end, the transit box continues it as a
+  stub. Where rooms lie behind it, the car hands over at the end face. The transit is very dark, with red signals passing
+  about every 110 m. The only light is the car's own lights and the flashlight (F also works between worlds). The ride sound
+  uses existing Sound Lab beds and cues: a rumble and an air loop blended by speed, rail-joint clacks and the brakes. It stops
+  at the platform and goes quiet in menus.
 - **Autosaves** (`src/save/`): the new game, the departure (with the journey pending) and the arrival each write the active slot.
   Continue resumes the last slot. A save taken mid-journey (a crash in the tunnel) resumes that journey once, arriving at
   the destination. There are three slots (`terminal-state.save.slot{1,2,3}.v1`, compact checksummed JSON, atomic writes,
@@ -232,9 +248,22 @@ Every load opens the **main menu** (`src/ui/mainMenu.ts`) beside a real-time dio
 city in green fog, surface tracks, the player train; render only, no world state). Boot builds the renderer and the diorama
 first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
 level is built before New game / Continue. Settings (sensitivity, invert, FOV 60-100, master volume 0-100 %, mute, quality,
-render resolution Native / Half / Quarter = a linear width-and-height scale over the DPR-capped native buffer, not a
-quality preset, and train sway 0-100 % = the moving train's jostle on the view, 0 = off) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
-the same store. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
+render resolution, and train sway 0-100 % = the moving train's jostle on the view, 0 = off) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+the same store.
+
+Campaign polish (task campaign-polish-20261103, lane MENU): the side column lists only Continue / New game / Load save / Settings /
+**Controls** / Dev start; every submenu opens as a centred dialog over a light dimmer (Esc / Back step back). Controls shows the
+game's actual bindings (`CONTROLS` in `src/ui/hud.ts`) plus a one-line hint about the two `1337` developer codes. Save slots are
+one grid row each (slot, name + metadata ellipsized, actions), stacked on narrow screens. The title camera opens at the framing its
+slow orbit reached about 25 s in (`MENU_SCENE.orbit.startAt`) and keeps orbiting from there. The loading screen shows only the
+destination's location name over the progress bar.
+- **Fog, shadows & anti-aliasing** (the stored `quality`, High / Low): exactly the volumetric fog march (High ½ of the drawing
+  buffer up to 960 × 540, 24 steps; Low ¼ up to 480 × 270, 14 steps — `ATMOSPHERE_QUALITY` in `src/render/atmosphere.ts`), the
+  flashlight's shadow map (1024 / 512 px), the scene pass MSAA (4× / none; the fog and the MSAA only while the volumetric pass
+  runs) and the native pixel-ratio cap (min(DPR, 1.5) / min(DPR, 0.85)). Nothing else (no light, geometry or art change).
+- **Render resolution**: a 25-100 % slider (1 % steps) = a linear width-and-height scale of the canvas over that DPR-capped
+  native buffer; not a quality preset. Stored as the fraction, so the former Native / Half / Quarter (1 / 0.5 / 0.25) read as
+  exactly 100 / 50 / 25 %; other values round to a whole percent and clamp. A drag applies once it settles or on release. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
 which starts a normal new game at that level.
 
 QA automation: `?qa=1` keeps the old automation contract — the menu waits behind the loading card while a **scratch run**
@@ -245,8 +274,8 @@ settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds 
 ## URL parameters (optional, session-only)
 - `?seed=CODE` — replay a station code shown in the pause menu (debug/share): the menu's Dev start (Subway seed).
   Reloading without it always makes a new station. (`?officeSeed=` / `?mallSeed=` / `?reactorSeed=`, `?level=` likewise.)
-- `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset). Session-only: it
-  overrides the stored Quality without changing it.
+- `?quality=low` — the Low "Fog, shadows & anti-aliasing" setting (the 0.85 pixel-ratio cap, the low volumetric-haze preset, the
+  512 px flashlight shadow, no MSAA; no light is removed). Session-only: it overrides the stored setting without changing it.
 - `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):

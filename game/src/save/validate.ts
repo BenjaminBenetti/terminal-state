@@ -9,7 +9,8 @@
 // registry with legal counts / magazines / filters / bag contents; archetypes are LevelIds; station ids belong to the network;
 // memory keys are `${stationId}:${section}`; no duplicate uid among the carried inventory + Lockbox) -> the network graph
 // (structural checks here, plus lane NET's validateNetwork when injected) -> logical campaign checks (current / known / visited /
-// transit endpoints in the network, the transit leaves `current`, a non-cheat transit follows a track edge) -> the metadata
+// transit endpoints in the network, the transit leaves `current`, a non-cheat transit follows a track edge or — campaign-polish lane
+// MAP — a multi-hop `route` over visited stations: campaign/discovery.ts transitRouteProblem) -> the metadata
 // matches the run. Pure.
 
 import type {CampaignState, SaveMeta, StationNode, SubwayNetwork} from '../campaign/types';
@@ -24,6 +25,7 @@ import {LOCKBOX_SLOTS} from '../run/trainLockbox';
 import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {checksumOf, utf8Bytes} from './checksum';
+import {transitRouteProblem} from '../campaign/discovery';
 import {ENTERED_KEEP, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, deriveMeta, type SaveFileV1Like, type SerializedRunV1} from './serialize';
 
 /** The envelope format this build writes (and the newest it reads). */
@@ -357,7 +359,13 @@ function campaign(v: unknown, path: string, inject?: NetworkValidator): Campaign
     if (from !== current) bad(`${p}.from`, `the train leaves ${from} but the current station is ${current}`);
     if (from === to) bad(p, 'a journey to the same station');
     if (tc && !cheat) bad(`${p}.cheat`, 'a cheat journey without the map cheat');
-    if (!tc && !net.edges.some(([a, b]) => (a === from && b === to) || (a === to && b === from))) bad(p, `no track between ${from} and ${to}`);
+    for (const k of Object.keys(t)) if (!['from', 'to', 'phase', 'cheat', 'route'].includes(k)) bad(p, `unexpected field '${k}'`);
+    if (has(t, 'route')) {
+      // (campaign-polish lane MAP) a multi-hop journey: its route over visited stations, checked like the campaign validator does
+      arr(t.route, `${p}.route`, ids.size, 3).forEach((s, i) => node(s, `${p}.route[${i}]`));
+      const problem = transitRouteProblem(net, {from, to, cheat: tc, route: t.route}, visited);
+      if (problem) bad(`${p}.route`, problem);
+    } else if (!tc && !net.edges.some(([a, b]) => (a === from && b === to) || (a === to && b === from))) bad(p, `no track between ${from} and ${to}`);
   }
   return c as unknown as CampaignState;
 }

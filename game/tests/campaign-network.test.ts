@@ -66,8 +66,9 @@ describe('the network over the seed sample', () => {
     }
     expect(depths.size).toBeGreaterThanOrEqual(3); // not one fixed depth
     expect(Math.min(...depths.keys())).toBeGreaterThanOrEqual(MIN_REACTOR_DEPTH);
-    expect(terminus / nets.length).toBeLessThan(0.4); // not always the end of a line
-    expect(terminus).toBeGreaterThan(0); // ... but sometimes
+    // campaign-polish (lane MAP): the Reactor is never a terminus any more — its Maintenance Route bypass needs a "beyond" to lead to
+    // (the legacy generator, {maintenanceRoute: false}, still makes terminus Reactors: campaign-maintenance-route.test.ts)
+    expect(terminus).toBe(0);
     expect(reactorIds.size).toBeGreaterThan(10);
     expect(reactorSpots.size).toBeGreaterThan(nets.length * 0.5);
   });
@@ -154,7 +155,15 @@ describe('determinism', () => {
   });
 
   it('is pinned for one seed (re-pin only for an intended generator change — saves keep their own copy of the network)', () => {
+    // re-pinned (campaign-polish lane MAP): the Maintenance Route bypass + "the Reactor is never a terminus" is an intended generator
+    // change. Proof that nothing else moved: the legacy mode below still yields the earlier pin exactly.
     const net = generateNetwork(20261102);
+    expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
+      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 41, lines: 6, start: 'st-00', reactor: 'st-06', fingerprint: '612733f3'});
+  });
+
+  it('the legacy generator ({maintenanceRoute: false}) reproduces the earlier networks bit for bit (what older saves contain)', () => {
+    const net = generateNetwork(20261102, {maintenanceRoute: false});
     expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
       fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 45, lines: 6, start: 'st-00', reactor: 'st-33', fingerprint: '5c0cc91e'});
   });

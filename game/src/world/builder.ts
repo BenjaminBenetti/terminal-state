@@ -495,6 +495,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
       const plane = new THREE.Mesh(new THREE.PlaneGeometry(t.z1 - t.z0, t.ceil - trenchY), voidMat);
       plane.position.set(x, (t.ceil + trenchY) / 2, (t.z0 + t.z1) / 2);
       plane.rotation.y = x < (t.x0 + t.x1) / 2 ? Math.PI / 2 : -Math.PI / 2;
+      plane.userData.bedEndVoid = `${ti}:${end}`; // task campaign-polish (lane TRAIN): the player train hides it while it runs through a stub
       group.add(plane);
     }
   }

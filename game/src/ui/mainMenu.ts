@@ -11,13 +11,23 @@
 //  - MainMenuView: renders the controller's model into the DOM (createElement + textContent only: save metadata can come from an
 //    imported file, nothing is ever parsed as HTML), wires clicks / keys back, keeps focus visible and on the controller's item.
 //  - mountSettingsForm: ONE settings form bound to the settings store (ui/settingsStore.ts), used by the menu AND the pause menu.
+//
+// Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): the side column now holds only the MAIN list (Continue / New game /
+// Load save / Settings / Controls / Dev start); every submenu (New game slots, Save slots, the confirmations, Settings, Controls, Dev
+// start) opens as a centred dialog over a light dimmer (the side stays legible but inert; Esc / Back return; focus moves in and
+// back). Controls is a top-level item showing the game's actual bindings (ui/hud.ts CONTROLS, passed in by main.ts) with a one-line
+// optional developer-code hint. Slot rows are one grid row each (slot | name + metadata, ellipsized | actions in a fixed column),
+// stacked deliberately on a narrow screen. Explanatory copy was cut to short labels, status lines and honest confirmations. The
+// settings form names Quality by what it really changes (settingsStore.ts QUALITY_LABEL / qualityDescription) and render resolution
+// is a 25-100 % slider (1 % steps) applied coalesced.
 
 import {SAVE_SLOTS, type SaveMeta} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {seedToCode} from '../core/rng';
 import {
-  SETTINGS_BOUNDS, renderScaleOptions, renderScaleReadout, volumeFromPercent, volumePercent,
-  type GameSettings, type RenderScale, type SettingsStore,
+  CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_BOUNDS, nativeRatioLabel, qualityDescription, renderPercent,
+  renderScaleFromPercent, renderScaleReadout, volumeFromPercent, volumePercent,
+  type CoalesceTimers, type GameSettings, type Quality, type QualityPresetLike, type SettingsStore,
 } from './settingsStore';
 
 // ---------------------------------------------------------------------------------------------
@@ -83,7 +93,10 @@ export function formatSavedAt(iso: string): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 
-/** Slot heading + detail lines (plain text; the view sets it as textContent). */
+/**
+ * Slot heading + detail lines (plain text; the view sets it as textContent). Lane MENU (campaign polish, item 6): line 0 = the NAME
+ * (station + archetype), line 1 = the metadata (playtime, saved, seed, stations, WON) — the slot row's two ellipsized lines.
+ */
 export function slotSummary(v: SlotView, levelName: (l: LevelId) => string = l => DEFAULT_LEVEL_NAMES[l] ?? String(l)): {heading: string; lines: string[]; tone: 'empty' | 'valid' | 'invalid'} {
   const heading = `Slot ${v.slot + 1}`;
   if (v.empty) return {heading, lines: ['Empty'], tone: 'empty'};
@@ -94,8 +107,8 @@ export function slotSummary(v: SlotView, levelName: (l: LevelId) => string = l =
   return {
     heading,
     lines: [
-      `${where} · ${formatPlaytime(m.playtime)} played`,
-      `Saved ${formatSavedAt(m.savedAt)} · seed ${seedToCode(m.networkSeed)} · ${m.stationsVisited} station${m.stationsVisited === 1 ? '' : 's'} visited${m.won ? ' · WON' : ''}`,
+      where,
+      `${formatPlaytime(m.playtime)} played · saved ${formatSavedAt(m.savedAt)} · seed ${seedToCode(m.networkSeed)} · ${m.stationsVisited} station${m.stationsVisited === 1 ? '' : 's'}${m.won ? ' · WON' : ''}`,
     ],
     tone: 'valid',
   };
@@ -113,7 +126,7 @@ export function continueTarget(slots: readonly SlotView[], last: number | null):
 // ---------------------------------------------------------------------------------------------
 // The controller (pure state machine)
 
-export type MenuViewKind = 'main' | 'new' | 'confirm-overwrite' | 'slots' | 'confirm-import' | 'confirm-delete' | 'settings' | 'dev';
+export type MenuViewKind = 'main' | 'new' | 'confirm-overwrite' | 'slots' | 'confirm-import' | 'confirm-delete' | 'settings' | 'controls' | 'dev';
 
 type View =
   | {kind: 'main'}
@@ -123,6 +136,7 @@ type View =
   | {kind: 'confirm-import'; slot: number; file: File}
   | {kind: 'confirm-delete'; slot: number}
   | {kind: 'settings'}
+  | {kind: 'controls'}
   | {kind: 'dev'};
 
 export interface MenuAction {
@@ -155,7 +169,16 @@ export interface MenuModel {
   busy: boolean;
   /** The focused action id (null: none focusable). */
   focus: string | null;
+  /** The Controls view (lane MENU, campaign polish item 5): the game's actual bindings (action, keys) and the optional dev-code hint. */
+  bindings?: {action: string; keys: string}[];
+  hint?: string;
 }
+
+/**
+ * The Controls view's one-line developer hint (lane MENU, campaign polish item 5): the two existing 1337 codes, both only while
+ * their screen is open (ui/paperMap.ts: the whole network for THIS run; ui/lockboxView.ts + items/devGrant.ts: the gear drop).
+ */
+export const DEV_CODES_HINT = 'Developer codes (optional): type 1337 with the travel map open to reveal every station, or with the train\'s Lockbox open for a gear drop.';
 
 export interface MainMenuOptions {
   /** The dev picker's initial choice (URL dev params / ?qa=1); null = no Dev start entry. */
@@ -167,6 +190,8 @@ export interface MainMenuOptions {
   /** Opens a file chooser INSIDE the click (user gesture); resolves null when cancelled. */
   pickFile?: () => Promise<File | null>;
   levelName?: (l: LevelId) => string;
+  /** The Controls view's bindings (action, keys): main.ts passes the game's central mapping, ui/hud.ts CONTROLS. */
+  controls?: readonly (readonly [string, string])[];
 }
 
 const START_IDS = new Set(['continue', 'overwrite-go', 'qa-start']);
@@ -269,17 +294,18 @@ export class MainMenuController {
         if (c !== null) {
           const s = this.slots()[c];
           const sum = slotSummary(s, name);
-          rows.push({slot: c, lines: [`${sum.heading} · ${sum.lines[0]}`], actions: [this.start('continue', 'Continue', this.opts.qa ? undefined : 'primary')]});
+          const played = s.meta ? ` · ${formatPlaytime(s.meta.playtime)}` : '';
+          rows.push({slot: c, lines: [`${sum.heading} · ${sum.lines[0]}${played}`], actions: [this.start('continue', 'Continue', this.opts.qa ? undefined : 'primary')]});
         }
         rows.push({actions: [this.nav('new-game', 'New game', c === null && !this.opts.qa ? 'primary' : undefined)]});
         rows.push({actions: [this.nav('slots', 'Load save / slots')]});
         rows.push({actions: [this.nav('settings', 'Settings')]});
+        rows.push({actions: [this.nav('controls', 'Controls')]}); // (lane MENU, campaign polish item 5: a top-level item)
         if (this.dev) rows.push({lines: [`Dev: ${name(this.dev.level)}${devSeedText(this.dev)}`], actions: [this.nav('dev', 'Dev start')]});
         break;
       }
       case 'new': {
         title = v.dev ? `New game · dev start ${name(v.dev.level)}` : 'New game — choose a slot';
-        text = ['The run is saved to this slot (on this device, in this browser). An occupied slot asks before it is overwritten.'];
         for (const s of this.slots()) {
           const sum = slotSummary(s, name);
           rows.push({slot: s.slot, heading: sum.heading, lines: sum.lines, tone: sum.tone,
@@ -292,13 +318,12 @@ export class MainMenuController {
         const s = this.slots()[v.slot];
         const sum = slotSummary(s, name);
         title = `Overwrite slot ${v.slot + 1}?`;
-        text = [`${sum.lines.join(' — ')}`, 'This save is replaced by the new run and cannot be recovered (export it first to keep a copy).'];
+        text = [`${sum.lines.join(' — ')}`, 'This save will be replaced and cannot be recovered.'];
         rows.push({actions: [this.start('overwrite-go', `Overwrite slot ${v.slot + 1} and start`, 'danger'), this.nav('back', 'Cancel')]});
         break;
       }
       case 'slots': {
         title = 'Save slots';
-        text = ['Saves live in this browser on this device. Export a slot to keep a file; import a file into the slot you choose.'];
         for (const s of this.slots()) {
           const sum = slotSummary(s, name);
           const actions: MenuAction[] = [];
@@ -315,7 +340,7 @@ export class MainMenuController {
         const s = this.slots()[v.slot];
         const sum = slotSummary(s, name);
         title = `Replace slot ${v.slot + 1}?`;
-        text = [`Import “${v.file.name.slice(0, 80)}” into slot ${v.slot + 1}, replacing: ${sum.lines.join(' — ')}`, 'The current save in this slot cannot be recovered (export it first to keep a copy).'];
+        text = [`Import “${v.file.name.slice(0, 80)}” into slot ${v.slot + 1}, replacing: ${sum.lines.join(' — ')}`, 'The current save will be replaced and cannot be recovered.'];
         rows.push({actions: [this.nav('import-go', `Replace slot ${v.slot + 1}`, 'danger'), this.nav('back', 'Cancel')]});
         break;
       }
@@ -323,7 +348,7 @@ export class MainMenuController {
         const s = this.slots()[v.slot];
         const sum = slotSummary(s, name);
         title = `Delete slot ${v.slot + 1}?`;
-        text = [sum.lines.join(' — '), 'The save is removed from this browser and cannot be recovered.'];
+        text = [sum.lines.join(' — '), 'The save will be deleted and cannot be recovered.'];
         rows.push({actions: [this.nav('delete-go', `Delete slot ${v.slot + 1}`, 'danger'), this.nav('back', 'Cancel')]});
         break;
       }
@@ -333,10 +358,15 @@ export class MainMenuController {
         rows.push({actions: [this.nav('back', 'Back')]});
         break;
       }
+      case 'controls': {
+        title = 'Controls';
+        rows.push({actions: [this.nav('back', 'Back')]});
+        break;
+      }
       case 'dev': {
         title = 'Dev start';
         const d = this.dev!;
-        text = [`From the URL: ${name(d.level)}${devSeedText(d)}. Starts a normal new game at the chosen level (pick its slot next).`];
+        text = [`From the URL: ${name(d.level)}${devSeedText(d)}.`];
         rows.push({actions: (this.opts.devLevels ?? (['subway', 'office', 'mall', 'reactor'] as LevelId[])).map(l => ({...this.nav(`dev-level:${l}`, name(l)), pressed: d.level === l}))});
         rows.push({actions: [this.nav('dev-go', `Start ${name(d.level)} · choose slot…`, 'primary'), this.nav('back', 'Back')]});
         break;
@@ -344,8 +374,25 @@ export class MainMenuController {
     }
     const status = this.status ?? (!this.boot.ready && rows.some(r => r.actions.some(a => isStart(a.id))) ? {text: this.waitHint(), tone: 'info' as const} : null);
     const model: MenuModel = {view: v.kind, title, text, rows, status, busy: this.busyFlag, focus: null};
+    if (v.kind === 'controls') {
+      model.bindings = (this.opts.controls ?? []).filter(([a]) => a).map(([action, keys]) => ({action, keys}));
+      model.hint = DEV_CODES_HINT;
+    }
     model.focus = this.validFocus(model);
     return model;
+  }
+
+  /**
+   * The MAIN view's model whatever is on top (lane MENU, campaign polish item 4: the side column keeps listing the main items while
+   * a submenu is open in the centred dialog). Its focus / status belong to the top view; they are not reported here.
+   */
+  mainModel(): MenuModel {
+    if (this.top.kind === 'main') return this.model();
+    const keep = this.stack;
+    this.stack = [{view: {kind: 'main'}, focus: null}];
+    const status = this.status;
+    this.status = null;
+    try { return {...this.model(), status: null, focus: null}; } finally { this.stack = keep; this.status = status; }
   }
 
   /** Flat action list (render / focus order). */
@@ -435,6 +482,7 @@ export class MainMenuController {
       case 'new-game': this.push({kind: 'new'}); return Promise.resolve();
       case 'slots': this.slotCache = null; this.push({kind: 'slots'}); return Promise.resolve();
       case 'settings': this.push({kind: 'settings'}); return Promise.resolve();
+      case 'controls': this.push({kind: 'controls'}); return Promise.resolve();
       case 'dev': this.push({kind: 'dev'}); return Promise.resolve();
       case 'dev-level': if (this.dev && arg) { this.dev = {...this.dev, level: arg as LevelId}; this.changed(); } return Promise.resolve();
       case 'dev-go': if (this.dev) this.push({kind: 'new', dev: this.devStart!}); return Promise.resolve();
@@ -532,52 +580,83 @@ function devSeedText(d: DevStart): string {
 // The DOM view
 
 const CSS = `
-#title.screen[data-mode="menu"] { background: none; backdrop-filter: none; justify-content: flex-start; align-items: stretch; padding: 0; }
+#title.screen[data-mode="menu"] { background: none; backdrop-filter: none; justify-content: flex-start; align-items: stretch; padding: 0; overflow: hidden; }
 #title[data-mode="menu"] .loading-card { display: none; }
-#title[data-mode="loading"] .mm-side { display: none; }
+#title[data-mode="loading"] .mm-side, #title[data-mode="loading"] .mm-overlay { display: none; }
 #title[data-mode="loading"].screen { background: rgba(6, 8, 7, 0.55); }
 #title-backdrop { position: absolute; inset: 0; z-index: 0; pointer-events: none; background: radial-gradient(ellipse at 68% 55%, #1d2a1b 0%, #0d130d 55%, #060806 100%); transition: opacity 1.4s ease; }
 #title-backdrop.faded { opacity: 0; }
-.mm-side { position: relative; z-index: 1; display: flex; flex-direction: column; width: min(440px, 100%); min-height: 100%; padding: 34px 30px 20px; overflow: auto;
-  background: linear-gradient(90deg, rgba(10, 12, 11, 0.9) 0%, rgba(10, 12, 11, 0.78) 72%, rgba(10, 12, 11, 0) 100%); }
+.mm-side { position: relative; z-index: 1; display: flex; flex-direction: column; width: min(400px, 100%); min-height: 100%; max-height: 100%; padding: 34px 30px 20px; overflow: auto;
+  background: linear-gradient(90deg, rgba(10, 12, 11, 0.9) 0%, rgba(10, 12, 11, 0.78) 72%, rgba(10, 12, 11, 0) 100%); transition: opacity 0.15s ease; }
+.mm-side.mm-dimmed { opacity: 0.55; }
 .mm-side .stripe { position: absolute; left: 30px; top: 0; width: 72px; height: 6px; background: var(--mustard); }
 .mm-side h1 { font-size: 44px; line-height: 1.02; margin: 10px 0 4px; }
 .mm-side .subtitle { margin-bottom: 18px; }
-.mm-view h2 { font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--cream-dim); margin: 4px 0 10px; font-weight: 700; }
-.mm-view p.mm-text { margin: 0 0 10px; font-size: 13.5px; line-height: 1.45; color: var(--cream-dim); }
 .mm-rows { display: flex; flex-direction: column; gap: 8px; }
-.mm-row { display: flex; flex-direction: column; gap: 6px; }
-.mm-row.slot { padding: 8px 10px 9px; background: rgba(21, 23, 26, 0.86); border-left: 3px solid #3a3f44; }
-.mm-row.slot.valid { border-left-color: var(--teal); }
-.mm-row.slot.invalid { border-left-color: var(--red); }
-.mm-row .mm-head { font-weight: 700; font-size: 14px; letter-spacing: 0.04em; }
-.mm-row .mm-line { font-size: 12.5px; color: var(--cream-dim); line-height: 1.4; overflow-wrap: anywhere; }
-.mm-row.slot.invalid .mm-line { color: #e3a197; }
+.mm-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.mm-row .mm-head { font-weight: 700; font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; }
+.mm-row .mm-line { font-size: 12.5px; color: var(--cream-dim); line-height: 1.4; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mm-row .mm-line.mm-name { font-size: 14px; color: var(--cream); }
 .mm-acts { display: flex; flex-wrap: wrap; gap: 6px; }
-.mm-row:not(.slot) > .mm-acts > button { flex: 1 1 auto; text-align: left; }
-.mm-side button { padding: 9px 16px; }
-.mm-side button.danger { border-color: var(--red); color: #f1c0b8; }
-.mm-side button.danger:hover:not(:disabled) { background: #3a2321; }
-.mm-side button[aria-pressed="true"] { border-color: var(--mustard); color: var(--mustard); box-shadow: inset 0 0 0 1px var(--mustard); }
-.mm-side button:focus { outline: none; }
-.mm-side button:focus-visible, .mm-side input:focus-visible, .mm-side select:focus-visible, #pause .settings :focus-visible { outline: 2px solid var(--mustard); outline-offset: 2px; }
-.mm-side .mm-status { min-height: 1.3em; margin: 10px 0 0; font-size: 13px; color: var(--cream-dim); }
-.mm-side .mm-status.ok { color: #9fd3a8; }
-.mm-side .mm-status.error { color: #f0a497; }
+.mm-main .mm-row > .mm-acts > button { flex: 1 1 auto; text-align: left; }
+.mm-side button, .mm-dialog button { padding: 9px 16px; }
+.mm-side button.danger, .mm-dialog button.danger { border-color: var(--red); color: #f1c0b8; }
+.mm-side button.danger:hover:not(:disabled), .mm-dialog button.danger:hover:not(:disabled) { background: #3a2321; }
+.mm-dialog button[aria-pressed="true"] { border-color: var(--mustard); color: var(--mustard); box-shadow: inset 0 0 0 1px var(--mustard); }
+.mm-side button:focus, .mm-dialog button:focus { outline: none; }
+.mm-side button:focus-visible, .mm-side input:focus-visible, .mm-dialog button:focus-visible, .mm-dialog input:focus-visible, .mm-dialog select:focus-visible, #pause .settings :focus-visible { outline: 2px solid var(--mustard); outline-offset: 2px; }
+.mm-status { min-height: 1.3em; margin: 10px 0 0; font-size: 13px; color: var(--cream-dim); }
+.mm-status.ok { color: #9fd3a8; }
+.mm-status.error { color: #f0a497; }
 .mm-boot { margin-top: auto; padding-top: 14px; font-size: 11.5px; color: var(--cream-dim); letter-spacing: 0.03em; }
 .mm-boot .track { height: 3px; background: #111315; margin-top: 4px; }
 .mm-boot .fill { height: 100%; width: 0; background: var(--teal); transition: width 0.2s linear; }
 .mm-boot.done .track { display: none; }
 .mm-extras { margin-top: 12px; }
-.mm-extras details { margin-top: 8px; }
-.mm-extras summary { cursor: pointer; font-size: 12.5px; color: var(--cream-dim); letter-spacing: 0.06em; }
-.mm-extras .controls-grid { grid-template-columns: 1fr; font-size: 12px; }
-.mm-settings.settings { grid-template-columns: 1fr; gap: 9px; margin: 4px 0 12px; }
-.settings .set-note { grid-column: 1 / -1; font-size: 12px; color: var(--cream-dim); }
+.mm-extras .actions { margin: 4px 0 2px; }
+/* the centred submenu dialog over a light dimmer (the diorama stays visible around it) */
+.mm-overlay { position: absolute; inset: 0; z-index: 3; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(5, 7, 6, 0.42); overflow: auto; }
+.mm-dialog.panel { width: min(600px, 100%); max-height: calc(100vh - 48px); overflow: auto; padding: 26px 30px 18px; margin: auto; background: rgba(29, 32, 35, 0.95); }
+.mm-dialog[data-view="new"], .mm-dialog[data-view="slots"] { width: min(880px, 100%); }
+.mm-dialog[data-view="controls"] { width: min(940px, 100%); }
+.mm-dialog h2 { font-size: 22px; letter-spacing: 0.06em; margin: 4px 0 12px; }
+.mm-dialog p.mm-text { margin: 0 0 10px; font-size: 14px; line-height: 1.45; color: var(--cream-dim); overflow-wrap: anywhere; }
+.mm-dialog .mm-body .mm-rows > .mm-row:not(.slot) > .mm-acts { margin-top: 4px; }
+/* slot rows: ONE grid row per slot — slot | name + metadata (ellipsized) | actions (a fixed column, right-aligned) */
+.mm-dialog { --mm-acts: 7.5em; }
+.mm-dialog[data-view="slots"] { --mm-acts: 23em; }
+.mm-row.slot { display: grid; grid-template-columns: 4.4em minmax(0, 1fr) var(--mm-acts); align-items: center; column-gap: 14px; row-gap: 6px; min-height: 60px;
+  padding: 9px 12px; background: rgba(21, 23, 26, 0.86); border-left: 3px solid #3a3f44; }
+.mm-row.slot.valid { border-left-color: var(--teal); }
+.mm-row.slot.invalid { border-left-color: var(--red); }
+.mm-row.slot.invalid .mm-line { color: #e3a197; }
+.mm-row.slot .mm-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mm-row.slot .mm-acts { flex-wrap: nowrap; justify-content: flex-end; }
+.mm-row.slot .mm-acts button { padding: 7px 12px; font-size: 14px; white-space: nowrap; }
+.mm-controls.controls-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 26px; margin: 0 0 6px; font-size: 13px; }
+.mm-controls.controls-grid div { align-items: baseline; }
+.mm-controls.controls-grid kbd { flex: none; white-space: nowrap; text-align: right; }
+.mm-dialog .mm-hint { margin: 10px 0 2px; font-size: 12px; color: var(--cream-dim); }
+.mm-settings.settings { grid-template-columns: 1fr; gap: 10px; margin: 2px 0 12px; }
+.settings .set-note { grid-column: 1 / -1; font-size: 12px; color: var(--cream-dim); margin: 0; }
+.settings .set-note:empty { display: none; }
 .settings select { max-width: 62%; }
+.settings output { min-width: 3.4em; font-variant-numeric: tabular-nums; }
 .settings .set-readout { grid-column: 1 / -1; font-size: 11.5px; color: var(--cream-dim); margin-top: -4px; text-align: right; }
-.loading-card { position: relative; z-index: 1; margin: auto; }
-@media (max-width: 760px) { .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); } }
+/* the loading card (lane MENU, campaign polish item 9): the location name over the progress bar, nothing else visible; the progress
+   label (written / read by the warm-up, perf and QA hooks) stays in the DOM for screen readers only */
+.loading-card { position: relative; z-index: 1; margin: auto; width: min(560px, 100%); }
+.loading-card .loading-place { font-size: 30px; line-height: 1.15; margin: 8px 0 16px; overflow-wrap: anywhere; }
+.loading-card #load .label { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 760px) {
+  .mm-side { width: 100%; background: rgba(10, 12, 11, 0.86); }
+  .mm-overlay { padding: 10px; }
+  .mm-dialog.panel { padding: 20px 16px 14px; max-height: calc(100vh - 20px); }
+  /* the deliberate narrow stack: slot + name / metadata on top, the actions on their own line under them */
+  .mm-row.slot { grid-template-columns: 4em minmax(0, 1fr); }
+  .mm-row.slot .mm-acts { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; }
+  .mm-controls.controls-grid { grid-template-columns: 1fr; }
+}
 `;
 
 function injectCss(doc: Document): void {
@@ -593,36 +672,64 @@ export interface MainMenuViewOptions {
   settings?: (container: HTMLElement) => void;
   /** Extra element (the QA #btn-start) adopted as the qa-start action button. */
   qaButton?: HTMLButtonElement | null;
+  /** Where the centred submenu dialog is mounted (default: the side column's parent, i.e. the #title section). */
+  overlayHost?: HTMLElement | null;
 }
 
-/** Renders a MainMenuController into `root` (#mm-view) and keeps focus on the controller's item. */
+/**
+ * Renders a MainMenuController: the MAIN list into `root` (#mm-view, in the side column) and every other view into a centred dialog
+ * (lane MENU, campaign polish item 4) — the side column stays legible but inert while it is open; focus moves into the dialog and
+ * back to the main item it came from; Esc / Back step back.
+ */
 export class MainMenuView {
   private readonly doc: Document;
+  private readonly side: HTMLElement | null;
+  private readonly overlay: HTMLElement;
+  private readonly dialog: HTMLElement;
   private readonly settingsBox: HTMLElement;
+  private readonly controlsBox: HTMLElement;
   private readonly head: HTMLElement;
   private readonly body: HTMLElement;
   private lastFocus: string | null = null;
+  private lastView: MenuViewKind = 'main';
   private visibleFlag = true;
   private programmatic = false;
 
   constructor(private readonly root: HTMLElement, readonly ctl: MainMenuController, private readonly o: MainMenuViewOptions = {}) {
     this.doc = root.ownerDocument;
     injectCss(this.doc);
-    this.head = this.doc.createElement('div');
-    this.head.className = 'mm-view mm-head-box';
-    this.body = this.doc.createElement('div');
-    this.body.className = 'mm-body';
-    this.settingsBox = this.doc.createElement('div');
-    this.settingsBox.className = 'mm-settings settings hidden'; // (the class, not [hidden]: .settings sets display: grid)
-    root.append(this.head, this.settingsBox, this.body);
+    this.side = root.closest<HTMLElement>('.mm-side') ?? root.parentElement;
+    root.classList.add('mm-main');
+    const el = (cls: string, tag = 'div') => { const e = this.doc.createElement(tag); e.className = cls; return e; };
+    this.overlay = el('mm-overlay hidden');
+    this.dialog = el('mm-dialog panel');
+    this.dialog.setAttribute('role', 'dialog');
+    this.dialog.setAttribute('aria-modal', 'true');
+    this.dialog.setAttribute('aria-labelledby', 'mm-dialog-title');
+    this.head = el('mm-view mm-head-box');
+    this.settingsBox = el('mm-settings settings hidden'); // (the class, not [hidden]: .settings sets display: grid)
+    this.controlsBox = el('mm-controls controls-grid hidden');
+    this.body = el('mm-body');
+    this.dialog.append(el('stripe'), this.head, this.settingsBox, this.controlsBox, this.body);
+    this.overlay.append(this.dialog);
+    (o.overlayHost ?? this.side?.parentElement ?? root).append(this.overlay);
     o.settings?.(this.settingsBox);
     ctl.onChange(() => this.render());
-    root.addEventListener('keydown', e => this.onKey(e));
-    root.addEventListener('focusin', e => {
-      const id = (e.target as HTMLElement)?.dataset?.action;
-      if (!id) return;
-      this.lastFocus = id;
-      if (!this.programmatic) this.ctl.setFocus(id); // a user's Tab / click (the view's own focus() keeps the default focus)
+    for (const box of [root, this.overlay]) {
+      box.addEventListener('keydown', e => this.onKey(e as KeyboardEvent));
+      box.addEventListener('focusin', e => {
+        const id = (e.target as HTMLElement)?.dataset?.action;
+        if (!id) return;
+        this.lastFocus = id;
+        if (!this.programmatic) this.ctl.setFocus(id); // a user's Tab / click (the view's own focus() keeps the default focus)
+      });
+    }
+    // Esc with the dialog open but the focus outside it (a click on the dimmer moved it to the page)
+    this.doc.addEventListener('keydown', e => {
+      if (e.code !== 'Escape' || !this.visibleFlag || this.ctl.view === 'main') return;
+      const t = e.target as Node | null;
+      if (t && (this.overlay.contains(t) || root.contains(t))) return; // handled by onKey
+      if (this.ctl.key('Escape')) e.preventDefault();
     });
     this.render();
   }
@@ -643,12 +750,18 @@ export class MainMenuView {
     }
   }
 
+  /** The element holding the controller's current view (the dialog when a submenu is open). */
+  private get active(): HTMLElement {
+    return this.ctl.view === 'main' ? this.root : this.dialog;
+  }
+
   /** Focus the controller's item (keyboard navigation, view changes). */
   focusCurrent(force = false): void {
     const id = this.ctl.focus;
     if (!id || !this.visibleFlag) return;
-    if (!force && id === this.lastFocus && this.doc.activeElement && this.root.contains(this.doc.activeElement)) return;
-    const el = this.root.querySelector<HTMLElement>(`[data-action="${cssEscape(id)}"]`);
+    const box = this.active;
+    if (!force && id === this.lastFocus && this.doc.activeElement && box.contains(this.doc.activeElement)) return;
+    const el = box.querySelector<HTMLElement>(`[data-action="${cssEscape(id)}"]`);
     if (el && this.doc.activeElement !== el) {
       this.programmatic = true;
       try { el.focus({preventScroll: false}); } finally { this.programmatic = false; }
@@ -656,35 +769,31 @@ export class MainMenuView {
     this.lastFocus = id;
   }
 
-  render(): void {
-    const m = this.ctl.model();
+  private rows(m: MenuModel, status: MenuModel['status']): HTMLElement {
     const d = this.doc;
-    this.settingsBox.classList.toggle('hidden', m.view !== 'settings');
-    const body = this.body;
-    // keep the adopted QA button alive across renders
-    if (this.o.qaButton?.parentElement) this.o.qaButton.remove();
-    // heading + text above the (persistent, never re-rendered) settings form; the actions and the status below it
-    const head = this.head;
-    head.replaceChildren();
-    head.dataset.view = m.view;
-    const h2 = d.createElement('h2');
-    h2.textContent = m.title;
-    head.append(h2);
-    for (const t of m.text) { const p = d.createElement('p'); p.className = 'mm-text'; p.textContent = t; head.append(p); }
-    body.replaceChildren();
     const view = d.createElement('div');
     view.className = 'mm-view';
     view.dataset.view = m.view;
     const rows = d.createElement('div');
-    rows.className = 'mm-rows';
+    const slots = m.rows.some(r => r.slot !== undefined && r.heading);
+    rows.className = `mm-rows${slots ? ' mm-slots' : ''}`;
     rows.setAttribute('role', 'group');
     rows.setAttribute('aria-label', m.title);
     for (const r of m.rows) {
       const row = d.createElement('div');
-      row.className = `mm-row${r.slot !== undefined && r.heading ? ` slot ${r.tone ?? ''}` : ''}`;
+      const slot = r.slot !== undefined && !!r.heading;
+      row.className = `mm-row${slot ? ` slot ${r.tone ?? ''}` : ''}`;
       if (r.slot !== undefined) row.dataset.slot = String(r.slot);
       if (r.heading) { const h = d.createElement('div'); h.className = 'mm-head'; h.textContent = r.heading; row.append(h); }
-      for (const l of r.lines ?? []) { const p = d.createElement('div'); p.className = 'mm-line'; p.textContent = l; row.append(p); }
+      const info = slot ? d.createElement('div') : row;
+      if (slot) { info.className = 'mm-info'; row.append(info); }
+      (r.lines ?? []).forEach((l, k) => {
+        const p = d.createElement('div');
+        p.className = `mm-line${slot && k === 0 && r.tone === 'valid' ? ' mm-name' : ''}`;
+        p.textContent = l;
+        p.title = l; // the full text when the row ellipsizes it
+        info.append(p);
+      });
       const acts = d.createElement('div');
       acts.className = 'mm-acts';
       for (const a of r.actions) acts.append(this.button(a));
@@ -693,14 +802,67 @@ export class MainMenuView {
     }
     view.append(rows);
     const st = d.createElement('p');
-    st.className = `mm-status${m.status ? ` ${m.status.tone}` : ''}`;
+    st.className = `mm-status${status ? ` ${status.tone}` : ''}`;
     st.setAttribute('role', 'status');
     st.setAttribute('aria-live', 'polite');
-    st.textContent = m.status?.text ?? '';
+    st.textContent = status?.text ?? '';
     view.append(st);
-    body.append(view);
+    return view;
+  }
+
+  render(): void {
+    const m = this.ctl.model();
+    const d = this.doc;
+    const open = m.view !== 'main';
+    const main = open ? this.ctl.mainModel() : m;
+    // keep the adopted QA button alive across renders
+    if (this.o.qaButton?.parentElement) this.o.qaButton.remove();
+    // the side column: always the main list (its status only while it is the top view)
+    this.root.replaceChildren(this.rows(main, open ? null : m.status));
+    this.side?.classList.toggle('mm-dimmed', open);
+    if (open) this.side?.setAttribute('inert', ''); else this.side?.removeAttribute('inert');
+    this.overlay.classList.toggle('hidden', !open);
+    this.dialog.dataset.view = m.view;
+    this.settingsBox.classList.toggle('hidden', m.view !== 'settings');
+    this.controlsBox.classList.toggle('hidden', m.view !== 'controls');
+    if (open) {
+      const head = this.head;
+      head.replaceChildren();
+      head.dataset.view = m.view;
+      const h2 = d.createElement('h2');
+      h2.id = 'mm-dialog-title';
+      h2.textContent = m.title;
+      head.append(h2);
+      for (const t of m.text) { const p = d.createElement('p'); p.className = 'mm-text'; p.textContent = t; head.append(p); }
+      if (m.view === 'controls') {
+        this.controlsBox.replaceChildren(...(m.bindings ?? []).map(b => {
+          const row = d.createElement('div'), a = d.createElement('span'), k = d.createElement('kbd');
+          a.textContent = b.action; k.textContent = b.keys;
+          row.append(a, k);
+          return row;
+        }));
+      }
+      const body = this.rows(m, m.status);
+      if (m.hint) { const p = d.createElement('p'); p.className = 'mm-hint'; p.textContent = m.hint; body.prepend(p); }
+      this.body.replaceChildren(body);
+    } else this.body.replaceChildren();
     this.root.setAttribute('aria-busy', String(m.busy));
-    this.focusCurrent(m.focus !== this.lastFocus);
+    const opened = m.view !== this.lastView;
+    this.lastView = m.view;
+    if (!this.visibleFlag) return;
+    if (opened) {
+      // a freshly opened Settings view starts on its first control (its only action is Back, at the foot of the form)
+      const first = m.view === 'settings' ? this.settingsBox.querySelector<HTMLElement>('input, select') : null;
+      if (first) { this.programmatic = true; try { first.focus({preventScroll: true}); } finally { this.programmatic = false; } this.lastFocus = null; }
+      else this.focusCurrent(true);
+      return;
+    }
+    // a re-render replaced the buttons: put the focus back on the same item — but never pull it off a settings control or any
+    // other element the player is using (the boot progress re-renders every 5 %)
+    const ae = this.doc.activeElement as HTMLElement | null;
+    const lost = !ae || ae === this.doc.body || !ae.isConnected;
+    const onAction = !!ae && this.active.contains(ae) && !!ae.dataset?.action;
+    if (lost || onAction) this.focusCurrent(m.focus !== this.lastFocus);
   }
 
   private button(a: MenuAction): HTMLButtonElement {
@@ -751,6 +913,10 @@ export interface SettingsFormOptions {
   idPrefix: string;
   /** The current CSS viewport + device pixel ratio (the render-resolution labels / readout). */
   viewport?: () => {w: number; h: number; dpr: number};
+  /** render/atmosphere.ts ATMOSPHERE_QUALITY (lane MENU, campaign polish item 7): the quality help line's real numbers. */
+  qualityPresets?: Partial<Record<Quality, QualityPresetLike>>;
+  /** Timers of the coalesced render-resolution apply (tests). */
+  timers?: CoalesceTimers;
 }
 
 /** Builds the settings controls into `box` (replacing its children), bound both ways to `store`. Returns an unsubscribe. */
@@ -789,54 +955,68 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   sync.push(range('vol', 'Master volume', 0, 100, 1, v => `${v} %`, s => volumePercent(s.volume), v => ({volume: volumeFromPercent(v)})));
   sync.push(check('mute', 'Mute audio (M)', 'muted'));
   sync.push(range('sway', 'Train sway', 0, 100, 5, v => (v === 0 ? 'Off' : `${v} %`), s => Math.round(s.trainSway * 100), v => ({trainSway: v / 100})));
-  // quality (its own documented effects only)
+  // quality — named by what it ACTUALLY changes (lane MENU, campaign polish item 7: settingsStore.ts QUALITY_LABEL; the values stay
+  // 'high' / 'low'): the volumetric fog's resolution + steps, the flashlight shadow map, MSAA and the pixel-ratio cap; one help line
   {
-    const l = label('Quality');
+    const l = label(QUALITY_LABEL);
     const sel = d.createElement('select');
     sel.id = P + 'quality';
-    for (const [v, t] of [['low', 'Low (faster)'], ['high', 'High']] as const) { const op = d.createElement('option'); op.value = v; op.textContent = t; sel.append(op); }
+    for (const q of QUALITY_OPTIONS) { const op = d.createElement('option'); op.value = q.value; op.textContent = q.label; sel.append(op); }
+    const help = d.createElement('div');
+    help.className = 'set-readout set-help';
+    help.id = P + 'quality-help';
+    sel.setAttribute('aria-describedby', help.id);
     sel.addEventListener('change', () => store.set({quality: sel.value === 'low' ? 'low' : 'high'}));
     l.append(sel);
-    box.append(l);
-    sync.push(s => { if (sel.value !== s.quality) sel.value = s.quality; });
+    box.append(l, help);
+    sync.push(s => { if (sel.value !== s.quality) sel.value = s.quality; help.textContent = qualityDescription(s.quality, o.qualityPresets?.[s.quality]); });
   }
-  // render resolution (a linear scale; not a preset)
+  // render resolution — a 25-100 % slider in 1 % steps (lane MENU, campaign polish item 8): the canvas scale only. The percent and
+  // the resulting drawing buffer show at once while dragging; the store (and so the renderer resize) gets the value coalesced —
+  // after the drag is still for a moment, or at once on release / a keyboard step (the change event) — never per input event.
+  let resApply: CoalescedApply<number> | null = null;
   {
     const l = label('Render resolution');
-    const sel = d.createElement('select');
-    sel.id = P + 'res';
-    sel.title = 'A linear scale of the render width and height (Native = the device-pixel-ratio-capped drawing buffer). Nothing else changes: Quality keeps its own settings.';
-    sel.addEventListener('change', () => store.set({renderScale: Number(sel.value) as RenderScale}));
-    l.append(sel);
+    const i = d.createElement('input');
+    i.id = P + 'res'; i.type = 'range';
+    i.min = String(RENDER_PERCENT.min); i.max = String(RENDER_PERCENT.max); i.step = String(RENDER_PERCENT.step);
+    const out = d.createElement('output');
+    out.htmlFor.add?.(i.id);
+    l.append(i, out);
     const readout = d.createElement('div');
     readout.className = 'set-readout';
     readout.id = P + 'res-readout';
+    i.setAttribute('aria-describedby', readout.id);
     box.append(l, readout);
-    const fill = (s: Readonly<GameSettings>) => {
+    const show = (pct: number, q: Quality) => {
       const {w, h, dpr} = vp();
-      const opts = renderScaleOptions(dpr, s.quality);
-      if (sel.options.length !== opts.length || opts.some((op, k) => sel.options[k].textContent !== op.label)) {
-        sel.replaceChildren(...opts.map(op => { const e = d.createElement('option'); e.value = String(op.value); e.textContent = op.label; return e; }));
-      }
-      if (sel.value !== String(s.renderScale)) sel.value = String(s.renderScale);
-      readout.textContent = renderScaleReadout(w, h, dpr, s.quality, s.renderScale);
+      out.textContent = `${pct} %`;
+      readout.textContent = `${renderScaleReadout(w, h, dpr, q, pct / 100)} · 100 % = ${nativeRatioLabel(dpr, q)} pixel ratio`;
+      i.setAttribute('aria-valuetext', `${pct} percent. ${readout.textContent}`);
     };
-    sync.push(fill);
+    const apply = (resApply = new CoalescedApply<number>(pct => store.set({renderScale: renderScaleFromPercent(pct)}), 160, o.timers));
+    i.addEventListener('input', () => { const pct = renderPercent(Number(i.value) / 100); show(pct, store.get().quality); apply.push(pct); });
+    i.addEventListener('change', () => apply.flush());
+    sync.push(s => {
+      if (apply.busy) return; // mid-drag: the slider shows the player's value, not the stored one
+      const pct = renderPercent(s.renderScale);
+      if (Number(i.value) !== pct) i.value = String(pct);
+      show(pct, s.quality);
+    });
   }
+  // only a short note when something is wrong (lane MENU, campaign polish item 2: no explanatory copy otherwise)
   const note = d.createElement('p');
   note.className = 'set-note';
   box.append(note);
   sync.push(() => {
     const r = store.loadReport;
-    note.textContent = !store.persistent
-      ? 'This browser refused to store settings: they apply for this session only.'
-      : r.source === 'invalid' ? 'Settings are saved on this device. Some stored values were invalid and were reset to their defaults.'
-        : 'Settings are saved on this device (this browser) and apply in the menu and in game.';
+    note.textContent = !store.persistent ? 'Settings could not be saved in this browser: they apply for this session only.'
+      : r.source === 'invalid' ? 'Some saved settings were invalid and were reset.' : '';
   });
   const all = (s: Readonly<GameSettings>) => { for (const f of sync) f(s); };
   all(store.get());
   const off = store.subscribe(s => all(s));
   const onResize = () => all(store.get());
   globalThis.addEventListener?.('resize', onResize);
-  return () => { off(); globalThis.removeEventListener?.('resize', onResize); };
+  return () => { off(); resApply?.cancel(); globalThis.removeEventListener?.('resize', onResize); };
 }

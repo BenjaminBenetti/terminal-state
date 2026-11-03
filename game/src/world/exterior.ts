@@ -28,9 +28,10 @@
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial, type Node} from 'three/webgpu';
 import {
-  Fn, abs, cameraPosition, clamp, dot, exp, float, floor, fract, hash, length, max, min, mix, normalWorld, normalize,
+  Fn, abs, cameraPosition, clamp, dot, exp, faceForward, float, floor, fract, hash, length, max, min, mix, normalWorld, normalWorldGeometry, normalize,
   positionView, positionWorld, pow, select, smoothstep, step, texture, time, uniform, uv, vec2, vec3, attribute, atan,
 } from 'three/tsl';
+import {repairZeroNormals} from './normalRepair'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU, item 3)
 import {mulberry32} from '../core/rng';
 import {MOOD} from './lights';
 import {canvasTexture} from './canvasTextures';
@@ -347,20 +348,36 @@ function propMaterial(): MeshBasicNodeMaterial {
   })());
 }
 
-const modelMats = new WeakMap<THREE.Texture | THREE.Color, MeshBasicNodeMaterial>();
-/** A Meshy model's base colour (map or colour) with the outdoor light and fog. */
+const modelMats = new WeakMap<THREE.Texture | THREE.Color, Map<THREE.Side, MeshBasicNodeMaterial>>();
+/**
+ * Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU, item 3): the fake light's normal on a DOUBLE-SIDED model — the
+ * model's own interpolated normal turned toward the eye (faceForward). The city's cooked Meshy GLBs are glTF doubleSided and ~2-6 %
+ * of their triangles are wound against their normals (the ruined tower 4.6 %): drawn front-side only those triangles were culled
+ * (holes through the facade: the "broken geometry"), and three's own back-face rule (negate by winding) would light them as facing
+ * away. Whatever side of a triangle is seen is lit as the side that faces the viewer.
+ */
+const facingNormalWorld = (): AnyNode => faceForward(normalWorldGeometry, positionWorld.sub(cameraPosition), normalWorldGeometry);
+
+/**
+ * A Meshy model's base colour (map or colour) with the outdoor light and fog. Lane MENU (campaign polish, item 3): the model's own
+ * side is kept (GLTFLoader: glTF doubleSided -> THREE.DoubleSide; was always front-side) with the view-facing normal above.
+ */
 function modelMaterial(src: THREE.Material): MeshBasicNodeMaterial {
   const std = src as THREE.MeshStandardMaterial;
   const key: THREE.Texture | THREE.Color = std.map ?? std.color ?? new THREE.Color(0x777777);
-  let m = modelMats.get(key);
+  const side: THREE.Side = std.side === THREE.DoubleSide ? THREE.DoubleSide : THREE.FrontSide;
+  let bySide = modelMats.get(key);
+  if (!bySide) modelMats.set(key, (bySide = new Map()));
+  let m = bySide.get(side);
   if (!m) {
     const tint = std.color ?? new THREE.Color(std.map ? 0xffffff : 0x777777);
     const albedo: AnyNode = std.map ? (texture(std.map, uv()).rgb as AnyNode).mul(vec3(tint.r, tint.g, tint.b)) : vec3(tint.r, tint.g, tint.b);
-    m = new MeshBasicNodeMaterial();
+    m = new MeshBasicNodeMaterial({side});
     m.name = `tower-ext-model`;
     m.fog = false;
-    m.colorNode = Fn(() => vec3(exteriorFog(albedo.mul(outdoorLight(normalWorld)).mul(1.15))))();
-    modelMats.set(key, m);
+    const n: AnyNode = side === THREE.DoubleSide ? facingNormalWorld() : normalWorld;
+    m.colorNode = Fn(() => vec3(exteriorFog(albedo.mul(outdoorLight(n)).mul(1.15))))();
+    bySide.set(side, m);
   }
   return m;
 }
@@ -641,7 +658,11 @@ export function fallbackPropGeometry(kind: PropKind): THREE.BufferGeometry {
   return merge([colored(ico, [0.22, 0.2, 0.18], 0.6, 32)]);
 }
 
-/** Model parts of a GLTF (geometry + material + transform relative to the gltf scene), for instancing. */
+/**
+ * Model parts of a GLTF (geometry + material + transform relative to the gltf scene), for instancing. Lane MENU (campaign polish,
+ * item 3): each part's zero-length vertex normals are repaired in place first (world/normalRepair.ts — they shaded as NaN-black
+ * triangles; idempotent, valid normals untouched).
+ */
 export function modelParts(gltf: GLTF): {geometry: THREE.BufferGeometry; material: THREE.Material; matrix: THREE.Matrix4}[] {
   const out: {geometry: THREE.BufferGeometry; material: THREE.Material; matrix: THREE.Matrix4}[] = [];
   gltf.scene.updateMatrixWorld(true);
@@ -649,6 +670,7 @@ export function modelParts(gltf: GLTF): {geometry: THREE.BufferGeometry; materia
   gltf.scene.traverse(o => {
     const m = o as THREE.Mesh;
     if (!m.isMesh || !m.geometry?.attributes.position) return;
+    repairZeroNormals(m.geometry);
     const mat = Array.isArray(m.material) ? m.material[0] : m.material;
     out.push({geometry: m.geometry, material: mat, matrix: new THREE.Matrix4().multiplyMatrices(inv, m.matrixWorld)});
   });

@@ -188,6 +188,8 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       strainerGait: () => { for (let i = 0; i < 12; i++) { ctx.currentTime += 0.2; sfx.strainerGait(z, 2, 2, 1.35, 0.2, 'Run'); } },
       strainerSwing: () => { for (let i = 0; i < 12; i++) { ctx.currentTime += 0.1; sfx.strainerSwing(z, 1, 1.0, i ? 0.1 : 0, 3, 1.5, 3); } },
       strainerContact: () => sfx.strainerContact(3, 3), strainerSquish: () => sfx.strainerSquish({}, 3, 1.3, 3),
+      // task campaign-polish (lane TRAIN, item 17): the moving train's rumble / air loops (non-positional, into the master)
+      rideLoop: () => { for (const c of ['bedRumble', 'bedWind'] as const) { const h = sfx.rideLoop(c, {send: 0.1}); h?.setLevel(0.5); h?.setRate(1.1); h?.setLowpass(1200); h?.stop(0.3); } },
       ambience: () => {
         for (const area of ['platform', 'service-corridor', 'washroom', 'food-court', 'utility']) { sfx.setRoom('medium', area); for (let i = 0; i < 400; i++) { ctx.currentTime += 0.25; sfx.ambience(0.25); } }
       },

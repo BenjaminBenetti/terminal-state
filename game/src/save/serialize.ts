@@ -338,9 +338,24 @@ export interface PreparedRestore {
   maxUid: number;
 }
 
-/** Decode a VALIDATED run and build its RunState (pure: nothing of the live game is touched). */
-export function prepareRestore(data: SerializedRunV1, makeRun: RunFactory): PreparedRestore {
-  const campaign = structuredClone(data.campaign);
+/**
+ * (campaign-polish lane MAP) A compatibility update of a validated save's campaign before its run is built (Game passes
+ * campaign/discovery.ts upgradeCampaign: an older network gets its Maintenance Route). `remembered`: the station ids that have saved
+ * world memory (the run's section keys + the Retry snapshot's station) — never touched by an update.
+ */
+export type CampaignUpdate = (campaign: CampaignState, remembered: StationId[]) => CampaignState;
+
+/** Station ids that have saved world memory in a run (section keys `${station}:${section}`, the Retry snapshot's station). */
+export function rememberedStations(data: SerializedRunV1): StationId[] {
+  const ids = new Set<StationId>(Object.keys(data.memories).map(k => k.slice(0, k.indexOf(':'))));
+  if (data.entry?.station) ids.add(data.entry.station);
+  for (const k of Object.keys(data.entry?.memories ?? {})) ids.add(k.slice(0, k.indexOf(':')));
+  return [...ids].sort();
+}
+
+/** Decode a VALIDATED run and build its RunState (pure: nothing of the live game is touched). `update`: see CampaignUpdate. */
+export function prepareRestore(data: SerializedRunV1, makeRun: RunFactory, update?: CampaignUpdate): PreparedRestore {
+  const campaign = update ? update(structuredClone(data.campaign), rememberedStations(data)) : structuredClone(data.campaign);
   const node = campaign.network.nodes.find(n => n.id === campaign.current);
   if (!node) throw new SaveError(`the current station ${campaign.current} is not in the network`);
   const key: SectionKey = {level: node.archetype, section: data.section, station: node.id};

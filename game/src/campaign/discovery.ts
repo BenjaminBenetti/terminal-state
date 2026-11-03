@@ -4,13 +4,15 @@
 //
 //  - A new campaign knows and has visited only the start; the train stands there.
 //  - The train console reveals the current station and every one-hop neighbour (revealAround); known stations are never forgotten.
-//  - Travel goes to a KNOWN station adjacent to the current one (never the current station itself) — unless the 1337 map cheat is
-//    on for this run (enableCheat: the whole network becomes known and any station is a destination).
+//  - Travel goes to a KNOWN station adjacent to the current one (never the current station itself), or (campaign-polish lane MAP) to
+//    a VISITED station over a route of visited stations (travelPlan: one continuous journey) — unless the 1337 map cheat is on for
+//    this run (enableCheat: the whole network becomes known and any station is a direct destination).
+//  - Saves made before the Maintenance Route existed get it once on load (upgradeCampaign: a minimal, deterministic graph update).
 //  - Arrival marks the station visited (and known) and makes it current.
 //  - The map shows the known stations and every edge whose two ends are known (with the cheat: everything).
 
 import type {CampaignState, StationId, StationNode, SubwayNetwork} from './types';
-import {validateNetwork} from './network';
+import {addMaintenanceRoute, maintenanceRouteNode, validateNetwork, type BypassInfo} from './network';
 
 const neighbourCache = new WeakMap<SubwayNetwork, Map<StationId, StationId[]>>();
 
@@ -47,11 +49,86 @@ export function revealAround(state: CampaignState, id: StationId): CampaignState
   return known === state.known ? state : {...state, known};
 }
 
-/** Whether the train may travel to `to` now: a known neighbour of the current station (any other station with the cheat). */
+/**
+ * Whether the train may travel to `to` now: a known neighbour of the current station, or (task campaign-polish-20261103-063841, lane
+ * MAP) a VISITED station reachable over visited stations (travelPlan); any other station with the cheat.
+ */
 export function canTravel(state: CampaignState, to: StationId): boolean {
-  if (to === state.current || !hasNode(state.network, to)) return false;
-  if (state.cheat) return true;
-  return state.known.includes(to) && neighbors(state.network, state.current).includes(to);
+  return travelPlan(state, to) !== null;
+}
+
+// --- multi-hop travel (task campaign-polish-20261103-063841, lane MAP) --------------------------------------------------------------
+//
+// User: "Allow travel across multiple nodes when those nodes are already explored." 'Explored' = VISITED (the stable flag), never merely
+// revealed one hop away. A visited destination is reached over connected track whose every station after the current one is visited
+// (the current station is visited by definition); the shortest such route, ties broken by station id (the lexicographically smallest
+// id sequence among the shortest). Never across an unvisited / unknown station, never ignoring the track. Adjacent unexplored travel is
+// unchanged; the 1337 cheat stays its own separate permission (a direct cheat trip, no route).
+
+/** A trip the console may start: `route` = [current, ..., to] (2 stations: one hop). */
+export interface TravelPlan { to: StationId; route: StationId[]; hops: number; cheat: boolean }
+
+/** Why `to` is not a destination: the current station, not a station on the map, not visited and not one stop away, no visited route. */
+export type TravelBlock = 'here' | 'unknown' | 'not-explored' | 'no-route';
+
+/** The shortest route current -> `to` over VISITED stations only (ties: smallest ids), or null (unvisited target / no such route). */
+export function visitedRoute(state: CampaignState, to: StationId): StationId[] | null {
+  const from = state.current;
+  const ok = new Set(state.visited);
+  if (!ok.has(to) || !ok.has(from)) return null;
+  if (from === to) return [from];
+  // hops to `to` over visited stations, then walk from the current station always to the smallest-id neighbour one hop nearer
+  const d = new Map<StationId, number>([[to, 0]]);
+  const q = [to];
+  for (let i = 0; i < q.length && !d.has(from); i++) for (const n of neighbors(state.network, q[i])) if (ok.has(n) && !d.has(n)) { d.set(n, d.get(q[i])! + 1); q.push(n); }
+  if (!d.has(from)) return null;
+  const route = [from];
+  for (let c = from; c !== to;) {
+    const k = d.get(c)!;
+    c = neighbors(state.network, c).find(n => d.get(n) === k - 1)!; // neighbors() is id-sorted
+    route.push(c);
+  }
+  return route;
+}
+
+/** The trip to `to` the console allows now (one hop to a known neighbour, a visited multi-hop route, or the cheat), else null. */
+export function travelPlan(state: CampaignState, to: StationId): TravelPlan | null {
+  if (to === state.current || !hasNode(state.network, to)) return null;
+  const adjacent = neighbors(state.network, state.current).includes(to);
+  if (state.cheat) return {to, route: [state.current, to], hops: 1, cheat: !adjacent};
+  if (adjacent && state.known.includes(to)) return {to, route: [state.current, to], hops: 1, cheat: false};
+  const route = visitedRoute(state, to);
+  return route ? {to, route, hops: route.length - 1, cheat: false} : null;
+}
+
+/** Why travelPlan(state, to) is null (null when it is not). */
+export function travelBlock(state: CampaignState, to: StationId): TravelBlock | null {
+  if (travelPlan(state, to)) return null;
+  if (to === state.current) return 'here';
+  if (!hasNode(state.network, to) || !(state.cheat || state.known.includes(to))) return 'unknown';
+  return state.visited.includes(to) ? 'no-route' : 'not-explored';
+}
+
+/** The pending transit record of a plan (departure autosave): a multi-hop trip carries its route. */
+export function transitOf(state: CampaignState, plan: TravelPlan): NonNullable<CampaignState['transit']> {
+  return {from: state.current, to: plan.to, phase: 'departing', cheat: plan.cheat, ...(plan.hops > 1 ? {route: plan.route.slice()} : {})};
+}
+
+/**
+ * A transit's route problem (null = fine): [from, ..., to], >= 3 stations, no repeats, consecutive pairs on the track, every station
+ * after `from` visited, never with the cheat flag. Shared by validateCampaign and the save validator (save/validate.ts).
+ */
+export function transitRouteProblem(net: SubwayNetwork, t: {from: unknown; to: unknown; cheat: unknown; route?: unknown}, visited: ReadonlySet<string>): string | null {
+  const r = t.route;
+  if (!Array.isArray(r) || r.length < 3 || r.length > net.nodes.length || r.some(x => typeof x !== 'string')) return 'a journey route must list 3 or more stations';
+  if (t.cheat === true) return 'a cheat journey has no route';
+  if (r[0] !== t.from || r[r.length - 1] !== t.to) return 'a journey route must run from its start to its destination';
+  if (new Set(r).size !== r.length) return 'a journey route repeats a station';
+  for (let i = 1; i < r.length; i++) {
+    if (!neighbors(net, r[i - 1] as string).includes(r[i] as string)) return `a journey route has no track ${String(r[i - 1])} - ${String(r[i])}`;
+    if (!visited.has(r[i] as string)) return `a journey route passes ${String(r[i])}, which was never visited`;
+  }
+  return null;
 }
 
 /** Every station the train may travel to now (network order). */
@@ -132,7 +209,55 @@ export function validateCampaign(state: unknown): string[] {
     const tr = t as Record<string, unknown> | undefined;
     if (!tr || typeof tr !== 'object' || !ids.has(tr.from as string) || !ids.has(tr.to as string) || tr.from === tr.to || tr.phase !== 'departing' || typeof tr.cheat !== 'boolean') errs.push('campaign: bad transit');
     else if (tr.from !== s.current) errs.push('campaign: a transit must leave the current station');
+    else if (tr.route !== undefined) { const p = transitRouteProblem(net, tr as {from: unknown; to: unknown; cheat: unknown; route: unknown}, new Set(visited ?? [])); if (p) errs.push(`campaign: ${p}`); }
     else if (!tr.cheat && !neighbors(net, tr.from as string).includes(tr.to as string)) errs.push('campaign: a non-cheat transit must go to a neighbour');
   }
   return errs;
+}
+
+// --- the save compatibility update (task campaign-polish-20261103-063841, lane MAP) ------------------------------------------------
+
+/** What upgradeCampaign did (reported once on load; tests). */
+export interface CampaignUpgrade {
+  state: CampaignState;
+  /** 'present': the network already had its Maintenance Route; 'added': the update gave it one; 'unchanged': impossible (reported). */
+  status: 'present' | 'added' | 'unchanged';
+  /** The station that became the Maintenance Route (its id, archetype, seed and memory untouched). */
+  node?: StationId;
+  /** 'unseen': a station the save never showed; 'unvisited': one shown on the map but never visited (no world memory; hidden again). */
+  tier?: 'unseen' | 'unvisited';
+  info?: Omit<BypassInfo, 'network'>;
+  reason?: string;
+}
+
+/**
+ * THE compatibility update of a saved campaign made before the Maintenance Route existed: deterministic, minimal, never a regenerate /
+ * wipe. Everything the save holds stays as it was — station ids, archetypes, seeds, names (but one), visited, known, current, the
+ * pending journey, the cheat, the win; every remembered world (loot, kills, lanes) stays keyed by its unchanged station id. The ONLY
+ * change is network-level (campaign/network.ts addMaintenanceRoute): ONE station the player has never seen (not known, not visited,
+ * no memory, not on the journey) — preferably a terminus — moves beside the Reactor, is printed "Maintenance Route", and a short
+ * service line joins it to the Reactor's approach and beyond. When every candidate was seen, a station that was only SHOWN (known,
+ * never visited, no memory) may move instead and is hidden again (it is re-revealed at the approach; a 1337 cheat run shows every
+ * station, so there it stays shown). Impossible -> unchanged.
+ * `remembered`: station ids with saved world memory (section keys / the Retry snapshot). Idempotent.
+ */
+export function upgradeCampaign(state: CampaignState, o: {remembered?: Iterable<StationId>} = {}): CampaignUpgrade {
+  const net = state.network;
+  if (maintenanceRouteNode(net)) return {state, status: 'present'};
+  const t = state.transit;
+  const fixed = new Set<StationId>([state.current, net.start, net.reactor, ...state.visited, ...(o.remembered ?? [])]);
+  if (t) for (const id of [t.from, t.to, ...(t.route ?? [])]) fixed.add(id);
+  if (state.won) fixed.add(state.won.station);
+  const trace: string[] = [];
+  const tiers: ['unseen' | 'unvisited', Set<StationId>][] = [['unseen', new Set([...fixed, ...state.known])], ['unvisited', fixed]];
+  for (const [tier, keep] of tiers) {
+    const got = addMaintenanceRoute(net, {keep, trace});
+    if (!got) continue;
+    const {network, ...info} = got;
+    // a shown-but-unvisited station that moved is hidden again (re-revealed at the approach) — except under the 1337 cheat, which
+    // shows every station by definition (a cheat run can only take that tier: nothing is unseen there)
+    const known = tier === 'unvisited' && !state.cheat ? state.known.filter(k => k !== got.node) : state.known;
+    return {state: {...state, network, known}, status: 'added', node: got.node, tier, info};
+  }
+  return {state, status: 'unchanged', reason: trace.join('; ') || 'no candidate'};
 }

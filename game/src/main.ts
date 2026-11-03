@@ -4,7 +4,7 @@ import {codeToSeed} from './core/rng';
 import {LEVELS, LEVEL_IDS, isLevelId, levelDisplayName, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
 import type {LevelId} from './levels/types';
 import {setMallVariantOverride} from './gen/mall/frame'; // Task track3-eaton-centre-20261031 (lane GEN): QA ?mallVariant=
-import {renderControls} from './ui/hud';
+import {CONTROLS, renderControls} from './ui/hud'; // (+ CONTROLS: the main menu's Controls view, task studio-beta-campaign-polish-20261103-063841-01 lane MENU)
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
@@ -16,6 +16,8 @@ import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/sett
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
 import {setSkylineTexture} from './world/exterior';
+import {ATMOSPHERE_QUALITY} from './render/atmosphere'; // (lane MENU, campaign polish item 7: the quality setting's real numbers in its help line)
+import {lastSaveNote} from './ui/loadingScreen'; // (lane MENU, DEATH: the death screen's last-save line)
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -132,8 +134,7 @@ async function loadMenuAssets(game: Game, progress: (f: number) => void): Promis
 // ==== end lane MENU (helpers) ==========================================================================================================
 
 async function boot(): Promise<void> {
-  renderControls($('#controls-title'));
-  renderControls($('#controls-pause'));
+  renderControls($('#controls-pause')); // (the main menu's Controls view renders the same CONTROLS: lane MENU, campaign polish item 5)
   $('#btn-retry').addEventListener('click', () => location.reload());
   if (location.protocol === 'file:') {
     showError('This page was opened directly from disk.', ['Serve the folder over HTTP, e.g. `npx vite preview` or any static web server.']);
@@ -145,9 +146,6 @@ async function boot(): Promise<void> {
     showError(req.forceWebGL ? 'WebGL 2 is not available in this browser (?renderer=webgl2 forces the WebGL 2 backend).' : 'Neither WebGPU nor WebGL 2 is available in this browser.',
       ['Enable hardware acceleration or try a current desktop Chrome, Edge or Firefox.']);
     return;
-  }
-  if (matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches) {
-    $('#mm-note').textContent = 'Touch devices are not supported — this slice needs a keyboard and mouse.';
   }
   const canvas = $('#view') as HTMLCanvasElement;
   const game = new Game(canvas, qa);
@@ -175,12 +173,13 @@ async function boot(): Promise<void> {
   });
   game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
-  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-'});
+  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY});
 
   // --- menus and settings ---
   // Iteration 16 (lane RUN): the pause menu travels to the other level (the run carries over) or starts a new game (confirmed: it
-  // resets everything); the death screen offers Retry level (the snapshot taken when the level was entered) or a new game; the clear
-  // screen lets the run go on. (lane MENU: new runs from the main menu go through its slot choice.)
+  // resets everything); the death screen offers Load last save (task studio-beta-campaign-polish-20261103-063841-01, lane MENU: the
+  // active slot's persisted save; was Retry level from the in-memory level-entry snapshot) or a new game; the clear screen lets the
+  // run go on. (lane MENU: new runs from the main menu go through its slot choice.)
   $('#btn-resume').addEventListener('click', () => void game.enterPlay());
   const confirms = ['#confirm-travel', '#confirm-new', '#confirm-win-new'];
   const closeConfirms = () => { for (const c of confirms) $(c).classList.add('hidden'); };
@@ -205,7 +204,26 @@ async function boot(): Promise<void> {
   for (const b of document.querySelectorAll<HTMLButtonElement>('.btn-new-level')) {
     b.addEventListener('click', () => { const l = b.dataset.level; closeConfirms(); if (isLevelId(l)) void game.newGame(l, {enter: true}); });
   }
-  $('#btn-death-retry').addEventListener('click', () => void game.retryLevel());
+  // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU, DEATH): "Load last save" = the ACTIVE slot's latest valid persisted
+  // save through the main menu's Continue path (Game.loadLastSave -> continueCampaign). Nothing is saved or erased on death; with no
+  // valid save the button is disabled and the note says why (Main menu / the legacy New game buttons remain).
+  const deathLoad = $('#btn-death-load') as HTMLButtonElement, deathNote = () => $('#death-note');
+  const showLastSave = () => {
+    const st = game.lastSaveStatus();
+    deathLoad.disabled = !st.ok;
+    deathLoad.title = st.ok ? '' : st.message;
+    deathNote().textContent = lastSaveNote(st, iso => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso : d.toLocaleString(); });
+  };
+  deathLoad.addEventListener('click', () => {
+    if (deathLoad.disabled || game.state !== 'dead') return;
+    deathLoad.disabled = true;
+    deathNote().textContent = 'Loading the last save…';
+    void game.loadLastSave().then(r => {
+      if (r.ok || game.state !== 'dead') return;
+      showLastSave();
+      deathNote().textContent = `Could not load the save: ${r.error.slice(0, 160)}`;
+    });
+  });
   $('#btn-death-new').addEventListener('click', () => void game.newGame(game.run.current.level, {enter: true}));
   ['#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth'].forEach((id, slot) => $(id).addEventListener('click', () => {
     const to = travelTargets(game.run.current.level)[slot];
@@ -217,23 +235,22 @@ async function boot(): Promise<void> {
     if (to) travelTo(to);
   }));
   $('#btn-win-new').addEventListener('click', () => openConfirm('#confirm-win-new'));
-  // menu wording follows the run (current level, the other level, what Retry restores)
+  // menu wording follows the run (current level, the other level, what Load last save restores)
   game.stateListeners.push((s: GameState) => {
     if (s !== 'paused' && s !== 'dead' && s !== 'won') return;
     closeConfirms();
     const cur = game.run.current, targets = travelTargets(cur.level), other = targets[0];
     targets.forEach((t, slot) => { for (const id of [['#btn-travel', '#btn-win-travel'], ['#btn-travel-2', '#btn-win-travel-2'], ['#btn-travel-3', '#btn-win-travel-3']][slot] ?? []) $(id).textContent = `Travel to ${nameOf(t)}`; }); // (+ slot 3: task reactor-build-20261101)
     $('#confirm-travel .to').textContent = nameOf(other);
-    $('#pause-run').textContent = `This run: ${nameOf(cur.level)} · ${sectionLabel(cur)}. Travelling keeps everything you carry and your condition; only New game resets them. Nothing is saved when the page reloads.`;
+    // (lane MENU, campaign polish item 2: one short line, and no "nothing is saved" claim for a campaign run — it autosaves)
+    const here = cur.station ? game.run.node(cur.station)?.name : undefined;
+    $('#pause-run').textContent = here ? `This run: ${here}` : `This run: ${nameOf(cur.level)} · ${sectionLabel(cur)} (not saved)`;
     // a new game rolls fresh seeds: the static (generic) names
     $('#btn-death-new').textContent = `New game · ${LEVELS[cur.level].name}`;
     $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
     if (targets[1]) $('#btn-death-new-third').textContent = `New game · ${LEVELS[targets[1]].name}`;
     if (targets[2]) $('#btn-death-new-fourth').textContent = `New game · ${LEVELS[targets[2]].name}`;
-    const entry = game.run.entry;
-    $('#death-note').textContent = entry
-      ? `Retry level puts you back where you entered ${nameOf(entry.level)}, exactly as you were then — the same kit, health, food and water, battery and injuries (no free heal or refill) — and the level as you found it. New game resets everything.`
-      : 'New game resets everything.';
+    if (s === 'dead') showLastSave();
     $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : 'Station clear';
   });
   // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
@@ -271,12 +288,13 @@ async function boot(): Promise<void> {
   };
   const host: MenuHost = campaignMenuHost(game, () => booted); // (primary: the 3 persistent slots; sessionMenuHost kept for tests / QA)
   const menu = new MainMenuController(host, {
-    dev, devLevels: LEVEL_IDS, levelName: l => LEVELS[l].name, pickFile: pickJsonFile,
+    dev, devLevels: LEVEL_IDS, levelName: l => LEVELS[l].name, pickFile: pickJsonFile, controls: CONTROLS,
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section)
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section; lane MENU: the quality help line)
     qaButton: qa ? qaButton : null,
+    overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)
   });
   qaButton.addEventListener('click', () => {
     if (qaPrebuild) { if (game.world) void game.enterPlay(); return; }
@@ -291,7 +309,9 @@ async function boot(): Promise<void> {
   };
   game.stateListeners.push((s: GameState, prev: GameState) => {
     menuView.visible = s === 'title';
-    if (s === 'title') { titleEl.dataset.mode = 'menu'; menu.refresh(); }
+    // (lane MENU, campaign polish: back from a game the menu opens on its main list, not on the submenu the run was started from;
+    // a failed start (loading -> title) keeps its view and its error line)
+    if (s === 'title') { titleEl.dataset.mode = 'menu'; if (prev !== 'title' && prev !== 'loading') menu.home(); else menu.refresh(); }
     // leaving the menu for a level build: the diorama goes first (its shared exterior uniforms restored before any level exterior)
     if (s === 'loading' && prev === 'title') disposeMenuScene();
   });

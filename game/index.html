@@ -105,7 +105,10 @@
 
 
     <!-- task campaign-foundation-20261102 (lane MENU): the MAIN MENU (ui/mainMenu.ts renders #mm-view) beside the real-time diorama
-         (world/menuScene.ts, drawn on #view); data-mode="loading" turns the section into the loading card (game.ts showLoading). -->
+         (world/menuScene.ts, drawn on #view); data-mode="loading" turns the section into the loading card (game.ts showLoading).
+         Task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): the side column holds the main list only (submenus incl.
+         Controls open as a centred dialog mounted by the view); the loading card shows ONLY the location name over the progress bar
+         (the progress label stays for the hooks, visually hidden). -->
     <section id="title" class="screen" data-mode="menu">
       <div id="title-backdrop"></div>
       <div class="mm-side" id="main-menu">
@@ -119,16 +122,13 @@
         <div class="mm-extras">
           <div class="actions"><button class="btn-fullscreen" type="button">Fullscreen</button></div>
           <p class="fine fs-status"></p>
-          <details><summary>Controls</summary><div class="controls-grid" id="controls-title"></div></details>
-          <p class="fine" id="mm-note">Desktop keyboard and mouse only — touch is not supported. Crouch is C. A run carries your inventory, gear, health, food and water, battery and injuries from level to level. Audio starts after your first click or key press.</p>
         </div>
         <div class="mm-boot" id="mm-boot"></div>
       </div>
       <div class="panel title-panel loading-card">
         <div class="stripe"></div>
-        <h2>Terminal State</h2>
-        <p id="station-intro" class="intro"></p>
-        <div id="load"><div class="track"><div class="fill"></div></div><div class="label">Loading…</div></div>
+        <h2 id="station-intro" class="loading-place"></h2>
+        <div id="load"><div class="track"><div class="fill"></div></div><div class="label" role="status" aria-live="polite">Loading…</div></div>
       </div>
     </section>
 
@@ -189,7 +189,7 @@
         <p class="stats" id="death-stats"></p>
         <p class="fine" id="death-note"></p>
         <div class="actions">
-          <button id="btn-death-retry" class="primary">Retry level</button>
+          <button id="btn-death-load" class="primary" type="button">Load last save</button>
           <button id="btn-death-new">New game · Subway</button>
           <button id="btn-death-new-other">New game · Office Space</button>
           <button id="btn-death-new-third">New game · Shopping Center</button>
