@@ -12,7 +12,7 @@
 // Nothing is uploaded or stored: the report lives in this tab's memory until downloaded (a normal browser download) or reload.
 
 import {PRIVACY_NOTE, type PerfCaps} from './perfRecorder';
-import {PerfRecorderController, type GpuTapHost, type RecorderGame} from './perfRecorderHooks';
+import {PerfRecorderController, type GpuTapHost, type RecorderGame, type RecorderOptions} from './perfRecorderHooks';
 import {isTypingTarget} from '../player/input';
 
 /** The recorder's keys (KeyboardEvent.code) and their labels. */
@@ -60,6 +60,8 @@ export interface PerfRecorderInstallOptions {
   overlay?: GpuTapHost | null;
   qa?: boolean;
   caps?: Partial<PerfCaps>;
+  /** Tests: the controller's environment (observer / loading manager / document / yield). */
+  controller?: Omit<RecorderOptions, 'overlay' | 'caps'>;
 }
 
 export class PerfRecorderUi {
@@ -72,7 +74,7 @@ export class PerfRecorderUi {
   private pendingDownload = false;
 
   constructor(game: RecorderGame, private readonly doc: Document | null, opts: PerfRecorderInstallOptions = {}) {
-    this.ctl = new PerfRecorderController(game, {overlay: opts.overlay ?? null, caps: opts.caps});
+    this.ctl = new PerfRecorderController(game, {...opts.controller, overlay: opts.overlay ?? null, caps: opts.caps});
     this.ctl.listeners.push(() => this.onPhase());
   }
 

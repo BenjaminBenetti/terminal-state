@@ -9,7 +9,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import * as THREE from 'three';
 import {CATEGORIES, F, FrameInput, PERF_SCHEMA, PERF_SCHEMA_VERSION, PerfCapture, assetCategory, assetId, chunkHash, distribution, reportFileName, stateCode, type ReportMeta} from '../src/debug/perfRecorder';
 import {PerfRecorderController, sanitizeInvoker, type RecorderGame} from '../src/debug/perfRecorderHooks';
-import {RECORDER_KEYS, clockText, recorderKeyAction} from '../src/debug/perfRecorderUi';
+import {PerfRecorderUi, RECORDER_KEYS, RECORDER_PRIVACY_LINE, clockText, recorderKeyAction} from '../src/debug/perfRecorderUi';
 import {S, SPAN_COUNT, UpdateProfiler} from '../src/debug/updateProfile';
 import {GAME_KEYS} from '../src/player/input';
 
@@ -601,6 +601,114 @@ describe('perf recorder: measured overhead and report size (Node; browser costs 
     await ctl.capture.serialize({...META}, () => { const t = performance.now(); each.push((t - last).toFixed(1)); maxStep = Math.max(maxStep, t - last); steps++; return new Promise<void>(res => setTimeout(() => { last = performance.now(); res(); }, 0)); });
     maxStep = Math.max(maxStep, performance.now() - last);
     log(`serialize steps ${steps}, longest step ${maxStep.toFixed(1)} ms [${each.join(' ')}]`);
-    expect(maxStep).toBeLessThan(250);
+    expect(maxStep).toBeLessThan(60); // ~6 ms measured; generous for slow CI runners and a cold JIT
+  });
+});
+
+// ==== the in-game UI (a minimal DOM stand-in: Node has no document) ============================================================
+
+class El {
+  children: El[] = [];
+  parentElement: El | null = null;
+  className = ''; id = ''; type = ''; title = ''; href = ''; download = ''; rel = ''; disabled = false;
+  dataset: Record<string, string> = {};
+  attrs: Record<string, string> = {};
+  private text = '';
+  private readonly on: Record<string, (() => void)[]> = {};
+  clicks = 0;
+  constructor(readonly tagName: string, readonly doc: Doc) {}
+  get textContent(): string { return this.children.length ? this.children.map(c => c.textContent).join('') : this.text; }
+  set textContent(v: string) { this.children = []; this.text = v; }
+  get classList() {
+    const cls = () => new Set(this.className.split(' ').filter(Boolean));
+    return {add: (c: string) => { const s = cls(); s.add(c); this.className = [...s].join(' '); }, remove: (c: string) => { const s = cls(); s.delete(c); this.className = [...s].join(' '); },
+      toggle: (c: string, on?: boolean) => { const s = cls(); if (on ?? !s.has(c)) s.add(c); else s.delete(c); this.className = [...s].join(' '); }, contains: (c: string) => cls().has(c)};
+  }
+  append(...nodes: (El | string)[]) {
+    for (const n of nodes) {
+      if (typeof n === 'string') { const t = new El('#text', this.doc); t.text = n; t.parentElement = this; this.children.push(t); } else { n.parentElement = this; this.children.push(n); }
+    }
+  }
+  appendChild(n: El) { this.append(n); return n; }
+  insertBefore(n: El, ref: El) { n.parentElement = this; this.children.splice(this.children.indexOf(ref), 0, n); }
+  replaceChildren(...nodes: El[]) { this.children = []; this.text = ''; this.append(...nodes); }
+  remove() { if (this.parentElement) this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1); this.parentElement = null; }
+  setAttribute(k: string, v: string) { this.attrs[k] = v; }
+  addEventListener(t: string, fn: () => void) { (this.on[t] ??= []).push(fn); }
+  click() { this.clicks++; if (!this.disabled) for (const fn of this.on.click ?? []) fn(); }
+  querySelector(sel: string): El | null { return sel === ':scope > .perf-rec' ? this.children.find(c => c.className.split(' ').includes('perf-rec')) ?? null : null; }
+  all(): El[] { return [this, ...this.children.flatMap(c => c.all())]; }
+}
+class Doc {
+  head = new El('head', this); body = new El('body', this);
+  createElement(tag: string) { return new El(tag.toUpperCase(), this); }
+  getElementById(id: string) { return [...this.head.all(), ...this.body.all()].find(e => e.id === id) ?? null; }
+}
+
+describe('perf recorder UI: the Performance section, badge and download', () => {
+  afterEach(() => { vi.useRealTimers(); });
+
+  it('mounts once per container; the buttons start / stop & download / download again / discard, with honest states and the privacy line', async () => {
+    vi.useFakeTimers();
+    const doc = new Doc();
+    const pause = doc.createElement('div');
+    const controls = doc.createElement('div');
+    pause.append(controls);
+    doc.body.append(pause);
+    const urls: unknown[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(b => { urls.push(b); return `blob:test-${urls.length}`; });
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    const g = new FakeGame();
+    const ui = new PerfRecorderUi(asGame(g), doc as unknown as Document, {controller: {...quick}});
+    ui.mountPanel(pause as unknown as HTMLElement, {idPrefix: 'pause-', before: controls as unknown as Element});
+    ui.mountPanel(pause as unknown as HTMLElement, {idPrefix: 'pause-', before: controls as unknown as Element});
+    expect(pause.children.filter(c => c.className === 'perf-rec')).toHaveLength(1);
+    expect(pause.children[0].className).toBe('perf-rec'); // before the controls grid
+    const btn = (id: string) => doc.getElementById(`pause-${id}`)!;
+    const all = pause.children[0].all();
+    expect(all.find(e => e.tagName === 'H3')?.textContent).toBe('Performance');
+    expect(all.some(e => e.textContent === RECORDER_PRIVACY_LINE)).toBe(true);
+    expect(pause.children[0].textContent).toContain('F8');
+    expect(pause.children[0].textContent).toContain('F9');
+    expect([btn('perf-start').disabled, btn('perf-stop').disabled, btn('perf-download').disabled]).toEqual([false, true, true]);
+    btn('perf-start').click();
+    expect(ui.ctl.recording).toBe(true);
+    expect([btn('perf-start').disabled, btn('perf-stop').disabled]).toEqual([true, false]);
+    const badge = doc.getElementById('perf-rec-badge')!;
+    expect(badge.textContent).toMatch(/^REC 0:00 · F8 stop · F9 mark/);
+    for (let k = 0; k < 30; k++) ui.frame(k * 16.7, 3);
+    expect(ui.mark()).toBe(1);
+    btn('perf-stop').click(); // Stop & Download
+    await vi.advanceTimersByTimeAsync(50);
+    expect(ui.ctl.phase).toBe('ready');
+    expect(doc.body.all().find(e => e.tagName === 'A')).toBeUndefined(); // the download link was clicked and removed again
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toBeInstanceOf(Blob);
+    const text = await (urls[0] as Blob).text();
+    expect(JSON.parse(text).schema).toBe('terminal-state-perf');
+    expect(btn('perf-download').disabled).toBe(false);
+    expect(btn('perf-start').disabled).toBe(false);
+    expect(pause.children[0].textContent).toContain('Report ready');
+    btn('perf-download').click(); // download the last report again
+    expect(urls).toHaveLength(2);
+    btn('perf-discard').click();
+    expect(ui.ctl.report).toBeNull();
+    expect(btn('perf-download').disabled).toBe(true);
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(badge.classList.contains('hidden')).toBe(true); // the badge goes away once nothing is recorded / announced
+  });
+
+  it('a key / automatic stop prepares the report without downloading and announces it on the badge', async () => {
+    vi.useFakeTimers();
+    const doc = new Doc();
+    const urls: unknown[] = [];
+    vi.spyOn(URL, 'createObjectURL').mockImplementation(b => { urls.push(b); return 'blob:x'; });
+    const ui = new PerfRecorderUi(asGame(new FakeGame()), doc as unknown as Document, {caps: {frames: 20}, controller: {...quick}});
+    ui.start('hotkey');
+    for (let k = 0; k < 25; k++) ui.frame(k * 16.7, 3); // hits the 20-frame cap
+    await vi.advanceTimersByTimeAsync(50);
+    expect(ui.ctl.phase).toBe('ready');
+    expect(urls).toHaveLength(0);
+    expect(doc.getElementById('perf-rec-badge')!.textContent).toMatch(/report ready \(stopped at the frame limit\)/);
   });
 });
