@@ -64,7 +64,7 @@ interface BodyJson {
   verification: {cpuSkinningFloor: Record<string, Record<string, unknown>>};
 }
 const wardrobe = deriv<{fit07: {gate: {limits: {bind: number; animated: number; extreme: number}; variants: {body: string; wearable: string; bind: number; animated: number; extreme: number; pass: boolean}[]}};
-  pairs: {body: string; wearable: string; motion?: {fraction: number}}[]; quality: {maxFractionOver: number}; excluded: {body: string; wearable: string; rule: string}[]; bodies: Record<string, {glb: string; sha256: string}>}>('zombie-wardrobe.json');
+  pairs: {body: string; wearable: string; motion?: {fraction: number}}[]; quality: {maxFractionOver: number}; excluded: {body: string; wearable: string; rule: string; reason?: string}[]; bodies: Record<string, {glb: string; sha256: string}>}>('zombie-wardrobe.json');
 
 const models: Record<string, GLTF> = {};
 let lib: ZombieLookLibrary;
