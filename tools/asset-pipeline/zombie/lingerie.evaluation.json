@@ -1,0 +1,320 @@
+{
+  "schema": "terminal-state/lingerie-evaluation@1",
+  "task": "studio-beta-mall-lingerie-20261102-221554-01",
+  "method": "build-lingerie.mjs --evaluate: every design fitted to every body, metrics over every 0.1 s of the six clips (lib/lingerie-metrics.mjs); score = 100 x (penetration + 3 x deep + hover + visible poke + exposed hidden) + 50 x (1 - apex coverage) + 50 x (1 - groin coverage) + mean gap p95 (mm) / 10 (lower is better); assignment = each design once, two per body, minimal worst score then sum",
+  "bodies": {
+    "paleGaze": "game/public/assets/models/zombie-body-pale-gaze-t25.glb",
+    "paleRevenant": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
+    "paleApparition": "game/public/assets/models/zombie-body-pale-apparition-t25.glb"
+  },
+  "table": {
+    "green": {
+      "paleGaze": {
+        "score": 17.1727,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0293,
+          "pokeVisible": 0.0697,
+          "exposedHidden": 0.0095,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 7.6775
+        },
+        "failures": 6,
+        "ms": 26673
+      },
+      "paleRevenant": {
+        "score": 7.3273,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0157,
+          "pokeVisible": 0,
+          "exposedHidden": 0.0088,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9167,
+          "meanGapP95MM": 7.1225
+        },
+        "failures": 0,
+        "ms": 20485
+      },
+      "paleApparition": {
+        "score": 5.3822,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0294,
+          "pokeVisible": 0.002,
+          "exposedHidden": 0.0158,
+          "apexCoverage": 1,
+          "groinCoverage": 1,
+          "meanGapP95MM": 6.6217
+        },
+        "failures": 0,
+        "ms": 21875
+      }
+    },
+    "purple": {
+      "paleGaze": {
+        "score": 8.0642,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0,
+          "pokeVisible": 0.0032,
+          "exposedHidden": 0.0152,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 6.6925
+        },
+        "failures": 0,
+        "ms": 19133
+      },
+      "paleRevenant": {
+        "score": 12.2776,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.057,
+          "pokeVisible": 0.0081,
+          "exposedHidden": 0.0081,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9167,
+          "meanGapP95MM": 7.9258
+        },
+        "failures": 0,
+        "ms": 18363
+      },
+      "paleApparition": {
+        "score": 10.8206,
+        "worst": {
+          "penetration": 0.0008,
+          "deep": 0.0008,
+          "hover": 0.0795,
+          "pokeVisible": 0.0073,
+          "exposedHidden": 0.011,
+          "apexCoverage": 1,
+          "groinCoverage": 1,
+          "meanGapP95MM": 7.2058
+        },
+        "failures": 2,
+        "ms": 19219
+      }
+    },
+    "blush": {
+      "paleGaze": {
+        "score": 10.8846,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0335,
+          "pokeVisible": 0.0028,
+          "exposedHidden": 0.0092,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 7.7958
+        },
+        "failures": 0,
+        "ms": 27878
+      },
+      "paleRevenant": {
+        "score": 6.1933,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0036,
+          "pokeVisible": 0,
+          "exposedHidden": 0.0092,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9167,
+          "meanGapP95MM": 7.4833
+        },
+        "failures": 0,
+        "ms": 24427
+      },
+      "paleApparition": {
+        "score": 4.4977,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0,
+          "pokeVisible": 0,
+          "exposedHidden": 0.0084,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9375,
+          "meanGapP95MM": 5.3275
+        },
+        "failures": 0,
+        "ms": 23769
+      }
+    },
+    "black": {
+      "paleGaze": {
+        "score": 16.2819,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0543,
+          "pokeVisible": 0.0103,
+          "exposedHidden": 0.0326,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 10.0692
+        },
+        "failures": 0,
+        "ms": 29358
+      },
+      "paleRevenant": {
+        "score": 7.1476,
+        "worst": {
+          "penetration": 0.0008,
+          "deep": 0,
+          "hover": 0.0099,
+          "pokeVisible": 0,
+          "exposedHidden": 0.0103,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9167,
+          "meanGapP95MM": 8.8258
+        },
+        "failures": 0,
+        "ms": 23137
+      },
+      "paleApparition": {
+        "score": 7.5381,
+        "worst": {
+          "penetration": 0.0009,
+          "deep": 0.0009,
+          "hover": 0.0198,
+          "pokeVisible": 0.0067,
+          "exposedHidden": 0.0059,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9375,
+          "meanGapP95MM": 8.1308
+        },
+        "failures": 0,
+        "ms": 23058
+      }
+    },
+    "red": {
+      "paleGaze": {
+        "score": 9.4619,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0,
+          "pokeVisible": 0.0021,
+          "exposedHidden": 0.0256,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 11.3692
+        },
+        "failures": 0,
+        "ms": 33244
+      },
+      "paleRevenant": {
+        "score": 14.1004,
+        "worst": {
+          "penetration": 0.0009,
+          "deep": 0.0009,
+          "hover": 0.0526,
+          "pokeVisible": 0.0025,
+          "exposedHidden": 0.0299,
+          "apexCoverage": 1,
+          "groinCoverage": 0.9167,
+          "meanGapP95MM": 10.7542
+        },
+        "failures": 1,
+        "ms": 23694
+      },
+      "paleApparition": {
+        "score": 8.3263,
+        "worst": {
+          "penetration": 0.002,
+          "deep": 0,
+          "hover": 0.0417,
+          "pokeVisible": 0.0043,
+          "exposedHidden": 0.0221,
+          "apexCoverage": 1,
+          "groinCoverage": 1,
+          "meanGapP95MM": 13.1633
+        },
+        "failures": 0,
+        "ms": 28229
+      }
+    },
+    "ivory": {
+      "paleGaze": {
+        "score": 12.0784,
+        "worst": {
+          "penetration": 0.0012,
+          "deep": 0,
+          "hover": 0.0336,
+          "pokeVisible": 0.0033,
+          "exposedHidden": 0.0169,
+          "apexCoverage": 1,
+          "groinCoverage": 0.8889,
+          "meanGapP95MM": 10.2342
+        },
+        "failures": 0,
+        "ms": 25223
+      },
+      "paleRevenant": {
+        "score": 4.2595,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.009,
+          "pokeVisible": 0.0065,
+          "exposedHidden": 0.0172,
+          "apexCoverage": 1,
+          "groinCoverage": 1,
+          "meanGapP95MM": 9.895
+        },
+        "failures": 0,
+        "ms": 21111
+      },
+      "paleApparition": {
+        "score": 6.1305,
+        "worst": {
+          "penetration": 0,
+          "deep": 0,
+          "hover": 0.0155,
+          "pokeVisible": 0.0054,
+          "exposedHidden": 0.0306,
+          "apexCoverage": 1,
+          "groinCoverage": 1,
+          "meanGapP95MM": 9.805
+        },
+        "failures": 0,
+        "ms": 21795
+      }
+    }
+  },
+  "chosen": {
+    "worst": 9.4619,
+    "sum": 38.8131,
+    "assignment": {
+      "green": "paleApparition",
+      "purple": "paleGaze",
+      "blush": "paleApparition",
+      "black": "paleRevenant",
+      "red": "paleGaze",
+      "ivory": "paleRevenant"
+    },
+    "byBody": {
+      "paleGaze": [
+        "purple",
+        "red"
+      ],
+      "paleRevenant": [
+        "black",
+        "ivory"
+      ],
+      "paleApparition": [
+        "green",
+        "blush"
+      ]
+    }
+  }
+}

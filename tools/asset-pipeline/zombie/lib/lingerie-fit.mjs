@@ -1,43 +1,45 @@
 // Task studio-beta-mall-lingerie-20261102-221554-01 (lane FIT): fits one clean Meshy lingerie set (lib/lingerie-garment.mjs: TOP +
-// BOTTOM pieces, simplified) to one WRITTEN wardrobe body (lib/lingerie-body.mjs), pose-aware, and derives its skin weights and the
-// runtime masks. The body is only read. Deterministic (no randomness; fixed iteration counts).
-//
-//  1. landmark alignment (one vertical affine map for the whole set, so the design's own heights stay: high-waist stays high):
-//     garment cup apex height -> the body's breast apex height, garment crotch (lowest midline point of the brief) -> the body's
-//     crotch; s = (apexY - crotchY)_body / (apexY - crotchY)_garment. Horizontal, per piece and height (5 mm bins, smoothed): the
-//     piece's own width / depth / centre -> the body's torso cross-section there (+ the cloth offset) wherever the piece is a closed
-//     tube (band, brief, bodysuit, garter belt); above a piece's tube (straps) and below it (suspender straps, thigh rings) the
-//     nearest tube mapping is held, then the cup apices are moved onto the breast apices (lateral warp of the top piece that fades
-//     out at the side seam) and the strap crests onto the shoulder strap line (|x| = 0.72 x the shoulder joint, medial on the
-//     trapezius).
+// BOTTOM pieces at the source resolution) to one WRITTEN wardrobe body (lib/lingerie-body.mjs), pose-aware, and derives its skin
+// weights and the runtime masks. The body is only read. Deterministic (no randomness; fixed iteration counts).
+// STAGE 1 (source resolution, fitStage1):
+//  1. landmark alignment: ONE vertical affine map for the whole set (the design's own heights stay: high-waist stays high): the
+//     garment's cup apex height -> the body's breast apex height, the garment's crotch (lowest midline point of the components
+//     crossing the midline) -> the body's crotch. Horizontal: ONE map per piece (medians over its closed-tube height bins of the
+//     body's / the piece's width, depth and centre, + the cloth offset); then the cup apices are moved onto the breast apices
+//     (symmetric, capped, front only, fading out at the side seam) and the strap crests onto the shoulder strap line (|x| = 0.72 x the
+//     shoulder joint: medial on the trapezius).
 //  2. thigh rings / closed leg loops are re-centred on the thigh's own cross-section at their height (rigid per component).
-//  3. non-rigid conformity (shrink-wrap): per welded vertex the closest point of the body's FIT surface (closed skin, torso + legs;
-//     never arms / head / hair) gives a signed distance; the target is offset + the vertex's own layer height (outer face of a thin
-//     sheet = its measured thickness, inner face 0), the correction along the body normal is Laplacian-smoothed over the cloth
-//     (smoothing schedule 24 -> 2 passes) so the cloth bridges hollows (cleavage, butt crease) and keeps the design's relief.
-//  4. clearance: any vertex closer than minClear is pushed out along the skin normal (diffused to its neighbours, no kinks).
-//  5. skin weights: each cloth vertex copies the body's own weights interpolated (barycentric) at its closest fit-surface point
-//     (Head -> Neck), light Laplacian smoothing over the cloth, top-4 normalised: cloth and the skin under it deform alike.
-//  6. pose-aware clearance: every validation pose (every 3rd frame of all six clips) is skinned; a vertex that comes closer than
-//     poseClear to the posed skin (or sinks) in ANY pose is pushed out in the bind pose by that deficit (diffused, capped), weights
-//     re-derived; repeated.
-//  7. masks: body triangles fully enclosed by the piece (normal + 4 tilted rays from below the skin hit it within maxDist) are
-//     hidden while it is worn; bottom-piece triangles under the top piece likewise (layering, e.g. suspender tops under a bustier).
-import {TriGrid, weldMap, insideByParity} from './penetration.mjs';
+//  3. non-rigid conformity (shrink-wrap): per welded vertex the closest point of the body's FIT surface (closed skin + hair fused onto
+//     it, torso + legs + armpit fold; never arms / head / free-hanging hair) gives a signed distance; the correction to `offset` along
+//     the skin normal is smoothed over SPATIAL neighbourhoods (radius 3.5 -> 0.8 cm, so both faces of a thin closed sheet move alike
+//     and the cloth bridges hollows such as the cleavage / butt crease while keeping the design's relief), 14 iterations.
+//  4. clearance: cloth closer than minClear to the skin (sign parity-verified against the closed skin) and skin poking through the
+//     cloth between its vertices (outward body rays meeting a cloth triangle too low) are pushed out along the skin normal (dilated
+//     over 6 mm: the other face of the sheet moves along).
+//  5. coverage guard (content rule): nipple / genital zone coverage by the cloth in the bind pose; if incomplete, the piece is re-fitted
+//     shifted vertically in 5 mm steps (first full coverage wins), recorded.
+// RUNTIME SIMPLIFICATION in BODY space (build-lingerie.mjs: the fitted first body, UV-weighted quadric, seams kept) -> STAGE 2
+// (fitStage2, per body, on the runtime triangles): clearance again (coarse triangles over body bumps), skin weights (each cloth vertex
+// copies the body's own weights interpolated at its closest fit-surface point, light Laplacian smoothing, top-4), pose-aware
+// clearance (every validation pose = every 0.1 s of all six clips: cloth sinking > 0.5 mm or skin poking through it -> pushed out in
+// the bind pose by that deficit, capped, weights re-derived, 3 rounds), normals (source shading rotated onto the fitted surface),
+// masks (body triangles enclosed by each piece hidden, conservatively: centroid + tilted rays AND all three vertex rays; bottom-piece
+// triangles under the top piece likewise).
+import {TriGrid, weldMap, insideByParity, closestOnTri} from './penetration.mjs';
 import {coverMask} from './fit.mjs';
 import {GROUP} from './lingerie-body.mjs';
+import {coverageZones, bindZoneCoverage} from './lingerie-metrics.mjs';
 
 const r4 = v => +(+v).toFixed(4), mm = v => +(v * 1000).toFixed(2);
 const ss = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
 
 export const FIT = {
   offset: {top: 0.0035, bottom: 0.003},   // cloth inner face above the skin (m)
-  layerMax: 0.007,                         // max layer height kept for an outer face (thin closed sheets: 2-4 mm)
   minClear: 0.0015,                        // bind clearance floor
-  poseClear: 0.0008,                       // posed clearance floor (any validation pose)
-  poseRounds: +(process.env.LING_POSE_ROUNDS ?? 3), posePushMax: 0.012,
+  poseClear: -0.0005,                      // posed clearance floor (any validation pose): the cloth may touch / sink 0.5 mm, no more
+  poseRounds: 4, posePushMax: 0.012,
   wrapIterations: 14, wrapRadius: [0.035, 0.008],     // spatial smoothing radius of the conformity correction (coarse -> fine)
-  pushRadius: 0.012,                       // clearance push dilation radius
+  pushRadius: 0.006,                       // clearance push dilation radius (couples the faces of a thin sheet; no wider lift)
   weightSmooth: {iters: 2, lambda: 0.3},
   strapLineFactor: 0.72,
   tubeMin: 0.55,                           // a height bin is a "tube" when the piece spans >= this fraction of the body's width and depth
@@ -156,11 +158,13 @@ export function capApex(P, x0, x1, cap, yRange = [-Infinity, Infinity]) {
   return {L: [mx, my, mz], R: [-mx, my, mz], raw};
 }
 function garmentRest(top, bottom, apex) {
-  // crotch: the lowest midline point of the bottom piece's largest component (suspenders / rings are separate components)
-  const {label, sizes} = compLabels(bottom);
-  const main = [...sizes.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0])[0][0];
+  // crotch: the lowest midline point of the bottom piece's components that CROSS the midline (brief / thong / gusset; suspender
+  // straps, clips and thigh rings stay on one side)
+  const {label} = compLabels(bottom);
+  const span = new Map();
+  for (let i = 0; i < bottom.pos.length / 3; i++) { const sp = span.get(label[i]) ?? [Infinity, -Infinity]; sp[0] = Math.min(sp[0], bottom.pos[i * 3]); sp[1] = Math.max(sp[1], bottom.pos[i * 3]); span.set(label[i], sp); }
   let crotch = null;
-  for (let i = 0; i < bottom.pos.length / 3; i++) { if (label[i] !== main || Math.abs(bottom.pos[i * 3]) > 0.02) continue; if (!crotch || bottom.pos[i * 3 + 1] < crotch[1]) crotch = [bottom.pos[i * 3], bottom.pos[i * 3 + 1], bottom.pos[i * 3 + 2]]; }
+  for (let i = 0; i < bottom.pos.length / 3; i++) { const sp = span.get(label[i]); if (!(sp[0] < -0.02 && sp[1] > 0.02) || Math.abs(bottom.pos[i * 3]) > 0.02) continue; if (!crotch || bottom.pos[i * 3 + 1] < crotch[1]) crotch = [bottom.pos[i * 3], bottom.pos[i * 3 + 1], bottom.pos[i * 3 + 2]]; }
   const strapTop = {};
   for (const [side, s] of [['L', 1], ['R', -1]]) { let best = -1; for (let i = 0; i < top.pos.length / 3; i++) { if (top.pos[i * 3] * s <= 0.01) continue; if (best < 0 || top.pos[i * 3 + 1] > top.pos[best * 3 + 1]) best = i; } strapTop[side] = [top.pos[best * 3], top.pos[best * 3 + 1], top.pos[best * 3 + 2]]; }
   return {apex, apexX: (apex.L[0] - apex.R[0]) / 2, apexY: (apex.L[1] + apex.R[1]) / 2, apexZ: (apex.L[2] + apex.R[2]) / 2, crotch, strapTop};
@@ -284,23 +288,6 @@ export function recentreLegLoops(B, piece) {
 }
 
 // ------------------------------------------------------------------------------------------------ 3-4. conformity + clearance
-/** Layer height per welded vertex: outer face of a thin sheet (its source normal faces away from the body and a face of the same
- *  piece lies behind it within layerMax) = that distance; else 0. Measured on the coarse-aligned piece. */
-function layerHeights(B, piece, G, opts) {
-  const P = piece.pos, N = piece.srcNrmAligned;
-  const grid = new TriGrid(P, piece.idx, 0.02);
-  const h = new Float32Array(G.n);
-  for (const i of G.uniq) {
-    const c = fitClosest(B, B.fitGrid, B.fitIdx, B.nrm, P[i * 3], P[i * 3 + 1], P[i * 3 + 2]);
-    if (!c) continue;
-    const nx = N[i * 3], ny = N[i * 3 + 1], nz = N[i * 3 + 2];
-    if (nx * c.n[0] + ny * c.n[1] + nz * c.n[2] < 0.2) continue;
-    const hit = grid.ray(P[i * 3] - nx * 1e-4, P[i * 3 + 1] - ny * 1e-4, P[i * 3 + 2] - nz * 1e-4, -nx, -ny, -nz, opts.layerMax, 2e-4);
-    if (hit) h[i] = hit.t;
-  }
-  return spread(G, laplace(G, h, 1, 2, 0.5), 1);
-}
-
 export function shrinkWrap(B, piece, G, name, opts = FIT) {
   const P = piece.pos, off = opts.offset[name] ?? 0.003;
   const hist = [];
@@ -339,7 +326,7 @@ export function verifiedClosest(B, grid, idx, nrm, closedGrid, x, y, z, maxR) {
 export function pokeCandidates(B, piece, near = 0.03) {
   const grid = new TriGrid(piece.pos, piece.idx, 0.02), out = [], seen = new Uint8Array(B.pos.length / 3);
   for (const v of B.fitIdx) {
-    const r = B.remap[v]; if (seen[r] || B.groups[r] === 2 || B.hair[r]) continue; seen[r] = 1;
+    const r = B.remap[v]; if (seen[r] || B.groups[r] === 2 || (B.hair[r] && !B.fused[r])) continue; seen[r] = 1;
     if (grid.closest(B.pos[r * 3], B.pos[r * 3 + 1], B.pos[r * 3 + 2], near)) out.push(r);
   }
   return Uint32Array.from(out);
@@ -349,16 +336,23 @@ export function pokeCandidates(B, piece, near = 0.03) {
  * cloth vertex the outward push it needs = max over the candidate body vertices whose outward ray, started `depth` inside the skin,
  * meets one of its triangles before skin + minClear.
  */
-export function bodyPokeNeeds(bodyPos, bodyNrm, cand, clothPos, clothIdx, G, minClear, depth = 0.008) {
+export function bodyPokeNeeds(bodyPos, bodyNrm, cand, clothPos, clothIdx, G, minClear, depth0 = 0.008, local = null) {
   const grid = new TriGrid(clothPos, clothIdx, 0.02), need = new Float32Array(G.n);
   let count = 0;
   for (const v of cand) {
+    const depth = local?.deepAboveY != null && local.bodyBind[v * 3 + 1] > local.deepAboveY ? local.deepDepth : depth0;
     const nx = bodyNrm[v * 3], ny = bodyNrm[v * 3 + 1], nz = bodyNrm[v * 3 + 2];
-    const h = grid.ray(bodyPos[v * 3] - nx * depth, bodyPos[v * 3 + 1] - ny * depth, bodyPos[v * 3 + 2] - nz * depth, nx, ny, nz, depth + minClear);
+    // local: only cloth anchored (bind) near this body vertex counts (a deep ray must not reach cloth across a thin body part)
+    const skip = local ? t => { for (let k = 0; k < 3; k++) { const c = clothIdx[t * 3 + k], a = local.anchor; if (Math.hypot(a[c * 3] - local.bodyBind[v * 3], a[c * 3 + 1] - local.bodyBind[v * 3 + 1], a[c * 3 + 2] - local.bodyBind[v * 3 + 2]) < local.radius) return false; } return true; } : null;
+    const h = grid.ray(bodyPos[v * 3] - nx * depth, bodyPos[v * 3 + 1] - ny * depth, bodyPos[v * 3 + 2] - nz * depth, nx, ny, nz, depth + minClear, 0, skip);
     if (!h) continue;
     const d = depth + minClear - h.t;
     count++;
-    if (process.env.LING_DEBUG_POKE && d > depth * 0.8 && count < 12) console.log(`      poke body v ${v} at ${[0, 1, 2].map(k => bodyPos[v * 3 + k].toFixed(3)).join(',')} n ${[nx, ny, nz].map(q => q.toFixed(2)).join(',')} hit t ${h.t.toFixed(4)} tri ${[0, 1, 2].map(k => [0, 1, 2].map(q => clothPos[clothIdx[h.tri * 3 + k] * 3 + q].toFixed(3)).join(',')).join(' / ')}`);
+    // lift the hit point: each vertex of the hit cloth triangle by d x its share (barycentric weight / the largest one)
+    const hp = [bodyPos[v * 3] + nx * (h.t - depth), bodyPos[v * 3 + 1] + ny * (h.t - depth), bodyPos[v * 3 + 2] + nz * (h.t - depth)];
+    const bc = closestOnTri(hp, clothPos, clothIdx[h.tri * 3] * 3, clothIdx[h.tri * 3 + 1] * 3, clothIdx[h.tri * 3 + 2] * 3), wm = Math.max(bc[3], bc[4], bc[5]);
+    for (let k = 0; k < 3; k++) { const c = G.remap[clothIdx[h.tri * 3 + k]], dv = d * Math.min(1, bc[3 + k] / wm); if (dv > need[c]) need[c] = dv; }
+    continue;
     for (let k = 0; k < 3; k++) { const c = G.remap[clothIdx[h.tri * 3 + k]]; if (d > need[c]) need[c] = d; }
   }
   return {need, count};
@@ -370,7 +364,6 @@ export function clearancePass(B, piece, G, floor, rounds = 6, push = null, maxSt
   for (let r = 0; r < rounds; r++) {
     const need = new Float32Array(G.n), dir = new Float32Array(G.n * 3); let any = 0;
     const poke = bodyPokeNeeds(B.pos, B.nrm, cand, P, piece.idx, G, floor).need;
-    if (process.env.LING_DEBUG) { const top = [...G.uniq].filter(i => poke[i] > 0).sort((a, b) => poke[b] - poke[a]); console.log(`   clear round ${r}: poke vertices ${top.length}`, top.slice(0, 5).map(i => `${(poke[i] * 1000).toFixed(1)}mm@${[0, 1, 2].map(k => P[i * 3 + k].toFixed(3)).join(',')}`).join(' ')); }
     for (const i of G.uniq) {
       const c = verifiedClosest(B, B.fitGrid, B.fitIdx, B.nrm, B.skinGrid, P[i * 3], P[i * 3 + 1], P[i * 3 + 2], 0.08);
       if (!c) continue;
@@ -416,7 +409,6 @@ export function transferWeights(B, piece, G, opts = FIT) {
 }
 
 // ------------------------------------------------------------------------------------------------ posing helpers
-export function poseWorld(B, clip, t) { return B.worldAt(clip, t); }
 /** LBS with float weights over the body's joint world matrices (column-major 4x4 incl. IBM). */
 export function skinWith(mats, pos, joints, weights, nrm = null) {
   const n = pos.length / 3, out = new Float32Array(n * 3), on = nrm ? new Float32Array(n * 3) : null;
@@ -437,6 +429,12 @@ export function skinWith(mats, pos, joints, weights, nrm = null) {
 
 /** Per welded cloth vertex: the minimum signed distance to the posed FIT surface over the given poses. */
 export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear) {
+  for (const ps of pieceSets) {
+    // bind anchors (closest fit-surface point) of every cloth vertex
+    const P = ps.piece.pos, a = new Float32Array(P.length);
+    for (let i = 0; i < P.length / 3; i++) { const c = B.fitGrid.closest(P[i * 3], P[i * 3 + 1], P[i * 3 + 2], 0.25); if (c) a.set(c.q.slice(0, 3), i * 3); else a.set(P.subarray(i * 3, i * 3 + 3), i * 3); }
+    ps.anchor = a;
+  }
   const mins = pieceSets.map(p => new Float32Array(p.G.n).fill(Infinity));
   const pokes = pieceSets.map(p => new Float32Array(p.G.n));
   for (const pose of poses) {
@@ -446,20 +444,22 @@ export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear)
     const bn = posedWeldedNormals(B, bp);
     pieceSets.forEach((ps, k) => {
       const gp = skinWith(mats, ps.piece.pos, ps.w.joints, ps.w.weights);
-      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor).need;
-      for (const i of ps.G.uniq) if (pk[i] > pokes[k][i]) { pokes[k][i] = pk[i]; if (process.env.LING_DEBUG) (ps.dbgPoke ??= {})[i] = pose.clip + '@' + pose.t; }
+      // posed shoulder skin can bulge through a strap by more (the deltoid / trapezius in Attack): deeper rays there (above the bust
+      // + 8 cm), restricted to cloth anchored near the body vertex; 8 mm elsewhere
+      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor, 0.008, {anchor: ps.anchor, bodyBind: B.pos, radius: 0.04, deepAboveY: B.landmarks.apexY + 0.08, deepDepth: 0.02}).need;
+      for (const i of ps.G.uniq) if (pk[i] > pokes[k][i]) pokes[k][i] = pk[i];
       for (const i of ps.G.uniq) {
         const c = verifiedClosest(B, grid, B.fitIdx, bn, closed, gp[i * 3], gp[i * 3 + 1], gp[i * 3 + 2], 0.06);
-        if (c && c.sd < mins[k][i]) { mins[k][i] = c.sd; if (process.env.LING_DEBUG) { (ps.dbgSd ??= {})[i] = pose.clip + '@' + pose.t + ' tri ' + c.v.map(v => B.groups[v]).join(''); } }
+        if (c && c.sd < mins[k][i]) mins[k][i] = c.sd;
       }
     });
   }
   return {mins, pokes};
 }
 
-/** Welded skin normals of a posed body (same welding / skin-only triangles as the bind). */
+/** Welded skin normals of a posed body (same welding / triangles as the bind normals: closed skin + fit surface). */
 export function posedWeldedNormals(B, pos) {
-  const n = pos.length / 3, acc = new Float32Array(n * 3), I = B.skinIdx, remap = B.remap;
+  const n = pos.length / 3, acc = new Float32Array(n * 3), I = B.nrmIdx ?? B.skinIdx, remap = B.remap;
   for (let t = 0; t < I.length; t += 3) {
     const a = I[t] * 3, b = I[t + 1] * 3, c = I[t + 2] * 3;
     const e1x = pos[b] - pos[a], e1y = pos[b + 1] - pos[a + 1], e1z = pos[b + 2] - pos[a + 2], e2x = pos[c] - pos[a], e2y = pos[c + 1] - pos[a + 1], e2z = pos[c + 2] - pos[a + 2];
@@ -508,18 +508,34 @@ export function fitStage1(B, pieces, opts = FIT) {
   const A = coarseAlign(B, pieces, GL, opts);
   const report = {landmarks: {garment: {apex: {L: GL.apex.L.map(r4), R: GL.apex.R.map(r4)}, crotch: GL.crotch.map(r4)}, body: bodyLandmarkReport(B)}, align: A.report, pieces: {}};
   const out = {};
+  const zones = coverageZones(B);
   for (const name of ['top', 'bottom']) {
-    const piece = A.pieces[name];
-    const G = clothGraph(piece);
-    piece.srcNrmAligned = carryNormals(piece.garmentPos, piece.nrm, piece.pos, G);
-    const loops = name === 'bottom' ? recentreLegLoops(B, piece) : [];
-    if (opts.snap) opts.snap(name, 'coarse', piece.pos.slice());
-    const wrap = shrinkWrap(B, piece, G, name, opts);
-    if (opts.snap) opts.snap(name, 'wrap', piece.pos.slice());
-    const fixed = clearancePass(B, piece, G, opts.minClear);
-    if (opts.snap) opts.snap(name, 'clear', piece.pos.slice());
+    const base = A.pieces[name];
+    const G = clothGraph(base);
+    base.srcNrmAligned = carryNormals(base.garmentPos, base.nrm, base.pos, G);
+    const loops = name === 'bottom' ? recentreLegLoops(B, base) : [];
+    // coverage guard (content rule: chest / groin fully covered): conform at the landmark height, and if any nipple / genital zone
+    // vertex is left uncovered, retry with the whole piece shifted vertically (top: up first, the cup edge; bottom: down first)
+    // in 5 mm steps; the first fully covering offset wins (else the best one), recorded
+    const ids = name === 'top' ? zones.apex : zones.groin;
+    const tries = name === 'top' ? [0, 0.005, 0.01, 0.015, 0.02, -0.005, -0.01, 0.025] : [0, -0.005, 0.005, -0.01, 0.01, -0.015];
+    let best = null;
+    const coarse = base.pos.slice();
+    for (const dy of tries) {
+      const piece = {...base, pos: coarse.slice()};
+      if (dy) for (let i = 1; i < piece.pos.length; i += 3) piece.pos[i] += dy;
+      const wrap = shrinkWrap(B, piece, G, name, opts);
+      const fixed = clearancePass(B, piece, G, opts.minClear);
+      const cov = bindZoneCoverage(B, ids, zones.nb, [{pos: piece.pos, idx: piece.idx}]);
+      const r = {dy, piece, wrap, fixed, coverage: r4(cov.fraction)};
+      if (!best || cov.fraction > best.coverage + 1e-9) best = r;
+      if (cov.fraction >= 1) break;
+    }
+    const {piece, wrap, fixed} = best;
+    base.pos = piece.pos;
     out[name] = piece.pos;
-    report.pieces[name] = {sourceVertices: piece.pos.length / 3, sourceTriangles: piece.idx.length / 3, legLoopsRecentred: loops, wrap: wrap.history.slice(-1)[0], stage1ClearanceRounds: fixed};
+    report.pieces[name] = {sourceVertices: piece.pos.length / 3, sourceTriangles: piece.idx.length / 3, legLoopsRecentred: loops, wrap: wrap.history.slice(-1)[0], stage1ClearanceRounds: fixed,
+      coverageGuard: {zone: name === 'top' ? 'breast apex (2 cm)' : 'genital V', vertices: ids.length, shiftM: best.dy, bindCoverage: best.coverage}};
   }
   return {fitted: out, report};
 }
@@ -561,11 +577,23 @@ export function fitStage2(B, pieces, stage1Report, opts = FIT) {
     out.pieces[s.name] = {...out.pieces[s.name], vertices: s.piece.pos.length / 3, triangles: s.piece.idx.length / 3, bindClearanceRounds: s.bindFixed, weightAnchorsBeyond25cm: s.w.far};
   }
   const bodyMesh = {pos: B.pos, idx: B.idx};
-  for (const s of sets) s.mask = coverMask(bodyMesh, {pos: s.piece.pos, idx: s.piece.idx}, {...opts.mask, bodyJoints: B.joints});
+  for (const s of sets) s.mask = strictMask(B, s.piece, coverMask(bodyMesh, {pos: s.piece.pos, idx: s.piece.idx}, {...opts.mask, bodyJoints: B.joints}), opts.mask);
   const top = sets.find(s => s.name === 'top'), bottom = sets.find(s => s.name === 'bottom');
   top.hideWear = coverMask({pos: bottom.piece.pos, idx: bottom.piece.idx}, {pos: top.piece.pos, idx: top.piece.idx}, {...opts.layerMask, skipJoints: [], bodyJoints: null});
   out.masks = {top: {hidden: top.mask.hidden, total: top.mask.total}, bottom: {hidden: bottom.mask.hidden, total: bottom.mask.total}, bottomUnderTop: {hidden: top.hideWear.hidden, total: top.hideWear.total}};
   return {sets, report: out};
+}
+
+
+/** Conservative hide mask: a coverMask triangle stays hidden only if each of its three vertices' outward (welded skin normal) rays,
+ *  started 1 mm below the skin, also meet the cloth within maxDist: the cloth lies OUTSIDE every hidden vertex (no hidden sliver at a
+ *  cloth edge, nothing hidden where the cloth dips under the skin: no see-through hole). */
+function strictMask(B, piece, m, {maxDist}) {
+  const grid = new TriGrid(piece.pos, piece.idx, 0.02), ok = new Map(), inset = 0.001;
+  const vOk = v => { const r = B.remap[v]; let o = ok.get(r); if (o === undefined) { const nx = B.nrm[r * 3], ny = B.nrm[r * 3 + 1], nz = B.nrm[r * 3 + 2]; o = !!grid.ray(B.pos[r * 3] - nx * inset, B.pos[r * 3 + 1] - ny * inset, B.pos[r * 3 + 2] - nz * inset, nx, ny, nz, maxDist + inset); ok.set(r, o); } return o; };
+  const hide = new Uint8Array(m.hide.length); let hidden = 0;
+  for (let t = 0; t < hide.length; t++) if (m.hide[t] && vOk(B.idx[t * 3]) && vOk(B.idx[t * 3 + 1]) && vOk(B.idx[t * 3 + 2])) { hide[t] = 1; hidden++; }
+  return {...m, hide, hidden, method: m.method + '; and all three vertex normal rays meet the cloth'};
 }
 
 /** Runtime piece of one body from its stage-1 positions and a simplification (vertex subset `srcIndex` of the source piece). */

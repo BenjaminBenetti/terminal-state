@@ -305,3 +305,20 @@ Community License + Gemma Terms of Use; conditional prototype status, not produc
 - Existing regular wardrobe garments are refitted to them. Provenance: `assets/derivatives/zombie-body-pale-*.json`.
 - Unclothed bodies: the game always dresses them in an upper and a lower garment. The original uploads stay private
   (studio reference task folder plus a local backup). Unapproved prototypes; no commercial clearance implied.
+
+## Mall lingerie task: lingerie sets fitted to the pale bodies (store-local variants)
+- Six lingerie sets (`assets/models/outfit-lingerie-{green,purple,blush,black,red,ivory}.glb`) were generated for this project as
+  Meshy T2.5 image-to-3D models from the six clothing reference images the user supplied in `langery-store-zombie-pack.zip`
+  (the primary was the sole Meshy submitter under the user's 200-credit clothing approval; Meshy PBR maps kept).
+- The local CPU builder `tools/asset-pipeline/zombie/build-lingerie.mjs` fitted each set to the pale bodies it is assigned to. Each
+  set ships as a wardrobe top (slot upper) and a bottom (slot lower):
+  - landmark alignment, non-rigid conformity to the body surface, and skin weights transferred from the body;
+  - pose-aware clearance checked through all six clips, with the covered body triangles hidden;
+  - the one-piece blush bodysuit is cut at the waist into those two halves;
+  - Meshy generated the ivory thong front-to-back, so it was mirrored to match the reference: full front panel, narrow back.
+- The Meshy base colour is re-encoded at 1024 and metallic / roughness packed at 256; the normal map is not shipped. No
+  retexturing or painting. Opaque material (the lace is texture only).
+- Each file also holds unskinned display nodes for the store's stock. Provenance: `assets/derivatives/outfit-lingerie-*.json` and
+  `assets/derivatives/zombie-lingerie.json`.
+- Raw Meshy outputs and the user references stay private (studio reference task folder plus a local backup). Unapproved
+  prototypes; no commercial clearance implied. Ordinary zombie clips only.

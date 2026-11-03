@@ -75,18 +75,59 @@ function triArea(P, a, b, c) {
   return 0.5 * Math.hypot(e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]);
 }
 
+
+/**
+ * Meshy front / back hallucination correction (ivory): the generated thong has its full V panel at the BACK and only a tiny gusset
+ * at the front, the reverse of the user's reference (front V lace panel, narrow back) and leaving the front of the pubis bare.
+ * The thong (the largest sub-component of `component` below `belowY`) is MIRRORED front-to-back about that component's own centre
+ * z: its vertices are duplicated with z' = 2 zc - z (normal z negated, UVs unchanged), its triangles re-indexed to the duplicates
+ * with reversed winding. Pure geometric processing of the Meshy output (no new geometry, texture untouched). Mutates raw (appends
+ * vertices) and returns the new index buffer + a record.
+ */
+export function mirrorFrontBack(raw, idx, rep, label, {component, belowY}) {
+  const P = raw.pos;
+  const tris = [];
+  let zMin = Infinity, zMax = -Infinity;
+  for (let t = 0; t < idx.length / 3; t++) {
+    if (label[t] !== component) continue;
+    for (let k = 0; k < 3; k++) { const z = P[idx[t * 3 + k] * 3 + 2]; zMin = Math.min(zMin, z); zMax = Math.max(zMax, z); }
+    const cy = (P[idx[t * 3] * 3 + 1] + P[idx[t * 3 + 1] * 3 + 1] + P[idx[t * 3 + 2] * 3 + 1]) / 3;
+    if (cy < belowY) tris.push(t);
+  }
+  const sub = Uint32Array.from(tris.flatMap(t => [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]]));
+  const {label: sl} = triangleComponents(sub, rep);
+  const part = tris.filter((_, i) => sl[i] === 0); // the largest
+  const zc = (zMin + zMax) / 2;
+  const n0 = P.length / 3, used = [...new Set(part.flatMap(t => [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]]))].sort((a, b) => a - b);
+  const map = new Map(used.map((v, i) => [v, n0 + i]));
+  const grow = (A, d, f) => { const o = new Float32Array(A.length + used.length * d); o.set(A); used.forEach((v, i) => { for (let k = 0; k < d; k++) o[(n0 + i) * d + k] = f(A[v * d + k], k); }); return o; };
+  raw.pos = grow(raw.pos, 3, (v, k) => (k === 2 ? 2 * zc - v : v));
+  raw.nrm = grow(raw.nrm, 3, (v, k) => (k === 2 ? -v : v));
+  raw.uv = grow(raw.uv, 2, v => v);
+  const out = Uint32Array.from(idx);
+  for (const t of part) { const a = map.get(idx[t * 3]), b = map.get(idx[t * 3 + 1]), c = map.get(idx[t * 3 + 2]); out[t * 3] = a; out[t * 3 + 1] = c; out[t * 3 + 2] = b; }
+  return {idx: out, record: {component, belowY, mirroredTriangles: part.length, mirroredVertices: used.length, aboutZ: r4(zc), reason: 'Meshy put the thong\'s full V panel at the back and a tiny gusset at the front (the reverse of the user reference); mirrored front-to-back so the front panel covers the pubis and the narrow part is the back'}};
+}
+
 /**
  * Cleaning + piece split. cfg: {splitY (garment frame), splitBy: 'component' | 'triangle', junkMaxTris, junkGap, innerGap}
  * Returns {pieces: {top: Uint32Array idx, bottom: Uint32Array idx}, components: [...], dropped: {...}}.
  */
 export function cleanAndSplit(raw, cfg) {
-  const {pos: P, idx: I0} = raw;
+  const {idx: I0} = raw;
+  let P = raw.pos;
   const keep = [];
   let degenerate = 0;
   for (let t = 0; t < I0.length; t += 3) { const a = I0[t], b = I0[t + 1], c = I0[t + 2]; if (a === b || b === c || a === c || triArea(P, a, b, c) < 1e-12) { degenerate++; continue; } keep.push(a, b, c); }
-  const idx = Uint32Array.from(keep);
-  const rep = weld(P);
-  const {label, count} = triangleComponents(idx, rep);
+  let idx = Uint32Array.from(keep);
+  let rep = weld(P);
+  let {label, count} = triangleComponents(idx, rep);
+  let mirrored = null;
+  if (cfg.mirror) {
+    const m = mirrorFrontBack(raw, idx, rep, label, cfg.mirror);
+    idx = m.idx; mirrored = m.record;
+    P = raw.pos; rep = weld(P); ({label, count} = triangleComponents(idx, rep));
+  }
   const comps = Array.from({length: count}, (_, k) => ({k, tris: 0, area: 0, min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity], c: [0, 0, 0]}));
   for (let t = 0; t < idx.length / 3; t++) {
     const C = comps[label[t]], a = idx[t * 3], b = idx[t * 3 + 1], c = idx[t * 3 + 2], A = triArea(P, a, b, c);
@@ -129,7 +170,7 @@ export function cleanAndSplit(raw, cfg) {
     const y = cfg.splitBy === 'triangle' && C.k === 0 ? (P[a * 3 + 1] + P[b * 3 + 1] + P[c * 3 + 1]) / 3 : C.c[1];
     (y > cfg.splitY ? top : bottom).push(a, b, c);
   }
-  return {pieces: {top: Uint32Array.from(top), bottom: Uint32Array.from(bottom)}, degenerate, rep,
+  return {pieces: {top: Uint32Array.from(top), bottom: Uint32Array.from(bottom)}, degenerate, rep, mirrored,
     components: comps.map(C => ({k: C.k, tris: C.tris, piece: C.drop ? null : (cfg.splitBy === 'triangle' && C.k === 0 ? 'split' : C.c[1] > cfg.splitY ? 'top' : 'bottom'), y: [r4(C.min[1]), r4(C.max[1])], x: [r4(C.min[0]), r4(C.max[0])], z: [r4(C.min[2]), r4(C.max[2])], gapToOthers: Number.isFinite(C.gap) ? r4(C.gap) : null, under: C.underFraction != null ? r4(C.underFraction) : null, drop: C.drop ?? null})),
     dropped};
 }

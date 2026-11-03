@@ -7,6 +7,7 @@
 //  - FIT surface = closed skin, torso + leg groups (no head, no arm: straps sit medially on the trapezius, never on the deltoid);
 //  - landmarks measured on the mesh (never assumed): breast apices, inframammary fold, waist, widest hip, crotch, shoulder crest,
 //    torso / leg cross-section profiles (5 mm bins).
+import sharp from 'sharp';
 import {loadRigged, jointWorld, skinMesh} from '../../enemy/lib/siren-glb.mjs';
 import {skinMask, vertexGroups, bodyFacing} from '../../enemy/lib/garment-metrics.mjs';
 import {TriGrid, weldMap, weldedNormals, closestOnTri} from './penetration.mjs';
@@ -32,6 +33,7 @@ export async function loadBody(file) {
   const sk = skinMask(pos, idx);
   const hair = Uint8Array.from(sk.skin, v => 1 - v);
   const relabelled = refineHair(pos, idx, hair);
+  const colourRelabelled = await skinColouredHair(m, pos, hair, J);
   const groups = vertexGroups({pos, joints, weights}, names);
   const {remap} = weldMap(pos);
   // arm-group skin that is NOT on the arm's own cylinder (the front armpit fold, the shoulder slope medial of the deltoid) stays part
@@ -49,8 +51,15 @@ export async function loadBody(file) {
   // surface the cloth sits on; free-hanging hair (the curtain over the back, locks beside the arms) never is
   const closed = new TriGrid(pos, skinIdx, 0.025);
   const fused = new Uint8Array(pos.length / 3);
+  // fused = hair vertices within 6 mm of the closed skin, grown twice through the hair triangles that touch the fused set (a lock's
+  // root merges into the skin over a band of junction triangles, which would otherwise leave a hole in the surface)
   for (let i = 0; i < fused.length; i++) { if (!hair[i] || remap[i] !== i) continue; const c = closed.closest(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], 0.006); if (c) fused[i] = 1; }
   for (let i = 0; i < fused.length; i++) fused[i] = fused[remap[i]];
+  for (let round = 0; round < 2; round++) {
+    const grown = new TriGrid(pos, Uint32Array.from([...skinIdx, ...[...Array(idx.length / 3).keys()].filter(t => [0, 1, 2].every(k => !hair[idx[t * 3 + k]] || fused[idx[t * 3 + k]])).flatMap(t => [idx[t * 3], idx[t * 3 + 1], idx[t * 3 + 2]])]), 0.025);
+    for (let i = 0; i < fused.length; i++) { if (!hair[i] || fused[i] || remap[i] !== i) continue; const c = grown.closest(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2], 0.006); if (c) fused[i] = 1; }
+    for (let i = 0; i < fused.length; i++) fused[i] = fused[remap[i]];
+  }
   const fitTris = [];
   for (let t = 0; t < idx.length; t += 3) {
     const v = [idx[t], idx[t + 1], idx[t + 2]];
@@ -59,11 +68,12 @@ export async function loadBody(file) {
   }
   const fitIdx = Uint32Array.from(fitTris);
   // welded normals over the closed skin + fused hair (the fit surface's own normals at fused locks)
-  const nrm = weldedNormals(pos, Uint32Array.from([...skinIdx, ...fitIdx]), remap);
+  const nrmIdx = Uint32Array.from([...skinIdx, ...fitIdx]);
+  const nrm = weldedNormals(pos, nrmIdx, remap);
   const facing = bodyFacing(pos, hair, J);
   if (facing.forward[2] !== 1) throw new Error(file + ': body does not face +Z');
-  const B = {file, id: ex.id, extras: ex, R, mesh: m, names, J, pos, idx, nrm, joints, weights, hair, groups, remap, skinIdx, fitIdx, legIdx: Uint32Array.from(legTris),
-    nTris: idx.length / 3, geometryHash: ex.geometryHash, skinVertices: sk.skinVertices, hairIslandsRelabelled: relabelled, facing};
+  const B = {file, id: ex.id, extras: ex, R, mesh: m, names, J, pos, idx, nrm, nrmIdx, joints, weights, hair, groups, remap, skinIdx, fitIdx, legIdx: Uint32Array.from(legTris),
+    nTris: idx.length / 3, geometryHash: ex.geometryHash, skinVertices: sk.skinVertices, hairIslandsRelabelled: relabelled, hairColourRelabelled: colourRelabelled, facing};
   B.fitGrid = new TriGrid(pos, fitIdx, 0.025);
   B.skinGrid = closed;
   B.fused = fused;
@@ -71,6 +81,39 @@ export async function loadBody(file) {
   return B;
 }
 
+
+
+/**
+ * Colour check of the geometric hair mask: a hair-labelled vertex whose base colour is the body's own SKIN colour is skin (a hair
+ * lock touching the skin makes the skin around it non-manifold / boundary-adjacent; Revenant's locks beside the breasts). Skin
+ * colour = median of the belly (torso skin between the hip joint + 10 cm and the chest joint, facing forward); a vertex is skin
+ * coloured when its chromaticity is within max(0.02, 3 x the belly's median absolute deviation) and its brightness 0.45-1.8 x. Display-independent: the
+ * texture is decoded only to read vertex colours.
+ */
+async function skinColouredHair(m, pos, hair, J) {
+  const img = m.material?.getBaseColorTexture()?.getImage();
+  if (!img || !m.uv) return 0;
+  const {data, info} = await sharp(Buffer.from(img)).removeAlpha().raw().toBuffer({resolveWithObject: true});
+  const W = info.width, H = info.height;
+  const col = i => { const u = m.uv[i * 2] - Math.floor(m.uv[i * 2]), v = m.uv[i * 2 + 1] - Math.floor(m.uv[i * 2 + 1]); const x = Math.min(W - 1, Math.floor(u * W)), y = Math.min(H - 1, Math.floor(v * H)); const o = (y * W + x) * 3; return [data[o], data[o + 1], data[o + 2]]; };
+  const belly = [];
+  for (let i = 0; i < pos.length / 3; i++) { const y = pos[i * 3 + 1]; if (hair[i] || y < J.Hips[1] + 0.1 || y > J.Chest[1] || Math.abs(pos[i * 3]) > 0.08 || pos[i * 3 + 2] < J.Chest[2]) continue; belly.push(col(i)); }
+  if (belly.length < 20) return 0;
+  // chromaticity (baked light / shadow changes brightness, not hue) + a broad brightness band (black hair is far darker)
+  const chroma = c => { const s = c[0] + c[1] + c[2] + 1e-6; return [c[0] / s, c[1] / s, s / 3]; };
+  const cb = belly.map(chroma);
+  const med = [0, 1, 2].map(k => { const a = cb.map(c => c[k]).sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; });
+  const dist = c => Math.hypot(c[0] - med[0], c[1] - med[1]);
+  const mad = cb.map(dist).sort((x, y) => x - y)[Math.floor(cb.length / 2)];
+  const tol = Math.max(0.02, 3 * mad);
+  let n = 0;
+  for (let i = 0; i < pos.length / 3; i++) {
+    if (!hair[i] || pos[i * 3 + 1] > J.Neck[1]) continue;
+    const c = chroma(col(i));
+    if (dist(c) < tol && c[2] > 0.45 * med[2] && c[2] < 1.8 * med[2]) { hair[i] = 0; n++; }
+  }
+  return n;
+}
 
 /**
  * Hair mask refinement. The geometric test (open sheets) misses hair strands lying close over the skin (Gaze / Revenant: locks over
@@ -147,20 +190,26 @@ export function measureLandmarks(B) {
   const fitV = new Uint8Array(P.length / 3);
   for (const v of B.fitIdx) fitV[v] = 1;
   const n = P.length / 3;
-  // breast apices: per side, the centroid of the most forward 8 mm cap of the fit surface in the bust band (forward-facing skin), then
-  // made symmetric (mean height / |x| / depth of both sides): one asymmetric vertex never moves a cup
+  // breast apices: the front profile z(x, y) of the fit surface (rays along -Z, 5 mm grid over the bust band) and its vertical
+  // prominence p = z(y) - (z(y + 5 cm) + z(y - 6 cm)) / 2: the breast mound stands out of the profile even where the belly / rib
+  // cage reaches as far forward (Apparition); per side the centroid of the cells within 3 mm of the best prominence (2 cm around
+  // it); the score adds the forwardness z itself (the nipple is both the most prominent and the most forward point of the mound),
+  // then made symmetric
   const rawApex = {};
+  const zf = (x, y) => { const h = B.fitGrid.ray(x, y, 0.6, 0, 0, -1, 1.2); return h ? 0.6 - h.t : null; };
   for (const [side, s] of [['L', 1], ['R', -1]]) {
-    const ids = [];
-    let zMax = -Infinity;
-    for (let i = 0; i < n; i++) {
-      if (!fitV[i] || B.nrm[i * 3 + 2] < 0.3) continue;
-      const x = P[i * 3] * s, y = P[i * 3 + 1];
-      if (x < 0.025 || x > 0.17 || y < J.Chest[1] - 0.14 || y > J.Neck[1] - 0.05) continue;
-      ids.push(i); zMax = Math.max(zMax, P[i * 3 + 2]);
+    const cells = [];
+    // the front of the chest only: medial of the arm (|x| <= 11 cm), every sample on the front half and the profile continuous
+    const zc = J.Chest[2];
+    for (let x = 0.025; x <= 0.11 + 1e-9; x += 0.005) for (let y = J.Chest[1] - 0.16; y <= J.Neck[1] - 0.06 + 1e-9; y += 0.005) {
+      const z = zf(s * x, y), za = zf(s * x, y + 0.05), zb = zf(s * x, y - 0.06);
+      if (z == null || za == null || zb == null || za < zc || zb < zc || Math.abs(z - za) > 0.06 || Math.abs(z - zb) > 0.06) continue;
+      cells.push([s * x, y, z, z - (za + zb) / 2 + z]); // score: prominence + forwardness
     }
-    const cap = ids.filter(i => P[i * 3 + 2] > zMax - 0.008);
-    rawApex[side] = [0, 1, 2].map(k => cap.reduce((a, i) => a + P[i * 3 + k], 0) / cap.length);
+    const best = cells.reduce((a, c) => (c[3] > a[3] ? c : a));
+    const cap = cells.filter(c => c[3] > best[3] - 0.003 && Math.hypot(c[0] - best[0], c[1] - best[1]) < 0.02);
+    rawApex[side] = [0, 1, 2].map(k => cap.reduce((a, c) => a + c[k], 0) / cap.length);
+    rawApex[side].prominence = best[3];
   }
   const mx = (Math.abs(rawApex.L[0]) + Math.abs(rawApex.R[0])) / 2, my = (rawApex.L[1] + rawApex.R[1]) / 2, mz = (rawApex.L[2] + rawApex.R[2]) / 2;
   const apex = {L: [mx, my, mz], R: [-mx, my, mz]};
@@ -214,7 +263,7 @@ export function measureLandmarks(B) {
     for (const z of [J.Neck[2] - 0.01, J.Neck[2], J.Neck[2] + 0.01, J.Neck[2] + 0.02]) { const h = B.fitGrid.ray(s * strapX, J.Neck[1] + 0.3, z, 0, -1, 0, 0.5); if (h) { const y = J.Neck[1] + 0.3 - h.t; if (!top || y > top[1]) top = [s * strapX, y, z]; } }
     crest[side] = top;
   }
-  return {apex, rawApex: {L: rawApex.L.map(r4), R: rawApex.R.map(r4)}, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
+  return {apex, rawApex: {L: rawApex.L.map(r4), R: rawApex.R.map(r4), prominenceMM: [r4(rawApex.L.prominence * 1000), r4(rawApex.R.prominence * 1000)]}, apexX: r4(apexX), apexY: r4(apexY), apexZ: r4(apexZ), crotch: crotch.map(r4), foldY: r4(fold[0]), waistY: r4(waist.y), waistHalfWidth: r4(waist.w / 2), hipY: r4(hip.y), hipHalfWidth: r4(hip.w / 2),
     strapX: r4(strapX), crest, profile: {Y0, YS, NY, at, bins: prof}};
 }
 

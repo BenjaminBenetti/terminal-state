@@ -6,4 +6,155 @@ export interface LingerieBuildSet {
   top: string; bottom: string; topLabel: string; bottomLabel: string; bodies: readonly string[];
   display: {top: string; bottom: string; fittedOn: string; setSizeM: readonly number[] | null};
 }
-export const LINGERIE_BUILD: readonly LingerieBuildSet[] = [];
+export const LINGERIE_BUILD: readonly LingerieBuildSet[] = [
+  {
+    id: 'lingerie-green',
+    design: 'green',
+    label: 'Emerald lace longline bra + high-waist brief',
+    model: 'outfit_lingerie_green',
+    url: 'assets/models/outfit-lingerie-green.glb',
+    bytes: 265284,
+    top: 'lingerie-green-top',
+    bottom: 'lingerie-green-bottom',
+    topLabel: 'longline underwire lace bra',
+    bottomLabel: 'high-waist lace brief',
+    bodies: [
+      'paleApparition'
+    ],
+    display: {
+      top: 'LingerieDisplay_green_top',
+      bottom: 'LingerieDisplay_green_bottom',
+      fittedOn: 'paleApparition',
+      setSizeM: [
+        0.3358,
+        0.658,
+        0.2466
+      ]
+    }
+  },
+  {
+    id: 'lingerie-purple',
+    design: 'purple',
+    label: 'Plum lace strapless bustier with suspenders + brief',
+    model: 'outfit_lingerie_purple',
+    url: 'assets/models/outfit-lingerie-purple.glb',
+    bytes: 251088,
+    top: 'lingerie-purple-top',
+    bottom: 'lingerie-purple-bottom',
+    topLabel: 'strapless lace bustier (front lacing, boning)',
+    bottomLabel: 'lace brief + four suspender straps',
+    bodies: [
+      'paleGaze'
+    ],
+    display: {
+      top: 'LingerieDisplay_purple_top',
+      bottom: 'LingerieDisplay_purple_bottom',
+      fittedOn: 'paleGaze',
+      setSizeM: [
+        0.295,
+        0.5171,
+        0.2317
+      ]
+    }
+  },
+  {
+    id: 'lingerie-blush',
+    design: 'blush',
+    label: 'Blush lace plunge bodysuit',
+    model: 'outfit_lingerie_blush',
+    url: 'assets/models/outfit-lingerie-blush.glb',
+    bytes: 215676,
+    top: 'lingerie-blush-top',
+    bottom: 'lingerie-blush-bottom',
+    topLabel: 'plunge bodysuit, upper half (cups, straps)',
+    bottomLabel: 'plunge bodysuit, lower half (waist to crotch)',
+    bodies: [
+      'paleApparition'
+    ],
+    display: {
+      top: 'LingerieDisplay_blush_top',
+      bottom: 'LingerieDisplay_blush_bottom',
+      fittedOn: 'paleApparition',
+      setSizeM: [
+        0.3041,
+        0.6331,
+        0.2432
+      ]
+    }
+  },
+  {
+    id: 'lingerie-black',
+    design: 'black',
+    label: 'Black lace balconette bra + brief',
+    model: 'outfit_lingerie_black',
+    url: 'assets/models/outfit-lingerie-black.glb',
+    bytes: 321964,
+    top: 'lingerie-black-top',
+    bottom: 'lingerie-black-bottom',
+    topLabel: 'balconette underwire lace bra',
+    bottomLabel: 'lace brief',
+    bodies: [
+      'paleRevenant'
+    ],
+    display: {
+      top: 'LingerieDisplay_black_top',
+      bottom: 'LingerieDisplay_black_bottom',
+      fittedOn: 'paleRevenant',
+      setSizeM: [
+        0.3407,
+        0.7092,
+        0.2523
+      ]
+    }
+  },
+  {
+    id: 'lingerie-red',
+    design: 'red',
+    label: 'Crimson lace plunge bra + garter belt + thong',
+    model: 'outfit_lingerie_red',
+    url: 'assets/models/outfit-lingerie-red.glb',
+    bytes: 355572,
+    top: 'lingerie-red-top',
+    bottom: 'lingerie-red-bottom',
+    topLabel: 'plunge lace bra',
+    bottomLabel: 'lace garter belt with suspender straps + thong',
+    bodies: [
+      'paleGaze'
+    ],
+    display: {
+      top: 'LingerieDisplay_red_top',
+      bottom: 'LingerieDisplay_red_bottom',
+      fittedOn: 'paleGaze',
+      setSizeM: [
+        0.335,
+        0.6639,
+        0.2554
+      ]
+    }
+  },
+  {
+    id: 'lingerie-ivory',
+    design: 'ivory',
+    label: 'Ivory lace bralette + garter belt + thong + thigh rings',
+    model: 'outfit_lingerie_ivory',
+    url: 'assets/models/outfit-lingerie-ivory.glb',
+    bytes: 190196,
+    top: 'lingerie-ivory-top',
+    bottom: 'lingerie-ivory-bottom',
+    topLabel: 'lace bralette',
+    bottomLabel: 'lace garter belt + thong + suspender straps + thigh-ring straps',
+    bodies: [
+      'paleRevenant'
+    ],
+    display: {
+      top: 'LingerieDisplay_ivory_top',
+      bottom: 'LingerieDisplay_ivory_bottom',
+      fittedOn: 'paleRevenant',
+      setSizeM: [
+        0.3352,
+        0.661,
+        0.2469
+      ]
+    }
+  }
+];
