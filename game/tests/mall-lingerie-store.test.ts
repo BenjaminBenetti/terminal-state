@@ -1,11 +1,13 @@
-// Task mall-lingerie-20261102 (lane STORE): the lingerie boutique — a LARGE-unit-only side program (a chance per mall, never guaranteed,
-// never moving another shop's assignment), its walk-in changing area (>= 4 curtained booths along a 1.5 m aisle, entered through a 1.5 m
-// opening; MallShop.changing rects for lane CONTEXT), its themed loot purposes, its fixtures' audits and the display-set seam to lane FIT.
+// Task mall-lingerie-20261102 / store-polish-20261103 (lane STORE): the lingerie boutique — a LARGE-unit-only side program (a chance per
+// mall, never guaranteed, never moving another shop's assignment), its changing SUITE carved into the shop with real walls and framed
+// doorways (3-4 private rooms off a corridor; MallShop.changing rects for lane CONTEXT), a clothing-store sales floor (rails / round racks /
+// clothing bays hung with lingerie, dressed female mannequins — no bare display mannequins, no box forms), its themed loot purposes, its
+// fixtures' audits and the display / hanging-stock seam to lane FIT.
 // Generated malls: a small fixed sample of real levels (natural + forced on large units) + the synthetic lot-family storey for the
 // assignment-level properties over many seeds.
 import {describe, expect, it} from 'vitest';
 import {Rng} from '../src/core/rng';
-import {CELL, FLOOR, PathFinder} from '../src/gen/grid';
+import {CELL, FLOOR, SOLID, PathFinder} from '../src/gen/grid';
 import {levelsOf} from '../src/gen/levels';
 import {PROP_DEFS} from '../src/gen/props';
 import {purposeById} from '../src/gen/purposes';
@@ -13,11 +15,11 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import type {MallProgram, MallShop} from '../src/gen/mall/mallTypes';
 import {MALL_ALWAYS, MALL_ASSIGN_STATS, MALL_PROGRAMS, MALL_ROTATION, SIDE_PROGRAMS, assignMallPrograms, shopFit} from '../src/gen/mall/shops';
 import {MALL_LOTS, MALL_LOT_IDS, lotSuits, lotsForProgram} from '../src/gen/mall/lots';
-import {LINGERIE_SET_KINDS, LINGERIE_SET_Y0, MALL_OPEN_AUDIT, MALL_PHYS, MALL_RIDER_KINDS} from '../src/gen/mall/kinds';
-import {CHANGING, LINGERIE_DESIGNS, LINGERIE_DISPLAY_SOURCE, lingerieDisplayModelKeys} from '../src/gen/mall/lingerieStore';
-import {LINGERIE_DISPLAYS} from '../src/ai/lingerie';
+import {GARMENT_RAIL_Y, LINGERIE_RACK, LINGERIE_SET_KINDS, LINGERIE_SET_Y0, MALL_OPEN_AUDIT, MALL_PHYS, MALL_RIDER_KINDS} from '../src/gen/mall/kinds';
+import {CHANGING_SUITE, LINGERIE_DESIGNS, LINGERIE_DISPLAY_SOURCE, lingerieDisplayModelKeys, rackCode, rackStock, suiteCols, suiteRows} from '../src/gen/mall/lingerieStore';
+import {LINGERIE_MODEL_FILES} from '../src/ai/lingerie';
 import {dressMallShops} from '../src/gen/mall/shopsDress';
-import {generateMallLevel} from '../src/gen/mall/index';
+import {generateMallLevel, mallIssues} from '../src/gen/mall/index';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {ridesHost} from '../src/damage/materials';
@@ -26,8 +28,11 @@ import {mallLotsFixture} from './helpers/mallShopsFixture';
 
 const LARGE = ['standard-line', 'end-unit'] as const;
 const SMALL = ['kiosk-cell', 'food-counter', 'compact-square', 'narrow-boutique', 'recessed-arcade'] as const;
-const NEW_KINDS = ['fittingPartition', 'fittingBackPanel', 'fittingBench', 'fittingMirror', 'fittingCurtain', 'lingerieBust', ...Object.values(LINGERIE_SET_KINDS)] as const;
-const BOOTH_KINDS = ['fittingPartition', 'fittingBackPanel', 'fittingBench', 'fittingMirror', 'fittingCurtain'] as const;
+const NEW_KINDS = ['fittingBench', 'fittingMirror', ...Object.values(LINGERIE_SET_KINDS), 'lingerieRackRow', 'lingerieRackRing'] as const;
+/** Kinds the polish deleted (the free-standing booth boxes and the box display form) — never in any layout. */
+const GONE = ['fittingPartition', 'fittingBackPanel', 'fittingCurtain', 'lingerieBust'];
+const SET_KINDS = Object.values(LINGERIE_SET_KINDS) as string[];
+const STOCK = (k: string) => SET_KINDS.includes(k) || k === 'lingerieRackRow' || k === 'lingerieRackRing';
 
 // Real malls: seeds whose natural assignment has the boutique (lanes/STORE.done sample) + seeds without it.
 const WITH = [1000, 8919, 24757, 32676];
@@ -57,8 +62,9 @@ describe('catalogue: lingerie is a LARGE-unit side program, never guaranteed', (
     for (const id of ['anchor-deep', 'wide-showroom', 'corner-double'] as const) expect(lotSuits(id, 'lingerie'), id).toBe(false);
     for (const id of LARGE) expect(MALL_LOTS[id].programs.at(-1), `${id}: appended last (no other program's typicality moved)`).toBe('lingerie');
     // the min size guarantees the changing area along the back wall: 4 booths + the opening along the wall, 3.5 m deep + >= 5 m in front
-    expect(d.min.width).toBeGreaterThanOrEqual((CHANGING.pitch * CHANGING.minBooths + 1 + CHANGING.entryCols) * CELL);
-    expect(d.min.depth).toBeGreaterThanOrEqual(3.5 + 5);
+    // the min size takes the changing suite along the back wall: 3 rooms + the passage along the wall, its depth + >= 4.5 m in front
+    expect(d.min.width).toBeGreaterThanOrEqual(suiteCols(CHANGING_SUITE.rooms) * CELL);
+    expect(d.min.depth).toBeGreaterThanOrEqual(suiteRows(CHANGING_SUITE.corridorRowsShallow) * CELL + 4.5);
     for (const id of LARGE) expect(MALL_LOTS[id].width[0] * MALL_LOTS[id].depth[0], id).toBeGreaterThanOrEqual(d.min.area);
     // the always / rotating catalogue is untouched
     expect(MALL_ALWAYS).toEqual(['guns', 'clothing', 'womenswear', 'pharmacy', 'cafe']);
@@ -118,16 +124,16 @@ function rectCells(L: StationLayout, s: MallShop, r: {x0: number; z0: number; x1
   return out;
 }
 
-function checkChanging(L: StationLayout, s: MallShop, tag: string): void {
-  const a = L.areas[s.area], lv = a.level ?? 0, g = L.levels[lv].grid;
-  expect(s.changing, `${tag}: changing area recorded`).toBeDefined();
-  const rects = s.changing!, booths = rects.slice(0, -1), aisle = rects[rects.length - 1];
-  expect(booths.length, `${tag}: booths`).toBeGreaterThanOrEqual(CHANGING.minBooths);
-  expect(booths.length).toBeLessThanOrEqual(CHANGING.maxBooths);
-  // aisle >= 1.2 m clear across, a booth 1.0 m (nav) x 1.5 m of free floor
-  expect(Math.min(aisle.x1 - aisle.x0, aisle.z1 - aisle.z0), `${tag}: aisle width`).toBeGreaterThanOrEqual(1.2);
-  for (const b of booths) expect([Math.min(b.x1 - b.x0, b.z1 - b.z0), Math.max(b.x1 - b.x0, b.z1 - b.z0)]).toEqual([1.0, 1.5]);
-  // inside the shop's sales floor, every cell walkable (nothing else landed in the changing area)
+function checkSuite(L: StationLayout, s: MallShop, tag: string): void {
+  const a = L.areas[s.area], lv = a.level ?? 0, g = L.levels[lv].grid, base = a.floorY ?? L.levels[lv].baseY;
+  expect(s.changing, `${tag}: changing suite recorded`).toBeDefined();
+  const rects = s.changing!, rooms = rects.slice(0, -1), corridor = rects[rects.length - 1];
+  expect(rooms.length, `${tag}: rooms`).toBeGreaterThanOrEqual(3);
+  expect(rooms.length).toBeLessThanOrEqual(4);
+  // a room's free floor 1.5 x 1.5 m (in front of its bench), the corridor >= 1.0 m clear
+  for (const r of rooms) expect([r.x1 - r.x0, r.z1 - r.z0]).toEqual([1.5, 1.5]);
+  expect(Math.min(corridor.x1 - corridor.x0, corridor.z1 - corridor.z0), `${tag}: corridor width`).toBeGreaterThanOrEqual(1.0);
+  // inside the shop, every rect cell walkable floor of the sales area (nothing else landed in the suite)
   const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
   for (const r of rects) {
     expect(r.x0 >= ax0 - 1e-6 && r.z0 >= az0 - 1e-6 && r.x1 <= ax1 + 1e-6 && r.z1 <= az1 + 1e-6, `${tag}: rect inside the shop`).toBe(true);
@@ -137,71 +143,69 @@ function checkChanging(L: StationLayout, s: MallShop, tag: string): void {
       expect(g.blocked[i], `${tag}: walkable`).toBe(0);
     }
   }
-  // booths are SEPARATE: a booth's free cells touch no other booth's (a partition between them), each opens onto the aisle
-  const cellsOf = booths.map(b => new Set(rectCells(L, s, b)));
-  const aisleCells = new Set(rectCells(L, s, aisle));
-  for (let k = 0; k < cellsOf.length; k++) {
-    let opens = 0;
-    for (const i of cellsOf[k]) for (const n of [i - 1, i + 1, i - g.w, i + g.w]) {
-      for (let j = 0; j < cellsOf.length; j++) if (j !== k) expect(cellsOf[j].has(n), `${tag}: booth ${k} touches booth ${j}`).toBe(false);
-      if (aisleCells.has(n)) opens++;
+  // REAL ROOMS: each room's free floor is enclosed by SOLID wall cells, its own bench and ONE 2-cell doorway (a framed door record with
+  // its lowered lintel ceiling) onto the corridor; no two rooms touch
+  const roomCells = rooms.map(r => new Set(rectCells(L, s, r))), corridorCells = new Set(rectCells(L, s, corridor));
+  const suiteDoors = L.doors.filter(d => d.a === s.area && d.b === s.area);
+  expect(suiteDoors.length, `${tag}: room doorways + the suite doorway`).toBe(rooms.length + 1);
+  const doorCells = new Set<number>();
+  for (const d of suiteDoors) {
+    expect(d.w === 1 || d.h === 1).toBe(true);
+    for (let y = d.y; y < d.y + d.h; y++) for (let x = d.x; x < d.x + d.w; x++) {
+      const i = g.idx(x, y);
+      doorCells.add(i);
+      expect(g.cells[i]).toBe(FLOOR);
+      expect(g.ceil[i], `${tag}: doorway lintel`).toBeCloseTo(base + d.height, 3);
+      expect(d.height).toBeGreaterThanOrEqual(2.0);
     }
-    expect(opens, `${tag}: booth ${k} opening cells`).toBeGreaterThanOrEqual(1);
-    expect(opens, `${tag}: booth ${k} opening <= 4 cells`).toBeLessThanOrEqual(4);
   }
-  // the fixtures: n + 1 partitions, a back panel / bench / mirror / curtain per booth, all static
+  let walls = 0;
+  roomCells.forEach((cells, k) => {
+    const out = new Set<number>();
+    for (const i of cells) for (const n of [i - 1, i + 1, i - g.w, i + g.w]) {
+      if (cells.has(n)) continue;
+      for (let j = 0; j < roomCells.length; j++) if (j !== k) expect(roomCells[j].has(n), `${tag}: room ${k} touches room ${j}`).toBe(false);
+      if (g.cells[n] === SOLID) { walls++; continue; }
+      if (g.blocked[n]) { expect(L.props.some(p => p.kind === 'fittingBench' && Math.abs(p.x - g.center(n % g.w, Math.floor(n / g.w))[0]) < 1 && Math.abs(p.z - g.center(n % g.w, Math.floor(n / g.w))[1]) < 1)).toBe(true); continue; }
+      out.add(n);
+    }
+    expect(out.size, `${tag}: room ${k} has one 2-cell doorway`).toBe(CHANGING_SUITE.roomDoor);
+    for (const n of out) {
+      expect(doorCells.has(n), `${tag}: room ${k} opening is a framed doorway`).toBe(true);
+      const nx = n % g.w, ny = Math.floor(n / g.w);
+      expect([n - 1, n + 1, n - g.w, n + g.w].some(q => corridorCells.has(q)), `${tag}: room ${k} doorway opens onto the corridor (${nx},${ny})`).toBe(true);
+    }
+  });
+  expect(walls, `${tag}: rooms walled`).toBeGreaterThan(rooms.length * 6);
+  // furniture: a built-in bench and a mirror per room; the deleted booth boxes / box forms nowhere
   const mine = L.props.filter(p => p.area === s.area);
-  const n = booths.length;
-  expect(mine.filter(p => p.kind === 'fittingPartition').length).toBe(n + 1);
-  for (const k of ['fittingBackPanel', 'fittingBench', 'fittingCurtain'] as const) expect(mine.filter(p => p.kind === k).length, `${tag}: ${k}`).toBe(n);
-  // a mirror inside every booth (on its partition face); the sales floor may hang more full-length mirrors on its walls
-  const booth = (p: {x: number; z: number}, b: {x0: number; z0: number; x1: number; z1: number}) => p.x > b.x0 - 0.3 && p.x < b.x1 + 0.3 && p.z > b.z0 - 0.3 && p.z < b.z1 + 0.3;
-  for (const b of booths) expect(mine.filter(p => p.kind === 'fittingMirror' && booth(p, b)).length, `${tag}: booth mirror`).toBeGreaterThanOrEqual(1);
-  // each curtain hangs gathered beside a partition and its rail (local +x) runs across ITS booth's opening
-  for (const c of mine.filter(p => p.kind === 'fittingCurtain')) {
-    const [dx, dz] = [Math.cos(c.rot), -Math.sin(c.rot)];
-    const mid = {x: c.x + dx * 0.7, z: c.z + dz * 0.7};
-    expect(booths.some(b => mid.x > b.x0 && mid.x < b.x1 && mid.z > b.z0 && mid.z < b.z1), `${tag}: curtain rail across a booth opening`).toBe(true);
-  }
-  for (const p of mine.filter(p => (BOOTH_KINDS as readonly string[]).includes(p.kind))) {
-    expect(dynamicKind(p.kind)).toBe(false);
-    expect(p.y).toBeCloseTo(a.floorY ?? 0, 3);
-    expect(p.h).toBeCloseTo(PROP_DEFS[p.kind].h, 6);
-  }
-  // reachable for the player and the enemy nav: from the opening (sales-floor side) to every booth and along the aisle
+  expect(mine.filter(p => p.kind === 'fittingBench').length).toBe(rooms.length);
+  expect(mine.filter(p => p.kind === 'fittingMirror').length).toBeGreaterThanOrEqual(rooms.length);
+  for (const p of L.props) expect(GONE, `${tag}: deleted kind ${p.kind}`).not.toContain(p.kind);
+  // the layout validates (no retry caused by the suite: lights stay out of the carved walls, doorways clear)
+  expect(mallIssues(L), `${tag}: mall issues`).toEqual([]);
+  // reachable for the player and the enemy nav: from the suite doorway into every room and down the corridor
+  const pf = new PathFinder(levelsOf(L));
   const [ex, ez] = [s.changingEntry!.x, s.changingEntry!.z];
-  const [ecx, ecy] = g.cellOf(ex, ez);
-  expect(g.walkable(ecx, ecy) || g.walkable(...g.cellOf(ex, ez + CELL / 2)) || g.walkable(...g.cellOf(ex, ez - CELL / 2)) || g.walkable(...g.cellOf(ex + CELL / 2, ez))
-    || g.walkable(...g.cellOf(ex - CELL / 2, ez)), `${tag}: opening walkable`).toBe(true);
-  const seen = new Uint8Array(g.w * g.h), stack: number[] = [];
-  for (let i = 0; i < g.w * g.h; i++) if (g.area[i] === s.area && g.cells[i] === FLOOR && !g.blocked[i]) { stack.push(i); seen[i] = 1; break; }
-  while (stack.length) {
-    const c = stack.pop()!;
-    for (const n2 of [c - 1, c + 1, c - g.w, c + g.w]) if (!seen[n2] && g.area[n2] === s.area && g.cells[n2] === FLOOR && !g.blocked[n2]) { seen[n2] = 1; stack.push(n2); }
-  }
-  for (const r of rects) for (const i of rectCells(L, s, r)) expect(seen[i], `${tag}: changing cell connected to the sales floor`).toBe(1);
-  const pf = new PathFinder(levelsOf(L)), fy = a.floorY ?? L.levels[lv].baseY;
-  // an enemy route (radius 0.34 like the mall AI tests) from the sales floor in front of the opening into every booth and down the aisle
-  const [sx, sz] = [ex, ez];
-  for (const t of [...booths, aisle]) {
-    const path = pf.find(sx, sz, (t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2, 0.34, 60000, {ay: fy + 0.05, by: fy + 0.05});
-    expect(path, `${tag}: enemy path from the opening into ${t === aisle ? 'the aisle' : 'a booth'}`).not.toBeNull();
+  for (const t of [...rooms, corridor]) {
+    const path = pf.find(ex, ez, (t.x0 + t.x1) / 2, (t.z0 + t.z1) / 2, 0.34, 60000, {ay: base + 0.05, by: base + 0.05});
+    expect(path, `${tag}: enemy path from the suite doorway into ${t === corridor ? 'the corridor' : 'a room'}`).not.toBeNull();
   }
   // at the back of the store: every changing cell >= 4 m deep from the shopfront line
   const f = s.frontage, along = f.side === 'N' || f.side === 'S', line = along ? (f.z0 + f.z1) / 2 : (f.x0 + f.x1) / 2;
   for (const r of rects) expect(Math.min(Math.abs((along ? r.z0 : r.x0) - line), Math.abs((along ? r.z1 : r.x1) - line)), `${tag}: off the shopfront`).toBeGreaterThanOrEqual(4 - 1e-6);
 }
 
-describe('the walk-in changing area (generated malls)', () => {
-  it('natural boutiques: >= 4 separate curtained booths along a >= 1.2 m aisle, walkable / connected, rects inside the shop', () => {
+describe('the changing SUITE (generated malls): real rooms with walls and doorways', () => {
+  it('natural boutiques: 3-4 walled rooms with framed doorways off a corridor, walkable / connected, validated, rects inside the shop', () => {
     for (const seed of WITH) {
       const L = mall(seed), ls = lingerieShops(L);
       expect(ls.length, `seed ${seed}`).toBe(1);
-      checkChanging(L, ls[0], `seed ${seed} ${ls[0].id}`);
+      checkSuite(L, ls[0], `seed ${seed} ${ls[0].id}`);
     }
   });
 
-  it('forced on standard-line / end units of other malls: the changing area always fits (the min size guarantee)', () => {
+  it('forced on standard-line / end units of other malls: the suite always fits (the min size guarantee)', () => {
     let n = 0;
     for (const seed of [40595, 111866]) {
       const base = mall(seed);
@@ -209,83 +213,108 @@ describe('the walk-in changing area (generated malls)', () => {
         const L = mall(seed, {[s.id]: 'lingerie'});
         const sh = L.mall!.shops.find(q => q.id === s.id)!;
         expect(sh.program).toBe('lingerie');
-        checkChanging(L, sh, `seed ${seed} forced ${s.id} (${s.lot} ${s.width} x ${s.depth})`);
+        checkSuite(L, sh, `seed ${seed} forced ${s.id} (${s.lot} ${s.width} x ${s.depth})`);
         n++;
       }
     }
     expect(n).toBeGreaterThanOrEqual(3);
   });
 
-  it('a coherent boutique: themed purposes, window / floor display forms dressed in the six sets, till, drawer chests, mirrors; sets only there', () => {
+  it('a clothing-store sales floor: rails / round racks / clothing bays hung with lingerie, every mannequin dressed, till, drawers; stock only there', () => {
     for (const seed of WITH) {
       const L = mall(seed), s = lingerieShops(L)[0], mine = L.props.filter(p => p.area === s.area);
       expect(L.areas[s.area].purpose).toBe('mall-lingerie');
       if (s.backroom !== undefined) expect(L.areas[s.backroom].purpose).toBe('mall-lingerie-back');
       expect(L.areas[s.area].label.startsWith(s.brand)).toBe(true);
       expect(MALL_PROGRAMS.lingerie.brands).toContain(s.brand);
-      const busts = mine.filter(p => p.kind === 'lingerieBust');
-      expect(busts.length, `seed ${seed} display forms`).toBeGreaterThanOrEqual(3);
-      const sets = mine.filter(p => (Object.values(LINGERIE_SET_KINDS) as string[]).includes(p.kind));
-      expect(sets.length).toBe(busts.length);
+      // every female mannequin of the boutique wears a set (no bare display mannequins), a set rides exactly one mannequin
+      const mannequins = mine.filter(p => p.kind === 'mannequinFemale');
+      expect(mannequins.length, `seed ${seed} mannequins`).toBeGreaterThanOrEqual(2);
+      const sets = mine.filter(p => SET_KINDS.includes(p.kind));
+      for (const m of mannequins) expect(sets.filter(p => L.props[p.host!] === m).length, `seed ${seed} mannequin dressed`).toBe(1);
       for (const p of sets) {
         const host = L.props[p.host!];
-        expect(host.kind).toBe('lingerieBust');
+        expect(host.kind).toBe('mannequinFemale');
         expect(p.y).toBeCloseTo(host.y + LINGERIE_SET_Y0, 6);
         expect([p.x, p.z, p.rot]).toEqual([host.x, host.z, host.rot]);
       }
       expect(new Set(sets.map(p => p.kind)).size, `seed ${seed} designs shown`).toBeGreaterThanOrEqual(Math.min(3, sets.length));
+      // hanging stock: on rails / round racks / clothing bays, its top on the host's rail, the hem clear of the floor
+      const stock = mine.filter(p => p.kind === 'lingerieRackRow' || p.kind === 'lingerieRackRing');
+      expect(stock.length, `seed ${seed} hung rails`).toBeGreaterThanOrEqual(1);
+      for (const p of stock) {
+        const host = L.props[p.host!];
+        expect(p.kind === 'lingerieRackRing' ? ['garmentRailRound'] : ['garmentRail', 'clothingWallUnit']).toContain(host.kind);
+        const rail = GARMENT_RAIL_Y[host.kind as keyof typeof GARMENT_RAIL_Y]!;
+        expect(p.y + p.h).toBeCloseTo(host.y + rail, 6);
+        expect(p.y - host.y, `seed ${seed} hem clearance`).toBeGreaterThanOrEqual(0.15);
+        expect([p.x, p.z, p.rot]).toEqual([host.x, host.z, host.rot]);
+        const st = rackStock(p.variant);
+        expect(LINGERIE_DESIGNS).toContain(st.a);
+        expect(LINGERIE_DESIGNS).toContain(st.b);
+      }
+      expect(mine.filter(p => p.kind === 'garmentRail' || p.kind === 'garmentRailRound' || p.kind === 'clothingWallUnit').length, `seed ${seed} racks`).toBeGreaterThanOrEqual(2);
       expect(mine.some(p => p.kind === 'shopCounter'), `seed ${seed} till`).toBe(true);
-      expect(mine.filter(p => p.kind === 'dresserDrawers').length, `seed ${seed} drawer chests`).toBeGreaterThanOrEqual(1);
-      expect(mine.filter(p => p.kind === 'fittingMirror').length).toBeGreaterThan(s.changing!.length - 1);
+      // no M06 / women's garment groups in the boutique: its racks carry lingerie
+      for (const p of mine) expect(['garmentHangingGroup', 'womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup']).not.toContain(p.kind);
+      // a clear way from the entry to the suite doorway: the walk is short (no maze)
+      const a = L.areas[s.area], g = L.levels[a.level ?? 0].grid, base = a.floorY ?? 0;
+      const f = s.frontage, fx = (f.x0 + f.x1) / 2, fz = (f.z0 + f.z1) / 2;
+      const inX = f.side === 'E' ? -1.5 : f.side === 'W' ? 1.5 : 0, inZ = f.side === 'S' ? -1.5 : f.side === 'N' ? 1.5 : 0;
+      const sx = fx + inX, sz = fz + inZ;
+      void g;
+      const path = new PathFinder(levelsOf(L)).find(sx, sz, s.changingEntry!.x, s.changingEntry!.z, 0.34, 60000, {ay: base + 0.05, by: base + 0.05});
+      expect(path, `seed ${seed} entry -> suite`).not.toBeNull();
+      let len = 0;
+      for (let k = 1; k < path!.length; k++) len += Math.hypot(path![k][0] - path![k - 1][0], path![k][1] - path![k - 1][1]);
+      expect(len, `seed ${seed} entry -> suite walk`).toBeLessThanOrEqual(Math.abs(sx - s.changingEntry!.x) + Math.abs(sz - s.changingEntry!.z) + 2);
       // the display stock stays in the boutique
-      for (const p of L.props) if (p.kind === 'lingerieBust' || (Object.values(LINGERIE_SET_KINDS) as string[]).includes(p.kind)) expect(L.areas[p.area].purpose).toBe('mall-lingerie');
+      for (const p of L.props) if (STOCK(p.kind)) expect(L.areas[p.area].purpose).toBe('mall-lingerie');
     }
   });
 });
 
-describe('fixtures: audits, physics, the display-set seam', () => {
-  it('every new kind is classified in both audits with an honest reason; booth pieces static, the form dynamic, the sets ride it', () => {
+describe('fixtures: audits, physics, the display / hanging-stock seam', () => {
+  it('every new kind is classified in both audits with an honest reason; booth boxes / box forms deleted; stock rides its host', () => {
     for (const k of NEW_KINDS) {
       expect(OPENABLE_AUDIT.filter(e => e.kind === k).length, `${k} openables audit`).toBe(1);
       expect(PROP_PHYSICS_AUDIT[k], `${k} physics audit`).toBeDefined();
       expect(MALL_OPEN_AUDIT[k].cls).toBe('none');
       expect(MALL_OPEN_AUDIT[k].how.length).toBeGreaterThan(20);
     }
-    expect(MALL_PHYS.fittingPartition).toMatchObject({dynamic: false, why: 'partition'});
-    expect(MALL_PHYS.fittingBackPanel).toMatchObject({dynamic: false, why: 'partition'});
+    for (const k of GONE) expect((PROP_DEFS as Record<string, unknown>)[k], k).toBeUndefined();
     expect(MALL_PHYS.fittingBench).toMatchObject({dynamic: false, why: 'built-in'});
     expect(MALL_PHYS.fittingMirror).toMatchObject({dynamic: false, why: 'mounted'});
-    expect(MALL_PHYS.fittingCurtain).toMatchObject({dynamic: false, why: 'mounted'});
-    expect(dynamicKind('lingerieBust')).toBe(true);
-    for (const k of Object.values(LINGERIE_SET_KINDS)) {
-      expect(MALL_PHYS[k]).toMatchObject({dynamic: false, why: 'host decor'});
+    expect(dynamicKind('mannequinFemale')).toBe(true);
+    for (const k of [...SET_KINDS, 'lingerieRackRow', 'lingerieRackRing'] as const) {
+      expect(MALL_PHYS[k as keyof typeof MALL_PHYS]).toMatchObject({dynamic: false, why: 'host decor'});
       expect(MALL_RIDER_KINDS).toContain(k);
       expect(ridesHost(k)).toBe(true);
     }
-    // real-world sizes: panels 2.1 m tall, the bench seat 0.45 m, the mirror glass to 1.85 m, a 1.48 m display form
-    expect(PROP_DEFS.fittingPartition.h).toBe(2.1);
+    // real-world sizes: the bench seat 0.45 m, the mirror to 1.97 m, the stock's longest drop 0.55 m under a rail
     expect(PROP_DEFS.fittingBench.h).toBe(0.45);
-    expect(PROP_DEFS.fittingMirror.h).toBe(1.85);
-    expect(PROP_DEFS.lingerieBust.h).toBe(1.48);
+    expect(PROP_DEFS.fittingMirror.h).toBe(1.97);
+    expect(LINGERIE_RACK.drop).toBeLessThanOrEqual(GARMENT_RAIL_Y.garmentRailRound! - 0.15);
+    expect(rackStock(rackCode(4, 1, 777))).toEqual({a: 'red', b: 'purple', seed: 777});
   });
 
-  it('display sets load lane FIT\'s outfit files by key (only the designs placed) — none for a mall without the boutique', () => {
+  it('display / hanging stock loads lane FIT\'s outfit files by key (only the designs placed) — none for a mall without the boutique', () => {
     expect(LINGERIE_DESIGNS).toEqual(['green', 'purple', 'blush', 'black', 'red', 'ivory']);
     expect(LINGERIE_DISPLAY_SOURCE.modelKey('red')).toBe('outfit_lingerie_red');
-    expect(LINGERIE_DISPLAY_SOURCE.nodes('blush')).toEqual(['LingerieDisplay_blush_top', 'LingerieDisplay_blush_bottom']);
-    // the store's derived keys / node names are exactly lane FIT's exported display table (one per design)
-    expect(LINGERIE_DISPLAYS.map(d => d.set)).toEqual(LINGERIE_DESIGNS.map(d => `lingerie-${d}`));
-    for (const d of LINGERIE_DESIGNS) {
-      const f = LINGERIE_DISPLAYS.find(x => x.set === `lingerie-${d}`)!;
-      expect(LINGERIE_DISPLAY_SOURCE.modelKey(d)).toBe(f.model);
-      expect(LINGERIE_DISPLAY_SOURCE.nodes(d)).toEqual([f.nodes.top, f.nodes.bottom]);
-    }
+    expect(LINGERIE_DISPLAY_SOURCE.mannequinNodes('blush')).toEqual(['LingerieMannequin_blush_top', 'LingerieMannequin_blush_bottom']);
+    expect(LINGERIE_DISPLAY_SOURCE.hangNodes('green')).toEqual(['LingerieHang_green_top', 'LingerieHang_green_bottom']);
+    // the keys are lane FIT's registered outfit files (the same files the store-local zombies wear)
+    for (const d of LINGERIE_DESIGNS) expect(LINGERIE_MODEL_FILES[LINGERIE_DISPLAY_SOURCE.modelKey(d)], d).toBeDefined();
     const L = mall(WITH[0]);
     const keys = lingerieDisplayModelKeys(L);
     expect(keys.length).toBeGreaterThan(0);
     for (const k of keys) expect(k).toMatch(/^outfit_lingerie_(green|purple|blush|black|red|ivory)$/);
-    const placed = new Set(L.props.filter(p => (Object.values(LINGERIE_SET_KINDS) as string[]).includes(p.kind)).map(p => p.kind));
-    expect(keys.length).toBe(placed.size);
+    const used = new Set<string>();
+    for (const p of L.props) {
+      if (SET_KINDS.includes(p.kind)) used.add(LINGERIE_DESIGNS[SET_KINDS.indexOf(p.kind)]);
+      if (p.kind === 'lingerieRackRow' || p.kind === 'lingerieRackRing') { const r = rackStock(p.variant); used.add(r.a); used.add(r.b); }
+    }
+    expect(keys).toEqual([...used].map(d => LINGERIE_DISPLAY_SOURCE.modelKey(d)).sort());
     const none = mallLotsFixture(3).layout;
     assignMallPrograms(none, new Rng(3 * 7919), {sidePrograms: false});
     dressMallShops(none, new Rng(3 ^ 0x5eed), {frame: 'absolute'});

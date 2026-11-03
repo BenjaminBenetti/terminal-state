@@ -834,11 +834,15 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.max(2.4, vMax - 2.0), true, zoneSide === 'L' ? 'R' : zoneSide === 'R' ? 'L' : suite ? (eu > W / 2 ? 'L' : 'R') : undefined);
     const sideA: 'L' | 'R' = zoneSide ? (zoneSide === 'L' ? 'R' : 'L') : d.rng.chance(0.5) ? 'L' : 'R';
     const sideB: 'L' | 'R' = sideA === 'L' ? 'R' : 'L';
-    const v1 = Math.min(D, vMax) - 0.6;
-    d.sideRow(sideA, [['glassDisplayCabinet', 0]], 2.4, v1, {max: 1});
-    d.sideRows([['dresserDrawers', 0]], 2.4, v1, {max: 2});
-    d.sideRow(sideB, [['cosmeticsWallUnit', 0]], 2.4, v1, {max: 1});
-    d.sideRows([['clothingWallUnit', 0], ['wallBay', 0]], 2.4, v1);
+    // each side wall up to the suite — or, beside a back-wall suite that leaves a strip on that side, all the way to the back corner
+    const zu = suite && suite.wall === fr.back ? [xzUV(fr, suite.zone.x0, suite.zone.z0)[0], xzUV(fr, suite.zone.x1, suite.zone.z1)[0]] : null;
+    const vEnd = (side: 'L' | 'R') => (zu && (side === 'L' ? Math.min(...zu) >= 1.6 : Math.max(...zu) <= W - 1.6) ? D - 0.3 : Math.min(D, vMax) - 0.6);
+    if (zoneSide !== 'L') d.sideRow('L', [['clothingWallUnit', 0], ['wallBay', 0]], 2.4, vEnd('L'), {max: 2});
+    if (zoneSide !== 'R') d.sideRow('R', [['clothingWallUnit', 0], ['wallBay', 0]], 2.4, vEnd('R'), {max: 2});
+    d.sideRow(sideA, [['glassDisplayCabinet', 0]], 2.4, vEnd(sideA), {max: 1});
+    d.sideRows([['dresserDrawers', 0]], 2.4, Math.min(D, vMax) - 0.6, {max: 2});
+    d.sideRow(sideB, [['cosmeticsWallUnit', 0]], 2.4, vEnd(sideB), {max: 1});
+    for (const side of ['L', 'R'] as const) if (zoneSide !== side) d.sideRow(side, [['clothingWallUnit', 0], ['wallBay', 0]], 2.4, vEnd(side));
     d.againstWall('fittingMirror', 1, {front: 0.9});
     // hanging stock: lingerie on every clothing bay's rail (two designs per bay, seeded)
     const hang = (rails: readonly PropPlacement[], share: number) => { for (const r of rails) if (d.rng.chance(share)) hangLingerie(d, r, rackCode(design++, design + d.rng.int(1, 4), d.rng.int(0, 9999))); };
@@ -846,14 +850,14 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     // the floor: garment rails and round racks hung with lingerie, folded-stock tables, a dressed mannequin or two, an ottoman by the suite
     // (the islands' walkway rings keep them off the suite's wall: the zone runs up to it)
     const zone = {u0: Math.max(1.4, uMin + 1.0), u1: Math.min(W - 1.4, uMax - 1.0), v0: 2.4, v1: Math.max(2.4, vMax - 0.9)};
-    // the bigger pieces first (a dressed mannequin, round racks, a folded-stock table), then the straight rails pack the rest like a
-    // clothing store's (a one-cell walkway ring: ~0.7-1.0 m between the racks' real edges)
+    // the bigger pieces first (a dressed mannequin, round racks), then the straight rails pack the floor like a clothing store's (a one-cell
+    // walkway ring: ~0.7-1.0 m between the racks' real edges), a folded-stock table where room is left
     from = d.placed.length;
-    d.islands('mannequinFemale', W * D >= 100 ? 2 : 1, {...zone, v0: Math.max(zone.v0, D * 0.3)}, {ring: 0.5});
+    if (vMax >= 6) d.islands('mannequinFemale', W * D >= 100 ? 2 : 1, {...zone, v0: Math.max(zone.v0, D * 0.3)}, {ring: 0.5}); // (a shallow floor keeps its room for racks)
     dressNew(from);
     hang(d.islands('garmentRailRound', per(d, 40, 1, 3), zone, {ring: 0.5}), 0.9);
-    d.islands('merchTable', per(d, 70, 1, 2), zone, {ring: 0.6});
     hang(d.islands('garmentRail', per(d, 18, 2, 7), zone, {ring: 0.5, along: !narrow}), 0.85);
+    d.islands('merchTable', per(d, 70, 1, 2), zone, {ring: 0.6});
     if (suite) {
       ottoman: for (const du of [1.6, -1.6, 2.2, -2.2]) for (const dv of [-1.6, -2.1]) {
         const away = suite.wall === fr.back ? [eu + du, ev + dv] : [eu + (zoneSide === 'L' ? 1.8 : -1.8), ev + du];
