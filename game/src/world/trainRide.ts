@@ -380,14 +380,12 @@ export class TrainRide {
    * stepped by normal physics in the station this frame.
    */
   stepPlayer(dt: number, input: MoveInput, opts: {aiming: boolean; speedMult: number; canSprint: boolean}): boolean {
-    const P = this.host.player;
-    const yaw0 = this.pose.yaw;
+    const P = this.host.player, L = this.local;
+    L.yaw = P.yaw - this.pose.yaw; // the mouse look was applied to the world yaw (relative to the car's pose of the last frame)
     const cdt = Math.max(0, Math.min(dt, RIDE.maxDt));
     if (dt > RIDE.maxDt) this.counts.clampedSteps++;
     this.advance(cdt);
     if (!this.riding) return P.update(dt, input, this.host.levels, this.host.propIndex, opts);
-    const L = this.local;
-    L.yaw = P.yaw - yaw0; // the mouse look was applied to the world yaw
     const [sx, sz] = toStep(L.x, L.z);
     P.x = sx; P.z = sz; P.y = L.y; P.yaw = L.yaw; P.vx = L.vx; P.vz = L.vz;
     let step = false;
@@ -704,12 +702,12 @@ export class TrainRide {
     this.audioT.rumble += dt;
     if (this.audioT.rumble >= 4.2) {
       this.audioT.rumble = 0;
-      rideCue(sfx, 'bedRumble', {rate: 0.78 + 0.32 * k, gain: 0.3 + 0.45 * k, maxDur: 6.2, fadeOut: 1.8, filter: {type: 'lowpass', freq: 650 + 500 * k}});
+      rideCue(sfx, 'bedRumble', {rate: 0.78 + 0.32 * k, gain: 0.22 + 0.33 * k, maxDur: 6.2, fadeOut: 1.8, filter: {type: 'lowpass', freq: 650 + 500 * k}});
     }
     this.audioT.run += dt;
     if (k > 0.35 && this.audioT.run >= 7) {
       this.audioT.run = 0;
-      rideCue(sfx, 'trainDistant', {rate: 0.6 + 0.25 * k, gain: 0.3 * k, maxDur: 8.5, fadeOut: 2.2, filter: {type: 'lowpass', freq: 1100}});
+      rideCue(sfx, 'trainDistant', {rate: 0.6 + 0.25 * k, gain: 0.25 * k, maxDur: 8.5, fadeOut: 2.2, filter: {type: 'lowpass', freq: 1100}});
     }
     // each bogie over a rail joint
     const J = RIDE_JOSTLE;

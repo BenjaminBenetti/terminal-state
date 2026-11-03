@@ -503,7 +503,8 @@ export class Game {
     hookName('lockbox');
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
-    this.trainRide = installTrainRide(this, this.trainRuntime);
+    // (the jostle intensity reads an optional settings.jostle 0..1 when the primary's Settings grow one; else RIDE_JOSTLE.intensity)
+    this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => (this.settings as unknown as {jostle?: number}).jostle ?? 1});
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
