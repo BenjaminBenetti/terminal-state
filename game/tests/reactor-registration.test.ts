@@ -61,14 +61,17 @@ describe('the Reactor registration', () => {
     expect(MASK_LOOT.levels.reactor).toEqual({masks: [1, 1], filters: [3, 5]});
   });
 
-  it('menus: a title card, a third travel slot, New game buttons and the ?reactorSeed= deep link', () => {
+  it('menus: a dev-start level, a third travel slot, New game buttons and the ?reactorSeed= deep link', () => {
     const html = fs.readFileSync(path.join(GAME, 'index.html'), 'utf8');
     const main = fs.readFileSync(path.join(GAME, 'src/main.ts'), 'utf8');
-    expect(html).toMatch(/class="level-card" data-level="reactor"/);
+    // (task campaign-foundation-20261102, lane MENU: the title's level cards became the main menu's Dev start picker, which offers
+    // every registered level; the deep-link seeds are parsed by main.ts devStartFromUrl)
+    expect(LEVEL_IDS).toContain('reactor');
+    expect(main).toMatch(/devLevels: LEVEL_IDS/);
+    expect(main).toMatch(/\['reactor', 'reactorSeed'\]/);
     expect(html).toMatch(/id="btn-travel-3"/);
     expect(html).toMatch(/id="btn-win-travel-3"/);
     expect(html).toMatch(/id="btn-death-new-fourth"/);
     expect(html.match(/class="btn-new-level[^"]*" type="button" data-level="reactor"/g)?.length).toBe(2);
-    expect(main).toMatch(/reactor: seedOf\('reactorSeed'\)/);
   });
 });
