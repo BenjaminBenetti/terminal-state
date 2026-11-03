@@ -607,8 +607,11 @@ export class PerfCapture {
     };
     yield;
     // --- spike detail: every nested span of the worst spike frames (gameplay / transition) ---
-    const spikeIdx: number[] = [];
-    for (let k = 0; k < n; k++) if ((cat[k] === C_GAMEPLAY || cat[k] === C_TRANSITION) && (this.flags[k] & F.spans) && (interval[k] > 50 || this.cpu[k] > SPIKE_MS)) spikeIdx.push(k);
+    const spikeIdx = ((): number[] => {
+      const out: number[] = [];
+      for (let k = 0; k < n; k++) if ((cat[k] === C_GAMEPLAY || cat[k] === C_TRANSITION) && (this.flags[k] & F.spans) && (interval[k] > 50 || this.cpu[k] > SPIKE_MS)) out.push(k);
+      return out;
+    })();
     spikeIdx.sort((a, b) => interval[b] - interval[a]);
     const keptSpikes = spikeIdx.slice(0, caps.spikeDetail);
     const spikeDetail = {
@@ -668,15 +671,15 @@ export class PerfCapture {
     // one column = `"name":[v,v,…]`, written in chunks (a yield every CHUNK values; the parts are only ever concatenated)
     const CHUNK = 4096;
     const buf: (string | number)[] = new Array(CHUNK);
+    const chunk = (k0: number, get: (k: number) => string | number): string => {
+      const m = Math.min(CHUNK, n - k0);
+      buf.length = m;
+      for (let j = 0; j < m; j++) buf[j] = get(k0 + j);
+      return buf.join(',');
+    };
     const column = function* (head: string, get: (k: number) => string | number): Generator<void, void, void> {
       parts.push(head + '[');
-      for (let k0 = 0; k0 < n; k0 += CHUNK) {
-        const m = Math.min(CHUNK, n - k0);
-        buf.length = m;
-        for (let j = 0; j < m; j++) buf[j] = get(k0 + j);
-        parts.push((k0 ? ',' : '') + buf.join(','));
-        yield;
-      }
+      for (let k0 = 0; k0 < n; k0 += CHUNK) { parts.push((k0 ? ',' : '') + chunk(k0, get)); yield; }
       parts.push(']');
     };
     let firstCol = true;
