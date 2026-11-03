@@ -4,7 +4,7 @@
 
 import {describe, expect, it} from 'vitest';
 import {generateNetwork, graphDistances} from '../src/campaign/network';
-import {arrive, canTravel, destinations, enableCheat, isVisited, neighbors, newCampaign, reactorKnown, revealAround, validateCampaign, visibleEdges, visibleNodes} from '../src/campaign/discovery';
+import {arrive, canTravel, destinations, enableCheat, isVisited, neighbors, newCampaign, reactorKnown, revealAround, travelPlan, validateCampaign, visibleEdges, visibleNodes} from '../src/campaign/discovery';
 import type {CampaignState, SubwayNetwork} from '../src/campaign/types';
 
 const net = generateNetwork(424242);
@@ -61,7 +61,7 @@ describe('neighbours and the reveal', () => {
 });
 
 describe('travel', () => {
-  it('only to a known neighbour of the current station, never to the current station', () => {
+  it('only to a known neighbour of the current station (or a visited station over visited track), never to the current station', () => {
     const s0 = newCampaign(net);
     const nb = neighbors(net, net.start);
     for (const id of nb) expect(canTravel(s0, id)).toBe(false); // adjacent but not on the map yet
@@ -76,7 +76,10 @@ describe('travel', () => {
     const notAdj = s2.known.filter(k => k !== n2 && !neighbors(net, n2).includes(k));
     expect(notAdj).toContain(net.start);
     expect(notAdj.length).toBeGreaterThan(0);
-    for (const k of notAdj) expect(canTravel(s2, k)).toBe(false);
+    // campaign-polish (lane MAP): a known station that is neither one stop away nor VISITED is no destination; a visited one is, over the
+    // visited route (campaign-multihop.test.ts covers the rules)
+    for (const k of notAdj) expect(canTravel(s2, k)).toBe(s2.visited.includes(k));
+    expect(travelPlan(s2, net.start)?.route).toEqual([n2, nb[0], net.start]);
     expect(canTravel(s2, 'st-99')).toBe(false);
   });
 

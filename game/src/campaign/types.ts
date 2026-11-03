@@ -71,6 +71,12 @@ export interface PendingTransit {
   phase: 'departing';
   /** True when chosen with the 1337 map cheat (any node, no adjacency needed). */
   cheat: boolean;
+  /**
+   * Task campaign-polish-20261103-063841 (lane MAP): a MULTI-HOP journey's route, [from, ..., to] (>= 3 stations; consecutive pairs
+   * are track edges; every station after `from` VISITED). Absent for a one-hop trip and for a cheat trip (old saves: absent). ONE
+   * continuous ride: only `to` is ever built / arrived at; the intermediate stations are passed in the tunnel, never loaded.
+   */
+  route?: StationId[];
 }
 
 /** The run's campaign record (serialized in saves). */

@@ -40,6 +40,12 @@ export type OrdinaryWeights = Readonly<Partial<Record<OrdinaryArchetype, number>
 export interface NetworkOptions {
   /** Ordinary archetype weights (default ORDINARY_WEIGHTS 80 / 10 / 10; a future archetype takes a share here). */
   weights?: OrdinaryWeights;
+  /**
+   * (lane MAP, campaign-polish-20261103-063841) The Reactor's bypass, the "Maintenance Route" (default true). `false` reproduces the
+   * networks of the earlier generator bit for bit (no bypass; a terminus may be the Reactor) — what saves made before it contain;
+   * the tests use it to exercise the save compatibility update on genuine old graphs.
+   */
+  maintenanceRoute?: boolean;
 }
 
 const ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'reactor'];
@@ -627,7 +633,7 @@ const COMPASS = ['east', 'south-east', 'south', 'south-west', 'west', 'north-wes
 
 // --- finishing --------------------------------------------------------------------------------------------------------------
 
-function finish(seed: number, b: Board, weights: OrdinaryWeights): SubwayNetwork | null {
+function finish(seed: number, b: Board, weights: OrdinaryWeights, bypass = false): SubwayNetwork | null {
   const rng = new Rng(hashString('terminal-state:network:finish', seed >>> 0));
   const n = b.st.length;
   const lineSets = b.st.map((_, i) => b.linesOf(i));
@@ -647,8 +653,10 @@ function finish(seed: number, b: Board, weights: OrdinaryWeights): SubwayNetwork
   const maxD = Math.max(...dist);
   const lo = maxD >= REACTOR_DEPTH.lo ? REACTOR_DEPTH.lo : MIN_REACTOR_DEPTH;
   const hi = Math.max(lo, Math.min(REACTOR_DEPTH.hi, maxD));
-  // the depth first (uniform over the depths the graph offers in lo..hi), then a station at that depth (termini down-weighted)
-  const reactorCands = b.st.map((_, i) => i).filter(i => dist[i] >= lo && dist[i] <= hi);
+  // the depth first (uniform over the depths the graph offers in lo..hi), then a station at that depth (termini down-weighted).
+  // Task campaign-polish-20261103-063841 (lane MAP): with the Maintenance Route the Reactor is never a terminus — a terminus has no
+  // "beyond" for the bypass to lead to (the legacy generator, `maintenanceRoute: false`, keeps the old rule bit for bit)
+  const reactorCands = b.st.map((_, i) => i).filter(i => dist[i] >= lo && dist[i] <= hi && (!bypass || b.adj[i].length >= 2));
   if (!reactorCands.length) return null;
   const depth = rng.pick([...new Set(reactorCands.map(i => dist[i]))].sort((x, y) => x - y));
   const reactor = rng.weighted(reactorCands.filter(i => dist[i] === depth).map(i => [i, b.adj[i].length === 1 ? 0.55 : 1] as const));
@@ -733,6 +741,7 @@ export function generateNetwork(seed: number, opts: NetworkOptions = {}): Subway
 /** generateNetwork plus how it was reached (tests / tuning): the accepted attempt index, or the fallback layout. */
 export function generateNetworkInfo(seed: number, opts: NetworkOptions = {}): {network: SubwayNetwork; attempt: number; fallback: boolean} {
   const weights = opts.weights ?? ORDINARY_WEIGHTS;
+  const bypass = opts.maintenanceRoute !== false;
   const total = NETWORK_SIZE.ordinary + NETWORK_SIZE.reactor;
   const s = seed >>> 0;
   // about 70 % of the seeds insist on a cycle for their first attempts (the rest take whatever shape the walks give)
@@ -740,19 +749,24 @@ export function generateNetworkInfo(seed: number, opts: NetworkOptions = {}): {n
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const got = buildAttempt(s, attempt, total);
     if (!got || (wantCycle && !got.cycle && attempt < MAX_ATTEMPTS / 2)) continue;
-    const network = finish(s, got.b, weights);
+    let network = finish(s, got.b, weights, bypass);
+    // (lane MAP) a new network always gets its Maintenance Route; an attempt that cannot place one is rejected like any other
+    if (network && bypass) network = addMaintenanceRoute(network, {strict: true})?.network ?? null;
     if (network && validateNetwork(network, {weights}).length === 0) return {network, attempt, fallback: false};
   }
-  const network = finish(s, fallbackBoard(total), weights);
-  if (!network) throw new Error(`network: no layout for seed ${s}`);
+  const network = fallbackNetwork(s, opts);
   return {network, attempt: MAX_ATTEMPTS, fallback: true};
 }
 
-/** Exposed for the tests: the fallback layout as a network (always valid). */
+/** Exposed for the tests: the fallback layout as a network (always valid; with its Maintenance Route unless legacy). */
 export function fallbackNetwork(seed: number, opts: NetworkOptions = {}): SubwayNetwork {
-  const net = finish(seed >>> 0, fallbackBoard(NETWORK_SIZE.ordinary + NETWORK_SIZE.reactor), opts.weights ?? ORDINARY_WEIGHTS);
+  const bypass = opts.maintenanceRoute !== false;
+  const net = finish(seed >>> 0, fallbackBoard(NETWORK_SIZE.ordinary + NETWORK_SIZE.reactor), opts.weights ?? ORDINARY_WEIGHTS, bypass);
   if (!net) throw new Error('network: fallback layout failed');
-  return net;
+  if (!bypass) return net;
+  const withRoute = addMaintenanceRoute(net, {strict: true}) ?? addMaintenanceRoute(net);
+  if (!withRoute) throw new Error('network: the fallback layout has no Maintenance Route');
+  return withRoute.network;
 }
 
 // --- graph helpers ------------------------------------------------------------------------------------------------------------
@@ -875,5 +889,361 @@ export function validateNetwork(net: unknown, opts: NetworkOptions = {}): string
     if (d.size !== ids.size) errs.push(`network: ${ids.size - d.size} stations unreachable from the start`);
     if (typeof reactor === 'string' && d.has(reactor) && d.get(reactor)! < MIN_REACTOR_DEPTH) errs.push(`network: Reactor only ${d.get(reactor)} hops from the start`);
   }
+  return errs;
+}
+
+// --- the Maintenance Route (task campaign-polish-20261103-063841, lane MAP) ----------------------------------------------------
+//
+// User: "The Reactor always has a bypass labelled 'Maintenance Route' so players can continue scavenging without being forced through
+// the endgame encounter." Representation (no new station, no new level type, no generation budget): ONE existing ordinary Subway
+// node — a terminus nobody has seen — is RELOCATED beside the Reactor and printed "Maintenance Route"; a short service line (its own
+// graphite ink; the paper map draws it dashed) joins it to an APPROACH station of the Reactor (one or two hops before it, on the
+// start's side) and to the station(s) BEYOND it: approach -> Reactor -> beyond and approach -> Maintenance Route -> beyond form a
+// cycle, so the Reactor is never the only gate to the rest of the network.
+//  - Counts unchanged (40 nodes, 31 Subway / 4 Office / 4 Mall, ONE Reactor): the node keeps its id, archetype and levelSeed (the same
+//    Subway world; only its printed name changes). The Reactor's depth is unchanged (the approach is nearer the start than it is).
+//  - Discoverable from the approach without entering the Reactor: it is a neighbour of an approach station, so the console's one-hop
+//    reveal there shows it beside the Reactor. Not a dead end: it continues into the beyond (every component the Reactor would gate).
+//  - Drawn like the rest: its edges are octilinear, 2..4 grid steps, cross no track, pass no station dot, keep stations spaced.
+//  - The terminus it is taken from leaves no hole: a terminus disconnects nothing; its line keeps >= 2 stations; a line end it hangs
+//    off keeps degree >= 3 when that end is a junction.
+// New networks: always, strict (afterwards the Reactor gates nothing; an attempt that cannot place it is rejected; the Reactor is
+// never a terminus). Old saved graphs: the same function with `keep` = every station the save knows / visited / remembers / travels,
+// so nothing the player has seen moves (discovery.ts upgradeCampaign); a terminus Reactor (old generator only) gets the 'shortcut'
+// variant: the Maintenance Route leaves its approach for a station at least three hops away.
+
+/** The bypass's printed name, its service line's id and ink. */
+export const MAINTENANCE_ROUTE = {name: 'Maintenance Route', line: 'ln-maint', color: '#5c574e'} as const;
+
+/** 'parallel': approach -> MR -> a neighbour beyond the Reactor; 'beyond': -> a station 2 hops beyond; 'shortcut': terminus Reactor. */
+export type BypassKind = 'parallel' | 'beyond' | 'shortcut';
+
+export interface BypassInfo {
+  network: SubwayNetwork;
+  /** The relocated node (id / archetype / levelSeed unchanged; printed "Maintenance Route"). */
+  node: StationId;
+  /** The approach station it hangs off. */
+  approach: StationId;
+  /** The station(s) it leads to. */
+  beyond: StationId[];
+  kind: BypassKind;
+  /** Afterwards the Reactor gates nothing: the network without it is still connected. */
+  gateFree: boolean;
+}
+
+export interface BypassOptions {
+  /** Stations that must not be relocated (an old save: everything the player knows / visited / remembers / is travelling). */
+  keep?: Iterable<StationId>;
+  /** New networks: only a bypass that leaves the Reactor gating nothing (and never the terminus 'shortcut' variant). */
+  strict?: boolean;
+  /** Receives why no bypass was added (tests / the compatibility report). */
+  trace?: string[];
+}
+
+/** The network's Maintenance Route node (a Subway node printed MAINTENANCE_ROUTE.name), else null. */
+export function maintenanceRouteNode(net: SubwayNetwork): StationNode | null {
+  return net.nodes.find(n => n.name === MAINTENANCE_ROUTE.name && n.archetype === 'subway') ?? null;
+}
+
+/** Whether a line is the Maintenance Route's service line (drawn dashed; not an interchange ink). */
+export const isServiceLine = (l: Pick<NetworkLine, 'id'>): boolean => l.id === MAINTENANCE_ROUTE.line || l.id.startsWith(`${MAINTENANCE_ROUTE.line}-`);
+
+/** Search bounds: approach / beyond stations at most `hops` from the Reactor; service-track segments 2..`steps` grid steps. */
+export const BYPASS = {hops: 3, steps: 6} as const;
+
+type XY = {x: number; y: number};
+const EPS = 1e-6;
+
+function segPointDist(p: XY, a: XY, b: XY): number {
+  const dx = b.x - a.x, dy = b.y - a.y, L = dx * dx + dy * dy;
+  const t = L > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L)) : 0;
+  return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+const crossZ = (o: XY, a: XY, b: XY) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+const sgn = (v: number) => (Math.abs(v) < EPS ? 0 : Math.sign(v));
+/** Two segments cross at one interior point of both. */
+const properCross = (a: XY, b: XY, c: XY, d: XY) => sgn(crossZ(a, b, c)) * sgn(crossZ(a, b, d)) < 0 && sgn(crossZ(c, d, a)) * sgn(crossZ(c, d, b)) < 0;
+const cheb = (a: XY, b: XY) => Math.max(Math.abs(a.x - b.x), Math.abs(a.y - b.y));
+
+/** Hops from `from` over `adj`, never entering `skip`. */
+function hops(adj: ReadonlyMap<StationId, readonly StationId[]>, from: StationId, skip?: StationId): Map<StationId, number> {
+  const d = new Map<StationId, number>([[from, 0]]);
+  const q = [from];
+  for (let i = 0; i < q.length; i++) for (const n of adj.get(q[i]) ?? []) if (n !== skip && !d.has(n)) { d.set(n, d.get(q[i])! + 1); q.push(n); }
+  return d;
+}
+
+/** Component index of every station of the network without `cut`. */
+function componentsWithout(adj: ReadonlyMap<StationId, readonly StationId[]>, cut: StationId): Map<StationId, number> {
+  const comp = new Map<StationId, number>();
+  let c = 0;
+  for (const id of adj.keys()) {
+    if (id === cut || comp.has(id)) continue;
+    for (const k of hops(adj, id, cut).keys()) comp.set(k, c);
+    c++;
+  }
+  return comp;
+}
+
+/** Whether the network without the Reactor is still connected (the Reactor gates nothing). */
+export function reactorGatesNothing(net: SubwayNetwork): boolean {
+  return new Set(componentsWithout(adjacency(net), net.reactor).values()).size <= 1;
+}
+
+interface BypassCand { leaf: StationId; join: [StationId, StationId] | null; x: StationId; p: XY; ys: StationId[]; kind: BypassKind; score: number[] }
+
+const lexLess = (a: readonly number[], b: readonly number[]) => { for (let i = 0; i < Math.max(a.length, b.length); i++) { const d = (a[i] ?? 0) - (b[i] ?? 0); if (d) return d < 0; } return false; };
+
+/**
+ * Add the Maintenance Route to a network that has none (see the section header). Pure: returns a new network (the input is never
+ * mutated) with the details, or null when no terminus can be relocated into a valid drawing (strict: also when the Reactor would
+ * still gate a part of the network, or when it is a terminus). Deterministic.
+ */
+export function addMaintenanceRoute(net: SubwayNetwork, o: BypassOptions = {}): BypassInfo | null {
+  const fail = (why: string): null => { o.trace?.push(why); return null; };
+  if (maintenanceRouteNode(net)) return fail('it already has one');
+  const keep = new Set(o.keep ?? []);
+  const u = GRID.unit, R = net.reactor, S = net.start;
+  const adj = adjacency(net);
+  if (!adj.has(R) || !adj.has(S) || R === S) return fail('no start / Reactor');
+  const pos = new Map(net.nodes.map(n => [n.id, {x: n.x, y: n.y}]));
+  const dS = hops(adj, S), dR = hops(adj, R);
+  const depth = dS.get(R);
+  if (depth === undefined || dS.size !== net.nodes.length) return fail('not connected');
+  const deg = (id: StationId) => adj.get(id)!.length;
+  const leafReactor = deg(R) <= 1;
+  if (leafReactor && o.strict) return fail('a terminus Reactor (new networks never have one)');
+  const comp = componentsWithout(adj, R);
+  const home = comp.get(S)!;
+  const beyondComps = [...new Set(comp.values())].filter(c => c !== home).sort((a, b) => a - b);
+  const natural: 'gate' | 'cycle' | 'leaf' = beyondComps.length ? 'gate' : leafReactor ? 'leaf' : 'cycle';
+  // approach stations: the start's side, nearer the start than the Reactor, at most BYPASS.hops from it (one preferred)
+  const approach = net.nodes.map(n => n.id).filter(id => comp.get(id) === home && dS.get(id)! < depth && (dR.get(id) ?? 99) <= BYPASS.hops);
+  if (!approach.length) return fail('no approach station');
+  const minus = new Map(approach.map(x => [x, hops(adj, x, R)]));
+  // per approach x: what R's OTHER neighbours reach without R and x (the far side a bypass from x must lead into)
+  const farSide = new Map(approach.map(x => {
+    const cut = new Map([...adj].map(([k, v]) => [k, v.filter(z => z !== x)]));
+    const f = new Set<StationId>();
+    for (const b of adj.get(R)!) if (b !== x) for (const k of hops(cut, b, R).keys()) f.add(k);
+    f.delete(x);
+    return [x, f];
+  }));
+  const allHops = new Map(approach.map(x => [x, hops(adj, x)]));
+  // relocatable termini: Subway, unseen, not next to the Reactor, at an end of every line serving them, those lines keep >= 2 stations
+  const lineEnds = (l: NetworkLine) => (l.loop ? [] : [l.stations[0], l.stations[l.stations.length - 1]]);
+  const leaves = net.nodes.filter(n => {
+    if (n.archetype !== 'subway' || n.id === S || n.id === R || keep.has(n.id) || deg(n.id) !== 1) return false;
+    const nb = adj.get(n.id)![0];
+    if (nb === R) return false;
+    const own = net.lines.filter(l => l.stations.includes(n.id));
+    if (!own.length || own.some(l => !lineEnds(l).includes(n.id) || l.stations.length < 3)) return false;
+    const endOfOther = net.lines.some(l => !own.includes(l) && lineEnds(l).includes(nb));
+    return !endOfOther || deg(nb) - 1 >= 3;
+  }).map(n => {
+    const len = Math.min(...net.lines.filter(l => l.stations.includes(n.id)).map(l => l.stations.length));
+    return {id: n.id, join: null as [StationId, StationId] | null, rank: [0, len >= 4 ? 0 : 1, -(dR.get(n.id) ?? 0)]};
+  });
+  // an old graph may also take an unseen mid-line Subway stop whose two tracks run straight through it: its neighbours are joined by
+  // one straight track along the same line (the drawing stays exactly the same minus one dot)
+  if (!o.strict) {
+    for (const n of net.nodes) {
+      if (n.archetype !== 'subway' || n.id === S || n.id === R || keep.has(n.id) || deg(n.id) !== 2) continue;
+      const [a, b] = adj.get(n.id)!;
+      if (a === R || b === R || adj.get(a)!.includes(b)) continue;
+      const own = net.lines.filter(l => l.stations.includes(n.id));
+      if (own.length !== 1) continue;
+      const st = own[0].stations, i = st.indexOf(n.id);
+      const inner = i > 0 && i < st.length - 1 ? [st[i - 1], st[i + 1]] : own[0].loop && st.length > 3 ? [st[(i - 1 + st.length) % st.length], st[(i + 1) % st.length]] : null;
+      if (!inner || !inner.includes(a) || !inner.includes(b)) continue;
+      if (dS.get(n.id)! + (dR.get(n.id) ?? 99) === depth) continue; // on a shortest way to the Reactor: joining would bring it nearer
+      const pa = pos.get(a)!, pb = pos.get(b)!;
+      if (Math.abs(crossZ(pa, n, pb)) > EPS || (n.x - pa.x) * (pb.x - n.x) + (n.y - pa.y) * (pb.y - n.y) <= 0) continue; // straight through
+      leaves.push({id: n.id, join: [a, b], rank: [1, 0, -(dR.get(n.id) ?? 0)]});
+    }
+  }
+  leaves.sort((a, b) => (lexLess(a.rank, b.rank) ? -1 : lexLess(b.rank, a.rank) ? 1 : a.id < b.id ? -1 : 1));
+  if (!leaves.length) return fail('no unseen terminus or straight-through stop can move');
+  // new networks stay on the layout grid; an old graph may reach one grid step past it (the paper re-fits the sheet once)
+  const margin = o.strict ? 0 : u;
+  const bound = {x0: -margin - EPS, y0: -margin - EPS, x1: GRID.w * u + margin + EPS, y1: GRID.h * u + margin + EPS};
+  let best: BypassCand | null = null;
+  // an old graph where nothing fits the Reactor's own shape (e.g. its beyond is one terminus in a crowded corner): the shortcut
+  // variant from the approach, then service links (below) join whatever the Reactor still gates
+  const passes = o.strict || natural === 'leaf' ? [natural] : [natural, 'leaf' as const];
+  const search = (mode: 'gate' | 'cycle' | 'leaf') => leaves.forEach(({id: leaf, join}, leafRank) => {
+    if (join && best) return; // a mid-line stop only when no terminus can be placed
+    const stations = net.nodes.filter(n => n.id !== leaf);
+    const edges = net.edges.filter(([a, b]) => a !== leaf && b !== leaf).map(([a, b]) => ({a, b, pa: pos.get(a)!, pb: pos.get(b)!}));
+    if (join) edges.push({a: join[0], b: join[1], pa: pos.get(join[0])!, pb: pos.get(join[1])!});
+    /**
+     * A new straight segment p-q (q = the station `end`): -1 when it passes a station dot, else the number of tracks it crosses (a
+     * new network allows none; an old graph whose every option crosses a line may cross one, scored worse — never through a dot).
+     */
+    const segCost = (p: XY, q: XY, end: StationId) => {
+      if (!stations.every(s => s.id === end || segPointDist(s, p, q) > u + EPS)) return -1;
+      let n = 0;
+      for (const e of edges) if (e.a !== end && e.b !== end && properCross(p, q, e.pa, e.pb)) n++;
+      return o.strict && n ? -1 : n;
+    };
+    for (const x of approach) {
+      if (x === leaf) continue;
+      const px = pos.get(x)!;
+      // the Maintenance Route's spot: a grid point 2..steps grid steps from the approach — on its octilinear rays (new networks: only
+      // there), or anywhere in that box for an old graph whose rays are all blocked (an angled service track, scored worse)
+      for (let gj = -BYPASS.steps; gj <= BYPASS.steps; gj++) for (let gi = -BYPASS.steps; gi <= BYPASS.steps; gi++) {
+        const k = Math.max(Math.abs(gi), Math.abs(gj));
+        if (k < 2) continue;
+        const angledX = gi === 0 || gj === 0 || Math.abs(gi) === Math.abs(gj) ? 0 : 1;
+        if (angledX && o.strict) continue;
+        const p = {x: px.x + gi * u, y: px.y + gj * u};
+        if (p.x < bound.x0 || p.y < bound.y0 || p.x > bound.x1 || p.y > bound.y1) continue;
+        if (stations.some(s => cheb(s, p) < 2 * u - EPS)) continue;
+        if (edges.some(e => segPointDist(p, e.pa, e.pb) <= u + EPS)) continue;
+        const crossX = segCost(px, p, x);
+        if (crossX < 0) continue;
+        // spokes: stations 2..steps grid steps from p (octilinear; angled only for an old graph), clear of everything
+        const spokes: {y: StationId; k: number; a: number}[] = [];
+        for (const st of stations) {
+          // never a shortcut that would bring the approach (and so the Reactor) nearer the start
+          if (st.id === x || st.id === R || dS.get(st.id)! + 2 < dS.get(x)!) continue;
+          const dx = Math.abs(st.x - p.x), dy = Math.abs(st.y - p.y), c = Math.max(dx, dy) / u;
+          if (c < 2 - EPS || c > BYPASS.steps + EPS) continue;
+          const a = Math.abs(dx - dy) < EPS || dx < EPS || dy < EPS ? 0 : 1;
+          if (a && o.strict) continue;
+          const cr = segCost(p, st, st.id);
+          if (cr >= 0) spokes.push({y: st.id, k: Math.round(c), a: a + 4 * cr});
+        }
+        const pr = Math.round(cheb(p, pos.get(R)!) / u);
+        const sk = (y: StationId) => spokes.find(q => q.y === y)!;
+        const consider = (ys: StationId[], kind: BypassKind, unconnected: number, rank: number) => {
+          const angled = angledX + 4 * crossX + ys.reduce((t, y) => t + sk(y).a, 0);
+          const len = k + ys.reduce((t, y) => t + sk(y).k, 0);
+          const score = [unconnected, angled, rank, (dR.get(x) ?? 9) - 1, len, pr, leafRank];
+          if (!best || lexLess(score, best.score)) best = {leaf, join, x, p, ys, kind, score};
+        };
+        const order = (f: (q: {y: StationId; k: number; a: number}) => number) => (q1: {y: StationId; k: number; a: number}, q2: {y: StationId; k: number; a: number}) =>
+          q1.a - q2.a || f(q1) - f(q2) || q1.k - q2.k || (q1.y < q2.y ? -1 : 1);
+        if (mode === 'gate') {
+          // one spoke per beyond component (its best: octilinear, a neighbour of the Reactor first, then the shortest)
+          const ys: StationId[] = [];
+          let worst = 0;
+          for (const c of beyondComps) {
+            const opts = spokes.filter(q => comp.get(q.y) === c && (!o.strict || (dR.get(q.y) ?? 99) <= BYPASS.hops)).sort(order(q => dR.get(q.y)!));
+            if (opts.length) { ys.push(opts[0].y); worst = Math.max(worst, dR.get(opts[0].y)! - 1); }
+          }
+          if (!ys.length || (o.strict && ys.length < beyondComps.length)) continue;
+          consider(ys, worst === 0 ? 'parallel' : 'beyond', beyondComps.length - ys.length, Math.min(worst, 9));
+        } else if (mode === 'cycle') {
+          // the Reactor's far side (reached from its other neighbours without it or x), not already near the approach
+          const opts = spokes.filter(q => (dR.get(q.y) ?? 99) <= BYPASS.hops && farSide.get(x)!.has(q.y) && (minus.get(x)!.get(q.y) ?? 99) >= 3).sort(order(q => dR.get(q.y)!));
+          if (!opts.length) continue;
+          consider([opts[0].y], dR.get(opts[0].y) === 1 ? 'parallel' : 'beyond', 0, dR.get(opts[0].y)! - 1);
+        } else {
+          // a terminus Reactor: a genuine onward connection from its approach (>= 3 hops away today)
+          const far = (q: {y: StationId}) => allHops.get(x)!.get(q.y) ?? 0;
+          const opts = spokes.filter(q => far(q) >= 3).sort(order(q => -far(q)));
+          if (!opts.length) continue;
+          consider([opts[0].y], 'shortcut', 0, -Math.min(12, far(opts[0])));
+        }
+      }
+    }
+  });
+  for (const mode of passes) if (!best) search(mode);
+  const pick = best as BypassCand | null;
+  if (!pick) return fail('no drawable spot beside the Reactor');
+  // apply: the terminus leaves its line end, moves to p, takes the name; the service line joins approach - MR - beyond
+  const out = JSON.parse(JSON.stringify(net)) as SubwayNetwork;
+  const m = out.nodes.find(n => n.id === pick.leaf)!;
+  m.x = pick.p.x; m.y = pick.p.y; m.name = MAINTENANCE_ROUTE.name;
+  out.edges = out.edges.filter(([a, b]) => a !== pick.leaf && b !== pick.leaf);
+  for (const l of out.lines) {
+    if (pick.join) { const i = l.stations.indexOf(pick.leaf); if (i >= 0) l.stations.splice(i, 1); continue; }
+    if (l.stations[0] === pick.leaf) l.stations.shift();
+    else if (l.stations[l.stations.length - 1] === pick.leaf) l.stations.pop();
+  }
+  if (pick.join) out.edges.push(pick.join[0] < pick.join[1] ? [pick.join[0], pick.join[1]] : [pick.join[1], pick.join[0]]);
+  const pair = (a: StationId, b: StationId): [StationId, StationId] => (a < b ? [a, b] : [b, a]);
+  out.edges.push(pair(pick.x, pick.leaf), ...pick.ys.map(y => pair(pick.leaf, y)));
+  out.edges.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
+  const taken = new Set(out.lines.map(l => l.id));
+  const lineId = (i: number) => { let id = i ? `${MAINTENANCE_ROUTE.line}-${i + 1}` : MAINTENANCE_ROUTE.line; while (taken.has(id)) id += 'x'; taken.add(id); return id; };
+  pick.ys.forEach((y, i) => out.lines.push({id: lineId(i), name: MAINTENANCE_ROUTE.name, color: MAINTENANCE_ROUTE.color, stations: i ? [pick.leaf, y] : [pick.x, pick.leaf, y]}));
+  // an old graph whose Reactor still gates a part: short service links (the same Maintenance Route line ink) join each remaining part
+  if (!o.strict) serviceLinks(out, R, (i: number) => lineId(pick.ys.length + i));
+  for (const n of out.nodes) n.lines = out.lines.filter(l => l.stations.includes(n.id)).map(l => l.id);
+  // never trade a valid network for an invalid one; the Reactor's depth is unchanged
+  if (validateNetwork(net).length === 0 && validateNetwork(out).length !== 0) return fail(`invalid result: ${validateNetwork(out).slice(0, 2).join('; ')}`);
+  if (graphDistances(out, out.start).get(R) !== depth) return fail('the Reactor would move nearer the start');
+  const gateFree = reactorGatesNothing(out);
+  if (o.strict && !gateFree) return fail('the Reactor would still gate a part');
+  return {network: out, node: pick.leaf, approach: pick.x, beyond: pick.ys.slice(), kind: pick.kind, gateFree};
+}
+
+/**
+ * (old graphs only) While the network without the Reactor falls apart, join the part that holds the start to another part with one
+ * straight service link between two existing stations (octilinear first, clear of every dot and track, near the Reactor first),
+ * printed as a Maintenance Route line. In place; stops when no link is drawable.
+ */
+function serviceLinks(net: SubwayNetwork, R: StationId, lineId: (i: number) => string): void {
+  const u = GRID.unit;
+  for (let i = 0; i < 4; i++) {
+    const adj = adjacency(net);
+    const comp = componentsWithout(adj, R);
+    const home = comp.get(net.start)!;
+    if (new Set(comp.values()).size <= 1) return;
+    const dR = hops(adj, R);
+    const pos = new Map(net.nodes.map(n => [n.id, n]));
+    const edges = net.edges.map(([a, b]) => ({a, b, pa: pos.get(a)!, pb: pos.get(b)!}));
+    let pick: {a: StationId; b: StationId; score: number[]} | null = null;
+    for (const na of net.nodes) {
+      if (na.id === R || comp.get(na.id) !== home) continue;
+      for (const nb of net.nodes) {
+        if (nb.id === R || comp.get(nb.id) === home || adj.get(na.id)!.includes(nb.id)) continue;
+        const dx = Math.abs(na.x - nb.x), dy = Math.abs(na.y - nb.y), c = Math.max(dx, dy) / u;
+        if (c < 2 - EPS || c > BYPASS.steps + EPS) continue;
+        const a = Math.abs(dx - dy) < EPS || dx < EPS || dy < EPS ? 0 : 1;
+        if (net.nodes.some(s => s.id !== na.id && s.id !== nb.id && segPointDist(s, na, nb) <= u + EPS)) continue;
+        if (edges.some(e => e.a !== na.id && e.b !== na.id && e.a !== nb.id && e.b !== nb.id && properCross(na, nb, e.pa, e.pb))) continue;
+        const score = [a, (dR.get(na.id) ?? 99) + (dR.get(nb.id) ?? 99), Math.round(c)];
+        if (!pick || lexLess(score, pick.score)) pick = {a: na.id, b: nb.id, score};
+      }
+    }
+    if (!pick) return;
+    net.edges.push(pick.a < pick.b ? [pick.a, pick.b] : [pick.b, pick.a]);
+    net.edges.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : x[1] < y[1] ? -1 : x[1] > y[1] ? 1 : 0));
+    net.lines.push({id: lineId(i), name: MAINTENANCE_ROUTE.name, color: MAINTENANCE_ROUTE.color, stations: [pick.a, pick.b]});
+  }
+}
+
+/**
+ * The Maintenance Route invariants of a network (tests; the generator's acceptance): empty = it has exactly one Maintenance Route,
+ * a Subway node (neither the start nor the Reactor, not next to the Reactor) next to an approach station of the Reactor, not a
+ * dead end, from which the stations beyond the Reactor are reachable without entering it — and (`gateFree`) the network without
+ * the Reactor is connected.
+ */
+export function maintenanceRouteProblems(net: SubwayNetwork, o: {gateFree?: boolean} = {}): string[] {
+  const errs: string[] = [];
+  const named = net.nodes.filter(n => n.name === MAINTENANCE_ROUTE.name);
+  if (named.length !== 1) return [`${named.length} stations named ${MAINTENANCE_ROUTE.name}, expected 1`];
+  const m = named[0], R = net.reactor, S = net.start;
+  if (m.archetype !== 'subway') errs.push('the Maintenance Route is not a Subway node');
+  if (m.id === S || m.id === R) errs.push('the Maintenance Route is the start or the Reactor');
+  const adj = adjacency(net);
+  const dS = hops(adj, S), dR = hops(adj, R), depth = dS.get(R) ?? 0;
+  const nb = adj.get(m.id) ?? [];
+  if (nb.includes(R)) errs.push('the Maintenance Route is next to the Reactor (not a bypass)');
+  if (nb.length < 2) errs.push('the Maintenance Route is a dead end');
+  const comp = componentsWithout(adj, R);
+  const approach = nb.filter(x => dS.get(x)! < depth && (dR.get(x) ?? 99) <= BYPASS.hops && comp.get(x) === comp.get(S));
+  if (!approach.length) errs.push('the Maintenance Route is not next to an approach station of the Reactor');
+  if ((dS.get(m.id) ?? 99) > depth) errs.push('the Maintenance Route is farther from the start than the Reactor');
+  const leaf = (adj.get(R) ?? []).length <= 1;
+  if (!leaf) {
+    // a genuine bypass: from the Maintenance Route, without the approach it hangs off, the track leads round to the Reactor's other side
+    const ok = approach.some(x => hops(new Map([...adj].map(([k, v]) => [k, v.filter(z => z !== x)])), m.id).has(R));
+    if (!ok) errs.push('the Maintenance Route does not lead beyond the Reactor');
+  }
+  if (o.gateFree !== false && !reactorGatesNothing(net)) errs.push('the Reactor still gates part of the network');
   return errs;
 }
