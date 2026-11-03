@@ -9,7 +9,8 @@
 //    bulkM, hideWear) — exactly what ai/wardrobe.ts WardrobeLibrary reads (geometry-hash guard included);
 //  - STATIC display nodes `LingerieDisplay_<design>_top` / `_bottom` (unskinned) that REUSE the display body's POSITION / NORMAL /
 //    UV / index accessors (zero extra geometry or texture bytes): the set holding its fitted shape, translated so the set stands
-//    centred on y = 0 (extras lingerieDisplay: size, the translation back onto the body);
+//    centred on y = 0 (extras lingerieDisplay: size; toBodySpace = the OFFSET to add to the node translation for the body frame,
+//    i.e. translation + toBodySpace = 0: the vertices themselves are in body space);
 //  - scene extras zombieWearable {id, kind: 'lingerie-set', pieces, bodies, ...} WITHOUT a scene-level `slot` (the file holds one
 //    wearable of each of two slots; WardrobeLibrary only rejects a file whose scene slot disagrees).
 import {Document, NodeIO} from '@gltf-transform/core';
