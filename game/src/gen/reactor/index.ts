@@ -50,6 +50,9 @@ import {sealPockets, suiteHolds, suiteRecord} from './suites'; // (lane ARRIVAL)
 import {coreFloorRecord, finishCoreFloor} from './coreFloor'; // task reactor-expansion-20261101 (lane CORE)
 // task reactor-expansion-20261101 (lane HOST): the generator side complexes (bunker / mines / waste) off the main shaft
 import {carveComplexes, clearEntranceLamps, complexLights, dressComplexes, finishComplexes, hostGenerators, trimCoreCrop, type ComplexCarvers} from './complex/host';
+// task studio-reactor-surface-ending-20261102 (lane ENDING): the sealed exterior door -> U-stair -> the open-air SURFACE storey
+import {carveSurface, finishSurface, planSurface} from './surface';
+import {extensionRects} from '../trackExt/index';
 
 export {reactorFrame, reactorSeed, reactorStoreyLabel, setReactorVariantOverride, TIERS, CORE_LEVEL, REACTOR_LEVELS} from './frame';
 export {reactorIssues, routeIssues as reactorRouteIssues} from './validate';
@@ -147,6 +150,9 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
     // columns are SOLID everywhere but are not rock, and the fans' ducts need PIT_ROCK cells of rock behind the walls: no extension
     // cell there (an annex corridor once cut through the rim gallery's organ bank)
     keepOut: [pitKeepOut(rc)],
+    // task studio-reactor-surface-ending-20261102 (lane ENDING): the pit storeys are the station's rock (the planner sees exactly these
+    // grids: an identical plan); the SURFACE storey added later may stand above an extension cell (extensionIssues checks its slab)
+    rockLevels: Array.from({length: REACTOR_LEVELS}, (_, i) => i),
   });
   // --- Crop (fixed origin: canvas cells = grid cells) ------------------------------------------------------------------------
   const c = cropKit(k, Array.from({length: REACTOR_LEVELS}, (_, i) => i), 0, 0, rc.coreW, rc.coreH);
@@ -239,8 +245,13 @@ function tryLevel(f: ReactorFrame, genSeed: number, seed: number, attempt: numbe
   finishComplexes(layout, rc, cxs); // lane HOST: complex generators' cables through their entrances + layout.reactor.complexes
   layout.reactor.approach = approachRecord(rc.arrival); // task reactor-playtest-round2-20261102 (lane ARRIVAL)
   layout.reactor.suites = suiteRecord(rc.suites); // (lane ARRIVAL: the seeded rock suites)
+  // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface exit, carved into rock nothing else used (its own stream;
+  // every earlier record keeps its value), BEFORE the pit lamps (they see the door) and clear of the planned Track2 extension
+  const sPlan = planSurface(layout, rc, seed, ext ? extensionRects(ext) : []);
+  const sCarve = sPlan ? carveSurface(layout, rc, sPlan) : null;
   planPitLamps(layout); // task reactor-expansion-20261101 (lane GASLIGHT): every pit lamp MOUNTED + a real fixture (no floating / dead-glow lamps); the open pit top — AFTER every wall carve (incl. the complex entrances)
   clearEntranceLamps(layout, cxs); // (lead merge fix) …and no mounted pit lamp in a complex's doorway band either
+  if (sCarve) finishSurface(layout, sCarve); // (lane ENDING) the open sky over the plaza, the opening through the deck, layout.reactor.surface
   layout.reactor.coreFloor = coreFloorRecord(layout, rc.coreFloor, coreFin); // task reactor-expansion-20261101 (lane CORE): glow sources, round-rail seam, record
 
   // --- Track2 attach, then the ONE family roll ---------------------------------------------------------------------------------

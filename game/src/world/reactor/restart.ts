@@ -33,7 +33,7 @@ import {
   CONTROL_NAME, HOLD_S, blocker, controlDone, controlPrompt, doneText, isRestartControl, nextStepText, operate, readRestartState,
   writeRestartState, type RestartControlId, type RestartEvent, type RestartHints, type RestartInventory, type RestartRun,
 } from './restartLogic';
-import {objectiveHtml} from './objectiveText'; // task reactor-surface-ending-20261102 (lane OBJECTIVES): every HUD objective string
+import {OBJECTIVE_TEXT, objectiveHtml} from './objectiveText'; // task reactor-surface-ending-20261102 (lane OBJECTIVES): every HUD objective string
 import {VENT_TOWERS, WinSequence, coreGlowAt, planWin, tierPowerAt, type WinPlan, type WinSink} from './restartWin';
 import {drawReactorScreen, screenKey, screenPixels, type ScreenModel} from './restartScreens';
 import {buildControlView, buildScreenView, fallbackMount, type ControlView, type ScreenView} from './restartViews';
@@ -380,7 +380,8 @@ export class ReactorRestart {
     let lv = -1;
     try { lv = this.host.levels.levelAt(P.x, P.z, P.y); } catch { lv = -1; }
     const tier = info.tiers.find(t => t.level === lv);
-    this.tierLabel = tier ? tier.label : this.tierLabel;
+    // (task studio-reactor-surface-ending-20261102, lane ENDING: + the surface storey, which is no tier)
+    this.tierLabel = tier ? tier.label : lv >= 0 && lv === info.surface?.level ? OBJECTIVE_TEXT.ending.storey : this.tierLabel;
     this.updateObjective();
   }
 

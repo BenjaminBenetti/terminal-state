@@ -52,7 +52,9 @@ function seeThrough(L: StationLayout): (x: number, y: number) => boolean {
     if (!g0.inBounds(x, y)) return false;
     const i = g0.idx(x, y);
     if (g0.cells[i] === FLOOR || g0.cells[i] === VOID) return true;
-    for (const lv of L.levels) if (lv.id && lv.grid.cells[i] !== SOLID && lv.grid.ceil[i] > -0.5) return true;
+    // (task studio-reactor-surface-ending-20261102, lane ENDING: a band wholly above the rim's eyes — the surface plaza on the roof, the
+    // exit stair's upper flights — carries no sight line at the rim: only bands spanning the rim's eye height count)
+    for (const lv of L.levels) if (lv.id && lv.grid.cells[i] !== SOLID && lv.grid.ceil[i] > -0.5 && lv.grid.floorOf(i) < 1.7) return true;
     return false;
   };
 }

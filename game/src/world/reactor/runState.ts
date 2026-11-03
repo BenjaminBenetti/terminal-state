@@ -45,7 +45,17 @@ export interface ReactorRunState {
   /** The reactor restarted (the local win); when (game clock s). */
   restarted: boolean;
   restartedAt: number;
+  /**
+   * Task studio-reactor-surface-ending-20261102 (lane ENDING, world/reactor/ending.ts writes it): the surface exit. `doors` = the
+   * exterior doors opened (once the core's gas finished clearing after ONLINE; never closes again), `openedAt` the game clock then,
+   * `announced` = the centre "External doors open" message has been shown (it never replays: a rebuild starts docked), `surfaced` =
+   * the player has stood on the surface storey.
+   */
+  ending: ReactorEndingState;
 }
+
+/** Task studio-reactor-surface-ending-20261102 (lane ENDING): the persisted surface-exit phase (see ReactorRunState.ending). */
+export interface ReactorEndingState { doors: boolean; openedAt: number; announced: boolean; surfaced: boolean }
 
 /** Fuse slots in the switchgear (two burnt cartridges to replace). */
 export const REACTOR_FUSE_SLOTS = 2;
@@ -58,6 +68,7 @@ export function emptyReactorState(generators: number, zones: number): ReactorRun
     jam: {generator: -1, stalls: 0, at: 0}, // (lane GAS)
     fuses: Array.from({length: REACTOR_FUSE_SLOTS}, () => false),
     breaker: false, valve: false, pump: false, keyInserted: false, rods: false, restarted: false, restartedAt: 0,
+    ending: {doors: false, openedAt: 0, announced: false, surfaced: false}, // (lane ENDING)
   };
 }
 
@@ -90,6 +101,9 @@ export function loadReactorState(raw: unknown, generators: number, zones: number
   s.rods = bool(r.rods) && s.keyInserted && s.pump;
   s.restarted = bool(r.restarted) && s.rods;
   s.restartedAt = s.restarted ? num(r.restartedAt) : 0;
+  // (lane ENDING) the doors only ever open after the restart; announced / surfaced only once they are open
+  const en = r.ending as Partial<ReactorEndingState> | undefined;
+  if (en && typeof en === 'object' && s.restarted && bool(en.doors)) s.ending = {doors: true, openedAt: num(en.openedAt), announced: bool(en.announced), surfaced: bool(en.surfaced)};
   return s;
 }
 

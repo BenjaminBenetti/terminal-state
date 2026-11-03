@@ -403,8 +403,9 @@ export interface ReactorSurfaceEdge { x0: number; z0: number; x1: number; z1: nu
  *  - `edges` are the plaza's outer boundary (a 1.1 m parapet line: `parapetY`); stand rubble, barriers and facades on / beyond them,
  *    never inside `walk`. A closed column is open air above `parapetY` unless levels[0].sky.tops raises it (`tops` cells: the stair
  *    head house) — buildings standing right on an edge may set tops there (bullets then stop on them);
- *  - `hole` is the roof opening (the beam rises through it), with the drawn parapet ring round it (r0..r1, top) and `keepR`: no
- *    walkable cell lies inside that radius; rain / props never go inside `keepR`;
+ *  - `hole` is the roof opening (the beam rises through it), with lane ENDING's barrier round it — a see-through steel guard railing
+ *    at `parapet.r0` (just inside r) `parapet.top` high over a concrete apron out to `parapet.r1` — and `keepR` (= r): no walkable cell
+ *    lies inside that radius (the deck stops at the opening's stepped cell edge, r .. r + 0.71); rain / props never go inside `keepR`;
  *  - `head` is the stair head house over the stair's top (a closed box from y to `head.top`: give it a canopy / facade if you like);
  *  - `exit` is where the stair opens onto the plaza (the way back down; signs / the map's exit marker).
  */
@@ -425,10 +426,10 @@ export interface ReactorSurface {
   hole: {x: number; z: number; r: number; parapet: {r0: number; r1: number; top: number}; keepR: number};
   /**
    * The sealed exterior door in the rim pit wall: centre (floor y), facing (yaw, camera convention: forward = out into the pit), its
-   * outward normal (into the pit), clear width / height, the door cells' world rect, the rim deck area in front, the grid cells of the
-   * opening on layout.levels[door.level] (the runtime blocks them while sealed).
+   * outward normal (into the pit), clear width / height, the opening's world rect (its cells on layout.levels[door.level]: the runtime
+   * blocks them while sealed — gen/reactor/surface.ts surfaceDoorCells), the rim deck area in front.
    */
-  door: {level: number; x: number; y: number; z: number; yaw: number; nx: number; nz: number; w: number; h: number; rect: ReactorRect; front: number; cells: readonly number[]};
+  door: {level: number; x: number; y: number; z: number; yaw: number; nx: number; nz: number; w: number; h: number; rect: ReactorRect; front: number};
   /** The stair: traversal.stairs ids (bottom first), the LevelLink id rim -> surface, its foot (rim) and head (surface) points, footprint. */
   stairs: {flights: readonly number[]; link: number; bottom: ReactorPoint; top: ReactorPoint; rect: ReactorRect};
   /** The stair head house on the plaza (closed box over the stair's upper end): footprint, top (absolute y). */

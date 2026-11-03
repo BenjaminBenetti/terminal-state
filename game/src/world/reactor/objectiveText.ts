@@ -21,6 +21,24 @@ export const OBJECTIVE_TEXT = {
   running: 'Reactor running · surface ventilation towers online',
   /** The task labels. */
   tasks: {power: 'Power', coolant: 'Coolant', key: 'Key', rods: 'Rods'},
+  /**
+   * Task studio-reactor-surface-ending-20261102 (lane ENDING): the surface exit's stages (world/reactor/ending.ts sets them through
+   * ReactorRestart.objectiveStage). `doors` is the line the centre "External doors open" message turns into when it docks on the left.
+   */
+  ending: {
+    /** The centre-screen message: the title (the user's words) and its one hint line. */
+    message: 'External doors open',
+    hint: 'Exterior stair off the rim gallery — up to the surface',
+    /** The objective once the message docked: the doors are open, go up. */
+    doors: 'External doors open — ▸ Climb to the surface',
+    /** On the surface storey. */
+    surfaced: 'Surface reached — the air is breathable',
+    /** The storey label of the surface (the HUD's storey line). */
+    storey: 'Surface',
+    /** The sealed door's prompt (before the core's air has cleared) and the open door's. */
+    sealed: 'External door · SEALED — opens when the core air has cleared',
+    open: 'External door · open — stair to the surface',
+  },
 } as const;
 
 /** The restart tasks in route order: the tier-4 switchgear, the pump hall, then the control room (its key, then the rods). */

@@ -126,7 +126,9 @@ describe('gaslight lamps: real generated Reactors', () => {
   // top open (no ceiling over any pit cell); the full opening checks are game/tests/reactor-x-roof-opening.test.ts
   it('the roof opening: the rim storey opens to the sky at the roof line ONLY over the core; the roof slab elsewhere; walls stop rays', () => {
     const L = level(SEEDS[0]), info = L.reactor!, o = roofOpeningOf(info)!;
-    expect(L.levels[0].sky).toMatchObject({y: info.pit.rimY, ceil: info.pit.roofY, top: info.pit.roofY});
+    // (task studio-reactor-surface-ending-20261102, lane ENDING: the sky ceil is now the surface plaza's band top over the roof; the pit's
+    // roof-line band tops stay ceilings below it — the full opening checks: reactor-x-roof-opening.test.ts)
+    expect(L.levels[0].sky).toMatchObject({y: info.pit.rimY, ceil: info.surface!.ceil, top: info.pit.roofY});
     expect(L.levels[0].sky!.open).toBeInstanceOf(Uint8Array);
     expect(L.levels.filter(l => l.sky).length).toBe(1);
     const levels = stationLevels(L), runs = ceilingRuns(levels, new LevelColumns(levels));

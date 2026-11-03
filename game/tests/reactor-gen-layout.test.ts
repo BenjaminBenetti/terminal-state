@@ -34,7 +34,10 @@ describe('Reactor generator (lane GEN)', () => {
     for (const seed of SEEDS) {
       const L = gen(seed);
       expect(reactorIssues(L), `seed ${seed}`).toEqual([]);
-      expect(L.levels.length).toBe(REACTOR_LEVELS);
+      // (task studio-reactor-surface-ending-20261102, lane ENDING: + the surface storey above the pit roof, levels[REACTOR_LEVELS]: the
+      // user's exterior door -> stairs -> surface; the pit storeys are still REACTOR_LEVELS)
+      expect(L.levels.length).toBe(REACTOR_LEVELS + 1);
+      expect(L.reactor!.surface?.level).toBe(REACTOR_LEVELS);
       expect(L.levels.length).toBeLessThanOrEqual(8);
       expect(L.grid.w * L.grid.h).toBeLessThanOrEqual(90_000);
     }
