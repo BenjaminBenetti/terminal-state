@@ -20,7 +20,7 @@ import {describe, expect, it} from 'vitest';
 import {surfaceEyeOpen, surfaceEyeOutside, surfaceSiteOf} from '../src/world/reactor/surfaceSite';
 import {surfaceRainExposure} from '../src/world/reactor/audioRain';
 import {CELL, SOLID} from '../src/gen/grid';
-import {planSurfaceCity, footprintCorners} from '../src/world/reactor/surfacePlan';
+import {SURFACE_CITY, planSurfaceCity, footprintCorners} from '../src/world/reactor/surfacePlan';
 import {SURFACE_RAIN, buildRainFloor, rainsAt} from '../src/world/reactor/surfaceRain';
 import {SURFACE_LOOK, mistOpacity, surfaceModelMaterial} from '../src/world/reactor/surfaceLook';
 import {buildSurfaceView, disposeSurfaceView} from '../src/world/reactor/surfaceCity';
@@ -303,7 +303,7 @@ describe('the runtime: the eye gate, the win, the mist / far-plane swap, ZERO su
     const plan = planSurfaceCity(site, L.seed >>> 0, inCatalogue, L.reactor!.pit.bounds);
     for (const p of plan.placements) {
       expect(p.y).toBe(site.y);
-      for (const [x, z] of footprintCorners(p)) expect(Math.hypot(x - site.hole.x, z - site.hole.z)).toBeLessThanOrEqual(175 + 1e-6);
+      for (const [x, z] of footprintCorners(p)) expect(Math.hypot(x - site.hole.x, z - site.hole.z)).toBeLessThanOrEqual(SURFACE_CITY.maxR + 1e-6); // (lane CITY: the outskirts belt reaches out to maxR)
     }
   });
 });

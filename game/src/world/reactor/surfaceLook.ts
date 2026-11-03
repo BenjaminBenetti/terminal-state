@@ -52,6 +52,8 @@ export const SURF_U = {
   yard: uniform(new THREE.Vector4(0, 0, 0, 0)),
   /** The street-mask rows: origin x / z, cell (m), texels per row. */
   maskXf: uniform(new THREE.Vector4(0, 0, 1, 1)),
+  /** The street grid's circle (centre x / z, radius, fade width): the streets fade out toward the outskirts (surfacePlan.ts streetFadeAt). */
+  streets: uniform(new THREE.Vector4(0, 0, 1e5, 1)),
   /** The outdoor sky's opacity (the clearing 0..1: over the pit's murk dome until clear). */
   skyOn: uniform(0),
 };
@@ -212,7 +214,7 @@ const ripples = (xz: N): N => {
  * THE CITY GROUND: the Reactor's Codex pit-concrete colour map (world-mapped, 3 m tiles; a flat tone when absent) — carriageway darker
  * and smoother, pavements lighter, lots dusty — wet, with puddles (mirror-ish sky, rain ripples) gathering on the carriageways. The
  * street mask is a 1-D data texture of two rows (across x / across z: 1 road, 0.5 pavement, 0 lot), CPU mirror surfacePlan.ts
- * streetMaskAt; the yard (SURF_U.yard) is 0.
+ * streetMaskAt; the yard (SURF_U.yard) is 0; the streets fade out round the grid's circle (SURF_U.streets: the outskirts are lots).
  */
 export function surfaceGroundMaterial(mask: THREE.DataTexture, concrete: THREE.Texture | null): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({name: 'reactor-surface-ground', fog: false});
@@ -223,7 +225,10 @@ export function surfaceGroundMaterial(mask: THREE.DataTexture, concrete: THREE.T
     const mx = n(texture(mask).load(ivec2(int(tx), int(0)))).r, mz = n(texture(mask).load(ivec2(int(tz), int(1)))).r;
     const Y = n(SURF_U.yard);
     const inYard = n(p.x).greaterThan(Y.x).and(n(p.x).lessThan(Y.z)).and(n(p.z).greaterThan(Y.y)).and(n(p.z).lessThan(Y.w));
-    const st = n(inYard.select(float(0), max(mx, mz))).toVar('sgSt');
+    // (the street grid fades out toward the outskirts: no carriageway runs on past the last blocks into the belt)
+    const S = n(SURF_U.streets);
+    const fade = n(float(1).sub(smoothstep(n(S.z).sub(S.w), S.z, length(n(p).xz.sub(vec2(S.x, S.y))))));
+    const st = n(inYard.select(float(0), max(mx, mz).mul(fade))).toVar('sgSt');
     const road = n(smoothstep(0.75, 0.95, st)), walk = n(smoothstep(0.3, 0.5, st)).mul(float(1).sub(road));
     const base = n(concrete ? n(texture(concrete, n(p).xz.div(3))).rgb : vec3(0.42, 0.4, 0.37)).toVar('sgBase');
     const lot = n(base).mul(vec3(0.78, 0.74, 0.68));
