@@ -17,10 +17,20 @@
 //    (Digit or Numpad keys) calls onCheat — the host persists enableCheat(state) — and the map re-renders with everything revealed.
 //    No digit ever reaches the hotbar; the sequence resets on a wrong key, close, blur or a hidden tab. The Lockbox's own 1337 is
 //    untouched: with the map closed its listener is gone.
+//
+// Task studio-beta-campaign-polish-20261103-063841-01 (lane MAP), items 10-14:
+//  - the selected station's details are a CARD beside its node (placeCard: world -> screen through the pan / zoom, right of the node,
+//    else left / below / above, clamped inside the viewport; re-placed on pan / zoom / resize; an overlay that never moves the print);
+//  - every station prints its TYPE ICON (stationGlyph: Subway dot, Office tower, Mall bag, Reactor trefoil, Maintenance Route hex
+//    nut; filled = visited) with a concise key; only known stations print, so the discovery mask holds (no Reactor spoiler);
+//  - label placement never depends on the selection / keyboard focus: selecting never moves, wraps or hides a station name;
+//  - travel mode also selects VISITED stations reachable over visited track (campaign/discovery.ts travelPlan): the card names the
+//    route, a pencil line traces it; a cut-off visited station says "not available" (no fake path);
+//  - the Maintenance Route's service line prints as a dashed graphite track (not an interchange ink).
 
 import type {CampaignState, StationId, StationNode, SubwayNetwork} from '../campaign/types';
-import {archetypeLabel} from '../campaign/network';
-import {canTravel, enableCheat, neighbors, reactorKnown, visibleEdges, visibleNodes} from '../campaign/discovery';
+import {MAINTENANCE_ROUTE, archetypeLabel, isServiceLine} from '../campaign/network';
+import {canTravel, enableCheat, neighbors, reactorKnown, travelBlock, travelPlan, visibleEdges, visibleNodes} from '../campaign/discovery';
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, digitOfCode} from '../items/devGrant';
 import {isTypingTarget} from '../player/input';
 import {seedToCode} from '../core/rng';
@@ -153,6 +163,77 @@ export function pickByDirection(from: Pt, cands: readonly {id: string; x: number
   return best;
 }
 
+// --- station types and the details card (pure; lane MAP) ---------------------------------------------------------------------
+
+/** What a station's icon shows: its archetype, or the Maintenance Route (an ordinary Subway node printed as the Reactor's bypass). */
+export type StationKind = 'subway' | 'office' | 'mall' | 'reactor' | 'maintenance';
+
+export function stationKind(node: StationNode, net: SubwayNetwork): StationKind {
+  if (node.id === net.reactor || node.archetype === 'reactor') return 'reactor';
+  if (node.name === MAINTENANCE_ROUTE.name && node.archetype === 'subway') return 'maintenance';
+  return node.archetype === 'office' ? 'office' : node.archetype === 'mall' ? 'mall' : 'subway';
+}
+
+/** The printed wording of a kind (key, card, hit titles). */
+export function kindLabel(k: StationKind): string {
+  return k === 'maintenance' ? MAINTENANCE_ROUTE.name : k === 'office' ? 'Office tower' : k === 'mall' ? 'Shopping mall' : k === 'reactor' ? 'Reactor' : 'Subway station';
+}
+
+/**
+ * The ink of one station icon centred at p (radius r): a round dot (Subway), a square tower with windows (Office), a shopping bag
+ * with its handle (Mall), the radiation trefoil (Reactor), a hex nut (Maintenance Route). `filled` = visited (solid ink, the paper
+ * showing through the details); otherwise a paper-white body in an ink outline. Shapes differ, so the type never relies on colour.
+ */
+export function stationGlyph(kind: StationKind, p: Pt, r: number, filled: boolean, hub = false): string {
+  const fill = filled ? INK : '#ffffff', detail = filled ? '#ffffff' : INK, sw = hub ? 3.2 : 2.2;
+  const x = p.x, y = p.y;
+  switch (kind) {
+    case 'reactor': return trefoil(p, r);
+    case 'office': {
+      const h = r * 0.92, w = r * 0.18;
+      const win = [[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([i, j]) => `<rect x="${n1(x + i * h * 0.38 - w)}" y="${n1(y + j * h * 0.38 - w)}" width="${n1(2 * w)}" height="${n1(2 * w)}" fill="${detail}"/>`).join('');
+      return `<rect x="${n1(x - h)}" y="${n1(y - h)}" width="${n1(2 * h)}" height="${n1(2 * h)}" rx="1.2" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>${win}`;
+    }
+    case 'mall': {
+      const w = r * 0.95, top = y - r * 0.35, bot = y + r * 0.95, hr = r * 0.45;
+      return `<path d="M${n1(x - hr)} ${n1(top)} A${n1(hr)} ${n1(hr)} 0 0 1 ${n1(x + hr)} ${n1(top)}" fill="none" stroke="${INK}" stroke-width="${n1(sw * 0.8)}"/>`
+        + `<path d="M${n1(x - w)} ${n1(top)} L${n1(x + w)} ${n1(top)} L${n1(x + w * 0.86)} ${n1(bot)} L${n1(x - w * 0.86)} ${n1(bot)} Z" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    }
+    case 'maintenance': {
+      const R = r * 1.08;
+      const pts = Array.from({length: 6}, (_, i) => `${n1(x + R * Math.cos((i * Math.PI) / 3))},${n1(y + R * Math.sin((i * Math.PI) / 3))}`).join(' ');
+      return `<polygon points="${pts}" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/><circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r * 0.36)}" fill="#ffffff" stroke="${INK}" stroke-width="1.4"/>`;
+    }
+    default:
+      return `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r)}" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`
+        + (filled && hub ? `<circle cx="${n1(x)}" cy="${n1(y)}" r="${n1(r * 0.38)}" fill="#ffffff"/>` : '');
+  }
+}
+
+export interface CardPlacement { x: number; y: number; side: 'right' | 'left' | 'below' | 'above' | 'clamped' }
+
+/**
+ * Where the details card goes (screen px): beside the node at `anchor` (its marker `r` px around it) — right, else left, else below,
+ * else above; vertically (horizontally) centred on the node and clamped inside the viewport below the bar; when no side fits (a tiny
+ * screen) the side with the most room, clamped (it may then cover the node). Pure (map-card.test.ts).
+ */
+void travelBlock; // (used by the overlay below)
+export function placeCard(anchor: Pt, r: number, card: {w: number; h: number}, view: {w: number; h: number; top: number}, o: {gap?: number; margin?: number} = {}): CardPlacement {
+  const gap = o.gap ?? 14, m = o.margin ?? 10;
+  const lo = {x: m, y: view.top + m}, hi = {x: view.w - m - card.w, y: view.h - m - card.h};
+  const clamp = (v: number, a: number, b: number) => (b < a ? a : Math.min(b, Math.max(a, v)));
+  const cy = clamp(anchor.y - card.h / 2, lo.y, hi.y), cx = clamp(anchor.x - card.w / 2, lo.x, hi.x);
+  const right = anchor.x + r + gap, left = anchor.x - r - gap - card.w, below = anchor.y + r + gap, above = anchor.y - r - gap - card.h;
+  if (right <= hi.x) return {x: right, y: cy, side: 'right'};
+  if (left >= lo.x) return {x: left, y: cy, side: 'left'};
+  if (below <= hi.y) return {x: cx, y: below, side: 'below'};
+  if (above >= lo.y) return {x: cx, y: above, side: 'above'};
+  const room = [view.w - (anchor.x + r), anchor.x - r, view.h - (anchor.y + r), anchor.y - r - view.top];
+  const best = room.indexOf(Math.max(...room));
+  const want = [{x: right, y: cy}, {x: left, y: cy}, {x: cx, y: below}, {x: cx, y: above}][best];
+  return {x: clamp(want.x, lo.x, hi.x), y: clamp(want.y, lo.y, hi.y), side: 'clamped'};
+}
+
 // --- the key scope (pure) -----------------------------------------------------------------------------------------------------
 
 export type PaperMapKey =
@@ -205,54 +286,71 @@ export interface MapStation {
   visited: boolean;
   current: boolean;
   reactor: boolean;
-  /** Selectable in this mode (travel: a destination; view: any visible station but the current one). */
+  /** The icon (lane MAP): archetype or the Maintenance Route. */
+  kind: StationKind;
+  /** Selectable in this mode (travel: a destination — one stop away, or visited over visited track; view: any visible station but the current one). */
   can: boolean;
+  /** Travel mode: a destination ONE stop away (the pencilled "one stop away" ring). */
+  adjacent: boolean;
 }
 
 export interface MapModel {
   stations: MapStation[];
-  runs: {color: string; pts: Pt[]}[];
+  runs: {color: string; pts: Pt[]; service?: boolean}[];
   labels: Map<string, PlacedLabel | null>;
   legend: {color: string; name: string}[];
   fs: number;
   hitR: number;
   cheat: boolean;
   reactorShown: boolean;
+  /** The Maintenance Route is on the map (its key entry and dashed service track). */
+  maintenanceShown: boolean;
+  /** Travel mode, a selected multi-hop destination: the paper points of its route (current station first), else null. */
+  route: Pt[] | null;
 }
 
 /** The base printed name of a line (a branch prints as its parent). */
 const baseLineName = (name: string) => name.replace(/ \([^)]*\)$/, '');
 
-/** Everything the map prints for `state` at screen scale `scale` (paper px -> screen px). */
+/**
+ * Everything the map prints for `state` at screen scale `scale` (paper px -> screen px). The label layout depends on the state, the
+ * mode and the scale only — NEVER on `selected` / `focused` (lane MAP item 12: selecting never moves / wraps / hides a station name);
+ * those two only add pencil marks and the route trace.
+ */
 export function buildMapModel(state: CampaignState, mode: MapMode, scale: number, selected: StationId | null, focused: StationId | null, layout = paperLayout(state.network)): MapModel {
+  void focused; // the keyboard focus only draws a pencil ring (renderInk); it never reaches the label layout
   const net = state.network;
   const nodes = visibleNodes(state);
   const vis = new Set(nodes.map(n => n.id));
-  const colourOf = new Map(net.lines.map(l => [l.id, l.color]));
+  const colourOf = new Map(net.lines.filter(l => !isServiceLine(l)).map(l => [l.id, l.color]));
+  const here = new Set(neighbors(net, state.current));
   const stations: MapStation[] = nodes.map(node => {
-    const hub = new Set(node.lines.map(l => colourOf.get(l))).size > 1;
+    const hub = new Set(node.lines.filter(l => colourOf.has(l)).map(l => colourOf.get(l))).size > 1;
     const reactor = node.id === net.reactor;
     const current = node.id === state.current;
+    const can = mode === 'travel' ? travelPlan(state, node.id) !== null : !current;
     return {
-      node, p: layout.get(node.id)!, hub, reactor, current, visited: state.visited.includes(node.id),
+      node, p: layout.get(node.id)!, hub, reactor, current, visited: state.visited.includes(node.id), kind: stationKind(node, net),
       r: reactor ? REACTOR_R : hub ? HUB_R : DOT_R,
-      can: mode === 'travel' ? canTravel(state, node.id) : !current,
+      can, adjacent: mode === 'travel' && can && here.has(node.id),
     };
   });
-  // track: per line, the runs of consecutive visible edges
+  // track: per line, the runs of consecutive visible edges (the Maintenance Route's service line prints dashed)
   const edgeKeys = new Set(visibleEdges(state).map(([a, b]) => `${a}|${b}`));
   const shown = (a: string, b: string) => edgeKeys.has(a < b ? `${a}|${b}` : `${b}|${a}`);
   const runs: MapModel['runs'] = [];
   for (const l of net.lines) {
     const st = l.loop ? [...l.stations, l.stations[0]] : l.stations;
+    const service = isServiceLine(l);
     let cur: Pt[] = [];
+    const flush = () => { if (cur.length) runs.push(service ? {color: l.color, pts: cur, service} : {color: l.color, pts: cur}); cur = []; };
     for (let i = 0; i + 1 < st.length; i++) {
       if (shown(st[i], st[i + 1])) {
         if (!cur.length) cur.push(layout.get(st[i])!);
         cur.push(layout.get(st[i + 1])!);
-      } else if (cur.length) { runs.push({color: l.color, pts: cur}); cur = []; }
+      } else flush();
     }
-    if (cur.length) runs.push({color: l.color, pts: cur});
+    flush();
   }
   const segs: [Pt, Pt][] = runs.flatMap(r => r.pts.slice(1).map((p, i) => [r.pts[i], p] as [Pt, Pt]));
   // labels
@@ -261,7 +359,7 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
     const a = layout.get(id)!, b = layout.get(n)!;
     return dir8(b.x - a.x, b.y - a.y);
   });
-  const prio = (s: MapStation) => (s.current ? 0 : s.node.id === selected ? 1 : s.reactor ? 2 : s.node.id === focused ? 3 : s.can && mode === 'travel' ? 4 : s.hub ? 5 : s.visited ? 6 : 7);
+  const prio = (s: MapStation) => (s.current ? 0 : s.reactor ? 1 : s.adjacent ? 2 : s.kind === 'maintenance' ? 3 : s.hub ? 4 : s.visited ? 5 : 6);
   // smaller print only where the zoom keeps it at least MIN_LABEL_PX on screen
   const sizes = [1, 0.84, 0.7].filter((k, i) => !i || fs * k * scale >= MIN_LABEL_PX);
   const items: LabelItem[] = stations.slice().sort((a, b) => prio(a) - prio(b) || (a.node.id < b.node.id ? -1 : 1)).map(s => {
@@ -280,20 +378,24 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
         variants.push({lines: sub ? [...two, sub] : two, cost: si * 1.6 + 0.35});
       }
     });
-    // clear the pencil marks around the dot: the selection ring, the "one stop away" ring, the you-are-here ring
-    const clear = s.node.id === selected || s.node.id === focused ? 14 : s.can && mode === 'travel' ? 8 : s.current ? 6 : 0;
-    return {id: s.node.id, x: s.p.x, y: s.p.y, r: s.r + clear, dirs: dirsOf(s.node.id), force: s.current || s.reactor || s.node.id === selected || s.node.id === focused, variants};
+    // clear the pencil marks around the dot that do not depend on the selection: the "one stop away" ring, the you-are-here ring
+    const clear = s.adjacent ? 8 : s.current ? 6 : 0;
+    return {id: s.node.id, x: s.p.x, y: s.p.y, r: s.r + clear, dirs: dirsOf(s.node.id), force: s.current || s.reactor, variants};
   });
   const markers = stations.map(s => ({id: s.node.id, box: {x0: s.p.x - s.r - 1, y0: s.p.y - s.r - 1, x1: s.p.x + s.r + 1, y1: s.p.y + s.r + 1}}));
   const labels = placeLabels(items, {bounds: PAPER.area, markers, segs, blocked: [{x0: PAPER.band.x0, y0: PAPER.band.y0, x1: PAPER.band.x1, y1: PAPER.band.y1 + 8}]});
-  // legend: the lines serving a visible station, one entry per ink
+  // legend: the lines serving a visible station, one entry per ink (the service line is in the symbol key, with its station)
   const legend: MapModel['legend'] = [];
   for (const l of net.lines) {
-    if (!l.stations.some(s => vis.has(s)) || legend.some(e => e.color === l.color)) continue;
+    if (isServiceLine(l) || !l.stations.some(s => vis.has(s)) || legend.some(e => e.color === l.color)) continue;
     const trunk = net.lines.find(o => o.color === l.color && !/\(.*branch\)$/.test(o.name)) ?? l;
     legend.push({color: l.color, name: baseLineName(trunk.name)});
   }
-  return {stations, runs, labels, legend, fs, hitR: Math.max(HIT_R, MIN_HIT_PX / Math.max(1e-3, scale)), cheat: state.cheat, reactorShown: reactorKnown(state)};
+  const plan = mode === 'travel' && selected ? travelPlan(state, selected) : null;
+  return {
+    stations, runs, labels, legend, fs, hitR: Math.max(HIT_R, MIN_HIT_PX / Math.max(1e-3, scale)), cheat: state.cheat, reactorShown: reactorKnown(state),
+    maintenanceShown: stations.some(s => s.kind === 'maintenance'), route: plan && plan.hops > 1 ? plan.route.map(id => layout.get(id)!) : null,
+  };
 }
 
 const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -319,6 +421,17 @@ function pencilRing(p: Pt, r: number, color: string, w: number): string {
   return `<path d="M${pt(a0, r * 1.04)} A${n1(r)} ${n1(r * 0.94)} 0 1 1 ${pt(a0 + Math.PI, r)} A${n1(r)} ${n1(r * 0.94)} 0 0 1 ${pt(a1, r * 0.97)}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round"/>`;
 }
 
+/** The title band's key rows: the line inks (row 1) and the symbols (row 2), laid out left to right, shrunk to fit when needed. */
+function keyRow(cells: {w: number; svg: string}[], x0: number, x1: number, y: number): string {
+  const gap = 22, total = cells.reduce((t, c) => t + c.w, 0) + gap * Math.max(0, cells.length - 1);
+  const k = total > x1 - x0 ? (x1 - x0) / total : 1;
+  let x = 0;
+  const out = cells.map(c => { const g = `<g transform="translate(${n1(x)} 0)">${c.svg}</g>`; x += c.w + gap; return g; }).join('');
+  return `<g transform="translate(${n1(x0)} ${n1(y)})${k < 1 ? ` scale(${k.toFixed(3)})` : ''}">${out}</g>`;
+}
+
+const keyText = (t: string, fs: number) => t.length * fs * 0.56 + 2;
+
 /** The SVG ink layer of a model (paper coordinates; the sheet transform pans / zooms it with the paper). */
 export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, selected: StationId | null, focused: StationId | null): string {
   const o: string[] = [`<svg class="pm-ink" viewBox="0 0 ${PAPER.w} ${PAPER.h}" width="${PAPER.w}" height="${PAPER.h}" aria-hidden="true">`];
@@ -327,32 +440,45 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   o.push(`<g class="pm-band">`);
   o.push(`<text class="pm-title" x="${b.x0 + 16}" y="${b.y0 + 27}" font-size="21">CITY RAPID TRANSIT</text>`);
   o.push(`<text class="pm-subtitle" x="${b.x0 + 17}" y="${b.y0 + 44}" font-size="10.5">Network map · not to scale · issue ${esc(seedToCode(net.seed))}</text>`);
-  const cells: string[] = [];
-  for (const e of m.legend) cells.push(`<rect x="0" y="-7" width="26" height="7" rx="2" fill="${esc(e.color)}"/><text x="33" y="0" font-size="12">${esc(e.name)}</text>`);
-  cells.push(`<circle cx="6" cy="-3.5" r="4.6" fill="${INK}" stroke="${INK}" stroke-width="1.6"/><text x="16" y="0" font-size="11">Visited</text>`
-    + `<circle cx="76" cy="-3.5" r="4.6" fill="#ffffff" stroke="${INK}" stroke-width="1.6"/><text x="86" y="0" font-size="11">Not yet visited</text>`);
-  if (mode === 'travel') cells.push(`<circle cx="6" cy="-3.5" r="7" fill="none" stroke="#4a4038" stroke-width="1.4" stroke-dasharray="2.5 2.5"/><text x="18" y="0" font-size="11">One stop away</text>`);
-  if (m.reactorShown) cells.push(`${trefoil({x: 7, y: -4}, 7.5)}<text x="20" y="0" font-size="11">Reactor</text>`);
-  const cols = Math.max(4, Math.ceil(cells.length / 2)), colW = (b.x1 - 12 - 390) / cols;
-  cells.forEach((c, i) => o.push(`<g transform="translate(${n1(390 + Math.floor(i / 2) * colW)} ${i % 2 ? b.y0 + 43 : b.y0 + 21})">${c}</g>`));
+  const lines = m.legend.map(e => ({w: 33 + keyText(e.name, 12), svg: `<rect x="0" y="-7" width="26" height="7" rx="2" fill="${esc(e.color)}"/><text x="33" y="0" font-size="12">${esc(e.name)}</text>`}));
+  // the symbol key: the station types (the Reactor / the Maintenance Route only once on the map), filled = visited, the travel ring
+  const sym = (kind: StationKind, label: string, extra = '') => ({w: 18 + keyText(label, 11) + (extra ? 30 : 0),
+    svg: `<g class="pm-key-${kind}">${extra}${stationGlyph(kind, {x: (extra ? 30 : 0) + 6, y: -4}, kind === 'reactor' ? 7 : 5, kind !== 'reactor')}</g><text x="${(extra ? 30 : 0) + 17}" y="0" font-size="11">${esc(label)}</text>`});
+  const symbols = [sym('subway', 'Subway'), sym('office', 'Office'), sym('mall', 'Mall')];
+  if (m.reactorShown) symbols.push(sym('reactor', 'Reactor'));
+  if (m.maintenanceShown) symbols.push(sym('maintenance', MAINTENANCE_ROUTE.name, `<line x1="0" y1="-4" x2="24" y2="-4" stroke="${MAINTENANCE_ROUTE.color}" stroke-width="3" stroke-dasharray="5 3"/>`));
+  symbols.push({w: 30 + keyText('Visited / not yet', 11), svg: `${stationGlyph('subway', {x: 5, y: -4}, 4.6, true)}${stationGlyph('subway', {x: 17, y: -4}, 4.6, false)}<text x="27" y="0" font-size="11">Visited / not yet</text>`});
+  if (mode === 'travel') symbols.push({w: 18 + keyText('One stop away', 11), svg: `<circle cx="6" cy="-3.5" r="7" fill="none" stroke="#4a4038" stroke-width="1.4" stroke-dasharray="2.5 2.5"/><text x="18" y="0" font-size="11">One stop away</text>`});
+  o.push(keyRow(lines, 390, b.x1 - 12, b.y0 + 21));
+  o.push(`<g class="pm-key">${keyRow(symbols, 390, b.x1 - 12, b.y0 + 43)}</g>`);
   o.push(`</g>`);
   o.push(`<text class="pm-issue" x="${PAPER.area.x0 + 10}" y="${PAPER.area.y1 - 8}" font-size="9.5">Printed for the travelling public · keep this copy</text>`);
   if (m.cheat) o.push(`<g class="pm-stamp" transform="translate(${PAPER.area.x1 - 150} ${PAPER.area.y0 + 30}) rotate(-7)"><rect x="-8" y="-17" width="140" height="24" fill="none" stroke="${RED}" stroke-width="2"/><text x="62" y="0" text-anchor="middle" font-size="13" fill="${RED}">ALL STATIONS OPEN</text></g>`);
-  // track
+  // track (the Maintenance Route's service line: a thinner dashed graphite track)
   o.push(`<g class="pm-track" fill="none" stroke-linecap="round" stroke-linejoin="round">`);
-  for (const r of m.runs) o.push(`<polyline points="${r.pts.map(p => `${n1(p.x)},${n1(p.y)}`).join(' ')}" stroke="${esc(r.color)}" stroke-width="${LINE_W}"/>`);
+  for (const r of m.runs) {
+    const pts = r.pts.map(p => `${n1(p.x)},${n1(p.y)}`).join(' ');
+    o.push(r.service ? `<polyline class="pm-service" points="${pts}" stroke="${esc(r.color)}" stroke-width="${n1(LINE_W * 0.62)}" stroke-dasharray="11 7"/>` : `<polyline points="${pts}" stroke="${esc(r.color)}" stroke-width="${LINE_W}"/>`);
+  }
   o.push(`</g>`);
-  // reachable hints (pencil, travel mode)
+  // reachable hints (pencil, travel mode): the stations one stop away
   o.push(`<g class="pm-hints" fill="none">`);
-  if (mode === 'travel') for (const s of m.stations) if (s.can) o.push(`<circle cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 6)}" stroke="#4a4038" stroke-width="1.5" stroke-dasharray="3 3"/>`);
+  if (mode === 'travel') for (const s of m.stations) if (s.adjacent) o.push(`<circle cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 6)}" stroke="#4a4038" stroke-width="1.5" stroke-dasharray="3 3"/>`);
   o.push(`</g>`);
-  // stations
+  // stations: the type icons
   o.push(`<g class="pm-stops">`);
   for (const s of m.stations) {
-    const cls = `pm-stop${s.visited ? ' pm-visited' : ''}${s.hub ? ' pm-hub' : ''}${s.current ? ' pm-current' : ''}`;
-    if (s.reactor) { o.push(`<g class="${cls} pm-reactor" data-id="${esc(s.node.id)}">${trefoil(s.p, s.r)}</g>`); continue; }
-    o.push(`<circle class="${cls}" data-id="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r)}" fill="${s.visited ? INK : '#ffffff'}" stroke="${INK}" stroke-width="${s.hub ? 3.2 : 2.2}"/>`);
-    if (s.visited && s.hub) o.push(`<circle cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r * 0.38)}" fill="#ffffff"/>`);
+    const cls = `pm-stop pm-kind-${s.kind}${s.visited ? ' pm-visited' : ''}${s.hub ? ' pm-hub' : ''}${s.current ? ' pm-current' : ''}${s.reactor ? ' pm-reactor' : ''}`;
+    o.push(`<g class="${cls}" data-id="${esc(s.node.id)}">${stationGlyph(s.kind, s.p, s.r, s.visited, s.hub)}</g>`);
+  }
+  o.push(`</g>`);
+  // marks (under the labels, so a pencil mark never hides a name): the selected route, you are here, selection, keyboard focus
+  o.push(`<g class="pm-marks">`);
+  if (m.route) o.push(`<polyline class="pm-route" points="${m.route.map(p => `${n1(p.x)},${n1(p.y)}`).join(' ')}" fill="none" stroke="#262320" stroke-width="3" stroke-dasharray="1 6" stroke-linecap="round" stroke-linejoin="round"/>`);
+  for (const s of m.stations) {
+    if (s.current) o.push(`<circle class="pm-you" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 5)}" fill="none" stroke="${RED}" stroke-width="3.4"/>`);
+    if (s.node.id === selected) o.push(`<g class="pm-selected">${pencilRing(s.p, s.r + 12, '#262320', 2.6)}</g>`);
+    if (s.node.id === focused && focused !== selected) o.push(`<g class="pm-focused">${pencilRing(s.p, s.r + 11, '#1f4f8f', 2)}</g>`);
   }
   o.push(`</g>`);
   // labels
@@ -368,18 +494,10 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
     o.push(`<text class="pm-label${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" text-anchor="${l.anchor}">${spans}</text>`);
   }
   o.push(`</g>`);
-  // marks: you are here, selection (pencil), keyboard focus
-  o.push(`<g class="pm-marks">`);
-  for (const s of m.stations) {
-    if (s.current) o.push(`<circle class="pm-you" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(s.r + 5)}" fill="none" stroke="${RED}" stroke-width="3.4"/>`);
-    if (s.node.id === selected) o.push(`<g class="pm-selected">${pencilRing(s.p, s.r + 12, '#262320', 2.6)}</g>`);
-    if (s.node.id === focused && focused !== selected) o.push(`<g class="pm-focused">${pencilRing(s.p, s.r + 11, '#1f4f8f', 2)}</g>`);
-  }
-  o.push(`</g>`);
   // hit areas (>= 30 screen px across)
   o.push(`<g class="pm-hits">`);
   for (const s of m.stations) {
-    const label = `${s.node.name}, ${archetypeLabel(s.node.archetype)}${s.current ? ', you are here' : s.can && mode === 'travel' ? ', one stop away' : ''}`;
+    const label = `${s.node.name}, ${s.kind === 'maintenance' ? `${kindLabel(s.kind)} (${archetypeLabel(s.node.archetype)})` : archetypeLabel(s.node.archetype)}${s.current ? ', you are here' : s.adjacent ? ', one stop away' : s.can && mode === 'travel' ? ', visited' : ''}`;
     o.push(`<circle class="pm-hit${s.can ? ' pm-can' : ''}" data-station="${esc(s.node.id)}" cx="${n1(s.p.x)}" cy="${n1(s.p.y)}" r="${n1(m.hitR)}"><title>${esc(label)}</title></circle>`);
   }
   o.push(`</g></svg>`);
