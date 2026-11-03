@@ -64,16 +64,9 @@
     #battery.off .fill { opacity: 0.45; }
     #flare-tag .n { color: var(--cream); font-weight: 700; }
     #flare-tag.none { opacity: 0.55; }
-    /* Iteration 16 (lane RUN): level choice (title), confirmations (pause / clear screen), the run line, the in-world travel overlay. */
-    .level-choice { margin: 6px 0 4px; }
-    .level-choice h3 { margin-top: 4px; }
-    .level-choice .levels { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; } /* (3 levels: task track3-eaton-centre-20261031) */
-    .level-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; padding: 10px 14px; background: #15171a; }
-    .level-card b { font-size: 16px; letter-spacing: 0.04em; }
-    .level-card span { font-size: 12.5px; line-height: 1.35; color: var(--cream-dim); }
-    .level-card[aria-checked="true"] { border-color: var(--mustard); box-shadow: inset 0 0 0 1px var(--mustard); }
-    .level-card[aria-checked="true"] b { color: var(--mustard); }
-    #title[data-mode="loading"] .level-choice { display: none; }
+    /* Iteration 16 (lane RUN): confirmations (pause / clear screen), the run line, the in-world travel overlay. (The title's level
+       choice became the main menu's Dev start picker: task campaign-foundation-20261102, lane MENU; menu CSS in ui/mainMenu.ts.) */
+    #title[data-mode="menu"] > .gpu-badge { left: auto; right: 14px; }
     .confirm { margin: 4px 0 8px; padding: 10px 14px 2px; background: #15171a; border-left: 3px solid var(--mustard); font-size: 14px; line-height: 1.45; }
     .confirm p { margin: 0; }
     .confirm .actions { margin: 10px 0 8px; }
@@ -111,30 +104,31 @@
     </div>
 
 
-    <section id="title" class="screen" data-mode="new-run">
-      <div class="panel title-panel">
+    <!-- task campaign-foundation-20261102 (lane MENU): the MAIN MENU (ui/mainMenu.ts renders #mm-view) beside the real-time diorama
+         (world/menuScene.ts, drawn on #view); data-mode="loading" turns the section into the loading card (game.ts showLoading). -->
+    <section id="title" class="screen" data-mode="menu">
+      <div id="title-backdrop"></div>
+      <div class="mm-side" id="main-menu">
         <div class="stripe"></div>
         <h1>TERMINAL STATE</h1>
         <p class="subtitle">First playable vertical slice</p>
         <p id="milestone-badge" class="fine" hidden style="margin: 2px 0 6px; color: var(--mustard); letter-spacing: 0.06em;"></p><!-- task reactor-build-20261101 (lane RESTART): earned milestone badge (run/milestones.ts; main.ts fills it) -->
-        <div class="level-choice" role="radiogroup" aria-label="Where the new run starts">
-          <h3>New run — choose where to start</h3>
-          <div class="levels">
-            <button type="button" class="level-card" data-level="subway" role="radio" aria-checked="true"><b>Subway</b><span>A large abandoned subway station — platforms, concourses, shops and back-of-house rooms.</span></button>
-            <button type="button" class="level-card" data-level="office" role="radio" aria-checked="false"><b>Office Space</b><span>A small subway stop under an office tower — climb the stairs into the lobby, then work up eight floors by stairwell or elevator. One continuous level.</span></button>
-            <button type="button" class="level-card" data-level="mall" role="radio" aria-checked="false"><b>Shopping Center</b><span>A subway station under a small glass atrium — look up to the sky, then explore three floors of shops, corridors and arcades by escalator, stairs or the glass elevator. A different center every run. One continuous level.</span></button>
-            <button type="button" class="level-card" data-level="reactor" role="radio" aria-checked="false"><b>Reactor</b><span>A station on the rim of a vast industrial pit — descend the gantries through deepening gas, restart the auxiliary generators or mask up, and bring the dormant reactor back to life. The hardest level. One continuous level.</span></button>
-          </div>
+        <div id="mm-view"></div>
+        <!-- ?qa=1 only: the QA quick start (the menu adopts it as its first action; automation clicks #btn-start) -->
+        <button id="btn-start" class="primary" type="button" hidden disabled>QA quick start</button>
+        <div class="mm-extras">
+          <div class="actions"><button class="btn-fullscreen" type="button">Fullscreen</button></div>
+          <p class="fine fs-status"></p>
+          <details><summary>Controls</summary><div class="controls-grid" id="controls-title"></div></details>
+          <p class="fine" id="mm-note">Desktop keyboard and mouse only — touch is not supported. Crouch is C. A run carries your inventory, gear, health, food and water, battery and injuries from level to level. Audio starts after your first click or key press.</p>
         </div>
+        <div class="mm-boot" id="mm-boot"></div>
+      </div>
+      <div class="panel title-panel loading-card">
+        <div class="stripe"></div>
+        <h2>Terminal State</h2>
         <p id="station-intro" class="intro"></p>
         <div id="load"><div class="track"><div class="fill"></div></div><div class="label">Loading…</div></div>
-        <div class="actions">
-          <button id="btn-start" class="primary" disabled>Start run</button>
-          <button class="btn-fullscreen" type="button">Fullscreen</button>
-        </div>
-        <p class="fine fs-status"></p>
-        <div class="controls-grid" id="controls-title"></div>
-        <p class="fine">Desktop keyboard and mouse only — touch is not supported. Crouch is C. A run carries your inventory, gear, health, food and water, battery and injuries from level to level (Pause → Travel); only New game resets them. Nothing is saved: reloading the page starts a new run. Audio starts after you click.</p>
       </div>
     </section>
 
@@ -161,17 +155,10 @@
           <div class="actions"><button class="btn-new-level primary" type="button" data-level="subway">New game · Subway</button><button class="btn-new-level" type="button" data-level="office">New game · Office Space</button><button class="btn-new-level" type="button" data-level="mall">New game · Shopping Center</button><button class="btn-new-level" type="button" data-level="reactor">New game · Reactor</button><button class="btn-cancel" type="button">Cancel</button></div>
         </div>
         <p class="fine fs-status"></p>
-        <div class="settings">
-          <label>Mouse sensitivity <input id="set-sens" type="range" min="0.2" max="3" step="0.05" value="1" /><output></output></label>
-          <label>Field of view <input id="set-fov" type="range" min="60" max="100" step="1" value="75" /><output></output></label>
-          <label>Volume <input id="set-vol" type="range" min="0" max="1" step="0.05" value="0.7" /><output></output></label>
-          <label class="check"><input id="set-mute" type="checkbox" /> Mute audio (M)</label>
-          <label class="check"><input id="set-invert" type="checkbox" /> Invert mouse Y</label>
-          <label>Quality <select id="set-quality"><option value="low">Low (faster)</option><option value="high" selected>High</option></select></label>
-        </div>
+        <!-- (lane MENU) the same settings form as the main menu, bound to the persisted settings store (ui/mainMenu.ts mountSettingsForm; ids set-*) -->
+        <div class="settings" id="pause-settings"></div>
         <div class="controls-grid" id="controls-pause"></div>
         <p class="fine" id="seed-line"></p>
-        <p class="fine">Settings last for this session only.</p>
       </div>
     </section>
 

@@ -20,11 +20,18 @@ export type LevelId = 'subway' | 'office' | 'mall' | 'reactor';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {
+  /** The ARCHETYPE (which generator builds it). */
   level: LevelId;
   section: string;
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01: the campaign network STATION (campaign/types.ts StationId) — one
+   * persistent world per node; two Subway nodes are two worlds. Absent = the legacy one-world-per-archetype key (QA / dev runs).
+   */
+  station?: string;
 }
 
-export const sectionId = (k: SectionKey): string => `${k.level}:${k.section}`;
+/** Memory / lane-store key: `${station}:${section}` for a campaign station, else `${level}:${section}`. */
+export const sectionId = (k: SectionKey): string => `${k.station ?? k.level}:${k.section}`;
 
 /** How the player arrives in a level: its start ('return' = the same start, used when coming back to a level). */
 export type ArrivalKind = 'start' | 'return';
@@ -39,8 +46,8 @@ export interface TravelRequest {
   arrival: Arrival;
   /** UI text while travelling ("Travelling to Office Space"). */
   label: string;
-  /** Always 'menu' (iteration 17: nothing inside a level travels). */
-  via: 'menu';
+  /** 'menu' (the legacy pause / clear menus, QA) or 'train' (campaign: the player's train between network stations). */
+  via: 'menu' | 'train';
 }
 
 /** Generation context handed to a section generator. */

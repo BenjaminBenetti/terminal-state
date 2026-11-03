@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 39858,
-      "sha256": "2f0f259279334ea0267869c5acdac3b6f07562275c74c522640246bc8b1c99c0"
+      "bytes": 40519,
+      "sha256": "a5147c1c2dba42607adced08e3a1c660584e4cc4ca0b71afa9d8267c3dd959a4"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1807,6 +1807,11 @@
       "path": "assets/derivatives/outfit-trench.json",
       "bytes": 89505,
       "sha256": "a235f2c1db27345365ebd751f6dd87f1c852c3ea5eabfdc42ed52c293045fd43"
+    },
+    {
+      "path": "assets/derivatives/paper-map-20261102.json",
+      "bytes": 1215,
+      "sha256": "be2aea536d3e996acfbebe6ed896df935d13fe66aab9a96d84440e8210cdcc4c"
     },
     {
       "path": "assets/derivatives/player-train-20261101.json",
@@ -3817,6 +3822,11 @@
       "path": "assets/textures/office/window-glass.png",
       "bytes": 466309,
       "sha256": "cc8c2c220b9a10859f50a5760e5f14512daa60ea16025affea05f52e9ae00513"
+    },
+    {
+      "path": "assets/textures/paper-map.jpg",
+      "bytes": 53939,
+      "sha256": "9d1762dd6c7c627845159c3d77d24813347e2bf783e6a7b4af6b842cecba4158"
     },
     {
       "path": "assets/textures/platform-authored-backing-color.jpg",

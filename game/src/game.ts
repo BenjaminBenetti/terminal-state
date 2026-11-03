@@ -9,6 +9,7 @@ import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'; // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
+import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
@@ -102,6 +103,10 @@ import {LEVELS, LEVEL_IDS, arrivalPose, clearLabel, levelDisplayName, sectionLab
 import {rollLevelGear} from './levels/gearAdapter';
 import {lootProfile} from './items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
+import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
+import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
+import {arrive as arriveCampaign, canTravel, enableCheat, neighbors, newCampaign, revealAround} from './campaign/discovery';
+import {PaperMap} from './ui/paperMap';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
@@ -110,8 +115,16 @@ import {applyHolders, captureHolders, capturePickups, restorePickup} from './run
 import {runBagStore} from './run/bagStore';
 import {playerTrainPlacement, type TrainPlacement} from './gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE)
 import {PlayerTrainRecord, PLAYER_TRAIN_PARTICIPANT} from './run/playerTrain'; // (lane PLACE: the run's one train identity)
+// --- save / load (lane SAVE) imports: task studio-alpha-campaign-foundation-20261102-230708-01 ---
+import {SaveSlots, type CommitResult} from './save/slots';
+import {captureRun, clampTrainLocal, deriveMeta, installRestore, makeSaveFile, prepareRestore, type PreparedRestore, type RestoreHandoff, type SaveFileV1Like, type SavePoint, type TrainLocalPose} from './save/serialize';
+import {validateSaveFile, type ValidateOptions} from './save/validate';
+import {trainSpawnLocal, trainToWorld, worldToTrain} from './gen/playerTrain';
+import {PLAYER_TRAIN_SPEC} from './world/playerTrainSpec';
+// --- end save / load (lane SAVE) imports ---
 import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
+import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -130,10 +143,16 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 
-export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error';
+export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
 
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high' }
+/** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
+export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train when done.';
+
+// (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
+// the persisted values live in ui/settingsStore.ts, main.ts copies them in)
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -173,7 +192,13 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high'};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1};
+  // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
+  /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
+  menuRender: ((time: number) => boolean) | null = null;
+  /** A setting changed inside the game (the M mute toggle): main.ts writes it back to the settings store. */
+  onSettingsChanged: ((key: keyof Settings) => void) | null = null;
+  // ==== end lane MENU ====
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
@@ -281,6 +306,11 @@ export class Game {
   readonly trainRuntime: PlayerTrainRuntime;
   /** Task train-lockbox-windows-20261101-232156 (lane BOX): the Lockbox transfer view / developer drop (ui/lockboxView.ts); the store is playerTrain.lockbox. */
   readonly lockbox: LockboxSystem;
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the MOVING train (world/trainRide.ts) — depart() / arrive() /
+   * enterTransit() for the primary's travel orchestration; while it rides, update() steps the player through it (car-local frame).
+   */
+  readonly trainRide: TrainRide;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
    * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
@@ -507,6 +537,11 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
+    // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
+    // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
+    // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
+    this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => this.settings.trainSway});
+    this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
@@ -600,7 +635,10 @@ export class Game {
   /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
-    return LEVELS[key.level].generate(key.section, {levelSeed: run.seeds[key.level], startWeapon: this.startWeapon, gear: run.gearFor(key)});
+    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key)}); // (campaign: the node's own seed)
+    const node = key.station ? run.node(key.station) : null;
+    if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
+    return layout;
   }
 
   /**
@@ -832,7 +870,11 @@ export class Game {
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
-    if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
+    // (lane RIDE) a player riding the moving train keeps their car-local pose: the ride writes the world pose every frame (a NEW game
+    // ends any ride first)
+    if (fresh) this.trainRide?.reset();
+    if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
+    else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
     this.lightSources.clear(); // Iteration 12: lights of the previous section (the flashlight / body glow re-register on the next update)
@@ -880,7 +922,9 @@ export class Game {
     const codes = LEVEL_IDS.map(l => `${levelDisplayName(l, this.run.seeds[l])} ${seedToCode(this.run.seeds[l])}`).join(' · ');
     $('#seed-line').textContent = `${levelDisplayName(key.level, this.run.seeds[key.level])} · ${sectionLabel(key)}: ${this.layout.name}. Run codes: ${codes} (debug/share only; reloading the page always starts a new run).`;
     const obj = document.querySelector('#objective .obj-title');
-    if (obj) obj.textContent = key.level === 'office' ? 'Clear the station and the tower' : key.level === 'mall' ? 'Clear the station and the mall' : key.level === 'reactor' ? 'Restart the reactor' : 'Clear the station'; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
+    // Task studio-alpha-campaign-foundation-20261102-230708-01 (user: "No ordinary clear-all-zombies objective: default objective says
+    // scavenge for resources and return to the train when done"): no kill goal anywhere; the Reactor keeps its real endgame chain.
+    if (obj) obj.textContent = key.level === 'reactor' ? 'Restart the reactor' : SCAVENGE_OBJECTIVE;
     for (const h of this.sectionHooks) h.build?.(this.layout); // Iteration 16: lane section content (before the warm-up runs)
     this.propModels.sealed = this.levelResources.sealed = true; // lane PACKAGE (track3): the level is built; a later fetch counts as `late`
     this.updateCamera(0);
@@ -940,10 +984,338 @@ export class Game {
   /** Iteration 16: the Retry-level snapshot of the level just entered (carry state + that level's section memories). */
   private levelEntrySnapshot(): RunSnapshot {
     const k = this.run.current;
-    return takeSnapshot({level: k.level, section: k.section, arrival: this.arrival},
+    return takeSnapshot({level: k.level, section: k.section, station: k.station, arrival: this.arrival},
       {inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery, participants: this.runParticipants, stats: this.stats},
-      this.run.levelMemories(k.level));
+      this.run.scopeMemories(k)); // (campaign: this STATION's memories only)
   }
+
+  // --- save / load (lane SAVE) ---------------------------------------------------------------------------------------------------
+  // Task studio-alpha-campaign-foundation-20261102-230708-01 (lane SAVE): capture / apply of a CAMPAIGN run's save (save/*.ts). The
+  // primary's travel orchestrator calls commitSave at the three autosave points — DEPARTURE (after the departing station's world was
+  // torn down, campaign.transit set), ARRIVAL (the train stopped at the new station), NEW GAME (the start station) — and applySave
+  // (after it tore the live world down with leaveSection(false)) before it builds / resumes the returned key. The menu lane reaches
+  // the three slots through `saves` (list / read / delete / exportFile / importFile) and loads through applySave. Builds nothing.
+  /** Lane NET's graph validator goes here once merged (`saveValidate.validateNetwork = validateNetwork`); read by saves + decodeSave. */
+  readonly saveValidate: ValidateOptions = {validateNetwork: n => { const e = validateNetwork(n); return e.length ? {ok: false, errors: e} : null; }}; // (primary: lane NET's graph validator)
+  /** The three localStorage save slots of this browser + origin (save/slots.ts). */
+  readonly saves = new SaveSlots({validate: this.saveValidate});
+  /** The slot this run saves into (null: not bound — a New Game / a load binds one). */
+  currentSlot: number | null = null;
+  /** The revision of currentSlot this run last wrote / loaded (an autosave never replaces another tab's newer revision). */
+  saveRevision = 0;
+  /** RunState.id bound to currentSlot (an autosave of any OTHER run is refused, so a new run never overwrites an old slot silently). */
+  private saveRunId = -1;
+
+  /** The player's pose in the parked player train's local frame (null: no train in this level). */
+  trainLocalPose(): TrainLocalPose | null {
+    const p = this.trainPlacement;
+    if (!p) return null;
+    const q = worldToTrain(p, this.player.x, this.player.y, this.player.z);
+    const yaw = this.player.yaw - p.yaw;
+    return {x: q.x, z: q.z, yaw: Math.atan2(Math.sin(yaw), Math.cos(yaw)), pitch: this.player.pitch, crouched: this.player.crouched};
+  }
+
+  /** A saved train-local pose in the parked train (kept inside the car) as a world pose on its interior floor; null without a train. */
+  trainLocalToWorld(pose: TrainLocalPose): {x: number; y: number; z: number; yaw: number; pitch: number; crouched: boolean; level: number} | null {
+    const p = this.trainPlacement;
+    if (!p) return null;
+    const c = clampTrainLocal(pose, PLAYER_TRAIN_SPEC.interior);
+    const w = trainToWorld(p, c.x, PLAYER_TRAIN_SPEC.floorY, c.z);
+    return {x: w.x, y: p.floorY, z: w.z, yaw: p.yaw + c.yaw, pitch: c.pitch, crouched: c.crouched, level: p.level};
+  }
+
+  /**
+   * The current campaign run as a save envelope (SaveSlots.commit finalises meta.slot / revision / savedAt). `pose`: the player's
+   * train-local pose (default: measured in the parked train, else the train's spawn point). Throws SaveError when the run cannot be
+   * saved faithfully (no campaign; a run participant failed to save) — nothing is written then.
+   */
+  captureSave(reason: SavePoint, o: {slot?: number; pose?: TrainLocalPose} = {}): SaveFileV1Like {
+    this.wireRunLanes();
+    const pose = o.pose ?? this.trainLocalPose() ?? {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false};
+    const run = captureRun({run: this.run, inv: this.inv, player: this.player, survival: this.survival, battery: this.torch.battery,
+      participants: this.runParticipants, stats: this.stats, clock: this.time, pose, point: reason});
+    return makeSaveFile(run, deriveMeta(run, {slot: o.slot ?? this.currentSlot ?? 1, revision: this.saveRevision, savedAt: new Date().toISOString(), reason}));
+  }
+
+  /**
+   * Capture + write. An AUTOSAVE (departure / arrival) goes into the slot bound to this run and refuses to replace another tab's
+   * newer save; NEW GAME (or an explicit other `slot`) writes an empty slot, or a used one only with `overwrite` (the player
+   * confirmed), and binds the run to it. Never throws: {ok: false, error} = nothing was saved (the previous save is intact).
+   */
+  commitSave(reason: SavePoint, o: {slot?: number; overwrite?: boolean; pose?: TrainLocalPose} = {}): CommitResult {
+    const bind = reason === 'new-game' || (o.slot !== undefined && o.slot !== this.currentSlot);
+    const slot = bind ? o.slot : this.currentSlot;
+    if (slot === undefined || slot === null) return {ok: false, code: 'bad-slot', error: 'Not saved: choose a save slot for this run first.'};
+    if (!bind && this.saveRunId !== this.run.id) return {ok: false, code: 'conflict', error: `Not saved: this run is not the one saved in slot ${slot}.`};
+    let file: SaveFileV1Like;
+    try { file = this.captureSave(reason, {slot, pose: o.pose}); } catch (err) { return {ok: false, code: 'invalid', error: `Not saved: ${String((err as Error)?.message ?? err)}`}; }
+    const r = this.saves.commit(slot, file, o.overwrite ? {overwrite: true} : bind ? {} : {expectRevision: this.saveRevision});
+    if (r.ok) { this.currentSlot = slot; this.saveRevision = r.meta.revision; this.saveRunId = this.run.id; }
+    return r;
+  }
+
+  /** Validate + decode a save WITHOUT touching the live game (its `run` can prepare the target section before the teardown). */
+  decodeSave(file: unknown): {ok: true; restore: PreparedRestore & {slot: number; revision: number}} | {ok: false; error: string} {
+    const v = validateSaveFile(file, this.saveValidate);
+    if (!v.ok) return v;
+    try {
+      const p = prepareRestore(v.value.run, o => createRun({seeds: o.seeds, start: o.start, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign}));
+      return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
+    } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
+  }
+
+  /**
+   * Install a decoded save: the run (campaign, every station's memory, the Retry snapshot, playtime), the carried inventory / vitals /
+   * survival / battery / stats, every run participant (train + Lockbox, injuries, gear, gas mask), the uid counters and the game
+   * clock; binds the run to its slot. CALL ONLY AFTER the live world was torn down (leaveSection(false)): lane teardown hooks write
+   * into the CURRENT run. Returns where to build (no transit: `key`, the player at `pose` in the parked train — trainLocalToWorld) or
+   * the journey to resume once (`transit`: from the tunnel to transit.to).
+   */
+  installSave(p: PreparedRestore & {slot: number; revision: number}): RestoreHandoff {
+    this.wireRunLanes();
+    const {failed} = installRestore(p, {
+      setRun: run => { this.run = run; },
+      installInventory: inv => this.installInventory(inv),
+      reserveUids: max => { this.inv.reserveUids(max); this.inv.reserveUids(this.playerTrain.lockbox.maxUid()); },
+      player: this.player, survival: this.survival, battery: this.torch.battery,
+      resetBattery: charge => this.torch.reset(charge),
+      participants: this.runParticipants, stats: this.stats,
+      setClock: t => { this.time = t; },
+    });
+    this.torch.battery.update(0); // output from the restored flags
+    this.arrival = {...p.run.arrival};
+    this.currentSlot = p.slot;
+    this.saveRevision = p.revision;
+    this.saveRunId = p.run.id;
+    this.saves.setLastSlot(p.slot);
+    return {key: {...p.key}, pose: {...p.pose}, transit: p.transit ? {...p.transit} : null, point: p.point, failed};
+  }
+
+  /** decodeSave + installSave (invalid -> {ok: false, error} and NOTHING was applied). Same teardown rule as installSave. */
+  applySave(file: unknown): ({ok: true} & RestoreHandoff) | {ok: false; error: string} {
+    const d = this.decodeSave(file);
+    if (!d.ok) return d;
+    return {ok: true, ...this.installSave(d.restore)};
+  }
+  // --- end save / load (lane SAVE) -----------------------------------------------------------------------------------------------
+
+  // --- campaign (primary, task studio-alpha-campaign-foundation-20261102-230708-01) -----------------------------------------------
+  /** The paper subway map overlay (ui/paperMap.ts; lazily mounted). */
+  private paperMapUi: PaperMap | null = null;
+  private get paperMap(): PaperMap { return (this.paperMapUi ??= new PaperMap({})); }
+  /** The state the travel map was opened from ('map' while open). */
+  private mapBack: GameState | null = null;
+
+  /**
+   * NEW GAME (campaign): a fresh network (its own seed), the start station, the chosen slot (an occupied one only with `overwrite` =
+   * the player confirmed). `dev`: a menu dev start — the run starts at the network's first node of that archetype (its own world)
+   * instead of the start station. Resolves after the station is built and play entered (from a click); the new-game save is written
+   * right away (a failure is reported, the run goes on unsaved).
+   */
+  async newCampaign(slot: number, o: {overwrite?: boolean; networkSeed?: number; dev?: {level?: LevelId}} = {}): Promise<{ok: true; saved: boolean; error?: string} | {ok: false; error: string}> {
+    if (this.lifecycle.busy) return {ok: false, error: 'Busy — try again in a moment.'};
+    const view = this.saves.list().find(v => v.slot === slot);
+    if (!view) return {ok: false, error: `There is no save slot ${slot}.`};
+    if (!view.empty && !o.overwrite) return {ok: false, error: `Slot ${slot} is in use — confirm overwriting it first.`};
+    const net = generateNetwork(o.networkSeed ?? freshSeed());
+    let state = newCampaign(net);
+    const devNode = o.dev?.level ? net.nodes.find(n => n.archetype === o.dev!.level) : undefined;
+    if (devNode && devNode.id !== state.current) state = {...state, current: devNode.id, known: [devNode.id], visited: [devNode.id]};
+    const w = await this.newGame(net.nodes.find(n => n.id === state.current)!.archetype, {campaign: state, enter: true});
+    if (!w) return {ok: false, error: 'The new game could not start.'};
+    const r = this.commitSave('new-game', {slot, overwrite: !view.empty});
+    if (!r.ok) { this.hud.toast(r.error, true); return {ok: true, saved: false, error: r.error}; }
+    this.saves.setLastSlot(slot);
+    return {ok: true, saved: true};
+  }
+
+  /**
+   * CONTINUE / LOAD: the slot's run (default: the last-used valid slot). Validated + decoded first (nothing live is touched by a bad
+   * save), the target station prepared, then the old world torn down, the run installed and the station built with the player at
+   * the saved train-local pose in the parked train; a save taken at a DEPARTURE resumes that journey once (from the tunnel).
+   */
+  async continueCampaign(slot?: number): Promise<{ok: true} | {ok: false; error: string}> {
+    if (this.lifecycle.busy) return {ok: false, error: 'Busy — try again in a moment.'};
+    const n = slot ?? this.saves.continueSlot();
+    if (n === null || n === undefined) return {ok: false, error: 'There is no save to continue.'};
+    const raw = this.saves.read(n);
+    if (!raw.ok) return {ok: false, error: raw.error};
+    const d = this.decodeSave(raw.file);
+    if (!d.ok) return d;
+    const lock = this.beginGesture();
+    const back = this.state;
+    const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
+      const run = d.restore.run, c = run.campaign!;
+      const resuming = !!c.transit;
+      const node = run.node(resuming ? c.transit!.to : c.current)!;
+      const key: SectionKey = {level: node.archetype, section: 'main', station: node.id};
+      const ui = this.showLoading(`Continue · ${node.name}${resuming ? ' — the train is on its way' : ''}.`, `Preparing ${node.name}…`);
+      await nextPaint();
+      let layout: StationLayout;
+      try { layout = await this.prepareSection(key, run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, back, ui); return {ok: false, error: 'The station could not be prepared.'}; }
+      await this.warmRun;
+      this.leaveSection(false); // the old run's world goes (its lanes write into the OLD run); then the save's run is installed
+      const h = this.installSave(d.restore);
+      if (h.transit) {
+        // the journey resumes once: the run arrives at the destination (the departure station was already left and saved)
+        this.run.campaign = {...arriveCampaign(this.run.campaign!, h.transit.to), transit: null};
+      }
+      this.buildSection(key, layout, {kind: 'start'}, false);
+      const wp = this.trainLocalToWorld(h.pose);
+      if (wp) { this.player.place(wp.x, wp.z, wp.yaw, wp.y); this.player.pitch = wp.pitch; }
+      if (h.transit) this.run.entry = this.levelEntrySnapshot();
+      this.updateStationIntro();
+      const w = await this.prepareGraphics(ui);
+      if (w.status === 'cancelled') return {ok: false, error: 'The graphics device was lost.'};
+      this.readyLine(ui, w);
+      if (h.transit) { const r = this.commitSave('arrival'); if (!r.ok) this.hud.toast(r.error, true); }
+      if (h.failed.length) this.hud.toast(`Some saved parts could not be restored: ${h.failed.join(', ')}`, true);
+      void lock.then(() => this.enterPlay());
+      return {ok: true};
+    });
+    return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /** The train console: the paper map in TRAVEL mode (the current station + every one-hop neighbour revealed and remembered). */
+  openTravelMap(mode: 'travel' | 'view' = 'travel'): boolean {
+    const run = this.run;
+    if (!run.campaign || this.mapBack) return false;
+    if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current);
+    this.mapBack = this.state;
+    this.setState('map');
+    this.paperMap.open({
+      state: run.campaign, mode,
+      onConfirm: to => { this.closeTravelMap(); void this.travelToStation(to); },
+      onClose: () => this.closeTravelMap(),
+      onCheat: () => (run.campaign = enableCheat(run.campaign!)),
+    });
+    return true;
+  }
+
+  private closeTravelMap(): void {
+    if (!this.mapBack) return;
+    const back = this.mapBack;
+    this.mapBack = null;
+    if (this.paperMap.isOpen) this.paperMap.close();
+    if (back === 'playing' || back === 'map') void this.enterPlay();
+    else this.setState(back);
+  }
+
+  private campaignTickT = 0;
+  /**
+   * (campaign) ~1 Hz: the Reactor's persisted ending phase (reactor.state.ending, the surface-ending contract) — the player reaching the
+   * surface WINS the run once (no modal; the ending's own message is never replayed).
+   */
+  private campaignTick(dt: number): void {
+    const c = this.run.campaign;
+    if (!c || c.won || this.run.current.level !== 'reactor' || (this.campaignTickT -= dt) > 0) return;
+    this.campaignTickT = 1;
+    const st = this.run.laneStore<{ending?: {surfaced?: boolean}}>('reactor.state');
+    if (st?.ending?.surfaced === true) this.onCampaignWin('surface');
+  }
+
+  /** True while no station world exists during a journey (the old one torn down, the next not built yet). */
+  private transitGap = false;
+
+  /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
+  private updateTransitGap(dt: number): void {
+    const inp = this.input, p = this.player;
+    const sens = this.settings.sens * 0.0022;
+    p.yaw -= inp.dx * sens;
+    p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
+    if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
+    this.updateCamera(dt);
+    this.trainRide.tiltCamera(this.camera);
+  }
+
+  /**
+   * THE JOURNEY (campaign): the occupied train leaves the current station for `to` (adjacent, or any node with the 1337 cheat).
+   * 1. depart (refused unless the player is inside; doors close; the car pulls into the tunnel and loops in the transit);
+   * 2. the old world is torn down (every delta flushed into the run) and the DEPARTURE autosave commits the pending journey;
+   * 3. the next station is prepared and built while the car runs through the dark tunnel (its pipelines compiled in the background);
+   * 4. the car arrives and stops at the platform; the run arrives (visited) and the ARRIVAL autosave commits.
+   * A destination that cannot be prepared (twice) sends the train back to the station it left; nothing is lost.
+   */
+  async travelToStation(to: string): Promise<{ok: true} | {ok: false; error: string}> {
+    const run = this.run, c0 = run.campaign;
+    if (!c0) return {ok: false, error: 'No campaign run.'};
+    if (this.lifecycle.busy || this.trainRide.riding) return {ok: false, error: 'The train is busy.'};
+    if (!canTravel(c0, to)) return {ok: false, error: 'That station cannot be reached from here.'};
+    const target = run.node(to)!;
+    const d = await this.trainRide.depart();
+    if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
+      const from = run.campaign!.current;
+      const ride = this.trainRide.state();
+      const pose: TrainLocalPose = {x: ride.local.x, z: ride.local.z, yaw: ride.local.yaw, pitch: this.player.pitch, crouched: this.player.crouched};
+      await this.warmRun;
+      this.transitGap = true;
+      // the departing station's every delta goes into its memory (one world per station). Its geometry goes now; its queued program /
+      // pipeline releases (Iteration 14) wait until the next station has rendered at the platform: Subway -> Subway shares those
+      // programs, and releasing them first recompiles them all on arrival (on a software rasterizer that memory is never returned)
+      this.leaveSection(true);
+      const adjacent = neighbors(run.campaign!.network, from).includes(to);
+      run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
+      const s1 = this.commitSave('departure', {pose});
+      if (!s1.ok && this.currentSlot !== null) this.hud.toast(s1.error, true);
+      for (const l of this.campaignListeners) l('transit');
+      let dest = target, layout: StationLayout | null = null, key: SectionKey = {level: dest.archetype, section: 'main', station: dest.id};
+      for (const attempt of [0, 1, 2]) {
+        if (attempt === 2) { dest = run.node(from)!; key = {level: dest.archetype, section: 'main', station: dest.id}; this.hud.toast(`${target.name} cannot be reached — the train returns to ${dest.name}.`, true); }
+        try { layout = await this.prepareSection(key, run); break; } catch (err) { console.warn('campaign: preparing', key, 'failed', err); this.trainRide.transitFailed(String((err as Error)?.message ?? err)); }
+      }
+      if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
+      await this.warmRun;
+      this.buildSection(key, layout, {kind: 'start'}, false); // the riding car is adopted at the new placement (lane RIDE)
+      this.transitGap = false;
+      await this.backgroundCompile();
+      const a = await this.trainRide.arrive();
+      if (a.status !== 'stopped') console.warn('campaign: arrival', a);
+      await nextPaint();
+      this.flushRetired(); // the previous station's queued releases (its programs are re-used by now)
+      run.campaign = {...arriveCampaign(run.campaign!, dest.id), transit: null};
+      run.entry = this.levelEntrySnapshot();
+      this.updateStationIntro();
+      const s2 = this.commitSave('arrival');
+      if (!s2.ok && this.currentSlot !== null) this.hud.toast(s2.error, true);
+      this.hud.toast(`${dest.name} — ${archetypeLabel(dest.archetype)}`);
+      for (const l of this.campaignListeners) l('arrived');
+      return {ok: true};
+    });
+    return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /**
+   * The next station's pipelines compiled WITHOUT hiding the canvas or holding frames (the player is riding through the tunnel):
+   * renderer.compileAsync over the new world with frustum culling lifted for the call (shadow / fog-pass variants are not covered:
+   * the first frames in a new view may still compile a few). Bounded; failures only log.
+   */
+  private async backgroundCompile(): Promise<void> {
+    const root = this.world?.group as THREE.Object3D | undefined;
+    const r = this.renderer as unknown as {compileAsync?: (o: THREE.Object3D, c: THREE.Camera, s?: THREE.Scene) => Promise<unknown>};
+    if (!root || typeof r.compileAsync !== 'function' || !this.renderer.initialized) return;
+    // the warm-up's own mode rule (render/warmup.ts): 'full' on a hardware GPU = the whole station; 'view' on a software rasterizer =
+    // only what stands within 24 m of the arrival (a full compile there costs GiBs of program memory); 'off' = none
+    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    if (mode === 'off') return;
+    const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : null;
+    const box = new THREE.Box3(), sphere = new THREE.Sphere();
+    const flipped: THREE.Object3D[] = [], hidden: THREE.Object3D[] = [];
+    root.updateMatrixWorld(true);
+    root.traverse(o => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      if (mode === 'view' && near) {
+        box.setFromObject(o); box.getBoundingSphere(sphere);
+        if (sphere.center.distanceTo(near) - sphere.radius > 24) { if (o.visible) { o.visible = false; hidden.push(o); } return; }
+      }
+      if (o.frustumCulled) { o.frustumCulled = false; flipped.push(o); }
+    });
+    const t0 = performance.now();
+    try { await Promise.race([r.compileAsync(root, this.camera, this.scene), new Promise(res => setTimeout(res, 8000))]); } catch (err) { console.warn('campaign: background compile failed', err); }
+    finally { for (const o of flipped) o.frustumCulled = true; for (const o of hidden) o.visible = true; }
+    console.info(`Terminal State: background compile of the next station (${mode}, ${flipped.length} meshes) ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+  }
+  // --- end campaign (primary) ----------------------------------------------------------------------------------------------------
 
   /** Iteration 16: from a click — audio resumes and pointer lock is requested inside the gesture (the rebuild can outlast it). */
   private beginGesture(): Promise<boolean> {
@@ -984,17 +1356,20 @@ export class Game {
    * warm-up; otherwise the caller shows the title (boot, the title's level choice). Single flight with travel / retry:
    * resolves null if another lifecycle operation is running.
    */
-  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void} = {}): Promise<WarmupResult | null> {
+  newGame(level: LevelId, o: {seeds?: Partial<Record<LevelId, number>>; enter?: boolean; onProgress?: (frac: number, label: string) => void; campaign?: CampaignState} = {}): Promise<WarmupResult | null> {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = o.enter ? this.beginGesture() : null;
     const back = this.state;
     const flight = this.lifecycle.run(async () => {
       this.wireRunLanes();
+      // (campaign) a network run starts at the campaign's current station (its archetype builds it, its node seed seeds it)
+      const startNode = o.campaign?.network.nodes.find(n => n.id === o.campaign!.current);
+      if (startNode) level = startNode.archetype;
       const def = LEVELS[level];
       const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
-      const key: SectionKey = {level, section: def.entry};
-      const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear});
-      const shown = levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
+      const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
+      const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
+      const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
       const ui = this.showLoading(`New run · ${shown}. ${def.blurb}`, `Generating ${shown}…`);
       await nextPaint();
       let layout: StationLayout;
@@ -1029,7 +1404,7 @@ export class Game {
     if (this.lifecycle.busy) return Promise.resolve(null);
     const lock = this.beginGesture();
     const flight = this.lifecycle.run(async () => {
-      const key: SectionKey = {level: snap.level, section: snap.section};
+      const key: SectionKey = snap.station ? {level: snap.level, section: snap.section, station: snap.station} : {level: snap.level, section: snap.section};
       const def = LEVELS[key.level];
       const ui = this.showLoading(`Retry · ${def.name}: back to how you entered it — the same kit, health and supplies as then.`, `Rebuilding ${def.name}…`);
       await nextPaint();
@@ -1037,7 +1412,7 @@ export class Game {
       try { layout = await this.prepareSection(key, this.run, this.progressTo(ui, 'Loading station props')); } catch (err) { this.lifecycleFailed(err, 'dead', ui); return null; }
       await this.warmRun;
       this.leaveSection(false); // this level's memories are replaced by the snapshot's
-      this.run.restoreLevelMemories(snap.level, snap.memories);
+      this.run.restoreScopeMemories(key, snap.memories); // (campaign: this station's memories only)
       this.restoreCarryFrom(snap);
       this.buildSection(key, layout, snap.arrival, false); // (the loading screen keeps saying what Retry restores)
       const w = await this.prepareGraphics(ui);
@@ -1326,6 +1701,7 @@ export class Game {
       this.settings.muted = !this.settings.muted;
       this.sfx.setMuted(this.settings.muted);
       ($('#set-mute') as HTMLInputElement).checked = this.settings.muted;
+      this.onSettingsChanged?.('muted'); // (lane MENU: persisted by the settings store)
       if (this.state === 'playing') this.hud.toast(this.settings.muted ? 'Audio muted' : 'Audio on');
     }
     if (this.state === 'playing') {
@@ -1362,8 +1738,9 @@ export class Game {
   // ---------------------------------------------------------------------------------------
   resize(): void {
     const w = window.innerWidth, h = window.innerHeight;
-    const dpr = Math.min(window.devicePixelRatio || 1, this.settings.quality === 'high' ? 1.5 : 1);
-    this.renderer.setPixelRatio(this.settings.quality === 'high' ? dpr : Math.min(dpr, 0.85));
+    // task campaign-foundation-20261102 (lane MENU): the native ratio is the existing DPR cap (min(dpr, 1.5) on High; min(dpr, 1, 0.85)
+    // on Low), times the linear render-resolution scale (Native / Half / Quarter) — ui/settingsStore.ts renderPixelRatio
+    this.renderer.setPixelRatio(renderPixelRatio(window.devicePixelRatio || 1, this.settings.quality, this.settings.renderScale));
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
@@ -1413,6 +1790,12 @@ export class Game {
       if (this.state === 'playing') cpu.deferredMs = fb.run();
       this.prof.lap(SPAN.other); // lane MEASURE
       this.frames++;
+    } else if (this.menuRender && !this.world && (this.state === 'title' || this.state === 'loading')) {
+      // task campaign-foundation-20261102 (lane MENU): the main menu's diorama (world/menuScene.ts; its own frame cap / hidden-tab pause)
+      // until the first world is built — never a world update
+      const r0 = performance.now();
+      cpu.rendered = this.menuRender(time ?? now);
+      cpu.renderMs = performance.now() - r0;
     } else if (this.world) {
       // menus: keep the frozen frame fresh at a low rate
       this.renderT -= dt;
@@ -1610,6 +1993,7 @@ export class Game {
 
   /** Drop `count` (default: all) of a slot on the floor in front of the player (inventory drag-out / Drop / Delete; G no longer drops). */
   dropRef(ref: SlotRef, count?: number): void {
+    if (this.trainRide?.refuseDrop()) { this.sfx.denied(); return; } // (lane RIDE) nothing is dropped from the moving car (the Lockbox holds things)
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
@@ -1749,6 +2133,10 @@ export class Game {
     prof.lap(SPAN.input);
     this.time += dt;
     this.stats.time += dt;
+    if (this.run.campaign) this.run.playtime += dt; // (campaign) save metadata
+    // (campaign, primary) between the old world's teardown and the next one's build only the riding car exists: no world system runs
+    if (this.transitGap) { this.updateTransitGap(dt); return; }
+    this.campaignTick(dt);
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
@@ -1775,10 +2163,13 @@ export class Game {
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
     // Iteration 15: flares are readied while G (INTERACT #6; was T) / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
     const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
+    // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
+    // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
+    const rideHolster = this.trainRide.blocksWeapons;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
-      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns,
+      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
       flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
     })) {
       if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
@@ -1789,12 +2180,15 @@ export class Game {
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
+    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) this.trainRide.refuseFire(); // (lane RIDE) the note
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
-    const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]});
+    const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
+    // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
+    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -1807,7 +2201,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy,
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy, // (lane RIDE: holstered)
         lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
         if (e.type === 'fire') this.fire(e.def);
@@ -1890,17 +2284,19 @@ export class Game {
     const eye = this.camera.getWorldPosition(new THREE.Vector3());
     const look = this.forward();
     const reachWorld = this.levels.count > 1 ? this.levels : this.layout.grid; // Lane B: 3D occlusion on stacked levels
-    this.currentTarget = this.pickups.target(eye, look, reachWorld);
+    // (lane RIDE) from the moving car nothing of the station is in reach (the car's walls are not in the station's occlusion)
+    const reachEye = this.trainRide.riding ? new THREE.Vector3(0, 1e6, 0) : eye;
+    this.currentTarget = this.pickups.target(reachEye, look, reachWorld);
     // Containers under the crosshair within reach; a closer targeted floor pickup wins.
     const tp = this.currentTarget;
-    this.containerTarget = this.containers?.target(eye, look, reachWorld, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
+    this.containerTarget = this.containers?.target(reachEye, look, reachWorld, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
     // Iteration 07 (Lane K): a loose item resting INSIDE a holder's box (shot down to a lower shelf tier) wins over the holder body.
     const ct = this.containerTarget;
     if (ct && !ct.lot && tp && tp.x > ct.container.min.x && tp.x < ct.container.max.x && tp.z > ct.container.min.z && tp.z < ct.container.max.z && tp.y + 0.08 < ct.container.max.y) this.containerTarget = null;
     // Container wins: clear the pickup target + its highlight (an unreachable eye matches nothing).
     if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, reachWorld);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
-    this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null;
+    this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing && !this.trainRide.riding ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null; // (lane RIDE: none from the moving car)
     prof.lap(SPAN.items);
     this.pickups.update(this.time);
     this.containers?.update(dt, this.time);
@@ -1954,13 +2350,27 @@ export class Game {
       this.sfx.win();
       this.hud.toast(clearLabel(this.run.current));
     }
-    if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) {
-      this.wonShown = true;
-      const lvl = this.run.current.level, secs = LEVELS[lvl].sections(this.run.seeds[lvl]);
-      if (this.run.levelCleared(lvl, secs)) this.showEnd('won');
-    }
+    // (campaign foundation) a cleared station is only remembered + toasted: no clear modal, nothing is gated on kills
+    if (this.wonAt >= 0 && this.time - this.wonAt > 1.6 && this.wonAt > -1 && !this.wonShown) this.wonShown = true;
   }
   private wonShown = false;
+
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01: THE campaign win (the Reactor's ending; world/reactor/restart.ts calls
+   * it once). Recorded in the run (saved at the next autosave); exploration goes on — nothing is reset, no modal blocks play.
+   */
+  onCampaignWin(via: string): void {
+    const c = this.run.campaign;
+    if (!c || c.won) return;
+    // the user's win is the habitable SURFACE: where the Reactor has its surface ending (reactor-surface-ending: layout.reactor.surface,
+    // reactor.state.ending.surfaced), the rods only bring the reactor ONLINE — the win waits for the surface (campaignTick)
+    if (via === 'reactor-restarted' && (this.layout as {reactor?: {surface?: unknown}}).reactor?.surface) return;
+    c.won = {at: new Date().toISOString(), station: c.current, via};
+    this.hud.toast('RUN COMPLETE — the reactor is running. Keep exploring, or head back to the train.');
+    for (const l of this.campaignListeners) l('won');
+  }
+  /** (campaign) listeners for campaign events ('won' | 'autosave' | 'transit'): the menu / HUD / save lanes subscribe. */
+  readonly campaignListeners: ((event: string) => void)[] = [];
 
   private updateCamera(dt: number): void {
     const p = this.player;
@@ -1970,6 +2380,7 @@ export class Game {
     const t = this.time;
     // Iteration 16: `aimOffset` (lane INJURY: arm-injury sway) moves the real aim — shots, crosshair and the optic dot follow it
     this.camera.rotation.set(p.pitch + this.recoilPitch + this.aimOffset.pitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + this.aimOffset.yaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
+    this.trainRide?.tiltCamera(this.camera); // (lane RIDE) the moving car's roll / pitch (its jostle) on the view; no-op when not riding
     const targetFov = this.aiming ? (WEAPONS[this.weapon.def?.id ?? 'rifle']?.aimFov ?? 60) : this.settings.fov;
     const fov = this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 14 || 1);
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
@@ -2017,6 +2428,7 @@ export class Game {
       melee: !!wdef?.melee && !this.gear?.readied, // lane KNIFE: MELEE tag, no rounds
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
+      objLine: '', // (campaign foundation) the scavenge objective has no kill counter
       area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,

@@ -32,6 +32,8 @@ export interface RunSnapshot {
   /** Where the level was entered (Retry level rebuilds this section and places the player by this arrival). */
   level: LevelId;
   section: string;
+  /** (campaign) the network station entered (absent: a legacy archetype run). */
+  station?: string;
   arrival: Arrival;
   vitals: VitalsSnapshot;
   survival: SurvivalSnapshot;
@@ -75,11 +77,11 @@ function safeSave(p: RunParticipant): unknown {
   try { return structuredClone(p.save()); } catch (err) { console.warn(`Iteration 16 (RUN): run participant '${p.id}' save failed`, err); return undefined; }
 }
 
-export function takeSnapshot(at: {level: LevelId; section: string; arrival: Arrival}, src: CarryState, memories: Record<string, SectionMemory>): RunSnapshot {
+export function takeSnapshot(at: {level: LevelId; section: string; station?: string; arrival: Arrival}, src: CarryState, memories: Record<string, SectionMemory>): RunSnapshot {
   const lanes: Record<string, unknown> = {};
   for (const p of src.participants) lanes[p.id] = safeSave(p);
   return {
-    level: at.level, section: at.section, arrival: {...at.arrival},
+    level: at.level, section: at.section, ...(at.station ? {station: at.station} : {}), arrival: {...at.arrival},
     vitals: {hp: src.player.hp, stamina: src.player.stamina, damageTaken: src.player.damageTaken},
     survival: {hunger: src.survival.hunger, thirst: src.survival.thirst, time: src.survival.time},
     battery: {charge: src.battery.charge, on: src.battery.on, died: src.battery.died},

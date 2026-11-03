@@ -1,15 +1,20 @@
 import {Game, type GameState} from './game';
 import {AssetLoadError} from './assets/loader';
 import {codeToSeed} from './core/rng';
-import {LEVELS, isLevelId, levelDisplayName, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
+import {LEVELS, LEVEL_IDS, isLevelId, levelDisplayName, sectionLabel, travelTargets} from './levels/registry'; // Iteration 16 (lane RUN); + travelTargets (task track3-eaton-centre-20261031, lane GEN: three levels)
 import type {LevelId} from './levels/types';
 import {setMallVariantOverride} from './gen/mall/frame'; // Task track3-eaton-centre-20261031 (lane GEN): QA ?mallVariant=
 import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
-import {warmupNote} from './render/warmup'; // Iteration 14
 import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
 import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
+// task campaign-foundation-20261102 (lane MENU): the main menu, its diorama and the persisted settings
+import {MainMenuController, MainMenuView, bootLine, mountSettingsForm, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
+import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
+import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
+import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
+import {setSkylineTexture} from './world/exterior';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 const params = new URLSearchParams(location.search);
@@ -30,6 +35,101 @@ function webgl2(): boolean {
   }
 }
 
+// ==== task campaign-foundation-20261102 (lane MENU): boot -> menu ==================================================================
+// Every load shows the MAIN MENU (dev deep links included). Boot = the renderer + the menu's diorama (only what the menu needs, a
+// small indicator) -> the menu; the heavy game boot assets (game.load: guns, items, icons) load in the background meanwhile (an
+// unobtrusive line at the foot of the menu; New game / Continue wait for them). No level is built before New game / Continue.
+//
+// QA automation (?qa=1): by default the menu stays hidden behind the loading card while a SCRATCH run of the URL's level / seeds is
+// prepared exactly as the old boot did (never saved, no slot); then state 'title' + __LL.ready(), and #btn-start ("QA quick start",
+// the menu's first item) enters it — the 26 scripts that wait for that and click #btn-start keep working. ?qa=1&qaPrebuild=0 shows the
+// real menu (diorama, settings, slots) with QA hooks; there #btn-start builds the scratch run on click (__LL.ready() only after it).
+
+/** The URL's developer start (?level= / ?seed= / ?officeSeed= / ?mallSeed= / ?reactorSeed=; ?qa=1 always offers it). */
+function devStartFromUrl(p: URLSearchParams, qaMode: boolean): DevStart | null {
+  const seedOf = (k: string) => { const v = p.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
+  const seeds: Partial<Record<LevelId, number>> = {};
+  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
+  const level = p.get('level');
+  const any = qaMode || isLevelId(level) || Object.keys(seeds).length > 0 || p.has('mallVariant');
+  return any ? {level: isLevelId(level) ? level : 'subway', seeds} : null;
+}
+
+/**
+ * Task studio-alpha-campaign-foundation-20261102-230708-01 (primary): THE menu host — the 3 localStorage slots (lane SAVE's SaveSlots,
+ * slots 1..3; the menu's 0-based slot n is save slot n + 1), New game = a fresh campaign network into the chosen slot (the menu has
+ * already confirmed an overwrite), Continue / Load = Game.continueCampaign, Export = a .json download, Import = a validated replace
+ * into the chosen slot (the menu has already confirmed it), Delete = that slot only.
+ */
+function campaignMenuHost(game: Game, ready: () => boolean): MenuHost {
+  const fail = (e: string): never => { throw new Error(e); };
+  return {
+    listSlots: (): SlotView[] => game.saves.list().map(v => ({slot: v.slot - 1, empty: v.empty, valid: v.valid, ...(v.meta ? {meta: v.meta} : {}), ...(v.error ? {error: v.error} : {})})),
+    lastSlot: () => { const n = game.saves.lastSlot(); return n === null ? null : n - 1; },
+    newGame: async (slot, dev) => {
+      if (!ready()) fail('the game files are still loading');
+      const r = await game.newCampaign(slot + 1, {overwrite: true, dev: dev ? {level: dev.level} : undefined});
+      if (!r.ok) fail(r.error);
+    },
+    continueGame: async slot => {
+      if (!ready()) fail('the game files are still loading');
+      const r = await game.continueCampaign(slot === undefined ? undefined : slot + 1);
+      if (!r.ok) fail(r.error);
+    },
+    exportSlot: slot => {
+      const r = game.saves.exportFile(slot + 1);
+      if (!r.ok) fail(r.error);
+      const e = r as {filename: string; blob: Blob};
+      const url = URL.createObjectURL(e.blob), a = document.createElement('a');
+      a.href = url; a.download = e.filename; a.rel = 'noopener';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    },
+    importFile: async (slot, file) => {
+      const r = await game.saves.importFile(slot + 1, file, {confirmReplace: true});
+      if (!r.ok) return {ok: false, error: r.error};
+      if (game.currentSlot === slot + 1) game.currentSlot = null; // the replaced slot no longer belongs to the run in memory
+      return {ok: true};
+    },
+    deleteSlot: slot => {
+      const r = game.saves.delete(slot + 1);
+      if (!r.ok) fail(r.error);
+      if (game.currentSlot === slot + 1) game.currentSlot = null;
+    },
+  };
+}
+
+/** A file chooser opened inside the click (user gesture); null when cancelled. */
+function pickJsonFile(): Promise<File | null> {
+  return new Promise(resolve => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json,application/json';
+    input.addEventListener('change', () => resolve(input.files?.[0] ?? null), {once: true});
+    input.addEventListener('cancel', () => resolve(null), {once: true});
+    input.click();
+  });
+}
+
+const EXT_IDS: Record<'tower' | 'midrise' | 'car' | 'bus' | 'rubble', OfficeAssetId> = {tower: 'ruined-tower', midrise: 'ruined-midrise', car: 'car-wreck', bus: 'bus-wreck', rubble: 'rubble-pile'};
+
+/** The diorama's models: the train shell + door leaf (prop library) and the exterior's Meshy pieces + skyline (office caches). Never rejects. */
+async function loadMenuAssets(game: Game, progress: (f: number) => void): Promise<MenuSceneAssets> {
+  const trainKeys = [MENU_TRAIN_KEYS.shell, MENU_TRAIN_KEYS.door];
+  const files = game.propModels.catalogue;
+  const total = trainKeys.reduce((s, k) => s + (files[k]?.bytes ?? 0), 0) + Object.values(EXT_IDS).reduce((s, id) => s + (OFFICE_ASSETS[id].bytes ?? 0), 0);
+  let done = 0, train = 0;
+  const tick = () => progress(Math.min(1, (done + train) / Math.max(1, total)));
+  const ext = {} as Record<keyof typeof EXT_IDS, Awaited<ReturnType<typeof loadOfficeAsset>>>;
+  await Promise.all([
+    game.propModels.ensure(trainKeys, f => { train = f * trainKeys.reduce((s, k) => s + (files[k]?.bytes ?? 0), 0); tick(); }),
+    ...(Object.entries(EXT_IDS) as [keyof typeof EXT_IDS, OfficeAssetId][]).map(([k, id]) => loadOfficeAsset(id).then(g => { ext[k] = g; done += OFFICE_ASSETS[id].bytes ?? 0; tick(); })),
+    loadOfficeTexture('skyline').then(t => { if (t) setSkylineTexture(t); }),
+  ]);
+  return {shell: game.propModels.get(trainKeys[0]) ?? null, door: game.propModels.get(trainKeys[1]) ?? null, exterior: ext};
+}
+// ==== end lane MENU (helpers) ==========================================================================================================
+
 async function boot(): Promise<void> {
   renderControls($('#controls-title'));
   renderControls($('#controls-pause'));
@@ -46,7 +146,7 @@ async function boot(): Promise<void> {
     return;
   }
   if (matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches) {
-    $('#station-intro').textContent = 'Touch devices are not supported — this slice needs a keyboard and mouse.';
+    $('#mm-note').textContent = 'Touch devices are not supported — this slice needs a keyboard and mouse.';
   }
   const canvas = $('#view') as HTMLCanvasElement;
   const game = new Game(canvas, qa);
@@ -56,11 +156,27 @@ async function boot(): Promise<void> {
   const perf = installPerfOverlay(game, {visible: params.get('perf') === '1'});
   (window as unknown as {__perf?: PerfOverlay}).__perf = qa ? perf : undefined;
 
+  // --- settings (lane MENU): ONE persisted store for the menu, the pause menu and the game ---
+  const settings = new SettingsStore(browserSettingsStorage());
+  // Session-only quality override (?quality=low), e.g. for slow software renderers: applied, never persisted.
+  if (params.get('quality') === 'low') settings.sessionOverride({quality: 'low'});
+  copySettingsInto(game.settings, settings.get());
+  game.applySettings();
+  settings.subscribe((s, changed) => {
+    const {qualityChanged} = copySettingsInto(game.settings, s);
+    // only what changed: a resize (canvas re-size) for the view settings, the audio gain for volume / mute, nothing for the mouse
+    if (changed.some(k => k === 'quality' || k === 'renderScale' || k === 'fov')) game.applySettings();
+    else if (changed.some(k => k === 'volume' || k === 'muted')) { game.sfx.setVolume(s.volume); game.sfx.setMuted(s.muted); }
+    if (qualityChanged) void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
+  });
+  game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
+  window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
+  mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-'});
+
   // --- menus and settings ---
-  // Iteration 16 (lane RUN): the title starts a NEW RUN in the chosen level; the pause menu travels to the other level (the run
-  // carries over) or starts a new game (confirmed: it resets everything); the death screen offers Retry level (the snapshot
-  // taken when the level was entered) or a new game; the clear screen lets the run go on.
-  $('#btn-start').addEventListener('click', () => void game.enterPlay());
+  // Iteration 16 (lane RUN): the pause menu travels to the other level (the run carries over) or starts a new game (confirmed: it
+  // resets everything); the death screen offers Retry level (the snapshot taken when the level was entered) or a new game; the clear
+  // screen lets the run go on. (lane MENU: new runs from the main menu go through its slot choice.)
   $('#btn-resume').addEventListener('click', () => void game.enterPlay());
   const confirms = ['#confirm-travel', '#confirm-new', '#confirm-win-new'];
   const closeConfirms = () => { for (const c of confirms) $(c).classList.add('hidden'); };
@@ -116,49 +232,8 @@ async function boot(): Promise<void> {
       : 'New game resets everything.';
     $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : 'Station clear';
   });
-  // task mall-playtest-revision-20261031 (lane GEN): the title's mall card names the prepared run's seeded mall
-  game.stateListeners.push((s: GameState) => {
-    if (s !== 'title') return;
-    const b = document.querySelector('.level-card[data-level="mall"] b');
-    if (b) b.textContent = nameOf('mall');
-  });
   // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
   game.stateListeners.push((st: GameState) => { if (st !== 'title') return; const el = $('#milestone-badge'), t = milestoneBadge(readMilestones()); if (el) { el.textContent = t; el.hidden = !t; } });
-  // the title's level choice (before the run starts): rebuilds the prepared run's start (same seeds) and warms it up
-  const choice = document.querySelectorAll<HTMLButtonElement>('.level-card');
-  const markChoice = (level: LevelId) => { for (const c of choice) c.setAttribute('aria-checked', String(c.dataset.level === level)); };
-  let choosing = false;
-  for (const c of choice) c.addEventListener('click', () => {
-    const level = c.dataset.level;
-    if (!isLevelId(level) || choosing || game.state !== 'title' || level === game.run.current.level) return;
-    choosing = true;
-    markChoice(level);
-    void game.newGame(level, {seeds: {...game.run.seeds}}).then(w => {
-      if (game.state === 'loading' || game.state === 'title') $('#title').dataset.mode = 'new-run';
-      if (w && w.status !== 'cancelled' && game.state === 'loading') game.setState('title');
-      markChoice(game.run.current.level); // a failed build keeps the prepared run (and its level)
-    }).finally(() => { choosing = false; });
-  });
-  const bindRange = (id: string, key: 'sens' | 'fov' | 'volume', fmt: (v: number) => string) => {
-    const input = $(id) as HTMLInputElement;
-    const out = input.parentElement!.querySelector('output')!;
-    const apply = () => { game.settings[key] = Number(input.value); out.textContent = fmt(Number(input.value)); game.applySettings(); };
-    input.addEventListener('input', apply);
-    apply();
-  };
-  bindRange('#set-sens', 'sens', v => v.toFixed(2));
-  bindRange('#set-fov', 'fov', v => v.toFixed(0));
-  bindRange('#set-vol', 'volume', v => `${Math.round(v * 100)}`);
-  ($('#set-mute') as HTMLInputElement).addEventListener('change', e => { game.settings.muted = (e.target as HTMLInputElement).checked; game.applySettings(); });
-  ($('#set-invert') as HTMLInputElement).addEventListener('change', e => { game.settings.invertY = (e.target as HTMLInputElement).checked; });
-  ($('#set-quality') as HTMLSelectElement).addEventListener('change', e => {
-    game.settings.quality = (e.target as HTMLSelectElement).value as 'low' | 'high';
-    game.applySettings();
-    void game.rewarmAfterSettings(); // Iteration 14: new render targets -> prepare their pipelines before Resume
-  });
-
-  // Session-only quality override (?quality=low), e.g. for slow software renderers.
-  if (params.get('quality') === 'low') { game.settings.quality = 'low'; ($('#set-quality') as HTMLSelectElement).value = 'low'; game.applySettings(); }
 
   const loop = (time: number) => {
     const t0 = performance.now();
@@ -172,49 +247,176 @@ async function boot(): Promise<void> {
     requestAnimationFrame(loop);
   };
 
-  game.setState('loading');
-  const bar = $('#load .fill'), label = $('#load .label');
-  // Iteration 13 (CORE): renderer.init() (WebGPU adapter + device, else the WebGL 2 fallback) runs while the assets download;
-  // game.load awaits it before the first GPU work (the item icons). A lost device stops rendering and shows the error screen.
+  // ==== task campaign-foundation-20261102 (lane MENU): the main menu =============================================================
+  // (task track3-eaton-centre-20261031, lane GEN: QA-only ?mallVariant=galleria|oval-court|cross-galleria forces the mall's layout
+  // variant for this session)
+  setMallVariantOverride(params.get('mallVariant'));
+  const qaPrebuild = qa && params.get('qaPrebuild') !== '0';
+  const dev = devStartFromUrl(params, qa);
+  const titleEl = $('#title'), qaButton = $('#btn-start') as HTMLButtonElement;
+  let qaReady = false, booted = false;
+  // a run outside the slots (the session host's New game, the QA scratch run): a click -> pointer lock / audio inside the gesture
+  const startRun = (level: LevelId, seeds: Partial<Record<LevelId, number>>): Promise<void> => {
+    if (!booted) return Promise.reject(new Error('the game files are still loading'));
+    return game.newGame(level, {seeds, enter: true}).then(w => {
+      if (!w) throw new Error('another start is already in progress');
+      if (w.status === 'cancelled') throw new Error('the graphics device was lost');
+    });
+  };
+  const host: MenuHost = campaignMenuHost(game, () => booted); // (primary: the 3 persistent slots; sessionMenuHost kept for tests / QA)
+  const menu = new MainMenuController(host, {
+    dev, devLevels: LEVEL_IDS, levelName: l => LEVELS[l].name, pickFile: pickJsonFile,
+    qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
+  });
+  const menuView = new MainMenuView($('#mm-view'), menu, {
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-'}); },
+    qaButton: qa ? qaButton : null,
+  });
+  qaButton.addEventListener('click', () => {
+    if (qaPrebuild) { if (game.world) void game.enterPlay(); return; }
+    void startRun(dev?.level ?? 'subway', dev?.seeds ?? {}).catch(err => console.warn('QA quick start failed', err));
+  });
+  const bootUi = bootLine($('#mm-boot'));
+  let menuScene: MenuScene | null = null, menuAudio = false, lastAmbience = 0;
+  const disposeMenuScene = () => {
+    game.menuRender = null;
+    menuScene?.dispose();
+    menuScene = null;
+  };
+  game.stateListeners.push((s: GameState, prev: GameState) => {
+    menuView.visible = s === 'title';
+    if (s === 'title') { titleEl.dataset.mode = 'menu'; menu.refresh(); }
+    // leaving the menu for a level build: the diorama goes first (its shared exterior uniforms restored before any level exterior)
+    if (s === 'loading' && prev === 'title') disposeMenuScene();
+  });
+  // menu ambience: an existing bed loop (the track bed: wind + rumble, distant trains) at the master volume, after a user gesture
+  const startMenuAudio = () => {
+    if (game.state !== 'title') return;
+    game.sfx.init();
+    game.sfx.setVolume(game.settings.volume);
+    game.sfx.setMuted(game.settings.muted);
+    if (!menuAudio) game.sfx.setRoom('large', 'track');
+    menuAudio = true;
+  };
+  window.addEventListener('pointerdown', startMenuAudio, true);
+  window.addEventListener('keydown', startMenuAudio, true);
+  (window as unknown as {__menu?: unknown}).__menu = qa ? {controller: menu, scene: () => menuScene, stats: () => menuScene?.stats() ?? null, frames: () => menuScene?.frames ?? 0} : undefined;
+
   game.onDeviceLost = text => {
     if (game.gpu) installBackendIndicator(document, game.gpu);
     showError('The graphics device was lost — rendering stopped.', [text, 'Reload the page to restart (your browser or GPU driver reset the device).']);
     game.state = 'error';
   };
+  // ==== task studio-alpha-campaign-foundation-20261102-230708-01 (primary): campaign runs in the pause / death screens ============
+  // A campaign run travels only by its train (the console's map): the legacy level travel + per-level new-game buttons are hidden; a
+  // "Main menu" button returns to the menu after a confirmation that says what the last autosave holds (nothing after it is saved).
+  const mainMenuButton = (parentSel: string, id: string): HTMLButtonElement => {
+    const b = document.createElement('button');
+    b.id = id; b.type = 'button'; b.textContent = 'Main menu';
+    document.querySelector(`${parentSel} .actions`)?.appendChild(b);
+    return b;
+  };
+  const autosaveNote = (): string => {
+    const slot = game.currentSlot;
+    const v = slot ? game.saves.list().find(x => x.slot === slot) : undefined;
+    if (!slot || !v?.meta) return 'This run has no save yet — leaving now loses it.';
+    const at = new Date(v.meta.savedAt), when = isNaN(at.getTime()) ? v.meta.savedAt : at.toLocaleString();
+    return `Last autosave (slot ${slot}): ${when}, at ${v.meta.station} (${v.meta.reason}). Progress since then is NOT saved — the game saves at every train departure and arrival.`;
+  };
+  const toMenu = (b: HTMLButtonElement) => b.addEventListener('click', () => {
+    if (!game.run.campaign) { game.setState('title'); return; }
+    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Confirm: back to the main menu'; b.title = autosaveNote(); const n = document.querySelector('#pause .fine'); if (n && game.state === 'paused') n.textContent = autosaveNote(); return; }
+    b.dataset.armed = ''; b.textContent = 'Main menu';
+    game.trainRide.reset();
+    game.setState('title');
+  });
+  toMenu(mainMenuButton('#pause', 'btn-main-menu'));
+  toMenu(mainMenuButton('#death', 'btn-death-menu'));
+  const legacyRunUi = ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-new-game', '#btn-death-new', '#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth',
+    '#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-new'];
+  game.stateListeners.push((s: GameState) => {
+    const campaign = !!game.run.campaign;
+    for (const id of legacyRunUi) document.querySelector(id)?.classList.toggle('hidden', campaign);
+    if (s !== 'paused') { const b = document.getElementById('btn-main-menu'); if (b) { b.dataset.armed = ''; b.textContent = 'Main menu'; } }
+  });
+
+  if (qaPrebuild) game.setState('loading'); // (QA: the loading card until the scratch run is ready, as the old boot)
+  else { titleEl.dataset.mode = 'menu'; game.setState('title'); }
+  requestAnimationFrame(loop);
+  // Iteration 13 (CORE): renderer.init() (WebGPU adapter + device, else the WebGL 2 fallback); game.load awaits it before the first
+  // GPU work (the item icons). A lost device stops rendering and shows the error screen.
   const gpuReady = game.initRenderer().then(gpu => { installBackendIndicator(document, gpu); return gpu; });
-  gpuReady.catch(() => {}); // handled below (awaited together with the asset load)
-  try {
-    await Promise.all([gpuReady, game.load((f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading ${file} · ${Math.round(f * 100)}%`; })]);
-  } catch (err) {
+  gpuReady.catch(() => {}); // handled below
+  const fatal = async (err: unknown) => {
     const gpuFailed = await gpuReady.then(() => null, (e: unknown) => e);
     if (gpuFailed) showError('The renderer could not start (neither WebGPU nor its WebGL 2 fallback initialized).', [String((gpuFailed as Error)?.message ?? gpuFailed), 'Enable hardware acceleration or try a current desktop Chrome, Edge or Firefox.']);
     else if (err instanceof AssetLoadError) showError('Some game files could not be loaded.', err.failures.map(f => `${f.url} — ${f.reason}`));
     else showError('The game failed to start.', [String((err as Error)?.message ?? err)]);
     game.state = 'error';
+  };
+  try { await gpuReady; } catch (err) { await fatal(err); return; }
+
+  // 1. the diorama (only what the menu needs; a small indicator; failures leave the plain backdrop). The game files start after
+  // it, or after MENU_FIRST_MS on a slow connection (the two then share the network; both are safe to interleave: the menu frame
+  // leaves the renderer's target / exposure as it found them)
+  const MENU_FIRST_MS = 4000;
+  let sceneBusy = !qaPrebuild && !(qa && params.get('menuScene') === '0');
+  // (primary, QA only: ?qa=1&menuScene=0 skips the diorama — software-GL browser checks of the campaign loop stay under the memory guard)
+  const menuSceneOff = qa && params.get('menuScene') === '0';
+  const menuTask = qaPrebuild || menuSceneOff ? Promise.resolve() : (async () => {
+    try {
+      bootUi(0, 'Preparing the scene…', false);
+      const assets = await loadMenuAssets(game, f => { if (sceneBusy) bootUi(f, `Preparing the scene · ${Math.round(f * 100)} %`, false); });
+      if (game.state === 'title' && !game.world) {
+        const scene = new MenuScene(assets);
+        await scene.compile(game.renderer); // every diorama pipeline before it is shown (no cold compile on screen)
+        if (game.state === 'title' && !game.world) {
+          menuScene = scene;
+          game.menuRender = t => {
+            const s = menuScene;
+            if (!s) return false;
+            const drew = s.render(game.renderer as unknown as MenuRenderer, t);
+            if (drew && menuAudio) { const dt = lastAmbience ? Math.min(0.25, (t - lastAmbience) / 1000) : 0; lastAmbience = t; game.sfx.ambience(dt); }
+            return drew;
+          };
+          requestAnimationFrame(() => $('#title-backdrop').classList.add('faded'));
+        } else scene.dispose();
+      }
+    } catch (err) {
+      console.warn('main menu: the diorama could not be built (plain backdrop kept)', err);
+    } finally {
+      sceneBusy = false;
+    }
+  })();
+  await Promise.race([menuTask, new Promise(r => setTimeout(r, MENU_FIRST_MS))]);
+  sceneBusy = false; // from here the line reports the game files
+
+  // 2. the heavy game boot assets in the background (New game / Continue wait for them)
+  try {
+    bootUi(0, 'Loading game files…', false);
+    menu.setBoot(false, 0);
+    await game.load((f, file) => { bootUi(f, `Loading game files · ${Math.round(f * 100)} %`, false); menu.setBoot(false, f); if (qaPrebuild) { $('#load .fill').style.width = `${Math.round(f * 100)}%`; $('#load .label').textContent = `Loading ${file} · ${Math.round(f * 100)}%`; } });
+  } catch (err) {
+    await fatal(err);
     return;
   }
-  // Session-only debug/share seeds via ?seed=CODE (Subway) and ?officeSeed=CODE (Office Space); otherwise a brand-new run every
-  // load. ?level=office starts the title's run in Office Space. Iteration 16 (lane RUN): boot = a NewGame (not entered yet).
-  const seedOf = (k: string) => { const v = params.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
-  const startLevel: LevelId = isLevelId(params.get('level')) ? params.get('level') as LevelId : 'subway';
-  markChoice(startLevel);
-  // Iteration 07 (Lane P2): only this section's lazy prop models are fetched (with progress) before it is built and revealed.
-  // Iteration 14 (primary): its pipelines, shadow variants, fog passes, held items and effects are prepared on the loading
-  // screen (render/warmup.ts) before "Start run" becomes available; partial / failed results say so.
-  // (task track3-eaton-centre-20261031, lane GEN: + ?mallSeed=CODE for the mall (seeded "<Name> Center"); ?level=mall starts there; QA-only
-  // ?mallVariant=galleria|oval-court|cross-galleria forces the mall's layout variant for this session)
-  setMallVariantOverride(params.get('mallVariant'));
-  // (task reactor-build-20261101: + ?reactorSeed=CODE; ?level=reactor starts the title's run in the Reactor)
-  const warm = await game.newGame(startLevel, {seeds: {subway: seedOf('seed'), office: seedOf('officeSeed'), mall: seedOf('mallSeed'), reactor: seedOf('reactorSeed')},
-    onProgress: (f, file) => { bar.style.width = `${Math.round(f * 100)}%`; label.textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
-  if (game.state === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)
-  const note = warmupNote(warm);
-  label.textContent = `Ready · ${game.layout.areas.length} spaces generated${note ? ` · ${note}` : ''}`;
-  bar.style.width = '100%';
-  ($('#btn-start') as HTMLButtonElement).disabled = false;
-  $('#title').dataset.mode = 'new-run';
-  game.setState('title');
-  requestAnimationFrame(loop);
+  if (game.state === 'error') return;
+  booted = true;
+  bootUi(1, 'Ready', true);
+  menu.setBoot(true, 1);
+
+  // 3. QA: the scratch run of the URL's level / seeds, prepared like the old boot (state 'title' + __LL.ready() when done)
+  if (qaPrebuild) {
+    const d = dev ?? {level: 'subway' as LevelId, seeds: {}};
+    // Iteration 07 (Lane P2) / 14: the level's lazy prop models are fetched with progress, then its pipelines are prepared on the
+    // loading screen before #btn-start becomes available; partial / failed results say so.
+    const warm = await game.newGame(d.level, {seeds: d.seeds, onProgress: (f, file) => { $('#load .fill').style.width = `${Math.round(f * 100)}%`; $('#load .label').textContent = `Loading station props · ${file} · ${Math.round(f * 100)}%`; }});
+    if ((game.state as GameState) === 'error' || !warm) return; // the device was lost meanwhile (error screen already shown)
+    qaReady = true;
+    qaButton.disabled = false;
+    game.setState('title');
+  }
+  // ==== end lane MENU ============================================================================================================
 }
 
 void boot();

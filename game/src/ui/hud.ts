@@ -57,6 +57,8 @@ export interface HudState {
   /** Item id shown as a 3D icon in front of the prompt (aimed floor pickup). */
   promptItem?: string;
   remaining: number;
+  /** (campaign foundation) the objective's second line; undefined = the legacy infected count. */
+  objLine?: string;
   total: number;
   area: string;
   spreadPx: number;
@@ -177,8 +179,9 @@ export class Hud {
     this.set('prompt', `${s.prompt}|${s.prompt && s.promptItem ? s.promptItem : ''}|${itemIconsVersion()}`, () => {
       $('#prompt').innerHTML = s.prompt ? `${s.promptItem ? itemIconHtml(s.promptItem, 'pi') : ''}${s.prompt}` : '';
     });
-    this.set('obj', `${s.remaining}/${s.total}`, () => {
-      $('#obj-count').textContent = s.remaining > 0 ? `${s.remaining} of ${s.total} infected remain` : 'All infected down — station clear';
+    // (campaign foundation) an explicit objective line wins (the scavenge objective has none); else the legacy infected count
+    this.set('obj', s.objLine !== undefined ? `line:${s.objLine}` : `${s.remaining}/${s.total}`, () => {
+      $('#obj-count').textContent = s.objLine !== undefined ? s.objLine : s.remaining > 0 ? `${s.remaining} of ${s.total} infected remain` : 'All infected down — station clear';
     });
     this.set('area', s.area, v => { $('#area-name').textContent = v; });
     this.set('spread', `${Math.round(s.spreadPx)}|${s.aiming}`, () => {

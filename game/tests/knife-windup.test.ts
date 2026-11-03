@@ -306,7 +306,7 @@ describe('cancellation: no path leaves a delayed attack for a later release', ()
     // a consumed in-world click clears the press and latches the button before the weapon update
     expect(src).toMatch(/if \(inp\.mousePressed\[0\] && this\.pointerHandlers\.some\(h => h\(\)\)\) \{ inp\.mousePressed\[0\] = false; this\.lmbLatch = true; \}/);
     expect(src.indexOf('this.pointerHandlers.some(h => h())')).toBeLessThan(src.indexOf('this.weapon.update(dt'));
-    expect(src).toMatch(/held: inp\.mouse\[0\] && !flareOwns, pressed: inp\.mousePressed\[0\] && !flareOwns/);
+    expect(src).toMatch(/held: inp\.mouse\[0\] && !flareOwns(?: && !rideHolster)?, pressed: inp\.mousePressed\[0\] && !flareOwns/);
     expect(src).toMatch(/if \(this\.input\.mouse\[0\] && \(this\.weapon\.def\?\.melee \|\| WEAPONS\[def\.weaponId!\]\?\.melee\)\) this\.lmbLatch = true/);
     expect(src).toMatch(/if \(s !== 'playing'\) \{[^\n]*this\.weapon\.cancelSwing\(\);/);
     expect(src).toMatch(/clears: inp\.clears\}/);

@@ -407,7 +407,7 @@ describe('input ownership: a click on a targeted button never fires the weapon',
     }
     // the gun's trigger is gated by the latch (flareOwns includes lmbLatch)
     expect(update).toMatch(/const flareOwns = [^;]*this\.lmbLatch/);
-    expect(update).toMatch(/held: inp\.mouse\[0\] && !flareOwns, pressed: inp\.mousePressed\[0\] && !flareOwns/);
+    expect(update).toMatch(/held: inp\.mouse\[0\] && !flareOwns(?: && !rideHolster)?, pressed: inp\.mousePressed\[0\] && !flareOwns/);
     // and the tower registers its handler there
     const P = new Player();
     const {host} = makeHost(towerLayout(), P);

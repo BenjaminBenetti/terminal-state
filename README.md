@@ -152,6 +152,14 @@ WASD move · mouse look · Shift sprint · Space jump · C crouch · left click 
 · Ctrl+Shift+P performance overlay.
 Drop an item by dragging it out of the inventory panel.
 
+**The campaign** (task campaign-foundation-20261102): every load opens the main menu. New game unfolds a crumpled paper
+subway map of a ~40-station network where only your starting stop is printed. Scavenge, then return to your train and use the
+driving console in the front cab (E) to pick a neighbouring station. The train pulls into a dark tunnel while the next
+station loads, and you can still walk around and change gear inside. Most stops are Subway stations (about 80 %), with some
+Office and Mall stops and exactly one Reactor, the destination. Restarting the reactor and reaching the habitable surface wins
+the run. Departures and arrivals autosave into one of three local save slots, which you can export and import from the
+menu. See [game/README.md](game/README.md#campaign-task-campaign-foundation-20261102).
+
 **Beyond the Station** (Track 2): the tracks no longer end at a black wall. Drop into a track bed and follow it into a
 finite, curving concrete tunnel that ends at a rubble heap, a bulkhead or a closed gate. About one level in five (a 20 %
 seeded roll per level, on every level type) also hides one or two **service annexes**: cramped, dark back-of-house rooms with
@@ -183,8 +191,7 @@ other storage, and physical 3D shelf stock that scatters when shot. Iteration 7 
 expanded prop placement/dynamics, fitted zombie wardrobes, updated weapon/consumption
 presentation and bundled audio updates. Detailed
 systems, controls, URL options and performance notes are in
-[game/README.md](game/README.md). A new station is generated on each load. No
-persistent saves, train travel or touch controls. Performance/visual rough edges
+[game/README.md](game/README.md). No touch controls. Performance/visual rough edges
 and browser pointer-lock restrictions remain; desktop browser QA is separate from
 unit tests. The original game README retains some historical tooling commands.
 

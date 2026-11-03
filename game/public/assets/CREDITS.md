@@ -345,3 +345,9 @@ Not reviewed by ear on the build worker. Raw takes are kept outside Git.
   `assets/derivatives/zombie-lingerie.json`.
 - Raw Meshy outputs and the user references stay private (studio reference task folder plus a local backup). Unapproved
   prototypes; no commercial clearance implied. Ordinary zombie clips only.
+
+<!-- BEGIN paper-map-20261102 (build-paper-map.mjs) -->
+## Campaign: the paper subway map
+
+- `assets/textures/paper-map.jpg` — the blank old folded paper sheet of the in-game subway map. Generated for this project with Codex's built-in image tool (one call under the task's 8-call authorization); runtime derivative by `tools/asset-pipeline/campaign/build-paper-map.mjs` (resize + JPEG only; provenance: `assets/derivatives/paper-map-20261102.json`). The lines, stations and labels are drawn at runtime. AI-generated asset: unapproved prototype, no licence or commercial clearance implied. The raw master is kept outside Git.
+<!-- END paper-map-20261102 -->

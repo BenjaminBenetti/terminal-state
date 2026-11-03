@@ -13,8 +13,8 @@ bands and menu boards, glazed shops, roll-down shutters, a service corridor behi
 the middle), washrooms, sealed street-exit stairs and back-of-house (stock rooms with shelving,
 storage, crew/utility rooms, closets) — 22–32 rigged zombies (iteration 12: doubled) that fall as
 physics ragdolls, physical casings, both existing guns, a five-slot hotbar + backpack, visible
-searchable loot, food/drink with slow hunger/thirst (both start at 80%), death and restart. Nothing is
-saved: no localStorage/IndexedDB; settings last for the session only.
+searchable loot, food/drink with slow hunger/thirst (both start at 80%), death and restart. Campaign runs autosave
+into three local save slots and settings persist (both `localStorage`, see Campaign below); no IndexedDB, cloud or server.
 
 ## Commands (from the repo root)
 | Command | What |
@@ -195,13 +195,58 @@ viewmodel pass, effect pools / thrown-flare prototypes and the torch shadow vari
 does not stutter on shader / pipeline compilation. The bar counts real work; it says Ready only when that work is
 done (or says it is partial / failed). `?warmup=off|view|full` overrides (software rasterizers default to `view`).
 
-Goal: clear the station (kill every infected). Death → "New station" (fresh seed) or "Retry this
-station" (same seed, this session only).
+Goal (campaign): "Scavenge for resources. Return to the train when done." There is no kill goal; the Reactor's objective is
+to restart it. On death a campaign run offers "Retry level" (this station, from your arrival there) or "Main menu", which leaves after
+a confirmation naming the last autosave. Legacy dev runs keep "New station" (fresh seed) as well.
+
+## Campaign (task campaign-foundation-20261102)
+- **Network** (`src/campaign/network.ts`): New game rolls a seeded, subway-like network of 40 stations on printed lines
+  (interchanges, branches, sometimes a ring). It has 39 ordinary stops split by largest remainder of 80 / 10 / 10, giving
+  31 Subway (including the start), 4 Office and 4 Mall (`ORDINARY_WEIGHTS` in `src/campaign/types.ts` is configurable), plus
+  exactly one Reactor several hops from the start. A station (`StationId`, e.g. `st-07`) is not a level type: each node has its
+  own seed, gear roll, section memories, Retry scope and printed name (shown on its signs, the HUD, the map and saves).
+- **Map and console** (`src/ui/paperMap.ts`, `src/world/trainConsole.ts`): the map is a crumpled paper sheet (Codex
+  source art, `assets/textures/paper-map.jpg`) with code-drawn lines and names. New game shows only the starting stop.
+  The driving console in the train's front cab (E) opens it and reveals the current stop and its neighbours. The Reactor
+  appears only once discovered. Pick an adjacent stop and confirm to travel. Typing `1337` while the map is open reveals
+  everything and allows travel anywhere for the rest of that run (it is saved with the run; separate from the Lockbox code).
+- **The journey** (`Game.travelToStation`, `src/world/trainRide.ts`): the occupied train closes its doors and pulls into a dark
+  transit tunnel. You can walk, look and change gear inside while the old station is torn down (every change kept in its
+  memory) and the next one is generated, built and compiled in the background, with jostle. The car then emerges at the new
+  platform and stops. There is no static loading screen. A destination that cannot be generated twice sends the train back.
+- **Autosaves** (`src/save/`): the new game, the departure (with the journey pending) and the arrival each write the active slot.
+  Continue resumes the last slot. A save taken mid-journey (a crash in the tunnel) resumes that journey once, arriving at
+  the destination. There are three slots (`terminal-state.save.slot{1,2,3}.v1`, compact checksummed JSON, atomic writes,
+  validated on load). The menu offers per-slot Export (a download) and Load save (imports a file into a chosen slot after
+  an explicit confirm). Three heavily played slots measure about 42 % of a 5 MiB origin quota (`tests/save-budget.test.ts`
+keeps them under 70 %).
+  A quota error is reported, never silently dropped.
+- **Win**: at the Reactor, restarting it opens the habitable-surface ending, and reaching the surface
+  (`reactor.state.ending.surfaced`) completes the run once. Builds without the surface ending fall back to the restart itself.
+- **QA**: `node tools/qa/campaign-loop-check.mjs` is one serial spot check (menu, new game, slot, map, journey, Continue).
+  On software GL (llvmpipe) the arrival drive outgrows the 6 GiB guard, so the check closes the page during the arrival, like
+  a crash mid-journey, and proves the departure save's once-only resume on a fresh page.
+
+## Main menu, settings and URL parameters (task campaign-foundation-20261102, lane MENU)
+Every load opens the **main menu** (`src/ui/mainMenu.ts`) beside a real-time diorama (`src/world/menuScene.ts`: the ruined
+city in green fog, surface tracks, the player train; render only, no world state). Boot builds the renderer and the diorama
+first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
+level is built before New game / Continue. Settings (sensitivity, invert, FOV 60-100, master volume 0-100 %, mute, quality,
+render resolution Native / Half / Quarter = a linear width-and-height scale over the DPR-capped native buffer, not a
+quality preset, and train sway 0-100 % = the moving train's jostle on the view, 0 = off) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+the same store. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
+which starts a normal new game at that level.
+
+QA automation: `?qa=1` keeps the old automation contract — the menu waits behind the loading card while a **scratch run**
+of the URL's level / seeds is prepared (never saved, no slot), then `__LL.state() === 'title'`, `__LL.ready()` is true and
+`#btn-start` ("QA quick start", the menu's first item) enters it. `?qa=1&qaPrebuild=0` shows the real menu (diorama,
+settings, slots) with the QA hooks (`window.__menu`); there `#btn-start` builds the scratch run when clicked.
 
 ## URL parameters (optional, session-only)
-- `?seed=CODE` — replay a station code shown in the pause menu (debug/share). Reloading without it
-  always makes a new station.
-- `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset).
+- `?seed=CODE` — replay a station code shown in the pause menu (debug/share): the menu's Dev start (Subway seed).
+  Reloading without it always makes a new station. (`?officeSeed=` / `?mallSeed=` / `?reactorSeed=`, `?level=` likewise.)
+- `?quality=low` — lower resolution and fewer dynamic lights (also the low volumetric-haze preset). Session-only: it
+  overrides the stored Quality without changing it.
 - `?warmup=off|view|full` — loading-screen graphics warm-up scope (iteration 14; default `full`, `view` on software GL).
 - `?renderer=webgl2` — force WebGPURenderer's WebGL 2 fallback backend (iteration 13; default: WebGPU when available).
 - `?fog=off|low|high` — override the volumetric haze (iteration 06, `src/render/volumetric.ts`):
