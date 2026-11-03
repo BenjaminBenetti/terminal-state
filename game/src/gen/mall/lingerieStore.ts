@@ -27,7 +27,8 @@
 // - The suite stays part of the SALES AREA (one area id: same purpose `mall-lingerie`, finish, lights, loot): its doors join the sales area
 //   to itself (Door a = b = the sales floor) — real framed openings in real walls, no new Area records (every area-indexed table and draw
 //   of the generator is unchanged).
-// - Lane CONTEXT contract: MallShop.changing = world rects of every room's free floor (in front of its bench), then the corridor LAST;
+// - Lane CONTEXT contract: MallShop.changing = world rects of every room's free floor (in front of its bench, beside its mirror: the two
+//   doorway columns, 1.0 x 1.5 m), then the corridor LAST;
 //   MallShop.changingEntry = the suite doorway's centre on the sales-floor side.
 
 import {CELL, FLOOR, SOLID} from '../grid';
@@ -68,7 +69,7 @@ export interface ChangingSuite {
   wall: Side;
   dir: 1 | -1;
   rooms: number;
-  /** World rects of each room's free floor (from the closed corner), then the corridor. */
+  /** World rects of each room's free floor (in front of its bench, beside its mirror strip; from the closed corner), then the corridor. */
   rects: ChangingRect[];
   roomRects: ChangingRect[];
   corridor: ChangingRect;
@@ -191,20 +192,27 @@ function trySuite(d: ShopDresser, Z: ShopFrame, wall: Side, dir: 1 | -1, n: numb
     markCell(ctx, ctx.zone, i);
     if (y >= dr.y - 1 && y <= dr.y + dr.h && x >= dr.x - 1 && x <= dr.x + dr.w) markCell(ctx, ctx.doorCell, i);
   }
-  // --- furniture: per room a built-in bench against its back wall and a mirror above it ------------------------------------------------
+  // --- furniture: per room a built-in bench against its back wall and a full-length mirror on its side wall (the side away from its
+  // doorway, by the bench). The mirror's 0.5 m strip of floor is kept off the nav grid (the mirror itself is a 2 cm panel the player can
+  // stand at): no room then offers the 3 x 3 clear floor an ambient spawn needs — the rooms are the store-local variants' (lane CONTEXT) ---
   const props: PropPlacement[] = [];
   const BE = PROP_DEFS.fittingBench, MI = PROP_DEFS.fittingMirror;
   const alongX = Z.side === 'N' || Z.side === 'S';
   const vBack = Z.D - frontRow * CELL; // the rooms' back wall face (the wall row toward the sales floor)
+  const towardC = dir > 0 ? Z.plusU : Z.minusU;
   for (let k = 0; k < n; k++) {
-    const um = ((S.roomCols + 1) * k + S.roomCols / 2) * CELL;
+    const c0 = (S.roomCols + 1) * k, um = (c0 + S.roomCols / 2) * CELL;
     const [bx, bz] = uvXZ(Z, dir > 0 ? um : Z.W - um, vBack + BE.d / 2 + 0.01);
     const bench = tryPlaceProp(ctx, a, 'fittingBench', r3(bx), r3(bz), Z.inward, {checkZone: false});
     if (bench) { props.push(bench); d.placed.push(bench); }
-    const [mx, mz] = uvXZ(Z, dir > 0 ? um : Z.W - um, vBack + MI.d / 2 + 0.005);
-    const mirror = forceProp(ctx, a, 'fittingMirror', r3(mx), r3(mz), r3(alongX ? MI.w / 2 : MI.d / 2), r3(alongX ? MI.d / 2 : MI.w / 2), MI.h, false);
-    mirror.rot = Z.inward;
+    // the mirror on the wall at the room's first column (c0: its wall is the previous separator / the closed corner's side wall), over
+    // the two rows in front of the bench
+    const uM = c0 * CELL + MI.d / 2 + 0.005, vM = vBack + 2 * CELL;
+    const [mx, mz] = uvXZ(Z, dir > 0 ? uM : Z.W - uM, vM);
+    const mirror = forceProp(ctx, a, 'fittingMirror', r3(mx), r3(mz), r3(alongX ? MI.d / 2 : MI.w / 2), r3(alongX ? MI.w / 2 : MI.d / 2), MI.h, false);
+    mirror.rot = towardC;
     props.push(mirror); d.placed.push(mirror);
+    for (const r of [frontRow - 1 - 1, frontRow - 1 - 2]) { const i = cell(c0, r); if (own(i)) markCell(ctx, g.blocked, i); }
   }
   // reserve every free suite cell (and the doorway's approach) so no sales-floor fixture lands in the suite
   const keepCell = (i: number) => { if (own(i) && !g.blocked[i]) markCell(ctx, ctx.keep, i); };
@@ -218,7 +226,8 @@ function trySuite(d: ShopDresser, Z: ShopFrame, wall: Side, dir: 1 | -1, n: numb
     return {x0: r3(Math.min(xa, xb)), z0: r3(Math.min(za, zb)), x1: r3(Math.max(xa, xb)), z1: r3(Math.max(za, zb))};
   };
   // a room's free floor: its columns, from the door row's inside to the bench row (exclusive)
-  const roomRects = Array.from({length: n}, (_, k) => rectOf((S.roomCols + 1) * k, (S.roomCols + 1) * k + S.roomCols - 1, room0, frontRow - 2));
+  // a room's free floor in front of its bench, beside the mirror strip: its two doorway columns (1.0 x 1.5 m)
+  const roomRects = Array.from({length: n}, (_, k) => rectOf((S.roomCols + 1) * k + 1, (S.roomCols + 1) * k + S.roomCols - 1, room0, frontRow - 2));
   const corridorRect = rectOf(0, endCol - 1, 0, doorRow - 1);
   const uE = (pass0 + S.entryDoor / 2) * CELL;
   const [ex, ez] = uvXZ(Z, dir > 0 ? uE : Z.W - uE, Z.D - rows * CELL);

@@ -130,8 +130,8 @@ function checkSuite(L: StationLayout, s: MallShop, tag: string): void {
   const rects = s.changing!, rooms = rects.slice(0, -1), corridor = rects[rects.length - 1];
   expect(rooms.length, `${tag}: rooms`).toBeGreaterThanOrEqual(3);
   expect(rooms.length).toBeLessThanOrEqual(4);
-  // a room's free floor 1.5 x 1.5 m (in front of its bench), the corridor >= 1.0 m clear
-  for (const r of rooms) expect([r.x1 - r.x0, r.z1 - r.z0]).toEqual([1.5, 1.5]);
+  // a room's free floor 1.0 x 1.5 m (in front of its bench, beside its mirror strip; the room is 1.5 x 2.0 m inside), the corridor >= 1.0 m
+  for (const r of rooms) expect([r.x1 - r.x0, r.z1 - r.z0].sort()).toEqual([1.0, 1.5]);
   expect(Math.min(corridor.x1 - corridor.x0, corridor.z1 - corridor.z0), `${tag}: corridor width`).toBeGreaterThanOrEqual(1.0);
   // inside the shop, every rect cell walkable floor of the sales area (nothing else landed in the suite)
   const ax0 = a.x * CELL, az0 = a.y * CELL, ax1 = (a.x + a.w) * CELL, az1 = (a.y + a.h) * CELL;
@@ -161,22 +161,36 @@ function checkSuite(L: StationLayout, s: MallShop, tag: string): void {
   }
   let walls = 0;
   roomCells.forEach((cells, k) => {
+    // the room = every walkable cell reachable from its rect without passing a doorway: small, holding no other room / corridor cell
+    const room = new Set(cells), stack = [...cells];
+    while (stack.length) {
+      const c = stack.pop()!;
+      for (const n of [c - 1, c + 1, c - g.w, c + g.w]) if (!room.has(n) && !doorCells.has(n) && g.cells[n] === FLOOR && g.area[n] === s.area && !g.blocked[n]) { room.add(n); stack.push(n); }
+    }
+    expect(room.size, `${tag}: room ${k} enclosed`).toBeLessThanOrEqual(CHANGING_SUITE.roomCols * CHANGING_SUITE.roomRows);
+    for (const i of room) { expect(corridorCells.has(i), `${tag}: room ${k} open to the corridor`).toBe(false); for (let j = 0; j < roomCells.length; j++) if (j !== k) expect(roomCells[j].has(i)).toBe(false); }
+    // its only ways out: its 2-cell framed doorway, opening onto the corridor
     const out = new Set<number>();
-    for (const i of cells) for (const n of [i - 1, i + 1, i - g.w, i + g.w]) {
-      if (cells.has(n)) continue;
-      for (let j = 0; j < roomCells.length; j++) if (j !== k) expect(roomCells[j].has(n), `${tag}: room ${k} touches room ${j}`).toBe(false);
+    for (const i of room) for (const n of [i - 1, i + 1, i - g.w, i + g.w]) {
+      if (room.has(n)) continue;
       if (g.cells[n] === SOLID) { walls++; continue; }
-      if (g.blocked[n]) { expect(L.props.some(p => p.kind === 'fittingBench' && Math.abs(p.x - g.center(n % g.w, Math.floor(n / g.w))[0]) < 1 && Math.abs(p.z - g.center(n % g.w, Math.floor(n / g.w))[1]) < 1)).toBe(true); continue; }
-      out.add(n);
+      if (doorCells.has(n)) out.add(n);
     }
     expect(out.size, `${tag}: room ${k} has one 2-cell doorway`).toBe(CHANGING_SUITE.roomDoor);
-    for (const n of out) {
-      expect(doorCells.has(n), `${tag}: room ${k} opening is a framed doorway`).toBe(true);
-      const nx = n % g.w, ny = Math.floor(n / g.w);
-      expect([n - 1, n + 1, n - g.w, n + g.w].some(q => corridorCells.has(q)), `${tag}: room ${k} doorway opens onto the corridor (${nx},${ny})`).toBe(true);
+    for (const n of out) expect([n - 1, n + 1, n - g.w, n + g.w].some(q => corridorCells.has(q)), `${tag}: room ${k} doorway opens onto the corridor`).toBe(true);
+    // its bench and its mirror inside (the mirror on the side wall, the bench on the back wall)
+    const near = (kind: string) => L.props.some(p => p.kind === kind && p.area === s.area && [...room].some(i => Math.hypot(g.center(i % g.w, Math.floor(i / g.w))[0] - p.x, g.center(i % g.w, Math.floor(i / g.w))[1] - p.z) < 0.8));
+    expect(near('fittingBench'), `${tag}: room ${k} bench`).toBe(true);
+    expect(near('fittingMirror'), `${tag}: room ${k} mirror`).toBe(true);
+    // no ambient-size 3 x 3 clear floor in a room: the rooms are the store-local variants' (lane CONTEXT)
+    for (const i of room) {
+      const x = i % g.w, y = Math.floor(i / g.w);
+      let clear = true;
+      for (let oy = -1; oy <= 1 && clear; oy++) for (let ox = -1; ox <= 1; ox++) if (!g.walkable(x + ox, y + oy)) { clear = false; break; }
+      expect(clear, `${tag}: room ${k} 3 x 3 clear cell`).toBe(false);
     }
   });
-  expect(walls, `${tag}: rooms walled`).toBeGreaterThan(rooms.length * 6);
+  expect(walls, `${tag}: rooms walled`).toBeGreaterThanOrEqual(rooms.length * 4);
   // furniture: a built-in bench and a mirror per room; the deleted booth boxes / box forms nowhere
   const mine = L.props.filter(p => p.area === s.area);
   expect(mine.filter(p => p.kind === 'fittingBench').length).toBe(rooms.length);
