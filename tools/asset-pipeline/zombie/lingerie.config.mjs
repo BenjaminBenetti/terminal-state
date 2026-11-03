@@ -64,9 +64,9 @@ export const BODY_ORDER = ['paleGaze', 'paleRevenant', 'paleApparition'];
  * derivatives/zombie-lingerie.json `evaluation`): the assignment with the best worst-case fit score under that constraint.
  */
 export const ASSIGNMENT = {
-  paleGaze: ['green', 'purple'],
-  paleRevenant: ['black', 'red'],
-  paleApparition: ['blush', 'ivory'],
+  paleGaze: ['purple', 'blush'],
+  paleRevenant: ['black', 'ivory'],
+  paleApparition: ['green', 'red'],
 };
 
 export const TEXTURES = {baseSize: 1024, baseQuality: 82, mrSize: 256, mrQuality: 85};

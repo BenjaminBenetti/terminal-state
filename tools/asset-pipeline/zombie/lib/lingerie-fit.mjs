@@ -37,7 +37,7 @@ export const FIT = {
   offset: {top: 0.0035, bottom: 0.003},   // cloth inner face above the skin (m)
   minClear: 0.0015,                        // bind clearance floor
   poseClear: -0.0005,                      // posed clearance floor (any validation pose): the cloth may touch / sink 0.5 mm, no more
-  poseRounds: 3, posePushMax: 0.008,
+  poseRounds: 4, posePushMax: 0.012,
   wrapIterations: 14, wrapRadius: [0.035, 0.008],     // spatial smoothing radius of the conformity correction (coarse -> fine)
   pushRadius: 0.006,                       // clearance push dilation radius (couples the faces of a thin sheet; no wider lift)
   weightSmooth: {iters: 2, lambda: 0.3},
@@ -435,7 +435,7 @@ export function poseMinClearance(B, pieceSets, poses, pokeFloor = FIT.poseClear)
     const bn = posedWeldedNormals(B, bp);
     pieceSets.forEach((ps, k) => {
       const gp = skinWith(mats, ps.piece.pos, ps.w.joints, ps.w.weights);
-      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor).need;
+      const pk = bodyPokeNeeds(bp, bn, ps.piece.pokeCand ??= pokeCandidates(B, ps.piece), gp, ps.piece.idx, ps.G, pokeFloor, 0.02).need; // posed skin can bulge through by more (deltoid in Attack)
       for (const i of ps.G.uniq) if (pk[i] > pokes[k][i]) pokes[k][i] = pk[i];
       for (const i of ps.G.uniq) {
         const c = verifiedClosest(B, grid, B.fitIdx, bn, closed, gp[i * 3], gp[i * 3 + 1], gp[i * 3 + 2], 0.06);
