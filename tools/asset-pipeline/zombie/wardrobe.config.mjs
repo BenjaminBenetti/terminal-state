@@ -189,8 +189,9 @@ export const BODIES = [
     provenance: 'user-uploaded', source: userBody(id), repose: 'T-skin', reposeOpts: {hair: {...hair, minYFrac: 0.6, dilate: 2}, upperArmFromVerticalDeg: 34}, heightM, weight: 0.5,
     // lib/skeleton.mjs options: crotch from the midline strip (touching inner thighs merge the slice clusters above the knees);
     // neck base / head pivot heights from the T-pose analysis rig's hair-aware throat profile (long hair widens every neck
-    // slice). The repose's hair mask also keeps hair off the arm weights of the final rig (lib/autorig.mjs bodySkin).
-    skeleton: {crotch: 'midline', neck: 'tpose'},
+    // slice); elbow / wrist joints from that rig too (thin zombie forearms fool the A-pose min-radius wrist search: forearm
+    // 0.17 m on Apparition). The repose's hair mask also keeps hair off the arm weights of the final rig (lib/autorig.mjs bodySkin).
+    skeleton: {crotch: 'midline', neck: 'tpose', arms: 'tpose'},
     traits: {requires: ['upper', 'lower'], nude: true, note: 'unclothed user-uploaded body: always wears an upper AND a lower garment'}, ...BODY_OPTS,
     // Gaze's inner thighs touch: the fitted inner pant-leg panels cross x = 0, so the pant leg side is taken from the nominal
     // pants mesh (lib/fit07.mjs legSplit; without it every pants failed the motion gate on Gaze: 13 % of triangles > 3x in Run)

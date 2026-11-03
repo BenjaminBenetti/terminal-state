@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-cap-t25.glb",
       "bytes": 328068,
-      "sha256": "602af962cf368a35f4231b8667efcd7177afd6865bc2d386a35431e2daaff3e9",
+      "sha256": "791f2a93cb19cef4d35b721a70f232663ab96b86b956a7213c3c8edf9db95fd2",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -1029,10 +1029,10 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 11,
+          "Death": 6,
           "Run": 4,
-          "Attack": 6,
-          "Idle": 4
+          "Attack": 10,
+          "Idle": 6
         },
         "poses": 85
       }
@@ -1159,7 +1159,8 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 10,
+          "Walk": 2,
+          "Death": 8,
           "Idle": 12,
           "Run": 2
         },

@@ -45,7 +45,7 @@
     "glb": {
       "path": "game/public/assets/models/zombie-body-pale-gaze-t25.glb",
       "bytes": 707900,
-      "sha256": "d83c5b76cf73e79880da6a7a02c3639bf5a1deeb88e9613d40d8471d35e79dcc",
+      "sha256": "e4ca91a100673fc967987c2f896fb95e0e93f385b36ef676a40d24143c356434",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -167,6 +167,32 @@
           -0.0477
         ],
         "armFromVerticalDegAfter": 34
+      }
+    },
+    "armJointsA": {
+      "L": {
+        "elbow": [
+          0.243,
+          1.127,
+          -0.0528
+        ],
+        "wrist": [
+          0.3627,
+          0.9736,
+          -0.0477
+        ]
+      },
+      "R": {
+        "elbow": [
+          -0.243,
+          1.127,
+          -0.0528
+        ],
+        "wrist": [
+          -0.3627,
+          0.9736,
+          -0.0477
+        ]
       }
     },
     "verticesMoved": 25383,
@@ -660,7 +686,7 @@
         165,
         31
       ],
-      "workers": 24
+      "workers": 16
     },
     "textures": {
       "baseColor": 1024,
@@ -738,18 +764,18 @@
         "name": "L_Forearm",
         "parent": "L_UpperArm",
         "bindWorldPosition": [
-          0.2534,
-          1.113,
-          -0.0541
+          0.243,
+          1.127,
+          -0.0528
         ]
       },
       {
         "name": "L_Hand",
         "parent": "L_Forearm",
         "bindWorldPosition": [
-          0.3699,
-          0.9626,
-          -0.0476
+          0.3627,
+          0.9736,
+          -0.0477
         ]
       },
       {
@@ -765,18 +791,18 @@
         "name": "R_Forearm",
         "parent": "R_UpperArm",
         "bindWorldPosition": [
-          -0.2534,
-          1.113,
-          -0.0541
+          -0.243,
+          1.127,
+          -0.0528
         ]
       },
       {
         "name": "R_Hand",
         "parent": "R_Forearm",
         "bindWorldPosition": [
-          -0.3699,
-          0.9626,
-          -0.0476
+          -0.3627,
+          0.9736,
+          -0.0477
         ]
       },
       {
@@ -868,11 +894,11 @@
       "Neck": 0.1868,
       "Head": 0.1144,
       "L_UpperArm": 0.2035,
-      "L_Forearm": 0.2253,
-      "L_Hand": 0.1904,
+      "L_Forearm": 0.2081,
+      "L_Hand": 0.1946,
       "R_UpperArm": 0.2035,
-      "R_Forearm": 0.2253,
-      "R_Hand": 0.1904,
+      "R_Forearm": 0.2081,
+      "R_Hand": 0.1946,
       "L_Thigh": 0.0527,
       "L_Shin": 0.3674,
       "L_Foot": 0.3676,
@@ -1087,6 +1113,29 @@
           ]
         }
       },
+      "armOverride": {
+        "elbow": [
+          0.243,
+          1.127,
+          -0.0528
+        ],
+        "wrist": [
+          0.3627,
+          0.9736,
+          -0.0477
+        ],
+        "measuredElbow": [
+          0.2534,
+          1.113,
+          -0.0541
+        ],
+        "measuredWrist": [
+          0.3699,
+          0.9626,
+          -0.0476
+        ],
+        "source": "T-pose analysis rig elbow / wrist (enemy/lib/tpose-skeleton.mjs: arm sections perpendicular to the horizontal arm) carried through the repose arm rotation (lib/repose-skin.mjs)"
+      },
       "shoulderCutPlanes": {
         "L": {
           "A": [
@@ -1156,24 +1205,24 @@
     },
     "limb": {
       "L_UpperArm": {
-        "length": 0.2253,
-        "radius": 0.0343,
-        "samples": 31
+        "length": 0.2081,
+        "radius": 0.0335,
+        "samples": 28
       },
       "L_Forearm": {
-        "length": 0.1904,
-        "radius": 0.0306,
-        "samples": 26
-      },
-      "R_UpperArm": {
-        "length": 0.2253,
-        "radius": 0.0343,
+        "length": 0.1946,
+        "radius": 0.0316,
         "samples": 30
       },
+      "R_UpperArm": {
+        "length": 0.2081,
+        "radius": 0.0335,
+        "samples": 27
+      },
       "R_Forearm": {
-        "length": 0.1904,
-        "radius": 0.0306,
-        "samples": 25
+        "length": 0.1946,
+        "radius": 0.0316,
+        "samples": 28
       },
       "L_Thigh": {
         "length": 0.3674,
@@ -1831,37 +1880,37 @@
       "durationS": 1.6,
       "loop": false,
       "keyframes": 49,
-      "maxLegReach": 1.0936
+      "maxLegReach": 1.091
     }
   ],
   "death": {
-    "hipsY": -0.6397,
+    "hipsY": -0.6487,
     "tune": {
-      "hipsPitch": -81.789,
-      "hipsRoll": -6.25,
+      "hipsPitch": -80.969,
+      "hipsRoll": -6.813,
       "neck": -26.148,
-      "head": -25.375,
+      "head": -24.75,
       "headYaw": -20,
       "armLz": -0.694,
-      "armRz": -0.406,
+      "armRz": -0.419,
       "footLz": 0.5,
-      "footRz": 0.12
+      "footRz": 0.154
     },
     "lowestPointPerRegionM": {
-      "torso": 0.091,
-      "head": 0.082,
-      "armR": 0.02,
-      "armL": 0.092,
-      "pelvis": 0.077,
-      "legL": 0.005,
+      "torso": 0.089,
+      "head": 0.084,
+      "armR": 0.016,
+      "armL": 0.095,
+      "pelvis": 0.069,
+      "legL": 0.004,
       "legR": 0.005,
       "outfit.torso": 0.01,
-      "outfit.pelvis": 0.048,
-      "outfit.armR": 0.01,
-      "outfit.head": 0.061,
-      "outfit.armL": 0.081,
-      "outfit.legL": 0.006,
-      "outfit.legR": 0.034
+      "outfit.pelvis": 0.039,
+      "outfit.armR": 0.013,
+      "outfit.head": 0.063,
+      "outfit.armL": 0.086,
+      "outfit.legL": 0.005,
+      "outfit.legR": 0.033
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -2058,14 +2107,14 @@
         }
       },
       "Death": {
-        "maxLegReach": 1.0936,
+        "maxLegReach": 1.091,
         "body": {
           "minY": -0.0003,
           "atT": 1.06667,
           "framesBelowMinus1cm": 0
         },
         "Outfit_hoodie": {
-          "minY": -0.0092,
+          "minY": -0.01,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
@@ -2098,17 +2147,17 @@
     },
     "motionStretch": {
       "triangles": 14985,
-      "p50": 1.065,
-      "p99": 2.585,
-      "max": 7.33,
-      "over2x": 376,
-      "over3x": 98,
+      "p50": 1.066,
+      "p99": 2.586,
+      "max": 7.34,
+      "over2x": 379,
+      "over3x": 97,
       "fractionOver": 0.0065,
       "worstClips": {
-        "Death": 99,
+        "Death": 101,
         "Run": 22,
         "Attack": 21,
-        "Hit": 9
+        "Hit": 8
       },
       "poses": 85,
       "method": "per triangle: worst edge length ratio posed/bind over every 3rd frame of all six clips (CPU skinning); body alone"

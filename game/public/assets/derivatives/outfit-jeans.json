@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-jeans-t25.glb",
       "bytes": 954576,
-      "sha256": "3b31adee00cf482f495594dd9e1f7581daec48621c415af3b2b85985fdab58f0",
+      "sha256": "6bd4f0ec9f40cb89fd941e78d4284499360fe5cca208030becfbf4d267e71e8f",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -209,7 +209,7 @@
         101,
         29
       ],
-      "workers": 32
+      "workers": 16
     },
     "textures": {
       "baseColor": 1024,
@@ -636,7 +636,7 @@
           "droppedNotCoveredInEveryPose": 146
         },
         "layers": [],
-        "ms": 8733
+        "ms": 7578
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1040,7 +1040,7 @@
           "droppedNotCoveredInEveryPose": 61
         },
         "layers": [],
-        "ms": 8518
+        "ms": 8474
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1396,7 +1396,7 @@
           "droppedNotCoveredInEveryPose": 76
         },
         "layers": [],
-        "ms": 9400
+        "ms": 8467
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1803,7 +1803,7 @@
           "droppedNotCoveredInEveryPose": 116
         },
         "layers": [],
-        "ms": 8681
+        "ms": 9016
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2159,7 +2159,7 @@
           "droppedNotCoveredInEveryPose": 191
         },
         "layers": [],
-        "ms": 9630
+        "ms": 8092
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2500,7 +2500,7 @@
           "droppedNotCoveredInEveryPose": 24
         },
         "layers": [],
-        "ms": 8462
+        "ms": 8484
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2874,7 +2874,7 @@
           "droppedNotCoveredInEveryPose": 12
         },
         "layers": [],
-        "ms": 8923
+        "ms": 8403
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2890,13 +2890,13 @@
         "triangles": 5999,
         "p50": 1.087,
         "p99": 3.817,
-        "max": 12.07,
+        "max": 12.11,
         "over2x": 230,
         "over3x": 90,
         "fractionOver": 0.015,
         "worstClips": {
-          "Death": 27,
-          "Run": 35
+          "Death": 23,
+          "Run": 39
         },
         "poses": 85
       }
@@ -3230,7 +3230,7 @@
           "droppedNotCoveredInEveryPose": 26
         },
         "layers": [],
-        "ms": 9128
+        "ms": 8998
       },
       "bulkMBeforeRefit": {
         "torso": 0,

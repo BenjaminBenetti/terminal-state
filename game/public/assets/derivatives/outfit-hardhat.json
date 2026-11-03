@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-hardhat-t25.glb",
       "bytes": 352460,
-      "sha256": "0f7a86ecd72418891faf90bb1af2b55be322fa48f9c4c31a9d42c755b9b22c4f",
+      "sha256": "994bbc71496b5b069a9e5679f9389acce30e300ba1969c8eebc6005d48cb42bd",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -203,7 +203,7 @@
         26,
         45
       ],
-      "workers": 32
+      "workers": 16
     },
     "textures": {
       "baseColor": 512,
@@ -1234,11 +1234,11 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Attack": 4,
+          "Death": 12,
+          "Attack": 2,
           "Walk": 2,
           "Idle": 6,
-          "Death": 8,
-          "Run": 4
+          "Run": 2
         },
         "poses": 85
       }
@@ -1400,12 +1400,12 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 8,
-          "Attack": 6,
+          "Death": 6,
           "Hit": 2,
           "Walk": 2,
-          "Run": 4,
-          "Idle": 4
+          "Run": 6,
+          "Idle": 4,
+          "Attack": 4
         },
         "poses": 85
       }

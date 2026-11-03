@@ -45,7 +45,7 @@
     "glb": {
       "path": "game/public/assets/models/zombie-body-pale-apparition-t25.glb",
       "bytes": 593440,
-      "sha256": "2966b375b218097390658738614b7b960290375af5afdabe9f0a9c1b72d9c373",
+      "sha256": "981a00337776b3dae885a7ba8f7015f9dad61c63417a92b7a61f67dd87c10278",
       "format": "glTF 2.0 binary, no Draco/meshopt/KTX2, JPEG textures, JOINTS_0 u8 / WEIGHTS_0 normalized u8"
     }
   },
@@ -167,6 +167,32 @@
           -0.0553
         ],
         "armFromVerticalDegAfter": 34
+      }
+    },
+    "armJointsA": {
+      "L": {
+        "elbow": [
+          0.2537,
+          1.132,
+          -0.0595
+        ],
+        "wrist": [
+          0.381,
+          0.9838,
+          -0.0553
+        ]
+      },
+      "R": {
+        "elbow": [
+          -0.2537,
+          1.132,
+          -0.0595
+        ],
+        "wrist": [
+          -0.381,
+          0.9838,
+          -0.0553
+        ]
       }
     },
     "verticesMoved": 25134,
@@ -740,18 +766,18 @@
         "name": "L_Forearm",
         "parent": "L_UpperArm",
         "bindWorldPosition": [
-          0.2425,
-          1.1513,
-          -0.0599
+          0.2537,
+          1.132,
+          -0.0595
         ]
       },
       {
         "name": "L_Hand",
         "parent": "L_Forearm",
         "bindWorldPosition": [
-          0.3493,
-          1.0174,
-          -0.059
+          0.381,
+          0.9838,
+          -0.0553
         ]
       },
       {
@@ -767,18 +793,18 @@
         "name": "R_Forearm",
         "parent": "R_UpperArm",
         "bindWorldPosition": [
-          -0.2425,
-          1.1513,
-          -0.0599
+          -0.2537,
+          1.132,
+          -0.0595
         ]
       },
       {
         "name": "R_Hand",
         "parent": "R_Forearm",
         "bindWorldPosition": [
-          -0.3493,
-          1.0174,
-          -0.059
+          -0.381,
+          0.9838,
+          -0.0553
         ]
       },
       {
@@ -870,11 +896,11 @@
       "Neck": 0.1954,
       "Head": 0.1114,
       "L_UpperArm": 0.2025,
-      "L_Forearm": 0.2035,
-      "L_Hand": 0.1713,
+      "L_Forearm": 0.2258,
+      "L_Hand": 0.1954,
       "R_UpperArm": 0.2025,
-      "R_Forearm": 0.2035,
-      "R_Hand": 0.1713,
+      "R_Forearm": 0.2258,
+      "R_Hand": 0.1954,
       "L_Thigh": 0.0691,
       "L_Shin": 0.3745,
       "L_Foot": 0.375,
@@ -882,9 +908,7 @@
       "R_Shin": 0.3745,
       "R_Foot": 0.375
     },
-    "validationIssues": [
-      "forearm/H=0.103 outside [0.11, 0.19]"
-    ],
+    "validationIssues": [],
     "estimation": {
       "feet": {
         "L": [
@@ -1091,6 +1115,29 @@
           ]
         }
       },
+      "armOverride": {
+        "elbow": [
+          0.2537,
+          1.132,
+          -0.0595
+        ],
+        "wrist": [
+          0.381,
+          0.9838,
+          -0.0553
+        ],
+        "measuredElbow": [
+          0.2425,
+          1.1513,
+          -0.0599
+        ],
+        "measuredWrist": [
+          0.3493,
+          1.0174,
+          -0.059
+        ],
+        "source": "T-pose analysis rig elbow / wrist (enemy/lib/tpose-skeleton.mjs: arm sections perpendicular to the horizontal arm) carried through the repose arm rotation (lib/repose-skin.mjs)"
+      },
       "shoulderCutPlanes": {
         "L": {
           "A": [
@@ -1160,24 +1207,24 @@
     },
     "limb": {
       "L_UpperArm": {
-        "length": 0.2035,
-        "radius": 0.0395,
-        "samples": 52
+        "length": 0.2258,
+        "radius": 0.0391,
+        "samples": 58
       },
       "L_Forearm": {
-        "length": 0.1713,
-        "radius": 0.0323,
-        "samples": 38
+        "length": 0.1954,
+        "radius": 0.0292,
+        "samples": 140
       },
       "R_UpperArm": {
-        "length": 0.2035,
-        "radius": 0.0395,
-        "samples": 55
+        "length": 0.2258,
+        "radius": 0.0391,
+        "samples": 62
       },
       "R_Forearm": {
-        "length": 0.1713,
-        "radius": 0.0323,
-        "samples": 35
+        "length": 0.1954,
+        "radius": 0.0292,
+        "samples": 131
       },
       "L_Thigh": {
         "length": 0.3745,
@@ -1883,37 +1930,37 @@
       "durationS": 1.6,
       "loop": false,
       "keyframes": 49,
-      "maxLegReach": 1.0937
+      "maxLegReach": 1.0925
     }
   ],
   "death": {
-    "hipsY": -0.6794,
+    "hipsY": -0.6874,
     "tune": {
-      "hipsPitch": -90.109,
+      "hipsPitch": -89.289,
       "hipsRoll": 11,
-      "neck": -15.25,
-      "head": -22.25,
+      "neck": -15.602,
+      "head": -24.75,
       "headYaw": -23,
-      "armLz": -0.65,
-      "armRz": -0.144,
+      "armLz": -0.606,
+      "armRz": -0.112,
       "footLz": 0.5,
       "footRz": 0.12
     },
     "lowestPointPerRegionM": {
-      "pelvis": 0.039,
-      "legL": 0.005,
-      "torso": 0.039,
+      "pelvis": 0.032,
+      "legL": 0.004,
+      "torso": 0.038,
       "legR": 0.007,
-      "armL": 0.034,
+      "armL": 0.04,
       "armR": 0.035,
       "head": 0.024,
-      "outfit.pelvis": 0.018,
+      "outfit.pelvis": 0.01,
       "outfit.legR": 0.03,
-      "outfit.torso": 0.012,
-      "outfit.armR": 0.011,
+      "outfit.torso": 0.011,
+      "outfit.armR": 0.01,
       "outfit.head": 0.01,
       "outfit.armL": 0.01,
-      "outfit.legL": -0.008
+      "outfit.legL": -0.011
     },
     "solvedAgainst": "body + every fitted wearable"
   },
@@ -2110,7 +2157,7 @@
         }
       },
       "Death": {
-        "maxLegReach": 1.0937,
+        "maxLegReach": 1.0925,
         "body": {
           "minY": -0.0002,
           "atT": 0.1,
@@ -2122,19 +2169,19 @@
           "framesBelowMinus1cm": 0
         },
         "Outfit_sweater": {
-          "minY": -0.0005,
+          "minY": -0.0018,
           "atT": 1.1,
           "framesBelowMinus1cm": 0
         },
         "Outfit_cargo": {
-          "minY": -0.008,
-          "atT": 1.1,
-          "framesBelowMinus1cm": 0
-        },
-        "Outfit_slacks": {
-          "minY": -0.0108,
+          "minY": -0.0104,
           "atT": 1.1,
           "framesBelowMinus1cm": 1
+        },
+        "Outfit_slacks": {
+          "minY": -0.0136,
+          "atT": 1.1,
+          "framesBelowMinus1cm": 5
         },
         "Outfit_hardhat": {
           "minY": -0.0002,
@@ -2150,9 +2197,9 @@
     },
     "motionStretch": {
       "triangles": 14989,
-      "p50": 1.029,
-      "p99": 2.389,
-      "max": 9.47,
+      "p50": 1.027,
+      "p99": 2.39,
+      "max": 9.46,
       "over2x": 279,
       "over3x": 85,
       "fractionOver": 0.0057,
