@@ -132,32 +132,27 @@ const SPECS = {
   cafeBistroTable: {box: [0.75, 0.756, 0.75], cls: 'terrazzo'},
   /** M32 café chair: bentwood-style chair, seat 0.43 m. */
   cafeChair: {box: [0.447, 0.537, 0.88], cls: 'wood'},
-  // --- task mall-lingerie-20261102 (lane STORE): the lingerie boutique's WALK-IN changing area (gen/mall/lingerieStore.ts) and its display
-  // forms. Procedural fixtures in the shop fit-out style (existing shape materials only, no new texture); booth pieces are placed on the
-  // 0.5 m grid by the changing-area planner (forceProp: the planner validates every cell and the room's connectivity itself) ---
-  /** Booth side partition: a 2.0 m laminate panel (booth depth 1.5 m + the booth-back row), full height 2.1 m on a steel foot channel. */
-  fittingPartition: {box: [2.0, 0.06, 2.1], blocksSight: true, cls: 'laminate'},
-  /** Booth back panel between two partitions (1.44 m clear between their faces) — together the booth backs are the wall the changing
-   *  area turns to the sales floor; two coat hooks on its booth face (built-in hardware). */
-  fittingBackPanel: {box: [1.44, 0.06, 2.1], blocksSight: true, cls: 'laminate'},
-  /** Built-in booth bench: a timber seat (0.45 m) on two steel brackets against the booth back panel, spanning the booth. */
+  // --- task mall-lingerie-20261102 (lane STORE) / store-polish-20261103: the lingerie boutique's changing-room furniture and its display
+  // stock. The changing SUITE itself is real level geometry (walls / doorways carved into the shop's grid: gen/mall/lingerieStore.ts);
+  // inside each room a built-in bench and a mirror. Procedural fixtures (existing shape materials only, no new texture) ---
+  /** Built-in changing-room bench: a timber seat (0.45 m) on two steel brackets against the room's back wall, spanning the room. */
   fittingBench: {box: [1.44, 0.42, 0.45], cls: 'wood'},
-  /** Full-length booth mirror (0.6 x 1.5 m glass from 0.35 m) in a thin frame, screwed to a partition face. */
-  fittingMirror: {box: [0.6, 0.02, 1.85], cls: 'glass'},
-  /** The booth's curtain gathered open beside a partition (0.2 m bunch hanging from 2.0 m); its ceiling-track rail spans the booth opening
-   *  overhead (drawn from the bunch along +x; no collider across the opening: the way in stays open). */
-  fittingCurtain: {box: [0.2, 0.12, 2.05], cls: 'fabric'},
-  /** Display form: a padded torso-to-mid-thigh form (no head / arms) on a pole and a three-foot base — the boutique's display stand for a
-   *  lingerie set (pale-body proportions: lane FIT's display meshes sit on it at their real worn size; suspenders reach its thighs). */
-  lingerieBust: {box: [0.42, 0.32, 1.48], cls: 'fabric'},
-  /** The six lingerie display sets (the user's designs), riders on a display bust at its torso (LINGERIE_SET_Y0 above the bust's base):
-   *  procedural stand-ins until lane FIT's compact static display derivative maps in (MALL_KIND_ASSET). Opaque, never see-through. */
-  lingerieSetGreen: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
-  lingerieSetPurple: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
-  lingerieSetBlush: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
-  lingerieSetBlack: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
-  lingerieSetRed: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
-  lingerieSetIvory: {box: [0.36, 0.26, 0.8], cls: 'fabric'},
+  /** Mirror (0.6 x 1.4 m glass from 0.55 m: above a bench seat) in a thin frame, screwed flat to a wall. */
+  fittingMirror: {box: [0.6, 0.02, 1.97], cls: 'glass'},
+  /** The six lingerie sets DRESSED ON a female display mannequin (riders on `mannequinFemale`, its torso from LINGERIE_SET_Y0): lane FIT's
+   *  mannequin-fitted meshes (world/mallLingerieDisplay.ts); procedural stand-ins until those load. Opaque, never see-through. */
+  lingerieSetGreen: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  lingerieSetPurple: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  lingerieSetBlush: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  lingerieSetBlack: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  lingerieSetRed: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  lingerieSetIvory: {box: [0.34, 0.24, 0.68], cls: 'fabric'},
+  /** Lingerie hanging stock on a straight rail (garment rail 1.53 m / clothing bay 1.915 m): a face-out row of hangers along the rail
+   *  (lane FIT's LingerieHang_* items: lace garment + its hanger), the row's designs / pieces seeded per placement (variant). Box = the
+   *  hung row (its top on the rail line, the longest drop below); a rider on its rail. */
+  lingerieRackRow: {box: [1.4, 0.24, 0.55], cls: 'fabric'},
+  /** The same stock round a round rack's ring (1.31 m), face-out all round. */
+  lingerieRackRing: {box: [1.1, 1.1, 0.55], cls: 'fabric'},
   // --- task track3 (lane ARCH): landmarks / navigation (gen/mall/landmarks.ts places them, world/mallArch.ts draws them) ---
   /** Pit-plaza fountain basin: square stone basin with a 0.4 m sitting ledge (half size 1.6 m; a 1.25 m fallback). */
   fountainBasin: {box: [3.2, 3.2, 0.5], cls: 'terrazzo'},
@@ -277,23 +272,29 @@ export const GARMENT_RAIL_Y: Readonly<Partial<Record<MallKind, number>>> = {garm
  * collider goes (h 0). The garment groups on a garment rail / round rack; on the static clothing bay they simply stay with the bay.
  */
 export const MALL_RIDER_KINDS: readonly MallKind[] = ['garmentHangingGroup', 'womensDressesGroup', 'womensBlousesGroup', 'womensSkirtsGroup', // (+ round 4: the women's face-out groups)
-  // (+ task mall-lingerie-20261102, lane STORE: the lingerie display sets ride their display bust when it tips over)
-  'lingerieSetGreen', 'lingerieSetPurple', 'lingerieSetBlush', 'lingerieSetBlack', 'lingerieSetRed', 'lingerieSetIvory'];
+  // (+ task mall-lingerie / store-polish, lane STORE: the lingerie sets ride their mannequin, the hanging stock rides its rail / rack)
+  'lingerieSetGreen', 'lingerieSetPurple', 'lingerieSetBlush', 'lingerieSetBlack', 'lingerieSetRed', 'lingerieSetIvory', 'lingerieRackRow', 'lingerieRackRing'];
 /**
- * Task mall-lingerie-20261102 (lane STORE): the lingerie display sets by design (the user's six reference designs, lane FIT's LINGERIE_SETS
- * order) and where one sits on its display form: the set's box spans LINGERIE_SET_Y0 (the suspender ends, ~0.74 m) to the strap tops
- * (y0 + h = 1.52) above the form's base. Lane FIT's display meshes are drawn at their real worn height (body space) centred on the form
- * (world/mallLingerieDisplay.ts); the form sits INSIDE every set (c1a3816, measured per 0.15 m height band: hips x +-0.14 / z +-0.11,
- * waist x +-0.12, bust x +-0.15 / z +-0.12 — qa-artifacts/lingerie/store/fitcheck).
+ * Task mall-lingerie-20261102 / store-polish-20261103 (lane STORE): the lingerie sets by design (the user's six reference designs, lane FIT's
+ * LINGERIE_SETS order), dressed on the existing FEMALE MANNEQUIN (M81 `mannequinFemale`, 1.75 m): the set rider shares the mannequin's
+ * x / z / yaw, its box spans LINGERIE_SET_Y0 (the briefs' lowest point / suspender ends) to y0 + h (the strap tops) above the mannequin's
+ * base. Lane FIT's meshes are fitted offline to the mannequin's own mesh (its local frame), so they draw under the mannequin's exact
+ * runtime transform (world/mallLingerieDisplay.ts).
  */
 export const LINGERIE_SET_KINDS = {
   green: 'lingerieSetGreen', purple: 'lingerieSetPurple', blush: 'lingerieSetBlush', black: 'lingerieSetBlack', red: 'lingerieSetRed', ivory: 'lingerieSetIvory',
 } as const satisfies Record<string, MallKind>;
-export const LINGERIE_SET_Y0 = 0.72;
-/** The display bust's torso in its prop frame (m): hips / waist / bust / shoulder heights and half widths (lingerieBust shape below). */
-export const LINGERIE_BUST = {thighY: 0.5, hipY: 0.92, waistY: 1.08, bustY: 1.24, shoulderY: 1.4, hipHalfW: 0.115, waistHalfW: 0.1, bustHalfW: 0.125, depth: 0.19,
-  /** the hips sit a little back (the briefs' fronts are 8 cm before the set's centre, their backs 10 cm behind it) */
-  hipDepth: 0.16, hipZ: -0.01} as const;
+export const LINGERIE_SET_Y0 = 0.76;
+/** The female mannequin's torso in its prop frame (m, measured on mall-mannequin-female.glb: hips 0.84-1.0, bust ~1.24, shoulders ~1.4). */
+export const MANNEQUIN_TORSO = {hipY: 0.92, waistY: 1.08, bustY: 1.24, shoulderY: 1.4, hipHalfW: 0.16, waistHalfW: 0.13, bustHalfW: 0.16, depth: 0.2} as const;
+/** The hanging-stock riders and their host rails: rail height (GARMENT_RAIL_Y), usable rail half length / ring radius (m). */
+export const LINGERIE_RACK = {
+  /** Longest drop of a hung item below the rail (m; lane FIT's purple bustier ~0.5) — the rider box's height. */
+  drop: 0.55,
+  /** Hosts: straight rails (face-out row along the host's x, half length) and the round rack (ring radius). */
+  row: {garmentRail: 0.66, clothingWallUnit: 1.08} as Readonly<Partial<Record<MallKind, number>>>,
+  ring: {garmentRailRound: 0.5} as Readonly<Partial<Record<MallKind, number>>>,
+} as const;
 
 /** Exposed loot surfaces of the open mall holders and of the bookcase (an openable container: its shelves + its drawers' trays). */
 export const MALL_SURFACES: Readonly<Record<MallHolderKind | MallOpenableKind, readonly SurfaceSpec[]>> = {
@@ -444,20 +445,17 @@ export const MALL_PHYS = {
   mallBench: S('anchored', 'mall bench (M37, ~60 kg steel and timber) bolted to the gallery floor like every public mall bench: a walk-in or a shot cannot move it'),
   cafeBistroTable: {dynamic: true, mass: 15, mat: 'pad', how: 'café bistro table (M31: marble disc on a cast foot, ~15 kg): shoved when walked into, slides / tips when shot (furniture, not a loot holder: nothing rides its top)'},
   cafeChair: {dynamic: true, mass: 5, mat: 'pad', how: 'café chair (M32, ~5 kg timber): shoved aside when walked into, tips when shot'},
-  // task mall-lingerie-20261102 (lane STORE): the changing area is an anchored fixture (booth panels fixed to the floor channel and the
-  // ceiling track); the display bust is light and movable; the sets ride it
-  fittingPartition: S('partition', 'fitting-booth partition: a laminate panel fixed in a floor channel and braced to the ceiling track — a walk-in or a shot cannot move it (anchored fixture of the changing area)'),
-  fittingBackPanel: S('partition', 'fitting-booth back panel: fixed between two partitions in the floor channel / ceiling track (anchored fixture of the changing area)'),
-  fittingBench: S('built-in', 'built-in booth bench: a timber seat on steel brackets screwed to the booth back panel; it cannot be shoved'),
-  fittingMirror: S('mounted', 'full-length booth mirror screwed flat to a partition face'),
-  fittingCurtain: S('mounted', 'booth curtain gathered on its fixed ceiling-track rail: cloth hanging from a fixed rail, nothing to shove (you brush past it)'),
-  lingerieBust: {dynamic: true, mass: 5, mat: 'pad', fit: 1.2, how: 'padded display bust on a pole and a three-foot base (~5 kg, top-heavy): tips over when shot or bumped; its lingerie set rides it'},
-  lingerieSetGreen: S('host decor', 'lingerie display set (green longline bra + high-waist brief) dressed on its display bust (decor stock, not an item): it rides the bust — when the bust goes loose it becomes part of its body (no floating stock, no collider left behind)'),
-  lingerieSetPurple: S('host decor', 'lingerie display set (purple lace bustier + suspenders + brief) dressed on its display bust (decor stock, not an item): it rides the bust like the garment groups ride their rail'),
-  lingerieSetBlush: S('host decor', 'lingerie display set (blush plunge bodysuit) dressed on its display bust (decor stock, not an item): it rides the bust like the garment groups ride their rail'),
-  lingerieSetBlack: S('host decor', 'lingerie display set (black balconette bra + brief) dressed on its display bust (decor stock, not an item): it rides the bust like the garment groups ride their rail'),
-  lingerieSetRed: S('host decor', 'lingerie display set (red plunge bra + garter belt + brief) dressed on its display bust (decor stock, not an item): it rides the bust like the garment groups ride their rail'),
-  lingerieSetIvory: S('host decor', 'lingerie display set (ivory bralette + garter belt + brief) dressed on its display bust (decor stock, not an item): it rides the bust like the garment groups ride their rail'),
+  // task mall-lingerie-20261102 / store-polish-20261103 (lane STORE): changing-room furniture is built in; the stock rides its host
+  fittingBench: S('built-in', 'built-in changing-room bench: a timber seat on steel brackets screwed to the room\'s wall; it cannot be shoved'),
+  fittingMirror: S('mounted', 'mirror screwed flat to a wall'),
+  lingerieSetGreen: S('host decor', 'lingerie set (green longline bra + high-waist brief) dressed on its female mannequin (decor stock, not an item): it rides the mannequin — when the mannequin tips over the set becomes part of its body (no floating stock, no collider left behind)'),
+  lingerieSetPurple: S('host decor', 'lingerie set (purple lace bustier + suspenders + brief) dressed on its female mannequin (decor stock, not an item): it rides the mannequin like the garment groups ride their rail'),
+  lingerieSetBlush: S('host decor', 'lingerie set (blush plunge bodysuit) dressed on its female mannequin (decor stock, not an item): it rides the mannequin like the garment groups ride their rail'),
+  lingerieSetBlack: S('host decor', 'lingerie set (black balconette bra + brief) dressed on its female mannequin (decor stock, not an item): it rides the mannequin like the garment groups ride their rail'),
+  lingerieSetRed: S('host decor', 'lingerie set (red plunge bra + garter belt + brief) dressed on its female mannequin (decor stock, not an item): it rides the mannequin like the garment groups ride their rail'),
+  lingerieSetIvory: S('host decor', 'lingerie set (ivory bralette + garter belt + brief) dressed on its female mannequin (decor stock, not an item): it rides the mannequin like the garment groups ride their rail'),
+  lingerieRackRow: S('host decor', 'lingerie on hangers hung face-out along a garment rail / clothing bay rail (decor stock, not items): it rides the rail — when a walk-in or a shot sends the rail loose the hangers become parts of its body (no floating stock, no collider left behind); on the static clothing bay they stay with the bay'),
+  lingerieRackRing: S('host decor', 'lingerie on hangers hung face-out round a round rack\'s ring (decor stock, not items): it rides the rack like the garment groups ride their rail'),
 } satisfies Record<MallKind, MallPhys>;
 
 // ---------------------------------------------------------------------------------------------
@@ -515,19 +513,17 @@ export const MALL_OPEN_AUDIT: Readonly<Record<MallKind, {role: Role; cls: Cls; h
   mallBench: {role: 'decor', cls: 'none', how: 'mall bench (M37): a seat with a slim backrest, nothing to open'},
   cafeBistroTable: {role: 'decor', cls: 'none', how: 'café bistro table (M31): a marble top on a foot, no drawer (movable furniture, not a loot holder)'},
   cafeChair: {role: 'decor', cls: 'none', how: 'café chair (M32): nothing to open'},
-  // task mall-lingerie-20261102 (lane STORE)
-  fittingPartition: {role: 'decor', cls: 'none', how: 'fitting-booth partition panel: a wall of the changing area, nothing to open'},
-  fittingBackPanel: {role: 'decor', cls: 'none', how: 'fitting-booth back panel with two coat hooks: a wall, nothing to open'},
-  fittingBench: {role: 'decor', cls: 'none', how: 'built-in booth bench: an open slatted seat on brackets, no lid or drawer (not a storage bench)'},
-  fittingMirror: {role: 'decor', cls: 'none', how: 'booth mirror screwed to the partition: not a cabinet, nothing to open'},
-  fittingCurtain: {role: 'decor', cls: 'none', how: 'booth curtain gathered open on its rail: cloth, the booth behind it is open floor (not storage)'},
-  lingerieBust: {role: 'decor', cls: 'none', how: 'display bust (padded torso form on a stand): not storage, nothing to open'},
-  lingerieSetGreen: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
-  lingerieSetPurple: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
-  lingerieSetBlush: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
-  lingerieSetBlack: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
-  lingerieSetRed: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
-  lingerieSetIvory: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a display bust (decor stock, not an item, not storage)'},
+  // task mall-lingerie-20261102 / store-polish-20261103 (lane STORE)
+  fittingBench: {role: 'decor', cls: 'none', how: 'built-in changing-room bench: an open slatted seat on brackets, no lid or drawer (not a storage bench)'},
+  fittingMirror: {role: 'decor', cls: 'none', how: 'mirror screwed to a wall: not a cabinet, nothing to open'},
+  lingerieSetGreen: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieSetPurple: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieSetBlush: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieSetBlack: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieSetRed: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieSetIvory: {role: 'decor', cls: 'none', how: 'lingerie set dressed on a female mannequin (decor stock, not an item, not storage)'},
+  lingerieRackRow: {role: 'decor', cls: 'none', how: 'lingerie on hangers on a rail (decor stock, not items, not storage): nothing to open'},
+  lingerieRackRing: {role: 'decor', cls: 'none', how: 'lingerie on hangers round a round rack (decor stock, not items, not storage): nothing to open'},
 };
 
 // ---------------------------------------------------------------------------------------------
@@ -792,16 +788,7 @@ export function mallShape(kind: MallKind): ShapePart[] {
       ...[[-1, -1], [-1, 1], [1, -1], [1, 1]].map(([sx, sz]) => box('wood', [0.03, 0.41, 0.03], [sx * (w / 2 - 0.04), 0.205, sz * (d / 2 - 0.08)])),
       box('wood', [w - 0.04, h - 0.45, 0.03], [0, 0.45 + (h - 0.45) / 2, -d / 2 + 0.02]),
     ];
-    // task mall-lingerie-20261102 (lane STORE): the changing area's fixtures and the display bust / sets
-    case 'fittingPartition': case 'fittingBackPanel': {
-      const out: ShapePart[] = [
-        box('partition', [w, h - 0.08, d], [0, 0.04 + (h - 0.08) / 2, 0]),
-        box('steelDark', [w, 0.04, d + 0.02], [0, 0.02, 0]),
-        box('steelBright', [w, 0.04, d + 0.02], [0, h - 0.02, 0]),
-      ];
-      if (kind === 'fittingBackPanel') for (const x of [-0.35, 0.35]) out.push(box('steelBright', [0.025, 0.06, 0.06], [x, 1.72, d / 2 + 0.03]));
-      return out;
-    }
+    // task mall-lingerie-20261102 / store-polish-20261103 (lane STORE): changing-room furniture, the dressed sets, the hanging stock
     case 'fittingBench': return [
       box('wood', [w - 0.02, 0.04, d - 0.04], [0, h - 0.02, 0.01]),
       box('wood', [w - 0.02, 0.03, 0.05], [0, h - 0.055, d / 2 - 0.04]),
@@ -809,40 +796,15 @@ export function mallShape(kind: MallKind): ShapePart[] {
       box('steelDark', [0.04, h - 0.04, d - 0.06], [w / 2 - 0.12, (h - 0.04) / 2, -0.02]),
     ];
     case 'fittingMirror': return [
-      box('steelBright', [w, 1.54, 0.012], [0, 0.35 + 0.75, -d / 2 + 0.006]),
-      box('mirror', [w - 0.04, 1.5, 0.008], [0, 0.35 + 0.75, d / 2 - 0.004]),
+      box('steelBright', [w, 1.44, 0.012], [0, 0.55 + 0.7, -d / 2 + 0.006]),
+      box('mirror', [w - 0.04, 1.4, 0.008], [0, 0.55 + 0.7, d / 2 - 0.004]),
     ];
-    case 'fittingCurtain': return [
-      // gathered drape (folds = staggered slabs) under the rail, the rail running +x across the booth opening (1.36 m) on two drop rods
-      box('accent', [w * 0.9, h - 0.13, d * 0.55], [0, 0.08 + (h - 0.13) / 2, 0]),
-      box('accent', [w * 0.45, h - 0.15, d], [-w * 0.2, 0.09 + (h - 0.15) / 2, 0]),
-      box('accent', [w * 0.45, h - 0.15, d * 0.8], [w * 0.22, 0.09 + (h - 0.15) / 2, 0]),
-      box('steelBright', [1.46, 0.025, 0.025], [0.63, h - 0.035, 0]),
-      box('steelBright', [0.015, 0.06, 0.015], [-0.08, h - 0.0, 0]),
-      box('steelBright', [0.015, 0.06, 0.015], [1.34, h - 0.0, 0]),
-    ];
-    case 'lingerieBust': {
-      const B = LINGERIE_BUST;
-      return [
-        box('steelDark', [0.36, 0.025, 0.06], [0, 0.0125, 0]),
-        box('steelDark', [0.06, 0.025, 0.3], [0, 0.0125, 0]),
-        box('steelBright', [0.025, B.thighY - 0.025, 0.025], [0, 0.025 + (B.thighY - 0.025) / 2, 0]),
-        // the padded form in stacked slabs (upper thighs, hips, waist, bust, shoulders), a neck cap — a featureless form
-        box('black', [0.1, B.hipY - 0.07 - B.thighY, B.hipDepth * 0.8], [-0.058, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, B.hipZ]),
-        box('black', [0.1, B.hipY - 0.07 - B.thighY, B.hipDepth * 0.8], [0.058, B.thighY + (B.hipY - 0.07 - B.thighY) / 2, B.hipZ]),
-        box('black', [B.hipHalfW * 2, 0.14, B.hipDepth], [0, B.hipY, B.hipZ]),
-        box('black', [B.waistHalfW * 2, 0.16, B.depth * 0.8], [0, B.waistY, 0]),
-        box('black', [B.bustHalfW * 2, 0.16, B.depth], [0, B.bustY, 0.005]),
-        box('black', [0.3, 0.08, B.depth * 0.85], [0, B.shoulderY - 0.02, 0]),
-        box('steelBright', [0.07, h - B.shoulderY - 0.02, 0.07], [0, B.shoulderY + 0.02 + (h - B.shoulderY - 0.02) / 2, 0]),
-      ];
-    }
     case 'lingerieSetGreen': case 'lingerieSetPurple': case 'lingerieSetBlush': case 'lingerieSetBlack': case 'lingerieSetRed': case 'lingerieSetIvory': {
-      // stand-in until lane FIT's display derivative maps in: an opaque brief over the hips and a bra band / cups over the bust (rider frame:
-      // origin = LINGERIE_SET_Y0 above the bust's base), just proud of the bust form's slabs
-      const B = LINGERIE_BUST, m: ShapeMat = kind === 'lingerieSetBlack' ? 'black' : 'accent', y = (v: number) => v - LINGERIE_SET_Y0;
+      // stand-in until lane FIT's mannequin-fitted meshes load: an opaque brief over the hips and a bra band / cups over the bust (rider
+      // frame: origin = LINGERIE_SET_Y0 above the mannequin's base), just proud of the M81 torso
+      const B = MANNEQUIN_TORSO, m: ShapeMat = kind === 'lingerieSetBlack' ? 'black' : 'accent', y = (v: number) => v - LINGERIE_SET_Y0;
       const out: ShapePart[] = [
-        box(m, [B.hipHalfW * 2 + 0.02, 0.11, B.depth * 0.95 + 0.02], [0, y(B.hipY) - 0.005, 0]),
+        box(m, [B.hipHalfW * 2 + 0.02, 0.11, B.depth + 0.02], [0, y(B.hipY) - 0.005, 0]),
         box(m, [B.bustHalfW * 2 + 0.02, 0.04, B.depth + 0.02], [0, y(B.bustY) - 0.07, 0.005]),
         box(m, [0.13, 0.11, 0.05], [-0.075, y(B.bustY), B.depth / 2 + 0.02]),
         box(m, [0.13, 0.11, 0.05], [0.075, y(B.bustY), B.depth / 2 + 0.02]),
@@ -852,6 +814,15 @@ export function mallShape(kind: MallKind): ShapePart[] {
       if (kind === 'lingerieSetPurple' || kind === 'lingerieSetBlush') out.push(box(m, [B.waistHalfW * 2 + 0.02, 0.16, B.depth * 0.8 + 0.02], [0, y(B.waistY), 0])); // bustier / bodysuit
       if (kind === 'lingerieSetRed' || kind === 'lingerieSetIvory') out.push(box(m, [B.waistHalfW * 2 + 0.03, 0.05, B.depth * 0.8 + 0.03], [0, y(B.hipY) + 0.08, 0])); // garter belt
       return out;
+    }
+    case 'lingerieRackRow': case 'lingerieRackRing': {
+      // stand-in until lane FIT's hanging items load: small opaque garments on hangers (rider frame: the box bottom = the longest drop
+      // below the rail, the hooks at the box top), a face-out row along x or round the ring
+      const spots: [number, number, number][] = kind === 'lingerieRackRow' ? [-0.48, -0.16, 0.16, 0.48].map(x => [x, 0, 0]) : [0, 1, 2, 3, 4, 5].map(k => [Math.cos(k * Math.PI / 3) * 0.48, Math.sin(k * Math.PI / 3) * 0.48, k * Math.PI / 3]);
+      return spots.flatMap(([x, z], k) => [
+        box('steelBright', [0.3, 0.012, 0.012], [x, h - 0.06, z]),
+        box(k % 2 ? 'black' : 'accent', [0.26, k % 2 ? 0.2 : 0.3, 0.05], [x, h - 0.07 - (k % 2 ? 0.1 : 0.15), z]),
+      ]);
     }
     case 'medicineDrawerCabinet': return [
       box('panel', [w, h, d - 0.07], [0, h / 2, -0.035]),

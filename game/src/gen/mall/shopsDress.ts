@@ -54,7 +54,7 @@ import {dressMallCommons, type CommonsReport} from './commons';
 import {placeMallAds, type MallAdsReport} from './ads'; // Task mall-playtest-revision-20261031 (lane SHOPS, D06)
 import {inferLot, shopFit, type MallRecipe, type MallShopFit} from './shops';
 import {mallLot, type MallLotFamily} from './lots'; // Task mall-playtest-revision-20261031 (lane GEN's lot families)
-import {CHANGING_ROWS, dressBust, placeChangingArea} from './lingerieStore'; // task mall-lingerie-20261102 (lane STORE)
+import {dressMannequin, hangLingerie, placeChangingSuite, rackCode} from './lingerieStore'; // task mall-lingerie-20261102 / store-polish (lane STORE)
 
 // ---------------------------------------------------------------------------------------------
 // Frame of one unit: u along the frontage (0 at the x0 / z0 end), v depth from the frontage into the unit.
@@ -792,62 +792,72 @@ const RECIPES: Record<MallRecipe, Recipe> = {
     void fr;
   },
   /**
-   * Task mall-lingerie-20261102 (lane STORE — user: "Make the store match its theme with a large fitting/changing area"): the lingerie
-   * boutique. FIRST the walk-in changing area (gen/mall/lingerieStore.ts: >= 4 curtained booths with a bench and a mirror each along a
-   * 1.5 m aisle, entered through a 1.5 m opening; recorded on the shop for the store-local spawns), then the window (female forms and
-   * dressed display busts either side of the entry), a pair of dressed busts on the entry axis, the till off the changing area, drawer
-   * chests (the lingerie drawers: openable holders), an accessories cabinet and a fragrance tier unit, slatwall bays, folded-stock tables,
-   * dressed busts on the floor, a couple of robe rails, full-length wall mirrors, and an ottoman by the changing area for whoever waits.
-   * Loot: the existing mall holders under `mall-lingerie` (personal theme like womenswear).
+   * Task mall-lingerie-20261102 / store-polish-20261103 (lane STORE — user: "layout of the store seems strange, it should be layed out better,
+   * for shopping. I think the regular clothing stores look nice, so more like that. Like with racks of clothing and stuff (but ofc
+   * liginiery on the racks)"): the lingerie boutique, laid out like the womenswear / clothing stores. FIRST the changing SUITE carved into
+   * the shop (gen/mall/lingerieStore.ts: real walls and framed doorways, 3-4 rooms off a corridor, its doorway onto the sales floor), then
+   * a clear main aisle from the entry to the suite doorway (reserved), the window of FEMALE MANNEQUINS dressed in the six sets (lane FIT's
+   * mannequin fits), a dressed pair flanking the aisle, clothing bays with lingerie hanging on their rails between slatwall bays and a
+   * fragrance tier unit, the till, the accessories cabinet and drawer chests (openable holders), and on the floor garment rails and round
+   * racks hung with lingerie (lane FIT's hanger stock), folded-stock tables, a dressed mannequin or two, a full-length mirror and an ottoman
+   * by the suite. Loot: the existing mall holders under `mall-lingerie` (personal theme like womenswear).
    */
   lingerie(d) {
     const {W, D, fr} = d;
-    const ch = placeChangingArea(d, d.shop);
-    // the changing area's extent in this frame (u along the frontage, v depth): the floor in front of / beside it is the sales floor
+    const narrow = d.lot?.shape === 'narrow-deep', wide = d.lot?.shape === 'wide-shallow' || W >= 11;
+    const suite = placeChangingSuite(d, d.shop);
+    // the suite's extent in this frame (u along the frontage, v depth): the sales floor is in front of / beside it
     let vMax = D, uMin = 0, uMax = W;
-    if (ch) {
-      const a = xzUV(fr, ch.zone.x0, ch.zone.z0), b = xzUV(fr, ch.zone.x1, ch.zone.z1);
+    let eu = (fr.entry[0] + fr.entry[1]) / 2, ev = D - 1;
+    if (suite) {
+      const a = xzUV(fr, suite.zone.x0, suite.zone.z0), b = xzUV(fr, suite.zone.x1, suite.zone.z1);
       const zu0 = Math.min(a[0], b[0]), zu1 = Math.max(a[0], b[0]), zv0 = Math.min(a[1], b[1]);
-      if (ch.wall === fr.back) vMax = zv0; else if (zu0 < W / 2) uMin = zu1; else uMax = zu0;
+      if (suite.wall === fr.back) vMax = zv0; else if (zu0 < W / 2) uMin = zu1; else uMax = zu0;
+      [eu, ev] = xzUV(fr, suite.entry.x, suite.entry.z);
     }
-    const zoneSide: 'L' | 'R' | undefined = !ch || ch.wall === fr.back ? undefined : uMin > 0 ? 'L' : 'R';
+    const zoneSide: 'L' | 'R' | undefined = !suite || suite.wall === fr.back ? undefined : uMin > 0 ? 'L' : 'R';
+    // the MAIN AISLE: 1.5 m from the entry straight in, then to the suite doorway — kept clear (the sightline to the changing rooms)
+    const um = Math.min(Math.max((fr.entry[0] + fr.entry[1]) / 2, uMin + 1.0), uMax - 1.0);
+    const aisleV = suite?.wall === fr.back ? ev - 0.75 : ev;
+    d.keep(um - 0.6, um + 0.6, 1.5, Math.max(1.5, aisleV + 0.6));
+    if (suite) d.keep(Math.min(um, eu) - 0.6, Math.max(um, eu) + 0.6, aisleV - 0.6, aisleV + 0.6);
     let design = d.rng.int(0, 5);
-    const dress = (from: number) => { for (const p of d.placed.slice(from)) if (p.kind === 'lingerieBust') dressBust(d, p, design++); };
-    // the window: female forms + dressed busts beside the entry, facing the gallery
+    const dressNew = (from: number) => { for (const p of d.placed.slice(from)) if (p.kind === 'mannequinFemale') dressMannequin(d, p, design++); };
+    // the window: dressed female mannequins either side of the entry, facing the gallery
     let from = d.placed.length;
-    windowDisplay(d, W >= 11 ? ['lingerieBust', 'mannequinFemale'] : ['lingerieBust', 'lingerieBust'], W >= 11 ? 4 : 2);
-    dress(from);
-    // the focal pair of dressed busts on the entry axis, just past the entry keep-out
-    from = d.placed.length;
-    const um = (fr.entry[0] + fr.entry[1]) / 2, vf = Math.min(Math.max(2.6, D * 0.3), Math.max(2.6, vMax - 2.4));
-    for (const du of [-0.45, 0.45]) for (const [eu, ev] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5]]) {
-      const u = Math.round((um + du + eu) * 4) / 4;
-      if (u > uMin + 0.6 && u < uMax - 0.6 && d.put('lingerieBust', u, Math.round((vf + ev) * 4) / 4, fr.face, {ring: 0.45})) break;
-    }
-    dress(from);
-    // the till off the changing area (a back changing area: in front of it)
-    cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.min(Math.max(2.4, D * 0.4), Math.max(2.4, vMax - CHANGING_ROWS * 0.5 - 0.3)), true, zoneSide === 'L' ? 'R' : zoneSide === 'R' ? 'L' : undefined);
-    // walls: the lingerie drawer chests, an accessories cabinet, a fragrance tier unit, slatwall bays; full-length mirrors
+    windowDisplay(d, ['mannequinFemale'], wide ? 4 : 2);
+    dressNew(from);
+    // walls: clothing bays (lingerie on their rails) between slatwall bays and a fragrance / accessories tier unit; the back wall when the
+    // suite leaves it free
+    if (vMax >= D) d.backRow([['clothingWallUnit', 0], ['cosmeticsWallUnit', 0], ['clothingWallUnit', 0], ['wallBay', 0]], Math.max(0.25, uMin + 0.25), Math.min(W - 0.25, uMax - 0.25));
+    // the till at the back of the sales floor by the changing suite (the side away from the suite doorway / a side-wall suite)
+    cashWrap(d, [['shopCounter', 0], ['glassCounter', 0]], 2, Math.max(2.4, vMax - 2.0), true, zoneSide === 'L' ? 'R' : zoneSide === 'R' ? 'L' : suite ? (eu > W / 2 ? 'L' : 'R') : undefined);
     const sideA: 'L' | 'R' = zoneSide ? (zoneSide === 'L' ? 'R' : 'L') : d.rng.chance(0.5) ? 'L' : 'R';
     const sideB: 'L' | 'R' = sideA === 'L' ? 'R' : 'L';
-    const v1 = Math.min(D, vMax) - 1.0;
-    d.sideRows([['dresserDrawers', 0]], 2.4, v1, {max: 2});
+    const v1 = Math.min(D, vMax) - 0.6;
     d.sideRow(sideA, [['glassDisplayCabinet', 0]], 2.4, v1, {max: 1});
+    d.sideRows([['dresserDrawers', 0]], 2.4, v1, {max: 2});
     d.sideRow(sideB, [['cosmeticsWallUnit', 0]], 2.4, v1, {max: 1});
-    if (vMax >= D) d.backRow([['dresserDrawers', 0], ['wallBay', 0], ['cosmeticsWallUnit', 0], ['wallBay', 0]], Math.max(0.25, uMin + 0.25), Math.min(W - 0.25, uMax - 0.25));
-    d.sideRows([['wallBay', 0], ['dresserDrawers', 0]], 2.4, v1);
-    d.againstWall('fittingMirror', 2, {front: 0.9});
-    // the floor: folded-stock tables, dressed busts, a couple of robe rails, an ottoman by the changing area's opening
-    const zone = {u0: Math.max(1.6, uMin + 1.2), u1: Math.min(W - 1.6, uMax - 1.2), v0: 2.6, v1: Math.max(2.6, vMax - 1.6)};
-    d.islands('merchTable', per(d, 60, 1, 3), zone, {ring: 0.9});
+    d.sideRows([['clothingWallUnit', 0], ['wallBay', 0]], 2.4, v1);
+    d.againstWall('fittingMirror', 1, {front: 0.9});
+    // hanging stock: lingerie on every clothing bay's rail (two designs per bay, seeded)
+    const hang = (rails: readonly PropPlacement[], share: number) => { for (const r of rails) if (d.rng.chance(share)) hangLingerie(d, r, rackCode(design++, design + d.rng.int(1, 4), d.rng.int(0, 9999))); };
+    hang(d.placed.filter(p => p.kind === 'clothingWallUnit'), 0.9);
+    // the floor: garment rails and round racks hung with lingerie, folded-stock tables, a dressed mannequin or two, an ottoman by the suite
+    // (the islands' walkway rings keep them off the suite's wall: the zone runs up to it)
+    const zone = {u0: Math.max(1.4, uMin + 1.0), u1: Math.min(W - 1.4, uMax - 1.0), v0: 2.4, v1: Math.max(2.4, vMax - 0.9)};
+    // the bigger pieces first (a dressed mannequin, round racks, a folded-stock table), then the straight rails pack the rest like a
+    // clothing store's (a one-cell walkway ring: ~0.7-1.0 m between the racks' real edges)
     from = d.placed.length;
-    d.islands('lingerieBust', per(d, 28, 2, 5), zone, {ring: 0.5});
-    dress(from);
-    d.dressRails(d.islands('garmentRail', per(d, 60, 1, 2), zone, {ring: 0.8}), 0.6);
-    if (ch) {
-      const [eu, ev] = xzUV(fr, ch.entry.x, ch.entry.z);
-      ottoman: for (const du of [1.4, -1.4, 2.0, -2.0]) for (const dv of [-1.0, -1.5]) {
-        if (d.put('ottoman', Math.round((eu + du) * 4) / 4, Math.round((ev + (ch.wall === fr.back ? dv : 0)) * 4) / 4, fr.face, {ring: 0.5})) break ottoman;
+    d.islands('mannequinFemale', W * D >= 100 ? 2 : 1, {...zone, v0: Math.max(zone.v0, D * 0.3)}, {ring: 0.5});
+    dressNew(from);
+    hang(d.islands('garmentRailRound', per(d, 40, 1, 3), zone, {ring: 0.5}), 0.9);
+    d.islands('merchTable', per(d, 70, 1, 2), zone, {ring: 0.6});
+    hang(d.islands('garmentRail', per(d, 18, 2, 7), zone, {ring: 0.5, along: !narrow}), 0.85);
+    if (suite) {
+      ottoman: for (const du of [1.6, -1.6, 2.2, -2.2]) for (const dv of [-1.6, -2.1]) {
+        const away = suite.wall === fr.back ? [eu + du, ev + dv] : [eu + (zoneSide === 'L' ? 1.8 : -1.8), ev + du];
+        if (d.put('ottoman', Math.round(away[0] * 4) / 4, Math.round(away[1] * 4) / 4, fr.face, {ring: 0.5})) break ottoman;
       }
     } else d.islands('ottoman', 1, zone, {ring: 0.7});
   },
@@ -1378,8 +1388,21 @@ function shopLights(layout: StationLayout, a: Area, step: number): void {
   if (layout.lights.some(l => l.area === a.id)) return;
   const lv = areaLevel(a);
   const w = a.w * CELL, h = a.h * CELL, nx = Math.max(1, Math.round(w / step)), nz = Math.max(1, Math.round(h / step));
+  const g = levelGrid(layout, lv);
   for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
-    const x = a.x * CELL + w * (i + 0.5) / nx, z = a.y * CELL + h * (j + 0.5) / nz;
+    let x = a.x * CELL + w * (i + 0.5) / nx, z = a.y * CELL + h * (j + 0.5) / nz;
+    // (task store-polish-20261103, lane STORE: a shop with walls carved inside it — the lingerie changing suite — moves a fixture that
+    // would hang inside a wall / over a doorway lintel to the nearest open cell of the shop under its full ceiling; no other shop has such
+    // a cell inside its rect, so their fixtures are unchanged)
+    const [cx, cy] = g.cellOf(x, z);
+    const open = (q: number) => g.cells[q] === FLOOR && g.area[q] === a.id && g.ceil[q] >= a.ceil - 0.05;
+    if (g.inBounds(cx, cy) && !open(g.idx(cx, cy))) {
+      search: for (let r = 1; r <= 8; r++) for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
+        if (Math.max(Math.abs(ox), Math.abs(oy)) !== r || !g.inBounds(cx + ox, cy + oy) || !open(g.idx(cx + ox, cy + oy))) continue;
+        [x, z] = g.center(cx + ox, cy + oy);
+        break search;
+      }
+    }
     layout.lights.push({x: r3(x), y: r3(a.ceil - 0.02), z: r3(z), rot: w >= h ? 0 : Math.PI / 2, area: a.id, broken: false, flicker: false, warm: true, power: 1, dying: false, ...(lv ? {level: lv} : {})});
   }
 }
