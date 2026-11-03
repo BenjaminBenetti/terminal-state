@@ -66,6 +66,13 @@ export interface LevelSky {
    * (the Office's open roof deck).
    */
   open?: Uint8Array;
+  /**
+   * Task studio-reactor-surface-ending-20261102 (lane ENDING): with `open`, the OUTDOORS over a walkable open-air storey (the Reactor's
+   * surface plaza round the roof opening, layout.levels[level]): closed columns are open air above `y` (that storey's parapet line),
+   * or above `tops[cell]` where a taller structure stands (the stair head house), and that storey's wall faces stand only that high
+   * (world/levelGeometry.ts clipSkyFaces). Absent: with `open` every closed column is solid at every height.
+   */
+  outdoor?: {level: number; y: number};
 }
 
 export interface Level {
@@ -345,8 +352,11 @@ export class Levels implements NavLevels {
   /** Open sky at height y entering closed column i (out of the grid: i < 0): above the column's solid top. */
   private openAir(i: number, y: number): boolean {
     const s = this.sky;
-    if (!s || y <= s.y || s.open) return false; // (lane ROOF: with an opening mask the closed columns are solid at every height)
+    if (!s || y <= s.y) return false;
     const t = i >= 0 && s.tops ? s.tops[i] : 0;
+    // (lane ROOF: with an opening mask the closed columns are solid at every height — task studio-reactor-surface-ending-20261102,
+    // lane ENDING: except above the surface storey's parapet line / a structure's top, the outdoors)
+    if (s.open) return !!s.outdoor && y > (t > 0 ? t : s.outdoor.y);
     return y > (t > 0 ? t : s.top);
   }
   /** Task reactor-submit-roof-fog-20261102 (lane ROOF): column i's band top at / above sky.ceil opens to the sky (LevelSky.open). */

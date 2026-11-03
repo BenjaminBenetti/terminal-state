@@ -1,6 +1,7 @@
 // Task reactor-build-20261101 (lane RESTART): THE REACTOR's restart runtime — the industrial controls, their in-world feedback, the
 // status screens, the HUD objective line and THE WIN. installReactorRestart(game) is called ONCE from the Game constructor and only
 // REGISTERS (like world/towerRuntime.ts / gear/system.ts); it is inert on every level without `layout.reactor`:
+// (Task reactor-surface-ending-20261102, lane OBJECTIVES: the HUD objective's strings and builder live in objectiveText.ts.)
 // - sectionHooks: build = read the persisted record (runState.ts REACTOR_LANE, RESTART's fields), build the
 //   control overlays (world/reactor/restartViews.ts) at layout.reactor.sites[].controls and the canvas screens at
 //   layout.reactor.screens, restore the visuals (a restarted reactor comes back restarted with its lights on: no replay); teardown =
@@ -30,8 +31,9 @@ import {reactorVisuals, type ReactorVisuals} from './visuals';
 import {reactorClearAll} from './generators';
 import {
   CONTROL_NAME, HOLD_S, blocker, controlDone, controlPrompt, doneText, isRestartControl, nextStepText, operate, readRestartState,
-  taskLine, writeRestartState, type RestartControlId, type RestartEvent, type RestartHints, type RestartInventory, type RestartRun,
+  writeRestartState, type RestartControlId, type RestartEvent, type RestartHints, type RestartInventory, type RestartRun,
 } from './restartLogic';
+import {OBJECTIVE_TEXT, objectiveHtml} from './objectiveText'; // task reactor-surface-ending-20261102 (lane OBJECTIVES): every HUD objective string
 import {VENT_TOWERS, WinSequence, coreGlowAt, planWin, tierPowerAt, type WinPlan, type WinSink} from './restartWin';
 import {drawReactorScreen, screenKey, screenPixels, type ScreenModel} from './restartScreens';
 import {buildControlView, buildScreenView, fallbackMount, type ControlView, type ScreenView} from './restartViews';
@@ -112,6 +114,12 @@ export class ReactorRestart {
   readonly counts = {presses: 0, holds: 0, completed: 0, refused: 0, letGo: 0, airCalls: 0, milestones: 0, saves: 0, redraws: 0};
   /** Milestone writer (tests replace it): true when written now. */
   recordMilestone: (levelSeed: number) => boolean = seed => recordReactorRestarted(seed);
+  /**
+   * Task reactor-surface-ending-20261102 (lane OBJECTIVES): a later objective stage (lane ENDING: e.g. the gas cleared, the external
+   * doors open) read at 4 Hz once the reactor is restarted: its line replaces the post-restart line; null = none. Strings belong in
+   * objectiveText.ts OBJECTIVE_TEXT.
+   */
+  objectiveStage: (() => string | null) | null = null;
   /** Lane AIR's whole-pit clearing (tests replace it): false while no Reactor air is built (retried next frame). */
   clearAir: (durationS: number) => boolean = d => reactorClearAll(d);
   /** The restarted core's hum loop (Sfx.reactorLoop handle) or null. */
@@ -175,7 +183,9 @@ export class ReactorRestart {
     const h = this.host;
     this.info = info;
     this.state = readRestartState(h.run, REACTOR_LANE, info.generators.length, info.zones.length);
-    this.hints = {fuse: info.components.find(c => c.item === 'fuse_cartridge')?.where, key: info.components.find(c => c.item === 'reactor_key')?.where};
+    // (lane OBJECTIVES) the key lies in the key switch's own room (the core floor's control room): the refusal says so
+    const keyC = info.components.find(c => c.item === 'reactor_key'), ctlSite = info.sites.find(s => s.id === 'control');
+    this.hints = {fuse: info.components.find(c => c.item === 'fuse_cartridge')?.where, key: keyC && ctlSite && keyC.area === ctlSite.area && keyC.level === ctlSite.level ? 'it lies in this control room' : keyC?.where};
     this.plan = planWin(info.tiers, info.fans);
     const root = new THREE.Group();
     root.name = 'reactor-restart';
@@ -375,7 +385,8 @@ export class ReactorRestart {
     let lv = -1;
     try { lv = this.host.levels.levelAt(P.x, P.z, P.y); } catch { lv = -1; }
     const tier = info.tiers.find(t => t.level === lv);
-    this.tierLabel = tier ? tier.label : this.tierLabel;
+    // (task studio-reactor-surface-ending-20261102, lane ENDING: + the surface storey, which is no tier)
+    this.tierLabel = tier ? tier.label : lv >= 0 && lv === info.surface?.level ? OBJECTIVE_TEXT.ending.storey : this.tierLabel;
     this.updateObjective();
   }
 
@@ -612,8 +623,8 @@ export class ReactorRestart {
       st.id = 'reactor-obj-css';
       st.textContent = '#reactor-objective{margin-top:4px;font-size:12px;letter-spacing:.04em;color:var(--cream-dim,#b9b2a1)}'
         + '#reactor-objective .rt.done{color:#7fd38a}#reactor-objective .rt.ready{color:var(--cream,#efe6cf)}#reactor-objective .rt.blocked{opacity:.55}'
-        + '#reactor-objective .tier{margin-top:2px;font-size:11px;opacity:.85}'
-        + '#reactor-objective .jam{margin-top:2px;font-size:11px;color:#ff8a6a}'; // (lane GAS)
+        + '#reactor-objective .rt.now{color:var(--cream,#efe6cf);font-weight:bold}' // (lane OBJECTIVES: the current task)
+        + '#reactor-objective .tier{margin-top:2px;font-size:11px;opacity:.85}';
       document.head?.appendChild(st);
     }
     let el = document.querySelector('#reactor-objective') as HTMLElement | null;
@@ -623,14 +634,16 @@ export class ReactorRestart {
     this.updateObjective();
   }
 
+  /**
+   * Task reactor-surface-ending-20261102 (lane OBJECTIVES): the concise HUD objective (world/reactor/objectiveText.ts: every string
+   * there): the goal + the task line, then the storey. No jam / mask paragraph (the jam is learnt at the generator). Updated at 4 Hz.
+   */
   private updateObjective(): void {
     const s = this.state;
     if (!s) return;
-    const line = s.restarted
-      ? (this.win && !this.win.done ? 'Reactor restarted — surface ventilation towers powering up' : 'Reactor running · surface ventilation towers online')
-      : `Restart the reactor — ${taskLine(s).html}`;
-    const jam = this.jamGassed() ? `<div class="jam">${JAM_TEXT.objective}</div>` : ''; // (lane GAS) the core floor needs the mask
-    const html = `<div>${line}</div>${jam}${this.tierLabel ? `<div class="tier">${this.tierLabel}</div>` : ''}`;
+    let stage: string | null = null;
+    try { stage = this.objectiveStage?.() ?? null; } catch { stage = null; }
+    const html = objectiveHtml({state: s, waking: !!this.win && !this.win.done, tier: this.tierLabel, stage});
     if (html === this.objHtml) return;
     this.objHtml = html;
     if (this.objEl) this.objEl.innerHTML = html;

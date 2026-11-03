@@ -255,7 +255,18 @@ describe('cross-storey shots on real generated levels (Subway multi-level, Offic
   for (const name of ['subway', 'office', 'mall', 'reactor'] as const) {
     it(`${name}: down and up every stair link — the enemy on the other storey is hit (the pre-fix reject skipped them)`, () => {
       const w = world(name);
-      const links = (w.layout.levelLinks ?? []).filter(k => k.kind === 'stairs');
+      // (task studio-reactor-surface-ending-20261102, lane ENDING: the Reactor's surface exit is a walled U-stair — its one link joins
+      // the rim and the surface round a turn landing, its ends behind the wall between the lanes: each straight run is shot along its own
+      // line instead, rim -> the turn and the turn -> the surface)
+      const sf = (w.layout as {reactor?: {surface?: {stairs: {link: number; flights: readonly number[]; bottom: {y: number}; top: {y: number}}}}}).reactor?.surface;
+      const links = (w.layout.levelLinks ?? []).filter(k => k.kind === 'stairs').flatMap(k => {
+        if (!sf || k.id !== sf.stairs.link) return [k];
+        const fl = sf.stairs.flights.map(id => w.layout.traversal.stairs[id]), hm = (sf.stairs.bottom.y + sf.stairs.top.y) / 2;
+        const lo = (q: typeof fl) => q.reduce((a, f) => (Math.min(f.h0, f.h1) < Math.min(a.h0, a.h1) ? f : a)).bottom;
+        const hi = (q: typeof fl) => q.reduce((a, f) => (Math.max(f.h0, f.h1) > Math.max(a.h0, a.h1) ? f : a)).top;
+        const a = fl.filter(f => Math.max(f.h0, f.h1) <= hm + 0.05), b = fl.filter(f => Math.min(f.h0, f.h1) >= hm - 0.05);
+        return [{...k, bottom: lo(a), top: hi(a)}, {...k, bottom: lo(b), top: hi(b)}];
+      });
       expect(w.L.count, w.name).toBeGreaterThan(1);
       expect(links.length).toBeGreaterThan(0);
       let down = 0, up = 0, preDown = 0, preUp = 0, heads = 0;

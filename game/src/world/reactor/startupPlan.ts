@@ -24,8 +24,12 @@
 //                   the roof starts to clear (SKY); the existing hum joins
 //  t 6 .. 24        each tier's lights clunk on (the existing breaker clip at that tier, pitch rising up the pit)
 
+//  (task reactor-surface-ending-20261102, lane AUDIO — user: "the reactor needs to have a noise when the blue beam shoots out the top!")
+//  ONLINE - crack  the BEAM IGNITION at the beam column: its whoosh swell leads in, its CRACK lands as the beam fires (beamCueAt)
+
 import type {ReactorRunState} from './runState';
 import {WIN, tierStartAt} from './restartWin';
+import {BEAM_IGNITION_CRACK_S} from '../../audio/manifest.reactorEnding.generated';
 
 const clamp01 = (v: number) => (v <= 0 ? 0 : v >= 1 ? 1 : v);
 const smooth = (v: number) => { const x = clamp01(v); return x * x * (3 - 2 * x); };
@@ -109,11 +113,14 @@ export const beaconPowerAt = (t: number, rank: number, n: number): number =>
   smooth((t + STARTUP.beaconLeadS - tierStartAt(rank, n)) / WIN.tierRampS);
 
 /** A timed win cue. */
-export interface WinCue { at: number; kind: 'surge' | 'online' | 'tier'; rank?: number }
+export interface WinCue { at: number; kind: 'surge' | 'online' | 'tier' | 'beam'; rank?: number }
+
+/** Lane AUDIO: the beam ignition's start on the win clock — its crack (BEAM_IGNITION_CRACK_S into the clip) lands as the beam fires. */
+export const beamCueAt = (): number => Math.max(0, STARTUP.onlineAtS - Math.max(0, BEAM_IGNITION_CRACK_S));
 
 /** The win's timed cues for n tiers (bottom-up ranks). */
 export function winCues(n: number): WinCue[] {
-  const out: WinCue[] = [{at: 0, kind: 'surge'}, {at: STARTUP.onlineAtS, kind: 'online'}];
+  const out: WinCue[] = [{at: 0, kind: 'surge'}, {at: beamCueAt(), kind: 'beam'}, {at: STARTUP.onlineAtS, kind: 'online'}];
   for (let r = 0; r < n; r++) out.push({at: tierStartAt(r, n), kind: 'tier', rank: r});
   return out.sort((a, b) => a.at - b.at);
 }

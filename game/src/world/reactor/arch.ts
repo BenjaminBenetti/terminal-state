@@ -103,7 +103,9 @@ export class ReactorArch {
     this.W = g0.w; this.H = g0.h;
     this.pitMask = new Uint8Array(this.W * this.H);
     this.mineAreas = new Set(minesRecord(layout)?.areas ?? []); // (lane MINES)
-    this.roughAreas = new Set(this.info.approach?.tunnel ?? []); // (lane ARRIVAL)
+    // (lane ARRIVAL) + task studio-reactor-surface-ending-20261102 (lane ENDING): the surface exit's passages and stair are rock-cut too
+    const sa = this.info.surface?.areas;
+    this.roughAreas = new Set([...(this.info.approach?.tunnel ?? []), ...(sa ? [sa.lower, sa.stair, sa.upper] : [])]);
     const b = this.info.pit.bounds, P = this.info.pit.outline;
     for (let cy = Math.max(0, Math.floor(b.z0 / CELL)); cy < Math.min(this.H, Math.ceil(b.z1 / CELL)); cy++) {
       for (let cx = Math.max(0, Math.floor(b.x0 / CELL)); cx < Math.min(this.W, Math.ceil(b.x1 / CELL)); cx++) {
@@ -130,9 +132,24 @@ export class ReactorArch {
   /** Reactor finishes for the builder's wall faces (pit concrete facing the pit; rusted plate in the rooms; the rim station kept). */
   remapFaces<F extends BuiltFace>(faces: F[]): F[] {
     const out: F[] = [];
+    const surf = this.info.surface, tops = this.levels[0]?.sky?.tops;
     for (const f of faces) {
       const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
       const mx = alongX ? (f.x0 + f.x1) / 2 : f.x0 + f.nx * CELL / 2, mz = alongX ? f.z0 + f.nz * CELL / 2 : (f.z0 + f.z1) / 2;
+      // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface plaza's boundary is lane SURFACE's wet-concrete parapet
+      // wall (on the edges' outer side, up to parapetY): the builder draws no second wall there. Where the stair head house stands behind
+      // the edge (LevelSky.tops), its facade continues above the parapet line.
+      if (surf && f.level === surf.level && f.area === surf.areas.plaza) {
+        const bx = (f.x0 + f.x1) / 2 - f.nx * CELL / 2, bz = (f.z0 + f.z1) / 2 - f.nz * CELL / 2;
+        const cx = Math.floor(bx / CELL), cy = Math.floor(bz / CELL), t = tops && cx >= 0 && cy >= 0 && cx < this.W && cy < this.H ? tops[cy * this.W + cx] : 0;
+        if (!(t > 0) || f.y1 <= surf.parapetY + 0.01) continue;
+        if (f.y0 < surf.parapetY) {
+          const y0 = surf.parapetY;
+          this.count('reactor-wall');
+          out.push({...f, y0, openings: f.openings.filter(o => o.top > y0 + 0.01), finish: 'reactor-wall'});
+          continue;
+        }
+      }
       // task reactor-expansion-20261101 (lane CORE): the vessel's grid column is not drawn (the hero model is); the goop pool's walls
       // under the deck (bridge sides, ring / outer edges) are rusted steel plate
       if (f.level === this.coreLevel && this.coreKinds.length) {
@@ -156,9 +173,39 @@ export class ReactorArch {
     if (!lvl) return null;
     // task reactor-expansion-20261101 (lane CORE): the vessel column / goop pool floors are not drawn; the ring + bridges are grating
     if (lvl.id === this.coreLevel && this.coreKinds[i]) return this.coreKinds[i] === CORE_CELL.deck ? 'reactor-grating' : this.coreKinds[i] === CORE_CELL.pool ? CORE_GOOP : CORE_HIDDEN;
+    // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface storey (the plaza on the roof's top, over the pit and beyond
+    // it alike, and its passage): the concrete floor (never the pit's grating; lane SURFACE lays its wet film over the plaza)
+    const surf = this.info.surface;
+    if (surf && lvl.id === surf.level) return 'reactor-floor';
     if (this.pitMask[i]) return lvl.id === this.coreLevel ? 'reactor-floor' : 'reactor-grating';
     const a = this.layout.areas[lvl.grid.area[i]];
     return isReactorArea(a, lvl.id) || this.roughAreas.has(lvl.grid.area[i]) ? 'reactor-floor' : null;
+  }
+
+  /**
+   * Task studio-reactor-surface-ending-20261102 (lane REPAIRS, user: "the floor around the reactor does not go under the reactor so there
+   * are gaps!"): floor runs the builder draws BESIDE the cells' own floors on level index L. The vessel's footprint is blocked cells
+   * whose square reaches past the model's round hazard plinth (cells with their centre within CORE_FLOOR.vesselR 6.6 m; the plinth is
+   * 6.4 m) and whose own floor is not drawn (the hidden column, floorKey) — so the grating stopped in a cell-stepped saw-tooth short of
+   * the plinth, with the void showing in the notches. The deck now continues under the vessel: every vessel cell gets the ring's
+   * grating at the deck height (the same surface key: one world-mapped pattern, the same per-chunk meshes). Collision is unchanged —
+   * the vessel stays the blocked, raised column; the goop pool / bridges are other cells and untouched.
+   */
+  floorFills(L: number): {key: string; x0: number; z0: number; x1: number; z1: number; y: number}[] {
+    const lvl = this.levels[L], cf = this.info.coreFloor;
+    if (!lvl || lvl.id !== this.coreLevel || !cf || !this.coreKinds.length) return [];
+    const out: {key: string; x0: number; z0: number; x1: number; z1: number; y: number}[] = [];
+    const K = this.coreKinds, W = this.W;
+    for (let cy = 0; cy < this.H; cy++) {
+      for (let cx = 0; cx < W;) {
+        if (K[cy * W + cx] !== CORE_CELL.vessel) { cx++; continue; }
+        let e = cx + 1;
+        while (e < W && K[cy * W + e] === CORE_CELL.vessel) e++;
+        out.push({key: 'reactor-grating', x0: cx * CELL, z0: cy * CELL, x1: e * CELL, z1: (cy + 1) * CELL, y: cf.y});
+        cx = e;
+      }
+    }
+    return out;
   }
 
   /**
@@ -190,6 +237,17 @@ export class ReactorArch {
 
   /** Stair flight finishes (traversalBuilder MatKeys) in the pit / below the rim: steel grating treads, rusted plate soffits. */
   stairKey(k: MatKey | string, x: number, z: number, level: number): string {
+    // task studio-reactor-surface-ending-20261102 (lane ENDING): the surface exit's U-stair (rim <-> surface, rock-cut): concrete treads,
+    // the rock-cut room ceiling under its flights
+    const sa = this.info.surface?.areas;
+    if (sa) {
+      const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL), g0 = this.levels[0]?.grid;
+      if (g0 && cx >= 0 && cy >= 0 && cx < this.W && cy < this.H && g0.area[cy * this.W + cx] === sa.stair) {
+        if (k === 'concrete' || k === 'terrazzo') return 'reactor-floor';
+        if (k === 'ceiling' || k === 'ceilingService') return 'reactor-ceil';
+        return k;
+      }
+    }
     if (!this.inPit(x, z) && level <= 0) {
       const cx = Math.floor(x / CELL), cy = Math.floor(z / CELL);
       const a = cx >= 0 && cy >= 0 && cx < this.W && cy < this.H ? this.layout.areas[this.levels[this.levelIndex(level)].grid.area[cy * this.W + cx]] : undefined;

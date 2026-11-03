@@ -438,7 +438,9 @@ describe('reactor air: the generator route WITHOUT a mask — no deadlock down t
     r.run(1);
     expect(r.gas.exposure.c).toBeGreaterThan(0.5);
     expect(r.hits.length).toBeGreaterThan(0);
-    expect(r.rt.hud.shown).toEqual({text: 'Core floor · Zone 3 · toxic air · fans jammed — gas mask on', tone: 'toxic'});
+    // (task reactor-surface-ending-20261102, lane OBJECTIVES, intent change: the air line says the zone is toxic, no jam explanation —
+    // the jam is learnt at the generator; was "toxic air · fans jammed — gas mask on")
+    expect(r.rt.hud.shown).toEqual({text: 'Core floor · Zone 3 · toxic air · gas mask on', tone: 'toxic'});
     const hurt = r.hits.length;
     r.gas.protection = () => true;
     r.run(2);

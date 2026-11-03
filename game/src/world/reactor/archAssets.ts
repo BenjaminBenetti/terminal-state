@@ -19,6 +19,7 @@
 
 import {REACTOR_KIT, REACTOR_TEXTURES as KIT_TEXTURES, type ReactorKitModel} from '../../assets/reactorKit.generated';
 import {REACTOR_X_KIT} from '../../assets/reactorExpansionKit.generated'; // task reactor-expansion-20261101: the expansion's Meshy kit
+import {REACTOR_SURFACE_KIT} from '../../assets/reactorSurfaceKit.generated'; // task studio-reactor-surface-ending-20261102 (lane SURFACE)
 
 /** The set pieces ARCH places (REACTOR_KIT keys; the items fuseCartridge / reactorKey are lane RESTART's). */
 export type ReactorPiece =
@@ -112,6 +113,8 @@ export function reactorModelFiles(): Record<string, {url: string; bytes: number}
   // task reactor-expansion-20261101 (lane CORE): + the whole expansion kit (hero assembly + the side complexes' set pieces): every
   // REACTOR_X_KIT url referenced from runtime code (the release packager drops unreferenced GLBs); fetched only when a layout asks
   for (const m of Object.values(REACTOR_X_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
+  // task studio-reactor-surface-ending-20261102 (lane SURFACE): + the ruined-city kit (fetched only on a Reactor layout: surfaceKit.ts keys)
+  for (const m of Object.values(REACTOR_SURFACE_KIT) as ReactorKitModel[]) out[m.key] = {url: m.url, bytes: m.bytes};
   return out;
 }
 export const REACTOR_MODEL_FILES: Readonly<Record<string, {url: string; bytes: number}>> = reactorModelFiles();

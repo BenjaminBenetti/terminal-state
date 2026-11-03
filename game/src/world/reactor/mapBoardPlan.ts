@@ -19,6 +19,7 @@ import type {StationLayout} from '../../gen/stationTypes';
 import {reactorMounts} from './controlsMount';
 import type {ReactorRunState} from './runState';
 import {JAM_TEXT, reactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
+import {coreAirCleared} from './endingLogic'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
 
 /** Board size (m): the map face; the storey buttons sit in a column at its right edge. */
 export const MAP_BOARD = {w: 1.5, h: 1.25, depth: 0.05, gap: 0.3, centerY: 1.55, buttonR: 0.032, buttonPitch: 0.105, buttonInset: 0.085} as const;
@@ -274,12 +275,13 @@ export function planStoreys(layout: StationLayout, info: ReactorInfo): MapPlan {
 // ---------------------------------------------------------------------------------------------------------------------------
 // Markers (what the player still needs, where it is NOW)
 
-export type MarkerKind = 'key' | 'fuse' | 'fuseSlot' | 'breaker' | 'valve' | 'pump' | 'keyswitch' | 'rods' | 'generator';
+/** (task studio-reactor-surface-ending-20261102, lane ENDING: + 'exit', the exterior doors once open) */
+export type MarkerKind = 'key' | 'fuse' | 'fuseSlot' | 'breaker' | 'valve' | 'pump' | 'keyswitch' | 'rods' | 'generator' | 'exit';
 /** Marker letters on the map / legend. */
-export const MARKER_LETTER: Record<MarkerKind, string> = {key: 'K', fuse: 'F', fuseSlot: 'F', breaker: 'B', valve: 'V', pump: 'P', keyswitch: 'S', rods: 'R', generator: 'G'};
+export const MARKER_LETTER: Record<MarkerKind, string> = {key: 'K', fuse: 'F', fuseSlot: 'F', breaker: 'B', valve: 'V', pump: 'P', keyswitch: 'S', rods: 'R', generator: 'G', exit: 'E'};
 export const MARKER_NAME: Record<MarkerKind, string> = {
   key: 'Startup key', fuse: 'Fuse cartridge', fuseSlot: 'Fuse slots (switchgear)', breaker: 'Main breaker', valve: 'Coolant valve',
-  pump: 'Circulation pump', keyswitch: 'Key switch (console)', rods: 'Rod control', generator: 'Generator',
+  pump: 'Circulation pump', keyswitch: 'Key switch (console)', rods: 'Rod control', generator: 'Generator', exit: 'Surface exit (doors open)',
 };
 
 export interface MapMarker {
@@ -342,6 +344,10 @@ export function mapMarkers(src: MarkerSource): MapMarker[] {
   // the generators (in their side complexes): started or not; (lane GAS) the final one is jammed
   const jam = reactorJam(info);
   for (const g of info.generators) out.push({kind: 'generator', level: g.level, x: g.panel.x, y: g.panel.y, z: g.panel.z, state: jam?.generator === g.id ? 'jammed' : s.generators[g.id]?.started ? 'done' : 'need', id: g.id});
+  // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior doors on the rim once they are open (the core air cleared
+  // after ONLINE: the same rule as world/reactor/endingLogic.ts coreAirCleared — the board's signature already follows those fields)
+  const sf = info.surface;
+  if (sf && (s.ending?.doors || coreAirCleared(s))) out.push({kind: 'exit', level: sf.door.level, x: sf.door.x, y: sf.door.y + 1.4, z: sf.door.z, state: 'need'});
   return out;
 }
 

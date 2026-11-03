@@ -44,24 +44,29 @@ export function reactorJam(info: Pick<ReactorInfo, 'zones' | 'generators'>): Rea
 /** Zone label as the HUD / boards print it ("Zone 3" for id 2). */
 export const zoneName = (zone: number): string => `Zone ${zone + 1}`;
 
-/** Every player-facing line about the jam (one wording across the prompt, toast, HUD, boards and the floor maps). */
+/**
+ * Every player-facing line about the jam (one wording across the prompt, toast, HUD, boards and the floor maps). Task
+ * reactor-surface-ending-20261102 (lane OBJECTIVES, user: "the objective text is to wordy, saying "core floor generator is jammed" and all
+ * that … The player will know its jammed when they try to start it"): the HUD objective's jam paragraph is gone (the HUD objective has no
+ * jam text at all: world/reactor/objectiveText.ts); the HUD air line only says the air is toxic; the board marks are terse. The jam itself
+ * is told AT the generator, when the player tries it: the stall, the flashing fault lamp, the short toast and its prompt.
+ */
 export const JAM_TEXT = {
   /** Generator prompt before any try / after a stall. */
   promptTry: (zone: number) => `<b>Hold [E]</b> Try to start the auxiliary generator (${zoneName(zone)} extraction fans) · FAULT lamp flashing`,
-  promptJammed: (zone: number) => `Auxiliary generator JAMMED — fan drive seized · ${zoneName(zone)} stays gassed: gas mask + filters until the reactor is online · <b>Hold [E]</b> try again`,
+  promptJammed: (zone: number) => `Auxiliary generator JAMMED — ${zoneName(zone)} fan drive seized · <b>Hold [E]</b> try again`,
   promptStalling: (zone: number) => `Auxiliary generator cranking… (${zoneName(zone)} extraction fans)`,
-  /** The toast when a start stalls. */
-  stalled: (zone: number) => `The generator cranks, then seizes: the ${zoneName(zone)} fan drive is JAMMED. The core floor stays gassed — wear the gas mask with spare filters until the reactor is online.`,
-  /** HUD air line on a jammed zone's storey. */
-  hud: 'toxic air · fans jammed — gas mask on',
+  /** The toast when a start stalls (short: the jam is learnt here). */
+  stalled: (zone: number) => `Generator seized: ${zoneName(zone)} fans JAMMED — keep the gas mask on: the core floor stays gassed until the reactor is online.`,
+  /** HUD air line on a jammed zone's storey: toxic, nothing about the jam. */
+  hud: 'toxic air · gas mask on',
   /** Pit board row (the zone's clearing bar is replaced while it stays gassed). */
   board: 'JAMMED · MASK',
   /** Switchgear board hint once control power is on (the last stop before the core floor). */
-  switchgear: 'Control power on — core floor next: generator jammed, wear the gas mask with filters',
-  /** The pit board's "Next: …" suffix for a step on a jammed storey; the HUD objective line. */
-  next: 'gas mask + filters (fans jammed)',
-  objective: 'Core floor gassed — its generator is jammed: gas mask + filters until the reactor is online',
+  switchgear: 'Control power on — core floor next: gas mask on',
+  /** The pit board's "Next: …" suffix for a step on a jammed storey. */
+  next: 'gas mask',
   /** Floor-map banner on a jammed storey, and the generator's legend entry. */
-  map: 'TOXIC AIR — GENERATOR JAMMED: GAS MASK + FILTERS REQUIRED',
+  map: 'TOXIC AIR — GAS MASK REQUIRED',
   legend: 'Generator JAMMED (no fans)',
 } as const;

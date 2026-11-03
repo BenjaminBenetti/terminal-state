@@ -6,7 +6,8 @@
 //
 // World frame (same conventions as the Office / Mall): x east, z south, y up, metres. ONE continuous layout:
 //  - levels[0] = the RIM: the subway station at the TOP of the pit (platform + track bed: a normal station a train can stop at),
-//    the rim gallery round the pit mouth and the rim control office (the startup key, the pit status board). baseY 0.
+//    the rim gallery round the pit mouth and the rim control office (the pit status board; task reactor-surface-ending-20261102, lane
+//    OBJECTIVES: the startup key moved down to the core floor's control room). baseY 0.
 //  - levels[1..] = the walkway TIERS going DOWN (negative baseY) — steel galleries on the pit walls, landings, bridges across the
 //    pit, lattice-tower decks and the rooms cut into the rock (stores, switchgear, pump hall) — and LAST the CORE FLOOR round the
 //    reactor vessel (the control room overlooks it).
@@ -383,6 +384,60 @@ export interface ReactorInfo {
   approach?: ReactorApproach;
   /** Task reactor-playtest-round2-20261102 (lane ARRIVAL, additive): the seeded rock suites behind the pit walls (gen/reactor/suites.ts). */
   suites?: readonly ReactorSuiteInfo[];
+  /** Task studio-reactor-surface-ending-20261102 (lane ENDING, additive): the sealed exterior door -> stairs -> the SURFACE storey. */
+  surface?: ReactorSurface;
+}
+
+/** A straight boundary segment of the surface plaza (world m, a cell edge), its normal pointing OUT of the walkable deck. */
+export interface ReactorSurfaceEdge { x0: number; z0: number; x1: number; z1: number; nx: number; nz: number }
+
+/**
+ * Task studio-reactor-surface-ending-20261102 (lane ENDING): THE SURFACE EXIT (gen/reactor/surface.ts). A sealed exterior door in a rim
+ * pit wall opens (runtime: world/reactor/ending*.ts) once the core's gas has cleared after ONLINE; behind it a walled U-stair climbs
+ * from the rim to a bounded OPEN-AIR storey on the roof's outer surface round the ONE roof opening. One continuous world: the surface is
+ * `layout.levels[level]` (role 'roof'; ABOVE every pit storey, NOT one of `tiers`), the stair a real flight set (twin cells on the
+ * rim and surface grids). World metres, absolute y.
+ *
+ * Lane SURFACE builds the city / rain / sky on it:
+ *  - the player can reach exactly `walk` (merged cell rects at deck height `y`); everything outside is closed rock / rubble line;
+ *  - `edges` are the plaza's outer boundary (a 1.1 m parapet line: `parapetY`); stand rubble, barriers and facades on / beyond them,
+ *    never inside `walk`. A closed column is open air above `parapetY` unless levels[0].sky.tops raises it (`tops` cells: the stair
+ *    head house) — buildings standing right on an edge may set tops there (bullets then stop on them);
+ *  - `hole` is the roof opening (the beam rises through it), with lane ENDING's barrier round it — a see-through steel guard railing
+ *    at `parapet.r0` (just inside r) `parapet.top` high over a concrete apron out to `parapet.r1` — and `keepR` (= r): no walkable cell
+ *    lies inside that radius (the deck stops at the opening's stepped cell edge, r .. r + 0.71); rain / props never go inside `keepR`;
+ *  - `head` is the stair head house over the stair's top (a closed box from y to `head.top`: give it a canopy / facade if you like);
+ *  - `exit` is where the stair opens onto the plaza (the way back down; signs / the map's exit marker).
+ */
+export interface ReactorSurface {
+  version: 1;
+  /** layout.levels index of the surface storey; its deck height (= pit.roofY + slab) and nominal open-air band top (LevelSky ceil). */
+  level: number;
+  y: number;
+  ceil: number;
+  /** Plaza parapet line: closed boundary columns are solid up to here (absolute y), open air above. */
+  parapetY: number;
+  /** Bounding rect of the walkable plaza and its walkable cell rects (row-merged; blocked keep-off cells excluded). */
+  bounds: ReactorRect;
+  walk: readonly ReactorRect[];
+  /** The plaza's outer boundary segments (merged cell edges; normal out of the deck). */
+  edges: readonly ReactorSurfaceEdge[];
+  /** The roof opening on the deck and its barrier: the parapet ring (inner / outer radius, top y) and the keep-off radius. */
+  hole: {x: number; z: number; r: number; parapet: {r0: number; r1: number; top: number}; keepR: number};
+  /**
+   * The sealed exterior door in the rim pit wall: centre (floor y), facing (yaw, camera convention: forward = out into the pit), its
+   * outward normal (into the pit), clear width / height, the opening's world rect (its cells on layout.levels[door.level]: the runtime
+   * blocks them while sealed — gen/reactor/surface.ts surfaceDoorCells), the rim deck area in front.
+   */
+  door: {level: number; x: number; y: number; z: number; yaw: number; nx: number; nz: number; w: number; h: number; rect: ReactorRect; front: number};
+  /** The stair: traversal.stairs ids (bottom first), the LevelLink id rim -> surface, its foot (rim) and head (surface) points, footprint. */
+  stairs: {flights: readonly number[]; link: number; bottom: ReactorPoint; top: ReactorPoint; rect: ReactorRect};
+  /** The stair head house on the plaza (closed box over the stair's upper end): footprint, top (absolute y). */
+  head: {rect: ReactorRect; top: number};
+  /** Where the stair opens onto the plaza (the way back down), facing out onto the plaza. */
+  exit: {x: number; y: number; z: number; yaw: number};
+  /** Area ids: the lower access passage (rim), the stair, the upper passage and the plaza (surface). */
+  areas: {lower: number; stair: number; upper: number; plaza: number};
 }
 
 /**

@@ -89,6 +89,8 @@ import {installSirens, type SirenSystem} from './ai/sirenSystem'; // Task track1
 import {preloadMedicalModels} from './world/medicalItems'; // Iteration 16 (lane INJURY): Meshy A7 / A8 treatment models
 import {installReactorRestart, preloadReactorItemModels} from './world/reactor/restart';
 import {installReactorStartup} from './world/reactor/startup'; // task reactor-playtest-round2-20261102 (lane STARTUP): startup audio, orange beacons, the ONLINE sky
+import {installReactorEnding} from './world/reactor/ending'; // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior door -> surface
+import {installReactorSurface} from './world/reactor/surface'; // task studio-reactor-surface-ending-20261102 (lane SURFACE): the city / rain / clear air outside
 import {installReactorCpuCulling} from './world/reactor/cpuActorCulling'; // task studio-reactor-submit-roof-fog-20261102 (lane CPU)
 import {installReactorMapBoards} from './world/reactor/mapBoard'; // task reactor-expansion-20261101 (lane CONTROLS) // task reactor-build-20261101 (lane RESTART): restart controls, screens, the win, the restart parts' models
 import {archetypeOf} from './ai/creatureArchetypes'; // Iteration 16 (lane INJURY): rat / dog bites go low
@@ -516,6 +518,8 @@ export class Game {
     hookName('sirens');
     installReactorRestart(this); hookName('reactorRestart');
     installReactorStartup(this); hookName('reactorStartup'); // task reactor-playtest-round2-20261102 (lane STARTUP): after RESTART (reads its record / hold / win clock) — the startup audio director, the orange rotating beacons + their boot-time SpotLights, the blue beam + its boot-time PointLights, the sky over the roof clearing; inert elsewhere
+    installReactorSurface(this); hookName('reactorSurface'); // task studio-reactor-surface-ending-20261102 (lane SURFACE): after STARTUP (reads its ONLINE sky) — the ruined city, rain, clear sky / mist round the roof aperture, shown only with the eye outside; inert elsewhere
+    installReactorEnding(this); hookName('reactorEnding'); // task studio-reactor-surface-ending-20261102 (lane ENDING): after RESTART / AIR (reads their live state; its objective stage) — the sealed exterior door, its opening once the core air cleared, the centre "External doors open" message docking into the objective, the parapet ring round the opening; inert elsewhere
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)
     installReactorMapBoards(this); hookName('reactorMapBoards'); // task reactor-expansion-20261101 (lane CONTROLS): floor-map boards beside the instruction boards (X marks, storey buttons; inert off the Reactor) // task reactor-build-20261101 (lane RESTART): E / hold-E controls, prompts, screens, the win sequence, section hooks (inert off the Reactor)
     // Task player-train-shell-20261101-202805 (lane TRAIN): LAST (its build rebuilds game.propIndex over everything already there, after the

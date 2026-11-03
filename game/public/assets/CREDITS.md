@@ -293,6 +293,29 @@ Community License + Gemma Terms of Use; conditional prototype status, not produc
 - `assets/audio/reactor-beacon-loop.mp3` — reactorBeacon (Sound Lab job 20261102T063904-2058341218)
 <!-- END reactor-startup-audio-20261102 -->
 
+<!-- BEGIN reactor-surface-kit-20261102 (build-reactor-surface-kit.mjs) -->
+## The Reactor surface ending: the ruined city round the roof aperture
+
+Generated for this project with Meshy T2.5 (smart topology; image-to-3D from Codex initial reference images made with the user-selected B concept attached) through the Meshy MCP under the user's NEW surface-ending 200-credit authorization (sha256 1eb98c31…); Meshy's PBR maps kept (re-encoded only). Raw masters + provenance stay private / tracked outside the shipped site.
+
+- `assets/models/reactor-city-highrise-ruin.glb` — surface: ruined ~25-storey glass / concrete office tower, top sheared off (Meshy task 01a19e39-ecdb-7658-852c-2f719bef5311)
+- `assets/models/reactor-city-apartment-ruin.glb` — surface: ruined 7-storey brick apartment block with fire escapes, a collapsed corner (Meshy task 01a19e3a-07b5-77b2-ab18-abc2bb8cb7d3)
+- `assets/models/reactor-city-garage-skeleton.glb` — surface: burned-out multi-storey parking garage stripped to its concrete frame (Meshy task 01a19e3a-240a-707c-a7f4-58d6115f7e01)
+- `assets/models/reactor-city-storefront-row.glb` — surface: ruined two-storey corner row of shops (blank signs) (Meshy task 01a19e3a-4200-75cb-ac7f-6377d9f68177)
+<!-- END reactor-surface-kit-20261102 -->
+
+<!-- BEGIN reactor-ending-audio-20261102 (reactor-ending-build.mjs) -->
+## The Reactor: ending audio (the blue-beam ignition, the surface rain)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the surface-
+ending task's blue-beam / rain allowance (2 jobs of a 6-job cap). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+loop, levelling, MP3) built by `tools/audio-pipeline/reactor-ending-build.mjs` (provenance: `assets/derivatives/audio-reactor-ending.json`).
+Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/reactor-beam.mp3` — reactorBeam (Sound Lab job 20261102T214343-1373120250)
+- `assets/audio/surface-rain-loop.mp3` — bedRain (Sound Lab job 20261102T214347-51396616)
+<!-- END reactor-ending-audio-20261102 -->
+
 <!-- BEGIN paper-map-20261102 (build-paper-map.mjs) -->
 ## Campaign: the paper subway map
 
