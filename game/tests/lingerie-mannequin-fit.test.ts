@@ -78,7 +78,8 @@ describe('lingerie on the female display mannequin', () => {
 });
 
 describe('lingerie rack stock (hanging items)', () => {
-  it('hangs every item on its hanger below the rail contact, supported, within the rail limits', () => {
+  it('hangs every item on its hanger below the rail contact, supported, within the rail limits', async () => {
+    const {closestOnTri} = await lib('penetration.mjs');
     const report: string[] = [];
     for (const s of LINGERIE_HANG_SETS) {
       expect(s.items.length, s.design).toBeGreaterThanOrEqual(1);
@@ -90,7 +91,7 @@ describe('lingerie rack stock (hanging items)', () => {
         const hangerPrim = prims.findIndex(p => p.getMaterial()!.getName() === 'LingerieHanger');
         expect(hangerPrim, it.node).toBe(prims.length - 1);
         expect(prims[hangerPrim].getMaterial()!.getBaseColorTexture()).toBeNull(); // plain hardware, no art
-        const H = arr(nd!, hangerPrim);
+        const H = arr(nd!, hangerPrim), HI = Uint32Array.from(prims[hangerPrim].getIndices()!.getArray()!);
         let hTop = -Infinity; for (let i = 1; i < H.length; i += 3) hTop = Math.max(hTop, H[i]);
         expect(hTop, `${it.node} hook top`).toBeGreaterThan(0); // the wire's top sits on the rail (contact = origin)
         expect(hTop).toBeLessThan(0.008);
@@ -99,12 +100,13 @@ describe('lingerie rack stock (hanging items)', () => {
           const G = arr(nd!, k);
           for (let i = 0; i < G.length; i += 3) {
             gTop = Math.max(gTop, G[i + 1]); gLow = Math.min(gLow, G[i + 1]); xMin = Math.min(xMin, G[i]); xMax = Math.max(xMax, G[i]);
-            for (let j = 0; j < H.length; j += 9) { const d = Math.hypot(G[i] - H[j], G[i + 1] - H[j + 1], G[i + 2] - H[j + 2]); if (d < dMin) dMin = d; }
+            // distance to the hanger SURFACE (its triangles), only for garment points near the hanger's height
+            if (G[i + 1] > -0.13) for (let t = 0; t < HI.length; t += 3) { const q = closestOnTri([G[i], G[i + 1], G[i + 2]], H, HI[t] * 3, HI[t + 1] * 3, HI[t + 2] * 3); const d = Math.hypot(G[i] - q[0], G[i + 1] - q[1], G[i + 2] - q[2]); if (d < dMin) dMin = d; }
           }
         }
         if (gTop >= 0) report.push(`${it.node}: garment above the rail contact (${gTop})`);
         if (dMin > 0.012) report.push(`${it.node}: garment not resting on its hanger (closest ${dMin.toFixed(4)} m)`);
-        if (-gLow > 0.55 || -gLow < 0.15) report.push(`${it.node}: drop ${-gLow}`);
+        if (-gLow > 0.65 || -gLow < 0.15) report.push(`${it.node}: drop ${-gLow}`); // the one-piece bodysuit hangs ~0.6 m
         if (Math.max(xMax, 0.156) - Math.min(xMin, -0.156) > 0.45) report.push(`${it.node}: wider than 0.45 m`);
         expect(it.dropM).toBeCloseTo(-gLow, 3);
         const ex = nd!.getExtras() as {lingerieHang?: {hanger: string}};
