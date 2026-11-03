@@ -8,7 +8,8 @@
 // Rules (campaign/discovery.ts decides what is known / reachable):
 //  - Only KNOWN stations and edges with both ends known are printed (with the 1337 cheat: everything); the Reactor's mark and name
 //    appear only once it is known. The layout is fitted to the WHOLE network once, so the print never shifts as stations appear.
-//  - travel mode (the train console): known stations one stop away are selectable (any station with the cheat). Clicking (or
+//  - travel mode (the train console): known stations one stop away — and (lane MAP) visited stations over visited track — are
+//    selectable (any station with the cheat). Clicking (or
 //    Enter on) a station SELECTS it and opens the details panel; travel happens only on the explicit "Depart" button (onConfirm);
 //    Cancel clears the selection. Hover never selects, a click never departs. view mode (title / pause "view map"): read-only.
 //  - Pan (drag), zoom (wheel at the cursor, + / - keys and buttons), F = fit the known stations, Home = the whole sheet.
@@ -217,17 +218,17 @@ export interface CardPlacement { x: number; y: number; side: 'right' | 'left' | 
  * else above; vertically (horizontally) centred on the node and clamped inside the viewport below the bar; when no side fits (a tiny
  * screen) the side with the most room, clamped (it may then cover the node). Pure (map-card.test.ts).
  */
-void travelBlock; // (used by the overlay below)
 export function placeCard(anchor: Pt, r: number, card: {w: number; h: number}, view: {w: number; h: number; top: number}, o: {gap?: number; margin?: number} = {}): CardPlacement {
   const gap = o.gap ?? 14, m = o.margin ?? 10;
   const lo = {x: m, y: view.top + m}, hi = {x: view.w - m - card.w, y: view.h - m - card.h};
   const clamp = (v: number, a: number, b: number) => (b < a ? a : Math.min(b, Math.max(a, v)));
   const cy = clamp(anchor.y - card.h / 2, lo.y, hi.y), cx = clamp(anchor.x - card.w / 2, lo.x, hi.x);
   const right = anchor.x + r + gap, left = anchor.x - r - gap - card.w, below = anchor.y + r + gap, above = anchor.y - r - gap - card.h;
-  if (right <= hi.x) return {x: right, y: cy, side: 'right'};
-  if (left >= lo.x) return {x: left, y: cy, side: 'left'};
-  if (below <= hi.y) return {x: cx, y: below, side: 'below'};
-  if (above >= lo.y) return {x: cx, y: above, side: 'above'};
+  const fits = (v: number, a: number, b: number) => v >= a && v <= b;
+  if (fits(right, lo.x, hi.x)) return {x: right, y: cy, side: 'right'};
+  if (fits(left, lo.x, hi.x)) return {x: left, y: cy, side: 'left'};
+  if (fits(below, lo.y, hi.y)) return {x: cx, y: below, side: 'below'};
+  if (fits(above, lo.y, hi.y)) return {x: cx, y: above, side: 'above'};
   const room = [view.w - (anchor.x + r), anchor.x - r, view.h - (anchor.y + r), anchor.y - r - view.top];
   const best = room.indexOf(Math.max(...room));
   const want = [{x: right, y: cy}, {x: left, y: cy}, {x: cx, y: below}, {x: cx, y: above}][best];
@@ -525,6 +526,9 @@ export interface PaperMapOpen {
   onCheat?: () => CampaignState | void;
 }
 
+/** The details card's width (CSS px; narrower screens: the viewport minus a margin) and its height when it cannot be measured. */
+const CARD_W = 300, CARD_H_GUESS = 170;
+
 const CSS = `
 #papermap { position: fixed; inset: 0; z-index: 70; background: rgba(10, 9, 8, 0.9); color: var(--cream, #ece4cf); overflow: hidden; outline: none; user-select: none; -webkit-user-select: none; touch-action: none; }
 #papermap.pm-hidden, #papermap .pm-hidden { display: none; }
@@ -550,9 +554,11 @@ const CSS = `
 #papermap .pm-mode { color: var(--cream-dim, #b9b19c); font-size: 12.5px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #papermap .pm-tools { display: flex; gap: 6px; }
 #papermap .pm-tools button { padding: 5px 11px; font-size: 14px; min-width: 34px; min-height: 32px; }
-#papermap .pm-panel { position: absolute; right: 14px; bottom: 40px; width: min(330px, calc(100vw - 28px)); background: rgba(16, 18, 20, 0.95); border: 1px solid #3a3f44; border-top: 3px solid var(--teal, #4f8a87); padding: 11px 14px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); font-size: 13px; }
+#papermap .pm-panel { position: absolute; left: 0; top: 0; width: min(${CARD_W}px, calc(100vw - 24px)); box-sizing: border-box; background: rgba(16, 18, 20, 0.95); border: 1px solid #3a3f44; border-top: 3px solid var(--teal, #4f8a87); padding: 11px 14px 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); font-size: 13px; }
 #papermap .pm-p-name { font-size: 18px; font-weight: 700; letter-spacing: 0.02em; }
-#papermap .pm-p-kind { color: var(--mustard, #d9a520); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; }
+#papermap .pm-p-name { overflow-wrap: anywhere; }
+#papermap .pm-p-kind { color: var(--mustard, #d9a520); font-size: 12px; letter-spacing: 0.1em; text-transform: uppercase; margin-top: 2px; display: flex; align-items: center; gap: 7px; }
+#papermap .pm-p-kind svg { flex: none; width: 18px; height: 18px; background: #e2d3ae; border-radius: 3px; }
 #papermap .pm-p-kind.pm-reactor-kind { color: #e0574b; }
 #papermap .pm-p-lines { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 8px; color: var(--cream-dim, #b9b19c); }
 #papermap .pm-p-lines i { display: inline-block; width: 18px; height: 6px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
@@ -560,10 +566,10 @@ const CSS = `
 #papermap .pm-p-note { margin-top: 4px; color: var(--cream-dim, #b9b19c); font-size: 12px; }
 #papermap .pm-p-actions { display: flex; gap: 8px; margin-top: 10px; }
 #papermap .pm-p-actions button { flex: 1; padding: 9px 12px; }
-#papermap .pm-help { position: absolute; left: 12px; bottom: 10px; right: 360px; color: var(--cream-dim, #b9b19c); font-size: 11.5px; text-shadow: 0 1px 2px #000; pointer-events: none; }
+#papermap .pm-help { position: absolute; left: 12px; bottom: 10px; right: 12px; color: var(--cream-dim, #b9b19c); font-size: 11.5px; text-shadow: 0 1px 2px #000; pointer-events: none; }
 #papermap .pm-note { position: absolute; left: 50%; top: 56px; transform: translateX(-50%); background: rgba(16, 18, 20, 0.92); border: 1px solid #3a3f44; padding: 6px 12px; font-size: 13px; color: var(--mustard, #d9a520); pointer-events: none; }
 #papermap .pm-live { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-@media (max-width: 720px) { #papermap .pm-help { display: none; } #papermap .pm-panel { right: 8px; left: 8px; width: auto; bottom: 8px; } }
+@media (max-width: 720px) { #papermap .pm-help { display: none; } }
 `;
 let styled = false;
 
@@ -595,7 +601,7 @@ export class PaperMap {
   private readonly onKey = (e: KeyboardEvent) => this.handleKey(e);
   private readonly onBlur = () => this.matcher.reset();
   private readonly onVisibility = () => this.matcher.reset();
-  private readonly onResize = () => { if (this.openFlag) { this.clampView(); this.render(); } };
+  private readonly onResize = () => { if (this.openFlag) { this.clampView(); this.render(); this.positionCard(); } };
   private readonly onMove = (e: PointerEvent) => this.pointerMove(e);
   private readonly onUp = (e: PointerEvent) => this.pointerUp(e);
 
@@ -674,7 +680,8 @@ export class PaperMap {
     if (!this.openFlag || !st) return false;
     if (!this.selectable(id)) {
       const n = st.network.nodes.find(x => x.id === id);
-      if (n && visibleNodes(st).some(x => x.id === id)) this.say(id === st.current ? `You are here: ${n.name}` : `${n.name} is not one stop from here`);
+      const why = this.mode === 'travel' ? travelBlock(st, id) : null;
+      if (n && visibleNodes(st).some(x => x.id === id)) this.say(id === st.current ? `You are here: ${n.name}` : why === 'no-route' ? `${n.name} is not available — no explored route from here` : `${n.name} is not one stop from here`);
       return false;
     }
     this.selected = id;
@@ -840,15 +847,16 @@ export class PaperMap {
 
   private applyTransform(): void {
     if (this.sheet) this.sheet.style.transform = `translate(${n1(this.view.tx)}px, ${n1(this.view.ty)}px) scale(${this.view.s.toFixed(4)})`;
+    this.positionCard(); // the card follows its node through every pan / zoom
   }
 
-  /** Pan so that station `id` is on screen (clear of the bar and the details panel). */
+  /** Pan so that station `id` is on screen (clear of the bar and the screen edges; the card then finds its own side). */
   private ensureVisible(id: StationId): void {
     const p = this.paperPositions().get(id);
     if (!p) return;
     const {w, h} = this.viewport(), v = this.view;
     const sx = p.x * v.s + v.tx, sy = p.y * v.s + v.ty;
-    const right = w > 720 ? w - 360 : w - 30, bottom = w > 720 ? h - 40 : h - 230;
+    const right = w - 40, bottom = h - 40;
     let dx = 0, dy = 0;
     if (sx < 40) dx = 40 - sx; else if (sx > right) dx = right - sx;
     if (sy < BAR_H + 40) dy = BAR_H + 40 - sy; else if (sy > bottom) dy = bottom - sy;
@@ -931,31 +939,68 @@ export class PaperMap {
     if (mode) {
       const here = st.network.nodes.find(n => n.id === st.current);
       mode.textContent = this.mode === 'travel'
-        ? `${here ? `At ${here.name}` : ''} · pick a station one stop away, then Depart${st.cheat ? ' · ALL STATIONS OPEN' : ''}`
+        ? `${here ? `At ${here.name}` : ''} · pick a station one stop away or any visited station, then Depart${st.cheat ? ' · ALL STATIONS OPEN' : ''}`
         : `View only — travel from the train's console${st.cheat ? ' · ALL STATIONS OPEN' : ''}`;
     }
   }
 
+  /** The details card: name, type icon + type, lines, visited / route state, actions; then placed beside its node. */
   private renderPanel(): void {
     const p = this.panel, st = this.state;
     if (!p || !st) return;
     const id = this.selected;
     const n = id ? st.network.nodes.find(x => x.id === id) : null;
-    if (!n) { p.classList.add('pm-hidden'); p.innerHTML = ''; return; }
-    const lines = st.network.lines.filter(l => n.lines.includes(l.id));
+    if (!n) { p.classList.add('pm-hidden'); p.innerHTML = ''; this.card = null; return; }
+    const kind = stationKind(n, st.network);
+    const mrShown = visibleNodes(st).some(x => stationKind(x, st.network) === 'maintenance');
+    const lines = st.network.lines.filter(l => n.lines.includes(l.id) && (!isServiceLine(l) || mrShown));
     const seen = new Set<string>();
-    const lineHtml = lines.filter(l => !seen.has(l.name) && (seen.add(l.name), true)).map(l => `<span><i style="background:${esc(l.color)}"></i>${esc(l.name)}</span>`).join('');
+    const lineHtml = lines.filter(l => !seen.has(l.name) && (seen.add(l.name), true)).map(l => isServiceLine(l)
+      ? `<span><i style="background:repeating-linear-gradient(90deg, ${esc(l.color)} 0 5px, transparent 5px 8px)"></i>${esc(l.name)}</span>`
+      : `<span><i style="background:${esc(l.color)}"></i>${esc(l.name)}</span>`).join('');
     const adjacent = neighbors(st.network, st.current).includes(n.id);
     const visited = st.visited.includes(n.id);
-    const state = `${visited ? 'Visited' : 'Not visited yet'}${adjacent ? ' · one stop from here' : st.cheat ? ' · far away (cheat route)' : ''}`;
-    const reactor = n.archetype === 'reactor';
-    const actions = this.mode === 'travel' && canTravel(st, n.id)
+    const plan = this.mode === 'travel' ? travelPlan(st, n.id) : null;
+    const name = (sid: StationId) => st.network.nodes.find(x => x.id === sid)?.name ?? sid;
+    let state = visited ? 'Visited' : 'Not visited yet';
+    if (plan && plan.hops > 1) {
+      const via = plan.route.slice(1, -1).map(name);
+      state += ` · ${plan.hops} stops via ${via.length > 3 ? `${via.slice(0, 2).join(', ')} and ${via.length - 2} more` : via.join(', ')}`;
+    } else if (adjacent) state += ' · one stop from here';
+    else if (st.cheat) state += ' · far away (cheat route)';
+    const reactor = kind === 'reactor';
+    const icon = `<svg viewBox="-11 -11 22 22" aria-hidden="true">${stationGlyph(kind, {x: 0, y: 0}, reactor ? 9 : 6.5, kind !== 'reactor' && visited)}</svg>`;
+    const kindText = kind === 'maintenance' ? `${kindLabel(kind)} · ${archetypeLabel(n.archetype)}` : archetypeLabel(n.archetype);
+    const note = reactor ? 'The Reactor: the endgame encounter.'
+      : kind === 'maintenance' ? 'A service bypass round the Reactor: the network goes on without entering it.' : '';
+    const actions = this.mode === 'travel' && plan
       ? `<div class="pm-p-actions"><button type="button" class="pm-depart primary">Depart</button><button type="button" class="pm-cancel">Cancel</button></div>`
       : `<div class="pm-p-note">View only — travel from the train's console.</div><div class="pm-p-actions"><button type="button" class="pm-cancel">Close details</button></div>`;
-    p.innerHTML = `<div class="pm-p-name">${esc(n.name)}</div><div class="pm-p-kind${reactor ? ' pm-reactor-kind' : ''}">${esc(archetypeLabel(n.archetype))}</div>`
+    p.innerHTML = `<div class="pm-p-name">${esc(n.name)}</div><div class="pm-p-kind${reactor ? ' pm-reactor-kind' : ''}">${icon}<span>${esc(kindText)}</span></div>`
       + `<div class="pm-p-lines">${lineHtml}</div><div class="pm-p-state">${esc(state)}</div>`
-      + (reactor ? `<div class="pm-p-note">The Reactor: the end of the line.</div>` : '') + actions;
+      + (note ? `<div class="pm-p-note">${esc(note)}</div>` : '') + actions;
     p.classList.remove('pm-hidden');
+    this.positionCard();
+  }
+
+  /** Where the card stands now (screen px; QA / tests). */
+  card: (CardPlacement & {w: number; h: number}) | null = null;
+
+  /** Place the details card beside the selected node (screen = paper * s + t), inside the viewport (placeCard). Never moves the print. */
+  private positionCard(): void {
+    const p = this.panel, id = this.selected;
+    if (!p || !id || p.classList.contains('pm-hidden')) { this.card = null; return; }
+    const pt = this.paperPositions().get(id);
+    if (!pt) return;
+    const v = this.view, {w, h} = this.viewport();
+    const st = this.model?.stations.find(x => x.node.id === id);
+    const r = ((st?.r ?? DOT_R) + 13) * v.s; // clear of the pencilled selection ring
+    const el = p as HTMLElement & {offsetWidth?: number; offsetHeight?: number};
+    const cw = el.offsetWidth || Math.min(CARD_W, w - 24), ch = el.offsetHeight || CARD_H_GUESS;
+    const c = placeCard({x: pt.x * v.s + v.tx, y: pt.y * v.s + v.ty}, r, {w: cw, h: ch}, {w, h, top: BAR_H});
+    p.style.transform = `translate(${Math.round(c.x)}px, ${Math.round(c.y)}px)`;
+    p.setAttribute('data-side', c.side);
+    this.card = {...c, w: cw, h: ch};
   }
 
   private say(text: string): void {
@@ -1086,6 +1131,10 @@ export class PaperMap {
       cheat: !!this.state?.cheat, reactorShown: !!m?.reactorShown, view: this.viewState,
       shown: m?.stations.map(s => s.node.id) ?? [], selectable: m?.stations.filter(s => s.can).map(s => s.node.id) ?? [],
       labels: m ? [...m.labels.values()].filter(Boolean).length : 0, hiddenLabels: m ? [...m.labels].filter(([, l]) => !l).map(([id]) => id) : [],
+      // (lane MAP) the card beside the selected node, the selected trip's route, the icons printed per kind
+      card: this.card ? {...this.card} : null, route: this.selected && this.state && this.mode === 'travel' ? travelPlan(this.state, this.selected)?.route ?? null : null,
+      kinds: m ? m.stations.reduce<Record<string, number>>((c, s) => ({...c, [s.kind]: (c[s.kind] ?? 0) + 1}), {}) : {},
+      maintenanceShown: !!m?.maintenanceShown,
     };
   }
 }
