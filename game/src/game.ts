@@ -115,6 +115,7 @@ import {PLAYER_TRAIN_SPEC} from './world/playerTrainSpec';
 // --- end save / load (lane SAVE) imports ---
 import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
+import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -284,6 +285,11 @@ export class Game {
   readonly trainRuntime: PlayerTrainRuntime;
   /** Task train-lockbox-windows-20261101-232156 (lane BOX): the Lockbox transfer view / developer drop (ui/lockboxView.ts); the store is playerTrain.lockbox. */
   readonly lockbox: LockboxSystem;
+  /**
+   * Task studio-alpha-campaign-foundation-20261102-230708-01 (lane RIDE): the MOVING train (world/trainRide.ts) — depart() / arrive() /
+   * enterTransit() for the primary's travel orchestration; while it rides, update() steps the player through it (car-local frame).
+   */
+  readonly trainRide: TrainRide;
   /**
    * Task gasmask-breach-20261030 (lane GAS): a bullet / pellet's world hit, offered before the damage system — true = handled (no
    * crater / prop damage), e.g. an office window pane took it. `shot` = the trigger pull (every pellet of one pull shares it);
@@ -506,6 +512,9 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
+    // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
+    // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
+    this.trainRide = installTrainRide(this, this.trainRuntime);
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
@@ -831,7 +840,11 @@ export class Game {
     const pose = arrivalPose(this.layout, arrival, this.trainPlacement);
     const lv = pose.level !== undefined && pose.level > 0 && pose.level < this.levels.count ? pose.level : 0;
     const y = pose.y ?? this.levels.grid(lv).floorAt(pose.x, pose.z); // Lane B: the arrival's own storey
-    if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
+    // (lane RIDE) a player riding the moving train keeps their car-local pose: the ride writes the world pose every frame (a NEW game
+    // ends any ride first)
+    if (fresh) this.trainRide?.reset();
+    if (this.trainRide?.riding) { /* the car drives into this station; TrainRide.arrive() parks it at trainPlacement */ }
+    else if (fresh) this.player.spawn(pose.x, pose.z, pose.yaw, y); else this.player.place(pose.x, pose.z, pose.yaw, y);
     this.ladderAim = null;
     this.recoilPitch = this.recoilYaw = this.bloom = this.shake = 0;
     this.lightSources.clear(); // Iteration 12: lights of the previous section (the flashlight / body glow re-register on the next update)
@@ -1707,6 +1720,7 @@ export class Game {
 
   /** Drop `count` (default: all) of a slot on the floor in front of the player (inventory drag-out / Drop / Delete; G no longer drops). */
   dropRef(ref: SlotRef, count?: number): void {
+    if (this.trainRide?.refuseDrop()) { this.sfx.denied(); return; } // (lane RIDE) nothing is dropped from the moving car (the Lockbox holds things)
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
@@ -1872,10 +1886,13 @@ export class Game {
     const wdef = heldDef?.kind === 'weapon' ? WEAPONS[heldDef.weaponId!] : null;
     // Iteration 15: flares are readied while G (INTERACT #6; was T) / left click (flare in hand) is held and thrown on release (weapons/flareHold.ts)
     const laneOwns = this.inputOwners.some(f => f()); // Iteration 16 (lane GEAR): a readied / open backpack owns the mouse buttons
+    // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
+    // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
+    const rideHolster = this.trainRide.blocksWeapons;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G
-      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns,
+      heldIsFlare: heldDef?.kind === 'throwable' && held?.itemId === 'flare', busy: !!this.use || this.consumeView.busy || p.climbing || laneOwns || rideHolster,
       flares: this.inv.count('flare'), refusal: this.flares.refusal(), clears: inp.clears,
     })) {
       if (e.type === 'ready') { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
@@ -1886,12 +1903,15 @@ export class Game {
       if ((e.type === 'release' || e.type === 'cancel') && inp.mouse[0]) this.lmbLatch = true; // never bleeds into the gun
     }
     const flareOwns = this.flareHold.active || this.lmbLatch || laneOwns;
+    if (rideHolster && !flareOwns && ((inp.mousePressed[0] && (wdef || heldDef?.kind === 'throwable')) || inp.hit('KeyG') || inp.hit('KeyT'))) this.trainRide.refuseFire(); // (lane RIDE) the note
     // A fresh sprint (Shift while moving forward) interrupts a timed use. Until the consume view has
     // brought the gun back up it stays lowered: no aiming, firing or reloading.
     if (this.use && (inp.hit('ShiftLeft') || inp.hit('ShiftRight')) && (inp.down('KeyW') || inp.down('ArrowUp'))) this.cancelUse('sprint');
     const vmBusy = !!this.use || this.consumeView.busy;
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
-    const step = p.update(dt, inp, this.levels, this.propIndex, {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]});
+    const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
+    // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
+    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -1904,7 +1924,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns, pressed: inp.mousePressed[0] && !flareOwns, reload: inp.hit('KeyR') && !vmBusy,
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy, // (lane RIDE: holstered)
         lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
         if (e.type === 'fire') this.fire(e.def);
@@ -1987,17 +2007,19 @@ export class Game {
     const eye = this.camera.getWorldPosition(new THREE.Vector3());
     const look = this.forward();
     const reachWorld = this.levels.count > 1 ? this.levels : this.layout.grid; // Lane B: 3D occlusion on stacked levels
-    this.currentTarget = this.pickups.target(eye, look, reachWorld);
+    // (lane RIDE) from the moving car nothing of the station is in reach (the car's walls are not in the station's occlusion)
+    const reachEye = this.trainRide.riding ? new THREE.Vector3(0, 1e6, 0) : eye;
+    this.currentTarget = this.pickups.target(reachEye, look, reachWorld);
     // Containers under the crosshair within reach; a closer targeted floor pickup wins.
     const tp = this.currentTarget;
-    this.containerTarget = this.containers?.target(eye, look, reachWorld, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
+    this.containerTarget = this.containers?.target(reachEye, look, reachWorld, tp ? Math.hypot(tp.x - eye.x, tp.y + 0.08 - eye.y, tp.z - eye.z) : Infinity) ?? null;
     // Iteration 07 (Lane K): a loose item resting INSIDE a holder's box (shot down to a lower shelf tier) wins over the holder body.
     const ct = this.containerTarget;
     if (ct && !ct.lot && tp && tp.x > ct.container.min.x && tp.x < ct.container.max.x && tp.z > ct.container.min.z && tp.z < ct.container.max.z && tp.y + 0.08 < ct.container.max.y) this.containerTarget = null;
     // Container wins: clear the pickup target + its highlight (an unreachable eye matches nothing).
     if (this.containerTarget && tp) this.currentTarget = this.pickups.target(new THREE.Vector3(0, 1e6, 0), look, reachWorld);
     // Lane T: a rescue ladder under the crosshair (only when nothing else is targeted).
-    this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null;
+    this.ladderAim = !this.currentTarget && !this.containerTarget && !p.climbing && !this.trainRide.riding ? ladderTarget(this.layout.traversal.ladders, eye, look, p.y) : null; // (lane RIDE: none from the moving car)
     prof.lap(SPAN.items);
     this.pickups.update(this.time);
     this.containers?.update(dt, this.time);
@@ -2078,6 +2100,7 @@ export class Game {
     const t = this.time;
     // Iteration 16: `aimOffset` (lane INJURY: arm-injury sway) moves the real aim — shots, crosshair and the optic dot follow it
     this.camera.rotation.set(p.pitch + this.recoilPitch + this.aimOffset.pitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + this.aimOffset.yaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
+    this.trainRide?.tiltCamera(this.camera); // (lane RIDE) the moving car's roll / pitch (its jostle) on the view; no-op when not riding
     const targetFov = this.aiming ? (WEAPONS[this.weapon.def?.id ?? 'rifle']?.aimFov ?? 60) : this.settings.fov;
     const fov = this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 14 || 1);
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
