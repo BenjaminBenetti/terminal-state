@@ -225,7 +225,7 @@ export class ReactorSurface {
       shown: {...this.shown}, plan: p?.stats ?? null, drawn: v?.drawn ?? null, meshes: v ? v.instanced.length + 6 : 0, visibleMeshes: draws, tris: v?.tris ?? 0,
       rain: v ? {near: v.near.stats(), column: v.column.stats(), floor: {w: v.floor.w, h: v.floor.h}} : null, look: surfaceTune(tune ?? {}), fogDefault: REACTOR_FOG,
       caps: {nearDrops: SURFACE_RAIN.near.count, columnDrops: SURFACE_RAIN.column.count},
-      plant: this.plantView ? {...this.plantView.stats, started: this.plantView.started, speed: this.plantView.fans.map(f => +f.speed.toFixed(3)), angle: this.plantView.fans.map(f => +f.angle.toFixed(3))} : null,
+      plant: this.plantView ? {...this.plantView.stats, towers: (this.plant?.towers ?? []).map(t => ({x: t.x, z: t.z, h: t.h})), started: this.plantView.started, speed: this.plantView.fans.map(f => +f.speed.toFixed(3)), angle: this.plantView.fans.map(f => +f.angle.toFixed(3))} : null,
     };
   }
 }
