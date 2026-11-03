@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-beanie-t25.glb",
       "bytes": 340436,
-      "sha256": "3f693eec5ec9f05b7d052327e48379d769fea73ed7ec6c75d5a8cc90fbd2813f",
+      "sha256": "0d2f80988ad2db03a80e93f2bfc1fbbb57133b68fbc444bb8e04cf31b7cd607f",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -203,7 +203,7 @@
         26,
         30
       ],
-      "workers": 32
+      "workers": 24
     },
     "textures": {
       "baseColor": 512,
@@ -1272,7 +1272,7 @@
           "Walk": 4,
           "Attack": 8,
           "Run": 2,
-          "Death": 4
+          "Hit": 2
         },
         "poses": 85
       }
@@ -1434,7 +1434,7 @@
         "over3x": 0,
         "fractionOver": 0,
         "worstClips": {
-          "Death": 4,
+          "Death": 2,
           "Attack": 4,
           "Run": 8,
           "Walk": 6,

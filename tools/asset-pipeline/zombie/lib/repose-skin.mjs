@@ -127,6 +127,8 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
     sides[s] = {armFromVerticalDegBefore: +now.toFixed(1), rotationDeg: +(-sg * delta).toFixed(1), shoulderJointM: r4(J[s + '_UpperArm']), wristJointM: r4(J[s + '_Hand'])};
   }
   const world = rig.fk({hips: [0, 0, 0], rot});
+  // the T-rig's elbow / wrist carried into the A-pose bind (FK of the same rotation): offered to the A-pose skeleton
+  const armJointsA = Object.fromEntries(['L', 'R'].map(s => [s, {elbow: r4(world[s + '_Forearm'].pos), wrist: r4(world[s + '_Hand'].pos)}]));
   const Pw = skinPositions({pos: welded.pos, joints: sw.joints, weights: sw.weights}, skel, world);
   for (const s of ['L', 'R']) { const d = V.sub(world[s + '_Hand'].pos, world[s + '_UpperArm'].pos); sides[s].armFromVerticalDegAfter = +(Math.atan2((s === 'L' ? 1 : -1) * d[0], -d[1]) * 180 / Math.PI).toFixed(1); }
   // back to native: inverse of similarity(scale, pivot, flipFacing, offset 0)
@@ -145,7 +147,7 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
   if (hairWeights) for (let i = 0; i < hairWeights.length; i++) if (hairWeights[i]) for (let k = 0; k < 4; k++) if (ARM.has(sw.joints[i * 4 + k]) && sw.weights[i * 4 + k] > 0) { hairArm++; break; }
   const b0 = bounds(master.pos), b1 = bounds(out);
   const log = {version: 'skin-1', method: 'linear-blend-skinning repose (lib/repose-skin.mjs): T-pose skeleton (enemy/lib/tpose-skeleton.mjs, dense surface samples, hair ignored) + shared zombie skin weights with the hair post-pass (enemy/lib/siren-skin.mjs bodyWeights); each UpperArm rolled about +Z through its shoulder joint to the A-pose bind angle; topology / UVs / textures unchanged',
-    upperArmFromVerticalDeg, analysisHeightM: heightM, facing: fd, sides, verticesMoved: moved, vertices: nN,
+    upperArmFromVerticalDeg, analysisHeightM: heightM, facing: fd, sides, armJointsA, verticesMoved: moved, vertices: nN,
     chestWallGuard: guard,
     hair: hair ? {rule: hair, nativeVertices: hairV.reduce((a, b) => a + b, 0), weldedVertices: hairW.reduce((a, b) => a + b, 0), weightMask: hairCut, weldedHairVerticesWithArmWeights: hairArm, weights: sw.stats.hair} : null,
     skeletonT: {joints: Object.fromEntries(Object.entries(J).map(([k, v]) => [k, r4(v)])), log: skel.log},
@@ -153,5 +155,5 @@ export async function reposeTtoAskinned(master, {heightM, hair = null, upperArmF
   // hair flags per native vertex (the weight mask: colour rule, medial of the shoulders, dilated) for the A-pose stage: left out
   // of the skeleton measurements and kept off the arm chains by the final skinning (lib/autorig.mjs bodyStage / bodySkin)
   const hairFlags = hairWeights ? Uint8Array.from({length: nN}, (_, i) => hairWeights[map[i]]) : null;
-  return {...master, pos: out, nrm: computeNormals(out, master.idx), repose: log, ...(hairFlags ? {hairMask: hairFlags} : {})};
+  return {...master, pos: out, nrm: computeNormals(out, master.idx), repose: {...log}, armJointsA, ...(hairFlags ? {hairMask: hairFlags} : {})};
 }

@@ -106,7 +106,7 @@
     "glb": {
       "path": "game/public/assets/models/outfit-slacks-t25.glb",
       "bytes": 876052,
-      "sha256": "1b438ebc903ac2bb04ecd9c47c5fdffbb87b979d63597d554438075acfe83da1",
+      "sha256": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
       "format": "glTF 2.0 binary; shared material/texture + shared TEXCOORD_0/index accessors; one SkinnedMesh per body (own POSITION/NORMAL/JOINTS_0/WEIGHTS_0 + skin over that body's joints); scene extras zombieWearable"
     }
   },
@@ -209,7 +209,7 @@
         101,
         26
       ],
-      "workers": 32
+      "workers": 16
     },
     "textures": {
       "baseColor": 1024,
@@ -636,7 +636,7 @@
           "droppedNotCoveredInEveryPose": 165
         },
         "layers": [],
-        "ms": 9817
+        "ms": 8868
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1040,7 +1040,7 @@
           "droppedNotCoveredInEveryPose": 59
         },
         "layers": [],
-        "ms": 8787
+        "ms": 7436
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1412,7 +1412,7 @@
           "droppedNotCoveredInEveryPose": 70
         },
         "layers": [],
-        "ms": 8270
+        "ms": 8732
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -1820,7 +1820,7 @@
           "droppedNotCoveredInEveryPose": 112
         },
         "layers": [],
-        "ms": 9281
+        "ms": 8245
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2144,7 +2144,7 @@
           "droppedNotCoveredInEveryPose": 188
         },
         "layers": [],
-        "ms": 7062
+        "ms": 7220
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2469,7 +2469,7 @@
           "droppedNotCoveredInEveryPose": 31
         },
         "layers": [],
-        "ms": 5734
+        "ms": 5896
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -2825,7 +2825,7 @@
           "droppedNotCoveredInEveryPose": 18
         },
         "layers": [],
-        "ms": 5669
+        "ms": 5985
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -3165,7 +3165,7 @@
           "droppedNotCoveredInEveryPose": 63
         },
         "layers": [],
-        "ms": 5490
+        "ms": 5540
       },
       "bulkMBeforeRefit": {
         "torso": 0,
@@ -3179,7 +3179,7 @@
       },
       "motionStretch": {
         "triangles": 5985,
-        "p50": 1.06,
+        "p50": 1.059,
         "p99": 1.876,
         "max": 2.36,
         "over2x": 38,

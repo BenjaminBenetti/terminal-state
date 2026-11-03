@@ -46,7 +46,9 @@ const summary = {
   models: files, audit: {before: before ? before.models : MERGE.audit.before, after: MERGE ? MERGE.audit.after : after.models, every: after.every},
   ...(MERGE ? {merges: [...(MERGE.merges ?? []), {generatedAt: new Date().toISOString(), task: args.task ?? null, models: after.models, every: after.every,
     added: {pairs: Object.keys(A0.pairs).length, layering: Object.keys(A0.layering).length, bodyUnderLayers: Object.keys(A0.bodyUnderLayers).length}, keys: Object.keys(after.results).sort(),
-    note: 'incremental: only these keys were re-audited on the rebuilt GLBs; every other entry is the previous audit of per-body variant meshes that are byte-identical in the rebuilt files (verified by the merging task)'}]} : {}),
+    note: ['pairs', 'layering', 'bodyUnderLayers'].every(g => Object.keys(MERGE.after[g]).every(k => k in A0[g]))
+      ? 'full re-audit of every shipped pair / layering on the rebuilt GLBs (the previous after block is fully replaced); the iteration-06 before block is kept from the previous summary'
+      : 'incremental: only these keys were re-audited on the rebuilt GLBs; every other entry is the previous audit of per-body variant meshes that are byte-identical in the rebuilt files (verified by the merging task)'}]} : {}),
   after: {pairs: A.pairs, layering: A.layering, bodyUnderLayers: A.bodyUnderLayers,
     aggregate: {garments: agg(A.pairs, ['upper', 'lower']), headwear: agg(A.pairs, ['head']), face: agg(A.pairs, ['face'])}},
   before: before ? {pairs: Bf.pairs, aggregate: {garments: agg(Bf.pairs, ['upper', 'lower']), headwear: agg(Bf.pairs, ['head']), face: agg(Bf.pairs, ['face'])},
