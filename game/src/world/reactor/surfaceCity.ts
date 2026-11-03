@@ -5,6 +5,9 @@
 // Budget: one InstancedMesh per (kit model part x quadrant round the aperture: frustum culling drops whole quadrants) — the kit's
 // GLB geometry is shared with the lazy library, never copied; the ground, the film, the sky dome, the tank stands and each rain
 // layer are one mesh each. No shadow casters. Materials: surfaceLook.ts (one per model map) and the rain's own.
+// Task reactor-surface-redesign-credits-20261103 (lane CITY): the far skyline's entries (surfaceKit.ts `skyline`: the outer blocks and
+// the outskirts belt, 150-280 m out) are their own instanced meshes in finer SECTORS (SURFACE_SECTORS.far) — the far band is where the
+// triangles are, so the frustum drops more of it; the same shared geometry and the same cached materials (no new permutation).
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -16,12 +19,17 @@ import type {SurfaceSite} from './surfaceSite';
 import {SURFACE_RAIN, RainLayer, buildRainFloor, rainFloorTexture, type RainFloorMap} from './surfaceRain';
 import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial, surfaceWallMaterial} from './surfaceLook';
 
-/** Sky dome radius (follows the eye; inside the outdoor far plane surface.ts SURFACE_RT.far 360, beyond every building and the ground disc). */
-export const SURFACE_SKY = {radius: 320} as const;
+/**
+ * Sky dome radius (follows the eye). Inside the outdoor far plane (surface.ts SURFACE_RT.far 360: the dome's nearest facet, ~0.99 R,
+ * and its farthest vertex, R, both in front of it) and beyond every building from anywhere on the plaza: the city's farthest footprint
+ * corner (SURFACE_CITY.maxR round the aperture) + the plaza's reach from the aperture, up to the tallest roof (tests pin it). The ground
+ * disc (SURFACE_CITY.ground) runs on under the dome to its horizon.
+ */
+export const SURFACE_SKY = {radius: 352} as const;
 /** The ground sits this far under the walk height (lane ENDING's floor covers it on the walk area); the film this far above. */
 export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT} as const;
-
-const QUADS = 4;
+/** Culling sectors round the aperture: the near city's entries per quadrant, the far skyline's per octant. */
+export const SURFACE_SECTORS = {near: 4, far: 8} as const;
 
 export interface SurfaceView {
   root: THREE.Group;
@@ -44,16 +52,20 @@ export interface SurfaceView {
   tris: number;
 }
 
-const quadOf = (cx: number, cz: number, x: number, z: number): number => {
+/** The sector (0..n-1) of (x, z) round the centre. */
+export const sectorOf = (cx: number, cz: number, x: number, z: number, n: number): number => {
   const a = Math.atan2(z - cz, x - cx);
-  return ((Math.floor(((a + Math.PI) / (Math.PI * 2)) * QUADS) % QUADS) + QUADS) % QUADS;
+  return ((Math.floor(((a + Math.PI) / (Math.PI * 2)) * n) % n) + n) % n;
 };
 const triCount = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.attributes.position.count) / 3;
 
-/** The street-mask rows (CPU side of the ground shader's lookup; surfacePlan.ts streetMaskAt mirrors the value). */
-export function streetMaskRows(plan: Pick<SurfaceCityPlan, 'xGaps' | 'zGaps' | 'centre' | 'groundR'>): {rows: Float32Array; texels: number; x0: number; z0: number; cell: number} {
-  const cell = SURFACE_LAYERS.maskCell, texels = Math.ceil((plan.groundR * 2) / cell) + 2;
-  const x0 = plan.centre.x - plan.groundR - cell, z0 = plan.centre.z - plan.groundR - cell;
+/**
+ * The street-mask rows (CPU side of the ground shader's lookup; surfacePlan.ts streetMaskAt mirrors the value). They span the street
+ * grid's circle (plan.streetsR): beyond it the shader's fade has already taken the streets out.
+ */
+export function streetMaskRows(plan: Pick<SurfaceCityPlan, 'xGaps' | 'zGaps' | 'centre' | 'streetsR'>): {rows: Float32Array; texels: number; x0: number; z0: number; cell: number} {
+  const cell = SURFACE_LAYERS.maskCell, R = plan.streetsR, texels = Math.ceil((R * 2) / cell) + 2;
+  const x0 = plan.centre.x - R - cell, z0 = plan.centre.z - R - cell;
   const rows = new Float32Array(texels * 2);
   const fill = (gaps: readonly (readonly [number, number])[], o: number, row: number) => {
     for (let i = 0; i < texels; i++) {
@@ -223,8 +235,9 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
     const gltf = list.length ? models(e.key) : undefined;
     if (!gltf) continue;
     drawn[e.id] = list.length;
-    const byQuad: (typeof list)[] = Array.from({length: QUADS}, () => []);
-    for (const p of list) byQuad[quadOf(cx, cz, p.x, p.z)].push(p);
+    const nq = e.skyline ? SURFACE_SECTORS.far : SURFACE_SECTORS.near;
+    const byQuad: (typeof list)[] = Array.from({length: nq}, () => []);
+    for (const p of list) byQuad[sectorOf(cx, cz, p.x, p.z, nq)].push(p);
     for (const [pi, part] of modelParts(gltf).entries()) {
       const mat = surfaceModelMaterial(part.material);
       byQuad.forEach((ql, qi) => addInstanced(`reactor-surface-${e.id}-${pi}-q${qi}`, part.geometry, mat,
@@ -242,6 +255,7 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   own.textures.push(maskTex);
   SURF_U.maskXf.value.set(rows.x0, rows.z0, rows.cell, rows.texels);
   SURF_U.yard.value.set(plan.plaza.x0, plan.plaza.z0, plan.plaza.x1, plan.plaza.z1);
+  SURF_U.streets.value.set(cx, cz, plan.streetsR, SURFACE_CITY.streetFade);
   const gg = groundGeometry(site, plan);
   own.geometries.push(gg);
   const gmat = surfaceGroundMaterial(maskTex, concrete);
