@@ -41,7 +41,7 @@ describe('settings store: persistence', () => {
     const a = new SettingsStore(mem);
     a.set({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25});
     const b = new SettingsStore(mem);
-    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25});
+    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1});
     expect(b.loadReport.source).toBe('stored');
     expect(JSON.parse(mem.map.get(STORAGE_KEYS.settings)!).v).toBe(1);
   });
@@ -99,7 +99,7 @@ describe('settings store: invalid storage falls back sanely', () => {
     const mem = new MemStorage();
     mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.33}));
     const s = new SettingsStore(mem);
-    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertY: true, quality: 'high', renderScale: 1});
+    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertY: true, quality: 'high', renderScale: 1, trainSway: 1});
     expect(s.loadReport.source).toBe('invalid');
     expect([...s.loadReport.fixed].sort()).toEqual(['fov', 'muted', 'quality', 'renderScale', 'sens', 'volume']);
     // NaN / Infinity never survive (JSON has none, but a patch could carry them)
@@ -108,7 +108,7 @@ describe('settings store: invalid storage falls back sanely', () => {
 
   it('an older / partial record keeps what it has and defaults the rest (missing = not "fixed")', () => {
     const r = parseStoredSettings(JSON.stringify({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low'}));
-    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low', renderScale: 1});
+    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low', renderScale: 1, trainSway: 1});
     expect(r.source).toBe('stored');
   });
 
@@ -118,6 +118,20 @@ describe('settings store: invalid storage falls back sanely', () => {
     s.set({fov: 12, renderScale: 3 as never, quality: 'x' as never});
     expect(s.get()).toMatchObject({fov: 60, renderScale: 1, quality: 'high'});
     expect(parseStoredSettings(mem.map.get(STORAGE_KEYS.settings)!).source).toBe('stored');
+  });
+
+  it('train sway (the moving car\'s jostle on the view): 0..1, clamped, 0 = off survives a reload, copied into the game', () => {
+    const mem = new MemStorage();
+    const s = new SettingsStore(mem);
+    s.set({trainSway: 7});
+    expect(s.get().trainSway).toBe(1);
+    s.set({trainSway: -2});
+    expect(s.get().trainSway).toBe(0);
+    expect(new SettingsStore(mem).get().trainSway).toBe(0);
+    expect(parseStoredSettings(JSON.stringify({trainSway: 'x'})).fixed).toEqual(['trainSway']);
+    const target = {...SETTINGS_DEFAULTS};
+    copySettingsInto(target, {...SETTINGS_DEFAULTS, trainSway: 0.35});
+    expect(target.trainSway).toBe(0.35);
   });
 
   it('storage that throws: defaults, the settings still apply for the session, persistent = false, never throws', () => {
@@ -183,7 +197,7 @@ describe('render resolution: a linear scale over the existing DPR cap, composed 
   });
 
   it('copySettingsInto fills the game\'s Settings object and reports a quality change', () => {
-    const target = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high' as const, renderScale: 1 as const} as {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: 1 | 0.5 | 0.25};
+    const target = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high' as const, renderScale: 1 as const, trainSway: 1} as {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: 1 | 0.5 | 0.25; trainSway: number};
     expect(copySettingsInto(target, {...SETTINGS_DEFAULTS, fov: 90, renderScale: 0.5}).qualityChanged).toBe(false);
     expect(target).toMatchObject({fov: 90, renderScale: 0.5});
     expect(copySettingsInto(target, {...SETTINGS_DEFAULTS, quality: 'low'}).qualityChanged).toBe(true);

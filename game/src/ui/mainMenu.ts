@@ -788,6 +788,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   sync.push(range('fov', 'Field of view', B.fov.min, B.fov.max, B.fov.step, v => `${v.toFixed(0)}°`, s => s.fov, v => ({fov: v})));
   sync.push(range('vol', 'Master volume', 0, 100, 1, v => `${v} %`, s => volumePercent(s.volume), v => ({volume: volumeFromPercent(v)})));
   sync.push(check('mute', 'Mute audio (M)', 'muted'));
+  sync.push(range('sway', 'Train sway', 0, 100, 5, v => (v === 0 ? 'Off' : `${v} %`), s => Math.round(s.trainSway * 100), v => ({trainSway: v / 100})));
   // quality (its own documented effects only)
   {
     const l = label('Quality');

@@ -233,7 +233,7 @@ city in green fog, surface tracks, the player train; render only, no world state
 first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
 level is built before New game / Continue. Settings (sensitivity, invert, FOV 60-100, master volume 0-100 %, mute, quality,
 render resolution Native / Half / Quarter = a linear width-and-height scale over the DPR-capped native buffer, not a
-quality preset) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+quality preset, and train sway 0-100 % = the moving train's jostle on the view, 0 = off) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
 the same store. Dev deep links (`?level=`, `?seed=` …) never start a game: they pre-fill the menu's **Dev start** picker,
 which starts a normal new game at that level.
 

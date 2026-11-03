@@ -14,6 +14,7 @@
 //    only its own documented effects (that DPR cap, render/atmosphere.ts ATMOSPHERE_QUALITY: fog march scale / steps / shadow
 //    map / MSAA) and never overrides the scale: pixel ratio = nativePixelRatio(dpr, quality) x renderScale.
 //  - Master volume 0..1 (shown as 0-100 %) is what Sfx.setVolume takes; mute is separate and respected (Sfx.setMuted).
+//  - Train sway 0..1 (shown as 0-100 %; 0 = off): the moving train's jostle roll / pitch on the view (world/trainRide.ts).
 
 import {STORAGE_KEYS} from '../campaign/types';
 
@@ -33,23 +34,26 @@ export interface GameSettings {
   invertY: boolean;
   quality: Quality;
   renderScale: RenderScale;
+  /** The moving train's jostle on the view, 0..1 (0 = off; world/trainRide.ts scales RIDE_JOSTLE by it). */
+  trainSway: number;
 }
 
 /** The game's historical defaults (game.ts Settings) + native resolution. */
-export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1});
+export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1});
 
-/** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %. */
+/** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %, train sway 0-100 %. */
 export const SETTINGS_BOUNDS = {
   sens: {min: 0.2, max: 3, step: 0.05},
   fov: {min: 60, max: 100, step: 1},
   volume: {min: 0, max: 1, step: 0.01},
+  trainSway: {min: 0, max: 1, step: 0.05},
 } as const;
 
 /** Stored record version (a future incompatible layout bumps it; unknown versions are read field by field all the same). */
 export const SETTINGS_VERSION = 1;
 
 export type SettingsKey = keyof GameSettings;
-export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertY', 'quality', 'renderScale'];
+export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertY', 'quality', 'renderScale', 'trainSway'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -59,10 +63,10 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
   const d = SETTINGS_DEFAULTS[k];
   if (raw === undefined) return {value: d, fixed: false};
   switch (k) {
-    case 'sens': case 'fov': case 'volume': {
+    case 'sens': case 'fov': case 'volume': case 'trainSway': {
       const n = num(raw);
       if (n === null) return {value: d, fixed: true};
-      const b = SETTINGS_BOUNDS[k as 'sens' | 'fov' | 'volume'];
+      const b = SETTINGS_BOUNDS[k as 'sens' | 'fov' | 'volume' | 'trainSway'];
       const c = clamp(n, b.min, b.max);
       return {value: c as GameSettings[K], fixed: c !== n};
     }
@@ -270,9 +274,9 @@ export function browserSettingsStorage(): SettingsStorage | null {
 }
 
 /** Copy the effective settings into the game's Settings object (game.ts reads `game.settings.*`); true when render-affecting quality changed. */
-export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
+export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
   const qualityChanged = target.quality !== s.quality;
   target.sens = s.sens; target.fov = s.fov; target.volume = s.volume; target.muted = s.muted;
-  target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale;
+  target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
   return {qualityChanged};
 }

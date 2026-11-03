@@ -148,7 +148,7 @@ export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train w
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale }
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -188,7 +188,7 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1};
   // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
   /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
   menuRender: ((time: number) => boolean) | null = null;
@@ -531,8 +531,8 @@ export class Game {
     hookName('lockbox');
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
-    // (the jostle intensity reads an optional settings.jostle 0..1 when the primary's Settings grow one; else RIDE_JOSTLE.intensity)
-    this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => (this.settings as unknown as {jostle?: number}).jostle ?? 1});
+    // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
+    this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => this.settings.trainSway});
     this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
