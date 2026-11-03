@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 40519,
-      "sha256": "a5147c1c2dba42607adced08e3a1c660584e4cc4ca0b71afa9d8267c3dd959a4"
+      "bytes": 42462,
+      "sha256": "92d44a725aae5e5a35eaaa77921e109cb45780daa5a925f9ed4f7c1ff7d44dd3"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1652,6 +1652,11 @@
       "path": "assets/derivatives/mall-ad-art-20261101.json",
       "bytes": 18568,
       "sha256": "f0bae7fcceb82701d94b1b664ca8f403feecd9aeb0a4b28cc4c370d1e8e49491"
+    },
+    {
+      "path": "assets/derivatives/mall-lingerie-ad-art-20261103.json",
+      "bytes": 12901,
+      "sha256": "e91569befa91e7adcdc0642d428257ac28bcb7db563af1bf8818ced9444dd3c0"
     },
     {
       "path": "assets/derivatives/mall-track3-20261031.json",
@@ -3752,6 +3757,26 @@
       "path": "assets/textures/ceiling-working-face-orm.jpg",
       "bytes": 160656,
       "sha256": "bd068b213befd43bbb63b06e77c86c6bb12b697810c4a4d81a921b8abd02f7a3"
+    },
+    {
+      "path": "assets/textures/mall/ads-lingerie/ad-lingerie-dressform.jpg",
+      "bytes": 31608,
+      "sha256": "b81255c34f6f4b097f27ec9265f3799e5f819df929f4600e62dcb30c22e96055"
+    },
+    {
+      "path": "assets/textures/mall/ads-lingerie/ad-lingerie-flatlay.jpg",
+      "bytes": 39990,
+      "sha256": "5538c0b6fba070226f967954dc795faae366e43cba1cf8d00f4e759d2afa2b6b"
+    },
+    {
+      "path": "assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg",
+      "bytes": 32607,
+      "sha256": "2404e8b9c458dd60a1b8cab1e431a68b8bb3ece4d37a3efc0751becc17a8d2d9"
+    },
+    {
+      "path": "assets/textures/mall/ads-lingerie/ad-lingerie-hangers.jpg",
+      "bytes": 30904,
+      "sha256": "0e02d71d6831dc2ee80404ffb43a27079ae9e6579a15904d33cef453f33ccb62"
     },
     {
       "path": "assets/textures/mall/ads/ad-cafe.jpg",

@@ -16,7 +16,15 @@ import {assetUrl} from './loader';
 import {assetAllowedIn} from './levelAssets';
 
 /** The eight accepted Codex artworks (provenance order). */
-export const AD_ART_IDS = ['womenswear', 'menswear', 'food', 'cafe', 'electronics', 'health', 'sports', 'shopping'] as const;
+export const AD_ART_ROUND4_IDS = ['womenswear', 'menswear', 'food', 'cafe', 'electronics', 'health', 'sports', 'shopping'] as const;
+/**
+ * Task mall-lingerie-store-polish-20261103-045922: the lingerie boutique's own FOUR Codex artworks (user: "the art work in the store for
+ * adds is the regular female clothing store add work ... use codex to generate appropriate adds"). Product-only images made with the
+ * user's garment references, built by tools/asset-pipeline/mall-ads/build-lingerie-ad-art.mjs (provenance
+ * assets/derivatives/mall-lingerie-ad-art-20261103.json).
+ */
+export const AD_ART_LINGERIE_IDS = ['lingerie-flatlay', 'lingerie-dressform', 'lingerie-hangers', 'lingerie-giftbox'] as const;
+export const AD_ART_IDS = [...AD_ART_ROUND4_IDS, ...AD_ART_LINGERIE_IDS] as const;
 export type AdArtId = (typeof AD_ART_IDS)[number];
 
 /** Runtime files (literal relative paths: the CI packager verifies each one ships). */
@@ -29,6 +37,10 @@ export const AD_ART_URLS: Readonly<Record<AdArtId, string>> = {
   health: 'assets/textures/mall/ads/ad-health.jpg',
   sports: 'assets/textures/mall/ads/ad-sports.jpg',
   shopping: 'assets/textures/mall/ads/ad-shopping.jpg',
+  'lingerie-flatlay': 'assets/textures/mall/ads-lingerie/ad-lingerie-flatlay.jpg',
+  'lingerie-dressform': 'assets/textures/mall/ads-lingerie/ad-lingerie-dressform.jpg',
+  'lingerie-hangers': 'assets/textures/mall/ads-lingerie/ad-lingerie-hangers.jpg',
+  'lingerie-giftbox': 'assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg',
 };
 
 /** A box in normalised image coordinates (0..1, y down). */
@@ -48,6 +60,11 @@ export const AD_ART_FOCUS: Readonly<Record<AdArtId, ArtBox>> = {
   health: {x0: 0.04, y0: 0.05, x1: 0.97, y1: 0.62},
   sports: {x0: 0.14, y0: 0.1, x1: 0.94, y1: 0.68},
   shopping: {x0: 0, y0: 0.08, x1: 1, y1: 0.68},
+  // (lingerie boutique, measured on the accepted sources) the product group in the upper two thirds; the dress form keeps the garment
+  'lingerie-flatlay': {x0: 0.04, y0: 0.04, x1: 0.96, y1: 0.7},
+  'lingerie-dressform': {x0: 0.33, y0: 0.08, x1: 0.67, y1: 0.66},
+  'lingerie-hangers': {x0: 0.12, y0: 0.03, x1: 0.88, y1: 0.71},
+  'lingerie-giftbox': {x0: 0.14, y0: 0.04, x1: 0.98, y1: 0.7},
 };
 
 /** Menu-board panel crops (one item each: burger / fries / cup; latte / croissant / the whole spread), cycled per panel. */
