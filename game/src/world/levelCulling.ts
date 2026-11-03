@@ -1436,6 +1436,12 @@ export class LevelCuller {
     }
   }
 
+  /** Lane RENDER-CPU (tests / QA A-B): forget the position-only caches (slab tests, sight rays); the next update recomputes them. */
+  forgetPositionCaches(): void {
+    this.posStamp++;
+    this.posEye.fill(NaN);
+  }
+
   /** Show everything again (debug / before disposal). */
   reset(): void {
     for (const en of this.entries) if (en.culled) { en.obj.layers.mask = en.mask; en.culled = false; en.occluded = false; }

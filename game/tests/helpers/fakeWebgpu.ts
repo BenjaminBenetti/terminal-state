@@ -61,9 +61,30 @@ export function stubWebgpuGlobals(): HTMLCanvasElement {
   vi.stubGlobal('cancelAnimationFrame', () => {});
   vi.stubGlobal('scheduler', {yield: () => new Promise<void>(r => setImmediate(r))}); // three's yieldToMain (compileAsync)
   vi.stubGlobal('ProgressEvent', class { constructor(readonly type: string, o: {loaded?: number; total?: number} = {}) { Object.assign(this, o); } }); // (compileAsync progress)
-  for (const g of ['GPURenderBundleEncoder', 'GPUTexture', 'GPUBuffer', 'GPUCanvasContext', 'GPUDevice', 'GPUAdapter']) vi.stubGlobal(g, class {});
+  for (const g of ['GPURenderBundleEncoder', 'GPUTexture', 'GPUBuffer', 'GPUCanvasContext', 'GPUDevice', 'GPUAdapter', 'ImageBitmap']) vi.stubGlobal(g, class {});
   const flags = new Proxy({}, {get: (_t, k) => (typeof k === 'string' ? 1 << (k.length % 16) : undefined)});
   for (const g of ['GPUBufferUsage', 'GPUTextureUsage', 'GPUMapMode', 'GPUShaderStage', 'GPUColorWrite']) vi.stubGlobal(g, flags);
   const ctx = {configure() {}, unconfigure() {}, getCurrentTexture: () => inert('canvasTexture', {width: 1280, height: 720, format: 'bgra8unorm', createView: () => inert('canvasView')})};
-  return {width: 1280, height: 720, style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {}, getContext: (k: string) => (k === 'webgpu' ? ctx : null)} as unknown as HTMLCanvasElement;
+  return {width: 1280, height: 720, style: {}, addEventListener() {}, removeEventListener() {}, setAttribute() {}, getContext: (k: string) => (k === 'webgpu' ? ctx : k === 'webgl2' ? fakeGl() : null)} as unknown as HTMLCanvasElement;
+}
+
+const GL_ARRAY_PARAMS = new Set([0x0ba2, 0x0c10, 0x0c22, 0x0b73]);
+/** An inert WebGL 2 context (every method exists; constants are distinct numbers) for three's WebGL 2 backend (`forceWebGL`). */
+function fakeGl(): WebGL2RenderingContext {
+  const gl: WebGL2RenderingContext = new Proxy({} as WebGL2RenderingContext, {
+    get(_t, k) {
+      if (typeof k !== 'string') return undefined;
+      if (/^[A-Z][A-Z0-9_]*$/.test(k)) return 0x1000 + (k.length * 7919 + k.charCodeAt(0) * 31 + k.charCodeAt(k.length - 1)) % 60000;
+      if (k === 'getParameter') return (p: number) => (GL_ARRAY_PARAMS.has(p) ? new Int32Array([0, 0, 1280, 720]) : p === gl.MAX_3D_TEXTURE_SIZE ? 2048 : 16);
+      if (k === 'getSupportedExtensions') return () => [];
+      if (k === 'getExtension') return () => null;
+      if (k === 'getContextAttributes') return () => ({antialias: true});
+      if (k === 'getShaderParameter' || k === 'getProgramParameter') return () => true;
+      if (k === 'getShaderInfoLog' || k === 'getProgramInfoLog') return () => '';
+      if (k === 'checkFramebufferStatus') return () => gl.FRAMEBUFFER_COMPLETE;
+      if (k === 'isContextLost') return () => false;
+      return () => ({});
+    },
+  });
+  return gl;
 }
