@@ -36,7 +36,12 @@ describe.skipIf(!OUT)('RENDER-CPU: real three WebGPU JS per frame on mall yaw sw
     fl.shadow.camera.near = 0.2;
     cam.add(fl, fl.target);
     c.viewpoints = [fl];
-    const rt = new THREE.RenderTarget(1280, 720, {type: THREE.HalfFloatType, depthBuffer: true, samples: 4});
+    // the game's path: the station drawn by a PassNode inside a RenderPipeline (render/volumetric.ts), i.e. a nested render
+    const W = await import('three/webgpu'), TSL = await import('three/tsl');
+    const scenePass = TSL.pass(scene, cam, {samples: 4}) as unknown as {renderTarget: THREE.RenderTarget};
+    const pipe = new W.RenderPipeline(renderer, scenePass as never);
+    const rt = scenePass.renderTarget;
+    const {renderContextDepth} = await import('../src/render/renderContextDepth');
     // counters: node builds, render objects, cache-key recomputes
     const R = renderer as unknown as {_objects: {createRenderObject: (...a: unknown[]) => {constructor: {prototype: {getCacheKey: () => string}}}}; backend: {createNodeBuilder: (...a: unknown[]) => unknown}};
     const n = {builds: 0, ros: 0, keys: 0};
@@ -56,7 +61,7 @@ describe.skipIf(!OUT)('RENDER-CPU: real three WebGPU JS per frame on mall yaw sw
       return ro;
     };
     const nodeFrame = (renderer as unknown as {_nodes: {nodeFrame: {update(): void}}})._nodes.nodeFrame;
-    const frame = (camera: THREE.Camera) => { renderer.info.reset(); nodeFrame.update(); renderer.setRenderTarget(rt); renderer.render(scene, camera); renderer.setRenderTarget(null); };
+    const frame = (_camera: THREE.Camera) => { renderer.info.reset(); nodeFrame.update(); renderer.setRenderTarget(null); pipe.render(); };
     // the game's first frame setup: loot display filled for the start eye
     (M.cm as unknown as {lastEye: THREE.Vector3}).lastEye.copy(cam.position);
     (M.cm as unknown as {dirty: boolean}).dirty = true;
@@ -70,7 +75,9 @@ describe.skipIf(!OUT)('RENDER-CPU: real three WebGPU JS per frame on mall yaw sw
       renderer: renderer as unknown as WarmupRenderer, scene, camera: cam, mode: 'full', registry: reg,
       sceneTarget: () => rt, torch: fl, torchIntensity: 1, frame: () => frame(cam),
       finish: () => { c.update(cam, true); frame(cam); }, hide: () => {}, alive: () => true,
+      ...(process.env.LL_RCPU_NO_DEPTH ? {} : {sceneDepth: () => { const m = cam.layers.mask; cam.layers.mask = 0; try { return renderContextDepth(renderer, rt, () => frame(cam)) ?? 0; } finally { cam.layers.mask = m; } }}),
     }, {yieldFrame: () => Promise.resolve()});
+    out(`scene depth ${res.sceneDepth}`);
     out(`warm-up ${res.status}${res.reason ? ` (${res.reason})` : ''} ${(performance.now() - t0).toFixed(0)} ms: items ${res.plan.items}, groups ${res.plan.groups}, casters ${res.plan.casters}; builds ${n.builds}, render objects ${n.ros}, cache keys ${n.keys}; gpu ${[...gpuCalls].filter(([k]) => /create|write/.test(k)).map(([k, v]) => `${k} ${v}`).join(', ')}`);
     const posesList: Pose[] = [sp];
     for (const [name, ring] of [['ring-edge', 2], ['shopfront', 1], ['escalator', 1], ['court', undefined], ['corridor', 1]] as const) {

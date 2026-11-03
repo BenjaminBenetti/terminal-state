@@ -43,6 +43,7 @@
 
 import * as THREE from 'three';
 import {CULL_LAYER} from '../world/levelCulling';
+import {compileAtDepth} from './renderContextDepth';
 
 export type WarmupMode = 'full' | 'view' | 'off';
 export type WarmupStatus = 'complete' | 'partial' | 'cancelled' | 'failed' | 'skipped';
@@ -254,6 +255,12 @@ export interface WarmupHost {
   hide(hidden: boolean): void;
   /** False once the station was replaced or the device was lost. */
   alive(): boolean;
+  /**
+   * Task studio-performance-recorder-20261103 (lane RENDER-CPU): the render-context CALL DEPTH the station's scene pass draws at
+   * (render/renderContextDepth.ts: three keys contexts by it; the atmosphere draws the station inside its RenderPipeline = 1). The
+   * station compile runs at that depth. Omitted: 0 (a top-level render: the direct path, tests).
+   */
+  sceneDepth?(): number;
 }
 
 export interface WarmupProgress {
@@ -276,6 +283,8 @@ export interface WarmupResult {
   mode: WarmupMode;
   ms: number;
   plan: {items: number; groups: number; renderables: number; skipped: number; flipped: number; casters: number};
+  /** The render-context call depth the station scene was compiled at (lane RENDER-CPU; 0: top level). */
+  sceneDepth: number;
   stages: Record<WarmupStage, WarmupStageReport>;
   passes: string[];
   pools: string[];
@@ -330,7 +339,7 @@ const emptyStages = (): Record<WarmupStage, WarmupStageReport> => ({
 });
 
 export const skippedWarmup = (reason: string): WarmupResult => ({
-  status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0},
+  status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0}, sceneDepth: 0,
   stages: emptyStages(), passes: [], pools: [],
 });
 
@@ -346,6 +355,9 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const budget = opts.budgetMs ?? WARMUP_DEFAULTS.budgetMs;
   const t0 = now();
   const r = host.renderer;
+  // (lane RENDER-CPU) the context the real frame draws the station in: measured by the host before anything is changed here
+  let sceneDepth = 0;
+  try { sceneDepth = Math.max(0, Math.floor(host.sceneDepth?.() ?? 0)); } catch { /* unknown: top level (the previous behaviour) */ }
   const cameraMask = host.camera.layers.mask;
   const plan = planWarmup(host.scene, {mode: host.mode, cameraMask, pools: host.registry.poolRoots(), near: host.near});
   const passes = host.registry.passes;
@@ -375,11 +387,11 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     if (now() - t0 > budget) { status = 'partial'; reason = `time budget (${Math.round(budget / 1000)} s) reached`; return true; }
     return false;
   };
-  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null) => {
+  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0) => {
     r.setRenderTarget(target);
     r.setMRT(null);
     try {
-      await r.compileAsync(scene, camera, null, onP);
+      await compileAtDepth(r, depth, () => r.compileAsync(scene, camera, null, onP));
     } finally {
       r.setRenderTarget(prevTarget);
       r.setMRT(prevMRT);
@@ -396,7 +408,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
         const k = e.total > 0 ? Math.floor(n * Math.min(1, e.loaded / e.total)) : 0;
         done = base + k;
         report('materials', base + k);
-      });
+      }, sceneDepth);
       stages.materials.done = base + n;
       done = stages.materials.done;
       report('materials', stages.materials.done);
@@ -473,7 +485,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     status, reason, mode: plan.mode, ms: now() - t0,
     plan: {items: plan.items.length, groups: plan.groups, renderables: plan.renderables.length, skipped: plan.skipped,
       flipped: plan.items.filter(i => i.flips.length).length, casters: casters.length},
-    stages, passes: names.passes, pools: names.pools,
+    sceneDepth, stages, passes: names.passes, pools: names.pools,
   };
 }
 
@@ -487,7 +499,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
  * pipelines asynchronously between frames (compileAsync yields per object). Resolves when ready; rejects only if three
  * does. For anything added mid-play that no registered pool / prototype covers.
  */
-export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, camera: THREE.Camera, root: THREE.Object3D, target: unknown): Promise<void> {
+export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, camera: THREE.Camera, root: THREE.Object3D, target: unknown, depth = 0): Promise<void> {
   const objs: THREE.Object3D[] = [];
   root.traverse(o => { objs.push(o); });
   const s = snapshot(objs);
@@ -497,7 +509,7 @@ export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, cam
     for (const o of objs) { o.visible = true; if (isRenderable(o)) o.frustumCulled = false; }
     renderer.setRenderTarget(target);
     renderer.setMRT(null);
-    p = renderer.compileAsync(root, camera, scene, null); // the projection runs synchronously in here
+    p = compileAtDepth(renderer, depth, () => renderer.compileAsync(root, camera, scene, null)); // the projection runs synchronously in here (lane RENDER-CPU: at the station pass's call depth)
   } finally {
     renderer.setRenderTarget(prevTarget);
     renderer.setMRT(prevMRT);

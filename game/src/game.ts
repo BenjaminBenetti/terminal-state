@@ -143,6 +143,7 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
@@ -411,6 +412,8 @@ export class Game {
   /** Iteration 14: the last warm-up's result (loading note, QA `__LL.warmup()`). */
   warmup: WarmupResult | null = null;
   private warmRun: Promise<WarmupResult> | null = null;
+  /** Lane RENDER-CPU: the render-context call depth each scene-pass target is drawn at (render/renderContextDepth.ts), once measured. */
+  private readonly sceneDepths = new WeakMap<object, number>();
   /**
    * Iteration 14: what the warm-up prepares besides the discovered station scene (docs/rendering-warmup.md): effect pools /
    * runtime prototypes in the scene, and render passes with their own scene / camera / target.
@@ -471,6 +474,10 @@ export class Game {
     // Iteration 14: effects hidden until the first shot / hit and the thrown-flare prototypes are warmed with the station
     this.warmRegistry.addPool('effects', () => [this.fx.group]);
     this.warmRegistry.addPool('flares', () => this.flares.warmPrototypes());
+    // Task studio-performance-recorder-20261103 (lane RENDER-CPU): the holders' contents hidden until used — the loot display's
+    // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
+    // interiors (shown when opened) — compile with the station instead of on first sight
+    this.warmRegistry.addPool('holders', () => (this.containers ? [this.containers.group] : []));
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -1533,7 +1540,36 @@ export class Game {
    */
   prepareBeforeShow(root: THREE.Object3D): Promise<void> {
     const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
-    return prepareObjects(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, root, target);
+    return prepareObjects(this.renderer as unknown as WarmupRenderer, this.scene, this.camera, root, target, this.sceneDepth(false));
+  }
+
+  /**
+   * Task studio-performance-recorder-20261103 (lane RENDER-CPU): the render-context call depth the station's scene pass is drawn at
+   * (render/renderContextDepth.ts: three r186 keys render contexts — and so node builds — by it; the atmosphere draws the station
+   * inside its RenderPipeline). Measured once per scene-pass target with one hidden frame that draws nothing of the scene (camera
+   * layers empty), only when `measure` (the warm-up: frames are held, the canvas is hidden for it); otherwise the known value or 0.
+   * The direct path (no atmosphere target) is a top-level render: 0.
+   */
+  private sceneDepth(measure: boolean): number {
+    const target = this.atmosphereBypass ? null : this.atmosphere.warmTarget(this.scene, this.camera);
+    if (!target || typeof target !== 'object') return 0;
+    const known = this.sceneDepths.get(target);
+    if (known !== undefined || !measure) return known ?? 0;
+    const mask = this.camera.layers.mask, shown = this.canvas.style.visibility;
+    let depth: number | null = null;
+    try {
+      this.canvas.style.visibility = 'hidden';
+      this.camera.layers.mask = 0; // (nothing of the scene draws; the pipeline's passes run as in a real frame)
+      depth = renderContextDepth(this.renderer, target, () => this.drawFrame());
+    } catch (err) {
+      console.warn('lane RENDER-CPU: scene-pass depth probe failed; compiling at the top level', err);
+    } finally {
+      this.camera.layers.mask = mask;
+      this.canvas.style.visibility = shown;
+    }
+    this.atmosphere.resetHistory();
+    this.sceneDepths.set(target, depth ?? 0);
+    return depth ?? 0;
   }
 
   /** Iteration 14: the title / loading screen's station line (boot and restarts). */
@@ -1610,6 +1646,7 @@ export class Game {
       finish: () => { this.world.culler.update(this.camera, true); this.atmosphere.resetHistory(); this.render(); },
       hide: hidden => { this.canvas.style.visibility = hidden ? 'hidden' : ''; },
       alive: () => gen === this.stationGen && !this.gpu?.deviceLost,
+      sceneDepth: () => this.sceneDepth(true), // lane RENDER-CPU: compile into the context the real frame draws the station in
     }, {
       onProgress: (p: WarmupProgress) => { if (bar) bar.style.width = `${Math.floor(p.done / Math.max(1, p.total) * 100)}%`; label.textContent = warmupLabel(p); },
     });
