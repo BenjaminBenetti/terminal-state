@@ -1,12 +1,13 @@
 // Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): Game.updateZombies on a REAL generated level with the REAL
 // enemy actors (stripped GLBs: wardrobe zombies incl. the lingerie store's variants, Sirens dormant, Blightbellies, rat/dogs,
-// Strainers), the horde director, the path service on a real-time FrameBudget, the chase share, the vocal-reach field and the
+// Strainers), the horde director, the path service on a FrameBudget (real or virtual clock), the chase share, the vocal field and the
 // flashlight light lure — wired exactly as game.ts (brainWorld, spawnEnemy, updateZombies, alertZombies) minus rendering / audio
 // (a no-op Sfx). The player walks / turns along a scripted route; per frame it records where the AI time went:
 //   vocal-reach, horde director, brain (sight, state machine: excl. path), path searches (immediate: count, ms, A* expansions,
 //   string-pulling probes + their ms), motor (+ body separation / settle), anim (cues, mixer update, hit-volume refresh), and the
 //   frame-budget background chunks (far deferred re-plans, the vocal field build) run after it.
-// Also a behaviour trace (`digest()`): every brain's state / position / yaw / path + the shared RNG draw count, frame by frame.
+// Also a behaviour trace (`digest()`): every brain's state / position / yaw + the shared RNG draw count, frame by frame, and every
+// synchronous search (`requests`: frame, requester, arguments, expansions, waypoints).
 // The instrumentation only observes (wrapped calls return exactly what the wrapped ones return; the same calls in the same order).
 
 import * as THREE from 'three';
@@ -74,8 +75,8 @@ export interface FrameCost {
 
 export interface SimRoutePoint { x: number; z: number; y: number }
 export interface AiCpuSimOpts {
-  /** Real actors (animation / hit volumes) — false: brains only (cheaper; the AI decisions are identical). */
-  actors?: Record<string, GLTF> | null;
+  /** The enemy models (loadEnemyModels()): every spawn becomes its real actor (brain, animation, hit volumes). Required. */
+  actors: Record<string, GLTF>;
   /** The player's route (feet points; walked at `speed` m/s, looped) and yaw sweep (rad/s of camera turning; 0 = look ahead). */
   route?: readonly SimRoutePoint[];
   speed?: number;
@@ -98,7 +99,7 @@ export interface AiCpuSimOpts {
   impl?: {Levels: new (levels: never, links: never, rails: never) => Levels; PathFinder: new (src: never) => PathFinder};
 }
 
-export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
+export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts) {
   // a private Levels (levelsOf caches one per layout: the instrumentation below must not leak into other users of the layout)
   const LC = (o.impl?.Levels ?? Levels) as unknown as new (l: unknown, k: unknown, r: unknown) => Levels;
   const L: Levels = layout.levels?.length ? new LC(layout.levels, layout.levelLinks ?? [], layout.rails) : new LC([{id: 0, role: 'main', grid: layout.grid, baseY: 0}], layout.levelLinks ?? [], layout.rails);
@@ -154,30 +155,21 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
   const ps = new PathService(timedFind, (ax, az, bx, bz, op, chunk) => farFinder.search(ax, az, bx, bz, 0.34, searchExpand(op), op, chunk), fb, nearPlayer, atrium);
   const share = atriumLevel ? new ChaseShare(L) : null;
   // --- enemies (Game.spawnEnemy) ---
-  const models = o.actors ?? null;
+  const models = o.actors;
   const zombies: EnemyActor[] = [];
   const brains: ZombieBrain[] = [];
-  let looks: ZombieLookLibrary | null = null, lingerie: WardrobeLibrary | null = null;
-  if (models) {
-    looks = new ZombieLookLibrary(models);
-    const lz = Object.keys(LINGERIE_MODEL_FILES).filter(k => models[k]);
-    lingerie = lz.length ? createLingerieLibrary(models) : null;
-  }
+  const looks = new ZombieLookLibrary(models);
+  const lingerie: WardrobeLibrary | null = Object.keys(LINGERIE_MODEL_FILES).some(k => models[k]) ? createLingerieLibrary(models) : null;
   const seed = layout.seed >>> 0;
   layout.zombies.forEach((s: ZombieSpawn, i) => {
-    if (models) {
-      const {actor} = createEnemyActor(s, withEnemyModels(models, k => models[k]), rand, () => {
-        const pick = chooseSpawnLook(seed, i, s, looks!, s.look === 'lingerie' ? lingerie : null);
-        const src = (pick.library === 'lingerie' ? lingerie! : looks!).build(pick.look);
-        return new ZombieActor(src, s, rand);
-      });
-      actor.brain.y = actor.root.position.y = s.y ?? L.grid(s.level ?? 0).floorAt(s.x, s.z);
-      zombies.push(actor);
-      brains.push(actor.brain);
-    } else {
-      // brains only: the archetype's brain exactly as its actor constructs it (no rand draws there for brains)
-      throw new Error('aiCpuSim: brains-only mode is not supported (the actors construct the brains); pass actors');
-    }
+    const {actor} = createEnemyActor(s, withEnemyModels(models, k => models[k]), rand, () => {
+      const pick = chooseSpawnLook(seed, i, s, looks, s.look === 'lingerie' ? lingerie : null);
+      const src = (pick.library === 'lingerie' ? lingerie! : looks).build(pick.look);
+      return new ZombieActor(src, s, rand);
+    });
+    actor.brain.y = actor.root.position.y = s.y ?? L.grid(s.level ?? 0).floorAt(s.x, s.z);
+    zombies.push(actor);
+    brains.push(actor.brain);
   });
   const director = layout.hordes?.length ? new HordeDirector(layout, L, i => brains[i], spawnProfile('mall').horde?.patrol) : null;
   // --- lights (the flashlight: world/lightSources.ts contract, player/flashlight.ts beam) ---
@@ -243,10 +235,14 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
   const bases = L.list.map(l => l.baseY);
   const HUNT = new Set(['chase', 'attack']);
   const costs: FrameCost[] = [];
+  /** Per enemy kind (archetype, '/lingerie' for the store variants): animated actor-frames, mixer + hit-volume ms, skinned meshes per actor. */
+  const kindOf = zombies.map((z, i) => `${archetypeOf(z)}${layout.zombies[i].look === 'lingerie' ? '/lingerie' : ''}`);
+  const animBy: Record<string, {actors: number; frames: number; ms: number; meshes: number}> = {};
+  zombies.forEach((z, i) => { const e = (animBy[kindOf[i]] ??= {actors: 0, frames: 0, ms: 0, meshes: 0}); e.actors++; let m = 0; z.root.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) m++; }); e.meshes += m; });
   let cost: FrameCost = null as never;
   let frame = 0, raf = 0;
   const sim = {
-    L, pf, ps, fb, reach, share, director, zombies, brains, player, costs, beam, requests,
+    L, pf, ps, fb, reach, share, director, zombies, brains, player, costs, beam, requests, animBy,
     get draws() { return draws; },
     get frame() { return frame; },
     /** One play frame: the player, gunfire, then Game.updateZombies, then the frame-budget background chunks. */
@@ -278,17 +274,15 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
       reqCls = 'horde'; reqActor = null;
       H?.update(dt, w, player);
       c0 = now(); cost.horde = c0 - c1;
-      for (const z of zombies) {
+      for (let zi = 0; zi < zombies.length; zi++) {
+        const z = zombies[zi];
         const b = z.brain;
         reqActor = z;
         const seqBefore = b.attackSeq;
-        const sb = searches, pb = pullMs;
         let c2 = now();
         const out: BrainOutput = b.update(dt, w);
         let c3 = now();
-        // (path time inside the brain: the immediate searches' share is measured by the wrapped find below)
-        cost.brain += c3 - c2;
-        void sb; void pb;
+        cost.brain += c3 - c2; // (includes its synchronous path searches, as the game's ai.brain span; `path` is their share)
         reqActor = null;
         if (H && out.alerted) H.alerted(b, player.y);
         c2 = now();
@@ -323,9 +317,11 @@ export function aiCpuSim(layout: StationLayout, o: AiCpuSimOpts = {}) {
         z.syncTransform();
         if (!z.ragdolled) z.root.position.y = b.y;
         const c5 = now(); cost.mixer += c5 - c4;
-        void archetypeOf; // (the Strainer's wet trail is visual only, Math.random: not simulated)
+        // (the Strainer's wet trail is visual only, Math.random: not simulated)
         if (adt > 0) z.updateVolumes();
-        cost.volumes += now() - c5;
+        const c6 = now();
+        cost.volumes += c6 - c5;
+        if (adt > 0) { const e = animBy[kindOf[zi]]; e.frames++; e.ms += c6 - c4; }
       }
       cost.ai = now() - a0;
       cost.searches = searches - s0; cost.expanded = expanded - e0; cost.probes = probes - p0; cost.pullMs = pullMs - m0;
@@ -373,4 +369,3 @@ export function routeThrough(L: Levels, stops: readonly SimRoutePoint[]): SimRou
   return out;
 }
 
-void THREE;

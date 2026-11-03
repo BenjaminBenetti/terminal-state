@@ -206,15 +206,15 @@ function volumeBand(c: VolumeColumn, nl: number): boolean {
   return true;
 }
 
-/**
- * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): a walk batch's column summaries (Levels.beginWalkBatch).
- * Column i is summarized on its first query in the batch (stamp === epoch): kind 1 = no ramp on any level and no dynamic volume,
- * so its bands do not depend on the query point — then `n` = its open levels in index order with their floor / ceiling (the exact
- * floorNearCell / ceilNearCell values) and blocked flags; kind 0 = the original per-query code.
- */
 /** lane AI-CPU: walkLineBatch tests every WALK_STRIDE-th sample's circle during its feet chain (evaluation order only). */
 export const WALK_STRIDE = 6;
 
+/**
+ * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): a walk batch's column summaries (Levels.beginWalkBatch).
+ * Column i is summarized on its first query in the batch (stamp === epoch): kind 1 = no dynamic volume — then `n` = its open
+ * levels in index order, each flat (the exact floorNearCell / ceilNearCell values) or a ramp (its inputs: walkBand evaluates the
+ * same ramp height at each query point), with its blocked flag; kind 0 (a volume column) = the original per-query code.
+ */
 interface WalkMemo {
   stamp: Uint32Array; epoch: number; kind: Uint8Array; n: Uint8Array;
   /**
@@ -632,8 +632,8 @@ export class Levels implements NavLevels {
   }
 
   /**
-   * lane AI-CPU: column i's batch summary kind (computed on its first query in the batch): 1 = summarized (no ramp on any level,
-   * no dynamic volume: its open levels' floor / ceiling / blocked in index order), 0 = query-point dependent.
+   * lane AI-CPU: column i's batch summary kind (computed on its first query in the batch): 1 = summarized (no dynamic volume: its
+   * open levels in index order — flat floor / ceiling or the ramp, blocked flag), 0 = a volume column (the per-query code).
    */
   private walkColumn(M: WalkMemo, i: number, cx: number, cy: number, wx: number, wz: number): number {
     if (M.stamp[i] === M.epoch) return M.kind[i];
@@ -1203,8 +1203,8 @@ export class Levels implements NavLevels {
   // code that never changes a grid or a volume) every column a query touches is SUMMARIZED once (walkColumn(): its open levels'
   // floor / ceiling / blocked flag, read from the grids exactly as the per-query code reads them) and circleClear's column test /
   // supportFloorIn run the same comparisons over the summary — the same answers for any feet height, without re-reading four
-  // level grids for every overlapping sample of every probe. Only columns whose bands cannot depend on the query point are
-  // summarized (no ramp on any level, no dynamic volume); every other column, and every query outside a batch, runs the original
+  // level grids for every overlapping sample of every probe (a ramp slot keeps its ramp: walkBand computes the same height at the
+  // query point). Columns of a dynamic volume are not summarized; they, and every query outside a batch, run the original
   // code. Every batch starts with no summary (the grids / volumes may change between batches: the Reactor ending's doors, the
   // elevator cab), so nothing is ever remembered across a yield or a frame.
 
