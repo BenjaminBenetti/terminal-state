@@ -70,11 +70,16 @@ function bodyCtx(B) {
   return {W, n, nt, region, nrm, grid, hull, sub, joints: B.weldedWeights.joints, weights: B.weldedWeights.weights};
 }
 
-/** Garment part label per welded vertex: 'torso' | 'sleeveL' | 'sleeveR' | 'legL' | 'legR' | 'top'. */
-function garmentParts(G, kind, gRegion, skel) {
+/**
+ * Garment part label per welded vertex: 'torso' | 'sleeveL' | 'sleeveR' | 'legL' | 'legR' | 'top'.
+ * legX (task mall-lingerie, body option pantsFit.legSplit 'nominal'): the pant leg side comes from the vertex's x in the
+ * NOMINAL pants mesh (its legs are apart there) instead of the fitted x - on a body whose inner thighs touch the fitted
+ * inner leg panels cross x = 0, and a panel half-weighted to the other leg stretches into a sheet when the legs part.
+ */
+function garmentParts(G, kind, gRegion, skel, legX = null) {
   const n = G.length / 3, out = new Array(n);
   for (let i = 0; i < n; i++) {
-    if (kind === 'pants') out[i] = G[i * 3 + 1] < skel.crotchY ? (G[i * 3] >= 0 ? 'legL' : 'legR') : 'top';
+    if (kind === 'pants') out[i] = G[i * 3 + 1] < skel.crotchY ? ((legX ? legX[i * 3] : G[i * 3]) >= 0 ? 'legL' : 'legR') : 'top';
     else out[i] = gRegion && gRegion[i] === 1 ? 'sleeveL' : gRegion && gRegion[i] === 2 ? 'sleeveR' : 'torso';
   }
   return out;
@@ -245,7 +250,7 @@ export function refineFit(v, gC, cfg, B) {
   const idx = kind === 'pants' ? gC.low.welded.idx : gC.canonical.idx;
   const orig = new Float32Array(v.weldedPos), base = new Float32Array(v.weldedPos);
   const n = base.length / 3;
-  const parts = garmentParts(base, kind, kind === 'pants' ? null : gC.canonical.region, B.skel);
+  const parts = garmentParts(base, kind, kind === 'pants' ? null : gC.canonical.region, B.skel, kind === 'pants' && B.pantsFit?.legSplit === 'nominal' ? gC.low.welded.pos : null);
   const A = anchors(ctx, base, parts, B.skel);
   const Wt = anchorWeights(ctx, A, base, idx, parts, kind, B.skel, cfg.fit07?.weights);
   const bodyAdj = vertexAdjacency(ctx.n, ctx.W.idx);

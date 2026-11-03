@@ -191,7 +191,16 @@ export interface ZombieSpawn {
   y?: number;
   /** Task track3-eaton-centre-20261031 (lane HORDE): member of roaming horde group layout.hordes[horde]; absent = ambient enemy. */
   horde?: number;
+  /**
+   * Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local LOOK of an ordinary zombie. 'lingerie' = a variant of the mall's
+   * lingerie store (gen/mall/lingerieSpawns.ts, spawn context 'lingerie'): at spawn time it wears a fitted lingerie set
+   * (ai/spawnLook.ts -> ai/lingerie.ts lingerieLook(seed, index)) instead of the ordinary wardrobe pick. Absent = the ordinary pool
+   * (every other spawn of every level). Generation data only — the look itself is recomputed from (layout seed, spawn index).
+   */
+  look?: SpawnLook;
 }
+/** Task mall-lingerie-20261102-221554 (lane CONTEXT): store-local look selectors of ZombieSpawn.look. */
+export type SpawnLook = 'lingerie';
 
 /**
  * Iteration 08 (Lane A, Lane G's format; the type lives in gen/levels.ts): a railing along a walkable

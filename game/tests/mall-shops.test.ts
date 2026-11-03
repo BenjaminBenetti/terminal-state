@@ -772,7 +772,8 @@ describe('R4 womenswear store + the reusable female mannequin', () => {
       const prog = new Map<number, MallProgram>();
       const back = new Set<number>();
       for (const q of L.mall!.shops) { prog.set(q.area, q.program); if (q.backroom !== undefined) { prog.set(q.backroom, q.program); back.add(q.backroom); } }
-      const out = L.props.filter(p => p.kind === 'mannequinFemale' && !(prog.get(p.area) === 'womenswear' && !back.has(p.area)) && prog.get(p.area) !== 'department');
+      // (task mall-lingerie-20261102, lane STORE: the lingerie boutique's window reuses the female forms on its sales floor, like womenswear)
+      const out = L.props.filter(p => p.kind === 'mannequinFemale' && !((prog.get(p.area) === 'womenswear' || prog.get(p.area) === 'lingerie') && !back.has(p.area)) && prog.get(p.area) !== 'department');
       extras += out.length;
       expect(out.length, `seed ${s} spooky extras`).toBeLessThanOrEqual(SPOOKY_MANNEQUINS.perMall);
       for (const p of out) {

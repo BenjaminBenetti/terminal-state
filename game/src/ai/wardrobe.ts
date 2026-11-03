@@ -35,12 +35,18 @@ export interface ZombieBodyDef {
   model: string;
   /** Default selection weight (a level pool may override). */
   weight: number;
-  /** 'generated' = source made for this game; 'reused' = existing master reused. */
-  origin: 'generated' | 'reused';
+  /** 'generated' = source made for this game; 'reused' = existing master reused; 'uploaded' = a body model the user supplied. */
+  origin: 'generated' | 'reused' | 'uploaded';
   /** Slots the body's own geometry already fills (no wearable is ever placed there). */
   covers?: readonly WardrobeSlot[];
   /** Slots that must always hold a wearable (e.g. underwear bases always wear a lower garment). */
   requires?: readonly WardrobeSlot[];
+  /**
+   * Task mall-lingerie-20261102: the body mesh is UNCLOTHED. Selection already never leaves a `requires` slot empty; build()
+   * additionally completes any required slot a look leaves empty (or names an unfitted / incompatible wearable in) with the
+   * first fitted, compatible wearable of that slot (registry order), so the body is never assembled bare.
+   */
+  nude?: boolean;
   /** Descriptive tags wearables can refer to in `incompatibleWith` ('tag:<t>'). */
   tags?: readonly string[];
 }
@@ -425,9 +431,27 @@ export class WardrobeLibrary {
     return g;
   }
 
+  /** Fills the body's empty required slots (pick order) with the first fitted wearables compatible with everything worn. */
+  private completeRequired(b: ZombieBodyDef, worn: {w: WearableDef; src: THREE.SkinnedMesh; ex: VariantExtras}[]): void {
+    const missing = PICK_ORDER.filter(s => b.requires?.includes(s) && !b.covers?.includes(s) && !worn.some(o => o.w.slot === s));
+    const fill = (k: number): boolean => {
+      if (k === missing.length) return true;
+      for (const w of this.wearables) {
+        if (w.slot !== missing[k] || !this.supports(b.id, w.id) || !worn.every(o => this.compatible(b.id, o.w, w))) continue;
+        const src = this.variant(w.id, b.id)!;
+        worn.push({w, src, ex: src.userData as VariantExtras});
+        if (fill(k + 1)) return true;
+        worn.pop();
+      }
+      return false;
+    };
+    fill(0);
+  }
+
   build(lookIn: ZombieLook | LegacyZombieLook): ZombieAppearance {
     const look = normalizeLook(lookIn);
-    const b = this.bodies.find(x => x.id === look.body) ?? this.allBodies.find(x => x.id === look.body) ?? this.bodies[0];
+    // (an unclothed body whose required slots cannot be filled is never selectable, and never built: bodies[0] instead)
+    const b = this.bodies.find(x => x.id === look.body) ?? this.allBodies.find(x => x.id === look.body && !x.nude) ?? this.bodies[0];
     if (!b) throw new Error('no zombie body model loaded');
     const gltf = this.models[b.model]!;
     const root = SkeletonUtils.clone(gltf.scene);
@@ -447,6 +471,7 @@ export class WardrobeLibrary {
       if (!w || !src || !worn.every(o => this.compatible(b.id, o.w, w))) continue;
       worn.push({w, src, ex: src.userData as VariantExtras});
     }
+    if (b.nude) this.completeRequired(b, worn);
     worn.sort((x, y) => SLOTS.indexOf(x.w.slot) - SLOTS.indexOf(y.w.slot));
     const ids = worn.map(o => o.w.id).sort();
     const meshes: ZombieAppearance['meshes'] = [{mesh: body, slot: 'body', wearable: null}];

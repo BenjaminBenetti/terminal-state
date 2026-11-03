@@ -72,6 +72,11 @@ profile, family list, tier or guarantee.
   'service')` (the Subway's station spawns are tagged `'station'` explicitly — its profile has two contexts now); the generators call
   `assignEnemyArchetypes` once afterwards. `OFFICE_SIREN_ELIGIBILITY.contexts` stays `['floor']`. Details and census:
   `docs/enemy-spawns.md` "Service annexes".
+- **A store-local zone** follows the same rules (task mall-lingerie-20261102-221554, lane CONTEXT): the mall's `'lingerie'` context
+  (`LINGERIE_CONTEXT`, its own zombie-only pool) runs once per optional lingerie store, appended after the annex `service` spawns,
+  tagged `markSpawnContext(…, 'lingerie')` and `ZombieSpawn.look = 'lingerie'` (re-tagged after `dropExtensions`, which removes the
+  annex spawns before it); its `ENEMY_LEVEL_ADAPTER` entry is a zone (`runsPerLevel [0, LINGERIE_STORES_MAX]`) with its own
+  eligibility / placement text. Details: `docs/enemy-spawns.md` "The mall".
 - Persistence: killed enemies are the generic per-index run memory (`game/src/run/memory.ts` `enemiesToSpawn`), so annex enemies
   die once per run like any other; nothing respawns on re-entry. Rare rewards (the level's gear roll, the roof cache / find) are
   per logical level and are not repeated by annexes (loot tables own that).

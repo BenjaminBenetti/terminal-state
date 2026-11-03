@@ -25,7 +25,9 @@ export type MallProgram =
   | 'food-court' | 'cafe' | 'grocery' | 'books' | 'toys' | 'sports' | 'jewelry' | 'home' | 'beauty' | 'music' | 'pet'
   | 'arcade' | 'luggage' | 'optical' | 'florist' | 'kiosk' | 'service' | 'vacant'
   // Task mall-round3-20261031 (lane SHOPS, R4): the women's fashion store (gen/mall/shops.ts MALL_PROGRAMS.womenswear)
-  | 'womenswear';
+  | 'womenswear'
+  // Task mall-lingerie-20261102 (lane STORE): the women's lingerie boutique (MALL_PROGRAMS.lingerie: large units only, never guaranteed)
+  | 'lingerie';
 
 /** What a retail unit is (census distinguishes real stores from kiosks / service rooms). */
 export type MallUnitKind = 'store' | 'anchor' | 'food' | 'kiosk' | 'service' | 'vacant';
@@ -111,6 +113,14 @@ export interface MallShop {
   recess?: number;
   /** Lane SHOPS' fit-out (recipe, finish, sign, front, shutter, entry span), attached by assignMallPrograms. */
   fit?: MallShopFit;
+  /**
+   * Task mall-lingerie-20261102 (lane STORE): the lingerie boutique's WALK-IN changing area (gen/mall/lingerieStore.ts) — world-space
+   * rects (metres, x0 < x1, z0 < z1) of every booth's free standing floor and of the booth aisle; every 0.5 m cell inside is walkable
+   * floor of the shop's sales area. Absent on every other shop. Lane CONTEXT spawns the store-local zombies in them.
+   */
+  changing?: {x0: number; z0: number; x1: number; z1: number}[];
+  /** (lane STORE) Centre of the opening from the sales floor into the changing aisle (world m) — keep point-blank spawns off it. */
+  changingEntry?: {x: number; z: number};
 }
 
 /** A walkway crossing the void at one storey. */

@@ -285,6 +285,32 @@ day tanks are collision-only `annexMachine` boxes under existing shape-material 
 - Tests: `tests/reactor-x-bunker-carve.test.ts`, `tests/reactor-x-bunker-level.test.ts` (both audits, purpose loot, placements on their
   floors / inside their ceilings, doorway lanes, the blast door's anchor on the lane).
 
+### The Mall lingerie boutique (task mall-lingerie-20261102, lane STORE)
+Program `lingerie` (gen/mall/shops.ts; large standard-line / end units only, a per-mall chance, never guaranteed). Its WALK-IN changing
+area (`gen/mall/lingerieStore.ts`) is built from local procedural fixtures in the shop fit-out style (box parts, existing shape materials,
+no model / texture file, no generation); the rest of the store uses existing kinds (busts below are the one movable newcomer). Both audits:
+`gen/mall/kinds.ts` MALL_OPEN_AUDIT / MALL_PHYS (spread into OPENABLE_AUDIT / PROP_PHYSICS_AUDIT).
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
+|---|---|---|---|---|
+| `fittingPartition` | booth side panel (laminate on a steel foot channel, top cap) | `none` | static `partition` (floor channel + ceiling track) | 2.00 × 2.10 × 0.08 m; grounded (foot channel); top 2.10 m — open above, a head clear of the 1.78 m zombie |
+| `fittingBackPanel` | booth back panel between two partitions, two coat hooks (built-in hardware) | `none` | static `partition` | 1.44 × 2.10 × 0.13 m (hooks); grounded |
+| `fittingBench` | built-in timber booth bench on two brackets | `none` (no lid / drawer) | static `built-in` | 1.42 × 0.45 × 0.40 m; grounded (4 bracket contacts); seat 0.45 m |
+| `fittingMirror` | full-length mirror in a thin frame | `none` | static `mounted` (screwed to a partition / wall) | 0.60 × 1.54 × 0.02 m glass + frame from 0.33 m: wall-mounted, intentionally off the floor |
+| `fittingCurtain` | booth curtain gathered open beside a partition, its rail across the opening overhead | `none` | static `mounted` (cloth on a fixed rail) | 1.46 × 2.00 × 0.12 m (rail span); the drape hangs 0.08 m above the floor; rail 2.0 m |
+| `lingerieBust` | padded torso-to-mid-thigh display form on a pole and a three-foot base (pale-body proportions, INSIDE every set) | `none` | **dynamic** 5 kg `pad`, fit 1.2 (tips over) | 0.36 × 1.48 × 0.30 m (base feet); grounded; shoulders 1.40, bust 1.24 (x ±0.125), hips 0.92 (x ±0.115, z -0.09..0.07), thighs to 0.50 m |
+| `lingerieSet<Design>` ×6 | the six display sets — riders on a display form: lane FIT's display meshes (c1a3816) at worn height, centred, unscaled; procedural stand-ins until loaded | `none` | static `host decor`, **rides** the form (MALL_RIDER_KINDS) | FIT meshes 0.74-1.50 m on the form (CPU render: qa-artifacts/lingerie/store/fitcheck/sets-on-form.png); stand-in 0.28 × 0.54 × 0.24 m; collider 0.72-1.52 m |
+
+- Changing area: 4-6 booths (2 × 3 free cells each: 1.44 m between the panels, 1.5 m deep in front of the bench) along a 1.5 m aisle on the
+  back wall, a 1.5 m opening from the sales floor, every free cell reserved; the pieces share their 0.5 m cell column, so the planner
+  validates every cell and the room's connectivity itself (forceProp inside a placeKit transaction, rolled back on failure).
+- No baked loose clutter: the booth pieces are structure (panels, a built-in bench, a screwed mirror, a curtain on its rail); the display
+  sets are separate riders on the form; the store's finds are real loot in its holders (drawer chests, the till, tables, bays).
+- Renders: `node tools/asset-pipeline/props/scale-check.mjs --kind fittingPartition --kind fittingBackPanel --kind fittingBench
+  --kind fittingMirror` and `--kind fittingCurtain --kind lingerieBust --kind lingerieSetRed --lift 0.72` (the tool now renders office /
+  mall procedural box forms too), viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/mall-lingerie-store.test.ts`.
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

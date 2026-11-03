@@ -1,0 +1,506 @@
+{
+ "schema": "terminal-state/zombie-lingerie@1",
+ "title": "Lingerie store variants: Meshy lingerie sets fitted to the pale female zombie bodies (prototype derivatives)",
+ "status": {
+  "approved": false,
+  "gameReady": false,
+  "stage": "unapproved prototype derivative (lingerie store variants); art / fit / deformation not certified",
+  "licenseClearance": "none - prototype status as every Meshy-generated asset of this repository; the designs are the user-supplied reference images"
+ },
+ "task": "studio-beta-mall-lingerie-20261102-221554-01",
+ "authoredOn": "2026-11-02",
+ "assignment": {
+  "paleGaze": [
+   "purple",
+   "red"
+  ],
+  "paleRevenant": [
+   "black",
+   "ivory"
+  ],
+  "paleApparition": [
+   "green",
+   "blush"
+  ]
+ },
+ "bodies": {
+  "paleGaze": "game/public/assets/models/zombie-body-pale-gaze-t25.glb",
+  "paleRevenant": "game/public/assets/models/zombie-body-pale-revenant-t25.glb",
+  "paleApparition": "game/public/assets/models/zombie-body-pale-apparition-t25.glb"
+ },
+ "totalBytes": 1599780,
+ "totalMB": 1.6,
+ "sets": [
+  {
+   "id": "lingerie-green",
+   "design": "green",
+   "label": "Emerald lace longline bra + high-waist brief",
+   "model": "outfit_lingerie_green",
+   "glb": "game/public/assets/models/outfit-lingerie-green.glb",
+   "bytes": 265284,
+   "sha256": "701b1076cd1b8da4a9ba9c75ff639c1e40b7f90c7bace3ad57bad7957f1b095a",
+   "bodies": [
+    "paleApparition"
+   ],
+   "pieces": {
+    "upper": "lingerie-green-top",
+    "lower": "lingerie-green-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 138241,
+    "metallicRoughnessBytes": 6921
+   },
+   "triangles": {
+    "top": 2024,
+    "bottom": 939
+   }
+  },
+  {
+   "id": "lingerie-purple",
+   "design": "purple",
+   "label": "Plum lace strapless bustier with suspenders + brief",
+   "model": "outfit_lingerie_purple",
+   "glb": "game/public/assets/models/outfit-lingerie-purple.glb",
+   "bytes": 251088,
+   "sha256": "751010d57d8e45dbf940bf0a09c495fc2dce03f62e7137be9ad67f6910035b69",
+   "bodies": [
+    "paleGaze"
+   ],
+   "pieces": {
+    "upper": "lingerie-purple-top",
+    "lower": "lingerie-purple-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 121476,
+    "metallicRoughnessBytes": 5209
+   },
+   "triangles": {
+    "top": 1832,
+    "bottom": 750
+   }
+  },
+  {
+   "id": "lingerie-blush",
+   "design": "blush",
+   "label": "Blush lace plunge bodysuit",
+   "model": "outfit_lingerie_blush",
+   "glb": "game/public/assets/models/outfit-lingerie-blush.glb",
+   "bytes": 215676,
+   "sha256": "59b731340b6201301f71450cfbf452126ca07dad4b9e049c662f00e3255b8593",
+   "bodies": [
+    "paleApparition"
+   ],
+   "pieces": {
+    "upper": "lingerie-blush-top",
+    "lower": "lingerie-blush-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 54798,
+    "metallicRoughnessBytes": 3665
+   },
+   "triangles": {
+    "top": 2070,
+    "bottom": 964
+   }
+  },
+  {
+   "id": "lingerie-black",
+   "design": "black",
+   "label": "Black lace balconette bra + brief",
+   "model": "outfit_lingerie_black",
+   "glb": "game/public/assets/models/outfit-lingerie-black.glb",
+   "bytes": 321964,
+   "sha256": "c026dc53cf43a90ea48cc0f64101faab07e2e689581aff92288323f9f9e82eb8",
+   "bodies": [
+    "paleRevenant"
+   ],
+   "pieces": {
+    "upper": "lingerie-black-top",
+    "lower": "lingerie-black-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 126087,
+    "metallicRoughnessBytes": 8067
+   },
+   "triangles": {
+    "top": 2296,
+    "bottom": 1453
+   }
+  },
+  {
+   "id": "lingerie-red",
+   "design": "red",
+   "label": "Crimson lace plunge bra + garter belt + thong",
+   "model": "outfit_lingerie_red",
+   "glb": "game/public/assets/models/outfit-lingerie-red.glb",
+   "bytes": 355572,
+   "sha256": "4c097870de8678ff28a1bd03e39295a32b370edf9773edc1339bef55f40d1e23",
+   "bodies": [
+    "paleGaze"
+   ],
+   "pieces": {
+    "upper": "lingerie-red-top",
+    "lower": "lingerie-red-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 186502,
+    "metallicRoughnessBytes": 8865
+   },
+   "triangles": {
+    "top": 1537,
+    "bottom": 1430
+   }
+  },
+  {
+   "id": "lingerie-ivory",
+   "design": "ivory",
+   "label": "Ivory lace bralette + garter belt + thong + thigh rings",
+   "model": "outfit_lingerie_ivory",
+   "glb": "game/public/assets/models/outfit-lingerie-ivory.glb",
+   "bytes": 190196,
+   "sha256": "07a781c84d984f34a9538f557442eb36031c4a352fe528e453f09a806be27963",
+   "bodies": [
+    "paleRevenant"
+   ],
+   "pieces": {
+    "upper": "lingerie-ivory-top",
+    "lower": "lingerie-ivory-bottom"
+   },
+   "textures": {
+    "baseColorBytes": 50339,
+    "metallicRoughnessBytes": 6130
+   },
+   "triangles": {
+    "top": 1481,
+    "bottom": 1293
+   }
+  }
+ ],
+ "fits": [
+  {
+   "design": "green",
+   "body": "paleApparition",
+   "score": 5.3822,
+   "worst": {
+    "penetration": 0,
+    "deep": 0,
+    "hover": 0.0294,
+    "pokeVisible": 0.002,
+    "exposedHidden": 0.0158,
+    "apexCoverage": 1,
+    "groinCoverage": 1,
+    "meanGapP95MM": 6.6217
+   },
+   "regionsWorst": {
+    "top.straps / upper edge": {
+     "penetration": 0,
+     "hover": 0.0968,
+     "gapP95MM": 21.73
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  },
+  {
+   "design": "purple",
+   "body": "paleGaze",
+   "score": 8.0642,
+   "worst": {
+    "penetration": 0,
+    "deep": 0,
+    "hover": 0,
+    "pokeVisible": 0.0032,
+    "exposedHidden": 0.0152,
+    "apexCoverage": 1,
+    "groinCoverage": 0.8889,
+    "meanGapP95MM": 6.6925
+   },
+   "regionsWorst": {
+    "bottom.suspenders / thigh rings": {
+     "penetration": 0,
+     "hover": 0,
+     "gapP95MM": 10.99
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  },
+  {
+   "design": "blush",
+   "body": "paleApparition",
+   "score": 4.4977,
+   "worst": {
+    "penetration": 0,
+    "deep": 0,
+    "hover": 0,
+    "pokeVisible": 0,
+    "exposedHidden": 0.0084,
+    "apexCoverage": 1,
+    "groinCoverage": 0.9375,
+    "meanGapP95MM": 5.3275
+   },
+   "regionsWorst": {
+    "top.straps / upper edge": {
+     "penetration": 0,
+     "hover": 0.0464,
+     "gapP95MM": 12.33
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  },
+  {
+   "design": "black",
+   "body": "paleRevenant",
+   "score": 7.1476,
+   "worst": {
+    "penetration": 0.0008,
+    "deep": 0,
+    "hover": 0.0099,
+    "pokeVisible": 0,
+    "exposedHidden": 0.0103,
+    "apexCoverage": 1,
+    "groinCoverage": 0.9167,
+    "meanGapP95MM": 8.8258
+   },
+   "regionsWorst": {
+    "top.straps / upper edge": {
+     "penetration": 0.0038,
+     "hover": 0.1255,
+     "gapP95MM": 24.31
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  },
+  {
+   "design": "red",
+   "body": "paleGaze",
+   "score": 9.4619,
+   "worst": {
+    "penetration": 0,
+    "deep": 0,
+    "hover": 0,
+    "pokeVisible": 0.0021,
+    "exposedHidden": 0.0256,
+    "apexCoverage": 1,
+    "groinCoverage": 0.8889,
+    "meanGapP95MM": 11.3692
+   },
+   "regionsWorst": {
+    "top.straps / upper edge": {
+     "penetration": 0,
+     "hover": 0.1474,
+     "gapP95MM": 22.14
+    },
+    "bottom.suspenders / thigh rings": {
+     "penetration": 0,
+     "hover": 0,
+     "gapP95MM": 6.02
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  },
+  {
+   "design": "ivory",
+   "body": "paleRevenant",
+   "score": 4.2595,
+   "worst": {
+    "penetration": 0,
+    "deep": 0,
+    "hover": 0.009,
+    "pokeVisible": 0.0065,
+    "exposedHidden": 0.0172,
+    "apexCoverage": 1,
+    "groinCoverage": 1,
+    "meanGapP95MM": 9.895
+   },
+   "regionsWorst": {
+    "top.straps / upper edge": {
+     "penetration": 0,
+     "hover": 0.0539,
+     "gapP95MM": 15.58
+    },
+    "bottom.suspenders / thigh rings": {
+     "penetration": 0,
+     "hover": 0.003,
+     "gapP95MM": 7.99
+    }
+   },
+   "limitsFailed": 0,
+   "clips": [
+    "Idle",
+    "Walk",
+    "Run",
+    "Attack",
+    "Hit",
+    "Death"
+   ],
+   "poses": 87
+  }
+ ],
+ "gate": {
+  "limits": {
+   "penetration": 0.01,
+   "deep": 0.005,
+   "hover": 0.06,
+   "edgeHover": 0.12,
+   "minSdMM": -25,
+   "pokeVisible": 0.01,
+   "pokeVisibleCount": 5,
+   "exposedHidden": 0.02,
+   "exposedHiddenCount": 3,
+   "apexCoverage": 1,
+   "groinCoreCoverage": 1,
+   "groinCoverage": 0.85
+  },
+  "failures": []
+ },
+ "validation": {
+  "step": 0.1,
+  "clips": [
+   "Idle",
+   "Walk",
+   "Run",
+   "Attack",
+   "Hit",
+   "Death"
+  ],
+  "method": "lib/lingerie-metrics.mjs"
+ },
+ "fitParams": {
+  "offset": {
+   "top": 0.0035,
+   "bottom": 0.003
+  },
+  "minClear": 0.0015,
+  "poseClear": -0.0005,
+  "poseRounds": 4,
+  "posePushMax": 0.012,
+  "wrapIterations": 14,
+  "wrapRadius": [
+   0.035,
+   0.008
+  ],
+  "pushRadius": 0.006,
+  "weightSmooth": {
+   "iters": 2,
+   "lambda": 0.3
+  },
+  "strapLineFactor": 0.72,
+  "tubeMin": 0.55,
+  "mask": {
+   "maxDist": 0.025,
+   "tiltDeg": 30,
+   "inset": 0.006
+  },
+  "layerMask": {
+   "maxDist": 0.012,
+   "tiltDeg": 20,
+   "inset": 0.0015
+  }
+ },
+ "evaluation": {
+  "method": "build-lingerie.mjs --evaluate: every design fitted to every body, metrics over every 0.1 s of the six clips (lib/lingerie-metrics.mjs); score = 100 x (penetration + 3 x deep + hover + visible poke + exposed hidden) + 50 x (1 - apex coverage) + 50 x (1 - groin coverage) + mean gap p95 (mm) / 10 (lower is better); assignment = each design once, two per body, minimal worst score then sum",
+  "chosen": {
+   "worst": 9.4619,
+   "sum": 38.8131,
+   "assignment": {
+    "green": "paleApparition",
+    "purple": "paleGaze",
+    "blush": "paleApparition",
+    "black": "paleRevenant",
+    "red": "paleGaze",
+    "ivory": "paleRevenant"
+   },
+   "byBody": {
+    "paleGaze": [
+     "purple",
+     "red"
+    ],
+    "paleRevenant": [
+     "black",
+     "ivory"
+    ],
+    "paleApparition": [
+     "green",
+     "blush"
+    ]
+   }
+  },
+  "scores": {
+   "green": {
+    "paleGaze": 17.1727,
+    "paleRevenant": 7.3273,
+    "paleApparition": 5.3822
+   },
+   "purple": {
+    "paleGaze": 8.0642,
+    "paleRevenant": 12.2776,
+    "paleApparition": 10.8206
+   },
+   "blush": {
+    "paleGaze": 10.8846,
+    "paleRevenant": 6.1933,
+    "paleApparition": 4.4977
+   },
+   "black": {
+    "paleGaze": 16.2819,
+    "paleRevenant": 7.1476,
+    "paleApparition": 7.5381
+   },
+   "red": {
+    "paleGaze": 9.4619,
+    "paleRevenant": 14.1004,
+    "paleApparition": 8.3263
+   },
+   "ivory": {
+    "paleGaze": 12.0784,
+    "paleRevenant": 4.2595,
+    "paleApparition": 6.1305
+   }
+  }
+ },
+ "rebuild": "node tools/asset-pipeline/zombie/build-lingerie.mjs (raw Meshy sources are private: reference/tasks/mall-lingerie-20261102-221554/meshy/raw)"
+}

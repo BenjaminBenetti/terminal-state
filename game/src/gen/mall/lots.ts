@@ -69,7 +69,10 @@ export interface MallLotFamily {
   recess?: readonly [number, number];
   zones: readonly MallLotZone[];
   /** Suitable programs, most typical first (lane SHOPS picks among them; the program's own min size still applies). Task mall-round3-20261031
-   *  (lane SHOPS, R4): 'womenswear' joins the boutique / in-line / corner / showroom / recessed / end families. */
+   *  (lane SHOPS, R4): 'womenswear' joins the boutique / in-line / corner / showroom / recessed / end families. Task mall-lingerie-20261102
+   *  (lane STORE): 'lingerie' joins ONLY the large in-line and corridor-end families, appended LAST so no other program's typicality moves
+   *  (never a kiosk cell, compact / narrow / recessed unit, food stall, wide-shallow showroom, anchor — nor a corner unit: its second
+   *  shopfront and side stock room leave no solid wall long enough for the >= 4-booth changing area in most of them). */
   programs: readonly MallProgram[];
   /** Unit kinds a program in this family usually takes (census). */
   kinds: readonly MallUnitKind[];
@@ -128,7 +131,8 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
   'standard-line': {
     id: 'standard-line', label: 'In-line store', shape: 'rect', width: [8, 11], depth: [9, 12.5], stock: 'service-corridor', stockSize: [2.5, 3.5],
     front: 'glazed', frontages: 1, zones: ['corridor', 'atrium', 'court'],
-    programs: ['clothing', 'womenswear', 'books', 'sports', 'outdoors', 'toys', 'hardware', 'pharmacy', 'electronics', 'home', 'pet', 'arcade', 'guns', 'shoes', 'music', 'grocery'],
+    programs: ['clothing', 'womenswear', 'books', 'sports', 'outdoors', 'toys', 'hardware', 'pharmacy', 'electronics', 'home', 'pet', 'arcade', 'guns', 'shoes', 'music', 'grocery',
+      'lingerie'],
     kinds: ['store'], service: true, vacant: true, weight: 1.6, maxPerMall: 8,
     layout: 'gondola aisles perpendicular to the frontage, wall bays, cash wrap near the entry; a rear stockroom, staff door to the service corridor when one runs behind',
   },
@@ -142,7 +146,7 @@ export const MALL_LOTS: Readonly<Record<MallLotId, MallLotFamily>> = {
   'end-unit': {
     id: 'end-unit', label: 'Corridor end unit', shape: 'end', width: [10, 15], depth: [10, 15], stock: 'service-corridor', stockSize: [3, 4],
     front: 'wide', frontages: 1, zones: ['end'],
-    programs: ['books', 'clothing', 'womenswear', 'sports', 'arcade', 'toys', 'home', 'outdoors', 'grocery', 'electronics', 'hardware', 'department'],
+    programs: ['books', 'clothing', 'womenswear', 'sports', 'arcade', 'toys', 'home', 'outdoors', 'grocery', 'electronics', 'hardware', 'department', 'lingerie'],
     kinds: ['store', 'anchor'], service: false, vacant: true, weight: 1, maxPerMall: 3,
     layout: 'faces straight down the corridor (a focal display on the axis), departments either side of a centre aisle, rear stockroom + service door',
   },

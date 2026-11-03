@@ -3,7 +3,7 @@
  "class": "chars",
  "task": "studio-meshy-game-replacement-20261029-01",
  "lane": "CHARS",
- "generatedAt": "2026-10-30T02:12:16.558Z",
+ "generatedAt": "2026-11-03T00:11:28.429Z",
  "baseCommit": "a7a646a1dd62bf1c641fe3dd0d1187ab322afe87",
  "method": "Accepted Meshy T2.5 native GLBs (single original front/reference image) are rebuilt by the EXISTING local CPU rig pipelines: densified (zombie/lib/densify.mjs, same surface + UV mapping) -> placement (metres, +Y up, +Z facing, feet / paws on y = 0) -> slice-landmark skeleton (18-joint humanoid / 25-joint quadruped, A-pose / bind as generated) -> simplify + new UV atlas + texture bake from the native textures -> automatic skin weights -> procedural clips (Idle/Walk/Run/Attack/Hit/Death) -> per-body garment fits (fit07 pose gate, masks, layering) recomputed for the new topology. No paid rigging / animation / remesh, no network.",
  "status": {
@@ -1053,10 +1053,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-hoodie-t25.glb",
-    "sha256": "0effd32fa6ae5f3103fe565f8c71ada214a092a8e488fc2d20be94f05e39462b",
-    "bytes": 822928,
-    "triangles": 37455,
-    "meshNodes": 5,
+    "sha256": "b0d827ca0c1a14360e018abb8d7fde7c9cc98ee933dab6a95ad4551c4320c92a",
+    "bytes": 1079796,
+    "triangles": 52437,
+    "meshNodes": 7,
     "perNodeTriangles": 7491,
     "textures": [
      {
@@ -1078,7 +1078,7 @@
       "bytes": 7458
      }
     ],
-    "skins": 5,
+    "skins": 7,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-hoodie.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1087,7 +1087,9 @@
      "courier",
      "scavenger",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleRevenant"
     ]
    },
    "densify": {
@@ -1271,10 +1273,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-flannel-t25.glb",
-    "sha256": "a3d7834f16cb2a37e73cd591cf198d3699fe90c6c481a2fb6f05296b477369f3",
-    "bytes": 622104,
-    "triangles": 26000,
-    "meshNodes": 4,
+    "sha256": "09b7e3f2853e2a40d749b21abdf86d760c1415aabdac02435e14f419c725846c",
+    "bytes": 843464,
+    "triangles": 39000,
+    "meshNodes": 6,
     "perNodeTriangles": 6500,
     "textures": [
      {
@@ -1296,7 +1298,7 @@
       "bytes": 7869
      }
     ],
-    "skins": 4,
+    "skins": 6,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-flannel.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1304,7 +1306,9 @@
      "lastshift",
      "courier",
      "heavyset",
-     "tall"
+     "tall",
+     "paleRevenant",
+     "paleApparition"
     ]
    },
    "densify": {
@@ -1379,10 +1383,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-sweater-t25.glb",
-    "sha256": "7c597f531fd3dbabcb2b70e9f922eb6baebbead57abfcf1398cbadb339f66760",
-    "bytes": 518580,
-    "triangles": 19464,
-    "meshNodes": 3,
+    "sha256": "afc69fb41c72f3136a8275131b17c373a6aca2c73d14c1e2c155fc9618f15a67",
+    "bytes": 739552,
+    "triangles": 32440,
+    "meshNodes": 5,
     "perNodeTriangles": 6488,
     "textures": [
      {
@@ -1404,14 +1408,16 @@
       "bytes": 7947
      }
     ],
-    "skins": 3,
+    "skins": 5,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-sweater.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
     "fittedBodies": [
      "courier",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleApparition"
     ]
    },
    "densify": {
@@ -1486,10 +1492,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-cargo-t25.glb",
-    "sha256": "d565911193019dc890db343f839b49db5f8648683534d7dc348bc1627bb98788",
-    "bytes": 760232,
-    "triangles": 35946,
-    "meshNodes": 6,
+    "sha256": "f7411ef49b59da9e4af710af8c34b860fe224c0239c885baca5aca5480cccbb1",
+    "bytes": 960716,
+    "triangles": 47928,
+    "meshNodes": 8,
     "perNodeTriangles": 5991,
     "textures": [
      {
@@ -1511,7 +1517,7 @@
       "bytes": 6308
      }
     ],
-    "skins": 6,
+    "skins": 8,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-cargo.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1521,7 +1527,9 @@
      "scavenger",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleApparition"
     ]
    },
    "densify": {
@@ -1596,10 +1604,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-jeans-t25.glb",
-    "sha256": "84c3ab7b822ca7c3e1416e0e392aa11f21b51ce29007bb2a158488416fcbd401",
-    "bytes": 766276,
-    "triangles": 35994,
-    "meshNodes": 6,
+    "sha256": "6bd4f0ec9f40cb89fd941e78d4284499360fe5cca208030becfbf4d267e71e8f",
+    "bytes": 954576,
+    "triangles": 47992,
+    "meshNodes": 8,
     "perNodeTriangles": 5999,
     "textures": [
      {
@@ -1621,7 +1629,7 @@
       "bytes": 9124
      }
     ],
-    "skins": 6,
+    "skins": 8,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-jeans.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1631,7 +1639,9 @@
      "scavenger",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleRevenant"
     ]
    },
    "densify": {
@@ -1706,10 +1716,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-slacks-t25.glb",
-    "sha256": "697e9d4c27db4fc38508a467e436e2439d9b23d1af6dd99251244779bc11c096",
-    "bytes": 687316,
-    "triangles": 35910,
-    "meshNodes": 6,
+    "sha256": "8d4d9cc620838e06944166600ebf326747432d923d33fa935ef8e32585a3e9f6",
+    "bytes": 876052,
+    "triangles": 47880,
+    "meshNodes": 8,
     "perNodeTriangles": 5985,
     "textures": [
      {
@@ -1731,7 +1741,7 @@
       "bytes": 4939
      }
     ],
-    "skins": 6,
+    "skins": 8,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-slacks.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1741,7 +1751,9 @@
      "scavenger",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleRevenant",
+     "paleApparition"
     ]
    },
    "densify": {
@@ -1816,10 +1828,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-hardhat-t25.glb",
-    "sha256": "b2c7274a6ad3bf42c71f5407f0e971c3f9dfe890abe63624a8f800dcca77cf4a",
-    "bytes": 273028,
-    "triangles": 10990,
-    "meshNodes": 5,
+    "sha256": "994bbc71496b5b069a9e5679f9389acce30e300ba1969c8eebc6005d48cb42bd",
+    "bytes": 352460,
+    "triangles": 15386,
+    "meshNodes": 7,
     "perNodeTriangles": 2198,
     "textures": [
      {
@@ -1841,7 +1853,7 @@
       "bytes": 5635
      }
     ],
-    "skins": 5,
+    "skins": 7,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-hardhat.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1850,7 +1862,9 @@
      "courier",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleRevenant",
+     "paleApparition"
     ]
    },
    "densify": {
@@ -1925,10 +1939,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-cap-t25.glb",
-    "sha256": "7a1dfb50e83c7c930cb4cd85f5d1eb19f81de6a371f8cf34ca868a7be1d10e5d",
-    "bytes": 250812,
-    "triangles": 11000,
-    "meshNodes": 5,
+    "sha256": "791f2a93cb19cef4d35b721a70f232663ab96b86b956a7213c3c8edf9db95fd2",
+    "bytes": 328068,
+    "triangles": 15400,
+    "meshNodes": 7,
     "perNodeTriangles": 2200,
     "textures": [
      {
@@ -1950,7 +1964,7 @@
       "bytes": 1425
      }
     ],
-    "skins": 5,
+    "skins": 7,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-cap.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -1959,7 +1973,9 @@
      "courier",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleRevenant"
     ]
    },
    "densify": {
@@ -2034,10 +2050,10 @@
    },
    "runtime": {
     "path": "game/public/assets/models/outfit-beanie-t25.glb",
-    "sha256": "4bd14c48ede2decb10a05439b98fd6b40476ea4510cd96685bf31ce35606f6b6",
-    "bytes": 262260,
-    "triangles": 10995,
-    "meshNodes": 5,
+    "sha256": "0d2f80988ad2db03a80e93f2bfc1fbbb57133b68fbc444bb8e04cf31b7cd607f",
+    "bytes": 340436,
+    "triangles": 15393,
+    "meshNodes": 7,
     "perNodeTriangles": 2199,
     "textures": [
      {
@@ -2059,7 +2075,7 @@
       "bytes": 1221
      }
     ],
-    "skins": 5,
+    "skins": 7,
     "animations": [],
     "derivativeManifest": "game/public/assets/derivatives/outfit-beanie.json",
     "buildTool": "tools/asset-pipeline/zombie/build-wardrobe.mjs (wardrobe.config.mjs T25 pin)",
@@ -2068,7 +2084,9 @@
      "courier",
      "agent",
      "heavyset",
-     "tall"
+     "tall",
+     "paleGaze",
+     "paleApparition"
     ]
    },
    "densify": {

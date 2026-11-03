@@ -14,7 +14,7 @@ import {execFileSync} from 'node:child_process';
 import {NodeIO} from '@gltf-transform/core';
 import {KHRMeshQuantization} from '@gltf-transform/extensions';
 import {REPO} from './lib/master.mjs';
-import {T25_TASK, T25_BASE_COMMIT, deliveredIndex, restoreRecord} from './lib/t25.mjs';
+import {T25_TASK, T25_BASE_COMMIT, deliveredIndex, restoreRecord, repoRel} from './lib/t25.mjs';
 import {liveModelFiles} from './lib/live-files.mjs';
 import {T25, KEEP_BODY_FILES, SKIP_WEARABLES} from './wardrobe.config.mjs';
 
@@ -47,7 +47,7 @@ function nativeRecord(asset) {
   if (!d) return null;
   return {meshyTaskId: d.taskId, attempt: d.attempt, provider: 'Meshy meshy_image_to_3d, ai_model meshy-t2.5, model_type smart-topology, should_texture + enable_pbr, texture_resolution 2k, target_formats [glb]',
     args: d.args, nativeGlb: `reference/tasks/meshy-game-replacement-20261029/assets/${d.nativeGlb}`, nativeSha256: d.sha256, nativeBytes: d.bytes, nativeTriangles: d.tris, nativeTextures: d.textures,
-    inputImage: d.inputImage && rel(d.inputImage), inputImageSha256: d.inputImageSha256, review: d.review, reviewNote: d.reviewNote};
+    inputImage: d.inputImage && repoRel(d.inputImage), inputImageSha256: d.inputImageSha256, review: d.review, reviewNote: d.reviewNote};
 }
 
 const live = liveModelFiles();
