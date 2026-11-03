@@ -133,6 +133,9 @@ export function createFogUniforms() {
     shaftDir: uniform(new THREE.Vector4(0, -1, 0, 0)), shaftRect: uniform(new THREE.Vector4(0, 0, 0, 0)), shaftA: uniform(new THREE.Vector4(0, 6, 0, 0.05)),
     shaftB: uniform(new THREE.Vector4(1, 0.5, 0.7, 0.045)), shaftC: uniform(new THREE.Vector4(0.5, 0.16, 0, 0)), shaftCol: uniform(new THREE.Vector3()),
     shaftHole: uniform(new THREE.Vector4(0, 0, 0, 1)),
+    // task reactor-surface-redesign-credits-20261103 (primary): the Reactor's OUTDOOR haze cap [y0, y1, -, on] — the haze term fades out
+    // between y0 and y1 over its surface deck (reactor-variant programs only; render/atmosphere.ts AtmosphereParams.skyCap)
+    skyCap: uniform(new THREE.Vector4(0, 1, 0, 0)),
     // temporal
     prevView: uniform(M4()), prevProj: uniform(M4()), historyValid: uniform(0), blend: uniform(0.85),
     // composite
@@ -288,7 +291,13 @@ export function createMarchMaterial(u: FogUniforms, tex: FogTextures, o: MarchOp
       const mf = n(u.mapFloors).element(layer).toVar();
       const h = n(p).y.sub(n(mf).x.add(m.g.mul(n(mf).y))).toVar();
       const hf = clamp(exp(n(u.heightFalloff).negate().mul(h.sub(u.refHeight))), 0.25, 2.5);
-      const base0 = n(u.density).mul(mult).toVar();
+      // task reactor-surface-redesign-credits-20261103 (primary; user screenshot "strange fog pillars" on the Reactor's surface): the
+      // height profile never drops under 0.25 and the light field lights a whole column, so over the surface deck the haze of the band
+      // picked there (the outdoor storey's, the pit's under the aperture) rose into the sky as lamp / beam lit pillars. Above the deck
+      // only open air remains: the haze (not the gas, smoke or depth strata) fades out a few metres over it (reactor programs only).
+      // (every other program: exactly the previous medium)
+      const base0 = (o.depth ? n(u.density).mul(mult).mul(select(n(u.skyCap).w.greaterThan(0.5), float(1).sub(smoothstep(n(u.skyCap).x, n(u.skyCap).y, n(p).y)), float(1)))
+        : n(u.density).mul(mult)).toVar();
       const D = n(noiseT.sample(n(p).mul(sc.d).add(u.offDet)).level(0)).toVar();
       const wk = n(u.warp).mul(u.noiseAmount).mul(2);
       const wp = n(p).add(vec3(D.b.sub(0.5).mul(wk), D.r.sub(0.5).mul(wk).mul(0.3), D.a.sub(0.5).mul(wk))).toVar();

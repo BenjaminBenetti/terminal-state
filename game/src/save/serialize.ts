@@ -8,7 +8,7 @@
 //
 // SerializedRunV1 (plain JSON data; never three.js objects / closures / DOM / audio):
 //   v: 1
-//   point: 'departure' | 'arrival' | 'new-game'        the transition this save was taken at
+//   point: 'departure' | 'arrival' | 'new-game' | 'ending'   the transition this save was taken at ('ending': lane CREDITS' Main Menu)
 //   campaign: CampaignState                             deep copy (network, current, known, visited, cheat, won, transit)
 //   seeds: Record<LevelId, number>                      the run's archetype seeds (RunState.seeds; the legacy fallback)
 //   section: string                                     run.current.section ('main'; the station is campaign.current)
@@ -54,10 +54,14 @@ export const SAVE_FORMAT = 'terminal-state-save' as const;
 /** run.entered entries kept (a QA log; everything else is kept whole). */
 export const ENTERED_KEEP = 64;
 
-/** The transition a save was taken at (SaveMeta.reason adds 'import'). */
-export type SavePoint = 'departure' | 'arrival' | 'new-game';
+/**
+ * The transition a save was taken at (SaveMeta.reason adds 'import'). Task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01
+ * (lane CREDITS): + 'ending' — the Reactor credits' "Main Menu" saves the run before it returns to the menu (Game.commitEndingSave; no
+ * journey: transit null; the pose is the parked train's spawn point). Older saves (the first three points) load unchanged.
+ */
+export type SavePoint = 'departure' | 'arrival' | 'new-game' | 'ending';
 export type SaveReason = SavePoint | 'import';
-export const SAVE_POINTS: readonly SavePoint[] = ['departure', 'arrival', 'new-game'];
+export const SAVE_POINTS: readonly SavePoint[] = ['departure', 'arrival', 'new-game', 'ending'];
 export const SAVE_REASONS: readonly SaveReason[] = [...SAVE_POINTS, 'import'];
 
 /** The player's pose in the player train's local frame (gen/playerTrain.ts worldToTrain; yaw relative to the car's yaw). */
