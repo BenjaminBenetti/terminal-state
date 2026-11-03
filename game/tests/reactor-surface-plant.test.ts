@@ -26,6 +26,33 @@ import {REACTOR_MODELS} from '../src/world/reactor/archAssets';
 import {ReactorSurface} from '../src/world/reactor/surface';
 import {SURFACE_SEEDS, fakeSurfaceHost, inCatalogue, poseCamera, surfaceLayout} from './reactor-surface-fixture';
 import {loadStripped} from './helpers/openablesFixture';
+import {PLANT_LOOK, plantPulseAt} from '../src/world/reactor/surfacePlantLook';
+import {GLSLNodeBuilder, WGSLNodeBuilder, type WebGPURenderer} from 'three/webgpu';
+import {rendererFor} from './helpers/fogCompile';
+import {setAttributeInstancing} from '../src/render/instancing';
+
+// (the reactor-surface-rain test's shader census: uniform buffers / textures per stage of a compiled node material)
+const ubos = (src: string, backend: 'glsl' | 'wgsl') => backend === 'wgsl' ? (src.match(/var<uniform>/g) ?? []).length : (src.match(/^(layout\(\s*std140\s*\)\s*)?uniform\s+\w+\s*\{/gm) ?? []).length;
+const texs = (src: string, backend: 'glsl' | 'wgsl') => backend === 'wgsl' ? (src.match(/^@binding\(.*\) var \w+ : texture_/gm) ?? []).length : (src.match(/^uniform\s+(highp\s+|mediump\s+|lowp\s+)?\w*sampler\w*\s+\w+;/gm) ?? []).length;
+function compileMesh(mesh: THREE.Mesh, backend: 'glsl' | 'wgsl'): {vertex: string; fragment: string} {
+  const r = rendererFor(backend) as WebGPURenderer;
+  const caps = (r.backend as unknown as {capabilities?: {getUniformBufferLimit(): number; llStub?: boolean}}).capabilities;
+  if (caps && !caps.llStub) { const f = caps.getUniformBufferLimit.bind(caps); caps.getUniformBufferLimit = () => { try { return f(); } catch { return 65536; } }; caps.llStub = true; }
+  const B = (backend === 'glsl' ? GLSLNodeBuilder : WGSLNodeBuilder) as unknown as new (o: THREE.Object3D, r: WebGPURenderer) => {scene: THREE.Scene; camera: THREE.Camera; build(): void; vertexShader?: string; fragmentShader?: string};
+  const scene = new THREE.Scene(), parent = mesh.parent;
+  scene.add(mesh);
+  const b = new B(mesh, r);
+  const camera = new THREE.PerspectiveCamera();
+  b.scene = scene;
+  b.camera = camera;
+  const lightsNode = (r as unknown as {lighting: {getNode(s: THREE.Scene, c: THREE.Camera): {setLights(l: THREE.Light[]): void}}}).lighting.getNode(scene, camera);
+  lightsNode.setLights([]);
+  (b as unknown as {lightsNode: unknown}).lightsNode = lightsNode;
+  b.build();
+  scene.remove(mesh);
+  if (parent) parent.add(mesh);
+  return {vertex: b.vertexShader ?? '', fragment: b.fragmentShader ?? ''};
+}
 
 const OUT = process.env.LL_PLANT_OUT;
 const out = (s: string) => { if (OUT) appendFileSync(OUT, s + '\n'); };
@@ -180,7 +207,7 @@ describe('the surface plant builder', () => {
     expect(v.housings[0].count).toBe(n);
     expect(v.housings[0].geometry).toBe(fan.geometry); // the library's geometry, shared
     expect(v.stats.model).toBe(true);
-    expect(v.stats.draws).toBeLessThanOrEqual(8); // (5 for the towers / wall + 3 for the flat collar: concrete, hatching, film gap)
+    expect(v.stats.draws).toBeLessThanOrEqual(11); // (5 for the towers / wall + 3 for the flat collar: concrete, hatching, film gap + 3 for the night dressing: tower concrete, lamp heads, glow cards)
     out(`builder: ${v.stats.draws} draws, ${v.stats.tris} triangles (fake housing), ${plan.parts.length} parts; collar ${JSON.stringify(v.stats.collar)}`);
     v.root.traverse(o => { if ((o as THREE.Mesh).isMesh) { expect((o as THREE.Mesh).castShadow, o.name).toBe(false); expect((o as THREE.Mesh).receiveShadow).toBe(false); } });
     // every merged vertex outside keepR; off the walkable cells unless it is a FLAT overlay (the collar layer: at most maxUp over the
@@ -413,6 +440,119 @@ describe('the flat engineered collar round the aperture (no collision: a flat ov
       for (const q of gap) expect(Math.hypot(Math.max(h.x - q.x1, 0, q.x0 - h.x), Math.max(h.z - q.z1, 0, q.z0 - h.z))).toBeGreaterThanOrEqual(h.keepR - 1e-6);
     }
   });
+});
+
+describe('the towers\' night dressing (red obstruction lights, sodium work lights, glows): visible in the rainy dusk', () => {
+  it('4 red obstruction lights on each stack\'s cap corners, 3 sodium work lights at the fan, a halo behind each rotor; towers blink out of phase', () => {
+    for (const sd of SEEDS) {
+      const {site, plan} = planOf(sd);
+      const v = buildSurfacePlant(site, plan, () => undefined, {concrete: null, steel: null, grating: null});
+      try {
+        const D = v.dressing, n = plan.towers.length;
+        expect(D.lamps.length).toBe(7 * n);
+        expect(D.cards.length).toBe(8 * n);
+        expect(D.heads!.count).toBe(D.lamps.length);
+        expect(D.glows!.count).toBe(D.cards.length);
+        expect(D.towers).toBeTruthy();
+        expect(D.tune!.tone.value).toBe(PLANT_LOOK.towerTone);
+        expect(PLANT_LOOK.towerTone).toBeGreaterThan(1); // the towers a touch lighter than the parapet's finish
+        for (const t of plan.towers) {
+          const inv = new THREE.Matrix4().compose(new THREE.Vector3(t.x, t.y, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.yaw), new THREE.Vector3(1, 1, 1)).invert();
+          const local = (p: {x: number; y: number; z: number}) => new THREE.Vector3(p.x, p.y, p.z).applyMatrix4(inv);
+          const red = D.lamps.filter(l => l.tower === t.id && l.kind === 'obstruction'), work = D.lamps.filter(l => l.tower === t.id && l.kind === 'work');
+          expect(red.length).toBe(4);
+          expect(work.length).toBe(3);
+          // red: over the cap (above the stack's top, inside the cap's corners), red, pulsing in the tower's own phase
+          const corners = new Set<string>();
+          for (const l of red) {
+            const q = local(l);
+            expect(q.y).toBeGreaterThan(t.h + 0.5);
+            expect(q.y).toBeLessThan(t.h + 1.5);
+            expect(Math.abs(q.x)).toBeLessThan(t.hw - 0.55 + 0.45);
+            expect(Math.abs(q.z)).toBeLessThan(t.hd - 0.55 + 0.45);
+            expect(Math.abs(q.x)).toBeGreaterThan(t.hw - 0.55); // outside the cowl
+            corners.add(`${Math.sign(q.x)},${Math.sign(q.z)}`);
+            expect(l.color[0]).toBeGreaterThan(5 * l.color[1]);
+            expect(l.blink).toEqual([t.blink, 1]);
+          }
+          expect(corners.size).toBe(4);
+          // sodium: at the fan (the platform's front corners, over the housing), warm, steady
+          const s = t.fanScale, hub = t.fan.hubY - t.y;
+          for (const l of work) {
+            const q = local(l);
+            expect(Math.abs(q.x)).toBeLessThan(FAN_ANCHORS.plateW * s / 2 + 0.6);
+            expect(q.y).toBeGreaterThan(hub - FAN_ANCHORS.ringY * s - 0.5);
+            expect(q.y).toBeLessThan(hub + (FAN_ANCHORS.plateH - FAN_ANCHORS.ringY) * s + 1.2);
+            expect(q.z).toBeGreaterThan(t.hd);
+            expect(q.z).toBeLessThan(t.hd + FAN_ANCHORS.depth * s + 1);
+            expect(l.color[0]).toBeGreaterThan(l.color[1]);
+            expect(l.color[1]).toBeGreaterThan(l.color[2]);
+            expect(l.blink[1]).toBe(0);
+          }
+          // the halo behind the rotor: centred on the hub, between the face and the blades, never pulled toward the eye
+          const halo = D.cards.filter(c => c.tower === t.id && c.kind === 'halo');
+          expect(halo.length).toBe(1);
+          const hq = local(halo[0]);
+          expect(hq.y).toBeCloseTo(hub, 4);
+          expect(hq.z).toBeGreaterThan(t.hd);
+          expect(hq.z).toBeLessThan(t.hd + FAN_ANCHORS.bladeZ * s - FAN_ANCHORS.back * s);
+          expect(halo[0].pull).toBe(0);
+        }
+        // out of phase: the towers' pulses differ by a good part of a cycle; at tower 0's peak tower 1 is dim
+        if (n === 2) {
+          const [a, b] = plan.towers, d = Math.abs(a.blink - b.blink), cyc = Math.min(d, 1 - d);
+          expect(cyc).toBeGreaterThan(0.3);
+          const tPeak = (1 - a.blink) % 1;
+          expect(plantPulseAt(tPeak, a.blink, 1)).toBeCloseTo(1, 5);
+          expect(plantPulseAt(tPeak, b.blink, 1)).toBeLessThan(0.5);
+        }
+        // the heads / cards where the lists say (instance matrices), the cards translation-only (camera-facing in the shader)
+        const m = new THREE.Matrix4(), p = new THREE.Vector3(), q = new THREE.Quaternion(), sc = new THREE.Vector3();
+        D.lamps.forEach((l, i) => { D.heads!.getMatrixAt(i, m); m.decompose(p, q, sc); expect(p.distanceTo(new THREE.Vector3(l.x, l.y, l.z))).toBeLessThan(1e-4); expect(sc.x).toBeCloseTo(l.size[0], 4); });
+        D.cards.forEach((c, i) => { D.glows!.getMatrixAt(i, m); m.decompose(p, q, sc); expect(p.distanceTo(new THREE.Vector3(c.x, c.y, c.z))).toBeLessThan(1e-4); expect(sc.x).toBeCloseTo(1, 6); expect(Math.abs(q.w)).toBeCloseTo(1, 6); });
+        const gm = D.glows!.material as THREE.Material;
+        expect(gm.transparent && !gm.depthWrite && gm.blending === THREE.AdditiveBlending).toBe(true);
+        expect(D.glows!.renderOrder).toBeGreaterThan(1); // after the wet film
+        // nothing per frame: spinning the fans never touches the lamps / cards
+        const hv = D.heads!.instanceMatrix.version, gv = D.glows!.instanceMatrix.version;
+        for (let f = 0; f < 30; f++) v.tick(1 / 60, true, 1);
+        expect(D.heads!.instanceMatrix.version).toBe(hv);
+        expect(D.glows!.instanceMatrix.version).toBe(gv);
+        out(`seed ${sd} dressing: ${D.lamps.length} lamps, ${D.cards.length} cards, blink ${plan.towers.map(t => t.blink).join(' / ')}; ${v.stats.draws} draws`);
+      } finally {
+        v.dispose();
+      }
+    }
+  });
+
+  it('the dressing\'s materials compile on both backends within WebGPU\'s 12 uniform buffers per stage', () => {
+    const {site, plan} = planOf(SURFACE_SEEDS[0]);
+    const t = new THREE.DataTexture(new Uint8Array([128, 128, 128, 255]), 1, 1);
+    t.needsUpdate = true;
+    const v = buildSurfacePlant(site, plan, () => undefined, {concrete: t, steel: t, grating: t});
+    try {
+      const D = v.dressing;
+      const meshes: [string, THREE.Mesh][] = [['towers', new THREE.Mesh(D.towers!.geometry, D.towers!.material)], ['lamps', D.heads!], ['glows', D.glows!]];
+      for (const backend of ['glsl', 'wgsl'] as const) for (const attr of [true, false]) {
+        setAttributeInstancing(attr);
+        try {
+          for (const [name, mesh] of meshes) {
+            const c = compileMesh(mesh, backend);
+            expect(c.fragment.length, name).toBeGreaterThan(200);
+            for (const [stage, src] of [['vertex', c.vertex], ['fragment', c.fragment]] as const) {
+              out(`${name} ${backend} attr=${attr} ${stage}: uniform buffers ${ubos(src, backend)}, textures ${texs(src, backend)}`);
+              expect(ubos(src, backend), `${name} ${backend} ${stage}`).toBeLessThanOrEqual(12);
+              expect(texs(src, backend), `${name} ${backend} ${stage}`).toBeLessThanOrEqual(2);
+            }
+          }
+        } finally {
+          setAttributeInstancing(false);
+        }
+      }
+    } finally {
+      v.dispose();
+    }
+  }, 300_000);
 });
 
 describe('the runtime: the plant under the outdoor view, the fans turning after the win', () => {

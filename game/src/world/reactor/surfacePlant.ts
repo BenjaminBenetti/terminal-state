@@ -27,6 +27,7 @@ import {SURFACE_LAYERS} from './surfaceCity';
 import {RING_VIEW} from './endingViews';
 import {controlSkin} from './controlsSkin';
 import {cloneSurfaceMaterial} from '../materials';
+import {PLANT_LOOK, plantGlowMaterial, plantLampMaterial, towerConcreteMaterial} from './surfacePlantLook';
 
 /** The existing colour maps the plant reuses (null: a flat tone — Node tests / a failed fetch). */
 export interface PlantTextures { concrete: THREE.Texture | null; steel: THREE.Texture | null; grating: THREE.Texture | null }
@@ -40,6 +41,11 @@ export const plantTextures = (): PlantTextures => ({
 
 /** The lazy-library key of the fan housing model. */
 export const PLANT_FAN_KEY = REACTOR_MODELS.fanHousing.key;
+
+/** A lamp head of the towers' dressing (world): kind, tower, centre, head size (m), colour, pulse (phase cycles, depth 0 = steady). */
+export interface PlantLamp { kind: 'obstruction' | 'work'; tower: number; x: number; y: number; z: number; size: readonly [number, number, number]; color: readonly [number, number, number]; blink: readonly [number, number] }
+/** A glow card (world centre, card size, pull toward the eye, colour, pulse): one per lamp + a halo behind each rotor. */
+export interface PlantCard { kind: 'obstruction' | 'work' | 'halo'; tower: number; x: number; y: number; z: number; w: number; h: number; pull: number; color: readonly [number, number, number]; blink: readonly [number, number] }
 
 /** One spinning rotor: its basis (local Z = the fan's axis, at the blades' centre), radius, angle, speed (0..1), rev / s at full. */
 export interface PlantRotor { basis: THREE.Matrix4; radius: number; angle: number; speed: number; rev: number }
@@ -57,6 +63,16 @@ export interface SurfacePlantView {
   stats: {towers: number; parts: number; draws: number; tris: number; model: boolean; collar: {segments: number; tris: number; filmGap: number}};
   /** (lane PLANT follow-up) The flat collar's meshes: the precast concrete, the yellow hatching, the wet film over the film's bare cells. */
   collar: {concrete: THREE.Mesh | null; hatch: THREE.Mesh | null; film: THREE.Mesh | null};
+  /**
+   * (lane PLANT follow-up 2) The towers' night dressing: the lighter tower concrete (with the sodium wash round each fan), the lamp
+   * heads (red obstruction lights pulsing out of phase per tower, steady sodium work lights) and their additive glow cards (+ a warm
+   * halo behind each rotor); `lamps` = per lamp / card: kind, tower, world position, pulse (phase, depth). QA: `tune` (tone, wash).
+   */
+  dressing: {
+    towers: THREE.Mesh | null; heads: THREE.InstancedMesh | null; glows: THREE.InstancedMesh | null;
+    lamps: PlantLamp[]; cards: PlantCard[];
+    tune: {tone: {value: number}; wash: {value: number}} | null;
+  };
   /** Per frame: `shown` = the surface view is visible (the eye outside), `power` = STARTUP's clearing 0..1. Returns matrices written. */
   tick(dt: number, shown: boolean, power?: number): number;
   dispose(): void;
@@ -160,9 +176,11 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'ho
   const gltf = plan.towers.length ? models(PLANT_FAN_KEY) : undefined;
   const fans: PlantRotor[] = [];
   const housingMats: THREE.Matrix4[] = [];
+  const towerC = new Batch(), lamps: PlantLamp[] = [], cards: PlantCard[] = [];
   for (const tw of plan.towers) {
     const f = frameM(tw.x, tw.y, tw.z, tw.yaw);
-    towerGeometry(tw, f, concrete, steel, grille, !gltf);
+    towerGeometry(tw, f, towerC, steel, grille, !gltf);
+    towerLamps(tw, f, steel, lamps, cards);
     const s = tw.fanScale, zModel = tw.hd - FAN_ANCHORS.back * s; // the back flange on the stack's front face
     const hub = tw.fan.hubY - tw.y;
     housingMats.push(f.clone().multiply(new THREE.Matrix4().compose(new THREE.Vector3(0, hub - FAN_ANCHORS.ringY * s, zModel), new THREE.Quaternion(), new THREE.Vector3(s, s, s))));
@@ -171,6 +189,11 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'ho
     fans.push({basis, radius: tw.bladeR, angle: tw.phase, speed: 0, rev: tw.rev});
   }
   // --- materials (existing maps through the wet outdoor look; owned per build) ---
+  // the towers' concrete: its own instance of the wall finish, lighter, + the sodium wash round each fan (follow-up 2)
+  const tc = towerConcreteMaterial(tex.concrete, plan.towers.map(t => ({x: t.x + Math.sin(t.yaw) * t.hd, y: t.fan.hubY, z: t.z + Math.cos(t.yaw) * t.hd, r: FAN_ANCHORS.ringR * t.fanScale, nx: Math.sin(t.yaw), nz: Math.cos(t.yaw)})));
+  own.materials.push(tc.material);
+  const towersMesh = towerC.build('reactor-surface-plant-towers', tc.material);
+  if (towersMesh) { meshes.push(towersMesh); own.geometries.push(towersMesh.geometry); tris += triCount(towersMesh.geometry); }
   // --- the flat collar round the aperture (its anchor plates / channel edges join the steel batch, the channel grating the grille's) ---
   const collarB = new Batch(), hatchB = new Batch();
   collarGeometry(plan.collar, site, collarB, hatchB, steel, grille);
@@ -232,6 +255,41 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'ho
     meshes.push(rotors);
     tris += triCount(g) * fans.length;
   }
+  // --- the towers' lamp heads (ONE InstancedMesh: unlit, pulsing by TSL time) and their glow cards (ONE additive InstancedMesh) ---
+  let heads: THREE.InstancedMesh | null = null, glows: THREE.InstancedMesh | null = null;
+  const m4 = new THREE.Matrix4(), cc = new THREE.Color();
+  if (lamps.length) {
+    const g = kitGeometry('bulb');
+    own.geometries.push(g);
+    const blink = new THREE.InstancedBufferAttribute(new Float32Array(lamps.length * 4), 4);
+    lamps.forEach((l, i) => blink.setXYZW(i, l.blink[0], l.blink[1], 0, 0));
+    const lm = plantLampMaterial(blink);
+    own.materials.push(lm);
+    heads = new THREE.InstancedMesh(g, lm, lamps.length);
+    heads.name = 'reactor-surface-plant-lamps';
+    lamps.forEach((l, i) => {
+      heads!.setMatrixAt(i, m4.makeScale(l.size[0], l.size[1], l.size[2]).setPosition(l.x, l.y, l.z));
+      heads!.setColorAt(i, cc.setRGB(l.color[0], l.color[1], l.color[2]));
+    });
+    heads.computeBoundingSphere();
+    meshes.push(heads);
+    tris += triCount(g) * lamps.length;
+  }
+  if (cards.length) {
+    const g = new THREE.PlaneGeometry(1, 1);
+    own.geometries.push(g);
+    const card = new THREE.InstancedBufferAttribute(new Float32Array(cards.length * 4), 4), blink = new THREE.InstancedBufferAttribute(new Float32Array(cards.length * 4), 4);
+    cards.forEach((c, i) => { card.setXYZW(i, c.w, c.h, c.pull, 0); blink.setXYZW(i, c.blink[0], c.blink[1], 0, 0); });
+    const gm = plantGlowMaterial(card, blink);
+    own.materials.push(gm);
+    glows = new THREE.InstancedMesh(g, gm, cards.length);
+    glows.name = 'reactor-surface-plant-glows';
+    cards.forEach((c, i) => { glows!.setMatrixAt(i, m4.makeTranslation(c.x, c.y, c.z)); glows!.setColorAt(i, cc.setRGB(c.color[0], c.color[1], c.color[2])); });
+    glows.renderOrder = 2; // (after the wet film)
+    glows.frustumCulled = false; // (camera-facing cards: their instance bounds are only the centres)
+    meshes.push(glows);
+    tris += 2 * cards.length;
+  }
   for (const m of meshes) {
     m.castShadow = m.receiveShadow = false;
     m.matrixAutoUpdate = false;
@@ -255,6 +313,7 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'ho
     stats: {towers: plan.towers.length, parts: plan.parts.length, draws: meshes.length, tris, model: !!gltf,
       collar: {segments: plan.collar.segments, tris: (collarMesh ? triCount(collarMesh.geometry) : 0) + (hatch ? triCount(hatch.geometry) : 0), filmGap: fg ? triCount(fg) : 0}},
     collar: {concrete: collarMesh, hatch, film},
+    dressing: {towers: towersMesh, heads, glows, lamps, cards, tune: towersMesh ? {tone: tc.tone, wash: tc.wash} : null},
     tick(dt: number, shown: boolean, power = 1): number {
       if (!(dt > 0) || !fans.length) return 0;
       const target = Math.max(0, Math.min(1, Number.isFinite(power) ? power : 0));
@@ -271,6 +330,8 @@ export function buildSurfacePlant(site: Pick<SurfaceSite, 'y' | 'parapetY' | 'ho
       root.removeFromParent();
       for (const h of housings) h.dispose();
       rotors?.dispose();
+      heads?.dispose();
+      glows?.dispose();
       for (const g of own.geometries) g.dispose();
       for (const m of own.materials) m.dispose();
     },
@@ -397,6 +458,51 @@ function towerGeometry(tw: VentTowerPlan, f: THREE.Matrix4, concrete: Batch, ste
     const pod = new THREE.CylinderGeometry(ringR * 0.3, ringR * 0.3, depth * 0.5, 16);
     steel.geo(f, pod, new THREE.Matrix4().makeRotationX(Math.PI / 2).premultiply(new THREE.Matrix4().makeTranslation(0, hub, zFace + depth * 0.35)));
   }
+}
+
+/**
+ * The tower's NIGHT DRESSING (follow-up 2: the towers must read from the plaza in the rainy dusk), in its frame `f`:
+ *  - four red aviation OBSTRUCTION LIGHTS on short steel posts at the cap's corners (round the discharge cowl), pulsing at ~1 Hz,
+ *    the tower's own phase (VentTowerPlan.blink: the two towers half a cycle apart), each with a red glow card;
+ *  - three warm sodium WORK LIGHTS (steady): on the service platform's two front railing posts and on a bracket over the fan housing,
+ *    each under a steel hood, with a warm glow card; and a warm HALO card behind the rotor (the blades turn against it).
+ * The lamp heads go to `lamps`, the cards to `cards`; their posts / hoods / brackets into the steel batch.
+ */
+function towerLamps(tw: VentTowerPlan, f: THREE.Matrix4, steel: Batch, lamps: PlantLamp[], cards: PlantCard[]): void {
+  const L = PLANT_LOOK, {hw, hd, h: H} = tw, s = tw.fanScale, hub = tw.fan.hubY - tw.y;
+  const hw2 = hw - 0.55, hd2 = hd - 0.55, capTop = H + 0.5, v = new THREE.Vector3();
+  const world = (lx: number, ly: number, lz: number) => v.set(lx, ly, lz).applyMatrix4(f).clone();
+  const put = (kind: PlantLamp['kind'], lx: number, ly: number, lz: number, size: readonly [number, number, number], color: readonly [number, number, number], glow: readonly [number, number, number], card: number, blink: readonly [number, number]) => {
+    const p = world(lx, ly, lz);
+    lamps.push({kind, tower: tw.id, x: p.x, y: p.y, z: p.z, size, color, blink});
+    cards.push({kind, tower: tw.id, x: p.x, y: p.y, z: p.z, w: card, h: card, pull: 0.35, color: glow, blink});
+  };
+  // the obstruction lights: a post + base plate at each cap corner, the red dome on top
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const lx = sx * (hw2 + 0.22), lz = sz * (hd2 + 0.22);
+    steel.box(f, lx, capTop + 0.02, lz, 0.22, 0.04, 0.22);
+    steel.box(f, lx, capTop + 0.27, lz, 0.07, 0.5, 0.07);
+    put('obstruction', lx, capTop + 0.62, lz, [0.26, 0.24, 0.26], L.red, L.redGlow, 2.6, [tw.blink, 1]);
+  }
+  // the work lights: on the platform's front corner posts (aimed back at the fan) and over the housing
+  const plateW = FAN_ANCHORS.plateW * s, depth = FAN_ANCHORS.depth * s;
+  const yP = hub - FAN_ANCHORS.ringY * s - 0.3, px = plateW / 2 + 0.45, pz1 = hd + depth + 0.7;
+  for (const sx of [-1, 1]) {
+    const lx = sx * (px - 0.05), ly = yP + 1.1 + 0.2, lz = pz1 - 0.05;
+    steel.box(f, lx, ly - 0.14, lz, 0.06, 0.2, 0.06); // the stalk off the post's top
+    steel.box(f, lx, ly + 0.13, lz, 0.42, 0.05, 0.3); // the hood
+    put('work', lx, ly, lz, [0.34, 0.2, 0.26], L.sodium, L.sodiumGlow, 2.2, [0, 0]);
+  }
+  // (the boom lamp out over the housing's front, seen from the plaza over the ring's top: it shines down onto the fan)
+  const top = hub + (FAN_ANCHORS.plateH - FAN_ANCHORS.ringY) * s, oy = top + 0.45, oz = hd + depth * 0.85;
+  steel.box(f, 0, oy + 0.2, (hd + oz) / 2, 0.1, 0.1, oz - hd); // the boom off the stack face
+  const kl = Math.hypot(0.9, oz - hd - 0.4);
+  steel.box(f, 0, oy + 0.2 + 0.45, hd + (oz - hd - 0.4) / 2, 0.06, 0.06, kl, Math.atan2(0.9, oz - hd - 0.4)); // its tie back to the face
+  steel.box(f, 0, oy + 0.13, oz, 0.44, 0.05, 0.32); // the hood
+  put('work', 0, oy, oz, [0.36, 0.2, 0.28], L.sodium, L.sodiumGlow, 2.2, [0, 0]);
+  // the warm halo behind the rotor (between the grille disc and the blades: never pulled in front of them)
+  const p = world(0, hub, hd + 0.12);
+  cards.push({kind: 'halo', tower: tw.id, x: p.x, y: p.y, z: p.z, w: 2.5 * FAN_ANCHORS.ringR * s, h: 2.5 * FAN_ANCHORS.ringR * s, pull: 0, color: L.halo, blink: [0, 0]});
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
