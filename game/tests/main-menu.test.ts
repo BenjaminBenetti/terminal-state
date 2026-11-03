@@ -44,7 +44,7 @@ const ready = (host: MenuHost, o = {}) => { const c = new MainMenuController(hos
 describe('main menu: the main view and Continue', () => {
   it('no save: New game / Load / Settings, no Continue, no dev entry without dev params', () => {
     const c = ready(new FakeHost());
-    expect(ids(c)).toEqual(['new-game', 'slots', 'settings']);
+    expect(ids(c)).toEqual(['new-game', 'slots', 'settings', 'controls']);
     expect(c.continueSlot()).toBeNull();
     expect(c.focus).toBe('new-game');
   });
@@ -86,7 +86,7 @@ describe('main menu: the main view and Continue', () => {
     expect(cont.disabled).toBe(true);
     expect(cont.hint).toContain('42 %');
     expect(m.status?.text).toMatch(/Waiting for the game files/);
-    expect(enabled(c)).toEqual(['new-game', 'slots', 'settings']);
+    expect(enabled(c)).toEqual(['new-game', 'slots', 'settings', 'controls']);
     void c.activate('continue');
     expect(h.calls).not.toContain('continue:0');
     c.setBoot(true, 1);
@@ -304,14 +304,16 @@ describe('main menu: keyboard', () => {
     c.key('ArrowDown'); c.key('ArrowDown');
     expect(c.focus).toBe('settings');
     c.key('ArrowDown');
+    expect(c.focus).toBe('controls'); // (lane MENU, campaign polish: Controls is a top-level item)
+    c.key('ArrowDown');
     expect(c.focus).toBe('continue'); // wraps
     c.key('ArrowUp');
-    expect(c.focus).toBe('settings');
+    expect(c.focus).toBe('controls');
     c.key('Home');
     expect(c.focus).toBe('continue');
     c.key('End');
-    expect(c.focus).toBe('settings');
-    c.key('ArrowUp'); // slots
+    expect(c.focus).toBe('controls');
+    c.key('ArrowUp'); c.key('ArrowUp'); // slots
     c.key('Enter');
     expect(c.view).toBe('slots');
     expect(c.focus).toBe('load:0');
@@ -327,7 +329,7 @@ describe('main menu: keyboard', () => {
     c.setBoot(false, 0);
     expect(c.focus).toBe('new-game'); // Continue is disabled while the game files load
     c.key('ArrowUp');
-    expect(c.focus).toBe('settings');
+    expect(c.focus).toBe('controls');
   });
 });
 

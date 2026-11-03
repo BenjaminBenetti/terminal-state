@@ -4,8 +4,8 @@
 import {describe, expect, it} from 'vitest';
 import {STORAGE_KEYS} from '../src/campaign/types';
 import {
-  RENDER_SCALES, SETTINGS_DEFAULTS, SettingsStore, copySettingsInto, drawingBufferSize, masterGain, nativePixelRatio, parseStoredSettings,
-  renderPixelRatio, renderScaleOptions, renderScaleReadout, sanitizeSettings, serializeSettings, volumeFromPercent, volumePercent,
+  RENDER_SCALES, SETTINGS_DEFAULTS, SettingsStore, copySettingsInto, drawingBufferSize, masterGain, nativePixelRatio, nativeRatioLabel, parseStoredSettings,
+  renderPixelRatio, renderScaleReadout, sanitizeSettings, serializeSettings, volumeFromPercent, volumePercent,
   type SettingsStorage,
 } from '../src/ui/settingsStore';
 
@@ -97,9 +97,10 @@ describe('settings store: invalid storage falls back sanely', () => {
 
   it('field by field: wrong types / NaN / unknown enums fall back, out-of-range numbers clamp, the rest is kept', () => {
     const mem = new MemStorage();
-    mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.33}));
+    // (task studio-beta-campaign-polish-20261103-063841-01, lane MENU: render scale is a 25-100 % slider now — 0.333 rounds to 33 %)
+    mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.333}));
     const s = new SettingsStore(mem);
-    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertY: true, quality: 'high', renderScale: 1, trainSway: 1});
+    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1});
     expect(s.loadReport.source).toBe('invalid');
     expect([...s.loadReport.fixed].sort()).toEqual(['fov', 'muted', 'quality', 'renderScale', 'sens', 'volume']);
     // NaN / Infinity never survive (JSON has none, but a patch could carry them)
@@ -178,13 +179,12 @@ describe('render resolution: a linear scale over the existing DPR cap, composed 
     expect(drawingBufferSize(1920, 1080, 2, 'high', 0.5)).toEqual({w: 1440, h: 810}); // 1.5 cap x 0.5
   });
 
-  it('the Native label says when the cap applies', () => {
-    expect(renderScaleOptions(2, 'high')[0].label).toBe('Native (DPR-capped 1.5×)');
-    expect(renderScaleOptions(1, 'high')[0].label).toBe('Native (1×)');
-    expect(renderScaleOptions(1, 'low')[0].label).toBe('Native (capped 0.85× by Low quality)');
-    expect(renderScaleOptions(1, 'high').map(o => o.value)).toEqual([1, 0.5, 0.25]);
+  it('the native label says when the cap applies (what 100 % means)', () => {
+    expect(nativeRatioLabel(2, 'high')).toBe('1.5×, DPR-capped');
+    expect(nativeRatioLabel(1, 'high')).toBe('1×');
+    expect(nativeRatioLabel(1, 'low')).toBe('0.85×, Low quality cap');
     expect(renderScaleReadout(1920, 1080, 1, 'high', 0.5)).toBe('Renders 960 × 540 (native 1920 × 1080)');
-    expect(renderScaleReadout(1920, 1080, 1, 'high', 1)).toBe('Renders 1920 × 1080');
+    expect(renderScaleReadout(1920, 1080, 1, 'high', 1)).toBe('Renders 1920 × 1080 (native)');
   });
 
   it('render scale is not a quality preset: changing it leaves quality (and everything else) untouched', () => {
