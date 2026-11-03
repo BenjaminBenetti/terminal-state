@@ -303,6 +303,10 @@ export class TrainRide {
   // -------------------------------------------------------------------------------------------
   // Departure
 
+  /** One hop (the original call; the perf recorder wraps this method by name). */
+  depart(): Promise<DepartResult>;
+  /** A journey (lane MAP's RideJourney: [current, ..., destination]); undefined = one hop. */
+  depart(journey: RideJourney | undefined): Promise<DepartResult>;
   depart(journey?: RideJourney): Promise<DepartResult> {
     const rt = this.runtime, P = this.host.player, t = rt.train;
     const refuse = (reason: RideRefusal): Promise<DepartResult> => {
