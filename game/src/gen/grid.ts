@@ -349,6 +349,15 @@ export class Grid {
     return true;
   }
 
+  /**
+   * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): sample 0 of walkLineClearH (the start point itself), shared
+   * by every walk from a whatever its end — false = every walkLineClearH(ax, az, *, *, r) is false (its exact first iteration).
+   */
+  walkStartClearH(ax: number, az: number, r: number): boolean {
+    const f = this.floorAt(ax, az);
+    return this.circleClearH(ax, az, r, f);
+  }
+
   // -------------------------------------------------------------------------------------------
   // Reachability
 
@@ -430,6 +439,14 @@ export interface NavLevels {
   walkLineClear(ax: number, ay: number, az: number, bx: number, bz: number, r: number, by?: number): boolean;
   /** Neighbour steps (level, cell a <-> cell b) a railing closes (deck edges, stairwells, flight sides). */
   blockedEdges?(): readonly {level: number; a: number; b: number}[];
+  /**
+   * Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): walkLineClear's sample 0 at a (shared by every walk from a:
+   * false = every walk from a is blocked), and a walk BATCH around synchronous string pulling (per-column answers remembered
+   * between begin and end; gen/levels.ts beginWalkBatch). Optional: without them the string pulling runs as before.
+   */
+  walkStartClear?(ax: number, ay: number, az: number, r: number): boolean;
+  beginWalkBatch?(): void;
+  endWalkBatch?(): void;
 }
 
 /** Clear height a nav cell must offer on stacked stations (m; zombies stoop). */
@@ -880,6 +897,13 @@ export class PathFinder {
     let anchor: [number, number, number] = [ax, az, multi && opts.ay !== undefined ? opts.ay : fl[start]];
     const clear = (a: [number, number, number], b: [number, number, number]) =>
       src ? src.walkLineClear(a[0], a[2], a[1], b[0], b[1], radius, b[2]) : ga.walkLineClearH(a[0], a[1], b[0], b[1], radius);
+    // Task studio-performance-recorder-20261103-043629-01 (lane AI-CPU): sample 0 of every probe from an anchor is the anchor
+    // itself (walkLineClear's t = 0 sample does not depend on the probe's end): when it is blocked (an anchor hugging a wall:
+    // measured ~60 % of the Mall's failing probes) every probe from that anchor fails, so they are not run — the same j, the same
+    // work units / chunk boundaries. A walk batch (Levels.beginWalkBatch) remembers the per-column answers between yields.
+    const startClear = (a: [number, number, number]) =>
+      src ? (src.walkStartClear ? src.walkStartClear(a[0], a[2], a[1], radius) : true) : ga.walkStartClearH(a[0], a[1], radius);
+    const batch = src && src.beginWalkBatch && src.endWalkBatch ? src as Required<Pick<NavLevels, 'beginWalkBatch' | 'endWalkBatch'>> : null;
     const emit = (p: [number, number, number], link?: number) => { out.push(multi ? [p[0], p[1], link, p[2]] : link === undefined ? [p[0], p[1]] : [p[0], p[1], link]); };
     const segment = function* (from: number, to: number, end: [number, number, number]): Generator<void, void, void> {
       const pts: [number, number, number][] = [];
@@ -889,9 +913,12 @@ export class PathFinder {
       while (i < pts.length) {
         let j = Math.min(pts.length - 1, i + 48);
         // (j > i && !clear(anchor, pts[j])) j-- — the same probes in the same order; lane SCHED: a chunk boundary between probes
+        // lane AI-CPU: `start` = the anchor's sample 0 (-1: not evaluated since the batch (re)started: a yield may change the world)
+        let start = -1;
         while (j > i) {
-          if ((work += PULL_PROBE_UNITS) > chunk) { work = PULL_PROBE_UNITS; yield; }
-          if (clear(anchor, pts[j])) break;
+          if ((work += PULL_PROBE_UNITS) > chunk) { work = PULL_PROBE_UNITS; batch?.endWalkBatch(); yield; batch?.beginWalkBatch(); start = -1; }
+          if (start < 0) start = startClear(anchor) ? 1 : 0;
+          if (start === 1 && clear(anchor, pts[j])) break;
           j--;
         }
         emit(pts[j]);
@@ -899,18 +926,23 @@ export class PathFinder {
         i = j + 1;
       }
     };
-    let segStart = 0;
-    for (let k = 1; k < cells.length; k++) {
-      if (via[k] < 0) continue;
-      const l = links[via[k]];
-      const fromA = l.a === cells[k - 1];
-      const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
-      yield* segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
-      emit([pe.x, pe.z, pe.y], l.id);
-      anchor = [pe.x, pe.z, pe.y];
-      segStart = k;
+    batch?.beginWalkBatch();
+    try {
+      let segStart = 0;
+      for (let k = 1; k < cells.length; k++) {
+        if (via[k] < 0) continue;
+        const l = links[via[k]];
+        const fromA = l.a === cells[k - 1];
+        const ps = fromA ? l.pa : l.pb, pe = fromA ? l.pb : l.pa;
+        yield* segment(segStart, k - 1, [ps.x, ps.z, ps.y]);
+        emit([pe.x, pe.z, pe.y], l.id);
+        anchor = [pe.x, pe.z, pe.y];
+        segStart = k;
+      }
+      yield* segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
+    } finally {
+      batch?.endWalkBatch();
     }
-    yield* segment(segStart, cells.length - 1, [bx, bz, fl[goal]]);
     return out;
   }
 }
