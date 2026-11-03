@@ -25,7 +25,7 @@
 
 import {mulberry32} from '../../core/rng';
 import type {ReactorRect} from '../../gen/reactor/reactorTypes';
-import {footprintsOverlap, type CityFootprint} from './surfacePlan';
+import {SURFACE_CITY, footprintsOverlap, type CityFootprint} from './surfacePlan';
 import type {SurfaceSite} from './surfaceSite';
 
 /** One vent tower: its footprint centre / yaw, the stack's size (m) and its fan (radius, hub world y, axis: 'up' = blowing skyward). */
@@ -97,8 +97,8 @@ export const SURFACE_PLANT = {
   duct: {w: 3.4, h: 2.2, bottom: 1.15},
   /** Compound wall: pier rhythm (m), width along the edge, depth beyond the parapet, height over the parapet line; buttress length / width. */
   pierEvery: 6, pierW: 0.8, pierOut: 0.42, pierUp: 0.45, buttress: 1.35, buttressW: 0.5,
-  /** The lane SURFACE parapet's thickness (surfacePlan.ts SURFACE_CITY.parapetT): the piers' depth starts behind it. */
-  parapetT: 0.32,
+  /** The lane SURFACE parapet's thickness (read from surfacePlan.ts SURFACE_CITY.parapetT): the plenums stand behind it. */
+  parapetT: SURFACE_CITY.parapetT,
   /** Inner faces stand this far off the walk boundary (never on a walkable cell). */
   clear: 0.012,
   /** Two towers stand at least this far apart (footprint gap). */

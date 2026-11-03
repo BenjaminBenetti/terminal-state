@@ -23,6 +23,7 @@ import {PLANT_FAN_KEY, buildSurfacePlant} from '../src/world/reactor/surfacePlan
 import {REACTOR_MODELS} from '../src/world/reactor/archAssets';
 import {ReactorSurface} from '../src/world/reactor/surface';
 import {SURFACE_SEEDS, fakeSurfaceHost, inCatalogue, poseCamera, surfaceLayout} from './reactor-surface-fixture';
+import {loadStripped} from './helpers/openablesFixture';
 
 const OUT = process.env.LL_PLANT_OUT;
 const out = (s: string) => { if (OUT) appendFileSync(OUT, s + '\n'); };
@@ -254,6 +255,42 @@ describe('the surface plant builder', () => {
     for (const m of v.meshes) {
       if (m.geometry === fan.geometry) expect(disposed.has(m.name), m.name).toBe(false);
       else expect(disposed.has(m.name), m.name).toBe(true);
+    }
+  });
+
+  it('the real fan GLB (the cooked Meshy housing): its back flange on the stack face, centred on the hub, the rotor inside its ring', async () => {
+    const {site, plan} = planOf(SURFACE_SEEDS[3]);
+    const gltf = await loadStripped(REACTOR_MODELS.fanHousing.url);
+    const v = buildSurfacePlant(site, plan, k => (k === PLANT_FAN_KEY ? gltf : undefined), {concrete: null, steel: null, grating: null});
+    try {
+      expect(v.housings.length).toBeGreaterThanOrEqual(1);
+      out(`real housing: ${v.housings.length} part(s), ${v.stats.draws} draws, ${v.stats.tris} triangles for ${plan.towers.length} towers`);
+      plan.towers.forEach((t, i) => {
+        // the placed housing's bounds in the tower's frame (origin = the stack's centre at the deck, +Z = toward the plaza)
+        const inv = new THREE.Matrix4().compose(new THREE.Vector3(t.x, t.y, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.yaw), new THREE.Vector3(1, 1, 1)).invert();
+        const b = new THREE.Box3(), m = new THREE.Matrix4(), q = new THREE.Vector3();
+        for (const im of v.housings) {
+          im.getMatrixAt(i, m);
+          const pos = im.geometry.getAttribute('position');
+          for (let k = 0; k < pos.count; k++) b.expandByPoint(q.fromBufferAttribute(pos, k).applyMatrix4(m).applyMatrix4(inv));
+        }
+        const s = t.fanScale, hub = t.fan.hubY - t.y;
+        out(`tower ${t.id}: housing x ${b.min.x.toFixed(2)}..${b.max.x.toFixed(2)} y ${b.min.y.toFixed(2)}..${b.max.y.toFixed(2)} z ${b.min.z.toFixed(2)}..${b.max.z.toFixed(2)} (stack face z ${t.hd}, hub y ${hub.toFixed(2)})`);
+        expect(Math.abs(b.min.z - t.hd)).toBeLessThan(0.05 * s); // the back flange on the face
+        expect(Math.abs((b.min.x + b.max.x) / 2)).toBeLessThan(0.05 * s);
+        expect(Math.abs((b.min.y + b.max.y) / 2 - hub)).toBeLessThan(0.05 * s);
+        expect(b.max.x - b.min.x).toBeLessThan(2 * t.hw - 0.8); // on the face between the corner pilasters
+        expect(b.max.z).toBeLessThan(t.hd + t.reach); // over the duct run, never past the parapet
+        expect(b.min.y).toBeGreaterThan(SURFACE_PLANT.duct.bottom + SURFACE_PLANT.duct.h + 0.4);
+        // the rotor: centred on the hub just inside the ring's mouth, radius < the ring radius
+        const r = new THREE.Matrix4(); v.rotors!.getMatrixAt(i, r);
+        const c = new THREE.Vector3().setFromMatrixPosition(r).applyMatrix4(inv);
+        expect(c.y).toBeCloseTo(hub, 4);
+        expect(c.z).toBeGreaterThan(b.min.z);
+        expect(c.z).toBeLessThan(b.max.z);
+      });
+    } finally {
+      v.dispose();
     }
   });
 
