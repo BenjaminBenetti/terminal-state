@@ -9,6 +9,7 @@ import {BODY_CLEAR, levelsOf, type Levels} from './gen/levels';
 import type {StationLayout} from './gen/station';
 import {PropModelLibrary, loadAssets, type AssetBundle} from './assets/loader';
 import {foreignTo, levelWorkingSet, selectLevelKeys} from './assets/levelAssets'; // Task track3-eaton-centre-20261031 (lane PACKAGE): level-scoped lazy assets
+import {adoptStationName} from './campaign/stationName';
 import {LevelResources} from './assets/levelResources'; // lane PACKAGE (track3): level textures / GPU resources released with their level
 import {P7_FILES, dropUnloadedP7, p7ModelKeysFor} from './gen/props07';
 import {buildWorld, type BuiltWorld} from './world/builder';
@@ -622,7 +623,10 @@ export class Game {
   /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
-    return LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key)}); // (campaign: the node's own seed)
+    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key)}); // (campaign: the node's own seed)
+    const node = key.station ? run.node(key.station) : null;
+    if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
+    return layout;
   }
 
   /**
@@ -1234,11 +1238,10 @@ export class Game {
       const pose: TrainLocalPose = {x: ride.local.x, z: ride.local.z, yaw: ride.local.yaw, pitch: this.player.pitch, crouched: this.player.crouched};
       await this.warmRun;
       this.transitGap = true;
-      this.leaveSection(true); // the departing station's every delta goes into its memory (one world per station)
-      // the old world's deferred GPU releases go NOW (a frame later: nothing renders it any more) — a journey has no warm-up to wait
-      // for, and keeping them until the arrival would hold two stations' GPU data at once (memory over pipeline-cache reuse)
-      await nextPaint();
-      this.flushRetired();
+      // the departing station's every delta goes into its memory (one world per station). Its geometry goes now; its queued program /
+      // pipeline releases (Iteration 14) wait until the next station has rendered at the platform: Subway -> Subway shares those
+      // programs, and releasing them first recompiles them all on arrival (on a software rasterizer that memory is never returned)
+      this.leaveSection(true);
       const adjacent = neighbors(run.campaign!.network, from).includes(to);
       run.campaign = {...run.campaign!, transit: {from, to, phase: 'departing', cheat: !adjacent}};
       const s1 = this.commitSave('departure', {pose});
@@ -1256,6 +1259,8 @@ export class Game {
       await this.backgroundCompile();
       const a = await this.trainRide.arrive();
       if (a.status !== 'stopped') console.warn('campaign: arrival', a);
+      await nextPaint();
+      this.flushRetired(); // the previous station's queued releases (its programs are re-used by now)
       run.campaign = {...arriveCampaign(run.campaign!, dest.id), transit: null};
       run.entry = this.levelEntrySnapshot();
       this.updateStationIntro();
@@ -1277,12 +1282,26 @@ export class Game {
     const root = this.world?.group as THREE.Object3D | undefined;
     const r = this.renderer as unknown as {compileAsync?: (o: THREE.Object3D, c: THREE.Camera, s?: THREE.Scene) => Promise<unknown>};
     if (!root || typeof r.compileAsync !== 'function' || !this.renderer.initialized) return;
-    const flipped: THREE.Object3D[] = [];
-    root.traverse(o => { if ((o as THREE.Mesh).isMesh && o.frustumCulled) { o.frustumCulled = false; flipped.push(o); } });
+    // the warm-up's own mode rule (render/warmup.ts): 'full' on a hardware GPU = the whole station; 'view' on a software rasterizer =
+    // only what stands within 24 m of the arrival (a full compile there costs GiBs of program memory); 'off' = none
+    const mode = warmupMode(location.search, this.softwareGl?.software === true);
+    if (mode === 'off') return;
+    const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : null;
+    const box = new THREE.Box3(), sphere = new THREE.Sphere();
+    const flipped: THREE.Object3D[] = [], hidden: THREE.Object3D[] = [];
+    root.updateMatrixWorld(true);
+    root.traverse(o => {
+      if (!(o as THREE.Mesh).isMesh) return;
+      if (mode === 'view' && near) {
+        box.setFromObject(o); box.getBoundingSphere(sphere);
+        if (sphere.center.distanceTo(near) - sphere.radius > 24) { if (o.visible) { o.visible = false; hidden.push(o); } return; }
+      }
+      if (o.frustumCulled) { o.frustumCulled = false; flipped.push(o); }
+    });
     const t0 = performance.now();
     try { await Promise.race([r.compileAsync(root, this.camera, this.scene), new Promise(res => setTimeout(res, 8000))]); } catch (err) { console.warn('campaign: background compile failed', err); }
-    finally { for (const o of flipped) o.frustumCulled = true; }
-    console.info(`Terminal State: background compile of the next station ${((performance.now() - t0) / 1000).toFixed(1)} s`);
+    finally { for (const o of flipped) o.frustumCulled = true; for (const o of hidden) o.visible = true; }
+    console.info(`Terminal State: background compile of the next station (${mode}, ${flipped.length} meshes) ${((performance.now() - t0) / 1000).toFixed(1)} s`);
   }
   // --- end campaign (primary) ----------------------------------------------------------------------------------------------------
 
