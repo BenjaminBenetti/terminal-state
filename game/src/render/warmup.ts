@@ -30,6 +30,9 @@
 //  3. shadows: a few REAL frames through the game's own render path (scene pass + flashlight shadow pass + fog passes +
 //     output + overlay composite) with the canvas hidden and the torch lit, each showing one chunk of casters
 //     (unculled), so every caster's shadow variant compiles.
+//     Task studio-performance-recorder-20261103 (lane RENDER-CPU): pooled casters too, a shadow receiver in every chunk (three
+//     draws a shadow map only when a receiver draws), and in 'full' every other renderable once (its own render objects); stage 1
+//     compiles at the scene pass's render-context CALL DEPTH (host.sceneDepth, render/renderContextDepth.ts).
 //  4. view: everything is restored exactly (layers, visibility, frustum flags, render target, MRT, torch), the culler
 //     re-runs, the fog history is dropped and one normal frame renders the real view; then the canvas shows.
 // Bounded: chunks, a wall-time budget (checked between chunks; a running chunk always finishes so the renderer state is
@@ -43,6 +46,7 @@
 
 import * as THREE from 'three';
 import {CULL_LAYER} from '../world/levelCulling';
+import {compileAtDepth} from './renderContextDepth';
 
 export type WarmupMode = 'full' | 'view' | 'off';
 export type WarmupStatus = 'complete' | 'partial' | 'cancelled' | 'failed' | 'skipped';
@@ -110,7 +114,10 @@ export interface WarmItem {
   object: Renderable;
   /** Hidden objects (the renderable and / or its ancestors inside a pool) made visible for the compile only. */
   flips: THREE.Object3D[];
-  /** Casts the flashlight shadow (gets a hidden shadow frame; never a pooled / hidden object). */
+  /**
+   * Casts the flashlight shadow: gets a hidden shadow frame (task studio-performance-recorder-20261103, lane RENDER-CPU: pooled ones too,
+   * their hidden chain flipped for that frame — an InstancedMesh's shadow variant is its own node build, like its scene one).
+   */
   caster: boolean;
 }
 
@@ -124,6 +131,12 @@ export interface WarmupPlan {
   groups: number;
   /** Renderables not needed: covered by a representative, hidden outside a pool, other layer, no geometry, out of range. */
   skipped: number;
+  /**
+   * Lane RENDER-CPU: the eligible renderables a representative already covers (same cache-key group). Their node builds are shared,
+   * but three still creates each one's OWN render objects (material cache key, bindings, uniform buffers, its geometry's GPU buffers)
+   * the first time it draws, in every pass; 'full' mode draws them once through the real hidden frames too.
+   */
+  others: WarmItem[];
 }
 
 export const isRenderable = (o: THREE.Object3D): o is Renderable =>
@@ -189,7 +202,7 @@ export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan 
   const pools = new Set(opts.pools ?? []);
   const includeCulled = opts.includeCulled ?? opts.mode === 'full';
   const seen = new Set<string>();
-  const items: WarmItem[] = [], renderables: Renderable[] = [];
+  const items: WarmItem[] = [], renderables: Renderable[] = [], others: WarmItem[] = [];
   let skipped = 0;
   root.updateMatrixWorld(true);
   // `flips` = hidden objects on the way down inside a pool; null = blocked (hidden outside any pool)
@@ -211,13 +224,16 @@ export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan 
       const fresh = ok ? warmKeys(o).filter(k => !seen.has(k)) : [];
       if (fresh.length) {
         for (const k of fresh) seen.add(k);
-        items.push({object: o, flips: here ?? [], caster: o.castShadow && !(here && here.length)});
-      } else skipped++;
+        items.push({object: o, flips: here ?? [], caster: o.castShadow});
+      } else {
+        skipped++;
+        if (ok) others.push({object: o, flips: here ?? [], caster: o.castShadow});
+      }
     }
     for (const c of o.children) walk(c, here, pool);
   };
   walk(root, [], false);
-  return {mode: opts.mode, items, renderables, groups: seen.size, skipped};
+  return {mode: opts.mode, items, renderables, groups: seen.size, skipped, others};
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -254,6 +270,12 @@ export interface WarmupHost {
   hide(hidden: boolean): void;
   /** False once the station was replaced or the device was lost. */
   alive(): boolean;
+  /**
+   * Task studio-performance-recorder-20261103 (lane RENDER-CPU): the render-context CALL DEPTH the station's scene pass draws at
+   * (render/renderContextDepth.ts: three keys contexts by it; the atmosphere draws the station inside its RenderPipeline = 1). The
+   * station compile runs at that depth. Omitted: 0 (a top-level render: the direct path, tests).
+   */
+  sceneDepth?(): number;
 }
 
 export interface WarmupProgress {
@@ -275,7 +297,11 @@ export interface WarmupResult {
   reason: string | null;
   mode: WarmupMode;
   ms: number;
-  plan: {items: number; groups: number; renderables: number; skipped: number; flipped: number; casters: number};
+  plan: {items: number; groups: number; renderables: number; skipped: number; flipped: number; casters: number;
+    /** Lane RENDER-CPU: non-representative renderables drawn once in the hidden frames ('full'; 0 otherwise). */
+    others: number};
+  /** The render-context call depth the station scene was compiled at (lane RENDER-CPU; 0: top level). */
+  sceneDepth: number;
   stages: Record<WarmupStage, WarmupStageReport>;
   passes: string[];
   pools: string[];
@@ -325,12 +351,26 @@ function only(s: readonly Snap[], chunk: readonly WarmItem[], cameraMask: number
   for (const i of chunk) { i.object.visible = true; for (const f of i.flips) f.visible = true; }
 }
 
+/**
+ * Lane RENDER-CPU (journey follow-up): run `fn` synchronously with exactly `chunk` of `renderables` on the camera layers (unculled, its
+ * hidden chain visible), then restore every snapshotted state at once (a frame drawn later sees nothing changed).
+ */
+export function withOnly<T>(renderables: readonly Renderable[], chunk: readonly WarmItem[], cameraMask: number, fn: () => T): T {
+  const snap = snapshot([...renderables, ...chunk.flatMap(i => i.flips)]);
+  try {
+    only(snap, chunk, cameraMask);
+    return fn();
+  } finally {
+    restore(snap);
+  }
+}
+
 const emptyStages = (): Record<WarmupStage, WarmupStageReport> => ({
   materials: {done: 0, total: 0, ms: 0}, passes: {done: 0, total: 0, ms: 0}, shadows: {done: 0, total: 0, ms: 0}, view: {done: 0, total: 0, ms: 0},
 });
 
 export const skippedWarmup = (reason: string): WarmupResult => ({
-  status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0},
+  status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0, others: 0}, sceneDepth: 0,
   stages: emptyStages(), passes: [], pools: [],
 });
 
@@ -346,13 +386,26 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const budget = opts.budgetMs ?? WARMUP_DEFAULTS.budgetMs;
   const t0 = now();
   const r = host.renderer;
+  // (lane RENDER-CPU) the context the real frame draws the station in: measured by the host before anything is changed here
+  let sceneDepth = 0;
+  try { sceneDepth = Math.max(0, Math.floor(host.sceneDepth?.() ?? 0)); } catch { /* unknown: top level (the previous behaviour) */ }
   const cameraMask = host.camera.layers.mask;
   const plan = planWarmup(host.scene, {mode: host.mode, cameraMask, pools: host.registry.poolRoots(), near: host.near});
   const passes = host.registry.passes;
   const torch = host.torch;
   const casters = torch?.castShadow ? plan.items.filter(i => i.caster) : [];
+  // (lane RENDER-CPU) 'full': every other eligible renderable is drawn once in the hidden frames as well (its own render objects in the
+  // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing
+  const rest = plan.mode === 'full' ? plan.others : [];
   const compileChunks = chunks(plan.items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
-  const frameChunks = torch?.castShadow ? (casters.length ? chunks(casters, opts.frameChunk ?? WARMUP_DEFAULTS.frameChunk) : [[]]) : [];
+  const frameItems = [...casters, ...rest];
+  // (lane RENDER-CPU) three draws a light's shadow map only when a RECEIVER draws (the shadow node lives in receivers' lit materials):
+  // a chunk of casters that receive nothing (enemies, pickups, loot batches) never drew its shadow variants. Every chunk holds one
+  // receiver (the first non-pooled one), so each chunk's casters really go through the shadow pass.
+  const anchor = torch?.castShadow ? plan.items.find(i => i.object.receiveShadow && !i.flips.length) : undefined;
+  const receives = (c: readonly WarmItem[]) => c.some(i => i.object.receiveShadow && !i.flips.length);
+  const frameChunks = (frameItems.length ? chunks(frameItems, opts.frameChunk ?? WARMUP_DEFAULTS.frameChunk) : torch?.castShadow ? [[]] : [])
+    .map(c => (anchor && c.length && !receives(c) ? [...c, anchor] : c));
   const stages = emptyStages();
   stages.materials.total = plan.items.length;
   stages.passes.total = passes.length;
@@ -363,7 +416,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const report = (stage: WarmupStage, stageDone: number, detail?: string) =>
     opts.onProgress?.({stage, done: Math.min(done, total), total, stageDone, stageTotal: stages[stage].total, detail});
 
-  const snap = snapshot([...plan.renderables, ...plan.items.flatMap(i => i.flips)]);
+  const snap = snapshot([...plan.renderables, ...plan.items.flatMap(i => i.flips), ...rest.flatMap(i => i.flips)]);
   const prevTarget = r.getRenderTarget(), prevMRT = r.getMRT();
   const torchIntensity = torch?.intensity ?? 0;
   const torchNeeds = torch?.shadow?.needsUpdate ?? false;
@@ -375,11 +428,11 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     if (now() - t0 > budget) { status = 'partial'; reason = `time budget (${Math.round(budget / 1000)} s) reached`; return true; }
     return false;
   };
-  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null) => {
+  const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0) => {
     r.setRenderTarget(target);
     r.setMRT(null);
     try {
-      await r.compileAsync(scene, camera, null, onP);
+      await compileAtDepth(r, depth, () => r.compileAsync(scene, camera, null, onP));
     } finally {
       r.setRenderTarget(prevTarget);
       r.setMRT(prevMRT);
@@ -396,7 +449,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
         const k = e.total > 0 ? Math.floor(n * Math.min(1, e.loaded / e.total)) : 0;
         done = base + k;
         report('materials', base + k);
-      });
+      }, sceneDepth);
       stages.materials.done = base + n;
       done = stages.materials.done;
       report('materials', stages.materials.done);
@@ -425,7 +478,8 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     }
     stages.passes.ms = now() - ts;
 
-    // 3. shadow casters (+ fog passes, output, overlay composite) through real hidden frames, torch lit
+    // 3. shadow casters (+ fog passes, output, overlay composite) through real hidden frames, torch lit; 'full': then every other
+    //    renderable once (lane RENDER-CPU)
     if (frameChunks.length && !stop()) {
       ts = now();
       host.hide(true);
@@ -472,13 +526,48 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   return {
     status, reason, mode: plan.mode, ms: now() - t0,
     plan: {items: plan.items.length, groups: plan.groups, renderables: plan.renderables.length, skipped: plan.skipped,
-      flipped: plan.items.filter(i => i.flips.length).length, casters: casters.length},
-    stages, passes: names.passes, pools: names.pools,
+      flipped: plan.items.filter(i => i.flips.length).length, casters: casters.length, others: rest.length},
+    sceneDepth, stages, passes: names.passes, pools: names.pools,
   };
 }
 
 // ---------------------------------------------------------------------------------------------
 // Readiness for content added after the loading screen
+
+/**
+ * Task studio-performance-recorder-20261103 (lane RENDER-CPU): compile `items` (planWarmup representatives / others) of `scene` in
+ * the station's render context WITHOUT holding frames — for preparation while the game keeps drawing (the campaign journey's next
+ * station, prepared while the player rides through the tunnel). The scene is projected synchronously inside each compileAsync call
+ * with exactly that chunk on the camera layers (unculled, its hidden chain visible), then restored at once, so a frame in between
+ * never draws anything differently; three finishes the node builds / pipelines asynchronously. Chunks run in the given order (callers
+ * put what is seen first first) until `deadline` (performance.now() ms) passes or `alive()` turns false; resolves with the items
+ * compiled. Not covered here (it needs real frames): shadow-map variants.
+ */
+export async function compileItemsLive(renderer: WarmupRenderer, scene: THREE.Scene, camera: THREE.Camera, items: readonly WarmItem[], renderables: readonly Renderable[],
+  target: unknown, depth: number, o: {chunk?: number; deadline?: number; alive?: () => boolean} = {}): Promise<number> {
+  const cameraMask = camera.layers.mask;
+  let done = 0;
+  for (const chunk of chunks(items, o.chunk ?? WARMUP_DEFAULTS.compileChunk)) {
+    if ((o.deadline !== undefined && performance.now() > o.deadline) || (o.alive && !o.alive())) break;
+    const prevTarget = renderer.getRenderTarget(), prevMRT = renderer.getMRT();
+    // (snapshotted per chunk: the frames in between change layers / visibility — the culler, the loot display)
+    const snap = snapshot([...renderables, ...chunk.flatMap(i => i.flips)]);
+    let p: Promise<void>;
+    try {
+      only(snap, chunk, cameraMask);
+      renderer.setRenderTarget(target);
+      renderer.setMRT(null);
+      p = compileAtDepth(renderer, depth, () => renderer.compileAsync(scene, camera, null, null)); // (projected synchronously in here)
+    } finally {
+      renderer.setRenderTarget(prevTarget);
+      renderer.setMRT(prevMRT);
+      restore(snap);
+    }
+    await p;
+    done += chunk.length;
+  }
+  return done;
+}
 
 /**
  * Prepare `root` (already in `scene`, HIDDEN: `root.visible = false`) in the station's render context before the
@@ -487,7 +576,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
  * pipelines asynchronously between frames (compileAsync yields per object). Resolves when ready; rejects only if three
  * does. For anything added mid-play that no registered pool / prototype covers.
  */
-export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, camera: THREE.Camera, root: THREE.Object3D, target: unknown): Promise<void> {
+export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, camera: THREE.Camera, root: THREE.Object3D, target: unknown, depth = 0): Promise<void> {
   const objs: THREE.Object3D[] = [];
   root.traverse(o => { objs.push(o); });
   const s = snapshot(objs);
@@ -497,7 +586,7 @@ export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, cam
     for (const o of objs) { o.visible = true; if (isRenderable(o)) o.frustumCulled = false; }
     renderer.setRenderTarget(target);
     renderer.setMRT(null);
-    p = renderer.compileAsync(root, camera, scene, null); // the projection runs synchronously in here
+    p = compileAtDepth(renderer, depth, () => renderer.compileAsync(root, camera, scene, null)); // the projection runs synchronously in here (lane RENDER-CPU: at the station pass's call depth)
   } finally {
     renderer.setRenderTarget(prevTarget);
     renderer.setMRT(prevMRT);
@@ -511,7 +600,7 @@ export function prepareObjects(renderer: WarmupRenderer, scene: THREE.Scene, cam
 
 /** Progress text (truthful stage + counts, no GPU percentage). */
 export function warmupLabel(p: WarmupProgress): string {
-  const what: Record<WarmupStage, string> = {materials: 'compiling materials', passes: p.detail ?? 'render passes', shadows: 'shadows and fog', view: 'first view'};
+  const what: Record<WarmupStage, string> = {materials: 'compiling materials', passes: p.detail ?? 'render passes', shadows: 'shadows, fog and objects', view: 'first view'};
   return `Preparing graphics · ${what[p.stage]} ${p.stageDone}/${p.stageTotal}`;
 }
 

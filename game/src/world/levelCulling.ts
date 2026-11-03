@@ -60,6 +60,17 @@
 // vessel's (the hero model stands there: ReactorArch.occlusionSee) — passed as a `see` rect (open on every storey). `slabs.glass`
 // names the glazed lift shafts of the atrium / aperture rules separately (default: `see`, the mall's shafts); the Reactor has none.
 
+//
+// Task studio-performance-recorder-20261103-043629 (lane RENDER-CPU, user: "turning the camera around in the mall causes the spike"):
+// a full update runs on EVERY turning frame (the skip only holds while the camera is still). Turning in place does not move the eye,
+// and several decisions depend on the eye POSITION only: the slab test of each entry (eye + box), the sight rays to the atrium /
+// portal tiles and through street-exit openings (eye + fixed grid targets). Those results are now kept per eye position (`posStamp`:
+// bumped whenever the eye or its override changes; a changed box clears its own) instead of being recomputed per frame; everything
+// that depends on the view direction (frustum, fog depth, the occlusion wedge) still runs every update. The hot loop no longer
+// allocates per entry (closures, one-element level arrays, per-update tile memo / sets / candidate objects), and the moving lift /
+// loot batches bring their shared parents' matrices up to date once per pass instead of once per mesh. Decisions are identical
+// (tests/rendercpu-culler.test.ts compares every entry's layer against fresh, uncached decisions over mall yaw sweeps and walks).
+
 import * as THREE from 'three';
 import {CELL, FLOOR, VOID, type Grid} from '../gen/grid';
 import type {Level} from '../gen/levels';
@@ -189,6 +200,11 @@ const OCCL_MOVE = 1e-3;
 interface OcclLevel { lo: number; hi: number; closed: Uint8Array; openSat: Int32Array; runs: Float64Array }
 
 const isOpen = (g: Grid, i: number) => g.cells[i] === FLOOR || g.cells[i] === VOID;
+/** Lane RENDER-CPU: any of `list` in `set` (no closure on the culler's hot path). */
+function anyIn(list: readonly number[], set: ReadonlySet<number>): boolean {
+  for (let i = 0; i < list.length; i++) if (set.has(list[i])) return true;
+  return false;
+}
 
 /** Lowest floor / highest ceiling of column i's band on grid g (ramps: the band the cell sweeps). */
 function bandOf(g: Grid, i: number): [number, number] {
@@ -228,6 +244,9 @@ interface Entry {
   empty?: boolean;
   /** Task mall-round2 (lane ARCH, M09): the street exit opening this mesh is seen through (mall only; see ExitAperture). */
   aperture?: ExitAperture;
+  /** Lane RENDER-CPU: the slab test's result (sh) for the eye position of stamp `sk` (LevelCuller.posStamp); unset = not computed. */
+  sk?: number;
+  sh?: boolean;
 }
 /** Task track3 (lane ARCH): an atrium tile — open void columns joining every level in `levels`. */
 interface AtriumTile { x0: number; z0: number; x1: number; z1: number; y0: number; y1: number; cells: number[]; levels: number[] }
@@ -307,6 +326,27 @@ export class LevelCuller {
   private occlTopHi = -Infinity;
   private occlState = false;
   private readonly vp = new THREE.Vector3();
+  /**
+   * Lane RENDER-CPU: the eye position (and override) the position-only caches below were computed for, and its stamp (bumped on any
+   * change). Per stamp: each entry's slab test (Entry.sk / sh), each atrium / portal tile's sight test, each exit opening's sight rays.
+   */
+  private posStamp = 0;
+  private readonly posEye = new Float64Array([NaN, NaN, NaN, NaN]);
+  private atriumSeeK = new Int32Array(0);
+  private atriumSeeV = new Uint8Array(0);
+  private tileSeeK = new Int32Array(0);
+  private tileSeeV = new Uint8Array(0);
+  private readonly apertureRays = new Map<ExitAperture, {k: number; v: boolean}>();
+  /** Lane RENDER-CPU: reused per-update scratch (no per-frame allocation). */
+  private tileMemo = new Int8Array(0);
+  private readonly visTiles = new Map<number, Tile[]>();
+  private readonly shownSet = new Set<number>();
+  private readonly hopSet = new Set<number>();
+  private readonly candK: number[] = [];
+  private readonly candD: number[] = [];
+  private readonly candOrder: number[] = [];
+  /** Parents of dynamic-bounds meshes whose world matrices were brought up to date in the current pass (refreshBox). */
+  private readonly dynParents = new Set<THREE.Object3D>();
   /** Task studio-reactor-submit (lane CPU): moving objects decided by their box every update (see track()); none unless registered. */
   private readonly tracked = new Map<THREE.Object3D, Tracked>();
   private readonly trackEntry = {obj: new THREE.Object3D(), level: NaN, levels: [] as readonly number[], x0: 0, z0: 0, x1: 0, z1: 0, y0: 0, y1: 0, mask: 0, culled: false} as Entry;
@@ -418,7 +458,13 @@ export class LevelCuller {
    * in the render after this) — far inside the occlusion's footprint pad.
    */
   private refreshBox(en: Entry): void {
-    if (en.dyn) en.obj.updateWorldMatrix(true, false); // the cab / rig moved this frame: its matrices before the render's update
+    if (en.dyn) {
+      // the cab / rig moved this frame: its matrices before the render's update (lane RENDER-CPU: each shared parent chain once per
+      // pass — dynParents is cleared at the start of every pass — then the mesh itself: the same matrices as updateWorldMatrix(true))
+      const p = en.obj.parent;
+      if (p && !this.dynParents.has(p)) { p.updateWorldMatrix(true, false); this.dynParents.add(p); }
+      en.obj.updateWorldMatrix(false, false);
+    }
     const mw = en.mw!, e = en.obj.matrixWorld.elements;
     let moved = false;
     for (let i = 0; i < 16 && !moved; i++) moved = mw[i] !== Math.fround(e[i]);
@@ -436,6 +482,7 @@ export class LevelCuller {
     if (this.box.isEmpty()) return;
     en.x0 = this.box.min.x; en.y0 = this.box.min.y; en.z0 = this.box.min.z; en.x1 = this.box.max.x; en.y1 = this.box.max.y; en.z1 = this.box.max.z;
     en.near = undefined;
+    en.sk = undefined; // (lane RENDER-CPU) a new box: its slab test again
     if (en.occ !== undefined) en.occ = this.occlusionLevel(en);
   }
 
@@ -705,6 +752,7 @@ export class LevelCuller {
     if (!moved) return; // the last decision stands
     this.prepareOcclusion(camera, this.occlHere, this.last.ov !== null);
     let occl = 0, culled = 0;
+    this.dynParents.clear();
     for (const en of this.entries) {
       if (en.mw) this.refreshBox(en);
       if (en.base && en.occ !== undefined && en.occ !== -1) {
@@ -959,21 +1007,25 @@ export class LevelCuller {
     const ov = this.eyeOverride !== null && this.levelIds.includes(this.eyeOverride) ? this.eyeOverride : null;
     if (!force && ov === l.ov && Math.abs(e.x - l.x) < 0.25 && Math.abs(e.y - l.y) < 0.15 && Math.abs(e.z - l.z) < 0.25
       && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(camera); this.decideTracked(camera); return; }
-    Object.assign(l, {x: e.x, y: e.y, z: e.z, qx: q.x, qy: q.y, qz: q.z, qw: q.w, ov});
+    l.x = e.x; l.y = e.y; l.z = e.z; l.qx = q.x; l.qy = q.y; l.qz = q.z; l.qw = q.w; l.ov = ov;
+    this.notePosition(e, ov);
     const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
     // (the eye in the elevator cab) is the only current level.
     const here = ov !== null ? this.onlyLevel(ov) : this.eyeLevels(e, camLevel);
     this.stats.level = camLevel;
     this.stats.levels = [...here];
-    // Visible portal tiles from the camera's level(s), per other level.
-    const vis = new Map<number, Tile[]>();
-    const shown = new Set<number>(here);
+    // Visible portal tiles from the camera's level(s), per other level. (lane RENDER-CPU: reused map / set; lists emptied)
+    const vis = this.visTiles;
+    for (const list of vis.values()) list.length = 0;
+    const shown = this.shownSet;
+    shown.clear();
+    for (const l of here) shown.add(l);
     let tested = 0, visible = 0, hops = 0;
     if (this.enabled) {
       this.pm.multiplyMatrices((camera as THREE.PerspectiveCamera).projectionMatrix, camera.matrixWorldInverse);
       this.fr.setFromProjectionMatrix(this.pm);
-      const seen = (t: Tile): boolean => {
+      const seen = (t: Tile, k: number): boolean => {
         const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1);
         if (dx * dx + dz * dz > PORTAL_MAX_DIST * PORTAL_MAX_DIST) return false;
         this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
@@ -981,7 +1033,7 @@ export class LevelCuller {
         const inside = dx * dx + dz * dz <= PORTAL_NEAR * PORTAL_NEAR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
         if (!inside && !this.fr.intersectsBox(this.box)) return false;
         tested++;
-        if (!inside && !this.sees(e, t)) return false;
+        if (!inside && !this.tileSees(k, t, e)) return false;
         visible++;
         return true;
       };
@@ -991,15 +1043,19 @@ export class LevelCuller {
       // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
       // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
       // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
-      const memo = new Int8Array(this.tiles.length);
+      if (this.tileMemo.length !== this.tiles.length) this.tileMemo = new Int8Array(this.tiles.length);
+      const memo = this.tileMemo;
+      memo.fill(0);
+      const before = this.hopSet;
       for (let added = true; added && hops < this.levels.length;) {
         added = false;
-        const before = new Set(shown);
+        before.clear();
+        for (const l of shown) before.add(l);
         for (let k = 0; k < this.tiles.length; k++) {
           const t = this.tiles[k];
           const ha = before.has(t.a), hb = before.has(t.b);
           if (ha === hb) continue; // neither level is shown yet, or both already are
-          if (!memo[k]) memo[k] = seen(t) ? 1 : -1;
+          if (!memo[k]) memo[k] = seen(t, k) ? 1 : -1;
           if (memo[k] < 0) continue;
           const other = ha ? t.b : t.a;
           add(other, t);
@@ -1020,6 +1076,7 @@ export class LevelCuller {
     const far = this.maxDistance;
     this.apertureSeenMemo.clear();
     let apCulled = 0;
+    this.dynParents.clear();
     for (const en of this.entries) {
       let show: boolean;
       if (en.mw) this.refreshBox(en); // task mall-round2 (lane PERF): a moved mesh / grown InstancedMesh box first (mall only)
@@ -1027,14 +1084,14 @@ export class LevelCuller {
       const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
       if (!this.enabled) show = true;
       else if (depth > far) { show = false; fogged++; } // entirely inside opaque fog
-      else if (en.levels) show = en.levels.some(l => here.has(l)) || en.levels.some(l => this.nearPortal(en, vis.get(l))) || this.nearAtrium(en, en.levels);
+      else if (en.levels) show = anyIn(en.levels, here) || this.nearAnyPortal(en, en.levels, vis) || this.nearAtrium(en, en.levels, NaN);
       else if (Number.isNaN(en.level) || here.has(en.level)) show = true;
       // Another level: only near a portal tile the camera can see (task track3: or near a visible atrium tile of that level).
-      else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, [en.level]);
+      else show = this.nearPortal(en, vis.get(en.level)) || this.nearAtrium(en, null, en.level);
       // Task mall-round2 (lane ARCH, M09): a street exit's doors / street view only while its glazed opening may be seen (mall only)
       if (show && this.enabled && en.aperture && !this.apertureSeen(en.aperture, e, ov !== null)) { show = false; apCulled++; }
       // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
-      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHidden(en, e)) { show = false; slab++; }
+      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHiddenAt(en, e)) { show = false; slab++; }
       // Task mall-round2 (lane PERF): same-storey occlusion last (only meshes every other rule shows; see OCCL_*)
       if (this.occl.length) {
         en.base = show;
@@ -1143,6 +1200,15 @@ export class LevelCuller {
     else { this.box.min.set(Math.min(p0, p1), a.y0, a.s0); this.box.max.set(Math.max(p0, p1), a.y1, a.s1); }
     if (!this.fr.intersectsBox(this.box)) return false;
     if (inCab || this.glassShafts.some(r => e.x >= r.x0 && e.x <= r.x1 && e.z >= r.z0 && e.z <= r.z1)) return true;
+    // (lane RENDER-CPU) the rays depend on the eye position only: kept per eye position
+    let m = this.apertureRays.get(a);
+    if (!m) this.apertureRays.set(a, (m = {k: -1, v: false}));
+    if (m.k !== this.posStamp) { m.v = this.apertureRaysSee(a, e, alongX, n); m.k = this.posStamp; }
+    return m.v;
+  }
+
+  /** The aperture's sight rays (see apertureTest). */
+  private apertureRaysSee(a: ExitAperture, e: THREE.Vector3, alongX: boolean, n: number): boolean {
     // sight: every CELL / 2 along the span (ends inset 0.1 m), to the hall cell centre in front of the plane, at four heights
     const inset = CELL / 2, ys = [Math.min(a.y1 - 0.2, Math.max(a.y0 + 0.2, e.y)), (a.y0 + a.y1) / 2, a.y0 + 0.3, a.y1 - 0.2];
     const n0 = a.s0 + 0.1, n1 = a.s1 - 0.1, steps = Math.max(1, Math.ceil((n1 - n0) / (CELL / 2)));
@@ -1190,7 +1256,8 @@ export class LevelCuller {
     vis.fill(0);
     this.atriumLevels.clear();
     const maxD = Math.min(ATRIUM_MAX_DIST, this.maxDistance);
-    const cand: {k: number; d2: number}[] = [];
+    const cand = this.candK, candD = this.candD, ord = this.candOrder; // (lane RENDER-CPU: reused; ord = indices sorted by distance)
+    cand.length = candD.length = ord.length = 0;
     let near = false;
     for (let k = 0; k < T.length; k++) {
       const t = T[k];
@@ -1201,21 +1268,22 @@ export class LevelCuller {
       if (!beside && !this.fr.intersectsBox(this.box)) continue;
       vis[k] = 1;
       if (beside) near = true;
-      cand.push({k, d2});
+      ord.push(cand.length);
+      cand.push(k); candD.push(d2);
     }
     st.inFrustum = cand.length;
     st.sightTests = 0;
     let seen = near;
     if (!seen && cand.length) {
-      cand.sort((a, b) => a.d2 - b.d2);
-      for (let c = 0; c < cand.length && c < ATRIUM_SIGHT_TESTS && !seen; c++) {
+      ord.sort((a, b) => candD[a] - candD[b] || a - b); // (as the former stable sort by distance: ties keep their tile order)
+      for (let c = 0; c < ord.length && c < ATRIUM_SIGHT_TESTS && !seen; c++) {
         st.sightTests++;
-        seen = this.sees(e, T[cand[c].k] as unknown as Tile);
+        seen = this.atriumSees(cand[ord[c]], e);
       }
     }
     st.seen = seen;
     if (!seen) { vis.fill(0); st.levels = []; return; }
-    for (const {k} of cand) for (const l of T[k].levels) { this.atriumLevels.add(l); shown.add(l); }
+    for (const k of cand) for (const l of T[k].levels) { this.atriumLevels.add(l); shown.add(l); }
     st.levels = [...this.atriumLevels].sort((a, b) => a - b);
   }
 
@@ -1225,8 +1293,10 @@ export class LevelCuller {
    * margin: deep back-of-house slivers through distant openings are visible, the 20 m margin popped them — task track3 ARCH, the
    * PERF oracle); without slabs the ATRIUM_MARGIN rule below stands.
    */
-  private nearAtrium(en: Entry, levels: readonly number[]): boolean {
-    if (!this.atriumTiles.length || !this.atriumStats.seen || !levels.some(l => this.atriumLevels.has(l))) return false;
+  private nearAtrium(en: Entry, levels: readonly number[] | null, level: number): boolean {
+    // (lane RENDER-CPU: `levels` — a multi-level entry — or the single `level`; no per-call arrays / closures on the hot path)
+    if (!this.atriumTiles.length || !this.atriumStats.seen) return false;
+    if (levels ? !anyIn(levels, this.atriumLevels) : !this.atriumLevels.has(level)) return false;
     if (this.slabPlanes.length && this.slabs) return true;
     if (!en.near) {
       const out: number[] = [];
@@ -1238,9 +1308,49 @@ export class LevelCuller {
     const vis = this.atriumVis;
     for (let i = 0; i < en.near.length; i++) {
       const k = en.near[i];
-      if (vis[k] && levels.some(l => this.atriumTiles[k].levels.includes(l))) return true;
+      if (!vis[k]) continue;
+      const tl = this.atriumTiles[k].levels;
+      if (levels ? levels.some(l => tl.includes(l)) : tl.includes(level)) return true;
     }
     return false;
+  }
+
+  /** Lane RENDER-CPU: a multi-level entry near a visible portal tile of any of its levels (nearPortal per level, no closure). */
+  private nearAnyPortal(en: Entry, levels: readonly number[], vis: ReadonlyMap<number, readonly Tile[]>): boolean {
+    for (let i = 0; i < levels.length; i++) if (this.nearPortal(en, vis.get(levels[i]))) return true;
+    return false;
+  }
+
+  /**
+   * Lane RENDER-CPU: a new eye position (or override) starts a new stamp of the position-only caches (slab tests, sight rays). Exact:
+   * a cached result is reused only for the identical eye coordinates it was computed at.
+   */
+  private notePosition(e: THREE.Vector3, ov: number | null): void {
+    const p = this.posEye, o = ov ?? -1;
+    if (p[0] === e.x && p[1] === e.y && p[2] === e.z && p[3] === o) return;
+    p[0] = e.x; p[1] = e.y; p[2] = e.z; p[3] = o;
+    this.posStamp++;
+  }
+
+  /** Lane RENDER-CPU: slabHidden for a registered entry, kept per eye position (Entry.sk / sh; a box change clears it). */
+  private slabHiddenAt(en: Entry, e: THREE.Vector3): boolean {
+    if (en.sk !== this.posStamp) { en.sh = this.slabHidden(en, e); en.sk = this.posStamp; }
+    return en.sh!;
+  }
+
+  /** Lane RENDER-CPU: `sees` for portal tile k, kept per eye position. */
+  private tileSees(k: number, t: Tile, e: THREE.Vector3): boolean {
+    if (this.tileSeeK.length !== this.tiles.length) { this.tileSeeK = new Int32Array(this.tiles.length).fill(-1); this.tileSeeV = new Uint8Array(this.tiles.length); }
+    if (this.tileSeeK[k] !== this.posStamp) { this.tileSeeV[k] = this.sees(e, t) ? 1 : 0; this.tileSeeK[k] = this.posStamp; }
+    return this.tileSeeV[k] === 1;
+  }
+
+  /** Lane RENDER-CPU: `sees` for atrium tile k, kept per eye position. */
+  private atriumSees(k: number, e: THREE.Vector3): boolean {
+    const T = this.atriumTiles;
+    if (this.atriumSeeK.length !== T.length) { this.atriumSeeK = new Int32Array(T.length).fill(-1); this.atriumSeeV = new Uint8Array(T.length); }
+    if (this.atriumSeeK[k] !== this.posStamp) { this.atriumSeeV[k] = this.sees(e, T[k] as unknown as Tile) ? 1 : 0; this.atriumSeeK[k] = this.posStamp; }
+    return this.atriumSeeV[k] === 1;
   }
 
   /**
@@ -1324,6 +1434,12 @@ export class LevelCuller {
       if (en.culled) en.obj.layers.mask = en.mask;
       this.entries.splice(k, 1);
     }
+  }
+
+  /** Lane RENDER-CPU (tests / QA A-B): forget the position-only caches (slab tests, sight rays); the next update recomputes them. */
+  forgetPositionCaches(): void {
+    this.posStamp++;
+    this.posEye.fill(NaN);
   }
 
   /** Show everything again (debug / before disposal). */

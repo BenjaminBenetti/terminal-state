@@ -8,6 +8,7 @@ import {renderControls} from './ui/hud';
 import {installQaHooks} from './qa';
 import {installBackendIndicator, rendererRequest} from './render/backend'; // Iteration 13 (CORE)
 import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
+import {installPerfRecorder} from './debug/perfRecorderUi'; // task studio-performance-recorder-20261103-043629 (lane RECORDER): the player's performance recorder
 import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
 // task campaign-foundation-20261102 (lane MENU): the main menu, its diorama and the persisted settings
 import {MainMenuController, MainMenuView, bootLine, mountSettingsForm, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
@@ -155,6 +156,9 @@ async function boot(): Promise<void> {
   // Performance / debug overlay: Ctrl+Shift+P toggles it (off by default; ?perf=1 starts it shown)
   const perf = installPerfOverlay(game, {visible: params.get('perf') === '1'});
   (window as unknown as {__perf?: PerfOverlay}).__perf = qa ? perf : undefined;
+  // Lane RECORDER: Pause / main-menu Settings -> Performance (Start / Stop & Download / Download last), F8 start / stop, F9 mark; QA __LL.perfRecorder()
+  const recorder = installPerfRecorder(game, {overlay: perf, qa});
+  recorder.mountPanel(document.querySelector<HTMLElement>('#pause .panel'), {idPrefix: 'pause-', before: document.getElementById('controls-pause')});
 
   // --- settings (lane MENU): ONE persisted store for the menu, the pause menu and the game ---
   const settings = new SettingsStore(browserSettingsStorage());
@@ -243,7 +247,9 @@ async function boot(): Promise<void> {
       game.lastError = String((err as Error)?.stack ?? err);
       console.error(err);
     }
-    perf.frame(time, performance.now() - t0);
+    const cpuMs = performance.now() - t0;
+    perf.frame(time, cpuMs);
+    recorder.frame(time, cpuMs); // lane RECORDER: the same frame values (off: one boolean check)
     requestAnimationFrame(loop);
   };
 
@@ -269,7 +275,7 @@ async function boot(): Promise<void> {
     qa: qa ? {label: qaPrebuild ? `QA quick start · ${LEVELS[dev?.level ?? 'subway'].name} (scratch, not saved)` : 'QA quick start (scratch build, not saved)', start: () => qaButton.click(), ready: () => qaReady || !qaPrebuild} : null,
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
-    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-'}); },
+    settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-'}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section)
     qaButton: qa ? qaButton : null,
   });
   qaButton.addEventListener('click', () => {
