@@ -26,7 +26,7 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
-import {ENTERED_KEEP, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, deriveMeta, type SaveFileV1Like, type SerializedRunV1} from './serialize';
+import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, SEEN_WORD_BITS, deriveMeta, seenWordCount, type SaveFileV1Like, type SerializedRunV1} from './serialize';
 
 /** The envelope format this build writes (and the newest it reads). */
 export const SAVE_FILE_V = 1;
@@ -464,14 +464,16 @@ function pickup(v: unknown, path: string): void {
 }
 
 function holder(v: unknown, path: string): void {
-  const t = arr(v, path, SAVE_LIMITS.holderLots + 3, 1);
+  const t = arr(v, path, SAVE_LIMITS.holderLots + 2 + seenWordCount(MAX_HOLDER_PARTS), 1);
   const f = int(t[0], `${path}[0]`, 0, 7);
   let from = 1;
   if (f & 4) {
+    // [flags | 4, seen.length, ...seenWords, ...lots] (save/serialize.ts encodeHolder): one 30-bit word per 30 compartments
     if (t.length < 3) bad(path, 'malformed holder');
-    const len = int(t[1], `${path}[1]`, 1, 30);
-    int(t[2], `${path}[2]`, 0, 2 ** len - 1);
-    from = 3;
+    const len = int(t[1], `${path}[1]`, 1, MAX_HOLDER_PARTS), n = seenWordCount(len);
+    if (t.length < 2 + n) bad(path, 'malformed holder');
+    for (let w = 0; w < n; w++) int(t[2 + w], `${path}[${2 + w}]`, 0, 2 ** Math.min(SEEN_WORD_BITS, len - w * SEEN_WORD_BITS) - 1);
+    from = 2 + n;
   }
   for (let i = from; i < t.length; i++) int(t[i], `${path}[${i}]`, 0, 1e9);
 }
