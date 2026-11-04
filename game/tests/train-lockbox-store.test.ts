@@ -33,7 +33,7 @@ describe('TrainLockbox: 40 ordinary slots, exact JSON, malformed data never cras
     const bag = inv.makeStack('backpack', 1);
     bag.bag![3] = inv.makeStack('water', 3);
     const mask = inv.makeStack('gas_mask', 1);
-    mask.filter = 61.5;
+    mask.filter = 15.375; // (task filter-tension-airtank: a 37.5 s filter — the former 61.5 of 150 s)
     box.slots[0] = rifle;
     box.slots[5] = bag;
     box.slots[39] = mask;
@@ -44,7 +44,7 @@ describe('TrainLockbox: 40 ordinary slots, exact JSON, malformed data never cras
     expect(other.toJSON()).toEqual(saved);
     expect(other.slots[0]).toEqual({uid: rifle.uid, itemId: 'rifle', count: 1, mag: 7});
     expect(other.slots[5]!.bag![3]).toMatchObject({itemId: 'water', count: 3});
-    expect(other.slots[39]!.filter).toBe(61.5);
+    expect(other.slots[39]!.filter).toBe(15.375);
     expect(other.slots[0]).not.toBe(rifle); // fresh objects, same uids
     expect(other.invariants()).toEqual([]);
     expect(other.maxUid()).toBe(Math.max(...uidsOf(new Inventory(), box)));

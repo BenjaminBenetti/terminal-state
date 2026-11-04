@@ -17,7 +17,8 @@ const mods = (inv: Inventory) => combineModifiers([() => gearModifiersFor(inv.ge
 
 describe('base-tier gear items', () => {
   it('seven base-tier items (task gasmask-breach-20261030: + the gas mask), merged into ITEMS / ITEM_DIMS / ICONS, one per slot type (two chest options)', () => {
-    expect(Object.keys(GEAR_ITEMS).sort()).toEqual(['armor_vest', 'backpack', 'boots', 'chest_rig', 'gas_mask', 'gloves', 'helmet']);
+    // task filter-tension-airtank-20261104-072836: + the Airtank Backpack (back slot, no storage, 600 s of air)
+    expect(Object.keys(GEAR_ITEMS).sort()).toEqual(['airtank_backpack', 'armor_vest', 'backpack', 'boots', 'chest_rig', 'gas_mask', 'gloves', 'helmet']);
     expect(GEAR_ITEMS.gas_mask.gear!.slot).toBe('mask');
     for (const [id, def] of Object.entries(GEAR_ITEMS)) {
       expect(ITEMS[id]).toBe(def);

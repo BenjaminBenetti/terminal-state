@@ -1,0 +1,118 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "gear-airtank-backpack",
+ "item": "airtank_backpack (items/gear.ts)",
+ "task": "studio-beta-filter-tension-airtank-20261104-072836-01",
+ "approval": "task-specific user generation approval (sha256 a8f41d80c3fb865aad4ff5bb3fddbbe831ae9b6275a0027927382a56f467a81b): one Airtank Backpack model, 50 Meshy credits total",
+ "route": "Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded only)",
+ "conditioningImage": {
+  "sha256": "eb2495312862bfcd27644b75695ce2660fdc55f0b2608b9f3553e62e003daf4b",
+  "bytes": 2128792,
+  "generator": "Codex CLI 0.163.0 built-in image_gen (model id not reported)",
+  "file": "reference/tasks/filter-tension-airtank-20261104-072836/gen/raw/codex-1-exec-8edf0bea-3a51-4b8c-a525-ac94da1808fc.png (raw original, outside Git)"
+ },
+ "meshy": {
+  "tool": "mcp__meshy__meshy_image_to_3d (@meshy-ai/meshy-mcp-server 0.6.6)",
+  "request": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "should_texture": true,
+   "texture_resolution": "2k",
+   "enable_pbr": true,
+   "target_polycount": 8000,
+   "target_formats": [
+    "glb"
+   ]
+  },
+  "task": "01a1a57d-55dd-7665-bc8e-8e951499b65f",
+  "status": "SUCCEEDED",
+  "consumedCredits": 15,
+  "evidence": "the exact create arguments are in the fsynced ledger intent line before the POST; the 15-credit charge is the T2 / T2.5 single-image textured price (meshy-6 / 7.1 / latest bill 30); the GET response does not echo ai_model"
+ },
+ "source": {
+  "file": "reference/tasks/filter-tension-airtank-20261104-072836/gen/raw/meshy-01a1a57d-airtank-backpack.glb (raw original, outside Git)",
+  "sha256": "71d333ad95fd1faf386142aa47077dd20693e65baefda764fdf6a38924ed6fd4",
+  "bytes": 7587444,
+  "triangles": 8363,
+  "extent": [
+   0.7627,
+   0.9512,
+   0.6318
+  ],
+  "textures": [
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3007931
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 1864668
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2303268
+   }
+  ]
+ },
+ "output": {
+  "file": "game/public/assets/models/gear-airtank-backpack.glb",
+  "url": "assets/models/gear-airtank-backpack.glb",
+  "sha256": "f8eb54ab6c92cf10e796b6ca32c1e926ce938fc0fad75ffd61d96c4221873981",
+  "bytes": 832924,
+  "triangles": 8363,
+  "dims": [
+   0.5773,
+   0.72,
+   0.4783
+  ]
+ },
+ "heightM": 0.72,
+ "scale": 0.756961,
+ "transform": "rotateY(180deg) * uniform scale to the real height, then grounded (min y = 0) and centred on x/z; baked into vertices",
+ "convention": "metres at real size, +Y up, front -Z (the tank side; gear/models.ts turns gear derivatives to +Z), grounded, centred",
+ "textures": [
+  {
+   "slot": "baseColor",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 196747,
+   "sha256": "2b92c946d1568acea1a832475c0111d23973d1178196f3d1db1f90bac80e1e6c"
+  },
+  {
+   "slot": "metallicRoughness",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 167056,
+   "sha256": "20e9470a648b3a35a26e6997840be09784bae8f3dfe922ab8f0d3e1d9f1a54cc"
+  },
+  {
+   "slot": "normal",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 108250,
+   "sha256": "6e55f5a693b2684fa32b7970a318943ebfd618d6232db24f10a008b470862cc7"
+  }
+ ],
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)"
+}

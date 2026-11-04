@@ -18,11 +18,17 @@
 // that migration's DELIVERED.json); its derivative record (assets/derivatives/outfit-gasmask.json) still says approved: false,
 // gameReady: false and no licence clearance — delivery acceptance is not legal clearance. world/pickups.ts registerItemModels hands
 // it over; without it (Node tests, a failed file) a procedural stand-in is used. Nothing new was generated.
+//
+// Task filter-tension-airtank-20261104-072836: the AIRTANK BACKPACK's model is its own Meshy T2.5 image-to-3D derivative
+// (assets/models/gear-airtank-backpack.glb, tools/asset-pipeline/props/build-airtank-backpack.mjs; provenance
+// assets/derivatives/gear-airtank-backpack.json; its Meshy PBR maps kept) in the gear-derivative convention (real size, front -Z),
+// loaded with the other gear models; a procedural stand-in until then / without it.
 
 import * as THREE from 'three';
-import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {loadOfficeAsset, OFFICE_ASSETS, type OfficeAssetId} from '../assets/officeAssets';
+import {assetUrl} from '../assets/loader';
 import {GEAR_DIMS, GEAR_IDS} from '../items/gear';
 
 /** Mask lane: the outfit mesh used as the gas-mask item (the lastshift fit: the default body's proportions). */
@@ -39,12 +45,21 @@ export const GEAR_ASSET: Readonly<Record<string, OfficeAssetId>> = {
   helmet: 'gear-helmet', boots: 'gear-boots', gloves: 'gear-gloves',
 };
 
+/** Task filter-tension-airtank-20261104-072836: gear derivatives outside the office asset registry (item id -> model url). */
+export const GEAR_MODEL_URL: Readonly<Record<string, string>> = {airtank_backpack: 'assets/models/gear-airtank-backpack.glb'};
+
 const loaded = new Map<string, GLTF>();
 let preload: Promise<void> | null = null;
+let ownLoader: GLTFLoader | null = null;
 
 /** Loads the delivered gear derivatives once (missing / failed ones keep the procedural model). Never rejects. */
 export function preloadGearModels(): Promise<void> {
   preload ??= Promise.all(GEAR_IDS.map(async id => {
+    const url = GEAR_MODEL_URL[id];
+    if (url) {
+      try { ownLoader ??= new GLTFLoader(); loaded.set(id, await ownLoader.loadAsync(assetUrl(url))); } catch { /* the stand-in stays */ }
+      return;
+    }
     const key = GEAR_ASSET[id];
     if (!key || !OFFICE_ASSETS[key]?.url) return;
     const g = await loadOfficeAsset(key);
@@ -61,6 +76,7 @@ export function registerGearModel(itemId: string, gltf: GLTF | null): void {
 /** 'office-gear-… (Meshy T2.5 derivative)' or 'procedural stand-in' (QA / item model report). */
 export function gearModelSource(itemId: string): string {
   if (itemId === 'gas_mask' && maskOutfit) return `assets/models/outfit-gasmask-t25.glb ${GAS_MASK_OUTFIT_MESH} (shipped zombie outfit made static; Meshy T2.5 delivery review accepted; derivative record approved: false, no licence clearance)`;
+  if (loaded.has(itemId) && GEAR_MODEL_URL[itemId]) return `${GEAR_MODEL_URL[itemId]} (Meshy T2.5 image-to-3D derivative)`;
   return loaded.has(itemId) ? `assets/officeAssets.ts ${GEAR_ASSET[itemId]} (Meshy T2.5 derivative)` : 'procedural gear stand-in (gear/models.ts)';
 }
 
@@ -253,6 +269,21 @@ function proceduralGear(itemId: string): THREE.Object3D {
       can.rotateX(Math.PI / 2); can.translate(0, 0.036, 0.07);
       P.push(tinted(can, olive));
       P.push(box(0.015, 0.012, 0.11, -0.078, 0.085, -0.03, strap), box(0.015, 0.012, 0.11, 0.078, 0.085, -0.03, strap)); // head straps
+      break;
+    }
+    case 'airtank_backpack': { // task filter-tension-airtank stand-in: upright cylinder (+Z face) on a frame / backplate, valve on top
+      const steel = 0x5b6150, band = 0xb08a2a, frame = 0x222426, pad = 0x18191a, brass = 0x8a7a55;
+      P.push(box(0.3, 0.6, 0.06, 0, 0.02, -0.08, pad)); // backplate / harness
+      P.push(box(0.03, 0.64, 0.03, -0.13, 0, -0.04, frame), box(0.03, 0.64, 0.03, 0.13, 0, -0.04, frame)); // frame rails
+      const cyl = new THREE.CylinderGeometry(0.085, 0.085, 0.54, 18);
+      cyl.translate(0, 0.33, 0.04);
+      P.push(tinted(cyl, steel));
+      const dome = new THREE.SphereGeometry(0.085, 18, 8, 0, Math.PI * 2, 0, Math.PI / 2);
+      dome.translate(0, 0.6, 0.04);
+      P.push(tinted(dome, steel));
+      P.push(box(0.172, 0.04, 0.172, 0, 0.5, 0.04, band)); // hazard band
+      P.push(box(0.05, 0.05, 0.05, 0, 0.63, 0.04, brass)); // valve (the stand-in stays under 0.7 m like every gear stand-in)
+      P.push(box(0.24, 0.05, 0.05, 0, 0.12, -0.02, frame)); // waist belt stub
       break;
     }
     default:

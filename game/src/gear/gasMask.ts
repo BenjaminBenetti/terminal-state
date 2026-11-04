@@ -28,28 +28,45 @@
 // backpack's contents — fitted instantly (sfx.batteryInsert + "Filter changed — N spare"). Low (<= 20 %) and empty warnings.
 // PROTECTION (protects()): fully on the face AND the fitted filter > 0. Donning is unprotected until complete, doffing at once;
 // an on-face mask with an empty filter is UNPROTECTED. The gas lane asks game.gasMask.protects() once per frame.
+//
+// Task filter-tension-airtank-20261104-072836 (user: filters last a quarter as long; the warning must count usable spares; an
+// Airtank Backpack with 600 s of air in the backpack slot):
+// - FILTERS: FILTER_LIFE_S 37.5 s (was 150). Drain rules unchanged (fully on, play dt only).
+// - AIR SUPPLY PRIORITY (one source per frame, never two): a WORN Airtank Backpack with air left feeds the on-face mask FIRST (its
+//   stack's `air` drains; the fitted filter is untouched); once the tank is empty (mid-frame remainder included) the fitted filter
+//   drains, then a spare is auto-fitted exactly as before. No spare is drawn while the tank still supplies air. The tank protects only
+//   through a mask that is fully on (it is an air supply, not an aura); off the face nothing drains. It is never refilled: an empty
+//   tank stays an inert, storage-less back item ("Airtank empty" toast once) until you take it off.
+//   PROTECTION = fully on AND (worn tank air > 0 OR fitted filter > 0).
+// - RESERVE-AWARE WARNING (tone; HUD Q cell + visor rim + toasts): the USABLE reserve = fitted filter + every spare the auto-fit can
+//   actually draw (inv.count: quick slots, pockets, grenade slot — the very lookup inv.take uses; never a bag's contents, the
+//   ground, the Lockbox) x FILTER_LIFE_S + a WORN tank's air. 'empty' (red) only with no usable protection at all; 'low' (amber) at
+//   <= LOW_RESERVE_S of it (30 s = the old warning's lead time: 20 % of the former 150 s filter); else 'ok'. The spare count is
+//   recounted only when inv.version changes (no per-frame scan).
 
 import type * as THREE from 'three';
 import type {Game} from '../game';
-import {FILTER_LIFE_S, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, isAirtank, isFilterMask} from '../items/gear';
 import {makeSupplyMesh} from '../world/pickups';
 import type {ItemStack} from '../items/inventory';
 import type {RunParticipant} from '../run/snapshot';
 import type {MaskView} from './maskView';
 
-/** Lens-rim / HUD warning tone: ok, low filter (amber), empty filter on the face (red, pulsing). */
+/** Lens-rim / HUD warning tone: ok, low usable reserve (amber), no usable protection left (red, pulsing). */
 export type MaskTone = 'ok' | 'low' | 'empty';
 
 /** Gas-mask tuning (first pass; all in one place). */
 export const GAS_MASK = {
-  /** Seconds one filter lasts on the face (items/gear.ts FILTER_LIFE_S = 150). */
+  /** Seconds one filter lasts on the face (items/gear.ts FILTER_LIFE_S = 37.5; was 150 before task filter-tension-airtank). */
   filterLifeS: FILTER_LIFE_S,
   /** Pulling the mask on (unprotected until done). */
   donS: 0.6,
   /** Taking it off (unprotected at once). */
   doffS: 0.45,
-  /** "Filter low" at or below this fraction of one filter (amber). */
+  /** "Filter low" at or below this fraction of one filter (the HUD filter bar's own amber; kept for the gauge). */
   lowFrac: 0.2,
+  /** Task filter-tension-airtank: the warning tone is amber at or below this many seconds of USABLE protection in total. */
+  lowReserveS: 30,
   /** The spare-filter item drawn automatically. */
   filterItem: 'gas_filter',
   /** RunParticipant id (Retry restores the on-face flag, NewGame resets it). */
@@ -67,6 +84,10 @@ export interface MaskHudView {
   cover: number;
   protects: boolean;
   tone: MaskTone;
+  /** Task filter-tension-airtank: seconds of usable protection (fitted filter + drawable spares + a worn tank's air). */
+  reserveS?: number;
+  /** A worn Airtank Backpack's air (s; null / absent without one worn). */
+  tankS?: number | null;
 }
 
 /** Game internals the mask needs (private there; handed over by the Game constructor like installInjuries' access). */
@@ -104,7 +125,12 @@ export class GasMaskSystem {
   private drawFailedAt = -1;
   private protos: THREE.Object3D[] | null = null;
   /** The HUD view (one object, refreshed in place every frame). */
-  private readonly view: MaskHudView = {state: 'off', cover: 0, protects: false, tone: 'ok'};
+  private readonly view: MaskHudView = {state: 'off', cover: 0, protects: false, tone: 'ok', reserveS: 0, tankS: null};
+  /** Spare filters counted at inv.version `sparesAt` (recounted only after an inventory change). */
+  private spareCount = 0;
+  private sparesAt = -1;
+  private tankEmptyWarned = false;
+  private tankUid = -1;
   /** Item 4: the first-person mask view (Game.load attaches it once the viewmodel exists; null in Node shells). */
   private faceView: MaskView | null = null;
   private aimOf: () => number = () => 0;
@@ -166,6 +192,7 @@ export class GasMaskSystem {
     this.wornUid = m?.uid ?? -1;
     this.lowWarned = this.emptyWarned = false;
     this.drawFailedAt = -1;
+    this.tankUid = -1; // (re-read by checkWorn: an already-empty restored tank does not toast again)
     this.present();
   }
 
@@ -194,13 +221,35 @@ export class GasMaskSystem {
 
   /** Spare filters in accessible inventory (quick slots, pockets, grenade slot; never a worn backpack's contents). */
   get spares(): number {
-    return this.game.inv.count(GAS_MASK.filterItem);
+    const inv = this.game.inv;
+    if (inv.version !== this.sparesAt) { this.spareCount = inv.count(GAS_MASK.filterItem); this.sparesAt = inv.version; }
+    return this.spareCount;
   }
 
-  /** Mask on the face (transition complete) AND its fitted filter has charge: infectious gas does no damage. */
+  /** Task filter-tension-airtank: the WORN Airtank Backpack (gear slot 'backpack'), or null. */
+  get tank(): ItemStack | null {
+    const t = this.game.inv.worn('backpack');
+    return t && isAirtank(t.itemId) ? t : null;
+  }
+
+  /** Seconds of air left in the worn Airtank Backpack (0 without one). */
+  get tankSeconds(): number {
+    return Math.max(0, this.tank?.air ?? 0);
+  }
+
+  /**
+   * Task filter-tension-airtank: seconds of protection the player can actually use — the fitted filter + every spare the auto-fit
+   * can draw (`spares`: the same lookup as inv.take) + a worn tank's air. 0 without a mask equipped (nothing can protect).
+   */
+  get reserveSeconds(): number {
+    if (!this.worn) return 0;
+    return this.filterSeconds + this.spares * GAS_MASK.filterLifeS + this.tankSeconds;
+  }
+
+  /** Mask on the face (transition complete) AND air: a worn tank with air left or a fitted filter with charge — no gas damage. */
   protects(): boolean {
     const m = this.worn;
-    return this.state === 'on' && !!m && m.uid === this.faceUid && (m.filter ?? 0) > 0;
+    return this.state === 'on' && !!m && m.uid === this.faceUid && ((m.filter ?? 0) > 0 || this.tankSeconds > 0);
   }
 
   /** 0 = off the face .. 1 = on (the mask view / transition progress). */
@@ -211,12 +260,11 @@ export class GasMaskSystem {
     return 0;
   }
 
-  /** The visor-edge / HUD warning tone: empty (on the face, no charge), low (<= lowFrac), ok. */
+  /** The visor-edge / HUD warning tone from the USABLE reserve: empty (none at all), low (<= lowReserveS), ok. No mask: ok. */
   get tone(): MaskTone {
-    const m = this.worn;
-    if (!m) return 'ok';
-    const frac = (m.filter ?? 0) / GAS_MASK.filterLifeS;
-    return frac <= 0 ? 'empty' : frac <= GAS_MASK.lowFrac ? 'low' : 'ok';
+    if (!this.worn) return 'ok';
+    const r = this.reserveSeconds;
+    return r <= 0 ? 'empty' : r <= GAS_MASK.lowReserveS ? 'low' : 'ok';
   }
 
   // --- Q -------------------------------------------------------------------------------------------------------------
@@ -271,27 +319,44 @@ export class GasMaskSystem {
     this.faceView?.update(dt, this.aimOf());
   }
 
-  /** On the face: the fitted filter drains by play dt; the low warning once per filter. */
+  /**
+   * On the face, by play dt: a worn tank's air first, then (the remainder of the frame, once it is empty) the fitted filter. The low
+   * warning once per crossing of the USABLE reserve below lowReserveS (re-armed when it rises above again: a pickup, a spare).
+   */
   private drain(dt: number): void {
     const m = this.worn;
     if (!m) return;
-    const left = Math.max(0, (m.filter ?? 0) - dt);
-    m.filter = left;
-    if (left > 0 && left / GAS_MASK.filterLifeS <= GAS_MASK.lowFrac && !this.lowWarned) {
+    let rest = dt;
+    const t = this.tank;
+    if (t && (t.air ?? 0) > 0) {
+      const used = Math.min(t.air!, rest);
+      t.air = Math.max(0, t.air! - used);
+      rest -= used;
+      if (t.air <= 0 && !this.tankEmptyWarned) {
+        this.tankEmptyWarned = true;
+        const f = m.filter ?? 0, n = this.spares;
+        this.game.hud.toast(f > 0 || n ? `Airtank empty — now on the mask filter (${Math.ceil(f / GAS_MASK.filterLifeS * 100 - 1e-9)} % · ${n} spare). It cannot be refilled.`
+          : 'Airtank empty — it cannot be refilled', true);
+      }
+    }
+    if (rest > 0 && (m.filter ?? 0) > 0) m.filter = Math.max(0, m.filter! - rest);
+    const r = this.reserveSeconds;
+    if (r > GAS_MASK.lowReserveS) this.lowWarned = false;
+    else if (r > 0 && !this.lowWarned) {
       this.lowWarned = true;
       const n = this.spares;
-      this.game.hud.toast(`Gas mask filter low — ${Math.ceil(left / GAS_MASK.filterLifeS * 100)} % · ${n ? `${n} spare` : 'no spare filter'}`, true);
+      this.game.hud.toast(`Gas mask air low — ${Math.ceil(r)} s of protection left · ${n ? `${n} spare filter${n > 1 ? 's' : ''}` : 'no spare filter'}`, true);
     }
   }
 
-  /** An empty fitted filter on the face: take one spare from accessible inventory (instant), else warn once. */
+  /** An empty fitted filter on the face (and no tank air feeding it): take one spare from accessible inventory (instant), else warn once. */
   private fitSpare(): void {
     const g = this.game, m = this.worn;
-    if (!m || (m.filter ?? 0) > 0) return;
+    if (!m || (m.filter ?? 0) > 0 || this.tankSeconds > 0) return;
     if (this.drawFailedAt === g.inv.version) return; // nothing new to draw from since the last try
     if (g.inv.take(GAS_MASK.filterItem, 1) === 1) {
       m.filter = GAS_MASK.filterLifeS;
-      this.lowWarned = this.emptyWarned = false;
+      this.emptyWarned = false;
       this.drawFailedAt = -1;
       (g.sfx as {batteryInsert?: () => void}).batteryInsert?.();
       const n = this.spares;
@@ -318,6 +383,8 @@ export class GasMaskSystem {
       this.lowWarned = this.emptyWarned = false;
       this.drawFailedAt = -1;
     }
+    const tid = this.tank?.uid ?? -1; // task filter-tension-airtank: another (or no) tank on the back re-arms its empty toast
+    if (tid !== this.tankUid) { this.tankUid = tid; this.tankEmptyWarned = (this.tank?.air ?? 0) <= 0; }
   }
 
   /** Lifecycle (state left 'playing', section build / teardown): a running transition ends OFF. */
@@ -335,6 +402,8 @@ export class GasMaskSystem {
     v.cover = this.cover;
     v.protects = this.protects();
     v.tone = this.tone;
+    v.reserveS = this.reserveSeconds;
+    v.tankS = this.tank ? this.tankSeconds : null;
     (this.game.hud as {setMask?: (v: MaskHudView) => void}).setMask?.(v);
     this.shownCover = v.cover;
     this.faceView?.set(v.cover, this.state === 'off' ? 'ok' : v.tone);
@@ -360,11 +429,12 @@ export class GasMaskSystem {
   }
 
   /** QA / tests: a compact state report. */
-  qa(): {state: MaskState; on: boolean; protects: boolean; transition: number; equipped: string | null; uid: number | null; filterS: number; filterFrac: number; spares: number; tone: MaskTone; overlay: number} {
+  qa(): {state: MaskState; on: boolean; protects: boolean; transition: number; equipped: string | null; uid: number | null; filterS: number; filterFrac: number; spares: number; tone: MaskTone; overlay: number; tankS: number | null; reserveS: number} {
     const m = this.worn;
     return {
       state: this.state, on: this.on, protects: this.protects(), transition: +this.cover.toFixed(3), equipped: m?.itemId ?? null, uid: m?.uid ?? null,
       filterS: +this.filterSeconds.toFixed(2), filterFrac: +(this.filterSeconds / GAS_MASK.filterLifeS).toFixed(4), spares: this.spares, tone: this.tone, overlay: this.shownCover,
+      tankS: this.tank ? +this.tankSeconds.toFixed(2) : null, reserveS: +this.reserveSeconds.toFixed(2),
     };
   }
 }

@@ -18,7 +18,7 @@ import {SAVE_SLOTS} from '../campaign/types';
 import type {LevelId} from '../levels/types';
 import {ITEMS, type ItemDef} from '../items/items';
 import {LEGACY_AMMO_IDS} from '../items/calibers';
-import {GEAR_SLOTS, gearSpec, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS, LEGACY_FILTER_LIFE_S, gearSpec, isAirtank, isFilterMask} from '../items/gear';
 import {HOTBAR_SIZE, MELEE_SLOTS, THROW_SLOTS} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
@@ -26,7 +26,7 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
-import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, SEEN_WORD_BITS, deriveMeta, seenWordCount, type SaveFileV1Like, type SerializedRunV1} from './serialize';
+import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, SEEN_WORD_BITS, deriveMeta, migrateFilterUnits, seenWordCount, type SaveFileV1Like, type SerializedRunV1} from './serialize';
 
 /** The envelope format this build writes (and the newest it reads). */
 export const SAVE_FILE_V = 1;
@@ -185,7 +185,13 @@ function itemOf(v: unknown, path: string): ItemDef {
   return ITEMS[canon];
 }
 
-const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter'] as const;
+const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter', 'air'] as const;
+/**
+ * Task filter-tension-airtank-20261104-072836: the largest fitted-filter charge a stack of the run being validated may hold = the
+ * filter life that run was written with (run.filterLifeS; absent = LEGACY_FILTER_LIFE_S, a save from before 37.5 s filters).
+ * validateRunData sets it for the duration of its walk; migrateFilterUnits then rescales the charges to FILTER_LIFE_S.
+ */
+let filterCapS: number = FILTER_LIFE_S;
 
 /**
  * An item stack: a known item, a legal count, a weapon's magazine, a gas mask's filter, a backpack's own contents (one level).
@@ -210,7 +216,11 @@ function stack(v: unknown, path: string, o: {uid: boolean; inBag: boolean; seen?
   }
   if (has(s, 'filter')) {
     if (!isFilterMask(def.id)) bad(`${path}.filter`, `${def.id} takes no filter`);
-    num(s.filter, `${path}.filter`, 0, (gearSpec(def.id)?.filterLife ?? 0) + 1e-6);
+    num(s.filter, `${path}.filter`, 0, filterCapS + 1e-6);
+  }
+  if (has(s, 'air')) { // task filter-tension-airtank: an Airtank Backpack's air (s)
+    if (!isAirtank(def.id)) bad(`${path}.air`, `${def.id} holds no air`);
+    num(s.air, `${path}.air`, 0, (gearSpec(def.id)?.airLife ?? 0) + 1e-6);
   }
   const slots = def.gear?.bagSlots ?? 0;
   if (slots > 0 && o.inBag) bad(path, 'a backpack inside a backpack');
@@ -536,13 +546,20 @@ function entry(v: unknown, path: string, net: SubwayNetwork): void {
   stats(e.stats, `${path}.stats`);
 }
 
-const RUN_KEYS = ['v', 'point', 'campaign', 'seeds', 'section', 'arrival', 'entered', 'playtime', 'clock', 'memories', 'entry', 'carry', 'participants', 'stats', 'player'];
+const RUN_KEYS = ['v', 'point', 'campaign', 'seeds', 'section', 'arrival', 'entered', 'playtime', 'clock', 'memories', 'entry', 'carry', 'participants', 'stats', 'player', 'filterLifeS'];
+const RUN_REQUIRED = RUN_KEYS.filter(k => k !== 'filterLifeS'); // (task filter-tension-airtank: optional; absent = a legacy 150 s save)
 
 /** The serialized run (save/serialize.ts SerializedRunV1), exact shape + ranges + logical checks. */
 export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run'): SerializedRunV1 {
   const r = obj(v, path);
-  only(r, path, RUN_KEYS);
+  only(r, path, RUN_KEYS, RUN_REQUIRED);
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
+  const prevCap = filterCapS;
+  filterCapS = has(r, 'filterLifeS') ? num(r.filterLifeS, `${path}.filterLifeS`, 1, 3600) : LEGACY_FILTER_LIFE_S;
+  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; }
+}
+
+function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
   const point = oneOf(r.point, `${path}.point`, SAVE_POINTS);
   const c = campaign(r.campaign, `${path}.campaign`, o.validateNetwork);
   if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : 'a new-game'} save during a journey`);
@@ -633,7 +650,11 @@ export function validateSaveFile(raw: unknown, o: ValidateOptions = {}): SaveRes
     if (checksumOf(f.run) !== sum) return fail('This save file is damaged: its checksum does not match its contents (it was changed or corrupted after it was written).');
     const run = validateRunData(f.run, o);
     const m = meta(f.meta, run);
-    return {ok: true, value: {format: SAVE_FORMAT, v: 1, meta: m, run, checksum: sum}};
+    // task filter-tension-airtank-20261104-072836: a save written with other filter units (a legacy 150 s save) has its charges
+    // rescaled ONCE here (same fraction of a filter, on a copy); the result carries filterLifeS = FILTER_LIFE_S and its own checksum,
+    // so it validates as is again and a reload never rescales twice (the stored text keeps its own units until the next save).
+    const now = migrateFilterUnits(run);
+    return {ok: true, value: {format: SAVE_FORMAT, v: 1, meta: m, run: now, checksum: now === run ? sum : checksumOf(now)}};
   } catch (err) {
     if (err instanceof Bad) return fail(`This save cannot be loaded — ${err.message}.`);
     return fail(`This save cannot be loaded (unexpected error: ${String((err as Error)?.message ?? err).slice(0, 160)}).`);

@@ -2,7 +2,7 @@
 // (run/playerTrain.ts PlayerTrainRecord.lockbox), so it is the SAME container in every level (Subway / Office / Mall / Reactor).
 //
 // - 40 ordinary inventory slots (ItemStack, the item's own stackMax), not volume. Every item kind fits, a backpack whole with its
-//   contents (`bag`); stacks keep their uid, count, gun magazine `mag` and gas-mask `filter` charge.
+//   contents (`bag`); stacks keep their uid, count, gun magazine `mag`, gas-mask `filter` charge and an airtank's `air`.
 // - It lives in the player-train RunParticipant: Travel keeps it (nothing touches the record), Retry restores it with the player's
 //   inventory from the level-entry snapshot, NewGame empties it. There is no on-disk run save (a page reload starts a new run).
 // - Transfers go only through Inventory.storeMove / storeQuick / storeWornBag (the open Lockbox view); the 1337 gear drop through
@@ -11,7 +11,7 @@
 
 import {ITEMS} from '../items/items';
 import {canonicalItemId} from '../items/calibers';
-import {gearSpec, isFilterMask} from '../items/gear';
+import {gearSpec, isAirtank, isFilterMask} from '../items/gear';
 import {stackToJSON, stacksIn, type ItemStack, type StackJSON} from '../items/inventory';
 import {WEAPONS} from '../weapons/weapons';
 
@@ -38,6 +38,7 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
     s.mag = Number.isFinite(o.mag) ? Math.max(0, Math.min(mag, Math.floor(o.mag as number))) : 0;
   }
   if (isFilterMask(itemId) && Number.isFinite(o.filter)) s.filter = Math.max(0, Math.min(gearSpec(itemId)!.filterLife!, o.filter as number));
+  if (isAirtank(itemId) && Number.isFinite(o.air)) s.air = Math.max(0, Math.min(gearSpec(itemId)!.airLife!, o.air as number)); // task filter-tension-airtank
   if (slots > 0) {
     const src = Array.isArray(o.bag) ? o.bag : [];
     s.bag = Array.from({length: slots}, (_, i) => stackFrom(src[i], true, seen));

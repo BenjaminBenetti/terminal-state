@@ -44,11 +44,18 @@
 // Task train-lockbox-windows-20261101-232156 (lane BOX): STORE transfers with the train's 40-slot Lockbox (run/trainLockbox.ts) —
 // storeMove / storeQuick / storeWornBag on a slot list the inventory does not own (StoreRef {bar: 'store', index}), through the same
 // move engine. The store takes every item kind (a backpack too, whole with its contents); a backpack leaves it only onto your back.
+//
+// Task filter-tension-airtank-20261104-072836: the AIRTANK BACKPACK (items/gear.ts `airtank_backpack`) is back-slot gear WITHOUT
+// storage — not a bag (isBagItem false): no contents list, it can ride in the pockets / a bag like a vest, and it never becomes a
+// grounded bag. Its air (seconds left) is `air` ON ITS OWN STACK, kept by every move / swap / drop / snapshot like a mask's `filter`.
+// makeStack makes a NEW tank full; a missing `air` reads as empty (never full), so no copy path can refill one. `wornBag()` is the
+// worn back item only when it is a real bag (the 6 / set-down / bag paths use it). Wearing it while a backpack is worn swaps
+// through the normal move engine, which refuses (a backpack never goes into the pockets): nothing is moved, dropped or lost.
 
 import {itemDef} from './items';
 import {canonicalItemId} from './calibers';
 import {WEAPONS, meleeDefOf} from '../weapons/weapons';
-import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isBagItem, isFilterMask, type GearSlot} from './gear';
+import {GEAR_SLOTS, GEAR_SLOT_NAMES, gearSpec, isAirtank, isBagItem, isFilterMask, type GearSlot} from './gear';
 
 export interface ItemStack {
   uid: number;
@@ -60,6 +67,8 @@ export interface ItemStack {
   bag?: (ItemStack | null)[];
   /** Mask lane: a gas mask's fitted filter, seconds of on-face use left (gas masks only; undefined = no charge). */
   filter?: number;
+  /** Task filter-tension-airtank-20261104-072836: an Airtank Backpack's air, seconds left (airtanks only; undefined = empty). */
+  air?: number;
 }
 
 export type Bar = 'hotbar' | 'pack' | 'gear' | 'throw' | 'melee';
@@ -101,7 +110,7 @@ export type RefusalCode = 'split' | 'wrong-slot' | 'not-gear' | 'pockets-occupie
 export interface Refusal { code: RefusalCode; text: string }
 
 /** Plain-data stack (snapshots). Mask lane: + `filter` (a gas mask's fitted-filter seconds). */
-export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number }
+export interface StackJSON { uid: number; itemId: string; count: number; mag?: number; bag?: (StackJSON | null)[]; filter?: number; air?: number }
 export interface InventoryJSON {
   /** 1: iteration-16 snapshots (no grenade slot), 2: + grenade slot (no melee slot) — both still loaded; 3: current. */
   v: 1 | 2 | 3;
@@ -133,6 +142,7 @@ export function stackToJSON(s: ItemStack | null | undefined): StackJSON | null {
   if (s.mag !== undefined) j.mag = s.mag;
   if (s.bag) j.bag = s.bag.map(stackToJSON);
   if (s.filter !== undefined) j.filter = s.filter; // mask lane
+  if (s.air !== undefined) j.air = s.air; // task filter-tension-airtank
   return j;
 }
 
@@ -146,6 +156,7 @@ export function stackFromJSON(j: StackJSON | null | undefined): ItemStack | null
   if (j.mag !== undefined) s.mag = j.mag;
   if (j.bag) s.bag = j.bag.map(stackFromJSON);
   if (j.filter !== undefined) s.filter = j.filter; // mask lane
+  if (j.air !== undefined) s.air = j.air; // task filter-tension-airtank
   return s;
 }
 
@@ -187,6 +198,7 @@ export class Inventory {
     if (def.kind === 'weapon') s.mag = mag ?? WEAPONS[def.weaponId!].magazine;
     const bagSlots = def.gear?.bagSlots ?? 0;
     if (bagSlots > 0) s.bag = new Array(bagSlots).fill(null);
+    if (def.gear?.airLife) s.air = def.gear.airLife; // task filter-tension-airtank: a NEW tank is full (copies keep their own `air`)
     return s;
   }
 
@@ -319,6 +331,19 @@ export class Inventory {
   get extraPockets(): number {
     return this.pocketsOf(this.gearSlots[CHEST]);
   }
+  /** Task filter-tension-airtank-20261104-072836: the worn back item when it is a real bag (has contents), else null (e.g. an airtank). */
+  wornBag(): ItemStack | null {
+    const st = this.gearSlots[BACK];
+    return st && isBagItem(st.itemId) ? st : null;
+  }
+
+  /** Task filter-tension-airtank-20261104-072836: why the back slot is not free for a backpack (the airtank needs Tab, a bag needs 6). */
+  private backTakenText(after: string): string {
+    const st = this.gearSlots[BACK];
+    return st && !isBagItem(st.itemId) ? `You are wearing the ${itemDef(st.itemId).name} — take it off first (Tab: gear).`
+      : `You are already wearing a backpack — ${after}`;
+  }
+
   /** Whether `stack` is the backpack being worn right now (its contents are then out of reach). */
   isWornBag(stack: ItemStack | null | undefined): boolean {
     return !!stack && this.gearSlots[BACK] === stack;
@@ -352,7 +377,7 @@ export class Inventory {
   /** Wear a backpack that is NOT in this inventory (a grounded bag's "Wear"): the very same stack (identity + contents). */
   wearBag(stack: ItemStack): boolean {
     if (!isBagItem(stack.itemId)) { this.refuse('not-a-bag', 'That is not a backpack.'); return false; }
-    if (this.gearSlots[BACK]) { this.refuse('slot-taken', 'You are already wearing a backpack — put yours down first (6, then click).'); return false; }
+    if (this.gearSlots[BACK]) { this.refuse('slot-taken', this.backTakenText('put yours down first (6, then click).')); return false; }
     if (this.holds(stack)) { this.refuse('bad-ref', 'That backpack is already yours.'); return false; }
     this.gearSlots[BACK] = stack;
     this.refusal = null;
@@ -416,7 +441,7 @@ export class Inventory {
           return 0;
         }
       }
-      if (isBagItem(stack.itemId)) { this.refuse('bag-not-pocketable', 'You are already wearing a backpack.'); return stack.count; }
+      if (isBagItem(stack.itemId)) { this.refuse('bag-not-pocketable', this.backTakenText('a second one does not fit in your pockets.')); return stack.count; }
     }
     let left = stack.count;
     // Task office-overhaul-20261030 (INTERACT): a throwable fills the grenade slot first (same item merge, else the empty slot)
@@ -646,7 +671,7 @@ export class Inventory {
     if (!src || !st) return 0;
     if (src.kind === 'store') {
       if (isBagItem(st.itemId)) {
-        if (this.gearSlots[BACK]) { this.refuse('slot-taken', 'You are already wearing a backpack — stow yours in the Lockbox first, then take this one.'); return 0; }
+        if (this.gearSlots[BACK]) { this.refuse('slot-taken', this.backTakenText('stow yours in the Lockbox first, then take this one.')); return 0; }
         src.list[src.index] = null;
         this.gearSlots[BACK] = st;
         this.refusal = null;
@@ -967,6 +992,12 @@ export class Inventory {
         const life = gearSpec(s.itemId)?.filterLife ?? 0;
         if (!isFilterMask(s.itemId)) out.push(`non-mask ${s.itemId} carries a filter charge`);
         else if (!Number.isFinite(s.filter) || s.filter < 0 || s.filter > life + 1e-6) out.push(`bad filter ${s.itemId}:${s.filter}`);
+      }
+      // task filter-tension-airtank: air only on airtanks, finite, 0..a full tank
+      if (s.air !== undefined) {
+        const life = gearSpec(s.itemId)?.airLife ?? 0;
+        if (!isAirtank(s.itemId)) out.push(`non-airtank ${s.itemId} carries air`);
+        else if (!Number.isFinite(s.air) || s.air < 0 || s.air > life + 1e-6) out.push(`bad air ${s.itemId}:${s.air}`);
       }
     };
     this.hotbar.forEach(s => s && check(s, 'hotbar'));

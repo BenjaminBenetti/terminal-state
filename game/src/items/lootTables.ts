@@ -826,8 +826,14 @@ export const PUBLIC_FLOOR_WEIGHTS: Readonly<Record<'station' | 'stationLevels' |
 export const GEAR_MEAN_PER_LEVEL = 1;
 /** Hard cap of gear items per logical level. */
 export const GEAR_CAP_PER_LEVEL = 5;
-/** Relative draw weights (the backpack a little more likely: it is the piece that changes play the most). */
-export const GEAR_WEIGHTS: Readonly<Record<string, number>> = {armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1};
+/**
+ * Relative draw weights (the backpack a little more likely: it is the piece that changes play the most). Task filter-tension-airtank-
+ * 20261104-072836: + the Airtank Backpack (back-slot gear, tier 1) at 0.8 — a little rarer than a base piece (optional preparation,
+ * not a free 600 s for everyone). It is the ONLY loot change of that task: the count (mean / cap), the other weights and every gas
+ * filter / mask table stay exactly as they were; levels whose gear pool inherits these weights (gearParams, the hideout gear rows)
+ * can roll it like any other piece, with no level-specific boost.
+ */
+export const GEAR_WEIGHTS: Readonly<Record<string, number>> = {armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1, airtank_backpack: 0.8};
 export interface GearLoot { mean: number; cap: number; weights: Readonly<Record<string, number>> }
 export const GEAR_LOOT: GearLoot = {mean: GEAR_MEAN_PER_LEVEL, cap: GEAR_CAP_PER_LEVEL, weights: GEAR_WEIGHTS};
 /**

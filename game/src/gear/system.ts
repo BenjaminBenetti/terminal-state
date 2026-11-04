@@ -33,7 +33,7 @@
 
 import * as THREE from 'three';
 import type {Game} from '../game';
-import {FILTER_LIFE_S, gearModifiersFor, GEAR_IDS, isBagItem, isFilterMask} from '../items/gear';
+import {FILTER_LIFE_S, gearModifiersFor, GEAR_IDS, isAirtank, isBagItem, isFilterMask} from '../items/gear';
 import {itemDef} from '../items/items';
 import {stackFromJSON, stackToJSON, stacksIn, type ItemStack} from '../items/inventory';
 import {makeSupplyMesh} from '../world/pickups';
@@ -195,7 +195,7 @@ export class GearSystem {
       else this.ready();
     }
     if (this.readied) {
-      if (!g.inv.worn('backpack') || g.player.climbing || g.consumeView.busy || !g.player.alive) this.cancelReady(true);
+      if (!g.inv.wornBag() || g.player.climbing || g.consumeView.busy || !g.player.alive) this.cancelReady(true);
       else if (KEYS_SHOULDER.some(k => inp.hit(k)) || inp.wheel) this.cancelReady(true);
       else {
         if (g.weapon.stack) g.weapon.equip(null);
@@ -297,6 +297,7 @@ export class GearSystem {
       const def = itemDef(st.itemId);
       this.game.hud.toast(isBagItem(st.itemId) ? `Wearing the ${def.short.toLowerCase()} — 6 takes it off, click sets it down, tap E opens it`
         : isFilterMask(st.itemId) ? `${def.short} equipped (face slot) — Q puts it on · filter ${Math.ceil(Math.max(0, Math.min(1, (st.filter ?? 0) / FILTER_LIFE_S)) * 100 - 1e-9)} %` // mask lane
+        : isAirtank(st.itemId) ? `Wearing the ${def.name} — ${Math.ceil(st.air ?? 0)} s of air for the gas mask (used before its filter; it cannot be refilled)` // task filter-tension-airtank
         : `Wearing the ${def.short.toLowerCase()} (Tab: gear)`);
     }
   }
@@ -310,7 +311,10 @@ export class GearSystem {
   /** 6: take the worn backpack off into the hands. */
   ready(): boolean {
     const g = this.game;
-    const bag = g.inv.worn('backpack');
+    const bag = g.inv.wornBag();
+    // task filter-tension-airtank: an Airtank Backpack on the back has no storage: it never becomes a grounded bag (no 6 / set-down)
+    const other = !bag ? g.inv.worn('backpack') : null;
+    if (other) { g.hud.toast(`The ${itemDef(other.itemId).name} has no storage to set down — take it off in Tab: gear`, true); g.sfx.denied(); return false; }
     if (!bag) { g.hud.toast(this.bags.length ? 'No backpack on your back — yours is on the ground (tap E to open it, hold E to pick it up)' : 'No backpack — gear is rare, keep looking', true); g.sfx.denied(); return false; }
     if (g.player.climbing || g.consumeView.busy) { g.hud.toast('Hands busy', true); g.sfx.denied(); return false; }
     if (g.flareHold.active) { g.flareHold.cancel(); g.syncHeld(); }
@@ -350,6 +354,7 @@ export class GearSystem {
   /** Take the worn bag off and lay it down at `pose` (the same stack: identity and contents). */
   private putDown(pose: BagPose): boolean {
     const g = this.game;
+    if (!g.inv.wornBag()) return false; // task filter-tension-airtank: only a real bag becomes a grounded bag
     const stack = g.inv.takeOffBag();
     if (!stack) return false;
     if (!stack.bag) stack.bag = new Array(itemDef(stack.itemId).gear?.bagSlots ?? 12).fill(null);
@@ -453,7 +458,8 @@ export class GearSystem {
     if (this.eHold) return '<b>Hold [E]</b> Picking the bag up… · release to open it instead';
     const used = (b.stack.bag ?? []).filter(Boolean).length;
     const what = itemDef(b.stack.itemId).short.toLowerCase();
-    const wear = this.game.inv.worn('backpack') ? ' (you already wear one)' : ' · <b>hold [E]</b> wear';
+    const back = this.game.inv.worn('backpack');
+    const wear = back ? (isBagItem(back.itemId) ? ' (you already wear one)' : ` (your back holds the ${itemDef(back.itemId).short.toLowerCase()})`) : ' · <b>hold [E]</b> wear';
     return `<b>[E]</b> Open ${what}${wear} · ${used ? `${used} item${used > 1 ? 's' : ''} inside` : 'empty'}`;
   }
 

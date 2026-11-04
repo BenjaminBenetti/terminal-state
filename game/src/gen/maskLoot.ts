@@ -39,6 +39,9 @@ export const MASK_LOOT = {
     // Task reactor-playtest-round2-20261102 (lane GAS): the final generator JAMS (gen/reactor/gasJam.ts), so the core floor NEEDS the
     // mask until the reactor is online. The same finite supply (>= 52.5 s fitted + 3 x 150 s spare) is now placed only UPSTREAM of the
     // jammed zone (placeMaskLoot), budgeted in tests/reactor-gas-jam.test.ts against the real core-floor travel / work time.
+    // Task filter-tension-airtank-20261104-072836: the COUNTS stay exactly as they are, but a filter now lasts 37.5 s (>= 13.1 s fitted
+    // + 3 x 37.5 s spare): by the user's design the on-site supply alone no longer has to cover the core floor — the player is meant to
+    // arrive prepared with scavenged filters / an Airtank Backpack (no Reactor-specific supply was added).
     reactor: {masks: [1, 1], filters: [3, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */

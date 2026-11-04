@@ -5,7 +5,7 @@
 //      generator (its stall toast stays short; the full stall / lamp / prompt machine: tests/reactor-air-runtime.test.ts).
 //  (3) "the key for reactor start should be on the bottom floor not the top floor." -> the startup key lies in the core floor's control
 //      room (the key switch's room) on >= 12 seeds: reachable on foot from every way down onto the core floor, fetched on the masked
-//      core route with the guaranteed upstream filter time covering that route twice over, its map X where it actually lies, nothing
+//      core route (its filter time measured; task filter-tension-airtank: 37.5 s filters, no on-site-only requirement), its map X where it actually lies, nothing
 //      pointing at the rim office any more, the item id / record / persistence unchanged.
 import {describe, expect, it} from 'vitest';
 import {appendFileSync} from 'node:fs';
@@ -176,7 +176,7 @@ describe('(3) the startup key on the core floor (lane OBJECTIVES)', () => {
     }
   }, 300_000);
 
-  it('>= 12 seeds: the guaranteed upstream mask + filter time covers the masked core route WITH the key fetch (stairs -> valve -> pump -> key -> key switch -> rods -> online) twice over', () => {
+  it('>= 12 seeds: the guaranteed upstream mask + filter time (unchanged counts, 37.5 s filters) measured against the masked core route WITH the key fetch (stairs -> valve -> pump -> key -> key switch -> rods -> online)', () => {
     for (const seed of SEEDS) {
       const L = level(seed), r = L.reactor!, jam = reactorJam(r)!, coreLv = jam.levels[0], g = L.levels[coreLv].grid;
       // the mask and every filter lie upstream of the gassed core floor (lane GAS's placement rule; the key fetch adds no gear lock)
@@ -212,7 +212,13 @@ describe('(3) the startup key on the core floor (lane OBJECTIVES)', () => {
       const work = HOLD_S.valve + HOLD_S.rods + 3 * 1.0; // presses: the pump, taking the key, the key switch
       const budget = 2 * (walkM / WALK_SPEED) + work + tClear + 60; // detours + 60 s of fighting
       const minSupply = FILTER_LIFE_S * MASK_LOOT.foundFilter[0] + FILTER_LIFE_S * MASK_LOOT.levels.reactor.filters[0];
-      expect(minSupply, `seed ${seed}: walk ${walkM.toFixed(0)} m, budget ${budget.toFixed(0)} s`).toBeGreaterThanOrEqual(2 * budget);
+      // task filter-tension-airtank-20261104-072836 (user: "Do not increase loot in the reactor at all … we simply changing the items
+      // statistics"; Main: no "finish the Reactor with only on-site supplies" requirement): a filter lasts 37.5 s now, so the on-site supply
+      // (counts UNCHANGED) no longer covers the masked core route by itself — by design the player arrives prepared (scavenged spares, an
+      // Airtank Backpack). Pinned instead: the unchanged counts and the supply in the new units; the route budget is still measured.
+      expect(MASK_LOOT.levels.reactor).toEqual({masks: [1, 1], filters: [3, 5]});
+      expect(minSupply).toBeCloseTo(37.5 * 0.35 + 37.5 * 3, 9);
+      expect(budget, `seed ${seed}: walk ${walkM.toFixed(0)} m`).toBeGreaterThan(0);
       const detour = dist(chain[1], chain[2]) + dist(chain[2], chain[3]) - dist(chain[1], chain[3]);
       if (process.env.LL_OBJ_OUT) appendFileSync(process.env.LL_OBJ_OUT, `seed ${seed}: walk ${walkM.toFixed(0)} m (key detour ${detour.toFixed(1)} m), clear ${tClear.toFixed(1)} s, budget ${budget.toFixed(0)} s, worst-roll supply ${minSupply.toFixed(0)} s\n`);
     }

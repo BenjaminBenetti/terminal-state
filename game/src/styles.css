@@ -140,6 +140,9 @@ body #hotbar .slot.maskslot img.ico3d { width: 54px; height: 30px; }
 #hotbar .slot.maskslot.low .nm { color: var(--mustard); }
 #hotbar .slot.maskslot.empty .fb { border-color: var(--red); }
 #hotbar .slot.maskslot.empty .nm { color: var(--red); }
+/* task filter-tension-airtank: a worn Airtank Backpack's air bar (teal) just above the fitted filter's bar (it is used first) */
+#hotbar .slot.maskslot .fb.tb { bottom: 9px; }
+#hotbar .slot.maskslot .fb.tb i, #hotbar .slot.maskslot.low .fb.tb i { background: var(--teal); }
 /* Natural cell widths per viewport (the band above shrinks them further only when they do not fit): 84 / 72 / 62 px quick
    slots, a narrower Q cell (compact from 1250 px down). */
 @media (max-width: 1400px) { #hotbar .slot { width: 72px; } #hotbar .slot svg { width: 46px; } body #hotbar .slot img.ico3d { width: 66px; }

@@ -118,6 +118,15 @@
 //     officePickups c60b27da -> 1aa35d40 (= GOLDEN_CORE), gearPlaced 87da653f -> ecb0c21c (live coordinates of stations re-cropped
 //     without their annexes). Core views, the reserve-off proof, the roof find, gearRolls and the core gear placement are unchanged
 //     (asserted every run).
+// 18. Task studio-beta-filter-tension-airtank-20261104-072836-01 — the GEAR ROW only. CAUSE: user "we'll just add the air tank and the
+//     loot table for the gear": GEAR_WEIGHTS + airtank_backpack 0.8 (one new row; mean / cap, every other weight and every mask / filter
+//     table unchanged). The weighted pick over a larger total deals other pieces for some seeds; the draws themselves are unchanged.
+//     PROOF (same corpora generated with and without the row): 800 level gear rolls, 0 with another COUNT (857 items; 345 now another
+//     piece, 107 of them the tank); the 18-station Subway pickups: 316, exactly ONE differs and only in its item id (56634 #16, the
+//     annex hideout's gear piece, which inherits the gear pool: chest_rig -> backpack), positions / counts / areas identical; the 61
+//     gear placements (6 Subway + 3 Office layouts): 0 length changes, 3 differ only in item id. Holders, the Office pickups, the roof
+//     find and every core / reserve-off subway pickup hash are unchanged. Re-pinned: subwayPickups fd47fecc -> 6ccb7466, gearRolls
+//     77148ba3 -> 9569e152, gearPlaced ecb0c21c -> c738fc00 (core view 3d2b40a1 -> 3cdaa67d, reserve off 2bc1c5bb -> 91aa0673).
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -135,22 +144,22 @@ import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
  * Stage 5 (main): the core views of the layouts generated with the core reserve OFF reproduce these byte for byte (stage 6 / 7
  * proof: the extensions never touch the core).
  */
-const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearPlaced: '2bc1c5bb', officeHolders: 'c36c5fba', officePickups: '1aa35d40'}; // stage 8 / 9
+const GOLDEN_CORE = {subwayHolders: '2e86346d', subwayPickups: '4afa77bf', gearPlaced: '91aa0673', officeHolders: 'c36c5fba', officePickups: '1aa35d40'}; // stage 8 / 9; gearPlaced stage 18 (the gear row): was 2bc1c5bb
 /** Stage 7 (GEN-2): the core views of the live layouts — the core stations with the reserve (a layout change). */
-const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3d2b40a1'}; // stage 8
+const GOLDEN_RESERVE = {subwayHolders: 'a978aeed', subwayPickups: '745b6481', gearPlaced: '3cdaa67d'}; // stage 8; gearPlaced stage 18 (the gear row): was 3d2b40a1
 const GOLDEN = {
   /** Stage 7 (GEN-2): the core stations with the reserve (the extensions carry no holders). */
   subwayHolders: 'aa2103ac', // stage 17 (lane AREA, the one 20 % area roll: 14 of 18 stations lost their annexes): was f6caed49; stage 16 (mall round 3 CI follow-up, exact-table square fallback): was 47d6dde6 — exactly 2 of 6,397 holders differ, the EMPTY annex supply stock shelves 135824 #213 / 32877 #158 now hold the med kit they rolled (core hashes unchanged); stage 15: was de651870; stage 14: was 288dd84c; stage 13: was 5c456623; stage 12: was fe63d0aa; stage 11: was 63f11838; stage 10 (annex halls / signatures); stage 9: e4c02d0b (+ the service annexes' holders)
   /** Stage 6 (Track 2): translated stations' pickups; stage 7: + the core reserve; stage 8: + the hidden-mount fix. */
-  subwayPickups: 'fd47fecc', // stage 17: was 473514e1; stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
+  subwayPickups: '6ccb7466', // stage 18 (task filter-tension-airtank): was fd47fecc; stage 17: was 473514e1; stage 15: was 0467b2d6; stage 11: was 5ae2b384; stage 10; stage 9: f3f6cbd3 (+ the annexes' floor finds)
   officeHolders: 'c36c5fba', // stage 17 (no Office corpus level has the area now: = the core view): was a46e2b2b; stage 15: was e69a7b80; stage 13: was 7e08e006; stage 12: was 0c130bc9; stage 11: was f07d82e0; stage 10; stage 9: 595d8a54 (+ the annexes' holders)
   /** The Office's layout pickups WITHOUT the roof find's (stage 5: main's stage-4 hash, unchanged). */
   officePickups: '1aa35d40', // stage 17 (= the core view): was c60b27da; stage 15: was 5fa98572; stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
-  gearRolls: '77148ba3',
+  gearRolls: '9569e152', // stage 18 (task filter-tension-airtank: + the Airtank Backpack gear row): was 77148ba3
   /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
-  gearPlaced: 'ecb0c21c', // stage 17: was 87da653f; stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
+  gearPlaced: 'c738fc00', // stage 18 (the gear row, item ids only): was ecb0c21c; stage 17: was 87da653f; stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
 };
 
 function fnv() {
