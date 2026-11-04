@@ -19,7 +19,7 @@ export interface GrantLine { itemId: string; count: number }
 /** The ordered key sequence (digits) that triggers the drop. */
 export const DEV_GRANT_SEQUENCE: readonly string[] = ['1', '3', '3', '7'];
 
-/** The gear drop: current ranged guns, one of each gear item, one full stack per caliber (registry order, deduped). */
+/** The gear drop: current ranged guns, one of each gear item (the Airtank Backpack excepted: task filter-tension-airtank), one full stack per caliber (registry order, deduped). */
 export function devGrantBundle(): GrantLine[] {
   const seen = new Set<string>(), out: GrantLine[] = [];
   const push = (itemId: string, count: number) => {
@@ -28,7 +28,7 @@ export function devGrantBundle(): GrantLine[] {
   };
   const defs = Object.values(ITEMS);
   for (const d of defs) if (d.kind === 'weapon' && d.weaponId && WEAPONS[d.weaponId] && !WEAPONS[d.weaponId].melee) push(d.id, 1);
-  for (const d of defs) if (d.kind === 'gear' && d.gear) push(d.id, 1);
+  for (const d of defs) if (d.kind === 'gear' && d.gear && !d.gear.airLife) push(d.id, 1); // (task filter-tension-airtank: the bundle stays as it was — no Airtank Backpack)
   for (const c of CALIBER_IDS) push(ammoItemFor(c), itemDef(ammoItemFor(c)).stackMax);
   return out;
 }

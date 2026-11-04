@@ -5,7 +5,7 @@
 import {Inventory, type ItemStack, type StackJSON} from '../../src/items/inventory';
 import {ITEMS, type ItemDef} from '../../src/items/items';
 import {WEAPONS} from '../../src/weapons/weapons';
-import {GEAR_SLOTS, isBagItem, isFilterMask} from '../../src/items/gear';
+import {FILTER_LIFE_S, GEAR_SLOTS, isBagItem, isFilterMask} from '../../src/items/gear';
 import {mulberry32} from '../../src/core/rng';
 import {createRun, type RunState} from '../../src/run/runState';
 import type {CampaignState, NetworkLine, StationNode, SubwayNetwork} from '../../src/campaign/types';
@@ -69,7 +69,7 @@ export function stackOf(inv: Inventory, def: ItemDef, r: () => number): ItemStac
   const st = inv.makeStack(def.id, 1);
   st.count = 1 + Math.floor(r() * def.stackMax);
   if (def.kind === 'weapon') st.mag = Math.floor(r() * (WEAPONS[def.weaponId!].magazine + 1));
-  if (isFilterMask(def.id)) st.filter = Math.round(r() * 150 * 1000) / 1000;
+  if (isFilterMask(def.id)) st.filter = Math.round(r() * FILTER_LIFE_S * 1000) / 1000; // (task filter-tension-airtank: 37.5 s filters; same draws)
   return st;
 }
 
@@ -148,7 +148,7 @@ export function fillInventory(h: Harness, seed = 7): void {
   for (const slot of GEAR_SLOTS) {
     const id = gearFor(slot);
     const st = isBagItem(id) ? fullBag(inv, r) : inv.makeStack(id, 1);
-    if (isFilterMask(id)) st.filter = 88.25;
+    if (isFilterMask(id)) st.filter = 22.0625; // (task filter-tension-airtank: 88.25 s of the former 150 s filter = the same fraction)
     inv.gearSlots[GEAR_SLOTS.indexOf(slot)] = st;
   }
   inv.pack.length = 0;

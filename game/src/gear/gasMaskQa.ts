@@ -1,7 +1,7 @@
 // Task gasmask-breach-20261030 (mask lane): QA hooks (spread into window.__LL through gear/qa.ts) for SHORT serial browser spot
 // checks of the gas mask. maskToggle() presses the very same path as Q (GasMaskSystem.press).
 import type {Game} from '../game';
-import {FILTER_LIFE_S} from '../items/gear';
+import {AIRTANK_AIR_S, FILTER_LIFE_S} from '../items/gear';
 import {GAS_MASK} from './gasMask';
 
 export function gasMaskQaApi(game: Game) {
@@ -30,6 +30,17 @@ export function gasMaskQaApi(game: Game) {
       st.count = Math.max(1, Math.min(n, st.count));
       const left = game.inv.add(st);
       return {left, spares: game.inv.count(GAS_MASK.filterItem)};
+    },
+    /**
+     * Task filter-tension-airtank-20261104-072836: give an Airtank Backpack with `airFrac` (0..1, default 1) of its air: worn at once
+     * when the back slot is empty, else pocketed (a worn backpack stays where it is). Where it went.
+     */
+    airtankGive: (airFrac = 1) => {
+      const st = game.inv.makeStack('airtank_backpack', 1);
+      st.air = Math.max(0, Math.min(1, airFrac)) * AIRTANK_AIR_S;
+      const left = game.inv.add(st);
+      const at = game.inv.find(st.uid);
+      return {left, at: at ? `${at.bar}:${at.index}` : null, airS: st.air};
     },
     /** Q: the same press path as the key (arbitration included); what it did and the state after. */
     maskToggle: () => ({result: game.gasMask.press(), ...report()}),

@@ -103,7 +103,7 @@ describe('reactor gas: the required mask + filters lie upstream with enough filt
   }, 240_000);
 
   for (const seed of SEEDS) {
-    it(`seed ${seed}: the guaranteed upstream filter time covers the real core-floor route (stairs -> valve -> pump -> key -> key switch -> rods -> online) twice over`, () => {
+    it(`seed ${seed}: the guaranteed upstream filter time (unchanged counts, 37.5 s filters) measured against the real core-floor route (stairs -> valve -> pump -> key -> key switch -> rods -> online)`, () => {
       const L = level(seed), r = L.reactor!, {st, air, jam} = upperCleared(L, r);
       const coreLv = jam.levels[0], g = L.levels[coreLv].grid;
       const stand = (id: string) => { for (const s of r.sites) { const c = s.controls.find(q => q.id === id); if (c) return c.stand; } throw new Error(id); };
@@ -145,7 +145,13 @@ describe('reactor gas: the required mask + filters lie upstream with enough filt
       const minSupply = FILTER_LIFE_S * MASK_LOOT.foundFilter[0] + FILTER_LIFE_S * MASK_LOOT.levels.reactor.filters[0];
       const fitted = L.pickups.find(p => p.itemId === 'gas_mask')!.filter ?? 0;
       const actual = fitted + FILTER_LIFE_S * L.pickups.filter(p => p.itemId === 'gas_filter').length;
-      expect(minSupply).toBeGreaterThanOrEqual(2 * budget); // twice over, even for the worst roll
+      // task filter-tension-airtank-20261104-072836 (user: "Do not increase loot in the reactor at all … we simply changing the items
+      // statistics"; Main: no "finish the Reactor with only on-site supplies" requirement): a filter lasts 37.5 s now, so the on-site supply
+      // (counts UNCHANGED) no longer covers the masked core route by itself — by design the player arrives prepared (scavenged spares, an
+      // Airtank Backpack). Pinned instead: the unchanged counts and the supply in the new units; the route budget is still measured.
+      expect(MASK_LOOT.levels.reactor).toEqual({masks: [1, 1], filters: [3, 5]});
+      expect(minSupply).toBeCloseTo(37.5 * 0.35 + 37.5 * 3, 9);
+      expect(budget).toBeGreaterThan(0);
       expect(actual).toBeGreaterThanOrEqual(minSupply - 1e-9);
       out.push(`seed ${seed} core route: walk ${walkM.toFixed(0)} m (${(walkM / WALK_SPEED).toFixed(0)} s at ${WALK_SPEED} m/s), holds/presses ${work.toFixed(0)} s, online -> breathable ${tClear.toFixed(1)} s; one pass ${once.toFixed(0)} s, budget ${budget.toFixed(0)} s; filter supply ${actual.toFixed(0)} s (worst roll ${minSupply.toFixed(0)} s)`);
       report(); out.length = 0;

@@ -1639,6 +1639,11 @@
       "sha256": "44408b072ee159f2ec54b815cb0665d0a96da836ab77ded5d5e9929b804af7ea"
     },
     {
+      "path": "assets/derivatives/gear-airtank-backpack.json",
+      "bytes": 3636,
+      "sha256": "bd17235b10a7d47d574950d56c67764c467b23bab147248194d4dba5e76101f3"
+    },
+    {
       "path": "assets/derivatives/light-lod-iteration03.json",
       "bytes": 1080,
       "sha256": "1faf9dac8c07ada6acb9b220bbf9badb65465b8ee3d959ff99ba9877cf955d62"
@@ -2012,6 +2017,11 @@
       "path": "assets/models/enemy-strainer.glb",
       "bytes": 2395736,
       "sha256": "7e6ad8ba435c15a18c7dda75727c1d7f54d46082bf3f12e77d9b21877dc408a5"
+    },
+    {
+      "path": "assets/models/gear-airtank-backpack.glb",
+      "bytes": 832924,
+      "sha256": "f8eb54ab6c92cf10e796b6ca32c1e926ce938fc0fad75ffd61d96c4221873981"
     },
     {
       "path": "assets/models/gun-locker.glb",

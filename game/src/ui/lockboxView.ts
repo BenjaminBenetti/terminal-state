@@ -265,9 +265,10 @@ export class LockboxView {
   stow(): boolean {
     const slots = this.host.slots(), inv = this.host.inv();
     if (!slots) { this.say(CLOSED_TEXT, true); return false; }
+    const worn = inv.worn('backpack'); // (task filter-tension-airtank: an Airtank Backpack is stowed whole too — name what went in)
     const ok = inv.storeWornBag(slots);
     this.last = {kind: 'stow', result: String(ok)};
-    this.say(ok ? `Backpack stowed in the ${LOCKBOX_NAME} (its contents stay inside)` : inv.refusal?.text ?? 'Nothing to stow.', !ok);
+    this.say(ok ? (worn && !isBagItem(worn.itemId) ? `${itemDef(worn.itemId).name} stowed in the ${LOCKBOX_NAME}` : `Backpack stowed in the ${LOCKBOX_NAME} (its contents stay inside)`) : inv.refusal?.text ?? 'Nothing to stow.', !ok);
     this.host.changed();
     this.render();
     return ok;

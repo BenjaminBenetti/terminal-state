@@ -17,14 +17,28 @@
 // (gear/gasMask.ts). It has no PlayerModifiers stats: on the face with a working filter it protects from infectious gas. The
 // fitted filter's charge (seconds left) lives on the mask's own ItemStack (`filter`, items/inventory.ts), so it travels with
 // that very mask. Spare filters are the passive supply item `gas_filter` (items/items.ts).
+//
+// Task filter-tension-airtank-20261104-072836 (user: filters at 25 % of their lifetime; an "Airtank Backpack" in the backpack slot
+// with 400 % of the old filter): FILTER_LIFE_S 150 -> 37.5 (x 0.25; saves written with 150 s filters are rescaled once on load:
+// save/serialize.ts migrateFilterUnits). The AIRTANK BACKPACK (`airtank_backpack`, slot 'backpack') holds AIRTANK_AIR_S = 600 s of
+// air on its OWN stack (`air`, like a mask's `filter`) and NO storage (no bagSlots: it is not a bag). It is consumable and can NOT be
+// refilled: a new tank is made full (Inventory.makeStack); nothing ever adds air. Worn with the gas mask on the face it supplies the
+// air FIRST (gear/gasMask.ts), the fitted filter only once the tank is empty.
 import type {ItemDef, ItemDims} from './items';
 import type {PlayerModifiers} from '../player/modifiers';
 
 export type GearSlot = 'chest' | 'backpack' | 'boots' | 'gloves' | 'helmet' | 'mask';
 export const GEAR_SLOTS: readonly GearSlot[] = ['helmet', 'chest', 'gloves', 'boots', 'backpack', 'mask'];
 
-/** Task gasmask-breach-20261030 (mask lane): seconds of on-face use one gas-mask filter gives (drains only while the mask is on). */
-export const FILTER_LIFE_S = 150;
+/**
+ * Task gasmask-breach-20261030 (mask lane): seconds of on-face use one gas-mask filter gives (drains only while the mask is on).
+ * Task filter-tension-airtank-20261104-072836: a QUARTER of the original 150 s (user: intentional tension).
+ */
+export const FILTER_LIFE_S = 37.5;
+/** The filter life saves were written with before FILTER_LIFE_S became 37.5 (a save without `filterLifeS`): save/serialize.ts. */
+export const LEGACY_FILTER_LIFE_S = 150;
+/** Task filter-tension-airtank-20261104-072836: seconds of air in a full Airtank Backpack (4 x the old 150 s filter = 16 filters now). */
+export const AIRTANK_AIR_S = 600;
 
 export interface GearSpec {
   slot: GearSlot;
@@ -44,6 +58,8 @@ export interface GearSpec {
   bagSlots?: number;
   /** Gas mask (mask lane): seconds one fitted filter lasts on the face (FILTER_LIFE_S). */
   filterLife?: number;
+  /** Airtank Backpack: seconds of air in a full tank (AIRTANK_AIR_S); its stack's `air` = seconds left (never refilled). */
+  airLife?: number;
 }
 
 /** Icon keys the gear lane adds (ui/gearIcons.ts). Mask lane: + 'gasmask'. */
@@ -74,6 +90,9 @@ export const GEAR_ITEMS: Record<string, ItemDef> = {
   // Task gasmask-breach-20261030 (mask lane)
   gas_mask: gear('gas_mask', 'Full-face gas mask', 'Gas mask', 'gasmask', {slot: 'mask', tier: 1, filterLife: FILTER_LIFE_S},
     'Black rubber full-face respirator with a wide visor. Worn in the face slot; Q pulls it on or off. It only protects while it is on your face AND its fitted filter has charge left — it draws a spare filter from your pockets / quick slots when one runs out (never from a worn backpack).'),
+  // Task filter-tension-airtank-20261104-072836 (icon key: the backpack glyph — no new hand-drawn icon; the item icon is its model)
+  airtank_backpack: gear('airtank_backpack', 'Airtank Backpack', 'Airtank', 'backpack', {slot: 'backpack', tier: 1, airLife: AIRTANK_AIR_S},
+    `A dented steel air cylinder strapped to a tubular frame and harness. Worn on your back (instead of a backpack: it has no storage) with the gas mask on your face, it feeds the mask clean air for ${AIRTANK_AIR_S / 60} minutes before the fitted filter is used. It cannot be refilled.`),
 };
 
 /** Resting sizes (m) as a pickup / ground model = the delivered Meshy derivatives' bounds (vest, rig, backpack, hat and boots stand; gloves lie flat). */
@@ -86,6 +105,8 @@ export const GEAR_DIMS: Record<string, ItemDims> = {
   gloves: {w: 0.26, d: 0.2, h: 0.06, shape: 'flat'},
   // mask lane: the shipped zombie outfit mask's bind-pose bounds (outfit-gasmask-t25.glb Outfit_gasmask__lastshift), standing on its chin
   gas_mask: {w: 0.18, d: 0.13, h: 0.18, shape: 'box'},
+  // the delivered derivative's bounds (assets/models/gear-airtank-backpack.glb: tank + frame upright, straps / belt splayed)
+  airtank_backpack: {w: 0.58, d: 0.48, h: 0.72, shape: 'box'},
 };
 
 export const GEAR_IDS = Object.keys(GEAR_ITEMS);
@@ -101,6 +122,11 @@ export function isGearItem(itemId: string | null | undefined): boolean {
 
 export function gearSpec(itemId: string | null | undefined): GearSpec | null {
   return itemId ? GEAR_ITEMS[itemId]?.gear ?? null : null;
+}
+
+/** Task filter-tension-airtank-20261104-072836: gear that holds its own air (`air` on its stack): the Airtank Backpack. */
+export function isAirtank(itemId: string | null | undefined): boolean {
+  return (gearSpec(itemId)?.airLife ?? 0) > 0;
 }
 
 /** Backpack-type gear (has its own container). */
@@ -119,7 +145,8 @@ export function gearStatText(spec: GearSpec): string {
   if (spec.speedMult && spec.speedMult !== 1) out.push(`speed ${spec.speedMult > 1 ? '+' : '−'}${pct(spec.speedMult - 1)}`);
   if (spec.spreadMult && spec.spreadMult !== 1) out.push(`spread ${spec.spreadMult < 1 ? '−' : '+'}${pct(spec.spreadMult - 1)}`);
   if (spec.handlingMult && spec.handlingMult !== 1) out.push(`reload / use time ${spec.handlingMult < 1 ? '−' : '+'}${pct(spec.handlingMult - 1)}`);
-  if (spec.filterLife) out.push(`blocks infectious gas while on (Q) with a working filter · one filter lasts ${spec.filterLife % 60 ? `${(spec.filterLife / 60).toFixed(1)}` : spec.filterLife / 60} min on the face`); // mask lane
+  if (spec.filterLife) out.push(`blocks infectious gas while on (Q) with a working filter · one filter lasts ${spec.filterLife} s on the face`); // mask lane
+  if (spec.airLife) out.push(`${spec.airLife / 60} min of air for the gas mask (used before its filter) · no storage · cannot be refilled`);
   return out.join(' · ');
 }
 

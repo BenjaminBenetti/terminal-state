@@ -83,8 +83,8 @@ describe('items: the gas mask (gear, face slot) and the gas filter (passive supp
     expect(GEAR_SLOTS.at(-1)).toBe('mask');
     expect(ITEMS.gas_mask).toBe(GEAR_ITEMS.gas_mask);
     expect(itemDef('gas_mask')).toMatchObject({kind: 'gear', stackMax: 1, icon: 'gasmask', gear: {slot: 'mask', tier: 1, filterLife: FILTER_LIFE_S}});
-    expect(FILTER_LIFE_S).toBe(150);
-    expect(GAS_MASK).toMatchObject({filterLifeS: 150, donS: 0.6, doffS: 0.45, lowFrac: 0.2, filterItem: 'gas_filter', lane: 'gas.mask'});
+    expect(FILTER_LIFE_S).toBe(37.5); // task filter-tension-airtank-20261104-072836: a quarter of the original 150 s
+    expect(GAS_MASK).toMatchObject({filterLifeS: 37.5, donS: 0.6, doffS: 0.45, lowFrac: 0.2, lowReserveS: 30, filterItem: 'gas_filter', lane: 'gas.mask'});
     expect(gearStatText(GEAR_ITEMS.gas_mask.gear!)).toMatch(/infectious gas.*filter/);
     expect(itemDef('gas_filter')).toMatchObject({kind: 'supply', stackMax: 6, icon: 'filter'});
     expect(isFilterMask('gas_mask')).toBe(true);
@@ -353,29 +353,37 @@ describe('filter charge: drain, auto-fit, warnings, protection', () => {
   });
 
   it('at 0 a spare is fitted from the pockets (batteryInsert + "Filter changed — N spare"); low and empty warnings; empty on the face = UNPROTECTED', () => {
+    // task filter-tension-airtank-20261104-072836: the warnings count the USABLE reserve (fitted + drawable spares), not the fitted filter
     const s = shell();
-    const m = s.giveMask(31); // 20.7 % — the low warning comes after one more second
+    const m = s.giveMask(10); // 10 s fitted + 2 spares x 37.5 s = 85 s of usable protection
     s.giveFilters(2);
     s.toggle();
     expect(s.sys.protects()).toBe(true);
-    s.step(2, 0.05);
-    expect(s.toasts.some(t => /filter low — \d+ % · 2 spare/.test(t.text) && t.warn)).toBe(true);
-    s.step(29, 0.05); // runs out at ~31 s: one spare goes in
+    expect(s.sys.reserveSeconds).toBeCloseTo(10 - 0.1 + 2 * FILTER_LIFE_S, 6); // (toggle: 0.6 s donning + 0.1 s on)
+    s.step(9, 0.05); // the fitted filter is nearly spent, but two spares will refill it: no false alarm
+    expect(s.sys.tone).toBe('ok');
+    expect(s.toasts.some(t => /low|NO FILTER/.test(t.text))).toBe(false);
+    s.step(2, 0.05); // runs out at ~10 s: one spare goes in
     expect(s.calls.battery).toBe(1);
     expect(s.g.inv.count('gas_filter')).toBe(1);
     expect(m.filter!).toBeGreaterThan(FILTER_LIFE_S - 2);
     expect(s.toasts.some(t => t.text === 'Filter changed — 1 spare')).toBe(true);
     expect(s.sys.protects()).toBe(true);
-    // burn through the last two filters
-    s.step(FILTER_LIFE_S * 2 + 1, 0.05);
+    s.step(FILTER_LIFE_S, 0.05); // the second spare goes in: ~36 s left in all, still above the 30 s low mark
     expect(s.calls.battery).toBe(2);
     expect(s.g.inv.count('gas_filter')).toBe(0);
+    expect(s.sys.tone).toBe('ok');
+    s.step(8, 0.05); // <= 30 s of usable protection: amber + ONE warning that says what is left
+    expect(s.sys.tone).toBe('low');
+    expect(s.toasts.filter(t => /^Gas mask air low — \d+ s of protection left · no spare filter$/.test(t.text) && t.warn)).toHaveLength(1);
+    s.step(FILTER_LIFE_S, 0.05); // burnt through the last filter
     expect(m.filter).toBe(0);
     expect(s.sys.state).toBe('on');
     expect(s.sys.protects()).toBe(false); // on the face, no working filter: NOT protecting
     expect(s.sys.tone).toBe('empty');
     expect(s.toasts.filter(t => /^NO FILTER/.test(t.text))).toHaveLength(1); // warned once
-    expect(s.view()).toMatchObject({state: 'on', protects: false, tone: 'empty'});
+    expect(s.toasts.filter(t => /air low/.test(t.text))).toHaveLength(1);
+    expect(s.view()).toMatchObject({state: 'on', protects: false, tone: 'empty', reserveS: 0});
     // a filter picked up while it is on: fitted on the next frame
     s.giveFilters(1);
     s.step(DT);
@@ -411,15 +419,15 @@ describe('filter charge: drain, auto-fit, warnings, protection', () => {
 describe('the charge belongs to the mask: no refill, no duplicate', () => {
   it('unequip forces OFF; re-equip / swapping masks / drop + pick-up keep each mask\'s own charge; totals conserved', () => {
     const s = shell();
-    const a = s.giveMask(80);
-    const b = s.mask(120);
+    const a = s.giveMask(30); // (task filter-tension-airtank: within one 37.5 s filter)
+    const b = s.mask(36);
     s.g.inv.set(P(5), b);
     s.giveFilters(2);
     const before = totals(s.g.inv);
     s.toggle();
     s.step(10, 0.05);
     const aLeft = a.filter!;
-    expect(aLeft).toBeCloseTo(70, 0);
+    expect(aLeft).toBeCloseTo(20, 0);
     // take it off (inventory screen: Take off -> the gear hook) => off the face at once, charge kept
     expect(s.g.inv.takeOff('mask')).toBe('moved');
     s.g.invUI.gear.changed();
@@ -439,7 +447,7 @@ describe('the charge belongs to the mask: no refill, no duplicate', () => {
     s.step(DT); // (the frame check catches it even without the inventory hook)
     expect(s.sys.state).toBe('off');
     expect(s.g.inv.get(MASK)).toBe(b);
-    expect(b.filter).toBe(120);
+    expect(b.filter).toBe(36);
     expect(a.filter!).toBeCloseTo(aOn, 6);
     // drop the worn mask and pick it up again: the same stack, the same charge, off
     s.toggle();
@@ -693,13 +701,26 @@ describe('HUD Q cell (ui/hud.ts) on the fake DOM; the old camera mask layer is g
     hud.update(state, inv);
     expect(q.innerHTML).toMatch(/>ON</);
     expect(q.classList.contains('on')).toBe(true);
+    // task filter-tension-airtank-20261104-072836: amber / red follow the mask system's RESERVE tone (spares count), the bar stays exact
     m.filter = 0.1 * FILTER_LIFE_S;
+    hud.update(state, inv);
+    expect(q.classList.contains('low')).toBe(false); // a nearly spent fitted filter with two spares: no false alarm
+    expect(q.innerHTML).toMatch(/width:10%/);
+    hud.setMask({state: 'on', cover: 1, protects: true, tone: 'low', reserveS: 3.75});
     hud.update(state, inv);
     expect(q.classList.contains('low')).toBe(true);
     m.filter = 0;
+    hud.setMask({state: 'on', cover: 1, protects: false, tone: 'empty', reserveS: 0});
     hud.update(state, inv);
     expect(q.classList.contains('empty')).toBe(true);
     expect(q.classList.contains('low')).toBe(false);
+    // a worn Airtank Backpack adds its own air bar (teal, above the filter bar)
+    const tank = inv.makeStack('airtank_backpack', 1);
+    tank.air = 450;
+    expect(inv.add(tank)).toBe(0);
+    hud.update(state, inv);
+    expect(q.innerHTML).toMatch(/class="fb tb"><i style="width:75%">/);
+    expect(q.title).toMatch(/airtank 75 %/);
   });
 
   it('task gas-mask-roof-feedback-20261030 (item 4): no DOM camera layer any more — the cover / tone go to the first-person mask view', () => {

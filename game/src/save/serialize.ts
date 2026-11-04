@@ -24,6 +24,12 @@
 //                                                       Lockbox with nested items; 'injuries'; 'gear'; 'gas.mask'; …)
 //   stats: Record<string, number>                       Game.stats
 //   player: {trainLocal: {x, z, yaw, pitch, crouched}}  the player's pose in the parked / moving train's local frame
+//   filterLifeS?: number                                seconds one full gas-mask filter held when written (task filter-tension-
+//                                                       airtank-20261104-072836: FILTER_LIFE_S 37.5; ABSENT = an older save written
+//                                                       with 150 s filters). Fitted-filter charges are seconds in those units: a
+//                                                       save in other units is rescaled ONCE on load (migrateFilterUnits: the same
+//                                                       fraction of a filter), and every new save writes the current units, so a
+//                                                       reload never rescales twice. An Airtank Backpack's `air` (s) is unaffected.
 //
 // MemoryV1 is a SectionMemory (run/memory.ts) with its two big lists COMPACTED (a station has 250–600 loot holders; the full
 // verbose records of 40 stations would not fit three slots in localStorage):
@@ -51,6 +57,7 @@ import type {HolderRecord, PickupRecord, SectionMemory, StackRecord} from '../ru
 import type {LevelSeeds, RunState} from '../run/runState';
 import type {BatterySnapshot, RunParticipant, RunSnapshot, SurvivalSnapshot, VitalsSnapshot} from '../run/snapshot';
 import {checksumOf} from './checksum';
+import {FILTER_LIFE_S, LEGACY_FILTER_LIFE_S, isFilterMask} from '../items/gear';
 
 export const SERIALIZED_RUN_V = 1 as const;
 export const SAVE_FORMAT = 'terminal-state-save' as const;
@@ -128,6 +135,33 @@ export interface SerializedRunV1 {
   participants: Record<string, unknown>;
   stats: Record<string, number>;
   player: {trainLocal: TrainLocalPose};
+  /** Task filter-tension-airtank-20261104-072836: the filter life (s) the charges were written in; absent = LEGACY_FILTER_LIFE_S. */
+  filterLifeS?: number;
+}
+
+/**
+ * Task filter-tension-airtank-20261104-072836: `run` with every gas mask's fitted-filter charge in FILTER_LIFE_S units — anywhere in
+ * the run (carry, Retry entry, Lockbox, grounded bags and loose items in station memories, bag contents): seconds x FILTER_LIFE_S /
+ * written life, clamped to one filter. The same object when it already is in these units; otherwise a rescaled deep copy carrying
+ * filterLifeS = FILTER_LIFE_S (idempotent: a migrated run is returned unchanged). Nothing else changes (no item added / removed).
+ */
+export function migrateFilterUnits(run: SerializedRunV1): SerializedRunV1 {
+  const written = run.filterLifeS ?? LEGACY_FILTER_LIFE_S;
+  if (written === FILTER_LIFE_S) return run;
+  const k = FILTER_LIFE_S / written;
+  const out = structuredClone(run);
+  const walk = (v: unknown, depth: number): void => {
+    if (!v || typeof v !== 'object' || depth > 64) return;
+    if (Array.isArray(v)) { for (const x of v) walk(x, depth + 1); return; }
+    const o = v as Record<string, unknown>;
+    if (typeof o.itemId === 'string' && isFilterMask(o.itemId) && typeof o.filter === 'number' && Number.isFinite(o.filter)) {
+      o.filter = Math.max(0, Math.min(FILTER_LIFE_S, o.filter * k));
+    }
+    for (const x of Object.values(o)) walk(x, depth + 1);
+  };
+  walk(out, 0);
+  out.filterLifeS = FILTER_LIFE_S;
+  return out;
 }
 
 /** A capture that cannot produce a trustworthy save (nothing is written). */
@@ -286,6 +320,7 @@ export function captureRun(src: RunSource): SerializedRunV1 {
     participants,
     stats: numbers(src.stats, 'stats'),
     player: {trainLocal: {x: pose.x, z: pose.z, yaw: pose.yaw, pitch: pose.pitch, crouched: !!pose.crouched}},
+    filterLifeS: FILTER_LIFE_S, // task filter-tension-airtank (the units of every fitted-filter charge in this save)
   };
 }
 

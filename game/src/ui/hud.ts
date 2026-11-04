@@ -5,12 +5,12 @@ import {itemIconHtml, itemIconsVersion} from './itemIcons';
 import {itemDef} from '../items/items';
 import {meleeDefOf} from '../weapons/weapons'; // lane KNIFE
 import type {Inventory} from '../items/inventory';
-import {FILTER_LIFE_S, GEAR_SLOTS} from '../items/gear';
+import {AIRTANK_AIR_S, FILTER_LIFE_S, GEAR_SLOTS, isAirtank} from '../items/gear';
 import {GEAR_ICONS} from './gearIcons';
 import {ensureGearStyles} from './gearStyles';
 import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
-import {GAS_MASK, type MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
+import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 
 // Iteration 16 (lane INJURY): limb indicator — a row of the vitals (shown only while injured, so the healthy HUD is unchanged):
 // a small body silhouette (seen from behind: your left on the left) with the injured arm / leg in red, and short labels.
@@ -251,8 +251,11 @@ export class Hud {
 
   /**
    * Task gasmask-breach-20261030 (mask lane): the HUD "Q" cell — the equipped gas mask's icon (dim "no mask" ghost without one),
-   * ON / OFF (ON… / OFF… while it goes on / comes off), the fitted filter's bar and the spare filters carried (+N). Amber at
-   * <= 20 % filter, red when the fitted filter is empty. Rebuilt only when what it shows changes.
+   * ON / OFF (ON… / OFF… while it goes on / comes off), the fitted filter's bar and the spare filters carried (+N). Rebuilt only when
+   * what it shows changes. Task filter-tension-airtank-20261104-072836: amber / red come from the mask system's RESERVE-aware tone
+   * (gear/gasMask.ts: amber at <= 30 s of usable protection in total — fitted filter + drawable spares + a worn tank; red only with none
+   * left), not from the fitted filter alone; the filter bar still shows the fitted filter exactly, and a worn Airtank Backpack adds
+   * its own air bar (teal) above it.
    */
   private maskSlot(inv: Inventory, el: HTMLElement): void {
     const st = inv.gearSlots[MASK];
@@ -261,18 +264,22 @@ export class Hud {
     const frac = def ? Math.max(0, Math.min(1, (st!.filter ?? 0) / FILTER_LIFE_S)) : 0;
     const pct = Math.ceil(frac * 100 - 1e-9);
     const spares = inv.count('gas_filter');
-    const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${state}|${pct}|${spares}|${itemIconsVersion()}`;
+    const back = inv.gearSlots[BACK], tank = back && isAirtank(back.itemId) ? back : null;
+    const tankPct = tank ? Math.ceil(Math.max(0, Math.min(1, (tank.air ?? 0) / AIRTANK_AIR_S)) * 100 - 1e-9) : -1;
+    const tone = def ? m?.tone ?? (pct <= 0 ? 'empty' : 'ok') : 'ok';
+    const reserve = Math.ceil(m?.reserveS ?? 0);
+    const key = `${st?.uid ?? 0}|${st?.itemId ?? ''}|${state}|${pct}|${spares}|${tankPct}|${tone}|${def ? reserve : 0}|${itemIconsVersion()}`;
     if (el.dataset.k === key) return;
     el.dataset.k = key;
-    const low = !!def && pct > 0 && frac <= GAS_MASK.lowFrac, empty = !!def && pct <= 0;
     el.classList.toggle('vacant', !def);
     el.classList.toggle('on', !!def && (state === 'on' || state === 'donning'));
-    el.classList.toggle('low', low);
-    el.classList.toggle('empty', empty);
+    el.classList.toggle('low', !!def && tone === 'low');
+    el.classList.toggle('empty', !!def && tone === 'empty');
     const label = state === 'on' ? 'ON' : state === 'donning' ? 'ON…' : state === 'doffing' ? 'OFF…' : 'OFF';
-    el.title = def ? `Gas mask ${label} · filter ${pct} % · ${spares} spare — Q puts it on / takes it off; it protects only while on with filter left` : 'Q: gas mask — none worn (drag one here or wear it from Tab: gear)';
+    const air = tank ? ` · airtank ${tankPct} % (used first)` : '';
+    el.title = def ? `Gas mask ${label} · filter ${pct} % · ${spares} spare${air} · ${reserve} s of protection in all — Q puts it on / takes it off; it protects only while on with air left` : 'Q: gas mask — none worn (drag one here or wear it from Tab: gear)';
     el.innerHTML = `<span class="key">Q</span>${spares ? `<span class="count">+${spares}</span>` : ''}${def ? itemIconHtml(def.id) : `<span class="ghost">${GEAR_ICONS.gasmask}</span>`}`
-      + `<span class="nm">${def ? label : 'no mask'}</span>${def ? `<span class="fb"><i style="width:${pct}%"></i></span>` : ''}`;
+      + `<span class="nm">${def ? label : 'no mask'}</span>${def && tank ? `<span class="fb tb"><i style="width:${tankPct}%"></i></span>` : ''}${def ? `<span class="fb"><i style="width:${pct}%"></i></span>` : ''}`;
   }
 
   /** Task gasmask-breach-20261030 (mask lane): the gas mask's face state (gear/gasMask.ts calls it every frame; applied by update). */

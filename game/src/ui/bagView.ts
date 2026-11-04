@@ -19,6 +19,7 @@ import {WEAPONS} from '../weapons/weapons';
 import type {BagSession} from '../gear/bagSession';
 import {ensureGearStyles} from './gearStyles';
 import {DRAG_THRESHOLD} from './inventoryUI';
+import {isBagItem} from '../items/gear';
 
 export interface BagViewHost {
   inv(): Inventory;
@@ -223,7 +224,7 @@ export class BagView {
     if (wear) {
       const worn = inv.worn('backpack');
       wear.disabled = !!worn;
-      wear.title = worn ? 'You are already wearing a backpack — put yours down first (6, then click)' : 'Pick this backpack up and wear it (its contents stay inside)';
+      wear.title = worn ? (isBagItem(worn.itemId) ? 'You are already wearing a backpack — put yours down first (6, then click)' : `You are wearing the ${itemDef(worn.itemId).name} — take it off first (Tab: gear)`) : 'Pick this backpack up and wear it (its contents stay inside)';
     }
     const n = root.querySelector('.bv-note');
     if (n) { n.textContent = this.note; n.classList.toggle('refused', this.noteBad); }
