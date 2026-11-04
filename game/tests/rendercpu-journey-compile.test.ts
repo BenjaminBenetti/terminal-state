@@ -9,6 +9,9 @@
 //    60 Hz) and a sweep afterwards — incl. a culled room coming into view and a pooled loot-style batch shown later — makes 0 node
 //    builds, 0 new render objects (scene AND shadow pass), 0 material cache-key rebuilds;
 //  - the job ends with the station (the scheduler's world generation).
+// Task studio-journey-compile-pacing-20261104 (the user's Chrome trace: three's scheduler.yield chain of a 16-item chunk held frames
+// ~100 ms): ONE item per compileAsync call, one in flight, and between two frames at most JOURNEY_COMPILE.maxPerSlice calls inside
+// the slice's real-time budget (the pacing rules with a fake renderer and clock: tests/journey-compile-pacing.test.ts).
 import * as THREE from 'three';
 import {afterAll, describe, expect, it, vi} from 'vitest';
 import {stubWebgpuGlobals} from './helpers/fakeWebgpu';
@@ -88,7 +91,8 @@ function journey(k: Awaited<ReturnType<typeof rig>>, fb: FrameBudget, depth: num
   const items = [...plan.items, ...plan.others];
   const casters = items.filter(i => i.caster);
   const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
-  const job = new JourneyCompile({renderer: k.r as never, scheduler: fb, scene: k.scene, camera: k.cam, target: k.scenePass.renderTarget, depth, items, casters, receiver});
+  const job = new JourneyCompile({renderer: k.r as never, scheduler: fb, scene: k.scene, camera: k.cam, target: k.scenePass.renderTarget, depth, items, casters, receiver,
+    frameNo: () => fb.frame});
   return {job, plan, items, casters};
 }
 
@@ -113,7 +117,7 @@ describe('journey compile (render/journeyCompile.ts) through the real frame-budg
     const targets: unknown[] = [];
     let nest = 0; // (the light's shadow map render nested inside the off-screen draw has its own target: only top-level renders count)
     R.render = (s, c) => { if (inRun && nest === 0) targets.push(k.r.getRenderTarget()); nest++; try { return render(s, c); } finally { nest--; } };
-    let frames = 0, maxSceneSteps = 0;
+    let frames = 0, maxSceneSteps = 0, maxPerFrame = 0;
     for (; frames < 720 && job.stats.phase !== 'done' && job.stats.phase !== 'cancelled'; frames++) {
       k.frame();
       const before = stateOf(k.scene), tm = k.r.toneMapping, auto = k.scene.matrixWorldAutoUpdate, target = k.r.getRenderTarget();
@@ -128,12 +132,17 @@ describe('journey compile (render/journeyCompile.ts) through the real frame-budg
       expect([k.r.toneMapping, k.scene.matrixWorldAutoUpdate, k.r.getRenderTarget()]).toEqual([tm, auto, target]);
       maxSceneSteps = Math.max(maxSceneSteps, job.stats.sceneChunks - c0);
       await idle(); // time between frames: three's yielded compile slices
+      maxPerFrame = Math.max(maxPerFrame, job.stats.sceneChunks - c0);
     }
     R.render = render;
     expect(job.stats.phase).toBe('done');
     expect(frames).toBeLessThan(720);
     expect([job.stats.sceneDone, job.stats.shadowDone]).toEqual([items.length, casters.length]);
-    expect(maxSceneSteps).toBe(1); // at most one scene chunk started per frame (and one in flight)
+    expect(maxSceneSteps).toBe(1); // at most one compile call started inside a frame's scheduler run (and one in flight)
+    expect(job.stats.sceneChunks).toBe(items.length); // ONE item per compileAsync call (JOURNEY_COMPILE.chunk)
+    expect(maxPerFrame).toBeLessThanOrEqual(JOURNEY_COMPILE.maxPerSlice); // between two frames: the slice's bounded calls
+    expect(job.stats.maxPerSlice).toBeLessThanOrEqual(JOURNEY_COMPILE.maxPerSlice);
+    expect([job.stats.background, job.stats.postStalls]).toEqual([false, 0]); // (Node: no scheduler.postTask — direct launches)
     expect(job.stats.shadowMaxPerStep).toBeGreaterThan(0);
     expect(job.stats.shadowMaxPerStep).toBeLessThanOrEqual(JOURNEY_COMPILE.shadowChunk);
     expect(targets.length).toBeGreaterThan(0);

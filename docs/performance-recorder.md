@@ -32,7 +32,8 @@ player can still stop.
 * **Every frame** (each rAF callback, never every n-th frame), with the same boundaries as the Ctrl+Shift+P overlay:
   * the interval to the next rAF, the game callback's main-thread CPU, the world update, the render submission (CPU encoding,
     not GPU work) and the deferred chunks;
-  * the game state and its tags: rendered, gap, hidden, unfocused, warming, transition, riding, spans, mark, state change;
+  * the game state and its tags: rendered, gap, hidden, unfocused, warming, transition, riding, spans, mark, state change,
+    and compiling (the train journey's background compile is still running, including after the arrival);
   * draw calls, triangles and passes;
   * the per-frame net change of `renderer.info.memory` textures / geometries / programs, and of two three-internal cache sizes:
     TSL node builds and pipelines;
@@ -55,7 +56,11 @@ player can still stop.
   * level generate / prepare / build (with the enemy spawns and their total instantiation ms) / leave;
   * the warm-up (status, mode, stages) and the Mall's texture staging. Each stage (materials, passes, shadows, view) is also a
     `warmup.stage` span. The stages run in that order, and their start times are derived from the stage durations;
-  * the journey's background compile. This is a CPU request span only: the GPU / driver compile is **not observable**;
+  * the journey's background compile. The `compile.background` span is the arrival's wait (at most 8 s). The job itself
+    has `compile.journey.start` / `.phase` (scene → shadow) / `.end` events, plus `compile.journey.active` when a recording
+    starts while it is running. They carry its counts: items done, calls, slices, the most calls in a slice, the longest
+    slice, and whether calls were launched from a background-priority task. They are seen at the next frame sample. The
+    GPU / driver compile is **not observable**;
   * travel and journey, new game / load / retry, save writes (reason and ok only), and the train depart / arrive;
   * state changes, visibility and focus changes, display / settings changes, `control.returned` (route, ms since the build),
     and user marks.

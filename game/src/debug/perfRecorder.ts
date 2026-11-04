@@ -85,6 +85,7 @@ export const F = {
   /** the UpdateProfiler recorded this frame (the world updated) */ spans: 128,
   /** the player pressed the mark key since the previous sample */ mark: 256,
   /** Game.setState ran since the previous sample */ stateChange: 512,
+  /** the train journey's background compile (render/journeyCompile.ts) was active at the sample */ compiling: 1024,
 } as const;
 export const FLAG_NAMES = Object.keys(F) as (keyof typeof F)[];
 

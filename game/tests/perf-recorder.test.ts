@@ -418,6 +418,41 @@ describe('perf recorder controller: recording', () => {
     expect(r.capture.overhead.frames).toBe(14);
   });
 
+  it('task journey-compile-pacing: tags frames while the journey compile runs; its start / phase / end (and a job already running) are events', async () => {
+    const clock = {t: 1000};
+    vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    const g = new FakeGame() as FakeGame & {journeyCompileStats: Record<string, unknown> | null};
+    const job = (phase: string) => ({phase, sceneItems: 40, sceneDone: 12, casters: 9, shadowDone: 0, sceneChunks: 12, slices: 7, maxPerSlice: 3,
+      sliceMaxMs: 1.2345, background: true, postStalls: 0, cancelReason: null as string | null});
+    const old = job('scene');
+    g.journeyCompileStats = old; // a capture started after the arrival, the job still running (the user's Mall trace)
+    const ctl = new PerfRecorderController(asGame(g), quick);
+    ctl.start('qa');
+    playFrame(g, ctl, clock);
+    old.phase = 'done';
+    playFrame(g, ctl, clock);
+    const next = job('scene');
+    g.journeyCompileStats = next; // the next journey
+    playFrame(g, ctl, clock);
+    next.phase = 'shadow';
+    playFrame(g, ctl, clock);
+    next.phase = 'cancelled'; next.cancelReason = 'generation';
+    playFrame(g, ctl, clock);
+    g.journeyCompileStats = null;
+    playFrame(g, ctl, clock);
+    await ctl.stop('manual', 'qa');
+    const r = ctl.reportObject() as any;
+    expect(r.frames.flagBits.compiling).toBe(F.compiling);
+    expect(Array.from(r.frames.columns.flags as number[], f => (f & F.compiling) !== 0)).toEqual([true, false, true, true, false, false]);
+    const ev = r.events.list.filter((e: any) => String(e.kind).startsWith('compile.journey'));
+    expect(ev.map((e: any) => [e.kind, e.phase])).toEqual([['compile.journey.active', 'scene'], ['compile.journey.end', 'done'], ['compile.journey.start', 'scene'],
+      ['compile.journey.phase', 'shadow'], ['compile.journey.end', 'cancelled']]);
+    expect(ev[0]).toMatchObject({sceneDone: 12, sceneItems: 40, calls: 12, slices: 7, maxPerSlice: 3, sliceMaxMs: 1.23, background: true, postStalls: 0});
+    expect(ev[4]).toMatchObject({reason: 'generation'});
+    const cap = Object.fromEntries((r.capabilities as any[]).map(c => [c.id, c]));
+    expect(cap.journeyCompile.available).toBe(true);
+  });
+
   it('keeps a QA-started profiler on after the recording', async () => {
     const g = new FakeGame();
     g.prof.startRecording();
@@ -613,7 +648,8 @@ describe('perf recorder: keys, file name, build identity, game seams', () => {
     const src = readFileSync(new URL('../src/game.ts', import.meta.url), 'utf8');
     for (const m of ['generateSection(', 'async prepareSection(', 'private buildSection(', 'private leaveSection(', 'prepareGraphics(', 'private async stageLevelTextures(',
       'private async backgroundCompile(', '  travel(req', 'async travelToStation(', '  newGame(level', 'async newCampaign(', 'async continueCampaign(', '  retryLevel(',
-      'commitSave(reason', 'spawnEnemy(s', 'private readonly lifecycle = new SingleFlight()', 'private transitGap = false', 'readonly frameCpu = {', 'readonly prof = new UpdateProfiler()']) {
+      'commitSave(reason', 'spawnEnemy(s', 'private readonly lifecycle = new SingleFlight()', 'private transitGap = false', 'readonly frameCpu = {', 'readonly prof = new UpdateProfiler()',
+      'get journeyCompileStats(']) {
       expect(src.includes(m), m).toBe(true);
     }
     const ride = readFileSync(new URL('../src/world/trainRide.ts', import.meta.url), 'utf8');

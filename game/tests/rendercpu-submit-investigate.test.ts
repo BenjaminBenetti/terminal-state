@@ -106,7 +106,8 @@ describe.skipIf(!OUT)('RENDER-CPU: real three WebGPU JS per frame on mall yaw sw
         const items = [...byNear(plan.items), ...byNear(plan.others)];
         const casters = byNear([...plan.items, ...plan.others].filter(i => i.caster));
         const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
-        const job = new JourneyCompile({renderer: renderer as never, scheduler: fb, scene, camera: cam, target: rt, depth, items, casters, receiver}).start();
+        const job = new JourneyCompile({renderer: renderer as never, scheduler: fb, scene, camera: cam, target: rt, depth, items, casters, receiver,
+          frameNo: () => fb.frame}).start(); // (as Game.backgroundCompile; task journey-compile-pacing-20261104)
         const N = Number(process.env.LL_RCPU_RIDE_FRAMES ?? 720), IDLE = Number(process.env.LL_RCPU_IDLE_MS ?? 10);
         const runMs: number[] = [], idleMs: number[] = [], buildsPer: number[] = [];
         let sliceMax = 0, sceneAt = -1, doneAt = -1;
