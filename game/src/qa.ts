@@ -371,7 +371,7 @@ export function installQaHooks(game: Game): void {
     // 'exit' | 'hole'}) — the exterior door's phase / seal / the centre message / the objective stage; force the clear-complete state, poses
     ...reactorEndingQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),
     // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): reactorCredits({skip: s, start, end, press, reset})
-    // — the credits record / phase / gate / counters; QA fast-forward of the 30 s count and the scroll, the end card's button
+    // — the credits record / phase / gate / counters; QA fast-forward of the 10 s count and the scroll, the end card's button
     reactorCredits: (cmd?: Parameters<ReactorCredits['qa']>[0]): object => reactorCreditsOf(game)?.qa(cmd) ?? {installed: false},
     // Task track1-siren-blightbelly-20261031 (lane BLIGHT): blight(), blightGo(i?, dist), blightAim(i?), blightGas(), DEBUG blightSpawnNear(dist) / blightKill(i?)
     ...blightbellyQaApi(game, (x: number, y: number, z: number): void => { api.lookAt(x, y, z); }, (x: number, z: number, yaw?: number, level?: number): boolean => api.teleport(x, z, yaw, level)),

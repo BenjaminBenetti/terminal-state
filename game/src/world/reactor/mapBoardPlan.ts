@@ -18,7 +18,7 @@ import type {ReactorInfo, ReactorScreen} from '../../gen/reactor/reactorTypes';
 import type {StationLayout} from '../../gen/stationTypes';
 import {reactorMounts} from './controlsMount';
 import type {ReactorRunState} from './runState';
-import {JAM_TEXT, reactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
+import {JAM_TEXT, jamDiscovered, reactorJam} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
 import {coreAirCleared} from './endingLogic'; // task studio-reactor-surface-ending-20261102 (lane ENDING)
 
 /** Board size (m): the map face; the storey buttons sit in a column at its right edge. */
@@ -341,8 +341,9 @@ export function mapMarkers(src: MarkerSource): MapMarker[] {
   at('valve', 'valve', s.valve ? 'done' : 'need');
   at('pump', 'pump', s.pump ? 'done' : 'need');
   at('rods', 'rods', s.rods ? 'done' : 'need');
-  // the generators (in their side complexes): started or not; (lane GAS) the final one is jammed
-  const jam = reactorJam(info);
+  // the generators (in their side complexes): started or not; (lane GAS) the final one is jammed — (task reactor-ending-polish-20261104)
+  // marked so only once a start was tried there: until then it is one more generator to start (the player finds the jam by trying)
+  const jam = jamDiscovered(s) ? reactorJam(info) : null;
   for (const g of info.generators) out.push({kind: 'generator', level: g.level, x: g.panel.x, y: g.panel.y, z: g.panel.z, state: jam?.generator === g.id ? 'jammed' : s.generators[g.id]?.started ? 'done' : 'need', id: g.id});
   // task studio-reactor-surface-ending-20261102 (lane ENDING): the exterior doors on the rim once they are open (the core air cleared
   // after ONLINE: the same rule as world/reactor/endingLogic.ts coreAirCleared — the board's signature already follows those fields)
@@ -356,9 +357,10 @@ export const markerOpen = (m: Pick<MapMarker, 'state'>): boolean => m.state === 
 
 /**
  * (lane GAS) The floor map's warning banner for storey `level`: the jammed zone's storeys while that zone is still gassed (the reactor
- * not online), else null.
+ * not online), else null. (task reactor-ending-polish-20261104: only once the jam is known — a start was tried — like its marker.)
  */
-export function storeyWarning(info: Pick<ReactorInfo, 'zones' | 'generators'>, s: Readonly<Pick<ReactorRunState, 'restarted' | 'zoneClear'>>, level: number): string | null {
+export function storeyWarning(info: Pick<ReactorInfo, 'zones' | 'generators'>, s: Readonly<Pick<ReactorRunState, 'restarted' | 'zoneClear'>> & {jam?: {stalls?: number}}, level: number): string | null {
+  if (!jamDiscovered(s)) return null;
   const jam = reactorJam(info);
   return jam && jam.levels.includes(level) && !s.restarted && (s.zoneClear[jam.zone] ?? 0) < 1 ? JAM_TEXT.map : null;
 }

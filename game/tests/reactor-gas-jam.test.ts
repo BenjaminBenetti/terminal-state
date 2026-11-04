@@ -190,9 +190,31 @@ describe('reactor gas: every surface agrees about the jam (lane GAS)', () => {
       expect(outside(texts, pw, ph), `${id} texts outside the canvas`).toEqual([]);
       return texts.map(t => t.s).join(' | ');
     };
-    // the pit board (on the rim: before committing) shows the core floor's row JAMMED · MASK; the other zones their clearing bars
-    expect(draw('pitBoard', st)).toContain(JAM_TEXT.board);
-    expect(draw('pitBoard', st).split(JAM_TEXT.board).length - 1).toBe(1);
+    // (task reactor-ending-polish-20261104, user: "the map indicates that the last generator is jammed. It shouldn't instead the player
+    // should discover this them selfs when they try to start the generator") BEFORE any start attempt nothing announces the jam: the pit
+    // board's core-floor row reads like any zone still to start, the floor maps mark the generator as one more to start (an open X), no
+    // jam banner / legend — the jam itself is unchanged (an attempt still seizes; reactor-air-runtime / generators tests)
+    expect(draw('pitBoard', st)).not.toContain(JAM_TEXT.board);
+    {
+      const ms0 = mapMarkers({info: r, state: st, carried: () => 0, pickups: () => [], levelAt: () => 0});
+      const g0 = ms0.find(m => m.kind === 'generator' && m.id === jam.generator)!;
+      expect(g0.state).toBe('need');
+      expect(markerOpen(g0)).toBe(true);
+      for (const t of r.tiers) expect(storeyWarning(r, st, t.level), t.label).toBeNull();
+      const plan0 = planStoreys(L, r);
+      for (const storey of plan0.storeys) {
+        const {ctx, texts} = recorder();
+        drawMapFace(ctx, MAP_PX.w, MAP_PX.h, {plan: plan0, storey, markers: ms0.filter(m => m.level === storey.level), you: null, board: null, warn: storeyWarning(r, st, storey.level),
+          floors: plan0.storeys.map(q => ({level: q.level, label: q.label, need: 1, selected: q.level === storey.level, here: false}))});
+        const all = texts.map(t => t.s).join(' | ');
+        expect(all.includes(JAM_TEXT.legend) || all.includes(JAM_TEXT.map), storey.label).toBe(false);
+      }
+    }
+    // AFTER a start was tried there (the attempt stalls and persists jam.stalls), the jam is known: the pit board shows the core
+    // floor's row JAMMED · MASK; the other zones their clearing bars
+    const tried: ReactorRunState = {...st, jam: {generator: jam.generator, stalls: 1, at: 1}};
+    expect(draw('pitBoard', tried)).toContain(JAM_TEXT.board);
+    expect(draw('pitBoard', tried).split(JAM_TEXT.board).length - 1).toBe(1);
     // the switchgear board (tier 4, the last stop before the core floor) warns once control power is on
     const powered = {...st, fuses: [true, true], breaker: true};
     expect(draw('switchgearBoard', powered).replace(/ \| /g, ' ')).toContain(JAM_TEXT.switchgear);
@@ -202,16 +224,16 @@ describe('reactor gas: every surface agrees about the jam (lane GAS)', () => {
     // (lane OBJECTIVES) the key on the core floor: its find step names the mask too
     expect(nextStepText({...powered, valve: true, pump: true}, r, {count: () => 0}, mask)).toBe('Next: find the startup key — Control room · Core floor · gas mask');
     expect(nextStepText({...st}, r, {count: () => 1}, mask)).not.toContain(JAM_TEXT.next); // fuses first: the switchgear, tier 4
-    // the floor maps: the jammed generator's own mark (not an open X), the banner on the core storey only
-    const ms = mapMarkers({info: r, state: st, carried: () => 0, pickups: () => [], levelAt: () => 0});
+    // the floor maps (once the jam is known): the jammed generator's own mark (not an open X), the banner on the core storey only
+    const ms = mapMarkers({info: r, state: tried, carried: () => 0, pickups: () => [], levelAt: () => 0});
     const gm = ms.find(m => m.kind === 'generator' && m.id === jam.generator)!;
     expect(gm.state).toBe('jammed');
     expect(markerOpen(gm)).toBe(false);
-    for (const t of r.tiers) expect(storeyWarning(r, st, t.level), t.label).toBe(t.level === core ? JAM_TEXT.map : null);
+    for (const t of r.tiers) expect(storeyWarning(r, tried, t.level), t.label).toBe(t.level === core ? JAM_TEXT.map : null);
     const plan = planStoreys(L, r);
     for (const storey of [plan.storeys.find(s => s.level === core)!, plan.storeys.find(s => s.level === gm.level)!]) {
       const {ctx, texts} = recorder();
-      drawMapFace(ctx, MAP_PX.w, MAP_PX.h, {plan, storey, markers: ms.filter(m => m.level === storey.level), you: null, board: null, warn: storeyWarning(r, st, storey.level),
+      drawMapFace(ctx, MAP_PX.w, MAP_PX.h, {plan, storey, markers: ms.filter(m => m.level === storey.level), you: null, board: null, warn: storeyWarning(r, tried, storey.level),
         floors: plan.storeys.map(s => ({level: s.level, label: s.label, need: 1, selected: s.level === storey.level, here: false}))});
       const all = texts.map(t => t.s).join(' | ');
       expect(all.includes(JAM_TEXT.map), storey.label).toBe(storey.level === core);
@@ -219,7 +241,7 @@ describe('reactor gas: every surface agrees about the jam (lane GAS)', () => {
       expect(outside(texts, MAP_PX.w, MAP_PX.h).filter(s => !/YOU ARE HERE|^H|^[A-Z ]+$|^[KFBVPSRG]\d?$/.test(s)), storey.label).toEqual([]);
     }
     // online (restarted): every warning goes; the clearing runs
-    const online = {...powered, valve: true, pump: true, keyInserted: true, rods: true, restarted: true, restartedAt: 1};
+    const online = {...powered, valve: true, pump: true, keyInserted: true, rods: true, restarted: true, restartedAt: 1, jam: tried.jam};
     expect(draw('pitBoard', online)).not.toContain(JAM_TEXT.board);
     expect(draw('switchgearBoard', online)).not.toContain('jammed');
     expect(storeyWarning(r, online, core)).toBeNull();

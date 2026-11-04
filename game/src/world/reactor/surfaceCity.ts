@@ -17,6 +17,8 @@ import {SURFACE_KIT, type SurfaceKitEntry} from './surfaceKit';
 import {SURFACE_CITY, footprintCorners, type SurfaceCityPlan} from './surfacePlan';
 import type {SurfaceSite} from './surfaceSite';
 import {SURFACE_RAIN, RainLayer, buildRainFloor, rainFloorTexture, type RainFloorMap} from './surfaceRain';
+import {SplashLayer, splashLedges} from './surfaceSplash';
+import type {SurfacePlantPlan} from './surfacePlantPlan';
 import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial, surfaceWallMaterial} from './surfaceLook';
 
 /**
@@ -31,7 +33,7 @@ export const SURFACE_SKY = {radius: 352} as const;
  * instance (grounded models, min y 0, planned at the deck height) is seated `sink` m down so its base meets / bites into the ground disc
  * (never a hairline of sky under a facade).
  */
-export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT, sink: 0.06} as const;
+export const SURFACE_LAYERS = {groundBelow: SURFACE_RAIN.groundBelow, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT, sink: 0.06} as const;
 /** Culling sectors round the aperture: the near city's entries per quadrant, the far skyline's per octant. */
 export const SURFACE_SECTORS = {near: 4, far: 8} as const;
 
@@ -46,6 +48,8 @@ export interface SurfaceView {
   sky: THREE.Mesh;
   near: RainLayer;
   column: RainLayer;
+  /** (task reactor-ending-polish-20261104, lane SPLASH) The rain's impacts on the open ground / ledges round the eye (surfaceSplash.ts). */
+  splash: SplashLayer;
   floor: RainFloorMap;
   /** Instanced city meshes (InstancedMesh per entry part x quadrant). */
   instanced: THREE.InstancedMesh[];
@@ -176,7 +180,24 @@ export function parapetGeometry(site: SurfaceSite): THREE.BufferGeometry | null 
   return g;
 }
 
-/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out. */
+/**
+ * The exit stair's footprint under its head house (the cut in the city ground: the stair's top flights pass the deck height there), or
+ * null (no stair / no head house over it / it reaches the aperture's ring, which must stay a single opening).
+ */
+export function stairwellRect(site: Pick<SurfaceSite, 'stairs' | 'shelters' | 'hole'>): {x0: number; z0: number; x1: number; z1: number} | null {
+  const st = site.stairs?.rect;
+  if (!st) return null;
+  for (const sh of site.shelters) {
+    const r = sh.rect, x0 = Math.max(st.x0, r.x0), x1 = Math.min(st.x1, r.x1), z0 = Math.max(st.z0, r.z0), z1 = Math.min(st.z1, r.z1);
+    if (x1 - x0 < 0.5 || z1 - z0 < 0.5) continue;
+    const o = site.hole, near = Math.hypot(Math.max(x0 - o.x, 0, o.x - x1), Math.max(z0 - o.z, 0, o.z - z1));
+    if (near < o.ringR1 + 1) return null;
+    return {x0, z0, x1, z1};
+  }
+  return null;
+}
+
+/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out (and the stairwell under the head house). */
 export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'groundR'>): THREE.BufferGeometry {
   const o = site.hole, R = plan.groundR, segs = 96;
   // shape coordinates (x, -z): rotateX(-90 deg) maps (x, y, 0) -> (x, 0, -y) = (x, 0, z), its +Z normal -> +Y (facing up)
@@ -192,6 +213,17 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
     if (k === 0) hole.moveTo(x, -z); else hole.lineTo(x, -z);
   }
   shape.holes.push(hole);
+  // (task reactor-ending-polish-20261104, user: "there is a flat piece of ground you walk through as you go the the stairs to the
+  // surface") the STAIRWELL: inside the head house the exit stair's top flights rise through the deck height, and the outdoor group
+  // shows from 7 m below the deck in the stair (surfaceSite.ts SURFACE_GATE.stairsBelow), so this one-sided disc drew a flat floor across
+  // the stairwell at foot height as the eye rose above it. Cut where the stair stands under its head house (that closed box hides the
+  // cut from outside; the stair's own landing floor is the arch's). The flights beyond the head house stay underground under the disc.
+  const well = stairwellRect(site);
+  if (well) {
+    const w = new THREE.Path();
+    w.moveTo(well.x0, -well.z0); w.lineTo(well.x1, -well.z0); w.lineTo(well.x1, -well.z1); w.lineTo(well.x0, -well.z1); w.lineTo(well.x0, -well.z0);
+    shape.holes.push(w);
+  }
   const g = new THREE.ShapeGeometry(shape, 1);
   g.rotateX(-Math.PI / 2);
   g.translate(0, site.y - SURFACE_LAYERS.groundBelow, 0);
@@ -203,9 +235,10 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
 
 /**
  * Build the surface's outside visuals. `models(key)`: the lazy library's GLTF (undefined = not delivered: that entry is skipped).
- * `concrete`: the Reactor's pit-concrete colour map (null: a flat tone).
+ * `concrete`: the Reactor's pit-concrete colour map (null: a flat tone). `plant`: lane PLANT's plan (its structures stop the rain;
+ * their tops take splashes).
  */
-export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, models: (key: string) => GLTF | undefined, concrete: THREE.Texture | null, seed: number, kit: readonly SurfaceKitEntry[] = SURFACE_KIT): SurfaceView {
+export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, models: (key: string) => GLTF | undefined, concrete: THREE.Texture | null, seed: number, kit: readonly SurfaceKitEntry[] = SURFACE_KIT, plant: Pick<SurfacePlantPlan, 'towers' | 'parts'> | null = null): SurfaceView {
   const root = new THREE.Group(), outdoor = new THREE.Group(), city = new THREE.Group();
   root.name = 'reactor-surface';
   city.name = 'reactor-surface-city';
@@ -310,8 +343,8 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   sky.renderOrder = -4.5; // (world/mallExterior.ts MALL_EXT_ORDER: over the pit's murk dome -5, under the gas sheets / curtain)
   outdoor.add(sky);
   tris += triCount(sg);
-  // --- rain (the shelter map shared by both layers) ---
-  const floor = buildRainFloor(site, plan);
+  // --- rain (the shelter map shared by both layers and the splashes) ---
+  const floor = buildRainFloor(site, plan, plant);
   const ft = rainFloorTexture(floor);
   own.textures.push(ft);
   const near = new RainLayer('reactor-surface-rain', SURFACE_RAIN.near.count, ft, floor, seed ^ 0x2a1);
@@ -319,8 +352,11 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   column.column(site);
   outdoor.add(near.mesh);
   root.add(column.mesh);
+  // the impacts where the rain lands round the eye (drawn with the near rain: outside only)
+  const splash = new SplashLayer('reactor-surface-rain-splash', ft, floor, site, splashLedges(site, plant, SURFACE_LAYERS.parapetT), seed ^ 0x5b1);
+  outdoor.add(splash.mesh);
   for (const o of [ground, film, sky, parapet]) if (o) { o.castShadow = o.receiveShadow = false; o.updateMatrix(); }
-  return {root, outdoor, city, ground, parapet, film, sky, near, column, floor, instanced, own, drawn, tris};
+  return {root, outdoor, city, ground, parapet, film, sky, near, column, splash, floor, instanced, own, drawn, tris};
 }
 
 /** Release what the view owns (the kit's GLB geometry / maps stay with the library; model materials stay cached). */
@@ -332,6 +368,7 @@ export function disposeSurfaceView(v: SurfaceView): void {
   for (const m of v.own.materials) m.dispose();
   v.near.dispose();
   v.column.dispose();
+  v.splash.dispose();
 }
 
 /** Every footprint corner of the plan (tests / QA): the city's extent round the aperture. */

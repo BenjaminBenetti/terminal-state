@@ -11,7 +11,7 @@
 
 import {REACTOR_FUSE_SLOTS, reactorTasks, type ReactorRunState, type ReactorTaskStatus} from './runState';
 import {VENT_TOWERS, WIN_TEXT, type TowerState} from './restartWin';
-import {JAM_TEXT} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS)
+import {JAM_TEXT, jamDiscovered} from '../../gen/reactor/gasJam'; // task reactor-playtest-round2-20261102 (lane GAS); (+ jamDiscovered: task reactor-ending-polish-20261104)
 
 export type ReactorScreenId = 'pitBoard' | 'controlMonitor' | 'switchgearBoard' | 'pumpBoard';
 
@@ -67,7 +67,7 @@ export function screenKey(id: ReactorScreenId, m: ScreenModel): string {
     case 'controlMonitor': return `${base}|${towers}|${m.winT === null ? '' : Math.round(m.core * 20)}`;
     case 'pitBoard': {
       const air = m.zones.map((z, i) => `${+(s.generators[z.generator]?.started ?? false)}${Math.round((s.zoneClear[i] ?? 0) * 10)}`).join('.');
-      return `${base}|${towers}|${air}|${m.next}`;
+      return `${base}|${towers}|${air}|${m.next}|${+jamDiscovered(s)}`;
     }
   }
 }
@@ -192,7 +192,9 @@ function drawPit(ctx: Ctx, w: number, h: number, m: ScreenModel): void {
     if (t.zone < 0) { text(ctx, 'CLEAN AIR', px + pw - 8, y, Math.round(size * 0.8), '#7fae86', 'right', 'normal', pw * 0.4); return; }
     const z = m.zones[t.zone], clear = Math.max(0, Math.min(1, s.zoneClear[t.zone] ?? 0));
     const bw = Math.round(pw * 0.3), bx = px + pw - 26 - bw;
-    if (t.zone === m.jamZone && jamGassed(m)) { // (lane GAS) the jammed zone: red fault lamp + "JAMMED · MASK" over the bar
+    // (lane GAS) the jammed zone: red fault lamp + "JAMMED · MASK" over the bar — (task reactor-ending-polish-20261104) only once a start
+    // was tried there; until then its row reads like any generator still to start
+    if (t.zone === m.jamZone && jamGassed(m) && jamDiscovered(s)) {
       lamp(ctx, px + pw - 14, y, size * 0.4, '#e0503c', true);
       text(ctx, JAM_TEXT.board, bx + bw, y, Math.round(size * 0.78), '#ff6a50', 'right', 'bold', bw + 12);
       return;

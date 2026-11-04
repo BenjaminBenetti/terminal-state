@@ -11,14 +11,16 @@
 //   npm run build && node tools/qa/reactor-surface-check.mjs [reactorSeedCode] [outDir] [--views]
 //   --views: instead of 3 / 4, four framed views from the ring round the opening (the collar + each tower, the far city away from the
 //   head house, the collar looking down at the railing)
+//   --ending (task reactor-ending-polish-20261104): the exit door straight on (lamp + SURFACE EXIT plate) and at a grazing angle (the
+//   frame), under a pit flight looking up (its underside), the stairwell from the stair's top landing (no ground across it)
 import fs from 'node:fs';
 import path from 'node:path';
 import {launchBrowser, withBrowserLock} from './browser-env.mjs';
 import {serveStatic} from './static-server.mjs';
 
-const ARGS = process.argv.slice(2), VIEWS = ARGS.includes('--views'), POS = ARGS.filter(a => !a.startsWith('--'));
+const ARGS = process.argv.slice(2), VIEWS = ARGS.includes('--views'), ENDING = ARGS.includes('--ending'), POS = ARGS.filter(a => !a.startsWith('--'));
 const code = POS[0] ?? '000070S';
-const out = path.resolve(POS[1] ?? (VIEWS ? 'qa-artifacts/reactor-surface-views' : 'qa-artifacts/reactor-surface-browser'));
+const out = path.resolve(POS[1] ?? (ENDING ? 'qa-artifacts/reactor-ending-views' : VIEWS ? 'qa-artifacts/reactor-surface-views' : 'qa-artifacts/reactor-surface-browser'));
 const STOP_GIB = 5.75;
 fs.mkdirSync(out, {recursive: true});
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -38,7 +40,8 @@ await withBrowserLock(async () => {
     const page = await browser.newPage();
     page.on('console', m => { if (m.type() === 'error' && report.consoleErrors.length < 30) report.consoleErrors.push(m.text().slice(0, 300)); });
     page.on('pageerror', e => { if (report.consoleErrors.length < 30) report.consoleErrors.push(`pageerror: ${String(e).slice(0, 300)}`); });
-    await page.setViewport({width: 640, height: 360});
+    const SIZE = (ARGS.find(a => a.startsWith('--size=')) ?? '--size=640x360').slice(7).split('x').map(Number);
+    await page.setViewport({width: SIZE[0], height: SIZE[1]});
     const ev = (fn, ...a) => page.evaluate(fn, ...a);
     const t0 = Date.now();
     await page.goto(`http://127.0.0.1:${port}/index.html?qa=1&level=reactor&reactorSeed=${code}&quality=low&warmup=off&menuScene=0`);
@@ -53,6 +56,67 @@ await withBrowserLock(async () => {
     for (let i = 0; i < 240; i++) { if (await ev(() => window.__LL.state() === 'playing').catch(() => false)) break; await sleep(1000); }
     await waitGame(1, 180);
     step('playing');
+    if (ENDING) {
+      if (!headroom('ending views')) return;
+      const shot = async (name, setup, arg) => {
+        if (!headroom(name)) return;
+        const info = await ev(setup, arg);
+        await waitGame(1.5, 120);
+        await page.screenshot({path: path.join(out, `${name}.png`)});
+        step(`view ${name} (internal)`, info);
+      };
+      // the door, sealed (red lamp), straight on, aimed at the lintel / plate
+      await shot('door', () => { window.__LL.reactorEnding({go: 'door'}); const d = window.__game.layout.reactor.surface.door; window.__LL.lookAt(d.x, d.y + 2.6, d.z); return {door: d}; });
+      // the frame at a grazing angle: 1.2 m out, 2.6 m along the wall, aimed at the near jamb's edge
+      await shot('door-frame', () => {
+        const d = window.__game.layout.reactor.surface.door, ux = -d.nz, uz = d.nx;
+        window.__LL.teleport(d.x + d.nx * 1.2 + ux * 2.6, d.z + d.nz * 1.2 + uz * 2.6, undefined, d.level);
+        window.__LL.lookAt(d.x + ux * (d.w / 2 + 0.12), d.y + 1.6, d.z + uz * (d.w / 2 + 0.12));
+        return {ok: true};
+      });
+      // close-ups of the frame (--frame: the two upper corners and the head, 1.1 m out)
+      if (ARGS.includes('--frame')) {
+        for (const [name, side, up] of [['frame-left', -1, 0], ['frame-right', 1, 0], ['frame-head', 0, 1]]) {
+          await shot(name, (o) => {
+            const d = window.__game.layout.reactor.surface.door, ux = -d.nz, uz = d.nx, [sd, up] = o;
+            const ax = d.x + ux * sd * (d.w / 2 + 0.1), az = d.z + uz * sd * (d.w / 2 + 0.1);
+            window.__LL.teleport(d.x + d.nx * (up ? 0.9 : 1.1) + ux * sd * 0.6, d.z + d.nz * (up ? 0.9 : 1.1) + uz * sd * 0.6, undefined, d.level);
+            window.__LL.lookAt(ax, d.y + (up ? 2.95 : 2.7), az);
+            return {side: sd};
+          }, [side, up]);
+        }
+        return;
+      }
+      // under a pit flight: the lower storey's open floor cell under a flight's mid point with the most room, looking up at it
+      await shot('stair-under', () => {
+        const g = window.__game, L = g.layout, C = 0.5, b = L.reactor.pit.bounds, lv = L.levels;
+        let best = null;
+        for (let k = 0; k < lv.length; k++) for (const r of lv[k].grid.ramps) {
+          const mx = (r.x + r.w / 2) * C, mz = (r.y + r.h / 2) * C;
+          if (mx < b.x0 || mx > b.x1 || mz < b.z0 || mz > b.z1) continue;
+          const top = (r.h0 + r.h1) / 2;
+          for (let j = 0; j < lv.length; j++) {
+            const q = lv[j].grid, i = q.idx(Math.floor(mx / C), Math.floor(mz / C));
+            if (q.cells[i] !== 1 || q.rampIdx[i] >= 0) continue;
+            const f = q.floorOf(i), gap = top - f;
+            if (gap > 2.6 && gap < 9 && (!best || gap < best.gap)) best = {x: mx, z: mz, level: j, f, top, gap};
+          }
+        }
+        if (!best) return {none: true};
+        window.__LL.teleport(best.x + 1.2, best.z + 1.2, undefined, best.level);
+        window.__LL.lookAt(best.x, best.top - 0.2, best.z);
+        return best;
+      });
+      // the stairwell from the stair's top landing (inside the head house), looking down the flight
+      await shot('stair-top', () => {
+        const s = window.__game.layout.reactor.surface, t = s.stairs.top, r = s.stairs.rect;
+        window.__LL.teleport(t.x, t.z, undefined, t.level);
+        const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+        window.__LL.lookAt(t.x + (cx - t.x) * 0.25, t.y - 2.5, t.z + (cz - t.z) * 0.25);
+        return {top: t, rect: r};
+      });
+      return;
+    }
     // 1. the restart chain + the doors (QA setup), the player on the plaza
     if (!headroom('online')) return;
     step('online', await ev(() => window.__LL.reactorEnding({online: true})));
@@ -107,6 +171,16 @@ await withBrowserLock(async () => {
       await waitGame(1.5, 120);
       await page.screenshot({path: path.join(out, '2-far-city.png')});
       step('frame: far city (internal)');
+    }
+    if (ARGS.includes('--splash') && headroom('frame splash')) {
+      // (task reactor-ending-polish-20261104) the rain's impact splashes on the deck: 2 m ahead, looking down
+      await ev(() => {
+        const g = window.__game, p = g.player, h = g.layout.reactor.surface.hole, dx = h.x - p.x, dz = h.z - p.z, l = Math.hypot(dx, dz) || 1;
+        window.__LL.lookAt(p.x + dx / l * 2.2, g.layout.reactor.surface.y, p.z + dz / l * 2.2); // the open deck toward the aperture
+      });
+      await waitGame(1.2, 120);
+      await page.screenshot({path: path.join(out, '2b-splash.png')});
+      step('frame: splashes (internal)', await ev(() => window.__LL.reactorSurface().shown));
     }
     if (headroom('frame across')) {
       await look(-az / L * 60, 8, ax / L * 60);
