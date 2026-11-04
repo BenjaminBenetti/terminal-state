@@ -582,7 +582,7 @@ describe('HUD ~ cell, inventory melee cell, controls, responsive hotbar', () => 
     const {CONTROLS} = await import('../src/ui/hud');
     expect(CONTROLS.some(([a, k]) => k === '~' && /melee/i.test(a))).toBe(true);
     expect(CONTROLS.some(([a]) => /knife: 3/.test(a))).toBe(false);
-    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && k.startsWith('Hold G'))).toBe(true); // G unchanged
+    expect(CONTROLS.some(([a, k]) => a === 'Throw equipped grenade' && k.startsWith('Hold G'))).toBe(true); // G unchanged (campaign-save-controls-fix: item-agnostic label)
     expect(CONTROLS.some(([a, k]) => /Backpack/.test(a) && k.startsWith('6'))).toBe(true); // 6 unchanged
     expect(SRC('game.ts')).toMatch(/'6 slings it back on · 1-5 \/ ~ switch'/);
   });
