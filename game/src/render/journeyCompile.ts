@@ -29,11 +29,12 @@
 // after every shader stage of every build stage (~6 per new build) — and in Chrome yieldToMain() is scheduler.yield(), whose
 // continuations are PRIORITISED over the browser's other work: the whole chunk's chain ran before the next frame was rendered, until
 // Chrome's ~100 ms render-starvation guard (the trace: 100-117 ms frames with game CPU ~8-11 ms, GPU <= 7 ms, LoAF renderStart +100 ms,
-// 'Scheduler.yield.then' scripts; 21 / 31 hitches in a 30 s capture just after leaving the train). Firefox has no scheduler.yield
-// (three falls back to one object per rAF), so software QA never showed it. Now the scene lane is PACED to real frames:
+// 'Scheduler.yield.then' scripts; 21 / 31 hitches in a 30 s capture just after leaving the train). The studio's Firefox 158 has
+// scheduler.yield / postTask too, but keeps rendering between yield continuations (a probe page: frames every ~17 ms, at most a 34 ms
+// gap, under a continuous 3 ms-per-link yield chain), so software QA never showed it. Now the scene lane is PACED to real frames:
 //  - ONE item per compileAsync call (JOURNEY_COMPILE.chunk 1) and one call in flight: the most a frame can be held is one item's chain;
 //  - a SLICE starts in the scheduler's step (after the frame's render); when an item settles in the SAME game frame (opts.frameNo:
-//    Game.frames) and the slice is under JOURNEY_COMPILE.sliceMs of real time, the next item starts at once (cheap cache-hit items
+//    FrameBudget.frame) and the slice is under JOURNEY_COMPILE.sliceMs of real time, the next item starts at once (cheap cache-hit items
 //    batch, at most maxPerSlice), else the job waits for the next frame's step — no burst after a hidden tab / pause (steps only run
 //    in playing frames; at most one item is ever in flight);
 //  - where the browser has scheduler.postTask, the call is LAUNCHED from a 'background' priority task, so the scheduler.yield()
@@ -70,7 +71,8 @@ export interface JourneyCompileOptions {
   chunk?: number;
   shadowChunk?: number;
   /**
-   * The game's frame number (Game.frames): cheap items batch only inside the frame whose step started the slice. Default: a counter
+   * The game's frame number (Game: FrameBudget.frame, stable from a frame's run() until the next frame callback): cheap items batch
+   * only inside the frame whose step started the slice. Default: a counter
    * the job's own scheduler steps advance (each step = a new frame).
    */
   frameNo?: () => number;
@@ -113,7 +115,7 @@ export const JOURNEY_COMPILE = {chunk: 1, shadowChunk: 8, shadowTargetMs: 1.5, k
    */
   sliceMs: 2, maxPerSlice: 48, postStallFrames: 20} as const;
 
-/** The browser's background-priority task launcher where it has scheduler.postTask (Chromium); null elsewhere (Node, older engines). */
+/** The browser's background-priority task launcher where it has scheduler.postTask (Chromium; Firefox 158); null elsewhere (Node, older engines). */
 function defaultPost(): ((fn: () => void) => void) | null {
   const s = (globalThis as {scheduler?: {postTask?: (fn: () => void, o: {priority: string}) => Promise<unknown>}}).scheduler;
   if (!s || typeof s.postTask !== 'function') return null;

@@ -129,8 +129,11 @@ Root causes, and their fixes:
    - **Cause:** three r186's `compileAsync` awaits `yieldToMain()` after every object, and `NodeBuilder.buildAsync`
      after every stage (about 6 per new build). In Chrome that is `scheduler.yield()`, whose continuations run ahead
      of rendering. So one 16-item chunk's whole chain ran before the next frame, until Chrome's ~100 ms
-     render-starvation guard. Firefox has no `scheduler.yield` (three yields one rAF instead), which is why
-     Firefox / llvmpipe QA never showed it.
+     render-starvation guard. The studio's Firefox 158 has `scheduler.yield` and `postTask` too, but it keeps
+     rendering between yield continuations. In a probe page under a continuous 3 ms-per-link yield chain, it drew
+     a frame every ~17 ms, with at most a 34 ms gap, whether the chain was started directly or from a background
+     task. That is why Firefox / llvmpipe QA never showed the starvation, and why it cannot confirm Chrome's
+     inheritance.
    - **Fix (scene lane only; the shadow lane is unchanged):**
      - one item per `compileAsync` call and one call in flight;
      - a slice starts in the scheduler's step, after the frame's render. A cheap item that settles in the same frame
@@ -146,6 +149,19 @@ Root causes, and their fixes:
      world change (checked when a call starts and when it settles).
    - **Recorder:** frame flag `compiling` (1024) while the job runs; events `compile.journey.active` (already running
      at recording start), `.start`, `.phase` and `.end` with the paced counts; capability `journeyCompile`.
+   - **Coverage cost** (Node, Mall t3a, the `journey-sliced` harness below, old and new job on the same pod):
+
+     | | Old (16-item chunks) | Paced |
+     |---|---|---|
+     | Done at a 720-frame ride: scene / shadow items | 912 / 780 | 798 / 1,699 |
+     | First sweep after the ride: builds / new ROs | 178 / 541 | 143 / 392 |
+     | Job finished after | 1,164 frames | 1,485 frames (+28 %) |
+     | Sweep after it finished | 0 / 0 / 0 | 0 / 0 / 0 |
+     | Largest synchronous scheduler step | 22.1 ms | 13.2 ms |
+     | Scheduler run per frame, mean | 3.2 ms | 6.7 ms (shadow lane gets the budget the chunks used) |
+
+     The shadow lane now gets the frame budget the 16-item chunks used to take. Node has no `scheduler.postTask`, so
+     these runs launch directly; native Chrome throughput is not measured here.
    - **Tests:** `journey-compile-pacing.test.ts` (fake renderer and clock: per-frame bound, batching bounds, frame
      awareness, hidden / pause, exactly-once completion, cancel / world change / failure, the background launcher, the
      watchdog) and `rendercpu-journey-compile.test.ts` (real renderer: one item per call, coverage, 0 builds after).
