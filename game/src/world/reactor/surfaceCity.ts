@@ -176,7 +176,24 @@ export function parapetGeometry(site: SurfaceSite): THREE.BufferGeometry | null 
   return g;
 }
 
-/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out. */
+/**
+ * The exit stair's footprint under its head house (the cut in the city ground: the stair's top flights pass the deck height there), or
+ * null (no stair / no head house over it / it reaches the aperture's ring, which must stay a single opening).
+ */
+export function stairwellRect(site: Pick<SurfaceSite, 'stairs' | 'shelters' | 'hole'>): {x0: number; z0: number; x1: number; z1: number} | null {
+  const st = site.stairs?.rect;
+  if (!st) return null;
+  for (const sh of site.shelters) {
+    const r = sh.rect, x0 = Math.max(st.x0, r.x0), x1 = Math.min(st.x1, r.x1), z0 = Math.max(st.z0, r.z0), z1 = Math.min(st.z1, r.z1);
+    if (x1 - x0 < 0.5 || z1 - z0 < 0.5) continue;
+    const o = site.hole, near = Math.hypot(Math.max(x0 - o.x, 0, o.x - x1), Math.max(z0 - o.z, 0, o.z - z1));
+    if (near < o.ringR1 + 1) return null;
+    return {x0, z0, x1, z1};
+  }
+  return null;
+}
+
+/** The city ground: a disc round the aperture (radius plan.groundR) with the opening cut out (and the stairwell under the head house). */
 export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'groundR'>): THREE.BufferGeometry {
   const o = site.hole, R = plan.groundR, segs = 96;
   // shape coordinates (x, -z): rotateX(-90 deg) maps (x, y, 0) -> (x, 0, -y) = (x, 0, z), its +Z normal -> +Y (facing up)
@@ -192,6 +209,17 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
     if (k === 0) hole.moveTo(x, -z); else hole.lineTo(x, -z);
   }
   shape.holes.push(hole);
+  // (task reactor-ending-polish-20261104, user: "there is a flat piece of ground you walk through as you go the the stairs to the
+  // surface") the STAIRWELL: inside the head house the exit stair's top flights rise through the deck height, and the outdoor group
+  // shows from 7 m below the deck in the stair (surfaceSite.ts SURFACE_GATE.stairsBelow), so this one-sided disc drew a flat floor across
+  // the stairwell at foot height as the eye rose above it. Cut where the stair stands under its head house (that closed box hides the
+  // cut from outside; the stair's own landing floor is the arch's). The flights beyond the head house stay underground under the disc.
+  const well = stairwellRect(site);
+  if (well) {
+    const w = new THREE.Path();
+    w.moveTo(well.x0, -well.z0); w.lineTo(well.x1, -well.z0); w.lineTo(well.x1, -well.z1); w.lineTo(well.x0, -well.z1); w.lineTo(well.x0, -well.z0);
+    shape.holes.push(w);
+  }
   const g = new THREE.ShapeGeometry(shape, 1);
   g.rotateX(-Math.PI / 2);
   g.translate(0, site.y - SURFACE_LAYERS.groundBelow, 0);

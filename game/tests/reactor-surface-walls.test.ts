@@ -57,3 +57,39 @@ describe('reactor surface: the wet film covers the whole open walk (no dry strip
     }, 120_000);
   }
 });
+
+// Task studio-alpha-reactor-ending-polish-20261104-034806-01 (primary; user: "there is a flat piece of ground you walk through as you go
+// the the stairs to the surface"): the city's ground disc (a one-sided visual plane 3 cm under the deck) crossed the exit stair's top
+// flights inside the head house; seen once the eye rose above it, a flat floor at foot height. It is cut there now; beyond the head house
+// the flights stay underground under the disc (no hole into the stair shaft), and the ground round the head house is intact.
+describe('reactor surface: the ground disc leaves the stairwell open under the head house (and only there)', async () => {
+  const {surfaceSiteOf} = await import('../src/world/reactor/surfaceSite');
+  const {groundGeometry, stairwellRect} = await import('../src/world/reactor/surfaceCity');
+  for (const seed of [9100, 4242, 777]) {
+    it(`seed ${seed}`, () => {
+      const L = LEVELS.reactor.generate('main', {levelSeed: seed}) as StationLayout;
+      const site = surfaceSiteOf(L)!, well = stairwellRect(site)!;
+      expect(well).not.toBeNull();
+      const st = site.stairs!.rect, head = site.shelters[0].rect;
+      // the cut is the stair's footprint inside the head house
+      expect(well).toEqual({x0: Math.max(st.x0, head.x0), z0: Math.max(st.z0, head.z0), x1: Math.min(st.x1, head.x1), z1: Math.min(st.z1, head.z1)});
+      const g = groundGeometry(site, {groundR: 345}), pos = g.attributes.position, idx = g.index;
+      const tris: number[][] = [];
+      const n = idx ? idx.count : pos.count;
+      for (let t = 0; t < n; t += 3) { const v = [0, 1, 2].map(k => (idx ? idx.getX(t + k) : t + k)); tris.push(v.flatMap(i => [pos.getX(i), pos.getZ(i)])); }
+      const covered = (x: number, z: number) => tris.some(([ax, az, bx, bz, cx, cz]) => {
+        const d1 = (x - bx) * (az - bz) - (ax - bx) * (z - bz), d2 = (x - cx) * (bz - cz) - (bx - cx) * (z - cz), d3 = (x - ax) * (cz - az) - (cx - ax) * (z - az);
+        return !((d1 < 0 || d2 < 0 || d3 < 0) && (d1 > 0 || d2 > 0 || d3 > 0));
+      });
+      for (let x = well.x0 + 0.25; x < well.x1; x += 0.5) for (let z = well.z0 + 0.25; z < well.z1; z += 0.5) expect(covered(x, z), `in the well ${x},${z}`).toBe(false);
+      // outside the head house over the stair's footprint (the underground flights) and round the head house: ground as before
+      const out: [number, number][] = [];
+      for (let x = st.x0 + 0.25; x < st.x1; x += 0.5) for (let z = st.z0 + 0.25; z < st.z1; z += 0.5) if (x < head.x0 || x > head.x1 || z < head.z0 || z > head.z1) out.push([x, z]);
+      for (const [dx, dz] of [[-1.5, 0], [1.5, 0], [0, -1.5], [0, 1.5]]) out.push([(head.x0 + head.x1) / 2 + dx * (head.x1 - head.x0) / 2, (head.z0 + head.z1) / 2 + dz * (head.z1 - head.z0) / 2]);
+      expect(out.length).toBeGreaterThan(4);
+      for (const [x, z] of out) expect(covered(x, z), `ground at ${x.toFixed(2)},${z.toFixed(2)}`).toBe(true);
+      // the aperture is still cut (one opening) and the disc is otherwise whole
+      expect(covered(site.hole.x, site.hole.z)).toBe(false);
+    }, 120_000);
+  }
+});
