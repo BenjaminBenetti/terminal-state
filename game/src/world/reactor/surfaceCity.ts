@@ -17,6 +17,8 @@ import {SURFACE_KIT, type SurfaceKitEntry} from './surfaceKit';
 import {SURFACE_CITY, footprintCorners, type SurfaceCityPlan} from './surfacePlan';
 import type {SurfaceSite} from './surfaceSite';
 import {SURFACE_RAIN, RainLayer, buildRainFloor, rainFloorTexture, type RainFloorMap} from './surfaceRain';
+import {SplashLayer, splashLedges} from './surfaceSplash';
+import type {SurfacePlantPlan} from './surfacePlantPlan';
 import {SURF_U, streetMaskTexture, surfaceFilmMaterial, surfaceGroundMaterial, surfaceModelMaterial, surfaceSkyMaterial, surfaceSteelMaterial, surfaceWallMaterial} from './surfaceLook';
 
 /**
@@ -31,7 +33,7 @@ export const SURFACE_SKY = {radius: 352} as const;
  * instance (grounded models, min y 0, planned at the deck height) is seated `sink` m down so its base meets / bites into the ground disc
  * (never a hairline of sky under a facade).
  */
-export const SURFACE_LAYERS = {groundBelow: 0.03, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT, sink: 0.06} as const;
+export const SURFACE_LAYERS = {groundBelow: SURFACE_RAIN.groundBelow, filmAbove: 0.012, maskCell: 0.5, parapetT: SURFACE_CITY.parapetT, sink: 0.06} as const;
 /** Culling sectors round the aperture: the near city's entries per quadrant, the far skyline's per octant. */
 export const SURFACE_SECTORS = {near: 4, far: 8} as const;
 
@@ -46,6 +48,8 @@ export interface SurfaceView {
   sky: THREE.Mesh;
   near: RainLayer;
   column: RainLayer;
+  /** (task reactor-ending-polish-20261104, lane SPLASH) The rain's impacts on the open ground / ledges round the eye (surfaceSplash.ts). */
+  splash: SplashLayer;
   floor: RainFloorMap;
   /** Instanced city meshes (InstancedMesh per entry part x quadrant). */
   instanced: THREE.InstancedMesh[];
@@ -231,9 +235,10 @@ export function groundGeometry(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'g
 
 /**
  * Build the surface's outside visuals. `models(key)`: the lazy library's GLTF (undefined = not delivered: that entry is skipped).
- * `concrete`: the Reactor's pit-concrete colour map (null: a flat tone).
+ * `concrete`: the Reactor's pit-concrete colour map (null: a flat tone). `plant`: lane PLANT's plan (its structures stop the rain;
+ * their tops take splashes).
  */
-export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, models: (key: string) => GLTF | undefined, concrete: THREE.Texture | null, seed: number, kit: readonly SurfaceKitEntry[] = SURFACE_KIT): SurfaceView {
+export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, models: (key: string) => GLTF | undefined, concrete: THREE.Texture | null, seed: number, kit: readonly SurfaceKitEntry[] = SURFACE_KIT, plant: Pick<SurfacePlantPlan, 'towers' | 'parts'> | null = null): SurfaceView {
   const root = new THREE.Group(), outdoor = new THREE.Group(), city = new THREE.Group();
   root.name = 'reactor-surface';
   city.name = 'reactor-surface-city';
@@ -338,8 +343,8 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   sky.renderOrder = -4.5; // (world/mallExterior.ts MALL_EXT_ORDER: over the pit's murk dome -5, under the gas sheets / curtain)
   outdoor.add(sky);
   tris += triCount(sg);
-  // --- rain (the shelter map shared by both layers) ---
-  const floor = buildRainFloor(site, plan);
+  // --- rain (the shelter map shared by both layers and the splashes) ---
+  const floor = buildRainFloor(site, plan, plant);
   const ft = rainFloorTexture(floor);
   own.textures.push(ft);
   const near = new RainLayer('reactor-surface-rain', SURFACE_RAIN.near.count, ft, floor, seed ^ 0x2a1);
@@ -347,8 +352,11 @@ export function buildSurfaceView(site: SurfaceSite, plan: SurfaceCityPlan, model
   column.column(site);
   outdoor.add(near.mesh);
   root.add(column.mesh);
+  // the impacts where the rain lands round the eye (drawn with the near rain: outside only)
+  const splash = new SplashLayer('reactor-surface-rain-splash', ft, floor, site, splashLedges(site, plant, SURFACE_LAYERS.parapetT), seed ^ 0x5b1);
+  outdoor.add(splash.mesh);
   for (const o of [ground, film, sky, parapet]) if (o) { o.castShadow = o.receiveShadow = false; o.updateMatrix(); }
-  return {root, outdoor, city, ground, parapet, film, sky, near, column, floor, instanced, own, drawn, tris};
+  return {root, outdoor, city, ground, parapet, film, sky, near, column, splash, floor, instanced, own, drawn, tris};
 }
 
 /** Release what the view owns (the kit's GLB geometry / maps stay with the library; model materials stay cached). */
@@ -360,6 +368,7 @@ export function disposeSurfaceView(v: SurfaceView): void {
   for (const m of v.own.materials) m.dispose();
   v.near.dispose();
   v.column.dispose();
+  v.splash.dispose();
 }
 
 /** Every footprint corner of the plan (tests / QA): the city's extent round the aperture. */

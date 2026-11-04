@@ -13,12 +13,19 @@
 // the vertex stage, CPU mirror rainFloorAt): the open ground, the building volumes (their tops), the stair head-house roof (ENDING's
 // shelters) — and the aperture, where the floor drops far into the pit. So no point under a roof, inside a building or anywhere in the
 // pit (but under the opening) ever gets rain. Plain uniforms only (no uniformArray), never a shadow caster, no volumetric-march change.
+// Task studio-alpha-reactor-ending-polish-20261104-034806-01 (lane SPLASH; user: "rain drops are not producing splashes when hitting the
+// ground outside, they should!"): the floor map is also where the SPLASHES land (surfaceSplash.ts), so it now holds the true surface
+// heights — the walkable deck at site.y, the city ground disc 0.03 m under it (surfaceCity.ts SURFACE_LAYERS.groundBelow) — on 0.5 m
+// cells (the level grid's CELL: the walk rects' edges fall on texel edges), the PLANT's structures (vent-tower stacks / plinths, the
+// plenums, ducts, sleepers, the compound wall's piers / buttresses: rain stops on them, never falls through), and it reaches far
+// enough round the yard for the splashes' view radius.
 
 import * as THREE from 'three';
 import {MeshBasicNodeMaterial} from 'three/webgpu';
 import {Fn, abs, attribute, cameraPosition, clamp, cross, float, floor, int, ivec2, length, max, min, mix, normalize, smoothstep, texture, uniform, varying, vec3, vec4} from 'three/tsl';
 import type {ReactorRect} from '../../gen/reactor/reactorTypes';
-import {footprintCorners, type SurfaceCityPlan} from './surfacePlan';
+import {footprintCorners, type CityFootprint, type SurfaceCityPlan} from './surfacePlan';
+import type {SurfacePlantPlan} from './surfacePlantPlan';
 import type {SurfaceSite} from './surfaceSite';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -37,8 +44,11 @@ export const SURFACE_RAIN = {
   wind: [1.3, 0.55] as readonly [number, number], gust: 0.45,
   /** Streak colour (lit by the overcast sky) and the beam's blue near its axis. */
   colour: [0.55, 0.6, 0.66] as readonly [number, number, number], beamGain: 1.6, beamR: 7,
-  /** The rain-floor map: cell (m) and the margin round the yard it covers (the near box's reach from any surface eye). */
-  floorCell: 1, floorPad: 24,
+  /** The rain-floor map: cell (m; the level grid's CELL) and the margin round the yard it covers (the near box's / the splashes'
+   *  reach from any surface eye: surfaceSplash.ts SURFACE_SPLASH.far + the eye gate's pad). */
+  floorCell: 0.5, floorPad: 34,
+  /** The city ground disc lies this far under the walkable deck (surfaceCity.ts SURFACE_LAYERS.groundBelow reads it). */
+  groundBelow: 0.03,
   /** The floor under the aperture (m below the ground): the drops keep falling into the pit. */
   holeDrop: 90,
   /** Time wraps after this long (s): float precision of the falling pattern (a one-frame jump every 10 minutes). */
@@ -48,34 +58,52 @@ export const SURFACE_RAIN = {
 // ---------------------------------------------------------------------------------------------------------------------------
 // The rain floor (pure)
 
-/** Rain floor height map: drops are drawn only ABOVE the floor at their x / z. */
-export interface RainFloorMap { x0: number; z0: number; cell: number; w: number; h: number; data: Float32Array; ground: number }
+/**
+ * Rain floor height map: drops are drawn only ABOVE the floor at their x / z. `ground` = the walkable deck's height (site.y), `low` =
+ * the city ground disc's (ground - groundBelow): a texel at either is open ground a splash may land on.
+ */
+export interface RainFloorMap { x0: number; z0: number; cell: number; w: number; h: number; data: Float32Array; ground: number; low: number }
 
 /**
- * The surface's rain floor: the ground everywhere, the TOP of every building / tank / vehicle footprint (rain never shows inside a
- * model), ENDING's shelters (their roofs), and far below the ground over the aperture. Covers the yard + floorPad; outside it the edge
- * texels hold (clamped reads), which the construction keeps at the ground.
+ * The surface's rain floor: the city ground disc everywhere and the walkable deck on the walk cells, the TOP of every building / tank /
+ * vehicle footprint (rain never shows inside a model) and of the plant's structures (`plant`: the vent towers, duct runs, piers),
+ * ENDING's shelters (their roofs), and far below the ground over the aperture. Covers the yard + floorPad; outside it the edge texels
+ * hold (clamped reads), which the construction keeps at the ground.
  */
-export function buildRainFloor(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'plaza' | 'placements'> | null): RainFloorMap {
+export function buildRainFloor(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'plaza' | 'placements'> | null, plant?: Pick<SurfacePlantPlan, 'towers' | 'parts'> | null): RainFloorMap {
   const R = SURFACE_RAIN, c = R.floorCell, P = plan?.plaza ?? site.bounds;
   const x0 = Math.floor(P.x0 - R.floorPad), z0 = Math.floor(P.z0 - R.floorPad);
   const w = Math.ceil((P.x1 + R.floorPad - x0) / c) + 1, h = Math.ceil((P.z1 + R.floorPad - z0) / c) + 1;
-  const data = new Float32Array(w * h).fill(site.y);
+  // the city ground disc everywhere; the walkable deck on the walk rects' cells (a cell whose centre lies on one)
+  const low = site.y - R.groundBelow;
+  const data = new Float32Array(w * h).fill(low);
   const raise = (i: number, v: number) => { if (v > data[i]) data[i] = v; };
-  // building volumes (by their footprint polygons; one cell of the map's border always stays the ground)
-  for (const p of plan?.placements ?? []) {
-    const cs = footprintCorners(p);
-    const bx0 = Math.max(1, Math.floor((Math.min(...cs.map(q => q[0])) - x0) / c)), bx1 = Math.min(w - 2, Math.floor((Math.max(...cs.map(q => q[0])) - x0) / c));
-    const bz0 = Math.max(1, Math.floor((Math.min(...cs.map(q => q[1])) - z0) / c)), bz1 = Math.min(h - 2, Math.floor((Math.max(...cs.map(q => q[1])) - z0) / c));
-    for (let iz = bz0; iz <= bz1; iz++) for (let ix = bx0; ix <= bx1; ix++) {
-      if (inPoly(cs, x0 + (ix + 0.5) * c, z0 + (iz + 0.5) * c)) raise(iz * w + ix, p.y + p.h);
-    }
-  }
   const cells = (r: ReactorRect, f: (i: number) => void) => {
     for (let iz = Math.max(1, Math.floor((r.z0 - z0) / c)); iz <= Math.min(h - 2, Math.floor((r.z1 - z0 - 1e-6) / c)); iz++) {
       for (let ix = Math.max(1, Math.floor((r.x0 - x0) / c)); ix <= Math.min(w - 2, Math.floor((r.x1 - x0 - 1e-6) / c)); ix++) f(iz * w + ix);
     }
   };
+  for (const r of site.walk) cells(r, i => {
+    const ix = i % w, iz = (i - ix) / w, cx = x0 + (ix + 0.5) * c, cz = z0 + (iz + 0.5) * c;
+    if (cx > r.x0 && cx < r.x1 && cz > r.z0 && cz < r.z1) raise(i, site.y);
+  });
+  /** A volume (oriented footprint, its top): every cell whose centre lies inside it (one cell of the map's border always stays the ground). */
+  const volume = (p: CityFootprint, top: number) => {
+    const cs = footprintCorners(p);
+    const bx0 = Math.max(1, Math.floor((Math.min(...cs.map(q => q[0])) - x0) / c)), bx1 = Math.min(w - 2, Math.floor((Math.max(...cs.map(q => q[0])) - x0) / c));
+    const bz0 = Math.max(1, Math.floor((Math.min(...cs.map(q => q[1])) - z0) / c)), bz1 = Math.min(h - 2, Math.floor((Math.max(...cs.map(q => q[1])) - z0) / c));
+    for (let iz = bz0; iz <= bz1; iz++) for (let ix = bx0; ix <= bx1; ix++) {
+      if (inPoly(cs, x0 + (ix + 0.5) * c, z0 + (iz + 0.5) * c)) raise(iz * w + ix, top);
+    }
+  };
+  // building volumes (their tops)
+  for (const p of plan?.placements ?? []) volume(p, p.y + p.h);
+  // the plant: the vent towers' stacks and plinths, the duct runs, the compound wall (a buttress by its high end)
+  for (const t of plant?.towers ?? []) {
+    volume({x: t.x, z: t.z, yaw: t.yaw, hw: t.plinth.hw, hd: t.plinth.hd}, t.y + t.plinth.h);
+    volume({x: t.x, z: t.z, yaw: t.yaw, hw: t.hw, hd: t.hd}, t.y + t.h);
+  }
+  for (const q of plant?.parts ?? []) volume(q, Math.max(q.y1, q.y1b ?? q.y1));
   for (const s of site.shelters) cells(s.rect, i => raise(i, s.roofY));
   // the aperture: the floor falls into the pit (a cell whose centre lies inside the disc)
   const o = site.hole;
@@ -83,7 +111,7 @@ export function buildRainFloor(site: SurfaceSite, plan: Pick<SurfaceCityPlan, 'p
     const ix = i % w, iz = (i - ix) / w;
     if (Math.hypot(x0 + (ix + 0.5) * c - o.x, z0 + (iz + 0.5) * c - o.z) < o.r) data[i] = site.y - R.holeDrop;
   });
-  return {x0, z0, cell: c, w, h, data, ground: site.y};
+  return {x0, z0, cell: c, w, h, data, ground: site.y, low};
 }
 
 function inPoly(P: readonly [number, number][], x: number, z: number): boolean {

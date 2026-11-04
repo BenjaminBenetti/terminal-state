@@ -77,7 +77,7 @@ export class ReactorSurface {
   /** The plant's view (surfacePlant.ts: the compound wall, the duct runs, the vent towers and their spinning fans) under view.outdoor. */
   plantView: SurfacePlantView | null = null;
   /** The last shown state (QA / tests). */
-  readonly shown = {outside: false, open: false, clear: 0, rain: 0, wet: 0, column: false, near: false, fogged: false, beam: 0};
+  readonly shown = {outside: false, open: false, clear: 0, rain: 0, wet: 0, column: false, near: false, splash: false, fogged: false, beam: 0};
   readonly counts = {builds: 0, frames: 0};
   /** Read STARTUP's ONLINE state (tests replace it): the sky clearing 0..1 and the beam's brightness. */
   findSky: () => {clear: number; beam: number} = () => {
@@ -112,7 +112,7 @@ export class ReactorSurface {
     // (task reactor-surface-redesign-credits-20261103: the plant first — its towers / structures reserve their lots in the city)
     this.plant = planSurfacePlant(site, layout.seed >>> 0, layout.reactor.pit.bounds);
     this.plan = planSurfaceCity(site, layout.seed >>> 0, key => !!lib?.get(key), layout.reactor.pit.bounds, this.plant.reserved);
-    this.view = buildSurfaceView(site, this.plan, key => lib?.get(key), (reactorTexture('pitConcrete', 'color') as THREE.Texture | undefined) ?? null, layout.seed >>> 0, SURFACE_KIT);
+    this.view = buildSurfaceView(site, this.plan, key => lib?.get(key), (reactorTexture('pitConcrete', 'color') as THREE.Texture | undefined) ?? null, layout.seed >>> 0, SURFACE_KIT, this.plant);
     SURF_U.beam.value.set(site.hole.x, site.hole.z, 0, 0);
     SURF_U.beamTop.value.set(site.hole.x, site.y + SURFACE_RT.cloudBase, site.hole.z);
     for (const L of [this.view.near, this.view.column]) L.u.beam.value.set(site.hole.x, site.hole.z, 0, 0);
@@ -163,6 +163,9 @@ export class ReactorSurface {
     const nearOn = outside && rain > 0.001;
     v.near.mesh.visible = nearOn;
     if (nearOn) { v.near.follow(eye); v.near.tick(dt, this.gust); v.near.u.on.value = rain; v.near.u.px.value = px; v.near.u.beam.value.z = beam; }
+    // (task reactor-ending-polish-20261104, lane SPLASH: the impacts where it lands — the near rain's gate, its density, its clock)
+    v.splash.mesh.visible = nearOn;
+    if (nearOn) v.splash.tick(dt, eye, rain, px, beam);
     // (in the pit's open shaft only: never from the rock rooms / complexes behind its walls)
     const pb = this.pit, inShaft = !!pb && eye.x > pb.x0 - 1 && eye.x < pb.x1 + 1 && eye.z > pb.z0 - 1 && eye.z < pb.z1 + 1;
     const colOn = !outside && rain > 0.001 && inShaft && Math.hypot(eye.x - site.hole.x, eye.z - site.hole.z) < SURFACE_RT.columnReach && eye.y < site.y;
@@ -178,7 +181,7 @@ export class ReactorSurface {
     this.applyFog(outside ? clear : 0, dt);
     this.applyFar(outside);
     const s = this.shown;
-    s.outside = outside; s.open = open; s.clear = clear; s.rain = rain; s.wet = SURF_U.wet.value as number; s.column = colOn; s.near = nearOn; s.beam = beam;
+    s.outside = outside; s.open = open; s.clear = clear; s.rain = rain; s.wet = SURF_U.wet.value as number; s.column = colOn; s.near = nearOn; s.splash = nearOn; s.beam = beam;
     ambience.outside = outside; ambience.open = open; ambience.rain = rain;
   }
 
@@ -223,7 +226,7 @@ export class ReactorSurface {
     return {
       site: this.site ? {contract: this.site.contract, level: this.site.level, y: this.site.y, hole: this.site.hole, walk: this.site.walk.length, edges: this.site.edges.length} : null,
       shown: {...this.shown}, plan: p?.stats ?? null, drawn: v?.drawn ?? null, meshes: v ? v.instanced.length + 6 : 0, visibleMeshes: draws, tris: v?.tris ?? 0,
-      rain: v ? {near: v.near.stats(), column: v.column.stats(), floor: {w: v.floor.w, h: v.floor.h}} : null, look: surfaceTune(tune ?? {}), fogDefault: REACTOR_FOG,
+      rain: v ? {near: v.near.stats(), column: v.column.stats(), splash: v.splash.stats(), floor: {w: v.floor.w, h: v.floor.h, cell: v.floor.cell}} : null, look: surfaceTune(tune ?? {}), fogDefault: REACTOR_FOG,
       caps: {nearDrops: SURFACE_RAIN.near.count, columnDrops: SURFACE_RAIN.column.count},
       plant: this.plantView ? {...this.plantView.stats, towers: (this.plant?.towers ?? []).map(t => ({x: t.x, z: t.z, h: t.h})), started: this.plantView.started, speed: this.plantView.fans.map(f => +f.speed.toFixed(3)), angle: this.plantView.fans.map(f => +f.angle.toFixed(3))} : null,
     };
