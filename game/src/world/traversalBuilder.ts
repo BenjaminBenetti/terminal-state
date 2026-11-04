@@ -141,11 +141,14 @@ function flatQuad(sink: QuadSink, m: {u: number; v: number}, axisX: boolean, s0:
   }
 }
 
+/** A flight's slab underside (m below the pitch line; at least half a riser + `clear` under it, inside the open sides' stringers). */
+export const FLIGHT_SOFFIT = {below: 0.18, clear: 0.06} as const;
+
 /** Ramp headroom (m) from which a flight is an open well without a following ceiling (task track3-eaton-centre-20261031). */
 export const OPEN_WELL_HEADROOM = 10;
 
 /** Stair flight geometry for one grid ramp (`walls`: the union-aware wall lookup for handrails). */
-function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink, steel: THREE.BufferGeometry[], walls: Grid, opts: {treads?: boolean; wallRails?: boolean} = {}): void {
+function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMaterials, acc: (k: MatKey) => QuadSink, steel: THREE.BufferGeometry[], walls: Grid, opts: {treads?: boolean; wallRails?: boolean; soffit?: boolean} = {}): void {
   const area = layout.areas[g.area[g.idx(r.x, r.y)]];
   const pub = area?.publicSpace ?? true;
   const floorMat: MatKey = pub ? 'terrazzo' : 'concrete';
@@ -172,6 +175,15 @@ function buildFlight(g: Grid, r: Ramp, layout: StationLayout, mats: WorldMateria
   for (let k = 0; k <= N; k++) {
     const sa = bounds[k], sb = bounds[k + 1];
     if (Math.abs(sb - sa) > 1e-4) flatQuad(acc(floorMat), fm, axisX, sa, sb, a0, a1, tread(k), tread(k), true);
+  }
+  // Task studio-alpha-reactor-ending-polish-20261104-034806-01 (primary; user: "the under sides of stairs in the reactor pit are see
+  // through"): a flight hanging in open space (the Reactor's pit / its surface stair) gets its SLAB UNDERSIDE — a soffit following the
+  // pitch line, below every step's inner corner (half a riser under the pitch line) and inside the open sides' stringers (world/reactor/
+  // archKit.ts planRails: 0.32 m deep, 0.20 m under the walking line), facing down. The treads are one-sided (they face up), so without
+  // it the flight was see-through from below. Every Subway / Office / Mall flight stands in its own shaft: unchanged (opts.soffit unset).
+  if (opts.soffit) {
+    const waist = Math.max(FLIGHT_SOFFIT.below, Math.abs(r.h1 - r.h0) / Math.max(1, N) / 2 + FLIGHT_SOFFIT.clear);
+    for (let i = 0; i + 1 < kinks.length; i++) flatQuad(acc(floorMat), fm, axisX, kinks[i], kinks[i + 1], a0, a1, H(kinks[i]) - waist, H(kinks[i + 1]) - waist, false);
   }
   const descending = r.h1 < r.h0;
   for (let k = 0; k < N; k++) {
@@ -230,7 +242,8 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
       if (seen.some(q => same(q, r))) continue;
       seen.push(r);
       const cx = (r.x + r.w / 2) * CELL, cz = (r.y + r.h / 2) * CELL;
-      buildFlight(g, r, layout, mats, k => acc(k, cx, cz, L.id), steel, ctx ? unionWalls(r, ctx.cols) : g, {treads: !escRamps.has(ri), wallRails: !transitRamps.has(ri) && !mallRamps.has(ri)});
+      buildFlight(g, r, layout, mats, k => acc(k, cx, cz, L.id), steel, ctx ? unionWalls(r, ctx.cols) : g, {treads: !escRamps.has(ri), wallRails: !transitRamps.has(ri) && !mallRamps.has(ri),
+        soffit: !!(layout as {reactor?: unknown}).reactor}); // (task reactor-ending-polish-20261104: the Reactor's open flights get their underside)
     }
   }
 
