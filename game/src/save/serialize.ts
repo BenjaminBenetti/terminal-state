@@ -32,7 +32,10 @@
 //                 | [...11, layoutIndex]                                    (12: what is left of a generated pickup)
 //                 | [...11, layoutIndex | -1, fromLot.holder, fromLot.lot]  (14: a lot that left its holder)
 //     positions / anchors rounded to 0.1 mm, quaternions to 1e-6 (sub-visual; decode(encode(x)) is idempotent).
-//   HolderTupleV1 = [flags, ...lots] (flags: 1 open, 2 searched) | [flags | 4, seen.length, seenMask, ...lots] (openables)
+//   HolderTupleV1 = [flags, ...lots] (flags: 1 open, 2 searched) | [flags | 4, seen.length, ...seenWords, ...lots] (openables)
+//     seenWords: ceil(seen.length / 30) exact integers, word w bit b = seen[30 w + b] (integer maths: no 32-bit bitwise past bit 30).
+//     A holder with <= 30 compartments keeps the original one-word tuple byte for byte (task campaign-save-controls-fix: the Mall's
+//     35-compartment medicine drawer cabinet overflowed the old single `1 << i` mask and its 1..30 validation).
 // Lane stores (`lanes`) stay opaque JSON (GEAR's bags, the Reactor record, office windows, sirens …) and are copied exactly.
 // Untouched stations have no memory at all: they regenerate from their node seed (they cost nothing).
 //
@@ -53,6 +56,12 @@ export const SERIALIZED_RUN_V = 1 as const;
 export const SAVE_FORMAT = 'terminal-state-save' as const;
 /** run.entered entries kept (a QA log; everything else is kept whole). */
 export const ENTERED_KEEP = 64;
+/** Holder `seen` compartments per packed word (exact JS integers; 30 keeps the single-word legacy tuples identical). */
+export const SEEN_WORD_BITS = 30;
+/** Largest compartment count a holder record may carry (every openable spec stays at or below it: tests/save-holder-parts.test.ts). */
+export const MAX_HOLDER_PARTS = 64;
+/** Packed words for `len` seen compartments (at least one: the legacy layout). */
+export const seenWordCount = (len: number): number => Math.max(1, Math.ceil(len / SEEN_WORD_BITS));
 
 /**
  * The transition a save was taken at (SaveMeta.reason adds 'import'). Task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01
@@ -160,16 +169,17 @@ export function decodePickup(t: PickupTupleV1): PickupRecord {
 export function encodeHolder(h: HolderRecord): HolderTupleV1 {
   const f = (h.open ? 1 : 0) | (h.searched ? 2 : 0);
   if (!h.seen) return [f, ...h.lots];
-  let mask = 0;
-  h.seen.forEach((v, i) => { if (v) mask |= 1 << i; });
-  return [f | 4, h.seen.length, mask, ...h.lots];
+  const words = new Array<number>(seenWordCount(h.seen.length)).fill(0);
+  h.seen.forEach((v, i) => { if (v) words[Math.floor(i / SEEN_WORD_BITS)] += 2 ** (i % SEEN_WORD_BITS); });
+  return [f | 4, h.seen.length, ...words, ...h.lots];
 }
 
 export function decodeHolder(t: HolderTupleV1): HolderRecord {
   const f = t[0];
   if (f & 4) {
-    const len = t[1], mask = t[2];
-    return {lots: t.slice(3), open: !!(f & 1), searched: !!(f & 2), seen: Array.from({length: len}, (_, i) => !!((mask >>> i) & 1))};
+    const len = t[1], n = seenWordCount(len), words = t.slice(2, 2 + n);
+    const bit = (i: number) => Math.floor(words[Math.floor(i / SEEN_WORD_BITS)] / 2 ** (i % SEEN_WORD_BITS)) % 2 === 1;
+    return {lots: t.slice(2 + n), open: !!(f & 1), searched: !!(f & 2), seen: Array.from({length: len}, (_, i) => bit(i))};
   }
   return {lots: t.slice(1), open: !!(f & 1), searched: !!(f & 2)};
 }

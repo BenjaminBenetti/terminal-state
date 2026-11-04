@@ -503,8 +503,8 @@ describe('battery / flare items and their authored models', () => {
     expect(effectText(b)).toBe('flashlight battery 100 %');
     expect(throwHint(f)).toMatch(/Hold click or G to ready .* release to throw/); // iteration 15: hold to ready, release to throw; INTERACT #6: G (was T)
     expect(Object.values(ITEMS).filter(d => d.kind === 'throwable').map(d => d.id)).toEqual(['flare']);
-    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && /release to throw/.test(a) && k.startsWith('Hold G'))).toBe(true); // INTERACT #6: G (was T)
-    expect(CONTROLS.some(([a]) => /battery/i.test(a))).toBe(true);
+    expect(CONTROLS.some(([a, k]) => a === 'Throw equipped grenade' && k.startsWith('Hold G'))).toBe(true); // INTERACT #6: G (was T); campaign-save-controls-fix: item-agnostic
+    expect(CONTROLS.some(([a, k]) => a === 'Use held item' && k === 'Left click')).toBe(true); // a battery is used like any held item (campaign-save-controls-fix: no item-specific rows)
   });
 
   it('the battery swap animation (consume view "insert") keeps the cell on screen in the lower half for the whole use', () => {
