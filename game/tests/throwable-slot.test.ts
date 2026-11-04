@@ -335,7 +335,7 @@ describe('inventory screen + HUD (ui/inventoryUI.ts drop step, ui/hud.ts G slot)
     expect(src).toMatch(/keyDown: inp\.down\('KeyG'\)/);
     const {CONTROLS} = await import('../src/ui/hud');
     expect(CONTROLS.some(([a, k]) => /drop held item/i.test(a) || k === 'G')).toBe(false);
-    expect(CONTROLS.some(([a, k]) => /flare/i.test(a) && k.startsWith('Hold G'))).toBe(true);
+    expect(CONTROLS.some(([a, k]) => a === 'Throw equipped grenade' && k.startsWith('Hold G'))).toBe(true); // campaign-save-controls-fix: item-agnostic label
     expect(CONTROLS.some(([, k]) => /\bT\b/.test(k))).toBe(false);
   });
 });

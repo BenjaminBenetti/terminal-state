@@ -441,23 +441,14 @@ export class Hud {
 }
 
 export const CONTROLS: [string, string][] = [
-  ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'],
-  ['Crouch (tap toggle · hold)', 'C'], ['Fire · knife: hold to wind up, release to slash (a tap slashes too) / eat · drink · use held item', 'Left click'],
-  ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Open · take aimed item · take all', 'E'], ['Quick slots', '1 – 5 · wheel'],
-  // Task knife-windup-20261030 (lane SLOT): the dedicated melee slot (the knife lives there, not in a quick slot)
-  ['Melee slot: draw your knife (1 – 5 · wheel switch back)', '~'],
-  // Task gasmask-breach-20261030 (mask lane): Q = the gas mask (last-item cycling removed); it uses filters from your pockets
-  ['Gas mask on/off', 'Q'], ['Inventory (drag an item out of it to drop it)', 'Tab or I'], ['Quick heal', 'H'],
-  // Iteration 12 (LIGHT): the flashlight runs on a battery (HUD meter); batteries are used like other items.
-  // Task office-overhaul-20261030 (INTERACT, #6): G throws the grenade slot's flare (T retired; G no longer drops)
-  ['Flashlight (battery meter, bottom right)', 'F'], ['Throw the grenade slot\'s flare: hold to ready, release to throw', 'Hold G · or hold click while held'],
-  ['Swap in a battery (refills the light)', 'Click while held · inventory Use'],
-  // Iteration 16 (lane INJURY): bandages / med kits heal HP only; an injured arm / leg needs its own treatment
-  ['Injured arm / leg (red on the HUD): apply an arm sling / leg splint', 'Click while held · inventory Use'],
-  // Iteration 16 (lane GEAR): gear is worn from the inventory's gear panel; a backpack is only opened on the ground
-  // Task office-overhaul-20261030 (INTERACT, #1): hold E on a grounded bag to pick it up and wear it
-  ['Backpack: hold it (slot 6) · set it down · open it (world keeps running) · pick it up', '6 · click · tap E · hold E'],
-  ['Mute', 'M'], ['Pause / release mouse', 'Esc'], ['Climb rescue ladder (track bed)', 'E · Space or S lets go'],
+  // Task campaign-save-controls-fix-20261104-034806 (user: "Simply say, left click uses held item"; the grenade key throws whatever
+  // grenade is equipped): item-agnostic action labels — one row per binding; item-specific uses (knife wind-up, batteries, slings,
+  // flares) are all "Use held item" / "Throw equipped grenade". Bindings unchanged.
+  ['Move', 'W A S D'], ['Look', 'Mouse'], ['Sprint', 'Shift'], ['Jump', 'Space'], ['Crouch (tap · hold)', 'C'],
+  ['Use held item', 'Left click'], ['Aim down sights', 'Right click'], ['Reload', 'R'], ['Interact · take (hold to pick up)', 'E'],
+  ['Quick slots', '1 – 5 · wheel'], ['Melee weapon', '~'], ['Throw equipped grenade', 'Hold G'],
+  ['Gas mask on/off', 'Q'], ['Flashlight', 'F'], ['Quick heal', 'H'], ['Inventory', 'Tab or I'], ['Backpack slot', '6'],
+  ['Climb ladder · let go', 'E · Space or S'], ['Mute', 'M'], ['Pause / release mouse', 'Esc'],
   // task studio-performance-recorder-20261103-043629 (lane RECORDER): debug/perfRecorderUi.ts RECORDER_KEYS (also Pause → Performance)
   ['Performance recording: start / stop · mark a stutter', 'F8 · F9'],
 ];
