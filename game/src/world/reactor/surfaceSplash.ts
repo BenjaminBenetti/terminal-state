@@ -32,13 +32,13 @@ const n = (x: unknown): N => x;
 /** Splash tunables (m, s, linear colours). */
 export const SURFACE_SPLASH = {
   /** Slots per kind (one ring + `sparks` droplets each). */
-  slots: {near: 240, far: 120, ledge: 56},
+  slots: {near: 330, far: 150, ledge: 60},
   /** Box half sizes round the eye (m): the near slots', the far slots'; the ledge slots fade out by `ledgeR`. */
   near: 11, far: 30, ledgeR: 22,
   /** A splash's life (s: the ring's; the crown's is shorter); each cycle = life + a seeded rest in this range. */
   life: 0.38, crownS: 0.3, rest: [0.14, 1.0] as readonly [number, number],
   /** Ring: final radius range (m), line width near the eye (m); it fades out between these distances (sub-pixel lines far off). */
-  ringR: [0.09, 0.2] as readonly [number, number], ringW: 0.014, ringFade: [8, 15] as readonly [number, number],
+  ringR: [0.07, 0.17] as readonly [number, number], ringW: 0.014, ringFade: [8, 15] as readonly [number, number],
   /** Crown droplets per splash, their size near the eye (m), launch speed (m/s: outward, upward), gravity (m/s^2). */
   sparks: 4, sparkSize: 0.009, sparkOut: [0.3, 0.85] as readonly [number, number], sparkUp: [0.8, 1.6] as readonly [number, number], gravity: 9.81,
   /** Height over the surface (m): over the deck's wet film (+0.012) and the collar's overlay (<= +0.02); over a ledge's top. */

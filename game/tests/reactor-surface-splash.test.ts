@@ -234,7 +234,7 @@ describe('rain splashes: one bounded draw, lean material, the runtime\'s gates',
       expect(mesh.geometry.index!.count).toBe(quads * 6);
       expect(mesh.geometry.getAttribute('position').count).toBe(quads * 4);
       expect(sp.stats()).toMatchObject({slots: quads / (1 + S.sparks), quads, triangles: quads * 2, visible: false});
-      expect(quads * 2).toBeLessThanOrEqual(5000);
+      expect(quads * 2).toBeLessThanOrEqual(6000); // (a few hundred slots: one small batch)
       const mt = mesh.material as THREE.Material;
       expect(mt.transparent && mt.forceSinglePass && !mt.depthWrite && mt.blending === THREE.AdditiveBlending).toBe(true);
       expect(mesh.castShadow || mesh.receiveShadow).toBe(false);
