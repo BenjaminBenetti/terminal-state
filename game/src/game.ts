@@ -581,7 +581,7 @@ export class Game {
     this.gpuInit ??= this.renderer.init().then(() => {
       const gpu = describeBackend(this.renderer.backend as never, this.gpuBoot.request, this.gpuBoot.fallbackError());
       this.gpu = gpu;
-      watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.onDeviceLost?.(text); }});
+      watchDevice(this.renderer, gpu, {onLost: text => { this.lastError = text; this.journeyCompile?.cancel(); this.onDeviceLost?.(text); }});
       this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
       observeBackendAnisotropy(this.renderer.backend); // lane FIX (U08): count the anisotropy values the backend hands the API (__LL.anisotropy())
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
@@ -1396,8 +1396,9 @@ export class Game {
       const items = [...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])];
       const casters = mode === 'full' && this.flashlight.castShadow ? byNear([...plan.items, ...plan.others].filter(i => i.caster)) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
+      // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
-        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver}).start());
+        scene: this.scene, camera: this.camera, target, depth, items, casters, receiver, frameNo: () => this.frameBudget.frame}).start());
       // the arrival waits for the scene-pass phase at most 8 s, as before; the job keeps going in spare frame time after that
       await Promise.race([job.sceneDone, new Promise(r => setTimeout(r, 8000))]);
       const st = job.stats;
@@ -1801,6 +1802,9 @@ export class Game {
     if (this.gpu?.deviceLost) s = 'error'; // Iteration 13 (CORE): a lost device keeps the error screen up (nothing can render)
     const prev = this.state;
     this.state = s;
+    // (task journey-compile-pacing-20261104) the journey's background compile ends with the run it prepares: the main menu, death,
+    // a loading screen (load / new game / retry build a new world) or the error screen; pause / inventory / map only hold it
+    if (s === 'title' || s === 'dead' || s === 'loading' || s === 'error') this.journeyCompile?.cancel();
     this.input.active = s === 'playing';
     if (s !== 'playing') { this.input.clear(); this.cancelUse(s); this.cancelFlareHold(); this.weapon.cancelSwing(); } // lane KNIFE / FEEL: no stale windup / contact after a menu / death / loading
     this.invUI.cancelDrag();

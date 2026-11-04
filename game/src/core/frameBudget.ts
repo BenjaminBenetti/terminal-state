@@ -299,6 +299,11 @@ export class FrameBudget implements FrameScheduler {
     return this.gen;
   }
 
+  /** Frame callbacks begun (beginFrame): stable from a frame's run() until the next frame starts. */
+  get frame(): number {
+    return this.frameNo;
+  }
+
   /** Jobs waiting. */
   get size(): number {
     return this.queue.size;
