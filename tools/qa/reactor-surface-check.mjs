@@ -172,6 +172,16 @@ await withBrowserLock(async () => {
       await page.screenshot({path: path.join(out, '2-far-city.png')});
       step('frame: far city (internal)');
     }
+    if (ARGS.includes('--splash') && headroom('frame splash')) {
+      // (task reactor-ending-polish-20261104) the rain's impact splashes on the deck: 2 m ahead, looking down
+      await ev(() => {
+        const g = window.__game, p = g.player, h = g.layout.reactor.surface.hole, dx = h.x - p.x, dz = h.z - p.z, l = Math.hypot(dx, dz) || 1;
+        window.__LL.lookAt(p.x + dx / l * 2.2, g.layout.reactor.surface.y, p.z + dz / l * 2.2); // the open deck toward the aperture
+      });
+      await waitGame(1.2, 120);
+      await page.screenshot({path: path.join(out, '2b-splash.png')});
+      step('frame: splashes (internal)', await ev(() => window.__LL.reactorSurface().shown));
+    }
     if (headroom('frame across')) {
       await look(-az / L * 60, 8, ax / L * 60);
       await waitGame(1.5, 120);
