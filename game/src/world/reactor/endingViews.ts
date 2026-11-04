@@ -71,14 +71,20 @@ export function buildDoorView(s: Pick<ReactorSurface, 'door'>): DoorView {
   }
   // the portal on the pit-side face: jambs + a yellow lintel, proud of the wall face
   const zf = wallHalf + V.proud / 2;
-  box(V.jamb, d.h + V.lintel, V.proud, frameMat, -half - V.jamb / 2, (d.h + V.lintel) / 2, zf, 'reactor-ending-door-jamb');
-  box(V.jamb, d.h + V.lintel, V.proud, frameMat, half + V.jamb / 2, (d.h + V.lintel) / 2, zf, 'reactor-ending-door-jamb');
+  // (task reactor-ending-polish-20261104, user: "some z-fighting around the frame") the jambs ran up to the lintel's top and the full-width
+  // lintel lay over them: in both top corners their front / top / end faces were coplanar (steel and yellow fighting). The jambs stop
+  // under the lintel now; the lintel spans the opening and both jambs, resting on them.
+  box(V.jamb, d.h, V.proud, frameMat, -half - V.jamb / 2, d.h / 2, zf, 'reactor-ending-door-jamb');
+  box(V.jamb, d.h, V.proud, frameMat, half + V.jamb / 2, d.h / 2, zf, 'reactor-ending-door-jamb');
   box(d.w + 2 * V.jamb, V.lintel, V.proud, yellow, 0, d.h + V.lintel / 2, zf, 'reactor-ending-door-lintel');
-  // the status lamp over the lintel: red (sealed) / green (open) lenses, one shown
-  const ly = d.h + V.lintel + V.lamp * 0.75;
-  box(V.lamp * 1.6, V.lamp * 1.4, V.proud, frameMat, 0, ly, zf, 'reactor-ending-door-lamp-box');
-  const lampRed = box(V.lamp, V.lamp, 0.03, lampSkin('litRed'), 0, ly, zf + V.proud / 2 + 0.016, 'reactor-ending-door-lamp-red');
-  const lampGreen = box(V.lamp, V.lamp, 0.03, lampSkin('litGreen'), 0, ly, zf + V.proud / 2 + 0.016, 'reactor-ending-door-lamp-green');
+  // the status lamp: red (sealed) / green (open) lenses, one shown. (task reactor-ending-polish-20261104, user: "surface exit door has the
+  // light in the middle of the sign (clipping)") It stood over the lintel, exactly where lane ENDING's SURFACE EXIT plate hangs (the
+  // plate's centre: door top + 0.55 m, 2 cm off the wall: gen/reactor/surface.ts), so the box came through the plate's middle. It is
+  // mounted ON the yellow lintel's face now (inside the lintel band, under the plate), the plate keeps the wall above it to itself.
+  const ly = d.h + V.lintel / 2, zl = zf + V.proud / 2 + V.proud / 2; // the lintel's centre line; the box stands on its front face
+  box(V.lamp * 1.6, V.lamp * 1.4, V.proud, frameMat, 0, ly, zl, 'reactor-ending-door-lamp-box');
+  const lampRed = box(V.lamp, V.lamp, 0.03, lampSkin('litRed'), 0, ly, zl + V.proud / 2 + 0.016, 'reactor-ending-door-lamp-red');
+  const lampGreen = box(V.lamp, V.lamp, 0.03, lampSkin('litGreen'), 0, ly, zl + V.proud / 2 + 0.016, 'reactor-ending-door-lamp-green');
   root.updateMatrixWorld(true);
   const closedX: [number, number] = [-half / 2, half / 2], travel = half + V.overlap + 0.02;
   const view: DoorView = {

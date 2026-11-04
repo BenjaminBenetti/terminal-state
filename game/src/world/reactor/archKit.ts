@@ -396,8 +396,16 @@ export function pitEdges(info: ReactorInfo): {a: {x: number; z: number}; b: {x: 
   return out;
 }
 
+/**
+ * Task reactor-ending-polish-20261104 (primary): the clear zone round the surface EXIT door's portal on its pit wall (m): past its
+ * opening's sides (the portal's 0.24 m jambs + a pilaster's half width + a margin) and above its opening (the 0.32 m lintel, the
+ * status lamp on it and the SURFACE EXIT plate whose top stands at door top + 0.55 + 0.17 m).
+ */
+export const EXIT_PORTAL = {side: 0.5, above: 0.9} as const;
+
 function planWallRibs(plan: KitPlan): void {
   const {pit} = plan.info;
+  const exit = plan.info.surface?.door ?? null;
   const top = Math.max(pit.rimY, Math.min(pit.roofY, pit.rimY + 6));
   // split each pilaster at the tier heights (per-band chunks for the culler)
   const cuts = [top, ...plan.tiers.map(t => t.baseY).filter(y => y < top && y > pit.floorY), pit.floorY].sort((a, b) => b - a);
@@ -435,6 +443,12 @@ function planWallRibs(plan: KitPlan): void {
           pieces = next;
         };
         for (const b of doors) cut(b.y0 - 0.05, b.y0 + 2.45, 2);
+        // (task reactor-ending-polish-20261104, user: "z-fighting around the frame" of the surface exit door) the EXIT door is taller (2.8 m)
+        // and carries lane ENDING's portal (lintel to +0.32 m) and the SURFACE EXIT plate over it: the I-beam came down to 2.48 m through
+        // the door head, its face in the lintel's plane. No pilaster across the portal up to over its plate.
+        if (exit && Math.abs((x - exit.x) * -exit.nz + (z - exit.z) * exit.nx) <= exit.w / 2 + EXIT_PORTAL.side && Math.abs((x - exit.x) * exit.nx + (z - exit.z) * exit.nz) < 1) {
+          cut(exit.y - 0.05, exit.y + exit.h + EXIT_PORTAL.above, 2);
+        }
         for (const b of bands) cut(b.y0 - 0.05, b.y1 + 0.1, 1);
         for (const [p, q, kind] of pieces) {
           if (q - p < 0.05 || kind === 2) continue;
