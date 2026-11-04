@@ -267,6 +267,12 @@ export class LevelCuller {
   private last = {x: NaN, y: NaN, z: NaN, qx: 0, qy: 0, qz: 0, qw: 0, ov: null as number | null};
   /** Levels the eye stands on (scratch of update). */
   private readonly here = new Set<number>();
+  /**
+   * Task office-elevator-visibility-20261104-063115: the last level the eye was resolved on outside a solid column (or an override).
+   * An eye inside a column with no open band on any storey (the Office lift's door wall / threshold: the shaft is solid on every
+   * grid) keeps it instead of the resolver's default 0, which culled the whole current storey ("the level disappears"). -1: none.
+   */
+  private lastOpenLevel = -1;
   /** Diagnostics of the last update (`level`: the resolver's level; `levels`: every level the eye stands on). */
   stats = {level: 0, levels: [0] as number[], tilesTested: 0, tilesVisible: 0, culled: 0, fogged: 0, registered: 0, uncullable: 0,
     /** Levels rendered this update (current + seen through portals), portal hops used, multi-level entries. */
@@ -1009,7 +1015,9 @@ export class LevelCuller {
       && Math.abs(q.x - l.qx) + Math.abs(q.y - l.qy) + Math.abs(q.z - l.qz) + Math.abs(q.w - l.qw) < 0.02) { this.refreshOcclusion(camera); this.decideTracked(camera); return; }
     l.x = e.x; l.y = e.y; l.z = e.z; l.qx = q.x; l.qy = q.y; l.qz = q.z; l.qw = q.w; l.ov = ov;
     this.notePosition(e, ov);
-    const camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
+    let camLevel = ov ?? this.levelAt(e.x, e.y, e.z);
+    if (ov === null && this.solidColumn(e) && this.lastOpenLevel >= 0) camLevel = this.lastOpenLevel; // (inside a wall: keep the storey)
+    else this.lastOpenLevel = camLevel;
     // Iteration 12 (ARCH): every level whose band holds the eye is current (a shared stair run = both). An override
     // (the eye in the elevator cab) is the only current level.
     const here = ov !== null ? this.onlyLevel(ov) : this.eyeLevels(e, camLevel);
@@ -1319,6 +1327,12 @@ export class LevelCuller {
   private nearAnyPortal(en: Entry, levels: readonly number[], vis: ReadonlyMap<number, readonly Tile[]>): boolean {
     for (let i = 0; i < levels.length; i++) if (this.nearPortal(en, vis.get(levels[i]))) return true;
     return false;
+  }
+
+  /** The eye's grid column has no open band on any storey (inside a wall / the lift shaft's solid door wall). Off the grid: false. */
+  private solidColumn(e: THREE.Vector3): boolean {
+    const cx = Math.floor(e.x / CELL), cy = Math.floor(e.z / CELL);
+    return cx >= 0 && cy >= 0 && cx < this.cols.W && cy < this.cols.H && this.cols.count(cy * this.cols.W + cx) === 0;
   }
 
   /**

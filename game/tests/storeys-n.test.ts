@@ -388,8 +388,16 @@ describe('level culling over 9 storeys', () => {
       expect(cu.stats.levels).toEqual([6]);
       for (const L of [0, 4, 8]) expect(byLevel(L).every(culled), `storey ${L} from the cab`).toBe(true);
       cu.eyeOverride = null;
-      cu.update(place(shaftX, storeyY(6) + 1.62, shaftZ, 0)); // the override change alone re-evaluates
-      expect(cu.stats.levels).toEqual([0]); // (grid lookup in a solid column: the station)
+      cu.update(place(shaftX, storeyY(6) + 1.62, shaftZ, 0));
+      // task office-elevator-visibility-20261104-063115: a solid column (the shaft, the lift's door wall) keeps the storey the eye last
+      // stood on; the grid lookup's fallback (the station) culled the whole storey around a player on the lift threshold
+      expect(cu.stats.levels).toEqual([6]);
+      cu.eyeOverride = 4;
+      cu.update(place(20, storeyY(6) + 1.62, 8, 0));
+      expect(cu.stats.levels).toEqual([4]);
+      cu.eyeOverride = null;
+      cu.update(place(20, storeyY(6) + 1.62, 8, 0)); // the override change alone re-evaluates (an open column: the grid lookup)
+      expect(cu.stats.levels).toEqual([6]);
       // render visibility only: nothing's `visible` flag changed
       w.group.traverse(o => expect(o.visible).toBe(visibleBefore.get(o)));
       // the iteration-14 'full' warm-up still plans every group, culled or not
