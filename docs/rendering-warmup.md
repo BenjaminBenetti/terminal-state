@@ -121,6 +121,34 @@ Root causes, and their fixes:
      anything composites. No hidden frame and no arrival pause are needed.
    - New game, Continue, Continue with a journey in progress, and menu travel all run `prepareGraphics` after the
      build, so they get all of the above.
+6. **The journey compile starved Chrome's rendering** (task journey-compile-pacing-20261104, from the user's native
+   Mall recording). In a 30 s capture just after leaving the train, 21 of 31 hitches and every frame of 100 ms or more
+   fell in a 3.85 s window while the journey job was still running. In those frames game CPU was 8–11 ms and the GPU
+   at most 7 ms, and the browser's long-animation-frame entries showed rendering held back about 100 ms behind
+   `Scheduler.yield` continuations.
+   - **Cause:** three r186's `compileAsync` awaits `yieldToMain()` after every object, and `NodeBuilder.buildAsync`
+     after every stage (about 6 per new build). In Chrome that is `scheduler.yield()`, whose continuations run ahead
+     of rendering. So one 16-item chunk's whole chain ran before the next frame, until Chrome's ~100 ms
+     render-starvation guard. Firefox has no `scheduler.yield` (three yields one rAF instead), which is why
+     Firefox / llvmpipe QA never showed it.
+   - **Fix (scene lane only; the shadow lane is unchanged):**
+     - one item per `compileAsync` call and one call in flight;
+     - a slice starts in the scheduler's step, after the frame's render. A cheap item that settles in the same frame
+       (`FrameBudget.frame`) under 2 ms of real time since the step starts the next item at once, at most 48 a
+       slice. Anything else waits for the next frame's step;
+     - where `scheduler.postTask` exists, each call is launched from a `'background'` priority task, so the yields
+       three makes inside it inherit background priority (the platform's documented yield inheritance) instead of
+       running ahead of rendering;
+     - a launch whose background task has not run after 20 frames is run by the next step directly.
+   - **Hidden tab / pause:** steps run only in playing frames and at most one call is in flight, so nothing bursts
+     on resume.
+   - **Cancelled** on a new journey, the main menu, death, a loading screen, the error screen, device loss and a
+     world change (checked when a call starts and when it settles).
+   - **Recorder:** frame flag `compiling` (1024) while the job runs; events `compile.journey.active` (already running
+     at recording start), `.start`, `.phase` and `.end` with the paced counts; capability `journeyCompile`.
+   - **Tests:** `journey-compile-pacing.test.ts` (fake renderer and clock: per-frame bound, batching bounds, frame
+     awareness, hidden / pause, exactly-once completion, cancel / world change / failure, the background launcher, the
+     watchdog) and `rendercpu-journey-compile.test.ts` (real renderer: one item per call, coverage, 0 builds after).
 
 Node builds / new render objects / key rebuilds after the warm-up, summed over yaw sweeps (16 steps a pose):
 
@@ -157,7 +185,10 @@ Limits:
 - **Journey timing.** On a large station, a 12 s ride does not cover everything at Node build speed. The rest
   continues after arrival in spare frame time, nearest first.
 - **Journey slicing granularity.** three's asynchronous build slices run between frames and are not budgeted by
-  the scheduler. Each slice is one build stage; the largest seen in Node was 22 ms.
+  the scheduler. Each slice is one build stage; the largest seen in Node was 22 ms. Since fix 6 the most one frame
+  can be held is one item's chain, and only where Chrome's yield inheritance does not apply. That inheritance and
+  the native frame times are not verifiable on this pod (no Chromium); they need a native recording after a train
+  arrival.
 - Things created on use after the warm-up, outside pools, still build cold: shelf-stock pieces knocked loose
   (`shelfStock.ts` creates their InstancedMesh then) and loot highlight copies (first hover per item type).
 - Harnesses: `rendercpu-submit-investigate.test.ts` (`LL_RCPU_SUBMIT_OUT=…`, `LL_RCPU_LEVEL=reactor`,

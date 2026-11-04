@@ -130,7 +130,7 @@ const GAME_WRAPS: WrapSpec[] = [
     return {status: str(w.status), mode: str(w.mode), warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null, stages, plan: w.plan ? {...w.plan} : null};
   }},
   {name: 'stageLevelTextures', kind: 'warmup.textures', async: true},
-  {name: 'backgroundCompile', kind: 'compile.background', async: true, detail: () => ({note: 'CPU-side compileAsync request span; GPU / driver pipeline compile completion is not observable'})},
+  {name: 'backgroundCompile', kind: 'compile.background', async: true, detail: () => ({note: 'the arrival gate (<= 8 s) of the journey compile; the job itself: flags.compiling + compile.journey.* events. GPU / driver pipeline compile completion is not observable'})},
   {name: 'travel', kind: 'travel', async: true, route: 'menu-travel', detail: a => { const q = a[0] as {to?: {level?: unknown; section?: unknown}; via?: unknown} | undefined; return {to: str(q?.to?.level), section: str(q?.to?.section), via: str(q?.via)}; },
     result: r => ({status: str((r as {status?: unknown} | null)?.status)})},
   {name: 'travelToStation', kind: 'journey', async: true, route: 'travel-arrival', detail: a => ({to: str(a[0])}), result: r => ({ok: (r as {ok?: unknown} | null)?.ok === true})},
@@ -160,7 +160,18 @@ interface GameExtras {
   atmosphereBypass?: string | null;
   frameBudget?: {diagnostics(): {refresh?: {hz?: number; measured?: boolean}}};
   camera?: {fov?: number};
+  journeyCompileStats?: JourneyStats | null;
 }
+/** Game.journeyCompileStats (render/journeyCompile.ts JourneyCompileStats; one object per job). */
+interface JourneyStats {
+  phase?: string; sceneItems?: number; sceneDone?: number; casters?: number; shadowDone?: number; sceneChunks?: number;
+  slices?: number; maxPerSlice?: number; sliceMaxMs?: number; background?: boolean; postStalls?: number; cancelReason?: string | null;
+}
+const journeyActive = (s: JourneyStats | null | undefined): boolean => s?.phase === 'scene' || s?.phase === 'shadow';
+const journeyData = (s: JourneyStats): Record<string, unknown> => ({phase: str(s.phase, 16), reason: str(s.cancelReason, 16),
+  sceneDone: s.sceneDone ?? null, sceneItems: s.sceneItems ?? null, shadowDone: s.shadowDone ?? null, casters: s.casters ?? null,
+  calls: s.sceneChunks ?? null, slices: s.slices ?? null, maxPerSlice: s.maxPerSlice ?? null,
+  sliceMaxMs: typeof s.sliceMaxMs === 'number' ? r2(s.sliceMaxMs) : null, background: s.background ?? null, postStalls: s.postStalls ?? null});
 /** three r186 internals read per frame for first-use counts (absent = null in the report). */
 interface RendererInternals { _nodes?: {nodeBuilderCache?: {size: number}} | null; _pipelines?: {caches?: {size: number}} | null }
 
@@ -216,6 +227,9 @@ export class PerfRecorderController {
   private fuMissing: string[] = [];
   private readonly unlisten: (() => void)[] = [];
   private gpuTap = false;
+  /** The journey compile job last seen (its stats object) and its phase then. */
+  private jcSeen: JourneyStats | null = null;
+  private jcPhase = '';
 
   constructor(game: RecorderGame, private readonly opts: RecorderOptions = {}) {
     this.g = game;
@@ -247,6 +261,9 @@ export class PerfRecorderController {
       if (x.lifecycle?.busy || x.transitGap) fl |= F.transition;
       if (x.trainRide?.riding) fl |= F.riding;
       if (this.stateChanged) { fl |= F.stateChange; this.stateChanged = false; }
+      const jc = x.journeyCompileStats;
+      if (journeyActive(jc)) fl |= F.compiling;
+      if ((jc ?? null) !== this.jcSeen || (jc && jc.phase !== this.jcPhase)) this.journeyEvent(t1, jc ?? null);
       i.flags = fl;
       const r = g.renderer;
       if (r.initialized) {
@@ -283,6 +300,18 @@ export class PerfRecorderController {
     this.ovSum += d; this.ovN++; if (d > this.ovMax) this.ovMax = d;
   }
 
+  /** The journey compile job changed (a new job, scene -> shadow, done / cancelled): one event, at the sample that saw it. */
+  private journeyEvent(t: number, jc: JourneyStats | null): void {
+    const fresh = jc !== this.jcSeen;
+    this.jcSeen = jc;
+    this.jcPhase = jc?.phase ?? '';
+    if (!jc) return;
+    const timing = 'seen at this frame sample (the change happened since the previous one)';
+    if (fresh) this.capture.event(t, 'compile.journey.start', null, {...journeyData(jc), timing});
+    if (!journeyActive(jc)) this.capture.event(t, 'compile.journey.end', null, {...journeyData(jc), timing});
+    else if (!fresh && jc.phase === 'shadow') this.capture.event(t, 'compile.journey.phase', null, {...journeyData(jc), timing});
+  }
+
   /** Start a new recording (clears the previous capture and report). Returns false when one is already running. */
   start(by = 'menu'): boolean {
     if (this.recording) return false;
@@ -315,6 +344,11 @@ export class PerfRecorderController {
     this.startedAtUTC = new Date().toISOString();
     this.install();
     this.capture.event(t, 'recording.start', null, {by: str(by, 16), state: str(this.g.state, 16)});
+    // a journey compile already running (a capture started after the arrival): one snapshot, then its phase / end events
+    const jc = this.x.journeyCompileStats ?? null;
+    this.jcSeen = jc;
+    this.jcPhase = jc?.phase ?? '';
+    if (jc && journeyActive(jc)) this.capture.event(t, 'compile.journey.active', null, {...journeyData(jc), note: 'already running at recording start'});
     this.worldSegment(t, undefined, 'recording-start', !this.x.world); // (the main menu: no level yet)
     if (this.x.world) this.capture.segmentControl(t); // a level already running: its first-use work from here on counts as after control
     this.emit();
@@ -425,6 +459,8 @@ export class PerfRecorderController {
       {id: 'loadRoute', available: true, source: 'Game lifecycle entry points in flight (travelToStation / travel / newGame / newCampaign / continueCampaign / retryLevel / rewarmAfterSettings)', note: 'labels every level build, warm-up and event; world.segments[].route'},
       {id: 'warmupStages', available: true, source: 'Game.prepareGraphics result (render/warmup.ts WarmupResult: status, mode, per-stage done / total / ms)', note: "stage start times are derived (the stages run in order materials, passes, shadows, view); the journey's background compile is a single CPU span"},
       {id: 'controlReturned', available: true, source: 'the first frame after a level build in state playing with no warm-up and no lifecycle operation in flight', note: 'for a train journey: after the arrival and its save'},
+      {id: 'journeyCompile', available: 'journeyCompileStats' in (g as object), source: 'Game.journeyCompileStats (render/journeyCompile.ts) read at every frame sample',
+        note: 'flags.compiling = the train journey\'s background compile is active (scene / shadow phase, incl. after the arrival); events compile.journey.active (running at recording start) / start / phase / end with its paced counts (calls, slices, maxPerSlice, sliceMaxMs, background = launched from a background-priority task)'},
       {id: 'shaderCompileTime', available: false, source: 'none', note: 'GPU pipeline compile time not observable from a web page; CPU-side build / request spans only (firstUse.*)'},
       {id: 'culling.culled', available: this.capture.seen.culled, source: 'LevelCuller.stats.culled', note: 'meshes hidden after the last full culler update (net; per-update show / hide counts are not instrumented)'},
       {id: 'enemies', available: true, source: 'Game.zombies.length'},
