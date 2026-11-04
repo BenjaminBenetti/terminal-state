@@ -5,7 +5,8 @@
 //    its position, a finished one shows nothing again; teardown = save the record, remove the column.
 //  - frameHooks (play time only): the gate (creditsLogic.ts CreditsGate: ending.surfaced from the live ENDING runtime, else its
 //    persisted record; the player on the surface storey as ending.ts tests it; 'playing'; the tab visible; the centre "External doors
-//    open" message not on screen) -> the 30 s count -> the scroll -> the end card. Enter while playing = the end card's button.
+//    open" message not on screen) -> the 10 s count (CREDITS.triggerS; task ...-ending-polish-20261104: was 30) -> the scroll -> the end
+//    card. Enter while playing = the end card's button.
 //  - stateListeners: the column shows while playing; while paused only the end card (clickable above the pause dim); hidden otherwise.
 //  - "Main Menu": the record is stored, then the run is SAVED through the existing save flow (host.commitEndingSave: Game.commitSave
 //    reason 'ending'), then the real campaign return (host.returnToMenu: trainRide.reset + the title, as the pause "Main menu"). A failed
@@ -18,7 +19,7 @@ import {REACTOR_LANE, loadReactorState} from './runState';
 import {reactorEndingOf} from './ending';
 import {
   CREDITS, CREDITS_LANE, END_CARD, advanceCredits, creditsPhase, creditsRecord, emptyCreditsState, loadCreditsState, scrollProgress,
-  stepCredits, type CreditsGate, type CreditsState,
+  secondsToStart, stepCredits, type CreditsGate, type CreditsState,
 } from './creditsLogic';
 import {mountCreditsView, type CreditsMode, type CreditsView, type CreditsViewHandlers} from '../../ui/credits';
 
@@ -290,8 +291,8 @@ export class ReactorCredits {
     if (this.info) {
       if (cmd.reset) { this.unmount(); this.state = emptyCreditsState(); this.cardLive = false; this.armed = false; this.error = null; this.store(); }
       if (typeof cmd.skip === 'number' && cmd.skip > 0 && !this.state.done) this.applyEvents(advanceCredits(this.state, cmd.skip));
-      if (cmd.start && !this.state.started) this.applyEvents(advanceCredits(this.state, CREDITS.triggerS - this.state.t + 1e-6));
-      if (cmd.end && !this.state.done) this.applyEvents(advanceCredits(this.state, CREDITS.triggerS - this.state.t + CREDITS.scrollS + 1));
+      if (cmd.start && !this.state.started) this.applyEvents(advanceCredits(this.state, secondsToStart(this.state) + 1e-6));
+      if (cmd.end && !this.state.done) this.applyEvents(advanceCredits(this.state, secondsToStart(this.state) + CREDITS.scrollS + 1));
       if (cmd.press) this.press();
     }
     return {
