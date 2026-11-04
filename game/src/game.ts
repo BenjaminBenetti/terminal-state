@@ -543,7 +543,7 @@ export class Game {
     installReactorSurface(this); hookName('reactorSurface'); // task studio-reactor-surface-ending-20261102 (lane SURFACE): after STARTUP (reads its ONLINE sky) — the ruined city, rain, clear sky / mist round the roof aperture, shown only with the eye outside; inert elsewhere
     installReactorEnding(this); hookName('reactorEnding'); // task studio-reactor-surface-ending-20261102 (lane ENDING): after RESTART / AIR (reads their live state; its objective stage) — the sealed exterior door, its opening once the core air cleared, the centre "External doors open" message docking into the objective, the parapet ring round the opening; inert elsewhere
     // task studio-alpha-reactor-surface-redesign-credits-20261103-055510-01 (lane CREDITS): after ENDING (reads its live surfaced phase /
-    // message) — 30 s of active play on the surface -> the slow top-right credits -> "Thank you for playing" + Main Menu (commitEndingSave,
+    // message) — 10 s of active play on the surface -> the slow top-right credits -> "Thank you for playing" + Main Menu (commitEndingSave,
     // returnToMenu); its own lane store 'reactor.credits'; inert elsewhere
     installReactorCredits(this); hookName('reactorCredits');
     installReactorCpuCulling(this); hookName('reactorCpuCulling'); // task studio-reactor-submit-roof-fog-20261102 (lane CPU): enemies / pickups behind the Reactor's rock decided by the level culler (inert elsewhere)

@@ -3,13 +3,16 @@
 //  - Placement: below the toast stack (#toasts: right 24 px, top 20 px) and above the light / weapon panels (bottom right); safe-area
 //    insets respected; narrow enough to clear the centred pause panel on common widths. Non-blocking: pointer-events none except the end
 //    card; no overlay, no camera / pointer-lock change.
-//  - Motion: the strip's offset is CSS (`--rc-k` = progress 0..1 set per frame; no layout reads): the heading enters at the window's
+//  - Motion: the strip's offset is CSS (`--rc-k` = progress 0..1 set per frame; no layout reads): the title enters at the window's
 //    foot, the end card settles CREDITS.restPx below its top (creditsLogic.ts stripOffsetPx is the same formula). Top / bottom fades.
+//  - Layout (task studio-alpha-reactor-ending-polish-20261104-034806-01): formal grouped sections — a heading, its rows tighter (role
+//    over name; the row's text is its display string "Role — Name", the dash visually hidden), a gap after each section. Every block has
+//    the exact height creditsLogic.ts creditBlocks sums (CREDITS_CONTENT_PX), so the CSS travel matches the logic's.
 //  - The end card ("Thank you for playing" + "Main Menu") stays until used. It sits above the pause screen's dim (z-index 21 > .screen
 //    20) so Esc (the pointer released) + a click reaches it; Enter while playing is read by the runtime (input.pressed); touch = click.
 //  - Visible while playing; while paused only the end card (once reached); hidden in every other state.
 
-import {CREDITS, CREDITS_ENTRIES, CREDITS_TITLE, CREDIT_LINES, END_CARD} from '../world/reactor/creditsLogic';
+import {CREDITS, CREDITS_CONTENT_PX, CREDITS_TITLE, CREDIT_SECTIONS, END_CARD} from '../world/reactor/creditsLogic';
 
 export interface CreditsViewHandlers {
   /** The end card's button (click / tap / keyboard on the focused button). */
@@ -23,18 +26,22 @@ const CSS_ID = 'reactor-credits-css';
 const FADE_PX = 36;
 
 function css(): string {
-  const {pitchPx: p, restPx: r} = CREDITS, n = CREDITS_ENTRIES;
+  const {restPx: r, titlePx, headingPx, rowPx, sectionGapPx} = CREDITS;
   const mask = `linear-gradient(to bottom,transparent 0,#000 ${FADE_PX}px,#000 calc(100% - ${FADE_PX}px),transparent 100%)`;
   return `#reactor-credits{--rc-h:clamp(160px,calc(100vh - 340px),${CREDITS.windowPx}px);position:absolute;z-index:21;`
     + 'top:calc(env(safe-area-inset-top,0px) + 132px);right:calc(env(safe-area-inset-right,0px) + 24px);'
-    + `width:clamp(200px,calc(50vw - 396px),280px);height:var(--rc-h);overflow:hidden;pointer-events:none;text-align:right;`
+    + `width:clamp(220px,calc(50vw - 396px),280px);height:var(--rc-h);overflow:hidden;pointer-events:none;text-align:right;`
     + `color:var(--cream,#ece4cf);font-weight:600;text-shadow:0 1px 2px rgba(0,0,0,.85);-webkit-mask-image:${mask};mask-image:${mask}}`
     + `#reactor-credits .rc-strip{position:absolute;left:0;right:0;top:0;padding-right:2px;will-change:transform;`
-    + `transform:translateY(calc(var(--rc-h) - var(--rc-k,0) * (var(--rc-h) + ${n * p}px - ${r}px)))}`
-    + `#reactor-credits .rc-entry{height:${p}px;overflow:hidden}`
-    + '#reactor-credits .rc-title{font-size:20px;letter-spacing:.14em;text-transform:uppercase;color:var(--mustard,#d9a520)}'
-    + '#reactor-credits .rc-role{font-size:11px;letter-spacing:.16em;text-transform:uppercase;color:var(--mustard,#d9a520)}'
-    + '#reactor-credits .rc-name{margin-top:4px;font-size:17px;line-height:1.25;color:var(--cream,#ece4cf)}'
+    + `transform:translateY(calc(var(--rc-h) - var(--rc-k,0) * (var(--rc-h) + ${CREDITS_CONTENT_PX}px - ${r}px)))}`
+    + `#reactor-credits .rc-ttl{height:${titlePx}px;overflow:hidden}`
+    + '#reactor-credits .rc-title{font-size:19px;letter-spacing:.12em;text-transform:uppercase;color:var(--mustard,#d9a520)}'
+    + `#reactor-credits .rc-sec{padding-bottom:${sectionGapPx}px}`
+    + `#reactor-credits .rc-h{height:${headingPx}px;overflow:hidden;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--mustard,#d9a520)}`
+    + `#reactor-credits .rc-row{position:relative;height:${rowPx}px;overflow:hidden;white-space:nowrap}`
+    + '#reactor-credits .rc-role{display:block;font-size:11.5px;font-weight:500;letter-spacing:.04em;color:var(--cream-dim,#b9b19c)}'
+    + '#reactor-credits .rc-sep{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}'
+    + '#reactor-credits .rc-name{display:block;margin-top:2px;font-size:15px;line-height:1.25;color:var(--cream,#ece4cf)}'
     + '#reactor-credits .rc-card{display:inline-block;max-width:100%;text-align:right;background:rgba(20,22,24,.8);'
     + 'border-right:4px solid var(--mustard,#d9a520);padding:12px 14px 10px;text-shadow:none}'
     + '#reactor-credits .rc-thanks{font-size:19px;letter-spacing:.04em;color:var(--cream,#ece4cf)}'
@@ -43,7 +50,7 @@ function css(): string {
     + '#reactor-credits .rc-error{margin-top:6px;font-size:12.5px;line-height:1.35;color:var(--red,#c2463a);white-space:normal}'
     + `#reactor-credits.rc-end{height:auto;overflow:visible;-webkit-mask-image:none;mask-image:none}`
     + `#reactor-credits.rc-end .rc-strip{position:static;transform:none;padding-top:${r}px}`
-    + '#reactor-credits.rc-end .rc-entry{display:none}'
+    + '#reactor-credits.rc-end .rc-ttl,#reactor-credits.rc-end .rc-sec{display:none}'
     + '#reactor-credits.rc-end .rc-card{pointer-events:auto}'
     + '#reactor-credits.rc-end .rc-menu,#reactor-credits.rc-end .rc-hint{visibility:visible}'
     + '#reactor-credits.rc-hidden{display:none}';
@@ -81,13 +88,19 @@ export class CreditsView {
     root.setAttribute('role', 'region');
     root.setAttribute('aria-label', 'Credits');
     const strip = el('div', 'rc-strip');
-    const head = el('div', 'rc-entry rc-head');
+    const head = el('div', 'rc-ttl');
     head.appendChild(el('div', 'rc-title', CREDITS_TITLE));
     strip.appendChild(head);
-    for (const c of CREDIT_LINES) {
-      const e = el('div', 'rc-entry');
-      add(e, el('div', 'rc-role', c.role), el('div', 'rc-name', c.name));
-      strip.appendChild(e);
+    // (creditsLogic.ts creditBlocks: the title, then per section its heading, its rows and the gap after it — the section's padding)
+    for (const sec of CREDIT_SECTIONS) {
+      const box = el('div', 'rc-sec');
+      box.appendChild(el('div', 'rc-h', sec.heading));
+      for (const row of sec.rows) {
+        const e = el('div', 'rc-row');
+        add(e, el('span', 'rc-role', row.role), el('span', 'rc-sep', ' — '), el('span', 'rc-name', row.name));
+        box.appendChild(e);
+      }
+      strip.appendChild(box);
     }
     const card = el('div', 'rc-card');
     card.setAttribute('aria-live', 'polite');
