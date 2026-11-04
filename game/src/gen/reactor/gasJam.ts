@@ -51,6 +51,14 @@ export const zoneName = (zone: number): string => `Zone ${zone + 1}`;
  * jam text at all: world/reactor/objectiveText.ts); the HUD air line only says the air is toxic; the board marks are terse. The jam itself
  * is told AT the generator, when the player tries it: the stall, the flashing fault lamp, the short toast and its prompt.
  */
+/**
+ * Task studio-alpha-reactor-ending-polish-20261104 (primary; user: "the map indicates that the last generator is jammed. It shouldn't
+ * instead the player should discover this them selfs when they try to start the generator"): the jam is KNOWN once a start was tried
+ * (ReactorRunState.jam.stalls, persisted by the attempt itself). Before that, every map / board shows the jammed generator like any
+ * other one still to start; the jam itself, its gassed zone and the mask rule are unchanged.
+ */
+export const jamDiscovered = (s: {jam?: {stalls?: number}} | null | undefined): boolean => (s?.jam?.stalls ?? 0) > 0;
+
 export const JAM_TEXT = {
   /** Generator prompt before any try / after a stall. */
   promptTry: (zone: number) => `<b>Hold [E]</b> Try to start the auxiliary generator (${zoneName(zone)} extraction fans) · FAULT lamp flashing`,

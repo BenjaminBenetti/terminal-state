@@ -20,6 +20,7 @@ import {reactorRestartOf} from './restart';
 import {screenFacing} from './restartViews';
 import {controlSkin, lampSkin} from './controlsSkin';
 import {MAP_BOARD, MAP_PX, mapButtons, mapMarkers, markerOpen, markerSig, planMapBoards, planStoreys, storeyWarning, type MapBoardPose, type MapButton, type MapMarker, type MapPlan} from './mapBoardPlan';
+import {jamDiscovered} from '../../gen/reactor/gasJam'; // task studio-alpha-reactor-ending-polish-20261104 (primary)
 import {drawMapFace} from './mapBoardDraw';
 import {rayCylinder, towerCue, type P3} from '../towerShared';
 
@@ -202,6 +203,7 @@ export class ReactorMapBoards {
     mix(+s.breaker); mix(+s.valve); mix(+s.pump); mix(+s.keyInserted); mix(+s.rods);
     for (const g of s.generators) mix(g.started ? 3 : 4);
     mix(+s.restarted); for (const c of s.zoneClear) mix(c >= 1 ? 5 : 6); // (lane GAS) the jam warning banner follows the air
+    mix(jamDiscovered(s) ? 13 : 14); // (task reactor-ending-polish-20261104) the jam is marked once a start was tried
     mix(this.host.inv.count('reactor_key')); mix(this.host.inv.count('fuse_cartridge'));
     for (const p of this.host.pickups?.list ?? []) {
       const id = p.stack.itemId;

@@ -91,12 +91,15 @@ for (const seed of SEEDS) {
         const site = r.sites.find(s => s.controls.some(c => c.id === id))!, p = mounts.byId.get(id)!.pick;
         expect(ms.some(m => m.level === site.level && Math.abs(m.x - p.x) < 1e-9 && Math.abs(m.z - p.z) < 1e-9), id).toBe(true);
       }
-      // (lane GAS, design change: the final generator JAMS) its mark is 'jammed' (nothing to do there), the others 'need'
+      // (lane GAS, design change: the final generator JAMS) — (task reactor-ending-polish-20261104) the map does not announce it: before a
+      // start was tried every generator is marked 'need' (the player finds the jam by trying); once tried, its mark is 'jammed'
       const jam = reactorJam(r)!;
       expect(jam).not.toBeNull();
+      const known = mapMarkers(source(L, {...state, jam: {generator: jam.generator, stalls: 1, at: 1}}));
       for (const g of r.generators) {
         const gm = ms.find(m => m.kind === 'generator' && m.id === g.id)!;
-        expect([gm.level, gm.x, gm.z, gm.state]).toEqual([g.level, g.panel.x, g.panel.z, g.id === jam.generator ? 'jammed' : 'need']);
+        expect([gm.level, gm.x, gm.z, gm.state]).toEqual([g.level, g.panel.x, g.panel.z, 'need']);
+        expect(known.find(m => m.kind === 'generator' && m.id === g.id)!.state).toBe(g.id === jam.generator ? 'jammed' : 'need');
         const cx = r.complexes?.find(c => c.generator === g.id);
         if (cx) expect(cx.level).toBe(g.level);
       }
@@ -125,7 +128,8 @@ for (const seed of SEEDS) {
       ms = mapMarkers(source(L, st, {}, dropped as never));
       expect(ms.filter(m => m.kind === 'key').map(m => [m.x, m.z])).toEqual([[r.start.x, r.start.z]]);
       // both fuses seated: no cartridge marks, slots done; key in, generators started: done
-      const done = {...st, fuses: st.fuses.map(() => true), breaker: true, valve: true, pump: true, keyInserted: true, generators: st.generators.map(() => ({started: true, startedAt: 1}))};
+      const done = {...st, fuses: st.fuses.map(() => true), breaker: true, valve: true, pump: true, keyInserted: true, generators: st.generators.map(() => ({started: true, startedAt: 1})),
+        jam: {generator: reactorJam(r)!.generator, stalls: 1, at: 1}}; // (task reactor-ending-polish-20261104: the jam known — a start was tried)
       ms = mapMarkers(source(L, done));
       expect(ms.some(m => m.kind === 'fuse' || m.kind === 'key')).toBe(false);
       // (lane GAS) a started flag never un-jams the final generator (its mark stays 'jammed'); the working ones are done
