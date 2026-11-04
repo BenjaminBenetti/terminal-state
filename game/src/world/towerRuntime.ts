@@ -141,6 +141,9 @@ export function registerMovingLift(culler: {register(root: THREE.Object3D): void
   }
 }
 
+/** Eye pad for the doorway classification (inDoorway radius: 0.4 x this past the cab / landing planes). */
+const GATE_EYE_PAD = 0.4;
+
 interface CullerLike { enabled?: boolean; eyeOverride?: number | null; register?(root: THREE.Object3D): void; levelAt?: (x: number, y: number, z: number) => number }
 
 /**
@@ -531,7 +534,12 @@ export class TowerRuntime {
     const c = this.host.world?.culler as CullerLike | undefined, e = o.elevator;
     if (!c || !e || this.cullerRestore) return;
     const eye = this.host.camera.getWorldPosition(this.vEye);
-    const inCab = insideRect(e.plan.info.cab, eye.x, eye.z, -0.05) && eye.y > e.vol.floorY - 0.1 && eye.y < e.vol.ceilY + 0.2;
+    const inBand = eye.y > e.vol.floorY - 0.1 && eye.y < e.vol.ceilY + 0.2;
+    // task office-elevator-visibility-20261104-063115 (user: "if you stand right in the door way, the level disappears"): the doorway
+    // between the cab plane and the landing plane is the shaft's door wall — solid on every storey grid like the shaft — so an eye
+    // standing on the threshold resolved to storey 0 and the culler hid the whole storey around it. It belongs to the storey the cab
+    // stands at, exactly like the cab (a little past both planes; the jamb-wide opening only).
+    const inCab = inBand && (insideRect(e.plan.info.cab, eye.x, eye.z, -0.05) || inDoorway(e.plan.gate, eye.x, eye.z, GATE_EYE_PAD));
     if ('eyeOverride' in c) {
       const want = inCab ? e.vol.level : null;
       if (c.eyeOverride !== want) c.eyeOverride = want;

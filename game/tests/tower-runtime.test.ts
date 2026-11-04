@@ -712,6 +712,31 @@ describe('tower runtime with a fake Game host (ONE continuous world)', () => {
     expect(c3.enabled).toBe(true);
     expect(c3.levelAt).toBe(orig);
   });
+
+  it('the doorway (the solid door-wall strip between the cab and landing planes) carries the cab storey', () => {
+    // task office-elevator-visibility-20261104-063115 (user: "if you stand right in the door way, the level disappears")
+    const layout = towerLayout();
+    const P = new Player();
+    const {host} = makeHost(layout, P);
+    installTower(host as unknown as TowerHost);
+    host.sectionHooks[0].build!(layout);
+    const c2 = {eyeOverride: null as number | null, register: () => {}};
+    (host.world as {culler: unknown}).culler = c2;
+    const at = (x: number, z: number, f = 1) => { aim(host, [x, baseOf(f) + 1.6, z], [x, baseOf(f) + 1.6, z - 2]); stepHooks(host, DT); return c2.eyeOverride; };
+    // lobby -> threshold -> cab -> threshold -> lobby (cab plane z 10, landing plane z 9.5)
+    expect(at(11.25, 8.5)).toBe(null);
+    expect(at(11.25, 9.4)).toBe(1); // just outside the landing plane (within the 0.16 m pad)
+    expect(at(11.25, 9.75)).toBe(1); // on the threshold
+    expect(at(10.6, 9.6)).toBe(1); // near a jamb, still inside the opening
+    expect(at(11.25, 10.05)).toBe(1); // cab plane
+    expect(at(11.25, 11.2)).toBe(1); // cab
+    expect(at(11.25, 9.75)).toBe(1);
+    expect(at(11.25, 9.2)).toBe(null); // a step into the lobby: the grid resolver again
+    expect(at(12.3, 9.75)).toBe(null); // beside the opening (the shaft wall, not the doorway)
+    // the doorway of a storey the cab is not at (the cab parks at 1): no override, that storey's own resolver
+    expect(at(11.25, 9.75, 3)).toBe(null);
+    host.sectionHooks[0].teardown!();
+  });
 });
 
 // ---------------------------------------------------------------------------------------------
