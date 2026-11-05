@@ -144,6 +144,8 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
+import {RuntimeVariantPool} from './render/runtimeVariants'; // task runtime-variant-warmup-20261105: play-only variants as warm-up prototypes
+import {woundsOf} from './damage/wounds'; // (the enemies' wound layers: their flesh-chunk material variants)
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
@@ -442,6 +444,8 @@ export class Game {
    * runtime prototypes in the scene, and render passes with their own scene / camera / target.
    */
   readonly warmRegistry = new WarmupRegistry();
+  /** Task runtime-variant-warmup-20261105: the play-only variants' hidden prototypes (render/runtimeVariants.ts; QA `__LL.warmup()`). */
+  readonly runtimeVariants = new RuntimeVariantPool();
   /** Iteration 14: the previous station's GPU-side releases, run after the new station's warm-up (see newStation). */
   private retired: (() => void)[] = [];
   /** Iteration 14: bumped by newStation (a running warm-up for the previous station stops at its next chunk). */
@@ -503,6 +507,10 @@ export class Game {
     // batches (one InstancedMesh = one node build per item x storey, shown when a lot comes within view distance) and the holders'
     // interiors (shown when opened) — compile with the station instead of on first sight
     this.warmRegistry.addPool('holders', () => (this.containers ? [this.containers.group] : []));
+    // Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): variants that only appear through play — holder takeovers,
+    // the aim highlight, damaged parts, flesh chunks — as hidden prototypes built by their real factories (refreshRuntimeVariants)
+    this.scene.add(this.runtimeVariants.root);
+    this.warmRegistry.addPool('runtime-variants', () => [this.runtimeVariants.root]);
     this.input = new Input(canvas, qa);
     this.input.onLockChange = locked => {
       if (!locked && this.state === 'playing' && !this.qa) this.setState('paused');
@@ -757,6 +765,7 @@ export class Game {
     this.chaseShare = null;
     this.pickups.clear();
     this.layoutPickup.clear();
+    this.runtimeVariants.clear(fn => this.retire(fn)); // task runtime-variant-warmup-20261105: the old world's prototypes go with it
     this.containers?.clear();
     this.containerTarget = null;
     this.currentTarget = null;
@@ -1408,6 +1417,7 @@ export class Game {
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return;
     this.journeyCompile?.cancel();
+    this.refreshRuntimeVariants(mode); // task runtime-variant-warmup-20261105: the destination's play-only variants join the paced job
     const t0 = performance.now();
     const near = this.trainPlacement ? new THREE.Vector3(this.trainPlacement.x, this.trainPlacement.floorY, this.trainPlacement.z) : this.camera.getWorldPosition(new THREE.Vector3());
     try {
@@ -1652,6 +1662,35 @@ export class Game {
   }
 
   /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): (re)build the runtime-variant prototypes of the live world just
+   * before a warm-up / the journey preparation plans it (the station is built, its shadow flags marked, its enemies spawned): holder
+   * takeovers + aim highlights (world/containers.ts), damaged parts (damage/propDamage.ts), flesh chunks per enemy layer-material
+   * variant (physics/chunks.ts). 'full' only: a software rasterizer's 'view' warm-up keeps its bounded neighbourhood (every variant's
+   * programs would land in system RAM) and the pool is cleared. The pool supersedes the flag-less damage pre-warm meshes. A failure
+   * leaves the pool empty (the warm-up runs as before); nothing of the world, its holders, loot, damage, physics or RNG changes.
+   */
+  private refreshRuntimeVariants(mode: WarmupMode): void {
+    const retire = (fn: () => void) => this.retire(fn);
+    if (mode !== 'full' || !this.world || !this.containers) { this.runtimeVariants.clear(retire); return; }
+    try {
+      const cm = this.containers.runtimeVariantPrototypes();
+      const dmg = this.damage.props.variantPrototypes(cm.own);
+      const layers: THREE.Material[] = [];
+      for (const z of this.zombies) for (const l of woundsOf(z as unknown as Parameters<typeof woundsOf>[0])?.layers ?? []) layers.push(l.material);
+      const flesh = this.physics.chunks.fleshPrototypes(layers);
+      this.damage.props.dropWarmup();
+      const st = this.runtimeVariants.rebuild([
+        {name: 'takeover', meshes: cm.takeover}, {name: 'highlight', meshes: cm.highlight}, {name: 'damaged', meshes: dmg.meshes}, {name: 'flesh', meshes: flesh.meshes},
+      ], {geometries: [...dmg.geometries, ...flesh.geometries], materials: dmg.materials}, retire);
+      const f = st.families, n = (k: string) => `${f[k]?.kept ?? 0}/${f[k]?.offered ?? 0}`;
+      console.info(`Terminal State: runtime variants ${st.prototypes} prototypes (${st.casters} casters) · takeover ${n('takeover')} · highlight ${n('highlight')} · damaged ${n('damaged')} · flesh ${n('flesh')} · ${st.ms.toFixed(1)} ms`);
+    } catch (err) {
+      console.warn('runtime variants: building the prototypes failed (the warm-up continues without them)', err);
+      this.runtimeVariants.clear(retire);
+    }
+  }
+
+  /**
    * Iteration 14: readiness boundary for content added AFTER the loading screen (render/warmup.ts prepareObjects): add
    * `root` to the scene hidden, await this, then show it. Things created on use that recur (effects, thrown items) should
    * instead be registered as warm-up pools / prototypes (warmRegistry) so the loading screen covers them.
@@ -1746,6 +1785,7 @@ export class Game {
     const mode = warmupMode(location.search, this.softwareGl?.software === true);
     if (mode === 'off') return (this.warmup = skippedWarmup('disabled by ?warmup=off'));
     if (!this.world || !this.gpu || this.gpu.deviceLost || !this.renderer.initialized) return (this.warmup = skippedWarmup('renderer or station not ready'));
+    this.refreshRuntimeVariants(mode); // task runtime-variant-warmup-20261105: the play-only variants join the plan (a pool)
     this.warming = true;
     if (button) button.disabled = true;
     // a quality change mid-run would dispose the render target being compiled into

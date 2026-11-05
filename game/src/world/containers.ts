@@ -929,11 +929,48 @@ export class ContainerManager {
     for (const m of c.leafMeshes) {
       const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
       m.userData.baseMat = base;
-      if (!(base as THREE.MeshStandardMaterial).isMeshStandardMaterial) continue;
-      let hi = this.hiMats.get(base);
-      if (!hi) { hi = cloneSurfaceMaterial(base as THREE.MeshStandardMaterial); this.hiMats.set(base, hi); } // Lane D: keeps damage / wound hooks (iteration 13: node hooks)
-      m.material = hi;
+      const hi = this.highlightOf(base);
+      if (hi) m.material = hi;
     }
+  }
+
+  /** The aim highlight clone of `base` (cached: one per base material; null for non-standard materials, which never glow). */
+  private highlightOf(base: THREE.Material): THREE.MeshStandardMaterial | null {
+    if (!(base as THREE.MeshStandardMaterial).isMeshStandardMaterial) return null;
+    let hi = this.hiMats.get(base);
+    if (!hi) { hi = cloneSurfaceMaterial(base as THREE.MeshStandardMaterial); this.hiMats.set(base, hi); } // Lane D: keeps damage / wound hooks (iteration 13: node hooks)
+    return hi;
+  }
+
+  /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): the holders' runtime-variant prototypes — openable takeovers
+   * (world/openables.ts takeoverPrototypes), the aim highlight on every aimable mesh (the SAME cached clone setHighlight puts on it:
+   * highlightOf) and `own` = the meshes damage can take over (prototype takeovers + one legacy container per kind), for
+   * PropDamage.variantPrototypes. Pure: no holder, lot, highlight or takeover state changes; legacy holders' real meshes are only
+   * READ (their geometry / material / flags) — every returned prototype is a new mesh.
+   */
+  runtimeVariantPrototypes(): {takeover: THREE.Mesh[]; highlight: THREE.Mesh[]; own: THREE.Mesh[]} {
+    const t = this.openables.takeoverPrototypes();
+    const highlight: THREE.Mesh[] = [], own: THREE.Mesh[] = [...t.meshes];
+    const glow = (m: THREE.Mesh) => {
+      const base = (m.userData.baseMat as THREE.Material | undefined) ?? (m.material as THREE.Material);
+      const hi = this.highlightOf(base);
+      if (!hi) return;
+      const p = new THREE.Mesh(m.geometry, hi);
+      p.castShadow = m.castShadow;
+      p.receiveShadow = m.receiveShadow;
+      p.name = m.name;
+      highlight.push(p);
+    };
+    for (const m of t.aimable) glow(m);
+    const kinds = new Set<string>();
+    for (const h of this.list) {
+      if (!h.root || h.open || kinds.has(h.kind)) continue; // (one legacy container per kind: the same model per kind)
+      kinds.add(h.kind);
+      for (const m of h.leafMeshes) glow(m);
+      h.root.traverse(o => { if ((o as THREE.Mesh).isMesh) own.push(o as THREE.Mesh); });
+    }
+    return {takeover: t.meshes, highlight, own};
   }
 
   // --- Iteration 06 (Lane D): damage / breaking ------------------------------------------

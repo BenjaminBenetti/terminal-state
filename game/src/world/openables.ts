@@ -166,6 +166,30 @@ export function setOpenableBodyModel(asset: string, gltf: GLTF | null): void {
  * flashlight direction (shelves / items / the door's own edge still cast onto it), while a CLOSED door — and the holder's
  * body, which casts from both sides — keep occluding it. Exported for world/containers.ts and tests.
  */
+/**
+ * Flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station).
+ * Task model-touchups-20261030 (lane GLASS): PER MATERIAL — a moving mesh takes the flags of the closed-part instance drawing
+ * its own material. Copying the first slot's (the opaque door frame's) flags onto every own mesh made the cooler's /
+ * extinguisher cabinet's transparent glass a spot-shadow caster whenever the player aimed at it (aiming takes the holder
+ * over): everything behind the closed glass fell into the torch's shadow while the pane itself stayed lit ("almost opaque"
+ * up close). render/volumetric.ts markShadows never marks a transparent material. Interior meshes (plate / tray / liner: no
+ * closed instance of their own) keep the first slot's flags, and a transparent / non-depth-writing material never casts.
+ * (Task runtime-variant-warmup-20261105: shared by takeover() and takeoverPrototypes(), so a prototype gets exactly these flags.)
+ */
+function ownMeshShadowFlags(root: THREE.Object3D, slots: readonly {mesh: THREE.InstancedMesh}[]): void {
+  const ref = slots[0]?.mesh;
+  if (!ref) return;
+  const bySlot = new Map<THREE.Material, THREE.InstancedMesh>();
+  for (const s of slots) if (!bySlot.has(s.mesh.material as THREE.Material)) bySlot.set(s.mesh.material as THREE.Material, s.mesh);
+  root.traverse(o => {
+    const mm = o as THREE.Mesh;
+    if (!mm.isMesh) return;
+    const mat = mm.material as THREE.Material, src = bySlot.get(mat) ?? ref;
+    mm.castShadow = src.castShadow && !mat.transparent && mat.depthWrite !== false;
+    mm.receiveShadow = src.receiveShadow;
+  });
+}
+
 export function interiorShadowSide<M extends THREE.Material>(m: M): M {
   if (m.side === THREE.BackSide) m.shadowSide = THREE.BackSide;
   return m;
@@ -529,6 +553,47 @@ export class OpenableSet {
     this.roleMats.clear();
   }
 
+  /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): hidden PROTOTYPES of the own meshes takeover() would build for
+   * every kind attached in this station — the kind model's part geometries and materials, the accent role material (any accent
+   * colour is the same variant: three keys colours as present), the own-mesh shadow flags of the kind's closed batches
+   * (ownMeshShadowFlags, the rule takeover uses) — so the first aim / open / damage of each kind finds its non-instanced variants
+   * compiled. Pure: no holder, slot, instance matrix or stat changes. `aimable` = the moving-part meshes (setHighlight's targets).
+   */
+  takeoverPrototypes(): {meshes: THREE.Mesh[]; aimable: THREE.Mesh[]} {
+    const meshes: THREE.Mesh[] = [], aimable: THREE.Mesh[] = [];
+    const closed = new Map<string, {mesh: THREE.InstancedMesh}[]>(), present = new Set<string>();
+    for (const im of this.instanced) {
+      const m = /^(container-body|openable-closed)-(.+)$/.exec(im.name);
+      if (!m) continue;
+      present.add(m[2]);
+      if (m[1] !== 'openable-closed') continue;
+      const kind = m[2] as OpenableKind;
+      let l = closed.get(kind);
+      if (!l) closed.set(kind, (l = []));
+      // (the first chunk's closed batches, in m.closed order: the slots a holder of the kind gets; flags depend on the material only)
+      if (l.length < (this.cache.get(kind)?.closed.length ?? 0)) l.push({mesh: im});
+    }
+    for (const kind of present) {
+      const m = this.cache.get(kind as OpenableKind), spec = openableSpec(kind as OpenableKind);
+      if (!m || !spec) continue;
+      const root = new THREE.Group();
+      m.parts.forEach((pm, i) => {
+        const ps = spec.parts[i];
+        for (const q of pm.moving) {
+          const mat = q.role === 'accent' ? this.roleMat('accent', m.paint, {accent: 0x8a8f94, double: ps?.doubleSide}) : q.mat;
+          const mesh = new THREE.Mesh(q.geo, mat);
+          root.add(mesh);
+          aimable.push(mesh);
+        }
+        for (const q of [...pm.plate, ...pm.tray, ...pm.inner]) root.add(new THREE.Mesh(q.geo, q.mat));
+      });
+      ownMeshShadowFlags(root, closed.get(kind) ?? []);
+      root.traverse(o => { if ((o as THREE.Mesh).isMesh) { o.name = `openable-${kind}`; meshes.push(o as THREE.Mesh); } });
+    }
+    return {meshes, aimable};
+  }
+
   // --- own meshes ---------------------------------------------------------------------------
   /** Gives the holder its own meshes (pivot groups + interiors) and hides its closed-part instance. */
   takeover(h: OpenHolder): void {
@@ -555,25 +620,7 @@ export class OpenableSet {
       root.add(pivot);
       ps.pivot = pivot;
     });
-    // flashlight shadows: own meshes cast / receive like the instanced closed parts they replace (marked once per station).
-    // Task model-touchups-20261030 (lane GLASS): PER MATERIAL — a moving mesh takes the flags of the closed-part instance drawing
-    // its own material. Copying the first slot's (the opaque door frame's) flags onto every own mesh made the cooler's /
-    // extinguisher cabinet's transparent glass a spot-shadow caster whenever the player aimed at it (aiming takes the holder
-    // over): everything behind the closed glass fell into the torch's shadow while the pane itself stayed lit ("almost opaque"
-    // up close). render/volumetric.ts markShadows never marks a transparent material. Interior meshes (plate / tray / liner: no
-    // closed instance of their own) keep the first slot's flags, and a transparent / non-depth-writing material never casts.
-    const ref = rt.slots[0]?.mesh;
-    if (ref) {
-      const bySlot = new Map<THREE.Material, THREE.InstancedMesh>();
-      for (const s of rt.slots) if (!bySlot.has(s.mesh.material as THREE.Material)) bySlot.set(s.mesh.material as THREE.Material, s.mesh);
-      root.traverse(o => {
-        const mm = o as THREE.Mesh;
-        if (!mm.isMesh) return;
-        const mat = mm.material as THREE.Material, src = bySlot.get(mat) ?? ref;
-        mm.castShadow = src.castShadow && !mat.transparent && mat.depthWrite !== false;
-        mm.receiveShadow = src.receiveShadow;
-      });
-    }
+    ownMeshShadowFlags(root, rt.slots);
     this.group.add(root);
     rt.root = root;
     for (const s of rt.slots) { s.mesh.setMatrixAt(s.index, ZERO); s.mesh.instanceMatrix.needsUpdate = true; }

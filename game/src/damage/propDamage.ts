@@ -530,6 +530,58 @@ export class PropDamage {
   private static readonly warmMats = new Map<THREE.Material, THREE.Material>();
   private warm: THREE.Mesh[] = [];
 
+  /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): PROTOTYPES of what detach() draws, with its exact factory —
+   * the material (toNodeMaterial + addPropDamageHooks, else the source itself: detach's `src.clone()` is the same variant), the
+   * geometry (a shared instance's geometry as a plain non-instanced mesh; a merged chunk's EXTRACT: non-indexed with every
+   * attribute, like extract()) and the source's shadow flags (the variant key includes receiveShadow; casters get shadow-pass
+   * variants) — plus `own` (meshes a holder owns: damage takes them over and hooks their base material). The pre-warm above
+   * carries no shadow flags and the indexed merged geometry; these match. Pure: no PropState, cut, index buffer, PartData, clone
+   * count or scene change. `geometries` / `materials` were created here (the caller releases them with its pool).
+   */
+  variantPrototypes(own: readonly THREE.Mesh[] = []): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]; materials: THREE.Material[]} {
+    const meshes: THREE.Mesh[] = [], geometries: THREE.BufferGeometry[] = [], materials: THREE.Material[] = [];
+    const hooked = new Map<THREE.Material, THREE.Material>();
+    const matFor = (src: THREE.Material): THREE.Material => {
+      let m = hooked.get(src);
+      if (m) return m;
+      const nm = toNodeMaterial(src);
+      if (nm) { addPropDamageHooks(nm); m = nm as unknown as THREE.Material; materials.push(m); } else m = src;
+      hooked.set(src, m);
+      return m;
+    };
+    const seen = new Set<string>();
+    const layout = (g: THREE.BufferGeometry, indexed: boolean) => `${Object.keys(g.attributes).sort().join(',')}${indexed ? '|i' : ''}`;
+    const add = (geo: THREE.BufferGeometry, cur: THREE.Material | THREE.Material[], cast: boolean, receive: boolean, name: string, indexed: boolean): boolean => {
+      const src = (Array.isArray(cur) ? cur[0] : cur) as THREE.Material | undefined;
+      if (!src) return false;
+      const key = `${src.uuid}|${layout(geo, indexed)}|${cast ? 1 : 0}|${receive ? 1 : 0}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const mesh = new THREE.Mesh(geo, matFor(src));
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+      mesh.name = name;
+      meshes.push(mesh);
+      return true;
+    };
+    for (const [p, list] of this.index.inst) for (const e of list) add(e.mesh.geometry, e.mesh.material, e.mesh.castShadow, e.mesh.receiveShadow, `damaged-${p.kind}`, !!e.mesh.geometry.index);
+    for (const m of this.index.merged) {
+      const g = m.mesh.geometry, idx = g.index;
+      if (!idx) continue;
+      const src = (Array.isArray(m.mesh.material) ? m.mesh.material[0] : m.mesh.material) as THREE.Material;
+      if (seen.has(`${src.uuid}|${layout(g, false)}|${m.mesh.castShadow ? 1 : 0}|${m.mesh.receiveShadow ? 1 : 0}`)) continue;
+      let t = -1;
+      for (let k = 0; k < idx.count / 3 && t < 0; k++) { const a = idx.getX(k * 3); if (a !== idx.getX(k * 3 + 1) || a !== idx.getX(k * 3 + 2)) t = k; }
+      if (t < 0) continue;
+      const geo = extract(g, [t]);
+      if (add(geo, m.mesh.material, m.mesh.castShadow, m.mesh.receiveShadow, `damaged-${m.key}`, false)) geometries.push(geo);
+      else geo.dispose();
+    }
+    for (const mesh of own) add(mesh.geometry, (mesh.userData.baseMat as THREE.Material | undefined) ?? mesh.material, mesh.castShadow, mesh.receiveShadow, mesh.name || 'damaged-own', !!mesh.geometry.index);
+    return {meshes, geometries, materials};
+  }
+
   /** Remove the pre-warm meshes (call once the first frames have rendered). */
   dropWarmup(): void {
     for (const m of this.warm) this.group.remove(m);
