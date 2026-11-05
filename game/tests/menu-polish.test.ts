@@ -799,3 +799,42 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
     expect(`${main}\n${SRC('src/game.ts')}`).not.toMatch(/permadeath|hardcore/i);
   });
 });
+
+// Task studio-beta-mouse-axis-invert-20261105-005156-01 (user: "They want invert option on the X / Y axis of the mouse!")
+describe('mouse axis inverts: two separate toggles in the main-menu Settings and the pause form (one store)', () => {
+  type Box = MiniEl & {checked: boolean; dispatchEvent(e: MiniEvent): void};
+  it('"Invert mouse X" and "Invert mouse Y": both off by default, each sets and persists only its own key, the other form follows', () => {
+    const mem = new MemStorage();
+    const m = mountMenu(new Host(), {store: new SettingsStore(mem)});
+    try {
+      m.press(m.btn('settings'));
+      const x = m.dialog.querySelector('#mm-set-invert-x') as unknown as Box, y = m.dialog.querySelector('#mm-set-invert') as unknown as Box;
+      expect(x.parentElement!.textContent).toContain('Invert mouse X');
+      expect(y.parentElement!.textContent).toContain('Invert mouse Y');
+      expect([(x as unknown as {type: string}).type, (y as unknown as {type: string}).type]).toEqual(['checkbox', 'checkbox']);
+      expect([!!x.checked, !!y.checked]).toEqual([false, false]);
+      // the order: sensitivity, X, Y (beside each other, near the mouse setting)
+      const ids = m.dialog.querySelectorAll('input').map(i => i.id);
+      expect(ids.indexOf('mm-set-invert-x')).toBe(ids.indexOf('mm-set-sens') + 1);
+      expect(ids.indexOf('mm-set-invert')).toBe(ids.indexOf('mm-set-invert-x') + 1);
+      const flip = (b: Box, v: boolean) => { b.checked = v; b.dispatchEvent(new MiniEvent('change')); };
+      flip(x, true);
+      expect(m.store.get()).toMatchObject({invertX: true, invertY: false});
+      expect(JSON.parse(mem.getItem(STORAGE_KEYS.settings)!)).toMatchObject({invertX: true, invertY: false});
+      flip(y, true);
+      expect(m.store.get()).toMatchObject({invertX: true, invertY: true});
+      flip(x, false);
+      expect(m.store.get()).toMatchObject({invertX: false, invertY: true});
+      // the in-game pause form (prefix set-) over the same store shows the same state and writes the same keys
+      const box = m.dom.doc.createElement('div');
+      m.dom.doc.body.appendChild(box);
+      mountSettingsForm(box as unknown as HTMLElement, m.store, {idPrefix: 'set-', viewport: () => ({w: 1920, h: 1080, dpr: 1}), qualityPresets: ATMOSPHERE_QUALITY});
+      const px = box.querySelector('#set-invert-x') as unknown as Box, py = box.querySelector('#set-invert') as unknown as Box;
+      expect([!!px.checked, !!py.checked]).toEqual([false, true]);
+      flip(px, true);
+      expect(m.store.get()).toMatchObject({invertX: true, invertY: true});
+      expect(!!x.checked).toBe(true); // the menu's box follows the store
+      expect(m.store.get()).toMatchObject({sens: SETTINGS_DEFAULTS.sens, fov: SETTINGS_DEFAULTS.fov}); // nothing else touched
+    } finally { m.dom.uninstall(); }
+  });
+});

@@ -41,7 +41,7 @@ describe('settings store: persistence', () => {
     const a = new SettingsStore(mem);
     a.set({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25});
     const b = new SettingsStore(mem);
-    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1});
+    expect(b.get()).toEqual({sens: 1.85, fov: 92, volume: 0.35, muted: true, invertX: false, invertY: true, quality: 'low', renderScale: 0.25, trainSway: 1});
     expect(b.loadReport.source).toBe('stored');
     expect(JSON.parse(mem.map.get(STORAGE_KEYS.settings)!).v).toBe(1);
   });
@@ -100,7 +100,7 @@ describe('settings store: invalid storage falls back sanely', () => {
     // (task studio-beta-campaign-polish-20261103-063841-01, lane MENU: render scale is a 25-100 % slider now — 0.333 rounds to 33 %)
     mem.setItem(STORAGE_KEYS.settings, JSON.stringify({v: 1, sens: 'fast', fov: 500, volume: -3, muted: 'yes', invertY: true, quality: 'ultra', renderScale: 0.333}));
     const s = new SettingsStore(mem);
-    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1});
+    expect(s.get()).toEqual({sens: SETTINGS_DEFAULTS.sens, fov: 100, volume: 0, muted: false, invertX: false, invertY: true, quality: 'high', renderScale: 0.33, trainSway: 1});
     expect(s.loadReport.source).toBe('invalid');
     expect([...s.loadReport.fixed].sort()).toEqual(['fov', 'muted', 'quality', 'renderScale', 'sens', 'volume']);
     // NaN / Infinity never survive (JSON has none, but a patch could carry them)
@@ -109,7 +109,7 @@ describe('settings store: invalid storage falls back sanely', () => {
 
   it('an older / partial record keeps what it has and defaults the rest (missing = not "fixed")', () => {
     const r = parseStoredSettings(JSON.stringify({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low'}));
-    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertY: false, quality: 'low', renderScale: 1, trainSway: 1});
+    expect(r.settings).toEqual({sens: 2, fov: 66, volume: 0.5, muted: true, invertX: false, invertY: false, quality: 'low', renderScale: 1, trainSway: 1}); // (task mouse-axis-invert: a record without invertX reads it as false)
     expect(r.source).toBe('stored');
   });
 
@@ -197,7 +197,7 @@ describe('render resolution: a linear scale over the existing DPR cap, composed 
   });
 
   it('copySettingsInto fills the game\'s Settings object and reports a quality change', () => {
-    const target = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high' as const, renderScale: 1 as const, trainSway: 1} as {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: 1 | 0.5 | 0.25; trainSway: number};
+    const target = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high' as const, renderScale: 1 as const, trainSway: 1} as {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: 1 | 0.5 | 0.25; trainSway: number};
     expect(copySettingsInto(target, {...SETTINGS_DEFAULTS, fov: 90, renderScale: 0.5}).qualityChanged).toBe(false);
     expect(target).toMatchObject({fov: 90, renderScale: 0.5});
     expect(copySettingsInto(target, {...SETTINGS_DEFAULTS, quality: 'low'}).qualityChanged).toBe(true);

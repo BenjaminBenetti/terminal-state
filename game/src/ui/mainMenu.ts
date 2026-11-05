@@ -937,7 +937,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     box.append(l);
     return (s: Readonly<GameSettings>) => { const v = get(s); if (Number(i.value) !== v) i.value = String(v); out.textContent = fmt(v); };
   };
-  const check = (id: string, text: string, key: 'muted' | 'invertY') => {
+  const check = (id: string, text: string, key: 'muted' | 'invertX' | 'invertY') => {
     const l = d.createElement('label');
     l.className = 'check';
     const i = d.createElement('input');
@@ -950,6 +950,7 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
   const sync: ((s: Readonly<GameSettings>) => void)[] = [];
   const B = SETTINGS_BOUNDS;
   sync.push(range('sens', 'Mouse sensitivity', B.sens.min, B.sens.max, B.sens.step, v => v.toFixed(2), s => s.sens, v => ({sens: v})));
+  sync.push(check('invert-x', 'Invert mouse X', 'invertX')); // task mouse-axis-invert (each axis on its own; the Y box keeps its id)
   sync.push(check('invert', 'Invert mouse Y', 'invertY'));
   sync.push(range('fov', 'Field of view', B.fov.min, B.fov.max, B.fov.step, v => `${v.toFixed(0)}°`, s => s.fov, v => ({fov: v})));
   sync.push(range('vol', 'Master volume', 0, 100, 1, v => `${v} %`, s => volumePercent(s.volume), v => ({volume: volumeFromPercent(v)})));
