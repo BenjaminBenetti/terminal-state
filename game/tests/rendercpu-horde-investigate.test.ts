@@ -63,7 +63,10 @@ describe.skipIf(!OUT)('RENDER-CPU: horde view cost (no-op device)', () => {
     const dl = Math.hypot(dx, dz) || 1; dx /= dl; dz /= dl;
     const cam = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 220);
     cam.position.set(cx + dx * 9, cy + 1.62, cz + dz * 9);
-    const lookYaw = Math.atan2(cx - cam.position.x, cz - cam.position.z) + Math.PI; // (three cameras look down -Z)
+    let lookYaw = Math.atan2(cx - cam.position.x, cz - cam.position.z) + Math.PI; // (three cameras look down -Z)
+    // LL_RCPU_POSE="x,y,z,yawDeg" (feet position; the player's yaw): a recorded pose instead of the densest cluster (local use only)
+    const pose = process.env.LL_RCPU_POSE?.split(',').map(Number);
+    if (pose && pose.length >= 4 && pose.every(Number.isFinite)) { cam.position.set(pose[0], pose[1] + 1.62, pose[2]); lookYaw = pose[3] * Math.PI / 180; out('pose: recorded (env)'); }
     cam.rotation.set(-0.05, lookYaw, 0, 'YXZ');
     scene.add(cam);
     const fl = new THREE.SpotLight(0xfff4e2, 1, 30, 0.58, 0.7, 1.2);
@@ -133,25 +136,21 @@ describe.skipIf(!OUT)('RENDER-CPU: horde view cost (no-op device)', () => {
       return ms[ms.length >> 1];
     };
     const at = lookYaw, away = lookYaw + Math.PI;
-    measure('yaw A, static', at, 'static');
-    measure('yaw A, animated (Walk)', at, 'Walk');
-    const aB = measure('yaw B, animated (Walk)', away, 'Walk');
-    const sB = measure('yaw B, static', away, 'static');
-    measure('yaw B again, animated (Walk)', away, 'Walk');
-    const mB = measure('yaw B, moving + animated (chase-like)', away, 'Move');
-    out(`yaw B moving - static: ${(mB - sB).toFixed(2)} ms per frame`);
+    const at_ = at, away_ = away;
+    const runSet = (tag: string) => {
+      const r: Record<string, number> = {};
+      for (const [yn, y] of [['A', at_], ['B', away_]] as const) for (const mode of ['static', 'Walk', 'Move'] as const) r[`${yn}.${mode}`] = measure(`${tag} yaw ${yn}, ${mode === 'static' ? 'static' : mode === 'Walk' ? 'animated in place' : 'moving + animated'}`, y, mode);
+      return r;
+    };
+    const before = runSet('PLAIN');
     for (const e of E) e.root.visible = false;
-    const hB = measure('yaw B, enemies HIDDEN', away, 'static');
+    measure('PLAIN yaw A, enemies HIDDEN', at, 'static');
+    measure('PLAIN yaw B, enemies HIDDEN', away, 'static');
     for (const e of E) e.root.visible = true;
-    out(`yaw B enemies' share of render: ${(sB - hB).toFixed(2)} ms per frame (static), moving ${(mB - hB).toFixed(2)}`);
     // A/B: the upload dedupe (render/uploadDedupe.ts) installed on the same renderer, the same views
     expect(installUploadDedupe(renderer)).toBe(true);
-    const sD = measure('DEDUPE yaw B, static', away, 'static');
-    const aD = measure('DEDUPE yaw B, animated (Walk)', away, 'Walk');
-    const mD = measure('DEDUPE yaw B, moving + animated (chase-like)', away, 'Move');
-    measure('DEDUPE yaw A, static', at, 'static');
-    out(`dedupe: static ${sB.toFixed(2)} -> ${sD.toFixed(2)} ms, animated ${aB.toFixed(2)} -> ${aD.toFixed(2)}, moving ${mB.toFixed(2)} -> ${mD.toFixed(2)}; stats ${JSON.stringify(uploadStats)}`);
-    out(`yaw B animated - static: ${(aB - sB).toFixed(2)} ms per frame`);
+    const after = runSet('DEDUPE');
+    out(`render median ms plain -> dedupe: ${Object.keys(before).map(k => `${k} ${before[k].toFixed(2)} -> ${after[k].toFixed(2)}`).join(' · ')}; stats ${JSON.stringify(uploadStats)}`);
     // CPU profile of the animated horde view (frames only: the animate call is outside the profiled section)
     if (process.env.LL_RCPU_PROFILE) {
       cam.rotation.set(-0.05, away, 0, 'YXZ');

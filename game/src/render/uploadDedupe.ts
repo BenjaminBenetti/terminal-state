@@ -27,9 +27,10 @@ export const RANGE_MERGE_MAX_BYTES = 4096;
 
 /**
  * Counters (QA / tests / the performance recorder's uniformWrites columns): renderers wrapped, full writes issued / skipped as identical,
- * ranged writes merged / passed through, writes saved by merging.
+ * ranged writes merged / passed through, writes saved by merging, bytes allocated for the last-write copies (cumulative; the copies
+ * are weakly held per binding: a released binding's copy is collected with it).
  */
-export const uploadStats = {installs: 0, full: 0, skipped: 0, merged: 0, ranged: 0, rangeWritesSaved: 0};
+export const uploadStats = {installs: 0, full: 0, skipped: 0, merged: 0, ranged: 0, rangeWritesSaved: 0, snapshotBytes: 0};
 
 /** Uniform-buffer uploads issued so far (every write the wrapper let through or merged). */
 export const uploadsIssued = (): number => uploadStats.full + uploadStats.merged + uploadStats.ranged;
@@ -39,8 +40,11 @@ interface Binding { buffer: ArrayLike<number> & {buffer?: ArrayBufferLike; byteO
 interface Backend { isWebGPUBackend?: boolean; get(o: object): {buffer?: unknown}; bindingUtils?: {updateBinding(b: Binding): void} }
 
 /** Last bytes written per binding (and the GPU buffer they went to). */
-const written = new WeakMap<Binding, {gpu: unknown; words: Uint32Array}>();
+const written = new WeakMap<Binding, {gpu: unknown; words: Uint32Array; src: unknown; view: Uint32Array}>();
 const installed = new WeakSet<object>();
+/** Scratch of a merge (three's write is synchronous): the merged range and three's own ranges, restored after it — no per-frame allocation. */
+const MERGED: Range = {start: 0, count: 0};
+const SAVED: Range[] = [];
 
 function wordsOf(a: Binding['buffer']): Uint32Array | null {
   if (!ArrayBuffer.isView(a) || a instanceof DataView || !a.buffer || a.byteLength === undefined || (a.byteLength & 3) !== 0 || ((a.byteOffset ?? 0) & 3) !== 0) return null;
@@ -67,28 +71,36 @@ export function installUploadDedupe(renderer: unknown): boolean {
   utils.updateBinding = (binding: Binding) => {
     const ranges = binding.updateRanges;
     if (ranges.length === 0) {
-      const words = wordsOf(binding.buffer), gpu = backend.get(binding as object).buffer;
-      const prev = words ? written.get(binding) : undefined;
+      const src = binding.buffer, gpu = backend.get(binding as object).buffer;
+      let prev = written.get(binding);
+      // (the word view of three's CPU array, kept with the record while the array is the same: no allocation per write)
+      const words = prev && prev.src === src && prev.view.byteLength === (src.byteLength ?? -1) ? prev.view : wordsOf(src);
       if (words && prev && prev.gpu === gpu && same(prev.words, words)) { uploadStats.skipped++; return; }
       inner(binding);
       uploadStats.full++;
-      if (words) {
-        if (prev && prev.words.length === words.length) { prev.words.set(words); prev.gpu = gpu; } else written.set(binding, {gpu, words: words.slice()});
-      }
+      if (!words) { written.delete(binding); return; }
+      if (prev && prev.words.length === words.length) { prev.words.set(words); prev.gpu = gpu; prev.src = src; prev.view = words; return; }
+      prev = {gpu, words: words.slice(), src, view: words};
+      written.set(binding, prev);
+      uploadStats.snapshotBytes += words.byteLength;
       return;
     }
     // a ranged write changes the GPU bytes outside any full-write record: forget it (the next full write compares afresh)
     written.delete(binding);
     const el = binding.buffer.BYTES_PER_ELEMENT ?? 4;
-    const first = ranges[0], last = ranges[ranges.length - 1], span = last.start + last.count - first.start;
+    let lo = Infinity, hi = -Infinity; // (three's ranges arrive sorted; the span does not rely on it)
+    for (const r of ranges) { if (r.start < lo) lo = r.start; if (r.start + r.count > hi) hi = r.start + r.count; }
+    const span = hi - lo;
     if (ranges.length < 2 || span * el > RANGE_MERGE_MAX_BYTES) { uploadStats.ranged++; inner(binding); return; }
     let writes = 1; // (the writes three would issue: it merges contiguous ranges only)
     for (let i = 1; i < ranges.length; i++) if (ranges[i].start !== ranges[i - 1].start + ranges[i - 1].count) writes++;
     if (writes < 2) { uploadStats.ranged++; inner(binding); return; }
-    const saved = ranges.slice();
+    SAVED.length = 0;
+    for (const r of ranges) SAVED.push(r);
+    MERGED.start = lo; MERGED.count = span;
     ranges.length = 0;
-    ranges.push({start: first.start, count: span});
-    try { inner(binding); } finally { ranges.length = 0; for (const r of saved) ranges.push(r); }
+    ranges.push(MERGED);
+    try { inner(binding); } finally { ranges.length = 0; for (const r of SAVED) ranges.push(r); SAVED.length = 0; }
     uploadStats.merged++;
     uploadStats.rangeWritesSaved += writes - 1;
   };

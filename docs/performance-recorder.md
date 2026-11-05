@@ -99,7 +99,7 @@ The report holds asset basenames only: no URLs, query strings, other-origin entr
 | `summary.firstUse.pipelines` (schemaMinor 3) | identified new render pipeline requests (pipeline cache misses): labels, pass, target, material state, object flags, `withBuild`, `newPrograms` (bounded) |
 | `worst` | the worst gameplay frames by interval and by CPU, and the worst non-gameplay frames. Each has its spans, counter changes, camera, nearby events and long frames, and a timeline of the frames around it |
 | `marks` | each mark, the worst frame and (schemaMinor 3) the stalls in the 10 s before it; was 2 s before schemaMinor 3 |
-| `frames.columns` | the per-frame columns (units in `frames.units`; times in 0.01 ms integers; `null` = not measured) |
+| `frames.columns` | the per-frame columns (units in `frames.units`; times in 0.01 ms integers; `null` = not measured; schemaMinor 4 adds `uniformWrites` / `uniformWritesSkipped`) |
 | `spans` | span names / parents and the per-frame top-level laps |
 | `spikeDetail` | every nested span of the kept spike frames |
 | `events`, `longFrames`, `resources`, `camera`, `heap` | bounded lists with `dropped` counts |
@@ -203,6 +203,15 @@ what they were for.
 
   Hidden-tab / gap frames are never stalls. Paused, menu and loading frames are kept and tagged with their category / state. The
   capability is `marks.lookback`.
+
+### schemaMinor 4 (task mall-horde-performance-20261105; additive)
+
+* **`frames.columns.uniformWrites` / `uniformWritesSkipped`:** the uniform-buffer uploads the frame issued, and those
+  `render/uploadDedupe.ts` skipped because their bytes equalled the last upload to the same GPU buffer. The values are per-frame
+  deltas of its `uploadStats`. Both columns are `null` when the wrapper is not installed (the WebGL 2 fallback, or a renderer that
+  is not initialized). The capability is `renderer.uniformWrites`.
+* **Use:** compare a horde view's render submission with these counts, for example lured enemies moving in view. This is a count
+  only; the native cost of an upload is not measured.
 
 **The capture that uses this** (Office top floor, or wherever the hitches are felt): about 60 s of the same kind of play. Walk
 and turn through the heavy views, fire a few shots at enemies, and have the flashlight on part of the time. Press F9 at stalls
