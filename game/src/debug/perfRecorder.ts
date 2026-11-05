@@ -1169,7 +1169,7 @@ export class PerfCapture {
     const from = mt - MARK_LOOKBACK_MS;
     let lo = 0, hi = n;
     while (lo < hi) { const mid = (lo + hi) >> 1; if (this.t[mid] < from) lo = mid + 1; else hi = mid; } // first frame in the window
-    const iv = (k: number) => (interval[k] === interval[k] ? interval[k] : -1);
+    const iv = (k: number) => (interval[k] === interval[k] ? q100(interval[k]) : -1); // (ranked at the reported 0.01 ms)
     const worse = (a: number, b: number) => iv(a) > iv(b) || (iv(a) === iv(b) && this.cpu[a] > this.cpu[b]);
     const ivLimit = 1.5 * refreshMs;
     const top: number[] = [];
@@ -1352,7 +1352,7 @@ export class PerfCapture {
     const culledDelta = k > 0 && this.culled[k] >= 0 && this.culled[k - 1] >= 0 ? this.culled[k] - this.culled[k - 1] : null;
     const builds = this.fuList.filter(e => e.frame === k).slice(0, 6).map(e => ({ms: r2(e.ms), object: e.object, objectType: e.objectType, material: e.material, materialType: e.materialType, objectMaterial: e.objectMaterial, shadowPass: e.shadowPass}));
     // (schemaMinor 3) this frame's identified pipeline requests, the most expensive first (at most 6; the count is firstUse.pipelines)
-    const pipelineRequests = this.fpList.filter(e => e.frame === k).sort((a, b) => (b.ms ?? -1) - (a.ms ?? -1) || a.t - b.t).slice(0, 6)
+    const pipelineRequests = this.fpList.filter(e => e.frame === k).sort((a, b) => (b.ms === null ? -1 : r2(b.ms)) - (a.ms === null ? -1 : r2(a.ms)) || a.t - b.t).slice(0, 6)
       .map(e => ({ms: e.ms === null ? null : r2(e.ms), async: e.async, withBuild: e.withBuild, newPrograms: e.newPrograms, pass: e.pass, object: e.object, objectType: e.objectType,
         material: e.material, materialType: e.materialType, objectMaterial: e.objectMaterial, shadowPass: e.shadowPass, target: e.target, materialState: e.materialState, objectFlags: e.objectFlags}));
     return {
