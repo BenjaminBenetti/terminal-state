@@ -260,6 +260,7 @@ a no-op device; Node build speed, not native timings):
 | Game pool | 220 prototypes: takeover 24, highlight 7, damaged 181, flesh 2. 208 are casters; 6 side copies |
 | Built in | about 29 ms |
 | `full` plan items | 1526 → 1788 (+262: 215 pool prototypes and 47 loot highlight copy meshes); casters 1258 → 1461 |
+| Warm-up time (Node build speed, no-op GPU) | 19.1 s → 24.1 s (+5.0 s, +26 %); hidden shadow frames 21 → 25. Native timing is not measured here: GPU pipeline creation is asynchronous there and Node's per-build cost is not the browser's |
 | Memory | 178 station damage materials made at warm-up instead of at the first hit (one per source and tint, shared with `detach()`); 15 one-triangle extracts (1.5 kB) plus 2 flesh flaps; the rest references live geometry and materials. GPU-side: the extra programs and pipelines, which is the point |
 | A/B, half the kinds with no prototypes | 345 new meshes → **69** node builds on first aim, open or detach |
 | A/B, the other half prototyped | 343 new meshes → **0** builds |
