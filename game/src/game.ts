@@ -24,7 +24,7 @@ import {SoundGate} from './world/openables';
 import {Effects} from './world/fx';
 import {Input} from './player/input';
 import {Player, WALK_SPEED, stanceRecoilMult, stanceSpreadMult} from './player/player';
-import {Inventory, MELEE_REF, THROW_REF, isMeleeItem, type SlotRef} from './items/inventory';
+import {Inventory, MELEE_REF, THROW_REF, isMeleeItem, type ItemStack, type SlotRef} from './items/inventory';
 import {ITEMS, itemDef, throwHint, useHint, useLabel} from './items/items';
 import {WEAPONS, WeaponController, caliberLabel, reserveFor, type WeaponDef} from './weapons/weapons';
 import {CALIBERS, ammoText} from './items/calibers'; // lane AMMO: caliber-based ammo
@@ -149,6 +149,7 @@ import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
+import {applyMouseLook, lookSigns} from './player/mouseLook'; // task studio-beta-mouse-axis-invert-20261105-005156-01: the one mouse-look step (X / Y inverts)
 
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
 
@@ -157,7 +158,7 @@ export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train w
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
-export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number }
+export interface Settings { sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: 'low' | 'high'; renderScale: RenderScale; trainSway: number }
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement;
 
@@ -177,7 +178,18 @@ export function warmupMode(search: string, software: boolean): WarmupMode {
   return software ? 'view' : 'full';
 }
 
-interface UseAction { uid: number; itemId: string; t: number; total: number }
+/**
+ * A timed item use. Task studio-beta-mouse-axis-invert-20261105-005156-01 (user follow-up, consumable return): `held` = the selection
+ * when the used stack WAS the held item (quick slot `index`, never the melee slot), else absent (quick heal / inventory use of another stack).
+ */
+interface UseAction { uid: number; itemId: string; t: number; total: number; held?: {index: number} }
+
+/**
+ * Task studio-beta-mouse-axis-invert-20261105-005156-01 (user: "when switching from an item (eg gun) to a consumable item (eg chocolate
+ * bar), after consuming it, auto switch back to original item that you came from"): the item held before a DELIBERATE switch (1-5, the
+ * wheel, ~, inventory Equip) to a held consumable — `uid` in the melee slot (`melee`) or a quick slot — and the consumable switched to.
+ */
+interface ConsumeReturn { melee: boolean; uid: number; consumableUid: number }
 
 export class Game {
   /** Iteration 13 (CORE): three r186 WebGPURenderer — usable only after `await initRenderer()` (main.ts boot). */
@@ -197,7 +209,7 @@ export class Game {
   readonly input: Input;
   readonly hud = new Hud();
   readonly sfx = new Sfx();
-  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1};
+  readonly settings: Settings = {sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1};
   // ==== task campaign-foundation-20261102 (lane MENU): main-menu hooks (main.ts / world/menuScene.ts) ====
   /** The main menu's diorama render (world/menuScene.ts), drawn by frame() in 'title' / 'loading' while no world is built; true when it drew. */
   menuRender: ((time: number) => boolean) | null = null;
@@ -377,6 +389,8 @@ export class Game {
   private shake = 0;
   private muzzleT = 0;
   private use: UseAction | null = null;
+  /** Task mouse-axis-invert (consumable return): where one successful use of the held consumable returns to (null: nowhere). */
+  private consumeReturn: ConsumeReturn | null = null;
   private aiming = false;
   private wonAt = -1;
   private rand: () => number = Math.random;
@@ -745,6 +759,7 @@ export class Game {
     this.fx.clear();
     this.damage.clear(fn => this.retire(fn)); // Iteration 14: the zombies' wound material clones are released after the warm-up too
     this.use = null;
+    this.consumeReturn = null; // (consumable return: a new station / Retry starts with nothing pending)
     this.consumeView?.reset();
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
@@ -1293,9 +1308,7 @@ export class Game {
   /** The transit gap's update: look, the riding car + the player in it, the camera. Nothing touches a station world. */
   private updateTransitGap(dt: number): void {
     const inp = this.input, p = this.player;
-    const sens = this.settings.sens * 0.0022;
-    p.yaw -= inp.dx * sens;
-    p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch - inp.dy * sens * (this.settings.invertY ? -1 : 1)));
+    applyMouseLook(p, inp.dx, inp.dy, this.settings); // task mouse-axis-invert: the one look step (sensitivity, X / Y inverts, pitch clamp)
     if (inp.hit('KeyF')) this.toggleFlashlight(); // task campaign-polish (lane TRAIN, item 15): the dark transit — the flashlight stays usable
     if (this.trainRide.riding) this.trainRide.stepPlayer(dt, inp, {aiming: false, speedMult: 1, canSprint: false});
     this.updateCamera(dt);
@@ -1999,9 +2012,28 @@ export class Game {
   // ---------------------------------------------------------------------------------------
   private selectSlot(i: number): void {
     if (i === this.inv.selected && !this.inv.meleeSelected) return;
+    const prev = this.heldNow();
     this.inv.select(i); // (leaves the melee slot)
     this.cancelUse('slot');
     this.syncHeld();
+    this.noteSelection(prev);
+  }
+
+  /** Consumable return: what is held right now (the melee slot or a quick slot) and its stack. */
+  private heldNow(): {melee: boolean; stack: ItemStack | null} {
+    return {melee: this.inv.meleeSelected, stack: this.inv.selectedStack()};
+  }
+
+  /**
+   * Consumable return: after a deliberate selection change. Switching TO a consumable from a held non-consumable remembers that item
+   * (by uid); consumable -> consumable keeps the item originally switched from; any other choice (a gun, a flare, the knife, an empty
+   * slot) is the player's newer choice and clears it.
+   */
+  private noteSelection(prev: {melee: boolean; stack: ItemStack | null}): void {
+    const now = this.inv.selectedStack();
+    if (!now || itemDef(now.itemId).kind !== 'consumable' || this.inv.meleeSelected) { this.consumeReturn = null; return; }
+    if (prev.stack && prev.stack !== now && itemDef(prev.stack.itemId).kind !== 'consumable') this.consumeReturn = {melee: prev.melee, uid: prev.stack.uid, consumableUid: now.uid};
+    else if (this.consumeReturn) this.consumeReturn.consumableUid = now.uid;
   }
 
   /**
@@ -2026,6 +2058,7 @@ export class Game {
     this.inv.selectMelee();
     this.cancelUse('slot');
     this.syncHeld();
+    this.consumeReturn = null; // (a deliberate draw of the melee weapon: nothing to return to)
     return true;
   }
 
@@ -2115,11 +2148,12 @@ export class Game {
       return;
     }
     if (ref.bar === 'hotbar') { this.selectSlot(ref.index); return; }
-    const wasMelee = this.inv.meleeSelected;
+    const wasMelee = this.inv.meleeSelected, prev = this.heldNow();
     this.inv.move(ref, {bar: 'hotbar', index: this.inv.selected});
     if (wasMelee) { this.inv.select(this.inv.selected); this.cancelUse('slot'); } // SLOT: the equipped gun is drawn
     this.invUI.selected = {bar: 'hotbar', index: this.inv.selected};
     this.syncHeld();
+    this.noteSelection(prev); // (consumable return: an Equip is a deliberate selection too)
   }
 
   private forward(out = new THREE.Vector3()): THREE.Vector3 {
@@ -2165,11 +2199,75 @@ export class Game {
       ?? (def.treats?.length ? this.injuries.refuseReason(def) : this.survival.blockReason(def, this.player.hp, this.player.maxHp));
     if (blocked) { this.hud.toast(`${blocked}${def.heal ? this.injuries.healNote() : ''}`); this.sfx.denied(); return; } // a bandage never fixes a limb
     const useTime = (def.useTime ?? 1) * this.mods.handlingMult; // Iteration 16 (lane GEAR): gloves x0.92 / arm injury (combined mods)
-    this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: useTime};
-    // Consume view: the held gun/item lowers and this item's model comes up to the face.
     const held = this.inv.selectedStack();
+    this.use = {uid: st.uid, itemId: st.itemId, t: 0, total: useTime, ...(held === st && !this.inv.meleeSelected ? {held: {index: this.inv.selected}} : {})};
+    // Consume view: the held gun/item lowers and this item's model comes up to the face.
     this.consumeView.start(st.itemId, useTime, held === st ? 'hand' : held ? 'swap' : 'empty');
     if (this.state === 'inventory') this.closeInventory();
+  }
+
+  /** A timed use reached its end: apply it (exactly once), then the item lowers and the held item — or, after a successful use of the held
+   * consumable switched to from another item, THAT item (task mouse-axis-invert, consumable return) — comes back. */
+  private completeUse(): void {
+    const use = this.use;
+    if (!use) return;
+    const p = this.player;
+    const ref = this.inv.find(use.uid);
+    const def = itemDef(use.itemId);
+    // Iteration 12 (LIGHT): a battery is applied by applyBatteryItem — refused at >= 99 % (nothing used), else exactly one removed
+    const refused = def.recharge ? applyBatteryItem(this.torch.battery, () => !!ref && this.inv.consumeAt(ref), def.recharge) : null;
+    if (refused) this.hud.toast(refused);
+    // Iteration 16 (lane INJURY): a limb treatment re-checks its injury, is consumed exactly once and cures only its limbs
+    const treat = def.treats?.length ? this.injuries.completeTreatment(def, () => !!ref && this.inv.consumeAt(ref)) : null;
+    if (treat?.text) this.hud.toast(treat.text, !treat.ok);
+    if (treat?.ok) { this.stats.itemsUsed++; this.sfx.heal(); }
+    const used = treat ? false : def.recharge ? !refused : !!ref && this.inv.consumeAt(ref);
+    if (used && def.recharge) {
+      this.stats.itemsUsed++;
+      this.sfx.batteryInsert?.();
+      this.hud.toast(`Battery swapped in: flashlight ${this.torch.battery.percent} %${this.torch.battery.on ? '' : ' (F to switch on)'}`);
+    } else if (used && (def.verb === 'eat' || def.verb === 'drink')) {
+      // Food/drink: restore hunger/thirst (HUD bars animate up and pop "+N").
+      const d = this.survival.consume(def);
+      this.stats.itemsUsed++;
+      if (def.verb === 'drink') this.sfx.drink(def.id); else this.sfx.eat(def.id);
+      this.hud.toast(`${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}`);
+    } else if (used) {
+      const healed = p.heal(def.heal ?? 0);
+      this.stats.healed += healed;
+      this.stats.itemsUsed++;
+      this.sfx.heal();
+      this.hud.toast(`${def.short} used: +${Math.round(healed)} health${this.injuries.healNote()}`); // Iteration 16: HP only, never a limb
+    }
+    const ok = (!!treat && treat.ok) || used;
+    const back = ok ? this.consumeReturnTarget(use) : null;
+    // Item lowers away (or back into the hand if the held stack remains — not when the item switched from comes back), then the gun returns.
+    this.consumeView.complete(!back && this.inv.selectedStack()?.uid === use.uid);
+    this.use = null;
+    if (back) this.returnToHeld(back); else this.syncHeld();
+  }
+
+  /**
+   * Consumable return: after a SUCCESSFUL use of the held consumable that a deliberate switch selected, the item switched from — by uid,
+   * where it is selectable now: the melee slot, or whichever quick slot holds it. Not found (dropped, stowed, pocketed, bagged): null,
+   * the current selection stays (never a stale stack, never another item now in the old slot). Used either way: nothing stays pending.
+   */
+  private consumeReturnTarget(use: UseAction): {melee: true} | {melee: false; index: number} | null {
+    const r = this.consumeReturn;
+    if (!r || !use.held || r.consumableUid !== use.uid) return null;
+    this.consumeReturn = null;
+    // the player's newer choice wins: only while the consumable's slot is still the selection (a switch would have cancelled the use)
+    if (this.inv.meleeSelected || this.inv.selected !== use.held.index) return null;
+    if (r.melee && this.inv.melee?.uid === r.uid) return {melee: true};
+    const i = this.inv.hotbar.findIndex(st => st?.uid === r.uid);
+    return i >= 0 ? {melee: false, index: i} : null;
+  }
+
+  /** Consumable return: select that item again; the button still held from the use never fires / swings it (released first: lmbLatch). */
+  private returnToHeld(t: {melee: true} | {melee: false; index: number}): void {
+    if (t.melee) this.inv.selectMelee(); else this.inv.select(t.index);
+    this.syncHeld();
+    if (this.input.mouse[0]) this.lmbLatch = true;
   }
 
   private quickHeal(): void {
@@ -2275,10 +2373,7 @@ export class Game {
     this.mods = combineModifiers(this.modifierSources); // Iteration 16: gear + injuries, from base values every frame
     const inp = this.input;
     const p = this.player;
-    const sens = this.settings.sens * 0.0022 * (this.aiming ? 0.65 : 1);
-    p.yaw -= inp.dx * sens;
-    p.pitch -= inp.dy * sens * (this.settings.invertY ? -1 : 1);
-    p.pitch = Math.max(-1.45, Math.min(1.45, p.pitch));
+    applyMouseLook(p, inp.dx, inp.dy, this.settings, this.aiming ? 0.65 : 1); // task mouse-axis-invert: sensitivity (x 0.65 aiming), X / Y inverts, pitch clamp
 
     this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
     if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
@@ -2354,39 +2449,7 @@ export class Game {
 
     if (this.use) {
       this.use.t += dt;
-      if (this.use.t >= this.use.total) {
-        const ref = this.inv.find(this.use.uid);
-        const def = itemDef(this.use.itemId);
-        // Iteration 12 (LIGHT): a battery is applied by applyBatteryItem — refused at >= 99 % (nothing used), else exactly one removed
-        const refused = def.recharge ? applyBatteryItem(this.torch.battery, () => !!ref && this.inv.consumeAt(ref), def.recharge) : null;
-        if (refused) this.hud.toast(refused);
-        // Iteration 16 (lane INJURY): a limb treatment re-checks its injury, is consumed exactly once and cures only its limbs
-        const treat = def.treats?.length ? this.injuries.completeTreatment(def, () => !!ref && this.inv.consumeAt(ref)) : null;
-        if (treat?.text) this.hud.toast(treat.text, !treat.ok);
-        if (treat?.ok) { this.stats.itemsUsed++; this.sfx.heal(); }
-        const used = treat ? false : def.recharge ? !refused : !!ref && this.inv.consumeAt(ref);
-        if (used && def.recharge) {
-          this.stats.itemsUsed++;
-          this.sfx.batteryInsert?.();
-          this.hud.toast(`Battery swapped in: flashlight ${this.torch.battery.percent} %${this.torch.battery.on ? '' : ' (F to switch on)'}`);
-        } else if (used && (def.verb === 'eat' || def.verb === 'drink')) {
-          // Food/drink: restore hunger/thirst (HUD bars animate up and pop "+N").
-          const d = this.survival.consume(def);
-          this.stats.itemsUsed++;
-          if (def.verb === 'drink') this.sfx.drink(def.id); else this.sfx.eat(def.id);
-          this.hud.toast(`${def.verb === 'drink' ? 'Drank' : 'Ate'} ${def.name.toLowerCase()}: ${Survival.describe(d)}`);
-        } else if (used) {
-          const healed = p.heal(def.heal ?? 0);
-          this.stats.healed += healed;
-          this.stats.itemsUsed++;
-          this.sfx.heal();
-          this.hud.toast(`${def.short} used: +${Math.round(healed)} health${this.injuries.healNote()}`); // Iteration 16: HP only, never a limb
-        }
-        // Item lowers away (or back into the hand if the held stack remains), then the gun returns.
-        this.consumeView.complete(this.inv.selectedStack()?.uid === this.use.uid);
-        this.use = null;
-        this.syncHeld();
-      }
+      if (this.use.t >= this.use.total) this.completeUse();
     }
 
     // Hunger/thirst: slow long-term drain in play time only (menus freeze it); at 0, slow health loss.
@@ -2459,7 +2522,8 @@ export class Game {
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
     this.viewmodel.update(dt, {
-      moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx, lookDY: inp.dy,
+      // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
+      moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
       reloading: this.weapon.reloading, reloadProgress: this.weapon.progress, using: !!this.use, useProgress: this.use ? this.use.t / this.use.total : 0, bobT: p.bobT,
       crouch: p.crouchBlend, vy: p.grounded ? 0 : p.vy, landDip: p.landDip,
       throwReady: this.flareHold.ready01, // Iteration 15: grenade-style pull-back

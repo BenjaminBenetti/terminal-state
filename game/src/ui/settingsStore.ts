@@ -18,6 +18,9 @@
 //    nativePixelRatio(dpr, quality) x renderScale.
 //  - Master volume 0..1 (shown as 0-100 %) is what Sfx.setVolume takes; mute is separate and respected (Sfx.setMuted).
 //  - Train sway 0..1 (shown as 0-100 %; 0 = off): the moving train's jostle roll / pitch on the view (world/trainRide.ts).
+//  - Task studio-beta-mouse-axis-invert-20261105-005156-01: invertX / invertY flip the horizontal / vertical mouse LOOK, each on its
+//    own (player/mouseLook.ts; both default off). A record from before invertX existed reads it as false (a missing field is just
+//    defaulted, not "fixed"); a non-boolean falls back to false. Same record, same SETTINGS_VERSION; never part of a save slot.
 
 import {STORAGE_KEYS} from '../campaign/types';
 
@@ -37,6 +40,9 @@ export interface GameSettings {
   /** Master volume 0..1 (Sfx.setVolume; shown as a percentage). */
   volume: number;
   muted: boolean;
+  /** Task mouse-axis-invert: flip the horizontal mouse look (mouse right turns left). */
+  invertX: boolean;
+  /** Flip the vertical mouse look (mouse up looks down). */
   invertY: boolean;
   quality: Quality;
   renderScale: RenderScale;
@@ -45,7 +51,7 @@ export interface GameSettings {
 }
 
 /** The game's historical defaults (game.ts Settings) + native resolution. */
-export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1});
+export const SETTINGS_DEFAULTS: Readonly<GameSettings> = Object.freeze({sens: 1, fov: 75, volume: 0.7, muted: false, invertX: false, invertY: false, quality: 'high', renderScale: 1, trainSway: 1});
 
 /** The existing UI bounds (index.html ranges): sensitivity 0.2-3, FOV 60-100 degrees, volume 0-100 %, train sway 0-100 %. */
 export const SETTINGS_BOUNDS = {
@@ -59,7 +65,7 @@ export const SETTINGS_BOUNDS = {
 export const SETTINGS_VERSION = 1;
 
 export type SettingsKey = keyof GameSettings;
-export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertY', 'quality', 'renderScale', 'trainSway'];
+export const SETTINGS_KEYS: readonly SettingsKey[] = ['sens', 'fov', 'volume', 'muted', 'invertX', 'invertY', 'quality', 'renderScale', 'trainSway'];
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -88,7 +94,7 @@ function field<K extends SettingsKey>(k: K, raw: unknown): {value: GameSettings[
       const c = clamp(n, b.min, b.max);
       return {value: c as GameSettings[K], fixed: c !== n};
     }
-    case 'muted': case 'invertY':
+    case 'muted': case 'invertX': case 'invertY':
       return typeof raw === 'boolean' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
     case 'quality':
       return raw === 'low' || raw === 'high' ? {value: raw as GameSettings[K], fixed: false} : {value: d, fixed: true};
@@ -360,9 +366,9 @@ export function browserSettingsStorage(): SettingsStorage | null {
 }
 
 /** Copy the effective settings into the game's Settings object (game.ts reads `game.settings.*`); true when render-affecting quality changed. */
-export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
+export function copySettingsInto(target: {sens: number; fov: number; volume: number; muted: boolean; invertX: boolean; invertY: boolean; quality: Quality; renderScale: RenderScale; trainSway: number}, s: Readonly<GameSettings>): {qualityChanged: boolean} {
   const qualityChanged = target.quality !== s.quality;
   target.sens = s.sens; target.fov = s.fov; target.volume = s.volume; target.muted = s.muted;
-  target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
+  target.invertX = s.invertX; target.invertY = s.invertY; target.quality = s.quality; target.renderScale = s.renderScale; target.trainSway = s.trainSway;
   return {qualityChanged};
 }
