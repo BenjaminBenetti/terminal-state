@@ -312,7 +312,8 @@ describe('cancellation: no path leaves a delayed attack for a later release', ()
     expect(src).toMatch(/clears: inp\.clears\}/);
     // cues: the whoosh only on 'swing' (the release), nothing on 'windup', the hit only on 'contact'; no gunfire path for melee
     expect(src).toMatch(/e\.type === 'swing'\) this\.sfx\.meleeSwing\(\)/);
-    expect(src).toMatch(/e\.type === 'contact'\) this\.meleeContact\(e\.def\)/);
+    // (task hitch-attribution-recorder-20261105: the dispatch may be wrapped in the weapon.melee profiler span — timing only)
+    expect(src).toMatch(/e\.type === 'contact'\) (?:\{ prof\.begin\(SPAN\.melee\); )?this\.meleeContact\(e\.def\)/);
     expect((src.match(/sfx\.meleeSwing\(/g) ?? []).length).toBe(1);
   });
 });
