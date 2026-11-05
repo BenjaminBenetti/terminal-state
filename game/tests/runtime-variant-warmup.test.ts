@@ -17,7 +17,7 @@ import {stubWebgpuGlobals} from './helpers/fakeWebgpu';
 import {WarmupRegistry, geometryKey, planWarmup, runWarmup, type WarmupRenderer} from '../src/render/warmup';
 import {renderContextDepth} from '../src/render/renderContextDepth';
 import {installShadowAlphaTwin} from '../src/render/shadowOverride';
-import {RuntimeVariantPool, materialKey, variantKey} from '../src/render/runtimeVariants';
+import {RuntimeVariantPool, drawsDoublePass, materialKey, ownShadowNodes, variantKey} from '../src/render/runtimeVariants';
 import {DamageSystem} from '../src/damage/system';
 import {CHUNK_PHYS} from '../src/damage/materials';
 import {woundsOf} from '../src/damage/wounds';
@@ -61,6 +61,39 @@ describe('runtime-variant pool (render/runtimeVariants.ts)', () => {
     expect([pool.root.children.length, mine.mock.calls.length, queue.length]).toEqual([0, 0, 1]); // deferred
     queue[0]();
     expect([mine.mock.calls.length, shared.mock.calls.length, mat.mock.calls.length]).toEqual([1, 0, 0]);
+  });
+
+  it('a caster whose material has a map / colour node keeps its material INSTANCE in the key (three builds its shadow variant per instance)', () => {
+    const g = new THREE.BoxGeometry(), map = new THREE.Texture();
+    const mesh = (m: THREE.Material, cast: boolean) => { const o = new THREE.Mesh(g, m); o.castShadow = cast; return o; };
+    const mapped = new THREE.MeshStandardMaterial({map}), plain = new THREE.MeshStandardMaterial();
+    expect([ownShadowNodes(mapped), ownShadowNodes(plain)]).toEqual([true, false]);
+    expect(variantKey(mesh(mapped.clone(), true))).not.toBe(variantKey(mesh(mapped, true)));
+    expect(variantKey(mesh(mapped.clone(), false))).toBe(variantKey(mesh(mapped, false))); // (the scene variant is shared)
+    expect(variantKey(mesh(plain.clone(), true))).toBe(variantKey(mesh(plain, true)));
+  });
+
+  it('a transparent DoubleSide prototype gets BackSide / FrontSide copies keyed like three\'s two draws; the pool owns only the copies', () => {
+    const g = new THREE.BoxGeometry();
+    const glass = new THREE.MeshStandardMaterial({transparent: true, side: THREE.DoubleSide, alphaTest: 0.25});
+    expect([drawsDoublePass(glass), drawsDoublePass(new THREE.MeshStandardMaterial({transparent: true}))]).toEqual([true, false]);
+    const proto = new THREE.Mesh(g, glass);
+    proto.receiveShadow = true;
+    const pool = new RuntimeVariantPool();
+    const st = pool.rebuild([{name: 'damaged', meshes: [proto]}]);
+    expect([st.prototypes, st.sideProxies, st.sideMismatch]).toEqual([3, 2, 0]);
+    expect(glass.side).toBe(THREE.DoubleSide); // (restored)
+    const copies = pool.root.children.filter(o => o !== proto) as THREE.Mesh[];
+    for (const [c, side] of copies.map((c, i) => [c, i ? THREE.FrontSide : THREE.BackSide] as const)) {
+      const m = c.material as THREE.Material;
+      expect([m.side, m.alphaTest, m.transparent, c.castShadow, c.receiveShadow, c.geometry === g]).toEqual([side, 0.25, true, false, true, true]);
+      glass.side = side;
+      expect(materialKey(m)).toBe(materialKey(glass));
+      glass.side = THREE.DoubleSide;
+    }
+    const own = vi.spyOn(glass, 'dispose'), mine = copies.map(c => vi.spyOn(c.material as THREE.Material, 'dispose'));
+    pool.clear();
+    expect([own.mock.calls.length, ...mine.map(s => s.mock.calls.length)]).toEqual([0, 1, 1]);
   });
 });
 
@@ -161,6 +194,9 @@ describe('the real mall: prototypes are the real factories, pure, and leave noth
       scene.add(all.root);
       const plan = (pools: THREE.Object3D[]) => planWarmup(scene, {mode: 'full', cameraMask: cam.layers.mask, pools: [cm.group, ...(M.liftRoot ? [M.liftRoot] : []), ...pools]});
       const without = plan([]), withAll = plan([all.root]);
+      const dmgMats = [...(damage.props as unknown as {damageMats: Map<unknown, Map<string, unknown>>}).damageMats.values()].reduce((n, m) => n + m.size, 0);
+      const bytes = (g: THREE.BufferGeometry) => Object.values(g.attributes).reduce((n, a) => n + ((a as THREE.BufferAttribute).array?.byteLength ?? 0), g.index?.array.byteLength ?? 0);
+      log(`game pool memory: ${dmgMats} station damage materials (shared with detach), owned geometry ${dAll.geometries.length} extracts ${dAll.geometries.reduce((n, g) => n + bytes(g), 0)} B (+ flesh flaps), the rest references live geometry / materials`);
       log(`game pool (all kinds): ${sa.prototypes} prototypes (${sa.casters} casters, ${sa.sideProxies} side proxies) ${JSON.stringify(sa.families)} · 'full' plan items ${without.items.length} -> ${withAll.items.length} (+${withAll.items.length - without.items.length}), casters ${without.items.filter(i => i.caster).length} -> ${withAll.items.filter(i => i.caster).length}`);
       scene.remove(all.root);
       all.clear();
@@ -237,6 +273,17 @@ describe('the real mall: prototypes are the real factories, pure, and leave noth
     show([chunk!]);
     frame(); frame();
     const chunkBuilds = k.n.builds - b2;
+    // a loot highlight copy (the first aim at a lot of an item type): prepared hidden in the holders pool by runtimeVariantPrototypes
+    const display = (cm as unknown as {display: {show(l: {id: number; itemId: string; matrix: THREE.Matrix4}[], h: number | null): void; highlightObject: THREE.Object3D | null; batches: Map<string, unknown>}}).display;
+    const itemId = [...display.batches.keys()][0].split('|')[0];
+    const b3 = k.n.builds;
+    display.show([{id: -7, itemId, matrix: new THREE.Matrix4().makeTranslation(cam.position.x, cam.position.y - 0.3, cam.position.z - 1)}], -7);
+    show(meshesOf(display.highlightObject!));
+    frame(); frame();
+    const lotBuilds = k.n.builds - b3;
+    log(`loot highlight copies prepared ${proto.lotHighlights}; first aim at a ${itemId} lot -> ${lotBuilds} builds`);
+    expect(proto.lotHighlights).toBeGreaterThan(0);
+    expect(lotBuilds).toBe(0);
     log(`control A: ${control.meshes} new meshes -> ${control.builds} node builds · prepared B: ${prepared.meshes} new meshes -> ${prepared.builds} builds ${JSON.stringify(builtB)} · flesh chunk -> ${chunkBuilds} builds`);
     expect(control.meshes).toBeGreaterThan(0);
     expect(control.builds).toBeGreaterThan(0); // (the control: without prototypes these variants build on first real use)

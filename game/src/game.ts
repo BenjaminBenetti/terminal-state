@@ -1683,7 +1683,7 @@ export class Game {
         {name: 'takeover', meshes: cm.takeover}, {name: 'highlight', meshes: cm.highlight}, {name: 'damaged', meshes: dmg.meshes}, {name: 'flesh', meshes: flesh.meshes},
       ], {geometries: [...dmg.geometries, ...flesh.geometries]}, retire);
       const f = st.families, n = (k: string) => `${f[k]?.kept ?? 0}/${f[k]?.offered ?? 0}`;
-      console.info(`Terminal State: runtime variants ${st.prototypes} prototypes (${st.casters} casters) · takeover ${n('takeover')} · highlight ${n('highlight')} · damaged ${n('damaged')} · flesh ${n('flesh')} · ${st.ms.toFixed(1)} ms`);
+      console.info(`Terminal State: runtime variants ${st.prototypes} prototypes (${st.casters} casters, ${st.sideProxies} side copies) · takeover ${n('takeover')} · highlight ${n('highlight')} · damaged ${n('damaged')} · flesh ${n('flesh')} · loot highlight copies ${cm.lotHighlights} · ${st.ms.toFixed(1)} ms`);
     } catch (err) {
       console.warn('runtime variants: building the prototypes failed (the warm-up continues without them)', err);
       this.runtimeVariants.clear(retire);

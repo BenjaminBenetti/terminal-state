@@ -43,6 +43,7 @@ screen, before its build and this warm-up. Release and limits are covered in `ga
 | A **new render pass** that draws objects with its own scene / camera / render target | `warmRegistry.addPass({name, scene, camera, target: () => rt, hidden?: () => roots})` | the viewmodel overlay (`'weapons and held items'`) |
 | **Effects hidden until first use** (pools with `visible = false`) | keep them under a registered pool root: `warmRegistry.addPool(name, () => [root])`. The default `'effects'` pool is `fx.group`, so new effects added there are covered | sparks, smoke, blood, tracers, decals |
 | Something **created on use** (thrown, spawned, attached later) | build a hidden **prototype** with the same factory, keep it in the scene (meshes hidden, `raycast` disabled, far away), and register it as a pool | `FlareSystem.warmPrototypes()` (`'flares'`) |
+| A **play-only variant** of station content (a holder's own meshes, a damaged part, a torn chunk) | add a pure prototype method to the subsystem (its real factory, materials, geometry layout and shadow flags) and offer its meshes in `Game.refreshRuntimeVariants` | the `'runtime-variants'` pool (below) |
 | Content **added mid-play** that no pool or prototype covers | add it hidden, `await game.prepareBeforeShow(root)`, then show it | the office exterior swapping in late-arriving Meshy models (`world/towerRuntime.ts`, iteration 16) |
 | Section content that may be **hidden at warm-up time** (e.g. scenery shown only while a window is in view) | keep it under a registered pool root | the `'tower'` pool: the moving elevator cab, landing doors, windows, exterior city (iteration 16; iteration 17: one continuous tower, all storeys warmed up front) |
 | A **shader-affecting configuration change** (quality, MSAA, render targets, light set) | call the warm-up again before control returns (`game.rewarmAfterSettings()` / `prepareGraphics()`) | the pause menu's Quality setting |
@@ -206,10 +207,75 @@ Limits:
   the native frame times are not verifiable on this pod (no Chromium); they need a native recording after a train
   arrival.
 - Things created on use after the warm-up, outside pools, still build cold: shelf-stock pieces knocked loose
-  (`shelfStock.ts` creates their InstancedMesh then) and loot highlight copies (first hover per item type).
+  (`shelfStock.ts` creates their InstancedMesh then) and a dropped item's pickup (its own material clones). Loot
+  highlight copies are prepared since task runtime-variant-warmup-20261105 (below).
 - Harnesses: `rendercpu-submit-investigate.test.ts` (`LL_RCPU_SUBMIT_OUT=…`, `LL_RCPU_LEVEL=reactor`,
   `LL_RCPU_ROUTE=journey-old|journey-new|journey-sliced`, `LL_RCPU_RIDE_FRAMES`, `LL_RCPU_IDLE_MS`, `LL_RCPU_SHADOW_FIX=1`, `LL_RCPU_NO_DEPTH=1`) and
   `rendercpu-cullprof-investigate.test.ts` (`LL_RCPU_PROF_OUT=…`). Both are env-gated and skipped in CI.
+
+## Play-only variants: the runtime-variant pool (task runtime-variant-warmup-20261105)
+
+A native recording (Office, GAME69) showed most felt stalls were **first uses of non-instanced variants** that do not
+exist at warm-up time. Firing a gun makes several at once: a holder's own meshes after an aim or an open, the damaged
+copy of a prop, a torn flesh chunk. `render/runtimeVariants.ts` keeps one hidden **prototype** per variant under the
+station scene (`RuntimeVariantPool`, registered as the `'runtime-variants'` pool). `Game.refreshRuntimeVariants`
+rebuilds it just before each warm-up and before the journey's preparation, so both plan and compile it.
+
+| Family | Built by | What it is |
+|---|---|---|
+| `takeover` | `OpenableSet.takeoverPrototypes()` (`world/openables.ts`) | Every attached kind's own meshes (moving parts, plates, trays, interiors), with the accent material **of each attached accent colour** and the own-mesh shadow flags rule (`ownMeshShadowFlags`, shared with `takeover()`) |
+| `highlight` | `ContainerManager.runtimeVariantPrototypes()` (`world/containers.ts`) | The aim highlight: the same cached clone gameplay uses (`highlightOf`), on the aimable meshes and on one legacy container per kind |
+| `damaged` | `PropDamage.variantPrototypes()` (`damage/propDamage.ts`) | Detached shared instances (non-instanced), merged-chunk extracts (non-indexed) and holders' own meshes, each with **the damage material the first hit will use** |
+| `flesh` | `PhysChunks.fleshPrototypes()` (`physics/chunks.ts`) | `chunkMaterial` per distinct enemy layer-material signature, on the patch / flap layout (position, normal, uv, colour; non-indexed) |
+
+Rules the pool follows, each found by the real-Mall A/B test below:
+- **Real factories only.** No stand-in boxes: the same geometry, material instance and shadow flags the play code
+  creates. Building the prototypes is pure: no holder, slot, PropState, cut, PartData, loot, RNG or physics change.
+- **One prototype per variant** (`variantKey`, a structural mirror of three's key, used only to de-duplicate).
+- **Shadow variants are per material instance.** three r186 builds a caster's shadow-pass variant per material
+  INSTANCE when the material has a map, colour node, mask or cast node (`Renderer._getShadowNodes` reads them from
+  the material). Two value-equal copies therefore share the scene build but not the shadow build. So:
+  - `variantKey` keeps such a caster's material instance (`ownShadowNodes`);
+  - every accent colour is prototyped;
+  - `detach()` now draws every part with one shared damage material per (source, instance tint) for the station,
+    instead of a clone per part (`PropDamage.damageMat`). The look is unchanged: the damage state is per-object data
+    on the part's mesh, and nothing per part lives on the material. `PropDamage.clear(retire)` releases them after
+    the next warm-up.
+- **Transparent DoubleSide materials draw in two passes.** three draws each side with `side` set to BackSide, then
+  FrontSide. `compileAsync` only queues the work and builds it after the side was restored, so it builds a DoubleSide
+  variant those draws never use. The pool adds a BackSide and a FrontSide copy of each such prototype (node hooks and
+  alphaTest kept; dropped unless its key equals the real draw's: `sideMismatch`).
+- **Hidden for the world's lifetime.** three's caches are reference-counted, so a prototype removed before first use
+  could free its build. The pool is cleared with the world (`leaveSection`), and its own geometries and side copies go
+  through the retire queue.
+- **Bounded.** The pool is one station's kinds, never other stations. It is used in `full` mode only; `view`
+  (software GL) clears it.
+- It supersedes the old flag-less damage pre-warm meshes (`dropWarmup`).
+
+**Measured** (`game/tests/runtime-variant-warmup.test.ts`, the real Mall t3a in Node on three's WebGPU code path with
+a no-op device; Node build speed, not native timings):
+
+| Measure | Result |
+|---|---|
+| Game pool | 220 prototypes: takeover 24, highlight 7, damaged 181, flesh 2. 208 are casters; 6 side copies |
+| Built in | about 29 ms |
+| `full` plan items | 1526 → 1788 (+262: 215 pool prototypes and 47 loot highlight copy meshes); casters 1258 → 1461 |
+| Memory | 178 station damage materials made at warm-up instead of at the first hit (one per source and tint, shared with `detach()`); 15 one-triangle extracts (1.5 kB) plus 2 flesh flaps; the rest references live geometry and materials. GPU-side: the extra programs and pipelines, which is the point |
+| A/B, half the kinds with no prototypes | 345 new meshes → **69** node builds on first aim, open or detach |
+| A/B, the other half prototyped | 343 new meshes → **0** builds |
+| A real torn flesh chunk | **0** builds |
+
+Before the per-instance shadow fixes, the prepared half still built 96 variants, almost all shadow variants of
+per-part damage clones.
+
+**Loot highlight copies.** `LotDisplay.prepareHighlights()`, called from `runtimeVariantPrototypes`, makes the real
+cached highlight copy of every item type allocated in the station. They sit hidden in the containers group (the
+`'holders'` pool), so the warm-up and journey compile prepare them. This runs after the station's culler registration
+(the #12 rule in `lootDisplay.ts`). In the test, the first aim at a lot builds 0 variants.
+
+Not covered (still cold on first use): shelf-stock pieces knocked loose, a dropped item's pickup (its own material
+clones), and anything a subsystem creates without a prototype method. Driver-side work, GC and the unexplained 367 ms freeze in the GAME69
+recording are outside this pool.
 
 ## Lifecycle and guarantees
 

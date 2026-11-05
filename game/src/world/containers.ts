@@ -946,10 +946,12 @@ export class ContainerManager {
    * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): the holders' runtime-variant prototypes — openable takeovers
    * (world/openables.ts takeoverPrototypes), the aim highlight on every aimable mesh (the SAME cached clone setHighlight puts on it:
    * highlightOf) and `own` = the meshes damage can take over (prototype takeovers + one legacy container per kind), for
-   * PropDamage.variantPrototypes. Pure: no holder, lot, highlight or takeover state changes; legacy holders' real meshes are only
-   * READ (their geometry / material / flags) — every returned prototype is a new mesh.
+   * PropDamage.variantPrototypes; `lotHighlights` = loot item types whose highlight copy is now prepared (LotDisplay.prepareHighlights).
+   * Pure: no holder, lot, highlight or takeover state changes; legacy holders' real meshes are only READ (their geometry / material /
+   * flags) — every returned prototype is a new mesh.
    */
-  runtimeVariantPrototypes(): {takeover: THREE.Mesh[]; highlight: THREE.Mesh[]; own: THREE.Mesh[]} {
+  runtimeVariantPrototypes(): {takeover: THREE.Mesh[]; highlight: THREE.Mesh[]; own: THREE.Mesh[]; lotHighlights: number} {
+    const lotHighlights = this.display.prepareHighlights(); // (the loot highlight copies: real cached copies, hidden in this pool)
     const t = this.openables.takeoverPrototypes();
     const highlight: THREE.Mesh[] = [], own: THREE.Mesh[] = [...t.meshes];
     const glow = (m: THREE.Mesh) => {
@@ -970,7 +972,7 @@ export class ContainerManager {
       for (const m of h.leafMeshes) glow(m);
       h.root.traverse(o => { if ((o as THREE.Mesh).isMesh) own.push(o as THREE.Mesh); });
     }
-    return {takeover: t.meshes, highlight, own};
+    return {takeover: t.meshes, highlight, own, lotHighlights};
   }
 
   // --- Iteration 06 (Lane D): damage / breaking ------------------------------------------
