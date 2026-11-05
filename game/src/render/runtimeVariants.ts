@@ -124,6 +124,25 @@ function sideCopy(m: THREE.Material, side: THREE.Side): THREE.Material {
   return c;
 }
 
+/** Marks a prepared play-only variant (a pool prototype, a loot highlight copy): `userData[RUNTIME_VARIANT]` on it or an ancestor. */
+export const RUNTIME_VARIANT = 'runtimeVariant';
+
+/** True when `o` or an ancestor is marked as a prepared play-only variant. */
+export function isRuntimeVariant(o: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p.userData[RUNTIME_VARIANT] === true) return true;
+  return false;
+}
+
+/**
+ * Task mall-horde-performance-20261105: `list` with the prepared play-only variants first (their relative order kept, then the rest
+ * in theirs) — Game.backgroundCompile's shadow lane, where "nearest the arrival first" put these origin-placed prototypes last.
+ */
+export function runtimeVariantsFirst<T extends {object: THREE.Object3D}>(list: readonly T[]): T[] {
+  const first: T[] = [], rest: T[] = [];
+  for (const i of list) (isRuntimeVariant(i.object) ? first : rest).push(i);
+  return first.concat(rest);
+}
+
 export interface VariantPoolStats {
   /** Per family: prototypes offered / kept after de-duplication. */
   families: Record<string, {offered: number; kept: number}>;
@@ -147,6 +166,7 @@ export class RuntimeVariantPool {
 
   constructor() {
     this.root.name = 'runtime-variants';
+    this.root.userData[RUNTIME_VARIANT] = true;
     this.root.visible = false;
     this.root.matrixAutoUpdate = false;
   }

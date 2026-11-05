@@ -17,7 +17,7 @@ import {stubWebgpuGlobals} from './helpers/fakeWebgpu';
 import {WarmupRegistry, geometryKey, planWarmup, runWarmup, type WarmupRenderer} from '../src/render/warmup';
 import {renderContextDepth} from '../src/render/renderContextDepth';
 import {installShadowAlphaTwin} from '../src/render/shadowOverride';
-import {RuntimeVariantPool, drawsDoublePass, materialKey, ownShadowNodes, variantKey} from '../src/render/runtimeVariants';
+import {RuntimeVariantPool, drawsDoublePass, isRuntimeVariant, materialKey, ownShadowNodes, runtimeVariantsFirst, variantKey} from '../src/render/runtimeVariants';
 import {DamageSystem} from '../src/damage/system';
 import {CHUNK_PHYS} from '../src/damage/materials';
 import {woundsOf} from '../src/damage/wounds';
@@ -61,6 +61,19 @@ describe('runtime-variant pool (render/runtimeVariants.ts)', () => {
     expect([pool.root.children.length, mine.mock.calls.length, queue.length]).toEqual([0, 0, 1]); // deferred
     queue[0]();
     expect([mine.mock.calls.length, shared.mock.calls.length, mat.mock.calls.length]).toEqual([1, 0, 0]);
+  });
+
+  it('journey order (task mall-horde-performance-20261105): pool prototypes and marked copies first, the rest in their order', () => {
+    const pool = new RuntimeVariantPool(), g = new THREE.BoxGeometry(), m = new THREE.MeshStandardMaterial();
+    const a = new THREE.Mesh(g, m), b = new THREE.Mesh(g, m.clone()), near = new THREE.Mesh(g, m), far = new THREE.Mesh(g, m);
+    b.castShadow = true; // (a different key: both kept)
+    pool.rebuild([{name: 'damaged', meshes: [a, b]}]);
+    const copy = new THREE.Group(), copyMesh = new THREE.Mesh(g, m);
+    copy.add(copyMesh);
+    copy.userData.runtimeVariant = true; // (LotDisplay.prepareHighlights marks its copies)
+    expect([isRuntimeVariant(a), isRuntimeVariant(copyMesh), isRuntimeVariant(near)]).toEqual([true, true, false]);
+    const order = runtimeVariantsFirst([near, a, far, copyMesh, b].map(object => ({object}))).map(i => i.object);
+    expect(order).toEqual([a, copyMesh, b, near, far]);
   });
 
   it('a caster whose material has a map / colour node keeps its material INSTANCE in the key (three builds its shadow variant per instance)', () => {
@@ -283,6 +296,7 @@ describe('the real mall: prototypes are the real factories, pure, and leave noth
     const lotBuilds = k.n.builds - b3;
     log(`loot highlight copies prepared ${proto.lotHighlights}; first aim at a ${itemId} lot -> ${lotBuilds} builds`);
     expect(proto.lotHighlights).toBeGreaterThan(0);
+    expect(isRuntimeVariant(display.highlightObject!)).toBe(true); // (journey order: task mall-horde-performance-20261105)
     expect(lotBuilds).toBe(0);
     log(`control A: ${control.meshes} new meshes -> ${control.builds} node builds · prepared B: ${prepared.meshes} new meshes -> ${prepared.builds} builds ${JSON.stringify(builtB)} · flesh chunk -> ${chunkBuilds} builds`);
     expect(control.meshes).toBeGreaterThan(0);

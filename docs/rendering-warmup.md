@@ -251,6 +251,11 @@ Rules the pool follows, each found by the real-Mall A/B test below:
 - **Bounded.** The pool is one station's kinds, never other stations. It is used in `full` mode only; `view`
   (software GL) clears it.
 - It supersedes the old flag-less damage pre-warm meshes (`dropWarmup`).
+- **Journey order** (task mall-horde-performance-20261105): the pool's prototypes and the loot highlight copies are marked
+  `userData.runtimeVariant` (`isRuntimeVariant`). `Game.backgroundCompile` puts their shadow variants first in the shadow lane
+  (`runtimeVariantsFirst`). They sit at the world origin, so "nearest the arrival first" used to rank them last. After arrival, busy
+  frames leave no spare time, so they were built one per overdue step, every 2 s, at 5–22 ms each. That was all 16 in-play builds
+  of the GAME71 Mall capture. The scene lane keeps its order.
 
 **Measured** (`game/tests/runtime-variant-warmup.test.ts`, the real Mall t3a in Node on three's WebGPU code path with
 a no-op device; Node build speed, not native timings):
@@ -277,6 +282,65 @@ cached highlight copy of every item type allocated in the station. They sit hidd
 Not covered (still cold on first use): shelf-stock pieces knocked loose, a dropped item's pickup (its own material
 clones), and anything a subsystem creates without a prototype method. Driver-side work, GC and the unexplained 367 ms freeze in the GAME69
 recording are outside this pool.
+
+## Horde views: per-frame uniform uploads (task mall-horde-performance-20261105)
+
+**The trace.** The user's GAME71 Mall trace (Chrome / WebGPU / AMD, quality high) dropped to about 30 fps whenever the horde was in
+view.
+
+| Metric | Value |
+|---|---|
+| Render submission (main thread) | 20–27 ms |
+| GPU render passes | 7–8 ms |
+| AI | ≤ 1.5 ms |
+| Culling | ≤ 2 ms |
+
+At the same view and the same draw count (979), submission fell to 7 ms in the frame the horde calmed down. Lured enemies
+(`ai/lightLure.ts`) move and animate every frame; across the horde-facing frames, submission tracks the AI span (r 0.88) far more
+than the draw count (r 0.31).
+
+**Not three's JS.** Three's own JavaScript does not explain it. In `tests/rendercpu-horde-investigate.test.ts` (env-gated:
+`LL_RCPU_HORDE_OUT=…`, the real Mall with the game's enemies and wounds), standing, animated and moving enemies differ by
+≤ 1 ms. What changes is the number of `device.queue.writeBuffer` calls per frame:
+
+| Enemies | Writes per frame |
+|---|---|
+| Hidden | 41 |
+| Standing | 242 |
+| Moving | 441 |
+
+Three r186 writes every buffer binding in full every frame, per render object and per pass, whether it changed or not. That
+covers a skinned draw's bone matrices and the per-object wound data. It also writes changed uniforms as separate ranges (a
+moving mesh's model and normal matrices).
+
+**The rule.** `render/uploadDedupe.ts`, installed after `renderer.init()` on the WebGPU backend only, makes two changes. Both are
+data-identical, because the CPU array mirrors the GPU buffer.
+
+| Write type | Change |
+|---|---|
+| Full write | Skipped when its bytes equal the last bytes written to the same GPU buffer |
+| A group's changed ranges | One write of their span (≤ 4 KiB) |
+
+Same harness, same views, with the dedupe:
+
+| Enemies | Writes per frame |
+|---|---|
+| Standing | 242 → 2 |
+| Animated in place | 242 → 74 |
+| Moving | 441 → 140 (227 → 133 KiB) |
+
+Three's JS time is unchanged. `tests/upload-dedupe.test.ts` renders the same frames on two renderers, one plain and one with the
+dedupe, and compares every GPU buffer's bytes after every frame.
+
+**Memory and recorder.**
+- The last-write copies are about the size of the buffers they mirror (`uploadStats.snapshotBytes`). They are weakly held per
+  binding.
+- The recorder's schemaMinor 4 columns `uniformWrites` / `uniformWritesSkipped` show the effect in a native capture.
+
+**Limits.**
+- The native cost of an upload is not measurable here, so no FPS gain is claimed. The user's recapture tells.
+- Each skinned draw still uploads its own copy of its skeleton's bones in every pass when the pose changed. Sharing one bone
+  buffer per skeleton would need a custom skinning node; that was not done.
 
 ## Lifecycle and guarantees
 
