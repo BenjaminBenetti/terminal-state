@@ -19,7 +19,8 @@
 // Asset ids are basenames + a category (never URLs / query strings); nothing about saves, inventory, input or the account is read.
 
 import * as THREE from 'three';
-import {FrameInput, PerfCapture, ST_PLAYING, assetId, chunkHash, reportFileName, safeLabel, stateCode, F, type FirstUseBuild, type LongFrameEntry, type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
+import {FrameInput, MARK_LOOKBACK_MS, MARK_STALLS, PerfCapture, ST_PLAYING, assetId, chunkHash, reportFileName, safeLabel, stateCode, F, type FirstUseBuild, type FirstUsePipeline, type LongFrameEntry,
+  type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
 import {SPAN_COUNT, type UpdateProfiler} from './updateProfile';
 import type {GpuInfo} from '../render/backend';
 import type {GpuTimingSupport} from './gpuTimer';
@@ -190,6 +191,49 @@ export function firstUseIdentity(renderObject: unknown, material: unknown): Omit
   return {object, via, objectType: safeLabel(o?.type, 24), material: safeLabel(m?.name), materialType: safeLabel(m?.type, 32),
     objectMaterial: om && om !== m ? safeLabel(om.name) : null, shadowPass: m?.isShadowPassMaterial === true};
 }
+
+/**
+ * (schemaMinor 3) The pass / target / material-state / object flags of a render pipeline request — the three r186 values a render
+ * pipeline is keyed by besides its shaders (WebGPUBackend.getRenderCacheKey), read as plain properties of the render object, its
+ * RenderContext, material and object at the request: numbers / booleans only (no references, names or strings are kept), null where
+ * a field is absent. No traversal; one 3x3 determinant (the mirrored flag) and nothing else is computed.
+ */
+export function pipelineContext(renderObject: unknown): Pick<FirstUsePipeline, 'pass' | 'target' | 'materialState' | 'objectFlags'> {
+  type Ctx = {textures?: unknown; sampleCount?: unknown; depth?: unknown; stencil?: unknown; depthTexture?: unknown; renderTarget?: unknown; mrt?: unknown; fullscreenPass?: unknown};
+  type Mat = {isShadowPassMaterial?: unknown; side?: unknown; transparent?: unknown; blending?: unknown; depthWrite?: unknown; depthTest?: unknown; colorWrite?: unknown;
+    alphaToCoverage?: unknown; polygonOffset?: unknown};
+  type Obj = {isMesh?: unknown; isInstancedMesh?: unknown; isBatchedMesh?: unknown; isSkinnedMesh?: unknown; matrixWorld?: {elements?: ArrayLike<number>} | null; geometry?: {index?: unknown} | null};
+  const ro = (renderObject !== null && typeof renderObject === 'object' ? renderObject : null) as
+    {object?: Obj | null; material?: Mat | null; context?: Ctx | null; geometry?: {index?: unknown} | null; clippingContextCacheKey?: unknown} | null;
+  if (!ro) return {pass: null, target: null, materialState: null, objectFlags: null};
+  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+  const bool = (v: unknown) => (typeof v === 'boolean' ? v : null);
+  const has = (v: unknown) => (v === undefined ? null : v !== null);
+  const m = ro.material ?? null, c = ro.context ?? null, o = ro.object ?? null;
+  let target: FirstUsePipeline['target'] = null;
+  if (c && typeof c === 'object') {
+    const tex = Array.isArray(c.textures) ? c.textures as {type?: unknown}[] : null;
+    target = {toTarget: tex !== null || (c.renderTarget !== undefined && c.renderTarget !== null) ? true : c.textures === null ? false : null,
+      colorTargets: tex ? tex.length : c.textures === null ? 0 : null, colorType: tex && tex[0] ? num(tex[0].type) : null, samples: tex ? num(c.sampleCount) : null,
+      depth: bool(c.depth), stencil: bool(c.stencil), depthTexture: has(c.depthTexture), mrt: has(c.mrt)};
+  }
+  const materialState: FirstUsePipeline['materialState'] = m && typeof m === 'object' ? {side: num(m.side), transparent: bool(m.transparent), blending: num(m.blending),
+    depthWrite: bool(m.depthWrite), depthTest: bool(m.depthTest), colorWrite: bool(m.colorWrite), alphaToCoverage: bool(m.alphaToCoverage), polygonOffset: bool(m.polygonOffset)} : null;
+  let objectFlags: FirstUsePipeline['objectFlags'] = null;
+  if (o && typeof o === 'object') {
+    let mirrored: boolean | null = false;
+    if (o.isMesh === true) {
+      const e = o.matrixWorld?.elements;
+      mirrored = e && e.length >= 11 ? e[0] * (e[5] * e[10] - e[9] * e[6]) - e[4] * (e[1] * e[10] - e[9] * e[2]) + e[8] * (e[1] * e[6] - e[5] * e[2]) < 0 : null;
+    }
+    const geo = ro.geometry ?? o.geometry ?? null;
+    const ck = ro.clippingContextCacheKey;
+    objectFlags = {instanced: o.isInstancedMesh === true, batched: o.isBatchedMesh === true, skinned: o.isSkinnedMesh === true, mirrored,
+      indexed: geo && typeof geo === 'object' ? has(geo.index) : null, clipping: typeof ck === 'string' ? ck !== '' : null};
+  }
+  const pass = m?.isShadowPassMaterial === true ? 'shadow' : c?.fullscreenPass === true ? 'fullscreen' : m || c ? 'scene' : null;
+  return {pass, target, materialState, objectFlags};
+}
 /** Game.journeyCompileStats (render/journeyCompile.ts JourneyCompileStats; one object per job). */
 interface JourneyStats {
   phase?: string; sceneItems?: number; sceneDone?: number; casters?: number; shadowDone?: number; sceneChunks?: number;
@@ -253,6 +297,13 @@ export class PerfRecorderController {
   private nbT0 = -1;
   /** (Revision 2) the identity of the in-render node build in progress. */
   private nbId: Omit<FirstUseBuild, 'frame' | 't' | 'ms'> | null = null;
+  /**
+   * (schemaMinor 3) The render object of the most recent node build (a pipeline request for the same one is `withBuild`) and the
+   * vertex / fragment programs created since the last pipeline request. Both are reset at every frame sample and at stop: no
+   * reference is kept beyond the frame it was seen in.
+   */
+  private lastBuildRO: unknown = null;
+  private progsPending = 0;
   /** (Revision 2) the GPU-queue completion probe: the queue (null = unsupported: `qWhy`), probes in flight (every capture) and stats. */
   private queue: QueueLike | null = null;
   /** The probe was installed for the current / last capture (meta() runs after uninstall). */
@@ -330,6 +381,7 @@ export class PerfRecorderController {
       i.nodeBuilds = fu.builds; i.nodeBuildMs = fu.buildMs; i.asyncBuilds = fu.async; i.pipelinesCreated = fu.pipes; i.pipelineMs = fu.pipeMs; i.programsCreated = fu.progs; i.programMs = fu.progMs;
       fu.builds = fu.buildMs = fu.async = fu.pipes = fu.pipeMs = fu.progs = fu.progMs = 0;
       this.nbT0 = -1;
+      this.lastBuildRO = null; this.progsPending = 0;
       const cap = this.capture.frame(i, g.prof);
       if ((fl & F.rendered) !== 0) this.probeQueue();
       if (this.pendingControl >= 0 && i.state === ST_PLAYING && (fl & (F.warming | F.transition)) === 0) {
@@ -417,6 +469,7 @@ export class PerfRecorderController {
     this.renderDepth = 0;
     this.nbT0 = -1;
     this.nbId = null;
+    this.lastBuildRO = null; this.progsPending = 0;
     this.startSeen = false;
     const qs = this.qStats;
     qs.issued = qs.resolved = qs.failed = qs.capped = qs.stale = qs.maxInFlight = qs.callUsSum = qs.callUsMax = qs.cbUsSum = 0; // (qInFlight spans captures)
@@ -533,6 +586,11 @@ export class PerfRecorderController {
         note: 'inclusive (a nested span is inside its parent; parents in spans.parents); per frame in spikeDetail and worst[].spans.hitPath; timing only'},
       {id: 'firstUse.identity', available: this.capture.seen.firstUse, source: 'NodeManager._createNodeBuilder(renderObject, material) while recording: sanitized object / material names and types (summary.firstUse.builds)',
         note: `synchronous in-render builds only; the ${this.capture.caps.firstUseBuilds} most expensive kept; null = anonymous; labels only (no references, shaders, geometry or textures)`},
+      {id: 'firstUse.pipelineIdentity', available: this.fuHooks.includes('Pipelines._getRenderPipeline'),
+        source: 'Pipelines._getRenderPipeline(renderObject, ...) while recording (a render pipeline cache miss): summary.firstUse.pipelines, worst[].firstUse.pipelineRequests',
+        note: `every new render pipeline request, in render or async, with the build labels, pass (scene / shadow / fullscreen), target (render target, color attachments, sample count, depth / stencil), material state, object flags (instanced, skinned, mirrored, indexed, clipping), withBuild and newPrograms; at most ${this.capture.caps.firstUsePipelines} kept (the most expensive in-render ones; async first-come); numbers / booleans / sanitized labels only; CPU-side request identity: the GPU / driver compile is not observable`},
+      {id: 'marks.lookback', available: true, source: 'marks[] (from the frame columns)',
+        note: `each F9 mark: the worst frame and up to ${MARK_STALLS} stalls (interval over 1.5 refreshes or game CPU over one; summary.tail.refreshMs, else 60 Hz) in the ${MARK_LOOKBACK_MS / 1000} s before it, clamped at the capture start; hidden-tab gaps are never stalls, paused / menu frames are tagged with their category`},
       {id: 'flashlight', available: this.x.flashlight !== undefined, source: 'Game.flashlight (SpotLight) at every frame sample',
         note: 'flags torchLit (visible, intensity > 0) and torchShadow (castShadow and shadow.autoUpdate: its shadow map is drawn that frame; quality-dependent)'},
       {id: 'tail', available: true, source: 'summary.tail (from the frame columns)', note: 'intervals by refresh multiple, callback overruns and their overlap, stall events per minute, worst 1 s / 5 s windows; descriptive, no pass / fail threshold'},
@@ -715,6 +773,7 @@ export class PerfRecorderController {
     for (const u of this.unlisten.splice(0)) u();
     if (this.gpuTap) { this.opts.overlay?.setGpuTap(null); this.gpuTap = false; }
     this.queue = null; // (probes in flight settle into nothing: the capture is stopped)
+    this.lastBuildRO = null; this.progsPending = 0; // (no render object reference outlives the capture)
   }
 
   private wrap(target: object, spec: WrapSpec): void {
@@ -785,6 +844,7 @@ export class PerfRecorderController {
       try { return orig.apply(this, a); } finally { self.renderDepth--; }
     });
     hook('NodeManager._createNodeBuilder', r._nodes, '_createNodeBuilder', orig => function (this: unknown, ...a: unknown[]) {
+      if (self.recording) self.lastBuildRO = a[0] ?? null; // (schemaMinor 3: a pipeline request for this render object is withBuild)
       // (a TSL error re-creates it with a fallback material: one span, the first identity)
       if (self.recording && self.renderDepth > 0 && self.nbT0 < 0) {
         self.nbT0 = now();
@@ -808,20 +868,41 @@ export class PerfRecorderController {
       }
       return res;
     });
+    // _getRenderPipeline(renderObject, stageVertex, stageFragment, cacheKey, promises): called on a pipeline cache miss only
     hook('Pipelines._getRenderPipeline', r._pipelines, '_getRenderPipeline', orig => function (this: unknown, ...a: unknown[]) {
       if (!self.recording) return orig.apply(this, a);
       self.fu.pipes++;
-      if (self.renderDepth === 0) return orig.apply(this, a);
+      const sync = self.renderDepth > 0;
       const t0 = now();
-      try { return orig.apply(this, a); } finally { self.fu.pipeMs += now() - t0; }
+      try { return orig.apply(this, a); } finally {
+        const t1 = now();
+        if (sync) self.fu.pipeMs += t1 - t0;
+        self.pipelineRequest(a[0], t1, sync ? t1 - t0 : null); // (identity read after the timed call: not in pipelineMs)
+      }
     });
     hook('backend.createProgram', r.backend, 'createProgram', orig => function (this: unknown, ...a: unknown[]) {
       if (!self.recording) return orig.apply(this, a);
       self.fu.progs++;
+      const stage = (a[0] as {stage?: unknown} | null | undefined)?.stage; // (ProgrammableStage; compute programs are not a render pipeline's)
+      if (stage === 'vertex' || stage === 'fragment') self.progsPending++;
       if (self.renderDepth === 0) return orig.apply(this, a);
       const t0 = now();
       try { return orig.apply(this, a); } finally { self.fu.progMs += now() - t0; }
     });
+  }
+
+  /**
+   * (schemaMinor 3) The identity of one new render pipeline request at `t` (`ms` = its CPU ms inside a synchronous render, null
+   * outside): labels (firstUseIdentity), pass / target / state (pipelineContext), withBuild and the programs created for it.
+   */
+  private pipelineRequest(renderObject: unknown, t: number, ms: number | null): void {
+    const withBuild = renderObject !== null && renderObject !== undefined && renderObject === this.lastBuildRO;
+    const newPrograms = Math.min(2, this.progsPending);
+    this.progsPending = 0;
+    try {
+      const ro = renderObject as {material?: unknown} | null | undefined;
+      this.capture.firstUsePipeline(t, ms, {...firstUseIdentity(renderObject, ro?.material ?? null), async: ms === null, withBuild, newPrograms, ...pipelineContext(renderObject)});
+    } catch { /* an instrumentation detail never breaks the render */ }
   }
 
   private hookDone(spec: WrapSpec, args: unknown[], result: unknown, t0: number, err: unknown): void {
