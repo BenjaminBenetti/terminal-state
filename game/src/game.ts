@@ -188,6 +188,9 @@ interface UseAction { uid: number; itemId: string; t: number; total: number; hel
  * Task studio-beta-mouse-axis-invert-20261105-005156-01 (user: "when switching from an item (eg gun) to a consumable item (eg chocolate
  * bar), after consuming it, auto switch back to original item that you came from"): the item held before a DELIBERATE switch (1-5, the
  * wheel, ~, inventory Equip) to a held consumable — `uid` in the melee slot (`melee`) or a quick slot — and the consumable switched to.
+ * Task studio-beta-consumable-stack-return-20261105-045347-01 (user correction: "it should only apply if you consume the last item in the
+ * stack. If there are more items in the stack, i.e. bandages, it should stay selected so the player may consume multiple"): it stays
+ * pending across every use of that stack and is used only by the use that empties it.
  */
 interface ConsumeReturn { melee: boolean; uid: number; consumableUid: number }
 
@@ -2249,23 +2252,26 @@ export class Game {
     }
     const ok = (!!treat && treat.ok) || used;
     const back = ok ? this.consumeReturnTarget(use) : null;
-    // Item lowers away (or back into the hand if the held stack remains — not when the item switched from comes back), then the gun returns.
+    // Item lowers away (or back into the hand while the held stack has units left), then the gun — or the item switched from — returns.
     this.consumeView.complete(!back && this.inv.selectedStack()?.uid === use.uid);
     this.use = null;
     if (back) this.returnToHeld(back); else this.syncHeld();
   }
 
   /**
-   * Consumable return: after a SUCCESSFUL use of the held consumable that a deliberate switch selected, the item switched from — by uid,
-   * where it is selectable now: the melee slot, or whichever quick slot holds it. Not found (dropped, stowed, pocketed, bagged): null,
-   * the current selection stays (never a stale stack, never another item now in the old slot). Used either way: nothing stays pending.
+   * Consumable return: after a SUCCESSFUL use of the held consumable that a deliberate switch selected. Units left in THAT stack (it is
+   * still the selection): null and the return stays pending — the stack stays selected for the next use (a fresh press, as always), the
+   * remembered item unchanged. That stack EMPTIED by this use: the item switched from — by uid, where it is selectable now: the melee
+   * slot, or whichever quick slot holds it. Not found (dropped, stowed, pocketed, bagged): null, the current selection stays (never a stale
+   * stack, never another item now in the old slot, never another stack of the same consumable). After the last unit nothing stays pending.
    */
   private consumeReturnTarget(use: UseAction): {melee: true} | {melee: false; index: number} | null {
     const r = this.consumeReturn;
     if (!r || !use.held || r.consumableUid !== use.uid) return null;
-    this.consumeReturn = null;
     // the player's newer choice wins: only while the consumable's slot is still the selection (a switch would have cancelled the use)
-    if (this.inv.meleeSelected || this.inv.selected !== use.held.index) return null;
+    if (this.inv.meleeSelected || this.inv.selected !== use.held.index) { this.consumeReturn = null; return null; }
+    if (this.inv.selectedStack()?.uid === use.uid) return null; // units left in the used stack: it stays selected (still pending)
+    this.consumeReturn = null;
     if (r.melee && this.inv.melee?.uid === r.uid) return {melee: true};
     const i = this.inv.hotbar.findIndex(st => st?.uid === r.uid);
     return i >= 0 ? {melee: false, index: i} : null;
