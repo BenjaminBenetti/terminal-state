@@ -32,7 +32,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     const journeys: (readonly string[] | null)[] = [];
     const s: Record<string, unknown> = {
       inv: new Inventory(), playerTrain: new PlayerTrainRecord(), runParticipants: [], arrival: {kind: 'start'}, startWeapon: 'pistol', bagStoreWired: false,
-      survival: new Survival(), torch: {battery, reset: (c?: number) => battery.reset(c)},
+      survival: new Survival(), torch: {battery, reset: (c?: number, ro?: {on?: boolean}) => battery.reset(c, ro)}, // (as PlayerLight.reset: the option reaches the battery)
       player: {hp: 100, stamina: 100, damageTaken: 0, alive: true, x: 0, y: 0, z: 0, yaw: 0, pitch: 0.1, crouched: false},
       stats: {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0}, time: 10, trainPlacement: null,
       run: createRun({seeds: SEEDS, start: key(0), levels: LEVELS, campaign: fixtureCampaign()}),
@@ -78,8 +78,36 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     expect(g.commitSave('new-game', {slot: 1})).toMatchObject({ok: true});
     log.length = 0;
     commits.length = 0;
-    return {g, log, commits, prepared, journeys};
+    return {g, log, commits, prepared, journeys, battery};
   }
+
+  // Task studio-beta-new-game-flashlight-off-20261105-022524-01 (user: "by default when starting a new game the light should not be on")
+  it('flashlight: a fresh campaign starts with it OFF (the new-game save says off); switched ON it stays on through a journey and Continue restores ON', async () => {
+    const a = shell();
+    expect([a.battery.on, a.battery.died, a.battery.output, a.battery.charge]).toEqual([false, false, 0, 0.8]); // resetCarry (the real one)
+    const saved = (k: number) => (a.g.saves.read(k) as unknown as {ok: boolean; file: {run: {carry: {battery: {on: boolean; charge: number}}}; meta: {reason: string}}}).file;
+    expect(saved(1).meta.reason).toBe('new-game');
+    expect(saved(1).run.carry.battery).toMatchObject({on: false, charge: 0.8});
+    a.battery.setOn(true); // F
+    expect((await a.g.travelToStation(sid(1)))).toEqual({ok: true});
+    expect(a.battery.on).toBe(true); // travel (teardown / prepare / build / arrive) never resets the light
+    expect(saved(1).meta.reason).toBe('arrival');
+    expect(saved(1).run.carry.battery.on).toBe(true);
+    // a fresh session (its own New-Game reset: off) continues the slot: the saved ON comes back
+    const b = shell();
+    expect(b.battery.on).toBe(false);
+    (b.g as unknown as {saves: SaveSlots}).saves = a.g.saves;
+    expect(await b.g.continueCampaign(1)).toEqual({ok: true});
+    expect(b.battery.on).toBe(true);
+    // and a save taken with it OFF continues OFF
+    a.battery.setOn(false);
+    expect((await a.g.travelToStation(sid(0)))).toEqual({ok: true});
+    const c = shell();
+    c.battery.setOn(true);
+    (c.g as unknown as {saves: SaveSlots}).saves = a.g.saves;
+    expect(await c.g.continueCampaign(1)).toEqual({ok: true});
+    expect(c.battery.on).toBe(false);
+  });
 
   it('the journey: depart -> teardown -> departure autosave (journey pending) -> prepare / build -> arrive -> arrival autosave', async () => {
     const {g, log, commits} = shell();

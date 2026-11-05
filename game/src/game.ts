@@ -992,10 +992,17 @@ export class Game {
     else this.inv = inv;
   }
 
-  /** Iteration 16: NewGame state — fresh starter kit, survival 80/80, battery 80 %, lane state reset, run stats zeroed (hp: Player.spawn). */
+  /**
+   * Iteration 16: NewGame state — fresh starter kit, survival 80/80, battery 80 % with the light OFF, lane state reset, run stats zeroed
+   * (hp: Player.spawn). Only a FRESH game comes here (every newGame path: campaign New Game, the QA / dev level starts, the death
+   * screen's New game); Retry / Load / Continue restore the saved light flags (restoreCarryFrom / installSave) and travel keeps the live one.
+   */
   private resetCarry(): void {
     this.survival.reset(); // food/water 80/80
-    this.torch.reset(); // Iteration 12 (LIGHT): battery back to its 80 % start, light on, no dip in progress
+    // Iteration 12 (LIGHT): battery back to its 80 % start, no dip in progress. Task studio-beta-new-game-flashlight-off-20261105-022524-01
+    // (user: "by default when starting a new game the light should not be on"): the light starts OFF (spot intensity 0 from this reset,
+    // before the first frame; F switches it on; the warm-up lights the torch itself, so its passes / shadows are still prepared)
+    this.torch.reset(undefined, {on: false});
     // Pistol lane: start with the pistol (15 + 45 x 9 mm) now that its art is ready; the rifle branch is the gate-off fallback.
     this.installInventory(starterInventory(this.startWeapon));
     this.stats = {shots: 0, hits: 0, kills: 0, time: 0, headshots: 0, healed: 0, itemsUsed: 0};
