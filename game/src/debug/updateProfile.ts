@@ -24,14 +24,20 @@ export const S = {
   vocal: 22, brain: 23, path: 24, motor: 25, anim: 26,
   // nested inside 'hooks': the frame hooks in registration order (Game.frameHookNames names them)
   hook0: 27,
+  // task hitch-attribution-recorder-20261105: nested inside 'weapon' — the shot / hit path at its real function boundaries
+  // (appended after the hook slots: every earlier id is unchanged)
+  fire: 35, melee: 36, fireFx: 37, fireRays: 38, hitWorld: 39, hitZombie: 40, tearChunk: 41, extractPatch: 42, ragdoll: 43, alert: 44,
 } as const;
 /** Frame hooks timed individually (more share the last slot). */
 export const HOOK_SLOTS = 8;
-export const SPAN_COUNT = S.hook0 + HOOK_SLOTS;
+/** First id after the frame-hook slots (the shot / hit spans). */
+const HIT0 = S.hook0 + HOOK_SLOTS;
+export const SPAN_COUNT = S.alert + 1;
 
 const BASE_NAMES = ['idle', 'input', 'player', 'weapon', 'survival', 'ai', 'hooks', 'physics', 'flares', 'camera', 'targets',
   'items', 'lights', 'fx', 'audio', 'view', 'hud', 'rules', 'render.cull', 'render.draw', 'deferred', 'other',
   'ai.vocalReach', 'ai.brain', 'ai.path', 'ai.motor', 'ai.anim'];
+const HIT_NAMES = ['weapon.fire', 'weapon.melee', 'fire.fx', 'fire.rays', 'hit.world', 'hit.zombie', 'hit.tearChunk', 'hit.extractPatch', 'hit.ragdoll', 'hit.alert'];
 
 /** What each sequential span covers (Game.update order; QA read-out `about`). */
 export const SPAN_ABOUT: Readonly<Record<string, string>> = {
@@ -60,10 +66,36 @@ export const SPAN_ABOUT: Readonly<Record<string, string>> = {
   'ai.motor': 'moveZombie + body separation + settle',
   'ai.anim': 'enemy cues (vocals / swings / steps), hits on the player, animation, transforms, hit volumes',
   'hook.*': 'one lane frame hook each (Game.prof.hookNames, registration order); an unnamed one is the QA walker',
+  'weapon.fire': 'Game.fire: one trigger pull (every pellet, its hits, kills and the gunfire alert)',
+  'weapon.melee': 'Game.meleeContact: one melee contact (its hits, kills and the alert)',
+  'fire.fx': 'Game.fire before the pellets: shot sound, viewmodel kick, recoil / camera, muzzle flash, casing ejection (physics.onFire)',
+  'fire.rays': 'Game.fire per pellet: raycastWorld + nearestEnemyHit + damage.corpseHit + stock.pelletHit (count = pellets)',
+  'hit.world': 'Game.bulletHit (lane handlers, e.g. office window panes) + DamageSystem.hitWorld (craters, prop damage / breaking, fx, sound)',
+  'hit.zombie': 'DamageSystem.hitZombie: wound, body-hit fx, flesh debris and the torn chunk (fire and melee; count = hits)',
+  'hit.tearChunk': 'DamageSystem.tearChunk inside hit.zombie: the torn piece (patch attempts + chunk spawn + wound tear)',
+  'hit.extractPatch': 'fleshPatch.extractPatch inside hit.tearChunk (count = attempts: up to 3 widening radii)',
+  'hit.ragdoll': 'PhysicsSystem.ragdoll on a kill (fire and melee)',
+  'hit.alert': 'Game.alertZombies after a shot / swing (hearing + wake-ups; their path searches run later, in ai.path)',
 };
 
-/** Parent span id of each id (-1 = a top-level lap). */
-export const PARENT: readonly number[] = Array.from({length: SPAN_COUNT}, (_, i) => (i === S.path ? S.brain : i >= S.vocal && i <= S.anim ? S.ai : i >= S.hook0 ? S.hooks : -1));
+/**
+ * Parent span id of each id (-1 = a top-level lap). The shot / hit spans nest: weapon > weapon.fire / weapon.melee >
+ * fire.fx / fire.rays / hit.world; hit.zombie / hit.ragdoll / hit.alert run inside weapon.fire OR weapon.melee, so their parent
+ * is the 'weapon' lap; hit.zombie > hit.tearChunk > hit.extractPatch. Every span is inclusive: never sum a span with its parent.
+ */
+export const PARENT: readonly number[] = Array.from({length: SPAN_COUNT}, (_, i) => {
+  if (i === S.path) return S.brain;
+  if (i >= S.vocal && i <= S.anim) return S.ai;
+  if (i >= S.hook0 && i < HIT0) return S.hooks;
+  if (i === S.fireFx || i === S.fireRays || i === S.hitWorld) return S.fire;
+  if (i === S.tearChunk) return S.hitZombie;
+  if (i === S.extractPatch) return S.tearChunk;
+  if (i >= HIT0) return S.weapon;
+  return -1;
+});
+
+/** The frame-hook slot ids (nested in 'hooks'). */
+export const isHookSpan = (id: number): boolean => id >= S.hook0 && id < HIT0;
 
 export interface SpanStat {
   name: string;
@@ -219,6 +251,7 @@ export class UpdateProfiler {
 
   name(id: number): string {
     if (id < S.hook0) return BASE_NAMES[id];
+    if (id >= HIT0) return HIT_NAMES[id - HIT0] ?? `span${id}`;
     const k = id - S.hook0, label = this.hookNames[k];
     return `hook.${label ?? k}${k === HOOK_SLOTS - 1 && this.hookNames.length > HOOK_SLOTS ? '+' : ''}`;
   }
@@ -257,7 +290,8 @@ export class UpdateProfiler {
         if (this.calls[o2] > 0) frames++;
         calls += this.calls[o2];
       }
-      if (id >= S.hook0 && id - S.hook0 >= this.hookNames.length && calls === 0) continue; // an unused, unnamed hook slot
+      if (isHookSpan(id) && id - S.hook0 >= this.hookNames.length && calls === 0) continue; // an unused, unnamed hook slot
+      if (id >= HIT0 && calls === 0) continue; // a shot / hit span that never ran in the window
       const st = summary(col);
       spans.push({name: this.name(id), parent: PARENT[id] >= 0 ? this.name(PARENT[id]) : null, avg: st.avg, p95: st.p95, max: st.max, frames, count: calls,
         share: frameSum > 0 ? sum / frameSum : 0});
@@ -271,8 +305,9 @@ export class UpdateProfiler {
         let v = this.ms[o2 + id];
         if (id === S.ai) v -= this.ms[o2 + S.vocal] + this.ms[o2 + S.brain] + this.ms[o2 + S.motor] + this.ms[o2 + S.anim];
         else if (id === S.brain) v -= this.ms[o2 + S.path]; // path searches run inside brain updates
-        else if (id === S.hooks) for (let h = S.hook0; h < SPAN_COUNT; h++) v -= this.ms[o2 + h];
-        if (v > 0.0005) items.push({name: id === S.ai ? 'ai (rest)' : id === S.brain ? 'ai.brain (excl. path)' : id === S.hooks ? 'hooks (rest)' : this.name(id), ms: v, count: this.calls[o2 + id]});
+        else if (id === S.hooks) for (let h = S.hook0; h < HIT0; h++) v -= this.ms[o2 + h];
+        else if (id === S.weapon) v -= this.ms[o2 + S.fire] + this.ms[o2 + S.melee]; // (the hit spans are inside those two)
+        if (v > 0.0005) items.push({name: id === S.ai ? 'ai (rest)' : id === S.brain ? 'ai.brain (excl. path)' : id === S.hooks ? 'hooks (rest)' : id === S.weapon ? 'weapon (rest)' : this.name(id), ms: v, count: this.calls[o2 + id]});
       }
       items.sort((a, b) => b.ms - a.ms);
       return {age: k, ms: frameMs[k], updateMs: updMs[k], dominant: items.slice(0, 4)};

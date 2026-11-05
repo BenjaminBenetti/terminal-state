@@ -32,6 +32,10 @@ import {extractPatch, fallbackFlap} from './fleshPatch';
 import {isLootHolderKind} from '../items/loot';
 import type {PhysicsSystem} from '../physics/world';
 import type {PickupLike} from '../physics/dynamicItems';
+import {S as SPAN} from '../debug/updateProfile'; // task hitch-attribution-recorder-20261105: hit.* span ids (timing only)
+
+/** The opt-in frame profiler's nested-span calls (debug/updateProfile.ts UpdateProfiler; a no-op unless it is recording). */
+export interface DamageProfiler { begin(id: number): void; end(id: number): void }
 
 /** What the damage system needs from a zombie (ZombieActor satisfies it). */
 export interface DamageZombie extends WoundableActor {
@@ -107,6 +111,11 @@ export class DamageSystem {
   private fallCue = 0;
   private physics: PhysicsSystem | null = null;
   rand: () => number = Math.random;
+  /**
+   * Task hitch-attribution-recorder-20261105: the game's frame profiler (Game sets it), for the hit.zombie / hit.tearChunk /
+   * hit.extractPatch spans. Timing only — every outcome (wounds, chunks, debris, RNG draws) is the same with or without it.
+   */
+  prof: DamageProfiler | null = null;
   /** Hits handled per kind (QA). */
   readonly counts = {structural: 0, prop: 0, zombie: 0, corpse: 0, knocked: 0, breaks: 0, itemsShot: 0, lotsLifted: 0, propsShoved: 0, patches: 0, flaps: 0, worldChunks: 0};
 
@@ -386,6 +395,7 @@ export class DamageSystem {
 
   /** A bullet / pellet into a zombie (alive or a corpse): wound + blood + flesh / cloth pieces. */
   hitZombie(z: DamageZombie, point: THREE.Vector3, dir: THREE.Vector3, part: 'head' | 'torso' | 'limb', shot: ShotInput, corpse = false): HitInfo {
+    this.prof?.begin(SPAN.hitZombie);
     if (corpse) this.counts.corpse++; else this.counts.zombie++;
     const w = woundsOf(z);
     const r = w?.add({point, dir, part, damage: shot.damage, pellet: shot.pellet}) ?? null;
@@ -409,10 +419,12 @@ export class DamageSystem {
       this.tearShot.set(z, this.shot);
       this.sfx?.breakage('fleshTear', at.x, at.y, at.z, Math.min(1, 0.4 + strength));
     }
-    if (r && w) this.tearChunk(z, w, r, dir, shot, part);
+    if (r && w) { this.prof?.begin(SPAN.tearChunk); this.tearChunk(z, w, r, dir, shot, part); this.prof?.end(SPAN.tearChunk); }
     const restP = r ? w!.wounds[r.index]?.c : null;
-    return {point: v3(at), normal: v3(tv.copy(dir).negate()), object: corpse ? 'corpse' : 'zombie', instanceId: null, material: r?.cls ?? 'flesh', bone: r?.bone,
+    const info: HitInfo = {point: v3(at), normal: v3(tv.copy(dir).negate()), object: corpse ? 'corpse' : 'zombie', instanceId: null, material: r?.cls ?? 'flesh', bone: r?.bone,
       localPoint: restP ? v3(restP) : undefined};
+    this.prof?.end(SPAN.hitZombie);
+    return info;
   }
 
   /**
@@ -441,7 +453,9 @@ export class DamageSystem {
     let patch: ReturnType<typeof extractPatch> = null, usedR = radiusM;
     for (const f of [1, 1.5, 2.1]) {
       usedR = Math.min(0.085, radiusM * f);
+      this.prof?.begin(SPAN.extractPatch);
       patch = extractPatch(layer, r.restEntry, r.restDir, usedR * r.k, {thickness: th});
+      this.prof?.end(SPAN.extractPatch);
       if (patch) break;
     }
     // velocity: the body there (ragdoll part / animated bone) + the bullet's throw

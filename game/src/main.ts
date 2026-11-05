@@ -266,7 +266,7 @@ async function boot(): Promise<void> {
     }
     const cpuMs = performance.now() - t0;
     perf.frame(time, cpuMs);
-    recorder.frame(time, cpuMs); // lane RECORDER: the same frame values (off: one boolean check)
+    recorder.frame(time, cpuMs, t0); // lane RECORDER: the same frame values + the callback start (off: one boolean check)
     requestAnimationFrame(loop);
   };
 

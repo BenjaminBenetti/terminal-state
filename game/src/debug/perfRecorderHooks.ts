@@ -19,7 +19,7 @@
 // Asset ids are basenames + a category (never URLs / query strings); nothing about saves, inventory, input or the account is read.
 
 import * as THREE from 'three';
-import {FrameInput, PerfCapture, ST_PLAYING, assetId, chunkHash, reportFileName, stateCode, F, type LongFrameEntry, type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
+import {FrameInput, PerfCapture, ST_PLAYING, assetId, chunkHash, reportFileName, safeLabel, stateCode, F, type FirstUseBuild, type LongFrameEntry, type PerfCaps, type ReportMeta, type TerminationReason} from './perfRecorder';
 import {SPAN_COUNT, type UpdateProfiler} from './updateProfile';
 import type {GpuInfo} from '../render/backend';
 import type {GpuTimingSupport} from './gpuTimer';
@@ -81,6 +81,9 @@ export interface RecorderOptions {
   origin?: string | null;
   /** Yield between serialization steps (default: a macrotask). */
   yieldFn?: () => Promise<void>;
+  /** (Revision 2) GPU-queue completion probe: false = off; `queue` injects one (tests; null = none). Default: three's WebGPU device queue. */
+  queueProbe?: boolean;
+  queue?: QueueLike | null;
 }
 
 interface LoadingManagerLike { itemStart(url: string): void; itemEnd(url: string): void; itemError(url: string): void }
@@ -161,6 +164,31 @@ interface GameExtras {
   frameBudget?: {diagnostics(): {refresh?: {hz?: number; measured?: boolean}}};
   camera?: {fov?: number};
   journeyCompileStats?: JourneyStats | null;
+  /** (Revision 2) the player's flashlight SpotLight (Game.flashlight): lit / shadow-map state flags. */
+  flashlight?: {visible?: boolean; intensity?: number; castShadow?: boolean; shadow?: {autoUpdate?: boolean}} | null;
+}
+
+/** A WebGPU queue as the completion probe uses it (three r186 WebGPUBackend.device.queue). */
+interface QueueLike { onSubmittedWorkDone(): Promise<unknown> }
+
+/**
+ * (Revision 2) The sanitized identity of a first-use node build: the render object's object (own name, else its nearest named
+ * ancestor within 4 levels) and type, the material the build is for, and — for a shadow pass, whose material is the light's
+ * shadow-pass material — the object's own material. Labels only (safeLabel); no references are kept.
+ */
+export function firstUseIdentity(renderObject: unknown, material: unknown): Omit<FirstUseBuild, 'frame' | 't' | 'ms'> {
+  type Obj = {name?: unknown; type?: unknown; parent?: Obj | null; material?: unknown};
+  const o = (renderObject as {object?: Obj} | null)?.object ?? null;
+  let object: string | null = null, via: FirstUseBuild['via'] = null;
+  if (o) {
+    object = safeLabel(o.name);
+    if (object) via = 'self';
+    else for (let p = o.parent ?? null, d = 0; p && d < 4 && !object; p = p.parent ?? null, d++) { object = safeLabel(p.name); if (object) via = 'ancestor'; }
+  }
+  const m = material as {name?: unknown; type?: unknown; isShadowPassMaterial?: unknown} | null;
+  const om = (Array.isArray(o?.material) ? o!.material[0] : o?.material) as {name?: unknown} | undefined;
+  return {object, via, objectType: safeLabel(o?.type, 24), material: safeLabel(m?.name), materialType: safeLabel(m?.type, 32),
+    objectMaterial: om && om !== m ? safeLabel(om.name) : null, shadowPass: m?.isShadowPassMaterial === true};
 }
 /** Game.journeyCompileStats (render/journeyCompile.ts JourneyCompileStats; one object per job). */
 interface JourneyStats {
@@ -223,6 +251,17 @@ export class PerfRecorderController {
   private readonly fu = {builds: 0, buildMs: 0, async: 0, pipes: 0, pipeMs: 0, progs: 0, progMs: 0};
   private renderDepth = 0;
   private nbT0 = -1;
+  /** (Revision 2) the identity of the in-render node build in progress. */
+  private nbId: Omit<FirstUseBuild, 'frame' | 't' | 'ms'> | null = null;
+  /** (Revision 2) the GPU-queue completion probe: the queue (null = unsupported: `qWhy`), probes in flight (every capture) and stats. */
+  private queue: QueueLike | null = null;
+  /** The probe was installed for the current / last capture (meta() runs after uninstall). */
+  private qInstalled = false;
+  private qWhy = 'not started';
+  private qInFlight = 0;
+  private readonly qStats = {issued: 0, resolved: 0, failed: 0, capped: 0, stale: 0, maxInFlight: 0, callUsSum: 0, callUsMax: 0, cbUsSum: 0};
+  /** (Revision 2) the main loop supplied callback starts (frame(time, cpu, start)). */
+  private startSeen = false;
   private fuHooks: string[] = [];
   private fuMissing: string[] = [];
   private readonly unlisten: (() => void)[] = [];
@@ -246,13 +285,18 @@ export class PerfRecorderController {
     });
   }
 
-  /** Per animation frame (main.ts, after the overlay's sample): `time` = the rAF timestamp, `cpuMs` = the game callback's main-thread ms. */
-  frame(time: number, cpuMs: number): void {
+  /**
+   * Per animation frame (main.ts, after the overlay's sample): `time` = the rAF timestamp, `cpuMs` = the game callback's main-thread
+   * ms, `start` = performance.now() at the callback's entry (revision 2; omitted = unknown).
+   */
+  frame(time: number, cpuMs: number, start?: number): void {
     if (!this.recording) return;
     const t1 = this.now();
     try {
       const g = this.g, x = this.x, i = this.inp, c = g.frameCpu;
       i.time = time; i.cpuMs = cpuMs; i.updateMs = c.updateMs; i.renderMs = c.renderMs; i.deferredMs = c.deferredMs;
+      i.start = typeof start === 'number' && Number.isFinite(start) ? start : NaN;
+      if (i.start === i.start) this.startSeen = true;
       i.state = stateCode(g.state);
       let fl = c.rendered ? F.rendered : 0;
       if (g.warming) fl |= F.warming;
@@ -263,6 +307,8 @@ export class PerfRecorderController {
       if (this.stateChanged) { fl |= F.stateChange; this.stateChanged = false; }
       const jc = x.journeyCompileStats;
       if (journeyActive(jc)) fl |= F.compiling;
+      const fl0 = x.flashlight;
+      if (fl0 && fl0.visible !== false && (fl0.intensity ?? 0) > 0) { fl |= F.torchLit; if (fl0.castShadow && fl0.shadow?.autoUpdate) fl |= F.torchShadow; }
       if ((jc ?? null) !== this.jcSeen || (jc && jc.phase !== this.jcPhase)) this.journeyEvent(t1, jc ?? null);
       i.flags = fl;
       const r = g.renderer;
@@ -285,6 +331,7 @@ export class PerfRecorderController {
       fu.builds = fu.buildMs = fu.async = fu.pipes = fu.pipeMs = fu.progs = fu.progMs = 0;
       this.nbT0 = -1;
       const cap = this.capture.frame(i, g.prof);
+      if ((fl & F.rendered) !== 0) this.probeQueue();
       if (this.pendingControl >= 0 && i.state === ST_PLAYING && (fl & (F.warming | F.transition)) === 0) {
         this.capture.event(t1, 'control.returned', null, {route: this.pendingRoute, sinceBuildMs: r2(t1 - this.pendingControl)});
         this.capture.segmentControl(t1);
@@ -298,6 +345,35 @@ export class PerfRecorderController {
     }
     const d = this.now() - t1;
     this.ovSum += d; this.ovN++; if (d > this.ovMax) this.ovMax = d;
+  }
+
+  /**
+   * (Revision 2) One GPU-queue completion probe for the frame just recorded: device.queue.onSubmittedWorkDone(), issued after the
+   * game's frame callback (every submission of the frame is in the queue by then) and NEVER awaited. At most caps.queueOutstanding
+   * in flight across captures (a stalled GPU / lost device cannot grow it: further frames are 'capped'); the resolution is written
+   * only into the same capture (generation) and only while it records — after stop the frame's probe is 'cancelled'.
+   */
+  private probeQueue(): void {
+    const q = this.queue, cap = this.capture;
+    if (!q) return;
+    if (this.qInFlight >= Math.max(1, this.capture.caps.queueOutstanding)) { cap.queueIssued(this.now(), true); this.qStats.capped++; return; }
+    const t0 = this.now();
+    let p: Promise<unknown>;
+    try { p = q.onSubmittedWorkDone(); } catch { this.qStats.failed++; return; }
+    const k = cap.queueIssued(t0);
+    const gen = cap.gen;
+    const callUs = (this.now() - t0) * 1000;
+    const s = this.qStats;
+    s.issued++; s.callUsSum += callUs; if (callUs > s.callUsMax) s.callUsMax = callUs;
+    this.qInFlight++;
+    if (this.qInFlight > s.maxInFlight) s.maxInFlight = this.qInFlight;
+    const settle = (ok: boolean) => {
+      const t = this.now();
+      this.qInFlight--;
+      if (cap.queueSettled(gen, k, t, ok)) { if (ok) s.resolved++; else s.failed++; } else s.stale++;
+      s.cbUsSum += (this.now() - t) * 1000;
+    };
+    p.then(() => settle(true), () => settle(false));
   }
 
   /** The journey compile job changed (a new job, scene -> shadow, done / cancelled): one event, at the sample that saw it. */
@@ -340,6 +416,10 @@ export class PerfRecorderController {
     this.pendingControl = -1;
     this.renderDepth = 0;
     this.nbT0 = -1;
+    this.nbId = null;
+    this.startSeen = false;
+    const qs = this.qStats;
+    qs.issued = qs.resolved = qs.failed = qs.capped = qs.stale = qs.maxInFlight = qs.callUsSum = qs.callUsMax = qs.cbUsSum = 0; // (qInFlight spans captures)
     this.fu.builds = this.fu.buildMs = this.fu.async = this.fu.pipes = this.fu.pipeMs = this.fu.progs = this.fu.progMs = 0;
     this.startedAtUTC = new Date().toISOString();
     this.install();
@@ -445,6 +525,17 @@ export class PerfRecorderController {
       {id: 'frame.interval', available: true, source: 'requestAnimationFrame timestamps (every frame)'},
       {id: 'frame.cpu', available: true, source: 'performance.now() around the game frame callback (main.ts loop)', note: 'main-thread JS of the game callback only'},
       {id: 'frame.update / renderSubmit / deferred', available: true, source: 'Game.frameCpu (the same boundaries as the Ctrl+Shift+P overlay)', note: 'render submit = CPU encoding, not GPU execution'},
+      {id: 'frame.callbackStart', available: this.startSeen, source: 'main.ts loop: performance.now() at the rAF callback entry (the t0 frame.cpu is measured from)',
+        note: 'columns start / startDelay (start - rAF timestamp) / gapBefore (start - previous start - previous cpu); same timebase as the rAF timestamps; gapBefore includes the normal wait for the next refresh, so it alone is not GC / busy-main-thread proof'},
+      {id: 'gpu.queueCompletion', available: this.qInstalled, source: this.qWhy,
+        note: `one device.queue.onSubmittedWorkDone() per drawn frame, issued at the end of the game callback (after its submissions), never awaited; at most ${this.capture.caps.queueOutstanding} in flight (more: that frame is 'capped', null); it resolves ON THE MAIN THREAD, so queueMs = queued GPU work + main-thread scheduling of the resolution — not GPU execution alone, not presentation (no web API reports canvas presentation times); still pending at stop = 'cancelled' (null). The probe itself may perturb timing slightly (see capture.overhead.queueProbe)`},
+      {id: 'spans.shotHit', available: this.capture.seen.spans, source: 'UpdateProfiler nested spans: weapon.fire / weapon.melee (Game.fire / meleeContact), fire.fx, fire.rays, hit.world, hit.zombie > hit.tearChunk > hit.extractPatch (DamageSystem), hit.ragdoll, hit.alert',
+        note: 'inclusive (a nested span is inside its parent; parents in spans.parents); per frame in spikeDetail and worst[].spans.hitPath; timing only'},
+      {id: 'firstUse.identity', available: this.capture.seen.firstUse, source: 'NodeManager._createNodeBuilder(renderObject, material) while recording: sanitized object / material names and types (summary.firstUse.builds)',
+        note: `synchronous in-render builds only; the ${this.capture.caps.firstUseBuilds} most expensive kept; null = anonymous; labels only (no references, shaders, geometry or textures)`},
+      {id: 'flashlight', available: this.x.flashlight !== undefined, source: 'Game.flashlight (SpotLight) at every frame sample',
+        note: 'flags torchLit (visible, intensity > 0) and torchShadow (castShadow and shadow.autoUpdate: its shadow map is drawn that frame; quality-dependent)'},
+      {id: 'tail', available: true, source: 'summary.tail (from the frame columns)', note: 'intervals by refresh multiple, callback overruns and their overlap, stall events per minute, worst 1 s / 5 s windows; descriptive, no pass / fail threshold'},
       {id: 'spans', available: this.capture.seen.spans, source: 'debug/updateProfile.ts UpdateProfiler (on while recording)', note: typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated ? 'fine clock (cross-origin isolated)' : 'browser default clock: Firefox ~1 ms, Chromium ~0.1 ms resolution'},
       {id: 'gpu', available: this.capture.seen.gpu, source: 'debug/gpuTimer.ts (WebGPU timestamp-query / EXT_disjoint_timer_query_webgl2), asynchronous',
         note: !this.gpuWanted ? 'not requested for this capture' : !this.opts.overlay ? 'no GPU timer installed' : this.opts.overlay.gpuTimer.error ?? (tap ? (tap.available ? tap.note : `unavailable: ${tap.note}`) : 'renderer not initialized')},
@@ -473,9 +564,15 @@ export class PerfRecorderController {
       {id: 'gc', available: false, source: 'none', note: 'no web API reports GC pauses; they show only as interval much longer than the game CPU'},
       {id: 'systemCpu / gpuUtilization', available: false, source: 'none', note: 'not exposed to web pages'},
     ];
-    const ov = this.ovN ? {frames: this.ovN, meanUs: r2(this.ovSum / this.ovN * 1000), maxUs: r2(this.ovMax * 1000), note: "the recorder's own per-frame work (not counted in frames.cpu); the UpdateProfiler's span clock reads are inside frames.cpu"} : null;
+    const ov = this.ovN ? {frames: this.ovN, meanUs: r2(this.ovSum / this.ovN * 1000), maxUs: r2(this.ovMax * 1000), note: "the recorder's own per-frame work (not counted in frames.cpu; includes issuing the queue probe); the UpdateProfiler's span clock reads are inside frames.cpu"} : null;
+    const qs = this.qStats;
+    const queueProbe = {supported: this.qInstalled, source: this.qWhy, policy: `every drawn frame while recording, at most ${this.capture.caps.queueOutstanding} in flight`,
+      issued: qs.issued, resolved: qs.resolved, failed: qs.failed, capped: qs.capped, staleIgnored: qs.stale, inFlightNow: this.qInFlight, maxInFlight: qs.maxInFlight,
+      callMeanUs: qs.issued ? r2(qs.callUsSum / qs.issued) : null, callMaxUs: r2(qs.callUsMax), resolveMeanUs: qs.resolved + qs.failed + qs.stale ? r2(qs.cbUsSum / (qs.resolved + qs.failed + qs.stale)) : null,
+      frameStates: this.capture.queueCounts(),
+      note: 'self-cost of the probe: the onSubmittedWorkDone() call and its resolution callback on the main thread (one promise per drawn frame); staleIgnored = resolved after its capture stopped / was replaced'};
     return {build: buildIdentity(), environment: this.environment(), capabilities: caps, spanNames, capturedAtUTC: this.startedAtUTC, endedAtUTC: new Date().toISOString(),
-      stoppedBy: this.stoppedBy, overhead: ov ? {...ov, captureBytes: this.capture.bytes()} : {captureBytes: this.capture.bytes()},
+      stoppedBy: this.stoppedBy, overhead: ov ? {...ov, captureBytes: this.capture.bytes(), queueProbe} : {captureBytes: this.capture.bytes(), queueProbe},
       notes: ['interval of frame k = rAF time of frame k+1 minus frame k (the work of frame k delays frame k+1)',
         'gameplay summaries exclude menus, pause, loading, warm-up, lifecycle transitions (travel / journey / level build), hidden-tab gaps and focus loss',
         'a software rasterizer / WebGL2 fallback is not representative of a hardware WebGPU device']};
@@ -571,6 +668,32 @@ export class PerfRecorderController {
     this.installObservers();
     this.installPage();
     this.installGpu();
+    this.installQueue();
+  }
+
+  /**
+   * (Revision 2) The GPU-queue completion probe: only on three's WebGPU backend with a live device (the renderer's own — nothing
+   * else is created or probed); WebGL 2 / no device: unsupported, every queue column null, the reason in the capabilities.
+   */
+  private installQueue(): void {
+    this.queue = null;
+    this.qInstalled = false;
+    this.installQueueImpl();
+    this.qInstalled = this.queue !== null;
+  }
+
+  private installQueueImpl(): void {
+    if (this.opts.queueProbe === false) { this.qWhy = 'disabled for this capture'; return; }
+    const r = this.g.renderer as unknown as {initialized?: boolean; backend?: {isWebGPUBackend?: boolean; device?: {queue?: Partial<QueueLike> | null} | null}};
+    const injected = this.opts.queue;
+    if (injected !== undefined) { this.queue = injected; this.qWhy = injected ? 'injected' : 'none'; return; }
+    if (!r.initialized) { this.qWhy = 'renderer not initialized at start'; return; }
+    const be = r.backend;
+    if (!be?.isWebGPUBackend) { this.qWhy = 'not the WebGPU backend (the WebGL 2 fallback has no GPU queue)'; return; }
+    const q = be.device?.queue;
+    if (!q || typeof q.onSubmittedWorkDone !== 'function') { this.qWhy = 'no WebGPU device queue with onSubmittedWorkDone'; return; }
+    this.queue = q as QueueLike;
+    this.qWhy = "three's WebGPU device.queue.onSubmittedWorkDone()";
   }
 
   private uninstall(): void {
@@ -591,6 +714,7 @@ export class PerfRecorderController {
     this.observers = [];
     for (const u of this.unlisten.splice(0)) u();
     if (this.gpuTap) { this.opts.overlay?.setGpuTap(null); this.gpuTap = false; }
+    this.queue = null; // (probes in flight settle into nothing: the capture is stopped)
   }
 
   private wrap(target: object, spec: WrapSpec): void {
@@ -661,13 +785,26 @@ export class PerfRecorderController {
       try { return orig.apply(this, a); } finally { self.renderDepth--; }
     });
     hook('NodeManager._createNodeBuilder', r._nodes, '_createNodeBuilder', orig => function (this: unknown, ...a: unknown[]) {
-      if (self.recording && self.renderDepth > 0 && self.nbT0 < 0) self.nbT0 = now(); // (a TSL error re-creates it: one span)
+      // (a TSL error re-creates it with a fallback material: one span, the first identity)
+      if (self.recording && self.renderDepth > 0 && self.nbT0 < 0) {
+        self.nbT0 = now();
+        try { self.nbId = firstUseIdentity(a[0], a[1]); } catch { self.nbId = null; } // (revision 2: labels only, at the build's start)
+      }
       return orig.apply(this, a);
     });
     hook('NodeManager._createNodeBuilderState', r._nodes, '_createNodeBuilderState', orig => function (this: unknown, ...a: unknown[]) {
       const res = orig.apply(this, a);
       if (self.recording) {
-        if (self.renderDepth > 0) { self.fu.builds++; if (self.nbT0 >= 0) { self.fu.buildMs += now() - self.nbT0; self.nbT0 = -1; } } else self.fu.async++;
+        if (self.renderDepth > 0) {
+          self.fu.builds++;
+          if (self.nbT0 >= 0) {
+            const t = now(), ms = t - self.nbT0;
+            self.fu.buildMs += ms;
+            self.capture.firstUseBuild(t, ms, self.nbId ?? firstUseIdentity(null, null));
+            self.nbT0 = -1;
+            self.nbId = null;
+          }
+        } else self.fu.async++;
       }
       return res;
     });
