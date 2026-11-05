@@ -21,12 +21,15 @@
 //               (non-instanced), merged-chunk extracts (non-indexed) and holders' own meshes, with the source's shadow flags;
 //  - flesh      physics/chunks.ts PhysChunks.fleshPrototypes: chunkMaterial per distinct enemy layer-material signature on the
 //               patch / flap geometry layout (position, normal, uv, colour; non-indexed).
-// The pool keeps one prototype per variant key (variantKey: a structural mirror of three's key, for de-duplication only), stays
+// The pool keeps one prototype per variant key (variantKey: a structural mirror of three's key, for de-duplication only; a caster
+// whose material has a map / colour / mask / cast node keeps its material INSTANCE in the key: ownShadowNodes), stays
 // HIDDEN under the station scene for the world's lifetime (three's caches are reference-counted: a removed / disposed prototype
 // would let a build be freed before its first real use) and is cleared with the world; geometries / materials the pool itself
 // created are released through the caller's retire queue (after the next warm-up, like every other station release).
 
 import * as THREE from 'three';
+import type {NodeMaterial} from 'three/webgpu';
+import {copyNodeHooks} from './nodeHooks';
 import {geometryKey} from './warmup';
 
 /** One family of prototypes as a subsystem built them. */
@@ -87,15 +90,49 @@ export function variantKey(o: THREE.Mesh): string {
   const mats = (Array.isArray(o.material) ? o.material : [o.material]) as THREE.Material[];
   const kind = (o as THREE.SkinnedMesh).isSkinnedMesh ? 'skin' : (o as THREE.InstancedMesh).isInstancedMesh ? `inst:${o.uuid}` : 'mesh';
   const bones = (o as THREE.SkinnedMesh).skeleton?.bones.length ?? 0;
-  return `${kind}|${mats.map(materialKey).join('+')}|${geometryKey(o.geometry)}|${bones}|${o.receiveShadow ? 1 : 0}|${o.castShadow ? 1 : 0}`;
+  const key = (m: THREE.Material) => materialKey(m) + (o.castShadow && ownShadowNodes(m) ? `#${m.uuid}` : '');
+  return `${kind}|${mats.map(key).join('+')}|${geometryKey(o.geometry)}|${bones}|${o.receiveShadow ? 1 : 0}|${o.castShadow ? 1 : 0}`;
+}
+
+/**
+ * True when three r186 builds the shadow-pass variant of a caster PER MATERIAL INSTANCE: Renderer._getShadowNodes makes the shadow
+ * override's colour / mask / cast nodes from the caster material's own map / colorNode / castShadowNode / mask nodes (reference(...,
+ * material) nodes, cached per material), so two value-equal materials with a map draw the same scene variant but two shadow
+ * variants (probed: a value-equal clone with a map built its own shadow program; one without a map shared it).
+ */
+export function ownShadowNodes(m: THREE.Material): boolean {
+  const n = m as THREE.Material & {map?: THREE.Texture | null; colorNode?: unknown; castShadowNode?: unknown; maskNode?: unknown; maskShadowNode?: unknown};
+  return !!(n.map as THREE.Texture | null | undefined)?.isTexture || !!n.colorNode || !!n.castShadowNode || !!n.maskNode || !!n.maskShadowNode;
+}
+
+/**
+ * True when three r186 draws `m` in two passes — a transparent DoubleSide material that is not forceSinglePass: renderObject /
+ * _renderTransparents set `side` to BackSide, then FrontSide, for the draws. compileAsync only QUEUES the work and builds it after
+ * the side was restored, so it builds the DoubleSide variant, which those draws never use (probed: a hidden glass prototype compiled
+ * at side 2, the first real draw built sides 1 and 0). The pool adds side proxies for such prototypes (RuntimeVariantPool.rebuild).
+ */
+export function drawsDoublePass(m: THREE.Material): boolean {
+  return m.transparent === true && m.side === THREE.DoubleSide && m.forceSinglePass === false;
+}
+
+/** A copy of `m` drawn like the real material in one of its double-pass draws (node hooks + alphaTest kept: NodeMaterial.copy drops it). */
+function sideCopy(m: THREE.Material, side: THREE.Side): THREE.Material {
+  const c = m.clone();
+  c.alphaTest = m.alphaTest;
+  if ((m as unknown as NodeMaterial).isNodeMaterial) copyNodeHooks(m as unknown as NodeMaterial, c as unknown as NodeMaterial);
+  c.side = side;
+  return c;
 }
 
 export interface VariantPoolStats {
   /** Per family: prototypes offered / kept after de-duplication. */
   families: Record<string, {offered: number; kept: number}>;
-  /** Prototypes in the pool now; casters among them (shadow-pass variants). */
+  /** Prototypes in the pool now (side proxies included); casters among them (shadow-pass variants). */
   prototypes: number;
   casters: number;
+  /** Side proxies added for double-pass prototypes (drawsDoublePass); copies whose key did not match the real draw (dropped). */
+  sideProxies: number;
+  sideMismatch: number;
   /** Main-thread ms of the last rebuild (building + de-duplicating; the compile is the warm-up's). */
   ms: number;
   /** Rebuilds / clears so far (QA). */
@@ -105,7 +142,7 @@ export interface VariantPoolStats {
 export class RuntimeVariantPool {
   /** The hidden pool root (in the station scene; register it as a warm-up pool). Never shown. */
   readonly root = new THREE.Group();
-  stats: VariantPoolStats = {families: {}, prototypes: 0, casters: 0, ms: 0, rebuilds: 0};
+  stats: VariantPoolStats = {families: {}, prototypes: 0, casters: 0, sideProxies: 0, sideMismatch: 0, ms: 0, rebuilds: 0};
   private owned: {geometries: Set<THREE.BufferGeometry>; materials: Set<THREE.Material>} = {geometries: new Set(), materials: new Set()};
 
   constructor() {
@@ -119,7 +156,7 @@ export class RuntimeVariantPool {
     const t0 = now();
     this.clear(retire);
     const seen = new Set<string>();
-    const stats: VariantPoolStats = {families: {}, prototypes: 0, casters: 0, ms: 0, rebuilds: this.stats.rebuilds + 1};
+    const stats: VariantPoolStats = {families: {}, prototypes: 0, casters: 0, sideProxies: 0, sideMismatch: 0, ms: 0, rebuilds: this.stats.rebuilds + 1};
     for (const f of families) {
       const s = (stats.families[f.name] ??= {offered: 0, kept: 0});
       for (const m of f.meshes) {
@@ -134,6 +171,28 @@ export class RuntimeVariantPool {
         s.kept++;
         stats.prototypes++;
         if (m.castShadow) stats.casters++;
+        // a double-pass material: its BackSide / FrontSide draws as one-pass copies (the scene-pass variants three's two draws key;
+        // value-equal keys share the build). The prototype itself stays: real draws (the hidden frames, the shadow pass) use it.
+        const mat = m.material as THREE.Material;
+        if (Array.isArray(m.material) || !drawsDoublePass(mat)) continue;
+        for (const side of [THREE.BackSide, THREE.FrontSide] as const) {
+          const c = sideCopy(mat, side);
+          mat.side = side;
+          const want = materialKey(mat);
+          mat.side = THREE.DoubleSide;
+          if (materialKey(c) !== want) { c.dispose(); stats.sideMismatch++; continue; }
+          const proxy = new THREE.Mesh(m.geometry, c);
+          proxy.receiveShadow = m.receiveShadow; // (not a caster: the shadow pass draws the prototype's own variant)
+          const pk = variantKey(proxy);
+          if (seen.has(pk)) { c.dispose(); continue; }
+          seen.add(pk);
+          proxy.name = `${m.name}:${side === THREE.BackSide ? 'back' : 'front'}Side`;
+          proxy.matrixAutoUpdate = false;
+          this.root.add(proxy);
+          this.owned.materials.add(c);
+          stats.prototypes++;
+          stats.sideProxies++;
+        }
       }
     }
     for (const g of owned.geometries ?? []) this.owned.geometries.add(g);
@@ -151,6 +210,6 @@ export class RuntimeVariantPool {
     this.owned = {geometries: new Set(), materials: new Set()};
     const release = () => { for (const g of geos) g.dispose(); for (const m of mats) m.dispose(); };
     if (geos.length || mats.length) { if (retire) retire(release); else release(); }
-    this.stats = {families: {}, prototypes: 0, casters: 0, ms: 0, rebuilds: this.stats.rebuilds};
+    this.stats = {families: {}, prototypes: 0, casters: 0, sideProxies: 0, sideMismatch: 0, ms: 0, rebuilds: this.stats.rebuilds};
   }
 }

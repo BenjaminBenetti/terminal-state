@@ -226,6 +226,8 @@ export class OpenableSet {
   private readonly roleMats = new Map<string, THREE.Material>();
   private readonly instanced: THREE.InstancedMesh[] = [];
   private pending: OpenHolder[] = [];
+  /** Task runtime-variant-warmup-20261105: the accent colours attached per kind this station (takeoverPrototypes). */
+  private readonly accents = new Map<OpenableKind, Set<number>>();
   /** Holders currently taken over (own meshes). */
   readonly active = new Set<OpenHolder>();
   /** QA counters. */
@@ -472,6 +474,9 @@ export class OpenableSet {
     const palette = PURPOSE_ACCENT[kind as keyof typeof PURPOSE_ACCENT];
     const p = h.prop;
     const accent = palette?.length ? palette[Math.abs(Math.round(p.x * 7 + p.z * 13 + p.variant)) % palette.length] : null;
+    let used = this.accents.get(kind);
+    if (!used) this.accents.set(kind, (used = new Set()));
+    used.add(accent ?? 0x8a8f94);
     const rt: OpenRT = {
       kind, spec, model, matrix: h.matrix.clone(), root: null, slots: [], accent, pinned: false, loose: false, glassBroken: false, idle: 0,
       parts: spec.parts.map((ps, i) => {
@@ -542,6 +547,7 @@ export class OpenableSet {
     for (const im of this.instanced) { this.group.remove(im); im.dispose(); }
     this.instanced.length = 0;
     this.pending = [];
+    this.accents.clear();
     for (const k of Object.keys(this.stats) as (keyof OpenableSet['stats'])[]) this.stats[k] = 0;
   }
 
@@ -555,8 +561,9 @@ export class OpenableSet {
 
   /**
    * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): hidden PROTOTYPES of the own meshes takeover() would build for
-   * every kind attached in this station — the kind model's part geometries and materials, the accent role material (any accent
-   * colour is the same variant: three keys colours as present), the own-mesh shadow flags of the kind's closed batches
+   * every kind attached in this station — the kind model's part geometries and materials, the accent role material of every accent
+   * colour attached for the kind (each colour is its own material with a map: three r186 builds a shadow variant per such material
+   * instance, so one colour would not cover another), the own-mesh shadow flags of the kind's closed batches
    * (ownMeshShadowFlags, the rule takeover uses) — so the first aim / open / damage of each kind finds its non-instanced variants
    * compiled. Pure: no holder, slot, instance matrix or stat changes. `aimable` = the moving-part meshes (setHighlight's targets).
    */
@@ -581,10 +588,14 @@ export class OpenableSet {
       m.parts.forEach((pm, i) => {
         const ps = spec.parts[i];
         for (const q of pm.moving) {
-          const mat = q.role === 'accent' ? this.roleMat('accent', m.paint, {accent: 0x8a8f94, double: ps?.doubleSide}) : q.mat;
-          const mesh = new THREE.Mesh(q.geo, mat);
-          root.add(mesh);
-          aimable.push(mesh);
+          const mats = q.role === 'accent'
+            ? [...(this.accents.get(kind as OpenableKind) ?? [0x8a8f94])].map(accent => this.roleMat('accent', m.paint, {accent, double: ps?.doubleSide}))
+            : [q.mat];
+          for (const mat of mats) {
+            const mesh = new THREE.Mesh(q.geo, mat);
+            root.add(mesh);
+            aimable.push(mesh);
+          }
         }
         for (const q of [...pm.plate, ...pm.tray, ...pm.inner]) root.add(new THREE.Mesh(q.geo, q.mat));
       });
