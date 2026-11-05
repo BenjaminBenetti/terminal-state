@@ -118,11 +118,15 @@ export class FlashlightBattery {
     this.reset();
   }
 
-  /** New station / retry / death: START charge, light on, no dip in progress. */
-  reset(charge: number = BATTERY.start): void {
+  /**
+   * New station / retry / death: START charge, light on (when charged), no dip in progress. Task studio-beta-new-game-flashlight-off-
+   * 20261105-022524-01 (user: "by default when starting a new game the light should not be on"): `o.on: false` = switched OFF instead
+   * (Game.resetCarry, a fresh game only) — off by choice, not flat (`died` stays false; F switches it on as usual).
+   */
+  reset(charge: number = BATTERY.start, o: {on?: boolean} = {}): void {
     this.charge = Math.max(0, Math.min(1, charge));
-    this.on = this.charge > 0;
-    this.died = !this.on;
+    this.on = this.charge > 0 && (o.on ?? true);
+    this.died = this.charge <= 0;
     this.calm();
     this.warned = this.charge <= BATTERY.critWarn ? 2 : this.charge <= BATTERY.lowWarn ? 1 : 0;
     this.stats.flickerTime = this.stats.dipTime = this.stats.dips = 0;
@@ -378,9 +382,9 @@ export class PlayerLight {
     this.glow.castShadow = false;
   }
 
-  /** New station / retry: full START charge, light on; sources are re-registered on the next update. */
-  reset(charge?: number): void {
-    this.battery.reset(charge);
+  /** New station / retry: full START charge, light on (`o.on: false`: off — a fresh game); sources are re-registered on the next update. */
+  reset(charge?: number, o: {on?: boolean} = {}): void {
+    this.battery.reset(charge, o);
     this.beam = this.body = null;
     this.spotT = 0;
     this.wasEmitting = false;
