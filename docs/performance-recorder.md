@@ -109,7 +109,8 @@ schema-1 field keeps its meaning, and a report without these fields simply lacks
 
 * **Callback start:** `frames.columns.start` is `performance.now()` at the game's rAF callback entry (the `t0` that `cpu` is
   measured from in `main.ts`), in the same timebase as the rAF timestamp `t`. Two values are derived from it:
-  * `startDelay = start − t`;
+  * `startDelay = start − t`. It can be slightly negative where the browser's rAF timestamp isn't the frame's begin time, or its
+    clock is coarse: a Firefox 158 menu smoke showed −0.8 ms to +15.9 ms, median 0.5 ms;
   * `gapBefore = start − (previous start + previous cpu)`. This is main-thread time between two game callbacks. **It includes the
     normal wait for the next refresh**, so a large value alone is not proof of GC or a busy main thread.
 * **GPU-queue completion** (`queueMs`, `queueDone`, `queueState`; WebGPU only):

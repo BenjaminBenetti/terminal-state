@@ -851,7 +851,7 @@ export class PerfCapture {
       asyncBuilds: 'node builds completed outside a render (compileAsync / warm-up)', pipelinesCreated: 'render pipelines requested (any path)',
       pipelineMs: '0.01 ms CPU of the pipeline requests inside renders (driver compile not observable)', programsCreated: 'shader programs created', programMs: '0.01 ms CPU of the program creation inside renders',
       start: '0.01 ms since capture start: performance.now() at the game rAF callback entry (main.ts; same timebase as t; null = not supplied)',
-      startDelay: '0.01 ms: start - t (the callback began this long after its rAF timestamp)',
+      startDelay: '0.01 ms: start - t (the callback began this long after its rAF timestamp; can be slightly negative where the browser\'s rAF timestamp is not the frame\'s begin time or its clock is coarse, e.g. Firefox ~1 ms)',
       gapBefore: '0.01 ms: start - (previous start + previous cpu): main-thread time between the previous game callback\'s end and this one\'s start, INCLUDING the normal wait for the next refresh',
       queueMs: '0.01 ms from the GPU-queue probe call (end of this game callback, after its submissions) to device.queue.onSubmittedWorkDone() resolving on the main thread (queued GPU work + main-thread scheduling; not GPU execution alone, not presentation); null unless resolved',
       queueDone: '0.01 ms since capture start when that probe resolved (null unless resolved)',
