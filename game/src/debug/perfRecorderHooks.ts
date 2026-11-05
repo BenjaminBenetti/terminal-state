@@ -26,6 +26,7 @@ import type {GpuInfo} from '../render/backend';
 import type {GpuTimingSupport} from './gpuTimer';
 import {seedToCode} from '../core/rng';
 import {SAVE_BUILD} from '../save/serialize';
+import {uploadStats, uploadsIssued} from '../render/uploadDedupe'; // task mall-horde-performance-20261105 (schemaMinor 4)
 
 /** The page was hidden this long (ms): the capture stops when it comes back (termination 'hidden'). */
 export const HIDDEN_STOP_MS = 30000;
@@ -370,6 +371,9 @@ export class PerfRecorderController {
         const nodes = this.ri._nodes?.nodeBuilderCache, pipes = this.ri._pipelines?.caches;
         i.nodes = nodes ? nodes.size : -1; i.pipelines = pipes ? pipes.size : -1;
       } else { i.frameId = -1; i.draws = i.tris = i.passes = 0; i.textures = i.geometries = i.programs = i.nodes = i.pipelines = -1; }
+      // (schemaMinor 4) render/uploadDedupe.ts: uniform uploads issued / skipped so far (-1: not installed — WebGL 2 or not initialized)
+      i.uniformWrites = uploadStats.installs > 0 ? uploadsIssued() : -1;
+      i.uniformWritesSkipped = uploadStats.installs > 0 ? uploadStats.skipped : -1;
       const stats = x.world?.culler?.stats;
       i.culled = stats && typeof stats.culled === 'number' ? stats.culled : -1;
       i.storey = stats && typeof stats.level === 'number' ? stats.level : 0;
@@ -600,6 +604,7 @@ export class PerfRecorderController {
       {id: 'renderer.draws / triangles / passes', available: g.renderer.initialized, source: 'renderer.info.render after each drawn frame (render/backend.ts renderStats)'},
       {id: 'renderer.newTextures / newGeometries / newPrograms', available: this.capture.seen.textures, source: 'renderer.info.memory counters, net change per frame'},
       {id: 'renderer.newNodeBuilds', available: this.capture.seen.nodes, source: 'three internal NodeManager.nodeBuilderCache.size (net change)', note: 'TSL material node builds on the CPU (first sight of a material / geometry / lights combination)'},
+      {id: 'renderer.uniformWrites', available: this.capture.seen.uniformWrites, source: 'render/uploadDedupe.ts uploadStats (the WebGPU backend\'s binding update, wrapped)', note: 'schemaMinor 4: uniform-buffer uploads issued / skipped as identical per frame; the native cost of an upload is not measured'},
       {id: 'renderer.newPipelines', available: this.capture.seen.pipelines, source: 'three internal Pipelines.caches.size (net change)', note: 'pipelines REQUESTED on the CPU; the driver / GPU shader compile and its completion are NOT observable'},
       {id: 'firstUse.nodeBuilds / nodeBuildMs / asyncBuilds', available: this.capture.seen.firstUse, source: this.fuHooks.length ? `three r186 internals hooked while recording: ${this.fuHooks.join(', ')}` : 'none',
         note: this.fuMissing.length ? `unavailable: ${this.fuMissing.join(', ')}` : 'TSL node builds completed inside synchronous renders, with their CPU ms; builds outside a render (compileAsync / warm-up) are counted, not timed'},

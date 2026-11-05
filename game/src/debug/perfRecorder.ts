@@ -39,9 +39,10 @@ export const PERF_SCHEMA_VERSION = 1;
 /**
  * Additive minor version of schema 1 (report key schemaMinor; 2: start / startDelay / gapBefore / queue* columns, torch flags,
  * firstUse.builds, summary.tail, shot / hit spans; 3: summary.firstUse.pipelines + worst[].firstUse.pipelineRequests, the 10 s mark
- * lookback with marks[].windowMs / fromT / refreshMs / stalls / omittedStalls).
+ * lookback with marks[].windowMs / fromT / refreshMs / stalls / omittedStalls; 4: frames.columns.uniformWrites / uniformWritesSkipped —
+ * render/uploadDedupe.ts).
  */
-export const PERF_SCHEMA_MINOR = 3;
+export const PERF_SCHEMA_MINOR = 4;
 
 /** (schemaMinor 3) A mark looks back this far (ms) for its worst frame and stalls: players press F9 seconds after the felt stall. */
 export const MARK_LOOKBACK_MS = 10000;
@@ -162,6 +163,8 @@ export class FrameInput {
    */
   fuOn = false;
   nodeBuilds = 0; nodeBuildMs = 0; asyncBuilds = 0; pipelinesCreated = 0; pipelineMs = 0; programsCreated = 0; programMs = 0;
+  /** (schemaMinor 4) Uniform-buffer uploads issued / skipped as identical so far (render/uploadDedupe.ts uploadStats; -1: not installed). */
+  uniformWrites = -1; uniformWritesSkipped = -1;
 }
 
 /** The UpdateProfiler's ring (debug/updateProfile.ts) as the recorder reads it. */
@@ -374,6 +377,7 @@ export class PerfCapture {
   private state!: Uint8Array; private flags!: Uint16Array; private frameId!: Float64Array;
   private draws!: Uint32Array; private tris!: Uint32Array; private passes!: Uint16Array;
   private dTex!: Int16Array; private dGeo!: Int16Array; private dProg!: Int16Array; private dNode!: Int16Array; private dPipe!: Int16Array;
+  private dUni!: Int16Array; private dUniSkip!: Int16Array;
   private culled!: Int32Array; private enemies!: Uint16Array; private yaw!: Float32Array; private pitch!: Float32Array;
   private spanMs!: Float32Array; private spanCalls!: Uint16Array;
   private fuBuilds!: Uint16Array; private fuBuildMs!: Float32Array; private fuAsync!: Uint16Array; private fuPipes!: Uint16Array; private fuPipeMs!: Float32Array;
@@ -391,9 +395,9 @@ export class PerfCapture {
   fpListDropped = 0;
   fpListSeen = 0;
   // --- running state ---
-  private prev = {textures: -1, geometries: -1, programs: -1, nodes: -1, pipelines: -1};
+  private prev = {textures: -1, geometries: -1, programs: -1, nodes: -1, pipelines: -1, uniformWrites: -1, uniformWritesSkipped: -1};
   /** Counters that were ever available in this capture (null in the report otherwise). */
-  readonly seen = {textures: false, geometries: false, programs: false, nodes: false, pipelines: false, culled: false, gpu: false, spans: false, firstUse: false};
+  readonly seen = {textures: false, geometries: false, programs: false, nodes: false, pipelines: false, culled: false, gpu: false, spans: false, firstUse: false, uniformWrites: false};
   private profHead = -1;
   private gapPending = false;
   private markPending = false;
@@ -439,6 +443,7 @@ export class PerfCapture {
     this.state = new Uint8Array(N); this.flags = new Uint16Array(N); this.frameId = new Float64Array(N);
     this.draws = new Uint32Array(N); this.tris = new Uint32Array(N); this.passes = new Uint16Array(N);
     this.dTex = new Int16Array(N); this.dGeo = new Int16Array(N); this.dProg = new Int16Array(N); this.dNode = new Int16Array(N); this.dPipe = new Int16Array(N);
+    this.dUni = new Int16Array(N); this.dUniSkip = new Int16Array(N);
     this.culled = new Int32Array(N); this.enemies = new Uint16Array(N); this.yaw = new Float32Array(N); this.pitch = new Float32Array(N);
     this.spanMs = new Float32Array(N * SPAN_COUNT); this.spanCalls = new Uint16Array(N * SPAN_COUNT);
     this.fuBuilds = new Uint16Array(N); this.fuBuildMs = new Float32Array(N); this.fuAsync = new Uint16Array(N); this.fuPipes = new Uint16Array(N); this.fuPipeMs = new Float32Array(N);
@@ -465,7 +470,7 @@ export class PerfCapture {
     this.gpu.fill(NaN);
     this.fuList = []; this.fuListDropped = 0; this.fuListSeen = 0;
     this.fpList = []; this.fpListDropped = 0; this.fpListSeen = 0;
-    this.prev.textures = this.prev.geometries = this.prev.programs = this.prev.nodes = this.prev.pipelines = -1;
+    this.prev.textures = this.prev.geometries = this.prev.programs = this.prev.nodes = this.prev.pipelines = this.prev.uniformWrites = this.prev.uniformWritesSkipped = -1;
     for (const k of Object.keys(this.seen) as (keyof PerfCapture['seen'])[]) this.seen[k] = false;
     this.profHead = profHead;
     this.gapPending = this.markPending = false;
@@ -526,6 +531,9 @@ export class PerfCapture {
     this.dProg[k] = delta(i.programs, p.programs); if (i.programs >= 0) s.programs = true; p.programs = i.programs;
     this.dNode[k] = delta(i.nodes, p.nodes); if (i.nodes >= 0) s.nodes = true; p.nodes = i.nodes;
     this.dPipe[k] = delta(i.pipelines, p.pipelines); if (i.pipelines >= 0) s.pipelines = true; p.pipelines = i.pipelines;
+    this.dUni[k] = delta(i.uniformWrites, p.uniformWrites); this.dUniSkip[k] = delta(i.uniformWritesSkipped, p.uniformWritesSkipped);
+    if (i.uniformWrites >= 0) s.uniformWrites = true;
+    p.uniformWrites = i.uniformWrites; p.uniformWritesSkipped = i.uniformWritesSkipped;
     this.culled[k] = i.culled; if (i.culled >= 0) s.culled = true;
     this.enemies[k] = Math.min(65535, Math.max(0, i.enemies));
     this.yaw[k] = i.yaw; this.pitch[k] = i.pitch;
@@ -972,6 +980,8 @@ export class PerfCapture {
       queueMs: '0.01 ms from the GPU-queue probe call (end of this game callback, after its submissions) to device.queue.onSubmittedWorkDone() resolving on the main thread (queued GPU work + main-thread scheduling; not GPU execution alone, not presentation); null unless resolved',
       queueDone: '0.01 ms since capture start when that probe resolved (null unless resolved)',
       queueState: 'index into queueStates (none = not probed: nothing drawn / unsupported backend; capped = too many probes in flight; cancelled = still pending at stop)',
+      uniformWrites: '(schemaMinor 4) uniform-buffer uploads (device.queue.writeBuffer through three\'s binding update) issued since the previous frame (null: render/uploadDedupe.ts not installed: WebGL 2 / not initialized)',
+      uniformWritesSkipped: '(schemaMinor 4) uniform-buffer uploads skipped since the previous frame because their bytes equalled the last upload to the same GPU buffer (render/uploadDedupe.ts)',
     })},`);
     parts.push('"columns":{');
     // one column = `"name":[v,v,…]`, written in chunks (a yield every CHUNK values; the parts are only ever concatenated)
@@ -1029,6 +1039,8 @@ export class PerfCapture {
     yield* col('queueMs', k => (this.qState[k] === Q_RESOLVED ? nn(this.qDone[k] - this.qCall[k]) : 'null'));
     yield* col('queueDone', k => (this.qState[k] === Q_RESOLVED ? nn(this.qDone[k]) : 'null'));
     yield* col('queueState', k => this.qState[k]);
+    yield* dcol('uniformWrites', this.dUni, this.seen.uniformWrites);
+    yield* dcol('uniformWritesSkipped', this.dUniSkip, this.seen.uniformWrites);
     parts.push('}}');
     // spans: top-level laps per frame (0.01 ms; 0 = no profiler sample, see flags.spans) + names
     parts.push(`,"spans":{"names":${JSON.stringify(spanNames)},"parents":${JSON.stringify(PARENT.map(p => (p >= 0 ? spanNames[p] : null)))},`);

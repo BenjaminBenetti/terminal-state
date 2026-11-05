@@ -144,10 +144,11 @@ import {OverlayPass} from './render/overlay';
 import {installFlareLightNode} from './world/flareLight'; // Iteration 15
 import {SteamVents, annexVents, steamLight} from './world/trackExt/steam'; // Track 2 (VIS): non-hazardous annex steam
 import {WarmupRegistry, planWarmup, prepareObjects, runWarmup, skippedWarmup, warmupLabel, warmupNote, type WarmupMode, type WarmupProgress, type WarmupRenderer, type WarmupResult} from './render/warmup'; // Iteration 14
-import {RuntimeVariantPool} from './render/runtimeVariants'; // task runtime-variant-warmup-20261105: play-only variants as warm-up prototypes
+import {RuntimeVariantPool, runtimeVariantsFirst} from './render/runtimeVariants'; // task runtime-variant-warmup-20261105: play-only variants as warm-up prototypes
 import {woundsOf} from './damage/wounds'; // (the enemies' wound layers: their flesh-chunk material variants)
 import {renderContextDepth} from './render/renderContextDepth'; // task studio-performance-recorder-20261103 (lane RENDER-CPU)
 import {installShadowAlphaTwin} from './render/shadowOverride'; // (lane RENDER-CPU)
+import {installUploadDedupe} from './render/uploadDedupe'; // task mall-horde-performance-20261105
 import {JourneyCompile, type JourneyCompileOptions} from './render/journeyCompile'; // (lane RENDER-CPU: the journey's sliced preparation)
 import {renderPixelRatio, type RenderScale} from './ui/settingsStore'; // task campaign-foundation-20261102 (lane MENU): render resolution x the DPR cap
 import {loadingPlaceName, type LastSaveStatus} from './ui/loadingScreen'; // task studio-beta-campaign-polish-20261103-063841-01 (lane MENU): loading name only; Load last save
@@ -611,6 +612,7 @@ export class Game {
       this.softwareGl = adaptToSoftwareGl(this.renderer); // iteration 08: no anisotropic filtering on software rasterizers / adapters
       observeBackendAnisotropy(this.renderer.backend); // lane FIX (U08): count the anisotropy values the backend hands the API (__LL.anisotropy())
       installFlareLightNode(this.renderer); // Iteration 15: flare lights occluded by their window (before the first compile)
+      installUploadDedupe(this.renderer); // task mall-horde-performance-20261105: no identical / split per-frame uniform uploads (WebGPU only)
       this.overlay.target.samples = this.renderer.samples; // 0 in WebGPU compatibility mode
       console.info(`Terminal State: ${gpu.label}${gpu.adapter ? ` · ${[gpu.adapter.vendor, gpu.adapter.architecture, gpu.adapter.description].filter(Boolean).join(' ')}` : gpu.glRenderer ? ` · ${gpu.glRenderer}` : ''}`);
       return gpu;
@@ -1428,7 +1430,12 @@ export class Game {
       const dist = (o: THREE.Object3D) => { box.setFromObject(o); if (box.isEmpty()) return Infinity; box.getBoundingSphere(sphere); return Math.max(0, sphere.center.distanceTo(near) - sphere.radius); };
       const byNear = <T extends {object: THREE.Object3D}>(l: readonly T[]) => l.map(i => ({i, d: dist(i.object)})).sort((a, b) => a.d - b.d).map(x => x.i);
       const items = [...byNear(plan.items), ...(mode === 'full' ? byNear(plan.others) : [])];
-      const casters = mode === 'full' && this.flashlight.castShadow ? byNear([...plan.items, ...plan.others].filter(i => i.caster)) : [];
+      // task mall-horde-performance-20261105 (the user's GAME71 Mall trace): the prepared play-only variants (the runtime-variant pool,
+      // the loot highlight copies: userData.runtimeVariant) sit at the world origin, so "nearest the arrival first" put their shadow
+      // variants LAST — after arrival, where busy frames leave no spare time and the job advanced only by its overdue rule, one forced
+      // step every 2 s building one of them (all 16 in-play builds of that capture, 5-22 ms each). Their shadow variants go first
+      // (prepared during the ride); the scene lane keeps its order (its representatives already include them, before 'others').
+      const casters = mode === 'full' && this.flashlight.castShadow ? runtimeVariantsFirst(byNear([...plan.items, ...plan.others].filter(i => i.caster))) : [];
       const receiver = plan.items.find(i => i.object.receiveShadow && !i.flips.length) ?? null;
       // (task journey-compile-pacing-20261104: paced to real frames — frameNo = the scheduler's frame callbacks begun)
       const job = (this.journeyCompile = new JourneyCompile({renderer: this.renderer as unknown as JourneyCompileOptions['renderer'], scheduler: this.frameBudget,
