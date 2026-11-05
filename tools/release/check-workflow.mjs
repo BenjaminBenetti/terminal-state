@@ -131,4 +131,19 @@ for (const [script,cmd] of Object.entries({'pages:build':'node tools/pages/run.m
   assert.equal(pkg.scripts[script],cmd,`package.json ${script}`);
 }
 assert(/^vitest run --config game\/vitest\.config\.ts .*tests\/pages-output\.test\.ts.*tests\/loot-reference\.test\.ts/.test(pkg.scripts['pages:test'] ?? ''),'package.json pages:test');
-console.log('Pinned workflows (game build + reference site) and portable npm aliases verified.');
+// Production is separate: a SemVer tag selects a successful main CI artifact;
+// no privileged PR trigger, rebuild or third-party SSH action.
+const prod = fs.readFileSync(new URL('.github/workflows/deploy-prod.yml', root), 'utf8');
+const prodActions = [...prod.matchAll(/^\s*(?:- )?uses:\s*(\S+)@(\S+)\s*$/gm)];
+assert.equal(prodActions.length, 2);
+for (const [, name, pin] of prodActions) assert.equal(pin, pins[name], `deploy-prod.yml: unreviewed action ${name}`);
+for (const required of ["tags: ['v*']", 'contents: read', 'actions: read', 'name: prod',
+  'group: terminal-state-prod', 'cancel-in-progress: false', 'persist-credentials: false', 'fetch-depth: 0',
+  "node-version: '22.16.0'", 'git merge-base --is-ancestor HEAD origin/main',
+  'node tools/deploy/gcp/release.mjs validate', 'node tools/deploy/gcp/release.mjs fetch',
+  'node tools/deploy/gcp/release.mjs prepare', 'vars.AUTO_CUTOFF_GB', 'vars.DEPLOY_KNOWN_HOSTS',
+  'secrets.DEPLOY_KEY', 'bash tools/deploy/gcp/ssh-deploy.sh']) assert(prod.includes(required), `deploy-prod.yml: missing ${required}`);
+assert(!/pull_request|workflow_dispatch|:\s*write|npm (?:ci|run build)/.test(prod), 'prod: tag-only, read-only artifact consumer');
+assert(pkg.scripts['ci:test'].includes('tools/deploy/gcp/release.test.mjs')
+  && pkg.scripts['ci:test'].includes('python3 tools/deploy/gcp/test_bandwidth.py'), 'ci:test must include deployment tests');
+console.log('Pinned workflows (game build, reference site, production deploy) and portable npm aliases verified.');
