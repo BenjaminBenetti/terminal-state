@@ -263,7 +263,10 @@ export interface FirstUsePipeline extends Omit<FirstUseBuild, 'ms'> {
   ms: number | null;
   /** Outside a synchronous renderer.render() (compileAsync / warm-up / background compile). */
   async: boolean;
-  /** The most recent node build (same frame sample) was for this render object: false = the material's node build was cached. */
+  /**
+   * The most recent node build (same frame sample) was for this render object: false in a render = the material's node build was
+   * cached (an async build can span frame samples: there false is not proof).
+   */
   withBuild: boolean;
   /** Vertex / fragment shader programs created for this request (0-2; 0 = both shader stages already existed). */
   newPrograms: number;
@@ -858,7 +861,7 @@ export class PerfCapture {
         list: this.fuList.slice().sort((a, b) => a.t - b.t).map(e => ({...e, t: r2(e.t), ms: r2(e.ms)}))},
       // (schemaMinor 3) which object / material / pass each NEW render pipeline request was for (a pipeline cache miss)
       pipelines: {seen: this.fpListSeen, kept: this.fpList.length, dropped: this.fpListDropped,
-        note: 'new render pipeline requests (pipeline cache misses), in render (ms = CPU of the request) or async (compileAsync / warm-up; ms null), with the same sanitized object / material labels as builds. withBuild = a node build for the same render object preceded it in this frame sample (false: the material build was cached, so the miss is a new target / sample count / material state / object flag combination: see target, materialState, objectFlags); newPrograms = vertex / fragment shader programs created for it. Bounded: the most expensive in-render requests are kept, async requests first-come while there is room. CPU-side request identity only: the GPU / driver compile time is not observable. null = unknown.',
+        note: 'new render pipeline requests (pipeline cache misses), in render (ms = CPU of the request) or async (compileAsync / warm-up; ms null), with the same sanitized object / material labels as builds. withBuild = a node build for the same render object preceded it in this frame sample (false in render: the material build was cached, so the miss is a new target / sample count / material state / object flag combination: see target, materialState, objectFlags; async builds can span frame samples, so there false is not proof of a cached build); newPrograms = vertex / fragment shader programs created for it. Bounded: the most expensive in-render requests are kept, async requests first-come while there is room. CPU-side request identity only: the GPU / driver compile time is not observable. null = unknown.',
         list: this.fpList.slice().sort((a, b) => a.t - b.t).map(e => ({...e, t: r2(e.t), ms: e.ms === null ? null : r2(e.ms)}))},
     };
     yield;
