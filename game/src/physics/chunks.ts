@@ -20,6 +20,7 @@ import {GROUP_CHUNK, GROUP_ITEM, GROUP_STATIC} from './ragdoll';
 import type {StaticQuery} from './staticQuery';
 import type {Piece} from '../damage/debris';
 import type {PhysMat} from '../damage/materials';
+import {fallbackFlap} from '../damage/fleshPatch'; // task runtime-variant-warmup-20261105: the flap factory (prototype geometry)
 
 export const MAX_WORLD_CHUNK_BODIES = 28;
 export const MAX_FLESH_CHUNKS = 24;
@@ -122,6 +123,17 @@ export interface ChunkSpawn {
   mat: PhysMat;
   /** kg per m^3 (box volume x 0.5 fill). */
   density: number;
+}
+
+/**
+ * Task runtime-variant-warmup-20261105: what makes two chunkMaterial() results different render variants — exactly the inputs it
+ * copies that three r186 keys (a texture by presence + mapping / sampler; roughness / metalness on / off); colours / scales never.
+ * Keep in step with chunkMaterial.
+ */
+export function chunkSignature(src: THREE.Material): string {
+  const s = src as THREE.MeshStandardMaterial;
+  const t = (x: THREE.Texture | null | undefined) => (x ? `${x.mapping}.${x.magFilter}.${x.minFilter}.${x.wrapS}.${x.wrapT}` : '-');
+  return [t(s.map), t(s.normalMap), t(s.roughnessMap), t(s.metalnessMap), (s.roughness ?? 0.8) !== 0 ? 1 : 0, (s.metalness ?? 0) !== 0 ? 1 : 0].join('|');
 }
 
 export class PhysChunks {
@@ -234,6 +246,22 @@ export class PhysChunks {
     m.name = `chunk:${src.name || 'layer'}`;
     this.materials.set(src, m);
     return m;
+  }
+
+  /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): one hidden flesh-chunk PROTOTYPE per distinct chunkMaterial
+   * variant among `sources` (the enemies' wound-layer materials: tearChunk passes `layer.material`) — the real chunkMaterial (cached
+   * as gameplay caches it, but only for one representative per chunkSignature, so warming never grows the per-actor cache) on the
+   * real flap factory's geometry (damage/fleshPatch.ts fallbackFlap: position / normal / uv / colour, non-indexed — extractPatch's
+   * layout) with spawnFlesh's flags (no shadow cast / receive). `geometries` were created here (the caller's pool releases them).
+   */
+  fleshPrototypes(sources: readonly THREE.Material[]): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]} {
+    const reps = new Map<string, THREE.Material>();
+    for (const s of sources) { const k = chunkSignature(s); if (!reps.has(k)) reps.set(k, s); }
+    if (!reps.size) return {meshes: [], geometries: []};
+    const geo = fallbackFlap(0.05, 0.01, new THREE.Color(1, 1, 1), 1); // (its own seeded jitter: no gameplay RNG)
+    const meshes = [...reps.values()].map(s => { const m = new THREE.Mesh(geo, this.chunkMaterial(s)); m.name = 'flesh-chunk'; return m; });
+    return {meshes, geometries: [geo]};
   }
 
   /**

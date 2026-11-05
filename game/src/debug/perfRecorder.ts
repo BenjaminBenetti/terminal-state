@@ -26,14 +26,27 @@
 // main thread: queueMs / queueDone / queueState — never awaited, bounded, honest nulls), flashlight lit / shadow-map flag bits, the
 // identity of synchronous first-use node builds (sanitized labels, bounded) and the TAIL summary: intervals by refresh multiple,
 // callback overruns and their overlap with interval misses, stall events per minute and the worst 1 s / 5 s windows.
+//
+// Task runtime-variant-warmup-20261105 (schemaMinor 3, additive): the identity of every NEW render pipeline request
+// (summary.firstUse.pipelines — a pipeline cache miss, with or without a node build, sync in a render or async; sanitized labels and
+// the request's pass / target / material-state / object flags, bounded) and a 10 s mark lookback with the stalls in it (marks[]).
 
 import {GAP_MS, quantile} from './frameHistory';
 import {PARENT, S, SPAN_COUNT, isHookSpan} from './updateProfile';
 
 export const PERF_SCHEMA = 'terminal-state-perf';
 export const PERF_SCHEMA_VERSION = 1;
-/** Additive minor version of schema 1 (report key schemaMinor; 2: start / startDelay / gapBefore / queue* columns, torch flags, firstUse.builds, summary.tail, shot / hit spans). */
-export const PERF_SCHEMA_MINOR = 2;
+/**
+ * Additive minor version of schema 1 (report key schemaMinor; 2: start / startDelay / gapBefore / queue* columns, torch flags,
+ * firstUse.builds, summary.tail, shot / hit spans; 3: summary.firstUse.pipelines + worst[].firstUse.pipelineRequests, the 10 s mark
+ * lookback with marks[].windowMs / fromT / refreshMs / stalls / omittedStalls).
+ */
+export const PERF_SCHEMA_MINOR = 3;
+
+/** (schemaMinor 3) A mark looks back this far (ms) for its worst frame and stalls: players press F9 seconds after the felt stall. */
+export const MARK_LOOKBACK_MS = 10000;
+/** (schemaMinor 3) Stalls listed per mark (worst first; the rest counted in omittedStalls). */
+export const MARK_STALLS = 12;
 
 export interface PerfCaps {
   /** Frame samples (every rAF callback); the capture stops when full. */
@@ -56,13 +69,18 @@ export interface PerfCaps {
   spikeDetail: number;
   /** Synchronous first-use node builds reported with their identity (the most expensive are kept). */
   firstUseBuilds: number;
+  /**
+   * (schemaMinor 3) New render pipeline requests reported with their identity: the most expensive in-render requests are kept;
+   * asynchronous ones (no CPU time) only first-come while there is room.
+   */
+  firstUsePipelines: number;
   /** GPU-queue completion probes in flight at once (more: that frame is not probed, counted as capped). */
   queueOutstanding: number;
 }
 
 export const PERF_CAPS: Readonly<PerfCaps> = Object.freeze({
   frames: 20000, durationMs: 120000, events: 6000, longFrames: 400, resources: 1500, camera: 1300, cameraEveryMs: 100, heap: 150,
-  marks: 200, worlds: 64, worst: 24, spikeDetail: 160, firstUseBuilds: 240, queueOutstanding: 8,
+  marks: 200, worlds: 64, worst: 24, spikeDetail: 160, firstUseBuilds: 240, firstUsePipelines: 240, queueOutstanding: 8,
 });
 
 /** Game states (Game.state) by code; anything else is 'other'. */
@@ -189,6 +207,76 @@ export interface FirstUseBuild {
   shadowPass: boolean;
 }
 
+/**
+ * (schemaMinor 3) What a pipeline request draws into: three r186 RenderContext fields read at the request (null = unknown / not a
+ * render-target value). A pipeline is keyed by these as well as by the shaders, so a request with no node build is often a known
+ * material in a new target / sample-count / state combination.
+ */
+export interface PipelineTarget {
+  /** Drawn into a render target (false: the canvas / default framebuffer). */
+  toTarget: boolean | null;
+  /** Color attachments of the target (0: the canvas). */
+  colorTargets: number | null;
+  /** three texture type constant of color attachment 0 (e.g. 1009 UnsignedByteType, 1016 HalfFloatType); null: the canvas. */
+  colorType: number | null;
+  /** RenderContext.sampleCount of a render target (MSAA); null for the canvas (the renderer's own samples are not read). */
+  samples: number | null;
+  depth: boolean | null;
+  stencil: boolean | null;
+  /** The target has a depth texture. */
+  depthTexture: boolean | null;
+  /** Multiple render targets (an MRT node) are bound. */
+  mrt: boolean | null;
+}
+
+/** (schemaMinor 3) The pipeline-relevant state of the request's material (three constants as numbers; null = not on the material). */
+export interface PipelineMaterialState {
+  side: number | null;
+  transparent: boolean | null;
+  blending: number | null;
+  depthWrite: boolean | null;
+  depthTest: boolean | null;
+  colorWrite: boolean | null;
+  alphaToCoverage: boolean | null;
+  polygonOffset: boolean | null;
+}
+
+/** (schemaMinor 3) The pipeline-relevant flags of the request's object. */
+export interface PipelineObjectFlags {
+  instanced: boolean;
+  batched: boolean;
+  skinned: boolean;
+  /** A mesh with a negative-determinant world matrix (three keys its front face, so it is a separate pipeline); null = unknown. */
+  mirrored: boolean | null;
+  /** The geometry has an index. */
+  indexed: boolean | null;
+  /** Clipping planes apply (RenderObject.clippingContextCacheKey). */
+  clipping: boolean | null;
+}
+
+/**
+ * (schemaMinor 3) One NEW render pipeline request (three r186 Pipelines._getRenderPipeline: a pipeline cache miss). Labels, numbers
+ * and booleans only — the same sanitized identity as a FirstUseBuild, plus the pass / target / state the pipeline is keyed by.
+ */
+export interface FirstUsePipeline extends Omit<FirstUseBuild, 'ms'> {
+  /** CPU ms of the request inside a synchronous render (it includes the backend's pipeline creation call); null outside one. */
+  ms: number | null;
+  /** Outside a synchronous renderer.render() (compileAsync / warm-up / background compile). */
+  async: boolean;
+  /**
+   * The most recent node build (same frame sample) was for this render object: false in a render = the material's node build was
+   * cached (an async build can span frame samples: there false is not proof).
+   */
+  withBuild: boolean;
+  /** Vertex / fragment shader programs created for this request (0-2; 0 = both shader stages already existed). */
+  newPrograms: number;
+  /** 'shadow' = a shadow-map pass (shadow-pass material), 'fullscreen' = a full-screen quad pass, else 'scene'; null = unknown. */
+  pass: 'scene' | 'shadow' | 'fullscreen' | null;
+  target: PipelineTarget | null;
+  materialState: PipelineMaterialState | null;
+  objectFlags: PipelineObjectFlags | null;
+}
+
 export interface ResourceEntry {
   start: number;
   duration: number;
@@ -298,6 +386,10 @@ export class PerfCapture {
   private fuList: FirstUseBuild[] = [];
   fuListDropped = 0;
   fuListSeen = 0;
+  /** (schemaMinor 3) identified new render pipeline requests (bounded: see PerfCaps.firstUsePipelines). */
+  private fpList: FirstUsePipeline[] = [];
+  fpListDropped = 0;
+  fpListSeen = 0;
   // --- running state ---
   private prev = {textures: -1, geometries: -1, programs: -1, nodes: -1, pipelines: -1};
   /** Counters that were ever available in this capture (null in the report otherwise). */
@@ -372,6 +464,7 @@ export class PerfCapture {
     this.gen++;
     this.gpu.fill(NaN);
     this.fuList = []; this.fuListDropped = 0; this.fuListSeen = 0;
+    this.fpList = []; this.fpListDropped = 0; this.fpListSeen = 0;
     this.prev.textures = this.prev.geometries = this.prev.programs = this.prev.nodes = this.prev.pipelines = -1;
     for (const k of Object.keys(this.seen) as (keyof PerfCapture['seen'])[]) this.seen[k] = false;
     this.profHead = profHead;
@@ -405,6 +498,7 @@ export class PerfCapture {
     this.n = 0;
     this.gen++;
     this.fuList = []; this.fuListDropped = 0; this.fuListSeen = 0;
+    this.fpList = []; this.fpListDropped = 0; this.fpListSeen = 0;
     this.events = []; this.longFrames = []; this.resources = []; this.heapRows = []; this.marks = []; this.worlds = [];
     this.eventTotals.clear(); this.resourceTotals.clear();
   }
@@ -605,6 +699,25 @@ export class PerfCapture {
     if (min >= 0 && e.ms > this.fuList[min].ms) this.fuList[min] = e;
   }
 
+  /**
+   * (schemaMinor 3) A new render pipeline request of the frame being prepared (index = the next sample), at `now`; `ms` = its CPU
+   * ms inside a synchronous render, null outside one. Bounded: when full, the kept entry with the lowest rank (in-render ms;
+   * asynchronous = -1) is replaced by a strictly higher-ranked one — the most expensive in-render requests are kept, asynchronous
+   * requests only first-come while there is room.
+   */
+  firstUsePipeline(now: number, ms: number | null, id: Omit<FirstUsePipeline, 'frame' | 't' | 'ms'>): void {
+    if (!this.on) return;
+    this.fpListSeen++;
+    const e: FirstUsePipeline = {frame: this.n, t: now - this.t0, ms: ms !== null && Number.isFinite(ms) ? ms : null, ...id};
+    const list = this.fpList, cap = Math.max(0, Math.floor(this.caps.firstUsePipelines));
+    if (list.length < cap) { list.push(e); return; }
+    this.fpListDropped++;
+    const rank = (x: FirstUsePipeline) => (x.ms === null ? -1 : x.ms);
+    let min = -1;
+    for (let j = 0; j < list.length; j++) if (min < 0 || rank(list[j]) < rank(list[min])) min = j;
+    if (min >= 0 && rank(e) > rank(list[min])) list[min] = e;
+  }
+
   /** Bounded-memory footprint of the capture arrays (bytes; 0 before the first start). */
   bytes(): number {
     if (!this.allocated) return 0;
@@ -746,6 +859,10 @@ export class PerfCapture {
       builds: {seen: this.fuListSeen, kept: this.fuList.length, dropped: this.fuListDropped,
         note: 'synchronous (in-render) TSL node builds with the rendered object / material labels (game-relative names, sanitized; null = anonymous). A shadow-pass build names the pass material and the object\'s own material. Asynchronous builds (compileAsync / warm-up) are counted only (asyncBuilds).',
         list: this.fuList.slice().sort((a, b) => a.t - b.t).map(e => ({...e, t: r2(e.t), ms: r2(e.ms)}))},
+      // (schemaMinor 3) which object / material / pass each NEW render pipeline request was for (a pipeline cache miss)
+      pipelines: {seen: this.fpListSeen, kept: this.fpList.length, dropped: this.fpListDropped,
+        note: 'new render pipeline requests (pipeline cache misses), in render (ms = CPU of the request) or async (compileAsync / warm-up; ms null), with the same sanitized object / material labels as builds. withBuild = a node build for the same render object preceded it in this frame sample (false in render: the material build was cached, so the miss is a new target / sample count / material state / object flag combination: see target, materialState, objectFlags; async builds can span frame samples, so there false is not proof of a cached build); newPrograms = vertex / fragment shader programs created for it. Bounded: the most expensive in-render requests are kept, async requests first-come while there is room. CPU-side request identity only: the GPU / driver compile time is not observable. null = unknown.',
+        list: this.fpList.slice().sort((a, b) => a.t - b.t).map(e => ({...e, t: r2(e.t), ms: e.ms === null ? null : r2(e.ms)}))},
     };
     yield;
     // --- worst frames with timelines (bounded top-N selection, no full sort) ---
@@ -800,13 +917,11 @@ export class PerfCapture {
         ms: Array.from(this.spanMs.subarray(k * SPAN_COUNT, (k + 1) * SPAN_COUNT), q100), calls: Array.from(this.spanCalls.subarray(k * SPAN_COUNT, (k + 1) * SPAN_COUNT))})),
     };
     yield;
-    // --- marks: the worst frame in the 2 s before each (players press the key after the stutter) ---
-    const marks = this.marks.map((mt, j) => {
-      let best = -1, lo = 0, hi = n;
-      while (lo < hi) { const mid = (lo + hi) >> 1; if (this.t[mid] < mt - 2000) lo = mid + 1; else hi = mid; } // first frame in the 2 s window
-      for (let k = lo; k < n && this.t[k] <= mt; k++) if (interval[k] === interval[k] && cat[k] !== C_HIDDEN && (best < 0 || interval[k] > interval[best])) best = k;
-      return {n: j + 1, t: r2(mt), worstBefore: best >= 0 ? {frame: best, t: r2(this.t[best]), intervalMs: r2(interval[best]), cpuMs: r2(this.cpu[best]), category: CATEGORIES[cat[best]]} : null};
-    });
+    // --- marks: the worst frame and the stalls in the MARK_LOOKBACK_MS before each (players press the key seconds after the
+    // stutter; schemaMinor 3 — was 2 s) ---
+    const markRefresh = (summary.tail as {refreshMs?: number} | null)?.refreshMs ?? 1000 / 60;
+    const marks = this.marks.map((mt, j) => this.markWindow(j, mt, interval, cat, markRefresh));
+    yield;
     // --- assemble ---
     const parts: string[] = [];
     const put = (key: string, v: unknown, first = false) => { parts.push(`${first ? '' : ','}${JSON.stringify(key)}:${JSON.stringify(v)}`); };
@@ -824,6 +939,7 @@ export class PerfCapture {
         longFrames: this.longFramesDropped, longFramesNote: 'when full, the shortest kept long frame is replaced (the worst are kept)',
         resources: this.resourcesDropped, camera: this.camDropped, heap: this.heapDropped, marks: this.marksDropped, worlds: this.worldsDropped,
         spikeDetail: spikeDetail.omitted, firstUseBuilds: this.fuListDropped, firstUseBuildsNote: 'when full, the cheapest kept build is replaced (the most expensive are kept)',
+        firstUsePipelines: this.fpListDropped, firstUsePipelinesNote: 'when full, the lowest-ranked kept request is replaced by a more expensive in-render one (async requests rank lowest: first-come)',
         oldestDropped: true},
       overhead: meta.overhead ?? null,
       notes: meta.notes ?? [],
@@ -1044,6 +1160,43 @@ export class PerfCapture {
     };
   }
 
+  /**
+   * (schemaMinor 3) Mark `j` at `mt` (ms since capture start): its lookback window [mt - MARK_LOOKBACK_MS, mt], clamped at the first
+   * frame — the worst interval in it (any non-hidden category, as before) and the frames in it that missed a refresh (interval over
+   * 1.5 x `refreshMs`) or overran one (game CPU over `refreshMs`), worst first (interval, then CPU), at most MARK_STALLS. Hidden /
+   * gap frames are never stalls; paused / menu / loading frames are kept and tagged with their category and state. Indices only
+   * while scanning (no frame objects); the list is built for the kept stalls.
+   */
+  private markWindow(j: number, mt: number, interval: Float64Array, cat: Uint8Array, refreshMs: number): Record<string, unknown> {
+    const n = this.n;
+    const from = mt - MARK_LOOKBACK_MS;
+    let lo = 0, hi = n;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (this.t[mid] < from) lo = mid + 1; else hi = mid; } // first frame in the window
+    const iv = (k: number) => (interval[k] === interval[k] ? q100(interval[k]) : -1); // (ranked at the reported 0.01 ms)
+    const worse = (a: number, b: number) => iv(a) > iv(b) || (iv(a) === iv(b) && this.cpu[a] > this.cpu[b]);
+    const ivLimit = 1.5 * refreshMs;
+    const top: number[] = [];
+    let best = -1, stalls = 0;
+    for (let k = lo; k < n && this.t[k] <= mt; k++) {
+      if (cat[k] === C_HIDDEN) continue;
+      const v = interval[k];
+      if (v === v && (best < 0 || v > interval[best])) best = k;
+      if (!((v === v && v > ivLimit) || this.cpu[k] > refreshMs)) continue;
+      stalls++;
+      if (top.length >= MARK_STALLS && !worse(k, top[top.length - 1])) continue;
+      let at = top.length;
+      while (at > 0 && worse(k, top[at - 1])) at--;
+      top.splice(at, 0, k);
+      if (top.length > MARK_STALLS) top.pop();
+    }
+    const fromT = Math.min(mt, Math.max(from, n > 0 ? this.t[0] : 0));
+    return {n: j + 1, t: r2(mt), windowMs: MARK_LOOKBACK_MS, fromT: r2(fromT), refreshMs: r2(refreshMs),
+      worstBefore: best >= 0 ? {frame: best, t: r2(this.t[best]), intervalMs: r2(interval[best]), cpuMs: r2(this.cpu[best]), category: CATEGORIES[cat[best]]} : null,
+      stalls: top.map(k => ({frame: k, t: r2(this.t[k]), dtBeforeMark: r2(mt - this.t[k]), intervalMs: interval[k] === interval[k] ? r2(interval[k]) : null, cpuMs: r2(this.cpu[k]),
+        category: CATEGORIES[cat[k]], state: STATE_NAMES[this.state[k]] ?? 'other'})),
+      omittedStalls: stalls - top.length};
+  }
+
   /** Frames [k0, k1): interval (to the next rAF) and category; returns the gaps among them. */
   private deriveRange(k0: number, k1: number, interval: Float64Array, cat: Uint8Array): number {
     const n = this.n;
@@ -1201,6 +1354,10 @@ export class PerfCapture {
     for (let j = Math.max(0, k - 6); j <= Math.min(n - 1, k + 3); j++) ctx.push([j - k, interval[j] === interval[j] ? r2(interval[j]) : -1, r2(this.cpu[j]), cat[j], nul(delayOf(j)), nul(gapOf(j)), nul(queueOf(j))]);
     const culledDelta = k > 0 && this.culled[k] >= 0 && this.culled[k - 1] >= 0 ? this.culled[k] - this.culled[k - 1] : null;
     const builds = this.fuList.filter(e => e.frame === k).slice(0, 6).map(e => ({ms: r2(e.ms), object: e.object, objectType: e.objectType, material: e.material, materialType: e.materialType, objectMaterial: e.objectMaterial, shadowPass: e.shadowPass}));
+    // (schemaMinor 3) this frame's identified pipeline requests, the most expensive first (at most 6; the count is firstUse.pipelines)
+    const pipelineRequests = this.fpList.filter(e => e.frame === k).sort((a, b) => (b.ms === null ? -1 : r2(b.ms)) - (a.ms === null ? -1 : r2(a.ms)) || a.t - b.t).slice(0, 6)
+      .map(e => ({ms: e.ms === null ? null : r2(e.ms), async: e.async, withBuild: e.withBuild, newPrograms: e.newPrograms, pass: e.pass, object: e.object, objectType: e.objectType,
+        material: e.material, materialType: e.materialType, objectMaterial: e.objectMaterial, shadowPass: e.shadowPass, target: e.target, materialState: e.materialState, objectFlags: e.objectFlags}));
     return {
       frame: k, t: r2(t), intervalMs: iv === iv ? r2(iv) : null, cpuMs: r2(this.cpu[k]), updateMs: r2(this.upd[k]), renderSubmitMs: r2(this.ren[k]),
       deferredMs: r2(this.def[k]), gpuMs: this.gpu[k] === this.gpu[k] ? r2(this.gpu[k]) : null,
@@ -1209,7 +1366,7 @@ export class PerfCapture {
         newTextures: this.seen.textures ? this.dTex[k] : null, newGeometries: this.seen.geometries ? this.dGeo[k] : null, newPrograms: this.seen.programs ? this.dProg[k] : null,
         newNodeBuilds: this.seen.nodes ? this.dNode[k] : null, newPipelines: this.seen.pipelines ? this.dPipe[k] : null},
       firstUse: this.seen.firstUse ? {nodeBuilds: this.fuBuilds[k], nodeBuildMs: r2(this.fuBuildMs[k]), asyncBuilds: this.fuAsync[k], pipelines: this.fuPipes[k], pipelineMs: r2(this.fuPipeMs[k]),
-        programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k]), builds} : null,
+        programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k]), builds, pipelineRequests} : null,
       // (revision 2) this callback's start and the next one's (the interval ends at the next rAF), and this frame's queue probe
       callback: {startDelayMs: nul(delayOf(k)), gapBeforeMs: nul(gapOf(k)), nextStartDelayMs: k + 1 < n ? nul(delayOf(k + 1)) : null, nextGapBeforeMs: k + 1 < n ? nul(gapOf(k + 1)) : null},
       queue: {state: QUEUE_STATES[this.qState[k]] ?? 'none', ms: nul(queueOf(k))},

@@ -11,7 +11,7 @@
 //    Meta combinations and typing in a form field are never taken; Shift is allowed (sprinting).
 // Nothing is uploaded or stored: the report lives in this tab's memory until downloaded (a normal browser download) or reload.
 
-import {PRIVACY_NOTE, type PerfCaps} from './perfRecorder';
+import {MARK_LOOKBACK_MS, PRIVACY_NOTE, type PerfCaps} from './perfRecorder';
 import {PerfRecorderController, type GpuTapHost, type RecorderGame, type RecorderOptions} from './perfRecorderHooks';
 import {isTypingTarget} from '../player/input';
 
@@ -144,7 +144,7 @@ export class PerfRecorderUi {
     const discard = btn('perf-discard', 'Discard', () => this.discard());
     const keys = d.createElement('p');
     keys.className = 'fine';
-    keys.append('Keys: ', kbd(d, RECORDER_KEYS.toggle), ' start / stop recording · ', kbd(d, RECORDER_KEYS.mark), ' mark a stutter (while recording).');
+    keys.append('Keys: ', kbd(d, RECORDER_KEYS.toggle), ' start / stop recording · ', kbd(d, RECORDER_KEYS.mark), ` mark a stutter (while recording; a mark covers the last ${MARK_LOOKBACK_MS / 1000} s).`);
     const privacy = d.createElement('p');
     privacy.className = 'fine perf-rec-privacy';
     privacy.textContent = RECORDER_PRIVACY_LINE;

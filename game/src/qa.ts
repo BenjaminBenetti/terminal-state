@@ -455,7 +455,7 @@ export function installQaHooks(game: Game): void {
      */
     anisotropy: () => anisotropyReport(anisotropyCapability(game.softwareGl), game.scene, game.renderer.initialized ? observeBackendAnisotropy(game.renderer.backend) : null, [decayDetailTexture()]),
     /** Iteration 14: the loading-screen render warm-up's result (status, mode, plan counts, per-stage done / total / ms) and whether one runs now. */
-    warmup: () => ({running: game.warming, result: game.warmup}),
+    warmup: () => ({running: game.warming, result: game.warmup, runtimeVariants: game.runtimeVariants.stats}),
     /**
      * Task frame-budget-deferral-20261030 (lane SCHED): the frame-budget scheduler (core/frameBudget.ts) — refresh detection,
      * budget, hold, generation, queued jobs + oldest age, last run frame (chunks / ms / deferred / overdue runs / remaining),

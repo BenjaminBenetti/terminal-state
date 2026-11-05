@@ -3,7 +3,8 @@
 Task studio-performance-recorder-20261103-043629 (lane RECORDER). An in-game recorder that the player starts, plays through and
 stops. It produces one private JSON file that the player can send to us. Code: `game/src/debug/perfRecorder.ts` (capture core,
 summaries, JSON), `perfRecorderHooks.ts` (what it reads from the game and the browser) and `perfRecorderUi.ts` (the menu
-section, badge and keys). Tests: `game/tests/perf-recorder.test.ts`.
+section, badge and keys). Tests: `game/tests/perf-recorder.test.ts`, `hitch-attribution-recorder.test.ts` and
+`recorder-pipeline-marks.test.ts`.
 
 ## For the player
 
@@ -11,8 +12,8 @@ section, badge and keys). Tests: `game/tests/perf-recorder.test.ts`.
    **Settings**. You can also press **F8** at any time.
 2. Choose **Resume** and play the part that stutters. For example, turn the camera around in the Mall, walk into new shops or
    ride the train. A small **REC m:ss** badge at the top of the screen shows that recording is on.
-3. When you feel a stutter, you can press **F9** to add a numbered mark. The report then names the worst frame in the 2 s before
-   each mark.
+3. When you feel a stutter, you can press **F9** to add a numbered mark. The report then names the worst frame and lists the
+   stalls in the 10 s before each mark, so pressing it a few seconds late is fine.
 4. To stop, press **Esc** and choose **Stop & Download report**. You can also press **F8**: the report is prepared, and
    **Esc → Performance → Download last report** saves it. Recording stops by itself after **2 minutes** or **20,000 frames**,
    and the badge then says that the report is ready.
@@ -95,14 +96,15 @@ The report holds asset basenames only: no URLs, query strings, other-origin entr
 | `summary.correlation` | gameplay frames and spikes (> 33.3 ms) that coincide with turning (> 90°/s), new node builds, pipelines, programs, textures or geometries, culling changes, path searches, riding, or main-thread time outside the game |
 | `summary.tail` (schemaMinor 2) | frame pacing by refresh multiple, callback overruns and their overlap, stall events / minute, worst 1 s / 5 s windows, callback start / gap and queue completion after misses (see Hitch attribution) |
 | `summary.firstUse.builds` (schemaMinor 2) | identified synchronous first-use builds (sanitized labels, bounded) |
+| `summary.firstUse.pipelines` (schemaMinor 3) | identified new render pipeline requests (pipeline cache misses): labels, pass, target, material state, object flags, `withBuild`, `newPrograms` (bounded) |
 | `worst` | the worst gameplay frames by interval and by CPU, and the worst non-gameplay frames. Each has its spans, counter changes, camera, nearby events and long frames, and a timeline of the frames around it |
-| `marks` | each mark and the worst frame in the 2 s before it |
+| `marks` | each mark, the worst frame and (schemaMinor 3) the stalls in the 10 s before it; was 2 s before schemaMinor 3 |
 | `frames.columns` | the per-frame columns (units in `frames.units`; times in 0.01 ms integers; `null` = not measured) |
 | `spans` | span names / parents and the per-frame top-level laps |
 | `spikeDetail` | every nested span of the kept spike frames |
 | `events`, `longFrames`, `resources`, `camera`, `heap` | bounded lists with `dropped` counts |
 
-## Hitch attribution (schema 1, `schemaMinor: 2`; task hitch-attribution-recorder-20261105)
+## Hitch attribution (schema 1, `schemaMinor: 2`, extended in `3`; task hitch-attribution-recorder-20261105)
 
 Added after the user's Office top-floor recording, where felt stalls could not be attributed. Everything is **additive**: every
 schema-1 field keeps its meaning, and a report without these fields simply lacks them. Read columns by name, not position.
@@ -154,6 +156,53 @@ schema-1 field keeps its meaning, and a report without these fields simply lacks
   * **Interval tail:** p99 / p99.9 / max.
   * **After a miss vs on time:** the next callback's start delay and gap, and the queue completion of missed vs on-time frames.
 * **`spikeDetail`** now also keeps frames with an interval over 1.5 refreshes or game CPU over one refresh.
+
+### schemaMinor 3 (task runtime-variant-warmup-20261105; additive)
+
+A native capture showed render **pipeline** requests with no node build, followed by ~100 ms GPU-side stalls, and nothing said
+what they were for.
+
+* **Pipeline-request identity:** `summary.firstUse.pipelines = {seen, kept, dropped, note, list}`, the list sorted by `t`. There
+  is one entry per new render pipeline request: three r186 `Pipelines._getRenderPipeline`, which runs on a pipeline cache miss
+  only. Each entry has:
+  * `frame` (the sample being prepared), `t`, `ms` (CPU of the request inside a synchronous render; `null` outside one) and
+    `async` (outside a render: compileAsync / warm-up / background compile);
+  * the build labels: `object`, `via`, `objectType`, `material`, `materialType`, `objectMaterial` and `shadowPass`, sanitized
+    exactly as for builds;
+  * `withBuild`: the most recent node build in the same frame sample was for this render object. In a render, `false` means the
+    material's build was cached, so the miss is a new combination of the values below. An async build can span frame samples,
+    so for `async` requests `false` is not proof of a cached build;
+  * `newPrograms`: the vertex / fragment shader programs created for it (0–2). 0 means both shader stages already existed;
+  * `pass`: `shadow` (shadow-pass material), `fullscreen` (a full-screen quad pass) or `scene`;
+  * `target` (RenderContext): `toTarget`, `colorTargets` (0 = canvas), `colorType` (three texture type constant), `samples`
+    (render-target MSAA; `null` for the canvas), `depth`, `stencil`, `depthTexture`, `mrt`;
+  * `materialState`: `side`, `transparent`, `blending`, `depthWrite`, `depthTest`, `colorWrite`, `alphaToCoverage`,
+    `polygonOffset`;
+  * `objectFlags`: `instanced`, `batched`, `skinned`, `mirrored` (a negative world determinant: three keys the front face),
+    `indexed`, `clipping`.
+
+  `null` means the field is absent or unknown, never a guess. Only numbers, booleans and sanitized labels are stored: no
+  references, shader source, URLs or traversal. The render-object reference used for `withBuild` is dropped at every frame sample.
+
+  **Bounds:** `caps.firstUsePipelines` (240). When the list is full, the most expensive in-render requests are kept. Async
+  requests have no CPU time, so they are kept first-come while there is room. Drops are in `capture.drops.firstUsePipelines`.
+  Worst frames list their own requests in `firstUse.pipelineRequests` (at most 6, most expensive first). The existing
+  `firstUse.pipelines` count is unchanged. The capability is `firstUse.pipelineIdentity`.
+
+  This is **CPU-side request identity only.** The GPU / driver pipeline compile and its stall remain not observable. They show up
+  only as later interval / queue time.
+* **Marks look back 10 s** (`MARK_LOOKBACK_MS`). The window was 2 s, and a 367 ms freeze 3.35 s before a mark was missed. Each mark
+  now has:
+  * `windowMs` (10000), and `fromT`: the window start, clamped at the first frame;
+  * `refreshMs`: `summary.tail.refreshMs`, or 60 Hz without a tail;
+  * `worstBefore`, as before, now over the 10 s window;
+  * `stalls`: at most 12, worst first by interval and then CPU. A stall is a frame in the window with an interval over 1.5
+    refreshes or game CPU over one refresh. Each stall has `frame`, `t`, `dtBeforeMark`, `intervalMs`, `cpuMs`, `category` and
+    `state`;
+  * `omittedStalls`: the stalls not listed.
+
+  Hidden-tab / gap frames are never stalls. Paused, menu and loading frames are kept and tagged with their category / state. The
+  capability is `marks.lookback`.
 
 **The capture that uses this** (Office top floor, or wherever the hitches are felt): about 60 s of the same kind of play. Walk
 and turn through the heavy views, fire a few shots at enemies, and have the flashlight on part of the time. Press F9 at stalls

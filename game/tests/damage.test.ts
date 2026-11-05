@@ -7,7 +7,7 @@
 import * as THREE from 'three';
 import {MeshStandardNodeMaterial, type NodeMaterial} from 'three/webgpu';
 import {materialColor, mix, vec3} from 'three/tsl';
-import {describe, expect, it} from 'vitest';
+import {describe, expect, it, vi} from 'vitest';
 import {installCanvasShim} from './helpers/canvas2d';
 import {generateStation, type StationLayout} from '../src/gen/station';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
@@ -232,6 +232,54 @@ describe('per-instance prop damage on a built station (Node, procedural props)',
     // B's meshes never carry damage data
     for (const e of entriesB) expect(e.mesh.userData[PROP_DATA_KEY]).toBeUndefined();
     console.info(`[damage] first hit on a table: detach ${sA.parts!.length} parts in ${ms.toFixed(1)} ms`);
+  });
+
+  it('parts of one source share ONE station damage material (the warm-up prototypes too); reattach keeps it, clear(retire) releases it once', () => {
+    // task runtime-variant-warmup-20261105: three r186 builds a caster's shadow variant per material instance (a map / colour node),
+    // so a clone per part was a new shadow program at every first hit. One material per (source, instance tint) per station.
+    const st = station(9001);
+    const P = st.sys.props;
+    const proto = P.variantPrototypes();
+    // the (source material, instance tint) of each shared-instance entry of a prop
+    const keysOf = (p: PropPlacement) => (P.index.inst.get(p) ?? []).map(e => {
+      const c = e.mesh.instanceColor ? new THREE.Color().fromArray(e.mesh.instanceColor.array as Float32Array, e.index * 3) : null;
+      return `${(e.mesh.material as THREE.Material).uuid}|${c ? `${c.r},${c.g},${c.b}` : ''}`;
+    });
+    const tables = st.layout.props.filter(p => p.kind === 'table');
+    let pair: [PropPlacement, PropPlacement] | null = null;
+    for (const x of tables) for (const y of tables) if (!pair && x !== y && keysOf(x).some(k => keysOf(y).includes(k))) pair = [x, y];
+    expect(pair, 'two tables with a part of the same source and tint').toBeTruthy();
+    const [A, B] = pair!;
+    const sA = P.state(A), sB = P.state(B);
+    expect(P.detach(sA, true) && P.detach(sB, true)).toBe(true);
+    // each instanced part: its key (source + tint, via the hidden instance it stands in for) -> the material it draws with
+    const drawn = new Map<string, Set<THREE.Material>>();
+    const a: THREE.Material[] = [];
+    for (const s of [sA, sB]) {
+      for (const hd of s.hidden) {
+        const c = hd.mesh.instanceColor ? new THREE.Color().fromArray(hd.mesh.instanceColor.array as Float32Array, hd.index * 3) : null;
+        const key = `${(hd.mesh.material as THREE.Material).uuid}|${c ? `${c.r},${c.g},${c.b}` : ''}`;
+        const m = hd.part!.material as THREE.Material;
+        if (!drawn.has(key)) drawn.set(key, new Set());
+        drawn.get(key)!.add(m);
+        if (s === sA) a.push(m);
+        expect(hasPropDamage(m)).toBe(true);
+        expect(proto.meshes.some(x => x.material === m)).toBe(true); // what the warm-up compiled IS what the hit draws
+      }
+    }
+    expect([...drawn.values()].every(set => set.size === 1)).toBe(true); // one material per (source, tint)
+    const mats = [...drawn.values()].map(set => [...set][0]);
+    expect(new Set(mats).size).toBe(drawn.size); // and a different one for every other (source, tint)
+    expect(drawn.size).toBeLessThan(sA.hidden.length + sB.hidden.length); // (A and B do share some)
+    for (const q of [...sA.parts!, ...sB.parts!]) expect(q.mesh.userData[PROP_DATA_KEY]).toBe(q.u.data); // (the damage state stays per part)
+    const spies = [...new Set(a)].map(m => vi.spyOn(m, 'dispose'));
+    expect(st.sys.props.reattach(A, true)).toBe('ok');
+    expect(spies.every(s => s.mock.calls.length === 0)).toBe(true); // (station-owned: B may still draw with them)
+    const queue: (() => void)[] = [];
+    st.sys.clear(fn => queue.push(fn));
+    expect(spies.every(s => s.mock.calls.length === 0)).toBe(true); // deferred (after the next station's warm-up)
+    for (const fn of queue) fn();
+    expect(spies.every(s => s.mock.calls.length === 1)).toBe(true);
   });
 
   it('crate: staged damage, then splinters; its finite lots stay (same ids / counts) and are takeable', () => {

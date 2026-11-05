@@ -185,6 +185,20 @@ export class LotDisplay {
     return h;
   }
 
+  /**
+   * Task runtime-variant-warmup-20261105: make the highlight copy of every item type allocated this station now (the same cached
+   * copies the first aim at a lot shows), hidden in the group — under the containers group, a registered warm-up pool, so the warm-up
+   * and the journey compile prepare them (a copy is non-instanced and owns material clones: a first aim built its variants). Done at
+   * warm-up time, i.e. after this station's culler registration (#12 above). Render cache only: no lot, aim or batch state. Returns
+   * the item types prepared.
+   */
+  prepareHighlights(): number {
+    const ids = new Set<string>();
+    for (const key of this.batches.keys()) ids.add(key.split('|')[0]);
+    for (const id of ids) this.highlight(id);
+    return ids.size;
+  }
+
   /** Task office-overhaul-20261030 (INTERACT, #12): a cached highlight copy leaves the group (and any cull layer) until next used. */
   private detachHighlight(h: Highlight): void {
     h.obj.visible = false;

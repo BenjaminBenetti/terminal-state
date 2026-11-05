@@ -530,6 +530,59 @@ export class PropDamage {
   private static readonly warmMats = new Map<THREE.Material, THREE.Material>();
   private warm: THREE.Mesh[] = [];
 
+  /**
+   * Task runtime-variant-warmup-20261105 (render/runtimeVariants.ts): PROTOTYPES of what detach() draws, with its exact factory —
+   * the material (damageMat: the SAME per-(source, instance tint) damage material the first hit will use, so the caster's
+   * per-instance shadow variant is the real one), the geometry (a shared instance's geometry as a plain non-instanced mesh; a merged
+   * chunk's EXTRACT: non-indexed with every attribute, like extract()) and the source's shadow flags (the variant key includes
+   * receiveShadow; casters get shadow-pass variants) — plus `own` (meshes a holder owns: damage takes them over and hooks their base
+   * material). The pre-warm above carries no shadow flags and the indexed merged geometry; these match. Pure: no PropState, cut,
+   * index buffer, PartData, clone count or scene change (the damage materials are created early, nothing else). `geometries` were
+   * created here (the caller releases them with its pool); the materials stay this station's (released by clear()). `kinds` (tests):
+   * only those prop kinds' shared instances (de-duplicated among themselves; merged chunks and `own` are always included).
+   */
+  variantPrototypes(own: readonly THREE.Mesh[] = [], kinds?: ReadonlySet<string>): {meshes: THREE.Mesh[]; geometries: THREE.BufferGeometry[]} {
+    const meshes: THREE.Mesh[] = [], geometries: THREE.BufferGeometry[] = [];
+    const seen = new Set<string>();
+    const layout = (g: THREE.BufferGeometry, indexed: boolean) => `${Object.keys(g.attributes).sort().join(',')}${indexed ? '|i' : ''}`;
+    const keyOf = (src: THREE.Material, g: THREE.BufferGeometry, indexed: boolean, cast: boolean, receive: boolean, tint: THREE.Color | null) =>
+      `${src.uuid}|${tint ? `${tint.r},${tint.g},${tint.b}` : ''}|${layout(g, indexed)}|${cast ? 1 : 0}|${receive ? 1 : 0}`;
+    const add = (geo: THREE.BufferGeometry, cur: THREE.Material | THREE.Material[], cast: boolean, receive: boolean, name: string, indexed: boolean, tint: THREE.Color | null): boolean => {
+      const src = (Array.isArray(cur) ? cur[0] : cur) as THREE.Material | undefined;
+      if (!src) return false;
+      const key = keyOf(src, geo, indexed, cast, receive, tint);
+      if (seen.has(key)) return false;
+      seen.add(key);
+      const mesh = new THREE.Mesh(geo, this.damageMat(src, tint));
+      mesh.castShadow = cast;
+      mesh.receiveShadow = receive;
+      mesh.name = name;
+      meshes.push(mesh);
+      return true;
+    };
+    for (const [p, list] of this.index.inst) {
+      if (kinds && !kinds.has(p.kind)) continue;
+      for (const e of list) {
+        const tint = e.mesh.instanceColor ? new THREE.Color().fromArray(e.mesh.instanceColor.array as Float32Array, e.index * 3) : null;
+        add(e.mesh.geometry, e.mesh.material, e.mesh.castShadow, e.mesh.receiveShadow, `damaged-${p.kind}`, !!e.mesh.geometry.index, tint);
+      }
+    }
+    for (const m of this.index.merged) {
+      const g = m.mesh.geometry, idx = g.index;
+      if (!idx) continue;
+      const src = (Array.isArray(m.mesh.material) ? m.mesh.material[0] : m.mesh.material) as THREE.Material;
+      if (seen.has(keyOf(src, g, false, m.mesh.castShadow, m.mesh.receiveShadow, null))) continue;
+      let t = -1;
+      for (let k = 0; k < idx.count / 3 && t < 0; k++) { const a = idx.getX(k * 3); if (a !== idx.getX(k * 3 + 1) || a !== idx.getX(k * 3 + 2)) t = k; }
+      if (t < 0) continue;
+      const geo = extract(g, [t]);
+      if (add(geo, m.mesh.material, m.mesh.castShadow, m.mesh.receiveShadow, `damaged-${m.key}`, false, null)) geometries.push(geo);
+      else geo.dispose();
+    }
+    for (const mesh of own) add(mesh.geometry, (mesh.userData.baseMat as THREE.Material | undefined) ?? mesh.material, mesh.castShadow, mesh.receiveShadow, mesh.name || 'damaged-own', !!mesh.geometry.index, null);
+    return {meshes, geometries};
+  }
+
   /** Remove the pre-warm meshes (call once the first frames have rendered). */
   dropWarmup(): void {
     for (const m of this.warm) this.group.remove(m);
@@ -559,6 +612,29 @@ export class PropDamage {
   /** Lane PHYS: detached props that are not physics bodies, least recently hit first (reclaimMarked). */
   private readonly order = new Set<PropState>();
 
+  /**
+   * Task runtime-variant-warmup-20261105: the damage material detach() draws a part with — the node-material copy of `src` with the
+   * prop-damage stages (else a plain clone: drawn as before, unmarked), its colour multiplied by the instance `tint` — ONE per
+   * (source, tint) for the station, shared by every part (and the warm-up prototypes: variantPrototypes) instead of a clone per part.
+   * Nothing per part lives on it (the damage state is the mesh's per-object data), and three r186 builds a caster's shadow variant per
+   * material instance when it has a map / colour node (render/runtimeVariants.ts ownShadowNodes): a clone per part meant a new shadow
+   * program at every first hit. Released by clear().
+   */
+  private damageMat(src: THREE.Material, tint: THREE.Color | null): THREE.Material {
+    let byTint = this.damageMats.get(src);
+    if (!byTint) this.damageMats.set(src, (byTint = new Map()));
+    const key = tint ? `${tint.r},${tint.g},${tint.b}` : '';
+    let mat = byTint.get(key);
+    if (mat) return mat;
+    const nodeMat = toNodeMaterial(src);
+    if (nodeMat) addPropDamageHooks(nodeMat);
+    mat = (nodeMat as unknown as THREE.Material | null) ?? src.clone();
+    if (tint && (mat as THREE.MeshStandardMaterial).color) (mat as THREE.MeshStandardMaterial).color.multiply(tint);
+    byTint.set(key, mat);
+    return mat;
+  }
+  private readonly damageMats = new Map<THREE.Material, Map<string, THREE.Material>>();
+
   /** Detach the prop into its own meshes + material clones (idempotent). False when capped / nothing found. */
   detach(s: PropState, force = false): boolean {
     if (s.parts) return true;
@@ -572,12 +648,9 @@ export class PropDamage {
       const src = (Array.isArray(cur) ? cur[0] : cur) as THREE.Material;
       const cls = partKeyClass(key || src.name || '', partKeyClass(src.name || '', s.spec.cls));
       const glass = cls === 'glass' || cls === 'screen' || (!!(src as THREE.MeshStandardMaterial).transparent && cls !== 'plastic' && /glass/i.test(src.name || key));
-      // Iteration 13 (MAT-B): own node-material copy + the prop-damage node stages; the part's state is per-object data
-      const nodeMat = toNodeMaterial(src);
-      if (nodeMat) addPropDamageHooks(nodeMat);
-      const mat = (nodeMat as unknown as THREE.Material | null) ?? src.clone(); // no node counterpart: drawn as before, unmarked
+      // Iteration 13 (MAT-B): node-material copy + the prop-damage node stages; the part's state is per-object data
+      const mat = this.damageMat(src, tint);
       this.clones++;
-      if (tint && (mat as THREE.MeshStandardMaterial).color) (mat as THREE.MeshStandardMaterial).color.multiply(tint);
       mesh.updateMatrixWorld(true);
       const u = new PartData(shadeIndex(glass && cls !== 'screen' ? 'glass' : cls), new THREE.Color(DAMAGE_MATERIALS[cls].substrate), mesh.matrixWorld);
       mesh.userData[PROP_DATA_KEY] = u.data;
@@ -704,8 +777,7 @@ export class PropDamage {
         if (q.prevMat) { q.mesh.material = q.prevMat; if (q.mesh.userData.baseMat === q.mat) q.mesh.userData.baseMat = q.prevMat; }
         delete q.mesh.userData[PROP_DATA_KEY];
       }
-      if (q.ownGeometry) q.mesh.geometry.dispose();
-      q.mat.dispose();
+      if (q.ownGeometry) q.mesh.geometry.dispose(); // (q.mat is the station's shared damage material: released by clear())
     }
     this.clones -= s.parts.length;
     s.parts = null;
@@ -879,8 +951,11 @@ export class PropDamage {
     this.hooks.onBreak?.({prop: p, index: s.index, kind: s.spec.breaks as BreakKind, boxes: res.boxes, color: res.color});
   }
 
-  /** Remove detached copies, restore shared instances / merged triangles / own-mesh materials. */
-  clear(): void {
+  /**
+   * Remove detached copies, restore shared instances / merged triangles / own-mesh materials. `retire`: when given, the station's
+   * damage materials' GPU release is handed to it (after the next warm-up, like the wound clones); else immediate.
+   */
+  clear(retire?: (release: () => void) => void): void {
     this.dropWarmup();
     for (const s of this.states.values()) {
       for (const hd of s.hidden) { hd.mesh.setMatrixAt(hd.index, hd.matrix); hd.mesh.instanceMatrix.needsUpdate = true; }
@@ -893,9 +968,12 @@ export class PropDamage {
         else if (q.prevMat) { q.mesh.material = q.prevMat; if (q.mesh.userData.baseMat === q.mat) q.mesh.userData.baseMat = q.prevMat; }
         if (!q.created) delete q.mesh.userData[PROP_DATA_KEY]; // Iteration 13 (MAT-B)
         if (q.ownGeometry) q.mesh.geometry.dispose();
-        q.mat.dispose();
       }
     }
+    const mats = [...this.damageMats.values()].flatMap(byTint => [...byTint.values()]);
+    this.damageMats.clear();
+    if (retire) retire(() => { for (const m of mats) m.dispose(); });
+    else for (const m of mats) m.dispose();
     this.states.clear();
     this.clones = 0;
     this.detached = 0; // lane PHYS
