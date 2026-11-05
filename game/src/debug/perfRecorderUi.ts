@@ -78,9 +78,9 @@ export class PerfRecorderUi {
     this.ctl.listeners.push(() => this.onPhase());
   }
 
-  /** Per animation frame (main.ts loop): the recorder's frame sample. OFF: one boolean check. */
-  frame(time: number, cpuMs: number): void {
-    this.ctl.frame(time, cpuMs);
+  /** Per animation frame (main.ts loop): the recorder's frame sample (+ the callback's start, revision 2). OFF: one boolean check. */
+  frame(time: number, cpuMs: number, start?: number): void {
+    this.ctl.frame(time, cpuMs, start);
   }
 
   start(by = 'menu'): boolean { return this.ctl.start(by); }

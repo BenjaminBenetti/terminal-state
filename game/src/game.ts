@@ -465,6 +465,7 @@ export class Game {
     this.scene.fog = new THREE.FogExp2(MOOD.fogColor, MOOD.fogDensity);
     this.scene.add(this.hemi, this.camera, this.muzzleLight, this.fx.group);
     this.scene.add(this.damage.group); // Lane D: debris / craters / damaged props (normal depth-tested scene pass)
+    this.damage.prof = this.prof; // task hitch-attribution-recorder-20261105: hit.zombie / hit.tearChunk / hit.extractPatch spans (timing only)
     this.camera.rotation.order = 'YXZ';
     // Hot centre (~10 deg) with a wide soft spill to ~33 deg; low decay so it reaches ~20 m.
     this.flashlight = new THREE.SpotLight(0xfff4e2, 0, 30, 0.58, 0.7, 1.2);
@@ -2441,10 +2442,11 @@ export class Game {
       const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy, // (lane RIDE: holstered)
         lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
-        if (e.type === 'fire') this.fire(e.def);
+        // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
+        if (e.type === 'fire') { prof.begin(SPAN.fire); this.fire(e.def); prof.end(SPAN.fire); }
         else if (e.type === 'windup') { /* lane FEEL: the raise is silent (no whoosh while held); the viewmodel shows it */ }
         else if (e.type === 'swing') this.sfx.meleeSwing(); // lane KNIFE / FEEL: the whoosh at the RELEASE (no gunfire, bullets, flash or recoil)
-        else if (e.type === 'contact') this.meleeContact(e.def);
+        else if (e.type === 'contact') { prof.begin(SPAN.melee); this.meleeContact(e.def); prof.end(SPAN.melee); }
         else if (e.type === 'dry') { this.sfx.dry(e.def.sound); if (e.def.caliber && reserveFor(e.def, this.inv) === 0) this.hud.toast(`Out of ${caliberLabel(e.def)} ${CALIBERS[e.def.caliber].unit[1]}`, true); }
         else if (e.type === 'reloadStart') this.sfx.reloadStart(e.def.sound, e.empty);
         else if (e.type === 'shellIn') { this.sfx.shellIn(); this.viewmodel.shellBump(); }
@@ -2647,9 +2649,13 @@ export class Game {
 
   // ---------------------------------------------------------------------------------------
   private fire(def: WeaponDef): void {
+    // task hitch-attribution-recorder-20261105: fire.fx / fire.rays / hit.world / hit.ragdoll spans (timing only; the profiler's
+    // calls are one boolean check when it is not recording — every outcome, RNG draw and allocation is unchanged)
+    const prof = this.prof;
     this.stats.shots++;
     this.damage.beginShot();
     this.shotCounter++;
+    prof.begin(SPAN.fireFx);
     this.sfx.shot(def.sound);
     this.viewmodel.fire(def, stanceRecoilMult(this.player.crouched));
     this.muzzleT = 0.05;
@@ -2672,10 +2678,12 @@ export class Game {
     const muzzle = this.viewmodel.muzzleWorld(this.camera);
     this.fx.muzzle(muzzle, fwd, def.pellets > 1);
     this.physics.onFire(def.id, this.viewmodel, this.camera, this.player); // brass now; shotgun hull on the pump
+    prof.end(SPAN.fireFx);
     for (let i = 0; i < def.pellets; i++) {
       const a = this.rand() * Math.PI * 2, r = spread * Math.sqrt(this.rand());
       const dir = fwd.clone().addScaledVector(right, Math.tan(r) * Math.cos(a)).addScaledVector(up, Math.tan(r) * Math.sin(a)).normalize();
       const d: Vec3 = {x: dir.x, y: dir.y, z: dir.z};
+      prof.begin(SPAN.fireRays);
       // Lane B (iteration 08): through every level's bands — a slab between shooter and target stops the bullet
       const wh = raycastWorld(this.levels, this.layout.props, o, d, def.range, this.layout.trench.floorY);
       let bestT = wh.t, bestZ: EnemyActor | null = null, bestPart = 'torso';
@@ -2689,6 +2697,7 @@ export class Game {
       // Iteration 08 (Lane S): a filler stock piece on the pellet line (exact per-piece test; inside a stocked shelf when its box is the
       // world hit) takes the pellet: its impulse at the hit point. Loot items / pickups in front of it still take it first (Lane K path).
       const fh = this.stock.pelletHit(o, d, bestT, wh, this.layout.props, !!bestZ || !!corpse);
+      prof.end(SPAN.fireRays);
       if (fh) { bestT = fh.t; bestZ = null; }
       const end = origin.clone().addScaledVector(dir, bestT);
       const shot = {damage: def.damage * WeaponController.falloff(def, bestT), pellet: def.pellets > 1, weapon: def.id};
@@ -2696,7 +2705,7 @@ export class Game {
       if (!fh) this.damage.knockPickups(o, d, bestT, wh, shot);
       else {
         if (!this.damage.knockPickups(o, d, fh.t, undefined, shot)) this.stock.shoot(fh, dir, shot.damage);
-        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); if (!this.bulletHit(wh, wp, dir, shot.damage)) this.damage.hitWorld(wh, wp, dir, shot); } // through a cooler's glass
+        if (fh.glass) { const wp = origin.clone().addScaledVector(dir, wh.t); prof.begin(SPAN.hitWorld); if (!this.bulletHit(wh, wp, dir, shot.damage)) this.damage.hitWorld(wh, wp, dir, shot); prof.end(SPAN.hitWorld); } // through a cooler's glass
       }
       if (bestZ) {
         const mult = bestPart === 'head' ? def.headMult : bestPart === 'limb' ? def.limbMult : 1;
@@ -2714,7 +2723,9 @@ export class Game {
       } else if (!fh && wh.kind !== 'none') {
         // Lane D: material-matched persistent damage (craters / per-instance prop damage / breaking) + fx + sound
         // (task gasmask-breach-20261030: unless a lane handler takes the hit — an office window pane)
+        prof.begin(SPAN.hitWorld);
         if (!this.bulletHit(wh, end, dir, shot.damage)) this.damage.hitWorld(wh, end, dir, shot);
+        prof.end(SPAN.hitWorld);
       }
       if (def.pellets === 1 ? this.shotCounter % 3 === 0 : i < 3) this.fx.tracer(muzzle, end);
     }
@@ -2733,7 +2744,9 @@ export class Game {
         this.stats.kills++;
         enemyCues(z).death(this.sfx, z); // zombie death cue / rat/dog death (Lane Q adapter)
         // articulated ragdoll from the current pose, shoved by this shot (falls back to the Death clip)
+        prof.begin(SPAN.ragdoll);
         this.physics.ragdoll(z, {dir: fwd, point: e.point, strength: killImpulseStrength(def.id, e.pellets, def.pellets), bone: e.head ? 'head' : undefined});
+        prof.end(SPAN.ragdoll);
       }
     }
     if (dmg.size) {
@@ -2758,12 +2771,14 @@ export class Game {
 
   /** A noise of loudness radius `radius` (m) at the player: zombies in earshot hear it (walls / slabs muffle; see fire()). */
   private alertZombies(radius: number): void {
+    this.prof.begin(SPAN.alert); // (task hitch-attribution-recorder-20261105: hit.alert span, timing only)
     const multi = this.levels.count > 1, P = this.player, bases = multi ? this.levels.list.map(l => l.baseY) : null;
     // lane ENEMY (mall round 3, R2): the listener loop is ai/brain.ts alertListeners (moved verbatim; the Node aggro scenario runs it).
     // An open-atrium level (layout.mall) adds the cross-storey rule (ATRIUM_PERCEPTION: x0.7 per storey through the void, at most 3
     // new cross-storey responders per noise); the Subway / Office pass no flag: the established loop.
     alertListeners(this.zombies.map(z => z.brain), P, radius,
       b => multi ? this.levels.lineOfSight({x: P.x, y: P.eye, z: P.z}, {x: b.x, y: b.y + 1.5, z: b.z}) : this.layout.grid.lineOfSight(P.x, P.z, b.x, b.z), bases, !!this.layout.mall || !!this.layout.reactor); // task reactor-build-20261101 (lane ARCH): + the Reactor's open pit (cross-storey hearing)
+    this.prof.end(SPAN.alert);
   }
 
   /**
@@ -2801,7 +2816,9 @@ export class Game {
       if (killed) {
         this.stats.kills++;
         enemyCues(z).death(this.sfx, z);
+        this.prof.begin(SPAN.ragdoll);
         this.physics.ragdoll(z, {dir: fwd, point, strength: killImpulseStrength(def.id, 1, 1), bone: res.part === 'head' ? 'head' : undefined});
+        this.prof.end(SPAN.ragdoll);
       } else enemyCues(z).hurt(this.sfx, z);
       this.hud.hitmarker(killed);
       this.sfx.hitTick(killed);

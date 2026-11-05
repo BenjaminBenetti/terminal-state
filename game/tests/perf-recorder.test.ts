@@ -656,7 +656,8 @@ describe('perf recorder: keys, file name, build identity, game seams', () => {
     expect(ride).toMatch(/\n {2}depart\(\): Promise</);
     expect(ride).toMatch(/\n {2}arrive\(\): Promise</);
     const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-    expect(main).toMatch(/perf\.frame\(time, cpuMs\);\s*recorder\.frame\(time, cpuMs\)/);
+    expect(main).toMatch(/perf\.frame\(time, cpuMs\);\s*recorder\.frame\(time, cpuMs, t0\)/); // (revision 2: + the callback start t0)
+    expect(main).toMatch(/const loop = \(time: number\) => \{\s*const t0 = performance\.now\(\);/); // t0 = the rAF callback's entry
   });
 });
 

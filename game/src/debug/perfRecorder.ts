@@ -19,12 +19,21 @@
 //
 // Cost: nothing is allocated before the first start (the arrays are then reused by every later start: a restart clears, never
 // grows); one frame() writes ~25 typed-array slots and copies the profiler's newest slot — no allocation, no string work.
+//
+// Task hitch-attribution-recorder-20261105 (schema revision 2, additive — every revision-1 field is unchanged): the callback START
+// (performance.now() at the main loop's rAF callback entry: `start`, with startDelay = start - t and gapBefore = start - the previous
+// callback's end), an asynchronous GPU-queue completion probe per drawn frame (device.queue.onSubmittedWorkDone(), resolved on the
+// main thread: queueMs / queueDone / queueState — never awaited, bounded, honest nulls), flashlight lit / shadow-map flag bits, the
+// identity of synchronous first-use node builds (sanitized labels, bounded) and the TAIL summary: intervals by refresh multiple,
+// callback overruns and their overlap with interval misses, stall events per minute and the worst 1 s / 5 s windows.
 
 import {GAP_MS, quantile} from './frameHistory';
-import {PARENT, S, SPAN_COUNT} from './updateProfile';
+import {PARENT, S, SPAN_COUNT, isHookSpan} from './updateProfile';
 
 export const PERF_SCHEMA = 'terminal-state-perf';
 export const PERF_SCHEMA_VERSION = 1;
+/** Additive minor version of schema 1 (report key schemaMinor; 2: start / startDelay / gapBefore / queue* columns, torch flags, firstUse.builds, summary.tail, shot / hit spans). */
+export const PERF_SCHEMA_MINOR = 2;
 
 export interface PerfCaps {
   /** Frame samples (every rAF callback); the capture stops when full. */
@@ -45,11 +54,15 @@ export interface PerfCaps {
   worst: number;
   /** Spike frames reported with every nested span. */
   spikeDetail: number;
+  /** Synchronous first-use node builds reported with their identity (the most expensive are kept). */
+  firstUseBuilds: number;
+  /** GPU-queue completion probes in flight at once (more: that frame is not probed, counted as capped). */
+  queueOutstanding: number;
 }
 
 export const PERF_CAPS: Readonly<PerfCaps> = Object.freeze({
   frames: 20000, durationMs: 120000, events: 6000, longFrames: 400, resources: 1500, camera: 1300, cameraEveryMs: 100, heap: 150,
-  marks: 200, worlds: 64, worst: 24, spikeDetail: 160,
+  marks: 200, worlds: 64, worst: 24, spikeDetail: 160, firstUseBuilds: 240, queueOutstanding: 8,
 });
 
 /** Game states (Game.state) by code; anything else is 'other'. */
@@ -86,7 +99,13 @@ export const F = {
   /** the player pressed the mark key since the previous sample */ mark: 256,
   /** Game.setState ran since the previous sample */ stateChange: 512,
   /** the train journey's background compile (render/journeyCompile.ts) was active at the sample */ compiling: 1024,
+  /** the player's flashlight was lit (visible, intensity > 0) at the sample */ torchLit: 2048,
+  /** the flashlight's shadow map was drawn this frame (castShadow and shadow.autoUpdate; quality-dependent) */ torchShadow: 4096,
 } as const;
+
+/** GPU-queue completion probe state per frame (frames.columns.queueState). */
+export const QUEUE_STATES = ['none', 'pending', 'resolved', 'capped', 'error', 'cancelled'] as const;
+export const Q_NONE = 0, Q_PENDING = 1, Q_RESOLVED = 2, Q_CAPPED = 3, Q_ERROR = 4, Q_CANCELLED = 5;
 export const FLAG_NAMES = Object.keys(F) as (keyof typeof F)[];
 
 /** Frame categories: what the summaries split by. Only 'gameplay' frames feed the gameplay summary. */
@@ -108,6 +127,8 @@ export type TerminationReason = 'manual' | 'auto-cap-frames' | 'auto-cap-duratio
 /** One frame's values (the hooks fill ONE reused instance per frame; -1 = counter unavailable). */
 export class FrameInput {
   time = 0; cpuMs = 0; updateMs = 0; renderMs = 0; deferredMs = 0;
+  /** performance.now() at the game's rAF callback entry (main.ts loop t0; the same timebase as `time`); NaN = not supplied. */
+  start = NaN;
   /** renderer.info.frame of the drawn frame (asynchronous GPU timings refer to it); -1 when nothing was drawn. */
   frameId = -1;
   state = 0; flags = 0;
@@ -144,6 +165,28 @@ export interface LongFrameEntry {
   /** The longest scripts (LoAF attribution; ids already sanitized). */
   scripts: {invokerType: string; invoker: string; fn: string; source: string; ms: number; forcedLayoutMs: number | null}[];
   type: 'long-animation-frame' | 'longtask';
+}
+
+/**
+ * One synchronous first-use TSL node build (inside a renderer.render(); task hitch-attribution-recorder-20261105). Labels only —
+ * sanitized names / types of the object and materials (safeLabel), never object references, shaders, geometry or textures.
+ */
+export interface FirstUseBuild {
+  /** Capture frame index of the callback it ran in, and its time (ms since capture start). */
+  frame: number;
+  t: number;
+  /** CPU ms of the build. */
+  ms: number;
+  /** The rendered object's name (or its nearest named ancestor's, `via` 'ancestor'); null = anonymous. */
+  object: string | null;
+  via: 'self' | 'ancestor' | null;
+  objectType: string | null;
+  /** The material the build is for (a shadow pass: the pass's depth material) and the object's own material. */
+  material: string | null;
+  materialType: string | null;
+  objectMaterial: string | null;
+  /** A shadow-map pass build (the material is the light's shadow-pass material). */
+  shadowPass: boolean;
 }
 
 export interface ResourceEntry {
@@ -247,6 +290,14 @@ export class PerfCapture {
   private spanMs!: Float32Array; private spanCalls!: Uint16Array;
   private fuBuilds!: Uint16Array; private fuBuildMs!: Float32Array; private fuAsync!: Uint16Array; private fuPipes!: Uint16Array; private fuPipeMs!: Float32Array;
   private fuProgs!: Uint16Array; private fuProgMs!: Float32Array;
+  /** (Revision 2) callback start, queue probe call / resolution (ms since capture start; NaN = none) and probe state (Q_*). */
+  private st!: Float64Array; private qCall!: Float64Array; private qDone!: Float64Array; private qState!: Uint8Array;
+  /** Bumped at every start / clear: a queue result of an earlier capture is never written into this one. */
+  gen = 0;
+  /** (Revision 2) identified synchronous first-use builds (the most expensive kept) and how many were not kept. */
+  private fuList: FirstUseBuild[] = [];
+  fuListDropped = 0;
+  fuListSeen = 0;
   // --- running state ---
   private prev = {textures: -1, geometries: -1, programs: -1, nodes: -1, pipelines: -1};
   /** Counters that were ever available in this capture (null in the report otherwise). */
@@ -300,6 +351,7 @@ export class PerfCapture {
     this.spanMs = new Float32Array(N * SPAN_COUNT); this.spanCalls = new Uint16Array(N * SPAN_COUNT);
     this.fuBuilds = new Uint16Array(N); this.fuBuildMs = new Float32Array(N); this.fuAsync = new Uint16Array(N); this.fuPipes = new Uint16Array(N); this.fuPipeMs = new Float32Array(N);
     this.fuProgs = new Uint16Array(N); this.fuProgMs = new Float32Array(N);
+    this.st = new Float64Array(N); this.qCall = new Float64Array(N); this.qDone = new Float64Array(N); this.qState = new Uint8Array(N);
     const C = Math.max(1, Math.floor(this.caps.camera));
     this.camT = new Float64Array(C); this.camX = new Float32Array(C); this.camY = new Float32Array(C); this.camZ = new Float32Array(C); this.camS = new Int8Array(C);
     this.allocated = true;
@@ -317,7 +369,9 @@ export class PerfCapture {
     this.tEnd = now;
     this.termination = null;
     this.n = 0;
+    this.gen++;
     this.gpu.fill(NaN);
+    this.fuList = []; this.fuListDropped = 0; this.fuListSeen = 0;
     this.prev.textures = this.prev.geometries = this.prev.programs = this.prev.nodes = this.prev.pipelines = -1;
     for (const k of Object.keys(this.seen) as (keyof PerfCapture['seen'])[]) this.seen[k] = false;
     this.profHead = profHead;
@@ -339,6 +393,8 @@ export class PerfCapture {
     this.stopped = reason !== 'cancelled';
     this.tEnd = now;
     this.termination = reason;
+    // queue probes still in flight are CANCELLED (null in the report; a later resolution is ignored: the capture is off)
+    for (let k = 0; k < this.n; k++) if (this.qState[k] === Q_PENDING) this.qState[k] = Q_CANCELLED;
   }
 
   /** Forget the capture (idempotent). The arrays stay allocated for the next start. */
@@ -347,6 +403,8 @@ export class PerfCapture {
     this.stopped = false;
     this.termination = null;
     this.n = 0;
+    this.gen++;
+    this.fuList = []; this.fuListDropped = 0; this.fuListSeen = 0;
     this.events = []; this.longFrames = []; this.resources = []; this.heapRows = []; this.marks = []; this.worlds = [];
     this.eventTotals.clear(); this.resourceTotals.clear();
   }
@@ -359,6 +417,8 @@ export class PerfCapture {
     if (this.gapPending) { if (k > 0) this.flags[k - 1] |= F.gap; this.gapPending = false; }
     const t = i.time - this.t0;
     this.t[k] = t;
+    this.st[k] = i.start === i.start ? i.start - this.t0 : NaN;
+    this.qCall[k] = NaN; this.qDone[k] = NaN; this.qState[k] = Q_NONE;
     this.cpu[k] = i.cpuMs; this.upd[k] = i.updateMs; this.ren[k] = i.renderMs; this.def[k] = i.deferredMs;
     this.state[k] = i.state;
     let fl = i.flags & 0xffff;
@@ -501,11 +561,55 @@ export class PerfCapture {
     return false;
   }
 
+  // --- revision 2: GPU-queue completion probes (the hooks issue them; this only stores) ---
+
+  /**
+   * A queue probe was issued for the newest recorded frame at `now` (performance.now(); right after the game's frame callback and
+   * its submissions). Returns its frame index (-1: not recording / no frame). `capped`: not issued (too many in flight).
+   */
+  queueIssued(now: number, capped = false): number {
+    const k = this.n - 1;
+    if (!this.on || k < 0) return -1;
+    if (capped) { this.qState[k] = Q_CAPPED; return k; }
+    this.qCall[k] = now - this.t0;
+    this.qState[k] = Q_PENDING;
+    return k;
+  }
+
+  /** The probe of frame `k` (issued in capture `gen`) resolved (ok) or failed at `now`; ignored unless it is still this capture's and pending. */
+  queueSettled(gen: number, k: number, now: number, ok: boolean): boolean {
+    if (gen !== this.gen || !this.on || !(k >= 0 && k < this.n) || this.qState[k] !== Q_PENDING) return false;
+    if (ok) { this.qDone[k] = now - this.t0; this.qState[k] = Q_RESOLVED; } else this.qState[k] = Q_ERROR;
+    return true;
+  }
+
+  /** Queue probe states over the recorded frames (report / UI). */
+  queueCounts(): Record<(typeof QUEUE_STATES)[number], number> {
+    const c = {none: 0, pending: 0, resolved: 0, capped: 0, error: 0, cancelled: 0};
+    for (let k = 0; k < this.n; k++) c[QUEUE_STATES[this.qState[k]] ?? 'none']++;
+    return c;
+  }
+
+  // --- revision 2: first-use identity ---
+
+  /** A synchronous first-use node build of the frame being prepared (index = the next sample). Bounded: the most expensive are kept. */
+  firstUseBuild(now: number, ms: number, id: Omit<FirstUseBuild, 'frame' | 't' | 'ms'>): void {
+    if (!this.on) return;
+    this.fuListSeen++;
+    const e: FirstUseBuild = {frame: this.n, t: now - this.t0, ms, ...id};
+    const cap = Math.max(0, Math.floor(this.caps.firstUseBuilds));
+    if (this.fuList.length < cap) { this.fuList.push(e); return; }
+    this.fuListDropped++;
+    let min = -1;
+    for (let j = 0; j < this.fuList.length; j++) if (min < 0 || this.fuList[j].ms < this.fuList[min].ms) min = j;
+    if (min >= 0 && e.ms > this.fuList[min].ms) this.fuList[min] = e;
+  }
+
   /** Bounded-memory footprint of the capture arrays (bytes; 0 before the first start). */
   bytes(): number {
     if (!this.allocated) return 0;
     const N = this.t.length;
-    return N * (8 + 4 * 5 + 1 + 2 + 8 + 4 + 4 + 2 + 2 * 5 + 4 + 2 + 4 + 4 + 2 * 4 + 4 * 3) + N * SPAN_COUNT * 6 + this.camT.length * (8 + 12 + 1);
+    return N * (8 + 4 * 5 + 1 + 2 + 8 + 4 + 4 + 2 + 2 * 5 + 4 + 2 + 4 + 4 + 2 * 4 + 4 * 3 + 8 * 3 + 1) + N * SPAN_COUNT * 6 + this.camT.length * (8 + 12 + 1);
   }
 
   // ==== read-out ===================================================================================================================
@@ -600,6 +704,11 @@ export class PerfCapture {
     }
     summary.spans = {frames: spanFrames, spikeFrames: spikeSpanFrames, note: 'ms per gameplay frame (inclusive: a nested span is also inside its parent); spikeMean = mean over gameplay frames with interval > 33.3 ms', list: spans};
     yield;
+    // --- (revision 2) tail / frame pacing ---
+    const env = meta.environment as {refresh?: {hz?: unknown; measured?: unknown}} | undefined;
+    const hintHz = env?.refresh?.measured === true && typeof env.refresh.hz === 'number' ? env.refresh.hz : null;
+    summary.tail = this.tailSummary(interval, cat, hintHz);
+    yield;
     // --- correlation counts: what the gameplay spikes coincide with (base rates over all gameplay frames beside them) ---
     const CORR = ['turning', 'newNodeBuilds', 'newPipelines', 'newPrograms', 'newTextures', 'newGeometries', 'cullingChanged', 'pathSearches', 'riding', 'mainThreadOutsideGame', 'firstUse'] as const;
     const cf = new Uint32Array(CORR.length), cs = new Uint32Array(CORR.length), cn = new Uint32Array(2);
@@ -633,6 +742,10 @@ export class PerfCapture {
       note: 'three r186 first-use preparation, counted per frame: nodeBuilds = TSL node builds completed inside synchronous renders (nodeBuildMs = their CPU ms), asyncBuilds = node builds completed outside a render (compileAsync / warm-up), pipelines = render pipelines requested (pipelineMs = CPU ms of the requests inside renders), programs = shader programs created (programMs likewise). afterControl = frames from the moment the player had control again (gameplay and transition frames); work there is first-use preparation the warm-up did not cover. The GPU / driver compile time is NOT observable: CPU-side spans only.',
       gameplayAfterControl: this.fuOut(fuTotal),
       segments: fuSegs,
+      // (revision 2) which material / object each synchronous build was for (sanitized labels; the most expensive kept)
+      builds: {seen: this.fuListSeen, kept: this.fuList.length, dropped: this.fuListDropped,
+        note: 'synchronous (in-render) TSL node builds with the rendered object / material labels (game-relative names, sanitized; null = anonymous). A shadow-pass build names the pass material and the object\'s own material. Asynchronous builds (compileAsync / warm-up) are counted only (asyncBuilds).',
+        list: this.fuList.slice().sort((a, b) => a.t - b.t).map(e => ({...e, t: r2(e.t), ms: r2(e.ms)}))},
     };
     yield;
     // --- worst frames with timelines (bounded top-N selection, no full sort) ---
@@ -668,15 +781,20 @@ export class PerfCapture {
     };
     yield;
     // --- spike detail: every nested span of the worst spike frames (gameplay / transition) ---
+    // (revision 2: also every frame that missed a refresh or whose callback overran one — the tail summary's refresh)
+    const tailRefresh = (summary.tail as {refreshMs?: number} | null)?.refreshMs ?? Infinity;
     const spikeIdx = ((): number[] => {
       const out: number[] = [];
-      for (let k = 0; k < n; k++) if ((cat[k] === C_GAMEPLAY || cat[k] === C_TRANSITION) && (this.flags[k] & F.spans) && (interval[k] > 50 || this.cpu[k] > SPIKE_MS)) out.push(k);
+      for (let k = 0; k < n; k++) {
+        if (!((cat[k] === C_GAMEPLAY || cat[k] === C_TRANSITION) && (this.flags[k] & F.spans))) continue;
+        if (interval[k] > 50 || this.cpu[k] > SPIKE_MS || interval[k] > 1.5 * tailRefresh || this.cpu[k] > tailRefresh) out.push(k);
+      }
       return out;
     })();
-    spikeIdx.sort((a, b) => interval[b] - interval[a]);
+    spikeIdx.sort((a, b) => interval[b] - interval[a] || this.cpu[b] - this.cpu[a]);
     const keptSpikes = spikeIdx.slice(0, caps.spikeDetail);
     const spikeDetail = {
-      note: 'frames with interval > 50 ms or game CPU > 33.3 ms (gameplay / transition, profiler sampled), worst first: ms in 0.01 ms units, calls = span entries (nested: calls, e.g. path searches)',
+      note: 'frames with interval > 50 ms, game CPU > 33.3 ms, (schema 1.2) an interval over 1.5 refreshes or game CPU over one refresh (summary.tail.refreshMs) — gameplay / transition, profiler sampled — worst first: ms in 0.01 ms units, calls = span entries (nested: calls, e.g. path searches); span order = spans.names',
       kept: keptSpikes.length, omitted: spikeIdx.length - keptSpikes.length,
       frames: keptSpikes.map(k => ({frame: k, intervalMs: r2(interval[k]), cpuMs: r2(this.cpu[k]),
         ms: Array.from(this.spanMs.subarray(k * SPAN_COUNT, (k + 1) * SPAN_COUNT), q100), calls: Array.from(this.spanCalls.subarray(k * SPAN_COUNT, (k + 1) * SPAN_COUNT))})),
@@ -695,6 +813,7 @@ export class PerfCapture {
     parts.push('{');
     put('schema', PERF_SCHEMA, true);
     put('schemaVersion', PERF_SCHEMA_VERSION);
+    put('schemaMinor', PERF_SCHEMA_MINOR);
     put('about', 'Terminal State in-game performance recording. Frames: every rAF callback. Times in ms unless a unit says otherwise. See docs/performance-recorder.md.');
     put('privacy', PRIVACY_NOTE);
     put('build', meta.build);
@@ -704,7 +823,8 @@ export class PerfCapture {
       drops: {frames: 0, framesNote: 'frames are never dropped: the capture stops at the frame / duration cap', events: this.eventsDropped,
         longFrames: this.longFramesDropped, longFramesNote: 'when full, the shortest kept long frame is replaced (the worst are kept)',
         resources: this.resourcesDropped, camera: this.camDropped, heap: this.heapDropped, marks: this.marksDropped, worlds: this.worldsDropped,
-        spikeDetail: spikeDetail.omitted, oldestDropped: true},
+        spikeDetail: spikeDetail.omitted, firstUseBuilds: this.fuListDropped, firstUseBuildsNote: 'when full, the cheapest kept build is replaced (the most expensive are kept)',
+        oldestDropped: true},
       overhead: meta.overhead ?? null,
       notes: meta.notes ?? [],
     });
@@ -717,7 +837,7 @@ export class PerfCapture {
     yield;
     // frames: columnar, quantized (one chunk per column)
     parts.push(',"frames":{');
-    parts.push(`"count":${n},"stateNames":${JSON.stringify(STATE_NAMES)},"categories":${JSON.stringify(CATEGORIES)},"flagBits":${JSON.stringify(F)},`);
+    parts.push(`"count":${n},"stateNames":${JSON.stringify(STATE_NAMES)},"categories":${JSON.stringify(CATEGORIES)},"flagBits":${JSON.stringify(F)},"queueStates":${JSON.stringify(QUEUE_STATES)},`);
     parts.push(`"units":${JSON.stringify({
       t: '0.01 ms since capture start (rAF timestamp)', interval: '0.01 ms to the next rAF (null: the last frame)', cpu: '0.01 ms (game frame callback, main thread)',
       update: '0.01 ms (world update)', render: '0.01 ms (render submission: CPU encoding, not GPU execution)', deferred: '0.01 ms (deferred background chunks, part of cpu)',
@@ -730,6 +850,12 @@ export class PerfCapture {
       nodeBuilds: 'TSL node builds completed inside synchronous renders since the previous frame (null: hooks unavailable)', nodeBuildMs: '0.01 ms CPU of those builds',
       asyncBuilds: 'node builds completed outside a render (compileAsync / warm-up)', pipelinesCreated: 'render pipelines requested (any path)',
       pipelineMs: '0.01 ms CPU of the pipeline requests inside renders (driver compile not observable)', programsCreated: 'shader programs created', programMs: '0.01 ms CPU of the program creation inside renders',
+      start: '0.01 ms since capture start: performance.now() at the game rAF callback entry (main.ts; same timebase as t; null = not supplied)',
+      startDelay: '0.01 ms: start - t (the callback began this long after its rAF timestamp)',
+      gapBefore: '0.01 ms: start - (previous start + previous cpu): main-thread time between the previous game callback\'s end and this one\'s start, INCLUDING the normal wait for the next refresh',
+      queueMs: '0.01 ms from the GPU-queue probe call (end of this game callback, after its submissions) to device.queue.onSubmittedWorkDone() resolving on the main thread (queued GPU work + main-thread scheduling; not GPU execution alone, not presentation); null unless resolved',
+      queueDone: '0.01 ms since capture start when that probe resolved (null unless resolved)',
+      queueState: 'index into queueStates (none = not probed: nothing drawn / unsupported backend; capped = too many probes in flight; cancelled = still pending at stop)',
     })},`);
     parts.push('"columns":{');
     // one column = `"name":[v,v,…]`, written in chunks (a yield every CHUNK values; the parts are only ever concatenated)
@@ -780,6 +906,13 @@ export class PerfCapture {
     yield* col('pipelineMs', k => (fu ? q100(this.fuPipeMs[k]) : 'null'));
     yield* col('programsCreated', k => (fu ? this.fuProgs[k] : 'null'));
     yield* col('programMs', k => (fu ? q100(this.fuProgMs[k]) : 'null'));
+    // (revision 2) callback start / gaps and the GPU-queue completion probe
+    yield* col('start', k => nn(this.st[k]));
+    yield* col('startDelay', k => nn(this.st[k] - this.t[k]));
+    yield* col('gapBefore', k => (k > 0 ? nn(this.st[k] - (this.st[k - 1] + this.cpu[k - 1])) : 'null'));
+    yield* col('queueMs', k => (this.qState[k] === Q_RESOLVED ? nn(this.qDone[k] - this.qCall[k]) : 'null'));
+    yield* col('queueDone', k => (this.qState[k] === Q_RESOLVED ? nn(this.qDone[k]) : 'null'));
+    yield* col('queueState', k => this.qState[k]);
     parts.push('}}');
     // spans: top-level laps per frame (0.01 ms; 0 = no profiler sample, see flags.spans) + names
     parts.push(`,"spans":{"names":${JSON.stringify(spanNames)},"parents":${JSON.stringify(PARENT.map(p => (p >= 0 ? spanNames[p] : null)))},`);
@@ -819,6 +952,96 @@ export class PerfCapture {
       note: 'performance.memory (Chromium only, coarse / approximate); empty when unavailable'});
     parts.push('}');
     return parts;
+  }
+
+  /**
+   * (Revision 2) Tail / frame-pacing summary of the gameplay frames: every interval classified by refresh multiple (missed = round(
+   * interval / refresh) - 1: an exactly 33.3 ms interval at 60 Hz is ONE missed refresh, not "not over 33.3"), callback overruns (game
+   * callback CPU over one refresh — the rAF timestamps are vsync-aligned, so an overrun need not lengthen any interval) and their
+   * overlap with interval misses, stall events (union) per minute, the worst 1 s / 5 s windows, and — where recorded — the callback
+   * start delays / gaps and queue completion after misses vs on-time frames. Descriptive, no pass / fail threshold.
+   */
+  private tailSummary(interval: Float64Array, cat: Uint8Array, hintHz: number | null): Record<string, unknown> | null {
+    const n = this.n;
+    const gp: number[] = [];
+    for (let k = 0; k < n; k++) if (cat[k] === C_GAMEPLAY && interval[k] === interval[k]) gp.push(k);
+    if (gp.length < 2) return null;
+    const sorted = (a: number[]) => Float64Array.from(a).sort();
+    const ivs = sorted(gp.map(k => interval[k]));
+    const median = quantile(ivs, 0.5);
+    const hz = hintHz ?? 0, measured = hz >= 20 && hz <= 500;
+    const refreshMs = measured ? 1000 / hz : median;
+    const missedOf = (k: number) => Math.max(0, Math.round(interval[k] / refreshMs) - 1);
+    let onTime = 0, m1 = 0, m2 = 0, m3 = 0, missedRefreshes = 0, lostMs = 0, over = 0, overWithMiss = 0, timeMs = 0;
+    const events: number[] = [];
+    for (const k of gp) {
+      const iv = interval[k], missed = missedOf(k), overrun = this.cpu[k] > refreshMs;
+      timeMs += iv;
+      if (missed === 0) onTime++; else if (missed === 1) m1++; else if (missed === 2) m2++; else m3++;
+      if (missed > 0) { missedRefreshes += missed; lostMs += iv - refreshMs; }
+      if (overrun) { over++; if (missed > 0) overWithMiss++; }
+      if (missed > 0 || overrun) events.push(this.t[k]);
+    }
+    const misses = m1 + m2 + m3, minutes = timeMs / 60000;
+    const perMin = (v: number) => (minutes > 0 ? r2(v / minutes) : null);
+    const worst = (winMs: number) => {
+      let best = 0, at = -1;
+      for (let i = 0, j = 0; i < events.length; i++) {
+        if (j < i) j = i;
+        while (j < events.length && events[j] < events[i] + winMs) j++;
+        if (j - i > best) { best = j - i; at = events[i]; }
+      }
+      return {events: best, t: at >= 0 ? r2(at) : null};
+    };
+    const stat = (a: number[]) => {
+      if (!a.length) return null;
+      const s = sorted(a);
+      return {n: a.length, p50: r2(quantile(s, 0.5)), p95: r2(quantile(s, 0.95)), max: r2(s[s.length - 1])};
+    };
+    // callback start (where the main loop supplied it): this frame's delay after its rAF timestamp, the gap since the previous
+    // callback's end, and the NEXT callback's values after a missed interval vs after an on-time one
+    const sd: number[] = [], gb: number[] = [], sdMiss: number[] = [], gbMiss: number[] = [], sdOk: number[] = [], gbOk: number[] = [];
+    let started = 0;
+    for (const k of gp) {
+      const s = this.st[k];
+      if (s === s) { started++; sd.push(s - this.t[k]); if (k > 0 && this.st[k - 1] === this.st[k - 1]) gb.push(s - (this.st[k - 1] + this.cpu[k - 1])); }
+      const j = k + 1;
+      if (j < n && this.st[j] === this.st[j]) {
+        const miss = missedOf(k) > 0;
+        (miss ? sdMiss : sdOk).push(this.st[j] - this.t[j]);
+        if (s === s) (miss ? gbMiss : gbOk).push(this.st[j] - (s + this.cpu[k]));
+      }
+    }
+    // queue completion (resolved probes) of the frame whose interval missed vs on-time frames
+    const q: number[] = [], qMiss: number[] = [], qOk: number[] = [];
+    let qOver = 0;
+    for (const k of gp) {
+      if (this.qState[k] !== Q_RESOLVED) continue;
+      const v = this.qDone[k] - this.qCall[k];
+      q.push(v);
+      if (v > refreshMs) qOver++;
+      (missedOf(k) > 0 ? qMiss : qOk).push(v);
+    }
+    return {
+      note: 'gameplay frames only (menus, pause, loading, warm-up, transitions, hidden-tab gaps and focus loss excluded). missed = round(interval / refreshMs) - 1 per interval (interval k = rAF k+1 - rAF k: its cause may be frame k\'s work, work between the callbacks, or the browser / GPU not being ready). An overrun = the game callback\'s CPU over one refresh; rAF timestamps are vsync-aligned, so an overrun need not lengthen an interval (the frame may still reach the screen late) and an interval miss need not have an overrun. stallEvents = frames with a missed interval OR an overrun, counted once. Clock: Chromium ~0.1 ms, Firefox ~1 ms resolution without cross-origin isolation.',
+      refreshMs: r2(refreshMs), refreshSource: measured ? `display rate measured by the frame budget (${r2(hz)} Hz)` : 'median gameplay interval (no measured display rate)',
+      frames: gp.length, timeMs: r2(timeMs),
+      intervals: {onTime, missed1: m1, missed2: m2, missed3plus: m3, misses, missedRefreshes, lostMs: r2(lostMs),
+        p99: r2(quantile(ivs, 0.99)), p999: r2(quantile(ivs, 0.999)), max: r2(ivs[ivs.length - 1])},
+      overruns: {count: over, withIntervalMiss: overWithMiss, withoutIntervalMiss: over - overWithMiss},
+      stallEvents: {count: misses + over - overWithMiss, intervalMissOnly: misses - overWithMiss, overrunOnly: over - overWithMiss, both: overWithMiss,
+        perMinute: perMin(misses + over - overWithMiss), intervalMissesPerMinute: perMin(misses), overrunsPerMinute: perMin(over)},
+      worstWindows: {'1s': worst(1000), '5s': worst(5000)},
+      callbackStart: started ? {
+        frames: started,
+        note: 'startDelay = callback start - its rAF timestamp; gapBefore = callback start - (previous callback start + its game CPU): it includes the normal wait for the next refresh, so a large value alone is not proof of GC or a busy main thread. "afterMiss" = the callback right after a missed interval.',
+        startDelay: stat(sd), gapBefore: stat(gb), afterMiss: {startDelay: stat(sdMiss), gapBefore: stat(gbMiss)}, afterOnTime: {startDelay: stat(sdOk), gapBefore: stat(gbOk)},
+      } : null,
+      queue: q.length ? {
+        note: 'queueMs = from the probe call (end of the game callback, after its submissions) to device.queue.onSubmittedWorkDone() resolving ON THE MAIN THREAD: queued GPU work plus main-thread scheduling of the resolution — not GPU execution alone, not presentation',
+        all: stat(q), overOneRefresh: qOver, missedFrames: stat(qMiss), onTimeFrames: stat(qOk),
+      } : null,
+    };
   }
 
   /** Frames [k0, k1): interval (to the next rAF) and category; returns the gaps among them. */
@@ -947,11 +1170,15 @@ export class PerfCapture {
         let v = this.spanMs[o + j];
         if (j === S.ai) v -= this.spanMs[o + S.vocal] + this.spanMs[o + S.brain] + this.spanMs[o + S.motor] + this.spanMs[o + S.anim];
         else if (j === S.brain) v -= this.spanMs[o + S.path];
-        else if (j === S.hooks) for (let h = S.hook0; h < SPAN_COUNT; h++) v -= this.spanMs[o + h];
-        if (v > 0.005) items.push({name: j === S.ai ? 'ai (rest)' : j === S.brain ? 'ai.brain (excl. path)' : j === S.hooks ? 'hooks (rest)' : names[j], ms: r2(v), calls: this.spanCalls[o + j]});
+        else if (j === S.hooks) { for (let h = S.hook0; h < SPAN_COUNT; h++) if (isHookSpan(h)) v -= this.spanMs[o + h]; }
+        else if (j === S.weapon) v -= this.spanMs[o + S.fire] + this.spanMs[o + S.melee]; // (the shot / hit spans run inside those)
+        if (v > 0.005) items.push({name: j === S.ai ? 'ai (rest)' : j === S.brain ? 'ai.brain (excl. path)' : j === S.hooks ? 'hooks (rest)' : j === S.weapon ? 'weapon (rest)' : names[j], ms: r2(v), calls: this.spanCalls[o + j]});
       }
       items.sort((a, b) => b.ms - a.ms);
-      spans = {dominant: items.slice(0, 6), pathSearches: this.spanCalls[o + S.path], brainUpdates: this.spanCalls[o + S.brain]};
+      // (revision 2) the shot / hit path of this frame, every nested span (inclusive ms; parents in spans.parents)
+      const hit: Record<string, {ms: number; calls: number}> = {};
+      for (let j = S.fire; j < SPAN_COUNT; j++) if (this.spanCalls[o + j] > 0) hit[names[j]] = {ms: r2(this.spanMs[o + j]), calls: this.spanCalls[o + j]};
+      spans = {dominant: items.slice(0, 6), pathSearches: this.spanCalls[o + S.path], brainUpdates: this.spanCalls[o + S.brain], hitPath: Object.keys(hit).length ? hit : null};
     }
     // camera pose: the newest cadence sample at or before the frame
     let pose: number[] | null = null;
@@ -966,9 +1193,14 @@ export class PerfCapture {
     const absLo = this.t0 + t - 50, absHi = this.t0 + hi;
     const longs = lfs.filter(e => e.start <= absHi && e.start + e.duration >= absLo).slice(0, 4)
       .map(e => ({dt: r2(e.start - this.t0 - t), duration: r2(e.duration), blocking: e.blocking === null ? null : r2(e.blocking), scripts: e.scripts.slice(0, 2)}));
-    const ctx: number[][] = [];
-    for (let j = Math.max(0, k - 6); j <= Math.min(n - 1, k + 3); j++) ctx.push([j - k, interval[j] === interval[j] ? r2(interval[j]) : -1, r2(this.cpu[j]), cat[j]]);
+    const nul = (v: number) => (v === v ? r2(v) : null);
+    const delayOf = (j: number) => this.st[j] - this.t[j];
+    const gapOf = (j: number) => (j > 0 ? this.st[j] - (this.st[j - 1] + this.cpu[j - 1]) : NaN);
+    const queueOf = (j: number) => (this.qState[j] === Q_RESOLVED ? this.qDone[j] - this.qCall[j] : NaN);
+    const ctx: (number | null)[][] = [];
+    for (let j = Math.max(0, k - 6); j <= Math.min(n - 1, k + 3); j++) ctx.push([j - k, interval[j] === interval[j] ? r2(interval[j]) : -1, r2(this.cpu[j]), cat[j], nul(delayOf(j)), nul(gapOf(j)), nul(queueOf(j))]);
     const culledDelta = k > 0 && this.culled[k] >= 0 && this.culled[k - 1] >= 0 ? this.culled[k] - this.culled[k - 1] : null;
+    const builds = this.fuList.filter(e => e.frame === k).slice(0, 6).map(e => ({ms: r2(e.ms), object: e.object, objectType: e.objectType, material: e.material, materialType: e.materialType, objectMaterial: e.objectMaterial, shadowPass: e.shadowPass}));
     return {
       frame: k, t: r2(t), intervalMs: iv === iv ? r2(iv) : null, cpuMs: r2(this.cpu[k]), updateMs: r2(this.upd[k]), renderSubmitMs: r2(this.ren[k]),
       deferredMs: r2(this.def[k]), gpuMs: this.gpu[k] === this.gpu[k] ? r2(this.gpu[k]) : null,
@@ -977,11 +1209,14 @@ export class PerfCapture {
         newTextures: this.seen.textures ? this.dTex[k] : null, newGeometries: this.seen.geometries ? this.dGeo[k] : null, newPrograms: this.seen.programs ? this.dProg[k] : null,
         newNodeBuilds: this.seen.nodes ? this.dNode[k] : null, newPipelines: this.seen.pipelines ? this.dPipe[k] : null},
       firstUse: this.seen.firstUse ? {nodeBuilds: this.fuBuilds[k], nodeBuildMs: r2(this.fuBuildMs[k]), asyncBuilds: this.fuAsync[k], pipelines: this.fuPipes[k], pipelineMs: r2(this.fuPipeMs[k]),
-        programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k])} : null,
+        programs: this.fuProgs[k], programMs: r2(this.fuProgMs[k]), builds} : null,
+      // (revision 2) this callback's start and the next one's (the interval ends at the next rAF), and this frame's queue probe
+      callback: {startDelayMs: nul(delayOf(k)), gapBeforeMs: nul(gapOf(k)), nextStartDelayMs: k + 1 < n ? nul(delayOf(k + 1)) : null, nextGapBeforeMs: k + 1 < n ? nul(gapOf(k + 1)) : null},
+      queue: {state: QUEUE_STATES[this.qState[k]] ?? 'none', ms: nul(queueOf(k))},
       world: {culled: this.culled[k] >= 0 ? this.culled[k] : null, culledDelta, enemies: this.enemies[k]},
       camera: {yawDeg: r2(wrapDeg(this.yaw[k])), pitchDeg: r2(this.pitch[k] * 180 / Math.PI), yawRateDegPerSec: Math.round(yawRate[k]), pose, poseColumns: ['x', 'y', 'z', 'storey', 'ageMs']},
       spans,
-      timeline: {columns: ['frameOffset', 'intervalMs', 'cpuMs', 'category'], rows: ctx},
+      timeline: {columns: ['frameOffset', 'intervalMs', 'cpuMs', 'category', 'startDelayMs', 'gapBeforeMs', 'queueMs'], rows: ctx},
       events: near, longFrames: longs,
     };
   }
@@ -1031,6 +1266,19 @@ export function assetId(url: string, origin: string | null): {id: string; catego
   id = id.replace(/[^\w.\-+@ ]/g, '_').slice(0, 96);
   if (!id) return null;
   return {id, category: assetCategory(id)};
+}
+
+/**
+ * A runtime object / material name as a report label (task hitch-attribution-recorder-20261105): never a URL (null), no directories
+ * (the basename), only [word . - + @ : | , #] characters, at most `max` long; null when nothing is left. Game names are catalogue /
+ * generator ids (e.g. "prop-foldingBarricade", "p7-folding-barricade-t25-baked"); a URL-like name is dropped, not trimmed.
+ */
+export function safeLabel(v: unknown, max = 48): string | null {
+  if (typeof v !== 'string' || !v) return null;
+  if (v.includes('://') || /^(blob|data|file|https?):/i.test(v)) return null;
+  const cut = Math.max(v.lastIndexOf('/'), v.lastIndexOf('\\'));
+  const s = (cut >= 0 ? v.slice(cut + 1) : v).split('?')[0].replace(/[^\w.\-+@:|,#]/g, '_').slice(0, max);
+  return s || null;
 }
 
 /** Report file name: terminal-state-perf-<build>-<UTC yyyymmdd-hhmmss>.json (build = the bundle's content hash, else 'dev'). */
