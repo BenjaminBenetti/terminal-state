@@ -154,7 +154,7 @@ describe('uploadDedupe: redundant per-frame uniform uploads removed data-identic
   });
 
   it('the performance recorder (schemaMinor 4): per-frame uniformWrites / uniformWritesSkipped deltas; null when not installed', () => {
-    expect(PERF_SCHEMA_MINOR).toBe(4);
+    expect(PERF_SCHEMA_MINOR).toBeGreaterThanOrEqual(4); // (4 added these columns; later minors are additive)
     const names = (() => { const p = new UpdateProfiler(2); return Array.from({length: SPAN_COUNT}, (_, j) => p.name(j)); })();
     const meta = (): ReportMeta => ({build: {label: 'test'}, environment: {}, capabilities: [], spanNames: names, capturedAtUTC: '2026-11-05T00:00:00.000Z', endedAtUTC: '2026-11-05T00:01:00.000Z'});
     const run = (installed: boolean) => {
@@ -172,7 +172,7 @@ describe('uploadDedupe: redundant per-frame uniform uploads removed data-identic
       return JSON.parse(c.serializeSync(meta())) as {schemaMinor: number; frames: {columns: Record<string, (number | null)[]>; units: Record<string, string>}};
     };
     const r = run(true);
-    expect(r.schemaMinor).toBe(4);
+    expect(r.schemaMinor).toBe(PERF_SCHEMA_MINOR);
     expect(r.frames.columns.uniformWrites).toEqual([0, 1, 2, 3, 4, 5]); // (the first frame: no baseline yet)
     expect(r.frames.columns.uniformWritesSkipped).toEqual([0, 2, 4, 6, 8, 10]);
     expect(r.frames.units.uniformWrites).toMatch(/schemaMinor 4/);

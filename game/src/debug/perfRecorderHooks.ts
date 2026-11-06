@@ -132,7 +132,9 @@ function warmupSummary(r: unknown): Record<string, unknown> | null {
   for (const [k, s] of Object.entries(w.stages ?? {})) stages[k] = {done: s?.done ?? null, total: s?.total ?? null, ms: typeof s?.ms === 'number' ? r2(s.ms) : null};
   const plan: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(w.plan ?? {})) if (typeof v === 'number') plan[k] = v;
-  return {status: str(w.status), mode: str(w.mode), reason: typeof w.reason === 'string' ? w.reason.slice(0, 120) : null, warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null,
+  // (a reason may be an error message: kept only without URL / path characters, else withheld)
+  const reason = typeof w.reason === 'string' ? (/[?#:/\\@]/.test(w.reason) ? 'withheld (not a plain reason)' : w.reason.slice(0, 120)) : null;
+  return {status: str(w.status), mode: str(w.mode), reason, warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null,
     budgetMs: typeof w.budgetMs === 'number' ? w.budgetMs : null, cutStage: str(w.cutStage), stages, plan: w.plan ? plan : null};
 }
 

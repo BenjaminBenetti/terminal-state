@@ -55,6 +55,9 @@ describe.skipIf(!OUT)('static batching census (real worlds, no renderer)', () =>
         const st = (a: number[]) => { const b = [...a].sort((x, y) => x - y); return `mean ${(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1)} p90 ${b[Math.floor(b.length * 0.9)]} max ${b[b.length - 1]}`; };
         let ims = 0, meshes = 0;
         for (const r of B.roots) r.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) ims++; else if ((o as THREE.Mesh).isMesh) meshes++; });
+        const W = await import('../src/render/warmup');
+        const plan = W.planWarmup(B.scene, {mode: 'full', cameraMask: c2.layers.mask, pools: [B.roots[1]]});
+        out(`WARMUP ${level}: 'full' plan representatives ${plan.items.length}, others ${plan.others.length}, renderables ${plan.renderables.length}`);
         out(`MULTI ${level}: ${per.length} views · draws (scene + shadow) ${st(per)} · triangles ${st(tris.map(t => Math.round(t / 1000)))}k · static roots: ${ims} InstancedMesh, ${meshes} meshes`);
         B.scene.remove(c2);
         if (process.env.LL_RCPU_CENSUS_MULTI_ONLY) continue;
