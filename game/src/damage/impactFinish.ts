@@ -25,6 +25,12 @@ const OFFICE_FLOOR: Readonly<Record<string, DamageClass>> = {
   core: 'concrete', roof: 'concrete',
 };
 const OFFICE_CEIL: Readonly<Record<string, DamageClass>> = {grid: 'plaster', plain: 'plaster', raw: 'concrete', core: 'concrete'};
+/** Task studio-skyways-level-20261106-054448 (lane VIEW): the Skyways finishes (world/skywaysArch.ts; the office materials behind them). */
+const SKYWAYS: Readonly<Record<string, DamageClass>> = {
+  'skyways-wall': 'plaster', 'skyways-reveal': 'plaster', 'skyways-wet': 'tile', 'skyways-boh': 'concrete', 'skyways-trim': 'steel',
+  'skyways-floor-public': 'terrazzo', 'skyways-floor-court': 'terrazzo', 'skyways-floor-bridge': 'tile', 'skyways-floor-wet': 'tile', 'skyways-floor-boh': 'concrete',
+  'skyways-ceil-plain': 'plaster', 'skyways-ceil-grid': 'plaster', 'skyways-ceil-bridge': 'plaster', 'skyways-ceil-core': 'concrete',
+};
 
 /** Damage class of an arch-owned finish key, or null (not an arch finish this table knows: the station rule applies). */
 export function finishClass(key: string | null | undefined): DamageClass | null {
@@ -32,6 +38,7 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in REACTOR) return REACTOR[key];
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
+  if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   if (key.startsWith('office-')) {
     const base = key.split('@')[0];
     if (base === 'office-wall' || base === 'office-accent') return 'plaster';
@@ -46,4 +53,4 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
 }
 
 /** Every finish key the table answers for (tests: coverage of the arches' key sets). */
-export const FINISH_CLASS_KEYS = {reactor: Object.keys(REACTOR), officeFloor: Object.keys(OFFICE_FLOOR), officeCeil: Object.keys(OFFICE_CEIL)} as const;
+export const FINISH_CLASS_KEYS = {reactor: Object.keys(REACTOR), officeFloor: Object.keys(OFFICE_FLOOR), officeCeil: Object.keys(OFFICE_CEIL), skyways: Object.keys(SKYWAYS)} as const;

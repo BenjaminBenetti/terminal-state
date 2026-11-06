@@ -87,8 +87,9 @@ const edge01 = (q: AnyNode): AnyNode => { const f = fract(q) as AnyNode; return 
  * screen-space interior haze (render/volumetric.ts: marched up to the scene depth, lit by the skylight) stops at the glass instead of
  * laying a bright grey veil over the exterior beyond it; the exterior sky / gas draw before it (renderOrder) and every other glass is
  * in front of it — still transparent, so never a flashlight shadow caster.
+ * (Task studio-skyways-level-20261106-054448, lane VIEW: exported — the Skyways atrium roofs / bridge glazing reuse it.)
  */
-function roofGlass(): MeshBasicNodeMaterial {
+export function roofGlass(): MeshBasicNodeMaterial {
   const m = new MeshBasicNodeMaterial({transparent: true, depthWrite: true, side: THREE.DoubleSide});
   m.name = 'mall-glass-roof';
   const U = (uv() as AnyNode).div(vec2(1.5, 1.2));
