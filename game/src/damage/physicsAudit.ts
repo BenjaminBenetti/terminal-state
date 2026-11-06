@@ -19,6 +19,8 @@ import {isLootHolderKind} from '../items/loot';
 import {isSpillHolderKind} from '../world/openablesSpec';
 import {dynamicKind} from '../physics/dynamicItems';
 import {BUNKER_STATIC} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
+import {SKYWAYS_KITCHEN_PHYS, isSkywaysKitchenKind} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {SKYWAYS_ADDON_PHYS, isSkywaysAddonKind} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 
 export interface PhysAuditRow {
   kind: string;
@@ -35,8 +37,11 @@ export interface PhysAuditRow {
   why?: StaticWhy;
   /** One honest sentence (what it is, roughly what it weighs, why it moves / does not). */
   how: string;
-  /** office = classified in gen/office/physics.ts; subway = the kind's iteration-07 / 08 class (+ its contact overlay). */
-  src: 'office' | 'subway';
+  /**
+   * office = classified in gen/office/physics.ts; subway = the kind's iteration-07 / 08 class (+ its contact overlay); skyways = the
+   * Skyways ramen restaurant's kinds (gen/skyways/kitchenKinds.ts SKYWAYS_KITCHEN_PHYS; task studio-skyways-level-20261106-054448, lane FOOD).
+   */
+  src: 'office' | 'subway' | 'skyways';
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -144,9 +149,17 @@ function officeRow(kind: string, r: OfficePhys): PhysAuditRow {
   return {kind, cls: 'dynamic', mass: r.mass, shape: r.shape ?? 'box', mat: r.mat, contact: !!propPhysics(kind).contact && dynamicKind(kind), ...(r.onHost ? {onHost: true} : {}), how: r.how, src: 'office'};
 }
 
+/** Lane FOOD (skyways): a ramen-restaurant kind's row — its class / body from the live physics (PROP_DEFS.physics), its reason from the table. */
+function skywaysRow(kind: string): PhysAuditRow {
+  // (lane ADDON: + the add-on's kinds, gen/skyways/addonKinds.ts SKYWAYS_ADDON_PHYS — same row shape)
+  const r = isSkywaysAddonKind(kind) ? SKYWAYS_ADDON_PHYS[kind] : SKYWAYS_KITCHEN_PHYS[kind as keyof typeof SKYWAYS_KITCHEN_PHYS], ph = propPhysics(kind);
+  if (!r.dynamic) return {kind, cls: 'static', why: r.why, how: r.how, src: 'skyways'};
+  return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact: !!ph.contact && dynamicKind(kind), ...(ph.onHost ? {onHost: true} : {}), how: r.how, src: 'skyways'};
+}
+
 /** kind -> its physics-affordance row; a kind with no row here is UNCLASSIFIED (tests fail). */
 export const PROP_PHYSICS_AUDIT: Readonly<Record<string, PhysAuditRow>> = Object.fromEntries(ALL_PROP_KINDS.flatMap(k => {
-  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : subwayRow(k);
+  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : isSkywaysKitchenKind(k) || isSkywaysAddonKind(k) ? skywaysRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds)
   return row ? [[k, row]] : [];
 }));
 

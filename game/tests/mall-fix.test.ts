@@ -199,7 +199,11 @@ describe('U04 round atrium columns: generation-time records', () => {
     // task reactor-expansion-20261101: the Reactor's core vessel (coreFloor.ts) and waste repository casks (wasteDress.ts) are cylinders
     // task train-fuel-system-20261106-024923: world/fuelCarts.ts gives fuel carts riding as CARGO a round footprint in the riding car's own
     // train-local collision model only (never a level prop: Subway / Office station props are untouched)
-    expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts', 'world/fuelCarts.ts']);
+    // task studio-skyways-level-20261106-054448 (lane ADDON): the Skyways add-on's cylinders — the mascot statues' round plinths
+    // (addonConvention.ts, on the stage deck; addonFrame.ts putRound, on the floor) and the prize ring's round-based stanchions
+    // (addonFrame.ts putRound) — Skyways-only kinds; Subway / Office station props still keep their box collision
+    expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts', 'gen/skyways/addonConvention.ts',
+      'gen/skyways/addonFrame.ts', 'world/fuelCarts.ts']);
   });
 });
 

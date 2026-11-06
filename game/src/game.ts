@@ -78,9 +78,12 @@ import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasma
 import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
 import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
 import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
+import {installSkywaysCar, type SkywaysCar} from './world/skywaysCar'; // task skyways-level-20261106 (lane CAR): the Skyways prize car (first-person drivable)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
+import {installSkywaysWindows, type SkywaysWindowRuntime} from './world/skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing
+import {installSkywaysExterior} from './world/skywaysExterior'; // task studio-skyways-level-20261106-054448 (lane VIEW): the city outside the Skyways glass
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
@@ -130,6 +133,9 @@ import {trainSpawnLocal, trainToWorld, worldToTrain} from './gen/playerTrain';
 import {PLAYER_TRAIN_SPEC} from './world/playerTrainSpec';
 // --- end save / load (lane SAVE) imports ---
 import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerTrainModelKeys, trainModelsFrom, type PlayerTrainRuntime} from './world/playerTrain'; // (lane TRAIN: the car in the game)
+import {SKYWAYS_KITCHEN_MODEL_FILES, skywaysKitchenModelKeysFor} from './gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+import {SKYWAYS_ADDON_MODEL_FILES, skywaysAddonModelKeysFor} from './gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
+import {installSkywaysAddon, type SkywaysAddonRuntime} from './world/skywaysAddonRuntime'; // (lane ADDON) art atlases, turntable, velvet ropes
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -231,7 +237,7 @@ export class Game {
   state: GameState = 'loading';
   assets!: AssetBundle;
   /** Iteration 07 (Lane P2): lazy per-station prop models (gen/props07.ts); only the kinds a station placed are fetched. */
-  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES}); // (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
+  readonly propModels = new PropModelLibrary({...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...ENEMY_MODEL_FILES, ...MALL_MODEL_FILES, [ANNEX_GENSET.key]: {url: ANNEX_GENSET.url, bytes: ANNEX_GENSET.bytes}, ...PLAYER_TRAIN_MODEL_FILES, ...REACTOR_MODEL_FILES, ...WASTE_MODEL_FILES, ...LINGERIE_MODEL_FILES, ...SKYWAYS_KITCHEN_MODEL_FILES, ...SKYWAYS_ADDON_MODEL_FILES}); // (skyways lane ADDON: + the convention / prize-car models, level-only skyways-*) (skyways lane FOOD: + the ramen restaurant's range / cookware / mascot, level-only skyways-*) (task mall-lingerie, lane CONTEXT: + the lingerie garments, lazy) Iteration 16 (RUN): + the office GLBs (lane ASSETS); office-overhaul (TENANTS): + company models; track1 (lane BLIGHT): + the lazy enemy models; track3 (ASSETS): + mall models; player-train (lane TRAIN): + the train's shell / door leaf / desk; reactor-build (lane ARCH): + the Reactor kit
   /** Task track3-eaton-centre-20261031 (lane PACKAGE): textures / GPU resources owned by ONE level, released when the level changes (assets/levelResources.ts). */
   readonly levelResources = new LevelResources();
   /** Pistol lane: legacy `?devpistol=1` flag (pre-art staging); no longer needed now that PISTOL_ART_READY. */
@@ -335,12 +341,18 @@ export class Game {
   readonly fuelPort: FuelPortSystem;
   /** Task train-fuel-system (lane CART): the fuel carts in the world — push / grab, the hose, cargo riding the train (world/fuelCarts.ts). */
   fuelCarts!: FuelCarts;
+  /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
+  skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
   readonly tower: TowerRuntime;
+  /** Task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing — breakable panes, pre-breached bridges (world/skywaysWindows.ts; inert elsewhere). */
+  readonly skywaysWindows: SkywaysWindowRuntime;
+  /** Task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's art atlases, the prize turntable and velvet ropes (world/skywaysAddonRuntime.ts; inert elsewhere). */
+  readonly skywaysAddon: SkywaysAddonRuntime;
   /** Task player-train-shell-20261101-202805 (lane TRAIN): the parked player train in the world — the car, its interior volume / colliders, doors, lights (world/playerTrain.ts). */
   readonly trainRuntime: PlayerTrainRuntime;
   /** Task train-lockbox-windows-20261101-232156 (lane BOX): the Lockbox transfer view / developer drop (ui/lockboxView.ts); the store is playerTrain.lockbox. */
@@ -366,7 +378,7 @@ export class Game {
   readonly sirens: SirenSystem;
   // ==== Iteration 16 (lane RUN): the run — logical levels, sections, travel, carryover (lanes/run.notes) ====
   /** The current run (run/runState.ts): level seeds, gear roll, section memories, the Retry-level snapshot. Replaced by NewGame. */
-  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
+  run: RunState = createRun({seeds: {subway: freshSeed(), office: freshSeed(), mall: freshSeed(), skyways: freshSeed(), reactor: freshSeed()}, start: {level: 'subway', section: 'main'}, levels: LEVELS}); // (+ mall: task track3-eaton-centre-20261031, lane GEN; + reactor: task reactor-build-20261101)
   /** How the player arrived in the current section (lane TOWER: kind 'elevator' starts inside the cab, doors closed). */
   arrival: Arrival = {kind: 'start'};
   /** Run-scoped lane state (INJURY / GEAR): saved at level entry (Retry), restored by Retry level, reset by NewGame — never by travel. */
@@ -557,10 +569,15 @@ export class Game {
     this.fuelPort = installFuelPort(this); hookName('fuelPort'); // task train-fuel-system (lane PORT)
     this.fuelCarts = installFuelCarts(this); // task train-fuel-system (lane CART)
     hookName('fuelCarts');
+    this.skywaysCar = installSkywaysCar(this); hookName('skywaysCar'); // task skyways-level-20261106 (lane CAR): its E handler / prompt go first (unshift)
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     hookName('tower');
+    this.skywaysWindows = installSkywaysWindows(this); // task studio-skyways-level-20261106-054448 (lane GAS): before GAS (its build reads the panes); inert without layout.skyways
+    hookName('skywaysWindows');
+    installSkywaysExterior(this); hookName('skywaysExterior'); // (lane VIEW) streets, building shells, bridge exteriors, wrecks, the far city / murk; the glazing's reveal finish; inert elsewhere
+    this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
@@ -568,6 +585,7 @@ export class Game {
     installReactorCoreLights(this); hookName('reactorCoreLights'); // task reactor-expansion-20261101 (lane CORE): the reactor's green / blue glow lights (boot-time, intensity-only; inert elsewhere)
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
+    this.gas.windowSources.push(() => this.skywaysWindows.gasSource()); // (lane GAS, Skyways) the glazing's panes when the world has no office tower
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();
@@ -610,6 +628,8 @@ export class Game {
     this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => this.settings.trainSway});
     this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
     this.sectionModelKeys.push(playerTrainModelKeys);
+    this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
+    this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -1593,7 +1613,7 @@ export class Game {
       const startNode = o.campaign?.network.nodes.find(n => n.id === o.campaign!.current);
       if (startNode) level = startNode.archetype;
       const def = LEVELS[level];
-      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
+      const seeds: Record<LevelId, number> = {subway: o.seeds?.subway ?? freshSeed(), office: o.seeds?.office ?? freshSeed(), mall: o.seeds?.mall ?? freshSeed(), skyways: o.seeds?.skyways ?? freshSeed(), reactor: o.seeds?.reactor ?? freshSeed()}; // (+ mall: lane GEN; + reactor: task reactor-build-20261101)
       const key: SectionKey = startNode ? {level, section: def.entry, station: startNode.id} : {level, section: def.entry};
       const run = createRun({seeds, start: key, levels: LEVELS, rollGear: rollLevelGear, campaign: o.campaign ?? null});
       const shown = startNode ? startNode.name : levelDisplayName(level, seeds[level]); // (task mall-playtest-revision, lane GEN: the seeded mall name)
@@ -2345,6 +2365,7 @@ export class Game {
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
     if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
+    if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -2577,7 +2598,8 @@ export class Game {
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
-    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
+    // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
+    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -2590,7 +2612,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy, // (lane RIDE: holstered)
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving, // (lane RIDE: holstered; lane CAR: no reload while driving)
         lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
@@ -2681,6 +2703,7 @@ export class Game {
     this.viewmodel.setLightLevel(this.lightPool.viewLevel(eye, this.torch.battery.emitting)); // Iteration 12 (LIGHT): actual output
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
+    if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
@@ -2775,8 +2798,9 @@ export class Game {
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
     // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House"); task mall-playtest-revision-20261031
     // (lane GEN): the mall's retail floor too ("Paper Lantern Books · Sales floor · Level 2 · Harbourline Center")
-    const storey = (this.layout.office || this.layout.mall) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
-    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
+    const storey = (this.layout.office || this.layout.mall || this.layout.skyways) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
+    // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed)
+    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,

@@ -340,8 +340,11 @@ function basic(key: string, color: AnyNode, side: THREE.Side = THREE.FrontSide):
   return m;
 }
 
-/** Per-vertex-coloured stand-in props (procedural cars / buses / rubble), outdoor-lit. */
-function propMaterial(): MeshBasicNodeMaterial {
+/**
+ * Per-vertex-coloured stand-in props (procedural cars / buses / rubble), outdoor-lit. (Task studio-skyways-level-20261106-054448, lane
+ * VIEW: exported with modelMaterial / facadeMaterial — the Skyways exterior's curbs / bridge shells, street wrecks and building shells.)
+ */
+export function propMaterial(): MeshBasicNodeMaterial {
   return basic('prop', Fn(() => {
     const albedo = attribute('color', 'vec3');
     return vec3(exteriorFog(albedo.mul(outdoorLight(normalWorld))));
@@ -362,7 +365,7 @@ const facingNormalWorld = (): AnyNode => faceForward(normalWorldGeometry, positi
  * A Meshy model's base colour (map or colour) with the outdoor light and fog. Lane MENU (campaign polish, item 3): the model's own
  * side is kept (GLTFLoader: glTF doubleSided -> THREE.DoubleSide; was always front-side) with the view-facing normal above.
  */
-function modelMaterial(src: THREE.Material): MeshBasicNodeMaterial {
+export function modelMaterial(src: THREE.Material): MeshBasicNodeMaterial {
   const std = src as THREE.MeshStandardMaterial;
   const key: THREE.Texture | THREE.Color = std.map ?? std.color ?? new THREE.Color(0x777777);
   const side: THREE.Side = std.side === THREE.DoubleSide ? THREE.DoubleSide : THREE.FrontSide;
@@ -431,7 +434,7 @@ function blockMaterial(): MeshBasicNodeMaterial {
  * broken out or boarded, sooty toward the top; outdoor-lit and fogged like the city. Its faces point outward, so from inside
  * (behind every face) it is never drawn.
  */
-function facadeMaterial(): MeshBasicNodeMaterial {
+export function facadeMaterial(): MeshBasicNodeMaterial {
   return basic('facade', Fn(() => {
     const n = normalWorld;
     const tangent = normalize(vec2(n.z.negate(), n.x).add(vec2(1e-4, 0)));
@@ -464,7 +467,9 @@ function groundDetail(): THREE.Texture {
 
 /** The city map: roads, pavements, lots, scorch marks (one texture over the whole ground, per section plan). */
 function groundTexture(plan: ExteriorPlan): THREE.Texture {
-  const key = `${plan.center.x.toFixed(1)}|${plan.center.z.toFixed(1)}|${plan.foot.x1 - plan.foot.x0}|${plan.foot.z1 - plan.foot.z0}|${plan.half}`;
+  // (task studio-skyways-level-20261106-054448, lane VIEW: + the street list's signature — the Skyways adds its own streets to a plan)
+  const sig = plan.streets.reduce((s, r, i) => (s + (r.x0 * 3.1 + r.z0 * 7.7 + r.x1 * 1.3 + r.z1 * 5.3 + r.kind.length) * (i + 1)) % 1e9, 0);
+  const key = `${plan.center.x.toFixed(1)}|${plan.center.z.toFixed(1)}|${plan.foot.x1 - plan.foot.x0}|${plan.foot.z1 - plan.foot.z0}|${plan.half}|${plan.streets.length}|${sig.toFixed(2)}`;
   if (groundTexCache?.key === key) return groundTexCache.tex;
   const S = 1024, H = plan.half;
   const tex = canvasTexture(S, S, 77017, (ctx, w, h, rnd) => {

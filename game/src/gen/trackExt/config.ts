@@ -164,7 +164,13 @@ export const TRACK_EXT_MALL: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, an
  */
 export const TRACK_EXT_REACTOR: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, annex: {...TRACK_EXT.annex, max: 1}};
 
+/**
+ * Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS' station under the station building — the mall's rule (no core
+ * reserve; at most ONE Beyond-the-Station annex under the standard one-roll chance; east / south growth from its fixed crop origin).
+ */
+export const TRACK_EXT_SKYWAYS: TrackExtConfig = {...TRACK_EXT, coreReserveM: 0, annex: {...TRACK_EXT.annex, max: 1}};
+
 /** Per-level track-extension config (levels/registry.ts LEVELS[..].trackExtensions reads it). */
 export function trackExtConfig(levelId: string): TrackExtConfig {
-  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : TRACK_EXT;
+  return levelId === 'office' ? TRACK_EXT_OFFICE : levelId === 'mall' ? TRACK_EXT_MALL : levelId === 'reactor' ? TRACK_EXT_REACTOR : levelId === 'skyways' ? TRACK_EXT_SKYWAYS : TRACK_EXT;
 }

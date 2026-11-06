@@ -1,0 +1,278 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "skyways-mascot-poses",
+ "item": "Skyways convention mascot statues (static props; never an NPC / animated): one mesh node per baked pose",
+ "task": "skyways-level-20261106-054448, lane ASSET-C",
+ "sourceStatus": "community-supplied source via the user; creator / license links pending; no license or authorship claim",
+ "source": {
+  "file": "reference/tasks/skyways-level-20261106-054448/masters/Meshy_AI_Blue_Haired_Bear_Hat__1106042016_texture.glb (user source master, outside Git)",
+  "sha256": "11461397fde2670461a6abe3863e7f62d27d7d4ed16452264eb0d027c25e093d",
+  "bytes": 23367796,
+  "triangles": 569240,
+  "extent": [
+   1.2221,
+   1.8978,
+   1.1758
+  ],
+  "textures": [
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2798769
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 753073
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2635411
+   }
+  ]
+ },
+ "method": [
+  "meshoptimizer simplifyWithAttributes (normal-weighted, UV seams preserved): 569240 -> 19499 triangles, 18058 vertices",
+  "uniform scale 0.7377 to a 1.4 m statue, grounded (feet at y 0), centred on x / z; front +Z (source native)",
+  "poses by deterministic region skinning (tools/asset-pipeline/props/lib/skyways-mascot-rig.mjs): arm regions flood-filled from the hands (hair, the maroon skirt and black excluded by base colour), shoulder pivots from each arm's cross-section at the sleeve seam, harmonic shoulder weights over a geodesic band around the armhole, smoothstep elbow / neck / waist weights, angle-blended rotations; no provider rig, no generation",
+  "checked per pose: max edge growth, folded triangles, moved-part intersections vs the rest pose (the build refuses torn / crossing poses); not shipped: think (forearm cannot reach the chin cleanly), salute (hat brim out of reach)",
+  "the source PBR maps kept (re-encoded only): base colour, normal, metallic-roughness; one material and one UV / index set shared by every pose node"
+ ],
+ "rig": {
+  "arms": [
+   {
+    "side": "+X (her left)",
+    "shoulder": [
+     0.1159,
+     0.441,
+     0.0903
+    ],
+    "elbow": [
+     0.1923,
+     0.3661,
+     0.1066
+    ],
+    "tip": [
+     0.2857,
+     0.2744,
+     0.1265
+    ],
+    "armVertices": 242
+   },
+   {
+    "side": "-X (her right)",
+    "shoulder": [
+     -0.1163,
+     0.4456,
+     0.1011
+    ],
+    "elbow": [
+     -0.1973,
+     0.3725,
+     0.1092
+    ],
+    "tip": [
+     -0.2962,
+     0.283,
+     0.119
+    ],
+    "armVertices": 240
+   }
+  ],
+  "neck": [
+   0,
+   0.553,
+   0.09
+  ],
+  "waist": [
+   0,
+   0.384,
+   0.12
+  ]
+ },
+ "poses": {
+  "stand": {
+   "spec": {},
+   "w": 0.9015,
+   "h": 1.4,
+   "d": 0.8674,
+   "tris": 19499,
+   "stretchMax": 1,
+   "folded": 0,
+   "intersectingTris": 0
+  },
+  "wave": {
+   "spec": {
+    "arms": {
+     "-1": {
+      "upper": [
+       28,
+       18
+      ],
+      "fore": [
+       64,
+       18
+      ]
+     }
+    },
+    "head": {
+     "axis": [
+      0,
+      0,
+      1
+     ],
+     "deg": -7
+    }
+   },
+   "w": 0.9294,
+   "h": 1.4255,
+   "d": 0.8674,
+   "tris": 19499,
+   "stretchMax": 12.504,
+   "folded": 16,
+   "intersectingTris": 0
+  },
+  "point": {
+   "spec": {
+    "arms": {
+     "-1": {
+      "upper": [
+       0,
+       8
+      ],
+      "fore": [
+       0,
+       8
+      ]
+     }
+    }
+   },
+   "w": 0.9015,
+   "h": 1.4,
+   "d": 0.8674,
+   "tris": 19499,
+   "pointDir": [
+    -0.9903,
+    0.1392
+   ],
+   "stretchMax": 7.134,
+   "folded": 10,
+   "intersectingTris": 0
+  },
+  "cheer": {
+   "spec": {
+    "arms": {
+     "1": {
+      "upper": [
+       40,
+       12
+      ],
+      "fore": [
+       55,
+       12
+      ]
+     },
+     "-1": {
+      "upper": [
+       40,
+       12
+      ],
+      "fore": [
+       55,
+       12
+      ]
+     }
+    }
+   },
+   "w": 0.9015,
+   "h": 1.4,
+   "d": 0.8674,
+   "tris": 19499,
+   "stretchMax": 17.908,
+   "folded": 47,
+   "intersectingTris": 2
+  },
+  "bow": {
+   "spec": {
+    "bow": 28,
+    "arms": {
+     "1": {
+      "upper": "rest",
+      "world": true
+     },
+     "-1": {
+      "upper": "rest",
+      "world": true
+     }
+    }
+   },
+   "w": 0.9015,
+   "h": 1.3442,
+   "d": 1.1319,
+   "tris": 19499,
+   "stretchMax": 4.182,
+   "folded": 6,
+   "intersectingTris": 0
+  }
+ },
+ "output": {
+  "file": "game/public/assets/models/skyways-mascot-poses.glb",
+  "url": "assets/models/skyways-mascot-poses.glb",
+  "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5",
+  "bytes": 2754056,
+  "nodes": [
+   "stand",
+   "wave",
+   "point",
+   "cheer",
+   "bow"
+  ],
+  "trianglesPerPose": 19499,
+  "materials": 1
+ },
+ "heightM": 1.4,
+ "convention": "metres at statue size (1.40 m standing), +Y up, front +Z, origin = bottom centre of the standing figure (feet at y 0), every node at identity; pointDir = unit [x, z] of the pointing hand in the model frame",
+ "textures": [
+  {
+   "slot": "baseColor",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 212473,
+   "sha256": "bb1d4f13a15554ef054a8865f1be7e167a1bb7e94f5e72db1a8d03d7d07964d8"
+  },
+  {
+   "slot": "normal",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 91282,
+   "sha256": "efbded88f73d1828e55ffa1a2b79611a2ae249a2d1d0e95a07e2fbc0f086e694"
+  },
+  {
+   "slot": "metallicRoughness",
+   "size": [
+    512,
+    512
+   ],
+   "mime": "image/jpeg",
+   "bytes": 17801,
+   "sha256": "81661dbb3c08afed7f9310813079165fb758cf206aa83fdff31a79fcd291dba1"
+  }
+ ],
+ "licence": "community-supplied source via the user; creator / license links pending; no license or authorship claim; not cleared for production / commercial use"
+}

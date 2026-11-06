@@ -35,7 +35,7 @@ installCanvasShim(false);
 const gen = (level: LevelId, seed: number): StationLayout => LEVELS[level].generate('main', {levelSeed: seed, startWeapon: 'pistol'});
 const LAYOUTS: [string, LevelId, StationLayout][] = [
   ['subway 101', 'subway', gen('subway', 101)], ['subway 4242', 'subway', gen('subway', 4242)], ['office', 'office', gen('office', 0x5ea1e55)],
-  ['mall', 'mall', gen('mall', 77)], ['reactor', 'reactor', gen('reactor', 0x70)],
+  ['mall', 'mall', gen('mall', 77)], ['reactor', 'reactor', gen('reactor', 0x70)], ['skyways', 'skyways', gen('skyways', 4)], // (+ skyways: task studio-skyways-level-20261106-054448-01)
 ];
 const CANS: FuelPlan = {units: 6, cans: 6, cart: 0};
 const CART: FuelPlan = {units: 8, cans: 0, cart: 8};

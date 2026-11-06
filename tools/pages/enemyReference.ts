@@ -38,7 +38,7 @@ import type {Area, StationLayout} from '../../game/src/gen/stationTypes';
 import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
-import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
+import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
 import {purposeById} from '../../game/src/gen/purposes';
@@ -90,7 +90,7 @@ const F = {
   strainer: 'game/src/ai/strainer.ts', // task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY)
   contract: 'game/src/levels/levelContract.ts',
   // task track3-eaton-centre-20261031 (lane PROFILES): the mall (seeded "<Name> Center")
-  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
+  mallIndex: 'game/src/gen/mall/index.ts', reactorIndex: 'game/src/gen/reactor/index.ts', skywaysIndex: 'game/src/gen/skyways/index.ts', mallTypes: 'game/src/gen/mall/mallTypes.ts', hordeSpec: 'game/src/ai/hordeSpec.ts',
   // Track 2 (lane CONTENT): the service annexes (zone context): their generation config and the content pass that places them
   trackExt: 'game/src/gen/trackExt/config.ts', annexContent: 'game/src/gen/annexContent.ts',
   // task mall-lingerie-20261102-221554 (lane CONTEXT): the mall's optional lingerie store's store-local zone context
@@ -269,6 +269,18 @@ export const ENEMY_LEVEL_ADAPTER: Readonly<Record<LevelId, {
       ring: {storeys: 'one DEEP walkway tier (each of tiers 3-4: galleries, landings, bridges, side rooms incl. the switchgear room)', runs: 2},
       pit: {storeys: 'the core floor (round the vessel, the pump hall, the control room)', runs: 1},
       service: {storeys: 'one seeded service annex off a rim-station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_REACTOR.annex.max], note: SERVICE_ZONE_NOTE}},
+    },
+  },
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the station storey, the street level and the skyway level, each
+  // one placeOfficeEnemies run on its own fork (skyways-enemies-<storey>), + the station's annex.
+  skyways: {
+    generator: {fn: 'generateSkywaysLevel', file: F.skywaysIndex,
+      note: `ONE continuous level (LevelId 'skyways', tier 2): a subway station under the station building, its pedway concourse, the street-level lobbies and the "+15" skyway level with glazed bridges between the buildings, generated once per level seed: placeOfficeEnemies runs the station context once (storey 0), the street context once (storey 1) and the floor context once (storey 2), each on its own fork (skyways-enemies-<storey>), and tags its spawns with the context; then (Track 2) the station's tunnel / service annex (at most ${TRACK_EXT_SKYWAYS.annex.max}) is attached and placeServiceSpawns runs the service context once per seeded service annex, appended last; assignEnemyArchetypes rolls every family ONCE at the end. Moving between storeys never rerolls anything.`},
+    contexts: {
+      station: {storeys: 'the station storey (platforms, the pedway concourse, the station back of house)', runs: 1},
+      street: {storeys: 'the street level (every building: lobbies, atrium courts, entrance halls, shops, service rooms)', runs: 1},
+      floor: {storeys: 'the skyway level (concourses, bridges, shops, the add-on hall)', runs: 1},
+      service: {storeys: 'one seeded service annex off a station track tunnel (its rooms and corridors only)', runs: 1, zone: {runsPerLevel: [0, TRACK_EXT_SKYWAYS.annex.max], note: SERVICE_ZONE_NOTE}},
     },
   },
 };

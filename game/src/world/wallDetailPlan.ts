@@ -62,6 +62,10 @@ export function finishFamily(finish: string): Finish {
   // house plaster-like (no station grid, never cut).
   if (/^mall-wall-boh/.test(finish)) return 'paint';
   if (/^mall-/.test(finish)) return 'office';
+  // Task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys — the same split (back-of-house painted concrete
+  // on the block grid; the public plaster never cut)
+  if (/^skyways-boh/.test(finish)) return 'paint';
+  if (/^skyways-/.test(finish)) return 'office';
   if (/shop/i.test(finish)) return 'shopTile';
   if (/tile/i.test(finish)) return 'tile';
   if (/paint|plaster|block/i.test(finish)) return 'paint';
@@ -75,6 +79,9 @@ export function treatmentOf(face: Pick<WallFace, 'zone' | 'finish'>): Treatment 
   // Task track3-eaton-centre-20261031 (lane ARCH): mall finishes never take a station treatment either.
   if (/^mall-wall-boh/.test(face.finish)) return 'mallService';
   if (/^mall-/.test(face.finish)) return 'mallWall';
+  // Task studio-skyways-level-20261106-054448 (lane VIEW): Skyways finishes take the mall's (no station identity either)
+  if (/^skyways-boh/.test(face.finish)) return 'mallService';
+  if (/^skyways-/.test(face.finish)) return 'mallWall';
   if (face.zone === 'trackbed' && /platformFace/i.test(face.finish)) return 'trackFace';
   return ZONE_TREATMENT[face.zone] ?? 'servicePaint';
 }

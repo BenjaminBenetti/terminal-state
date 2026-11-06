@@ -358,8 +358,8 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
   - This replaced the earlier CSS / SVG camera overlay. Nothing new was generated, and the provenance flags above still apply.
 
 ### Breached windows
-- **Which panes:** only the Office's exterior window panes. The entrance, shop / cooler / prop glass, elevator glass and
-  the roof are excluded.
+- **Which panes:** only the Office's exterior window panes (and the Skyways glazing, below). The entrance, shop / cooler / prop
+  glass, elevator glass and the roof are excluded.
 - **Health:** a pane has the health of **3 pistol bullets**: `PANE_MAX_HP` = 3 × the pistol's damage in the weapon table
   (17 → 51). It is derived, so a pistol retune moves the panes with it.
 - **Damage:** every bullet or pellet that reaches the glass takes off its real damage once, the same damage `Game.fire`
@@ -382,6 +382,22 @@ Task gasmask-breach-20261030. All balance values are first-pass constants: `GAS_
 - **Persistence:** pane damage and breaks persist in the one Office world and across Subway↔Office travel. The lane
   `office.windows` stores them as v2 `damage` records. An older v1 hit counter converts to `hits × 51 / 3` damage, and a broken
   pane stays broken. Retry restores the level-entry state, and New game resets them.
+
+### Skyways glazing
+Task studio-skyways-level-20261106-054448 (lane GAS): `src/world/skywaysWindows.ts`.
+- **Which panes:** every glazed span of `layout.skyways.windows`: the bridge side walls and the building facades on the street
+  and +15 storeys. Health, damage, cues and collision are the Office's.
+- **No inert broken glass:** a pane is intact or cracked (breakable), or broken because it is breached (a gas source). Boarded
+  columns stay boarded.
+- **Pre-breached bridges:** spans marked `breached` start broken. On the first visit their gas is seeded as 90 s old breaches,
+  so it has already spread across the bridge when you arrive, and you need a mask to cross. A revisit restores the saved state
+  instead of seeding again.
+- **Persistence:** the lane `skyways.windows` (per station, the same v2 record as `office.windows`). Retry and New game work as
+  in the Office.
+- **Contact breaks:** `game.gas.breakPaneNear(level, x, y, z, radius)` breaks the panes within reach (a car hitting the glass)
+  exactly like a bullet break.
+- **Gas:** the same field, exposure, mask rules, HUD and green fog as the Office. The field covers the whole complex
+  (`layout.skyways.exterior`).
 
 ### Infectious gas
 - **Spread:** a breach lets the green outdoor gas flow in. It fills that room over ~25–40 s, starting at the window, and

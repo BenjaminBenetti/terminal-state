@@ -572,13 +572,15 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
   const fr = shopFrame(sf);
   const boxes: ShopBox[] = [];
   const faces: ShopFace[] = [];
+  // task studio-skyways-level-20261106-054448-01: a bay on another storey (sf.baseY) — every height below is relative to its floor
+  const by = sf.baseY ?? 0;
   const box = (m: ShopMat | MenuKey, a0: number, a1: number, y0: number, y1: number, n0: number, n1: number, tint?: number) => {
     const [p0, q0] = frameXZ(fr, a0, n0), [p1, q1] = frameXZ(fr, a1, n1);
-    boxes.push({m, x0: Math.min(p0, p1), y0, z0: Math.min(q0, q1), x1: Math.max(p0, p1), y1, z1: Math.max(q0, q1), tint});
+    boxes.push({m, x0: Math.min(p0, p1), y0: y0 + by, z0: Math.min(q0, q1), x1: Math.max(p0, p1), y1: y1 + by, z1: Math.max(q0, q1), tint});
   };
   const face = (kind: ShopFace['kind'], a: number, y: number, n: number, w: number, h: number) => {
     const [x, z] = frameXZ(fr, a, n);
-    faces.push({kind, sf: sf.id, x, y, z, rot: fr.faceRot, w, h});
+    faces.push({kind, sf: sf.id, x, y: y + by, z, rot: fr.faceRot, w, h});
   };
   const {a0, a1} = fr;
   const W = a1 - a0, mid = (a0 + a1) / 2;
@@ -594,7 +596,8 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
   box('signBand', a0 - 0.25, a1 + 0.25, head, sf.fasciaTop, 0, 0.16);
   box('black', a0 - 0.25, a1 + 0.25, head - 0.01, head + 0.012, 0.0, 0.165);
   if (sf.shutter !== 'closed' || sf.style !== 'hoarding') face('fascia', mid, (head + sf.fasciaTop) / 2, 0.163, Math.max(1, W - 0.1), Math.max(0.2, sf.fasciaTop - head - 0.1));
-  const bulkTop = Math.min(hall.ceil - 0.02, sf.fasciaTop + (hall.ceil > 4.2 ? 0.9 : 0.4));
+  const hallCeil = hall.ceil - by; // (relative to the bay's floor)
+  const bulkTop = Math.min(hallCeil - 0.02, sf.fasciaTop + (hallCeil > 4.2 ? 0.9 : 0.4));
   if (bulkTop > sf.fasciaTop + 0.05) box('shopFrame', a0 - 0.25, a1 + 0.25, sf.fasciaTop, bulkTop, 0, 0.06);
 
   const cells = Math.round(W / CELL);
@@ -650,7 +653,7 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
     const back = -CELL - fr.depth;
     // With a rear door the boards go above its lintel (2.3 m) instead of beside it.
     const bd = sf.backDoor >= 0 ? layout.doors[sf.backDoor] : null;
-    const y0 = bd ? bd.height + 0.1 : 2.05, y1 = Math.min(y0 + 0.68, unit.ceil - 0.1);
+    const y0 = bd ? bd.height + 0.1 : 2.05, y1 = Math.min(y0 + 0.68, unit.ceil - by - 0.1);
     // Lane C's menus are designed for ~2:1 faces: panel width ≈ 2 × height.
     const n = Math.max(1, Math.min(4, Math.round((W - 0.5) / (2 * (y1 - y0)))));
     const pw = (W - 0.5 - (n - 1) * 0.06) / n;

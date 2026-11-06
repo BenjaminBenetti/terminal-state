@@ -1,0 +1,198 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "item-ramen-chashu",
+ "key": "item_ramen_chashu",
+ "role": "food pickup: chashu ramen in a white bowl (inventory item, held in the hand)",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Ramen_Delight_food__1106035919_texture.glb",
+  "sha256": "711f7c1b74921bdabee02744450e08453b2bc26f65999a2617c801667e8392f0",
+  "bytes": 33439136,
+  "triangles": 768471,
+  "vertices": 431950,
+  "extent": [
+   1.9032,
+   0.7993,
+   1.9039
+  ],
+  "uvCharts": 1283,
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3576215,
+    "sha256": "9f79074ab6ad7fc31daad6a5e78e769364556d2df054343d26102be23ca3cfd0"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2617305,
+    "sha256": "81dca1a6e17f0f1a2f7ccaf5d592c10e96ec22fad9555902826087710c2e5ccc"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 4199226,
+    "sha256": "0f98637ad12560a7c28b13a653595b0234d063f6a9f6b261093308fca85d0ce6"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/item-ramen-chashu.glb",
+  "file": "game/public/assets/models/item-ramen-chashu.glb",
+  "bytes": 582400,
+  "sha256": "ddbe642a6ab4083e5a91dc4565cf5161f706af4cd22b2219300fb0acc502f1ce",
+  "triangles": 3964,
+  "vertices": 5862,
+  "dims": [
+   0.2271,
+   0.0945,
+   0.2259
+  ],
+  "min": [
+   -0.113563,
+   0,
+   -0.112964
+  ],
+  "max": [
+   0.113563,
+   0.094518,
+   0.112964
+  ],
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 93991,
+    "sha256": "64178f829f7cdf205dfc9703a160707c6cad1126443f49e09f6698cf36145544",
+    "quality": 85
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 94526,
+    "sha256": "6ef2625be5b533dc73adfd4f8b813567006a04b1fbb8c8bf08feb5fde8b29da8",
+    "quality": 88
+   },
+   {
+    "slot": "normal",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 180731,
+    "sha256": "4811639447f1ea7cfb6f00845ab1069113d0153df77df45a093d5bf75bb910da",
+    "quality": 90
+   }
+  ]
+ },
+ "fit": {
+  "kind": "rim",
+  "sizeM": 0.22,
+  "rimBandYFrac": 0.85,
+  "rimBandTopY": 0.08034,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 1.841187,
+  "scale": 0.119488
+ },
+ "transform": "no rotation, uniform scale 0.119488 about the bounds' bottom centre (source offset 0.000487, -0.391586, -0.004871): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; round bowl: source frame kept (front +Z); the nori overhangs the rim (source geometry)",
+ "weld": {
+  "verticesBefore": 431950,
+  "verticesAfter": 431950,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "rebake",
+ "rebakeReason": "the source atlas has 1283 UV charts: a seam-preserving collapse stalls at 12040 triangles (> the 4000 budget) and collapsing across the seams smears the texture between charts",
+ "seamPreservingAttempt": {
+  "applied": false,
+  "stalledAt": 12040,
+  "budget": 4000,
+  "errorRelative": 0.792027
+ },
+ "simplify": {
+  "tool": "lib/dense.mjs simplifyGeometry (meshoptimizer 1.3 simplify, Permissive, geometry only; position weld)",
+  "fromTriangles": 768471,
+  "triangles": 3964,
+  "budget": 4000,
+  "errorRelative": 0.005856,
+  "errorSourceUnits": 0.01115,
+  "droppedDegenerate": 0
+ },
+ "unwrap": {
+  "tool": "lib/unwrap.mjs",
+  "charts": 543,
+  "mergedSmallCharts": 241,
+  "degenerateNormalGroups": 0,
+  "texelsPerSourceUnit": 95.3872,
+  "atlas": 512,
+  "pad": 3,
+  "chartAreaFraction": 0.5158,
+  "vertices": 5862,
+  "triangles": 3964
+ },
+ "bake": {
+  "tool": "lib/bake.mjs (closest same-facing source surface; base colour + metallic-roughness texels bilinear; normal from the source surface normals)",
+  "supersample": 2,
+  "atlas": 512,
+  "mrDiv": 1,
+  "normalDiv": 1,
+  "searchRadiusSourceUnits": 0.0669,
+  "matchedSameFacing": 447104,
+  "matchedFallbackAnyFacing": 78,
+  "unmatched": 0,
+  "projectionDistanceSourceUnits": {
+   "p50": 0.002923,
+   "p90": 0.007721,
+   "p99": 0.013416,
+   "max": 0.037805
+  },
+  "notes": "base colour, metallic-roughness (G roughness, B metalness, R neutral) and normal re-baked from the source"
+ },
+ "textures": "the source appearance re-baked onto a fresh atlas (processing of the source maps, no new / hand-painted art): JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}

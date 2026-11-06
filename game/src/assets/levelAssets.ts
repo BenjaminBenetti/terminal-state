@@ -33,6 +33,8 @@ export interface LevelOnlyRule {
   level: string;
   /** Matches the level-only runtime paths (relative, as in the manifests: 'assets/models/…'). */
   path: RegExp;
+  /** Other levels that may ALSO load these files (task studio-skyways-level-20261106-054448-01: the mall's café furniture in Skyways). */
+  also?: readonly string[];
 }
 
 /**
@@ -40,15 +42,27 @@ export interface LevelOnlyRule {
  * texture under `assets/textures/mall/`. Same families as tools/release/package-ci.mjs `levelFamilies` (mall).
  */
 export const LEVEL_ONLY_RULES: readonly LevelOnlyRule[] = [
+  // task studio-skyways-level-20261106-054448-01: the mall's café furniture (its family stays the mall's) also furnishes the Skyways
+  // ramen restaurant (gen/skyways/ramen.ts RAMEN_SEATING) — matched before the general mall rule
+  {level: 'mall', also: ['skyways'], path: /^(?:\.\/)?assets\/models\/mall-(?:cafe-bistro-table|cafe-chair|food-court-table-set)\.glb$/},
   {level: 'mall', path: /^(?:\.\/)?assets\/(?:models\/mall-[A-Za-z0-9_-]+\.glb|textures\/mall\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
   // task reactor-build-20261101 (lane ARCH): the Reactor's kit (assets/reactorKit.generated.ts: reactor-*.glb, textures/reactor/**)
   {level: 'reactor', path: /^(?:\.\/)?assets\/(?:models\/reactor-[A-Za-z0-9_-]+\.glb|textures\/reactor\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
+  // task studio-skyways-level-20261106-054448-01: Skyways' kit (skyways-*.glb: the prize car, the mascot statues, street wrecks, the
+  // ramen kitchen; textures/skyways/**: the convention / prize / ramen art atlases). The edible food models (item-*.glb) are shared.
+  {level: 'skyways', path: /^(?:\.\/)?assets\/(?:models\/skyways-[A-Za-z0-9_-]+\.glb|textures\/skyways\/[A-Za-z0-9_/-]+\.(?:png|jpg|jpeg|webp|ktx2))$/},
 ];
 
 /** The level that alone may load `url`, or null when it is shared. */
 export function levelOfAsset(url: string): string | null {
   for (const r of LEVEL_ONLY_RULES) if (r.path.test(url)) return r.level;
   return null;
+}
+
+/** May `level` load the level-only file `url` (its owner, or a level its rule also allows)? Shared files: always. */
+function allowedFor(level: string, url: string): boolean {
+  for (const r of LEVEL_ONLY_RULES) if (r.path.test(url)) return r.level === level || (r.also?.includes(level) ?? false);
+  return true;
 }
 
 /** The owning level of a lazy-library key (by its file path), or null when shared / unknown to `files`. */
@@ -59,8 +73,7 @@ export function levelOfKey(key: string, files: LazyFiles): string | null {
 
 /** May `level` load `url`? Shared files: yes; level-only files: only their own level. */
 export function assetAllowedIn(level: string, url: string): boolean {
-  const owner = levelOfAsset(url);
-  return owner === null || owner === level;
+  return allowedFor(level, url);
 }
 
 /**
@@ -73,15 +86,15 @@ export function selectLevelKeys(level: string, keys: readonly string[], files: L
   for (const k of keys) {
     if (seen.has(k)) continue;
     seen.add(k);
-    const owner = levelOfKey(k, files);
-    (owner === null || owner === level ? out : foreign).push(k);
+    const f = files[k];
+    (!f || allowedFor(level, f.url) ? out : foreign).push(k);
   }
   return {keys: out, foreign};
 }
 
 /** Predicate for PropModelLibrary.trim: a key owned by a level other than `level` (released, never kept as a recent extra). */
 export function foreignTo(level: string, files: LazyFiles): (key: string) => boolean {
-  return key => { const owner = levelOfKey(key, files); return owner !== null && owner !== level; };
+  return key => { const f = files[key]; return !!f && !allowedFor(level, f.url); };
 }
 
 export interface ByteCount { files: number; bytes: number }

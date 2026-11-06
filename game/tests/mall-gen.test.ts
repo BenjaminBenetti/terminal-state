@@ -97,14 +97,14 @@ function coreWalk(L: StationLayout): number[] {
 
 describe('registration and the seeded name (U01)', () => {
   it('is a registered LevelId (tier 2) with a generic menu name, travel targets, labels and a real Track2 declaration', () => {
-    expect(LEVEL_IDS).toEqual(['subway', 'office', 'mall', 'reactor']); // (+ reactor, tier 3: task reactor-build-20261101)
+    expect(LEVEL_IDS).toEqual(['subway', 'office', 'mall', 'skyways', 'reactor']); // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01)
     expect(isLevelId('mall')).toBe(true);
     expect(LEVELS.mall.tier).toBe(2);
     expect(LEVELS.mall.name).toBe(MALL_GENERIC_NAME);
     expect(LEVELS.mall.name).not.toMatch(/Eaton/);
     expect(LEVELS.mall.sections(1)).toEqual(['main']);
-    expect(travelTargets('mall')).toEqual(['subway', 'office', 'reactor']);
-    expect(travelTargets('subway')).toEqual(['office', 'mall', 'reactor']);
+    expect(travelTargets('mall')).toEqual(['subway', 'office', 'skyways', 'reactor']);
+    expect(travelTargets('subway')).toEqual(['office', 'mall', 'skyways', 'reactor']);
     expect(LEVELS.mall.trackExtensions).toBe(TRACK_EXT_MALL);
     const L = mall();
     expect(L.mall?.version).toBe(2);

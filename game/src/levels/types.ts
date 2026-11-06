@@ -16,7 +16,9 @@ import type {TrackExtConfig} from '../gen/trackExt/types';
 // Task track3-eaton-centre-20261031 (lane GEN): + 'mall' — the mall (tier 2; gen/mall/index.ts generateMallLevel; seeded "<Name> Center").
 // Task reactor-build-20261101 (primary): + 'reactor' — THE REACTOR (tier 3; gen/reactor/index.ts generateReactorLevel): the selected B
 // "Industrial Service Cathedral" pit under a rim station.
-export type LevelId = 'subway' | 'office' | 'mall' | 'reactor';
+// Task studio-skyways-level-20261106-054448-01 (primary): + 'skyways' — SKYWAYS (gen/skyways/index.ts generateSkywaysLevel): a connected
+// multi-building pedway network with glazed bridges over the streets and exactly one localized add-on.
+export type LevelId = 'subway' | 'office' | 'mall' | 'skyways' | 'reactor';
 
 /** A section of a logical level: every level is one section, 'main' (one continuous world). */
 export interface SectionKey {

@@ -1,0 +1,165 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "skyways-wreck-army-truck",
+ "key": "skyways_wreck_army_truck",
+ "role": "street scenery: abandoned six-wheel army cargo truck with a canvas cover",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Bloodmarked_Convoy_1106035329_texture.glb",
+  "sha256": "d2b4d1ee71f34e599ae36eca098c6bff2d82bf3d2acc6512389f15e41677dc4f",
+  "bytes": 24197380,
+  "triangles": 533638,
+  "vertices": 311683,
+  "extent": [
+   1.9014,
+   0.8159,
+   0.7182
+  ],
+  "uvCharts": 1753,
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3070060,
+    "sha256": "c421f009708fb72197398fa5326f1743c165144df699aae9ab8fc94f9f400649"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2360250,
+    "sha256": "513ac0292e1245bff71a7fc3aec88ba35048334fb06efa0b5856f159bd1b586b"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2387303,
+    "sha256": "1d2872161c1ae55a90477ea0773b511026a6e879d6904e183cbd6c16b9457905"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/skyways-wreck-army-truck.glb",
+  "file": "game/public/assets/models/skyways-wreck-army-truck.glb",
+  "bytes": 958140,
+  "sha256": "33db208929b07a123d6ec896540a6b807f6668a9656600f33f38ef4811bae9e0",
+  "triangles": 14988,
+  "vertices": 17330,
+  "dims": [
+   7.6,
+   3.2591,
+   2.8666
+  ],
+  "min": [
+   -3.8,
+   0,
+   -1.433325
+  ],
+  "max": [
+   3.8,
+   3.259145,
+   1.433325
+  ],
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     1024,
+     1024
+    ],
+    "mime": "image/jpeg",
+    "bytes": 208342,
+    "sha256": "0374f3085b6eec2ec3fe05ab65bfd93b55edf0fc5daad82953cf4e1e72686d62",
+    "quality": 85
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 76291,
+    "sha256": "ee130b27bde7a87ed2abb97af9daf9c74f5bad464a3e35932a9f72b7745e8e69",
+    "quality": 88
+   },
+   {
+    "slot": "normal",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 27200,
+    "sha256": "e042ab1a3b56c93de5c54b1ac5b55a452ffecb609e7f343117a0eeaad3ca5f50",
+    "quality": 90
+   }
+  ]
+ },
+ "fit": {
+  "kind": "x",
+  "sizeM": 7.6,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 1.89475,
+  "scale": 4.011083
+ },
+ "transform": "half turn about Y (x, z -> -x, -z), then uniform scale 4.011083 about the bounds' bottom centre (source offset 0.002659, -0.409831, 0.004258): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; nose at +X (half turn: cab, windscreen and grille at the source's -X end; the canvas-covered cargo bed's tail at +X)",
+ "weld": {
+  "verticesBefore": 311683,
+  "verticesAfter": 311683,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "source-uv",
+ "simplify": {
+  "applied": true,
+  "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept)",
+  "flags": [],
+  "fromTriangles": 533638,
+  "triangles": 14988,
+  "budget": 15000,
+  "askedTriangles": 15000,
+  "passes": 1,
+  "errorRelative": 0.039037,
+  "errorSourceUnits": 0.074225,
+  "normalWeight": 0.5,
+  "uvWeight": 1,
+  "targetError": 1
+ },
+ "textures": "the source maps only, on the source UVs (no new / hand-painted art): Lanczos3 downsize, JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}

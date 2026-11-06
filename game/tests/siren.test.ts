@@ -589,7 +589,7 @@ describe('Siren actor on lane RIGS\'s enemy-siren.glb (the real asset; textures 
 });
 
 describe('Siren system: persistence across revisits, retry, model-missing skip, veins lifecycle', () => {
-  const host = (model: GLTF | undefined, zombies: ZombieSpawn[], run = new RunState({seeds: {subway: 1, office: 2, mall: 3, reactor: 4}, start: {level: 'office', section: 'main'}})) => {
+  const host = (model: GLTF | undefined, zombies: ZombieSpawn[], run = new RunState({seeds: {subway: 1, office: 2, mall: 3, skyways: 707, reactor: 4}, start: {level: 'office', section: 'main'}})) => {
     const stops: object[] = [];
     const pools = new Map<string, () => readonly THREE.Object3D[]>();
     const h: SirenHost & {stops: object[]; pools: typeof pools} = {
@@ -645,7 +645,7 @@ describe('Siren system: persistence across revisits, retry, model-missing skip, 
   it('Retry level restores the level-entry snapshot: Sirens woken after entry are dormant again', () => {
     const g = syntheticSiren();
     const spawns = [spawnAt(20, 5)];
-    const run = new RunState({seeds: {subway: 1, office: 2, mall: 3, reactor: 4}, start: {level: 'office', section: 'main'}}); // (+ mall: Track3 x Track1 merge — LevelSeeds has every level)
+    const run = new RunState({seeds: {subway: 1, office: 2, mall: 3, skyways: 707, reactor: 4}, start: {level: 'office', section: 'main'}}); // (+ mall: Track3 x Track1 merge — LevelSeeds has every level)
     const h = host(g, spawns, run);
     const sys = new SirenSystem(h).install();
     run.memory();

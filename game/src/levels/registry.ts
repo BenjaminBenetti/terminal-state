@@ -15,12 +15,13 @@ import {generateMallLevel} from '../gen/mall/index'; // Task track3-eaton-centre
 import {MALL_GENERIC_NAME, mallNameOf} from '../gen/mall/names'; // task mall-playtest-revision-20261031 (lane GEN): seeded "<Name> Center"
 import {trackExtConfig} from '../gen/trackExt/config'; // Track 2 (lane GEN): tunnels + service annexes per level
 import {generateReactorLevel} from '../gen/reactor/index'; // task reactor-build-20261101 (lane GEN): THE REACTOR
+import {generateSkywaysLevel} from '../gen/skyways/index'; // task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS
 import {lootProfile} from '../items/lootTables'; // task mall-round3-20261031 (lane SHOPS, R6): the gear placement bias
 import {trainSpawnPose, type TrainPlacement} from '../gen/playerTrain'; // task player-train-shell-20261101-202805 (lane PLACE): start arrivals inside the train
 import type {Arrival, LevelDef, LevelId, LevelTier, SectionGenContext, SectionKey} from './types';
 
 /** Logical levels in tier order (subway 0, office 1, mall 2 — task track3-eaton-centre-20261031, lane GEN). */
-export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101)
+export const LEVEL_IDS: readonly LevelId[] = ['subway', 'office', 'mall', 'skyways', 'reactor']; // (+ reactor, tier 3: task reactor-build-20261101; + skyways: task studio-skyways-level-20261106-054448-01, before the Reactor)
 
 /**
  * Gear of the level-wide roll (lane GEAR), placed once, after generation. Task gasmask-breach-20261030 (mask lane): the roll's
@@ -82,6 +83,24 @@ export const LEVELS: Record<LevelId, LevelDef> = {
       return withGear(generateMallLevel(ctx, {trackExt: LEVELS.mall.trackExtensions}), ctx, 'mall');
     },
   },
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — a connected multi-building public pedway network loosely inspired
+  // by Alberta's pedway / "+15" systems (gen/skyways/index.ts): the station under one building, the underground pedway concourse up into
+  // its street-level lobby, stair cores up to the skyway level and glazed bridges over the streets to the other buildings, plus exactly
+  // one localized add-on. ONE continuous world, section 'main'; an ordinary network node (10 % of the ordinary stations, taken from
+  // the Subway's share: campaign/types.ts ORDINARY_WEIGHTS).
+  skyways: {
+    id: 'skyways',
+    tier: 2, // an ordinary node of the Mall's difficulty; metadata only
+    name: 'Skyways',
+    blurb: 'A station under a downtown block — climb from the pedway concourse to the glazed skyways linking the towers above the streets.',
+    entry: 'main',
+    sections: () => ['main'],
+    trackExtensions: trackExtConfig('skyways'),
+    generate: (section, ctx) => {
+      if (section !== 'main') throw new Error(`Skyways has no section '${section}'`);
+      return withGear(generateSkywaysLevel(ctx, {trackExt: LEVELS.skyways.trackExtensions}), ctx, 'skyways');
+    },
+  },
   // Task reactor-build-20261101 (primary + lane GEN): THE REACTOR — the user-selected B "Industrial Service Cathedral": a rim subway
   // station at the TOP of a huge vertical industrial pit, walkway tiers, bridges, lattice towers, the crane and the organ-pipe wall
   // going down through stratified gas to the dormant reactor core (gen/reactor/index.ts). ONE continuous world, section 'main'. The
@@ -140,12 +159,12 @@ export function levelDisplayName(level: LevelId, levelSeed?: number): string {
 
 /** Short human label of a level's world ("Station", "Station and tower", "Station and mall"). */
 export function sectionLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : 'Station';
+  return key.level === 'office' ? 'Station and tower' : key.level === 'mall' ? 'Station and mall' : key.level === 'reactor' ? 'Station and pit' : key.level === 'skyways' ? 'Station and skyways' : 'Station';
 }
 
 /** What the HUD calls clearing the level. */
 export function clearLabel(key: SectionKey): string {
-  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : 'Station clear';
+  return key.level === 'office' ? 'Tower clear' : key.level === 'mall' ? 'Mall clear' : key.level === 'reactor' ? 'Pit clear' : key.level === 'skyways' ? 'Skyways clear' : 'Station clear';
 }
 
 /**
@@ -158,7 +177,9 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   const m = layout.mall?.storeys.find(t => t.level === level);
   if (m) return m.label;
   const r = layout.reactor?.tiers.find(t => t.level === level); // task reactor-build-20261101: 'Rim', 'Tier 1' … 'Core floor'
-  return r ? r.label : '';
+  if (r) return r.label;
+  const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', '+15 Skyway'
+  return k ? k.label : '';
 }
 
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */
@@ -176,7 +197,7 @@ export interface ArrivalPose { x: number; z: number; yaw: number; level?: number
  */
 export function arrivalPose(layout: StationLayout, arrival: Arrival, train?: TrainPlacement | null): ArrivalPose {
   if (train && arrival.kind === 'start') return trainSpawnPose(layout, train);
-  const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start)
+  const start = layout.office?.start ?? layout.mall?.start ?? layout.reactor?.start ?? layout.skyways?.start; // (lane GEN: + the mall's platform start; + the reactor's rim platform start; + Skyways')
   if (start) return {...start, source: 'start'};
   const sp = layout.playerSpawn as {x: number; z: number; yaw: number; level?: number; y?: number};
   return {x: sp.x, z: sp.z, yaw: sp.yaw, level: sp.level, y: sp.y, source: 'playerSpawn'};

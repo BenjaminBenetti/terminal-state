@@ -135,7 +135,7 @@ export const GENERATED_FROM: readonly string[] = [
  */
 export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   /** Task track3-eaton-centre-20261031 (lane PROFILES): + 'mall' (gen/mall/supplies.ts placeMallSupplies, once per storey). */
-  floor: 'subway' | 'office' | 'mall';
+  floor: 'subway' | 'office' | 'mall' | 'none';
   /** + 'mall-plan' (task track3-eaton-centre-20261031): the mall's bounded once-per-run gun-shop weapon plan (lane SHOPS). */
   weapons: 'station' | 'office-plan' | 'mall-plan';
   pistolBoxes: boolean;
@@ -154,6 +154,10 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
   // Task reactor-build-20261101 (primary + lane GEN): the Reactor's per-storey mall floor program (gen/mall/supplies.ts placeMallSupplies)
   reactor: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the Office's loose floor program over its three storeys
+  // — no loose floor program (user 2026-11-06: ordinary small loot sits on shelves / counters / in containers; the floor is reserved for
+  // key finds) — and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
+  skyways: {floor: 'none', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -1054,6 +1058,15 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
     return [{id: 'annex', label: 'Service annex (per annex)', runs: 'once per seeded service annex off a track tunnel (0-2 per level; gen/annexContent.ts placeAnnexFloor) — not in the per-level totals', finds, totals: totals(finds)}];
   };
   const annexNote = 'Service annexes (Track 2): the "annex" variant runs once per seeded annex (0-2 per level) on the annex\'s own fork; its finds land in the annex rooms (purpose `floor` weights; battery / flare: FLOOR_ECONOMY.themeWeight) and are NOT in the exact per-level totals (the annex count is a seeded census quantity).';
+  if (kind === 'none') {
+    // task studio-skyways-level-20261106-054448-01: a level without a loose floor program (its annexes keep theirs)
+    const annex = annexVariant();
+    return {
+      id: 'none', level, label: 'No loose floor supplies (ordinary loot in holders: shelves, counters, containers)', variants: annex,
+      placement: {derivable: false, reason: 'The level places no loose floor supplies of its own (user 2026-11-06: ordinary small loot appears on shelves / counters / in containers; standalone floor placement is reserved for key items such as weapon finds).', weights: []},
+      at: [], knobs: [], notes: annex.length ? [annexNote] : [],
+    };
+  }
   if (kind === 'subway') {
     const S = P.tables.floor.subway;
     const finds = programFinds(S, 'SUBWAY_FLOOR', 'FLOOR_ECONOMY.medKeep', 'FLOOR_ECONOMY', 'n copies on the spawn stream');
@@ -1335,6 +1348,16 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     items: kit(start), probability: 'Guaranteed: always exactly these stacks at the start of a run (not per level).',
     knobs: [{what: 'the kit', value: 'starterInventory()', at: B.src.at(F.starter, 'starterInventory'), overrides: ['none']}],
     at: [B.src.at(F.starter, 'starterInventory'), B.src.at(F.pistol, 'startWeaponFor')],
+  });
+
+  // --- task studio-skyways-level-20261106-054448-01: the Skyways ramen restaurant's loose plates (its dresser's own finite pickups)
+  if (levels.includes('skyways')) add({
+    id: 'skyways-ramen-loose', family: 'fixture', label: 'Skyways ramen restaurant: loose food on the tables / counter', class: 'conditional', levels: ['skyways'],
+    summary: 'Placed once per level seed by the restaurant dresser (gen/skyways/ramen.ts dressSkywaysRamen): RAMEN_LOOSE (2-4) single servings drawn from RAMEN_LOOSE_ROWS, each standing supported on a café table or the counter\'s pass (never on the floor). Finite: remembered like every pickup, never refilled. The restaurant\'s counter / cooler / fridge / kitchen holders roll RAMEN_COUNTER / RAMEN_COOLER / RAMEN_FRIDGE / RAMEN_KITCHEN (purposes skyways-ramen / skyways-ramen-kitchen).',
+    items: LT.RAMEN_LOOSE_ROWS.map(([itemId, w]) => ({itemId, count: 1, note: `weight ${w}`})),
+    probability: 'Seeded: 2-4 single servings per Skyways level (one restaurant per level).',
+    knobs: [{what: 'the loose servings', value: 'RAMEN_LOOSE / RAMEN_LOOSE_ROWS', at: B.src.at(F.tables, 'RAMEN_LOOSE_ROWS'), overrides: ['none']}],
+    at: [B.src.at(F.tables, 'RAMEN_LOOSE_ROWS')],
   });
 
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)

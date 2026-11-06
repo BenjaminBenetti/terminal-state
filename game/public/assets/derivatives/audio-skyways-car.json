@@ -1,0 +1,142 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-skyways-car-20261106",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "lead",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance; 4 jobs of the task's 12-job cap)",
+ "plannedBy": "tools/audio-pipeline/skyways-car-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/skyways-car-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (per-0.1 s level, per-0.25 s spectral centroid, peak, silence). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "carIdle",
+   "url": "assets/audio/car-engine-idle-loop.mp3",
+   "bytes": 21106,
+   "sha256": "9f0c271b94d3b4739cc4cb5ef047818a160185fa34f2ac06dbb1619acaec2714",
+   "dur": 2.6,
+   "loop": {
+    "start": 0.1,
+    "length": 2.4
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 0.77 dB over 0.5 s blocks, searched from 0.8 s)",
+    "loop 2.4 s, equal-power crossfade 0.4 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (2.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "car-engine-idle-01",
+    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-engine-idle-01.wav",
+    "rawSha256": "3874af68af54f0d46cf7e9147264495aa75832b584cf6a2d4e6e2325df7e845c",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-modern-v8-sports-car-engine-idling-ste_w8a8_seed1422195354_071502.wav",
+    "labSidecarSha256": "00d3335cb9de99074a1be32f75eb97ce55fc45610733083471f29cfcfdef462a",
+    "jobId": "20261106T071502-1422195354",
+    "prompt": "TrackType: SFX, a modern V8 sports car engine idling steadily with the car standing still: a deep smooth burbling rumble at a constant low rpm, steady and continuous, no revving, no start, no stop, heard from the driver seat inside the cabin, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1422195354,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "carDrive",
+   "url": "assets/audio/car-engine-drive-loop.mp3",
+   "bytes": 21106,
+   "sha256": "3aec0dfccce66b8cc9e6029937b840eb65e5171e88ef47ddf623c67202f5b91b",
+   "dur": 2.6,
+   "loop": {
+    "start": 0.1,
+    "length": 2.4
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 2.22 dB over 0.5 s blocks, searched from 0.8 s)",
+    "loop 2.4 s, equal-power crossfade 0.4 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (-0.6 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "car-engine-drive-01",
+    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-engine-drive-01.wav",
+    "rawSha256": "ca94017354797148dc475c21b5fb7a0f9fdce27f33075d42b44d4fdb3f8bd3fb",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-modern-v8-sports-car-engine-pulling-at_w8a8_seed522183325_071506.wav",
+    "labSidecarSha256": "c0e426ebfdc1b601da7186a23b522bad235f4987659907e6d9c0f83172e8f757",
+    "jobId": "20261106T071506-522183325",
+    "prompt": "TrackType: SFX, a modern V8 sports car engine pulling at a steady medium rpm while cruising: a constant throaty growl with a smooth exhaust note, no gear changes, constant speed, no tyre noise, heard from the driver seat inside the cabin, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 522183325,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "carSkid",
+   "url": "assets/audio/car-skid.mp3",
+   "bytes": 8359,
+   "sha256": "67294c130348074b998b4a90a6504c391689ad5dccdba7332799a8eed0820b28",
+   "dur": 1,
+   "ops": [
+    "mono",
+    "trim 0.05-1.05 s",
+    "cosine fades 0.01 / 0.2 s",
+    "peak -1 dBFS (3.0 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "car-skid-01",
+    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-skid-01.wav",
+    "rawSha256": "925625a0c558324629c7e92b4d80b7c4c72a788e7a9e79a4cefe5a7dfbd2d67c",
+    "rawBytes": 352844,
+    "labFile": "sfx_car-tyres-skidding-and-screeching-briefl_w8a8_seed1842152276_071511.wav",
+    "labSidecarSha256": "117468085e476b9cdcad2bbd1ceeed824e5e22c7d5f7ce73bdd05e70a9b7ce0f",
+    "jobId": "20261106T071511-1842152276",
+    "prompt": "TrackType: SFX, car tyres skidding and screeching briefly on a smooth polished stone floor during a hard stop, a sharp rubber squeal that fades out, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1842152276,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "carDoor",
+   "url": "assets/audio/car-door.mp3",
+   "bytes": 14210,
+   "sha256": "34fa395aab37cd4b5340aecf827377fa7ef6a7310f35231101e9bc5b1e5d2291",
+   "dur": 1.75,
+   "ops": [
+    "mono",
+    "trim 0-1.75 s",
+    "cosine fades 0.005 / 0.15 s",
+    "peak -1 dBFS (1.9 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "car-door-01",
+    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-door-01.wav",
+    "rawSha256": "f8a9e799d013d3737a20a3e1dc839e7515438f1786d78f6c75d74f0e1e3a802c",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-heavy-car-door-opened-with-a-latch-cli_w8a8_seed1534666901_071515.wav",
+    "labSidecarSha256": "3e3388527a23939b44632ccb626e17240e4451fb98942b20b36b796ed1cc1d40",
+    "jobId": "20261106T071515-1534666901",
+    "prompt": "TrackType: SFX, a heavy car door opened with a latch click and then shut with a solid muffled thunk, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1534666901,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}

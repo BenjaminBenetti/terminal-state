@@ -7,7 +7,7 @@
 import {describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import {GRID, MIN_REACTOR_DEPTH, fallbackNetwork, generateNetwork, generateNetworkInfo, graphDistances, hashNodeSeed, ordinaryCounts, validateNetwork} from '../src/campaign/network';
-import {NETWORK_SIZE, ORDINARY_WEIGHTS, type SubwayNetwork} from '../src/campaign/types';
+import {NETWORK_SIZE, ORDINARY_WEIGHTS, type SubwayNetwork, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
 import {hashString} from '../src/core/rng';
 
 const SEEDS = Array.from({length: 360}, (_, i) => (Math.imul(i + 1, 2654435761) ^ 0x5bd1e995) >>> 0);
@@ -36,14 +36,16 @@ function stats(net: SubwayNetwork) {
 }
 
 describe('the network over the seed sample', () => {
-  it('every network validates, used no fallback, and has the exact archetype counts 31 / 4 / 4 / 1', () => {
-    expect(ordinaryCounts()).toEqual({subway: 31, office: 4, mall: 4});
+  it('every network validates, used no fallback, and has the exact archetype counts 27 / 4 / 4 / 4 / 1', () => {
+    // task studio-skyways-level-20261106-054448-01: Skyways takes 10 % from the Subway's share (Office / Mall unchanged)
+    expect(ordinaryCounts()).toEqual({subway: 27, office: 4, mall: 4, skyways: 4});
+    expect(ordinaryCounts(PRE_SKYWAYS_WEIGHTS)).toEqual({subway: 31, office: 4, mall: 4}); // what earlier networks were drawn with
     for (const {network: net, fallback} of nets) {
       expect([net.seed, validateNetwork(net)]).toEqual([net.seed, []]);
       expect(fallback).toBe(false);
       const c: Record<string, number> = {};
       for (const n of net.nodes) c[n.archetype] = (c[n.archetype] ?? 0) + 1;
-      expect(c).toEqual({subway: 31, office: 4, mall: 4, reactor: 1});
+      expect(c).toEqual({subway: 27, office: 4, mall: 4, skyways: 4, reactor: 1});
       expect(net.nodes.length).toBe(NETWORK_SIZE.ordinary + NETWORK_SIZE.reactor);
     }
   });
@@ -157,15 +159,22 @@ describe('determinism', () => {
   it('is pinned for one seed (re-pin only for an intended generator change — saves keep their own copy of the network)', () => {
     // re-pinned (campaign-polish lane MAP): the Maintenance Route bypass + "the Reactor is never a terminus" is an intended generator
     // change. Proof that nothing else moved: the legacy mode below still yields the earlier pin exactly.
+    // re-pinned (task studio-skyways-level-20261106-054448-01): Skyways in the ordinary mix is an intended change of the archetype draw
+    // only — with the pre-Skyways weights the same seed still yields the earlier pin exactly (graph, ids, positions, lines untouched).
     const net = generateNetwork(20261102);
     expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
-      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 41, lines: 6, start: 'st-00', reactor: 'st-06', fingerprint: '612733f3'});
+      fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 41, lines: 6, start: 'st-00', reactor: 'st-06', fingerprint: 'a617fdcb'});
+    expect(net.nodes.filter(n => n.archetype === 'skyways').map(n => n.id)).toEqual(['st-12', 'st-28', 'st-29', 'st-35']);
+    expect(hashString(JSON.stringify(generateNetwork(20261102, {weights: PRE_SKYWAYS_WEIGHTS}))).toString(16)).toBe('612733f3');
   });
 
   it('the legacy generator ({maintenanceRoute: false}) reproduces the earlier networks bit for bit (what older saves contain)', () => {
-    const net = generateNetwork(20261102, {maintenanceRoute: false});
+    // (older saves were drawn before Skyways: the pre-Skyways weights reproduce them; saves keep their own copy anyway)
+    const net = generateNetwork(20261102, {maintenanceRoute: false, weights: PRE_SKYWAYS_WEIGHTS});
     expect({nodes: net.nodes.length, edges: net.edges.length, lines: net.lines.length, start: net.start, reactor: net.reactor,
       fingerprint: hashString(JSON.stringify(net)).toString(16)}).toEqual({nodes: 40, edges: 45, lines: 6, start: 'st-00', reactor: 'st-33', fingerprint: '5c0cc91e'});
+    // and such a pre-Skyways network still validates under the default census (an old save loads)
+    expect(validateNetwork(net)).toEqual([]);
   });
 
   it('the edge list is sorted and unique, each pair sorted', () => {
@@ -182,7 +191,7 @@ describe('determinism', () => {
     expect(validateNetwork(net, {weights: w})).toEqual([]);
     expect(validateNetwork(net).some(e => e.includes('subway nodes'))).toBe(true);
     expect(() => generateNetwork(77, {weights: {office: 1}})).toThrow(/Subway/);
-    expect(ordinaryCounts(ORDINARY_WEIGHTS, 10)).toEqual({subway: 8, office: 1, mall: 1});
+    expect(ordinaryCounts(ORDINARY_WEIGHTS, 10)).toEqual({subway: 7, office: 1, mall: 1, skyways: 1});
   });
 
   it('the last-resort layout is a valid network too', () => {

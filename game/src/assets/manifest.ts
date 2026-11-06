@@ -1,6 +1,8 @@
 // Runtime asset manifest. Every file here is a derivative under public/assets/ documented in
 // public/assets/derivatives/*.json (sources, hashes, pipeline, limitations).
 
+import {SKYWAYS_FOOD_MODEL_FILES} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
+
 export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'knife' | 'bench' | 'light' | 'cabinetTall' | 'cabinetLow' | 'sign' | 'crate' | 'turnstile'
   // Iteration 06 zombie wardrobe (ai/outfits.ts + ai/wardrobe.ts): bodies (derivatives/zombie-body-*.json) + slot wearables fitted per body (derivatives/outfit-*.json; summary zombie-wardrobe.json).
   // Iteration 07: refitted outside the posed body + cranium-fitted hats; the puffer fails the fit gate on every body (no model key).
@@ -17,6 +19,9 @@ export type ModelKey = 'rifle' | 'shotgun' | 'pistol' | 'knife' | 'bench' | 'lig
   | 'item_ammo_9mm' | 'item_ammo_556' | 'item_ammo_12ga'
   // Task office-props-physics-scale-20261030 (lane FURN): the bakery loaf, cut out of the Meshy T2.5 bakery case (derivatives/office-overhaul-20261030.json `parts`).
   | 'item_bread'
+  // Task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's edible food (items/skywaysFood.ts; lane ASSET-A's
+  // derivatives of the user's community-supplied sources, derivatives/item-*.json). Shared, not level-only: food travels.
+  | 'item_ramen' | 'item_ramen_chashu' | 'item_sushi_bento' | 'item_bubble_tea'
   // Iteration 04 generated trash can + modular shop building blocks (derivatives/props-iteration04.json); added once each GLB exists.
   | 'trashCan' | 'shopCounter' | 'shopBackbar' | 'shopCooler' | 'shopDisplay'
   // Iteration 05 purpose-specific props (Lane A; derivatives/props-iteration05.json); each key is added only once its GLB exists.
@@ -95,6 +100,9 @@ export const MODEL_FILES: Record<ModelKey, {url: string; bytes: number}> = {
   // Meshy T2.5 refine; tools/asset-pipeline/props/build-office-overhaul.mjs FURNITURE; derivatives/office-overhaul-20261030.json `parts`).
   // Front +Z, origin bottom-centre, metres, at ITEM_DIMS.bread size (0.26 x 0.092 x 0.223), its own 256 px crop of the case atlas.
   item_bread: {url: 'assets/models/item-bread-t25.glb', bytes: 41_000},
+  // Task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (front +Z, origin bottom-centre, metres, at
+  // ITEM_DIMS size: assets/skywaysFoodModels.ts holds the urls / bounds).
+  ...SKYWAYS_FOOD_MODEL_FILES,
   // Iteration 04 generated (derivatives/props-iteration04.json; straight-on conditioning images). Front +Z, origin bottom-centre, metres.
   // trashCan 0.55 x 0.95 x 0.55; shopCounter 1.5 x 1.05 x 0.75 (top 1.04); shopBackbar 1.77 x 1.83 x 0.70 (worktop 0.86);
   // shopCooler 0.75 x 2.0 x 0.75; shopDisplay 1.1 x 0.70 x 0.62 countertop unit (sits on shopCounter).

@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 45176,
-      "sha256": "989d4405400f91e07848bbf2785f6c9987e8b5ed914186dd7fe62be6bcfeee2a"
+      "bytes": 48623,
+      "sha256": "c057ea819f9806e012cb0f88df889e6c1bb56231688e7b037983a21af912b5a6"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1851,
-      "sha256": "66609466cb147d8e32a49adb35511a0fed0f67581ca6a88dc165c780b4471dfb"
+      "bytes": 2041,
+      "sha256": "1c631377982070e2515e0e7f2c1b6710bf9e9e1f267407990bdf05e23f3d13a1"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -92,6 +92,26 @@
       "path": "assets/audio/cabinet-open-02.mp3",
       "bytes": 21943,
       "sha256": "2a002263494a0295313ba44c8c9cd9d70a291ba2ecd320b836fa1ecaacc5c171"
+    },
+    {
+      "path": "assets/audio/car-door.mp3",
+      "bytes": 14210,
+      "sha256": "34fa395aab37cd4b5340aecf827377fa7ef6a7310f35231101e9bc5b1e5d2291"
+    },
+    {
+      "path": "assets/audio/car-engine-drive-loop.mp3",
+      "bytes": 21106,
+      "sha256": "3aec0dfccce66b8cc9e6029937b840eb65e5171e88ef47ddf623c67202f5b91b"
+    },
+    {
+      "path": "assets/audio/car-engine-idle-loop.mp3",
+      "bytes": 21106,
+      "sha256": "9f0c271b94d3b4739cc4cb5ef047818a160185fa34f2ac06dbb1619acaec2714"
+    },
+    {
+      "path": "assets/audio/car-skid.mp3",
+      "bytes": 8359,
+      "sha256": "67294c130348074b998b4a90a6504c391689ad5dccdba7332799a8eed0820b28"
     },
     {
       "path": "assets/audio/casing-brass-01-s01.mp3",
@@ -1629,6 +1649,11 @@
       "sha256": "21a667dd4d7f84cf902ca3ca424c17d8d77a7755739524479b9b3c0b3b5a116d"
     },
     {
+      "path": "assets/derivatives/audio-skyways-car.json",
+      "bytes": 6147,
+      "sha256": "99fc2e1ea561846af6e9e25293805851325a13b6657480a68fc9587a98e85b9d"
+    },
+    {
       "path": "assets/derivatives/audio-strainer.json",
       "bytes": 89623,
       "sha256": "e4b9d387481c3b9c3552afcb06782ce6fbe4ab7e1ba0435b7f2db78989f60382"
@@ -1662,6 +1687,26 @@
       "path": "assets/derivatives/gear-airtank-backpack.json",
       "bytes": 3636,
       "sha256": "bd17235b10a7d47d574950d56c67764c467b23bab147248194d4dba5e76101f3"
+    },
+    {
+      "path": "assets/derivatives/item-bubble-tea.json",
+      "bytes": 4332,
+      "sha256": "5cc4079d8fce014a070d4fdf44e85b52b60090f8e168fed075bb6445a1cec583"
+    },
+    {
+      "path": "assets/derivatives/item-ramen-bowl.json",
+      "bytes": 3327,
+      "sha256": "d39c1872e8f121f049399fed836078769c4a4c42539d98e5787c1b811cb85cbd"
+    },
+    {
+      "path": "assets/derivatives/item-ramen-chashu.json",
+      "bytes": 5315,
+      "sha256": "89ed8d6138624e8a1874001d25fe1a20d15d1bf8ad27508ea887836bacde098a"
+    },
+    {
+      "path": "assets/derivatives/item-sushi-bento.json",
+      "bytes": 4538,
+      "sha256": "bc9c7b5834707c8b9516bd03a5af37786650a05e4dbe01fbe3d481ecdfed6c44"
     },
     {
       "path": "assets/derivatives/light-lod-iteration03.json",
@@ -1899,6 +1944,126 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/skyways-car-dash-model.json",
+      "bytes": 6420,
+      "sha256": "fe6dd14f3df30c13b912e04697312e98a6ee5286ac7b1edbb0e54cd2dbc45c04"
+    },
+    {
+      "path": "assets/derivatives/skyways-car-seat-model.json",
+      "bytes": 6335,
+      "sha256": "de367a879fc274be97b8a8806e9caa3b16d688d6ec7d0a7a2c136b54328fe57a"
+    },
+    {
+      "path": "assets/derivatives/skyways-commercial-range.json",
+      "bytes": 5788,
+      "sha256": "19a6cc148429c2fb969a68275ec1a4668971831c2e2f2682e3f9522decdfc103"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-banners.json",
+      "bytes": 4434,
+      "sha256": "efdf512116eb976d5e538b0edbcdf0368fd70bba2f34cf0f3144f2dec0e3e05e"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-figure-box-model.json",
+      "bytes": 6544,
+      "sha256": "cd21fed992a6ef95e7c368c3a4bef3b58921411171fa76cbc482b5027187d43b"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-merch-table-model.json",
+      "bytes": 6841,
+      "sha256": "28745e570469e8c1e253a0f059051638463a15f5de1f1aa144cee6437cf885d7"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-plush-model.json",
+      "bytes": 6504,
+      "sha256": "dbf88e470b9cc9027657ac31bfa28bfa6773aef0d246c1472b606c7672eee49f"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-posters.json",
+      "bytes": 8896,
+      "sha256": "a1d1ff418f9ff4c93f7fb95346af07e6626634ce2e3de546f038998525edd8d0"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-signs.json",
+      "bytes": 4385,
+      "sha256": "1f9f33a922a8571f4b48754e9c52589b5474c4a3536c04fa756547517922bb26"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-stage-model.json",
+      "bytes": 6720,
+      "sha256": "9dd818c9020e2f52bd27ebeabd6702181d3275a451622657cd3db7f56ec6688c"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-stage.json",
+      "bytes": 2613,
+      "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
+    },
+    {
+      "path": "assets/derivatives/skyways-mascot-poses.json",
+      "bytes": 5708,
+      "sha256": "58557fd2e5f7e20c241a55e8b1ffbd120a6fc01fee6bcca42b21d2672f9a78df"
+    },
+    {
+      "path": "assets/derivatives/skyways-prize-board.json",
+      "bytes": 2700,
+      "sha256": "5e8c85cc164404a7c4f5f848b68c519e6e891774ca0b33a336a61b22b7c7c0c8"
+    },
+    {
+      "path": "assets/derivatives/skyways-prize-car.json",
+      "bytes": 12742,
+      "sha256": "9db1a2d612e6f0ee982617794780b33f8cf4a38c6d8e22941ed85bc26fa98a57"
+    },
+    {
+      "path": "assets/derivatives/skyways-prize-stanchion-model.json",
+      "bytes": 7013,
+      "sha256": "07147b0c7a0862333c3afea841b84388400e84015b2a8558d5114c131089c1a0"
+    },
+    {
+      "path": "assets/derivatives/skyways-ramen-art.json",
+      "bytes": 5789,
+      "sha256": "ac21dde4cbe651bbad17d4f33c44cef23f82a8cdbc57ae961c940b83e9377190"
+    },
+    {
+      "path": "assets/derivatives/skyways-saucepan.json",
+      "bytes": 4117,
+      "sha256": "1afc285d0a4a57a9786559adf07c700754dbf0176b9c34b612067a7b96bde702"
+    },
+    {
+      "path": "assets/derivatives/skyways-stock-pot.json",
+      "bytes": 4161,
+      "sha256": "36cea54c291259d32bade5b0911f262bb8a646026887bdfd385cfee33a2209f1"
+    },
+    {
+      "path": "assets/derivatives/skyways-sushi-mascot.json",
+      "bytes": 3347,
+      "sha256": "717d6975e384ac23a480a97fa4b2bb939b6922e7ccbb09dcf175af64df6cdc9b"
+    },
+    {
+      "path": "assets/derivatives/skyways-wreck-army-truck.json",
+      "bytes": 4287,
+      "sha256": "1d7ba6ad18f4fd3b520fdd20b6aff2dd5d939ee568f83c791c70c308d4ad6af6"
+    },
+    {
+      "path": "assets/derivatives/skyways-wreck-sedan-burnt.json",
+      "bytes": 5326,
+      "sha256": "d8e0e2590ce58ee2c1b6a58d79928ad09a46a4aa3d23788aa637473e52aba720"
+    },
+    {
+      "path": "assets/derivatives/skyways-wreck-sedan-rust.json",
+      "bytes": 5316,
+      "sha256": "8b6257da3964c58de8b75221806abb2a2af5efc9004e89fefedb6742ef031c1d"
+    },
+    {
+      "path": "assets/derivatives/skyways-wreck-sedan-stripped.json",
+      "bytes": 3988,
+      "sha256": "757e6e02dcb75e3fa60acf323abf20691a7ee3d7705aee8466e1e4db2931a31b"
+    },
+    {
+      "path": "assets/derivatives/skyways-wreck-suv.json",
+      "bytes": 5302,
+      "sha256": "50abde035753fad48aab8779a12817435178c1a5d720eecf4105c22a4d3dbdf9"
+    },
+    {
       "path": "assets/derivatives/train-fuel-can.json",
       "bytes": 5654,
       "sha256": "64c7f770c0e85edccfa2e3f6d0c5189b31e53cdb89c412237446bd61d6cd47ac"
@@ -2069,6 +2234,11 @@
       "sha256": "df74540046a7c8fda63ec54386a24c57f88d1dd8c11e4b96a9637db1d48b99b8"
     },
     {
+      "path": "assets/models/item-bubble-tea.glb",
+      "bytes": 144664,
+      "sha256": "34aae60c92c9f677e349b997b0446b44adff9c2d0692b7f35b6fad2f838aaac5"
+    },
+    {
       "path": "assets/models/item-chips-t25.glb",
       "bytes": 170828,
       "sha256": "5d99643b1f78411dfc4220684950fe176cc0e8a8de753378889df99ffa63e3a3"
@@ -2092,6 +2262,21 @@
       "path": "assets/models/item-noodles-t25.glb",
       "bytes": 183564,
       "sha256": "5273677a6ae27abd59a31a69a3e2dedfeed6675fde4e083b91789481c14cf299"
+    },
+    {
+      "path": "assets/models/item-ramen-bowl.glb",
+      "bytes": 283412,
+      "sha256": "f9d1ce83bffce9d2eeae5329b41cd31d790525dcac699aeb988a6fa1c40d6b15"
+    },
+    {
+      "path": "assets/models/item-ramen-chashu.glb",
+      "bytes": 582400,
+      "sha256": "ddbe642a6ab4083e5a91dc4565cf5161f706af4cd22b2219300fb0acc502f1ce"
+    },
+    {
+      "path": "assets/models/item-sushi-bento.glb",
+      "bytes": 167020,
+      "sha256": "0d60fe754c18bea26788465fcbef2f595146453272966eb0d45e4bfa6959b489"
     },
     {
       "path": "assets/models/item-water-t25.glb",
@@ -3689,6 +3874,96 @@
       "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3"
     },
     {
+      "path": "assets/models/skyways-car-dash.glb",
+      "bytes": 1414504,
+      "sha256": "b766fb2f22c43597345f227e0f990a0ace6cf59ffae7da87714af75add2875bf"
+    },
+    {
+      "path": "assets/models/skyways-car-seat.glb",
+      "bytes": 737156,
+      "sha256": "2cc52dd00c2d3ef6c7d60a9094156a7041fe730b649d05c0068aae7e7f864fe3"
+    },
+    {
+      "path": "assets/models/skyways-commercial-range.glb",
+      "bytes": 1191144,
+      "sha256": "dd94a9bbd50ceef281c84c397ec434ec9c667e382de4f126bacdf06f52253614"
+    },
+    {
+      "path": "assets/models/skyways-con-figure-box.glb",
+      "bytes": 251632,
+      "sha256": "4f50dec2d75a2e1b01459935b1a27d0273bc549647e97befeebfeb1250289dc9"
+    },
+    {
+      "path": "assets/models/skyways-con-merch-table.glb",
+      "bytes": 216084,
+      "sha256": "274ebc955cfaae1df33880968db312b50a3b5cb41a91cecbc435449a3d229f9e"
+    },
+    {
+      "path": "assets/models/skyways-con-plush.glb",
+      "bytes": 288800,
+      "sha256": "3a5b78b43c6b3d9564da0aef06ea9291cad1236e13abf8c7dcd3f7c9e2560bdc"
+    },
+    {
+      "path": "assets/models/skyways-con-stage.glb",
+      "bytes": 1372576,
+      "sha256": "8cae4e5e932debda14b2f041bf47aff986fe5dae154ae4ef3c6641196a546e26"
+    },
+    {
+      "path": "assets/models/skyways-mascot-poses.glb",
+      "bytes": 2754056,
+      "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5"
+    },
+    {
+      "path": "assets/models/skyways-prize-car.glb",
+      "bytes": 5918956,
+      "sha256": "ec9087c9ba0e592b0a1e6d65a375564b7e53a0fdcf41a6e7fc3aa68f663f120d"
+    },
+    {
+      "path": "assets/models/skyways-prize-stanchion.glb",
+      "bytes": 258556,
+      "sha256": "9536b792ce18e91685aea9c84b40aaaf571ce39aeb7852d6fac23d096fb57e5f"
+    },
+    {
+      "path": "assets/models/skyways-saucepan.glb",
+      "bytes": 207132,
+      "sha256": "954119d74bbfcd1a12ce9595e41ad4ffbcdaf7cd9a6b7be2c893927b0f43148c"
+    },
+    {
+      "path": "assets/models/skyways-stock-pot.glb",
+      "bytes": 207868,
+      "sha256": "6025d06a8347692d689a95320f858fd0111d8fa35ea7d73744f594142598698b"
+    },
+    {
+      "path": "assets/models/skyways-sushi-mascot.glb",
+      "bytes": 382420,
+      "sha256": "8c978561f85b38ba12ebab139a8ac2b341645aaadc68afc02a207f8c3ce66a23"
+    },
+    {
+      "path": "assets/models/skyways-wreck-army-truck.glb",
+      "bytes": 958140,
+      "sha256": "33db208929b07a123d6ec896540a6b807f6668a9656600f33f38ef4811bae9e0"
+    },
+    {
+      "path": "assets/models/skyways-wreck-sedan-burnt.glb",
+      "bytes": 1444400,
+      "sha256": "3c40701ceebc783eaef6af5b916182e05f84bc4aca06e6b9357a27116bde424d"
+    },
+    {
+      "path": "assets/models/skyways-wreck-sedan-rust.glb",
+      "bytes": 1240512,
+      "sha256": "78d4b9d07a19bfbf6b7d5fa0c84d2045cf7f5baeaf91ff7206e2dc3dfe508c27"
+    },
+    {
+      "path": "assets/models/skyways-wreck-sedan-stripped.glb",
+      "bytes": 570260,
+      "sha256": "18c5cbfeca74cd0ea3e3b9c4fa4d9a5621b82abe6741c71631905efc70a78d98"
+    },
+    {
+      "path": "assets/models/skyways-wreck-suv.glb",
+      "bytes": 1102820,
+      "sha256": "18cbef07e1a9d3265c16bae4cc600d197cb17d85b1a942d11e0891e83097417b"
+    },
+    {
       "path": "assets/models/stall-t25.glb",
       "bytes": 646764,
       "sha256": "f3d8902c1c6c5dafd795ad18178012bfa4bcce90c606c009ddd1b6421cfa147c"
@@ -3997,6 +4272,36 @@
       "path": "assets/textures/reactor/rusted-steel-orm.jpg",
       "bytes": 185844,
       "sha256": "639a45cd6f5a0b0a11dae3e7005392fe4cfc4a7f2c3b656b9e3b8be7c51b74fd"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-con-banners.jpg",
+      "bytes": 404398,
+      "sha256": "76650d4d903dc650511250a376525173fbb20cc59f29d39d1e68b0b2da08474f"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-con-posters.jpg",
+      "bytes": 938398,
+      "sha256": "03c8aa00a1bb9de1529bea4b57a79e16e207e274788b2c3ec84be2989d88eb09"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-con-signs.jpg",
+      "bytes": 332448,
+      "sha256": "26ef45558ed4df8a027eabe34651bd0a2f2a1bb5a2d6b38be3e345ca14072759"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-con-stage.jpg",
+      "bytes": 361058,
+      "sha256": "31b72a8dfb8ac8e4d587c0af3b70d76f15f5b1f936a2d02fc8b95249d4f06f25"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-prize-board.jpg",
+      "bytes": 168551,
+      "sha256": "4dce957f4a1b1594d915d0e0f216b284ef306d8b29de06371c5e14fec25fe235"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-ramen-art.jpg",
+      "bytes": 457852,
+      "sha256": "9f1b40a4e9cb97b70264d69c6a0cd1d9c439a07a532093842db6f4ed35d6742f"
     },
     {
       "path": "assets/textures/train/train-int-bulkhead.jpg",

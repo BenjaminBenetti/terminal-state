@@ -312,6 +312,61 @@ MALL_PHYS (spread into OPENABLE_AUDIT / PROP_PHYSICS_AUDIT).
 - Tests: `tests/mall-lingerie-store.test.ts` (rooms enclosed by walls + one framed doorway each, validation clean, enemy paths, the floor's
   racks / dressed mannequins / stock), `tests/lingerie-mannequin-fit.test.ts` (lane FIT), `tests/mall-lingerie-spawns.test.ts` (lane CONTEXT).
 
+### The Skyways ramen restaurant (task studio-skyways-level-20261106-054448, lane FOOD)
+`gen/skyways/ramen.ts` dressSkywaysRamen dresses the base shop pool's ramen bar (a carved dining room + optional kitchen) with EXISTING
+kinds — a `shopCounter` run (island with a staff aisle, else against the back wall), a glass-door `shopCooler`, the mall café sets
+(`cafeBistroTable` + `cafeChair`, now and then a `foodCourtTableSet`), a `shopBackbar`, the kitchen `fridge`, open `shelf` — every holder
+keyed to the `skyways-ramen*` purposes (named `items/lootTables.ts` RAMEN_* tables: exact, one or two lots, often none). Its EDIBLE food
+(ramen / chashu ramen / sushi bento / bubble tea: ordinary consumables, `items/skywaysFood.ts`) is those finite lots plus 2-4 loose
+pickups on the café tables / the counter's pass (the counter's span under a pickup or the mascot is cut out of its loot surface). Four
+NEW kinds draw lane ASSET-A's derivatives of the user's community-supplied sources (front +Z; maps kept; `gen/skyways/kitchenKinds.ts`
+holds their classification, spread into both audits):
+
+| Kind | What | Openables audit | Physics audit | Scale check (`scale-check.mjs --prop <glb>`, viewed beside `lastshift`) |
+|---|---|---|---|---|
+| `skywaysRange` | commercial gas range: 6 burners + griddle, two oven doors, backguard + high shelf | `exception`: the oven doors are the appliance's (cold, empty ovens: not storage) | static `anchored` (~250 kg, hard-piped) | 1.52 × 1.40 × 0.89 m; grounded (4 feet); cooktop plateau 0.915 m = the collision / host top (the thin backguard / 1.40 m shelf above it are drawn only) |
+| `skywaysStockPot` | 20 l stainless stock pot with its lid, on the range | `exception`: cookware, the lid is part of its one mesh | **dynamic** 3.5 kg cylinder, `pad` contact, `onHost` (the range's cooktop) | 0.42 × 0.27 × 0.32 m (handles / lid knob incl.); grounded (one base) |
+| `skywaysSaucepan` | rusty steel saucepan, on the range | `none` | **dynamic** 1.3 kg box, `pad`, `onHost` | 0.46 × 0.10 × 0.22 m (handle incl.); grounded |
+| `skywaysSushiMascot` | kawaii sushi display figurine, on the service counter | `none` | **dynamic** 0.8 kg box, `pad`, `onHost` (the counter top) | 0.51 × 0.32 × 0.33 m (arms spread); grounded (feet) |
+
+- No baked loose clutter: the range / cookware / figurine models carry no food; the bowls, bento and cups are separate items.
+- Tests: `tests/skyways-food.test.ts` (registrations, both audits, purpose loot, the dresser on a synthetic carved restaurant — support,
+  overlap, finite pickups, frames — and the cookware / figurine going loose on their static host under fire).
+
+### The Skyways add-on: convention hall / prize-car atrium (task studio-skyways-level-20261106-054448, lane ADDON)
+`gen/skyways/addon.ts` dressSkywaysAddon dresses the ONE add-on of a Skyways level (`addonConvention.ts`, `addonPrize.ts`; shared frame /
+keep-mask helpers `addonFrame.ts`). Reserved first (`PlaceCtx.keep`): 1.5 m in front of every door of the hall, 1.8 m lanes entry -> stage
+and entry -> washrooms (convention), the car body + 1.2 m and its exit lane to the entry (prize car). EXISTING kinds join them: folding
+chairs in rows facing the stage, capsule-toy machines, arcade cabinets, a giant teddy (convention), planters (prize car). NEW kinds
+(`gen/skyways/addonKinds.ts` holds their classification, spread into both audits; drawn by `world/skywaysAddon.ts`: lane ASSET-D's Meshy
+models with their maps kept, lane ASSET-C's mascot pose GLB, the Codex art atlases on flat panels — crop / pack only, no new painting):
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
+|---|---|---|---|---|
+| `skywaysConStage` | modular stage: skirted deck, front steps, truss goalpost with hung speakers | `none` | static `structure`; collision = the deck box (8.0 × 4.4 m at 1.03 m) + its steps box (variant 1, collision only) | 8.00 × 5.18 × 5.17 m; grounded (skirt hem / feet / steps); deck 1.03 m; truss 5.18 m |
+| `skywaysConBackdrop` | the stage backdrop art laced into the truss behind the deck | `none` | static `mounted` | 4.86 × 3.26 m panel above the deck, under the truss beam (4.40 m) |
+| `skywaysConMerchTable` | 6-ft vendor table under a floor-length cloth | `none` (open top) | static `fixture`: the host of its loose merch (on-host decor goes loose only on a static host; a prop something rests on never moves) | 2.03 × 0.76 × 1.02 m (cloth flare); top 0.759 m over 1.84 × 0.78 m |
+| `skywaysConFigureBox` / `skywaysConPlush` / `skywaysConPrintCard` | LOOSE merch on the table tops (boxed figure, plush, print in an acrylic block: the prints sheet) | `exception` (sealed retail box) / `none` / `none` | **dynamic** 0.6 kg box, `pad`, `onHost` | 0.16 × 0.24 × 0.06 / 0.30 × 0.34 × 0.28 / 0.21 × 0.25 × 0.11 m on the 0.757 m top |
+| `skywaysConPoster` | paper poster in a snap frame on solid wall (never over glazing / doors / props) | `none` | static `mounted` | 0.84 × 1.24 m, bottom 1.05 m |
+| `skywaysConPosterBoard` / `skywaysConWelcome` / `skywaysPrizeBoard` | freestanding poster board / welcome sign on an easel / GRAND PRIZE DRAW board on posts | `none` | **dynamic** 7 / 6 / 12 kg box, `pad` | 0.96 × 1.98 × 0.46 / 1.26 × 1.92 × 0.5 / 1.9 × 2.12 × 0.56 m |
+| `skywaysConBanner` | fabric banner on battens, hung on cables from the ceiling | `none` | static `mounted` (>= 2.2 m clear under it) | 1.2 × 3.2 m incl. 0.52 m cables |
+| `skywaysMascotStatue` | the mascot in a baked pose (variant = pose) on a round plinth; recorded in `addon.convention.statues` | `none` | static `anchored` (~150 kg resin, plinth bolted); round collider, any yaw | plinth 1.1 × 0.12 m + the 1.40 m pose (× scale) |
+| `skywaysPrizeStanchion` | chrome rope stanchion round the prize car's spot | `none` | **dynamic** 8 kg cylinder, `pad` | 0.34 × 0.96 × 0.34 m; base disc grounded; eye ring 0.85 m |
+
+- Statues: `wave` inside the entrance facing it, `point` turned so its hand (`SKYWAYS_MASCOT.poses.point.pointDir`) aims at the WASHROOMS
+  door (<= 10°), `cheer` on the stage deck, `bow` by the merch tables, `stand` in the green room (or the event storage) when it fits.
+- Loose merch: separate on-host props packed along each table's real top (never floating / overlapping); a shot knocks it over or off
+  (host-top slab). No loose items are baked into the furniture models. Noted: the delivered stanchion model keeps a short red rope loop
+  hanging from its eye ring (part of the cooked Meshy model, a clipped rope end — not a takeable item); the spanning velvet ropes are
+  runtime geometry (`world/skywaysAddonRuntime.ts`): they hang between upright posts, follow nudged posts and DROP to the floor for good
+  when a post is knocked over (never floating). The turntable under the car is render-only (no collision).
+- Never any text about driving / entering the car: the prize add-on shows the GRAND PRIZE DRAW art only.
+- Renders: `scale-check.mjs --prop skyways-con-stage.glb`, `--prop skyways-con-merch-table.glb --prop skyways-con-figure-box.glb --lift
+  0.757 --prop skyways-con-plush.glb --lift 0.757 --prop skyways-prize-stanchion.glb`, viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/skyways-addon.test.ts` (both audits, the models / measured geometry, the convention and the prize car on the real seeds:
+  statues / aim, stage against its wall, merch support / overlap, lanes / doors, posters / banners, the car's clearance / exit lane /
+  ring / ropes / board; the renderer on the real GLBs; ropes dropping with a shot post; merch shot off its table).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

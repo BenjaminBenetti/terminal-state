@@ -10,7 +10,8 @@ w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio
 ../derivatives/audio-strainer.json; the Reactor machine set reactor-*.mp3: ../derivatives/audio-reactor.json and its startup set (power-up surge, online impact,
 control-rod drive / stop, machine bed, stage thump, beacon motor): ../derivatives/audio-reactor-startup.json; its ending set (the blue-beam ignition reactor-beam.mp3, the
 surface rain loop surface-rain-loop.mp3): ../derivatives/audio-reactor-ending.json; the train fuel set (engine stall
-fuel-engine-stall.mp3, jerrycan pour fuel-pour.mp3, fuel cart rolling loop fuel-cart-roll-loop.mp3): ../derivatives/audio-fuel.json).
+fuel-engine-stall.mp3, jerrycan pour fuel-pour.mp3, fuel cart rolling loop fuel-cart-roll-loop.mp3): ../derivatives/audio-fuel.json; the Skyways prize-car set (engine idle /
+drive loops car-engine-idle-loop.mp3 / car-engine-drive-loop.mp3, tyre skid car-skid.mp3, door car-door.mp3): ../derivatives/audio-skyways-car.json).
 
 Powered by Stability AI.
 

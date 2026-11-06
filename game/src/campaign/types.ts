@@ -15,10 +15,20 @@ import type {LevelId} from '../levels/types';
 /** One network node's id: `st-00` .. `st-NN` (stable within a network; the start is `st-00`). */
 export type StationId = string;
 
-/** Ordinary station archetypes and their configured weights (user 2026-11-02: 80 / 10 / 10; future archetypes take Subway's share). */
-export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.8, office: 0.1, mall: 0.1};
+/**
+ * Ordinary station archetypes and their configured weights (user 2026-11-02: 80 / 10 / 10; future archetypes take Subway's share).
+ * Task studio-skyways-level-20261106-054448-01 (user: "10 % ... taken from default Subway levels"): + Skyways 10 % out of the Subway's
+ * share — 70 / 10 / 10 / 10: of the 39 ordinary nodes 27 Subway (incl. the start), 4 Office, 4 Mall, 4 Skyways (Office / Mall unchanged).
+ */
+export const ORDINARY_WEIGHTS: Readonly<Record<Exclude<LevelId, 'reactor'>, number>> = {subway: 0.7, office: 0.1, mall: 0.1, skyways: 0.1};
+/**
+ * The weights every network generated BEFORE Skyways was drawn with (31 / 4 / 4 / 0). Saved networks are never regenerated: a save
+ * written by an older build keeps its network (validateNetwork accepts either census), so an existing campaign never turns a visited
+ * Subway world into Skyways; Skyways nodes appear in campaigns started on this build.
+ */
+export const PRE_SKYWAYS_WEIGHTS: Readonly<Partial<Record<Exclude<LevelId, 'reactor'>, number>>> = {subway: 0.8, office: 0.1, mall: 0.1};
 
-/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 31 Subway incl. the start, 4 Office, 4 Mall) + exactly 1 Reactor. */
+/** Network size: ~40 nodes = 39 ordinary (largest remainder of the weights: 27 Subway incl. the start, 4 Office, 4 Mall, 4 Skyways) + exactly 1 Reactor. */
 export const NETWORK_SIZE = {ordinary: 39, reactor: 1} as const;
 
 /** A station of the network. */

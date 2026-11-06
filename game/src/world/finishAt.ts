@@ -23,7 +23,7 @@ interface FaceLike {
 interface ArchFloors { floorKey(L: number, i: number): string | null; ceilKey(L: number, area: number, i?: number, y?: number): string | false | null }
 
 /** A finish key is arch-owned (an arch remapped it; the station rule would not know it). */
-export const isArchFinish = (k: string): boolean => /^(office-|mall-|reactor-|annexWall)/.test(k);
+export const isArchFinish = (k: string): boolean => /^(office-|mall-|reactor-|skyways-|annexWall)/.test(k); // (+ skyways-: task studio-skyways-level-20261106-054448, lane VIEW)
 
 export type FinishAt = (kind: 'wall' | 'floor' | 'ceiling', levelIndex: number, x: number, y: number, z: number, nx: number, nz: number) => string | null;
 

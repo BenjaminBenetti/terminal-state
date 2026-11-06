@@ -52,7 +52,7 @@ function webgl2(): boolean {
 function devStartFromUrl(p: URLSearchParams, qaMode: boolean): DevStart | null {
   const seedOf = (k: string) => { const v = p.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
   const seeds: Partial<Record<LevelId, number>> = {};
-  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
+  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['skyways', 'skywaysSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
   const level = p.get('level');
   const any = qaMode || isLevelId(level) || Object.keys(seeds).length > 0 || p.has('mallVariant');
   return any ? {level: isLevelId(level) ? level : 'subway', seeds} : null;
@@ -193,7 +193,7 @@ async function boot(): Promise<void> {
     void game.travel({to: {level: to, section: LEVELS[to].entry}, arrival: {kind: 'start'}, label: `Travelling to ${nameOf(to)}`, via: 'menu'});
   };
   let travelTarget: LevelId | null = null;
-  ['#btn-travel', '#btn-travel-2', '#btn-travel-3'].forEach((id, slot) => $(id).addEventListener('click', () => { // (+ slot 3: task reactor-build-20261101)
+  ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-travel-4'].forEach((id, slot) => $(id).addEventListener('click', () => { // (+ slot 3: task reactor-build-20261101; + slot 4: skyways)
     travelTarget = travelTargets(game.run.current.level)[slot] ?? null;
     if (!travelTarget) return;
     $('#confirm-travel .to').textContent = nameOf(travelTarget);
@@ -225,12 +225,12 @@ async function boot(): Promise<void> {
     });
   });
   $('#btn-death-new').addEventListener('click', () => void game.newGame(game.run.current.level, {enter: true}));
-  ['#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth'].forEach((id, slot) => $(id).addEventListener('click', () => {
+  ['#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth', '#btn-death-new-fifth'].forEach((id, slot) => $(id).addEventListener('click', () => {
     const to = travelTargets(game.run.current.level)[slot];
     if (to) void game.newGame(to, {enter: true});
   }));
   $('#btn-win-stay').addEventListener('click', () => game.keepExploring());
-  ['#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3'].forEach((id, slot) => $(id).addEventListener('click', () => {
+  ['#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-travel-4'].forEach((id, slot) => $(id).addEventListener('click', () => {
     const to = travelTargets(game.run.current.level)[slot];
     if (to) travelTo(to);
   }));
@@ -240,7 +240,7 @@ async function boot(): Promise<void> {
     if (s !== 'paused' && s !== 'dead' && s !== 'won') return;
     closeConfirms();
     const cur = game.run.current, targets = travelTargets(cur.level), other = targets[0];
-    targets.forEach((t, slot) => { for (const id of [['#btn-travel', '#btn-win-travel'], ['#btn-travel-2', '#btn-win-travel-2'], ['#btn-travel-3', '#btn-win-travel-3']][slot] ?? []) $(id).textContent = `Travel to ${nameOf(t)}`; }); // (+ slot 3: task reactor-build-20261101)
+    targets.forEach((t, slot) => { for (const id of [['#btn-travel', '#btn-win-travel'], ['#btn-travel-2', '#btn-win-travel-2'], ['#btn-travel-3', '#btn-win-travel-3'], ['#btn-travel-4', '#btn-win-travel-4']][slot] ?? []) $(id).textContent = `Travel to ${nameOf(t)}`; }); // (+ slot 3: task reactor-build-20261101; + slot 4)
     $('#confirm-travel .to').textContent = nameOf(other);
     // (lane MENU, campaign polish item 2: one short line, and no "nothing is saved" claim for a campaign run — it autosaves)
     const here = cur.station ? game.run.node(cur.station)?.name : undefined;
@@ -250,8 +250,9 @@ async function boot(): Promise<void> {
     $('#btn-death-new-other').textContent = `New game · ${LEVELS[other].name}`;
     if (targets[1]) $('#btn-death-new-third').textContent = `New game · ${LEVELS[targets[1]].name}`;
     if (targets[2]) $('#btn-death-new-fourth').textContent = `New game · ${LEVELS[targets[2]].name}`;
+    if (targets[3]) $('#btn-death-new-fifth').textContent = `New game · ${LEVELS[targets[3]].name}`;
     if (s === 'dead') showLastSave();
-    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : 'Station clear';
+    $('#win-title').textContent = cur.level === 'office' ? 'Office tower clear' : cur.level === 'mall' ? `${nameOf('mall')} clear` : cur.level === 'reactor' ? 'Reactor pit clear' : cur.level === 'skyways' ? 'Skyways clear' : 'Station clear';
   });
   // task reactor-build-20261101 (lane RESTART): the title shows the persistent local "Reactor restarted" milestone once earned
   game.stateListeners.push((st: GameState) => { if (st !== 'title') return; const el = $('#milestone-badge'), t = milestoneBadge(readMilestones()); if (el) { el.textContent = t; el.hidden = !t; } });
@@ -357,8 +358,8 @@ async function boot(): Promise<void> {
   });
   toMenu(mainMenuButton('#pause', 'btn-main-menu'));
   toMenu(mainMenuButton('#death', 'btn-death-menu'));
-  const legacyRunUi = ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-new-game', '#btn-death-new', '#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth',
-    '#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-new'];
+  const legacyRunUi = ['#btn-travel', '#btn-travel-2', '#btn-travel-3', '#btn-travel-4', '#btn-new-game', '#btn-death-new', '#btn-death-new-other', '#btn-death-new-third', '#btn-death-new-fourth', '#btn-death-new-fifth',
+    '#btn-win-travel', '#btn-win-travel-2', '#btn-win-travel-3', '#btn-win-travel-4', '#btn-win-new'];
   game.stateListeners.push((s: GameState) => {
     const campaign = !!game.run.campaign;
     for (const id of legacyRunUi) document.querySelector(id)?.classList.toggle('hidden', campaign);

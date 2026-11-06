@@ -1,0 +1,159 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "skyways-wreck-sedan-stripped",
+ "key": "skyways_wreck_sedan_stripped",
+ "role": "street scenery: stripped red sedan shell (no doors / glass)",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Rustbound_Relic_1106035207_texture.glb",
+  "sha256": "c82c91d20b63820d4ffaa8fe3ed0b3012b4e4f69f69bca64afb117ceba790560",
+  "bytes": 8592504,
+  "triangles": 3512,
+  "vertices": 3910,
+  "extent": [
+   1,
+   0.2971,
+   0.3968
+  ],
+  "uvCharts": 481,
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3693247,
+    "sha256": "e81738e220fa32f90ef4c3c81bc6e195bad773ac14a948232b0b9f1282a720ee"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2116542,
+    "sha256": "75686f5002e5e261e3fe0e1fc6254501cc26a5c8fbc2d531449dbfa34bf519bb"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2613163,
+    "sha256": "bb236c63a50cb2606a519ef4aacc8f2042842709ed23a285068e4717959c3edc"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/skyways-wreck-sedan-stripped.glb",
+  "file": "game/public/assets/models/skyways-wreck-sedan-stripped.glb",
+  "bytes": 570260,
+  "sha256": "18c5cbfeca74cd0ea3e3b9c4fa4d9a5621b82abe6741c71631905efc70a78d98",
+  "triangles": 3512,
+  "vertices": 3910,
+  "dims": [
+   4.6,
+   1.3667,
+   1.8254
+  ],
+  "min": [
+   -2.3,
+   0,
+   -0.912723
+  ],
+  "max": [
+   2.3,
+   1.366706,
+   0.912723
+  ],
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     1024,
+     1024
+    ],
+    "mime": "image/jpeg",
+    "bytes": 305274,
+    "sha256": "574e0f63f0875643eecd35f9821e1c1e54690962353c237e765c8c10828ced05",
+    "quality": 85
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 75678,
+    "sha256": "a1ea93a8678d52dea9e6f829c968a63a32330f9419d06e59f738e05bc31a310f",
+    "quality": 88
+   },
+   {
+    "slot": "normal",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 41265,
+    "sha256": "22b28fab7be089b485947e4e21fc1d64cadf59f01980f1dd75e055884f390e69",
+    "quality": 90
+   }
+  ]
+ },
+ "fit": {
+  "kind": "x",
+  "sizeM": 4.6,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 1,
+  "scale": 4.6
+ },
+ "transform": "half turn about Y (x, z -> -x, -z), then uniform scale 4.6 about the bounds' bottom centre (source offset 0, -0.147553, -0.000054): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; nose at +X (half turn: steering wheel, hood and front lamps at the source's -X end; trunk lid and round tail lamps at +X)",
+ "weld": {
+  "verticesBefore": 3910,
+  "verticesAfter": 3910,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "source-uv",
+ "simplify": {
+  "applied": false,
+  "triangles": 3512,
+  "budget": 12000,
+  "errorRelative": 0,
+  "normalWeight": 0.5,
+  "uvWeight": 1,
+  "targetError": 1
+ },
+ "textures": "the source maps only, on the source UVs (no new / hand-painted art): Lanczos3 downsize, JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}

@@ -228,6 +228,26 @@ from depth, using existing families only: no boss and no new enemy. The ambient 
   tiers now place their full draw, so the two upper tiers can never outnumber the two deep ones. Checked on those 12 pits and on the 8
   standard seeds 1–8 (upper pair 12–16, deep pair 16–21).
 
+## Skyways (`skyways`)
+
+<!-- Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS, a connected multi-building pedway network. -->
+
+`SKYWAYS_SPAWN_PROFILE` (`SPAWN_PROFILES.skyways`, `LEVELS.skyways.tier = 2`) is ONE logical level, `LevelId` `skyways`
+(`game/src/gen/skyways/index.ts` `generateSkywaysLevel`): a subway station under the station building and its pedway concourse
+(storey 0), the street-level lobbies / atrium courts / entrance halls of every building (storey 1) and the "+15" skyway level with
+the glazed bridges between the buildings and the one add-on hall (storey 2). It uses the ordinary pool (`ENEMY_POOL`: no Siren —
+she is opt-in and Skyways declares no eligibility rule) and the Office's placement rules (`OFFICE_PLACEMENT`: never in a stair
+core, light in storefront units and closets, 5 m off every run landing). One `placeOfficeEnemies` run per storey, each on its own
+fork (`skyways-enemies-<storey>`), tags its spawns with the context:
+
+- **`station`**: the station storey (platforms, the pedway concourse, the station's back of house), U{5..8}.
+- **`street`**: the street level of every building (lobbies, atrium courts, entrance halls, shops, service rooms), U{8..12}.
+- **`floor`**: the skyway level (concourses, bridges, atrium galleries, shops, the add-on hall), U{10..15}.
+- **`service`**: `SERVICE_CONTEXT`, the station's Beyond-the-Station annex (`TRACK_EXT_SKYWAYS.annex.max = 1`, the standard
+  one-roll chance), appended last; the Strainer only there (`STRAINER_CONTEXTS` unchanged).
+- No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
+  static props, never enemies.
+
 ## Units: what the numbers are
 
 - **Count range**: spawns one run of a context tries to place; E[count] = (lo + hi) / 2. There is no per-area spawn density at

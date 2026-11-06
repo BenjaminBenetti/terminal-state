@@ -25,6 +25,7 @@ export type IconKey =
   | GearIconKey | MedicalIconKey // Iteration 16 (lanes GEAR / INJURY)
   | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
   | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
+  | SkywaysFoodIconKey // task studio-skyways-level-20261106-054448 (lane FOOD): ramen bowls, sushi bento, bubble tea (items/skywaysFood.ts)
   | 'reactorKey' | 'fuseCartridge'; // task reactor-build-20261101 (lane RESTART): the reactor restart parts
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
@@ -60,10 +61,12 @@ import {GEAR_DIMS, GEAR_ITEMS, type GearIconKey, type GearSpec} from './gear';
 import type {Caliber} from './calibers';
 import {MEDICAL_DIMS, MEDICAL_ITEMS, treatsText, type Limb, type MedicalIconKey} from './medical';
 import {MATERIAL_DIMS, MATERIAL_ITEMS, type MaterialIconKey} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
+import {SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_DIMS, SKYWAYS_FOOD_IDS, SKYWAYS_FOOD_ITEMS, type SkywaysFoodIconKey} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 
 // + bread (task office-props-physics-scale-20261030, lane FURN): only bakery display cases hold it (items/lootTables.ts BAKERY_ROWS)
-export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles', 'bread'] as const;
-export const DRINK_IDS = ['water', 'cola', 'juice'] as const;
+// + the Skyways ramen restaurant's ramen bowls / bento and bubble tea (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts)
+export const FOOD_IDS = ['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS] as const;
+export const DRINK_IDS = ['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS] as const;
 
 export const ITEMS: Record<string, ItemDef> = {
   rifle: {id: 'rifle', name: 'Rifle — "Kept running"', short: 'Rifle', kind: 'weapon', stackMax: 1, weaponId: 'rifle', icon: 'rifle',
@@ -108,6 +111,8 @@ export const ITEMS: Record<string, ItemDef> = {
   // have baked into its model, now a real pickup (model item-bread-t25.glb, cut out of the same Meshy case; finite case lots).
   bread: {id: 'bread', name: 'Stale bread loaf', short: 'Bread', kind: 'consumable', stackMax: 3, hunger: 22, thirst: -3, useTime: 2.0, verb: 'eat', icon: 'bread',
     description: 'A round crusty loaf from a bakery display case, gone hard as a brick. Filling once you work through the crust, and thirsty work.'},
+  // --- task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's food (items/skywaysFood.ts) ---
+  ...SKYWAYS_FOOD_ITEMS,
   // --- Iteration 12 (LIGHT): light survival (authored models: world/authoredItems.ts) ---
   battery: {id: 'battery', name: 'D-cell battery', short: 'Battery', kind: 'consumable', stackMax: 4, recharge: 1, useTime: 1.4, verb: 'use', icon: 'battery',
     description: 'Unbranded 1.5 V D cell, scuffed but holding charge. Swap it into the flashlight to refill it to 100 %.'},
@@ -201,6 +206,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   // lane FURN (office-props-physics-scale-20261030): the measured runtime bounds of item-bread-t25.glb (assets/companyDims.generated.ts
   // COMPANY_PART_DIMS.bread, so fitItemModel keeps it at scale 1): a round loaf, always resting on its base
   bread: {w: 0.26, d: 0.2231, h: 0.0919, shape: 'flat'},
+  ...SKYWAYS_FOOD_DIMS, // task studio-skyways-level-20261106-054448 (lane FOOD): the item models' real bounds (assets/skywaysFoodModels.ts)
   // Lane AMMO (knife-melee-20261030): the measured runtime bounds of the Meshy T2.5 ammo boxes (assets/manifest.ts item_ammo_*;
   // derivatives/meshy-t25-ammo-20261030.json), so fitItemModel keeps them at scale 1. They stand upright ('flat': never laid down)
   // and are all < 0.176 m tall: they fit the 0.18 m desk-drawer / low-cupboard clearance (items/lootLayout.ts).

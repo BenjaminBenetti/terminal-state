@@ -46,11 +46,11 @@ const walk = (net: SubwayNetwork, ids: StationId[]): CampaignState => ids.reduce
 const archetypeCounts = (net: SubwayNetwork) => net.nodes.reduce<Record<string, number>>((c, n) => ({...c, [n.archetype]: (c[n.archetype] ?? 0) + 1}), {});
 
 describe('new networks: the Reactor always has its Maintenance Route', () => {
-  it('exactly one, an ordinary Subway node; 40 nodes, 31 / 4 / 4 + ONE Reactor; ids and node seeds intact; its own service line', () => {
+  it('exactly one, an ordinary Subway node; 40 nodes, 27 / 4 / 4 / 4 + ONE Reactor; ids and node seeds intact; its own service line', () => {
     for (const net of nets) {
       expect([net.seed, validateNetwork(net)]).toEqual([net.seed, []]);
       expect([net.seed, maintenanceRouteProblems(net)]).toEqual([net.seed, []]);
-      expect(archetypeCounts(net)).toEqual({subway: 31, office: 4, mall: 4, reactor: 1});
+      expect(archetypeCounts(net)).toEqual({subway: 27, office: 4, mall: 4, skyways: 4, reactor: 1});
       const m = maintenanceRouteNode(net)!;
       expect(m.archetype).toBe('subway');
       expect([m.id === net.start, m.id === net.reactor]).toEqual([false, false]);
