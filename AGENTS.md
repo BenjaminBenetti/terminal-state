@@ -5,11 +5,14 @@ source. `game/README.md` has detailed gameplay notes and some historical command
 
 ## Source control and releases
 
-- Work in the Git repository, not an unversioned studio copy. The user's standing
-  instruction is to **commit and push verified changes to GitHub `main`** after
-  checks. Use main, not feature branches. Fetch first, preserve existing history,
-  and reconcile concurrent changes without discarding anyone's work. Never force
-  push, rewrite published history or use destructive reset/clean operations.
+- Work in the Git repository, not an unversioned studio copy. **Use a feature
+  branch and open a pull request into `main`** (user clarification, 2026-11-05).
+  Commit and push verified changes to that branch. Merge through the PR after
+  required GitHub CI, including the protected branch's `build` check, succeeds;
+  do not push directly to `main` or bypass branch protection. Fetch first,
+  preserve existing history, and reconcile concurrent changes without discarding
+  anyone's work. Never force push, rewrite published history or use destructive
+  reset/clean operations.
 - Run `npm ci`, `npm run build`, `npm test`, `npm run ci:check`,
   `npm run ci:test` and `npm run ci:package` before pushing. Inspect the diff and
   secret/asset checks. A blocked check or authentication is a blocker to report,
@@ -17,7 +20,10 @@ source. `game/README.md` has detailed gameplay notes and some historical command
 - GitHub Actions is the authoritative release build. Everything publication must
   use the **successful GitHub CI artifact for that exact main commit**, never a
   locally built folder. Main downloads, validates the manifest and publishes
-  only `site/`. No automatic deploy, deployment credentials or webhook required.
+  only `site/`. Everything publication stays manual. The user-authorized Google
+  Cloud VM deployment uses SemVer tags and the `prod` environment; see
+  `tools/deploy/gcp/README.md`. It consumes that same successful main CI artifact,
+  verifies every original/representation hash, and never rebuilds on the VM.
 - `game/src/` and **every file in `game/public/`** are authoritative source inputs.
   Track generated/cooked models, textures, audio and provenance. Do not delete or
   ignore them as disposable output. Build outputs themselves are ignored.

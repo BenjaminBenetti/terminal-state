@@ -1,0 +1,55 @@
+name: Deploy game to production VM
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: terminal-state-prod
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment:
+      name: prod
+      url: https://terminal-state.bbenetti.ca
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST || 'terminal-state.bbenetti.ca' }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER || 'bbenetti' }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      PUBLIC_DOMAIN: ${{ vars.PUBLIC_DOMAIN || 'terminal-state.bbenetti.ca' }}
+      AUTO_CUTOFF_GB: ${{ vars.AUTO_CUTOFF_GB }}
+      ACME_EMAIL: ${{ vars.ACME_EMAIL }}
+      RELEASE_TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22.16.0'
+      - name: Validate tag and deployment settings
+        run: |
+          node tools/deploy/gcp/release.mjs validate
+          git merge-base --is-ancestor HEAD origin/main
+          echo "SOURCE_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+      - name: Download successful main CI artifact and prepare compressed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node tools/deploy/gcp/release.mjs fetch
+          node tools/deploy/gcp/release.mjs prepare
+          git rev-list HEAD > artifacts/vm-release/ancestors.txt
+          tar -C artifacts/vm-release -cf "$RUNNER_TEMP/terminal-state-release.tar" .
+      - name: Configure nginx and deploy over SSH
+        env:
+          DEPLOY_KEY: ${{ secrets.DEPLOY_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: bash tools/deploy/gcp/ssh-deploy.sh
