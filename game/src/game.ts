@@ -78,6 +78,7 @@ import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasma
 import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
 import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
 import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
+import {installSkywaysCar, type SkywaysCar} from './world/skywaysCar'; // task skyways-level-20261106 (lane CAR): the Skyways prize car (first-person drivable)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
@@ -331,6 +332,8 @@ export class Game {
   readonly fuelPort: FuelPortSystem;
   /** Task train-fuel-system (lane CART): the fuel carts in the world — push / grab, the hose, cargo riding the train (world/fuelCarts.ts). */
   fuelCarts!: FuelCarts;
+  /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
+  skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
@@ -555,6 +558,7 @@ export class Game {
     this.fuelPort = installFuelPort(this); hookName('fuelPort'); // task train-fuel-system (lane PORT)
     this.fuelCarts = installFuelCarts(this); // task train-fuel-system (lane CART)
     hookName('fuelCarts');
+    this.skywaysCar = installSkywaysCar(this); hookName('skywaysCar'); // task skyways-level-20261106 (lane CAR): its E handler / prompt go first (unshift)
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
@@ -2338,6 +2342,7 @@ export class Game {
     const def = itemDef(st.itemId);
     if (def.kind !== 'consumable') return;
     if (this.gasMask.transitioning) return; // mask lane: no use starts while the gas mask goes on / comes off (H, click)
+    if (this.skywaysCar?.refuseUse()) return; // (lane CAR) no item use while driving the Skyways car
     // Iteration 12 (LIGHT): a battery is refused at >= 99 % charge (nothing used)
     // Iteration 16 (lane INJURY): a limb treatment needs its injury ("No leg injury to treat"); it heals no HP, so the HP check is skipped
     const blocked = (def.recharge ? this.torch.battery.refuseReason() : null)
@@ -2566,7 +2571,8 @@ export class Game {
     this.aiming = !!wdef && !wdef.melee && inp.mouse[2] && !this.weapon.reloading && !p.sprinting && !vmBusy && !p.climbing && !this.flareHold.active && !laneOwns;
     const moveOpts = {aiming: this.aiming, speedMult: (this.use ? 0.6 : wdef?.moveMult ?? 1) * this.mods.speedMult, canSprint: !this.use && !inp.mouse[0]};
     // (lane RIDE) riding: car pose -> the player's car-local step -> the world pose (TrainRide.stepPlayer); else the world body as ever
-    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
+    // (lane CAR) driving the Skyways prize car: the car's step puts the player in the driver seat (world/skywaysCar.ts stepPlayer)
+    const step = this.trainRide.riding ? this.trainRide.stepPlayer(dt, inp, moveOpts) : this.skywaysCar.driving ? this.skywaysCar.stepPlayer(dt, inp) : p.update(dt, inp, this.levels, this.propIndex, moveOpts);
     if (step) this.sfx.footstep(p.sprinting, p.crouched);
     if (p.justJumped) this.sfx.jump();
     if (p.justLanded) this.sfx.land(Math.min(1, p.landSpeed / 6));
@@ -2579,7 +2585,7 @@ export class Game {
       // buttons, or the button being latched away from it mid-windup, cancels (never a release that swings); wiped input
       // (`clears`: menus / blur / pointer unlock) cancels a windup too. `pressed` is Input's per-frame latch: a down + up inside
       // one frame still starts the full windup -> swing -> recovery.
-      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy, // (lane RIDE: holstered)
+      const ev = this.weapon.update(dt, {held: inp.mouse[0] && !flareOwns && !rideHolster, pressed: inp.mousePressed[0] && !flareOwns && !rideHolster, reload: inp.hit('KeyR') && !vmBusy && !this.skywaysCar.driving, // (lane RIDE: holstered; lane CAR: no reload while driving)
         lowered: p.sprinting || vmBusy || p.climbing || (!!wdef.melee && (laneOwns || (this.lmbLatch && this.weapon.winding))), clears: inp.clears}, this.inv);
       for (const e of ev) {
         // (task hitch-attribution-recorder-20261105: weapon.fire / weapon.melee spans — timing only, a no-op unless profiling)
@@ -2670,6 +2676,7 @@ export class Game {
     this.viewmodel.setLightLevel(this.lightPool.viewLevel(eye, this.torch.battery.emitting)); // Iteration 12 (LIGHT): actual output
     prof.lap(SPAN.view);
     this.consumeView.update(dt); // item-to-face pose + gun holster level, before the gun pose
+    if (this.skywaysCar.holster > 0) this.viewmodel.setHolstered(this.skywaysCar.holster); // (lane CAR) hands on the wheel: the held item lowered
     this.viewmodel.update(dt, {
       // (task mouse-axis-invert: the sway follows the EFFECTIVE turn, so an inverted axis sways with the view, not against it)
       moving: Math.min(1, p.speed / WALK_SPEED), sprint: p.sprinting, aiming: this.aiming, lookDX: inp.dx * lookSigns(this.settings).x, lookDY: inp.dy * lookSigns(this.settings).y,
