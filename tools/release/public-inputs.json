@@ -1944,6 +1944,11 @@
       "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
     },
     {
+      "path": "assets/derivatives/skyways-mascot-poses.json",
+      "bytes": 5708,
+      "sha256": "58557fd2e5f7e20c241a55e8b1ffbd120a6fc01fee6bcca42b21d2672f9a78df"
+    },
+    {
       "path": "assets/derivatives/skyways-prize-board.json",
       "bytes": 2700,
       "sha256": "5e8c85cc164404a7c4f5f848b68c519e6e891774ca0b33a336a61b22b7c7c0c8"
@@ -3807,6 +3812,11 @@
       "path": "assets/models/skyways-commercial-range.glb",
       "bytes": 1191144,
       "sha256": "dd94a9bbd50ceef281c84c397ec434ec9c667e382de4f126bacdf06f52253614"
+    },
+    {
+      "path": "assets/models/skyways-mascot-poses.glb",
+      "bytes": 2754056,
+      "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5"
     },
     {
       "path": "assets/models/skyways-saucepan.glb",
