@@ -536,9 +536,9 @@ describe.runIf(!!realDef)('skyways gas on the REAL generated level', () => {
     expect(info.windows.length).toBeGreaterThan(0);
     for (const w of info.windows) {
       const g = L.levels[w.level].grid, alongX = w.side === 'N' || w.side === 'S';
-      const inward = w.side === 'N' || w.side === 'W' ? 1 : -1;
+      const inward = w.side === 'N' || w.side === 'W' ? 1 : -1, inner = w.side === 'N' ? w.z1 : w.side === 'S' ? w.z0 : w.side === 'W' ? w.x1 : w.x0;
       for (let a = (alongX ? w.x0 : w.z0) + CELL / 2; a < (alongX ? w.x1 : w.z1); a += CELL) {
-        const c = alongX ? (w.z0 + w.z1) / 2 : (w.x0 + w.x1) / 2, cin = c + inward * CELL;
+        const c = inner - inward * CELL / 2, cin = inner + inward * CELL / 2; // the wall cell behind the room-side face / the room cell
         const [wx, wz] = alongX ? [a, c] : [c, a], [rx, rz] = alongX ? [a, cin] : [cin, a];
         expect(g.cells[g.idx(Math.floor(wx / CELL), Math.floor(wz / CELL))], `wall cell of span at ${wx},${wz}`).toBe(SOLID);
         expect(g.cells[g.idx(Math.floor(rx / CELL), Math.floor(rz / CELL))], `room cell of span at ${rx},${rz}`).not.toBe(SOLID);
