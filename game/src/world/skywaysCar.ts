@@ -228,6 +228,11 @@ export class SkywaysCar {
   private readonly kickT = new WeakMap<PropPlacement, number>();
   private readonly glassT = new WeakMap<PropPlacement, number>();
   private readonly walkerIds: object[];
+  private walkerBase: DynLike['walkers'] = null;
+  private readonly walkerWrap = () => {
+    const list = this.walkerBase?.() ?? [];
+    return this.body && this.driving && Math.abs(this.body.v) > 0.3 ? [...list, ...this.walkers()] : list;
+  };
   private readonly ownsInput = (): boolean => this.driving;
   private readonly box: Box3Like = {min: {x: 0, y: 0, z: 0}, max: {x: 0, y: 0, z: 0}};
 
@@ -286,14 +291,11 @@ export class SkywaysCar {
       if (dynamicKind(p.kind)) this.dynIdx!.set(p, i);
       if (propDamageSpec(p.kind).glass?.on === 'shatter') this.glassIdx!.set(p, i);
     });
-    // the moving car's circles shove loose props as walkers (contact wake + the walker shove)
+    // the moving car's circles shove loose props as walkers (contact wake + the walker shove); Game sets a fresh walker list per build
     const di = this.host.physics?.dynamicItems;
     if (di) {
-      const base = di.walkers;
-      di.walkers = () => {
-        const list = base?.() ?? [];
-        return this.body && this.driving && Math.abs(this.body.v) > 0.3 ? [...list, ...this.walkers()] : list;
-      };
+      this.walkerBase = di.walkers === this.walkerWrap ? this.walkerBase : di.walkers;
+      di.walkers = this.walkerWrap;
     }
     this.driving = false;
     this.holster = 0;
@@ -599,7 +601,7 @@ export class SkywaysCar {
       const [nx, nz] = moveCircle(L, h.propIndex, q.x, q.z, n.nx * overlap, n.nz * overlap, r, q.y, q.stats.height ?? BODY_CLEAR);
       q.x = nx; q.z = nz;
       this.syncZombie(z);
-      if (!moving || closing <= 0.3) continue;
+      if (!moving || closing <= 0.05) continue;
       this.counts.pushes++;
       b.v = approach(b.v, 0, CAR_RT.pushDecel * dt);
       if (r - nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z).d > CAR_RT.pinned) {
@@ -631,12 +633,14 @@ export class SkywaysCar {
   /** The walking player never passes through the parked car (moved out through the world's collision; the velocity into it lost). */
   private separatePlayer(): void {
     const h = this.host, P = h.player, b = this.body!;
-    const n = nearestCircle(this.spec, b.x, b.z, b.yaw, P.x, P.z), ov = P.radius - n.d;
-    if (ov <= 0) return;
-    const [x, z] = moveCircle(h.levels!, h.propIndex, P.x, P.z, n.nx * ov, n.nz * ov, P.radius, P.y, P.bodyHeight);
-    P.x = x; P.z = z;
-    const into = -(P.vx * n.nx + P.vz * n.nz);
-    if (into > 0) { P.vx += n.nx * into; P.vz += n.nz * into; }
+    for (let it = 0; it < 3; it++) { // (out of one circle can still leave it inside the next one along the body)
+      const n = nearestCircle(this.spec, b.x, b.z, b.yaw, P.x, P.z), ov = P.radius - n.d;
+      if (ov <= 1e-7) return;
+      const [x, z] = moveCircle(h.levels!, h.propIndex, P.x, P.z, n.nx * (ov + 1e-6), n.nz * (ov + 1e-6), P.radius, P.y, P.bodyHeight);
+      P.x = x; P.z = z;
+      const into = -(P.vx * n.nx + P.vz * n.nz);
+      if (into > 0) { P.vx += n.nx * into; P.vz += n.nz * into; }
+    }
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

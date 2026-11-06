@@ -180,16 +180,17 @@ function proceduralCockpit(spec: CarSpec): {group: THREE.Group; wheel: THREE.Obj
   const S = carMaterials(), g = new THREE.Group();
   g.name = 'skyways-car-cockpit';
   const I = spec.interior, E = spec.eye, Wc = spec.wheelCentre;
+  const wy = Math.min(Wc.y, E.y - 0.27); // (the wheel's rim stays under the eye line: the view ahead is over it)
   const box = (w: number, h: number, d: number, x: number, y: number, z: number, m: THREE.Material, parent: THREE.Object3D = g) => {
     const b = new THREE.Mesh(S.box, m); b.scale.set(w, h, d); b.position.set(x, y, z); parent.add(b); return b;
   };
   // the dash: across the cabin in front of the wheel, its top a little above the wheel's centre
-  const dashTop = Wc.y + 0.08, dashFront = Math.max(I.z0, Wc.z - 0.6), dashBack = Wc.z - 0.12;
+  const dashTop = wy + 0.08, dashFront = Math.max(I.z0, Wc.z - 0.6), dashBack = Wc.z - 0.12;
   box(I.x1 - I.x0 - 0.04, 0.24, dashBack - dashFront, (I.x0 + I.x1) / 2, dashTop - 0.12, (dashFront + dashBack) / 2, S.dash).name = 'skyways-car-dash';
   // the steering wheel: tilted toward the driver; the spin pivot turns with the front wheels (a spoke shows the turn)
   const tilt = new THREE.Group();
   tilt.name = 'skyways-car-steering';
-  tilt.position.set(Wc.x, Wc.y, Wc.z);
+  tilt.position.set(Wc.x, wy, Wc.z);
   tilt.rotation.x = -0.35;
   g.add(tilt);
   const spin = new THREE.Group();
