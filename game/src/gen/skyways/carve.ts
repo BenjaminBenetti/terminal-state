@@ -24,6 +24,7 @@ import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type SkywaysFrame} from './frame';
 import type {SkywaysAddonId} from './skywaysTypes';
+import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
@@ -680,9 +681,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
             if (!k.solid(gap, level)) continue;
             const name = rng.pick(RAMEN_NAMES);
             const dining = k.addArea(r, 'room', 'eatery', ceilOf(level, CLEAR.shop), P.id, {...opt(level), label: name, publicSpace: true});
-            dining.purpose = 'ramen';
+            dining.purpose = SKYWAYS_RAMEN_PURPOSE.dining;
             const kitchen = k.addArea(kr, 'room', 'eatery', ceilOf(level, CLEAR.back), dining.id, {...opt(level), label: `${name} kitchen`, publicSpace: false});
-            kitchen.purpose = 'ramen-kitchen';
+            kitchen.purpose = SKYWAYS_RAMEN_PURPOSE.kitchen;
             k.carveDoor(gap, P, dining, CLEAR.door + 0.2, false);
             // the kitchen door through the shared side wall (one cell between the two rooms)
             const side2: Side = s === 'N' || s === 'S' ? 'E' : 'S';

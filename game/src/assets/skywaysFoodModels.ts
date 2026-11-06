@@ -13,6 +13,8 @@
 // Frame of every file: metres, +Y up, front +Z, grounded (min y = 0), centred on x / z. `bytes` = the lazy-library / boot progress
 // weight (an estimate until the cooked files are measured; the loader never trusts it for anything else).
 
+import {SKYWAYS_PROP_MODELS} from './skywaysProps.generated';
+
 export type SkywaysFoodModelKey =
   | 'item_ramen_bowl' | 'item_ramen_chashu' | 'item_sushi_bento' | 'item_bubble_tea'
   | 'skyways_sushi_mascot' | 'skyways_stock_pot' | 'skyways_saucepan' | 'skyways_commercial_range';
@@ -43,7 +45,7 @@ const NOMINAL: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = {
 };
 
 /** The models (url + real bounds). The swap point for ASSET-A's measured SKYWAYS_PROP_MODELS (see the header). */
-export const SKYWAYS_FOOD_MODELS: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = NOMINAL;
+export const SKYWAYS_FOOD_MODELS: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = {...NOMINAL, ...SKYWAYS_PROP_MODELS}; // (ASSET-A's measured bounds, merged)
 
 /** Progress weights (bytes: ASSET-A's cooked files as first built, 2026-11-06 — a weight only, nothing else trusts it). */
 export const SKYWAYS_FOOD_MODEL_BYTES: Readonly<Record<SkywaysFoodModelKey, number>> = {
