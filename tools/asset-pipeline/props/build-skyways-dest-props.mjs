@@ -99,7 +99,7 @@ const ROWS = [
     front: 'front +Z = the seat (the backrest is at -Z; the cup holder on the -X arm)'},
   {n: 316, id: 'mu-bins', axis: 'w', m: 1.8, tris: 6000, tier: 'fixture', planned: [1.8, 0.95, 0.75], measure: ['bins'], role: 'music: record bin rack (twelve open compartments in two rows on a slope)',
     front: 'front +Z = the browsing side (the compartments slope up from the front lip to the back rim; the closed back panel is at -Z)'},
-  {n: 317, id: 'mu-crate', axis: 'w', m: 0.36, tris: 3000, tier: 'small', planned: [0.36, 0.35, 0.36], role: 'music: crate of records', front: null},
+  {n: 348, id: 'mu-crate', axis: 'w', m: 0.36, tris: 3000, tier: 'small', planned: [0.36, 0.35, 0.36], role: 'music: crate of records', front: null},
   {n: 318, id: 'mu-guitar', axis: 'h', m: 1.05, tris: 6000, tier: 'small', planned: [0.4, 1.05, 0.45], role: 'music: electric guitar on a floor stand',
     front: 'front +Z = the guitar top (pickups / controls face +Z)'},
   {n: 319, id: 'mu-piano', axis: 'w', m: 1.5, tris: 10000, tier: 'fixture', planned: [1.5, 1.25, 0.6], role: 'music: upright piano',
