@@ -38,10 +38,11 @@ const SPEC: [string, 'h' | 'w' | 'l' | 'd', number, number, Tier][] = [
   ['hk-net', 'w', 1.83, 6000, 'fixture'], ['hk-goalie', 'h', 1.95, 12000, 'fixture'],
 ];
 /** The lead's fit decisions replacing the brief's axis (DECISIONS.md): fountain under a 4.3 m court, display table by height, the
- * vitrine re-scoped to its airship display model (by length). */
-const FIT: Record<string, ['h' | 'w' | 'l' | 'd', number]> = {'lm-fountain': ['w', 4.4], 'bk-table': ['h', 1.1], 'hb-vitrine': ['l', 0.95]};
-/** The lead-approved depth squashes (z, metres): the canoe's beam, the amp's depth. */
-const SQUASH: Record<string, number> = {'of-canoe': 0.95, 'mu-amp': 0.4};
+ * vitrine re-scoped to its airship display model (by length), the dining table and the staging bench by their top (topY). */
+const FIT: Record<string, ['h' | 'w' | 'l' | 'd' | 'top', number]> = {'lm-fountain': ['w', 4.4], 'bk-table': ['h', 1.1], 'hb-vitrine': ['l', 0.95],
+  'ds-table': ['top', 0.75], 'gd-bench': ['top', 0.75]};
+/** The lead-approved depth squashes (z, metres): the canoe's beam, the amp's and the pinball cabinet's depth. */
+const SQUASH: Record<string, number> = {'of-canoe': 0.95, 'mu-amp': 0.4, 'ar-pinball': 1.45};
 /** Map sizes [base colour, metallicRoughness, normal] px by tier (the brief). */
 const TEX: Record<Tier, [number, number, number]> = {hero: [2048, 1024, 1024], fixture: [1024, 512, 512], small: [512, 512, 512]};
 const AXIS = {h: 1, w: 0, l: 0, d: 2} as const;
@@ -115,7 +116,8 @@ describe('Skyways destination kit (lane KITS)', () => {
       expect(Math.abs(b.min[0] + b.max[0])).toBeLessThan(1e-3);
       expect(Math.abs(b.min[2] + b.max[2])).toBeLessThan(1e-3);
       const [fitAxis, fitM] = FIT[id] ?? [axis, m];
-      expect(dims[AXIS[fitAxis]]).toBeCloseTo(fitM, 3);
+      if (fitAxis === 'top') expect(Math.abs(reg.topY! - fitM)).toBeLessThanOrEqual(0.01);
+      else expect(dims[AXIS[fitAxis]]).toBeCloseTo(fitM, 3);
       if (FIT[id]) expect(prov.fit).toMatchObject({axis: fitAxis, size: fitM, override: {briefAxis: axis, briefSize: m}});
       if (fitAxis === 'l') expect(dims[0]).toBeGreaterThan(dims[2]);
       if (SQUASH[id]) { expect(dims[2]).toBeCloseTo(SQUASH[id], 3); expect(prov.fit.squash).toMatchObject({axis: 'z', to: SQUASH[id]}); } else expect(prov.fit.squash).toBeUndefined();
@@ -149,9 +151,8 @@ describe('Skyways destination kit (lane KITS)', () => {
       expect(reg.tris).toBe(tris);
       // provenance binds these bytes: Meshy T2.5 task, the ledger lines, Codex concept + raw sha256; no URLs / signatures / tokens / local paths
       expect(prov).toMatchObject({id: `skyways-d-${id}`, key, piece: {id, tier, size: {axis, m}, budget}, output: {url, bytes: bytes.length, sha256: sha(bytes), triangles: tris}});
-      expect(typeof prov.accepted).toBe('boolean');
-      if (prov.accepted) expect(prov.meshy.ledger.lines.accept).toBeGreaterThan(prov.meshy.ledger.lines.raw);
-      else expect(prov.meshy.ledger.lines.accept).toBeNull();
+      expect(prov.accepted).toBe(true);
+      expect(prov.meshy.ledger.lines.accept).toBeGreaterThan(prov.meshy.ledger.lines.raw);
       expect(prov.meshy.task).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
       expect(prov.meshy).toMatchObject({status: 'SUCCEEDED', consumedCredits: 15, request: {ai_model: 'meshy-t2.5', model_type: 'smart-topology', enable_pbr: true, texture_resolution: '2k'}});
       expect(prov.meshy.ledger.lines.raw).toBeGreaterThan(prov.meshy.ledger.lines.status);

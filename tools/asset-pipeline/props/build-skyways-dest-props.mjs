@@ -133,11 +133,13 @@ const ROWS = [
     front: 'front +Z = the seat opening (the shell back is at -Z)'},
   {n: 328, id: 'ds-lamp', axis: 'h', m: 2.1, tris: 5000, tier: 'fixture', planned: [1.7, 2.1, 0.45], role: 'design: arc floor lamp (marble base, dome shade)',
     front: 'front +Z = the arc seen side-on; the arc spans X: the SHADE at -X, the marble base at +X'},
-  {n: 329, id: 'ds-table', axis: 'w', m: 2.2, tris: 6000, tier: 'fixture', planned: [2.2, 0.75, 1.0], measure: ['topY'], role: 'design: live-edge slab table on black trestle legs',
+  {n: 329, id: 'ds-table', axis: 'w', m: 2.2, tris: 6000, tier: 'fixture', planned: [2.84, 0.75, 1.2], measure: ['topY'],
+    fit: {axis: 'top', m: 0.75, why: `${LEAD}: fit by its TOP = 0.75 m, a dining height (the brief's w 2.2 m left the top at 0.57 m; ~2.84 m long)`}, role: 'design: live-edge slab table on black trestle legs',
     front: 'front +Z = the concept view (a long side)'},
   {n: 330, id: 'ds-bed', axis: 'l', m: 2.2, tris: 10000, tier: 'fixture', planned: [2.2, 1.1, 1.7], turn: 90, measure: ['topY'], role: 'design: showroom bed (upholstered headboard, pillows, duvet, throw)',
     front: 'turned +90 deg about Y (Meshy delivered the length along Z, headboard at -Z): long axis X, HEADBOARD at -X, the open long side faces +Z'},
-  {n: 331, id: 'gd-bench', axis: 'w', m: 2.0, tris: 6000, tier: 'fixture', planned: [2.0, 0.8, 0.7], measure: ['topY'], role: 'garden: slatted bench on a galvanised pipe frame',
+  {n: 331, id: 'gd-bench', axis: 'w', m: 2.0, tris: 6000, tier: 'fixture', planned: [3.0, 0.75, 1.05], measure: ['topY'],
+    fit: {axis: 'top', m: 0.75, why: `${LEAD}: fit by its TOP = 0.75 m, a plant-staging height (the brief's w 2.0 m left the top at 0.50 m; ~3.0 m long)`}, role: 'garden: slatted bench on a galvanised pipe frame',
     front: 'front +Z = a long side (the same both sides)'},
   {n: 332, id: 'gd-palm', axis: 'h', m: 2.2, tris: 10000, tier: 'fixture', planned: [1.4, 2.2, 1.4], role: 'garden: kentia palm in a blue glazed pot',
     front: 'front +Z = the concept view (round pot)'},
@@ -145,7 +147,8 @@ const ROWS = [
     front: 'front +Z = the concept view (round pot)'},
   {n: 334, id: 'gd-barrow', axis: 'l', m: 1.5, tris: 6000, tier: 'fixture', planned: [1.5, 0.7, 0.65], role: 'garden: green steel wheelbarrow',
     front: 'front +Z = the concept side elevation; long axis X: the WHEEL at -X, the handles at +X'},
-  {n: 335, id: 'ar-pinball', axis: 'h', m: 1.9, tris: 15000, tier: 'fixture', planned: [0.75, 1.9, 1.4], role: 'arcade: space-themed pinball machine',
+  {n: 335, id: 'ar-pinball', axis: 'h', m: 1.9, tris: 15000, tier: 'fixture', planned: [0.75, 1.9, 1.4],
+    squash: {z: 1.45, why: `${LEAD}: Meshy's cabinet read 1.91 m deep at the 1.9 m height (a real machine ~1.4 m)`}, role: 'arcade: space-themed pinball machine',
     front: 'front +Z = the player end (coin door, flipper buttons; the backbox is at -Z)'},
   {n: 336, id: 'ar-airhockey', axis: 'l', m: 2.1, tris: 8000, tier: 'fixture', planned: [2.1, 0.85, 1.2], measure: ['topY'], role: 'arcade: air hockey table (two mallets and a puck on the rink)',
     front: 'front +Z = a long side; long axis X (the goals at -X / +X)'},
@@ -589,7 +592,13 @@ for (const row of ROWS) {
   if (row.axis === 'l' && ext[0] < ext[2]) throw new Error(`${row.id}: an 'l' piece must be long along X after the turn`);
   const fitAxis = row.fit?.axis ?? row.axis, fitM = row.fit?.m ?? row.m;
   const k = {h: 1, w: 0, l: 0, d: 2}[fitAxis];
-  const s = fitM / ext[k];
+  // 'top' = fit by the top surface: the broadest flat top above 40 % of the height (top-down height map, 1/400 of the footprint)
+  let topFit = null;
+  if (fitAxis === 'top') {
+    const hm = heightMap(P0, low.I, Math.max(ext[0], ext[2]) / 400), pl = plateau(hm, i => hm.H[i] > b.min[1] + 0.4 * ext[1]);
+    topFit = {sourceTop: r6(pl.y - b.min[1]), method: 'broadest 2 cm-equivalent window of a top-down height map (1/400 of the footprint) above 40 % of the height; median'};
+  }
+  const s = topFit ? fitM / topFit.sourceTop : fitM / ext[k];
   const tx = -s * (b.min[0] + b.max[0]) / 2, ty = -s * b.min[1], tz = -s * (b.min[2] + b.max[2]) / 2;
   const P = new Float32Array(P0.length);
   for (let i = 0; i < P.length; i += 3) { P[i] = s * P0[i] + tx; P[i + 1] = s * P0[i + 1] + ty; P[i + 2] = s * P0[i + 2] + tz; }
@@ -604,8 +613,8 @@ for (const row of ROWS) {
     }
     squash = {axis: 'z', to: row.squash.z, from: r4(s * ext[2]), factor: r6(kz), normals: 'inverse-transpose (n.z / factor), renormalised', why: row.squash.why};
   }
-  const fit = {axis: fitAxis, kind: {h: 'the full height (y)', w: 'the full width (x)', l: 'the long axis (x)', d: 'the full depth (z)'}[fitAxis], size: fitM, scale: r6(s),
-    ...(row.fit ? {override: {briefAxis: row.axis, briefSize: row.m, why: row.fit.why}} : {}), ...(squash ? {squash} : {}),
+  const fit = {axis: fitAxis, kind: {h: 'the full height (y)', w: 'the full width (x)', l: 'the long axis (x)', d: 'the full depth (z)', top: 'the top surface height (topY)'}[fitAxis], size: fitM, scale: r6(s),
+    ...(topFit ? {top: topFit} : {}), ...(row.fit ? {override: {briefAxis: row.axis, briefSize: row.m, why: row.fit.why}} : {}), ...(squash ? {squash} : {}),
     translate: [tx, ty, tz].map(r6), turnDegY: turn, measuredOn: 'the welded (and simplified) mesh that ships', rotation: turn ? `${turn} deg about +Y (exact quarter turn of positions and normals)` : 'none (Meshy native front +Z kept)'};
   // ---- write into the source document (its material + PBR maps kept; maps re-encoded / downsized only)
   const {doc, prim, mat} = src;
@@ -633,7 +642,7 @@ for (const row of ROWS) {
   const bb = getBounds(cr.getDefaultScene() ?? cr.listScenes()[0]);
   const dims = [0, 1, 2].map(q => r4(bb.max[q] - bb.min[q]));
   if (Math.abs(bb.min[1]) > 1e-4 || Math.abs(bb.min[0] + bb.max[0]) > 1e-3 || Math.abs(bb.min[2] + bb.max[2]) > 1e-3) throw new Error(`${id}: not grounded / centred`);
-  if (Math.abs(dims[k] - fitM) > 1e-3) throw new Error(`${id}: size axis ${fitAxis} is ${dims[k]}, not ${fitM}`);
+  if (!topFit && Math.abs(dims[k] - fitM) > 1e-3) throw new Error(`${id}: size axis ${fitAxis} is ${dims[k]}, not ${fitM}`);
   if (row.squash && Math.abs(dims[2] - row.squash.z) > 1e-3) throw new Error(`${id}: squashed depth is ${dims[2]}, not ${row.squash.z}`);
   const cp = cr.listMeshes()[0].listPrimitives()[0];
   const tris = cp.getIndices().getCount() / 3;
@@ -653,6 +662,7 @@ for (const row of ROWS) {
         ySpread: pl.ySpread.map(r4), x: pl.x.map(r4), z: pl.z.map(r4)}});
     } else throw new Error(`${id}: unknown measure ${ms}`);
   }
+  if (topFit && !(Math.abs(measures.topY - fitM) <= 0.01)) throw new Error(`${id}: top-fitted, but the shipped top is ${measures.topY} m, not ${fitM} m (± 1 cm)`);
   const mats = cr.listMaterials();
   const textures = cr.listTextures().map(t => ({slot: [['baseColor', mats[0].getBaseColorTexture()], ['metallicRoughness', mats[0].getMetallicRoughnessTexture()], ['normal', mats[0].getNormalTexture()]].find(([, x]) => x === t)?.[0] ?? 'unused',
     size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().byteLength, sha256: sha(t.getImage())}));

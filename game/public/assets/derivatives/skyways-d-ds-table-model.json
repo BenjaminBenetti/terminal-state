@@ -18,7 +18,7 @@
   "userGenerationApprovalSha256": "fff848e763a671bbab6c963cd8078a7485846f7fdb02186f6e1cb33aa33816d1",
   "summary": "the user's Skyways destinations generation approval: a NEW 895-credit Meshy T2.5 ledger (caps 59 attempts / 96 paid POSTs); Codex concept images uncapped but recorded; first acceptable result per piece"
  },
- "accepted": false,
+ "accepted": true,
  "route": "Codex native image_gen INITIAL concept image (straight-on elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded / downsized only; no re-texture, projection or hand-painted replacement)",
  "conditioningImage": {
   "codexCall": 329,
@@ -52,13 +52,19 @@
     "posted": 239,
     "status": 291,
     "raw": 292,
-    "accept": null
+    "accept": 345
    },
    "codexLines": {
     "intent": 128,
     "result": 151
    },
-   "accept": null
+   "accept": {
+    "event": "accept",
+    "kind": null,
+    "entry": "first acceptable result (qa/kits/ACCEPT-b3a/b3b/retakes.md); no further attempt",
+    "see": null,
+    "t": "2026-11-06T17:54:02.638302Z"
+   }
   }
  },
  "source": {
@@ -127,35 +133,44 @@
  "output": {
   "url": "assets/models/skyways-d-ds-table.glb",
   "file": "game/public/assets/models/skyways-d-ds-table.glb",
-  "bytes": 534836,
-  "sha256": "130b5147a8050d89ae211bf816e7ca62c6d5a4da63a8473cddada177a5df2878",
+  "bytes": 534832,
+  "sha256": "906b972e0f311769b18461203aa699c1a46fc6bc0bdd38f41210dc67f7edf2b7",
   "triangles": 5937,
   "vertices": 5188,
   "dims": [
-   2.2,
-   0.581,
-   0.93
+   2.8866,
+   0.7623,
+   1.2202
   ],
   "min": [
-   -1.1,
+   -1.443298,
    0,
-   -0.464995
+   -0.610115
   ],
   "max": [
-   1.1,
-   0.580965,
-   0.464995
+   1.443298,
+   0.762277,
+   0.610115
   ]
  },
  "fit": {
-  "axis": "w",
-  "kind": "the full width (x)",
-  "size": 2.2,
-  "scale": 2.305836,
+  "axis": "top",
+  "kind": "the top surface height (topY)",
+  "size": 0.75,
+  "scale": 3.025462,
+  "top": {
+   "sourceTop": 0.247896,
+   "method": "broadest 2 cm-equivalent window of a top-down height map (1/400 of the footprint) above 40 % of the height; median"
+  },
+  "override": {
+   "briefAxis": "w",
+   "briefSize": 2.2,
+   "why": "lead decision (task qa/kits/DECISIONS.md, recorded in the ledger): fit by its TOP = 0.75 m, a dining height (the brief's w 2.2 m left the top at 0.57 m; ~2.84 m long)"
+  },
   "translate": [
-   0.001689,
-   0.286542,
-   0.002815
+   0.002216,
+   0.375968,
+   0.003694
   ],
   "turnDegY": 0,
   "measuredOn": "the welded (and simplified) mesh that ships",
@@ -173,21 +188,21 @@
   "budget": 6000
  },
  "measurements": {
-  "topY": 0.5716,
+  "topY": 0.7501,
   "top": {
    "method": "broadest 2 cm height window of a 1 cm top-down height map above 40 % of the height; median",
-   "areaM2": 1.9375,
+   "areaM2": 3.2775,
    "ySpread": [
-    0.5592,
-    0.5808
+    0.7384,
+    0.7604
    ],
    "x": [
-    -1.095,
-    1.095
+    -1.4383,
+    1.4317
    ],
    "z": [
-    -0.46,
-    0.44
+    -0.6051,
+    0.5749
    ]
   }
  },

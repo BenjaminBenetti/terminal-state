@@ -18,7 +18,7 @@
   "userGenerationApprovalSha256": "fff848e763a671bbab6c963cd8078a7485846f7fdb02186f6e1cb33aa33816d1",
   "summary": "the user's Skyways destinations generation approval: a NEW 895-credit Meshy T2.5 ledger (caps 59 attempts / 96 paid POSTs); Codex concept images uncapped but recorded; first acceptable result per piece"
  },
- "accepted": false,
+ "accepted": true,
  "route": "Codex native image_gen INITIAL concept image (straight-on elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded / downsized only; no re-texture, projection or hand-painted replacement)",
  "conditioningImage": {
   "codexCall": 335,
@@ -52,13 +52,19 @@
     "posted": 245,
     "status": 303,
     "raw": 304,
-    "accept": null
+    "accept": 351
    },
    "codexLines": {
     "intent": 215,
     "result": 216
    },
-   "accept": null
+   "accept": {
+    "event": "accept",
+    "kind": null,
+    "entry": "first acceptable result (qa/kits/ACCEPT-b3a/b3b/retakes.md); no further attempt",
+    "see": null,
+    "t": "2026-11-06T17:54:03.162002Z"
+   }
   }
  },
  "source": {
@@ -128,23 +134,23 @@
   "url": "assets/models/skyways-d-ar-pinball.glb",
   "file": "game/public/assets/models/skyways-d-ar-pinball.glb",
   "bytes": 791844,
-  "sha256": "14fc17b5a7d0c2c3447df2ecfb8a686955e854d7df699f16b825d5d5a956213d",
+  "sha256": "ef82b94eb30eac9407452a7c41668c6bad82a5d67b8a900514fb73aa6b05e328",
   "triangles": 9044,
   "vertices": 11484,
   "dims": [
    0.8305,
    1.9,
-   1.9088
+   1.45
   ],
   "min": [
    -0.415229,
    0,
-   -0.954391
+   -0.725
   ],
   "max": [
    0.415229,
    1.9,
-   0.954391
+   0.725
   ]
  },
  "fit": {
@@ -152,6 +158,14 @@
   "kind": "the full height (y)",
   "size": 1.9,
   "scale": 1.998561,
+  "squash": {
+   "axis": "z",
+   "to": 1.45,
+   "from": 1.9088,
+   "factor": 0.759647,
+   "normals": "inverse-transpose (n.z / factor), renormalised",
+   "why": "lead decision (task qa/kits/DECISIONS.md, recorded in the ledger): Meshy's cabinet read 1.91 m deep at the 1.9 m height (a real machine ~1.4 m)"
+  },
   "translate": [
    0,
    0.95,

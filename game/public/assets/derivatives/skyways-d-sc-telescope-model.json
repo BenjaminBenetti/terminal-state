@@ -18,7 +18,7 @@
   "userGenerationApprovalSha256": "fff848e763a671bbab6c963cd8078a7485846f7fdb02186f6e1cb33aa33816d1",
   "summary": "the user's Skyways destinations generation approval: a NEW 895-credit Meshy T2.5 ledger (caps 59 attempts / 96 paid POSTs); Codex concept images uncapped but recorded; first acceptable result per piece"
  },
- "accepted": false,
+ "accepted": true,
  "route": "Codex native image_gen INITIAL concept image (straight-on elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded / downsized only; no re-texture, projection or hand-painted replacement)",
  "conditioningImage": {
   "codexCall": 341,
@@ -52,13 +52,19 @@
     "posted": 275,
     "status": 324,
     "raw": 325,
-    "accept": null
+    "accept": 357
    },
    "codexLines": {
     "intent": 251,
     "result": 252
    },
-   "accept": null
+   "accept": {
+    "event": "accept",
+    "kind": null,
+    "entry": "first acceptable result (qa/kits/ACCEPT-b3a/b3b/retakes.md); no further attempt",
+    "see": null,
+    "t": "2026-11-06T17:54:03.635162Z"
+   }
   }
  },
  "source": {
