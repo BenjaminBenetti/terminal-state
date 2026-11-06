@@ -15,7 +15,8 @@ import * as THREE from 'three';
 import {beforeAll, describe, expect, it} from 'vitest';
 import fs from 'node:fs';
 import {installCanvasShim} from './helpers/canvas2d';
-import {fakeEnvTextures} from './helpers/openablesFixture';
+import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
+import {buildBoth} from './helpers/tslShaders';
 import {CELL, FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {LEVELS} from '../src/levels/registry';
@@ -27,7 +28,7 @@ import {LOWER, OfficeSurfaceMaterial} from '../src/world/officeArch';
 import {SkywaysArch, skywaysAreaClass, type SkywaysClass} from '../src/world/skywaysArch';
 import {
   SKYWAYS_EXT, WRECK_KEYS, bridgeOuter, buildSkywaysExterior, groundRects, installSkywaysExterior, planSkywaysExterior, subtractRects,
-  type SkywaysExteriorHost, type SkywaysExteriorPlan,
+  type SkywaysExteriorHost, type SkywaysExteriorPlan, type WreckKey,
 } from '../src/world/skywaysExterior';
 import {planSkywaysWindows} from '../src/world/skywaysWindows';
 import {EXT_U, EXTERIOR} from '../src/world/exterior';
@@ -431,4 +432,66 @@ describe('skyways exterior: build + runtime', () => {
     expect(host.camera.far).toBe(70);
     void CELL;
   });
+});
+
+describe('skyways: real assets + shaders', () => {
+  it('the delivered wreck GLBs (textures stripped): nose +X, grounded, centred; instanced wrecks stand on the road at street level', async () => {
+    const models = {} as Record<WreckKey, GLTF>;
+    for (const k of WRECK_KEYS) models[k] = await loadStripped(SKYWAYS_PROP_MODELS[k].url);
+    for (const k of WRECK_KEYS) {
+      const b = new THREE.Box3().setFromObject(models[k].scene), m = SKYWAYS_PROP_MODELS[k];
+      expect(b.min.y, k).toBeCloseTo(0, 2);
+      expect(b.max.x - b.min.x, k).toBeCloseTo(m.w, 1); // long along X
+      expect(b.max.z - b.min.z, k).toBeCloseTo(m.d, 1);
+      expect(Math.abs(b.max.x + b.min.x) / 2, k).toBeLessThan(0.05);
+    }
+    const {L} = world(SEEDS[0]);
+    const info = L.skyways!, plan = planSkywaysExterior(L);
+    const v = buildSkywaysExterior(plan, {wrecks: models});
+    expect(v.stats.wreckModels).toBe(new Set(plan.wrecks.map(q => q.key)).size);
+    const walks = info.buildings.map(b => ({x0: b.rect.x0 - SKYWAYS_EXT.sidewalk, z0: b.rect.z0 - SKYWAYS_EXT.sidewalk, x1: b.rect.x1 + SKYWAYS_EXT.sidewalk, z1: b.rect.z1 + SKYWAYS_EXT.sidewalk}));
+    const m4 = new THREE.Matrix4(), p = new THREE.Vector3();
+    let corners = 0;
+    for (const im of v.instanced.filter(q => q.name.startsWith('skyways-ext-wreck-'))) {
+      im.geometry.computeBoundingBox();
+      const bb = im.geometry.boundingBox!;
+      for (let i = 0; i < im.count; i++) {
+        im.getMatrixAt(i, m4);
+        let minY = Infinity;
+        for (const [x, z] of [[bb.min.x, bb.min.z], [bb.max.x, bb.min.z], [bb.min.x, bb.max.z], [bb.max.x, bb.max.z]]) {
+          p.set(x, bb.min.y, z).applyMatrix4(m4);
+          minY = Math.min(minY, p.y);
+          corners++;
+          expect(walks.some(r => p.x > r.x0 + 0.05 && p.x < r.x1 - 0.05 && p.z > r.z0 + 0.05 && p.z < r.z1 - 0.05), `${im.name} corner on a sidewalk`).toBe(false);
+        }
+        expect(minY).toBeGreaterThan(info.groundY - 0.3); // grounded on the street (part bounds: within the model's own min y)
+      }
+    }
+    expect(corners).toBeGreaterThan(0);
+    for (const g of v.geometries) g.dispose();
+  }, 60_000);
+
+  it('every skyways surface, the atrium roof and the exterior pieces build cleanly on both backends (WGSL + GLSL)', () => {
+    const {L, w} = world(SEEDS[0]);
+    const lights = () => [new THREE.PointLight(0xffffff, 1, 8)];
+    const clean = (o: THREE.Object3D, what: string) => { for (const sh of buildBoth(o, {lights: lights()})) expect(sh.errors, `${what} (${sh.backend})`).toEqual([]); };
+    const seen = new Set<THREE.Material>();
+    w.group.traverse(o => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh || seen.has(m.material as THREE.Material)) return;
+      const mat = m.material as THREE.Material;
+      if (!/^skyways-/.test(mat.name ?? '') && !/^skyways-atrium/.test(m.name)) return;
+      seen.add(mat);
+      clean(new THREE.Mesh(m.geometry, mat), m.name);
+    });
+    expect(seen.size).toBeGreaterThanOrEqual(10);
+    const v = buildSkywaysExterior(planSkywaysExterior(L), {wrecks: {[WRECK_KEYS[0]]: fakeWreck()}});
+    for (const n of ['skyways-ext-ground', 'skyways-ext-shells', 'skyways-ext-bridges', 'skyways-ext-bridge-glass']) {
+      const m = v.root.getObjectByName(n) as THREE.Mesh;
+      clean(new THREE.Mesh(m.geometry, m.material as THREE.Material), n);
+    }
+    const wr = v.instanced.find(q => q.name.startsWith('skyways-ext-wreck-'))!;
+    clean(wr, wr.name);
+    for (const g of v.geometries) g.dispose();
+  }, 120_000);
 });
