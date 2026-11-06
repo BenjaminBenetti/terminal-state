@@ -312,6 +312,27 @@ MALL_PHYS (spread into OPENABLE_AUDIT / PROP_PHYSICS_AUDIT).
 - Tests: `tests/mall-lingerie-store.test.ts` (rooms enclosed by walls + one framed doorway each, validation clean, enemy paths, the floor's
   racks / dressed mannequins / stock), `tests/lingerie-mannequin-fit.test.ts` (lane FIT), `tests/mall-lingerie-spawns.test.ts` (lane CONTEXT).
 
+### The Skyways ramen restaurant (task studio-skyways-level-20261106-054448, lane FOOD)
+`gen/skyways/ramen.ts` dressSkywaysRamen dresses the base shop pool's ramen bar (a carved dining room + optional kitchen) with EXISTING
+kinds — a `shopCounter` run (island with a staff aisle, else against the back wall), a glass-door `shopCooler`, the mall café sets
+(`cafeBistroTable` + `cafeChair`, now and then a `foodCourtTableSet`), a `shopBackbar`, the kitchen `fridge`, open `shelf` — every holder
+keyed to the `skyways-ramen*` purposes (named `items/lootTables.ts` RAMEN_* tables: exact, one or two lots, often none). Its EDIBLE food
+(ramen / chashu ramen / sushi bento / bubble tea: ordinary consumables, `items/skywaysFood.ts`) is those finite lots plus 2-4 loose
+pickups on the café tables / the counter's pass (the counter's span under a pickup or the mascot is cut out of its loot surface). Four
+NEW kinds draw lane ASSET-A's derivatives of the user's community-supplied sources (front +Z; maps kept; `gen/skyways/kitchenKinds.ts`
+holds their classification, spread into both audits):
+
+| Kind | What | Openables audit | Physics audit | Scale check (`scale-check.mjs --prop <glb>`, viewed beside `lastshift`) |
+|---|---|---|---|---|
+| `skywaysRange` | commercial gas range: 6 burners + griddle, two oven doors, backguard + high shelf | `exception`: the oven doors are the appliance's (cold, empty ovens: not storage) | static `anchored` (~250 kg, hard-piped) | 1.52 × 1.40 × 0.89 m; grounded (4 feet); cooktop plateau 0.915 m = the collision / host top (the thin backguard / 1.40 m shelf above it are drawn only) |
+| `skywaysStockPot` | 20 l stainless stock pot with its lid, on the range | `exception`: cookware, the lid is part of its one mesh | **dynamic** 3.5 kg cylinder, `pad` contact, `onHost` (the range's cooktop) | 0.42 × 0.27 × 0.32 m (handles / lid knob incl.); grounded (one base) |
+| `skywaysSaucepan` | rusty steel saucepan, on the range | `none` | **dynamic** 1.3 kg box, `pad`, `onHost` | 0.46 × 0.10 × 0.22 m (handle incl.); grounded |
+| `skywaysSushiMascot` | kawaii sushi display figurine, on the service counter | `none` | **dynamic** 0.8 kg box, `pad`, `onHost` (the counter top) | 0.51 × 0.32 × 0.33 m (arms spread); grounded (feet) |
+
+- No baked loose clutter: the range / cookware / figurine models carry no food; the bowls, bento and cups are separate items.
+- Tests: `tests/skyways-food.test.ts` (registrations, both audits, purpose loot, the dresser on a synthetic carved restaurant — support,
+  overlap, finite pickups, frames — and the cookware / figurine going loose on their static host under fire).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

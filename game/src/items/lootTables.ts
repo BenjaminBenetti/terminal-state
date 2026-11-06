@@ -528,7 +528,7 @@ export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['wate
  * ramenPurposes.ts; placed by gen/skyways/ramen.ts with that loot key). Its edible food lies where a ramen bar keeps it — bowls and bento
  * on the service counter's pass, bento / bowls in the kitchen fridge, bubble tea in the glass-door drinks cooler. EXACT (no scarcity
  * cut: the rows are the numbers), small and finite: one or two lots, often none — a restaurant is a treat, not a food fountain. A
- * level profile's 'countertop' / 'cold' slot scaling still applies. The loose table pickups are the dresser's own (2-3 per restaurant).
+ * level profile's 'countertop' / 'cold' slot scaling still applies. The loose pickups are the dresser's own (2-4 per restaurant: RAMEN_LOOSE_ROWS).
  */
 export const RAMEN_COUNTER: LootSpec = {items: [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [SUSHI_BENTO, 1], [BUBBLE_TEA, 0.4]], lots: [1, 2], empty: 0.35, exact: true};
 export const RAMEN_COOLER: LootSpec = {items: [[BUBBLE_TEA, 2.4], ['water', 0.8], ['cola', 0.5]], lots: [1, 2], empty: 0.3, exact: true};

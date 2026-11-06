@@ -18,6 +18,13 @@
 //    pot's lid is part of its one mesh: cookware, not storage — an exception with its reason);
 //  - sushi mascot: a ~0.8 kg resin display figurine standing on the service counter (on-host decor) — dynamic like the pots.
 // No loose items are baked into any model (rule 4): the bowls, bento and cups are separate item pickups / holder lots.
+//
+// Scale (ASSET-A's cooked files rendered beside a runtime zombie: tools/asset-pipeline/props/scale-check.mjs --prop <glb>, 2026-11-06,
+// viewed; uniform runtime fit k ~ 1):
+//  - skywaysRange        1.52 x 1.40 x 0.89 m, grounded on 4 feet; cooktop plateau 0.915 m (= the collision / host top), high shelf 1.40 m;
+//  - skywaysStockPot     0.42 x 0.27 x 0.32 m (handles, lid knob), grounded on one base;
+//  - skywaysSaucepan     0.46 x 0.10 x 0.22 m (handle), grounded;
+//  - skywaysSushiMascot  0.51 x 0.32 x 0.33 m (arms spread), grounded on its feet.
 
 import type {PropDef} from '../props';
 import type {DamageClass, PhysMat, StaticWhy} from '../../damage/materials';
