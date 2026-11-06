@@ -10,6 +10,10 @@ import {skywaysIssues} from '../src/gen/skyways/validate';
 import {skywaysAddonLevelOf, skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
 import type {SkywaysRect} from '../src/gen/skyways/skywaysTypes';
 import {CELL, FLOOR} from '../src/gen/grid';
+import {levelsOf} from '../src/gen/levels';
+import {PropIndex} from '../src/core/physics';
+import {NO_CONTROLS, stepCar, type CarBody, type CarControls} from '../src/world/skywaysCarPhysics';
+import {CAR_SPEC} from '../src/world/skywaysCarSpec';
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const cache = new Map<number, StationLayout>();
@@ -147,6 +151,50 @@ describe('Skyways layout variety: generated layouts stay coherent', () => {
         expect(l.storefronts.filter(sf => sf.hall === a.id && sf.food).length, `seed ${s}: counters round the court`).toBeGreaterThanOrEqual(3);
         expect(l.props.filter(p => p.area === a.id && p.kind === 'foodCourtTableSet').length, `seed ${s}: seating`).toBeGreaterThanOrEqual(2);
       }
+    }
+    expect(n).toBeGreaterThan(0);
+  });
+});
+
+describe('Skyways layout variety: the prize car leaves a foyer-approached hall', () => {
+  it('drives from its spot out of the hall, through the foyer and into the host lobby (real storey geometry)', () => {
+    let n = 0;
+    for (const s of SEEDS) {
+      const l = gen(s), ad = l.skyways!.addon;
+      if (ad.id !== 'prize-car' || ad.approach !== 'foyer') continue;
+      n++;
+      const hall = l.areas[ad.areas[0]], foyer = ad.areas.map(id => l.areas[id]).find(a => a.id !== hall.id && a.kind === 'concourse')!;
+      const door = l.doors.find(d => (d.a === hall.id && d.b === foyer.id) || (d.b === hall.id && d.a === foyer.id))!;
+      // the display's loose posts / board are shoved aside in play (dynamic props): the obstacle index keeps everything else
+      const levels = levelsOf(l), own = new Set(ad.areas);
+      const props = new PropIndex(levels, l.props.filter(p => !own.has(p.area)));
+      const w = {levels, props};
+      const dc = [(door.x + door.w / 2) * CELL, (door.y + door.h / 2) * CELL];
+      const [hx, hz] = centre(l, hall.id);
+      const ax = door.h === 1 ? [0, Math.sign(dc[1] - hz)] : [Math.sign(dc[0] - hx), 0]; // out of the hall
+      const deep = (door.h === 1 ? foyer.h : foyer.w) * CELL;
+      const way = [[dc[0] - ax[0] * 4, dc[1] - ax[1] * 4], [dc[0] + ax[0] * 2, dc[1] + ax[1] * 2], [dc[0] + ax[0] * (deep + 6), dc[1] + ax[1] * (deep + 6)]];
+      const car = ad.car!;
+      const b: CarBody = {x: car.x, y: car.y, z: car.z, yaw: car.yaw, v: 0, steer: 0, level: car.level, yawRate: 0};
+      const ctl: CarControls = {...NO_CONTROLS};
+      let wp = 0, stuck = 0, backing = 0;
+      for (let f = 0; f < 40 * 60 && wp < way.length; f++) {
+        const [tx, tz] = way[wp];
+        const dx = tx - b.x, dz = tz - b.z;
+        if (Math.hypot(dx, dz) < (wp === way.length - 1 ? 2.5 : 2.0)) { wp++; continue; }
+        const want = Math.atan2(-dx, -dz); // camera convention: forward = (-sin yaw, -cos yaw)
+        let err = want - b.yaw; while (err > Math.PI) err -= 2 * Math.PI; while (err < -Math.PI) err += 2 * Math.PI;
+        Object.assign(ctl, NO_CONTROLS);
+        if (backing > 0) { backing--; ctl.back = true; ctl.left = err < 0; ctl.right = err > 0; }
+        else { ctl.forward = Math.abs(err) < 1.4 || b.v < 1.5; ctl.left = err > 0.06; ctl.right = err < -0.06; if (Math.abs(b.v) > 4) ctl.forward = false; }
+        const r = stepCar(b, w, CAR_SPEC, ctl, 1 / 60);
+        stuck = r.moved < 0.002 ? stuck + 1 : 0;
+        if (stuck > 25 && !backing) { backing = 50; stuck = 0; }
+        expect(b.level).toBe(car.level);
+      }
+      expect(wp, `seed ${s}: reached the lobby beyond the foyer`).toBe(way.length);
+      const g = levels.grid(car.level), [cx, cy] = g.cellOf(b.x, b.z);
+      expect(own.has(g.area[g.idx(cx, cy)]), `seed ${s}: out of the add-on`).toBe(false);
     }
     expect(n).toBeGreaterThan(0);
   });
