@@ -387,3 +387,17 @@ on the build worker. Raw takes are kept outside Git.
 - `assets/audio/fuel-pour.mp3` — fuelPour (Sound Lab job 20261106T031213-437489893)
 - `assets/audio/fuel-cart-roll-loop.mp3` — cartRoll (Sound Lab job 20261106T031217-869772459)
 <!-- END train-fuel-audio-20261106 -->
+
+<!-- BEGIN skyways-car-audio-20261106 (skyways-car-build.mjs) -->
+## Skyways prize-car audio (engine idle / drive loops, tyre skid, door)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Skyways
+task's local Sound Lab allowance (4 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/skyways-car-build.mjs` (provenance: `assets/derivatives/audio-skyways-car.json`). Not reviewed by ear
+on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/car-engine-idle-loop.mp3` — carIdle (Sound Lab job 20261106T071502-1422195354)
+- `assets/audio/car-engine-drive-loop.mp3` — carDrive (Sound Lab job 20261106T071506-522183325)
+- `assets/audio/car-skid.mp3` — carSkid (Sound Lab job 20261106T071511-1842152276)
+- `assets/audio/car-door.mp3` — carDoor (Sound Lab job 20261106T071515-1534666901)
+<!-- END skyways-car-audio-20261106 -->

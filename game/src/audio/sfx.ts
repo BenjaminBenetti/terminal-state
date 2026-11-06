@@ -145,6 +145,7 @@ export const CUE_GAIN: Record<CueId, number> = {
   // stands in (a refused departure: clearly heard, under a gunshot); the pour is at the hands (between pickup and heal); the cart rumble
   // sits in the footsteps' level band at walking pace.
   engineStall: 0.55, fuelPour: 0.42, cartRoll: 0.4,
+  carIdle: 0.42, carDrive: 0.5, carSkid: 0.45, carDoor: 0.6, // (task studio-skyways-level-20261106-054448-01: the prize car)
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {

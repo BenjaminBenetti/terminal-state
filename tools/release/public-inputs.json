@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 45176,
-      "sha256": "989d4405400f91e07848bbf2785f6c9987e8b5ed914186dd7fe62be6bcfeee2a"
+      "bytes": 46300,
+      "sha256": "96b2f8fd2eb872f9f4399e457d0ba84e5bb4df92880ffede617de547d1053fbf"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1851,
-      "sha256": "66609466cb147d8e32a49adb35511a0fed0f67581ca6a88dc165c780b4471dfb"
+      "bytes": 2041,
+      "sha256": "1c631377982070e2515e0e7f2c1b6710bf9e9e1f267407990bdf05e23f3d13a1"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -92,6 +92,26 @@
       "path": "assets/audio/cabinet-open-02.mp3",
       "bytes": 21943,
       "sha256": "2a002263494a0295313ba44c8c9cd9d70a291ba2ecd320b836fa1ecaacc5c171"
+    },
+    {
+      "path": "assets/audio/car-door.mp3",
+      "bytes": 14210,
+      "sha256": "34fa395aab37cd4b5340aecf827377fa7ef6a7310f35231101e9bc5b1e5d2291"
+    },
+    {
+      "path": "assets/audio/car-engine-drive-loop.mp3",
+      "bytes": 21106,
+      "sha256": "3aec0dfccce66b8cc9e6029937b840eb65e5171e88ef47ddf623c67202f5b91b"
+    },
+    {
+      "path": "assets/audio/car-engine-idle-loop.mp3",
+      "bytes": 21106,
+      "sha256": "9f0c271b94d3b4739cc4cb5ef047818a160185fa34f2ac06dbb1619acaec2714"
+    },
+    {
+      "path": "assets/audio/car-skid.mp3",
+      "bytes": 8359,
+      "sha256": "67294c130348074b998b4a90a6504c391689ad5dccdba7332799a8eed0820b28"
     },
     {
       "path": "assets/audio/casing-brass-01-s01.mp3",
@@ -1627,6 +1647,11 @@
       "path": "assets/derivatives/audio-reactor.json",
       "bytes": 11595,
       "sha256": "21a667dd4d7f84cf902ca3ca424c17d8d77a7755739524479b9b3c0b3b5a116d"
+    },
+    {
+      "path": "assets/derivatives/audio-skyways-car.json",
+      "bytes": 6147,
+      "sha256": "99fc2e1ea561846af6e9e25293805851325a13b6657480a68fc9587a98e85b9d"
     },
     {
       "path": "assets/derivatives/audio-strainer.json",
