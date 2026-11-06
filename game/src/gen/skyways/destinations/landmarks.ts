@@ -33,7 +33,7 @@ import type {Area, LightPlacement, Side, StationLayout} from '../../stationTypes
 import {normYaw, quarter, segDist, yawToward} from '../addonFrame';
 import type {SkywaysLandmark, SkywaysLandmarkFamily} from '../skywaysTypes';
 import {DEST_PLAQUE_OF} from './art';
-import {LANDMARK_KIND, LANDMARK_ROUND, LANDMARK_UPPER_VARIANT, landmarkUpper, type LandmarksKind} from './kindsLandmarks';
+import {LANDMARK_KIND, LANDMARK_ROUND, landmarkUppers, type LandmarksKind} from './kindsLandmarks';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -61,8 +61,8 @@ export interface LandmarkDress {
   family: SkywaysLandmarkFamily;
   kind: LandmarksKind;
   centre: PropPlacement | null;
-  /** The collision-only upper part (fig tree trunk / fountain column). */
-  upper: PropPlacement | null;
+  /** The collision-only upper parts (fig tree planter + trunk / fountain column). */
+  upper: PropPlacement[];
   plaque: PropPlacement | null;
   benches: PropPlacement[];
   planters: PropPlacement[];
@@ -170,7 +170,7 @@ function samples(x: number, z: number, hx: number, hz: number, disc: boolean): [
 /** Dresses one landmark court; returns the props placed. */
 export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandmark): number {
   const kind = LANDMARK_KIND[lm.family];
-  const res: LandmarkDress = {id: lm.id, family: lm.family, kind, centre: null, upper: null, plaque: null, benches: [], planters: [], lights: [], scale: 1, ring: 0, openings: [], miss: []};
+  const res: LandmarkDress = {id: lm.id, family: lm.family, kind, centre: null, upper: [], plaque: null, benches: [], planters: [], lights: [], scale: 1, ring: 0, openings: [], miss: []};
   let list = DRESSED.get(layout);
   if (!list) DRESSED.set(layout, (list = []));
   list.push(res);
@@ -209,9 +209,9 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     if (s < 1) s = Math.floor(s * 100) / 100;
     if (!(s >= LANDMARK_DRESS.minScale)) res.miss.push(`ceiling ${r3(clear)} m too low`);
     else {
-      // the spot, else nudged up to 2 m (a stair approach / door zone reaching into the disc)
+      // the spot, else nudged up to 3 m (a stair approach / door zone reaching into the disc)
       const nudges: [number, number][] = [[0, 0]];
-      for (const d of [0.5, 1, 1.5, 2]) for (let j = 0; j < 8; j++) nudges.push([r3(Math.sin((j * Math.PI) / 4) * d), r3(Math.cos((j * Math.PI) / 4) * d)]);
+      for (const d of [0.5, 1, 1.5, 2, 2.5, 3]) for (let j = 0; j < 8; j++) nudges.push([r3(Math.sin((j * Math.PI) / 4) * d), r3(Math.cos((j * Math.PI) / 4) * d)]);
       for (const ring of LANDMARK_DRESS.rings) {
         for (const [dx, dz] of nudges) {
           const p = put(kind, lm.x + dx, lm.z + dz, rot, {laneOk: true, plazaOk: true, ring, h: r3(def.h * s)});
@@ -225,13 +225,14 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
       if (!res.centre) res.miss.push('centrepiece spot taken');
     }
     const c = res.centre;
-    const up = landmarkUpper(kind);
-    if (c && up) {
-      // the collision-only upper part rests on the hero's base (never drawn)
-      const u: PropPlacement = {kind, x: c.x, z: c.z, y: r3(c.y + up.y0 * s), rot: c.rot, area: area.id, hx: r3(up.r * s), hz: r3(up.r * s), h: r3((up.y1 - up.y0) * s),
-        blocksSight: false, variant: LANDMARK_UPPER_VARIANT, round: true, host: layout.props.indexOf(c), ...(lv ? {level: lv} : {})};
+    // the collision-only upper parts, each resting on the part below (never drawn)
+    let below = c ? layout.props.indexOf(c) : -1;
+    for (const up of c ? landmarkUppers(kind) : []) {
+      const u: PropPlacement = {kind, x: c!.x, z: c!.z, y: r3(c!.y + up.y0 * s), rot: c!.rot, area: area.id, hx: r3(up.r * s), hz: r3(up.r * s), h: r3((up.y1 - up.y0) * s),
+        blocksSight: false, variant: up.variant, round: true, host: below, ...(lv ? {level: lv} : {})};
       layout.props.push(u);
-      res.upper = u;
+      res.upper.push(u);
+      below = layout.props.length - 1;
     }
     if (c) R0 = round ? c.hx : kind === 'skyDDinosaur' ? Math.min(c.hx, c.hz) : Math.max(c.hx, c.hz);
   }
@@ -255,14 +256,17 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
 
   // --- 3. the plaque beside the main approach, facing the visitor -----------------------------------------------------------------
   {
-    const ux = Math.sin(toMain), uz = Math.cos(toMain), rot = quarter(toMain);
+    // the main approach first, then the court's other openings by span, then the four sides (a court too shallow on that side)
+    const dirs = [toMain, ...res.openings.slice().sort((p, q) => q.n - p.n).map(o => yawToward(o.x - X, o.z - Z)), 0, Math.PI / 2, Math.PI, -Math.PI / 2];
     const variant = DEST_PLAQUE_OF[lm.family], dep = PROP_DEFS.skyDPlaque.d / 2;
-    const base = halfToward(ux, uz) + ext + dep + 0.15;
     // (the station's desire lines crossed the court's middle before the hero stood there: the reserved lanes above replace them)
-    outer: for (const radial of [0, 0.5, 1.0, 1.6, 2.4]) for (const lateral of [1.3, -1.3, 1.9, -1.9, 2.6, -2.6]) {
-      const x = X + ux * (base + radial) + uz * lateral, z = Z + uz * (base + radial) - ux * lateral;
-      const p = put('skyDPlaque', x, z, rot, {plazaOk: true, laneOk: true, variant});
-      if (p) { res.plaque = p; break outer; }
+    outer: for (const yaw of dirs) {
+      const ux = Math.sin(yaw), uz = Math.cos(yaw), rot = quarter(yaw), base = halfToward(ux, uz) + ext + dep + 0.15;
+      for (const radial of [0, 0.5, 1.0, 1.6, 2.4]) for (const lateral of [1.3, -1.3, 1.9, -1.9, 2.6, -2.6]) {
+        const x = X + ux * (base + radial) + uz * lateral, z = Z + uz * (base + radial) - ux * lateral;
+        const p = put('skyDPlaque', x, z, rot, {plazaOk: true, laneOk: true, variant});
+        if (p) { res.plaque = p; break outer; }
+      }
     }
     if (!res.plaque) res.miss.push('no plaque spot');
   }
@@ -283,13 +287,17 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
         for (const t of [-0.45 * L, 0.45 * L]) cand.push([dx, dz, t]);
       } else cand.push([dx, dz, 0]);
     }
+    // a bench faces the hero straight on, else flanks the walking lane coming in on that side (+-1.6 m along the tangent), else a
+    // little further out
     let n = rng.int(...LANDMARK_DRESS.benches);
     for (const [dx, dz, t] of rng.shuffle(cand)) {
       if (n <= 0) break;
       const dist = halfToward(dx, dz) + ext + bd / 2 + extra;
-      const x = X + dx * dist - dz * t, z = Z + dz * dist + dx * t;
-      const p = put('bench', x, z, quarter(yawToward(-dx, -dz)), {plazaOk: true, laneOk: true, front: 0.6});
-      if (p) { res.benches.push(p); n--; }
+      bench: for (const out of [0, 0.6, 1.2]) for (const side of t ? [0, Math.sign(t) * 0.8] : [0, 1.6, -1.6]) {
+        const x = X + dx * (dist + out) - dz * (t + side), z = Z + dz * (dist + out) + dx * (t + side);
+        const p = put('bench', x, z, quarter(yawToward(-dx, -dz)), {plazaOk: true, laneOk: true, front: 0.6});
+        if (p) { res.benches.push(p); n--; break bench; }
+      }
     }
     if (lm.family !== 'fig-tree') {
       const pw = PROP_DEFS.planterTree.w;

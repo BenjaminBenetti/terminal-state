@@ -9,8 +9,9 @@
 //  - skyDClock: the cast-iron clock tower on its stone plinth — the whole model box (the plinth is its widest part);
 //  - skyDDinosaur: the hadrosaur skeleton cast on its plinth with steel rods — the whole model box (head, tail and plinth: you bump
 //    the bones before you could walk under them); lies along the court's longer axis (model long axis X);
-//  - skyDFigTree: the fig in its raised round planter with the slatted ring bench — a ROUND collider of the ring bench (variant 0,
-//    up to the planter's rim) plus a collision-only TRUNK cylinder (variant 1) up into the crown; the leafy crown is drawn only;
+//  - skyDFigTree: the fig in its raised round planter with the slatted ring bench — a ROUND collider of the ring bench (variant 0, to
+//    the seat) plus collision-only cylinders of the raised planter (variant 1, to its rim) and the trunk (variant 2, up into the crown);
+//    the leafy crown is drawn only;
 //  - skyDFountain: the dry three-tier stone fountain — a ROUND collider of the basin (variant 0, to its rim) plus a collision-only
 //    COLUMN cylinder (variant 1) through the tiers;
 //  - skyDGeese: the bronze flock of Canada geese hung from the atrium roof — mounted high (no floor footprint), its cables drawn to
@@ -28,21 +29,20 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const M = SKYWAYS_DEST_PROPS;
 
 /**
- * The heroes' collision shape as fractions of the model's box (w along X, h) — measured on the accepted Meshy raws by vertex slices
- * (lane LANDMARKS, 2026-11-06; the KITS builder scales uniformly, so the fractions hold for the runtime files):
- *  - fig tree (raw 0.935 x 0.875 x 0.918): the ring bench's outer radius 0.42 w (its seat band 0.10-0.14 h), the planter wall
- *    (radius 0.333 w) up to its rim at 0.24 h, the trunk flaring out of the soil (radius ~0.07 w above the flare) into the crown
- *    from ~0.40 h; the crown spans the whole w;
- *  - fountain (raw 0.952 x 0.834 x 0.952): the round basin (radius 0.5 w) to its rim at 0.22 h; above it the column (radius 0.12 w)
- *    carrying the middle bowl (radius 0.26 w at 0.55-0.65 h) and the top bowl (0.14 w at 0.85-0.9 h): the column cylinder is taken
- *    at 0.14 w (the column plus the bowls' inner rings; a bowl's outer lip may let a shot past).
+ * The heroes' collision shape as fractions of the model's box (w along X, h) — measured by vertex slices / radial height profiles on
+ * the accepted Meshy raws and lane KITS's runtime files (lane LANDMARKS, 2026-11-06; uniform scaling keeps the fractions):
+ *  - fig tree (7.48 x 7.00 x 7.35 m): the slatted ring bench (outer radius 0.42 w) with its seat at 0.133 h, the raised planter
+ *    inside it (radius 0.333 w) to its rim / soil at 0.24 h, the trunk out of the soil (radius ~0.05 w above the root flare) into the
+ *    crown from ~0.40 h; the crown spans the whole w;
+ *  - fountain (4.40 x 3.85 x 4.40 m): the round basin (radius 0.5 w; its wall 0.85-1.0 of the radius) to its rim at 0.216 h (the dry
+ *    basin floor inside at ~0.11 h); above it the column (radius ~0.12 w) carrying the middle bowl (radius 0.26 w at 0.55-0.65 h) and
+ *    the top bowl (0.14 w at 0.85-0.9 h): the column cylinder is taken at 0.14 w (column plus the bowls' inner rings; a bowl's outer
+ *    lip may let a shot past).
  */
 export const LANDMARK_SHAPE = {
-  tree: {ringR: 0.42, rim: 0.24, trunkR: 0.07, trunkTop: 0.40},
-  fountain: {rim: 0.22, columnR: 0.14},
+  tree: {ringR: 0.42, seat: 0.133, planterR: 0.333, rim: 0.24, trunkR: 0.05, trunkTop: 0.40},
+  fountain: {rim: 0.216, columnR: 0.14},
 } as const;
-/** The collision-only upper part of the fig tree / fountain is a placement of the same kind with this variant (never drawn). */
-export const LANDMARK_UPPER_VARIANT = 1;
 
 /** Wall poster: the frame's base height above the floor (its centre at DEST_POSTER.y). Place with placeKit.mountProp at this y. */
 export const DEST_POSTER_BASE_Y = r3(DEST_POSTER.y - (DEST_POSTER.h + 0.04) / 2);
@@ -62,14 +62,17 @@ export const LANDMARK_ROUND: ReadonlySet<string> = new Set(['skyDFigTree', 'skyD
 const T = LANDMARK_SHAPE.tree, F = LANDMARK_SHAPE.fountain;
 const tree = M.skyways_d_lm_tree, fountain = M.skyways_d_lm_fountain, orrery = M.skyways_d_lm_orrery;
 
-/** The collision-only upper cylinder of a hero (radius, base and top above the hero's base; unscaled model metres), else null. */
-export function landmarkUpper(kind: string): {r: number; y0: number; y1: number} | null {
-  if (kind === 'skyDFigTree') return {r: r3(T.trunkR * tree.w), y0: r3(T.rim * tree.h), y1: r3(T.trunkTop * tree.h)};
-  if (kind === 'skyDFountain') return {r: r3(F.columnR * fountain.w), y0: r3(F.rim * fountain.h), y1: fountain.h};
-  return null;
+/**
+ * The collision-only upper cylinders of a hero (each a placement of the same kind with its `variant` >= 1, standing on the part below;
+ * radius, base and top above the hero's base in unscaled model metres): the fig tree's planter and trunk, the fountain's column.
+ */
+export function landmarkUppers(kind: string): readonly {variant: number; r: number; y0: number; y1: number}[] {
+  if (kind === 'skyDFigTree') return [{variant: 1, r: r3(T.planterR * tree.w), y0: r3(T.seat * tree.h), y1: r3(T.rim * tree.h)}, {variant: 2, r: r3(T.trunkR * tree.w), y0: r3(T.rim * tree.h), y1: r3(T.trunkTop * tree.h)}];
+  if (kind === 'skyDFountain') return [{variant: 1, r: r3(F.columnR * fountain.w), y0: r3(F.rim * fountain.h), y1: fountain.h}];
+  return [];
 }
-/** A placement that is collision only (the hero's upper part): the renderer draws nothing for it. */
-export const destCollisionOnly = (p: {kind: string; variant: number}): boolean => p.variant === LANDMARK_UPPER_VARIANT && landmarkUpper(p.kind) !== null;
+/** A placement that is collision only (a hero's upper part): the renderer draws nothing for it. */
+export const destCollisionOnly = (p: {kind: string; variant: number}): boolean => p.variant >= 1 && landmarkUppers(p.kind).some(u => u.variant === p.variant);
 
 export const LANDMARKS_SPECS: Readonly<Record<LandmarksKind, DestKindSpec>> = {
   skyDPoster: {
@@ -99,8 +102,8 @@ export const LANDMARKS_SPECS: Readonly<Record<LandmarksKind, DestKindSpec>> = {
     open: {cls: 'none', role: 'decor', how: 'skeleton cast on a solid plinth: nothing to open'},
   },
   skyDFigTree: {
-    def: {w: r3(2 * T.ringR * tree.w), d: r3(2 * T.ringR * tree.w), h: r3(T.rim * tree.h), blocksSight: false},
-    phys: {dynamic: false, why: 'built-in', how: 'living fig in a raised masonry planter with a slatted ring bench, built into the court floor (tonnes of soil): its collider is the ring bench (round) plus the trunk; the crown is foliage'},
+    def: {w: r3(2 * T.ringR * tree.w), d: r3(2 * T.ringR * tree.w), h: r3(T.seat * tree.h), blocksSight: false},
+    phys: {dynamic: false, why: 'built-in', how: 'living fig in a raised masonry planter with a slatted ring bench, built into the court floor (tonnes of soil): its colliders are the ring bench, the planter and the trunk (round); the crown is foliage'},
     damage: 'concrete',
     model: 'skyways_d_lm_tree',
     open: {cls: 'none', role: 'decor', how: 'masonry planter full of soil with a bench round it: no door, lid or drawer'},

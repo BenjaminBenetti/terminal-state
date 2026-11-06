@@ -44,14 +44,18 @@ export function skywaysDestModelKeysFor(layout: {props?: readonly {kind: string}
   return [...out].sort();
 }
 
-/** Rows that HANG from the ceiling (gen/assets.json physics 'hung': the geese, the canoe, the planet mobile; or any row with hangY). */
-const HUNG: ReadonlySet<SkywaysDestPropKey> = new Set(['skyways_d_lm_geese', 'skyways_d_of_canoe', 'skyways_d_sc_mobile']);
-export const destModelHung = (m: SkywaysDestPropKey): boolean => HUNG.has(m) || destModelRow(m).hangY !== undefined;
 /**
- * A hung model's suspension: the attachment height (model frame: hangY, else its top) and the cables' x offsets (model frame: one
- * centred cable, two at +-0.3 w for a long piece >= 4 m). The renderer draws each cable from there straight up to the ceiling.
+ * Rows that HANG from the ceiling (gen/assets.json physics 'hung'), with their suspension points as fractions of the row's w (x) and h
+ * (y) — measured on lane KITS's runtime files (lane LANDMARKS, 2026-11-06): the geese's beam hangs from two rods rising at its ends
+ * (rod tops x +-0.46 w at the model top = hangY); the canoe is slung at +-0.3 of its length just under its gunwale ends; the planet
+ * mobile hangs from the hook on its centre top. A row with `hangY` and no entry here hangs from one centred point.
  */
+const HUNG: Readonly<Partial<Record<SkywaysDestPropKey, {xs: readonly number[]; y: number}>>> = {
+  skyways_d_lm_geese: {xs: [-0.46, 0.46], y: 1}, skyways_d_of_canoe: {xs: [-0.3, 0.3], y: 0.85}, skyways_d_sc_mobile: {xs: [0], y: 1},
+};
+export const destModelHung = (m: SkywaysDestPropKey): boolean => HUNG[m] !== undefined || destModelRow(m).hangY !== undefined;
+/** A hung model's suspension points (model frame, metres): the renderer draws each cable from there straight up to the ceiling. */
 export function destHangCables(m: SkywaysDestPropKey): {y: number; xs: number[]} {
-  const row = destModelRow(m);
-  return {y: row.hangY ?? row.h, xs: row.w >= 4 ? [-0.3 * row.w, 0.3 * row.w] : [0]};
+  const row = destModelRow(m), spec = HUNG[m];
+  return spec ? {y: spec.y * row.h, xs: spec.xs.map(f => f * row.w)} : {y: row.hangY ?? row.h, xs: [0]};
 }
