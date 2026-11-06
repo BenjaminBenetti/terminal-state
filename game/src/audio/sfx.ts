@@ -2133,13 +2133,14 @@ export class Sfx {
     const ok = (e: LocationEmitter) => LOCATION_CUES.has(e.cue) && [e.x, e.y, e.z, e.gain, e.range].every(Number.isFinite) && e.range > 0 && e.gain >= 0;
     this.locations = list.filter(ok).slice(0, LOCATION_AUDIO.max).map(e => ({...e}));
     for (const c of this.locCh) this.releaseLocation(c, fadeS);
+    this.trimLocationFades();
     const clocks = this.locations.filter(e => e.cue === 'clockTick');
     const C = LOCATION_AUDIO.chime, s = this.locChime;
     s.seed = clocks.reduce((h, e) => Math.imul(h ^ Math.round(e.x * 10) ^ (Math.round(e.z * 10) << 11), 16777619) >>> 0, 2166136261);
     s.n = 0;
     s.left = clocks.length ? C.firstS[0] + (C.firstS[1] - C.firstS[0]) * hash01(s.seed, 0) : Infinity;
     s.t = -1;
-    this.emitterTick = 99;
+    if (this.locations.length) this.emitterTick = 99; // pick at the next listener update (clearing needs no early tick: released above)
   }
 
   /** An emitter the listener can hear from here: its storey gate (feet within the band of its floor), then its distance (null = not). */
@@ -2161,19 +2162,11 @@ export class Sfx {
     near.sort((p, q) => p.d - q.d);
     const picks = near.slice(0, A.voices), keep = new Set(picks.map(p => p.e));
     for (const c of this.locCh) if (c.released < 0 && !keep.has(c.e)) this.releaseLocation(c, A.fadeOut);
+    this.trimLocationFades();
     for (const {e, d} of picks) {
       let c = this.locCh.find(q => q.e === e && q.released < 0);
       if (!c) {
         if (!this.bank.has(e.cue)) continue; // not decoded yet: silent until it is (no silent-play count per tick)
-        const fading = this.locCh.filter(q => q.released >= 0);
-        if (fading.length >= A.voices) { // bounded: the oldest fading channel is cut now
-          const old = fading[0];
-          old.g.gain.cancelScheduledValues(t);
-          old.g.gain.setTargetAtTime(0, t, 0.01);
-          try { old.src.stop(t + 0.04); } catch { /* already stopped */ }
-          this.locCh.splice(this.locCh.indexOf(old), 1);
-          this.locStats.cuts++;
-        }
         const clip = this.bank.pick(e.cue);
         if (!clip) continue;
         const src = ctx.createBufferSource();
@@ -2228,6 +2221,20 @@ export class Sfx {
     c.g.gain.cancelScheduledValues(t);
     c.g.gain.setTargetAtTime(0, t, f / 3);
     try { c.src.stop(t + f + 0.05); } catch { /* already stopped */ }
+  }
+
+  /** The fading bound: beyond LOCATION_AUDIO.voices fading channels, the oldest are cut now (a quick ramp, then stop). Plays nothing. */
+  private trimLocationFades(): void {
+    const ctx = this.ctx;
+    const fading = this.locCh.filter(q => q.released >= 0);
+    while (fading.length > LOCATION_AUDIO.voices) {
+      const old = fading.shift()!, t = ctx?.currentTime ?? 0;
+      old.g.gain.cancelScheduledValues(t);
+      old.g.gain.setTargetAtTime(0, t, 0.01);
+      try { old.src.stop(t + 0.04); } catch { /* already stopped */ }
+      this.locCh.splice(this.locCh.indexOf(old), 1);
+      this.locStats.cuts++;
+    }
   }
 
   /** QA / tests: the location emitters' live state (emitters, sounding / fading channels and their cues, the chime countdown, counters). */
