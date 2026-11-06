@@ -155,12 +155,13 @@ export const ANCHOR_CLEAR = {hall: [4.3, 3.9], doubleHeight: 7.5} as const;
 
 /** Per landmark family: the court's name, footprint clear radius (m), height above the floor (m), where it can stand. */
 export const LANDMARK_FAMILIES: Record<SkywaysLandmarkFamily, {name: string; radius: number; height: number; atriumOnly: boolean; long?: number}> = {
-  clock: {name: 'Clock Court', radius: 1.6, height: 5.6, atriumOnly: true},
-  dinosaur: {name: 'Badlands Court', radius: 2.2, height: 3.6, atriumOnly: false, long: 7.5},
-  'fig-tree': {name: 'Fig Tree Court', radius: 3.0, height: 7.0, atriumOnly: true},
-  fountain: {name: 'Fountain Court', radius: 3.0, height: 2.6, atriumOnly: false},
+  // (measured on the kit models: lane KITS; heights are the clear height they need, radii their floor footprint)
+  clock: {name: 'Clock Court', radius: 1.2, height: 5.6, atriumOnly: true},
+  dinosaur: {name: 'Badlands Court', radius: 1.3, height: 2.6, atriumOnly: false, long: 7.5},
+  'fig-tree': {name: 'Fig Tree Court', radius: 2.8, height: 7.0, atriumOnly: true},
+  fountain: {name: 'Fountain Court', radius: 2.4, height: 3.9, atriumOnly: false},
   geese: {name: 'Flight Court', radius: 1.2, height: 9.0, atriumOnly: true},
-  orrery: {name: 'Orrery Court', radius: 1.4, height: 3.1, atriumOnly: false},
+  orrery: {name: 'Orrery Court', radius: 1.2, height: 3.1, atriumOnly: false},
 };
 
 export interface SkywaysCarve {
