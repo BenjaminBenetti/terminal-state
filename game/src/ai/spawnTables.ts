@@ -685,6 +685,24 @@ export const REACTOR_SPAWN_PROFILE: SpawnProfile = {
 };
 
 /**
+ * Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS' spawn profile — the ordinary pool (no Siren: she is opt-in per level
+ * with an eligibility rule; Skyways has none), the Office's placement rules (stair cores / landings never; storefront units and closets
+ * light) per storey context: the station storey (platforms, pedway concourse, its back of house), the street level (lobbies, atrium
+ * courts, shops, service rooms of every building) and the skyway level (concourses, bridges, shops, the add-on hall), plus the
+ * station's Beyond-the-Station annex. Counts scale with the ~3x larger walkable area of the upper storeys.
+ */
+export const SKYWAYS_SPAWN_PROFILE: SpawnProfile = {
+  id: 'skyways', label: 'Skyways', families: ENEMY_POOL, zombieTypes: ZOMBIE_TYPES,
+  contexts: {
+    station: {label: 'Station storey (platforms, pedway concourse, station back of house)', count: [5, 8], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    street: {label: 'Street level (every building: lobbies, atrium courts, shops, service rooms)', count: [8, 12], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    floor: {label: 'Skyway level (concourses, bridges, shops, the add-on hall)', count: [10, 15], placement: OFFICE_PLACEMENT, accept: {min: 'count', max: 'count'}},
+    service: SERVICE_CONTEXT,
+  },
+  rooms: {},
+};
+
+/**
  * THE PER-LEVEL PROFILES. Every level lists every family (familyPool); the Office opts in to the Siren with its eligibility rule.
  * No room modifiers (every room resolves to 1). A new level adds its entry here (Record<LevelId, …> makes that mandatory;
  * levels/levelContract.ts validateLevelRegistry + tests/enemy-spawn-contract.test.ts check coverage and the tier).
@@ -715,6 +733,8 @@ export const SPAWN_PROFILES: Readonly<Record<LevelId, SpawnProfile>> = {
   },
   // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_SPAWN_PROFILE).
   mall: MALL_SPAWN_PROFILE,
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS (station / street / floor contexts + the annex).
+  skyways: SKYWAYS_SPAWN_PROFILE,
   // Task reactor-build-20261101 (primary): THE REACTOR (REACTOR_SPAWN_PROFILE: depth-graded context pools, the deep Siren rule).
   reactor: REACTOR_SPAWN_PROFILE,
 };

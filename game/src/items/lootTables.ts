@@ -1262,6 +1262,9 @@ export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   office: {id: 'office', label: 'Office Space', tables: BASE_TABLES, overrides: {}},
   // Task track3-eaton-centre-20261031: wired by lane GEN with LevelId 'mall' (the profile itself is lane PROFILES' MALL_PROFILE).
   mall: MALL_PROFILE,
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — today's tables, no overrides (its shops / eateries / back-of-house
+  // rooms use the station purposes; its edible ramen-restaurant food is that room's own finite purpose rows).
+  skyways: {id: 'skyways', label: 'Skyways', tables: BASE_TABLES, overrides: {}},
   // Task reactor-build-20261101 (primary): THE REACTOR — the mall's tables (its per-storey loose floor program serves the tiers) with
   // the culminating level's pressure: ammo, medicine and batteries scarcer, materials a little rarer (docs/loot-tables.md overrides).
   reactor: REACTOR_PROFILE,

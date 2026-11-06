@@ -52,7 +52,7 @@ function webgl2(): boolean {
 function devStartFromUrl(p: URLSearchParams, qaMode: boolean): DevStart | null {
   const seedOf = (k: string) => { const v = p.get(k); return v ? codeToSeed(v) ?? undefined : undefined; };
   const seeds: Partial<Record<LevelId, number>> = {};
-  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
+  for (const [l, k] of [['subway', 'seed'], ['office', 'officeSeed'], ['mall', 'mallSeed'], ['skyways', 'skywaysSeed'], ['reactor', 'reactorSeed']] as const) { const s = seedOf(k); if (s !== undefined) seeds[l] = s; }
   const level = p.get('level');
   const any = qaMode || isLevelId(level) || Object.keys(seeds).length > 0 || p.has('mallVariant');
   return any ? {level: isLevelId(level) ? level : 'subway', seeds} : null;

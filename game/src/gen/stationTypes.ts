@@ -270,6 +270,13 @@ export interface Storefront {
   backDoor: number;
   /** Closure look: solid roll-down slat shutter, open rod grille, or a leasing hoarding (vacant). */
   style: 'slat' | 'grille' | 'hoarding';
+  /**
+   * Task studio-skyways-level-20261106-054448-01: the storey of a bay off the main level (layout.levels id) and its floor (absolute
+   * y). Absent = level 0 (every Subway bay). Heights above (head, shutterY, fasciaTop) stay relative to that floor; storefrontParts
+   * returns absolute boxes / faces (+ baseY).
+   */
+  level?: number;
+  baseY?: number;
 }
 
 export interface StationLayout {

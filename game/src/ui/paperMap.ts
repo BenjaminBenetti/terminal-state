@@ -168,17 +168,17 @@ export function pickByDirection(from: Pt, cands: readonly {id: string; x: number
 // --- station types and the details card (pure; lane MAP) ---------------------------------------------------------------------
 
 /** What a station's icon shows: its archetype, or the Maintenance Route (an ordinary Subway node printed as the Reactor's bypass). */
-export type StationKind = 'subway' | 'office' | 'mall' | 'reactor' | 'maintenance';
+export type StationKind = 'subway' | 'office' | 'mall' | 'skyways' | 'reactor' | 'maintenance';
 
 export function stationKind(node: StationNode, net: SubwayNetwork): StationKind {
   if (node.id === net.reactor || node.archetype === 'reactor') return 'reactor';
   if (node.name === MAINTENANCE_ROUTE.name && node.archetype === 'subway') return 'maintenance';
-  return node.archetype === 'office' ? 'office' : node.archetype === 'mall' ? 'mall' : 'subway';
+  return node.archetype === 'office' ? 'office' : node.archetype === 'mall' ? 'mall' : node.archetype === 'skyways' ? 'skyways' : 'subway';
 }
 
 /** The printed wording of a kind (key, card, hit titles). */
 export function kindLabel(k: StationKind): string {
-  return k === 'maintenance' ? MAINTENANCE_ROUTE.name : k === 'office' ? 'Office tower' : k === 'mall' ? 'Shopping mall' : k === 'reactor' ? 'Reactor' : 'Subway station';
+  return k === 'maintenance' ? MAINTENANCE_ROUTE.name : k === 'office' ? 'Office tower' : k === 'mall' ? 'Shopping mall' : k === 'skyways' ? 'Skyways' : k === 'reactor' ? 'Reactor' : 'Subway station';
 }
 
 /**
@@ -200,6 +200,13 @@ export function stationGlyph(kind: StationKind, p: Pt, r: number, filled: boolea
       const w = r * 0.95, top = y - r * 0.35, bot = y + r * 0.95, hr = r * 0.45;
       return `<path d="M${n1(x - hr)} ${n1(top)} A${n1(hr)} ${n1(hr)} 0 0 1 ${n1(x + hr)} ${n1(top)}" fill="none" stroke="${INK}" stroke-width="${n1(sw * 0.8)}"/>`
         + `<path d="M${n1(x - w)} ${n1(top)} L${n1(x + w)} ${n1(top)} L${n1(x + w * 0.86)} ${n1(bot)} L${n1(x - w * 0.86)} ${n1(bot)} Z" fill="${fill}" stroke="${INK}" stroke-width="${sw}" stroke-linejoin="round"/>`;
+    }
+    case 'skyways': {
+      // two tower blocks joined by a skyway bridge (task studio-skyways-level-20261106-054448-01)
+      const h = r * 0.95, bw = r * 0.5, by0 = y - r * 0.1;
+      return `<rect x="${n1(x - h)}" y="${n1(y - h)}" width="${n1(bw)}" height="${n1(2 * h)}" rx="0.8" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`
+        + `<rect x="${n1(x + h - bw)}" y="${n1(y - h * 0.7)}" width="${n1(bw)}" height="${n1(h * 1.7)}" rx="0.8" fill="${fill}" stroke="${INK}" stroke-width="${sw}"/>`
+        + `<rect x="${n1(x - h + bw)}" y="${n1(by0 - r * 0.22)}" width="${n1(2 * h - 2 * bw)}" height="${n1(r * 0.44)}" fill="${detail}" stroke="${INK}" stroke-width="${n1(sw * 0.6)}"/>`;
     }
     case 'maintenance': {
       const R = r * 1.08;
@@ -478,6 +485,7 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   const sym = (kind: StationKind, label: string, extra = '') => ({w: 18 + keyText(label, 11) + (extra ? 30 : 0),
     svg: `<g class="pm-key-${kind}">${extra}${stationGlyph(kind, {x: (extra ? 30 : 0) + 6, y: -4}, kind === 'reactor' ? 7 : 5, kind !== 'reactor')}</g><text x="${(extra ? 30 : 0) + 17}" y="0" font-size="11">${esc(label)}</text>`});
   const symbols = [sym('subway', 'Subway'), sym('office', 'Office'), sym('mall', 'Mall')];
+  if (net.nodes.some(nd => nd.archetype === 'skyways')) symbols.push(sym('skyways', 'Skyways')); // (only networks that have the type)
   if (m.reactorShown) symbols.push(sym('reactor', 'Reactor'));
   if (m.maintenanceShown) symbols.push(sym('maintenance', MAINTENANCE_ROUTE.name, `<line x1="0" y1="-4" x2="24" y2="-4" stroke="${MAINTENANCE_ROUTE.color}" stroke-width="3" stroke-dasharray="5 3"/>`));
   symbols.push({w: 30 + keyText('Visited / not yet', 11), svg: `${stationGlyph('subway', {x: 5, y: -4}, 4.6, true)}${stationGlyph('subway', {x: 17, y: -4}, 4.6, false)}<text x="27" y="0" font-size="11">Visited / not yet</text>`});

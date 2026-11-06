@@ -25,7 +25,7 @@
 
 import type {LevelId} from '../levels/types';
 import {Rng, hashString} from '../core/rng';
-import {NETWORK_SIZE, ORDINARY_WEIGHTS, type NetworkLine, type StationId, type StationNode, type SubwayNetwork} from './types';
+import {NETWORK_SIZE, ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS, type NetworkLine, type StationId, type StationNode, type SubwayNetwork} from './types';
 
 /** The layout grid: points 0..w x 0..h; one grid unit = `unit` map units (so x spans 0..98, y 0..56). */
 export const GRID = {w: 28, h: 16, unit: 3.5} as const;
@@ -48,7 +48,7 @@ export interface NetworkOptions {
   maintenanceRoute?: boolean;
 }
 
-const ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'reactor'];
+const ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'skyways', 'reactor'];
 
 /** In-world wording of an archetype (map details, HUD). */
 export function archetypeLabel(a: LevelId): string {
@@ -56,6 +56,7 @@ export function archetypeLabel(a: LevelId): string {
     case 'subway': return 'Subway station';
     case 'office': return 'Office tower';
     case 'mall': return 'Shopping mall';
+    case 'skyways': return 'Skyways';
     case 'reactor': return 'Reactor';
   }
   return 'Station';
@@ -826,10 +827,17 @@ export function validateNetwork(net: unknown, opts: NetworkOptions = {}): string
     if (!Array.isArray(nd.lines) || !nd.lines.length || nd.lines.some(l => typeof l !== 'string')) errs.push(`node ${id}: lines must be a non-empty id list`);
   }
   if ((count.reactor ?? 0) !== 1) errs.push(`network: ${count.reactor ?? 0} Reactor nodes, expected exactly 1`);
-  const want = ordinaryCounts(opts.weights ?? ORDINARY_WEIGHTS, NETWORK_SIZE.ordinary);
-  for (const k of new Set([...Object.keys(want), ...Object.keys(count).filter(c => c !== 'reactor')])) {
-    if ((count[k] ?? 0) !== (want[k] ?? 0)) errs.push(`network: ${count[k] ?? 0} ${k} nodes, expected ${want[k] ?? 0}`);
-  }
+  // task studio-skyways-level-20261106-054448-01: without explicit weights, a network drawn before Skyways (PRE_SKYWAYS_WEIGHTS) is as
+  // valid as a current one — saved networks are never regenerated (an old campaign keeps its worlds).
+  const censuses = opts.weights ? [opts.weights] : [ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS];
+  const censusErrs = censuses.map(w => {
+    const want = ordinaryCounts(w, NETWORK_SIZE.ordinary), e: string[] = [];
+    for (const k of new Set([...Object.keys(want), ...Object.keys(count).filter(c => c !== 'reactor')])) {
+      if ((count[k] ?? 0) !== (want[k] ?? 0)) e.push(`network: ${count[k] ?? 0} ${k} nodes, expected ${want[k] ?? 0}`);
+    }
+    return e;
+  });
+  if (!censusErrs.some(e => !e.length)) errs.push(...censusErrs[0]);
   const start = net.start, reactor = net.reactor;
   if (typeof start !== 'string' || !byId.has(start)) errs.push('network: start is not a node');
   else {

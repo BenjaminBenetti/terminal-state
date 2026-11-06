@@ -43,6 +43,9 @@ export const MASK_LOOT = {
     // + 3 x 37.5 s spare): by the user's design the on-site supply alone no longer has to cover the core floor — the player is meant to
     // arrive prepared with scavenged filters / an Airtank Backpack (no Reactor-specific supply was added).
     reactor: {masks: [1, 1], filters: [3, 5]},
+    // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS keeps the Office's / mall's roll — its glazed bridges start
+    // partly breached (gas across some routes) and every pane can be shot out, exactly the Office's window rule; no extra supply.
+    skyways: {masks: [1, 2], filters: [2, 5]},
   } as Readonly<Record<LevelId, MaskLootSpec>>,
   /** A found mask's fitted filter: this fraction range of FILTER_LIFE_S (uniform, seeded per mask). */
   foundFilter: [0.35, 0.75] as const,

@@ -7,8 +7,8 @@ import {parseSectionId} from '../src/run/bagStore';
 import {sectionId, type LevelId} from '../src/levels/types';
 import type {CampaignState, SubwayNetwork} from '../src/campaign/types';
 
-const LEVELS = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
-const SEEDS = {subway: 11, office: 22, mall: 33, reactor: 44};
+const LEVELS = {subway: {sections: () => ['main']}, office: {sections: () => ['main']}, mall: {sections: () => ['main']}, skyways: {sections: () => ['main']}, reactor: {sections: () => ['main']}} as Record<LevelId, {sections(s: number): string[]}>;
+const SEEDS = {subway: 11, office: 22, mall: 33, skyways: 707, reactor: 44};
 
 function fixture(): CampaignState {
   const network: SubwayNetwork = {

@@ -27,13 +27,14 @@ import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
+import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
 import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, SEEN_WORD_BITS, deriveMeta, migrateFilterUnits, seenWordCount, type SaveFileV1Like, type SerializedRunV1} from './serialize';
 
 /** The envelope format this build writes (and the newest it reads). */
 export const SAVE_FILE_V = 1;
 
 /** Archetypes a save may name (levels/registry.ts LEVEL_IDS; save-validate.test asserts they match). */
-export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'reactor'];
+export const SAVE_ARCHETYPES: readonly LevelId[] = ['subway', 'office', 'mall', 'skyways', 'reactor'];
 
 export const SAVE_LIMITS = {
   /** An exported file / a stored value, UTF-8 bytes. */
@@ -575,6 +576,9 @@ function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: s
   const c = campaign(r.campaign, `${path}.campaign`, o.validateNetwork);
   if ((point === 'departure') !== (c.transit !== null)) bad(`${path}.point`, point === 'departure' ? 'a departure save without a journey' : `${point === 'arrival' ? 'an arrival' : point === 'ending' ? 'an ending' : 'a new-game'} save during a journey`);
   const seeds = obj(r.seeds, `${path}.seeds`);
+  // task studio-skyways-level-20261106-054448-01: a run saved before Skyways existed has no seeds.skyways (the legacy per-archetype seed;
+  // campaign nodes carry their own levelSeed) — a deterministic default from its Subway seed (the checksum was verified on the stored run)
+  if (seeds.skyways === undefined && typeof seeds.subway === 'number' && Number.isInteger(seeds.subway)) seeds.skyways = hashString('terminal-state:skyways-seed', seeds.subway >>> 0);
   only(seeds, `${path}.seeds`, SAVE_ARCHETYPES);
   for (const l of SAVE_ARCHETYPES) int(seeds[l], `${path}.seeds.${l}`, 0, UINT32);
   str(r.section, `${path}.section`, 32, SECTION, 'a section id');

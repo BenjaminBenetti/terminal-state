@@ -154,6 +154,9 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   mall: {floor: 'mall', weapons: 'mall-plan', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
   // Task reactor-build-20261101 (primary + lane GEN): the Reactor's per-storey mall floor program (gen/mall/supplies.ts placeMallSupplies)
   reactor: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the Office's loose floor program over its three storeys
+  // (gen/office/spawns.ts placeOfficeSupplies) and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
+  skyways: {floor: 'office', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**

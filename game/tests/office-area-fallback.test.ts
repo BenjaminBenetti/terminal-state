@@ -165,7 +165,7 @@ describe('the Office presence fallback (one seeded service hatch when a PRESENT 
     const raw = officeAttempt({levelSeed: s, startWeapon: 'pistol'}, a.attempt)!;
     expect(JSON.stringify(raw.extensions)).toBe(JSON.stringify(a.extensions));
     // a revisit: the run keeps only the level seeds; the level regenerates identically (its fallback hatch included)
-    const run = createRun({seeds: {subway: 1, office: s, mall: 2, reactor: 3}, start: {level: 'office', section: 'main'}, levels: LEVELS});
+    const run = createRun({seeds: {subway: 1, office: s, mall: 2, skyways: 707, reactor: 3}, start: {level: 'office', section: 'main'}, levels: LEVELS});
     const again = LEVELS.office.generate('main', {levelSeed: run.seeds.office, startWeapon: 'pistol'} as never);
     expect(sameLevel(again, a)).toEqual([]);
     expect(again.extensions!.annexes.map(n => !!n.bed)).toEqual([true]);
