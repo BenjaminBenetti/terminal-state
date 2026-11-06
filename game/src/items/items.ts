@@ -215,7 +215,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
   // mask lane: the authored filter canister (world/authoredItems.ts FILTER_DIMS) standing on its base, thread up
   gas_filter: {w: 0.096, d: 0.096, h: 0.072, shape: 'cylinder'},
-  fuel_can: {w: 0.32, d: 0.165, h: 0.47, shape: 'box'}, // a 20 l jerrycan standing upright (task train-fuel-system: assets/models/train-fuel-can.glb bounds)
+  fuel_can: {w: 0.2015, d: 0.105, h: 0.30, shape: 'box'}, // a ~5 l can standing upright, med-kit sized (user feedback, task fuel-feedback: assets/models/train-fuel-can.glb bounds)
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,

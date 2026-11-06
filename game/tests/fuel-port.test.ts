@@ -444,7 +444,7 @@ describe('fuel can model + wiring', () => {
     expect(fuelCanModelSource()).toMatch(/^FALLBACK box .*not finished art/);
     expect(fb.getObjectByName('fuel-can-fallback')).toBeTruthy();
     const d = itemDims(FUEL.canItem), b = new THREE.Box3().setFromObject(fb), size = b.getSize(new THREE.Vector3());
-    expect(d).toMatchObject({w: 0.32, d: 0.165, h: 0.47});
+    expect(d).toMatchObject({w: 0.2015, d: 0.105, h: 0.30}); // task fuel-feedback: the med-kit sized can (assets/models/train-fuel-can.glb bounds)
     expect(size.x).toBeCloseTo(d.w, 3); expect(size.y).toBeCloseTo(d.h, 3); expect(size.z).toBeCloseTo(d.d, 3);
     expect(b.min.y).toBeCloseTo(0, 6);
   });

@@ -20,7 +20,7 @@ describe('the user-confirmed numbers (quarter-tank units)', () => {
     expect(FUEL).toMatchObject({tankUnits: 4, hopUnits: 4, canUnits: 1, canStackMax: 2, cartUnits: 8, stationMinUnits: 4, canItem: 'fuel_can'});
     expect(ITEMS.fuel_can).toMatchObject({id: 'fuel_can', kind: 'supply', stackMax: 2, icon: 'fuelCan'});
     expect(2 * FUEL.canStackMax * FUEL.canUnits).toBe(FUEL.tankUnits);
-    expect(itemDims('fuel_can').h).toBeGreaterThan(0.4);
+    expect(itemDims('fuel_can').h).toBeCloseTo(0.30, 2); // task fuel-feedback: user "Smaller fuel cans roughly med-pack sized" (was a 0.47 m jerrycan)
     expect(routeCost(1)).toBe(4);
     expect(routeCost(3)).toBe(12); // a 3-hop route costs 3 tanks
     expect(routeCost(3, true)).toBe(0); // the map cheat waives it
