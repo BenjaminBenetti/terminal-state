@@ -220,10 +220,12 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     if (!done) d.skipped.push('convention: merch statue');
   }
   {
-    const green = own.find(a => a.type === 'crew-room');
-    const gDoor = green ? doorBetween(layout, hall.id, green.id) : undefined;
-    const p = green && gDoor ? greenRoomStatue(d, green, gDoor) : null;
-    if (p) res.statues.push(p);
+    // the green room's `stand` (optional: the event storage when the green room is full)
+    for (const room of [own.find(a => a.type === 'crew-room'), own.find(a => a.type === 'storage')]) {
+      const door = room ? doorBetween(layout, hall.id, room.id) : undefined;
+      const p = room && door ? greenRoomStatue(d, room, door) : null;
+      if (p) { res.statues.push(p); break; }
+    }
   }
 
   // --- 6. the welcome sign beside the entry lane, facing the entrance -------------------------------------------------------
@@ -340,15 +342,25 @@ function statueOn(d: AddonDresser, host: PropPlacement, role: StatueRole, x: num
   return statueProp(p, role);
 }
 
-/** The green room's statue: free floor with 0.7 m clear of every prop there and of its door strip, facing the door. */
+/**
+ * A back room's statue: free floor 0.45 m clear of every prop there, never in front of one (its 0.9 m access strip: fridge / locker
+ * doors, seats) nor near the door, facing the door; the room stays connected (tryPlaceProp).
+ */
 function greenRoomStatue(d: AddonDresser, room: Area, door: Door) {
-  const r = SKYWAYS_STATUE_PLINTH.r, dp = doorPoint(door, room), props = d.layout.props.filter(p => p.area === room.id && !p.mounted);
+  const r = SKYWAYS_STATUE_PLINTH.r, dp = doorPoint(door, room), props = d.layout.props.filter(p => p.area === room.id && p.host === undefined && p.h > 0);
+  const near = (p: PropPlacement, x: number, z: number) => {
+    if (Math.abs(p.x - x) < p.hx + r + 0.45 && Math.abs(p.z - z) < p.hz + r + 0.45) return true;
+    // its front strip (front +Z turned by its yaw), 0.9 m deep over its width
+    const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot)), q = Math.abs(fx) > 0;
+    const sx = p.x + fx * (p.hx + 0.45), sz = p.z + fz * (p.hz + 0.45), shx = q ? 0.45 : p.hx, shz = q ? p.hz : 0.45;
+    return Math.abs(sx - x) < shx + r && Math.abs(sz - z) < shz + r;
+  };
   const cells: [number, number][] = [];
   for (let y = room.y + 2; y < room.y + room.h - 2; y++) for (let x = room.x + 2; x < room.x + room.w - 2; x++) cells.push([x, y]);
-  for (const [cx, cy] of d.rng.shuffle(cells).slice(0, 60)) {
-    const x = cx * CELL, z = cy * CELL; // a cell corner: the 1.1 m plinth covers 2 x 2 cells... plus its rim
+  for (const [cx, cy] of d.rng.shuffle(cells).slice(0, 80)) {
+    const x = (cx + 0.5) * CELL, z = (cy + 0.5) * CELL;
     if (Math.hypot(x - dp.x, z - dp.z) < 2.2) continue;
-    if (props.some(p => Math.abs(p.x - x) < p.hx + r + 0.7 && Math.abs(p.z - z) < p.hz + r + 0.7)) continue;
+    if (props.some(p => near(p, x, z))) continue;
     const s = statueAt(d, 'green-room-stand', x, z, yawToward(dp.x - x, dp.z - z), room);
     if (s) return s;
   }

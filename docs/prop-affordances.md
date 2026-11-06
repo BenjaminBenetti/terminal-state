@@ -333,6 +333,40 @@ holds their classification, spread into both audits):
 - Tests: `tests/skyways-food.test.ts` (registrations, both audits, purpose loot, the dresser on a synthetic carved restaurant — support,
   overlap, finite pickups, frames — and the cookware / figurine going loose on their static host under fire).
 
+### The Skyways add-on: convention hall / prize-car atrium (task studio-skyways-level-20261106-054448, lane ADDON)
+`gen/skyways/addon.ts` dressSkywaysAddon dresses the ONE add-on of a Skyways level (`addonConvention.ts`, `addonPrize.ts`; shared frame /
+keep-mask helpers `addonFrame.ts`). Reserved first (`PlaceCtx.keep`): 1.5 m in front of every door of the hall, 1.8 m lanes entry -> stage
+and entry -> washrooms (convention), the car body + 1.2 m and its exit lane to the entry (prize car). EXISTING kinds join them: folding
+chairs in rows facing the stage, capsule-toy machines, arcade cabinets, a giant teddy (convention), planters (prize car). NEW kinds
+(`gen/skyways/addonKinds.ts` holds their classification, spread into both audits; drawn by `world/skywaysAddon.ts`: lane ASSET-D's Meshy
+models with their maps kept, lane ASSET-C's mascot pose GLB, the Codex art atlases on flat panels — crop / pack only, no new painting):
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact; surfaces) |
+|---|---|---|---|---|
+| `skywaysConStage` | modular stage: skirted deck, front steps, truss goalpost with hung speakers | `none` | static `structure`; collision = the deck box (8.0 × 4.4 m at 1.03 m) + its steps box (variant 1, collision only) | 8.00 × 5.18 × 5.17 m; grounded (skirt hem / feet / steps); deck 1.03 m; truss 5.18 m |
+| `skywaysConBackdrop` | the stage backdrop art laced into the truss behind the deck | `none` | static `mounted` | 4.86 × 3.26 m panel above the deck, under the truss beam (4.40 m) |
+| `skywaysConMerchTable` | 6-ft vendor table under a floor-length cloth | `none` (open top) | static `fixture`: the host of its loose merch (on-host decor goes loose only on a static host; a prop something rests on never moves) | 2.03 × 0.76 × 1.02 m (cloth flare); top 0.759 m over 1.84 × 0.78 m |
+| `skywaysConFigureBox` / `skywaysConPlush` / `skywaysConPrintCard` | LOOSE merch on the table tops (boxed figure, plush, print in an acrylic block: the prints sheet) | `exception` (sealed retail box) / `none` / `none` | **dynamic** 0.6 kg box, `pad`, `onHost` | 0.16 × 0.24 × 0.06 / 0.30 × 0.34 × 0.28 / 0.21 × 0.25 × 0.11 m on the 0.757 m top |
+| `skywaysConPoster` | paper poster in a snap frame on solid wall (never over glazing / doors / props) | `none` | static `mounted` | 0.84 × 1.24 m, bottom 1.05 m |
+| `skywaysConPosterBoard` / `skywaysConWelcome` / `skywaysPrizeBoard` | freestanding poster board / welcome sign on an easel / GRAND PRIZE DRAW board on posts | `none` | **dynamic** 7 / 6 / 12 kg box, `pad` | 0.96 × 1.98 × 0.46 / 1.26 × 1.92 × 0.5 / 1.9 × 2.12 × 0.56 m |
+| `skywaysConBanner` | fabric banner on battens, hung on cables from the ceiling | `none` | static `mounted` (>= 2.2 m clear under it) | 1.2 × 3.2 m incl. 0.52 m cables |
+| `skywaysMascotStatue` | the mascot in a baked pose (variant = pose) on a round plinth; recorded in `addon.convention.statues` | `none` | static `anchored` (~150 kg resin, plinth bolted); round collider, any yaw | plinth 1.1 × 0.12 m + the 1.40 m pose (× scale) |
+| `skywaysPrizeStanchion` | chrome rope stanchion round the prize car's spot | `none` | **dynamic** 8 kg cylinder, `pad` | 0.34 × 0.96 × 0.34 m; base disc grounded; eye ring 0.85 m |
+
+- Statues: `wave` inside the entrance facing it, `point` turned so its hand (`SKYWAYS_MASCOT.poses.point.pointDir`) aims at the WASHROOMS
+  door (<= 10°), `cheer` on the stage deck, `bow` by the merch tables, `stand` in the green room (or the event storage) when it fits.
+- Loose merch: separate on-host props packed along each table's real top (never floating / overlapping); a shot knocks it over or off
+  (host-top slab). No loose items are baked into the furniture models. Noted: the delivered stanchion model keeps a short red rope loop
+  hanging from its eye ring (part of the cooked Meshy model, a clipped rope end — not a takeable item); the spanning velvet ropes are
+  runtime geometry (`world/skywaysAddonRuntime.ts`): they hang between upright posts, follow nudged posts and DROP to the floor for good
+  when a post is knocked over (never floating). The turntable under the car is render-only (no collision).
+- Never any text about driving / entering the car: the prize add-on shows the GRAND PRIZE DRAW art only.
+- Renders: `scale-check.mjs --prop skyways-con-stage.glb`, `--prop skyways-con-merch-table.glb --prop skyways-con-figure-box.glb --lift
+  0.757 --prop skyways-con-plush.glb --lift 0.757 --prop skyways-prize-stanchion.glb`, viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/skyways-addon.test.ts` (both audits, the models / measured geometry, the convention and the prize car on the real seeds:
+  statues / aim, stage against its wall, merch support / overlap, lanes / doors, posters / banners, the car's clearance / exit lane /
+  ring / ropes / board; the renderer on the real GLBs; ropes dropping with a shot post; merch shot off its table).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

@@ -44,7 +44,7 @@ import {CELL, FLOOR, Grid, SOLID} from '../src/gen/grid';
 import {WorldMaterials} from '../src/world/materials';
 import {buildWorld} from '../src/world/builder';
 import {PropDamage} from '../src/damage/propDamage';
-import {setSkywaysAddonArtMaterial, skywaysAddonFit} from '../src/world/skywaysAddon';
+import {setSkywaysAddonArtMaterial, skywaysAddonArtLoaded, skywaysAddonFit} from '../src/world/skywaysAddon';
 import {SkywaysAddonRuntime, planRopes, ropeLine, ROPE_TUBE} from '../src/world/skywaysAddonRuntime';
 import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
 import {installCanvasShim, ShimContext} from './helpers/canvas2d';
@@ -495,7 +495,7 @@ describe('world/skywaysAddon.ts + skywaysAddonRuntime.ts: drawn at real size, ro
     pd.build(layout.props, [w.group]);
     ph.dynamicItems.detacher = pd;
     const scene = new THREE.Scene();
-    const rt = new SkywaysAddonRuntime({scene, levelResources: {load: async () => null, own: r => r}, physics: ph, frameHooks: [], sectionHooks: []});
+    const rt = new SkywaysAddonRuntime({scene, levelResources: {load: async () => null, own: (_l, r) => r}, physics: ph, frameHooks: [], sectionHooks: []});
     // (the car spot the ring stands round: layout.skyways.addon.car)
     rt.build({...layout, skyways: {addon: {id: 'prize-car', car: {x: 20, y: 0, z: 15, yaw: 0.5, level: 0, area: 0}}}} as unknown as StationLayout);
     const disc = scene.getObjectByName('skyways-turntable') as THREE.Mesh;
@@ -530,6 +530,26 @@ describe('world/skywaysAddon.ts + skywaysAddonRuntime.ts: drawn at real size, ro
     expect(rt.counts.drops).toBe(2);
     rt.teardown();
     expect(scene.getObjectByName('skyways-addon')).toBeUndefined();
+  });
+
+  it('preload: the panels\' Codex atlases (level-only, via LevelResources) become one material each before the build; a failed atlas keeps the plain board', async () => {
+    const {layout} = sample();
+    const asked: string[] = [], owned: unknown[] = [];
+    const rt = new SkywaysAddonRuntime({scene: new THREE.Scene(), frameHooks: [], sectionHooks: [], levelResources: {
+      load: async (level, url) => { asked.push(`${level}:${url}`); return url.includes('prize') ? null : new THREE.Texture(); },
+      own: (_l, r) => { owned.push(r); return r; }}});
+    await rt.preload(layout);
+    // posters / boards (conPosters), banners (conBanners), backdrop (conStage), welcome + prints (conSigns), the prize board (prizeBoard)
+    expect(asked.sort()).toEqual(['conBanners', 'conPosters', 'conSigns', 'conStage', 'prizeBoard'].map(k => `skyways:${SKYWAYS_ART[k as 'conStage'].url}`).sort());
+    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage'] as const) expect(skywaysAddonArtLoaded(k), k).toBe(true);
+    expect(skywaysAddonArtLoaded('prizeBoard')).toBe(false);
+    expect(owned.length).toBe(4);
+    expect(rt.counts.artLoaded).toBe(4);
+    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage'] as const) setSkywaysAddonArtMaterial(k, null);
+    // a layout without the add-on panels asks for nothing
+    asked.length = 0;
+    await rt.preload(room([place('foldingChair', 5, 5)]));
+    expect(asked).toEqual([]);
   });
 
   it('merch is knocked off its static vendor table (host slab: never sinks into it); the table and the statues never move', () => {

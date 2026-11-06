@@ -294,9 +294,11 @@ export const SKYWAYS_ADDON_OPEN_AUDIT: readonly {kind: SkywaysAddonKind; cls: 'e
  * lane's private QA folder): W x H x D, grounded contact, support heights.
  */
 export const SKYWAYS_ADDON_SCALE = {
-  skywaysConStage: '8.00 x 5.18 x 5.17 m as cooked (k 1); deck 1.03 m; 9+ contact clusters (skirt / leg feet / steps)',
-  skywaysConMerchTable: '2.03 x 0.76 x 1.02 m (cloth flare incl.; top 1.84 x 0.78 m); top 0.757 m (desk height); cloth skirt to the floor',
-  skywaysPrizeStanchion: '0.34 x 0.96 x 0.34 m; base disc on the floor; ring 0.85 m',
+  skywaysConStage: '8.00 x 5.18 x 5.17 m as cooked (k 1); deck 1.03 m (84 % of the top-down area); grounded, 129 contact clusters (skirt hem, leg feet, steps 0.73 m); truss 5.18 m (hall ceilings 5.6 m)',
+  skywaysConMerchTable: '2.03 x 0.76 x 1.02 m (cloth flare incl.; top 1.84 x 0.78 m); top 0.759 m (desk height, 79 %); grounded, 9 clusters (cloth hem)',
+  skywaysConFigureBox: '0.16 x 0.24 x 0.06 m standing on the 0.757 m table top',
+  skywaysConPlush: '0.30 x 0.34 x 0.28 m sitting on the 0.757 m table top (one contact)',
+  skywaysPrizeStanchion: '0.34 x 0.96 x 0.34 m; grounded base disc (2 clusters, 5 cm base plate); eye ring 0.85 m',
 } as const;
 
 /** Poses by role (the convention's statues). */
