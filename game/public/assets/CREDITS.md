@@ -443,3 +443,17 @@ them are invented. Runtime derivatives (crop / resize / JPEG atlas pack only) bu
   Flight and Orrery Courts).
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-dest-art-20261106 -->
+
+<!-- BEGIN skyways-destinations-audio-20261106 (skyways-destinations-build.mjs) -->
+## Skyways destinations audio (clock tick loop, clock chime, arcade attract loop, projector loop)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Skyways
+destinations task's local Sound Lab allowance (4 jobs of a 4-job plan). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+loop, levelling, MP3) built by `tools/audio-pipeline/skyways-destinations-build.mjs` (provenance:
+`assets/derivatives/audio-skyways-destinations.json`). Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/skyways-clock-tick-loop.mp3` — clockTick (Sound Lab job 20261106T172857-365151629)
+- `assets/audio/skyways-clock-chime.mp3` — clockChime (Sound Lab job 20261106T172902-1344187379)
+- `assets/audio/skyways-arcade-attract-loop.mp3` — arcadeAttract (Sound Lab job 20261106T172906-1331231845)
+- `assets/audio/skyways-projector-loop.mp3` — projectorRun (Sound Lab job 20261106T172911-1103820376)
+<!-- END skyways-destinations-audio-20261106 -->

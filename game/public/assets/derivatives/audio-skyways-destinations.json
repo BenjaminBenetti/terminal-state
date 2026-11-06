@@ -1,0 +1,146 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-skyways-destinations-20261106",
+ "task": "studio-skyways-destinations-20261106-170011-01",
+ "lane": "AUDIO",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance; 4 jobs of the plan's 4-job cap)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/skyways-destinations-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (per-0.1 s level, quiet fraction, spectral centroid, onsets, loop seam). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "clockTick",
+   "url": "assets/audio/skyways-clock-tick-loop.mp3",
+   "bytes": 21942,
+   "sha256": "2d024c9380c996c920c611d67440ed0cb8810b71444131e185aefea993a400f1",
+   "dur": 2.7007,
+   "loop": {
+    "start": 0.1,
+    "length": 2.500658
+   },
+   "ops": [
+    "mono",
+    "beat-aligned loop: 5 tick intervals from tick 2 (0.511 s) to tick 7 (3.012 s) = 2.501 s, intervals 0.491 / 0.496 / 0.511 / 0.496 / 0.506 s, start 0.15 s before a tick",
+    "equal-power crossfade 0.08 s",
+    "margins 0.1 s",
+    "rms -20 dBFS, peak ceiling -1 dBFS (5.9 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "clock-tick-01",
+    "rawFile": "reference/tasks/skyways-destinations-20261106-170011/audio/raw/clock-tick-01.wav",
+    "rawSha256": "70bdef411be754e1c0ce136b40b586e661aa290180bd2ad90b079ea50666aed9",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-large-old-mechanical-tower-clock-movem_w8a8_seed365151629_172857.wav",
+    "labSidecarSha256": "5159d497bfbd9c71e53c776cf3702c7bd8f6575e58b28d1161fcc35382e0b1aa",
+    "jobId": "20261106T172857-365151629",
+    "prompt": "TrackType: SFX, a large old mechanical tower clock movement ticking steadily: slow heavy regular brass escapement ticks with a faint gear rumble, constant tempo, continuous, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 365151629,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "clockChime",
+   "url": "assets/audio/skyways-clock-chime.mp3",
+   "bytes": 43258,
+   "sha256": "463a2c7e4a1c8f2b72ea79f11bffd330ad2c8672e1a1f302003b7c1d49b0658a",
+   "dur": 5.38,
+   "ops": [
+    "mono",
+    "trim 0.32-5.7 s",
+    "cosine fades 0.01 / 0.6 s",
+    "peak -1 dBFS (7.8 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "clock-chime-01",
+    "rawFile": "reference/tasks/skyways-destinations-20261106-170011/audio/raw/clock-chime-01.wav",
+    "rawSha256": "0110e93aa2ea809d7ffe3436ae23eb2f9c902ad4c28460da7e670eebb667751a",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-large-public-clock-bell-striking-three_w8a8_seed1344187379_172902.wav",
+    "labSidecarSha256": "6e6fd040e017310139fad8cd147141f9fec32361258e80fc1cee80348b59e4fe",
+    "jobId": "20261106T172902-1344187379",
+    "prompt": "TrackType: SFX, a large public clock bell striking three slow deep bronze tolls, each ringing out and decaying, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1344187379,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "arcadeAttract",
+   "url": "assets/audio/skyways-arcade-attract-loop.mp3",
+   "bytes": 25495,
+   "sha256": "42a970bc071f48019a8d2cf186b2694fc28753db8622a8e8378439e2f8db834a",
+   "dur": 3.16,
+   "loop": {
+    "start": 0.1,
+    "length": 2.96
+   },
+   "ops": [
+    "mono",
+    "window from 0.1 s, loop 2.96 s",
+    "equal-power crossfade 0.08 s",
+    "margins 0.1 s",
+    "rms -20 dBFS, peak ceiling -1 dBFS (11.4 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "arcade-attract-01",
+    "rawFile": "reference/tasks/skyways-destinations-20261106-170011/audio/raw/arcade-attract-01.wav",
+    "rawSha256": "fe9b17a058f1f4425532e7851d46598f314e030d3a3bdf4f2144438b0fb4b9d1",
+    "rawBytes": 705644,
+    "labFile": "sfx_old-video-arcade-cabinets-in-attract-mod_w8a8_seed1331231845_172906.wav",
+    "labSidecarSha256": "d5375503223068087bdb08c19f2021317511c14ea5155438914c72c1d60b2e8e",
+    "jobId": "20261106T172906-1331231845",
+    "prompt": "TrackType: SFX, old video arcade cabinets in attract mode: soft electronic bleeps, blips and synth jingles from several machines at once, steady and continuous, no voices, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1331231845,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "projectorRun",
+   "url": "assets/audio/skyways-projector-loop.mp3",
+   "bytes": 19435,
+   "sha256": "cebf6d3a860a355aaf8fc23ec4f9748a97157ca55c7df7c7dddc5d4b710b4c13",
+   "dur": 2.4,
+   "loop": {
+    "start": 0.1,
+    "length": 2.2
+   },
+   "ops": [
+    "mono",
+    "window from 0.55 s, loop 2.2 s",
+    "equal-power crossfade 0.25 s",
+    "margins 0.1 s",
+    "rms -20 dBFS, peak ceiling -1 dBFS (10.5 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "projector-run-01",
+    "rawFile": "reference/tasks/skyways-destinations-20261106-170011/audio/raw/projector-run-01.wav",
+    "rawSha256": "01b89a31a7da7df7b740312765f857cf3b782a98e7453425dc2814c94684cd43",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-vintage-35-mm-film-projector-running-a_w8a8_seed1103820376_172911.wav",
+    "labSidecarSha256": "5241dea73456fde9846034afd77b619c21a157693b61a86254f6f097c022e4df",
+    "jobId": "20261106T172911-1103820376",
+    "prompt": "TrackType: SFX, a vintage 35 mm film projector running: a steady mechanical clatter of the film gate and a whirring motor, constant and continuous, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1103820376,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}
