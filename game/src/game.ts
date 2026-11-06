@@ -2762,8 +2762,9 @@ export class Game {
     const area = multi ? this.levels.areaAt(p.x, p.z, p.y) : this.layout.grid.areaAt(p.x, p.z);
     // Iteration 17: the office tower's storey ("Open-plan office · Floor 5 · Bramley House"); task mall-playtest-revision-20261031
     // (lane GEN): the mall's retail floor too ("Paper Lantern Books · Sales floor · Level 2 · Harbourline Center")
-    const storey = (this.layout.office || this.layout.mall) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
-    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
+    const storey = (this.layout.office || this.layout.mall || this.layout.skyways) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
+    // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed)
+    const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
     const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
