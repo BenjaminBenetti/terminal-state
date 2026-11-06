@@ -38,6 +38,15 @@
 // shoves it along the shot (bounded, by mass). An enemy in front of the cart is still hit first (the enemy pass runs before the world).
 // LIMITS: enemies walk through carts (no nav / body collision with them); a train door closes through a cart standing in the doorway
 // (only bodies block the doors) — a departure is refused while one straddles (departBlock).
+//
+// API for the lead (Game.fuelCarts):
+//   aboard() / departBlock() / captureCargo() / releaseCargo()  FuelCartsLike (above).
+//   loadStation(recs)    the current station's carts are exactly `recs` (StationCartJSON, from its FUEL_LANE); cargo kept; uids the train
+//                        carries are skipped; before this system's build hook ran they wait for it. Call it on EVERY station build.
+//   spawn(rec)           one more station cart (the plan realization; a known uid is ignored).
+//   stationRecords()     the station-owned carts as StationCartJSON (live; between a teardown and the next build: the torn-down
+//                        station's snapshot) — what the lead writes into that station's FUEL_LANE (on a saving teardown / a save).
+//   stationUnits() / all() / cartsNear(x, z, r, level?)  readouts (map stock, QA); cargo() the train's records (TrainFuel.live).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
