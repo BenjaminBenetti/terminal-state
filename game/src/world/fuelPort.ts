@@ -25,8 +25,10 @@
 // slot: never a worn backpack's contents) — and the tank gains FUEL.canUnits. Not routed through the consumable use (startUse /
 // consumeReturn / lmbLatch are untouched: fuel_can is a 'supply').
 //
-// HELD VIEW: supplies are not held-visible in this game (Game.syncHeld shows weapons, consumables and throwables only), so a selected
-// fuel can shows empty hands like a held gas filter; the left-click pour still works from that quick slot.
+// HELD VIEW: a fuel can in the selected quick slot is held in front of you (the delivered GLB, world/fuelCanModel.ts): this system
+// adds it to the viewmodel once per build (Viewmodel.addHeldItem, before the warm-up, like the readied backpack) and Game.syncHeld shows
+// a SUPPLY that has a registered held model (only the fuel can). It never becomes a consumable use (no startUse / consume view).
+// The model loads with the boot assets (preloadFuelCanModel: started here, awaited by Game.load before item templates / icons).
 //
 // HUD (ui/hud.ts setFuel; DOM written only on change): shown while the player is inside or within FUEL_PORT.hudNear of the parked car,
 // and while riding — the tank as four quarter pips + "Fuel ¾ tank · aboard +2 tanks (chest 1, carts 1)" (fuel/fuel.ts reservesOf: the
@@ -38,6 +40,7 @@ import {FUEL, reservesOf, tanksText, type CartFuel, type FuelReserves} from '../
 import {PORT, fuelPortLocal} from '../fuel/trainPort';
 import {PLAYER_TRAIN_SPEC} from './playerTrainSpec';
 import {makeSupplyMesh} from './pickups';
+import {preloadFuelCanModel} from './fuelCanModel';
 import type {ItemStack} from '../items/inventory';
 
 /** Tuning (one place). */
@@ -52,6 +55,8 @@ export const FUEL_PORT = {
   reachSlack: 0.3,
   /** The cap's aim box (train-local, around fuelPortLocal()): half extents along the car (x) / up (y), and how far out / in (z). */
   aim: {hx: 0.13, hy: 0.1, out: 0.12, in: 0.04},
+  /** The held can's hand pose (viewmodel camera space; the model centred on its holder): low right, front (+Z) to the eye. */
+  held: {hip: [0.24, -0.43, -0.72] as const, yaw: -0.35, pitch: 0.08, roll: 0.04},
   /** The visible fixture (m): housing plate, filler neck, cap. */
   part: {plateW: 0.2, plateH: 0.14, plateD: 0.05, plateInset: 0.02, neckR: 0.034, neckLen: 0.05, capR: 0.046, capLen: 0.03},
 } as const;
@@ -114,7 +119,6 @@ interface TrainLike {
 interface HostExtras {
   trainRuntime?: TrainLike;
   trainRide?: {riding: boolean};
-  fuelCarts?: {aboard?(): CartFuel[]} | null;
   levels?: {raycast(o: V3, d: V3, max: number): {kind: string; t: number}} | null;
   consumeView?: {busy: boolean};
   gasMask?: {transitioning: boolean};
@@ -184,6 +188,7 @@ export class FuelPortSystem {
 
   install(): this {
     const g = this.host;
+    void preloadFuelCanModel(); // the GLB download overlaps the boot assets (Game.load awaits it before the item templates)
     g.frameHooks.push(dt => this.update(dt));
     g.interactHandlers.push(() => this.onInteract());
     g.pointerHandlers?.push(() => this.onPointer());
@@ -191,7 +196,7 @@ export class FuelPortSystem {
     g.inputOwners?.push(() => !!this.pour);
     g.hitListeners.push(hit => { if (this.pour && hit.amount > 0) this.cancel('hit'); });
     g.stateListeners?.push(s => { if (s !== 'playing') { if (this.pour) this.cancel('menu'); this.aimed = false; } });
-    g.sectionHooks.push({build: () => this.attach(), teardown: () => { if (this.pour) this.cancel('teardown'); this.aimed = false; this.setHud(null); }});
+    g.sectionHooks.push({build: () => { this.attach(); this.ensureHeldModel(); }, teardown: () => { if (this.pour) this.cancel('teardown'); this.aimed = false; this.setHud(null); }});
     g.warmRegistry.addPool('fuel-port', () => this.warmRoots());
     return this;
   }
@@ -208,6 +213,20 @@ export class FuelPortSystem {
       this.cap.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.level = level; });
       this.counts.attached++;
     }
+    return true;
+  }
+
+  /** The viewmodel's held fuel can (the shared item template, centred on its holder), added once — before the warm-up compiles it. */
+  ensureHeldModel(): boolean {
+    const vm = (this.game as {viewmodel?: {hasItem?(id: string): boolean; addHeldItem?(id: string, obj: THREE.Object3D, pose: {hip: readonly [number, number, number]; yaw?: number; pitch?: number; roll?: number}): void}}).viewmodel;
+    if (!vm || typeof vm.addHeldItem !== 'function' || typeof vm.hasItem !== 'function') return false;
+    if (vm.hasItem(FUEL.canItem)) return true;
+    const obj = makeSupplyMesh(FUEL.canItem);
+    obj.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(obj);
+    if (!box.isEmpty()) obj.position.y -= (box.min.y + box.max.y) / 2; // centre on the holder (the template's origin is bottom-centre)
+    vm.addHeldItem(FUEL.canItem, obj, FUEL_PORT.held);
+    (this.game as {syncHeld?: () => void}).syncHeld?.(); // a can already selected shows at once
     return true;
   }
 
@@ -393,7 +412,9 @@ export class FuelPortSystem {
 
   private updateHud(g: Game & HostExtras): void {
     if (!this.nearTrain()) { this.setHud(null); return; }
-    const carts = g.fuelCarts?.aboard?.() ?? [];
+    // the cart system (world/fuelCarts.ts, lane CART) may be absent: Game.fuelCarts is then not a cart system (no aboard())
+    const fc = (this.game as unknown as {fuelCarts?: {aboard?: unknown}}).fuelCarts;
+    const carts = fc && typeof fc.aboard === 'function' ? (fc.aboard as () => CartFuel[]).call(fc) ?? [] : [];
     this.setHud(fuelReadout(g.playerTrain.fuel.tank, carts, g.playerTrain.lockbox.slots));
   }
 

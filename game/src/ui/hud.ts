@@ -11,6 +11,19 @@ import {ensureGearStyles} from './gearStyles';
 import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
 import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
+import type {FuelHudView} from '../world/fuelPort'; // task train-fuel-system (lane PORT)
+
+// Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL readout — a row at the top of the light panel in the
+// battery meter's style (icon, label, four quarter pips like the battery bar's cells, cream text; amber when the train cannot make one
+// hop). Built on first use (no index.html markup), written only when what it shows changes (world/fuelPort.ts decides when it shows).
+const FUEL_CSS = `
+#fuel-tag.none { display: none; }
+#fuel-tag .pips { display: flex; gap: 2px; }
+#fuel-tag .pips i { width: 11px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
+#fuel-tag .pips i.on { background: var(--cream); }
+#fuel-tag .txt { color: var(--cream); white-space: nowrap; }
+#fuel-tag.low .pips i.on { background: var(--mustard); }
+#fuel-tag.low .txt, #fuel-tag.low .ico { color: var(--mustard); }`;
 
 // Iteration 16 (lane INJURY): limb indicator — a row of the vitals (shown only while injured, so the healthy HUD is unchanged):
 // a small body silhouette (seen from behind: your left on the left) with the injured arm / leg in red, and short labels.
@@ -280,6 +293,46 @@ export class Hud {
     el.title = def ? `Gas mask ${label} · filter ${pct} % · ${spares} spare${air} · ${reserve} s of protection in all — Q puts it on / takes it off; it protects only while on with air left` : 'Q: gas mask — none worn (drag one here or wear it from Tab: gear)';
     el.innerHTML = `<span class="key">Q</span>${spares ? `<span class="count">+${spares}</span>` : ''}${def ? itemIconHtml(def.id) : `<span class="ghost">${GEAR_ICONS.gasmask}</span>`}`
       + `<span class="nm">${def ? label : 'no mask'}</span>${def && tank ? `<span class="fb tb"><i style="width:${tankPct}%"></i></span>` : ''}${def ? `<span class="fb"><i style="width:${pct}%"></i></span>` : ''}`;
+  }
+
+  /**
+   * Task train-fuel-system (lane PORT): the train FUEL readout (world/fuelPort.ts: near / aboard the train; null hides it). Writes the
+   * DOM only when the pips / text / tone change.
+   */
+  setFuel(v: FuelHudView | null): void {
+    const key = v ? `${v.pips}|${v.low ? 1 : 0}|${v.text}` : '';
+    if (key === this.fuelKey) return;
+    this.fuelKey = key;
+    if (typeof document === 'undefined') return;
+    if (!this.fuelEl) {
+      const panel = document.querySelector('#light-panel');
+      if (!panel) return;
+      if (!document.querySelector('#fuel-css')) {
+        const st = document.createElement('style');
+        st.id = 'fuel-css';
+        st.textContent = FUEL_CSS;
+        document.head.appendChild(st);
+      }
+      const el = document.createElement('div');
+      el.id = 'fuel-tag';
+      el.className = 'lrow none';
+      panel.insertBefore(el, panel.firstChild); // above the flares / battery rows
+      this.fuelEl = el;
+    }
+    const el = this.fuelEl;
+    el.classList.toggle('none', !v);
+    if (!v) return;
+    el.classList.toggle('low', v.low);
+    el.title = 'Train fuel: one tank = one stop. Pour fuel cans in at the fuel cap (E); fuel cans in the train chest and fuel carts inside the car are burnt by themselves when the train departs.';
+    const pips = Array.from({length: 4}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}"></i>`).join('');
+    el.innerHTML = `<span class="ico">${ICONS.fuelCan}</span><span class="pips">${pips}</span><span class="txt">${v.text.replace(/[&<>]/g, c => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'))}</span>`;
+  }
+  private fuelKey = '';
+  private fuelEl: HTMLElement | null = null;
+
+  /** Task train-fuel-system (lane PORT): the fuel readout's shown text ('' hidden) — QA / tests. */
+  get fuelShown(): string {
+    return this.fuelKey;
   }
 
   /** Task gasmask-breach-20261030 (mask lane): the gas mask's face state (gear/gasMask.ts calls it every frame; applied by update). */

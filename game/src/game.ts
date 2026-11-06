@@ -75,6 +75,8 @@ import {installFuelStations, type FuelStations} from './world/fuelStations'; // 
 import {FUEL, applyDebit, planDebit, refundDebit, reservesOf, routeCost, tanksText, type CartFuel, type FuelDebit} from './fuel/fuel'; // task train-fuel-system
 import type {FuelCartsLike} from './fuel/trainPort'; // task train-fuel-system: the carts aboard as the departure sees them (world/fuelCarts.ts)
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
+import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
+import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
@@ -322,6 +324,8 @@ export class Game {
   readonly gear: GearSystem;
   /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, the first-person mask view; protects() (gear/gasMask.ts). */
   readonly gasMask: GasMaskSystem;
+  /** Task train-fuel-system (lane PORT): the train's fuel cap — E pours one fuel can into the tank; the HUD fuel readout (world/fuelPort.ts). */
+  readonly fuelPort: FuelPortSystem;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
@@ -541,6 +545,7 @@ export class Game {
     this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
     this.fuelStations = installFuelStations(this); // task train-fuel-system: realize each campaign station's fuel once; the map's figures
     hookName('gasMask');
+    this.fuelPort = installFuelPort(this); hookName('fuelPort'); // task train-fuel-system (lane PORT)
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
@@ -642,6 +647,7 @@ export class Game {
     // Food/drink use the generated item models when the manifest has them (else stand-ins).
     await preloadMedicalModels(); // Iteration 16 (lane INJURY): Meshy splint / sling (null urls / failures -> authored models)
     await preloadReactorItemModels(); // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge kit GLBs (failures -> procedural stand-ins)
+    await preloadFuelCanModel(); // task train-fuel-system (lane PORT): the fuel-can GLB before item templates / icons (a failure -> the fallback box)
     registerItemModels(m as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF | undefined>);
     const consumables: Record<string, THREE.Object3D> = {};
     for (const id of Object.values(ITEMS).filter(d => d.kind === 'consumable' || d.kind === 'throwable').map(d => d.id)) {
@@ -2200,7 +2206,8 @@ export class Game {
       this.viewmodel.setItem(st!.itemId);
     } else {
       this.weapon.equip(null);
-      this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' ? st!.itemId : null); // Iteration 12 (LIGHT): a held flare shows
+      // Iteration 12 (LIGHT): a held flare shows; (task train-fuel-system, lane PORT) so does a supply with a registered held model (the fuel can)
+      this.viewmodel.setItem(def?.kind === 'consumable' || def?.kind === 'throwable' || (def?.kind === 'supply' && this.viewmodel.hasItem(st!.itemId)) ? st!.itemId : null);
     }
     // Iteration 15: while a flare is readied the hand shows it (whatever pickups / inventory changes happen meanwhile)
     if (this.flareHold.active) { this.weapon.equip(null); this.viewmodel.setItem('flare'); }
