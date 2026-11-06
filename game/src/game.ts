@@ -1442,13 +1442,13 @@ export class Game {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
     const carts = this.fuelCarts();
     const block = carts?.departBlock() ?? null;
-    if (block) { this.hud.toast(block, true); this.sfx.denied(); return {ok: false, error: block}; }
+    if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
     const debit = planDebit(cost, tf.tank, aboard, chest);
     if (!debit) {
       const r = reservesOf(tf.tank, aboard, chest);
       const msg = `Not enough fuel — ${hops > 1 ? `${hops} stops need` : 'this stop needs'} ${tanksText(cost)}, the train has ${tanksText(r.total)}. Find fuel cans (a can is ¼ tank) or a fuel cart.`;
-      (this.sfx as {engineStall?(): void}).engineStall?.();
+      (this.sfx as {engineStall?(): void} | undefined)?.engineStall?.();
       this.hud.toast(msg, true);
       return {ok: false, error: msg};
     }
