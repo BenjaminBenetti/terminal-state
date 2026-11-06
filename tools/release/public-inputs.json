@@ -1899,6 +1899,11 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/skyways-mascot-poses.json",
+      "bytes": 5708,
+      "sha256": "58557fd2e5f7e20c241a55e8b1ffbd120a6fc01fee6bcca42b21d2672f9a78df"
+    },
+    {
       "path": "assets/derivatives/train-fuel-can.json",
       "bytes": 3901,
       "sha256": "7265ddde750c562f5287bbb55e369cd92a6e38c6113995ea687cc8f758a21a3c"
@@ -3687,6 +3692,11 @@
       "path": "assets/models/sign.glb",
       "bytes": 259508,
       "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3"
+    },
+    {
+      "path": "assets/models/skyways-mascot-poses.glb",
+      "bytes": 2754056,
+      "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5"
     },
     {
       "path": "assets/models/stall-t25.glb",
