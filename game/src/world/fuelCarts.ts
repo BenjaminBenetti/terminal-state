@@ -71,6 +71,11 @@ export const FUEL_CART = {
   captureGrace: 1.0,
   /** Model fetch wait behind the loading screen (ms). */
   modelWaitMs: 8000,
+  /**
+   * The ownership test's footprint radius (aboard / straddling): a centimetre inside the collision circle, so a cart resting against the
+   * car's lining (|z| + r = halfWidth within float error) still counts as wholly aboard.
+   */
+  ownRadius: PORT.cartRadius - 0.01,
 } as const;
 
 export const CART_TEXT = {
@@ -149,6 +154,7 @@ interface CartSfx {
   denied?(): void;
 }
 
+const OWN_RADIUS = FUEL_CART.ownRadius;
 const NO_MODS = Object.freeze({});
 const DRAG_MODS = Object.freeze({speedMult: FUEL_CART.speedMult});
 const r4 = (v: number) => Math.round(v * 1e4) / 1e4;
@@ -257,7 +263,7 @@ export class FuelCarts implements FuelCartsLike {
       if (c.mode !== 'world') continue;
       const q = worldToTrain(p, c.body.x, c.body.y, c.body.z);
       if (Math.abs(q.y - this.spec.floorY) > 1.2) continue; // (a cart down in the bed / on another storey is not at the car)
-      if (cartStraddles(q.x, q.z, PORT.cartRadius, this.spec)) return CART_TEXT.straddle;
+      if (cartStraddles(q.x, q.z, OWN_RADIUS, this.spec)) return CART_TEXT.straddle;
     }
     return null;
   }
@@ -520,6 +526,7 @@ export class FuelCarts implements FuelCartsLike {
     const p = this.parkedPlacement();
     if (!p || c.mode !== 'world') return 'There is no train here';
     if (this.grab?.cart === c) return 'Let go of the cart first';
+    if (this.insideCar(c, p)) return 'Take the cart out to the fuel cap'; // (the cap is on the outer skin: no hose through the wall)
     if (this.nozzleToCap(c, p) > FUEL_CART.hoseMax) return 'Too far from the fuel cap';
     if (c.fuel.units <= 0) return CART_TEXT.empty;
     if (this.host.playerTrain.fuel.tank >= FUEL.tankUnits) return 'The train tank is full';
@@ -711,7 +718,7 @@ export class FuelCarts implements FuelCartsLike {
   /** A world cart wholly inside the car at placement p (cartAboard on its train-local centre, standing on the car floor). */
   private insideCar(c: Cart, p: TrainPlacement): boolean {
     const q = worldToTrain(p, c.body.x, c.body.y, c.body.z);
-    return Math.abs(q.y - this.spec.floorY) < 0.3 && cartAboard(q.x, q.z, PORT.cartRadius, this.spec);
+    return Math.abs(q.y - this.spec.floorY) < 0.3 && cartAboard(q.x, q.z, OWN_RADIUS, this.spec);
   }
 
   /** Cargo -> ordinary carts at the parked car's placement (an arrival: the NEW station's); without a car -> pending records. */

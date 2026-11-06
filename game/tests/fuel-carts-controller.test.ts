@@ -17,8 +17,8 @@ const R = CART.radius;
 const WALL = 0.5; // the room's inner wall faces: x / z = 0.5 and x = 10.5 / z = 6.5
 const EDGE = 7; // the drop
 
-const body = (x: number, z: number, units = FUEL.cartUnits, v: [number, number] = [0, 0]): CartBody => ({x, y: 0, z, yaw: 0, vx: v[0], vz: v[1], level: 0, units});
-const cart = (uid: string, x: number, z: number, units = FUEL.cartUnits, yaw = 0) => ({uid, units, x, y: 0, z, yaw, level: 0});
+const body = (x: number, z: number, units: number = FUEL.cartUnits, v: [number, number] = [0, 0]): CartBody => ({x, y: 0, z, yaw: 0, vx: v[0], vz: v[1], level: 0, units});
+const cart = (uid: string, x: number, z: number, units: number = FUEL.cartUnits, yaw = 0) => ({uid, units, x, y: 0, z, yaw, level: 0});
 
 describe('fuel cart controller (pure)', () => {
   const levels = flatRoom(EDGE);

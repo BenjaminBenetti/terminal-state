@@ -45,6 +45,7 @@ export function flatRoom(dropX = 7): Levels {
 
 export interface CartTestHost extends FuelCartHost {
   player: Player;
+  playerTrain: PlayerTrainRecord;
   keys: Keys;
   toasts: string[];
   sfxCalls: string[];

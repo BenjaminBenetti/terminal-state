@@ -24,7 +24,7 @@ const live: PlayerTrainRuntime[] = [];
 afterEach(() => { for (const rt of live.splice(0)) if (rt.train) { rt.ride = null; rt.teardown(); } });
 
 /** The station, a cart on the platform beside the fuel cap (drum toward the car), the player behind it looking at the drum. */
-function setup(units = FUEL.cartUnits, tank = 0, lz = -2.5, dx = 0) {
+function setup(units: number = FUEL.cartUnits, tank = 0, lz = -2.5, dx = 0) {
   const s = stationHost(SUBWAY());
   live.push(s.rt);
   const {h, carts} = s;
