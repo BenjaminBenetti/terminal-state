@@ -28,6 +28,8 @@ export const SKYWAYS_ADDON_ART_WAIT_MS = 6000;
 export const ROPE_TUBE = {r: 0.02, seg: 12, sides: 6} as const;
 /** A post leaning more than this (cos of the tilt) drops its ropes. */
 const UPRIGHT_COS = Math.cos(0.35);
+/** The LevelResources owner key (a named constant: the release packager reads a literal first `load(...)` argument as an asset path). */
+const LEVEL = 'skyways';
 
 export interface SkywaysAddonHost {
   scene: THREE.Scene;
@@ -153,12 +155,12 @@ export class SkywaysAddonRuntime {
   async preload(layout: StationLayout): Promise<void> {
     const atlases = skywaysAddonAtlases(new Set(layout.props.map(p => p.kind)));
     await Promise.all(atlases.map(async (atlas: SkywaysArtAtlasKey) => {
-      const tex = await this.host.levelResources.load('skyways', SKYWAYS_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
+      const tex = await this.host.levelResources.load(LEVEL, SKYWAYS_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
       if (!tex) { setSkywaysAddonArtMaterial(atlas, null); return; }
       // the same texture (a Retry of the level keeps its resources): the same material
       let m = this.artMats.get(tex);
       if (!m) {
-        m = this.host.levelResources.own('skyways', new SurfaceNodeMaterial({map: tex, roughness: 0.78, metalness: 0}));
+        m = this.host.levelResources.own(LEVEL, new SurfaceNodeMaterial({map: tex, roughness: 0.78, metalness: 0}));
         m.name = `skyways-addon-art-${atlas}`;
         this.artMats.set(tex, m);
       }
