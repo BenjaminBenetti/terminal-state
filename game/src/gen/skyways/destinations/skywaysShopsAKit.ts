@@ -30,7 +30,7 @@ export const SHOPS_A_LANE_HALF = 0.7;
 export const SHOPS_A_DOOR_CLEAR = 1.5;
 export const SHOPS_A_STAIR_CLEAR = 1.4;
 
-export interface ShopsALane { level: number; to: 'door' | 'zone' | 'stair'; pts: [number, number][]; half: number; narrow?: boolean }
+export interface ShopsALane { level: number; to: 'door' | 'zone' | 'stair' | 'aisle'; pts: [number, number][]; half: number; narrow?: boolean }
 
 interface Storey { level: number; ctx: PlaceCtx; g: Grid; areas: Area[]; ids: Set<number>; base: number; doors: Door[] }
 
@@ -123,8 +123,9 @@ export class AnchorKit {
     if (own) begin(s.ctx);
     const mark = s.ctx.tx.log!.length, n0 = this.layout.props.length;
     let p = tryPlaceProp(s.ctx, area, kind, r3(x), r3(z), r3(normYaw(rot)), o);
-    // (a piece cut off from the entry / the stair: undone back to the savepoint, the open cluster kept)
-    if (p && multi && !this.regionOk(level)) { undoTo(s.ctx, mark, n0); p = null; }
+    // (a piece cut off from the entry / the stair, or a box overlapping a neighbour's by more than 1 cm — the cell test lets a box reach
+    // 4 cm into a free cell: undone back to the savepoint, the open cluster kept)
+    if (p && (this.overlaps(p, level) || (multi && !this.regionOk(level)))) { undoTo(s.ctx, mark, n0); p = null; }
     if (own) commit(s.ctx);
     if (p) this.placed.push(p);
     return p;
@@ -150,13 +151,16 @@ export class AnchorKit {
     return true;
   }
   /** Wall spots (solid wall behind a `kind`) of the storey's pieces, nearest (x, z) first. */
-  wallSpots(kind: PropKind, x: number, z: number, level = this.level, sides?: Side[]): {a: Area; side: Side; t: number; x: number; z: number; rot: number}[] {
+  wallSpots(kind: PropKind, x: number, z: number, level = this.level, sides?: Side[], turn = 0): {a: Area; side: Side; t: number; x: number; z: number; rot: number}[] {
     const s = this.st(level), def = PROP_DEFS[kind], out: {a: Area; side: Side; t: number; x: number; z: number; rot: number}[] = [];
+    // (turn +-PI/2: a piece whose long X side runs from the wall into the room — the bed's headboard end to the wall)
+    const span = turn ? def.d : def.w, depth = turn ? def.w : def.d;
     for (const a of s.areas.filter(q => !this.zones.includes(q))) for (const side of sides ?? (['N', 'S', 'E', 'W'] as Side[])) {
       const [lo, hi] = wallRange(a, side);
-      for (let t = lo + 0.3 + def.w / 2; t <= hi - 0.3 - def.w / 2; t += 0.25) {
-        if (!this.solidWall(a, side, t, kind, level)) continue;
-        const sp = wallSpot(a, side, t, kind);
+      for (let t = lo + 0.3 + span / 2; t <= hi - 0.3 - span / 2; t += 0.25) {
+        if (!this.solidWall(a, side, t, kind, level, span)) continue;
+        const [wx, wz] = wallXZ(a, side, t, depth / 2 + 0.03);
+        const sp = turn ? {x: wx, z: wz, rot: normYaw(WALL_ROT[side] + turn)} : wallSpot(a, side, t, kind);
         out.push({a, side, t, ...sp});
       }
     }
@@ -203,6 +207,14 @@ export class AnchorKit {
     return p;
   }
 
+  /** A standing prop's box overlaps another standing prop's box of the storey (by more than 1 cm). */
+  overlaps(p: PropPlacement, level: number): boolean {
+    for (const q of this.layout.props) {
+      if (q === p || q.mounted || q.host !== undefined || (q.level ?? 0) !== level) continue;
+      if (Math.abs(q.x - p.x) < q.hx + p.hx - 0.01 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.01) return true;
+    }
+    return false;
+  }
   /** Every free cell of the storey's sales pieces is reachable from its way in (the entry / the stair mouth), every door touched. */
   regionOk(level: number): boolean {
     const s = this.st(level), g = s.g;
@@ -304,11 +316,14 @@ export class AnchorKit {
       }
       const m = this.mouths.get(level);
       if (m && level === this.level) targets.push({x: m.x, z: m.z, to: 'stair'});
+      // the main aisle: in from the entry to the back of the floor (the shop's spine; dense fixtures fill round it)
+      if (level === this.level) { const [x, z] = this.uv(this.uE, this.fr.D - 1.6); targets.push({x, z, to: 'aisle'}); }
       for (const t of targets) {
         let path = this.route(level, from, [t.x, t.z], true), narrow = false;
         if (!path) { path = this.route(level, from, [t.x, t.z], false); narrow = true; }
-        if (!path) { this.skipped.push(`lane to ${t.to} at ${t.x.toFixed(1)},${t.z.toFixed(1)}`); continue; }
-        for (let k = 1; k < path.length; k++) this.keepSegment(path[k - 1][0], path[k - 1][1], path[k][0], path[k][1], SHOPS_A_LANE_HALF, level);
+        if (!path) { if (t.to !== 'aisle') this.skipped.push(`lane to ${t.to} at ${t.x.toFixed(1)},${t.z.toFixed(1)}`); continue; }
+        // (reserved a little wider than the recorded half width: the cells diagonal to the path's corners / ends — 0.71 m — are kept too)
+        for (let k = 1; k < path.length; k++) this.keepSegment(path[k - 1][0], path[k - 1][1], path[k][0], path[k][1], SHOPS_A_LANE_HALF + 0.06, level);
         this.lanes.push({level, to: t.to, pts: path.map(([x, z]) => [r3(x), r3(z)] as [number, number]), half: SHOPS_A_LANE_HALF, ...(narrow ? {narrow} : {})});
       }
     }
@@ -393,9 +408,9 @@ export class AnchorKit {
     return wins.some(w => w.x0 < sx1 + 0.05 && w.x1 > sx0 - 0.05 && w.z0 < sz1 + 0.05 && w.z1 > sz0 - 0.05 && w.sill < y1);
   }
   /** Solid wall (no opening / glazing / aperture / window) behind a prop of `kind` centred at `t` on `a`'s `side`. */
-  solidWall(a: Area, side: Side, t: number, kind: PropKind, level = this.level): boolean {
+  solidWall(a: Area, side: Side, t: number, kind: PropKind, level = this.level, span = PROP_DEFS[kind].w): boolean {
     const s = this.st(level), def = PROP_DEFS[kind];
-    const t0 = t - def.w / 2, t1 = t + def.w / 2;
+    const t0 = t - span / 2, t1 = t + span / 2;
     if (!backed(s.ctx, a, side, t0, t1, s.base + 0.05) || !backed(s.ctx, a, side, t0, t1, s.base + Math.min(def.h, 2.2) - 0.05)) return false;
     return !this.windowAt(a, side, t0, t1, Math.min(def.h, 2.4), level);
   }

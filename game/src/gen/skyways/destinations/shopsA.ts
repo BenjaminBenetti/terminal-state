@@ -78,32 +78,46 @@ export function dressShopsA(layout: StationLayout, rng: Rng, anchor: SkywaysAnch
 // =================================================================================================================================
 // Families
 
+/**
+ * Loose book stacks per bookshop (both storeys): a picked-over abandoned shop, and a bounded instance count (each stack is a ~3k-tri
+ * model): spread over every bookcase (a few shelves each) and the feature tables' bottom tiers.
+ */
+export const BOOK_STACK_BUDGET = 120;
+
 function books(kit: AnchorKit): void {
   const rng = kit.rng;
   counter(kit, {snack: true, cooler: true});
   // a hall: the reading nook in its far corner (a two-level shop: the whole other storey is the reading room)
   if (kit.other === null) readingNook(kit, kit.level, 'far');
   kit.reserveLanes();
-  const cases = kit.wallRun('skyDBookcase', {front: 0.9, cluster: 4, gap: 0.45});
-  // feature tables near the front, double-sided bookcase islands deeper in
-  const tables = lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.4, 3.4], v: [2.8, Math.max(3.2, kit.fr.D * 0.5)], max: rng.int(3, 6)});
-  cases.push(...bookIslands(kit, kit.level, rng.int(3, 8)));
-  for (const t of lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.4, 3.4], max: 2})) tables.push(t);
-  for (const bc of cases) stockBookcase(kit, bc);
-  for (const t of tables) stockTiers(kit, t, 'skyDBookStack', [2, 5]);
+  // feature tables in the front band, bookcases lining every solid wall, double-sided bookcase runs filling the floor behind
+  const tables = lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.0, 3.0], v: [2.6, Math.min(kit.fr.D - 2, Math.max(3.2, kit.fr.D * 0.42))], max: rng.int(3, 6)});
+  if (tables.length < 3) tables.push(...lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [2.8, 2.8], max: 3 - tables.length}));
+  const cases = kit.wallRun('skyDBookcase', {front: 0.9});
+  cases.push(...fillRuns(kit, kit.level, 'skyDBookcase', {units: [2, 3], aisle: 1.3, max: 14, orient: longAxis(kit)}).flat());
+  tables.push(...lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.0, 3.0], max: rng.int(1, 3)}));
   kit.posters(3);
+  let side: PropPlacement | null = null;
   if (kit.other !== null) {
-    // the READING ROOM upstairs / downstairs: nooks of wingbacks, bookcases round the walls, a table or two, a sideboard of stacks
+    // the READING ROOM upstairs / downstairs: nooks of wingbacks, bookcases round the walls and in runs, tables, a sideboard of stacks
     const L = kit.other;
     readingNook(kit, L, 'far');
     readingNook(kit, L, 'any');
-    const up = kit.wallRun('skyDBookcase', {level: L, front: 0.9, cluster: 3, gap: 0.6});
-    const side = kit.putNearWall('cabinetLow', kit.mouths.get(L)?.x ?? kit.entry.x, kit.mouths.get(L)?.z ?? kit.entry.z, {level: L, front: 0.7, tries: 80});
-    if (side) stacksOnTop(kit, side, PROP_DEFS.cabinetLow.h, rng.int(1, 3));
-    up.push(...bookIslands(kit, L, rng.int(0, 3)));
-    for (const bc of up) stockBookcase(kit, bc);
-    for (const t of lattice(kit, 'skyDBookTable', {level: L, round: true, ring: 0.8, pitch: [3.6, 3.6], max: 2})) stockTiers(kit, t, 'skyDBookStack', [2, 4]);
+    if (rng.chance(0.6)) readingNook(kit, L, 'any');
+    side = kit.putNearWall('cabinetLow', kit.mouths.get(L)?.x ?? kit.entry.x, kit.mouths.get(L)?.z ?? kit.entry.z, {level: L, front: 0.7, tries: 80});
+    cases.push(...kit.wallRun('skyDBookcase', {level: L, front: 0.9}));
+    tables.push(...lattice(kit, 'skyDBookTable', {level: L, round: true, ring: 0.8, pitch: [3.0, 3.0], max: rng.int(2, 4)}));
+    cases.push(...fillRuns(kit, L, 'skyDBookcase', {units: [2, 3], aisle: 1.4, max: rng.int(6, 10), orient: longAxis(kit)}).flat());
     kit.posters(2, L);
+  }
+  // the stacks: the tables' tiers first, a sideboard's top, then the bookcases in turn (a few shelves each) until the budget is spent
+  let left = BOOK_STACK_BUDGET;
+  for (const t of tables) left -= stockTiers(kit, t, 'skyDBookStack', [2, 4]);
+  if (side) left -= stacksOnTop(kit, side, PROP_DEFS.cabinetLow.h, rng.int(1, 3));
+  const per = Math.max(1, Math.min(4, Math.floor(left / Math.max(1, cases.length))));
+  for (const bc of rng.shuffle(cases.slice())) {
+    if (left <= 0) break;
+    left -= stockBookcase(kit, bc, Math.min(left, rng.int(Math.max(1, per - 1), per + 1)));
   }
 }
 
@@ -119,18 +133,21 @@ function outfitter(kit: AnchorKit, res: ShopsAResult): void {
   if (canoe) res.canoe = {prop: kit.layout.props.indexOf(canoe), cable: 0};
   else kit.skipped.push('canoe');
   kit.reserveLanes();
-  // camp food and drinks (the store's holders), gear shelving with lanterns, a pack wall, clothing rails, lantern tables
-  let food = kit.wallRun('stockShelf', {sides: [fr.back], cluster: 3, gap: 0.6, max: 4, front: 0.9, variant: () => stockVariant('grocery')});
-  if (food.length < 2) food = food.concat(kit.wallRun('stockShelf', {cluster: 3, gap: 0.6, max: 3 - food.length, front: 0.9, variant: () => stockVariant('grocery')}));
+  // round the campsite: lantern display tables and clothing rails; along the walls: camp food and drinks (the store's holders), a
+  // pack wall, gear shelving with lanterns, a bike or two; then aisles of gear / food shelving filling the rest of the floor
+  for (const t of lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.0, 3.0], max: rng.int(2, 3)})) stockTiers(kit, t, 'skyDLantern', [2, 4]);
+  lattice(kit, 'clothingRack', {ring: 0.7, pitch: [2.6, 2.4], max: rng.int(2, 4)});
+  let food = kit.wallRun('stockShelf', {sides: [fr.back], cluster: 4, gap: 0.6, max: 5, front: 0.9, variant: () => stockVariant('grocery')});
+  if (food.length < 2) food = food.concat(kit.wallRun('stockShelf', {cluster: 3, gap: 0.6, max: 4 - food.length, front: 0.9, variant: () => stockVariant('grocery')}));
   const [cx, cz] = kit.inside(3);
   for (let i = 0, n = rng.int(1, 2); i < n; i++) kit.putNearWall('shopCooler', cx, cz);
-  const flanks = flankSides(kit);
-  for (const sh of kit.wallRun('shelf', {sides: flanks, cluster: 2, gap: 0.8, max: rng.int(2, 4), front: 0.9})) shelfItems(kit, sh, 'skyDLantern', [1, 2], 3);
-  const packs = kit.wallRun('skyDBackpack', {cluster: 1, gap: rng.range(0.12, 0.3), max: rng.int(5, 9)});
+  const packs = kit.wallRun('skyDBackpack', {cluster: rng.int(4, 6), gap: 0.9, max: rng.int(7, 12)});
   if (!packs.length) kit.skipped.push('pack wall');
-  lattice(kit, 'clothingRack', {ring: 0.7, pitch: [3.2, 2.6], max: rng.int(1, 3)});
-  for (const t of lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.4, 3.4], max: rng.int(1, 2)})) stockTiers(kit, t, 'skyDLantern', [2, 4]);
-  if (rng.chance(0.6)) kit.putNearWall('bicycle', ...kit.inside(kit.fr.D * 0.6), {tries: 40});
+  for (let i = 0, n = rng.int(1, 2); i < n; i++) kit.putNearWall('bicycle', ...kit.inside(kit.fr.D * 0.7), {tries: 60});
+  for (const sh of kit.wallRun('shelf', {cluster: 3, gap: 0.6, max: rng.int(4, 8), front: 0.9})) shelfItems(kit, sh, 'skyDLantern', [1, 2], 2);
+  fillRuns(kit, kit.level, 'stockShelf', {units: [2, 3], aisle: 1.3, max: rng.int(1, 3), orient: longAxis(kit), variant: () => stockVariant('grocery')});
+  for (const run of fillRuns(kit, kit.level, 'shelf', {units: [2, 3], aisle: 1.3, max: rng.int(4, 8), orient: longAxis(kit)})) for (const sh of run) shelfItems(kit, sh, 'skyDLantern', [1], 1);
+  lattice(kit, 'clothingRack', {ring: 0.7, pitch: [2.6, 2.4], max: rng.int(1, 3)});
   kit.posters(3);
 }
 
@@ -139,15 +156,22 @@ function music(kit: AnchorKit): void {
   counter(kit, {crate: true});
   stageCorner(kit);
   kit.reserveLanes();
-  binIslands(kit, rng.int(3, 7));
   const flanks = flankSides(kit).filter(s => !boothSide(kit, s));
-  const guitars = kit.wallRun('skyDGuitar', {sides: flanks.length ? flanks : undefined, cluster: 1, gap: 0.22, max: rng.int(6, 10)});
-  if (!guitars.length) kit.skipped.push('guitar wall');
+  const want = rng.int(6, 10);
+  const guitars = kit.wallRun('skyDGuitar', {sides: flanks.length ? flanks : undefined, cluster: 1, gap: 0.22, max: want});
+  // (the flank taken by the counter / the stage: the guitar wall moves to the back or any other free wall)
+  if (guitars.length < 4) guitars.push(...kit.wallRun('skyDGuitar', {sides: [kit.fr.back, ...flankSides(kit)], cluster: 1, gap: 0.22, max: want - guitars.length}));
+  if (guitars.length < 4) kit.skipped.push(`guitar wall: ${guitars.length}`);
   kit.wallRun('stockShelf', {cluster: 2, gap: 0.6, max: rng.int(1, 2), front: 0.9, variant: () => stockVariant('devices')});
   const bz = kit.zones[0];
   const [jx, jz] = bz ? [(bz.x + bz.w / 2) * CELL, (bz.y + bz.h / 2) * CELL] : kit.inside(kit.fr.D * 0.6);
   kit.putNearWall('jukebox', jx, jz, {front: 0.9, tries: 80});
   for (const z of kit.zones) listeningBooth(kit, z.id);
+  // the browsing floor: rows of double-sided bin racks (dig crates of records at their ends), a crate row along a free wall
+  const runs = fillRuns(kit, kit.level, 'skyDRecordBins', {units: [2, 3], aisle: 1.2, max: rng.int(6, 12), orient: longAxis(kit) === 'u' ? 'v' : 'u'});
+  for (const run of runs) digCrates(kit, run);
+  if (!runs.length) kit.skipped.push('record bins');
+  kit.wallRun('skyDRecordCrate', {cluster: rng.int(3, 5), gap: 1.2, max: rng.int(4, 8)});
   kit.posters(4);
 }
 
@@ -158,12 +182,15 @@ function hobby(kit: AnchorKit): void {
   diorama(kit);
   kit.reserveLanes();
   // sideboard exhibits: the airship model / a cased model ship on top (sealed exhibits; the sideboards are openable holders)
-  const boards = kit.wallRun('cabinetLow', {cluster: 1, gap: 0.9, max: rng.int(2, 4), front: 0.7});
-  boards.forEach((b, i) => exhibitOn(kit, b, i % 2 === 0 ? 'skyDAirshipModel' : 'shipModel') || exhibitOn(kit, b, 'shipModel'));
-  for (const sh of kit.wallRun('shelf', {cluster: 3, gap: 0.6, max: rng.int(3, 6), front: 0.9})) shelfItems(kit, sh, 'skyDModelKits', [0, 1, 2], 2);
+  const boards = kit.wallRun('cabinetLow', {cluster: 2, gap: 1.2, max: rng.int(3, 5), front: 0.7});
+  boards.forEach((b, i) => exhibitOn(kit, b, i % 2 === 0 ? 'skyDAirshipModel' : 'shipModel') || exhibitOn(kit, b, 'skyDAirshipModel'));
+  kit.wallRun('capsuleToyMachine', {cluster: 3, gap: 0.6, max: rng.int(2, 4), front: 0.9});
   kit.wallRun('stockShelf', {cluster: 1, max: 1, front: 0.9, variant: () => stockVariant('parts')});
-  kit.wallRun('capsuleToyMachine', {cluster: 3, gap: 0.6, max: rng.int(2, 3), front: 0.9});
-  lattice(kit, 'architectModel', {ring: 0.8, pitch: [3.4, 3.0], max: rng.int(0, 1)});
+  // kit shelving: every free wall, then double-sided gondola runs between the diorama's ring and the walls
+  for (const sh of kit.wallRun('shelf', {cluster: 4, gap: 0.5, max: 16, front: 0.9})) shelfItems(kit, sh, 'skyDModelKits', [0, 1, 2], 2);
+  lattice(kit, 'architectModel', {ring: 0.8, pitch: [3.4, 3.0], max: rng.int(1, 2)});
+  if (rng.chance(0.5)) lattice(kit, 'giantTeddy', {ring: 0.6, pitch: [3.0, 3.0], max: 1});
+  for (const run of fillRuns(kit, kit.level, 'shelf', {units: [2, 3], aisle: 1.3, max: rng.int(5, 9), orient: longAxis(kit)})) for (const sh of run) shelfItems(kit, sh, 'skyDModelKits', [0, 1, 2], 2);
   kit.posters(3);
 }
 
@@ -171,13 +198,22 @@ function design(kit: AnchorKit): void {
   const rng = kit.rng;
   counter(kit, {});
   kit.reserveLanes();
-  const sets = [livingSet, diningSet, bedroomSet];
-  const extra = rng.shuffle([livingSet, diningSet, bedroomSet]);
-  let n = 0;
-  for (const f of [...sets, ...extra]) if (f(kit, kit.level)) n++;
+  // room sets until the floor is full (each kind at least once first), then a few plants between them
+  const roomSets = (level: number, first: ((k: AnchorKit, l: number) => boolean)[]): number => {
+    let n = 0, miss = 0;
+    const order = [...first, ...rng.shuffle([livingSet, diningSet, bedroomSet, livingSet, bedroomSet, diningSet, livingSet, readingCorner, readingCorner])];
+    for (const f of order) {
+      if (miss >= 4 || n >= 9) break;
+      if (f(kit, level)) { n++; miss = 0; } else miss++;
+    }
+    lattice(kit, 'planterTree', {level, ring: 0.6, pitch: [3.0, 3.0], max: rng.int(1, 3)});
+    return n;
+  };
+  const n = roomSets(kit.level, [livingSet, diningSet, bedroomSet]);
   if (n < 3) kit.skipped.push(`design: ${n} room sets on the sales floor`);
+  for (const k of ['skyDSofa', 'skyDDiningTable', 'skyDShowroomBed'] as PropKind[]) if (!kit.placed.some(p => p.kind === k)) kit.skipped.push(`design: no ${k} set`);
   if (kit.other !== null) {
-    for (const f of rng.shuffle([livingSet, bedroomSet, diningSet, livingSet])) f(kit, kit.other);
+    roomSets(kit.other, rng.shuffle([livingSet, bedroomSet, diningSet]));
     kit.posters(2, kit.other);
   }
   kit.posters(3);
@@ -226,6 +262,27 @@ function counter(kit: AnchorKit, o: {snack?: boolean; cooler?: boolean; crate?: 
     });
     if (ok) { run = got; break search; }
   }
+  // else the run parallel to the front, beside the entry, facing it (the staff aisle behind it, deeper in)
+  if (!run.length) search2: for (const s of kit.rng.shuffle([1, -1])) for (const dv of [2.4, 3.0, 3.8, 4.8]) for (const du of [eh + 0.9, eh + 1.6, eh + 2.6, eh + 3.8, eh + 5.2]) {
+    const v = snapEdge(dv + def.d / 2, def.d / 2);
+    const got: PropPlacement[] = [];
+    const ok = kit.cluster(() => {
+      for (let k = 0; k < 2; k++) {
+        const u = snapEdge(uE + s * (du + def.w / 2 + k * (def.w + 0.01)), def.w / 2);
+        const [x, z] = kit.uv(u, v);
+        const p = kit.put('shopCounter', x, z, fr.toFront, {front: 1.0});
+        if (!p) return false;
+        got.push(p);
+      }
+      const us = got.map(p => kit.toUV(p.x, p.z)[0]);
+      const [ax, az] = kit.uv(Math.min(...us) - def.w / 2, v + def.d / 2 + 0.02), [bx, bz] = kit.uv(Math.max(...us) + def.w / 2, v + def.d / 2 + 0.9);
+      const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
+      if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
+      kit.keepBox(box[0], box[1], box[2], box[3]);
+      return true;
+    });
+    if (ok) { run = got; break search2; }
+  }
   if (!run.length) { kit.skipped.push('counter'); return run; }
   const till = run[0];
   const reg = kit.onTop(till, 'cashRegister', 0.25, -0.08, SHOP_COUNTER_TOP_Y);
@@ -239,11 +296,10 @@ function counter(kit: AnchorKit, o: {snack?: boolean; cooler?: boolean; crate?: 
   }
   if (o.snack) {
     // the impulse rack at the run's door end, facing the aisle
-    const [, v] = kit.toUV(till.x, till.z), [u] = kit.toUV(till.x, till.z);
-    const sr = PROP_DEFS.snackRack;
-    for (const dv of [def.w / 2 + 0.05 + sr.w / 2, def.w / 2 + 0.3 + sr.w / 2]) {
-      const [x, z] = kit.uv(u, v - dv);
-      if (kit.put('snackRack', x, z, till.rot, {front: 0.8})) break;
+    const sr = PROP_DEFS.snackRack, L = Math.hypot(till.x - run[1].x, till.z - run[1].z) || 1;
+    const dx = (till.x - run[1].x) / L, dz = (till.z - run[1].z) / L;
+    for (const off of [def.w / 2 + 0.05 + sr.w / 2, def.w / 2 + 0.3 + sr.w / 2]) {
+      if (kit.put('snackRack', till.x + dx * off, till.z + dz * off, till.rot, {front: 0.8})) break;
     }
   }
   if (o.cooler) kit.putNearWall('shopCooler', run[1].x, run[1].z, {tries: 40});
@@ -273,64 +329,95 @@ function lattice(kit: AnchorKit, kind: PropKind, o: {level?: number; round?: boo
   return out;
 }
 
-/** Double-sided bookcase islands: back-to-back pairs (facing +/-u) two cases long, aisles leading in from the front. */
-function bookIslands(kit: AnchorKit, level: number, max: number): PropPlacement[] {
-  const fr = kit.fr, def = PROP_DEFS.skyDBookcase, out: PropPlacement[] = [];
-  const len = 2 * def.w + 0.02, pu = 2 * def.d + 1.7, pv = len + 1.6;
-  const spots: [number, number][] = [];
-  for (let u = 1.6 + def.d; u <= fr.W - 1.6 - def.d; u += pu) for (let v = Math.max(3.4, fr.D * 0.35); v + len <= fr.D - 1.4; v += pv) spots.push([Math.round(u / CELL) * CELL, Math.round(v / CELL) * CELL]);
-  let n = 0;
-  for (const [u, v] of kit.rng.shuffle(spots)) {
-    if (n >= max) break;
+/** The floor's longer axis in the frame ('u' along the front, 'v' in depth): runs laid along it read as aisles. */
+function longAxis(kit: AnchorKit): 'u' | 'v' {
+  return kit.fr.W >= kit.fr.D ? 'u' : 'v';
+}
+
+/**
+ * Double-sided island RUNS of `kind` (two rows back to back on a cell line, `units` long), scanned greedily over the storey's floor
+ * (0.5 m grid, the deep floor first) so they pack into aisles `aisle` m wide (each unit's front strip, reserved); a run along u
+ * (`orient` 'u') faces +/-v, along v faces +/-u. A run needs its first back-to-back pair; it stops where the next unit does not fit.
+ * Lanes / door strips / centrepiece rings already reserved stay clear. Returns the runs.
+ */
+function fillRuns(kit: AnchorKit, level: number, kind: PropKind, o: {units: [number, number]; aisle: number; max: number; orient: 'u' | 'v'; variant?: () => number}): PropPlacement[][] {
+  const fr = kit.fr, def = PROP_DEFS[kind], out: PropPlacement[][] = [];
+  if (o.max <= 0) return out;
+  const along = o.orient === 'u';
+  // unit pitch along the run: whole cells (packed units never share a cell), never closer than 2 cm
+  const pitch = Math.max(def.w + 0.02, (Math.floor((def.w - 0.04) / CELL) + 1) * CELL);
+  const us: number[] = [], vs: number[] = [];
+  for (let u = CELL; u <= fr.W - CELL; u += CELL) us.push(u);
+  for (let v = 2.5; v <= fr.D - CELL; v += CELL) vs.push(v);
+  if (kit.rng.chance(0.5)) us.reverse();
+  vs.reverse();
+  for (const v of vs) for (const u of us) {
+    if (out.length >= o.max) return out;
+    const n = kit.rng.int(o.units[0], o.units[1]);
     const got: PropPlacement[] = [];
     const ok = kit.cluster(() => {
-      for (let k = 0; k < 2; k++) for (const s of [-1, 1]) {
-        const [x, z] = kit.uv(u + s * def.d / 2, v + def.w / 2 + k * (def.w + 0.02));
-        const p = kit.put('skyDBookcase', x, z, s < 0 ? fr.minusU : fr.plusU, {level, front: 0.9});
-        if (p) got.push(p);
-        else if (k === 0) return false; // the first pair is the island; the second may be missing
+      for (let k = 0; k < n; k++) {
+        const side: PropPlacement[] = [];
+        for (const s of [-1, 1]) {
+          const t = k * pitch + def.w / 2;
+          const [pu, pv] = along ? [u + t, v + s * def.d / 2] : [u + s * def.d / 2, v + t];
+          const rot = along ? (s < 0 ? fr.toFront : fr.toBack) : (s < 0 ? fr.minusU : fr.plusU);
+          const [x, z] = kit.uv(pu, pv);
+          const p = kit.put(kind, x, z, rot, {level, front: o.aisle, variant: o.variant?.()});
+          if (p) side.push(p);
+        }
+        got.push(...side);
+        if (side.length < 2) return k > 0; // the first pair makes the island; a later unit that does not fit ends the run
       }
-      return got.length >= 2;
+      return true;
     }, level);
-    if (ok) { out.push(...got); n++; }
+    if (ok) out.push(got);
   }
   return out;
 }
 
-/** Loose book stacks on a bookcase's measured shelves (1-3 per shelf, now and then a picked-over shelf). */
-function stockBookcase(kit: AnchorKit, bc: PropPlacement): void {
+/**
+ * `n` loose book stacks on a bookcase's measured shelves: random shelves that clear a stack, one per shelf (now and then two side by
+ * side), front-aligned in the bay. Returns the stacks placed.
+ */
+function stockBookcase(kit: AnchorKit, bc: PropPlacement, n: number): number {
   const rng = kit.rng, def = PROP_DEFS.skyDBookcase, sd = PROP_DEFS.skyDBookStack, shelves = bookcaseShelves();
   const inner = def.w / 2 - 0.08, lz = r3(def.d / 2 - 0.04 - sd.d / 2);
-  if (lz - sd.d / 2 < -def.d / 2 + 0.02) return;
-  shelves.forEach((y, i) => {
-    const next = shelves[i + 1] ?? def.h - 0.12;
-    if (next - y < sd.h + 0.03 || rng.chance(0.2)) return;
-    let x = -inner + rng.range(0, 0.3);
-    for (let k = 0, n = rng.int(1, 3); k < n && x + sd.w <= inner; k++) {
-      kit.onTop(bc, 'skyDBookStack', r3(x + sd.w / 2), lz, y);
-      x += sd.w + rng.range(0.03, 0.25);
+  if (lz - sd.d / 2 < -def.d / 2 + 0.02 || 2 * inner < sd.w) return 0;
+  const ok = shelves.map((_, i) => i).filter(i => (shelves[i + 1] ?? def.h - 0.12) - shelves[i] >= sd.h + 0.03);
+  let placed = 0;
+  for (const i of rng.shuffle(ok)) {
+    if (placed >= n) break;
+    const two = placed + 1 < n && rng.chance(0.3) && 2 * sd.w + 0.04 <= 2 * inner;
+    let x = -inner + rng.range(0, Math.max(0, 2 * inner - (two ? 2 * sd.w + 0.04 : sd.w)));
+    for (let k = 0; k < (two ? 2 : 1); k++) {
+      if (kit.onTop(bc, 'skyDBookStack', r3(x + sd.w / 2), lz, shelves[i])) placed++;
+      x += sd.w + 0.04;
     }
-  });
+  }
+  return placed;
 }
 
-/** A few loose stacks on a host's flat top (a sideboard), left to right, the host's loot surface giving up their span. */
-function stacksOnTop(kit: AnchorKit, host: PropPlacement, top: number, n: number): void {
+/** A few loose stacks on a host's flat top (a sideboard), left to right, the host's loot surface giving up their span; returns them. */
+function stacksOnTop(kit: AnchorKit, host: PropPlacement, top: number, n: number): number {
   const def = PROP_DEFS[host.kind], sd = PROP_DEFS.skyDBookStack;
-  let x = -def.w / 2 + 0.12;
+  let x = -def.w / 2 + 0.12, placed = 0;
   for (let k = 0; k < n && x + sd.w <= def.w / 2 - 0.12; k++) {
-    if (sd.d > def.d - 0.06) return;
-    kit.onTop(host, 'skyDBookStack', r3(x + sd.w / 2), r3(-def.d / 2 + 0.03 + sd.d / 2), top);
+    if (sd.d > def.d - 0.06) break;
+    if (kit.onTop(host, 'skyDBookStack', r3(x + sd.w / 2), r3(-def.d / 2 + 0.03 + sd.d / 2), top)) placed++;
     (host.cut ??= []).push({y: top, x0: r3(x - 0.02), x1: r3(x + sd.w + 0.02)});
     x += sd.w + kit.rng.range(0.1, 0.4);
   }
+  return placed;
 }
 
 /**
  * Loose items round the tiers of a three-tier table: radially aligned on each tier's visible ring (never inside the top tier's hollow
  * centre; under a tier's overhang only when the item clears the tier above), evenly spaced, a random count per tier.
  */
-function stockTiers(kit: AnchorKit, t: PropPlacement, kind: PropKind, per: [number, number]): void {
+function stockTiers(kit: AnchorKit, t: PropPlacement, kind: PropKind, per: [number, number]): number {
   const it = PROP_DEFS[kind], tiers = bookTableTiers(), col = tiers[tiers.length - 1].rIn;
+  let placed = 0;
   tiers.forEach((tier, i) => {
     const above = tiers[i + 1];
     const under = above ? above.y - tier.y - 0.03 >= it.h : false;
@@ -345,9 +432,10 @@ function stockTiers(kit: AnchorKit, t: PropPlacement, kind: PropKind, per: [numb
     for (let k = 0; k < n; k++) {
       const a = a0 + (k * 2 * Math.PI) / n;
       const p = kit.onTop(t, kind, r3(Math.sin(a) * rc), r3(Math.cos(a) * rc), tier.y, normYaw(t.rot + a));
-      if (p) { const c = Math.abs(Math.cos(t.rot + a)), s = Math.abs(Math.sin(t.rot + a)); p.hx = r3(c * hw + s * hd); p.hz = r3(s * hw + c * hd); }
+      if (p) { const c = Math.abs(Math.cos(t.rot + a)), s = Math.abs(Math.sin(t.rot + a)); p.hx = r3(c * hw + s * hd); p.hz = r3(s * hw + c * hd); placed++; }
     }
   });
+  return placed;
 }
 
 /** Loose items on the tiers of an open steel shelving unit (two per tier, its loot surface giving up their spans). */
@@ -473,7 +561,14 @@ function hangCanoe(kit: AnchorKit, spots: [number, number][]): PropPlacement | n
     const below = layout.props.some((p, i) => (p.level ?? 0) === kit.level && !p.mounted && Math.abs(p.x - x) < p.hx + hx + 0.1 && Math.abs(p.z - z) < p.hz + hz + 0.1
       && (i >= kit.p0 ? p.y + p.h : p.y + p.h - base) > y - CANOE_CLEAR);
     if (below) continue;
-    if (layout.lights.some(l => (l.level ?? 0) === kit.level && Math.abs(l.x - x) < hx + 0.4 && Math.abs(l.z - z) < hz + 0.4)) continue;
+    // light fixtures: hung right under the ceiling the hull would meet them (none over the footprint); hung lower, only its two
+    // cable anchors (a third of its length out from the middle) keep clear of a fixture
+    const top = y + canoeHangY(), low = ceil - base - top > 0.3;
+    const ax = q ? 0 : def.w / 3, az = q ? def.w / 3 : 0;
+    const lit = (l: {x: number; z: number; level?: number}) => (l.level ?? 0) === kit.level && (low
+      ? [-1, 1].some(s => Math.hypot(l.x - (x + s * ax), l.z - (z + s * az)) < 0.45)
+      : Math.abs(l.x - x) < hx + 0.4 && Math.abs(l.z - z) < hz + 0.4);
+    if (layout.lights.some(lit)) continue;
     if (propBlocksDoorway(layout, x, z, hx, hz, base + y, def.h)) continue;
     return kit.push({kind: 'skyDCanoe', x, z, y, rot: r3(normYaw(rot)), area: area.id, hx: r3(hx), hz: r3(hz), h: def.h, blocksSight: false, variant: 0, mounted: true});
   }
@@ -498,57 +593,48 @@ function stageCorner(kit: AnchorKit): void {
       const [px, pz] = kit.uv(uP, fr.D - 0.03 - piano.d / 2);
       const a = kit.areaAt(px, pz);
       if (!a || !kit.solidWall(a, back, back === 'N' || back === 'S' ? px : pz, 'skyDPiano')) return false;
-      const p = kit.put('skyDPiano', px, pz, fr.toFront, {area: a, front: 0.8});
+      const p = kit.put('skyDPiano', px, pz, fr.toFront, {area: a, front: 0.6});
       if (!p) return false;
       got.push(p);
-      const uA = uP + dir * (piano.w / 2 + 0.35 + amp.w / 2);
-      const [ax, az] = kit.uv(uA, fr.D - 0.03 - amp.d / 2);
-      const pa = kit.put('skyDAmpStack', ax, az, fr.toFront);
-      if (pa) got.push(pa);
-      const uD = (pa ? uA : uP + dir * (piano.w / 2 + 0.4)) + dir * (drums.w / 2 - 0.2);
-      for (const dv of [1.0, 1.4, 1.9]) {
-        const [dx, dz] = kit.uv(uD, fr.D - 0.03 - Math.max(amp.d, piano.d) - dv - drums.d / 2);
-        const pd = kit.put('skyDDrumKit', dx, dz, fr.toFront);
-        if (pd) { got.push(pd); break; }
+      // the amp stack beside the piano (toward the middle, else the other side), the drum kit out in front of the amp
+      let uA = NaN;
+      for (const [s, gap] of [[dir, 0.35], [dir, 0.7], [-dir, 0.35], [-dir, 0.7]] as [number, number][]) {
+        const u = uP + s * (piano.w / 2 + gap + amp.w / 2), [ax, az] = kit.uv(u, fr.D - 0.03 - amp.d / 2);
+        const pa = kit.put('skyDAmpStack', ax, az, fr.toFront, {front: 0.5});
+        if (pa) { got.push(pa); uA = u; break; }
       }
-      return got.length >= 2;
+      if (!Number.isFinite(uA)) return false;
+      const sA = Math.sign(uA - uP);
+      drum: for (const dv of [0.9, 1.3, 1.8, 2.4]) for (const du of [sA * (drums.w / 2 - 0.3), sA * 0.3, 0, sA * (drums.w / 2 + 0.3), -sA * 0.6]) {
+        const [dx, dz] = kit.uv(uA + du, fr.D - 0.03 - Math.max(amp.d, piano.d) - dv - drums.d / 2);
+        const pd = kit.put('skyDDrumKit', dx, dz, fr.toFront);
+        if (pd) { got.push(pd); break drum; }
+      }
+      return got.length === 3;
     });
     if (ok) { reserveAround(kit, got, kit.level, 0.6); return; }
   }
   kit.skipped.push('stage corner');
 }
 
-/** Rows of double-sided record-bin islands (two racks back to back, two long) with dig crates of records on the floor at their ends. */
-function binIslands(kit: AnchorKit, max: number): void {
-  const fr = kit.fr, bin = PROP_DEFS.skyDRecordBins, crate = PROP_DEFS.skyDRecordCrate;
-  const len = 2 * bin.w + 0.02, pu = len + 2.0, pv = 2 * bin.d + 1.6;
-  const spots: [number, number][] = [];
-  for (let u = 1.4; u + len <= fr.W - 1.4; u += pu) for (let v = 3.6; v + 2 * bin.d <= fr.D - 1.4; v += pv) spots.push([Math.round(u / CELL) * CELL, Math.round((v + bin.d) / CELL) * CELL]);
-  let n = 0;
-  for (const [u, v] of kit.rng.shuffle(spots)) {
-    if (n >= max) break;
-    const got: PropPlacement[] = [];
-    const ok = kit.cluster(() => {
-      for (let k = 0; k < 2; k++) for (const s of [-1, 1]) {
-        const [x, z] = kit.uv(u + bin.w / 2 + k * (bin.w + 0.02), v + s * bin.d / 2);
-        const p = kit.put('skyDRecordBins', x, z, s < 0 ? fr.toFront : fr.toBack, {front: 1.1});
-        if (p) got.push(p);
-        else if (k === 0) return false;
-      }
-      return got.length >= 2;
-    });
-    if (!ok) continue;
-    n++;
-    // dig crates at the island's ends (a few, on the floor)
-    const ext = Math.max(...got.map(p => kit.toUV(p.x, p.z)[0])) + bin.w / 2;
-    for (const [cu, ds] of kit.rng.shuffle([[u - 0.25 - crate.w / 2, -1], [ext + 0.25 + crate.w / 2, 1]] as [number, number][])) {
-      for (const dv of kit.rng.shuffle([-0.22, 0.22]).slice(0, kit.rng.int(1, 2))) {
-        const [x, z] = kit.uv(cu + ds * 0.02, v + dv);
-        kit.put('skyDRecordCrate', x, z, ds < 0 ? fr.minusU : fr.plusU);
-      }
+/**
+ * Dig crates of records on the floor at a bin run's two ends (the measured bin racks slope from a 0.51 m front lip to a 0.99 m back
+ * rim: no flat top to stand a crate on, so the crates stand at the run ends like a record shop's overflow).
+ */
+function digCrates(kit: AnchorKit, run: PropPlacement[]): void {
+  const crate = PROP_DEFS.skyDRecordCrate;
+  const x0 = Math.min(...run.map(p => p.x - p.hx)), x1 = Math.max(...run.map(p => p.x + p.hx));
+  const z0 = Math.min(...run.map(p => p.z - p.hz)), z1 = Math.max(...run.map(p => p.z + p.hz));
+  const alongX = x1 - x0 >= z1 - z0, mid = alongX ? (z0 + z1) / 2 : (x0 + x1) / 2;
+  for (const end of kit.rng.shuffle([-1, 1])) {
+    const e = alongX ? (end < 0 ? x0 : x1) : (end < 0 ? z0 : z1);
+    const c = end < 0 ? Math.floor((e - 0.04) / CELL) * CELL - crate.w / 2 - 0.02 : Math.ceil((e + 0.04) / CELL) * CELL + crate.w / 2 + 0.02;
+    const rot = alongX ? (end < 0 ? -Math.PI / 2 : Math.PI / 2) : (end < 0 ? Math.PI : 0);
+    for (const off of kit.rng.shuffle([-0.25, 0.25]).slice(0, kit.rng.int(1, 2))) {
+      const [x, z] = alongX ? [c, mid + off] : [mid + off, c];
+      kit.put('skyDRecordCrate', x, z, rot);
     }
   }
-  if (!n) kit.skipped.push('record bins');
 }
 
 /** A listening booth: an armchair facing into the booth from its back wall (or a bean bag) and a small table beside it. */
@@ -595,8 +681,8 @@ function robotAtEntry(kit: AnchorKit): void {
 /** The model-railway diorama mid-floor (its front to the entry), a 1.2 m viewing ring all round it. */
 function diorama(kit: AnchorKit): void {
   const fr = kit.fr, def = PROP_DEFS.skyDDiorama;
-  for (const dv of [0, 0.5, -0.5, 1.0, -1.0, 1.5, 2.0]) for (const du of [0, 1, -1, 2, -2, 3, -3]) {
-    const [x, z] = kit.uv(fr.W / 2 + du, Math.max(2.8 + 1.2 + def.d / 2, fr.D * 0.5) + dv);
+  for (const dv of [0, 0.5, -0.5, 1.0, -1.0, 1.5, -1.5, 2.0, 3.0]) for (const du of [0, 1, -1, 2, -2, 3, -3, 4.5, -4.5, 6, -6]) {
+    const [x, z] = kit.uv(fr.W / 2 + du, Math.max(2.6 + 1.2 + def.d / 2, fr.D * 0.5) + dv);
     if (kit.put('skyDDiorama', snapEdge(x, def.w / 2), snapEdge(z, def.d / 2), fr.toFront, {ring: 1.2})) return;
     if (kit.put('skyDDiorama', snapEdge(x, def.d / 2), snapEdge(z, def.w / 2), fr.plusU, {ring: 1.2})) return;
   }
@@ -618,10 +704,17 @@ const destPlanned = (kind: PropKind): boolean => kind === 'skyDAirshipModel' && 
 // --- design ------------------------------------------------------------------------------------------------------------------------
 
 /** A room set's wall-backed anchor piece: the wall spots of the storey in a shuffled order. */
-function wallAnchors(kit: AnchorKit, kind: PropKind, level: number): {a: Area; side: Side; x: number; z: number; rot: number}[] {
+function wallAnchors(kit: AnchorKit, kind: PropKind, level: number, turn = 0): {a: Area; side: Side; x: number; z: number; rot: number}[] {
   const [ox, oz] = spotsFrom(kit, level, 'any')[0] ?? kit.inside(3);
-  return kit.rng.shuffle(kit.wallSpots(kind, ox, oz, level).filter((_, i) => i % 3 === 0)).slice(0, 50);
+  return kit.rng.shuffle(kit.wallSpots(kind, ox, oz, level, undefined, turn).filter((_, i) => i % 3 === 0)).slice(0, 50);
 }
+/**
+ * The arc lamp's yaw beside a wall-backed piece of yaw `rot`: the model's long axis is X with its marble base at the +X end and the
+ * shade hanging at -X (measured on the kit model), so the base stands by the wall and the arm reaches out over the floor.
+ */
+const lampYaw = (rot: number): number => normYaw(rot + Math.PI / 2);
+/** The showroom bed's model runs along X with its headboard at the -X end (measured): this turn puts the head to the wall. */
+export const BED_TURN = -Math.PI / 2;
 
 /** The living set: the sofa backed to a wall, the egg chair across from one end, the arc lamp and a side table at its ends, a plant. */
 function livingSet(kit: AnchorKit, level: number): boolean {
@@ -635,7 +728,7 @@ function livingSet(kit: AnchorKit, level: number): boolean {
       const side = kit.rng.chance(0.5) ? 1 : -1;
       // the lamp at one end, its arm reaching out from the wall over the seat's end
       const [lx, lz] = toWorld(s, side * (sofa.w / 2 + 0.06 + lamp.d / 2), -sofa.d / 2 + lamp.w / 2);
-      const pl = kit.put('skyDArcLamp', lx, lz, s.rot + side * Math.PI / 2, {level});
+      const pl = kit.put('skyDArcLamp', lx, lz, lampYaw(s.rot), {level});
       if (pl) got.push(pl);
       const [tx, tz] = toWorld(s, -side * (sofa.w / 2 + 0.08 + tb.w / 2), 0);
       const pt = kit.putRound('cafeBistroTable', tx, tz, 0, {level});
@@ -652,7 +745,6 @@ function livingSet(kit: AnchorKit, level: number): boolean {
     }, level);
     if (ok) { reserveAround(kit, got, level, 0.6); return true; }
   }
-  kit.skipped.push(`living set (level ${level})`);
   return false;
 }
 
@@ -670,7 +762,7 @@ function diningSet(kit: AnchorKit, level: number): boolean {
       got.push(t);
       // the chairs just beyond the table's cells
       const halfD = Math.ceil((tb.d / 2 - 0.04) / CELL) * CELL, halfW = Math.ceil((tb.w / 2 - 0.04) / CELL) * CELL;
-      const n = Math.max(2, Math.min(3, Math.floor((tb.w - 0.2) / 0.62)));
+      const n = Math.max(2, Math.min(4, Math.floor((tb.w - 0.2) / 0.62)));
       for (const s of [-1, 1]) for (let k = 0; k < n; k++) {
         const lx = (k - (n - 1) / 2) * 0.66;
         const [cx, cz] = toWorld(t, lx, s * (halfD + ch.d / 2 + 0.02));
@@ -687,28 +779,29 @@ function diningSet(kit: AnchorKit, level: number): boolean {
     }, level);
     if (ok) { reserveAround(kit, got, level, 0.6); return true; }
   }
-  kit.skipped.push(`dining set (level ${level})`);
   return false;
 }
 
 /** The bedroom set: the showroom bed's head to a wall, an arc lamp beside it, a sideboard dresser on the other side, a plant. */
 function bedroomSet(kit: AnchorKit, level: number): boolean {
   const bed = PROP_DEFS.skyDShowroomBed, lamp = PROP_DEFS.skyDArcLamp, cab = PROP_DEFS.cabinetLow;
-  for (const sp of wallAnchors(kit, 'skyDShowroomBed', level)) {
+  for (const sp of wallAnchors(kit, 'skyDShowroomBed', level, BED_TURN)) {
     const got: PropPlacement[] = [];
     const ok = kit.cluster(() => {
-      const b = kit.put('skyDShowroomBed', sp.x, sp.z, sp.rot, {level, area: sp.a, front: 0.9});
+      const b = kit.put('skyDShowroomBed', sp.x, sp.z, sp.rot, {level, area: sp.a});
       if (!b) return false;
       got.push(b);
+      // in the bed's own frame the wall is at -X (its headboard) and its long sides face +/-Z
+      const wallRot = normYaw(b.rot - BED_TURN); // the yaw of a piece backed to the same wall
       const side = kit.rng.chance(0.5) ? 1 : -1;
-      const [lx, lz] = toWorld(b, side * (bed.w / 2 + 0.08 + lamp.d / 2), -bed.d / 2 + lamp.w / 2);
-      const pl = kit.put('skyDArcLamp', lx, lz, b.rot + side * Math.PI / 2, {level});
+      const [lx, lz] = toWorld(b, -bed.w / 2 + lamp.w / 2, side * (bed.d / 2 + 0.08 + lamp.d / 2));
+      const pl = kit.put('skyDArcLamp', lx, lz, lampYaw(wallRot), {level});
       if (pl) got.push(pl);
-      const [cx, cz] = toWorld(b, -side * (bed.w / 2 + 0.25 + cab.w / 2), -bed.d / 2 + cab.d / 2);
-      const pc = kit.put('cabinetLow', cx, cz, b.rot, {level, front: 0.7});
+      const [cx, cz] = toWorld(b, -bed.w / 2 + cab.d / 2, -side * (bed.d / 2 + 0.25 + cab.w / 2));
+      const pc = kit.put('cabinetLow', cx, cz, wallRot, {level, front: 0.7});
       if (pc) got.push(pc);
       if (!pc) {
-        const [px, pz] = toWorld(b, -side * (bed.w / 2 + 0.4), -bed.d / 2 + 0.3);
+        const [px, pz] = toWorld(b, -bed.w / 2 + 0.3, -side * (bed.d / 2 + 0.4));
         const pp = kit.put('pottedPlantSmall', px, pz, 0, {level});
         if (pp) got.push(pp);
       }
@@ -716,7 +809,29 @@ function bedroomSet(kit: AnchorKit, level: number): boolean {
     }, level);
     if (ok) { reserveAround(kit, got, level, 0.6); return true; }
   }
-  kit.skipped.push(`bedroom set (level ${level})`);
+  return false;
+}
+
+/** A reading corner vignette: the egg chair backed to a wall, the arc lamp beside it reaching over it, a side table on its other side. */
+function readingCorner(kit: AnchorKit, level: number): boolean {
+  const egg = PROP_DEFS.skyDEggChair, lamp = PROP_DEFS.skyDArcLamp, tb = PROP_DEFS.cafeBistroTable;
+  for (const sp of wallAnchors(kit, 'skyDEggChair', level).slice(0, 30)) {
+    const got: PropPlacement[] = [];
+    const ok = kit.cluster(() => {
+      const e = kit.put('skyDEggChair', sp.x, sp.z, sp.rot, {level, area: sp.a, front: 0.8});
+      if (!e) return false;
+      got.push(e);
+      const side = kit.rng.chance(0.5) ? 1 : -1;
+      const [lx, lz] = toWorld(e, side * (egg.w / 2 + 0.06 + lamp.d / 2), -egg.d / 2 + lamp.w / 2);
+      const pl = kit.put('skyDArcLamp', lx, lz, lampYaw(e.rot), {level});
+      if (pl) got.push(pl);
+      const [tx, tz] = toWorld(e, -side * (egg.w / 2 + 0.1 + tb.w / 2), 0);
+      const pt = kit.putRound('cafeBistroTable', tx, tz, 0, {level});
+      if (pt) got.push(pt);
+      return got.length >= 2;
+    }, level);
+    if (ok) { reserveAround(kit, got, level, 0.6); return true; }
+  }
   return false;
 }
 
