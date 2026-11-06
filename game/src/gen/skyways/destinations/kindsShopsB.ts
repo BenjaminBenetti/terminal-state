@@ -55,6 +55,16 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
  */
 export const SKYD_SCREEN = {w: 7.0, h: 3.0, border: 0.1, d: 0.1, y: 0.9, minY: 0.5, ceilGap: 0.1} as const;
 
+/**
+ * The screen's code-drawn parts (prop frame: origin bottom centre on the wall face, front +Z into the room; shape-material keys of
+ * gen/propShapes.ts): the black masking frame and the matte projection surface just proud of it. For the destination renderer's draw path
+ * of model-less kinds (world/skywaysDestinations.ts drawParts takes this shape).
+ */
+export const SKYD_SCREEN_PARTS: readonly {m: 'black' | 'panel'; s: [number, number, number]; p: [number, number, number]}[] = [
+  {m: 'black', s: [SKYD_SCREEN.w + 2 * SKYD_SCREEN.border, SKYD_SCREEN.h + 2 * SKYD_SCREEN.border, SKYD_SCREEN.d * 0.8], p: [0, SKYD_SCREEN.h / 2 + SKYD_SCREEN.border, -SKYD_SCREEN.d * 0.1]},
+  {m: 'panel', s: [SKYD_SCREEN.w, SKYD_SCREEN.h, 0.01], p: [0, SKYD_SCREEN.h / 2 + SKYD_SCREEN.border, SKYD_SCREEN.d * 0.3 + 0.005]},
+];
+
 /** Plant bench top (m above its base): the measured `topY` when the kit table carries it, else the model's height. */
 export const PLANT_BENCH_TOP = (): number => shopsBModel('skyways_d_gd_bench').topY ?? shopsBModel('skyways_d_gd_bench').h;
 /** Planet mobile: its hang point above its base (the top ring) — the measured `hangY`, else its height. */

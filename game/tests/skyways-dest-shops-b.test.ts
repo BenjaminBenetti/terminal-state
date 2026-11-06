@@ -23,7 +23,7 @@ import {PROP_DAMAGE, PHYS_MATS, propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {holderFinds, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
-import {SKYWAYS_DEST_PROPS} from '../src/assets/skywaysDestProps.generated';
+import {SKYWAYS_DEST_PROPS, type SkywaysDestProp} from '../src/assets/skywaysDestProps.generated';
 import {DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
 import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SPECS} from '../src/gen/skyways/destinations/kindsShopsB';
 import {SHOPS_B_FAMILIES} from '../src/gen/skyways/destinations/shopsB';
@@ -62,7 +62,7 @@ describe('Skyways destinations, lane SHOPS-B: kinds', () => {
       const s = SHOPS_B_SPECS[k], def = PROP_DEFS[k], m = SHOPS_B_MODEL[k];
       expect(def, k).toBe(s.def);
       if (m) {
-        const row = SKYWAYS_DEST_PROPS[m];
+        const row: SkywaysDestProp = SKYWAYS_DEST_PROPS[m];
         expect(row.planned, k).toBeFalsy();
         expect([def.w, def.h, def.d], k).toEqual([row.w, row.h, row.d].map(v => Math.round(v * 1000) / 1000));
         expect(existsSync(pub(row.url)), `${k} ${row.url}`).toBe(true);
@@ -243,20 +243,24 @@ describe('Skyways destinations, lane SHOPS-B: the anchors on real levels', () =>
     }
   });
 
-  it('the holders roll the family\'s base-use tables, with finite loot present in every anchor', () => {
+  it('the holders roll the family\'s base-use tables (finite loot: stocked tables in every anchor, finds in every family)', () => {
+    const finds = new Map<string, number>();
     for (const s of shops) {
       const use = ANCHOR_FAMILIES[s.an.family].use, tag = `seed ${s.seed} ${s.an.family}`;
       for (const a of s.areas) expect(a.purpose, tag).toBe(use);
       const holders = s.props.filter(p => MINE.has(p.kind) && isLootHolderKind(p.kind));
       expect(holders.length, tag).toBeGreaterThanOrEqual(2);
-      let finds = 0;
+      let stocked = 0;
       holders.forEach((p, i) => {
-        const area = s.layout.areas[p.area].purpose!;
-        expect(holderTable(p.kind as HolderKind, p.purpose ?? area).source, `${tag} ${p.kind}`).toBe('purpose');
-        finds += holderFinds(s.layout.seed, i, p.kind as HolderKind, p.purpose ?? area).length;
+        const key = p.purpose ?? s.layout.areas[p.area].purpose!, t = holderTable(p.kind as HolderKind, key);
+        expect(t.source, `${tag} ${p.kind}`).toBe('purpose');
+        if (t.rows.length && t.empty < 1 && t.lots[1] > 0) stocked++;
+        // (the scarcity economy keeps only some of a holder's roll: finds are counted per family)
+        for (let k = 0; k < 4; k++) finds.set(s.an.family, (finds.get(s.an.family) ?? 0) + holderFinds(s.layout.seed + k, i, p.kind as HolderKind, key).length);
       });
-      expect(finds, `${tag}: some loot`).toBeGreaterThan(0);
+      expect(stocked, `${tag}: stocked holders`).toBeGreaterThanOrEqual(2);
     }
+    for (const f of SHOPS_B_FAMILIES) expect(finds.get(f) ?? 0, `${f}: finite loot found`).toBeGreaterThan(0);
   });
 
   it('deterministic per seed', () => {

@@ -18,7 +18,8 @@ import {isLootHolderKind} from '../../../items/loot';
 import type {Area, Door, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {OPP, doorPoint, hallFrame, normYaw, segDist, toWorld, uvXZ, xzUV, type HallFrame} from '../addonFrame';
-import {DEST_POSTER, DEST_POSTERS_OF} from './art';
+import {DEST_POSTERS_OF} from './art';
+import {DEST_POSTER_BASE_Y} from './kindsLandmarks';
 import {HUNG_CLEAR} from './kindsShopsB';
 
 const r3 = (v: number): number => Math.round(v * 1000) / 1000;
@@ -171,12 +172,7 @@ export class ShopsBDresser {
   putXZ(kind: PropKind, x: number, z: number, yaw: number, o: PlaceOpts & {area?: Area} = {}): PropPlacement | null {
     const rot = quarterYaw(yaw);
     const {hx, hz} = footprint(kind, rot), f = this.floorAt(x, z);
-    if (!this.boxFree(x, z, hx, hz, f, f + (o.h ?? PROP_DEFS[kind].h))) { DBG?.(`${kind} box ${x},${z}`); return null; }
-    if (DBG) {
-      const g = this.g, [a0, b0, a1, b1] = cellsOfBox(x, z, hx, hz), why: string[] = [];
-      for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) { const i = g.idx(cx, cy); if (g.cells[i] !== FLOOR) why.push('wall'); else if (g.area[i] !== (o.area ?? this.floor).id) why.push('area'); else if (g.blocked[i]) why.push('blocked'); else if (this.ctx.keep[i]) why.push('keep'); else if (this.ctx.edge[i]) why.push('edge'); else if (this.ctx.zone[i]) why.push('zone'); }
-      if (why.length) DBG(`${kind} ${x},${z}: ${[...new Set(why)].join(',')}`);
-    }
+    if (!this.boxFree(x, z, hx, hz, f, f + (o.h ?? PROP_DEFS[kind].h))) return null;
     const {y: _y, ...opts} = o; void _y; // floor props only (a y >= 0.9 would make the primitive treat it as a wall mount)
     const p = tryPlaceProp(this.ctx, o.area ?? this.floor, kind, r3(x), r3(z), rot, opts);
     if (!p) return null;
@@ -374,7 +370,7 @@ export class ShopsBDresser {
   /** The family's wall posters (skyDPoster, its art pieces in turn) on the listed frame walls (solid wall only: never glazing / doors). */
   posters(n: number, walls: readonly Wall[] = ['L', 'R', 'B'], a: Area = this.floor, fr: HallFrame = this.fr): PropPlacement[] {
     const pieces = DEST_POSTERS_OF[this.anchor.family], out: PropPlacement[] = [];
-    const def = PROP_DEFS.skyDPoster, y = DEST_POSTER.y - def.h / 2;
+    const def = PROP_DEFS.skyDPoster, y = DEST_POSTER_BASE_Y;
     for (let tries = 0; tries < n * 14 && out.length < n; tries++) {
       const w = walls[(out.length + tries) % walls.length], side = this.side(w, fr);
       const len = w === 'L' || w === 'R' ? fr.D : fr.W;
@@ -393,9 +389,6 @@ export class ShopsBDresser {
   /** A seeded pick of a quarter turn (symmetric pieces). */
   anyYaw(): number { return this.rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]); }
 }
-
-let DBG: ((m: string) => void) | undefined;
-export const setShopsBDebug = (f?: (m: string) => void): void => { DBG = f; };
 
 /** The opposite frame wall. */
 export const OPP_WALL: Readonly<Record<Wall, Wall>> = {L: 'R', R: 'L', B: 'F', F: 'B'};
