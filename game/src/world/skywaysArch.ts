@@ -198,6 +198,8 @@ export class SkywaysArch {
       case 'court': case 'wet': return this.ceilKeyOf('plain');
       case 'bridge': return this.ceilKeyOf('bridge');
       case 'boh': return this.ceilKeyOf('core');
+      // storefront units above the station storey: the pedway's light plaster (their walls / floors keep the storefront interior)
+      case 'shop': return lvl.id >= 1 ? this.ceilKeyOf('plain') : null;
       default: return null;
     }
   }
@@ -206,7 +208,7 @@ export class SkywaysArch {
   doorCeilKey(L: number, a: Area | undefined, b: Area | undefined): string | null {
     if (!this.levels[L]) return null;
     const ca = this.classOf(a?.id ?? -1), cb = this.classOf(b?.id ?? -1);
-    if (ca === 'station' || ca === 'shop' || cb === 'station' || cb === 'shop') return null;
+    if (ca === 'station' || cb === 'station' || ((ca === 'shop' || cb === 'shop') && this.levels[L].id < 1)) return null;
     return this.ceilKeyOf(ca === 'boh' && cb === 'boh' ? 'core' : cls2ceil(ca, cb));
   }
 

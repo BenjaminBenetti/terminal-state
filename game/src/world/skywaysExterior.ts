@@ -17,8 +17,8 @@
 //  - STREET WRECKS (lane ASSET-A's skyways-wreck-*.glb, nose +X like the Office car wreck): a seeded handful per street on the road
 //    (never on a sidewalk, never under a bridge deck), instanced per model part;
 //  - the FAR CITY, sky and green outdoor murk: world/exterior.ts planExterior / buildExterior around layout.skyways.exterior (ring
-//    road, ruined blocks, the Office's Meshy heroes / wrecks when fetched, the skyline ghost, the dome following the eye), the camera
-//    far plane raised like the Office's.
+//    road, ruined blocks, the Office's Meshy heroes / bus / rubble when fetched — its ring-road cars the Skyways' lightest wreck —, the
+//    skyline ghost, the dome following the eye), the camera far plane raised like the Office's.
 // Fog: every exterior material is the Office's exteriorFog (indoor FogExp2 over the part of the ray inside EXT_U.box, the green height
 // fog over the rest): per frame the box is the footprint the eye stands in (a bridge deck on a bridge); inside an atrium building every
 // exterior ray counts as outdoor (EXT_U.roofY under the eye) so the sky through the vault is not swallowed by the indoor fog.
@@ -59,7 +59,7 @@ export const SKYWAYS_EXT = {
   /** Bridge steel outside the glazing: post width, depth proud of the fascia, chord height (m). */
   post: 0.2, frameDepth: 0.1, chord: 0.16,
   /** Wrecks per street (inclusive range) and their spacing pad (m). */
-  wrecksMin: 2, wrecksMax: 4, wreckPad: 0.6,
+  wrecksMin: 2, wrecksMax: 3, wreckPad: 0.6,
   /** Clearance of a wreck from a bridge deck footprint (m). */
   bridgeClear: 1.5,
   /** Exterior visibility check period (s) and reach (m). */
@@ -76,8 +76,12 @@ export const WRECK_KEYS = ['skyways_wreck_sedan_stripped', 'skyways_wreck_sedan_
 export type WreckKey = (typeof WRECK_KEYS)[number];
 const WRECK_WEIGHTS: Record<WreckKey, number> = {skyways_wreck_sedan_stripped: 3, skyways_wreck_sedan_rust: 3, skyways_wreck_sedan_burnt: 3, skyways_wreck_suv: 3, skyways_wreck_army_truck: 1};
 
-/** The Office city's models (shared office assets, module-cached by assets/officeAssets.ts). */
-const CITY_MODEL_IDS: Record<keyof ExteriorModels, OfficeAssetId> = {car: 'car-wreck', bus: 'bus-wreck', rubble: 'rubble-pile', tower: 'ruined-tower', midrise: 'ruined-midrise'};
+/**
+ * The Office city's models (shared office assets, module-cached by assets/officeAssets.ts). Its ring-road cars are the Skyways' own
+ * lightest wreck (CITY_CAR: the stripped sedan, 3.5k tris; same nose-+X convention) instead of the Office car wreck.
+ */
+const CITY_MODEL_IDS: Record<Exclude<keyof ExteriorModels, 'car'>, OfficeAssetId> = {bus: 'bus-wreck', rubble: 'rubble-pile', tower: 'ruined-tower', midrise: 'ruined-midrise'};
+const CITY_CAR: WreckKey = 'skyways_wreck_sedan_stripped';
 
 // ---------------------------------------------------------------------------------------------
 // Plan (pure, deterministic per level seed)
@@ -634,7 +638,7 @@ export class SkywaysExteriorRuntime {
   /** The Office city's models, skyline, the office surface textures (the Skyways finishes) and the wrecks; never rejects. */
   preload(): Promise<void> {
     const jobs: Promise<unknown>[] = [];
-    for (const [k, id] of Object.entries(CITY_MODEL_IDS) as [keyof ExteriorModels, OfficeAssetId][]) jobs.push(loadOfficeAsset(id).then(g => { this.city[k] = g; }));
+    for (const [k, id] of Object.entries(CITY_MODEL_IDS) as [Exclude<keyof ExteriorModels, 'car'>, OfficeAssetId][]) jobs.push(loadOfficeAsset(id).then(g => { this.city[k] = g; }));
     jobs.push(loadOfficeTexture('skyline').then(t => { if (t) setSkylineTexture(t); }));
     jobs.push(preloadOfficeArch());
     jobs.push(loadSkywaysWrecks());
@@ -648,7 +652,8 @@ export class SkywaysExteriorRuntime {
     if (!info) { this.counts.released += releaseSkywaysWrecks(); return; }
     const h = this.host;
     const plan = planSkywaysExterior(layout);
-    const view = buildSkywaysExterior(plan, {city: {...this.city}, wrecks: skywaysWrecks()});
+    const wrecks = skywaysWrecks();
+    const view = buildSkywaysExterior(plan, {city: {...this.city, car: wrecks[CITY_CAR] ?? null}, wrecks});
     h.scene.add(view.root);
     this.view = view; this.plan = plan; this.info = info;
     // the city / skyline lie beyond the station's 70 m far plane: raise it while the Skyways world is built
