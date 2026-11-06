@@ -32,7 +32,8 @@ import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor, SkywaysShopFamily} from '../skywaysTypes';
 import {normYaw, toWorld, yawToward} from '../addonFrame';
 import {AnchorKit, r3, snapEdge, type ShopsALane} from './skywaysShopsAKit';
-import {bookTableTiers, bookcaseShelves, canoeHangY, destDims} from './kindsShopsA';
+import {SHOPS_A_MODEL, bookTableTiers, bookcaseShelves, canoeHangY, destDims} from './kindsShopsA';
+import {destHangCables} from './skywaysDestModels';
 
 export const SHOPS_A_FAMILIES: readonly SkywaysShopFamily[] = ['books', 'outfitter', 'music', 'hobby', 'design'];
 
@@ -146,7 +147,7 @@ function outfitter(kit: AnchorKit, res: ShopsAResult): void {
   for (let i = 0, n = rng.int(1, 2); i < n; i++) kit.putNearWall('bicycle', ...kit.inside(kit.fr.D * 0.7), {tries: 60});
   for (const sh of kit.wallRun('shelf', {cluster: 3, gap: 0.6, max: rng.int(4, 8), front: 0.9})) shelfItems(kit, sh, 'skyDLantern', [1, 2], 2);
   fillRuns(kit, kit.level, 'stockShelf', {units: [2, 3], aisle: 1.3, max: rng.int(1, 3), orient: longAxis(kit), variant: () => stockVariant('grocery')});
-  for (const run of fillRuns(kit, kit.level, 'shelf', {units: [2, 3], aisle: 1.3, max: rng.int(4, 8), orient: longAxis(kit)})) for (const sh of run) shelfItems(kit, sh, 'skyDLantern', [1], 1);
+  for (const run of fillRuns(kit, kit.level, 'shelf', {units: [2, 3], aisle: 1.3, max: rng.int(6, 10), orient: longAxis(kit)})) for (const sh of run) shelfItems(kit, sh, 'skyDLantern', [1], 1);
   lattice(kit, 'clothingRack', {ring: 0.7, pitch: [2.6, 2.4], max: rng.int(1, 3)});
   kit.posters(3);
 }
@@ -240,21 +241,24 @@ function boothSide(kit: AnchorKit, side: Side): boolean {
 function counter(kit: AnchorKit, o: {snack?: boolean; cooler?: boolean; crate?: boolean}): PropPlacement[] {
   const fr = kit.fr, def = PROP_DEFS.shopCounter, eh = kit.entry.half, uE = kit.uE;
   let run: PropPlacement[] = [];
+  for (const nm of [2, 1]) {
+  if (run.length) break;
   search: for (const s of kit.rng.shuffle([1, -1])) for (const dv of [2.0, 2.5, 3.0, 3.5, 4.5, 5.5]) for (const du of [eh + 1.2, eh + 1.7, eh + 2.4, eh + 3.2, eh + 4.2, eh + 5.5]) {
-    const u = snapEdge(uE + s * (du + def.d / 2), def.d / 2);
+    // (the BACK edge on a cell line: the staff aisle behind starts on a clean cell)
+    const u = r3(Math.round((uE + s * (du + def.d / 2) + s * def.d / 2) / CELL) * CELL - s * def.d / 2);
     if (u - def.d / 2 - 1.0 < 0.2 || u + def.d / 2 + 1.0 > fr.W - 0.2) continue;
     const rot = s > 0 ? fr.minusU : fr.plusU;
     const v0 = snapEdge(dv + def.w / 2, def.w / 2);
     const got: PropPlacement[] = [];
     const ok = kit.cluster(() => {
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < nm; k++) {
         const [x, z] = kit.uv(u, v0 + k * (def.w + 0.01));
         const p = kit.put('shopCounter', x, z, rot, {front: 1.0});
         if (!p) return false;
         got.push(p);
       }
       // the staff aisle behind the run: free floor, reserved
-      const [ax, az] = kit.uv(u + s * (def.d / 2 + 0.02), v0 - def.w / 2), [bx, bz] = kit.uv(u + s * (def.d / 2 + 0.9), v0 + def.w * 1.5 + 0.01);
+      const [ax, az] = kit.uv(u + s * (def.d / 2 + 0.02), v0 - def.w / 2), [bx, bz] = kit.uv(u + s * (def.d / 2 + 0.9), v0 + def.w * (nm - 0.5) + 0.01);
       const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
       if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
       kit.keepBox(box[0], box[1], box[2], box[3]);
@@ -264,10 +268,10 @@ function counter(kit: AnchorKit, o: {snack?: boolean; cooler?: boolean; crate?: 
   }
   // else the run parallel to the front, beside the entry, facing it (the staff aisle behind it, deeper in)
   if (!run.length) search2: for (const s of kit.rng.shuffle([1, -1])) for (const dv of [2.4, 3.0, 3.8, 4.8]) for (const du of [eh + 0.9, eh + 1.6, eh + 2.6, eh + 3.8, eh + 5.2]) {
-    const v = snapEdge(dv + def.d / 2, def.d / 2);
+    const v = r3(Math.round((dv + def.d) / CELL) * CELL - def.d / 2); // (its back edge on a cell line)
     const got: PropPlacement[] = [];
     const ok = kit.cluster(() => {
-      for (let k = 0; k < 2; k++) {
+      for (let k = 0; k < nm; k++) {
         const u = snapEdge(uE + s * (du + def.w / 2 + k * (def.w + 0.01)), def.w / 2);
         const [x, z] = kit.uv(u, v);
         const p = kit.put('shopCounter', x, z, fr.toFront, {front: 1.0});
@@ -283,26 +287,29 @@ function counter(kit: AnchorKit, o: {snack?: boolean; cooler?: boolean; crate?: 
     });
     if (ok) { run = got; break search2; }
   }
+  } // (two modules, else a single one)
   if (!run.length) { kit.skipped.push('counter'); return run; }
+  const last = run[run.length - 1];
   const till = run[0];
   const reg = kit.onTop(till, 'cashRegister', 0.25, -0.08, SHOP_COUNTER_TOP_Y);
   if (reg) (till.cut ??= []).push({y: SHOP_COUNTER_TOP_Y, x0: 0.25 - 0.26, x1: 0.25 + 0.26});
   if (o.crate) {
     const c = PROP_DEFS.skyDRecordCrate;
     if (c.d <= def.d - 0.06 && c.w <= 0.7) {
-      const p = kit.onTop(run[1], 'skyDRecordCrate', -0.3, 0, SHOP_COUNTER_TOP_Y);
-      if (p) (run[1].cut ??= []).push({y: SHOP_COUNTER_TOP_Y, x0: r3(-0.3 - c.w / 2 - 0.02), x1: r3(-0.3 + c.w / 2 + 0.02)});
+      const p = kit.onTop(last, 'skyDRecordCrate', -0.3, 0, SHOP_COUNTER_TOP_Y);
+      if (p) (last.cut ??= []).push({y: SHOP_COUNTER_TOP_Y, x0: r3(-0.3 - c.w / 2 - 0.02), x1: r3(-0.3 + c.w / 2 + 0.02)});
     }
   }
   if (o.snack) {
     // the impulse rack at the run's door end, facing the aisle
-    const sr = PROP_DEFS.snackRack, L = Math.hypot(till.x - run[1].x, till.z - run[1].z) || 1;
-    const dx = (till.x - run[1].x) / L, dz = (till.z - run[1].z) / L;
-    for (const off of [def.w / 2 + 0.05 + sr.w / 2, def.w / 2 + 0.3 + sr.w / 2]) {
-      if (kit.put('snackRack', till.x + dx * off, till.z + dz * off, till.rot, {front: 0.8})) break;
+    // (beside the till along the counter's length; the side the second module stands on simply does not fit)
+    const sr = PROP_DEFS.snackRack;
+    snack: for (const off of [def.w / 2 + 0.05 + sr.w / 2, def.w / 2 + 0.3 + sr.w / 2]) for (const sx of [-1, 1]) {
+      const [x, z] = toWorld(till, sx * off, 0);
+      if (kit.put('snackRack', x, z, till.rot, {front: 0.8})) break snack;
     }
   }
-  if (o.cooler) kit.putNearWall('shopCooler', run[1].x, run[1].z, {tries: 40});
+  if (o.cooler) kit.putNearWall('shopCooler', last.x, last.z, {tries: 40});
   return run;
 }
 
@@ -564,9 +571,10 @@ function hangCanoe(kit: AnchorKit, spots: [number, number][]): PropPlacement | n
     // light fixtures: hung right under the ceiling the hull would meet them (none over the footprint); hung lower, only its two
     // cable anchors (a third of its length out from the middle) keep clear of a fixture
     const top = y + canoeHangY(), low = ceil - base - top > 0.3;
-    const ax = q ? 0 : def.w / 3, az = q ? def.w / 3 : 0;
+    // (the renderer's suspension points: gen/skyways/destinations/skywaysDestModels.ts destHangCables, along the model's X)
+    const xs = destHangCables(SHOPS_A_MODEL.skyDCanoe).xs;
     const lit = (l: {x: number; z: number; level?: number}) => (l.level ?? 0) === kit.level && (low
-      ? [-1, 1].some(s => Math.hypot(l.x - (x + s * ax), l.z - (z + s * az)) < 0.45)
+      ? xs.some(c => Math.hypot(l.x - (x + (q ? 0 : c)), l.z - (z + (q ? -c : 0))) < 0.45)
       : Math.abs(l.x - x) < hx + 0.4 && Math.abs(l.z - z) < hz + 0.4);
     if (layout.lights.some(lit)) continue;
     if (propBlocksDoorway(layout, x, z, hx, hz, base + y, def.h)) continue;

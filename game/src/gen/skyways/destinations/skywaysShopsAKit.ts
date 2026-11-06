@@ -21,7 +21,8 @@ import {WALL_ROT, backed, begin, commit, makePlaceCtx, markCell, rollback, tryPl
 import type {Area, Door, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {hallFrame, normYaw, segDist, toWorld, uvXZ, xzUV, type HallFrame} from '../addonFrame';
-import {DEST_POSTER, DEST_POSTERS_OF} from './art';
+import {DEST_POSTERS_OF} from './art';
+import {DEST_POSTER_BASE_Y} from './kindsLandmarks';
 
 export const r3 = (v: number): number => Math.round(v * 1000) / 1000;
 /** Half width of the reserved walking lanes (m): >= 1.2 m clear lanes. */
@@ -441,7 +442,7 @@ export class AnchorKit {
 
   /** Family posters on solid walls (never over glazing / windows / a door, nothing standing in front), spread out; returns them. */
   posters(max: number, level = this.level): PropPlacement[] {
-    const s = this.st(level), def = PROP_DEFS.skyDPoster, y0 = DEST_POSTER.y - def.h / 2, y1 = y0 + def.h, out: PropPlacement[] = [];
+    const s = this.st(level), def = PROP_DEFS.skyDPoster, y0 = DEST_POSTER_BASE_Y, y1 = y0 + def.h, out: PropPlacement[] = [];
     const vars = DEST_POSTERS_OF[this.an.family];
     const props = this.layout.props.filter(p => (p.level ?? 0) === level);
     const cands: {a: Area; side: Side; t: number}[] = [];

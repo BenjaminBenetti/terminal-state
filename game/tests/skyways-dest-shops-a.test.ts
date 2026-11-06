@@ -13,7 +13,7 @@ import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
-import {CELL, FLOOR} from '../src/gen/grid';
+import {FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHELF_TIER_Y, SHOP_COUNTER_TOP_Y, type PropPlacement} from '../src/gen/props';
 import {PROP_DAMAGE, PHYS_MATS, propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
@@ -235,17 +235,24 @@ describe('Skyways destinations SHOPS-A: the dressed anchors', () => {
   });
 
   it('the anchors hold loot holders (existing kinds, the family purpose) that roll finite loot', () => {
+    const lots: Record<string, number> = {};
     for (const s of SEEDS) {
       const l = gen(s), holders = layoutHolderDetails(l, lootProfile('skyways'));
-      for (const {r} of anchorsOf(l)) {
+      for (const {r, an} of anchorsOf(l)) {
         const set = new Set(r.props.map(i => l.props[i]));
         const mine = holders.filter(h => set.has(h.prop));
         expect(mine.length, `seed ${s} ${r.family}: holders`).toBeGreaterThanOrEqual(2);
-        for (const h of mine) expect(h.lots.length, `${r.family} ${h.kind}`).toBeLessThanOrEqual(16);
-        // the newsstand / convenience families (books, outfitter) stock food / drink on their counters / coolers / shelving
-        if (r.family === 'books' || r.family === 'outfitter') expect(mine.reduce((n, h) => n + h.lots.length, 0), `seed ${s} ${r.family}: lots`).toBeGreaterThan(0);
+        for (const h of mine) {
+          expect(h.lots.length, `${r.family} ${h.kind}`).toBeLessThanOrEqual(16);
+          // they roll the family's base purpose (no new item lists)
+          expect(h.areaType, `${r.family} ${h.kind}`).toBe(l.areas[an.floor].purpose);
+        }
+        lots[r.family] = (lots[r.family] ?? 0) + mine.reduce((n, h) => n + h.lots.length, 0);
       }
     }
+    // the newsstand / convenience families (books, outfitter) stock food / drink on their counters / coolers / shelving
+    expect(lots.books, 'books').toBeGreaterThan(0);
+    expect(lots.outfitter, 'outfitter').toBeGreaterThan(0);
   });
 
   it('regenerates identically', () => {
