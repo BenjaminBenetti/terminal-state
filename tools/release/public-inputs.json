@@ -1900,8 +1900,8 @@
     },
     {
       "path": "assets/derivatives/train-fuel-can.json",
-      "bytes": 3901,
-      "sha256": "7265ddde750c562f5287bbb55e369cd92a6e38c6113995ea687cc8f758a21a3c"
+      "bytes": 5654,
+      "sha256": "64c7f770c0e85edccfa2e3f6d0c5189b31e53cdb89c412237446bd61d6cd47ac"
     },
     {
       "path": "assets/derivatives/user-knife-20261030.json",
@@ -3700,8 +3700,8 @@
     },
     {
       "path": "assets/models/train-fuel-can.glb",
-      "bytes": 780132,
-      "sha256": "77b89db5a7b585e0dd52bb9f44f638f5d32c96b909321ea910aadc8dd1c0bd8c"
+      "bytes": 779784,
+      "sha256": "5d1fba9c8d2447293990b27be05d1a55846ccfdee5f22a87ae447e7e5f33f825"
     },
     {
       "path": "assets/models/trash-can-t25.glb",
