@@ -183,7 +183,6 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
   const put = (k: PropKind, x: number, z: number, rot: number, o: PlaceOpts = {}): PropPlacement | null => {
     const p = tryPlaceProp(ctx, area, k, r3(x), r3(z), r3(rot), o);
     if (p) p.y = r3(p.y + g.floorAt(p.x, p.z));
-    if (!p && LM_DEBUG.on) LM_DEBUG.log.push(`${lm.family} ${k} @${r3(x - lm.x)},${r3(z - lm.z)} r${r3(rot)}: ${whyNot(ctx, area, k, x, z, rot)}`);
     return p;
   };
   res.openings = courtOpenings(g, area);
@@ -385,17 +384,3 @@ function hangFlock(layout: StationLayout, g: Grid, area: Area, lm: SkywaysLandma
   return null;
 }
 
-// DEBUG (temporary)
-export const LM_DEBUG = {on: false, log: [] as string[]};
-function whyNot(ctx: PlaceCtx, area: Area, kind: PropKind, x: number, z: number, rot: number): string {
-  const g = ctx.g, {hx, hz} = footprint(kind, rot);
-  const e = 0.04, x0 = Math.floor((x - hx + e) / CELL), y0 = Math.floor((z - hz + e) / CELL), x1 = Math.floor((x + hx - e) / CELL), y1 = Math.floor((z + hz - e) / CELL);
-  const why: Record<string, number> = {};
-  for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
-    if (!g.inBounds(cx, cy)) { why.oob = (why.oob ?? 0) + 1; continue; }
-    const i = g.idx(cx, cy);
-    const r = g.cells[i] !== FLOOR ? 'cell' : g.area[i] !== area.id ? 'area' : g.blocked[i] ? 'blocked' : ctx.keep[i] ? 'keep' : ctx.edge[i] ? 'edge' : ctx.doorCell[i] ? 'doorCell' : ctx.zone[i] ? 'zone' : ctx.lane[i] ? 'lane' : ctx.plaza[i] ? 'plaza' : '';
-    if (r) why[r] = (why[r] ?? 0) + 1;
-  }
-  return JSON.stringify(why);
-}
