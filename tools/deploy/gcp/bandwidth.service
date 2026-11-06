@@ -1,0 +1,25 @@
+[Unit]
+Description=Terminal State monthly outbound bandwidth cutoff
+After=network-online.target
+Wants=network-online.target
+Before=nginx.service
+
+[Service]
+Type=notify
+ExecStart=/usr/bin/python3 /usr/local/libexec/terminal-state/bandwidth.py
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=30
+TimeoutStopSec=10
+WatchdogSec=10
+StateDirectory=terminal-state-bandwidth
+StateDirectoryMode=0755
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/terminal-state-bandwidth
+
+[Install]
+WantedBy=multi-user.target

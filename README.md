@@ -44,9 +44,9 @@ calls or `reference/` mount. Models, textures, MP3s and provenance are checked i
 
 ## GitHub main → CI artifact → Everything
 
-Work in this Git repository. **After checks, commit and push changes to GitHub
-`main`**, preserving existing history; no feature branch requirement or force
-push. See [AGENTS.md](AGENTS.md). The workflow
+Work in this Git repository. **Use a feature branch, push checked commits, and
+open a pull request into `main`.** Merge after required CI, including `build`,
+succeeds; preserve history and branch protection. See [AGENTS.md](AGENTS.md). The workflow
 [`.github/workflows/game-build.yml`](.github/workflows/game-build.yml) runs on pushes
 to main, on **pull requests into main** (check `build`, required before merging) and
 on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off). Jobs run in
@@ -76,9 +76,13 @@ commit, verify commit/file count/bytes/all hashes and inspect the artifact befor
 publishing its `site/` through Everything. Never publish local build output.** For
 the initial v7 migration, additionally compare every one of the expected **472
 site files / 92,653,680 bytes** to the independently backed-up reviewed v7 release.
-The pipeline does not auto-deploy, call Everything APIs, store deploy secrets or
-run generation. A CI failure is a release blocker, not permission to substitute a
-local build. GitHub artifact access follows this private repository's permissions.
+The build pipeline does not deploy, call Everything APIs or run generation. A CI
+failure is a release blocker, not permission to substitute a local build.
+Separately, **SemVer tags** (`v1.2.3`) trigger
+[production VM deployment](tools/deploy/gcp/README.md) through the GitHub `prod`
+environment. That workflow verifies the successful main CI artifact, prepares
+Brotli/gzip files, and configures Rocky Linux nginx, HTTPS, caching and the monthly
+bandwidth cutoff page. GitHub artifact access follows repository permissions.
 
 `tools/release/package-ci.mjs` is the portable release path. It verifies every
 public input against the checked-in path/size/hash allowlist, rejects unexpected

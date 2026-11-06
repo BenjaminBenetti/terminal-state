@@ -1,9 +1,12 @@
 @AGENTS.md
 
-Follow current portable repository guidance. Work in Git, push checked changes to
-GitHub `main` without rewriting history, and publish only verified GitHub Actions
-artifacts. This repo does not install or authenticate an assistant CLI. Historical
-setup/job documents are not active instructions and authorize no generation.
+Follow current portable repository guidance. Work in Git on a feature branch,
+push checked commits to that branch, and open a pull request into `main`. Merge
+through the PR after required CI, including `build`, succeeds; never push directly
+to protected `main`, bypass branch protection or rewrite history. Publish only
+verified GitHub Actions artifacts. This repo does not install or authenticate an
+assistant CLI. Historical setup/job documents are not active instructions and
+authorize no generation.
 
 Project skills preserve asset-method guardrails only. Audio is bundled Sound
 Lab-derived MP3 data; building/playing does not require an audio generation service.

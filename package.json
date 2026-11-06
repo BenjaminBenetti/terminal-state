@@ -21,7 +21,7 @@
     "test": "npm run game:test",
     "ci:package": "node tools/release/package-ci.mjs",
     "ci:check": "node tools/release/check-workflow.mjs",
-    "ci:test": "node --test tools/release/package-ci.test.mjs tools/deploy/dynamic-app/dynamic-app.test.mjs tools/release/test-shards.test.mjs",
+    "ci:test": "node --test tools/release/package-ci.test.mjs tools/deploy/dynamic-app/dynamic-app.test.mjs tools/release/test-shards.test.mjs tools/deploy/gcp/release.test.mjs && python3 tools/deploy/gcp/test_bandwidth.py && bash -n tools/deploy/gcp/install.sh && bash -n tools/deploy/gcp/ssh-deploy.sh",
     "pages:build": "node tools/pages/run.mjs build",
     "pages:check": "node tools/pages/run.mjs check",
     "pages:preview": "vite preview --outDir dist/pages --base /terminal-state/ --host 127.0.0.1 --port 4190 --strictPort",
