@@ -644,7 +644,9 @@ export class FuelCarts implements FuelCartsLike {
       const s = Math.sin(b.yaw), co = Math.cos(b.yaw);
       const tf = rayCylinder(o, d, b.x + K.frame.z * s, b.z + K.frame.z * co, K.frame.r, b.y, b.y + K.height, FUEL_CART.grabReach);
       const td = rayCylinder(o, d, b.x + K.drumZ * s, b.z + K.drumZ * co, K.drumR + 0.02, b.y + K.drumBase, b.y + K.drumTop + 0.03, FUEL_CART.drumReach);
-      const part = td !== null && (tf === null || td <= tf) ? 'drum' : tf !== null ? 'frame' : null;
+      // the drum wins whenever the ray meets it (the truck's frame is mostly open air: looking down at the lid over the handle aims
+      // at the drum); aimed higher (the handle bar) or at the wheels / uprights it is the frame
+      const part = td !== null ? 'drum' : tf !== null ? 'frame' : null;
       if (!part) continue;
       const t = part === 'drum' ? td! : tf!;
       if (best && best.t <= t) continue;
