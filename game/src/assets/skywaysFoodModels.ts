@@ -4,8 +4,11 @@
 //
 // Lane ASSET-A cooks the runtime derivatives (tools/asset-pipeline/props/build-skyways-sources.mjs) from the user's community-supplied
 // Meshy sources and writes their MEASURED bounds to assets/skywaysProps.generated.ts (SKYWAYS_PROP_MODELS, the same keys as below).
-// Until that file is merged the rows below carry ASSET-A's target sizes; the merge swaps them with ONE line:
-//   export const SKYWAYS_FOOD_MODELS = {...NOMINAL, ...pick(SKYWAYS_PROP_MODELS)}
+// Until that file is merged the rows below carry ASSET-A's target sizes; the merge swaps them with ONE import + ONE line (same keys;
+// the generated map's extra wreck rows / `tris` are simply carried along):
+//   import {SKYWAYS_PROP_MODELS} from './skywaysProps.generated';
+//   export const SKYWAYS_FOOD_MODELS: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = {...NOMINAL, ...SKYWAYS_PROP_MODELS};
+// (tests/skyways-food.test.ts passes with ASSET-A's first measured bounds and files, checked 2026-11-06.)
 // Everything else (item dims, prop footprints, the restaurant dresser, the renderer, the tests) reads SKYWAYS_FOOD_MODELS only.
 // Frame of every file: metres, +Y up, front +Z, grounded (min y = 0), centred on x / z. `bytes` = the lazy-library / boot progress
 // weight (an estimate until the cooked files are measured; the loader never trusts it for anything else).
@@ -42,15 +45,16 @@ const NOMINAL: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = {
 /** The models (url + real bounds). The swap point for ASSET-A's measured SKYWAYS_PROP_MODELS (see the header). */
 export const SKYWAYS_FOOD_MODELS: Readonly<Record<SkywaysFoodModelKey, SkywaysModelSpec>> = NOMINAL;
 
-/** Progress weights (bytes, estimates within ASSET-A's budgets: 512 px maps; the range 1024 px base colour). */
+/** Progress weights (bytes: ASSET-A's cooked files as first built, 2026-11-06 — a weight only, nothing else trusts it). */
 export const SKYWAYS_FOOD_MODEL_BYTES: Readonly<Record<SkywaysFoodModelKey, number>> = {
-  item_ramen_bowl: 220_000, item_ramen_chashu: 220_000, item_sushi_bento: 200_000, item_bubble_tea: 160_000,
-  skyways_sushi_mascot: 260_000, skyways_stock_pot: 200_000, skyways_saucepan: 180_000, skyways_commercial_range: 700_000,
+  item_ramen_bowl: 283_000, item_ramen_chashu: 582_000, item_sushi_bento: 167_000, item_bubble_tea: 145_000,
+  skyways_sushi_mascot: 382_000, skyways_stock_pot: 208_000, skyways_saucepan: 207_000, skyways_commercial_range: 1_191_000,
 };
 
 /**
  * Height of the range's COOKTOP above its base (m): the work surface its pots stand on — the prop's collision top (gen/skyways/
- * kitchenKinds.ts). The model's thin backguard / high shelf rises above it to the full model height. A commercial range's cooking
- * height is ~0.91-0.95 m; re-measure on the cooked GLB (vertical ray cast over the burners) when ASSET-A's file lands.
+ * kitchenKinds.ts). The model's thin backguard / high shelf rises above it to the full model height. Measured on ASSET-A's cooked
+ * skyways-commercial-range.glb (tools/asset-pipeline/props/scale-check.mjs top-surface plateaus, 2026-11-06: 0.915 m over 60 % of the
+ * top-down area — the burner grates / griddle; the high shelf 1.40 m): a commercial range's ordinary ~0.91 m cooking height.
  */
-export const SKYWAYS_RANGE_COOKTOP_Y = 0.93;
+export const SKYWAYS_RANGE_COOKTOP_Y = 0.915;

@@ -355,7 +355,9 @@ export function dressSkywaysRamen(layout: StationLayout, rng: Rng, opts: RamenDr
   const front = res.counter.length ? Math.min(...res.counter.map(p => Math.abs((fr.front === 'N' ? p.z - fr.z0 : fr.front === 'S' ? fr.z1 - p.z : fr.front === 'W' ? p.x - fr.x0 : fr.x1 - p.x)) - cd / 2)) : fr.D - 0.4;
   if (res.counter.length) {
     const host = res.counter[rng.int(0, res.counter.length - 1)];
-    res.mascot = d.onTop(host, 'skywaysSushiMascot', rng.chance(0.5) ? -0.5 : 0.5, 0.02, SHOP_COUNTER_TOP_Y, host.rot, true);
+    // near one end of its module (its own width from the end, so a wide figurine still stands wholly on the top)
+    const mx = Math.max(0, PROP_DEFS.shopCounter.w / 2 - PROP_DEFS.skywaysSushiMascot.w / 2 - 0.06);
+    res.mascot = d.onTop(host, 'skywaysSushiMascot', rng.chance(0.5) ? -mx : mx, 0, SHOP_COUNTER_TOP_Y, host.rot, true);
     if (!res.mascot) d.skipped.push('dining: mascot');
   }
   // --- the drinks cooler on a side wall, on the customers' side of the counter ---

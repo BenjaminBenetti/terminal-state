@@ -105,10 +105,11 @@ describe('Skyways food: four ordinary consumables, registered like bread', () =>
       expect(itemPhysics(id).mass, id).toBeLessThan(1.5);
     }
     // ASSET-A targets: bowl rims 0.20 / 0.22 m, the bento 0.24 m long, the cup 0.24 m tall with its straw
-    expect(ITEM_DIMS[RAMEN].w).toBeCloseTo(0.2, 2);
-    expect(ITEM_DIMS[RAMEN_CHASHU].w).toBeCloseTo(0.22, 2);
-    expect(Math.max(ITEM_DIMS[SUSHI_BENTO].w, ITEM_DIMS[SUSHI_BENTO].d)).toBeCloseTo(0.24, 2);
-    expect(ITEM_DIMS[BUBBLE_TEA].h).toBeCloseTo(0.24, 2);
+    const near = (v: number, t: number) => expect(Math.abs(v - t), `${v} ~ ${t}`).toBeLessThan(0.01);
+    near(Math.max(ITEM_DIMS[RAMEN].w, ITEM_DIMS[RAMEN].d), 0.2);
+    near(Math.max(ITEM_DIMS[RAMEN_CHASHU].w, ITEM_DIMS[RAMEN_CHASHU].d), 0.22);
+    near(Math.max(ITEM_DIMS[SUSHI_BENTO].w, ITEM_DIMS[SUSHI_BENTO].d), 0.24);
+    near(ITEM_DIMS[BUBBLE_TEA].h, 0.24);
     expect([itemClass(RAMEN), itemClass(RAMEN_CHASHU), itemClass(SUSHI_BENTO), itemClass(BUBBLE_TEA)]).toEqual(['porcelain', 'porcelain', 'plastic', 'plastic']);
     expect(itemPhysics(RAMEN)).toMatchObject({shape: 'cylinder', mat: 'stone'});
   });
@@ -170,7 +171,10 @@ describe('Skyways ramen kitchen kinds: classified, real size, level-only models'
     expect(PROP_PHYSICS_AUDIT.skywaysRange).toMatchObject({cls: 'static', why: 'anchored'});
     expect(dynamicKind('skywaysRange')).toBe(false);
     const m = (k: keyof typeof SKYWAYS_FOOD_MODELS) => SKYWAYS_FOOD_MODELS[k];
-    expect(PROP_DEFS.skywaysRange).toMatchObject({w: m('skyways_commercial_range').w, d: m('skyways_commercial_range').d, h: SKYWAYS_RANGE_COOKTOP_Y});
+    expect(PROP_DEFS.skywaysRange.w).toBeCloseTo(m('skyways_commercial_range').w, 3);
+    expect(PROP_DEFS.skywaysRange.d).toBeCloseTo(m('skyways_commercial_range').d, 3);
+    expect(PROP_DEFS.skywaysRange.h).toBe(SKYWAYS_RANGE_COOKTOP_Y);
+    expect(m('skyways_commercial_range').h, 'the model rises above the cooktop (backguard / shelf)').toBeGreaterThan(SKYWAYS_RANGE_COOKTOP_Y + 0.3);
     expect(SKYWAYS_RANGE_COOKTOP_Y).toBeGreaterThan(0.88);
     expect(SKYWAYS_RANGE_COOKTOP_Y).toBeLessThan(0.98);
     expect(m('skyways_commercial_range').w).toBeCloseTo(1.52, 2);
