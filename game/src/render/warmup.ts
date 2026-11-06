@@ -197,6 +197,16 @@ function worldSphere(o: Renderable): THREE.Sphere | null {
   return g.boundingSphere ? _sphere.copy(g.boundingSphere).applyMatrix4(o.matrixWorld) : null;
 }
 
+/**
+ * Task static-batching-warmup-20261105: distance (m) from `eye` to a renderable's world bounding sphere (0 inside it; Infinity when it
+ * has none) — the warm-up's first-use order. An InstancedMesh's existing instance sphere is used as is (never recomputed here).
+ */
+function itemDistance(o: Renderable, eye: THREE.Vector3): number {
+  const im = o as THREE.InstancedMesh;
+  const s = im.isInstancedMesh && im.boundingSphere ? _sphere.copy(im.boundingSphere).applyMatrix4(o.matrixWorld) : worldSphere(o);
+  return s ? Math.max(0, s.center.distanceTo(eye) - s.radius) : Infinity;
+}
+
 /** Pick the representatives (reads the scene graph; changes nothing but bounding volumes / world matrices). */
 export function planWarmup(root: THREE.Object3D, opts: PlanOptions): WarmupPlan {
   const pools = new Set(opts.pools ?? []);
@@ -302,6 +312,10 @@ export interface WarmupResult {
     others: number};
   /** The render-context call depth the station scene was compiled at (lane RENDER-CPU; 0: top level). */
   sceneDepth: number;
+  /** Task static-batching-warmup-20261105: the wall-time budget it ran under (ms; a maximum, not a wait) and the stage the budget cut
+   * ('partial'; null otherwise). */
+  budgetMs: number;
+  cutStage: WarmupStage | null;
   stages: Record<WarmupStage, WarmupStageReport>;
   passes: string[];
   pools: string[];
@@ -320,7 +334,12 @@ export interface WarmupOptions {
   yieldFrame?: () => Promise<void>;
 }
 
-export const WARMUP_DEFAULTS = {budgetMs: 60_000, compileChunk: 48, frameChunk: 96} as const;
+// Task static-batching-warmup-20261105 (user: "You mentiona a 60 limit. Lets double that to 120s"): the MAXIMUM work budget — the warm-up
+// still ends as soon as its work is done; a slow CPU (a GAME72 laptop capture: 'partial' at 60 s, 37 builds left for play) gets twice
+// the time before the long tail is cut.
+export const WARMUP_DEFAULTS = {budgetMs: 120_000, compileChunk: 48, frameChunk: 96} as const;
+/** Torch reach (m; game.ts flashlight distance): casters within it are the torch shadow's first uses. */
+const TORCH_REACH = 30;
 
 const defaultYield = (): Promise<void> => new Promise(res => {
   let done = false;
@@ -371,7 +390,7 @@ const emptyStages = (): Record<WarmupStage, WarmupStageReport> => ({
 
 export const skippedWarmup = (reason: string): WarmupResult => ({
   status: 'skipped', reason, mode: 'off', ms: 0, plan: {items: 0, groups: 0, renderables: 0, skipped: 0, flipped: 0, casters: 0, others: 0}, sceneDepth: 0,
-  stages: emptyStages(), passes: [], pools: [],
+  budgetMs: 0, cutStage: null, stages: emptyStages(), passes: [], pools: [],
 });
 
 const message = (e: unknown): string => String((e as Error)?.message ?? e).slice(0, 300);
@@ -393,11 +412,19 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const plan = planWarmup(host.scene, {mode: host.mode, cameraMask, pools: host.registry.poolRoots(), near: host.near});
   const passes = host.registry.passes;
   const torch = host.torch;
-  const casters = torch?.castShadow ? plan.items.filter(i => i.caster) : [];
+  // Task static-batching-warmup-20261105: the likely FIRST USES go first, so a budget cut drops the long tail instead — representatives:
+  // the hidden pooled ones (effects, the runtime-variant pool, unshown loot batches: prepared for first use) then nearest the camera;
+  // shadow casters: within torch reach first (what the first torch-lit frame draws), then pooled ones, then by distance.
+  const eye = host.camera.getWorldPosition(new THREE.Vector3());
+  const distOf = new Map<WarmItem, number>();
+  const dist = (i: WarmItem) => { let d = distOf.get(i); if (d === undefined) distOf.set(i, (d = itemDistance(i.object, eye))); return d; };
+  const items = [...plan.items].sort((a, b) => (a.flips.length ? 0 : 1) - (b.flips.length ? 0 : 1) || dist(a) - dist(b));
+  const casterTier = (i: WarmItem) => (!i.flips.length && dist(i) <= TORCH_REACH ? 0 : i.flips.length ? 1 : 2);
+  const casters = torch?.castShadow ? items.filter(i => i.caster).sort((a, b) => casterTier(a) - casterTier(b) || dist(a) - dist(b)) : [];
   // (lane RENDER-CPU) 'full': every other eligible renderable is drawn once in the hidden frames as well (its own render objects in the
   // real scene / shadow pass contexts; node builds are cache hits by then) — a first view in play then creates nothing
-  const rest = plan.mode === 'full' ? plan.others : [];
-  const compileChunks = chunks(plan.items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
+  const rest = plan.mode === 'full' ? [...plan.others].sort((a, b) => dist(a) - dist(b)) : [];
+  const compileChunks = chunks(items, opts.compileChunk ?? WARMUP_DEFAULTS.compileChunk);
   const frameItems = [...casters, ...rest];
   // (lane RENDER-CPU) three draws a light's shadow map only when a RECEIVER draws (the shadow node lives in receivers' lit materials):
   // a chunk of casters that receive nothing (enemies, pickups, loot batches) never drew its shadow variants. Every chunk holds one
@@ -422,10 +449,11 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
   const torchNeeds = torch?.shadow?.needsUpdate ?? false;
   let status = 'complete' as WarmupStatus; // (mutated by stop(); no control-flow narrowing)
   let reason: string | null = null;
+  let stageNow: WarmupStage = 'materials', cutStage: WarmupStage | null = null;
   const stop = (): boolean => {
     if (status !== 'complete') return true;
     if (!host.alive()) { status = 'cancelled'; reason = 'station replaced or graphics device lost'; return true; }
-    if (now() - t0 > budget) { status = 'partial'; reason = `time budget (${Math.round(budget / 1000)} s) reached`; return true; }
+    if (now() - t0 > budget) { status = 'partial'; cutStage = stageNow; reason = `time budget (${Math.round(budget / 1000)} s) reached in ${stageNow}`; return true; }
     return false;
   };
   const compileIn = async (target: unknown, scene: THREE.Object3D, camera: THREE.Camera, onP: ((e: {loaded: number; total: number}) => void) | null, depth = 0) => {
@@ -457,10 +485,14 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     restore(snap);
     stages.materials.ms = now() - ts;
 
-    // 2. registered passes (viewmodel overlay, ...) in their own render contexts, hidden roots visible for the call
+    // 2. registered passes (viewmodel overlay, ...) in their own render contexts, hidden roots visible for the call. Task
+    //    static-batching-warmup-20261105: also after a budget cut in the materials stage (the held items are a first use within seconds
+    //    of control; one call per registered pass) — only a cancelled / failed run skips them
     ts = now();
+    stageNow = 'passes';
     for (const p of passes) {
-      if (stop()) break;
+      if (status === 'cancelled' || status === 'failed') break;
+      if (!host.alive()) { status = 'cancelled'; reason = 'station replaced or graphics device lost'; break; }
       const own: THREE.Object3D[] = [];
       p.scene.traverse(o => { if (isRenderable(o)) own.push(o); });
       const hidden = p.hidden?.() ?? [];
@@ -480,6 +512,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
 
     // 3. shadow casters (+ fog passes, output, overlay composite) through real hidden frames, torch lit; 'full': then every other
     //    renderable once (lane RENDER-CPU)
+    stageNow = 'shadows';
     if (frameChunks.length && !stop()) {
       ts = now();
       host.hide(true);
@@ -527,7 +560,7 @@ export async function runWarmup(host: WarmupHost, opts: WarmupOptions = {}): Pro
     status, reason, mode: plan.mode, ms: now() - t0,
     plan: {items: plan.items.length, groups: plan.groups, renderables: plan.renderables.length, skipped: plan.skipped,
       flipped: plan.items.filter(i => i.flips.length).length, casters: casters.length, others: rest.length},
-    sceneDepth, stages, passes: names.passes, pools: names.pools,
+    sceneDepth, budgetMs: budget, cutStage, stages, passes: names.passes, pools: names.pools,
   };
 }
 

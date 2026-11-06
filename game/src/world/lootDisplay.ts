@@ -195,7 +195,7 @@ export class LotDisplay {
   prepareHighlights(): number {
     const ids = new Set<string>();
     for (const key of this.batches.keys()) ids.add(key.split('|')[0]);
-    for (const id of ids) this.highlight(id);
+    for (const id of ids) this.highlight(id).obj.userData.runtimeVariant = true; // (render/runtimeVariants.ts RUNTIME_VARIANT: journey order)
     return ids.size;
   }
 

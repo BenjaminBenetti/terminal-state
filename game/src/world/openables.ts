@@ -41,6 +41,7 @@ import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeomet
 import {propShape} from '../gen/propShapes'; // Task office-overhaul-20261030 (lane INTERACT): toilet-stall body (bodyShape)
 import {rackLedMaterial} from './rackLeds'; // Task office-props-physics-scale-20261030 (lane RACK)
 import {openableSpec, partFace, type AuthoredBox, type Box6, type MatRole, type OpenableKind, type OpenableSpec, type PartSpec} from './openablesSpec';
+import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
 
 const OPEN_TIME = 0.5;
 const CLOSE_TIME = 0.38;
@@ -496,7 +497,8 @@ export class OpenableSet {
   /**
    * Builds the station's instanced bodies + closed parts (per kind, 12 m chunks). Task mall-round2-20261031 (lane PERF): `byStorey`
    * (the mall) also splits a chunk per storey — one batch spanning two storeys had a box the level culler could never level- / slab- /
-   * occlusion-cull (world/levelCulling.ts); identity is unchanged (every holder still owns exactly one slot per closed part).
+   * occlusion-cull (world/levelCulling.ts); identity is unchanged (every holder still owns exactly one slot per closed part). Task
+   * static-batching-warmup-20261105: cohorts are per level on every level, one per level for a cheap kind (world/staticCohorts.ts).
    */
   finish(byStorey = false): void {
     const byKind = new Map<OpenableKind, OpenHolder[]>();
@@ -509,16 +511,14 @@ export class OpenableSet {
     this.pending = [];
     for (const [kind, list] of byKind) {
       const m = this.model(kind);
-      const chunks = new Map<string, OpenHolder[]>();
-      for (const h of list) {
-        const key = `${byStorey ? `${h.prop.level ?? 0}:` : ''}${Math.floor(h.prop.x / CHUNK)},${Math.floor(h.prop.z / CHUNK)}`;
-        let l = chunks.get(key);
-        if (!l) chunks.set(key, (l = []));
-        l.push(h);
-      }
-      for (const hs of chunks.values()) {
-        for (const part of m.body) this.instance(part, hs, `container-body-${kind}`, false);
-        for (const part of m.closed) this.instance(part, hs, `openable-closed-${kind}`, true);
+      // task static-batching-warmup-20261105 (world/staticCohorts.ts): per level on every level (was: the mall / Reactor only); coarse
+      // cohorts for a cheap kind where the culler has no slab occlusion (!byStorey: every level but the mall / Reactor)
+      let tris = 0;
+      for (const part of [...m.body, ...m.closed]) tris += trianglesOf(part.geo);
+      const chunks = planCohorts(list, h => ({x: h.prop.x, z: h.prop.z, level: h.prop.level ?? 0}), CHUNK, tris, !byStorey);
+      for (const {level, list: hs} of chunks.values()) {
+        for (const part of m.body) this.instance(part, hs, `container-body-${kind}`, false, level);
+        for (const part of m.closed) this.instance(part, hs, `openable-closed-${kind}`, true, level);
       }
       // Ajar parts never rest closed: those holders keep their own meshes.
       for (const h of list) if (h.open!.spec.parts.some(p => p.ajar)) { this.takeover(h); h.open!.pinned = true; }
@@ -526,7 +526,7 @@ export class OpenableSet {
     this.group.updateMatrixWorld(true);
   }
 
-  private instance(part: Part, hs: OpenHolder[], name: string, slot: boolean): void {
+  private instance(part: Part, hs: OpenHolder[], name: string, slot: boolean, level?: number): void {
     const accentPart = part.role === 'accent';
     const mat = accentPart ? this.roleMat('accent', new THREE.Color(), {accent: 0xffffff}) : part.mat;
     const im = new THREE.InstancedMesh(part.geo, mat, hs.length);
@@ -536,6 +536,7 @@ export class OpenableSet {
       if (slot) h.open!.slots.push({mesh: im, index: i});
     });
     im.name = name;
+    if (level !== undefined) im.userData.level = level; // (the culler's level of the cohort: never derived from a level-wide box)
     im.computeBoundingSphere();
     this.group.add(im);
     this.instanced.push(im);
