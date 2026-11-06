@@ -1,9 +1,9 @@
 // Task studio-skyways-destinations-20261106-170011-01 (lane SHOPS-B (C): garden, arcade, cinema, science, hockey): this lane's Skyways DESTINATION prop kinds (kindTypes.ts
 // DestKindSpec each). Merged by registry.ts into the shared tables — never edit the shared tables for these kinds.
 //
-// Footprints and support heights come from the kit model table (assets/skywaysDestProps.generated.ts: the lead's planned sizes until lane
-// KITS writes the measured ones under the same keys) — never literals, so the measured values flow through. One code-drawn kind: the cinema
-// SCREEN (a flat projection screen in a black masking frame, mounted on the auditorium's screen wall; no model).
+// Footprints and support heights come from the kit model table (assets/skywaysDestProps.generated.ts: lane KITS' measured runtime rows,
+// topY / hangY / seatY) — never literals, so re-measured values flow through. One code-drawn kind: the cinema SCREEN (a flat projection
+// screen in a black masking frame, mounted on the auditorium's far wall; no model: SKYD_SCREEN_PARTS).
 //
 // Affordances (root CLAUDE.md "Props — core design rules"; docs/prop-affordances.md):
 //  - rule 1: none of these reads as openable storage — the coin-op machines, the popcorn cart and the ticket booth are sealed equipment
@@ -118,7 +118,7 @@ export const SHOPS_B_SPECS: Readonly<Record<ShopsBKind, DestKindSpec>> = {
   }),
   skyDClawCrane: spec('skyDClawCrane', {
     phys: {dynamic: false, why: 'too heavy', how: 'claw crane prize machine (~180 kg glass-fronted cabinet): a bump or a bullet does not shove it'},
-    damage: 'glass', open: {cls: 'exception', role: 'equipment', how: 'sealed coin-op machine: the plush prize pile is behind its locked glass (part of the machine, like a vending machine\'s display); the coin door is a service panel'},
+    damage: 'glass', open: {cls: 'exception', role: 'equipment', how: 'coin-op prize machine: the plush pile inside its cabinet under the claw is the machine\'s own display (part of the equipment, like a vending machine\'s stock), not storage or loot; the coin door is a service panel'},
   }),
   // --- Aurora Picture House ---
   skyDPopcornCart: spec('skyDPopcornCart', {
@@ -168,7 +168,25 @@ export const SHOPS_B_SPECS: Readonly<Record<ShopsBKind, DestKindSpec>> = {
 };
 
 /**
- * Scale-check record (tools/asset-pipeline/props/scale-check.mjs beside zombie `lastshift` at runtime scale 1.0, viewed): W x H x D, grounded
- * contact, support heights. Pending until lane KITS delivers the measured models (the placeholder table has no files yet).
+ * Scale-check record (tools/asset-pipeline/props/scale-check.mjs `--prop` on the runtime GLBs as authored — the destination renderer's uniform
+ * fit is k = 1 on the measured files — beside zombie `lastshift` at runtime scale 1.0, viewed; renders in the lane's private QA folder):
+ * W x H x D, grounded contact, support heights.
  */
-export const SHOPS_B_SCALE: Readonly<Partial<Record<ShopsBKind, string>>> = {};
+export const SHOPS_B_SCALE: Readonly<Record<Exclude<ShopsBKind, 'skyDCinemaScreen'>, string>> = {
+  skyDPlantBench: '2.98 x 0.75 x 1.05 m; grounded, 4 leg contacts; slatted top 0.749 m (99 % of the top-down area): the pots stand there',
+  skyDPottedPalm: '1.57 x 2.20 x 1.59 m (fronds; planter ~0.6 m wide); grounded, 1 contact (planter base 0.46 x 0.45)',
+  skyDGeraniumPot: '0.26 x 0.35 x 0.19 m; grounded, 1 contact (pot foot 0.105 m); on the bench top at 0.75 m',
+  skyDWheelbarrow: '1.50 x 0.63 x 0.52 m; grounded, 4 contacts (wheel + legs; wheel at -X); tray rim 0.62 m',
+  skyDPinball: '0.83 x 1.90 x 1.45 m; grounded, 4 leg contacts; playfield glass ~1.10 m, backbox top 1.89 m',
+  skyDAirHockey: '2.10 x 1.07 x 1.07 m; grounded, 4 leg contacts; playfield 0.97 m (topY), rails 1.01 m',
+  skyDClawCrane: '0.97 x 1.90 x 0.96 m; grounded, 4 contacts; control panel ~0.9 m, cabinet top 1.90 m',
+  skyDPopcornCart: '1.07 x 1.60 x 0.78 m; grounded, 4 contacts (spoked wheels + leg); canopy 1.53 m',
+  skyDCinemaSeats: '2.40 x 1.04 x 0.80 m (four seats); grounded, 14 contacts on the floor rail; seat 0.51 m (seatY), facing +Z',
+  skyDTicketBooth: '1.77 x 2.40 x 1.54 m; grounded, 4 contacts; counter shelf 0.93 m (84 %)',
+  skyDTelescope: '1.61 x 1.70 x 0.76 m; grounded, 3 tripod feet; objective at -X (aimed out by a quarter turn past facing the front)',
+  skyDGiantGlobe: '0.83 x 1.20 x 0.78 m; grounded, 4 stand feet; meridian ring top 1.06 m',
+  skyDRocketModel: '0.83 x 2.20 x 0.83 m; grounded, 5 contacts (fins / launch pad 0.17 m)',
+  skyDPlanetMobile: '3.00 x 2.58 x 2.03 m; hung from its top hook (hangY 2.575 m), planets in a row ~0.43 m above its base: hung only where the underside clears 2.3 m (the 7.5 m emporium: underside ~4.9 m)',
+  skyDHockeyNet: '1.83 x 1.23 x 0.76 m (regulation goal); grounded, 8 contacts (posts + base frame); mouth toward +Z',
+  skyDGoalieMannequin: '1.07 x 1.95 x 0.61 m; grounded, 3 contacts on its round base (0.08 m); facing +Z',
+};

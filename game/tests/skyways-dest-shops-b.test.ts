@@ -25,7 +25,7 @@ import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {holderFinds, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {SKYWAYS_DEST_PROPS, type SkywaysDestProp} from '../src/assets/skywaysDestProps.generated';
 import {DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
-import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SPECS} from '../src/gen/skyways/destinations/kindsShopsB';
+import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SCALE, SHOPS_B_SPECS, SKYD_SCREEN_PARTS} from '../src/gen/skyways/destinations/kindsShopsB';
 import {SHOPS_B_FAMILIES} from '../src/gen/skyways/destinations/shopsB';
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
@@ -66,7 +66,18 @@ describe('Skyways destinations, lane SHOPS-B: kinds', () => {
         expect(row.planned, k).toBeFalsy();
         expect([def.w, def.h, def.d], k).toEqual([row.w, row.h, row.d].map(v => Math.round(v * 1000) / 1000));
         expect(existsSync(pub(row.url)), `${k} ${row.url}`).toBe(true);
-      } else expect(k).toBe('skyDCinemaScreen');
+        // rule 5: its scale check beside the zombie recorded (dims + grounded contact / hang point)
+        expect((SHOPS_B_SCALE as Record<string, string>)[k], k).toMatch(/\d+\.\d+ x \d+\.\d+ x \d+\.\d+ m.*(grounded|hung)/);
+      } else {
+        expect(k).toBe('skyDCinemaScreen');
+        // the code-drawn screen: its parts inside its box (frame + projection face)
+        for (const {p, s} of SKYD_SCREEN_PARTS) {
+          expect(Math.abs(p[0]) + s[0] / 2, k).toBeLessThanOrEqual(def.w / 2 + 1e-6);
+          expect(p[1] - s[1] / 2, k).toBeGreaterThanOrEqual(-1e-6);
+          expect(p[1] + s[1] / 2, k).toBeLessThanOrEqual(def.h + 1e-6);
+          expect(Math.abs(p[2]) + s[2] / 2, k).toBeLessThanOrEqual(def.d / 2 + 1e-6);
+        }
+      }
       const a = PROP_PHYSICS_AUDIT[k];
       expect(a, k).toBeTruthy();
       expect(a.cls, k).toBe(s.phys.dynamic ? 'dynamic' : 'static');
