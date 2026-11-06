@@ -17,7 +17,7 @@ import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {assetUrl} from '../assets/loader';
 import type {CarSpec} from './skywaysCarSpec';
-import {COCKPIT_URLS, FILL_COLOR, cockpitLayout} from './skywaysCarCockpit';
+import {COCKPIT_URLS, FILL_COLOR, cockpitLayout, fillMesh} from './skywaysCarCockpit';
 
 /** Steering-wheel turns per front-wheel radian (a quick rack: full lock 0.55 rad ~ 140°). */
 export const WHEEL_RATIO = 4.4;
@@ -220,6 +220,19 @@ function proceduralCockpit(spec: CarSpec): {group: THREE.Group; wheel: THREE.Obj
   return {group: g, wheel: spin};
 }
 
+let fillCache: {spec: CarSpec; geo: THREE.BufferGeometry} | null = null;
+/** The fillers' geometry for a spec (cached: one car at a time; a few hundred triangles). */
+function fillGeometry(spec: CarSpec): THREE.BufferGeometry {
+  if (fillCache?.spec === spec) return fillCache.geo;
+  const m = fillMesh(cockpitLayout(spec)), geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(m.P, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(m.N, 3));
+  geo.setIndex(new THREE.BufferAttribute(m.I, 1));
+  geo.computeBoundingSphere();
+  fillCache = {spec, geo};
+  return geo;
+}
+
 /**
  * The Meshy cockpit (car frame, world/skywaysCarCockpit.ts cockpitLayout): the dash (its wheel rim on the eye's x), the two seats turned to
  * face it, and the plain dark fillers. The parts keep their own materials (Meshy maps); nothing here casts a shadow.
@@ -238,14 +251,11 @@ function modelCockpit(spec: CarSpec, dash: GLTF, seat: GLTF): THREE.Group {
   };
   part(dash, lay.dash, 'skyways-car-dash-model');
   lay.seats.forEach((p, i) => part(seat, p, i ? 'skyways-car-seat-right' : 'skyways-car-seat-left'));
-  for (const b of lay.fillers) {
-    const m = new THREE.Mesh(S.box, S.fill);
-    m.name = `skyways-car-${b.name}`;
-    m.scale.set(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
-    m.position.set((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
-    m.userData.carPart = 'cockpit';
-    g.add(m);
-  }
+  // the fillers: one mesh (firewall + shelves + tunnel + risers), built once per layout and shared by every view
+  const fill = new THREE.Mesh(fillGeometry(spec), S.fill);
+  fill.name = 'skyways-car-cockpit-fill';
+  fill.userData.carPart = 'cockpit';
+  g.add(fill);
   return g;
 }
 

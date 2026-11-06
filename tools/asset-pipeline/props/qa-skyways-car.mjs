@@ -260,7 +260,7 @@ const C_BOX = [255, 220, 0], C_EYE = [255, 40, 40], C_WHEEL = [255, 140, 0], C_E
 
 // ---- lane CAR2: the assembled cockpit (the runtime's own layout) -------------------------------------------------------------
 {
-  const {cockpitLayout, posePoint, sightLineY, COCKPIT_URLS, FILL_COLOR} = await import('../../../game/src/world/skywaysCarCockpit.ts');
+  const {cockpitLayout, fillMesh, posePoint, sightLineY, COCKPIT_URLS, FILL_COLOR} = await import('../../../game/src/world/skywaysCarCockpit.ts');
   const {SKYWAYS_CAR: SPEC} = await import('../../../game/src/assets/skywaysCar.generated.ts');
   const lay = cockpitLayout(SPEC);
   console.log('cockpit layout', JSON.stringify(lay));
@@ -279,15 +279,9 @@ const C_BOX = [255, 220, 0], C_EYE = [255, 40, 40], C_WHEEL = [255, 140, 0], C_E
     }
     return {...M, P, N};
   };
-  const boxMesh = b => {
-    const P = [], N = [], I = [], cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2, cz = (b.z0 + b.z1) / 2;
-    for (const x of [b.x0, b.x1]) for (const y of [b.y0, b.y1]) for (const z of [b.z0, b.z1]) { P.push(x, y, z); N.push(...norm([x - cx, y - cy, z - cz])); }
-    for (const q of [[0, 1, 3, 2], [4, 6, 7, 5], [0, 4, 5, 1], [2, 3, 7, 6], [0, 2, 6, 4], [1, 5, 7, 3]]) I.push(q[0], q[1], q[2], q[0], q[2], q[3]);
-    return {P: Float32Array.from(P), N: Float32Array.from(N), I: Uint32Array.from(I)};
-  };
   const dashM = await loadPart(COCKPIT_URLS.dash), seatM = await loadPart(COCKPIT_URLS.seat);
   const FILL = [FILL_COLOR >> 16, (FILL_COLOR >> 8) & 255, FILL_COLOR & 255]; // (the runtime fillers' colour: the dash top's median)
-  const parts = [{M: place(dashM, lay.dash)}, ...lay.seats.map(p => ({M: place(seatM, p)})), ...lay.fillers.map(b => ({M: boxMesh(b), flat: FILL}))];
+  const parts = [{M: place(dashM, lay.dash)}, ...lay.seats.map(p => ({M: place(seatM, p)})), {M: fillMesh(lay), flat: FILL}];
   const flatParts = parts.map(x => (x.flat ? {...x, flat: [230, 140, 40]} : x)); // (the sections: fillers orange)
   const e = [SPEC.eye.x, SPEC.eye.y, SPEC.eye.z], W = 960, H = 540;
   const views = [[0, -4], [0, -28], [70, -10], [-60, -14], [0, -62], [-140, -12]];
