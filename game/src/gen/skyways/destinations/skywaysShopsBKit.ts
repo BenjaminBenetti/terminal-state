@@ -171,7 +171,12 @@ export class ShopsBDresser {
   putXZ(kind: PropKind, x: number, z: number, yaw: number, o: PlaceOpts & {area?: Area} = {}): PropPlacement | null {
     const rot = quarterYaw(yaw);
     const {hx, hz} = footprint(kind, rot), f = this.floorAt(x, z);
-    if (!this.boxFree(x, z, hx, hz, f, f + (o.h ?? PROP_DEFS[kind].h))) return null;
+    if (!this.boxFree(x, z, hx, hz, f, f + (o.h ?? PROP_DEFS[kind].h))) { DBG?.(`${kind} box ${x},${z}`); return null; }
+    if (DBG) {
+      const g = this.g, [a0, b0, a1, b1] = cellsOfBox(x, z, hx, hz), why: string[] = [];
+      for (let cy = b0; cy <= b1; cy++) for (let cx = a0; cx <= a1; cx++) { const i = g.idx(cx, cy); if (g.cells[i] !== FLOOR) why.push('wall'); else if (g.area[i] !== (o.area ?? this.floor).id) why.push('area'); else if (g.blocked[i]) why.push('blocked'); else if (this.ctx.keep[i]) why.push('keep'); else if (this.ctx.edge[i]) why.push('edge'); else if (this.ctx.zone[i]) why.push('zone'); }
+      if (why.length) DBG(`${kind} ${x},${z}: ${[...new Set(why)].join(',')}`);
+    }
     const {y: _y, ...opts} = o; void _y; // floor props only (a y >= 0.9 would make the primitive treat it as a wall mount)
     const p = tryPlaceProp(this.ctx, o.area ?? this.floor, kind, r3(x), r3(z), rot, opts);
     if (!p) return null;
@@ -316,8 +321,12 @@ export class ShopsBDresser {
     return p;
   }
 
-  /** A wall mount on side `side` of `a` at `t` (world m along it), `y` m above the floor (backed solid wall, clear of props and doorways). */
+  /**
+   * A wall mount on side `side` of `a` at `t` (world m along it), `y` m above the floor: a backed solid wall clear of props and doorways
+   * (placeKit.mountProp) and never over glazing — no Skyways window / boarded entrance of this storey in that wall span.
+   */
   mount(a: Area, side: Side, t: number, kind: PropKind, y: number, variant = 0): PropPlacement | null {
+    if (this.glazedSpan(a, side, t - PROP_DEFS[kind].w / 2 - 0.1, t + PROP_DEFS[kind].w / 2 + 0.1)) return null;
     const p = mountProp(this.ctx, a, side, t, kind, r3(this.base + y), 0);
     if (!p) return null;
     p.variant = variant;
@@ -327,6 +336,18 @@ export class ShopsBDresser {
     }
     this.placed.push(p);
     return p;
+  }
+
+  /** A window / boarded entrance of this storey lies in the wall behind side `side` of `a` over [t0, t1] (world m along it). */
+  glazedSpan(a: Area, side: Side, t0: number, t1: number): boolean {
+    const alongX = side === 'N' || side === 'S';
+    const c = side === 'N' ? a.y * CELL - CELL / 2 : side === 'S' ? (a.y + a.h) * CELL + CELL / 2 : side === 'W' ? a.x * CELL - CELL / 2 : (a.x + a.w) * CELL + CELL / 2;
+    for (const w of this.layout.skyways?.windows ?? []) {
+      if (w.level !== this.level) continue;
+      const [s0, s1, q0, q1] = alongX ? [w.x0, w.x1, w.z0, w.z1] : [w.z0, w.z1, w.x0, w.x1];
+      if (s1 > t0 + 1e-6 && s0 < t1 - 1e-6 && c >= q0 - CELL / 2 - 1e-6 && c <= q1 + CELL / 2 + 1e-6) return true;
+    }
+    return false;
   }
 
   /**
@@ -372,6 +393,9 @@ export class ShopsBDresser {
   /** A seeded pick of a quarter turn (symmetric pieces). */
   anyYaw(): number { return this.rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]); }
 }
+
+let DBG: ((m: string) => void) | undefined;
+export const setShopsBDebug = (f?: (m: string) => void): void => { DBG = f; };
 
 /** The opposite frame wall. */
 export const OPP_WALL: Readonly<Record<Wall, Wall>> = {L: 'R', R: 'L', B: 'F', F: 'B'};

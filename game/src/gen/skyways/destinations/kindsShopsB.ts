@@ -43,9 +43,8 @@ export const SHOPS_B_MODEL: Readonly<Partial<Record<ShopsBKind, SkywaysDestPropK
   skyDHockeyNet: 'skyways_d_hk_net', skyDGoalieMannequin: 'skyways_d_hk_goalie',
 };
 
-/** A kit model's measured row (support heights optional: the placeholder has none, the measured table may add them). */
-export type ShopsBModelRow = SkywaysDestProp & {shelfY?: number; hangY?: number; seatY?: number};
-export const shopsBModel = (k: SkywaysDestPropKey): ShopsBModelRow => SKYWAYS_DEST_PROPS[k];
+/** A kit model's measured row (lane KITS' table: runtime bounds + the measured support heights). */
+export const shopsBModel = (k: SkywaysDestPropKey): SkywaysDestProp => SKYWAYS_DEST_PROPS[k];
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
