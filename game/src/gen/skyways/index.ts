@@ -40,6 +40,7 @@ import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
+import {dressSkywaysAtriums} from './greenery';
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -162,6 +163,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // the ONE add-on's dressing (stage / tables / banners / mascot statues, or the prize display) + the ramen restaurant
   dressSkywaysAddon(layout, rng.fork('skyways-addon'));
   const ram = layout.skyways.restaurant;
+  dressSkywaysAtriums(layout, rng.fork('skyways-atriums'));
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------

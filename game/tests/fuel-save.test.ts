@@ -60,6 +60,24 @@ describe('fuel in saves', () => {
     rejects(f => { f.run.memories[`${sid(0)}:main`] = {visits: 1, pickups: null, holders: {}, killed: [], cleared: false, lanes: {[FUEL_LANE]: {v: 1, realized: 'yes', carts: []}}}; }, /realized/);
   });
 
+  it('a v2 station record (task fuel-feedback: + its realized holder lots) round-trips; a malformed lot list is refused', () => {
+    const h = harness();
+    const key = {level: 'subway' as const, section: 'main', station: sid(0)};
+    h.run.memory(key).holders['shelf@0:120,-340'] = {lots: [2003, 2900], open: true, searched: true};
+    h.run.setLaneStore(FUEL_LANE, {v: 2, realized: true, carts: [], lots: ['shelf@0:120,-340#2900', 'crate@0:5,6#900']}, key);
+    const file = h.file('arrival', 1) as Any;
+    const p = parseSaveText(saveFileText(file));
+    expect(p.ok, p.ok ? '' : p.error).toBe(true);
+    const mem = (p as {value: SaveFileV1Like}).value.run.memories[`${sid(0)}:main`];
+    expect((mem.lanes as Any)[FUEL_LANE]).toEqual({v: 2, realized: true, carts: [], lots: ['shelf@0:120,-340#2900', 'crate@0:5,6#900']});
+    const bad = structuredClone(file);
+    bad.run.memories[`${sid(0)}:main`].lanes[FUEL_LANE].lots = ['shelf@0:120,-340#2900', 'shelf@0:120,-340#2900'];
+    bad.checksum = checksumOf(bad.run);
+    const r = validateSaveFile(bad);
+    expect(r.ok).toBe(false);
+    expect((r as {error: string}).error).toMatch(/duplicate station fuel lot/);
+  });
+
   it('an older save (no fuel anywhere) still loads: an empty tank and no cargo; its pending journey resumes free', () => {
     const h = harness();
     h.run.campaign!.transit = {from: sid(1), to: sid(2), phase: 'departing', cheat: false};

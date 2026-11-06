@@ -123,7 +123,7 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 37.5 seconds on the face.'}, // (task train-fuel-system: corrected — FILTER_LIFE_S is 37.5 s since PR #52)
   // --- Task studio-beta-train-fuel-system-20261106-024923-01: the TRAIN's fuel (fuel/fuel.ts): one can = a quarter of the tank, 2 a slot ---
   fuel_can: {id: 'fuel_can', name: 'Fuel can', short: 'Fuel', kind: 'supply', stackMax: 2, icon: 'fuelCan',
-    description: 'A steel jerrycan of diesel: a quarter of the train\'s tank (one tank = one stop). Pour it in at the train\'s fuel cap (E), or leave it in the train chest — the train burns chest fuel by itself when it departs.'},
+    description: 'A small steel jerrycan of diesel: a quarter of the train\'s tank (one tank = one stop). Pour it in at the train\'s fuel cap (E), or leave it in the train chest — the train burns chest fuel by itself when it departs.'},
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
@@ -221,7 +221,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
   // mask lane: the authored filter canister (world/authoredItems.ts FILTER_DIMS) standing on its base, thread up
   gas_filter: {w: 0.096, d: 0.096, h: 0.072, shape: 'cylinder'},
-  fuel_can: {w: 0.32, d: 0.165, h: 0.47, shape: 'box'}, // a 20 l jerrycan standing upright (task train-fuel-system: assets/models/train-fuel-can.glb bounds)
+  fuel_can: {w: 0.2015, d: 0.105, h: 0.30, shape: 'box'}, // a ~5 l can standing upright, med-kit sized (user feedback, task fuel-feedback: assets/models/train-fuel-can.glb bounds)
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,

@@ -488,6 +488,22 @@ export const FUEL_AUDIO = {
   cart: {rate: [0.72, 1.12] as const, level: [0.35, 1] as const, lowpass: [900, 5200] as const, tau: 0.08, idleStopS: 0.4, stopFade: 0.12, ref: 2.2, rolloff: 1.1, send: 0.12, minK: 0.01},
 } as const;
 
+/**
+ * Task studio-skyways-level-20261106-054448 (lane CAR2): the Skyways PRIZE CAR (Sound Lab clips carIdle / carDrive loops, carSkid / carDoor
+ * one-shots; provenance derivatives/audio-skyways-car.json). carEngine is ONE page-lifetime channel like cartRoll: the idle and the drive
+ * loops run together, crossfaded (equal power) by the engine load (speed, plus `throttleLoad` while the throttle is held), both at one
+ * playbackRate rising with the speed (`rate`: 0.85 at rest .. 1.5 at the top speed), every target eased (setTargetAtTime, `tau`; unchanged
+ * values cost nothing). Created from silence on the first call; `rev` (getting in) adds a short decaying blip (`rev.s`: load and rate up
+ * to `rev.peak`). stopCarEngine (getting out / death / teardown), a pause / menu and a new world fade it out and release it at once.
+ * carSkid: one tyre-skid take, at most every `skid.minGapS`; carDoor: the door clunk. Positional (`at`; omitted = at the listener).
+ */
+export const CAR_AUDIO = {
+  rate: [0.85, 1.5] as const, throttleRate: 0.08, throttleLoad: 0.35, speedLoad: 0.8, idleFloor: 0.25, tau: 0.12,
+  rev: {s: 0.6, peak: 0.6}, stopFade: 0.25, ref: 2.5, rolloff: 1, send: 0.05, eps: 0.004,
+  skid: {minGapS: 0.9, send: 0.15, ref: 3, maxDist: 40},
+  door: {send: 0.15, ref: 2, maxDist: 30},
+} as const;
+
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
 /**
@@ -533,6 +549,10 @@ export class Sfx {
   private pourVoice: Voice | null = null;
   private cart: {src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
   private cartStats = {starts: 0, stops: 0};
+  // Task skyways-level-20261106 (lane CAR2): the prize car's engine channel (both loops; null while nobody drives) + counters
+  private engine: {idle: AudioBufferSourceNode; drive: AudioBufferSourceNode; gi: GainNode; gd: GainNode; pan: PannerNode; rate: number; vi: number; vd: number; revT: number} | null = null;
+  private carStats = {starts: 0, stops: 0, revs: 0, skids: 0, doors: 0};
+  private skidAt = -Infinity;
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
@@ -689,6 +709,7 @@ export class Sfx {
     this.desired = 'suspended';
     this.applyGain();
     this.stopCartRoll(0.05); // task train-fuel-system (lane PORT): the cart rumble never waits out a menu
+    this.stopCarEngine(0.05); // (lane CAR2) the Skyways car's engine too
   }
 
   /** Issue the op for the desired state now (keeps user-gesture timing), reconcile after settle. */
@@ -766,7 +787,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); this.stopCarEngine(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble; lane CAR2: the car engine
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -1953,6 +1974,102 @@ export class Sfx {
     const now = this.ctx?.currentTime ?? 0;
     return {cart: !!this.cart, cartK: this.cart?.k ?? 0, cartStarts: this.cartStats.starts, cartStops: this.cartStats.stops,
       stall: !!this.stallVoice && this.stallVoice.end > now, pour: !!this.pourVoice && this.pourVoice.end > now};
+  }
+
+  /**
+   * The Skyways prize car's engine while someone drives it (every frame): `speed01` 0..1 of its top speed, `throttle01` 0..1 (the pedal
+   * held in the direction of travel), `at` = the engine (world; omitted = the listener). ONE channel (CAR_AUDIO): created from silence on
+   * the first call — `rev` adds the start-up blip —, then only its targets move. Paused audio: nothing starts (a running one was stopped).
+   */
+  carEngine(speed01: number, throttle01: number, at?: Pos, o: {rev?: boolean} = {}): void {
+    const A = CAR_AUDIO, ctx = this.live;
+    if (!ctx) { this.stopCarEngine(0.05); return; }
+    const k = Number.isFinite(speed01) ? clamp01(speed01) : 0, th = Number.isFinite(throttle01) ? clamp01(throttle01) : 0;
+    let e = this.engine;
+    if (!e) {
+      const ci = this.bank.pick('carIdle'), cd = this.bank.pick('carDrive');
+      if (!ci || !cd) return;
+      const pan = this.makePanner(ctx, false, A.ref, A.rolloff);
+      const nodes: AudioNode[] = [pan];
+      const loop = (clip: NonNullable<typeof ci>): [AudioBufferSourceNode, GainNode] => {
+        const src = ctx.createBufferSource();
+        src.buffer = clip.buffer;
+        src.loop = true;
+        const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+        src.loopStart = a;
+        src.loopEnd = b;
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        src.connect(g).connect(pan);
+        nodes.push(src, g);
+        src.start(ctx.currentTime, a + Math.random() * Math.max(0, b - a));
+        this.soundsStarted++;
+        return [src, g];
+      };
+      const [idle, gi] = loop(ci), [drive, gd] = loop(cd);
+      pan.connect(this.master);
+      if (this.reverbIn) {
+        const sn = ctx.createGain();
+        sn.gain.value = A.send;
+        pan.connect(sn).connect(this.reverbIn);
+        nodes.push(sn);
+      }
+      idle.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
+      this.carStats.starts++;
+      e = this.engine = {idle, drive, gi, gd, pan, rate: -1, vi: -1, vd: -1, revT: -Infinity};
+    }
+    const t = ctx.currentTime;
+    if (o.rev) { e.revT = t; this.carStats.revs++; }
+    const p = at ?? this.listener;
+    this.setPannerPos(e.pan, p.x, p.y, p.z);
+    const r = t - e.revT < A.rev.s ? A.rev.peak * (1 - (t - e.revT) / A.rev.s) : 0;
+    const load = Math.max(r, clamp01(A.speedLoad * k + A.throttleLoad * th));
+    const rate = A.rate[0] + (A.rate[1] - A.rate[0]) * Math.max(r, clamp01(k + A.throttleRate * th));
+    const vi = CUE_GAIN.carIdle * (A.idleFloor + (1 - A.idleFloor) * Math.cos((load * Math.PI) / 2));
+    const vd = CUE_GAIN.carDrive * Math.sin((load * Math.PI) / 2);
+    if (Math.abs(rate - e.rate) < A.eps && Math.abs(vi - e.vi) < A.eps && Math.abs(vd - e.vd) < A.eps) return;
+    e.rate = rate; e.vi = vi; e.vd = vd;
+    for (const [param, v] of [[e.idle.playbackRate, rate], [e.drive.playbackRate, rate], [e.gi.gain, vi], [e.gd.gain, vd]] as const) {
+      param.cancelScheduledValues(t);
+      param.setTargetAtTime(v, t, A.tau);
+    }
+  }
+
+  /** The car's engine fades out and is released (getting out, death, teardown, pause, a new world). Plays nothing. */
+  stopCarEngine(fadeS: number = CAR_AUDIO.stopFade): void {
+    const e = this.engine;
+    if (!e) return;
+    this.engine = null;
+    this.carStats.stops++;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    for (const g of [e.gi, e.gd]) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, f / 3); }
+    for (const src of [e.idle, e.drive]) { try { src.stop(t + f + 0.05); } catch { /* already stopped */ } }
+  }
+
+  /** A tyre skid (a hard brake / handbrake turn at speed): one take, at most every CAR_AUDIO.skid.minGapS. True = it played. */
+  carSkid(at?: Pos): boolean {
+    const S = CAR_AUDIO.skid, ctx = this.live;
+    if (!ctx || ctx.currentTime - this.skidAt < S.minGapS) return false;
+    const v = this.voice({at, send: S.send, pri: 1, ref: S.ref, maxDist: S.maxDist});
+    if (!this.play(v, 'carSkid', {jitter: 0.04, gainJitter: 1})) return false;
+    this.skidAt = ctx.currentTime;
+    this.carStats.skids++;
+    return true;
+  }
+
+  /** The car's door (getting in or out), at the door. */
+  carDoor(at?: Pos): void {
+    const D = CAR_AUDIO.door;
+    const v = this.voice({at, send: D.send, pri: 1, ref: D.ref, maxDist: D.maxDist});
+    if (this.play(v, 'carDoor', {jitter: 0.03, gainJitter: 1})) this.carStats.doors++;
+  }
+
+  /** QA / tests: the car cues' live state (the engine channel and its current targets, counters). Plays nothing. */
+  carAudioState(): {engine: boolean; rate: number; idle: number; drive: number; starts: number; stops: number; revs: number; skids: number; doors: number} {
+    const e = this.engine;
+    return {engine: !!e, rate: e?.rate ?? 0, idle: e?.vi ?? 0, drive: e?.vd ?? 0, ...this.carStats};
   }
 
   /** Cut a one-shot voice that may still be sounding (stall / pour): its sources fade over `fadeS` and stop. */

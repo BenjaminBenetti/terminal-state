@@ -4,7 +4,7 @@
 // out"), death / state change / teardown; zombies rammed through the real kill path, pushed / slowed / crushed slower, same storey only,
 // kept out of the parked car; loose props shoved (bounded) and fixed props stopping it; window panes + prop glass at speed; bullets;
 // persistence (record validator + save validation, restore, no duplicate, teardown idempotent); the view (stand-in, the model's paint /
-// trim twin / glass, the turning wheel); the audio hook.
+// trim twin / glass, the turning wheel); the audio hook (lane CAR2: the engine / skid / door wiring is in skyways-car-cockpit.test.ts).
 import {describe, expect, it} from 'vitest';
 import * as THREE from 'three';
 import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
@@ -65,7 +65,8 @@ describe('skyways car: getting in and out', () => {
     expect(h.camera.position.y).toBeCloseTo(S.eye.y, 6); // the camera IS the driver's eye
     expect(car.prompt).toBe(CAR_TEXT.driving);
     expect(h.promptProviders[0]()).toBe(CAR_TEXT.driving); // the car's prompt goes first
-    expect(h.sfxCalls).toContain('open:fridge'); // the door cue
+    expect(h.sfxCalls).toContain('door'); // the car door cue
+    expect(h.sfxCalls).toContain('engine:start'); // the engine starts with the driver (lane CAR2)
     expect(car.counts.enters).toBe(1);
   });
 
@@ -146,7 +147,7 @@ describe('skyways car: getting in and out', () => {
     expect(h.player.z).toBeCloseTo(right.z, 6);
     expect(nearestCircle(S, b.x, b.z, b.yaw, h.player.x, h.player.z).d).toBeGreaterThan(h.player.radius);
     expect(h.player.eye).toBeCloseTo(h.player.y + 1.62, 6);
-    expect(h.sfxCalls).toContain('close:fridge');
+    expect(h.sfxCalls.slice(-2)).toEqual(['door', 'engine:stop']); // out: the door, the engine stops
     // boxed in on all four sides by crates (the player squeezed in by the left door first): no room
     const crates = ([[S.exits.left.x, S.exits.left.z], [S.exits.right.x, S.exits.right.z], [0, -S.length / 2 - 0.55], [0, S.length / 2 + 0.55]] as const)
       .map(([lx, lz]) => carToWorld(15, 15, 0, lx, lz)).map(p => prop('crate', p.x, p.z, 0.3, 0.3, 1.2));
@@ -420,7 +421,7 @@ describe('skyways car: persistence', () => {
 
 describe('skyways car: the view', () => {
   it('without the model: the stand-in body + the procedural cockpit (dash, wheel, two seats); the wheel turns with the steering', () => {
-    setSkywaysCarModelsForTests({car: null, cockpit: null});
+    setSkywaysCarModelsForTests({car: null, dash: null, seat: null});
     const v = buildCarView(S);
     expect(v.standIn).toBe(true);
     expect(v.group.getObjectByName('skyways-car-stand-in')).toBeTruthy();
@@ -451,7 +452,7 @@ describe('skyways car: the view', () => {
     const body = new THREE.Mesh(new THREE.BoxGeometry(1.9, 1.2, 4.7), paint); body.name = 'body';
     const glass = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.4, 2), glassMat); glass.name = 'glass';
     scene.add(body, glass);
-    setSkywaysCarModelsForTests({car: {scene} as unknown as GLTF, cockpit: null});
+    setSkywaysCarModelsForTests({car: {scene} as unknown as GLTF, dash: null, seat: null});
     try {
       const v = buildCarView(S);
       expect(v.standIn).toBe(false);
@@ -468,7 +469,7 @@ describe('skyways car: the view', () => {
       // a world built now draws the model; the car's own trim twins / glass cast no shadow
       const {car} = carHost();
       expect(car.view!.standIn).toBe(false);
-    } finally { setSkywaysCarModelsForTests({car: null, cockpit: null}); }
+    } finally { setSkywaysCarModelsForTests({car: null, dash: null, seat: null}); }
   });
 
   it('the physics numbers are the brief\'s (arcade, not a simulation)', () => {

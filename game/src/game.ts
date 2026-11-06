@@ -83,6 +83,7 @@ import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-2026103
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installSkywaysWindows, type SkywaysWindowRuntime} from './world/skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing
+import {installSkywaysExterior} from './world/skywaysExterior'; // task studio-skyways-level-20261106-054448 (lane VIEW): the city outside the Skyways glass
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
@@ -300,6 +301,8 @@ export class Game {
   readonly flareHold = new FlareHold();
   /** Iteration 15: the left button belonged to a flare hold; the gun ignores it until it is released. */
   private lmbLatch = false;
+  /** A lane owned the mouse buttons last frame (inputOwners; task fuel-feedback: its release latches a still-held left button). */
+  private laneOwnedLast = false;
 
   // ==== Iteration 16 shared plumbing (primary) — lanes REGISTER into these; they do not rewrite each other's code ====
   /** Per-frame modifier contributors (lane GEAR: worn gear; lane INJURY: limb injuries). Combined from base values each frame. */
@@ -317,7 +320,11 @@ export class Game {
    */
   readonly pointerHandlers: (() => boolean)[] = [];
   /** Per-section build hooks: `build` after a section's world is built (before warm-up), `teardown` before it is torn down. */
-  readonly sectionHooks: {build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
+  /**
+   * … `holders` (task fuel-feedback, world/fuelStations.ts): runs right after the loot holders are built — before the shelf filler is
+   * dressed around their lots and before the section memory removes the taken ones (extra lots that must behave like rolled loot).
+   */
+  readonly sectionHooks: {holders?(layout: Iter16Layout): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
   /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
@@ -569,6 +576,7 @@ export class Game {
     hookName('tower');
     this.skywaysWindows = installSkywaysWindows(this); // task studio-skyways-level-20261106-054448 (lane GAS): before GAS (its build reads the panes); inert without layout.skyways
     hookName('skywaysWindows');
+    installSkywaysExterior(this); hookName('skywaysExterior'); // (lane VIEW) streets, building shells, bridge exteriors, wrecks, the far city / murk; the glazing's reveal finish; inert elsewhere
     this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
@@ -814,6 +822,7 @@ export class Game {
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
     this.lmbLatch = false;
+    this.laneOwnedLast = false;
     this.aiming = false;
   }
 
@@ -864,6 +873,7 @@ export class Game {
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
     this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
+    for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
@@ -1153,7 +1163,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
-    if (this.world) { this.saveSectionMemory(); this.gear.flush(); }
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); } // (task fuel-feedback: the station's fuel record with its memory)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
 
@@ -2337,8 +2347,15 @@ export class Game {
       if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - p.y) > 0.45 || !g.lineOfSight(p.x, p.z, x, z)) { x = p.x; z = p.z; }
       y = g.stepAt(x, z);
     }
-    this.pickups.add(st, x, y, z, p.yaw);
-    this.hud.toast(`Dropped ${st.count > 1 ? `${st.count} × ` : ''}${itemDef(st.itemId).short}`);
+    const n = st.count;
+    if (st.itemId === FUEL.canItem && n > 1) {
+      // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly), back towards the player
+      const fl = Math.hypot(f.x, f.z) || 1, bx = -f.x / fl * 0.26, bz = -f.z / fl * 0.26;
+      st.count = 1;
+      this.pickups.add(st, x, y, z, p.yaw);
+      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, x + bx * k, y, z + bz * k, p.yaw); }
+    } else this.pickups.add(st, x, y, z, p.yaw);
+    this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }
 
@@ -2555,6 +2572,10 @@ export class Game {
     // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
     // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
     const rideHolster = this.trainRide.blocksWeapons;
+    // task fuel-feedback: a lane giving the mouse back with the left button still held (a fuel pour ends / is cancelled, a backpack is
+    // put away) never bleeds into the gun — the button is released first (as after a flare)
+    if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
+    this.laneOwnedLast = laneOwns;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G

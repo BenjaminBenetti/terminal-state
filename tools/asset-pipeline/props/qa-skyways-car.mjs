@@ -8,7 +8,14 @@
 //   cabin-side.png         section through the driver seat plane (x > eye.x), from the left: box, eye, wheel, sight lines
 //   first-person.png       perspective views from the driver eye (forward / left / right / forward-down): what the player sees
 //   badges.png             close-ups of the badge areas in the texture (reported, never painted over)
-// Usage: node --max-old-space-size=3072 tools/asset-pipeline/props/qa-skyways-car.mjs [--reference <dir>] [--out <dir>]
+// Lane CAR2 (the ASSEMBLED car: body + glass + the Meshy dash + two seats + the cockpit fillers, placed by the runtime's own
+// game/src/world/skywaysCarCockpit.ts cockpitLayout; private QA folder qa/car2):
+//   cockpit-first-person.png  from the driver eye at the game's default 75° vertical FOV (16:9): forward, forward-down at the dash,
+//                             left, right, over the right shoulder, straight down at the wheel / seat
+//   cockpit-side.png          a section through the driver seat plane from the left (parts, eye, wheel, the cowl -> header line)
+//   cockpit-top.png           the roof clipped, from above (parts, fillers, interior box, eye)
+// Usage: node --experimental-strip-types --max-old-space-size=3072 tools/asset-pipeline/props/qa-skyways-car.mjs [--reference <dir>]
+//        [--out <dir>] [--only cockpit]   (the cockpit sheets need --experimental-strip-types: they import the runtime's layout)
 import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
@@ -21,6 +28,7 @@ const argv = process.argv.slice(2);
 const opt = k => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : null; };
 const REF = path.resolve(opt('--reference') ?? path.join(root, 'reference'));
 const OUT = path.resolve(opt('--out') ?? path.join(REF, 'tasks/skyways-level-20261106-054448/qa/asset-b'));
+const ONLY = opt('--only'); // 'cockpit': only lane CAR2's cockpit sheets
 fs.mkdirSync(OUT, {recursive: true});
 const prov = JSON.parse(fs.readFileSync(path.join(root, 'game/public/assets/derivatives/skyways-prize-car.json'), 'utf8'));
 const A = prov.anchors;
@@ -74,12 +82,12 @@ function frameBox(V, box, W, H, m = 0.94) {
 }
 const CAR = [[-1.06, 0, -2.39], [1.06, 1.39, 2.39]];
 /** glassMode: 'tint' (its material over what is behind) | 'cyan' | 'texture' | 'hide'; skip(centroid) clips */
-function ortho(V, W, H, {frame, glassMode = 'tint', skip = null, bg = [40, 40, 44]} = {}) {
+function ortho(V, W, H, {frame, glassMode = 'tint', skip = null, bg = [40, 40, 44], extras = []} = {}) {
   const fr = frame ?? frameBox(V, CAR, W, H);
   const im = img(W, H, bg), zb = new Float32Array(W * H).fill(-Infinity);
   const proj = p => [(V[0][0] * p[0] + V[0][1] * p[1] + V[0][2] * p[2] - fr.cx) * fr.s + W / 2, H / 2 - (V[1][0] * p[0] + V[1][1] * p[1] + V[1][2] * p[2] - fr.cy) * fr.s, V[2][0] * p[0] + V[2][1] * p[1] + V[2][2] * p[2]];
-  const draw = (M, mode) => {
-    const {P, N, UV, I, tex} = M;
+  const draw = (M, mode, flat = null) => {
+    const {P, N, I, tex} = M, UV = M.UV ?? new Float32Array(P.length / 3 * 2);
     for (let t = 0; t < I.length; t += 3) {
       const ids = [I[t], I[t + 1], I[t + 2]], w = ids.map(i => [P[3 * i], P[3 * i + 1], P[3 * i + 2]]);
       if (skip && skip([(w[0][0] + w[1][0] + w[2][0]) / 3, (w[0][1] + w[1][1] + w[2][1]) / 3, (w[0][2] + w[1][2] + w[2][2]) / 3])) continue;
@@ -97,9 +105,11 @@ function ortho(V, W, H, {frame, glassMode = 'tint', skip = null, bg = [40, 40, 4
         if (b0 < -1e-6 || b1 < -1e-6 || b2 < -1e-6) continue;
         const z = b0 * s[0][2] + b1 * s[1][2] + b2 * s[2][2], k = y * W + x;
         let c;
-        if (mode === 'opaque' || mode === 'cyan' || mode === 'texture') {
+        if (mode === 'opaque' || mode === 'cyan' || mode === 'texture' || mode === 'both') {
           if (z <= zb[k]) continue; zb[k] = z;
           if (mode === 'cyan') c = [0, 225, 255];
+          else if (flat) c = flat;
+          else if (mode === 'both') c = sample(tex, b0 * UV[2 * ids[0]] + b1 * UV[2 * ids[1]] + b2 * UV[2 * ids[2]], b0 * UV[2 * ids[0] + 1] + b1 * UV[2 * ids[1] + 1] + b2 * UV[2 * ids[2] + 1]);
           else if (!facing && mode === 'opaque') c = TRIM;
           else c = sample(tex, b0 * UV[2 * ids[0]] + b1 * UV[2 * ids[1]] + b2 * UV[2 * ids[2]], b0 * UV[2 * ids[0] + 1] + b1 * UV[2 * ids[1] + 1] + b2 * UV[2 * ids[2] + 1]);
           put(im, x, y, c.map(v => Math.min(255, v * L)));
@@ -111,6 +121,7 @@ function ortho(V, W, H, {frame, glassMode = 'tint', skip = null, bg = [40, 40, 4
     }
   };
   draw(body, 'opaque');
+  for (const x of extras) draw(x.M, 'both', x.flat ?? null);
   if (glassMode === 'cyan') draw(glass, 'cyan');
   else if (glassMode === 'texture') draw(glass, 'texture');
   else if (glassMode === 'tint') draw(glass, 'tint');
@@ -118,10 +129,11 @@ function ortho(V, W, H, {frame, glassMode = 'tint', skip = null, bg = [40, 40, 4
 }
 
 // ---- perspective (first person) ------------------------------------------------------------------------------------------
-function persp(eye, yaw, pitch, W, H, hfov = 80) {
+/** extras: [{M: {P, N, UV, I, tex}, flat?: [r, g, b]}] drawn opaque from both sides (the cockpit parts / fillers); vfov: vertical FOV */
+function persp(eye, yaw, pitch, W, H, hfov = 80, {extras = [], vfov = null} = {}) {
   const a = yaw * Math.PI / 180, b = pitch * Math.PI / 180;
   const f = [-Math.sin(a) * Math.cos(b), Math.sin(b), -Math.cos(a) * Math.cos(b)], r = norm(cross(f, [0, 1, 0])), u = cross(r, f);
-  const fp = (W / 2) / Math.tan(hfov * Math.PI / 360), NEAR = 0.03;
+  const fp = vfov ? (H / 2) / Math.tan(vfov * Math.PI / 360) : (W / 2) / Math.tan(hfov * Math.PI / 360), NEAR = 0.05;
   const im = img(W, H, [0, 0, 0]), zb = new Float32Array(W * H).fill(0); // stores 1/depth (bigger = nearer)
   // background: sky gradient + 1 m checker ground (with distance fade) seen from the eye height
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
@@ -136,8 +148,8 @@ function persp(eye, yaw, pitch, W, H, hfov = 80) {
     put(im, x, y, c);
   }
   const cam = p => { const q = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]]; return [q[0] * r[0] + q[1] * r[1] + q[2] * r[2], q[0] * u[0] + q[1] * u[1] + q[2] * u[2], q[0] * f[0] + q[1] * f[1] + q[2] * f[2]]; };
-  const draw = (M, glassy) => {
-    const {P, N, UV, I, tex} = M;
+  const draw = (M, glassy, flat = null, both = false) => {
+    const {P, N, I, tex} = M, UV = M.UV ?? new Float32Array(P.length / 3 * 2);
     for (let t = 0; t < I.length; t += 3) {
       const ids = [I[t], I[t + 1], I[t + 2]];
       const w = ids.map(i => [P[3 * i], P[3 * i + 1], P[3 * i + 2]]);
@@ -172,13 +184,15 @@ function persp(eye, yaw, pitch, W, H, hfov = 80) {
           if (glassy) { put(im, x, y, [GC[0] * 255 + 40 * L, GC[1] * 255 + 44 * L, GC[2] * 255 + 50 * L], GC[3]); continue; }
           zb[k2] = iz;
           let c = TRIM;
-          if (facing) { const q0 = b0 * s[0][2], q1 = b1 * s[1][2], q2 = b2 * s[2][2], qs = q0 + q1 + q2; c = sample(tex, (q0 * tri[0].uv[0] + q1 * tri[1].uv[0] + q2 * tri[2].uv[0]) / qs, (q0 * tri[0].uv[1] + q1 * tri[1].uv[1] + q2 * tri[2].uv[1]) / qs); }
+          if (flat) c = flat;
+          else if (facing || both) { const q0 = b0 * s[0][2], q1 = b1 * s[1][2], q2 = b2 * s[2][2], qs = q0 + q1 + q2; c = sample(tex, (q0 * tri[0].uv[0] + q1 * tri[1].uv[0] + q2 * tri[2].uv[0]) / qs, (q0 * tri[0].uv[1] + q1 * tri[1].uv[1] + q2 * tri[2].uv[1]) / qs); }
           put(im, x, y, c.map(v => Math.min(255, v * L)));
         }
       }
     }
   };
   draw(body, false);
+  for (const x of extras) draw(x.M, false, x.flat ?? null, true);
   draw(glass, true);
   // centre cross-hair
   for (let i = -6; i <= 6; i++) { put(im, W / 2 + i, H / 2, [255, 255, 0]); put(im, W / 2, H / 2 + i, [255, 255, 0]); }
@@ -187,6 +201,7 @@ function persp(eye, yaw, pitch, W, H, hfov = 80) {
 
 // ---- sheets ------------------------------------------------------------------------------------------------------------------
 const T = 640;
+if (ONLY !== 'cockpit') {
 await sheet('ortho.png', [ortho(viewYP(0, 0), T, T / 2 * 1.1 | 0), ortho(viewYP(180, 0), T, T / 2 * 1.1 | 0), ortho(viewYP(90, 0), T, T / 2 * 1.1 | 0), ortho(viewYP(-90, 0), T, T / 2 * 1.1 | 0), ortho(TOP, T, T / 2 * 1.1 | 0, {frame: frameBox(TOP, CAR, T, T / 2 * 1.1 | 0)}), ortho(viewYP(35, 22), T, T / 2 * 1.1 | 0)].map(o => o.im), 2);
 await sheet('glass-mask.png', [viewYP(30, 25), viewYP(150, 25), viewYP(90, 5), viewYP(-90, 5), viewYP(0, 15), TOP].map(V => ortho(V, T, 400, {glassMode: 'cyan'}).im), 2);
 {
@@ -240,4 +255,61 @@ const C_BOX = [255, 220, 0], C_EYE = [255, 40, 40], C_WHEEL = [255, 140, 0], C_E
 {
   const shots = [[viewYP(0, 8), [[-0.25, 0.6, -2.4], [0.25, 0.9, -2.2]]], [viewYP(180, 8), [[-0.3, 0.7, 2.2], [0.3, 0.95, 2.4]]], [viewYP(180, 0), [[-0.5, 0.35, 2.2], [0.5, 0.75, 2.4]]], [viewYP(90, 0), [[-1, 0.55, -1.25], [-0.8, 0.85, -0.85]]], [TOP, [[-0.4, 0.6, -2.42], [0.4, 0.9, -2.0]]], [TOP, [[-0.5, 0.9, 1.6], [0.5, 1.1, 2.4]]]];
   await sheet('badges.png', shots.map(([V, box]) => ortho(V, 640, 320, {frame: frameBox(V, box, 640, 320, 0.9), glassMode: 'hide'}).im), 2);
+}
+} // (ASSET-B's sheets)
+
+// ---- lane CAR2: the assembled cockpit (the runtime's own layout) -------------------------------------------------------------
+{
+  const {cockpitLayout, fillMesh, posePoint, sightLineY, COCKPIT_URLS, FILL_COLOR} = await import('../../../game/src/world/skywaysCarCockpit.ts');
+  const {SKYWAYS_CAR: SPEC} = await import('../../../game/src/assets/skywaysCar.generated.ts');
+  const lay = cockpitLayout(SPEC);
+  console.log('cockpit layout', JSON.stringify(lay));
+  const loadPart = async url => {
+    const d = await new NodeIO().read(path.join(root, 'game/public', url));
+    const p = d.getRoot().listNodes()[0].getMesh().listPrimitives()[0], t = p.getMaterial().getBaseColorTexture();
+    const {data, info} = await sharp(Buffer.from(t.getImage())).removeAlpha().raw().toBuffer({resolveWithObject: true});
+    return {P: p.getAttribute('POSITION').getArray(), N: p.getAttribute('NORMAL').getArray(), UV: p.getAttribute('TEXCOORD_0').getArray(), I: p.getIndices().getArray(), tex: {data, w: info.width, h: info.height}};
+  };
+  const place = (M, pose) => {
+    const P = new Float32Array(M.P.length), N = new Float32Array(M.N.length), c = Math.cos(pose.rotY), s = Math.sin(pose.rotY);
+    for (let i = 0; i < P.length; i += 3) {
+      const q = posePoint(pose, M.P[i], M.P[i + 1], M.P[i + 2]);
+      P[i] = q.x; P[i + 1] = q.y; P[i + 2] = q.z;
+      N[i] = M.N[i] * c + M.N[i + 2] * s; N[i + 1] = M.N[i + 1]; N[i + 2] = -M.N[i] * s + M.N[i + 2] * c;
+    }
+    return {...M, P, N};
+  };
+  const dashM = await loadPart(COCKPIT_URLS.dash), seatM = await loadPart(COCKPIT_URLS.seat);
+  const FILL = [FILL_COLOR >> 16, (FILL_COLOR >> 8) & 255, FILL_COLOR & 255]; // (the runtime fillers' colour: the dash top's median)
+  const parts = [{M: place(dashM, lay.dash)}, ...lay.seats.map(p => ({M: place(seatM, p)})), {M: fillMesh(lay), flat: FILL}];
+  const flatParts = parts.map(x => (x.flat ? {...x, flat: [230, 140, 40]} : x)); // (the sections: fillers orange)
+  const e = [SPEC.eye.x, SPEC.eye.y, SPEC.eye.z], W = 960, H = 540;
+  const views = [[0, -4], [0, -28], [70, -10], [-60, -14], [0, -62], [-140, -12]];
+  await sheet('cockpit-first-person.png', views.map(([y, p]) => persp(e, y, p, W, H, 0, {extras: parts, vfov: 75})), 2);
+  // the side section through the driver seat plane (x >= eye.x), from the left; the cowl -> header line extended
+  {
+    const V = viewYP(90, 0), Wd = 1400, Hd = 620, frame = frameBox(V, [[0, 0, -1.6], [0, 1.45, 1.2]], Wd, Hd, 0.97);
+    const im = ortho(V, Wd, Hd, {frame, skip: c => c[0] < SPEC.eye.x, glassMode: 'tint', extras: flatParts});
+    const p = (y, z) => im.P([0, y, z]);
+    line(im.im, ...p(sightLineY(SPEC, -1.2), -1.2), ...p(sightLineY(SPEC, SPEC.header.z), SPEC.header.z), [255, 0, 255], 1);
+    dot(im.im, ...p(SPEC.cowl.y, SPEC.cowl.z), 5, [255, 0, 255]);
+    dot(im.im, ...p(SPEC.header.y, SPEC.header.z), 5, [255, 0, 255]);
+    dot(im.im, ...p(SPEC.eye.y, SPEC.eye.z), 7, [255, 40, 40]);
+    dot(im.im, ...p(lay.wheel.y, lay.wheel.z), 6, [255, 140, 0]);
+    dot(im.im, ...p(lay.cushionY, SPEC.eye.z), 5, [60, 255, 60]);
+    const {y0, y1, z0, z1} = SPEC.interior;
+    for (const [a, b] of [[[y0, z0], [y0, z1]], [[y0, z1], [y1, z1]], [[y1, z1], [y1, z0]], [[y1, z0], [y0, z0]]]) line(im.im, ...p(...a), ...p(...b), [255, 220, 0], 1);
+    await sheet('cockpit-side.png', [im.im], 1);
+  }
+  // from above, the roof clipped
+  {
+    const Wd = 900, Hd = 1000, frame = frameBox(TOP, [[-1.1, 0, -1.6], [1.1, 1, 1.2]], Wd, Hd, 0.97);
+    const im = ortho(TOP, Wd, Hd, {frame, skip: c => c[1] > 1.0, glassMode: 'hide', extras: flatParts});
+    const p = (x, z) => im.P([x, 0, z]);
+    const {x0, x1, z0, z1} = SPEC.interior;
+    for (const [a, b] of [[[x0, z0], [x1, z0]], [[x1, z0], [x1, z1]], [[x1, z1], [x0, z1]], [[x0, z1], [x0, z0]]]) line(im.im, ...p(...a), ...p(...b), [255, 220, 0], 1);
+    dot(im.im, ...p(SPEC.eye.x, SPEC.eye.z), 7, [255, 40, 40]);
+    dot(im.im, ...p(lay.wheel.x, lay.wheel.z), 6, [255, 140, 0]);
+    await sheet('cockpit-top.png', [im.im], 1);
+  }
 }

@@ -3,14 +3,14 @@
 //      a stair RAMP (cells x 10..12 m, z 20..25 m) rising 0 -> 1.2 m along z,
 //      a DROP: everything at x >= 30 m is 3 m lower (an unrailed edge),
 //      a RAILING along x = 20 m, z 2..10 m (the explicit rail list),
-//      a low SOFFIT (ceiling 1.2 m) over x 4..6 m, z 2..4 m;
+//      a low SOFFIT (ceiling 1.2 m) over x 2.5..7.5 m, z 2..4 m (wider than the measured car's 2.2 m body circles: lane CAR2);
 //  - storey 1 (role 'upper', floor 5): a deck over x 2..8 m, z 2..8 m (another storey's floor at the same x / z).
 import {CELL, FLOOR, Grid, SOLID, type Ramp} from '../../src/gen/grid';
 import {Levels, type RailRun} from '../../src/gen/levels';
 import {PropIndex} from '../../src/core/physics';
 import type {PropPlacement} from '../../src/gen/props';
 
-export const HALL = {w: 40, d: 30, wall: 0.5, drop: 30, rail: {x: 20, z0: 2, z1: 10}, ramp: {x0: 10, x1: 12, z0: 20, z1: 25, h: 1.2}, soffit: {x0: 4, x1: 6, z0: 2, z1: 4, ceil: 1.2}} as const;
+export const HALL = {w: 40, d: 30, wall: 0.5, drop: 30, rail: {x: 20, z0: 2, z1: 10}, ramp: {x0: 10, x1: 12, z0: 20, z1: 25, h: 1.2}, soffit: {x0: 2.5, x1: 7.5, z0: 2, z1: 4, ceil: 1.2}} as const;
 
 export function hallLevels(): Levels {
   const W = HALL.w / CELL, H = HALL.d / CELL;
