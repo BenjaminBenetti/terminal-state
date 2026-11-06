@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 45176,
-      "sha256": "989d4405400f91e07848bbf2785f6c9987e8b5ed914186dd7fe62be6bcfeee2a"
+      "bytes": 46300,
+      "sha256": "96b2f8fd2eb872f9f4399e457d0ba84e5bb4df92880ffede617de547d1053fbf"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1851,
-      "sha256": "66609466cb147d8e32a49adb35511a0fed0f67581ca6a88dc165c780b4471dfb"
+      "bytes": 2041,
+      "sha256": "1c631377982070e2515e0e7f2c1b6710bf9e9e1f267407990bdf05e23f3d13a1"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1992,6 +1992,11 @@
       "path": "assets/derivatives/skyways-con-stage-model.json",
       "bytes": 6720,
       "sha256": "9dd818c9020e2f52bd27ebeabd6702181d3275a451622657cd3db7f56ec6688c"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-stage.json",
+      "bytes": 2613,
+      "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
     },
     {
       "path": "assets/derivatives/skyways-mascot-poses.json",
