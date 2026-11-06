@@ -457,9 +457,10 @@ export class FuelCarts implements FuelCartsLike {
         if (this.grab!.lag > CART.grab.breakTime || Math.hypot(c.body.x - P.x, c.body.z - P.z) > FUEL_CART.farDist) this.letGo('stuck');
         c.awake = true;
       } else {
-        if (!riding && P.alive && d < P.radius + CART.radius + 0.05 && pushByPlayer(c.body, P, dt)) { c.awake = true; this.counts.pushes++; }
+        const pushed = !riding && P.alive && d < P.radius + CART.radius + 0.05 && pushByPlayer(c.body, P, dt);
+        if (pushed) { c.awake = true; this.counts.pushes++; }
         if (c.awake) {
-          stepCart(c.body, this.world, dt, null);
+          stepCart(c.body, this.world, dt, null, pushed);
           this.counts.steps++;
           if (Math.hypot(c.body.vx, c.body.vz) < CART.sleep) { c.body.vx = c.body.vz = 0; c.awake = false; }
         }
@@ -859,6 +860,16 @@ export class FuelCarts implements FuelCartsLike {
       this.protoGen = cartModelsGen;
     }
     return [this.proto, this.hose.mesh];
+  }
+
+  /** QA / tests: a live cart's controller body (its world pose: stale while it rides as cargo), or null. */
+  bodyOf(uid: string): CartBody | null {
+    return this.carts.find(c => c.uid === uid)?.body ?? null;
+  }
+
+  /** QA / tests: a live cart's view root, or null. */
+  viewOf(uid: string): THREE.Group | null {
+    return this.carts.find(c => c.uid === uid)?.view.group ?? null;
   }
 
   /** QA readout. */

@@ -24,8 +24,8 @@ export const CART = {
   height: 1.25,
   emptyKg: 40,
   kgPerUnit: (150 - 40) / FUEL.cartUnits,
-  /** Free rolling resistance (m/s²): a shoved cart coasts a short way. */
-  rollDecel: 1.8,
+  /** Free rolling resistance (m/s²): a shoved cart coasts a short way (not applied on a frame the player pushes it). */
+  rollDecel: 1.2,
   maxSpeed: 3.2,
   /** Walking into a free cart: the push force (N) and the top push speeds (m/s, empty .. full). */
   push: {force: 320, maxEmpty: 1.9, maxFull: 1.0},
@@ -107,9 +107,10 @@ export interface CartTarget { x: number; z: number; vx: number; vz: number }
  * One controller step: the spring toward `target` (grabbed) or rolling resistance (free), the speed cap, the move with collision; the
  * velocity follows what actually happened (sliding along walls, stopped by an edge). Returns the distance moved.
  */
-export function stepCart(b: CartBody, w: CartWorld, dt: number, target: CartTarget | null): number {
+export function stepCart(b: CartBody, w: CartWorld, dt: number, target: CartTarget | null, pushed = false): number {
   if (dt <= 0) return 0;
-  if (target) {
+  if (pushed) { /* the push already set the velocity this frame (it overcomes the rolling resistance) */ }
+  else if (target) {
     const k = CART.grab.k, c = 2 * Math.sqrt(k);
     let ax = k * (target.x - b.x) + c * (target.vx - b.vx);
     let az = k * (target.z - b.z) + c * (target.vz - b.vz);
@@ -144,11 +145,12 @@ export function pushByPlayer(b: CartBody, p: CartPusher, dt: number): boolean {
   const vn = p.vx * nx + p.vz * nz;
   if (vn <= 0.02) return false;
   const want = Math.min(vn, pushTop(b.units)), cur = b.vx * nx + b.vz * nz;
-  if (want <= cur) return false;
-  const dv = Math.min(want - cur, (CART.push.force / cartMass(b.units)) * dt);
-  b.vx += nx * dv;
-  b.vz += nz * dv;
-  return true;
+  if (want > cur) {
+    const dv = Math.min(want - cur, (CART.push.force / cartMass(b.units)) * dt);
+    b.vx += nx * dv;
+    b.vz += nz * dv;
+  }
+  return true; // (pushing: no rolling resistance this frame)
 }
 
 /**
