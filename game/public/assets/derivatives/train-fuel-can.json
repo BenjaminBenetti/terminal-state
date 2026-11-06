@@ -1,0 +1,121 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "train-fuel-can",
+ "item": "fuel_can (Beta train fuel system; key / integration chosen at Beta import)",
+ "task": "studio-train-fuel-can-asset-20261106-030724-01 (asset handoff to studio-beta-train-fuel-system-20261106-024923-01)",
+ "approval": "task-specific user generation approval (sha256 e5442d81e41d064fce89e2f0f3d41bd2637a78dbd45f47a26422694ae5c3b097): one fuel can model, 50 Meshy credits total",
+ "accepted": true,
+ "route": "Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded only)",
+ "conditioningImage": {
+  "sha256": "680bc24314fc978cbd6901d80b0eacde94128308531e8625f2841fed25f70d09",
+  "bytes": 2172644,
+  "generator": "Codex CLI 0.163.0 built-in image_gen (model id not reported)",
+  "file": "reference/tasks/train-fuel-can-asset-20261106-030724/gen/raw/codex-1-exec-a8165151-a6dd-4b10-b1c2-ed60cd754751.png (raw original, outside Git)"
+ },
+ "meshy": {
+  "tool": "mcp__meshy__meshy_image_to_3d (@meshy-ai/meshy-mcp-server 0.6.6)",
+  "request": {
+   "ai_model": "meshy-t2.5",
+   "model_type": "smart-topology",
+   "should_texture": true,
+   "texture_resolution": "2k",
+   "enable_pbr": true,
+   "target_polycount": 4000,
+   "target_formats": [
+    "glb"
+   ]
+  },
+  "task": "01a1aed9-88f5-716e-8176-8d460dd715f2",
+  "status": "SUCCEEDED",
+  "consumedCredits": 15,
+  "evidence": "the exact create arguments are in the fsynced ledger intent line before the POST; the 15-credit charge is the T2 / T2.5 single-image textured price (meshy-6 / 7.1 / latest bill 30); the GET response does not echo ai_model"
+ },
+ "source": {
+  "file": "reference/tasks/train-fuel-can-asset-20261106-030724/gen/raw/meshy-1-01a1aed9-88f5-716e-8176-8d460dd715f2.glb (raw original, outside Git)",
+  "sha256": "b19f8d7197832fd91409955084d80e6b329bc4f8f14ca2c1ada0cbb6204a470e",
+  "bytes": 8680104,
+  "triangles": 4187,
+  "extent": [
+   0.6396,
+   0.9521,
+   0.21
+  ],
+  "textures": [
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3641350
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2311493
+   },
+   {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2533553
+   }
+  ]
+ },
+ "output": {
+  "file": "game/public/assets/models/train-fuel-can.glb",
+  "url": "assets/models/train-fuel-can.glb",
+  "sha256": "77b89db5a7b585e0dd52bb9f44f638f5d32c96b909321ea910aadc8dd1c0bd8c",
+  "bytes": 780132,
+  "triangles": 4187,
+  "dims": [
+   0.3157,
+   0.47,
+   0.165
+  ]
+ },
+ "heightM": 0.47,
+ "depthM": 0.165,
+ "scale": 0.493621,
+ "depthFit": 1.592,
+ "transform": "uniform scale to the real height, then a z-only depth fit (a single straight-on view carries no depth cue), grounded (min y = 0) and centred on x/z; baked into vertices; no rotation",
+ "convention": "metres at real size, +Y up, front +Z (the stencilled FUEL broad side; Meshy native), the spout / cap at the top, three-bar carry handle on top, grounded (min y = 0), centred on x/z",
+ "textures": [
+  {
+   "slot": "baseColor",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 250673,
+   "sha256": "23f590e937f4c2513e9b49d63b4b3b5a48e48728b729bdedb0e1483dde2e07d1"
+  },
+  {
+   "slot": "metallicRoughness",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 230939,
+   "sha256": "26ffb23e8233769ebf712db47831c65e91db0e390849ac6db7f578f9759e4068"
+  },
+  {
+   "slot": "normal",
+   "size": [
+    1024,
+    1024
+   ],
+   "mime": "image/jpeg",
+   "bytes": 130532,
+   "sha256": "032fb005ae0b9bd8e4e77d778040fbbac3c87917c42bb8d9a58c9760e2b14305"
+  }
+ ],
+ "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)"
+}
