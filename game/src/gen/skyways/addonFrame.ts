@@ -102,7 +102,9 @@ export class AddonDresser {
     // masks over every add-on area (+2 cells): the hall and its support rooms
     const win = {x0: Math.min(...rooms.map(a => a.x)) - 3, y0: Math.min(...rooms.map(a => a.y)) - 3, x1: Math.max(...rooms.map(a => a.x + a.w)) + 2, y1: Math.max(...rooms.map(a => a.y + a.h)) + 2};
     this.ctx = makePlaceCtx(layout, rng, this.level, win);
-    const ins = layout.doors.filter(d => (d.a === hall.id && !own.has(d.b)) || (d.b === hall.id && !own.has(d.a)));
+    // (layout-variety pass: a hall reached through its foyer — an add-on area of concourse kind — is entered by that door)
+    const outside = (id: number) => !own.has(id) || layout.areas[id]?.kind === 'concourse';
+    const ins = layout.doors.filter(d => (d.a === hall.id && outside(d.b)) || (d.b === hall.id && outside(d.a)));
     // the entry: the hall's door nearest the record's entry point
     this.entry = ins.sort((p, q) => dist2(doorPoint(p, hall), addon.entry) - dist2(doorPoint(q, hall), addon.entry))[0];
     this.fr = hallFrame(hall, this.entry ? doorSide(this.entry, hall) : 'S');

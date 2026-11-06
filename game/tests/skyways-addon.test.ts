@@ -226,7 +226,9 @@ describe('the convention hall on the real seeds', () => {
       }
 
       // --- the stage: real size, inside the hall, back to the wall opposite the entry ---
-      const entry = L.doors.find(q => (q.a === hall.id || q.b === hall.id) && !ad.areas.includes(q.a === hall.id ? q.b : q.a))!;
+      // (the entry: the hall's door to the network — or to its foyer, an add-on area of concourse kind)
+      const outside = (id: number) => !ad.areas.includes(id) || L.areas[id]?.kind === 'concourse';
+      const entry = L.doors.find(q => (q.a === hall.id || q.b === hall.id) && outside(q.a === hall.id ? q.b : q.a))!;
       const stage = c.stage!, E = doorPoint(entry, hall);
       expect(stage.kind).toBe('skywaysConStage');
       expect(PROP_DEFS.skywaysConStage.w).toBe(SKYWAYS_MESHY_PROPS.skyways_con_stage.w);

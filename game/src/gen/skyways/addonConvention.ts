@@ -183,9 +183,19 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     const tx = -E.nz, tz = E.nx; // along the entry wall
     const wSide = wIn ? Math.sign((wIn[0] - E.x) * tx + (wIn[1] - E.z) * tz) || 1 : 1;
     let done = false;
-    for (const side of [-wSide, wSide]) for (const lat of [E.half + 1.2, E.half + 1.8, E.half + 2.5]) for (const dv of [1.3, 1.9, 2.6]) {
+    // (layout-variety pass: the entry may sit near a corner or a support door now — a few more spots, still at the entrance)
+    for (const side of [-wSide, wSide]) for (const lat of [E.half + 1.2, E.half + 1.8, E.half + 2.5, E.half + 3.2, E.half + 4.0, E.half + 5.0, E.half + 6.0]) for (const dv of [1.3, 1.9, 2.6, 3.4, 4.2]) {
       if (done) break;
       const x = E.x + E.nx * dv + tx * lat * side, z = E.z + E.nz * dv + tz * lat * side;
+      const p = statueAt(d, 'entrance-wave', x, z, yawToward(E.x - x, E.z - z));
+      if (p) { res.statues.push(p); done = true; }
+    }
+    // else anywhere on arcs 2.5-8 m in from the entry (still greeting it): an off-centre entry near a corner / a support door
+    for (let r = 2.5; r <= 8 && !done; r += 0.75) for (let k = 0; k <= 12 && !done; k++) {
+      const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * (Math.PI / 14);
+      const c = Math.cos(a), sn = Math.sin(a);
+      const dx = E.nx * c - E.nz * sn, dz = E.nz * c + E.nx * sn;
+      const x = E.x + dx * r, z = E.z + dz * r;
       const p = statueAt(d, 'entrance-wave', x, z, yawToward(E.x - x, E.z - z));
       if (p) { res.statues.push(p); done = true; }
     }
@@ -236,6 +246,13 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     for (const side of [-wSide, wSide]) for (const dv of [3.4, 4.2, 2.8, 5.0]) for (const lat of [E.half + 0.7, E.half + 1.4, E.half + 2.2]) {
       if (res.welcome) break;
       const x = E.x + E.nx * dv + tx * lat * side, z = E.z + E.nz * dv + tz * lat * side;
+      res.welcome = d.put('skywaysConWelcome', x, z, fr.toFront, {front: 0.6});
+    }
+    // else on arcs 2.8-8 m in from the entry (an off-centre entry: still at the entrance, facing it)
+    for (let r = 2.8; r <= 8 && !res.welcome; r += 0.8) for (let k = 0; k <= 12 && !res.welcome; k++) {
+      const a = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * (Math.PI / 14);
+      const c = Math.cos(a), sn = Math.sin(a);
+      const x = E.x + (E.nx * c - E.nz * sn) * r, z = E.z + (E.nz * c + E.nx * sn) * r;
       res.welcome = d.put('skywaysConWelcome', x, z, fr.toFront, {front: 0.6});
     }
     if (!res.welcome) d.skipped.push('convention: welcome sign');

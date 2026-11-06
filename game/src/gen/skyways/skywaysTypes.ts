@@ -40,6 +40,17 @@ export interface SkywaysStorey {
 
 export type SkywaysBuildingRole = 'station' | 'hub' | 'tower' | 'hotel';
 
+/**
+ * (task studio-skyways-layout-variety-20261106-054448-01) A building's floor-plan family: `court` (a central lobby court, the atrium
+ * buildings' plan), `galleria` (a long spine hall through the building with street doors at its ends), `offset` (a court pushed into
+ * the corner toward its bridges, with an L-arm out to the far facades), `cross` (a small central court with arms out to the facades).
+ */
+export type SkywaysPlan = 'court' | 'galleria' | 'offset' | 'cross';
+/** The network's frame family (block grid and empty lots). */
+export type SkywaysFamily = 'block-2x2' | 'block-3x2' | 'block-2x3' | 'cluster-3x3' | 'chain-4x2';
+/** The bridge graph's character: a tree (branches, dead ends) or looped. */
+export type SkywaysTopology = 'tree' | 'looped';
+
 export interface SkywaysBuilding {
   /** Stable id within the layout ('B0' ...). */
   id: string;
@@ -54,6 +65,10 @@ export interface SkywaysBuilding {
   levels: number[];
   /** A glazed atrium: the skyway slab is open over `rect` (railed), the street-level court below, a glass roof at `roofY`. */
   atrium?: {rect: SkywaysRect; roofY: number};
+  /** Floor-plan family (layout-variety pass). */
+  plan?: SkywaysPlan;
+  /** The building's FOOD COURT (food counters round a seated court): its storey and the court's area (layout.areas index). */
+  foodCourt?: {level: number; area: number};
 }
 
 export interface SkywaysBridge {
@@ -139,6 +154,8 @@ export interface SkywaysAddon {
   car?: SkywaysCarSpawn;
   /** 'convention': the stage box and the mascot statues. */
   convention?: {stage: SkywaysRect; statues: SkywaysStatue[]};
+  /** How the hall attaches to its host's lobby: straight off it, or through a pre-function foyer / showroom approach (in `areas`). */
+  approach?: 'direct' | 'foyer';
 }
 
 /** The ramen restaurant of the base shop pool (exactly one per Skyways; its edible food is ordinary finite loot). */
@@ -169,4 +186,9 @@ export interface SkywaysInfo {
   start: OfficePose;
   /** Bounds of every building footprint (world m): the exterior scenery goes around / between them. */
   exterior: SkywaysRect;
+  /** (layout-variety pass) The frame family and the bridge graph's character. */
+  family?: SkywaysFamily;
+  topology?: SkywaysTopology;
+  /** Underground pedway links from the station concourse up into other buildings' lobbies (building ids). */
+  pedways?: string[];
 }

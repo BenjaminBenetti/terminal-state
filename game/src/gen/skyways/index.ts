@@ -3,7 +3,7 @@
 // pedway / "+15" systems: the train arrives in the station under the STATION building, the underground pedway concourse leads up the
 // transit run into its street-level lobby, public stair cores climb to the "+15" skyway level, and glazed bridges cross the streets to
 // the other buildings (branches and loops), with atrium courts, cafés / shops, a ramen restaurant, lobbies and service rooms — plus
-// EXACTLY ONE localized add-on (gen/skyways/addon.ts: a convention hall or a prize-car atrium) on one building's skyway level.
+// EXACTLY ONE localized add-on (gen/skyways/addon.ts: a convention hall / street-level ballroom or a prize-car atrium) on its host building.
 //
 // levels[0] = the station + pedway concourse (role 'main', y 0); levels[1] = street level (role 'ring', y 5); levels[2] = the skyway
 // level (role 'ring', y 10). Deterministic from (ctx.levelSeed, ctx.startWeapon); gear is NOT placed here (the registry appends it).
@@ -40,7 +40,7 @@ import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
-import {dressSkywaysAtriums} from './greenery';
+import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -164,6 +164,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysAddon(layout, rng.fork('skyways-addon'));
   const ram = layout.skyways.restaurant;
   dressSkywaysAtriums(layout, rng.fork('skyways-atriums'));
+  dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
@@ -220,7 +221,8 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
   const groundY = BASES[1];
   const buildings = sc.buildings.map(bc => ({
     id: bc.b.id, name: bc.b.name, role: bc.b.role, rect: rectW(bc.b), top: r3(groundY + bc.b.height),
-    levels: [1, 2], ...(bc.atrium ? {atrium: {rect: rectW(bc.atrium), roofY: sc.roofY}} : {}),
+    levels: [1, 2], ...(bc.atrium ? {atrium: {rect: rectW(bc.atrium), roofY: sc.roofY}} : {}), plan: bc.plan,
+    ...(sc.foodCourt?.building === bc.b.id ? {foodCourt: {level: sc.foodCourt.level, area: sc.foodCourt.area}} : {}),
   }));
   if (buildings.find(b => b.id === f.station)) buildings.find(b => b.id === f.station)!.levels = [0, 1, 2];
   const bridges = sc.bridges.map(b => ({id: b.id, level: SKYWAYS_LEVEL.skyway, area: b.area, a: b.a, b: b.b, rect: rectW(b.rect), axis: b.axis, width: r3(b.width * CELL),
@@ -246,11 +248,11 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     ...(w.breached ? {breached: true} : {})})) as SkywaysWindow[];
   const a = sc.addon;
   const host = sc.buildings.find(b => b.b.id === a.building)!;
-  const g2 = layout.levels[2].grid;
+  const ga = layout.levels[a.level].grid;
   const car = a.car ? (() => {
     const x = r3((a.car.cx - ox) * CELL), z = r3((a.car.cy - oy) * CELL);
-    const [cx, cy] = g2.cellOf(x, z);
-    return {x, y: BASES[2], z, yaw: r3(a.car.yaw), level: 2, area: g2.area[g2.idx(cx, cy)]};
+    const [cx, cy] = ga.cellOf(x, z);
+    return {x, y: BASES[a.level], z, yaw: r3(a.car.yaw), level: a.level, area: ga.area[ga.idx(cx, cy)]};
   })() : undefined;
   const entryCell = a.entry;
   const name = `${host.b.name.split(' ')[0]} +15`;
@@ -263,14 +265,16 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     ],
     buildings, bridges, streets, windows,
     addon: {
-      id: a.id, building: a.building, level: 2, hall: rectW(a.hall), areas: a.areas.slice(),
-      entry: {x: r3((entryCell.x + entryCell.w / 2 - ox) * CELL), z: r3((entryCell.y + entryCell.h / 2 - oy) * CELL), level: 2},
+      id: a.id, building: a.building, level: a.level, hall: rectW(a.hall), areas: a.areas.slice(),
+      entry: {x: r3((entryCell.x + entryCell.w / 2 - ox) * CELL), z: r3((entryCell.y + entryCell.h / 2 - oy) * CELL), level: a.level},
+      approach: a.approach,
       ...(car ? {car} : {}),
       ...(a.id === 'convention' ? {convention: {stage: a.stage ? rectW(a.stage) : rectW(a.hall), statues: []}} : {}),
     },
     restaurant: sc.ramen ? {area: sc.ramen.dining, kitchen: sc.ramen.kitchen, building: sc.ramen.building, level: sc.ramen.level, name: layout.areas[sc.ramen.dining].label} : null,
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},
     exterior: rectW({x: minX, y: minZ, w: maxX - minX, h: maxZ - minZ}),
+    family: f.family, topology: f.topology, pedways: sc.pedways.slice(),
   };
 }
 
@@ -330,8 +334,9 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     const lane = b.axis === 'x' ? {x: b.rect.x - 6, y: b.rect.y + 2, w: b.rect.w + 12, h: b.rect.h - 4} : {x: b.rect.x + 2, y: b.rect.y - 6, w: b.rect.w - 4, h: b.rect.h + 12};
     add(2, lane);
   }
-  add(2, sc.addon.hall);
-  add(2, sc.addon.entry, 3);
+  add(sc.addon.level, sc.addon.hall);
+  add(sc.addon.level, sc.addon.entry, 3);
+  if (sc.addon.foyer) add(sc.addon.level, sc.addon.foyer);
   return out;
 }
 
