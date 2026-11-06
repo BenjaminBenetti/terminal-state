@@ -6,6 +6,7 @@ import {OFFICE_PROP_DEFS, type OfficeKind} from './office/kinds'; // Iteration 1
 import {BUNKER_PROP_DEFS, type BunkerKind} from './reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {SKYWAYS_KITCHEN_PROP_DEFS, type SkywaysKitchenKind} from './skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_PROP_DEFS, type SkywaysAddonKind} from './skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
+import {SKYWAYS_DEST_PROP_DEFS, type SkywaysDestKind} from './skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -39,7 +40,9 @@ export type PropKind =
   // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's range / cookware / sushi mascot (gen/skyways/kitchenKinds.ts).
   | SkywaysKitchenKind
   // task studio-skyways-level-20261106-054448 (lane ADDON): the Skyways add-on's convention / prize-car kinds (gen/skyways/addonKinds.ts).
-  | SkywaysAddonKind;
+  | SkywaysAddonKind
+  // task studio-skyways-destinations-20261106-170011-01: the Skyways destination shop / landmark kinds (gen/skyways/destinations/registry.ts).
+  | SkywaysDestKind;
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -192,6 +195,7 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   ...SKYWAYS_KITCHEN_PROP_DEFS,
   // task studio-skyways-level-20261106-054448 (lane ADDON): the convention stage / merch / boards / statues, the prize stanchions / board
   ...SKYWAYS_ADDON_PROP_DEFS,
+  ...SKYWAYS_DEST_PROP_DEFS, // task studio-skyways-destinations-20261106-170011-01
 };
 
 /**

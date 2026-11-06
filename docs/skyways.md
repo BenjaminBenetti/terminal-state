@@ -62,6 +62,67 @@ The frame (`frame.ts`) varies the STRUCTURE from the level seed; the carve (`car
 - **Add-on choice:** `skywaysAddonOf(levelSeed)`, equal weights, on its own hash stream; its storey (`skywaysAddonLevelOf`) on
   another. A retry never changes either.
 
+## Destinations: anchor shops and landmark courts (layout version 2)
+
+The destinations pass (task studio-skyways-destinations-20261106-170011-01) gives every Skyways several large, distinct ANCHOR shops
+and named LANDMARK courts on top of the ordinary storefront bays. It also raises the shop count: more and longer shop arcades, more bays
+per lobby and pedway.
+
+**Anchors** (`carve.ts` `ANCHOR_FAMILIES`, records `layout.skyways.anchors`):
+- **Selection:** 4–6 per map, taken from a seeded rotation of ten families (`skywaysDestinationsOf`, its own stream: a retry never
+  re-rolls it).
+- **Placement:** each is the roomiest site beyond a lobby side. One per building and storey; a galleria may take one on either side of
+  its spine.
+- **Front:** a wide glazed storefront with the shop's fascia. The storefront system draws the front only (`Storefront.anchor`); the
+  family's own dresser furnishes the interior.
+- **Back rooms:** a stock room and an office behind staff doors.
+
+| Family | Shop | Formats |
+|---|---|---|
+| books | Paper Prairie Books | two-level (sales floor + mezzanine, an internal open stair) or hall |
+| outfitter | Coulee & Canoe Outfitters | double-height (a canoe hung overhead) or hall |
+| music | Northern Groove Records | multi-zone (listening booths) or hall |
+| hobby | Grain Elevator Models | hall round the railway diorama |
+| design | Larch & Loom Home | two-level or hall of room sets |
+| garden | Glasshouse Garden Co. | double-height glasshouse or hall |
+| arcade | Starfall Arcade | hall |
+| cinema | Aurora Picture House | multi-zone (lobby + auditorium) |
+| science | Big Sky Wonders | double-height or hall |
+| hockey | Blue Line Sports | hall |
+
+Anchor floors are about 130–400 m², against about 20 m² for an ordinary bay. A double-height anchor rises through the skyway storey;
+nothing is carved above it.
+
+**Landmark courts** (`LANDMARK_FAMILIES`, records `layout.skyways.landmarks`):
+- **Selection:** every atrium court (one to three per map) takes the next family of the rotation, then one or two large plain courts take
+  the families that fit their clear height. One family per map.
+- **The six families:**
+  - Clock Court: a cast-iron clock tower;
+  - Badlands Court: a hadrosaur skeleton cast;
+  - Fig Tree Court: an indoor fig in a ring-bench planter;
+  - Fountain Court: a dry three-tier fountain;
+  - Flight Court: bronze geese hung in the atrium;
+  - Orrery Court: a brass armillary sphere.
+- **Naming:** the court area takes the court's name.
+
+**Dressing:** `gen/skyways/destinations/`:
+- the kit kinds (`registry.ts`, merging the kinds files into the shared prop / damage / physics / openables tables);
+- the family dressers (`shopsA.ts`, `shopsB.ts`) and `landmarks.ts`;
+- the shared art kinds (`art.ts`: shop posters, court plaques).
+
+The station dresser leaves the anchor interiors (sales floor and its stair-well pieces, the upper storey, the zones) and the landmark
+discs alone (`index.ts` `holds`). Only the forced storefront glazing goes in. The stock rooms keep their back-of-house dressing.
+
+Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR maps kept (`assets/skywaysDestProps.generated.ts`).
+
+## Layout versions (save compatibility)
+
+`gen/skyways/layoutVersion.ts`:
+- A station records the generator version it was first built with (lane `skyways.layout`).
+- A station a player entered under GAME76 (memory with visits, no record) keeps regenerating that exact layout (version 1, pinned by
+  fingerprints in `tests/skyways-dest-layout-version.test.ts`), so its saved holders, pickups, kills and car stay consistent.
+- Every station not yet entered (in an old campaign too) gets version 2, the destinations.
+
 ## The add-on (exactly one)
 
 The hall's side of the host lobby varies (only halls at least 70 % of the roomiest that fits), and it is entered straight from the

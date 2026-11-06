@@ -17,6 +17,7 @@ import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revisi
 import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_KITCHEN_DAMAGE_CLASS} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_DAMAGE_CLASS} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
+import {SKYWAYS_DEST_DAMAGE_CLASS} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -245,6 +246,7 @@ export const PROP_DAMAGE: Record<PropKind, PropDamageSpec> = {
   ...(Object.fromEntries(Object.entries(SKYWAYS_KITCHEN_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SKYWAYS_KITCHEN_DAMAGE_CLASS, PropDamageSpec>),
   // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's stage / merch / boards / statues / stanchions — marks only, never break
   ...(Object.fromEntries(Object.entries(SKYWAYS_ADDON_DAMAGE_CLASS).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SKYWAYS_ADDON_DAMAGE_CLASS, PropDamageSpec>),
+  ...(Object.fromEntries(Object.entries(SKYWAYS_DEST_DAMAGE_CLASS as Record<string, DamageClass>).map(([k, c]) => [k, NEVER(c)])) as Record<keyof typeof SKYWAYS_DEST_DAMAGE_CLASS, PropDamageSpec>), // (destinations)
 };
 
 /** Spec for any prop kind (unknown future kinds: painted sheet metal, never breaks). */

@@ -21,7 +21,7 @@
 //    the bridges).
 
 import {Rng, hashString} from '../../core/rng';
-import {SKYWAYS_ADDONS, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysPlan, type SkywaysTopology} from './skywaysTypes';
+import {SKYWAYS_ADDONS, SKYWAYS_LANDMARK_FAMILIES, SKYWAYS_SHOP_FAMILIES, type SkywaysAddonId, type SkywaysBuildingRole, type SkywaysFamily, type SkywaysLandmarkFamily, type SkywaysPlan, type SkywaysShopFamily, type SkywaysTopology} from './skywaysTypes';
 
 /** Storey height (m): storey k at y = STOREY * k (station 0, street level 5, skyway level 10). */
 export const STOREY = 5.0;
@@ -98,6 +98,15 @@ export interface SkywaysFrame {
   lowerLinks: string[];
   /** The food court: its building and storey (null: none this time). */
   foodCourt: {building: string; level: 1 | 2} | null;
+  /** (destinations pass) The seeded rotation of destination shop families and landmark families (the carve takes them in order). */
+  shopFamilies: SkywaysShopFamily[];
+  landmarkFamilies: SkywaysLandmarkFamily[];
+}
+
+/** The destination rotations of a level seed (their own stream: a retry or a revisit never re-rolls them). */
+export function skywaysDestinationsOf(levelSeed: number): {shops: SkywaysShopFamily[]; landmarks: SkywaysLandmarkFamily[]} {
+  const r = new Rng(hashString('skyways:destinations', levelSeed >>> 0));
+  return {shops: r.shuffle(SKYWAYS_SHOP_FAMILIES.slice()), landmarks: r.shuffle(SKYWAYS_LANDMARK_FAMILIES.slice())};
 }
 
 /** Add-on of a level seed: equal weights (one dedicated stream: never moved by any other roll). */
@@ -134,7 +143,7 @@ const FAMILIES: Record<SkywaysFamily, {cols: number; rows: number; lots: [number
  * The city frame of a level seed. `salt` > 0 re-rolls the free parameters (sizes, lots, offsets, bridge picks, plans) for a retry;
  * the family, the add-on and its storey stay those of the seed.
  */
-export function skywaysFrame(levelSeed: number, salt = 0): SkywaysFrame {
+export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolean} = {}): SkywaysFrame {
   const seed = skywaysSeed(levelSeed);
   const shape = new Rng(hashString('skyways:shape', seed));
   const rng = new Rng(salt ? hashString(`skyways:frame:${salt}`, seed) : hashString('skyways:frame', seed));
@@ -252,7 +261,9 @@ export function skywaysFrame(levelSeed: number, salt = 0): SkywaysFrame {
   host.role = addon === 'convention' ? 'hotel' : 'hub';
   // Atriums: one or two other hubs (court plan); the prize-car host's display hall needs its floor (no atrium there).
   const others = rng.shuffle(buildings.filter(q => q.id !== host.id && q.id !== station.id));
-  const nHub = Math.min(others.length, rng.int(1, 2));
+  // (destinations pass: one to three atrium courts — the landmark courts under the glass)
+  // (legacy = layout version 1: GAME76's one or two)
+  const nHub = Math.min(others.length, rng.int(1, opts.legacy ? 2 : 3));
   for (let i = 0; i < nHub; i++) { others[i].role = 'hub'; others[i].atrium = true; }
   // Bridges: width (cells) — at least 5.5 m wherever the prize car may drive (every bridge: the car roams the skyway level); now and
   // then a WIDE gallery bridge (7.5-9 m); a lateral preference along the two buildings' shared span
@@ -306,6 +317,7 @@ export function skywaysFrame(levelSeed: number, salt = 0): SkywaysFrame {
     seed, family, topology, cols, rows, buildings, bridges, station: station.id, addon, addonHost: host.id, addonLevel,
     addonApproach: rng.chance(0.5) ? 'foyer' : 'direct', ramen, Lp: rng.int(124, 150),
     transitEdge: rng.chance(0.5) ? 'N' : 'S', transitAt: rng.range(0.15, 0.85), transitLanes, lowerLinks, foodCourt,
+    shopFamilies: skywaysDestinationsOf(levelSeed).shops, landmarkFamilies: skywaysDestinationsOf(levelSeed).landmarks,
   };
 }
 

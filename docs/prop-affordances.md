@@ -367,6 +367,31 @@ models with their maps kept, lane ASSET-C's mascot pose GLB, the Codex art atlas
   statues / aim, stage against its wall, merch support / overlap, lanes / doors, posters / banners, the car's clearance / exit lane /
   ring / ropes / board; the renderer on the real GLBs; ropes dropping with a shot post; merch shot off its table).
 
+### Skyways destination anchors: garden, arcade, cinema, science, hockey (task studio-skyways-destinations-20261106-170011-01, lane SHOPS-B)
+`gen/skyways/destinations/shopsB.ts` dresses five anchor families (placement context `skywaysShopsBKit.ts`: lanes from the storefront entry
+to every zone / back-room door reserved first, cell-aligned runs, all-or-nothing counter runs). EXISTING kinds carry the storage and loot
+(counters + register, stock shelving, coolers, back counters, the snack rack, the vending machine, merch tables), every holder on the
+family's base-use purpose. The NEW kinds (`kindsShopsB.ts`: lane KITS' measured Meshy models, maps kept; the cinema screen code-drawn):
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop <glb>` beside `lastshift`) |
+|---|---|---|---|
+| `skyDPlantBench` | `none` (open slatted top) | static `fixture`: host of its pots | 2.98 × 0.75 × 1.05 m; 4 legs; top 0.75 m |
+| `skyDGeraniumPot` | `none` | **dynamic** 2.5 kg cylinder, `pad`, `onHost` (the bench top) | 0.26 × 0.35 × 0.19 m; grounded |
+| `skyDPottedPalm` / `skyDWheelbarrow` | `none` | **dynamic** 40 / 18 kg, `pad` | 1.57 × 2.20 × 1.59 / 1.50 × 0.63 × 0.52 m; grounded |
+| `skyDPinball` / `skyDAirHockey` / `skyDClawCrane` | `exception`: sealed coin-op equipment (the claw's plush is the machine's display) | static `too heavy` (115-180 kg) | 0.83 × 1.90 × 1.45 / 2.10 × 1.07 × 1.07 (playfield 0.97) / 0.97 × 1.90 × 0.96 m |
+| `skyDPopcornCart` | `exception`: food machine (its kettle's popcorn sealed) | **dynamic** 45 kg, `castor` | 1.07 × 1.60 × 0.78 m; wheels grounded |
+| `skyDCinemaSeats` | `none` | static `anchored` (floor rail) | 2.40 × 1.04 × 0.80 m; seat 0.51 m; faces +Z |
+| `skyDTicketBooth` | `exception`: kiosk, staff door onto the cashier's space | static `too heavy` | 1.77 × 2.40 × 1.54 m; counter shelf 0.93 m |
+| `skyDCinemaScreen` | `none` | static `mounted` (the auditorium's far wall) | code-drawn 7.2 × 3.2 m frame |
+| `skyDTelescope` / `skyDGiantGlobe` / `skyDRocketModel` | `none` | **dynamic** 14 / 16 / 28 kg, `pad` | 1.61 × 1.70 × 0.76 / 0.83 × 1.20 × 0.78 / 0.83 × 2.20 × 0.83 m |
+| `skyDPlanetMobile` | `none` | static `mounted`: hung from its top hook, underside >= 2.3 m (double-height only) | 3.00 × 2.58 × 2.03 m |
+| `skyDHockeyNet` / `skyDGoalieMannequin` | `none` | **dynamic** 38 / 24 kg, `pad` | 1.83 × 1.23 × 0.76 / 1.07 × 1.95 × 0.61 m |
+
+- No baked loose clutter: the bench is empty (its pots are separate on-host props); the science kits on the merch tables are separate
+  on-host props with their spans cut out of the tables' loot tops.
+- Tests: `tests/skyways-dest-shops-b.test.ts` (both audits, measured footprints, signature pieces per family on real seeds, the screen on
+  the far wall with the rows facing it, support / containment / overlaps, lanes to every door, base-use loot, determinism).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

@@ -37,7 +37,7 @@ import {layStairRun, transitSpecs, type StairFlight, type StairSpec} from '../tr
 import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type RunLanes, type SkywaysFrame} from './frame';
-import type {SkywaysAddonId, SkywaysPlan} from './skywaysTypes';
+import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysLandmarkFamily, SkywaysPlan, SkywaysShopFamily} from './skywaysTypes';
 import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
 
@@ -125,6 +125,45 @@ export interface AddonCarve {
 
 export interface RamenCarve { building: string; level: number; dining: number; kitchen: number }
 
+/** A destination ANCHOR shop as carved (cells). */
+export interface AnchorCarve {
+  id: string; family: SkywaysShopFamily; name: string; building: string; level: number; format: SkywaysAnchorFormat;
+  floor: number; rect: CellRect; storefront: number; front: Side; upper: number | null; zones: number[]; stock: number[]; ceilY: number;
+}
+/** A LANDMARK court (cells): its centrepiece's spot and clearances. */
+export interface LandmarkCarve {
+  id: string; family: SkywaysLandmarkFamily; name: string; building: string; level: number; area: number; cx: number; cy: number;
+  radius: number; height: number; atrium: boolean; axis: 'x' | 'z';
+}
+
+/** Per destination family: its printed name, the base purpose its front borrows (fascia colours / loot class), its formats
+ *  (weights; tried in turn, then a plain hall) and its sales floor size range (cells: along the front x deep). */
+export const ANCHOR_FAMILIES: Record<SkywaysShopFamily, {name: string; use: ShopUse; formats: [SkywaysAnchorFormat, number][]; along: [number, number]; deep: [number, number]; color: number}> = {
+  books: {name: 'Paper Prairie Books', use: 'newsstand', formats: [['two-level', 0.65], ['hall', 0.35]], along: [26, 44], deep: [18, 28], color: 0x5b3a29},
+  outfitter: {name: 'Coulee & Canoe Outfitters', use: 'convenience', formats: [['double-height', 0.7], ['hall', 0.3]], along: [28, 46], deep: [20, 30], color: 0x2e5d34},
+  music: {name: 'Northern Groove Records', use: 'tech', formats: [['multi-zone', 0.7], ['hall', 0.3]], along: [26, 40], deep: [20, 28], color: 0x3a2c5c},
+  hobby: {name: 'Grain Elevator Models', use: 'tech', formats: [['hall', 1]], along: [24, 38], deep: [18, 26], color: 0x8a5a1c},
+  design: {name: 'Larch & Loom Home', use: 'florist', formats: [['two-level', 0.5], ['hall', 0.5]], along: [30, 48], deep: [20, 30], color: 0x6d6a5f},
+  garden: {name: 'Glasshouse Garden Co.', use: 'florist', formats: [['double-height', 0.65], ['hall', 0.35]], along: [26, 42], deep: [18, 28], color: 0x3f7a4a},
+  arcade: {name: 'Starfall Arcade', use: 'tech', formats: [['hall', 1]], along: [28, 44], deep: [18, 28], color: 0x7b1fa2},
+  cinema: {name: 'Aurora Picture House', use: 'newsstand', formats: [['multi-zone', 1]], along: [30, 44], deep: [28, 36], color: 0x8e1c2b},
+  science: {name: 'Big Sky Wonders', use: 'tech', formats: [['double-height', 0.6], ['hall', 0.4]], along: [26, 42], deep: [18, 28], color: 0x1f4e79},
+  hockey: {name: 'Blue Line Sports', use: 'convenience', formats: [['hall', 1]], along: [24, 36], deep: [16, 24], color: 0x1d3f8f},
+};
+/** Clear heights (m) of the anchor formats' sales floors (double height: up through the skyway storey). */
+export const ANCHOR_CLEAR = {hall: [4.3, 3.9], doubleHeight: 7.5} as const;
+
+/** Per landmark family: the court's name, footprint clear radius (m), height above the floor (m), where it can stand. */
+export const LANDMARK_FAMILIES: Record<SkywaysLandmarkFamily, {name: string; radius: number; height: number; atriumOnly: boolean; long?: number}> = {
+  // (measured on the kit models: lane KITS; heights are the clear height they need, radii their floor footprint)
+  clock: {name: 'Clock Court', radius: 1.2, height: 5.6, atriumOnly: true},
+  dinosaur: {name: 'Badlands Court', radius: 1.3, height: 2.6, atriumOnly: false, long: 7.5},
+  'fig-tree': {name: 'Fig Tree Court', radius: 2.8, height: 7.0, atriumOnly: true},
+  fountain: {name: 'Fountain Court', radius: 2.4, height: 3.9, atriumOnly: false},
+  geese: {name: 'Flight Court', radius: 1.2, height: 9.0, atriumOnly: true},
+  orrery: {name: 'Orrery Court', radius: 1.2, height: 3.1, atriumOnly: false},
+};
+
 export interface SkywaysCarve {
   f: SkywaysFrame;
   block: TrackBlock;
@@ -140,6 +179,9 @@ export interface SkywaysCarve {
   pedways: string[];
   /** The food court (carved): building, storey, court area. */
   foodCourt: {building: string; level: number; area: number} | null;
+  /** (destinations pass) The anchor shops and the landmark courts. */
+  anchors: AnchorCarve[];
+  landmarks: LandmarkCarve[];
   /** Carved extent (canvas cells). */
   X0: number; Z0: number; X1: number; Z1: number;
   /** Atrium court roof height (absolute y). */
@@ -185,8 +227,10 @@ const sideLen = (r: CellRect, s: Side) => (alongXSide(s) ? r.w : r.h);
 const SIDES: readonly Side[] = ['N', 'E', 'S', 'W'];
 
 /** Carves the whole Skyways level. Null when the frame does not fit (the caller re-rolls the frame's free parameters). */
-export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | null {
+export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: boolean} = {}): SkywaysCarve | null {
   FAIL = '';
+  /** Layout version 1 (gen/skyways/layoutVersion.ts): GAME76's program exactly — no destinations, its arcade / shop / back-room rolls. */
+  const legacy = !!opts.legacy;
   let shopSerial = 0;
   const shopName = (use: ShopUse): string => { const list = STORE_PURPOSES[use].names; return list[(shopSerial++ + f.seed) % list.length]; };
   const byId = new Map(f.buildings.map(b => [b.id, b]));
@@ -451,6 +495,10 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
   if (!addon) return fail(`addon-${f.addon}-${f.addonLevel}`);
   addonAreas.push(...addon.areas);
 
+  // --- 6a. DESTINATIONS: the landmark courts (atrium courts first) and the large ANCHOR shops ------------------------------------
+  const landmarks = legacy ? [] : placeLandmarks();
+  const anchors = legacy ? [] : carveAnchors();
+
   // --- 6b. The FOOD COURT (before the arms take the lobby walls): the frame's building / storey first, else any other non-host
   // building's (an atrium building's on its street-level court under the glass): the first lobby piece (largest first) that takes at
   // least three food counters round it, then labelled (seated by gen/skyways/greenery.ts)
@@ -460,7 +508,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     const order: [BuildingCarve, number][] = [[first, first.atrium ? 1 : f.foodCourt.level]];
     for (const bc of rng.shuffle([...carves.values()])) if (bc.b.id !== f.addonHost && bc !== first) order.push([bc, bc.atrium ? 1 : f.foodCourt.level]);
     search: for (const [bc, lv] of order) {
-      const pieces = (bc.hubAreas.get(lv) ?? []).map(id => k.areas[id]).filter(a => !addon.areas.includes(a.id) && Math.max(a.w, a.h) >= 16 && Math.min(a.w, a.h) >= 14).sort((p, q) => q.w * q.h - p.w * p.h);
+      const pieces = (bc.hubAreas.get(lv) ?? []).map(id => k.areas[id]).filter(a => !addon.areas.includes(a.id) && !landmarks.some(m => m.area === a.id) && Math.max(a.w, a.h) >= 16 && Math.min(a.w, a.h) >= 14).sort((p, q) => q.w * q.h - p.w * p.h);
       for (const court of pieces.slice(0, 2)) {
         shopsOn(bc, lv, [court.id], 'food', rng.int(5, 7));
         if (storefronts.filter(sf => sf.hall === court.id && sf.food).length < 3) continue;
@@ -501,13 +549,19 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
         if (open.length && rng.chance(0.75)) lookout(bc, open[0], 'random');
       }
     }
-    // dead-end shop ARCADES off the lobby (a mall arm), now and then on either storey
-    for (const level of [1, 2]) if (rng.chance(bc.plan === 'court' || bc.plan === 'offset' ? 0.45 : 0.25)) arcade(bc, level);
+    // dead-end shop ARCADES off the lobby (a mall arm lined with units), on either storey — two in the roomier plans now and then
+    // (destinations pass: more shops overall, the anchors took some lobby walls)
+    for (const level of [1, 2]) {
+      if (legacy) { if (rng.chance(bc.plan === 'court' || bc.plan === 'offset' ? 0.45 : 0.25)) arcade(bc, level); continue; }
+      const p = bc.plan === 'court' || bc.plan === 'offset' ? 0.75 : 0.5;
+      if (rng.chance(p)) arcade(bc, level);
+      if (rng.chance(p * 0.45)) arcade(bc, level);
+    }
     // a SERVICE CORRIDOR lined with back rooms (or the office suite), on one storey or both
     for (const level of [1, 2]) {
       if (host && level === f.addonLevel) continue;
       const offices = b.offices === level;
-      if (offices || rng.chance(0.4)) serviceCorridor(bc, level, offices);
+      if (offices || rng.chance(legacy ? 0.4 : 0.28)) serviceCorridor(bc, level, offices);
     }
   }
 
@@ -517,16 +571,16 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
   // --- 9. Storefront units (the food court's counters), washrooms, back of house ---------------------------------------------------
   // the station concourse first (storey 0: food counters + kiosks), the pedways' kiosks, then every building's street / skyway level
   const con0 = (sc.publicAreas.get(0) ?? [concourse.id]).filter(id => !pedwayAreas.includes(id));
-  shopsOn(sc, 0, con0, 'food', rng.int(5, 8));
-  if (pedwayAreas.length) shopsOn(sc, 0, pedwayAreas, 'food', rng.int(1, 3));
+  shopsOn(sc, 0, con0, 'food', legacy ? rng.int(5, 8) : rng.int(7, 10));
+  if (pedwayAreas.length) shopsOn(sc, 0, pedwayAreas, 'food', legacy ? rng.int(1, 3) : rng.int(2, 4));
   for (const bc of carves.values()) {
     for (const level of [1, 2]) {
       const pub = (bc.publicAreas.get(level) ?? []).filter(id => !addon.areas.includes(id));
       const fc = foodCourt?.building === bc.b.id && foodCourt.level === level;
       washroom(bc, level, pub);
       if (fc) shopsOn(bc, level, pub.filter(id => id !== foodCourt!.area), 'food', rng.int(2, 4));
-      shopsOn(bc, level, pub, level === 1 ? 'mixed' : 'skyway', level === 1 ? rng.int(5, 8) : rng.int(6, 10));
-      backOfHouse(bc, level, pub, rng.int(3, 5));
+      shopsOn(bc, level, pub, level === 1 ? 'mixed' : 'skyway', legacy ? (level === 1 ? rng.int(5, 8) : rng.int(6, 10)) : level === 1 ? rng.int(10, 14) : rng.int(11, 16));
+      backOfHouse(bc, level, pub, legacy ? rng.int(3, 5) : rng.int(2, 4));
     }
   }
   // the station's own back of house off the concourse
@@ -542,7 +596,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     X0 = Math.min(X0, r.x); Z0 = Math.min(Z0, r.y); X1 = Math.max(X1, r.x + r.w); Z1 = Math.max(Z1, r.y + r.h);
   }
   if (X0 - 4 < 1 || Z0 - 4 < 1 || X1 + 4 > k.g.w || Z1 + 4 > k.g.h) return fail('canvas');
-  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, X0, Z0, X1, Z1, roofY};
+  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, anchors, landmarks, X0, Z0, X1, Z1, roofY};
 
   // ===========================================================================================================================
   // Local helpers (closures over the kit / records)
@@ -656,6 +710,251 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     }
     bc.runs12 = runs12; bc.down = down; bc.atrium = atrium;
     return true;
+  }
+
+  /**
+   * The LANDMARK courts: every atrium court (the street-level court under the glass) takes the next family of the seeded rotation
+   * (any family: the tall ones need the glass), then up to two large plain courts take the next families that fit their clear height
+   * (a dry fountain, the orrery, the dinosaur on a long lobby court). Never the add-on's areas; one family per map.
+   */
+  function placeLandmarks(): LandmarkCarve[] {
+    const out: LandmarkCarve[] = [];
+    const left = f.landmarkFamilies.slice();
+    const take = (ok: (fam: SkywaysLandmarkFamily) => boolean): SkywaysLandmarkFamily | null => { const i = left.findIndex(ok); return i < 0 ? null : left.splice(i, 1)[0]; };
+    const fits = (a: Area, lv: number, fam: SkywaysLandmarkFamily, cx: number, cy: number, atrium: boolean): {axis: 'x' | 'z'} | null => {
+      const F = LANDMARK_FAMILIES[fam];
+      if (F.atriumOnly && !atrium) return null;
+      const clear = (atrium ? roofY : a.ceil) - BASES[lv];
+      if (F.height + 0.4 > clear) return null;
+      const axis: 'x' | 'z' = a.w >= a.h ? 'x' : 'z';
+      const g = k.grid(lv), R = Math.ceil((F.radius + 1.0) / CELL), L = Math.ceil(((F.long ?? 0) / 2 + 1.2) / CELL);
+      for (let dy = -Math.max(R, axis === 'z' ? L : 0); dy <= Math.max(R, axis === 'z' ? L : 0); dy++) for (let dx = -Math.max(R, axis === 'x' ? L : 0); dx <= Math.max(R, axis === 'x' ? L : 0); dx++) {
+        const x = Math.round(cx) + dx, y = Math.round(cy) + dy, i = g.idx(x, y);
+        if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0) return null;
+      }
+      return {axis};
+    };
+    // atrium courts first
+    for (const bc of rng.shuffle([...carves.values()])) {
+      if (!bc.atrium || out.length >= 4) continue;
+      const cx = bc.atrium.x + bc.atrium.w / 2, cy = bc.atrium.y + bc.atrium.h / 2;
+      const g1 = k.grid(1), a = k.areas[g1.area[g1.idx(Math.floor(cx), Math.floor(cy))]];
+      if (!a || addonAreas.includes(a.id)) continue;
+      const fam = take(q => !!fits(a, 1, q, cx, cy, true));
+      if (!fam) continue;
+      out.push(landmark(fam, bc, 1, a, cx, cy, true, fits(a, 1, fam, cx, cy, true)!.axis));
+    }
+    // then up to two big plain courts (street or skyway level), the biggest first
+    const plain: [BuildingCarve, number, Area][] = [];
+    for (const bc of carves.values()) for (const lv of [1, 2]) for (const id of bc.hubAreas.get(lv) ?? []) {
+      const a = k.areas[id];
+      if (addonAreas.includes(a.id) || out.some(m => m.area === a.id) || Math.min(a.w, a.h) < 18 || (bc.atrium && overlapsR(a, bc.atrium))) continue;
+      if (out.some(m => m.building === bc.b.id)) continue;
+      plain.push([bc, lv, a]);
+    }
+    plain.sort((p, q) => q[2].w * q[2].h - p[2].w * p[2].h);
+    let extra = rng.int(1, 2);
+    for (const [bc, lv, a] of plain) {
+      if (extra <= 0 || out.length >= 5 || out.some(m => m.building === bc.b.id)) continue;
+      const cx = a.x + a.w / 2, cy = a.y + a.h / 2;
+      const fam = take(q => !!fits(a, lv, q, cx, cy, false));
+      if (!fam) continue;
+      out.push(landmark(fam, bc, lv, a, cx, cy, false, fits(a, lv, fam, cx, cy, false)!.axis));
+      extra--;
+    }
+    return out;
+  }
+  function landmark(fam: SkywaysLandmarkFamily, bc: BuildingCarve, lv: number, a: Area, cx: number, cy: number, atrium: boolean, axis: 'x' | 'z'): LandmarkCarve {
+    const F = LANDMARK_FAMILIES[fam];
+    a.label = `${F.name} · ${bName(bc.b)}`;
+    return {id: `L${fam}`, family: fam, name: F.name, building: bc.b.id, level: lv, area: a.id, cx: r2(cx), cy: r2(cy), radius: F.radius, height: F.height, atrium, axis};
+  }
+
+  /**
+   * The ANCHOR shops: the families of the seeded rotation in turn, each in the roomiest site beyond a lobby side that fits its size
+   * (one per building and storey; a galleria may take one either side of its spine), up to 4-6 per map. Each gets a wide glazed
+   * storefront onto the lobby, its format (two-level with an internal stair, double height, multi-zone, else a plain hall) and one or
+   * two back rooms behind a staff door.
+   */
+  function carveAnchors(): AnchorCarve[] {
+    const out: AnchorCarve[] = [];
+    const target = rng.int(4, 6);
+    const used = new Map<string, number>(); // building:level -> anchors there
+    for (const fam of f.shopFamilies) {
+      if (out.length >= target) break;
+      const F = ANCHOR_FAMILIES[fam];
+      const sites: [BuildingCarve, 1 | 2][] = [];
+      for (const bc of rng.shuffle([...carves.values()])) for (const lv of rng.shuffle([1, 2] as (1 | 2)[])) {
+        const n = used.get(`${bc.b.id}:${lv}`) ?? 0;
+        if (n >= (bc.plan === 'galleria' ? 2 : 1)) continue;
+        if (bc.b.id === f.addonHost && lv === f.addonLevel) continue;
+        sites.push([bc, lv]);
+      }
+      const formats = [...F.formats.slice().sort((p, q) => rng.range(0, q[1]) - rng.range(0, p[1])).map(q => q[0]), 'hall' as const].filter((q, i, a) => a.indexOf(q) === i);
+      let made: AnchorCarve | null = null;
+      for (const fmt of formats) {
+        for (const [bc, lv] of sites) {
+          if ((fmt === 'two-level' || fmt === 'double-height') && lv !== 1 && !(fmt === 'two-level' && lv === 2)) continue;
+          made = anchorAt(fam, fmt, bc, lv);
+          if (made) { used.set(`${bc.b.id}:${lv}`, (used.get(`${bc.b.id}:${lv}`) ?? 0) + 1); break; }
+        }
+        if (made) break;
+      }
+      if (made) out.push(made);
+    }
+    return out;
+  }
+
+  function anchorAt(fam: SkywaysShopFamily, fmt: SkywaysAnchorFormat, bc: BuildingCarve, lv: 1 | 2): AnchorCarve | null {
+    const F = ANCHOR_FAMILIES[fam], {I, hub, b} = bc;
+    const g = k.grid(lv);
+    const other = fmt === 'two-level' ? (lv === 1 ? 2 : 1) : null;
+    const cands: {r: CellRect; s: Side; gap: CellRect; score: number}[] = [];
+    for (const s of SIDES) {
+      const deepMax = s === 'N' ? hub.y - 1 - I.y : s === 'S' ? I.y + I.h - (hub.y + hub.h + 1) : s === 'W' ? hub.x - 1 - I.x : I.x + I.w - (hub.x + hub.w + 1);
+      if (deepMax < F.deep[0]) continue;
+      const a0 = alongXSide(s) ? I.x : I.y, a1 = alongXSide(s) ? I.x + I.w : I.y + I.h;
+      let got: (typeof cands)[number] | null = null;
+      for (let deep = Math.min(deepMax, F.deep[1]); deep >= F.deep[0] && !got; deep -= 3) {
+        for (let w = Math.min(a1 - a0, F.along[1]); w >= F.along[0] && !got; w -= 4) {
+          for (let o = 0; o + w <= a1 - a0; o += 3) {
+            const r: CellRect = s === 'N' ? {x: a0 + o, y: hub.y - 1 - deep, w, h: deep} : s === 'S' ? {x: a0 + o, y: hub.y + hub.h + 1, w, h: deep}
+              : s === 'W' ? {x: hub.x - 1 - deep, y: a0 + o, w: deep, h: w} : {x: hub.x + hub.w + 1, y: a0 + o, w: deep, h: w};
+            const ov0 = alongXSide(s) ? Math.max(r.x, hub.x) : Math.max(r.y, hub.y), ov1 = alongXSide(s) ? Math.min(r.x + r.w, hub.x + hub.w) : Math.min(r.y + r.h, hub.y + hub.h);
+            if (ov1 - ov0 < 14) continue;
+            if (!within(I, r) || !k.rectFree(r, lv)) continue;
+            if (other !== null && !k.rectFree(r, other)) continue;
+            if (fmt === 'double-height' && !k.solid(grow(r, 1), 2)) continue;
+            // the storefront: a wide opening centred on the overlap, slid until flat lobby floor (never a run well) lies in front
+            const ow = Math.min(ov1 - ov0 - 2, rng.int(12, 18));
+            const hubSide = opposite(s);
+            let gap: CellRect | null = null;
+            for (const d of [0, 2, -2, 4, -4, 6, -6, 8, -8]) {
+              const e0 = Math.round((ov0 + ov1 - ow) / 2) + d;
+              if (e0 < ov0 + 1 || e0 + ow > ov1 - 1) continue;
+              const gp: CellRect = hubSide === 'S' ? {x: e0, y: r.y + r.h, w: ow, h: 1} : hubSide === 'N' ? {x: e0, y: r.y - 1, w: ow, h: 1}
+                : hubSide === 'E' ? {x: r.x + r.w, y: e0, w: 1, h: ow} : {x: r.x - 1, y: e0, w: 1, h: ow};
+              if (!k.solid(gp, lv)) continue;
+              let ok = true;
+              for (let q = 0; q < ow && ok; q++) {
+                const cx = gp.w > 1 ? gp.x + q : hubSide === 'E' ? gp.x + 1 : gp.x - 1, cy = gp.h > 1 ? gp.y + q : hubSide === 'S' ? gp.y + 1 : gp.y - 1;
+                const i = g.idx(cx, cy);
+                if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || addonAreas.includes(g.area[i])) ok = false;
+              }
+              if (ok) { gap = gp; break; }
+            }
+            if (!gap) continue;
+            got = {r, s, gap, score: r.w * r.h};
+            break;
+          }
+        }
+      }
+      if (got) cands.push(got);
+    }
+    if (!cands.length) return null;
+    const top = Math.max(...cands.map(c => c.score));
+    const {r, s, gap} = rng.weighted(cands.filter(c => c.score >= 0.7 * top).map(c => [c, c.score] as const));
+    const hubSide = opposite(s), front: Side = hubSide; // the floor's front wall faces the lobby
+    const P = k.areas[g.area[g.idx(...frontCell(gap, hubSide))]];
+    if (!P) return null;
+    const id = `A${fam}`;
+    const ceilY = fmt === 'double-height' ? ceilOf(1, ANCHOR_CLEAR.doubleHeight) : ceilOf(lv, ANCHOR_CLEAR.hall[lv - 1]);
+    if (fmt === 'double-height') keepAir(grow(r, 1));
+    // multi-zone: the front hall + (the cinema) an auditorium behind it / (the music store) listening booths along a flank
+    let floorRect = r;
+    const zoneRects: [CellRect, string, Area['type'], number][] = [];
+    if (fmt === 'multi-zone') {
+      if (fam === 'cinema') {
+        const fd = Math.max(11, Math.min(14, Math.floor(sideLen({x: 0, y: 0, w: r.w, h: r.h}, alongXSide(s) ? 'W' : 'N') * 0.4)));
+        const D = alongXSide(s) ? r.h : r.w;
+        if (D - fd - 1 < 12) return null;
+        // the front (lobby) band lies against the lobby side
+        floorRect = s === 'N' ? {x: r.x, y: r.y + r.h - fd, w: r.w, h: fd} : s === 'S' ? {x: r.x, y: r.y, w: r.w, h: fd} : s === 'W' ? {x: r.x + r.w - fd, y: r.y, w: fd, h: r.h} : {x: r.x, y: r.y, w: fd, h: r.h};
+        const aud = s === 'N' ? {x: r.x + 2, y: r.y, w: r.w - 4, h: r.h - fd - 1} : s === 'S' ? {x: r.x + 2, y: r.y + fd + 1, w: r.w - 4, h: r.h - fd - 1}
+          : s === 'W' ? {x: r.x, y: r.y + 2, w: r.w - fd - 1, h: r.h - 4} : {x: r.x + fd + 1, y: r.y + 2, w: r.w - fd - 1, h: r.h - 4};
+        zoneRects.push([aud, 'Auditorium', 'shop', 4]);
+      } else {
+        // booths: a flank strip of 6-cell rooms
+        const BW = 6, along = alongXSide(s);
+        const flankLow = rng.chance(0.5);
+        floorRect = along ? {x: flankLow ? r.x + BW + 1 : r.x, y: r.y, w: r.w - BW - 1, h: r.h} : {x: r.x, y: flankLow ? r.y + BW + 1 : r.y, w: r.w, h: r.h - BW - 1};
+        const strip = along ? {x: flankLow ? r.x : r.x + r.w - BW, y: r.y, w: BW, h: r.h} : {x: r.x, y: flankLow ? r.y : r.y + r.h - BW, w: r.w, h: BW};
+        const L = along ? strip.h : strip.w;
+        const nb = Math.max(2, Math.min(4, Math.floor((L - 2) / 7)));
+        for (let i = 0; i < nb; i++) {
+          const t0 = 1 + i * 7;
+          if (t0 + 6 > L - 1) break;
+          zoneRects.push([along ? {x: strip.x, y: strip.y + t0, w: BW, h: 6} : {x: strip.x + t0, y: strip.y, w: 6, h: BW}, 'Listening booth', 'shop', 3]);
+        }
+        // the gap must still front the floor
+        const g0 = alongXSide(hubSide) ? gap.x : gap.y, g1 = g0 + (alongXSide(hubSide) ? gap.w : gap.h);
+        const h0 = alongXSide(hubSide) ? floorRect.x : floorRect.y, h1 = h0 + (alongXSide(hubSide) ? floorRect.w : floorRect.h);
+        if (g0 < h0 || g1 > h1) return null;
+      }
+    }
+    // two-level: an internal open stair along the far wall at one end (both storeys: the floor round it on each)
+    let well: CellRect | null = null;
+    if (fmt === 'two-level') {
+      const far = s; // the wall opposite the front
+      const L = sideLen(r, far), lw = LANE_W.stair;
+      // (3 m of floor beyond either end: the landings)
+      if (L < RUN_CELLS + 14) return null;
+      const t = rng.chance(0.5) ? 7 : L - 7 - RUN_CELLS;
+      well = far === 'N' ? {x: r.x + t, y: r.y, w: RUN_CELLS, h: lw} : far === 'S' ? {x: r.x + t, y: r.y + r.h - lw, w: RUN_CELLS, h: lw}
+        : far === 'W' ? {x: r.x, y: r.y + t, w: lw, h: RUN_CELLS} : {x: r.x + r.w - lw, y: r.y + t, w: lw, h: RUN_CELLS};
+    }
+    // the sales floor (with its storefront): a whole rect, or the pieces round the stair well (the storefront fronts the largest)
+    const an = {family: fam, name: F.name, ceil: ceilY, entryW: rng.int(4, 6)};
+    let sf: Storefront;
+    const pieces = well ? decompose((x, y) => !inRect(well!, x, y), floorRect).sort((p, q) => q.w * q.h - p.w * p.h) : [floorRect];
+    const main = pieces.find(q => overlapsR(grow(q, 1), gap)) ?? pieces[0];
+    sf = shopfront(lv, P, hubSide, gap, main, F.use, an);
+    sf.color = F.color;
+    storefronts.push(sf);
+    const floor = k.areas[sf.unit];
+    floor.purpose = F.use;
+    for (const q of pieces) if (q !== main) { const a = k.addArea(q, 'room', 'shop', ceilY, floor.id, {...opt(lv), label: F.name, publicSpace: true}); a.purpose = F.use; }
+    const zones: number[] = [];
+    for (const [zr, label, type, dw] of zoneRects) {
+      const a = k.addArea(zr, 'room', type, label === 'Auditorium' ? ceilOf(lv, ANCHOR_CLEAR.hall[lv - 1]) : ceilOf(lv, CLEAR.shop), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: true});
+      a.purpose = F.use;
+      // its door from the floor: through the shared wall, centred
+      const side: Side = zr.x >= floorRect.x + floorRect.w ? 'E' : zr.x + zr.w <= floorRect.x ? 'W' : zr.y >= floorRect.y + floorRect.h ? 'S' : 'N';
+      const L = alongXSide(side) ? zr.w : zr.h;
+      const d0 = (alongXSide(side) ? zr.x - floorRect.x : zr.y - floorRect.y) + Math.floor((L - dw) / 2);
+      k.carveDoor(gapOn(floorRect, side, d0, dw), floor, a, CLEAR.door + (dw >= 4 ? 0.4 : 0), false);
+      zones.push(a.id);
+    }
+    let upper: number | null = null;
+    if (fmt === 'two-level' && well) {
+      const up = lv === 1 ? 2 : 1;
+      const ups = decompose((x, y) => !inRect(well!, x, y), r).sort((p, q) => q.w * q.h - p.w * p.h);
+      const ua = k.addArea(ups[0], 'room', 'shop', ceilOf(up, ANCHOR_CLEAR.hall[up - 1]), -1, {...opt(up), label: `${F.name} · ${up === 2 ? 'mezzanine' : 'lower floor'}`, publicSpace: true});
+      ua.purpose = F.use;
+      for (const q of ups.slice(1)) { const a = k.addArea(q, 'room', 'shop', ceilOf(up, ANCHOR_CLEAR.hall[up - 1]), ua.id, {...opt(up), label: `${F.name} · ${up === 2 ? 'mezzanine' : 'lower floor'}`, publicSpace: true}); a.purpose = F.use; }
+      upper = ua.id;
+      runs.push(carveRun(k, `shop-${fam}`, b.id, 1, well, alongXSide(s) ? 'x' : 'z', rng.chance(0.5) ? 'lo' : 'hi', ['stair'], false));
+    }
+    // back rooms: a stock room (and an office) beyond the far wall or a flank, staff doors from the floor
+    const stock: number[] = [];
+    const backs: [string, Area['type'], number, number][] = [['Stock room', 'stock-room', rng.int(10, 14), rng.int(7, 9)], ['Office', 'agent-office', rng.int(8, 10), rng.int(6, 8)]];
+    for (const [label, type, along, deep] of backs) {
+      let a: Area | null = null;
+      for (const bs of [s, ...SIDES.filter(q => q !== s && q !== hubSide)]) {
+        const n = sideLen(floorRect, bs) - along;
+        for (let t = 2; t <= n - 2 && !a; t += 3) {
+          const rr = beyond(floorRect, bs, t, along, deep);
+          if (!within(I, rr) || !k.rectFree(rr, lv) || (fmt === 'double-height' && false)) continue;
+          if (zoneRects.some(([zr]) => overlapsR(grow(zr, 1), rr))) continue;
+          if (well && overlapsR(grow(well, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
+          a = k.addArea(rr, 'room', type, ceilOf(lv, CLEAR.back), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: false});
+          k.carveDoor(gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3), floor, a, CLEAR.door, false, {staff: true});
+        }
+        if (a) break;
+      }
+      if (a) stock.push(a.id);
+    }
+    return {id, family: fam, name: F.name, building: b.id, level: lv, format: fmt, floor: floor.id, rect: r, storefront: sf.id, front, upper, zones, stock, ceilY};
   }
 
   function hubArea(bc: BuildingCarve, level: number, id: number): void { let l = bc.hubAreas.get(level); if (!l) bc.hubAreas.set(level, (l = [])); l.push(id); }
@@ -818,7 +1117,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     const width = rng.int(8, 10);
     for (const s of rng.shuffle(SIDES.slice())) {
       const room = s === 'N' ? bc.hub.y - bc.I.y : s === 'S' ? bc.I.y + bc.I.h - bc.hub.y - bc.hub.h : s === 'W' ? bc.hub.x - bc.I.x : bc.I.x + bc.I.w - bc.hub.x - bc.hub.w;
-      const len = Math.min(rng.int(14, 24), room - 10);
+      const len = Math.min(legacy ? rng.int(14, 24) : rng.int(18, 30), room - 10);
       if (len < 10) continue;
       for (const lat of latOf(bc, s, width, 'random').slice(0, 10)) {
         const r = armOff(bc, level, s, lat, width, len);
@@ -1172,26 +1471,28 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     }
   }
 
-  function shopfront(level: number, P: Area, s: Side, gap: CellRect, r: CellRect, use: ShopUse): Storefront {
+  function shopfront(level: number, P: Area, s: Side, gap: CellRect, r: CellRect, use: ShopUse, an?: {family: string; name: string; ceil: number; entryW: number}): Storefront {
     const info = STORE_PURPOSES[use];
     const isFood = info.category === 'food';
     // glazed retail fronts stand open (glass either side of the entry); counter fronts may have their shutter stuck part-way
-    const shutter = info.glazed ? 'open' as const : rng.weighted([['open', 0.65], ['partial', 0.35]] as const);
+    // (a destination anchor: always a glazed open front with a wide entry)
+    const shutter = info.glazed || an ? 'open' as const : rng.weighted([['open', 0.65], ['partial', 0.35]] as const);
     const head = r2(rng.range(2.55, 2.8)), fasciaTop = r2(Math.min(head + rng.range(0.55, 0.75), (P.ceil - BASES[level]) - 0.15));
-    const glazed = info.glazed && gap.w + gap.h - 1 >= 6;
+    const glazed = (info.glazed || !!an) && gap.w + gap.h - 1 >= 6;
     const ow = gap.w + gap.h - 1;
-    const entryW = Math.min(ow - 2, rng.int(2, 3));
-    const e0 = !glazed ? 0 : rng.chance(0.5) ? 1 : Math.floor((ow - entryW) / 2);
+    const entryW = Math.min(ow - 2, an ? an.entryW : rng.int(2, 3));
+    const e0 = !glazed ? 0 : an ? Math.floor((ow - entryW) / 2) : rng.chance(0.5) ? 1 : Math.floor((ow - entryW) / 2);
     const sf: Storefront = {
       id: storefronts.length, hall: P.id, side: s, unit: -1, ox: gap.x, oy: gap.y, ow: gap.w, oh: gap.h, ux: r.x, uy: r.y, uw: r.w, uh: r.h,
-      use, food: isFood, name: shopName(use), shutter, head, shutterY: shutter === 'partial' ? r2(rng.range(1.95, 2.2)) : head, fasciaTop,
+      use, food: isFood, name: an ? an.name : shopName(use), shutter, head, shutterY: shutter === 'partial' ? r2(rng.range(1.95, 2.2)) : head, fasciaTop,
       sign: shutter === 'open' ? rng.weighted([['lit', 0.5], ['dim', 0.3], ['dead', 0.2]] as const) : rng.weighted([['dim', 0.4], ['dead', 0.6]] as const),
       glazed, entry: glazed ? [e0, e0 + entryW] : [0, ow], color: rng.pick(info.colors), backDoor: -1,
       style: 'slat',
       ...(level ? {level, baseY: BASES[level]} : {}),
+      ...(an ? {anchor: an.family} : {}),
     };
     // every unit has an interior (an abandoned network: a closed shutter is a grille you can see through, or reached via a partial)
-    const unit = k.addArea(r, 'room', isFood ? 'eatery' : 'shop', ceilOf(level, CLEAR.shop), P.id, {...opt(level), label: sf.name, publicSpace: true});
+    const unit = k.addArea(r, 'room', isFood ? 'eatery' : 'shop', an ? an.ceil : ceilOf(level, CLEAR.shop), P.id, {...opt(level), label: sf.name, publicSpace: true});
     unit.storefront = sf.id;
     unit.purpose = use;
     sf.unit = unit.id;
