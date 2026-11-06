@@ -40,9 +40,10 @@ export const PERF_SCHEMA_VERSION = 1;
  * Additive minor version of schema 1 (report key schemaMinor; 2: start / startDelay / gapBefore / queue* columns, torch flags,
  * firstUse.builds, summary.tail, shot / hit spans; 3: summary.firstUse.pipelines + worst[].firstUse.pipelineRequests, the 10 s mark
  * lookback with marks[].windowMs / fromT / refreshMs / stalls / omittedStalls; 4: frames.columns.uniformWrites / uniformWritesSkipped —
- * render/uploadDedupe.ts).
+ * render/uploadDedupe.ts; 5: world.segments[].lastWarmup on the recording-start segment + environment.warmup's full result fields —
+ * budgetMs / cutStage / reason / ms / stages / plan).
  */
-export const PERF_SCHEMA_MINOR = 4;
+export const PERF_SCHEMA_MINOR = 5;
 
 /** (schemaMinor 3) A mark looks back this far (ms) for its worst frame and stalls: players press F9 seconds after the felt stall. */
 export const MARK_LOOKBACK_MS = 10000;
@@ -304,6 +305,12 @@ export interface WorldSegment {
   route?: string | null;
   /** Warm-ups / background compiles run for this level (status / mode / ms; stage times in the events). */
   warmups?: Record<string, unknown>[];
+  /**
+   * (schemaMinor 5, the 'recording-start' segment) The most recent loading-screen warm-up BEFORE the capture started (null: none yet):
+   * status, reason, mode, ms, budgetMs, cutStage, per-stage done / total / ms and the plan's item counts — so a capture started after the
+   * load still explains a 'partial' warm-up.
+   */
+  lastWarmup?: Record<string, unknown> | null;
   /** When the player had control again (state playing, no warm-up, no lifecycle operation in flight); null = not within the capture. */
   controlT?: number | null;
 }

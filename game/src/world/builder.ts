@@ -30,6 +30,7 @@ import {
   CHUNK_M, LevelColumns, RAIL_HEIGHT, cellCeil as cellCeilAt, ceilingRuns, chunkKey, extractWallFaces, levelOf, rampsEqual, stationLevels, stationRails,
   type BuiltFace, type RailRun,
 } from './levelGeometry';
+import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
 import type {WallFace} from './wallFaces';
 import {LEGACY_STACK, LevelCuller} from './levelCulling';
 import {MeshBasicNodeMaterial, MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
@@ -233,8 +234,11 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     }
     return best;
   };
+  // task static-batching-warmup-20261105 (world/staticCohorts.ts): coarse cohorts for cheap models where the culler has no atrium / slab
+  // occlusion (the mall / Reactor keep fine chunks: their per-box occlusion is what removes draws there)
+  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor;
   const instanceModel = (gr: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) =>
-    addInstancedModel(gr, gltf, placements, fit, name, levelAt);
+    addInstancedModel(gr, gltf, placements, fit, name, levelAt, coarseCohorts);
   const group = new THREE.Group();
   group.name = 'station';
   // Architecture accumulators per (material, level:chunk). Task office-overhaul-20261030 (lane ARCH): keys are MatKeys or the
@@ -1064,30 +1068,24 @@ function mergeBoxes(list: THREE.BufferGeometry[]): THREE.BufferGeometry {
 export type LevelResolver = (x: number, y: number, z: number) => number;
 
 /**
- * Split instance placements into culling chunks: CHUNK m in X/Z, per level (the band holding the
- * instance origin). Key `level:cx,cz`. Shared by model props, storefront fittings and shelf stock so
- * every instanced group culls the same way.
+ * Split instance placements into culling cohorts, per level (the band holding the instance origin): CHUNK m chunks in X/Z (key
+ * `level:cx,cz`), or — task static-batching-warmup-20261105 (world/staticCohorts.ts) — ONE cohort per level (`level:*`) when the
+ * level's instances total at most STATIC_COHORTS.levelTriangles (`trisPerInstance`: all the model's parts; omitted = always chunked).
+ * Shared by model props, storefront fittings and shelf stock so every instanced group culls the same way.
  */
-export function chunkInstances(placements: readonly THREE.Matrix4[], levelAt?: LevelResolver): Map<string, {level: number; list: THREE.Matrix4[]}> {
-  const chunks = new Map<string, {level: number; list: THREE.Matrix4[]}>();
+export function chunkInstances(placements: readonly THREE.Matrix4[], levelAt?: LevelResolver, trisPerInstance = Infinity, coarse = false): Map<string, {level: number; list: THREE.Matrix4[]}> {
   const pos = new THREE.Vector3();
-  for (const p of placements) {
-    pos.setFromMatrixPosition(p);
-    const level = levelAt ? levelAt(pos.x, pos.y, pos.z) : 0;
-    const key = `${level}:${Math.floor(pos.x / CHUNK)},${Math.floor(pos.z / CHUNK)}`;
-    let e = chunks.get(key);
-    if (!e) chunks.set(key, (e = {level, list: []}));
-    e.list.push(p);
-  }
-  return chunks;
+  const at = (p: THREE.Matrix4) => { pos.setFromMatrixPosition(p); return {x: pos.x, z: pos.z, level: levelAt ? levelAt(pos.x, pos.y, pos.z) : 0}; };
+  return planCohorts(placements, at, CHUNK, trisPerInstance, coarse);
 }
 
 /**
  * Instances every mesh of a GLB derivative. The model is fitted to the target footprint
  * (width X, height Y, depth Z) with its base (or top, for hanging fixtures) at the origin.
- * Instances are split per level and CHUNK-m chunk (chunkInstances) so off-screen chunks are culled.
+ * Instances are split per level and CHUNK-m chunk (chunkInstances) so off-screen chunks are culled — or one cohort per level for a
+ * cheap model (world/staticCohorts.ts).
  */
-export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string, levelAt?: LevelResolver): number {
+export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string, levelAt?: LevelResolver, coarse = false): number {
   if (!placements.length) return 0;
   const root = gltf.scene;
   root.updateMatrixWorld(true);
@@ -1097,7 +1095,9 @@ export function addInstancedModel(group: THREE.Group, gltf: GLTF, placements: TH
   const center = box.getCenter(new THREE.Vector3());
   const anchorY = fit.anchor === 'bottom' ? box.min.y : box.max.y;
   const fitM = new THREE.Matrix4().makeScale(s.x, s.y, s.z).multiply(new THREE.Matrix4().makeTranslation(-center.x, -anchorY, -center.z));
-  const chunks = chunkInstances(placements, levelAt);
+  let tris = 0; // (task static-batching-warmup-20261105: the model's triangles per instance, all parts: its cohort size)
+  root.traverse(o => { if ((o as THREE.Mesh).isMesh) tris += trianglesOf((o as THREE.Mesh).geometry); });
+  const chunks = chunkInstances(placements, levelAt, tris, coarse);
   let count = 0;
   root.traverse(o => {
     const mesh = o as THREE.Mesh;

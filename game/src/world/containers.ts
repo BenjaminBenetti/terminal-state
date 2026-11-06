@@ -55,6 +55,7 @@ import {holderBoxes} from '../physics/holderShapes';
 import {averageColor, boxGeo, firstMaterial, fittedMeshes, partition, soupGeometry, type Plane, type Soup} from './meshSplit';
 import {FitIndex, OpenableSet, interiorShadowSide, type OpenRT} from './openables';
 import {openableActive, openableSpec} from './openablesSpec';
+import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
 
 /**
  * Lid split for the generated crate model (`models.crate`, assets/models/crate-t25.glb): triangles
@@ -473,7 +474,7 @@ export class ContainerManager {
   build(layout: StationLayout, extraModels: Record<string, GLTF | undefined> = {}, loot: LootProfile = BASELINE_PROFILE): void {
     this.clear();
     const opts = surfaceOptions();
-    const placements = new Map<LegacyKind, THREE.Matrix4[]>();
+    const placements = new Map<LegacyKind, {matrix: THREE.Matrix4; level: number}[]>();
     const counts = new Map<string, number>();
     let ci = 0, si = 0;
     // Iteration 08 (Lane I): openables split their (lazy p7) models; new container kinds index per kind (legacy indices keep).
@@ -539,29 +540,27 @@ export class ContainerManager {
       this.list.push(h);
       let l = placements.get(kind as LegacyKind);
       if (!l) placements.set(kind as LegacyKind, (l = []));
-      l.push(matrix.clone());
+      l.push({matrix: matrix.clone(), level: p.level ?? 0});
     }
     // Task mall-round2-20261031 (lane PERF): in the mall the chunks are per storey too (a batch spanning two storeys was never culled)
     // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the Reactor (six tiers stacked round / behind the pit; its culler has
     // the same slab / storey occlusion, so the per-storey loot display batches are decided like the mall's)
     const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor;
     this.openables.finish(byStorey);
-    // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props.
-    for (const [kind, mats4] of placements) {
-      const chunks = new Map<string, THREE.Matrix4[]>();
-      const v = new THREE.Vector3();
-      for (const m of mats4) {
-        v.setFromMatrixPosition(m);
-        const key = `${byStorey ? `${storeyOf(layout, v.y)}:` : ''}${Math.floor(v.x / 12)},${Math.floor(v.z / 12)}`;
-        let l = chunks.get(key);
-        if (!l) chunks.set(key, (l = []));
-        l.push(m);
-      }
-      for (const part of this.model(kind).body) {
-        for (const list of chunks.values()) {
+    // Bodies: instanced per kind in ~12 m chunks (frustum culling), like builder props. Task static-batching-warmup-20261105
+    // (world/staticCohorts.ts): per level on every level (the holder's own level; was: the mall / Reactor by storey band); coarse
+    // cohorts for a cheap kind where the culler has no slab occlusion (!byStorey).
+    for (const [kind, list0] of placements) {
+      const body = this.model(kind).body;
+      let tris = 0;
+      for (const part of body) tris += trianglesOf(part.geo);
+      const chunks = planCohorts(list0, e => ({x: e.matrix.elements[12], z: e.matrix.elements[14], level: e.level}), 12, tris, !byStorey);
+      for (const part of body) {
+        for (const {level, list} of chunks.values()) {
           const im = new THREE.InstancedMesh(part.geo, part.mat, list.length);
-          list.forEach((m, i) => im.setMatrixAt(i, m));
+          list.forEach((e, i) => im.setMatrixAt(i, e.matrix));
           im.name = `container-body-${kind}`;
+          im.userData.level = level;
           im.computeBoundingSphere();
           this.group.add(im);
           this.bodies.push(im);
