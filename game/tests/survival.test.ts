@@ -92,9 +92,11 @@ describe('hunger and thirst', () => {
   });
 
   // + bread (task office-props-physics-scale-20261030, lane FURN: the bakery case's loaves are a food item now)
-  it('defines 3 drinks and 5 foods with effects, use times, stacks and icons', () => {
-    expect(DRINK_IDS.length).toBe(3);
-    expect(FOOD_IDS.length).toBe(5);
+  // + the Skyways ramen restaurant's NEW items (task studio-skyways-level-20261106-054448, lane FOOD: items/skywaysFood.ts): foods 5 -> 8
+  //   (ramen, ramen_chashu, sushi_bento), drinks 3 -> 4 (bubble_tea) — a re-pin for added items, every existing row unchanged
+  it('defines 4 drinks and 8 foods with effects, use times, stacks and icons', () => {
+    expect(DRINK_IDS.length).toBe(4);
+    expect(FOOD_IDS.length).toBe(8);
     for (const id of [...DRINK_IDS, ...FOOD_IDS]) {
       const d = ITEMS[id];
       expect(d.kind).toBe('consumable');

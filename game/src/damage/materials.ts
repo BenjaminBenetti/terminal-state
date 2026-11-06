@@ -14,6 +14,7 @@ import {OFFICE_PROP_DAMAGE} from '../gen/office/kinds'; // Iteration 16 (WORLD-G
 import {BUNKER_DAMAGE_CLASS} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {officePropPhysics} from '../gen/office/physics'; // Task office-interactions-layout-20261030 (lane PHYS)
 import {MALL_RIDER_KINDS} from '../gen/mall/kinds'; // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments ride their rail
+import {SKYWAYS_FOOD_CLASS, SKYWAYS_FOOD_MODEL_CLASS, SKYWAYS_FOOD_PHYSICS} from '../items/skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import type {ShapeMat} from '../gen/propShapes';
 import type {PurposeMat} from '../gen/purposeShapes';
 import type {BreakCue, Surface} from '../audio/sfx';
@@ -159,6 +160,7 @@ export const MODEL_KEY_CLASS: Record<string, DamageClass> = {
   crate: 'wood', turnstile: 'steel', shelf: 'steel', vending: 'sheetMetal', stall: 'sheetMetal',
   item_water: 'plastic', item_cola: 'sheetMetal', item_juice: 'cardboard', item_chocolate: 'food', item_chips: 'food', item_beans: 'sheetMetal', item_noodles: 'food',
   item_bread: 'food', // lane FURN (office-props-physics-scale-20261030): the bakery loaf
+  ...SKYWAYS_FOOD_MODEL_CLASS, // task studio-skyways-level-20261106-054448 (lane FOOD): ceramic ramen bowls, the bento tray, the tea cup
   item_ammo_9mm: 'cardboard', item_ammo_556: 'sheetMetal', item_ammo_12ga: 'cardboard', // lane AMMO (knife-melee-20261030): Meshy T2.5 ammo boxes
   trashCan: 'sheetMetal', shopCounter: 'laminate', shopBackbar: 'steel', shopCooler: 'sheetMetal', shopDisplay: 'steel',
   janitorCart: 'plastic', magazineRack: 'steel', techDisplay: 'laminate', hotdogCart: 'steel', gunLocker: 'sheetMetal',
@@ -254,6 +256,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   rifle: 'steel', shotgun: 'steel', pistol: 'steel', knife: 'steel', ammo_556: 'sheetMetal', ammo_12ga: 'cardboard', ammo_9mm: 'cardboard', medkit: 'plastic', bandage: 'fabric', // lane AMMO: 5.56 steel can
   water: 'plastic', cola: 'sheetMetal', juice: 'cardboard', chocolate: 'food', chips: 'food', beans: 'sheetMetal', noodles: 'food',
   bread: 'food', // lane FURN (office-props-physics-scale-20261030)
+  ...SKYWAYS_FOOD_CLASS, // task studio-skyways-level-20261106-054448 (lane FOOD): ceramic ramen bowls (porcelain), bento / tea cup (plastic)
   battery: 'sheetMetal', flare: 'cardboard', // Iteration 12 (LIGHT): steel-jacketed D cell; waxed-paper road flare
   leg_splint: 'plastic', arm_sling: 'fabric', trauma_kit: 'fabric', // Iteration 16 (lane INJURY): foam splint roll; sling packet; nylon pouch
   // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
@@ -320,6 +323,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   water: {mass: 0.55, shape: 'cylinder', mat: 'plastic'}, noodles: {mass: 0.09, shape: 'cylinder', mat: 'soft'},
   juice: {mass: 0.3, shape: 'box', mat: 'soft'}, chocolate: {mass: 0.1, shape: 'box', mat: 'soft'}, chips: {mass: 0.16, shape: 'box', mat: 'soft'},
   bread: {mass: 0.45, shape: 'box', mat: 'soft'}, // lane FURN (office-props-physics-scale-20261030): a stale round loaf
+  ...SKYWAYS_FOOD_PHYSICS, // task studio-skyways-level-20261106-054448 (lane FOOD): full ramen bowls ~1 kg, bento ~0.5 kg, bubble tea ~0.6 kg
   ammo_556: {mass: 0.9, shape: 'box', mat: 'metal'}, ammo_12ga: {mass: 0.7, shape: 'box', mat: 'soft'}, ammo_9mm: {mass: 0.5, shape: 'box', mat: 'soft'}, // lane AMMO: small steel 5.56 can
   medkit: {mass: 0.6, shape: 'box', mat: 'plastic'}, bandage: {mass: 0.08, shape: 'box', mat: 'soft'},
   rifle: {mass: 3.4, shape: 'box', mat: 'heavy'}, shotgun: {mass: 3.6, shape: 'box', mat: 'heavy'}, pistol: {mass: 0.9, shape: 'box', mat: 'heavy'},
