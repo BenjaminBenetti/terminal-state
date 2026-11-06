@@ -295,6 +295,8 @@ export class Game {
   readonly flareHold = new FlareHold();
   /** Iteration 15: the left button belonged to a flare hold; the gun ignores it until it is released. */
   private lmbLatch = false;
+  /** A lane owned the mouse buttons last frame (inputOwners; task fuel-feedback: its release latches a still-held left button). */
+  private laneOwnedLast = false;
 
   // ==== Iteration 16 shared plumbing (primary) — lanes REGISTER into these; they do not rewrite each other's code ====
   /** Per-frame modifier contributors (lane GEAR: worn gear; lane INJURY: limb injuries). Combined from base values each frame. */
@@ -800,6 +802,7 @@ export class Game {
     this.flares.clear(); // Iteration 12 (LIGHT): burning / thrown flares, their lights, smoke, loops and light sources
     this.flareHold.cancel(); // Iteration 15: a readied flare is dropped (nothing spent)
     this.lmbLatch = false;
+    this.laneOwnedLast = false;
     this.aiming = false;
   }
 
@@ -2548,6 +2551,10 @@ export class Game {
     // (lane RIDE) riding the moving train: no gunfire / melee / flare throws (the world's hitscan / bodies would not match the moving
     // car); aiming, reloading, consumables, gear, inventory, the flashlight and the Lockbox stay usable
     const rideHolster = this.trainRide.blocksWeapons;
+    // task fuel-feedback: a lane giving the mouse back with the left button still held (a fuel pour ends / is cancelled, a backpack is
+    // put away) never bleeds into the gun — the button is released first (as after a flare)
+    if (this.laneOwnedLast && !laneOwns && inp.mouse[0]) this.lmbLatch = true;
+    this.laneOwnedLast = laneOwns;
     if (this.lmbLatch && !inp.mouse[0]) this.lmbLatch = false;
     for (const e of this.flareHold.update(dt, {
       keyDown: inp.down('KeyG') || inp.down('KeyT'), keyPressed: inp.hit('KeyG') || inp.hit('KeyT'), mouseDown: inp.mouse[0], mousePressed: inp.mousePressed[0], // INTERACT (#6): G

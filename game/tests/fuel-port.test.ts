@@ -548,7 +548,7 @@ describe('fuel cap: the visible pour', () => {
           s.step();
           expect(s.press()).toBe(true);
           const v = s.sys.pourView!, dims = size ?? itemDims(FUEL.canItem), b = v.bounds.getSize(new THREE.Vector3());
-          expect([b.x, b.y, b.z].map(x => +x.toFixed(3))).toEqual([dims.w, dims.h, dims.d].map(x => +x.toFixed(3))); // sizes come from the model
+          [dims.w, dims.h, dims.d].forEach((d, k) => expect([b.x, b.y, b.z][k]).toBeCloseTo(d, 3)); // sizes come from the model (0.2015 m: no 3-digit rounding pin)
           const tag = `${size ? 'small' : 'current'} can, ${back} m out`;
           let maxZ = -Infinity, pourMaxZ = -Infinity, tipGap = Infinity, frames = 0;
           while (s.sys.pour) {
