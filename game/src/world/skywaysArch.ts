@@ -13,7 +13,10 @@
 //  - washrooms: the office wet-room tile; back of house (storage, utility, staff rooms, closets, security / signal rooms): painted
 //    concrete with a dark lower band, sealed concrete floors, painted concrete ceilings;
 //  - the station storey (platforms, track bed, track tunnels, its shops / back rooms) and every storefront unit (shops / eateries:
-//    their own storefront interiors) keep the builder's own rule (null keys).
+//    their own storefront walls / floors) keep the builder's own rule (null keys); above the station storey the storefront units take
+//    the pedway's plain plaster ceiling (and their door soffits), not the station ceiling kit.
+// The keys are arch-owned finishes for bullet impacts too (world/finishAt.ts, damage/impactFinish.ts: plaster / terrazzo / tile /
+// concrete) and never take a station wall treatment (world/wallDetailPlan.ts: the mall's front / back-of-house recipes).
 // Every surface reuses the office architecture's materials (world/officeArch.ts: ONE program per surface kind — the plasterboard wall,
 // the floor, the ceiling graph — the Codex T4 office wall / T2 ceiling textures, the procedural grain, the 30-year decay hook): one
 // material per finish (a handful in total), chunked by the builder like every other arch key. Door frames are dark painted steel.
