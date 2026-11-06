@@ -228,7 +228,8 @@ describe('loose pickups and grounded bags: the look-at highlight only changes em
     const inv = new Inventory();
     const scene = new THREE.Scene();
     scene.add(pm.group);
-    const g = hall(40, 12).grid;
+    // (task studio-skyways-level-20261106-054448, lane FOOD: 12 m deep — the four Skyways food items add a fourth row of pickups at z 8.5)
+    const g = hall(40, 24).grid;
     const ps = KINDS.map((k, i) => pm.add(inv.makeStack(k, 1), 1 + (i % 18) * 1.0, 0, 1 + Math.floor(i / 18) * 2.5, 0));
     const state = () => ps.map(p => { const out: string[] = []; p.obj.traverse(o => { if ((o as THREE.Mesh).isMesh) out.push(`${o.visible}|${o.layers.mask}|${(o as THREE.Mesh).geometry.uuid}`); }); return `${p.obj.parent === pm.group}|${p.obj.visible}|${out.join(',')}`; });
     const before = state();
