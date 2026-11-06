@@ -24,6 +24,7 @@ export type IconKey =
   | 'filter' // mask lane: gas-mask filter canister
   | GearIconKey | MedicalIconKey // Iteration 16 (lanes GEAR / INJURY)
   | MaterialIconKey // lane RACK (office-props-physics-scale-20261030): crafting materials
+  | 'fuelCan' // task train-fuel-system-20261106-024923: the train's fuel can
   | 'reactorKey' | 'fuseCartridge'; // task reactor-build-20261101 (lane RESTART): the reactor restart parts
 
 /** How a consumable is used: wording, sound and the stat it mainly restores ('use': the flashlight battery). */
@@ -115,6 +116,9 @@ export const ITEMS: Record<string, ItemDef> = {
   // --- Task gasmask-breach-20261030 (mask lane): a passive supply (authored model: world/authoredItems.ts) ---
   gas_filter: {id: 'gas_filter', name: 'Gas mask filter canister', short: 'Filter', kind: 'supply', stackMax: 6, icon: 'filter',
     description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 2.5 minutes on the face.'},
+  // --- Task studio-beta-train-fuel-system-20261106-024923-01: the TRAIN's fuel (fuel/fuel.ts): one can = a quarter of the tank, 2 a slot ---
+  fuel_can: {id: 'fuel_can', name: 'Fuel can', short: 'Fuel', kind: 'supply', stackMax: 2, icon: 'fuelCan',
+    description: 'A steel jerrycan of diesel: a quarter of the train\'s tank (one tank = one stop). Pour it in at the train\'s fuel cap (E), or leave it in the train chest — the train burns chest fuel by itself when it departs.'},
   // --- Iteration 16: character gear (lane GEAR, items/gear.ts) and limb-treatment items (lane INJURY, items/medical.ts) ---
   ...GEAR_ITEMS,
   ...MEDICAL_ITEMS,
@@ -211,6 +215,7 @@ export const ITEM_DIMS: Record<string, ItemDims> = {
   flare: {w: 0.255, d: 0.033, h: 0.033, shape: 'flat'},
   // mask lane: the authored filter canister (world/authoredItems.ts FILTER_DIMS) standing on its base, thread up
   gas_filter: {w: 0.096, d: 0.096, h: 0.072, shape: 'cylinder'},
+  fuel_can: {w: 0.17, d: 0.35, h: 0.47, shape: 'box'}, // a 20 l jerrycan standing upright (task train-fuel-system)
   // Iteration 16: gear / limb-treatment items (lanes GEAR / INJURY)
   ...GEAR_DIMS,
   ...MEDICAL_DIMS,
