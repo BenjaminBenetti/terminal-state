@@ -6,7 +6,10 @@ import {readFileSync} from 'node:fs';
 import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
 import {afterAll, beforeAll, describe, expect, it} from 'vitest';
-import {FUEL_PORT, FuelPortSystem, fuelReadout, installFuelPort, rayBoxT, tankCount, type FuelHudView} from '../src/world/fuelPort';
+import {FUEL_PORT, FuelPortSystem, fuelNeckMouthLocal, fuelReadout, heldCanPose, installFuelPort, rayBoxT, tankCount, type FuelHudView} from '../src/world/fuelPort';
+import {POUR_VIEW, pourPhaseAt} from '../src/world/fuelPourView';
+import {PLAYER_TRAIN_SPEC} from '../src/world/playerTrainSpec';
+import {WeaponController} from '../src/weapons/weapons';
 import {FUEL, type CartFuel} from '../src/fuel/fuel';
 import {PORT, fuelPortLocal} from '../src/fuel/trainPort';
 import {trainToWorld, worldToTrain} from '../src/gen/playerTrain';
@@ -336,6 +339,367 @@ describe('fuel cap: the pour', () => {
   });
 });
 
+// Task studio-beta-fuel-feedback-20261106-064128-01 (lane POUR): the VISIBLE pour (world/fuelPourView.ts) — the user: "See an animation
+// of the can being poured into train".
+describe('fuel cap: the visible pour', () => {
+  const MOUTH = fuelNeckMouthLocal();
+  const SKIN_Z = -PLAYER_TRAIN_SPEC.width / 2;
+  const PLATE_Z = SKIN_Z + FUEL_PORT.part.plateInset - FUEL_PORT.part.plateD;
+  const POUR_AT = POUR_VIEW.liftS + POUR_VIEW.tiltS + 0.25; // well inside the pour phase
+  const mouthV = new THREE.Vector3(MOUTH.x, MOUTH.y, MOUTH.z);
+
+  /** A viewmodel stand-in (hasItem / addHeldItem / setItem / heldItem / camera) whose shown item follows the selection (Game.syncHeld). */
+  const withViewmodel = (s: ReturnType<typeof shell>) => {
+    const items = new Map<string, THREE.Object3D>();
+    const setCalls: (string | null)[] = [];
+    const vm = {
+      camera: new THREE.PerspectiveCamera(FUEL_PORT.viewmodelFov, 16 / 9, 0.01, 20), heldItem: null as string | null,
+      hasItem: (id: string) => items.has(id), addHeldItem: (id: string, obj: THREE.Object3D) => { items.set(id, obj); },
+      setItem(id: string | null) { if (vm.heldItem === id) return; setCalls.push(id); vm.heldItem = id && items.has(id) ? id : null; }, // (as Viewmodel.setItem: a no-op for the same item)
+    };
+    (s.g as unknown as {viewmodel: unknown}).viewmodel = vm;
+    s.g.syncHeld = () => { s.calls.sync++; const st = s.g.inv.meleeSelected ? null : s.g.inv.selectedStack(); vm.setItem(st?.itemId === FUEL.canItem ? st.itemId : null); };
+    for (const h of s.g.sectionHooks) h.build?.({});
+    return {vm, items, setCalls};
+  };
+  const view = (s: ReturnType<typeof shell>) => s.sys.qa().view;
+  /** The can's 8 bounds corners in the train-local frame right now. */
+  const corners = (s: ReturnType<typeof shell>) => {
+    const v = s.sys.pourView!, b = v.bounds, out: THREE.Vector3[] = [];
+    for (let i = 0; i < 8; i++) out.push(new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).applyQuaternion(v.can.quaternion).add(v.can.position));
+    return out;
+  };
+
+  it('phases: lift -> tilt -> pour -> settle inside FUEL_PORT.pourS (2.4 s, close to the 2.58 s pour sound)', () => {
+    expect(FUEL_PORT.pourS).toBe(2.4);
+    expect(POUR_VIEW.liftS + POUR_VIEW.tiltS + POUR_VIEW.settleS).toBeLessThan(FUEL_PORT.pourS - 0.8); // the pour phase itself lasts >= 0.8 s
+    const at = (t: number) => pourPhaseAt(t, FUEL_PORT.pourS).phase;
+    expect([0, 0.3, 0.6, 0.9, 1.9, 2.0, 2.39].map(at)).toEqual(['lift', 'lift', 'tilt', 'pour', 'pour', 'settle', 'settle']);
+  });
+
+  it('E with the cans in the pockets: hidden before; lifted, tipped over the uncapped neck pouring, back; one can used only at the end', () => {
+    const s = shell();
+    s.give(2, 'pack', 3);
+    s.standAtCap();
+    s.step();
+    expect(view(s)?.visible ?? false).toBe(false);
+    expect(s.press()).toBe(true);
+    expect(view(s)).toMatchObject({active: true, visible: true, phase: 'lift', stream: false});
+    expect(s.sys.uncapped).toBe(false);
+    s.step(0.4);
+    expect(view(s)).toMatchObject({phase: 'lift', visible: true, stream: false});
+    expect(s.sys.uncapped).toBe(true); // the screw cap comes off as the can arrives
+    s.step(POUR_AT - 0.4);
+    const v = s.sys.pourView!;
+    expect(view(s)).toMatchObject({phase: 'pour', visible: true, stream: true});
+    // tipped past its side (its top below horizontal), the spout down over the neck, a few cm above / out of its mouth
+    expect(v.canUp().y).toBeLessThan(-0.2);
+    expect(v.dir.y).toBeLessThan(-0.6); // the spout's own axis points down at the neck below it
+    const tip = v.spoutTip();
+    expect(tip.distanceTo(mouthV)).toBeLessThan(0.09);
+    expect(tip.y).toBeGreaterThan(MOUTH.y + FUEL_PORT.part.neckR);
+    // the stream runs from the spout tip into the neck (its end inside the neck tube)
+    const st = v.streamEnds()!;
+    expect(st.from.distanceTo(tip)).toBeLessThan(0.03);
+    expect(st.to.z).toBeGreaterThan(MOUTH.z);
+    expect(st.to.z).toBeLessThan(MOUTH.z + FUEL_PORT.part.neckLen);
+    expect(Math.hypot(st.to.x - MOUTH.x, st.to.y - MOUTH.y)).toBeLessThan(FUEL_PORT.part.neckR);
+    expect(v.drops.some(d => d.visible)).toBe(true);
+    // nothing used yet
+    expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem)]).toEqual([0, 2]);
+    s.step(FUEL_PORT.pourS - POUR_AT - 0.15);
+    expect(view(s)).toMatchObject({phase: 'settle', visible: true, stream: false});
+    expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem)]).toEqual([0, 2]);
+    s.step(0.2);
+    expect(s.sys.pour).toBeNull();
+    expect(view(s)).toMatchObject({active: false, visible: false, stream: false, phase: null});
+    expect(v.drops.every(d => !d.visible)).toBe(true);
+    expect(s.sys.uncapped).toBe(false);
+    expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem)]).toEqual([1, 1]);
+  });
+
+  it('a held can + left click: the held view hides while the world can pours (no duplicate) and comes back; the selection never changes', () => {
+    const s = shell();
+    const {vm, setCalls} = withViewmodel(s);
+    s.give(2, 'hotbar', 1);
+    s.g.inv.select(1);
+    s.g.syncHeld();
+    expect(vm.heldItem).toBe(FUEL.canItem);
+    const held = s.sys.heldObj!;
+    expect(held.visible).toBe(true);
+    s.standAtCap();
+    s.step();
+    expect(s.g.pointerHandlers.some(h => h())).toBe(true);
+    expect(held.visible).toBe(false);
+    expect(s.sys.qa().heldHidden).toBe(true);
+    // the world can starts where the held one is drawn: the viewmodel pose re-projected (same screen spot) in front of the eye
+    const v = s.sys.pourView!, cam = s.g.camera;
+    const centre = new THREE.Vector3(0, v.centerY, 0).applyQuaternion(v.can.quaternion).add(v.can.position); // train-local = world here
+    const ndcWorld = centre.clone().project(cam);
+    const vmCam = vm.camera, H = FUEL_PORT.held.hip;
+    vmCam.updateMatrixWorld(true);
+    const ndcHeld = new THREE.Vector3(...H).project(vmCam);
+    expect(Math.abs(ndcWorld.x - ndcHeld.x)).toBeLessThan(0.02);
+    expect(Math.abs(ndcWorld.y - ndcHeld.y)).toBeLessThan(0.02);
+    s.step(POUR_AT);
+    expect(held.visible).toBe(false);
+    expect(s.g.inv.selected).toBe(1);
+    expect(vm.heldItem).toBe(FUEL.canItem); // the selection / held item are untouched (only our object inside it is hidden)
+    setCalls.length = 0;
+    s.step(FUEL_PORT.pourS);
+    expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem), s.g.inv.selected]).toEqual([1, 1, 1]);
+    expect(held.visible).toBe(true);
+    expect(setCalls).toEqual([null, FUEL.canItem]); // the next can rises into the hand (the equip raise), still the same slot
+    // the last can: the hand's stack empties at completion -> empty hands, the same slot stays selected (no switch)
+    expect(s.g.pointerHandlers.some(h => h())).toBe(true);
+    s.step(FUEL_PORT.pourS + 0.1);
+    expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem), s.g.inv.selected, vm.heldItem]).toEqual([2, 0, 1, null]);
+    expect(held.visible).toBe(true);
+    expect(view(s)?.visible).toBe(false);
+  });
+
+  it('every cancel removes the can + stream at once, puts the cap back and restores the held view: nothing used, selection unchanged', () => {
+    const cases: [string, (s: ReturnType<typeof shell>) => void][] = [
+      ['hit', s => { for (const f of s.g.hitListeners) f({amount: 12}); }],
+      ['sprint', s => { s.g.player.sprinting = true; }],
+      ['away', s => { s.standAtCap(2.4); }],
+      ['away', s => { const c = s.g.camera.position; s.lookAt(c.x + 5, c.y, c.z); }],
+      ['menu', s => { s.setState('paused'); }],
+      ['menu', s => { s.setState('dead'); }],
+      ['menu', s => { s.g.input.clears++; }],
+      ['riding', s => { s.g.trainRide.riding = true; }],
+      ['busy', s => { s.g.player.alive = false; }],
+      ['teardown', s => { for (const h of s.g.sectionHooks) h.teardown?.(); }],
+    ];
+    for (const [why, act] of cases) {
+      for (const phaseAt of [0.3, POUR_AT]) { // during the lift and while the stream runs
+        const s = shell();
+        withViewmodel(s);
+        s.give(2, 'hotbar', 2);
+        s.g.inv.select(2);
+        s.g.syncHeld();
+        s.standAtCap();
+        s.step();
+        expect(s.g.pointerHandlers.some(h => h()), why).toBe(true);
+        s.step(phaseAt);
+        expect(view(s)?.visible, why).toBe(true);
+        expect(s.sys.qa().heldHidden, why).toBe(true);
+        act(s);
+        s.step(FUEL_PORT.awayGraceS + 0.1);
+        const tag = `${why} @${phaseAt}`;
+        expect(s.sys.pour, tag).toBeNull();
+        expect(s.sys.lastCancel, tag).toBe(why);
+        expect(view(s), tag).toMatchObject({active: false, visible: false, stream: false});
+        expect(s.sys.pourView!.drops.every(d => !d.visible), tag).toBe(true);
+        expect(s.sys.uncapped, tag).toBe(false);
+        expect(s.sys.heldObj!.visible, tag).toBe(true);
+        expect([s.g.playerTrain.fuel.tank, s.g.inv.count(FUEL.canItem), s.g.inv.selected], tag).toEqual([0, 2, 2]);
+      }
+    }
+  });
+
+  it('refused presses (full tank, no can, moving) show no pour at all; a can dropped mid-pour gets no fuel', () => {
+    const s = shell();
+    withViewmodel(s);
+    s.give(1, 'hotbar', 0);
+    s.g.inv.select(0);
+    s.g.syncHeld();
+    s.standAtCap();
+    s.g.playerTrain.fuel.tank = FUEL.tankUnits;
+    s.step();
+    expect(s.press()).toBe(true);
+    expect(s.g.pointerHandlers.some(h => h())).toBe(true);
+    expect([view(s)?.visible ?? false, s.sys.qa().heldHidden, s.sys.uncapped]).toEqual([false, false, false]);
+    s.g.playerTrain.fuel.tank = 0;
+    s.g.trainRide.riding = true;
+    s.press();
+    expect([view(s)?.visible ?? false, s.sys.qa().heldHidden]).toEqual([false, false]);
+    s.g.trainRide.riding = false;
+    // the can leaves the inventory mid-pour (dropped / moved): the visual runs to its end, then nothing is poured
+    expect(s.press()).toBe(true);
+    s.step(POUR_AT);
+    expect(s.g.inv.take(FUEL.canItem, 1)).toBe(1);
+    s.g.syncHeld();
+    s.step(FUEL_PORT.pourS);
+    expect(s.sys.pour).toBeNull();
+    expect(s.g.playerTrain.fuel.tank).toBe(0);
+    expect(s.toasts.at(-1)!.text).toBe('No fuel can');
+    expect([view(s)?.visible, s.sys.uncapped, s.sys.heldObj!.visible]).toEqual([false, false, true]);
+    // no can at all: refused, nothing shown
+    s.press();
+    expect(view(s)?.visible).toBe(false);
+    expect(s.toasts.at(-1)!.text).toBe('No fuel can');
+  });
+
+  it('the posed can never enters the car (skin / housing plate) and its spout ends at the neck — the current can AND the smaller medpack-size can', () => {
+    const sizes: (null | {w: number; h: number; d: number})[] = [null, {w: 0.205, h: 0.3, d: 0.105}];
+    for (const size of sizes) {
+      if (size) {
+        const scene = new THREE.Group();
+        scene.add(new THREE.Mesh(new THREE.BoxGeometry(size.w, size.h, size.d).translate(0, size.h / 2, 0), new THREE.MeshStandardMaterial()));
+        registerFuelCanModel({scene});
+      } else registerFuelCanModel(null);
+      registerItemModels({});
+      try {
+        for (const back of [0.45, 0.8, 1.3]) {
+          const s = shell();
+          s.give(1);
+          s.standAtCap(back);
+          s.step();
+          expect(s.press()).toBe(true);
+          const v = s.sys.pourView!, dims = size ?? itemDims(FUEL.canItem), b = v.bounds.getSize(new THREE.Vector3());
+          [dims.w, dims.h, dims.d].forEach((d, k) => expect([b.x, b.y, b.z][k]).toBeCloseTo(d, 3)); // sizes come from the model (0.2015 m: no 3-digit rounding pin)
+          const tag = `${size ? 'small' : 'current'} can, ${back} m out`;
+          let maxZ = -Infinity, pourMaxZ = -Infinity, tipGap = Infinity, frames = 0;
+          while (s.sys.pour) {
+            for (const c of corners(s)) maxZ = Math.max(maxZ, c.z);
+            if (v.phase === 'pour') {
+              const tip = v.spoutTip(), zone = POUR_VIEW.spoutZone * Math.max(b.x, b.y, b.z);
+              for (const c of corners(s)) if (c.distanceTo(tip) > zone) pourMaxZ = Math.max(pourMaxZ, c.z);
+              tipGap = Math.min(tipGap, tip.distanceTo(mouthV));
+            }
+            s.step();
+            frames++;
+          }
+          expect(frames, tag).toBeGreaterThan(130);
+          expect(maxZ, tag).toBeLessThan(SKIN_Z); // the whole box, every frame: outside the car's skin
+          expect(pourMaxZ, tag).toBeLessThan(PLATE_Z); // pouring: all but the spout's corner clear of the housing plate too
+          expect(tipGap, tag).toBeLessThan(0.1); // the spout a few cm from the neck's mouth (the visible stream between them)
+          expect(s.g.playerTrain.fuel.tank, tag).toBe(1);
+        }
+      } finally {
+        registerFuelCanModel(null);
+        registerItemModels({});
+      }
+    }
+  });
+
+  it('rendering hygiene: built once into the cap (warm pool), shared materials, no shadows / raycasts, the car level; reused across pours', () => {
+    const s = shell();
+    s.give(2);
+    s.standAtCap();
+    s.step();
+    const roots = s.pools['fuel-port']();
+    const v = s.sys.pourView!;
+    expect(roots).toContain(s.sys.cap);
+    let inCap = false;
+    v.root.traverseAncestors(a => { if (a === s.sys.cap) inCap = true; });
+    expect(inCap).toBe(true);
+    expect(v.root.visible).toBe(false);
+    const meshes: THREE.Mesh[] = [];
+    v.root.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    const canMeshes: THREE.Mesh[] = [];
+    v.can.traverse(o => { if ((o as THREE.Mesh).isMesh) canMeshes.push(o as THREE.Mesh); });
+    expect(meshes.length).toBe(canMeshes.length + 1 + POUR_VIEW.stream.drops); // the can's own meshes + the stream + its drops, nothing else
+    const fx = [v.stream, ...v.drops];
+    expect(new Set(fx.map(m => m.material)).size).toBe(1); // one shared stream material
+    const fxMat = v.stream.material as THREE.MeshStandardMaterial;
+    expect([fxMat.transparent, fxMat.side, fxMat.depthWrite]).toEqual([true, THREE.FrontSide, false]); // single-pass translucent
+    expect(new Set(fx.map(m => m.geometry)).size).toBe(2); // one cylinder, one sphere
+    // the can shares the item template's materials (no per-pour clone)
+    const tmpl: THREE.Material[] = [];
+    itemTemplate(FUEL.canItem).traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) tmpl.push(m.material as THREE.Material); });
+    v.can.traverse(o => { const m = o as THREE.Mesh; if (m.isMesh) expect(tmpl).toContain(m.material); });
+    const ray = new THREE.Raycaster(new THREE.Vector3(CAP.x, CAP.y, CAP.z - 1), new THREE.Vector3(0, 0, 1));
+    for (const m of meshes) {
+      expect(m.castShadow).toBe(false);
+      expect(m.userData.level).toBe(0);
+      const hits: THREE.Intersection[] = [];
+      m.raycast(ray, hits);
+      expect(hits).toEqual([]);
+    }
+    // two pours: the same objects, nothing added
+    const before = s.sys.cap.children.length;
+    for (let i = 0; i < 2; i++) { s.press(); s.step(FUEL_PORT.pourS + 0.05); }
+    expect(s.g.playerTrain.fuel.tank).toBe(2);
+    expect(s.sys.pourView).toBe(v);
+    expect(s.sys.cap.children.length).toBe(before);
+    expect(v.stream.material).toBe(fxMat);
+  });
+
+  it('the held can pose scales with the can: the same share of a 0.47 m and a 0.30 m can shows above the screen edge', () => {
+    const shown = (h: number) => {
+      const p = heldCanPose(h), half = Math.tan(THREE.MathUtils.degToRad(FUEL_PORT.viewmodelFov) / 2) * -p.hip[2];
+      return (p.hip[1] + h / 2 + half) / h; // the part of the can above the viewmodel frustum's lower edge at its depth
+    };
+    expect(shown(0.3)).toBeCloseTo(shown(0.47), 6);
+    expect(shown(0.3)).toBeGreaterThan(0.3);
+    expect(shown(0.3)).toBeLessThan(0.6);
+    expect(FUEL_PORT.held).toEqual(heldCanPose(itemDims(FUEL.canItem).h));
+    heldCanPose(0.47).hip.forEach((x, i) => expect(Math.abs(x - [0.24, -0.43, -0.72][i])).toBeLessThan(0.03)); // ~ the pose first tuned for the 0.47 m can
+  });
+
+  it('the left button during / after a pour (Game.update order, pinned below): never fires a gun, never changes the choice', () => {
+    // Game.update, in order: E, then the pointer handlers (a taken press is consumed and LATCHED until released), the latch release,
+    // the lane input owners, the weapon (held / pressed only when neither owns the button), later the frame hooks (the pour's clock).
+    const game = src('../src/game.ts');
+    const at = (re: RegExp) => { const m = re.exec(game); expect(m, String(re)).not.toBeNull(); return m!.index; };
+    const iPtr = at(/if \(inp\.mousePressed\[0\] && this\.pointerHandlers\.some\(h => h\(\)\)\) \{ inp\.mousePressed\[0\] = false; this\.lmbLatch = true; \}/);
+    const iOwners = at(/const laneOwns = this\.inputOwners\.some\(f => f\(\)\);/);
+    const iRelease = at(/if \(this\.lmbLatch && !inp\.mouse\[0\]\) this\.lmbLatch = false;/);
+    const iOwns = at(/const flareOwns = this\.flareHold\.active \|\| this\.lmbLatch \|\| laneOwns;/);
+    const iWeapon = at(/this\.weapon\.update\(dt, \{held: inp\.mouse\[0\] && !flareOwns && !rideHolster, pressed: inp\.mousePressed\[0\] && !flareOwns && !rideHolster/);
+    const iHooks = at(/for \(const fn of this\.frameHooks\)/);
+    expect(iPtr < iOwners && iOwners < iRelease && iRelease < iOwns && iOwns < iWeapon && iWeapon < iHooks).toBe(true);
+    /** That order on the shell, with a real rifle controller; returns the shots fired. */
+    const rig = (setup: (s: ReturnType<typeof shell>) => void) => {
+      const s = shell();
+      const weapon = new WeaponController();
+      s.g.syncHeld = () => { s.calls.sync++; const st = s.g.inv.meleeSelected ? null : s.g.inv.selectedStack(); weapon.equip(st?.itemId === 'rifle' ? st : null); };
+      setup(s);
+      s.g.syncHeld();
+      s.standAtCap();
+      s.step();
+      const inp = {mouse: false, pressed: false};
+      let latch = false, shots = 0;
+      const frame = () => {
+        if (inp.pressed && s.g.pointerHandlers.some(h => h())) { inp.pressed = false; latch = true; }
+        const laneOwns = s.g.inputOwners.some(f => f());
+        if (latch && !inp.mouse) latch = false;
+        const owns = latch || laneOwns;
+        shots += weapon.update(DT, {held: inp.mouse && !owns, pressed: inp.pressed && !owns, reload: false, lowered: false}, s.g.inv).filter(e => e.type === 'fire').length;
+        for (const f of s.g.frameHooks) f(DT);
+        inp.pressed = false;
+      };
+      const run = (sec: number) => { for (let i = 0; i < Math.round(sec / DT); i++) frame(); };
+      return {s, inp, run, shots: () => shots, weapon};
+    };
+    const rifleAnd = (cans: number, where: 'pack' | 'hotbar', select: number) => (s: ReturnType<typeof shell>) => {
+      s.g.inv.set({bar: 'hotbar', index: 0}, s.g.inv.makeStack('rifle', 1));
+      s.give(cans, where, where === 'hotbar' ? 1 : 0);
+      s.g.inv.select(select);
+    };
+    // 1) E with the (automatic) rifle in the hand; the button pressed mid-pour and held past the end: taken by the pour, never fires
+    const a = rig(rifleAnd(2, 'pack', 0));
+    a.run(1); // the rifle is equipped (idle) by now
+    expect(a.s.press()).toBe(true);
+    a.run(0.5);
+    a.inp.mouse = true; a.inp.pressed = true;
+    a.run(FUEL_PORT.pourS);
+    expect(a.s.g.playerTrain.fuel.tank).toBe(1);
+    a.run(0.5);
+    expect(a.shots()).toBe(0);
+    a.inp.mouse = false; a.run(DT); a.inp.mouse = true; a.inp.pressed = true; a.run(0.05); // released + pressed again: the gun works
+    expect(a.shots()).toBeGreaterThan(0);
+    // 2) a held can + left click, the hand's last can: the stack empties at completion with the button still down -> empty hands,
+    //    no shot, the same (now empty) slot stays selected — never a switch to the rifle
+    const b = rig(rifleAnd(1, 'hotbar', 1));
+    b.inp.mouse = true; b.inp.pressed = true;
+    b.run(FUEL_PORT.pourS + 1);
+    expect([b.s.g.playerTrain.fuel.tank, b.s.g.inv.count(FUEL.canItem), b.s.g.inv.selected, b.weapon.stack, b.shots()]).toEqual([1, 0, 1, null, 0]);
+    // 3) a cancel (a hit) with the button held from a mid-pour press: still latched, no shot until released
+    const c = rig(rifleAnd(2, 'pack', 0));
+    c.run(1);
+    c.s.press();
+    c.run(0.4);
+    c.inp.mouse = true; c.inp.pressed = true;
+    c.run(0.3);
+    for (const f of c.s.g.hitListeners) f({amount: 10});
+    c.run(1);
+    expect([c.s.sys.lastCancel, c.s.g.inv.count(FUEL.canItem), c.shots()]).toEqual(['hit', 2, 0]);
+  });
+});
+
 describe('HUD fuel readout', () => {
   const chestWith = (...counts: number[]) => {
     const inv = new Inventory();
@@ -444,7 +808,7 @@ describe('fuel can model + wiring', () => {
     expect(fuelCanModelSource()).toMatch(/^FALLBACK box .*not finished art/);
     expect(fb.getObjectByName('fuel-can-fallback')).toBeTruthy();
     const d = itemDims(FUEL.canItem), b = new THREE.Box3().setFromObject(fb), size = b.getSize(new THREE.Vector3());
-    expect(d).toMatchObject({w: 0.32, d: 0.165, h: 0.47});
+    expect(d).toMatchObject({w: 0.2015, d: 0.105, h: 0.30}); // task fuel-feedback: the med-kit sized can (assets/models/train-fuel-can.glb bounds)
     expect(size.x).toBeCloseTo(d.w, 3); expect(size.y).toBeCloseTo(d.h, 3); expect(size.z).toBeCloseTo(d.d, 3);
     expect(b.min.y).toBeCloseTo(0, 6);
   });

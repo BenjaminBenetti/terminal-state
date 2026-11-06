@@ -697,10 +697,11 @@ describe("the Main Menu save path (the REAL game.ts methods on a minimal shell):
     s.world = {};
     s.saveSectionMemory = () => order.push('memory');
     s.gear = {flush: () => order.push('bags')};
+    s.fuelStations = {flush: () => order.push('fuel')}; // (task fuel-feedback: the station's fuel record goes with its memory)
     const commit = Game.prototype.commitSave;
     s.commitSave = function (this: G, ...a: Parameters<G['commitSave']>) { order.push(`commit:${a[0]}`); return commit.apply(this as never, a as never); };
     expect(g.commitEndingSave()).toMatchObject({ok: true, meta: {reason: 'ending'}});
-    expect(order).toEqual(['memory', 'bags', 'commit:ending']);
+    expect(order).toEqual(['memory', 'bags', 'fuel', 'commit:ending']);
   });
 
   it('returnToMenu = the campaign return (the moving ride reset, then the title), as the pause / death "Main menu"', () => {

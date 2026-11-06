@@ -340,7 +340,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   helmet: {mass: 0.4, shape: 'box', mat: 'soft'}, boots: {mass: 1.6, shape: 'box', mat: 'soft'}, gloves: {mass: 0.2, shape: 'box', mat: 'cloth'},
   // task gasmask-breach-20261030 (mask lane): full-face mask ~0.6 kg (rubber), 40 mm filter canister ~0.25 kg (steel)
   gas_mask: {mass: 0.6, shape: 'box', mat: 'soft'}, gas_filter: {mass: 0.25, shape: 'cylinder', mat: 'metal'},
-  fuel_can: {mass: 18, shape: 'box', mat: 'metal'}, // task train-fuel-system: a full 20 l jerrycan (~17 kg of diesel + the can)
+  fuel_can: {mass: 4.5, shape: 'box', mat: 'metal'}, // task fuel-feedback: a full ~5 l can, med-kit sized (~4 kg of fuel + the thin pressed-steel shell)
   // task filter-tension-airtank: a charged ~6 l steel cylinder (~7 kg) + aluminium frame and harness (~2 kg)
   airtank_backpack: {mass: 9, shape: 'box', mat: 'metal'},
   // Task office-props-physics-scale-20261030 (lane RACK): board + relays + wire coil ~0.35 kg; bent brackets / plate / rail ~1.1 kg;

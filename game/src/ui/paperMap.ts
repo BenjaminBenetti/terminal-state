@@ -32,7 +32,6 @@
 import type {CampaignState, StationId, StationNode, SubwayNetwork} from '../campaign/types';
 import {MAINTENANCE_ROUTE, archetypeLabel, isServiceLine} from '../campaign/network';
 import {canTravel, enableCheat, neighbors, reactorKnown, travelBlock, travelPlan, visibleEdges, visibleNodes} from '../campaign/discovery';
-import {tanksText} from '../fuel/fuel'; // task train-fuel-system: the card's fuel wording
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, digitOfCode} from '../items/devGrant';
 import {isTypingTarget} from '../player/input';
 import {seedToCode} from '../core/rng';
@@ -297,23 +296,44 @@ export interface MapFuel {
   aboard(): {tank: number; chest: number; carts: number; total: number};
   cost(hops: number): number;
 }
-/** The station fuel bar (paper px): two segments = two tanks, filled by quarters; more than two tanks adds a "+". */
-export const FUEL_BAR = {w: 18, h: 4.2, gap: 3.2, tanks: 2} as const;
+/**
+ * The station fuel bar (paper px): one segment per train tank (= one hop), filled by quarters; more than `tanks` tanks adds a "+".
+ * Task studio-beta-fuel-feedback-20261106-064128-01: six segments (stations hold about 4 tanks now — a two-tank bar showed nearly every
+ * station full) and the map tells fuel VISUALLY only (user: "no need to tell the player the exact fuel amount in text on the map").
+ */
+export const FUEL_BAR = {w: 26, h: 4.2, gap: 3.2, tanks: 6, seg: 0.9} as const;
 
 /** The ink of one station's fuel bar under its marker (pure). */
 export function fuelBarSvg(p: Pt, r: number, units: number, source: 'planned' | 'remaining' | 'live'): string {
-  const x0 = p.x - FUEL_BAR.w / 2, y0 = p.y + r + FUEL_BAR.gap, segW = (FUEL_BAR.w - 1.2) / FUEL_BAR.tanks;
+  const x0 = p.x - FUEL_BAR.w / 2, y0 = p.y + r + FUEL_BAR.gap, segW = (FUEL_BAR.w - (FUEL_BAR.tanks - 1) * FUEL_BAR.seg) / FUEL_BAR.tanks;
   const o: string[] = [`<g class="pm-fuel pm-fuel-${source}" data-units="${units}">`];
+  // (no template fragment may start with '/': tools/release/package-ci.mjs reads it as a root-absolute URL)
+  const look = source === 'planned' ? 'fill="#8a6f2c" opacity="0.7"' : 'fill="#3f6b3a"';
   for (let k = 0; k < FUEL_BAR.tanks; k++) {
-    const sx = x0 + k * (segW + 1.2), f = Math.max(0, Math.min(1, (units - k * 4) / 4));
-    o.push(`<rect x="${n1(sx)}" y="${n1(y0)}" width="${n1(segW)}" height="${FUEL_BAR.h}" rx="0.8" fill="none" stroke="#3a3028" stroke-width="0.8"></rect>`);
-    // (no template fragment may start with '/': tools/release/package-ci.mjs reads it as a root-absolute URL)
-    const look = source === 'planned' ? 'fill="#8a6f2c" opacity="0.7"' : 'fill="#3f6b3a"';
-    if (f > 0) o.push(`<rect x="${n1(sx + 0.5)}" y="${n1(y0 + 0.5)}" width="${n1(Math.max(0.6, (segW - 1) * f))}" height="${n1(FUEL_BAR.h - 1)}" ${look}></rect>`);
+    const sx = x0 + k * (segW + FUEL_BAR.seg), f = Math.max(0, Math.min(1, (units - k * 4) / 4));
+    o.push(`<rect x="${n1(sx)}" y="${n1(y0)}" width="${n1(segW)}" height="${FUEL_BAR.h}" rx="0.6" fill="none" stroke="#3a3028" stroke-width="0.7"></rect>`);
+    if (f > 0) o.push(`<rect x="${n1(sx + 0.45)}" y="${n1(y0 + 0.45)}" width="${n1(Math.max(0.5, (segW - 0.9) * f))}" height="${n1(FUEL_BAR.h - 0.9)}" ${look}></rect>`);
   }
   if (units > FUEL_BAR.tanks * 4) o.push(`<text x="${n1(x0 + FUEL_BAR.w + 1.6)}" y="${n1(y0 + FUEL_BAR.h)}" font-size="6.5">+</text>`);
   o.push('</g>');
   return o.join('');
+}
+
+/**
+ * Task fuel-feedback (visual only): a destination card's trip gauge — one tank outline per hop the trip burns, filled by the fuel aboard
+ * (tank + chest cans + carts aboard); what is missing is outlined red (`short`). No figures in text. Pure; null with the cheat (free).
+ */
+export function tripGaugeSvg(cost: number, aboard: number): {svg: string; short: boolean} | null {
+  if (cost <= 0) return null;
+  const n = Math.max(1, Math.ceil(cost / 4)), segW = 14, gap = 3, h = 9, w = n * segW + (n - 1) * gap, short = aboard < cost;
+  const o: string[] = [`<svg class="pm-trip-gauge" viewBox="-1 -1 ${w + 2} ${h + 2}" width="${w + 2}" height="${h + 2}" aria-hidden="true">`];
+  for (let k = 0; k < n; k++) {
+    const x = k * (segW + gap), f = Math.max(0, Math.min(1, (aboard - k * 4) / 4));
+    if (f > 0) o.push(`<rect x="${x + 1}" y="1" width="${n1(Math.max(1, (segW - 2) * f))}" height="${h - 2}" rx="1" fill="#6f9a5c"></rect>`);
+    o.push(`<rect x="${x}" y="0" width="${segW}" height="${h}" rx="1.5" fill="none" stroke="${f < 1 ? '#e0574b' : '#cfc3a4'}" stroke-width="1.2"></rect>`);
+  }
+  o.push('</svg>');
+  return {svg: o.join(''), short};
 }
 
 export interface MapStation {
@@ -423,7 +443,9 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
   // (task train-fuel-system: with fuel shown, each marker's box reaches down over its fuel bar so no label covers it)
   const fx = (s: {p: Pt; r: number}) => (fuelShown ? Math.max(s.r + 1, FUEL_BAR.w / 2 + 1) : s.r + 1);
   const markers = stations.map(s => ({id: s.node.id, box: {x0: s.p.x - fx(s), y0: s.p.y - s.r - 1, x1: s.p.x + fx(s), y1: s.p.y + s.r + 1 + (fuelShown ? FUEL_BAR.gap + FUEL_BAR.h + 1 : 0)}}));
-  const labels = placeLabels(items, {bounds: PAPER.area, markers, segs, blocked: [{x0: PAPER.band.x0, y0: PAPER.band.y0, x1: PAPER.band.x1, y1: PAPER.band.y1 + 8}]});
+  // (task fuel-feedback: the wider six-tank bars are blocked for EVERY label — a station's own label included, which the marker boxes skip)
+  const bars = fuelShown ? stations.map(s => ({x0: s.p.x - FUEL_BAR.w / 2 - 1, y0: s.p.y + s.r + FUEL_BAR.gap - 1, x1: s.p.x + FUEL_BAR.w / 2 + 7, y1: s.p.y + s.r + FUEL_BAR.gap + FUEL_BAR.h + 1})) : [];
+  const labels = placeLabels(items, {bounds: PAPER.area, markers, segs, blocked: [{x0: PAPER.band.x0, y0: PAPER.band.y0, x1: PAPER.band.x1, y1: PAPER.band.y1 + 8}, ...bars]});
   // legend: the lines serving a visible station, one entry per ink (the service line is in the symbol key, with its station)
   const legend: MapModel['legend'] = [];
   for (const l of net.lines) {
@@ -489,7 +511,7 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   if (m.reactorShown) symbols.push(sym('reactor', 'Reactor'));
   if (m.maintenanceShown) symbols.push(sym('maintenance', MAINTENANCE_ROUTE.name, `<line x1="0" y1="-4" x2="24" y2="-4" stroke="${MAINTENANCE_ROUTE.color}" stroke-width="3" stroke-dasharray="5 3"/>`));
   symbols.push({w: 30 + keyText('Visited / not yet', 11), svg: `${stationGlyph('subway', {x: 5, y: -4}, 4.6, true)}${stationGlyph('subway', {x: 17, y: -4}, 4.6, false)}<text x="27" y="0" font-size="11">Visited / not yet</text>`});
-  if (fuel) symbols.push({w: 26 + keyText('Fuel (tanks)', 11), svg: `${fuelBarSvg({x: 9, y: -9}, 0, 6, 'remaining')}<text x="22" y="0" font-size="11">Fuel (tanks)</text>`});
+  if (fuel) symbols.push({w: 34 + keyText('Fuel (tanks)', 11), svg: `${fuelBarSvg({x: 13, y: -9}, 0, 10, 'remaining')}<text x="30" y="0" font-size="11">Fuel (tanks)</text>`});
   if (mode === 'travel') symbols.push({w: 18 + keyText('One stop away', 11), svg: `<circle cx="6" cy="-3.5" r="7" fill="none" stroke="#4a4038" stroke-width="1.4" stroke-dasharray="2.5 2.5"/><text x="18" y="0" font-size="11">One stop away</text>`});
   o.push(keyRow(lines, 390, b.x1 - 12, b.y0 + 21));
   o.push(`<g class="pm-key">${keyRow(symbols, 390, b.x1 - 12, b.y0 + 43)}</g>`);
@@ -613,7 +635,8 @@ const CSS = `
 #papermap .pm-p-lines i { display: inline-block; width: 18px; height: 6px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 #papermap .pm-p-state { margin-top: 8px; }
 #papermap .pm-p-note { margin-top: 4px; color: var(--cream-dim, #b9b19c); font-size: 12px; }
-#papermap .pm-p-fuel { color: var(--cream, #ece4cf); }
+#papermap .pm-p-fuel { color: var(--cream, #ece4cf); display: flex; align-items: center; gap: 8px; }
+#papermap .pm-trip-gauge { flex: none; }
 #papermap .pm-p-short { color: #e0574b; font-weight: 700; }
 #papermap .pm-p-actions { display: flex; gap: 8px; margin-top: 10px; }
 #papermap .pm-p-actions button { flex: 1; padding: 9px 12px; }
@@ -1035,21 +1058,16 @@ export class PaperMap {
   }
 
   /**
-   * Task train-fuel-system: the card's fuel lines — the station's fuel (left / at first visit / here now) and, for a destination, the
-   * trip: stops, cost and the train's reserves aboard (enough or not; Depart still works and the engine tells you if it is short).
+   * Task train-fuel-system: the card's fuel — task fuel-feedback (user: "no need to tell the player the exact fuel amount in text on the
+   * map. Just use the visual indicators"): the station's fuel is its bar on the map; a destination card (travel) shows only the trip's
+   * tank gauge (tripGaugeSvg: a tank per hop, filled by the fuel aboard, red where it is short) — no fuel figures in text. Depart still
+   * works and the engine tells you if it is short.
    */
-  private fuelLines(id: StationId, plan: {hops: number} | null): string {
+  private fuelLines(_id: StationId, plan: {hops: number} | null): string {
     const f = this.args?.fuel;
-    if (!f) return '';
-    const out: string[] = [];
-    const nf = f.node(id);
-    if (nf) out.push(`Fuel here: ${tanksText(nf.units)}${nf.source === 'planned' ? ' (not visited — untouched)' : nf.source === 'live' ? ' (lying here now)' : ' (left here)'}`);
-    if (plan && this.mode === 'travel') {
-      const cost = f.cost(plan.hops), a = f.aboard();
-      const tail = cost === 0 ? ' — no fuel used (cheat)' : a.total >= cost ? '' : ' — NOT ENOUGH';
-      out.push(`Trip: ${plan.hops} stop${plan.hops > 1 ? 's' : ''} · needs ${tanksText(cost)} · aboard ${tanksText(a.total)}${a.chest || a.carts ? ` (tank ${tanksText(a.tank)}, chest ${tanksText(a.chest)}, carts ${tanksText(a.carts)})` : ''}${tail}`);
-    }
-    return out.map((l, i) => `<div class="pm-p-note pm-p-fuel${i && l.endsWith('NOT ENOUGH') ? ' pm-p-short' : ''}">${esc(l)}</div>`).join('');
+    if (!f || !plan || this.mode !== 'travel') return '';
+    const g = tripGaugeSvg(f.cost(plan.hops), f.aboard().total);
+    return g ? `<div class="pm-p-note pm-p-fuel${g.short ? ' pm-p-short' : ''}"><span>Fuel</span>${g.svg}</div>` : '';
   }
 
   /** Where the card stands now (screen px; QA / tests). */

@@ -2,10 +2,10 @@
  "schema": "terminal-state-derivative-v1",
  "id": "train-fuel-can",
  "item": "fuel_can (Beta train fuel system; key / integration chosen at Beta import)",
- "task": "studio-train-fuel-can-asset-20261106-030724-01 (asset handoff to studio-beta-train-fuel-system-20261106-024923-01)",
+ "task": "studio-train-fuel-can-asset-20261106-030724-01 (asset handoff to studio-beta-train-fuel-system-20261106-024923-01); re-cooked by studio-beta-fuel-feedback-20261106-064128-01 (user feedback: med-kit size, readable back label; no regeneration)",
  "approval": "task-specific user generation approval (sha256 e5442d81e41d064fce89e2f0f3d41bd2637a78dbd45f47a26422694ae5c3b097): one fuel can model, 50 Meshy credits total",
  "accepted": true,
- "route": "Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded only)",
+ "route": "Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded; one deterministic texel mirror of the back label, see labelRepair)",
  "conditioningImage": {
   "sha256": "680bc24314fc978cbd6901d80b0eacde94128308531e8625f2841fed25f70d09",
   "bytes": 2172644,
@@ -70,21 +70,53 @@
  "output": {
   "file": "game/public/assets/models/train-fuel-can.glb",
   "url": "assets/models/train-fuel-can.glb",
-  "sha256": "77b89db5a7b585e0dd52bb9f44f638f5d32c96b909321ea910aadc8dd1c0bd8c",
-  "bytes": 780132,
+  "sha256": "5d1fba9c8d2447293990b27be05d1a55846ccfdee5f22a87ae447e7e5f33f825",
+  "bytes": 779784,
   "triangles": 4187,
   "dims": [
-   0.3157,
-   0.47,
-   0.165
+   0.2015,
+   0.3,
+   0.105
   ]
  },
- "heightM": 0.47,
- "depthM": 0.165,
- "scale": 0.493621,
- "depthFit": 1.592,
+ "heightM": 0.3,
+ "depthM": 0.105,
+ "scale": 0.315077,
+ "depthFit": 1.5872,
+ "size": "a ~5-litre can, med-kit sized (user feedback \"Smaller fuel cans roughly med-pack sized\"; the med kit item is 0.32 x 0.22 x 0.14 m); previously a 0.47 m 20-litre jerrycan",
  "transform": "uniform scale to the real height, then a z-only depth fit (a single straight-on view carries no depth cue), grounded (min y = 0) and centred on x/z; baked into vertices; no rotation",
- "convention": "metres at real size, +Y up, front +Z (the stencilled FUEL broad side; Meshy native), the spout / cap at the top, three-bar carry handle on top, grounded (min y = 0), centred on x/z",
+ "labelRepair": {
+  "reason": "user feedback \"Fuel spelled in reverse on the back side, looks good otherwise\": the single-view Meshy texture painted the back (-Z) broad side with the front FUEL stencil seen through the can",
+  "method": "deterministic texel mirror of the back label; Meshy maps otherwise kept (tools/asset-pipeline/props/lib/label-mirror.mjs): every back-facing texel inside the label box takes the bilinear sample of the ORIGINAL map at the mirrored back-panel point (-x, y) (the can is centred and left / right symmetric about x = 0); base colour and metallic-roughness copied, the tangent-space normal re-expressed for the mirrored content (world reflection, three.js / glTF derivative tangent frame); smoothstep feather outside the box; gutter texels nearest a repaired texel padded from it; no generation, no other image used",
+  "region": {
+   "xHalfWidth": 0.064,
+   "y": [
+    0.186,
+    0.238
+   ],
+   "feather": 0.006,
+   "mirrorPlaneX": 0,
+   "frame": "final frame (metres), back panel (-Z)"
+  },
+  "maps": [
+   "baseColor",
+   "metallicRoughness",
+   "normal"
+  ],
+  "atResolution": [
+   2048,
+   2048
+  ],
+  "texels": 25997,
+  "featheredTexels": 7221,
+  "gutterTexels": 7391,
+  "changedTexels": {
+   "baseColor": 32433,
+   "metallicRoughness": 31478,
+   "normal": 32690
+  }
+ },
+ "convention": "metres at real size, +Y up, front +Z (the stencilled FUEL broad side; Meshy native; the back -Z broad side carries the same stencil, readable from behind), the spout / cap at the top, three-bar carry handle on top, grounded (min y = 0), centred on x/z",
  "textures": [
   {
    "slot": "baseColor",
@@ -93,8 +125,8 @@
     1024
    ],
    "mime": "image/jpeg",
-   "bytes": 250673,
-   "sha256": "23f590e937f4c2513e9b49d63b4b3b5a48e48728b729bdedb0e1483dde2e07d1"
+   "bytes": 250538,
+   "sha256": "20c360364ed1ac355d400939189ada63048b70ec68b5c0879f4dbd68d2210aba"
   },
   {
    "slot": "metallicRoughness",
@@ -103,8 +135,8 @@
     1024
    ],
    "mime": "image/jpeg",
-   "bytes": 230939,
-   "sha256": "26ffb23e8233769ebf712db47831c65e91db0e390849ac6db7f578f9759e4068"
+   "bytes": 230922,
+   "sha256": "20bf7424eeedccaf1eebb2b37ee2551d4d00bfa4ae6a89f7909b796e7619dcc5"
   },
   {
    "slot": "normal",
@@ -113,8 +145,8 @@
     1024
    ],
    "mime": "image/jpeg",
-   "bytes": 130532,
-   "sha256": "032fb005ae0b9bd8e4e77d778040fbbac3c87917c42bb8d9a58c9760e2b14305"
+   "bytes": 130330,
+   "sha256": "e3607299fe1574b7a75e2c2f2d2b2f960cc8b2e1cfe00fc51cfca67e16a71bd3"
   }
  ],
  "licence": "generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)"

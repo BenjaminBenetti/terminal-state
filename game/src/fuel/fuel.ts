@@ -7,10 +7,15 @@
 //     stacks to FUEL.canStackMax (2): two slots carry a full tank;
 //   - an optional FUEL CART (a hand truck with a drum: a physical, wheeled world object; never an inventory item) holds up to
 //     FUEL.cartUnits (8 = two tanks); not guaranteed anywhere.
-// Station fuel: every network station has a deterministic FuelPlan (its own RNG namespace `fuel-plan:<stationId>` over the network
-//   seed — never the layout / loot / enemy streams) of at least FUEL.stationMinUnits (one tank) in total: the cart's fuel COUNTS
-//   toward it (a cart station has no extra cans). It is realized ONCE, on the station's first build, as real pickups / a cart and is
-//   finite from then on (the station's memory remembers what is left: never re-rolled or refilled on a revisit).
+// Station fuel: every network station has a deterministic FuelPlan (its own RNG namespace over the network seed — never the layout /
+//   loot / enemy streams) of at least FUEL.stationMinUnits (one tank) in total: the cart's fuel COUNTS toward it. It is realized ONCE,
+//   on the station's first build, and is finite from then on (the station's memory remembers what is left: never re-rolled or refilled
+//   on a revisit).
+//   Task studio-beta-fuel-feedback-20261106-064128-01 (user feedback: "about 4 tanks average per level, distributed as standard loot"):
+//   plan v2 (FUEL_PLAN) — total = min + two uniform rolls (a triangular spread: average 4 tanks, now and then a lean or a rich station);
+//   a station rich enough may carry its optional cart (8 of its units) and still has cans. Every can is ONE loot lot / ONE pickup
+//   (gen/fuelHolders.ts: on shelves, counters and in storage — never a stack of two shown as one can). The v1 plan
+//   (stationFuelPlanV1) stays only to size the one-time additive delta for stations a v1 save already realized.
 // Departure: the route cost is drawn from the RESERVES ABOARD — the tank, then the carts fully inside the car (uid order), then the fuel
 //   cans in the train chest (slot order). Pockets, bags, the ground and carts outside the car are never drawn automatically. The exact
 //   draw is recorded (FuelDebit) with the pending journey so a failed journey that brings the train back refunds exactly that, and a
@@ -33,10 +38,18 @@ export const FUEL = {
   stationMinUnits: 4,
   /** The fuel can item id. */
   canItem: 'fuel_can',
-  /** Plan rolls (lead v1, conservative): a cart station (a full cart, no cans) — rare windfall. */
-  cartChance: 0.12,
-  /** Cans above the minimum on a can station: +0 / +1 / +2 with these weights. */
-  extraCans: [[0, 0.7], [1, 0.2], [2, 0.1]] as readonly (readonly [number, number])[],
+} as const;
+
+/**
+ * Plan v2 (task fuel-feedback): total units = FUEL.stationMinUnits + two independent rolls of 0..rollMax (a triangular spread around the
+ * average 4 + rollMax = 16 units = 4 tanks; 4 .. 28). A station with at least cartMinTotal units carries its cart with cartChance (the
+ * cart's 8 units are PART of the total, the rest are cans: a cart station is never "a cart and nothing else" below cartMinTotal).
+ */
+export const FUEL_PLAN = {
+  version: 2,
+  rollMax: 12,
+  cartChance: 0.25,
+  cartMinTotal: 12,
 } as const;
 
 export type StationId = string;
@@ -46,9 +59,20 @@ export interface FuelPlan { units: number; cans: number; cart: number }
 
 /** The station's initial fuel plan (pure: no world generation; the map shows it for known, unvisited stations). */
 export function stationFuelPlan(networkSeed: number, station: StationId): FuelPlan {
+  const rng = new Rng(hashString(`fuel-plan-v2:${station}`, (networkSeed >>> 0) ^ 0x5f3759df));
+  const units = FUEL.stationMinUnits + rng.int(0, FUEL_PLAN.rollMax) + rng.int(0, FUEL_PLAN.rollMax);
+  const cart = units >= FUEL_PLAN.cartMinTotal && rng.next() < FUEL_PLAN.cartChance ? FUEL.cartUnits : 0;
+  return {units, cans: (units - cart) / FUEL.canUnits, cart};
+}
+
+/**
+ * The v1 plan (task train-fuel-system, released): only to size the ONE additive delta a station realized under v1 receives (v2 units
+ * minus these, never negative). Exactly the old rolls: 12 % a full cart and no cans, else 4 cans +0 / +1 / +2 (0.7 / 0.2 / 0.1).
+ */
+export function stationFuelPlanV1(networkSeed: number, station: StationId): FuelPlan {
   const rng = new Rng(hashString(`fuel-plan:${station}`, (networkSeed >>> 0) ^ 0x5f3759df));
-  if (rng.next() < FUEL.cartChance) return {units: FUEL.cartUnits, cans: 0, cart: FUEL.cartUnits};
-  const extra = rng.weighted(FUEL.extraCans.map(([n, w]) => [String(n), w] as [string, number]));
+  if (rng.next() < 0.12) return {units: FUEL.cartUnits, cans: 0, cart: FUEL.cartUnits};
+  const extra = rng.weighted([['0', 0.7], ['1', 0.2], ['2', 0.1]] as [string, number][]);
   const cans = FUEL.stationMinUnits / FUEL.canUnits + Number(extra);
   return {units: cans * FUEL.canUnits, cans, cart: 0};
 }
@@ -143,9 +167,23 @@ export interface StationCartJSON { uid: string; units: number; x: number; y: num
 /** The train's fuel record (inside the 'player-train' participant): the tank and the carts aboard. */
 export interface TrainFuelJSON { v: 1; tank: number; cargo: CargoCartJSON[] }
 
-/** Section-memory lane of a station's fuel (FUEL_LANE): the plan realized (once), the carts lying there. */
-export interface StationFuelJSON { v: 1; realized: boolean; carts: StationCartJSON[] }
+/**
+ * Section-memory lane of a station's fuel (FUEL_LANE): the plan realized (once), the carts lying there. v2 (task fuel-feedback): + `lots`
+ * — the fuel cans realized as loot lots in the station's holders (`<holderKey>#<lotId>`, gen/fuelHolders.ts), re-placed on every build
+ * (the holder memory then removes the taken ones like any lot). A v1 record (released train-fuel-system saves) has no lots: its
+ * station gets the one-time v2 delta on its next build (world/fuelStations.ts).
+ */
+export interface StationFuelJSON { v: 1 | 2; realized: boolean; carts: StationCartJSON[]; lots?: string[] }
 export const FUEL_LANE = 'fuel.station';
+/** A realized fuel lot's key: the holder's memory key + the lot id. */
+export const FUEL_LOT_KEY = /^[A-Za-z][A-Za-z0-9_]{0,47}@-?\d{1,4}:-?\d{1,9},-?\d{1,9}#\d{1,9}$/;
+/** Most fuel lots one station record lists. */
+export const FUEL_LOTS_MAX = 64;
+export const fuelLotKey = (holderKey: string, lotId: number): string => `${holderKey}#${lotId}`;
+export function parseFuelLotKey(k: string): {holder: string; lot: number} {
+  const i = k.lastIndexOf('#');
+  return {holder: k.slice(0, i), lot: Number(k.slice(i + 1))};
+}
 
 const finite = (v: unknown, lo: number, hi: number): v is number => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi;
 const units = (v: unknown, max: number): v is number => Number.isInteger(v) && (v as number) >= 0 && (v as number) <= max;
@@ -188,9 +226,19 @@ export function trainFuelProblem(v: unknown): string | null {
 export function stationFuelProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'the station fuel record must be an object';
   const o = v as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (!['v', 'realized', 'carts'].includes(k)) return `unexpected station fuel field '${k}'`;
-  if (o.v !== 1) return 'unsupported station fuel version';
+  for (const k of Object.keys(o)) if (!['v', 'realized', 'carts', 'lots'].includes(k)) return `unexpected station fuel field '${k}'`;
+  if (o.v !== 1 && o.v !== 2) return 'unsupported station fuel version';
   if (typeof o.realized !== 'boolean') return 'station fuel needs a realized flag';
+  if (o.v === 1 && o.lots !== undefined) return 'a v1 station fuel record has no lots';
+  if (o.v === 2) {
+    if (!Array.isArray(o.lots) || o.lots.length > FUEL_LOTS_MAX) return `station fuel lots must be a list of at most ${FUEL_LOTS_MAX}`;
+    const seen = new Set<string>();
+    for (const k of o.lots) {
+      if (typeof k !== 'string' || !FUEL_LOT_KEY.test(k)) return 'a malformed station fuel lot';
+      if (seen.has(k)) return `duplicate station fuel lot ${k}`;
+      seen.add(k);
+    }
+  }
   if (!Array.isArray(o.carts) || o.carts.length > 16) return 'station carts must be a list of at most 16';
   const ids = new Set<string>();
   for (const c of o.carts) {
@@ -215,9 +263,19 @@ export function debitProblem(v: unknown): string | null {
   return null;
 }
 
-/** Fuel units lying in a station's remembered loose items / grounded bags / carts (the map's "remaining" for a visited station). */
-export function stationFuelRemaining(o: {pickups?: readonly {stack: {itemId: string; count: number; bag?: readonly ({itemId: string; count: number} | null)[]}}[] | null; bags?: readonly {stack: {bag?: readonly ({itemId: string; count: number} | null)[]}}[]; carts?: readonly {units: number}[]}): number {
+/**
+ * Fuel units lying in a station's remembered loose items / grounded bags / carts / holder lots (the map's "remaining" for a visited
+ * station). `lots` = the station record's realized fuel lots, `holders` = the station memory's holder records: a lot counts while its
+ * holder still lists it (a holder without a record keeps all its lots, as Game's applyHolders does). A lot that left its holder is a
+ * pickup now (counted there once).
+ */
+export function stationFuelRemaining(o: {pickups?: readonly {stack: {itemId: string; count: number; bag?: readonly ({itemId: string; count: number} | null)[]}}[] | null; bags?: readonly {stack: {bag?: readonly ({itemId: string; count: number} | null)[]}}[]; carts?: readonly {units: number}[];
+  lots?: readonly string[]; holders?: Readonly<Record<string, {lots: readonly number[]}>>}): number {
   let n = 0;
+  for (const k of o.lots ?? []) {
+    const {holder, lot} = parseFuelLotKey(k), rec = o.holders?.[holder];
+    if (!rec || rec.lots.includes(lot)) n += FUEL.canUnits;
+  }
   for (const p of o.pickups ?? []) {
     if (p.stack.itemId === FUEL.canItem) n += p.stack.count * FUEL.canUnits;
     for (const c of p.stack.bag ?? []) if (c && c.itemId === FUEL.canItem) n += c.count * FUEL.canUnits;

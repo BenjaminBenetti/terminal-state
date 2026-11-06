@@ -38,20 +38,23 @@ describe('fuel carts with the station coordinator (real plan realization + FUEL_
     const s = stationHost(L, {build: false});
     live.push(s.rt);
     const {h, carts} = s;
-    const pickups: unknown[] = [];
-    Object.assign(h, {run, inv: new Inventory(), world: {}, fuelCarts: carts, pickups: {list: pickups, add: (...a: unknown[]) => { pickups.push(a); return {}; }}});
+    // (task fuel-feedback: a v2 cart station also has cans — no loot holders in this host, so they come as loose single-can pickups)
+    const pickups: {stack: {itemId: string; count: number}; x: number; y: number; z: number}[] = [];
+    Object.assign(h, {run, inv: new Inventory(), world: {}, fuelCarts: carts, pickups: {list: pickups, add: (stack: {itemId: string; count: number}, x: number, y: number, z: number) => { pickups.push({stack, x, y, z}); return {}; }}});
+    const plan = stationFuelPlan(seed, sid(0));
     const fs = new FuelStations(h as never).install();
     h.sectionHooks.unshift(h.sectionHooks.pop()!); // Game's order: the coordinator's hooks before the carts'
     // first build: the plan is realized — its cart through carts.spawn (before the carts' own build: it waits for it)
     build(h, L);
-    expect(fs.last).toMatchObject({station: sid(0), realized: true, cart: true});
+    expect(fs.last).toMatchObject({station: sid(0), mode: 'plan', cart: true, loose: plan.cans});
+    expect(pickups.every(p => p.stack.itemId === FUEL.canItem && p.stack.count === 1)).toBe(true); // one can per pickup
     const uid = `cart:${sid(0)}`;
     expect(carts.all().map(c => [c.uid, c.units, c.owner, c.mode])).toEqual([[uid, FUEL.cartUnits, 'station', 'world']]);
     const b = carts.bodyOf(uid)!;
     expect(footprintFloor(h.levels!, b.x, b.z, b.y)).not.toBeNull(); // standing on walkable floor, not over a ledge
     const [rx, rz] = moveCircle(h.levels!, h.propIndex, b.x, b.z, 0, 0, CART.radius, b.y, CART.height);
     expect(Math.hypot(rx - b.x, rz - b.z)).toBeLessThan(1e-6); // out of every wall / prop / the car
-    expect(fs.liveUnits()).toBe(FUEL.cartUnits); // the map's live figure counts the cart outside the car
+    expect(fs.liveUnits()).toBe(FUEL.cartUnits + plan.cans); // the map's live figure counts the cart outside the car (+ the station's cans)
     runFrames(h, 0.5);
     // teardown: the coordinator writes the record from the carts' live station records
     teardown(h);
@@ -61,7 +64,7 @@ describe('fuel carts with the station coordinator (real plan realization + FUEL_
     expect(carts.all()).toEqual([]);
     // revisit: realized -> loadStation(rec.carts) -> the same cart at the same pose (no second plan, no duplicate)
     build(h, L);
-    expect(fs.last).toMatchObject({realized: false});
+    expect(fs.last).toMatchObject({mode: 'kept'});
     const again = carts.all();
     expect(again.map(c => c.uid)).toEqual([uid]);
     expect(Math.hypot(again[0].x - rec.carts[0].x, again[0].z - rec.carts[0].z)).toBeLessThan(1e-3);
@@ -76,6 +79,6 @@ describe('fuel carts with the station coordinator (real plan realization + FUEL_
     // next build: the station has no cart; the train's cart stands in the parked car (exactly one)
     build(h, L);
     expect(carts.all().map(c => [c.uid, c.owner, c.mode])).toEqual([[uid, 'train', 'world']]);
-    expect(fs.liveUnits()).toBe(0); // fuel aboard is not the station's
+    expect(fs.liveUnits()).toBe(plan.cans); // fuel aboard is not the station's (its cans still are: this host keeps the pickup list)
   }, 60000);
 });

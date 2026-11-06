@@ -10,10 +10,15 @@
 //   tools/release/public-inputs.json                       (ONLY these two entries are added / updated; others untouched)
 //
 // Derivative: Meshy's native orientation kept (front +Z: the stencilled FUEL broad side; +Y up), UNIFORM scale to the real height H_M
-// (a 20-litre jerrycan), then a DEPTH FIT on z to DEPTH_M — a straight-on single view carries no depth cue (the original came back
-// ~0.22 x its height deep; a real can is ~0.35 x) — grounded (min y = 0) and centred on x/z, baked into the vertices (identity nodes).
-// No geometry simplification (Smart Topology made the target count). The model's OWN Meshy PBR maps (base colour, metallic-roughness,
-// normal) are kept and only re-encoded: Lanczos downsize to TEX_PX, JPEG q85.
+// (a ~5-litre can, med-kit sized: user feedback, task studio-beta-fuel-feedback-20261106-064128-01; was a 0.47 m 20-litre jerrycan),
+// then a DEPTH FIT on z to DEPTH_M — a straight-on single view carries no depth cue (the original came back ~0.22 x its height deep; a
+// real can is ~0.35 x) — grounded (min y = 0) and centred on x/z, baked into the vertices (identity nodes). No geometry
+// simplification (Smart Topology made the target count). The model's OWN Meshy PBR maps (base colour, metallic-roughness, normal)
+// are kept and re-encoded (Lanczos downsize to TEX_PX, JPEG q85) after ONE deterministic texel repair (same feedback task: "Fuel
+// spelled in reverse on the back side, looks good otherwise"): Meshy's single view painted the back (-Z) broad side with the front's
+// FUEL stencil seen through the can (mirrored when viewed from behind), so lib/label-mirror.mjs mirrors the back's OWN paint about the
+// can's symmetry plane x = 0 inside a feathered label box (LABEL) in all three maps (the normal map's tangent-space vectors are
+// re-expressed for the mirrored content); every texel outside the box (and its gutters) is kept exactly as decoded.
 //
 // Usage: node tools/asset-pipeline/props/build-train-fuel-can.mjs
 import fs from 'node:fs';
@@ -23,6 +28,8 @@ import {createRequire} from 'node:module';
 import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {flatten, clearNodeTransform, transformMesh, getBounds, textureCompress, prune, dedup} from '@gltf-transform/functions';
+
+import {mirrorBackLabel} from './lib/label-mirror.mjs';
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -35,10 +42,16 @@ const ID = 'train-fuel-can';
 const OUT_REL = `assets/models/${ID}.glb`;
 const PROV_REL = `assets/derivatives/${ID}.json`;
 const ALLOW = path.join(root, 'tools/release/public-inputs.json');
-/** Real height (m): a 20-litre jerrycan, handle and spout included (Beta's request: ~0.34 x 0.47 x 0.17 m). */
-const H_M = 0.47;
-/** Real depth (m) of the body: the depth fit (z only) after the uniform height scale. */
-const DEPTH_M = 0.165;
+/** Real height (m), handle and spout included. User feedback (task studio-beta-fuel-feedback-20261106-064128-01): "Smaller fuel cans
+ *  roughly med-pack sized" -> a ~5-litre can, about the med kit's 0.32 x 0.22 x 0.14 m (was a 0.47 m 20-litre jerrycan). */
+const H_M = 0.30;
+/** Real depth (m) of the body: the depth fit (z only) after the uniform height scale (kept at the 20 l can's 0.35 x its height). */
+const DEPTH_M = 0.105;
+/** The BACK-LABEL REPAIR region (final frame, metres; measured on the back's stencil at this size: letters x -0.048 .. +0.059,
+ *  y 0.193 .. 0.231 m): a box symmetric about the can's mirror plane x = 0 (the body is centred there: +-0.1008 m) with >= 5 mm margin,
+ *  smoothstep-feathered over 6 mm outside. Deliberately NOT the whole panel: the X-ridge geometry is only ~0.5 mm symmetric and the
+ *  shoulder under the spout is asymmetric, so mirroring more would double edges; the rest of the back keeps its own Meshy wear. */
+const LABEL = {halfWidth: 0.064, y0: 0.186, y1: 0.238, feather: 0.006, axisX: 0};
 const TEX_PX = 1024;
 const sha = b => crypto.createHash('sha256').update(b).digest('hex');
 
@@ -72,6 +85,10 @@ for (const m of r.listMeshes()) transformMesh(m, M);
 r.listMeshes().forEach((m, i) => m.setName(i ? `${ID}-${i}` : ID));
 r.listNodes().filter(n => n.getMesh()).forEach((n, i) => n.setName(i ? `${ID}-${i}` : ID));
 r.listMaterials().forEach((m, i) => m.setName(i ? `${ID}-${i}` : ID));
+// user feedback "Fuel spelled in reverse on the back side": un-mirror the back's own stencil (lib/label-mirror.mjs) on the decoded
+// full-resolution Meshy maps, before the normal re-encode; texels outside the feathered label region stay exactly as decoded
+const labelRepair = await mirrorBackLabel(doc, sharp, {region: {halfWidth: LABEL.halfWidth, y0: LABEL.y0, y1: LABEL.y1}, axisX: LABEL.axisX, feather: LABEL.feather});
+if (labelRepair.missingSource || labelRepair.texels < 20000) throw new Error(`label repair: ${JSON.stringify(labelRepair)}`);
 await doc.transform(dedup(), prune(), textureCompress({encoder: sharp, targetFormat: 'jpeg', resize: [TEX_PX, TEX_PX], quality: 85}));
 r.getAsset().generator = 'Terminal State tools/asset-pipeline/props/build-train-fuel-can.mjs (glTF-Transform)';
 const glb = Buffer.from(await io.writeBinary(doc));
@@ -93,10 +110,10 @@ const prov = {
   schema: 'terminal-state-derivative-v1',
   id: ID,
   item: 'fuel_can (Beta train fuel system; key / integration chosen at Beta import)',
-  task: 'studio-train-fuel-can-asset-20261106-030724-01 (asset handoff to studio-beta-train-fuel-system-20261106-024923-01)',
+  task: 'studio-train-fuel-can-asset-20261106-030724-01 (asset handoff to studio-beta-train-fuel-system-20261106-024923-01); re-cooked by studio-beta-fuel-feedback-20261106-064128-01 (user feedback: med-kit size, readable back label; no regeneration)',
   approval: 'task-specific user generation approval (sha256 e5442d81e41d064fce89e2f0f3d41bd2637a78dbd45f47a26422694ae5c3b097): one fuel can model, 50 Meshy credits total',
   accepted,
-  route: 'Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded only)',
+  route: 'Codex native image_gen INITIAL concept / conditioning image (straight-on front elevation) -> Meshy T2.5 image-to-3D (smart-topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded; one deterministic texel mirror of the back label, see labelRepair)',
   conditioningImage: codex ? {sha256: intent.request.inputSha256, bytes: codex.files[0].bytes, generator: 'Codex CLI 0.163.0 built-in image_gen (model id not reported)', file: `${TASK_DIR}/${codex.files[0].raw} (raw original, outside Git)`} : null,
   meshy: {
     tool: 'mcp__meshy__meshy_image_to_3d (@meshy-ai/meshy-mcp-server 0.6.6)',
@@ -107,8 +124,18 @@ const prov = {
   source: {file: `${TASK_DIR}/${accept.rawGlb} (raw original, outside Git)`, sha256: accept.rawSha256, bytes: rawBytes.length, triangles: rawTris, extent: ext.map(v => +v.toFixed(4)), textures: rawTex},
   output: {file: `game/public/${OUT_REL}`, url: OUT_REL, sha256: sha(glb), bytes: glb.length, triangles: tris(chk), dims},
   heightM: H_M, depthM: DEPTH_M, scale: +s.toFixed(6), depthFit: +kz.toFixed(4),
+  size: 'a ~5-litre can, med-kit sized (user feedback "Smaller fuel cans roughly med-pack sized"; the med kit item is 0.32 x 0.22 x 0.14 m); previously a 0.47 m 20-litre jerrycan',
   transform: 'uniform scale to the real height, then a z-only depth fit (a single straight-on view carries no depth cue), grounded (min y = 0) and centred on x/z; baked into vertices; no rotation',
-  convention: 'metres at real size, +Y up, front +Z (the stencilled FUEL broad side; Meshy native), the spout / cap at the top, three-bar carry handle on top, grounded (min y = 0), centred on x/z',
+  labelRepair: {
+    reason: 'user feedback "Fuel spelled in reverse on the back side, looks good otherwise": the single-view Meshy texture painted the back (-Z) broad side with the front FUEL stencil seen through the can',
+    method: 'deterministic texel mirror of the back label; Meshy maps otherwise kept (tools/asset-pipeline/props/lib/label-mirror.mjs): every back-facing texel inside the label box takes the bilinear sample of the ORIGINAL map at the mirrored back-panel point (-x, y) (the can is centred and left / right symmetric about x = 0); base colour and metallic-roughness copied, the tangent-space normal re-expressed for the mirrored content (world reflection, three.js / glTF derivative tangent frame); smoothstep feather outside the box; gutter texels nearest a repaired texel padded from it; no generation, no other image used',
+    region: {xHalfWidth: LABEL.halfWidth, y: [LABEL.y0, LABEL.y1], feather: LABEL.feather, mirrorPlaneX: LABEL.axisX, frame: 'final frame (metres), back panel (-Z)'},
+    maps: ['baseColor', 'metallicRoughness', 'normal'],
+    atResolution: labelRepair.maps.baseColor.size,
+    texels: labelRepair.texels, featheredTexels: labelRepair.feathered, gutterTexels: labelRepair.gutter,
+    changedTexels: Object.fromEntries(Object.entries(labelRepair.maps).map(([k, v]) => [k, v.changedTexels])),
+  },
+  convention: 'metres at real size, +Y up, front +Z (the stencilled FUEL broad side; Meshy native; the back -Z broad side carries the same stencil, readable from behind), the spout / cap at the top, three-bar carry handle on top, grounded (min y = 0), centred on x/z',
   textures,
   licence: 'generated for this project under the existing provider accounts; no blanket licence or commercial clearance implied (assets/CREDITS.md)',
 };
@@ -125,3 +152,4 @@ allow.files = [...allow.files.filter(f => !mine.has(f.path)), ...[...mine].map((
 fs.writeFileSync(ALLOW, JSON.stringify(allow, null, 2) + '\n');
 console.log(`${ID}${accepted ? '' : ' (CANDIDATE, not accepted)'}: ${rawTris} tris, ${(rawBytes.length / 1e6).toFixed(2)} MB -> ${(glb.length / 1e6).toFixed(2)} MB (${tris(chk)} tris), dims ${dims.join(' x ')} m, scale ${s.toFixed(4)}`);
 console.log(textures.map(t => `${t.slot} ${t.size?.join('x')} ${t.mime} ${t.bytes} B`).join('\n'));
+console.log(`back-label repair: ${JSON.stringify(labelRepair)}`);
