@@ -1999,109 +1999,234 @@
       "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
     },
     {
+      "path": "assets/derivatives/skyways-d-ar-airhockey-model.json",
+      "bytes": 6494,
+      "sha256": "228ca3012bc32afec3ad67d02b2f531c5bd59a2eaaed870c258f46ae01acd4f2"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ar-claw-model.json",
+      "bytes": 6177,
+      "sha256": "16cdfaccf975b215accae7cb2ad2c51e260b3b68d45142bb57512326101a460e"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ar-pinball-model.json",
+      "bytes": 6200,
+      "sha256": "1597661465339cdb40858a06bf4183e54d77cc86179069fbf5fce754fa1ef1a4"
+    },
+    {
       "path": "assets/derivatives/skyways-d-bk-armchair-model.json",
-      "bytes": 6711,
-      "sha256": "f3f8a3bf00dfd172411c7deb61df4e8bdc5135b1a87df86750002f9f7763d190"
+      "bytes": 6887,
+      "sha256": "8d1e26bab95b133c675b361cb66c035aebd4f5890824f78b596ebabfe61ed5c4"
     },
     {
       "path": "assets/derivatives/skyways-d-bk-bookcase-model.json",
-      "bytes": 6708,
-      "sha256": "90688c37055911ff18fa1cde1126047e447c975f7d73d1d0f35e782dd8bdf1ca"
+      "bytes": 6884,
+      "sha256": "872b9c00492b8d73d1411f8806ef1818549a0e54146b908115a5b8ae7fe98b34"
     },
     {
       "path": "assets/derivatives/skyways-d-bk-stack-model.json",
-      "bytes": 6421,
-      "sha256": "44fdf87d99df1fbee36e3269b3f750661db978098a7b532cd1e857be7a89d94b"
+      "bytes": 6594,
+      "sha256": "a525495b5ad758330342a35b2f08da2864c6ab4133f0faafd47379b08bd9f5e2"
     },
     {
       "path": "assets/derivatives/skyways-d-bk-table-model.json",
-      "bytes": 6978,
-      "sha256": "f9cb14a46e42ec03617106bc562adef78b9c7cb691c67d87f873af18c944f9da"
+      "bytes": 7355,
+      "sha256": "4e8d9102acf0a6e98280c532efc53aa9c31d8cdbaa9d5753d0e0ffb41f88df5c"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-cn-booth-model.json",
+      "bytes": 6135,
+      "sha256": "8c28f21eb5199735cd6ecd60513afa0f1505b7549fff20594064f6418de15d2b"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-cn-popcorn-model.json",
+      "bytes": 6464,
+      "sha256": "a860a49db6fa1a631c62b6467643437a9faccf22d8946cc41f9b097c9e6b7a28"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-cn-seats-model.json",
+      "bytes": 6724,
+      "sha256": "da7def2f4ec9482d33257e213e9555a1c0885c083125767e3f11405eabf25e62"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ds-bed-model.json",
+      "bytes": 6861,
+      "sha256": "7ed9f1704a1bce63a183c34b93ef60f84d4e92f9b63729e85943a3258229da7f"
     },
     {
       "path": "assets/derivatives/skyways-d-ds-eggchair-model.json",
-      "bytes": 6738,
-      "sha256": "8515814521c66a8f88a77b4dea65ba9ca7a5f5eabc016d6cf62a26016c1190ac"
+      "bytes": 6914,
+      "sha256": "65c13402e1b52790ea23cfe4d96a6d40c82637d7c95f860017cd56bb72e70fb5"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ds-lamp-model.json",
+      "bytes": 6201,
+      "sha256": "9fb7d681fdab408f78b7dcdc477071df3d3ca12b762967fb3f6f78d9a4facf97"
     },
     {
       "path": "assets/derivatives/skyways-d-ds-sofa-model.json",
-      "bytes": 6686,
-      "sha256": "daf6eaa59e916e1947f46c1f2c58bb58c853fa5555572deeecf154df88ce3205"
+      "bytes": 6858,
+      "sha256": "dbede23c0d501afb0e0caaabc9f60a6fb458769380a67e2f47832b3de5220f1a"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ds-table-model.json",
+      "bytes": 6440,
+      "sha256": "aeb7936e62ce5d7afeb22cf2f6871d678aa55f242a1aa123bf6423c24395452a"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-gd-barrow-model.json",
+      "bytes": 6471,
+      "sha256": "43c993703a52d54a41205a927343e8b92c214870aae98ff4277f470f69bab3d6"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-gd-bench-model.json",
+      "bytes": 6430,
+      "sha256": "909ccd12fe270bc1d2ce3d208b0684c982d1f4e390c4aef9c3abc72eef1f2a79"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-gd-palm-model.json",
+      "bytes": 6160,
+      "sha256": "3660ed76e4b9bbdd2391e3dfdec6b7f0271a68c02bf5e12cbd1b78ca1352c505"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-gd-pot-model.json",
+      "bytes": 6143,
+      "sha256": "a0e9bbc34bf8108845f541d9607abe9587d681b670b91a63e78cd6bf51073973"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hb-diorama-model.json",
+      "bytes": 6660,
+      "sha256": "dfe1fb12379abb5525210f8a366336bbc5ef85197ef5d26051cd7048eee0a5a3"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hb-kits-model.json",
+      "bytes": 6842,
+      "sha256": "3c51adbedb5e22f2f55ad4181c3935ff46e575b46949bd847948669689259988"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hb-robot-model.json",
+      "bytes": 6171,
+      "sha256": "4b894869d05e6c4f9b8c7bc6b09644151aec74ea4d6d6aa7444c479dd65df03f"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hb-vitrine-model.json",
+      "bytes": 7096,
+      "sha256": "2c57cd4e9ba4d208951b010e2a497902e7cd8cf0f727795d8b78e90d4146f7d7"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hk-goalie-model.json",
+      "bytes": 6457,
+      "sha256": "da0ef4effb2a4927546342137c9fa191e2e4e4fe09559e13737651e726941ddc"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-hk-net-model.json",
+      "bytes": 6421,
+      "sha256": "469796087e05d98088038226f358b7b57e0732640e34bfaef1bbd0c21dfa53ee"
     },
     {
       "path": "assets/derivatives/skyways-d-lm-clock-model.json",
-      "bytes": 6197,
-      "sha256": "c3b8e4077e09771ab1cea4b5f8cc838a1c94dd5879ea27840f2944842e8fccf7"
+      "bytes": 6370,
+      "sha256": "087bf75a2b544c0c0418d7888d484418099dae9bc286f756222824bdff344dac"
     },
     {
       "path": "assets/derivatives/skyways-d-lm-dino-model.json",
-      "bytes": 6595,
-      "sha256": "293e5ec5ca3056a079430d578614ff8c13ec2214e3058ddde6145b9cf11b16b1"
+      "bytes": 6767,
+      "sha256": "016beeefb314f45c0f2867e1479089a0ea08717f433ca378fe8277ab042b89d8"
     },
     {
       "path": "assets/derivatives/skyways-d-lm-fountain-model.json",
-      "bytes": 6504,
-      "sha256": "ad00362a8b87d69f1fbb975d2e8de2e0c9c313c1b60f69f7606f19ba3374f6b4"
+      "bytes": 6903,
+      "sha256": "ee8ec4d6e1ad21a1f61b2552d85c3b32227851e5e7dfaf96582b1fdf8463a29c"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-geese-model.json",
+      "bytes": 6720,
+      "sha256": "04b9238a2611f23835021677faf2d3ef2b2a067c2d06beeb0ad350d7b29a7c33"
     },
     {
       "path": "assets/derivatives/skyways-d-lm-orrery-model.json",
-      "bytes": 6185,
-      "sha256": "676b73a97a9df2d485483dc91a9fb38bd504687eed0682f714252e1228bb80e6"
+      "bytes": 6359,
+      "sha256": "34cd60be21b063931c8f89c0b094c2c00e9e7f61580a528189f1f9b13d89fa1f"
     },
     {
       "path": "assets/derivatives/skyways-d-lm-tree-model.json",
-      "bytes": 6231,
-      "sha256": "97d17b58105c5066c71bf26881450e162774397643e61a93a1bc402672ac189e"
+      "bytes": 6403,
+      "sha256": "87043fe2a17aab3d868e66ace1cd96b3f5686bb4d7e40974ea099e2daef96083"
     },
     {
       "path": "assets/derivatives/skyways-d-mu-amp-model.json",
-      "bytes": 6143,
-      "sha256": "a755d59c4b405b3dc9a7081ef1d0141a6380844af1f8111db3a40fa01ff26ed6"
+      "bytes": 6627,
+      "sha256": "9f4386096068de142f987c576691b670adf7ce0295f0f090a712afe3a4591e20"
     },
     {
       "path": "assets/derivatives/skyways-d-mu-bins-model.json",
-      "bytes": 8098,
-      "sha256": "a9844391b31cfb5bab9afea130ef1aa31b9b2f4dd6a088bd1e9beecd6c79a774"
+      "bytes": 8270,
+      "sha256": "bafb2afaea1df1b0ec2ff59f106aac5d5b212cb509aecf26a2659bfd179b1000"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-crate-model.json",
+      "bytes": 6420,
+      "sha256": "215fa613f5e8a5676c00bed4048bc04c79c6a57c49f78c064223ba8ca493896b"
     },
     {
       "path": "assets/derivatives/skyways-d-mu-drums-model.json",
-      "bytes": 6205,
-      "sha256": "8b136764b14a9c4bf58db48759a781e7da9482317c27b0e429bb75ab8ed7e981"
+      "bytes": 6378,
+      "sha256": "035f7a714f28ef8d6502daa47df9777c4e9311f20aae7365ae48022c5b2e1af9"
     },
     {
       "path": "assets/derivatives/skyways-d-mu-guitar-model.json",
-      "bytes": 6164,
-      "sha256": "db50c48f65c704060f8126dbd8446cac496c6a01098f69d6d19e1b912a336699"
+      "bytes": 6338,
+      "sha256": "4824205fd6d9023b10a89c8d21cbf7b3919f23d0d9a5d4ef263ff61ce8df5150"
     },
     {
       "path": "assets/derivatives/skyways-d-mu-piano-model.json",
-      "bytes": 6142,
-      "sha256": "0029e9aca26a370ed53c4d4def1c394ed6846c587d4c5533fe6a892fe20d842d"
+      "bytes": 6315,
+      "sha256": "2ae7dcaf4f8e1b1c6391b50b48a12c86d4f699aec9e836adbe5d18c429cb08b8"
     },
     {
       "path": "assets/derivatives/skyways-d-of-backpack-model.json",
-      "bytes": 6180,
-      "sha256": "b633a68ee31e9ed8eb03b40549217f77fd16d147b6c61f53090a7580b1bea5d6"
+      "bytes": 6356,
+      "sha256": "7a07105b540772bca7f2a0be8dc493e3fc52d17b712500d45fa3c6ecdf689631"
     },
     {
       "path": "assets/derivatives/skyways-d-of-campchair-model.json",
-      "bytes": 6491,
-      "sha256": "a8aa6c78c26475cd799041249b746ec9f7acace5c2c91a600d03cfa5afad5fe1"
+      "bytes": 6668,
+      "sha256": "47d7264adaa243b3be05df4bdfc4bf1ae05dbc92105ab6b26a098696a2a8083f"
     },
     {
       "path": "assets/derivatives/skyways-d-of-canoe-model.json",
-      "bytes": 6328,
-      "sha256": "ff977d391331c181cf86c0f2c7fd4d134876744b5330dcaefcdffb46fa8b350b"
+      "bytes": 6793,
+      "sha256": "925315c5725d5a7beebd633c1737f5e5ded7e1fed573c28171b7d9f014b527da"
     },
     {
       "path": "assets/derivatives/skyways-d-of-lantern-model.json",
-      "bytes": 6439,
-      "sha256": "0b34bbf9a7e0e6ed8e8886e5a04dcc4f573820ac0f519a0e84f06103bea7bdc2"
+      "bytes": 6614,
+      "sha256": "46ae30981d09ec5d29f68be7335e2dc96d94c176f006e6813ad9f119deacb54b"
     },
     {
       "path": "assets/derivatives/skyways-d-of-tent-model.json",
-      "bytes": 6136,
-      "sha256": "6fdc4989d9255b0ee302b9a28649559177b6acfe6e21f80bffa1f5b7b4a46fbd"
+      "bytes": 6308,
+      "sha256": "2260271a677eed09206f18e402b45109f1238de8fa4b661e487a493656b62cfa"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-sc-globe-model.json",
+      "bytes": 6419,
+      "sha256": "38c763ac3b1f0798eb75e405a7fb111f1162875a81290361581435290b0d397a"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-sc-mobile-model.json",
+      "bytes": 6673,
+      "sha256": "68f08438b13561a7f78c9a1e20ada91db2aea1edd9eb8852d858959f9138128c"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-sc-rocket-model.json",
+      "bytes": 6141,
+      "sha256": "e467f86399d352ff437078b972938bbb68c1e61189c2162a78cb28af03f25fd5"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-sc-telescope-model.json",
+      "bytes": 6548,
+      "sha256": "72e83091003452611cb13b3f5e9ec2687a0d519067e58871203479985838d46f"
     },
     {
       "path": "assets/derivatives/skyways-mascot-poses.json",
@@ -4014,6 +4139,21 @@
       "sha256": "8cae4e5e932debda14b2f041bf47aff986fe5dae154ae4ef3c6641196a546e26"
     },
     {
+      "path": "assets/models/skyways-d-ar-airhockey.glb",
+      "bytes": 655960,
+      "sha256": "21557d404363577ee0edfc4b66f70854b14380650523080281fc54efdfddb77a"
+    },
+    {
+      "path": "assets/models/skyways-d-ar-claw.glb",
+      "bytes": 754848,
+      "sha256": "49b39b6f6a3a4048d4274ab1fd9b6e33487097400c687d929f87459897366fa5"
+    },
+    {
+      "path": "assets/models/skyways-d-ar-pinball.glb",
+      "bytes": 791844,
+      "sha256": "14fc17b5a7d0c2c3447df2ecfb8a686955e854d7df699f16b825d5d5a956213d"
+    },
+    {
       "path": "assets/models/skyways-d-bk-armchair.glb",
       "bytes": 576016,
       "sha256": "4b8b87ae86ee7662c53f057ed4a3ef6d654b3f0421a0b992f0d2735753f0619d"
@@ -4030,8 +4170,28 @@
     },
     {
       "path": "assets/models/skyways-d-bk-table.glb",
-      "bytes": 485048,
-      "sha256": "7dc3fcd1fc0140ccca8929099fef2b69291be64e380536af1eb3dec502e8273c"
+      "bytes": 485076,
+      "sha256": "06f6c698762756fd735460ee9d0888e2d24697000e4e2e12c6cda467bb57cc6c"
+    },
+    {
+      "path": "assets/models/skyways-d-cn-booth.glb",
+      "bytes": 566512,
+      "sha256": "3f7c71e926cd7a8db64559e9165c75f8c94ee5bfb1d0f2fe4d86fd26420ae4dc"
+    },
+    {
+      "path": "assets/models/skyways-d-cn-popcorn.glb",
+      "bytes": 764972,
+      "sha256": "7bd03fc6a38ef589139c5fdd3368d4459d034c58882674a268994d6613c339f4"
+    },
+    {
+      "path": "assets/models/skyways-d-cn-seats.glb",
+      "bytes": 657832,
+      "sha256": "31eab59e2954892489afed5b687863aa09475eb157ad64b8512672f51c47bb3c"
+    },
+    {
+      "path": "assets/models/skyways-d-ds-bed.glb",
+      "bytes": 636908,
+      "sha256": "92dad9053613befe26eb1ddec4c612408eda131baba58e632bfc3f2b8f991b3c"
     },
     {
       "path": "assets/models/skyways-d-ds-eggchair.glb",
@@ -4039,9 +4199,69 @@
       "sha256": "5ae3305acb8ac42fdb189dcfcbbc84e8b8e82b9bb85dbab6efd85e655cb4cab2"
     },
     {
+      "path": "assets/models/skyways-d-ds-lamp.glb",
+      "bytes": 450516,
+      "sha256": "d02557898579574038000c4c6d87251785ee1bc43e3c36bd9afaf0583ca670aa"
+    },
+    {
       "path": "assets/models/skyways-d-ds-sofa.glb",
       "bytes": 513128,
       "sha256": "c94a9c2fee9a6aaa75764c7ce607b84231c59cf4adf725286e3b6cc6a76ee777"
+    },
+    {
+      "path": "assets/models/skyways-d-ds-table.glb",
+      "bytes": 534836,
+      "sha256": "130b5147a8050d89ae211bf816e7ca62c6d5a4da63a8473cddada177a5df2878"
+    },
+    {
+      "path": "assets/models/skyways-d-gd-barrow.glb",
+      "bytes": 609824,
+      "sha256": "3d318c179ea1457344b6277a8dfb49dc73667602c5ff36fdd2eb2e68aa26bc4c"
+    },
+    {
+      "path": "assets/models/skyways-d-gd-bench.glb",
+      "bytes": 520856,
+      "sha256": "58577d0eb581cd31aae18b0568265c6bd5080c9fa69bfcf6e837b537a54be47f"
+    },
+    {
+      "path": "assets/models/skyways-d-gd-palm.glb",
+      "bytes": 810832,
+      "sha256": "182112a55cbf45112820ebd3118ca8ca4270d9ab7143c1383f9b9637d5c740ce"
+    },
+    {
+      "path": "assets/models/skyways-d-gd-pot.glb",
+      "bytes": 346280,
+      "sha256": "be569823e60b82221f92170940bb2326ce925d235bae185d353a44980d8f675a"
+    },
+    {
+      "path": "assets/models/skyways-d-hb-diorama.glb",
+      "bytes": 1547004,
+      "sha256": "a1e10e85a8b0c7571408785b54da7c64083183b4be08f98811fc0be69bac156d"
+    },
+    {
+      "path": "assets/models/skyways-d-hb-kits.glb",
+      "bytes": 180668,
+      "sha256": "6c16926fe5c3ba4b1493a235620666f1a5607500421d1c0af0f83f225c7212bb"
+    },
+    {
+      "path": "assets/models/skyways-d-hb-robot.glb",
+      "bytes": 605696,
+      "sha256": "4890a2f86a2b55038d13527d4911b6896cceb9254204e77bdba4781a880c5e66"
+    },
+    {
+      "path": "assets/models/skyways-d-hb-vitrine.glb",
+      "bytes": 645128,
+      "sha256": "64d67419c72d68434a8130303f3932fe83c70e4e9e642f9542ba623c0bfed72e"
+    },
+    {
+      "path": "assets/models/skyways-d-hk-goalie.glb",
+      "bytes": 971940,
+      "sha256": "86912a62a7b87faed4413fa08a1d9229230149b83d82534aa0b4e3f3d39e7186"
+    },
+    {
+      "path": "assets/models/skyways-d-hk-net.glb",
+      "bytes": 733600,
+      "sha256": "2392c570a6ec65e51d61a4d713c5947d34e5bbb082763be064152bd5d96d8959"
     },
     {
       "path": "assets/models/skyways-d-lm-clock.glb",
@@ -4056,7 +4276,12 @@
     {
       "path": "assets/models/skyways-d-lm-fountain.glb",
       "bytes": 2485468,
-      "sha256": "85c1819475e14cbf1e4fe1c3832f4e8238156900bcb7e1f0ee230e6e135e91cc"
+      "sha256": "c4ff4dcbf9cbfe36f5bafafe4bab837dfb24dbbf22d074f47b449690456694db"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-geese.glb",
+      "bytes": 2426976,
+      "sha256": "63af4f167d3f4098cb7f8451913bd7137ad0ac79fb23528b9cdb94037eff76e4"
     },
     {
       "path": "assets/models/skyways-d-lm-orrery.glb",
@@ -4071,12 +4296,17 @@
     {
       "path": "assets/models/skyways-d-mu-amp.glb",
       "bytes": 524080,
-      "sha256": "2060e50f3f96ca5a884856cb0cfb2485ebe6bd02bc92a73c02793174cd5eb0cd"
+      "sha256": "b89810d3c7e192f283fa0c162bc8d8e24a0eb7f089f7562e9252769a3b9b0a8b"
     },
     {
       "path": "assets/models/skyways-d-mu-bins.glb",
       "bytes": 549904,
       "sha256": "00e840aed6df301f7dfbab4a244051e70bf973d7f49607a2c9854c6127e7d688"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-crate.glb",
+      "bytes": 328288,
+      "sha256": "9c1a8a35b46fe96f22313ff624c7e4ffea1d8847cc04151fc34590c2d532f86a"
     },
     {
       "path": "assets/models/skyways-d-mu-drums.glb",
@@ -4106,7 +4336,7 @@
     {
       "path": "assets/models/skyways-d-of-canoe.glb",
       "bytes": 614964,
-      "sha256": "f493c676539d592f6c8b00c0b2f4926b8fa15eb18ef077a01b968e02ce341d2b"
+      "sha256": "268513d86aa1b3643def4d4b4d64ab623664959bf685230cf27463ddafab2c5b"
     },
     {
       "path": "assets/models/skyways-d-of-lantern.glb",
@@ -4117,6 +4347,26 @@
       "path": "assets/models/skyways-d-of-tent.glb",
       "bytes": 645852,
       "sha256": "e2c2ee0693b0c3df01d9356c231cc85a1d17cc3a62237fa57e733c1ba6538f84"
+    },
+    {
+      "path": "assets/models/skyways-d-sc-globe.glb",
+      "bytes": 688488,
+      "sha256": "c0859e3d75e5458332499f86372debd1e01f421e80275bb2af92e9b8e8b0a3f4"
+    },
+    {
+      "path": "assets/models/skyways-d-sc-mobile.glb",
+      "bytes": 810688,
+      "sha256": "e4f9e5770fbd8cd79f9f08cdd8719260ae3bf1f38ff03dedc626bde71aeaadd4"
+    },
+    {
+      "path": "assets/models/skyways-d-sc-rocket.glb",
+      "bytes": 701700,
+      "sha256": "097bd2ebb17f4d8a8c9ad5291622e7214f2e0c58d1e8405f30e7216989ca4f0f"
+    },
+    {
+      "path": "assets/models/skyways-d-sc-telescope.glb",
+      "bytes": 684496,
+      "sha256": "0e35c028cd386857bdc8fd6227b190f65641b283987bf235b25259342a7ea6ff"
     },
     {
       "path": "assets/models/skyways-mascot-poses.glb",

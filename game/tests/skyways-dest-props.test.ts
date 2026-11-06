@@ -37,6 +37,11 @@ const SPEC: [string, 'h' | 'w' | 'l' | 'd', number, number, Tier][] = [
   ['sc-telescope', 'h', 1.7, 6000, 'fixture'], ['sc-globe', 'h', 1.2, 8000, 'fixture'], ['sc-rocket', 'h', 2.2, 8000, 'fixture'], ['sc-mobile', 'w', 3.0, 10000, 'fixture'],
   ['hk-net', 'w', 1.83, 6000, 'fixture'], ['hk-goalie', 'h', 1.95, 12000, 'fixture'],
 ];
+/** The lead's fit decisions replacing the brief's axis (DECISIONS.md): fountain under a 4.3 m court, display table by height, the
+ * vitrine re-scoped to its airship display model (by length). */
+const FIT: Record<string, ['h' | 'w' | 'l' | 'd', number]> = {'lm-fountain': ['w', 4.4], 'bk-table': ['h', 1.1], 'hb-vitrine': ['l', 0.95]};
+/** The lead-approved depth squashes (z, metres): the canoe's beam, the amp's depth. */
+const SQUASH: Record<string, number> = {'of-canoe': 0.95, 'mu-amp': 0.4};
 /** Map sizes [base colour, metallicRoughness, normal] px by tier (the brief). */
 const TEX: Record<Tier, [number, number, number]> = {hero: [2048, 1024, 1024], fixture: [1024, 512, 512], small: [512, 512, 512]};
 const AXIS = {h: 1, w: 0, l: 0, d: 2} as const;
@@ -109,12 +114,18 @@ describe('Skyways destination kit (lane KITS)', () => {
       expect(Math.abs(b.min[1])).toBeLessThan(1e-4);
       expect(Math.abs(b.min[0] + b.max[0])).toBeLessThan(1e-3);
       expect(Math.abs(b.min[2] + b.max[2])).toBeLessThan(1e-3);
-      expect(dims[AXIS[axis]]).toBeCloseTo(m, 3);
-      if (axis === 'l') expect(dims[0]).toBeGreaterThan(dims[2]);
-      // triangle budget (the source mesh is kept only when the raw was already within it, or the seams stalled the collapse — recorded)
+      const [fitAxis, fitM] = FIT[id] ?? [axis, m];
+      expect(dims[AXIS[fitAxis]]).toBeCloseTo(fitM, 3);
+      if (FIT[id]) expect(prov.fit).toMatchObject({axis: fitAxis, size: fitM, override: {briefAxis: axis, briefSize: m}});
+      if (fitAxis === 'l') expect(dims[0]).toBeGreaterThan(dims[2]);
+      if (SQUASH[id]) { expect(dims[2]).toBeCloseTo(SQUASH[id], 3); expect(prov.fit.squash).toMatchObject({axis: 'z', to: SQUASH[id]}); } else expect(prov.fit.squash).toBeUndefined();
+      // triangle budget (the source mesh is kept only when the raw was already within it, or the seams stalled the collapse — recorded);
+      // a lead-approved local mesh separation removes whole parts first
       const tris = prim.getIndices()!.getCount() / 3;
+      const removed = prov.separation?.removedTriangles ?? 0;
       if (prov.simplify.applied) expect(tris).toBeLessThanOrEqual(budget);
-      else expect(tris).toBe(prov.source.triangles - prov.weld.degenerateTrianglesDropped);
+      else expect(tris).toBe(prov.source.triangles - prov.weld.degenerateTrianglesDropped - removed);
+      if (prov.separation) expect(prov.separation.keptTriangles).toBe(prov.source.triangles - prov.weld.degenerateTrianglesDropped - removed);
       if (tris > budget) expect(prov.simplify.reason).toMatch(/stall|crumpled/);
       // the material: Meshy's base colour / metallic-roughness / normal maps kept (JPEG at the tier's sizes), opaque
       const mats = root.listMaterials();
@@ -219,5 +230,26 @@ describe('Skyways destination kit (lane KITS)', () => {
       expect(topAt(P, N, I, 0, 0)).toBeLessThan(bins.backY!);
     }
     for (const k of ['skyways_d_lm_geese', 'skyways_d_of_canoe', 'skyways_d_sc_mobile']) if (!R[k].planned) expect(R[k].hangY, k).toBe(R[k].h);
+    const dio = R.skyways_d_hb_diorama;
+    if (!dio.planned) {
+      // the table top under the scenery: an up-facing crossing at topY under most of the layout, with the scenery above it
+      const {P, N, I} = await load(dio.url);
+      let at = 0, n = 0;
+      for (const fx of [-0.3, 0, 0.3]) for (const fz of [-0.3, 0, 0.3]) {
+        n++;
+        const hits = column(P, N, I, fx * dio.w, fz * dio.d);
+        if (hits.some(h => h.ny > 0.3 && Math.abs(h.y - dio.topY!) < 0.01)) at++;
+      }
+      expect(at).toBe(n);
+      expect(dio.topY!).toBeGreaterThan(0.75);
+      expect(dio.topY!).toBeLessThan(dio.h - 0.3);
+    }
+    // flat tops (tables / benches / the air-hockey rink / the bed): the top-most crossing at the centre sits at topY
+    for (const k of ['skyways_d_ds_table', 'skyways_d_gd_bench', 'skyways_d_ar_airhockey', 'skyways_d_ds_bed']) {
+      const t = R[k];
+      if (t.planned) continue;
+      const {P, N, I} = await load(t.url);
+      expect(Math.abs(topAt(P, N, I, 0.1 * t.w, 0.05 * t.d) - t.topY!), k).toBeLessThan(0.03);
+    }
   });
 });

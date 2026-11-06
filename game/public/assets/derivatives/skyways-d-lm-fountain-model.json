@@ -18,7 +18,7 @@
   "userGenerationApprovalSha256": "fff848e763a671bbab6c963cd8078a7485846f7fdb02186f6e1cb33aa33816d1",
   "summary": "the user's Skyways destinations generation approval: a NEW 895-credit Meshy T2.5 ledger (caps 59 attempts / 96 paid POSTs); Codex concept images uncapped but recorded; first acceptable result per piece"
  },
- "accepted": false,
+ "accepted": true,
  "route": "Codex native image_gen INITIAL concept image (straight-on elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded / downsized only; no re-texture, projection or hand-painted replacement)",
  "conditioningImage": {
   "codexCall": 304,
@@ -52,13 +52,19 @@
     "posted": 47,
     "status": 70,
     "raw": 71,
-    "accept": null
+    "accept": 311
    },
    "codexLines": {
     "intent": 8,
     "result": 9
    },
-   "accept": null
+   "accept": {
+    "event": "note",
+    "kind": "acceptance",
+    "entry": "lm-fountain",
+    "see": "qa/kits/ACCEPT-1.md, ACCEPT-b2.md, DECISIONS.md",
+    "t": "2026-11-06T17:41:03.772571Z"
+   }
   }
  },
  "source": {
@@ -128,34 +134,39 @@
   "url": "assets/models/skyways-d-lm-fountain.glb",
   "file": "game/public/assets/models/skyways-d-lm-fountain.glb",
   "bytes": 2485468,
-  "sha256": "85c1819475e14cbf1e4fe1c3832f4e8238156900bcb7e1f0ee230e6e135e91cc",
+  "sha256": "c4ff4dcbf9cbfe36f5bafafe4bab837dfb24dbbf22d074f47b449690456694db",
   "triangles": 29999,
   "vertices": 31461,
   "dims": [
-   5.2,
-   4.5547,
-   5.1973
+   4.4,
+   3.8539,
+   4.3977
   ],
   "min": [
-   -2.6,
+   -2.2,
    0,
-   -2.598665
+   -2.19887
   ],
   "max": [
-   2.6,
-   4.554662,
-   2.598665
+   2.2,
+   3.853945,
+   2.19887
   ]
  },
  "fit": {
   "axis": "w",
   "kind": "the full width (x)",
-  "size": 5.2,
-  "scale": 5.46133,
+  "size": 4.4,
+  "scale": 4.621125,
+  "override": {
+   "briefAxis": "w",
+   "briefSize": 5.2,
+   "why": "lead decision (task qa/kits/DECISIONS.md, recorded in the ledger): fit by WIDTH 4.4 m so it stands ~3.85 m high, under a 4.3 m street-level lobby court"
+  },
   "translate": [
-   0.006666,
-   2.286664,
-   0.008001
+   0.00564,
+   1.93487,
+   0.00677
   ],
   "turnDegY": 0,
   "measuredOn": "the welded (and simplified) mesh that ships",

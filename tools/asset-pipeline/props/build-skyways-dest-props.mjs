@@ -62,10 +62,13 @@ const TEX = {hero: [2048, 1024, 1024], fixture: [1024, 512, 512], small: [512, 5
 
 /**
  * The 46 pieces (gen/assets.json: n, id, size axis / metres, triangle budget, tier — checked at build time) + the lead's planned
- * placeholder bounds [w, h, d] (kept for unbuilt rows) + what the acceptance review decided: `turn` (degrees about +Y applied to the
- * raw before the fit; + = counter-clockwise seen from above), `front` (the reviewed front +Z convention; null = not reviewed yet: never
- * built), `measure` (the registry extras), `role`.
+ * placeholder bounds [w, h, d] (kept for unbuilt rows) + what the acceptance review decided (qa/kits/ACCEPT-*.md, DECISIONS.md):
+ * `front` (the reviewed front +Z convention; null = not reviewed yet: never built), `turn` (degrees about +Y applied to the raw
+ * before the fit; + = counter-clockwise seen from above), `fit` (a lead-decided fit axis / size replacing the brief's), `squash` (a
+ * lead-approved depth squash to `z` metres), `clean` (lead-approved local mesh separation), `skipTasks` (raws never used for this
+ * row), `measure` (the registry extras), `role`.
  */
+const LEAD = 'lead decision (task qa/kits/DECISIONS.md, recorded in the ledger)';
 const ROWS = [
   {n: 301, id: 'lm-clock', axis: 'h', m: 5.6, tris: 30000, tier: 'hero', planned: [1.6, 5.6, 1.6], role: 'Clock Court landmark: cast-iron clock tower on a stone plinth',
     front: 'front +Z = the main dial (dials also on the back and right sides)'},
@@ -73,22 +76,26 @@ const ROWS = [
     front: 'turned -90 deg about Y (Meshy delivered the long axis along Z, head at +Z): long axis X, HEAD at -X, the concept side elevation faces +Z'},
   {n: 303, id: 'lm-tree', axis: 'h', m: 7.0, tris: 30000, tier: 'hero', planned: [5.6, 7.0, 5.6], role: 'Fig Tree Court landmark: indoor fig in a raised round planter with a slatted ring bench',
     front: 'front +Z = the concept view (round planter and ring bench, the same all round)'},
-  {n: 304, id: 'lm-fountain', axis: 'w', m: 5.2, tris: 30000, tier: 'hero', planned: [5.2, 2.6, 5.2], role: 'Fountain Court landmark: dry three-tier stone fountain in a round basin',
-    front: 'front +Z = the concept view (round, the same all round)'},
-  {n: 305, id: 'lm-geese', axis: 'w', m: 7.0, tris: 30000, tier: 'hero', planned: [7.0, 3.0, 4.0], measure: ['hangY'], role: 'Flight Court landmark: suspended bronze flock of Canada geese',
-    front: null},
+  {n: 304, id: 'lm-fountain', axis: 'w', m: 5.2, tris: 30000, tier: 'hero', planned: [4.4, 3.85, 4.4],
+    fit: {axis: 'w', m: 4.4, why: `${LEAD}: fit by WIDTH 4.4 m so it stands ~3.85 m high, under a 4.3 m street-level lobby court`},
+    role: 'Fountain Court landmark: dry three-tier stone fountain in a round basin', front: 'front +Z = the concept view (round, the same all round)'},
+  {n: 349, id: 'lm-geese', axis: 'w', m: 7.0, tris: 30000, tier: 'hero', planned: [7.0, 3.0, 4.0], measure: ['hangY'],
+    role: 'Flight Court landmark: suspended bronze flock of Canada geese in a V on one solid beam, hung from two rods',
+    front: 'front +Z = the concept view (the V seen from the front; the lead goose low at the centre); natural up kept for hanging (the rod tops = the hanging points)'},
   {n: 306, id: 'lm-orrery', axis: 'h', m: 3.0, tris: 25000, tier: 'hero', planned: [2.0, 3.0, 2.0], role: 'Orrery Court landmark: brass armillary sphere on a stone column',
     front: 'front +Z = the concept view (the meridian ring faces +Z)'},
   {n: 307, id: 'bk-bookcase', axis: 'h', m: 2.4, tris: 8000, tier: 'fixture', planned: [1.6, 2.4, 0.45], measure: ['shelfY'], role: 'books: tall oak bookcase (open shelves, closed back)',
     front: 'front +Z = the open shelves (the closed back panel is at -Z)'},
-  {n: 308, id: 'bk-table', axis: 'w', m: 1.5, tris: 6000, tier: 'fixture', planned: [1.5, 1.1, 1.5], measure: ['tiers'], role: 'books: three-tier round display table',
-    front: 'front +Z = the concept view (round, the same all round)'},
+  {n: 308, id: 'bk-table', axis: 'w', m: 1.5, tris: 6000, tier: 'fixture', planned: [1.5, 1.1, 1.5], measure: ['tiers'],
+    fit: {axis: 'h', m: 1.1, why: `${LEAD}: fit by HEIGHT 1.1 m (the brief's w 1.5 m stood it 1.33 m high)`},
+    role: 'books: three-tier round display table', front: 'front +Z = the concept view (round, the same all round)'},
   {n: 309, id: 'bk-armchair', axis: 'h', m: 1.1, tris: 8000, tier: 'fixture', planned: [0.9, 1.1, 0.85], measure: ['seatY'], role: 'books: green leather wingback armchair',
     front: 'front +Z = the seat (the wingback is at -Z)'},
   {n: 310, id: 'bk-stack', axis: 'w', m: 0.32, tris: 3000, tier: 'small', planned: [0.32, 0.22, 0.24], role: 'books: loose stack of six old hardback books',
     front: 'front +Z = the concept view (the stack read from the side)'},
-  {n: 311, id: 'of-canoe', axis: 'l', m: 5.0, tris: 10000, tier: 'fixture', planned: [5.0, 0.7, 0.95], measure: ['hangY'], role: 'outfitter: red canvas canoe (hung overhead)',
-    front: 'front +Z = the concept side elevation; long axis X (symmetric bow / stern); hull keel down (natural up kept for hanging)'},
+  {n: 311, id: 'of-canoe', axis: 'l', m: 5.0, tris: 10000, tier: 'fixture', planned: [5.0, 0.7, 0.95], measure: ['hangY'],
+    squash: {z: 0.95, why: `${LEAD}: Meshy's beam read 1.73 m at the 5 m length (a real canoe ~0.9 m)`},
+    role: 'outfitter: red canvas canoe (hung overhead)', front: 'front +Z = the concept side elevation; long axis X (symmetric bow / stern); hull keel down (natural up kept for hanging)'},
   {n: 312, id: 'of-tent', axis: 'w', m: 2.1, tris: 8000, tier: 'fixture', planned: [2.1, 1.25, 2.1], role: 'outfitter: pitched dome tent with guy lines and pegs',
     front: 'front +Z = the open door'},
   {n: 313, id: 'of-backpack', axis: 'h', m: 0.8, tris: 5000, tier: 'small', planned: [0.45, 0.8, 0.3], role: 'outfitter: expedition backpack with a bedroll',
@@ -99,42 +106,69 @@ const ROWS = [
     front: 'front +Z = the seat (the backrest is at -Z; the cup holder on the -X arm)'},
   {n: 316, id: 'mu-bins', axis: 'w', m: 1.8, tris: 6000, tier: 'fixture', planned: [1.8, 0.95, 0.75], measure: ['bins'], role: 'music: record bin rack (twelve open compartments in two rows on a slope)',
     front: 'front +Z = the browsing side (the compartments slope up from the front lip to the back rim; the closed back panel is at -Z)'},
-  {n: 348, id: 'mu-crate', axis: 'w', m: 0.36, tris: 3000, tier: 'small', planned: [0.36, 0.35, 0.36], role: 'music: crate of records', front: null},
+  {n: 348, id: 'mu-crate', axis: 'w', m: 0.36, tris: 3000, tier: 'small', planned: [0.36, 0.35, 0.36], role: 'music: slatted wooden crate full of LP records',
+    front: 'front +Z = the hand-hole side'},
   {n: 318, id: 'mu-guitar', axis: 'h', m: 1.05, tris: 6000, tier: 'small', planned: [0.4, 1.05, 0.45], role: 'music: electric guitar on a floor stand',
     front: 'front +Z = the guitar top (pickups / controls face +Z)'},
   {n: 319, id: 'mu-piano', axis: 'w', m: 1.5, tris: 10000, tier: 'fixture', planned: [1.5, 1.25, 0.6], role: 'music: upright piano',
     front: 'front +Z = the keyboard (the closed back is at -Z)'},
   {n: 320, id: 'mu-drums', axis: 'w', m: 1.8, tris: 12000, tier: 'fixture', planned: [1.8, 1.4, 1.4], role: 'music: drum kit with cymbals on stands',
     front: 'front +Z = the audience side (the bass-drum head faces +Z; the drummer sits at -Z)'},
-  {n: 321, id: 'mu-amp', axis: 'h', m: 1.3, tris: 5000, tier: 'fixture', planned: [0.75, 1.3, 0.4], role: 'music: guitar amp head on its speaker cabinet',
-    front: 'front +Z = the grille and the control panel'},
-  {n: 322, id: 'hb-diorama', axis: 'w', m: 3.0, tris: 25000, tier: 'fixture', planned: [3.0, 1.3, 1.6], measure: ['topY'], role: 'hobby: model-railway prairie diorama', front: null},
-  {n: 323, id: 'hb-vitrine', axis: 'h', m: 1.9, tris: 8000, tier: 'fixture', planned: [0.9, 1.9, 0.9], role: 'hobby: sealed display vitrine', front: null},
-  {n: 324, id: 'hb-kits', axis: 'w', m: 0.45, tris: 3000, tier: 'small', planned: [0.45, 0.4, 0.32], role: 'hobby: stack of model-kit boxes', front: null},
-  {n: 347, id: 'hb-robot', axis: 'h', m: 1.0, tris: 10000, tier: 'small', planned: [0.55, 1.0, 0.45], role: 'hobby: giant tin-toy robot model', front: null},
+  {n: 321, id: 'mu-amp', axis: 'h', m: 1.3, tris: 5000, tier: 'fixture', planned: [0.75, 1.3, 0.4],
+    squash: {z: 0.4, why: `${LEAD}: Meshy delivered a near cube (0.88 m deep at 1.3 m high; a real half stack ~0.36-0.4 m deep)`},
+    role: 'music: guitar amp head on its speaker cabinet', front: 'front +Z = the grille and the control panel'},
+  {n: 350, id: 'hb-diorama', axis: 'w', m: 3.0, tris: 25000, tier: 'fixture', planned: [3.0, 1.3, 1.6], measure: ['tableTop'], skipTasks: ['01a1b1e6-f820-7377-a33f-f874e493564a'],
+    role: 'hobby: model-railway prairie diorama on its four-legged table (the retake; the first, board-only raw is never used)',
+    front: 'front +Z = the concept view (square layout on a square table)'},
+  {n: 323, id: 'hb-vitrine', axis: 'h', m: 1.9, tris: 8000, tier: 'fixture', planned: [0.95, 0.38, 0.21],
+    fit: {axis: 'l', m: 0.95, why: `${LEAD}: RE-SCOPED: Meshy rebuilt only the display model inside the vitrine (the glass case and cabinet were lost), so the piece is the AIRSHIP display model fitted by its LENGTH 0.95 m, shown inside an existing case / on a plinth by the dressing lane`},
+    role: 'hobby: display model of an airship on its stand (the vitrine re-scoped to its contents)', front: 'front +Z = the concept view (the airship long along X)'},
+  {n: 324, id: 'hb-kits', axis: 'w', m: 0.45, tris: 3000, tier: 'small', planned: [0.45, 0.4, 0.32], clean: 'boxes', role: 'hobby: stepped stack of five model-kit boxes',
+    front: 'front +Z = the box-art ends (the stack steps back towards -Z)'},
+  {n: 347, id: 'hb-robot', axis: 'h', m: 1.0, tris: 10000, tier: 'small', planned: [0.55, 1.0, 0.45], role: 'hobby: giant generic tin-toy robot on a round base',
+    front: 'front +Z = the face and the gauge chest (the wind-up key on +X)'},
   {n: 326, id: 'ds-sofa', axis: 'w', m: 2.1, tris: 8000, tier: 'fixture', planned: [2.1, 0.85, 0.9], measure: ['seatY'], role: 'design: mid-century three-seat sofa',
     front: 'front +Z = the seats (the back is at -Z)'},
   {n: 327, id: 'ds-eggchair', axis: 'h', m: 1.1, tris: 8000, tier: 'fixture', planned: [0.9, 1.1, 0.9], measure: ['seatY'], role: 'design: egg chair on a four-star swivel base',
     front: 'front +Z = the seat opening (the shell back is at -Z)'},
-  {n: 328, id: 'ds-lamp', axis: 'h', m: 2.1, tris: 5000, tier: 'fixture', planned: [1.7, 2.1, 0.45], role: 'design: arc floor lamp', front: null},
-  {n: 329, id: 'ds-table', axis: 'w', m: 2.2, tris: 6000, tier: 'fixture', planned: [2.2, 0.75, 1.0], measure: ['topY'], role: 'design: live-edge dining table', front: null},
-  {n: 330, id: 'ds-bed', axis: 'l', m: 2.2, tris: 10000, tier: 'fixture', planned: [1.7, 1.1, 2.2], measure: ['topY'], role: 'design: showroom bed', front: null},
-  {n: 331, id: 'gd-bench', axis: 'w', m: 2.0, tris: 6000, tier: 'fixture', planned: [2.0, 0.8, 0.7], measure: ['topY'], role: 'garden: slatted plant bench', front: null},
-  {n: 332, id: 'gd-palm', axis: 'h', m: 2.2, tris: 10000, tier: 'fixture', planned: [1.4, 2.2, 1.4], role: 'garden: potted palm', front: null},
-  {n: 333, id: 'gd-pot', axis: 'h', m: 0.35, tris: 4000, tier: 'small', planned: [0.3, 0.35, 0.3], role: 'garden: geranium pot', front: null},
-  {n: 334, id: 'gd-barrow', axis: 'l', m: 1.5, tris: 6000, tier: 'fixture', planned: [1.5, 0.7, 0.65], role: 'garden: wheelbarrow', front: null},
-  {n: 335, id: 'ar-pinball', axis: 'h', m: 1.9, tris: 15000, tier: 'fixture', planned: [0.75, 1.9, 1.4], role: 'arcade: pinball machine', front: null},
-  {n: 336, id: 'ar-airhockey', axis: 'l', m: 2.1, tris: 8000, tier: 'fixture', planned: [2.1, 0.85, 1.2], measure: ['topY'], role: 'arcade: air hockey table', front: null},
-  {n: 337, id: 'ar-claw', axis: 'h', m: 1.9, tris: 10000, tier: 'fixture', planned: [0.95, 1.9, 0.95], role: 'arcade: claw crane', front: null},
-  {n: 338, id: 'cn-popcorn', axis: 'h', m: 1.6, tris: 8000, tier: 'fixture', planned: [0.95, 1.6, 0.65], role: 'cinema: popcorn cart', front: null},
-  {n: 339, id: 'cn-seats', axis: 'w', m: 2.4, tris: 10000, tier: 'fixture', planned: [2.4, 1.0, 0.75], measure: ['seatY'], role: 'cinema: row of cinema seats', front: null},
-  {n: 340, id: 'cn-booth', axis: 'h', m: 2.4, tris: 8000, tier: 'fixture', planned: [1.6, 2.4, 1.4], role: 'cinema: ticket booth', front: null},
-  {n: 341, id: 'sc-telescope', axis: 'h', m: 1.7, tris: 6000, tier: 'fixture', planned: [1.3, 1.7, 0.9], role: 'science: telescope on a tripod', front: null},
-  {n: 342, id: 'sc-globe', axis: 'h', m: 1.2, tris: 8000, tier: 'fixture', planned: [0.75, 1.2, 0.75], role: 'science: giant floor globe', front: null},
-  {n: 343, id: 'sc-rocket', axis: 'h', m: 2.2, tris: 8000, tier: 'fixture', planned: [0.9, 2.2, 0.9], role: 'science: rocket model', front: null},
-  {n: 344, id: 'sc-mobile', axis: 'w', m: 3.0, tris: 10000, tier: 'fixture', planned: [3.0, 1.6, 3.0], measure: ['hangY'], role: 'science: hanging planet mobile', front: null},
-  {n: 345, id: 'hk-net', axis: 'w', m: 1.83, tris: 6000, tier: 'fixture', planned: [1.83, 1.22, 1.1], role: 'hockey: goal net', front: null},
-  {n: 346, id: 'hk-goalie', axis: 'h', m: 1.95, tris: 12000, tier: 'fixture', planned: [0.9, 1.95, 0.6], role: 'hockey: goalie display mannequin', front: null},
+  {n: 328, id: 'ds-lamp', axis: 'h', m: 2.1, tris: 5000, tier: 'fixture', planned: [1.7, 2.1, 0.45], role: 'design: arc floor lamp (marble base, dome shade)',
+    front: 'front +Z = the arc seen side-on; the arc spans X: the SHADE at -X, the marble base at +X'},
+  {n: 329, id: 'ds-table', axis: 'w', m: 2.2, tris: 6000, tier: 'fixture', planned: [2.2, 0.75, 1.0], measure: ['topY'], role: 'design: live-edge slab table on black trestle legs',
+    front: 'front +Z = the concept view (a long side)'},
+  {n: 330, id: 'ds-bed', axis: 'l', m: 2.2, tris: 10000, tier: 'fixture', planned: [2.2, 1.1, 1.7], turn: 90, measure: ['topY'], role: 'design: showroom bed (upholstered headboard, pillows, duvet, throw)',
+    front: 'turned +90 deg about Y (Meshy delivered the length along Z, headboard at -Z): long axis X, HEADBOARD at -X, the open long side faces +Z'},
+  {n: 331, id: 'gd-bench', axis: 'w', m: 2.0, tris: 6000, tier: 'fixture', planned: [2.0, 0.8, 0.7], measure: ['topY'], role: 'garden: slatted bench on a galvanised pipe frame',
+    front: 'front +Z = a long side (the same both sides)'},
+  {n: 332, id: 'gd-palm', axis: 'h', m: 2.2, tris: 10000, tier: 'fixture', planned: [1.4, 2.2, 1.4], role: 'garden: kentia palm in a blue glazed pot',
+    front: 'front +Z = the concept view (round pot)'},
+  {n: 333, id: 'gd-pot', axis: 'h', m: 0.35, tris: 4000, tier: 'small', planned: [0.3, 0.35, 0.3], role: 'garden: red geraniums in a terracotta pot',
+    front: 'front +Z = the concept view (round pot)'},
+  {n: 334, id: 'gd-barrow', axis: 'l', m: 1.5, tris: 6000, tier: 'fixture', planned: [1.5, 0.7, 0.65], role: 'garden: green steel wheelbarrow',
+    front: 'front +Z = the concept side elevation; long axis X: the WHEEL at -X, the handles at +X'},
+  {n: 335, id: 'ar-pinball', axis: 'h', m: 1.9, tris: 15000, tier: 'fixture', planned: [0.75, 1.9, 1.4], role: 'arcade: space-themed pinball machine',
+    front: 'front +Z = the player end (coin door, flipper buttons; the backbox is at -Z)'},
+  {n: 336, id: 'ar-airhockey', axis: 'l', m: 2.1, tris: 8000, tier: 'fixture', planned: [2.1, 0.85, 1.2], measure: ['topY'], role: 'arcade: air hockey table (two mallets and a puck on the rink)',
+    front: 'front +Z = a long side; long axis X (the goals at -X / +X)'},
+  {n: 337, id: 'ar-claw', axis: 'h', m: 1.9, tris: 10000, tier: 'fixture', planned: [0.95, 1.9, 0.95], role: 'arcade: claw crane (open front, no glass modelled)',
+    front: 'front +Z = the joystick panel and the prize chute'},
+  {n: 338, id: 'cn-popcorn', axis: 'h', m: 1.6, tris: 8000, tier: 'fixture', planned: [0.95, 1.6, 0.65], role: 'cinema: popcorn cart',
+    front: 'front +Z = the concept view (the kettle window; the push handles on -X / +X)'},
+  {n: 339, id: 'cn-seats', axis: 'w', m: 2.4, tris: 10000, tier: 'fixture', planned: [2.4, 1.0, 0.75], measure: ['seatY'], role: 'cinema: row of four red velvet theatre seats',
+    front: 'front +Z = the seats (the backs lean to -Z)'},
+  {n: 340, id: 'cn-booth', axis: 'h', m: 2.4, tris: 8000, tier: 'fixture', planned: [1.6, 2.4, 1.4], role: 'cinema: art-deco ticket booth',
+    front: 'front +Z = the ticket window and counter'},
+  {n: 341, id: 'sc-telescope', axis: 'h', m: 1.7, tris: 6000, tier: 'fixture', planned: [1.3, 1.7, 0.9], role: 'science: brass and white refractor telescope on a wooden tripod',
+    front: 'front +Z = the tube seen side-on; the tube spans X: the OBJECTIVE (big end) at -X, the eyepiece at +X'},
+  {n: 342, id: 'sc-globe', axis: 'h', m: 1.2, tris: 8000, tier: 'fixture', planned: [0.75, 1.2, 0.75], role: 'science: floor globe on a tripod stand',
+    front: 'front +Z = the concept view'},
+  {n: 343, id: 'sc-rocket', axis: 'h', m: 2.2, tris: 8000, tier: 'fixture', planned: [0.9, 2.2, 0.9], role: 'science: retro rocket model on a striped stand',
+    front: 'front +Z = the portholes'},
+  {n: 344, id: 'sc-mobile', axis: 'w', m: 3.0, tris: 10000, tier: 'fixture', planned: [3.0, 1.6, 3.0], measure: ['hangY'], role: 'science: hanging planet mobile (sun and nine planets in a row under a ring)',
+    front: 'front +Z = the concept view (the planets hang in one row along X); natural up kept for hanging (the hook top = the hanging point)'},
+  {n: 345, id: 'hk-net', axis: 'w', m: 1.83, tris: 6000, tier: 'fixture', planned: [1.83, 1.22, 1.1], role: 'hockey: goal frame and net',
+    front: 'front +Z = the goal mouth (the net slopes back to -Z)'},
+  {n: 346, id: 'hk-goalie', axis: 'h', m: 1.95, tris: 12000, tier: 'fixture', planned: [0.9, 1.95, 0.6], role: 'hockey: goalie display mannequin in full gear',
+    front: 'front +Z = the mask and the chest'},
 ];
 const SIMPLIFY = {normalWeight: 0.5, uvWeight: 1, targetError: 1, tool: 'meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept)'};
 /** Above this relative error the seam-preserving result counts as visibly crumpled: the source mesh is kept instead. */
@@ -154,25 +188,53 @@ const MESHY_TOOL = `${toolM[1]} (MCP ${toolM[2]})`;
 const last = ledger[ledger.length - 1];
 if (last.billed + last.reserved > open.caps.meshyCredits || last.attempts > open.caps.attempts || last.paidPOSTs > open.caps.paidPOSTs) throw new Error(`ledger outside the caps: ${JSON.stringify(last)}`);
 const assets = new Map(JSON.parse(fs.readFileSync(path.join(GEN, 'assets.json'), 'utf8')).map(a => [a.id, a]));
-if (assets.size !== ROWS.length) throw new Error(`assets.json has ${assets.size} pieces, ROWS ${ROWS.length}`);
+const pieceOf = row => row.asset ?? row.id;
+if ([...assets.keys()].sort().join() !== [...new Set(ROWS.map(pieceOf))].sort().join()) throw new Error('ROWS pieces differ from assets.json');
 for (const row of ROWS) {
-  const a = assets.get(row.id);
+  const a = assets.get(pieceOf(row));
   if (!a || a.n !== row.n || a.size.axis !== row.axis || a.size.m !== row.m || a.polycount !== row.tris || a.tier !== row.tier) throw new Error(`${row.id}: ROWS disagrees with assets.json`);
 }
 const seq = e => ledger.indexOf(e) + 1;
 const named = (e, raw) => (e.taskId && raw.file.includes(e.taskId)) || (e.file && e.file === raw.file);
+/** An acceptance list entry names the piece: 'hb-vitrine(re-scoped: airship model)' / 'lm-geese (birds lost ...)' -> the id before ( / space. */
+const listed = (list, asset) => (list ?? []).find(s => s.split(/[\s(]/)[0] === asset) ?? null;
 
-/** The raw to build (accepted, or with --include-pending the latest unjudged one) + its chain of ledger lines; null = nothing to build. */
-function records(asset) {
-  const lines = ledger.filter(e => e.asset === asset);
-  const raws = lines.filter(e => e.event === 'raw');
-  const accept = lines.filter(e => e.event === 'accept').pop() ?? null;
-  let raw;
-  if (accept) raw = raws.find(r => named(accept, r)) ?? raws.filter(r => seq(r) < seq(accept)).pop();
-  else if (PENDING) raw = raws[raws.length - 1];
+/**
+ * The lead's judgements of one piece's raws, in ledger order: `accept` / `reject` lines, or a `note` of kind `acceptance` listing the
+ * accepted / rejected pieces. Each judges the raw it names (taskId / file), else the latest raw of the piece before it.
+ */
+function judgements(asset, raws) {
+  const out = [];
+  for (const e of ledger) {
+    let verdict = null, entry = null;
+    if (e.event === 'accept' && e.asset === asset) verdict = 'accept';
+    else if (e.event === 'reject' && e.asset === asset) verdict = 'reject';
+    else if (e.event === 'note' && e.kind === 'acceptance') {
+      if ((entry = listed(e.accept, asset))) verdict = 'accept'; else if ((entry = listed(e.reject, asset))) verdict = 'reject';
+    }
+    if (!verdict) continue;
+    const raw = raws.find(r => named(e, r)) ?? raws.filter(r => seq(r) < seq(e)).pop();
+    if (!raw) throw new Error(`${asset}: a ${verdict} at ledger line ${seq(e)} precedes every raw`);
+    out.push({verdict, line: e, entry, raw});
+  }
+  return out;
+}
+
+/**
+ * The raw to build + its chain of ledger lines; null = nothing to build. The latest raw whose last judgement is an accept (`pinTask`:
+ * exactly that Meshy task; `skipTasks`: never those); with --include-pending the latest raw instead when nobody has judged it yet.
+ */
+function records(asset, {pinTask = null, skipTasks = []} = {}) {
+  const allRaws = ledger.filter(e => e.event === 'raw' && e.asset === asset);
+  const judged = judgements(asset, allRaws);
+  const raws = allRaws.filter(e => (!pinTask || e.file.includes(pinTask)) && !skipTasks.some(t => e.file.includes(t)));
+  const lastOf = raw => judged.filter(j => j.raw === raw).pop() ?? null;
+  let raw = raws.filter(r => lastOf(r)?.verdict === 'accept').pop() ?? null;
+  const newest = raws[raws.length - 1];
+  if (PENDING && newest && !lastOf(newest)) raw = newest;
   if (!raw) return null;
-  const reject = lines.filter(e => e.event === 'reject' && seq(e) > seq(raw) && (named(e, raw) || !(e.taskId || e.file))).pop() ?? null;
-  if (reject && (!accept || seq(reject) > seq(accept))) return null;
+  const judgement = lastOf(raw);
+  const accept = judgement?.verdict === 'accept' ? judgement : null;
   const one = (pred, what) => { const m = ledger.filter(pred); if (m.length !== 1) throw new Error(`${asset}: expected exactly one ${what} line, found ${m.length}`); return m[0]; };
   const posted = one(e => e.event === 'posted' && e.asset === asset && raw.file.includes(e.taskId), 'posted');
   const status = one(e => e.event === 'status' && e.asset === asset && e.taskId === posted.taskId, 'status');
@@ -188,7 +250,7 @@ function records(asset) {
   if (sha(fs.readFileSync(path.join(GEN, inputFile.raw))) !== intent.inputSha256) throw new Error(`${asset}: Codex concept file sha256 mismatch`);
   const bytes = fs.readFileSync(path.join(GEN, raw.file));
   if (sha(bytes) !== raw.sha256 || bytes.length !== raw.bytes) throw new Error(`${asset}: raw original sha256 / bytes mismatch (${raw.file})`);
-  return {accept, raw, intent, posted, status, settings, codex, codexIntent, inputFile, bytes};
+  return {accept, judged: judged.filter(j => j.raw === raw), raw, intent, posted, status, settings, codex, codexIntent, inputFile, bytes};
 }
 
 // ---------- geometry ----------
@@ -425,6 +487,29 @@ function tierHeights(P, I, dims) {
       rings: tiers, openCentre: runs.filter(t => median(t.h) <= 0.1 * dims[1] && t.r0 === 0).map(t => ({rOuter: r4((t.r1 + 1) * 0.01), y: r4(median(t.h))}))}};
 }
 
+/**
+ * The diorama's table top UNDER the scenery: vertical lines on a 9 x 9 grid over the inner 90 % of the footprint; per line its up-facing
+ * crossings (merged within 1 cm); topY = the height found on the most lines (>= 80 % required), median. The layout's own ground (the
+ * broadest flat of the top-down height map) is recorded alongside.
+ */
+function tableTopUnder(P, N, I, dims) {
+  const lines = [], found = [];
+  for (let i = 0; i < 9; i++) for (let j = 0; j < 9; j++) lines.push([(-0.45 + 0.1125 * i) * dims[0], (-0.45 + 0.1125 * j) * dims[2]]);
+  for (const [x, z] of lines) {
+    const ups = [];
+    for (const h of columnHits(P, N, I, x, z)) if (h.ny > 0.3 && !(ups.length && h.y - ups[ups.length - 1] < 0.01)) ups.push(h.y);
+    found.push(...ups);
+  }
+  found.sort((p, q) => p - q);
+  const groups = [];
+  for (const y of found) { const g = groups[groups.length - 1]; if (g && y - g[g.length - 1] < 0.01) g.push(y); else groups.push([y]); }
+  const best = groups.reduce((a, g) => (g.length > a.length ? g : a), []);
+  if (best.length < 0.8 * lines.length) throw new Error(`tableTop: no table top under the scenery (best ${best.length} of ${lines.length} lines)`);
+  const hm = heightMap(P, I, 0.01), ground = plateau(hm, i => hm.H[i] > median(best));
+  return {topY: r4(median(best)), tableTop: {method: 'up-facing crossings of vertical lines on a 9 x 9 grid over the inner 90 % of the footprint, merged within 1 cm; the height on the most lines (median)', lines: lines.length, found: best.length,
+    layoutGroundY: r4(ground.y), layoutGround: 'the broadest 2 cm window of the 1 cm top-down height map above the table top (the scenery\'s ground level)'}};
+}
+
 /** A sloped bin rack: the top-most up-facing crossing along the centre line x = 0, front (+Z) to back; topY = the front lip, backY = the back. */
 function binSlope(P, N, I, dims) {
   const prof = [];
@@ -437,11 +522,50 @@ function binSlope(P, N, I, dims) {
     bins: {method: 'the top-most up-facing crossing of vertical lines along x = 0 from z = +48 % to -48 % of the depth; topY = the front lip (max of the 4 front-most), backY = the highest (the back rim)', profile: prof}};
 }
 
+/**
+ * Local mesh separation for the model-kit stack (lead-approved: Meshy extruded the box art into loose toy fragments — a car, a tank, a
+ * jet, a robot — standing out of the box ends and lying on top). Position-connected parts (vertices joined by equal position across
+ * UV / normal seams); the BOXES = the parts at least half as wide (x) and a quarter as deep (z) as the whole stack (a flat label
+ * strip is not a box); kept = the boxes + any part lying inside a
+ * box's bounds (+2 % of the stack width); every other part is removed. The kept triangles are untouched (no new geometry or texels).
+ */
+function separateBoxes(m) {
+  const nv = m.P.length / 3, key = new Map(), rep = new Int32Array(nv);
+  for (let v = 0; v < nv; v++) { const k = `${m.P[3 * v]},${m.P[3 * v + 1]},${m.P[3 * v + 2]}`; if (!key.has(k)) key.set(k, key.size); rep[v] = key.get(k); }
+  const parent = Int32Array.from({length: key.size}, (_, i) => i);
+  const find = x => { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+  for (let f = 0; f < m.I.length; f += 3) for (const [a, b] of [[m.I[f], m.I[f + 1]], [m.I[f + 1], m.I[f + 2]]]) { const x = find(rep[a]), y = find(rep[b]); if (x !== y) parent[x] = y; }
+  const parts = new Map();
+  for (let f = 0; f < m.I.length; f += 3) {
+    const c = find(rep[m.I[f]]);
+    let o = parts.get(c);
+    if (!o) parts.set(c, (o = {faces: [], min: [Infinity, Infinity, Infinity], max: [-Infinity, -Infinity, -Infinity]}));
+    o.faces.push(f);
+    for (const v of [m.I[f], m.I[f + 1], m.I[f + 2]]) for (let k = 0; k < 3; k++) { o.min[k] = Math.min(o.min[k], m.P[3 * v + k]); o.max[k] = Math.max(o.max[k], m.P[3 * v + k]); }
+  }
+  const all = boundsOf(m.P), W = all.max[0] - all.min[0], D = all.max[2] - all.min[2], tol = 0.005 * W;
+  const list = [...parts.values()];
+  const boxes = list.filter(o => o.max[0] - o.min[0] >= 0.5 * W && o.max[2] - o.min[2] >= 0.25 * D);
+  const inside = o => boxes.some(b => [0, 1, 2].every(k => o.min[k] >= b.min[k] - tol && o.max[k] <= b.max[k] + tol));
+  const keep = list.filter(o => boxes.includes(o) || inside(o)), gone = list.filter(o => !keep.includes(o));
+  if (boxes.length !== 5) throw new Error(`hb-kits: expected the five kit boxes, found ${boxes.length}`);
+  const faces = keep.flatMap(o => o.faces).sort((a, b) => a - b), map = new Int32Array(nv).fill(-1), P = [], N = [], UV = [], I = [];
+  for (const f of faces) for (let j = 0; j < 3; j++) {
+    const v = m.I[f + j];
+    if (map[v] < 0) { map[v] = P.length / 3; P.push(m.P[3 * v], m.P[3 * v + 1], m.P[3 * v + 2]); N.push(m.N[3 * v], m.N[3 * v + 1], m.N[3 * v + 2]); UV.push(m.UV[2 * v], m.UV[2 * v + 1]); }
+    I.push(map[v]);
+  }
+  const removedTris = gone.reduce((t, o) => t + o.faces.length, 0);
+  return {m: {P: Float32Array.from(P), N: Float32Array.from(N), UV: Float32Array.from(UV), I: Uint32Array.from(I)},
+    info: {method: 'position-connected parts; boxes = parts >= 50 % of the stack width (x) and >= 25 % of its depth (z); kept = boxes + parts inside a box\'s bounds (+2 % of the width); the rest removed; kept triangles untouched',
+      parts: list.length, boxes: boxes.length, keptParts: keep.length, removedParts: gone.length, removedTriangles: removedTris, keptTriangles: faces.length}};
+}
+
 // ---------- build ----------
 const outRows = [];
 for (const row of ROWS) {
   if (ONLY && !ONLY.includes(row.id)) continue;
-  const rec = records(row.id);
+  const rec = records(pieceOf(row), row);
   if (!rec) continue;
   if (!row.front) {
     if (rec.accept) throw new Error(`${row.id}: accepted, but its front / orientation has not been reviewed on the acceptance renders (ROWS front: null)`);
@@ -454,19 +578,34 @@ for (const row of ROWS) {
   const extent = [0, 1, 2].map(k => r4(srcB.max[k] - srcB.min[k]));
   const welded = weld(src.m);
   const charts = uvCharts(welded);
-  const {m: low, info: simp} = await simplify(welded, row.tris);
+  // ---- local mesh separation (lead-approved junk removal; the kept parts are untouched)
+  const sep = row.clean ? separateBoxes(welded) : null;
+  const {m: low, info: simp} = await simplify(sep ? sep.m : welded, row.tris);
   // ---- orient: quarter turn about Y (positions + normals); then UNIFORM scale (s) on the size axis; grounded, centred on x / z
   const turn = row.turn ?? 0;
-  const P0 = turn ? turnY(low.P, turn) : low.P, N = turn ? turnY(low.N, turn) : low.N;
+  const P0 = turn ? turnY(low.P, turn) : low.P, N = Float32Array.from(turn ? turnY(low.N, turn) : low.N);
   const b = boundsOf(P0);
   const ext = [0, 1, 2].map(k => b.max[k] - b.min[k]);
   if (row.axis === 'l' && ext[0] < ext[2]) throw new Error(`${row.id}: an 'l' piece must be long along X after the turn`);
-  const k = {h: 1, w: 0, l: 0, d: 2}[row.axis];
-  const s = row.m / ext[k];
+  const fitAxis = row.fit?.axis ?? row.axis, fitM = row.fit?.m ?? row.m;
+  const k = {h: 1, w: 0, l: 0, d: 2}[fitAxis];
+  const s = fitM / ext[k];
   const tx = -s * (b.min[0] + b.max[0]) / 2, ty = -s * b.min[1], tz = -s * (b.min[2] + b.max[2]) / 2;
   const P = new Float32Array(P0.length);
   for (let i = 0; i < P.length; i += 3) { P[i] = s * P0[i] + tx; P[i + 1] = s * P0[i + 1] + ty; P[i + 2] = s * P0[i + 2] + tz; }
-  const fit = {axis: row.axis, kind: {h: 'the full height (y)', w: 'the full width (x)', l: 'the long axis (x)', d: 'the full depth (z)'}[row.axis], size: row.m, scale: r6(s),
+  // ---- lead-approved depth squash: z scaled about the centre; normals by the inverse transpose (n.z / kz), renormalised
+  let squash = null;
+  if (row.squash) {
+    const kz = row.squash.z / (s * ext[2]);
+    for (let i = 0; i < P.length; i += 3) {
+      P[i + 2] *= kz;
+      const nx = N[i], ny = N[i + 1], nz = N[i + 2] / kz, l = Math.hypot(nx, ny, nz) || 1;
+      N[i] = nx / l; N[i + 1] = ny / l; N[i + 2] = nz / l;
+    }
+    squash = {axis: 'z', to: row.squash.z, from: r4(s * ext[2]), factor: r6(kz), normals: 'inverse-transpose (n.z / factor), renormalised', why: row.squash.why};
+  }
+  const fit = {axis: fitAxis, kind: {h: 'the full height (y)', w: 'the full width (x)', l: 'the long axis (x)', d: 'the full depth (z)'}[fitAxis], size: fitM, scale: r6(s),
+    ...(row.fit ? {override: {briefAxis: row.axis, briefSize: row.m, why: row.fit.why}} : {}), ...(squash ? {squash} : {}),
     translate: [tx, ty, tz].map(r6), turnDegY: turn, measuredOn: 'the welded (and simplified) mesh that ships', rotation: turn ? `${turn} deg about +Y (exact quarter turn of positions and normals)` : 'none (Meshy native front +Z kept)'};
   // ---- write into the source document (its material + PBR maps kept; maps re-encoded / downsized only)
   const {doc, prim, mat} = src;
@@ -494,7 +633,8 @@ for (const row of ROWS) {
   const bb = getBounds(cr.getDefaultScene() ?? cr.listScenes()[0]);
   const dims = [0, 1, 2].map(q => r4(bb.max[q] - bb.min[q]));
   if (Math.abs(bb.min[1]) > 1e-4 || Math.abs(bb.min[0] + bb.max[0]) > 1e-3 || Math.abs(bb.min[2] + bb.max[2]) > 1e-3) throw new Error(`${id}: not grounded / centred`);
-  if (Math.abs(dims[k] - row.m) > 1e-3) throw new Error(`${id}: size axis ${row.axis} is ${dims[k]}, not ${row.m}`);
+  if (Math.abs(dims[k] - fitM) > 1e-3) throw new Error(`${id}: size axis ${fitAxis} is ${dims[k]}, not ${fitM}`);
+  if (row.squash && Math.abs(dims[2] - row.squash.z) > 1e-3) throw new Error(`${id}: squashed depth is ${dims[2]}, not ${row.squash.z}`);
   const cp = cr.listMeshes()[0].listPrimitives()[0];
   const tris = cp.getIndices().getCount() / 3;
   if (simp.applied && tris > row.tris) throw new Error(`${id}: over budget`);
@@ -505,6 +645,7 @@ for (const row of ROWS) {
     else if (ms === 'seatY') Object.assign(measures, seatHeight(CP, CI, dims));
     else if (ms === 'tiers') Object.assign(measures, tierHeights(CP, CI, dims));
     else if (ms === 'bins') Object.assign(measures, binSlope(CP, CN, CI, dims));
+    else if (ms === 'tableTop') Object.assign(measures, tableTopUnder(CP, CN, CI, dims));
     else if (ms === 'hangY') Object.assign(measures, {hangY: dims[1], hang: {method: 'the top of the model (min y = 0): the hanging point'}});
     else if (ms === 'topY') {
       const hm = heightMap(CP, CI, 0.01), pl = plateau(hm, i => hm.H[i] > 0.4 * dims[1]);
@@ -515,7 +656,7 @@ for (const row of ROWS) {
   const mats = cr.listMaterials();
   const textures = cr.listTextures().map(t => ({slot: [['baseColor', mats[0].getBaseColorTexture()], ['metallicRoughness', mats[0].getMetallicRoughnessTexture()], ['normal', mats[0].getNormalTexture()]].find(([, x]) => x === t)?.[0] ?? 'unused',
     size: t.getSize(), mime: t.getMimeType(), bytes: t.getImage().byteLength, sha256: sha(t.getImage())}));
-  outRows.push({row, id, key, url, provRel, rec, src, extent, welded, charts, simp, fit, glb, dims, min: bb.min.map(r6), max: bb.max.map(r6), tris, vertices: cp.getAttribute('POSITION').getCount(), measures, textures});
+  outRows.push({row, id, key, url, provRel, rec, src, extent, welded, charts, sep, simp, fit, glb, dims, min: bb.min.map(r6), max: bb.max.map(r6), tris, vertices: cp.getAttribute('POSITION').getCount(), measures, textures});
   const extras = Object.entries(measures).filter(([, v]) => typeof v === 'number' || (Array.isArray(v) && typeof v[0] === 'number')).map(([q, v]) => `, ${q} ${Array.isArray(v) ? `[${v.join(' ')}]` : v}`).join('');
   console.log(`${id}: ${rec.bytes.length} B ${src.m.I.length / 3} tris -> ${glb.length} B ${tris} tris (${simp.applied ? `simplified, err ${simp.errorRelative}` : simp.reason}; ${charts} UV charts), dims ${dims.join(' x ')} m, ` +
     `scale ${s.toFixed(4)}${turn ? `, turn ${turn}` : ''}${extras}; ${rec.accept ? 'accepted' : 'PENDING acceptance'}; maps ${textures.map(t => `${t.slot} ${t.size[0]} ${t.bytes}`).join(', ')}`);
@@ -532,7 +673,6 @@ if (DRY) {
 const written = new Map();
 for (const o of outRows) {
   const {row, rec} = o;
-  const line = (({event: _e, ...rest}) => rest);
   const prov = {
     schema: 'terminal-state-derivative-v1',
     id: o.id,
@@ -549,14 +689,16 @@ for (const o of outRows) {
     meshy: {
       tool: MESHY_TOOL, request: rec.settings, task: rec.posted.taskId, status: rec.status.status, consumedCredits: rec.status.consumed_credits,
       evidence: 'the create arguments are fixed in FINANCIAL-ACK.json and the fsynced ledger intent line before the POST; 15 credits = the T2 / T2.5 single-image textured price; the task GET response does not echo ai_model',
-      ledger: {file: `${TASK_DIR}/gen/LEDGER.jsonl (outside Git)`, lines: {intent: seq(rec.intent), posted: seq(rec.posted), status: seq(rec.status), raw: seq(rec.raw), accept: rec.accept ? seq(rec.accept) : null},
-        codexLines: {intent: rec.codexIntent ? seq(rec.codexIntent) : null, result: seq(rec.codex)}, accept: rec.accept ? line(rec.accept) : null},
+      ledger: {file: `${TASK_DIR}/gen/LEDGER.jsonl (outside Git)`, lines: {intent: seq(rec.intent), posted: seq(rec.posted), status: seq(rec.status), raw: seq(rec.raw), accept: rec.accept ? seq(rec.accept.line) : null},
+        codexLines: {intent: rec.codexIntent ? seq(rec.codexIntent) : null, result: seq(rec.codex)},
+        accept: rec.accept ? {event: rec.accept.line.event, kind: rec.accept.line.kind ?? null, entry: rec.accept.entry ?? rec.accept.line.note ?? null, see: rec.accept.line.see ?? null, t: rec.accept.line.t} : null},
     },
     source: {file: `${TASK_DIR}/gen/${rec.raw.file} (raw original, read-only, outside Git; never shipped)`, sha256: rec.raw.sha256, bytes: rec.raw.bytes,
       triangles: o.src.m.I.length / 3, vertices: o.src.m.P.length / 3, extent: o.extent, uvCharts: o.charts, material: o.src.material, maps: o.src.maps},
     output: {url: o.url, file: `game/public/${o.url}`, bytes: o.glb.length, sha256: sha(o.glb), triangles: o.tris, vertices: o.vertices, dims: o.dims, min: o.min, max: o.max},
     fit: o.fit,
     weld: o.welded.weld,
+    ...(o.sep ? {separation: {...o.sep.info, why: 'lead decision (task qa/kits/DECISIONS.md): remove the stray toy fragments Meshy extruded out of the box art; keep the five-box stack'}} : {}),
     simplify: o.simp,
     measurements: o.measures,
     textures: o.textures,

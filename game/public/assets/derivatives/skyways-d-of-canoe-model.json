@@ -18,7 +18,7 @@
   "userGenerationApprovalSha256": "fff848e763a671bbab6c963cd8078a7485846f7fdb02186f6e1cb33aa33816d1",
   "summary": "the user's Skyways destinations generation approval: a NEW 895-credit Meshy T2.5 ledger (caps 59 attempts / 96 paid POSTs); Codex concept images uncapped but recorded; first acceptable result per piece"
  },
- "accepted": false,
+ "accepted": true,
  "route": "Codex native image_gen INITIAL concept image (straight-on elevation) -> Meshy T2.5 image-to-3D (smart topology, 2K PBR texture); the Meshy model keeps its own PBR maps (re-encoded / downsized only; no re-texture, projection or hand-painted replacement)",
  "conditioningImage": {
   "codexCall": 311,
@@ -52,13 +52,19 @@
     "posted": 153,
     "status": 182,
     "raw": 183,
-    "accept": null
+    "accept": 311
    },
    "codexLines": {
     "intent": 22,
     "result": 23
    },
-   "accept": null
+   "accept": {
+    "event": "note",
+    "kind": "acceptance",
+    "entry": "of-canoe",
+    "see": "qa/kits/ACCEPT-1.md, ACCEPT-b2.md, DECISIONS.md",
+    "t": "2026-11-06T17:41:03.772571Z"
+   }
   }
  },
  "source": {
@@ -128,23 +134,23 @@
   "url": "assets/models/skyways-d-of-canoe.glb",
   "file": "game/public/assets/models/skyways-d-of-canoe.glb",
   "bytes": 614964,
-  "sha256": "f493c676539d592f6c8b00c0b2f4926b8fa15eb18ef077a01b968e02ce341d2b",
+  "sha256": "268513d86aa1b3643def4d4b4d64ab623664959bf685230cf27463ddafab2c5b",
   "triangles": 7637,
   "vertices": 8847,
   "dims": [
    5,
    0.7301,
-   1.7275
+   0.95
   ],
   "min": [
    -2.5,
    0,
-   -0.863752
+   -0.475
   ],
   "max": [
    2.5,
    0.730077,
-   0.863752
+   0.475
   ]
  },
  "fit": {
@@ -152,6 +158,14 @@
   "kind": "the long axis (x)",
   "size": 5,
   "scale": 5.264776,
+  "squash": {
+   "axis": "z",
+   "to": 0.95,
+   "from": 1.7275,
+   "factor": 0.549926,
+   "normals": "inverse-transpose (n.z / factor), renormalised",
+   "why": "lead decision (task qa/kits/DECISIONS.md, recorded in the ledger): Meshy's beam read 1.73 m at the 5 m length (a real canoe ~0.9 m)"
+  },
   "translate": [
    0,
    0.374036,
