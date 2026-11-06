@@ -41,8 +41,17 @@ import {PhysicsSystem} from '../src/physics/world';
 import {dynamicKind} from '../src/physics/dynamicItems';
 import {SHOT_IMPULSE_PER_DAMAGE} from '../src/damage/system';
 import {levelOfAsset} from '../src/assets/levelAssets';
-import {loadStripped} from './helpers/openablesFixture';
+import {fakeEnvTextures, loadStripped} from './helpers/openablesFixture';
+import {installCanvasShim, ShimContext} from './helpers/canvas2d';
+import {WorldMaterials} from '../src/world/materials';
+import {buildWorld} from '../src/world/builder';
+import {PropDamage} from '../src/damage/propDamage';
+import {skywaysKitchenFit} from '../src/world/skywaysKitchen';
+import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
+
+installCanvasShim(false);
+(ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
 const PUB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public');
 const DT = 1 / 60;
@@ -288,7 +297,8 @@ function restaurant(o: {dW?: number; dD?: number; kitchen?: boolean; level?: 0 |
   const layout = {
     seed: o.seed ?? 7, name: 'ramen test', props: [], grid: g0, areas, doors: doors.map(d => (lv ? {...d, level: lv} : d)),
     playerSpawn: {x: 4, z: 2, yaw: 0}, lights: [], signs: [], pickups: [], zombies: [], decor: [], storefronts: [], trench: {floorY: -1.15}, trenches: [],
-    ...(lv ? {levels: [{id: 0, role: 'main', grid: g0, baseY: 0}, {id: 1, role: 'upper', grid: g, baseY: 5}], levelLinks: []} : {}),
+    attempt: 0, towards: ['A', 'B'], platform: 0, platforms: [], traversal: {stairs: [], ladders: [], underpasses: []}, rails: [], levelLinks: [],
+    ...(lv ? {levels: [{id: 0, role: 'main', grid: g0, baseY: 0}, {id: 1, role: 'upper', grid: g, baseY: 5}]} : {}),
   } as unknown as StationLayout;
   return {layout, dining, kitchen, floor};
 }
@@ -531,4 +541,72 @@ describe('movable things move: cookware and the figurine go loose on their stati
       expect(host.h, 'the host stays a static obstacle').toBe(hd.h);
     });
   }
+});
+
+// ---------------------------------------------------------------------------------------------
+// the world builder: models front +Z at their real size (stand-in boxes while missing), found by the damage / physics index
+
+describe('world/skywaysKitchen.ts: the kitchen kinds are drawn on their placements and go loose as drawn', () => {
+  const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+  const modelKey = (k: (typeof SKYWAYS_KITCHEN_KINDS)[number]) => (k === 'skywaysRange' ? 'skyways_commercial_range' : k === 'skywaysStockPot' ? 'skyways_stock_pot'
+    : k === 'skywaysSaucepan' ? 'skyways_saucepan' : 'skyways_sushi_mascot') as keyof typeof SKYWAYS_FOOD_MODELS;
+  /** A stand-in "cooked" model: one box at the kind's real model bounds, grounded and centred like ASSET-A's files. */
+  const model = (k: (typeof SKYWAYS_KITCHEN_KINDS)[number]): GLTF => {
+    const m = SKYWAYS_FOOD_MODELS[modelKey(k)];
+    const scene = new THREE.Group(), mesh = new THREE.Mesh(new THREE.BoxGeometry(m.w, m.h, m.d), new THREE.MeshStandardMaterial({name: `${k}-body`}));
+    mesh.position.y = m.h / 2;
+    scene.add(mesh);
+    scene.updateMatrixWorld(true);
+    return {scene} as unknown as GLTF;
+  };
+
+  it('missing models: plain box stand-ins of the footprint (never invisible collision)', () => {
+    const {layout} = dress({seed: 3});
+    const w = buildWorld(layout, mats, {});
+    const names = new Set<string>();
+    w.group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) names.add(o.name); });
+    for (const k of SKYWAYS_KITCHEN_KINDS) expect([...names].some(n => n.startsWith(`prop-${k}-`)), k).toBe(true);
+  });
+
+  it('loaded models: one prop-<kind> instance per placement at the real size (k ~ 1, front +Z); the pot goes loose drawn by its own mesh', () => {
+    const {layout, res} = dress({seed: 3});
+    const lib: Record<string, GLTF> = {};
+    for (const k of SKYWAYS_KITCHEN_KINDS) lib[skywaysKitchenModelKey(k)] = model(k);
+    const w = buildWorld(layout, mats, lib);
+    for (const k of SKYWAYS_KITCHEN_KINDS) {
+      const m = SKYWAYS_FOOD_MODELS[modelKey(k)];
+      const fit = skywaysKitchenFit(k, new THREE.Box3().setFromObject(lib[skywaysKitchenModelKey(k)].scene).getSize(new THREE.Vector3()));
+      expect(fit.w / m.w, k).toBeCloseTo(1, 2);
+      expect(fit.h / m.h, `${k} keeps its full height`).toBeCloseTo(1, 2);
+      const meshes: THREE.InstancedMesh[] = [];
+      w.group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh && o.name === `prop-${k}`) meshes.push(o as THREE.InstancedMesh); });
+      expect(meshes.reduce((n, im) => n + im.count, 0), k).toBe(layout.props.filter(p => p.kind === k).length);
+    }
+    // the range instance on its placement: base on the floor, top at the model's full height (backguard / shelf above the cooktop)
+    const range = res.range!;
+    const ims: THREE.InstancedMesh[] = [];
+    w.group.traverse(o => { if (o.name === 'prop-skywaysRange') ims.push(o as THREE.InstancedMesh); });
+    const mtx = new THREE.Matrix4();
+    ims[0].getMatrixAt(0, mtx);
+    const box = new THREE.Box3().setFromBufferAttribute(ims[0].geometry.attributes.position as THREE.BufferAttribute).applyMatrix4(mtx);
+    expect(box.min.y).toBeCloseTo(range.y, 3);
+    expect(box.max.y).toBeCloseTo(range.y + SKYWAYS_FOOD_MODELS.skyways_commercial_range.h, 2);
+    expect((box.min.x + box.max.x) / 2).toBeCloseTo(range.x, 2);
+    expect((box.min.z + box.max.z) / 2).toBeCloseTo(range.z, 2);
+    // damage / physics: the pot's instance is found for its placement; a buckshot blast detaches it and its own mesh follows the body
+    const pd = new PropDamage();
+    pd.build(layout.props, [w.group]);
+    const ph = new PhysicsSystem(null);
+    ph.build(layout);
+    ph.dynamicItems.detacher = pd;
+    const pot = res.cookware.find(p => p.kind === 'skywaysStockPot')!, i = layout.props.indexOf(pot);
+    expect((pd.index.inst.get(pot) ?? []).length).toBe(1);
+    expect(ph.dynamicItems.isDynamicProp(pot)).toBe(true);
+    expect(ph.dynamicItems.shootProp(pot, i, new THREE.Vector3(pot.x - pot.hx, pot.y + pot.h * 0.5, pot.z), new THREE.Vector3(1, 0, 0), PELLET * 9)).toBe(true);
+    const own = pd.group.children.filter(o => o.name === `damaged-skywaysStockPot-${i}`);
+    expect(own.length).toBe(1);
+    const before = own[0].matrix.clone();
+    for (let t = 0; t < 1; t += DT) ph.update(DT);
+    expect(own[0].matrix.equals(before)).toBe(false);
+  });
 });
