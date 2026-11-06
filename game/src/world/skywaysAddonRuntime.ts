@@ -136,6 +136,8 @@ export class SkywaysAddonRuntime {
   /** Counters (QA / tests). */
   readonly counts = {builds: 0, ropeWrites: 0, drops: 0, artLoaded: 0};
   private readonly line: number[] = [];
+  /** Atlas material per loaded texture (released with the level by LevelResources). */
+  private readonly artMats = new WeakMap<THREE.Texture, THREE.Material>();
 
   constructor(readonly host: SkywaysAddonHost) {}
 
@@ -153,8 +155,13 @@ export class SkywaysAddonRuntime {
     await Promise.all(atlases.map(async (atlas: SkywaysArtAtlasKey) => {
       const tex = await this.host.levelResources.load('skyways', SKYWAYS_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
       if (!tex) { setSkywaysAddonArtMaterial(atlas, null); return; }
-      const m = this.host.levelResources.own('skyways', new SurfaceNodeMaterial({map: tex, roughness: 0.78, metalness: 0}));
-      m.name = `skyways-addon-art-${atlas}`;
+      // the same texture (a Retry of the level keeps its resources): the same material
+      let m = this.artMats.get(tex);
+      if (!m) {
+        m = this.host.levelResources.own('skyways', new SurfaceNodeMaterial({map: tex, roughness: 0.78, metalness: 0}));
+        m.name = `skyways-addon-art-${atlas}`;
+        this.artMats.set(tex, m);
+      }
       setSkywaysAddonArtMaterial(atlas, m);
       this.counts.artLoaded++;
     }));

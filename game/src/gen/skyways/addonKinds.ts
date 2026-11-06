@@ -195,12 +195,12 @@ export function skywaysAddonShape(kind: SkywaysAddonKind, variant = 0): {parts: 
       break;
     }
     case 'skywaysConWelcome': {
-      // sign board on an easel stand (two front legs, a rear strut), the welcome art on the front
+      // sign board on an easel stand: two legs behind the board, a rear strut, a ledge under the board; the welcome art on the front
       const {w, h} = PS.welcome, y0 = 1.06, t = 0.025;
       box('panel', [w + 0.04, h + 0.04, t], [0, y0 + h / 2, 0]);
-      for (const s of [-1, 1]) box('steelDark', [0.035, y0 + h * 0.6, 0.035], [s * (w / 2 - 0.12), (y0 + h * 0.6) / 2, 0.06]);
+      for (const s of [-1, 1]) box('steelDark', [0.035, y0 + h * 0.6, 0.035], [s * (w / 2 - 0.12), (y0 + h * 0.6) / 2, -t / 2 - 0.02]);
       box('steelDark', [0.03, 1.5, 0.03], [0, 0.75, -0.14], 0.17);
-      box('steelDark', [w - 0.2, 0.03, 0.04], [0, y0 - 0.02, 0.03]);
+      box('steelDark', [w - 0.2, 0.03, 0.06], [0, y0 - 0.035, 0.0]);
       faces.push({atlas: 'conSigns', piece: 'welcome', w, h, p: [0, y0 + h / 2, t / 2 + 0.002]});
       break;
     }
