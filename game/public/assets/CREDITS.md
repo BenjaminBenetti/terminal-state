@@ -365,6 +365,16 @@ Generated for this project with Codex native image generation (the owned Codex C
 - `assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg` — the blush lace plunge bodysuit folded in a ribboned gift box (user design 9gPhXy5tx6G6iW_2) (Codex thread 01a19fce-fa07-76b0-9686-25cdde8264a5)
 <!-- END mall-lingerie-ad-art-20261103 -->
 
+<!-- BEGIN train-fuel-and-airtank-models (build-airtank-backpack.mjs, build-train-fuel-can.mjs) -->
+## Survival gear and train fuel: the Airtank Backpack and the fuel can
+
+Generated for this project from a Codex INITIAL concept image (the owned Codex CLI's built-in image_gen tool) turned into a model with Meshy T2.5 image-to-3D; each model keeps Meshy's own PBR maps (re-encoded only). AI-generated assets: unapproved prototypes, no licence or commercial clearance implied. Raw masters, conditioning images and job ledgers are kept outside Git.
+
+- `assets/models/gear-airtank-backpack.glb` — the Airtank Backpack (steel cylinder on a frame and harness). Task studio-beta-filter-tension-airtank-20261104-072836-01 under the user's 50-credit authorization (15 credits, 1 attempt); runtime derivative by `tools/asset-pipeline/props/build-airtank-backpack.mjs` (provenance: `assets/derivatives/gear-airtank-backpack.json`).
+- `assets/models/train-fuel-can.glb` — the train's fuel can (a 20-litre jerrycan). Task studio-train-fuel-can-asset-20261106-030724-01 under the user's 50-credit authorization (15 credits, 1 attempt); runtime derivative by `tools/asset-pipeline/props/build-train-fuel-can.mjs` (provenance: `assets/derivatives/train-fuel-can.json`).
+- The train's fuel cart is a composition of two existing models (`assets/models/p7-hand-truck-t25.glb` and `assets/models/reactor-waste-drum.glb`); nothing new was generated for it.
+<!-- END train-fuel-and-airtank-models -->
+
 <!-- BEGIN train-fuel-audio-20261106 (fuel-build.mjs) -->
 ## Train fuel audio (engine stall, fuel pour, fuel cart rolling)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the train-fuel
