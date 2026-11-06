@@ -197,7 +197,9 @@ describe('U04 round atrium columns: generation-time records', () => {
     const walk = (d: string) => { for (const f of fs.readdirSync(d)) { const q = path.join(d, f); if (fs.statSync(q).isDirectory()) walk(q); else if (/\.ts$/.test(f) && fs.readFileSync(q, 'utf8').split('\n').some(l => !/^\s*(\/\/|\*)/.test(l) && /\.round = true|round: true/.test(l))) hits.push(path.relative(src, q)); } }; // code lines only (doc comments may name the flag)
     walk(src);
     // task reactor-expansion-20261101: the Reactor's core vessel (coreFloor.ts) and waste repository casks (wasteDress.ts) are cylinders
-    expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts']);
+    // task train-fuel-system-20261106-024923: world/fuelCarts.ts gives fuel carts riding as CARGO a round footprint in the riding car's own
+    // train-local collision model only (never a level prop: Subway / Office station props are untouched)
+    expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts', 'world/fuelCarts.ts']);
   });
 });
 

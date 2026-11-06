@@ -22,7 +22,9 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
   const {LEVELS} = await import('../src/levels/registry');
   const key = (i: number): SectionKey => ({level: 'subway', section: 'main', station: sid(i)});
 
-  function shell(o: {depart?: 'in-tunnel' | 'outside'; failPrepare?: (k: SectionKey, n: number) => boolean} = {}) {
+  // (task train-fuel-system: `fuel` = the train's tank / chest cans after the New Game reset; default: a full tank + 16 chest cans,
+  // enough for every journey below that is not about fuel)
+  function shell(o: {depart?: 'in-tunnel' | 'outside'; failPrepare?: (k: SectionKey, n: number) => boolean; fuel?: {tank: number; chestCans: number}} = {}) {
     const storage = new FakeStorage();
     const battery = new FlashlightBattery();
     const saveValidate = {};
@@ -39,6 +41,7 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
       saveValidate, saves: new SaveSlots({storage, validate: saveValidate, listen: false}), currentSlot: null, saveRevision: 0, saveRunId: -1,
       lifecycle: new SingleFlight(), warmRun: Promise.resolve(), campaignListeners: [], transitGap: false, mapBack: null, retired: [],
       hud: {toast: (t: string) => log.push(`toast:${t}`)},
+      sfx: {engineStall: () => log.push('stall'), denied: () => log.push('denied')},
       trainRide: {
         riding: false,
         depart: async (j?: {route: readonly string[]}) => { log.push('depart'); journeys.push(j?.route ?? null); return o.depart === 'outside' ? {status: 'refused', reason: 'outside', message: 'Board the train first'} : {status: 'in-tunnel', via: 'tunnel', end: 'x1', dir: 1}; },
@@ -75,11 +78,93 @@ describe('campaign journey (real orchestration, recorded fakes)', async () => {
     }) as typeof g.saves.commit;
     (g as unknown as {wireRunLanes(): void}).wireRunLanes();
     (g as unknown as {resetCarry(): void}).resetCarry();
+    const fuelSetup = o.fuel ?? {tank: 4, chestCans: 16};
+    const train = (g as unknown as {playerTrain: PlayerTrainRecord}).playerTrain;
+    train.fuel.tank = fuelSetup.tank;
+    for (let k = 0, left = fuelSetup.chestCans; left > 0; k++) { const st = (g as unknown as {inv: Inventory}).inv.makeStack('fuel_can', 2); st.count = Math.min(2, left); left -= st.count; train.lockbox.slots[k] = st; }
     expect(g.commitSave('new-game', {slot: 1})).toMatchObject({ok: true});
     log.length = 0;
     commits.length = 0;
     return {g, log, commits, prepared, journeys, battery};
   }
+
+  // Task studio-beta-train-fuel-system-20261106-024923-01: the departure's fuel (one tank per stop; tank -> carts -> chest; charged once)
+  const fuelOf = (g: unknown) => { const t = (g as {playerTrain: PlayerTrainRecord}).playerTrain; return {tank: t.fuel.tank, chest: t.lockbox.slots.reduce((n, x) => n + (x?.itemId === 'fuel_can' ? x.count : 0), 0)}; };
+  it('fuel: an empty train STALLS — the engine sound + a toast with the numbers; nothing moves, saves or changes', async () => {
+    const {g, log, commits} = shell({fuel: {tank: 0, chestCans: 3}});
+    const before = JSON.stringify(g.run.campaign);
+    const r = await g.travelToStation(sid(1));
+    expect(r.ok).toBe(false);
+    expect(log.filter(l => !l.startsWith('toast'))).toEqual(['stall']); // no depart, no teardown, no save
+    expect(log.find(l => l.startsWith('toast:'))).toMatch(/^toast:Not enough fuel — this stop needs 1 tank, the train has ¾ tank\./);
+    expect(commits).toEqual([]);
+    expect(fuelOf(g)).toEqual({tank: 0, chest: 3});
+    expect(JSON.stringify(g.run.campaign)).toBe(before);
+  });
+
+  it('fuel: one stop burns ONE tank (the tank first); the departure save records the charge; nothing else drawn', async () => {
+    const {g, commits} = shell({fuel: {tank: 4, chestCans: 3}});
+    expect(await g.travelToStation(sid(1))).toEqual({ok: true});
+    expect(fuelOf(g)).toEqual({tank: 0, chest: 3});
+    expect(commits[0].campaign).toMatchObject({transit: {from: sid(0), to: sid(1), fuel: {cost: 4, debit: {tank: 4, carts: [], chest: []}}}});
+    expect(commits[1].campaign.transit).toBeNull();
+    const dep = (g.saves.read(1) as unknown as {file: {run: {participants: Record<string, {fuel: unknown}>}}}).file; // (the arrival save)
+    expect(dep.run.participants['player-train'].fuel).toEqual({v: 1, tank: 0, cargo: []});
+  });
+
+  it('fuel: the chest feeds the tank automatically — 1 in the tank + 3 chest cans make a stop; a 3-stop route costs 3 tanks', async () => {
+    const a = shell({fuel: {tank: 1, chestCans: 3}});
+    expect(await a.g.travelToStation(sid(1))).toEqual({ok: true});
+    expect(fuelOf(a.g)).toEqual({tank: 0, chest: 0});
+    // the 3-hop trip back over visited track: 12 units; 10 aboard refuses (stall), 12 goes with no stop on the way
+    const b = shell({fuel: {tank: 4, chestCans: 6}});
+    b.g.run.campaign = {...b.g.run.campaign!, current: sid(3), visited: [sid(0), sid(1), sid(2), sid(3)], known: [sid(0), sid(1), sid(2), sid(3), sid(4)]};
+    b.g.run.current = key(3);
+    expect((await b.g.travelToStation(sid(0))).ok).toBe(false);
+    expect(b.log).toContain('stall');
+    expect(fuelOf(b.g)).toEqual({tank: 4, chest: 6});
+    const train = (b.g as unknown as {playerTrain: PlayerTrainRecord}).playerTrain;
+    const st = (b.g as unknown as {inv: Inventory}).inv.makeStack('fuel_can', 2); st.count = 2; train.lockbox.slots[10] = st;
+    b.log.length = 0; b.prepared.clear();
+    expect(await b.g.travelToStation(sid(0))).toEqual({ok: true});
+    expect(fuelOf(b.g)).toEqual({tank: 0, chest: 0});
+    expect([...b.prepared.keys()]).toEqual([sid(0)]); // no intermediate station loaded / looted
+    expect(b.commits.at(-2)!.campaign).toMatchObject({transit: {route: [sid(3), sid(2), sid(1), sid(0)], fuel: {cost: 12}}});
+  });
+
+  it('fuel: Continue from the DEPARTURE save resumes the journey without charging again', async () => {
+    const a = shell({fuel: {tank: 4, chestCans: 2}});
+    // the departure half by hand (as a crash in the tunnel): the charge goes in with the journey
+    const f = a.g.fuelCheck(1);
+    expect(f.ok).toBe(true);
+    const t = (a.g as unknown as {playerTrain: PlayerTrainRecord}).playerTrain;
+    t.fuel.tank = 0;
+    a.g.run.campaign = {...a.g.run.campaign!, transit: {from: sid(0), to: sid(1), phase: 'departing', cheat: false, fuel: {cost: 4, debit: (f as unknown as {debit: never}).debit}}};
+    expect(a.g.commitSave('departure', {pose: {x: 1, z: 0, yaw: 0, pitch: 0, crouched: false}})).toMatchObject({ok: true});
+    const b = shell({fuel: {tank: 4, chestCans: 9}});
+    (b.g as unknown as {saves: SaveSlots}).saves = a.g.saves;
+    expect(await b.g.continueCampaign(1)).toEqual({ok: true});
+    expect(b.g.run.campaign).toMatchObject({current: sid(1), transit: null});
+    expect(fuelOf(b.g)).toEqual({tank: 0, chest: 2}); // the save's own fuel, not charged a second time
+  });
+
+  it('fuel: a journey that fails back to its start refunds EXACTLY what it drew; a refused departure refunds too', async () => {
+    const a = shell({fuel: {tank: 2, chestCans: 3}, failPrepare: k => k.station === sid(1)});
+    expect(await a.g.travelToStation(sid(1))).toEqual({ok: true}); // (the train returns to st-00)
+    expect(a.g.run.campaign!.current).toBe(sid(0));
+    expect(fuelOf(a.g)).toEqual({tank: 2, chest: 3});
+    const b = shell({depart: 'outside', fuel: {tank: 4, chestCans: 0}});
+    expect((await b.g.travelToStation(sid(1))).ok).toBe(false);
+    expect(fuelOf(b.g)).toEqual({tank: 4, chest: 0});
+  });
+
+  it('fuel: the map 1337 cheat waives the cost (cheat runs only); an ordinary run never travels free', async () => {
+    const {g} = shell({fuel: {tank: 0, chestCans: 0}});
+    expect((await g.travelToStation(sid(1))).ok).toBe(false);
+    g.run.campaign = enableCheat(g.run.campaign!);
+    expect(await g.travelToStation(sid(5))).toEqual({ok: true});
+    expect(fuelOf(g)).toEqual({tank: 0, chest: 0});
+  });
 
   // Task studio-beta-new-game-flashlight-off-20261105-022524-01 (user: "by default when starting a new game the light should not be on")
   it('flashlight: a fresh campaign starts with it OFF (the new-game save says off); switched ON it stays on through a journey and Continue restores ON', async () => {

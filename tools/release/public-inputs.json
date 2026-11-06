@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 42680,
-      "sha256": "9c84be8c9b529710305f3299df85158f572cd94976b2c06f1bd35bd31d641e6d"
+      "bytes": 45176,
+      "sha256": "989d4405400f91e07848bbf2785f6c9987e8b5ed914186dd7fe62be6bcfeee2a"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 1685,
-      "sha256": "185c70795086cc92b4784324d5dab24ef3d0f139dd578b88dbc466143b56e3bc"
+      "bytes": 1851,
+      "sha256": "66609466cb147d8e32a49adb35511a0fed0f67581ca6a88dc165c780b4471dfb"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -357,6 +357,21 @@
       "path": "assets/audio/flicker-02.mp3",
       "bytes": 26018,
       "sha256": "224b0dd8f3456d729f12f18e3c53655fe1fb7b4179047258bf6e96d600d060c7"
+    },
+    {
+      "path": "assets/audio/fuel-cart-roll-loop.mp3",
+      "bytes": 30720,
+      "sha256": "223081198653c9de61f2514c2e8f8262c0979eee991be8c61debfbfbab8fa06a"
+    },
+    {
+      "path": "assets/audio/fuel-engine-stall.mp3",
+      "bytes": 25495,
+      "sha256": "d95229cb140c50dd9365888ffeca13ffc2a6ee2bff5ab8a530f2f91cc2e6cda7"
+    },
+    {
+      "path": "assets/audio/fuel-pour.mp3",
+      "bytes": 20897,
+      "sha256": "59afe9ae2c224e50cf2027092167b797a43353dc8bc43ae87f991e85209d1f4f"
     },
     {
       "path": "assets/audio/heal-01.mp3",
@@ -1564,6 +1579,11 @@
       "sha256": "60204bf7da17a1eee224268875d11ac91d329933e88cedc3eb4c4058ee3b2212"
     },
     {
+      "path": "assets/derivatives/audio-fuel.json",
+      "bytes": 5049,
+      "sha256": "fb5f0ddc3985bfc038af63e781ce88e7a5b3a9cb8e9f9931a3d786981193cf0b"
+    },
+    {
       "path": "assets/derivatives/audio-iteration05.json",
       "bytes": 342301,
       "sha256": "bd70d5a46c5b976079440faca78268194bf422d4bfd1467981d199b19f79fa08"
@@ -1877,6 +1897,11 @@
       "path": "assets/derivatives/rifle-optic-iteration04.json",
       "bytes": 10032,
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
+    },
+    {
+      "path": "assets/derivatives/train-fuel-can.json",
+      "bytes": 3901,
+      "sha256": "7265ddde750c562f5287bbb55e369cd92a6e38c6113995ea687cc8f758a21a3c"
     },
     {
       "path": "assets/derivatives/user-knife-20261030.json",
@@ -3672,6 +3697,11 @@
       "path": "assets/models/tech-display-t25.glb",
       "bytes": 500576,
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
+    },
+    {
+      "path": "assets/models/train-fuel-can.glb",
+      "bytes": 780132,
+      "sha256": "77b89db5a7b585e0dd52bb9f44f638f5d32c96b909321ea910aadc8dd1c0bd8c"
     },
     {
       "path": "assets/models/trash-can-t25.glb",

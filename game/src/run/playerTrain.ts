@@ -10,10 +10,56 @@
 // Task train-lockbox-windows-20261101-232156 (lane BOX): the record also holds the train's LOCKBOX (run/trainLockbox.ts, 40 slots): saved
 // with the record (`lockbox` in the participant data; an old save without it loads an empty box), emptied by NewGame, kept by Travel.
 // `state` stays the train identity only.
+//
+// Task studio-beta-train-fuel-system-20261106-024923-01: the record also holds the train's FUEL (TrainFuel: the tank in quarter units and
+// the fuel CARTS aboard — physical cargo, train-local poses; fuel/fuel.ts). Saved with the record (`fuel`); NewGame: an EMPTY tank, no
+// cargo; Travel keeps it; Retry restores the entry state. An old save without `fuel` loads an empty tank and no cargo (no free fuel: its
+// stations get their fuel the first time they are built — Game.realizeStationFuel).
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
 import {TrainLockbox} from './trainLockbox';
+import {FUEL, trainFuelProblem, type CargoCartJSON, type TrainFuelJSON} from '../fuel/fuel';
+
+/**
+ * The train's fuel: the tank (quarter units, 0..FUEL.tankUnits) and the carts aboard. With a live cart system attached (`live`, the
+ * world's FuelCarts) the cargo's truth is the live carts (their poses / units at save time); without one (Node, between worlds) the
+ * stored records are kept exactly.
+ */
+export class TrainFuel {
+  tank = 0;
+  private cargo: CargoCartJSON[] = [];
+  live: {cargo(): CargoCartJSON[]; restore(c: CargoCartJSON[]): void} | null = null;
+
+  /** The carts aboard (live when attached, else the stored records). */
+  cargoRecords(): CargoCartJSON[] {
+    return (this.live ? this.live.cargo() : this.cargo).map(c => ({...c}));
+  }
+
+  /** Store cargo records (the live system hands them back when its world goes; a load without a live system). */
+  setCargo(c: readonly CargoCartJSON[]): void {
+    this.cargo = c.map(x => ({...x}));
+  }
+
+  toJSON(): TrainFuelJSON {
+    return {v: 1, tank: this.tank, cargo: this.cargoRecords()};
+  }
+
+  /** Exact load (a malformed record loads EMPTY: no tank, no cargo — never invented fuel). */
+  load(d: unknown): void {
+    const ok = d !== undefined && trainFuelProblem(d) === null;
+    const j = ok ? d as TrainFuelJSON : {v: 1 as const, tank: 0, cargo: []};
+    this.tank = Math.max(0, Math.min(FUEL.tankUnits, j.tank));
+    this.cargo = j.cargo.map(c => ({...c}));
+    this.live?.restore(this.cargo.map(c => ({...c})));
+  }
+
+  reset(): void {
+    this.tank = 0;
+    this.cargo = [];
+    this.live?.restore([]);
+  }
+}
 
 /** The level-one train every run starts with. */
 export const PLAYER_TRAIN_L1 = Object.freeze({id: 'player-train-l1', tier: 1});
@@ -42,6 +88,8 @@ export class PlayerTrainRecord {
   private s: PlayerTrainState = fresh();
   /** Lane BOX: the train's 40-slot Lockbox (the same object for the whole session; load / reset write it in place). */
   readonly lockbox = new TrainLockbox();
+  /** Task train-fuel-system: the tank + the carts aboard (the same object for the whole session). */
+  readonly fuel = new TrainFuel();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -64,12 +112,13 @@ export class PlayerTrainRecord {
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => ({...this.state, lockbox: this.lockbox.toJSON()}),
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON()}),
       load: d => {
         this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
         this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
+        this.fuel.load(d && typeof d === 'object' ? (d as {fuel?: unknown}).fuel : undefined);
       },
-      reset: () => { this.s = fresh(); this.lockbox.clear(); },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); },
     };
   }
 }

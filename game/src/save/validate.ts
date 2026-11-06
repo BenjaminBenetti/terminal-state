@@ -24,6 +24,7 @@ import {WEAPONS} from '../weapons/weapons';
 import {LOCKBOX_SLOTS} from '../run/trainLockbox';
 import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
+import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {ENTERED_KEEP, MAX_HOLDER_PARTS, SAVE_FORMAT, SAVE_POINTS, SAVE_REASONS, SEEN_WORD_BITS, deriveMeta, migrateFilterUnits, seenWordCount, type SaveFileV1Like, type SerializedRunV1} from './serialize';
@@ -369,7 +370,15 @@ function campaign(v: unknown, path: string, inject?: NetworkValidator): Campaign
     if (from !== current) bad(`${p}.from`, `the train leaves ${from} but the current station is ${current}`);
     if (from === to) bad(p, 'a journey to the same station');
     if (tc && !cheat) bad(`${p}.cheat`, 'a cheat journey without the map cheat');
-    for (const k of Object.keys(t)) if (!['from', 'to', 'phase', 'cheat', 'route'].includes(k)) bad(p, `unexpected field '${k}'`);
+    for (const k of Object.keys(t)) if (!['from', 'to', 'phase', 'cheat', 'route', 'fuel'].includes(k)) bad(p, `unexpected field '${k}'`);
+    if (has(t, 'fuel')) { // task train-fuel-system: the journey's one-time fuel charge
+      const f = obj(t.fuel, `${p}.fuel`);
+      only(f, `${p}.fuel`, ['cost', 'debit']);
+      const cost = int(f.cost, `${p}.fuel.cost`, 0, FUEL.hopUnits * SAVE_LIMITS.stations);
+      const dp = debitProblem(f.debit);
+      if (dp) bad(`${p}.fuel.debit`, dp);
+      if (debitUnits(f.debit as FuelDebit) !== cost) bad(`${p}.fuel`, 'the fuel drawn does not match the journey cost');
+    }
     if (has(t, 'route')) {
       // (campaign-polish lane MAP) a multi-hop journey: its route over visited stations, checked like the campaign validator does
       arr(t.route, `${p}.route`, ids.size, 3).forEach((s, i) => node(s, `${p}.route[${i}]`));
@@ -437,6 +446,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       if (lb.v !== 1) bad(`${p}.lockbox.v`, 'unsupported Lockbox version');
       slotList(lb.slots, `${p}.lockbox.slots`, LOCKBOX_SLOTS, seen);
     }
+    if (r.fuel !== undefined) { const fp = trainFuelProblem(r.fuel); if (fp) bad(`${p}.fuel`, fp); } // task train-fuel-system
   }
 }
 
@@ -459,6 +469,7 @@ function lanes(v: unknown, path: string): void {
   if (keys.length > SAVE_LIMITS.lanes) bad(path, 'too many lane stores');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a lane id');
   if (has(o, BAG_LANE)) sectionBags(o[BAG_LANE], `${path}.${BAG_LANE}`);
+  if (has(o, FUEL_LANE)) { const fp = stationFuelProblem(o[FUEL_LANE]); if (fp) bad(`${path}.${FUEL_LANE}`, fp); } // task train-fuel-system
 }
 
 function pickup(v: unknown, path: string): void {

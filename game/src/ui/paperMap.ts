@@ -32,6 +32,7 @@
 import type {CampaignState, StationId, StationNode, SubwayNetwork} from '../campaign/types';
 import {MAINTENANCE_ROUTE, archetypeLabel, isServiceLine} from '../campaign/network';
 import {canTravel, enableCheat, neighbors, reactorKnown, travelBlock, travelPlan, visibleEdges, visibleNodes} from '../campaign/discovery';
+import {tanksText} from '../fuel/fuel'; // task train-fuel-system: the card's fuel wording
 import {DEV_GRANT_SEQUENCE, SequenceMatcher, digitOfCode} from '../items/devGrant';
 import {isTypingTarget} from '../player/input';
 import {seedToCode} from '../core/rng';
@@ -279,6 +280,35 @@ export function paperMapKeyAction(e: KeyLike, onButton = false): PaperMapKey {
 
 export type MapMode = 'travel' | 'view';
 
+/**
+ * Task studio-beta-train-fuel-system-20261106-024923-01: the map's fuel figures. `node(id)`: a known station's fuel in quarter-tank units
+ * (planned before a visit, remaining after one, live for the current station); `aboard`: the train's reserves (tank + chest cans + carts
+ * aboard); `cost(hops)`: a trip's cost (0 with the map cheat). Absent = no fuel figures (non-campaign maps / tests).
+ */
+export interface MapFuel {
+  node(id: StationId): {units: number; source: 'planned' | 'remaining' | 'live'} | null;
+  aboard(): {tank: number; chest: number; carts: number; total: number};
+  cost(hops: number): number;
+}
+/** The station fuel bar (paper px): two segments = two tanks, filled by quarters; more than two tanks adds a "+". */
+export const FUEL_BAR = {w: 18, h: 4.2, gap: 3.2, tanks: 2} as const;
+
+/** The ink of one station's fuel bar under its marker (pure). */
+export function fuelBarSvg(p: Pt, r: number, units: number, source: 'planned' | 'remaining' | 'live'): string {
+  const x0 = p.x - FUEL_BAR.w / 2, y0 = p.y + r + FUEL_BAR.gap, segW = (FUEL_BAR.w - 1.2) / FUEL_BAR.tanks;
+  const o: string[] = [`<g class="pm-fuel pm-fuel-${source}" data-units="${units}">`];
+  for (let k = 0; k < FUEL_BAR.tanks; k++) {
+    const sx = x0 + k * (segW + 1.2), f = Math.max(0, Math.min(1, (units - k * 4) / 4));
+    o.push(`<rect x="${n1(sx)}" y="${n1(y0)}" width="${n1(segW)}" height="${FUEL_BAR.h}" rx="0.8" fill="none" stroke="#3a3028" stroke-width="0.8"></rect>`);
+    // (no template fragment may start with '/': tools/release/package-ci.mjs reads it as a root-absolute URL)
+    const look = source === 'planned' ? 'fill="#8a6f2c" opacity="0.7"' : 'fill="#3f6b3a"';
+    if (f > 0) o.push(`<rect x="${n1(sx + 0.5)}" y="${n1(y0 + 0.5)}" width="${n1(Math.max(0.6, (segW - 1) * f))}" height="${n1(FUEL_BAR.h - 1)}" ${look}></rect>`);
+  }
+  if (units > FUEL_BAR.tanks * 4) o.push(`<text x="${n1(x0 + FUEL_BAR.w + 1.6)}" y="${n1(y0 + FUEL_BAR.h)}" font-size="6.5">+</text>`);
+  o.push('</g>');
+  return o.join('');
+}
+
 export interface MapStation {
   node: StationNode;
   p: Pt;
@@ -318,7 +348,7 @@ const baseLineName = (name: string) => name.replace(/ \([^)]*\)$/, '');
  * mode and the scale only — NEVER on `selected` / `focused` (lane MAP item 12: selecting never moves / wraps / hides a station name);
  * those two only add pencil marks and the route trace.
  */
-export function buildMapModel(state: CampaignState, mode: MapMode, scale: number, selected: StationId | null, focused: StationId | null, layout = paperLayout(state.network)): MapModel {
+export function buildMapModel(state: CampaignState, mode: MapMode, scale: number, selected: StationId | null, focused: StationId | null, layout = paperLayout(state.network), fuelShown = false): MapModel {
   void focused; // the keyboard focus only draws a pencil ring (renderInk); it never reaches the label layout
   const net = state.network;
   const nodes = visibleNodes(state);
@@ -383,7 +413,9 @@ export function buildMapModel(state: CampaignState, mode: MapMode, scale: number
     const clear = s.adjacent ? 8 : s.current ? 6 : 0;
     return {id: s.node.id, x: s.p.x, y: s.p.y, r: s.r + clear, dirs: dirsOf(s.node.id), force: s.current || s.reactor, variants};
   });
-  const markers = stations.map(s => ({id: s.node.id, box: {x0: s.p.x - s.r - 1, y0: s.p.y - s.r - 1, x1: s.p.x + s.r + 1, y1: s.p.y + s.r + 1}}));
+  // (task train-fuel-system: with fuel shown, each marker's box reaches down over its fuel bar so no label covers it)
+  const fx = (s: {p: Pt; r: number}) => (fuelShown ? Math.max(s.r + 1, FUEL_BAR.w / 2 + 1) : s.r + 1);
+  const markers = stations.map(s => ({id: s.node.id, box: {x0: s.p.x - fx(s), y0: s.p.y - s.r - 1, x1: s.p.x + fx(s), y1: s.p.y + s.r + 1 + (fuelShown ? FUEL_BAR.gap + FUEL_BAR.h + 1 : 0)}}));
   const labels = placeLabels(items, {bounds: PAPER.area, markers, segs, blocked: [{x0: PAPER.band.x0, y0: PAPER.band.y0, x1: PAPER.band.x1, y1: PAPER.band.y1 + 8}]});
   // legend: the lines serving a visible station, one entry per ink (the service line is in the symbol key, with its station)
   const legend: MapModel['legend'] = [];
@@ -434,7 +466,7 @@ function keyRow(cells: {w: number; svg: string}[], x0: number, x1: number, y: nu
 const keyText = (t: string, fs: number) => t.length * fs * 0.56 + 2;
 
 /** The SVG ink layer of a model (paper coordinates; the sheet transform pans / zooms it with the paper). */
-export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, selected: StationId | null, focused: StationId | null): string {
+export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, selected: StationId | null, focused: StationId | null, fuel?: MapFuel | null): string {
   const o: string[] = [`<svg class="pm-ink" viewBox="0 0 ${PAPER.w} ${PAPER.h}" width="${PAPER.w}" height="${PAPER.h}" aria-hidden="true">`];
   // the title band: title, line legend, symbol key
   const b = PAPER.band;
@@ -449,6 +481,7 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
   if (m.reactorShown) symbols.push(sym('reactor', 'Reactor'));
   if (m.maintenanceShown) symbols.push(sym('maintenance', MAINTENANCE_ROUTE.name, `<line x1="0" y1="-4" x2="24" y2="-4" stroke="${MAINTENANCE_ROUTE.color}" stroke-width="3" stroke-dasharray="5 3"/>`));
   symbols.push({w: 30 + keyText('Visited / not yet', 11), svg: `${stationGlyph('subway', {x: 5, y: -4}, 4.6, true)}${stationGlyph('subway', {x: 17, y: -4}, 4.6, false)}<text x="27" y="0" font-size="11">Visited / not yet</text>`});
+  if (fuel) symbols.push({w: 26 + keyText('Fuel (tanks)', 11), svg: `${fuelBarSvg({x: 9, y: -9}, 0, 6, 'remaining')}<text x="22" y="0" font-size="11">Fuel (tanks)</text>`});
   if (mode === 'travel') symbols.push({w: 18 + keyText('One stop away', 11), svg: `<circle cx="6" cy="-3.5" r="7" fill="none" stroke="#4a4038" stroke-width="1.4" stroke-dasharray="2.5 2.5"/><text x="18" y="0" font-size="11">One stop away</text>`});
   o.push(keyRow(lines, 390, b.x1 - 12, b.y0 + 21));
   o.push(`<g class="pm-key">${keyRow(symbols, 390, b.x1 - 12, b.y0 + 43)}</g>`);
@@ -473,6 +506,12 @@ export function renderInk(m: MapModel, net: SubwayNetwork, mode: MapMode, select
     o.push(`<g class="${cls}" data-id="${esc(s.node.id)}">${stationGlyph(s.kind, s.p, s.r, s.visited, s.hub)}</g>`);
   }
   o.push(`</g>`);
+  // (task train-fuel-system) each known station's fuel bar
+  if (fuel) {
+    o.push(`<g class="pm-fuels">`);
+    for (const s of m.stations) { const f = fuel.node(s.node.id); if (f) o.push(fuelBarSvg(s.p, s.r, f.units, f.source)); }
+    o.push(`</g>`);
+  }
   // marks (under the labels, so a pencil mark never hides a name): the selected route, you are here, selection, keyboard focus
   o.push(`<g class="pm-marks">`);
   if (m.route) o.push(`<polyline class="pm-route" points="${m.route.map(p => `${n1(p.x)},${n1(p.y)}`).join(' ')}" fill="none" stroke="#262320" stroke-width="3" stroke-dasharray="1 6" stroke-linecap="round" stroke-linejoin="round"/>`);
@@ -524,6 +563,8 @@ export interface PaperMapOpen {
   onClose?: () => void;
   /** 1337 typed: the host persists enableCheat(state); a returned state is shown, else the map applies enableCheat to its copy. */
   onCheat?: () => CampaignState | void;
+  /** Task train-fuel-system: the fuel figures (station bars; the card's trip cost / reserves). */
+  fuel?: MapFuel;
 }
 
 /** The details card's width (CSS px; narrower screens: the viewport minus a margin) and its height when it cannot be measured. */
@@ -564,6 +605,8 @@ const CSS = `
 #papermap .pm-p-lines i { display: inline-block; width: 18px; height: 6px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 #papermap .pm-p-state { margin-top: 8px; }
 #papermap .pm-p-note { margin-top: 4px; color: var(--cream-dim, #b9b19c); font-size: 12px; }
+#papermap .pm-p-fuel { color: var(--cream, #ece4cf); }
+#papermap .pm-p-short { color: #e0574b; font-weight: 700; }
 #papermap .pm-p-actions { display: flex; gap: 8px; margin-top: 10px; }
 #papermap .pm-p-actions button { flex: 1; padding: 9px 12px; }
 #papermap .pm-help { position: absolute; left: 12px; bottom: 10px; right: 12px; color: var(--cream-dim, #b9b19c); font-size: 11.5px; text-shadow: 0 1px 2px #000; pointer-events: none; }
@@ -932,8 +975,8 @@ export class PaperMap {
     const st = this.state;
     if (!st || !this.openFlag) return;
     if (this.selected && !this.selectable(this.selected)) this.selected = null;
-    this.model = buildMapModel(st, this.mode, this.view.s, this.selected, this.focused, this.paperPositions());
-    if (this.sheet) this.sheet.innerHTML = renderInk(this.model, st.network, this.mode, this.selected, this.focused);
+    this.model = buildMapModel(st, this.mode, this.view.s, this.selected, this.focused, this.paperPositions(), !!this.args?.fuel);
+    if (this.sheet) this.sheet.innerHTML = renderInk(this.model, st.network, this.mode, this.selected, this.focused, this.args?.fuel ?? null);
     this.applyTransform();
     const mode = this.root?.querySelector('.pm-mode');
     if (mode) {
@@ -978,9 +1021,27 @@ export class PaperMap {
       : `<div class="pm-p-note">View only — travel from the train's console.</div><div class="pm-p-actions"><button type="button" class="pm-cancel">Close details</button></div>`;
     p.innerHTML = `<div class="pm-p-name">${esc(n.name)}</div><div class="pm-p-kind${reactor ? ' pm-reactor-kind' : ''}">${icon}<span>${esc(kindText)}</span></div>`
       + `<div class="pm-p-lines">${lineHtml}</div><div class="pm-p-state">${esc(state)}</div>`
-      + (note ? `<div class="pm-p-note">${esc(note)}</div>` : '') + actions;
+      + this.fuelLines(n.id, plan) + (note ? `<div class="pm-p-note">${esc(note)}</div>` : '') + actions;
     p.classList.remove('pm-hidden');
     this.positionCard();
+  }
+
+  /**
+   * Task train-fuel-system: the card's fuel lines — the station's fuel (left / at first visit / here now) and, for a destination, the
+   * trip: stops, cost and the train's reserves aboard (enough or not; Depart still works and the engine tells you if it is short).
+   */
+  private fuelLines(id: StationId, plan: {hops: number} | null): string {
+    const f = this.args?.fuel;
+    if (!f) return '';
+    const out: string[] = [];
+    const nf = f.node(id);
+    if (nf) out.push(`Fuel here: ${tanksText(nf.units)}${nf.source === 'planned' ? ' (not visited — untouched)' : nf.source === 'live' ? ' (lying here now)' : ' (left here)'}`);
+    if (plan && this.mode === 'travel') {
+      const cost = f.cost(plan.hops), a = f.aboard();
+      const tail = cost === 0 ? ' — no fuel used (cheat)' : a.total >= cost ? '' : ' — NOT ENOUGH';
+      out.push(`Trip: ${plan.hops} stop${plan.hops > 1 ? 's' : ''} · needs ${tanksText(cost)} · aboard ${tanksText(a.total)}${a.chest || a.carts ? ` (tank ${tanksText(a.tank)}, chest ${tanksText(a.chest)}, carts ${tanksText(a.carts)})` : ''}${tail}`);
+    }
+    return out.map((l, i) => `<div class="pm-p-note pm-p-fuel${i && l.endsWith('NOT ENOUGH') ? ' pm-p-short' : ''}">${esc(l)}</div>`).join('');
   }
 
   /** Where the card stands now (screen px; QA / tests). */

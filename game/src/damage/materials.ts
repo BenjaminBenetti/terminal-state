@@ -259,6 +259,7 @@ export const ITEM_CLASS: Record<string, DamageClass> = {
   // Iteration 16 (primary, for lane GEAR's items): soft armor / nylon / boots / gloves = fabric; the hard hat = plastic
   armor_vest: 'fabric', chest_rig: 'fabric', backpack: 'fabric', helmet: 'plastic', boots: 'fabric', gloves: 'fabric',
   gas_mask: 'rubber', gas_filter: 'sheetMetal', // task gasmask-breach-20261030 (mask lane): rubber full-face mask; painted steel filter canister
+  fuel_can: 'sheetMetal', // task train-fuel-system: a pressed-steel jerrycan
   airtank_backpack: 'steel', // task filter-tension-airtank: a steel air cylinder on a tubular frame (the harness is the minor part)
   // Task office-props-physics-scale-20261030 (lane RACK): crafting materials — circuit board + wire bundle; bent steel; plastic specimen jar
   electrical_parts: 'plastic', scrap_metal: 'sheetMetal', bio_mater: 'plastic',
@@ -332,6 +333,7 @@ export const ITEM_PHYSICS: Record<string, ItemPhysics> = {
   helmet: {mass: 0.4, shape: 'box', mat: 'soft'}, boots: {mass: 1.6, shape: 'box', mat: 'soft'}, gloves: {mass: 0.2, shape: 'box', mat: 'cloth'},
   // task gasmask-breach-20261030 (mask lane): full-face mask ~0.6 kg (rubber), 40 mm filter canister ~0.25 kg (steel)
   gas_mask: {mass: 0.6, shape: 'box', mat: 'soft'}, gas_filter: {mass: 0.25, shape: 'cylinder', mat: 'metal'},
+  fuel_can: {mass: 18, shape: 'box', mat: 'metal'}, // task train-fuel-system: a full 20 l jerrycan (~17 kg of diesel + the can)
   // task filter-tension-airtank: a charged ~6 l steel cylinder (~7 kg) + aluminium frame and harness (~2 kg)
   airtank_backpack: {mass: 9, shape: 'box', mat: 'metal'},
   // Task office-props-physics-scale-20261030 (lane RACK): board + relays + wire coil ~0.35 kg; bent brackets / plate / rail ~1.1 kg;

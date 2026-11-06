@@ -77,6 +77,12 @@ export interface PendingTransit {
    * continuous ride: only `to` is ever built / arrived at; the intermediate stations are passed in the tunnel, never loaded.
    */
   route?: StationId[];
+  /**
+   * Task studio-beta-train-fuel-system-20261106-024923-01: the journey's fuel, charged ONCE when it departed (fuel/fuel.ts): `cost` quarter
+   * units (hops x 4; 0 = the map cheat) and exactly what was drawn (`debit`: refunded only when the journey fails back to `from`). A
+   * reload of the departure save resumes the journey without charging again. Absent in older saves (their journeys resume free).
+   */
+  fuel?: {cost: number; debit: import('../fuel/fuel').FuelDebit};
 }
 
 /** The run's campaign record (serialized in saves). */
