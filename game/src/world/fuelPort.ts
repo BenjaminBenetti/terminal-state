@@ -196,7 +196,11 @@ export class FuelPortSystem {
     g.inputOwners?.push(() => !!this.pour);
     g.hitListeners.push(hit => { if (this.pour && hit.amount > 0) this.cancel('hit'); });
     g.stateListeners?.push(s => { if (s !== 'playing') { if (this.pour) this.cancel('menu'); this.aimed = false; } });
-    g.sectionHooks.push({build: () => { this.attach(); this.ensureHeldModel(); }, teardown: () => { if (this.pour) this.cancel('teardown'); this.aimed = false; this.setHud(null); }});
+    g.sectionHooks.push({build: () => { this.attach(); this.ensureHeldModel(); }, teardown: () => {
+      if (this.pour) this.cancel('teardown');
+      this.aimed = false;
+      if (!g.trainRide?.riding) this.setHud(null); // (riding: the readout stays through the tunnel gap, where no frame hook runs)
+    }});
     g.warmRegistry.addPool('fuel-port', () => this.warmRoots());
     return this;
   }

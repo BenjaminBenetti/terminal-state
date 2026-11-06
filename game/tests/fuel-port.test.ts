@@ -381,6 +381,8 @@ describe('HUD fuel readout', () => {
     s.g.trainRide.riding = true;
     s.step();
     expect(s.hud()).not.toBeNull();
+    for (const h of s.g.sectionHooks) h.teardown?.(); // the tunnel gap (no frame hooks run): the readout stays while riding
+    expect(s.hud()).not.toBeNull();
     s.g.trainRide.riding = false;
     // inside the car
     s.g.player.x = -3; s.g.player.z = 0.4;
@@ -392,6 +394,12 @@ describe('HUD fuel readout', () => {
     expect(s.hud()).not.toBeNull();
     s.g.player.z = -(1.4933 + 7);
     s.step();
+    expect(s.hud()).toBeNull();
+    // a parked teardown (travel / Retry) hides it
+    s.g.player.z = -2.3;
+    s.step();
+    expect(s.hud()).not.toBeNull();
+    for (const h of s.g.sectionHooks) h.teardown?.();
     expect(s.hud()).toBeNull();
   });
 
