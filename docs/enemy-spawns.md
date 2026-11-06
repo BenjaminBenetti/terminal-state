@@ -246,7 +246,7 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
 - **`service`**: `SERVICE_CONTEXT`, the station's Beyond-the-Station annex (`TRACK_EXT_SKYWAYS.annex.max = 1`, the standard
   one-roll chance), appended last; the Strainer only there (`STRAINER_CONTEXTS` unchanged).
 - No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
-  static props, never enemies; the prize car runs zombies over through the ordinary kill path (`Game.blastKill`).
+  static props, never enemies.
 
 ## Units: what the numbers are
 
