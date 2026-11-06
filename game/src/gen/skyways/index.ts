@@ -29,7 +29,7 @@ import type {SectionGenContext} from '../../levels/types';
 import type {LightPlacement, StationLayout} from '../stationTypes';
 import {cropKit} from '../office/common';
 import {holdCells} from '../office/transit';
-import {placeOfficeEnemies, placeOfficeSupplies, type SpawnField} from '../office/spawns';
+import {placeOfficeEnemies, type SpawnField} from '../office/spawns';
 import {placeWeaponFinds} from '../weaponFinds';
 import {DAYLIGHT_TINT} from '../office/windows';
 import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EXT_STATS, type TrackExtConfig} from '../trackExt/index';
@@ -166,7 +166,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   const field: SpawnField = {dist: levelDistance(layout.levels, sx, sy, 0, layout.levelLinks), keep: keepPoints(layout)};
   const ctxOf: [number, 'station' | 'street' | 'floor'][] = [[0, 'station'], [1, 'street'], [2, 'floor']];
   for (const [lv, context] of ctxOf) if (spawns.contexts[context]) placeOfficeEnemies(layout, rng.fork(`skyways-enemies-${lv}`), field, [lv], spawns, context);
-  placeOfficeSupplies(layout, rng.fork('skyways-supplies'), field, [0, 1, 2], false, loot);
+  // (no loose floor supplies: user 2026-11-06 — ordinary small loot sits on shelves / counters / in containers; the floor is reserved
+  // for key items such as the weapon finds below)
   placeWeaponFinds(layout, rng.fork('skyways-weapons'), layout.startWeapon ?? 'rifle');
 
   // --- Lighting, daylight, traversal ------------------------------------------------------------------------------------------

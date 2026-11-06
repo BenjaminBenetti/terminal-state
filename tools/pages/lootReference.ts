@@ -135,7 +135,7 @@ export const GENERATED_FROM: readonly string[] = [
  */
 export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   /** Task track3-eaton-centre-20261031 (lane PROFILES): + 'mall' (gen/mall/supplies.ts placeMallSupplies, once per storey). */
-  floor: 'subway' | 'office' | 'mall';
+  floor: 'subway' | 'office' | 'mall' | 'none';
   /** + 'mall-plan' (task track3-eaton-centre-20261031): the mall's bounded once-per-run gun-shop weapon plan (lane SHOPS). */
   weapons: 'station' | 'office-plan' | 'mall-plan';
   pistolBoxes: boolean;
@@ -155,8 +155,9 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // Task reactor-build-20261101 (primary + lane GEN): the Reactor's per-storey mall floor program (gen/mall/supplies.ts placeMallSupplies)
   reactor: {floor: 'mall', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
   // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the Office's loose floor program over its three storeys
-  // (gen/office/spawns.ts placeOfficeSupplies) and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
-  skyways: {floor: 'office', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  // — no loose floor program (user 2026-11-06: ordinary small loot sits on shelves / counters / in containers; the floor is reserved for
+  // key finds) — and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
+  skyways: {floor: 'none', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -1057,6 +1058,15 @@ function floorProgram(B: Builder, level: LevelId, P: LootProfile): FloorProgramI
     return [{id: 'annex', label: 'Service annex (per annex)', runs: 'once per seeded service annex off a track tunnel (0-2 per level; gen/annexContent.ts placeAnnexFloor) — not in the per-level totals', finds, totals: totals(finds)}];
   };
   const annexNote = 'Service annexes (Track 2): the "annex" variant runs once per seeded annex (0-2 per level) on the annex\'s own fork; its finds land in the annex rooms (purpose `floor` weights; battery / flare: FLOOR_ECONOMY.themeWeight) and are NOT in the exact per-level totals (the annex count is a seeded census quantity).';
+  if (kind === 'none') {
+    // task studio-skyways-level-20261106-054448-01: a level without a loose floor program (its annexes keep theirs)
+    const annex = annexVariant();
+    return {
+      id: 'none', level, label: 'No loose floor supplies (ordinary loot in holders: shelves, counters, containers)', variants: annex,
+      placement: {derivable: false, reason: 'The level places no loose floor supplies of its own (user 2026-11-06: ordinary small loot appears on shelves / counters / in containers; standalone floor placement is reserved for key items such as weapon finds).', weights: []},
+      at: [], knobs: [], notes: annex.length ? [annexNote] : [],
+    };
+  }
   if (kind === 'subway') {
     const S = P.tables.floor.subway;
     const finds = programFinds(S, 'SUBWAY_FLOOR', 'FLOOR_ECONOMY.medKeep', 'FLOOR_ECONOMY', 'n copies on the spawn stream');
