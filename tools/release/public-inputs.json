@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 46300,
-      "sha256": "96b2f8fd2eb872f9f4399e457d0ba84e5bb4df92880ffede617de547d1053fbf"
+      "bytes": 45176,
+      "sha256": "989d4405400f91e07848bbf2785f6c9987e8b5ed914186dd7fe62be6bcfeee2a"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2041,
-      "sha256": "1c631377982070e2515e0e7f2c1b6710bf9e9e1f267407990bdf05e23f3d13a1"
+      "bytes": 1851,
+      "sha256": "66609466cb147d8e32a49adb35511a0fed0f67581ca6a88dc165c780b4471dfb"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1979,6 +1979,11 @@
       "sha256": "5e8c85cc164404a7c4f5f848b68c519e6e891774ca0b33a336a61b22b7c7c0c8"
     },
     {
+      "path": "assets/derivatives/skyways-prize-car.json",
+      "bytes": 12742,
+      "sha256": "9db1a2d612e6f0ee982617794780b33f8cf4a38c6d8e22941ed85bc26fa98a57"
+    },
+    {
       "path": "assets/derivatives/skyways-ramen-art.json",
       "bytes": 5789,
       "sha256": "ac21dde4cbe651bbad17d4f33c44cef23f82a8cdbc57ae961c940b83e9377190"
@@ -3842,6 +3847,11 @@
       "path": "assets/models/skyways-mascot-poses.glb",
       "bytes": 2754056,
       "sha256": "03f834661d65629e6ebda366e0e706981907fad58f3f897f332705780886ecc5"
+    },
+    {
+      "path": "assets/models/skyways-prize-car.glb",
+      "bytes": 5918956,
+      "sha256": "ec9087c9ba0e592b0a1e6d65a375564b7e53a0fdcf41a6e7fc3aa68f663f120d"
     },
     {
       "path": "assets/models/skyways-saucepan.glb",
