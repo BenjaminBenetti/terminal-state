@@ -546,13 +546,18 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
         if (open.length && rng.chance(0.75)) lookout(bc, open[0], 'random');
       }
     }
-    // dead-end shop ARCADES off the lobby (a mall arm), now and then on either storey
-    for (const level of [1, 2]) if (rng.chance(bc.plan === 'court' || bc.plan === 'offset' ? 0.45 : 0.25)) arcade(bc, level);
+    // dead-end shop ARCADES off the lobby (a mall arm lined with units), on either storey — two in the roomier plans now and then
+    // (destinations pass: more shops overall, the anchors took some lobby walls)
+    for (const level of [1, 2]) {
+      const p = bc.plan === 'court' || bc.plan === 'offset' ? 0.75 : 0.5;
+      if (rng.chance(p)) arcade(bc, level);
+      if (rng.chance(p * 0.45)) arcade(bc, level);
+    }
     // a SERVICE CORRIDOR lined with back rooms (or the office suite), on one storey or both
     for (const level of [1, 2]) {
       if (host && level === f.addonLevel) continue;
       const offices = b.offices === level;
-      if (offices || rng.chance(0.4)) serviceCorridor(bc, level, offices);
+      if (offices || rng.chance(0.28)) serviceCorridor(bc, level, offices);
     }
   }
 
@@ -562,16 +567,16 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
   // --- 9. Storefront units (the food court's counters), washrooms, back of house ---------------------------------------------------
   // the station concourse first (storey 0: food counters + kiosks), the pedways' kiosks, then every building's street / skyway level
   const con0 = (sc.publicAreas.get(0) ?? [concourse.id]).filter(id => !pedwayAreas.includes(id));
-  shopsOn(sc, 0, con0, 'food', rng.int(5, 8));
-  if (pedwayAreas.length) shopsOn(sc, 0, pedwayAreas, 'food', rng.int(1, 3));
+  shopsOn(sc, 0, con0, 'food', rng.int(7, 10));
+  if (pedwayAreas.length) shopsOn(sc, 0, pedwayAreas, 'food', rng.int(2, 4));
   for (const bc of carves.values()) {
     for (const level of [1, 2]) {
       const pub = (bc.publicAreas.get(level) ?? []).filter(id => !addon.areas.includes(id));
       const fc = foodCourt?.building === bc.b.id && foodCourt.level === level;
       washroom(bc, level, pub);
       if (fc) shopsOn(bc, level, pub.filter(id => id !== foodCourt!.area), 'food', rng.int(2, 4));
-      shopsOn(bc, level, pub, level === 1 ? 'mixed' : 'skyway', level === 1 ? rng.int(5, 8) : rng.int(6, 10));
-      backOfHouse(bc, level, pub, rng.int(3, 5));
+      shopsOn(bc, level, pub, level === 1 ? 'mixed' : 'skyway', level === 1 ? rng.int(10, 14) : rng.int(11, 16));
+      backOfHouse(bc, level, pub, rng.int(2, 4));
     }
   }
   // the station's own back of house off the concourse
@@ -1108,7 +1113,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame): SkywaysCarve | 
     const width = rng.int(8, 10);
     for (const s of rng.shuffle(SIDES.slice())) {
       const room = s === 'N' ? bc.hub.y - bc.I.y : s === 'S' ? bc.I.y + bc.I.h - bc.hub.y - bc.hub.h : s === 'W' ? bc.hub.x - bc.I.x : bc.I.x + bc.I.w - bc.hub.x - bc.hub.w;
-      const len = Math.min(rng.int(14, 24), room - 10);
+      const len = Math.min(rng.int(18, 30), room - 10);
       if (len < 10) continue;
       for (const lat of latOf(bc, s, width, 'random').slice(0, 10)) {
         const r = armOff(bc, level, s, lat, width, len);
