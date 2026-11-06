@@ -546,6 +546,36 @@ describe('perf recorder controller: recording', () => {
   });
 });
 
+describe('perf recorder: the recent warm-up result (schemaMinor 5, task static-batching-warmup-20261105)', () => {
+  it('a capture started after the load carries the warm-up that prepared the level: status, budget, cut stage, stages; reasons sanitized', async () => {
+    const clock = {t: 1000};
+    vi.spyOn(performance, 'now').mockImplementation(() => clock.t);
+    const g = new FakeGame() as FakeGame & {warmup?: unknown};
+    g.warmup = {status: 'partial', mode: 'full', ms: 120004.2, budgetMs: 120000, cutStage: 'materials', reason: 'time budget (120 s) reached in materials',
+      plan: {items: 1366, others: 722, casters: 900}, stages: {materials: {done: 900, total: 1366, ms: 119000}, passes: {done: 1, total: 1, ms: 300}, shadows: {done: 0, total: 20, ms: 0}, view: {done: 1, total: 1, ms: 40}}};
+    const ctl = new PerfRecorderController(asGame(g), quick);
+    ctl.start('qa');
+    for (let k = 0; k < 5; k++) playFrame(g, ctl, clock);
+    await ctl.stop('manual', 'qa');
+    const r = ctl.reportObject() as any;
+    expect(r.schemaMinor).toBe(5);
+    const want = {status: 'partial', mode: 'full', budgetMs: 120000, cutStage: 'materials', reason: 'time budget (120 s) reached in materials', warmupMs: 120004.2,
+      stages: {materials: {done: 900, total: 1366, ms: 119000}, shadows: {done: 0, total: 20, ms: 0}}, plan: {items: 1366}};
+    expect(r.world.segments[0]).toMatchObject({route: 'recording-start', lastWarmup: want});
+    expect(r.environment.warmup).toMatchObject(want);
+    // an error-message reason (may hold a path / URL) is withheld
+    g.warmup = {status: 'failed', mode: 'full', ms: 3, reason: 'fetch https://x.example/a?b=1 failed', stages: {}};
+    const c2 = new PerfRecorderController(asGame(g), quick);
+    c2.start('qa');
+    playFrame(g, c2, clock);
+    await c2.stop('manual', 'qa');
+    const r2 = c2.reportObject() as any;
+    expect(r2.world.segments[0].lastWarmup.reason).toBe('withheld (not a plain reason)');
+    expect(JSON.stringify(r2)).not.toContain('x.example');
+    vi.restoreAllMocks();
+  });
+});
+
 describe('perf recorder: privacy', () => {
   it('asset ids are basenames + a category (no directories, query strings, fragments, other origins)', () => {
     const o = 'https://game.example';

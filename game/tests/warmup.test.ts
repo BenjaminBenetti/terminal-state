@@ -402,3 +402,58 @@ describe('USER-UPDATE-02: station transition keeps shared programs alive until t
     expect(t2).toBe(1);
   });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Task static-batching-warmup-20261105 (user: "double that to 120s"): a 120 s MAXIMUM work budget, the likely first uses first, and the
+// cut recorded (a GAME72 laptop capture: 'partial' at 60 s with the held items, torch casters and loot batches left for play).
+describe('warm-up budget / first-use order / cut stage (task static-batching-warmup-20261105)', () => {
+  it('the default budget is a 120 s maximum: a run that finishes early returns at once (complete, no cut)', async () => {
+    expect(WARMUP_DEFAULTS.budgetMs).toBe(120_000);
+    const s = station();
+    const r = new FakeRenderer();
+    let t = 0;
+    const {host} = hostFor(s, r);
+    const res = await runWarmup(host, {now: () => (t += 1), yieldFrame: async () => {}});
+    expect(res.status).toBe('complete');
+    expect([res.budgetMs, res.cutStage]).toEqual([120_000, null]);
+    expect(res.ms).toBeLessThan(500); // (fake clock: one tick per call — it ends with the work, it never waits for the budget)
+  });
+
+  it('pooled first-use items (effects, prototypes) compile first, then the representatives nearest the camera', async () => {
+    const s = station();
+    const r = new FakeRenderer();
+    const {host} = hostFor(s, r);
+    const res = await runWarmup(host, {compileChunk: 2, yieldFrame: async () => {}});
+    expect(res.status).toBe('complete');
+    const calls = r.calls.filter(c => c.target === 'scene-pass-rt');
+    const order = calls.flatMap(c => c.objects);
+    // the 3 pooled items (the empty decal batch is planned but this fake projects nothing for it) fill the first 2 chunks of 2
+    const pooled = [s.sparks, s.decals, s.protoMesh];
+    const firstCalls = new Set(calls.slice(0, Math.ceil(pooled.length / 2)).flatMap(c => c.objects));
+    for (const o of [s.sparks, s.protoMesh]) expect(firstCalls.has(o)).toBe(true);
+    expect(firstCalls.has(s.floor) || firstCalls.has(s.farRoom)).toBe(false);
+    expect(order.indexOf(s.farRoom)).toBeGreaterThan(order.indexOf(s.floor)); // (40 m away: after the room around the camera)
+    expect(new Set(order)).toEqual(new Set(planWarmup(s.scene, {mode: 'full', cameraMask: 1, pools: [s.fx, s.proto]}).items.map(i => i.object))); // (same set)
+  });
+
+  it('a budget cut in the materials stage: partial, cutStage materials, the held-item pass STILL compiled, no hidden frames', async () => {
+    const s = station();
+    const vmScene = new THREE.Scene(), vmCam = camera();
+    const held = new THREE.Group(); held.visible = false;
+    const knife = mesh(box(), std(0x222222), 0, -1); held.add(knife); vmScene.add(held);
+    const r = new FakeRenderer();
+    let t = 0;
+    const {host, log} = hostFor(s, r);
+    host.registry = registryFor(s, reg => reg.addPass({name: 'weapons and held items', scene: vmScene, camera: vmCam, target: () => 'overlay-rt', hidden: () => [held]}));
+    const res = await runWarmup(host, {compileChunk: 2, budgetMs: 1000, now: () => (t += 400), yieldFrame: async () => {}});
+    expect(res.status).toBe('partial');
+    expect([res.cutStage, res.budgetMs]).toEqual(['materials', 1000]);
+    expect(res.reason).toMatch(/time budget \(1 s\) reached in materials/);
+    expect(res.stages.materials.done).toBeLessThan(res.stages.materials.total);
+    expect(r.calls.some(c => c.target === 'overlay-rt' && c.objects.includes(knife))).toBe(true);
+    expect(res.stages.passes).toMatchObject({done: 1, total: 1});
+    expect(log.frames.length).toBe(0);
+    expect(held.visible).toBe(false); // (restored)
+    expect(log.finished).toBe(1);
+  });
+});

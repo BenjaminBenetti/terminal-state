@@ -24,6 +24,7 @@ import type {ShopUse, StationLayout, Storefront} from '../gen/stationTypes';
 import {canvasTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial} from './materials';
 import {PAINT, purposeMaterial, purposeMenuMaterial} from './purposeTextures';
+import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
 
 export interface StorefrontDeps {
   /** Shape material by key (falls back to a related key). */
@@ -173,7 +174,8 @@ function accentVertexColored(): THREE.Material {
  */
 function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: StorefrontDeps): number {
   let instances = 0;
-  const buckets = new Map<string, {mat: string; geos: THREE.BufferGeometry[]}>();
+  const buckets = new Map<string, {mat: string; geos: THREE.BufferGeometry[]; level?: number}>();
+  const parts0: {level: number; x: number; z: number; mk: string; geo: THREE.BufferGeometry}[] = [];
   const shapes = new Map<string, PurposePart[]>();
   const tmp = new THREE.Color(), paintCol = new THREE.Color();
   // task mall-round2 (lane PERF): storey-split chunks, mall only (task studio-reactor-submit, lane CPU: + the Reactor's stacked tiers)
@@ -205,7 +207,7 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
       const m4 = placeM(p);
       // Task mall-round2-20261031 (lane PERF): in the mall a chunk is also per storey ('<storey>:<cx>,<cz>'): a chunk holding two
       // storeys' fixtures had a box spanning both, so the level culler could never level- / slab- / occlusion-cull it (world/levelCulling.ts)
-      const chunk = `${byStorey ? `${p.level ?? 0}:` : ''}${Math.floor(p.x / CHUNK)},${Math.floor(p.z / CHUNK)}`;
+      const level = p.level ?? 0; // (task static-batching-warmup-20261105: every level splits per storey; the cohort is chosen below)
       const accent = tmp.set(p.shop !== undefined ? layout.storefronts[p.shop]?.color ?? 0xb0a890
         : palette?.length ? palette[Math.abs(Math.round(p.x * 7 + p.z * 13 + p.variant)) % palette.length] : 0xb0a890);
       for (const part of parts) {
@@ -223,17 +225,30 @@ function buildPurposeProps(group: THREE.Group, layout: StationLayout, deps: Stor
           for (let i = 0; i < n; i++) c.set([c3.r, c3.g, c3.b], i * 3);
           b.setAttribute('color', new THREE.BufferAttribute(c, 3));
         }
-        const key = `${chunk}|${mk}`;
-        let bk = buckets.get(key);
-        if (!bk) buckets.set(key, (bk = {mat: mk, geos: []}));
-        bk.geos.push(b);
+        parts0.push({level, x: p.x, z: p.z, mk, geo: b});
       }
+    }
+  }
+  // Task static-batching-warmup-20261105 (world/staticCohorts.ts): per (level, material key), the 12 m chunks of that level — or, where the
+  // culler has no slab occlusion (!byStorey), 48 m cohorts when its parts there total <= STATIC_COHORTS.levelTriangles
+  // ('purpose-<level>:<cx>,<cz>|<key>' / 'purpose-<level>:c<cx>,<cz>|<key>'; damage/propDamage.ts reads the key after '|'). The mall /
+  // Reactor already split per storey (byStorey); the Subway / Office now do too.
+  const byMat = new Map<string, typeof parts0>();
+  for (const e of parts0) { const k = `${e.level}|${e.mk}`; let l = byMat.get(k); if (!l) byMat.set(k, (l = [])); l.push(e); }
+  for (const list of byMat.values()) {
+    const tris = list.reduce((s, e) => s + trianglesOf(e.geo), 0) / list.length; // (box parts: equal per part; the mean keeps the rule exact)
+    for (const [cohort, {list: es}] of planCohorts(list, e => e, CHUNK, tris, !byStorey)) {
+      const key = `${cohort}|${es[0].mk}`;
+      let bk = buckets.get(key);
+      if (!bk) buckets.set(key, (bk = {mat: es[0].mk, geos: [], level: es[0].level}));
+      for (const e of es) bk.geos.push(e.geo);
     }
   }
   for (const [key, bk] of buckets) {
     const geo = mergeGeometries(bk.geos);
     const mesh = new THREE.Mesh(geo, bk.mat === 'accent' ? accentVertexColored() : materialFor(deps, bk.mat));
     mesh.name = `purpose-${key}`;
+    if (bk.level !== undefined) mesh.userData.level = bk.level; // (the culler's level of the cohort)
     mesh.matrixAutoUpdate = false;
     mesh.updateMatrix();
     group.add(mesh);

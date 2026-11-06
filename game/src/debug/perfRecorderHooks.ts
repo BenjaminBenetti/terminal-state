@@ -121,19 +121,30 @@ const sectionDetail = (a: unknown[]): Record<string, unknown> => {
 };
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
+/**
+ * A warm-up result (render/warmup.ts WarmupResult) as the report stores it (numbers / short strings only): status, reason, mode, ms,
+ * (schemaMinor 5) budgetMs and cutStage, per-stage done / total / ms, the plan's counts. Null when absent.
+ */
+function warmupSummary(r: unknown): Record<string, unknown> | null {
+  const w = r as {status?: unknown; mode?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
+  if (!w || typeof w !== 'object') return null;
+  const stages: Record<string, unknown> = {};
+  for (const [k, s] of Object.entries(w.stages ?? {})) stages[k] = {done: s?.done ?? null, total: s?.total ?? null, ms: typeof s?.ms === 'number' ? r2(s.ms) : null};
+  const plan: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(w.plan ?? {})) if (typeof v === 'number') plan[k] = v;
+  // (a reason may be an error message: kept only without URL / path characters, else withheld)
+  const reason = typeof w.reason === 'string' ? (/[?#:/\\@]/.test(w.reason) ? 'withheld (not a plain reason)' : w.reason.slice(0, 120)) : null;
+  return {status: str(w.status), mode: str(w.mode), reason, warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null,
+    budgetMs: typeof w.budgetMs === 'number' ? w.budgetMs : null, cutStage: str(w.cutStage), stages, plan: w.plan ? plan : null};
+}
+
 /** Game methods timed while recording (instance wrappers; removed at stop). */
 const GAME_WRAPS: WrapSpec[] = [
   {name: 'generateSection', kind: 'level.generate', detail: sectionDetail},
   {name: 'prepareSection', kind: 'level.prepare', async: true, detail: sectionDetail},
   {name: 'buildSection', kind: 'level.build', detail: sectionDetail},
   {name: 'leaveSection', kind: 'level.leave'},
-  {name: 'prepareGraphics', kind: 'warmup', async: true, result: r => {
-    const w = r as {status?: unknown; mode?: unknown; ms?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
-    if (!w) return null;
-    const stages: Record<string, unknown> = {};
-    for (const [k, s] of Object.entries(w.stages ?? {})) stages[k] = {done: s?.done ?? null, total: s?.total ?? null, ms: typeof s?.ms === 'number' ? r2(s.ms) : null};
-    return {status: str(w.status), mode: str(w.mode), warmupMs: typeof w.ms === 'number' ? r2(w.ms) : null, stages, plan: w.plan ? {...w.plan} : null};
-  }},
+  {name: 'prepareGraphics', kind: 'warmup', async: true, result: r => warmupSummary(r)},
   {name: 'stageLevelTextures', kind: 'warmup.textures', async: true},
   {name: 'backgroundCompile', kind: 'compile.background', async: true, detail: () => ({note: 'the arrival gate (<= 8 s) of the journey compile; the job itself: flags.compiling + compile.journey.* events. GPU / driver pipeline compile completion is not observable'})},
   {name: 'travel', kind: 'travel', async: true, route: 'menu-travel', detail: a => { const q = a[0] as {to?: {level?: unknown; section?: unknown}; via?: unknown} | undefined; return {to: str(q?.to?.level), section: str(q?.to?.section), via: str(q?.via)}; },
@@ -161,7 +172,7 @@ interface GameExtras {
   world?: {culler?: {stats?: {culled?: number; level?: number}}} | null;
   layout?: {name?: unknown} | null;
   softwareGl?: {software?: boolean} | null;
-  warmup?: {mode?: unknown; status?: unknown} | null;
+  warmup?: {mode?: unknown; status?: unknown; reason?: unknown; ms?: unknown; budgetMs?: unknown; cutStage?: unknown; plan?: Record<string, unknown>; stages?: Record<string, {done?: number; total?: number; ms?: number}>} | null;
   atmosphereBypass?: string | null;
   frameBudget?: {diagnostics(): {refresh?: {hz?: number; measured?: boolean}}};
   camera?: {fov?: number};
@@ -657,7 +668,7 @@ export class PerfRecorderController {
       renderer: gp ? {backend: gp.backend, label: gp.label, adapter: gp.adapter ? {...gp.adapter} : null, glRenderer: gp.glRenderer, compatibilityMode: gp.compatibilityMode,
         deviceLost: gp.deviceLost !== null, errors: gp.errors.length} : null,
       softwareRasterizer: x.softwareGl ? x.softwareGl.software === true : null,
-      warmup: x.warmup ? {mode: str(x.warmup.mode), status: str(x.warmup.status)} : null,
+      warmup: x.warmup ? warmupSummary(x.warmup) : null, // (schemaMinor 5: the full recent result, not only mode / status)
       atmosphereBypass: typeof x.atmosphereBypass === 'string' ? true : x.atmosphereBypass === null ? false : null,
     };
   }
@@ -689,7 +700,9 @@ export class PerfRecorderController {
     const g = this.g, cur = noWorld ? undefined : key && typeof key === 'object' ? key : g.run?.current;
     const name = noWorld ? null : this.x.layout?.name, seed = !noWorld && Number.isFinite(g.seed) ? g.seed >>> 0 : null;
     this.capture.world(t, {level: str(cur?.level), section: str(cur?.section), station: str(cur?.station), seed, seedCode: seed === null ? null : seedToCode(seed),
-      name: typeof name === 'string' ? name.slice(0, 64) : null, route});
+      name: typeof name === 'string' ? name.slice(0, 64) : null, route,
+      // (schemaMinor 5) a capture started after the load: the warm-up that prepared this level (why it may be 'partial', where it was cut)
+      ...(route === 'recording-start' ? {lastWarmup: !noWorld && this.x.warmup ? warmupSummary(this.x.warmup) : null} : {})});
   }
 
   /** The load route of what runs now: the outermost lifecycle entry point in flight ('other' outside one). */

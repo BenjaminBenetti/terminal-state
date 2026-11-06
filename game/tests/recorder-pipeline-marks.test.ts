@@ -26,7 +26,7 @@ const pid = (object: string, extra: Partial<FirstUsePipeline> = {}): Omit<FirstU
 
 describe('pipeline-request identity: the core capture (summary.firstUse.pipelines)', () => {
   it('bounded: the most expensive in-render requests kept, async first-come; time order; drops disclosed; per frame in worst detail', () => {
-    expect(PERF_SCHEMA_MINOR).toBe(4); // (3: these fields; 4 adds frames.columns.uniformWrites — tests/upload-dedupe.test.ts)
+    expect(PERF_SCHEMA_MINOR).toBe(5); // (3: these fields; 4 adds frames.columns.uniformWrites — tests/upload-dedupe.test.ts; 5 the lastWarmup segment)
     expect(PERF_CAPS.firstUsePipelines).toBe(240);
     const c = new PerfCapture({firstUsePipelines: 3});
     c.firstUsePipeline(10, 9, pid('before-start')); // not recording: ignored
