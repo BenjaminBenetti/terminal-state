@@ -1,0 +1,74 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-con-stage",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "ART",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways convention add-on: the main-stage backdrop (as generated, 3:2)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-art.mjs",
+ "rawStorage": "reference/tasks/skyways-level-20261106-054448/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art-<nn>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (focus per piece)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1536x1024, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-con-stage.jpg",
+  "bytes": 361058,
+  "sha256": "31b72a8dfb8ac8e4d587c0af3b70d76f15f5b1f936a2d02fc8b95249d4f06f25",
+  "width": 1536,
+  "height": 1024,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "backdrop",
+   "subject": "main-stage backdrop: \"AURORA ANIME FEST\" / \"MAIN STAGE\" + Kumako and invented characters",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 12,
+    "session": "01a1af83-2194-75d3-92b6-d9658e08127e",
+    "requested": "2026-11-06T06:19:28.879429Z",
+    "finished": "2026-11-06T06:20:33.588640Z",
+    "seconds": 64.6
+   },
+   "prompt": {
+    "file": "art-12.txt",
+    "sha256": "5c9e683e3e41785d2e0e3cb886c09d80972186309e841047b6cfed53de70193e"
+   },
+   "source": {
+    "file": "codex-12-exec-828b690c-d623-40fb-9cb2-f6e4da1b24ce.png",
+    "sha256": "a685fcbe00410cf50c837d357a4e58832c3a15876aa385d9f482774b83b32d6f",
+    "bytes": 2508886,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   }
+  }
+ ]
+}

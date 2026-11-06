@@ -1,0 +1,171 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-con-signs",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "ART",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways convention add-on: the welcome sign (1152 x 768) and the merch-table prints sheet (768 x 768; one UV rect per print card)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-art.mjs",
+ "rawStorage": "reference/tasks/skyways-level-20261106-054448/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art-<nn>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (focus per piece)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1920x768, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-con-signs.jpg",
+  "bytes": 332448,
+  "sha256": "26ef45558ed4df8a027eabe34651bd0a2f2a1bb5a2d6b38be3e345ca14072759",
+  "width": 1920,
+  "height": 768,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "welcome",
+   "subject": "welcome sign: Kumako waving + \"WELCOME TO AURORA ANIME FEST\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 13,
+    "session": "01a1af84-1ee3-76d1-a701-0f214f749325",
+    "requested": "2026-11-06T06:20:33.725908Z",
+    "finished": "2026-11-06T06:21:13.858553Z",
+    "seconds": 40.1
+   },
+   "prompt": {
+    "file": "art-13.txt",
+    "sha256": "cc4d342e13bc37f9020f9582b3c8bbf7bb0050d29a9e503c7abe8bc6d8db98d0"
+   },
+   "source": {
+    "file": "codex-13-exec-b2f5e1ce-e3b8-451e-b9e5-3fd227e17a4d.png",
+    "sha256": "d3f2459a7330855f6a9d56fdcd0c812fa0d609b39dcfc4ef46b08798c432c40f",
+    "bytes": 2040325,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 1152,
+    "h": 768
+   }
+  },
+  {
+   "name": "prints",
+   "subject": "merch-table prints sheet: four chibi art prints (Kumako, magical girl, swordsman, ghost)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 14,
+    "session": "01a1af84-bc2b-7402-9847-4fd5dfe3a940",
+    "requested": "2026-11-06T06:21:13.991633Z",
+    "finished": "2026-11-06T06:22:24.101929Z",
+    "seconds": 70
+   },
+   "prompt": {
+    "file": "art-14.txt",
+    "sha256": "29dc2ae7d107073d705e87a14645dfe795827f36b486d1e248eb07ac0df32459"
+   },
+   "source": {
+    "file": "codex-14-exec-106bf02e-6c7a-4876-a972-f8efc7bc9a49.png",
+    "sha256": "8ec8b4ecfa68f408272ae22f2a8be79f2687c3197bbefd91d8fedac1651674e0",
+    "bytes": 2452715,
+    "width": 1254,
+    "height": 1254
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1254,
+    "h": 1254
+   },
+   "placed": {
+    "x": 1152,
+    "y": 0,
+    "w": 768,
+    "h": 768
+   },
+   "subPieces": [
+    {
+     "name": "print-kumako",
+     "placed": {
+      "x": 1172,
+      "y": 19,
+      "w": 356,
+      "h": 358
+     },
+     "sourceBox": [
+      32,
+      31,
+      614,
+      615
+     ]
+    },
+    {
+     "name": "print-magical-girl",
+     "placed": {
+      "x": 1543,
+      "y": 19,
+      "w": 357,
+      "h": 358
+     },
+     "sourceBox": [
+      639,
+      31,
+      1221,
+      615
+     ]
+    },
+    {
+     "name": "print-swordsman",
+     "placed": {
+      "x": 1172,
+      "y": 391,
+      "w": 356,
+      "h": 357
+     },
+     "sourceBox": [
+      32,
+      638,
+      614,
+      1222
+     ]
+    },
+    {
+     "name": "print-ghost",
+     "placed": {
+      "x": 1543,
+      "y": 391,
+      "w": 357,
+      "h": 357
+     },
+     "sourceBox": [
+      639,
+      638,
+      1221,
+      1222
+     ]
+    }
+   ]
+  }
+ ]
+}

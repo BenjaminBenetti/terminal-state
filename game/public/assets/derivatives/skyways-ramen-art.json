@@ -1,0 +1,236 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-ramen-art",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "ART",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways ramen restaurant: noren curtain (1024 x 683), illustrated menu board (1024 x 683; NO prices in the art: one UV rect per empty price strip, prices are drawn at runtime) and promo poster (512 x 768)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-art.mjs",
+ "rawStorage": "reference/tasks/skyways-level-20261106-054448/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art-<nn>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (focus per piece)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1536x1366, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-ramen-art.jpg",
+  "bytes": 457852,
+  "sha256": "9f1b40a4e9cb97b70264d69c6a0cd1d9c439a07a532093842db6f4ed35d6742f",
+  "width": 1536,
+  "height": 1366,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "noren",
+   "subject": "ramen restaurant noren curtain: \"MENYA HOSHI\" / 麺屋 星 + a ramen bowl",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 16,
+    "session": "01a1af86-784f-7bc1-aa6e-5e517a312cc4",
+    "requested": "2026-11-06T06:23:07.688586Z",
+    "finished": "2026-11-06T06:23:44.555844Z",
+    "seconds": 36.8
+   },
+   "prompt": {
+    "file": "art-16.txt",
+    "sha256": "08d0001a6839be3be3ee4ee8ea0d3cdf6b3c6dd658727991bdfc5dc0a11bed41"
+   },
+   "source": {
+    "file": "codex-16-exec-57e095fe-d8ea-46ce-9956-9ebc023c1afd.png",
+    "sha256": "c979ca2bc57844d2d4ecfd21b4b0945bc81796722b9bef90843a7b1fb048b792",
+    "bytes": 3402156,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 1,
+    "y": 0,
+    "w": 1535,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 683
+   }
+  },
+  {
+   "name": "menu",
+   "subject": "ramen restaurant illustrated menu board: six dishes with names and EMPTY price strips (no prices)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 17,
+    "session": "01a1af87-08fc-7f21-8eb7-00d46d14fb68",
+    "requested": "2026-11-06T06:23:44.728633Z",
+    "finished": "2026-11-06T06:24:35.323757Z",
+    "seconds": 50.5
+   },
+   "prompt": {
+    "file": "art-17.txt",
+    "sha256": "f853290e5f1269c0770114927a4c098db823f0a65bcd22bcf4531c114bb811a0"
+   },
+   "source": {
+    "file": "codex-17-exec-5276ab1f-15e4-49e1-99e9-61476401a75c.png",
+    "sha256": "a42171ca2db5412d0bf483c8f336f9a7a2fc5ae331e0ea37317fe63056e97621",
+    "bytes": 3041743,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 1,
+    "y": 0,
+    "w": 1535,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 683,
+    "w": 1024,
+    "h": 683
+   },
+   "subPieces": [
+    {
+     "name": "price-shoyu-ramen",
+     "placed": {
+      "x": 52,
+      "y": 1042,
+      "w": 274,
+      "h": 25
+     },
+     "sourceBox": [
+      79,
+      538,
+      490,
+      576
+     ]
+    },
+    {
+     "name": "price-miso-ramen",
+     "placed": {
+      "x": 382,
+      "y": 1043,
+      "w": 262,
+      "h": 25
+     },
+     "sourceBox": [
+      573,
+      539,
+      966,
+      577
+     ]
+    },
+    {
+     "name": "price-tonkotsu-ramen",
+     "placed": {
+      "x": 699,
+      "y": 1042,
+      "w": 273,
+      "h": 25
+     },
+     "sourceBox": [
+      1049,
+      538,
+      1458,
+      576
+     ]
+    },
+    {
+     "name": "price-spicy-ramen",
+     "placed": {
+      "x": 51,
+      "y": 1312,
+      "w": 276,
+      "h": 26
+     },
+     "sourceBox": [
+      78,
+      943,
+      491,
+      982
+     ]
+    },
+    {
+     "name": "price-gyoza",
+     "placed": {
+      "x": 381,
+      "y": 1313,
+      "w": 263,
+      "h": 25
+     },
+     "sourceBox": [
+      572,
+      944,
+      966,
+      982
+     ]
+    },
+    {
+     "name": "price-karaage",
+     "placed": {
+      "x": 698,
+      "y": 1313,
+      "w": 274,
+      "h": 26
+     },
+     "sourceBox": [
+      1048,
+      944,
+      1458,
+      983
+     ]
+    }
+   ]
+  },
+  {
+   "name": "poster",
+   "subject": "ramen restaurant promo poster: \"MENYA HOSHI\" / \"TONKOTSU RAMEN\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 18,
+    "session": "01a1af87-cf31-75c3-9fbc-91885839607c",
+    "requested": "2026-11-06T06:24:35.459131Z",
+    "finished": "2026-11-06T06:25:09.623403Z",
+    "seconds": 34.1
+   },
+   "prompt": {
+    "file": "art-18.txt",
+    "sha256": "df712d073050c7418bfe86f87cc05492cd224d9849e4b9f9151351ad2c85610a"
+   },
+   "source": {
+    "file": "codex-18-exec-da785f6f-e3d8-4d46-b666-23e9bdbf7e78.png",
+    "sha256": "34fbf6e39cc28363848d6fef588a4d986069f1aa13b3cfeac9aeb107cb7a04a6",
+    "bytes": 2648314,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1024,
+    "y": 0,
+    "w": 512,
+    "h": 768
+   }
+  }
+ ]
+}
