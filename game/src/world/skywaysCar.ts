@@ -36,8 +36,11 @@
 // PERSISTENCE: the lane store SKYWAYS_CAR_LANE {v, x, y, z, yaw, level} (world/skywaysCarStore.ts; strict, validated by
 // save/validate.ts) — written at teardown, on getting out and when play pauses; read at the build (a record that no longer satisfies
 // the floor rule falls back to the generator's spawn). Exactly one car per station world.
-// AUDIO: `audio` (CarAudio) — door and impacts reuse existing cues (the fridge door's clunk, the metal crash, the flesh slap); no engine
-// clip exists in the bank, so start / stop / setSpeed are a clean no-op hook for later Sound Lab clips.
+// AUDIO: `audio` (CarAudio; lane CAR2: the Sound Lab car set through audio/sfx.ts carEngine / stopCarEngine / carSkid / carDoor) — the
+// engine runs only while someone is in the car: it starts on getting in (a short rev), follows the speed / throttle every frame (idle at
+// rest), stops on getting out / death / a state change / teardown (a pause or a new world also silences it in Sfx); the tyre skid on a
+// hard brake / handbrake above CAR_RT.skidSpeed (an edge, rate-limited: CAR_RT.skidEvery); the car door on getting in / out; impacts
+// reuse existing cues (the metal crash, the flesh slap).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -93,6 +96,11 @@ export const CAR_RT = {
   noteEvery: 2.5,
   /** Model fetch wait behind the loading screen (ms). */
   modelWaitMs: 8000,
+  /** (lane CAR2) The tyre skid: a hard brake / handbrake begun above skidSpeed (m/s), at most every skidEvery s. */
+  skidSpeed: 6,
+  skidEvery: 1.2,
+  /** (lane CAR2) The engine's sound position (car frame: under the bonnet). */
+  engineAt: {x: 0, y: 0.75, z: -1.5},
 } as const;
 
 export const CAR_TEXT = {
@@ -104,35 +112,41 @@ export const CAR_TEXT = {
   placeRule: 'Not from the driver seat',
 } as const;
 
-/** The car's sound hook (the default maps onto existing cues; the lead may swap in Sound Lab clips). */
+/** The car's sound hook (sfxCarAudio maps it onto Sfx). */
 export interface CarAudio {
-  /** The engine: the driver got in / out. */
-  start(): void;
+  /** The engine: the driver got in (it starts with a short rev at the engine, world x / y / z) / the car is empty (it stops). */
+  start(x: number, y: number, z: number): void;
   stop(): void;
-  /** Engine speed 0..1 and whether the throttle is held. */
-  setSpeed(speed01: number, throttle: boolean): void;
+  /** Every frame someone drives: speed 0..1 of the top speed, throttle 0..1, the engine's world position. */
+  engine(speed01: number, throttle01: number, x: number, y: number, z: number): void;
+  /** A tyre skid (a hard brake / handbrake turn at speed), at the car. */
+  skid(x: number, y: number, z: number): void;
   /** A contact (closing m/s): the car body against the world, or a body it hit. */
   impact(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): void;
   door(open: boolean, x: number, y: number, z: number): void;
 }
 
+type At = {x: number; y: number; z: number};
 interface CarSfx {
   physImpact?(x: number, y: number, z: number, speed: number, family: 'prop' | 'flesh', mass?: number): void;
-  containerOpen?(kind: string, at?: {x: number; y: number; z: number}): void;
-  containerClose?(kind: string, at?: {x: number; y: number; z: number}): void;
+  carEngine?(speed01: number, throttle01: number, at?: At, o?: {rev?: boolean}): void;
+  stopCarEngine?(): void;
+  carSkid?(at?: At): boolean;
+  carDoor?(at?: At): void;
   denied?(): void;
   impact?(x: number, y: number, z: number, surface: 'metal'): void;
 }
 
-/** The default CarAudio over the existing Sfx (no engine clip in the bank: the engine calls are no-ops). */
+/** The default CarAudio over Sfx: the Sound Lab car set (engine loops, skid, door) + the existing impact cues. */
 export function sfxCarAudio(sfx: () => unknown): CarAudio {
   const s = () => (sfx() as CarSfx | null) ?? null;
   return {
-    start() { /* no engine clip yet (Sound Lab hook) */ },
-    stop() { /* no engine clip yet */ },
-    setSpeed() { /* no engine clip yet */ },
+    start(x, y, z) { s()?.carEngine?.(0, 0, {x, y, z}, {rev: true}); },
+    stop() { s()?.stopCarEngine?.(); },
+    engine(speed01, throttle01, x, y, z) { s()?.carEngine?.(speed01, throttle01, {x, y, z}); },
+    skid(x, y, z) { s()?.carSkid?.({x, y, z}); },
     impact(x, y, z, speed, what) { s()?.physImpact?.(x, y, z, Math.min(5, speed), what === 'car' ? 'prop' : 'flesh', what === 'car' ? 1300 : 70); },
-    door(open, x, y, z) { const q = s(); if (open) q?.containerOpen?.('fridge', {x, y, z}); else q?.containerClose?.('fridge', {x, y, z}); },
+    door(_open, x, y, z) { s()?.carDoor?.({x, y, z}); },
   };
 }
 
@@ -220,6 +234,9 @@ export class SkywaysCar {
   readonly ctl: CarControls = {...NO_CONTROLS};
   private yawSeen = 0;
   private clock = 0;
+  /** (lane CAR2) The skid's edge (a hard brake / handbrake was already on last frame) and the last skid's clock. */
+  private skidding = false;
+  private skidT = -Infinity;
   private noteT: number = CAR_RT.noteEvery;
   private readonly step: CarStep = {moved: 0, blocked: false, refused: false, impact: null};
   private readonly world: CarWorld = {levels: null as unknown as Levels, props: null};
@@ -393,7 +410,9 @@ export class SkywaysCar {
     this.writePlayer(0);
     const d = carToWorld(b.x, b.z, b.yaw, -this.spec.width / 2, this.spec.exits.left.z);
     this.audio.door(true, d.x, b.y + 0.8, d.z);
-    this.audio.start();
+    const en = this.enginePos();
+    this.audio.start(en.x, en.y, en.z);
+    this.skidding = false;
     this.prompt = CAR_TEXT.driving;
   }
 
@@ -542,9 +561,32 @@ export class SkywaysCar {
     this.zombieContacts(dt);
     if (!this.driving && P.alive && Math.abs(P.y - b.y) < 1.2) this.separatePlayer();
     this.syncView();
-    this.audio.setSpeed(this.driving ? Math.min(1, Math.abs(b.v) / CAR_PHYS.forwardMax) : 0, this.driving && (this.ctl.forward || this.ctl.back));
+    if (this.driving) this.driveAudio();
     if (this.driving) this.prompt = CAR_TEXT.driving;
     else this.prompt = h.state === 'playing' && this.canEnter() && this.pickAim() ? CAR_TEXT.getIn : null;
+  }
+
+  /** (lane CAR2) The engine's world position (CAR_RT.engineAt under the bonnet). */
+  private enginePos(): {x: number; y: number; z: number} {
+    const b = this.body!, A = CAR_RT.engineAt, p = carToWorld(b.x, b.z, b.yaw, A.x, A.z);
+    return {x: p.x, y: b.y + A.y, z: p.z};
+  }
+
+  /**
+   * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel), the tyre skid when a hard
+   * brake (the pedal against the travel) or the handbrake BEGINS above CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s).
+   */
+  private driveAudio(): void {
+    const b = this.body!, c = this.ctl, v = b.v, stop = CAR_PHYS.stopSpeed;
+    const throttle = (c.forward && v > -stop) || (c.back && v < stop) ? 1 : 0;
+    const en = this.enginePos();
+    this.audio.engine(Math.min(1, Math.abs(v) / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z);
+    const hard = Math.abs(v) > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
+    if (hard && !this.skidding && this.clock - this.skidT >= CAR_RT.skidEvery) {
+      this.skidT = this.clock;
+      this.audio.skid(b.x, b.y + 0.3, b.z);
+    }
+    this.skidding = hard;
   }
 
   private syncView(): void {

@@ -4,11 +4,12 @@
 // yaw 0 is -Z: the camera convention of SkywaysCarSpawn.yaw, forward = (-sin yaw, -cos yaw)), +X = the car's RIGHT, so the driver's
 // (LEFT) seat has x < 0. three.js rotation.y = yaw maps the car frame to the world.
 //
-// The field names are lane ASSET-B's `SKYWAYS_CAR` (game/src/assets/skywaysCar.generated.ts: measured on the cooked
-// skyways-prize-car.glb), so the swap is one line: `export const CAR_SPEC: CarSpec = SKYWAYS_CAR`. Until that file lands this module's
-// DEFAULT_CAR_SPEC holds plausible numbers for a 4.78 m sports coupe. `cockpit` (optional, not in ASSET-B's set) names a cockpit GLB
-// (dash / wheel / seats) fitted into `interior`; absent = the procedural cockpit (world/skywaysCarModel.ts). Any url here must be a
-// LITERAL 'assets/models/….glb' of a file that exists in game/public (the CI packager resolves every such literal in the bundle).
+// CAR_SPEC is lane ASSET-B's `SKYWAYS_CAR` (game/src/assets/skywaysCar.generated.ts: measured on the cooked skyways-prize-car.glb; lane
+// CAR2 swapped it in). The cockpit (lane CAR2: the Meshy dash + two seats fitted from eye / wheelCentre / interior / cowl / header) is
+// world/skywaysCarCockpit.ts. Any url here must be a LITERAL 'assets/models/….glb' of a file that exists in game/public (the CI
+// packager resolves every such literal in the bundle).
+
+import {SKYWAYS_CAR} from '../assets/skywaysCar.generated';
 
 export interface CarPoint { x: number; y: number; z: number }
 
@@ -34,31 +35,16 @@ export interface CarSpec {
   circles: readonly {z: number; r: number}[];
   /** The free cabin box. */
   interior: {x0: number; x1: number; y0: number; y1: number; z0: number; z1: number};
-  /** Optional cockpit GLB fitted into `interior` (see above). */
-  cockpit?: string;
+  /** The windscreen's base / top edge at the eye's x (y, z): a dash top must stay under the line between them. */
+  cowl: {y: number; z: number};
+  header: {y: number; z: number};
   /** (ASSET-B readouts; unused by the runtime) */
   bodyTris?: number;
   glassTris?: number;
 }
 
-/** Plausible defaults until lane ASSET-B's measured SKYWAYS_CAR lands (a 4.78 m coupe, nose -Z, driver on the left). */
-export const DEFAULT_CAR_SPEC: CarSpec = {
-  url: 'assets/models/skyways-prize-car.glb',
-  length: 4.78, width: 1.96, height: 1.32,
-  wheelBase: 2.72, track: 1.64,
-  wheels: [
-    {x: -0.82, y: 0.35, z: -1.39, r: 0.35}, {x: 0.82, y: 0.35, z: -1.39, r: 0.35},
-    {x: -0.82, y: 0.35, z: 1.33, r: 0.35}, {x: 0.82, y: 0.35, z: 1.33, r: 0.35},
-  ],
-  eye: {x: -0.37, y: 1.07, z: 0.22},
-  wheelCentre: {x: -0.37, y: 0.8, z: -0.2},
-  exits: {left: {x: -1.68, z: 0.05}, right: {x: 1.68, z: 0.05}},
-  circles: [{z: -1.44, r: 0.95}, {z: -0.48, r: 0.95}, {z: 0.48, r: 0.95}, {z: 1.44, r: 0.95}],
-  interior: {x0: -0.78, x1: 0.78, y0: 0.25, y1: 1.22, z0: -0.85, z1: 0.95},
-};
-
-/** The spec the runtime uses (the lead swaps in SKYWAYS_CAR here). */
-export const CAR_SPEC: CarSpec = DEFAULT_CAR_SPEC;
+/** The spec the runtime uses: the measured anchors of the cooked model. */
+export const CAR_SPEC: CarSpec = SKYWAYS_CAR;
 
 /** Car frame -> world (x, z) for a car at (x, z, yaw). */
 export function carToWorld(x: number, z: number, yaw: number, lx: number, lz: number): {x: number; z: number} {

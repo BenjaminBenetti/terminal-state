@@ -5,8 +5,9 @@
 //    material) draws the shell's inside, so from the driver's seat the cabin is a dark trimmed shell (no paint seen from inside);
 //  - the glass (material `glass`, alpha-blended) is drawn from both sides in ONE pass (forceSinglePass: no hidden FrontSide / BackSide
 //    variant for the warm-up to miss), so the windscreen and side windows tint the view out;
-//  - the cockpit: CarSpec.cockpit (a GLB the lead may add later, fitted into CarSpec.interior) else a PROCEDURAL one — untextured dark
-//    shapes only (dash, a steering wheel that turns with the front wheels, two seats, the centre console).
+//  - the cockpit (lane CAR2): lane ASSET-D's Meshy dash + two Meshy seats (their own maps kept) placed by world/skywaysCarCockpit.ts
+//    cockpitLayout, with its plain dark fillers (firewall, dash-end shelves, console tunnel, seat risers); only if either part fails to
+//    load, the PROCEDURAL fallback — untextured dark shapes (dash, a steering wheel that turns with the front wheels, two seats, console).
 // Models load through this module's own cache (loadSkywaysCarModel: the same GLTFLoader the prop library uses) behind the Skyways
 // loading screen (the runtime's section preload) and are released at the next build of a layout without the car (a Skyways-only
 // asset: assets/levelAssets.ts 'skyways'). Without the model (Node tests, a failed fetch) a simple STAND-IN body (named
@@ -16,15 +17,17 @@ import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {assetUrl} from '../assets/loader';
 import type {CarSpec} from './skywaysCarSpec';
+import {COCKPIT_URLS, FILL_COLOR, cockpitLayout} from './skywaysCarCockpit';
 
 /** Steering-wheel turns per front-wheel radian (a quick rack: full lock 0.55 rad ~ 140°). */
 export const WHEEL_RATIO = 4.4;
 
-export interface CarModels { car: GLTF | null; cockpit: GLTF | null }
+export interface CarModels { car: GLTF | null; dash: GLTF | null; seat: GLTF | null }
+const NO_MODELS: CarModels = {car: null, dash: null, seat: null};
 
 let cache: Promise<CarModels> | null = null;
 let cacheUrls = '';
-let loaded: CarModels = {car: null, cockpit: null};
+let loaded: CarModels = NO_MODELS;
 /** Bumped when models arrive / are released (a view built from the stand-in rebuilds its look). */
 export let carModelsGen = 0;
 
@@ -32,10 +35,10 @@ export function skywaysCarModels(): CarModels {
   return loaded;
 }
 
-/** Fetches the car (+ the optional cockpit) once per session (browser only; never rejects: a failure keeps the stand-in). */
+/** Fetches the car + the cockpit parts once per session (browser only; never rejects: a failure keeps the stand-in / fallback). */
 export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
   if (typeof document === 'undefined') return Promise.resolve(loaded);
-  const key = `${spec.url}|${spec.cockpit ?? ''}`;
+  const key = `${spec.url}|${COCKPIT_URLS.dash}|${COCKPIT_URLS.seat}`;
   if (cache && cacheUrls === key) return cache;
   cacheUrls = key;
   cache = (async () => {
@@ -43,8 +46,8 @@ export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
       console.warn(`skyways car: model ${url} failed (stand-in kept)`, err);
       resolve(null);
     }));
-    const [car, cockpit] = await Promise.all([one(spec.url), spec.cockpit ? one(spec.cockpit) : Promise.resolve(null)]);
-    loaded = {car, cockpit};
+    const [car, dash, seat] = await Promise.all([one(spec.url), one(COCKPIT_URLS.dash), one(COCKPIT_URLS.seat)]);
+    loaded = {car, dash, seat};
     carModelsGen++;
     return loaded;
   })();
@@ -53,8 +56,8 @@ export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
 
 /** The car left the current world for good (a build without it): its GPU resources go, the next Skyways fetches again. */
 export function releaseSkywaysCarModel(): boolean {
-  if (!loaded.car && !loaded.cockpit) return false;
-  for (const g of [loaded.car, loaded.cockpit]) g?.scene.traverse(o => {
+  if (!loaded.car && !loaded.dash && !loaded.seat) return false;
+  for (const g of [loaded.car, loaded.dash, loaded.seat]) g?.scene.traverse(o => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.geometry?.dispose();
@@ -63,7 +66,7 @@ export function releaseSkywaysCarModel(): boolean {
       mat.dispose();
     }
   });
-  loaded = {car: null, cockpit: null};
+  loaded = NO_MODELS;
   cache = null;
   cacheUrls = '';
   carModelsGen++;
@@ -80,7 +83,7 @@ export function setSkywaysCarModelsForTests(m: CarModels): void {
 // Shared runtime materials / geometry (one instance each: one program, one shadow program per material)
 
 let shared: {
-  trim: THREE.MeshStandardMaterial; dash: THREE.MeshStandardMaterial; seat: THREE.MeshStandardMaterial; wheel: THREE.MeshStandardMaterial;
+  trim: THREE.MeshStandardMaterial; dash: THREE.MeshStandardMaterial; seat: THREE.MeshStandardMaterial; wheel: THREE.MeshStandardMaterial; fill: THREE.MeshStandardMaterial;
   standPaint: THREE.MeshStandardMaterial; standGlass: THREE.MeshStandardMaterial; standTyre: THREE.MeshStandardMaterial;
   box: THREE.BufferGeometry; ring: THREE.BufferGeometry; cyl: THREE.BufferGeometry;
 } | null = null;
@@ -96,6 +99,7 @@ export function carMaterials(): NonNullable<typeof shared> {
     dash: std('skyways-car-dash', 0x1b1c1f),
     seat: std('skyways-car-seat', 0x2a2522, {roughness: 0.95}),
     wheel: std('skyways-car-wheel', 0x101012, {roughness: 0.6}),
+    fill: std('skyways-car-cockpit-fill', FILL_COLOR, {roughness: 0.9}),
     standPaint: std('skyways-car-stand-in-paint', 0x8c1a16, {roughness: 0.35, metalness: 0.4}),
     standGlass,
     standTyre: std('skyways-car-stand-in-tyre', 0x121212, {roughness: 0.9}),
@@ -216,16 +220,32 @@ function proceduralCockpit(spec: CarSpec): {group: THREE.Group; wheel: THREE.Obj
   return {group: g, wheel: spin};
 }
 
-/** A cockpit model fitted into the interior box (uniform scale to fit, centred, on the cabin floor). */
-function modelCockpit(spec: CarSpec, m: GLTF): THREE.Group {
-  const g = new THREE.Group();
+/**
+ * The Meshy cockpit (car frame, world/skywaysCarCockpit.ts cockpitLayout): the dash (its wheel rim on the eye's x), the two seats turned to
+ * face it, and the plain dark fillers. The parts keep their own materials (Meshy maps); nothing here casts a shadow.
+ */
+function modelCockpit(spec: CarSpec, dash: GLTF, seat: GLTF): THREE.Group {
+  const S = carMaterials(), lay = cockpitLayout(spec), g = new THREE.Group();
   g.name = 'skyways-car-cockpit-model';
-  const s = m.scene.clone(true);
-  const bb = new THREE.Box3().setFromObject(s), size = bb.getSize(new THREE.Vector3()), I = spec.interior;
-  const k = Math.min((I.x1 - I.x0) / Math.max(1e-3, size.x), (I.y1 - I.y0) / Math.max(1e-3, size.y), (I.z1 - I.z0) / Math.max(1e-3, size.z));
-  s.scale.setScalar(k);
-  s.position.set((I.x0 + I.x1) / 2 - ((bb.min.x + bb.max.x) / 2) * k, I.y0 - bb.min.y * k, (I.z0 + I.z1) / 2 - ((bb.min.z + bb.max.z) / 2) * k);
-  g.add(s);
+  const part = (m: GLTF, pose: {x: number; y: number; z: number; rotY: number; scale: number}, name: string) => {
+    const s = m.scene.clone(true);
+    s.name = name;
+    s.position.set(pose.x, pose.y, pose.z);
+    s.rotation.set(0, pose.rotY, 0);
+    s.scale.setScalar(pose.scale);
+    s.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.carPart = 'cockpit'; });
+    g.add(s);
+  };
+  part(dash, lay.dash, 'skyways-car-dash-model');
+  lay.seats.forEach((p, i) => part(seat, p, i ? 'skyways-car-seat-right' : 'skyways-car-seat-left'));
+  for (const b of lay.fillers) {
+    const m = new THREE.Mesh(S.box, S.fill);
+    m.name = `skyways-car-${b.name}`;
+    m.scale.set(b.x1 - b.x0, b.y1 - b.y0, b.z1 - b.z0);
+    m.position.set((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, (b.z0 + b.z1) / 2);
+    m.userData.carPart = 'cockpit';
+    g.add(m);
+  }
   return g;
 }
 
@@ -237,7 +257,7 @@ export function buildCarView(spec: CarSpec): CarView {
   const body = m.car ? modelBody(m.car) : standInBody(spec);
   group.add(body);
   let cockpit: THREE.Group, wheel: THREE.Object3D | null = null;
-  if (m.cockpit) cockpit = modelCockpit(spec, m.cockpit);
+  if (m.dash && m.seat) cockpit = modelCockpit(spec, m.dash, m.seat);
   else ({group: cockpit, wheel} = proceduralCockpit(spec));
   group.add(cockpit);
   return {group, body, cockpit, wheel, gen: carModelsGen, standIn: !m.car};
@@ -251,7 +271,7 @@ export function refreshCarView(v: CarView, spec: CarSpec): void {
   v.group.remove(v.body, v.cockpit);
   v.body = m.car ? modelBody(m.car) : standInBody(spec);
   v.standIn = !m.car;
-  if (m.cockpit) { v.cockpit = modelCockpit(spec, m.cockpit); v.wheel = null; }
+  if (m.dash && m.seat) { v.cockpit = modelCockpit(spec, m.dash, m.seat); v.wheel = null; }
   else ({group: v.cockpit, wheel: v.wheel} = proceduralCockpit(spec));
   v.group.add(v.body, v.cockpit);
 }

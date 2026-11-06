@@ -48,6 +48,8 @@ export interface CarTestHost extends SkywaysCarHost {
   zombies: TestZombie[];
   toasts: string[];
   sfxCalls: string[];
+  /** (lane CAR2) Every per-frame carEngine call (speed01, throttle01) since the last engine start. */
+  engineLog: {k: number; th: number}[];
   store: Map<string, unknown>;
   kills: {z: TestZombie; dir: THREE.Vector3; point: THREE.Vector3}[];
   shoves: {prop: PropPlacement; index: number; impulse: number; t: number}[];
@@ -70,7 +72,7 @@ export function carHost(o: {spawn?: Partial<SkywaysCarSpawn>; props?: PropPlacem
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.05, 70);
   camera.rotation.order = 'YXZ';
   scene.add(camera);
-  const store = new Map<string, unknown>(), toasts: string[] = [], sfxCalls: string[] = [];
+  const store = new Map<string, unknown>(), toasts: string[] = [], sfxCalls: string[] = [], engineLog: {k: number; th: number}[] = [];
   const kills: CarTestHost['kills'] = [], shoves: CarTestHost['shoves'] = [], propHits: CarTestHost['propHits'] = [], broken: string[] = [];
   const windows = paneRefs(o.panes ?? []);
   const h = {
@@ -78,12 +80,16 @@ export function carHost(o: {spawn?: Partial<SkywaysCarSpawn>; props?: PropPlacem
     levels, propIndex: new PropIndex(levels, props),
     layout: {props, skyways: {addon: {id: 'prize-car', car: spawn}}} as never,
     run: {laneStore: (lane: string) => store.get(lane), setLaneStore: (lane: string, v: unknown) => { if (v === undefined) store.delete(lane); else store.set(lane, structuredClone(v)); }},
-    store, toasts, sfxCalls, kills, shoves, propHits, broken, windows,
+    store, toasts, sfxCalls, engineLog, kills, shoves, propHits, broken, windows,
     hud: {toast: (t: string) => { toasts.push(t); }},
     sfx: {
       physImpact: (_x: number, _y: number, _z: number, s: number, fam: string) => { sfxCalls.push(`impact:${fam}:${s.toFixed(1)}`); },
-      containerOpen: (k: string) => { sfxCalls.push(`open:${k}`); }, containerClose: (k: string) => { sfxCalls.push(`close:${k}`); },
       denied: () => { sfxCalls.push('denied'); }, impact: () => { sfxCalls.push('bullet'); },
+      // (lane CAR2) the car set: the engine's start (rev) / stop, its per-frame speed + throttle, the skid, the door
+      carEngine: (k: number, th: number, _at: unknown, o?: {rev?: boolean}) => { if (o?.rev) { sfxCalls.push('engine:start'); engineLog.length = 0; } else engineLog.push({k, th}); },
+      stopCarEngine: () => { sfxCalls.push('engine:stop'); },
+      carSkid: () => { sfxCalls.push('skid'); return true; },
+      carDoor: () => { sfxCalls.push('door'); },
     },
     state: 'playing',
     frameHooks: [] as ((dt: number) => void)[], interactHandlers: [] as (() => boolean)[], sectionHooks: [] as {build?(l: never): void; teardown?(): void}[],
