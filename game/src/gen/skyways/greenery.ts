@@ -9,6 +9,7 @@ import {CELL} from '../grid';
 import {makePlaceCtx, tryPlaceProp} from '../placeKit';
 import type {PropKind} from '../props';
 import type {StationLayout} from '../stationTypes';
+import {keepLandmarkClear} from './destinations/landmarks'; // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS)
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
@@ -22,6 +23,7 @@ export function dressSkywaysAtriums(layout: StationLayout, rng: Rng): number {
   if (!info) return 0;
   const lv = 1, g = layout.levels[lv].grid, base = layout.levels[lv].baseY;
   const ctx = makePlaceCtx(layout, rng, lv);
+  keepLandmarkClear(ctx, layout); // (destinations, lane LANDMARKS) the landmark courts' clear discs + walking ring stay open
   const p0 = layout.props.length;
   for (const b of info.buildings) {
     if (!b.atrium) continue;
@@ -71,6 +73,7 @@ export function dressSkywaysFoodCourts(layout: StationLayout, rng: Rng): number 
     const lv = b.foodCourt.level, g = layout.levels[lv]?.grid, area = layout.areas[b.foodCourt.area];
     if (!g || !area) continue;
     const ctx = makePlaceCtx(layout, rng, lv);
+    keepLandmarkClear(ctx, layout); // (destinations, lane LANDMARKS)
     const q0 = layout.props.length;
     const x0 = area.x * CELL, z0 = area.y * CELL, x1 = (area.x + area.w) * CELL, z1 = (area.y + area.h) * CELL;
     // candidate spots on a fine grid (the kit refuses overlaps, shop fronts' clearances and the walking lanes): as many sets as fit
