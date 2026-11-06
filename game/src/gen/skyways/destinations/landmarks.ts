@@ -16,9 +16,9 @@
 //     anything else is placed;
 //  3. the court's PLAQUE (skyDPlaque, variant art.ts DEST_PLAQUE_OF) beside the main approach (the opening with the widest span),
 //     just off its lane, facing the visitor;
-//  4. SEATING: existing station benches round the centrepiece facing it (the dinosaur: along its long sides; the fig tree has its own
-//     ring bench, so its benches stand further out), never on the approach side; PLANTERS (the existing planter tree) on the
-//     diagonals (not in the fig tree's court);
+//  4. SEATING: existing station benches round the centrepiece facing it (along a long hero's sides; the fig tree has its own ring
+//     bench, so its benches stand further out), more in a big court, never on the reserved lanes / ring; PLANTERS (the existing
+//     planter tree) on the diagonals (not in the fig tree's court);
 //  5. a warm ACCENT light or two: warm ceiling fixtures near the centrepiece where a ceiling is within reach (an atrium court: under
 //     the skyway slab at the opening's edge), never over the hero (lit / broken / flickering: the lighting pass rolls them like every
 //     fixture of the court).
@@ -50,6 +50,8 @@ export const LANDMARK_DRESS = {
   laneHalf: 0.6,
   /** Seating / planters / accent lights per court (seeded within). */
   benches: [2, 4] as const, planters: [1, 3] as const, lights: [1, 2] as const,
+  /** A court of at least this floor (m2) is big: more seating and planters. */
+  bigCourt: 250, benchesBig: [4, 7] as const, plantersBig: [2, 5] as const,
   /** Accent fixtures only under a ceiling at most this high above the court floor. */
   lightReach: 6.0,
   /** Clear disc kept by the dressers that run first (greenery): the clear radius + this. */
@@ -298,27 +300,25 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
 
   // --- 4. benches facing the centrepiece; planters on the diagonals ---------------------------------------------------------------
   {
+    // a big court gets more seating / greenery than a small atrium floor (court floor m2)
+    const m2 = area.w * area.h * CELL * CELL, big = m2 >= LANDMARK_DRESS.bigCourt;
     const bd = PROP_DEFS.bench.d;
     const extra = lm.family === 'fig-tree' ? 1.5 : 0.1;
-    const cand: [number, number, number][] = []; // direction (unit x, z) + offset along the tangent
-    const dirs: [number, number][] = [[0, -1], [1, 0], [0, 1], [-1, 0]];
-    for (const [dx, dz] of dirs) {
-      // never on the approach side (the plaque and the way in)
-      if (main && dx * Math.sin(toMain) + dz * Math.cos(toMain) > 0.7) continue;
-      if (lm.family === 'dinosaur') {
-        const along = c0 ? c0.hx >= c0.hz : courtAxis(area) === 'x';
-        if ((along && dx !== 0) || (!along && dz !== 0)) continue; // only its long sides
-        const L = c0 ? (along ? c0.hx : c0.hz) : 3;
-        for (const t of [-0.45 * L, 0.45 * L]) cand.push([dx, dz, t]);
-      } else cand.push([dx, dz, 0]);
+    // bench slots round the hero (all four sides: the reserved walking lanes / ring and the plaque are already taken, so the way in
+    // stays open): straight on, else flanking the lane coming in on that side, along a long hero's sides
+    const slots: [number, number, number][] = []; // direction (unit x, z) + offset along the tangent
+    for (const [dx, dz] of [[0, -1], [1, 0], [0, 1], [-1, 0]] as [number, number][]) {
+      const L = c0 ? Math.abs(dz) * c0.hx + Math.abs(dx) * c0.hz : 0; // the hero's half length along this side
+      const ts = L > 2 ? [-0.5 * L, 0.5 * L, 0] : [0, 1.6, -1.6];
+      for (const t of ts) slots.push([dx, dz, t]);
     }
-    // a bench faces the hero straight on, else flanks the walking lane coming in on that side (+-1.6 m along the tangent), else a
-    // little further out
-    let n = rng.int(...LANDMARK_DRESS.benches);
-    for (const [dx, dz, t] of rng.shuffle(cand)) {
+    const [n0, n1] = big ? LANDMARK_DRESS.benchesBig : LANDMARK_DRESS.benches;
+    let n = rng.int(n0, n1);
+    for (const [dx, dz, t] of rng.shuffle(slots)) {
       if (n <= 0) break;
       const dist = halfToward(dx, dz) + ext + bd / 2 + extra;
-      bench: for (const out of [0, 0.6, 1.2]) for (const side of t ? [0, Math.sign(t) * 0.8] : [0, 1.6, -1.6]) {
+      // the slot, else a little further out / slid along the side
+      bench: for (const out of [0, 0.8, 1.6, 2.6, 3.6]) for (const side of [0, 0.9, -0.9]) {
         const x = X + dx * (dist + out) - dz * (t + side), z = Z + dz * (dist + out) + dx * (t + side);
         const p = put('bench', x, z, quarter(yawToward(-dx, -dz)), {plazaOk: true, laneOk: true, front: 0.6});
         if (p) { res.benches.push(p); n--; break bench; }
@@ -326,13 +326,16 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     }
     if (lm.family !== 'fig-tree') {
       const pw = PROP_DEFS.planterTree.w;
-      let k = rng.int(...LANDMARK_DRESS.planters);
+      const [k0, k1] = big ? LANDMARK_DRESS.plantersBig : LANDMARK_DRESS.planters;
+      let k = rng.int(k0, k1);
       for (const [dx, dz] of rng.shuffle([[1, 1], [1, -1], [-1, 1], [-1, -1]] as [number, number][])) {
         if (k <= 0) break;
         const hx = c0 ? c0.hx : R0, hz = c0 ? c0.hz : R0;
-        const x = X + dx * (hx + ext + pw / 2 + 0.3), z = Z + dz * (hz + ext + pw / 2 + 0.3);
-        const p = put('planterTree', x, z, 0, {plazaOk: true, laneOk: true, ring: 0.6});
-        if (p) { res.planters.push(p); k--; }
+        for (const out of [0, 1.0, 2.0, 3.0]) {
+          const x = X + dx * (hx + ext + pw / 2 + 0.3 + out), z = Z + dz * (hz + ext + pw / 2 + 0.3 + out);
+          const p = put('planterTree', x, z, 0, {plazaOk: true, laneOk: true, ring: 0.6});
+          if (p) { res.planters.push(p); k--; break; }
+        }
       }
     }
   }
