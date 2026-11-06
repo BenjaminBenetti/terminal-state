@@ -140,6 +140,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   // Iteration 12 (AUDIO): flashlight battery + thrown flare. flareBurn is an RMS -20 dBFS loop (positional, rolls off);
   // the others are peak -1 dBFS one-shots. flashlightFlicker is deliberately faint (a failing contact at the hand).
   batteryInsert: 0.4, flareIgnite: 0.55, flareBurn: 0.5, flareOut: 0.45, flashlightFlicker: 0.13,
+  // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT, tools/audio-pipeline/fuel-build.mjs): the stall / pour one-shots
+  // are peak -1 dBFS, the cart loop RMS -20 dBFS (the bed / flare-loop convention). The stall is under the floor of the car the player
+  // stands in (a refused departure: clearly heard, under a gunshot); the pour is at the hands (between pickup and heal); the cart rumble
+  // sits in the footsteps' level band at walking pace.
+  engineStall: 0.55, fuelPour: 0.42, cartRoll: 0.4,
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {
@@ -467,6 +472,19 @@ export const STRAINER_CUE_IDS = ['strainerStep', 'strainerSwing', 'strainerConta
 type StrainerVoiceKind = 'step' | 'swing' | 'contact' | 'squish';
 
 /** Weapon sound kinds (WeaponDef.sound). */
+/**
+ * Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL cues. engineStall / fuelPour play one Sound Lab take
+ * once per call (a sounding one is cut first: never stacked, never looped); hoseConnect reuses the magazine seat / release clips, lower
+ * and heavier, with the switch click (no new clip); cartRoll is ONE page-lifetime channel (the cart rolling loop): created while the cart
+ * rolls, its level / rate / lowpass eased to the speed, faded and released after `idleStopS` at speed 0, at once on pause / a new world.
+ */
+export const FUEL_AUDIO = {
+  stall: {send: 0.2},
+  pour: {send: 0.1, cutFade: 0.12},
+  hose: {on: {cue: 'rifleMagIn' as CueId, rate: 0.68, gain: 0.9}, off: {cue: 'rifleMagOut' as CueId, rate: 0.72, gain: 0.8}, click: {rate: 0.75, gain: 0.55, delay: 0.05}},
+  cart: {rate: [0.72, 1.12] as const, level: [0.35, 1] as const, lowpass: [900, 5200] as const, tau: 0.08, idleStopS: 0.4, stopFade: 0.12, ref: 2.2, rolloff: 1.1, send: 0.12, minK: 0.01},
+} as const;
+
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
 /**
@@ -507,6 +525,11 @@ export class Sfx {
   private listener: Pos & {yaw: number} = {x: 0, y: 1.6, z: 0, yaw: 0};
   private voices: Voice[] = [];
   private coughVoice: Voice | null = null; // task gas-mask-roof-feedback-20261030: the one cough that may be sounding
+  // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the sounding stall / pour (one each) and the cart rolling channel
+  private stallVoice: Voice | null = null;
+  private pourVoice: Voice | null = null;
+  private cart: {src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
+  private cartStats = {starts: 0, stops: 0};
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
@@ -662,6 +685,7 @@ export class Sfx {
   pause(): void {
     this.desired = 'suspended';
     this.applyGain();
+    this.stopCartRoll(0.05); // task train-fuel-system (lane PORT): the cart rumble never waits out a menu
   }
 
   /** Issue the op for the desired state now (keeps user-gesture timing), reconcile after settle. */
@@ -739,7 +763,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -1794,6 +1818,149 @@ export class Sfx {
     r.g.gain.setTargetAtTime(RAIN_BED.gain * AMBIENT_LEVEL * lv * (1 - (1 - RAIN_BED.shelterLevel) * mf), t, RAIN_BED.tauS / 3);
     r.lp.frequency.cancelScheduledValues(t);
     r.lp.frequency.setTargetAtTime(RAIN_BED.openHz * Math.pow(RAIN_BED.muffledHz / RAIN_BED.openHz, mf), t, RAIN_BED.tauS / 3);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL cues (FUEL_AUDIO; silent no-ops when audio is
+  // paused / not started or a clip is missing).
+
+  /**
+   * The train engine refusing to start for want of fuel (crank, cough, die): ONE take per call, under the floor of the car the player
+   * stands in (listener-relative, a little room). A stall still sounding is cut first (never two, never a loop). Returns the clip's length
+   * (s; 0 = nothing played).
+   */
+  engineStall(): number {
+    this.cutVoice(this.stallVoice, 0.06);
+    const v = this.voice({send: FUEL_AUDIO.stall.send, pri: 1});
+    const clip = this.play(v, 'engineStall', {jitter: 0.02, gainJitter: 0.5});
+    this.stallVoice = clip ? v : null;
+    return clip ? clip.dur : 0;
+  }
+
+  /**
+   * One fuel can poured into the train's filler neck (at the hands). A pour still sounding is cut first. Returns the clip's length (s;
+   * 0 = nothing played). stopFuelPour() cuts it (a cancelled pour).
+   */
+  fuelPour(): number {
+    this.cutVoice(this.pourVoice, 0.05);
+    const v = this.voice({send: FUEL_AUDIO.pour.send, pri: 1});
+    const clip = this.play(v, 'fuelPour', {jitter: 0.03, gainJitter: 0.8});
+    this.pourVoice = clip ? v : null;
+    return clip ? clip.dur : 0;
+  }
+
+  /** A sounding pour fades out (the pour was cancelled: nothing poured). Plays nothing. */
+  stopFuelPour(): void {
+    this.cutVoice(this.pourVoice, FUEL_AUDIO.pour.cutFade);
+    this.pourVoice = null;
+  }
+
+  /**
+   * The fuel hose's nozzle seated in the train's fuel cap (`on`) or pulled out: the existing magazine seat / release clips, lower and
+   * heavier (a steel nozzle), with the switch click as the latch. `at` = the cap (world), omitted = at the listener.
+   */
+  hoseConnect(on: boolean, at?: Pos): void {
+    const H = FUEL_AUDIO.hose, m = on ? H.on : H.off;
+    const v = this.voice({at, send: 0.15, pri: 1, ref: 2, maxDist: 30});
+    this.play(v, m.cue, {rate: m.rate, gain: m.gain, jitter: 0.02});
+    this.play(v, 'click', {rate: H.click.rate, gain: H.click.gain, delay: H.click.delay, jitter: 0.03});
+  }
+
+  /**
+   * The fuel cart's wheels rolling (call it every frame the cart is simulated): `speed01` 0..1 of its push speed (0 = stopped), `at` = the
+   * cart (world; omitted = at the listener). ONE channel for the page: created on the first rolling call (from silence, eased in — never a
+   * restart at full volume), then only its targets move (unchanged values cost nothing); at 0 it fades and is released after
+   * FUEL_AUDIO.cart.idleStopS unless the cart rolls again. Paused audio / a menu / a new world stop it at once.
+   */
+  cartRoll(speed01: number, at?: Pos): void {
+    const C = FUEL_AUDIO.cart, ctx = this.live;
+    const k = Number.isFinite(speed01) ? clamp01(speed01) : 0;
+    if (!ctx) { this.stopCartRoll(0.05); return; }
+    let c = this.cart;
+    if (k < C.minK) {
+      if (!c) return;
+      if (c.k !== 0) {
+        c.k = 0;
+        c.fade.gain.cancelScheduledValues(ctx.currentTime);
+        c.fade.gain.setTargetAtTime(0, ctx.currentTime, C.tau / 2);
+      }
+      const mine = c;
+      if (!c.idle) c.idle = setTimeout(() => { if (this.cart === mine) this.stopCartRoll(0.02); }, C.idleStopS * 1000);
+      return;
+    }
+    if (!c) {
+      const clip = this.bank.pick('cartRoll');
+      if (!clip) return;
+      const src = ctx.createBufferSource();
+      src.buffer = clip.buffer;
+      src.loop = true;
+      const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+      src.loopStart = a;
+      src.loopEnd = b;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass'; lp.Q.value = 0.5; lp.frequency.value = C.lowpass[0];
+      const fade = ctx.createGain();
+      fade.gain.value = 0;
+      const pan = this.makePanner(ctx, false, C.ref, C.rolloff);
+      src.connect(lp).connect(fade).connect(pan).connect(this.master);
+      const nodes: AudioNode[] = [src, lp, fade, pan];
+      if (this.reverbIn) {
+        const sn = ctx.createGain();
+        sn.gain.value = C.send;
+        fade.connect(sn).connect(this.reverbIn);
+        nodes.push(sn);
+      }
+      src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
+      src.start(ctx.currentTime, a + Math.random() * Math.max(0, b - a));
+      this.soundsStarted++;
+      this.cartStats.starts++;
+      c = this.cart = {src, fade, lp, pan, k: 0, idle: null};
+    }
+    if (c.idle) { clearTimeout(c.idle); c.idle = null; }
+    const p = at ?? this.listener;
+    this.setPannerPos(c.pan, p.x, p.y, p.z);
+    if (Math.abs(k - c.k) < 0.01) return;
+    c.k = k;
+    const t = ctx.currentTime, lerp = (r: readonly [number, number]) => r[0] + (r[1] - r[0]) * k;
+    c.fade.gain.cancelScheduledValues(t);
+    c.fade.gain.setTargetAtTime(CUE_GAIN.cartRoll * lerp(C.level), t, C.tau);
+    c.src.playbackRate.cancelScheduledValues(t);
+    c.src.playbackRate.setTargetAtTime(lerp(C.rate), t, C.tau);
+    c.lp.frequency.cancelScheduledValues(t);
+    c.lp.frequency.setTargetAtTime(lerp(C.lowpass), t, C.tau);
+  }
+
+  /** The cart rolling channel fades out and is released (speed 0 for idleStopS, pause, a new world, the cart system's dispose). Plays nothing. */
+  stopCartRoll(fadeS: number = FUEL_AUDIO.cart.stopFade): void {
+    const c = this.cart;
+    if (!c) return;
+    this.cart = null;
+    if (c.idle) clearTimeout(c.idle);
+    this.cartStats.stops++;
+    const ctx = this.ctx;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    c.fade.gain.cancelScheduledValues(t);
+    c.fade.gain.setTargetAtTime(0, t, f / 3);
+    try { c.src.stop(t + f + 0.05); } catch { /* already stopped */ }
+  }
+
+  /** QA / tests: the fuel cues' live state (the cart channel exists / its speed; stall / pour sounding). Plays nothing. */
+  fuelAudioState(): {cart: boolean; cartK: number; cartStarts: number; cartStops: number; stall: boolean; pour: boolean} {
+    const now = this.ctx?.currentTime ?? 0;
+    return {cart: !!this.cart, cartK: this.cart?.k ?? 0, cartStarts: this.cartStats.starts, cartStops: this.cartStats.stops,
+      stall: !!this.stallVoice && this.stallVoice.end > now, pour: !!this.pourVoice && this.pourVoice.end > now};
+  }
+
+  /** Cut a one-shot voice that may still be sounding (stall / pour): its sources fade over `fadeS` and stop. */
+  private cutVoice(v: Voice | null, fadeS: number): void {
+    const ctx = this.ctx;
+    if (!v || !ctx || v.end <= ctx.currentTime) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    v.inp.gain.cancelScheduledValues(t);
+    v.inp.gain.setTargetAtTime(0, t, f / 3);
+    for (const src of v.srcs) { try { src.stop(t + f + 0.02); } catch { /* already stopped */ } }
+    v.end = Math.min(v.end, t + f + 0.03);
   }
 
   /** Task reactor-build-20261101: fade out every machine loop (new world). */

@@ -9,7 +9,8 @@ w8a8 profile). Per-file sources, prompts, seeds and hashes: ../derivatives/audio
 ../derivatives/audio-track1.json; the Strainer's wet footfalls / arm swing / claw contact / hit squish strainer-*.mp3:
 ../derivatives/audio-strainer.json; the Reactor machine set reactor-*.mp3: ../derivatives/audio-reactor.json and its startup set (power-up surge, online impact,
 control-rod drive / stop, machine bed, stage thump, beacon motor): ../derivatives/audio-reactor-startup.json; its ending set (the blue-beam ignition reactor-beam.mp3, the
-surface rain loop surface-rain-loop.mp3): ../derivatives/audio-reactor-ending.json).
+surface rain loop surface-rain-loop.mp3): ../derivatives/audio-reactor-ending.json; the train fuel set (engine stall
+fuel-engine-stall.mp3, jerrycan pour fuel-pour.mp3, fuel cart rolling loop fuel-cart-roll-loop.mp3): ../derivatives/audio-fuel.json).
 
 Powered by Stability AI.
 

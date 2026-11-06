@@ -364,3 +364,16 @@ Generated for this project with Codex native image generation (the owned Codex C
 - `assets/textures/mall/ads-lingerie/ad-lingerie-hangers.jpg` — the crimson plunge bra + garter set and the ivory bralette + garter set on satin hangers (user designs M52skrui8zNLGE_1 / _2) (Codex thread 01a19fcd-dd71-77c2-ad3b-1173da5e02ef)
 - `assets/textures/mall/ads-lingerie/ad-lingerie-giftbox.jpg` — the blush lace plunge bodysuit folded in a ribboned gift box (user design 9gPhXy5tx6G6iW_2) (Codex thread 01a19fce-fa07-76b0-9686-25cdde8264a5)
 <!-- END mall-lingerie-ad-art-20261103 -->
+
+<!-- BEGIN train-fuel-audio-20261106 (fuel-build.mjs) -->
+## Train fuel audio (engine stall, fuel pour, fuel cart rolling)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the train-fuel
+task's local Sound Lab allowance (3 jobs of a 6-job cap). Powered by Stability AI. Stability AI Community License +
+Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
+levelling, MP3) built by `tools/audio-pipeline/fuel-build.mjs` (provenance: `assets/derivatives/audio-fuel.json`). Not reviewed by ear
+on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/fuel-engine-stall.mp3` — engineStall (Sound Lab job 20261106T031208-1101220115)
+- `assets/audio/fuel-pour.mp3` — fuelPour (Sound Lab job 20261106T031213-437489893)
+- `assets/audio/fuel-cart-roll-loop.mp3` — cartRoll (Sound Lab job 20261106T031217-869772459)
+<!-- END train-fuel-audio-20261106 -->

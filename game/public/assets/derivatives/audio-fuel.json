@@ -1,0 +1,109 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-fuel-20261106",
+ "task": "studio-beta-train-fuel-system-20261106-024923-01",
+ "lane": "PORT",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance; 3 jobs of a 6-job cap, every first take accepted)",
+ "plannedBy": "tools/audio-pipeline/fuel-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/fuel-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (per-0.1 s level, per-0.25 s spectral centroid, peak, silence). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "engineStall",
+   "url": "assets/audio/fuel-engine-stall.mp3",
+   "bytes": 25495,
+   "sha256": "d95229cb140c50dd9365888ffeca13ffc2a6ee2bff5ab8a530f2f91cc2e6cda7",
+   "dur": 3.15,
+   "ops": [
+    "mono",
+    "trim 0-3.15 s",
+    "cosine fades 0.01 / 0.25 s",
+    "peak -1 dBFS (7.2 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "fuel-engine-stall-01",
+    "rawFile": "reference/tasks/train-fuel-system-20261106-024923/audio/raw/fuel-engine-stall-01.wav",
+    "rawSha256": "826312261d3ad34d9043772d841f9ca14f0641cf8c0471f5fce9009b5eb83b12",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-big-old-diesel-train-engine-that-fails_w8a8_seed1101220115_031208.wav",
+    "labSidecarSha256": "ede1d165c957e401200368e1e0729b89ce98bc8ec1fb735a89292bb0ce8119a9",
+    "jobId": "20261106T031208-1101220115",
+    "prompt": "TrackType: SFX, a big old diesel train engine that fails to start because it is out of fuel: the electric starter motor cranks and whines, the engine coughs and sputters weakly twice, then dies, the starter winds down and stops, ending in silence, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1101220115,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "fuelPour",
+   "url": "assets/audio/fuel-pour.mp3",
+   "bytes": 20897,
+   "sha256": "59afe9ae2c224e50cf2027092167b797a43353dc8bc43ae87f991e85209d1f4f",
+   "dur": 2.58,
+   "ops": [
+    "mono",
+    "trim 0.12-2.7 s",
+    "cosine fades 0.02 / 0.3 s",
+    "peak -1 dBFS (4.8 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "fuel-pour-01",
+    "rawFile": "reference/tasks/train-fuel-system-20261106-024923/audio/raw/fuel-pour-01.wav",
+    "rawSha256": "f7f6ffb5c3e53c0932c4e4a46efb5c91f6635b33f0031f151cf852ad53c62a4a",
+    "rawBytes": 529244,
+    "labFile": "sfx_diesel-fuel-poured-from-a-full-steel-jer_w8a8_seed437489893_031213.wav",
+    "labSidecarSha256": "72cd650f441c7ffd90e8ac6788a13869a4c640d472eee890f6d56b5394321948",
+    "jobId": "20261106T031213-437489893",
+    "prompt": "TrackType: SFX, diesel fuel poured from a full steel jerrycan into a metal fuel tank filler neck: a steady heavy glugging liquid pour with gurgles and air bubbles through the spout, splashing into a hollow metal tank, then the flow stops with a few drips, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 437489893,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "cartRoll",
+   "url": "assets/audio/fuel-cart-roll-loop.mp3",
+   "bytes": 30720,
+   "sha256": "223081198653c9de61f2514c2e8f8262c0979eee991be8c61debfbfbab8fa06a",
+   "dur": 3.8,
+   "loop": {
+    "start": 0.1,
+    "length": 3.6
+   },
+   "ops": [
+    "mono",
+    "stationary window from 1.5 s (std 0.8 dB over 0.5 s blocks, searched from 1 s)",
+    "loop 3.6 s, equal-power crossfade 0.4 s",
+    "margins 0.1 s",
+    "rms -20 dBFS (3.4 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "fuel-cart-roll-01",
+    "rawFile": "reference/tasks/train-fuel-system-20261106-024923/audio/raw/fuel-cart-roll-01.wav",
+    "rawSha256": "66ccaee5929d8dad56ae34a206ebe9d1e65987ec43a98de609e72a31e583fd67",
+    "rawBytes": 1058444,
+    "labFile": "sfx_a-heavy-steel-hand-truck-carrying-a-meta_w8a8_seed869772459_031217.wav",
+    "labSidecarSha256": "80e274e242ac2dda6a665596eea9781261138e2e9dc3dba262c6498b7f66814a",
+    "jobId": "20261106T031217-869772459",
+    "prompt": "TrackType: SFX, a heavy steel hand truck carrying a metal fuel drum pushed at a steady walking pace across a concrete floor: hard rubber wheels rolling with a constant low rumble and small rattles of the metal frame, constant speed, no stopping, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 869772459,
+    "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}

@@ -17,6 +17,7 @@ import {CLIP_MANIFEST_STRAINER} from './manifest.strainer.generated'; // Task st
 import {CLIP_MANIFEST_REACTOR} from './manifest.reactor.generated'; // task reactor-build-20261101 (primary): the Reactor's machine set
 import {CLIP_MANIFEST_REACTOR_STARTUP} from './manifest.reactorStartup.generated'; // task reactor-playtest-round2-20261102 (lane STARTUP): the startup set
 import {CLIP_MANIFEST_REACTOR_ENDING} from './manifest.reactorEnding.generated'; // task reactor-surface-ending-20261102 (lane AUDIO): the beam ignition + surface rain
+import {CLIP_MANIFEST_FUEL} from './manifest.fuel.generated'; // task train-fuel-system-20261106 (lane PORT): engine stall, fuel pour, fuel cart rolling
 
 /**
  * Runtime manifest: the iteration-05 bank plus the iteration-06 material-breaking cues
@@ -27,7 +28,7 @@ import {CLIP_MANIFEST_REACTOR_ENDING} from './manifest.reactorEnding.generated';
  * 20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / arm swing / claw contact / hit squish (tools/audio-pipeline/
  * strainer-build.mjs; provenance derivatives/audio-strainer.json).
  */
-export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING};
+export const CLIP_MANIFEST: Readonly<Record<string, readonly ClipRef[]>> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL};
 
 /** Every cue the game can play, in decode-priority order (most frequent / important first). */
 export const CUES = [
@@ -58,6 +59,9 @@ export const CUES = [
   // Task reactor-surface-ending-20261102 (lane AUDIO, tools/audio-pipeline/reactor-ending-build.mjs): the blue-beam ignition one-shot
   // and the surface rain bed loop.
   'reactorBeam', 'bedRain',
+  // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT, tools/audio-pipeline/fuel-build.mjs): the engine stall (a departure
+  // refused for fuel), the jerrycan pour at the fuel cap, the fuel cart's rolling loop.
+  'engineStall', 'fuelPour', 'cartRoll',
   'casingBrass', 'casingHull', 'bodyFall', 'hurt', 'hitTick', 'hitKill',
   'bedWind', 'bedRumble', 'bedHvac', 'bedFridge', 'bedBuzz',
   'shotgunPump', 'shellInsert', 'rifleMagOut', 'rifleMagIn', 'rifleCharge', 'rifleMagDrop', 'dryFire', 'equip',
