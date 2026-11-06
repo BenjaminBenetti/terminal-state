@@ -1,8 +1,10 @@
-// Task studio-beta-train-fuel-system-20261106-024923-01: the paper map's fuel figures (ui/paperMap.ts): a bar per KNOWN station (two
-// segments = two tanks, quarters fill, "+" beyond), planned (ochre, faded) vs remaining / live (green), labels kept clear of the bars,
-// no figures without a provider (non-campaign maps unchanged) and nothing shown for stations the map does not reveal.
+// Task studio-beta-train-fuel-system-20261106-024923-01: the paper map's fuel (ui/paperMap.ts): a bar per KNOWN station, planned (ochre,
+// faded) vs remaining / live (green), labels kept clear of the bars, nothing without a provider (non-campaign maps unchanged) and nothing
+// for stations the map does not reveal. Task studio-beta-fuel-feedback-20261106-064128-01: six tank segments (stations hold ~4 tanks
+// now) and VISUAL ONLY (user: "no need to tell the player the exact fuel amount in text on the map. Just use the visual indicators"):
+// no fuel figures in the card text — a destination shows a trip gauge (a tank per hop, filled by the fuel aboard, red where short).
 import {describe, expect, it} from 'vitest';
-import {FUEL_BAR, PaperMap, buildMapModel, fuelBarSvg, renderInk, type MapFuel} from '../src/ui/paperMap';
+import {FUEL_BAR, PaperMap, buildMapModel, fuelBarSvg, renderInk, tripGaugeSvg, type MapFuel} from '../src/ui/paperMap';
 import {fixtureCampaign, sid} from './helpers/saveFixture';
 import {visibleNodes} from '../src/campaign/discovery';
 
@@ -13,16 +15,21 @@ const fuel: MapFuel = {
 };
 
 describe('station fuel bars', () => {
-  it('two segments filled by quarter units; more than two tanks adds a "+"; planned vs remaining colours', () => {
+  it('six tank segments filled by quarter units; more than six tanks adds a "+"; planned vs remaining colours', () => {
+    expect(FUEL_BAR.tanks).toBe(6);
     const half = fuelBarSvg({x: 100, y: 100}, 6, 2, 'live');
-    expect(half.match(/<rect /g)).toHaveLength(3); // two outlines + one fill (half of the first tank)
+    expect(half.match(/<rect /g)).toHaveLength(7); // six outlines + one fill (half of the first tank)
     expect(half).toContain('data-units="2"');
     expect(half).not.toContain('>+<');
-    const many = fuelBarSvg({x: 100, y: 100}, 6, 9, 'remaining');
-    expect(many.match(/<rect /g)).toHaveLength(4);
+    const four = fuelBarSvg({x: 100, y: 100}, 6, 16, 'remaining');
+    expect(four.match(/<rect /g)).toHaveLength(10); // an average station: four of six tanks full — not every station "full"
+    expect(four).not.toContain('>+<');
+    const many = fuelBarSvg({x: 100, y: 100}, 6, 25, 'remaining');
+    expect(many.match(/<rect /g)).toHaveLength(12);
     expect(many).toContain('>+</text>');
     expect(fuelBarSvg({x: 0, y: 0}, 6, 4, 'planned')).toContain('opacity="0.7"');
-    expect(fuelBarSvg({x: 0, y: 0}, 6, 0, 'remaining').match(/<rect /g)).toHaveLength(2); // empty: outlines only
+    expect(fuelBarSvg({x: 0, y: 0}, 6, 0, 'remaining').match(/<rect /g)).toHaveLength(6); // empty: outlines only
+    for (const u of [0, 3, 16, 30]) expect(fuelBarSvg({x: 0, y: 0}, 6, u, 'live').replace(/<[^>]*>/g, '').replace('+', '')).toBe(''); // no figures
   });
 
   it('the map draws a bar for every KNOWN station only, with a key entry; without a provider nothing changes', () => {
@@ -52,20 +59,35 @@ describe('station fuel bars', () => {
   });
 });
 
-describe('the details card: the station\'s fuel and the trip (stops, cost, reserves aboard)', () => {
-  it('names the station fuel and a trip that is short; Depart stays (the engine stalls audibly when short)', () => {
+describe('the details card: fuel shown visually only (a trip gauge), no fuel figures in text', () => {
+  const card = (f: MapFuel, mode = 'travel') => {
     const pm = new PaperMap() as unknown as {args: {fuel: MapFuel}; mode: string; fuelLines(id: string, plan: {hops: number} | null): string};
-    pm.args = {fuel};
-    pm.mode = 'travel';
-    const html = pm.fuelLines(sid(1), {hops: 3});
-    expect(html).toContain('Fuel here: 2¼ tanks (left here)');
-    expect(html).toContain('Trip: 3 stops · needs 3 tanks · aboard ¾ tank (tank ¼ tank, chest ½ tank, carts empty) — NOT ENOUGH');
-    expect(html).toContain('pm-p-short');
-    expect(pm.fuelLines(sid(2), {hops: 1})).toContain('Fuel here: 1 tank (not visited — untouched)');
-    const rich: MapFuel = {...fuel, aboard: () => ({tank: 4, chest: 0, carts: 0, total: 4})};
-    pm.args = {fuel: rich};
-    expect(pm.fuelLines(sid(2), {hops: 1})).toContain('Trip: 1 stop · needs 1 tank · aboard 1 tank</div>');
-    pm.args = {fuel: {...fuel, cost: () => 0}};
-    expect(pm.fuelLines(sid(2), {hops: 5})).toContain('no fuel used (cheat)');
+    pm.args = {fuel: f};
+    pm.mode = mode;
+    return pm;
+  };
+  const text = (html: string) => html.replace(/<[^>]*>/g, '').trim();
+
+  it('a destination: one tank outline per hop, filled by the fuel aboard, red where short — and only the word "Fuel" as text', () => {
+    const html = card(fuel).fuelLines(sid(1), {hops: 3});
+    expect(text(html)).toBe('Fuel');
+    expect(html).toContain('pm-trip-gauge');
+    expect(html).toContain('pm-p-short'); // 3 units aboard < 12
+    expect((html.match(/rx="1.5"/g) ?? []).length).toBe(3); // three tank outlines (three hops)
+    expect((html.match(/fill="#6f9a5c"/g) ?? []).length).toBe(1); // ¾ of the first tank
+    expect(html).not.toMatch(/tank|needs|aboard|Fuel here|NOT ENOUGH|\d+ stop/);
+    const rich = card({...fuel, aboard: () => ({tank: 4, chest: 4, carts: 0, total: 8})}).fuelLines(sid(2), {hops: 2});
+    expect(rich).not.toContain('pm-p-short');
+    expect((rich.match(/fill="#6f9a5c"/g) ?? []).length).toBe(2);
+    expect(rich).not.toContain('#e0574b');
+    expect(tripGaugeSvg(4, 3)!.short).toBe(true);
+    expect(tripGaugeSvg(4, 4)!.short).toBe(false);
+  });
+
+  it('nothing in the card for a station (its bar is on the map), in view mode, or with the cheat (free)', () => {
+    expect(card(fuel).fuelLines(sid(2), null)).toBe('');
+    expect(card(fuel, 'view').fuelLines(sid(2), {hops: 1})).toBe('');
+    expect(card({...fuel, cost: () => 0}).fuelLines(sid(2), {hops: 5})).toBe('');
+    expect(tripGaugeSvg(0, 3)).toBeNull();
   });
 });

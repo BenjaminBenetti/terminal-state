@@ -1,9 +1,11 @@
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the FUEL CAN's world / held / icon model.
 //
 // MODEL: the delivered runtime GLB assets/models/train-fuel-can.glb (task studio-train-fuel-can-asset-20261106-030724-01: a Meshy T2.5
-// image-to-3D derivative of a Codex concept; Meshy's own PBR maps kept as they are; provenance assets/derivatives/train-fuel-can.json).
-// It is already in the item frame — real size 0.32 x 0.47 x 0.165 m (= items.ts ITEM_DIMS.fuel_can), origin bottom-centre, +Y up,
-// front +Z, identity transforms, one material — so it is used as delivered (a clone shares its geometry / materials / maps).
+// image-to-3D derivative of a Codex concept; Meshy's own PBR maps kept, re-encoded, the back label un-mirrored by a deterministic texel
+// mirror; provenance assets/derivatives/train-fuel-can.json).
+// It is already in the item frame — real size 0.2015 x 0.30 x 0.105 m (= items.ts ITEM_DIMS.fuel_can: a ~5 l can, med-kit sized, user
+// feedback task fuel-feedback; FUEL readable on both broad sides), origin bottom-centre, +Y up, front +Z, identity transforms, one
+// material — so it is used as delivered (a clone shares its geometry / materials / maps).
 // preloadFuelCanModel() fetches it once (installFuelPort starts it so the download overlaps the boot assets; Game.load awaits it before
 // the item templates / icons are built, like the medical / reactor item models), so pickups, holder lots, icons, the held can and the
 // warm-up prototype all show the same model.
