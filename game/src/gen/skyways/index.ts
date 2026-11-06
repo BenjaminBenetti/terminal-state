@@ -41,6 +41,7 @@ import {skywaysIssues} from './validate';
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
+import {dressSkywaysDestinations} from './destinations/index';
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -165,6 +166,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   const ram = layout.skyways.restaurant;
   dressSkywaysAtriums(layout, rng.fork('skyways-atriums'));
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
+  // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
+  dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
@@ -275,6 +278,10 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},
     exterior: rectW({x: minX, y: minZ, w: maxX - minX, h: maxZ - minZ}),
     family: f.family, topology: f.topology, pedways: sc.pedways.slice(),
+    anchors: sc.anchors.map(an => ({id: an.id, family: an.family, name: an.name, building: an.building, level: an.level, format: an.format, floor: an.floor,
+      rect: rectW(an.rect), storefront: an.storefront, front: an.front, ...(an.upper !== null ? {upper: an.upper} : {}), zones: an.zones.slice(), stock: an.stock.slice(), ceilY: an.ceilY})),
+    landmarks: sc.landmarks.map(m => ({id: m.id, family: m.family, name: m.name, building: m.building, level: m.level, area: m.area,
+      x: r3((m.cx - ox) * CELL), z: r3((m.cy - oy) * CELL), y: BASES[m.level], radius: m.radius, height: m.height, atrium: m.atrium})),
   };
 }
 
@@ -333,6 +340,11 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
   for (const b of sc.bridges) {
     const lane = b.axis === 'x' ? {x: b.rect.x - 6, y: b.rect.y + 2, w: b.rect.w + 12, h: b.rect.h - 4} : {x: b.rect.x + 2, y: b.rect.y - 6, w: b.rect.w - 4, h: b.rect.h + 12};
     add(2, lane);
+  }
+  // the landmark courts' centrepieces (their clear radius + a walking ring)
+  for (const m of sc.landmarks) {
+    const R = Math.ceil((m.radius + 0.8) / CELL), L = m.family === 'dinosaur' ? Math.ceil(4.6 / CELL) : R;
+    add(m.level, {x: Math.round(m.cx) - (m.axis === 'x' ? L : R), y: Math.round(m.cy) - (m.axis === 'z' ? L : R), w: 2 * (m.axis === 'x' ? L : R), h: 2 * (m.axis === 'z' ? L : R)});
   }
   add(sc.addon.level, sc.addon.hall);
   add(sc.addon.level, sc.addon.entry, 3);

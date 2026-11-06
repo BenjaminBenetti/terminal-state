@@ -338,6 +338,8 @@ export function dressStorefront(api: ShopDressApi, layout: StationLayout, sf: St
       tagged(api.force(unit, 'shopGlazing', q4(x), q4(z), fr.alongX ? half : 0.06, fr.alongX ? 0.06 : half, sf.head, false));
     }
   }
+  // (task studio-skyways-destinations-20261106-170011-01) a Skyways destination anchor: its own dresser furnishes the interior
+  if (sf.anchor) return;
   const themeV = P.stock ? stockVariant(P.stock) : 0;
   const variantOf = (r: PropRule) => (r.variant === 'stock' ? themeV : r.variant ?? 0);
   const cw = PROP_DEFS.shopCounter.w;

@@ -277,6 +277,12 @@ export interface Storefront {
    */
   level?: number;
   baseY?: number;
+  /**
+   * Task studio-skyways-destinations-20261106-170011-01: a Skyways DESTINATION anchor shop (its family id). The storefront system draws
+   * its front (glazing / shutter / fascia / sign) as for any bay; its interior is dressed by gen/skyways/destinations (not the
+   * purpose's generic layout).
+   */
+  anchor?: string;
 }
 
 export interface StationLayout {

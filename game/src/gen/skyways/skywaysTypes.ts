@@ -168,6 +168,68 @@ export interface SkywaysRestaurant {
   name: string;
 }
 
+// ---------------------------------------------------------------------------------------------
+// Destinations (task studio-skyways-destinations-20261106-170011-01): large ANCHOR shops and LANDMARK courts
+
+/** Destination shop families (each a distinct large-format anchor with its own kit; a seeded rotation per map). */
+export const SKYWAYS_SHOP_FAMILIES = ['books', 'outfitter', 'music', 'hobby', 'design', 'garden', 'arcade', 'cinema', 'science', 'hockey'] as const;
+export type SkywaysShopFamily = (typeof SKYWAYS_SHOP_FAMILIES)[number];
+/**
+ * An anchor's large format: `hall` (one big sales floor), `two-level` (the same footprint on the street and skyway levels joined by
+ * an internal open stair: a sales floor and a mezzanine floor), `double-height` (a street-level hall rising through the skyway
+ * storey: nothing carved above), `multi-zone` (a front hall and a second room behind it: the cinema's lobby + auditorium, the music
+ * store's listening booths).
+ */
+export type SkywaysAnchorFormat = 'hall' | 'two-level' | 'double-height' | 'multi-zone';
+
+export interface SkywaysAnchor {
+  id: string;
+  family: SkywaysShopFamily;
+  /** Printed shop name (its fascia). */
+  name: string;
+  building: string;
+  /** The storey its entrance (storefront) is on, and its format. */
+  level: number;
+  format: SkywaysAnchorFormat;
+  /** The main sales floor (layout.areas id), its rect (world m) and its storefront (layout.storefronts id). */
+  floor: number;
+  rect: SkywaysRect;
+  storefront: number;
+  /** The open side of the sales floor toward its storefront (the shop's front). */
+  front: Side;
+  /** two-level: the upper floor (area id, storey level + 1, the same rect) and the internal stair's link (layout.levelLinks index). */
+  upper?: number;
+  /** multi-zone: the second room(s) behind / beside the floor (area ids: the auditorium, listening booths). */
+  zones: number[];
+  /** Back rooms (stock room / office: area ids, staff doors from the floor). */
+  stock: number[];
+  /** Absolute y of the sales floor's ceiling (double-height: above the skyway storey's floor). */
+  ceilY: number;
+}
+
+/** Landmark families: a recognisable centrepiece making a court a named destination and a wayfinding anchor. */
+export const SKYWAYS_LANDMARK_FAMILIES = ['clock', 'dinosaur', 'fig-tree', 'fountain', 'geese', 'orrery'] as const;
+export type SkywaysLandmarkFamily = (typeof SKYWAYS_LANDMARK_FAMILIES)[number];
+
+export interface SkywaysLandmark {
+  id: string;
+  family: SkywaysLandmarkFamily;
+  /** The court's name ("Clock Court"). */
+  name: string;
+  building: string;
+  level: number;
+  /** The court area (layout.areas id; relabelled with the court's name) and the centrepiece's spot (world m, floor y). */
+  area: number;
+  x: number;
+  z: number;
+  y: number;
+  /** Clear radius (m) kept round the centrepiece and its clear height above the floor. */
+  radius: number;
+  height: number;
+  /** An atrium court (double height under the glass) or an ordinary lobby / skyway court. */
+  atrium: boolean;
+}
+
 /** layout.skyways (written by gen/skyways/index.ts). */
 export interface SkywaysInfo {
   version: 1;
@@ -191,4 +253,7 @@ export interface SkywaysInfo {
   topology?: SkywaysTopology;
   /** Underground pedway links from the station concourse up into other buildings' lobbies (building ids). */
   pedways?: string[];
+  /** (destinations pass) The large anchor shops and the landmark courts. */
+  anchors?: SkywaysAnchor[];
+  landmarks?: SkywaysLandmark[];
 }
