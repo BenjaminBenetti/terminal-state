@@ -157,7 +157,7 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the Office's loose floor program over its three storeys
   // — no loose floor program (user 2026-11-06: ordinary small loot sits on shelves / counters / in containers; the floor is reserved for
   // key finds) — and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
-  skyways: {floor: 'none', weapons: 'station', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  skyways: {floor: 'none', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
 };
 
 /**
@@ -1348,6 +1348,16 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     items: kit(start), probability: 'Guaranteed: always exactly these stacks at the start of a run (not per level).',
     knobs: [{what: 'the kit', value: 'starterInventory()', at: B.src.at(F.starter, 'starterInventory'), overrides: ['none']}],
     at: [B.src.at(F.starter, 'starterInventory'), B.src.at(F.pistol, 'startWeaponFor')],
+  });
+
+  // --- task studio-skyways-level-20261106-054448-01: the Skyways ramen restaurant's loose plates (its dresser's own finite pickups)
+  if (levels.includes('skyways')) add({
+    id: 'skyways-ramen-loose', family: 'fixture', label: 'Skyways ramen restaurant: loose food on the tables / counter', class: 'conditional', levels: ['skyways'],
+    summary: 'Placed once per level seed by the restaurant dresser (gen/skyways/ramen.ts dressSkywaysRamen): RAMEN_LOOSE (2-4) single servings drawn from RAMEN_LOOSE_ROWS, each standing supported on a café table or the counter\'s pass (never on the floor). Finite: remembered like every pickup, never refilled. The restaurant\'s counter / cooler / fridge / kitchen holders roll RAMEN_COUNTER / RAMEN_COOLER / RAMEN_FRIDGE / RAMEN_KITCHEN (purposes skyways-ramen / skyways-ramen-kitchen).',
+    items: LT.RAMEN_LOOSE_ROWS.map(([itemId, w]) => ({itemId, count: 1, note: `weight ${w}`})),
+    probability: 'Seeded: 2-4 single servings per Skyways level (one restaurant per level).',
+    knobs: [{what: 'the loose servings', value: 'RAMEN_LOOSE / RAMEN_LOOSE_ROWS', at: B.src.at(F.tables, 'RAMEN_LOOSE_ROWS'), overrides: ['none']}],
+    at: [B.src.at(F.tables, 'RAMEN_LOOSE_ROWS')],
   });
 
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
