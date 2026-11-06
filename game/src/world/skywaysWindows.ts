@@ -42,7 +42,7 @@ export const SKYWAYS_GLASS_WAIT_MS = 4000;
 
 /** The spans in the tower runtime's WindowSpan shape (1:1 with layout.skyways.windows: the span index is part of the pane id). */
 export function skywaysSpans(windows: readonly SkywaysWindow[]): WindowSpan[] {
-  return windows.map(w => ({x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1, side: w.side, sill: w.sill, head: w.head, kind: 'window', level: w.level, baseY: w.baseY}));
+  return windows.map(w => ({x0: w.x0, z0: w.z0, x1: w.x1, z1: w.z1, side: w.side, sill: w.sill, head: w.head, kind: w.kind === 'entrance' ? 'entrance' : 'window', level: w.level, baseY: w.baseY})); // (entrance: boarded street doors, inert)
 }
 
 /** The Skyways pane rule: a breached span's panes are all breakable (broken by the breach), else generated broken -> cracked. */

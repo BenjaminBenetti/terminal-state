@@ -88,7 +88,8 @@ export interface SkywaysWindow extends SkywaysRect {
   side: Side;
   sill: number;
   head: number;
-  kind: 'window';
+  /** 'entrance' = a building's boarded street doors (sill 0): scenery, never breakable (the Office's lobby entrance rule). */
+  kind: 'window' | 'entrance';
   level: number;
   baseY: number;
   /** What the glass belongs to: a bridge side, a building facade (street lobbies / skyway concourse) or an atrium. */
