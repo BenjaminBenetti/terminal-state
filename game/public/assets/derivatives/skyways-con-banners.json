@@ -1,0 +1,144 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-con-banners",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "ART",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways convention add-on: three tall hanging banners (512 x 1219 each, 1:2.38: the painted strip of each 2:3 source, centred)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-art.mjs",
+ "rawStorage": "reference/tasks/skyways-level-20261106-054448/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art-<nn>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (focus per piece)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1536x1219, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-con-banners.jpg",
+  "bytes": 404398,
+  "sha256": "76650d4d903dc650511250a376525173fbb20cc59f29d39d1e68b0b2da08474f",
+  "width": 1536,
+  "height": 1219,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "banner-wave",
+   "subject": "hanging banner: \"AURORA ANIME FEST\" + the mascot Kumako waving",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 9,
+    "session": "01a1af80-d640-7e11-b36e-2d6d387aa116",
+    "requested": "2026-11-06T06:16:58.521891Z",
+    "finished": "2026-11-06T06:17:49.656988Z",
+    "seconds": 51.1
+   },
+   "prompt": {
+    "file": "art-09.txt",
+    "sha256": "aa41937e01a9cd0f9eecbbbc2ea27faef1a509da4c10e1895da8e8ebf75992e3"
+   },
+   "source": {
+    "file": "codex-9-exec-47731e67-8e6e-41e5-a174-4a6c191e65fc.png",
+    "sha256": "7ad5de6971fb5666339514a776b97ee2d770a3559f0fa73abc0a964e2c32a0e4",
+    "bytes": 1770841,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 190,
+    "y": 0,
+    "w": 645,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 1219
+   }
+  },
+  {
+   "name": "banner-jump",
+   "subject": "hanging banner: Kumako jumping + \"AURORA ANIME FEST\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 10,
+    "session": "01a1af81-9e8b-73a1-ba57-33cf98845b59",
+    "requested": "2026-11-06T06:17:49.792000Z",
+    "finished": "2026-11-06T06:18:38.347022Z",
+    "seconds": 48.5
+   },
+   "prompt": {
+    "file": "art-10.txt",
+    "sha256": "a21ea8d248331324107096d4cf9d31332752bd8132674d2888390a8f5c1bd41d"
+   },
+   "source": {
+    "file": "codex-10-exec-60ad7338-0709-47a2-9402-bab51f898c42.png",
+    "sha256": "2d099e78d3cc989a141bd70a846a70a875505f7cec3568fe263f4b80258182c9",
+    "bytes": 1988760,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 190,
+    "y": 0,
+    "w": 645,
+    "h": 1536
+   },
+   "placed": {
+    "x": 512,
+    "y": 0,
+    "w": 512,
+    "h": 1219
+   }
+  },
+  {
+   "name": "banner-moon",
+   "subject": "hanging banner: \"AURORA ANIME FEST\" + Kumako on a crescent moon",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 11,
+    "session": "01a1af82-5cc3-7f92-b34a-e0b2b9e4266a",
+    "requested": "2026-11-06T06:18:38.485058Z",
+    "finished": "2026-11-06T06:19:28.744822Z",
+    "seconds": 50.2
+   },
+   "prompt": {
+    "file": "art-11.txt",
+    "sha256": "2ae8c062b537a932e978854dce481ef04b3b8ea9e5169aee40501cc56c4f1ed9"
+   },
+   "source": {
+    "file": "codex-11-exec-d7afb588-1fab-4d0f-a27a-47d49d678396.png",
+    "sha256": "7461ac023e8b94a0080319faf705cb9770181d23879287c078869cd793614715",
+    "bytes": 2006261,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 190,
+    "y": 0,
+    "w": 645,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1024,
+    "y": 0,
+    "w": 512,
+    "h": 1219
+   }
+  }
+ ]
+}

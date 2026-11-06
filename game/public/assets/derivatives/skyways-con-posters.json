@@ -1,0 +1,319 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-con-posters",
+ "task": "studio-skyways-level-20261106-054448-01",
+ "lane": "ART",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways convention add-on: the eight series posters (512 x 768 each, 2:3, 4 x 2 grid)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-art.mjs",
+ "rawStorage": "reference/tasks/skyways-level-20261106-054448/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art-<nn>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (focus per piece)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 2048x1536, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-con-posters.jpg",
+  "bytes": 938398,
+  "sha256": "03c8aa00a1bb9de1529bea4b57a79e16e207e274788b2c3ec84be2989d88eb09",
+  "width": 2048,
+  "height": 1536,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "dawnstrider",
+   "subject": "convention poster: invented mecha series \"DAWNSTRIDER\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 101,
+    "session": "01a1af88-7df6-70a2-9f08-da2ba25ff86a",
+    "requested": "2026-11-06T06:25:20.201118Z",
+    "finished": "2026-11-06T06:26:13.934257Z",
+    "seconds": 53.7
+   },
+   "prompt": {
+    "file": "art-01-r1.txt",
+    "sha256": "67730f8884fac39d771982b4bbdadf7f2bf30cba833b7e31758cca1dc4f3a213"
+   },
+   "source": {
+    "file": "codex-101-exec-5f218af6-ccbb-4f11-8e60-f9e824ff9609.png",
+    "sha256": "b94ac6a8971845ba01210e14fdb610934b4ecf5c5ab1173853a052481bc9424f",
+    "bytes": 2413288,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "starlight-prism",
+   "subject": "convention poster: invented magical-girl series \"STARLIGHT PRISM\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 2,
+    "session": "01a1af7b-1073-7a72-944d-ca605e39c636",
+    "requested": "2026-11-06T06:10:40.190999Z",
+    "finished": "2026-11-06T06:11:35.980798Z",
+    "seconds": 55.7
+   },
+   "prompt": {
+    "file": "art-02.txt",
+    "sha256": "945e8fdaa0ddef150cd76b90377630c160d95bcfb2e497ff5a9f473463ef82f4"
+   },
+   "source": {
+    "file": "codex-2-exec-e2850661-19c2-412a-8e0d-8c71816259f5.png",
+    "sha256": "5c68ea590023593ad4501af56b08f73b64117b675467be034f8abdfe0ec7a589",
+    "bytes": 2355516,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 512,
+    "y": 0,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "petal-cafe-club",
+   "subject": "convention poster: invented slice-of-life series \"PETAL CAFE CLUB\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 103,
+    "session": "01a1af89-505e-78e3-ac11-060f0b132797",
+    "requested": "2026-11-06T06:26:14.069913Z",
+    "finished": "2026-11-06T06:27:04.833106Z",
+    "seconds": 50.7
+   },
+   "prompt": {
+    "file": "art-03-r1.txt",
+    "sha256": "42c06bcc4572bb6bafdee89acd97f8cb766ad61ecda2adecaa1655e3b2f21e29"
+   },
+   "source": {
+    "file": "codex-103-exec-c906bab4-0413-4703-96ff-11ba281377f1.png",
+    "sha256": "4e71dff30ae44276a1cfb7806e9aefef8355219887306f5ef86d3cf6e856edb1",
+    "bytes": 2613750,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1024,
+    "y": 0,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "rift-blade",
+   "subject": "convention poster: invented battle-action series \"RIFT BLADE\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 4,
+    "session": "01a1af7c-c31d-7db3-bfc3-a745a15d739f",
+    "requested": "2026-11-06T06:12:31.470976Z",
+    "finished": "2026-11-06T06:13:33.199888Z",
+    "seconds": 61.7
+   },
+   "prompt": {
+    "file": "art-04.txt",
+    "sha256": "5864e0a057db40115b94193406f8048b79254df257bdfe03675550dabcccd859"
+   },
+   "source": {
+    "file": "codex-4-exec-5523f7b3-0905-44fb-9e67-924817871e15.png",
+    "sha256": "2311ad7b6776839f7cb08baec8bf2ef7425e2b460c12556eb4d50e100d353516",
+    "bytes": 2319461,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1536,
+    "y": 0,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "nova-beat",
+   "subject": "convention poster: invented idol-group series \"NOVA BEAT\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 5,
+    "session": "01a1af7d-b4b6-75b1-9068-8aac9a73c315",
+    "requested": "2026-11-06T06:13:33.330132Z",
+    "finished": "2026-11-06T06:14:29.931590Z",
+    "seconds": 56.5
+   },
+   "prompt": {
+    "file": "art-05.txt",
+    "sha256": "8402dfdcebdb217ede910de64dad2d4ac4ceeb90bf001814af64a930bb33d33f"
+   },
+   "source": {
+    "file": "codex-5-exec-c39e823a-757a-49ca-933d-0ede8f1e8c1f.png",
+    "sha256": "9491ce6be3ab1c9145856b61be20d4bdb79efbfa56f7123489c9249674b6953c",
+    "bytes": 2649425,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 768,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "lumeria-quest",
+   "subject": "convention poster: invented isekai fantasy series \"LUMERIA QUEST\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 6,
+    "session": "01a1af7e-9262-7073-a73c-86a96a0f5b63",
+    "requested": "2026-11-06T06:14:30.066482Z",
+    "finished": "2026-11-06T06:15:12.113333Z",
+    "seconds": 42
+   },
+   "prompt": {
+    "file": "art-06.txt",
+    "sha256": "2ffc4f0c4bdaededac8112e1b7e9c64a12deb4aab249ea4376321c7c994eea11"
+   },
+   "source": {
+    "file": "codex-6-exec-31a6c9df-b423-42f8-a66e-720d8c2f5226.png",
+    "sha256": "360439aff123180639734223193b09b17d911110bee64c89f144185ce4a45245",
+    "bytes": 2661720,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 512,
+    "y": 768,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "relay-rush",
+   "subject": "convention poster: invented sports series \"RELAY RUSH\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 7,
+    "session": "01a1af7f-371d-7ea3-9155-c7a69d6a6123",
+    "requested": "2026-11-06T06:15:12.241266Z",
+    "finished": "2026-11-06T06:16:03.545904Z",
+    "seconds": 51.2
+   },
+   "prompt": {
+    "file": "art-07.txt",
+    "sha256": "8e98ddcb52771ec92d6e21aa6c9393323360cb5cb5c2e6a654eb5407e0e96890"
+   },
+   "source": {
+    "file": "codex-7-exec-d57d9032-a5ad-4799-98f3-479894cfd07b.png",
+    "sha256": "1454dd4c8b6a0f5a57ab3bda95b9e7d406f93219501e7a60ad0536fb19f2fba4",
+    "bytes": 2233173,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1024,
+    "y": 768,
+    "w": 512,
+    "h": 768
+   }
+  },
+  {
+   "name": "spooky-share-house",
+   "subject": "convention poster: invented cozy horror-comedy series \"SPOOKY SHARE HOUSE\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 8,
+    "session": "01a1af80-0006-72f3-8bbb-da4d873c9158",
+    "requested": "2026-11-06T06:16:03.677857Z",
+    "finished": "2026-11-06T06:16:58.393545Z",
+    "seconds": 54.6
+   },
+   "prompt": {
+    "file": "art-08.txt",
+    "sha256": "035407dea3d17f2ca013fa6d3137e133b421b893b3a79f0b0e99f297222e3afd"
+   },
+   "source": {
+    "file": "codex-8-exec-cc025fc8-abd4-46aa-9240-4b7f00f3e9ef.png",
+    "sha256": "376ce8fe767ceca09e24a23d361eae42e86c1714acefc51a416be57961984025",
+    "bytes": 2457897,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1536,
+    "y": 768,
+    "w": 512,
+    "h": 768
+   }
+  }
+ ]
+}
