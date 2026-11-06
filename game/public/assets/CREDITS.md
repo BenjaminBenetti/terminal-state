@@ -427,3 +427,16 @@ on the build worker. Raw takes are kept outside Git.
   provenance `assets/derivatives/skyways-*.json`). The series, characters and brands are invented.
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-sources-20261106 -->
+
+<!-- BEGIN skyways-destinations-kit-20261106 (lane KITS) -->
+## Skyways destinations: landmark and shop kit models
+- New Skyways destination models, generated for this project under the user's Skyways destinations generation approval (a new
+  895-credit Meshy T2.5 ledger; the destinations lead was the sole Meshy submitter): the six court landmarks (clock tower, hadrosaur
+  skeleton, fig tree, fountain, flock of geese, orrery) and the shop kit for the books, outfitter, music, hobby, design, garden, arcade,
+  cinema, science and hockey destinations (`skyways-d-*`). Each is a Codex native image_gen concept image (a straight-on elevation)
+  followed by Meshy T2.5 image-to-3D, with Meshy's own PBR maps kept (re-encoded / downsized only). Runtime derivatives (uniform
+  real-size fit, light simplification where over budget, lead-approved depth squashes and one local junk-part removal) are built by
+  `tools/asset-pipeline/props/build-skyways-dest-props.mjs`; provenance in `assets/derivatives/skyways-d-*-model.json`. The raw
+  generations and concept images stay private (studio reference task folder). The designs and brands are invented.
+- Unapproved prototypes; no commercial clearance implied.
+<!-- END skyways-destinations-kit-20261106 -->
