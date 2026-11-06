@@ -65,9 +65,10 @@ export interface PropDef {
   blocksSight: boolean;
   /**
    * Rigid-body flags read first by damage/materials.ts propPhysics (iteration 07 generated props). Task studio-skyways-level-20261106-054448
-   * (lane FOOD): + `onHost` / `contact` (damage/materials.ts PropPhysics) for on-host decor declared with its kind (gen/skyways/kitchenKinds.ts).
+   * (lane FOOD): + `onHost` / `contact` and the calibrated `castor` / `pad` contacts (damage/materials.ts PropPhysics / PHYS_MATS) for on-host
+   * decor declared with its kind (gen/skyways/kitchenKinds.ts).
    */
-  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh'; onHost?: boolean; contact?: boolean};
+  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh' | 'castor' | 'pad'; onHost?: boolean; contact?: boolean};
 }
 
 export const PROP_DEFS: Record<PropKind, PropDef> = {

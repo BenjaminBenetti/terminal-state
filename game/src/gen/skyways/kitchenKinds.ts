@@ -49,9 +49,9 @@ type KitchenPhys =
 /** Physics affordance of each kind (damage/physicsAudit.ts PROP_PHYSICS_AUDIT reads it; the live physics come from PROP_DEFS.physics). */
 export const SKYWAYS_KITCHEN_PHYS: Readonly<Record<SkywaysKitchenKind, KitchenPhys>> = {
   skywaysRange: {dynamic: false, why: 'anchored', how: 'commercial gas range (~250 kg of steel and cast-iron grates) levelled on its feet against the kitchen wall and hard-piped to the gas line: a bump or a bullet does not shove it; its stock pot / saucepan are separate loose props on its cooktop'},
-  skywaysStockPot: {dynamic: true, mass: 3.5, mat: 'metal', shape: 'cylinder', how: 'empty 20 l stainless stock pot with its lid (~3.5 kg) standing on the range: a shot knocks it along / off the cooktop (on-host decor: out of reach of a walker\'s legs)'},
-  skywaysSaucepan: {dynamic: true, mass: 1.3, mat: 'metal', shape: 'box', how: 'rusty steel saucepan (~1.3 kg) standing on the range: a shot spins / knocks it off the cooktop (on-host decor)'},
-  skywaysSushiMascot: {dynamic: true, mass: 0.8, mat: 'plastic', shape: 'box', how: 'kawaii sushi display figurine (~0.8 kg of painted resin) on the service counter: a shot knocks it over / off the counter (on-host decor)'},
+  skywaysStockPot: {dynamic: true, mass: 3.5, mat: 'pad', shape: 'cylinder', how: 'empty 20 l stainless stock pot with its lid (~3.5 kg) standing on the range (calibrated pad contact: its base slides on the grates): a rifle round nudges it a few cm, buckshot knocks it off the cooktop (on-host decor: out of reach of a walker\'s legs)'},
+  skywaysSaucepan: {dynamic: true, mass: 1.3, mat: 'pad', shape: 'box', how: 'rusty steel saucepan (~1.3 kg) standing on the range (pad contact): a rifle round slides / spins it, buckshot knocks it off the cooktop (on-host decor)'},
+  skywaysSushiMascot: {dynamic: true, mass: 0.8, mat: 'pad', shape: 'box', how: 'kawaii sushi display figurine (~0.8 kg of painted resin on a felt base) on the service counter: a shot slides / knocks it over or off the counter (on-host decor)'},
 };
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -61,7 +61,7 @@ function defOf(k: SkywaysKitchenKind): PropDef {
   // dynamic on-host decor: `onHost` (goes loose on its static host's top) + `contact` (the calibrated contact-wake rules; a raised
   // prop is never shoved by legs) — read by damage/materials.ts propPhysics before PROP_PHYSICS
   return {w: r3(m.w), d: r3(m.d), h: r3(h), blocksSight: false,
-    ...(ph.dynamic ? {physics: {mass: ph.mass, dynamic: true, shape: ph.shape, mat: ph.mat as 'metal' | 'plastic', onHost: true, contact: true}} : {})};
+    ...(ph.dynamic ? {physics: {mass: ph.mass, dynamic: true, shape: ph.shape, mat: ph.mat, onHost: true, contact: true}} : {})};
 }
 export const SKYWAYS_KITCHEN_PROP_DEFS: Readonly<Record<SkywaysKitchenKind, PropDef>> = Object.fromEntries(SKYWAYS_KITCHEN_KINDS.map(k => [k, defOf(k)])) as Record<SkywaysKitchenKind, PropDef>;
 

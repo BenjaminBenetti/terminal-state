@@ -180,12 +180,12 @@ class Dresser {
   }
 }
 
-/** A run of `n` counter modules facing the entry: an island at depth V (staff aisle behind) or against the back wall (V = null). */
-function counterRun(d: Dresser, fr: Frame, n: number, V: number | null, leftOpen: boolean): PropPlacement[] {
-  const def = PROP_DEFS.shopCounter, len = n * def.w;
-  const gap = V === null ? 0.3 : Math.max(1.2, Math.min(2.0, fr.W - len - 0.6)); // the staff way in round the open end
-  if (fr.W - len - gap < 0.3) return [];
-  const u0 = snap(leftOpen ? gap : fr.W - len - 0.3);
+/**
+ * A run of `n` counter modules facing the entry from u0 (cell-aligned): an island at depth V (the staff aisle behind it) or against the
+ * back wall (V = null). All or nothing (a transaction); [] when any module does not fit.
+ */
+function counterRun(d: Dresser, fr: Frame, n: number, V: number | null, u0: number): PropPlacement[] {
+  const def = PROP_DEFS.shopCounter;
   begin(d.ctx);
   const out: PropPlacement[] = [];
   for (let i = 0; i < n; i++) {
@@ -205,6 +205,18 @@ function counterRun(d: Dresser, fr: Frame, n: number, V: number | null, leftOpen
   commit(d.ctx);
   for (const p of out) { p.purpose = SKYWAYS_RAMEN_PURPOSE.dining; d.placed.push(p); }
   return out;
+}
+
+/**
+ * Where a run of `len` m may start (u of its first module, cell steps): flush with one side wall first (the other end open: the staff
+ * way in behind an island), then sliding toward the other end. An island keeps at least one end >= 1.2 m from its side wall.
+ */
+function runStarts(fr: Frame, len: number, island: boolean, flushRight: boolean): number[] {
+  const max = Math.floor((fr.W - len) / CELL + 1e-6) * CELL;
+  const out: number[] = [];
+  for (let u = 0; u <= max + 1e-6; u += CELL) if (!island || u >= 1.2 - 1e-6 || fr.W - len - u >= 1.2 - 1e-6) out.push(r3(u));
+  const pref = flushRight ? max : 0;
+  return out.sort((a, b) => Math.abs(a - pref) - Math.abs(b - pref)).slice(0, 12);
 }
 
 /** One café set: a bistro table on a cell corner at (u, v), a café chair either side along u, facing it. */
@@ -329,13 +341,15 @@ export function dressSkywaysRamen(layout: StationLayout, rng: Rng, opts: RamenDr
   // --- dining: the counter (island with a staff aisle when deep enough, else against the back wall) and its mascot ---
   const fr = frameOf(dining, diningFront(layout, dining, kit));
   const n = fr.W >= 8.5 ? 3 : fr.W >= 4.5 ? 2 : 1;
-  const leftOpen = rng.chance(0.5);
+  const flushRight = rng.chance(0.5);
   const cd = PROP_DEFS.shopCounter.d;
   const islandV = Math.floor((fr.D - cd - RAMEN_STAFF_AISLE) / CELL) * CELL;
-  for (const [k, V] of [[n, islandV], [n - 1, islandV], [n, null], [n - 1, null], [1, null]] as const) {
+  search: for (const [k, V] of [[n, islandV], [n - 1, islandV], [n, null], [n - 1, null], [1, null]] as const) {
     if (k < 1 || (V !== null && V < 2.5)) continue;
-    res.counter = counterRun(d, fr, k, V, leftOpen);
-    if (res.counter.length) break;
+    for (const u0 of runStarts(fr, k * PROP_DEFS.shopCounter.w, V !== null, flushRight)) {
+      res.counter = counterRun(d, fr, k, V, u0);
+      if (res.counter.length) break search;
+    }
   }
   if (!res.counter.length) d.skipped.push('dining: no room for the counter');
   const front = res.counter.length ? Math.min(...res.counter.map(p => Math.abs((fr.front === 'N' ? p.z - fr.z0 : fr.front === 'S' ? fr.z1 - p.z : fr.front === 'W' ? p.x - fr.x0 : fr.x1 - p.x)) - cd / 2)) : fr.D - 0.4;
