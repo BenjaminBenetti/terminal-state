@@ -72,6 +72,7 @@ import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './pl
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
+import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
@@ -319,6 +320,8 @@ export class Game {
   readonly gear: GearSystem;
   /** Task gasmask-breach-20261030 (mask lane): the gas mask — Q on / off, filter charge + spares, Q HUD cell, the first-person mask view; protects() (gear/gasMask.ts). */
   readonly gasMask: GasMaskSystem;
+  /** Task train-fuel-system (lane CART): the fuel carts in the world — push / grab, the hose, cargo riding the train (world/fuelCarts.ts). */
+  fuelCarts!: FuelCarts;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
@@ -535,6 +538,8 @@ export class Game {
     // Task gasmask-breach-20261030 (mask lane): after GEAR (wraps its inventory-screen hook); frame hook, input owner, lifecycle, run participant 'gas.mask'
     this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
     hookName('gasMask');
+    this.fuelCarts = installFuelCarts(this); // task train-fuel-system (lane CART)
+    hookName('fuelCarts');
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
