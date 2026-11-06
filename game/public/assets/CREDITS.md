@@ -427,3 +427,19 @@ on the build worker. Raw takes are kept outside Git.
   provenance `assets/derivatives/skyways-*.json`). The series, characters and brands are invented.
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-sources-20261106 -->
+
+<!-- BEGIN skyways-dest-art-20261106 (build-skyways-dest-art.mjs) -->
+## Skyways destinations: original shop posters and court plaques
+Original flat art generated for this project with Codex native image_gen (owned Codex CLI), one call per piece, under the user's
+explicit art authorization for the Skyways destinations. The films, bands, hockey team, shops, shows, courts and society named on
+them are invented. Runtime derivatives (crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/props/build-skyways-dest-art.mjs`; provenance `assets/derivatives/skyways-d-posters.json` and
+`assets/derivatives/skyways-d-plaques.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/skyways-d-posters.jpg` — thirteen shop posters: three cinema film posters, two record-store gig posters,
+  the bookshop's author evening, the outfitter's travel poster, a star chart, the arcade's neon poster, a hockey team poster, the
+  model-railway show, a home-store catalogue ad and a seed-catalogue poster.
+- `assets/textures/skyways/skyways-d-plaques.jpg` — six cast-bronze / enamel court plaques (Clock, Badlands, Fig Tree, Fountain,
+  Flight and Orrery Courts).
+- Unapproved prototypes; no commercial clearance implied.
+<!-- END skyways-dest-art-20261106 -->

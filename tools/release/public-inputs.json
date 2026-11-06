@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 48623,
-      "sha256": "c057ea819f9806e012cb0f88df889e6c1bb56231688e7b037983a21af912b5a6"
+      "bytes": 49930,
+      "sha256": "7c251ecff380ae4efc23f44f5432006fc4e675141fc55e7ef9aefd0fd4b1c415"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -1997,6 +1997,16 @@
       "path": "assets/derivatives/skyways-con-stage.json",
       "bytes": 2613,
       "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-plaques.json",
+      "bytes": 7153,
+      "sha256": "48553f98d742a2460505180748ac4d333f634af3907119428a9c8dfc07db82c0"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-posters.json",
+      "bytes": 13490,
+      "sha256": "80b61060c4441019e8a15ab4cfa43be22106d463cff387435dbcbd6b6c804e8f"
     },
     {
       "path": "assets/derivatives/skyways-mascot-poses.json",
@@ -4292,6 +4302,16 @@
       "path": "assets/textures/skyways/skyways-con-stage.jpg",
       "bytes": 361058,
       "sha256": "31b72a8dfb8ac8e4d587c0af3b70d76f15f5b1f936a2d02fc8b95249d4f06f25"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-d-plaques.jpg",
+      "bytes": 255169,
+      "sha256": "13cc88b9356cfb937f700659cc813482102ed30410129ee4979fca782555af5e"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-d-posters.jpg",
+      "bytes": 1065393,
+      "sha256": "dd84debf9bb5b92ceffc4c18f06be5ea06d6824193f6dbfc7676105b5487377c"
     },
     {
       "path": "assets/textures/skyways/skyways-prize-board.jpg",
