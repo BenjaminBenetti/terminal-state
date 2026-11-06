@@ -1,0 +1,125 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "item-ramen-bowl",
+ "key": "item_ramen_bowl",
+ "role": "food pickup: ramen in a blue patterned bowl (inventory item, held in the hand)",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Ramen_Delight_1106035914_texture.glb",
+  "sha256": "4c534e02e0074a787ab902328644bd59e392644ba839464dbcb3feaaa8091f25",
+  "bytes": 3382276,
+  "triangles": 56171,
+  "vertices": 35922,
+  "extent": [
+   2.0069,
+   1.7557,
+   2.0067
+  ],
+  "uvCharts": 451,
+  "material": {
+   "metallicFactor": 0,
+   "roughnessFactor": 0.8,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 1556860,
+    "sha256": "efbbf16dda4842665b5aa42d560f78c619e28164a14ab7a4188f84d6021c3c3b"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/item-ramen-bowl.glb",
+  "file": "game/public/assets/models/item-ramen-bowl.glb",
+  "bytes": 283412,
+  "sha256": "f9d1ce83bffce9d2eeae5329b41cd31d790525dcac699aeb988a6fa1c40d6b15",
+  "triangles": 3997,
+  "vertices": 4248,
+  "dims": [
+   0.2,
+   0.1741,
+   0.2
+  ],
+  "min": [
+   -0.100009,
+   0,
+   -0.099991
+  ],
+  "max": [
+   0.100009,
+   0.174137,
+   0.099991
+  ],
+  "material": {
+   "metallicFactor": 0,
+   "roughnessFactor": 0.8,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 122063,
+    "sha256": "fb3d2dc25f67e4bb7279d8594327286d2be51bf1e042ba63548ab5d283dd065f",
+    "quality": 85
+   }
+  ]
+ },
+ "fit": {
+  "kind": "rim",
+  "sizeM": 0.2,
+  "rimBandYFrac": 1,
+  "rimBandTopY": 0.174137,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 2.006675,
+  "scale": 0.099667
+ },
+ "transform": "no rotation, uniform scale 0.099667 about the bounds' bottom centre (source offset -0.000075, -0.87793, 0.00011): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; round bowl: source frame kept (front +Z)",
+ "weld": {
+  "verticesBefore": 35922,
+  "verticesAfter": 35922,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "source-uv",
+ "simplify": {
+  "applied": true,
+  "tool": "meshoptimizer 1.3 simplifyWithAttributes (normals x0.5 + UV x1 attribute weights; UV seams preserved; source UVs / normals kept)",
+  "flags": [],
+  "fromTriangles": 56171,
+  "triangles": 3997,
+  "budget": 4000,
+  "askedTriangles": 4000,
+  "passes": 1,
+  "errorRelative": 0.019157,
+  "errorSourceUnits": 0.038445,
+  "normalWeight": 0.5,
+  "uvWeight": 1,
+  "targetError": 1
+ },
+ "textures": "the source maps only, on the source UVs (no new / hand-painted art): Lanczos3 downsize, JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}

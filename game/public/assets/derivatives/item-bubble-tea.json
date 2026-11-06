@@ -1,0 +1,154 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "item-bubble-tea",
+ "key": "item_bubble_tea",
+ "role": "food pickup: bubble tea cup with a straw (inventory item, held in the hand)",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Bubble_tea_cup_with_a_1106035926_texture.glb",
+  "sha256": "18194f951d5ca3268d32a308a82ce960941eb949e4c4c5629563a585d9fb7e7e",
+  "bytes": 5135736,
+  "triangles": 139940,
+  "vertices": 82586,
+  "extent": [
+   0.9253,
+   1.9999,
+   0.83
+  ],
+  "uvCharts": 1361,
+  "material": {
+   "metallicFactor": 0,
+   "roughnessFactor": 0.8,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 811830,
+    "sha256": "99fe2422d1cd49a7edb7b1e789a3388088d2f3704b3cb7ef6976e9db6186c387"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/item-bubble-tea.glb",
+  "file": "game/public/assets/models/item-bubble-tea.glb",
+  "bytes": 144664,
+  "sha256": "34aae60c92c9f677e349b997b0446b44adff9c2d0692b7f35b6fad2f838aaac5",
+  "triangles": 2999,
+  "vertices": 2310,
+  "dims": [
+   0.1111,
+   0.24,
+   0.0993
+  ],
+  "min": [
+   -0.055572,
+   0,
+   -0.04967
+  ],
+  "max": [
+   0.055572,
+   0.24,
+   0.04967
+  ],
+  "material": {
+   "metallicFactor": 0,
+   "roughnessFactor": 0.8,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 51322,
+    "sha256": "e423b6a9b50921de3d1be08747730af9bceb923877ccb78e7eb5753993a18fa2",
+    "quality": 85
+   }
+  ]
+ },
+ "fit": {
+  "kind": "y",
+  "sizeM": 0.24,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 1.99776,
+  "scale": 0.120135
+ },
+ "transform": "no rotation, uniform scale 0.120135 about the bounds' bottom centre (source offset -0.001013, -1.001362, -0.001024): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; round cup: source frame kept (front +Z)",
+ "weld": {
+  "verticesBefore": 82586,
+  "verticesAfter": 82586,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "rebake",
+ "rebakeReason": "the source atlas has 1361 UV charts: a seam-preserving collapse stalls at 3086 triangles (> the 3000 budget) and collapsing across the seams smears the texture between charts",
+ "seamPreservingAttempt": {
+  "applied": false,
+  "stalledAt": 3086,
+  "budget": 3000,
+  "errorRelative": 0.292301
+ },
+ "simplify": {
+  "tool": "lib/dense.mjs simplifyGeometry (meshoptimizer 1.3 simplify, Permissive, geometry only; position weld)",
+  "fromTriangles": 139940,
+  "triangles": 2999,
+  "budget": 3000,
+  "errorRelative": 0.001312,
+  "errorSourceUnits": 0.002625,
+  "droppedDegenerate": 0
+ },
+ "unwrap": {
+  "tool": "lib/unwrap.mjs",
+  "charts": 53,
+  "mergedSmallCharts": 52,
+  "degenerateNormalGroups": 0,
+  "texelsPerSourceUnit": 171.3463,
+  "atlas": 512,
+  "pad": 3,
+  "chartAreaFraction": 0.6171,
+  "vertices": 2310,
+  "triangles": 2999
+ },
+ "bake": {
+  "tool": "lib/bake.mjs (closest same-facing source surface; base colour + metallic-roughness texels bilinear; normal from the source surface normals)",
+  "supersample": 2,
+  "atlas": 512,
+  "mrDiv": 1,
+  "normalDiv": 1,
+  "searchRadiusSourceUnits": 0.039998,
+  "matchedSameFacing": 462389,
+  "matchedFallbackAnyFacing": 0,
+  "unmatched": 0,
+  "projectionDistanceSourceUnits": {
+   "p50": 0.00061,
+   "p90": 0.001629,
+   "p99": 0.002694,
+   "max": 0.004099
+  },
+  "notes": "base colour re-baked from the source (no metallic-roughness / normal map in the source: constant factors kept)"
+ },
+ "textures": "the source appearance re-baked onto a fresh atlas (processing of the source maps, no new / hand-painted art): JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}
