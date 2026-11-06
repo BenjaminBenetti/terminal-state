@@ -1,0 +1,196 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "skyways-wreck-sedan-rust",
+ "key": "skyways_wreck_sedan_rust",
+ "role": "street scenery: rusted white sedan",
+ "task": "skyways-level-20261106-054448 (lane ASSET-A)",
+ "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim",
+ "source": {
+  "archive": "sky-ways.zip",
+  "member": "sky-ways/Meshy_AI_Rustbound_Relic_1106035225_texture.glb",
+  "sha256": "011f58357dc782d8cc10e16593c4441b46b6ec5b8faca63de29f953686c0227e",
+  "bytes": 112749176,
+  "triangles": 3497930,
+  "vertices": 1906513,
+  "extent": [
+   1.9042,
+   0.6601,
+   0.8221
+  ],
+  "uvCharts": 4803,
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 3962357,
+    "sha256": "732112412f962ec6cfdb17d7e580b24d1da5e0ac6a12f974d0fc3bbcef7c17fb"
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2899917,
+    "sha256": "9c05f87e45b4fbe32e2ad4f544a5e6e56f789ef6b16503177e755cce1dd6b748"
+   },
+   {
+    "slot": "normal",
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2901050,
+    "sha256": "a27e039850d15104b00d12f822f7981bb61eb2e2005ac827ffe14b327b7a9ed8"
+   }
+  ],
+  "storage": "read-only master kept privately outside Git (never shipped)"
+ },
+ "output": {
+  "url": "assets/models/skyways-wreck-sedan-rust.glb",
+  "file": "game/public/assets/models/skyways-wreck-sedan-rust.glb",
+  "bytes": 1240512,
+  "sha256": "78d4b9d07a19bfbf6b7d5fa0c84d2045cf7f5baeaf91ff7206e2dc3dfe508c27",
+  "triangles": 11904,
+  "vertices": 17363,
+  "dims": [
+   4.75,
+   1.6254,
+   2.0531
+  ],
+  "min": [
+   -2.375,
+   0,
+   -1.02655
+  ],
+  "max": [
+   2.375,
+   1.625393,
+   1.02655
+  ],
+  "material": {
+   "metallicFactor": 1,
+   "roughnessFactor": 1,
+   "emissiveFactor": [
+    0,
+    0,
+    0
+   ],
+   "doubleSided": true
+  },
+  "maps": [
+   {
+    "slot": "baseColor",
+    "size": [
+     1024,
+     1024
+    ],
+    "mime": "image/jpeg",
+    "bytes": 270898,
+    "sha256": "1c3e59efa312450d91f8f8cfead84367a97f74a10d375ff34bbf5e642fca2d43",
+    "quality": 85
+   },
+   {
+    "slot": "metallicRoughness",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 87397,
+    "sha256": "73b2cc86a65205daa36e3303a7779c6b415971735f8ea5aa1517e414a079371c",
+    "quality": 88
+   },
+   {
+    "slot": "normal",
+    "size": [
+     512,
+     512
+    ],
+    "mime": "image/jpeg",
+    "bytes": 253375,
+    "sha256": "d70f300b41262af40794b348a294810e0228c4807195b2f00a641ec847987128",
+    "quality": 90
+   }
+  ]
+ },
+ "fit": {
+  "kind": "x",
+  "sizeM": 4.75,
+  "measuredOn": "the simplified mesh in source units (its extremes are what ships)",
+  "sourceMeasure": 1.898533,
+  "scale": 2.501932
+ },
+ "transform": "half turn about Y (x, z -> -x, -z), then uniform scale 2.501932 about the bounds' bottom centre (source offset -0.001484, -0.32153, -0.000437): grounded (min y = 0), centred on x / z; baked into the vertices (identity node)",
+ "convention": "metres at real size, +Y up; nose at +X (half turn: grille and crumpled headlights at the source's -X end; red tail lights and the plate at +X)",
+ "weld": {
+  "verticesBefore": 1906513,
+  "verticesAfter": 1906513,
+  "degenerateTrianglesDropped": 0
+ },
+ "method": "rebake",
+ "rebakeReason": "the source atlas has 4803 UV charts: a seam-preserving collapse stalls at 30634 triangles (> the 12000 budget) and collapsing across the seams smears the texture between charts",
+ "seamPreservingAttempt": {
+  "applied": false,
+  "stalledAt": 30634,
+  "budget": 12000,
+  "errorRelative": 0.757215
+ },
+ "simplify": {
+  "tool": "lib/dense.mjs simplifyGeometry (meshoptimizer 1.3 simplify, Permissive, geometry only; position weld)",
+  "fromTriangles": 3497930,
+  "triangles": 11904,
+  "budget": 12000,
+  "errorRelative": 0.003053,
+  "errorSourceUnits": 0.005813,
+  "droppedDegenerate": 0
+ },
+ "unwrap": {
+  "tool": "lib/unwrap.mjs",
+  "charts": 2250,
+  "mergedSmallCharts": 565,
+  "degenerateNormalGroups": 0,
+  "texelsPerSourceUnit": 152.7237,
+  "atlas": 1024,
+  "pad": 4,
+  "chartAreaFraction": 0.4282,
+  "vertices": 17363,
+  "triangles": 11904
+ },
+ "bake": {
+  "tool": "lib/bake.mjs (closest same-facing source surface; base colour + metallic-roughness texels bilinear; normal from the source surface normals)",
+  "supersample": 2,
+  "atlas": 1024,
+  "mrDiv": 2,
+  "normalDiv": 2,
+  "searchRadiusSourceUnits": 0.038085,
+  "matchedSameFacing": 1618772,
+  "matchedFallbackAnyFacing": 0,
+  "unmatched": 0,
+  "projectionDistanceSourceUnits": {
+   "p50": 0.001286,
+   "p90": 0.003534,
+   "p99": 0.006089,
+   "max": 0.021235
+  },
+  "notes": "base colour, metallic-roughness (G roughness, B metalness, R neutral) and normal re-baked from the source"
+ },
+ "textures": "the source appearance re-baked onto a fresh atlas (processing of the source maps, no new / hand-painted art): JPEG (mozjpeg, 4:4:4) — base colour q85, metallic-roughness q88, normal q90; source material factors kept",
+ "rebuild": "node --max-old-space-size=3072 tools/asset-pipeline/props/build-skyways-sources.mjs"
+}
