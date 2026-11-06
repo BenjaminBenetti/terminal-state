@@ -34,8 +34,10 @@
 //    cargo goes, the records wait until a world with a parked car exists.
 // PERFORMANCE: only carts near the player (or moving / grabbed) step; sleeping carts cost a distance test; the hose rewrites one fixed
 // geometry in place; materials / geometry are shared; a hidden prototype is warmed with the station (pool 'fuel-carts').
-// LIMITS: enemies walk through carts and bullets do not move them (no hitscan target); a train door closes through a cart standing in
-// the doorway (only bodies block the doors) — a departure is refused while one straddles (departBlock).
+// BULLETS (Game.bulletHitHandlers): a shot whose world hit lies behind a cart stops on the cart (a metal impact, no crater behind) and
+// shoves it along the shot (bounded, by mass). An enemy in front of the cart is still hit first (the enemy pass runs before the world).
+// LIMITS: enemies walk through carts (no nav / body collision with them); a train door closes through a cart standing in the doorway
+// (only bodies block the doors) — a departure is refused while one straddles (departBlock).
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -48,7 +50,7 @@ import {playerTrainPlacement, trainToWorld, worldToTrain, type TrainPlacement} f
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
 import {RIDE_FRAME, type RideLocalModel} from './trainRideLocal';
 import {rayBox, rayCylinder, type Box3Like, type P3} from './towerShared';
-import {CART, cartFloorAt, pushByPlayer, separateCarts, separatePlayer, stepCart, turnToward, wrapYaw, type CartBody, type CartTarget, type CartWorld} from './fuelCartPhysics';
+import {CART, cartFloorAt, cartMass, pushByPlayer, separateCarts, separatePlayer, stepCart, turnToward, wrapYaw, type CartBody, type CartTarget, type CartWorld} from './fuelCartPhysics';
 import {CART_LOOK, CartHose, buildCartView, cartMaterials, cartModelsGen, loadCartModels, refreshCartBody, setGauge, type CartView} from './fuelCartModel';
 
 export const FUEL_CART = {
@@ -76,6 +78,9 @@ export const FUEL_CART = {
    * car's lining (|z| + r = halfWidth within float error) still counts as wholly aboard.
    */
   ownRadius: PORT.cartRadius - 0.01,
+  /** A bullet's shove: Δv = damage x bulletImpulse / mass (m/s), at most bulletMaxDv (a rifle round ~0.5 m/s into a full cart). */
+  bulletImpulse: 2.5,
+  bulletMaxDv: 1.4,
 } as const;
 
 export const CART_TEXT = {
@@ -145,6 +150,9 @@ export interface FuelCartHost {
   stateListeners?: ((state: never, prev: never) => void)[];
   sectionPreloads?: ((layout: never) => Promise<void>)[];
   atmosphere?: {markShadows(root: THREE.Object3D, structure: boolean): void};
+  /** A bullet's world hit (Game.bulletHitHandlers: true = handled, no crater behind). */
+  bulletHitHandlers?: ((wh: never, point: THREE.Vector3, dir: THREE.Vector3, shot: number, damage: number) => boolean)[];
+  fx?: {impact(pos: THREE.Vector3, normal: THREE.Vector3, surface: 'metal', opts?: {decal?: boolean; chips?: number}): void} | null;
 }
 
 interface CartSfx {
@@ -183,7 +191,7 @@ export class FuelCarts implements FuelCartsLike {
   aim: {cart: Cart; part: 'frame' | 'drum'; t: number} | null = null;
   prompt: string | null = null;
   /** QA / tests. */
-  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0};
+  readonly counts = {spawned: 0, captured: 0, released: 0, grabs: 0, letGo: 0, connects: 0, disconnects: 0, transfers: 0, pushes: 0, restores: 0, steps: 0, bullets: 0};
   private proto: THREE.Group | null = null;
   private protoGen = -1;
   private modelsGen = cartModelsGen;
@@ -224,6 +232,7 @@ export class FuelCarts implements FuelCartsLike {
       ? Promise.race([loadCartModels().then(() => undefined), new Promise<void>(r => setTimeout(r, FUEL_CART.modelWaitMs))])
       : Promise.resolve())) as (layout: never) => Promise<void>);
     h.warmRegistry.addPool('fuel-carts', () => this.warmRoots());
+    h.bulletHitHandlers?.push(((wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3, _shot: number, damage: number) => this.bulletHit(wh, point, dir, damage)) as never);
     h.playerTrain.fuel.live = {cargo: () => this.cargo(), restore: c => this.restore(c)};
     return this;
   }
@@ -516,6 +525,41 @@ export class FuelCarts implements FuelCartsLike {
     if (!this.captured) return;
     this.captured.idle += dt;
     if (this.captured.sawRide || this.captured.idle > FUEL_CART.captureGrace) this.release();
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------------
+  // Bullets
+
+  /**
+   * A bullet / pellet ray that reached the world at distance wh.t: a world cart in front of that hit stops it (steel: a metal impact,
+   * no crater behind) and takes a shove along the shot (bounded, by mass). Riding cargo is never hit (no gunfire while riding).
+   */
+  bulletHit(wh: {t: number}, point: THREE.Vector3, dir: THREE.Vector3, damage: number): boolean {
+    if (!this.worldLive || !(wh.t > 0)) return false;
+    const o = {x: point.x - dir.x * wh.t, y: point.y - dir.y * wh.t, z: point.z - dir.z * wh.t};
+    let best: Cart | null = null, bt = wh.t - 0.01;
+    for (const c of this.carts) {
+      if (c.mode !== 'world') continue;
+      const b = c.body;
+      const t = rayCylinder(o, dir, b.x, b.z, CART.radius * 0.85, b.y + 0.02, b.y + CART_LOOK.height, bt);
+      if (t !== null && t < bt) { bt = t; best = c; }
+    }
+    if (!best) return false;
+    const b = best.body, hx = o.x + dir.x * bt, hy = o.y + dir.y * bt, hz = o.z + dir.z * bt;
+    const hl = Math.hypot(dir.x, dir.z);
+    if (hl > 1e-6) {
+      const dv = Math.min(FUEL_CART.bulletMaxDv, (Math.max(0, damage) * FUEL_CART.bulletImpulse) / cartMass(best.fuel.units));
+      b.vx += (dir.x / hl) * dv;
+      b.vz += (dir.z / hl) * dv;
+      best.awake = true;
+    }
+    const n = new THREE.Vector3(hx - b.x, 0, hz - b.z);
+    if (n.lengthSq() < 1e-8) n.set(-dir.x, -dir.y, -dir.z);
+    n.normalize();
+    this.host.fx?.impact(new THREE.Vector3(hx, hy, hz), n, 'metal', {decal: false, chips: 1});
+    (this.sfx as {impact?(x: number, y: number, z: number, s: string): void} | null)?.impact?.(hx, hy, hz, 'metal');
+    this.counts.bullets++;
+    return true;
   }
 
   // ---------------------------------------------------------------------------------------------------------------------

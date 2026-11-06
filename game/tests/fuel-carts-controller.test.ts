@@ -201,6 +201,34 @@ describe('fuel cart push / grab (system, real Player)', () => {
     expect(h.toasts).toContain('The cart is stuck — you let go');
   });
 
+  it('a bullet whose world hit lies behind a cart stops on it and shoves it along the shot (bounded, a full cart less)', () => {
+    const shove: Record<number, number> = {};
+    for (const units of [FUEL.cartUnits, 0]) {
+      const {h, carts} = roomHost();
+      carts.spawn(cart('c', 5, 3.5, units));
+      expect(h.bulletHitHandlers).toHaveLength(1);
+      const shoot = (z: number, damage: number) => {
+        // a ray from (2, 1.0, z) along +X (a little down) to the far wall (x = 10.5)
+        const dir = new THREE.Vector3(1, -0.05, 0).normalize(), t = (10.5 - 2) / dir.x;
+        const point = new THREE.Vector3(2, 1.0, z).addScaledVector(dir, t);
+        return h.bulletHitHandlers!.some(f => (f as (wh: unknown, p: THREE.Vector3, d: THREE.Vector3, s: number, dmg: number) => boolean)({t, kind: 'wall', nx: -1, ny: 0, nz: 0}, point, dir, 1, damage));
+      };
+      expect(shoot(5.5, 30)).toBe(false); // passes beside it: the wall takes it
+      expect(carts.bodyOf('c')!.vx).toBe(0);
+      expect(shoot(3.5, 30)).toBe(true); // through the cart: stopped there
+      const b = carts.bodyOf('c')!;
+      expect(b.vx).toBeGreaterThan(0);
+      expect(b.vx).toBeLessThanOrEqual(FUEL_CART.bulletMaxDv + 1e-9);
+      expect(Math.abs(b.vz)).toBeLessThan(1e-9);
+      shove[units] = b.vx;
+      run(h, 2);
+      expect(b.x).toBeGreaterThan(5.02); // it rolled a little, then stopped (rolling resistance)
+      expect(Math.hypot(b.vx, b.vz)).toBe(0);
+      expect(carts.counts.bullets).toBe(1);
+    }
+    expect(shove[FUEL.cartUnits]).toBeLessThan(shove[0]);
+  });
+
   it('carts never overlap: a pushed cart shoves the next one', () => {
     const {h, carts} = roomHost();
     carts.spawn(cart('a', 3.2, 3.5));
