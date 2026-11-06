@@ -129,6 +129,20 @@ describe('holders and purpose fixtures on real procedural worlds', () => {
     });
   }
 
+  it('revisit: clear() releases the cohort batches (disposed, out of the group) and a rebuild makes the same ones', () => {
+    const layout = generateStation(9001);
+    const {cm} = build(layout);
+    const names = (g: THREE.Object3D) => ims(g, /^(container-body|openable-closed)-/).map(m => `${m.name}@${m.userData.level}x${m.count}`).sort();
+    const first = names(cm.group), before = ims(cm.group, /^(container-body|openable-closed)-/);
+    let disposed = 0;
+    for (const m of before) m.addEventListener('dispose', () => { disposed++; });
+    cm.clear();
+    expect(ims(cm.group, /^(container-body|openable-closed)-/)).toHaveLength(0);
+    expect(disposed).toBe(before.length);
+    cm.build(layout, {}, lootProfile('subway'));
+    expect(names(cm.group)).toEqual(first);
+  });
+
   it('the damage index still finds every purpose fixture and holder prop (by triangles / instances)', () => {
     const layout = generateStation(9001);
     const {world, cm, mats} = build(layout);

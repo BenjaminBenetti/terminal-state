@@ -213,6 +213,16 @@ what they were for.
 * **Use:** compare a horde view's render submission with these counts, for example lured enemies moving in view. This is a count
   only; the native cost of an upload is not measured.
 
+### schemaMinor 5 (task static-batching-warmup-20261105; additive)
+
+* **`world.segments[].lastWarmup`** (the `recording-start` segment only): the most recent loading-screen warm-up before the capture
+  started. Fields: `status`, `mode`, `reason`, `warmupMs`, `budgetMs` (the maximum it ran under: 120 s by default), `cutStage` (the
+  stage the budget cut, or `null`), and per stage `done`, `total` and `ms`, plus the plan's counts. `null` when there was no warm-up
+  yet. A capture started after the load can now say where a `partial` warm-up stopped.
+* **`environment.warmup`** carries the same summary (was: mode and status only).
+* **Sanitized reasons:** a reason containing URL or path characters (an error message) is stored as `withheld (not a plain
+  reason)`.
+
 **The capture that uses this** (Office top floor, or wherever the hitches are felt): about 60 s of the same kind of play. Walk
 and turn through the heavy views, fire a few shots at enemies, and have the flashlight on part of the time. Press F9 at stalls
 you feel: it helps, but unmarked stalls are counted too.

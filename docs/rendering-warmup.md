@@ -342,11 +342,63 @@ dedupe, and compares every GPU buffer's bytes after every frame.
 - Each skinned draw still uploads its own copy of its skeleton's bones in every pass when the pose changed. Sharing one bone
   buffer per skeleton would need a custom skinning node; that was not done.
 
+## Static cohorts and a 120 s budget (task static-batching-warmup-20261105)
+
+**The trace that prompted it.** A GAME72 laptop recording: Intel integrated GPU, Chrome / WebGPU, Subway, render scale 0.4. Its
+cost was CPU draw submission, about 2 ms plus 27 µs per draw. 81 % of its missed refreshes came at 450 or more draws. Its warm-up
+ended `partial` at 60 s, leaving 37 builds for play.
+
+**Census (`tests/rendercpu-batch-census.test.ts`, env-gated).** The architecture is already one mesh per material per 48 m chunk;
+merging plain meshes further within a chunk saves 1–2 draws on three of four levels. What multiplies the draws is the instancing of
+repeated static models: every model prop and holder kind was one InstancedMesh per model part per 12–18 m chunk. In the Subway's
+busiest view, the ceiling fixture alone was 29 draws.
+
+**The shared rule** (`world/staticCohorts.ts` `planCohorts`). Every builder of repeated static geometry uses it: `chunkInstances`
+(model props, p7 props, Office furniture, storefront fittings), the openables and container bodies, and the merged purpose-prop
+parts.
+- **Cohorts are per level, always.** Before, the Subway and Office holder and purpose batches spanned storeys.
+- **Cheap models get 48 m cohorts where the culler doesn't occlusion-cull.** A model is cheap when its instances on a level total at
+  most `STATIC_COHORTS.levelTriangles` (20k). The 48 m cohort matches the architecture chunk. This applies on levels without atrium
+  or slab occlusion (Subway, Office).
+- **Occlusion-culled levels keep their chunks.** On the Mall and Reactor, fine boxes are what that occlusion removes draws with;
+  coarser cohorts measured +6 % draws there.
+- **Heavy models keep their builder chunks** everywhere.
+- **Identity and culling.** Cohorts keep the same instances, matrices, colours, materials, holder slots and damage-index entries, and
+  each one carries `userData.level`, so the culler never derives its level from a wide box.
+
+**Measured** (the same harness, worlds and views; Node, no renderer). 48 views per level: the start pose plus 5 enemy spawns, 8 yaws
+each. Scene plus torch-shadow draws after the culler, as mean / p90 / max:
+
+| Level | Before | After | Notes |
+|---|---|---|---|
+| Subway | 304 / 497 / 539 | **292 / 452 / 492** | triangles +7 % |
+| Office | 195 / 319 / 366 | **147 / 229 / 278** | triangles −19 %, from the storey split |
+| Mall, Reactor | unchanged | unchanged | by the occlusion rule |
+
+Warm-up representatives drop with the batch count: Subway 777 → 696, Office 945 → 912.
+
+**Budget and order** (`render/warmup.ts`).
+- **The budget is a 120 s maximum, not a wait.** `WARMUP_DEFAULTS.budgetMs` is the ceiling; the warm-up ends as soon as its work is
+  done.
+- **Likely first uses go first.** Representatives: the hidden pooled ones (effects, the runtime-variant pool, unshown loot batches),
+  then nearest the camera. Shadow frames: casters within torch reach (30 m), then pooled casters, then the rest by distance.
+- **The held-item pass always runs.** It still compiles after a budget cut in the materials stage, unless the warm-up was cancelled.
+- **The cut is reported.** `WarmupResult.budgetMs` and `cutStage` record it. The performance recorder (schemaMinor 5) puts the full
+  recent result on the `recording-start` world segment (`lastWarmup`) and in `environment.warmup`, so a capture started after the load
+  can still explain a `partial`.
+
+**Limits.**
+- On occlusion-culled levels, repeated models are not batched further.
+- Coarse cohorts draw slightly more triangles: Subway +7 %, against GPU headroom in that trace.
+- If 120 s still does not cover a slow CPU, the long tail builds on first use as before. The cut is now visible in captures.
+- No post-load continuation job: its overdue rule would bring back the periodic forced-step hitches.
+
 ## Lifecycle and guarantees
 
 - `Game.prepareGraphics()` is single-flight. It resolves (never rejects) with a `WarmupResult` whose status is one of:
   - `complete`;
-  - `partial` (60 s budget; checked between chunks, and a running chunk always finishes);
+  - `partial` (the time budget — a 120 s maximum since task static-batching-warmup-20261105, was 60 s; checked between chunks, a
+    running chunk always finishes; `cutStage` says which stage it cut, `reason` repeats it);
   - `cancelled` (station replaced or device lost);
   - `failed`;
   - `skipped` (`?warmup=off`).
