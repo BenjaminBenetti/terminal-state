@@ -1999,6 +1999,111 @@
       "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
     },
     {
+      "path": "assets/derivatives/skyways-d-bk-armchair-model.json",
+      "bytes": 6711,
+      "sha256": "f3f8a3bf00dfd172411c7deb61df4e8bdc5135b1a87df86750002f9f7763d190"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-bk-bookcase-model.json",
+      "bytes": 6708,
+      "sha256": "90688c37055911ff18fa1cde1126047e447c975f7d73d1d0f35e782dd8bdf1ca"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-bk-stack-model.json",
+      "bytes": 6421,
+      "sha256": "44fdf87d99df1fbee36e3269b3f750661db978098a7b532cd1e857be7a89d94b"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-bk-table-model.json",
+      "bytes": 6978,
+      "sha256": "f9cb14a46e42ec03617106bc562adef78b9c7cb691c67d87f873af18c944f9da"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ds-eggchair-model.json",
+      "bytes": 6738,
+      "sha256": "8515814521c66a8f88a77b4dea65ba9ca7a5f5eabc016d6cf62a26016c1190ac"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-ds-sofa-model.json",
+      "bytes": 6686,
+      "sha256": "daf6eaa59e916e1947f46c1f2c58bb58c853fa5555572deeecf154df88ce3205"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-clock-model.json",
+      "bytes": 6197,
+      "sha256": "c3b8e4077e09771ab1cea4b5f8cc838a1c94dd5879ea27840f2944842e8fccf7"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-dino-model.json",
+      "bytes": 6595,
+      "sha256": "293e5ec5ca3056a079430d578614ff8c13ec2214e3058ddde6145b9cf11b16b1"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-fountain-model.json",
+      "bytes": 6504,
+      "sha256": "ad00362a8b87d69f1fbb975d2e8de2e0c9c313c1b60f69f7606f19ba3374f6b4"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-orrery-model.json",
+      "bytes": 6185,
+      "sha256": "676b73a97a9df2d485483dc91a9fb38bd504687eed0682f714252e1228bb80e6"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-lm-tree-model.json",
+      "bytes": 6231,
+      "sha256": "97d17b58105c5066c71bf26881450e162774397643e61a93a1bc402672ac189e"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-amp-model.json",
+      "bytes": 6143,
+      "sha256": "a755d59c4b405b3dc9a7081ef1d0141a6380844af1f8111db3a40fa01ff26ed6"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-bins-model.json",
+      "bytes": 8098,
+      "sha256": "a9844391b31cfb5bab9afea130ef1aa31b9b2f4dd6a088bd1e9beecd6c79a774"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-drums-model.json",
+      "bytes": 6205,
+      "sha256": "8b136764b14a9c4bf58db48759a781e7da9482317c27b0e429bb75ab8ed7e981"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-guitar-model.json",
+      "bytes": 6164,
+      "sha256": "db50c48f65c704060f8126dbd8446cac496c6a01098f69d6d19e1b912a336699"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-mu-piano-model.json",
+      "bytes": 6142,
+      "sha256": "0029e9aca26a370ed53c4d4def1c394ed6846c587d4c5533fe6a892fe20d842d"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-of-backpack-model.json",
+      "bytes": 6180,
+      "sha256": "b633a68ee31e9ed8eb03b40549217f77fd16d147b6c61f53090a7580b1bea5d6"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-of-campchair-model.json",
+      "bytes": 6491,
+      "sha256": "a8aa6c78c26475cd799041249b746ec9f7acace5c2c91a600d03cfa5afad5fe1"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-of-canoe-model.json",
+      "bytes": 6328,
+      "sha256": "ff977d391331c181cf86c0f2c7fd4d134876744b5330dcaefcdffb46fa8b350b"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-of-lantern-model.json",
+      "bytes": 6439,
+      "sha256": "0b34bbf9a7e0e6ed8e8886e5a04dcc4f573820ac0f519a0e84f06103bea7bdc2"
+    },
+    {
+      "path": "assets/derivatives/skyways-d-of-tent-model.json",
+      "bytes": 6136,
+      "sha256": "6fdc4989d9255b0ee302b9a28649559177b6acfe6e21f80bffa1f5b7b4a46fbd"
+    },
+    {
       "path": "assets/derivatives/skyways-mascot-poses.json",
       "bytes": 5708,
       "sha256": "58557fd2e5f7e20c241a55e8b1ffbd120a6fc01fee6bcca42b21d2672f9a78df"
@@ -3907,6 +4012,111 @@
       "path": "assets/models/skyways-con-stage.glb",
       "bytes": 1372576,
       "sha256": "8cae4e5e932debda14b2f041bf47aff986fe5dae154ae4ef3c6641196a546e26"
+    },
+    {
+      "path": "assets/models/skyways-d-bk-armchair.glb",
+      "bytes": 576016,
+      "sha256": "4b8b87ae86ee7662c53f057ed4a3ef6d654b3f0421a0b992f0d2735753f0619d"
+    },
+    {
+      "path": "assets/models/skyways-d-bk-bookcase.glb",
+      "bytes": 542296,
+      "sha256": "ff6cbd76ca23d04029a14ce63ed8eb3bd410293269b9ab933df1b41e4c9f68e1"
+    },
+    {
+      "path": "assets/models/skyways-d-bk-stack.glb",
+      "bytes": 352144,
+      "sha256": "9e55546238aefdc8a29886ea01d73194d8fb5114aa18fed56258787c97d22a46"
+    },
+    {
+      "path": "assets/models/skyways-d-bk-table.glb",
+      "bytes": 485048,
+      "sha256": "7dc3fcd1fc0140ccca8929099fef2b69291be64e380536af1eb3dec502e8273c"
+    },
+    {
+      "path": "assets/models/skyways-d-ds-eggchair.glb",
+      "bytes": 597464,
+      "sha256": "5ae3305acb8ac42fdb189dcfcbbc84e8b8e82b9bb85dbab6efd85e655cb4cab2"
+    },
+    {
+      "path": "assets/models/skyways-d-ds-sofa.glb",
+      "bytes": 513128,
+      "sha256": "c94a9c2fee9a6aaa75764c7ce607b84231c59cf4adf725286e3b6cc6a76ee777"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-clock.glb",
+      "bytes": 2777308,
+      "sha256": "a192496f73794f220d55ed52ff6280106e216d31cad9f3151218d8d9a8d8b73c"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-dino.glb",
+      "bytes": 2898844,
+      "sha256": "1c6e20faeb858b849a8469b57fd9a43ef1602802df429c6c4ee9db483a5cbba4"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-fountain.glb",
+      "bytes": 2485468,
+      "sha256": "85c1819475e14cbf1e4fe1c3832f4e8238156900bcb7e1f0ee230e6e135e91cc"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-orrery.glb",
+      "bytes": 2444152,
+      "sha256": "11b2116f9aeaa024c9cc275508a87fbdfc4bff13be02844ea9e46edcf8db98cd"
+    },
+    {
+      "path": "assets/models/skyways-d-lm-tree.glb",
+      "bytes": 2950336,
+      "sha256": "6a20a4b8fd594bd7a9b2107096b6f37a13747878717fb824831dac409a59be05"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-amp.glb",
+      "bytes": 524080,
+      "sha256": "2060e50f3f96ca5a884856cb0cfb2485ebe6bd02bc92a73c02793174cd5eb0cd"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-bins.glb",
+      "bytes": 549904,
+      "sha256": "00e840aed6df301f7dfbab4a244051e70bf973d7f49607a2c9854c6127e7d688"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-drums.glb",
+      "bytes": 1085792,
+      "sha256": "0d8bc3bac1ddde6562489836d96d8267948c11737632ee3ba16b98498e25477a"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-guitar.glb",
+      "bytes": 467692,
+      "sha256": "4019c308734541355f247889cd9c74b3d12726fb7949e95b0e40a73ad5d0d3c1"
+    },
+    {
+      "path": "assets/models/skyways-d-mu-piano.glb",
+      "bytes": 740732,
+      "sha256": "a48cf7f724b380e6204cea855344f817ba66e4af74eeea0d6b2c294add8adc11"
+    },
+    {
+      "path": "assets/models/skyways-d-of-backpack.glb",
+      "bytes": 307140,
+      "sha256": "741ec561279b0f95d0278b17e33c45e5663623b050845f993c2b5fdead37eee3"
+    },
+    {
+      "path": "assets/models/skyways-d-of-campchair.glb",
+      "bytes": 457128,
+      "sha256": "3c12eb3a22d92d2b0a83d45e819696044bef1f8242b024045bcc60d7e40784c5"
+    },
+    {
+      "path": "assets/models/skyways-d-of-canoe.glb",
+      "bytes": 614964,
+      "sha256": "f493c676539d592f6c8b00c0b2f4926b8fa15eb18ef077a01b968e02ce341d2b"
+    },
+    {
+      "path": "assets/models/skyways-d-of-lantern.glb",
+      "bytes": 349756,
+      "sha256": "f45fd34a00ba2139ce4bb7be37952de5d8c1a302e101d44cda723fed19f90bb7"
+    },
+    {
+      "path": "assets/models/skyways-d-of-tent.glb",
+      "bytes": 645852,
+      "sha256": "e2c2ee0693b0c3df01d9356c231cc85a1d17cc3a62237fa57e733c1ba6538f84"
     },
     {
       "path": "assets/models/skyways-mascot-poses.glb",
