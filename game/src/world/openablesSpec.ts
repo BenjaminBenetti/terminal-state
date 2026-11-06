@@ -26,6 +26,7 @@ import type {OfficeKind} from '../gen/office/kinds';
 import {BUNKER_OPEN_AUDIT} from '../gen/reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
 import {SKYWAYS_KITCHEN_OPEN_AUDIT} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_OPEN_AUDIT} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
+import {SKYWAYS_DEST_OPEN_AUDIT} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
 import {MALL_OPEN_AUDIT} from '../gen/mall/kinds'; // Task track3-eaton-centre-20261031 (lane SHOPS): the mall shop-fixture kinds' rows
 import {OPENABLE_TABLES, type ItemRows, type OwnTable} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {COMPANY_DIMS} from '../assets/companyDims.generated'; // Task office-props-physics-scale-20261030 (lane FURN): furniture-only rescales
@@ -1392,6 +1393,7 @@ export const OPENABLE_AUDIT: readonly AuditEntry[] = [
   ...SKYWAYS_KITCHEN_OPEN_AUDIT,
   // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's convention / prize-car kinds (gen/skyways/addonKinds.ts)
   ...SKYWAYS_ADDON_OPEN_AUDIT,
+  ...SKYWAYS_DEST_OPEN_AUDIT, // task studio-skyways-destinations-20261106-170011-01
 ];
 
 function describe(k: OpenableKind): string {

@@ -8,24 +8,30 @@
 import type {Rng} from '../../../core/rng';
 import {CELL} from '../../grid';
 import type {LightPlacement, StationLayout} from '../../stationTypes';
+import {SHOPS_A_FAMILIES, dressShopsA} from './shopsA';
+import {SHOPS_B_FAMILIES, dressShopsB} from './shopsB';
+import {dressLandmark} from './landmarks';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 /** Light grid pitch (m) inside anchor rooms. */
 export const ANCHOR_LIGHT_PITCH = 4.5;
 
-export interface DestinationsResult { anchors: number; landmarks: number; lights: number }
+export interface DestinationsResult { anchors: number; landmarks: number; lights: number; props: number }
 
 /** Dresses every anchor shop and landmark court of a Skyways layout (no-op without layout.skyways). */
 export function dressSkywaysDestinations(layout: StationLayout, rng: Rng): DestinationsResult {
   const info = layout.skyways;
-  const res: DestinationsResult = {anchors: 0, landmarks: 0, lights: 0};
+  const res: DestinationsResult = {anchors: 0, landmarks: 0, lights: 0, props: 0};
   if (!info) return res;
   for (const an of info.anchors ?? []) {
     for (const id of [an.floor, ...(an.upper !== undefined ? [an.upper] : []), ...an.zones]) res.lights += lightGrid(layout, id, rng);
+    // each family on its own rng fork (a family's dresser never moves another's)
+    const r = rng.fork(`anchor-${an.family}`);
+    res.props += SHOPS_A_FAMILIES.includes(an.family) ? dressShopsA(layout, r, an) : SHOPS_B_FAMILIES.includes(an.family) ? dressShopsB(layout, r, an) : 0;
     res.anchors++;
   }
-  res.landmarks = (info.landmarks ?? []).length;
+  for (const lm of info.landmarks ?? []) { res.props += dressLandmark(layout, rng.fork(`landmark-${lm.family}`), lm); res.landmarks++; }
   return res;
 }
 
