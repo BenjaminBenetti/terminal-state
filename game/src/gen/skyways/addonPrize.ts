@@ -7,9 +7,10 @@
 //  - the GRAND PRIZE DRAW board (the Codex art: never any text that says the car can be driven / entered / used) on its stand beyond
 //    the car, facing the entry;
 //  - a couple of planters (existing kind) by the walls.
-// Reserved first (PlaceCtx.keep): the car body + 1.2 m, the exit lane (car -> entry, the car's width + 2 x 1.2 m), 1.5 m in front of every
-// door. Pure data; the rng is consumed only here.
+// Reserved (PlaceCtx.keep): 1.5 m in front of every door and the exit lane (car -> entry, the car's width + 2 x 1.2 m) first; the car
+// body + 1.2 m right after the ring (the posts stand outside it by construction). Pure data; the rng is consumed only here.
 
+import {CELL} from '../grid';
 import {PROP_DEFS, type PropPlacement} from '../props';
 import {wallRange, wallSpot} from '../placeKit';
 import type {Side} from '../stationTypes';
@@ -45,7 +46,6 @@ export function dressPrizeCar(d: AddonDresser): PrizeCarResult {
   const ein: [number, number] = [E.x + E.nx * 0.6, E.z + E.nz * 0.6];
   // --- reserved: door strips, the car body + 1.2 m, the exit lane --------------------------------------------------------------
   for (const door of layout.doors) if (door.a === hall.id || door.b === hall.id) d.keepDoor(door, hall, 1.5);
-  d.keepDisc(car.x, car.z, SKYWAYS_PRIZE_RING - SKYWAYS_STANCHION.radius - 0.15);
   d.keepSegment(car.x, car.z, ein[0], ein[1], SKYWAYS_PRIZE_LANE_HALF);
   res.lane = {ax: car.x, az: car.z, bx: r3(ein[0]), bz: r3(ein[1]), half: SKYWAYS_PRIZE_LANE_HALF};
 
@@ -61,6 +61,14 @@ export function dressPrizeCar(d: AddonDresser): PrizeCarResult {
     if (p) res.stanchions.push(p);
   }
   if (res.stanchions.length < SKYWAYS_PRIZE_POSTS / 2) d.skipped.push(`prize car: ${res.stanchions.length} stanchions`);
+  // the car body + 1.2 m: every cell whose centre lies within that clearance + a cell's half diagonal (so no later box reaches it);
+  // the posts stand on the ring outside it (their true distance from the body >= 1.2 m by the ring radius)
+  const fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw), hl = SKYWAYS_CAR.length / 2, hw = SKYWAYS_CAR.width / 2, reach = 1.2 + CELL * Math.SQRT1_2;
+  for (let cy = Math.floor((car.z - 5) / CELL); cy <= Math.floor((car.z + 5) / CELL); cy++) for (let cx = Math.floor((car.x - 5) / CELL); cx <= Math.floor((car.x + 5) / CELL); cx++) {
+    const dx = (cx + 0.5) * CELL - car.x, dz = (cy + 0.5) * CELL - car.z;
+    const lz = dx * fx + dz * fz, lx = dx * -fz + dz * fx;
+    if (Math.hypot(Math.max(0, Math.abs(lz) - hl), Math.max(0, Math.abs(lx) - hw)) <= reach) d.keepCell(cx, cy);
+  }
 
   // --- the prize-draw board beyond the car (as seen from the entry), facing the entry -----------------------------------------
   const away = Math.atan2(car.x - ein[0], car.z - ein[1]);

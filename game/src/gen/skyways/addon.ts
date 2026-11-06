@@ -27,9 +27,26 @@ export interface AddonDressResult {
   skipped: string[];
 }
 
-/** QA / tests: what dressSkywaysAddon placed in a layout (the generator ignores the return value). */
-const RESULTS = new WeakMap<StationLayout, AddonDressResult>();
-export const skywaysAddonDressOf = (layout: StationLayout): AddonDressResult | undefined => RESULTS.get(layout);
+/** QA / tests: what dressSkywaysAddon placed in a layout (the generator ignores the return value), with each prop's layout index. */
+const RESULTS = new WeakMap<StationLayout, {res: AddonDressResult; index: Map<PropPlacement, number>}>();
+/**
+ * QA / tests: the dress result of a layout, its prop references resolved against the layout's CURRENT props (a later re-frame —
+ * gen/trackExt finishExtensions — replaces the placements with translated copies in the same order).
+ */
+export function skywaysAddonDressOf(layout: StationLayout): AddonDressResult | undefined {
+  const r = RESULTS.get(layout);
+  if (!r) return undefined;
+  const map = (v: unknown): unknown => {
+    if (Array.isArray(v)) return v.map(map);
+    if (v && typeof v === 'object') {
+      const i = r.index.get(v as PropPlacement);
+      if (i !== undefined) return layout.props[i];
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, map(x)]));
+    }
+    return v;
+  };
+  return map(r.res) as AddonDressResult;
+}
 
 /** Dresses the add-on hall (and records its statues / car). No-op on any other layout. */
 export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressResult {
@@ -46,7 +63,7 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
   if (res.convention && info.addon.convention) info.addon.convention.statues = conventionStatues(res.convention, info.addon.level);
   res.props = layout.props.slice(d.p0);
   res.skipped.push(...d.skipped);
-  RESULTS.set(layout, res);
+  RESULTS.set(layout, {res, index: new Map(layout.props.map((p, i) => [p, i] as const).filter(([, i]) => i >= d.p0))});
   return res;
 }
 

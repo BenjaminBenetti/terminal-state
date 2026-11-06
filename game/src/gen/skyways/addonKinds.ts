@@ -83,16 +83,17 @@ export function skywaysAddonModelKeysFor(layout: {props?: readonly {kind: string
 
 const STAGE_M = SKYWAYS_MESHY_PROPS.skyways_con_stage;
 /**
- * The stage (skyways-con-stage.glb 8.000 x 5.176 x 5.172 m): the skirted DECK top at 1.029 m spans x -3.94..3.92, z -2.586 (its truss
- * back) .. 1.665 (deck front); the front steps (0.70 m) stand at x 2.27..3.54, z 1.665..2.586; the truss goalpost rises at the back
- * (uprights |x| 3.47..3.91, z -2.38..-1.75, beam underside 4.40 m) with two speakers hung in front of it (|x| 2.56..3.18).
+ * The stage (skyways-con-stage.glb 8.000 x 5.176 x 5.172 m): the DECK top at 1.029 m spans x -3.94..3.92, z -2.586 (its truss back)
+ * .. 1.657 (deck edge), its skirt flaring to z 1.81 below it; the front steps (0.73 m) stand at x 2.2..3.6, z 1.81..2.586; the truss
+ * goalpost rises at the back (uprights |x| 3.47..3.91, z -2.38..-1.75, beam underside 4.40 m) with two speakers hung in front of it
+ * (|x| 2.56..3.18).
  */
 export const SKYWAYS_STAGE = {
   deckY: STAGE_M.deckY,
-  /** Deck box in the model frame (z). */
-  deckZ0: -STAGE_M.d / 2, deckZ1: 1.665,
+  /** Deck box in the model frame (z): the truss back to the skirt's front. */
+  deckZ0: -STAGE_M.d / 2, deckZ1: 1.81,
   /** The steps (model frame). */
-  steps: {x0: 2.265, x1: 3.538, z0: 1.665, z1: STAGE_M.d / 2, h: 0.70},
+  steps: {x0: 2.2, x1: 3.6, z0: 1.81, z1: STAGE_M.d / 2, h: 0.73},
   /** Truss: inner faces of the uprights (|x|), underside of the top beam, its back face (z). */
   trussInner: 3.47, beamY: 4.40, trussBackZ: -2.38,
 } as const;
@@ -257,7 +258,7 @@ export const SKYWAYS_ADDON_PHYS: Readonly<Record<SkywaysAddonKind, AddonPhys>> =
 
 const DAMAGE: Readonly<Record<SkywaysAddonKind, DamageClass>> = {
   skywaysConStage: 'wood', skywaysConBackdrop: 'fabric', skywaysConMerchTable: 'fabric', skywaysConFigureBox: 'cardboard', skywaysConPlush: 'fabric',
-  skywaysConPrintCard: 'plastic', skywaysConPoster: 'cardboard', skywaysConPosterBoard: 'cardboard', skywaysConBanner: 'fabric', skywaysConWelcome: 'plastic',
+  skywaysConPrintCard: 'plastic', skywaysConPoster: 'cardboard', skywaysConPosterBoard: 'plastic', skywaysConBanner: 'fabric', skywaysConWelcome: 'plastic',
   skywaysMascotStatue: 'plastic', skywaysPrizeStanchion: 'steel', skywaysPrizeBoard: 'plastic',
 };
 /** Damage class (damage/materials.ts PropDamageSpec, 'never' breaks: marks only — no destructibility system). */

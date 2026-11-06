@@ -22,7 +22,8 @@ import type {CueId} from '../src/audio/bank';
 import {FakeCtx, fakeBank, type Src} from './helpers/fakeAudio';
 
 const DT = 1 / 60;
-const CARDBOARD_KINDS = ['archiveBoxes', 'cardboardBoxFlaps', 'newspaperBundles'];
+// (task studio-skyways-level-20261106-054448, lane ADDON: + the Skyways convention's boxed figure — a cardboard window box)
+const CARDBOARD_KINDS = ['archiveBoxes', 'cardboardBoxFlaps', 'newspaperBundles', 'skywaysConFigureBox'];
 
 describe('M01 classification: which loose props are cardboard (every level)', () => {
   it('exactly the dynamic kinds of damage class cardboard strike as cardboard; every other loose prop keeps prop', () => {
@@ -91,7 +92,8 @@ function walkIn(r: ReturnType<typeof lone>, speed = 1.4): {pushEnd: number} {
 }
 
 describe('M01 physics routing: cardboard props thud / drag on the shared contact path, others unchanged', () => {
-  for (const kind of CARDBOARD_KINDS as PropKind[]) {
+  // (lane ADDON: floor kinds only — on-host decor such as the convention's boxed figure stands on a table top, out of a walker's legs' reach)
+  for (const kind of (CARDBOARD_KINDS as PropKind[]).filter(k => !propPhysics(k).onHost)) {
     it(`${kind} walked into: only cardboard impacts (its mass), paced drag ticks while it slides, then one release`, () => {
       const r = lone(kind);
       const {pushEnd} = walkIn(r);
