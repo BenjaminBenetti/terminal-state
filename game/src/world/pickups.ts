@@ -17,6 +17,7 @@ import {MATERIAL_MODEL_SOURCE, isMaterialItem, materialItemModel} from './materi
 import {gearItemModel, gearModelSource, registerGasMaskOutfit} from '../gear/models'; // Iteration 16 (lane GEAR); mask lane: the outfit gas mask
 import {isGearItem} from '../items/gear';
 import {isReactorItem, reactorItemModel, reactorItemSource} from './reactor/restartItems'; // task reactor-build-20261101 (lane RESTART)
+import {FUEL_CAN_MODEL_SOURCE, fuelCanModel} from './fuelCanModel'; // task train-fuel-system-20261106 (lane PORT): provisional stand-in
 import {Grid} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 
@@ -264,6 +265,10 @@ export function itemTemplate(itemId: string): THREE.Object3D {
     // Iteration 12 (LIGHT): battery / road flare are authored procedural geometry (world/authoredItems.ts), never generated.
     t = authoredItemModel(itemId);
     templateSource.set(itemId, 'authored procedural geometry (world/authoredItems.ts)');
+  } else if (itemId === 'fuel_can') {
+    // task train-fuel-system-20261106 (lane PORT): the PROVISIONAL fuel-can stand-in until an approved model is delivered (one branch to swap)
+    t = fuelCanModel();
+    templateSource.set(itemId, FUEL_CAN_MODEL_SOURCE);
   } else if (isReactorItem(itemId)) {
     // task reactor-build-20261101 (lane RESTART): startup key / fuse cartridge — the Meshy kit GLBs (procedural stand-in if one failed to load)
     t = reactorItemModel(itemId);
