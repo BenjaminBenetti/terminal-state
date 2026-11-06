@@ -1,0 +1,249 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-d-plaques",
+ "task": "studio-skyways-destinations-20261106-170011-01",
+ "lane": "ART2D",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways destinations (no numerical image cap, user override); invented titles, bands, teams, societies and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways landmark courts: six cast-bronze / enamel court plaques (512 x 341 each, 3:2, a 3 x 2 grid), one per landmark family",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-dest-art.mjs",
+ "rawStorage": "reference/tasks/skyways-destinations-20261106-170011/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art2d-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (inside an optional per-piece source box)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1536x682, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-dest-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-d-plaques.jpg",
+  "bytes": 255169,
+  "sha256": "13cc88b9356cfb937f700659cc813482102ed30410129ee4979fca782555af5e",
+  "width": 1536,
+  "height": 682,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "plaque_clock",
+   "subject": "court plaque: \"CLOCK COURT\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 414,
+    "session": "01a1b1e2-c5e1-7e22-b3cc-686db97979f3",
+    "requested": "2026-11-06T17:23:11.294162Z",
+    "finished": "2026-11-06T17:23:58.116166Z",
+    "seconds": 46.8
+   },
+   "prompt": {
+    "file": "art2d-414.txt",
+    "sha256": "0d59715fc1eb659b5f030cb1e40736090224a5e3318ca055582d4bac26627a94"
+   },
+   "source": {
+    "file": "codex-414-exec-f49a418e-e188-41ab-a2dd-c54e8541417a.png",
+    "sha256": "d325c7c58038a618ed91f511bea1133d0db78917a1f387d0ddb1c4b7c8b48b55",
+    "bytes": 3288232,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 512,
+    "h": 341
+   }
+  },
+  {
+   "name": "plaque_dinosaur",
+   "subject": "court plaque: \"BADLANDS COURT\" (a duck-billed dinosaur cast, gift of the invented Prairie Natural History Society)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 415,
+    "session": "01a1b1e3-7dd5-76f2-80e2-114f2e428e98",
+    "requested": "2026-11-06T17:23:58.385523Z",
+    "finished": "2026-11-06T17:24:48.593477Z",
+    "seconds": 50.1
+   },
+   "prompt": {
+    "file": "art2d-415.txt",
+    "sha256": "289b2775a45fe262cbe22421052d7cf497f5db8d1baadc921364ee43f981add5"
+   },
+   "source": {
+    "file": "codex-415-exec-93b2f2fe-6bce-4a05-9d76-5fc450214ea1.png",
+    "sha256": "37f68074cd485265eb37ef4c34d4e123d267e9318d5dd379a4c0f27c2a7bde1f",
+    "bytes": 3341223,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 512,
+    "y": 0,
+    "w": 512,
+    "h": 341
+   }
+  },
+  {
+   "name": "plaque_fig_tree",
+   "subject": "court plaque: \"FIG TREE COURT\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 416,
+    "session": "01a1b1e4-425d-7e50-8ccc-04466f8c2cc5",
+    "requested": "2026-11-06T17:24:48.706149Z",
+    "finished": "2026-11-06T17:25:25.205822Z",
+    "seconds": 36.4
+   },
+   "prompt": {
+    "file": "art2d-416.txt",
+    "sha256": "46aba16d8fccabd8f4f8a27497e4ec02914aae5f39641ce7a035e027aad22d85"
+   },
+   "source": {
+    "file": "codex-416-exec-1f11e04f-2861-4046-94bb-8009e0c98ce4.png",
+    "sha256": "74c92acbaa5bb8335c5c4762bd5e0f2b70fc77d3e8f5a2ad1b3a6cd095e16115",
+    "bytes": 3277947,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 1024,
+    "y": 0,
+    "w": 512,
+    "h": 341
+   }
+  },
+  {
+   "name": "plaque_fountain",
+   "subject": "court plaque: \"FOUNTAIN COURT\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 417,
+    "session": "01a1b1e4-d179-7470-a1b4-0ca32f921052",
+    "requested": "2026-11-06T17:25:25.325548Z",
+    "finished": "2026-11-06T17:26:00.381813Z",
+    "seconds": 35
+   },
+   "prompt": {
+    "file": "art2d-417.txt",
+    "sha256": "dfe45832c3259f0d670f96e12c9089512f574db7cbeffa8884488bf27274fc10"
+   },
+   "source": {
+    "file": "codex-417-exec-5ca2268d-94a9-4d53-8292-9e7a0da44558.png",
+    "sha256": "8799e62282cf2e65f9e654427b713d6c049899229ddf2aa20a4c8413ef451607",
+    "bytes": 3369032,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 0,
+    "y": 341,
+    "w": 512,
+    "h": 341
+   }
+  },
+  {
+   "name": "plaque_geese",
+   "subject": "court plaque: \"FLIGHT COURT\" (the bronze geese)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 418,
+    "session": "01a1b1e5-5bd3-7b41-985f-0ff0df578b35",
+    "requested": "2026-11-06T17:26:00.740673Z",
+    "finished": "2026-11-06T17:26:44.697705Z",
+    "seconds": 43.9
+   },
+   "prompt": {
+    "file": "art2d-418.txt",
+    "sha256": "20fd36a09d190621fbd5fdc2407f9419a1b02e9a033748a14f2d62c3db851430"
+   },
+   "source": {
+    "file": "codex-418-exec-1b367013-ce0c-4450-b503-c763c907aec8.png",
+    "sha256": "15f225c22107677fb4c94605b00bf4d10e98def36a37436b5af706daffb46777",
+    "bytes": 3120660,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 512,
+    "y": 341,
+    "w": 512,
+    "h": 341
+   }
+  },
+  {
+   "name": "plaque_orrery",
+   "subject": "court plaque: \"ORRERY COURT\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 419,
+    "session": "01a1b1e6-0827-7241-bf6a-b3cb963a1d8c",
+    "requested": "2026-11-06T17:26:44.832083Z",
+    "finished": "2026-11-06T17:27:28.357353Z",
+    "seconds": 43.4
+   },
+   "prompt": {
+    "file": "art2d-419.txt",
+    "sha256": "05b61c1a0c931d2e2cd8c0c7bf5c1b1494046f0c150aa1b9180625731007ac95"
+   },
+   "source": {
+    "file": "codex-419-exec-5b4fa593-2c32-4c92-bbe5-b655430e9d64.png",
+    "sha256": "c9f194a43be981a7892e248da44657cfab542222a3fb02c9a31c5d36c6134c88",
+    "bytes": 3151235,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 1024,
+    "y": 341,
+    "w": 512,
+    "h": 341
+   }
+  }
+ ]
+}

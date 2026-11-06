@@ -38,6 +38,7 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
+import {SKYWAYS_LAYOUT_VERSION} from './layoutVersion';
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
@@ -76,10 +77,12 @@ export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOpt
   let fallback: StationLayout | null = null;
   SKYWAYS_GEN_STATS.carveFails = 0;
   let salt = 0;
+  // (task studio-skyways-destinations-20261106-170011-01) layout version 1 = GAME76's program (gen/skyways/layoutVersion.ts)
+  const legacy = (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) < 2;
   for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
-    const f = skywaysFrame(ctx.levelSeed, salt);
+    const f = skywaysFrame(ctx.levelSeed, salt, {legacy});
     const s = attempt === 0 ? seed : hashString('retry' + attempt, seed);
-    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt);
+    const layout = tryLevel(f, s, seed, attempt, ctx, loot, spawns, trackExt, legacy);
     SKYWAYS_GEN_STATS.attempts = attempt + 1;
     if (!layout) { SKYWAYS_GEN_STATS.carveFails++; SKYWAYS_GEN_STATS.lastFail = lastSkywaysCarveFail(); salt++; continue; }
     let issues = skywaysIssues(layout, {startCells: startCells(spawns)});
@@ -118,10 +121,10 @@ export function skywaysTrackExtContext(levelSeed: number, ox: number, oy: number
 // ---------------------------------------------------------------------------------------------
 // One attempt
 
-function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none'): StationLayout | null {
+function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none', legacy = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SKYWAYS_CANVAS.levels, w: SKYWAYS_CANVAS.w, h: SKYWAYS_CANVAS.h});
-  const sc = carveSkyways(k, rng.fork('carve'), f);
+  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy});
   if (!sc) return null;
 
   // --- Crop (fixed origin) + the Track2 plan (before the crop; nothing written into the Kit) ------------------------------------

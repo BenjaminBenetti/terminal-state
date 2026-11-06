@@ -427,3 +427,33 @@ on the build worker. Raw takes are kept outside Git.
   provenance `assets/derivatives/skyways-*.json`). The series, characters and brands are invented.
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-sources-20261106 -->
+
+<!-- BEGIN skyways-dest-art-20261106 (build-skyways-dest-art.mjs) -->
+## Skyways destinations: original shop posters and court plaques
+Original flat art generated for this project with Codex native image_gen (owned Codex CLI), one call per piece, under the user's
+explicit art authorization for the Skyways destinations. The films, bands, hockey team, shops, shows, courts and society named on
+them are invented. Runtime derivatives (crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/props/build-skyways-dest-art.mjs`; provenance `assets/derivatives/skyways-d-posters.json` and
+`assets/derivatives/skyways-d-plaques.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/skyways-d-posters.jpg` — thirteen shop posters: three cinema film posters, two record-store gig posters,
+  the bookshop's author evening, the outfitter's travel poster, a star chart, the arcade's neon poster, a hockey team poster, the
+  model-railway show, a home-store catalogue ad and a seed-catalogue poster.
+- `assets/textures/skyways/skyways-d-plaques.jpg` — six cast-bronze / enamel court plaques (Clock, Badlands, Fig Tree, Fountain,
+  Flight and Orrery Courts).
+- Unapproved prototypes; no commercial clearance implied.
+<!-- END skyways-dest-art-20261106 -->
+
+<!-- BEGIN skyways-destinations-audio-20261106 (skyways-destinations-build.mjs) -->
+## Skyways destinations audio (clock tick loop, clock chime, arcade attract loop, projector loop)
+Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Skyways
+destinations task's local Sound Lab allowance (4 jobs of a 4-job plan). Powered by Stability AI. Stability AI Community
+License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades,
+loop, levelling, MP3) built by `tools/audio-pipeline/skyways-destinations-build.mjs` (provenance:
+`assets/derivatives/audio-skyways-destinations.json`). Not reviewed by ear on the build worker. Raw takes are kept outside Git.
+
+- `assets/audio/skyways-clock-tick-loop.mp3` — clockTick (Sound Lab job 20261106T172857-365151629)
+- `assets/audio/skyways-clock-chime.mp3` — clockChime (Sound Lab job 20261106T172902-1344187379)
+- `assets/audio/skyways-arcade-attract-loop.mp3` — arcadeAttract (Sound Lab job 20261106T172906-1331231845)
+- `assets/audio/skyways-projector-loop.mp3` — projectorRun (Sound Lab job 20261106T172911-1103820376)
+<!-- END skyways-destinations-audio-20261106 -->
