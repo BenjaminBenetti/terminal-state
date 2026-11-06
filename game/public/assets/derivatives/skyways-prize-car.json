@@ -1,0 +1,538 @@
+{
+ "schema": "terminal-state-derivative-v1",
+ "id": "skyways-prize-car",
+ "role": "Skyways prize-car add-on: the one first-person drivable hero car (body + window glass); a cockpit model is placed separately in the interior box",
+ "task": "skyways-level-20261106-054448 lane ASSET-B",
+ "source": {
+  "member": "sky-ways/Meshy_AI_sports_car_model_1106041732_image-to-3d-texture.glb",
+  "file": "reference/tasks/skyways-level-20261106-054448/masters/Meshy_AI_sports_car_model_1106041732_image-to-3d-texture.glb (user source master, outside Git)",
+  "sha256": "8bc1075d4042d491f5fc4e678e57e6305b52a45ec864db824c0f5241cf8b2497",
+  "bytes": 48769784,
+  "triangles": 1042700,
+  "vertices": 572481,
+  "closedShell": true,
+  "extentM": [
+   1.901903,
+   0.550786,
+   0.840596
+  ],
+  "noseAxis": "-X (source)",
+  "maps": {
+   "baseColor": {
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 9036393
+   },
+   "metallicRoughness": {
+    "size": [
+     2048,
+     2048
+    ],
+    "mime": "image/jpeg",
+    "bytes": 2279508
+   },
+   "normal": {
+    "size": [
+     4096,
+     4096
+    ],
+    "mime": "image/jpeg",
+    "bytes": 6619771
+   }
+  },
+  "licence": "community-supplied source via the user (sky-ways.zip); creator / license links pending; no license or authorship claim"
+ },
+ "output": {
+  "file": "game/public/assets/models/skyways-prize-car.glb",
+  "url": "assets/models/skyways-prize-car.glb",
+  "sha256": "ec9087c9ba0e592b0a1e6d65a375564b7e53a0fdcf41a6e7fc3aa68f663f120d",
+  "bytes": 5918956,
+  "triangles": 125996,
+  "dims": [
+   2.112,
+   1.384,
+   4.78
+  ],
+  "body": {
+   "node": "body",
+   "material": "body",
+   "triangles": 119235,
+   "vertices": 83753,
+   "maps": {
+    "baseColor": {
+     "size": 2048,
+     "mime": "image/jpeg",
+     "quality": 88,
+     "bytes": 803840,
+     "sha256": "b69ebc18c180ec18d4731801cbfae166cf1394de22db6091274af4b2ecae84cb"
+    },
+    "metallicRoughness": {
+     "size": 1024,
+     "mime": "image/jpeg",
+     "quality": 88,
+     "bytes": 292323,
+     "sha256": "2b1fa2f477b7b12f55ec0556736f9cb2ecf6c47cc98b54f90ac83cc304b4c0a2"
+    },
+    "normal": {
+     "size": 2048,
+     "mime": "image/jpeg",
+     "quality": 90,
+     "bytes": 525240,
+     "sha256": "706aac8b9d0abe9f84e5c1df37020f88e3f1a271af612f9abdde498468adfae4"
+    }
+   },
+   "doubleSided": true
+  },
+  "glass": {
+   "node": "glass",
+   "material": "glass",
+   "triangles": 6761,
+   "vertices": 4484,
+   "alphaMode": "BLEND",
+   "doubleSided": true,
+   "baseColorFactor": [
+    0.04,
+    0.045,
+    0.05,
+    0.3
+   ],
+   "metallicFactor": 0,
+   "roughnessFactor": 0.05,
+   "islands": {
+    "windscreen": {
+     "triangles": 1060,
+     "areaM2": 1.002,
+     "min": [
+      -0.719,
+      0.96,
+      -0.884
+     ],
+     "max": [
+      0.719,
+      1.319,
+      -0.116
+     ]
+    },
+    "rear": {
+     "triangles": 4689,
+     "areaM2": 0.63,
+     "min": [
+      -0.479,
+      1.115,
+      1.057
+     ],
+     "max": [
+      0.466,
+      1.316,
+      1.589
+     ]
+    },
+    "left": {
+     "triangles": 611,
+     "areaM2": 0.356,
+     "min": [
+      -0.791,
+      0.994,
+      -0.516
+     ],
+     "max": [
+      -0.627,
+      1.287,
+      1.03
+     ]
+    },
+    "right": {
+     "triangles": 401,
+     "areaM2": 0.333,
+     "min": [
+      0.623,
+      0.99,
+      -0.481
+     ],
+     "max": [
+      0.788,
+      1.276,
+      1.016
+     ]
+    }
+   },
+   "note": "keeps TEXCOORD_0 (the body base map would fit) but binds no texture: a uniform dark neutral tint you can see through"
+  }
+ },
+ "transform": {
+  "scale": 2.513272,
+  "rotation": "about +Y by -90 deg (source nose -X -> runtime -Z): x = -z_src, z = x_src",
+  "grounded": true,
+  "centred": "x / z footprint (bounding box)",
+  "lengthM": 4.78,
+  "baked": "into the vertices (identity nodes)"
+ },
+ "convention": "metres at real size, +Y up, NOSE toward -Z (runtime forward at yaw 0), grounded (min y = 0), centred on x / z; driver = LEFT seat (-X)",
+ "glassClassification": {
+  "method": "per-triangle base-map colour (4 barycentric samples) scored dark (luminance ramp) x low-saturation (chroma ramp), only inside the greenhouse zone (centroid above the beltline, inside the greenhouse half-width: never tyres / grille / lights / sills / mirrors); area-weighted ball median filter; small islands dropped; enclosed non-glass holes in the zone filled (painted interior, defroster lines); outline smoothed: straddling triangles split on the 0.5 iso-line of a per-vertex field; glass vertices duplicated so the outline is an attribute seam through simplification",
+  "params": {
+   "BELT_Y": 0.9,
+   "ZONE_HALF_X": 0.9,
+   "LUM": [
+    30,
+    55
+   ],
+   "CHROMA": [
+    20,
+    40
+   ],
+   "RHO": 0.03,
+   "ITERS": 2,
+   "MIN_ISLAND": 0.03,
+   "MAX_HOLE": 0.3,
+   "SMOOTH_R": 0.045
+  },
+  "result": {
+   "zoneTriangles": 117011,
+   "strongSeedTriangles": 45225,
+   "droppedIslands": 34,
+   "droppedArea": 0.00456,
+   "filledHoles": 15,
+   "filledArea": 0.001461,
+   "glassTriangles": 52579,
+   "lookThrough": {
+    "nominalEye": [
+     -0.36,
+     1.122,
+     0.215
+    ],
+    "visibleGlass": 69044,
+    "rejected": 14654,
+    "rejectedArea": 0.305967
+   }
+  },
+  "splitTriangles": 2939,
+  "proof": {
+   "bodyPlusGlassWelded": {
+    "open": 0,
+    "nonManifold": 67,
+    "edges": 188927
+   },
+   "bodyOpenEdges": 449,
+   "glassOpenEdges": 449,
+   "glassIslands": 4,
+   "lookThroughFromEye": {
+    "raysThroughGlass": 277,
+    "intoShell": 0,
+    "grid": "yaw -120..120, pitch -25..35, 5 deg"
+   }
+  }
+ },
+ "simplify": {
+  "tool": "meshoptimizer simplifyWithAttributes (normal x0.5 + UV; seams kept incl. the glass outline; positions never moved)",
+  "fromTriangles": 1048578,
+  "triangles": 125996,
+  "bodyBudget": 120000,
+  "errorRelative": 0.000712,
+  "errorMeters": 0.003402,
+  "maxErrorRelative": 0.002
+ },
+ "anchors": {
+  "length": 4.78,
+  "width": 2.112,
+  "height": 1.384,
+  "wheelBase": 2.864,
+  "track": 1.649,
+  "wheels": [
+   {
+    "x": -0.832,
+    "y": 0.38,
+    "z": -1.558,
+    "r": 0.368
+   },
+   {
+    "x": 0.815,
+    "y": 0.363,
+    "z": -1.595,
+    "r": 0.348
+   },
+   {
+    "x": -0.828,
+    "y": 0.37,
+    "z": 1.288,
+    "r": 0.37
+   },
+   {
+    "x": 0.823,
+    "y": 0.367,
+    "z": 1.287,
+    "r": 0.367
+   }
+  ],
+  "eye": {
+   "x": -0.36,
+   "y": 1.12,
+   "z": 0.21
+  },
+  "wheelCentre": {
+   "x": -0.36,
+   "y": 0.79,
+   "z": -0.29
+  },
+  "exits": {
+   "left": {
+    "x": -1.62,
+    "z": -0.01
+   },
+   "right": {
+    "x": 1.62,
+    "z": -0.01
+   }
+  },
+  "circles": [
+   {
+    "z": -1.54,
+    "r": 1.09
+   },
+   {
+    "z": -0.44,
+    "r": 1.09
+   },
+   {
+    "z": 0.77,
+    "r": 1.1
+   },
+   {
+    "z": 1.59,
+    "r": 1.03
+   }
+  ],
+  "interior": {
+   "x0": -0.58,
+   "x1": 0.58,
+   "y0": 0.18,
+   "y1": 1.18,
+   "z0": -0.75,
+   "z1": 0.83
+  },
+  "cowl": {
+   "y": 0.99,
+   "z": -0.82
+  },
+  "header": {
+   "y": 1.31,
+   "z": -0.15
+  },
+  "wheelsMeasured": [
+   {
+    "x": -0.832,
+    "y": 0.38,
+    "z": -1.558,
+    "r": 0.368,
+    "rimRadius": 0.289,
+    "ground": 0.012,
+    "contactWidth": 0.292
+   },
+   {
+    "x": 0.815,
+    "y": 0.363,
+    "z": -1.595,
+    "r": 0.348,
+    "rimRadius": 0.298,
+    "ground": 0.015,
+    "contactWidth": 0.356
+   },
+   {
+    "x": -0.828,
+    "y": 0.37,
+    "z": 1.288,
+    "r": 0.37,
+    "rimRadius": 0.287,
+    "ground": 0,
+    "contactWidth": 0.264
+   },
+   {
+    "x": 0.823,
+    "y": 0.367,
+    "z": 1.287,
+    "r": 0.367,
+    "rimRadius": 0.291,
+    "ground": 0,
+    "contactWidth": 0.266
+   }
+  ],
+  "trackFront": 1.647,
+  "trackRear": 1.651,
+  "doorSeams": {
+   "left": [
+    -0.72,
+    0.72
+   ],
+   "right": [
+    -0.72,
+    0.7
+   ]
+  },
+  "doorHalfWidth": 0.916,
+  "roofAtEye": 1.369,
+  "sightLines": [
+   {
+    "name": "forward",
+    "yaw": 0,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.79
+   },
+   {
+    "name": "forward-down-6",
+    "yaw": 0,
+    "pitch": -6,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.986
+   },
+   {
+    "name": "forward-up-15",
+    "yaw": 0,
+    "pitch": 15,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.52
+   },
+   {
+    "name": "forward-left-15",
+    "yaw": 15,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.757
+   },
+   {
+    "name": "forward-right-30",
+    "yaw": -30,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.953
+   },
+   {
+    "name": "left",
+    "yaw": 90,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.355
+   },
+   {
+    "name": "left-forward-50",
+    "yaw": 50,
+    "pitch": -5,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.499
+   },
+   {
+    "name": "left-down-10",
+    "yaw": 90,
+    "pitch": -10,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.396
+   },
+   {
+    "name": "left-back-110",
+    "yaw": 110,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 0.375
+   },
+   {
+    "name": "right",
+    "yaw": -90,
+    "pitch": 0,
+    "required": true,
+    "hit": "glass",
+    "distance": 1.07
+   },
+   {
+    "name": "right-forward-45",
+    "yaw": -45,
+    "pitch": -5,
+    "required": true,
+    "hit": "glass",
+    "distance": 1.335
+   },
+   {
+    "name": "right-down-5",
+    "yaw": -90,
+    "pitch": -5,
+    "required": true,
+    "hit": "glass",
+    "distance": 1.123
+   },
+   {
+    "name": "a-pillar-left-30",
+    "yaw": 30,
+    "pitch": 0,
+    "required": false,
+    "hit": "body",
+    "distance": 0.732
+   },
+   {
+    "name": "right-down-10",
+    "yaw": -90,
+    "pitch": -10,
+    "required": false,
+    "hit": "body",
+    "distance": 1.238
+   },
+   {
+    "name": "back",
+    "yaw": 180,
+    "pitch": 0,
+    "required": false,
+    "hit": "body",
+    "distance": 1.349
+   }
+  ],
+  "method": {
+   "wheels": "tread contact patch (source triangles within 3 cm of the local ground) -> x / z; outward-facing silver rim disc (0.5 / 99.5 % height quantiles) -> hub y; r = hub - local ground",
+   "eye": "left seat: z = windscreen header (top edge at the eye x) + 0.36 m; y = roof line at the eye - 0.25 m; x = half the side-glass half-width at the eye",
+   "wheelCentre": "steering-wheel estimate: eye + (0, -0.33, -0.5) m",
+   "exits": "0.7 m outside the body side (max |x| at door height) at mid-door (between the door seam lines found in the texture)",
+   "circles": "4 circles on the centreline covering the footprint below the mirrors (y <= 0.95 m) with the smallest common radius",
+   "interior": "cabin box for the cockpit: front within 0.12 m of the windscreen base (the dash front; the curved screen corners dip lower at the sides), widest (then largest) x-symmetric box free of the shell (body + glass, 2 cm voxels + 1 voxel clearance) except the raked windscreen / A-pillars above the cowl -> header line (top-front edge; a dash stays below it); contains the eye (top = eye + 0.06 m) and the steering-wheel estimate; back >= eye + 0.45 m (behind the seat back), the rear wheel arches at most"
+  }
+ },
+ "limitations": [
+  "The source has no interior: the shell is hollow (no firewall, dash or seats). From the eye, everything BELOW the windscreen base (the cowl -> header line) looks into the empty engine bay until the cockpit model (dash / firewall) closes it; through the glass itself the view always leaves the car (lookThroughFromEye).",
+  "The front wheels are modelled steered (they stand ~0.1 m proud of the front arches and set the overall width); wheels are part of the body shell, not separate nodes (no spin / steer).",
+  "Badges are in the source texture and were NOT painted over: a winged emblem on the upper grille, on the rear panel between the tail lights and on both front fenders behind the wheel arches; illegible dark script in the rear plate recess. The body is a recognisable real-world sports-coupe design (trade-dress caveat).",
+  "The rear window carries the source geometry ridges along its defroster lines (kept, inside the glass primitive).",
+  "67 non-manifold edges from the simplification (front wheels / front bumper, none at the cabin or the glass outline); the welded shell has no open edge.",
+  "The glass is double-sided BLEND: the runtime should render it after the opaque body (transparent pass) and may draw its back faces first."
+ ],
+ "textures": {
+  "baseColor": {
+   "size": 2048,
+   "mime": "image/jpeg",
+   "quality": 88,
+   "bytes": 803840,
+   "sha256": "b69ebc18c180ec18d4731801cbfae166cf1394de22db6091274af4b2ecae84cb"
+  },
+  "metallicRoughness": {
+   "size": 1024,
+   "mime": "image/jpeg",
+   "quality": 88,
+   "bytes": 292323,
+   "sha256": "2b1fa2f477b7b12f55ec0556736f9cb2ecf6c47cc98b54f90ac83cc304b4c0a2"
+  },
+  "normal": {
+   "size": 2048,
+   "mime": "image/jpeg",
+   "quality": 90,
+   "bytes": 525240,
+   "sha256": "706aac8b9d0abe9f84e5c1df37020f88e3f1a271af612f9abdde498468adfae4"
+  }
+ }
+}
