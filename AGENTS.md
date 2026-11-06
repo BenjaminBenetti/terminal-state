@@ -5,11 +5,14 @@ source. `game/README.md` has detailed gameplay notes and some historical command
 
 ## Source control and releases
 
-- Work in the Git repository, not an unversioned studio copy. The user's standing
-  instruction is to **commit and push verified changes to GitHub `main`** after
-  checks. Use main, not feature branches. Fetch first, preserve existing history,
-  and reconcile concurrent changes without discarding anyone's work. Never force
-  push, rewrite published history or use destructive reset/clean operations.
+- Work in the Git repository, not an unversioned studio copy. **Use a feature
+  branch and open a pull request into `main`** (user clarification, 2026-11-05).
+  Commit and push verified changes to that branch. Merge through the PR after
+  required GitHub CI, including the protected branch's `build` check, succeeds;
+  do not push directly to `main` or bypass branch protection. Fetch first,
+  preserve existing history, and reconcile concurrent changes without discarding
+  anyone's work. Never force push, rewrite published history or use destructive
+  reset/clean operations.
 - Run `npm ci`, `npm run build`, `npm test`, `npm run ci:check`,
   `npm run ci:test` and `npm run ci:package` before pushing. Inspect the diff and
   secret/asset checks. A blocked check or authentication is a blocker to report,

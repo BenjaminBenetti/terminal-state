@@ -44,9 +44,9 @@ calls or `reference/` mount. Models, textures, MP3s and provenance are checked i
 
 ## GitHub main → CI artifact → Everything
 
-Work in this Git repository. **After checks, commit and push changes to GitHub
-`main`**, preserving existing history; no feature branch requirement or force
-push. See [AGENTS.md](AGENTS.md). The workflow
+Work in this Git repository. **Use a feature branch, push checked commits, and
+open a pull request into `main`.** Merge after required CI, including `build`,
+succeeds; preserve history and branch protection. See [AGENTS.md](AGENTS.md). The workflow
 [`.github/workflows/game-build.yml`](.github/workflows/game-build.yml) runs on pushes
 to main, on **pull requests into main** (check `build`, required before merging) and
 on manual dispatch. It uses Node 22.16.0, `npm ci` (browser download off). Jobs run in
