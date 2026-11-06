@@ -535,6 +535,8 @@ export const RAMEN_COOLER: LootSpec = {items: [[BUBBLE_TEA, 2.4], ['water', 0.8]
 export const RAMEN_FRIDGE: LootSpec = {items: [[SUSHI_BENTO, 1.4], [RAMEN, 0.9], [RAMEN_CHASHU, 0.6], [BUBBLE_TEA, 0.6], ['water', 0.5]], lots: [1, 2], empty: 0.3, exact: true};
 /** The kitchen's stainless worktop / open shelving: now and then a covered bento or a bottle left on it. */
 export const RAMEN_KITCHEN: LootSpec = {items: [[SUSHI_BENTO, 1], ['water', 0.8], [RAMEN, 0.4]], lots: [1, 1], empty: 0.6, exact: true};
+/** What was left standing on the dining tables / the counter's pass: the dresser's few LOOSE pickups (gen/skyways/ramen.ts RAMEN_LOOSE). */
+export const RAMEN_LOOSE_ROWS: ItemRows = [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [SUSHI_BENTO, 1], [BUBBLE_TEA, 1]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every
