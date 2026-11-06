@@ -1,0 +1,494 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-d-posters",
+ "task": "studio-skyways-destinations-20261106-170011-01",
+ "lane": "ART2D",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways destinations (no numerical image cap, user override); invented titles, bands, teams, societies and brand names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways destination shops: thirteen posters (408 x 612 each, 2:3, a 5 x 3 grid, two spare slots), one or more per anchor-shop family",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-dest-art.mjs",
+ "rawStorage": "reference/tasks/skyways-destinations-20261106-170011/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/art2d-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (inside an optional per-piece source box)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 2040x1836, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-dest-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-d-posters.jpg",
+  "bytes": 1065393,
+  "sha256": "dd84debf9bb5b92ceffc4c18f06be5ea06d6824193f6dbfc7676105b5487377c",
+  "width": 2040,
+  "height": 1836,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "cinema1",
+   "subject": "cinema film poster: invented 1950s science-fiction film \"PRAIRIE STATIC\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 401,
+    "session": "01a1b1e2-be6f-72c0-98f2-827f74055fa6",
+    "requested": "2026-11-06T17:23:09.380760Z",
+    "finished": "2026-11-06T17:24:06.002106Z",
+    "seconds": 56.6
+   },
+   "prompt": {
+    "file": "art2d-401.txt",
+    "sha256": "bfb15c8ce0fab093fca968934aba1cc00345a609719cbce6ef32b4b0c6f8cdc3"
+   },
+   "source": {
+    "file": "codex-401-exec-05d2ef38-5c52-4aa8-8305-00cd1881870e.png",
+    "sha256": "060f7bcf01aad8f95471345c8f49640d233bafa3e49bc232f1b3d596b78e4fda",
+    "bytes": 3453317,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "cinema2",
+   "subject": "cinema film poster: invented frozen thriller \"NINETY BELOW\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 402,
+    "session": "01a1b1e3-9bfe-76e2-8d6e-c0175e7175f1",
+    "requested": "2026-11-06T17:24:06.110314Z",
+    "finished": "2026-11-06T17:25:06.565927Z",
+    "seconds": 60.4
+   },
+   "prompt": {
+    "file": "art2d-402.txt",
+    "sha256": "5ad561d3114aa429d3bd5564976614b4dcbe4e189444f82c26ac04bb82d036da"
+   },
+   "source": {
+    "file": "codex-402-exec-74c55093-c2bd-4ee0-9f1e-83183331769c.png",
+    "sha256": "a78d6ed65742f74d4601cc426ba3dadf90df4453b0434b381b98bf12e6614d56",
+    "bytes": 3366844,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 408,
+    "y": 0,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "cinema3",
+   "subject": "cinema film poster: invented period drama \"THE LAST STREETCAR\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 403,
+    "session": "01a1b1e4-88a7-7bb3-a2a5-46c48592ff9f",
+    "requested": "2026-11-06T17:25:06.675031Z",
+    "finished": "2026-11-06T17:26:03.401868Z",
+    "seconds": 56.7
+   },
+   "prompt": {
+    "file": "art2d-403.txt",
+    "sha256": "5bb4a0c9155992ff7c07a0c3b5d8b090bd8bfb4ff182daa67893694882086d4c"
+   },
+   "source": {
+    "file": "codex-403-exec-83ddf5a7-12dc-4c99-98fe-889bb7b8ce5b.png",
+    "sha256": "bf3ecfbe30ee3ed245bd8c366480ee547582cda03b77c55925c390f82e74d913",
+    "bytes": 3141654,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 816,
+    "y": 0,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "music1",
+   "subject": "record-store gig poster: invented band \"THE WHEATFIELD SAINTS\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 404,
+    "session": "01a1b1e5-66a4-7533-97de-1ea690fcf5e1",
+    "requested": "2026-11-06T17:26:03.512150Z",
+    "finished": "2026-11-06T17:26:45.259359Z",
+    "seconds": 41.7
+   },
+   "prompt": {
+    "file": "art2d-404.txt",
+    "sha256": "09d3d7a404b337d9e716ac2336364d6435a1ce7a5f32ce9ae0b578f5c5c86036"
+   },
+   "source": {
+    "file": "codex-404-exec-4a5e08a9-3241-4c5b-ba5c-0e88cb29e63b.png",
+    "sha256": "dc4176b710a3123cf27db9b654e612f55f7a14b1e7246d4583203033206ef54f",
+    "bytes": 3862436,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1224,
+    "y": 0,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "music2",
+   "subject": "record-store gig poster: invented band \"HOARFROST\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 405,
+    "session": "01a1b1e6-0a76-7772-b9ff-40658e04eda4",
+    "requested": "2026-11-06T17:26:45.432636Z",
+    "finished": "2026-11-06T17:27:29.063964Z",
+    "seconds": 43.5
+   },
+   "prompt": {
+    "file": "art2d-405.txt",
+    "sha256": "c991dcb7667c0c459f5bb9d020c9f93d4a48ef3be4bf290ca66a72fc4f7a2052"
+   },
+   "source": {
+    "file": "codex-405-exec-f0a18461-0d6f-4e33-9cc1-3b2768b35f5f.png",
+    "sha256": "a17b5ba6c440900d908892b69c106e3f58545e74cd36f375d3b01154599b766e",
+    "bytes": 4100023,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1632,
+    "y": 0,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "books",
+   "subject": "bookshop poster: \"READINGS AT PAPER PRAIRIE BOOKS\", an author evening",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 406,
+    "session": "01a1b1e6-b5be-7c50-a717-5f227756bc7c",
+    "requested": "2026-11-06T17:27:29.302430Z",
+    "finished": "2026-11-06T17:28:09.708124Z",
+    "seconds": 40.3
+   },
+   "prompt": {
+    "file": "art2d-406.txt",
+    "sha256": "cb67cf264e124eccc7a19726e56a728f8b9df3759453ca20ff0e3d3aca0d1dc3"
+   },
+   "source": {
+    "file": "codex-406-exec-17e0327a-968b-4fef-b88d-32ee12d0636d.png",
+    "sha256": "d68626a0e6d91ecdaea2436f1e096ff50064b53d7e710c8d2165733e21ac3621",
+    "bytes": 3407330,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 612,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "outfitter",
+   "subject": "outfitter travel poster: \"PADDLE NORTH\", an imaginary mountain-lake canoe scene",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 407,
+    "session": "01a1b1e7-53fe-7553-9ca8-6aedf8f805d5",
+    "requested": "2026-11-06T17:28:09.810465Z",
+    "finished": "2026-11-06T17:29:03.577058Z",
+    "seconds": 53.7
+   },
+   "prompt": {
+    "file": "art2d-407.txt",
+    "sha256": "ec3936f520b404f39b96390732956101c7472e1a7f16a28b178f5ab1d07da950"
+   },
+   "source": {
+    "file": "codex-407-exec-ab4ac4f0-0fff-4ee7-8509-8c32b83f533e.png",
+    "sha256": "1e2d212ae2e6aeea161c6639b96bad141451c9dcde2aec2c5630fcfe79fd083e",
+    "bytes": 3097626,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 408,
+    "y": 612,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "science",
+   "subject": "science emporium star chart: \"THE NORTHERN SKY\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 408,
+    "session": "01a1b1e2-c24f-72b0-97c9-c9004cfd62cf",
+    "requested": "2026-11-06T17:23:10.377444Z",
+    "finished": "2026-11-06T17:24:05.158833Z",
+    "seconds": 54.7
+   },
+   "prompt": {
+    "file": "art2d-408.txt",
+    "sha256": "a9abf6003fbf287eceb27d28fddbffa36147b8d017fb2878334c57d1d80ab852"
+   },
+   "source": {
+    "file": "codex-408-exec-7b0b4da7-df99-4fb0-8197-fd0e65775203.png",
+    "sha256": "4f8375bf0f9642e84af19365e6761233e4fdbacd377ab59cf8d46afd6a810652",
+    "bytes": 3223754,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 816,
+    "y": 612,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "arcade",
+   "subject": "arcade neon space poster: \"STARFALL ARCADE\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 409,
+    "session": "01a1b1e3-98ce-7da3-b855-9a9c3c8725b1",
+    "requested": "2026-11-06T17:24:05.269301Z",
+    "finished": "2026-11-06T17:25:00.439045Z",
+    "seconds": 55.1
+   },
+   "prompt": {
+    "file": "art2d-409.txt",
+    "sha256": "65792dce3aa136527129daf7c3cc2ab52fddb069b0b37ee7d57e3a60bcf6154c"
+   },
+   "source": {
+    "file": "codex-409-exec-23f5a196-04a1-4f86-b91f-ff6adcc8bec7.png",
+    "sha256": "a6e3afcb3477dce3156d427e76b1541ebb2f8e57dc985572e555a3adafefe35b",
+    "bytes": 3465913,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1224,
+    "y": 612,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "hockey",
+   "subject": "sports-store team poster: invented hockey team \"PRAIRIE BLIZZARD\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 410,
+    "session": "01a1b1e4-70c6-7a12-a081-9631451948f4",
+    "requested": "2026-11-06T17:25:00.566710Z",
+    "finished": "2026-11-06T17:25:54.515191Z",
+    "seconds": 53.9
+   },
+   "prompt": {
+    "file": "art2d-410.txt",
+    "sha256": "8e177bf99996a0ca21968193033be20ba0d0828ada2d8626ec38e1ed8302fab4"
+   },
+   "source": {
+    "file": "codex-410-exec-197408ef-bd63-414d-802f-18715b5cae8a.png",
+    "sha256": "2bad9ce14fe52aaba3fe3f5177dd2367ea1b09a962d648b52b24fb204b143fe4",
+    "bytes": 3679053,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 1632,
+    "y": 612,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "hobby",
+   "subject": "model-shop show poster: \"GRAIN ELEVATOR MODELS\" / \"RAILWAY DAYS\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 411,
+    "session": "01a1b1e5-43eb-7540-bdee-b9594aad8b39",
+    "requested": "2026-11-06T17:25:54.622227Z",
+    "finished": "2026-11-06T17:26:50.450363Z",
+    "seconds": 55.8
+   },
+   "prompt": {
+    "file": "art2d-411.txt",
+    "sha256": "7d8eeb629d26ad4d3ef6ecd200e3eb82307250511bf3eaa94aedd0fb33972a0c"
+   },
+   "source": {
+    "file": "codex-411-exec-51c0c1ba-3f5c-443c-b135-f490ab43aeee.png",
+    "sha256": "3f24ab470b34d1e9d93f19b4253ccebc748915496ab215b4c94dc994a0362289",
+    "bytes": 3391396,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 0,
+    "y": 1224,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "design",
+   "subject": "home-store mid-century catalogue ad: \"LARCH & LOOM HOME\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 412,
+    "session": "01a1b1e6-1e75-7bf2-9297-d7866e943da6",
+    "requested": "2026-11-06T17:26:50.557002Z",
+    "finished": "2026-11-06T17:27:34.252416Z",
+    "seconds": 43.6
+   },
+   "prompt": {
+    "file": "art2d-412.txt",
+    "sha256": "574a0016f1992128b1c61e07820fff8c4368c6eecc8edac59b4e9847b87fedd0"
+   },
+   "source": {
+    "file": "codex-412-exec-f6003520-e7ba-4c2b-ad80-50f2ef6636e4.png",
+    "sha256": "46e3e3de52bcbf25d7a2330d446e526cba054f2e5594d1c6b499befdfdc2c4dc",
+    "bytes": 3156288,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 408,
+    "y": 1224,
+    "w": 408,
+    "h": 612
+   }
+  },
+  {
+   "name": "garden",
+   "subject": "garden-centre botanical seed poster: \"GLASSHOUSE GARDEN CO.\"",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 413,
+    "session": "01a1b1e6-c9a6-7b41-9ea0-ceeff7987737",
+    "requested": "2026-11-06T17:27:34.391499Z",
+    "finished": "2026-11-06T17:28:30.561553Z",
+    "seconds": 56.1
+   },
+   "prompt": {
+    "file": "art2d-413.txt",
+    "sha256": "2ed99e8ce79bdfb999c5db174e1f98ef989110e1155e0ef64d28bdaeb1e1a24a"
+   },
+   "source": {
+    "file": "codex-413-exec-021b8d34-99fe-4674-bfd2-2b60a7a43202.png",
+    "sha256": "9bb49ce61fd896ed4c9793f7eb8f4b9b84ec17517c354557905e174dd3fbf15b",
+    "bytes": 4156894,
+    "width": 1024,
+    "height": 1536
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1024,
+    "h": 1536
+   },
+   "placed": {
+    "x": 816,
+    "y": 1224,
+    "w": 408,
+    "h": 612
+   }
+  }
+ ]
+}
