@@ -1944,6 +1944,16 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/skyways-car-dash.json",
+      "bytes": 6420,
+      "sha256": "fe6dd14f3df30c13b912e04697312e98a6ee5286ac7b1edbb0e54cd2dbc45c04"
+    },
+    {
+      "path": "assets/derivatives/skyways-car-seat.json",
+      "bytes": 6335,
+      "sha256": "de367a879fc274be97b8a8806e9caa3b16d688d6ec7d0a7a2c136b54328fe57a"
+    },
+    {
       "path": "assets/derivatives/skyways-commercial-range.json",
       "bytes": 5788,
       "sha256": "19a6cc148429c2fb969a68275ec1a4668971831c2e2f2682e3f9522decdfc103"
@@ -1952,6 +1962,21 @@
       "path": "assets/derivatives/skyways-con-banners.json",
       "bytes": 4434,
       "sha256": "efdf512116eb976d5e538b0edbcdf0368fd70bba2f34cf0f3144f2dec0e3e05e"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-figure-box.json",
+      "bytes": 6544,
+      "sha256": "cd21fed992a6ef95e7c368c3a4bef3b58921411171fa76cbc482b5027187d43b"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-merch-table.json",
+      "bytes": 6841,
+      "sha256": "28745e570469e8c1e253a0f059051638463a15f5de1f1aa144cee6437cf885d7"
+    },
+    {
+      "path": "assets/derivatives/skyways-con-plush.json",
+      "bytes": 6504,
+      "sha256": "dbf88e470b9cc9027657ac31bfa28bfa6773aef0d246c1472b606c7672eee49f"
     },
     {
       "path": "assets/derivatives/skyways-con-posters.json",
@@ -1982,6 +2007,11 @@
       "path": "assets/derivatives/skyways-prize-car.json",
       "bytes": 12742,
       "sha256": "9db1a2d612e6f0ee982617794780b33f8cf4a38c6d8e22941ed85bc26fa98a57"
+    },
+    {
+      "path": "assets/derivatives/skyways-prize-stanchion.json",
+      "bytes": 7013,
+      "sha256": "07147b0c7a0862333c3afea841b84388400e84015b2a8558d5114c131089c1a0"
     },
     {
       "path": "assets/derivatives/skyways-ramen-art.json",
@@ -3839,9 +3869,39 @@
       "sha256": "51aee024f5ff0cfec1cbdb93912bd79672612023a4f5add2b1b1eb13a8043de3"
     },
     {
+      "path": "assets/models/skyways-car-dash.glb",
+      "bytes": 1414504,
+      "sha256": "b766fb2f22c43597345f227e0f990a0ace6cf59ffae7da87714af75add2875bf"
+    },
+    {
+      "path": "assets/models/skyways-car-seat.glb",
+      "bytes": 737156,
+      "sha256": "2cc52dd00c2d3ef6c7d60a9094156a7041fe730b649d05c0068aae7e7f864fe3"
+    },
+    {
       "path": "assets/models/skyways-commercial-range.glb",
       "bytes": 1191144,
       "sha256": "dd94a9bbd50ceef281c84c397ec434ec9c667e382de4f126bacdf06f52253614"
+    },
+    {
+      "path": "assets/models/skyways-con-figure-box.glb",
+      "bytes": 251632,
+      "sha256": "4f50dec2d75a2e1b01459935b1a27d0273bc549647e97befeebfeb1250289dc9"
+    },
+    {
+      "path": "assets/models/skyways-con-merch-table.glb",
+      "bytes": 216084,
+      "sha256": "274ebc955cfaae1df33880968db312b50a3b5cb41a91cecbc435449a3d229f9e"
+    },
+    {
+      "path": "assets/models/skyways-con-plush.glb",
+      "bytes": 288800,
+      "sha256": "3a5b78b43c6b3d9564da0aef06ea9291cad1236e13abf8c7dcd3f7c9e2560bdc"
+    },
+    {
+      "path": "assets/models/skyways-con-stage.glb",
+      "bytes": 1372576,
+      "sha256": "8cae4e5e932debda14b2f041bf47aff986fe5dae154ae4ef3c6641196a546e26"
     },
     {
       "path": "assets/models/skyways-mascot-poses.glb",
@@ -3852,6 +3912,11 @@
       "path": "assets/models/skyways-prize-car.glb",
       "bytes": 5918956,
       "sha256": "ec9087c9ba0e592b0a1e6d65a375564b7e53a0fdcf41a6e7fc3aa68f663f120d"
+    },
+    {
+      "path": "assets/models/skyways-prize-stanchion.glb",
+      "bytes": 258556,
+      "sha256": "9536b792ce18e91685aea9c84b40aaaf571ce39aeb7852d6fac23d096fb57e5f"
     },
     {
       "path": "assets/models/skyways-saucepan.glb",
