@@ -115,7 +115,7 @@ export const ITEMS: Record<string, ItemDef> = {
     description: 'Red highway flare. Goes in the grenade slot: hold G to strike and ready one, release to throw (or hold click while it is in your hand): about 50 s of red light and smoke. Light draws the infected.'},
   // --- Task gasmask-breach-20261030 (mask lane): a passive supply (authored model: world/authoredItems.ts) ---
   gas_filter: {id: 'gas_filter', name: 'Gas mask filter canister', short: 'Filter', kind: 'supply', stackMax: 6, icon: 'filter',
-    description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 2.5 minutes on the face.'},
+    description: 'Screw-in 40 mm respirator filter, seal intact. Nothing to use by hand: a gas mask on your face fits a spare by itself when its filter runs out (from your pockets or quick slots — never from a worn backpack). One lasts 37.5 seconds on the face.'}, // (task train-fuel-system: corrected — FILTER_LIFE_S is 37.5 s since PR #52)
   // --- Task studio-beta-train-fuel-system-20261106-024923-01: the TRAIN's fuel (fuel/fuel.ts): one can = a quarter of the tank, 2 a slot ---
   fuel_can: {id: 'fuel_can', name: 'Fuel can', short: 'Fuel', kind: 'supply', stackMax: 2, icon: 'fuelCan',
     description: 'A steel jerrycan of diesel: a quarter of the train\'s tank (one tank = one stop). Pour it in at the train\'s fuel cap (E), or leave it in the train chest — the train burns chest fuel by itself when it departs.'},
