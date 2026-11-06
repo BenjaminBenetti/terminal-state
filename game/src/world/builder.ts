@@ -41,6 +41,8 @@ import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; 
 import {cutSkywaysWindows} from './skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing holes
 import {buildSkywaysKitchenProp} from './skywaysKitchen'; // task studio-skyways-level-20261106-054448 (lane FOOD): ramen restaurant range / cookware / mascot
 import {isSkywaysKitchenKind} from '../gen/skyways/kitchenKinds';
+import {buildSkywaysAddonProp} from './skywaysAddon'; // task studio-skyways-level-20261106-054448 (lane ADDON): convention / prize-car kinds
+import {isSkywaysAddonKind} from '../gen/skyways/addonKinds';
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
@@ -656,6 +658,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     if (isOfficeBuilt(kind, layout)) { instances += buildOfficeProp(group, kind, list, mats, layout, instanceModel, models); continue; }
     // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's kinds (lazy skyways-* models, front +Z)
     if (isSkywaysKitchenKind(kind)) { instances += buildSkywaysKitchenProp(group, kind, list, mats, instanceModel, models); continue; }
+    // task studio-skyways-level-20261106-054448 (lane ADDON): the Skyways add-on's kinds (lazy skyways-* models, statues, Codex art panels)
+    if (isSkywaysAddonKind(kind)) { instances += buildSkywaysAddonProp(group, kind, list, mats, instanceModel, models); continue; }
     // Storefront furniture / glazing / shutters: built by storefrontBuilder.
     if (SHOP_FURNITURE.includes(kind) || SHOP_BLOCKERS.includes(kind)) continue;
     const def = PROP_DEFS[kind];

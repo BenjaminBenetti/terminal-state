@@ -714,6 +714,18 @@ export class DynamicItems {
     return v;
   }
 
+  /**
+   * Task studio-skyways-level-20261106-054448 (lane ADDON): the object -> world matrix (origin bottom centre, the prop frame) of a LOOSE
+   * prop as drawn (its body's pose); false while it never went loose (it stands where its placement says). The Skyways velvet ropes
+   * follow their stanchions with it (world/skywaysAddonRuntime.ts).
+   */
+  propMatrix(prop: PropPlacement, out: THREE.Matrix4): boolean {
+    const e = this.ents.get(prop);
+    if (!e?.body || !e.prop) return false;
+    this.objMatrix(e, out);
+    return true;
+  }
+
   /** Loose (already physical) props, e.g. for QA. */
   looseProps(): PropPlacement[] {
     return [...this.ents.values()].filter(e => e.prop).map(e => e.prop!);
