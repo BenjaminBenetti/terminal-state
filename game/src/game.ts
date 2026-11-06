@@ -81,6 +81,7 @@ import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task trai
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
+import {installSkywaysWindows, type SkywaysWindowRuntime} from './world/skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
@@ -335,6 +336,8 @@ export class Game {
   readonly injuries: InjurySystem;
   /** Iteration 16 (lane TOWER): the office tower runtime — elevator, stairwell doors, window glass, exterior city (world/towerRuntime.ts). */
   readonly tower: TowerRuntime;
+  /** Task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing — breakable panes, pre-breached bridges (world/skywaysWindows.ts; inert elsewhere). */
+  readonly skywaysWindows: SkywaysWindowRuntime;
   /** Task player-train-shell-20261101-202805 (lane TRAIN): the parked player train in the world — the car, its interior volume / colliders, doors, lights (world/playerTrain.ts). */
   readonly trainRuntime: PlayerTrainRuntime;
   /** Task train-lockbox-windows-20261101-232156 (lane BOX): the Lockbox transfer view / developer drop (ui/lockboxView.ts); the store is playerTrain.lockbox. */
@@ -555,6 +558,8 @@ export class Game {
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
     hookName('tower');
+    this.skywaysWindows = installSkywaysWindows(this); // task studio-skyways-level-20261106-054448 (lane GAS): before GAS (its build reads the panes); inert without layout.skyways
+    hookName('skywaysWindows');
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
     hookName('officeAtmosphere');
@@ -562,6 +567,7 @@ export class Game {
     installReactorCoreLights(this); hookName('reactorCoreLights'); // task reactor-expansion-20261101 (lane CORE): the reactor's green / blue glow lights (boot-time, intensity-only; inert elsewhere)
     this.gas = installGas(this); // Task gasmask-breach-20261030 (lane GAS): after TOWER (its build reads the windows) — bullet hits, frame hook, section hooks
     hookName('gas');
+    this.gas.windowSources.push(() => this.skywaysWindows.gasSource()); // (lane GAS, Skyways) the glazing's panes when the world has no office tower
     // Task gasmask-breach-20261030 (primary): breach gas spares the player only behind a mask that is on with a working filter.
     // The mask's frame hook runs first (installed earlier), so a filter swapped in this frame already counts.
     this.gas.protection = () => this.gasMask.protects();

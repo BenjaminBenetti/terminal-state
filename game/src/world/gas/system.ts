@@ -34,13 +34,23 @@
 // (world/reactor/generators.ts) while a layout with `reactor` is built; the eye exposure is then c = max(min(CAP, breach field +
 // puffs), roof outdoor, depth gas) through the same threshold / dps / protection / HUD / cough path (source 'depth'), and the
 // fallback haze covers it too. Without layout.reactor the term never exists (one more boolean in the fast path).
+//
+// Task studio-skyways-level-20261106-054448 (lane GAS): GENERIC WINDOW SOURCES — the section build takes its breakable panes from
+// the Office tower (host.tower.office.windows, lane store WINDOWS_LANE 'office.windows', domain = the tower footprint) or, without
+// one, from the first registered `windowSources` provider that has a world: the Skyways glazing (world/skywaysWindows.ts: lane
+// store 'skyways.windows', domain = layout.skyways.exterior ± 1 cell over the storeys that have windows). Both are per-station
+// memory (RUN lane stores are per section). A source may list PRE-BREACHED panes: at the FIRST build of its world (no lane record
+// yet) they are broken through the same restore path at age AGE_CAP_S, so their gas is fast-forwarded exactly like a saved breach
+// (already spread at arrival); a revisit restores the saved record instead (never seeded twice). Everything downstream — bullets,
+// the field, the uploads to the storey layers, the ONE exposure calculation, the mask, the fallback — is the Office's path.
+// breakPaneNear(level, x, y, z, radius) breaks panes by contact (lane CAR: a car hitting the glazing at speed), as a bullet break.
 
 import * as THREE from 'three';
 import type {Vec3, WorldHit} from '../../combat/hitscan';
 import type {StationLayout} from '../../gen/stationTypes';
 import {CELL} from '../../gen/grid';
 import type {WindowPlan, WindowView} from '../officeWindows';
-import {WINDOWS_LANE, WindowBreaches, paneCentre, sourceCells, type Breach, type PaneRef} from '../windowBreach';
+import {WINDOWS_LANE, WINDOW_BREACH, WindowBreaches, paneCentre, sourceCells, type Breach, type PaneRef, type WindowsRecord} from '../windowBreach';
 import {roofAirOf, roofBlend, type RoofAir} from '../roofAir'; // task gas-mask-roof-feedback-20261030 (item 10): the toxic roof
 import {GasHud} from '../../ui/gasHud';
 import {GAS, GasField} from './field';
@@ -93,6 +103,36 @@ export interface GasExposure {
   fallback?: number;
 }
 
+/**
+ * Task studio-skyways-level-20261106-054448 (lane GAS): a breakable-window world the gas covers besides the Office tower (the Skyways
+ * glazing). `exterior` = its footprint (world m; the field domain = its cells ± 1), `lane` = the RUN lane store of its panes' state,
+ * `prebreached` = pane ids broken at the FIRST build of the world (no lane record yet), seeded as aged breaches (AGE_CAP_S).
+ */
+export interface GasWindowSource {
+  plans: WindowPlan[];
+  view: WindowView | null;
+  exterior: {x0: number; z0: number; x1: number; z1: number};
+  lane: string;
+  prebreached?: readonly string[];
+}
+
+/** Distance (m) from world (x, y, z) to a pane's glass rectangle (lane CAR's contact test; the glass sits behind the room-side face). */
+export function paneDistance(ref: PaneRef, x: number, y: number, z: number): number {
+  const p = ref.plan, a = p.along === 'x' ? x : z, c = p.along === 'x' ? z : x;
+  const da = Math.max(ref.pane.a0 - a, 0, a - ref.pane.a1), dy = Math.max(ref.pane.y0 - y, 0, y - ref.pane.y1);
+  return Math.hypot(da, dy, c - p.glass);
+}
+
+/**
+ * Task studio-skyways-level-20261106-054448 (lane GAS): the first-build record of a source's pre-breached panes — every one broken
+ * WINDOW_BREACH.AGE_CAP_S ago (the restore path caps ages there): their gas is replayed by fastForward like any saved breach.
+ */
+export function prebreachRecord(ids: readonly string[]): WindowsRecord {
+  const broken: Record<string, number> = {};
+  for (const id of ids) broken[id] = WINDOW_BREACH.AGE_CAP_S;
+  return {v: 2, damage: {}, broken};
+}
+
 const GLASS = new THREE.Color(0xc9d8dc);
 const tv = new THREE.Vector3(), tn = new THREE.Vector3(), td = new THREE.Vector3();
 
@@ -119,6 +159,13 @@ export class GasSystem {
    * generators.ts after this system's section build; read only while layout.reactor exists. Null on every other level.
    */
   depth: DepthGasSource | null = null;
+  /**
+   * Task studio-skyways-level-20261106-054448 (lane GAS): window worlds besides the Office tower, asked in order at each section build
+   * when the layout has no tower windows (the Skyways glazing runtime registers one; null = not its world).
+   */
+  readonly windowSources: (() => GasWindowSource | null)[] = [];
+  /** RUN lane store of the current world's panes (WINDOWS_LANE for the Office; the source's own lane otherwise). */
+  lane: string = WINDOWS_LANE;
   /** Counters (QA / tests). */
   readonly counts = {impacts: 0, damage: 0, cracked: 0, broken: 0, passThrough: 0, uploads: 0};
   readonly hud = new GasHud();
@@ -149,22 +196,37 @@ export class GasSystem {
     // lane BLIGHT: puffs may start on any storey of this world (layout.levels index; a single-level station = its grid)
     const levels = layout.levels?.length ? layout.levels : [{id: 0, grid: layout.grid}];
     this.puffs.world = {grid: lv => (levels[lv]?.grid as PuffGrid | undefined) ?? null, closed};
+    // the Office tower's windows, else (task studio-skyways-level-20261106-054448, lane GAS) a registered window world (the Skyways)
     const o = this.host.tower.office, w = o?.windows;
-    if (!o || !w) return;
-    this.windows = new WindowBreaches(w.plans, w.view);
-    // the fields cover the tower footprint (+ the closed ring)
-    const ex = o.info.exterior;
+    const src: GasWindowSource | null = o && w ? {plans: w.plans, view: w.view, exterior: o.info.exterior, lane: WINDOWS_LANE} : this.windowSource();
+    if (!src) return;
+    this.windows = new WindowBreaches(src.plans, src.view);
+    this.lane = src.lane;
+    // the fields cover the tower footprint / the complex (+ the closed ring)
+    const ex = src.exterior;
     const domain = {x0: Math.floor(ex.x0 / CELL) - 1, y0: Math.floor(ex.z0 / CELL) - 1, x1: Math.ceil(ex.x1 / CELL) + 1, y1: Math.ceil(ex.z1 / CELL) + 1};
-    const storeys = new Set(w.plans.map(p => p.level));
+    const storeys = new Set(src.plans.map(p => p.level));
     this.field = new GasField(layout.levels.filter(l => storeys.has(l.id)).map(l => ({id: l.id, grid: l.grid})), {domain, closed});
-    const rec = this.host.run.laneStore(WINDOWS_LANE);
+    const rec = this.host.run.laneStore(src.lane);
     if (rec !== undefined) this.fastForward(this.windows.restore(rec, this.host.clock));
+    // (lane GAS, Skyways) the first build of this world: its pre-breached panes as breaches of the capped age — the restore path
+    else if (src.prebreached?.length) this.fastForward(this.windows.restore(prebreachRecord(src.prebreached), this.host.clock));
     this.upload();
+  }
+
+  /** Task studio-skyways-level-20261106-054448 (lane GAS): the first registered window world with panes for this build (or null). */
+  private windowSource(): GasWindowSource | null {
+    for (const f of this.windowSources) {
+      let s: GasWindowSource | null = null;
+      try { s = f(); } catch (err) { console.warn('gas: a window source failed', err); }
+      if (s && s.plans.length) return s;
+    }
+    return null;
   }
 
   teardown(): void {
     if (this.windows) {
-      try { this.host.run.setLaneStore(WINDOWS_LANE, this.windows.save(this.host.clock)); } catch (err) { console.warn('gas: saving the window state failed', err); }
+      try { this.host.run.setLaneStore(this.lane, this.windows.save(this.host.clock)); } catch (err) { console.warn('gas: saving the window state failed', err); }
     }
     this.clear();
   }
@@ -172,6 +234,7 @@ export class GasSystem {
   private clear(): void {
     this.windows = null;
     this.field = null;
+    this.lane = WINDOWS_LANE; // (lane GAS, Skyways) set again by the next build's window source
     this.roof = null;
     this.puffs.clear(); // lane BLIGHT: temporary puffs never outlive their world (never saved: no re-emission on a revisit)
     this.puffs.world = null;
@@ -327,6 +390,23 @@ export class GasSystem {
     if (!W || !W.breakNow(id, this.host.clock)) return false;
     this.onBreak(W.refs.get(id)!, null);
     return true;
+  }
+
+  /**
+   * Task studio-skyways-level-20261106-054448 (lane GAS) — lane CAR's hook (a car hitting the glazing at speed): breaks every unbroken
+   * breakable pane on storey `level` whose glass rectangle lies within `radius` m of (x, y, z) — its shards, burst, cue and gas, exactly
+   * as a bullet break. The contact point may be on the room-side wall face (the glass sits ~0.28 m behind it: pass a radius beyond
+   * that). `dir` = the impact direction (default: out through the pane). Returns the pane ids broken now ([] without windows / in
+   * reach). Collision is never changed (the wall cells and span colliders stay).
+   */
+  breakPaneNear(level: number, x: number, y: number, z: number, radius = 0.6, dir: Vec3 | null = null): string[] {
+    const W = this.windows, out: string[] = [];
+    if (!W || !(radius >= 0)) return out;
+    for (const ref of W.refs.values()) {
+      if (ref.plan.level !== level || W.broken(ref.id) || paneDistance(ref, x, y, z) > radius) continue;
+      if (W.breakNow(ref.id, this.host.clock)) { this.onBreak(ref, dir); out.push(ref.id); }
+    }
+    return out;
   }
 
   // -------------------------------------------------------------------------------------------
