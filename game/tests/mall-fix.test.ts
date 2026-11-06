@@ -204,8 +204,12 @@ describe('U04 round atrium columns: generation-time records', () => {
     // (addonFrame.ts putRound) — Skyways-only kinds; Subway / Office station props still keep their box collision
     // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): the Skyways landmark heroes' cylinders — the fig tree's ring
     // bench / planter / trunk, the fountain's basin / column, the orrery's sphere (gen/skyways/destinations/landmarks.ts) — Skyways-only
+    // (same task, lanes SHOPS-A / SHOPS-B): the anchor shops' round tables and stanchions — the bookshop's tiered tables and café bistro
+    // tables (shopsA.ts lattice / skywaysShopsAKit.ts putRound), the arcade's prize-ring stanchions (skywaysShopsBKit.ts putRound) —
+    // placed inside Skyways anchors only
     expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts', 'gen/skyways/addonConvention.ts',
-      'gen/skyways/addonFrame.ts', 'gen/skyways/destinations/landmarks.ts', 'world/fuelCarts.ts']);
+      'gen/skyways/addonFrame.ts', 'gen/skyways/destinations/landmarks.ts', 'gen/skyways/destinations/shopsA.ts',
+      'gen/skyways/destinations/skywaysShopsAKit.ts', 'gen/skyways/destinations/skywaysShopsBKit.ts', 'world/fuelCarts.ts']);
   });
 });
 

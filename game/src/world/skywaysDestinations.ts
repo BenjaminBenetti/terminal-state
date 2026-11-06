@@ -25,6 +25,7 @@ import type {ShapeMat} from '../gen/propShapes';
 import type {StationLayout} from '../gen/stationTypes';
 import {DEST_POSTER} from '../gen/skyways/destinations/art';
 import {DEST_PLAQUE, destCollisionOnly} from '../gen/skyways/destinations/kindsLandmarks';
+import {SKYD_SCREEN_PARTS} from '../gen/skyways/destinations/kindsShopsB';
 import type {SkywaysDestKind} from '../gen/skyways/destinations/registry';
 import {destHangCables, destModelHung, destModelKey, destModelOf, destModelRow} from '../gen/skyways/destinations/skywaysDestModels';
 import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
@@ -222,6 +223,8 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   const draw = list.filter(p => !destCollisionOnly(p));
   if (!draw.length) return 0;
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
+  // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
+  if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
   const m = destModelOf(kind);
   const gltf = m ? lib[destModelKey(m)] : undefined;
   if (!gltf) { const n = standIn(group, kind, draw, wm); drawCables(group, kind, draw, wm, layout, 1); return n; }

@@ -349,6 +349,20 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     const R = Math.ceil((m.radius + 0.8) / CELL), L = m.family === 'dinosaur' ? Math.ceil(4.6 / CELL) : R;
     add(m.level, {x: Math.round(m.cx) - (m.axis === 'x' ? L : R), y: Math.round(m.cy) - (m.axis === 'z' ? L : R), w: 2 * (m.axis === 'x' ? L : R), h: 2 * (m.axis === 'z' ? L : R)});
   }
+  // the anchor shops' interiors (sales floor + its stair-well pieces, the upper storey, the zones) belong to the destinations
+  // dressers: the station's generic / purpose props stay out (the storefront glazing is forced, so it still places); stock rooms keep
+  // their back-of-house dressing
+  for (const an of sc.anchors) {
+    const ids = new Set([an.floor, ...(an.upper !== null ? [an.upper] : []), ...an.zones]);
+    for (const a of layout.areas) if (ids.has(a.parent) && a.type === 'shop') ids.add(a.id);
+    for (const id of ids) {
+      const a = layout.areas[id], lv = a?.level ?? 0, g = layout.levels[lv]?.grid;
+      if (!a || !g) continue;
+      const cells: number[] = [];
+      for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === id) cells.push(g.idx(x, y));
+      out.push({level: lv, cells});
+    }
+  }
   add(sc.addon.level, sc.addon.hall);
   add(sc.addon.level, sc.addon.entry, 3);
   if (sc.addon.foyer) add(sc.addon.level, sc.addon.foyer);

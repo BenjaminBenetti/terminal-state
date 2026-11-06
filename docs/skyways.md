@@ -110,6 +110,9 @@ nothing is carved above it.
 - the family dressers (`shopsA.ts`, `shopsB.ts`) and `landmarks.ts`;
 - the shared art kinds (`art.ts`: shop posters, court plaques).
 
+The station dresser leaves the anchor interiors (sales floor and its stair-well pieces, the upper storey, the zones) and the landmark
+discs alone (`index.ts` `holds`). Only the forced storefront glazing goes in. The stock rooms keep their back-of-house dressing.
+
 Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR maps kept (`assets/skywaysDestProps.generated.ts`).
 
 ## Layout versions (save compatibility)
