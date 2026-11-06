@@ -19,8 +19,9 @@
 //  4. SEATING: existing station benches round the centrepiece facing it (the dinosaur: along its long sides; the fig tree has its own
 //     ring bench, so its benches stand further out), never on the approach side; PLANTERS (the existing planter tree) on the
 //     diagonals (not in the fig tree's court);
-//  5. a warm ACCENT light or two: steady warm ceiling fixtures near the centrepiece where a ceiling is within reach (an atrium court:
-//     under the skyway slab at the opening's edge), never over the hero.
+//  5. a warm ACCENT light or two: warm ceiling fixtures near the centrepiece where a ceiling is within reach (an atrium court: under
+//     the skyway slab at the opening's edge), never over the hero (lit / broken / flickering: the lighting pass rolls them like every
+//     fixture of the court).
 // Existing approved kinds only besides the destination kinds; deterministic from the rng it is given.
 // keepLandmarkClear: the atrium greenery / food-court seating (gen/skyways/greenery.ts, which runs first) keep the courts' clear discs.
 
@@ -76,8 +77,22 @@ export interface LandmarkDress {
   miss: string[];
 }
 const DRESSED = new WeakMap<StationLayout, LandmarkDress[]>();
-/** The landmark courts dressed into a layout (in dressing order). */
-export const landmarkDressOf = (layout: StationLayout): readonly LandmarkDress[] => DRESSED.get(layout) ?? [];
+/** Where each recorded placement / light was pushed (its index in layout.props / layout.lights at dressing time). */
+const PUSHED = new WeakMap<object, number>();
+/** The live record of a dressed one: the generator may later copy its prop / light records (track-extension reframing): same values. */
+function live<T extends object>(list: readonly T[], rec: T, same: (a: T, b: T) => boolean): T {
+  const i = PUSHED.get(rec);
+  if (i !== undefined && list[i] && same(list[i], rec)) return list[i];
+  return list.find(q => same(q, rec)) ?? rec;
+}
+const sameProp = (a: PropPlacement, b: PropPlacement) => a.kind === b.kind && a.variant === b.variant && a.x === b.x && a.y === b.y && a.z === b.z && (a.level ?? 0) === (b.level ?? 0);
+const sameLight = (a: LightPlacement, b: LightPlacement) => a.x === b.x && a.y === b.y && a.z === b.z && a.area === b.area;
+/** The landmark courts dressed into a layout (in dressing order; QA / tests), resolved to the layout's current records. */
+export function landmarkDressOf(layout: StationLayout): readonly LandmarkDress[] {
+  const P = (p: PropPlacement) => live(layout.props, p, sameProp);
+  return (DRESSED.get(layout) ?? []).map(d => ({...d, centre: d.centre && P(d.centre), upper: d.upper.map(P), plaque: d.plaque && P(d.plaque), benches: d.benches.map(P),
+    planters: d.planters.map(P), lights: d.lights.map(l => live(layout.lights, l, sameLight))}));
+}
 
 /** Footprint radius of a family's hero about its spot (round: its collider; box: its half diagonal; the dinosaur: its half depth). */
 export function landmarkFootRadius(family: SkywaysLandmarkFamily): number {
@@ -182,7 +197,7 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
   /** Through the kit (local height frame), then lifted onto the court floor. */
   const put = (k: PropKind, x: number, z: number, rot: number, o: PlaceOpts = {}): PropPlacement | null => {
     const p = tryPlaceProp(ctx, area, k, r3(x), r3(z), r3(rot), o);
-    if (p) p.y = r3(p.y + g.floorAt(p.x, p.z));
+    if (p) { p.y = r3(p.y + g.floorAt(p.x, p.z)); PUSHED.set(p, layout.props.length - 1); }
     return p;
   };
   res.openings = courtOpenings(g, area);
@@ -203,35 +218,46 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     const row = landmarkModelSize(kind);
     const turned = Math.abs(Math.sin(rot)) > 0.5;
     const vhx = (turned ? row.d : row.w) / 2, vhz = (turned ? row.w : row.d) / 2;
-    const clear = minCeil(g, samples(lm.x, lm.z, vhx, vhz, round)) - floor;
-    let s = Math.min(1, (clear - LANDMARK_DRESS.headroom) / row.h);
-    if (s < 1) s = Math.floor(s * 100) / 100;
-    if (!(s >= LANDMARK_DRESS.minScale)) res.miss.push(`ceiling ${r3(clear)} m too low`);
-    else {
-      // the spot, else nudged up to 3 m (a stair approach / door zone reaching into the disc)
-      const nudges: [number, number][] = [[0, 0]];
-      for (const d of [0.5, 1, 1.5, 2, 2.5, 3]) for (let j = 0; j < 8; j++) nudges.push([r3(Math.sin((j * Math.PI) / 4) * d), r3(Math.cos((j * Math.PI) / 4) * d)]);
-      for (const ring of LANDMARK_DRESS.rings) {
-        for (const [dx, dz] of nudges) {
-          const p = put(kind, lm.x + dx, lm.z + dz, rot, {laneOk: true, plazaOk: true, ring, h: r3(def.h * s)});
-          if (!p) continue;
-          if (round) { p.rot = r3(normYaw(yaw)); p.round = true; p.hx = p.hz = r3((def.w / 2) * s); } else { const f = footprint(kind, rot); p.hx = r3(f.hx * s); p.hz = r3(f.hz * s); }
-          res.centre = p; res.ring = ring; res.scale = s;
-          break;
-        }
-        if (res.centre) break;
+    /**
+     * The largest uniform scale (1, 0.95, ... minScale; 0: none) the hero may stand at at (x, z): its whole drawn footprint over carved
+     * floor (no crown / tail into a wall) and under the ceiling (+ headroom).
+     */
+    const fitAt = (x: number, z: number): number => {
+      const f0 = g.floorAt(x, z);
+      for (let k = 1; k >= LANDMARK_DRESS.minScale - 1e-9; k = Math.round((k - 0.05) * 100) / 100) {
+        const pts = samples(x, z, vhx * k, vhz * k, round);
+        if (pts.some(([px, pz]) => { const [cx, cy] = g.cellOf(px, pz); return !g.inBounds(cx, cy) || g.cells[g.idx(cx, cy)] !== FLOOR; })) continue;
+        if (minCeil(g, pts) - f0 - LANDMARK_DRESS.headroom >= row.h * k) return k;
       }
-      if (!res.centre) res.miss.push('centrepiece spot taken');
+      return 0;
+    };
+    // the spot, else nudged up to 3 m (a stair approach / door zone reaching into the disc)
+    const nudges: [number, number][] = [[0, 0]];
+    for (const d of [0.5, 1, 1.5, 2, 2.5, 3]) for (let j = 0; j < 8; j++) nudges.push([r3(Math.sin((j * Math.PI) / 4) * d), r3(Math.cos((j * Math.PI) / 4) * d)]);
+    let low = 0;
+    find: for (const ring of LANDMARK_DRESS.rings) {
+      for (const [dx, dz] of nudges) {
+        const s = fitAt(lm.x + dx, lm.z + dz);
+        if (!(s >= LANDMARK_DRESS.minScale)) { low++; continue; }
+        const p = put(kind, lm.x + dx, lm.z + dz, rot, {laneOk: true, plazaOk: true, ring, h: r3(def.h * s)});
+        if (!p) continue;
+        if (round) { p.rot = r3(normYaw(yaw)); p.round = true; p.hx = p.hz = r3((def.w / 2) * s); } else { const f = footprint(kind, rot); p.hx = r3(f.hx * s); p.hz = r3(f.hz * s); }
+        res.centre = p; res.ring = ring; res.scale = s;
+        break find;
+      }
     }
+    if (!res.centre) res.miss.push(low ? `centrepiece spot taken / ceiling too low (${low} spots under ${LANDMARK_DRESS.minScale} scale)` : 'centrepiece spot taken');
     const c = res.centre;
     // the collision-only upper parts, each resting on the part below (never drawn)
     let below = c ? layout.props.indexOf(c) : -1;
     for (const up of c ? landmarkUppers(kind) : []) {
+      const s = res.scale;
       const u: PropPlacement = {kind, x: c!.x, z: c!.z, y: r3(c!.y + up.y0 * s), rot: c!.rot, area: area.id, hx: r3(up.r * s), hz: r3(up.r * s), h: r3((up.y1 - up.y0) * s),
         blocksSight: false, variant: up.variant, round: true, host: below, ...(lv ? {level: lv} : {})};
       layout.props.push(u);
       res.upper.push(u);
       below = layout.props.length - 1;
+      PUSHED.set(u, below);
     }
     if (c) R0 = round ? c.hx : kind === 'skyDDinosaur' ? Math.min(c.hx, c.hz) : Math.max(c.hx, c.hz);
   }
@@ -330,6 +356,7 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
         if (lv) l.level = lv;
         layout.lights.push(l);
         res.lights.push(l);
+        PUSHED.set(l, layout.lights.length - 1);
         used.push([x, z]);
         n--;
         break;
@@ -376,6 +403,7 @@ function hangFlock(layout: StationLayout, g: Grid, area: Area, lm: SkywaysLandma
       const p: PropPlacement = {kind, x: r3(lm.x), z: r3(lm.z), y: r3(bottom), rot: r3(rot), area: area.id, hx: r3(hx), hz: r3(hz), h: r3(h), blocksSight: false, variant: 0, mounted: true,
         ...(lv ? {level: lv} : {})};
       layout.props.push(p);
+      PUSHED.set(p, layout.props.length - 1);
       res.scale = s;
       return p;
     }

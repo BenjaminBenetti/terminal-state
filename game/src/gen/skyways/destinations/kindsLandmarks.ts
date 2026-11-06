@@ -132,8 +132,15 @@ export const LANDMARKS_SPECS: Readonly<Record<LandmarksKind, DestKindSpec>> = {
 };
 
 /**
- * Scale-check record (rule 5; tools/asset-pipeline/props/scale-check.mjs beside zombie `lastshift` at runtime scale 1.0, viewed;
- * renders in the task's private qa/landmarks folder). Filled from the renders of the raws at the planned real size until the KITS
- * runtime files land (then re-checked on them).
+ * Scale-check record (rule 5; tools/asset-pipeline/props/scale-check.mjs --prop on lane KITS's runtime files — the runtime transform:
+ * the table's real size, k = 1 — beside zombie `lastshift` 1.78 m at runtime scale 1.0, viewed; renders in the task's private
+ * qa/landmarks folder): W x H x D, grounded contact, notes. The dresser may shrink a hero uniformly to fit a low court (LANDMARK_DRESS).
  */
-export const LANDMARK_SCALE: Readonly<Partial<Record<LandmarksKind, string>>> = {};
+export const LANDMARK_SCALE: Readonly<Partial<Record<LandmarksKind, string>>> = {
+  skyDClock: '1.57 x 5.60 x 1.60 m; grounded, 4 contacts (plinth corners); plinth ~0.9 m, dial centre ~4.6 m: a monumental public clock, reads right',
+  skyDDinosaur: '7.50 x 2.49 x 1.86 m (long X, head -X); grounded on its low plinth (top 0.19 m, 4.95 m long); neck and tail overhang it at 1-2 m: reads right',
+  skyDFigTree: '7.48 x 7.00 x 7.35 m at the brief 7 m; grounded planter ring; FLAG (as lane KITS): ring-bench seat 0.95 m, planter rim 1.68 m = double human scale (a 0.45 m seat means a ~3.3 m tree)',
+  skyDFountain: '4.40 x 3.85 x 4.40 m; grounded basin ring; basin wall 0.83 m (a raised basin, waist high), dry floor 0.43 m inside: reads right',
+  skyDGeese: '7.00 x 3.65 x 1.11 m; hung: rod tops = hangY 3.646 m at x +-3.22 m, the beam ~2.0 m above the lowest goose; wingspans ~1.5 m: reads right',
+  skyDOrrery: '2.12 x 3.00 x 1.84 m; grounded round plinth (~1.3 m across, ~0.9 m high), sphere radius ~1.05 m: reads right',
+};

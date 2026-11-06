@@ -189,8 +189,9 @@ function drawCables(group: THREE.Group, kind: string, list: readonly PropPlaceme
     const g = layout.levels?.[p.level ?? 0]?.grid ?? layout.grid, s = destPlacementScale(p) * k, c = Math.cos(p.rot), sn = Math.sin(p.rot);
     for (const ox of xs) {
       const wx = p.x + ox * s * c, wz = p.z - ox * s * sn, y0 = p.y + y * s, ceil = g.ceilAt(wx, wz);
-      const len = Math.min(DEST_CABLE.maxLen, ceil - y0);
-      if (!Number.isFinite(len) || len < 0.05) continue;
+      // (no ceiling recorded over it: no cable rather than one into the sky)
+      const len = Number.isFinite(ceil) ? Math.min(DEST_CABLE.maxLen, ceil - y0) : 0;
+      if (len < 0.05) continue;
       mats.push({level: p.level ?? 0, m: new THREE.Matrix4().makeTranslation(wx, y0, wz).multiply(new THREE.Matrix4().makeScale(1, len, 1))});
     }
   }
