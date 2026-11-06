@@ -150,9 +150,17 @@ describe('skyways car vs the world (walls, rails, props, floor rule)', () => {
 
   it('a low soffit (1.2 m) and a counter-sized prop stop it; a prop under the floor plane / overhead does not', () => {
     const w: CarWorld = {levels, props: null};
-    const s = car(HALL.soffit.x0 + 1, 12, 0, 8); // heading north into the soffit's south edge (z = 4)
-    run(s, w, ctl({forward: true}), 2);
-    expect(s.z - G.length / 2).toBeGreaterThan(HALL.soffit.z1 - 0.2);
+    const s = car((HALL.soffit.x0 + HALL.soffit.x1) / 2, 12, 0, 8); // heading north into the soffit's south edge (z = 4), head-on
+    // (lane CAR2: the measured car's 1.09 m circles) no body circle ever gets under it; pressing on, the car may slide along its edge
+    let deepest = Infinity;
+    run(s, w, ctl({forward: true}), 2, () => {
+      for (const k of G.circles) {
+        const c = carToWorld(s.x, s.z, s.yaw, 0, k.z), S = HALL.soffit;
+        deepest = Math.min(deepest, Math.hypot(Math.max(S.x0 - c.x, 0, c.x - S.x1), Math.max(S.z0 - c.z, 0, c.z - S.z1)) - k.r);
+      }
+    });
+    expect(deepest).toBeGreaterThan(-0.02);
+    expect(deepest).toBeLessThan(0.05); // (it did reach it)
     const counter = prop('shopCounter', 15, 6, 1.5, 0.4, 0.95);
     const high = prop('sign', 25, 6, 1.5, 0.4, 0.3, 2.2); // hanging above the roof
     const wp: CarWorld = {levels, props: propIndex(levels, [counter, high])};

@@ -18,7 +18,7 @@ import {CLIP_BYTES_REACTOR, CLIP_GAPS_REACTOR, CLIP_MANIFEST_REACTOR} from '../s
 import {CLIP_BYTES_REACTOR_STARTUP, CLIP_GAPS_REACTOR_STARTUP, CLIP_MANIFEST_REACTOR_STARTUP} from '../src/audio/manifest.reactorStartup.generated'; // task reactor-playtest-round2-20261102 (lane STARTUP)
 import {CLIP_BYTES_REACTOR_ENDING, CLIP_GAPS_REACTOR_ENDING, CLIP_MANIFEST_REACTOR_ENDING} from '../src/audio/manifest.reactorEnding.generated'; // task reactor-surface-ending-20261102 (lane AUDIO)
 import {CLIP_BYTES_FUEL, CLIP_GAPS_FUEL, CLIP_MANIFEST_FUEL} from '../src/audio/manifest.fuel.generated'; // task train-fuel-system-20261106 (lane PORT)
-import {CLIP_BYTES_SKYWAYS_CAR, CLIP_GAPS_SKYWAYS_CAR, CLIP_MANIFEST_SKYWAYS_CAR} from '../src/audio/manifest.skywaysCar.generated'; // task studio-skyways-level-20261106-054448-01
+import {CLIP_BYTES_SKYWAYS_CAR, CLIP_GAPS_SKYWAYS_CAR, CLIP_MANIFEST_SKYWAYS_CAR} from '../src/audio/manifest.skywaysCar.generated'; // task skyways-level-20261106: the prize car set
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
@@ -78,7 +78,8 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         // ambience beds loop >= 5 s; the iteration-12 flare burn is a deliberately short (3-4 s) positional loop, and so are (task
         // reactor-playtest-round2-20261102, lane STARTUP) the control-rod drive (it runs only while the rods move: a 4 s hold) and the
         // beacon motor (a short mechanical cycle at one beacon) — the Reactor's machine BED stays under the >= 5 s bed rule
-        const SHORT: Record<string, [number, number]> = {flareBurn: [3, 4], reactorRodLoop: [2, 3], reactorBeacon: [1.5, 2.5], cartRoll: [3, 4], carIdle: [2, 3], carDrive: [2, 3]}; // (+ task train-fuel-system, lane PORT: the fuel cart's positional rolling loop; + the Skyways prize car's engine loops, pitched by speed at runtime)
+        const SHORT: Record<string, [number, number]> = {flareBurn: [3, 4], reactorRodLoop: [2, 3], reactorBeacon: [1.5, 2.5], cartRoll: [3, 4], // (+ task train-fuel-system, lane PORT: the fuel cart's positional rolling loop)
+          carIdle: [2, 3], carDrive: [2, 3]}; // (+ task skyways-level-20261106, lane CAR2: the prize car's engine loops — a steady engine cycle, re-pitched every frame)
         if (r.loop) expect(r.loop.length).toBeGreaterThan(SHORT[cue]?.[0] ?? 5);
         if (SHORT[cue]) expect(r.loop!.length).toBeLessThanOrEqual(SHORT[cue][1]);
       }
@@ -138,7 +139,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): Strainer cue voice caps (play nothing)
     'sLive', 'strainerVoice',
     // Task train-fuel-system-20261106 (lane PORT): cutting a sounding pour / releasing the cart channel / QA state / the one-shot cut (play nothing)
-    'stopFuelPour', 'stopCartRoll', 'fuelAudioState', 'cutVoice']);
+    'stopFuelPour', 'stopCartRoll', 'fuelAudioState', 'cutVoice',
+    // task skyways-level-20261106 (lane CAR2): releasing the car's engine channel / its QA state (play nothing)
+    'stopCarEngine', 'carAudioState']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -198,6 +201,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       engineStall: () => sfx.engineStall(), fuelPour: () => { sfx.fuelPour(); sfx.stopFuelPour(); },
       hoseConnect: () => { sfx.hoseConnect(true, at); sfx.hoseConnect(false); },
       cartRoll: () => { sfx.cartRoll(0.6, at); sfx.cartRoll(1, at); sfx.cartRoll(0); sfx.stopCartRoll(); },
+      // task skyways-level-20261106 (lane CAR2): the prize car's engine loops (one channel), tyre skid, door
+      carEngine: () => { sfx.carEngine(0, 0, at, {rev: true}); sfx.carEngine(0.7, 1, at); sfx.stopCarEngine(); },
+      carSkid: () => { ctx.currentTime += 1; sfx.carSkid(at); }, carDoor: () => sfx.carDoor(at),
       ambience: () => {
         for (const area of ['platform', 'service-corridor', 'washroom', 'food-court', 'utility']) { sfx.setRoom('medium', area); for (let i = 0; i < 400; i++) { ctx.currentTime += 0.25; sfx.ambience(0.25); } }
       },
