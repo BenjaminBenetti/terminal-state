@@ -36,6 +36,7 @@ import {GEAR_ITEMS} from './gear';
 import {genericAmmo} from './calibers'; // lane AMMO (knife-melee-20261030): pure data, no imports
 import {ARM_SLING, LEG_SPLINT, LIMB_TREATMENT_IDS, TRAUMA_KIT} from './medical';
 import {BIO_MATER, ELECTRICAL_PARTS, SCRAP_METAL, isMaterialItem} from './craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
+import {BUBBLE_TEA, RAMEN, RAMEN_CHASHU, SKYWAYS_DRINK_IDS, SKYWAYS_FOOD_IDS, SUSHI_BENTO} from './skywaysFood'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import type {LootTheme} from '../gen/purposes';
 import type {LootTilt} from '../gen/office/companies';
 import type {LevelId} from '../levels/types';
@@ -92,8 +93,10 @@ export type SlotCategory = (typeof SLOT_CATEGORIES)[number];
 /** The light lane's item ids (items/items.ts): a consumable torch battery and the throwable flare. */
 export const BATTERY_ID = 'battery';
 export const FLARE_ID = 'flare';
-const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles', 'bread']); // + bread: lane FURN (office-props-physics-scale-20261030), bakery cases only
-const DRINK = new Set(['water', 'cola', 'juice']);
+// + the Skyways ramen restaurant's food / bubble tea (task studio-skyways-level-20261106-054448, lane FOOD): only its own RAMEN_* tables and its
+// loose table pickups name them — no shared row, global pool or golden draw changes (econCat only classifies rows that already hold them)
+const FOOD = new Set(['chocolate', 'chips', 'beans', 'noodles', 'bread', ...SKYWAYS_FOOD_IDS]); // + bread: lane FURN (office-props-physics-scale-20261030), bakery cases only
+const DRINK = new Set<string>(['water', 'cola', 'juice', ...SKYWAYS_DRINK_IDS]);
 /** HP medicine (bandage / med kit). Iteration 16 (lane INJURY): the limb treatments (items/medical.ts) are 'med' too. */
 export const HP_MED: ReadonlySet<string> = new Set(['bandage', 'medkit']);
 const MED = new Set<string>([...HP_MED, ...LIMB_TREATMENT_IDS]);
@@ -520,6 +523,20 @@ export const DRESSER_ROWS: ItemRows = [['bandage', 0.7], ['battery', 0.6], ['cho
 export const CARTON_ROWS: ItemRows = [['water', 1], ['beans', 0.8], ['noodles', 0.6], ['chips', 0.6], ['chocolate', 0.5], ['battery', 0.3], ['bandage', 0.3]];
 /** Lane SHOPS (track3): a gallery kiosk cart's cabinet — snacks, drinks, a cell. */
 export const KIOSK_CART_ROWS: ItemRows = [['chocolate', 2], ['chips', 2], ['water', 1.2], ['cola', 1.2], ['battery', 0.4]];
+/**
+ * Task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways RAMEN RESTAURANT's holders (purpose 'skyways-ramen', gen/skyways/
+ * ramenPurposes.ts; placed by gen/skyways/ramen.ts with that loot key). Its edible food lies where a ramen bar keeps it — bowls and bento
+ * on the service counter's pass, bento / bowls in the kitchen fridge, bubble tea in the glass-door drinks cooler. EXACT (no scarcity
+ * cut: the rows are the numbers), small and finite: one or two lots, often none — a restaurant is a treat, not a food fountain. A
+ * level profile's 'countertop' / 'cold' slot scaling still applies. The loose pickups are the dresser's own (2-4 per restaurant: RAMEN_LOOSE_ROWS).
+ */
+export const RAMEN_COUNTER: LootSpec = {items: [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [SUSHI_BENTO, 1], [BUBBLE_TEA, 0.4]], lots: [1, 2], empty: 0.35, exact: true};
+export const RAMEN_COOLER: LootSpec = {items: [[BUBBLE_TEA, 2.4], ['water', 0.8], ['cola', 0.5]], lots: [1, 2], empty: 0.3, exact: true};
+export const RAMEN_FRIDGE: LootSpec = {items: [[SUSHI_BENTO, 1.4], [RAMEN, 0.9], [RAMEN_CHASHU, 0.6], [BUBBLE_TEA, 0.6], ['water', 0.5]], lots: [1, 2], empty: 0.3, exact: true};
+/** The kitchen's stainless worktop / open shelving: now and then a covered bento or a bottle left on it. */
+export const RAMEN_KITCHEN: LootSpec = {items: [[SUSHI_BENTO, 1], ['water', 0.8], [RAMEN, 0.4]], lots: [1, 1], empty: 0.6, exact: true};
+/** What was left standing on the dining tables / the counter's pass: the dresser's few LOOSE pickups (gen/skyways/ramen.ts RAMEN_LOOSE). */
+export const RAMEN_LOOSE_ROWS: ItemRows = [[RAMEN, 1.2], [RAMEN_CHASHU, 0.8], [SUSHI_BENTO, 1], [BUBBLE_TEA, 1]];
 
 /**
  * OWN tables of the openable kinds (world/openablesSpec.ts `loot` references these): NEW container kinds roll theirs over every

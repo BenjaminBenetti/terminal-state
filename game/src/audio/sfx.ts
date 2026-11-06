@@ -195,7 +195,9 @@ const CLOSE_CUE: Record<string, CueId> = {
   desk: 'drawerOpen', monitorDesk: 'drawerOpen', kitchenette: 'cabinetClose',
 };
 const EAT_CUE: Record<string, CueId> = {chips: 'eatChips', chocolate: 'eatChocolate', beans: 'eatBeans', noodles: 'eatNoodles'};
-const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater', juice: 'drinkJuice'};
+// (task studio-skyways-level-20261106-054448, lane FOOD: the ramen bowls / bento chew with the generic 'eat' take; the bubble tea's
+// straw-and-cup drink uses the carton-and-gulps take)
+const DRINK_CUE: Record<string, CueId> = {cola: 'drinkCola', water: 'drinkWater', juice: 'drinkJuice', bubble_tea: 'drinkJuice'};
 /**
  * Iteration 07 (Lane K): rigid item / chunk contact families -> Sound Lab cues (bank i07k + reused impacts). Task mall-round2-20261031
  * (lane AUDIO, M01): 'cardboard' -> its body cue; physImpact layers it per CARDBOARD_AUDIO.thud.

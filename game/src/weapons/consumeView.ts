@@ -86,6 +86,10 @@ function styleFor(itemId: string, box: THREE.Box3): Style {
       case 'chips': return {...s, a0: 1.15, a1: 1.75, shake: 0.06, target: new THREE.Vector3(0.015, -0.05, -0.15)};
       case 'beans': return {...s, a0: 1.05, a1: 1.6, shake: 0.08, target: new THREE.Vector3(0.015, -0.05, -0.14)};
       case 'noodles': return {...s, a0: 1.0, a1: 1.5, shake: 0.07, target: new THREE.Vector3(0.015, -0.05, -0.14)};
+      // task studio-skyways-level-20261106-054448 (lane FOOD): a ramen bowl is lifted to the lips and tipped / shaken like the noodle cup
+      // (slurped from the rim; a 0.2 m bowl is held a little further out), the bento held lower and nibbled from
+      case 'ramen': case 'ramen_chashu': return {...s, a0: 0.75, a1: 1.15, shake: 0.08, target: new THREE.Vector3(0.015, -0.06, -0.19)};
+      case 'sushi_bento': return {...s, motion: 'bite', a0: 0.55, a1: 0.7, roll: 0.05, target: new THREE.Vector3(0.01, -0.08, -0.22)};
       default: return {...s, motion: 'bite', a0: 1.0, a1: 1.1};
     }
   }

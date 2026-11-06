@@ -4,6 +4,7 @@
 import {P7_PROP_DEFS, type P7Kind} from './props07';
 import {OFFICE_PROP_DEFS, type OfficeKind} from './office/kinds'; // Iteration 16 (WORLD-GEN)
 import {BUNKER_PROP_DEFS, type BunkerKind} from './reactor/complex/bunkerKinds'; // task reactor-expansion-20261101 (lane BUNKER)
+import {SKYWAYS_KITCHEN_PROP_DEFS, type SkywaysKitchenKind} from './skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 
 export type PropKind =
   | 'bench' | 'cabinetTall' | 'cabinetLow' | 'column' | 'crate' | 'bin' | 'fareGate'
@@ -33,7 +34,9 @@ export type PropKind =
   // Iteration 16 (WORLD-GEN): office tower furniture (gen/office/kinds.ts; Meshy office models, procedural fallbacks).
   | OfficeKind
   // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (REACTOR_X_KIT models; gen/reactor/complex/bunkerKinds.ts).
-  | BunkerKind;
+  | BunkerKind
+  // task studio-skyways-level-20261106-054448 (lane FOOD): the Skyways ramen restaurant's range / cookware / sushi mascot (gen/skyways/kitchenKinds.ts).
+  | SkywaysKitchenKind;
 
 /** Purpose props (iteration 05). Holders: see PURPOSE_SURFACES; the rest are furniture/decor. */
 export const PURPOSE_PROP_KINDS = [
@@ -60,8 +63,12 @@ export interface PropDef {
   d: number;
   h: number;
   blocksSight: boolean;
-  /** Rigid-body flags read first by damage/materials.ts propPhysics (iteration 07 generated props). */
-  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh'};
+  /**
+   * Rigid-body flags read first by damage/materials.ts propPhysics (iteration 07 generated props). Task studio-skyways-level-20261106-054448
+   * (lane FOOD): + `onHost` / `contact` and the calibrated `castor` / `pad` contacts (damage/materials.ts PropPhysics / PHYS_MATS) for on-host
+   * decor declared with its kind (gen/skyways/kitchenKinds.ts).
+   */
+  physics?: {mass: number; dynamic: boolean; shape?: 'box' | 'cylinder'; mat?: 'metal' | 'plastic' | 'soft' | 'heavy' | 'wood' | 'glass' | 'stone' | 'cloth' | 'flesh' | 'castor' | 'pad'; onHost?: boolean; contact?: boolean};
 }
 
 export const PROP_DEFS: Record<PropKind, PropDef> = {
@@ -178,6 +185,8 @@ export const PROP_DEFS: Record<PropKind, PropDef> = {
   ...OFFICE_PROP_DEFS,
   // task reactor-expansion-20261101 (lane BUNKER): the Reactor bunker's hero props (real size, gen/reactor/complex/bunkerKinds.ts)
   ...BUNKER_PROP_DEFS,
+  // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's range (collision to its cooktop), stock pot, saucepan, sushi mascot
+  ...SKYWAYS_KITCHEN_PROP_DEFS,
 };
 
 /**

@@ -4,6 +4,7 @@ import type {IconKey} from '../items/items';
 import {GEAR_ICONS} from './gearIcons'; // Iteration 16 (lane GEAR)
 import {MEDICAL_ICONS} from './medicalIcons'; // Iteration 16 (lane INJURY)
 import {MATERIAL_ICONS} from './materialIcons'; // lane RACK (office-props-physics-scale-20261030): crafting materials
+import {SKYWAYS_FOOD_ICONS} from './skywaysFoodIcons'; // task studio-skyways-level-20261106-054448 (lane FOOD): ramen / bento / bubble tea
 
 const S = (body: string) => `<svg viewBox="0 0 64 32" fill="currentColor" aria-hidden="true">${body}</svg>`;
 const DARK = '#15171a';
@@ -41,6 +42,7 @@ export const ICONS: Record<IconKey, string> = {
   ...GEAR_ICONS,
   ...MEDICAL_ICONS,
   ...MATERIAL_ICONS,
+  ...SKYWAYS_FOOD_ICONS, // task studio-skyways-level-20261106-054448 (lane FOOD)
   // task reactor-build-20261101 (lane RESTART): HUD silhouettes (fallback when the 3D icon render is unavailable) — a key on a fob tag;
   // a fuse cartridge lying along X (ceramic body, end caps, blade contacts)
   reactorKey: S(`<rect x="4" y="9" width="20" height="14" rx="4"/><circle cx="9" cy="16" r="2.2" fill="${DARK}" opacity="0.55"/><circle cx="29" cy="16" r="4.5" fill="none" stroke="currentColor" stroke-width="1.6"/><circle cx="38" cy="16" r="5"/><circle cx="38" cy="16" r="1.8" fill="${DARK}" opacity="0.5"/><path d="M42 14.5h18v3h-3v3h-3v-3h-3v3h-3v-3h-6z"/>`),
