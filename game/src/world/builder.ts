@@ -38,6 +38,7 @@ import {SIGN_ATLAS_CONTEXT} from './surfaceNodes';
 import {buildWallDetail} from './wallDetail';
 import {applyStationDecay, archShopMaterial} from './decay';
 import {buildOfficeProp, cutOfficeWindows, isOfficeBuilt} from './officeProps'; // Iteration 16 (WORLD-GEN)
+import {cutSkywaysWindows} from './skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing holes
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
 import {setExteriorRoof} from './exterior'; // Task office-overhaul-20261030 (lane ARCH): roof deck for the outdoor fog / tower shell
 import {levelsOf} from '../gen/levels'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's collision rails
@@ -293,7 +294,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
 
   // --- Walls: union-of-open-columns faces, merged per straight run and level band ----------
   // Iteration 16 (WORLD-GEN): office window spans are cut out of the facade faces (no-op without layout.office).
-  const cutFaces: BuiltFace[] = cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout);
+  // Task studio-skyways-level-20261106-054448 (lane GAS): + the Skyways glazed spans (world/skywaysWindows.ts; no-op without layout.skyways).
+  const cutFaces: BuiltFace[] = cutSkywaysWindows(cutOfficeWindows(extractWallFaces(layout, levels, cols, {tileLowerHeight: mats.tileLowerHeight}), layout), layout);
   // Task office-overhaul-20261030 (lane ARCH): office storey walls get office finishes (drywall, accent, wet-room tile, core, roof).
   const remapped: BuiltFace[] = office ? office.remapFaces(cutFaces, mats.tileLowerHeight) : mall ? mall.remapFaces(cutFaces, mats.tileLowerHeight) : reactor ? reactor.remapFaces(cutFaces) : cutFaces; // (+ reactor: lane ARCH)
   // Track 2 (VIS): where a track tunnel continues a bed, its smooth shell replaces the grid geometry inside the corridor

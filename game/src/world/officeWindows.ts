@@ -52,8 +52,11 @@ export interface WindowPlan {
   collider: Rect2;
 }
 
-/** Plans every window span of the tower (every storey): panes, states, frames, colliders (deterministic per level seed). */
-export function planWindows(info: TowerInfo): WindowPlan[] {
+/**
+ * Plans every window span of the tower (every storey): panes, states, frames, colliders (deterministic per level seed). Task
+ * studio-skyways-level-20261106-054448 (lane GAS): only the spans + seed are read (world/skywaysWindows.ts plans the Skyways glazing).
+ */
+export function planWindows(info: Pick<TowerInfo, 'windows' | 'seed'>): WindowPlan[] {
   return info.windows.map((span, si) => {
     const n = sideNormal(span.side);
     const along: 'x' | 'z' = n[0] === 0 ? 'x' : 'z';
