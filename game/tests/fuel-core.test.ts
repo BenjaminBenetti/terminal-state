@@ -66,7 +66,7 @@ describe('station fuel plans (deterministic per network seed + station id; >= on
   });
 
   it('the base filter / mask loot and the gear weights are untouched (the fuel task adds no loot rows)', () => {
-    expect(MASK_LOOT.levels).toEqual({office: {masks: [1, 2], filters: [2, 5]}, subway: {masks: [0, 1], filters: [0, 2]}, mall: {masks: [1, 2], filters: [2, 5]}, reactor: {masks: [1, 1], filters: [3, 5]}});
+    expect(MASK_LOOT.levels).toEqual({office: {masks: [1, 2], filters: [2, 5]}, subway: {masks: [0, 1], filters: [0, 2]}, mall: {masks: [1, 2], filters: [2, 5]}, reactor: {masks: [1, 1], filters: [3, 5]}, skyways: {masks: [1, 2], filters: [2, 5]}}); // (+ skyways: the Office's roll, task studio-skyways-level-20261106-054448-01)
     expect(GEAR_WEIGHTS).toEqual({armor_vest: 1, chest_rig: 1, backpack: 1.4, helmet: 1, boots: 1, gloves: 1, airtank_backpack: 0.8});
   });
 });
