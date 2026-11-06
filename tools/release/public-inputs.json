@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 48623,
-      "sha256": "c057ea819f9806e012cb0f88df889e6c1bb56231688e7b037983a21af912b5a6"
+      "bytes": 49880,
+      "sha256": "4222864f0eaee8f0dbc1a339dff2c96b94a9a02b43edbdc7879927145dffd6e3"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2041,
-      "sha256": "1c631377982070e2515e0e7f2c1b6710bf9e9e1f267407990bdf05e23f3d13a1"
+      "bytes": 2298,
+      "sha256": "73ca53424184c66caf17ef561c42978c80e62a3703548ef37ae9e36b649233d3"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -1104,6 +1104,26 @@
       "sha256": "701ca9de38625932ad511ae389e7ba38e27173c8d0199967af83b91cedd2ded7"
     },
     {
+      "path": "assets/audio/skyways-arcade-attract-loop.mp3",
+      "bytes": 25495,
+      "sha256": "42a970bc071f48019a8d2cf186b2694fc28753db8622a8e8378439e2f8db834a"
+    },
+    {
+      "path": "assets/audio/skyways-clock-chime.mp3",
+      "bytes": 43258,
+      "sha256": "463a2c7e4a1c8f2b72ea79f11bffd330ad2c8672e1a1f302003b7c1d49b0658a"
+    },
+    {
+      "path": "assets/audio/skyways-clock-tick-loop.mp3",
+      "bytes": 21942,
+      "sha256": "2d024c9380c996c920c611d67440ed0cb8810b71444131e185aefea993a400f1"
+    },
+    {
+      "path": "assets/audio/skyways-projector-loop.mp3",
+      "bytes": 19435,
+      "sha256": "cebf6d3a860a355aaf8fc23ec4f9748a97157ca55c7df7c7dddc5d4b710b4c13"
+    },
+    {
       "path": "assets/audio/step-concrete-run-01-s01.mp3",
       "bytes": 4389,
       "sha256": "d13b56f7b44f89cb28b91b36c1a139928e2a7d33b0195318dd261b015720e10e"
@@ -1652,6 +1672,11 @@
       "path": "assets/derivatives/audio-skyways-car.json",
       "bytes": 6147,
       "sha256": "99fc2e1ea561846af6e9e25293805851325a13b6657480a68fc9587a98e85b9d"
+    },
+    {
+      "path": "assets/derivatives/audio-skyways-destinations.json",
+      "bytes": 6260,
+      "sha256": "58f898cac6f7b7679bbc7bbf74f2a1e2cc60d4681f7ccb58f9f00e78b3fee9a6"
     },
     {
       "path": "assets/derivatives/audio-strainer.json",

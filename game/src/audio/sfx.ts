@@ -146,6 +146,11 @@ export const CUE_GAIN: Record<CueId, number> = {
   // sits in the footsteps' level band at walking pace.
   engineStall: 0.55, fuelPour: 0.42, cartRoll: 0.4,
   carIdle: 0.42, carDrive: 0.5, carSkid: 0.45, carDoor: 0.6, // (task studio-skyways-level-20261106-054448-01: the prize car)
+  // Task studio-skyways-destinations-20261106-170011-01 (lane AUDIO, tools/audio-pipeline/skyways-destinations-build.mjs; LOCATION_AUDIO): the
+  // loops are RMS -20 dBFS under a -1 dBFS peak ceiling (the sparse tick loop is peak-bound: -30.7 dBFS RMS, -26 LUFS), the chime peak
+  // -1 dBFS. The location loops sit in the bed band (under the fans / the cart); the chime is a bell across a court: heard, under a
+  // gunshot. First estimates for the ear pass (derivatives/audio-skyways-destinations.json).
+  clockTick: 0.5, clockChime: 0.7, arcadeAttract: 0.26, projectorRun: 0.22,
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {
@@ -504,6 +509,46 @@ export const CAR_AUDIO = {
   door: {send: 0.15, ref: 2, maxDist: 30},
 } as const;
 
+/**
+ * Task studio-skyways-destinations-20261106-170011-01 (lane AUDIO): LOCATION emitters — a destination's own looping sound where it stands
+ * (the Clock Court's tower movement, the Starfall Arcade's attract mode, the Aurora Picture House's projector; Sound Lab clips, provenance
+ * derivatives/audio-skyways-destinations.json; world/skywaysDestAudio.ts derives the list from layout.skyways). A small sibling of the
+ * nearest-hum emitter / fan channels: Sfx.setLocationEmitters (per section; [] clears; a new world clears) keeps at most `max`; at the
+ * emitter tick the nearest `voices` in their own `range` (and, with a `floorY`, on the listener's storey: feet within `band`) sound — one
+ * channel each (loop -> gain -> panner (inverse law, `ref` per cue) -> the ambient bus: the beds' shot ducking and pause / menu mute),
+ * created from silence when an emitter is first heard and eased in (`tau`), faded out and released (`fadeOut`) when it leaves that set;
+ * at most `voices` sounding + `voices` fading channels exist (an older fading one is cut). Occlusion-free. Level: CUE_GAIN x the
+ * emitter's `gain` x an edge fade over the last `edge` of its range (no pop at the cut-off). The clock CHIME: while the listener hears
+ * a clockTick emitter within `chime.range`, its in-range time counts down — the first strike `chime.firstS` s after first arriving, then
+ * every `chime.minS`..`chime.maxS` s (a sequence seeded by the clock list; never sooner, never stacked) — one clockChime one-shot at the
+ * clock (a bell carries: its own reference distance / range).
+ */
+export type LocationCue = 'clockTick' | 'arcadeAttract' | 'projectorRun';
+export interface LocationEmitter {
+  x: number; y: number; z: number;
+  cue: LocationCue;
+  /** Level multiplier (x CUE_GAIN; 1 = the cue's mix level). */
+  gain: number;
+  /** Audible range (m, 3D). */
+  range: number;
+  /** Optional storey gate: the emitter's floor (absolute m); heard only with the listener's feet within `band` (default LOCATION_AUDIO.band). */
+  floorY?: number;
+  band?: number;
+}
+export const LOCATION_AUDIO = {
+  max: 32, voices: 2, ref: {clockTick: 4, arcadeAttract: 6, projectorRun: 3} as const, rolloff: 1, band: 2.4, edge: 0.25, tau: 0.35, fadeOut: 0.8, eps: 0.004,
+  chime: {range: 25, firstS: [6, 14] as const, minS: 60, maxS: 90, maxStepS: 0.5, ref: 8, rolloff: 1, maxDist: 90, send: 0.5},
+} as const;
+const LOCATION_CUES: ReadonlySet<string> = new Set<LocationCue>(['clockTick', 'arcadeAttract', 'projectorRun']);
+/** A deterministic 0..1 value per (seed, n) (the chime sequence). */
+function hash01(seed: number, n: number): number {
+  let h = (seed ^ Math.imul(n + 1, 0x9e3779b1)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 0x85ebca6b) >>> 0;
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+interface LocationChannel { e: LocationEmitter; src: AudioBufferSourceNode; g: GainNode; v: number; released: number }
+
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
 /**
@@ -553,6 +598,11 @@ export class Sfx {
   private engine: {idle: AudioBufferSourceNode; drive: AudioBufferSourceNode; gi: GainNode; gd: GainNode; pan: PannerNode; rate: number; vi: number; vd: number; revT: number} | null = null;
   private carStats = {starts: 0, stops: 0, revs: 0, skids: 0, doors: 0};
   private skidAt = -Infinity;
+  // Task skyways-destinations-20261106 (lane AUDIO): the location emitters (LOCATION_AUDIO), their channels, the clock chime's countdown
+  private locations: LocationEmitter[] = [];
+  private locCh: LocationChannel[] = [];
+  private locChime = {seed: 0, n: 0, left: Infinity, t: -1};
+  private locStats = {starts: 0, stops: 0, cuts: 0, chimes: 0};
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
@@ -779,7 +829,7 @@ export class Sfx {
         l.setOrientation?.(fx, 0, fz, 0, 1, 0);
       }
     }
-    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); this.updateFans(); this.updateLoops(false); }
+    if (++this.emitterTick >= 12) { this.emitterTick = 0; this.updateEmitter(); this.updateFans(); this.updateLoops(false); this.updateLocations(); } // (+ skyways-destinations lane AUDIO: the location emitters)
   }
 
   /**
@@ -787,7 +837,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); this.stopCarEngine(0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble; lane CAR2: the car engine
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); this.stopCarEngine(0.05); this.setLocationEmitters([], 0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble; lane CAR2: the car engine; skyways-destinations (lane AUDIO): the location emitters
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -2070,6 +2120,120 @@ export class Sfx {
   carAudioState(): {engine: boolean; rate: number; idle: number; drive: number; starts: number; stops: number; revs: number; skids: number; doors: number} {
     const e = this.engine;
     return {engine: !!e, rate: e?.rate ?? 0, idle: e?.vi ?? 0, drive: e?.vd ?? 0, ...this.carStats};
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-skyways-destinations-20261106-170011-01 (lane AUDIO): LOCATION emitters (LOCATION_AUDIO)
+
+  /**
+   * This section's location emitters (copied; invalid entries dropped; at most LOCATION_AUDIO.max). Every sounding channel fades out
+   * (`fadeS`) — the next emitter tick picks again — and the clock chime's countdown restarts for the new clock list. [] = none.
+   */
+  setLocationEmitters(list: readonly LocationEmitter[], fadeS: number = LOCATION_AUDIO.fadeOut): void {
+    const ok = (e: LocationEmitter) => LOCATION_CUES.has(e.cue) && [e.x, e.y, e.z, e.gain, e.range].every(Number.isFinite) && e.range > 0 && e.gain >= 0;
+    this.locations = list.filter(ok).slice(0, LOCATION_AUDIO.max).map(e => ({...e}));
+    for (const c of this.locCh) this.releaseLocation(c, fadeS);
+    const clocks = this.locations.filter(e => e.cue === 'clockTick');
+    const C = LOCATION_AUDIO.chime, s = this.locChime;
+    s.seed = clocks.reduce((h, e) => Math.imul(h ^ Math.round(e.x * 10) ^ (Math.round(e.z * 10) << 11), 16777619) >>> 0, 2166136261);
+    s.n = 0;
+    s.left = clocks.length ? C.firstS[0] + (C.firstS[1] - C.firstS[0]) * hash01(s.seed, 0) : Infinity;
+    s.t = -1;
+    this.emitterTick = 99;
+  }
+
+  /** An emitter the listener can hear from here: its storey gate (feet within the band of its floor), then its distance (null = not). */
+  private locHeard(e: LocationEmitter, feetY: number): number | null {
+    if (e.floorY !== undefined && Math.abs(feetY - e.floorY) > (e.band ?? LOCATION_AUDIO.band)) return null;
+    const d = this.dist(e);
+    return d < e.range ? d : null;
+  }
+
+  /** The emitter tick: point channels at the nearest audible emitters, ease their levels, run the clock chime's countdown. */
+  private updateLocations(): void {
+    const ctx = this.ctx, bus = this.ambBus;
+    if (!ctx || !bus) return;
+    const A = LOCATION_AUDIO, t = ctx.currentTime, feet = this.listener.y - FAN_EYE_H;
+    this.locCh = this.locCh.filter(c => c.released < 0 || t < c.released + A.fadeOut + 0.1);
+    if (!this.locations.length && !this.locCh.length) return;
+    const near: {e: LocationEmitter; d: number}[] = [];
+    for (const e of this.locations) { const d = this.locHeard(e, feet); if (d !== null) near.push({e, d}); }
+    near.sort((p, q) => p.d - q.d);
+    const picks = near.slice(0, A.voices), keep = new Set(picks.map(p => p.e));
+    for (const c of this.locCh) if (c.released < 0 && !keep.has(c.e)) this.releaseLocation(c, A.fadeOut);
+    for (const {e, d} of picks) {
+      let c = this.locCh.find(q => q.e === e && q.released < 0);
+      if (!c) {
+        if (!this.bank.has(e.cue)) continue; // not decoded yet: silent until it is (no silent-play count per tick)
+        const fading = this.locCh.filter(q => q.released >= 0);
+        if (fading.length >= A.voices) { // bounded: the oldest fading channel is cut now
+          const old = fading[0];
+          old.g.gain.cancelScheduledValues(t);
+          old.g.gain.setTargetAtTime(0, t, 0.01);
+          try { old.src.stop(t + 0.04); } catch { /* already stopped */ }
+          this.locCh.splice(this.locCh.indexOf(old), 1);
+          this.locStats.cuts++;
+        }
+        const clip = this.bank.pick(e.cue);
+        if (!clip) continue;
+        const src = ctx.createBufferSource();
+        src.buffer = clip.buffer;
+        src.loop = true;
+        const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+        src.loopStart = a;
+        src.loopEnd = b;
+        const g = ctx.createGain();
+        g.gain.value = 0;
+        const pan = this.makePanner(ctx, false, A.ref[e.cue], A.rolloff);
+        this.setPannerPos(pan, e.x, e.y, e.z);
+        src.connect(g).connect(pan).connect(bus);
+        const nodes: AudioNode[] = [src, g, pan];
+        src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
+        src.start(t, a + Math.random() * Math.max(0, b - a));
+        this.soundsStarted++;
+        this.locStats.starts++;
+        c = {e, src, g, v: -1, released: -1};
+        this.locCh.push(c);
+      }
+      const edge = clamp01((e.range - d) / Math.max(0.5, A.edge * e.range));
+      const v = CUE_GAIN[e.cue] * e.gain * AMBIENT_LEVEL * edge;
+      if (Math.abs(v - c.v) < A.eps) continue;
+      c.v = v;
+      c.g.gain.cancelScheduledValues(t);
+      c.g.gain.setTargetAtTime(v, t, A.tau);
+    }
+    // the clock chime: in-range time counts down (paused audio: nothing counts, nothing strikes)
+    const C = A.chime, s = this.locChime;
+    const dt = s.t < 0 ? 0 : Math.min(C.maxStepS, Math.max(0, t - s.t));
+    s.t = t;
+    if (!this.live || !Number.isFinite(s.left)) return;
+    let clock: LocationEmitter | null = null, bd: number = C.range;
+    for (const e of this.locations) if (e.cue === 'clockTick') { const d = this.locHeard(e, feet); if (d !== null && d < bd) { bd = d; clock = e; } }
+    if (!clock) return;
+    s.left -= dt;
+    if (s.left > 0) return;
+    s.left = C.minS + (C.maxS - C.minS) * hash01(s.seed, ++s.n);
+    const v = this.voice({at: clock, send: C.send, pri: 1, ref: C.ref, rolloff: C.rolloff, maxDist: C.maxDist, occlude: false});
+    if (this.play(v, 'clockChime', {jitter: 0.01, gainJitter: 0.5})) this.locStats.chimes++;
+  }
+
+  /** A location channel fades out (`fadeS`) and its loop stops (kept in the list until the fade ends: the fading bound). Plays nothing. */
+  private releaseLocation(c: LocationChannel, fadeS: number): void {
+    if (c.released >= 0) return;
+    const ctx = this.ctx;
+    c.released = ctx?.currentTime ?? 0;
+    this.locStats.stops++;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    c.g.gain.cancelScheduledValues(t);
+    c.g.gain.setTargetAtTime(0, t, f / 3);
+    try { c.src.stop(t + f + 0.05); } catch { /* already stopped */ }
+  }
+
+  /** QA / tests: the location emitters' live state (emitters, sounding / fading channels and their cues, the chime countdown, counters). */
+  locationAudioState(): {emitters: number; sounding: LocationCue[]; fading: number; chimeIn: number; starts: number; stops: number; cuts: number; chimes: number} {
+    const live = this.locCh.filter(c => c.released < 0);
+    return {emitters: this.locations.length, sounding: live.map(c => c.e.cue), fading: this.locCh.length - live.length, chimeIn: this.locChime.left, ...this.locStats};
   }
 
   /** Cut a one-shot voice that may still be sounding (stall / pour): its sources fade over `fadeS` and stop. */
