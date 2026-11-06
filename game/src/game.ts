@@ -312,7 +312,11 @@ export class Game {
    */
   readonly pointerHandlers: (() => boolean)[] = [];
   /** Per-section build hooks: `build` after a section's world is built (before warm-up), `teardown` before it is torn down. */
-  readonly sectionHooks: {build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
+  /**
+   * … `holders` (task fuel-feedback, world/fuelStations.ts): runs right after the loot holders are built — before the shelf filler is
+   * dressed around their lots and before the section memory removes the taken ones (extra lots that must behave like rolled loot).
+   */
+  readonly sectionHooks: {holders?(layout: Iter16Layout): void; build?(layout: Iter16Layout): void; teardown?(): void}[] = [];
   /** Aim offset (radians) added to the camera every frame (lane INJURY: restrained arm-injury sway). Shots use the camera, so it is honest. */
   readonly aimOffset = {yaw: 0, pitch: 0};
   /** Per-frame lane updates while playing (after the player moved, before the camera update). */
@@ -846,6 +850,7 @@ export class Game {
     // Searchable cabinets/crates; loot is rolled from the station seed + container index.
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
     this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
+    for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
@@ -2319,8 +2324,15 @@ export class Game {
       if (!g.passable(...g.cellOf(x, z)) || Math.abs(g.floorAt(x, z) - p.y) > 0.45 || !g.lineOfSight(p.x, p.z, x, z)) { x = p.x; z = p.z; }
       y = g.stepAt(x, z);
     }
-    this.pickups.add(st, x, y, z, p.yaw);
-    this.hud.toast(`Dropped ${st.count > 1 ? `${st.count} × ` : ''}${itemDef(st.itemId).short}`);
+    const n = st.count;
+    if (st.itemId === FUEL.canItem && n > 1) {
+      // task fuel-feedback: fuel cans lie as SINGLE cans (one visible can = one can; the quantity kept exactly), back towards the player
+      const fl = Math.hypot(f.x, f.z) || 1, bx = -f.x / fl * 0.26, bz = -f.z / fl * 0.26;
+      st.count = 1;
+      this.pickups.add(st, x, y, z, p.yaw);
+      for (let k = 1; k < n; k++) { const one = this.inv.makeStack(FUEL.canItem, 1); one.count = 1; this.pickups.add(one, x + bx * k, y, z + bz * k, p.yaw); }
+    } else this.pickups.add(st, x, y, z, p.yaw);
+    this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
     this.syncHeld();
   }
 

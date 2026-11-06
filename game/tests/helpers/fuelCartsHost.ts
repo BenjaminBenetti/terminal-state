@@ -78,7 +78,7 @@ function baseHost(levels: Levels, layout: StationLayout | null, placement: Train
     },
     hud: {toast: (t: string) => { toasts.push(t); }}, toasts, sfxCalls, pools,
     warmRegistry: warm, physics: {propsChanged: () => {}},
-    interactHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[], sectionHooks: [] as {build?(l: never): void; teardown?(): void}[],
+    interactHandlers: [] as (() => boolean)[], frameHooks: [] as ((dt: number) => void)[], sectionHooks: [] as {holders?(l: never): void; build?(l: never): void; teardown?(): void}[],
     promptProviders: [] as (() => string | null)[], stateListeners: [] as ((s: never, p: never) => void)[], sectionPreloads: [] as ((l: never) => Promise<void>)[],
     inputOwners: [] as (() => boolean)[], modifierSources: [] as (() => {speedMult?: number})[], hitListeners: [] as ((h: never) => void)[],
     bulletHitHandlers: [] as never[],
@@ -109,10 +109,11 @@ export function stationHost(L: StationLayout, opts: {build?: boolean} = {}) {
   return {h, carts, rt, ride};
 }
 
-/** Game.buildSection's tail: the level fields, then every section hook; the player at the train spawn. */
+/** Game.buildSection's tail: the level fields, then every section hook (holders phase, then build); the player at the train spawn. */
 export function build(h: CartTestHost & {layout?: StationLayout | null}, L: StationLayout, spawn = true): void {
   const levels = levelsOf(L);
   Object.assign(h, {layout: L, levels, propIndex: new PropIndex(levels, L.props), trainPlacement: playerTrainPlacement(L)});
+  for (const s of h.sectionHooks) s.holders?.(L as never); // (Game: right after the loot holders are built — task fuel-feedback)
   for (const s of h.sectionHooks) s.build?.(L as never);
   if (spawn && h.trainPlacement && !h.trainRide?.riding) {
     const pose = trainSpawnPose(L, h.trainPlacement);

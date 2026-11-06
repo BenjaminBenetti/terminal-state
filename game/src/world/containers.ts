@@ -567,8 +567,21 @@ export class ContainerManager {
         }
       }
     }
+    this.built = layout;
+    this.allocateDisplay(layout, counts);
+    this.lastEye.set(layout.playerSpawn.x, 1.6, layout.playerSpawn.z);
+    this.dirty = true;
+    this.group.updateMatrixWorld(true);
+  }
+
+  /** The layout of the last build (addLots re-allocates the display for it). */
+  private built: StationLayout | null = null;
+
+  /** (Re)allocates the loot display for `counts` (lots per item id) of this station's holders. */
+  private allocateDisplay(layout: StationLayout, counts: Map<string, number>): void {
     // Task mall-round2-20261031 (lane PERF, M05): in the mall the loot display batches per (item, storey) + one all-storey batch,
     // frustum-bounded and registered with the level culler (world/lootDisplay.ts); elsewhere one unbounded batch per item as before
+    const byStorey = !!(layout as {mall?: unknown}).mall || !!(layout as {reactor?: unknown}).reactor;
     if (byStorey) {
       const perStorey = new Map<string, Set<number>>();
       for (const h of this.all) for (const l of h.state.lots) {
@@ -582,9 +595,37 @@ export class ContainerManager {
       this.display.storeyOf = null;
       this.display.allocate(counts);
     }
-    this.lastEye.set(layout.playerSpawn.x, 1.6, layout.playerSpawn.z);
-    this.dirty = true;
-    this.group.updateMatrixWorld(true);
+  }
+
+  /**
+   * Task studio-beta-fuel-feedback-20261106-064128-01: extra lots placed in holders' FREE room right after build (before the shelf
+   * filler and the section memory: world/fuelStations.ts fuel cans, gen/fuelHolders.ts). Each lot id must be new for its holder (the
+   * rolled lots, their ids and streams are untouched). The holders' lot transforms are re-placed and the display re-allocated (before
+   * the warm-up). Returns the lots added.
+   */
+  addLots(adds: readonly {holder: Holder; lots: readonly Lot[]}[]): number {
+    let n = 0;
+    for (const {holder: h, lots} of adds) {
+      const ids = new Set(h.state.lots.map(l => l.id));
+      let k = 0;
+      for (const l of lots) {
+        if (ids.has(l.id)) continue;
+        ids.add(l.id);
+        h.state.lots.push({...l});
+        k++;
+      }
+      if (!k) continue;
+      h.state.rolled += k;
+      this.placeLots(h);
+      n += k;
+    }
+    if (n && this.built) {
+      const counts = new Map<string, number>();
+      for (const h of this.all) for (const l of h.state.lots) counts.set(l.itemId, (counts.get(l.itemId) ?? 0) + 1);
+      this.allocateDisplay(this.built, counts);
+      this.dirty = true;
+    }
+    return n;
   }
 
   /** Vending spill lots that would land inside a wall are pulled back against the machine. */
