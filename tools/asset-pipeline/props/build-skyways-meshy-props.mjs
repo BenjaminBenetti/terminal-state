@@ -10,7 +10,7 @@
 //   gen/raw/meshy-<asset>-<taskId>.glb   the immutable raw originals (read-only)
 // and writes deterministically:
 //   game/public/assets/models/skyways-<asset>.glb          plain glTF binary (no Draco / meshopt / KTX2): one node / mesh / primitive / material
-//   game/public/assets/derivatives/skyways-<asset>.json    provenance (Meshy task id, ledger rows, input / raw sha256; no URLs / tokens)
+//   game/public/assets/derivatives/skyways-<asset>-model.json    provenance (Meshy task id, ledger rows, input / raw sha256; no URLs / tokens)
 //   game/src/assets/skywaysMeshyProps.generated.ts         SKYWAYS_MESHY_PROPS {url, w, h, d, tris (+ deckY / topY / ringY)} (three-free)
 //   tools/release/public-inputs.json                       ONLY this script's entries added / updated (others untouched)
 //
@@ -264,7 +264,7 @@ function plateau(hm, minY = -Infinity) {
 // ---------- build ----------
 const outRows = [];
 for (const row of ROWS) {
-  const id = `skyways-${row.asset}`, url = `assets/models/${id}.glb`, provRel = `assets/derivatives/${id}.json`;
+  const id = `skyways-${row.asset}`, url = `assets/models/${id}.glb`, provRel = `assets/derivatives/${id}-model.json`; // (lead: '-model' — skyways-con-stage.json is the stage ART atlas's provenance)
   const rec = records(row.asset);
   const src = await readSource(rec);
   const srcB = boundsOf(src.m.P);

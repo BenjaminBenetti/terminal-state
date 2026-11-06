@@ -1944,12 +1944,12 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
-      "path": "assets/derivatives/skyways-car-dash.json",
+      "path": "assets/derivatives/skyways-car-dash-model.json",
       "bytes": 6420,
       "sha256": "fe6dd14f3df30c13b912e04697312e98a6ee5286ac7b1edbb0e54cd2dbc45c04"
     },
     {
-      "path": "assets/derivatives/skyways-car-seat.json",
+      "path": "assets/derivatives/skyways-car-seat-model.json",
       "bytes": 6335,
       "sha256": "de367a879fc274be97b8a8806e9caa3b16d688d6ec7d0a7a2c136b54328fe57a"
     },
@@ -1964,17 +1964,17 @@
       "sha256": "efdf512116eb976d5e538b0edbcdf0368fd70bba2f34cf0f3144f2dec0e3e05e"
     },
     {
-      "path": "assets/derivatives/skyways-con-figure-box.json",
+      "path": "assets/derivatives/skyways-con-figure-box-model.json",
       "bytes": 6544,
       "sha256": "cd21fed992a6ef95e7c368c3a4bef3b58921411171fa76cbc482b5027187d43b"
     },
     {
-      "path": "assets/derivatives/skyways-con-merch-table.json",
+      "path": "assets/derivatives/skyways-con-merch-table-model.json",
       "bytes": 6841,
       "sha256": "28745e570469e8c1e253a0f059051638463a15f5de1f1aa144cee6437cf885d7"
     },
     {
-      "path": "assets/derivatives/skyways-con-plush.json",
+      "path": "assets/derivatives/skyways-con-plush-model.json",
       "bytes": 6504,
       "sha256": "dbf88e470b9cc9027657ac31bfa28bfa6773aef0d246c1472b606c7672eee49f"
     },
@@ -1989,9 +1989,9 @@
       "sha256": "1f9f33a922a8571f4b48754e9c52589b5474c4a3536c04fa756547517922bb26"
     },
     {
-      "path": "assets/derivatives/skyways-con-stage.json",
-      "bytes": 2613,
-      "sha256": "40533fbd1d4b7a8202bedcea6306e6ded3e7222d7a3a21f0bc469603050587a7"
+      "path": "assets/derivatives/skyways-con-stage-model.json",
+      "bytes": 6720,
+      "sha256": "9dd818c9020e2f52bd27ebeabd6702181d3275a451622657cd3db7f56ec6688c"
     },
     {
       "path": "assets/derivatives/skyways-mascot-poses.json",
@@ -2009,7 +2009,7 @@
       "sha256": "9db1a2d612e6f0ee982617794780b33f8cf4a38c6d8e22941ed85bc26fa98a57"
     },
     {
-      "path": "assets/derivatives/skyways-prize-stanchion.json",
+      "path": "assets/derivatives/skyways-prize-stanchion-model.json",
       "bytes": 7013,
       "sha256": "07147b0c7a0862333c3afea841b84388400e84015b2a8558d5114c131089c1a0"
     },

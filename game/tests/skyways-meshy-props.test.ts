@@ -67,7 +67,7 @@ describe('Skyways Meshy T2.5 props (lane ASSET-D)', () => {
 
   for (const row of ROWS) {
     it(`${row.id}: real size, grounded / centred, budget, Meshy maps kept, registry, provenance and allowlist`, async () => {
-      const url = `assets/models/${row.id}.glb`, provRel = `assets/derivatives/${row.id}.json`;
+      const url = `assets/models/${row.id}.glb`, provRel = `assets/derivatives/${row.id}-model.json`;
       const {bytes, root, prim, P} = await load(url);
       const provBytes = readFileSync(pub(provRel));
       const prov = JSON.parse(provBytes.toString());
