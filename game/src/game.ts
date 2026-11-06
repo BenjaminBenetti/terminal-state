@@ -77,6 +77,7 @@ import type {FuelCartsLike} from './fuel/trainPort'; // task train-fuel-system: 
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
 import {installFuelPort, type FuelPortSystem} from './world/fuelPort'; // task train-fuel-system (lane PORT): the train's fuel cap (pour a fuel can), HUD fuel readout
 import {preloadFuelCanModel} from './world/fuelCanModel'; // task train-fuel-system (lane PORT): the delivered fuel-can GLB
+import {installFuelCarts, type FuelCarts} from './world/fuelCarts'; // task train-fuel-system (lane CART): fuel carts — push / grab, hose to the fuel cap, station / train cargo ownership
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
@@ -326,6 +327,8 @@ export class Game {
   readonly gasMask: GasMaskSystem;
   /** Task train-fuel-system (lane PORT): the train's fuel cap — E pours one fuel can into the tank; the HUD fuel readout (world/fuelPort.ts). */
   readonly fuelPort: FuelPortSystem;
+  /** Task train-fuel-system (lane CART): the fuel carts in the world — push / grab, the hose, cargo riding the train (world/fuelCarts.ts). */
+  fuelCarts!: FuelCarts;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
   readonly stalls: StallSystem;
   /** Iteration 16 (lane INJURY): limb injuries (player/injuries.ts) — RUN carries snapshot() / restore(), NewGame calls reset(). */
@@ -546,6 +549,8 @@ export class Game {
     this.fuelStations = installFuelStations(this); // task train-fuel-system: realize each campaign station's fuel once; the map's figures
     hookName('gasMask');
     this.fuelPort = installFuelPort(this); hookName('fuelPort'); // task train-fuel-system (lane PORT)
+    this.fuelCarts = installFuelCarts(this); // task train-fuel-system (lane CART)
+    hookName('fuelCarts');
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
     this.tower = installTower(this); // Iteration 16 (lane TOWER): section hooks, frame hook (doors / collision / exterior), E + prompts, preload, warm-up pool
@@ -1319,7 +1324,7 @@ export class Game {
   mapFuel(): MapFuel {
     return {
       node: id => this.fuelStations.nodeFuel(id),
-      aboard: () => reservesOf(this.playerTrain.fuel.tank, this.fuelCarts()?.aboard() ?? [], this.playerTrain.lockbox.slots),
+      aboard: () => reservesOf(this.playerTrain.fuel.tank, this.fuelCartsLike()?.aboard() ?? [], this.playerTrain.lockbox.slots),
       cost: hops => routeCost(hops, !!this.run.campaign?.cheat),
     };
   }
@@ -1386,10 +1391,10 @@ export class Game {
     // reserved NOW (before the doors close): nothing drawn here can be taken out of the chest / a cart while the car leaves
     const debit = fuel.debit;
     this.playerTrain.fuel.tank = applyDebit(debit, this.playerTrain.fuel.tank, fuel.carts, this.playerTrain.lockbox.slots);
-    this.fuelCarts()?.captureCargo();
+    this.fuelCartsLike()?.captureCargo();
     // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
     const d = await this.trainRide.depart({route: plan.route});
-    if (d.status !== 'in-tunnel') { this.fuelCarts()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    if (d.status !== 'in-tunnel') { this.fuelCartsLike()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
     if (fuel.cost) this.hud.toast(`${plan.hops > 1 ? `${plan.hops} stops` : 'One stop'}: ${tanksText(fuel.cost)} of fuel burnt`);
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
@@ -1435,7 +1440,7 @@ export class Game {
   }
 
   /** Task train-fuel-system: the world's fuel carts (world/fuelCarts.ts), if installed. */
-  private fuelCarts(): FuelCartsLike | null {
+  private fuelCartsLike(): FuelCartsLike | null {
     const c = (this as unknown as {fuelCarts?: Partial<FuelCartsLike>}).fuelCarts;
     return c && typeof c.aboard === 'function' && typeof c.departBlock === 'function' && typeof c.captureCargo === 'function' && typeof c.releaseCargo === 'function' ? c as FuelCartsLike : null;
   }
@@ -1446,7 +1451,7 @@ export class Game {
    */
   fuelCheck(hops: number): {ok: true; cost: number; debit: FuelDebit; carts: CartFuel[]} | {ok: false; error: string} {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
-    const carts = this.fuelCarts();
+    const carts = this.fuelCartsLike();
     const block = carts?.departBlock() ?? null;
     if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;

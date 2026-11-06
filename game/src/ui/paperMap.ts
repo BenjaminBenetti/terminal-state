@@ -299,8 +299,10 @@ export function fuelBarSvg(p: Pt, r: number, units: number, source: 'planned' | 
   const o: string[] = [`<g class="pm-fuel pm-fuel-${source}" data-units="${units}">`];
   for (let k = 0; k < FUEL_BAR.tanks; k++) {
     const sx = x0 + k * (segW + 1.2), f = Math.max(0, Math.min(1, (units - k * 4) / 4));
-    o.push(`<rect x="${n1(sx)}" y="${n1(y0)}" width="${n1(segW)}" height="${FUEL_BAR.h}" rx="0.8" fill="none" stroke="#3a3028" stroke-width="0.8"/>`);
-    if (f > 0) o.push(`<rect x="${n1(sx + 0.5)}" y="${n1(y0 + 0.5)}" width="${n1(Math.max(0.6, (segW - 1) * f))}" height="${n1(FUEL_BAR.h - 1)}" fill="${source === 'planned' ? '#8a6f2c' : '#3f6b3a'}"${source === 'planned' ? ' opacity="0.7"' : ''}/>`);
+    o.push(`<rect x="${n1(sx)}" y="${n1(y0)}" width="${n1(segW)}" height="${FUEL_BAR.h}" rx="0.8" fill="none" stroke="#3a3028" stroke-width="0.8"></rect>`);
+    // (no template fragment may start with '/': tools/release/package-ci.mjs reads it as a root-absolute URL)
+    const look = source === 'planned' ? 'fill="#8a6f2c" opacity="0.7"' : 'fill="#3f6b3a"';
+    if (f > 0) o.push(`<rect x="${n1(sx + 0.5)}" y="${n1(y0 + 0.5)}" width="${n1(Math.max(0.6, (segW - 1) * f))}" height="${n1(FUEL_BAR.h - 1)}" ${look}></rect>`);
   }
   if (units > FUEL_BAR.tanks * 4) o.push(`<text x="${n1(x0 + FUEL_BAR.w + 1.6)}" y="${n1(y0 + FUEL_BAR.h)}" font-size="6.5">+</text>`);
   o.push('</g>');
