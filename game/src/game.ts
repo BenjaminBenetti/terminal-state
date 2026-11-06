@@ -136,6 +136,7 @@ import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerT
 import {SKYWAYS_KITCHEN_MODEL_FILES, skywaysKitchenModelKeysFor} from './gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_MODEL_FILES, skywaysAddonModelKeysFor} from './gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {installSkywaysAddon, type SkywaysAddonRuntime} from './world/skywaysAddonRuntime'; // (lane ADDON) art atlases, turntable, velvet ropes
+import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
@@ -724,7 +725,10 @@ export class Game {
   /** Generate a section of `run` (levels/registry.ts; the section's gear from the run's level-wide roll). Deterministic. */
   generateSection(key: SectionKey, run: RunState = this.run): StationLayout {
     this.lifecycleCounts.generate++;
-    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key)}); // (campaign: the node's own seed)
+    // (task studio-skyways-destinations-20261106-170011-01) a Skyways station regenerates with the layout version it was first built with
+    const layoutVersion = key.level === 'skyways' ? skywaysLayoutVersionFor(run.peekMemory(key)) : undefined;
+    const layout = LEVELS[key.level].generate(key.section, {levelSeed: run.seedFor(key), startWeapon: this.startWeapon, gear: run.gearFor(key), ...(layoutVersion !== undefined ? {layoutVersion} : {})}); // (campaign: the node's own seed)
+    if (layoutVersion !== undefined && run.laneStore(SKYWAYS_LAYOUT_LANE, key) === undefined) run.setLaneStore(SKYWAYS_LAYOUT_LANE, {v: layoutVersion}, key);
     const node = key.station ? run.node(key.station) : null;
     if (node) adoptStationName(layout, node.name); // campaign: the map's / save's name is the one on the signs and the HUD
     return layout;

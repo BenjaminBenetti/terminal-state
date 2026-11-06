@@ -143,7 +143,7 @@ const FAMILIES: Record<SkywaysFamily, {cols: number; rows: number; lots: [number
  * The city frame of a level seed. `salt` > 0 re-rolls the free parameters (sizes, lots, offsets, bridge picks, plans) for a retry;
  * the family, the add-on and its storey stay those of the seed.
  */
-export function skywaysFrame(levelSeed: number, salt = 0): SkywaysFrame {
+export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolean} = {}): SkywaysFrame {
   const seed = skywaysSeed(levelSeed);
   const shape = new Rng(hashString('skyways:shape', seed));
   const rng = new Rng(salt ? hashString(`skyways:frame:${salt}`, seed) : hashString('skyways:frame', seed));
@@ -262,7 +262,8 @@ export function skywaysFrame(levelSeed: number, salt = 0): SkywaysFrame {
   // Atriums: one or two other hubs (court plan); the prize-car host's display hall needs its floor (no atrium there).
   const others = rng.shuffle(buildings.filter(q => q.id !== host.id && q.id !== station.id));
   // (destinations pass: one to three atrium courts — the landmark courts under the glass)
-  const nHub = Math.min(others.length, rng.int(1, 3));
+  // (legacy = layout version 1: GAME76's one or two)
+  const nHub = Math.min(others.length, rng.int(1, opts.legacy ? 2 : 3));
   for (let i = 0; i < nHub; i++) { others[i].role = 'hub'; others[i].atrium = true; }
   // Bridges: width (cells) — at least 5.5 m wherever the prize car may drive (every bridge: the car roams the skyway level); now and
   // then a WIDE gallery bridge (7.5-9 m); a lateral preference along the two buildings' shared span

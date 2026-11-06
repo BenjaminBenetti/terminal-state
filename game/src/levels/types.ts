@@ -62,6 +62,11 @@ export interface SectionGenContext {
    * Task gasmask-breach-20261030 (mask lane): followed by the level's gas masks (with their seeded `filter` seconds) and filters.
    */
   gear?: readonly {itemId: string; filter?: number}[];
+  /**
+   * Task studio-skyways-destinations-20261106-170011-01: the generator version a station regenerates with (Skyways only:
+   * gen/skyways/layoutVersion.ts — a station entered under an older build keeps its layout). Absent = the current version.
+   */
+  layoutVersion?: number;
 }
 
 /**
