@@ -283,6 +283,10 @@ describe('skyways glazing: the plan, the builder cut, the runtime', () => {
     expect(rt.gasSource()).toBe(null);
     build();
     expect(rt.glazing).not.toBe(null);
+    // the level's architecture may take the reveals over per storey (null: it builds them itself — never coplanar duplicates)
+    rt.revealMaterial = lv => (lv === 1 ? null : mats.get('concrete'));
+    build();
+    expect(rt.glazing!.reveals.map(m => [m.userData.level, (m.material as THREE.Material) === mats.get('concrete')])).toEqual([[2, true]]);
   });
 });
 

@@ -10,7 +10,8 @@
 //    AGE_CAP_S through the restore / fast-forward path (world/gas/system.ts) — the bridge is already gassed at arrival; a revisit
 //    restores the saved record (lane store SKYWAYS_WINDOWS_LANE 'skyways.windows', per-station memory) and never seeds twice;
 //  - build (sectionHooks, before GAS): buildWindows' merged per-storey meshes (pre-built intact / cracked / broken looks of every
-//    breakable pane, switched by setPaneLook), the reveals over the wall thickness (head soffit, sill, jambs in the wall paint),
+//    breakable pane, switched by setPaneLook), the reveals over the wall thickness (head soffit, sill, jambs; `revealMaterial`: the
+//    station wall paint unless the level's architecture supplies its storey finish, null = it builds its own reveals),
 //    shadows marked, registered with the storey culler (userData.level) and the warm-up; disposed on teardown. The window-glass
 //    texture (lane ASSETS' T6, an existing approved texture; the procedural cracked fallback until it arrives) is preloaded;
 //  - the wall holes: cutSkywaysWindows (world/builder.ts, beside cutOfficeWindows; no-op without layout.skyways) cuts the spans out
@@ -153,8 +154,11 @@ class RevealQuads {
   }
 }
 
-/** The reveals of every span over its wall thickness (head soffit, sill top, jambs): one mesh per storey in `mat`. */
-export function buildSkywaysReveals(spans: readonly CutSpan[], mat: THREE.Material, scale: {u: number; v: number}): THREE.Mesh[] {
+/**
+ * The reveals of every span over its wall thickness (head soffit, sill top, jambs): one mesh per storey in `matOf(level)` (null: no
+ * reveals on that storey).
+ */
+export function buildSkywaysReveals(spans: readonly CutSpan[], matOf: (level: number) => THREE.Material | null, scale: {u: number; v: number}): THREE.Mesh[] {
   const byLevel = new Map<number, RevealQuads>();
   for (const w of spans) {
     let q = byLevel.get(w.level);
@@ -173,8 +177,8 @@ export function buildSkywaysReveals(spans: readonly CutSpan[], mat: THREE.Materi
   }
   const out: THREE.Mesh[] = [];
   for (const [lv, q] of [...byLevel].sort((a, b) => a[0] - b[0])) {
-    const g = q.geometry();
-    if (!g) continue;
+    const mat = matOf(lv), g = mat ? q.geometry() : null;
+    if (!mat || !g) continue;
     const m = new THREE.Mesh(g, mat);
     m.name = 'skyways-window-reveals';
     m.userData.level = lv;
@@ -189,7 +193,6 @@ export function buildSkywaysReveals(spans: readonly CutSpan[], mat: THREE.Materi
 /** What the runtime needs from Game (structural: tests drive it with a fake host). */
 export interface SkywaysWindowsHost {
   scene: THREE.Scene;
-  layout: StationLayout;
   mats: WorldMaterials;
   player: {x: number; z: number; y: number; radius: number; alive: boolean};
   zombies: readonly {brain: {x: number; z: number; y: number; alive: boolean; stats: {radius: number}}; ragdolled?: boolean}[];
@@ -218,6 +221,11 @@ export class SkywaysWindowRuntime {
   glazing: SkywaysGlazing | null = null;
   /** Counters (QA / tests): builds, collider push-outs. */
   readonly counts = {builds: 0, pushes: 0};
+  /**
+   * The reveals' material per storey (default: the station wall paint). The level's architecture may supply its storey wall finish,
+   * or return null where it builds the reveals itself (never both: coplanar duplicates).
+   */
+  revealMaterial: (level: number) => THREE.Material | null = () => this.host.mats.get('paint');
   private glassTex: THREE.Texture | null | undefined = undefined;
   private loading: Promise<void> | null = null;
 
@@ -250,7 +258,7 @@ export class SkywaysWindowRuntime {
     const plans = planSkywaysWindows(info, layout.seed);
     const view = buildWindows(plans, h.mats, this.glassTex ?? null);
     view.root.name = 'skyways-windows';
-    const reveals = buildSkywaysReveals(info.windows, h.mats.get('paint'), h.mats.scale.paint);
+    const reveals = buildSkywaysReveals(info.windows, lv => this.revealMaterial(lv), h.mats.scale.paint);
     const root = new THREE.Group();
     root.name = 'skyways-glazing';
     root.add(view.root);
