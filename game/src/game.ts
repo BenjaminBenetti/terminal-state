@@ -71,6 +71,9 @@ import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifi
 import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
+import {installFuelStations, type FuelStations} from './world/fuelStations'; // task train-fuel-system: the stations' finite fuel (plans realized once; map figures)
+import {FUEL, applyDebit, planDebit, refundDebit, reservesOf, routeCost, tanksText, type CartFuel, type FuelDebit} from './fuel/fuel'; // task train-fuel-system
+import type {FuelCartsLike} from './fuel/trainPort'; // task train-fuel-system: the carts aboard as the departure sees them (world/fuelCarts.ts)
 import {installGasMask, type GasMaskSystem} from './gear/gasMask'; // Task gasmask-breach-20261030 (mask lane): gas mask on / off (Q), filters (+ the first-person mask view, gear/maskView.ts)
 import {MaskView} from './gear/maskView'; // Task gas-mask-roof-feedback-20261030 (item 4): first-person view through the real mask's visor
 import {installStalls, type StallSystem} from './world/stalls'; // Task office-overhaul-20261030 (lane INTERACT, #13): stall doors, walk-in collision, toilet loot
@@ -107,7 +110,7 @@ import type {Arrival, LevelId, SectionKey, TravelRequest} from './levels/types';
 import type {CampaignState} from './campaign/types'; // Task studio-alpha-campaign-foundation-20261102-230708-01 (primary)
 import {archetypeLabel, generateNetwork, validateNetwork} from './campaign/network';
 import {arrive as arriveCampaign, enableCheat, newCampaign, revealAround, transitOf, travelPlan, upgradeCampaign} from './campaign/discovery';
-import {PaperMap} from './ui/paperMap';
+import {PaperMap, type MapFuel} from './ui/paperMap';
 import {createRun, type RunState} from './run/runState';
 import {enemiesToSpawn, mergeKilled, pickupPlan} from './run/memory';
 import {resetParticipants, restoreCarry, restoreParticipants, takeSnapshot, type RunParticipant, type RunSnapshot} from './run/snapshot';
@@ -157,7 +160,7 @@ import {applyMouseLook, lookSigns} from './player/mouseLook'; // task studio-bet
 export type GameState = 'loading' | 'title' | 'playing' | 'paused' | 'inventory' | 'dead' | 'won' | 'error' | 'map'; // ('map': the campaign's paper map overlay — the world holds)
 
 /** Task studio-alpha-campaign-foundation-20261102-230708-01: the ordinary station objective (no kill goal). */
-export const SCAVENGE_OBJECTIVE = 'Scavenge for resources. Return to the train when done.';
+export const SCAVENGE_OBJECTIVE = 'Scavenge fuel and supplies. Return to the train when done.'; // (task train-fuel-system: the train needs a tank of fuel per stop)
 
 // (task campaign-foundation-20261102, lane MENU: + renderScale — a linear render-resolution scale over the DPR-capped native buffer;
 // the persisted values live in ui/settingsStore.ts, main.ts copies them in)
@@ -362,6 +365,8 @@ export class Game {
    */
   trainPlacement: TrainPlacement | null = null;
   readonly playerTrain = new PlayerTrainRecord();
+  /** Task train-fuel-system: the stations' finite fuel (world/fuelStations.ts). */
+  fuelStations!: FuelStations;
   /** Called on every setState (lanes close their UIs when the state leaves 'playing'). */
   readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
@@ -534,6 +539,7 @@ export class Game {
     hookName('gear');
     // Task gasmask-breach-20261030 (mask lane): after GEAR (wraps its inventory-screen hook); frame hook, input owner, lifecycle, run participant 'gas.mask'
     this.gasMask = installGasMask(this, {cancelUse: reason => this.cancelUse(reason), cancelFlareHold: () => this.cancelFlareHold()});
+    this.fuelStations = installFuelStations(this); // task train-fuel-system: realize each campaign station's fuel once; the map's figures
     hookName('gasMask');
     this.stalls = installStalls(this); // Task office-overhaul-20261030 (lane INTERACT, #13): after GEAR, before TOWER (E-handler order)
     hookName('stalls');
@@ -1298,8 +1304,18 @@ export class Game {
       onConfirm: to => { this.closeTravelMap(); void this.travelToStation(to); },
       onClose: () => this.closeTravelMap(),
       onCheat: () => (run.campaign = enableCheat(run.campaign!)),
+      fuel: this.mapFuel(), // task train-fuel-system: station fuel bars, the trip's cost and the train's reserves
     });
     return true;
+  }
+
+  /** Task train-fuel-system: the map's fuel figures (fuel/fuel.ts units: quarter tanks). */
+  mapFuel(): MapFuel {
+    return {
+      node: id => this.fuelStations.nodeFuel(id),
+      aboard: () => reservesOf(this.playerTrain.fuel.tank, this.fuelCarts()?.aboard() ?? [], this.playerTrain.lockbox.slots),
+      cost: hops => routeCost(hops, !!this.run.campaign?.cheat),
+    };
   }
 
   private closeTravelMap(): void {
@@ -1356,9 +1372,19 @@ export class Game {
     const plan = travelPlan(c0, to);
     if (!plan) return {ok: false, error: 'That station cannot be reached from here.'};
     const target = run.node(to)!;
+    // Task train-fuel-system: the route's fuel (hops x one tank; the map cheat waives it), checked BEFORE anything moves: a cart in a
+    // doorway refuses, short reserves stall the engine audibly (nothing changes); otherwise the carts aboard become cargo and, once the
+    // car is in the tunnel, the exact draw is made and recorded with the journey (charged once; refunded only if it fails back).
+    const fuel = this.fuelCheck(plan.hops);
+    if (!fuel.ok) return {ok: false, error: fuel.error};
+    // reserved NOW (before the doors close): nothing drawn here can be taken out of the chest / a cart while the car leaves
+    const debit = fuel.debit;
+    this.playerTrain.fuel.tank = applyDebit(debit, this.playerTrain.fuel.tank, fuel.carts, this.playerTrain.lockbox.slots);
+    this.fuelCarts()?.captureCargo();
     // the ride's route (lane TRAIN: world/trainRide.ts depart(journey?: RideJourney); bounded extra transit time per extra hop)
     const d = await this.trainRide.depart({route: plan.route});
-    if (d.status !== 'in-tunnel') { this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    if (d.status !== 'in-tunnel') { this.fuelCarts()?.releaseCargo(); this.refundFuel(debit, fuel.carts); this.hud.toast(d.message, true); return {ok: false, error: d.message}; }
+    if (fuel.cost) this.hud.toast(`${plan.hops > 1 ? `${plan.hops} stops` : 'One stop'}: ${tanksText(fuel.cost)} of fuel burnt`);
     const flight = this.lifecycle.run(async (): Promise<{ok: true} | {ok: false; error: string}> => {
       const from = run.campaign!.current;
       const ride = this.trainRide.state();
@@ -1369,13 +1395,16 @@ export class Game {
       // pipeline releases (Iteration 14) wait until the next station has rendered at the platform: Subway -> Subway shares those
       // programs, and releasing them first recompiles them all on arrival (on a software rasterizer that memory is never returned)
       this.leaveSection(true);
-      run.campaign = {...run.campaign!, transit: transitOf(run.campaign!, plan)};
+      run.campaign = {...run.campaign!, transit: {...transitOf(run.campaign!, plan), fuel: {cost: fuel.cost, debit}}};
       const s1 = this.commitSave('departure', {pose});
       if (!s1.ok && this.currentSlot !== null) this.hud.toast(s1.error, true);
       for (const l of this.campaignListeners) l('transit');
       let dest = target, layout: StationLayout | null = null, key: SectionKey = {level: dest.archetype, section: 'main', station: dest.id};
       for (const attempt of [0, 1, 2]) {
-        if (attempt === 2) { dest = run.node(from)!; key = {level: dest.archetype, section: 'main', station: dest.id}; this.hud.toast(`${target.name} cannot be reached — the train returns to ${dest.name}.`, true); }
+        if (attempt === 2) {
+          dest = run.node(from)!; key = {level: dest.archetype, section: 'main', station: dest.id}; this.hud.toast(`${target.name} cannot be reached — the train returns to ${dest.name}.`, true);
+          this.refundFuel(debit, fuel.carts); // (task train-fuel-system) the journey never left: exactly what it drew comes back
+        }
         try { layout = await this.prepareSection(key, run); break; } catch (err) { console.warn('campaign: preparing', key, 'failed', err); this.trainRide.transitFailed(String((err as Error)?.message ?? err)); }
       }
       if (!layout) { this.transitGap = false; this.lifecycleFailed(new Error('no station could be prepared'), 'playing', titleWarmupUi()); return {ok: false, error: 'No station could be prepared.'}; }
@@ -1397,6 +1426,44 @@ export class Game {
       return {ok: true};
     });
     return (await flight) ?? {ok: false, error: 'Busy — try again in a moment.'};
+  }
+
+  /** Task train-fuel-system: the world's fuel carts (world/fuelCarts.ts), if installed. */
+  private fuelCarts(): FuelCartsLike | null {
+    const c = (this as unknown as {fuelCarts?: Partial<FuelCartsLike>}).fuelCarts;
+    return c && typeof c.aboard === 'function' && typeof c.departBlock === 'function' && typeof c.captureCargo === 'function' && typeof c.releaseCargo === 'function' ? c as FuelCartsLike : null;
+  }
+
+  /**
+   * Task train-fuel-system: can the train make a `hops`-edge trip now? Draws nothing. Refusals give their feedback here: a cart in a
+   * doorway (short toast), or short reserves (the engine cranks and stalls + a toast with the numbers). The map 1337 cheat waives the cost.
+   */
+  fuelCheck(hops: number): {ok: true; cost: number; debit: FuelDebit; carts: CartFuel[]} | {ok: false; error: string} {
+    const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
+    const carts = this.fuelCarts();
+    const block = carts?.departBlock() ?? null;
+    if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
+    const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
+    const debit = planDebit(cost, tf.tank, aboard, chest);
+    if (!debit) {
+      const r = reservesOf(tf.tank, aboard, chest);
+      const msg = `Not enough fuel — ${hops > 1 ? `${hops} stops need` : 'this stop needs'} ${tanksText(cost)}, the train has ${tanksText(r.total)}. Find fuel cans (a can is ¼ tank) or a fuel cart.`;
+      (this.sfx as {engineStall?(): void} | undefined)?.engineStall?.();
+      this.hud.toast(msg, true);
+      return {ok: false, error: msg};
+    }
+    return {ok: true, cost, debit, carts: aboard};
+  }
+
+  /** Task train-fuel-system: a journey that failed back to its start gets exactly its fuel back (tank, carts, chest stacks by uid). */
+  private refundFuel(debit: FuelDebit, carts: CartFuel[]): void {
+    const box = this.playerTrain.lockbox;
+    this.playerTrain.fuel.tank = refundDebit(debit, this.playerTrain.fuel.tank, carts, box.slots, (count, uid) => {
+      const st = this.inv.makeStack(FUEL.canItem, count);
+      st.count = count;
+      st.uid = uid; // the same item back (its uid was never reused: Lockbox uids stay reserved)
+      return st;
+    });
   }
 
   /**

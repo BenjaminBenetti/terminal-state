@@ -1899,6 +1899,11 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/train-fuel-can.json",
+      "bytes": 3901,
+      "sha256": "7265ddde750c562f5287bbb55e369cd92a6e38c6113995ea687cc8f758a21a3c"
+    },
+    {
       "path": "assets/derivatives/user-knife-20261030.json",
       "bytes": 3815,
       "sha256": "2eb3dd4f7479c8adac08f37b01208c952aabcc16e220533786e84e660e60561a"
@@ -3692,6 +3697,11 @@
       "path": "assets/models/tech-display-t25.glb",
       "bytes": 500576,
       "sha256": "014bc3ef3c6cbc59661b6d51f85f556afd608e33678a058a01ce8261b8e3208e"
+    },
+    {
+      "path": "assets/models/train-fuel-can.glb",
+      "bytes": 780132,
+      "sha256": "77b89db5a7b585e0dd52bb9f44f638f5d32c96b909321ea910aadc8dd1c0bd8c"
     },
     {
       "path": "assets/models/trash-can-t25.glb",
