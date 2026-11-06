@@ -1140,7 +1140,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
-    if (this.world) { this.saveSectionMemory(); this.gear.flush(); }
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations.flush(); } // (task fuel-feedback: the station's fuel record with its memory)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
 

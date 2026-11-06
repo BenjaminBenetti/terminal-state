@@ -113,7 +113,7 @@ export function stationHost(L: StationLayout, opts: {build?: boolean} = {}) {
 export function build(h: CartTestHost & {layout?: StationLayout | null}, L: StationLayout, spawn = true): void {
   const levels = levelsOf(L);
   Object.assign(h, {layout: L, levels, propIndex: new PropIndex(levels, L.props), trainPlacement: playerTrainPlacement(L)});
-  for (const s of h.sectionHooks) s.holders?.(L as never); // (Game: right after the loot holders are built — task fuel-feedback)
+  for (const s of h.sectionHooks) (s as {holders?(l: never): void}).holders?.(L as never); // (Game: right after the loot holders are built — task fuel-feedback)
   for (const s of h.sectionHooks) s.build?.(L as never);
   if (spawn && h.trainPlacement && !h.trainRide?.riding) {
     const pose = trainSpawnPose(L, h.trainPlacement);

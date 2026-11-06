@@ -18,7 +18,8 @@
 //    single cans side by side (v1 saves laid two cans as one pickup: one visible can = one can, the quantity kept exactly).
 //  - teardown: the record {v: 2, realized: true, carts, lots} is written into the station's memory together with the normal memory flush
 //    (Game.leaveSection: hooks first, then saveSectionMemory) — a save taken before the first departure (new-game / arrival) regenerates
-//    the same realization on load, never twice and never lost; a Retry rebuilds the entry state the same way.
+//    the same realization on load, never twice and never lost; a Retry rebuilds the entry state the same way. The ending save's
+//    non-destructive memory capture writes it too (flush), so its Continue never realizes the station twice.
 // Remaining fuel (the map, nodeFuel): the CURRENT station live (its fuel lots in holders, fuel pickups, cans in grounded bags, its carts
 // outside the car); a visited station with a realized record from its memory (recorded lots its holders still list, remembered fuel
 // cans, cans in remembered bags, its carts; a v1 station + its pending delta); otherwise (known, never built, or visited before fuel
@@ -200,9 +201,17 @@ export class FuelStations {
   }
 
   teardown(): void {
-    const key = this.live, st = this.stage;
+    this.flush();
     this.live = null;
     this.stage = null;
+  }
+
+  /**
+   * Write the station's record now (teardown; and Game.commitEndingSave's NON-destructive capture, which flushes the live section's
+   * memory without leaving it — the record must go with that memory, or a Continue would realize the plan a second time).
+   */
+  flush(): void {
+    const key = this.live, st = this.stage;
     if (!key || !st) return;
     const rec: StationFuelJSON = {v: 2, realized: true, carts: this.carts?.stationRecords() ?? [], lots: st.lots};
     this.game.run.setLaneStore(FUEL_LANE, rec, key);

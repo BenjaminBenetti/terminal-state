@@ -362,6 +362,21 @@ describe('the station coordinator (world/fuelStations.ts) in Game\'s build order
     expect(t.fs.nodeFuel(sid(0))).toBeNull();
   }, 60000);
 
+  it('the ending save\'s non-destructive memory capture writes the fuel record too: its Continue never realizes the station twice', () => {
+    const s = new Station(l, {containers: false});
+    s.enter();
+    const plan = stationFuelPlan(s.seed, sid(0));
+    // Game.commitEndingSave: saveSectionMemory + gear.flush + fuelStations.flush — the world stays live (no teardown)
+    s.fs.flush();
+    const mem = s.run.memory(s.key);
+    mem.pickups = capturePickups(s.pickups.list, () => undefined);
+    expect(s.run.laneStore<StationFuelJSON>(FUEL_LANE, s.key)).toMatchObject({v: 2, realized: true});
+    // Continue: the station is built again from that memory
+    s.enter();
+    expect(s.fs.last).toMatchObject({mode: 'kept', loose: 0});
+    expect(s.stationUnits()).toBe(plan.units);
+  }, 60000);
+
   it('a loose stack of several cans (an older save, a drop) becomes single cans side by side, the total exact', () => {
     const s = new Station(l, {containers: false});
     s.enter();
