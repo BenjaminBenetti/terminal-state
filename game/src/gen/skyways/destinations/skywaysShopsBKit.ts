@@ -220,16 +220,18 @@ export class ShopsBDresser {
         for (let cy = s1; cy <= s3; cy++) for (let cx = s0; cx <= s2; cx++) if (!g.walkable(cx, cy)) return [];
       }
     }
-    begin(ctx);
+    // block the cells (logged in an open transaction); undone by hand when the area would split (never rolls back an outer transaction)
+    const set: [Uint8Array, number][] = [];
+    const mark = (arr: Uint8Array, i: number) => { if (!arr[i]) { markCell(ctx, arr, i); set.push([arr, i]); } };
     for (const b of boxes) {
       const [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
       for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
         const i = g.idx(cx, cy);
-        markCell(ctx, g.blocked, i);
-        if (PROP_DEFS[b.kind].blocksSight) markCell(ctx, g.sightBlocked, i);
+        mark(g.blocked, i);
+        if (PROP_DEFS[b.kind].blocksSight) mark(g.sightBlocked, i);
       }
     }
-    if (!areaConnected(ctx, a)) { rollback(ctx); return []; }
+    if (!areaConnected(ctx, a)) { for (const [arr, i] of set) arr[i] = 0; return []; }
     const out: PropPlacement[] = [];
     for (const b of boxes) {
       if (front > 0) {
@@ -243,27 +245,46 @@ export class ShopsBDresser {
       this.placed.push(p);
       out.push(p);
     }
-    commit(ctx);
     return out;
   }
 
-  /** Units of `kind` side by side with their backs to frame wall `w` from `from` to `to` (m along it), `gap` apart; contiguous runs of `run`. */
+  /**
+   * All-or-nothing group: `fn` places a cluster and says whether it is complete; when not, everything it placed (props, blocked / keep
+   * cells) is undone. Not nested.
+   */
+  tx(fn: () => boolean): boolean {
+    const n0 = this.placed.length;
+    begin(this.ctx);
+    if (fn()) { commit(this.ctx); return true; }
+    rollback(this.ctx);
+    this.placed.length = n0;
+    return false;
+  }
+
+  /**
+   * Units of `kind` side by side with their backs to frame wall `w` from `from` to `to` (m along it), `gap` apart; contiguous runs of `run`
+   * (each run starts on a cell boundary: the frame origin is one, so a run never straddles a reserved / blocked cell it could have cleared).
+   */
   wallRow(w: Wall, kind: PropKind, from: number, to: number, o: {gap?: number; run?: number; front?: number; variant?: () => number; max?: number; area?: Area; fr?: HallFrame} = {}): PropPlacement[] {
-    const fr = o.fr ?? this.fr, a = o.area ?? fr.a, def = PROP_DEFS[kind], side = this.side(w, fr);
+    const fr = o.fr ?? this.fr, a = o.area ?? fr.a, def = PROP_DEFS[kind];
     const out: PropPlacement[] = [];
-    const run = Math.max(1, o.run ?? 1), gap = o.gap ?? 0.04;
-    let t = from;
-    while (t + def.w <= to + 1e-6 && out.length < (o.max ?? 99)) {
-      const n = Math.min(run, Math.floor((to - t + gap) / (def.w + gap)), (o.max ?? 99) - out.length);
-      if (n <= 0) break;
-      const items = Array.from({length: n}, (_, k) => {
-        const s = this.wallSpotUV(fr, w, t + def.w / 2 + k * (def.w + gap), kind);
-        return {kind, x: s.x, z: s.z, rot: s.rot, variant: o.variant?.() ?? 0};
-      });
-      const got = n > 1 || o.front ? this.putRow(items, a, o.front ?? 0) : (() => { const p = this.putXZ(kind, items[0].x, items[0].z, items[0].rot, {area: a, variant: items[0].variant}); return p ? [p] : []; })();
-      if (got.length) { out.push(...got); t += n * (def.w + gap) + (run > 1 ? 0.5 : 0); } else t += 0.5;
+    const run = Math.max(1, o.run ?? 1), gap = o.gap ?? 0.04, max = o.max ?? 99;
+    const up = (t: number) => Math.ceil(t / CELL - 1e-6) * CELL;
+    let t = up(from);
+    while (t + def.w <= to + 1e-6 && out.length < max) {
+      const n0 = Math.min(run, Math.floor((to - t + gap) / (def.w + gap)), max - out.length);
+      if (n0 <= 0) break;
+      let got: PropPlacement[] = [];
+      for (let n = n0; n >= 1 && !got.length; n--) {
+        const items = Array.from({length: n}, (_, k) => {
+          const s = this.wallSpotUV(fr, w, t + def.w / 2 + k * (def.w + gap), kind);
+          return {kind, x: s.x, z: s.z, rot: s.rot, variant: o.variant?.() ?? 0};
+        });
+        got = n > 1 || o.front ? this.putRow(items, a, o.front ?? 0) : (() => { const p = this.putXZ(kind, items[0].x, items[0].z, items[0].rot, {area: a, variant: items[0].variant}); return p ? [p] : []; })();
+        if (run === 1) break;
+      }
+      if (got.length) { out.push(...got); t = up(t + got.length * (def.w + gap) + (run > 1 ? 0.45 : gap)); } else t += CELL;
     }
-    void side;
     return out;
   }
   /** Position of a prop with its back to frame wall `w` at `t` m along it (from the frame's u = 0 / v = 0 end). */
