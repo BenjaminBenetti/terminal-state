@@ -23,7 +23,7 @@ describe('the Reactor registration', () => {
     expect(LEVELS.reactor.entry).toBe('main');
     expect(LEVELS.reactor.name).toBe('Reactor');
     for (const l of LEVEL_IDS) if (l !== 'reactor') expect(travelTargets(l)).toContain('reactor');
-    expect(travelTargets('reactor')).toEqual(['subway', 'office', 'mall']);
+    expect(travelTargets('reactor')).toEqual(['subway', 'office', 'mall', 'skyways']);
     expect(sectionLabel({level: 'reactor', section: 'main'})).toBe('Station and pit');
     expect(clearLabel({level: 'reactor', section: 'main'})).toBe('Pit clear');
     expect(validateLevelRegistry()).toEqual([]);

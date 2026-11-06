@@ -72,7 +72,7 @@ describe('campaign run: one persistent world per station', () => {
     const rolls: string[] = [];
     const run = createRun({seeds: SEEDS, start: {level: 'subway', section: 'main'}, levels: LEVELS, rollGear: (_s, l) => { rolls.push(l); return {main: []}; }});
     expect(run.campaign).toBeNull();
-    expect(rolls.sort()).toEqual(['mall', 'office', 'reactor', 'subway']);
+    expect(rolls.sort()).toEqual(['mall', 'office', 'reactor', 'skyways', 'subway']);
     expect(run.sectionId).toBe('subway:main');
     expect(run.scopeOf()).toBe('subway');
   });

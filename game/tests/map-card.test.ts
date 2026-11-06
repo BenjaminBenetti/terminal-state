@@ -91,7 +91,7 @@ describe('labels never move with the selection (pure)', () => {
     n.nodes.forEach((x, i) => { if (i % 3 === 0 && x.name !== MAINTENANCE_ROUTE.name) x.name = `${x.name} Interchange Upper Concourse`.slice(0, 44); });
     const s = enableCheat(start(n));
     const kinds = new Set(buildMapModel(s, 'travel', 1, null, null).stations.map(x => x.kind));
-    expect([...kinds].sort()).toEqual(['maintenance', 'mall', 'office', 'reactor', 'subway']);
+    expect([...kinds].sort()).toEqual(['maintenance', 'mall', 'office', 'reactor', 'skyways', 'subway']);
     sameLabels(s, 'travel', 1);
     sameLabels(s, 'view', 0.7);
   });
