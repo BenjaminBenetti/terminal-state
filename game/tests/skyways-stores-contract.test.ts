@@ -60,6 +60,27 @@ describe('Skyways major stores: the contract', () => {
     expect(seen).toBeGreaterThan(10);
   }, 600_000);
 
+  it('version 3: every store has a back room behind a staff door into the store (inset in the footprint when none fits beyond it)', () => {
+    let n = 0;
+    for (let seed = 1; seed <= 12; seed++) {
+      const l = gen(seed, 3);
+      for (const an of l.skyways!.anchors ?? []) {
+        n++;
+        expect(an.stock.length, `seed ${seed} ${an.family} (${an.format})`).toBeGreaterThan(0);
+        const mine = new Set([an.floor, ...l.areas.filter(a => a.parent === an.floor && a.type === 'shop').map(a => a.id), ...an.zones]);
+        for (const s of an.stock) {
+          const a = l.areas[s];
+          expect(['stock-room', 'agent-office']).toContain(a.type);
+          expect(Math.min(a.w, a.h), `${an.family} back room size`).toBeGreaterThanOrEqual(4);
+          const doors = l.doors.filter(d => (d.a === s && mine.has(d.b)) || (d.b === s && mine.has(d.a)));
+          expect(doors.length, `seed ${seed} ${an.family}: a door into the store`).toBeGreaterThan(0);
+          expect(doors.every(d => d.staff)).toBe(true);
+        }
+      }
+    }
+    expect(n).toBeGreaterThan(30);
+  }, 900_000);
+
   it('version 3: no loose floor piles in a store (noFloorLoot on every store area; the level keeps its floor-supply count)', () => {
     for (const seed of [1, 3, 6]) {
       const l = gen(seed, 3), v2 = gen(seed, 2);

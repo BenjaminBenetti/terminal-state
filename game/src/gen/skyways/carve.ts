@@ -227,7 +227,7 @@ const sideLen = (r: CellRect, s: Side) => (alongXSide(s) ? r.w : r.h);
 const SIDES: readonly Side[] = ['N', 'E', 'S', 'W'];
 
 /** Carves the whole Skyways level. Null when the frame does not fit (the caller re-rolls the frame's free parameters). */
-export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: boolean; outwardFronts?: boolean} = {}): SkywaysCarve | null {
+export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: boolean; outwardFronts?: boolean; storeBackRooms?: boolean} = {}): SkywaysCarve | null {
   FAIL = '';
   /** Layout version 1 (gen/skyways/layoutVersion.ts): GAME76's program exactly — no destinations, its arcade / shop / back-room rolls. */
   const legacy = !!opts.legacy;
@@ -903,10 +903,15 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       well = far === 'N' ? {x: r.x + t, y: r.y, w: RUN_CELLS, h: lw} : far === 'S' ? {x: r.x + t, y: r.y + r.h - lw, w: RUN_CELLS, h: lw}
         : far === 'W' ? {x: r.x, y: r.y + t, w: lw, h: RUN_CELLS} : {x: r.x + r.w - lw, y: r.y + t, w: lw, h: RUN_CELLS};
     }
+    // (task studio-alpha-skyways-shops-20261107-054512-01, layout version 3) every major store gets a back room: the back rooms' sizes
+    // are drawn first; when no stock-room site is free beyond the floor, the stock room is INSET in a far corner of the footprint (a wall
+    // ring between it and the floor), clear of the storefront, the stair well's landings and the zones' doors. Older versions: as before.
+    const backsEarly = opts.storeBackRooms ? backSizes() : null;
+    const inset = backsEarly && !backSiteFree(backsEarly[0][2], backsEarly[0][3]) ? insetBack(backsEarly[0][2], backsEarly[0][3]) : null;
     // the sales floor (with its storefront): a whole rect, or the pieces round the stair well (the storefront fronts the largest)
     const an = {family: fam, name: F.name, ceil: ceilY, entryW: rng.int(4, 6)};
     let sf: Storefront;
-    const pieces = well ? decompose((x, y) => !inRect(well!, x, y), floorRect).sort((p, q) => q.w * q.h - p.w * p.h) : [floorRect];
+    const pieces = well || inset ? decompose((x, y) => !(well && inRect(well, x, y)) && !(inset && inRect(inset.cut, x, y)), floorRect).sort((p, q) => q.w * q.h - p.w * p.h) : [floorRect];
     const main = pieces.find(q => overlapsR(grow(q, 1), gap)) ?? pieces[0];
     // (task studio-alpha-skyways-shops-20261107-054512-01, user: "major-store signs face inward / reverse") a storefront's `side` is the
     // HALL wall it stands on (gen/storefronts.ts shopFrame); the anchor passed the shop's own front wall (hubSide), so its frame and its
@@ -941,9 +946,18 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     }
     // back rooms: a stock room (and an office) beyond the far wall or a flank, staff doors from the floor
     const stock: number[] = [];
-    const backs: [string, Area['type'], number, number][] = [['Stock room', 'stock-room', rng.int(10, 14), rng.int(7, 9)], ['Office', 'agent-office', rng.int(8, 10), rng.int(6, 8)]];
+    const backs: [string, Area['type'], number, number][] = backsEarly ?? backSizes();
     for (const [label, type, along, deep] of backs) {
       let a: Area | null = null;
+      if (inset && type === 'stock-room') {
+        // the inset stock room: its staff door through the ring wall into the floor piece in front of it
+        a = k.addArea(inset.room, 'room', type, ceilOf(lv, CLEAR.back), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: false});
+        const [fx, fy] = frontCell(inset.door, inset.into);
+        const piece = k.areas[g.area[g.idx(fx, fy)]] ?? floor;
+        k.carveDoor(inset.door, piece, a, CLEAR.door, false, {staff: true});
+        stock.push(a.id);
+        continue;
+      }
       for (const bs of [s, ...SIDES.filter(q => q !== s && q !== hubSide)]) {
         const n = sideLen(floorRect, bs) - along;
         for (let t = 2; t <= n - 2 && !a; t += 3) {
@@ -951,6 +965,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
           if (!within(I, rr) || !k.rectFree(rr, lv) || (fmt === 'double-height' && false)) continue;
           if (zoneRects.some(([zr]) => overlapsR(grow(zr, 1), rr))) continue;
           if (well && overlapsR(grow(well, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
+          if (inset && overlapsR(grow(inset.cut, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
           a = k.addArea(rr, 'room', type, ceilOf(lv, CLEAR.back), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: false});
           k.carveDoor(gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3), floor, a, CLEAR.door, false, {staff: true});
         }
@@ -959,6 +974,62 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       if (a) stock.push(a.id);
     }
     return {id, family: fam, name: F.name, building: b.id, level: lv, format: fmt, floor: floor.id, rect: r, storefront: sf.id, front, upper, zones, stock, ceilY};
+
+    function backSizes(): [string, Area['type'], number, number][] {
+      return [['Stock room', 'stock-room', rng.int(10, 14), rng.int(7, 9)], ['Office', 'agent-office', rng.int(8, 10), rng.int(6, 8)]];
+    }
+    /** (version 3) A stock-room site beyond the floor exists (the search below, without carving). */
+    function backSiteFree(along: number, deep: number): boolean {
+      for (const bs of [s, ...SIDES.filter(q => q !== s && q !== hubSide)]) {
+        const n = sideLen(floorRect, bs) - along;
+        for (let t = 2; t <= n - 2; t += 3) {
+          const rr = beyond(floorRect, bs, t, along, deep);
+          if (!within(I, rr) || !k.rectFree(rr, lv)) continue;
+          if (zoneRects.some(([zr]) => overlapsR(grow(zr, 1), rr))) continue;
+          if (well && overlapsR(grow(well, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
+          return true;
+        }
+      }
+      return false;
+    }
+    /**
+     * (version 3) The stock room inset inside the floor: against the far wall in one of its corners, else centred on a flank wall —
+     * `room` (`along` x deep), its `cut` (+ the one-cell wall ring toward the floor, inside the floor rect), its staff door (3 cells,
+     * centred on the ring's floor side) and the side it opens `into`. Null when no spot clears the storefront, the stair well's landings,
+     * the zones' doors and keeps >= 6 cells of floor in front of it.
+     */
+    function insetBack(along: number, deep0: number): {room: CellRect; cut: CellRect; door: CellRect; into: Side} | null {
+      const fr = floorRect;
+      const zoneDoors = zoneRects.map(([zr, , , dw]) => {
+        const side: Side = zr.x >= fr.x + fr.w ? 'E' : zr.x + zr.w <= fr.x ? 'W' : zr.y >= fr.y + fr.h ? 'S' : 'N';
+        const ZL = alongXSide(side) ? zr.w : zr.h;
+        return gapOn(fr, side, (alongXSide(side) ? zr.x - fr.x : zr.y - fr.y) + Math.floor((ZL - dw) / 2), dw);
+      });
+      const flanks = SIDES.filter(q => q !== s && q !== hubSide);
+      // (the flank spots: centred, then toward either end — a two-level shop's stair well along the far wall can take the middle)
+      const cands: [Side, 'lo' | 'hi' | 'mid' | 'lo2' | 'hi2'][] = [...((rng.chance(0.5) ? ['lo', 'hi'] : ['hi', 'lo']) as ('lo' | 'hi')[]).map(e => [s, e] as [Side, 'lo' | 'hi']),
+        ...flanks.flatMap(q => (['mid', 'lo2', 'hi2'] as const).map(e => [q, e] as [Side, 'mid' | 'lo2' | 'hi2']))];
+      for (const [q, at] of cands) {
+        const L = sideLen(fr, q), D = sideLen(fr, alongXSide(q) ? 'W' : 'N');
+        // (a shallow front hall — the cinema's lobby band — takes a shallower room; a short flank a shorter one)
+        const deep = Math.min(deep0, D - 7), al = q === s ? along : Math.min(along, L - 10);
+        if (deep < 4 || al < 8 || al + 2 > L - 8) continue;
+        const t = at === 'lo' ? 0 : at === 'hi' ? L - al : at === 'mid' ? Math.floor((L - al) / 2) : at === 'lo2' ? 2 : L - al - 2;
+        const room: CellRect = q === 'N' ? {x: fr.x + t, y: fr.y, w: al, h: deep} : q === 'S' ? {x: fr.x + t, y: fr.y + fr.h - deep, w: al, h: deep}
+          : q === 'W' ? {x: fr.x, y: fr.y + t, w: deep, h: al} : {x: fr.x + fr.w - deep, y: fr.y + t, w: deep, h: al};
+        const gr = grow(room, 1), x0 = Math.max(gr.x, fr.x), y0 = Math.max(gr.y, fr.y);
+        const cut: CellRect = {x: x0, y: y0, w: Math.min(gr.x + gr.w, fr.x + fr.w) - x0, h: Math.min(gr.y + gr.h, fr.y + fr.h) - y0};
+        if (overlapsR(grow(cut, 2), gap)) continue;
+        if (well && overlapsR(grow(cut, 1), grow(well, 4))) continue;
+        if (zoneDoors.some(zd => overlapsR(grow(cut, 1), zd))) continue;
+        // the staff door: the ring's floor side, centred
+        const into = opposite(q), m = Math.floor((al - 3) / 2);
+        const door: CellRect = q === 'N' ? {x: room.x + m, y: room.y + deep, w: 3, h: 1} : q === 'S' ? {x: room.x + m, y: room.y - 1, w: 3, h: 1}
+          : q === 'W' ? {x: room.x + deep, y: room.y + m, w: 1, h: 3} : {x: room.x - 1, y: room.y + m, w: 1, h: 3};
+        return {room, cut, door, into};
+      }
+      return null;
+    }
   }
 
   function hubArea(bc: BuildingCarve, level: number, id: number): void { let l = bc.hubAreas.get(level); if (!l) bc.hubAreas.set(level, (l = [])); l.push(id); }

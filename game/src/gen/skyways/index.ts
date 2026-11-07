@@ -125,7 +125,7 @@ export function skywaysTrackExtContext(levelSeed: number, ox: number, oy: number
 function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none', legacy = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SKYWAYS_CANVAS.levels, w: SKYWAYS_CANVAS.w, h: SKYWAYS_CANVAS.h});
-  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy, outwardFronts: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION}); // (+ outwardFronts: task studio-alpha-skyways-shops-20261107-054512-01)
+  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy, outwardFronts: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION, storeBackRooms: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION}); // (+ outwardFronts / storeBackRooms: task studio-alpha-skyways-shops-20261107-054512-01)
   if (!sc) return null;
 
   // --- Crop (fixed origin) + the Track2 plan (before the crop; nothing written into the Kit) ------------------------------------
