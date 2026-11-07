@@ -30,6 +30,7 @@ import type {SkywaysDestKind} from '../gen/skyways/destinations/registry';
 import {destHangCables, destModelHung, destModelKey, destModelOf, destModelRow} from '../gen/skyways/destinations/skywaysDestModels';
 import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {shapeMaterials} from './shapeMaterials';
+import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
@@ -223,6 +224,7 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   const draw = list.filter(p => !destCollisionOnly(p));
   if (!draw.length) return 0;
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
+  if (isScienceArtKind(kind)) return drawScienceArt(group, kind, draw, wm); // (lane STORE-SCIENCE: the science store's framed Codex wall art)
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
   const m = destModelOf(kind);
