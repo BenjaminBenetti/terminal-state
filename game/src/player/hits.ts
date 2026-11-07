@@ -19,6 +19,29 @@ export interface PlayerHit {
   location: HitLocation;
   /** Attacker kind (zombie archetype / creature id) when known. */
   attacker?: string;
+  /**
+   * Task studio-alpha-survival-controls-20261107-060450-01: an ENEMY's attack (a claw / bite / fist, the Blightbelly's death blast). Absent:
+   * the 'zombie' / 'creature' sources are enemy attacks, every other source is not (a fall, 'other').
+   */
+  enemy?: boolean;
+}
+
+/**
+ * Task studio-alpha-survival-controls-20261107-060450-01 (user: "the enemies should do double the damage to the PLAYER only! The player
+ * damage is UNCHANGED"): the multiplier on every ENEMY attack that reaches the player, applied to the raw hit before armour (so armour
+ * keeps its fraction and the injury roll sees the hit it really is). The player's own weapons, enemy health, the toxic gas field,
+ * falls and the empty-vitals drain never go through it.
+ */
+export const ENEMY_DAMAGE_TO_PLAYER = 2;
+
+/** Whether a hit is an enemy's attack (see PlayerHit.enemy). */
+export function isEnemyHit(hit: PlayerHit): boolean {
+  return hit.enemy ?? (hit.source === 'zombie' || hit.source === 'creature');
+}
+
+/** The hit as it lands: an enemy's attack scaled by ENEMY_DAMAGE_TO_PLAYER, anything else unchanged (pure). */
+export function incomingHit<H extends PlayerHit>(hit: H): H {
+  return isEnemyHit(hit) ? {...hit, amount: hit.amount * ENEMY_DAMAGE_TO_PLAYER} : hit;
 }
 
 export interface ResolvedHit extends PlayerHit {

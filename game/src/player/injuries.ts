@@ -29,6 +29,7 @@ import type {HitLocation, ResolvedHit} from './hits';
 import type {ModifierSource, PlayerModifiers} from './modifiers';
 import {LIMBS, treatsText, type Limb} from '../items/medical';
 import type {ItemDef} from '../items/items';
+import {STAMINA_PCT_PER_UNIT} from './player'; // task studio-alpha-survival-controls-20261107-060450-01 (the stamina reserve's units)
 
 export type {Limb};
 export type LimbSide = 'left' | 'right';
@@ -377,7 +378,7 @@ export function installInjuries(game: InjuryHost, access: InjuryAccess, sys = ne
       const limb = sys.onLanding(p.landSpeed);
       if (limb) { game.sfx.hurt(); announce(limb); }
     }
-    if (sys.limbs.leg && p.sprinting) p.stamina = Math.max(0, p.stamina - INJURY.legSprintDrain * dt);
+    if (sys.limbs.leg && p.sprinting) p.stamina = Math.max(0, p.stamina - INJURY.legSprintDrain * STAMINA_PCT_PER_UNIT * dt); // (units -> meter %: task studio-alpha-survival-controls-20261107-060450-01)
     const o = sys.sway.update(dt, game.mods.swayAmp, game.mods.swayHz, {aiming: access.aiming(), crouched: p.crouched});
     game.aimOffset.yaw = o.yaw;
     game.aimOffset.pitch = o.pitch;
