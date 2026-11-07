@@ -41,6 +41,7 @@ import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {dressSkywaysAddon} from './addon';
+import {dressSkywaysOfficeWing} from './officeWing';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
@@ -174,6 +175,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
+  dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
@@ -289,6 +291,7 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     family: f.family, topology: f.topology, pedways: sc.pedways.slice(),
     anchors: sc.anchors.map(an => ({id: an.id, family: an.family, name: an.name, building: an.building, level: an.level, format: an.format, floor: an.floor,
       rect: rectW(an.rect), storefront: an.storefront, front: an.front, ...(an.upper !== null ? {upper: an.upper} : {}), zones: an.zones.slice(), stock: an.stock.slice(), ceilY: an.ceilY})),
+    ...(sc.officeWing ? {officeWing: {building: sc.officeWing.building, level: sc.officeWing.level, tenant: sc.officeWing.tenant, rooms: sc.officeWing.rooms.map(q => ({...q}))}} : {}),
     landmarks: sc.landmarks.map(m => ({id: m.id, family: m.family, name: m.name, building: m.building, level: m.level, area: m.area,
       x: r3((m.cx - ox) * CELL), z: r3((m.cy - oy) * CELL), y: BASES[m.level], radius: m.radius, height: m.height, atrium: m.atrium})),
   };
@@ -378,6 +381,12 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === id) cells.push(g.idx(x, y));
       out.push({level: lv, cells});
     }
+  }
+  // (layout version 3) the office wing: the office dresser furnishes it
+  for (const q of sc.officeWing?.rooms ?? []) {
+    const a = layout.areas[q.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === q.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
   }
   // (layout version 3) the convention venue: its public event areas belong to the venue dresser (the washrooms, backstage and storage
   // keep the station's ordinary dressing)

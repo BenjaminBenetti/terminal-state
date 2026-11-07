@@ -168,6 +168,10 @@ export interface SkywaysAddon {
   display?: boolean;
 }
 
+/** (layout version 3) A tenant's office wing: open plan, meeting room, private offices, break room (layout.areas ids by role). */
+export interface SkywaysOfficeWing { building: string; level: number; tenant: string; rooms: {role: SkywaysOfficeRole; area: number}[] }
+export type SkywaysOfficeRole = 'open' | 'meeting' | 'office' | 'break';
+
 /** What a convention venue area is for. */
 export type SkywaysVenueRole = 'registration' | 'exhibitors' | 'main-hall' | 'panel' | 'photo-lounge' | 'backstage' | 'storage' | 'washrooms';
 
@@ -268,5 +272,7 @@ export interface SkywaysInfo {
   pedways?: string[];
   /** (destinations pass) The large anchor shops and the landmark courts. */
   anchors?: SkywaysAnchor[];
+  /** (layout version 3) a tenant's office wing (open plan, meeting room, offices, break room), when the frame gave one. */
+  officeWing?: SkywaysOfficeWing;
   landmarks?: SkywaysLandmark[];
 }

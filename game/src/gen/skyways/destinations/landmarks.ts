@@ -136,12 +136,13 @@ function keepCells(ctx: PlaceCtx, ax: number, az: number, bx: number, bz: number
 
 /**
  * The court's openings: runs of its boundary cells whose outward neighbour is walkable floor of another area (doorways, open sides
- * onto a corridor / the rest of the lobby), one per run, at the run's middle on the boundary line.
+ * onto a corridor / the rest of the lobby), one per run, at the run's middle on the boundary line. (Task studio-skyways-rework-
+ * 20261107-054512-01: never a stair well's side — its flights' cells are a run's, not a way in: an atrium court split by a well.)
  */
 export function courtOpenings(g: Grid, a: Area): {x: number; z: number; side: Side; n: number}[] {
   const out: {x: number; z: number; side: Side; n: number}[] = [];
   const own = (x: number, y: number) => g.inBounds(x, y) && g.area[g.idx(x, y)] === a.id && g.cells[g.idx(x, y)] === FLOOR;
-  const open = (x: number, y: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] !== a.id;
+  const open = (x: number, y: number, fy: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] !== a.id && g.rampIdx[g.idx(x, y)] < 0 && Math.abs(g.floor[g.idx(x, y)] - fy) < 0.4;
   const sides: [Side, number, number, number, number, number, number][] = [
     // side, start x, start y, step x, step y, outward dx, dy
     ['N', a.x, a.y, 1, 0, 0, -1], ['S', a.x, a.y + a.h - 1, 1, 0, 0, 1], ['W', a.x, a.y, 0, 1, -1, 0], ['E', a.x + a.w - 1, a.y, 0, 1, 1, 0],
@@ -158,7 +159,7 @@ export function courtOpenings(g: Grid, a: Area): {x: number; z: number; side: Si
     };
     for (let k = 0; k < len; k++) {
       const x = sx + dx * k, y = sy + dy * k;
-      if (own(x, y) && open(x + ox, y + oy)) { if (run < 0) run = k; } else flush(k);
+      if (own(x, y) && open(x + ox, y + oy, g.floor[g.idx(x, y)])) { if (run < 0) run = k; } else flush(k);
     }
     flush(len);
   }

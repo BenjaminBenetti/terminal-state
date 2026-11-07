@@ -30,6 +30,8 @@ const SKYWAYS: Readonly<Record<string, DamageClass>> = {
   'skyways-wall': 'plaster', 'skyways-reveal': 'plaster', 'skyways-wet': 'tile', 'skyways-boh': 'concrete', 'skyways-trim': 'steel',
   'skyways-floor-public': 'terrazzo', 'skyways-floor-court': 'terrazzo', 'skyways-floor-bridge': 'tile', 'skyways-floor-wet': 'tile', 'skyways-floor-boh': 'concrete',
   'skyways-ceil-plain': 'plaster', 'skyways-ceil-grid': 'plaster', 'skyways-ceil-bridge': 'plaster', 'skyways-ceil-core': 'concrete',
+  // (task studio-skyways-rework-20261107-054512-01) a tenant office wing
+  'skyways-office-wall': 'plaster', 'skyways-floor-office': 'fabric',
 };
 
 /** Damage class of an arch-owned finish key, or null (not an arch finish this table knows: the station rule applies). */
