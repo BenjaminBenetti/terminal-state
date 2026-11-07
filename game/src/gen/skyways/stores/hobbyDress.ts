@@ -107,9 +107,11 @@ export function dressHobbyStore(layout: StationLayout, rng: Rng, anchor: Skyways
   add('poster', ...kit.posters(3));
   kit.lift();
   res.placed = layout.props.length - kit.p0;
+  // (one record per anchor: a re-dressed layout keeps the latest)
   let list = RESULTS.get(layout);
   if (!list) RESULTS.set(layout, (list = []));
-  list.push(res);
+  const k = list.findIndex(q => q.anchor === res.anchor);
+  if (k >= 0) list[k] = res; else list.push(res);
   return res.placed;
 }
 
