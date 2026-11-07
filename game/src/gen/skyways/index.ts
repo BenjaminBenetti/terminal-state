@@ -38,7 +38,8 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_LAYOUT_VERSION} from './layoutVersion';
+import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
+import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
@@ -69,6 +70,8 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 /** The ONE continuous Skyways layout. */
 export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOptions = {}): StationLayout {
+  // (task studio-skyways-rework-20261107-054512-01) stations entered before the rework regenerate through the frozen GAME77 generator
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) <= SKYWAYS_LEGACY77_MAX) return generateSkywaysLegacy77(ctx, opts);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile('skyways');
   const spawns = opts.spawns ?? spawnProfile('skyways');
