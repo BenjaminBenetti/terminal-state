@@ -22,6 +22,8 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {LEVELS} from '../src/levels/registry';
 import {skywaysIssues} from '../src/gen/skyways/index';
 import {skywaysAddonDressOf} from '../src/gen/skyways/addon';
+import {skywaysAddonDressOf as legacyAddonDressOf} from '../src/gen/skyways/legacy77/addon';
+import {skywaysIssues as legacyIssues} from '../src/gen/skyways/legacy77/validate';
 import {SKYWAYS_ADDON_KINDS, SKYWAYS_ADDON_MODEL_FILES, SKYWAYS_ADDON_PHYS, SKYWAYS_MASCOT_MODEL_KEY, SKYWAYS_MASCOT_POSES, SKYWAYS_MERCH_TOP,
   SKYWAYS_STAGE, SKYWAYS_STAGE_DECK_D, SKYWAYS_STAGE_MODEL_SHIFT, SKYWAYS_STANCHION, SKYWAYS_STATUE_PLINTH, isSkywaysAddonKind, skywaysAddonModelKey,
   skywaysAddonModelKeysFor, skywaysAddonShape, type SkywaysAddonKind} from '../src/gen/skyways/addonKinds';
@@ -66,6 +68,13 @@ const layouts = new Map<number, StationLayout>();
 const gen = (seed: number): StationLayout => {
   let L = layouts.get(seed);
   if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed} as never)));
+  return L;
+};
+/** (task studio-skyways-rework-20261107-054512-01) a station entered before the rework: the frozen GAME77 generator (layout version 2). */
+const layouts77 = new Map<number, StationLayout>();
+const gen77 = (seed: number): StationLayout => {
+  let L = layouts77.get(seed);
+  if (!L) layouts77.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed, layoutVersion: 2} as never)));
   return L;
 };
 /** World point -> host-local (x, z) (inverse of the dressers' toWorld). */
@@ -361,11 +370,11 @@ describe('the prize-car atrium on the real seeds', () => {
   }
 
   for (const seed of PRIZE_SEEDS) {
-    it(`seed ${seed}: car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board facing the entry`, () => {
-      const L = gen(seed), info = L.skyways!, ad = info.addon, res = skywaysAddonDressOf(L)!, pz = res.prize!;
+    it(`GAME77 showroom (layout version 2), seed ${seed}: car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board facing the entry`, () => {
+      const L = gen77(seed), info = L.skyways!, ad = info.addon, res = legacyAddonDressOf(L)!, pz = res.prize!;
       expect(ad.id).toBe('prize-car');
       expect(res.skipped, `seed ${seed}`).toEqual([]);
-      expect(skywaysIssues(L), `seed ${seed} validation`).toEqual([]);
+      expect(legacyIssues(L), `seed ${seed} validation`).toEqual([]);
       const car = ad.car!, hall = L.areas[ad.areas[0]];
       // nothing at all within the car body + 1.2 m (any prop of the storey, the stanchions included)
       for (const p of L.props) if ((p.level ?? 0) === car.level && p.h > 0) expect(bodyDist(car, p), `seed ${seed}: ${p.kind} within the car body + 1.2 m`).toBeGreaterThanOrEqual(1.2);
@@ -397,6 +406,43 @@ describe('the prize-car atrium on the real seeds', () => {
       // no sign in the add-on says anything about the car
       for (const sg of L.signs) if (ad.areas.includes(sg.area)) expect(sg.text).not.toMatch(DRIVE_WORDS);
       void hall;
+    });
+  }
+
+  // (layout version 3; user: "prize car in public walkway / atrium, not separate room") the PRIZE DISPLAY in the host's skyway court
+  for (const seed of PRIZE_SEEDS) {
+    it(`public display (layout version 3), seed ${seed}: in the skyway court, car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board behind it`, () => {
+      const L = gen(seed), info = L.skyways!, ad = info.addon, res = skywaysAddonDressOf(L)!, pz = res.prize!;
+      expect(ad.id).toBe('prize-car');
+      expect(ad.display).toBe(true);
+      expect(ad.areas).toEqual([]);
+      expect(res.skipped, `seed ${seed}`).toEqual([]);
+      expect(skywaysIssues(L), `seed ${seed} validation`).toEqual([]);
+      const car = ad.car!, court = L.areas[car.area];
+      expect(car.level).toBe(2);
+      expect(court.publicSpace).toBe(true);
+      expect(court.label).toMatch(/^Skyway (court|galleria)/);
+      // nothing within the car body + 1.2 m
+      for (const p of L.props) if ((p.level ?? 0) === car.level && p.h > 0) expect(bodyDist(car, p), `seed ${seed}: ${p.kind} within the car body + 1.2 m`).toBeGreaterThanOrEqual(1.2);
+      // the exit lane ahead of the nose clear of every prop of the storey; the car's way out reachable on its storey
+      const lane = pz.lane!;
+      expect(lane.half).toBeCloseTo(SKYWAYS_PRIZE_LANE_HALF, 6);
+      for (const p of L.props) if ((p.level ?? 0) === car.level && !p.mounted) expect(boxSegDist(p, lane.ax, lane.az, lane.bx, lane.bz), `seed ${seed}: ${p.kind} in the exit lane`).toBeGreaterThan(lane.half - 1e-6);
+      expect(reach(L, car.level, [car.x, car.z], [lane.bx, lane.bz], SKYWAYS_CAR.width / 2 + 0.1), `seed ${seed}: the car's way out`).toBe(true);
+      expect(pz.stanchions.length, `seed ${seed}`).toBeGreaterThanOrEqual(7);
+      for (const s of pz.stanchions) {
+        expect(Math.hypot(s.x - car.x, s.z - car.z)).toBeCloseTo(SKYWAYS_PRIZE_RING, 1);
+        expect(s.y).toBeCloseTo(car.y, 6);
+      }
+      const ropes = planRopes(L);
+      expect(ropes.length).toBeLessThan(pz.stanchions.length); // the lane's side stays open
+      for (const r of ropes) expect(segDist((r.a.x + r.b.x) / 2, (r.a.z + r.b.z) / 2, lane.ax, lane.az, lane.bx, lane.bz)).toBeGreaterThan(lane.half);
+      // the prize board behind the car, facing it (the way it looks)
+      const b = pz.board!;
+      expect(b.kind).toBe('skywaysPrizeBoard');
+      expect(deg(angDiff(b.rot, Math.atan2(car.x - b.x, car.z - b.z))), 'board faces the car').toBeLessThanOrEqual(46);
+      // no sign anywhere in the court says anything about the car
+      for (const sg of L.signs) if (sg.area === car.area) expect(sg.text).not.toMatch(DRIVE_WORDS);
     });
   }
 });

@@ -75,13 +75,20 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       expect(a).toBeInstanceOf(SkywaysArch);
       const bridges = new Set(L.skyways!.bridges.map(b => b.area));
       const seen = new Map<SkywaysClass, number>();
-      const FLOOR_OF: Partial<Record<SkywaysClass, string>> = {public: 'skyways-floor-public', court: 'skyways-floor-court', bridge: 'skyways-floor-bridge', wet: 'skyways-floor-wet', boh: 'skyways-floor-boh'};
+      const FLOOR_OF: Partial<Record<SkywaysClass, string>> = {public: 'skyways-floor-public', court: 'skyways-floor-court', bridge: 'skyways-floor-bridge', wet: 'skyways-floor-wet', boh: 'skyways-floor-boh', office: 'skyways-floor-office'};
       for (const ar of L.areas) {
-        const cls = skywaysAreaClass(ar, bridges);
+        // (rework) the arch's class: anchors take their store finishes; an atrium court keeps 'court' under a landmark's name
+        const cls = a.classOf(ar.id);
         seen.set(cls, (seen.get(cls) ?? 0) + 1);
         const c = cellOf(L, ar.id);
         if (c.i < 0) continue;
         const fk = a.floorKey(c.L, c.i);
+        // (task studio-skyways-rework-20261107-054512-01) an anchor store's areas take its family's own finishes (anchorStyles.ts)
+        if (a.classOf(ar.id) === 'anchor') {
+          expect(fk, `${ar.label} floor`).toMatch(/^skyways-anchor-floor-[a-z]+@/);
+          expect(a.ceilKey(c.L, ar.id, c.i), `${ar.label} ceil`).toMatch(/^skyways-anchor-ceil-[a-z]+@/);
+          continue;
+        }
         if (cls === 'station' || cls === 'shop') expect(fk, `${ar.label} floor`).toBeNull();
         else expect(fk, `${ar.label} floor`).toBe(FLOOR_OF[cls]);
         const ck = a.ceilKey(c.L, ar.id, c.i);
@@ -89,6 +96,7 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         if (cls === 'station' || (cls === 'shop' && c.L === 0)) expect(ck, `${ar.label} ceil`).toBeNull();
         else if (cls === 'bridge') expect(ck).toBe('skyways-ceil-bridge');
         else if (cls === 'boh') expect(ck).toBe('skyways-ceil-core');
+        else if (cls === 'office') expect(ck).toBe('skyways-ceil-grid'); // (rework) a tenant office wing
         else if (cls === 'public' && c.L >= 2) expect(ck).toBe('skyways-ceil-grid');
         else expect(ck, `${ar.label} ceil`).toBe('skyways-ceil-plain');
       }
@@ -101,8 +109,9 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       for (const f of w.wallFaces) {
         const cls = a.classOf(f.area);
         if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
+        if (cls === 'anchor') { expect(f.finish).toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
-        expect(f.finish, cls).toBe(cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : 'skyways-wall');
+        expect(f.finish, cls).toBe(cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : cls === 'office' ? 'skyways-office-wall' : 'skyways-wall');
         // never a station treatment / identity
         expect(STATION_TREATMENTS).not.toContain(treatmentOf(f));
         expect(['office', 'paint']).toContain(finishFamily(f.finish));
@@ -170,7 +179,14 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
     const {L, w} = world(SEEDS[0]);
     const a = w.skywaysArch!;
     const used = a.usedMaterials();
-    expect(used.size).toBeLessThanOrEqual(15);
+    // the public finishes stay a handful; the anchor stores add at most three per family (+ a zone set: the auditorium / booths),
+    // every one on the same office programs (wall / floor / ceiling) and with an impact class
+    const anchorKeys = [...used.keys()].filter(k => k.startsWith('skyways-anchor-'));
+    expect(used.size - anchorKeys.length).toBeLessThanOrEqual(15);
+    expect(anchorKeys.length).toBeLessThanOrEqual(6 * (L.skyways!.anchors?.length ?? 0));
+    for (const k of anchorKeys) expect(finishClass(k), k).not.toBeNull();
+    const aw = anchorKeys.filter(k => k.startsWith('skyways-anchor-wall-')).map(k => used.get(k) as OfficeSurfaceMaterial);
+    for (const m of aw) expect(m.colorNode).toBe((used.get('skyways-wall') as OfficeSurfaceMaterial).colorNode);
     const walls = ['skyways-wall', 'skyways-wet', 'skyways-boh'].map(k => used.get(k) as OfficeSurfaceMaterial);
     const reveal = a.revealMaterial(2) as OfficeSurfaceMaterial;
     expect(reveal).toBeInstanceOf(OfficeSurfaceMaterial);

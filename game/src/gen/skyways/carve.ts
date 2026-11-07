@@ -37,7 +37,7 @@ import {layStairRun, transitSpecs, type StairFlight, type StairSpec} from '../tr
 import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type RunLanes, type SkywaysFrame} from './frame';
-import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysPlan, SkywaysShopFamily, SkywaysVenueRole} from './skywaysTypes';
+import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysOfficeRole, SkywaysPlan, SkywaysShopFamily, SkywaysVenueRole} from './skywaysTypes';
 import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
 
@@ -137,6 +137,11 @@ export interface AddonCarve {
   venue?: VenueRoomCarve[];
 }
 
+/** (layout version 3) A tenant's office wing (gen/skyways/officeWing.ts dresses it). */
+export interface OfficeWingCarve { building: string; level: number; tenant: string; rooms: {role: SkywaysOfficeRole; area: number}[] }
+/** Original tenant names of the office wings (fictional companies). */
+export const OFFICE_TENANTS = ['Chinook Analytics', 'Bow River Mutual', 'Parkland Engineering', 'Foothills Legal Group', 'Prairie Sky Software', 'Elbow Valley Energy', 'Aspen & Coulee Architects', 'Nose Hill Logistics'];
+
 /** (layout version 3) One area of the convention venue and what it is for. */
 export interface VenueRoomCarve { role: SkywaysVenueRole; area: number }
 
@@ -199,6 +204,8 @@ export interface SkywaysCarve {
   /** (destinations pass) The anchor shops and the landmark courts. */
   anchors: AnchorCarve[];
   landmarks: LandmarkCarve[];
+  /** (layout version 3) a tenant's office wing, or null. */
+  officeWing: OfficeWingCarve | null;
   /** Carved extent (canvas cells). */
   X0: number; Z0: number; X1: number; Z1: number;
   /** Atrium court roof height (absolute y). */
@@ -533,6 +540,12 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   if (!addon) return fail(`addon-${f.addon}-${f.addonLevel}`);
   addonAreas.push(...addon.areas, ...(addon.venue ?? []).map(v => v.area));
 
+  // (layout version 3) the tenant's OFFICE WING, before the anchors take the hub sides: the frame's office building and storey (the
+  // other storey when that one has no room)
+  let officeWing: OfficeWingCarve | null = null;
+  const offC = legacy ? undefined : [...carves.values()].find(bc => bc.b.offices > 0 && bc.b.id !== f.addonHost);
+  if (offC) officeWing = carveOfficeWing(offC, offC.b.offices) ?? carveOfficeWing(offC, 3 - offC.b.offices);
+
   // --- 6a. DESTINATIONS: the landmark courts (atrium courts first) and the large ANCHOR shops ------------------------------------
   const landmarks = legacy ? [] : placeLandmarks();
   const anchors = legacy ? [] : carveAnchors();
@@ -600,6 +613,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     for (const level of [1, 2]) {
       if (host && level === f.addonLevel) continue;
       const offices = b.offices === level;
+      // (layout version 3; user: "occasional accessible office building floor") the building's tenant office: a real OFFICE WING (open
+      // plan, meeting room, private offices, break room) instead of a corridor suite (that one when no wing fits)
+      if (offices && officeWing?.building === bc.b.id) continue;
       if (offices || rng.chance(legacy ? 0.4 : 0.28)) serviceCorridor(bc, level, offices);
     }
   }
@@ -636,7 +652,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     X0 = Math.min(X0, r.x); Z0 = Math.min(Z0, r.y); X1 = Math.max(X1, r.x + r.w); Z1 = Math.max(Z1, r.y + r.h);
   }
   if (X0 - 4 < 1 || Z0 - 4 < 1 || X1 + 4 > k.g.w || Z1 + 4 > k.g.h) return fail('canvas');
-  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, anchors, landmarks, X0, Z0, X1, Z1, roofY};
+  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, anchors, landmarks, officeWing, X0, Z0, X1, Z1, roofY};
 
   // ===========================================================================================================================
   // Local helpers (closures over the kit / records)
@@ -788,7 +804,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const plain: [BuildingCarve, number, Area][] = [];
     for (const bc of carves.values()) for (const lv of [1, 2]) for (const id of bc.hubAreas.get(lv) ?? []) {
       const a = k.areas[id];
-      if (addonAreas.includes(a.id) || out.some(m => m.area === a.id) || Math.min(a.w, a.h) < 18 || (bc.atrium && overlapsR(a, bc.atrium))) continue;
+      // (layout version 3: never the court holding the prize display)
+      if (addonAreas.includes(a.id) || out.some(m => m.area === a.id) || Math.min(a.w, a.h) < 18 || (bc.atrium && overlapsR(a, bc.atrium)) || (addon?.car && overlapsR(grow(a, 2), addon.hall))) continue;
       if (out.some(m => m.building === bc.b.id)) continue;
       plain.push([bc, lv, a]);
     }
@@ -1458,6 +1475,10 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const mouths = bc.mouths.map(m => grow(m, 2));
     // (the zone may span the court's pieces round the wells: any court floor of the host's skyway level)
     const court = new Set(bc.hubAreas.get(lv) ?? []);
+    // the court's openings so far (bridge corridors) and its walls (where the shopfronts go later): the zone keeps 2 cells of court
+    // floor all round it, so the doors' strips stay walkable and the stanchions find their places
+    const doors = k.doors.filter(d => court.has(d.a) || court.has(d.b)).map(d => grow({x: d.x, y: d.y, w: d.w, h: d.h}, 2));
+    const M = 2;
     /** The roomiest spot for a display zone of half size R (cells), or null. */
     const find = (R: number): {cx: number; cy: number; score: number; area: number; R: number} | null => {
       let best: {cx: number; cy: number; score: number; area: number; R: number} | null = null;
@@ -1465,9 +1486,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
         const P = k.areas[id];
         for (let cy = P.y + R; cy <= P.y + P.h - R; cy += 2) for (let cx = P.x + R; cx <= P.x + P.w - R; cx += 2) {
           const zone: CellRect = {x: cx - R, y: cy - R, w: 2 * R, h: 2 * R};
-          if (wells.some(w => overlapsR(w, zone)) || mouths.some(m => overlapsR(m, zone))) continue;
+          if (wells.some(w => overlapsR(w, zone)) || mouths.some(m => overlapsR(m, zone)) || doors.some(d => overlapsR(d, zone))) continue;
           let ok = true;
-          for (let y = zone.y; y < zone.y + zone.h && ok; y++) for (let x = zone.x; x < zone.x + zone.w && ok; x++) {
+          for (let y = zone.y - M; y < zone.y + zone.h + M && ok; y++) for (let x = zone.x - M; x < zone.x + zone.w + M && ok; x++) {
             const i = g.idx(x, y);
             if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || !court.has(g.area[i])) ok = false;
           }
@@ -1492,6 +1513,51 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const ux = Math.sign(Math.round(to.x - cx)), uy = Math.sign(Math.round(to.y - cy));
     const entry: CellRect = {x: cx + ux * (R - 1), y: cy + uy * (R - 1), w: 1, h: 1};
     return {id: 'prize-car', building: bc.b.id, level: lv, approach: 'direct', hall, hallArea: best.area, areas: [], entry, foyer: null, stage: null, car: {cx, cy, yaw}, washrooms: []};
+  }
+
+  /**
+   * (layout version 3, task studio-skyways-rework-20261107-054512-01) A tenant's OFFICE WING off a public lobby / court of its building:
+   * the OPEN-PLAN office beyond a hub side (a wide public entrance from the lobby), and off its other sides a meeting room, two private
+   * offices and a break room (doors from the open plan). Dressed with the office kit (gen/skyways/officeWing.ts); null when it cannot fit.
+   */
+  function carveOfficeWing(bc: BuildingCarve, level: number): OfficeWingCarve | null {
+    const tenant = OFFICE_TENANTS[(f.seed >>> 0) % OFFICE_TENANTS.length];
+    const pieces = (bc.hubAreas.get(level) ?? []).map(id => k.areas[id]).filter(a => !addonAreas.includes(a.id)).sort((p, q) => q.w * q.h - p.w * p.h);
+    for (const P of pieces) {
+      for (const s of rng.shuffle(SIDES.slice())) {
+        const along = rng.int(20, 28), deep = rng.int(14, 18);
+        const N = sideLen(P, s) - along;
+        for (let t = 1; t <= N - 1; t += 2) {
+          const r = beyond(P, s, t, along, deep);
+          const door = gapOn(P, s, t + Math.floor(along / 2) - 2, 4);
+          if (!free(r, level, bc.I) || !k.solid(door, level)) continue;
+          const open = k.addArea(r, 'room', 'office-open', ceilOf(level, CLEAR.skyway), P.id, {...opt(level), label: `${tenant} · open office`, publicSpace: true});
+          k.carveDoor(door, P, open, CLEAR.door, false);
+          addPublic(bc, level, open.id);
+          const rooms: {role: SkywaysOfficeRole; area: number}[] = [{role: 'open', area: open.id}];
+          const want: [SkywaysOfficeRole, string, [number, number], [number, number]][] = [['meeting', 'meeting room', [11, 13], [9, 10]], ['office', 'office', [7, 8], [7, 8]],
+            ['office', 'office', [7, 8], [7, 8]], ['break', 'break room', [10, 12], [8, 9]]];
+          const back = opposite(s);
+          for (const [role, lab, al, dp] of want) {
+            let made: Area | null = null;
+            for (const rs of [back, ...SIDES.filter(q => q !== back && q !== s)]) {
+              const A = rng.int(al[0], al[1]), D = rng.int(dp[0], dp[1]), n = sideLen(open, rs) - A;
+              for (let u = 1; u <= n - 1 && !made; u += 2) {
+                const rr = beyond(open, rs, u, A, D);
+                const g = gapOn(open, rs, u + Math.floor(A / 2) - 1, 3);
+                if (!free(rr, level, bc.I) || !k.solid(g, level)) continue;
+                made = k.addArea(rr, 'room', 'office-room', ceilOf(level, CLEAR.back), open.id, {...opt(level), label: `${tenant} · ${lab}`, publicSpace: true});
+                k.carveDoor(g, open, made, CLEAR.door, false);
+              }
+              if (made) break;
+            }
+            if (made) rooms.push({role, area: made.id});
+          }
+          return {building: bc.b.id, level, tenant, rooms};
+        }
+      }
+    }
+    return null;
   }
 
   function carveRamen(bc: BuildingCarve): RamenCarve | null {
