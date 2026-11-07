@@ -1,0 +1,233 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-store-science-art-20261107",
+ "task": "studio-alpha-skyways-shops-20261107-054512-01",
+ "lane": "STORE-SCIENCE",
+ "status": "runtime derivative of five pieces of static wall art cut from THREE images generated for this project with Codex native image_gen (owned Codex CLI) under the store lanes' Codex authorization (task studio-alpha-skyways-shops-20261107-054512-01: \"Codex image-gen ... for the stores' wall / sign / cover art\", no numerical cap; 3 calls, 3 accepted); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "game/src/world/skywaysStoreScienceArt.ts: the art faces of the Big Sky Wonders wall-art kinds (gen/skyways/stores/kinds/science.ts skySciStarMap / skySciChart / skySciPoster) in Skyways layout version >= 3",
+ "rebuild": "node tools/asset-pipeline/skyways-stores/science/build-science-art.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/science/codex/<job>/{<session>-exec-<id>.png, prompt.txt, instruction.txt, receipt.json, rollout-*.jsonl, last.txt} + ledger.jsonl (raw backup outside Git; never overwritten)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "extract (px) per piece: the triptych split inside its measured off-white gutters; the mural and the chart whole",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill (aspect kept: target sizes match the crops / a uniform 2/3 for the chart)"
+  },
+  "pack": {
+   "width": 2048,
+   "height": 2048,
+   "fill": "#10182a",
+   "gap": ">= 8 px",
+   "uv": "three.js (v = 0 at the bottom), inset half a texel"
+  },
+  "colour": "sRGB, alpha none",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips)"
+ },
+ "sources": [
+  {
+   "job": "star-map-mural",
+   "source": {
+    "file": "01a1b4ba-f910-7120-94ba-572e8b2422a6-exec-7d0bbfd1-65de-4a27-a5a9-af8ef425f338.png",
+    "sha256": "1a3020f57311481701489f58c09cc5a7f13f8ac7e0747200b95f4e54702dd333",
+    "bytes": 3371016,
+    "width": 1536,
+    "height": 1024,
+    "channels": 3
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "session": "01a1b4ba-f910-7120-94ba-572e8b2422a6",
+    "nativeOutput": "exec-7d0bbfd1-65de-4a27-a5a9-af8ef425f338.png",
+    "rollout": "rollout-2026-11-07T06-38-34-01a1b4ba-f910-7120-94ba-572e8b2422a6.jsonl"
+   },
+   "promptSha256": "41eb9b2f311f5336b5e3ad962188de41ba6e3c62458392e9d070df6bbeb5203e",
+   "prompt": "A wide printed wall mural for a family science and astronomy store: a beautiful star chart of the northern night sky. Deep navy-blue background, hundreds of small white and pale-gold stars of varied brightness, the constellations drawn as thin gold lines joining their stars (the Big Dipper, Cassiopeia, Cygnus, Orion, Lyra, Draco, Perseus), a soft milky band of the Milky Way crossing diagonally, a faint pale-blue celestial coordinate grid of arcs and meridians, a thin gold horizon ring along the lower edge with tiny tick marks, and a row of small moon-phase discs along the bottom margin. Flat graphic artwork viewed straight on, filling the entire image edge to edge: no frame, no wall, no room, no people, no perspective, no text, no letters, no numbers, no logos. Mid-century screen-print style with a lightly aged matte paper texture. Landscape 3:2."
+  },
+  {
+   "job": "kit-posters",
+   "source": {
+    "file": "01a1b4bc-6669-7b53-b83a-0149c6fa7065-exec-d7904dc9-96f7-474e-a627-19d3e05d1ba0.png",
+    "sha256": "fd146adda76e09a47310b3abee297a370c872c47f1557cfb48d3b135a8807338",
+    "bytes": 3462775,
+    "width": 1536,
+    "height": 1024,
+    "channels": 3
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "session": "01a1b4bc-6669-7b53-b83a-0149c6fa7065",
+    "nativeOutput": "exec-d7904dc9-96f7-474e-a627-19d3e05d1ba0.png",
+    "rollout": "rollout-2026-11-07T06-40-08-01a1b4bc-6669-7b53-b83a-0149c6fa7065.jsonl"
+   },
+   "promptSha256": "c191845bb1305ae6a2859709b1af4efb719de665187fb1099591a7d4a3782c36",
+   "prompt": "Three separate vintage advertising posters for a science discovery toy store, placed side by side in one image with equal narrow plain off-white gutters between them; each poster is a tall portrait panel filling its third of the image from top to bottom, all three the same size, shown straight on. Poster 1: a boxed children's chemistry set with test tubes in a rack, round flasks and bright bubbling green, blue and orange liquids, headline CHEMISTRY SET. Poster 2: a crystal-growing kit, glowing purple and sky-blue crystal geodes and a glass jar of growing crystals, headline GROW CRYSTALS. Poster 3: a build-your-own robot kit, a friendly retro tin robot surrounded by gears, bolts and a screwdriver, headline BUILD A ROBOT. Mid-century screen-print style in a deep navy blue, gold and white palette with bright accent colours, lightly aged matte paper. Flat graphic art: no frames, no wall, no room, no people photographed, no perspective, no real brand names or logos. Landscape 3:2."
+  },
+  {
+   "job": "periodic-chart",
+   "source": {
+    "file": "01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99-exec-7b641b01-9f36-4c6f-96ae-be11cdc81eea.png",
+    "sha256": "ac46eefb1f41262e623d33b07c4097fc68fb9725749af7d12b74081ec8c8cc95",
+    "bytes": 2271648,
+    "width": 1536,
+    "height": 1024,
+    "channels": 3
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "session": "01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99",
+    "nativeOutput": "exec-7b641b01-9f36-4c6f-96ae-be11cdc81eea.png",
+    "rollout": "rollout-2026-11-07T06-39-23-01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99.jsonl"
+   },
+   "promptSha256": "ac4e4cbec363c2d4b80761c4b12441124859f683f2cfda7079675e7882971e38",
+   "prompt": "A classroom wall chart in the style of a periodic table of the elements, shown straight on and filling the entire image edge to edge. An off-white background with a deep navy title band across the top reading PERIODIC TABLE in bold white capitals. Below it a grid of square tiles in the classic periodic-table silhouette: two tall columns on the left, a lower block of ten columns in the middle, six tall columns on the right, and two separate rows of tiles underneath. Each tile shows one large one- or two-letter element symbol and a small number above it, colour-coded in soft families: coral red, orange, sunflower yellow, leaf green, teal, sky blue and violet. Clean flat print graphic, vintage school-chart style, lightly aged matte paper. No frame, no wall, no room, no people, no perspective, no logos. Landscape 3:2."
+  }
+ ],
+ "pieces": [
+  {
+   "id": "starMap",
+   "subject": "star chart of the northern sky (navy, gold constellations, Milky Way, moon phases)",
+   "job": "star-map-mural",
+   "crop": [
+    0,
+    0,
+    1536,
+    1024
+   ],
+   "packedSize": [
+    1536,
+    1024
+   ],
+   "packedAt": [
+    0,
+    0
+   ],
+   "uv": {
+    "u0": 0.000244,
+    "v0": 0.500244,
+    "u1": 0.749756,
+    "v1": 0.999756,
+    "aspect": 1.5
+   }
+  },
+  {
+   "id": "chemistry",
+   "subject": "kit poster: CHEMISTRY SET (triptych panel 1)",
+   "job": "kit-posters",
+   "crop": [
+    11,
+    10,
+    487,
+    1004
+   ],
+   "packedSize": [
+    487,
+    1004
+   ],
+   "packedAt": [
+    1552,
+    0
+   ],
+   "uv": {
+    "u0": 0.758057,
+    "v0": 0.51001,
+    "u1": 0.995361,
+    "v1": 0.999756,
+    "aspect": 0.48506
+   }
+  },
+  {
+   "id": "chart",
+   "subject": "periodic-table-style classroom chart",
+   "job": "periodic-chart",
+   "crop": [
+    0,
+    0,
+    1536,
+    1024
+   ],
+   "packedSize": [
+    1024,
+    683
+   ],
+   "packedAt": [
+    0,
+    1040
+   ],
+   "uv": {
+    "u0": 0.000244,
+    "v0": 0.158936,
+    "u1": 0.499756,
+    "v1": 0.491943,
+    "aspect": 1.499268
+   }
+  },
+  {
+   "id": "crystals",
+   "subject": "kit poster: GROW CRYSTALS (triptych panel 2)",
+   "job": "kit-posters",
+   "crop": [
+    525,
+    10,
+    487,
+    1004
+   ],
+   "packedSize": [
+    487,
+    1004
+   ],
+   "packedAt": [
+    1040,
+    1040
+   ],
+   "uv": {
+    "u0": 0.508057,
+    "v0": 0.002197,
+    "u1": 0.745361,
+    "v1": 0.491943,
+    "aspect": 0.48506
+   }
+  },
+  {
+   "id": "robot",
+   "subject": "kit poster: BUILD A ROBOT (triptych panel 3)",
+   "job": "kit-posters",
+   "crop": [
+    1039,
+    10,
+    487,
+    1004
+   ],
+   "packedSize": [
+    487,
+    1004
+   ],
+   "packedAt": [
+    1544,
+    1040
+   ],
+   "uv": {
+    "u0": 0.75415,
+    "v0": 0.002197,
+    "u1": 0.991455,
+    "v1": 0.491943,
+    "aspect": 0.48506
+   }
+  }
+ ],
+ "output": {
+  "url": "assets/textures/skyways/stores/science/science-art.jpg",
+  "bytes": 1072718,
+  "sha256": "b99893617b40127d854ee4f03039532805fd1f55a93ae04108d20c1ea0cf9ca5",
+  "width": 2048,
+  "height": 2048,
+  "format": "jpeg"
+ }
+}

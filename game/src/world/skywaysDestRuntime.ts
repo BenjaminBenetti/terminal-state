@@ -10,6 +10,8 @@ import type {StationLayout} from '../gen/stationTypes';
 import {destArtAtlas, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysDestArtMaterial, skywaysDestAtlases} from './skywaysDestinations';
+import {preloadScienceArt} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
+import {preloadStoreMusicArt} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
 
 /** Longest wait for the art atlases before the world is built (then: the plain boards). */
 export const SKYWAYS_DEST_ART_WAIT_MS = 6000;
@@ -31,13 +33,16 @@ export class SkywaysDestRuntime {
 
   install(): this {
     this.host.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_DEST_ART_WAIT_MS))]) : Promise.resolve()));
+    // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01): the record store's cover / sign atlases, same wait
+    this.host.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([preloadStoreMusicArt(this.host, layout).then(() => undefined), new Promise<void>(r => setTimeout(r, SKYWAYS_DEST_ART_WAIT_MS))]) : Promise.resolve()));
     return this;
   }
 
   /** The atlases this layout's posters / plaques show -> one material each (released with the level). Never rejects. */
   async preload(layout: StationLayout): Promise<void> {
     const atlases = skywaysDestAtlases(new Set(layout.props.map(p => p.kind)));
-    await Promise.all(atlases.map(async (atlas: DestArtAtlasKey) => {
+    // (+ lane STORE-SCIENCE: the science store's wall-art atlas, when placed — in parallel)
+    await Promise.all([preloadScienceArt(layout, this.host), ...atlases.map(async (atlas: DestArtAtlasKey) => {
       const rec = destArtAtlas(atlas);
       const tex = rec ? await this.host.levelResources.load(LEVEL, rec.url, {srgb: true, repeat: false}).catch(() => null) : null;
       if (!tex) { setSkywaysDestArtMaterial(atlas, null); this.counts.artMissing++; return; }
@@ -51,7 +56,7 @@ export class SkywaysDestRuntime {
       }
       setSkywaysDestArtMaterial(atlas, m);
       this.counts.artLoaded++;
-    }));
+    })]);
   }
 }
 

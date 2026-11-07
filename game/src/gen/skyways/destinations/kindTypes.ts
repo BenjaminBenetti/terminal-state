@@ -6,6 +6,14 @@
 import type {PropDef} from '../../props';
 import type {DamageClass, PhysMat, StaticWhy} from '../../../damage/materials';
 import type {SkywaysDestPropKey} from '../../../assets/skywaysDestProps.generated';
+import type {PartMat} from '../../purposeShapes'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOCKEY): drawn parts
+
+/**
+ * (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) One CODE-DRAWN box part of a model-less kind: prop frame
+ * (origin bottom centre, front +Z, metres), size `s`, centre `p`, rotated about X (`rx`) then Y (`ry`), then translated; `m` = a shape
+ * material (gen/propShapes.ts) or a purpose material (gen/purposeShapes.ts: the painted colours). Geometry only — no drawn texture.
+ */
+export interface DestDrawnPart { m: PartMat; s: readonly [number, number, number]; p: readonly [number, number, number]; rx?: number; ry?: number }
 
 /** Rigid-body row (the live physics come from `def.physics`) or the static reason. */
 export type DestPhys =
@@ -22,4 +30,10 @@ export interface DestKindSpec {
   open: DestOpen;
   /** The Meshy model it renders with (assets/skywaysDestProps.generated.ts key); absent = drawn by code (art panels / parts). */
   model?: SkywaysDestPropKey;
+  /**
+   * (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) A model-less kind's code-drawn parts per placement variant
+   * (world/skywaysDestinations.ts draws them merged per material, one batch per variant; tools/asset-pipeline/props/scale-check.mjs
+   * renders variant 0). Absent: the model / art / stand-in path as before.
+   */
+  parts?: (variant: number) => readonly DestDrawnPart[];
 }
