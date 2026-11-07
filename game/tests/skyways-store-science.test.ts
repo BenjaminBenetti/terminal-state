@@ -4,6 +4,16 @@
 // the store's own pieces (the hung solar system, telescopes, globes, the kit wall with loose kits, the demo bench, the specimen
 // cabinets under the star-map wall, the cash desk with its openable back counter).
 import {describe, expect, it} from 'vitest';
+import fs from 'node:fs';
+import crypto from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import * as THREE from 'three';
+import {WorldMaterials} from '../src/world/materials';
+import {fakeEnvTextures} from './helpers/openablesFixture';
+import {installCanvasShim} from './helpers/canvas2d';
+import {levelOfAsset} from '../src/assets/levelAssets';
+import {SCIENCE_ART} from '../src/gen/skyways/stores/scienceArt.generated';
+import {drawScienceArt, preloadScienceArt, scienceArtLoaded, scienceArtPiece, setScienceArtMaterial} from '../src/world/skywaysStoreScienceArt';
 import {findStores, storeAreas, storeProps, type StoreHit} from './helpers/skywaysStores';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHELF_TIER_Y, type PropPlacement} from '../src/gen/props';
@@ -14,7 +24,7 @@ import {holderTable, isLootHolderKind} from '../src/items/loot';
 import type {HolderKind} from '../src/items/loot';
 import {STORE_SCIENCE} from '../src/gen/skyways/stores/science';
 import {SCIENCE_TECH_PURPOSE, scienceResultOf} from '../src/gen/skyways/stores/scienceDress';
-import {STORE_SCIENCE_KINDS, STORE_SCIENCE_MALL_MODELS, STORE_SCIENCE_SPECS} from '../src/gen/skyways/stores/kinds/science';
+import {SCI_ART_FACE, SCI_POSTER_VARIANTS, STORE_SCIENCE_KINDS, STORE_SCIENCE_MALL_MODELS, STORE_SCIENCE_SPECS, type StoreScienceKind} from '../src/gen/skyways/stores/kinds/science';
 import {ANCHOR_STYLES} from '../src/gen/skyways/destinations/anchorStyles';
 import {HUNG_CLEAR} from '../src/gen/skyways/destinations/kindsShopsB';
 import {SKYWAYS_STORE_MALL_MODELS} from '../src/gen/skyways/stores/kinds/index';
@@ -253,5 +263,67 @@ describe('Skyways store: Big Sky Wonders (science)', () => {
       for (const p of [r!.rocket, r!.cashwrap, r!.demo, r!.starMap]) expect(live(h, p), tagOf(h)).toBeTruthy();
       void xzUV;
     }
+  });
+});
+
+describe('Big Sky Wonders wall art: Codex atlas, frames and faces (world/skywaysStoreScienceArt.ts)', () => {
+  installCanvasShim(false);
+  const mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+  const place = (kind: StoreScienceKind, x: number, o: Partial<PropPlacement> = {}): PropPlacement => {
+    const d = PROP_DEFS[kind];
+    return {kind, x, z: 5, y: 1, rot: 0, area: 0, hx: d.w / 2, hz: d.d / 2, h: d.h, blocksSight: false, variant: 0, mounted: true, ...o};
+  };
+
+  it('the atlas and its provenance are in game/public (level-only Skyways), every piece inside the atlas at the art\'s own aspect', () => {
+    const jpg = fs.readFileSync(fileURLToPath(new URL('../public/' + SCIENCE_ART.url, import.meta.url)));
+    expect(levelOfAsset(SCIENCE_ART.url)).toBe('skyways');
+    const prov = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../public/assets/derivatives/skyways-store-science-art-20261107.json', import.meta.url)), 'utf8'));
+    expect(prov.output.sha256).toBe(crypto.createHash('sha256').update(jpg).digest('hex'));
+    expect(prov.generator).toMatch(/Codex native image_gen/);
+    expect(prov.status).toMatch(/unapproved prototype/);
+    expect(prov.sources.length).toBe(3);
+    for (const [k, r] of Object.entries(SCIENCE_ART.pieces)) {
+      expect(r.u0 >= 0 && r.u1 <= 1 && r.v0 >= 0 && r.v1 <= 1 && r.u0 < r.u1 && r.v0 < r.v1, k).toBe(true);
+      expect(Math.abs((r.u1 - r.u0) * SCIENCE_ART.width / ((r.v1 - r.v0) * SCIENCE_ART.height) - r.aspect), k).toBeLessThan(0.01);
+    }
+    // the faces are sized to their art (no crop beyond a sliver): mural 3:2, chart 3:2, posters ~0.49
+    for (const k of STORE_SCIENCE_KINDS) {
+      const f = SCI_ART_FACE[k], piece = SCIENCE_ART.pieces[scienceArtPiece(k, 0)];
+      expect(Math.abs(f.w / f.h - piece.aspect) / piece.aspect, k).toBeLessThan(0.02);
+    }
+    expect(SCI_POSTER_VARIANTS.map((_, v) => scienceArtPiece('skySciPoster', v))).toEqual(['chemistry', 'crystals', 'robot']);
+  });
+
+  it('draws frame + backing + one art quad per piece, per storey; a scaled mural is wider / taller but no deeper; plain board until loaded', async () => {
+    const list = [place('skySciStarMap', 2), place('skySciStarMap', 9, {h: PROP_DEFS.skySciStarMap.h * 1.5, level: 1}), place('skySciChart', 14), ...[0, 1, 2].map(v => place('skySciPoster', 17 + v, {variant: v}))];
+    const group = new THREE.Group();
+    setScienceArtMaterial(null);
+    for (const k of STORE_SCIENCE_KINDS) drawScienceArt(group, k, list.filter(p => p.kind === k), mats);
+    const ims: THREE.InstancedMesh[] = [];
+    group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) ims.push(o as THREE.InstancedMesh); });
+    const names = new Set(ims.map(m => m.name));
+    for (const n of ['prop-skySciStarMap-steelBright', 'prop-skySciStarMap-panel', 'prop-skySciStarMap-art-starMap', 'prop-skySciChart-art-chart', 'prop-skySciPoster-art-chemistry', 'prop-skySciPoster-art-crystals', 'prop-skySciPoster-art-robot']) expect(names.has(n), n).toBe(true);
+    expect(ims.filter(m => m.name === 'prop-skySciStarMap-art-starMap').map(m => m.userData.level).sort()).toEqual([0, 1]);
+    expect(ims.every(m => (m.material as THREE.Material).name !== 'skyways-science-art')).toBe(true);
+    // the scaled mural's art quad: 1.5x wide and tall, the same depth off the wall
+    const art = ims.filter(m => m.name === 'prop-skySciStarMap-art-starMap'), mtx = new THREE.Matrix4();
+    const box = (im: THREE.InstancedMesh) => { im.getMatrixAt(0, mtx); return new THREE.Box3().setFromBufferAttribute(im.geometry.attributes.position as THREE.BufferAttribute).applyMatrix4(mtx); };
+    const b0 = box(art.find(m => m.userData.level === 0)!), b1 = box(art.find(m => m.userData.level === 1)!);
+    expect(b0.max.x - b0.min.x).toBeCloseTo(SCI_ART_FACE.skySciStarMap.w, 3);
+    expect(b1.max.x - b1.min.x).toBeCloseTo(SCI_ART_FACE.skySciStarMap.w * 1.5, 3);
+    expect(b1.max.y - b1.min.y).toBeCloseTo(SCI_ART_FACE.skySciStarMap.h * 1.5, 3);
+    expect(b1.min.z).toBeCloseTo(b0.min.z, 4);
+    // the face shows its piece: UVs inside the atlas rect
+    const uv = (art[0].geometry.attributes.uv as THREE.BufferAttribute), r = SCIENCE_ART.pieces.starMap;
+    for (let i = 0; i < uv.count; i++) expect(uv.getX(i) >= r.u0 - 1e-6 && uv.getX(i) <= r.u1 + 1e-6 && uv.getY(i) >= r.v0 - 1e-6 && uv.getY(i) <= r.v1 + 1e-6).toBe(true);
+    // the preload: no art placed -> no load; placed -> one load, the material handed over
+    const loads: string[] = [];
+    const host = {levelResources: {load: async (_l: string, url: string) => { loads.push(url); return new THREE.Texture(); }, own: <T,>(_l: string, r: T) => r}};
+    await preloadScienceArt({props: []}, host);
+    expect(loads).toEqual([]);
+    await preloadScienceArt({props: list}, host);
+    expect(loads).toEqual([SCIENCE_ART.url]);
+    expect(scienceArtLoaded()).toBe(true);
+    setScienceArtMaterial(null);
   });
 });
