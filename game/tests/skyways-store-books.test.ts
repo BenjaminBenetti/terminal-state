@@ -213,6 +213,15 @@ describe('Paper Prairie Books: the store at version 3 (several seeds, both forma
     }
   });
 
+  it('no back room (an older / tight carve): a staff stock corner — shelving and openable storage near the cash desk', () => {
+    const h = findStores('books', {count: 20, maxSeed: 30}).find(q => !q.anchor.stock.length);
+    if (!h) return; // (every sampled store has a back room: nothing to check)
+    const r = resOf(h), L = h.layout, corner = r.stockCorner.map(i => L.props[i]);
+    expect(corner.length, `seed ${h.seed}`).toBeGreaterThanOrEqual(2);
+    expect(corner.some(p => ['openable', 'existing'].includes(audit(p.kind)?.cls ?? '')), `seed ${h.seed}: openable storage`).toBe(true);
+    for (const p of corner) expect(p.purpose).toBe(BOOKS_HOLDER_PURPOSE.stockCorner);
+  }, 120_000);
+
   it('books are loose stock on real supports (rule 4): every stack hosted on a measured shelf / tier / top, the budget kept', () => {
     const shelves = bookcaseShelves(), tiers = bookTableTiers().map(t => t.y), m09 = [0.36, 0.85, 1.25, 1.63];
     for (const h of ALL) {

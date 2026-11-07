@@ -141,6 +141,8 @@ class BooksDresser {
   salesFloor(): void {
     const kit = this.kit, rng = this.rng, L = kit.level;
     this.cashDesk();
+    // no back room (an older carve): the staff stock corner near the cash desk, before anything else takes those walls
+    if (!this.kit.an.stock.length) this.stockCorner();
     // the reading nook in the far corner (both formats: the shop's armchair corner downstairs)
     this.readingNook(L, 'far');
     kit.reserveLanes();
@@ -158,7 +160,6 @@ class BooksDresser {
     this.plants(L);
     if (rng.chance(0.6)) this.stepLadder(L);
     kit.posters(rng.int(2, 3));
-    if (!this.kit.an.stock.length) this.stockCorner();
   }
 
   /** The other storey of a two-level shop (mezzanine / lower floor): children's corner, rare books, bays, stacks, a second nook. */
