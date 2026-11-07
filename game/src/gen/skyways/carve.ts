@@ -49,6 +49,9 @@ export const RUN = transitSpecs(STOREY);
 /** Cells of a stair run (pitch + top landing) for one storey. */
 export const RUN_CELLS = RUN.cells;
 const LANE_W = {escalator: 3, stair: 5} as const;
+/** (layout version 3) Straight run-out (cells) of flat hub floor kept beyond both ends of a public run where the hub allows: 6 m (a
+ *  4.8 m prize car lines up with the flight; gen/skyways/index.ts holds it clear of props during the station dress). */
+export const RUN_OUT = 12;
 /** Open stair wells' ramp headroom (capped by the well's ceiling: Ramp.capCeil). */
 const RUN_OPEN_HEADROOM = 40;
 const lanesW = (l: RunLanes) => l.reduce((q, k) => q + LANE_W[k], 0);
@@ -361,14 +364,17 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     /** An open well hugging hub edge `s`: `len` along it from fraction `at`, `lw` deep, inside the hub, clear of the other wells. */
     const wellOn = (s: Side, lw: number, at: number, len = RUN_CELLS): CellRect | null => {
       const ax = alongXSide(s), L = edgeLen(s);
-      if (L < len + 8) return null;
-      const lo = (ax ? hub.x : hub.y) + 4, hi = (ax ? hub.x : hub.y) + L - 4 - len;
-      const tries = [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98];
-      for (const t of tries) {
-        const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
-        const atLow = s === 'N' || s === 'W';
-        const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
-        if (!clashes(r)) return r;
+      // (layout version 3) a straight run-out of RUN_OUT cells of hub floor beyond both ends where the edge allows (the old 4 else)
+      for (const m of legacy ? [4] : [RUN_OUT, 4]) {
+        if (L < len + 2 * m) continue;
+        const lo = (ax ? hub.x : hub.y) + m, hi = (ax ? hub.x : hub.y) + L - m - len;
+        const tries = [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98];
+        for (const t of tries) {
+          const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
+          const atLow = s === 'N' || s === 'W';
+          const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
+          if (!clashes(r)) return r;
+        }
       }
       return null;
     };
@@ -675,15 +681,18 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const hostLow = hostSide === 'W' || hostSide === 'N';
     const wellOn = (s: Side, lw: number, at: number, len = RUN_CELLS, upper = true): CellRect | null => {
       const ax = alongXSide(s), L = edgeLen(s);
-      if (L < len + 8) return null;
-      const lo = (ax ? hub.x : hub.y) + 4, hi = (ax ? hub.x : hub.y) + L - 4 - len;
       const flank = hostSide && alongXSide(s) === alongXSide(opposite(hostSide)) === false;
       const tries = flank ? [0, 0.1, 0.2, 0.3, 0.4].map(t => (hostLow ? t : 1 - t)) : [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98, 0.4, 0.6];
-      for (const t of tries) {
-        const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
-        const atLow = s === 'N' || s === 'W';
-        const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
-        if (!clashes(r, upper)) return r;
+      // (layout version 3) a straight run-out of RUN_OUT cells of hub floor beyond both ends where the edge allows (the old 4 else)
+      for (const m of legacy ? [4] : [RUN_OUT, 4]) {
+        if (L < len + 2 * m) continue;
+        const lo = (ax ? hub.x : hub.y) + m, hi = (ax ? hub.x : hub.y) + L - m - len;
+        for (const t of tries) {
+          const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
+          const atLow = s === 'N' || s === 'W';
+          const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
+          if (!clashes(r, upper)) return r;
+        }
       }
       return null;
     };

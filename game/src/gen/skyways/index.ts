@@ -36,7 +36,7 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent';
 import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
-import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
+import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
@@ -355,10 +355,12 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     for (let y = r.y - oy - pad; y < r.y - oy + r.h + pad; y++) for (let x = r.x - ox - pad; x < r.x - ox + r.w + pad; x++) if (g.inBounds(x, y)) cells.push(g.idx(x, y));
     out.push({level, cells});
   };
+  // (layout version 3) the run-outs: RUN_OUT cells straight beyond both ends (a car lines up with the flight), 4 before
+  const M = RUN_OUT;
   for (const rc of sc.runs) {
     const r = rc.rect;
-    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - 4, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - 4, w: r.w, h: 4};
-    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - 4 : r.x + r.w, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - 4 : r.y + r.h, w: r.w, h: 4};
+    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - M, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - M, w: r.w, h: M};
+    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - M : r.x + r.w, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - M : r.y + r.h, w: r.w, h: M};
     add(rc.lower, mouthLo); add(rc.lower + 1, mouthHi);
   }
   for (const b of sc.bridges) {
