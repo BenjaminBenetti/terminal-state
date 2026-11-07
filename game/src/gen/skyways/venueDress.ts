@@ -22,12 +22,13 @@
 
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
-import {PROP_DEFS, type PropKind, type PropPlacement} from '../props';
+import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import {WALL_ROT, backed, begin, commit, rollback, rowAlongWall, wallRange, wallXZ} from '../placeKit';
 import type {Area, Door, Side, SignPlacement, StationLayout} from '../stationTypes';
-import {AddonDresser, doorPoint, hallFrame, normYaw, r3, uvXZ, yawToward, type HallFrame} from './addonFrame';
+import {AddonDresser, doorPoint, hallFrame, normYaw, r3, toWorld, uvXZ, yawToward, type HallFrame} from './addonFrame';
 import {merchOn, statueAt, type ConventionResult} from './addonConvention';
-import {SKYWAYS_POSTER_Y} from './addonKinds';
+import {SKYWAYS_POSTER_Y, SKYWAYS_TABLE_BANNER} from './addonKinds';
+import {SKYWAYS_VENUE_BOOTHS, SKYWAYS_VENUE_SLIDES} from '../../assets/skywaysVenueArt.generated';
 import {SKYWAYS_CON_POSTERS} from '../../assets/skywaysArt.generated';
 import {SKYWAYS_ROPE} from './addonPrize';
 import type {SkywaysAddon, SkywaysVenueRole} from './skywaysTypes';
@@ -58,6 +59,9 @@ export interface VenueResult {
   exhibits: PropPlacement[];
   panels: {area: number; tables: PropPlacement[]; panelists: PropPlacement[]; chairs: PropPlacement[]; screen: PropPlacement | null}[];
   photo: {area: number; backdrop: PropPlacement[]; seats: PropPlacement[]} | null;
+  /** The registration signs on the walls behind the desks, the artist-alley booth banners on the vendor tables' fronts. */
+  regSigns: PropPlacement[];
+  banners: PropPlacement[];
   statues: ConventionResult['statues'];
   signs: VenueSign[];
   lanes: VenueLane[];
@@ -89,7 +93,7 @@ export function dressSkywaysVenue(layout: StationLayout, rng: Rng): VenueResult 
   if (!areas.length) return null;
   const v = new AddonDresser(layout, rng, {...addon, areas: pub.map(q => q.area)} as SkywaysAddon, areas[0]);
   const res: VenueResult = {byArea: {}, roles: Object.fromEntries(pub.map(q => [q.area, q.role] as const)), desks: [], queues: [], welcome: [], tables: [], merch: [], exhibits: [],
-    panels: [], photo: null, statues: [], signs: [], lanes: [], skipped: v.skipped};
+    panels: [], photo: null, regSigns: [], banners: [], statues: [], signs: [], lanes: [], skipped: v.skipped};
   const roleOf = (id: number) => venue.find(q => q.area === id)?.role;
   const bridges = new Set((layout.skyways?.bridges ?? []).map(b => b.area));
   const portals = new Map(areas.map(a => [a.id, portalsOf(layout, v.g, a)] as const));
@@ -107,7 +111,7 @@ export function dressSkywaysVenue(layout: StationLayout, rng: Rng): VenueResult 
     if (!mouth && a.kind === 'concourse' && a.type === 'concourse') continue; // the main stage foyer: boards only (below)
     registrationDesks(vc, a);
   }
-  order('panel').forEach(a => dressPanel(vc, a));
+  order('panel').forEach((a, k) => dressPanel(vc, a, k));
   for (const a of order('photo-lounge')) dressPhotoLounge(vc, a);
   const pieces = order('exhibitors').sort((p, q) => q.w * q.h - p.w * p.h);
   pieces.forEach((a, k) => exhibitorRows(vc, a, k));
@@ -355,6 +359,15 @@ function deskRow(vc: VenueCtx, a: Area, mouth: Portal | null): boolean {
         }
         res.desks.push(...got.row);
         res.queues.push(...got.chains);
+        // the registration sign on the wall behind the desks (above the staff's heads), centred on the row
+        {
+          const k = PROP_DEFS.skywaysVenueRegSign, c0 = got.row[0], c1 = got.row[got.row.length - 1], along = side === 'N' || side === 'S';
+          const t = along ? (c0.x + c1.x) / 2 : (c0.z + c1.z) / 2, y = 1.3;
+          if (backed(v.ctx, a, side, t - k.w / 2, t + k.w / 2, v.base + y + 0.05) && backed(v.ctx, a, side, t - k.w / 2, t + k.w / 2, v.base + y + k.h - 0.05)) {
+            const [x, z] = wallXZ(a, side, t, k.d / 2 + 0.004), f = footprint('skywaysVenueRegSign', WALL_ROT[side]);
+            res.regSigns.push(v.push({kind: 'skywaysVenueRegSign', x: r3(x), z: r3(z), y, rot: WALL_ROT[side], area: a.id, hx: r3(f.hx), hz: r3(f.hz), h: k.h, blocksSight: false, variant: 0, mounted: true}));
+          }
+        }
         // the REGISTRATION plate hung over the middle of the desk row, facing the queue
         const c0 = got.row[0], c1 = got.row[got.row.length - 1], fx = Math.sin(c0.rot), fz = Math.cos(c0.rot);
         if (a.ceil - v.base >= VENUE_SIGN.y + 0.6) {
@@ -394,15 +407,32 @@ function greet(vc: VenueCtx, a: Area): void {
   if (sign) res.welcome.push(sign); else res.skipped.push(`venue: registration ${a.id} welcome sign`);
 }
 
-function dressPanel(vc: VenueCtx, a: Area): void {
+function dressPanel(vc: VenueCtx, a: Area, letter: number): void {
   const {v, res} = vc, ps = vc.portals.get(a.id)!;
   const door = ps.find(p => p.door) ?? ps[0] ?? null;
   const fr = frameOf(a, door);
   const def = PROP_DEFS.skywaysConMerchTable;
   const out: VenueResult['panels'][number] = {area: a.id, tables: [], panelists: [], chairs: [], screen: null};
   const du = door ? xzToU(fr, door.x, door.z) : fr.W / 2;
-  // the panel table: two tables side by side 1.3 m off the back wall, facing the door; the panelists behind it
-  const uc = Math.round(Math.max(def.w + 0.8, Math.min(fr.W - def.w - 0.8, fr.W / 2)) * 2) / 2, vt = fr.D - 1.3 - def.d / 2;
+  let uc = Math.round(Math.max(def.w + 0.8, Math.min(fr.W - def.w - 0.8, fr.W / 2)) * 2) / 2;
+  // the panel's title slide on a tripod screen facing the audience (each room: its own slide): centred against the back wall of a deep
+  // room, else beside the panel table at one end of the back wall
+  const sd = PROP_DEFS.skywaysVenueScreen, deep = fr.D >= 7.2, slide = letter % SKYWAYS_VENUE_SLIDES.length;
+  if (deep) {
+    const [x, z] = uvXZ(fr, uc, fr.D - sd.d / 2 - 0.04);
+    out.screen = group(vc, [a], () => v.put('skywaysVenueScreen', x, z, fr.toFront, {area: a, variant: slide}));
+  } else {
+    for (const s of [1, -1]) {
+      const us = Math.round((s > 0 ? fr.W - 0.45 - sd.w / 2 : 0.45 + sd.w / 2) * 2) / 2, ut = us - s * (sd.w / 2 + 0.3 + def.w);
+      if (ut - def.w - 0.4 < 0 || ut + def.w + 0.4 > fr.W) continue;
+      const [x, z] = uvXZ(fr, us, fr.D - sd.d / 2 - 0.04);
+      out.screen = group(vc, [a], () => v.put('skywaysVenueScreen', x, z, fr.toFront, {area: a, variant: slide}));
+      if (out.screen) { uc = ut; break; }
+    }
+  }
+  // the panel table: two tables side by side, facing the door, 1.3 m off the back wall (in front of a centred screen: a free cell row
+  // stays between the panelists' chairs and it, the floor behind the table one connected space); the panelists behind it
+  const back = out.screen && deep ? sd.d + 1.75 : 1.3, vt = fr.D - back - def.d / 2;
   for (const s of [-1, 1]) {
     const [x, z] = uvXZ(fr, uc + s * (def.w / 2 + 0.03), vt);
     const t = v.put('skywaysConMerchTable', x, z, fr.toFront, {area: a});
@@ -410,7 +440,7 @@ function dressPanel(vc: VenueCtx, a: Area): void {
   }
   if (!out.tables.length) { res.skipped.push(`venue: panel ${a.id} table`); res.panels.push(out); return; }
   for (const k of [-1.5, -0.5, 0.5, 1.5]) {
-    const [x, z] = uvXZ(fr, uc + k * 0.95, fr.D - 0.55);
+    const [x, z] = uvXZ(fr, uc + k * 0.95, vt + def.d / 2 + 0.45);
     const c = v.put('foldingChair', snapC(x), snapC(z), fr.toFront, {area: a});
     if (c) out.panelists.push(c);
   }
@@ -419,7 +449,7 @@ function dressPanel(vc: VenueCtx, a: Area): void {
   v.keepSegment(A[0], A[1], B[0], B[1], 0.7);
   res.lanes.push({area: a.id, ax: r3(A[0]), az: r3(A[1]), bx: r3(B[0]), bz: r3(B[1]), half: 0.7});
   // audience rows facing the panel, either side of the aisle
-  for (let vr = vt - def.d / 2 - 1.7; vr >= 1.6; vr -= 0.95) {
+  for (let vr = vt - def.d / 2 - 1.5; vr >= 1.4; vr -= 0.95) {
     for (let u = 0.6; u <= fr.W - 0.6; u += 0.55) {
       if (v.rng.chance(0.06)) continue;
       const [x, z] = uvXZ(fr, u, vr);
@@ -427,9 +457,9 @@ function dressPanel(vc: VenueCtx, a: Area): void {
       if (c) out.chairs.push(c);
     }
   }
-  // the panel's key art: a framed poster centred on the wall behind the panelists (above their heads)
+  // no room for the screen: the panel's key art is a framed poster centred on the wall behind the panelists (above their heads)
   const side = fr.back, t = (fr.front === 'N' || fr.front === 'S' ? fr.x0 : fr.z0) + uc, pd = PROP_DEFS.skywaysConPoster;
-  if (backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.4) && backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.35 + pd.h)) {
+  if (!out.screen && backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.4) && backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.35 + pd.h)) {
     const [x, z] = wallXZ(a, side, t, pd.d / 2 + 0.004), along = side === 'N' || side === 'S';
     out.screen = v.push({kind: 'skywaysConPoster', x: r3(x), z: r3(z), y: 1.35, rot: WALL_ROT[side], area: a.id, hx: r3(along ? pd.w / 2 : pd.d / 2), hz: r3(along ? pd.d / 2 : pd.w / 2),
       h: pd.h, blocksSight: false, variant: v.rng.int(0, SKYWAYS_CON_POSTERS.length - 1), mounted: true});
@@ -443,9 +473,14 @@ function dressPhotoLounge(vc: VenueCtx, a: Area): void {
   const door = ps.find(p => p.door) ?? ps[0] ?? null;
   const fr = frameOf(a, door);
   const out = {area: a.id, backdrop: [] as PropPlacement[], seats: [] as PropPlacement[]};
-  // the photo-op wall: two poster boards side by side against the back wall
+  // the photo-op wall against the back wall, facing the door (a narrow room: two poster boards instead)
   const uc = Math.round(fr.W / 2 * 2) / 2;
-  for (const s of [-1, 1]) {
+  {
+    const pd = PROP_DEFS.skywaysVenuePhotoWall, [x, z] = uvXZ(fr, uc, fr.D - pd.d / 2 - 0.05);
+    const w = v.put('skywaysVenuePhotoWall', x, z, fr.toFront, {area: a});
+    if (w) out.backdrop.push(w);
+  }
+  for (const s of out.backdrop.length ? [] : [-1, 1]) {
     const [x, z] = uvXZ(fr, uc + s * 0.5, fr.D - 0.55);
     const b = v.put('skywaysConPosterBoard', x, z, fr.toFront, {area: a, variant: v.rng.int(0, SKYWAYS_CON_POSTERS.length - 1)});
     if (b) out.backdrop.push(b);
@@ -508,6 +543,12 @@ function exhibitorRows(vc: VenueCtx, a: Area, rank: number): void {
       run++;
       res.tables.push(got.t);
       res.merch.push(...merchOn(v, got.t));
+      // the studio's booth banner along the table's front (its cloth faces the aisle)
+      if (rng.chance(0.75)) {
+        const t = got.t, [bx, bz] = toWorld(t, 0, SKYWAYS_TABLE_BANNER.z), f = footprint('skywaysVenueTableBanner', t.rot);
+        res.banners.push(v.push({kind: 'skywaysVenueTableBanner', x: r3(bx), z: r3(bz), y: r3(t.y + SKYWAYS_TABLE_BANNER.y0), rot: t.rot, area: a.id, hx: r3(f.hx), hz: r3(f.hz),
+          h: PROP_DEFS.skywaysVenueTableBanner.h, blocksSight: false, variant: rng.int(0, SKYWAYS_VENUE_BOOTHS.length - 1), mounted: true, host: v.layout.props.indexOf(t)}));
+      }
     }
   }
   void rank;

@@ -16,8 +16,7 @@
 import * as THREE from 'three';
 import type {PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/stationTypes';
-import {SKYWAYS_ART, type SkywaysArtAtlasKey} from '../assets/skywaysArt.generated';
-import {SKYWAYS_STANCHION} from '../gen/skyways/addonKinds';
+import {SKYWAYS_ADDON_ART, SKYWAYS_STANCHION, type SkywaysAddonArtKey} from '../gen/skyways/addonKinds';
 import {SKYWAYS_ROPE, SKYWAYS_TURNTABLE_R} from '../gen/skyways/addonPrize';
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysAddonArtMaterial, skywaysAddonAtlases} from './skywaysAddon';
@@ -172,8 +171,8 @@ export class SkywaysAddonRuntime {
   /** The atlases this layout's add-on panels show -> one material each (released with the level). Never rejects. */
   async preload(layout: StationLayout): Promise<void> {
     const atlases = skywaysAddonAtlases(new Set(layout.props.map(p => p.kind)));
-    await Promise.all(atlases.map(async (atlas: SkywaysArtAtlasKey) => {
-      const tex = await this.host.levelResources.load(LEVEL, SKYWAYS_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
+    await Promise.all(atlases.map(async (atlas: SkywaysAddonArtKey) => {
+      const tex = await this.host.levelResources.load(LEVEL, SKYWAYS_ADDON_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
       if (!tex) { setSkywaysAddonArtMaterial(atlas, null); return; }
       // the same texture (a Retry of the level keeps its resources): the same material
       let m = this.artMats.get(tex);

@@ -14,7 +14,11 @@
 //    blocking the body standing on them while the deck-top statue blocks at deck height; chasing zombies' paths reach the deck by the
 //    steps; deterministic.
 import {beforeAll, describe, expect, it} from 'vitest';
+import fs from 'node:fs';
+import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
+import {SKYWAYS_VENUE_ART} from '../src/assets/skywaysVenueArt.generated';
+import {levelOfAsset} from '../src/assets/levelAssets';
 import {LEVELS} from '../src/levels/registry';
 import {skywaysAddonDressOf} from '../src/gen/skyways/addon';
 import {SKYWAYS_STAGE} from '../src/gen/skyways/addonKinds';
@@ -22,7 +26,7 @@ import {SKYWAYS_STAGE_DECK_EDGE, SKYWAYS_STAGE_SURFACES, SKYWAYS_STAGE_TRUSS_VAR
   from '../src/gen/skyways/stageSupport';
 import {VENUE_ROUTE_R, arrowDir, portalsOf} from '../src/gen/skyways/venueDress';
 import {SKYWAYS_MESHY_PROPS} from '../src/assets/skywaysMeshyProps.generated';
-import {SKYWAYS_MERCH_TOP} from '../src/gen/skyways/addonKinds';
+import {SKYWAYS_MERCH_TOP, SKYWAYS_TABLE_BANNER} from '../src/gen/skyways/addonKinds';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
 import {CELL, FLOOR, PathFinder, STEP_UP} from '../src/gen/grid';
 import {levelsOf, type Levels} from '../src/gen/levels';
@@ -107,7 +111,7 @@ describe('the convention venue floor (layout version 3) on the real seeds', () =
       // --- nothing floats: floor props on the floor under them, hosted ones on their host, mounted ones on a wall ---
       for (const p of venueProps) {
         expect(p.level, p.kind).toBe(lv);
-        if (p.mounted) { expect(p.y - base, `${p.kind} wall height`).toBeGreaterThan(0.5); continue; }
+        if (p.mounted && p.host === undefined) { expect(p.y - base, `${p.kind} wall height`).toBeGreaterThan(0.5); continue; }
         if (p.host !== undefined) continue;
         const [cx, cy] = g.cellOf(p.x, p.z);
         expect(p.y, `${p.kind} on the floor`).toBeCloseTo(g.floorOf(g.idx(cx, cy)), 6);
@@ -156,6 +160,22 @@ describe('the convention venue floor (layout version 3) on the real seeds', () =
         expect(Math.abs(ax - bx) >= (A.w + B.w) / 2 - 1e-6 || Math.abs(az - bz) >= (A.d + B.d) / 2 - 1e-6, 'merch overlaps').toBe(true);
       }
       expect(vr.exhibits.length, `seed ${seed}: pop-up exhibits`).toBeGreaterThanOrEqual(2);
+      // the studios' booth banners: on the front of a vendor table's cloth, hosted on it
+      expect(vr.banners.length, `seed ${seed}: booth banners`).toBeGreaterThanOrEqual(3);
+      for (const b of vr.banners) {
+        expect(b.kind).toBe('skywaysVenueTableBanner');
+        const t = L.props[b.host!];
+        expect(vr.tables).toContainEqual(t);
+        const [lx, lz] = local(t, b.x, b.z);
+        expect(Math.abs(lx)).toBeLessThan(1e-3);
+        expect(lz).toBeCloseTo(SKYWAYS_TABLE_BANNER.z, 3);
+        expect(b.rot).toBe(t.rot);
+        expect(b.y - t.y).toBeCloseTo(SKYWAYS_TABLE_BANNER.y0, 3);
+        expect(b.y - t.y + b.h, 'under the table top').toBeLessThan(SKYWAYS_MERCH_TOP.y);
+      }
+      // the registration sign on the wall behind the badge desks (above the staff)
+      expect(vr.regSigns.length, `seed ${seed}: registration sign`).toBe(1);
+      for (const r of vr.regSigns) { expect(r.mounted).toBe(true); expect(r.y - base).toBeCloseTo(1.3, 3); expect(Math.min(...vr.desks.map(d => Math.hypot(d.x - r.x, d.z - r.z)))).toBeLessThan(3.5); }
 
       // --- panel rooms: the panel table, panelists behind it and audience rows facing it ---
       const panels = venue.filter(v => v.role === 'panel');
@@ -168,12 +188,20 @@ describe('the convention venue floor (layout version 3) on the real seeds', () =
         const facing = p.chairs.filter(c => Math.sin(c.rot) * (tx - c.x) + Math.cos(c.rot) * (tz - c.z) > 0).length;
         expect(facing / p.chairs.length, 'the audience faces the panel').toBeGreaterThan(0.8);
         for (const t of p.tables) expect(Math.sin(t.rot) * (p.chairs[0].x - t.x) + Math.cos(t.rot) * (p.chairs[0].z - t.z), 'the panel faces the audience').toBeGreaterThan(0);
+        // the panel's title slide on its tripod screen (or, no room for it, a poster on the wall behind), facing the audience
+        expect(p.screen, `seed ${seed}: panel ${p.area} screen`).toBeTruthy();
+        expect(['skywaysVenueScreen', 'skywaysConPoster']).toContain(p.screen!.kind);
+        const sc = p.screen!;
+        expect(Math.sin(sc.rot) * (p.chairs[0].x - sc.x) + Math.cos(sc.rot) * (p.chairs[0].z - sc.z), 'the screen faces the audience').toBeGreaterThan(0);
       }
+      expect(vr.panels.some(p => p.screen?.kind === 'skywaysVenueScreen'), `seed ${seed}: a tripod screen`).toBe(true);
+      expect(new Set(vr.panels.filter(p => p.screen?.kind === 'skywaysVenueScreen').map(p => p.screen!.variant)).size, 'each room its own slide')
+        .toBe(vr.panels.filter(p => p.screen?.kind === 'skywaysVenueScreen').length);
       // --- the photo lounge (when the carve fitted one): the backdrop, the posed statue facing its door, seats ---
       const lounge = venue.find(v => v.role === 'photo-lounge');
       if (lounge) {
         expect(vr.photo?.area).toBe(lounge.area);
-        expect(vr.photo!.backdrop.length).toBeGreaterThanOrEqual(1);
+        expect(vr.photo!.backdrop.map(b => b.kind)).toEqual(['skywaysVenuePhotoWall']);
         expect(vr.photo!.seats.length).toBeGreaterThanOrEqual(2);
         const pose = vr.statues.find(s => s.role === 'photo-pose')!;
         const door = portalsOf(L, g, L.areas[lounge.area]).find(q => q.door)!;
@@ -235,6 +263,23 @@ describe('the convention venue floor (layout version 3) on the real seeds', () =
     const a = LEVELS.skyways.generate('main', {levelSeed: 4} as never), b = LEVELS.skyways.generate('main', {levelSeed: 4} as never);
     const pick = (L: StationLayout) => JSON.stringify([skywaysAddonDressOf(L)!.venue, L.skyways!.addon, L.signs.length]);
     expect(pick(a)).toBe(pick(b));
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+
+describe('the venue art (Codex initial sources; crop / pack only)', () => {
+  it('one level-only atlas on file, allowlisted, its provenance naming the ledgered Codex calls; every piece a 3:2 panel', () => {
+    const url = SKYWAYS_VENUE_ART.venueArt.url, pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
+    expect(levelOfAsset(url)).toBe('skyways');
+    const bytes = fs.readFileSync(pub(url));
+    const allow = (JSON.parse(fs.readFileSync(fileURLToPath(new URL('../../tools/release/public-inputs.json', import.meta.url)), 'utf8')) as {files: {path: string; bytes: number}[]}).files;
+    expect(allow.find(f => f.path === url)?.bytes).toBe(bytes.length);
+    const prov = JSON.parse(fs.readFileSync(pub('assets/derivatives/skyways-venue-art.json'), 'utf8')) as {output: {bytes: number}; pieces: {name: string; codex: {ledgerCall: number; generator: string}}[]};
+    expect(prov.output.bytes).toBe(bytes.length);
+    for (const p of prov.pieces) { expect(p.codex.ledgerCall).toBeGreaterThanOrEqual(200); expect(p.codex.ledgerCall).toBeLessThan(300); expect(p.codex.generator).toMatch(/Codex/); }
+    expect(prov.pieces.map(p => p.name).sort()).toEqual(Object.keys(SKYWAYS_VENUE_ART.venueArt.pieces).sort());
+    for (const [n, p] of Object.entries(SKYWAYS_VENUE_ART.venueArt.pieces)) expect(Math.abs(p.aspect - 1.5), n).toBeLessThan(0.01);
   });
 });
 
