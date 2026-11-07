@@ -100,6 +100,8 @@ class Sci {
   /** Staff doors from the floor (any piece) into the back rooms: the frame point just inside each. */
   readonly doors: {u: number; v: number; to: number; piece: Area}[];
   readonly res: ScienceResult;
+  /** The kit shelving units' walls and along positions (the kit posters hang above them). */
+  readonly kitSpots: ['L' | 'R' | 'B', number][] = [];
 
   constructor(readonly layout: StationLayout, readonly rng: Rng, readonly anchor: SkywaysAnchor) {
     const d = (this.d = new ShopsBDresser(layout, rng, anchor));
@@ -302,6 +304,23 @@ class Sci {
     const s = Math.min(NW - 1, Math.max(0, Math.floor(a[0] / CELL))) + Math.min(ND - 1, Math.max(0, Math.floor(a[1] / CELL))) * NW;
     const t = Math.min(NW - 1, Math.max(0, Math.floor(b[0] / CELL))) + Math.min(ND - 1, Math.max(0, Math.floor(b[1] / CELL))) * NW;
     if (!ok[s] || !ok[t]) return null;
+    // distance (cells) to the nearest wall / non-store cell: a route keeps >= 2.5 m off the walls where it can (the wall strips are
+    // the shelving's), so it runs down the middle of the floor and only meets a wall at its door
+    const wd = new Int32Array(N).fill(1 << 20), qq: number[] = [];
+    for (let iv = 0; iv < ND; iv++) for (let iu = 0; iu < NW; iu++) {
+      const c = iv * NW + iu;
+      if (!this.isStore(this.idx(iu, iv))) { wd[c] = 0; qq.push(c); continue; }
+      if ((iu === 0 || iv === 0 || iu === NW - 1 || iv === ND - 1) && [[iu - 1, iv], [iu + 1, iv], [iu, iv - 1], [iu, iv + 1]].some(([a2, b2]) => !this.isStore(this.idx(a2, b2)))) { wd[c] = 1; qq.push(c); }
+    }
+    for (let h = 0; h < qq.length; h++) {
+      const c = qq[h], iu = c % NW, iv = (c - iu) / NW;
+      for (const [nu, nv] of [[iu + 1, iv], [iu - 1, iv], [iu, iv + 1], [iu, iv - 1]]) {
+        if (nu < 0 || nv < 0 || nu >= NW || nv >= ND) continue;
+        const n2 = nv * NW + nu;
+        if (wd[n2] > wd[c] + 1) { wd[n2] = wd[c] + 1; qq.push(n2); }
+      }
+    }
+    const WALL = 5, pen = (c: number) => (wd[c] < WALL ? (WALL - wd[c]) * 2 : 0);
     const DU = [1, -1, 0, 0], DV = [0, 0, 1, -1], TURN = 3;
     const dist = new Int32Array(N * 4).fill(1 << 30), prev = new Int32Array(N * 4).fill(-1);
     const buckets: number[][] = [];
@@ -319,7 +338,7 @@ class Sci {
         for (let k = 0; k < 4; k++) {
           const nu = iu + DU[k], nv = iv + DV[k];
           if (nu < 0 || nv < 0 || nu >= NW || nv >= ND || !ok[nv * NW + nu]) continue;
-          const ns = (nv * NW + nu) * 4 + k, nc = c + 1 + (k === dir ? 0 : TURN);
+          const ns = (nv * NW + nu) * 4 + k, nc = c + 1 + (k === dir ? 0 : TURN) + pen(nv * NW + nu);
           if (nc < dist[ns]) { dist[ns] = nc; prev[ns] = st; (buckets[nc] ??= []).push(ns); }
         }
       }
@@ -342,7 +361,6 @@ class Sci {
   // --- the store ------------------------------------------------------------------------------------
   dress(): void {
     const d = this.d, D = this.D;
-    const cs = this.cashSide(), os = other(cs);
     // 1. the entry spine to the centrepiece, the rocket under the hung solar system, the globes beside it
     const vS = Math.max(2.4, Math.min(D * 0.45, D - 3.6));
     this.keep(this.entryU, 0, this.entryU, Math.min(3, vS), Math.max(0.75, Math.min(1.1, this.entryHalf)));
@@ -355,17 +373,23 @@ class Sci {
       for (let i = 1; i < r.length; i++) d.keepSegment(r[i - 1].x, r[i - 1].z, r[i].x, r[i].z, 0.75);
       this.res.routes.push(r);
     }
-    // 3. the cash desk (+ the tech wall beyond it), 4. the star-map / specimen wall, 5. the kit wall
-    const tillEnd = this.cashDesk(cs);
-    this.starWall();
-    this.kitWall(os);
-    this.techWall(cs, tillEnd);
-    // 6. telescopes at the windows, 7. the demo bench, 8. display tables and models
+    // 3. the cash desk, the telescopes at the windows, 4. the hands-on demo bench (the store's must-haves first), 5. the star-map /
+    // specimen wall, 6. the kit wall (the other side wall), 7. the tech wall beyond the cash desk
+    const desk = this.cashDesk(this.cashSide());
+    const cs: 'L' | 'R' = desk.side === 'B' ? this.cashSide() : desk.side, os = other(cs);
+    const tillEnd = desk.side === 'B' ? 1.0 : desk.end;
     this.telescopes();
     this.demoBench(os);
+    this.starWall(desk.side === 'B');
+    const tw: ['L' | 'R' | 'B', number] = desk.side === 'B' ? ['B', desk.end] : [cs, tillEnd];
+    this.techWall(tw[0], tw[1], 1, false);
+    this.kitWall(os);
+    this.techWall(tw[0], tw[1], this.rng.int(2, 3), true);
+    // 8. display tables and models, 9. the periodic chart by the bench, the posters
     this.tables();
-    // 9. posters, 10. back rooms (or the staff stock corner)
+    this.chart();
     this.posters(cs, os);
+    // 11. back rooms (or the staff stock corner)
     if (this.anchor.stock.length) for (const id of this.anchor.stock) this.backRoom(id);
     else this.stockCorner(cs, tillEnd);
   }
@@ -413,20 +437,37 @@ class Sci {
     if (!res.globes.length) d.skipped.push('globes');
   }
 
-  /** The cash desk: [shop counter (till), glass counter] facing the floor, the cash-wrap back counter on the wall behind. Returns its far end (v). */
-  cashDesk(cs: 'L' | 'R'): number {
-    const d = this.d, res = this.res, D = this.D;
-    const mods: PropKind[] = ['shopCounter', 'glassCounter'];
+  /**
+   * The cash desk: [shop counter (till), glass counter] facing the floor, the cash-wrap back counter on the wall behind (the staff aisle
+   * between). Near the front on the roomier side wall, else the other, else along the back wall; a single till counter when the pair
+   * finds no room. Returns its wall and the far end of its run (m along that wall).
+   */
+  cashDesk(cs: 'L' | 'R'): {side: 'L' | 'R' | 'B'; end: number} {
+    const {W, D} = this;
+    const tries: ['L' | 'R' | 'B', number][] = [];
+    for (const side of [cs, other(cs)]) for (let t0 = 1.5; t0 <= D - 4.0 + 1e-6; t0 += 0.5) tries.push([side, t0]);
+    const mid = Math.round(W / 2 - 1.5);
+    for (let k = 0; k <= W; k += 1) for (const t0 of k ? [mid - k, mid + k] : [mid]) if (t0 >= 1.0 && t0 <= W - 4.0) tries.push(['B', t0]);
+    for (const mods of [['shopCounter', 'glassCounter'], ['shopCounter']] as PropKind[][]) for (const [side, t0] of tries) {
+      const end = this.cashRun(side, t0, mods);
+      if (end !== null) return {side, end};
+    }
+    this.d.skipped.push('cash desk');
+    return {side: cs, end: 1.5};
+  }
+  /** One cash-desk run attempt (all or nothing): the modules from `t0` along wall `side`; the far end of the run, or null. */
+  cashRun(side: 'L' | 'R' | 'B', t0: number, mods: readonly PropKind[]): number | null {
+    const d = this.d, res = this.res, len = side === 'B' ? this.W : this.D;
     const backD = PROP_DEFS.mallCashwrapCounter.d, ub = counterBack(backD);
-    const runW = mods.reduce((s, k) => s + PROP_DEFS[k].w, 0);
-    for (const side of [cs, other(cs)]) for (const t0 of [1.5, 2.0, 2.5, 3.5, 4.5, 5.5]) {
-      if (t0 + runW > D - 1.0) continue;
+    const modW = mods.reduce((s, k) => s + PROP_DEFS[k].w, 0), runW = Math.max(PROP_DEFS.mallCashwrapCounter.w, modW);
+    {
+      if (t0 + runW > len - 0.8) return null;
       const face = this.wallFace(side, t0, t0 + runW);
-      if (face === null) continue;
+      if (face === null) return null;
       const got: PropPlacement[] = [];
       let cw: PropPlacement | null = null;
       const ok = d.tx(() => {
-        let t = t0;
+        let t = t0 + (runW - modW) / 2;
         for (const k of mods) {
           const def = PROP_DEFS[k], off = face + ub + def.d / 2;
           const [u, v] = this.wallUV(side, t + def.w / 2, off);
@@ -439,38 +480,48 @@ class Sci {
         if (!cw) return false;
         // the staff aisle between them and both its ends stay clear
         const au = face + 0.03 + backD + (ub - 0.03 - backD) / 2;
-        const [a0u, a0v] = this.wallUV(side, Math.max(0.6, t0 - 0.8), au), [a1u, a1v] = this.wallUV(side, Math.min(D - 0.6, t0 + runW + 0.8), au);
+        const [a0u, a0v] = this.wallUV(side, Math.max(0.6, t0 - 0.8), au), [a1u, a1v] = this.wallUV(side, Math.min(len - 0.6, t0 + runW + 0.8), au);
         this.keep(a0u, a0v, a1u, a1v, 0.4);
         return true;
       });
-      if (!ok) continue;
+      if (!ok) return null;
       res.till.push(...got);
       res.cashwrap = cw;
       const till = got.find(p => p.kind === 'shopCounter');
       if (till) res.register = d.onTop(till, 'cashRegister', REGISTER_X, 0, SHOP_COUNTER_TOP_Y);
       return t0 + runW;
     }
-    d.skipped.push('cash desk');
-    return 1.5;
   }
 
   /** The tech wall: device shelving (torch cells, batteries) beyond the cash desk on its wall. */
-  techWall(cs: 'L' | 'R', tillEnd: number): void {
-    const res = this.res;
-    res.tech.push(...this.wallRun(cs, 'stockShelf', tillEnd + 1.0, this.D - 0.7, {max: this.rng.int(2, 3), gap: 0.05, front: 0.9, variant: () => stockVariant('devices'), purpose: SCIENCE_TECH_PURPOSE}));
-    if (res.tech.length < 2) res.tech.push(...this.wallRun('B', 'stockShelf', 0.8, this.W - 0.8, {max: 2 - res.tech.length, front: 0.9, variant: () => stockVariant('devices'), purpose: SCIENCE_TECH_PURPOSE}));
-    if (!res.tech.length) this.d.skipped.push('tech wall');
+  techWall(cs: 'L' | 'R' | 'B', tillEnd: number, want: number, final: boolean): void {
+    const res = this.res, o = {gap: 0.05, front: 0.9, variant: () => stockVariant('devices'), purpose: SCIENCE_TECH_PURPOSE};
+    if (res.tech.length < want) res.tech.push(...this.wallRun(cs, 'stockShelf', tillEnd + 1.0, (cs === 'B' ? this.W : this.D) - 0.7, {...o, max: want - res.tech.length}));
+    // (no room beyond the desk: the back wall, then any side wall)
+    for (const w of ['B', 'L', 'R'] as const) {
+      if (res.tech.length >= Math.min(want, 2)) break;
+      res.tech.push(...this.wallRun(w, 'stockShelf', 0.8, (w === 'B' ? this.W : this.D) - 0.8, {...o, max: Math.min(want, 2) - res.tech.length}));
+    }
+    if (final && !res.tech.length) this.d.skipped.push('tech wall');
   }
 
   /** The kit wall: open shelving with boxed kits / microscopes / chemistry glassware on its tiers, the tin robot kit beside it. */
   kitWall(os: 'L' | 'R'): void {
     const res = this.res, d = this.d, D = this.D;
     const shelves = this.wallRun(os, 'shelf', 1.6, D - 0.7, {max: this.rng.int(4, 6), gap: 0.04, front: 0.9});
-    if (shelves.length < 3) shelves.push(...this.wallRun('B', 'shelf', 0.8, this.W - 0.8, {max: 3 - shelves.length, gap: 0.04, front: 0.9}));
+    for (const p of shelves) this.kitSpots.push([os, xzUV(this.fr, p.x, p.z)[1]]);
+    // (a short kit wall: the back wall, then any free stretch of the other side wall)
+    for (const w of ['B', other(os), os] as const) {
+      if (shelves.length >= 3) break;
+      const more = this.wallRun(w, 'shelf', 0.8, (w === 'B' ? this.W : D) - 0.8, {max: 3 - shelves.length, gap: 0.04, front: 0.9});
+      for (const p of more) this.kitSpots.push([w, xzUV(this.fr, p.x, p.z)[w === 'B' ? 0 : 1]]);
+      shelves.push(...more);
+    }
     if (!shelves.length) d.skipped.push('kit shelves');
     res.kits.push(...shelves);
     const stock: PropKind[] = ['skyDModelKits', 'skyDModelKits', 'labMicroscope', 'labBottleRack', 'labTubeRack', 'labFlaskLarge'];
-    for (const sh of shelves) for (const tier of [0, 1, 2]) this.shelfTier(sh, tier, this.rng.pick(stock));
+    // (boxed kits at eye level on every unit; the other tiers a seeded mix of kits, microscopes and chemistry glassware)
+    for (const sh of shelves) for (const tier of [0, 1, 2]) this.shelfTier(sh, tier, tier === 1 ? 'skyDModelKits' : this.rng.pick(stock));
     // the robot kit: the metre-tall tin robot by the shelving's front end
     const first = shelves[0];
     if (first) {
@@ -491,14 +542,13 @@ class Sci {
   }
 
   /** The star-map wall (back wall): the framed star-chart mural, the two glass specimen cabinets under / beside it. */
-  starWall(): void {
+  starWall(deskOnBack: boolean): void {
     const res = this.res, d = this.d, W = this.W;
     const m = this.double ? SCIENCE_MURAL.double : SCIENCE_MURAL.hall;
     const cab = PROP_DEFS.glassDisplayCabinet;
     const offs = [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 3, -3, 4, -4];
-    const tryWall = (w: 'L' | 'R' | 'B', len: number, centre: number): boolean => {
-      for (const s of [m.s, 1.25, 1.0]) {
-        if (s > m.s) continue;
+    const tryWall = (w: 'L' | 'R' | 'B', len: number, centre: number, s: number): boolean => {
+      {
         for (const off of offs) {
           const t = centre + off;
           const p = this.mountArt(w, 'skySciStarMap', t, m.y, s);
@@ -513,7 +563,10 @@ class Sci {
       }
       return false;
     };
-    if (!tryWall('B', W, W / 2) && !tryWall(this.cashSide() === 'L' ? 'R' : 'L', this.D, this.D * 0.6)) d.skipped.push('star-map wall');
+    const walls: ['L' | 'R' | 'B', number, number][] = [['B', W, W / 2], [other(this.cashSide()), this.D, this.D * 0.6], [this.cashSide(), this.D, this.D * 0.6]];
+    if (deskOnBack) walls.push(walls.shift()!);
+    // (the largest size that fits any of the walls first: the double height's star map is a wall-scale piece)
+    if (![m.s, 1.25, 1.0].filter(s => s <= m.s).some(s => walls.some(([w, len, c]) => tryWall(w, len, c, s)))) d.skipped.push('star-map wall');
     // a specimen cabinet still missing: anywhere along the back wall
     if (res.specimen.length < 2) res.specimen.push(...this.wallRun('B', 'glassDisplayCabinet', 0.6, W - 0.6, {max: 2 - res.specimen.length, gap: 0.2, front: 0.7}));
     if (!res.specimen.length) d.skipped.push('specimen cabinets');
@@ -535,7 +588,12 @@ class Sci {
       const p = this.put(kind, u, v, yaw, {ring: 0.3});
       if (p) res.telescopes.push(p);
     }
-    if (!res.telescopes.length) res.telescopes.push(...this.islands('skyDTelescope', 1, {u0: 1.0, u1: W - 1.0, v0: 1.8, v1: 3.5}, {ring: 0.3, yaw: () => this.fr.toFront + Math.PI / 2}));
+    // (no window spot free: on the front half of the floor, still aimed at the storefront)
+    for (const kind of ['skyDTelescope', 'telescope'] as PropKind[]) {
+      if (res.telescopes.length >= 2) break;
+      res.telescopes.push(...this.islands(kind, 1, {u0: 1.0, u1: W - 1.0, v0: 1.8, v1: Math.max(2.5, Math.min(this.D / 2, 5.0))},
+        {ring: 0.3, apart: 1.5, near: [this.entryU, 2.0], yaw: () => (kind === 'skyDTelescope' ? this.fr.toFront + Math.PI / 2 : this.fr.toFront)}));
+    }
     if (!res.telescopes.length) this.d.skipped.push('telescopes');
   }
 
@@ -544,21 +602,34 @@ class Sci {
     const res = this.res, d = this.d, {W, D} = this;
     const nu = os === 'L' ? W * 0.3 : W * 0.7, nv = D * 0.62;
     const reg = {u0: 2.6, u1: W - 2.6, v0: 2.6, v1: D - 1.8};
-    for (const yaw of [this.fr.toFront, this.fr.plusU]) {
-      res.demo = this.islands('labBench', 1, reg, {ring: 0.9, yaw: () => yaw, near: [nu, nv]})[0] ?? null;
+    for (const [yaw, ring] of [[this.fr.toFront, 0.9], [this.fr.plusU, 0.9], [this.fr.toFront, 0.6], [this.fr.plusU, 0.6]]) {
+      res.demo = this.islands('labBench', 1, ring < 0.9 ? {u0: 1.8, u1: W - 1.8, v0: 2.2, v1: D - 1.4} : reg, {ring, yaw: () => yaw, near: [nu, nv]})[0] ?? null;
+      if (res.demo) break;
+    }
+    // (a small floor: the bench against a free wall, its drawers to the room)
+    if (!res.demo) for (const w of ['B', os, other(os)] as const) {
+      const len = w === 'B' ? W : D;
+      for (let t = PROP_DEFS.labBench.w / 2 + 0.4; t <= len - PROP_DEFS.labBench.w / 2 - 0.4 && !res.demo; t += 0.5) res.demo = this.wallUnit(w, 'labBench', t, {front: 0.9});
       if (res.demo) break;
     }
     if (!res.demo) { d.skipped.push('demo bench'); return; }
     const top = PROP_DEFS.labBench.h;
     const decor = this.rng.shuffle(['labMicroscope', 'labFlaskLarge', 'labTubeRack', 'labBottleRack', 'labFlask', 'labBottle'] as PropKind[]).slice(0, this.rng.int(4, 5));
     decor.forEach((k, i) => { const p = d.onTop(res.demo!, k, r3((i - (decor.length - 1) / 2) * 0.55), r3(this.rng.range(-0.12, 0.12)), top, res.demo!.rot); if (p) res.demoStock.push(p); });
-    // the periodic chart on the wall nearest the bench
-    const [bu, bv] = xzUV(this.fr, res.demo.x, res.demo.z);
+  }
+
+  /** The periodic-table chart on the wall nearest the demo bench (else the middle of the back wall). */
+  chart(): void {
+    const res = this.res, d = this.d, {W, D} = this;
+    const [bu, bv] = res.demo ? xzUV(this.fr, res.demo.x, res.demo.z) : [W / 2, D - 1];
     const cands: ['L' | 'R' | 'B', number, number][] = [['L', bv, bu], ['R', bv, W - bu], ['B', bu, D - bv]];
     cands.sort((a, b) => a[2] - b[2]);
     for (const [w, t] of cands) {
-      for (const off of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 3, -3]) {
-        if ((res.chart = this.mountArt(w, 'skySciChart', t + off, 1.3))) break;
+      const len = w === 'B' ? W : D;
+      const offs = Array.from({length: Math.ceil(len / 0.5) * 2 + 1}, (_, i) => (i % 2 ? 1 : -1) * Math.ceil(i / 2) * 0.5);
+      for (const off of offs) {
+        if (t + off < 0.9 || t + off > len - 0.9) continue;
+        if ((res.chart = this.mountArt(w, 'skySciChart', t + off, 1.3) ?? (this.double ? this.mountArt(w, 'skySciChart', t + off, 2.2) : null))) break;
       }
       if (res.chart) break;
     }
@@ -585,15 +656,17 @@ class Sci {
     // above the kit shelving (clear of its 1.85 m top), in turn: chemistry set, crystals, robot
     const y = 2.05;
     let v = 0;
-    const shelves = res.kits.filter(p => xzUV(this.fr, p.x, p.z)[0] < 1.5 || xzUV(this.fr, p.x, p.z)[0] > this.W - 1.5);
-    const along = shelves.map(p => xzUV(this.fr, p.x, p.z)[1]).sort((a, b) => a - b);
-    const ts = along.length ? along : [D * 0.35, D * 0.55, D * 0.75];
-    for (const t of ts) {
-      if (v >= SCI_POSTER_VARIANTS.length) break;
-      if (res.posters.some(p => Math.abs(xzUV(this.fr, p.x, p.z)[1] - t) < 0.9)) continue;
-      const p = this.mountArt(os, 'skySciPoster', t, y, 1, v) ?? this.mountArt(os, 'skySciPoster', t, 1.25, 1, v);
-      if (p) { res.posters.push(p); v++; }
-    }
+    const spots: ['L' | 'R' | 'B', number][] = this.kitSpots.length ? this.kitSpots : [[os, D * 0.35], [os, D * 0.55], [os, D * 0.75]];
+    const tryAt = (w: 'L' | 'R' | 'B', t: number): boolean => {
+      for (const off of [0, 0.35, -0.35, 0.7, -0.7]) {
+        const p = this.mountArt(w, 'skySciPoster', t + off, y, 1, v) ?? this.mountArt(w, 'skySciPoster', t + off, 1.25, 1, v);
+        if (p) { res.posters.push(p); v++; return true; }
+      }
+      return false;
+    };
+    for (const [w, t] of spots) if (v < SCI_POSTER_VARIANTS.length) tryAt(w, t);
+    // (none above the shelving: on the kit side's wall anywhere)
+    for (let t = 1.0; t <= D - 1.0 && v < 2; t += 1.0) tryAt(os, t);
     // the star-chart poster by the cash desk's wall (or anywhere)
     for (const w of [cs, 'B', os] as const) {
       const len = w === 'B' ? this.W : D;
@@ -610,27 +683,39 @@ class Sci {
     if (!room) return;
     const door = this.layout.doors.find(q => (q.a === id && this.ids.has(q.b)) || (q.b === id && this.ids.has(q.a)));
     const fr = hallFrame(room, door ? doorSide(door, room) : this.anchor.front);
-    const walls: Wall[] = ['B', 'L', 'R'];
+    const walls: Wall[] = ['B', 'L', 'R', 'F'];
     const out = this.res.back;
-    const run = (kind: PropKind, n: number, o: {gap?: number} = {}) => {
+    const run = (kind: PropKind, n: number, o: {gap?: number; loose?: boolean} = {}) => {
       let got = 0;
       for (const w of this.rng.shuffle(walls.slice())) {
         if (got >= n) break;
-        const len = w === 'B' ? fr.W : fr.D;
+        const len = w === 'B' || w === 'F' ? fr.W : fr.D;
         const ps = d.wallRow(w, kind, 0.4, len - 0.4, {area: room, fr, max: n - got, gap: o.gap ?? 0.1});
         out.push(...ps);
         got += ps.length;
       }
+      // small loose stock (cartons, totes): also out on the free floor (the primitive keeps the room connected)
+      if (o.loose && got < n) {
+        const spots: [number, number][] = [];
+        for (let u = 0.75; u <= fr.W - 0.75; u += 0.5) for (let v = 0.75; v <= fr.D - 0.75; v += 0.5) spots.push([u, v]);
+        for (const [u, v] of this.rng.shuffle(spots)) {
+          if (got >= n) break;
+          const p = d.put(kind, u, v, d.anyYaw(), {area: room, fr, ring: 0.3});
+          if (p) { out.push(p); got++; }
+        }
+      }
       return got;
     };
     if (room.type === 'stock-room') {
-      if (!run('staffLockers', 1)) d.skipped.push(`back room ${id}: lockers`);
-      if (!run('cardboardBoxFlaps', this.rng.int(2, 4), {gap: 0.08})) d.skipped.push(`back room ${id}: cartons`);
-      run('storageTote', this.rng.int(1, 2), {gap: 0.08});
+      // staff lockers, else a two-door cabinet, else a filing cabinet: openable staff storage
+      if (!run('staffLockers', 1) && !run('cabinetTall', 1) && !run('filingCabinet', 1)) d.skipped.push(`back room ${id}: lockers`);
+      if (!run('cardboardBoxFlaps', this.rng.int(2, 4), {gap: 0.08, loose: true})) d.skipped.push(`back room ${id}: cartons`);
+      run('storageTote', this.rng.int(1, 2), {gap: 0.08, loose: true});
     } else {
       if (!this.layout.props.some(p => p.area === id && (p.kind === 'filingCabinet' || p.kind === 'officeFiling'))) run('filingCabinet', 1);
-      run('cardboardBoxFlaps', this.rng.int(1, 2), {gap: 0.08});
-      run('storageTote', 1);
+      if (!this.layout.props.some(p => p.area === id && p.kind === 'staffLockers')) run('staffLockers', 1);
+      run('cardboardBoxFlaps', this.rng.int(1, 2), {gap: 0.08, loose: true});
+      run('storageTote', 1, {loose: true});
     }
   }
 
