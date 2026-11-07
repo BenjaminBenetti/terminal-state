@@ -25,12 +25,12 @@
 import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../../props';
-import {WALL_ROT, begin, commit, makePlaceCtx, rollback, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
+import {WALL_ROT, backed, begin, commit, makePlaceCtx, rollback, sideOfRot, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
 import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld} from '../addonFrame';
 import {AnchorKit, r3, snapEdge, type ShopsALane} from '../destinations/skywaysShopsAKit';
-import {DESIGN_RUG, DESIGN_RUGS, DESIGN_TEXTILES} from './kinds/design';
+import {DESIGN_PRINT, DESIGN_RUG, DESIGN_RUGS, DESIGN_TEXTILES} from './kinds/design';
 
 /** Loot key of the lighting gallery's storage (an existing purpose: the electronics store's spare cells / flares). */
 export const DESIGN_LIGHTING_PURPOSE = 'mall-electronics';
@@ -56,12 +56,14 @@ export interface DesignResult {
   back: {area: number; type: string; props: PropPlacement[]}[];
   /** The wall shelving per storey (bookcases, dressers). */
   walls: {level: number; bookcases: PropPlacement[]; dressers: PropPlacement[]}[];
+  /** The framed art prints hung (over sofas, beds, sideboards). */
+  prints: PropPlacement[];
 }
 const RESULTS = new WeakMap<StationLayout, DesignResult[]>();
 /** QA / tests: what the design dresser placed in a layout. */
 export function skywaysDesignDressOf(layout: StationLayout): readonly DesignResult[] { return RESULTS.get(layout) ?? []; }
 
-interface Ctx { kit: AnchorKit; res: DesignResult; rugs: {level: number; x0: number; z0: number; x1: number; z1: number}[]; rugN: number }
+interface Ctx { kit: AnchorKit; res: DesignResult; rugs: {level: number; x0: number; z0: number; x1: number; z1: number}[]; rugN: number; printN: number }
 
 const quarterTurned = (rot: number) => Math.abs(Math.sin(rot)) > 0.7;
 /**
@@ -81,8 +83,8 @@ function localBox(host: {x: number; z: number; rot: number}, lx0: number, lz0: n
 export function dressDesignStore(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number {
   if (!layout.areas[anchor.floor]) return 0;
   const kit = new AnchorKit(layout, rng, anchor);
-  const res: DesignResult = {anchor: anchor.id, format: anchor.format, level: kit.level, other: kit.other, props: [], lanes: kit.lanes, skipped: kit.skipped, sets: [], back: [], walls: []};
-  const C: Ctx = {kit, res, rugs: [], rugN: rng.int(0, DESIGN_RUGS.length - 1)};
+  const res: DesignResult = {anchor: anchor.id, format: anchor.format, level: kit.level, other: kit.other, props: [], lanes: kit.lanes, skipped: kit.skipped, sets: [], back: [], walls: [], prints: []};
+  const C: Ctx = {kit, res, rugs: [], rugN: rng.int(0, DESIGN_RUGS.length - 1), printN: rng.int(0, DESIGN_PRINT.pieces - 1)};
   kit.reserveDoors();
   const desk = designDesk(C);
   kit.reserveLanes();
@@ -224,6 +226,45 @@ function reserveAround(kit: AnchorKit, ps: PropPlacement[], level: number, margi
   const x0 = Math.min(...ps.map(p => p.x - p.hx)) - margin, x1 = Math.max(...ps.map(p => p.x + p.hx)) + margin;
   const z0 = Math.min(...ps.map(p => p.z - p.hz)) - margin, z1 = Math.max(...ps.map(p => p.z + p.hz)) + margin;
   kit.keepBox(x0, z0, x1, z1, level);
+}
+
+/**
+ * Framed art prints (one, or a pair) centred at `t` on the wall `side` of area `a`, their bottom `y0` m above the storey floor: only
+ * where the wall is solid over the whole frame (no opening, window or aperture behind it), clear of the other wall art and with no tall
+ * piece standing in front of it. Mounted (they never block a cell). Returns the prints hung.
+ */
+function hangPrints(C: Ctx, level: number, a: Area, side: Side, t: number, y0: number, n: number): PropPlacement[] {
+  const {kit} = C, s = kit.st(level), P = DESIGN_PRINT, out: PropPlacement[] = [];
+  const ts = n >= 2 ? [t - (P.w / 2 + 0.06), t + (P.w / 2 + 0.06)] : [t];
+  const along = side === 'N' || side === 'S', local = new Set(kit.placed);
+  for (const tc of ts) {
+    const t0 = tc - P.w / 2, t1 = tc + P.w / 2;
+    if (!backed(s.ctx, a, side, t0, t1, s.base + y0 + 0.05) || !backed(s.ctx, a, side, t0, t1, s.base + y0 + P.h - 0.05)) continue;
+    if (kit.windowAt(a, side, t0, t1, y0 + P.h + 0.1, level)) continue;
+    const [x, z] = wallXZ(a, side, tc, P.d / 2 + 0.004);
+    const hx = along ? P.w / 2 : P.d / 2, hz = along ? P.d / 2 : P.w / 2;
+    // (the wall cell behind it is the area's own wall, not a door; no other wall art within 0.1 m; nothing taller than its bottom in front)
+    const [cx, cy] = s.g.cellOf(...wallXZ(a, side, tc, -0.25));
+    if (!s.g.inBounds(cx, cy) || s.ctx.doorCell[s.g.idx(cx, cy)]) continue;
+    const [fx, fz] = wallXZ(a, side, tc, 0.35), fhx = along ? P.w / 2 : 0.35, fhz = along ? 0.35 : P.w / 2;
+    const clash = kit.layout.props.some(q => {
+      if ((q.level ?? 0) !== level) return false;
+      if (q.mounted) return q.kind !== 'skyDsRug' && Math.abs(q.x - x) < q.hx + hx + 0.1 && Math.abs(q.z - z) < q.hz + hz + 0.1;
+      // (this dresser's props are still in the storey's local height frame; earlier ones are absolute)
+      const top = q.y + q.h - (local.has(q) ? 0 : s.base);
+      return top > y0 - 0.02 && Math.abs(q.x - fx) < q.hx + fhx && Math.abs(q.z - fz) < q.hz + fhz;
+    });
+    if (clash) continue;
+    out.push(kit.push({kind: 'skyDsArtPrint', x: r3(x), z: r3(z), y: r3(y0), rot: WALL_ROT[side], area: a.id, hx: r3(hx), hz: r3(hz), h: P.h, blocksSight: false,
+      variant: C.printN++ % P.pieces, mounted: true}, level));
+  }
+  C.res.prints.push(...out);
+  return out;
+}
+/** A print over a wall-backed sideboard / dresser (clear of the throws on its top). */
+function printOver(C: Ctx, level: number, p: PropPlacement): void {
+  const side = sideOfRot(p.rot), a = C.kit.layout.areas[p.area];
+  if (a) hangPrints(C, level, a, side, side === 'N' || side === 'S' ? p.x : p.z, PROP_DEFS[p.kind].h + 0.3, 1);
 }
 
 /** A set placed (its rug laid, its floor reserved, recorded). */
@@ -372,7 +413,7 @@ function livingIsland(C: Ctx, level: number): boolean {
 }
 function living(C: Ctx, level: number, island: boolean): boolean {
   const {kit} = C, sofa = PROP_DEFS.skyDSofa, ot = PROP_DEFS.ottoman, lamp = PROP_DEFS.skyDArcLamp, tb = PROP_DEFS.cafeBistroTable, fr = kit.fr;
-  const anchors: {a?: Area; x: number; z: number; rot: number}[] = island ? [] : wallAnchors(kit, 'skyDSofa', level);
+  const anchors: {a?: Area; side?: Side; t?: number; x: number; z: number; rot: number}[] = island ? [] : wallAnchors(kit, 'skyDSofa', level);
   if (island) {
     const [ox, oz] = wayIn(kit, level);
     const spots: [number, number][] = [];
@@ -415,6 +456,8 @@ function living(C: Ctx, level: number, island: boolean): boolean {
     if (!ok) continue;
     const s = got[0];
     done(C, 'living', level, got, localBox(s, -(sofa.w / 2 + 0.3), island ? -sofa.d / 2 + 0.1 : sofa.d / 2 - 0.3, sofa.w / 2 + 0.3, far - 0.25), island ? 0.8 : 0.6);
+    // art over the sofa (a pair, or one)
+    if (sp.a && sp.side && sp.t !== undefined) hangPrints(C, level, sp.a, sp.side, sp.t, sofa.h + 0.3, kit.rng.chance(0.6) ? 2 : 1);
     return true;
   }
   return false;
@@ -454,7 +497,7 @@ function diningSet(C: Ctx, level: number): boolean {
     // the sideboard (a dresser with a throw on it) on the nearest free wall, when one is close
     if (kit.rng.chance(0.6)) {
       const t = got[0], sb = kit.putNearWall('dresserDrawers', t.x, t.z, {level, front: 0.8, tries: 24});
-      if (sb && Math.hypot(sb.x - t.x, sb.z - t.z) < 5.5) { textilesOn(kit, sb, PROP_DEFS.dresserDrawers.h, 0.38, 0, throwVariant(kit)); C.res.sets[C.res.sets.length - 1].props.push(sb); }
+      if (sb && Math.hypot(sb.x - t.x, sb.z - t.z) < 5.5) { textilesOn(kit, sb, PROP_DEFS.dresserDrawers.h, 0.38, 0, throwVariant(kit)); C.res.sets[C.res.sets.length - 1].props.push(sb); printOver(C, level, sb); }
       else if (sb) C.res.sets.push({kind: 'dining', level, props: [sb]});
     }
     return true;
@@ -503,6 +546,8 @@ function bedroomSet(C: Ctx, level: number): boolean {
     if (!ok) continue;
     const b = got[0];
     done(C, 'bedroom', level, got, localBox(b, -bed.w / 2 + 0.55, -(bed.d / 2 + 0.6), bed.w / 2 + 0.85, bed.d / 2 + 0.6));
+    // art over the headboard
+    hangPrints(C, level, sp.a, sp.side, sp.t, bed.h + 0.2, kit.rng.chance(0.4) ? 2 : 1);
     return true;
   }
   return false;
@@ -605,7 +650,7 @@ function wallFill(C: Ctx, level: number): void {
   const sides = rng.shuffle(['N', 'S', 'E', 'W'] as Side[]);
   const cases = kit.wallRun('bookstoreBookcase', {level, sides, cluster: 2, gap: 1.6, max: rng.int(2, 4), front: 0.9});
   const dressers = kit.wallRun('dresserDrawers', {level, sides: rng.shuffle(sides.slice()), cluster: 1, gap: 2.5, max: rng.int(1, 2), front: 0.8});
-  for (const d of dressers) textilesOn(kit, d, PROP_DEFS.dresserDrawers.h, rng.chance(0.5) ? 0.38 : -0.38, 0, throwVariant(kit));
+  for (const d of dressers) { textilesOn(kit, d, PROP_DEFS.dresserDrawers.h, rng.chance(0.5) ? 0.38 : -0.38, 0, throwVariant(kit)); printOver(C, level, d); }
   kit.wallRun('pottedPlantSmall', {level, sides: rng.shuffle(sides.slice()), cluster: 1, gap: 3.5, max: rng.int(2, 3)});
   lattice(kit, 'planterTree', {level, ring: 0.6, pitch: [3.0, 3.0], max: rng.int(1, 2)});
   C.res.walls.push({level, bookcases: cases, dressers});

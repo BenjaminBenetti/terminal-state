@@ -18,7 +18,13 @@ import {purposeById} from '../src/gen/purposes';
 import {SKYWAYS_STORES} from '../src/gen/skyways/stores/index';
 import {STORE_DESIGN} from '../src/gen/skyways/stores/design';
 import {DESIGN_LIGHTING_PURPOSE, designPitch, skywaysDesignDressOf, type DesignResult} from '../src/gen/skyways/stores/designDress';
-import {DESIGN_RUG, DESIGN_RUGS, DESIGN_TEXTILES, STORE_DESIGN_KINDS, STORE_DESIGN_MALL_MODELS, designRugParts, designTextileParts} from '../src/gen/skyways/stores/kinds/design';
+import {DESIGN_PRINT, DESIGN_RUG, DESIGN_RUGS, DESIGN_TEXTILES, STORE_DESIGN_KINDS, STORE_DESIGN_MALL_MODELS, designPrintArt, designRugParts, designTextileParts} from '../src/gen/skyways/stores/kinds/design';
+import {DESIGN_ART} from '../src/gen/skyways/stores/designArt';
+import {designArtLoaded, designArtMaterial} from '../src/world/skywaysStoreDesignDraw';
+import {preloadSkywaysStoreDesign} from '../src/world/skywaysStoreDesignRuntime';
+import {installSkywaysDestinations} from '../src/world/skywaysDestRuntime';
+import {levelOfAsset} from '../src/assets/levelAssets';
+import * as crypto from 'node:crypto';
 import {ANCHOR_STYLES, ANCHOR_STYLE_DEFAULTS} from '../src/gen/skyways/destinations/anchorStyles';
 import {AnchorKit} from '../src/gen/skyways/destinations/skywaysShopsAKit';
 import {MALL_KIND_ASSET} from '../src/gen/mall/kinds';
@@ -74,7 +80,7 @@ describe('Larch & Loom Home (design store): spec, kinds, finish', () => {
   });
 
   it('the store kinds: in PROP_DEFS, both audits (rug flat / static, textiles light on-host decor), nothing to open', () => {
-    expect([...STORE_DESIGN_KINDS]).toEqual(['skyDsRug', 'skyDsTextiles']);
+    expect([...STORE_DESIGN_KINDS]).toEqual(['skyDsRug', 'skyDsTextiles', 'skyDsArtPrint']);
     for (const k of STORE_DESIGN_KINDS) {
       expect(PROP_DEFS[k], k).toBeTruthy();
       expect(audit.get(k)?.cls, k).toBe('none');
@@ -82,6 +88,9 @@ describe('Larch & Loom Home (design store): spec, kinds, finish', () => {
     }
     expect(PROP_PHYSICS_AUDIT.skyDsRug).toMatchObject({cls: 'static', why: 'flat'});
     expect(PROP_PHYSICS_AUDIT.skyDsTextiles).toMatchObject({cls: 'dynamic', onHost: true});
+    expect(PROP_PHYSICS_AUDIT.skyDsArtPrint).toMatchObject({cls: 'static', why: 'mounted'});
+    // the print's art face keeps its atlas pieces' aspect (never stretched)
+    expect(designPrintArt().w / designPrintArt().h).toBeCloseTo(DESIGN_ART.aspect, 2);
     expect(PROP_DEFS.skyDsRug.h).toBeLessThanOrEqual(0.02); // flat: the walk / support code ignores it (q.h <= 0.02)
     // parts stay inside the kind's box: the textile stacks (every variant) and a rug (its band inside its rect)
     for (let v = 0; v < DESIGN_TEXTILES.variants; v++) for (const p of designTextileParts(v)) {
@@ -144,6 +153,17 @@ describe('Larch & Loom Home: the showroom (layout v3, both formats)', () => {
         const g = s.rug!, m = s.props[0];
         expect(Math.abs(m.x - g.x) < m.hx + g.hx && Math.abs(m.z - g.z) < m.hz + g.hz, `${at}: ${s.kind} on its rug`).toBe(true);
       }
+      // framed art prints on the walls over the sofas / beds / sideboards: mounted on solid wall, nothing taller in front
+      const prints = mine(h).filter(p => p.kind === 'skyDsArtPrint');
+      expect(prints.length, at).toBeGreaterThanOrEqual(2);
+      for (const p of prints) {
+        expect(p.mounted).toBe(true);
+        expect(p.variant).toBeLessThan(DESIGN_PRINT.pieces);
+        const base = h.layout.levels[p.level ?? 0].grid.floorOf(h.layout.levels[p.level ?? 0].grid.idx(...h.layout.levels[p.level ?? 0].grid.cellOf(p.x, p.z)));
+        expect(p.y - base, `${at}: print height`).toBeGreaterThan(1.0);
+        expect(p.y - base + p.h, `${at}: print top`).toBeLessThan(2.4);
+      }
+      expect(new Set(prints.map(p => p.variant)).size, at).toBeGreaterThanOrEqual(Math.min(2, prints.length));
       // two-level: the other storey is the bedroom + lighting showroom
       if (h.anchor.format === 'two-level') {
         expect(sets('bedroom').filter(s => s.level === r.other).length, at).toBeGreaterThanOrEqual(1);
@@ -333,6 +353,46 @@ describe('Larch & Loom Home: the showroom (layout v3, both formats)', () => {
   }, 600_000);
 });
 
+describe('Larch & Loom Home: the Codex print atlas', () => {
+  it('the atlas: a Skyways-only level texture with its provenance (Codex native image_gen, crop / resize / pack only), six pieces inside it', () => {
+    const pub = fileURLToPath(new URL('../public/', import.meta.url));
+    const file = path.join(pub, DESIGN_ART.url);
+    expect(fs.existsSync(file)).toBe(true);
+    expect(levelOfAsset(DESIGN_ART.url)).toBe('skyways');
+    const prov = JSON.parse(fs.readFileSync(path.join(pub, 'assets/derivatives/skyways-store-design-art-20261107.json'), 'utf8'));
+    expect(prov.generator).toMatch(/Codex native image_gen/);
+    expect(prov.status).toMatch(/unapproved prototype/);
+    expect(prov.codex.nativeSha256Matches).toBe(true);
+    const buf = fs.readFileSync(file);
+    expect(prov.output).toMatchObject({url: DESIGN_ART.url, bytes: buf.length, sha256: crypto.createHash('sha256').update(buf).digest('hex'), width: DESIGN_ART.width, height: DESIGN_ART.height});
+    expect(DESIGN_ART.pieces.length).toBe(6);
+    for (const r of DESIGN_ART.pieces) {
+      for (const v of [r.u0, r.u1, r.v0, r.v1]) { expect(v).toBeGreaterThanOrEqual(0); expect(v).toBeLessThanOrEqual(1); }
+      expect(((r.u1 - r.u0) * DESIGN_ART.width) / ((r.v1 - r.v0) * DESIGN_ART.height)).toBeCloseTo(DESIGN_ART.aspect, 2);
+    }
+  });
+
+  it('the runtime preload hands the renderer the atlas material (a missing atlas: the plain board, never drawn art)', async () => {
+    const h = ALL[0];
+    const tex = new THREE.Texture();
+    const owned: unknown[] = [];
+    const host = {levelResources: {load: async (_l: string, url: string) => (url === DESIGN_ART.url ? tex : null), own: <T>(_l: string, r: T) => { owned.push(r); return r; }}};
+    await preloadSkywaysStoreDesign(host as never, h.layout);
+    expect(designArtLoaded()).toBe(true);
+    expect((designArtMaterial() as THREE.MeshStandardMaterial).map).toBe(tex);
+    expect(owned.length).toBe(1);
+    await preloadSkywaysStoreDesign({levelResources: {load: async () => null, own: <T>(_l: string, r: T) => r}} as never, h.layout);
+    expect(designArtLoaded()).toBe(false);
+    expect((designArtMaterial() as THREE.MeshStandardMaterial).map ?? null).toBeNull();
+    // wired: the destinations runtime installs it as its own section preload (the level-only url, through LevelResources)
+    const asked: string[] = [], sectionPreloads: ((l: StationLayout) => Promise<void>)[] = [];
+    installSkywaysDestinations({sectionPreloads, levelResources: {load: async (lv: string, url: string) => { asked.push(`${lv}:${url}`); return url === DESIGN_ART.url ? tex : null; }, own: <T>(_l: string, r: T) => r}} as never);
+    for (const pre of sectionPreloads) await pre(h.layout);
+    expect(asked).toContain(`skyways:${DESIGN_ART.url}`);
+    expect(designArtLoaded()).toBe(true);
+  });
+});
+
 describe('Larch & Loom Home: the rug / textile renderer', () => {
   let mats: WorldMaterials;
   beforeAll(() => { mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}); });
@@ -359,7 +419,15 @@ describe('Larch & Loom Home: the rug / textile renderer', () => {
     ri.build([group], [...stacks, ...rugs], new Set());
     for (const s of stacks) expect(ri.inst.get(s)?.length, 'a stack\'s instances').toBeGreaterThan(0);
     for (const r of rugs) expect(ri.inst.get(r)?.length, 'a rug\'s field + band').toBe(2);
+    // the framed prints: frame / mat per shape material, an art quad per variant; the index maps each print
+    const prints = mine(h).filter(p => p.kind === 'skyDsArtPrint');
+    expect(buildSkywaysDestProp(group, 'skyDsArtPrint', prints, mats, inst, {}, l)).toBe(prints.length);
+    const printMeshes = (group.children as THREE.Mesh[]).filter(m => m.name.startsWith('prop-skyDsArtPrint-'));
+    expect(printMeshes.filter(m => /-art\d+$/.test(m.name)).length).toBe(new Set(prints.map(p => `${p.variant}@${p.level ?? 0}`)).size); // (per variant and storey)
+    const ri2 = new RenderIndex();
+    ri2.build([group], prints, new Set());
+    for (const p of prints) expect(ri2.inst.get(p)?.length, 'a print\'s frame / mat / art').toBe(3);
     const lights = () => [new THREE.PointLight(0xffffff, 1, 8)];
-    for (const m of [rugMeshes[0], texMeshes[0]]) for (const sh of buildBoth(m, {lights: lights()})) expect(sh.errors, `${m.name} (${sh.backend})`).toEqual([]);
+    for (const m of [rugMeshes[0], texMeshes[0], printMeshes.find(q => /-art\d+$/.test(q.name))!]) for (const sh of buildBoth(m, {lights: lights()})) expect(sh.errors, `${m.name} (${sh.backend})`).toEqual([]);
   }, 600_000);
 });

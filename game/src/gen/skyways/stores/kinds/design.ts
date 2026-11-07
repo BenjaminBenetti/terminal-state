@@ -5,17 +5,20 @@
 //
 // LARCH & LOOM HOME furnishes with existing kinds (the destination kit's sofa / egg chair / arc lamp / dining table / showroom bed; the
 // Mall's dresser, bookcase, cash-wrap, vitrine, ottoman, cartons and totes; the Subway / Office kitchenette, lockers, footlocker,
-// fridge). Two things no existing kind is:
+// fridge). Three things no existing kind is:
 //  - skyDsRug: a flat wool RUG under each room vignette (a field and a border band, sized per placement: hx / hz / h on the
 //    placement). Static 'flat' (a covering lying under furniture: nothing to shove or tip; the furniture stands on it).
 //  - skyDsTextiles: a stack of folded THROWS / TOWELS on a display table (the textiles department): light loose merchandise
 //    (on-host, ~2 kg), knocked off its table when shot or bumped like the bookshop's stacks.
-// Both are drawn by code (world/skywaysStoreDesignDraw.ts): boxes in the Office architecture's tinted CARPET material (the approved
-// Codex office carpet texture, re-tinted per colourway; no new or hand-drawn texture). Rule 4: neither bakes anything loose in.
+//  - skyDsArtPrint: a FRAMED ART PRINT hung on the wall over a sofa, a bed or a sideboard: a thin pale-oak frame, a white mat and one of
+//    the store's six Codex art prints (stores/designArt.ts atlas; no art drawn by code: without the atlas a plain board). Mounted.
+// The rugs and textiles are drawn by code (world/skywaysStoreDesignDraw.ts): boxes in the Office architecture's tinted CARPET material
+// (the approved Codex office carpet texture, re-tinted per colourway; no new or hand-drawn texture). Rule 4: none bakes anything loose in.
 
 import type {DestKindSpec} from '../../destinations/kindTypes';
+import {DESIGN_ART} from '../designArt';
 
-export const STORE_DESIGN_KINDS = ['skyDsRug', 'skyDsTextiles'] as const;
+export const STORE_DESIGN_KINDS = ['skyDsRug', 'skyDsTextiles', 'skyDsArtPrint'] as const;
 export type StoreDesignKind = (typeof STORE_DESIGN_KINDS)[number];
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -80,6 +83,24 @@ export function designRugParts(hx: number, hz: number, variant: number): DesignP
   ];
 }
 
+/**
+ * The framed print (prop frame: origin bottom centre on the wall face, front +Z into the room; metres): its outer frame, the frame bar,
+ * the mat border and the art (0.36 m wide, the atlas pieces' portrait aspect: stores/designArt.ts DESIGN_ART.aspect).
+ */
+const PRINT_ART_W = 0.36, PRINT_ART_H = r3(PRINT_ART_W / DESIGN_ART.aspect);
+export const DESIGN_PRINT = {w: r3(PRINT_ART_W + 2 * 0.03 + 2 * 0.05), h: r3(PRINT_ART_H + 2 * 0.03 + 2 * 0.06), d: 0.03, bar: 0.03, mat: 0.05, matV: 0.06, pieces: DESIGN_ART.pieces.length} as const;
+/** The print's art face size (m). */
+export const designPrintArt = (): {w: number; h: number} => ({w: PRINT_ART_W, h: PRINT_ART_H});
+/** Shape-material boxes of the print (gen/propShapes.ts keys): the pale-oak frame bars and the white mat behind the art. */
+export function designPrintParts(): {m: 'wood' | 'counter'; s: [number, number, number]; p: [number, number, number]}[] {
+  const {w, h, d, bar} = DESIGN_PRINT;
+  return [
+    {m: 'wood', s: [w, bar, d], p: [0, bar / 2, 0]}, {m: 'wood', s: [w, bar, d], p: [0, h - bar / 2, 0]},
+    {m: 'wood', s: [bar, r3(h - 2 * bar), d], p: [r3(-w / 2 + bar / 2), h / 2, 0]}, {m: 'wood', s: [bar, r3(h - 2 * bar), d], p: [r3(w / 2 - bar / 2), h / 2, 0]},
+    {m: 'counter', s: [r3(w - 2 * bar), r3(h - 2 * bar), 0.008], p: [0, h / 2, r3(-d / 2 + 0.004)]},
+  ];
+}
+
 export const STORE_DESIGN_SPECS: Readonly<Record<StoreDesignKind, DestKindSpec>> = {
   skyDsRug: {
     def: {w: DESIGN_RUG.w, d: DESIGN_RUG.d, h: DESIGN_RUG.h, blocksSight: false},
@@ -93,6 +114,12 @@ export const STORE_DESIGN_SPECS: Readonly<Record<StoreDesignKind, DestKindSpec>>
     phys: {dynamic: true, mass: 2.2, mat: 'pad', shape: 'box', onHost: true, how: 'pile of four folded wool throws / five folded towels (~2 kg) on a display table: a shot knocks it off the table (on-host decor; its host table stays put)'},
     damage: 'fabric',
     open: {cls: 'none', role: 'decor', how: 'folded throws / towels: merchandise on display, nothing to open'},
+  },
+  skyDsArtPrint: {
+    def: {w: DESIGN_PRINT.w, d: DESIGN_PRINT.d, h: DESIGN_PRINT.h, blocksSight: false},
+    phys: {dynamic: false, why: 'mounted', how: 'framed art print (~2 kg, pale oak frame) hung on the wall over a sofa / bed / sideboard: out of the way of feet and bodies; bullets mark it only'},
+    damage: 'wood',
+    open: {cls: 'none', role: 'decor', how: 'framed print: nothing to open'},
   },
 };
 

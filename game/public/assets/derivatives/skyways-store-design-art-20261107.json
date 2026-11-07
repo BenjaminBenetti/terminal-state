@@ -1,0 +1,162 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-store-design-art-20261107",
+ "task": "studio-alpha-skyways-shops-20261107-054512-01",
+ "lane": "STORE-DESIGN (Skyways major store: Larch & Loom Home)",
+ "status": "runtime derivative of SIX static framed-art-print artworks generated for this project with Codex native image_gen (owned Codex CLI) in ONE call (1 accepted of 1 attempt) under the store lanes' authorization (COMMON brief: Codex art for the store's wall / sign / poster / cover art, economical); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "game/src/world/skywaysStoreDesignDraw.ts: the skyDsArtPrint framed prints (pale-oak frame + white mat drawn as boxes, the art face one atlas piece each; loaded behind the loading screen by world/skywaysStoreDesignRuntime.ts; without the atlas a plain board)",
+ "rebuild": "node tools/asset-pipeline/skyways-stores/design/build-art.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/design/codex/{design-prints-original.png, receipt.json, prompt.txt, instruction.txt, attempts.log, codex-session.jsonl, SOURCES-SHA256.txt} (read-only raw master, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "source": {
+  "file": "design-prints-original.png",
+  "sha256": "502456e94600216be22695e812f52c8b61e292968a06b75736e03a55138bf50b",
+  "bytes": 2558485,
+  "width": 1024,
+  "height": 1536,
+  "channels": 3,
+  "hasAlpha": false
+ },
+ "codex": {
+  "generator": "Codex native built-in image_gen (owned Codex CLI codex exec, codex-cli 0.163.0)",
+  "threadId": "01a1b4f6-8104-7391-9ec0-584414b4be67",
+  "nativeOutput": "exec-5bc0223b-f97c-4a8a-b704-8c0208d05e64.png",
+  "nativeSha256Matches": true,
+  "exit": 0,
+  "launched": "2026-11-07T07:43:36Z",
+  "finished": "2026-11-07T07:44:19Z",
+  "agentModel": "gpt-6.1-sol (session rollout; the image model id is not reported)"
+ },
+ "prompt": "Six original wall-art prints for a calm Scandinavian home-design showroom, shown together as a clean product sheet: exactly six separate artworks arranged in a precise grid of 3 columns and 2 rows on a pure flat white background, every artwork the same size, a tall portrait rectangle (2:3), separated by wide even white gutters and a wide white margin around the sheet. Straight-on, flat, evenly lit, print-ready artwork only: no frames, no mats, no walls, no shadows, no text, no letters, no logos, no signatures, no watermarks. The six artworks: 1) mid-century abstract overlapping arches and circles in sage green, ochre, terracotta and cream; 2) a minimal ink line drawing of a prairie horizon with a low winter sun, lots of empty paper; 3) a botanical study of larch branches with small cones in muted greens and browns on warm paper; 4) a woven-textile geometric pattern in oatmeal, charcoal and rust like a loom weaving; 5) a soft watercolour of a northern lake with birch trees and a pale blue sky; 6) a bold Scandinavian graphic of stacked organic shapes in mustard, dusty blue and charcoal. Cohesive muted palette, high quality, matte paper texture.",
+ "recipe": {
+  "find": "the six artworks: row then column projections of near-white pixels (all channels > 238; a line is white when < 1 % of its sampled pixels are not), 2 rows x 3 columns",
+  "crop": "8 px inside each artwork's edge",
+  "resize": {
+   "width": 332,
+   "height": 576,
+   "fit": "cover (centre) to the sheet's own ~0.58 portrait aspect (a few px trimmed)",
+   "kernel": "lanczos3"
+  },
+  "pack": {
+   "layout": "3 x 2",
+   "width": 996,
+   "height": 1152,
+   "order": "row-major as on the sheet"
+  },
+  "colour": "sRGB, alpha none",
+  "encode": {
+   "format": "jpeg",
+   "quality": 86,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/skyways-stores/design/build-art.mjs"
+ },
+ "pieces": [
+  {
+   "index": 0,
+   "subject": "mid-century abstract arches and circles (sage, ochre, terracotta, cream)",
+   "sourceBox": {
+    "x0": 16,
+    "y0": 213,
+    "x1": 338,
+    "y1": 758
+   },
+   "uv": {
+    "u0": 0.000502,
+    "v0": 0.500434,
+    "u1": 0.332831,
+    "v1": 0.999566
+   }
+  },
+  {
+   "index": 1,
+   "subject": "ink line drawing of a prairie horizon with a low winter sun",
+   "sourceBox": {
+    "x0": 353,
+    "y0": 213,
+    "x1": 671,
+    "y1": 758
+   },
+   "uv": {
+    "u0": 0.333835,
+    "v0": 0.500434,
+    "u1": 0.666165,
+    "v1": 0.999566
+   }
+  },
+  {
+   "index": 2,
+   "subject": "botanical study of larch branches with cones",
+   "sourceBox": {
+    "x0": 687,
+    "y0": 213,
+    "x1": 1008,
+    "y1": 758
+   },
+   "uv": {
+    "u0": 0.667169,
+    "v0": 0.500434,
+    "u1": 0.999498,
+    "v1": 0.999566
+   }
+  },
+  {
+   "index": 3,
+   "subject": "woven-textile geometric pattern (oatmeal, charcoal, rust)",
+   "sourceBox": {
+    "x0": 16,
+    "y0": 783,
+    "x1": 337,
+    "y1": 1336
+   },
+   "uv": {
+    "u0": 0.000502,
+    "v0": 0.000434,
+    "u1": 0.332831,
+    "v1": 0.499566
+   }
+  },
+  {
+   "index": 4,
+   "subject": "watercolour of a northern lake with birch trees",
+   "sourceBox": {
+    "x0": 352,
+    "y0": 783,
+    "x1": 672,
+    "y1": 1336
+   },
+   "uv": {
+    "u0": 0.333835,
+    "v0": 0.000434,
+    "u1": 0.666165,
+    "v1": 0.499566
+   }
+  },
+  {
+   "index": 5,
+   "subject": "Scandinavian graphic of stacked organic shapes (mustard, dusty blue, charcoal)",
+   "sourceBox": {
+    "x0": 688,
+    "y0": 783,
+    "x1": 1008,
+    "y1": 1336
+   },
+   "uv": {
+    "u0": 0.667169,
+    "v0": 0.000434,
+    "u1": 0.999498,
+    "v1": 0.499566
+   }
+  }
+ ],
+ "output": {
+  "url": "assets/textures/skyways/stores/design/skyways-store-design-prints.jpg",
+  "bytes": 219687,
+  "sha256": "13278f8e58a44fc44aaec1bc1b8c6bc59a954fb5805f4c3d9a88ef11fd46a465",
+  "width": 996,
+  "height": 1152,
+  "format": "jpeg"
+ }
+}
