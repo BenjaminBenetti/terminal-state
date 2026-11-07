@@ -1,0 +1,74 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-arch-wood-slats",
+ "task": "studio-skyways-rework-20261107-054512-01",
+ "lane": "ARCH",
+ "status": "runtime derivative (tile crop / resize / JPEG only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways rework (no numerical image cap, user override); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways skylit / atrium courts: the ceiling between the skylight coffers (timber slats)",
+ "subject": "dark walnut timber slat ceiling with black reveals, seen from below, tileable",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-arch-textures.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/arch-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 103,
+  "session": "01a1b4b0-520c-7fe1-8a4d-6fb245ab23e1",
+  "requested": "2026-11-07T06:26:56.493321Z",
+  "finished": "2026-11-07T06:27:26.383492Z",
+  "seconds": 29.8
+ },
+ "prompt": {
+  "file": "arch-103.txt",
+  "sha256": "6daf41fbb7306b4f177a84aae2cc84859a96ecf70640da02fe9af9abdbc67184"
+ },
+ "source": {
+  "file": "codex-103-exec-517a25ef-de62-4ea8-8175-c52969f1b222.png",
+  "sha256": "1f8f58854ba2e2ab96c0fb608283a6dc7410b5976dde71e8cab865f1b3d7c685",
+  "bytes": 2259454,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "why": "full frame (tiles as delivered)"
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "seamLR": 3.8,
+  "interiorLR": 1.8,
+  "seamTB": 4.2,
+  "interiorTB": 1.7,
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+ },
+ "spanM": {
+  "u": 1.5,
+  "v": 1.5
+ },
+ "output": {
+  "url": "assets/textures/skyways/arch/skyways-arch-wood-slats.jpg",
+  "bytes": 135544,
+  "sha256": "3f3fc0b3cc66cac1b8b4029d6fe5c92efb67525aedbc0e8c6c8ad157c3828b2c",
+  "width": 1024,
+  "height": 1024,
+  "format": "jpeg"
+ }
+}

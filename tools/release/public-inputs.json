@@ -1969,6 +1969,26 @@
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
     },
     {
+      "path": "assets/derivatives/skyways-arch-brick-wall.json",
+      "bytes": 2590,
+      "sha256": "523e930332919c145a7420bf6e02a77e2aa447f298a7c8dd1ba2ead9fbf7c6f2"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-herringbone.json",
+      "bytes": 2588,
+      "sha256": "93e92aaf5e4bd538a5043936008987c869d208c347d28b722f7dde56fde83ad4"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-pavers.json",
+      "bytes": 2562,
+      "sha256": "e2297ade87b80a20b323852b8bd25a13b90ecbf0bdac603da08d4063bc765741"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-wood-slats.json",
+      "bytes": 2589,
+      "sha256": "b19afe2852cd7ce559d6c479d8f57c371d4abe0c5d2605550f215b96025a21b2"
+    },
+    {
       "path": "assets/derivatives/skyways-car-dash-model.json",
       "bytes": 6420,
       "sha256": "fe6dd14f3df30c13b912e04697312e98a6ee5286ac7b1edbb0e54cd2dbc45c04"
@@ -4767,6 +4787,26 @@
       "path": "assets/textures/reactor/rusted-steel-orm.jpg",
       "bytes": 185844,
       "sha256": "639a45cd6f5a0b0a11dae3e7005392fe4cfc4a7f2c3b656b9e3b8be7c51b74fd"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-brick-wall.jpg",
+      "bytes": 236194,
+      "sha256": "c6094083d0ccc87bba9477cb531f4708483af9c6ad6d9f8d8ed90ac8b1693e82"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-herringbone.jpg",
+      "bytes": 208710,
+      "sha256": "a5b47023f7aa57cf22bc59921135aa915b97af94ddd1d8fc74ff8176532dbc7d"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-pavers.jpg",
+      "bytes": 177666,
+      "sha256": "ddb82a28af1eb8ea63153fad1f8b50827cde232ffea76531dd177db23387c679"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-wood-slats.jpg",
+      "bytes": 135544,
+      "sha256": "3f3fc0b3cc66cac1b8b4029d6fe5c92efb67525aedbc0e8c6c8ad157c3828b2c"
     },
     {
       "path": "assets/textures/skyways/skyways-con-banners.jpg",
