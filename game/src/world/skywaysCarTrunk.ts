@@ -101,7 +101,7 @@ export class TrunkSystem {
   private openFlag = false;
   /** The car build whose trunk the store holds (-1: none) — trunkSource hands the live slots back only for that build. */
   private loadedFor = -1;
-  private pose: {x: number; z: number; yaw: number} | null = null;
+  private pose: {x: number; z: number; yaw: number; pitch: number} | null = null;
   private ownsPointer = false;
   private lockGraceUntil = 0;
   private seen = '';
@@ -171,19 +171,27 @@ export class TrunkSystem {
   // ---------------------------------------------------------------------------------------------------------------------
   // Aim / open / close
 
-  /** The trunk's anchor in the world (the middle of the boot deck; follows the car body), null without a car. */
+  /** The trunk's anchor in the world (the middle of the boot deck; follows the car body, its pitch on a flight too), null without a car. */
   anchor(): {x: number; y: number; z: number} | null {
     const b = this.car.body, A = TRUNK_RT.anchor;
     if (!b || !this.car.worldLive) return null;
-    const p = carToWorld(b.x, b.z, b.yaw, A.x, A.z);
-    return {x: p.x, y: b.y + A.y, z: p.z};
+    const pt = b.pitch ?? 0, cp = Math.cos(pt), sp = Math.sin(pt);
+    const p = carToWorld(b.x, b.z, b.yaw, A.x, A.y * sp + A.z * cp);
+    return {x: p.x, y: b.y + A.y * cp - A.z * sp, z: p.z};
+  }
+
+  /** The body line's height (feet) at car-frame z (on a stair flight it rises along the car: the car's own same-storey rule). */
+  private lineY(lz: number): number {
+    const b = this.car.body!;
+    return b.y - lz * Math.tan(b.pitch ?? 0);
   }
 
   /** The player stands behind the car (on its storey, within reach of the tail). */
   standingBehind(): boolean {
     const b = this.car.body, P = this.host.player, S = this.car.spec;
-    if (!b || Math.abs(P.y - b.y) > CAR_RT.storeyY) return false;
+    if (!b) return false;
     const lp = worldToCar(b.x, b.z, b.yaw, P.x, P.z);
+    if (Math.abs(P.y - this.lineY(lp.z)) > CAR_RT.storeyY) return false;
     if (lp.z < S.length / 2 - TRUNK_RT.behind || Math.abs(lp.x) > S.width / 2 + TRUNK_RT.side) return false;
     return Math.hypot(lp.x, lp.z - S.length / 2) <= TRUNK_RT.stand;
   }
@@ -195,11 +203,15 @@ export class TrunkSystem {
     h.camera.getWorldPosition(tv);
     h.camera.getWorldDirection(tv2);
     const lo = worldToCar(b.x, b.z, b.yaw, tv.x, tv.z), c = Math.cos(b.yaw), s = Math.sin(b.yaw);
-    const ld = {x: tv2.x * c - tv2.z * s, y: tv2.y, z: tv2.x * s + tv2.z * c};
+    const dz = tv2.x * s + tv2.z * c, oy = tv.y - b.y;
+    // (a car on a flight) undo the body's pitch too: the view's rotation is (pitch, yaw, 'YXZ'), so local = Rx(-pitch) · the yaw frame
+    const pt = b.pitch ?? 0, cp = Math.cos(pt), sp = Math.sin(pt);
+    const o = {x: lo.x, y: oy * cp + lo.z * sp, z: lo.z * cp - oy * sp};
+    const ld = {x: tv2.x * c - tv2.z * s, y: tv2.y * cp + dz * sp, z: dz * cp - tv2.y * sp};
     const B = this.box;
     B.min.x = -Z.halfX; B.min.y = Z.y0; B.min.z = Z.z0;
     B.max.x = Z.halfX; B.max.y = Z.y1; B.max.z = S.length / 2;
-    const t = rayBox({x: lo.x, y: tv.y - b.y, z: lo.z}, ld, B, TRUNK_RT.reach);
+    const t = rayBox(o, ld, B, TRUNK_RT.reach);
     if (t === null) return null;
     const hit = {x: tv.x + tv2.x * t, y: tv.y + tv2.y * t, z: tv.z + tv2.z * t};
     if (!L.lineOfSight({x: tv.x, y: tv.y, z: tv.z}, hit, {slack: 0.15})) return null;
@@ -226,7 +238,7 @@ export class TrunkSystem {
     if (h.state !== 'playing' || !h.player.alive || h.gear?.session || !b || car.driving || !this.loaded) { this.counts.refused++; return false; }
     h.gear?.cancelReady?.(true);
     this.openFlag = true;
-    this.pose = {x: b.x, z: b.z, yaw: b.yaw};
+    this.pose = {x: b.x, z: b.z, yaw: b.yaw, pitch: b.pitch ?? 0};
     this.seen = this.key();
     this.ownsPointer = true;
     this.lockGraceUntil = now() + 500;
@@ -270,9 +282,12 @@ export class TrunkSystem {
     if (!b || !o || !this.loaded) { this.close('gone'); return; }
     if (!P.alive) { this.close('state'); return; }
     if (car.driving) { this.close('driving'); return; }
-    if (Math.hypot(b.x - o.x, b.z - o.z) > TRUNK_RT.moved || Math.abs(wrapAngle(b.yaw - o.yaw)) > TRUNK_RT.moved) { this.close('moved'); return; }
-    const a = this.anchor()!;
-    if (Math.hypot(P.x - a.x, P.z - a.z) > TRUNK_RT.closeRange || Math.abs(P.y - b.y) > TRUNK_RT.closeRise) { this.close('distance'); return; }
+    if (Math.hypot(b.x - o.x, b.z - o.z) > TRUNK_RT.moved || Math.abs(wrapAngle(b.yaw - o.yaw)) > TRUNK_RT.moved || Math.abs((b.pitch ?? 0) - o.pitch) > TRUNK_RT.moved) {
+      this.close('moved');
+      return;
+    }
+    const a = this.anchor()!, lz = worldToCar(b.x, b.z, b.yaw, P.x, P.z).z;
+    if (Math.hypot(P.x - a.x, P.z - a.z) > TRUNK_RT.closeRange || Math.abs(P.y - this.lineY(lz)) > TRUNK_RT.closeRise) { this.close('distance'); return; }
     const k = this.key();
     if (k !== this.seen) { this.seen = k; this.view.render(); }
   }

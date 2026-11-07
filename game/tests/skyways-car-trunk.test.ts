@@ -123,6 +123,23 @@ describe('skyways car trunk: opening it (the rear zone from behind) vs the doors
     expect(car.prompt).toBeNull();
   });
 
+  it('a car resting on a flight (pitched): the boot, the anchor and the stand rule follow the body\'s pitch', () => {
+    const {h, car, sys} = trunkHost();
+    const b = car.body!, pitch = -0.3; // nose down: the tail is up the flight
+    (b as {pitch?: number}).pitch = pitch;
+    const A = TRUNK_RT.anchor, a = sys.anchor()!, w = carToWorld(b.x, b.z, b.yaw, 0, A.y * Math.sin(pitch) + A.z * Math.cos(pitch));
+    expect([a.x, a.y, a.z]).toEqual([w.x, b.y + A.y * Math.cos(pitch) - A.z * Math.sin(pitch), w.z]);
+    // the player up the flight behind it (the body line's height there), looking at the boot
+    const lz = S.length / 2 + 0.9, p = carToWorld(b.x, b.z, b.yaw, 0, lz), P = h.player;
+    P.x = p.x; P.z = p.z; P.y = b.y - lz * Math.tan(pitch); P.eye = P.y + 1.62;
+    lookAt(h, a.x, a.y, a.z);
+    expect(sys.standingBehind()).toBe(true);
+    expect(sys.aimHit()!.t).toBeLessThan(TRUNK_RT.reach);
+    expect(sys.aimed()).toBe(true);
+    P.y = b.y; P.eye = P.y + 1.62; // the same spot on the flat floor's height: another storey for this body line
+    expect(sys.standingBehind()).toBe(false);
+  });
+
   it('not the trunk: aiming over the boot, too far behind, beside the car (the doors rule: get in), through a wall', () => {
     const {h, car, sys} = trunkHost();
     behind(h, car, {look: {x: 0, y: 1.3, z: 1.2}}); // over the boot at the rear window / roof
