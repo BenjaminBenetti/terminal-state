@@ -30,7 +30,7 @@ import {compartmentTable, holderTable, isLootHolderKind} from '../src/items/loot
 import {lootProfile} from '../src/items/lootTables';
 import {ANCHOR_STYLES} from '../src/gen/skyways/destinations/anchorStyles';
 import {SKYWAYS_SHOP_FAMILIES} from '../src/gen/skyways/skywaysTypes';
-import {bookTableTiers, bookcaseShelves, destDims} from '../src/gen/skyways/destinations/kindsShopsA';
+import {bookTableTiers, bookcaseShelves} from '../src/gen/skyways/destinations/kindsShopsA';
 import {levelOfAsset} from '../src/assets/levelAssets';
 import {WorldMaterials} from '../src/world/materials';
 import {buildStoreBooksProp, isStoreBooksDrawnKind, storeBooksPiece} from '../src/world/skywaysStoreBooks';
