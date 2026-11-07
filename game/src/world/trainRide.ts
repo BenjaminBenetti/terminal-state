@@ -29,7 +29,8 @@
 //   stepPlayer(dt, input, opts)       Game.update's hook instead of Player.update while riding (see the update order below).
 //   tiltCamera(camera)                Game.updateCamera's hook: the car's jostle roll / pitch on the view.
 //   blocksWeapons / refuseFire()      weapon fire / melee / flare throws are blocked while riding ("Holster — the train is moving").
-//   refuseDrop()                      item drops are refused while riding (the Lockbox holds things); the gear's backpack set-down too.
+//   refuseDrop()                      the fallback refusal of a riding drop (task train-loose-cargo: Game.dropRef hands riding drops to
+//                                     world/trainCargo.ts — they arrive with the train); the gear's backpack set-down stays refused.
 //
 // RIDE MODE. The player lives in the TRAIN-LOCAL frame: `local` (x, y, z, yaw, vx, vz) is the truth; Player.update runs unchanged on
 // it against the car's own collision model (trainRideLocal.ts: walls with the closed side doors, end walls, both partitions with

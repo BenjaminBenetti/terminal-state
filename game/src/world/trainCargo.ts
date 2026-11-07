@@ -83,7 +83,7 @@ export interface CargoHost {
 }
 
 const QY = new THREE.Quaternion(), QW = new THREE.Quaternion(), V = new THREE.Vector3(), M = new THREE.Matrix4(), ONE = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
-const r5 = (v: number) => Math.round(v * 1e5) / 1e5;
+const r5 = (v: number) => (Math.round(v * 1e5) / 1e5) || 0; // (never -0: records compare exactly)
 const byKey = (a: CargoItemJSON, b: CargoItemJSON) => (a.stack.uid - b.stack.uid) || (a.kind < b.kind ? -1 : a.kind > b.kind ? 1 : 0);
 
 export class TrainCargoSystem {
@@ -241,6 +241,7 @@ export class TrainCargoSystem {
 
   private recordOf(r: {kind: 'item' | 'bag'; id?: string; stack: ItemStack; x: number; y: number; z: number; q: THREE.Quaternion}): CargoItemJSON {
     const q = r.q.clone().normalize();
+    if (q.w < 0) q.set(-q.x, -q.y, -q.z, -q.w); // (q and -q are one orientation: one record)
     const rec: CargoItemJSON = {kind: r.kind, stack: stackToJSON(r.stack)!, x: r5(r.x), y: r5(r.y), z: r5(r.z), q: [r5(q.x), r5(q.y), r5(q.z), r5(q.w)]};
     if (r.kind === 'bag') rec.id = r.id ?? `bag:${r.stack.uid}`;
     return rec;
