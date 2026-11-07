@@ -947,7 +947,10 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       const side: Side = zr.x >= floorRect.x + floorRect.w ? 'E' : zr.x + zr.w <= floorRect.x ? 'W' : zr.y >= floorRect.y + floorRect.h ? 'S' : 'N';
       const L = alongXSide(side) ? zr.w : zr.h;
       const d0 = (alongXSide(side) ? zr.x - floorRect.x : zr.y - floorRect.y) + Math.floor((L - dw) / 2);
-      k.carveDoor(gapOn(floorRect, side, d0, dw), floor, a, CLEAR.door + (dw >= 4 ? 0.4 : 0), false);
+      // (task studio-alpha-skyways-shops-20261107-054512-01) the door's floor side is the floor PIECE in front of it (an inset back room
+      // splits the floor into pieces): the door records that area, so connectivity / placement see it open off the right piece
+      const zg = gapOn(floorRect, side, d0, dw);
+      k.carveDoor(zg, pieceBehind(zg, opposite(side)), a, CLEAR.door + (dw >= 4 ? 0.4 : 0), false);
       zones.push(a.id);
     }
     let upper: number | null = null;
@@ -983,7 +986,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
           if (well && overlapsR(grow(well, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
           if (inset && overlapsR(grow(inset.cut, 1), gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3))) continue;
           a = k.addArea(rr, 'room', type, ceilOf(lv, CLEAR.back), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: false});
-          k.carveDoor(gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3), floor, a, CLEAR.door, false, {staff: true});
+          const bg = gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3);
+          k.carveDoor(bg, pieceBehind(bg, opposite(bs)), a, CLEAR.door, false, {staff: true}); // (+ the piece in front: see the zones)
         }
         if (a) break;
       }
@@ -991,6 +995,11 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     }
     return {id, family: fam, name: F.name, building: b.id, level: lv, format: fmt, floor: floor.id, rect: r, storefront: sf.id, front, upper, zones, stock, ceilY};
 
+    /** The sales-floor piece in front of a one-cell wall gap of the floor rect (toward the floor); the main floor when none is there. */
+    function pieceBehind(gp: CellRect, toward: Side): Area {
+      const [fx, fy] = frontCell(gp, toward), a = k.areas[g.area[g.idx(fx, fy)]];
+      return a && (a.id === sf.unit || a.parent === sf.unit) ? a : k.areas[sf.unit];
+    }
     function backSizes(): [string, Area['type'], number, number][] {
       return [['Stock room', 'stock-room', rng.int(10, 14), rng.int(7, 9)], ['Office', 'agent-office', rng.int(8, 10), rng.int(6, 8)]];
     }

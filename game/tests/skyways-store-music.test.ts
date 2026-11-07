@@ -21,7 +21,7 @@ import {propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
-import {lootProfile} from '../src/items/lootTables';
+import {HANDFUL, lootProfile} from '../src/items/lootTables';
 import {isLootHolderKind} from '../src/items/loot';
 import {purposeById, purposeLoot} from '../src/gen/purposes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
@@ -286,7 +286,16 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
         lots += h.lots.length;
         const spec = purposeLoot(h.areaType, h.kind);
         expect(spec, `seed ${seed} ${h.kind} @ ${h.areaType}`).toBeTruthy();
-        if (front.has(h.prop.area)) for (const lot of h.lots) expect(FRONT_OK.has(lot.itemId), `seed ${seed} ${h.kind} @ ${h.areaType}: ${lot.itemId}`).toBe(true);
+        // (primary, integration) the store's TABLES never carry ammo on the floor / in the booths; a rolled lot may still be the global
+        // scarcity economy's off-theme find (items/lootEconomy.ts: ~16-18 % of finds; off-theme ammo is a handful of rounds) — existing
+        // behaviour on every level, so a rolled ammo lot is accepted only as that handful
+        if (front.has(h.prop.area)) {
+          expect((spec?.items ?? []).some(([id]) => /^ammo_/.test(id)), `seed ${seed} ${h.kind} @ ${h.areaType}: an ammo row`).toBe(false);
+          for (const lot of h.lots) {
+            if (/^ammo_/.test(lot.itemId)) { expect(lot.count, `seed ${seed} ${h.kind}: off-theme handful`).toBeLessThanOrEqual(HANDFUL[lot.itemId]?.[1] ?? 0); continue; }
+            expect(FRONT_OK.has(lot.itemId), `seed ${seed} ${h.kind} @ ${h.areaType}: ${lot.itemId}`).toBe(true);
+          }
+        }
       }
       // the floor's holders roll the music store's rows; the booths the listening lounge's
       const floorHolder = l.props.find(p => p.area === an.floor && isLootHolderKind(p.kind) && !p.purpose);
