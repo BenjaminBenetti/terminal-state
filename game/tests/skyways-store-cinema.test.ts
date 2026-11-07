@@ -67,9 +67,13 @@ describe('Skyways cinema store: kinds, art, audits', () => {
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(prov.files).toHaveLength(5);
     for (const piece of [...CINEMA_POSTER_PIECES, CINEMA_MENU_PIECE]) expect(a.pieces[piece], piece).toBeTruthy();
-    // the cooked atlas and its provenance are allowlisted public inputs (bytes / sha256 as built)
+    // CREDITS credits the art; no absolute local path / URL in the public provenance
+    const credits = fs.readFileSync(path.join(__dirname, '../public/assets/CREDITS.md'), 'utf8');
+    expect(credits).toContain('assets/textures/skyways/stores/cinema/cinema-art.jpg');
+    expect(JSON.stringify(prov)).not.toMatch(/\/workspaces\/|\/home\/|https?:\/\//);
+    // the cooked atlas, its provenance and CREDITS are allowlisted public inputs (bytes / sha256 as built)
     const allow = JSON.parse(fs.readFileSync(path.join(__dirname, '../../tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
-    for (const rel of [a.url, 'assets/derivatives/skyways-store-cinema-art-20261107.json']) {
+    for (const rel of [a.url, 'assets/derivatives/skyways-store-cinema-art-20261107.json', 'assets/CREDITS.md']) {
       const row = allow.files.find(f => f.path === rel), b = fs.readFileSync(path.join(__dirname, '../public', rel));
       expect(row, rel).toBeTruthy();
       expect(row!.bytes, rel).toBe(b.length);
