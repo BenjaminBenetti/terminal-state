@@ -1,0 +1,76 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "audio-head-hit-20261107",
+ "task": "studio-general-armor-20261107-231448-01",
+ "lane": "GENERAL",
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance; 2 jobs of a 4-job cap, both first takes accepted)",
+ "plannedBy": "tools/audio-pipeline/headhit-plan.py",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/headhit-build.mjs",
+ "license": {
+  "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
+  "kitStatus": "Conditional. Not commercially cleared by this kit.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (5 ms envelope, onsets, peak, spectral centroid / bands). The user taste-tests in game.",
+  "gameReady": false,
+  "approved": false,
+  "notice": "game/public/assets/audio/NOTICE.md"
+ },
+ "kbps": 64,
+ "derivatives": [
+  {
+   "cue": "headHit",
+   "url": "assets/audio/head-hit-01.mp3",
+   "bytes": 2716,
+   "sha256": "822478f24026d67ca1a90350c79a1ee7c858bcd44dfa727f5a6a0e5dbfa21108",
+   "dur": 0.29,
+   "ops": [
+    "mono",
+    "trim 0.03-0.32 s",
+    "cosine fades 0.004 / 0.09 s",
+    "peak -1 dBFS (1.1 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "head-hit-01",
+    "rawFile": "reference/tasks/skywalk-and-general-feedback-20261107-231448/general/audio/raw/head-hit-01.wav",
+    "rawSha256": "2890e10f8fc2d4ebe23918fae8233726d20b06f8a6c6877670b08a1555d7331b",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-bullet-striking-a-human-skull-at-close_w8a8_seed256099295_232716.wav",
+    "labSidecarSha256": "16a25a2611a6db94319d3393ae925ceb2be6c308b67b4811db5f22fe0ca211c6",
+    "jobId": "20261107T232716-256099295",
+    "prompt": "TrackType: SFX, a bullet striking a human skull at close range: one sharp hard bony crack with a short wet crunch of bone, a single hit with a fast decay, no splinters, no metal, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 256099295,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "headHit",
+   "url": "assets/audio/head-hit-02.mp3",
+   "bytes": 2716,
+   "sha256": "c84b3a054227b8ac026c8e0ec0bf1b563debac0615f517edd6e3d554153540e7",
+   "dur": 0.3,
+   "ops": [
+    "mono",
+    "trim 0.02-0.32 s",
+    "cosine fades 0.004 / 0.09 s",
+    "peak -1 dBFS (3.5 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "source": {
+    "clip": "head-hit-02",
+    "rawFile": "reference/tasks/skywalk-and-general-feedback-20261107-231448/general/audio/raw/head-hit-02.wav",
+    "rawSha256": "e899de4d6fe689507607bda194d53229536e28c883c5b41b4fcb5118e6c9c730",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-bullet-striking-a-human-skull-at-close_w8a8_seed253643819_232721.wav",
+    "labSidecarSha256": "e3e6021b47c512dc738e44e5db391ff671ad2f829cccf44846249afda90bba45",
+    "jobId": "20261107T232721-253643819",
+    "prompt": "TrackType: SFX, a bullet striking a human skull at close range: one sharp hard bony crack with a short wet crunch of bone, a single hit with a fast decay, no splinters, no metal, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 253643819,
+    "seconds": 2,
+    "steps": 8,
+    "cfg": 1
+   }
+  }
+ ]
+}

@@ -2992,7 +2992,7 @@ export class Game {
     for (const [z, e] of dmg) {
       const killed = z.brain.damage(e.total, this.player.x, this.player.z, this.player.y);
       z.hitFlash = 1;
-      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups)
+      this.sfx.hitConfirm(e.point.x, e.point.y, e.point.z, z, e.head); // Iteration 12 (AUDIO): foreground (non-spatial) flesh confirm, once per enemy per shot (pellets aggregated in dmg; `z` de-dups); + the skull crack when a pellet / bullet of this shot really hit its HEAD (task studio-general-armor-20261107-231448-01)
       if (e.head) this.stats.headshots++;
       // knockback along the shot direction (stays out of walls)
       const k = def.knockback * (e.pellets / def.pellets) * (killed ? 1.4 : 1);
@@ -3071,7 +3071,7 @@ export class Game {
       this.damage.hitZombie(z, point, dir, res.part, wound);
       const killed = z.brain.damage(meleeDamage(def, res.part), this.player.x, this.player.z, this.player.y, {stagger: false});
       z.hitFlash = 1;
-      this.sfx.hitConfirm(point.x, point.y, point.z, z);
+      this.sfx.hitConfirm(point.x, point.y, point.z, z, res.part === 'head'); // (+ the head crack on a confirmed head hit: task studio-general-armor-20261107-231448-01)
       if (killed) {
         this.stats.kills++;
         enemyCues(z).death(this.sfx, z);

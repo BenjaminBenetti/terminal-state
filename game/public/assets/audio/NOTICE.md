@@ -14,7 +14,8 @@ fuel-engine-stall.mp3, jerrycan pour fuel-pour.mp3, fuel cart rolling loop fuel-
 drive loops car-engine-idle-loop.mp3 / car-engine-drive-loop.mp3, engine start car-engine-start.mp3, reverse whine loop
 car-reverse-loop.mp3, brake stop car-brake.mp3, tyre skid car-skid.mp3, door car-door.mp3): ../derivatives/audio-skyways-car.json; the Skyways destinations set (clock tick loop
 skyways-clock-tick-loop.mp3, clock chime skyways-clock-chime.mp3, arcade attract loop skyways-arcade-attract-loop.mp3, projector loop
-skyways-projector-loop.mp3): ../derivatives/audio-skyways-destinations.json).
+skyways-projector-loop.mp3): ../derivatives/audio-skyways-destinations.json; the head-hit set (skull crack
+head-hit-01.mp3, head-hit-02.mp3): ../derivatives/audio-head-hit.json).
 
 Powered by Stability AI.
 
