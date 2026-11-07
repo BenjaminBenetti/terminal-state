@@ -483,3 +483,41 @@ studio-alpha-skyways-shops-20261107-054512-01). Runtime derivative (locate / cro
   branches, a woven-textile pattern, a birch-lake watercolour and stacked organic shapes.
 - Unapproved prototypes; provider terms apply; no commercial clearance implied.
 <!-- END skyways-store-design-art-20261107 -->
+
+<!-- BEGIN skyways-store-science-art-20261107 (build-science-art.mjs, lane STORE-SCIENCE) -->
+## Skyways major store Big Sky Wonders: wall art
+Three static artworks generated for this project with Codex native image_gen (owned Codex CLI; 3 calls, 3 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): a northern star-chart mural, a periodic-table
+style classroom chart and a triptych of vintage science-kit posters. Runtime derivative (crop / resize / atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/science/build-science-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-science-art-20261107.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/science/science-art.jpg` — the star map, the chart and the three kit posters.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-science-art-20261107 -->
+
+<!-- BEGIN skyways-store-music-art-20261107 (build-music-art.mjs, lane STORE-MUSIC) -->
+## Skyways major store Northern Groove Records: record covers, gig posters and signs
+Six static art sheets generated for this project with Codex native image_gen (owned Codex CLI; 6 calls, 6 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): 64 original fictional LP covers (four 4 x 4
+sheets, no text, no real artists or artwork requested), four fictional gig posters, and the NEW ARRIVALS / LISTENING BOOTHS boards and
+eight genre cards. Runtime derivatives (crop / resize / atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/music/build-music-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-music-art-20261107.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/music/music-covers.jpg` — the 64 cover faces of the record-bin stock and the new-arrivals wall.
+- `assets/textures/skyways/stores/music/music-signs.jpg` — the gig posters, the two boards and the genre cards.
+- Bands, venues and covers are invented. Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-music-art-20261107 -->
+
+<!-- BEGIN skyways-store-books-art-20261107 (build-books-art.mjs, lane STORE-BOOKS) -->
+## Skyways major store Paper Prairie Books: category signs and rugs
+Two static art sheets generated for this project with Codex native image_gen (owned Codex CLI; 2 calls, 2 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): eight carved walnut category signs (invented shop
+signage) and two area rugs (a worn reading-room rug, a children's prairie play rug). Runtime derivative (crop / resize / atlas pack
+only) built by `tools/asset-pipeline/skyways-stores/books/build-books-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-books-art-20261107.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/books/skyways-store-books-art.jpg` — the signs and the rugs.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-books-art-20261107 -->

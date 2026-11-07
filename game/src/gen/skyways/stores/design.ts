@@ -22,7 +22,7 @@ export const STORE_DESIGN: SkywaysStoreSpec = {
   family: 'design',
   owner: 'lane STORE-DESIGN',
   dress: (layout, rng, anchor) => dressDesignStore(layout, rng, anchor),
-  purposes: {floor: 'mall-home', upper: 'mall-home', stock: 'mall-home-back'},
+  purposes: {floor: 'mall-home', upper: 'mall-home', stock: 'mall-home-back', office: 'mall-management'}, // (+ office: the primary, integration — a Mall management office, not the carve's agent office with its ammo rows)
   finish: {
     wall: {paint: 0xf1ede5, lower: 0xcfb58c, trim: 0xb39670, kind: 'wood', lowerTop: 1.1, skirt: 0.1, rail: 0.025, peel: 0.08, panel: 0.14},
     floor: ['wood', 0xc9a674],
