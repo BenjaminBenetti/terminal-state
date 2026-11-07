@@ -536,8 +536,9 @@ export interface LocationEmitter {
   band?: number;
 }
 export const LOCATION_AUDIO = {
-  max: 32, voices: 2, ref: {clockTick: 4, arcadeAttract: 6, projectorRun: 3} as const, rolloff: 1, band: 2.4, edge: 0.25, tau: 0.35, fadeOut: 0.8, eps: 0.004,
-  chime: {range: 25, firstS: [6, 14] as const, minS: 60, maxS: 90, maxStepS: 0.5, ref: 8, rolloff: 1, maxDist: 90, send: 0.5},
+  // (task studio-skyways-rework-20261107-054512-01: the clock court-local — tick ref 4 -> 2 m; chime trigger 25 -> 12 m, carry 90 -> 40 m)
+  max: 32, voices: 2, ref: {clockTick: 2, arcadeAttract: 6, projectorRun: 3} as const, rolloff: 1, band: 2.4, edge: 0.25, tau: 0.35, fadeOut: 0.8, eps: 0.004,
+  chime: {range: 12, firstS: [6, 14] as const, minS: 60, maxS: 90, maxStepS: 0.5, ref: 8, rolloff: 1, maxDist: 40, send: 0.5},
 } as const;
 const LOCATION_CUES: ReadonlySet<string> = new Set<LocationCue>(['clockTick', 'arcadeAttract', 'projectorRun']);
 /** A deterministic 0..1 value per (seed, n) (the chime sequence). */

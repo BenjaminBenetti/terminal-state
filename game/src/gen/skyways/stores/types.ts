@@ -4,8 +4,8 @@
 //
 // Layout versions (gen/skyways/layoutVersion.ts): stations a player already entered keep regenerating their version (1 or 2) with the
 // old dressers (destinations/shopsA.ts / shopsB.ts) untouched; a station first built at version >= SKYWAYS_STORES_MIN_VERSION gets these
-// stores (their dresser, their purposes, their back rooms). The wall / floor / ceiling FINISH is render-only (world/skywaysStoreFinish.ts)
-// and applies to every version (no save state behind it).
+// stores (their dresser, their purposes, their back rooms). The wall / floor / ceiling FINISH is render-only (destinations/anchorStyles.ts
+// ANCHOR_STYLES -> world/skywaysArch.ts class 'anchor') and applies to every version (no save state behind it).
 
 import type {Rng} from '../../../core/rng';
 import type {StationLayout} from '../../stationTypes';
@@ -19,9 +19,9 @@ export type StoreFloorKind = 'carpet' | 'vinyl' | 'tile' | 'stone' | 'concrete' 
 export type StoreCeilKind = 'grid' | 'plain' | 'raw';
 
 /**
- * A store wall (colours sRGB hex): upper paint, the lower / full-height finish (`lowerTop` >= 3.5 m = full height, e.g. wood panelling
- * floor to ceiling), its colour, the skirting / rail colour and sizes. Built with the Office wall material (world/officeArch.ts
- * wallMaterial: one program per kind), never a global WallMaterial mutation.
+ * A store wall (colours sRGB hex): upper paint, the lower / full-height finish (`lowerTop`: its top in m — >= 3.5 runs floor to
+ * ceiling; >= 2 counts as the finish for bullet impacts), its colour, the skirting / rail colour and sizes. Built with the Office wall
+ * material (world/officeArch.ts wallMaterial: one program per kind), never a global WallMaterial mutation.
  */
 export interface StoreWall {
   paint: number; lower: number; trim: number; kind: StoreLowerKind; lowerTop: number; skirt: number; rail: number;
@@ -58,6 +58,7 @@ export interface SkywaysStoreSpec {
    */
   dress(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number;
   purposes: StorePurposes;
-  finish: StoreFinish;
+  /** The store's walls / floor / ceiling (destinations/anchorStyles.ts ANCHOR_STYLES reads it; absent: the lead's default). */
+  finish?: StoreFinish;
   // (the store's Mall-only model files: stores/kinds/<family>.ts STORE_<FAMILY>_MALL_MODELS — pure data, read by assets/levelAssets.ts)
 }
