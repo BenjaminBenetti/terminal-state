@@ -32,7 +32,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 // The soil pallet
 
 /** Pallet footprint (a 1.2 x 1.0 m timber pallet), deck height, bag size and the stack's layers. */
-export const SOIL_PALLET = {w: 1.2, d: 1.0, deck: 0.144, bag: {w: 0.58, h: 0.125, d: 0.47}, layers: 5} as const;
+export const SOIL_PALLET = {w: 1.2, d: 1.0, deck: 0.144, bag: {w: 0.56, h: 0.125, d: 0.47}, layers: 5} as const;
 /** Bag colours per placement variant (dark green compost, brown potting soil, black mulch). */
 export const SOIL_BAG_COLORS: readonly number[] = [0x2f4b2c, 0x5a3b26, 0x262626];
 /** Pallet height: the deck plus the layers (the top bag's top). */
@@ -49,11 +49,11 @@ export const SOIL_PALLET_PARTS: readonly GardenPart[] = (() => {
   for (let L = 0; L < P.layers; L++) {
     const y0 = P.deck + L * P.bag.h, nx = (L % 2 ? 1 : -1) * 0.012, nz = (L % 3 === 1 ? 1 : -1) * 0.01;
     for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-      const cx = r3(sx * (P.bag.w / 2 + 0.008) + nx), cz = r3(sz * (P.bag.d / 2 + 0.008) + nz), cy = r3(y0 + P.bag.h / 2);
+      const cx = r3(sx * (P.bag.w / 2 + 0.006) + nx), cz = r3(sz * (P.bag.d / 2 + 0.008) + nz), cy = r3(y0 + P.bag.h / 2);
       out.push({m: 'accent', s: [P.bag.w, r3(P.bag.h - 0.006), P.bag.d], p: [cx, cy, cz]});
       // label band (lying across the bag's top) and the heat-sealed ends
       out.push({m: 'counter', s: [r3(P.bag.w * 0.42), 0.004, r3(P.bag.d - 0.08)], p: [cx, r3(y0 + P.bag.h - 0.004), cz]});
-      for (const e of [-1, 1]) out.push({m: 'accent', s: [0.03, r3(P.bag.h * 0.55), r3(P.bag.d - 0.02)], p: [r3(cx + e * (P.bag.w / 2 + 0.012)), cy, cz]});
+      for (const e of [-1, 1]) out.push({m: 'accent', s: [0.02, r3(P.bag.h * 0.55), r3(P.bag.d - 0.02)], p: [r3(cx + e * (P.bag.w / 2 + 0.005)), cy, cz]});
     }
   }
   return out;
@@ -125,6 +125,6 @@ export const STORE_GARDEN_MALL_MODELS: readonly string[] = ['mall-mall-cashwrap-
  * by tools/asset-pipeline/props/scale-check.mjs beside zombie `lastshift` at runtime scale 1.0, viewed): W x H x D, contact, heights.
  */
 export const GARDEN_SCALE: Readonly<Record<StoreGardenKind, string>> = {
-  storeGardenSoilPallet: '1.20 x 0.77 x 1.00 m (bags overhang the deck by ~1 cm); grounded: 3 runner contacts over the full 1.2 x 1.0 m; deck 0.144 m, five bag layers of 0.125 m, top 0.77 m (below the 0.90 counter line): a waist-high pallet',
-  storeGardenBasketRail: '3.00 x 0.95 x 0.30 m (rail 0.90-0.95 m over the basket bottoms); hung: the baskets\' bottoms >= 2.40 m above the floor (rail top >= 3.35 m), two rods to the ceiling; each ring 0.30 x 0.24 m at 0.20 m holds a 0.26 x 0.35 x 0.19 m geranium pot',
+  storeGardenSoilPallet: '1.20 x 0.77 x 1.00 m (the bags within the deck); grounded: 12 contact clusters (runners) over 1.20 x 0.96 m; deck 0.144 m, five bag layers of 0.125 m, top 0.77 m (90 % of the top-down area; below the 0.90 counter line): a waist-high pallet',
+  storeGardenBasketRail: '3.00 x 0.95 x 0.25 m with its baskets (rail top 0.945 m over the basket bottoms); hung at the lowest 2.40 m: baskets 2.40-2.61 m, rail 3.35 m (beside the 1.78 m zombie: walk-under); five 0.30 x 0.24 m rings at 0.20 m each hold a 0.26 x 0.35 x 0.19 m geranium pot; two rods to the ceiling (drawn per placement)',
 };

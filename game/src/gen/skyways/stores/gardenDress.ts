@@ -442,13 +442,14 @@ function basketRails(kit: AnchorKit, benches: readonly PropPlacement[]): PropPla
   const max = tall ? rng.int(3, 5) : clear >= GARDEN_RAIL_CLEAR + BASKET_RAIL_H + 0.4 ? rng.int(1, 2) : 0;
   if (!max) return out;
   const heights = tall ? [2.6, 3.0, 3.4, 2.8, 3.2] : [GARDEN_RAIL_CLEAR];
-  const cands: [number, number][] = [];
-  for (const b of benches) cands.push([b.x, b.z]);
-  for (let v = 3.0; v <= fr.D - 2.0; v += 1.5) for (let u = 2.6; u <= fr.W - 2.6; u += 1.5) cands.push(kit.uv(u, v));
+  // over each bench, along it (a bench's length is its local x, like the rail's); then a grid over the floor, along the storefront
+  const cands: [number, number, number][] = [];
+  for (const b of benches) cands.push([b.x, b.z, b.rot]);
+  for (let v = 3.0; v <= fr.D - 2.0; v += 1.5) for (let u = 2.6; u <= fr.W - 2.6; u += 1.5) cands.push([...kit.uv(u, v), fr.toFront]);
   const lights = L.lights.filter(l => (l.level ?? 0) === kit.level);
-  for (const [cx, cz] of cands) {
+  for (const [cx, cz, rot] of cands) {
     if (out.length >= max) break;
-    const y = r3(s.base + heights[out.length % heights.length]), rot = fr.toFront;
+    const y = r3(s.base + heights[out.length % heights.length]);
     const c = Math.cos(rot), sn = Math.sin(rot), hw = BASKET_RAIL.w / 2;
     // the rods' points (and the rail's ends) over this store's floor, under its ceiling, clear of light fixtures
     const pts = BASKET_RAIL.rods.map(ox => [cx + ox * c, cz - ox * sn] as const);
