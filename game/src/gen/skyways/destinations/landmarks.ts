@@ -297,6 +297,13 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     const dirs = [toMain, ...res.openings.slice().sort((p, q) => q.n - p.n).map(o => yawToward(o.x - X, o.z - Z)), 0, Math.PI / 2, Math.PI, -Math.PI / 2];
     const variant = DEST_PLAQUE_OF[lm.family], dep = PROP_DEFS.skyDPlaque.d / 2;
     // (the station's desire lines crossed the court's middle before the hero stood there: the reserved lanes above replace them)
+    // (rework: the main lane's mouth stays open — a disc where the way in crosses into the court — so the plaque stands beside the
+    // approach, never in it)
+    const mainO = res.openings.reduce((b, o) => (o.n > b.n ? o : b), res.openings[0]);
+    if (mainO) {
+      const inward = ({N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0]} as const)[mainO.side];
+      keepCells(ctx, mainO.x + inward[0] * 0.75, mainO.z + inward[1] * 0.75, mainO.x + inward[0] * 0.75, mainO.z + inward[1] * 0.75, 1.3, area.id);
+    }
     outer: for (const yaw of dirs) {
       const ux = Math.sin(yaw), uz = Math.cos(yaw), rot = quarter(yaw), base = halfToward(ux, uz) + ext + dep + 0.15;
       for (const radial of [0, 0.5, 1.0, 1.6, 2.4]) for (const lateral of [1.3, -1.3, 1.9, -1.9, 2.6, -2.6]) {
