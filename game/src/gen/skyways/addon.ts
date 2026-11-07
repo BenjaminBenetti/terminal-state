@@ -16,6 +16,7 @@ import type {SkywaysAddon} from './skywaysTypes';
 import {AddonDresser} from './addonFrame';
 import {conventionStatues, dressConvention, type ConventionResult} from './addonConvention';
 import {dressPrizeCar, type PrizeCarResult} from './addonPrize';
+import {dressPrizeDisplay, prizeDisplayDresser} from './addonPrizeDisplay';
 
 export interface AddonDressResult {
   id: SkywaysAddon['id'] | null;
@@ -53,11 +54,13 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
   const info = layout.skyways;
   const res: AddonDressResult = {id: info?.addon.id ?? null, props: [], skipped: []};
   if (!info) return res;
-  const hall = layout.areas[info.addon.areas[0]];
+  // (layout version 3) the prize car on its public display in the host's skyway court (no add-on rooms)
+  const display = info.addon.id === 'prize-car' && info.addon.display && info.addon.car;
+  const hall = display ? layout.areas[info.addon.car!.area] : layout.areas[info.addon.areas[0]];
   if (!hall) { res.skipped.push('no hall area'); return res; }
-  const d = new AddonDresser(layout, rng, info.addon, hall);
+  const d = display ? prizeDisplayDresser(layout, rng) : new AddonDresser(layout, rng, info.addon, hall);
   if (info.addon.id === 'convention') res.convention = dressConvention(d);
-  else res.prize = dressPrizeCar(d);
+  else res.prize = display ? dressPrizeDisplay(d) : dressPrizeCar(d);
   d.lift();
   // the statue records (absolute: after the lift)
   if (res.convention && info.addon.convention) info.addon.convention.statues = conventionStatues(res.convention, info.addon.level);
