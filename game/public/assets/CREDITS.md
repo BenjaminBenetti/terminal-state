@@ -470,3 +470,16 @@ loop, levelling, MP3) built by `tools/audio-pipeline/skyways-destinations-build.
   generations and concept images stay private (studio reference task folder). The designs and brands are invented.
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-destinations-kit-20261106 -->
+
+<!-- BEGIN skyways-store-design-art-20261107 (build-art.mjs, lane STORE-DESIGN) -->
+## Skyways major store Larch & Loom Home: framed art prints
+Six original framed-art-print artworks generated for this project with Codex native image_gen (owned Codex CLI) in one call (one
+sheet; Codex thread 01a1b4f6-8104-7391-9ec0-584414b4be67) under the Skyways store lanes' art authorization (task
+studio-alpha-skyways-shops-20261107-054512-01). Runtime derivative (locate / crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/design/build-art.mjs`; provenance with the prompt and source hash:
+`assets/derivatives/skyways-store-design-art-20261107.json`. The raw generation stays private (studio reference task folder).
+
+- `assets/textures/skyways/stores/design/skyways-store-design-prints.jpg` — mid-century arches, a prairie horizon line drawing, larch
+  branches, a woven-textile pattern, a birch-lake watercolour and stacked organic shapes.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-design-art-20261107 -->
