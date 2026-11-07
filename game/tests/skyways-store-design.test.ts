@@ -64,7 +64,7 @@ describe('Larch & Loom Home (design store): spec, kinds, finish', () => {
 
   it('the spec: its own dresser, existing Mall home purposes, its own finish (pale timber wainscot, larch boards, plain pale ceiling)', () => {
     expect(SKYWAYS_STORES.design).toBe(STORE_DESIGN);
-    expect(STORE_DESIGN.purposes).toEqual({floor: 'mall-home', upper: 'mall-home', stock: 'mall-home-back'});
+    expect(STORE_DESIGN.purposes).toEqual({floor: 'mall-home', upper: 'mall-home', stock: 'mall-home-back', office: 'mall-management'});
     for (const id of [...Object.values(STORE_DESIGN.purposes), DESIGN_LIGHTING_PURPOSE]) expect(purposeById(id), id).toBeTruthy();
     const st = ANCHOR_STYLES.design;
     expect(st.wall.kind).toBe('wood');
