@@ -37,7 +37,7 @@ import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {doorPoint, hallFrame, uvXZ, xzUV, type HallFrame} from '../addonFrame';
 import {ShopsBDresser, type Wall} from '../destinations/skywaysShopsBKit';
-import {HK_VARIANTS} from './hockeyParts';
+import {HK_STICK_RACK, HK_VARIANTS} from './hockeyParts';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const near = (a: number, b: number) => Math.abs(a - b) < 0.01;
@@ -58,16 +58,22 @@ export interface HockeyResult {
   props: PropPlacement[];
   skipped: string[];
   roles: Record<string, PropPlacement[]>;
+  /** The wall-backed spans found (frame wall, line, along range; QA). */
+  spans: {w: Wall; line: number; s0: number; s1: number; area: number}[];
+  /** Store frame size (m), the dresser's own time (ms). */
+  W: number; D: number; ms: number;
 }
 /** The latest result per anchor id (tests / QA; rewritten by every generation). */
 export const HOCKEY_LAST = new Map<string, HockeyResult>();
 
 /** Dresses Blue Line Sports (the version-3 hockey store); returns the props placed. */
 export function dressHockeyStore(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number {
+  const t0 = performance.now();
   const d = new ShopsBDresser(layout, rng, anchor);
   const s = new HockeyStore(d);
   s.dress();
-  HOCKEY_LAST.set(anchor.id, {props: d.placed, skipped: d.skipped, roles: s.roles});
+  HOCKEY_LAST.set(anchor.id, {props: d.placed, skipped: d.skipped, roles: s.roles, W: s.W, D: s.D, ms: performance.now() - t0,
+    spans: s.spans.map(sp => ({w: sp.w, line: sp.line, s0: sp.s0, s1: sp.s1, area: sp.a.id}))});
   return d.count;
 }
 
@@ -168,7 +174,7 @@ class HockeyStore {
    * `n` (down to `min`) units of `kind` side by side with their backs to a span, from `from` toward `to` along it (either order: the
    * search runs from `from`), `gap` apart; the first start that takes a run wins. `front`: the reserved walkable strip in front (m).
    */
-  runOn(sp: WallSpan, kind: PropKind, n: number, o: {min?: number; from?: number; to?: number; gap?: number; front?: number; variant?: () => number} = {}): PropPlacement[] {
+  runOn(sp: WallSpan, kind: PropKind, n: number, o: {min?: number; from?: number; to?: number; gap?: number; front?: number; variant?: () => number; exact?: boolean} = {}): PropPlacement[] {
     const def = PROP_DEFS[kind], gap = o.gap ?? 0.04, min = Math.max(1, o.min ?? 1);
     const from = o.from ?? sp.s0, to = o.to ?? (from - sp.s0 <= sp.s1 - from ? sp.s1 : sp.s0), dir = to >= from ? 1 : -1;
     const lo = Math.max(sp.s0, Math.min(from, to)), hi = Math.min(sp.s1, Math.max(from, to));
@@ -177,8 +183,9 @@ class HockeyStore {
       const len = k * def.w + (k - 1) * gap;
       if (len > hi - lo + 1e-6) continue;
       // starts on cell boundaries, walking from `from`
-      const first = dir > 0 ? Math.ceil(lo / CELL - 1e-6) * CELL : Math.floor((hi - len) / CELL + 1e-6) * CELL;
-      for (let st = first; dir > 0 ? st + len <= hi + 1e-6 : st >= lo - 1e-6; st += dir * CELL) {
+      // (`exact`: a single unit packed right at `from` — a counter run's back units — then on cell boundaries)
+      const first = o.exact && dir > 0 ? lo : dir > 0 ? Math.ceil(lo / CELL - 1e-6) * CELL : Math.floor((hi - len) / CELL + 1e-6) * CELL;
+      for (let st = first; dir > 0 ? st + len <= hi + 1e-6 : st >= lo - 1e-6; st = o.exact && dir > 0 && st === lo ? Math.floor(lo / CELL + 1e-6) * CELL + CELL : st + dir * CELL) {
         const items = Array.from({length: k}, (_, i) => {
           const [u, v] = this.at(sp, st + def.w / 2 + i * (def.w + gap), off), [x, z] = this.d.xz(u, v, this.U);
           return {kind, x, z, rot: yaw, variant: o.variant?.() ?? 0};
@@ -202,12 +209,17 @@ class HockeyStore {
     this.reserveLanes();
     const cashSide = this.eu >= this.W / 2 ? 'L' : 'R';
     this.cashDesk(cashSide);
+    // no stock room (older carves; the version-3 carve insets one): the staff stock corner goes in beside the cash desk first
+    if (!this.d.anchor.stock.some(id => this.d.layout.areas[id]?.type === 'stock-room')) this.staffCorner();
     this.sharpening(cashSide === 'L' ? 'R' : 'L');
-    this.shootingLane();
+    // (the lane takes a back corner first — corners suit little else; a lane straight out from a wall only once the wall runs are in)
+    this.shootingLane('corner');
+    this.gearWall('bootWall', 3, 2);
     this.lockers();
     this.jerseyWall();
-    this.gearWalls();
-    if (!this.d.anchor.stock.some(id => this.d.layout.areas[id]?.type === 'stock-room')) this.staffCorner();
+    if (!this.roles.lane?.length) this.shootingLane('wall');
+    this.gearWall('gearWall', 3, 1);
+    this.ottoman();
     this.floorPieces();
     this.posters();
     this.dressStock();
@@ -226,7 +238,7 @@ class HockeyStore {
         const other = door.a === a.id ? door.b : door.a;
         if (this.pieceIds.has(other)) continue;
         const pt = doorPoint(door, a), [du, dv] = xzUV(U, pt.x, pt.z), w = d.wallOf(pt.side, U);
-        if (w === 'B') { const vc = Math.max(1.5, dv - 2.2); d.keepUV(eu, 0, eu, vc, half, U); d.keepUV(eu, vc, du, vc, half, U); d.keepUV(du, vc, du, dv, half, U); }
+        if (w === 'B') { const vc = Math.max(1.5, dv - 3.0); d.keepUV(eu, 0, eu, vc, half, U); d.keepUV(eu, vc, du, vc, half, U); d.keepUV(du, vc, du, dv, half, U); }
         else if (w === 'L' || w === 'R') { const vc = Math.max(1.2, Math.min(dv, D - 1.0)); d.keepUV(eu, 0, eu, vc, half, U); d.keepUV(eu, vc, du, vc, half, U); d.keepUV(du, vc, du, dv, half, U); }
         else { d.keepUV(eu, 0.8, du, 0.8, half, U); d.keepUV(du, 0, du, 1.6, half, U); }
       }
@@ -260,11 +272,11 @@ class HockeyStore {
         }
         let b = s0;
         for (const k of back) {
-          const got = this.runOn(sp, k, 1, {from: b, to: Math.min(s0 + runW + 0.6, sp.s1)});
+          const got = this.runOn(sp, k, 1, {from: b, to: Math.min(s0 + runW + 0.6, sp.s1), exact: true});
           if (!got.length) return false;
           backs.push(got[0]);
           const [gu, gv] = xzUV(this.U, got[0].x, got[0].z);
-          b = (sp.w === 'L' || sp.w === 'R' ? gv : gu) + PROP_DEFS[k].w / 2 + 0.2;
+          b = r3((sp.w === 'L' || sp.w === 'R' ? gv : gu) + PROP_DEFS[k].w / 2 + 0.06);
         }
         return true;
       });
@@ -276,11 +288,17 @@ class HockeyStore {
   /** The cash desk: till counter (register) + glass display counter; the openable cashwrap back counter and the drinks cooler behind. */
   cashDesk(side: 'L' | 'R'): void {
     const other: 'L' | 'R' = side === 'L' ? 'R' : 'L';
-    const starts = [1.5, 2.0, 2.5, 3.0, 4.0, 5.0];
-    for (const sp of [...this.spansOf([side]), ...this.spansOf([other]), ...this.spansOf(['B'])]) {
-      const st = sp.w === 'B' ? [sp.s0 + 0.5, sp.s1 - 3.5, sp.s0 + 2.0, sp.s1 - 5.0].map(v => Math.round(v / CELL) * CELL) : starts;
-      const run = this.counterRun(sp, st, ['shopCounter', 'glassCounter'], ['mallCashwrapCounter', 'shopCooler'])
-        ?? this.counterRun(sp, st, ['shopCounter'], ['mallCashwrapCounter']);
+    // by the entry: a side wall's front-most run (two modules, else the till alone), the back wall only when no side wall takes it
+    const two: [PropKind[], PropKind[]] = [['shopCounter', 'glassCounter'], ['mallCashwrapCounter', 'shopCooler']], one: [PropKind[], PropKind[]] = [['shopCounter'], ['mallCashwrapCounter']];
+    // (a short front span: the till with a tall storage cupboard behind it)
+    const short: [PropKind[], PropKind[]] = [['shopCounter'], ['cabinetTall']];
+    // (front spans of both side walls first — the till alone when only it fits there — then the rest of the side walls, then the back)
+    const sides = [...this.spansOf([side]), ...this.spansOf([other])].sort((p, q) => Number(p.s0 > 1) - Number(q.s0 > 1));
+    const tries: [WallSpan, [PropKind[], PropKind[]]][] = [...sides.flatMap(sp => (sp.s0 <= 1 ? [[sp, two], [sp, one], [sp, short]] : [[sp, two], [sp, one]]) as [WallSpan, typeof two][]),
+      ...this.spansOf(['B']).flatMap(sp => [[sp, two], [sp, one]] as [WallSpan, typeof two][])];
+    for (const [sp, [mods, back]] of tries) {
+      const st = sp.w === 'B' ? [sp.s0 + 0.5, sp.s1 - 3.5, sp.s0 + 2.0, sp.s1 - 5.0].map(v => Math.round(v / CELL) * CELL) : [0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0].map(v => sp.s0 + v);
+      const run = this.counterRun(sp, st, mods, back);
       if (!run) continue;
       const till = run.mods.find(p => p.kind === 'shopCounter');
       if (till) this.add('register', this.d.onTop(till, 'cashRegister', REGISTER_X, 0, SHOP_COUNTER_TOP_Y));
@@ -296,7 +314,7 @@ class HockeyStore {
   /** The skate-sharpening service counter: the counter, the sharpener and the openable tool chest behind it, pegboard + first-aid kit above. */
   sharpening(side: 'L' | 'R'): void {
     const other: 'L' | 'R' = side === 'L' ? 'R' : 'L';
-    const cands = [...this.spansOf([side]), ...this.spansOf([other]), ...this.spansOf(['B'])];
+    const cands = [...[...this.spansOf([side]), ...this.spansOf([other])].sort((p, q) => Number(p.s0 > 1) - Number(q.s0 > 1)), ...this.spansOf(['B'])];
     for (const sp of cands) {
       const starts: number[] = [];
       for (let s = Math.ceil((sp.s0 + 0.5) / CELL) * CELL; s <= sp.s1 - 2.0 && starts.length < 6; s += 1.0) {
@@ -304,7 +322,7 @@ class HockeyStore {
         if (sp === this.cashSpan && s < this.cashRange[1] + 0.8 && s + 1.5 > this.cashRange[0] - 0.8) continue;
         starts.push(s);
       }
-      if (sp.w !== 'B') starts.sort((p, q) => Math.abs(p - 2.5) - Math.abs(q - 2.5));
+      if (sp.w !== 'B') starts.sort((p, q) => Math.abs(p - 2.0) - Math.abs(q - 2.0));
       const run = this.counterRun(sp, starts, ['shopCounter'], ['benchGrinderStand', 'rollingToolChest']);
       if (!run) continue;
       const chest = run.backs.find(p => p.kind === 'rollingToolChest');
@@ -314,7 +332,7 @@ class HockeyStore {
       const [cu, cv] = chest ? xzUV(this.U, chest.x, chest.z) : [0, 0];
       const cs = sp.w === 'L' || sp.w === 'R' ? cv : cu;
       if (chest) this.add('pegboard', this.d.mount(sp.a, sp.side, this.worldT(sp, cs), 'toolPegboard', 1.35));
-      const kit = [run.s1 + 0.5, run.s0 - 0.5, run.s1 + 1.0, run.s0 - 1.0].map(s => (s > sp.s0 + 0.3 && s < sp.s1 - 0.3 ? this.d.mount(sp.a, sp.side, this.worldT(sp, s), 'firstAidWallKit', 1.3) : null)).find(Boolean);
+      const kit = [run.s1 + 0.5, run.s0 - 0.5, run.s1 + 1.0, run.s0 - 1.0, run.s1 + 1.5, run.s0 - 1.5, run.s1 + 2.0].map(s => (s > sp.s0 + 0.3 && s < sp.s1 - 0.3 ? this.d.mount(sp.a, sp.side, this.worldT(sp, s), 'firstAidWallKit', 1.3) : null)).find(Boolean);
       if (kit) this.add('firstAid', kit); else this.skip('first-aid kit');
       return;
     }
@@ -325,8 +343,8 @@ class HockeyStore {
    * The shooting lane in a back corner (side wall + back wall meet, both solid): dasher boards with their glass along its open side, the
    * goal at its closed end facing the shooter, the lane's floor and its mouth kept clear. Along the side wall first, else along the back.
    */
-  shootingLane(): void {
-    const IW = 2.3, LL = 4.0, bd = PROP_DEFS.hkRinkBoard.d, bw = PROP_DEFS.hkRinkBoard.w, net = PROP_DEFS.skyDHockeyNet;
+  shootingLane(phase: 'corner' | 'wall'): void {
+    const IW = 2.5, LL = 4.0, bd = PROP_DEFS.hkRinkBoard.d, bw = PROP_DEFS.hkRinkBoard.w, net = PROP_DEFS.skyDHockeyNet;
     const backs = this.spansOf(['B']), sides = this.spansOf(['L', 'R']);
     const corners: {b: WallSpan; s: WallSpan}[] = [];
     for (const b of backs) for (const s of sides) {
@@ -334,7 +352,7 @@ class HockeyStore {
       if (s.w === 'L' ? !near(b.s0, s.line) : !near(b.s1, s.line)) continue;
       corners.push({b, s});
     }
-    for (const {b, s} of this.rng.shuffle(corners)) {
+    for (const {b, s} of phase === 'corner' ? this.rng.shuffle(corners) : []) {
       const sg = s.w === 'L' ? 1 : -1; // +u into the room from a left wall
       for (const along of ['side', 'back'] as const) {
         const ok = this.d.tx(() => {
@@ -365,7 +383,35 @@ class HockeyStore {
         if (ok) return;
       }
     }
-    this.skip('shooting lane');
+    if (phase === 'corner') return;
+    // else a lane straight out from one wall: the goal against it, two boards a side (its inner faces on cell boundaries); in a shallow
+    // store one board a side (a 2 m mini lane)
+    for (const per of [2, 1]) for (const sp of [...this.spansOf(['B']), ...this.spansOf(['L', 'R'])]) {
+      const need = IW + 2 * bd + 0.4;
+      if (sp.s1 - sp.s0 < need) continue;
+      const yaw = this.d.faceFrom(sp.w, this.U), across = yaw + Math.PI / 2, cs: number[] = [];
+      for (let c = sp.s0 + need / 2; c <= sp.s1 - need / 2 + 1e-6 && cs.length < 8; c += 1.0) cs.push(Math.round((c - IW / 2) / CELL) * CELL + IW / 2);
+      for (const c of this.rng.shuffle(cs)) {
+        if (c - IW / 2 - bd < sp.s0 - 1e-6 || c + IW / 2 + bd > sp.s1 + 1e-6) continue;
+        const ok = this.d.tx(() => {
+          const items: {kind: PropKind; x: number; z: number; rot: number}[] = [];
+          for (const k of [-1, 1]) for (let j = 0; j < per; j++) {
+            const [u, v] = this.at(sp, c + k * (IW / 2 + bd / 2), bw / 2 + j * bw), [x, z] = this.d.xz(u, v, this.U);
+            items.push({kind: 'hkRinkBoard', x, z, rot: across});
+          }
+          const boards = this.d.putRow(items, sp.a, 0);
+          if (boards.length !== 2 * per) return false;
+          const [nu, nv] = this.at(sp, c, 0.1 + net.d / 2), netP = this.put('skyDHockeyNet', nu, nv, yaw);
+          if (!netP) return false;
+          const [au, av] = this.at(sp, c, net.d + 0.2), [bu, bv] = this.at(sp, c, per * bw + 1.4);
+          this.d.keepUV(au, av, bu, bv, IW / 2 - 0.25, this.U);
+          this.add('lane', ...boards); this.add('laneNet', netP);
+          return true;
+        });
+        if (ok) return;
+      }
+    }
+    this.skip(corners.length ? 'shooting lane' : 'shooting lane (no solid back corner)');
   }
 
   /** The team lockers on the back wall (openable staff lockers), the locker-room bench in front of them. */
@@ -376,9 +422,16 @@ class HockeyStore {
       this.add('lockers', ...got);
       // the bench: centred on the lockers, its back toward them (players sit facing the room), past the doors' swing strip
       const ss = got.map(p => { const [u, v] = xzUV(this.U, p.x, p.z); return sp.w === 'L' || sp.w === 'R' ? v : u; });
-      const mid = (Math.min(...ss) + Math.max(...ss)) / 2, off = PROP_DEFS.staffLockers.d + 0.03 + 0.7 + PROP_DEFS.mallBench.d / 2 + 0.05;
-      const [u, v] = this.at(sp, mid, off);
-      const bench = this.put('mallBench', u, v, this.d.faceFrom(sp.w, this.U)) ?? this.put('mallBench', ...this.at(sp, mid, off + 0.5), this.d.faceFrom(sp.w, this.U));
+      // (past the doors' swing strip, whose reserved cells run to the next cell boundary)
+      const mid = (Math.min(...ss) + Math.max(...ss)) / 2, off = Math.ceil((PROP_DEFS.staffLockers.d + 0.03 + 0.7) / CELL - 1e-6) * CELL + PROP_DEFS.mallBench.d / 2 + 0.02;
+      let bench: PropPlacement | null = null;
+      for (const [ds, dv] of [[0, 0], [0.5, 0], [-0.5, 0], [1.0, 0], [-1.0, 0], [1.5, 0], [-1.5, 0], [0, 0.5], [2.0, 0], [-2.0, 0]]) {
+        if ((bench = this.put('mallBench', ...this.at(sp, mid + ds, off + dv), this.d.faceFrom(sp.w, this.U)))) break;
+      }
+      if (!bench) {
+        const [cu, cv] = this.at(sp, mid, 2.0);
+        bench = this.islands('mallBench', 1, {u0: cu - 2.5, u1: cu + 2.5, v0: cv - 2.5, v1: cv + 2.5}, 0.3, () => this.d.faceFrom(sp.w, this.U))[0] ?? null;
+      }
       if (bench) this.add('lockerBench', bench); else this.skip('locker bench');
       return;
     }
@@ -394,26 +447,32 @@ class HockeyStore {
     this.skip('jersey wall');
   }
 
-  /** The boot wall (skates) and the gear wall (helmets / gloves / shin guards): slatwall bay runs on the free wall spans. */
-  gearWalls(): void {
+  /** The boot wall (skates) / the gear wall (helmets / gloves / shin guards): a slatwall bay run on a free wall span (side walls first). */
+  gearWall(role: 'bootWall' | 'gearWall', n: number, min: number): void {
     const order = [...this.spansOf(['L', 'R']), ...this.spansOf(['B'])];
-    const used = new Set<WallSpan>();
-    for (const [role, n] of [['bootWall', 4], ['gearWall', 3]] as const) {
-      let got: PropPlacement[] = [];
-      for (const sp of order) {
-        if (used.has(sp) && order.some(q => !used.has(q))) continue;
-        got = this.runOn(sp, 'wallBay', n, {min: 2, front: 1.0, gap: 0.03, from: sp.w === 'B' ? sp.s0 : sp.s1, to: sp.w === 'B' ? sp.s1 : sp.s0});
-        if (got.length) { used.add(sp); break; }
-      }
-      if (got.length) this.add(role, ...got); else this.skip(role);
+    for (const sp of [...order.filter(q => !this.used.has(q)), ...order.filter(q => this.used.has(q))]) {
+      const got = this.runOn(sp, 'wallBay', n, {min, front: 1.0, gap: 0.03, from: sp.w === 'B' ? sp.s0 : sp.s1, to: sp.w === 'B' ? sp.s1 : sp.s0});
+      if (got.length) { this.used.add(sp); this.add(role, ...got); return; }
     }
-    // a try-on ottoman in front of the boot wall
-    const boot = this.roles.bootWall?.[0];
-    if (boot) {
-      const yaw = boot.rot, [ou, ov] = xzUV(this.U, boot.x + Math.sin(yaw) * 1.95, boot.z + Math.cos(yaw) * 1.95);
-      if (!this.add('ottoman', this.put('ottoman', ou, ov, yaw + Math.PI, {ring: 0.4})).length) this.skip('ottoman');
+    this.skip(role);
+  }
+  /** Spans a wall run already took (the next runs try the others first). */
+  readonly used = new Set<WallSpan>();
+
+  /** A try-on ottoman in front of the boot wall. */
+  ottoman(): void {
+    const boots = this.roles.bootWall ?? [];
+    if (boots.length) {
+      let ot: PropPlacement | null = null;
+      for (const bay of boots) for (const off of [1.95, 2.45]) {
+        if (ot) break;
+        const [ou, ov] = xzUV(this.U, bay.x + Math.sin(bay.rot) * off, bay.z + Math.cos(bay.rot) * off);
+        ot = this.put('ottoman', ou, ov, bay.rot + Math.PI, {ring: 0.3});
+      }
+      if (!this.add('ottoman', ot).length) this.skip('ottoman');
     }
   }
+
 
   /** No stock room: a staff stock corner — shelving + openable storage — on a wall near the cash desk (back-of-house purpose). */
   staffCorner(): void {
@@ -437,8 +496,9 @@ class HockeyStore {
     if (n <= 0 || r.u1 < r.u0 || r.v1 < r.v0) return out;
     const spots: [number, number][] = [];
     for (let u = Math.round(r.u0 * 2) / 2; u <= r.u1 + 1e-6; u += 0.5) for (let v = Math.round(r.v0 * 2) / 2; v <= r.v1 + 1e-6; v += 0.5) spots.push([u, v]);
+    let tries = 0;
     for (const [u, v] of this.rng.shuffle(spots)) {
-      if (out.length >= n) break;
+      if (out.length >= n || ++tries > 160) break;
       const [x, z] = this.d.xz(u, v, this.U);
       if (out.some(p => Math.hypot(p.x - x, p.z - z) < apart)) continue;
       const p = this.put(kind, u, v, yaw?.() ?? this.d.anyYaw(), {ring});
@@ -455,12 +515,14 @@ class HockeyStore {
     const goalie = this.put('skyDGoalieMannequin', gu, 2.0, U.toFront, {ring: 0.4}) ?? this.islands('skyDGoalieMannequin', 1, {u0: 1.0, u1: W - 1.0, v0: 1.4, v1: Math.min(D - 2, 3.5)}, 0.4, () => U.toFront)[0];
     if (goalie) this.add('goalie', goalie); else this.skip('goalie');
     const mid = {u0: 2.0, u1: W - 2.0, v0: 2.4, v1: D - 2.0};
-    const racks = this.islands('hkStickRack', Math.max(2, Math.min(3, Math.floor(W * D / 50))), mid, 0.7, () => this.rng.pick([U.toFront, U.toBack, U.plusU, U.minusU]), 2.4);
-    if (racks.length < 2) racks.push(...this.islands('hkStickRack', 2 - racks.length, {u0: 1.2, u1: W - 1.2, v0: 1.6, v1: D - 1.2}, 0.6, () => this.rng.pick([U.toFront, U.plusU]), 1.8));
+    const racks = this.islands('hkStickRack', Math.max(2, Math.min(4, Math.floor(W * D / 40))), mid, 0.7, () => this.rng.pick([U.toFront, U.toBack, U.plusU, U.minusU]), 2.4);
+    // (a small store: a one-cell walkway ring anywhere on the floor)
+    if (racks.length < 2) racks.push(...this.islands('hkStickRack', 2 - racks.length, {u0: 1.0, u1: W - 1.0, v0: 1.4, v1: D - 1.0}, 0.4, () => this.rng.pick([U.toFront, U.toBack, U.plusU, U.minusU]), 1.8));
     if (racks.length) this.add('stickRacks', ...racks); else this.skip('stick racks');
-    const tables = this.islands('merchTable', Math.max(1, Math.min(2, Math.floor(W * D / 70))), mid, 0.8, () => this.rng.pick([U.toFront, U.plusU]), 2.4);
+    const tables = this.islands('merchTable', Math.max(1, Math.min(3, Math.floor(W * D / 60))), mid, 0.8, () => this.rng.pick([U.toFront, U.plusU]), 2.4);
+    if (!tables.length) tables.push(...this.islands('merchTable', 1, {u0: 1.2, u1: W - 1.2, v0: 1.4, v1: D - 1.0}, 0.4, () => this.rng.pick([U.toFront, U.plusU]), 2.0));
     if (tables.length) this.add('gearTables', ...tables); else this.skip('gear tables');
-    if (!this.roles.laneNet?.length) {
+    if (!this.roles.laneNet?.length || W * D >= 140) {
       const net = this.islands('skyDHockeyNet', 1, {u0: 2.5, u1: W - 2.5, v0: 3.0, v1: D - 2.4}, 0.8, () => U.toFront);
       if (net.length) this.add('displayNet', ...net);
     }
@@ -477,7 +539,7 @@ class HockeyStore {
   dressStock(): void {
     const d = this.d, R = this.rng;
     // sticks standing in every rack
-    for (const rack of this.roles.stickRacks ?? []) this.add('sticks', d.onTop(rack, 'hkSticks', 0, 0, 0, rack.rot));
+    for (const rack of this.roles.stickRacks ?? []) this.add('sticks', d.onTop(rack, 'hkSticks', 0, 0, HK_STICK_RACK.trayY, rack.rot));
     // team jerseys face-out on the jersey wall's rails (two per bay, hook top = the rail), a colourway each
     const rail = 1.915, jerseys = R.shuffle(Array.from({length: HK_VARIANTS.hkJersey}, (_, i) => i));
     let j = 0;

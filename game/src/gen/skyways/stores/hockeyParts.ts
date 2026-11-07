@@ -23,9 +23,9 @@ const wrapV = (v: number, n: number) => ((Math.trunc(v) % n) + n) % n;
 // Sizes (the kinds' PROP_DEFS boxes read these)
 
 /** The floor stick rack: a steel base trough (the blades stand in it), end posts, a slotted top rail. */
-export const HK_STICK_RACK = {w: 1.6, d: 0.5, h: 1.16, trayY: 0.05, railY: 1.08, shaftZ: -0.12} as const;
+export const HK_STICK_RACK = {w: 1.6, d: 0.5, h: 1.19, trayY: 0.05, railY: 1.08, shaftZ: -0.12} as const;
 /** A rack's sticks (12 senior sticks, 1.5 m): the rider box over the rack. */
-export const HK_STICKS = {w: 1.42, d: 0.42, h: 1.6, n: 12, pitch: 0.12, len: 1.5} as const;
+export const HK_STICKS = {w: 1.42, d: 0.42, h: 1.5, n: 12, pitch: 0.12, len: 1.5} as const;
 /** A jersey hung face-out from a rail (sleeves hanging beside the body): hook top = the rail. */
 export const HK_JERSEY = {w: 0.84, d: 0.04, h: 0.8} as const;
 /** Skates (a pair, side by side, toes along +x: the profile faces the shopper). */
@@ -78,7 +78,7 @@ export function stickRackParts(): readonly DestDrawnPart[] {
     ...[-ex, ex].map(x => P('steelDark', [0.05, railY + 0.04, 0.05], [x, (railY + 0.04) / 2, shaftZ])),
     P('steelBright', [w - 0.06, 0.03, 0.03], [0, 0.5, shaftZ - 0.04]),
     P('steelBright', [w, 0.04, 0.1], [0, railY, shaftZ]),
-    P('paintBlue', [w + 0.02, 0.05, 0.11], [0, railY + 0.045, shaftZ]),
+    P('paintBlue', [w, 0.05, 0.11], [0, railY + 0.045, shaftZ]),
     // the slot teeth on the rail (rubber), between the sticks
     ...Array.from({length: HK_STICKS.n + 1}, (_, i) => P('black', [0.012, 0.035, 0.1], [-HK_STICKS.pitch * HK_STICKS.n / 2 + i * HK_STICKS.pitch, railY + 0.085, shaftZ])),
   ];
@@ -86,7 +86,8 @@ export function stickRackParts(): readonly DestDrawnPart[] {
 
 /** A rack's sticks: shafts upright through the rail's slots, blades forward in the trough, taped blades and knobs, shaft graphics. */
 export function sticksParts(): readonly DestDrawnPart[] {
-  const {n, pitch, len} = HK_STICKS, z = HK_STICK_RACK.shaftZ, y0 = HK_STICK_RACK.trayY + 0.005;
+  // (the prop's base = the blades' bottom: it stands on the rack's trough floor, HK_STICK_RACK.trayY above the rack's base)
+  const {n, pitch, len} = HK_STICKS, z = HK_STICK_RACK.shaftZ, y0 = 0;
   const shafts: PartMat[] = ['black', 'paintWhite', 'black', 'paintRed', 'black', 'steelDark', 'paintBlue', 'black', 'paintYellow', 'black', 'paintWhite', 'black'];
   const bands: PartMat[] = ['paintRed', 'black', 'paintBlue', 'paintWhite', 'paintYellow', 'paintRed', 'paintWhite', 'paintGreen', 'black', 'paintBlue', 'paintRed', 'paintOrange'];
   const out: DestDrawnPart[] = [];
