@@ -147,7 +147,12 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
     turntable and the prize board (`gen/skyways/addonPrizeDisplay.ts`).
 - **Tenant OFFICE WING (about one map in five):** an open-plan office off a lobby, with a meeting room, private offices and a break
   room, furnished with the office floor's own kit (`gen/skyways/officeWing.ts`) and finishes.
-- **Anchor stores' own finishes:** `gen/skyways/destinations/anchorStyles.ts` (world/skywaysArch.ts class 'anchor').
+- **The ten major stores** (`gen/skyways/stores/`, from version 3; one doc per store under `docs/skyways-stores/`):
+  - each family has its own dresser, fixtures, openable storage, back room and loot purposes (existing Mall / Office / station tables);
+  - the storefront and sign face the hall;
+  - no floor piles inside a store (`Area.noFloorLoot`).
+- **Anchor stores' own finishes:** `gen/skyways/destinations/anchorStyles.ts` (world/skywaysArch.ts class 'anchor'). The class covers the
+  store's floors, upper storey and zones, plus a two-level store's own internal stair (its well and flight flank walls).
 - **The public architecture look** (`world/skywaysArch.ts`, `skywaysBridgeRoofs.ts`, `skywaysSkylights.ts`, `skywaysGardens.ts`):
   - glazed bridge roofs with steel ribs, clay-paver decks and daylight under the glass;
   - SKYLIGHT coffers in the large skyway courts (`gen/skyways/skylights.ts`);
