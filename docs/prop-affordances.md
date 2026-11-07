@@ -367,6 +367,38 @@ models with their maps kept, lane ASSET-C's mascot pose GLB, the Codex art atlas
   statues / aim, stage against its wall, merch support / overlap, lanes / doors, posters / banners, the car's clearance / exit lane /
   ring / ropes / board; the renderer on the real GLBs; ropes dropping with a shot post; merch shot off its table).
 
+### The Skyways convention VENUE floor and the walkable stage (task studio-skyways-rework-20261107-054512-01, lane VENUE)
+Layout version 3 rents the host's whole skyway floor to the convention (`addon.venue` roles). `gen/skyways/venueDress.ts` dresses the
+public areas beyond the main hall: registration (badge desks = the merch table kind with a staff folding chair behind, a stanchion queue
+line whose velvet ropes the runtime draws from `addon.queues`, the welcome sign, the `registration-wave` statue), the exhibitors' floor
+(vendor table rows with LOOSE merch on the tops and a vendor's chair, the pop-up exhibits: arcade cabinets + capsule-toy row + giant teddy,
+a mannequin cosplay display), panel rooms (two tables, panelists, audience rows, a tripod screen), the photo lounge (photo-op wall,
+`photo-pose` statue, armchairs / bean bags / ottoman / plants) and event wayfinding on the sign system. Every furniture group is kept only
+if every opening of its area that was reachable before stays reachable by a 1.2 m wide path (then reserved as lanes); 1.5 m stays clear in
+front of every door. Existing kinds keep their classes; FOUR new art-panel kinds (`gen/skyways/addonKinds.ts`, drawn by
+`world/skywaysAddon.ts` from the venue's Codex atlas `textures/skyways/skyways-venue-art.jpg`, crop / pack only):
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact) |
+|---|---|---|---|---|
+| `skywaysVenuePhotoWall` | printed 3 × 2 m photo-op panel in a steel frame between two posts on sandbag-weighted base plates | `none` | static `anchored` (~45 kg) | 3.19 × 2.50 × 0.60 m, panel 0.42–2.42 m; grounded (base plates) |
+| `skywaysVenueScreen` | tripod projection screen showing the panel's title slide (variant = slide) | `none` | **dynamic** 9 kg box, `pad` | 2.18 × 2.30 × 0.50 m, screen 0.80–2.20 m; grounded (T-foot) |
+| `skywaysVenueRegSign` | framed registration sign screwed to the wall behind the badge desks | `none` | static `mounted` | 1.56 × 1.06 m at 1.30–2.36 m |
+| `skywaysVenueTableBanner` | vinyl booth banner zip-tied along a vendor table's cloth front (hosted on the table; variant = studio) | `none` | static `mounted` | 0.90 × 0.60 m at 0.11–0.71 m, under the 0.757 m top |
+
+- No loose items baked in: the panels are print + frame only; merch / chairs are separate props.
+- The STAGE (`gen/skyways/stageSupport.ts`, user: "anime stage stairs must be walkable"): at runtime (`game.ts`, after the world is drawn,
+  before levels / prop index / paths / physics) the grid floor under the drawn deck (1.029 m) and the two drawn treads (0.682 / 0.325 m,
+  sampled at cell centres from the cooked model: risers 0.33–0.36 m, each within STEP_UP) is lifted, so the real player walks up the
+  steps onto the deck and back down; the deck / tread boxes then no longer block a body standing on them, the cheer statue blocks at deck
+  height, and collision-only truss boxes (stage variant 2) keep bodies out of the truss / backdrop line. Zombies' paths reach the deck by
+  the steps. Version 3 stands the deck edge on a cell line (drawn ↔ support exact but the bottom riser, 8 cm); the frozen v1 / v2 stages
+  get the same runtime support (within 0.15 m), their layout data unchanged.
+- Renders: the four kinds (shape GLBs) + `skyways-con-merch-table.glb`, `scale-check.mjs --prop … --lift 1.3 (sign) / 0.11 (banner)`,
+  viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/skyways-venue.test.ts` (roles, signature pieces, nothing floating, 1.2 m routes from every bridge mouth to every room door /
+  the stage steps / the washrooms, door strips, wayfinding arrows, the venue atlas' provenance; the drawn stage heights vs the support; a
+  real Player on the v3 and v2 stages; paths onto the deck), `tests/skyways-addon.test.ts` (both audits, the art faces, the renderer).
+
 ### Skyways destination anchors: garden, arcade, cinema, science, hockey (task studio-skyways-destinations-20261106-170011-01, lane SHOPS-B)
 `gen/skyways/destinations/shopsB.ts` dresses five anchor families (placement context `skywaysShopsBKit.ts`: lanes from the storefront entry
 to every zone / back-room door reserved first, cell-aligned runs, all-or-nothing counter runs). EXISTING kinds carry the storage and loot
