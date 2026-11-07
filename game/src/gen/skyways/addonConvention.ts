@@ -25,23 +25,28 @@ import {SKYWAYS_BANNER_CABLE, SKYWAYS_MASCOT_POSES, SKYWAYS_MERCH_TOP, SKYWAYS_P
   SKYWAYS_STATUE_PLINTH, SKYWAYS_STATUE_POSE} from './addonKinds';
 import {AddonDresser, doorBetween, doorPoint, normYaw, propRect, r3, segDist, toWorld, uvXZ, xzUV, yawToward} from './addonFrame';
 import type {SkywaysAddon, SkywaysStatue} from './skywaysTypes';
+import {SKYWAYS_STAGE_DECK_EDGE, SKYWAYS_STAGE_SURFACES, stageWorldXZ, type StageSurface} from './stageSupport';
 
 /** Clear floor kept in front of every door of the hall (m: >= the 1.2 m rule). */
 export const CON_DOOR_CLEAR = 1.5;
 /** Half width of the reserved walking lanes (entry -> stage, entry -> washrooms), m. */
 export const CON_LANE_HALF = 0.9;
+/** Half width of the strip kept along the stage front to the foot of its steps (lane VENUE), m. */
+export const CON_STEPS_LANE_HALF = 0.6;
 /** Chairs per side of the centre aisle, rows at most; tables at most; merch per table (front row). */
 export const CON_CHAIRS = {perSide: 5, rows: 5, pitch: 1.0} as const;
 export const CON_TABLES_MAX = 10;
 export const CON_MERCH_PER_TABLE: readonly [number, number] = [3, 5];
 /** Statue scale over the authored 1.40 m pose (the entrance greeter a little larger). */
-export const CON_STATUE_SCALE: Readonly<Record<string, number>> = {'entrance-wave': 1.1};
+export const CON_STATUE_SCALE: Readonly<Record<string, number>> = {'entrance-wave': 1.1, 'registration-wave': 1.1};
 
 export type StatueRole = keyof typeof SKYWAYS_STATUE_POSE;
 
 export interface ConventionResult {
   stage: PropPlacement | null;
+  /** The steps' collision (the upper tread's box; `treads` = both, upper first: lane VENUE). */
   steps: PropPlacement | null;
+  treads: PropPlacement[];
   backdrop: PropPlacement | null;
   chairs: PropPlacement[];
   tables: PropPlacement[];
@@ -65,7 +70,7 @@ const snapB = (v: number) => Math.round(v / CELL) * CELL; // a cell boundary
 export function dressConvention(d: AddonDresser): ConventionResult {
   const {layout, fr, hall, rng} = d;
   const conv = d.addon.convention!;
-  const res: ConventionResult = {stage: null, steps: null, backdrop: null, chairs: [], tables: [], merch: [], posters: [], boards: [], banners: [], welcome: null, booth: [],
+  const res: ConventionResult = {stage: null, steps: null, treads: [], backdrop: null, chairs: [], tables: [], merch: [], posters: [], boards: [], banners: [], welcome: null, booth: [],
     statues: [], lanes: [], washroomDoor: null};
   const own = d.addon.areas.map(id => layout.areas[id]).filter(Boolean);
   const washroom = own.find(a => a.type === 'washroom');
@@ -81,8 +86,11 @@ export function dressConvention(d: AddonDresser): ConventionResult {
   const sc = xzUV(fr, (conv.stage.x0 + conv.stage.x1) / 2, (conv.stage.z0 + conv.stage.z1) / 2);
   const halfW = PROP_DEFS.skywaysConStage.w / 2;
   const us0 = snapB(Math.max(halfW + 0.5, Math.min(fr.W - halfW - 0.5, sc[0])));
-  // the deck's front edge on a cell line (its steps' collision box then starts on the next cell): back ~0.25 m off the wall
-  const vDeckFront = snapB(fr.D - 0.03 - SKYWAYS_STAGE_DECK_D - 0.24) + 0.001, vDeck = vDeckFront + SKYWAYS_STAGE_DECK_D / 2;
+  // (lane VENUE, layout version 3) the drawn deck EDGE on a cell line, so the walkable support under the deck and its two treads
+  // (gen/skyways/stageSupport.ts: sampled at cell centres) meets the drawn deck edge and the riser between the treads exactly; the
+  // collision box's front (the skirt's flare at the floor) is 0.145 m in front of it; the back ~0.25 m off the wall
+  const edgeToFront = SKYWAYS_STAGE.deckZ1 - SKYWAYS_STAGE_DECK_EDGE, deckDepth = SKYWAYS_STAGE_DECK_EDGE - SKYWAYS_STAGE.deckZ0;
+  const vDeckFront = snapB(fr.D - 0.03 - deckDepth - 0.24) - edgeToFront, vDeck = vDeckFront + SKYWAYS_STAGE_DECK_D / 2;
   let us = us0;
   if (fr.W >= 2 * halfW + 0.8 && fr.D >= SKYWAYS_STAGE_DECK_D + 7) {
     for (const du of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, 2, -2, 3, -3]) {
@@ -97,13 +105,14 @@ export function dressConvention(d: AddonDresser): ConventionResult {
   const stepsD = SKYWAYS_STAGE.steps.z1 - SKYWAYS_STAGE.steps.z0;
   if (res.stage) {
     const st = res.stage;
-    // the front steps: a collision-only box (variant 1), drawn by the stage model
-    const s = SKYWAYS_STAGE.steps, lx = (s.x0 + s.x1) / 2, lz = (s.z0 + s.z1) / 2 + SKYWAYS_STAGE_MODEL_SHIFT;
-    const [x, z] = toWorld(st, lx, lz);
-    const q = Math.abs(Math.sin(st.rot)) > 0.7;
-    const hx = r3(((q ? stepsD : s.x1 - s.x0)) / 2), hz = r3(((q ? s.x1 - s.x0 : stepsD)) / 2);
-    res.steps = boxProp(d, 'skywaysConStage', x, z, hx, hz, s.h, st.rot, 1);
-    if (!res.steps) d.skipped.push('convention: stage steps box');
+    // (lane VENUE) the front steps' collision: one box per drawn tread (variant 1, drawn by the stage model) — the upper tread's box
+    // starts at the deck edge (inside the deck box's cells), the lower one in front of it: hitscan / physics meet the treads as drawn
+    // (the walking support under them: gen/skyways/stageSupport.ts)
+    for (const surf of SKYWAYS_STAGE_SURFACES.slice(1)) {
+      const t = treadBox(d, st, surf);
+      if (t) res.treads.push(t); else d.skipped.push(`convention: stage ${surf.name} box`);
+    }
+    res.steps = res.treads[0] ?? null;
     // the backdrop vinyl in the truss (behind the uprights, in front of the deck's back edge), its bottom just above the deck
     const [bx, bz] = toWorld(st, 0, SKYWAYS_STAGE.trussBackZ - 0.04 + SKYWAYS_STAGE_MODEL_SHIFT);
     const bf = footprint('skywaysConBackdrop', st.rot);
@@ -114,7 +123,7 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     const [tx, tz] = uvXZ(fr, us, 0); // looking out over the audience toward the entry wall
     const sp = statueOn(d, st, 'stage-cheer', cx, cz, yawToward(tx - cx, tz - cz));
     if (sp) res.statues.push(sp); else d.skipped.push('convention: stage statue');
-    conv.stage = unionRect(propRect(st), res.steps ? propRect(res.steps) : propRect(st));
+    conv.stage = res.treads.reduce((u, t) => unionRect(u, propRect(t)), propRect(st));
   }
 
   // --- 2. lanes: entry -> the centre aisle -> the stage front; entry -> the washrooms ------------------------------------------
@@ -124,6 +133,12 @@ export function dressConvention(d: AddonDresser): ConventionResult {
   const vLast = vFirst - (nRows - 1) * CON_CHAIRS.pitch;
   const A = uvXZ(fr, us, Math.max(1.6, vLast - 1.4)), S = uvXZ(fr, us, vDeckFront - stepsD - 0.35);
   lane(d, res, ein, A, 'stage'); lane(d, res, A, S, 'stage');
+  // (lane VENUE) along the stage front to the foot of its steps (a narrower 1.2 m strip: the first row keeps its chairs)
+  if (res.stage && res.treads.length) {
+    const sf = SKYWAYS_STAGE_SURFACES[2], foot = stageWorldXZ(res.stage, (sf.x0 + sf.x1) / 2, sf.z1 + 0.45);
+    d.keepSegment(S[0], S[1], foot[0], foot[1], CON_STEPS_LANE_HALF);
+    res.lanes.push({ax: r3(S[0]), az: r3(S[1]), bx: r3(foot[0]), bz: r3(foot[1]), half: CON_STEPS_LANE_HALF, to: 'stage'});
+  }
   let wIn: [number, number] | null = null;
   if (wDoor) {
     const W = doorPoint(wDoor, hall);
@@ -313,7 +328,7 @@ export function dressConvention(d: AddonDresser): ConventionResult {
 }
 
 /** The statue records (absolute feet heights: call after the dresser lifted the props). */
-export function conventionStatues(res: ConventionResult, level: number): SkywaysStatue[] {
+export function conventionStatues(res: Pick<ConventionResult, 'statues'>, level: number): SkywaysStatue[] {
   return res.statues.map(s => ({pose: s.pose, x: s.prop.x, y: r3(s.prop.y + SKYWAYS_STATUE_PLINTH.h), z: s.prop.z, yaw: s.prop.rot, level, scale: s.scale, role: s.role}));
 }
 
@@ -327,16 +342,24 @@ function lane(d: AddonDresser, res: ConventionResult, a: readonly [number, numbe
 const unionRect = (a: {x0: number; z0: number; x1: number; z1: number}, b: {x0: number; z0: number; x1: number; z1: number}) =>
   ({x0: Math.min(a.x0, b.x0), z0: Math.min(a.z0, b.z0), x1: Math.max(a.x1, b.x1), z1: Math.max(a.z1, b.z1)});
 
-/** A collision box of its own size (cells free floor of the hall, not reserved; the hall stays connected). */
-function boxProp(d: AddonDresser, kind: PropKind, x: number, z: number, hx: number, hz: number, h: number, rot: number, variant: number): PropPlacement | null {
-  const g = d.g, cells: number[] = [];
+/**
+ * (lane VENUE) A drawn tread's collision box (variant 1; model-frame rect of `surf`, its top = the tread): every cell it covers is free
+ * floor of the hall or already the stage's own (the upper tread starts under the deck box's skirt line); the hall stays connected.
+ */
+function treadBox(d: AddonDresser, st: PropPlacement, surf: StageSurface): PropPlacement | null {
+  const g = d.g, corners = [[surf.x0, surf.z0], [surf.x1, surf.z0], [surf.x0, surf.z1], [surf.x1, surf.z1]].map(([mx, mz]) => stageWorldXZ(st, mx, mz));
+  const x0 = Math.min(...corners.map(c => c[0])), x1 = Math.max(...corners.map(c => c[0])), z0 = Math.min(...corners.map(c => c[1])), z1 = Math.max(...corners.map(c => c[1]));
+  const x = (x0 + x1) / 2, z = (z0 + z1) / 2, hx = r3((x1 - x0) / 2), hz = r3((z1 - z0) / 2);
+  const own = (cx: number, cy: number) => (cx + 1) * CELL > st.x - st.hx + 0.04 && cx * CELL < st.x + st.hx - 0.04 && (cy + 1) * CELL > st.z - st.hz + 0.04 && cy * CELL < st.z + st.hz - 0.04;
+  const cells: number[] = [];
   for (let cy = Math.floor((z - hz + 0.04) / CELL); cy <= Math.floor((z + hz - 0.04) / CELL); cy++) for (let cx = Math.floor((x - hx + 0.04) / CELL); cx <= Math.floor((x + hx - 0.04) / CELL); cx++) {
+    if (own(cx, cy) && g.area[g.idx(cx, cy)] === d.hall.id) continue;
     if (!d.freeAt((cx + 0.5) * CELL, (cy + 0.5) * CELL)) return null;
     cells.push(g.idx(cx, cy));
   }
   for (const i of cells) markCell(d.ctx, g.blocked, i);
   if (!areaConnected(d.ctx, d.hall)) { for (const i of cells) g.blocked[i] = 0; return null; }
-  return d.push({kind, x: r3(x), z: r3(z), y: 0, rot: r3(rot), area: d.hall.id, hx, hz, h, blocksSight: false, variant});
+  return d.push({kind: 'skywaysConStage', x: r3(x), z: r3(z), y: 0, rot: st.rot, area: d.hall.id, hx, hz, h: surf.top, blocksSight: false, variant: 1});
 }
 
 function statueProp(p: PropPlacement, role: StatueRole): {role: StatueRole; pose: SkywaysMascotPoseName; scale: number; prop: PropPlacement} {
@@ -347,7 +370,7 @@ function statueProp(p: PropPlacement, role: StatueRole): {role: StatueRole; pose
   return {role, pose, scale, prop: p};
 }
 /** A floor statue (round plinth collider, any yaw). */
-function statueAt(d: AddonDresser, role: StatueRole, x: number, z: number, yaw: number, area?: Area) {
+export function statueAt(d: AddonDresser, role: StatueRole, x: number, z: number, yaw: number, area?: Area) {
   const p = d.putRound('skywaysMascotStatue', snapC(x), snapC(z), yaw, area ? {area} : {});
   return p ? statueProp(p, role) : null;
 }
@@ -385,7 +408,7 @@ function greenRoomStatue(d: AddonDresser, room: Area, door: Door) {
 }
 
 /** Loose merch packed along a table's top: a front row (figure boxes in runs, plushes, print cards) and a few boxes behind. */
-function merchOn(d: AddonDresser, t: PropPlacement): PropPlacement[] {
+export function merchOn(d: AddonDresser, t: PropPlacement): PropPlacement[] {
   const rng = d.rng, out: PropPlacement[] = [], top = SKYWAYS_MERCH_TOP;
   const want = rng.int(CON_MERCH_PER_TABLE[0], CON_MERCH_PER_TABLE[1]);
   let x = -top.x + 0.06 + rng.range(0, 0.12);

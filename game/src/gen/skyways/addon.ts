@@ -17,11 +17,14 @@ import {AddonDresser} from './addonFrame';
 import {conventionStatues, dressConvention, type ConventionResult} from './addonConvention';
 import {dressPrizeCar, type PrizeCarResult} from './addonPrize';
 import {dressPrizeDisplay, prizeDisplayDresser} from './addonPrizeDisplay';
+import {dressSkywaysVenue, type VenueResult} from './venueDress';
 
 export interface AddonDressResult {
   id: SkywaysAddon['id'] | null;
   convention?: ConventionResult;
   prize?: PrizeCarResult;
+  /** (lane VENUE, layout version 3) the convention venue's public areas beyond the main hall. */
+  venue?: VenueResult;
   /** Every prop placed here (layout.props order). */
   props: PropPlacement[];
   /** Pieces that could not be placed (QA). */
@@ -64,6 +67,11 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
   d.lift();
   // the statue records (absolute: after the lift)
   if (res.convention && info.addon.convention) info.addon.convention.statues = conventionStatues(res.convention, info.addon.level);
+  // (lane VENUE, layout version 3) the venue floor beyond the main hall: registration, the exhibitors' floor, panel rooms, the photo lounge
+  if (res.convention && info.addon.venue) {
+    res.venue = dressSkywaysVenue(layout, rng) ?? undefined;
+    if (res.venue && info.addon.convention) info.addon.convention.statues.push(...conventionStatues(res.venue, info.addon.level));
+  }
   res.props = layout.props.slice(d.p0);
   res.skipped.push(...d.skipped);
   RESULTS.set(layout, {res, index: new Map(layout.props.map((p, i) => [p, i] as const).filter(([, i]) => i >= d.p0))});

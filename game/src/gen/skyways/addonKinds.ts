@@ -302,6 +302,8 @@ export const SKYWAYS_ADDON_SCALE = {
 } as const;
 
 /** Poses by role (the convention's statues). */
-export const SKYWAYS_STATUE_POSE: Readonly<Record<'entrance-wave' | 'washroom-point' | 'stage-cheer' | 'merch-bow' | 'green-room-stand', SkywaysMascotPoseName>> = {
+export const SKYWAYS_STATUE_POSE: Readonly<Record<'entrance-wave' | 'washroom-point' | 'stage-cheer' | 'merch-bow' | 'green-room-stand' | 'registration-wave' | 'photo-pose', SkywaysMascotPoseName>> = {
   'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand',
+  // (lane VENUE, layout version 3) the venue's registration greeter and the photo lounge's photo-op pose
+  'registration-wave': 'wave', 'photo-pose': 'cheer',
 };

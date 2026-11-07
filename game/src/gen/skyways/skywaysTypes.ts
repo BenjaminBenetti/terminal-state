@@ -164,6 +164,8 @@ export interface SkywaysAddon {
   approach?: 'direct' | 'foyer';
   /** (layout version 3) 'convention': the VENUE — every area of the host's skyway floor by role (the bridges lead straight into it). */
   venue?: {role: SkywaysVenueRole; area: number}[];
+  /** (layout version 3, lane VENUE) 'convention': the registration queue's rope lines (chains of layout.props indices of stanchion posts). */
+  queues?: number[][];
   /** (layout version 3) 'prize-car': the car stands on a public display in its host's skyway court (`areas` empty, `hall` = the zone). */
   display?: boolean;
 }
