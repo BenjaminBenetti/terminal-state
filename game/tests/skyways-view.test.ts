@@ -21,7 +21,7 @@ import {CELL, FLOOR} from '../src/gen/grid';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {LEVELS} from '../src/levels/registry';
 import {WorldMaterials} from '../src/world/materials';
-import {storeAreaFinishes, storeWallClass} from '../src/world/skywaysStoreFinish'; // task studio-alpha-skyways-shops-20261107-054512-01
+import {ANCHOR_STYLES} from '../src/gen/skyways/destinations/anchorStyles';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {finishFamily, treatmentOf} from '../src/world/wallDetailPlan';
 import {LevelColumns, ceilingRuns, stationLevels} from '../src/world/levelGeometry';
@@ -76,8 +76,23 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       expect(a).toBeInstanceOf(SkywaysArch);
       const bridges = new Set(L.skyways!.bridges.map(b => b.area));
       const seen = new Map<SkywaysClass, number>();
-      const stores = storeAreaFinishes(L);
+      // the anchor stores' areas (sales floor + pieces, the upper storey + pieces, the zones) -> the store's finish
+      const stores = new Map<number, {fam: keyof typeof ANCHOR_STYLES; role: '' | '-zone' | '-upper'}>();
+      for (const an of L.skyways!.anchors ?? []) {
+        const st = ANCHOR_STYLES[an.family], add = (root: number, role: '' | '-upper') => {
+          const set = new Set([root]);
+          for (const q of L.areas) if (set.has(q.parent) && q.type === 'shop') set.add(q.id);
+          for (const id of set) stores.set(id, {fam: an.family, role});
+        };
+        add(an.floor, '');
+        if (an.upper !== undefined) add(an.upper, st.upper ? '-upper' : '');
+        for (const z of an.zones) stores.set(z, {fam: an.family, role: st.zones ? '-zone' : ''});
+      }
       expect(stores.size).toBeGreaterThan(0);
+      const styleOf = (e: {fam: keyof typeof ANCHOR_STYLES; role: string}) => {
+        const st = ANCHOR_STYLES[e.fam], v = e.role === '-zone' ? st.zones : e.role === '-upper' ? st.upper : undefined;
+        return {wall: v?.wall ?? st.wall, floor: v?.floor ?? st.floor, ceiling: v?.ceiling ?? st.ceiling};
+      };
       const FLOOR_OF: Partial<Record<SkywaysClass, string>> = {public: 'skyways-floor-public', court: 'skyways-floor-court', bridge: 'skyways-floor-bridge', wet: 'skyways-floor-wet', boh: 'skyways-floor-boh'};
       for (const ar of L.areas) {
         const cls = skywaysAreaClass(ar, bridges);
@@ -85,12 +100,13 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         const c = cellOf(L, ar.id);
         if (c.i < 0) continue;
         const fk = a.floorKey(c.L, c.i);
-        // (task studio-alpha-skyways-shops-20261107-054512-01) a major store's areas: its own finish keys (world/skywaysStoreFinish.ts)
+        // a major store's areas: its own finish keys (destinations/anchorStyles.ts)
         const st = stores.get(ar.id);
         if (st) {
-          expect(fk, `${ar.label} floor`).toBe(`skyways-store-floor-${st.floor[0]}@${st.family}-${st.role}`);
+          const sf = styleOf(st);
+          expect(fk, `${ar.label} floor`).toBe(`skyways-anchor-floor-${sf.floor.kind}@${st.fam}${st.role}`);
           const sk = a.ceilKey(c.L, ar.id, c.i);
-          if (sk !== false) expect(sk, `${ar.label} ceil`).toBe(`skyways-store-ceil-${st.ceil[0]}@${st.family}-${st.role}`);
+          if (sk !== false) expect(sk, `${ar.label} ceil`).toBe(`skyways-anchor-ceil-${sf.ceiling.kind}@${st.fam}${st.role}`);
           continue;
         }
         if (cls === 'station' || cls === 'shop') expect(fk, `${ar.label} floor`).toBeNull();
@@ -112,7 +128,7 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       for (const f of w.wallFaces) {
         const cls = a.classOf(f.area);
         const sw = f.slope ? undefined : stores.get(f.area);
-        if (sw) { expect(f.finish, 'a store wall').toBe(`skyways-store-wall-${storeWallClass(sw.wall)}@${sw.family}-${sw.role}`); continue; }
+        if (sw) { expect(f.finish, 'a store wall').toMatch(new RegExp(`^skyways-anchor-wall-[a-z]+@${sw.fam}${sw.role}$`)); continue; }
         if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
         expect(f.finish, cls).toBe(cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : 'skyways-wall');
@@ -183,16 +199,16 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
     const {L, w} = world(SEEDS[0]);
     const a = w.skywaysArch!;
     const used = a.usedMaterials();
-    // (task studio-alpha-skyways-shops-20261107-054512-01: + the major stores' own wall / floor / ceiling per store role; every store wall
-    // shares the one office wall program, every store floor / ceiling its kind's)
-    const base = [...used.keys()].filter(k => !k.startsWith('skyways-store-')), store = [...used.keys()].filter(k => k.startsWith('skyways-store-'));
+    // (+ the anchor stores' own wall / floor / ceiling per store and role; every store wall shares the one office wall program, every
+    // store floor / ceiling its kind's)
+    const base = [...used.keys()].filter(k => !k.startsWith('skyways-anchor-')), store = [...used.keys()].filter(k => k.startsWith('skyways-anchor-'));
     expect(base.length).toBeLessThanOrEqual(15);
     const roles = new Set(store.map(k => k.split('@')[1]));
     expect(store.length).toBeLessThanOrEqual(3 * roles.size);
     const walls = ['skyways-wall', 'skyways-wet', 'skyways-boh'].map(k => used.get(k) as OfficeSurfaceMaterial);
     const reveal = a.revealMaterial(2) as OfficeSurfaceMaterial;
     expect(reveal).toBeInstanceOf(OfficeSurfaceMaterial);
-    for (const m of [...walls, reveal, ...store.filter(k => k.startsWith('skyways-store-wall-')).map(k => used.get(k) as OfficeSurfaceMaterial)]) expect(m.colorNode).toBe(walls[0].colorNode);
+    for (const m of [...walls, reveal, ...store.filter(k => k.startsWith('skyways-anchor-wall-')).map(k => used.get(k) as OfficeSurfaceMaterial)]) expect(m.colorNode).toBe(walls[0].colorNode);
     expect(reveal.ofP.w).toBe(LOWER.none);
     expect(reveal.ofP.x).toBe(0); // no skirting band on the reveals' arbitrary uvs
     expect(reveal.ofA.equals((used.get('skyways-wall') as OfficeSurfaceMaterial).ofA)).toBe(true);
