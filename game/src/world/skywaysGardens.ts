@@ -17,8 +17,8 @@ import {shapeMaterials} from './shapeMaterials';
 
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) => number;
 
-/** The foliage model (the office potted plant: natural size, its pot's height as a fraction of the model). */
-export const GARDEN_FOLIAGE = {key: officeModelKey('potted-plant-small'), w: 0.42, h: 0.6, d: 0.43, pot: 0.34} as const;
+/** The foliage model (the office potted plant: natural size; `pot` = its bowl's rim as a fraction of its height, measured: the cut line). */
+export const GARDEN_FOLIAGE = {key: officeModelKey('potted-plant-small'), w: 0.42, h: 0.6, d: 0.43, pot: 0.5} as const;
 
 /** Game.sectionModelKeys: the foliage model when a layout placed a planter kind. */
 export function skywaysGardenModelKeysFor(layout: {props?: readonly {kind: string}[]}): readonly string[] {
@@ -65,7 +65,7 @@ export function shrubSpots(kind: GardenKind, variant: number): {x: number; z: nu
     for (let i = 0; i < n; i++) out.push({x: -w / 2 + w * (i + 0.5) / n + (rnd(i) - 0.5) * 0.12, z: (rnd(i + 7) - 0.5) * 0.06, y: GALLERY_PLANTER.soil, rot: rnd(i + 3) * Math.PI * 2, s: 1 + (rnd(i + 11) - 0.5) * 2 * GARDEN_SHRUBS.jitter});
   } else {
     const B = BENCH_PLANTER, n = GARDEN_SHRUBS.bench, bed = B.w - 2 * B.rim, zc = -B.d / 2 + B.rim + (B.d - B.seatD - B.rim) / 2;
-    for (let i = 0; i < n; i++) out.push({x: -bed / 2 + bed * (i + 0.5) / n + (rnd(i) - 0.5) * 0.15, z: zc + (rnd(i + 5) - 0.5) * 0.12, y: B.soil, rot: rnd(i + 3) * Math.PI * 2, s: 1.05 + (rnd(i + 11) - 0.5) * 2 * GARDEN_SHRUBS.jitter});
+    for (let i = 0; i < n; i++) out.push({x: -bed / 2 + bed * (i + 0.5) / n + (rnd(i) - 0.5) * 0.15, z: zc + (rnd(i + 5) - 0.5) * 0.12, y: B.soil, rot: rnd(i + 3) * Math.PI * 2, s: 0.85 + (rnd(i + 11) - 0.5) * 2 * GARDEN_SHRUBS.jitter});
   }
   return out;
 }
@@ -92,6 +92,46 @@ function instanced(group: THREE.Group, geo: THREE.BufferGeometry, mat: THREE.Mat
 
 let standInGeo: THREE.BufferGeometry | null = null;
 
+const foliageCache = new WeakMap<GLTF, {geo: THREE.BufferGeometry; mat: THREE.Material}[]>();
+/**
+ * The foliage of the potted-plant model (local mesh separation, no new asset): every mesh fitted to the model's natural size (bottom
+ * centre at the origin, as the builder fits a model) with the triangles wholly under the pot's rim (GARDEN_FOLIAGE.pot of its height:
+ * the bowl and its soil) removed. Cached per loaded model (the library owns the source; these copies live as long as it).
+ */
+export function foliageParts(gltf: GLTF): {geo: THREE.BufferGeometry; mat: THREE.Material}[] {
+  let out = foliageCache.get(gltf);
+  if (out) return out;
+  out = [];
+  const F = GARDEN_FOLIAGE, root = gltf.scene;
+  root.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(root), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const fit = new THREE.Matrix4().makeScale(F.w / size.x, F.h / size.y, F.d / size.z).multiply(new THREE.Matrix4().makeTranslation(-c.x, -box.min.y, -c.z));
+  const cut = F.pot * F.h;
+  root.traverse(o => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const g = mesh.geometry.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(fit, mesh.matrixWorld));
+    const pos = g.attributes.position, src = g.index ? Array.from(g.index.array as ArrayLike<number>) : Array.from({length: pos.count}, (_, i) => i);
+    const keep: number[] = [];
+    for (let t = 0; t + 2 < src.length; t += 3) if (Math.max(pos.getY(src[t]), pos.getY(src[t + 1]), pos.getY(src[t + 2])) > cut) keep.push(src[t], src[t + 1], src[t + 2]);
+    // compact: only the vertices the kept triangles use (bounds / uploads of the foliage alone)
+    const remap = new Map<number, number>(), order: number[] = [];
+    const idx = keep.map(i => { let j = remap.get(i); if (j === undefined) { remap.set(i, (j = order.length)); order.push(i); } return j; });
+    const f = new THREE.BufferGeometry();
+    for (const [name, a] of Object.entries(g.attributes) as [string, THREE.BufferAttribute][]) {
+      const arr = new Float32Array(order.length * a.itemSize);
+      order.forEach((i, j) => { for (let c = 0; c < a.itemSize; c++) arr[j * a.itemSize + c] = a.getComponent(i, c); });
+      f.setAttribute(name, new THREE.BufferAttribute(arr, a.itemSize));
+    }
+    f.setIndex(idx);
+    f.computeBoundingSphere();
+    g.dispose();
+    out!.push({geo: f, mat: Array.isArray(mesh.material) ? mesh.material[0] : mesh.material});
+  });
+  foliageCache.set(gltf, out);
+  return out;
+}
+
 /** Renders one planter kind's placements (bodies + soil + shrubs). Returns the planter count. */
 export function buildSkywaysGardenProp(group: THREE.Group, kind: PropKind, list: PropPlacement[], wm: WorldMaterials, instanceModel: InstanceModel,
   lib: Readonly<Record<string, GLTF | undefined>>): number {
@@ -117,14 +157,15 @@ export function buildSkywaysGardenProp(group: THREE.Group, kind: PropKind, list:
     const base = placeM(p);
     for (const s of shrubSpots(kind, p.variant)) {
       const k = S * s.s;
-      const local = new THREE.Matrix4().compose(new THREE.Vector3(s.x, s.y - F.pot * F.h * k, s.z), new THREE.Quaternion().setFromAxisAngle(UP, s.rot), new THREE.Vector3(k, k, k));
+      const local = new THREE.Matrix4().compose(new THREE.Vector3(s.x, s.y - 0.03 - F.pot * F.h * k, s.z), new THREE.Quaternion().setFromAxisAngle(UP, s.rot), new THREE.Vector3(k, k, k));
       shrubs.push({level: p.level ?? 0, m: base.clone().multiply(local)});
     }
   }
   const gltf = lib[F.key];
   if (gltf) {
-    // fit = the model's natural size (scale 1): the per-shrub scale / sink live in the instance matrices
-    for (const [, ms] of byLevel(shrubs)) instanceModel(group, gltf, ms.map(e => e.m), {w: F.w, h: F.h, d: F.d, anchor: 'bottom'}, `${kind}-foliage`);
+    // the model's foliage only (its bowl pot cut away: foliageParts), at its natural size; the per-shrub scale / sink in the matrices
+    for (const part of foliageParts(gltf)) instanced(group, part.geo, part.mat, shrubs, `prop-${kind}-foliage`);
+    void instanceModel;
   } else {
     // stand-in: a dark foliage box the size of the plant above its pot
     standInGeo ??= (() => { const g = new THREE.BoxGeometry(F.w * 0.9, F.h * (1 - F.pot), F.d * 0.9); g.translate(0, F.h * F.pot + F.h * (1 - F.pot) / 2, 0); return g; })();

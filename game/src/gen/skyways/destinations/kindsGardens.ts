@@ -22,7 +22,7 @@ export const isSkywaysGardenKind = (k: string): k is GardenKind => KIND_SET.has(
 export const GALLERY_PLANTER = {w: 1.5, d: 0.46, h: 0.52, soil: 0.47, lip: 0.06} as const;
 export const BENCH_PLANTER = {w: 2.6, d: 1.3, h: 0.46, seatD: 0.42, seatT: 0.05, rim: 0.12, soil: 0.42} as const;
 /** Shrubs per planter (the foliage model instanced along its soil bed) and their size over the model's own (uniform scale). */
-export const GARDEN_SHRUBS = {gallery: 3, bench: 4, scale: 1.9, jitter: 0.12} as const;
+export const GARDEN_SHRUBS = {gallery: 4, bench: 4, scale: 2.4, jitter: 0.12} as const;
 
 export const GARDEN_SPECS: Readonly<Record<GardenKind, DestKindSpec>> = {
   skyArchGalleryPlanter: {
@@ -43,6 +43,6 @@ export const GARDEN_SPECS: Readonly<Record<GardenKind, DestKindSpec>> = {
  * Scale-check record (rule 5; tools/asset-pipeline/props/scale-check.mjs beside a runtime-scaled zombie): W x H x D, contact, notes.
  */
 export const GARDEN_SCALE: Readonly<Record<GardenKind, string>> = {
-  skyArchGalleryPlanter: '1.50 x 0.52 x 0.46 m trough (soil line 0.47 m), shrubs to ~1.25 m; grounded on its full base; knee-high against the 1.0 m balustrade',
-  skyArchBenchPlanter: '2.60 x 0.46 x 1.30 m (seat 0.46 m, 0.42 m deep), shrubs to ~1.2 m; grounded on its full base: a bench seat at chair height',
+  skyArchGalleryPlanter: '1.50 x 0.52 x 0.46 m trough (soil line 0.47 m), 2.01 x 1.19 x 1.19 m with its shrubs (foliage to 1.19 m); grounded on its full base (4 contact corners): knee-high against the 1.0 m balustrade, the shrubs just over the rail',
+  skyArchBenchPlanter: '2.60 x 0.46 x 1.30 m (seat 0.46 m, 0.42 m deep), 2.70 x 1.03 x 1.42 m with its shrubs (foliage to 1.03 m); grounded on its full base (4 contact corners): a bench seat at chair height',
 };
