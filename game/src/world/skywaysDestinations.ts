@@ -26,12 +26,19 @@ import type {StationLayout} from '../gen/stationTypes';
 import {DEST_POSTER} from '../gen/skyways/destinations/art';
 import {DEST_PLAQUE, destCollisionOnly} from '../gen/skyways/destinations/kindsLandmarks';
 import {SKYD_SCREEN_PARTS} from '../gen/skyways/destinations/kindsShopsB';
-import type {SkywaysDestKind} from '../gen/skyways/destinations/registry';
+import {SKYWAYS_DEST_SPECS, type SkywaysDestKind} from '../gen/skyways/destinations/registry';
+import {isPurposeMat, type PartMat} from '../gen/purposeShapes'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOCKEY)
+import {purposeMaterial} from './purposeTextures';
 import {destHangCables, destModelHung, destModelKey, destModelOf, destModelRow} from '../gen/skyways/destinations/skywaysDestModels';
 import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {shapeMaterials} from './shapeMaterials';
+import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
+import {buildStoreMusicProp, isStoreMusicKind} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
 import {buildStoreCinemaArt, isStoreCinemaArtKind} from './skywaysStoreCinema'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-CINEMA): the cinema's art kinds
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
+import {drawStoreGarden, isStoreGardenDrawn} from './skywaysStoreGarden'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-GARDEN)
+import {buildStoreBooksProp, isStoreBooksDrawnKind} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
+import {buildSkywaysStoreDesignProp, isDesignDrawnKind} from './skywaysStoreDesignDraw'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN)
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: Fit, name: string) => number;
@@ -69,7 +76,7 @@ export function skywaysDestAtlases(kinds: Iterable<string>): DestArtAtlasKey[] {
 // ---------------------------------------------------------------------------------------------
 // Art kinds: frame / lectern parts and the art face (prop frame: origin bottom centre, front +Z, metres)
 
-export interface DestPart { m: ShapeMat; s: readonly [number, number, number]; p: readonly [number, number, number]; rx?: number }
+export interface DestPart { m: ShapeMat | PartMat; s: readonly [number, number, number]; p: readonly [number, number, number]; rx?: number; ry?: number }
 export interface DestFace { atlas: DestArtAtlasKey; piece: string; w: number; h: number; p: readonly [number, number, number]; rx?: number }
 
 /** Boxes and the art face of a poster (aluminium snap frame on the wall, the paper inside) or a plaque (cast head on a pedestal). */
@@ -111,6 +118,7 @@ export function destFaceGeometry(f: DestFace): THREE.BufferGeometry {
 function partGeo(part: DestPart): THREE.BufferGeometry {
   const g = new THREE.BoxGeometry(part.s[0], part.s[1], part.s[2]);
   if (part.rx) g.rotateX(part.rx);
+  if (part.ry) g.rotateY(part.ry); // (lane STORE-HOCKEY: drawn store parts)
   g.translate(part.p[0], part.p[1], part.p[2]);
   return g;
 }
@@ -135,14 +143,14 @@ function instanced(group: THREE.Group, geo: THREE.BufferGeometry, mat: THREE.Mat
   return list.length;
 }
 
-/** Boxes merged per shape material, instanced on `list`. */
-function drawParts(group: THREE.Group, kind: string, parts: readonly DestPart[], list: readonly PropPlacement[], wm: WorldMaterials, local?: (p: PropPlacement) => THREE.Matrix4): void {
-  const pm = shapeMaterials(wm), byMat = new Map<ShapeMat, THREE.BufferGeometry[]>();
+/** Boxes merged per shape material (or purpose paint: lane STORE-HOCKEY), instanced on `list`; `tag` names a variant batch. */
+function drawParts(group: THREE.Group, kind: string, parts: readonly DestPart[], list: readonly PropPlacement[], wm: WorldMaterials, local?: (p: PropPlacement) => THREE.Matrix4, tag = ''): void {
+  const pm = shapeMaterials(wm), byMat = new Map<ShapeMat | PartMat, THREE.BufferGeometry[]>();
   for (const part of parts) { let l = byMat.get(part.m); if (!l) byMat.set(part.m, (l = [])); l.push(partGeo(part)); }
   for (const [m, geos] of byMat) {
     const geo = geos.length > 1 ? mergeGeometries(geos, false) : geos[0];
     if (geos.length > 1) for (const g of geos) g.dispose();
-    instanced(group, geo, pm[m], list, `prop-${kind}-${m}`, local);
+    instanced(group, geo, isPurposeMat(m) ? purposeMaterial(m) : pm[m as ShapeMat], list, `prop-${kind}${tag}-${m}`, local);
   }
 }
 
@@ -224,9 +232,26 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   const draw = list.filter(p => !destCollisionOnly(p));
   if (!draw.length) return 0;
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
+  // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS): the bookshop's category signs / rugs (code-drawn + Codex art)
+  if (isStoreBooksDrawnKind(kind)) return buildStoreBooksProp(group, kind, draw, wm);
+  if (isScienceArtKind(kind)) return drawScienceArt(group, kind, draw, wm); // (lane STORE-SCIENCE: the science store's framed Codex wall art)
+  if (isStoreMusicKind(kind)) return buildStoreMusicProp(group, kind, draw, wm); // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01): the record store's own kinds
   if (isStoreCinemaArtKind(kind)) return buildStoreCinemaArt(group, kind, draw, wm); // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-CINEMA)
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
+  // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-GARDEN) the garden store's code-drawn soil pallets / basket rails
+  // (tinted bags per placement, rods up to the ceiling per placement: world/skywaysStoreGarden.ts)
+  if (isStoreGardenDrawn(kind)) return drawStoreGarden(group, kind, draw, wm, layout);
+  // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) a store kind drawn by code: its spec's parts, one batch per variant
+  const drawn = (SKYWAYS_DEST_SPECS as Readonly<Record<string, {parts?: (variant: number) => readonly DestPart[]}>>)[kind]?.parts;
+  if (drawn) {
+    const byVariant = new Map<number, PropPlacement[]>();
+    for (const p of draw) { const l = byVariant.get(p.variant); if (l) l.push(p); else byVariant.set(p.variant, [p]); }
+    for (const [v, ps] of byVariant) drawParts(group, kind, drawn(v), ps, wm, scaleM, `-v${v}`);
+    return draw.length;
+  }
+  // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN): the design store's rugs / folded textiles, drawn by code
+  if (isDesignDrawnKind(kind)) return buildSkywaysStoreDesignProp(group, kind, draw, wm);
   const m = destModelOf(kind);
   const gltf = m ? lib[destModelKey(m)] : undefined;
   if (!gltf) { const n = standIn(group, kind, draw, wm); drawCables(group, kind, draw, wm, layout, 1); return n; }

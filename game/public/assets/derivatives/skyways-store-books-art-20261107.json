@@ -1,0 +1,236 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-store-books-art-20261107",
+ "task": "studio-alpha-skyways-shops-20261107-054512-01",
+ "lane": "STORE-BOOKS (Skyways major store: Paper Prairie Books)",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways major stores (no numerical cap; 2 calls, both accepted at the first attempt); invented shop signage; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Paper Prairie Books (Skyways, layout version 3): the eight category signs on the bookcases' headers / the feature tables (skyBooksSign variants) and the two area rugs (skyBooksRug variants), drawn by game/src/world/skywaysStoreBooks.ts",
+ "rebuild": "node tools/asset-pipeline/skyways-stores/books/build-books-art.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/books/codex/{LEDGER.jsonl, raw/<tag>-<session>-exec-<id>.png, prompts/<tag>.txt} (private raw backup, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "each board / rug at its measured edge on the sheet (backdrop-difference mask: row bands, then column bands; 1 px inset)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill (the box's own aspect kept: signs 512 px wide, rugs 512 x 341)"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 1024x1024, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/skyways-stores/books/build-books-art.mjs"
+ },
+ "output": {
+  "path": "assets/textures/skyways/stores/books/skyways-store-books-art.jpg",
+  "bytes": 235936,
+  "sha256": "3f49ebc115a59fdc968d8ccf63fad33e6e89f513aa646d10e2e2a315f20a56ae",
+  "width": 1024,
+  "height": 1024
+ },
+ "sources": [
+  {
+   "id": "books-01-signs",
+   "subject": "sheet of eight carved walnut bookshop category signs, cream-and-gold serif lettering (invented shop signage)",
+   "source": {
+    "file": "raw/books-01-signs-01a1b4b7-fdc3-7ab1-9759-447874509f08-exec-ce5d2951-efb6-4d6f-8cc2-4e045ef74969.png",
+    "sha256": "a5d55b1e432622ebc4e923e3a6e156043b28912956f05cc980076341a13b8362",
+    "bytes": 2281916,
+    "width": 1536,
+    "height": 1024
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "session": "01a1b4b7-fdc3-7ab1-9759-447874509f08",
+    "nativeOutput": "exec-ce5d2951-efb6-4d6f-8cc2-4e045ef74969.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-07T06:35:19Z",
+    "finished": "2026-11-07T06:35:57Z"
+   },
+   "prompt": "A flat, straight-on, evenly lit product sheet of EIGHT separate hand-painted wooden bookshop category signs for an independent prairie bookshop, arranged in an exact grid of 2 columns by 4 rows on a plain flat charcoal-grey background, with equal clear gaps of background between the signs and a generous empty margin around the whole grid. Every sign is exactly the same size: a landscape rectangle three times as wide as it is tall, filling its grid cell. Each sign is a dark stained walnut board with a thin carved bevelled border, warm aged varnish and faint wood grain, lettered in large, clean, centred cream-and-gold serif capitals in classic sign-writer style, perfectly legible and spelled exactly as given, with no other words. Row 1, left: \"FICTION\"; row 1, right: \"LOCAL HISTORY\". Row 2, left: \"MAPS & TRAVEL\"; row 2, right: \"CHILDREN'S BOOKS\". Row 3, left: \"RARE BOOKS\"; row 3, right: \"POETRY\". Row 4, left: \"PRAIRIE AUTHORS\"; row 4, right: \"NEW & NOTABLE\". Front-on orthographic view with no perspective, no cast shadows, no hanging chains or hooks, no hands, no people, no logos, no watermark, no extra text.",
+   "promptSha256": "0fa1bfcae728e421614b9bc79a87cdce8dd04ec33c219c9751746aaf4d22f3ed",
+   "pieces": [
+    {
+     "piece": "fiction",
+     "source": [
+      56,
+      113,
+      690,
+      180
+     ],
+     "atlas": [
+      0,
+      0,
+      512,
+      134
+     ]
+    },
+    {
+     "piece": "local-history",
+     "source": [
+      790,
+      113,
+      690,
+      180
+     ],
+     "atlas": [
+      512,
+      0,
+      512,
+      134
+     ]
+    },
+    {
+     "piece": "maps-travel",
+     "source": [
+      56,
+      335,
+      690,
+      172
+     ],
+     "atlas": [
+      0,
+      136,
+      512,
+      128
+     ]
+    },
+    {
+     "piece": "childrens",
+     "source": [
+      790,
+      335,
+      690,
+      172
+     ],
+     "atlas": [
+      512,
+      136,
+      512,
+      128
+     ]
+    },
+    {
+     "piece": "rare-books",
+     "source": [
+      56,
+      548,
+      690,
+      169
+     ],
+     "atlas": [
+      0,
+      272,
+      512,
+      125
+     ]
+    },
+    {
+     "piece": "poetry",
+     "source": [
+      790,
+      548,
+      690,
+      169
+     ],
+     "atlas": [
+      512,
+      272,
+      512,
+      125
+     ]
+    },
+    {
+     "piece": "prairie-authors",
+     "source": [
+      56,
+      757,
+      690,
+      167
+     ],
+     "atlas": [
+      0,
+      408,
+      512,
+      124
+     ]
+    },
+    {
+     "piece": "new-notable",
+     "source": [
+      790,
+      757,
+      690,
+      167
+     ],
+     "atlas": [
+      512,
+      408,
+      512,
+      124
+     ]
+    }
+   ]
+  },
+  {
+   "id": "books-02-rugs",
+   "subject": "two area rugs seen from above: a worn Persian-style reading-room rug, a children's prairie play rug",
+   "source": {
+    "file": "raw/books-02-rugs-01a1b4b9-d81a-75c0-a3ec-357310021f78-exec-d89e177e-23b8-4221-8c1a-4ae7239efed1.png",
+    "sha256": "825eeaf8ec4325b34213fcbefe8e71351bb5ce37a5245a8696d80c7956c4481c",
+    "bytes": 2460990,
+    "width": 1536,
+    "height": 1024
+   },
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "session": "01a1b4b9-d81a-75c0-a3ec-357310021f78",
+    "nativeOutput": "exec-d89e177e-23b8-4221-8c1a-4ae7239efed1.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-07T06:37:20Z",
+    "finished": "2026-11-07T06:38:01Z"
+   },
+   "prompt": "A flat, top-down, straight-down orthographic texture sheet of TWO separate rectangular area rugs side by side on a plain flat charcoal-grey background, each rug filling one half of the image with an equal clear gap between them and an even empty margin all round, evenly lit with no shadows and no perspective. Left rug: a worn traditional wool reading-room rug with a Persian-style medallion and border pattern in deep madder red, ochre, navy and cream, slightly faded, short fringe at both short ends. Right rug: a cheerful children's-corner play rug in soft primary colours, a simple pattern of stylised prairie hills, a winding river, little trees and stars, low-pile and slightly worn. Both rugs are landscape rectangles about one and a half times as wide as they are tall, seen exactly from above, completely flat, no furniture, no objects, no people, no text, no logos, no watermark.",
+   "promptSha256": "ed15404aae61a9a59164a5e4d5e61ce43f87aab8933a2353ee4d11f4bbb728d2",
+   "pieces": [
+    {
+     "piece": "rug-reading",
+     "source": [
+      12,
+      267,
+      744,
+      495
+     ],
+     "atlas": [
+      0,
+      560,
+      512,
+      341
+     ]
+    },
+    {
+     "piece": "rug-children",
+     "source": [
+      780,
+      267,
+      744,
+      495
+     ],
+     "atlas": [
+      512,
+      560,
+      512,
+      341
+     ]
+    }
+   ]
+  }
+ ]
+}

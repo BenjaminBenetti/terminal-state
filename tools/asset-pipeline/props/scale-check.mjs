@@ -35,6 +35,7 @@
 //            --exclude <regex>        furniture-only body = everything except nodes / meshes / materials matching the regex
 //            --floor y                floor height the contact gap is measured against (default 0)
 //            --label <text>
+//            --variant n              (with --kind) a code-drawn Skyways store kind's variant (DestKindSpec.parts; default 0)
 //   global:  --out <file.png>         default qa-artifacts/scale-check/<names>.png (git-ignored); the JSON report goes next to it
 //            --json <file.json>
 //            --zombie <id>            lastshift (default) | courier | agent | scavenger | heavyset | tall
@@ -95,6 +96,8 @@ export async function loadRuntime() {
     `export {PURPOSE_PROP_KINDS, PURPOSE_MODEL_KEYS} from '${G}/gen/props';`,
     // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): procedural PROP shapes (gen/propShapes.ts box parts: the camp lantern / stove)
     `export {propShape, ACCENT_COLORS} from '${G}/gen/propShapes';`,
+    // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOCKEY): code-drawn Skyways store kinds (DestKindSpec.parts)
+    `export {SKYWAYS_DEST_SPECS} from '${G}/gen/skyways/destinations/registry';`,
   ].join('\n');
   const bundle = await rolldown({
     input: 'scale-check-entry', platform: 'node', logLevel: 'silent',
@@ -126,7 +129,7 @@ function modelFileOf(rt, key) {
 }
 
 /** The runtime model + transform of a prop kind, exactly as the game builds it (see the header). */
-export async function resolveKind(kind) {
+export async function resolveKind(kind, variantArg = 0) { // (+ variantArg: lane STORE-HOCKEY, drawn store kinds)
   const rt = await loadRuntime();
   const def = rt.PROP_DEFS[kind];
   if (!def) throw new Error(`unknown prop kind '${kind}' (not in PROP_DEFS)`);
@@ -173,6 +176,15 @@ export async function resolveKind(kind) {
     const parts = rt.purposePropShape(kind, 0);
     if (parts?.length) return {kind, file: path.join(GAME, 'src/gen/purposeShapes.ts'), parts, accent: rt.PURPOSE_ACCENT[kind]?.[0] ?? 0xb0a890,
       path: 'procedural purpose shape (gen/purposeShapes.ts parts; world/storefrontBuilder.ts buildPurposeProps)', fit: null, turn: false, lift: 0, def, modelKey: null,
+      notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key']};
+  }
+  // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOCKEY): a code-drawn Skyways store kind (its DestKindSpec.parts, variant
+  // `--variant` or 0) renders its box parts exactly as world/skywaysDestinations.ts draws them (prop frame, metres, no fit)
+  {
+    const dest = rt.SKYWAYS_DEST_SPECS?.[kind];
+    const parts = dest?.parts ? dest.parts(variantArg) : null;
+    if (parts?.length) return {kind, file: path.join(GAME, 'src/gen/skyways/destinations/registry.ts'), parts: parts.map(q => ({...q, s: [...q.s], p: [...q.p]})), accent: 0xb0a890,
+      path: `code-drawn Skyways store kind (DestKindSpec.parts, variant ${variantArg}; world/skywaysDestinations.ts drawParts)`, fit: null, turn: false, lift: 0, def, modelKey: null,
       notes: ['authored box parts (no model file): drawn with flat stand-in colours per material key']};
   }
   // task studio-alpha-track2-round3-20261031-01 (lane HIDEOUT): a procedural PROP shape (gen/propShapes.ts propShape: the hideout's camp lantern /
@@ -655,7 +667,7 @@ export async function loadZombie(id = 'lastshift', scale = 1) {
 export async function measureProp(spec) {
   let base = {};
   if (spec.kind) {
-    base = await resolveKind(spec.kind);
+    base = await resolveKind(spec.kind, spec.variant ?? 0);
     if (!base.file && !spec.model) return {label: spec.label ?? spec.kind, kind: spec.kind, skipped: base.path};
   }
   const file = spec.model ?? spec.file ?? base.file;
@@ -766,6 +778,7 @@ function parseArgs(argv) {
       case '--turn': prop().turn = true; break;
       case '--no-turn': prop().turn = false; break;
       case '--lift': prop().lift = +val(); break;
+      case '--variant': prop().variant = +val(); break; // (lane STORE-HOCKEY: a drawn store kind's variant)
       case '--below': prop().below = +val(); break;
       case '--exclude': prop().exclude = val(); break;
       case '--floor': prop().floor = +val(); break;
