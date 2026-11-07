@@ -31,6 +31,7 @@ import {destHangCables, destModelHung, destModelKey, destModelOf, destModelRow} 
 import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {shapeMaterials} from './shapeMaterials';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
+import {buildSkywaysStoreDesignProp, isDesignDrawnKind} from './skywaysStoreDesignDraw'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN)
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: Fit, name: string) => number;
@@ -225,6 +226,8 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
+  // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN): the design store's rugs / folded textiles, drawn by code
+  if (isDesignDrawnKind(kind)) return buildSkywaysStoreDesignProp(group, kind, draw, wm);
   const m = destModelOf(kind);
   const gltf = m ? lib[destModelKey(m)] : undefined;
   if (!gltf) { const n = standIn(group, kind, draw, wm); drawCables(group, kind, draw, wm, layout, 1); return n; }
