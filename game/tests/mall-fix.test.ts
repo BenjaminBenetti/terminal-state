@@ -207,9 +207,14 @@ describe('U04 round atrium columns: generation-time records', () => {
     // (same task, lanes SHOPS-A / SHOPS-B): the anchor shops' round tables and stanchions — the bookshop's tiered tables and café bistro
     // tables (shopsA.ts lattice / skywaysShopsAKit.ts putRound), the arcade's prize-ring stanchions (skywaysShopsBKit.ts putRound) —
     // placed inside Skyways anchors only
+    // (task studio-skyways-rework-20261107-054512-01) + their frozen GAME77 copies (gen/skyways/legacy77/: the generator of the Skyways
+    // stations entered before the rework) — Skyways-only, the same placements
     expect(hits.sort()).toEqual(['gen/mall/columns.ts', 'gen/reactor/complex/wasteDress.ts', 'gen/reactor/coreFloor.ts', 'gen/skyways/addonConvention.ts',
       'gen/skyways/addonFrame.ts', 'gen/skyways/destinations/landmarks.ts', 'gen/skyways/destinations/shopsA.ts',
-      'gen/skyways/destinations/skywaysShopsAKit.ts', 'gen/skyways/destinations/skywaysShopsBKit.ts', 'world/fuelCarts.ts']);
+      'gen/skyways/destinations/skywaysShopsAKit.ts', 'gen/skyways/destinations/skywaysShopsBKit.ts',
+      'gen/skyways/legacy77/addonConvention.ts', 'gen/skyways/legacy77/addonFrame.ts', 'gen/skyways/legacy77/destinations/landmarks.ts',
+      'gen/skyways/legacy77/destinations/shopsA.ts', 'gen/skyways/legacy77/destinations/skywaysShopsAKit.ts',
+      'gen/skyways/legacy77/destinations/skywaysShopsBKit.ts', 'world/fuelCarts.ts']);
   });
 });
 
