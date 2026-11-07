@@ -10,38 +10,52 @@ Owner: lane STORE-ARCADE (task studio-alpha-skyways-shops-20261107-054512-01). C
 The anchor is always the `hall` format; at version 3 an inset stock room can leave the sales floor L-shaped (a second floor piece
 beside it). The dresser treats every floor piece as one store, in the main piece's storefront frame.
 
+Placement order (the cabinets claim the walls before the prizes, rides and party take floor):
+
 1. Circulation reserved first:
    - the entry straight in;
    - a 1 m band along every seam between floor pieces;
    - a 2.5 m apron in front of every back-room door (a side-wall door also straight across to the entry spine).
-2. Prize counter near the storefront on the roomier side:
+2. Prize counter: the longest run that fits, on the main floor's walls first (the roomier side's wall from the storefront first),
+   then the other piece's walls.
    - glass prize cases either side of the till, with the register on the till;
    - a staff aisle of at least 0.95 m behind, kept open past both ends of the run;
-   - against the wall: the openable back counter (`mallCashwrapCounter`) and the glass prize cabinet (`glassDisplayCabinet`).
-   - Shorter runs fall back to a `stockShelf` back unit.
+   - against the wall: the openable back counter (`mallCashwrapCounter`) and the glass prize cabinet (`glassDisplayCabinet`);
+   - shorter runs: the prize cabinet + the staff's two-door supply cabinet (`cabinetTall`), or the supply cabinet alone. The counter
+     always has opening storage behind it.
 3. Token changers: the Subway coin / card machine form (`ticketMachine`) on the storefront wall's solid stretches beside the entry,
    else at the counter's end.
 4. The technician's workshop in the stock room, dressed before the rest of the floor (see "Back rooms").
-5. The giant teddy prize beside the counter. Capsule-toy machines and a gumball machine run along the wall beyond the counter.
-6. Claw cranes near the entry:
+5. Capsule-toy machines and a gumball machine along the wall beyond the counter.
+6. Banks of upright cabinets (`arcadeCabinet`, runs of up to 6 from the corner, each with a 1 m play strip) on every far wall.
+7. Claw cranes near the entry:
    - on the claws' side wall, else the storefront wall (the window display), else any side wall;
    - a bank of 2 to 4 cranes, a single crane only as the last resort.
-7. Kiddie rides in the front window zone.
-8. The party zone:
-   - in the other floor piece, or a deep main floor's back corner;
-   - party tables with their stools (`foodCourtTableSet`), a drinks cooler and the jukebox.
-9. Banks of upright cabinets (`arcadeCabinet`, runs of up to 6, each with a 1 m play strip) on every far wall. Pinball banks run
-   along the long side walls deeper in.
-10. Each floor piece's middle is filled in bands across it:
+8. A small hall (under 140 m² of sales floor): its air hockey table now. The 1 m walkway comes first, else one cell (the players
+   stand at its ends).
+9. The giant teddy prize beside the counter, else sat against a free wall.
+10. Kiddie rides in the front window zone.
+11. The party zone, only in a store of at least 130 m² of sales floor:
+    - in the other floor piece, or a deep main floor's back corner;
+    - party tables with their stools (`foodCourtTableSet`), a drinks cooler and the jukebox.
+12. Pinball banks along the long side walls deeper in.
+13. Each floor piece's middle is filled in bands across it:
     - back-to-back cabinet rows (backs on a cell seam, both play strips are aisles);
     - a pinball row;
     - air hockey tables (islands with a 1 m ring);
     - single cabinet rows where only those fit.
-11. One drinks vending machine. Arcade posters (`skyDPoster`, the destination art's arcade piece) go at eye height on free walls
-    and high (2.1 m) over the cabinet banks.
+14. One drinks vending machine. More upright cabinets go on whatever wall is still free (up to 12).
+15. Arcade posters (`skyDPoster`, the destination art's arcade piece) at eye height on free walls and high (2.1 m) over the cabinet
+    banks.
 
-REACH: every placement goes through an all-or-nothing transaction that keeps every arcade holder and back-room door at the end of a
-1 m wide walk from the storefront (blocks of 2 × 2 free cells). Each floor piece also stays connected (`placeKit`).
+Every placement goes through an all-or-nothing transaction. It holds:
+- REACH: every arcade holder and back-room door stays at the end of a 1 m wide walk from the storefront (blocks of 2 × 2 free cells);
+- no trapped floor: every free cell of the floor pieces joins the storefront's open floor. This is the level validation's rule, and
+  a placement never forces a generation retry.
+
+The dresser places its contiguous rows itself, with the kit's `putRow` checks minus `placeKit.areaConnected`. On an L-shaped v3 floor
+the storefront opening's walkable cells carry the main piece's area id beyond its rect. That test then fails for the main piece
+before anything stands there, so every kit row would be refused. The store-wide checks above replace it.
 
 ## Back rooms
 

@@ -27,8 +27,8 @@
 
 import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
-import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../../props';
-import {begin, commit, doorSide as doorSideOf, makePlaceCtx, mountProp, rollback, tryPlaceProp, wallSpot, WALL_MOUNT_Y, type PlaceCtx} from '../../placeKit';
+import {PROP_DEFS, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../../props';
+import {begin, cellsOfBox, commit, doorSide as doorSideOf, makePlaceCtx, markCell, mountProp, rollback, tryPlaceProp, wallSpot, WALL_MOUNT_Y, type PlaceCtx} from '../../placeKit';
 import {stockVariant} from '../../purposeShapes';
 import {isLootHolderKind} from '../../../items/loot';
 import type {Area, Door, Side, StationLayout} from '../../stationTypes';
@@ -40,6 +40,8 @@ import {DEST_POSTERS_OF} from '../destinations/art';
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const upCell = (t: number) => Math.ceil(t / CELL - 1e-6) * CELL;
 const snapCell = (t: number) => Math.round(t / CELL) * CELL;
+/** One unit of a contiguous row (world x / z, yaw). */
+type RowItem = {kind: PropKind; x: number; z: number; rot: number; variant?: number};
 
 /**
  * Per-holder loot keys (existing purposes, gen/purposes.ts) where the holder's role is not the area's:
@@ -146,6 +148,20 @@ class ArcadePlan {
       const [x0, y0] = g.cellOf(p.x - p.hx, p.z - p.hz), [x1, y1] = g.cellOf(p.x + p.hx - 0.01, p.z + p.hz - 0.01);
       if (!hit(x0, y0, x1, y1)) return false;
     }
+    // no trapped floor (the level's validation: every walkable cell reachable): every free cell of the floor pieces joins the
+    // storefront's open floor (4-connected, any width) — the store-wide form of placeKit.areaConnected (after the block checks: the
+    // stamps are reused)
+    const cur2 = ++this.stampCur, open = (i: number) => g.cells[i] === FLOOR && !g.blocked[i] && (this.ids.has(g.area[i]) || this.doorCells.has(i));
+    const st2: number[] = [];
+    for (const q of this.doors) if (q.shopfront) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) { const i = g.idx(x, y); if (open(i) && st[i] !== cur2) { st[i] = cur2; st2.push(i); } }
+    while (st2.length) {
+      const i = st2.pop()!;
+      for (const j of [i - 1, i + 1, i - g.w, i + g.w]) if (j >= 0 && j < n && st[j] !== cur2 && open(j)) { st[j] = cur2; st2.push(j); }
+    }
+    for (const q of this.pieces) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) {
+      const i = g.idx(x, y);
+      if (g.area[i] === q.id && open(i) && st[i] !== cur2) return false;
+    }
     return true;
   }
   /** All or nothing, and REACH still holds afterwards (nested calls: the outermost checks). */
@@ -159,10 +175,61 @@ class ArcadePlan {
     let p: PropPlacement | null = null;
     return this.txn(() => !!(p = this.d.put(kind, u, v, yaw, o))) ? p : null;
   }
-  /** d.putRow under REACH. */
-  private rowG(items: Parameters<ShopsBDresser['putRow']>[0], a: Area, front: number): PropPlacement[] {
+  /** A contiguous row under REACH. */
+  private rowG(items: readonly RowItem[], a: Area, front: number): PropPlacement[] {
     let got: PropPlacement[] = [];
-    return this.txn(() => (got = this.d.putRow(items, a, front)).length > 0) ? got : [];
+    return this.txn(() => (got = this.putRow(items, a, front)).length > 0) ? got : [];
+  }
+  /**
+   * The kit's contiguous run (destinations/skywaysShopsBKit.ts putRow: every footprint on free unreserved floor of `a`, no 3D overlap,
+   * touching AABBs allowed, the `front` strip walkable and then reserved) WITHOUT its whole-area connectivity test: on an L-shaped v3
+   * floor the storefront opening's walkable cells carry the main piece's area id beyond its rect, so placeKit.areaConnected answers
+   * false for that piece before anything stands there (every kit row would be refused). Connectivity is REACH's instead (txn: the
+   * storefront still reaches every arcade holder and back-room door over 1 m wide floor). Only ever called under txn.
+   */
+  private putRow(items: readonly RowItem[], a: Area, front: number): PropPlacement[] {
+    if (!items.length) return [];
+    const d = this.d, g = d.g, ctx = d.ctx;
+    const boxes = items.map(it => {
+      const rot = quarterYaw(it.rot), {hx, hz} = footprint(it.kind, rot);
+      return {...it, rot, hx, hz, x: r3(it.x), z: r3(it.z), f: d.floorAt(it.x, it.z), h: PROP_DEFS[it.kind].h};
+    });
+    const stripOf = (b: (typeof boxes)[number]) => {
+      const fx = Math.round(Math.sin(b.rot)), fz = Math.round(Math.cos(b.rot)), hd = PROP_DEFS[b.kind].d / 2, hw = PROP_DEFS[b.kind].w / 2 * 0.8;
+      return cellsOfBox(b.x + fx * (hd + front / 2), b.z + fz * (hd + front / 2), fx ? front / 2 : hw, fz ? front / 2 : hw);
+    };
+    for (const [k, b] of boxes.entries()) {
+      const [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!g.inBounds(cx, cy)) return [];
+        const i = g.idx(cx, cy);
+        if (g.cells[i] !== FLOOR || g.area[i] !== a.id || g.blocked[i] || ctx.keep[i] || ctx.edge[i] || ctx.doorCell[i] || ctx.zone[i]) return [];
+      }
+      if (!d.boxFree(b.x, b.z, b.hx, b.hz, b.f, b.f + b.h)) return [];
+      for (let j = 0; j < k; j++) {
+        const q = boxes[j];
+        if (Math.min(b.x + b.hx, q.x + q.hx) - Math.max(b.x - b.hx, q.x - q.hx) > 0.01 && Math.min(b.z + b.hz, q.z + q.hz) - Math.max(b.z - b.hz, q.z - q.hz) > 0.01) return [];
+      }
+      if (front > 0) { const [s0, s1, s2, s3] = stripOf(b); for (let cy = s1; cy <= s3; cy++) for (let cx = s0; cx <= s2; cx++) if (!g.walkable(cx, cy)) return []; }
+    }
+    const out: PropPlacement[] = [];
+    for (const b of boxes) {
+      const [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        const i = g.idx(cx, cy);
+        markCell(ctx, g.blocked, i);
+        if (PROP_DEFS[b.kind].blocksSight) markCell(ctx, g.sightBlocked, i);
+      }
+    }
+    for (const b of boxes) {
+      if (front > 0) { const [s0, s1, s2, s3] = stripOf(b); for (let cy = s1; cy <= s3; cy++) for (let cx = s0; cx <= s2; cx++) if (g.inBounds(cx, cy) && !g.blocked[g.idx(cx, cy)]) markCell(ctx, ctx.keep, g.idx(cx, cy)); }
+      const p: PropPlacement = {kind: b.kind, x: b.x, z: b.z, y: r3(b.f), rot: b.rot, area: a.id, hx: b.hx, hz: b.hz, h: b.h, blocksSight: PROP_DEFS[b.kind].blocksSight, variant: b.variant ?? 0,
+        ...(d.level ? {level: d.level} : {})};
+      d.layout.props.push(p);
+      d.placed.push(p);
+      out.push(p);
+    }
+    return out;
   }
 
   private add(role: string, ...ps: (PropPlacement | null | undefined)[]): PropPlacement[] {
@@ -171,6 +238,8 @@ class ArcadePlan {
     return got;
   }
   private skip(what: string): void { this.d.skipped.push(what); }
+  /** The sales floor's area (m², every floor piece). */
+  salesArea(): number { return this.pieces.reduce((s, q) => s + q.w * q.h * CELL * CELL, 0); }
 
   // --- geometry ---------------------------------------------------------------------------------------------------------------------
   /** Grid index under a frame point (-1 outside). */
@@ -265,16 +334,20 @@ class ArcadePlan {
     this.tokenChangers();
     // (the back rooms before the rest of the floor: a lined stock room's lockers stand by its staff door on the floor)
     this.backRooms();
-    this.teddy();
     if (!this.d.anchor.stock.length) this.staffCorner();
+    // (the counter's capsule run, then the cabinets — they are the arcade: their wall banks and the claws claim the walls before the
+    // prizes / rides / party take floor)
     this.capsules();
+    this.cabinetBanks();
     this.claws();
+    if (this.salesArea() < 140) this.oneAirHockey(); // (a small hall: its table before the prizes / rides take the floor)
+    this.teddy();
     this.kiddieRides();
     this.party();
-    this.cabinetBanks();
     this.sidePinball();
     this.middle();
     this.vending();
+    this.extraCabinets();
     this.posters();
   }
 
@@ -340,15 +413,16 @@ class ArcadePlan {
   private prizeCounter(): void {
     const d = this.d;
     const runs: PropKind[][] = [['glassCounter', 'shopCounter', 'glassCounter'], ['shopCounter', 'glassCounter'], ['shopCounter']];
-    const backs: [PropKind, number][][] = [[['mallCashwrapCounter', 0], ['glassDisplayCabinet', 0]], [['glassDisplayCabinet', 0], ['stockShelf', stockVariant('cartons')]], [['stockShelf', stockVariant('cartons')]]];
-    // (the main floor's side walls from the storefront first — the counter's side, then the other —, its far wall, then the other
-    // pieces' walls; on each wall the longest run that fits)
-    const main = (q: Seg) => q.area === d.floor, side = (q: Seg) => q.w === 'L' || q.w === 'R';
+    const backs: [PropKind, number][][] = [[['mallCashwrapCounter', 0], ['glassDisplayCabinet', 0]], [['glassDisplayCabinet', 0], ['cabinetTall', 0]], [['cabinetTall', 0]]];
+    // (wall preference: the main floor's side walls from the storefront — the counter's side, then the other —, its far wall, then the
+    // other pieces' walls)
+    const main =(q: Seg) => q.area === d.floor, side = (q: Seg) => q.w === 'L' || q.w === 'R';
     const rank = (q: Seg) => (main(q) ? 0 : 6) + (side(q) ? (q.t0 < 0.6 ? 0 : 2) + (q.w === this.ps ? 0 : 1) : 4);
     const segs = this.segs.filter(q => q.w !== 'F' && q.t1 - q.t0 >= 3.0).sort((p, q) => rank(p) - rank(q) || (q.t1 - q.t0) - (p.t1 - p.t0));
-    // (the main floor's walls first, the full counter before a shorter one; then the other pieces' walls the same way)
+    // (the full counter before a shorter one, each on the main floor's walls first, then the other pieces': a counter always has its
+    // openable storage behind it — the back counter / prize cabinet, at least the staff's two-door supply cabinet)
     const order: [Seg, number][] = [];
-    for (const inMain of [true, false]) for (let k = 0; k < runs.length; k++) for (const s of segs) if (main(s) === inMain) order.push([s, k]);
+    for (let k = 0; k < runs.length; k++) for (const inMain of [true, false]) for (const s of segs) if (main(s) === inMain) order.push([s, k]);
     for (const [s, k] of order) {
       const kinds = runs[k], back = backs[k], runW = kinds.reduce((a, q) => a + PROP_DEFS[q].w, 0);
       const backW = back.reduce((a, [q]) => a + PROP_DEFS[q].w + 0.25, -0.25);
@@ -453,6 +527,11 @@ class ArcadePlan {
       const area = this.areaAt(u, v), p = area ? this.putG(k, snapCell(u), snapCell(v), this.fr.toFront, {ring: 0.4, area}) : null;
       if (p) { this.add('teddy', p); return; }
     }
+    // a cramped hall: sat against a free stretch of wall (the counter's first)
+    for (const s of [...(this.wrap ? [this.wrap.seg] : []), ...this.segs.filter(q => q.w !== 'F')]) {
+      const p = this.fillSeg(s, k, s.t0, s.t1, {max: 1, front: 0.5})[0];
+      if (p) { this.add('teddy', p); return; }
+    }
     this.skip('giant teddy');
   }
 
@@ -555,6 +634,8 @@ class ArcadePlan {
       }
       return true;
     };
+    // (a small hall keeps its floor for the games: a party zone only in a store of >= 130 m² of sales floor)
+    if (this.salesArea() < 130) { this.skip('party zone (small hall)'); return; }
     for (const q of this.pieces.slice(1)) {
       const r = this.rectOf(q);
       if (r.u1 - r.u0 < 3.5 || r.v1 - r.v0 < 3.5) continue;
@@ -576,8 +657,18 @@ class ArcadePlan {
   private cabinetBanks(): void {
     const k = ARCADE_FLOOR_KINDS.cabinet;
     let n = 0;
-    for (const s of this.segs.filter(q => q.w === 'B')) n += this.add('cabinet', ...this.fillSeg(s, k, s.t0 + 0.3, s.t1 - 0.3, {run: 6, front: 1.0, gap: 0.03})).length;
+    for (const s of this.segs.filter(q => q.w === 'B')) n += this.add('cabinet', ...this.fillSeg(s, k, s.t0, s.t1, {run: 6, front: 1.0, gap: 0.03})).length;
     if (!n) this.skip('cabinet banks');
+  }
+
+  /** Last: more upright cabinets on whatever stretches of wall the store still has free (a small L-shaped hall's side walls). */
+  private extraCabinets(): void {
+    const k = ARCADE_FLOOR_KINDS.cabinet;
+    let n = 0;
+    for (const s of this.segs.filter(q => q.w !== 'F').sort((p, q) => (q.t1 - q.t0) - (p.t1 - p.t0))) {
+      if (n >= 12) break;
+      n += this.add('cabinet', ...this.fillSeg(s, k, s.t0, s.t1, {run: 4, max: 12 - n, front: 1.0, gap: 0.03})).length;
+    }
   }
 
   /** Pinball banks along the long side walls deeper in the store (the walls the counter / claws / capsules left free). */
@@ -625,7 +716,19 @@ class ArcadePlan {
       const r = this.rectOf(q), got = this.islands(ARCADE_FLOOR_KINDS.airHockey, extra, {u0: r.u0 + 1.6, u1: r.u1 - 1.6, v0: Math.max(r.v0 + 1.4, q === this.d.floor ? 1.8 : 0), v1: r.v1 - 1.6}, () => this.fr.toFront, 0.9, 3.4);
       this.add('airHockey', ...got);
     }
+    this.oneAirHockey();
     if (!this.roles.airHockey?.length) this.skip('air hockey');
+  }
+  /**
+   * A cramped hall (small L-shaped floors; called before the prizes / rides there too): one table, the 1 m walkway first, else one
+   * cell (0.5-0.9 m: the players stand at its ends), anywhere off the front plaza, along or across the frame.
+   */
+  private oneAirHockey(): void {
+    for (const ring of [0.9, 0.5]) for (const q of this.pieces) {
+      if (this.roles.airHockey?.length) return;
+      const r = this.rectOf(q);
+      this.add('airHockey', ...this.islands(ARCADE_FLOOR_KINDS.airHockey, 1, {u0: r.u0 + 1.0, u1: r.u1 - 1.0, v0: Math.max(r.v0 + 1.0, q === this.d.floor ? 1.6 : 0), v1: r.v1 - 1.0}, () => this.d.rng.pick([this.fr.toFront, this.fr.plusU]), ring, 3.4));
+    }
   }
   /**
    * A cabinet row from band start `v` facing the storefront (its play strip in front); `twin`: back to back with a second row facing the
