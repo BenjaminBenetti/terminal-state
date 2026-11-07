@@ -61,6 +61,7 @@ import {CAR_PHYS, NO_CONTROLS, footprintFloor, nearestCircle, settlePose, stepCa
 import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
 import type {StackJSON} from '../items/inventory';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
+import {attachCarBeam, createCarBeam, setCarLamps, type CarBeam} from './skywaysCarLights';
 
 export const CAR_RT = {
   /** Aim reach to the car's body (eye -> hit, m) and the most a player may stand from a door's side point (m, horizontal). */
@@ -107,7 +108,7 @@ export const CAR_RT = {
 
 export const CAR_TEXT = {
   getIn: '<b>[E]</b> Get in',
-  driving: '<b>[W]</b> drive · <b>[S]</b> brake / reverse · <b>[A]</b> <b>[D]</b> steer · <b>[Space]</b> handbrake · <b>[E]</b> get out',
+  driving: '<b>[W]</b> drive · <b>[S]</b> brake / reverse · <b>[A]</b> <b>[D]</b> steer · <b>[Space]</b> handbrake · <b>[E]</b> get out · <b>[F]</b> lights',
   noRoom: 'No room to get out',
   slowDown: 'Stop the car to get out',
   hands: 'Hands on the wheel — get out first',
@@ -136,6 +137,7 @@ interface CarSfx {
   carSkid?(at?: At): boolean;
   carDoor?(at?: At): void;
   denied?(): void;
+  click?(pitch?: number): void;
   impact?(x: number, y: number, z: number, surface: 'metal'): void;
 }
 
@@ -241,6 +243,11 @@ export class SkywaysCar {
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
   lastImpact: CarImpact | null = null;
+  /**
+   * (lane VIS) The car's forward beam (world/skywaysCarLights.ts): created at the first car world's build, in the view group from each
+   * build (before the warm-up) to its teardown; `lights` only sets its intensity (and the lenses' glow). Null: no car world built yet.
+   */
+  beam: CarBeam | null = null;
   readonly ctl: CarControls = {...NO_CONTROLS};
   private yawSeen = 0;
   private clock = 0;
@@ -312,6 +319,10 @@ export class SkywaysCar {
     this.view.group.name = 'skyways-car';
     if (this.view.standIn && typeof document !== 'undefined') console.warn('skyways car: the model is not loaded — a stand-in body is drawn');
     this.root.add(this.view.group);
+    // (lane VIS) the beam joins this world now, before the warm-up (the view group is the 'skyways-car' warm pool): on / off from here
+    // on is its intensity only — the scene's light set never changes during play
+    this.beam ??= createCarBeam();
+    attachCarBeam(this.beam, this.view.group);
     this.decorateView();
     this.syncView();
     // the layout props the car can shove (dynamic kinds) / shatter (glazed kinds), by their layout index (shootProp / hitWorld need it)
@@ -338,6 +349,8 @@ export class SkywaysCar {
     if (this.driving) this.forceOut('teardown', false);
     this.store();
     this.view?.group.removeFromParent();
+    this.beam?.light.removeFromParent(); // (lane VIS) the next world has no car beam unless it builds a car
+    this.beam?.target.removeFromParent();
     this.view = null;
     this.body = null;
     this.dynIdx = this.glassIdx = null;
@@ -574,7 +587,7 @@ export class SkywaysCar {
     this.world.props = h.propIndex;
     this.zombieContacts(dt);
     if (!this.driving && P.alive && Math.abs(P.y - b.y) < 1.2) this.separatePlayer();
-    this.syncView();
+    this.syncView(dt);
     if (this.driving) this.driveAudio();
     if (this.driving) this.prompt = CAR_TEXT.driving;
     else this.prompt = h.state === 'playing' && this.canEnter() && this.pickAim() ? CAR_TEXT.getIn : null;
@@ -603,7 +616,8 @@ export class SkywaysCar {
     this.skidding = hard;
   }
 
-  private syncView(): void {
+  /** The view at the body's pose; the wheel follows the steering (eased with dt, at once without); (lane VIS) the lamps as `lights`. */
+  private syncView(dt?: number): void {
     const v = this.view, b = this.body;
     if (!v || !b) return;
     const g = v.group;
@@ -612,7 +626,20 @@ export class SkywaysCar {
       g.rotation.set(0, b.yaw, 0);
       g.updateMatrixWorld(true);
     }
-    setWheel(v, b.steer);
+    setWheel(v, b.steer, dt);
+    setCarLamps(this.lights, v.lens, this.beam);
+  }
+
+  /**
+   * (lane VIS) Game's F key: while seated, the car's lamps on / off (a switch click) and the key is consumed — the personal flashlight is
+   * left alone; otherwise false (F = the flashlight as ever). The state stays with the car (record v2 `lights`), also once parked.
+   */
+  onLightKey(): boolean {
+    if (!this.driving || !this.worldLive || !this.body) return false;
+    this.lights = !this.lights;
+    setCarLamps(this.lights, this.view?.lens ?? null, this.beam);
+    (this.host.sfx as CarSfx | null)?.click?.(this.lights ? 1.2 : 0.9);
+    return true;
   }
 
   /** Shadows (the paint casts; the trim twins / glass / cockpit do not), the storey for the level culler. */
