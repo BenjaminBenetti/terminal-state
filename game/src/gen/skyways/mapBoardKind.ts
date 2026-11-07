@@ -51,7 +51,9 @@ export const SKYWAYS_MAPBOARD_OPEN_AUDIT: readonly {kind: SkywaysMapBoardKind; c
 ];
 
 /**
- * Scale-check record (rule 5): filled from the CPU render beside the runtime zombie (tools/asset-pipeline/props/scale-check.mjs --prop
- * on the board's exact runtime geometry exported to a GLB), viewed. W x H x D, grounded contact, notes.
+ * Scale-check record (rule 5; tools/asset-pipeline/props/scale-check.mjs --prop on the board's exact runtime geometry —
+ * world/skywaysMapBoards.ts skywaysMapBoardBody + skywaysMapFaceGeometry exported to a GLB — beside zombie `lastshift` 1.78 m at runtime
+ * scale 1.0, front and side views looked at; render in the task's private qa/maps folder): W x H x D, grounded contact, notes.
  */
-export const SKYWAYS_MAP_BOARD_SCALE = '' as string;
+export const SKYWAYS_MAP_BOARD_SCALE = '1.00 x 1.35 x 0.53 m; grounded on its round base plate (contact span 0.52 x 0.52 m); face centre 0.88 m, ' +
+  'tilted 25 degrees back (the rim from 0.42 to 1.35 m): a waist-high round directory a standing adult reads looking down, like a pedway map pedestal';

@@ -392,6 +392,24 @@ family's base-use purpose. The NEW kinds (`kindsShopsB.ts`: lane KITS' measured 
 - Tests: `tests/skyways-dest-shops-b.test.ts` (both audits, measured footprints, signature pieces per family on real seeds, the screen on
   the far wall with the rows facing it, support / containment / overlaps, lanes to every door, base-use loot, determinism).
 
+### Skyways local directory boards (task studio-skyways-rework-20261107-054512-01, lane MAPS)
+One NEW kind, `skywaysMapBoard` (`gen/skyways/mapBoardKind.ts`): a round freestanding directory on a pedestal — a 0.95 m printed face
+tilted 25° back in a steel ring rim on a shallow drum, one column on a round base plate. Procedural geometry in the existing shape
+materials (no model, no generation); the face is a code-drawn plan of the generated network (`world/skywaysMapBoards.ts`, data from
+`world/skywaysMapPlan.ts`: a per-layout runtime-composited data texture). Placed by `gen/skyways/mapBoards.ts` (layout version 3 only)
+at the station concourse by the transit stair, in every building-storey's hub and at bridge landings, on flat public floor clear of
+doors, run mouths, walking lanes / plazas, landmark discs, bridge lanes and shop / anchor fronts, with a 1.2 m reading strip in front.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of its runtime geometry beside `lastshift`) |
+|---|---|---|---|
+| `skywaysMapBoard` | `none` (`equipment`): a sealed sign — the plan behind a screwed acrylic face in a welded drum, no door, lid or drawer | static `anchored` (~90 kg pedestal bolted through its base plate) | 1.00 × 1.35 × 0.53 m; grounded on the base plate (span 0.52 × 0.52 m); face centre 0.88 m, rim 0.42–1.35 m |
+
+- No baked loose clutter (nothing loose is part of it); damage: steel, marks only (never breaks).
+- E at a board's face opens a close-up of the same face (`world/skywaysMapRead.ts`); the face never prints fuel, gameplay hints or
+  travel information.
+- Tests: `tests/skyways-map-boards.test.ts` (both audits, the shape inside its box, placement and clearances on real seeds, the plan
+  against the layout, YOU ARE HERE, storey highlighting, forbidden words, the renderer's bounded meshes / textures, the close-up read).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.
