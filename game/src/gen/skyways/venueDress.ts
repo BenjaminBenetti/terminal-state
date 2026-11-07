@@ -383,7 +383,7 @@ function greet(vc: VenueCtx, a: Area): void {
   for (const pass of ['statue', 'sign'] as const) for (const sp of spots) {
     if (pass === 'statue' ? statue : sign) break;
     const m = sp.at, tx = -m.nz, tz = m.nx;
-    for (const side of [1, -1]) for (const lat of [m.half + 0.9, m.half + 1.6, m.half + 2.4, 1.6, 2.6, 0.9]) for (const dv of [1.6, 2.0, 2.8, 3.6, 4.6]) {
+    for (const side of [1, -1]) for (const lat of [m.half + 0.9, m.half + 1.6, m.half + 2.4, 1.6, 2.6, 0.9, m.half + 3.4, m.half + 4.6]) for (const dv of [1.6, 2.0, 2.8, 3.6, 4.6, 1.25, 0.75]) {
       if (pass === 'statue' ? statue : sign) break;
       const x = m.x + m.nx * dv + tx * lat * side, z = m.z + m.nz * dv + tz * lat * side;
       if (pass === 'statue') statue = group(vc, [sp.area], () => statueAt(v, 'registration-wave', x, z, yawToward(m.x - x, m.z - z), sp.area));
