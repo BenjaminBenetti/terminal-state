@@ -2565,7 +2565,7 @@ export class Game {
 
     this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
     if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
-    if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
+    if (inp.hit('KeyF') && !this.skywaysCar?.onLightKey()) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only); seated in the Skyways car: its lamps instead
     // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
     // G = drop binding is gone (drop by dragging out of the inventory screen). An empty grenade slot takes a carried throwable first.
     if ((inp.hit('KeyG') || inp.hit('KeyT')) && !this.inv.thrown && this.inv.refillThrowSlot()) this.syncHeld();
