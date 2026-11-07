@@ -281,6 +281,9 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
       approach: a.approach,
       ...(car ? {car} : {}),
       ...(a.id === 'convention' ? {convention: {stage: a.stage ? rectW(a.stage) : rectW(a.hall), statues: []}} : {}),
+      // (layout version 3) the convention venue's areas by role; the prize car's public display
+      ...(a.venue ? {venue: a.venue.map(v => ({role: v.role, area: v.area}))} : {}),
+      ...(a.id === 'prize-car' && !a.areas.length ? {display: true} : {}),
     },
     restaurant: sc.ramen ? {area: sc.ramen.dining, kitchen: sc.ramen.kitchen, building: sc.ramen.building, level: sc.ramen.level, name: layout.areas[sc.ramen.dining].label} : null,
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},
@@ -377,6 +380,14 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === id) cells.push(g.idx(x, y));
       out.push({level: lv, cells});
     }
+  }
+  // (layout version 3) the convention venue: its public event areas belong to the venue dresser (the washrooms, backstage and storage
+  // keep the station's ordinary dressing)
+  for (const v of sc.addon.venue ?? []) {
+    if (v.role === 'washrooms' || v.role === 'backstage' || v.role === 'storage') continue;
+    const a = layout.areas[v.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === v.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
   }
   add(sc.addon.level, sc.addon.hall);
   add(sc.addon.level, sc.addon.entry, 3);
