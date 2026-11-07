@@ -45,6 +45,8 @@ import {buildSkylights, SKYLIGHT_SKY_KEY, skylightSkyMaterial, type SkylightStat
 import {skywaysArchSpan, skywaysArchTexture, skywaysTexturedMaterial, usesSkywaysArchTextures} from './skywaysArchTextures';
 import type {SkywaysArchTextureKey} from '../assets/skywaysArchTextures.generated';
 import type {SkywaysBridge} from '../gen/skyways/skywaysTypes';
+// (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' interior palettes (by their use)
+import {skywaysShopFloorOf, skywaysShopPaletteOf, skywaysShopWallKey, skywaysShopWallSpec, type SkywaysShopPalette} from './skywaysShopFinish';
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -134,6 +136,8 @@ export class SkywaysArch {
   /** (lane ARCH) bridge roof / skylight build stats (QA / tests). */
   bridgeRoofs: BridgeRoofStats[] = [];
   skylightStats: SkylightStats = {coffers: 0, panes: 0, meshes: 0, triangles: 0};
+  /** (lane DRESS) area id -> its small shop palette (null: the builder's rule), cached. */
+  private readonly shopPal = new Map<number, SkywaysShopPalette | null>();
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
     return layout.skyways ? new SkywaysArch(layout, mats, levels) : null;
@@ -247,6 +251,27 @@ export class SkywaysArch {
     });
   }
 
+  /** (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's palette (world/skywaysShopFinish.ts), cached. */
+  shopPalette(areaId: number): SkywaysShopPalette | null {
+    let p = this.shopPal.get(areaId);
+    if (p === undefined) this.shopPal.set(areaId, (p = skywaysShopPaletteOf(this.layout, areaId)));
+    return p;
+  }
+
+  private shopWallKey(areaId: number): string | null {
+    const p = this.shopPalette(areaId);
+    if (!p) return null;
+    const key = skywaysShopWallKey(p);
+    return this.def(key, () => wallMaterial(this.mats, key, skywaysShopWallSpec(p)));
+  }
+
+  private shopFloorKey(areaId: number): string | null {
+    const p = this.shopPalette(areaId);
+    if (!p) return null;
+    const f = skywaysShopFloorOf(p);
+    return this.def(f.key, () => floorMaterial(this.mats, f.key, f.kind, f.tint));
+  }
+
   /** Register a lazily built material behind a key. */
   private def(key: string, make: () => THREE.Material): string {
     if (!this.specs.has(key)) this.specs.set(key, make);
@@ -313,6 +338,8 @@ export class SkywaysArch {
       // 'tileShop'): they take the store's finish before the storefront rule, or the store reads as the Subway tile box
       // (integration 20261107-115426: the internal stair's sloped flank faces too — a raking dado, never a strip of Subway tile)
       if (cls === 'anchor') return {...f, finish: this.anchorWallKey(f.area)};
+      // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) a small storefront unit's walls: its use's palette, not the Subway tile
+      if (cls === 'shop' && f.finish === 'tileShop') { const k = this.shopWallKey(f.area); if (k) return {...f, finish: k}; }
       if (f.finish === 'tileShop') return f;
       if (cls === 'station' || cls === 'shop') return f;
       // (task studio-skyways-rework-20261107-054512-01, lane ARCH) a roofed bridge's side walls stop at the springing line (the glass
@@ -357,6 +384,7 @@ export class SkywaysArch {
     // (lane ARCH) roofed bridges: clay pavers; skylit / atrium courts: herringbone brick (stand-ins: dark brick-red stone / court stone)
     if (cls === 'bridge' && this.roofed.has(area)) return this.texKey('pavers', () => this.def('skyways-floor-pavers', () => floorMaterial(this.mats, 'skyways-floor-pavers', SKYWAYS_PAVER_STANDIN.kind, SKYWAYS_PAVER_STANDIN.tint)));
     if ((cls === 'public' || cls === 'court') && this.courtLook(area)) return this.texKey('herringbone', () => this.floorKeyOf('court'));
+    if (cls === 'shop') return this.shopFloorKey(area); // (lane DRESS) a small shop's palette floor (null: the builder's rule)
     switch (cls) {
       case 'public': case 'court': case 'bridge': case 'wet': case 'boh': case 'office': return this.floorKeyOf(cls);
       case 'anchor': return this.anchorFloorKey(lvl.grid.area[i]);
@@ -411,7 +439,7 @@ export class SkywaysArch {
     // (lane ARCH) the textured finishes: their texture's real-world span; the skylight sky: unmapped
     for (const [t, k] of Object.entries(SKYWAYS_TEX_KEYS) as [SkywaysArchTextureKey, string][]) if (key === k) return skywaysArchSpan(t);
     if (key === SKYLIGHT_SKY_KEY) return {u: 1, v: 1};
-    if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN};
+    if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor') || key.startsWith('skyways-shop-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN}; // (+ shop: lane DRESS)
     if (key.startsWith('skyways-ceil') || key.startsWith('skyways-anchor-ceil')) return {u: OFFICE_CEIL_SPAN, v: OFFICE_CEIL_SPAN};
     if (key === 'skyways-trim') return {u: 1, v: 1};
     return {u: OFFICE_WALL_SPAN, v: OFFICE_WALL_SPAN};

@@ -45,7 +45,8 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key === 'annexWall') return 'concrete';
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
   // (task studio-skyways-rework-20261107-054512-01) the anchor stores' finishes: skyways-anchor-{wall-<class>|floor-<kind>|ceil-<kind>}@<family>
-  const an = /^skyways-anchor-(wall|floor|ceil)-([a-z]+)@/.exec(key);
+  // (+ task studio-skywalk-variety-20261107-231448-01, lane DRESS: the small shops' palettes, skyways-shop-{wall-<class>|floor-<kind>}@<palette>)
+  const an = /^skyways-(?:anchor|shop)-(wall|floor|ceil)-([a-z]+)@/.exec(key);
   if (an) return an[1] === 'wall' ? (an[2] as DamageClass) : an[1] === 'floor' ? OFFICE_FLOOR[an[2]] ?? null : OFFICE_CEIL[an[2]] ?? null;
   if (key.startsWith('office-')) {
     const base = key.split('@')[0];
