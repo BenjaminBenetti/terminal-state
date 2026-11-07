@@ -12,16 +12,31 @@
 // prize display, map boards, the reworked anchor stores): versions 1 and 2 regenerate through the FROZEN GAME77 generator
 // (gen/skyways/legacy77/, fingerprints pinned in tests/skyways-dest-layout-version.test.ts); every station not yet entered — in a new
 // OR an existing campaign — gets version 3. Shared runtime fixes (stairs, materials, signs, the clock) reach every version.
+//
+// Task studio-skywalk-variety-20261107-231448-01 (version 4, the building PROGRAMMES: each building its own plan / vertical sequence /
+// openness, ramen as an ordinary random tenant, store merchandise loose, convention snacks): version 3 regenerates through the FROZEN
+// version-3 core (gen/skyways/legacy80/, fingerprints pinned); every station not yet entered gets version 4. The shared dressers learn
+// which version they dress from skywaysGenVersion(layout) (set by each generator before dressing; layout data unchanged).
 
 export const SKYWAYS_LAYOUT_LANE = 'skyways.layout';
 /**
  * 1 = GAME76's layout (the first release + the layout-variety pass); 2 = the destinations pass (GAME77); 3 = the Skyways rework (task
  * studio-skyways-rework-20261107-054512: the ten major stores, gen/skyways/stores/, with their outward storefronts, Skyways-scoped loot
- * purposes and dressers — and the parent's architecture). Stations entered at 1 / 2 keep regenerating exactly that layout.
+ * purposes and dressers — and the parent's architecture); 4 = the building programmes (task studio-skywalk-variety-20261107-231448-01).
+ * Stations entered at 1 / 2 / 3 keep regenerating exactly that layout.
  */
-export const SKYWAYS_LAYOUT_VERSION = 3;
+export const SKYWAYS_LAYOUT_VERSION = 4;
 /** The newest version the frozen GAME77 generator (gen/skyways/legacy77/) serves. */
 export const SKYWAYS_LEGACY77_MAX = 2;
+/** The version the frozen version-3 core (gen/skyways/legacy80/) serves. */
+export const SKYWAYS_LEGACY80 = 3;
+
+/** (version 4) The version a Skyways layout object was generated at, for the shared dressers (not part of the layout's data). */
+const GEN_VERSION = new WeakMap<object, number>();
+export function markSkywaysGenVersion(layout: object, v: number): void { GEN_VERSION.set(layout, v); }
+/** The version a layout was generated at by a Skyways generator that marks it (versions 3+); 0 for anything else. Gate every version-4
+ *  generation change on `skywaysGenVersion(layout) >= 4` so the frozen generators' layouts stay exactly as pinned. */
+export function skywaysGenVersion(layout: object): number { return GEN_VERSION.get(layout) ?? 0; }
 
 /** The layout version a station regenerates with, from its section memory (undefined = never touched). */
 export function skywaysLayoutVersionFor(mem: {visits: number; lanes: Record<string, unknown>} | undefined): number {

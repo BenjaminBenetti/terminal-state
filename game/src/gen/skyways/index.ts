@@ -38,8 +38,9 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
+import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
+import {generateSkywaysLevel as generateSkywaysLegacy80} from './legacy80/index'; // (task studio-skywalk-variety-20261107-231448-01) version 3, frozen
 import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysOfficeWing} from './officeWing';
@@ -77,6 +78,8 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOptions = {}): StationLayout {
   // (task studio-skyways-rework-20261107-054512-01) stations entered before the rework regenerate through the frozen GAME77 generator
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) <= SKYWAYS_LEGACY77_MAX) return generateSkywaysLegacy77(ctx, opts);
+  // (task studio-skywalk-variety-20261107-231448-01) stations entered at version 3 regenerate through the frozen version-3 core
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) === SKYWAYS_LEGACY80) return generateSkywaysLegacy80(ctx, opts);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile('skyways');
   const spawns = opts.spawns ?? spawnProfile('skyways');
@@ -159,6 +162,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
     traversal: {stairs: c.flights, ladders: [], underpasses: []}, levels, levelLinks: links, rails: [],
   };
   P1.towardsN = towards[0]; P2.towardsS = towards[1];
+  markSkywaysGenVersion(layout, ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION); // (version 4: the shared dressers' version gate)
   registerApertures(layout.levels);
   layout.rails = [...deriveRails(layout.levels), ...runRails(sc, ox, oy, c.flights)];
   layout.traversal.ladders = placeLadders(layout);

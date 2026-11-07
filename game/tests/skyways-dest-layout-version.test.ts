@@ -7,6 +7,9 @@
 // Task studio-skyways-rework-20261107-054512-01: version 3 is the rework; versions 1 and 2 regenerate through the FROZEN GAME77
 // generator (gen/skyways/legacy77/). GAME77's version-2 fingerprints (the full skyways record, anchors / landmarks included) were
 // computed on main be3173d7738024b26d7d06c42cddf118c3520a02 before any rework change and must stay identical too.
+// Task studio-skywalk-variety-20261107-231448-01: version 4 is the building programmes; version 3 regenerates through the FROZEN
+// version-3 core (gen/skyways/legacy80/). Version 3's fingerprints (the full skyways record, area / prop loot purposes included) were
+// computed on main ebc2034a193ee29cccf42f289a93ac80c13cf4a4 (GAME80) before any change and must stay identical.
 import {describe, expect, it} from 'vitest';
 import * as crypto from 'node:crypto';
 import {LEVELS} from '../src/levels/registry';
@@ -21,6 +24,20 @@ const GAME77: Record<number, string> = {
   1: '29d8bb0219a9f9dd', 2: '77b133b78c1d78de', 3: '0e8c6753b41e013d', 4: 'd9883095d3c641e4', 5: '3cc0620b42b648c6',
   6: '8bda6abfa44afb2e', 7: '75a1dd8f9dabb31c', 8: '2736a1641114b92f', 707: '4003fcc846daf4bb', 4242: '2f0908a92dfa53b8',
 };
+
+const GAME80: Record<number, string> = {
+  1: '35c9f560bdb0676a', 2: '6f6ff17334434a0f', 3: '91a29aac6577fcb2', 4: 'ffdb73399586a0c2', 5: '54fef0374c6ad3d0',
+  6: '326eff21283e9918', 7: '5b6d22f0301fafe4', 8: '13569124684b1c55', 707: '5cde7e9753278187', 4242: 'f7c8bd37849c4fc9',
+  103855126: '0ce04ab0a6fc37ab',
+};
+
+function fingerprint80(seed: number): string {
+  const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 3} as never);
+  const info = {...(l.skyways as unknown as Record<string, unknown>)};
+  const fp = JSON.stringify({info, areas: l.areas.map(a => [a.x, a.y, a.w, a.h, a.label, a.type, a.ceil, a.level ?? 0, a.purpose ?? null]), props: l.props.map(p => [p.kind, p.x, p.z, p.y, p.rot, p.level ?? 0, p.variant ?? 0, p.purpose ?? null]),
+    pickups: l.pickups.map(p => [p.itemId, p.x, p.z]), zombies: l.zombies.map(z => [z.x, z.z, z.archetype]), lights: l.lights.length, sf: l.storefronts.length, links: l.levelLinks.length});
+  return crypto.createHash('sha256').update(fp).digest('hex').slice(0, 16);
+}
 
 function fingerprint77(seed: number): string {
   const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 2} as never);
@@ -40,12 +57,13 @@ function fingerprint(seed: number, layoutVersion?: number): string {
 
 describe('Skyways layout version (save compatibility)', () => {
   it('the policy: a station entered under GAME76 (visits, no record) keeps version 1; a recorded version is kept; a new station gets the current one', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(3);
-    expect(skywaysLayoutVersionFor(undefined)).toBe(3);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(3);
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(4);
+    expect(skywaysLayoutVersionFor(undefined)).toBe(4);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(4);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 3}}})).toBe(3);
+    expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 4}}})).toBe(4);
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 1}}})).toBe(1);
     // a malformed record falls back to the visit rule
     expect(skywaysLayoutVersionFor({visits: 1, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 9}}})).toBe(1);
@@ -57,6 +75,10 @@ describe('Skyways layout version (save compatibility)', () => {
 
   it('version 2 regenerates GAME77 exactly through the frozen generator (fingerprints pinned on main be3173d)', () => {
     for (const [s, want] of Object.entries(GAME77)) expect(fingerprint77(Number(s)), `seed ${s}`).toBe(want);
+  });
+
+  it('version 3 regenerates GAME78-80 exactly through the frozen version-3 core (fingerprints pinned on main ebc2034)', () => {
+    for (const [s, want] of Object.entries(GAME80)) expect(fingerprint80(Number(s)), `seed ${s}`).toBe(want);
   });
 
   it('version 2 adds the destinations: anchors and landmark courts', () => {
