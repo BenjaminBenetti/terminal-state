@@ -429,6 +429,27 @@ export class GearSystem {
     if (this.target === b) this.target = null;
   }
 
+  /**
+   * Task train-loose-cargo-20261107: a grounded bag leaves the live section without being worn (it rides the player train): an open view
+   * on it closes, its object goes; the SAME stack (identity, contents) is returned. null = not one of this section's bags.
+   */
+  releaseBag(b: GroundBag): ItemStack | null {
+    if (!this.bags.includes(b)) return null;
+    if (this.session?.bag === b) this.close('gone');
+    this.removeBag(b);
+    return b.stack;
+  }
+
+  /** Task train-loose-cargo-20261107: a bag arrives in the live section (the train's cargo after a ride / a load): the same stack. */
+  adoptBag(id: string, stack: ItemStack, pose: BagPose): GroundBag {
+    const b = new GroundBag(id, stack, pose);
+    this.addBag(b);
+    return b;
+  }
+
+  /** Task train-loose-cargo-20261107: bags the section's record leaves out (the train's own: saved with the train). */
+  recordFilter: ((b: GroundBag) => boolean) | null = null;
+
   private disposeBags(): void {
     for (const b of this.bags) b.dispose();
     this.bags = [];
@@ -584,7 +605,7 @@ export class GearSystem {
 
   /** The live section's bags as a store record. */
   record(): SectionBags {
-    const bags: BagRecord[] = this.bags.filter(b => b.grounded).map(b => ({id: b.id, stack: stackToJSON(b.stack)!, x: b.pose.x, y: b.pose.y, z: b.pose.z, yaw: b.pose.yaw, level: b.pose.level}));
+    const bags: BagRecord[] = this.bags.filter(b => b.grounded && !this.recordFilter?.(b)).map(b => ({id: b.id, stack: stackToJSON(b.stack)!, x: b.pose.x, y: b.pose.y, z: b.pose.z, yaw: b.pose.yaw, level: b.pose.level}));
     return {v: 1, seed: this.sectionSeed, init: true, bags};
   }
 

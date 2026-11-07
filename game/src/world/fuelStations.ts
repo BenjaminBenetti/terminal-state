@@ -20,7 +20,8 @@
 //    (Game.leaveSection: hooks first, then saveSectionMemory) — a save taken before the first departure (new-game / arrival) regenerates
 //    the same realization on load, never twice and never lost; a Retry rebuilds the entry state the same way. The ending save's
 //    non-destructive memory capture writes it too (flush), so its Continue never realizes the station twice.
-// Remaining fuel (the map, nodeFuel): the CURRENT station live (its fuel lots in holders, fuel pickups, cans in grounded bags, its carts
+// Remaining fuel (the map, nodeFuel): the CURRENT station live (its fuel lots in holders, fuel pickups, cans in grounded bags — not the
+// ones lying in the parked train: its cargo, task train-loose-cargo — its carts
 // outside the car); a visited station with a realized record from its memory (recorded lots its holders still list, remembered fuel
 // cans, cans in remembered bags, its carts; a v1 station + its pending delta); otherwise (known, never built, or visited before fuel
 // existed) its PLAN. Fuel moved aboard the train is not the station's any more.
@@ -222,7 +223,11 @@ export class FuelStations {
     const g = this.game as unknown as {pickups: {list: readonly {stack: {itemId: string; count: number; bag?: readonly ({itemId: string; count: number} | null)[]}}[]}; gear?: {bags?: readonly {stack: {bag?: readonly ({itemId: string; count: number} | null)[]}}[]}};
     let lots = 0;
     for (const h of this.containers?.all ?? []) for (const l of h.state.lots) if (l.itemId === FUEL.canItem) lots += l.count * FUEL.canUnits;
-    return lots + stationFuelRemaining({pickups: g.pickups.list, bags: g.gear?.bags ?? [], carts: this.carts?.stationRecords() ?? []});
+    // (task train-loose-cargo: cans / bags lying in the parked train are the train's cargo, not the station's stock)
+    const cargo = (this.game as unknown as {trainCargo?: {ownsPickup(p: unknown): boolean; ownsBag(b: unknown): boolean}}).trainCargo;
+    const pickups = cargo ? g.pickups.list.filter(p => !cargo.ownsPickup(p)) : g.pickups.list;
+    const bags = cargo ? (g.gear?.bags ?? []).filter(b => !cargo.ownsBag(b)) : g.gear?.bags ?? [];
+    return lots + stationFuelRemaining({pickups, bags, carts: this.carts?.stationRecords() ?? []});
   }
 
   /** The map's figure for a station (null outside a campaign). */

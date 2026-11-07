@@ -15,11 +15,16 @@
 // the fuel CARTS aboard — physical cargo, train-local poses; fuel/fuel.ts). Saved with the record (`fuel`); NewGame: an EMPTY tank, no
 // cargo; Travel keeps it; Retry restores the entry state. An old save without `fuel` loads an empty tank and no cargo (no free fuel: its
 // stations get their fuel the first time they are built — Game.realizeStationFuel).
+//
+// Task studio-beta-train-loose-cargo-20261107-060450-01: the record also holds the train's LOOSE CARGO (run/trainCargo.ts TrainCargo:
+// every loose item / grounded bag lying in the car, exact stacks + train-local poses). Saved with the record (`cargo`); NewGame: none;
+// Travel keeps it; Retry restores the entry state. An old save without `cargo` loads none (its fuel carts / Lockbox untouched).
 
 import type {RunParticipant} from './snapshot';
 import type {SectionKey} from '../levels/types';
 import {TrainLockbox} from './trainLockbox';
 import {FUEL, trainFuelProblem, type CargoCartJSON, type TrainFuelJSON} from '../fuel/fuel';
+import {TrainCargo} from './trainCargo';
 
 /**
  * The train's fuel: the tank (quarter units, 0..FUEL.tankUnits) and the carts aboard. With a live cart system attached (`live`, the
@@ -90,6 +95,8 @@ export class PlayerTrainRecord {
   readonly lockbox = new TrainLockbox();
   /** Task train-fuel-system: the tank + the carts aboard (the same object for the whole session). */
   readonly fuel = new TrainFuel();
+  /** Task train-loose-cargo: the loose items / bags aboard (the same object for the whole session). */
+  readonly cargo = new TrainCargo();
 
   /** A copy of the current record. */
   get state(): PlayerTrainState {
@@ -112,13 +119,14 @@ export class PlayerTrainRecord {
   participant(): RunParticipant {
     return {
       id: PLAYER_TRAIN_PARTICIPANT,
-      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON()}),
+      save: () => ({...this.state, lockbox: this.lockbox.toJSON(), fuel: this.fuel.toJSON(), cargo: this.cargo.toJSON()}),
       load: d => {
         this.s = valid(d) ? {id: d.id, tier: d.tier, at: d.at ? {level: d.at.level, section: d.at.section} : null} : fresh();
         this.lockbox.load(d && typeof d === 'object' ? (d as {lockbox?: unknown}).lockbox : undefined);
         this.fuel.load(d && typeof d === 'object' ? (d as {fuel?: unknown}).fuel : undefined);
+        this.cargo.load(d && typeof d === 'object' ? (d as {cargo?: unknown}).cargo : undefined);
       },
-      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); },
+      reset: () => { this.s = fresh(); this.lockbox.clear(); this.fuel.reset(); this.cargo.reset(); },
     };
   }
 }
