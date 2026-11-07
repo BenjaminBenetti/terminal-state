@@ -45,6 +45,8 @@ import {buildSkywaysAddonProp} from './skywaysAddon'; // task studio-skyways-lev
 import {isSkywaysAddonKind} from '../gen/skyways/addonKinds';
 import {buildSkywaysDestProp} from './skywaysDestinations'; // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): every destination kind
 import {isSkywaysDestKind} from '../gen/skyways/destinations/registry';
+import {buildSkywaysGardenProp} from './skywaysGardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery / court planters
+import {isSkywaysGardenKind} from '../gen/skyways/destinations/kindsGardens';
 import {buildSkywaysMapBoards} from './skywaysMapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards
 import {isSkywaysMapBoardKind} from '../gen/skyways/mapBoardKind';
 import {OfficeArch} from './officeArch'; // Task office-overhaul-20261030 (lane ARCH): office storeys look like an office
@@ -669,6 +671,7 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     if (isSkywaysKitchenKind(kind)) { instances += buildSkywaysKitchenProp(group, kind, list, mats, instanceModel, models); continue; }
     // task studio-skyways-level-20261106-054448 (lane ADDON): the Skyways add-on's kinds (lazy skyways-* models, statues, Codex art panels)
     if (isSkywaysAddonKind(kind)) { instances += buildSkywaysAddonProp(group, kind, list, mats, instanceModel, models); continue; }
+    if (isSkywaysGardenKind(kind)) { instances += buildSkywaysGardenProp(group, kind, list, mats, instanceModel, models); continue; } // (task studio-skyways-rework-20261107-054512-01, lane ARCH) planters: procedural bodies + the office potted-plant foliage
     // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): the destination kinds (lazy skyways-d-* models, hung cables, Codex art panels)
     if (isSkywaysDestKind(kind)) { instances += buildSkywaysDestProp(group, kind, list, mats, instanceModel, models, layout); continue; }
     if (isSkywaysMapBoardKind(kind)) { instances += buildSkywaysMapBoards(group, list, mats, layout); continue; } // task studio-skyways-rework-20261107-054512-01 (lane MAPS)

@@ -410,6 +410,25 @@ doors, run mouths, walking lanes / plazas, landmark discs, bridge lanes and shop
 - Tests: `tests/skyways-map-boards.test.ts` (both audits, the shape inside its box, placement and clearances on real seeds, the plan
   against the layout, YOU ARE HERE, storey highlighting, forbidden words, the renderer's bounded meshes / textures, the close-up read).
 
+### Skyways planted galleries and courts (task studio-skyways-rework-20261107-054512-01, lane ARCH)
+`gen/skyways/gardens.ts` (layout version 3) lines every atrium opening's skyway-level gallery with planter troughs against the
+balustrade, and puts a few bench-planters in the large skyway courts and the atrium courts. Two NEW code-drawn kinds
+(`gen/skyways/destinations/kindsGardens.ts`, merged by `registry.ts`; drawn by `world/skywaysGardens.ts`): procedural bodies in the
+existing shape materials and the office's EXISTING potted-plant model's foliage (its bowl pot cut away by a local mesh separation, the
+foliage sunk into the soil bed). No new model or texture.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of the drawn kind beside `lastshift`) |
+|---|---|---|---|
+| `skyArchGalleryPlanter` | `none` (an open soil bed) | static `built-in`: a precast trough full of soil (~450 kg) against the balustrade | trough 1.50 × 0.52 × 0.46 m (soil 0.47 m); 2.01 × 1.19 × 1.19 m with its shrubs; grounded, 4 contact corners |
+| `skyArchBenchPlanter` | `none` (a raised soil bed) | static `built-in`: timber-clad raised bed with a slatted bench (tonnes of soil) | 2.60 × 0.46 × 1.30 m, seat 0.46 m (0.42 m deep); 2.70 × 1.03 × 1.42 m with its shrubs; grounded, 4 contact corners |
+
+- Placement: troughs only on open public gallery floor at the opening's edge (the rail stands there), never on a stair / escalator cell
+  or within its mouth, a level link's landing, a door's zone, a bridge lane, a storefront's opening strip or a landmark's clear disc,
+  and only where 2.5 m of walkway stays open behind them; bench-planters through the station placement kit with a 1.0 m walking ring.
+- No baked loose clutter: the shrubs are planting rooted in the soil (part of the fixture, nothing to take); no loose item sits in them.
+- Tests: `tests/skyways-arch-rework.test.ts` (both audits, troughs at the rails / on the floor / clear of stairs, doors and run mouths,
+  the walkway behind them, bench-planters on the floor, the foliage model requested only where a planter stands).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

@@ -89,11 +89,19 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
           expect(a.ceilKey(c.L, ar.id, c.i), `${ar.label} ceil`).toMatch(/^skyways-anchor-ceil-[a-z]+@/);
           continue;
         }
+        // (task studio-skyways-rework-20261107-054512-01, lane ARCH: layout v3 — a roofed bridge has the paver floor and no ceiling
+        // (its glass roof); the skylit skyway courts and the atrium courts take the court look: the warm floor, the timber slat
+        // ceiling — their stand-ins here, no textures loaded; tests/skyways-arch-rework.test.ts covers the textured path)
+        const roofed = L.skyways!.bridges.some(b => b.area === ar.id && b.roof), courtLook = a.rework && (cls === 'court' || (L.skyways!.skylights ?? []).some(s => s.area === ar.id));
         if (cls === 'station' || cls === 'shop') expect(fk, `${ar.label} floor`).toBeNull();
+        else if (roofed) expect(fk, `${ar.label} floor`).toBe('skyways-floor-pavers');
+        else if (courtLook) expect(fk, `${ar.label} floor`).toBe('skyways-floor-court');
         else expect(fk, `${ar.label} floor`).toBe(FLOOR_OF[cls]);
         const ck = a.ceilKey(c.L, ar.id, c.i);
         if (a.atriumRoof[c.i] > 0 && L.levels![c.L].grid.ceil[c.i] >= a.atriumRoof[c.i] - 0.5) { expect(ck, `${ar.label} atrium`).toBe(false); continue; }
         if (cls === 'station' || (cls === 'shop' && c.L === 0)) expect(ck, `${ar.label} ceil`).toBeNull();
+        else if (roofed) expect(ck, `${ar.label} ceil`).toBe(false);
+        else if (courtLook) expect(ck, `${ar.label} ceil`).toBe('skyways-ceil-slats');
         else if (cls === 'bridge') expect(ck).toBe('skyways-ceil-bridge');
         else if (cls === 'boh') expect(ck).toBe('skyways-ceil-core');
         else if (cls === 'office') expect(ck).toBe('skyways-ceil-grid'); // (rework) a tenant office wing
@@ -111,7 +119,9 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
         if (cls === 'anchor') { expect(f.finish).toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
-        expect(f.finish, cls).toBe(cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : cls === 'office' ? 'skyways-office-wall' : 'skyways-wall');
+        // (lane ARCH) a skylight coffer's well walls: the plain plaster of a light well
+        const well = (L.skyways!.skylights ?? []).some(s => s.area === f.area && f.y0 >= s.ceilY - 0.02);
+        expect(f.finish, cls).toBe(well ? 'skyways-reveal' : cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : cls === 'office' ? 'skyways-office-wall' : 'skyways-wall');
         // never a station treatment / identity
         expect(STATION_TREATMENTS).not.toContain(treatmentOf(f));
         expect(['office', 'paint']).toContain(finishFamily(f.finish));
@@ -182,7 +192,10 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
     // the public finishes stay a handful; the anchor stores add at most three per family (+ a zone set: the auditorium / booths),
     // every one on the same office programs (wall / floor / ceiling) and with an impact class
     const anchorKeys = [...used.keys()].filter(k => k.startsWith('skyways-anchor-'));
-    expect(used.size - anchorKeys.length).toBeLessThanOrEqual(15);
+    // (lane ARCH) + the rework's court / bridge finishes (textured or their stand-ins), the roof steel and the skylight sky
+    const archKeys = [...used.keys()].filter(k => /^skyways-(tex-|floor-pavers|ceil-slats|skylight-sky|roof-steel)/.test(k));
+    expect(archKeys.length).toBeLessThanOrEqual(8);
+    expect(used.size - anchorKeys.length - archKeys.length).toBeLessThanOrEqual(15);
     expect(anchorKeys.length).toBeLessThanOrEqual(6 * (L.skyways!.anchors?.length ?? 0));
     for (const k of anchorKeys) expect(finishClass(k), k).not.toBeNull();
     const aw = anchorKeys.filter(k => k.startsWith('skyways-anchor-wall-')).map(k => used.get(k) as OfficeSurfaceMaterial);
@@ -307,9 +320,11 @@ describe('skyways exterior: the plan (pure)', () => {
         const br = info.bridges.find(b => b.id === bp.bridge)!;
         expect(bp.outer).toEqual(bridgeOuter(br));
         const under = bp.faces.filter(f => f.axis === 'y' && f.n === -1), roof = bp.faces.filter(f => f.axis === 'y' && f.n === 1);
-        expect(under.length).toBe(1); expect(roof.length).toBe(1);
+        expect(under.length).toBe(1);
         expect(under[0].c).toBeCloseTo(info.storeys[2].baseY - SKYWAYS_EXT.deckDepth, 6);
-        expect(roof[0].c).toBeGreaterThan(info.storeys[2].baseY + 3);
+        // (lane ARCH, layout v3) a glazed roof: no opaque roof slab, the fascias stop under its wall plate
+        if (br.roof) { expect(roof.length).toBe(0); expect(bp.y1).toBeCloseTo(br.roof.springY - 0.03, 6); }
+        else { expect(roof.length).toBe(1); expect(roof[0].c).toBeGreaterThan(info.storeys[2].baseY + 3); }
         const wins = info.windows.filter(w => 'bridge' in w.host && w.host.bridge === br.id);
         const side = bp.faces.filter(f => f.axis !== 'y');
         const full = 2 * (bp.y1 - bp.y0) * (br.axis === 'z' ? br.rect.z1 - br.rect.z0 : br.rect.x1 - br.rect.x0);
@@ -414,7 +429,8 @@ describe('skyways exterior: build + runtime', () => {
     expect(v.root.visible).toBe(true);
     expect(rt.fogBox).toEqual({kind: 'bridge', id: br.id});
     expect([EXT_U.box.value.x, EXT_U.box.value.y, EXT_U.box.value.z, EXT_U.box.value.w]).toEqual([br.rect.x0, br.rect.z0, br.rect.x1, br.rect.z1]);
-    expect(EXT_U.roofY.value).toBe(1e9);
+    // (lane ARCH) under a glazed bridge roof (layout v3) every exterior ray is outdoor (the sky through the roof); else the deck's box
+    expect(EXT_U.roofY.value).toBe(br.roof ? -1e9 : 1e9);
     // inside an atrium building: every exterior ray outdoor (the sky through the vault); a plain building: its footprint
     const atr = info.buildings.find(b => b.atrium)!, plain = info.buildings.find(b => !b.atrium)!;
     const r = atr.atrium!.rect;
