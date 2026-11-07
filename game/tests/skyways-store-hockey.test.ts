@@ -74,6 +74,8 @@ describe('Skyways store: Blue Line Sports (hockey)', () => {
       const chest = kinds(floor, 'rollingToolChest');
       expect(chest.length, why).toBe(1);
       expect(chest[0].purpose, why).toBe(HOCKEY_PURPOSE.tools);
+      // one first-aid kit on the sharpening wall (never a row of them)
+      expect(kinds(floor, 'firstAidWallKit').length, why).toBeLessThanOrEqual(1);
       // stick racks with their sticks, the goalie
       const racks = kinds(floor, 'hkStickRack'), sticks = kinds(floor, 'hkSticks');
       expect(sticks.length, why).toBe(racks.length);

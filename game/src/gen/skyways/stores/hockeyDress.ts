@@ -332,7 +332,11 @@ class HockeyStore {
       const [cu, cv] = chest ? xzUV(this.U, chest.x, chest.z) : [0, 0];
       const cs = sp.w === 'L' || sp.w === 'R' ? cv : cu;
       if (chest) this.add('pegboard', this.d.mount(sp.a, sp.side, this.worldT(sp, cs), 'toolPegboard', 1.35));
-      const kit = [run.s1 + 0.5, run.s0 - 0.5, run.s1 + 1.0, run.s0 - 1.0, run.s1 + 1.5, run.s0 - 1.5, run.s1 + 2.0].map(s => (s > sp.s0 + 0.3 && s < sp.s1 - 0.3 ? this.d.mount(sp.a, sp.side, this.worldT(sp, s), 'firstAidWallKit', 1.3) : null)).find(Boolean);
+      // (one kit: the first spot that takes it)
+      let kit: PropPlacement | null = null;
+      for (const s of [run.s1 + 0.5, run.s0 - 0.5, run.s1 + 1.0, run.s0 - 1.0, run.s1 + 1.5, run.s0 - 1.5, run.s1 + 2.0]) {
+        if (s > sp.s0 + 0.3 && s < sp.s1 - 0.3 && (kit = this.d.mount(sp.a, sp.side, this.worldT(sp, s), 'firstAidWallKit', 1.3))) break;
+      }
       if (kit) this.add('firstAid', kit); else this.skip('first-aid kit');
       return;
     }
