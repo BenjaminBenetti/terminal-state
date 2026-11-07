@@ -39,6 +39,12 @@ import {
 } from './officeArch';
 import {surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
 import {roofGlass} from './mallArch';
+// (task studio-skyways-rework-20261107-054512-01, lane ARCH) the rework's look: glazed bridge roofs, skylight coffers, textured courts
+import {buildBridgeRoofs, BRIDGE_STEEL_LIGHT, type BridgeRoofStats} from './skywaysBridgeRoofs';
+import {buildSkylights, SKYLIGHT_SKY_KEY, skylightSkyMaterial, type SkylightStats} from './skywaysSkylights';
+import {skywaysArchSpan, skywaysArchTexture, skywaysTexturedMaterial, usesSkywaysArchTextures} from './skywaysArchTextures';
+import type {SkywaysArchTextureKey} from '../assets/skywaysArchTextures.generated';
+import type {SkywaysBridge} from '../gen/skyways/skywaysTypes';
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -57,6 +63,15 @@ export const SKYWAYS_CEILS = {
 } as const satisfies Record<string, readonly [CeilingKind, number | undefined]>;
 /** Door frames / roof steel: dark painted steel. */
 export const SKYWAYS_STEEL = 0x3a3d40;
+/**
+ * (task studio-skyways-rework-20261107-054512-01, lane ARCH) The rework's textured finishes (world/skywaysArchTextures.ts: Codex-authored
+ * textures, layout version 3 only) and their office-program stand-ins while a texture is not delivered: the courts' herringbone brick
+ * floor (stand-in: the court stone), brick walls (stand-in: the public plaster), dark timber slat ceilings (stand-in: a dark brown raw
+ * ceiling), the roofed bridges' clay pavers (stand-in: a half-bond dark brick-red stone floor).
+ */
+export const SKYWAYS_TEX_KEYS = {herringbone: 'skyways-tex-herringbone', brickWall: 'skyways-tex-brick', woodSlats: 'skyways-tex-slats', pavers: 'skyways-tex-pavers'} as const satisfies Record<SkywaysArchTextureKey, string>;
+export const SKYWAYS_PAVER_STANDIN = {kind: 'stone' as FloorKind, tint: 0x6b3a2f};
+export const SKYWAYS_SLAT_STANDIN = {kind: 'raw' as CeilingKind, tint: 0x3a2b21, bar: 0x1c1612};
 
 /** What a Skyways area is, for its finishes ('station' / 'shop': the builder's own rule). */
 export type SkywaysClass = 'station' | 'shop' | 'public' | 'court' | 'bridge' | 'wet' | 'boh' | 'anchor';
@@ -101,6 +116,17 @@ export class SkywaysArch {
   /** (task studio-skyways-rework-20261107-054512-01) area id -> its anchor store's family (+ zone: a zone override applies). */
   private readonly anchorAreas = new Map<number, {family: SkywaysShopFamily; zone: boolean}>();
   stats: SkywaysRoofStats = {roofs: 0, panes: 0, arches: 0, meshes: 0, triangles: 0};
+  /** (lane ARCH) deck area id -> its bridge, for the bridges with a glazed roof (layout version 3). */
+  private readonly roofed = new Map<number, SkywaysBridge>();
+  /** (lane ARCH) per cell (layout grid) of the skyway storey: 1 = under a skylight coffer. */
+  readonly coffer: Uint8Array;
+  /** (lane ARCH) skylit court area id -> its ceiling line (absolute y). */
+  private readonly skylit = new Map<number, number>();
+  /** (lane ARCH) the rework finishes apply (layout version 3: roofed bridges / skylights). */
+  readonly rework: boolean;
+  /** (lane ARCH) bridge roof / skylight build stats (QA / tests). */
+  bridgeRoofs: BridgeRoofStats[] = [];
+  skylightStats: SkylightStats = {coffers: 0, panes: 0, meshes: 0, triangles: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
     return layout.skyways ? new SkywaysArch(layout, mats, levels) : null;
@@ -125,6 +151,28 @@ export class SkywaysArch {
         for (let cx = Math.max(0, Math.floor(r.x0 / CELL)); cx < Math.min(g0.w, Math.ceil(r.x1 / CELL)); cx++) this.atriumRoof[cy * g0.w + cx] = b.atrium.roofY;
       }
     }
+    // (task studio-skyways-rework-20261107-054512-01, lane ARCH) roofed bridges, skylight coffers, the rework finishes (v3 only)
+    for (const b of this.info.bridges) if (b.roof) this.roofed.set(b.area, b);
+    this.coffer = new Uint8Array(g0.w * g0.h);
+    for (const s of this.info.skylights ?? []) {
+      this.skylit.set(s.area, s.ceilY);
+      for (let cy = Math.max(0, Math.round(s.rect.z0 / CELL)); cy < Math.min(g0.h, Math.round(s.rect.z1 / CELL)); cy++) {
+        for (let cx = Math.max(0, Math.round(s.rect.x0 / CELL)); cx < Math.min(g0.w, Math.round(s.rect.x1 / CELL)); cx++) this.coffer[cy * g0.w + cx] = 1;
+      }
+    }
+    this.rework = usesSkywaysArchTextures(layout);
+  }
+
+  /** (lane ARCH) A rework finish's key: the textured one when its texture is loaded (layout version 3), else its stand-in key. */
+  private texKey(t: SkywaysArchTextureKey, standIn: () => string): string {
+    const key = SKYWAYS_TEX_KEYS[t];
+    if (this.rework && skywaysArchTexture(t)) return this.def(key, () => skywaysTexturedMaterial(this.mats, t, key)!);
+    return standIn();
+  }
+
+  /** (lane ARCH) Is the area a skylit court / an atrium court (the warm brick / timber look)? */
+  private courtLook(areaId: number): boolean {
+    return this.rework && (this.skylit.has(areaId) || this.classOf(areaId) === 'court');
   }
 
   /** The class of an area id (cached). */
@@ -190,6 +238,24 @@ export class SkywaysArch {
     });
   }
 
+  /** (lane ARCH) The slat ceiling's stand-in: the office raw ceiling (dark beams every 2.4 m) in a dark timber brown. */
+  private slatStandIn(): string {
+    return this.def('skyways-ceil-slats', () => {
+      const m = ceilingMaterial(this.mats, 'skyways-ceil-slats', SKYWAYS_SLAT_STANDIN.kind);
+      m.ofA.setHex(SKYWAYS_SLAT_STANDIN.tint, THREE.SRGBColorSpace); m.ofB.setHex(SKYWAYS_SLAT_STANDIN.bar, THREE.SRGBColorSpace);
+      return m;
+    });
+  }
+
+  /** (lane ARCH) The bridge roofs' light putty-grey steel (the faceted / vaulted tubes). */
+  private lightSteelKey(): string {
+    return this.def('skyways-roof-steel', () => {
+      const m = thinTrim(surfaceMaterial('paintedSteel', {color: BRIDGE_STEEL_LIGHT, metalness: 0.3}, {grime: [0.25, 0.5], macro: 0.15}));
+      m.name = 'skyways-roof-steel';
+      return m;
+    });
+  }
+
   private trimKey(): string {
     return this.def('skyways-trim', () => {
       const m = thinTrim(surfaceMaterial('paintedSteel', {color: SKYWAYS_STEEL, metalness: 0.35}, {grime: [0.2, 0.5], macro: 0.12}));
@@ -205,23 +271,53 @@ export class SkywaysArch {
    * station / storefront faces pass unchanged. Faces split at the station tile line keep one texture base (as OfficeArch).
    */
   remapFaces<F extends FaceLike>(faces: F[], tileLowerHeight: number): F[] {
-    return faces.map(f => {
+    return faces.map((f): F | null => {
       if (f.finish === 'tileShop') return f;
       const cls = this.classOf(f.area);
       if (cls === 'station' || cls === 'shop') return f;
       if (cls === 'anchor') return {...f, finish: this.anchorWallKey(f.area)};
+      // (task studio-skyways-rework-20261107-054512-01, lane ARCH) a roofed bridge's side walls stop at the springing line (the glass
+      // roof is there); a skylight coffer's well walls (the ceiling step over a skylit court) take the plain plaster of a light well;
+      // the skylit / atrium courts' walls the textured brick
+      if (cls === 'bridge' && !f.slope) {
+        const c = this.clipBridgeSide(f);
+        if (c === null) return null;
+        if (c !== f) return {...c, finish: this.wallKey(cls)};
+      }
+      if (!f.slope && this.skylit.has(f.area) && f.y0 >= this.skylit.get(f.area)! - 0.02) return {...f, finish: this.def('skyways-reveal', () => wallMaterial(this.mats, 'skyways-reveal', SKYWAYS_REVEAL_WALL))};
+      const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
+      if (!f.slope && cls !== 'wet' && cls !== 'boh' && this.courtLook(f.area)) return {...f, finish: this.texKey('brickWall', () => this.wallKey(cls)), ...up};
       // stair flight side walls: public flights plaster, service flights the core
       const finish = this.wallKey(f.slope ? (this.layout.areas[f.area]?.publicSpace ? 'public' : 'boh') : cls);
-      const up = /tileUpper/.test(f.finish) && f.vb0 !== undefined ? {vb0: f.vb0 - tileLowerHeight, vb1: (f.vb1 ?? f.vb0) - tileLowerHeight} : {};
       return {...f, finish, ...up};
-    });
+    }).filter((f): f is F => f !== null);
+  }
+
+  /**
+   * (lane ARCH) A roofed bridge deck's face on a side wall plane (along the deck): clipped to the springing line (null: wholly above it);
+   * any other face unchanged (the same object).
+   */
+  private clipBridgeSide<F extends FaceLike>(f: F): F | null {
+    const b = this.roofed.get(f.area);
+    if (!b) return f;
+    const alongX = Math.abs(f.z0 - f.z1) < 1e-9;
+    if (alongX !== (b.axis === 'x')) return f;
+    const plane = alongX ? f.z0 : f.x0, [p0, p1] = b.axis === 'x' ? [b.rect.z0, b.rect.z1] : [b.rect.x0, b.rect.x1];
+    if (Math.abs(plane - p0) > 1e-3 && Math.abs(plane - p1) > 1e-3) return f;
+    const top = b.roof!.springY;
+    if (f.y1 <= top + 1e-4) return f;
+    if (f.y0 >= top - 0.02) return null;
+    return {...f, y1: top, openings: f.openings.map(o => ({...o, top: Math.min(o.top, top)}))};
   }
 
   /** Floor key of an open cell of level index L (null: the builder's own rule). */
   floorKey(L: number, i: number): string | null {
     const lvl = this.levels[L];
     if (!lvl) return null;
-    const cls = this.classOf(lvl.grid.area[i]);
+    const area = lvl.grid.area[i], cls = this.classOf(area);
+    // (lane ARCH) roofed bridges: clay pavers; skylit / atrium courts: herringbone brick (stand-ins: dark brick-red stone / court stone)
+    if (cls === 'bridge' && this.roofed.has(area)) return this.texKey('pavers', () => this.def('skyways-floor-pavers', () => floorMaterial(this.mats, 'skyways-floor-pavers', SKYWAYS_PAVER_STANDIN.kind, SKYWAYS_PAVER_STANDIN.tint)));
+    if ((cls === 'public' || cls === 'court') && this.courtLook(area)) return this.texKey('herringbone', () => this.floorKeyOf('court'));
     switch (cls) {
       case 'public': case 'court': case 'bridge': case 'wet': case 'boh': return this.floorKeyOf(cls);
       case 'anchor': return this.anchorFloorKey(lvl.grid.area[i]);
@@ -238,6 +334,11 @@ export class SkywaysArch {
       if (top >= this.atriumRoof[i] - 0.5) return false;
     }
     const cls = this.classOf(areaId);
+    // (lane ARCH) a roofed bridge deck: no ceiling (the glazed roof); a skylight coffer's top: the sky through the roof light; the
+    // skylit / atrium courts: the dark timber slat ceiling
+    if (cls === 'bridge' && this.roofed.has(areaId)) return false;
+    if (i !== undefined && this.coffer[i] && lvl.id === 2 && this.skylit.has(areaId) && (y === undefined || y > this.skylit.get(areaId)! + 0.05)) return this.def(SKYLIGHT_SKY_KEY, () => skylightSkyMaterial());
+    if ((cls === 'public' || cls === 'court') && this.courtLook(areaId)) return this.texKey('woodSlats', () => this.slatStandIn());
     switch (cls) {
       case 'public': return this.ceilKeyOf(lvl.id >= 2 ? 'grid' : 'plain');
       case 'court': case 'wet': return this.ceilKeyOf('plain');
@@ -267,6 +368,9 @@ export class SkywaysArch {
   /** Texture scale (m per repeat) of a skyways key; undefined for any other key. */
   scale(key: string): {u: number; v: number} | undefined {
     if (!isSkywaysKey(key)) return undefined;
+    // (lane ARCH) the textured finishes: their texture's real-world span; the skylight sky: unmapped
+    for (const [t, k] of Object.entries(SKYWAYS_TEX_KEYS) as [SkywaysArchTextureKey, string][]) if (key === k) return skywaysArchSpan(t);
+    if (key === SKYLIGHT_SKY_KEY) return {u: 1, v: 1};
     if (key.startsWith('skyways-floor') || key.startsWith('skyways-anchor-floor')) return {u: OFFICE_FLOOR_SPAN, v: OFFICE_FLOOR_SPAN};
     if (key.startsWith('skyways-ceil') || key.startsWith('skyways-anchor-ceil')) return {u: OFFICE_CEIL_SPAN, v: OFFICE_CEIL_SPAN};
     if (key === 'skyways-trim') return {u: 1, v: 1};
@@ -317,6 +421,10 @@ export class SkywaysArch {
     }
     this.stats.roofs = roofs;
     const tag = [...new Set(this.info.storeys.filter(s => s.role !== 'station').map(s => s.level))];
+    // (task studio-skyways-rework-20261107-054512-01, lane ARCH) the glazed bridge roofs (skyway storey) and the skylight coffers' glazing
+    const sky = this.info.storeys.find(s => s.role === 'skyway')?.level ?? 2;
+    this.bridgeRoofs = buildBridgeRoofs(group, this.info.bridges, light => this.material(light ? this.lightSteelKey() : this.trimKey())!, [sky]);
+    if (this.info.skylights?.length) this.skylightStats = buildSkylights(group, this.info.skylights, this.material(this.trimKey())!);
     const out: THREE.Mesh[] = [];
     const g = glass.mesh(skywaysRoofGlass(this.mats), 'skyways-atrium-glass', tag);
     if (g) out.push(g);
@@ -331,8 +439,8 @@ export class SkywaysArch {
   }
 
   /** Summary (QA / tests). */
-  summary(): {materials: string[]; roofs: SkywaysRoofStats} {
-    return {materials: [...this.usedMaterials().keys()].sort(), roofs: {...this.stats}};
+  summary(): {materials: string[]; roofs: SkywaysRoofStats; bridgeRoofs: BridgeRoofStats[]; skylights: SkylightStats} {
+    return {materials: [...this.usedMaterials().keys()].sort(), roofs: {...this.stats}, bridgeRoofs: this.bridgeRoofs.map(b => ({...b})), skylights: {...this.skylightStats}};
   }
 }
 

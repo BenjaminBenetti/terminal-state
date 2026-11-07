@@ -44,6 +44,8 @@ import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
+import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
+import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -175,6 +177,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
+  dressSkywaysGardens(layout, rng.fork('skyways-gardens')); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) planted galleries + court bench-planters
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -188,6 +191,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // --- Lighting, daylight, traversal ------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   addSkywaysDaylight(layout);
+  skywaysSkylights(layout); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) skylight coffers + their daylight (before dropFloatingFixtures)
   finishTraversal(layout);
   dropFloatingFixtures(layout);
 
