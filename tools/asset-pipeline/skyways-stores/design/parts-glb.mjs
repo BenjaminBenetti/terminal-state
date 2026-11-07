@@ -1,5 +1,6 @@
 // Task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN): writes the design store's CODE-DRAWN kinds (a vignette rug,
-// a stack of folded throws, a stack of folded towels — gen/skyways/stores/kinds/design.ts designRugParts / designTextileParts, the
+// a stack of folded throws, a stack of folded towels, a framed print — gen/skyways/stores/kinds/design.ts designRugParts / designTextileParts /
+// designPrintParts, the
 // exact boxes world/skywaysStoreDesignDraw.ts draws) as small flat-coloured GLBs, so the prop scale check
 // (tools/asset-pipeline/props/scale-check.mjs --prop <glb>) can render them beside the runtime zombie (it skips model-less kinds).
 // QA only: the GLBs are scratch files (never game inputs). Colours: the colourway tints (the game draws the tinted office carpet).
@@ -52,6 +53,10 @@ try {
   await write(path.join(outDir, 'design-rug.glb'), K.designRugParts(Number(rugW) / 2, Number(rugD) / 2, 0), K.DESIGN_TINT);
   await write(path.join(outDir, 'design-throws.glb'), K.designTextileParts(K.DESIGN_TEXTILES.throws[0]), K.DESIGN_TINT);
   await write(path.join(outDir, 'design-towels.glb'), K.designTextileParts(K.DESIGN_TEXTILES.towels[0]), K.DESIGN_TINT);
+  // the framed print: the frame bars (pale oak), the white mat and the art face (a flat stand-in colour here; the game maps the atlas)
+  const art = K.designPrintArt(), P = K.DESIGN_PRINT;
+  const print = [...K.designPrintParts().map(q => ({t: q.m === 'wood' ? 'oak' : 'mat', s: q.s, p: q.p})), {t: 'art', s: [art.w, art.h, 0.002], p: [0, P.h / 2, -P.d / 2 + 0.0095]}];
+  await write(path.join(outDir, 'design-print.glb'), print, {oak: 0xc8a676, mat: 0xf0ece4, art: 0x8f9d86});
 } finally {
   await server.close();
 }

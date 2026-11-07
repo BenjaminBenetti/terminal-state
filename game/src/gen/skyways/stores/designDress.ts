@@ -648,7 +648,7 @@ function lighting(C: Ctx, level: number): boolean {
 function wallFill(C: Ctx, level: number): void {
   const {kit} = C, rng = kit.rng;
   const sides = rng.shuffle(['N', 'S', 'E', 'W'] as Side[]);
-  const cases = kit.wallRun('bookstoreBookcase', {level, sides, cluster: 2, gap: 1.6, max: rng.int(2, 4), front: 0.9});
+  const cases = kit.wallRun('bookstoreBookcase', {level, sides, cluster: 2, gap: 1.6, max: rng.int(2, 3), front: 0.9});
   const dressers = kit.wallRun('dresserDrawers', {level, sides: rng.shuffle(sides.slice()), cluster: 1, gap: 2.5, max: rng.int(1, 2), front: 0.8});
   for (const d of dressers) { textilesOn(kit, d, PROP_DEFS.dresserDrawers.h, rng.chance(0.5) ? 0.38 : -0.38, 0, throwVariant(kit)); printOver(C, level, d); }
   kit.wallRun('pottedPlantSmall', {level, sides: rng.shuffle(sides.slice()), cluster: 1, gap: 3.5, max: rng.int(2, 3)});
