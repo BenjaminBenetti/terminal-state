@@ -24,7 +24,7 @@ import type {PropDef} from '../../../props';
 import {BIN_STYLES, LP_SLEEVE, COVER_WALL, FACED_PER_LEDGE, FACED_PITCH, binBlock, facedLean} from '../musicStock';
 import {COVER_WALL_DEPTH, COVER_WALL_TOP, MUSIC_DIMS} from '../musicShapes';
 
-export const STORE_MUSIC_KINDS = ['skyMuBinRecords', 'skyMuFacedRecords', 'skyMuCoverWall', 'skyMuBinHeader', 'skyMuTurntable', 'skyMuHeadphones', 'skyMuStool', 'skyMuGigPoster', 'skyMuSign'] as const;
+export const STORE_MUSIC_KINDS = ['skyMuBinRecords', 'skyMuFacedRecords', 'skyMuCoverWall', 'skyMuBinLabel','skyMuTurntable', 'skyMuHeadphones', 'skyMuStool', 'skyMuGigPoster', 'skyMuSign'] as const;
 export type StoreMusicKind = (typeof STORE_MUSIC_KINDS)[number];
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
@@ -42,7 +42,7 @@ const DEF: Readonly<Record<StoreMusicKind, PropDef>> = {
   skyMuBinRecords: {w: BIN.w, d: BIN.d, h: BIN.h, blocksSight: false, physics: {mass: 4.5, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
   skyMuFacedRecords: {w: r3((FACED_PER_LEDGE - 1) * FACED_PITCH + LP_SLEEVE.s + 0.04), d: FACED_D, h: FACED_H, blocksSight: false, physics: {mass: 1.8, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
   skyMuCoverWall: {w: r3(COVER_WALL.w + 0.05), d: r3(COVER_WALL_DEPTH), h: r3(COVER_WALL_TOP), blocksSight: false},
-  skyMuBinHeader: {w: MUSIC_DIMS.binHeader.w, d: MUSIC_DIMS.binHeader.d, h: MUSIC_DIMS.binHeader.h, blocksSight: false},
+  skyMuBinLabel: {...MUSIC_DIMS.binLabel, blocksSight: false},
   skyMuTurntable: {...MUSIC_DIMS.turntable, blocksSight: false, physics: {mass: 7, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
   skyMuHeadphones: {...MUSIC_DIMS.headphones, blocksSight: false, physics: {mass: 0.35, dynamic: true, shape: 'box', mat: 'pad', contact: true, onHost: true}},
   skyMuStool: {...MUSIC_DIMS.stool, blocksSight: false, physics: {mass: 5, dynamic: true, shape: 'cylinder', mat: 'pad', contact: true}},
@@ -54,7 +54,7 @@ const PHYS: Readonly<Record<StoreMusicKind, DestPhys>> = {
   skyMuBinRecords: {dynamic: true, mass: 4.5, mat: 'pad', shape: 'box', onHost: true, how: 'a bay of 10-inch LP sleeves filed upright in one compartment of a record-bin rack (~4.5 kg of card and vinyl): inside the bay the static rack\'s divider / bar / back walls hold it (on-host decor goes loose only from a host top), so a shot marks it and nothing floats; standing on a counter / table top it would go loose'},
   skyMuFacedRecords: {dynamic: true, mass: 1.8, mat: 'pad', shape: 'box', onHost: true, how: 'five 12-inch LP sleeves stood face-out on a ledge of the new-arrivals board (~1.8 kg): held by the ledge lip and the board (not the host top), they rest within the static wall fixture — marked by a shot, never floating'},
   skyMuCoverWall: {dynamic: false, why: 'mounted', how: 'black-stained display board with three oak ledges and its NEW ARRIVALS header, screwed to the shop wall from 0.92 m up: a bump or a bullet does not move it'},
-  skyMuBinHeader: {dynamic: false, why: 'mounted', how: 'genre divider card in a steel spring clip on a record-bin rack\'s back rim: clipped to the static rack'},
+  skyMuBinLabel: {dynamic: false, why: 'mounted', how: 'printed genre card screwed to a record-bin rack\'s front apron: fixed to the static rack'},
   skyMuTurntable: {dynamic: true, mass: 7, mat: 'pad', shape: 'box', onHost: true, how: 'belt-drive turntable on rubber feet (~7 kg) on the listening counter: on the counter top a shot knocks it off (on-host decor), a bump slides it'},
   skyMuHeadphones: {dynamic: true, mass: 0.35, mat: 'pad', shape: 'box', onHost: true, how: 'closed-back studio headphones (~0.35 kg) lying on the listening counter: knocked off by a shot (on-host decor)'},
   skyMuStool: {dynamic: true, mass: 5, mat: 'pad', shape: 'cylinder', how: 'steel counter stool with a padded seat (~5 kg): shoved when walked into, tips under buckshot'},
@@ -63,7 +63,7 @@ const PHYS: Readonly<Record<StoreMusicKind, DestPhys>> = {
 };
 
 const DAMAGE: Readonly<Record<StoreMusicKind, DamageClass>> = {
-  skyMuBinRecords: 'cardboard', skyMuFacedRecords: 'cardboard', skyMuCoverWall: 'wood', skyMuBinHeader: 'cardboard',
+  skyMuBinRecords: 'cardboard', skyMuFacedRecords: 'cardboard', skyMuCoverWall: 'wood', skyMuBinLabel: 'cardboard',
   skyMuTurntable: 'wood', skyMuHeadphones: 'plastic', skyMuStool: 'steel', skyMuGigPoster: 'cardboard', skyMuSign: 'wood',
 };
 
@@ -71,7 +71,7 @@ const OPEN: Readonly<Record<StoreMusicKind, DestOpen>> = {
   skyMuBinRecords: {cls: 'none', role: 'decor', how: 'record sleeves filed in a bin: physical stock to flip through, nothing to open (records are not inventory items)'},
   skyMuFacedRecords: {cls: 'none', role: 'decor', how: 'record sleeves stood face-out on a ledge: physical stock, nothing to open'},
   skyMuCoverWall: {cls: 'none', role: 'surface', how: 'open display board with ledges: no doors, lids or drawers'},
-  skyMuBinHeader: {cls: 'none', role: 'decor', how: 'printed divider card: nothing to open'},
+  skyMuBinLabel: {cls: 'none', role: 'decor', how: 'printed genre card: nothing to open'},
   skyMuTurntable: {cls: 'none', role: 'equipment', how: 'turntable: its dust cover is gone (only the hinge blocks remain) — equipment, not storage'},
   skyMuHeadphones: {cls: 'none', role: 'equipment', how: 'headphones: nothing to open'},
   skyMuStool: {cls: 'none', role: 'decor', how: 'counter stool: no storage'},

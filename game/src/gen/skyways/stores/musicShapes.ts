@@ -7,6 +7,12 @@
 
 import type {ShapeMat} from '../../propShapes';
 import {COVER_WALL} from './musicStock';
+import {MUSIC_ART} from './musicArt';
+
+/** A sign board's height at width w, at its Codex art's own aspect (never stretched; 6.3 : 1 when the table lacks it). */
+const signH = (piece: string, w: number): number => Math.round(w / (MUSIC_ART.signs.pieces[piece]?.aspect ?? 6.3) * 1000) / 1000;
+/** The NEW ARRIVALS header board on the cover wall. */
+export const COVER_HEADER = {w: COVER_WALL.headerW, h: signH('new-arrivals', COVER_WALL.headerW)} as const;
 
 /** A box (s = size, p = centre) or an upright cylinder (r = radius, h = height, p = centre); optional rotation about X / Z (rad). */
 export type MusicPart =
@@ -20,9 +26,9 @@ export const MUSIC_DIMS = {
   turntable: {w: 0.45, h: 0.135, d: 0.36},
   headphones: {w: 0.19, h: 0.07, d: 0.2},
   stool: {w: 0.4, h: 0.66, d: 0.4},
-  binHeader: {w: 0.26, h: 0.16, d: 0.03},
+  binLabel: {w: 0.25, h: 0.115, d: 0.006},
   poster: {w: 0.62, h: 0.93, d: 0.025},
-  sign: {w: 1.5, h: 0.4, d: 0.04},
+  sign: {w: 1.6, h: signH('listening-booths', 1.6), d: 0.04},
 } as const;
 
 /** Belt-drive turntable: walnut plinth, black platter with a record on it, a steel tonearm on its pillar, a dust-cover hinge block. */
@@ -85,7 +91,7 @@ export function stoolParts(): MusicPart[] {
  * painted NEW ARRIVALS header board above it (the Codex sign art face). Prop frame origin at the board's base.
  */
 export function coverWallParts(): {parts: MusicPart[]; faces: MusicFace[]} {
-  const {w, h, t, ledges, ledgeD, lip, header} = COVER_WALL, back = -(t + ledgeD) / 2;
+  const {w, h, t, ledges, ledgeD, lip} = COVER_WALL, header = COVER_HEADER, back = -(t + ledgeD) / 2;
   const parts: MusicPart[] = [
     {m: 'black', box: [w, h, t], p: [0, h / 2, back + t / 2]},
     {m: 'woodVeneer', box: [w + 0.04, 0.03, t + 0.01], p: [0, h + 0.015, back + t / 2 + 0.005]},
@@ -102,16 +108,16 @@ export function coverWallParts(): {parts: MusicPart[]; faces: MusicFace[]} {
   return {parts, faces: [{atlas: 'signs', piece: 'new-arrivals', w: header.w, h: header.h, p: [0, hy, back + 0.026]}]};
 }
 /** Height of the cover wall (the header's top) above its base. */
-export const COVER_WALL_TOP = COVER_WALL.h + 0.06 + COVER_WALL.header.h + 0.02;
+export const COVER_WALL_TOP = COVER_WALL.h + 0.06 + COVER_HEADER.h + 0.02;
 /** Depth of the cover wall (board + ledges) — its footprint off the wall. */
 export const COVER_WALL_DEPTH = COVER_WALL.t + COVER_WALL.ledgeD;
 
-/** A genre header card clipped to a bin rack's back rim: the Codex card art on a thin board, a steel spring clip under it. */
-export function binHeaderParts(genre: string): {parts: MusicPart[]; faces: MusicFace[]} {
-  const {w, h} = MUSIC_DIMS.binHeader;
+/** A genre card screwed to a bin rack's front apron: the Codex card art on a thin board (prop frame: its back at z = -d/2). */
+export function binLabelParts(genre: string): {parts: MusicPart[]; faces: MusicFace[]} {
+  const {w, h, d} = MUSIC_DIMS.binLabel;
   return {
-    parts: [{m: 'panel', box: [w, h, 0.004], p: [0, h / 2, 0]}, {m: 'steelDark', box: [0.06, 0.05, 0.03], p: [0, 0.0, 0]}],
-    faces: [{atlas: 'signs', piece: `genre-${genre}`, w: w - 0.01, h: h - 0.01, p: [0, h / 2, 0.0025]}],
+    parts: [{m: 'panel', box: [w, h, d - 0.001], p: [0, h / 2, -0.0005]}],
+    faces: [{atlas: 'signs', piece: `genre-${genre}`, w: w - 0.008, h: h - 0.008, p: [0, h / 2, d / 2 - 0.0004]}],
   };
 }
 
@@ -132,9 +138,9 @@ export function posterParts(variant: number): {parts: MusicPart[]; faces: MusicF
 export function signParts(piece: string): {parts: MusicPart[]; faces: MusicFace[]} {
   const {w, h, d} = MUSIC_DIMS.sign;
   return {
-    parts: [{m: 'black', box: [w + 0.03, h + 0.03, 0.02], p: [0, h / 2, -d / 2 + 0.03]}, {m: 'steelDark', box: [0.04, 0.04, d - 0.02], p: [-w / 3, h / 2, -d / 2 + 0.01]},
-      {m: 'steelDark', box: [0.04, 0.04, d - 0.02], p: [w / 3, h / 2, -d / 2 + 0.01]}],
-    faces: [{atlas: 'signs', piece, w, h, p: [0, h / 2, -d / 2 + 0.041]}],
+    parts: [{m: 'black', box: [w + 0.03, h + 0.03, 0.02], p: [0, (h + 0.03) / 2, d / 2 - 0.01]}, {m: 'steelDark', box: [0.04, 0.04, d - 0.02], p: [-w / 3, (h + 0.03) / 2, -0.01]},
+      {m: 'steelDark', box: [0.04, 0.04, d - 0.02], p: [w / 3, (h + 0.03) / 2, -0.01]}],
+    faces: [{atlas: 'signs', piece, w, h, p: [0, (h + 0.03) / 2, d / 2 + 0.0005]}],
   };
 }
 

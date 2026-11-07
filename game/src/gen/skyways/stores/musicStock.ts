@@ -192,7 +192,7 @@ export function binBlockFrame(variant: number, col: number): {x: number; z: numb
 // The faced-out NEW ARRIVALS wall (skyMuCoverWall board with three ledges; one skyMuFacedRecords row of 12-inch LPs per ledge).
 
 /** The cover wall board (m): width, height, the board's thickness, the ledges' heights above the board's base, depth and lip. */
-export const COVER_WALL = {w: 2.0, h: 1.62, t: 0.03, ledges: [0.06, 0.56, 1.06], ledgeD: 0.09, lip: 0.025, header: {w: 1.5, h: 0.37}} as const;
+export const COVER_WALL = {w: 2.0, h: 1.62, t: 0.03, ledges: [0.06, 0.56, 1.06], ledgeD: 0.09, lip: 0.025, headerW: 1.7} as const;
 /** The board's base above the floor (m): it is wall-mounted (the floor in front stays walkable). */
 export const COVER_WALL_BASE_Y = 0.92;
 /** Faced sleeves per ledge and their pitch along it. */
