@@ -6,6 +6,7 @@
 import {beforeAll, describe, expect, it} from 'vitest';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import {createHash} from 'node:crypto';
 import {LEVELS} from '../src/levels/registry';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
@@ -66,6 +67,14 @@ describe('Skyways cinema store: kinds, art, audits', () => {
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(prov.files).toHaveLength(5);
     for (const piece of [...CINEMA_POSTER_PIECES, CINEMA_MENU_PIECE]) expect(a.pieces[piece], piece).toBeTruthy();
+    // the cooked atlas and its provenance are allowlisted public inputs (bytes / sha256 as built)
+    const allow = JSON.parse(fs.readFileSync(path.join(__dirname, '../../tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
+    for (const rel of [a.url, 'assets/derivatives/skyways-store-cinema-art-20261107.json']) {
+      const row = allow.files.find(f => f.path === rel), b = fs.readFileSync(path.join(__dirname, '../public', rel));
+      expect(row, rel).toBeTruthy();
+      expect(row!.bytes, rel).toBe(b.length);
+      expect(row!.sha256, rel).toBe(createHash('sha256').update(b).digest('hex'));
+    }
     for (const k of STORE_CINEMA_KINDS) {
       const {parts, face} = cinemaArtShape(k, 1), def = PROP_DEFS[k];
       // the art sits inside the kind's box; its aspect is the piece's (posters 2:3, the board 3:2)
@@ -131,6 +140,8 @@ describe('Skyways cinema store: a real old picture house on every seed', () => {
         expect(fx * dx + fz * dz, at).toBeGreaterThan(0);
       }
       expect(of(A, 'fireExtinguisherCabinet').length + of(A, 'firstAidWallKit').length, at).toBeGreaterThanOrEqual(1);
+      // a bin by the doors (the lobby's or the auditorium's: openable spill holders)
+      expect(of(h.props, 'bin').length, at).toBeGreaterThanOrEqual(1);
       // a walkable route from the auditorium door to the front (screen) zone and to the end of every seat row
       const g = h.layout.levels[aud.level ?? 0].grid;
       const door = h.layout.doors.find(d => d.b === aud.id || d.a === aud.id)!;

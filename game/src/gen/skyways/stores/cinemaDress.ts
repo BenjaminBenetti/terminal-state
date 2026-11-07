@@ -166,8 +166,11 @@ function dressLobby(k: CinemaKit, res: CinemaResult): void {
   let nStands = 0;
   for (const [u, v] of stands) if (nearest(k, L, 'storeCinemaPosterStand', u, v, 1.6, L.fr.toFront, {ring: 0.3, variant: (first + 2 + nStands) % CINEMA_POSTER_PIECES.length})) nStands++;
   if (!nStands) k.skipped.push('poster stand');
+  // --- potted plants flanking the auditorium doors (beyond the poster cases), where the floor is free
+  for (const d of audDoors) for (const s of [-1, 1]) k.put(L, 'pottedPlantSmall', r3(d.u + s * (d.half + 1.45)), r3(D - PROP_DEFS.pottedPlantSmall.d / 2 - 0.05), L.fr.toFront);
   // --- a bin by the auditorium doors; the coming-attractions bills on what wall is left
-  if (aud) for (const s of [1, -1]) if (k.put(L, 'bin', r3(du + s * (dHalf + 0.45)), r3(D - PROP_DEFS.bin.d / 2 - 0.03), L.fr.toFront, {zoneOk: true})) break;
+  // (clear of the door's own cells: >= 0.5 m past the opening)
+  if (aud) for (const off of [0.85, 1.35, 1.85]) { let got = false; for (const s of [1, -1]) if ((got = !!k.put(L, 'bin', r3(du + s * (dHalf + off)), r3(D - PROP_DEFS.bin.d / 2 - 0.03), L.fr.toFront, {zoneOk: true}))) break; if (got) break; }
   const bills = DEST_POSTERS_OF.cinema;
   let nb = 0;
   for (const w of ['L', 'R', 'B'] as const) for (let t = 0.6; t < (w === 'B' ? W : D) - 0.6 && nb < 2; t += 0.75) {
@@ -405,7 +408,7 @@ function dressAuditorium(k: CinemaKit, aud: Area, res: CinemaResult): void {
   const du = dr?.u ?? W / 2, dh = dr?.half ?? 1;
   // by the door (the back wall, before the aisles are reserved): a bin, the fire-extinguisher cabinet (low wall cabinet: from the floor,
   // drawn `lift` up like the generated kit's low mounts), the first-aid kit; the usher's cupboard by the screen
-  for (const s of [-1, 1]) if (k.atWall(A, 'B', r3(du + s * (dh + 0.45)), 'bin', {zoneOk: true})) break;
+  for (const off of [0.85, 1.35, 1.85]) { let got = false; for (const s of [-1, 1]) if ((got = !!k.atWall(A, 'B', r3(du + s * (dh + off)), 'bin', {zoneOk: true}))) break; if (got) break; }
   for (const s of [1, -1]) {
     const fe = k.atWall(A, 'B', r3(du + s * (dh + 1.2)), 'fireExtinguisherCabinet', {front: 0.6, zoneOk: true});
     if (fe) { fe.lift = 0.6; fe.h = r3(0.6 + PROP_DEFS.fireExtinguisherCabinet.h); break; }
