@@ -372,6 +372,22 @@ describe('Larch & Loom Home: the Codex print atlas', () => {
     }
   });
 
+  it('the atlas and its provenance are allowlisted at their current bytes; no URLs / local paths in the public provenance; CREDITS credits the prints', () => {
+    const pub = fileURLToPath(new URL('../public/', import.meta.url));
+    const allow = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../../tools/release/public-inputs.json', import.meta.url)), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
+    const PROV = 'assets/derivatives/skyways-store-design-art-20261107.json';
+    for (const rel of [DESIGN_ART.url, PROV]) {
+      const b = fs.readFileSync(path.join(pub, rel));
+      expect(allow.files.find(f => f.path === rel), rel).toEqual({path: rel, bytes: b.length, sha256: crypto.createHash('sha256').update(b).digest('hex')});
+    }
+    expect(fs.readFileSync(path.join(pub, PROV), 'utf8')).not.toMatch(/https?:|Signature=|X-Amz|token=|api[_-]?key|\/home\/|\/workspaces\//i);
+    const credits = fs.readFileSync(path.join(pub, 'assets/CREDITS.md'), 'utf8');
+    const sec = credits.slice(credits.indexOf('<!-- BEGIN skyways-store-design-art-20261107'), credits.indexOf('<!-- END skyways-store-design-art-20261107 -->'));
+    expect(sec).toMatch(/Codex native image_gen/);
+    expect(sec).toContain(`\`${DESIGN_ART.url}\``);
+    expect(sec).toMatch(/no commercial clearance implied/);
+  });
+
   it('the runtime preload hands the renderer the atlas material (a missing atlas: the plain board, never drawn art)', async () => {
     const h = ALL[0];
     const tex = new THREE.Texture();
