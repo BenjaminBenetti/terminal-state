@@ -429,12 +429,15 @@ describe('the prize-car atrium on the real seeds', () => {
       expect(lane.half).toBeCloseTo(SKYWAYS_PRIZE_LANE_HALF, 6);
       for (const p of L.props) if ((p.level ?? 0) === car.level && !p.mounted) expect(boxSegDist(p, lane.ax, lane.az, lane.bx, lane.bz), `seed ${seed}: ${p.kind} in the exit lane`).toBeGreaterThan(lane.half - 1e-6);
       expect(reach(L, car.level, [car.x, car.z], [lane.bx, lane.bz], SKYWAYS_CAR.width / 2 + 0.1), `seed ${seed}: the car's way out`).toBe(true);
+      // the stanchions: a rounded rectangle about 1.2 m off the body (>= 1.2 m: checked above for every prop), on the floor
       expect(pz.stanchions.length, `seed ${seed}`).toBeGreaterThanOrEqual(7);
       for (const s of pz.stanchions) {
-        expect(Math.hypot(s.x - car.x, s.z - car.z)).toBeCloseTo(SKYWAYS_PRIZE_RING, 1);
+        expect(bodyDist(car, s)).toBeLessThanOrEqual(2.4);
         expect(s.y).toBeCloseTo(car.y, 6);
       }
       const ropes = planRopes(L);
+      // (the lane's gap, and at most one post the court left no room for)
+      expect(ropes.length).toBeGreaterThanOrEqual(pz.stanchions.length - 3);
       expect(ropes.length).toBeLessThan(pz.stanchions.length); // the lane's side stays open
       for (const r of ropes) expect(segDist((r.a.x + r.b.x) / 2, (r.a.z + r.b.z) / 2, lane.ax, lane.az, lane.bx, lane.bz)).toBeGreaterThan(lane.half);
       // the prize board behind the car, facing it (the way it looks)

@@ -240,6 +240,8 @@ describe('planted galleries and courts', () => {
           expect(doorNear(x, y), 'door zone').toBe(false);
           for (let s = 1; s <= GARDEN.walk; s++) expect(g.walkable(x + fx * s, y + fz * s), 'walkway').toBe(true);
           for (const r of g.ramps) {
+            // (the shared ramps list holds every storey's flights: only those carved into this storey's grid are its stairs)
+            if (!g.inBounds(r.x, r.y) || g.rampIdx[g.idx(r.x, r.y)] < 0) continue;
             const dx = Math.max(r.x - x, 0, x - (r.x + r.w - 1)), dy = Math.max(r.y - y, 0, y - (r.y + r.h - 1));
             expect(Math.max(dx, dy), 'run mouth').toBeGreaterThan(1);
             if (r.axis === 'x' && y >= r.y - 1 && y <= r.y + r.h) expect(dx, 'run mouth (x)').toBeGreaterThan(GARDEN.mouth);

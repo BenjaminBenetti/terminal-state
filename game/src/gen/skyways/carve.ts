@@ -48,10 +48,10 @@ export type CellRect = Rect;
 export const RUN = transitSpecs(STOREY);
 /** Cells of a stair run (pitch + top landing) for one storey. */
 export const RUN_CELLS = RUN.cells;
-// (layout version 3: a fixed stair lane is 3 m — the prize car's 2.6 m clear width between rails / balustrades; GAME77's were 2.5 m)
+// (layout version 3: a fixed stair lane is 3 m wide between its rails / balustrades; GAME77's were 2.5 m)
 const LANE_W = {escalator: 3, stair: 6} as const;
-/** (layout version 3) Straight run-out (cells) of flat hub floor kept beyond both ends of a public run where the hub allows: 6 m (a
- *  4.8 m prize car lines up with the flight; gen/skyways/index.ts holds it clear of props during the station dress). */
+/** (layout version 3) Straight run-out (cells) of flat hub floor kept beyond both ends of a public run where the hub allows: 6 m of
+ *  open floor in line with the flight (gen/skyways/index.ts holds it clear of props during the station dress). */
 export const RUN_OUT = 12;
 /** Open stair wells' ramp headroom (capped by the well's ceiling: Ramp.capCeil). */
 const RUN_OPEN_HEADROOM = 40;
@@ -1534,7 +1534,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       return best;
     };
     // display zone half size (cells): the stanchion ring (~4.1 m radius) with room for its board beside it; tighter in a smaller court
-    const best = find(10) ?? find(9) ?? find(8);
+    const best = find(10) ?? find(9) ?? find(8) ?? find(7);
     if (!best) return null;
     const {cx, cy, R} = best;
     // nose toward the nearest bridge landing (else along the court's long axis)
