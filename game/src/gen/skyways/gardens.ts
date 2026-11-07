@@ -19,6 +19,7 @@ import type {StationLayout} from '../stationTypes';
 import {keepLandmarkClear} from './destinations/landmarks';
 import {SKYLIGHT, skylightCandidate} from './skylights';
 import {SKYWAYS_LEVEL} from './skywaysTypes';
+import {SKYWAYS_PRIZE_LANE_HALF} from './addonPrize';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const TROUGH: PropKind = 'skyArchGalleryPlanter', BENCH: PropKind = 'skyArchBenchPlanter';
@@ -58,13 +59,14 @@ function keepCirculation(ctx: PlaceCtx, layout: StationLayout): void {
   if (info.addon.level === lv) {
     const [cx, cy] = g.cellOf(info.addon.entry.x, info.addon.entry.z);
     keep(cx - 4, cy - 4, cx + 5, cy + 5);
-    // the add-on's hall / the prize display zone (+ 1 m), and the prize car's way out fore and aft (its body discs + a 3.2 m lane)
+    // the add-on's hall / the prize display zone (+ 1 m), and the prize car's way out (the display's exit lane, + 0.5 m) and behind it
     const h = info.addon.hall;
     keep(Math.floor(h.x0 / CELL) - 2, Math.floor(h.z0 / CELL) - 2, Math.ceil(h.x1 / CELL) + 2, Math.ceil(h.z1 / CELL) + 2);
     const car = info.addon.car;
     if (car && car.level === lv) {
       const fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw);
-      for (let t = -7; t <= 7; t += 0.5) for (let w = -1.8; w <= 1.8; w += 0.5) {
+      const half = SKYWAYS_PRIZE_LANE_HALF + 0.5;
+      for (let t = -7; t <= 9; t += 0.25) for (let w = -half; w <= half; w += 0.25) {
         const [x, y] = g.cellOf(car.x + fx * t - fz * w, car.z + fz * t + fx * w);
         keep(x, y, x + 1, y + 1);
       }
