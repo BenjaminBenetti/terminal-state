@@ -44,7 +44,8 @@ describe('Skyways store: Starfall Arcade (layout version 3)', () => {
       const r = roles(h), s = `seed ${h.seed}`;
       expect(kindsIn(r.counter ?? []).has('shopCounter') || kindsIn(r.counter ?? []).has('glassCounter'), `${s}: counter`).toBe(true);
       expect(r.register?.length, `${s}: register`).toBe(1);
-      expect((r.counterBack ?? []).some(p => AUDIT.get(p.kind)?.cls === 'openable'), `${s}: openable cabinet behind the counter`).toBe(true);
+      // (openable: derived drawers / doors; existing: the supply cabinet's two derived doors — a short counter's back unit)
+      expect((r.counterBack ?? []).some(p => ['openable', 'existing'].includes(AUDIT.get(p.kind)?.cls ?? '')), `${s}: openable cabinet behind the counter`).toBe(true);
       expect(count(h, 'token'), `${s}: token changer`).toBeGreaterThanOrEqual(1);
       expect(count(h, 'claw'), `${s}: claw cranes`).toBeGreaterThanOrEqual(1);
       expect(count(h, 'cabinet', 'cabinetRow'), `${s}: arcade cabinets`).toBeGreaterThanOrEqual(5);
@@ -202,8 +203,12 @@ describe('Skyways store: Starfall Arcade (layout version 3)', () => {
       expect(r && r.cls === 'dynamic' ? r.mass : 0, k).toBeGreaterThan(1);
       expect(r && r.cls === 'dynamic' ? r.mass : 99, k).toBeLessThan(30);
     }
-    for (const h of HITS) for (const p of storeProps(h.layout, h.anchor)) {
-      expect(PROP_PHYSICS_AUDIT[p.kind], `${p.kind} classified`).toBeTruthy();
+    for (const h of HITS) {
+      for (const p of storeProps(h.layout, h.anchor)) expect(PROP_PHYSICS_AUDIT[p.kind], `${p.kind} classified`).toBeTruthy();
+    }
+    // the arcade's own on-top decor (register, soldering station, test terminal, toolbox). (The station dresser's office chairs also
+    // carry a `host` — the desk they are tucked at, standing on the floor beside it — so the back office's pieces are not on-top decor.)
+    for (const h of HITS) for (const p of storeProps(h.layout, h.anchor).filter(q => ARCADE_LAST.get(h.layout)!.props.some(m => sig(m) === sig(q)))) {
       if (p.host === undefined) continue;
       const host = h.layout.props[p.host];
       expect(host, `seed ${h.seed}: ${p.kind} host`).toBeTruthy();
