@@ -417,6 +417,42 @@ describe('train prop cargo: a whole journey, unload, revisit, return', () => {
   }, 240000);
 });
 
+describe('train prop cargo: the Office\'s furniture rides to the Subway', () => {
+  it('an office chair-class prop and the office\'s archive boxes (a spill holder) ride Office -> Subway and arrive loose, drawn, empty', async () => {
+    const B = OFF(), c = rig(B, KB), {h, ride, props} = c;
+    let w = enter(c, B, KB);
+    const I = SPEC.interior, used = new Set<PropPlacement>();
+    const chair = pick(w, ['officeChair', 'executiveChair', 'loungeArmchair', 'beanBag', 'giantTeddy', 'pottedPlantSmall', 'ottoman'], used);
+    const box = pick(w, ['archiveBoxes', 'storageTote', 'cardboardBoxFlaps', 'bin', 'wheelieBin'], used);
+    pushIn(c, w, chair, I.x0 + 1.5, 0.2, 2.4);
+    pushIn(c, w, box, I.x1 - 1.6, -0.3, 0.1);
+    expect(w.cm.holderFor(box.p)!.state.lots).toEqual([]); // spilled where it stood
+    const ids = [chair, box].map(t => `${sectionId(KB)}#${t.i}`).sort();
+    void ride.depart();
+    run(h, 80, () => ride.phase === 'transit');
+    expect(props.riding.map(r => r.rec.id).sort()).toEqual(ids);
+    expect(props.riding.every(r => (r.obj?.children.length ?? 0) > 0)).toBe(true);
+    leave(c);
+    expect(c.h.run.station(KB).gone.map(g => g.i).sort((a, b) => a - b)).toEqual([chair.i, box.i].sort((a, b) => a - b));
+    const A = SUB();
+    w = enter(c, A, KA);
+    void ride.arrive();
+    run(h, 150, () => !ride.riding);
+    await Promise.resolve();
+    run(h, 0.1);
+    for (const [t, id] of [[chair, `${sectionId(KB)}#${chair.i}`], [box, `${sectionId(KB)}#${box.i}`]] as const) {
+      const q = A.props.find(x => x.cargo === id)!;
+      expect([q.kind, q.variant]).toEqual([t.p.kind, t.p.variant]);
+      expect(looseOf(w, q), `${q.kind} loose in the Subway's car`).toBeTruthy();
+      expect(props.ownsLoose(looseOf(w, q)!)).toBe(true);
+      expect(w.pd.states.get(q)?.parts?.some(pt => !!pt.mesh.parent)).toBe(true);
+    }
+    const holder = w.cm.holderFor(A.props.find(x => x.cargo === `${sectionId(KB)}#${box.i}`)!)!;
+    expect(holder.state.lots).toEqual([]);
+    expect(census(c)).toEqual(ids);
+  }, 180000);
+});
+
 describe('train prop cargo: saves, refused and failed-back departures', () => {
   it('Continue: the participant\'s props load into the next parked car exactly once (idempotent); New Game clears them', () => {
     const c = rig(SUB());

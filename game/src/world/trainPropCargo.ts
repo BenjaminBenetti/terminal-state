@@ -150,11 +150,13 @@ export class TrainPropCargo {
    * The live world's bookkeeping. `goneNow`: generated props withdrawn into the riding train (with their riders); a generated prop lying in
    * the parked car is gone too, decided by its position at flush time (pushed back out, it is the station's again).
    */
-  private here: {key: SectionKey; layout: StationLayout; gone: GonePropJSON[]; appended: Appended[]; goneNow: Map<PropPlacement, GonePropJSON>} | null = null;
+  private here: {key: SectionKey; layout: StationLayout; gone: GonePropJSON[]; appended: Appended[]; goneNow: Map<PropPlacement, GonePropJSON>; deferred: CargoPropJSON[]} | null = null;
   /** Each layout's generated indices (identity) and parked car (computed before anything is appended). */
   private readonly genIndex = new WeakMap<StationLayout, Map<PropPlacement, number>>();
   private readonly trainAt = new WeakMap<StationLayout, TrainPlacement | null>();
   private readonly appendedOf = new WeakMap<StationLayout, Appended[]>();
+  /** Station records a build could not draw (a model fetch failed): kept in the station's lane as they were. */
+  private readonly deferredOf = new WeakMap<StationLayout, CargoPropJSON[]>();
   /** Props of a decoded save not yet installed (Game.decodeSave): their models are fetched by the prepare. */
   private readonly prepared = new WeakMap<object, CargoPropJSON[]>();
   /** QA / tests. */
@@ -335,18 +337,23 @@ export class TrainPropCargo {
       for (const [q, i] of gen) byIndex.set(i, q);
       for (const g of st.gone) { const q = byIndex.get(g.i); if (q && q.kind === g.kind) q.cargoGone = true; }
     }
-    const out: Appended[] = [], ids = new Set<string>(), tp = this.trainAt.get(layout) ?? null;
+    const out: Appended[] = [], ids = new Set<string>(), tp = this.trainAt.get(layout) ?? null, deferred: CargoPropJSON[] = [];
     const add = (rec: CargoPropJSON, owner: 'train' | 'station', m: THREE.Matrix4, level: number) => {
       if (ids.has(rec.id) || !Object.prototype.hasOwnProperty.call(PROP_DEFS, rec.kind)) return;
       ids.add(rec.id);
       const a = this.placementsOf(layout, rec, owner, m, level);
-      if (phase === 'build' && this.host.carriedModelsReady && !this.host.carriedModelsReady(layout, [a.prop, ...a.riders])) { this.counts.deferred++; return; }
+      if (phase === 'build' && this.host.carriedModelsReady && !this.host.carriedModelsReady(layout, [a.prop, ...a.riders])) {
+        this.counts.deferred++;
+        if (owner === 'station') deferred.push(structuredClone(rec)); // (the train's stays pending)
+        return;
+      }
       layout.props.push(a.prop, ...a.riders);
       out.push(a);
     };
     if (tp) for (const rec of train) add(rec, 'train', this.trainMatrix(tp, rec), tp.level);
     for (const rec of here) add(rec, 'station', new THREE.Matrix4().compose(V.set(rec.x, rec.y, rec.z), Q.set(rec.q[0], rec.q[1], rec.q[2], rec.q[3]).normalize(), ONE), rec.level ?? 0);
     this.appendedOf.set(layout, out);
+    this.deferredOf.set(layout, deferred);
     if (phase === 'build') this.counts.appended += out.length;
   }
 
@@ -420,7 +427,8 @@ export class TrainPropCargo {
     this.gen++;
     const key = {...h.run.current};
     const st = stationPropsOf(h.run.laneStore(STATION_PROPS_LANE, key));
-    this.here = {key, layout, gone: st.gone, appended: [], goneNow: new Map()};
+    this.here = {key, layout, gone: st.gone, appended: [], goneNow: new Map(), deferred: this.deferredOf.get(layout) ?? []};
+    this.prepared.delete(h.run); // (a decoded save's props: installed by now)
     if (!this.genIndex.has(layout)) { // (a world built without the layout hook: its generated props keep their identities, nothing carried)
       const m = new Map<PropPlacement, number>();
       layout.props.forEach((q, i) => { if (!q.cargo) m.set(q, i); });
@@ -501,6 +509,7 @@ export class TrainPropCargo {
       if (lp.prop.cargo && !lp.prop.cargo.includes('/')) here.push(this.recordOf(lp, lp.prop.cargo, null));
     }
     // carried props that never went loose here (no render / model): kept where they were recorded
+    for (const r of w.deferred) if (!here.some(x => x.id === r.id)) here.push(structuredClone(r));
     for (const a of w.appended) if (a.owner === 'station' && !lpOf(this.host, a.prop) && !this.riding.some(r => r.rec.id === a.rec.id) && !here.some(r => r.id === a.rec.id)) here.push(structuredClone(a.rec));
     const rec: StationPropsJSON = {v: 1, gone: [...gone.values()].sort((a, b) => a.i - b.i).slice(0, CARGO.gone), here: here.sort((a, b) => (a.id < b.id ? -1 : 1)).slice(0, CARGO.stationProps)};
     this.host.run.setLaneStore(STATION_PROPS_LANE, rec.gone.length || rec.here.length ? rec : undefined, w.key);
