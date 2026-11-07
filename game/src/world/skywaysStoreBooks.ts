@@ -12,7 +12,7 @@
 
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
-import {PROP_DEFS, type PropPlacement} from '../gen/props';
+import {PROP_DEFS, levelArtWanted, type PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/stationTypes';
 import {BOOKS_ART, type BooksArtKey} from '../gen/skyways/stores/booksArt.generated';
 import {BOOKS_RUG_PIECES, BOOKS_RUG_SIZE, BOOKS_SIGN_BOARD, BOOKS_SIGN_PIECES} from '../gen/skyways/stores/kinds/books';
@@ -151,5 +151,5 @@ export function installSkywaysStoreBooks(host: StoreBooksHost): void {
     }
     setStoreBooksArtMaterial(m);
   };
-  host.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([preload(layout), new Promise<void>(r => setTimeout(r, STORE_BOOKS_ART_WAIT_MS))]) : Promise.resolve()));
+  host.sectionPreloads?.push(layout => (levelArtWanted(layout, !!layout.skyways) ? Promise.race([preload(layout), new Promise<void>(r => setTimeout(r, STORE_BOOKS_ART_WAIT_MS))]) : Promise.resolve()));
 }

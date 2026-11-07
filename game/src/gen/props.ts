@@ -348,6 +348,23 @@ export interface PropPlacement {
    * statics and loose-item queries keep the box. The mall's round atrium columns (gen/mall/columns.ts).
    */
   round?: boolean;
+  /**
+   * Task studio-beta-train-all-cargo-20261107-184244-01 (world/trainPropCargo.ts): a CARRIED prop appended to this layout (the train's
+   * cargo in its parked car, or one left lying in this station) — its canonical identity ('<section id>#<layout index>' where it was
+   * generated). Absent on every generated placement.
+   */
+  cargo?: string;
+  /** Task train-all-cargo: a generated placement this station lost to the train (hidden at build; never respawned, roped or stocked). */
+  cargoGone?: boolean;
+}
+
+/**
+ * Task studio-beta-train-all-cargo-20261107-184244-01: the ONE gate for a level's own art / resources (a section preload keyed on the
+ * kinds a layout holds): wanted when the layout is that level (`own`) or carries props from elsewhere (placement.cargo: the train's, or
+ * left in this station) — a carried prop's look follows it into any level. Every level-gated preload uses this, never its own rule.
+ */
+export function levelArtWanted(layout: {props: readonly PropPlacement[]}, own: boolean): boolean {
+  return own || layout.props.some(p => p.cargo !== undefined);
 }
 
 export function footprint(kind: PropKind, rot: number): {hx: number; hz: number} {

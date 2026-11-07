@@ -210,6 +210,20 @@ interface Ent {
   dragOff?: number;
 }
 
+/**
+ * Task studio-beta-train-all-cargo-20261107-184244-01 (world/trainPropCargo.ts): a loose prop as the train's prop cargo sees it — its
+ * object frame (origin bottom centre) as drawn, its collider (object-frame centre / half extents) and the decor riding it (each rider's
+ * object frame in the host's, fixed when the host first went loose).
+ */
+export interface LooseProp {
+  prop: PropPlacement;
+  index: number;
+  matrix: THREE.Matrix4;
+  center: THREE.Vector3;
+  half: THREE.Vector3;
+  riders: {prop: PropPlacement; index: number; rel: THREE.Matrix4}[];
+}
+
 export interface DynHit { t: number; point: THREE.Vector3; normal: THREE.Vector3; pickup?: PickupLike; prop?: PropPlacement; propIndex?: number; ent?: Ent }
 
 const tm = new THREE.Matrix4(), tm2 = new THREE.Matrix4(), tv = new THREE.Vector3(), tq = new THREE.Quaternion(), ts = new THREE.Vector3(1, 1, 1);
@@ -262,6 +276,10 @@ export class DynamicItems {
    */
   holderLoose: ((prop: PropPlacement) => THREE.Object3D[]) | null = null;
   private readonly lastPos = new WeakMap<object, {x: number; z: number}>();
+  /** Task train-all-cargo: a prop's placement height before it went loose (h is zeroed then: no AABB) — loose props and their riders. */
+  private readonly heights = new WeakMap<PropPlacement, number>();
+  /** Task train-all-cargo: a rider's object frame in its host's (fixed when the host first went loose). */
+  private readonly riderRel = new WeakMap<PropPlacement, THREE.Matrix4>();
   /**
    * Lane PHYS: contact wake + office-world interaction rules. Task office-props-physics-scale-20261030: null = automatic — contact
    * wake in EVERY world (contactOn), the office rules for uncalibrated kinds (prop knock-on, shove gain / height, no leg shove of
@@ -696,6 +714,7 @@ export class DynamicItems {
     for (const r of e.riders ?? []) {
       const meshes = this.detacher?.detachForPhysics(r.prop, r.index) ?? null;
       if (meshes) out.push(...meshes);
+      if (!this.heights.has(r.prop)) this.heights.set(r.prop, r.prop.h); // task train-all-cargo
       r.prop.h = 0;
       r.prop.blocksSight = false;
     }
@@ -731,11 +750,99 @@ export class DynamicItems {
     return [...this.ents.values()].filter(e => e.prop).map(e => e.prop!);
   }
 
-  private entForProp(prop: PropPlacement, index: number): Ent | null {
+  /** Task train-all-cargo: a prop's placement height before it went loose (its h while it never did). */
+  restHeight(prop: PropPlacement): number {
+    return this.heights.get(prop) ?? prop.h;
+  }
+
+  /** Task train-all-cargo: every loose prop with a body, as drawn now (world/trainPropCargo.ts ownership / capture). */
+  loose(): LooseProp[] {
+    const out: LooseProp[] = [];
+    for (const e of this.ents.values()) {
+      if (!e.prop || !e.body) continue;
+      if (e.body.type === CANNON.Body.DYNAMIC) this.syncEnt(e, false);
+      out.push({prop: e.prop, index: e.propIndex ?? 0, matrix: this.objMatrix(e, new THREE.Matrix4()), center: e.center.clone(), half: e.half.clone(),
+        riders: (e.riders ?? []).map(r => ({prop: r.prop, index: r.index, rel: (this.riderRel.get(r.prop) ?? new THREE.Matrix4()).clone()}))});
+    }
+    return out;
+  }
+
+  /**
+   * Task train-all-cargo: make `prop` loose with its body at the object matrix `at` — where its render is drawn now (a fresh placement:
+   * its placement pose; a withdrawn prop: where it was withdrawn) — then move it to `target` (its exact carried pose: any yaw / tilt).
+   * The floor / nothing-on-top rules are not asked (the car's floor, a carried pose; carried props are adopted top-down); the kind must be
+   * dynamic. A resting
+   * static body, as any loose prop at rest. False: already loose, not a dynamic kind, no render to drive or no physics world.
+   */
+  adoptLoose(prop: PropPlacement, index: number, at: THREE.Matrix4, target: THREE.Matrix4 = at): boolean {
+    if (this.ents.has(prop)) return false;
+    const e = this.entForProp(prop, index, at);
+    if (!e?.body) return false;
+    this.place(e, target);
+    return true;
+  }
+
+  /**
+   * Task studio-beta-train-cargo-overflow-20261107-210410-01: hand a RESTING loose prop's own meshes back to its shared instances now, at
+   * its pose (the background reclaim's step, for this prop whatever stands beside it — the parked train's car is a dynamic volume, where
+   * the reclaim never looks): it stays loose; waking it detaches it again. So any number of carried props can rest in the car without
+   * holding the damage system's detach slots. False: not loose / moving / nothing to hand back / it cannot (a broken body).
+   */
+  handBack(prop: PropPlacement): boolean {
+    const e = this.ents.get(prop), d = this.detacher;
+    if (!e?.body || !e.parts || !e.prop || e.body.type === CANNON.Body.DYNAMIC || !d?.reattach) return false;
+    if (d.reattach(e.prop, true) !== 'ok') return false;
+    for (const rd of e.riders ?? []) d.reattach(rd.prop, true);
+    e.parts = undefined;
+    this.reclaimQ.delete(e);
+    this.counts.reclaimed++;
+    return true;
+  }
+
+  /** Task train-all-cargo: a resting loose prop's body (and its drawn parts) to the object matrix `m`, at rest. */
+  private place(e: Ent, m: THREE.Matrix4): void {
+    const b = e.body!;
+    tm.copy(m).multiply(tm2.makeTranslation(e.center.x, e.center.y, e.center.z)).decompose(tv, tq, ts);
+    b.position.set(tv.x, tv.y, tv.z);
+    b.quaternion.set(tq.x, tq.y, tq.z, tq.w);
+    b.previousPosition.copy(b.position); b.interpolatedPosition.copy(b.position);
+    b.previousQuaternion.copy(b.quaternion); b.interpolatedQuaternion.copy(b.quaternion);
+    b.velocity.setZero(); b.angularVelocity.setZero();
+    b.aabbNeedsUpdate = true;
+    this.syncEnt(e, false);
+    if (b.type !== CANNON.Body.DYNAMIC) this.toRest(e);
+    this.host.propsChanged?.(e.prop!.x, e.prop!.z);
+  }
+
+  /**
+   * Task train-all-cargo: take a loose prop out of the simulation for good (its body, its entity): drawn by its own meshes first (a
+   * reclaimed one is detached again at its pose; with `detach: false` it is left to its shared instances, parts []). Returns its object matrix as drawn and the objects drawing it (detached meshes, a
+   * holder's own root, its riders' meshes; world-matrix driven) — the caller hides / re-shows them. Null: not loose / no render.
+   */
+  withdraw(prop: PropPlacement, o: {detach?: boolean} = {}): {matrix: THREE.Matrix4; parts: THREE.Object3D[]} | null {
+    const e = this.ents.get(prop);
+    if (!e?.body || !e.prop) return null;
+    // (task cargo-overflow: `detach: false` — a prop drawn by its shared instances again (reclaimed) stays so: no render slot needed, parts [])
+    if (!e.parts && o.detach !== false && !this.redetach(e)) return null;
+    if (e.body.type === CANNON.Body.DYNAMIC) this.syncEnt(e, false);
+    const matrix = this.objMatrix(e, new THREE.Matrix4()), parts = (e.parts ?? []).map(p => p.mesh);
+    if (e.dragging) this.dragStop(e);
+    const was = this.active.has(e);
+    this.unrest(e);
+    this.reclaimQ.delete(e);
+    this.forget(prop, e);
+    if (was) this.host.bodiesChanged();
+    this.host.propsChanged?.(prop.x, prop.z);
+    return {matrix, parts};
+  }
+
+  private entForProp(prop: PropPlacement, index: number, at?: THREE.Matrix4): Ent | null {
     let e = this.ents.get(prop);
     if (e) return e;
     const ph = propPhysics(prop.kind);
-    if (!this.isDynamicProp(prop) || prop.h <= 0.02) return null;
+    // (task train-all-cargo: `at` = a carried prop adopted where it is drawn — the kind rule only, see adoptLoose: its upright placement box
+    // says nothing about its carried pose (a tall one lying on its side under the car's roof), and carried props go loose top-down)
+    if (at ? !dynamicKind(prop.kind) || prop.h <= 0.02 : !this.isDynamicProp(prop) || prop.h <= 0.02) return null;
     let meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
     // task office-props-physics-scale-20261030 (lane PHYS): the detach budget is full — hand a resting prop's render back first
     if ((!meshes || !meshes.length) && this.reclaim(1) > 0) meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
@@ -747,16 +854,21 @@ export class DynamicItems {
     const shape = ph.shape ?? 'box';
     const half = shape === 'cylinder' ? new THREE.Vector3(Math.min(w, d) / 2, h / 2, Math.min(w, d) / 2) : new THREE.Vector3(w / 2, h / 2, d / 2);
     const center = new THREE.Vector3(0, h / 2, 0);
-    if (shape === 'box') this.clearStart(prop, center, half);
+    if (shape === 'box' && !at) this.clearStart(prop, center, half);
     e = {kind: 'prop', serial: 0, body: null, pending: null, center, half, shape, mass: ph.mass, mat: ph.mat ?? 'metal', fam: propImpactFamily(prop.kind),
       t: 0, sleepT: 0, soundT: 0, shots: 0, prop, propIndex: index, contact: !!ph.contact, restKey: null, rad: half.length()};
     this.maxRad = Math.max(this.maxRad, e.rad!);
-    const body = this.host.world ? this.makeBody(e, this.objMatrix(e, new THREE.Matrix4())) : null;
+    const objM = at ? at.clone() : this.objMatrix(e, new THREE.Matrix4());
+    const body = this.host.world ? this.makeBody(e, objM) : null;
     if (!body) return null;
     const bm = new THREE.Matrix4().compose(tv.set(body.position.x, body.position.y, body.position.z), tq.set(body.quaternion.x, body.quaternion.y, body.quaternion.z, body.quaternion.w), ts.set(1, 1, 1));
     const inv = bm.clone().invert();
     const carried = this.holderLoose?.(prop) ?? []; // iteration 08 (Lane I): spill + carry the holder's own lid / liner
     e.riders = this.ridersOf(index); // Task mall-playtest-revision-20261031 (lane SHOPS, U05): garments hung on it ride it
+    // task train-all-cargo: each rider's frame in the host's, while both still stand at their placements (kept for good)
+    const invObj = objM.clone().invert();
+    for (const r of e.riders) if (!this.riderRel.has(r.prop)) this.riderRel.set(r.prop, invObj.clone().multiply(new THREE.Matrix4().compose(tv.set(r.prop.x, r.prop.y, r.prop.z), tq.setFromAxisAngle(tv2.set(0, 1, 0), r.prop.rot), ts.set(1, 1, 1))));
+    if (!this.heights.has(prop)) this.heights.set(prop, prop.h); // task train-all-cargo: its height before it is zeroed below
     e.parts = [...meshes, ...carried, ...this.riderMeshes(e)].map(mesh => ({mesh, rel: inv.clone().multiply(mesh.matrix)}));
     this.markUnder(e, body); // lane PHYS: its spilled lots (and anything on the floor beneath it) lie inside its collider
     // loose from now on: no longer an AABB obstacle for walking / hitscan / statics (hit-tested here)

@@ -1021,6 +1021,44 @@ export class ContainerManager {
     return this.all.find(h => h.prop === prop) ?? null;
   }
 
+  /**
+   * Task studio-beta-train-all-cargo-20261107-184244-01 (world/trainPropCargo.ts): a holder with no lots at all — a CARRIED holder's copy
+   * (it spilled its finite lots when it was knocked loose, where it stood; they travel as item cargo) or one its station lost to the
+   * train. Never invented loot; the display follows next frame. False: not a holder.
+   */
+  emptyHolder(prop: PropPlacement): boolean {
+    const h = this.holderFor(prop);
+    if (!h) return false;
+    h.state.lots = [];
+    h.lotMats.clear();
+    h.lotBoxes.clear();
+    if (this.highlighted === h) this.setHighlight(null);
+    this.highlightLot = -1;
+    this.dirty = true;
+    return true;
+  }
+
+  /** Task cargo-overflow: the holder's own world-matrix-driven root (a loose spill holder's lid / liner), or null. */
+  ownRoot(prop: PropPlacement): THREE.Object3D | null {
+    const h = this.holderFor(prop);
+    return h?.open?.root ?? h?.root ?? null;
+  }
+
+  /**
+   * Task train-all-cargo: a holder its station lost to the train (a revisit): emptied, never an [E] target again (loose: the hit test skips
+   * it), its own meshes out of the scene. Its shared body instances are hidden by the caller (the damage render index).
+   */
+  removeHolder(prop: PropPlacement): boolean {
+    const h = this.holderFor(prop);
+    if (!h || !this.emptyHolder(prop)) return false;
+    if (h.open) {
+      this.openables.takeover(h);
+      h.open.loose = h.open.pinned = true;
+      h.open.root?.removeFromParent();
+    } else h.root?.removeFromParent();
+    return true;
+  }
+
   /** Meshes drawn for this holder alone (doors / lid / interior), for per-instance damage. */
   ownMeshes(prop: PropPlacement): THREE.Mesh[] {
     const h = this.holderFor(prop);

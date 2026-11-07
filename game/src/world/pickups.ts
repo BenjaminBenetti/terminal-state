@@ -374,7 +374,8 @@ export class PickupManager {
     this.group.name = 'pickups';
   }
 
-  private meshFor(itemId: string): THREE.Object3D {
+  /** The object an item is drawn with (a gun on its side, else the shared item template's copy). Task train-loose-cargo: also its riding cargo. */
+  meshFor(itemId: string): THREE.Object3D {
     const def = itemDef(itemId);
     if (def.kind === 'weapon' && this.guns[itemId]) {
       // Lay the gun on its side: muzzle along -X, detailed side facing up.
