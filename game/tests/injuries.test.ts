@@ -3,7 +3,7 @@
 // exactly-once consumption, bandages / med kits never cure), snapshot / restore, and the loot frequency of the treatments.
 import {describe, expect, it} from 'vitest';
 import {mulberry32} from '../src/core/rng';
-import {GRAVITY, JUMP_HEIGHT} from '../src/player/player';
+import {GRAVITY, JUMP_HEIGHT, STAMINA_PCT_PER_UNIT} from '../src/player/player';
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource} from '../src/player/modifiers';
 import {meleeHitLocation, type ResolvedHit} from '../src/player/hits';
 import {
@@ -196,7 +196,7 @@ describe('aim sway', () => {
     // injured leg: sprints drain extra stamina
     host.player.sprinting = true; host.player.stamina = 100;
     frame(1, 0.1);
-    expect(host.player.stamina).toBeCloseTo(100 - INJURY.legSprintDrain, 6);
+    expect(host.player.stamina).toBeCloseTo(100 - INJURY.legSprintDrain * STAMINA_PCT_PER_UNIT, 6); // (units of the reserve: task studio-alpha-survival-controls-20261107-060450-01)
     host.player.sprinting = false;
     // a dead player rolls nothing
     sys.reset();

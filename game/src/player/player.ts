@@ -29,6 +29,19 @@ export const CROUCH_EYE = 1.02;
 /** Crown of the head above the eyes; used for ceiling clearance. */
 export const HEAD_ABOVE_EYE = 0.12;
 export const CROUCH_SPEED_MULT = 0.5;
+/**
+ * Task studio-alpha-survival-controls-20261107-060450-01 (user: stamina +25 %): the sprint RESERVE in stamina units (formerly 100). The
+ * meter stays a 0-100 % fill (`stamina`: HUD bar, saves, breathing cue) of this reserve; sprinting still burns STAMINA_SPRINT_DRAIN
+ * units / s, recovers STAMINA_REGEN units / s after STAMINA_REGEN_DELAY s and needs STAMINA_SPRINT_START units to start, as before —
+ * so a full sprint lasts 125 / 24 = 5.2 s (was 4.2 s) and an empty reserve refills in 125 / 18 = 6.9 s (a bigger tank, same flow).
+ */
+export const STAMINA_CAPACITY = 125;
+export const STAMINA_SPRINT_DRAIN = 24;
+export const STAMINA_REGEN = 18;
+export const STAMINA_REGEN_DELAY = 0.9;
+export const STAMINA_SPRINT_START = 15;
+/** Stamina units -> meter percent (100 / STAMINA_CAPACITY). */
+export const STAMINA_PCT_PER_UNIT = 100 / STAMINA_CAPACITY;
 export const GRAVITY = 17;
 export const JUMP_HEIGHT = 0.5;
 export const JUMP_SPEED = Math.sqrt(2 * GRAVITY * JUMP_HEIGHT);
@@ -268,14 +281,15 @@ export class Player {
     // --- sprint / horizontal movement ------------------------------------------------------------
     const wantsSprint = shiftDown && fz < 0 && opts.canSprint && !opts.aiming && !this.crouched;
     this.sprintCd = Math.max(0, this.sprintCd - dt);
-    if (wantsSprint && this.stamina > (this.sprinting ? 0 : 15)) {
+    // (the meter is a percent of STAMINA_CAPACITY units: the unit rates scale by STAMINA_PCT_PER_UNIT)
+    if (wantsSprint && this.stamina > (this.sprinting ? 0 : STAMINA_SPRINT_START * STAMINA_PCT_PER_UNIT)) {
       this.sprinting = true;
-      this.stamina = Math.max(0, this.stamina - 24 * dt);
-      this.sprintCd = 0.9;
+      this.stamina = Math.max(0, this.stamina - STAMINA_SPRINT_DRAIN * STAMINA_PCT_PER_UNIT * dt);
+      this.sprintCd = STAMINA_REGEN_DELAY;
       if (this.stamina <= 0) this.sprinting = false;
     } else {
       this.sprinting = false;
-      if (this.sprintCd <= 0) this.stamina = Math.min(100, this.stamina + 18 * dt);
+      if (this.sprintCd <= 0) this.stamina = Math.min(100, this.stamina + STAMINA_REGEN * STAMINA_PCT_PER_UNIT * dt);
     }
     const max = (this.sprinting ? SPRINT_SPEED : opts.aiming ? AIM_SPEED : WALK_SPEED) * (this.crouched ? CROUCH_SPEED_MULT : 1) * opts.speedMult;
     // camera-relative: forward is -Z rotated by yaw

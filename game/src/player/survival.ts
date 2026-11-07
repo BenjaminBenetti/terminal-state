@@ -1,23 +1,36 @@
 // Hunger and thirst, shown on the HUD as FOOD and WATER fullness (0-100, higher = better).
-// Pure logic, no DOM/three.js. Both start at 80 on spawn, new station and restart. The drain is
-// deliberately slow and long-term: about 8 food and 12 water over a 15-minute session, so a short
-// slice never forces eating but each item visibly moves its bar. It only ticks from
-// Game.update(), which runs only in the 'playing' state: pause, inventory, menus, death and the
-// win screen freeze it. At 0 the player slowly loses health (per depleted stat).
+// Pure logic, no DOM/three.js. Both start at 80 on spawn, new station and restart. It only ticks from
+// Game.update(), which runs only in the 'playing' state: pause, inventory, menus, map, death and the
+// win screen freeze it (no catch-up of time spent away).
+//
+// Task studio-alpha-survival-controls-20261107-060450-01 (user: hunger / thirst "8x" faster, about 20 active minutes from full to
+// empty): the drain is 8x the former rates (food 1 point / 110 s -> / 13.75 s: 22.9 min full -> 0; water 1 / 75 s -> / 9.375 s:
+// 15.6 min; from the 80 at spawn 18.3 / 12.5 min — water still runs out first, as before). At 0 (EITHER stat) the player loses
+// EMPTY_MAX_HP_PER_MIN of MAX health per active minute, smoothly — one shared rate, not per stat — and the existing pain grunt plays
+// on becoming empty and then at most once a minute while empty (`pain` in the tick; never while frozen).
 
 export const SURVIVAL_START = 80;
 export const SURVIVAL_MAX = 100;
-/** Food points lost per second of play (1 point every 110 s). */
-export const HUNGER_DRAIN = 1 / 110;
-/** Water points lost per second of play (1 point every 75 s). */
-export const THIRST_DRAIN = 1 / 75;
-/** Health lost per second for EACH stat at 0 (1 HP every 6 s; both empty = 1 HP every 3 s). */
-export const EMPTY_HP_DRAIN = 1 / 6;
+/** The drain multiplier on the former rates (task studio-alpha-survival-controls-20261107-060450-01). */
+export const SURVIVAL_RATE = 8;
+/** Food points lost per second of play (8 x 1 point every 110 s: 100 -> 0 in 22.9 min). */
+export const HUNGER_DRAIN = SURVIVAL_RATE / 110;
+/** Water points lost per second of play (8 x 1 point every 75 s: 100 -> 0 in 15.6 min). */
+export const THIRST_DRAIN = SURVIVAL_RATE / 75;
+/** Fraction of MAX health lost per active minute while food OR water is at 0 (one shared rate: both empty is not double). */
+export const EMPTY_MAX_HP_PER_MIN = 0.05;
+/** Seconds of active play between pain grunts while empty (the first plays on becoming empty). */
+export const EMPTY_PAIN_EVERY_S = 60;
 export const LOW = 25;
 export const CRITICAL = 10;
 
 export interface SurvivalWarning { text: string; warn: boolean }
-export interface SurvivalTick { hpLoss: number; warnings: SurvivalWarning[] }
+export interface SurvivalTick {
+  hpLoss: number;
+  warnings: SurvivalWarning[];
+  /** Play the pain cue now (on becoming empty, then once per EMPTY_PAIN_EVERY_S of active play while empty). */
+  pain: boolean;
+}
 export interface Consumable { hunger?: number; thirst?: number; heal?: number; verb?: string }
 
 type Stat = 'hunger' | 'thirst';
@@ -40,23 +53,36 @@ export class Survival {
   time = 0;
   /** Highest warning level announced per stat (0 none, 1 low, 2 critical, 3 empty). */
   private level: Record<Stat, number> = {hunger: 0, thirst: 0};
+  /** Active seconds since the last pain grunt while empty; null = not empty (the next empty frame grunts at once). */
+  private painT: number | null = null;
 
   reset(): void {
     this.hunger = SURVIVAL_START;
     this.thirst = SURVIVAL_START;
     this.time = 0;
     this.level = {hunger: 0, thirst: 0};
+    this.painT = null;
   }
 
-  /** Advance by dt seconds of PLAY time. Returns health to remove and any threshold warnings. */
-  update(dt: number): SurvivalTick {
-    if (!(dt > 0)) return {hpLoss: 0, warnings: []};
+  /** Whether food or water is at 0. */
+  get empty(): boolean { return this.hunger <= 0 || this.thirst <= 0; }
+
+  /**
+   * Advance by dt seconds of PLAY time. Returns health to remove (EMPTY_MAX_HP_PER_MIN of `maxHp` per active minute while either stat
+   * was empty through the step), any threshold warnings and whether to play the pain cue.
+   */
+  update(dt: number, maxHp = 100): SurvivalTick {
+    if (!(dt > 0)) return {hpLoss: 0, warnings: [], pain: false};
     this.time += dt;
-    const emptyBefore = (this.hunger <= 0 ? 1 : 0) + (this.thirst <= 0 ? 1 : 0);
+    const emptyBefore = this.empty;
     this.hunger = clamp(this.hunger - HUNGER_DRAIN * dt);
     this.thirst = clamp(this.thirst - THIRST_DRAIN * dt);
-    const emptyAfter = (this.hunger <= 0 ? 1 : 0) + (this.thirst <= 0 ? 1 : 0);
-    const hpLoss = Math.min(emptyBefore, emptyAfter) * EMPTY_HP_DRAIN * dt;
+    const emptyAfter = this.empty;
+    const hpLoss = emptyBefore && emptyAfter ? maxHp * EMPTY_MAX_HP_PER_MIN / 60 * dt : 0;
+    let pain = false;
+    if (!emptyAfter) this.painT = null;
+    else if (this.painT === null) { this.painT = 0; pain = true; } // just became empty: one grunt now
+    else if ((this.painT += dt) >= EMPTY_PAIN_EVERY_S) { this.painT = 0; pain = true; } // then once a minute (never a burst after a long step)
     const warnings: SurvivalWarning[] = [];
     for (const s of ['hunger', 'thirst'] as Stat[]) {
       const v = this[s];
@@ -67,7 +93,7 @@ export class Survival {
       if (lvl > this.level[s]) this.level[s] = lvl;
       else if (lvl < this.level[s] && v > rearm) this.level[s] = lvl;
     }
-    return {hpLoss, warnings};
+    return {hpLoss, warnings, pain};
   }
 
   /** Applies an item's food/water effect (clamped). Returns the deltas actually applied. */

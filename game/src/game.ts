@@ -68,7 +68,7 @@ import {PlayerLight, applyBatteryItem} from './player/flashlight'; // Iteration 
 import {FlareSystem, throwOneFlare, type FlareSmokeHost} from './weapons/throwables'; // Iteration 12 (LIGHT): thrown road flares (grenade slot)
 import {FlareHold} from './weapons/flareHold'; // Iteration 15: hold to ready, release to throw
 import {BASE_MODIFIERS, combineModifiers, type ModifierSource, type PlayerModifiers} from './player/modifiers'; // Iteration 16 (shared contract)
-import {armorFor, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
+import {armorFor, incomingHit, meleeHitLocation, type PlayerHit, type ResolvedHit} from './player/hits'; // Iteration 16 (shared contract)
 import {biteHitLocation, installInjuries, injuryStatusHtml, type InjurySystem} from './player/injuries'; // Iteration 16 (lane INJURY)
 import {installGear, type GearSystem} from './gear/system'; // Iteration 16 (lane GEAR): gear slots, deployable backpack, grounded bags
 import {installFuelStations, type FuelStations} from './world/fuelStations'; // task train-fuel-system: the stations' finite fuel (plans realized once; map figures)
@@ -1356,12 +1356,15 @@ export class Game {
     const run = this.run;
     if (!run.campaign || this.mapBack) return false;
     if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current);
+    // (task studio-alpha-survival-controls-20261107-060450-01) E / Tab close the map too: the ones physically down now (the console's E)
+    // close it only after a release; the key that closes it is kept from the game until released (no interact / inventory / depart)
+    const heldKeys = ['KeyE', 'Tab'].filter(c => this.input.down(c));
     this.mapBack = this.state;
     this.setState('map');
     this.paperMap.open({
-      state: run.campaign, mode,
+      state: run.campaign, mode, heldKeys,
       onConfirm: to => { this.closeTravelMap(); void this.travelToStation(to); },
-      onClose: () => this.closeTravelMap(),
+      onClose: key => { if (key) this.input.suppressUntilRelease(key); this.closeTravelMap(); },
       onCheat: () => (run.campaign = enableCheat(run.campaign!)),
       fuel: this.mapFuel(), // task train-fuel-system: station fuel bars, the trip's cost and the train's reserves
     });
@@ -2654,10 +2657,12 @@ export class Game {
       if (this.use.t >= this.use.total) this.completeUse();
     }
 
-    // Hunger/thirst: slow long-term drain in play time only (menus freeze it); at 0, slow health loss.
+    // Hunger/thirst: drain in play time only (menus freeze it); at 0, slow health loss (5 % of max HP per active minute) and the pain
+    // grunt at most once a minute (task studio-alpha-survival-controls-20261107-060450-01)
     prof.lap(SPAN.survival);
-    const surv = this.survival.update(survivalTicks(this.state) ? dt : 0);
+    const surv = this.survival.update(survivalTicks(this.state) ? dt : 0, p.maxHp);
     if (surv.hpLoss > 0) p.takeDamage(surv.hpLoss);
+    if (surv.pain && p.alive) this.sfx.hurt();
     for (const w of surv.warnings) this.hud.toast(w.text, w.warn);
 
     prof.lap(SPAN.ai);
@@ -3183,7 +3188,7 @@ export class Game {
     // Task studio-alpha-beyond-station-round4-20261101-01 (lane FAMILY): the Strainer's long claw swipe too (a standing humanoid melee hit), attacker 'strainer'
     const claw = archetypeOf(z) === 'siren' || archetypeOf(z) === 'blightbelly' || archetypeOf(z) === 'strainer';
     const creature = archetypeOf(z) !== 'zombie' && !claw;
-    const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie',
+    const hit: PlayerHit = {amount: z.brain.stats.attackDamage, source: creature ? 'creature' : 'zombie', enemy: true,
       location: creature ? biteHitLocation(this.rand(), p.crouched) : meleeHitLocation(this.rand(), p.crouched), attacker: creature || claw ? archetypeOf(z) : z.brain.type};
     const resolved = this.applyPlayerHit(hit);
     const amount = resolved.applied;
@@ -3225,8 +3230,13 @@ export class Game {
     this.physics.ragdoll(e, {dir, point, strength: killImpulseStrength('shotgun', 6, 9)});
   }
 
-  /** Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too. */
-  applyPlayerHit(hit: PlayerHit): ResolvedHit {
+  /**
+   * Iteration 16: apply a hit to the player through armor; notifies hitListeners. Other damage sources (falls) use this too.
+   * (task studio-alpha-survival-controls-20261107-060450-01) an enemy's attack lands at ENEMY_DAMAGE_TO_PLAYER x its raw amount first
+   * (player/hits.ts incomingHit): armour, the injury roll and the HUD all see that hit.
+   */
+  applyPlayerHit(raw: PlayerHit): ResolvedHit {
+    const hit = incomingHit(raw);
     const {applied, absorbed} = armorFor(hit, this.mods.armorHead, this.mods.armorTorso);
     this.player.takeDamage(applied);
     const resolved: ResolvedHit = {...hit, applied, absorbed};

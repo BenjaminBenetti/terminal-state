@@ -57,7 +57,7 @@ import {STEP_UP} from '../gen/grid';
 import {moveCircle, resolveCircle, type PropIndex} from '../core/physics';
 import {MAX_SHOT_DV, dynamicKind} from '../physics/dynamicItems';
 import {propDamageSpec, propPhysics} from '../damage/materials';
-import {STAND_EYE} from '../player/player';
+import {STAMINA_PCT_PER_UNIT, STAMINA_REGEN, STAND_EYE} from '../player/player';
 import {paneCentre, type PaneRef} from './windowBreach';
 import {rayBox, type Box3Like} from './towerShared';
 import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
@@ -598,7 +598,7 @@ export class SkywaysCar {
     P.grounded = true;
     P.speed = 0; // (no walking bob / spread)
     P.sprinting = false;
-    P.stamina = Math.min(100, P.stamina + 18 * dt);
+    P.stamina = Math.min(100, P.stamina + STAMINA_REGEN * STAMINA_PCT_PER_UNIT * dt); // (the ordinary recovery: player.ts reserve units)
     P.justJumped = P.justLanded = P.justRung = P.justClimbed = P.justLetGo = P.stanceChanged = false;
     P.landSpeed = 0;
   }

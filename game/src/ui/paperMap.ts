@@ -13,7 +13,8 @@
 //    Enter on) a station SELECTS it and opens the details panel; travel happens only on the explicit "Depart" button (onConfirm);
 //    Cancel clears the selection. Hover never selects, a click never departs. view mode (title / pause "view map"): read-only.
 //  - Pan (drag), zoom (wheel at the cursor, + / - keys and buttons), F = fit the known stations, Home = the whole sheet.
-//  - Keyboard: arrows move between selectable stations by direction, Tab / Shift+Tab cycle them, Enter selects, Esc closes.
+//  - Keyboard: arrows move between selectable stations by direction, Enter selects, Esc / E / Tab close (task
+//    studio-alpha-survival-controls-20261107-060450-01: E / Tab on a fresh press; Tab no longer cycles the stations).
 //  - While open, the map owns the keyboard (a window capture listener, installed on open and removed on close): typing 1 3 3 7
 //    (Digit or Numpad keys) calls onCheat — the host persists enableCheat(state) — and the map re-renders with everything revealed.
 //    No digit ever reaches the hotbar; the sequence resets on a wrong key, close, blur or a hidden tab. The Lockbox's own 1337 is
@@ -249,9 +250,9 @@ export type PaperMapKey =
   | {kind: 'digit'; digit: string} // the cheat matcher only
   | {kind: 'swallow'} // consumed, nothing (auto-repeat, bare modifiers)
   | {kind: 'close'}
+  | {kind: 'closeKey'; code: string} // E / Tab (task studio-alpha-survival-controls-20261107-060450-01): a fresh press closes, like Esc
   | {kind: 'select'}
   | {kind: 'native'} // Enter / Space on a focused map button: consumed for the game, the browser still clicks the button
-  | {kind: 'tab'; back: boolean}
   | {kind: 'arrow'; dir: 'left' | 'right' | 'up' | 'down'; pan: boolean}
   | {kind: 'zoom'; dir: 1 | -1}
   | {kind: 'fit'}
@@ -271,8 +272,11 @@ export function paperMapKeyAction(e: KeyLike, onButton = false): PaperMapKey {
   const d = digitOfCode(e.code);
   if (d !== null) return e.repeat ? {kind: 'swallow'} : {kind: 'digit', digit: d};
   if (e.code === 'Escape') return {kind: 'close'};
+  // (task studio-alpha-survival-controls-20261107-060450-01, user: "E again or Tab close the train map") the interact key that opened it
+  // and the inventory key close it too — a FRESH press only (auto-repeat is swallowed; PaperMap also waits for a key still held from
+  // the press that opened the map). Tab no longer cycles the stations: the arrows do.
+  if (e.code === 'KeyE' || e.code === 'Tab') return e.repeat ? {kind: 'swallow'} : {kind: 'closeKey', code: e.code};
   if (e.code === 'Enter' || e.code === 'NumpadEnter' || e.code === 'Space') return onButton ? {kind: 'native'} : e.repeat ? {kind: 'swallow'} : {kind: 'select'};
-  if (e.code === 'Tab') return {kind: 'tab', back: !!e.shiftKey};
   if (ARROWS[e.code]) return {kind: 'arrow', dir: ARROWS[e.code], pan: !!e.shiftKey};
   if (e.code === 'Equal' || e.code === 'NumpadAdd' || e.key === '+') return {kind: 'zoom', dir: 1};
   if (e.code === 'Minus' || e.code === 'NumpadSubtract' || e.key === '-') return {kind: 'zoom', dir: -1};
@@ -589,8 +593,16 @@ export interface PaperMapOpen {
   mode?: MapMode;
   /** Depart confirmed for `to` (the map has closed itself first). */
   onConfirm?: (to: StationId) => void;
-  /** The player closed the map (Esc / Close). Not called for host close() or after a confirm. */
-  onClose?: () => void;
+  /**
+   * The player closed the map (Esc / Close / E / Tab). Not called for host close() or after a confirm. `key`: the E / Tab press that
+   * closed it (the host keeps that key from reaching the game until it is released).
+   */
+  onClose?: (key?: string) => void;
+  /**
+   * Task studio-alpha-survival-controls-20261107-060450-01: the close keys (E / Tab) physically down when the map opened (the console's
+   * E): they close it only after a release, so the press that opened the map never closes it again.
+   */
+  heldKeys?: readonly string[];
   /** 1337 typed: the host persists enableCheat(state); a returned state is shown, else the map applies enableCheat to its copy. */
   onCheat?: () => CampaignState | void;
   /** Task train-fuel-system: the fuel figures (station bars; the card's trip cost / reserves). */
@@ -673,6 +685,9 @@ export class PaperMap {
   note = '';
 
   private readonly onKey = (e: KeyboardEvent) => this.handleKey(e);
+  /** Close keys (E / Tab) still held from before the map opened (task studio-alpha-survival-controls-20261107-060450-01). */
+  private held = new Set<string>();
+  private readonly onKeyUp = (e: KeyboardEvent) => { this.held.delete(e.code); };
   private readonly onBlur = () => this.matcher.reset();
   private readonly onVisibility = () => this.matcher.reset();
   private readonly onResize = () => { if (this.openFlag) { this.clampView(); this.render(); this.positionCard(); } };
@@ -701,6 +716,7 @@ export class PaperMap {
     this.note = '';
     this.model = null; // a reopen always re-prints (the view may be unchanged while the state is not)
     this.matcher.reset();
+    this.held = new Set(o.heldKeys ?? []);
     this.openFlag = true;
     this.mount();
     this.attach();
@@ -788,12 +804,12 @@ export class PaperMap {
     return true;
   }
 
-  /** The player's close (Esc / Close): close, then onClose. */
-  userClose(): void {
+  /** The player's close (Esc / Close / E / Tab): close, then onClose (with the closing key for E / Tab). */
+  userClose(key?: string): void {
     if (!this.openFlag) return;
     const cb = this.args?.onClose;
     this.close();
-    cb?.();
+    cb?.(key);
   }
 
   /** Stations the keyboard moves between. */
@@ -988,6 +1004,7 @@ export class PaperMap {
   private attach(): void {
     if (typeof window === 'undefined') return;
     window.addEventListener('keydown', this.onKey, {capture: true});
+    window.addEventListener('keyup', this.onKeyUp, {capture: true});
     window.addEventListener('blur', this.onBlur);
     window.addEventListener('resize', this.onResize);
     if (typeof document !== 'undefined') document.addEventListener('visibilitychange', this.onVisibility);
@@ -996,6 +1013,7 @@ export class PaperMap {
   private detach(): void {
     if (typeof window === 'undefined') return;
     window.removeEventListener('keydown', this.onKey, {capture: true});
+    window.removeEventListener('keyup', this.onKeyUp, {capture: true});
     window.removeEventListener('blur', this.onBlur);
     window.removeEventListener('resize', this.onResize);
     if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', this.onVisibility);
@@ -1185,8 +1203,8 @@ export class PaperMap {
     switch (a.kind) {
       case 'digit': this.digit(a.digit); break;
       case 'close': this.userClose(); break;
+      case 'closeKey': if (!this.held.has(a.code)) this.userClose(a.code); break; // (a key still held from the opening press: nothing)
       case 'select': if (this.focused) this.select(this.focused); else this.focusNext(1); break;
-      case 'tab': this.root?.focus?.(); this.focusNext(a.back ? -1 : 1); break;
       case 'arrow': if (a.pan) this.panBy({left: 60, right: -60, up: 0, down: 0}[a.dir], {left: 0, right: 0, up: 60, down: -60}[a.dir]); else this.focusDir(a.dir); break;
       case 'zoom': this.zoomBy(a.dir > 0 ? 1.35 : 1 / 1.35); break;
       case 'fit': this.fitKnown(); break;
