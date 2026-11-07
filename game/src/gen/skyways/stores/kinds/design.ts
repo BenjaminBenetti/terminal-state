@@ -100,9 +100,9 @@ export const STORE_DESIGN_SPECS: Readonly<Record<StoreDesignKind, DestKindSpec>>
  * Mall-only model FILES this store loads in Skyways (basenames under assets/models, e.g. 'mall-clothes-rail.glb'): registered narrowly
  * for Skyways by assets/levelAssets.ts (the Mall's own worlds unchanged). Office / Subway / Skyways models need no entry.
  * The dresser (M45), the bookcase (M09), the cash-wrap counter (M01), the glass vitrine (M02), the try-on ottoman (M24), the cartons
- * (M47) and the storage totes (M18).
+ * (M47), the storage totes (M18) and the café chairs / bistro tables (already Skyways-eligible: the ramen restaurant's; listed as a record).
  */
 export const STORE_DESIGN_MALL_MODELS: readonly string[] = [
   'mall-dresser-drawers.glb', 'mall-bookstore-bookcase.glb', 'mall-mall-cashwrap-counter.glb', 'mall-glass-display-cabinet.glb', 'mall-try-on-ottoman.glb',
-  'mall-cardboard-box-flaps.glb', 'mall-storage-tote.glb',
+  'mall-cardboard-box-flaps.glb', 'mall-storage-tote.glb', 'mall-cafe-chair.glb', 'mall-cafe-bistro-table.glb',
 ];

@@ -7,7 +7,7 @@
 // texture T1 with its 30-year decay), one instance per colourway tint (DESIGN_TINT), re-valued per build; its carpet-tile seams and
 // checker are turned off (one continuous pile). The boxes carry metre UVs at the office floor span, so the pile reads at the same
 // scale as the office carpets. No new or hand-drawn texture.
-//  - rugs: merged per (storey, tint) — flat, static, never shadow casters;
+//  - rugs: one one-instance mesh per (rug, tint) — flat, static, never shadow casters;
 //  - textiles: instanced per (storey, variant, tint), named `prop-skyDsTextiles-…` so the prop render index (damage/propDamage.ts)
 //    finds each stack's instance like every model prop (a stack knocked off its table moves with its body).
 // Every mesh carries userData.level (the level culler).
@@ -58,29 +58,33 @@ const merge = (geos: THREE.BufferGeometry[]): THREE.BufferGeometry => {
   return g;
 };
 
-/** Rugs: every rug of a storey merged per tint (world geometry; static, flat, receives shadows only). */
+/**
+ * Rugs: each rug its own geometry (its size: metre UVs) per tint — the field and the border band — drawn as a one-instance
+ * InstancedMesh at the rug (so the prop render index maps each mesh to exactly its rug: a shot rug marks only itself). Static, flat,
+ * receives shadows only. (~2 draws per rug; a store lays 3-11.)
+ */
 function drawRugs(group: THREE.Group, list: readonly PropPlacement[], wm: WorldMaterials): number {
-  for (const [level, ps] of byLevel(list)) {
+  for (const p of list) {
+    const turn = new THREE.Matrix4().makeRotationY(p.rot);
+    // (rugs are placed axis-aligned, rot 0: hx / hz are the world half extents; a quarter-turned one swaps them back)
+    const q = Math.abs(Math.sin(p.rot)) > 0.7, hx = q ? p.hz : p.hx, hz = q ? p.hx : p.hz;
     const byTint = new Map<DesignTint, THREE.BufferGeometry[]>();
-    for (const p of ps) {
-      const turn = new THREE.Matrix4().makeRotationY(p.rot), at = new THREE.Matrix4().makeTranslation(p.x, p.y, p.z);
-      // (rugs are placed axis-aligned, rot 0: hx / hz are the world half extents; a quarter-turned one swaps them back)
-      const q = Math.abs(Math.sin(p.rot)) > 0.7, hx = q ? p.hz : p.hx, hz = q ? p.hx : p.hz;
-      for (const part of designRugParts(hx, hz, p.variant)) {
-        const g = designBox(part.s, part.p).applyMatrix4(turn).applyMatrix4(at);
-        let l = byTint.get(part.t);
-        if (!l) byTint.set(part.t, (l = []));
-        l.push(g);
-      }
+    for (const part of designRugParts(hx, hz, p.variant)) {
+      let l = byTint.get(part.t);
+      if (!l) byTint.set(part.t, (l = []));
+      l.push(designBox(part.s, part.p).applyMatrix4(turn));
     }
     for (const [tint, geos] of byTint) {
-      const mesh = new THREE.Mesh(merge(geos), designTextileMaterial(wm, tint));
-      mesh.name = `prop-skyDsRug-${tint}`;
-      mesh.userData.level = level;
-      mesh.castShadow = false;
-      mesh.receiveShadow = true;
-      mesh.geometry.computeBoundingSphere();
-      group.add(mesh);
+      const geo = merge(geos);
+      geo.computeBoundingSphere();
+      const im = new THREE.InstancedMesh(geo, designTextileMaterial(wm, tint), 1);
+      im.setMatrixAt(0, new THREE.Matrix4().makeTranslation(p.x, p.y, p.z));
+      im.name = `prop-skyDsRug-${tint}`;
+      im.userData.level = p.level ?? 0;
+      im.castShadow = false;
+      im.receiveShadow = true;
+      im.computeBoundingSphere();
+      group.add(im);
     }
   }
   return list.length;
