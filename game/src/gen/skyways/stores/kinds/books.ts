@@ -40,7 +40,7 @@ export const BOOKS_RUG_SIZE = {w: 2.4, d: 1.6, h: 0.012} as const;
 export const STORE_BOOKS_SPECS: Readonly<Record<StoreBooksKind, DestKindSpec>> = {
   skyBooksSign: {
     def: {w: BOOKS_SIGN_BOARD.w, d: BOOKS_SIGN_BOARD.d, h: BOOKS_SIGN_BOARD.h, blocksSight: false},
-    phys: {dynamic: false, why: 'mounted', how: 'carved walnut category sign (~3 kg) screwed to the top of its bookcase at 2.4 m: out of reach overhead, a bullet marks it only'},
+    phys: {dynamic: false, why: 'mounted', how: 'carved walnut category sign (~3 kg) screwed to the top of its bookcase / display cabinet (or to the wall over the children\'s dresser): out of reach overhead, a bullet marks it only; the small feature-table sign (x0.62) is screwed to its tiered table\'s column cap'},
     damage: 'wood',
     open: {cls: 'none', role: 'decor', how: 'a solid painted sign board: nothing to open'},
   },

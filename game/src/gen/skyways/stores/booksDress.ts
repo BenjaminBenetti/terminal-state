@@ -27,7 +27,7 @@
 import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../../props';
-import {backed, makePlaceCtx, markCell, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
+import {backed, begin, commit, makePlaceCtx, markCell, rollback, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
 import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld, yawToward} from '../addonFrame';
@@ -90,6 +90,7 @@ export function dressBooksStore(layout: StationLayout, rng: Rng, anchor: Skyways
   kit.reserveDoors();
   d.salesFloor();
   if (kit.other !== null) d.otherStorey(kit.other);
+  d.ensureCategories();
   d.stockBooks();
   kit.lift();
   const idx = (p: PropPlacement | null | undefined) => (p ? layout.props.indexOf(p) : -1);
@@ -471,9 +472,17 @@ class BooksDresser {
       if (!ok || !st.table) continue;
       // the rug's long side along the chairs' axis (x when they sit east / west of the table)
       const along = chairs.filter(c => Math.abs(c.z - z) < 0.1).length >= chairs.filter(c => Math.abs(c.x - x) < 0.1).length ? 0 : Math.PI / 2;
+      // the arc lamp beside the group (its arm along the rug's side, the shade reaching over a chair), where it fits
+      let lp: PropPlacement | null = null;
+      for (const s of this.rng.shuffle([-1, 1])) for (const turn of [0, Math.PI]) {
+        if (lp) break;
+        const [lx, lz] = toWorld({x, z, rot: along}, 0, s * (R.d / 2 + lamp.d / 2 + 0.1));
+        lp = kit.put('skyDArcLamp', lx, lz, normYaw(along + turn), {level: L});
+      }
+      if (lp) got.push(lp);
       const rug = this.rug(x, z, along, BOOKS_RUG.reading, st.table);
       this.reserveAround(got, L, 0.6);
-      this.nooks.push({level: L, rug, chairs, lamp: null, table: st.table});
+      this.nooks.push({level: L, rug, chairs, lamp: lp, table: st.table});
       return true;
     }
     kit.skipped.push(`reading nook (level ${L})`);
@@ -495,7 +504,8 @@ class BooksDresser {
     const kit = this.kit, dr = PROP_DEFS.dresserDrawers, R = BOOKS_RUG_SIZE;
     const [ox, oz] = L === kit.level ? kit.inside(1) : [kit.mouths.get(L)?.x ?? kit.entry.x, kit.mouths.get(L)?.z ?? kit.entry.z];
     const spots = this.rng.shuffle(kit.wallSpots('dresserDrawers', ox, oz, L).filter((_, i) => i % 2 === 0)).slice(0, 40);
-    for (const sp of spots) {
+    // (a second pass, where no wall spot fits the bean bags in front: the corner without them — dresser, rug, bay, teddy)
+    for (const [pass, sp] of [...spots.map(s => [0, s] as const), ...spots.slice(0, 20).map(s => [1, s] as const)]) {
       const got: PropPlacement[] = [], seats: PropPlacement[] = [], cases: PropPlacement[] = [];
       const st: {dresser: PropPlacement | null} = {dresser: null};
       const ok = kit.cluster(() => {
@@ -510,7 +520,12 @@ class BooksDresser {
           const p = kit.put('beanBag', snapEdge(x, hx), snapEdge(z, hz), rot, {level: L});
           if (p) { got.push(p); seats.push(p); break; }
         }
-        if (!seats.length) return false;
+        if (!seats.length && pass === 0) return false;
+        if (!seats.length) {
+          // (the rug alone: its floor must be free — nothing standing under it)
+          const [cx, cz] = toWorld(dresser, 0, rz), f = footprint('skyBooksRug', dresser.rot);
+          if (!kit.boxFree(cx - f.hx, cz - f.hz, cx + f.hx, cz + f.hz, L, true)) return false;
+        }
         // a bookcase either side of the dresser on the same wall (the bay)
         for (const s of [-1, 1]) {
           const c = (sp.side === 'N' || sp.side === 'S' ? dresser.x : dresser.z) + s * (dr.w / 2 + 0.03 + PROP_DEFS.skyDBookcase.w / 2);
@@ -538,6 +553,11 @@ class BooksDresser {
       }
       // the header: over the bay's cases (else on the dresser's wall above it: on the case nearest)
       if (cases.length) this.bayHeader(cases.length === 2 ? [cases[0], cases[1]] : cases, BOOKS_SIGN.childrens);
+      else {
+        // no case beside it: the header screwed to the wall above the dresser (its back flush with the wall face)
+        const [wx, wz] = toWorld(d, 0, -dr.d / 2 - 0.03 + BOOKS_SIGN_BOARD.d / 2 + 0.005);
+        this.sign(wx, wz, d.y + 1.55, d.rot, BOOKS_SIGN.childrens, d, 1);
+      }
       this.bays.push({level: L, sign: BOOKS_SIGN.childrens, cases, spurs: []});
       this.reserveAround(got, L, 0.5);
       this.kids = {level: L, rug, seats, dresser: d};
@@ -639,6 +659,25 @@ class BooksDresser {
   // --- the loose stock ----------------------------------------------------------------------------------------------------------
 
   /** The book stacks: the tables' tiers, the flat tops (dresser / desk), the Mall bookcases' shelves, then the oak cases in turn. */
+  /**
+   * Every store signs the bookshop's core sections — fiction, local history, maps & travel (and the children's / rare-books corners
+   * where they stand): a section no bay got (a small hall with few bays) takes over a repeated bay / run sign.
+   */
+  ensureCategories(): void {
+    const core = [BOOKS_SIGN.fiction, BOOKS_SIGN.localHistory, BOOKS_SIGN.mapsTravel];
+    const fixed = new Set<number>([BOOKS_SIGN.newNotable, BOOKS_SIGN.childrens, BOOKS_SIGN.rareBooks]);
+    for (const want of core) {
+      if (this.signs.some(s => s.variant === want)) continue;
+      const count = (v: number) => this.signs.filter(s => s.variant === v).length;
+      // a repeated section's header takes it over, else a wall case without a header gets one
+      const dupe = this.signs.find(s => !fixed.has(s.variant) && Math.abs(s.h - BOOKS_SIGN_BOARD.h) < 1e-3 && count(s.variant) > 1);
+      if (dupe) { dupe.variant = want; continue; }
+      const bare = this.cases.find(c => c.kind === 'skyDBookcase' && !this.signs.some(s => (s.level ?? 0) === (c.level ?? 0) && Math.hypot(s.x - c.x, s.z - c.z) < 1.6));
+      if (bare) this.bayHeader([bare], want);
+      else this.kit.skipped.push(`no sign for section ${want}`);
+    }
+  }
+
   stockBooks(): void {
     const kit = this.kit, rng = this.rng;
     let left = BOOKS_STACK_BUDGET;
@@ -863,10 +902,23 @@ function onFloor(ctx: PlaceCtx, a: Area, kind: PropKind, rng: Rng): PropPlacemen
   const cells: [number, number][] = [];
   for (let y = a.y + 1; y < a.y + a.h - 1; y++) for (let x = a.x + 1; x < a.x + a.w - 1; x++) cells.push([x, y]);
   for (const [x, y] of rng.shuffle(cells).slice(0, 40)) {
-    const p = tryPlaceProp(ctx, a, kind, r3((x + 0.5) * CELL), r3((y + 0.5) * CELL), rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]));
+    const p = placeChecked(ctx, a, kind, r3((x + 0.5) * CELL), r3((y + 0.5) * CELL), rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]), {});
     if (p) return p;
   }
   return null;
+}
+
+/** tryPlaceProp + the anchor kit's box test (no standing box of the storey overlapped by more than 1 cm), all-or-nothing. */
+function placeChecked(ctx: PlaceCtx, a: Area, kind: PropKind, x: number, z: number, rot: number, o: {front?: number}): PropPlacement | null {
+  begin(ctx);
+  const p = tryPlaceProp(ctx, a, kind, x, z, rot, o);
+  const lv = ctx.level;
+  if (p && ctx.layout.props.some(q => q !== p && !q.mounted && q.host === undefined && (q.level ?? 0) === lv && Math.abs(q.x - p.x) < q.hx + p.hx - 0.01 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.01)) {
+    rollback(ctx);
+    return null;
+  }
+  commit(ctx);
+  return p;
 }
 
 /** One `kind` backed to a solid wall of the room (sides shuffled, a 0.25 m scan), or null. */
@@ -879,7 +931,7 @@ function againstWall(ctx: PlaceCtx, a: Area, kind: PropKind, front: number, rng:
     for (const t of rng.shuffle(ts)) {
       if (!backed(ctx, a, side, t - def.w / 2, t + def.w / 2, base + 0.05) || !backed(ctx, a, side, t - def.w / 2, t + def.w / 2, base + Math.min(def.h, 2.2) - 0.05)) continue;
       const sp = wallSpot(a, side, t, kind);
-      const p = tryPlaceProp(ctx, a, kind, r3(sp.x), r3(sp.z), sp.rot, front ? {front} : {});
+      const p = placeChecked(ctx, a, kind, r3(sp.x), r3(sp.z), sp.rot, front ? {front} : {});
       if (p) return p;
     }
   }
