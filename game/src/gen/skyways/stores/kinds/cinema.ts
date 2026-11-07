@@ -52,7 +52,7 @@ export const STORE_CINEMA_MALL_MODELS: readonly string[] = ['mall-cardboard-box-
  * tools/asset-pipeline/skyways-stores/cinema/parts-glb.mjs, beside zombie `lastshift` at runtime scale 1.0, viewed): W x H x D, contact.
  */
 export const STORE_CINEMA_SCALE: Readonly<Record<StoreCinemaKind, string>> = {
-  storeCinemaPosterCase: '0.86 x 1.28 x 0.09 m case (sheet 0.70 x 1.05 m) mounted 0.82 m up: sheet centre 1.46 m, top 2.10 m (eye level beside the 1.78 m zombie)',
-  storeCinemaPosterStand: '0.80 x 1.80 x 0.46 m; grounded on its 0.56 x 0.42 m base plate (one contact cluster); sheet 0.70 x 1.05 m from 0.69 m',
-  storeCinemaMenuBoard: '1.80 x 1.24 x 0.07 m board (art 1.68 x 1.12 m) mounted 2.1 m up: over the 1.83 m back counter / 2.0 m cooler, top 3.34 m',
+  storeCinemaPosterCase: '0.86 x 1.28 x 0.09 m case (sheet 0.70 x 1.05 m) mounted 0.82 m up (min-y 0.82, its back on the wall): sheet centre 1.46 m, top 2.10 m — eye level beside the 1.78 m zombie',
+  storeCinemaPosterStand: '0.80 x 1.80 x 0.42 m; grounded (min-y 0) on its 0.56 x 0.42 m base plate (4 corner contact clusters); sheet 0.70 x 1.05 m from 0.69 m, top at the zombie\'s head height',
+  storeCinemaMenuBoard: '1.80 x 1.24 x 0.07 m board (art 1.68 x 1.12 m) mounted 2.1 m up (min-y 2.10): clear over the 1.83 m back counter / 2.0 m cooler, top 3.34 m under the 4.3 m ceiling',
 };

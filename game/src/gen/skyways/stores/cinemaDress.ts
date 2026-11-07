@@ -302,7 +302,7 @@ function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spin
     tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.d / 2))), v: bv, yaw: dir < 0 ? L.fr.plusU : L.fr.minusU, nu: -dir, nv: 0});
   }
   // back to the storefront wall, window toward the lobby
-  for (let off = 0.5; off <= 9; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(0.05 + bk.d / 2), yaw: L.fr.toBack, nu: 0, nv: 1});
+  for (let off = 0.5; off <= L.fr.W; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(0.05 + bk.d / 2), yaw: L.fr.toBack, nu: 0, nv: 1});
   for (const t of tries) {
     const half = t.nu ? bk.d / 2 : bk.w / 2;
     if (t.u - half < 0.3 || t.u + half > L.fr.W - 0.3) continue;
@@ -329,6 +329,13 @@ function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spin
         const p = k.putRound(L, 'skywaysPrizeStanchion', r3(t.u + sd * (bk.w / 2 + 0.4)), r3(v), 0);
         if (p) res.queue.push(p);
       }
+    }
+    // (else: the nearest free floor in front of the window)
+    for (let i = 0; res.queue.length < 2 && i < 2; i++) {
+      const p = nearest(k, L, 'skywaysPrizeStanchion', t.u + (t.nu || 0) * (bk.d / 2 + 0.5), t.v + (t.nv || 0) * (bk.d / 2 + 0.5), 1.5, 0);
+      if (!p) break;
+      p.round = true; p.hx = p.hz = r3(PROP_DEFS.skywaysPrizeStanchion.w / 2);
+      res.queue.push(p);
     }
     // the hanging plate over the kiosk
     const [x, z] = k.xz(L, t.u, t.v);
@@ -411,10 +418,11 @@ function dressAuditorium(k: CinemaKit, aud: Area, res: CinemaResult): void {
   k.keepUV(A, W - SIDE / 2, 2.4, W - SIDE / 2, D - 0.4, SIDE / 2);
   k.keepUV(A, du, D, du, 2.4, 0.7);
   k.keepUV(A, 0, D - BACK / 2, W, D - BACK / 2, BACK / 2);
-  // seat rows: from 2.6 m off the screen to the back aisle, groups of up to three 4-seat blocks between the aisles; a few torn out
+  // seat rows: from 2.5 m off the screen to the back aisle at a 1.0 m row pitch (cell-aligned: rows never share a cell), groups of up to
+  // three 4-seat blocks between the aisles; a few torn out
   k.phase = 'seats';
   const sd = PROP_DEFS.skyDCinemaSeats.d, swd = PROP_DEFS.skyDCinemaSeats.w;
-  for (let v = 2.6; v + sd <= D - BACK + 1e-6; v += 1.05) {
+  for (let v = 2.5; v + sd <= D - BACK + 1e-6; v += 1.0) {
     for (const [a, b] of [[SIDE, du - 0.75], [du + 0.75, W - SIDE]] as const) {
       const groups = seatGroups(b - a, swd);
       const total = groups.reduce((t, q) => t + q, 0) * swd + Math.max(0, groups.length - 1) * 1.2;

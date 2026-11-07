@@ -35,7 +35,7 @@ export function cinemaArtCrop(r: CinemaArtRect, faceAspect: number): Omit<Cinema
  * framed sheet from `frameY`). MENU: the concession's framed REFRESHMENTS board (3:2) over the back counter, its bottom `y` up.
  */
 export const CINEMA_CASE = {w: 0.86, h: 1.28, d: 0.09, y: 0.82, art: {w: 0.7, h: 1.05}, bar: 0.06} as const;
-export const CINEMA_STAND = {w: 0.8, h: 1.8, d: 0.46, frameY: 0.63, art: {w: 0.7, h: 1.05}, bar: 0.04, base: {w: 0.56, d: 0.42, h: 0.035}} as const;
+export const CINEMA_STAND = {w: 0.8, h: 1.8, d: 0.42, frameY: 0.63, art: {w: 0.7, h: 1.05}, bar: 0.04, base: {w: 0.56, d: 0.42, h: 0.035}} as const;
 export const CINEMA_MENU = {w: 1.8, h: 1.24, d: 0.07, y: 2.1, art: {w: 1.68, h: 1.12}, bar: 0.06} as const;
 
 /** Part materials: shape-material keys of world/shapeMaterials.ts, plus `brass` (the renderer's polished brass colour). */
