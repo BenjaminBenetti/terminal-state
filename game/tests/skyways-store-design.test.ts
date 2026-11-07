@@ -98,7 +98,8 @@ describe('Larch & Loom Home (design store): spec, kinds, finish', () => {
     const used = new Set<string>();
     for (const h of ALL) for (const p of mine(h)) {
       const id = (MALL_KIND_ASSET as Record<string, string | undefined>)[p.kind];
-      if (id && MALL_ASSETS[id]) used.add(path.basename(MALL_ASSETS[id].url));
+      const url = id ? MALL_ASSETS[id]?.url : null;
+      if (url) used.add(path.basename(url));
     }
     expect(used.size).toBeGreaterThan(3);
     for (const f of used) expect(STORE_DESIGN_MALL_MODELS, f).toContain(f);
