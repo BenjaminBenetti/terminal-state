@@ -327,7 +327,7 @@ describe('skyways car: the cockpit view', () => {
 
 const settle = () => new Promise(r => setTimeout(r, 40));
 type Rec = Src & {stopAt?: number};
-async function audio() {
+async function audio(only?: readonly (typeof CUES)[number][]) {
   const made: FakeCtx[] = [];
   const sfx = new Sfx(() => {
     const c = new FakeCtx();
@@ -335,7 +335,7 @@ async function audio() {
     c.createBufferSource = () => { const s = mk() as Rec; s.stop = (t?: number) => { s.stopAt = t ?? c.currentTime; }; return s; };
     made.push(c);
     return c as unknown as AudioContext;
-  }, fakeBank({variants: 1}).bank);
+  }, fakeBank({variants: 1, only}).bank);
   sfx.init();
   sfx.suspend(false);
   await settle();
@@ -344,10 +344,11 @@ async function audio() {
 const bufOf = (sfx: Sfx, cue: string) => (sfx as unknown as {bank: {pick(c: string): {buffer: unknown} | null}}).bank.pick(cue)!.buffer;
 
 describe('Sfx: the prize car cues', () => {
-  it('the clips: the four cues in the bank (idle / drive loops), gains set', () => {
-    for (const c of ['carIdle', 'carDrive', 'carSkid', 'carDoor'] as const) { expect(CUES as readonly string[]).toContain(c); expect(CUE_GAIN[c]).toBeGreaterThan(0); expect(CLIP_MANIFEST_SKYWAYS_CAR[c]).toHaveLength(1); }
+  it('the clips: the car cues in the bank (idle / drive / reverse-whine loops), gains set', () => {
+    for (const c of ['carIdle', 'carDrive', 'carStart', 'carReverse', 'carBrake', 'carSkid', 'carDoor'] as const) { expect(CUES as readonly string[]).toContain(c); expect(CUE_GAIN[c]).toBeGreaterThan(0); expect(CLIP_MANIFEST_SKYWAYS_CAR[c]).toHaveLength(1); }
     expect(CLIP_MANIFEST_SKYWAYS_CAR.carIdle[0].loop).toBeTruthy();
     expect(CLIP_MANIFEST_SKYWAYS_CAR.carDrive[0].loop).toBeTruthy();
+    expect(CLIP_MANIFEST_SKYWAYS_CAR.carReverse[0].loop).toBeTruthy();
   });
 
   it('are safe without an audio context (Node / before the first gesture)', () => {
@@ -357,18 +358,20 @@ describe('Sfx: the prize car cues', () => {
     expect(sfx.carAudioState()).toMatchObject({engine: false, starts: 0});
   });
 
-  it('carEngine: ONE channel (the idle + drive loops) never restarted per frame; the rate rises with speed (0.85 -> 1.5), the loops crossfade by load', async () => {
+  it('carEngine: ONE channel (the idle + drive + reverse-whine loops) never restarted per frame; the rates rise with the rpm (drive 0.85 -> 1.6, idle 1 -> 1.35), the loops crossfade by it', async () => {
     const {sfx, ctx} = await audio();
     const s0 = ctx.started.length;
     sfx.carEngine(0, 0, {x: 1, y: 0.75, z: -1.5});
     const loops = ctx.started.slice(s0) as Rec[];
-    expect(loops).toHaveLength(2);
-    expect(loops.map(s => s.buffer)).toEqual([bufOf(sfx, 'carIdle'), bufOf(sfx, 'carDrive')]);
+    expect(loops).toHaveLength(3);
+    expect(loops.map(s => s.buffer)).toEqual([bufOf(sfx, 'carIdle'), bufOf(sfx, 'carDrive'), bufOf(sfx, 'carReverse')]);
     for (const s of loops) { expect(s.loop).toBe(true); expect(s.stopAt).toBeUndefined(); }
     // from silence: the loops' gains start at 0 and only targets move
     const idleState = sfx.carAudioState();
     expect(idleState.engine).toBe(true);
-    expect(idleState.rate).toBeCloseTo(CAR_AUDIO.rate[0], 6);
+    expect(idleState.rate).toBeCloseTo(CAR_AUDIO.driveRate[0], 6);
+    expect(idleState.idleRate).toBeCloseTo(CAR_AUDIO.idleRate[0], 6); // (round 2: the idle never plays below 1x)
+    expect(idleState.reverse).toBe(0);
     expect(idleState.idle).toBeCloseTo(CUE_GAIN.carIdle, 6);
     expect(idleState.drive).toBeCloseTo(0, 6);
     let last = idleState;
@@ -381,33 +384,34 @@ describe('Sfx: the prize car cues', () => {
       expect(st.idle).toBeLessThanOrEqual(last.idle + 1e-9);
       last = st;
     }
-    expect(ctx.started.length).toBe(s0 + 2); // never restarted
-    expect(last.rate).toBeCloseTo(CAR_AUDIO.rate[1], 2); // (a target moves only by more than CAR_AUDIO.eps)
+    expect(ctx.started.length).toBe(s0 + 3); // never restarted
+    expect(last.rate).toBeCloseTo(CAR_AUDIO.driveRate[1], 2); // (a target moves only by more than CAR_AUDIO.eps)
     expect(last.drive).toBeCloseTo(CUE_GAIN.carDrive, 2);
     expect(last.idle).toBeLessThan(CUE_GAIN.carIdle * 0.4);
-    expect((loops[0].playbackRate as unknown as {value: number}).value).toBeCloseTo(last.rate, 9); // (the fake param takes the target)
+    expect((loops[1].playbackRate as unknown as {value: number}).value).toBeCloseTo(last.rate, 9); // (the fake param takes the target)
     // back to rest, off the pedal: idle again
     ctx.currentTime += 1;
     sfx.carEngine(0, 0);
-    expect(sfx.carAudioState()).toMatchObject({rate: CAR_AUDIO.rate[0], drive: 0});
+    expect(sfx.carAudioState()).toMatchObject({rate: CAR_AUDIO.driveRate[0], drive: 0});
     expect(sfx.carAudioState().starts).toBe(1);
     expect(ctx.oscillatorCalls).toBe(0);
   });
 
-  it('rev (getting in): a short blip over idle that decays; stopCarEngine / pause / a new world fade it out and release it', async () => {
-    const {sfx, ctx} = await audio();
+  it('rev (getting in) without an engine-start clip: a short blip over idle that decays; stopCarEngine / pause / a new world fade it out and release it', async () => {
+    const {sfx, ctx} = await audio(CUES.filter(c => c !== 'carStart')); // (round 2: with the clip the start one-shot plays — skyways-car-audio.test.ts)
     const s0 = ctx.started.length;
     sfx.carEngine(0, 0, undefined, {rev: true});
     const blip = sfx.carAudioState();
     expect(blip.revs).toBe(1);
-    expect(blip.rate).toBeGreaterThan(CAR_AUDIO.rate[0] + 0.2);
+    expect(blip.startCues).toBe(0);
+    expect(blip.rate).toBeGreaterThan(CAR_AUDIO.driveRate[0] + 0.2);
     expect(blip.drive).toBeGreaterThan(0.2);
     ctx.currentTime += CAR_AUDIO.rev.s / 2;
     sfx.carEngine(0, 0);
     expect(sfx.carAudioState().rate).toBeLessThan(blip.rate);
     ctx.currentTime += CAR_AUDIO.rev.s;
     sfx.carEngine(0, 0);
-    expect(sfx.carAudioState().rate).toBeCloseTo(CAR_AUDIO.rate[0], 6);
+    expect(sfx.carAudioState().rate).toBeCloseTo(CAR_AUDIO.driveRate[0], 6);
     const loops = ctx.started.slice(s0) as Rec[];
     sfx.stopCarEngine();
     expect(sfx.carAudioState()).toMatchObject({engine: false, stops: 1});

@@ -145,7 +145,10 @@ export const CUE_GAIN: Record<CueId, number> = {
   // stands in (a refused departure: clearly heard, under a gunshot); the pour is at the hands (between pickup and heal); the cart rumble
   // sits in the footsteps' level band at walking pace.
   engineStall: 0.55, fuelPour: 0.42, cartRoll: 0.4,
-  carIdle: 0.42, carDrive: 0.5, carSkid: 0.45, carDoor: 0.6, // (task studio-skyways-level-20261106-054448-01: the prize car)
+  // (task studio-skyways-level-20261106-054448-01: the prize car; round 2, task skyways-vehicle-20261107 lane AUDIO — see CAR_AUDIO: the
+  // engine loops are RMS -20 dBFS mid-range layers now (idle 0.42 -> 0.55, drive 0.5 -> 0.6); start / brake peak -1 dBFS, the reverse whine
+  // loop RMS -20 dBFS (a layer over the engine))
+  carIdle: 0.55, carDrive: 0.6, carStart: 0.6, carReverse: 0.28, carBrake: 0.5, carSkid: 0.45, carDoor: 0.6,
   // Task studio-skyways-destinations-20261106-170011-01 (lane AUDIO, tools/audio-pipeline/skyways-destinations-build.mjs; LOCATION_AUDIO): the
   // loops are RMS -20 dBFS under a -1 dBFS peak ceiling (the sparse tick loop is peak-bound: -30.7 dBFS RMS, -26 LUFS), the chime peak
   // -1 dBFS. The location loops sit in the bed band (under the fans / the cart); the chime is a bell across a court: heard, under a
@@ -494,19 +497,42 @@ export const FUEL_AUDIO = {
 } as const;
 
 /**
- * Task studio-skyways-level-20261106-054448 (lane CAR2): the Skyways PRIZE CAR (Sound Lab clips carIdle / carDrive loops, carSkid / carDoor
- * one-shots; provenance derivatives/audio-skyways-car.json). carEngine is ONE page-lifetime channel like cartRoll: the idle and the drive
- * loops run together, crossfaded (equal power) by the engine load (speed, plus `throttleLoad` while the throttle is held), both at one
- * playbackRate rising with the speed (`rate`: 0.85 at rest .. 1.5 at the top speed), every target eased (setTargetAtTime, `tau`; unchanged
- * values cost nothing). Created from silence on the first call; `rev` (getting in) adds a short decaying blip (`rev.s`: load and rate up
- * to `rev.peak`). stopCarEngine (getting out / death / teardown), a pause / menu and a new world fade it out and release it at once.
- * carSkid: one tyre-skid take, at most every `skid.minGapS`; carDoor: the door clunk. Positional (`at`; omitted = at the listener).
+ * Task studio-skyways-level-20261106-054448 (lane CAR2): the Skyways PRIZE CAR (Sound Lab clips; provenance derivatives/audio-skyways-car.json).
+ *
+ * Round 2 (task studio-beta-skyways-vehicle-20261107-054512-01, lane AUDIO; user, Game 77: "car feels bad, mostly audio", "actual engine
+ * audible"). ROOT CAUSE (measured; the wiring was intact — one channel, never torn down per frame, the panner at unity gain 1.8 m from the
+ * driver's ear): the round-1 engine loops were SUB-BASS only — spectral centroid 47 / 74 Hz, the share above 180 Hz -20.3 / -12.4 dB of
+ * the loop (derivatives/audio-skyways-car.json revision.round1) — and the idle played at 0.85x (lower still) at CUE 0.42: its content
+ * above 180 Hz reached the master at about -48 dBFS. Laptop speakers / earbuds reproduce almost nothing below ~150 Hz and the ear is
+ * ~25 dB less sensitive at 50 Hz than at 1 kHz: the engine was effectively silent. Round 2: mid-range engine layers (share above
+ * 180 Hz -2.2 / -3.5 dB), rates that never go below 1x at idle, higher gains, and the arcade cues the car lacked:
+ *  - carEngine: ONE page-lifetime channel (one panner) of three loops — idle, drive, reverse whine — every target eased (setTargetAtTime,
+ *    `tau`; unchanged values cost nothing). The engine "rpm" (0 idle .. 1 top) = `rpm.speed` x speed01 + `rpm.throttle` x throttle01 (the
+ *    pedal revs the engine before the car is fast: an audible pull-away), clamped. Idle / drive crossfade by rpm (equal power; the idle
+ *    keeps `idleFloor`); their playbackRates rise with rpm (`idleRate`, `driveRate`). Reverse (`reverse01` = 0..1 of the reverse top
+ *    speed): the gearbox-whine layer comes in with the speed (`reverse.level`, `reverse.rate`) — a sound the forward gears never make.
+ *  - Getting in (`rev`): the carStart one-shot (starter whirr, the catch, an idle) at the engine `start.delayS` after the door (so the
+ *    latch and the starter do not mask each other), the loops held under it and faded in from `start.holdS` into it (sooner —
+ *    `start.catchS` — when the throttle is already held); no carStart clip: the round-1 blip (`rev`).
+ *  - stopCarEngine (getting out / death / teardown): the loops fade (`stopFade`) while their rate sinks to `stopRate` x (a spin-down), the
+ *    start one-shot is cut; a pause / menu / a new world: the same at once (0.05 s). Nothing starts while audio is paused.
+ *  - carBrake: the brake-to-stop (squeal, scrub, the suspension settling) — once per stop from a real brake (world/skywaysCar.ts CAR_SOUND),
+ *    level by the speed it braked from; carSkid: one tyre-skid take, at most every `skid.minGapS`; carDoor: the door; carImpact: the car's
+ *    own contacts — the body against the world (metal crash + topple rattle) or a body it hits (flesh slap + body thump), scaled by the
+ *    closing speed, never more often than `impact.minGapS` per kind. Positional (`at`; omitted = at the listener).
+ * Levels / rates are first estimates for the user's ear pass — the clips were NOT auditioned (structural QC only).
  */
 export const CAR_AUDIO = {
-  rate: [0.85, 1.5] as const, throttleRate: 0.08, throttleLoad: 0.35, speedLoad: 0.8, idleFloor: 0.25, tau: 0.12,
-  rev: {s: 0.6, peak: 0.6}, stopFade: 0.25, ref: 2.5, rolloff: 1, send: 0.05, eps: 0.004,
+  rpm: {speed: 0.85, throttle: 0.3}, idleRate: [1, 1.35] as const, driveRate: [0.85, 1.6] as const, idleFloor: 0.15, tau: 0.1,
+  reverse: {level: [0.35, 1] as const, rate: [0.85, 1.2] as const, min: 0.02},
+  start: {delayS: 0.3, holdS: 0.9, catchS: 0.55, fadeS: 0.6, send: 0.08},
+  rev: {s: 0.6, peak: 0.6}, stopFade: 0.5, stopRate: 0.55, ref: 2.5, rolloff: 1, send: 0.05, eps: 0.004,
+  brake: {minGapS: 1, base: 0.55, send: 0.15, ref: 2.5, maxDist: 35},
   skid: {minGapS: 0.9, send: 0.15, ref: 3, maxDist: 40},
   door: {send: 0.15, ref: 2, maxDist: 30},
+  impact: {minGapS: {car: 0.12, flesh: 0.06} as const, from: {car: 1.5, flesh: 0.5} as const, full: 9, base: 0.4, ref: 2.5, rolloff: 1.1, send: 0.35, maxDist: 40,
+    car: {cue: 'impactMetal' as CueId, gain: 1, rate: [1, 0.82] as const, layer: {cue: 'propTopple' as CueId, gain: 0.9, rate: [0.95, 0.8] as const}},
+    flesh: {cue: 'impactFlesh' as CueId, gain: 1.2, rate: [1.02, 0.88] as const, layer: {cue: 'bodyFall' as CueId, gain: 0.8, rate: [1.05, 0.9] as const}}},
 } as const;
 
 /**
@@ -597,9 +623,14 @@ export class Sfx {
   private cart: {src: AudioBufferSourceNode; fade: GainNode; lp: BiquadFilterNode; pan: PannerNode; k: number; idle: ReturnType<typeof setTimeout> | null} | null = null;
   private cartStats = {starts: 0, stops: 0};
   // Task skyways-level-20261106 (lane CAR2): the prize car's engine channel (both loops; null while nobody drives) + counters
-  private engine: {idle: AudioBufferSourceNode; drive: AudioBufferSourceNode; gi: GainNode; gd: GainNode; pan: PannerNode; rate: number; vi: number; vd: number; revT: number} | null = null;
-  private carStats = {starts: 0, stops: 0, revs: 0, skids: 0, doors: 0};
+  // (round 2, lane AUDIO: + the reverse whine loop, per-loop rates, the start one-shot's voice and the startup hold)
+  private engine: {idle: AudioBufferSourceNode; drive: AudioBufferSourceNode; rev: AudioBufferSourceNode | null; gi: GainNode; gd: GainNode; gr: GainNode | null;
+    pan: PannerNode; ri: number; rd: number; rr: number; vi: number; vd: number; vr: number; rpm: number; revT: number; startT: number; hold: number} | null = null;
+  private engineStart: Voice | null = null;
+  private carStats = {starts: 0, stops: 0, revs: 0, startCues: 0, skids: 0, doors: 0, brakes: 0, impacts: 0};
   private skidAt = -Infinity;
+  private brakeAt = -Infinity;
+  private carImpactAt = {car: -Infinity, flesh: -Infinity};
   // Task skyways-destinations-20261106 (lane AUDIO): the location emitters (LOCATION_AUDIO), their channels, the clock chime's countdown
   private locations: LocationEmitter[] = [];
   private locCh: LocationChannel[] = [];
@@ -2030,17 +2061,22 @@ export class Sfx {
 
   /**
    * The Skyways prize car's engine while someone drives it (every frame): `speed01` 0..1 of its top speed, `throttle01` 0..1 (the pedal
-   * held in the direction of travel), `at` = the engine (world; omitted = the listener). ONE channel (CAR_AUDIO): created from silence on
-   * the first call — `rev` adds the start-up blip —, then only its targets move. Paused audio: nothing starts (a running one was stopped).
+   * held in the direction of travel), `at` = the engine (world; omitted = the listener), `reverse01` 0..1 of the reverse top speed while
+   * reversing. ONE channel (CAR_AUDIO: idle + drive + reverse-whine loops, one panner): created from silence on the first call — `rev`
+   * (getting in) plays the engine start and holds the loops under it —, then only its targets move. Paused audio: nothing starts (a
+   * running one was stopped).
    */
-  carEngine(speed01: number, throttle01: number, at?: Pos, o: {rev?: boolean} = {}): void {
+  carEngine(speed01: number, throttle01: number, at?: Pos, o: {rev?: boolean; reverse01?: number} = {}): void {
     const A = CAR_AUDIO, ctx = this.live;
     if (!ctx) { this.stopCarEngine(0.05); return; }
-    const k = Number.isFinite(speed01) ? clamp01(speed01) : 0, th = Number.isFinite(throttle01) ? clamp01(throttle01) : 0;
+    const fin = (v: number | undefined) => (v !== undefined && Number.isFinite(v) ? clamp01(v) : 0);
+    const k = fin(speed01), th = fin(throttle01), rv = fin(o.reverse01);
+    const p = at ?? this.listener;
     let e = this.engine;
     if (!e) {
       const ci = this.bank.pick('carIdle'), cd = this.bank.pick('carDrive');
       if (!ci || !cd) return;
+      const cr = this.bank.has('carReverse') ? this.bank.pick('carReverse') : null;
       const pan = this.makePanner(ctx, false, A.ref, A.rolloff);
       const nodes: AudioNode[] = [pan];
       const loop = (clip: NonNullable<typeof ci>): [AudioBufferSourceNode, GainNode] => {
@@ -2059,6 +2095,7 @@ export class Sfx {
         return [src, g];
       };
       const [idle, gi] = loop(ci), [drive, gd] = loop(cd);
+      const [rev, gr] = cr ? loop(cr) : [null, null];
       pan.connect(this.master);
       if (this.reverbIn) {
         const sn = ctx.createGain();
@@ -2068,36 +2105,99 @@ export class Sfx {
       }
       idle.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
       this.carStats.starts++;
-      e = this.engine = {idle, drive, gi, gd, pan, rate: -1, vi: -1, vd: -1, revT: -Infinity};
+      e = this.engine = {idle, drive, rev, gi, gd, gr, pan, ri: -1, rd: -1, rr: -1, vi: -1, vd: -1, vr: -1, rpm: 0, revT: -Infinity, startT: -Infinity, hold: 1};
     }
     const t = ctx.currentTime;
-    if (o.rev) { e.revT = t; this.carStats.revs++; }
-    const p = at ?? this.listener;
+    if (o.rev) {
+      // getting in: the start one-shot at the engine (a sounding one is cut first), the loops held silent under its crank / catch
+      this.carStats.revs++;
+      this.cutVoice(this.engineStart, 0.05);
+      this.engineStart = null;
+      const v = this.bank.has('carStart') ? this.voice({at: {x: p.x, y: p.y, z: p.z}, send: A.start.send, pri: 1, ref: A.ref, rolloff: A.rolloff, maxDist: 40, occlude: false}) : null;
+      if (v && this.play(v, 'carStart', {jitter: 0.02, gainJitter: 0.5, delay: A.start.delayS})) { this.engineStart = v; e.startT = t + A.start.delayS; e.hold = 0; this.carStats.startCues++; }
+      else e.revT = t; // no start clip: the round-1 blip
+    }
     this.setPannerPos(e.pan, p.x, p.y, p.z);
+    const S = A.start, since = t - e.startT;
+    if (e.hold < 1) e.hold = Math.max(e.hold, clamp01((since - (th > 0 ? S.catchS : S.holdS)) / S.fadeS)); // (never falls back)
     const r = t - e.revT < A.rev.s ? A.rev.peak * (1 - (t - e.revT) / A.rev.s) : 0;
-    const load = Math.max(r, clamp01(A.speedLoad * k + A.throttleLoad * th));
-    const rate = A.rate[0] + (A.rate[1] - A.rate[0]) * Math.max(r, clamp01(k + A.throttleRate * th));
-    const vi = CUE_GAIN.carIdle * (A.idleFloor + (1 - A.idleFloor) * Math.cos((load * Math.PI) / 2));
-    const vd = CUE_GAIN.carDrive * Math.sin((load * Math.PI) / 2);
-    if (Math.abs(rate - e.rate) < A.eps && Math.abs(vi - e.vi) < A.eps && Math.abs(vd - e.vd) < A.eps) return;
-    e.rate = rate; e.vi = vi; e.vd = vd;
-    for (const [param, v] of [[e.idle.playbackRate, rate], [e.drive.playbackRate, rate], [e.gi.gain, vi], [e.gd.gain, vd]] as const) {
+    const rpm = e.rpm = Math.max(r, clamp01(A.rpm.speed * k + A.rpm.throttle * th));
+    const lerp = (q: readonly [number, number], f: number) => q[0] + (q[1] - q[0]) * f;
+    const ri = lerp(A.idleRate, rpm), rd = lerp(A.driveRate, rpm), rr = lerp(A.reverse.rate, rv);
+    const vi = e.hold * CUE_GAIN.carIdle * (A.idleFloor + (1 - A.idleFloor) * Math.cos((rpm * Math.PI) / 2));
+    const vd = e.hold * CUE_GAIN.carDrive * Math.sin((rpm * Math.PI) / 2);
+    const vr = e.gr && rv > A.reverse.min ? e.hold * CUE_GAIN.carReverse * lerp(A.reverse.level, rv) : 0;
+    const ease = (param: AudioParam, v: number, was: number): number => {
+      if (Math.abs(v - was) < A.eps) return was;
       param.cancelScheduledValues(t);
       param.setTargetAtTime(v, t, A.tau);
-    }
+      return v;
+    };
+    e.ri = ease(e.idle.playbackRate, ri, e.ri);
+    e.rd = ease(e.drive.playbackRate, rd, e.rd);
+    e.vi = ease(e.gi.gain, vi, e.vi);
+    e.vd = ease(e.gd.gain, vd, e.vd);
+    if (e.rev && e.gr) { e.rr = ease(e.rev.playbackRate, rr, e.rr); e.vr = ease(e.gr.gain, vr, e.vr); }
   }
 
-  /** The car's engine fades out and is released (getting out, death, teardown, pause, a new world). Plays nothing. */
+  /**
+   * The car's engine fades out and is released (getting out, death, teardown: `stopFade` with the spin-down; pause, a new world: at once).
+   * A sounding engine start is cut. Plays nothing.
+   */
   stopCarEngine(fadeS: number = CAR_AUDIO.stopFade): void {
+    const ctx = this.ctx;
+    this.cutVoice(this.engineStart, Math.min(fadeS, 0.15));
+    this.engineStart = null;
     const e = this.engine;
     if (!e) return;
     this.engine = null;
     this.carStats.stops++;
-    const ctx = this.ctx;
     if (!ctx) return;
     const t = ctx.currentTime, f = Math.max(0.01, fadeS);
-    for (const g of [e.gi, e.gd]) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, f / 3); }
-    for (const src of [e.idle, e.drive]) { try { src.stop(t + f + 0.05); } catch { /* already stopped */ } }
+    for (const g of [e.gi, e.gd, e.gr]) if (g) { g.gain.cancelScheduledValues(t); g.gain.setTargetAtTime(0, t, f / 3); }
+    if (f >= 0.2) { // (getting out) the engine winds down as it fades
+      for (const [src, r] of [[e.idle, e.ri], [e.drive, e.rd], [e.rev, e.rr]] as const) {
+        if (!src || !(r > 0)) continue;
+        src.playbackRate.cancelScheduledValues(t);
+        src.playbackRate.setTargetAtTime(r * CAR_AUDIO.stopRate, t, f / 2);
+      }
+    }
+    for (const src of [e.idle, e.drive, e.rev]) if (src) { try { src.stop(t + f + 0.05); } catch { /* already stopped */ } }
+  }
+
+  /**
+   * The brake-to-stop (a real brake brought the car to rest: the squeal, the scrub, the suspension settling), at the car. `strength` 0..1
+   * (the speed it braked from) sets the level; at most one every CAR_AUDIO.brake.minGapS. True = it played.
+   */
+  carBrake(at?: Pos, strength = 1): boolean {
+    const B = CAR_AUDIO.brake, ctx = this.live;
+    if (!ctx || ctx.currentTime - this.brakeAt < B.minGapS) return false;
+    const s = Number.isFinite(strength) ? clamp01(strength) : 1;
+    const v = this.voice({at, send: B.send, pri: 1, ref: B.ref, maxDist: B.maxDist, gain: B.base + (1 - B.base) * s});
+    if (!this.play(v, 'carBrake', {jitter: 0.04, gainJitter: 1})) return false;
+    this.brakeAt = ctx.currentTime;
+    this.carStats.brakes++;
+    return true;
+  }
+
+  /**
+   * One of the car's contacts at `speed` m/s closing: 'car' = its body against the world (the metal crash + the topple rattle, heavier with
+   * speed), 'flesh' = a body it hit (the flesh slap + the body thump). Level / rate by the speed from impact.from[what] to impact.full;
+   * at most one per kind every impact.minGapS (a scrape along a wall reports every frame). True = it played.
+   */
+  carImpact(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): boolean {
+    const I = CAR_AUDIO.impact, ctx = this.live;
+    if (!ctx || !(speed >= I.from[what])) return false;
+    const now = ctx.currentTime;
+    if (now - this.carImpactAt[what] < I.minGapS[what]) return false;
+    const s = clamp01((speed - I.from[what]) / (I.full - I.from[what])), P = I[what];
+    const lerp = (q: readonly [number, number]) => q[0] + (q[1] - q[0]) * s;
+    const v = this.voice({at: {x, y, z}, ref: I.ref, rolloff: I.rolloff, send: I.send, pri: 1, maxDist: I.maxDist, gain: I.base + (1 - I.base) * Math.pow(s, 0.7)});
+    if (!this.play(v, P.cue, {rate: lerp(P.rate), jitter: 0.05, gain: P.gain})) return false;
+    this.play(v, P.layer.cue, {rate: lerp(P.layer.rate), jitter: 0.05, gain: P.layer.gain, delay: 0.004});
+    this.carImpactAt[what] = now;
+    this.carStats.impacts++;
+    return true;
   }
 
   /** A tyre skid (a hard brake / handbrake turn at speed): one take, at most every CAR_AUDIO.skid.minGapS. True = it played. */
@@ -2118,10 +2218,16 @@ export class Sfx {
     if (this.play(v, 'carDoor', {jitter: 0.03, gainJitter: 1})) this.carStats.doors++;
   }
 
-  /** QA / tests: the car cues' live state (the engine channel and its current targets, counters). Plays nothing. */
-  carAudioState(): {engine: boolean; rate: number; idle: number; drive: number; starts: number; stops: number; revs: number; skids: number; doors: number} {
-    const e = this.engine;
-    return {engine: !!e, rate: e?.rate ?? 0, idle: e?.vi ?? 0, drive: e?.vd ?? 0, ...this.carStats};
+  /**
+   * QA / tests: the car cues' live state — the engine channel, its rpm and current targets (`rate` = the drive loop's rate, `idleRate`,
+   * `reverseRate`; gains `idle` / `drive` / `reverse`), the startup hold (0 under the start one-shot .. 1), a start sounding, counters.
+   * Plays nothing.
+   */
+  carAudioState(): {engine: boolean; rpm: number; rate: number; idleRate: number; reverseRate: number; idle: number; drive: number; reverse: number; hold: number;
+    start: boolean; starts: number; stops: number; revs: number; startCues: number; skids: number; doors: number; brakes: number; impacts: number} {
+    const e = this.engine, now = this.ctx?.currentTime ?? 0, g = (v: number | undefined) => Math.max(0, v ?? 0);
+    return {engine: !!e, rpm: e?.rpm ?? 0, rate: g(e?.rd), idleRate: g(e?.ri), reverseRate: g(e?.rr), idle: g(e?.vi), drive: g(e?.vd), reverse: g(e?.vr),
+      hold: e?.hold ?? 0, start: !!this.engineStart && this.engineStart.end > now, ...this.carStats};
   }
 
   // ---------------------------------------------------------------------------------------

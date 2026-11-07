@@ -8,6 +8,9 @@
 // - Transfers go only through Inventory.storeMove / storeQuick / storeWornBag (the open Lockbox view); the 1337 gear drop through
 //   items/devGrant.ts. Loading malformed data never throws: bad slots are dropped, an old save without a lockbox loads empty.
 // Pure (no three.js / DOM).
+//
+// Task studio-beta-skyways-vehicle-20261107-054512-01 (lane TRUNK): the slot count is a constructor parameter (default LOCKBOX_SLOTS:
+// the Lockbox is unchanged) so the Skyways prize car's trunk (world/skywaysCarTrunk.ts, TRUNK_SLOTS) is the same store.
 
 import {ITEMS} from '../items/items';
 import {canonicalItemId} from '../items/calibers';
@@ -48,16 +51,21 @@ function stackFrom(j: unknown, inBag: boolean, seen: Set<number>): ItemStack | n
 
 export class TrainLockbox {
   /** The live slots (one array for the whole run: the open view and transfers hold it; load / clear write in place). */
-  readonly slots: (ItemStack | null)[] = new Array(LOCKBOX_SLOTS).fill(null);
+  readonly slots: (ItemStack | null)[];
   /** Bumped by load / clear / a grant (transfers bump the Inventory's version). */
   version = 0;
+
+  /** `size`: the slot count (the Lockbox: LOCKBOX_SLOTS; lane TRUNK: the car trunk's TRUNK_SLOTS). */
+  constructor(readonly size: number = LOCKBOX_SLOTS) {
+    this.slots = new Array(size).fill(null);
+  }
 
   get used(): number {
     return this.slots.filter(Boolean).length;
   }
 
   get free(): number {
-    return LOCKBOX_SLOTS - this.used;
+    return this.size - this.used;
   }
 
   /** JSON-safe deep copy (the RunParticipant save). */
@@ -69,7 +77,7 @@ export class TrainLockbox {
   load(d: unknown): void {
     const src = d && typeof d === 'object' && Array.isArray((d as TrainLockboxJSON).slots) ? (d as TrainLockboxJSON).slots : [];
     const seen = new Set<number>();
-    for (let i = 0; i < LOCKBOX_SLOTS; i++) this.slots[i] = stackFrom(src[i], false, seen);
+    for (let i = 0; i < this.size; i++) this.slots[i] = stackFrom(src[i], false, seen);
     this.version++;
   }
 
@@ -94,7 +102,7 @@ export class TrainLockbox {
   /** Test invariant check: slot count, stack limits, uids unique, bags one level deep with their own size. */
   invariants(): string[] {
     const out: string[] = [], uids = new Set<number>();
-    if (this.slots.length !== LOCKBOX_SLOTS) out.push(`lockbox has ${this.slots.length} slots`);
+    if (this.slots.length !== this.size) out.push(`lockbox has ${this.slots.length} slots`);
     const check = (s: ItemStack, inBag: boolean) => {
       const def = ITEMS[s.itemId];
       if (!def) { out.push(`unknown item ${s.itemId}`); return; }
