@@ -32,7 +32,7 @@ export const CON_DOOR_CLEAR = 1.5;
 /** Half width of the reserved walking lanes (entry -> stage, entry -> washrooms), m. */
 export const CON_LANE_HALF = 0.9;
 /** Half width of the strip kept along the stage front to the foot of its steps (lane VENUE), m. */
-export const CON_STEPS_LANE_HALF = 0.75;
+export const CON_STEPS_LANE_HALF = 0.9;
 /** Chairs per side of the centre aisle, rows at most; tables at most; merch per table (front row). */
 export const CON_CHAIRS = {perSide: 5, rows: 5, pitch: 1.0} as const;
 export const CON_TABLES_MAX = 10;
@@ -133,7 +133,7 @@ export function dressConvention(d: AddonDresser): ConventionResult {
   const vLast = vFirst - (nRows - 1) * CON_CHAIRS.pitch;
   const A = uvXZ(fr, us, Math.max(1.6, vLast - 1.4)), S = uvXZ(fr, us, vDeckFront - stepsD - 0.35);
   lane(d, res, ein, A, 'stage'); lane(d, res, A, S, 'stage');
-  // (lane VENUE) along the stage front to the foot of its steps (a 1.5 m strip: the first row's chairs in front of the steps give way)
+  // (lane VENUE) along the stage front to the foot of its steps (a 1.8 m lane like the others: the first row gives way in front of them)
   if (res.stage && res.treads.length) {
     const sf = SKYWAYS_STAGE_SURFACES[2], foot = stageWorldXZ(res.stage, (sf.x0 + sf.x1) / 2, sf.z1 + 0.7);
     d.keepSegment(S[0], S[1], foot[0], foot[1], CON_STEPS_LANE_HALF);

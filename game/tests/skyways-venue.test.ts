@@ -35,7 +35,7 @@ import {Player} from '../src/player/player';
 import {loadStripped} from './helpers/openablesFixture';
 import type {Area, StationLayout} from '../src/gen/stationTypes';
 
-const SEEDS = [4, 5, 7, 9, 13];
+const SEEDS = [4, 5, 7, 9, 13, 29]; // (29: a carve that fits the photo lounge)
 const DT = 1 / 60;
 const cache = new Map<string, StationLayout>();
 const gen = (seed: number, layoutVersion?: number): StationLayout => {

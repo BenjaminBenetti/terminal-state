@@ -114,11 +114,11 @@ export function dressSkywaysVenue(layout: StationLayout, rng: Rng): VenueResult 
   order('panel').forEach((a, k) => dressPanel(vc, a, k));
   for (const a of order('photo-lounge')) dressPhotoLounge(vc, a);
   const pieces = order('exhibitors').sort((p, q) => q.w * q.h - p.w * p.h);
+  exhibits(vc, pieces); // (the pop-up exhibits claim their walls first: the vendor rows fill around them)
   pieces.forEach((a, k) => exhibitorRows(vc, a, k));
   for (const a of areas) markRoutes(vc, a);
   // --- 2. the smaller pieces: greeters / welcome signs at the bridge mouths, exhibits, boards, posters -----------------------------
   for (const a of order('registration')) greet(vc, a);
-  pieces.forEach((a, k) => exhibits(vc, a, k));
   for (const a of areas) boards(vc, a, roleOf(a.id) === 'exhibitors' ? (a === pieces[0] ? 2 : 1) : roleOf(a.id) === 'registration' ? 2 : roleOf(a.id) === 'panel' ? 0 : 1);
   {
     const order2 = rng.shuffle(SKYWAYS_CON_POSTERS.map((_, i) => i));
@@ -554,36 +554,37 @@ function exhibitorRows(vc: VenueCtx, a: Area, rank: number): void {
   void rank;
 }
 
-/** The pop-up exhibits: a retro game corner in the roomiest piece, a cosplay display of mannequins in the next. */
-function exhibits(vc: VenueCtx, a: Area, rank: number): void {
+/**
+ * The pop-up exhibits: a retro game corner (two arcade cabinets + a capsule-toy row) and the giant teddy in the roomiest piece that takes
+ * them, a cosplay display of mannequins preferably in another piece.
+ */
+function exhibits(vc: VenueCtx, pieces: readonly Area[]): void {
   const {v, res} = vc, rng = v.rng;
-  if (rank > 1 || Math.min(a.w, a.h) * CELL < 3.0) return;
-  if (rank === 0) {
+  const roomy = pieces.filter(a => Math.min(a.w, a.h) * CELL >= 3.0);
+  const along = (a: Area, kind: PropKind, o: Parameters<typeof rowAlongWall>[4], least: number): PropPlacement[] | null => {
     for (const side of rng.shuffle(SIDES.slice())) {
-      const got = group(vc, [a], () => {
-        const n = v.layout.props.length;
-        const cab = rowAlongWall(v.ctx, a, side, 'arcadeCabinet', {max: 2, front: 1.0});
-        if (!cab.length) return null;
-        const at = cab[cab.length - 1], hi = wallRange(a, side)[1], t = side === 'N' || side === 'S' ? at.x : at.z;
-        rowAlongWall(v.ctx, a, side, 'capsuleToyMachine', {from: Math.min(hi - 1.6, t + 0.6), to: hi, max: 3, front: 0.9});
-        return propsSince(v, n);
-      });
-      if (got) { res.exhibits.push(...got); break; }
+      const got = group(vc, [a], () => { const n = v.layout.props.length; return rowAlongWall(v.ctx, a, side, kind, o).length >= least ? propsSince(v, n) : null; });
+      if (got) return got;
     }
-    for (const side of rng.shuffle(SIDES.slice())) {
-      const got = group(vc, [a], () => { const n = v.layout.props.length; return rowAlongWall(v.ctx, a, side, 'giantTeddy', {max: 1, front: 0.6}).length ? propsSince(v, n) : null; });
-      if (got) { res.exhibits.push(...got); break; }
-    }
+    return null;
+  };
+  let corner: Area | null = null;
+  for (const a of roomy) {
+    const got = along(a, 'arcadeCabinet', {max: 2, front: 1.0}, 2);
+    if (!got) continue;
+    res.exhibits.push(...got);
+    corner = a;
+    res.exhibits.push(...(along(a, 'capsuleToyMachine', {max: 3, front: 0.9}, 2) ?? []));
+    break;
   }
-  if (rank === 1 || res.exhibits.length < 3) {
-    const kind: PropKind = rng.chance(0.5) ? 'mannequinFull' : 'mannequinFemale';
-    for (const side of rng.shuffle(SIDES.slice())) {
-      const got = group(vc, [a], () => {
-        const n = v.layout.props.length;
-        return rowAlongWall(v.ctx, a, side, kind, {max: 3, cluster: 1, gap: 0.5, front: 0.8}).length >= 2 ? propsSince(v, n) : null;
-      });
-      if (got) { res.exhibits.push(...got); break; }
-    }
+  for (const a of corner ? [corner, ...roomy.filter(q => q !== corner)] : roomy) {
+    const got = along(a, 'giantTeddy', {max: 1, front: 0.6}, 1);
+    if (got) { res.exhibits.push(...got); break; }
+  }
+  const kind: PropKind = rng.chance(0.5) ? 'mannequinFull' : 'mannequinFemale';
+  for (const a of [...roomy.filter(q => q !== corner), ...(corner ? [corner] : [])]) {
+    const got = along(a, kind, {max: 3, cluster: 1, gap: 0.5, front: 0.8}, 2);
+    if (got) { res.exhibits.push(...got); break; }
   }
 }
 
