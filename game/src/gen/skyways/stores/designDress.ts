@@ -64,6 +64,13 @@ export function skywaysDesignDressOf(layout: StationLayout): readonly DesignResu
 interface Ctx { kit: AnchorKit; res: DesignResult; rugs: {level: number; x0: number; z0: number; x1: number; z1: number}[]; rugN: number }
 
 const quarterTurned = (rot: number) => Math.abs(Math.sin(rot)) > 0.7;
+/**
+ * Pitch (m) of units of width `w` packed side by side so they never share a placement cell (whole cells; the cell test lets a box reach
+ * 4 cm into a free cell), and a run's start `t` (its first unit's centre along the wall) moved so that unit's low edge sits on a cell
+ * line: the next unit then starts on a clean cell.
+ */
+export const designPitch = (w: number): number => r3(Math.max(w + 0.01, (Math.floor((w - 0.04) / CELL) + 1) * CELL));
+const snapRun = (t: number, w: number): number => r3(Math.round((t - w / 2) / CELL) * CELL + w / 2);
 /** World AABB [x0, z0, x1, z1] of a host-local rect (quarter-turn hosts). */
 function localBox(host: {x: number; z: number; rot: number}, lx0: number, lz0: number, lx1: number, lz1: number): [number, number, number, number] {
   const a = toWorld(host, lx0, lz0), b = toWorld(host, lx1, lz1);
@@ -83,19 +90,26 @@ export function dressDesignStore(layout: StationLayout, rng: Rng, anchor: Skyway
   // the entrance storey: the textiles band by the door, the kitchen, the living / dining (and in a hall: bedroom, lighting) vignettes
   textileTables(C, L, rng.int(2, 3), [2.4, Math.max(4.2, Math.min(6.5, kit.fr.D * 0.32))]);
   if (!kitchen(C, L)) kit.skipped.push('kitchen display');
-  const firsts: ((c: Ctx, l: number) => boolean)[] = U === null ? [livingSet, bedroomSet, diningSet] : [livingSet, diningSet];
-  for (const f of firsts) if (!f(C, L)) kit.skipped.push(`${f.name} on the sales floor`);
-  if (U === null && !lighting(C, L)) kit.skipped.push('lighting gallery');
-  moreSets(C, L, U === null ? [livingSet, diningSet, bedroomSet, readingCorner] : [livingSet, diningSet, livingSet, readingCorner], U === null ? 3 : 3);
+  // (the wall-backed sets before the island ones: the lighting row needs ~4 m of free wall)
+  const firsts: [string, (c: Ctx, l: number) => boolean][] = U === null
+    ? [['living room', livingSet], ['bedroom', bedroomSet], ['lighting gallery', lighting], ['dining set', diningSet]]
+    : [['living room', livingSet], ['dining set', diningSet]];
+  for (const [what, f] of firsts) if (!f(C, L)) kit.skipped.push(`${what} on the sales floor`);
+  moreSets(C, L, U === null ? [livingIsland, diningSet, bedroomSet, readingCorner] : [livingIsland, diningSet, livingSet, readingCorner], 3);
   wallFill(C, L);
+  // (what floor is left in the middle: a table or two more of throws)
+  textileTables(C, L, rng.int(1, 2), [3.0, kit.fr.D - 1.6], true);
   kit.posters(3);
-  // the other storey of a two-level shop: the bedroom + lighting showroom
+  // the other storey of a two-level shop: the bedroom + lighting showroom (bedding tables, bedrooms, the lighting gallery, a nook)
   if (U !== null) {
     textileTables(C, U, rng.int(1, 2), [1.6, kit.fr.D - 1.6]);
     for (let i = 0, n = rng.int(2, 3); i < n; i++) if (!bedroomSet(C, U) && i === 0) kit.skipped.push('bedroom on the other storey');
     if (!lighting(C, U)) kit.skipped.push('lighting gallery (other storey)');
-    moreSets(C, U, [readingCorner, bedroomSet, livingSet], 2);
+    // (a vignette the sales floor had no room for moves up / down)
+    for (const [kind, f] of [['living', livingSet], ['dining', diningSet]] as const) if (!C.res.sets.some(s => s.kind === kind)) f(C, U);
+    moreSets(C, U, [readingCorner, bedroomSet, livingIsland, livingSet], 3);
     wallFill(C, U);
+    textileTables(C, U, rng.int(1, 2), [1.6, kit.fr.D - 1.6], true);
     kit.posters(2, U);
   }
   backOfHouse(C, desk);
@@ -125,19 +139,23 @@ function designDesk(C: Ctx): PropPlacement | null {
     if (Math.hypot(sp.x - ex, sp.z - ez) > 14) break;
     for (const n of [2, 1]) {
       const got: PropPlacement[] = [];
+      // (the counters' low edge on a cell line: two modules pack without sharing a cell)
+      const pitch = designPitch(sc.w), tt = snapRun(sp.t, n === 2 ? sc.w + pitch : sc.w);
+      if (!kit.solidWall(sp.a, sp.side, tt, 'mallCashwrapCounter')) continue;
+      const at = wallSpot(sp.a, sp.side, tt, 'mallCashwrapCounter');
       const ok = kit.cluster(() => {
-        const w = kit.put('mallCashwrapCounter', sp.x, sp.z, sp.rot, {area: sp.a});
+        const w = kit.put('mallCashwrapCounter', at.x, at.z, at.rot, {area: sp.a});
         if (!w) return false;
         got.push(w);
         for (let k = 0; k < n; k++) {
-          const lx = n === 1 ? 0 : (k - 0.5) * (sc.w + 0.01);
+          const lx = n === 1 ? 0 : (k - 0.5) * pitch;
           const [x, z] = toWorld(w, lx, lzCounter);
           const c = kit.put('shopCounter', x, z, w.rot, {front: 1.0});
           if (!c) return false;
           got.push(c);
         }
         // the staff aisle between the cash-wrap and the counters, open at (at least) one end
-        const half = n * (sc.w + 0.01) / 2, z0 = wrapCells - (0.03 + cw.d / 2) + 0.02, z1 = z0 + DESIGN_DESK_AISLE - 0.04;
+        const half = (n === 1 ? sc.w : sc.w + pitch) / 2, z0 =wrapCells - (0.03 + cw.d / 2) + 0.02, z1 = z0 + DESIGN_DESK_AISLE - 0.04;
         const mid = localBox(w, -half, z0, half, z1);
         if (!kit.boxFree(mid[0], mid[1], mid[2], mid[3], kit.level, true)) return false;
         const ends = [localBox(w, -half - 0.9, z0, -half, z1), localBox(w, half, z0, half + 0.9, z1)].filter(b => kit.boxFree(b[0], b[1], b[2], b[3], kit.level, true));
@@ -278,17 +296,17 @@ function lattice(kit: AnchorKit, kind: PropKind, o: {level: number; ring?: numbe
 // --- the textiles band -------------------------------------------------------------------------------------------------------------
 
 /** Display tables of folded throws (now and then towels): two or four stacks each, the middle of the top left for its stock. */
-function textileTables(C: Ctx, level: number, n: number, v: [number, number]): void {
+function textileTables(C: Ctx, level: number, n: number, v: [number, number], fill = false): void {
   const {kit} = C, mt = PROP_DEFS.merchTable;
   let tables = lattice(kit, 'merchTable', {level, ring: 0.9, pitch: [2.8, 2.6], v: [v[0] + mt.d / 2, Math.max(v[0] + mt.d / 2, v[1] - mt.d / 2)], max: n});
-  if (!tables.length) tables = lattice(kit, 'merchTable', {level, ring: 0.9, pitch: [2.8, 2.6], max: n});
+  if (!tables.length && !fill) tables = lattice(kit, 'merchTable', {level, ring: 0.9, pitch: [2.8, 2.6], max: n});
   tables.forEach((t, i) => {
     const towels = i === 1 && kit.rng.chance(0.6);
     const rows = kit.rng.chance(0.5) ? [-0.22, 0.22] : [0];
     for (const lx of [-0.5, 0.5]) for (const lz of rows) textilesOn(kit, t, mt.h, lx, lz, towels ? towelVariant(kit) : throwVariant(kit));
     C.res.sets.push({kind: 'textiles', level, props: [t]});
   });
-  if (!tables.length) kit.skipped.push(`textile tables (level ${level})`);
+  if (!tables.length && !fill) kit.skipped.push(`textile tables (level ${level})`);
 }
 
 // --- the kitchen display -----------------------------------------------------------------------------------------------------------
@@ -298,11 +316,13 @@ function kitchen(C: Ctx, level: number): boolean {
   const {kit} = C, k = PROP_DEFS.kitchenette, mt = PROP_DEFS.merchTable, ch = PROP_DEFS.cafeChair, fr = kit.fr;
   const flanks = (['N', 'S', 'E', 'W'] as Side[]).filter(s => s !== fr.front && s !== fr.back);
   const spots = [...wallAnchors(kit, 'kitchenette', level, 0, [fr.back]), ...wallAnchors(kit, 'kitchenette', level, 0, flanks)].slice(0, 60);
+  const pitch = designPitch(k.w);
   for (const units of [kit.rng.int(2, 3), 2]) for (const sp of spots) {
     const got: PropPlacement[] = [];
+    const t0 = snapRun(sp.t, k.w);
     const ok = kit.cluster(() => {
       for (let i = 0; i < units; i++) {
-        const t = sp.t + i * (k.w + 0.01);
+        const t = t0 + i * pitch;
         if (!kit.solidWall(sp.a, sp.side, t, 'kitchenette', level)) return false;
         const at = wallSpot(sp.a, sp.side, t, 'kitchenette');
         const p = kit.put('kitchenette', at.x, at.z, at.rot, {level, area: sp.a, front: 0.9});
@@ -344,12 +364,30 @@ const BED_TURN = -Math.PI / 2;
 
 /** The living room: sofa to the wall, an ottoman as the coffee table, two armchairs across it, the arc lamp, a side table, a plant. */
 function livingSet(C: Ctx, level: number): boolean {
-  const {kit} = C, sofa = PROP_DEFS.skyDSofa, ot = PROP_DEFS.ottoman, lamp = PROP_DEFS.skyDArcLamp, tb = PROP_DEFS.cafeBistroTable;
-  for (const sp of wallAnchors(kit, 'skyDSofa', level)) {
+  return living(C, level, false);
+}
+/** The living room as a free-standing ISLAND on the open floor (the sofa's back to an aisle): fills a showroom's middle. */
+function livingIsland(C: Ctx, level: number): boolean {
+  return living(C, level, true);
+}
+function living(C: Ctx, level: number, island: boolean): boolean {
+  const {kit} = C, sofa = PROP_DEFS.skyDSofa, ot = PROP_DEFS.ottoman, lamp = PROP_DEFS.skyDArcLamp, tb = PROP_DEFS.cafeBistroTable, fr = kit.fr;
+  const anchors: {a?: Area; x: number; z: number; rot: number}[] = island ? [] : wallAnchors(kit, 'skyDSofa', level);
+  if (island) {
+    const [ox, oz] = wayIn(kit, level);
+    const spots: [number, number][] = [];
+    for (let u = 3.0; u <= fr.W - 3.0; u += 1.0) for (let v = 3.5; v <= fr.D - 3.0; v += 1.0) spots.push(kit.uv(u, v));
+    for (const [x, z] of kit.rng.shuffle(spots).slice(0, 60)) {
+      if (Math.hypot(x - ox, z - oz) < 3) continue;
+      const rot = kit.rng.pick([fr.toFront, fr.toBack, fr.plusU, fr.minusU]), q = quarterTurned(rot);
+      anchors.push({x: snapEdge(x, (q ? sofa.d : sofa.w) / 2), z: snapEdge(z, (q ? sofa.w : sofa.d) / 2), rot});
+    }
+  }
+  for (const sp of anchors) {
     const got: PropPlacement[] = [];
     let far = 0;
     const ok = kit.cluster(() => {
-      const s = kit.put('skyDSofa', sp.x, sp.z, sp.rot, {level, area: sp.a});
+      const s = kit.put('skyDSofa', sp.x, sp.z, sp.rot, {level, ...(sp.a ? {area: sp.a} : {})});
       if (!s) return false;
       got.push(s);
       const zo = sofa.d / 2 + 0.45 + ot.d / 2;
@@ -363,7 +401,7 @@ function livingSet(C: Ctx, level: number): boolean {
         const c = putFirst(kit, chair, s, [[sx, zc], [sx, zc + 0.25], [sx * 1.25, zc]], normYaw(s.rot + Math.PI), level);
         if (c) { got.push(c); chairs++; far = Math.max(far, zc + cd / 2); }
       }
-      if (!chairs) return false;
+      if (!chairs || (island && chairs < 2)) return false;
       const side = kit.rng.chance(0.5) ? 1 : -1;
       const pl = putFirst(kit, 'skyDArcLamp', s, [[side * (sofa.w / 2 + 0.06 + lamp.d / 2), -sofa.d / 2 + lamp.w / 2], [side * (sofa.w / 2 + 0.3 + lamp.d / 2), -sofa.d / 2 + lamp.w / 2]], lampYaw(s.rot), level);
       if (pl) got.push(pl);
@@ -376,7 +414,7 @@ function livingSet(C: Ctx, level: number): boolean {
     }, level);
     if (!ok) continue;
     const s = got[0];
-    done(C, 'living', level, got, localBox(s, -(sofa.w / 2 + 0.3), sofa.d / 2 - 0.3, sofa.w / 2 + 0.3, far - 0.25));
+    done(C, 'living', level, got, localBox(s, -(sofa.w / 2 + 0.3), island ? -sofa.d / 2 + 0.1 : sofa.d / 2 - 0.3, sofa.w / 2 + 0.3, far - 0.25), island ? 0.8 : 0.6);
     return true;
   }
   return false;
@@ -507,17 +545,18 @@ function moreSets(C: Ctx, level: number, order: ((c: Ctx, l: number) => boolean)
 // --- the lighting gallery ------------------------------------------------------------------------------------------------------------
 
 /**
- * A row of three or four arc lamps backed to a wall (bases at the wall, shades out over the floor) on a rug, a glass vitrine at an end
+ * A row of arc lamps (three or four; two where the walls are short) backed to a wall (bases at the wall, shades out over the floor) on a rug, a glass vitrine at an end
  * of the row, a table of desk lamps in front. The vitrine and the table hold a lighting department's spare cells (per-holder purpose).
  */
 function lighting(C: Ctx, level: number): boolean {
   const {kit} = C, lamp = PROP_DEFS.skyDArcLamp, gdc = PROP_DEFS.glassDisplayCabinet, mt = PROP_DEFS.merchTable, dl = PROP_DEFS.draftingLamp;
-  const pitch = 0.9, turn = Math.PI / 2;
-  for (const n of [kit.rng.int(3, 4), 3]) for (const sp of wallAnchors(kit, 'skyDArcLamp', level, turn).slice(0, 40)) {
+  const pitch = designPitch(lamp.d), turn = Math.PI / 2;
+  for (const n of [kit.rng.int(3, 4), 3, 2]) for (const sp of wallAnchors(kit, 'skyDArcLamp', level, turn).slice(0, 40)) {
     const got: PropPlacement[] = [];
+    const t0 = snapRun(sp.t, lamp.d), lo0 = t0 - lamp.d / 2;
     const ok = kit.cluster(() => {
       for (let i = 0; i < n; i++) {
-        const t = sp.t + i * pitch;
+        const t = t0 + i * pitch;
         if (!kit.solidWall(sp.a, sp.side, t, 'skyDArcLamp', level, lamp.d)) return false;
         const [x, z] = wallXZ(sp.a, sp.side, t, lamp.w / 2 + 0.03);
         const p = kit.put('skyDArcLamp', x, z, sp.rot, {level, area: sp.a});
@@ -526,7 +565,8 @@ function lighting(C: Ctx, level: number): boolean {
       }
       // a vitrine at one end of the row (its glass doors open forward: a front strip)
       const [lo, hi] = wallRange(sp.a, sp.side);
-      for (const t of [sp.t - lamp.d / 2 - 0.3 - gdc.w / 2, sp.t + (n - 1) * pitch + lamp.d / 2 + 0.3 + gdc.w / 2]) {
+      // (beside the row's end cells: the low end just under the first lamp's cell line, the high end past the last lamp's cells)
+      for (const t of [lo0 - 0.05 - gdc.w / 2, lo0 + n * pitch + 0.02 + gdc.w / 2]) {
         if (t - gdc.w / 2 < lo + 0.2 || t + gdc.w / 2 > hi - 0.2 || !kit.solidWall(sp.a, sp.side, t, 'glassDisplayCabinet', level)) continue;
         const at = wallSpot(sp.a, sp.side, t, 'glassDisplayCabinet');
         const v = kit.put('glassDisplayCabinet', at.x, at.z, at.rot, {level, area: sp.a, front: 0.8});
@@ -595,6 +635,28 @@ function backPut(layout: StationLayout, ctx: PlaceCtx, a: Area, kind: PropKind, 
   return null;
 }
 
+/** A small `kind` on the open floor of a back room within two cells of a wall (cell-aligned; the room stays connected). */
+function backFloorPut(layout: StationLayout, ctx: PlaceCtx, a: Area, kind: PropKind): PropPlacement | null {
+  const def = PROP_DEFS[kind], cands: [number, number, number][] = [];
+  for (const rot of [0, Math.PI / 2]) {
+    const q = rot !== 0, hx = (q ? def.d : def.w) / 2, hz = (q ? def.w : def.d) / 2;
+    for (let cy = a.y; cy < a.y + a.h; cy++) for (let cx = a.x; cx < a.x + a.w; cx++) {
+      const x = r3(cx * CELL + hx + 0.02), z = r3(cy * CELL + hz + 0.02);
+      const nearWall = Math.min(cx - a.x, a.x + a.w - 1 - cx, cy - a.y, a.y + a.h - 1 - cy) <= 2;
+      if (nearWall && x + hx < (a.x + a.w) * CELL - 0.02 && z + hz < (a.y + a.h) * CELL - 0.02) cands.push([x, z, rot]);
+    }
+  }
+  for (const [x, z, rot] of ctx.rng.shuffle(cands).slice(0, 80)) {
+    begin(ctx);
+    const p = tryPlaceProp(ctx, a, kind, x, z, rot);
+    const lv = p?.level ?? 0;
+    if (!p || layout.props.some(q => q !== p && !q.mounted && q.host === undefined && (q.level ?? 0) === lv && Math.abs(q.x - p.x) < q.hx + p.hx - 0.01 && Math.abs(q.z - p.z) < q.hz + p.hz - 0.01)) { rollback(ctx); continue; }
+    commit(ctx);
+    return p;
+  }
+  return null;
+}
+
 /**
  * The back rooms: flat-pack cartons (openable flap-top boxes), lidded totes, staff lockers and a staff fridge in the stock room; a
  * carton or two and lockers in the office. With no back room: a staff stock corner (tall cupboard, shelving, cartons) by the desk.
@@ -607,17 +669,20 @@ function backOfHouse(C: Ctx, desk: PropPlacement | null): void {
     const level = a.level ?? 0;
     const ctx = makePlaceCtx(layout, rng, level, {x0: a.x - 3, y0: a.y - 3, x1: a.x + a.w + 3, y1: a.y + a.h + 3});
     const got: PropPlacement[] = [];
-    const add = (kind: PropKind, n: number, front?: number) => { for (let i = 0; i < n; i++) { const p = backPut(layout, ctx, a, kind, front); if (!p) break; got.push(p); } };
+    // (cartons and totes: against a wall, else on the open floor near one — the station dresser's shelving often lines every wall)
+    const add = (kind: PropKind, n: number, front?: number, floor = false) => {
+      for (let i = 0; i < n; i++) { const p = backPut(layout, ctx, a, kind, front) ?? (floor ? backFloorPut(layout, ctx, a, kind) : null); if (!p) break; got.push(p); }
+    };
     const has = (kind: PropKind) => layout.props.some(p => p.area === a.id && p.kind === kind);
     if (a.type === 'stock-room') {
-      add('cardboardBoxFlaps', rng.int(3, 5));
       if (!has('staffLockers')) add('staffLockers', 1);
-      add('storageTote', rng.int(1, 2));
       if (!has('fridge') && rng.chance(0.7)) add('fridge', 1);
       if (!has('stockShelf') && !has('shelf')) add('stockShelf', 2, 0.9);
+      add('cardboardBoxFlaps', rng.int(3, 5), undefined, true);
+      add('storageTote', rng.int(1, 2), undefined, true);
     } else {
-      add('cardboardBoxFlaps', rng.int(1, 2));
       if (!has('staffLockers')) add('staffLockers', 1);
+      add('cardboardBoxFlaps', rng.int(1, 2), undefined, true);
     }
     C.res.back.push({area: a.id, type: a.type, props: got});
   }
