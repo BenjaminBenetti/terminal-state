@@ -29,7 +29,7 @@ import {finishClass} from '../src/damage/impactFinish';
 import {WorldMaterials, SurfaceNodeMaterial} from '../src/world/materials';
 import {buildWorld, type BuiltWorld} from '../src/world/builder';
 import {LevelColumns, ceilingRuns, stationLevels} from '../src/world/levelGeometry';
-import {SKYWAYS_TEX_KEYS, skywaysAreaClass} from '../src/world/skywaysArch';
+import {SKYWAYS_TEX_KEYS} from '../src/world/skywaysArch';
 import {BRIDGE_PANE_MAX, bridgeRoofBays, bridgeRoofPlan, bridgeRoofProfile} from '../src/world/skywaysBridgeRoofs';
 import {SKYLIGHT_SKY_KEY} from '../src/world/skywaysSkylights';
 import {SkywaysArchTextureRuntime, setSkywaysArchTexture, usesSkywaysArchTextures} from '../src/world/skywaysArchTextures';
@@ -121,7 +121,7 @@ describe('glazed bridge roofs', () => {
         // no fixture hangs at the ridge: the deck's lights are daylight under the glass (gen/skyways/skylights.ts glazedBridgeDaylight)
         const deckLights = L.lights.filter(l => l.area === b.area);
         expect(deckLights.filter(l => !l.virtual).length, `${b.id} fixtures`).toBe(0);
-        for (const l of deckLights) expect(l.y, `${b.id} light under the glass`).toBeLessThan(b.roof!.springY);
+        for (const l of deckLights) expect(l.y, `${b.id} light under the glass`).toBeLessThan(b.roof!.apexY);
         expect(L.lights.filter(l => l.virtual && l.x > b.rect.x0 && l.x < b.rect.x1 && l.z > b.rect.z0 && l.z < b.rect.z1).length, `${b.id} daylight`).toBeGreaterThan(0);
         log(`seed ${seed} ${b.id} ${b.roof!.style} w ${b.width} len ${b.length}: ribs ${st.ribs} panes ${st.panes} purlins ${st.purlins} meshes ${st.meshes} tris ${st.triangles}`);
       }
@@ -173,12 +173,12 @@ describe('skylight coffers', () => {
       const L = gen(seed), w = world(seed), a = w.skywaysArch!, info = L.skyways!;
       const sk = info.skylights ?? [];
       total += sk.length;
-      const bridges = new Set(info.bridges.map(b => b.area)), g = L.levels[2].grid;
+      const g = L.levels[2].grid;
       for (const s of sk) {
         expect(s.level).toBe(2);
         const ar = L.areas[s.area];
         expect(ar.publicSpace, ar.label).toBe(true);
-        expect(skywaysAreaClass(ar, bridges), ar.label).toBe('public');
+        expect(a.classOf(s.area), ar.label).toBe('public');
         expect(info.addon.areas).not.toContain(s.area);
         expect(s.topY - s.ceilY).toBeCloseTo(SKYLIGHT.depth, 3);
         expect(Math.round((s.rect.x1 - s.rect.x0) / CELL)).toBe(SKYLIGHT.size);
@@ -314,7 +314,7 @@ describe('court / bridge textures (Codex derivatives)', () => {
       expect(a.rework).toBe(true);
       const b = info.bridges[0], g2 = L.levels[2].grid, [bx, by] = g2.cellOf((b.rect.x0 + b.rect.x1) / 2, (b.rect.z0 + b.rect.z1) / 2);
       expect(a.floorKey(2, g2.idx(bx, by))).toBe(SKYWAYS_TEX_KEYS.pavers);
-      const court = L.areas.find(q => skywaysAreaClass(q, new Set(info.bridges.map(x => x.area))) === 'court')!;
+      const court = L.areas.find(q => (q.level ?? 0) === 1 && a.classOf(q.id) === 'court')!;
       const g1 = L.levels[1].grid;
       let ci = -1;
       for (let y = court.y; y < court.y + court.h && ci < 0; y++) for (let x = court.x; x < court.x + court.w; x++) if (g1.cells[g1.idx(x, y)] === FLOOR && g1.area[g1.idx(x, y)] === court.id) { ci = g1.idx(x, y); break; }

@@ -104,13 +104,14 @@ export function skywaysSkylights(layout: StationLayout): number {
   return out.length;
 }
 
-/** A glazed bridge's daylight source: its drop under the springing line and its power (the lighting pass's fixtures it replaces). */
+/** A glazed bridge's daylight source: its drop under the roof's apex (above every door head) and its power. */
 export const BRIDGE_DAYLIGHT = {below: 0.3, power: 0.42} as const;
 
 /**
  * Under a glazed bridge roof (layout version 3: the deck's ceiling is the roof's apex, nothing to hang a fixture from but the glass)
  * the lighting pass's ceiling fixtures of the deck become fixture-less DAYLIGHT sources (virtual, the Office's DAYLIGHT_TINT) at the
- * same spots, BRIDGE_DAYLIGHT.below under the springing line: the tube is lit by the sky through its glass, no lamp floats at the ridge.
+ * same spots, BRIDGE_DAYLIGHT.below under the glass apex (over the mouths' door heads): the tube is lit by the sky through its glass,
+ * no lamp floats at the ridge.
  */
 function glazedBridgeDaylight(layout: StationLayout): number {
   const info = layout.skyways!;
@@ -120,7 +121,7 @@ function glazedBridgeDaylight(layout: StationLayout): number {
     for (const l of layout.lights) {
       if (l.virtual || l.area !== b.area) continue;
       l.virtual = true;
-      l.y = r3(b.roof.springY - BRIDGE_DAYLIGHT.below);
+      l.y = r3(b.roof.apexY - BRIDGE_DAYLIGHT.below);
       l.tint = DAYLIGHT_TINT;
       l.warm = false; l.broken = false; l.flicker = false; l.dying = false;
       l.power = BRIDGE_DAYLIGHT.power;
