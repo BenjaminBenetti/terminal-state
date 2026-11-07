@@ -7,7 +7,7 @@
 // follow it through this one constant.
 
 import type {Rng} from '../../../core/rng';
-import type {StationLayout} from '../../stationTypes';
+import type {Area, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor, SkywaysShopFamily} from '../skywaysTypes';
 import type {SkywaysStoreSpec} from './types';
 import {STORE_BOOKS} from './books';
@@ -28,6 +28,19 @@ export const SKYWAYS_STORES: Readonly<Record<SkywaysShopFamily, SkywaysStoreSpec
   books: STORE_BOOKS, outfitter: STORE_OUTFITTER, music: STORE_MUSIC, hobby: STORE_HOBBY, design: STORE_DESIGN, garden: STORE_GARDEN, arcade: STORE_ARCADE, cinema: STORE_CINEMA, science: STORE_SCIENCE, hockey: STORE_HOCKEY,
 };
 
+
+/**
+ * Version >= 3, BEFORE the station dresser: flag every store area (the sales floor and its pieces, the upper floor and its pieces, the
+ * zones, the back rooms) `noFloorLoot` — the store's loot is on its shelves / counters / in its containers, never loose floor piles
+ * (the level's floor program keeps its count; those boxes land in the other rooms).
+ */
+export function markStoreAreas(areas: Area[], anchors: readonly {floor: number; upper?: number | null; zones: readonly number[]; stock: readonly number[]}[]): void {
+  for (const an of anchors) {
+    const ids = new Set<number>([an.floor, ...an.zones, ...an.stock, ...(an.upper != null ? [an.upper] : [])]);
+    for (const a of areas) if ((a.parent === an.floor && a.type === 'shop') || (an.upper != null && a.parent === an.upper)) ids.add(a.id);
+    for (const id of ids) if (areas[id]) areas[id].noFloorLoot = true;
+  }
+}
 
 /**
  * Version >= 3: give the anchor's areas their store's loot purposes (Skyways only: the anchor areas of this layout) and dress it with

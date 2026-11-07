@@ -60,6 +60,17 @@ describe('Skyways major stores: the contract', () => {
     expect(seen).toBeGreaterThan(10);
   }, 600_000);
 
+  it('version 3: no loose floor piles in a store (noFloorLoot on every store area; the level keeps its floor-supply count)', () => {
+    for (const seed of [1, 3, 6]) {
+      const l = gen(seed, 3), v2 = gen(seed, 2);
+      const flagged = new Set(l.areas.filter(a => a.noFloorLoot).map(a => a.id));
+      for (const an of l.skyways!.anchors ?? []) for (const id of [an.floor, ...an.zones, ...an.stock, ...(an.upper !== undefined ? [an.upper] : [])]) expect(flagged.has(id), `${an.family} area ${id}`).toBe(true);
+      const onFloor = l.pickups.filter(p => flagged.has(p.area) && Math.abs(p.y - (l.areas[p.area].floorY ?? 0)) < 0.05);
+      expect(onFloor, `seed ${seed}`).toEqual([]);
+      expect(v2.areas.some(a => a.noFloorLoot)).toBe(false);
+    }
+  }, 600_000);
+
   it('version 2 anchors keep their record; the renderer turns their sign band to the lobby (anchorSign)', () => {
     const l = gen(4, 2);
     for (const an of l.skyways!.anchors ?? []) {

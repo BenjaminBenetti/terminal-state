@@ -111,6 +111,12 @@ export interface Area extends Rect {
    * service network (gen/trackExt/carve.ts, TrackExtConfig.annex.hall); its signature content comes from gen/annexRooms.ts.
    */
   extHall?: boolean;
+  /**
+   * Task studio-alpha-skyways-shops-20261107-054512-01: no loose FLOOR supplies here (the station dresser's floor program skips it; the
+   * level's count is unchanged, the boxes land elsewhere) — a Skyways major store's areas from layout version 3: its loot is on its
+   * shelves / counters / in its containers.
+   */
+  noFloorLoot?: true;
 }
 
 export interface Door extends Rect {

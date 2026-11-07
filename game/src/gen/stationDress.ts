@@ -1131,6 +1131,7 @@ export function placeSpawns(layout: StationLayout, rng: Rng, loot: LootProfile =
   // nothing in florists or food counters; public halls keep a small share (dropped supplies).
   const PUBLIC_FLOOR = PUBLIC_FLOOR_WEIGHTS.station;
   const floorWeight = (a: Area, cat: 'ammo' | 'med'): number => {
+    if (a.noFloorLoot) return 0; // (task studio-alpha-skyways-shops-20261107-054512-01: a Skyways major store, version 3)
     const p = purposeById(a.purpose);
     if (p) return p.floor?.[cat] ?? 0;
     return PUBLIC_FLOOR[a.type] ?? 0;

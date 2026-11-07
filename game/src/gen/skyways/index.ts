@@ -39,7 +39,7 @@ import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, ty
 import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION} from './layoutVersion';
-import {SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
+import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
@@ -159,6 +159,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
 
   // --- Dressing (run mouths, bridge decks' middle lane, the add-on hall held clear) -----------------------------------------------
   const release = holdCells(layout, holds(layout, sc, ox, oy));
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION) markStoreAreas(layout.areas, sc.anchors); // (task studio-alpha-skyways-shops-20261107-054512-01: no floor piles in the stores)
   dress(layout, rng.fork('dress'));
   release();
 
