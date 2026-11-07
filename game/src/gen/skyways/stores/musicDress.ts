@@ -79,7 +79,10 @@ export function dressMusicStore(layout: StationLayout, rng: Rng, anchor: Skyways
   if (kit.zones.length) boothSign(kit);
   // the browsing floor: double-sided rack runs (aisles from the front) packing the floor, then single racks backed to the free walls;
   // every bay stocked, a genre card per rack (one genre per run), dig crates at the island runs' ends
-  const runs = fillRuns(kit, 'skyDRecordBins', {units: [2, 4], aisle: 1.2, max: rng.int(12, 20), orient: kit.fr.W >= kit.fr.D ? 'v' : 'u'});
+  const orient = kit.fr.W >= kit.fr.D ? 'v' : 'u';
+  const runs = fillRuns(kit, 'skyDRecordBins', {units: [2, 4], aisle: 1.1, max: rng.int(12, 20), orient});
+  // (a second pass of short islands across the first rows' direction fills the floor the lanes left between them)
+  runs.push(...fillRuns(kit, 'skyDRecordBins', {units: [1, 2], aisle: 1.1, max: rng.int(4, 8), orient: orient === 'u' ? 'v' : 'u'}));
   if (!runs.length) kit.skipped.push('record bins');
   const genres = rng.shuffle(MUSIC_LABEL_GENRES.map((_, i) => i));
   const stockRun = (run: PropPlacement[], k: number) => {
