@@ -148,7 +148,23 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
 - **Tenant OFFICE WING (about one map in five):** an open-plan office off a lobby, with a meeting room, private offices and a break
   room, furnished with the office floor's own kit (`gen/skyways/officeWing.ts`) and finishes.
 - **Anchor stores' own finishes:** `gen/skyways/destinations/anchorStyles.ts` (world/skywaysArch.ts class 'anchor').
+- **The public architecture look** (`world/skywaysArch.ts`, `skywaysBridgeRoofs.ts`, `skywaysSkylights.ts`, `skywaysGardens.ts`):
+  - glazed bridge roofs with steel ribs, clay-paver decks and daylight under the glass;
+  - SKYLIGHT coffers in the large skyway courts (`gen/skyways/skylights.ts`);
+  - planter troughs along the atrium gallery rails and timber bench-planters in the courts (`gen/skyways/gardens.ts`);
+  - herringbone brick floors, brick walls and timber-slat ceilings in the atrium / skylit courts (Codex textures).
+- **Local directory boards** (`gen/skyways/mapBoards.ts`, `world/skywaysMapBoards.ts`, `skywaysMapPlan.ts`):
+  - round freestanding boards in every lobby and skyway court and at the bridge landings;
+  - each face is a code-drawn plan of THIS network (buildings, bridges, pedways, stairs, destinations) with YOU ARE HERE and the
+    floor;
+  - the interact key reads it full screen.
+- **The convention venue's dressing** (`gen/skyways/venueDress.ts`):
+  - registration desks with a queue, artist-alley vendor rows with stock, panel rooms, a photo lounge and wayfinding signs;
+  - the STAGE is walkable: `gen/skyways/stageSupport.ts` raises the floor under its drawn deck and treads at load time, for every layout
+    version.
 - **Stairs:**
+  - (layout version 3) a fixed stair lane is 3 m wide, and a building's main public run keeps about 6 m of straight open floor beyond
+    both ends where its lobby allows (held clear of props, no shopfront alongside);
   - every Skyways flight is an OPEN well: its band, rays and drawn ceiling rise to the well's ceiling (`Ramp.capCeil`), never a 2.5 m
     soffit with a fascia hanging over the stair foot;
   - escalator lanes are drawn as stopped escalators, whose glass balustrades carry the seam rails;
