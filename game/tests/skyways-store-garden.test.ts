@@ -40,7 +40,9 @@ installCanvasShim(false);
 
 const DH = findStores('garden', {format: 'double-height', count: 4, maxSeed: 40});
 const HALL = findStores('garden', {format: 'hall', count: 5, maxSeed: 40});
-const ALL: StoreHit[] = [...DH, ...HALL];
+// (+ a double-height store whose lanes leave one bench line: the recorded flower-stand substitute)
+const EXTRA = findStores('garden', {format: 'double-height', count: 8, maxSeed: 40}).filter(h => h.seed === 22);
+const ALL: StoreHit[] = [...DH, ...HALL, ...EXTRA.filter(h => !DH.some(d => d.seed === h.seed))];
 const tag = (h: StoreHit) => `seed ${h.seed} (${h.anchor.format})`;
 const AUDIT = new Map(OPENABLE_AUDIT.map(a => [a.kind, a]));
 const PROFILE = lootProfile('skyways');
@@ -65,7 +67,14 @@ describe('Glasshouse Garden Co.: a real garden centre', () => {
       const benches = of(ps, 'skyDPlantBench'), area = storeAreas(h.layout, h.anchor).floor.reduce((s, id) => s + h.layout.areas[id].w * h.layout.areas[id].h * CELL * CELL, 0);
       // plant benches in runs (a floor cut up round an inset back room: tiered flower stands as islands instead)
       expect(benches.length + of(ps, 'flowerStand').length, `${t} plant displays (${area} m2)`).toBeGreaterThanOrEqual(area >= 120 ? 3 : 2);
-      if (area >= 120) expect(benches.length, `${t} plant benches (${area} m2)`).toBeGreaterThanOrEqual(2);
+      // a large floor has its bench runs — unless its lanes / inset back room leave no line for two (the dresser records the
+      // substitute: tiered flower-stand islands, and they stood)
+      const sub = GARDEN_LAST.get(h.layout)!.skipped.find(s => s.startsWith('bench runs:'));
+      if (area >= 120 && benches.length < 2) {
+        expect(sub, `${t} plant benches (${area} m2): ${benches.length} without a recorded substitute`).toBeTruthy();
+        expect(of(ps, 'flowerStand').length, `${t} the substitute stands`).toBeGreaterThanOrEqual(3 - benches.length);
+      }
+      if (benches.length >= 2) expect(sub, t).toBeUndefined();
       const potted = new Set(of(ps, 'skyDGeraniumPot').map(p => hostOf(h.layout, p)).filter(Boolean));
       for (const b of benches) expect(potted.has(b), `${t} pots on every bench`).toBe(true);
       expect(of(ps, 'planterTree', 'skyDPottedPalm').length, `${t} big planters`).toBeGreaterThanOrEqual(area >= 120 ? 2 : 1);
@@ -163,13 +172,14 @@ describe('Glasshouse Garden Co.: a real garden centre', () => {
 describe('Glasshouse Garden Co.: openables, loot, physics', () => {
   it('every storage-looking kind placed opens (OPENABLE_AUDIT openable / existing); the soil pallet is the one honest exception', () => {
     for (const h of ALL) {
-      const t = tag(h);
+      const t = tag(h), mine = new Set(GARDEN_LAST.get(h.layout)!.props.map(i => h.layout.props[i]));
       let n = 0;
       for (const p of storeProps(h.layout, h.anchor)) {
         const a = AUDIT.get(p.kind);
         expect(a, `${t} ${p.kind} classified`).toBeTruthy();
         if (STORAGE.includes(p.kind)) { expect(['openable', 'existing'], `${t} ${p.kind}`).toContain(a!.cls); n++; }
-        if (a!.cls === 'exception') expect(['storeGardenSoilPallet', 'cashRegister', 'cartonStack', 'keyCabinet', 'microwaveOven', 'waterCooler'], `${t} ${p.kind} exception`).toContain(p.kind);
+        // (what the garden itself placed; the station's back-of-house appliances keep their own audit rows)
+        if (a!.cls === 'exception' && mine.has(p)) expect(['storeGardenSoilPallet', 'cashRegister'], `${t} ${p.kind} exception`).toContain(p.kind);
       }
       expect(n, `${t} openable storage pieces`).toBeGreaterThanOrEqual(8);
     }

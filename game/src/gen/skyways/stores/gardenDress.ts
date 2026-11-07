@@ -82,13 +82,16 @@ export function dressGarden(layout: StationLayout, rng: Rng, anchor: SkywaysAnch
   // --- the floor (local height frame; lifted at the end) ---
   const cash = cashDesk(kit);
   kit.reserveLanes();
-  entryBand(kit);
   const tools = toolWall(kit, cash?.wall === 'L' ? 'R' : 'L');
   backWall(kit);
   planters(kit);
+  // the bench field before the entry band's free-standing pieces (a shallow floor keeps its bench lines; the racks / stands find room
+  // round them)
   const benches = benchField(kit);
   potBenches(kit, benches);
-  if (benches.length < 2) standIslands(kit, 3 - benches.length);
+  entryBand(kit);
+  // (a floor whose lanes / inset back room leave no room for two bench runs: tiered flower-stand islands stand in — recorded)
+  if (benches.length < 2) kit.skipped.push(`bench runs: ${benches.length} fit (lanes / inset back room), ${standIslands(kit, 3 - benches.length)} flower-stand islands instead`);
   floorExtras(kit);
   if (!anchor.stock.length) staffCorner(kit, cash);
   if (kit.posters(2).length < 1) kit.skipped.push('posters');
@@ -234,7 +237,7 @@ function entryBand(kit: AnchorKit): void {
   // seed racks: two or three, a little in from the windows either side of the entry lane (each with a ring to browse round it)
   let racks = 0;
   const want = rng.int(2, 3);
-  for (const dv of [2.2, 3.0, 3.8]) for (const s of sides) for (const du of [eh + 1.1, eh + 1.8, eh + 2.6]) {
+  for (const dv of [2.2, 3.0, 3.8, 1.6, 4.6]) for (const s of sides) for (const du of [eh + 1.1, eh + 1.8, eh + 2.6, eh + 3.5]) {
     if (racks >= want) break;
     const u = uE + s * du;
     if (u < 1.0 || u > fr.W - 1.0) continue;
@@ -243,11 +246,13 @@ function entryBand(kit: AnchorKit): void {
   if (!racks) kit.skipped.push('seed racks');
   // tiered flower stands: facing the entry lane a little deeper in
   let stands = 0;
-  for (const s of sides) for (const dv of [4.2, 5.0, 3.6]) for (const du of [eh + 1.6, eh + 2.4]) {
+  for (const s of sides) for (const dv of [4.2, 5.0, 3.6, 2.6, 5.8]) for (const du of [eh + 1.6, eh + 2.4, eh + 3.4]) {
     if (stands >= 2) break;
     const u = uE + s * du;
     if (putUV(kit, 'flowerStand', u, dv, s > 0 ? fr.minusU : fr.plusU, {ring: 0.3})) { stands++; break; }
   }
+  // (none by the lane — a shallow floor's bench lines took the front band: as islands deeper in)
+  if (stands < 2) stands += standIslands(kit, 2 - stands);
   if (!stands) kit.skipped.push('flower stands');
 }
 
@@ -335,10 +340,11 @@ function planters(kit: AnchorKit): void {
 function benchField(kit: AnchorKit): PropPlacement[] {
   const fr = kit.fr, b = PROP_DEFS.skyDPlantBench;
   const pitch = Math.ceil((b.d + 1.3) / CELL - 1e-6) * CELL, L = Math.ceil(b.w / CELL - 1e-6) * CELL;
-  const field = (along: 'u' | 'v'): PropPlacement[] => {
+  // `start`: the depth (v) the field starts at — the first line's (rows along u) or the runs' (columns along v)
+  const field = (along: 'u' | 'v', start: number): PropPlacement[] => {
     const out: PropPlacement[] = [];
     // lines across the other axis; runs along `along`
-    const [a0, a1, c0, c1] = along === 'u' ? [2.0, fr.W - 1.5, 3.0, fr.D - 2.0] : [3.0, fr.D - 2.0, 2.0, fr.W - 1.5];
+    const [a0, a1, c0, c1] = along === 'u' ? [2.0, fr.W - 1.5, start, fr.D - 2.0] : [start, fr.D - 2.0, 2.0, fr.W - 1.5];
     for (let c = c0; c + b.d <= c1 + 1e-6; c += pitch) {
       let a = a0;
       while (a + L <= a1 + 1e-6) {
@@ -362,10 +368,16 @@ function benchField(kit: AnchorKit): PropPlacement[] {
     }
     return out;
   };
-  let rows = 0, cols = 0;
-  kit.cluster(() => { rows = field('u').length; return false; });
-  kit.cluster(() => { cols = field('v').length; return false; });
-  const out = field(cols > rows ? 'v' : 'u');
+  // every orientation x start depth tried as a dry run (rolled back; no rng drawn: repeatable); the first holding the most benches
+  // stays — a shallow floor crossed by a lane to a flank door (an L round an inset back room) still finds the lines that fit
+  const plans: ['u' | 'v', number][] = [['u', 3.0], ['v', 3.0], ['u', 2.5], ['u', 3.5], ['v', 2.5]];
+  let best = plans[0], most = -1;
+  for (const pl of plans) {
+    let n = 0;
+    kit.cluster(() => { n = field(pl[0], pl[1]).length; return false; });
+    if (n > most) { most = n; best = pl; }
+  }
+  const out = field(best[0], best[1]);
   if (!out.length) kit.skipped.push('plant benches');
   return out;
 }
@@ -382,8 +394,11 @@ function potBenches(kit: AnchorKit, benches: readonly PropPlacement[]): void {
   }
 }
 
-/** A floor too cut up for bench runs (an L round an inset back room): tiered flower stands as islands instead, a walkway round each. */
-function standIslands(kit: AnchorKit, n: number): void {
+/**
+ * Tiered flower stands as free-standing islands (a walkway round each): instead of bench runs on a floor too cut up for them (an L
+ * round an inset back room), and for the entry band's stands when the bench lines took the front band. Returns how many stood.
+ */
+function standIslands(kit: AnchorKit, n: number): number {
   const fr = kit.fr, spots: [number, number][] = [];
   for (let u = 1.4; u <= fr.W - 1.4; u += 0.5) for (let v = 2.2; v <= fr.D - 1.6; v += 0.5) spots.push([u, v]);
   let got = 0;
@@ -392,6 +407,7 @@ function standIslands(kit: AnchorKit, n: number): void {
     if (putUV(kit, 'flowerStand', u, v, kit.rng.pick([fr.toFront, fr.plusU, fr.minusU]), {ring: 0.5})) got++;
   }
   if (!got) kit.skipped.push('stand islands');
+  return got;
 }
 
 /** The wheelbarrow and small potted plants on the floor (loose, movable). */
