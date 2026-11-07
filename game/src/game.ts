@@ -142,6 +142,7 @@ import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layout
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
+import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -345,6 +346,8 @@ export class Game {
   readonly fuelPort: FuelPortSystem;
   /** Task train-fuel-system (lane CART): the fuel carts in the world — push / grab, the hose, cargo riding the train (world/fuelCarts.ts). */
   fuelCarts!: FuelCarts;
+  /** Task train-loose-cargo: the train's loose items / bags (world/trainCargo.ts). */
+  trainCargo!: TrainCargoSystem;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -633,6 +636,10 @@ export class Game {
     // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
     this.trainRide = installTrainRide(this, this.trainRuntime, {jostle: () => this.settings.trainSway});
     this.trainRuntime.onConsoleInteract = () => { this.openTravelMap(); }; // (campaign, primary) the driving console opens the paper map
+    // task train-loose-cargo: the train's loose items / bags travel with it (after the gear, train, ride and fuel carts: its section teardown
+    // runs FIRST — unshifted — and its build LAST)
+    this.trainCargo = installTrainCargo(this);
+    hookName('trainCargo');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -839,7 +846,8 @@ export class Game {
   /** Iteration 16: what the player changed in the live section -> its run memory (loose items with poses, holder lots, kills). */
   private saveSectionMemory(): void {
     const mem = this.run.memory(this.run.current);
-    mem.pickups = capturePickups(this.pickups.list, p => this.layoutPickup.get(p));
+    // (task train-loose-cargo: the items lying in the parked train are the TRAIN's — saved with it, never also as station loot)
+    mem.pickups = capturePickups(this.pickups.list.filter(p => !this.trainCargo?.ownsPickup(p)), p => this.layoutPickup.get(p));
     if (this.containers) mem.holders = captureHolders(this.containers);
     const dead = this.zombies.filter(z => !z.brain.alive).map(z => this.enemyIndex.get(z)).filter((i): i is number => i !== undefined);
     mem.killed = mergeKilled(mem.killed, dead);
@@ -2337,7 +2345,18 @@ export class Game {
 
   /** Drop `count` (default: all) of a slot on the floor in front of the player (inventory drag-out / Drop / Delete; G no longer drops). */
   dropRef(ref: SlotRef, count?: number): void {
-    if (this.trainRide?.refuseDrop()) { this.sfx.denied(); return; } // (lane RIDE) nothing is dropped from the moving car (the Lockbox holds things)
+    // task train-loose-cargo (user: "if I drop an item on the train it should come with it"): while riding, the stack lies on the car
+    // floor in front of the player as the train's cargo (was: refused — "use the Lockbox")
+    if (this.trainRide?.riding) {
+      const st = this.inv.detach(ref, count);
+      if (!st) return;
+      if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
+      const n = st.count;
+      if (!this.trainCargo.dropRiding(st)) { this.inv.add(st); if (this.trainRide.refuseDrop()) this.sfx.denied(); return; } // (no car view: as before)
+      this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
+      this.syncHeld();
+      return;
+    }
     const st = this.inv.detach(ref, count);
     if (!st) return;
     if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');

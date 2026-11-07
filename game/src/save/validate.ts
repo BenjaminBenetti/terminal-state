@@ -26,6 +26,7 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {SKYWAYS_CAR_LANE, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
+import {cargoProblem} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
@@ -449,6 +450,11 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       slotList(lb.slots, `${p}.lockbox.slots`, LOCKBOX_SLOTS, seen);
     }
     if (r.fuel !== undefined) { const fp = trainFuelProblem(r.fuel); if (fp) bad(`${p}.fuel`, fp); } // task train-fuel-system
+    if (r.cargo !== undefined) { // task train-loose-cargo: the loose items / bags aboard — shape, then every stack (one item, one uid run-wide)
+      const cp = cargoProblem(r.cargo);
+      if (cp) bad(`${p}.cargo`, cp);
+      (r.cargo as {items: {stack: unknown}[]}).items.forEach((it, i) => stack(it.stack, `${p}.cargo.items[${i}].stack`, {uid: true, inBag: false, seen, needBag: true}));
+    }
   }
 }
 
