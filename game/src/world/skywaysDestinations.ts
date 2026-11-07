@@ -35,6 +35,7 @@ import {shapeMaterials} from './shapeMaterials';
 import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {buildStoreMusicProp, isStoreMusicKind} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
+import {drawStoreGarden, isStoreGardenDrawn} from './skywaysStoreGarden'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-GARDEN)
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: Fit, name: string) => number;
@@ -232,6 +233,9 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   if (isStoreMusicKind(kind)) return buildStoreMusicProp(group, kind, draw, wm); // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01): the record store's own kinds
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
+  // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-GARDEN) the garden store's code-drawn soil pallets / basket rails
+  // (tinted bags per placement, rods up to the ceiling per placement: world/skywaysStoreGarden.ts)
+  if (isStoreGardenDrawn(kind)) return drawStoreGarden(group, kind, draw, wm, layout);
   // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) a store kind drawn by code: its spec's parts, one batch per variant
   const drawn = (SKYWAYS_DEST_SPECS as Readonly<Record<string, {parts?: (variant: number) => readonly DestPart[]}>>)[kind]?.parts;
   if (drawn) {
