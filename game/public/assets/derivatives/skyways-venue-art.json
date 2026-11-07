@@ -1,0 +1,319 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-venue-art",
+ "task": "studio-skyways-rework-20261107-054512-01",
+ "lane": "VENUE",
+ "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization for Skyways art (no numerical image cap, user override); invented characters, titles and studio names; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways convention venue (layout version 3): the photo lounge's photo-op wall (1536 x 1024), the panel rooms' two title slides (768 x 512), the registration sign (512 x 341) and four artist-alley booth banners (384 x 256, cropped from one sheet)",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-venue-art.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/venue-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "recipe": {
+  "crop": "centred cover crop to the slot aspect (the booth banners: inside their sheet cell first)",
+  "resize": {
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "pack": "atlas 2048x1536, empty area rgb(24,24,28)",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-venue-art.mjs"
+ },
+ "output": {
+  "url": "assets/textures/skyways/skyways-venue-art.jpg",
+  "bytes": 650289,
+  "sha256": "19f89351a58f6a0a36adaf3adbdd8ea6a475fcceb231b35990239796c6edac02",
+  "width": 2048,
+  "height": 1536,
+  "format": "jpeg"
+ },
+ "pieces": [
+  {
+   "name": "photo-wall",
+   "subject": "photo-op wall: \"AURORA ANIME FEST\" / \"PHOTO SPOT\" + the mascot Kumako, two ghosts and a bear over an aurora skyline",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 201,
+    "session": "01a1b500-5f8a-70e1-a391-28e4f9e5eabc",
+    "requested": "2026-11-07T07:54:22.782714Z",
+    "finished": "2026-11-07T07:55:14.754620Z",
+    "seconds": 51.9
+   },
+   "prompt": {
+    "file": "venue-201.txt",
+    "sha256": "384fbffeda7d97c04486c4580d8d518b6f4200fe0a5d19ce375300dfb148bff8"
+   },
+   "source": {
+    "file": "codex-201-exec-bccf70f2-6ab9-42ce-927e-c3dd62b4c4dd.png",
+    "sha256": "9e41a72eeccd5adf4bbc671abc6aa98cd3c91429c191304c633c1af9cb65a13b",
+    "bytes": 2272825,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   }
+  },
+  {
+   "name": "booth-mochi",
+   "subject": "artist-alley booth banners sheet: four invented studios (MOCHI PRINTS, STARDUST STUDIO, PIXEL FOX ART, HOSHI CRAFTS)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 205,
+    "session": "01a1b503-62bb-72f0-9e75-103267372914",
+    "requested": "2026-11-07T07:57:40.246205Z",
+    "finished": "2026-11-07T07:58:31.060545Z",
+    "seconds": 50.8
+   },
+   "prompt": {
+    "file": "venue-205.txt",
+    "sha256": "869eefd16a71336c1d6a797bae4ec3da27168037b3b861605fba99c601009e34"
+   },
+   "source": {
+    "file": "codex-205-exec-73bee747-090b-4294-8b45-a924e20f50cb.png",
+    "sha256": "d1da1a9d65945ea01e18227c83ca0a65b5b52e2f14852f472a73c0381443aac2",
+    "bytes": 2076280,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 13,
+    "y": 8,
+    "w": 741,
+    "h": 494
+   },
+   "placed": {
+    "x": 1536,
+    "y": 0,
+    "w": 384,
+    "h": 256
+   }
+  },
+  {
+   "name": "booth-stardust",
+   "subject": "artist-alley booth banners sheet: four invented studios (MOCHI PRINTS, STARDUST STUDIO, PIXEL FOX ART, HOSHI CRAFTS)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 205,
+    "session": "01a1b503-62bb-72f0-9e75-103267372914",
+    "requested": "2026-11-07T07:57:40.246205Z",
+    "finished": "2026-11-07T07:58:31.060545Z",
+    "seconds": 50.8
+   },
+   "prompt": {
+    "file": "venue-205.txt",
+    "sha256": "869eefd16a71336c1d6a797bae4ec3da27168037b3b861605fba99c601009e34"
+   },
+   "source": {
+    "file": "codex-205-exec-73bee747-090b-4294-8b45-a924e20f50cb.png",
+    "sha256": "d1da1a9d65945ea01e18227c83ca0a65b5b52e2f14852f472a73c0381443aac2",
+    "bytes": 2076280,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 782,
+    "y": 8,
+    "w": 741,
+    "h": 494
+   },
+   "placed": {
+    "x": 1536,
+    "y": 256,
+    "w": 384,
+    "h": 256
+   }
+  },
+  {
+   "name": "booth-pixelfox",
+   "subject": "artist-alley booth banners sheet: four invented studios (MOCHI PRINTS, STARDUST STUDIO, PIXEL FOX ART, HOSHI CRAFTS)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 205,
+    "session": "01a1b503-62bb-72f0-9e75-103267372914",
+    "requested": "2026-11-07T07:57:40.246205Z",
+    "finished": "2026-11-07T07:58:31.060545Z",
+    "seconds": 50.8
+   },
+   "prompt": {
+    "file": "venue-205.txt",
+    "sha256": "869eefd16a71336c1d6a797bae4ec3da27168037b3b861605fba99c601009e34"
+   },
+   "source": {
+    "file": "codex-205-exec-73bee747-090b-4294-8b45-a924e20f50cb.png",
+    "sha256": "d1da1a9d65945ea01e18227c83ca0a65b5b52e2f14852f472a73c0381443aac2",
+    "bytes": 2076280,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 13,
+    "y": 521,
+    "w": 741,
+    "h": 494
+   },
+   "placed": {
+    "x": 1536,
+    "y": 512,
+    "w": 384,
+    "h": 256
+   }
+  },
+  {
+   "name": "booth-hoshi",
+   "subject": "artist-alley booth banners sheet: four invented studios (MOCHI PRINTS, STARDUST STUDIO, PIXEL FOX ART, HOSHI CRAFTS)",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 205,
+    "session": "01a1b503-62bb-72f0-9e75-103267372914",
+    "requested": "2026-11-07T07:57:40.246205Z",
+    "finished": "2026-11-07T07:58:31.060545Z",
+    "seconds": 50.8
+   },
+   "prompt": {
+    "file": "venue-205.txt",
+    "sha256": "869eefd16a71336c1d6a797bae4ec3da27168037b3b861605fba99c601009e34"
+   },
+   "source": {
+    "file": "codex-205-exec-73bee747-090b-4294-8b45-a924e20f50cb.png",
+    "sha256": "d1da1a9d65945ea01e18227c83ca0a65b5b52e2f14852f472a73c0381443aac2",
+    "bytes": 2076280,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 782,
+    "y": 521,
+    "w": 741,
+    "h": 494
+   },
+   "placed": {
+    "x": 1536,
+    "y": 768,
+    "w": 384,
+    "h": 256
+   }
+  },
+  {
+   "name": "slide-draw",
+   "subject": "panel title slide: \"DRAW YOUR OWN HERO\" / \"ART WORKSHOP\" + Kumako at a drawing desk",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 202,
+    "session": "01a1b501-4b8e-7920-afdf-3bfee4017525",
+    "requested": "2026-11-07T07:55:23.237677Z",
+    "finished": "2026-11-07T07:56:10.185251Z",
+    "seconds": 46.9
+   },
+   "prompt": {
+    "file": "venue-202.txt",
+    "sha256": "3508d9309548a4ebfe59cc8dedf63aa67eba4e817505b7f585b6e9dc2f4543d2"
+   },
+   "source": {
+    "file": "codex-202-exec-9cd1f154-795f-41f6-9b5d-6939c80cd44d.png",
+    "sha256": "410e894d0375a0e9cfad01e96b531a48cb9856bb95d9c401fb7fad9e3efcf221",
+    "bytes": 1990833,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   },
+   "placed": {
+    "x": 0,
+    "y": 1024,
+    "w": 768,
+    "h": 512
+   }
+  },
+  {
+   "name": "slide-cosplay",
+   "subject": "panel title slide: \"COSPLAY CRAFT TALK\" / \"FOAM, FABRIC & FUN\" + Kumako with a foam star wand",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 203,
+    "session": "01a1b502-037a-7921-bfc0-8095e02d9abf",
+    "requested": "2026-11-07T07:56:10.311784Z",
+    "finished": "2026-11-07T07:56:56.941387Z",
+    "seconds": 46.6
+   },
+   "prompt": {
+    "file": "venue-203.txt",
+    "sha256": "ddbb20e36d84e8e32352944545147663f1c879423d8dc6e52918a6549d05634e"
+   },
+   "source": {
+    "file": "codex-203-exec-874fac56-bea0-44df-b27d-07c29bf13d4f.png",
+    "sha256": "be436c76e47c2da9e17bf6f88577f4ca9dfa610c89fad05cf692252e8097052a",
+    "bytes": 2039871,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 0,
+    "w": 1536,
+    "h": 1024
+   },
+   "placed": {
+    "x": 768,
+    "y": 1024,
+    "w": 768,
+    "h": 512
+   }
+  },
+  {
+   "name": "registration",
+   "subject": "registration sign: \"AURORA ANIME FEST\" / \"REGISTRATION\" / \"BADGE PICKUP\" + Kumako holding up a badge",
+   "codex": {
+    "generator": "Codex native image_gen (owned Codex CLI)",
+    "ledgerCall": 204,
+    "session": "01a1b502-b9ff-7ec1-a708-4307cba75a4e",
+    "requested": "2026-11-07T07:56:57.044149Z",
+    "finished": "2026-11-07T07:57:40.148666Z",
+    "seconds": 43
+   },
+   "prompt": {
+    "file": "venue-204.txt",
+    "sha256": "3294efef72172b6652a4608d2c18b721c0117ea0b4ba1cfd934107519ba0bbdc"
+   },
+   "source": {
+    "file": "codex-204-exec-d95a5c62-36b6-4cf0-af19-1577440f5f59.png",
+    "sha256": "42057965c6c869a5db53f2815f9489b78dcb076cebb5d1ae08564cfdc47eb0d3",
+    "bytes": 2053839,
+    "width": 1536,
+    "height": 1024
+   },
+   "crop": {
+    "x": 0,
+    "y": 1,
+    "w": 1536,
+    "h": 1023
+   },
+   "placed": {
+    "x": 1536,
+    "y": 1024,
+    "w": 512,
+    "h": 341
+   }
+  }
+ ]
+}

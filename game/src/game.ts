@@ -136,11 +136,16 @@ import {PLAYER_TRAIN_MODEL_FILES, installPlayerTrain, loadTrainTextures, playerT
 import {SKYWAYS_KITCHEN_MODEL_FILES, skywaysKitchenModelKeysFor} from './gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_MODEL_FILES, skywaysAddonModelKeysFor} from './gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {installSkywaysAddon, type SkywaysAddonRuntime} from './world/skywaysAddonRuntime'; // (lane ADDON) art atlases, turntable, velvet ropes
+import {applySkywaysStageSupport} from './gen/skyways/stageSupport'; // (lane VENUE) the convention stage is walkable: its deck / steps lift the floor under them
 import {SKYWAYS_DEST_MODEL_FILES, skywaysDestModelKeysFor} from './gen/skyways/destinations/skywaysDestModels'; // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS)
 import {installSkywaysDestinations} from './world/skywaysDestRuntime'; // (destinations, lane LANDMARKS) the posters' / plaques' art atlases
+import {installSkywaysArchTextures} from './world/skywaysArchTextures'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): court / bridge finish textures
+import {skywaysGardenModelKeysFor} from './world/skywaysGardens'; // (lane ARCH) the planters' foliage model
 import {SKYWAYS_LAYOUT_LANE, skywaysLayoutVersionFor} from './gen/skyways/layoutVersion'; // task studio-skyways-destinations-20261106-170011-01
 import {installSkywaysDestAudio} from './world/skywaysDestAudio'; // task skyways-destinations-20261106 (lane AUDIO): the destinations' location sounds
+import {installSkywaysMapRead} from './world/skywaysMapRead'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the directory boards' close-up read
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
+import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -583,6 +588,8 @@ export class Game {
     installSkywaysExterior(this); hookName('skywaysExterior'); // (lane VIEW) streets, building shells, bridge exteriors, wrecks, the far city / murk; the glazing's reveal finish; inert elsewhere
     this.skywaysAddon = installSkywaysAddon(this); hookName('skywaysAddon'); // task studio-skyways-level-20261106-054448 (lane ADDON): inert without layout.skyways
     installSkywaysDestinations(this); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): poster / plaque atlases before the build; inert elsewhere
+    installSkywaysArchTextures(this); // task studio-skyways-rework-20261107-054512-01 (lane ARCH): the courts' / bridges' Codex textures before the build (layout v3); inert elsewhere
+    installSkywaysMapRead(this); hookName('skywaysMapRead'); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): E at a directory board reads its face (inert without boards)
     installSkywaysDestAudio(this); // task skyways-destinations-20261106 (lane AUDIO): clock tick / chime, arcade attract, cinema projector emitters per section (inert elsewhere)
     installOfficeAtmosphere(this); // Task office-overhaul-20261030 (lane ARCH): office wall / carpet / ceiling textures before the build; roof = outdoor green fog
     installMallAtmosphere(this); // Task track3-eaton-centre-20261031 (lane ARCH): mall = light dusty haze, raised far plane, culler fog distance (inert elsewhere)
@@ -628,6 +635,7 @@ export class Game {
     hookName('train');
     this.lockbox = installLockbox(this); // task train-lockbox-windows-20261101-232156 (lane BOX): after TRAIN (its onLockboxInteract opens the view)
     hookName('lockbox');
+    installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule
     // (the jostle intensity = the player's Train sway setting 0..1; 0 = off)
@@ -637,6 +645,7 @@ export class Game {
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
     this.sectionModelKeys.push(skywaysDestModelKeysFor); // task studio-skyways-destinations-20261106-170011-01 (lane LANDMARKS): the destinations' skyways-d-* models
+    this.sectionModelKeys.push(skywaysGardenModelKeysFor); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) the planters' foliage (the office potted plant)
     this.sectionPreloads.push(layout => preloadOfficeAssets(layout, {models: false})); // Iteration 16 (WORLD-GEN): office textures before the build (models come via propModels)
     void preloadMedicalModels(); // fetched with the main assets; load() awaits it before item templates / icons
     window.addEventListener('resize', () => this.resize());
@@ -884,6 +893,7 @@ export class Game {
     // Task loot-tables-20261030 (lane LOOT): under the logical level's loot profile (items/lootTables.ts PROFILES; one per level).
     this.containers.build(this.layout, this.propModels.record() as unknown as Record<string, import('three/addons/loaders/GLTFLoader.js').GLTF>, lootProfile(key.level)); // iteration 08 (Lane I): openables split the lazy p7 models too
     for (const h of this.sectionHooks) h.holders?.(this.layout); // task fuel-feedback: fuel cans as loot lots (before the filler / memory)
+    applySkywaysStageSupport(this.layout); // (lane VENUE) after the world is drawn, before levels / prop index / paths / physics read the grid
     this.levels = levelsOf(this.layout);
     this.propIndex = new PropIndex(this.levels, this.layout.props);
     this.pathfinder = new PathFinder(this.levels); // Lane B: (level, cell) nodes; stairs join levels
@@ -2566,7 +2576,7 @@ export class Game {
 
     this.slotKeys(inp); // 1-5 / wheel / ~ (melee slot)
     if (inp.hit('KeyQ')) this.gasMask.press(); // Task gasmask-breach-20261030 (mask lane): Q = gas mask on / off (last-item cycling removed)
-    if (inp.hit('KeyF')) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only)
+    if (inp.hit('KeyF') && !this.skywaysCar?.onLightKey()) this.toggleFlashlight(); // Iteration 12 (LIGHT): battery-aware (flat: dry click only); seated in the Skyways car: its lamps instead
     // Task office-overhaul-20261030 (lane INTERACT, #6): G = the grenade slot (hold / release below; T a silent alias). The old
     // G = drop binding is gone (drop by dragging out of the inventory screen). An empty grenade slot takes a carried throwable first.
     if ((inp.hit('KeyG') || inp.hit('KeyT')) && !this.inv.thrown && this.inv.refillThrowSlot()) this.syncHeld();
@@ -2778,6 +2788,7 @@ export class Game {
     // Iteration 16: `aimOffset` (lane INJURY: arm-injury sway) moves the real aim — shots, crosshair and the optic dot follow it
     this.camera.rotation.set(p.pitch + this.recoilPitch + this.aimOffset.pitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + this.aimOffset.yaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
     this.trainRide?.tiltCamera(this.camera); // (lane RIDE) the moving car's roll / pitch (its jostle) on the view; no-op when not riding
+    this.skywaysCar?.tiltCamera(this.camera); // (Skyways prize display) its body pitch on a flight; no-op out of it / on flat floor
     const targetFov = this.aiming ? (WEAPONS[this.weapon.def?.id ?? 'rifle']?.aimFov ?? 60) : this.settings.fov;
     const fov = this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 14 || 1);
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }

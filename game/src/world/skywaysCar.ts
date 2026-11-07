@@ -19,6 +19,8 @@
 // at the left door's stand point if a player circle fits there on the same storey floor (nothing solid, a clear line from the seat),
 // else the right, the front, the back; none -> "No room to get out". Death, any state other than playing / paused / inventory, a
 // teardown (travel / Retry / Load / New game) -> the player is out, the car stays parked, the controls cleared.
+// THE TRUNK (lane TRUNK, world/skywaysCarTrunk.ts through `rear`): the crosshair on the boot (the rear zone) while standing behind the car
+// -> its prompt and [E] open the trunk view instead; anywhere else the doors rule above (the two stand zones never overlap).
 // DRIVING: W drive, S brake / reverse, A / D steer, Space handbrake (world/skywaysCarPhysics.ts: arcade kinematics, the rigid
 // multi-circle body against the world's collision, the floor rule). Mouse look is relative to the car (the yaw clamped to
 // ±CAR_RT.lookYaw; settings / inversion untouched: Game's applyMouseLook runs as ever). No fire / melee / ADS / flares / throws
@@ -33,14 +35,17 @@
 // walkers too (contact wake + the walker shove up to 12 m/s). Glass: a hit faster than CAR_RT.glassSpeed breaks the Skyways window
 // pane(s) at the contact through the gas system's break path (breakPane: gas comes in — the established rule; the wall cells still stop
 // the car) and shatters a glazed prop there through damage.hitWorld (nothing else is damaged). Bullets meeting the car stop on it.
-// PERSISTENCE: the lane store SKYWAYS_CAR_LANE {v, x, y, z, yaw, level} (world/skywaysCarStore.ts; strict, validated by
-// save/validate.ts) — written at teardown, on getting out and when play pauses; read at the build (a record that no longer satisfies
-// the floor rule falls back to the generator's spawn). Exactly one car per station world.
+// PERSISTENCE: the lane store SKYWAYS_CAR_LANE {v: 2, x, y, z, yaw, level, lights, trunk} (world/skywaysCarStore.ts; strict, validated by
+// save/validate.ts; a v1 record upgrades once: lamps off, an empty trunk) — written at teardown, on getting out and when play pauses;
+// read at the build (a record that no longer satisfies the floor rule falls back to the generator's spawn; its lamps / trunk stay).
+// Exactly one car per station world.
 // AUDIO: `audio` (CarAudio; lane CAR2: the Sound Lab car set through audio/sfx.ts carEngine / stopCarEngine / carSkid / carDoor) — the
 // engine runs only while someone is in the car: it starts on getting in (a short rev), follows the speed / throttle every frame (idle at
 // rest), stops on getting out / death / a state change / teardown (a pause or a new world also silences it in Sfx); the tyre skid on a
 // hard brake / handbrake above CAR_RT.skidSpeed (an edge, rate-limited: CAR_RT.skidEvery); the car door on getting in / out; impacts
-// reuse existing cues (the metal crash, the flesh slap).
+// reuse existing cues (the metal crash, the flesh slap). Round 2 (task skyways-vehicle-20261107, lane AUDIO; audio/sfx.ts CAR_AUDIO has
+// the root cause: the round-1 engine loops were sub-bass only): the engine START on getting in, mid-range engine loops rising with the
+// speed / pedal, the reverse-gear whine while reversing, the brake-to-stop (CAR_SOUND), and Sfx.carImpact for the contacts.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -56,9 +61,11 @@ import {STAMINA_PCT_PER_UNIT, STAMINA_REGEN, STAND_EYE} from '../player/player';
 import {paneCentre, type PaneRef} from './windowBreach';
 import {rayBox, type Box3Like} from './towerShared';
 import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
-import {CAR_PHYS, NO_CONTROLS, footprintFloor, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarStep, type CarWorld} from './skywaysCarPhysics';
-import {SKYWAYS_CAR_LANE, skywaysCarProblem, skywaysCarRecord, type SkywaysCarRecord} from './skywaysCarStore';
+import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
+import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
+import type {StackJSON} from '../items/inventory';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
+import {attachCarBeam, createCarBeam, setCarLamps, type CarBeam} from './skywaysCarLights';
 
 export const CAR_RT = {
   /** Aim reach to the car's body (eye -> hit, m) and the most a player may stand from a door's side point (m, horizontal). */
@@ -105,22 +112,34 @@ export const CAR_RT = {
 
 export const CAR_TEXT = {
   getIn: '<b>[E]</b> Get in',
-  driving: '<b>[W]</b> drive · <b>[S]</b> brake / reverse · <b>[A]</b> <b>[D]</b> steer · <b>[Space]</b> handbrake · <b>[E]</b> get out',
+  driving: '<b>[W]</b> drive · <b>[S]</b> brake / reverse · <b>[A]</b> <b>[D]</b> steer · <b>[Space]</b> handbrake · <b>[E]</b> get out · <b>[F]</b> lights',
   noRoom: 'No room to get out',
   slowDown: 'Stop the car to get out',
   hands: 'Hands on the wheel — get out first',
   placeRule: 'Not from the driver seat',
 } as const;
 
+/**
+ * (round 2, task skyways-vehicle-20261107, lane AUDIO) When driveAudio sounds the brake-to-stop: a brake (the pedal against the travel /
+ * the handbrake) held from at least `brakeMin` m/s that brings the car under `brakeStopAt` m/s (once per stop; not when a crash did it);
+ * its level = the speed it braked from / CAR_PHYS.forwardMax.
+ */
+export const CAR_SOUND = {brakeMin: 3, brakeStopAt: 1} as const;
+
 /** The car's sound hook (sfxCarAudio maps it onto Sfx). */
 export interface CarAudio {
-  /** The engine: the driver got in (it starts with a short rev at the engine, world x / y / z) / the car is empty (it stops). */
+  /** The engine: the driver got in (the engine START, then its idle, at the engine, world x / y / z) / the car is empty (it stops). */
   start(x: number, y: number, z: number): void;
   stop(): void;
-  /** Every frame someone drives: speed 0..1 of the top speed, throttle 0..1, the engine's world position. */
-  engine(speed01: number, throttle01: number, x: number, y: number, z: number): void;
+  /**
+   * Every frame someone drives: speed 0..1 of the top speed, throttle 0..1, the engine's world position, `reverse01` 0..1 of the reverse
+   * top speed while reversing (0 otherwise).
+   */
+  engine(speed01: number, throttle01: number, x: number, y: number, z: number, reverse01?: number): void;
   /** A tyre skid (a hard brake / handbrake turn at speed), at the car. */
   skid(x: number, y: number, z: number): void;
+  /** The brake-to-stop (a real brake brought the car to rest), at the car; strength 0..1 = the speed it braked from. */
+  brake(x: number, y: number, z: number, strength01: number): void;
   /** A contact (closing m/s): the car body against the world, or a body it hit. */
   impact(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): void;
   door(open: boolean, x: number, y: number, z: number): void;
@@ -129,23 +148,34 @@ export interface CarAudio {
 type At = {x: number; y: number; z: number};
 interface CarSfx {
   physImpact?(x: number, y: number, z: number, speed: number, family: 'prop' | 'flesh', mass?: number): void;
-  carEngine?(speed01: number, throttle01: number, at?: At, o?: {rev?: boolean}): void;
+  carEngine?(speed01: number, throttle01: number, at?: At, o?: {rev?: boolean; reverse01?: number}): void;
   stopCarEngine?(): void;
   carSkid?(at?: At): boolean;
+  carBrake?(at?: At, strength?: number): boolean;
+  carImpact?(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): boolean;
   carDoor?(at?: At): void;
   denied?(): void;
+  click?(pitch?: number): void;
   impact?(x: number, y: number, z: number, surface: 'metal'): void;
 }
 
-/** The default CarAudio over Sfx: the Sound Lab car set (engine loops, skid, door) + the existing impact cues. */
+/**
+ * The default CarAudio over Sfx: the Sound Lab car set (the engine channel with its start / reverse whine, skid, brake stop, door, the
+ * car's own impact cue) — an Sfx without carImpact falls back to the generic prop / flesh contact cues.
+ */
 export function sfxCarAudio(sfx: () => unknown): CarAudio {
   const s = () => (sfx() as CarSfx | null) ?? null;
   return {
     start(x, y, z) { s()?.carEngine?.(0, 0, {x, y, z}, {rev: true}); },
     stop() { s()?.stopCarEngine?.(); },
-    engine(speed01, throttle01, x, y, z) { s()?.carEngine?.(speed01, throttle01, {x, y, z}); },
+    engine(speed01, throttle01, x, y, z, reverse01 = 0) { s()?.carEngine?.(speed01, throttle01, {x, y, z}, reverse01 > 0 ? {reverse01} : undefined); },
     skid(x, y, z) { s()?.carSkid?.({x, y, z}); },
-    impact(x, y, z, speed, what) { s()?.physImpact?.(x, y, z, Math.min(5, speed), what === 'car' ? 'prop' : 'flesh', what === 'car' ? 1300 : 70); },
+    brake(x, y, z, strength01) { s()?.carBrake?.({x, y, z}, strength01); },
+    impact(x, y, z, speed, what) {
+      const f = s();
+      if (f?.carImpact) f.carImpact(x, y, z, speed, what);
+      else f?.physImpact?.(x, y, z, Math.min(5, speed), what === 'car' ? 'prop' : 'flesh', what === 'car' ? 1300 : 70);
+    },
     door(_open, x, y, z) { s()?.carDoor?.({x, y, z}); },
   };
 }
@@ -203,7 +233,7 @@ export interface SkywaysCarHost {
 /** Keys the driver uses (MoveInput-like; Game's Input also carries mousePressed). */
 export interface DriveInput { down(code: string): boolean; hit(code: string): boolean; mousePressed?: readonly boolean[] }
 
-const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tn = new THREE.Vector3();
+const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tn = new THREE.Vector3(), tq = new THREE.Quaternion();
 const near = new Set<number>();
 const approach = (v: number, to: number, step: number): number => (v < to ? Math.min(to, v + step) : Math.max(to, v - step));
 const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
@@ -227,16 +257,36 @@ export class SkywaysCar {
   audio: CarAudio;
   /** Where the car came from this build ('record' | 'spawn'), QA. */
   source: 'record' | 'spawn' | null = null;
+  /**
+   * Task skyways-vehicle-20261107 (record v2): the car's own state kept with it at its station — its lamps on / off and the trunk's
+   * slots (StackJSON, uids kept). Read at the build (a v1 / missing record: off / empty), written by store().
+   */
+  lights = false;
+  trunkJSON: (StackJSON | null)[] = emptyTrunk();
+  /** The live trunk (lane TRUNK's store) supplies the slots to store, when present. */
+  trunkSource: (() => (StackJSON | null)[]) | null = null;
+  /**
+   * (lane TRUNK) The trunk at the car's rear (world/skywaysCarTrunk.ts): when the crosshair is on the rear zone from behind the car,
+   * its prompt shows and [E] opens it instead of the doors rule (one action per press; never while seated: E gets out first).
+   */
+  rear: {aimed(): boolean; interact(): boolean; readonly prompt: string} | null = null;
   /** QA / tests. */
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
   lastImpact: CarImpact | null = null;
+  /**
+   * (lane VIS) The car's forward beam (world/skywaysCarLights.ts): created at the first car world's build, in the view group from each
+   * build (before the warm-up) to its teardown; `lights` only sets its intensity (and the lenses' glow). Null: no car world built yet.
+   */
+  beam: CarBeam | null = null;
   readonly ctl: CarControls = {...NO_CONTROLS};
   private yawSeen = 0;
   private clock = 0;
   /** (lane CAR2) The skid's edge (a hard brake / handbrake was already on last frame) and the last skid's clock. */
   private skidding = false;
   private skidT = -Infinity;
+  /** (round 2, lane AUDIO) The top speed of the brake in progress (0: none) — the brake-to-stop's trigger and level. */
+  private brakeFrom = 0;
   private noteT: number = CAR_RT.noteEvery;
   private readonly step: CarStep = {moved: 0, blocked: false, refused: false, impact: null};
   private readonly world: CarWorld = {levels: null as unknown as Levels, props: null};
@@ -290,15 +340,28 @@ export class SkywaysCar {
     const L = this.host.levels;
     if (!spawn || !L) { if (releaseSkywaysCarModel()) this.counts.released++; return; }
     const rec = this.readRecord();
-    const ok = (p: {x: number; y: number; z: number; yaw: number; level: number}) => p.level >= 0 && p.level < L.count && footprintFloor(L, p.x, p.z, p.yaw, p.y, p.level, this.spec) !== null;
-    const pose = rec && ok(rec) ? rec : spawn;
+    // (stairs) a stored pose may stand on a flight: tried flat, then up / down a flight's pitch
+    const fit = (p: {x: number; y: number; z: number; yaw: number; level: number}): CarPose | null => {
+      if (p.level < 0 || p.level >= L.count) return null;
+      for (const pitch of CAR_STAIRS.loadPitches) { const q = carPose(L, p.x, p.z, p.yaw, p.y, pitch, p.level, this.spec); if (q) return q; }
+      return null;
+    };
+    const fromRec = rec ? fit(rec) : null;
+    const pose = fromRec ? rec! : spawn;
+    // (record v2) the car's own state comes back with it even when its pose fell back to the spawn (never lost, never doubled)
+    this.lights = rec?.lights ?? false;
+    this.trunkJSON = rec ? structuredClone(rec.trunk) : emptyTrunk();
     this.source = pose === rec ? 'record' : 'spawn';
-    const y = footprintFloor(L, pose.x, pose.z, pose.yaw, pose.y, pose.level, this.spec) ?? pose.y;
-    this.body = {x: pose.x, y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: pose.level, yawRate: 0};
+    const at = fromRec ?? fit(spawn);
+    this.body = {x: pose.x, y: at?.y ?? pose.y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: at?.level ?? pose.level, yawRate: 0, pitch: at?.pitch ?? 0};
     this.view = buildCarView(this.spec);
     this.view.group.name = 'skyways-car';
     if (this.view.standIn && typeof document !== 'undefined') console.warn('skyways car: the model is not loaded — a stand-in body is drawn');
     this.root.add(this.view.group);
+    // (lane VIS) the beam joins this world now, before the warm-up (the view group is the 'skyways-car' warm pool): on / off from here
+    // on is its intensity only — the scene's light set never changes during play
+    this.beam ??= createCarBeam();
+    attachCarBeam(this.beam, this.view.group);
     this.decorateView();
     this.syncView();
     // the layout props the car can shove (dynamic kinds) / shatter (glazed kinds), by their layout index (shootProp / hitWorld need it)
@@ -325,6 +388,8 @@ export class SkywaysCar {
     if (this.driving) this.forceOut('teardown', false);
     this.store();
     this.view?.group.removeFromParent();
+    this.beam?.light.removeFromParent(); // (lane VIS) the next world has no car beam unless it builds a car
+    this.beam?.target.removeFromParent();
     this.view = null;
     this.body = null;
     this.dynIdx = this.glassIdx = null;
@@ -335,11 +400,11 @@ export class SkywaysCar {
     this.counts.teardowns++;
   }
 
-  /** The station's car record (valid, else null). */
+  /** The station's car record (valid, else null), as v2 (a v1 record: lamps off, an empty trunk). */
   readRecord(): SkywaysCarRecord | null {
     let raw: unknown;
     try { raw = this.host.run.laneStore(SKYWAYS_CAR_LANE); } catch { raw = undefined; }
-    return raw !== undefined && skywaysCarProblem(raw) === null ? raw as SkywaysCarRecord : null;
+    return raw !== undefined && skywaysCarProblem(raw) === null ? upgradeCarRecord(raw as SkywaysCarRecordV1 | SkywaysCarRecord) : null;
   }
 
   /** Where the car stands now -> this station's lane store. */
@@ -347,7 +412,8 @@ export class SkywaysCar {
     const b = this.body;
     if (!b || !this.worldLive) return;
     try {
-      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level));
+      if (this.trunkSource) this.trunkJSON = this.trunkSource();
+      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: this.lights, trunk: this.trunkJSON}));
       this.counts.stores++;
     } catch (err) { console.warn('skyways car: storing the record failed', err); }
   }
@@ -363,11 +429,12 @@ export class SkywaysCar {
   // ---------------------------------------------------------------------------------------------------------------------
   // Enter / exit
 
-  /** [E]: while driving, get out; else get in when aiming at the car by a door. */
+  /** [E]: while driving, get out; else the trunk when aiming at its rear zone from behind (lane TRUNK); else get in when aiming at the car by a door. */
   onInteract(): boolean {
     const h = this.host;
     if (!this.worldLive || !this.body || h.state !== 'playing') return false;
     if (this.driving) { this.tryExit(); return true; }
+    if (this.rear?.aimed() && this.rear.interact()) return true;
     if (!this.canEnter() || !this.pickAim()) return false;
     this.enter();
     return true;
@@ -413,6 +480,7 @@ export class SkywaysCar {
     const en = this.enginePos();
     this.audio.start(en.x, en.y, en.z);
     this.skidding = false;
+    this.brakeFrom = 0;
     this.prompt = CAR_TEXT.driving;
   }
 
@@ -438,16 +506,18 @@ export class SkywaysCar {
     const r = P.radius, gap = 0.55;
     const cands: [typeof S.exits.left, 'left' | 'right' | 'front' | 'back'][] = [
       [S.exits.left, 'left'], [S.exits.right, 'right'], [{x: 0, z: -S.length / 2 - gap}, 'front'], [{x: 0, z: S.length / 2 + gap}, 'back']];
-    const seat = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z);
+    const seat = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z), tp = Math.tan(b.pitch ?? 0), onFlight = Math.abs(b.pitch ?? 0) > 1e-4;
     for (const [c, side] of cands) {
       const w = carToWorld(b.x, b.z, b.yaw, c.x, c.z);
-      const s = L.supportIn(w.x, w.z, b.y, STEP_UP);
-      if (!s || s.volume || s.level !== b.level || Math.abs(s.floor - b.y) > 0.3) continue;
+      // (stairs) the body line's height there: beside / ahead of / behind a car on a flight the stand point is on the flight's floor
+      const hl = b.y - c.z * tp;
+      const s = L.supportIn(w.x, w.z, hl + 0.05, STEP_UP);
+      if (!s || s.volume || (!onFlight && s.level !== b.level) || Math.abs(s.floor - hl) > (onFlight ? 0.45 : 0.3)) continue;
       if (!L.circleClear(w.x, w.z, r, s.floor)) continue;
       const [rx, rz] = resolveCircle(L, h.propIndex, w.x, w.z, r, s.floor, STAND_EYE + 0.12);
       if (Math.hypot(rx - w.x, rz - w.z) > 1e-4) continue; // a prop there
       if (nearestCircle(S, b.x, b.z, b.yaw, w.x, w.z).d < r + 0.02) continue;
-      if (!L.lineOfSight({x: seat.x, y: b.y + 0.9, z: seat.z}, {x: w.x, y: s.floor + 0.9, z: w.z}, {slack: 0.1})) continue;
+      if (!L.lineOfSight({x: seat.x, y: b.y - S.eye.z * tp + 0.9, z: seat.z}, {x: w.x, y: s.floor + 0.9, z: w.z}, {slack: 0.1})) continue;
       return {x: w.x, y: s.floor, z: w.z, side};
     }
     return null;
@@ -517,9 +587,11 @@ export class SkywaysCar {
   /** The player's world pose = the driver's seat (feet on the car's floor, the eye at the seated eye), its view yaw relative to the car. */
   private writePlayer(dt: number): void {
     const b = this.body!, P = this.host.player, S = this.spec;
-    const e = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z);
-    P.x = e.x; P.z = e.z; P.y = b.y;
-    P.eye = b.y + S.eye.y;
+    // (stairs) the seat rides the body's pitch: the eye (car frame) turned about the car's lateral axis, then the yaw
+    const p = b.pitch ?? 0, cp = Math.cos(p), sp = Math.sin(p);
+    const ez = S.eye.y * sp + S.eye.z * cp, e = carToWorld(b.x, b.z, b.yaw, S.eye.x, ez);
+    P.x = e.x; P.z = e.z; P.y = b.y - S.eye.z * sp;
+    P.eye = b.y + S.eye.y * cp - S.eye.z * sp;
     P.yaw = b.yaw + this.lookYaw;
     this.yawSeen = b.yaw;
     P.vx = -Math.sin(b.yaw) * b.v; P.vz = -Math.cos(b.yaw) * b.v; P.vy = 0;
@@ -529,6 +601,20 @@ export class SkywaysCar {
     P.stamina = Math.min(100, P.stamina + STAMINA_REGEN * STAMINA_PCT_PER_UNIT * dt); // (the ordinary recovery: player.ts reserve units)
     P.justJumped = P.justLanded = P.justRung = P.justClimbed = P.justLetGo = P.stanceChanged = false;
     P.landSpeed = 0;
+  }
+
+  /**
+   * (stairs) Game.updateCamera's hook: while seated, the view pitches with the car's body (on a flight the cockpit and the view tilt
+   * together; the player's own look is relative to it). No-op out of the car / on flat floor.
+   */
+  tiltCamera(camera: THREE.Camera): void {
+    const b = this.body;
+    if (!this.driving || !b) return;
+    const p = b.pitch ?? 0;
+    if (Math.abs(p) < 1e-5) return;
+    // a turn of `p` about the car's lateral axis (world: its +X turned by the yaw), applied on top of the look
+    tq.setFromAxisAngle(tv.set(Math.cos(b.yaw), 0, -Math.sin(b.yaw)), p);
+    camera.quaternion.premultiply(tq);
   }
 
   /** Game.startUse: no item use while driving (true = refused, with the note). */
@@ -560,10 +646,10 @@ export class SkywaysCar {
     this.world.props = h.propIndex;
     this.zombieContacts(dt);
     if (!this.driving && P.alive && Math.abs(P.y - b.y) < 1.2) this.separatePlayer();
-    this.syncView();
+    this.syncView(dt);
     if (this.driving) this.driveAudio();
     if (this.driving) this.prompt = CAR_TEXT.driving;
-    else this.prompt = h.state === 'playing' && this.canEnter() && this.pickAim() ? CAR_TEXT.getIn : null;
+    else this.prompt = h.state !== 'playing' || !this.canEnter() ? null : this.rear?.aimed() ? this.rear.prompt : this.pickAim() ? CAR_TEXT.getIn : null;
   }
 
   /** (lane CAR2) The engine's world position (CAR_RT.engineAt under the bonnet). */
@@ -573,32 +659,56 @@ export class SkywaysCar {
   }
 
   /**
-   * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel), the tyre skid when a hard
-   * brake (the pedal against the travel) or the handbrake BEGINS above CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s).
+   * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel; round 2: + how fast it
+   * reverses — the gearbox whine), the tyre skid when a hard brake (the pedal against the travel) or the handbrake BEGINS above
+   * CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s), (round 2) the brake-to-stop when a brake from >= CAR_SOUND.brakeMin brings the
+   * car under CAR_SOUND.brakeStopAt (once per stop; a crash that stopped it already sounded).
    */
   private driveAudio(): void {
-    const b = this.body!, c = this.ctl, v = b.v, stop = CAR_PHYS.stopSpeed;
+    const b = this.body!, c = this.ctl, v = b.v, sp = Math.abs(v), stop = CAR_PHYS.stopSpeed;
     const throttle = (c.forward && v > -stop) || (c.back && v < stop) ? 1 : 0;
     const en = this.enginePos();
-    this.audio.engine(Math.min(1, Math.abs(v) / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z);
-    const hard = Math.abs(v) > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
+    this.audio.engine(Math.min(1, sp / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z, v < -stop ? Math.min(1, sp / CAR_PHYS.reverseMax) : 0);
+    const hard = sp > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
     if (hard && !this.skidding && this.clock - this.skidT >= CAR_RT.skidEvery) {
       this.skidT = this.clock;
       this.audio.skid(b.x, b.y + 0.3, b.z);
     }
     this.skidding = hard;
+    const braking = c.handbrake || (c.back && v > stop) || (c.forward && v < -stop);
+    const crashed = !!this.step.impact && this.step.impact.speed >= CAR_RT.impactSfx;
+    if (sp > CAR_SOUND.brakeStopAt) this.brakeFrom = braking && !crashed ? Math.max(this.brakeFrom, sp) : 0;
+    else if (this.brakeFrom > 0) {
+      if (this.brakeFrom >= CAR_SOUND.brakeMin && !crashed) this.audio.brake(b.x, b.y + 0.3, b.z, Math.min(1, this.brakeFrom / CAR_PHYS.forwardMax));
+      this.brakeFrom = 0;
+    }
   }
 
-  private syncView(): void {
+  /** The view at the body's pose; the wheel follows the steering (eased with dt, at once without); (lane VIS) the lamps as `lights`. */
+  private syncView(dt?: number): void {
     const v = this.view, b = this.body;
     if (!v || !b) return;
     const g = v.group;
-    if (g.position.x !== b.x || g.position.y !== b.y || g.position.z !== b.z || g.rotation.y !== b.yaw) {
+    const pitch = b.pitch ?? 0;
+    if (g.position.x !== b.x || g.position.y !== b.y || g.position.z !== b.z || g.rotation.y !== b.yaw || g.rotation.x !== pitch) {
       g.position.set(b.x, b.y, b.z);
-      g.rotation.set(0, b.yaw, 0);
+      g.rotation.set(pitch, b.yaw, 0, 'YXZ'); // (stairs: the yaw, then the pitch about the car's own lateral axis; nose -Z up for > 0)
       g.updateMatrixWorld(true);
     }
-    setWheel(v, b.steer);
+    setWheel(v, b.steer, dt);
+    setCarLamps(this.lights, v.lens, this.beam);
+  }
+
+  /**
+   * (lane VIS) Game's F key: while seated, the car's lamps on / off (a switch click) and the key is consumed — the personal flashlight is
+   * left alone; otherwise false (F = the flashlight as ever). The state stays with the car (record v2 `lights`), also once parked.
+   */
+  onLightKey(): boolean {
+    if (!this.driving || !this.worldLive || !this.body) return false;
+    this.lights = !this.lights;
+    setCarLamps(this.lights, this.view?.lens ?? null, this.beam);
+    (this.host.sfx as CarSfx | null)?.click?.(this.lights ? 1.2 : 0.9);
+    return true;
   }
 
   /** Shadows (the paint casts; the trim twins / glass / cockpit do not), the storey for the level culler. */
@@ -630,8 +740,10 @@ export class SkywaysCar {
     const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw), moving = this.driving && Math.abs(b.v) > 0.05;
     for (const z of h.zombies) {
       const q = z.brain;
-      if (!q.alive || q.climbing || z.ragdolled || Math.abs(q.y - b.y) > CAR_RT.storeyY) continue;
+      if (!q.alive || q.climbing || z.ragdolled) continue;
       const r = q.stats.radius, dx = q.x - b.x, dz = q.z - b.z;
+      // (stairs) the same storey = near the body line's height at the body (on a flight it rises along the car)
+      if (Math.abs(q.y - (b.y - worldToCar(b.x, b.z, b.yaw, q.x, q.z).z * Math.tan(b.pitch ?? 0))) > CAR_RT.storeyY) continue;
       if (dx * dx + dz * dz > (reach + r) ** 2) continue;
       const n = nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z), overlap = r - n.d;
       if (overlap <= 0) continue;

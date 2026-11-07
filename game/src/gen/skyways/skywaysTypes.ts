@@ -87,7 +87,17 @@ export interface SkywaysBridge {
   length: number;
   /** Starts with broken panes and gas already flowing across it (a mask is needed). */
   breached: boolean;
+  /** (layout version 3, task studio-skyways-rework-20261107-054512-01) the glazed roof: its cross-section, the absolute y where it
+   *  springs from the glazed side walls (the side glazing's head) and its apex (the deck's ceiling); ribs every `rib` m. */
+  roof?: SkywaysBridgeRoof;
 }
+
+/** A bridge's glazed roof (world/skywaysArch.ts draws it; the deck's area ceiling = apexY). */
+export interface SkywaysBridgeRoof { style: 'vault' | 'faceted' | 'gable' | 'flat'; springY: number; apexY: number; rib: number }
+
+/** (layout version 3, task studio-skyways-rework-20261107-054512-01, lane ARCH: gen/skyways/skylights.ts) a skylight coffer in a
+ *  skyway-level public court's ceiling: its rect (world m), the court's ceiling line and the well's glazed top (absolute y). */
+export interface SkywaysSkylight { level: number; area: number; rect: SkywaysRect; ceilY: number; topY: number }
 
 export interface SkywaysStreet {
   /** Road + sidewalks between two building rows (world m; street level). */
@@ -156,7 +166,20 @@ export interface SkywaysAddon {
   convention?: {stage: SkywaysRect; statues: SkywaysStatue[]};
   /** How the hall attaches to its host's lobby: straight off it, or through a pre-function foyer / showroom approach (in `areas`). */
   approach?: 'direct' | 'foyer';
+  /** (layout version 3) 'convention': the VENUE — every area of the host's skyway floor by role (the bridges lead straight into it). */
+  venue?: {role: SkywaysVenueRole; area: number}[];
+  /** (layout version 3, lane VENUE) 'convention': the registration queue's rope lines (chains of layout.props indices of stanchion posts). */
+  queues?: number[][];
+  /** (layout version 3) 'prize-car': the car stands on a public display in its host's skyway court (`areas` empty, `hall` = the zone). */
+  display?: boolean;
 }
+
+/** (layout version 3) A tenant's office wing: open plan, meeting room, private offices, break room (layout.areas ids by role). */
+export interface SkywaysOfficeWing { building: string; level: number; tenant: string; rooms: {role: SkywaysOfficeRole; area: number}[] }
+export type SkywaysOfficeRole = 'open' | 'meeting' | 'office' | 'break';
+
+/** What a convention venue area is for. */
+export type SkywaysVenueRole = 'registration' | 'exhibitors' | 'main-hall' | 'panel' | 'photo-lounge' | 'backstage' | 'storage' | 'washrooms';
 
 /** The ramen restaurant of the base shop pool (exactly one per Skyways; its edible food is ordinary finite loot). */
 export interface SkywaysRestaurant {
@@ -255,5 +278,9 @@ export interface SkywaysInfo {
   pedways?: string[];
   /** (destinations pass) The large anchor shops and the landmark courts. */
   anchors?: SkywaysAnchor[];
+  /** (layout version 3) a tenant's office wing (open plan, meeting room, offices, break room), when the frame gave one. */
+  officeWing?: SkywaysOfficeWing;
   landmarks?: SkywaysLandmark[];
+  /** (layout version 3, lane ARCH) The skylight coffers of the skyway-level courts (gen/skyways/skylights.ts). */
+  skylights?: SkywaysSkylight[];
 }

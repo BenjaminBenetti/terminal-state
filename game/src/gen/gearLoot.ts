@@ -112,6 +112,7 @@ export function gearAreaWeight(a: Area): number {
   // Track 2 (lane GEN): the level's ONE gear roll stays in the core station (track tunnels / service annexes never multiply it).
   if (isExtensionArea(a)) return 0;
   if (a.kind === 'platform' || a.kind === 'passage' || a.kind === 'concourse') return 0;
+  if (a.noFloorLoot) return 0; // (task studio-alpha-skyways-shops-20261107-054512-01: a Skyways major store, version 3: no floor finds)
   if (a.storefront !== undefined && a.type !== 'shop' && a.type !== 'eatery') return 0;
   const words = `${a.type} ${a.role ?? ''} ${a.purpose ?? ''}`;
   if (a.role === 'stair' || a.type === 'stair-core' || a.type === 'exit-stair' || EXCLUDED.test(words)) return 0;

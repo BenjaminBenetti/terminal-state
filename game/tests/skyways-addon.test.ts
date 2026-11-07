@@ -22,7 +22,9 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {LEVELS} from '../src/levels/registry';
 import {skywaysIssues} from '../src/gen/skyways/index';
 import {skywaysAddonDressOf} from '../src/gen/skyways/addon';
-import {SKYWAYS_ADDON_KINDS, SKYWAYS_ADDON_MODEL_FILES, SKYWAYS_ADDON_PHYS, SKYWAYS_MASCOT_MODEL_KEY, SKYWAYS_MASCOT_POSES, SKYWAYS_MERCH_TOP,
+import {skywaysAddonDressOf as legacyAddonDressOf} from '../src/gen/skyways/legacy77/addon';
+import {skywaysIssues as legacyIssues} from '../src/gen/skyways/legacy77/validate';
+import {SKYWAYS_ADDON_ART, SKYWAYS_ADDON_KINDS, SKYWAYS_ADDON_MODEL_FILES, SKYWAYS_ADDON_PHYS, SKYWAYS_MASCOT_MODEL_KEY, SKYWAYS_MASCOT_POSES, SKYWAYS_MERCH_TOP,
   SKYWAYS_STAGE, SKYWAYS_STAGE_DECK_D, SKYWAYS_STAGE_MODEL_SHIFT, SKYWAYS_STANCHION, SKYWAYS_STATUE_PLINTH, isSkywaysAddonKind, skywaysAddonModelKey,
   skywaysAddonModelKeysFor, skywaysAddonShape, type SkywaysAddonKind} from '../src/gen/skyways/addonKinds';
 import {CON_DOOR_CLEAR} from '../src/gen/skyways/addonConvention';
@@ -66,6 +68,13 @@ const layouts = new Map<number, StationLayout>();
 const gen = (seed: number): StationLayout => {
   let L = layouts.get(seed);
   if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed} as never)));
+  return L;
+};
+/** (task studio-skyways-rework-20261107-054512-01) a station entered before the rework: the frozen GAME77 generator (layout version 2). */
+const layouts77 = new Map<number, StationLayout>();
+const gen77 = (seed: number): StationLayout => {
+  let L = layouts77.get(seed);
+  if (!L) layouts77.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed, layoutVersion: 2} as never)));
   return L;
 };
 /** World point -> host-local (x, z) (inverse of the dressers' toWorld). */
@@ -115,7 +124,7 @@ function reach(L: StationLayout, level: number, from: [number, number], to: [num
 
 describe('add-on kinds: registered, classified in both audits, models / art on file', () => {
   it('every kind has a footprint, a never-breaking damage class, one openables row and a physics row that agrees with the live physics', () => {
-    expect(SKYWAYS_ADDON_KINDS.length).toBe(13);
+    expect(SKYWAYS_ADDON_KINDS.length).toBe(18); // 13 + (lane VENUE) the photo-op wall, the tripod screen, the registration sign, the table banner, the wall screen
     for (const k of SKYWAYS_ADDON_KINDS) {
       expect(isSkywaysAddonKind(k)).toBe(true);
       expect(/^[A-Za-z]+$/.test(k), `${k}: prop-<kind> mesh names (damage/propDamage.ts NAME_RE)`).toBe(true);
@@ -190,7 +199,7 @@ describe('add-on kinds: registered, classified in both audits, models / art on f
 
   it('art faces show existing atlas pieces at their aspect; nothing printed / named about driving the car', () => {
     for (const k of SKYWAYS_ADDON_KINDS) for (let v = 0; v < 8; v++) for (const f of skywaysAddonShape(k, v).faces) {
-      const piece = (SKYWAYS_ART[f.atlas].pieces as Record<string, {aspect: number}>)[f.piece];
+      const piece = (SKYWAYS_ADDON_ART[f.atlas].pieces as Record<string, {aspect: number}>)[f.piece]; // (+ lane VENUE: the venue's atlas)
       expect(piece, `${k} ${f.piece}`).toBeTruthy();
       expect(Math.abs(f.w / f.h - piece.aspect) / piece.aspect, `${k} ${f.piece} aspect`).toBeLessThan(0.02);
     }
@@ -200,7 +209,7 @@ describe('add-on kinds: registered, classified in both audits, models / art on f
       expect(SKYWAYS_ADDON_PHYS[k].how, k).not.toMatch(DRIVE_WORDS);
       expect(OPENABLE_AUDIT.find(r => r.kind === k)!.how, k).not.toMatch(DRIVE_WORDS);
     }
-    for (const a of Object.values(SKYWAYS_ART)) for (const name of Object.keys(a.pieces)) expect(name).not.toMatch(DRIVE_WORDS);
+    for (const a of Object.values(SKYWAYS_ADDON_ART)) for (const name of Object.keys(a.pieces)) expect(name).not.toMatch(DRIVE_WORDS);
   });
 });
 
@@ -250,7 +259,9 @@ describe('the convention hall on the real seeds', () => {
       const recs = ad.convention!.statues;
       const roles = recs.map(s => s.role);
       for (const r of ['entrance-wave', 'washroom-point', 'stage-cheer', 'merch-bow']) expect(roles, `seed ${seed}`).toContain(r);
-      const want: Record<string, string> = {'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand'};
+      // (+ layout version 3, lane VENUE: the registration greeter and the photo lounge's pose on the venue floor beyond the hall)
+      const want: Record<string, string> = {'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand',
+        'registration-wave': 'wave', 'photo-pose': 'cheer'};
       for (const s of recs) {
         expect(s.pose).toBe(want[s.role]);
         expect(s.level).toBe(ad.level);
@@ -361,11 +372,11 @@ describe('the prize-car atrium on the real seeds', () => {
   }
 
   for (const seed of PRIZE_SEEDS) {
-    it(`seed ${seed}: car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board facing the entry`, () => {
-      const L = gen(seed), info = L.skyways!, ad = info.addon, res = skywaysAddonDressOf(L)!, pz = res.prize!;
+    it(`GAME77 showroom (layout version 2), seed ${seed}: car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board facing the entry`, () => {
+      const L = gen77(seed), info = L.skyways!, ad = info.addon, res = legacyAddonDressOf(L)!, pz = res.prize!;
       expect(ad.id).toBe('prize-car');
       expect(res.skipped, `seed ${seed}`).toEqual([]);
-      expect(skywaysIssues(L), `seed ${seed} validation`).toEqual([]);
+      expect(legacyIssues(L), `seed ${seed} validation`).toEqual([]);
       const car = ad.car!, hall = L.areas[ad.areas[0]];
       // nothing at all within the car body + 1.2 m (any prop of the storey, the stanchions included)
       for (const p of L.props) if ((p.level ?? 0) === car.level && p.h > 0) expect(bodyDist(car, p), `seed ${seed}: ${p.kind} within the car body + 1.2 m`).toBeGreaterThanOrEqual(1.2);
@@ -397,6 +408,46 @@ describe('the prize-car atrium on the real seeds', () => {
       // no sign in the add-on says anything about the car
       for (const sg of L.signs) if (ad.areas.includes(sg.area)) expect(sg.text).not.toMatch(DRIVE_WORDS);
       void hall;
+    });
+  }
+
+  // (layout version 3; user: "prize car in public walkway / atrium, not separate room") the PRIZE DISPLAY in the host's skyway court
+  for (const seed of PRIZE_SEEDS) {
+    it(`public display (layout version 3), seed ${seed}: in the skyway court, car spot + exit lane clear, stanchion ring outside the body + 1.2 m, ropes, board behind it`, () => {
+      const L = gen(seed), info = L.skyways!, ad = info.addon, res = skywaysAddonDressOf(L)!, pz = res.prize!;
+      expect(ad.id).toBe('prize-car');
+      expect(ad.display).toBe(true);
+      expect(ad.areas).toEqual([]);
+      expect(res.skipped, `seed ${seed}`).toEqual([]);
+      expect(skywaysIssues(L), `seed ${seed} validation`).toEqual([]);
+      const car = ad.car!, court = L.areas[car.area];
+      expect(car.level).toBe(2);
+      expect(court.publicSpace).toBe(true);
+      expect(court.label).toMatch(/^Skyway (court|galleria)/);
+      // nothing within the car body + 1.2 m
+      for (const p of L.props) if ((p.level ?? 0) === car.level && p.h > 0) expect(bodyDist(car, p), `seed ${seed}: ${p.kind} within the car body + 1.2 m`).toBeGreaterThanOrEqual(1.2);
+      // the exit lane ahead of the nose clear of every prop of the storey; the car's way out reachable on its storey
+      const lane = pz.lane!;
+      expect(lane.half).toBeCloseTo(SKYWAYS_PRIZE_LANE_HALF, 6);
+      for (const p of L.props) if ((p.level ?? 0) === car.level && !p.mounted) expect(boxSegDist(p, lane.ax, lane.az, lane.bx, lane.bz), `seed ${seed}: ${p.kind} in the exit lane`).toBeGreaterThan(lane.half - 1e-6);
+      expect(reach(L, car.level, [car.x, car.z], [lane.bx, lane.bz], SKYWAYS_CAR.width / 2 + 0.1), `seed ${seed}: the car's way out`).toBe(true);
+      // the stanchions: a rounded rectangle about 1.2 m off the body (>= 1.2 m: checked above for every prop), on the floor
+      expect(pz.stanchions.length, `seed ${seed}`).toBeGreaterThanOrEqual(7);
+      for (const s of pz.stanchions) {
+        expect(bodyDist(car, s)).toBeLessThanOrEqual(2.4);
+        expect(s.y).toBeCloseTo(car.y, 6);
+      }
+      const ropes = planRopes(L);
+      // (the lane's gap, and at most one post the court left no room for)
+      expect(ropes.length).toBeGreaterThanOrEqual(pz.stanchions.length - 3);
+      expect(ropes.length).toBeLessThan(pz.stanchions.length); // the lane's side stays open
+      for (const r of ropes) expect(segDist((r.a.x + r.b.x) / 2, (r.a.z + r.b.z) / 2, lane.ax, lane.az, lane.bx, lane.bz)).toBeGreaterThan(lane.half);
+      // the prize board behind the car, facing it (the way it looks)
+      const b = pz.board!;
+      expect(b.kind).toBe('skywaysPrizeBoard');
+      expect(deg(angDiff(b.rot, Math.atan2(car.x - b.x, car.z - b.z))), 'board faces the car').toBeLessThanOrEqual(46);
+      // no sign anywhere in the court says anything about the car
+      for (const sg of L.signs) if (sg.area === car.area) expect(sg.text).not.toMatch(DRIVE_WORDS);
     });
   }
 });
@@ -449,6 +500,9 @@ describe('world/skywaysAddon.ts + skywaysAddonRuntime.ts: drawn at real size, ro
     props.push(place('skywaysConPosterBoard', 36, 5, {variant: 3}), place('skywaysConBanner', 36, 12, {y: 2.38, mounted: true, variant: 1}),
       place('skywaysConWelcome', 36, 18), place('skywaysPrizeBoard', 30, 8));
     props.push(...ringPosts());
+    // (lane VENUE) the venue's art panels: the photo-op wall, a tripod screen, the registration sign on a wall, a banner on the table front
+    props.push(place('skywaysVenuePhotoWall', 50, 30), place('skywaysVenueScreen', 56, 30, {variant: 1}), place('skywaysVenueRegSign', 60, 0.52, {y: 1.3, mounted: true}),
+      place('skywaysVenueTableBanner', 30, 25 + 0.415, {y: 0.11, mounted: true, host: ti, variant: 2}), place('skywaysVenueWallScreen', 64, 0.53, {y: 1.15, mounted: true, variant: 1}));
     return {layout: room(props), stage, table};
   }
 
@@ -542,12 +596,12 @@ describe('world/skywaysAddon.ts + skywaysAddonRuntime.ts: drawn at real size, ro
       own: (_l, r) => { owned.push(r); return r; }}});
     await rt.preload(layout);
     // posters / boards (conPosters), banners (conBanners), backdrop (conStage), welcome + prints (conSigns), the prize board (prizeBoard)
-    expect(asked.sort()).toEqual(['conBanners', 'conPosters', 'conSigns', 'conStage', 'prizeBoard'].map(k => `skyways:${SKYWAYS_ART[k as 'conStage'].url}`).sort());
-    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage'] as const) expect(skywaysAddonArtLoaded(k), k).toBe(true);
+    expect(asked.sort()).toEqual(['conBanners', 'conPosters', 'conSigns', 'conStage', 'prizeBoard', 'venueArt'].map(k => `skyways:${SKYWAYS_ADDON_ART[k as 'conStage'].url}`).sort()); // (+ lane VENUE)
+    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage', 'venueArt'] as const) expect(skywaysAddonArtLoaded(k), k).toBe(true);
     expect(skywaysAddonArtLoaded('prizeBoard')).toBe(false);
-    expect(owned.length).toBe(4);
-    expect(rt.counts.artLoaded).toBe(4);
-    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage'] as const) setSkywaysAddonArtMaterial(k, null);
+    expect(owned.length).toBe(5);
+    expect(rt.counts.artLoaded).toBe(5);
+    for (const k of ['conBanners', 'conPosters', 'conSigns', 'conStage', 'venueArt'] as const) setSkywaysAddonArtMaterial(k, null);
     // a layout without the add-on panels asks for nothing
     asked.length = 0;
     await rt.preload(room([place('foldingChair', 5, 5)]));

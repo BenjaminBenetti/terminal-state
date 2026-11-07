@@ -36,13 +36,19 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent';
 import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
-import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
+import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_LAYOUT_VERSION} from './layoutVersion';
+import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
+import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
+import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
 import {dressSkywaysAddon} from './addon';
+import {dressSkywaysOfficeWing} from './officeWing';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
+import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
+import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
+import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -69,6 +75,8 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 
 /** The ONE continuous Skyways layout. */
 export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOptions = {}): StationLayout {
+  // (task studio-skyways-rework-20261107-054512-01) stations entered before the rework regenerate through the frozen GAME77 generator
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) <= SKYWAYS_LEGACY77_MAX) return generateSkywaysLegacy77(ctx, opts);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile('skyways');
   const spawns = opts.spawns ?? spawnProfile('skyways');
@@ -124,7 +132,7 @@ export function skywaysTrackExtContext(levelSeed: number, ox: number, oy: number
 function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none', legacy = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SKYWAYS_CANVAS.levels, w: SKYWAYS_CANVAS.w, h: SKYWAYS_CANVAS.h});
-  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy});
+  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy, outwardFronts: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION, storeBackRooms: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION}); // (+ outwardFronts / storeBackRooms: task studio-alpha-skyways-shops-20261107-054512-01)
   if (!sc) return null;
 
   // --- Crop (fixed origin) + the Track2 plan (before the crop; nothing written into the Kit) ------------------------------------
@@ -158,6 +166,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
 
   // --- Dressing (run mouths, bridge decks' middle lane, the add-on hall held clear) -----------------------------------------------
   const release = holdCells(layout, holds(layout, sc, ox, oy));
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION) markStoreAreas(layout.areas, sc.anchors); // (task studio-alpha-skyways-shops-20261107-054512-01: no floor piles in the stores)
   dress(layout, rng.fork('dress'));
   release();
 
@@ -170,8 +179,11 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysAtriums(layout, rng.fork('skyways-atriums'));
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
-  dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
+  dressSkywaysDestinations(layout, rng.fork('skyways-destinations'), {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: task studio-alpha-skyways-shops-20261107-054512-01)
+  dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
+  placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
+  dressSkywaysGardens(layout, rng.fork('skyways-gardens')); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) planted galleries + court bench-planters
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -185,6 +197,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // --- Lighting, daylight, traversal ------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   addSkywaysDaylight(layout);
+  skywaysSkylights(layout); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) skylight coffers + their daylight (before dropFloatingFixtures)
   finishTraversal(layout);
   dropFloatingFixtures(layout);
 
@@ -232,7 +245,7 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
   }));
   if (buildings.find(b => b.id === f.station)) buildings.find(b => b.id === f.station)!.levels = [0, 1, 2];
   const bridges = sc.bridges.map(b => ({id: b.id, level: SKYWAYS_LEVEL.skyway, area: b.area, a: b.a, b: b.b, rect: rectW(b.rect), axis: b.axis, width: r3(b.width * CELL),
-    length: r3((b.axis === 'x' ? b.rect.w : b.rect.h) * CELL), breached: b.breached}));
+    length: r3((b.axis === 'x' ? b.rect.w : b.rect.h) * CELL), breached: b.breached, ...(b.roof ? {roof: {...b.roof}} : {})}));
   // streets: the gaps between neighbouring footprints (scenery records)
   const streets: SkywaysInfo['streets'] = [];
   const all = sc.buildings.map(bc => bc.b);
@@ -276,6 +289,9 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
       approach: a.approach,
       ...(car ? {car} : {}),
       ...(a.id === 'convention' ? {convention: {stage: a.stage ? rectW(a.stage) : rectW(a.hall), statues: []}} : {}),
+      // (layout version 3) the convention venue's areas by role; the prize car's public display
+      ...(a.venue ? {venue: a.venue.map(v => ({role: v.role, area: v.area}))} : {}),
+      ...(a.id === 'prize-car' && !a.areas.length ? {display: true} : {}),
     },
     restaurant: sc.ramen ? {area: sc.ramen.dining, kitchen: sc.ramen.kitchen, building: sc.ramen.building, level: sc.ramen.level, name: layout.areas[sc.ramen.dining].label} : null,
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},
@@ -283,6 +299,7 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     family: f.family, topology: f.topology, pedways: sc.pedways.slice(),
     anchors: sc.anchors.map(an => ({id: an.id, family: an.family, name: an.name, building: an.building, level: an.level, format: an.format, floor: an.floor,
       rect: rectW(an.rect), storefront: an.storefront, front: an.front, ...(an.upper !== null ? {upper: an.upper} : {}), zones: an.zones.slice(), stock: an.stock.slice(), ceilY: an.ceilY})),
+    ...(sc.officeWing ? {officeWing: {building: sc.officeWing.building, level: sc.officeWing.level, tenant: sc.officeWing.tenant, rooms: sc.officeWing.rooms.map(q => ({...q}))}} : {}),
     landmarks: sc.landmarks.map(m => ({id: m.id, family: m.family, name: m.name, building: m.building, level: m.level, area: m.area,
       x: r3((m.cx - ox) * CELL), z: r3((m.cy - oy) * CELL), y: BASES[m.level], radius: m.radius, height: m.height, atrium: m.atrium})),
   };
@@ -293,6 +310,9 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
  * between its lanes — on the lower storey following the pitch from the bottom edge to the top of the flight, on the upper storey a flat
  * run over the whole length (the upper floor's well guard) — and the WELL END: a flat rail on the upper storey across the bottom edge.
  */
+/** How far an escalator's bottom newel (and its glass balustrade) reaches beyond the flight's foot (world/traversalBuilder.ts ESC.newelBottom). */
+const SKYWAYS_ESC_NEWEL_BOTTOM = 1.2;
+
 function runRails(sc: SkywaysCarve, ox: number, oy: number, flights: readonly StairFlight[]): RailRun[] {
   const out: RailRun[] = [];
   const W = (cx: number) => r3((cx - ox) * CELL), Z = (cy: number) => r3((cy - oy) * CELL);
@@ -314,9 +334,16 @@ function runRails(sc: SkywaysCarve, ox: number, oy: number, flights: readonly St
         ? {level, x0: r3(s0), z0: along, x1: r3(s1), z1: along, y0: r3(y0), y1: r3(y1), nx: 0, nz: normal, kind: 'railing', h: 1.0, ...(hidden ? {hidden: true} : {})}
         : {level, x0: along, z0: r3(s0), x1: along, z1: r3(s1), y0: r3(y0), y1: r3(y1), nx: normal, nz: 0, kind: 'railing', h: 1.0, ...(hidden ? {hidden: true} : {})});
     };
+    // (task studio-skyways-rework-20261107-054512-01, user bug: invisible solid barriers at varying stair seams) a seam between two
+    // fixed stair lanes has NO rail (one wide stair, the same pitch); an escalator lane's sides keep the collision of the glass
+    // balustrade world/traversalBuilder.ts now DRAWS (its bottom newel included); the outer pitch rails stay drawn railings
+    const kindAt = (i: number): string[] => i === 0 ? [rc.lanes[0].kind] : i === 1 ? [rc.lanes[rc.lanes.length - 1].kind] : [rc.lanes[i - 2].kind, rc.lanes[i - 1].kind];
+    const beyond = botEdge + (rc.from === 'hi' ? -1 : 1) * SKYWAYS_ESC_NEWEL_BOTTOM;
     lines.forEach((along, i) => {
-      const inner = i >= 2, normal = i === 1 ? 1 : -1;
-      seg(lo, along, botEdge, yLo, sTop, yHi, normal, inner);
+      const inner = i >= 2, normal = i === 1 ? 1 : -1, esc = kindAt(i).includes('escalator');
+      if (inner && !esc) return;
+      if (esc) seg(lo, along, beyond, yLo, botEdge, yLo, normal, true);
+      seg(lo, along, botEdge, yLo, sTop, yHi, normal, esc);
       seg(hi, along, inner ? sTop : botEdge, yHi, topEdge, yHi, normal, inner);
     });
     out.push(rc.axis === 'x'
@@ -334,10 +361,12 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     for (let y = r.y - oy - pad; y < r.y - oy + r.h + pad; y++) for (let x = r.x - ox - pad; x < r.x - ox + r.w + pad; x++) if (g.inBounds(x, y)) cells.push(g.idx(x, y));
     out.push({level, cells});
   };
+  // (layout version 3) the run-outs: RUN_OUT cells straight beyond both ends (a car lines up with the flight), 4 before
+  const M = RUN_OUT;
   for (const rc of sc.runs) {
     const r = rc.rect;
-    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - 4, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - 4, w: r.w, h: 4};
-    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - 4 : r.x + r.w, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - 4 : r.y + r.h, w: r.w, h: 4};
+    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - M, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - M, w: r.w, h: M};
+    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - M : r.x + r.w, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - M : r.y + r.h, w: r.w, h: M};
     add(rc.lower, mouthLo); add(rc.lower + 1, mouthHi);
   }
   for (const b of sc.bridges) {
@@ -362,6 +391,20 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === id) cells.push(g.idx(x, y));
       out.push({level: lv, cells});
     }
+  }
+  // (layout version 3) the office wing: the office dresser furnishes it
+  for (const q of sc.officeWing?.rooms ?? []) {
+    const a = layout.areas[q.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === q.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
+  }
+  // (layout version 3) the convention venue: its public event areas belong to the venue dresser (the washrooms, backstage and storage
+  // keep the station's ordinary dressing)
+  for (const v of sc.addon.venue ?? []) {
+    if (v.role === 'washrooms' || v.role === 'backstage' || v.role === 'storage') continue;
+    const a = layout.areas[v.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === v.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
   }
   add(sc.addon.level, sc.addon.hall);
   add(sc.addon.level, sc.addon.entry, 3);

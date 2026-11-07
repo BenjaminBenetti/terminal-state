@@ -570,8 +570,14 @@ export interface ShopBox { m: ShopMat | MenuKey; x0: number; y0: number; z0: num
 /** Textured face (sign lettering, leasing hoarding) — centre, yaw of its normal, size. */
 export interface ShopFace { kind: 'fascia' | 'hoarding'; sf: number; x: number; y: number; z: number; rot: number; w: number; h: number }
 
-export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: ShopBox[]; faces: ShopFace[]} {
+export function storefrontParts(layout: StationLayout, sf: Storefront, opts: {anchorSign?: boolean} = {}): {boxes: ShopBox[]; faces: ShopFace[]} {
   const fr = shopFrame(sf);
+  // (task studio-alpha-skyways-shops-20261107-054512-01, user: "major-store signs face inward / reverse") an older station's Skyways anchor
+  // record has its shop's own front wall as `side` (Storefront.outward absent), so its frame is mirrored into the shop. For the renderer
+  // (opts.anchorSign) the SIGN BAND, its lettering and the bulkhead over it are drawn from the hall side's frame: they face the lobby.
+  // The jambs / glazing stay where that station's collision is; the generator's own calls (no option) are unchanged.
+  const flipSign = !!opts.anchorSign && !!sf.anchor && !sf.outward;
+  const frS = flipSign ? shopFrame({...sf, side: ({N: 'S', S: 'N', E: 'W', W: 'E'} as const)[sf.side]}) : fr;
   const boxes: ShopBox[] = [];
   const faces: ShopFace[] = [];
   // task studio-skyways-level-20261106-054448-01: a bay on another storey (sf.baseY) — every height below is relative to its floor
@@ -580,9 +586,13 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
     const [p0, q0] = frameXZ(fr, a0, n0), [p1, q1] = frameXZ(fr, a1, n1);
     boxes.push({m, x0: Math.min(p0, p1), y0: y0 + by, z0: Math.min(q0, q1), x1: Math.max(p0, p1), y1: y1 + by, z1: Math.max(q0, q1), tint});
   };
-  const face = (kind: ShopFace['kind'], a: number, y: number, n: number, w: number, h: number) => {
-    const [x, z] = frameXZ(fr, a, n);
-    faces.push({kind, sf: sf.id, x, y: y + by, z, rot: fr.faceRot, w, h});
+  const face = (kind: ShopFace['kind'], a: number, y: number, n: number, w: number, h: number, F: ShopFrame = fr) => {
+    const [x, z] = frameXZ(F, a, n);
+    faces.push({kind, sf: sf.id, x, y: y + by, z, rot: F.faceRot, w, h});
+  };
+  const boxS = (m: ShopMat | MenuKey, a0: number, a1: number, y0: number, y1: number, n0: number, n1: number) => {
+    const [p0, q0] = frameXZ(frS, a0, n0), [p1, q1] = frameXZ(frS, a1, n1);
+    boxes.push({m, x0: Math.min(p0, p1), y0: y0 + by, z0: Math.min(q0, q1), x1: Math.max(p0, p1), y1: y1 + by, z1: Math.max(q0, q1)});
   };
   const {a0, a1} = fr;
   const W = a1 - a0, mid = (a0 + a1) / 2;
@@ -595,12 +605,12 @@ export function storefrontParts(layout: StationLayout, sf: Storefront): {boxes: 
   box('shopFrame', a1 - 0.07, a1, 0, head, -0.12, 0.035);
   box('shopFrame', a0, a1, head - 0.08, head, -0.14, 0.035);
   // Sign band (fascia) across the frontage, lettering face, and the bulkhead above it in tall halls.
-  box('signBand', a0 - 0.25, a1 + 0.25, head, sf.fasciaTop, 0, 0.16);
-  box('black', a0 - 0.25, a1 + 0.25, head - 0.01, head + 0.012, 0.0, 0.165);
-  if (sf.shutter !== 'closed' || sf.style !== 'hoarding') face('fascia', mid, (head + sf.fasciaTop) / 2, 0.163, Math.max(1, W - 0.1), Math.max(0.2, sf.fasciaTop - head - 0.1));
+  boxS('signBand', a0 - 0.25, a1 + 0.25, head, sf.fasciaTop, 0, 0.16);
+  boxS('black', a0 - 0.25, a1 + 0.25, head - 0.01, head + 0.012, 0.0, 0.165);
+  if (sf.shutter !== 'closed' || sf.style !== 'hoarding') face('fascia', mid, (head + sf.fasciaTop) / 2, 0.163, Math.max(1, W - 0.1), Math.max(0.2, sf.fasciaTop - head - 0.1), frS);
   const hallCeil = hall.ceil - by; // (relative to the bay's floor)
   const bulkTop = Math.min(hallCeil - 0.02, sf.fasciaTop + (hallCeil > 4.2 ? 0.9 : 0.4));
-  if (bulkTop > sf.fasciaTop + 0.05) box('shopFrame', a0 - 0.25, a1 + 0.25, sf.fasciaTop, bulkTop, 0, 0.06);
+  if (bulkTop > sf.fasciaTop + 0.05) boxS('shopFrame', a0 - 0.25, a1 + 0.25, sf.fasciaTop, bulkTop, 0, 0.06);
 
   const cells = Math.round(W / CELL);
   if (sf.shutter === 'closed') {

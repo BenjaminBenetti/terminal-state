@@ -103,7 +103,7 @@ function cellSurf(grid: Grid, cx: number, cy: number, x: number, z: number, tren
     // Evaluate this cell's ramp (points on the cell boundary belong to it, not the neighbour).
     const R = grid.ramps[r];
     const f = grid.floorNear(cx, cy, x, z);
-    return [f, f + R.headroom];
+    return [f, R.capCeil && grid.hasCeil(i) ? Math.min(f + R.headroom, grid.ceil[i]) : f + R.headroom]; // (capCeil: Skyways open wells)
   }
   const f = grid.cells[i] === VOID && grid.floor[i] === 0 ? trenchY : grid.floorOf(i);
   return [f, grid.hasCeil(i) ? grid.ceil[i] : 3];

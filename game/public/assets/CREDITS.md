@@ -389,15 +389,18 @@ on the build worker. Raw takes are kept outside Git.
 <!-- END train-fuel-audio-20261106 -->
 
 <!-- BEGIN skyways-car-audio-20261106 (skyways-car-build.mjs) -->
-## Skyways prize-car audio (engine idle / drive loops, tyre skid, door)
+## Skyways prize-car audio (engine idle / drive loops, engine start, reverse whine, brake stop, tyre skid, door)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Skyways
-task's local Sound Lab allowance (4 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
-Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
-levelling, MP3) built by `tools/audio-pipeline/skyways-car-build.mjs` (provenance: `assets/derivatives/audio-skyways-car.json`). Not reviewed by ear
-on the build worker. Raw takes are kept outside Git.
+task's local Sound Lab allowance (round 1: 4 jobs of the Skyways task's 12-job cap) and the rework's (round 2: 8 jobs of the Skyways rework's 8-job audio allowance). Powered by Stability AI.
+Stability AI Community License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime
+derivatives (trim, fades, loop, layer mix, levelling, MP3) built by `tools/audio-pipeline/skyways-car-build.mjs` (provenance:
+`assets/derivatives/audio-skyways-car.json`). Not reviewed by ear on the build worker. Raw takes are kept outside Git.
 
-- `assets/audio/car-engine-idle-loop.mp3` — carIdle (Sound Lab job 20261106T071502-1422195354)
-- `assets/audio/car-engine-drive-loop.mp3` — carDrive (Sound Lab job 20261106T071506-522183325)
+- `assets/audio/car-engine-idle-loop.mp3` — carIdle (Sound Lab jobs 20261107T060608-1026530035 + 20261107T060428-1611127821)
+- `assets/audio/car-engine-drive-loop.mp3` — carDrive (Sound Lab jobs 20261107T060433-429155089 + 20261106T071506-522183325)
+- `assets/audio/car-engine-start.mp3` — carStart (Sound Lab job 20261107T060438-1607570711)
+- `assets/audio/car-reverse-loop.mp3` — carReverse (Sound Lab job 20261107T060442-1790482092)
+- `assets/audio/car-brake.mp3` — carBrake (Sound Lab job 20261107T060447-234821177)
 - `assets/audio/car-skid.mp3` — carSkid (Sound Lab job 20261106T071511-1842152276)
 - `assets/audio/car-door.mp3` — carDoor (Sound Lab job 20261106T071515-1534666901)
 <!-- END skyways-car-audio-20261106 -->
@@ -470,3 +473,67 @@ loop, levelling, MP3) built by `tools/audio-pipeline/skyways-destinations-build.
   generations and concept images stay private (studio reference task folder). The designs and brands are invented.
 - Unapproved prototypes; no commercial clearance implied.
 <!-- END skyways-destinations-kit-20261106 -->
+
+<!-- BEGIN skyways-store-design-art-20261107 (build-art.mjs, lane STORE-DESIGN) -->
+## Skyways major store Larch & Loom Home: framed art prints
+Six original framed-art-print artworks generated for this project with Codex native image_gen (owned Codex CLI) in one call (one
+sheet; Codex thread 01a1b4f6-8104-7391-9ec0-584414b4be67) under the Skyways store lanes' art authorization (task
+studio-alpha-skyways-shops-20261107-054512-01). Runtime derivative (locate / crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/design/build-art.mjs`; provenance with the prompt and source hash:
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.design`). The raw generation stays private (studio reference task folder).
+
+- `assets/textures/skyways/stores/design/skyways-store-design-prints.jpg` — mid-century arches, a prairie horizon line drawing, larch
+  branches, a woven-textile pattern, a birch-lake watercolour and stacked organic shapes.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-design-art-20261107 -->
+
+<!-- BEGIN skyways-store-science-art-20261107 (build-science-art.mjs, lane STORE-SCIENCE) -->
+## Skyways major store Big Sky Wonders: wall art
+Three static artworks generated for this project with Codex native image_gen (owned Codex CLI; 3 calls, 3 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): a northern star-chart mural, a periodic-table
+style classroom chart and a triptych of vintage science-kit posters. Runtime derivative (crop / resize / atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/science/build-science-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.science`). The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/science/science-art.jpg` — the star map, the chart and the three kit posters.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-science-art-20261107 -->
+
+<!-- BEGIN skyways-store-music-art-20261107 (build-music-art.mjs, lane STORE-MUSIC) -->
+## Skyways major store Northern Groove Records: record covers, gig posters and signs
+Six static art sheets generated for this project with Codex native image_gen (owned Codex CLI; 6 calls, 6 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): 64 original fictional LP covers (four 4 x 4
+sheets, no text, no real artists or artwork requested), four fictional gig posters, and the NEW ARRIVALS / LISTENING BOOTHS boards and
+eight genre cards. Runtime derivatives (crop / resize / atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/music/build-music-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.music`). The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/music/music-covers.jpg` — the 64 cover faces of the record-bin stock and the new-arrivals wall.
+- `assets/textures/skyways/stores/music/music-signs.jpg` — the gig posters, the two boards and the genre cards.
+- Bands, venues and covers are invented. Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-music-art-20261107 -->
+
+<!-- BEGIN skyways-store-books-art-20261107 (build-books-art.mjs, lane STORE-BOOKS) -->
+## Skyways major store Paper Prairie Books: category signs and rugs
+Two static art sheets generated for this project with Codex native image_gen (owned Codex CLI; 2 calls, 2 accepted) under the Skyways
+store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): eight carved walnut category signs (invented shop
+signage) and two area rugs (a worn reading-room rug, a children's prairie play rug). Runtime derivative (crop / resize / atlas pack
+only) built by `tools/asset-pipeline/skyways-stores/books/build-books-art.mjs`; provenance with the prompts and source hashes:
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.books`). The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/books/skyways-store-books-art.jpg` — the signs and the rugs.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-books-art-20261107 -->
+
+<!-- BEGIN skyways-store-cinema-art-20261107 (build-art.mjs, lane STORE-CINEMA) -->
+## Skyways major store Aurora Picture House: now-showing posters and the concession board
+Five original flat artworks generated for this project with Codex native image_gen (owned Codex CLI), one call per piece, under the
+Skyways store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01). The films, titles and taglines are
+invented (no real films, studios, actors or brands). Runtime derivative (crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/cinema/build-art.mjs`; provenance with the Codex threads, prompt and source hashes:
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.cinema`). The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/cinema/cinema-art.jpg` — four film posters ("The Coulee Kid", "The Hoppers", "Moonlight on the
+  Midway", "Skywalk at Midnight") and the art-deco REFRESHMENTS concession board.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-cinema-art-20261107 -->

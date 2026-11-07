@@ -1,0 +1,74 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-arch-brick-wall",
+ "task": "studio-skyways-rework-20261107-054512-01",
+ "lane": "ARCH",
+ "status": "runtime derivative (tile crop / resize / JPEG only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways rework (no numerical image cap, user override); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways skylit / atrium courts: the walls (face brick)",
+ "subject": "red-brown face-brick wall in running bond, straight-on, tileable",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-arch-textures.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/arch-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 102,
+  "session": "01a1b4af-cdc4-7533-b81d-3b981c79a59a",
+  "requested": "2026-11-07T06:26:22.617889Z",
+  "finished": "2026-11-07T06:26:56.386642Z",
+  "seconds": 33.7
+ },
+ "prompt": {
+  "file": "arch-102.txt",
+  "sha256": "f94214587c2bf3d0c81ab01128df372be9a85bd6b1c130bc1a5409931b576f45"
+ },
+ "source": {
+  "file": "codex-102-exec-b21ba742-e6c7-469f-9f6d-27de0024aa44.png",
+  "sha256": "3a500cbda93565cce2f27430f8fa3f33f3b381a3098316a6375b5f80943951b6",
+  "bytes": 3551330,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1043,
+   "why": "a whole number of brick courses (the source's measured vertical repeat)"
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "seamLR": 12.3,
+  "interiorLR": 9.2,
+  "seamTB": 18.2,
+  "interiorTB": 12.7,
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+ },
+ "spanM": {
+  "u": 1.254,
+  "v": 1.043
+ },
+ "output": {
+  "url": "assets/textures/skyways/arch/skyways-arch-brick-wall.jpg",
+  "bytes": 236194,
+  "sha256": "c6094083d0ccc87bba9477cb531f4708483af9c6ad6d9f8d8ed90ac8b1693e82",
+  "width": 1024,
+  "height": 1024,
+  "format": "jpeg"
+ }
+}

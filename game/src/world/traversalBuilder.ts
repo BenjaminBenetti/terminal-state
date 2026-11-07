@@ -232,6 +232,10 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   const mallEsc = mallEscalatorFlights(layout);
   const mallRamps = new Set<number>(mallEsc.map(e => e.flight.ramp));
   for (const rr of mallRamps) escRamps.add(rr);
+  // (task studio-skyways-rework-20261107-054512-01) the Skyways runs' escalator lanes: the stopped escalator (steps, balustrades,
+  // handrails) instead of fixed treads — their side rails were collision-only and read as invisible barriers
+  const skyEsc = skywaysEscalatorFlights(layout);
+  for (const e of skyEsc) escRamps.add(e.flight.ramp);
   const transitRamps = new Set<number>(layout.traversal.stairs.filter(f => f.spec).map(f => f.ramp));
   for (const L of levels) {
     const g = L.grid;
@@ -289,6 +293,7 @@ export function buildTraversal(group: THREE.Group, layout: StationLayout, mats: 
   addMerged(group, stripes, hazardMaterial(mats), 'traversal-hazard');
   if (office) buildOfficeExtras(group, layout, office, mats);
   if (mallEsc.length) buildMallEscalators(group, layout, mallEsc, mats); // task track3 (lane ARCH)
+  if (skyEsc.length) buildMallEscalators(group, layout, skyEsc, mats, 'skyways-escalators'); // task studio-skyways-rework-20261107-054512-01
   return layout.traversal.ladders.length;
 }
 
@@ -417,7 +422,20 @@ function buildOfficeExtras(group: THREE.Group, layout: StationLayout, office: Of
  * Task track3-eaton-centre-20261031 (lane ARCH): the mall's stopped escalators, merged per storey pair (every bank between two rings
  * is one mesh per material: ~6 pairs x 5 materials instead of 5 draw calls per escalator) and tagged with those two storeys.
  */
-function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights: ReturnType<typeof mallEscalatorFlights>, mats: WorldMaterials): void {
+/** Task studio-skyways-rework-20261107-054512-01: every escalator lane of a Skyways run (layout.levelLinks, flight spec 'escalator'). */
+export function skywaysEscalatorFlights(layout: StationLayout): ReturnType<typeof mallEscalatorFlights> {
+  if (!(layout as {skyways?: unknown}).skyways) return [];
+  const out: ReturnType<typeof mallEscalatorFlights> = [], seen = new Set<number>();
+  for (const ln of (layout as {levelLinks?: {lower: number; upper: number; traversalId?: number}[]}).levelLinks ?? []) {
+    const fl = ln.traversalId !== undefined ? layout.traversal.stairs[ln.traversalId] : undefined;
+    if (!fl || fl.spec !== 'escalator' || seen.has(fl.ramp)) continue;
+    seen.add(fl.ramp);
+    out.push({flight: fl, lower: ln.lower, upper: ln.upper});
+  }
+  return out;
+}
+
+function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights: ReturnType<typeof mallEscalatorFlights>, mats: WorldMaterials, name = 'mall-escalators'): void {
   const pairs = new Map<string, {L: OfficeLists; lower: number; upper: number}>();
   for (const {flight, lower, upper} of flights) {
     const q = layout.traversal.stairs.find(f2 => f2.ramp === flight.ramp);
@@ -428,7 +446,7 @@ function buildMallEscalators(group: THREE.Group, layout: StationLayout, flights:
     if (!e) pairs.set(key, (e = {L: lists(), lower, upper}));
     buildEscalator(e.L, r, q, true);
   }
-  for (const [key, e] of pairs) emitLists(group, e.L, mats, `mall-escalators-${key}`, [e.lower, e.upper]);
+  for (const [key, e] of pairs) emitLists(group, e.L, mats, `${name}-${key}`, [e.lower, e.upper]);
 }
 
 /**

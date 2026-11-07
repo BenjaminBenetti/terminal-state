@@ -367,6 +367,44 @@ models with their maps kept, lane ASSET-C's mascot pose GLB, the Codex art atlas
   statues / aim, stage against its wall, merch support / overlap, lanes / doors, posters / banners, the car's clearance / exit lane /
   ring / ropes / board; the renderer on the real GLBs; ropes dropping with a shot post; merch shot off its table).
 
+### The Skyways convention VENUE floor and the walkable stage (task studio-skyways-rework-20261107-054512-01, lane VENUE)
+Layout version 3 rents the host's whole skyway floor to the convention (`addon.venue` roles). `gen/skyways/venueDress.ts` dresses the
+public areas beyond the main hall: registration (badge desks = the merch table kind with a staff folding chair behind, a stanchion queue
+line whose velvet ropes the runtime draws from `addon.queues`, the welcome sign, the `registration-wave` statue), the exhibitors' floor
+(vendor table rows with LOOSE merch on the tops and a vendor's chair, the pop-up exhibits: arcade cabinets + capsule-toy row + giant teddy,
+a mannequin cosplay display), panel rooms (two tables, panelists, audience rows, a tripod screen), the photo lounge (photo-op wall,
+`photo-pose` statue, armchairs / bean bags / ottoman / plants) and event wayfinding on the sign system. Every furniture group is kept only
+if every opening of its area that was reachable before stays reachable by a 1.2 m wide path (then reserved as lanes); 1.5 m stays clear in
+front of every door. Existing kinds keep their classes; FIVE new art-panel kinds (`gen/skyways/addonKinds.ts`, drawn by
+`world/skywaysAddon.ts` from the venue's Codex atlas `textures/skyways/skyways-venue-art.jpg`, crop / pack only):
+
+| Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact) |
+|---|---|---|---|---|
+| `skywaysVenuePhotoWall` | printed 3 × 2 m photo-op panel in a steel frame between two posts on sandbag-weighted base plates | `none` | static `anchored` (~45 kg) | 3.19 × 2.50 × 0.60 m, panel 0.42–2.42 m; grounded (base plates) |
+| `skywaysVenueScreen` | tripod projection screen showing the panel's title slide (variant = slide) | `none` | **dynamic** 9 kg box, `pad` | 2.18 × 2.30 × 0.50 m, screen 0.80–2.20 m; grounded (T-foot) |
+| `skywaysVenueRegSign` | framed registration sign screwed to the wall behind the badge desks | `none` | static `mounted` | 1.56 × 1.06 m at 1.30–2.36 m |
+| `skywaysVenueTableBanner` | vinyl booth banner zip-tied along a vendor table's cloth front (hosted on the table; variant = studio) | `none` | static `mounted` | 0.90 × 0.60 m at 0.11–0.71 m, under the 0.757 m top |
+| `skywaysVenueWallScreen` | a compact panel room's projection screen fixed to the wall behind the panel (variant = slide) | `none` | static `mounted` | 1.88 × 1.28 × 0.05 m at 1.15–2.43 m |
+
+- Every carved event room is dressed, compact ones too: a narrow panel room gets one table and two panelists, closer audience rows and
+  the slide on the wall screen; a compact lounge keeps its photo wall, the posed statue only where it fits, the seating that fits.
+- Routes: besides each area's own openings, the WHOLE walk (the public venue areas + the main hall) is checked from every bridge mouth;
+  the main hall keeps a lane from its entry to every other door of it (the rooms carved off it, the back of house).
+
+- No loose items baked in: the panels are print + frame only; merch / chairs are separate props.
+- The STAGE (`gen/skyways/stageSupport.ts`, user: "anime stage stairs must be walkable"): at runtime (`game.ts`, after the world is drawn,
+  before levels / prop index / paths / physics) the grid floor under the drawn deck (1.029 m) and the two drawn treads (0.682 / 0.325 m,
+  sampled at cell centres from the cooked model: risers 0.33–0.36 m, each within STEP_UP) is lifted, so the real player walks up the
+  steps onto the deck and back down; the deck / tread boxes then no longer block a body standing on them, the cheer statue blocks at deck
+  height, and collision-only truss boxes (stage variant 2) keep bodies out of the truss / backdrop line. Zombies' paths reach the deck by
+  the steps. Version 3 stands the deck edge on a cell line (drawn ↔ support exact but the bottom riser, 8 cm); the frozen v1 / v2 stages
+  get the same runtime support (within 0.15 m), their layout data unchanged.
+- Renders: the five kinds (shape GLBs) + `skyways-con-merch-table.glb`, `scale-check.mjs --prop … --lift 1.3 (sign) / 0.11 (banner) / 1.15 (wall screen)`,
+  viewed beside zombie `lastshift` at runtime scale 1.0.
+- Tests: `tests/skyways-venue.test.ts` (roles, signature pieces, nothing floating, 1.2 m routes from every bridge mouth to every room door /
+  the stage steps / the washrooms, door strips, wayfinding arrows, the venue atlas' provenance; the drawn stage heights vs the support; a
+  real Player on the v3 and v2 stages; paths onto the deck), `tests/skyways-addon.test.ts` (both audits, the art faces, the renderer).
+
 ### Skyways destination anchors: garden, arcade, cinema, science, hockey (task studio-skyways-destinations-20261106-170011-01, lane SHOPS-B)
 `gen/skyways/destinations/shopsB.ts` dresses five anchor families (placement context `skywaysShopsBKit.ts`: lanes from the storefront entry
 to every zone / back-room door reserved first, cell-aligned runs, all-or-nothing counter runs). EXISTING kinds carry the storage and loot
@@ -391,6 +429,43 @@ family's base-use purpose. The NEW kinds (`kindsShopsB.ts`: lane KITS' measured 
   on-host props with their spans cut out of the tables' loot tops.
 - Tests: `tests/skyways-dest-shops-b.test.ts` (both audits, measured footprints, signature pieces per family on real seeds, the screen on
   the far wall with the rows facing it, support / containment / overlaps, lanes to every door, base-use loot, determinism).
+
+### Skyways local directory boards (task studio-skyways-rework-20261107-054512-01, lane MAPS)
+One NEW kind, `skywaysMapBoard` (`gen/skyways/mapBoardKind.ts`): a round freestanding directory on a pedestal — a 0.95 m printed face
+tilted 25° back in a steel ring rim on a shallow drum, one column on a round base plate. Procedural geometry in the existing shape
+materials (no model, no generation); the face is a code-drawn plan of the generated network (`world/skywaysMapBoards.ts`, data from
+`world/skywaysMapPlan.ts`: a per-layout runtime-composited data texture). Placed by `gen/skyways/mapBoards.ts` (layout version 3 only)
+at the station concourse by the transit stair, in every building-storey's hub and at bridge landings, on flat public floor clear of
+doors, run mouths, walking lanes / plazas, landmark discs, bridge lanes and shop / anchor fronts, with a 1.2 m reading strip in front.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of its runtime geometry beside `lastshift`) |
+|---|---|---|---|
+| `skywaysMapBoard` | `none` (`equipment`): a sealed sign — the plan behind a screwed acrylic face in a welded drum, no door, lid or drawer | static `anchored` (~90 kg pedestal bolted through its base plate) | 1.00 × 1.35 × 0.53 m; grounded on the base plate (span 0.52 × 0.52 m); face centre 0.88 m, rim 0.42–1.35 m |
+
+- No baked loose clutter (nothing loose is part of it); damage: steel, marks only (never breaks).
+- E at a board's face opens a close-up of the same face (`world/skywaysMapRead.ts`); the face never prints fuel, gameplay hints or
+  travel information.
+- Tests: `tests/skyways-map-boards.test.ts` (both audits, the shape inside its box, placement and clearances on real seeds, the plan
+  against the layout, YOU ARE HERE, storey highlighting, forbidden words, the renderer's bounded meshes / textures, the close-up read).
+
+### Skyways planted galleries and courts (task studio-skyways-rework-20261107-054512-01, lane ARCH)
+`gen/skyways/gardens.ts` (layout version 3) lines every atrium opening's skyway-level gallery with planter troughs against the
+balustrade, and puts a few bench-planters in the large skyway courts and the atrium courts. Two NEW code-drawn kinds
+(`gen/skyways/destinations/kindsGardens.ts`, merged by `registry.ts`; drawn by `world/skywaysGardens.ts`): procedural bodies in the
+existing shape materials and the office's EXISTING potted-plant model's foliage (its bowl pot cut away by a local mesh separation, the
+foliage sunk into the soil bed). No new model or texture.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of the drawn kind beside `lastshift`) |
+|---|---|---|---|
+| `skyArchGalleryPlanter` | `none` (an open soil bed) | static `built-in`: a precast trough full of soil (~450 kg) against the balustrade | trough 1.50 × 0.52 × 0.46 m (soil 0.47 m); 2.01 × 1.19 × 1.19 m with its shrubs; grounded, 4 contact corners |
+| `skyArchBenchPlanter` | `none` (a raised soil bed) | static `built-in`: timber-clad raised bed with a slatted bench (tonnes of soil) | 2.60 × 0.46 × 1.30 m, seat 0.46 m (0.42 m deep); 2.70 × 1.03 × 1.42 m with its shrubs; grounded, 4 contact corners |
+
+- Placement: troughs only on open public gallery floor at the opening's edge (the rail stands there), never on a stair / escalator cell
+  or within its mouth, a level link's landing, a door's zone, a bridge lane, a storefront's opening strip or a landmark's clear disc,
+  and only where 2.5 m of walkway stays open behind them; bench-planters through the station placement kit with a 1.0 m walking ring.
+- No baked loose clutter: the shrubs are planting rooted in the soil (part of the fixture, nothing to take); no loose item sits in them.
+- Tests: `tests/skyways-arch-rework.test.ts` (both audits, troughs at the rails / on the floor / clear of stairs, doors and run mouths,
+  the walkway behind them, bench-planters on the floor, the foliage model requested only where a planter stands).
 
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
