@@ -41,7 +41,9 @@
 // engine runs only while someone is in the car: it starts on getting in (a short rev), follows the speed / throttle every frame (idle at
 // rest), stops on getting out / death / a state change / teardown (a pause or a new world also silences it in Sfx); the tyre skid on a
 // hard brake / handbrake above CAR_RT.skidSpeed (an edge, rate-limited: CAR_RT.skidEvery); the car door on getting in / out; impacts
-// reuse existing cues (the metal crash, the flesh slap).
+// reuse existing cues (the metal crash, the flesh slap). Round 2 (task skyways-vehicle-20261107, lane AUDIO; audio/sfx.ts CAR_AUDIO has
+// the root cause: the round-1 engine loops were sub-bass only): the engine START on getting in, mid-range engine loops rising with the
+// speed / pedal, the reverse-gear whine while reversing, the brake-to-stop (CAR_SOUND), and Sfx.carImpact for the contacts.
 
 import * as THREE from 'three';
 import type {Game} from '../game';
@@ -114,15 +116,27 @@ export const CAR_TEXT = {
   placeRule: 'Not from the driver seat',
 } as const;
 
+/**
+ * (round 2, task skyways-vehicle-20261107, lane AUDIO) When driveAudio sounds the brake-to-stop: a brake (the pedal against the travel /
+ * the handbrake) held from at least `brakeMin` m/s that brings the car under `brakeStopAt` m/s (once per stop; not when a crash did it);
+ * its level = the speed it braked from / CAR_PHYS.forwardMax.
+ */
+export const CAR_SOUND = {brakeMin: 3, brakeStopAt: 1} as const;
+
 /** The car's sound hook (sfxCarAudio maps it onto Sfx). */
 export interface CarAudio {
-  /** The engine: the driver got in (it starts with a short rev at the engine, world x / y / z) / the car is empty (it stops). */
+  /** The engine: the driver got in (the engine START, then its idle, at the engine, world x / y / z) / the car is empty (it stops). */
   start(x: number, y: number, z: number): void;
   stop(): void;
-  /** Every frame someone drives: speed 0..1 of the top speed, throttle 0..1, the engine's world position. */
-  engine(speed01: number, throttle01: number, x: number, y: number, z: number): void;
+  /**
+   * Every frame someone drives: speed 0..1 of the top speed, throttle 0..1, the engine's world position, `reverse01` 0..1 of the reverse
+   * top speed while reversing (0 otherwise).
+   */
+  engine(speed01: number, throttle01: number, x: number, y: number, z: number, reverse01?: number): void;
   /** A tyre skid (a hard brake / handbrake turn at speed), at the car. */
   skid(x: number, y: number, z: number): void;
+  /** The brake-to-stop (a real brake brought the car to rest), at the car; strength 0..1 = the speed it braked from. */
+  brake(x: number, y: number, z: number, strength01: number): void;
   /** A contact (closing m/s): the car body against the world, or a body it hit. */
   impact(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): void;
   door(open: boolean, x: number, y: number, z: number): void;
@@ -131,23 +145,33 @@ export interface CarAudio {
 type At = {x: number; y: number; z: number};
 interface CarSfx {
   physImpact?(x: number, y: number, z: number, speed: number, family: 'prop' | 'flesh', mass?: number): void;
-  carEngine?(speed01: number, throttle01: number, at?: At, o?: {rev?: boolean}): void;
+  carEngine?(speed01: number, throttle01: number, at?: At, o?: {rev?: boolean; reverse01?: number}): void;
   stopCarEngine?(): void;
   carSkid?(at?: At): boolean;
+  carBrake?(at?: At, strength?: number): boolean;
+  carImpact?(x: number, y: number, z: number, speed: number, what: 'car' | 'flesh'): boolean;
   carDoor?(at?: At): void;
   denied?(): void;
   impact?(x: number, y: number, z: number, surface: 'metal'): void;
 }
 
-/** The default CarAudio over Sfx: the Sound Lab car set (engine loops, skid, door) + the existing impact cues. */
+/**
+ * The default CarAudio over Sfx: the Sound Lab car set (the engine channel with its start / reverse whine, skid, brake stop, door, the
+ * car's own impact cue) — an Sfx without carImpact falls back to the generic prop / flesh contact cues.
+ */
 export function sfxCarAudio(sfx: () => unknown): CarAudio {
   const s = () => (sfx() as CarSfx | null) ?? null;
   return {
     start(x, y, z) { s()?.carEngine?.(0, 0, {x, y, z}, {rev: true}); },
     stop() { s()?.stopCarEngine?.(); },
-    engine(speed01, throttle01, x, y, z) { s()?.carEngine?.(speed01, throttle01, {x, y, z}); },
+    engine(speed01, throttle01, x, y, z, reverse01 = 0) { s()?.carEngine?.(speed01, throttle01, {x, y, z}, reverse01 > 0 ? {reverse01} : undefined); },
     skid(x, y, z) { s()?.carSkid?.({x, y, z}); },
-    impact(x, y, z, speed, what) { s()?.physImpact?.(x, y, z, Math.min(5, speed), what === 'car' ? 'prop' : 'flesh', what === 'car' ? 1300 : 70); },
+    brake(x, y, z, strength01) { s()?.carBrake?.({x, y, z}, strength01); },
+    impact(x, y, z, speed, what) {
+      const f = s();
+      if (f?.carImpact) f.carImpact(x, y, z, speed, what);
+      else f?.physImpact?.(x, y, z, Math.min(5, speed), what === 'car' ? 'prop' : 'flesh', what === 'car' ? 1300 : 70);
+    },
     door(_open, x, y, z) { s()?.carDoor?.({x, y, z}); },
   };
 }
@@ -247,6 +271,8 @@ export class SkywaysCar {
   /** (lane CAR2) The skid's edge (a hard brake / handbrake was already on last frame) and the last skid's clock. */
   private skidding = false;
   private skidT = -Infinity;
+  /** (round 2, lane AUDIO) The top speed of the brake in progress (0: none) — the brake-to-stop's trigger and level. */
+  private brakeFrom = 0;
   private noteT: number = CAR_RT.noteEvery;
   private readonly step: CarStep = {moved: 0, blocked: false, refused: false, impact: null};
   private readonly world: CarWorld = {levels: null as unknown as Levels, props: null};
@@ -427,6 +453,7 @@ export class SkywaysCar {
     const en = this.enginePos();
     this.audio.start(en.x, en.y, en.z);
     this.skidding = false;
+    this.brakeFrom = 0;
     this.prompt = CAR_TEXT.driving;
   }
 
@@ -587,20 +614,29 @@ export class SkywaysCar {
   }
 
   /**
-   * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel), the tyre skid when a hard
-   * brake (the pedal against the travel) or the handbrake BEGINS above CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s).
+   * (lane CAR2) The driver's sounds each frame: the engine (speed / the pedal held in the direction of travel; round 2: + how fast it
+   * reverses — the gearbox whine), the tyre skid when a hard brake (the pedal against the travel) or the handbrake BEGINS above
+   * CAR_RT.skidSpeed (at most every CAR_RT.skidEvery s), (round 2) the brake-to-stop when a brake from >= CAR_SOUND.brakeMin brings the
+   * car under CAR_SOUND.brakeStopAt (once per stop; a crash that stopped it already sounded).
    */
   private driveAudio(): void {
-    const b = this.body!, c = this.ctl, v = b.v, stop = CAR_PHYS.stopSpeed;
+    const b = this.body!, c = this.ctl, v = b.v, sp = Math.abs(v), stop = CAR_PHYS.stopSpeed;
     const throttle = (c.forward && v > -stop) || (c.back && v < stop) ? 1 : 0;
     const en = this.enginePos();
-    this.audio.engine(Math.min(1, Math.abs(v) / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z);
-    const hard = Math.abs(v) > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
+    this.audio.engine(Math.min(1, sp / CAR_PHYS.forwardMax), throttle, en.x, en.y, en.z, v < -stop ? Math.min(1, sp / CAR_PHYS.reverseMax) : 0);
+    const hard = sp > CAR_RT.skidSpeed && (c.handbrake || (c.back && v > 0) || (c.forward && v < 0));
     if (hard && !this.skidding && this.clock - this.skidT >= CAR_RT.skidEvery) {
       this.skidT = this.clock;
       this.audio.skid(b.x, b.y + 0.3, b.z);
     }
     this.skidding = hard;
+    const braking = c.handbrake || (c.back && v > stop) || (c.forward && v < -stop);
+    const crashed = !!this.step.impact && this.step.impact.speed >= CAR_RT.impactSfx;
+    if (sp > CAR_SOUND.brakeStopAt) this.brakeFrom = braking && !crashed ? Math.max(this.brakeFrom, sp) : 0;
+    else if (this.brakeFrom > 0) {
+      if (this.brakeFrom >= CAR_SOUND.brakeMin && !crashed) this.audio.brake(b.x, b.y + 0.3, b.z, Math.min(1, this.brakeFrom / CAR_PHYS.forwardMax));
+      this.brakeFrom = 0;
+    }
   }
 
   private syncView(): void {
