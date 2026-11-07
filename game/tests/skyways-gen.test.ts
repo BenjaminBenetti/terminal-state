@@ -16,6 +16,7 @@ import {ORDINARY_WEIGHTS, PRE_SKYWAYS_WEIGHTS} from '../src/campaign/types';
 import {FOOD_IDS, DRINK_IDS} from '../src/items/items';
 import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
+import {outfitterDressOf} from '../src/gen/skyways/stores/outfitterDress'; // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-OUTFITTER)
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const cache = new Map<number, StationLayout>();
@@ -136,6 +137,8 @@ describe('Skyways: generated layouts', () => {
       const l = gen(s), r = l.skyways!.restaurant;
       for (const p of l.pickups) {
         if (FOOD.has(p.itemId) || l.areas[p.area]?.ext) continue; // the restaurant's plates; the annex keeps its own program
+        // (lane STORE-OUTFITTER: the outfitter's ONE real backpack, a gear find standing on its pack-wall shelf — not a floor pile)
+        if (outfitterDressOf(l).some(r => r.backpack && l.pickups[r.backpack.pickup] === p)) continue;
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);
       }
       void r;
