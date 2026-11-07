@@ -56,7 +56,10 @@ export const SKYWAYS_REVEAL_WALL: WallSpec = {...SKYWAYS_PUBLIC_WALL, kind: LOWE
 /** Floors: [floor kind, tint]. */
 export const SKYWAYS_FLOORS = {
   public: ['stone', 0xd2cbbe], court: ['stone', 0xbfb5a3], bridge: ['tile', 0xd6d1c6], wet: ['wet', undefined], boh: ['concrete', undefined],
+  office: ['carpet', 0x5d6670],
 } as const satisfies Record<string, readonly [FloorKind, number | undefined]>;
+/** (rework) A tenant office wing's walls: light office paint over a narrow painted skirting. */
+export const SKYWAYS_OFFICE_WALL: WallSpec = {paint: 0xdcdcd6, lower: 0xc4c4bc, trim: 0x585a5c, kind: LOWER.paint, lowerTop: 0.1, skirt: 0.1, rail: 0, peel: 0.25, panel: 0.15};
 /** Ceilings: kind and tint (undefined: the office kind's own colour). The bridges' soffit is a whiter plaster. */
 export const SKYWAYS_CEILS = {
   plain: ['plain', 0xe2ded6], grid: ['grid', undefined], bridge: ['plain', 0xeceae4], core: ['core', undefined],
@@ -74,7 +77,7 @@ export const SKYWAYS_PAVER_STANDIN = {kind: 'stone' as FloorKind, tint: 0x6b3a2f
 export const SKYWAYS_SLAT_STANDIN = {kind: 'raw' as CeilingKind, tint: 0x3a2b21, bar: 0x1c1612};
 
 /** What a Skyways area is, for its finishes ('station' / 'shop': the builder's own rule). */
-export type SkywaysClass = 'station' | 'shop' | 'public' | 'court' | 'bridge' | 'wet' | 'boh' | 'anchor';
+export type SkywaysClass = 'station' | 'shop' | 'public' | 'court' | 'bridge' | 'wet' | 'boh' | 'anchor' | 'office';
 
 /** The class of an area (`bridges`: the layout.areas ids of the bridge decks). */
 export function skywaysAreaClass(a: Area | undefined, bridges: ReadonlySet<number>): SkywaysClass {
@@ -86,6 +89,7 @@ export function skywaysAreaClass(a: Area | undefined, bridges: ReadonlySet<numbe
   if ((a.level ?? 0) === 0) return a.publicSpace && (t === 'concourse' || t === 'stair-core') ? 'public' : 'station';
   if (bridges.has(a.id)) return 'bridge';
   if (t === 'washroom') return 'wet';
+  if (t === 'office-open' || t === 'office-room') return 'office'; // (rework) a tenant office wing: the office floor's finishes
   if (!a.publicSpace) return 'boh';
   if (/^Atrium court/.test(a.label ?? '')) return 'court';
   return 'public';
@@ -113,6 +117,9 @@ export class SkywaysArch {
   private readonly materials = new Map<string, THREE.Material>();
   private readonly specs = new Map<string, () => THREE.Material>();
   private readonly classCache = new Map<number, SkywaysClass>();
+  /** (task studio-skyways-rework-20261107-054512-01) the street-level courts under an atrium opening (a landmark court keeps its
+   *  court finish under its new name: classed by the opening, not the 'Atrium court' label). */
+  private readonly courtAreas = new Set<number>();
   /** (task studio-skyways-rework-20261107-054512-01) area id -> its anchor store's family (+ zone: a zone override applies). */
   private readonly anchorAreas = new Map<number, {family: SkywaysShopFamily; zone: boolean}>();
   stats: SkywaysRoofStats = {roofs: 0, panes: 0, arches: 0, meshes: 0, triangles: 0};
@@ -136,6 +143,14 @@ export class SkywaysArch {
     this.info = layout.skyways!;
     const g0 = layout.grid;
     this.bridgeAreas = new Set(this.info.bridges.map(b => b.area));
+    for (const b of this.info.buildings) {
+      const r = b.atrium?.rect;
+      if (!r) continue;
+      for (const a of layout.areas) {
+        if ((a.level ?? 0) !== 1 || !a.publicSpace || (a.type as string) === 'shop' || (a.type as string) === 'eatery') continue;
+        if (a.x * CELL < r.x1 && (a.x + a.w) * CELL > r.x0 && a.y * CELL < r.z1 && (a.y + a.h) * CELL > r.z0) this.courtAreas.add(a.id);
+      }
+    }
     // the anchor stores' own finishes (gen/skyways/destinations/anchorStyles.ts): sales floor + its stair-well pieces, upper storey, zones
     for (const an of this.info.anchors ?? []) {
       const main = new Set([an.floor, ...(an.upper !== undefined ? [an.upper] : [])]);
@@ -178,7 +193,11 @@ export class SkywaysArch {
   /** The class of an area id (cached). */
   classOf(areaId: number): SkywaysClass {
     let c = this.classCache.get(areaId);
-    if (c === undefined) this.classCache.set(areaId, (c = this.anchorAreas.has(areaId) ? 'anchor' : skywaysAreaClass(areaId >= 0 ? this.layout.areas[areaId] : undefined, this.bridgeAreas)));
+    if (c === undefined) {
+      c = this.anchorAreas.has(areaId) ? 'anchor' : skywaysAreaClass(areaId >= 0 ? this.layout.areas[areaId] : undefined, this.bridgeAreas);
+      if (c === 'public' && this.courtAreas.has(areaId)) c = 'court';
+      this.classCache.set(areaId, c);
+    }
     return c;
   }
 
@@ -221,6 +240,7 @@ export class SkywaysArch {
   private wallKey(cls: SkywaysClass): string {
     if (cls === 'wet') return this.def('skyways-wet', () => wallMaterial(this.mats, 'skyways-wet', WET_WALL));
     if (cls === 'boh') return this.def('skyways-boh', () => wallMaterial(this.mats, 'skyways-boh', CORE_WALL));
+    if (cls === 'office') return this.def('skyways-office-wall', () => wallMaterial(this.mats, 'skyways-office-wall', SKYWAYS_OFFICE_WALL));
     return this.def('skyways-wall', () => wallMaterial(this.mats, 'skyways-wall', SKYWAYS_PUBLIC_WALL));
   }
 
@@ -319,7 +339,7 @@ export class SkywaysArch {
     if (cls === 'bridge' && this.roofed.has(area)) return this.texKey('pavers', () => this.def('skyways-floor-pavers', () => floorMaterial(this.mats, 'skyways-floor-pavers', SKYWAYS_PAVER_STANDIN.kind, SKYWAYS_PAVER_STANDIN.tint)));
     if ((cls === 'public' || cls === 'court') && this.courtLook(area)) return this.texKey('herringbone', () => this.floorKeyOf('court'));
     switch (cls) {
-      case 'public': case 'court': case 'bridge': case 'wet': case 'boh': return this.floorKeyOf(cls);
+      case 'public': case 'court': case 'bridge': case 'wet': case 'boh': case 'office': return this.floorKeyOf(cls);
       case 'anchor': return this.anchorFloorKey(lvl.grid.area[i]);
       default: return null;
     }
@@ -344,6 +364,7 @@ export class SkywaysArch {
       case 'court': case 'wet': return this.ceilKeyOf('plain');
       case 'bridge': return this.ceilKeyOf('bridge');
       case 'boh': return this.ceilKeyOf('core');
+      case 'office': return this.ceilKeyOf('grid');
       case 'anchor': return this.anchorCeilKey(areaId);
       // storefront units above the station storey: the pedway's light plaster (their walls / floors keep the storefront interior)
       case 'shop': return lvl.id >= 1 ? this.ceilKeyOf('plain') : null;

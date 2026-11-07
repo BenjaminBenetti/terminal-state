@@ -15,7 +15,9 @@ import {FakeCtx, fakeBank, type Node, type Src} from './helpers/fakeAudio';
 /** Seed 33: a Clock Court, the arcade (hall) and the cinema (multi-zone: lobby + auditorium) in one map; seed 7: none of them. */
 const SEED_ALL = 33, SEED_NONE = 7;
 const cache = new Map<number, StationLayout>();
-const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'}))); return l; };
+// (task studio-skyways-rework-20261107-054512-01) fixtures: the frozen GAME77 layouts (layout version 2: a clock court, an arcade and a
+// cinema on known seeds); the emitter wiring is the same for every version
+const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const settle = () => new Promise(r => setTimeout(r, 40));
 const LOC_CUES = ['clockTick', 'clockChime', 'arcadeAttract', 'projectorRun'] as const;
 
@@ -56,6 +58,12 @@ describe('Skyways destinations: location emitters from a real generated layout',
     expect(cinema.format).toBe('multi-zone');
     const em = skywaysLocationEmitters(L);
     expect(em.map(e => e.cue).sort()).toEqual(['arcadeAttract', 'clockTick', 'projectorRun']);
+    // (rework; user: "clock tick too loud / far") half the level, heard in its court only
+    const tick = em.find(e => e.cue === 'clockTick')!;
+    expect(tick.gain).toBe(0.5);
+    expect(tick.range).toBe(8);
+    expect(LOCATION_AUDIO.ref.clockTick).toBe(2);
+    expect(LOCATION_AUDIO.chime.range).toBe(8);
     expect(skywaysLocationEmitters(L)).toEqual(em); // pure / deterministic
     // clock: at the centrepiece, the movement 3 m up; an atrium court: no storey gate (heard from the gallery above)
     const ct = em.find(e => e.cue === 'clockTick')!;
@@ -197,7 +205,7 @@ describe('Skyways destinations: the location channels (fake WebAudio)', () => {
       for (let t = 0; t < seconds; t += 0.25) { const c0 = sfx.locationAudioState().chimes; step(sfx, ctx, p); if (sfx.locationAudioState().chimes > c0) strikes.push(ctx.currentTime); }
     };
     const t0 = ctx.currentTime;
-    run(320, {x: 8, y: 1.6, z: 0}); // in the court (8 m from the clock)
+    run(320, {x: 6, y: 1.6, z: 0}); // in the court (6 m from the clock: within its 8 m)
     expect(strikes.length).toBeGreaterThanOrEqual(4);
     expect(strikes[0] - t0).toBeGreaterThanOrEqual(LOCATION_AUDIO.chime.firstS[0]);
     expect(strikes[0] - t0).toBeLessThanOrEqual(LOCATION_AUDIO.chime.firstS[1] + 0.5);
@@ -211,7 +219,7 @@ describe('Skyways destinations: the location channels (fake WebAudio)', () => {
     expect(chimes.every(s => s.loop === false)).toBe(true);
     const cp = pannerOf(chimes[0]);
     expect([cp.positionX.value, cp.positionY.value, cp.positionZ.value]).toEqual([0, 4.6, 0]);
-    // out of the 25 m chime range: no strike, the countdown keeps its remainder
+    // out of the 8 m chime range: no strike, the countdown keeps its remainder
     const n = strikes.length, left = sfx.locationAudioState().chimeIn;
     run(200, {x: 40, y: 1.6, z: 0});
     expect(strikes.length).toBe(n);
@@ -219,12 +227,12 @@ describe('Skyways destinations: the location channels (fake WebAudio)', () => {
     // paused (menu): nothing counts, nothing strikes; the loops ride the muted ambient bus
     sfx.suspend(true);
     await settle();
-    run(200, {x: 8, y: 1.6, z: 0});
+    run(200, {x: 6, y: 1.6, z: 0});
     expect(strikes.length).toBe(n);
     expect(sfx.locationAudioState().chimeIn).toBeCloseTo(left, 6);
     sfx.suspend(false);
     await settle();
-    run(left + 0.75, {x: 8, y: 1.6, z: 0}); // the remainder runs out: exactly one strike (the next is >= 60 s on)
+    run(left + 0.75, {x: 6, y: 1.6, z: 0}); // the remainder runs out: exactly one strike (the next is >= 60 s on)
     expect(strikes.length).toBe(n + 1);
     // seeded: the same clock list gives the same countdown on another Sfx; a different clock another one
     const other = await setup();

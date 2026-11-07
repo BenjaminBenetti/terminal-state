@@ -14,8 +14,8 @@ import {fileURLToPath} from 'node:url';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout, Area} from '../src/gen/stationTypes';
 import type {SkywaysAnchor} from '../src/gen/skyways/skywaysTypes';
-import {skywaysIssues} from '../src/gen/skyways/validate';
-import {ANCHOR_FAMILIES} from '../src/gen/skyways/carve';
+import {skywaysIssues} from '../src/gen/skyways/legacy77/validate';
+import {ANCHOR_FAMILIES} from '../src/gen/skyways/legacy77/carve';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../src/gen/props';
 import {doorSide} from '../src/gen/placeKit';
@@ -24,9 +24,9 @@ import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {holderFinds, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {SKYWAYS_DEST_PROPS, type SkywaysDestProp} from '../src/assets/skywaysDestProps.generated';
-import {DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
+import {DEST_POSTERS_OF} from '../src/gen/skyways/legacy77/destinations/art';
 import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SCALE, SHOPS_B_SPECS, SKYD_SCREEN_PARTS} from '../src/gen/skyways/destinations/kindsShopsB';
-import {SHOPS_B_FAMILIES} from '../src/gen/skyways/destinations/shopsB';
+import {SHOPS_B_FAMILIES} from '../src/gen/skyways/legacy77/destinations/shopsB';
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
 const near = (a: number, b: number, eps = 1e-3) => Math.abs(a - b) <= eps;
@@ -38,6 +38,8 @@ const MINE: ReadonlySet<string> = new Set([...SHOPS_B_KINDS, 'shopCounter', 'sho
 /** Host tops (m above the host's base) of the hosts this lane stacks on. */
 const TOP: Readonly<Partial<Record<PropKind, number>>> = {skyDPlantBench: PLANT_BENCH_TOP(), merchTable: PROP_DEFS.merchTable.h, shopCounter: SHOP_COUNTER_TOP_Y};
 
+// (task studio-skyways-rework-20261107-054512-01) these dressers' GAME77 output, on the stations entered before the rework: layout version 2
+// through the frozen generator (gen/skyways/legacy77/). The reworked stores (layout version 3) are the store lanes' own tests.
 interface Shop { seed: number; layout: StationLayout; an: SkywaysAnchor; areas: Area[]; props: PropPlacement[] }
 const SEEDS = Array.from({length: 14}, (_, i) => i + 1);
 const layouts = new Map<number, StationLayout>();
@@ -46,7 +48,7 @@ const ofFamily = (f: string) => shops.filter(s => s.an.family === f);
 
 beforeAll(() => {
   for (const seed of SEEDS) {
-    const layout = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol'});
+    const layout = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 2} as never);
     layouts.set(seed, layout);
     for (const an of layout.skyways?.anchors ?? []) {
       if (!SHOPS_B_FAMILIES.includes(an.family)) continue;
@@ -276,7 +278,7 @@ describe('Skyways destinations, lane SHOPS-B: the anchors on real levels', () =>
 
   it('deterministic per seed', () => {
     const s = shops[0];
-    const again = LEVELS.skyways.generate('main', {levelSeed: s.seed, startWeapon: 'pistol'});
+    const again = LEVELS.skyways.generate('main', {levelSeed: s.seed, startWeapon: 'pistol', layoutVersion: 2} as never);
     const ids = new Set([s.an.floor, ...s.an.zones]);
     expect(JSON.stringify(again.props.filter(p => ids.has(p.area)))).toBe(JSON.stringify(s.props));
   });
