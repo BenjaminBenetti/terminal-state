@@ -46,7 +46,7 @@ const ofFamily = (f: string) => shops.filter(s => s.an.family === f);
 
 beforeAll(() => {
   for (const seed of SEEDS) {
-    const layout = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol'});
+    const layout = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 2} as never);
     layouts.set(seed, layout);
     for (const an of layout.skyways?.anchors ?? []) {
       if (!SHOPS_B_FAMILIES.includes(an.family)) continue;
@@ -276,7 +276,7 @@ describe('Skyways destinations, lane SHOPS-B: the anchors on real levels', () =>
 
   it('deterministic per seed', () => {
     const s = shops[0];
-    const again = LEVELS.skyways.generate('main', {levelSeed: s.seed, startWeapon: 'pistol'});
+    const again = LEVELS.skyways.generate('main', {levelSeed: s.seed, startWeapon: 'pistol', layoutVersion: 2} as never);
     const ids = new Set([s.an.floor, ...s.an.zones]);
     expect(JSON.stringify(again.props.filter(p => ids.has(p.area)))).toBe(JSON.stringify(s.props));
   });

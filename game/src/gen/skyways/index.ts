@@ -39,6 +39,7 @@ import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, ty
 import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION} from './layoutVersion';
+import {SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
 import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
@@ -124,7 +125,7 @@ export function skywaysTrackExtContext(levelSeed: number, ox: number, oy: number
 function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: number, ctx: SectionGenContext, loot: LootProfile, spawns: SpawnProfile, trackExt: TrackExtConfig | 'none', legacy = false): StationLayout | null {
   const rng = new Rng(genSeed);
   const k = new Kit(rng, {levels: SKYWAYS_CANVAS.levels, w: SKYWAYS_CANVAS.w, h: SKYWAYS_CANVAS.h});
-  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy});
+  const sc = carveSkyways(k, rng.fork('carve'), f, {legacy, outwardFronts: (ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION}); // (+ outwardFronts: task studio-alpha-skyways-shops-20261107-054512-01)
   if (!sc) return null;
 
   // --- Crop (fixed origin) + the Track2 plan (before the crop; nothing written into the Kit) ------------------------------------
@@ -170,7 +171,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysAtriums(layout, rng.fork('skyways-atriums'));
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
-  dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
+  dressSkywaysDestinations(layout, rng.fork('skyways-destinations'), {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: task studio-alpha-skyways-shops-20261107-054512-01)
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------

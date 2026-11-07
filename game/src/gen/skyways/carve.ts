@@ -227,7 +227,7 @@ const sideLen = (r: CellRect, s: Side) => (alongXSide(s) ? r.w : r.h);
 const SIDES: readonly Side[] = ['N', 'E', 'S', 'W'];
 
 /** Carves the whole Skyways level. Null when the frame does not fit (the caller re-rolls the frame's free parameters). */
-export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: boolean} = {}): SkywaysCarve | null {
+export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: boolean; outwardFronts?: boolean} = {}): SkywaysCarve | null {
   FAIL = '';
   /** Layout version 1 (gen/skyways/layoutVersion.ts): GAME76's program exactly — no destinations, its arcade / shop / back-room rolls. */
   const legacy = !!opts.legacy;
@@ -908,7 +908,11 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     let sf: Storefront;
     const pieces = well ? decompose((x, y) => !inRect(well!, x, y), floorRect).sort((p, q) => q.w * q.h - p.w * p.h) : [floorRect];
     const main = pieces.find(q => overlapsR(grow(q, 1), gap)) ?? pieces[0];
-    sf = shopfront(lv, P, hubSide, gap, main, F.use, an);
+    // (task studio-alpha-skyways-shops-20261107-054512-01, user: "major-store signs face inward / reverse") a storefront's `side` is the
+    // HALL wall it stands on (gen/storefronts.ts shopFrame); the anchor passed the shop's own front wall (hubSide), so its frame and its
+    // fascia faced into the shop. From layout version 3 it is the hall wall `s` (only the record's side changes: no rng, no geometry).
+    sf = shopfront(lv, P, opts.outwardFronts ? s : hubSide, gap, main, F.use, an);
+    if (opts.outwardFronts) sf.outward = true;
     sf.color = F.color;
     storefronts.push(sf);
     const floor = k.areas[sf.unit];

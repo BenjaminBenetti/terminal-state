@@ -54,7 +54,7 @@ const rowOf = (kind: SkywaysDestKind) => SKYWAYS_DEST_PROPS[SKYWAYS_DEST_SPECS[k
 const layouts = new Map<number, StationLayout>();
 const gen = (seed: number): StationLayout => {
   let L = layouts.get(seed);
-  if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed} as never)));
+  if (!L) layouts.set(seed, (L = LEVELS.skyways.generate('main', {levelSeed: seed, layoutVersion: 2} as never)));
   return L;
 };
 const gridOf = (L: StationLayout, level: number): Grid => L.levels[level].grid;
@@ -295,7 +295,7 @@ describe('the landmark courts on real seeds', () => {
   }
 
   it('deterministic per seed (two generations of seed 2 dress the courts identically)', () => {
-    const a = gen(2), b = LEVELS.skyways.generate('main', {levelSeed: 2} as never);
+    const a = gen(2), b = LEVELS.skyways.generate('main', {levelSeed: 2, layoutVersion: 2} as never);
     const mine = (L: StationLayout) => JSON.stringify(L.props.filter(p => (LANDMARKS_KINDS as readonly string[]).includes(p.kind)));
     expect(mine(b)).toBe(mine(a));
     expect(JSON.stringify(landmarkDressOf(b).map(d => [d.id, d.scale, d.ring, d.benches.length, d.planters.length, d.lights]))).toBe(JSON.stringify(landmarkDressOf(a).map(d => [d.id, d.scale, d.ring, d.benches.length, d.planters.length, d.lights])));

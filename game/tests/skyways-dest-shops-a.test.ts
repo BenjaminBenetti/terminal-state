@@ -31,7 +31,7 @@ import {layoutHolderDetails} from './helpers/lootEconomy';
 // music hall / multi-zone, hobby hall, design hall / two-level)
 const SEEDS = [2, 3, 4, 5, 6, 9, 12];
 const cache = new Map<number, StationLayout>();
-const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'}))); return l; };
+const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const anchorsOf = (l: StationLayout) => skywaysShopsADressOf(l).map(r => ({r, an: l.skyways!.anchors!.find(a => a.id === r.anchor)!}));
 const all = () => SEEDS.flatMap(s => anchorsOf(gen(s)).map(x => ({...x, l: gen(s), seed: s})));
 const kindsIn = (l: StationLayout, r: ShopsAResult) => { const m: Record<string, number> = {}; for (const i of r.props) m[l.props[i].kind] = (m[l.props[i].kind] ?? 0) + 1; return m; };
@@ -256,7 +256,7 @@ describe('Skyways destinations SHOPS-A: the dressed anchors', () => {
   });
 
   it('regenerates identically', () => {
-    const s = 5, a = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'});
+    const s = 5, a = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never);
     const pick = (l: StationLayout) => skywaysShopsADressOf(l).map(r => r.props.map(i => l.props[i]));
     expect(JSON.stringify(pick(a))).toBe(JSON.stringify(pick(gen(s))));
   });

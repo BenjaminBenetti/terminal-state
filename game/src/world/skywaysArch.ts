@@ -38,6 +38,7 @@ import {
 } from './officeArch';
 import {surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
 import {roofGlass} from './mallArch';
+import {storeAreaFinishes, storeWallClass, storeWallSpec, type StoreAreaFinish} from './skywaysStoreFinish'; // task studio-alpha-skyways-shops-20261107-054512-01
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -97,6 +98,8 @@ export class SkywaysArch {
   private readonly materials = new Map<string, THREE.Material>();
   private readonly specs = new Map<string, () => THREE.Material>();
   private readonly classCache = new Map<number, SkywaysClass>();
+  /** (task studio-alpha-skyways-shops-20261107-054512-01) the major stores' own finishes per anchor area id (world/skywaysStoreFinish.ts). */
+  private readonly storeAreas: Map<number, StoreAreaFinish>;
   stats: SkywaysRoofStats = {roofs: 0, panes: 0, arches: 0, meshes: 0, triangles: 0};
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
@@ -107,6 +110,7 @@ export class SkywaysArch {
     this.info = layout.skyways!;
     const g0 = layout.grid;
     this.bridgeAreas = new Set(this.info.bridges.map(b => b.area));
+    this.storeAreas = storeAreaFinishes(layout);
     this.atriumRoof = new Float32Array(g0.w * g0.h);
     for (const b of this.info.buildings) {
       if (!b.atrium) continue;
@@ -150,6 +154,24 @@ export class SkywaysArch {
     });
   }
 
+  // (task studio-alpha-skyways-shops-20261107-054512-01) a major store's own wall / floor / ceiling (its family's finish, per role)
+  private storeWallKey(f: StoreAreaFinish): string {
+    const key = `skyways-store-wall-${storeWallClass(f.wall)}@${f.family}-${f.role}`;
+    return this.def(key, () => wallMaterial(this.mats, key, storeWallSpec(f.wall)));
+  }
+  private storeFloorKey(f: StoreAreaFinish): string {
+    const [kind, tint] = f.floor, key = `skyways-store-floor-${kind}@${f.family}-${f.role}`;
+    return this.def(key, () => floorMaterial(this.mats, key, kind, tint));
+  }
+  private storeCeilKey(f: StoreAreaFinish): string {
+    const [kind, tint] = f.ceil, key = `skyways-store-ceil-${kind}@${f.family}-${f.role}`;
+    return this.def(key, () => {
+      const m = ceilingMaterial(this.mats, key, kind);
+      if (tint !== undefined) { m.ofA.setHex(tint, THREE.SRGBColorSpace); m.ofB.setHex(tint, THREE.SRGBColorSpace); }
+      return m;
+    });
+  }
+
   private trimKey(): string {
     return this.def('skyways-trim', () => {
       const m = thinTrim(surfaceMaterial('paintedSteel', {color: SKYWAYS_STEEL, metalness: 0.35}, {grime: [0.2, 0.5], macro: 0.12}));
@@ -166,6 +188,9 @@ export class SkywaysArch {
    */
   remapFaces<F extends FaceLike>(faces: F[], tileLowerHeight: number): F[] {
     return faces.map(f => {
+      // (task studio-alpha-skyways-shops-20261107-054512-01) a major store's walls: its own finish (wood panelling in the bookshop, …)
+      const st = f.slope ? undefined : this.storeAreas.get(f.area);
+      if (st) return {...f, finish: this.storeWallKey(st)};
       if (f.finish === 'tileShop') return f;
       const cls = this.classOf(f.area);
       if (cls === 'station' || cls === 'shop') return f;
@@ -180,6 +205,8 @@ export class SkywaysArch {
   floorKey(L: number, i: number): string | null {
     const lvl = this.levels[L];
     if (!lvl) return null;
+    const st = this.storeAreas.get(lvl.grid.area[i]); // (task studio-alpha-skyways-shops-20261107-054512-01) a major store's floor
+    if (st) return this.storeFloorKey(st);
     const cls = this.classOf(lvl.grid.area[i]);
     switch (cls) {
       case 'public': case 'court': case 'bridge': case 'wet': case 'boh': return this.floorKeyOf(cls);
@@ -195,6 +222,8 @@ export class SkywaysArch {
       const top = y ?? (lvl.grid.hasCeil(i) ? lvl.grid.ceil[i] : -Infinity);
       if (top >= this.atriumRoof[i] - 0.5) return false;
     }
+    const st = this.storeAreas.get(areaId); // (task studio-alpha-skyways-shops-20261107-054512-01) a major store's ceiling
+    if (st) return this.storeCeilKey(st);
     const cls = this.classOf(areaId);
     switch (cls) {
       case 'public': return this.ceilKeyOf(lvl.id >= 2 ? 'grid' : 'plain');

@@ -57,7 +57,7 @@ export function buildStorefronts(group: THREE.Group, layout: StationLayout, deps
   const boxes: ShopBox[] = [...layout.decor];
   const faces: ShopFace[] = [];
   for (const sf of layout.storefronts) {
-    const p = storefrontParts(layout, sf);
+    const p = storefrontParts(layout, sf, {anchorSign: true}); // (+ anchorSign: task studio-alpha-skyways-shops-20261107-054512-01)
     boxes.push(...p.boxes);
     faces.push(...p.faces);
   }

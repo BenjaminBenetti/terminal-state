@@ -24,9 +24,10 @@ function fingerprint(seed: number, layoutVersion?: number): string {
 
 describe('Skyways layout version (save compatibility)', () => {
   it('the policy: a station entered under GAME76 (visits, no record) keeps version 1; a recorded version is kept; a new station gets the current one', () => {
-    expect(SKYWAYS_LAYOUT_VERSION).toBe(2);
-    expect(skywaysLayoutVersionFor(undefined)).toBe(2);
-    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(2);
+    // (task studio-alpha-skyways-shops-20261107-054512-01: the Skyways rework is version 3; a recorded version 2 keeps 2)
+    expect(SKYWAYS_LAYOUT_VERSION).toBe(3);
+    expect(skywaysLayoutVersionFor(undefined)).toBe(3);
+    expect(skywaysLayoutVersionFor({visits: 0, lanes: {}})).toBe(3);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {}})).toBe(1);
     expect(skywaysLayoutVersionFor({visits: 3, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 2}}})).toBe(2);
     expect(skywaysLayoutVersionFor({visits: 0, lanes: {[SKYWAYS_LAYOUT_LANE]: {v: 1}}})).toBe(1);
@@ -38,8 +39,8 @@ describe('Skyways layout version (save compatibility)', () => {
     for (const [s, want] of Object.entries(GAME76)) expect(fingerprint(Number(s), 1), `seed ${s}`).toBe(want);
   });
 
-  it('version 2 (the default) adds the destinations: anchors and landmark courts', () => {
-    const l = LEVELS.skyways.generate('main', {levelSeed: 4, startWeapon: 'pistol'} as never);
+  it('version 2 adds the destinations: anchors and landmark courts', () => {
+    const l = LEVELS.skyways.generate('main', {levelSeed: 4, startWeapon: 'pistol', layoutVersion: 2} as never);
     expect(l.skyways!.anchors!.length).toBeGreaterThanOrEqual(3);
     expect(l.skyways!.landmarks!.length).toBeGreaterThanOrEqual(1);
     const old = LEVELS.skyways.generate('main', {levelSeed: 4, startWeapon: 'pistol', layoutVersion: 1} as never);

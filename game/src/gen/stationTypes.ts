@@ -283,6 +283,12 @@ export interface Storefront {
    * purpose's generic layout).
    */
   anchor?: string;
+  /**
+   * Task studio-alpha-skyways-shops-20261107-054512-01: an anchor storefront carved with its hall-wall `side` (layout version >= 3): its
+   * frame / fascia face the lobby. Absent on an anchor = an older station's record, whose `side` is the shop's own front wall (the
+   * renderer turns only its sign band + lettering to the lobby: gen/storefronts.ts storefrontParts `anchorSign`).
+   */
+  outward?: true;
 }
 
 export interface StationLayout {

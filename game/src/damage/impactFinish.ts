@@ -39,6 +39,14 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
+  // task studio-alpha-skyways-shops-20261107-054512-01: the major stores' own finishes (world/skywaysArch.ts storeWallKey / storeFloorKey /
+  // storeCeilKey: 'skyways-store-wall-<class>@<family>-<role>', 'skyways-store-floor-<kind>@…', 'skyways-store-ceil-<kind>@…')
+  if (key.startsWith('skyways-store-')) {
+    const base = key.split('@')[0];
+    if (base.startsWith('skyways-store-wall-')) { const c = base.slice('skyways-store-wall-'.length); return c === 'wood' || c === 'terrazzo' || c === 'tile' || c === 'concrete' || c === 'plaster' ? c : null; }
+    if (base.startsWith('skyways-store-floor-')) return OFFICE_FLOOR[base.slice('skyways-store-floor-'.length)] ?? null;
+    if (base.startsWith('skyways-store-ceil-')) return OFFICE_CEIL[base.slice('skyways-store-ceil-'.length)] ?? null;
+  }
   if (key.startsWith('office-')) {
     const base = key.split('@')[0];
     if (base === 'office-wall' || base === 'office-accent') return 'plaster';

@@ -15,7 +15,7 @@ import {FakeCtx, fakeBank, type Node, type Src} from './helpers/fakeAudio';
 /** Seed 33: a Clock Court, the arcade (hall) and the cinema (multi-zone: lobby + auditorium) in one map; seed 7: none of them. */
 const SEED_ALL = 33, SEED_NONE = 7;
 const cache = new Map<number, StationLayout>();
-const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'}))); return l; };
+const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const settle = () => new Promise(r => setTimeout(r, 40));
 const LOC_CUES = ['clockTick', 'clockChime', 'arcadeAttract', 'projectorRun'] as const;
 
