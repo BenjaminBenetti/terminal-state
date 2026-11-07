@@ -82,11 +82,21 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         const c = cellOf(L, ar.id);
         if (c.i < 0) continue;
         const fk = a.floorKey(c.L, c.i);
+        // (task studio-skyways-rework-20261107-054512-01) the anchor stores' own finishes (gen/skyways/destinations/anchorStyles.ts)
+        if (a.classOf(ar.id) === 'anchor') { expect(fk, `${ar.label} floor`).toMatch(/^skyways-anchor-floor-/); continue; }
+        // (task studio-skyways-rework-20261107-054512-01, lane ARCH: layout v3 — a roofed bridge has the paver floor and no ceiling
+        // (its glass roof); the skylit skyway courts and the atrium courts take the court look: the warm floor, the timber slat
+        // ceiling — their stand-ins here, no textures loaded; tests/skyways-arch-rework.test.ts covers the textured path)
+        const roofed = L.skyways!.bridges.some(b => b.area === ar.id && b.roof), courtLook = a.rework && (cls === 'court' || (L.skyways!.skylights ?? []).some(s => s.area === ar.id));
         if (cls === 'station' || cls === 'shop') expect(fk, `${ar.label} floor`).toBeNull();
+        else if (roofed) expect(fk, `${ar.label} floor`).toBe('skyways-floor-pavers');
+        else if (courtLook) expect(fk, `${ar.label} floor`).toBe('skyways-floor-court');
         else expect(fk, `${ar.label} floor`).toBe(FLOOR_OF[cls]);
         const ck = a.ceilKey(c.L, ar.id, c.i);
         if (a.atriumRoof[c.i] > 0 && L.levels![c.L].grid.ceil[c.i] >= a.atriumRoof[c.i] - 0.5) { expect(ck, `${ar.label} atrium`).toBe(false); continue; }
         if (cls === 'station' || (cls === 'shop' && c.L === 0)) expect(ck, `${ar.label} ceil`).toBeNull();
+        else if (roofed) expect(ck, `${ar.label} ceil`).toBe(false);
+        else if (courtLook) expect(ck, `${ar.label} ceil`).toBe('skyways-ceil-slats');
         else if (cls === 'bridge') expect(ck).toBe('skyways-ceil-bridge');
         else if (cls === 'boh') expect(ck).toBe('skyways-ceil-core');
         else if (cls === 'public' && c.L >= 2) expect(ck).toBe('skyways-ceil-grid');
@@ -101,8 +111,11 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       for (const f of w.wallFaces) {
         const cls = a.classOf(f.area);
         if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
+        if (cls === 'anchor') { expect(f.finish).toMatch(/^skyways-anchor-wall-/); continue; } // (rework: the anchor stores' finishes)
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
-        expect(f.finish, cls).toBe(cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : 'skyways-wall');
+        // (lane ARCH) a skylight coffer's well walls: the plain plaster of a light well
+        const well = (L.skyways!.skylights ?? []).some(s => s.area === f.area && f.y0 >= s.ceilY - 0.02);
+        expect(f.finish, cls).toBe(well ? 'skyways-reveal' : cls === 'wet' ? 'skyways-wet' : cls === 'boh' ? 'skyways-boh' : 'skyways-wall');
         // never a station treatment / identity
         expect(STATION_TREATMENTS).not.toContain(treatmentOf(f));
         expect(['office', 'paint']).toContain(finishFamily(f.finish));
@@ -170,7 +183,8 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
     const {L, w} = world(SEEDS[0]);
     const a = w.skywaysArch!;
     const used = a.usedMaterials();
-    expect(used.size).toBeLessThanOrEqual(15);
+    // (task studio-skyways-rework-20261107-054512-01: + the anchor stores' finishes and lane ARCH's court / bridge finishes, roof steel, the skylight sky)
+    expect(used.size).toBeLessThanOrEqual(32);
     const walls = ['skyways-wall', 'skyways-wet', 'skyways-boh'].map(k => used.get(k) as OfficeSurfaceMaterial);
     const reveal = a.revealMaterial(2) as OfficeSurfaceMaterial;
     expect(reveal).toBeInstanceOf(OfficeSurfaceMaterial);
@@ -291,9 +305,11 @@ describe('skyways exterior: the plan (pure)', () => {
         const br = info.bridges.find(b => b.id === bp.bridge)!;
         expect(bp.outer).toEqual(bridgeOuter(br));
         const under = bp.faces.filter(f => f.axis === 'y' && f.n === -1), roof = bp.faces.filter(f => f.axis === 'y' && f.n === 1);
-        expect(under.length).toBe(1); expect(roof.length).toBe(1);
+        expect(under.length).toBe(1);
         expect(under[0].c).toBeCloseTo(info.storeys[2].baseY - SKYWAYS_EXT.deckDepth, 6);
-        expect(roof[0].c).toBeGreaterThan(info.storeys[2].baseY + 3);
+        // (lane ARCH, layout v3) a glazed roof: no opaque roof slab, the fascias stop under its wall plate
+        if (br.roof) { expect(roof.length).toBe(0); expect(bp.y1).toBeCloseTo(br.roof.springY - 0.03, 6); }
+        else { expect(roof.length).toBe(1); expect(roof[0].c).toBeGreaterThan(info.storeys[2].baseY + 3); }
         const wins = info.windows.filter(w => 'bridge' in w.host && w.host.bridge === br.id);
         const side = bp.faces.filter(f => f.axis !== 'y');
         const full = 2 * (bp.y1 - bp.y0) * (br.axis === 'z' ? br.rect.z1 - br.rect.z0 : br.rect.x1 - br.rect.x0);
@@ -398,7 +414,8 @@ describe('skyways exterior: build + runtime', () => {
     expect(v.root.visible).toBe(true);
     expect(rt.fogBox).toEqual({kind: 'bridge', id: br.id});
     expect([EXT_U.box.value.x, EXT_U.box.value.y, EXT_U.box.value.z, EXT_U.box.value.w]).toEqual([br.rect.x0, br.rect.z0, br.rect.x1, br.rect.z1]);
-    expect(EXT_U.roofY.value).toBe(1e9);
+    // (lane ARCH) under a glazed bridge roof (layout v3) every exterior ray is outdoor (the sky through the roof); else the deck's box
+    expect(EXT_U.roofY.value).toBe(br.roof ? -1e9 : 1e9);
     // inside an atrium building: every exterior ray outdoor (the sky through the vault); a plain building: its footprint
     const atr = info.buildings.find(b => b.atrium)!, plain = info.buildings.find(b => !b.atrium)!;
     const r = atr.atrium!.rect;

@@ -60,8 +60,9 @@ export function skywaysSkylights(layout: StationLayout): number {
     const pad = 0.5;
     tall.push({x0: p.x - p.hx - pad, z0: p.z - p.hz - pad, x1: p.x + p.hx + pad, z1: p.z + p.hz + pad});
   }
+  // stairs / escalators at ANY storey (a run's open well band rises through the storeys above it: never a coffer over one)
   const rampNear = new Uint8Array(g.w * g.h);
-  for (let i = 0; i < rampNear.length; i++) if (g.rampIdx[i] >= 0) rampNear[i] = 1;
+  for (const lvl of layout.levels) for (let i = 0; i < rampNear.length; i++) if (lvl.grid.rampIdx[i] >= 0) rampNear[i] = 1;
   const doorNear = new Uint8Array(g.w * g.h);
   for (const d of layout.doors) {
     const dl = (d as {level?: number}).level ?? layout.areas[d.a]?.level ?? 0;
@@ -96,7 +97,33 @@ export function skywaysSkylights(layout: StationLayout): number {
     }
   }
   info.skylights = out;
+  moveFixturesOutOfWells(layout, out);
   return out.length;
+}
+
+/**
+ * Ceiling fixtures (and a landmark court's accent lights) that the generator hung where a coffer now opens move onto the slatted ceiling
+ * beside it (just past its nearest edge, in the same area under the flat ceiling); one that cannot is left to dropFloatingFixtures.
+ */
+function moveFixturesOutOfWells(layout: StationLayout, wells: readonly SkywaysSkylight[]): void {
+  if (!wells.length) return;
+  const g = layout.levels[SKYWAYS_LEVEL.skyway].grid, pad = 0.6;
+  for (const l of layout.lights) {
+    if (l.virtual || (l.level ?? layout.areas[l.area]?.level ?? 0) !== SKYWAYS_LEVEL.skyway) continue;
+    const s = wells.find(w => l.x > w.rect.x0 - 0.2 && l.x < w.rect.x1 + 0.2 && l.z > w.rect.z0 - 0.2 && l.z < w.rect.z1 + 0.2);
+    if (!s) continue;
+    const r = s.rect;
+    const cands = [{x: r.x0 - pad, z: l.z, d: l.x - r.x0}, {x: r.x1 + pad, z: l.z, d: r.x1 - l.x}, {x: l.x, z: r.z0 - pad, d: l.z - r.z0}, {x: l.x, z: r.z1 + pad, d: r.z1 - l.z}].sort((p, q) => p.d - q.d);
+    for (const c of cands) {
+      const [cx, cy] = g.cellOf(c.x, c.z);
+      if (!g.inBounds(cx, cy)) continue;
+      const i = g.idx(cx, cy);
+      if (g.cells[i] !== FLOOR || g.area[i] !== s.area || Math.abs(g.ceil[i] - s.ceilY) > 0.01) continue;
+      if (wells.some(w => c.x > w.rect.x0 - 0.2 && c.x < w.rect.x1 + 0.2 && c.z > w.rect.z0 - 0.2 && c.z < w.rect.z1 + 0.2)) continue;
+      l.x = r3(c.x); l.z = r3(c.z);
+      break;
+    }
+  }
 }
 
 /** A skyway-storey public court / concourse of a usable size (the skylit courts' and the court bench-planters' candidates). */
