@@ -521,3 +521,16 @@ only) built by `tools/asset-pipeline/skyways-stores/books/build-books-art.mjs`; 
 - `assets/textures/skyways/stores/books/skyways-store-books-art.jpg` — the signs and the rugs.
 - Unapproved prototypes; provider terms apply; no commercial clearance implied.
 <!-- END skyways-store-books-art-20261107 -->
+
+<!-- BEGIN skyways-store-cinema-art-20261107 (build-art.mjs, lane STORE-CINEMA) -->
+## Skyways major store Aurora Picture House: now-showing posters and the concession board
+Five original flat artworks generated for this project with Codex native image_gen (owned Codex CLI), one call per piece, under the
+Skyways store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01). The films, titles and taglines are
+invented (no real films, studios, actors or brands). Runtime derivative (crop / resize / JPEG atlas pack only) built by
+`tools/asset-pipeline/skyways-stores/cinema/build-art.mjs`; provenance with the Codex threads, prompt and source hashes:
+`assets/derivatives/skyways-store-cinema-art-20261107.json`. The raw generations stay private (studio reference task folder).
+
+- `assets/textures/skyways/stores/cinema/cinema-art.jpg` — four film posters ("The Coulee Kid", "The Hoppers", "Moonlight on the
+  Midway", "Skywalk at Midnight") and the art-deco REFRESHMENTS concession board.
+- Unapproved prototypes; provider terms apply; no commercial clearance implied.
+<!-- END skyways-store-cinema-art-20261107 -->

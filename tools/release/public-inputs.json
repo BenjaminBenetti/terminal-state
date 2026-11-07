@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 56898,
-      "sha256": "5068f949fe44bf804f0ccc361f8d55dfb5f952f8f1b61fe4d17fb814015eb4cd"
+      "bytes": 58041,
+      "sha256": "78bf2fe14d40f450aa0e528c7f3f6c5acbe27c408429f1e7f7b28359260cbe20"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2302,6 +2302,11 @@
       "path": "assets/derivatives/skyways-store-books-art-20261107.json",
       "bytes": 7679,
       "sha256": "4bce598e61906c02d6fe9ce753b2a396f6277452ac838ee24a873049fe481b4b"
+    },
+    {
+      "path": "assets/derivatives/skyways-store-cinema-art-20261107.json",
+      "bytes": 6726,
+      "sha256": "8ae282b1b4a0b9093219fe8949157acab180d7e0afc6565736bf502a3fd5578c"
     },
     {
       "path": "assets/derivatives/skyways-store-design-art-20261107.json",
@@ -4832,6 +4837,11 @@
       "path": "assets/textures/skyways/stores/books/skyways-store-books-art.jpg",
       "bytes": 235936,
       "sha256": "3f49ebc115a59fdc968d8ccf63fad33e6e89f513aa646d10e2e2a315f20a56ae"
+    },
+    {
+      "path": "assets/textures/skyways/stores/cinema/cinema-art.jpg",
+      "bytes": 614283,
+      "sha256": "ad6d1e2b4ffb12522794337af8c58603aefc9a5feb38d1353b38bbd84d75f5a0"
     },
     {
       "path": "assets/textures/skyways/stores/design/skyways-store-design-prints.jpg",

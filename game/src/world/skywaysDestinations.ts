@@ -34,6 +34,7 @@ import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen
 import {shapeMaterials} from './shapeMaterials';
 import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {buildStoreMusicProp, isStoreMusicKind} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
+import {buildStoreCinemaArt, isStoreCinemaArtKind} from './skywaysStoreCinema'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-CINEMA): the cinema's art kinds
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 import {drawStoreGarden, isStoreGardenDrawn} from './skywaysStoreGarden'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-GARDEN)
 import {buildStoreBooksProp, isStoreBooksDrawnKind} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
@@ -235,6 +236,7 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   if (isStoreBooksDrawnKind(kind)) return buildStoreBooksProp(group, kind, draw, wm);
   if (isScienceArtKind(kind)) return drawScienceArt(group, kind, draw, wm); // (lane STORE-SCIENCE: the science store's framed Codex wall art)
   if (isStoreMusicKind(kind)) return buildStoreMusicProp(group, kind, draw, wm); // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01): the record store's own kinds
+  if (isStoreCinemaArtKind(kind)) return buildStoreCinemaArt(group, kind, draw, wm); // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-CINEMA)
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
   // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-GARDEN) the garden store's code-drawn soil pallets / basket rails
