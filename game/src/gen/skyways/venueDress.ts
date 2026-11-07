@@ -79,6 +79,9 @@ interface VenueCtx {
   hub: ReadonlyMap<number, Portal | null>;
   /** The openings reachable from the hub before the venue was dressed (per area: the reach key that must survive). */
   reach0: Map<number, string>;
+  /** The whole walk (lane VENUE round 2): the public venue areas + the main hall, the cell window round them, the bridge mouths' bands
+   *  (the sources) and what they reach before dressing (every opening of the public areas a 1.2 m path reaches from a bridge). */
+  walk: {ids: ReadonlySet<number>; x0: number; y0: number; w: number; h: number; sources: number[]; key0: string; pub: readonly Area[]};
   roleOf: (id: number) => SkywaysVenueRole | undefined;
   bridges: ReadonlySet<number>;
 }
@@ -98,27 +101,36 @@ export function dressSkywaysVenue(layout: StationLayout, rng: Rng): VenueResult 
   const bridges = new Set((layout.skyways?.bridges ?? []).map(b => b.area));
   const portals = new Map(areas.map(a => [a.id, portalsOf(layout, v.g, a)] as const));
   const hub = new Map(areas.map(a => [a.id, hubPortal(portals.get(a.id)!, bridges, roleOf)] as const));
-  const vc: VenueCtx = {v, res, portals, hub, reach0: new Map(), roleOf, bridges};
+  const hallArea = layout.areas[venue.find(q => q.role === 'main-hall')?.area ?? -1];
+  const walkAreas = hallArea ? [...areas, hallArea] : areas;
+  const wx0 = Math.min(...walkAreas.map(a => a.x)) - 1, wy0 = Math.min(...walkAreas.map(a => a.y)) - 1;
+  const walk = {ids: new Set(walkAreas.map(a => a.id)), x0: wx0, y0: wy0, w: Math.max(...walkAreas.map(a => a.x + a.w)) + 1 - wx0, h: Math.max(...walkAreas.map(a => a.y + a.h)) + 1 - wy0,
+    sources: areas.flatMap(a => portals.get(a.id)!.filter(p => bridges.has(p.to)).flatMap(p => bandCells(v.g, a, p))), key0: '', pub: areas};
+  const vc: VenueCtx = {v, res, portals, hub, reach0: new Map(), roleOf, bridges, walk};
   // --- 0. door strips; the reach every area must keep ------------------------------------------------------------------------
   for (const a of areas) for (const p of portals.get(a.id)!) if (p.door) v.keepDoor(p.door, a, VENUE_DOOR_CLEAR, 0.3);
   for (const a of areas) vc.reach0.set(a.id, reachKey(vc, a));
+  walk.key0 = walkKey(vc);
   const n0 = layout.props.length;
 
   // --- 1. the big furniture of every area (each group kept only if the area's routes survive), then its routes become lanes ----
   const order = (r: SkywaysVenueRole) => areas.filter(q => roleOf(q.id) === r);
+  // the greeter / welcome sign first (a small registration keeps them at its bridge mouth; the desks may then go one area on)
+  for (const a of order('registration')) greet(vc, a);
   for (const a of order('registration')) {
     const mouth = portals.get(a.id)!.find(p => bridges.has(p.to)) ?? null;
     if (!mouth && a.kind === 'concourse' && a.type === 'concourse') continue; // the main stage foyer: boards only (below)
     registrationDesks(vc, a);
   }
-  order('panel').forEach((a, k) => dressPanel(vc, a, k));
+  order('panel').forEach((a, k) => dressPanel(vc, a, panelLetter(a, k)));
   for (const a of order('photo-lounge')) dressPhotoLounge(vc, a);
   const pieces = order('exhibitors').sort((p, q) => q.w * q.h - p.w * p.h);
-  exhibits(vc, pieces); // (the pop-up exhibits claim their walls first: the vendor rows fill around them)
+  const corner = gameCorner(vc, pieces); // (the arcade pair claims its wall first: the vendor rows fill around it)
   pieces.forEach((a, k) => exhibitorRows(vc, a, k));
+  exhibits(vc, pieces, corner);
   for (const a of areas) markRoutes(vc, a);
+  markWalkRoutes(vc);
   // --- 2. the smaller pieces: greeters / welcome signs at the bridge mouths, exhibits, boards, posters -----------------------------
-  for (const a of order('registration')) greet(vc, a);
   for (const a of areas) boards(vc, a, roleOf(a.id) === 'exhibitors' ? (a === pieces[0] ? 2 : 1) : roleOf(a.id) === 'registration' ? 2 : roleOf(a.id) === 'panel' ? 0 : 1);
   {
     const order2 = rng.shuffle(SKYWAYS_CON_POSTERS.map((_, i) => i));
@@ -238,13 +250,69 @@ function reachKey(vc: VenueCtx, a: Area): string {
   const ps = vc.portals.get(a.id)!;
   return ps.map((p, k) => (bandCells(g, a, p).some(i => f[locOf(g, a, i)] !== -2) ? k : -1)).filter(k => k >= 0).join(',');
 }
+/**
+ * (lane VENUE round 2) The whole walk: a BFS over the route cells of the public venue areas and the main hall from every bridge mouth's
+ * band (local per-area routes do not compose across areas: two areas may each keep their own hub routes yet meet only at cells the
+ * other cannot reach). Parent per cell of the walk window (-1 = a source, -2 = unreached).
+ */
+function walkField(vc: VenueCtx): Int32Array {
+  const g = vc.v.g, W = vc.walk;
+  const parent = new Int32Array(W.w * W.h).fill(-2);
+  const ok = (cx: number, cy: number) => {
+    if (cx < W.x0 || cy < W.y0 || cx >= W.x0 + W.w || cy >= W.y0 + W.h) return false;
+    const i = g.idx(cx, cy);
+    return g.cells[i] === FLOOR && W.ids.has(g.area[i]) && !g.blocked[i] && g.circleClear((cx + 0.5) * CELL, (cy + 0.5) * CELL, VENUE_ROUTE_R);
+  };
+  const q: number[] = [];
+  for (const i of W.sources) {
+    const cx = i % g.w, cy = Math.floor(i / g.w), l = (cy - W.y0) * W.w + (cx - W.x0);
+    if (parent[l] === -2 && ok(cx, cy)) { parent[l] = -1; q.push(l); }
+  }
+  for (let k = 0; k < q.length; k++) {
+    const l = q[k], x = l % W.w, y = Math.floor(l / W.w);
+    for (const [nx, ny] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) {
+      if (nx < 0 || ny < 0 || nx >= W.w || ny >= W.h) continue;
+      const m = ny * W.w + nx;
+      if (parent[m] === -2 && ok(W.x0 + nx, W.y0 + ny)) { parent[m] = l; q.push(m); }
+    }
+  }
+  return parent;
+}
+const walkLoc = (vc: VenueCtx, i: number) => (Math.floor(i / vc.v.g.w) - vc.walk.y0) * vc.walk.w + (i % vc.v.g.w - vc.walk.x0);
+/** Which openings of the public venue areas a bridge mouth reaches by a 1.2 m path. */
+function walkKey(vc: VenueCtx): string {
+  const f = walkField(vc), g = vc.v.g;
+  return vc.walk.pub.map(a => vc.portals.get(a.id)!.map((p, k) => (bandCells(g, a, p).some(i => f[walkLoc(vc, i)] !== -2) ? k : '')).join('.')).join('|');
+}
+/** The whole walk's routes from the bridge mouths to every opening of the public areas become reserved lanes too. */
+function markWalkRoutes(vc: VenueCtx): void {
+  const f = walkField(vc), g = vc.v.g, W = vc.walk;
+  const at = (l: number): [number, number] => [(W.x0 + l % W.w + 0.5) * CELL, (W.y0 + Math.floor(l / W.w) + 0.5) * CELL];
+  for (const a of W.pub) for (const p of vc.portals.get(a.id)!) {
+    if (vc.bridges.has(p.to)) continue;
+    const band = bandCells(g, a, p).map(i => walkLoc(vc, i)).filter(l => f[l] !== -2);
+    if (!band.length) continue;
+    const [px, pz] = inside(p, 0.5);
+    let l = band.sort((m, n) => Math.hypot(at(m)[0] - px, at(m)[1] - pz) - Math.hypot(at(n)[0] - px, at(n)[1] - pz))[0];
+    const path: number[] = [l];
+    while (f[l] >= 0) { l = f[l]; path.push(l); }
+    let s = 0;
+    for (let k = 1; k <= path.length; k++) {
+      const turn = k === path.length || (k >= 2 && path[k] - path[k - 1] !== path[k - 1] - path[k - 2]);
+      if (!turn) continue;
+      const A = at(path[s]), B = at(path[k - 1]);
+      vc.v.keepSegment(A[0], A[1], B[0], B[1], VENUE_LANE_HALF);
+      s = k - 1;
+    }
+  }
+}
 /** Places a group of props; keeps it only if every opening of the given areas the hub reached before is still reached. */
 function group<T>(vc: VenueCtx, check: readonly Area[], place: () => T | null): T | null {
   const v = vc.v;
   begin(v.ctx);
   const np = v.placed.length;
   const out = place();
-  if (out !== null && check.every(a => reachKey(vc, a) === vc.reach0.get(a.id))) { commit(v.ctx); return out; }
+  if (out !== null && check.every(a => reachKey(vc, a) === vc.reach0.get(a.id)) && walkKey(vc) === vc.walk.key0) { commit(v.ctx); return out; }
   rollback(v.ctx);
   v.placed.length = np;
   return null;
@@ -302,6 +370,8 @@ function entryAreas(vc: VenueCtx, a: Area): {area: Area; at: Portal}[] {
 // Areas
 
 const frameOf = (a: Area, p: Portal | null): HallFrame => hallFrame(a, p?.side ?? 'S');
+/** A panel room's letter index (0 = A): from the carve's label ("Panel room B"), else its order. */
+const panelLetter = (a: Area, k: number): number => { const m = / ([A-Z])$/.exec(a.label ?? ''); return m ? m[1].charCodeAt(0) - 65 : k; };
 const snapC = (x: number) => Math.floor(x / CELL) * CELL + CELL / 2;
 const propsSince = (v: AddonDresser, n: number) => v.layout.props.slice(n);
 
@@ -407,6 +477,11 @@ function greet(vc: VenueCtx, a: Area): void {
   if (sign) res.welcome.push(sign); else res.skipped.push(`venue: registration ${a.id} welcome sign`);
 }
 
+/**
+ * A panel room: the panel table (two cloth-draped tables, one in a narrow room) with its panelists behind it facing audience rows of
+ * folding chairs either side of an aisle from the door, and the panel's title slide (each room its own): on a tripod screen centred
+ * against the back wall of a deep room, else beside the table; a compact room: on a screen fixed to the wall behind the panel.
+ */
 function dressPanel(vc: VenueCtx, a: Area, letter: number): void {
   const {v, res} = vc, ps = vc.portals.get(a.id)!;
   const door = ps.find(p => p.door) ?? ps[0] ?? null;
@@ -414,32 +489,31 @@ function dressPanel(vc: VenueCtx, a: Area, letter: number): void {
   const def = PROP_DEFS.skywaysConMerchTable;
   const out: VenueResult['panels'][number] = {area: a.id, tables: [], panelists: [], chairs: [], screen: null};
   const du = door ? xzToU(fr, door.x, door.z) : fr.W / 2;
-  let uc = Math.round(Math.max(def.w + 0.8, Math.min(fr.W - def.w - 0.8, fr.W / 2)) * 2) / 2;
-  // the panel's title slide on a tripod screen facing the audience (each room: its own slide): centred against the back wall of a deep
-  // room, else beside the panel table at one end of the back wall
+  const nT = fr.W >= 2 * def.w + 1.6 ? 2 : 1, half = nT * (def.w + 0.03) / 2;
+  let uc = Math.round(Math.max(half + 0.8, Math.min(fr.W - half - 0.8, fr.W / 2)) * 2) / 2;
   const sd = PROP_DEFS.skywaysVenueScreen, deep = fr.D >= 7.2, slide = letter % SKYWAYS_VENUE_SLIDES.length;
   if (deep) {
     const [x, z] = uvXZ(fr, uc, fr.D - sd.d / 2 - 0.04);
     out.screen = group(vc, [a], () => v.put('skywaysVenueScreen', x, z, fr.toFront, {area: a, variant: slide}));
   } else {
     for (const s of [1, -1]) {
-      const us = Math.round((s > 0 ? fr.W - 0.45 - sd.w / 2 : 0.45 + sd.w / 2) * 2) / 2, ut = us - s * (sd.w / 2 + 0.3 + def.w);
-      if (ut - def.w - 0.4 < 0 || ut + def.w + 0.4 > fr.W) continue;
+      const us = Math.round((s > 0 ? fr.W - 0.45 - sd.w / 2 : 0.45 + sd.w / 2) * 2) / 2, ut = us - s * (sd.w / 2 + 0.3 + half);
+      if (ut - half - 0.4 < 0 || ut + half + 0.4 > fr.W) continue;
       const [x, z] = uvXZ(fr, us, fr.D - sd.d / 2 - 0.04);
       out.screen = group(vc, [a], () => v.put('skywaysVenueScreen', x, z, fr.toFront, {area: a, variant: slide}));
       if (out.screen) { uc = ut; break; }
     }
   }
-  // the panel table: two tables side by side, facing the door, 1.3 m off the back wall (in front of a centred screen: a free cell row
-  // stays between the panelists' chairs and it, the floor behind the table one connected space); the panelists behind it
+  // the panel table facing the door, 1.3 m off the back wall (in front of a centred screen: a free cell row stays between the panelists'
+  // chairs and it, the floor behind the table one connected space); the panelists behind it
   const back = out.screen && deep ? sd.d + 1.75 : 1.3, vt = fr.D - back - def.d / 2;
-  for (const s of [-1, 1]) {
+  for (const s of nT === 2 ? [-1, 1] : [0]) {
     const [x, z] = uvXZ(fr, uc + s * (def.w / 2 + 0.03), vt);
     const t = v.put('skywaysConMerchTable', x, z, fr.toFront, {area: a});
     if (t) out.tables.push(t);
   }
   if (!out.tables.length) { res.skipped.push(`venue: panel ${a.id} table`); res.panels.push(out); return; }
-  for (const k of [-1.5, -0.5, 0.5, 1.5]) {
+  for (const k of nT === 2 ? [-1.5, -0.5, 0.5, 1.5] : [-0.5, 0.5]) {
     const [x, z] = uvXZ(fr, uc + k * 0.95, vt + def.d / 2 + 0.45);
     const c = v.put('foldingChair', snapC(x), snapC(z), fr.toFront, {area: a});
     if (c) out.panelists.push(c);
@@ -448,23 +522,27 @@ function dressPanel(vc: VenueCtx, a: Area, letter: number): void {
   const A = uvXZ(fr, du, 0.9), B = uvXZ(fr, uc, vt - def.d / 2 - 0.9);
   v.keepSegment(A[0], A[1], B[0], B[1], 0.7);
   res.lanes.push({area: a.id, ax: r3(A[0]), az: r3(A[1]), bx: r3(B[0]), bz: r3(B[1]), half: 0.7});
-  // audience rows facing the panel, either side of the aisle
-  for (let vr = vt - def.d / 2 - 1.5; vr >= 1.4; vr -= 0.95) {
+  // audience rows facing the panel, either side of the aisle (a compact room: closer rows, down to the door's clear strip)
+  const gap = deep ? 1.5 : 1.2, last = deep ? 1.4 : 1.0;
+  for (let vr = vt - def.d / 2 - gap; vr >= last; vr -= 0.95) {
     for (let u = 0.6; u <= fr.W - 0.6; u += 0.55) {
-      if (v.rng.chance(0.06)) continue;
+      if (v.rng.chance(deep ? 0.06 : 0.03)) continue;
       const [x, z] = uvXZ(fr, u, vr);
       const c = v.put('foldingChair', snapC(x), snapC(z), normYaw(fr.toBack + (v.rng.chance(0.06) ? (v.rng.chance(0.5) ? 0.5 : -0.5) * Math.PI : 0)), {area: a});
       if (c) out.chairs.push(c);
     }
   }
-  // no room for the screen: the panel's key art is a framed poster centred on the wall behind the panelists (above their heads)
-  const side = fr.back, t = (fr.front === 'N' || fr.front === 'S' ? fr.x0 : fr.z0) + uc, pd = PROP_DEFS.skywaysConPoster;
-  if (!out.screen && backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.4) && backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + 1.35 + pd.h)) {
-    const [x, z] = wallXZ(a, side, t, pd.d / 2 + 0.004), along = side === 'N' || side === 'S';
-    out.screen = v.push({kind: 'skywaysConPoster', x: r3(x), z: r3(z), y: 1.35, rot: WALL_ROT[side], area: a.id, hx: r3(along ? pd.w / 2 : pd.d / 2), hz: r3(along ? pd.d / 2 : pd.w / 2),
-      h: pd.h, blocksSight: false, variant: v.rng.int(0, SKYWAYS_CON_POSTERS.length - 1), mounted: true});
+  // no room for a tripod: the title slide on a screen fixed to the wall behind the panelists (above their heads); else the key-art poster
+  const side = fr.back, t = (fr.front === 'N' || fr.front === 'S' ? fr.x0 : fr.z0) + uc, along = side === 'N' || side === 'S';
+  for (const kind of out.screen ? [] : ['skywaysVenueWallScreen', 'skywaysConPoster'] as const) {
+    const pd = PROP_DEFS[kind], y = kind === 'skywaysVenueWallScreen' ? 1.15 : 1.35;
+    if (!backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + y + 0.05) || !backed(v.ctx, a, side, t - pd.w / 2, t + pd.w / 2, v.base + y + pd.h - 0.05)) continue;
+    const [x, z] = wallXZ(a, side, t, pd.d / 2 + 0.004);
+    out.screen = v.push({kind, x: r3(x), z: r3(z), y, rot: WALL_ROT[side], area: a.id, hx: r3(along ? pd.w / 2 : pd.d / 2), hz: r3(along ? pd.d / 2 : pd.w / 2),
+      h: pd.h, blocksSight: false, variant: kind === 'skywaysVenueWallScreen' ? slide : v.rng.int(0, SKYWAYS_CON_POSTERS.length - 1), mounted: true});
+    break;
   }
-  if (out.chairs.length < 6) res.skipped.push(`venue: panel ${a.id} audience (${out.chairs.length})`);
+  if (out.chairs.length < 4) res.skipped.push(`venue: panel ${a.id} audience (${out.chairs.length})`);
   res.panels.push(out);
 }
 
@@ -492,8 +570,13 @@ function dressPhotoLounge(vc: VenueCtx, a: Area): void {
   v.keepSegment(A[0], A[1], B[0], B[1], 0.7);
   res.lanes.push({area: a.id, ax: r3(A[0]), az: r3(A[1]), bx: r3(B[0]), bz: r3(B[1]), half: 0.7});
   const [dx, dz] = door ? [door.x, door.z] : uvXZ(fr, uc, 0);
-  const st = statueAt(v, 'photo-pose', sx, sz, yawToward(dx - sx, dz - sz), a);
-  if (st) res.statues.push(st); else res.skipped.push(`venue: photo lounge ${a.id} statue`);
+  // (a compact lounge: closer to the wall or to one side; the statue only where it fits)
+  for (const [du2, dv2] of [[0, 2.0], [0, 1.6], [-1.0, 1.6], [1.0, 1.6], [-1.2, 2.0], [1.2, 2.0]]) {
+    const [qx, qz] = uvXZ(fr, uc + du2, fr.D - dv2);
+    const st = group(vc, [a], () => statueAt(v, 'photo-pose', qx, qz, yawToward(dx - qx, dz - qz), a));
+    if (st) { res.statues.push(st); break; }
+  }
+  void sx; void sz;
   // lounge seating along the side walls (armchairs facing in), bean bags, an ottoman, plants
   const n0 = v.layout.props.length;
   const flanks: Side[] = fr.front === 'N' || fr.front === 'S' ? ['W', 'E'] : ['N', 'S'];
@@ -501,10 +584,13 @@ function dressPhotoLounge(vc: VenueCtx, a: Area): void {
     if (v.layout.props.length - n0 >= 4) break;
     rowAlongWall(v.ctx, a, side, 'loungeArmchair', {max: 2, front: 0.9, cluster: 2, gap: 1.2});
   }
-  for (const k of ['beanBag', 'beanBag', 'ottoman'] as PropKind[]) {
-    for (let t = 0; t < 12; t++) {
-      const [x, z] = uvXZ(fr, v.rng.range(1.2, fr.W - 1.2), v.rng.range(1.4, Math.max(1.5, fr.D - 2.8)));
-      if (v.put(k, snapC(x), snapC(z), quarterToward(sx - x, sz - z), {area: a})) break;
+  // (a compact lounge: anywhere clear of the photo spot, its lane and the door strip; the photo spot's lane / door keep their cells)
+  const seats = () => propsSince(v, n0).filter(p => p.kind !== 'pottedPlantSmall').length;
+  for (const k of ['beanBag', 'beanBag', 'ottoman', 'beanBag', 'ottoman'] as PropKind[]) {
+    if (seats() >= 5) break;
+    for (let t = 0; t < 30; t++) {
+      const [x, z] = uvXZ(fr, v.rng.range(0.8, fr.W - 0.8), v.rng.range(1.0, Math.max(1.1, fr.D - 1.0)));
+      if (group(vc, [a], () => v.put(k, snapC(x), snapC(z), quarterToward(sx - x, sz - z), {area: a}))) break;
     }
   }
   for (const side of SIDES) rowAlongWall(v.ctx, a, side, 'pottedPlantSmall', {max: 1, front: 0.3});
@@ -554,36 +640,34 @@ function exhibitorRows(vc: VenueCtx, a: Area, rank: number): void {
   void rank;
 }
 
-/**
- * The pop-up exhibits: a retro game corner (two arcade cabinets + a capsule-toy row) and the giant teddy in the roomiest piece that takes
- * them, a cosplay display of mannequins preferably in another piece.
- */
-function exhibits(vc: VenueCtx, pieces: readonly Area[]): void {
-  const {v, res} = vc, rng = v.rng;
-  const roomy = pieces.filter(a => Math.min(a.w, a.h) * CELL >= 3.0);
-  const along = (a: Area, kind: PropKind, o: Parameters<typeof rowAlongWall>[4], least: number): PropPlacement[] | null => {
-    for (const side of rng.shuffle(SIDES.slice())) {
-      const got = group(vc, [a], () => { const n = v.layout.props.length; return rowAlongWall(v.ctx, a, side, kind, o).length >= least ? propsSince(v, n) : null; });
-      if (got) return got;
-    }
-    return null;
-  };
-  let corner: Area | null = null;
-  for (const a of roomy) {
-    const got = along(a, 'arcadeCabinet', {max: 2, front: 1.0}, 2);
-    if (!got) continue;
-    res.exhibits.push(...got);
-    corner = a;
-    res.exhibits.push(...(along(a, 'capsuleToyMachine', {max: 3, front: 0.9}, 2) ?? []));
-    break;
+/** A row of `kind` against some solid wall of `a` (a route-checked group), or null. */
+function wallRow(vc: VenueCtx, a: Area, kind: PropKind, o: Parameters<typeof rowAlongWall>[4], least: number): PropPlacement[] | null {
+  const v = vc.v;
+  for (const side of v.rng.shuffle(SIDES.slice())) {
+    const got = group(vc, [a], () => { const n = v.layout.props.length; return rowAlongWall(v.ctx, a, side, kind, o).length >= least ? propsSince(v, n) : null; });
+    if (got) return got;
   }
-  for (const a of corner ? [corner, ...roomy.filter(q => q !== corner)] : roomy) {
-    const got = along(a, 'giantTeddy', {max: 1, front: 0.6}, 1);
-    if (got) { res.exhibits.push(...got); break; }
+  return null;
+}
+const roomyPieces = (pieces: readonly Area[]) => pieces.filter(a => Math.min(a.w, a.h) * CELL >= 3.0);
+/** The retro game corner's two arcade cabinets, in the roomiest piece that takes them (placed before the vendor rows). */
+function gameCorner(vc: VenueCtx, pieces: readonly Area[]): Area | null {
+  for (const a of roomyPieces(pieces)) {
+    const got = wallRow(vc, a, 'arcadeCabinet', {max: 2, front: 1.0}, 2);
+    if (got) { vc.res.exhibits.push(...got); return a; }
   }
+  return null;
+}
+/** The rest of the pop-up exhibits (after the vendor rows): the capsule-toy row and the giant teddy by the game corner, a cosplay display
+ *  of mannequins preferably in another piece. */
+function exhibits(vc: VenueCtx, pieces: readonly Area[], corner: Area | null): void {
+  const {res} = vc, rng = vc.v.rng, roomy = roomyPieces(pieces);
+  const near = corner ? [corner, ...roomy.filter(q => q !== corner)] : roomy;
+  for (const a of near) { const got = wallRow(vc, a, 'capsuleToyMachine', {max: 3, front: 0.9}, 2); if (got) { res.exhibits.push(...got); break; } }
+  for (const a of near) { const got = wallRow(vc, a, 'giantTeddy', {max: 1, front: 0.6}, 1); if (got) { res.exhibits.push(...got); break; } }
   const kind: PropKind = rng.chance(0.5) ? 'mannequinFull' : 'mannequinFemale';
   for (const a of [...roomy.filter(q => q !== corner), ...(corner ? [corner] : [])]) {
-    const got = along(a, kind, {max: 3, cluster: 1, gap: 0.5, front: 0.8}, 2);
+    const got = wallRow(vc, a, kind, {max: 3, cluster: 1, gap: 0.5, front: 0.8}, 2);
     if (got) { res.exhibits.push(...got); break; }
   }
 }
@@ -645,8 +729,8 @@ function wayfinding(vc: VenueCtx, areas: readonly Area[]): void {
     const s = doorPlate(v, hall, {x: dp.x, z: dp.z, nx: dp.nx, nz: dp.nz, half: dp.half, to: w, door: d, side: dp.side}, 'WASHROOMS');
     if (s) res.signs.push({sign: s, to: 'WASHROOMS', target: {x: dp.x, z: dp.z}});
   }
-  const panelLetter = new Map(areas.filter(a => roleOf(a.id) === 'panel').map((a, k) => [a.id, String.fromCharCode(65 + k)] as const));
-  const nameOf = (id: number) => roleOf(id) === 'panel' ? `PANEL ROOM ${panelLetter.get(id) ?? ''}`.trim() : SIGN_NAMES[roleOf(id)!] ?? '';
+  const letters = new Map(areas.filter(a => roleOf(a.id) === 'panel').map((a, k) => [a.id, String.fromCharCode(65 + panelLetter(a, k))] as const));
+  const nameOf = (id: number) => roleOf(id) === 'panel' ? `PANEL ROOM ${letters.get(id) ?? ''}`.trim() : SIGN_NAMES[roleOf(id)!] ?? '';
   // 1. plates over the event doors, on the side people come from (MAIN STAGE, PANEL ROOM A / B, PHOTO LOUNGE)
   for (const a of areas) {
     for (const p of portals.get(a.id) ?? []) {
@@ -656,9 +740,20 @@ function wayfinding(vc: VenueCtx, areas: readonly Area[]): void {
       if (s) res.signs.push({sign: s, to: nameOf(p.to), target: {x: p.x, z: p.z}});
     }
   }
+  // ... and the rooms carved off the main hall: their plates on the hall's side of the door
+  for (const d of layout.doors) {
+    const [h, r] = roleOf(d.a) === 'main-hall' ? [d.a, d.b] : roleOf(d.b) === 'main-hall' ? [d.b, d.a] : [-1, -1];
+    const rr = r >= 0 ? roleOf(r) : undefined;
+    if (h < 0 || (rr !== 'panel' && rr !== 'photo-lounge')) continue;
+    const hall = layout.areas[h], dp = doorPoint(d, hall);
+    const s = doorPlate(v, hall, {x: dp.x, z: dp.z, nx: dp.nx, nz: dp.nz, half: dp.half, to: r, door: d, side: dp.side}, nameOf(r));
+    if (s) res.signs.push({sign: s, to: nameOf(r), target: {x: dp.x, z: dp.z}});
+  }
   // 2. hanging direction signs where people come in: in each registration corridor (facing the bridge mouth) and at each exhibitors'
   //    piece's way in from registration — one plate per arrow, the arrow along the route (the next opening toward each target)
-  const route = routeTable(portals);
+  // (routes may cross the main hall: rooms carved off it are reached through its entry)
+  const hallId = layout.skyways!.addon.venue!.find(q => q.role === 'main-hall')?.area;
+  const route = routeTable(hallId !== undefined ? new Map([...portals, [hallId, portalsOf(layout, v.g, layout.areas[hallId])]]) : portals);
   const targets: {name: string; area: number}[] = [];
   for (const a of areas) for (const p of portals.get(a.id) ?? []) if (roleOf(p.to) === 'main-hall') targets.push({name: 'MAIN STAGE · WASHROOMS', area: p.to});
   for (const a of areas) if (roleOf(a.id) === 'panel' || roleOf(a.id) === 'photo-lounge') targets.push({name: nameOf(a.id), area: a.id});

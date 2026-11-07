@@ -45,6 +45,8 @@ export const SKYWAYS_ADDON_KINDS = [
   // (lane VENUE, layout version 3) the convention venue's art panels: the photo lounge's photo-op wall, the panel rooms' tripod
   // screens, the registration sign behind the badge desks, the artist-alley booth banners on the vendor tables' fronts
   'skywaysVenuePhotoWall', 'skywaysVenueScreen', 'skywaysVenueRegSign', 'skywaysVenueTableBanner',
+  // (a compact panel room: the title slide on a projection screen fixed to the wall behind the panel)
+  'skywaysVenueWallScreen',
 ] as const;
 export type SkywaysAddonKind = (typeof SKYWAYS_ADDON_KINDS)[number];
 const KIND_SET: ReadonlySet<string> = new Set(SKYWAYS_ADDON_KINDS);
@@ -138,6 +140,7 @@ export const SKYWAYS_ART_SIZE = {
   screen: {w: 2.1, h: 1.4},
   regSign: {w: 1.5, h: 1.0},
   tableBanner: {w: 0.9, h: 0.6},
+  wallScreen: {w: 1.8, h: 1.2},
 } as const;
 /** (lane VENUE) Table banner: its tilt (rx) along the cloth's front, the bottom of the vinyl above the floor (its placement y) and its plane in
  *  front of the table's centre (m: the cloth's front runs z 0.38 at the top .. 0.43 at the floor). Placed there, hosted on its table. */
@@ -174,6 +177,7 @@ const DEFS: Record<SkywaysAddonKind, {w: number; d: number; h: number; blocksSig
   skywaysVenueScreen: {w: 2.24, d: 0.56, h: 2.3},
   skywaysVenueRegSign: {w: 1.56, d: 0.03, h: 1.06},
   skywaysVenueTableBanner: {w: 0.92, d: 0.06, h: 0.62},
+  skywaysVenueWallScreen: {w: 1.88, d: 0.05, h: 1.28},
 };
 
 /** Frame / stand parts and art faces of the panel kinds (prop frame; variant = the art piece index). Model kinds: []. */
@@ -282,6 +286,14 @@ export function skywaysAddonShape(kind: SkywaysAddonKind, variant = 0): {parts: 
       faces.push({atlas: 'venueArt', piece: 'registration', w, h, p: [0, h / 2 + f, -d / 2 + 0.011]});
       break;
     }
+    case 'skywaysVenueWallScreen': {
+      // a fixed projection screen on the wall (back at z -d/2): the white screen in a black border showing the panel's title slide
+      const {w, h} = PS.wallScreen, d = DEFS.skywaysVenueWallScreen.d;
+      box('black', [w + 0.08, h + 0.08, d], [0, (h + 0.08) / 2, 0]);
+      box('steelDark', [w + 0.08, 0.06, d], [0, h + 0.05, 0]); // the roller housing along the top
+      faces.push({atlas: 'venueArt', piece: pick(SKYWAYS_VENUE_SLIDES), w, h, p: [0, 0.04 + h / 2, d / 2 + 0.002]});
+      break;
+    }
     case 'skywaysVenueTableBanner': {
       // a vinyl booth banner zip-tied along the front of a vendor table's cloth (placed on the cloth's front, the table's yaw; tilted with it)
       const {w, h} = PS.tableBanner, b = SKYWAYS_TABLE_BANNER;
@@ -320,6 +332,7 @@ export const SKYWAYS_ADDON_PHYS: Readonly<Record<SkywaysAddonKind, AddonPhys>> =
   skywaysVenuePhotoWall: {dynamic: false, why: 'anchored', how: 'pop-up photo-op wall: a 3 x 2 m printed panel in a steel frame between two posts on sandbag-weighted base plates (~45 kg): a bump or a bullet does not shove it'},
   skywaysVenueScreen: {dynamic: true, mass: 9, mat: 'pad', shape: 'box', how: 'tripod projection screen (~9 kg: a 2.1 m screen on a three-legged stand): walked into it slides, shot it slides / tips over'},
   skywaysVenueRegSign: {dynamic: false, why: 'mounted', how: 'printed registration sign in an aluminium frame screwed to the wall behind the badge desks'},
+  skywaysVenueWallScreen: {dynamic: false, why: 'mounted', how: 'fixed projection screen (the panel\'s title slide) screwed to the wall behind a compact panel room\'s table'},
   skywaysVenueTableBanner: {dynamic: false, why: 'mounted', how: 'vinyl booth banner zip-tied along the front of a vendor table\'s cloth (no table, no banner: it never stands on its own)'},
 };
 
@@ -327,7 +340,7 @@ const DAMAGE: Readonly<Record<SkywaysAddonKind, DamageClass>> = {
   skywaysConStage: 'wood', skywaysConBackdrop: 'fabric', skywaysConMerchTable: 'fabric', skywaysConFigureBox: 'cardboard', skywaysConPlush: 'fabric',
   skywaysConPrintCard: 'plastic', skywaysConPoster: 'cardboard', skywaysConPosterBoard: 'plastic', skywaysConBanner: 'fabric', skywaysConWelcome: 'plastic',
   skywaysMascotStatue: 'plastic', skywaysPrizeStanchion: 'steel', skywaysPrizeBoard: 'plastic',
-  skywaysVenuePhotoWall: 'fabric', skywaysVenueScreen: 'fabric', skywaysVenueRegSign: 'plastic', skywaysVenueTableBanner: 'fabric',
+  skywaysVenuePhotoWall: 'fabric', skywaysVenueScreen: 'fabric', skywaysVenueRegSign: 'plastic', skywaysVenueTableBanner: 'fabric', skywaysVenueWallScreen: 'fabric',
 };
 /** Damage class (damage/materials.ts PropDamageSpec, 'never' breaks: marks only — no destructibility system). */
 export const SKYWAYS_ADDON_DAMAGE_CLASS: Readonly<Record<SkywaysAddonKind, DamageClass>> = DAMAGE;
@@ -359,6 +372,7 @@ export const SKYWAYS_ADDON_OPEN_AUDIT: readonly {kind: SkywaysAddonKind; cls: 'e
   {kind: 'skywaysVenueScreen', cls: 'none', role: 'equipment', how: 'tripod projection screen: nothing to open'},
   {kind: 'skywaysVenueRegSign', cls: 'none', role: 'decor', how: 'framed wall sign'},
   {kind: 'skywaysVenueTableBanner', cls: 'none', role: 'decor', how: 'vinyl banner on a table front'},
+  {kind: 'skywaysVenueWallScreen', cls: 'none', role: 'decor', how: 'projection screen fixed to a wall: nothing to open'},
 ];
 
 /**
