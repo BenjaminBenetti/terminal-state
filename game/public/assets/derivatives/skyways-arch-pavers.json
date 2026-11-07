@@ -1,0 +1,74 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-arch-pavers",
+ "task": "studio-skyways-rework-20261107-054512-01",
+ "lane": "ARCH",
+ "status": "runtime derivative (tile crop / resize / JPEG only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways rework (no numerical image cap, user override); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways glazed bridges (layout version 3): the deck floor (clay pavers)",
+ "subject": "dark red-brown clay brick pavers in stretcher bond, top-down, tileable",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-arch-textures.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/arch-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 104,
+  "session": "01a1b4b0-c751-7741-8fcf-cc422e2e73e0",
+  "requested": "2026-11-07T06:27:26.499833Z",
+  "finished": "2026-11-07T06:27:56.392276Z",
+  "seconds": 29.8
+ },
+ "prompt": {
+  "file": "arch-104.txt",
+  "sha256": "8c55b372619667bddba6475b83560fefaf36e533ae57f4b0474654c69cb65fc5"
+ },
+ "source": {
+  "file": "codex-104-exec-4b01c4f7-f829-40d6-a725-3be69496641c.png",
+  "sha256": "458ec2a2635857324652e7805bf6312351e82b9b519fc44bea1f953c633a0dc7",
+  "bytes": 3164764,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "why": "full frame (tiles as delivered)"
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "seamLR": 7.3,
+  "interiorLR": 6.3,
+  "seamTB": 10.5,
+  "interiorTB": 12.8,
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+ },
+ "spanM": {
+  "u": 1.25,
+  "v": 1.25
+ },
+ "output": {
+  "url": "assets/textures/skyways/arch/skyways-arch-pavers.jpg",
+  "bytes": 177666,
+  "sha256": "ddb82a28af1eb8ea63153fad1f8b50827cde232ffea76531dd177db23387c679",
+  "width": 1024,
+  "height": 1024,
+  "format": "jpeg"
+ }
+}

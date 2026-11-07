@@ -392,6 +392,43 @@ family's base-use purpose. The NEW kinds (`kindsShopsB.ts`: lane KITS' measured 
 - Tests: `tests/skyways-dest-shops-b.test.ts` (both audits, measured footprints, signature pieces per family on real seeds, the screen on
   the far wall with the rows facing it, support / containment / overlaps, lanes to every door, base-use loot, determinism).
 
+### Skyways local directory boards (task studio-skyways-rework-20261107-054512-01, lane MAPS)
+One NEW kind, `skywaysMapBoard` (`gen/skyways/mapBoardKind.ts`): a round freestanding directory on a pedestal — a 0.95 m printed face
+tilted 25° back in a steel ring rim on a shallow drum, one column on a round base plate. Procedural geometry in the existing shape
+materials (no model, no generation); the face is a code-drawn plan of the generated network (`world/skywaysMapBoards.ts`, data from
+`world/skywaysMapPlan.ts`: a per-layout runtime-composited data texture). Placed by `gen/skyways/mapBoards.ts` (layout version 3 only)
+at the station concourse by the transit stair, in every building-storey's hub and at bridge landings, on flat public floor clear of
+doors, run mouths, walking lanes / plazas, landmark discs, bridge lanes and shop / anchor fronts, with a 1.2 m reading strip in front.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of its runtime geometry beside `lastshift`) |
+|---|---|---|---|
+| `skywaysMapBoard` | `none` (`equipment`): a sealed sign — the plan behind a screwed acrylic face in a welded drum, no door, lid or drawer | static `anchored` (~90 kg pedestal bolted through its base plate) | 1.00 × 1.35 × 0.53 m; grounded on the base plate (span 0.52 × 0.52 m); face centre 0.88 m, rim 0.42–1.35 m |
+
+- No baked loose clutter (nothing loose is part of it); damage: steel, marks only (never breaks).
+- E at a board's face opens a close-up of the same face (`world/skywaysMapRead.ts`); the face never prints fuel, gameplay hints or
+  travel information.
+- Tests: `tests/skyways-map-boards.test.ts` (both audits, the shape inside its box, placement and clearances on real seeds, the plan
+  against the layout, YOU ARE HERE, storey highlighting, forbidden words, the renderer's bounded meshes / textures, the close-up read).
+
+### Skyways planted galleries and courts (task studio-skyways-rework-20261107-054512-01, lane ARCH)
+`gen/skyways/gardens.ts` (layout version 3) lines every atrium opening's skyway-level gallery with planter troughs against the
+balustrade, and puts a few bench-planters in the large skyway courts and the atrium courts. Two NEW code-drawn kinds
+(`gen/skyways/destinations/kindsGardens.ts`, merged by `registry.ts`; drawn by `world/skywaysGardens.ts`): procedural bodies in the
+existing shape materials and the office's EXISTING potted-plant model's foliage (its bowl pot cut away by a local mesh separation, the
+foliage sunk into the soil bed). No new model or texture.
+
+| Kind | Openables audit | Physics audit | Scale check (`--prop` of the drawn kind beside `lastshift`) |
+|---|---|---|---|
+| `skyArchGalleryPlanter` | `none` (an open soil bed) | static `built-in`: a precast trough full of soil (~450 kg) against the balustrade | trough 1.50 × 0.52 × 0.46 m (soil 0.47 m); 2.01 × 1.19 × 1.19 m with its shrubs; grounded, 4 contact corners |
+| `skyArchBenchPlanter` | `none` (a raised soil bed) | static `built-in`: timber-clad raised bed with a slatted bench (tonnes of soil) | 2.60 × 0.46 × 1.30 m, seat 0.46 m (0.42 m deep); 2.70 × 1.03 × 1.42 m with its shrubs; grounded, 4 contact corners |
+
+- Placement: troughs only on open public gallery floor at the opening's edge (the rail stands there), never on a stair / escalator cell
+  or within its mouth, a level link's landing, a door's zone, a bridge lane, a storefront's opening strip or a landmark's clear disc,
+  and only where 2.5 m of walkway stays open behind them; bench-planters through the station placement kit with a 1.0 m walking ring.
+- No baked loose clutter: the shrubs are planting rooted in the soil (part of the fixture, nothing to take); no loose item sits in them.
+- Tests: `tests/skyways-arch-rework.test.ts` (both audits, troughs at the rails / on the floor / clear of stairs, doors and run mouths,
+  the walkway behind them, bench-planters on the floor, the foliage model requested only where a planter stands).
+
 ## 6. Player-train fixtures (not layout prop kinds)
 Task train-lockbox-windows-20261101-232156. The player train's parts are built by `world/playerTrain.ts`, not from `PROP_DEFS`, so
 they sit outside the two audits; their classification is recorded here.

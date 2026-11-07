@@ -95,6 +95,10 @@ export interface SkywaysBridge {
 /** A bridge's glazed roof (world/skywaysArch.ts draws it; the deck's area ceiling = apexY). */
 export interface SkywaysBridgeRoof { style: 'vault' | 'faceted' | 'gable' | 'flat'; springY: number; apexY: number; rib: number }
 
+/** (layout version 3, task studio-skyways-rework-20261107-054512-01, lane ARCH: gen/skyways/skylights.ts) a skylight coffer in a
+ *  skyway-level public court's ceiling: its rect (world m), the court's ceiling line and the well's glazed top (absolute y). */
+export interface SkywaysSkylight { level: number; area: number; rect: SkywaysRect; ceilY: number; topY: number }
+
 export interface SkywaysStreet {
   /** Road + sidewalks between two building rows (world m; street level). */
   rect: SkywaysRect;
@@ -277,4 +281,6 @@ export interface SkywaysInfo {
   /** (layout version 3) a tenant's office wing (open plan, meeting room, offices, break room), when the frame gave one. */
   officeWing?: SkywaysOfficeWing;
   landmarks?: SkywaysLandmark[];
+  /** (layout version 3, lane ARCH) The skylight coffers of the skyway-level courts (gen/skyways/skylights.ts). */
+  skylights?: SkywaysSkylight[];
 }

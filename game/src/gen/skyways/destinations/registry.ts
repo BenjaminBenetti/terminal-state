@@ -8,12 +8,13 @@ import type {DestKindSpec, DestOpen, DestPhys} from './kindTypes';
 import {LANDMARKS_KINDS, LANDMARKS_SPECS, type LandmarksKind} from './kindsLandmarks';
 import {SHOPS_A_KINDS, SHOPS_A_SPECS, type ShopsAKind} from './kindsShopsA';
 import {SHOPS_B_KINDS, SHOPS_B_SPECS, type ShopsBKind} from './kindsShopsB';
+import {GARDEN_KINDS, GARDEN_SPECS, type GardenKind} from './kindsGardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery / court planters
 
-export type SkywaysDestKind = LandmarksKind | ShopsAKind | ShopsBKind;
-export const SKYWAYS_DEST_KINDS: readonly SkywaysDestKind[] = [...LANDMARKS_KINDS, ...SHOPS_A_KINDS, ...SHOPS_B_KINDS];
+export type SkywaysDestKind = LandmarksKind | ShopsAKind | ShopsBKind | GardenKind; // (+ GardenKind: lane ARCH)
+export const SKYWAYS_DEST_KINDS: readonly SkywaysDestKind[] = [...LANDMARKS_KINDS, ...SHOPS_A_KINDS, ...SHOPS_B_KINDS, ...GARDEN_KINDS]; // (+ lane ARCH)
 const KIND_SET: ReadonlySet<string> = new Set(SKYWAYS_DEST_KINDS);
 export const isSkywaysDestKind = (k: string): k is SkywaysDestKind => KIND_SET.has(k);
-export const SKYWAYS_DEST_SPECS: Readonly<Record<SkywaysDestKind, DestKindSpec>> = {...LANDMARKS_SPECS, ...SHOPS_A_SPECS, ...SHOPS_B_SPECS};
+export const SKYWAYS_DEST_SPECS: Readonly<Record<SkywaysDestKind, DestKindSpec>> = {...LANDMARKS_SPECS, ...SHOPS_A_SPECS, ...SHOPS_B_SPECS, ...GARDEN_SPECS}; // (+ lane ARCH)
 const SPEC = SKYWAYS_DEST_SPECS as Readonly<Record<string, DestKindSpec>>;
 
 const map = <T>(f: (s: DestKindSpec) => T): Record<SkywaysDestKind, T> => Object.fromEntries(SKYWAYS_DEST_KINDS.map(k => [k, f(SPEC[k])])) as Record<SkywaysDestKind, T>;

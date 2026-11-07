@@ -121,7 +121,40 @@ Every kit model is a Codex concept turned into a Meshy T2.5 model with its PBR m
 - A station records the generator version it was first built with (lane `skyways.layout`).
 - A station a player entered under GAME76 (memory with visits, no record) keeps regenerating that exact layout (version 1, pinned by
   fingerprints in `tests/skyways-dest-layout-version.test.ts`), so its saved holders, pickups, kills and car stay consistent.
-- Every station not yet entered (in an old campaign too) gets version 2, the destinations.
+- Every station not yet entered in GAME77 got version 2, the destinations.
+- **Version 3, the rework** (task studio-skyways-rework-20261107-054512-01) is what every station not yet entered gets now, in new
+  and existing campaigns.
+- Versions 1 and 2 regenerate through a FROZEN snapshot of the GAME77 generator (`gen/skyways/legacy77/`). The test pins both
+  versions' fingerprints (GAME76 and GAME77), so a station a player already entered keeps its holders, pickups, kills and add-on.
+- Never edit the snapshot. Never rename or resize a prop kind it places; add a new kind instead.
+- Fixes that change no layout data reach every version: the stairs, the store and court finishes, the clock, the signs.
+
+## The rework (layout version 3)
+
+- **Open architecture:**
+  - glazed ATRIA on most buildings (at least two per map): court atria, or a long GALLERIA atrium (a wider spine with walkways along
+    both sides of its opening);
+  - every bridge has a glazed roof record (`bridges[].roof`: faceted, vaulted, gable or ribbed flat), with the deck's ceiling at its
+    apex and the side glazing up to the springing line.
+- **The add-on always takes its host's bridge level:**
+  - `convention` is a VENUE: the host's whole skyway floor (`addon.venue` by role):
+    - registration (the corridors in from the bridges);
+    - the exhibitors' floor (the host's skyway court);
+    - the main stage hall with backstage, storage and washrooms;
+    - two panel rooms and a photo lounge;
+    - the street level below stays the building's ordinary lobby.
+  - `prize-car` is a public PRIZE DISPLAY in the host's skyway court (`addon.display`; no add-on rooms), with the stanchion ring, the
+    turntable and the prize board (`gen/skyways/addonPrizeDisplay.ts`).
+- **Tenant OFFICE WING (about one map in five):** an open-plan office off a lobby, with a meeting room, private offices and a break
+  room, furnished with the office floor's own kit (`gen/skyways/officeWing.ts`) and finishes.
+- **Anchor stores' own finishes:** `gen/skyways/destinations/anchorStyles.ts` (world/skywaysArch.ts class 'anchor').
+- **Stairs:**
+  - every Skyways flight is an OPEN well: its band, rays and drawn ceiling rise to the well's ceiling (`Ramp.capCeil`), never a 2.5 m
+    soffit with a fascia hanging over the stair foot;
+  - escalator lanes are drawn as stopped escalators, whose glass balustrades carry the seam rails;
+  - two fixed stair lanes side by side form one wide stair, with no seam rail.
+  - Evidence: `tests/skyways-stairs.test.ts`, using a real player.
+- **The clock court's tick:** half its old level, heard within 8 m. The chime strikes only within that range.
 
 ## The add-on (exactly one)
 

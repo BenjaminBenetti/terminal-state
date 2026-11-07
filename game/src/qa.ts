@@ -37,6 +37,7 @@ import {reactorRestartQaApi} from './world/reactor/restartQa'; // task reactor-b
 import {trainQaApi} from './world/playerTrain'; // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights()
 import {rideQaApi} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?), rideReset()
 import {lockboxQaApi} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxType('1337'), lockboxQuick / Move / Stow / Close
+import {trunkQaApi} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick / Move / Stow
 import {floorPlanPose, roofLadderPose, roofRewardPose, transitPose} from './gen/office'; // Task office-overhaul-20261030 (lane STRUCT) / office-interactions-layout-20261030: roof ladder / transit / roof cache / floor-plan poses
 import {mallShopPose} from './gen/mall/shopsWeapons'; // Task track3-eaton-centre-20261031 (primary): goShop
 import {MALL_POSE_NAMES, mallQaPose, type MallPoseName} from './gen/mall/qa'; // Task track3-eaton-centre-20261031 (lane GEN): mall QA poses
@@ -386,6 +387,7 @@ export function installQaHooks(game: Game): void {
     ...trainQaApi(game), // Task player-train-shell-20261101-202805 (lane TRAIN): train(), trainDoor(i, open), trainFaceDoor(i?), trainLights(); train-shell-followup: trainGo('cab' | 'rear' | 'spawn'); train-lockbox: trainGo('lockbox')
     ...rideQaApi(game), // task campaign-foundation-20261102 (lane RIDE): ride(), rideDepart(), rideArrive(), rideDemo(seconds?) (dev: depart + loop + re-arrive at the same station), rideReset()
     ...lockboxQaApi(game), // task train-lockbox-windows-20261101-232156 (lane BOX): lockbox(), lockboxOpen(), lockboxClose(), lockboxType(keys), lockboxQuick(spec), lockboxMove(from, to, n?), lockboxStow()
+    ...trunkQaApi(game), // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): trunk(), trunkOpen(), trunkClose(), trunkQuick(spec), trunkMove(from, to, n?), trunkStow()
     // Task office-overhaul-20261030 (lane STRUCT): stand at the roof access ladder (then the game's own "[E] Climb ladder") or on a transit-hall lane (0 / 2 escalators, 1 stair)
     goRoofLadder: (end: 'bottom' | 'top' = 'bottom') => {
       const q = roofLadderPose(game.layout, end);

@@ -36,7 +36,7 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent';
 import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
-import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
+import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
@@ -45,6 +45,9 @@ import {dressSkywaysOfficeWing} from './officeWing';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
+import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
+import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
+import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -177,6 +180,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
   dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
+  placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
+  dressSkywaysGardens(layout, rng.fork('skyways-gardens')); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) planted galleries + court bench-planters
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -190,6 +195,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // --- Lighting, daylight, traversal ------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   addSkywaysDaylight(layout);
+  skywaysSkylights(layout); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) skylight coffers + their daylight (before dropFloatingFixtures)
   finishTraversal(layout);
   dropFloatingFixtures(layout);
 
@@ -353,10 +359,12 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     for (let y = r.y - oy - pad; y < r.y - oy + r.h + pad; y++) for (let x = r.x - ox - pad; x < r.x - ox + r.w + pad; x++) if (g.inBounds(x, y)) cells.push(g.idx(x, y));
     out.push({level, cells});
   };
+  // (layout version 3) the run-outs: RUN_OUT cells straight beyond both ends (a car lines up with the flight), 4 before
+  const M = RUN_OUT;
   for (const rc of sc.runs) {
     const r = rc.rect;
-    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - 4, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - 4, w: r.w, h: 4};
-    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - 4 : r.x + r.w, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - 4 : r.y + r.h, w: r.w, h: 4};
+    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - M, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - M, w: r.w, h: M};
+    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - M : r.x + r.w, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - M : r.y + r.h, w: r.w, h: M};
     add(rc.lower, mouthLo); add(rc.lower + 1, mouthHi);
   }
   for (const b of sc.bridges) {

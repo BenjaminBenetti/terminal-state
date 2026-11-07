@@ -65,8 +65,8 @@ export const CUES = [
   // refused for fuel), the jerrycan pour at the fuel cap, the fuel cart's rolling loop.
   'engineStall', 'fuelPour', 'cartRoll',
   // Task studio-skyways-level-20261106-054448-01 (tools/audio-pipeline/skyways-car-build.mjs): the prize car's engine idle / drive loops,
-  // its tyre skid and its door.
-  'carIdle', 'carDrive', 'carSkid', 'carDoor',
+  // its tyre skid and its door; (round 2, task skyways-vehicle-20261107, lane AUDIO) its engine start, reverse-gear whine loop, brake stop.
+  'carIdle', 'carDrive', 'carStart', 'carReverse', 'carBrake', 'carSkid', 'carDoor',
   // Task studio-skyways-destinations-20261106-170011-01 (lane AUDIO, tools/audio-pipeline/skyways-destinations-build.mjs): the location
   // sounds — the Clock Court's tick loop and bell chime, the Starfall Arcade's attract loop, the Aurora Picture House's projector loop.
   'clockTick', 'clockChime', 'arcadeAttract', 'projectorRun',
