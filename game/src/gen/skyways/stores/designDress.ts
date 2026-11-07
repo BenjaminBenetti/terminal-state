@@ -89,9 +89,11 @@ export function dressDesignStore(layout: StationLayout, rng: Rng, anchor: Skyway
   const desk = designDesk(C);
   kit.reserveLanes();
   const L = kit.level, U = kit.other;
-  // the entrance storey: the textiles band by the door, the kitchen, the living / dining (and in a hall: bedroom, lighting) vignettes
+  // the entrance storey: the kitchen (it needs ~4 m of free wall: first), the textiles band by the door, the living / dining (and in a
+  // hall: bedroom, lighting) vignettes
+  const kitchenHere = kitchen(C, L);
+  if (!kitchenHere && U === null) kit.skipped.push('kitchen display');
   textileTables(C, L, rng.int(2, 3), [2.4, Math.max(4.2, Math.min(6.5, kit.fr.D * 0.32))]);
-  if (!kitchen(C, L)) kit.skipped.push('kitchen display');
   // (the wall-backed sets before the island ones: the lighting row needs ~4 m of free wall)
   const firsts: [string, (c: Ctx, l: number) => boolean][] = U === null
     ? [['living room', livingSet], ['bedroom', bedroomSet], ['lighting gallery', lighting], ['dining set', diningSet]]
@@ -104,6 +106,8 @@ export function dressDesignStore(layout: StationLayout, rng: Rng, anchor: Skyway
   kit.posters(3);
   // the other storey of a two-level shop: the bedroom + lighting showroom (bedding tables, bedrooms, the lighting gallery, a nook)
   if (U !== null) {
+    // (no wall on the sales floor took the kitchen display: it moves up / down)
+    if (!kitchenHere && !kitchen(C, U)) kit.skipped.push('kitchen display');
     textileTables(C, U, rng.int(1, 2), [1.6, kit.fr.D - 1.6]);
     for (let i = 0, n = rng.int(2, 3); i < n; i++) if (!bedroomSet(C, U) && i === 0) kit.skipped.push('bedroom on the other storey');
     if (!lighting(C, U)) kit.skipped.push('lighting gallery (other storey)');
@@ -352,48 +356,61 @@ function textileTables(C: Ctx, level: number, n: number, v: [number, number], fi
 
 // --- the kitchen display -----------------------------------------------------------------------------------------------------------
 
-/** A run of kitchenettes along a wall (the back wall / a flank first), an island table with stools in front, tea towels on it. */
+/**
+ * A run of kitchenettes along a wall (the back wall / a flank first, then any wall), an island table with stools in front and tea towels
+ * on it. Pass 1 wants the run AND its island (the island a little deeper or slid along the run where a lane runs in front); pass 2 takes
+ * the run alone where no island fits (narrow floors / lanes along every wall: recorded in `skipped`).
+ */
 function kitchen(C: Ctx, level: number): boolean {
-  const {kit} = C, k = PROP_DEFS.kitchenette, mt = PROP_DEFS.merchTable, ch = PROP_DEFS.cafeChair, fr = kit.fr;
+  const {kit} = C, fr = kit.fr;
   const flanks = (['N', 'S', 'E', 'W'] as Side[]).filter(s => s !== fr.front && s !== fr.back);
-  const spots = [...wallAnchors(kit, 'kitchenette', level, 0, [fr.back]), ...wallAnchors(kit, 'kitchenette', level, 0, flanks)].slice(0, 60);
-  const pitch = designPitch(k.w);
-  for (const units of [kit.rng.int(2, 3), 2]) for (const sp of spots) {
-    const got: PropPlacement[] = [];
-    const t0 = snapRun(sp.t, k.w);
-    const ok = kit.cluster(() => {
-      for (let i = 0; i < units; i++) {
-        const t = t0 + i * pitch;
-        if (!kit.solidWall(sp.a, sp.side, t, 'kitchenette', level)) return false;
-        const at = wallSpot(sp.a, sp.side, t, 'kitchenette');
-        const p = kit.put('kitchenette', at.x, at.z, at.rot, {level, area: sp.a, front: 0.9});
-        if (!p) return false;
-        got.push(p);
-      }
-      // the island across the aisle (its back past the run's reserved front strip), stools on its far side facing it
-      const first = got[0], last = got[got.length - 1], mid = {x: (first.x + last.x) / 2, z: (first.z + last.z) / 2, rot: first.rot};
-      let island: PropPlacement | null = null;
-      for (const depth of [2.0, 2.5]) {
-        const lz = depth - (0.03 + k.d / 2) + mt.d / 2;
-        island = putFirst(kit, 'merchTable', mid, [[0, lz]], mid.rot, level);
-        if (island) break;
-      }
-      if (!island) return false;
-      got.push(island);
-      const stools = units >= 3 ? [-0.55, 0, 0.55] : [-0.45, 0.45];
-      for (const sx of stools) {
-        const p = putFirst(kit, 'cafeChair', island, [[sx, mt.d / 2 + 0.1 + ch.d / 2], [sx, mt.d / 2 + 0.3 + ch.d / 2]], normYaw(island.rot + Math.PI), level);
-        if (p) got.push(p);
-      }
+  const spots = [...wallAnchors(kit, 'kitchenette', level, 0, [fr.back]), ...wallAnchors(kit, 'kitchenette', level, 0, flanks)].slice(0, 70);
+  const any = wallAnchors(kit, 'kitchenette', level).slice(0, 40);
+  for (const [island, list] of [[true, spots], [true, any], [false, [...spots, ...any]]] as const) {
+    for (const units of [kit.rng.int(2, 3), 2]) for (const sp of list) {
+      const got = kitchenRun(C, level, sp, units, island);
+      if (!got) continue;
+      if (!island) kit.skipped.push(`kitchen island (level ${level}: no free floor in front of the run)`);
+      done(C, 'kitchen', level, got, null, 0.5);
       return true;
-    }, level);
-    if (!ok) continue;
-    const island = got.find(p => p.kind === 'merchTable')!;
-    textilesOn(kit, island, mt.h, 0.5, 0, towelVariant(kit));
-    done(C, 'kitchen', level, got, null, 0.5);
-    return true;
+    }
   }
   return false;
+}
+
+/** One kitchen run at a wall spot (+ its island when `island`): the placed props, or null (rolled back). */
+function kitchenRun(C: Ctx, level: number, sp: {a: Area; side: Side; t: number}, units: number, island: boolean): PropPlacement[] | null {
+  const {kit} = C, k = PROP_DEFS.kitchenette, mt = PROP_DEFS.merchTable, ch = PROP_DEFS.cafeChair, pitch = designPitch(k.w);
+  const got: PropPlacement[] = [];
+  const t0 = snapRun(sp.t, k.w);
+  const ok = kit.cluster(() => {
+    for (let i = 0; i < units; i++) {
+      const t = t0 + i * pitch;
+      if (!kit.solidWall(sp.a, sp.side, t, 'kitchenette', level)) return false;
+      const at = wallSpot(sp.a, sp.side, t, 'kitchenette');
+      const p = kit.put('kitchenette', at.x, at.z, at.rot, {level, area: sp.a, front: 0.9});
+      if (!p) return false;
+      got.push(p);
+    }
+    if (!island) return true;
+    // the island across the aisle (its back past the run's reserved front strip), stools on its far side facing it
+    const first = got[0], last = got[got.length - 1], mid = {x: (first.x + last.x) / 2, z: (first.z + last.z) / 2, rot: first.rot};
+    const cands: [number, number][] = [];
+    for (const depth of [2.0, 2.5, 3.0]) for (const dx of [0, -0.5, 0.5, -1.0, 1.0]) cands.push([dx, depth - (0.03 + k.d / 2) + mt.d / 2]);
+    const isl = putFirst(kit, 'merchTable', mid, cands, mid.rot, level);
+    if (!isl) return false;
+    got.push(isl);
+    const stools = units >= 3 ? [-0.55, 0, 0.55] : [-0.45, 0.45];
+    for (const sx of stools) {
+      const p = putFirst(kit, 'cafeChair', isl, [[sx, mt.d / 2 + 0.1 + ch.d / 2], [sx, mt.d / 2 + 0.3 + ch.d / 2]], normYaw(isl.rot + Math.PI), level);
+      if (p) got.push(p);
+    }
+    return true;
+  }, level);
+  if (!ok) return null;
+  const isl = got.find(p => p.kind === 'merchTable');
+  if (isl) textilesOn(kit, isl, mt.h, 0.5, 0, towelVariant(kit));
+  return got;
 }
 
 // --- room vignettes ------------------------------------------------------------------------------------------------------------------
