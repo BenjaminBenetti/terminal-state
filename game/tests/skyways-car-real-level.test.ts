@@ -1,15 +1,16 @@
 // Task studio-skyways-level-20261106-054448 (lane CAR): the prize car's controller on a REAL generated multi-storey level (until the Skyways
 // generator lands: the Mall — galleries round an open atrium behind generator railings, escalator / stair ramps, shopfronts, columns,
 // props). From several admissible parked poses on different storeys the car is driven with a busy deterministic pattern (throttle,
-// steering swings, reverse, handbrake) and every frame it must hold the controller's invariants: the footprint on its own storey's
-// floor (never a ramp, never over the atrium / an edge), the storey unchanged, never inside a wall / rail / prop (a settled pose).
+// steering swings, reverse, handbrake) and every frame it must hold the controller's invariants: the footprint on its floor (never over
+// the atrium / an edge), never inside a wall / rail / prop (a settled pose), the storey / height unchanged unless it is on a flight (task
+// skyways-vehicle-20261107: the car takes stair ramps now — tests/skyways-car-stairs.test.ts).
 import {describe, expect, it} from 'vitest';
 import {generateMallLevel} from '../src/gen/mall/index';
 import {levelsOf} from '../src/gen/levels';
 import {CELL} from '../src/gen/grid';
 import {PropIndex} from '../src/core/physics';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {CAR_PHYS, NO_CONTROLS, footprintFloor, settlePose, stepCar, type CarBody, type CarControls} from '../src/world/skywaysCarPhysics';
+import {CAR_PHYS, NO_CONTROLS, carPose, footprintFloor, settlePose, stepCar, type CarBody, type CarControls} from '../src/world/skywaysCarPhysics';
 import {CAR_SPEC} from '../src/world/skywaysCarSpec';
 
 const DT = 1 / 60;
@@ -22,7 +23,7 @@ describe('skyways car on a real level (the Mall)', () => {
   const w = {levels, props};
   const settled = (b: CarBody) => {
     const o = {x: 0, z: 0, sx: 0, sz: 0, circle: -1};
-    return settlePose(w, G, b.x, b.z, b.yaw, b.y, o) && Math.hypot(o.sx, o.sz) < 0.01;
+    return settlePose(w, G, b.x, b.z, b.yaw, b.y, o, b.pitch ?? 0) && Math.hypot(o.sx, o.sz) < 0.01;
   };
 
   /** Admissible parked poses: spread over the grid, one storey at a time (every 7th cell, both axes' headings). */
@@ -52,6 +53,7 @@ describe('skyways car on a real level (the Mall)', () => {
     let driven = 0, blocked = 0;
     for (const [k, b] of start.entries()) {
       const level = b.level, y0 = b.y;
+      let flight = false;
       const ctl: CarControls = {...NO_CONTROLS};
       for (let f = 0; f < 6 / DT; f++) {
         const t = f * DT, phase = Math.floor(t / 0.7) + k;
@@ -63,9 +65,13 @@ describe('skyways car on a real level (the Mall)', () => {
         const r = stepCar(b, w, G, ctl, DT);
         driven += r.moved;
         if (r.blocked) blocked++;
-        expect(b.level).toBe(level);
-        expect(Math.abs(b.y - y0)).toBeLessThanOrEqual(CAR_PHYS.floorTol + 1e-6);
-        expect(footprintFloor(levels, b.x, b.z, b.yaw, b.y, b.level, G), `pose ${k} frame ${f}`).not.toBeNull();
+        if (Math.abs(b.pitch ?? 0) > 1e-6) flight = true;
+        if (!flight) { // (off any flight: its own storey's floor, as before)
+          expect(b.level).toBe(level);
+          expect(Math.abs(b.y - y0)).toBeLessThanOrEqual(CAR_PHYS.floorTol + 1e-6);
+          expect(footprintFloor(levels, b.x, b.z, b.yaw, b.y, b.level, G), `pose ${k} frame ${f}`).not.toBeNull();
+        }
+        expect(carPose(levels, b.x, b.z, b.yaw, b.y, b.pitch ?? 0, b.level, G), `pose ${k} frame ${f}`).not.toBeNull();
         expect(settled(b), `pose ${k} frame ${f}`).toBe(true);
         expect(Number.isFinite(b.x) && Number.isFinite(b.z) && Number.isFinite(b.v)).toBe(true);
       }
