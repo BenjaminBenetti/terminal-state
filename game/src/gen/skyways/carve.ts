@@ -30,14 +30,14 @@
 //  8. the ramen restaurant; 9. storefront units (the food court's counters), washrooms, back of house, the pedways' kiosks;
 //  10. the glazing records (bridge sides, entrance halls, lookouts, the add-on hall's facade: SkywaysWindow spans in solid wall runs).
 
-import type {Rng} from '../../core/rng';
+import {Rng, hashString} from '../../core/rng';
 import {CELL, FLOOR, SOLID, VOID} from '../grid';
 import {Kit, type TrackBlock} from '../stationKit';
 import {layStairRun, transitSpecs, type StairFlight, type StairSpec} from '../traversal';
 import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type RunLanes, type SkywaysFrame} from './frame';
-import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysLandmarkFamily, SkywaysPlan, SkywaysShopFamily} from './skywaysTypes';
+import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysPlan, SkywaysShopFamily} from './skywaysTypes';
 import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
 
@@ -49,6 +49,8 @@ export const RUN = transitSpecs(STOREY);
 /** Cells of a stair run (pitch + top landing) for one storey. */
 export const RUN_CELLS = RUN.cells;
 const LANE_W = {escalator: 3, stair: 5} as const;
+/** Open stair wells' ramp headroom (capped by the well's ceiling: Ramp.capCeil). */
+const RUN_OPEN_HEADROOM = 40;
 const lanesW = (l: RunLanes) => l.reduce((q, k) => q + LANE_W[k], 0);
 
 export interface RunLaneCarve { kind: 'escalator' | 'stair'; rect: CellRect; flights: number[] }
@@ -67,7 +69,17 @@ export interface RunCarve {
   building: string;
 }
 
-export interface BridgeCarve { id: string; a: string; b: string; axis: 'x' | 'z'; rect: CellRect; area: number; breached: boolean; width: number }
+export interface BridgeCarve { id: string; a: string; b: string; axis: 'x' | 'z'; rect: CellRect; area: number; breached: boolean; width: number; roof?: SkywaysBridgeRoof }
+
+/** (task studio-skyways-rework-20261107-054512-01) a bridge's glazed roof: its own stream per bridge (no other roll moves), the cross-
+ *  section weighted toward the faceted / vaulted glass tubes of the reference, heights (absolute) from the deck width (m). */
+export function bridgeRoofOf(seed: number, id: string, widthM: number): SkywaysBridgeRoof {
+  const r = new Rng(hashString(`skyways:bridge-roof:${id}`, seed >>> 0));
+  const style = r.weighted([['faceted', 0.35], ['vault', 0.3], ['gable', 0.2], ['flat', 0.15]] as const);
+  const spring = style === 'flat' ? 3.4 : style === 'gable' ? 2.8 : style === 'vault' ? 2.7 : 2.4;
+  const rise = style === 'flat' ? 0.25 : style === 'gable' ? Math.min(widthM * 0.35, 1.8) : style === 'vault' ? Math.min(widthM / 2, 2.4) : Math.min(widthM * 0.45, 2.6);
+  return {style, springY: r2(BASES[2] + spring), apexY: r2(BASES[2] + spring + rise), rib: style === 'flat' ? 2.4 : 1.8};
+}
 
 export interface WindowCarve {
   /** Wall cells (canvas) of the span and its outward side. */
@@ -386,7 +398,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       const cb = corridorTo(E0, 2, sb, lat, width, `Skyway concourse · ${bName(E0.b)}`, 'mall', made);
       if (!cb) { undo(); why = `corridor-${E0.b.id}`; continue; }
       const wide = width >= 15;
-      const dk = k.addArea(deck, 'passage', 'passage', ceilOf(2, CLEAR.bridge + (wide ? 0.4 : 0)), -1, {...opt(2), label: `${wide ? 'Skyway gallery bridge' : 'Skyway bridge'} · ${bName(W0.b)} – ${bName(E0.b)}`, publicSpace: true, role: 'crossover'});
+      // (layout version 3) a glazed roof over the deck: the deck's ceiling is its apex
+      const roof = legacy ? undefined : bridgeRoofOf(f.seed, e.id, width * CELL);
+      const dk = k.addArea(deck, 'passage', 'passage', roof ? roof.apexY : ceilOf(2, CLEAR.bridge + (wide ? 0.4 : 0)), -1, {...opt(2), label: `${wide ? 'Skyway gallery bridge' : 'Skyway bridge'} · ${bName(W0.b)} – ${bName(E0.b)}`, publicSpace: true, role: 'crossover'});
       // wide openings through both facade walls (the full width less a pier each side)
       const ga: CellRect = e.axis === 'x' ? {x: W0.b.x + W0.b.w - 1, y: lat + 1, w: 1, h: width - 2} : {x: lat + 1, y: W0.b.y + W0.b.h - 1, w: width - 2, h: 1};
       const gb: CellRect = e.axis === 'x' ? {x: E0.b.x, y: lat + 1, w: 1, h: width - 2} : {x: lat + 1, y: E0.b.y, w: width - 2, h: 1};
@@ -394,7 +408,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       k.carveDoor(gb, dk, cb, CLEAR.wide, false);
       for (const a of made) addPublic(carves.get(a.label.endsWith(bName(W0.b)) ? W0.b.id : E0.b.id)!, 2, a.id);
       for (const m of pendingMouths) m.bc.mouths.push(m.rect);
-      done = {id: e.id, a: e.a, b: e.b, axis: e.axis, rect: deck, area: dk.id, breached: e.breached, width};
+      done = {id: e.id, a: e.a, b: e.b, axis: e.axis, rect: deck, area: dk.id, breached: e.breached, width, ...(roof ? {roof} : {})};
       break;
     }
     if (!done) return fail(`bridge-${e.id}-${why}-${cands.length}`);
@@ -405,7 +419,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       for (const [t0, t1] of spans(1, along - 1, 16)) {
         const strip = e.axis === 'x' ? {x: done.rect.x + t0, y: s === 'N' ? done.rect.y - 1 : done.rect.y + done.rect.h, w: t1 - t0, h: 1}
           : {x: s === 'W' ? done.rect.x - 1 : done.rect.x + done.rect.w, y: done.rect.y + t0, w: 1, h: t1 - t0};
-        windows.push({rect: strip, side: s, level: 2, sill: 0.45, head: 3.1, kind: 'window', host: {bridge: e.id}, ...(e.breached ? {breached: true} : {})});
+        // (layout version 3: the side glazing runs up to the roof's springing line)
+        const head = done.roof ? r2(done.roof.springY - BASES[2] - 0.05) : 3.1;
+        windows.push({rect: strip, side: s, level: 2, sill: 0.45, head, kind: 'window', host: {bridge: e.id}, ...(e.breached ? {breached: true} : {})});
       }
     }
   }
@@ -1663,14 +1679,16 @@ function carveRun(k: Kit, id: string, building: string, lower: number, rect: Cel
   const area = k.addArea(rect, 'passage', 'stair-core', ceil, -1, {...(lower ? {level: lower, floorY: BASES[lower]} : {}), also: [hi], role: 'stair', publicSpace: true, label});
   const out: RunLaneCarve[] = [];
   let off = 0;
-  const spec = (kind: 'escalator' | 'stair'): StairSpec => (kind === 'escalator' ? RUN.escalator : RUN.stair);
+  // (task studio-skyways-rework-20261107-054512-01, user bug: a low bulkhead hung over the stair approach) an OPEN well: the flights'
+  // band rises to the well's ceiling (capCeil: capped by ceil[i] below), never a 2.5 m soffit following the flight
+  const spec = (kind: 'escalator' | 'stair'): StairSpec => ({...(kind === 'escalator' ? RUN.escalator : RUN.stair), headroom: RUN_OPEN_HEADROOM});
   for (const kind of lanes) {
     const w = LANE_W[kind];
     const r: CellRect = axis === 'x' ? {x: rect.x, y: rect.y + off, w: rect.w, h: w} : {x: rect.x + off, y: rect.y, w, h: rect.h};
     off += w;
     const fl: StairFlight[] = layStairRun([k.grid(lower), k.grid(hi)], r, area.id, axis, from, BASES[hi], BASES[lower], spec(kind));
     const ids: number[] = [];
-    for (const q of fl) { q.id = k.flights.length; q.spec = kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); }
+    for (const q of fl) { q.id = k.flights.length; q.spec = kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); k.grid(lower).ramps[q.ramp].capCeil = true; }
     out.push({kind, rect: r, flights: ids});
   }
   // an open well: both storeys' bands rise to the upper storey's ceiling over the whole run
