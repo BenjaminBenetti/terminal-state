@@ -88,12 +88,13 @@ export function dressGarden(layout: StationLayout, rng: Rng, anchor: SkywaysAnch
   planters(kit);
   const benches = benchField(kit);
   potBenches(kit, benches);
+  if (benches.length < 2) standIslands(kit, 3 - benches.length);
   floorExtras(kit);
   if (!anchor.stock.length) staffCorner(kit, cash);
   if (kit.posters(2).length < 1) kit.skipped.push('posters');
   kit.lift();
   // --- absolute heights from here: wall mounts, the hung rails and their baskets, the back rooms ---
-  pegboards(kit, tools);
+  pegboards(kit, tools, cash?.wall === 'L' ? 'R' : 'L');
   if (cash) tillFirstAid(kit, cash);
   const rails = basketRails(kit, benches);
   backRooms(kit);
@@ -317,6 +318,12 @@ function planters(kit: AnchorKit): void {
     for (let t = 1.0; t <= fr.W - 1.0; t += 0.5) spots.push([t, fr.D - 0.9]);
     for (const [u, v] of rng.shuffle(spots)) { if (n >= 2) break; if (putUV(kit, tall(), u, v, anyYaw(kit), {ring: 0.3})) n++; }
   }
+  // (walls all taken: a planter out on the floor, a walkway round it)
+  if (n < 2) {
+    const spots: [number, number][] = [];
+    for (let u = 1.5; u <= fr.W - 1.5; u += 0.5) for (let v = 2.0; v <= fr.D - 1.5; v += 0.5) spots.push([u, v]);
+    for (const [u, v] of rng.shuffle(spots)) { if (n >= 2) break; if (putUV(kit, tall(), u, v, anyYaw(kit), {ring: 0.6})) n++; }
+  }
   if (n < 2) kit.skipped.push('planters');
 }
 
@@ -375,6 +382,18 @@ function potBenches(kit: AnchorKit, benches: readonly PropPlacement[]): void {
   }
 }
 
+/** A floor too cut up for bench runs (an L round an inset back room): tiered flower stands as islands instead, a walkway round each. */
+function standIslands(kit: AnchorKit, n: number): void {
+  const fr = kit.fr, spots: [number, number][] = [];
+  for (let u = 1.4; u <= fr.W - 1.4; u += 0.5) for (let v = 2.2; v <= fr.D - 1.6; v += 0.5) spots.push([u, v]);
+  let got = 0;
+  for (const [u, v] of kit.rng.shuffle(spots)) {
+    if (got >= n) break;
+    if (putUV(kit, 'flowerStand', u, v, kit.rng.pick([fr.toFront, fr.plusU, fr.minusU]), {ring: 0.5})) got++;
+  }
+  if (!got) kit.skipped.push('stand islands');
+}
+
 /** The wheelbarrow and small potted plants on the floor (loose, movable). */
 function floorExtras(kit: AnchorKit): void {
   const fr = kit.fr, rng = kit.rng;
@@ -418,16 +437,24 @@ function mountAt(kit: AnchorKit, kind: PropKind, w: FWall, t: number, y: number)
   return p;
 }
 
-/** A tool pegboard above each potting bench (1.15 m: clear of the worktop's pots). */
-function pegboards(kit: AnchorKit, benches: readonly PropPlacement[]): void {
-  const fr = kit.fr;
+/**
+ * The garden-tool wall: a tool pegboard above each potting bench (1.15 m: clear of the worktop's pots), then more along the tool wall
+ * wherever its wall is free at that height (over the tool chest, the step ladder or bare wall) — up to four boards in all.
+ */
+function pegboards(kit: AnchorKit, benches: readonly PropPlacement[], toolWall: 'L' | 'R'): void {
+  const fr = kit.fr, placed: number[] = [];
   let n = 0;
   for (const b of benches) {
     const [u, v] = uvOf(kit, b), back = Math.abs(normYaw(b.rot - fr.toFront)) < 0.1;
     const w: FWall = back ? 'B' : u < fr.W / 2 ? 'L' : 'R';
-    if (mountAt(kit, 'toolPegboard', w, back ? u : v, 1.15)) n++;
+    if (mountAt(kit, 'toolPegboard', w, back ? u : v, 1.15)) { n++; if (w === toolWall) placed.push(v); }
   }
-  if (benches.length && !n) kit.skipped.push('pegboards');
+  const bw = PROP_DEFS.toolPegboard.w;
+  for (let t = 1.4 + bw / 2; t <= fr.D - 1.0 - bw / 2 && n < 4; t += 0.5) {
+    if (placed.some(q => Math.abs(q - t) < bw + 0.15)) continue;
+    if (mountAt(kit, 'toolPegboard', toolWall, t, 1.15)) { n++; placed.push(t); }
+  }
+  if (!n) kit.skipped.push('pegboards');
 }
 
 /**
@@ -504,6 +531,42 @@ function backMount(ctx: PlaceCtx, a: Area, kind: PropKind, base: number, y: numb
   return null;
 }
 
+/** The potting shed's tool lockers (any one of them). */
+const TOOL_LOCKERS: readonly PropKind[] = ['cabinetTall', 'staffLockers', 'rollingToolChest'];
+
+/**
+ * Turns one wall shelving unit of back room `id` (a station stockShelf, 1.2 m wide, nothing resting on it) into a staff / tool locker
+ * bank (staffLockers: the same 1.2 m width, 5 cm deeper — its back kept to the wall) where the locker doors' 0.6 m strip in front is
+ * walkable; same prop index (nothing else moves). True when one was converted.
+ */
+function lockerForShelf(L: StationLayout, ctx: PlaceCtx, id: number): boolean {
+  const g = ctx.g, lk = PROP_DEFS.staffLockers, sh = PROP_DEFS.stockShelf;
+  if (Math.abs(lk.w - sh.w) > 1e-6) return false;
+  for (const p of L.props) {
+    if (p.area !== id || p.kind !== 'stockShelf' || p.mounted || L.props.some(q => q.host !== undefined && L.props[q.host] === p)) continue;
+    const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot)), off = (lk.d - sh.d) / 2;
+    const x = r3(p.x + fx * off), z = r3(p.z + fz * off), {hx, hz} = footprint('staffLockers', p.rot);
+    // its new cells: free or the shelf's own; the doors' strip walkable
+    const own = new Set<number>();
+    for (const [cx0, cy0, cx1, cy1] of [cellsOf(p.x, p.z, p.hx, p.hz)]) for (let cy = cy0; cy <= cy1; cy++) for (let cx = cx0; cx <= cx1; cx++) own.add(g.idx(cx, cy));
+    const [nx0, ny0, nx1, ny1] = cellsOf(x, z, hx, hz);
+    let ok = true;
+    for (let cy = ny0; cy <= ny1 && ok; cy++) for (let cx = nx0; cx <= nx1; cx++) { const i = g.idx(cx, cy); if (!own.has(i) && !(g.walkable(cx, cy) && g.area[i] === id)) { ok = false; break; } }
+    const f = 0.6, hd = lk.d / 2, hw = lk.w / 2 - 0.02;
+    const [sx0, sy0, sx1, sy1] = cellsOf(x + fx * (hd + f / 2), z + fz * (hd + f / 2), fx ? f / 2 : hw, fz ? f / 2 : hw);
+    for (let cy = sy0; cy <= sy1 && ok; cy++) for (let cx = sx0; cx <= sx1; cx++) if (!g.walkable(cx, cy)) { ok = false; break; }
+    if (!ok) continue;
+    for (let cy = ny0; cy <= ny1; cy++) for (let cx = nx0; cx <= nx1; cx++) g.blocked[g.idx(cx, cy)] = 1;
+    Object.assign(p, {kind: 'staffLockers', x, z, hx: r3(hx), hz: r3(hz), h: lk.h, blocksSight: lk.blocksSight, variant: 0, purpose: GARDEN_HOLDER_PURPOSE.lockers});
+    delete p.cut;
+    return true;
+  }
+  return false;
+}
+/** Grid cells under a box (placeKit's 4 cm tolerance). */
+const cellsOf = (x: number, z: number, hx: number, hz: number): [number, number, number, number] =>
+  [Math.floor((x - hx + 0.04) / CELL), Math.floor((z - hz + 0.04) / CELL), Math.floor((x + hx - 0.04) / CELL), Math.floor((z + hz - 0.04) / CELL)];
+
 /**
  * The back rooms. The STOCK ROOM becomes the potting shed (its station shelving / cartons / crates kept): a tool locker (tall two-door
  * cabinet), a staff fridge, a first-aid kit on the wall, a rolling tool chest, a potting bench (low two-door cabinet with pots on its
@@ -540,6 +603,9 @@ function backRooms(kit: AnchorKit): void {
     if (put('staffLockers', {purpose: GARDEN_HOLDER_PURPOSE.lockers})) open++;
     for (let k = 0; k < (shed ? 2 : 1); k++) if (put('storageTote')) open++;
     if (shed && put('cardboardBoxFlaps')) open++;
+    // a shed whose walls the station's shelving already filled: one of its open shelving units becomes the staff / tool locker bank
+    // (the same 1.2 m wall slot, its back kept to the wall; the locker doors' strip clear) — the room's storage then opens too
+    if (shed && !L.props.some(p => p.area === id && TOOL_LOCKERS.includes(p.kind)) && lockerForShelf(L, ctx, id)) open++;
     if (!open) kit.skipped.push(`back room ${id}: no openable storage fitted`);
     for (const p of L.props) if (p.area === id && p.kind === 'staffLockers' && !p.purpose) p.purpose = GARDEN_HOLDER_PURPOSE.lockers;
   }

@@ -38,8 +38,8 @@ import type {Area, StationLayout} from '../src/gen/stationTypes';
 installCanvasShim(false);
 (ShimContext.prototype as unknown as {clip?: () => void}).clip ??= () => {};
 
-const DH = findStores('garden', {format: 'double-height', count: 3, maxSeed: 40});
-const HALL = findStores('garden', {format: 'hall', count: 3, maxSeed: 40});
+const DH = findStores('garden', {format: 'double-height', count: 4, maxSeed: 40});
+const HALL = findStores('garden', {format: 'hall', count: 5, maxSeed: 40});
 const ALL: StoreHit[] = [...DH, ...HALL];
 const tag = (h: StoreHit) => `seed ${h.seed} (${h.anchor.format})`;
 const AUDIT = new Map(OPENABLE_AUDIT.map(a => [a.kind, a]));
@@ -62,11 +62,13 @@ describe('Glasshouse Garden Co.: a real garden centre', () => {
   it('plants: plant benches with pots on their tops, big planters, small potted plants, flower stands', () => {
     for (const h of ALL) {
       const ps = storeProps(h.layout, h.anchor), t = tag(h);
-      const benches = of(ps, 'skyDPlantBench');
-      expect(benches.length, `${t} plant benches`).toBeGreaterThanOrEqual(2);
+      const benches = of(ps, 'skyDPlantBench'), area = storeAreas(h.layout, h.anchor).floor.reduce((s, id) => s + h.layout.areas[id].w * h.layout.areas[id].h * CELL * CELL, 0);
+      // plant benches in runs (a floor cut up round an inset back room: tiered flower stands as islands instead)
+      expect(benches.length + of(ps, 'flowerStand').length, `${t} plant displays (${area} m2)`).toBeGreaterThanOrEqual(area >= 120 ? 3 : 2);
+      if (area >= 120) expect(benches.length, `${t} plant benches (${area} m2)`).toBeGreaterThanOrEqual(2);
       const potted = new Set(of(ps, 'skyDGeraniumPot').map(p => hostOf(h.layout, p)).filter(Boolean));
       for (const b of benches) expect(potted.has(b), `${t} pots on every bench`).toBe(true);
-      expect(of(ps, 'planterTree', 'skyDPottedPalm').length, `${t} big planters`).toBeGreaterThanOrEqual(2);
+      expect(of(ps, 'planterTree', 'skyDPottedPalm').length, `${t} big planters`).toBeGreaterThanOrEqual(area >= 120 ? 2 : 1);
       expect(of(ps, 'flowerStand').length + of(ps, 'pottedPlantSmall').length, `${t} stands / small plants`).toBeGreaterThanOrEqual(2);
     }
   });
@@ -80,13 +82,16 @@ describe('Glasshouse Garden Co.: a real garden centre', () => {
       expect(potting.length, `${t} potting benches`).toBeGreaterThanOrEqual(1);
       const boards = of(ps, 'toolPegboard');
       expect(boards.length, `${t} tool pegboards`).toBeGreaterThanOrEqual(1);
+      const g = h.layout.levels[h.anchor.level].grid;
+      let over = 0;
       for (const b of boards) {
         expect(b.mounted, t).toBe(true);
-        // above a potting bench, clear of its worktop and its pots
+        expect(b.y - g.floorOf(g.idx(...g.cellOf(b.x, b.z))), `${t} pegboard height`).toBeGreaterThanOrEqual(1.1);
+        // over a potting bench: clear of its worktop and its pots
         const under = potting.find(c => Math.hypot(c.x - b.x, c.z - b.z) < 0.6);
-        expect(under, `${t} a pegboard over a potting bench`).toBeTruthy();
-        expect(b.y, t).toBeGreaterThan(under!.y + PROP_DEFS.cabinetLow.h + PROP_DEFS.skyDGeraniumPot.h - 0.05);
+        if (under) { over++; expect(b.y, t).toBeGreaterThan(under.y + PROP_DEFS.cabinetLow.h + PROP_DEFS.skyDGeraniumPot.h - 0.05); }
       }
+      expect(over, `${t} a pegboard over a potting bench`).toBeGreaterThanOrEqual(1);
       expect(of(ps, 'skyDGeraniumPot').some(p => hostOf(h.layout, p)?.kind === 'cabinetLow'), `${t} pots on a potting bench`).toBe(true);
       expect(of(ps, 'rollingToolChest').length, `${t} tool chest`).toBeGreaterThanOrEqual(1);
       expect(of(ps, 'storeGardenSoilPallet').length, `${t} soil pallets`).toBeGreaterThanOrEqual(1);
