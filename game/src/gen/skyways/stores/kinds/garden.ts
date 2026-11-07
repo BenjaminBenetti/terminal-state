@@ -79,7 +79,7 @@ export const BASKET_ROD = {t: 0.022, maxLen: 6.5} as const;
 export const BASKET_RAIL_PARTS: readonly GardenPart[] = (() => {
   const R = BASKET_RAIL, out: GardenPart[] = [], t = 0.012;
   out.push({m: 'steelBright', s: [R.w, R.pipe, R.pipe], p: [0, r3(R.railY + R.pipe / 2), 0]});
-  for (const ex of [-1, 1]) out.push({m: 'steelBright', s: [0.06, 0.06, 0.06], p: [r3(ex * R.rods[1]), r3(R.railY + R.pipe / 2), 0]});
+  for (const ex of [-1, 1]) out.push({m: 'steelBright', s: [0.07, R.pipe, 0.07], p: [r3(ex * R.rods[1]), r3(R.railY + R.pipe / 2), 0]}); // the rods' clamps
   const hookY = R.railY, splitY = 0.62, ringY = R.ring.y, rz = R.ring.d / 2 - 0.01;
   for (const x of R.slots) {
     out.push({m: 'steelDark', s: [0.03, 0.05, 0.06], p: [x, r3(hookY - 0.02), 0]});

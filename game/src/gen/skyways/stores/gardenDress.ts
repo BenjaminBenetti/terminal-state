@@ -32,7 +32,7 @@ import {backed, boxClear, ceilOver, makePlaceCtx, mountProp, tryPlaceProp, wallR
 import {stockVariant} from '../../purposeShapes';
 import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
-import {segDist} from '../addonFrame';
+import {normYaw, segDist} from '../addonFrame';
 import {AnchorKit, r3, snapEdge} from '../destinations/skywaysShopsAKit';
 import {PLANT_BENCH_TOP} from '../destinations/kindsShopsB';
 import {BASKET_RAIL, BASKET_RAIL_H, GARDEN_RAIL_CLEAR} from './kinds/garden';
@@ -45,23 +45,32 @@ export const GARDEN_HOLDER_PURPOSE = {
   fridge: 'mall-food-back',
   /** First-aid kits: dressings (and now and then a kit). */
   firstAid: 'mall-first-aid',
+  /** Staff lockers: the staff's own snacks, water, a dressing (the Mall management office's rows: no sidearm rounds in a garden centre). */
+  lockers: 'mall-management',
 } as const;
 
 /** Frame walls: L (u = 0), R (u = W), B (v = D), F (the storefront). */
 type FWall = 'L' | 'R' | 'B' | 'F';
 
-/** What one garden got (tests / QA; rewritten by every generation). */
+/** The cash desk as placed: its wall, the till (counter module with the register) and the back counter. */
+interface CashDesk { wall: 'L' | 'R'; till: PropPlacement; back: PropPlacement }
+/**
+ * What one garden got (tests / QA; rewritten by every generation): INDICES into layout.props (the generator may re-create the prop
+ * objects later; the order stays), what found no room.
+ */
 export interface GardenResult {
   anchor: string;
   format: SkywaysAnchor['format'];
-  props: PropPlacement[];
+  /** Every prop this dresser placed. */
+  props: number[];
   skipped: string[];
-  /** The cash desk's wall ('L' / 'R'; null: none placed) and its back counter. */
-  cash: {wall: 'L' | 'R'; till: PropPlacement; back: PropPlacement} | null;
-  rails: PropPlacement[];
-  benches: PropPlacement[];
+  /** The cash desk's wall ('L' / 'R'), its till and back counter (null: none placed). */
+  cash: {wall: 'L' | 'R'; till: number; back: number} | null;
+  rails: number[];
+  benches: number[];
 }
-export const GARDEN_LAST = new Map<string, GardenResult>();
+/** The latest result per layout (tests / QA; one garden per layout). */
+export const GARDEN_LAST = new WeakMap<StationLayout, GardenResult>();
 
 const SOIL_VARIANTS = 3;
 
@@ -69,28 +78,28 @@ const SOIL_VARIANTS = 3;
 export function dressGarden(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number {
   if (!layout.areas[anchor.floor]) return 0;
   const kit = new AnchorKit(layout, rng, anchor);
-  const res: GardenResult = {anchor: anchor.id, format: anchor.format, props: [], skipped: kit.skipped, cash: null, rails: [], benches: []};
   kit.reserveDoors();
   // --- the floor (local height frame; lifted at the end) ---
-  res.cash = cashDesk(kit);
+  const cash = cashDesk(kit);
   kit.reserveLanes();
   entryBand(kit);
-  const tools = toolWall(kit, res.cash?.wall === 'L' ? 'R' : 'L');
+  const tools = toolWall(kit, cash?.wall === 'L' ? 'R' : 'L');
   backWall(kit);
   planters(kit);
-  res.benches = benchField(kit);
-  potBenches(kit, res.benches);
+  const benches = benchField(kit);
+  potBenches(kit, benches);
   floorExtras(kit);
-  if (!anchor.stock.length) staffCorner(kit, res.cash);
+  if (!anchor.stock.length) staffCorner(kit, cash);
   if (kit.posters(2).length < 1) kit.skipped.push('posters');
   kit.lift();
   // --- absolute heights from here: wall mounts, the hung rails and their baskets, the back rooms ---
   pegboards(kit, tools);
-  if (res.cash) tillFirstAid(kit, res.cash);
-  res.rails = basketRails(kit, res.benches);
+  if (cash) tillFirstAid(kit, cash);
+  const rails = basketRails(kit, benches);
   backRooms(kit);
-  res.props = layout.props.slice(kit.p0);
-  GARDEN_LAST.set(anchor.id, res);
+  const ix = (p: PropPlacement) => layout.props.indexOf(p);
+  GARDEN_LAST.set(layout, {anchor: anchor.id, format: anchor.format, props: layout.props.slice(kit.p0).map((_, i) => kit.p0 + i), skipped: kit.skipped,
+    cash: cash ? {wall: cash.wall, till: ix(cash.till), back: ix(cash.back)} : null, rails: rails.map(ix), benches: benches.map(ix)});
   return layout.props.length - kit.p0;
 }
 
@@ -154,7 +163,7 @@ function wallLine(kit: AnchorKit, kind: PropKind, w: FWall, t0: number, t1: numb
  * the front, the drinks cooler beside the back counter. The roomier side first, then the other; nearest the front first. Falls back
  * to one module.
  */
-function cashDesk(kit: AnchorKit): GardenResult['cash'] {
+function cashDesk(kit: AnchorKit): CashDesk | null {
   const fr = kit.fr, sc = PROP_DEFS.shopCounter, cw = PROP_DEFS.mallCashwrapCounter;
   const roomy: 'L' | 'R' = kit.uE >= fr.W / 2 ? 'L' : 'R';
   for (const n of [2, 1]) for (const wall of [roomy, roomy === 'L' ? 'R' : 'L'] as const) for (const v0 of [1.5, 2.0, 2.5, 3.0, 3.5, 4.5, 5.5]) {
@@ -200,9 +209,9 @@ function cashDesk(kit: AnchorKit): GardenResult['cash'] {
 }
 
 /** A first-aid kit on the wall beside the back counter (dressings: GARDEN_HOLDER_PURPOSE.firstAid). */
-function tillFirstAid(kit: AnchorKit, cash: NonNullable<GardenResult['cash']>): void {
+function tillFirstAid(kit: AnchorKit, cash: CashDesk): void {
   const [, bv] = uvOf(kit, cash.back), half = PROP_DEFS.mallCashwrapCounter.w / 2;
-  for (const dv of [half + 0.35, -half - 0.35, half + 0.9, -half - 0.9]) {
+  for (const dv of [half + 0.35, -half - 0.35, half + 0.9, -half - 0.9, half + 1.6, -half - 1.6]) {
     const p = mountAt(kit, 'firstAidWallKit', cash.wall, bv + dv, 1.3);
     if (p) { p.purpose = GARDEN_HOLDER_PURPOSE.firstAid; return; }
   }
@@ -217,9 +226,9 @@ function entryBand(kit: AnchorKit): void {
   const fr = kit.fr, uE = kit.uE, eh = kit.entry.half, rng = kit.rng;
   const sides = rng.shuffle([-1, 1]);
   let baskets = false;
-  for (const s of sides) for (const du of [eh + 0.8, eh + 1.3, eh + 1.9]) {
+  for (const v of [1.4, 1.9]) for (const s of sides) for (const du of [eh + 0.9, eh + 1.4, eh + 2.0, eh + 2.7]) {
     if (baskets) break;
-    if (putUV(kit, 'basketStack', uE + s * du, 0.9, fr.toBack)) baskets = true;
+    if (putUV(kit, 'basketStack', uE + s * du, v, fr.toBack)) baskets = true;
   }
   // seed racks: two or three, a little in from the windows either side of the entry lane (each with a ring to browse round it)
   let racks = 0;
@@ -247,7 +256,11 @@ function entryBand(kit: AnchorKit): void {
  */
 function toolWall(kit: AnchorKit, w: 'L' | 'R'): PropPlacement[] {
   const fr = kit.fr, rng = kit.rng;
-  const benches = wallLine(kit, 'cabinetLow', w, 1.4, fr.D - 1.0, {max: rng.int(2, 3), gap: 0.25, front: 0.7});
+  const n = rng.int(2, 3);
+  let benches = wallLine(kit, 'cabinetLow', w, 1.4, fr.D - 1.0, {max: n, gap: 0.25, front: 0.7});
+  // (a tool wall cut up by doors: the potting benches go to the back wall, else the other side wall's far half)
+  if (!benches.length) benches = wallLine(kit, 'cabinetLow', 'B', 0.6, fr.W - 0.6, {max: Math.min(2, n), gap: 0.25, front: 0.7});
+  if (!benches.length) benches = wallLine(kit, 'cabinetLow', w === 'L' ? 'R' : 'L', fr.D * 0.45, fr.D - 1.0, {max: 1, front: 0.7});
   if (!benches.length) kit.skipped.push('potting benches');
   const top = PROP_DEFS.cabinetLow.h, pot = PROP_DEFS.skyDGeraniumPot;
   for (const b of benches) {
@@ -276,54 +289,76 @@ function backWall(kit: AnchorKit): void {
   }
 }
 
-/** Big planters: planter trees / palms by the front windows (the planter gallery), in the back corners and along the side walls. */
+/**
+ * Big planters: planter trees / palms by the front windows (the planter gallery), then in the back corners and along the side walls
+ * wherever a stretch is still free — at least two (any free floor spot near a wall when the walls are taken).
+ */
 function planters(kit: AnchorKit): void {
   const fr = kit.fr, rng = kit.rng;
   const tall = (): PropKind => (rng.chance(0.5) ? 'planterTree' : 'skyDPottedPalm');
   let n = 0;
   // the windows either side of the entry (the front corners first)
-  for (const s of [-1, 1]) for (const du of [0.9, 2.2, 3.6]) {
+  for (const s of [-1, 1]) for (const du of [0.9, 2.2, 3.6, 5.0]) {
     const u = s < 0 ? du : fr.W - du;
     if (Math.abs(u - kit.uE) < kit.entry.half + 1.4) continue;
-    const k = tall();
-    if (putUV(kit, k, u, 1.0, anyYaw(kit), {ring: 0.3})) { n++; break; }
+    if (putUV(kit, tall(), u, 1.0, anyYaw(kit), {ring: 0.3})) { n++; break; }
   }
   // the back corners and along the side walls (wherever a wall stretch is still free)
-  for (const [w, t] of [['L', fr.D - 1.0], ['R', fr.D - 1.0], ['L', fr.D * 0.6], ['R', fr.D * 0.6], ['L', fr.D * 0.4], ['R', fr.D * 0.4]] as const) {
-    const k = tall(), [x, z] = kit.uv(w === 'L' ? 0.9 : fr.W - 0.9, t);
-    if (kit.putNearWall(k, x, z, {sides: [sideOf(kit, w)], tries: 10})) n++;
+  const want = n + rng.int(2, 4);
+  for (const [w, t] of [['L', fr.D - 1.0], ['R', fr.D - 1.0], ['L', fr.D * 0.6], ['R', fr.D * 0.6], ['L', fr.D * 0.4], ['R', fr.D * 0.4], ['B', 1.0], ['B', fr.W - 1.0]] as const) {
+    if (n >= want) break;
+    const [x, z] = w === 'B' ? kit.uv(t, fr.D - 0.9) : kit.uv(w === 'L' ? 0.9 : fr.W - 0.9, t);
+    if (kit.putNearWall(tall(), x, z, {sides: [sideOf(kit, w)], tries: 16})) n++;
   }
-  if (!n) kit.skipped.push('planters');
+  // still fewer than two: any free spot a metre off a wall
+  if (n < 2) {
+    const spots: [number, number][] = [];
+    for (let t = 1.0; t <= fr.D - 1.0; t += 0.5) spots.push([0.9, t], [fr.W - 0.9, t]);
+    for (let t = 1.0; t <= fr.W - 1.0; t += 0.5) spots.push([t, fr.D - 0.9]);
+    for (const [u, v] of rng.shuffle(spots)) { if (n >= 2) break; if (putUV(kit, tall(), u, v, anyYaw(kit), {ring: 0.3})) n++; }
+  }
+  if (n < 2) kit.skipped.push('planters');
 }
 
 /**
- * The bench field: rows of slatted plant benches parallel to the storefront (pairs end to end, 1.5 m aisles between runs and rows)
- * between the walls' fixtures, from the front band to the back wall's aisle. Every bench on cell lines.
+ * The bench field: runs of slatted plant benches (pairs end to end, 1.5 m between runs, 1.3 m aisles between lines) over the floor
+ * left between the walls' fixtures, the front band and the back wall's aisle — lines parallel to the storefront (`u`) or running
+ * into the depth (`v`): both are tried (no rng drawn: repeatable) and the one holding more benches stays. Every bench on cell lines.
  */
 function benchField(kit: AnchorKit): PropPlacement[] {
-  const fr = kit.fr, b = PROP_DEFS.skyDPlantBench, out: PropPlacement[] = [];
-  const pitch = Math.ceil((b.d + 1.5) / CELL - 1e-6) * CELL;
-  const L = Math.ceil(b.w / CELL - 1e-6) * CELL;
-  for (let v = 3.4; v + b.d <= fr.D - 2.1 + 1e-6; v += pitch) {
-    let u = 2.0; // (cell lines: the frame origin is one, so every bench's cells are its own)
-    while (u + L <= fr.W - 1.8 + 1e-6) {
-      let got = 0;
-      for (const n of [2, 1]) {
-        if (u + n * L > fr.W - 1.8 + 1e-6) continue;
-        const run: PropPlacement[] = [];
-        if (kit.cluster(() => {
-          for (let k = 0; k < n; k++) {
-            const [x, z] = kit.uv(u + k * L + L / 2, v + b.d / 2);
-            const p = kit.put('skyDPlantBench', x, z, fr.toFront);
-            if (!p) return false;
-            run.push(p);
-          }
-          return true;
-        })) { got = n; out.push(...run); break; }
+  const fr = kit.fr, b = PROP_DEFS.skyDPlantBench;
+  const pitch = Math.ceil((b.d + 1.3) / CELL - 1e-6) * CELL, L = Math.ceil(b.w / CELL - 1e-6) * CELL;
+  const field = (along: 'u' | 'v'): PropPlacement[] => {
+    const out: PropPlacement[] = [];
+    // lines across the other axis; runs along `along`
+    const [a0, a1, c0, c1] = along === 'u' ? [2.0, fr.W - 1.5, 3.0, fr.D - 2.0] : [3.0, fr.D - 2.0, 2.0, fr.W - 1.5];
+    for (let c = c0; c + b.d <= c1 + 1e-6; c += pitch) {
+      let a = a0;
+      while (a + L <= a1 + 1e-6) {
+        let got = 0;
+        for (const n of [2, 1]) {
+          if (a + n * L > a1 + 1e-6) continue;
+          const run: PropPlacement[] = [];
+          if (kit.cluster(() => {
+            for (let k = 0; k < n; k++) {
+              const t = a + k * L + L / 2, w = c + b.d / 2;
+              const [x, z] = along === 'u' ? kit.uv(t, w) : kit.uv(w, t);
+              const p = kit.put('skyDPlantBench', x, z, along === 'u' ? fr.toFront : fr.plusU);
+              if (!p) return false;
+              run.push(p);
+            }
+            return true;
+          })) { got = n; out.push(...run); break; }
+        }
+        a += got ? got * L + 1.5 : CELL;
       }
-      u += got ? got * L + 1.5 : CELL;
     }
-  }
+    return out;
+  };
+  let rows = 0, cols = 0;
+  kit.cluster(() => { rows = field('u').length; return false; });
+  kit.cluster(() => { cols = field('v').length; return false; });
+  const out = field(cols > rows ? 'v' : 'u');
   if (!out.length) kit.skipped.push('plant benches');
   return out;
 }
@@ -359,7 +394,7 @@ function floorExtras(kit: AnchorKit): void {
 }
 
 /** No back room: a staff stock corner by the cash desk (supply shelving and a tall two-door cabinet). */
-function staffCorner(kit: AnchorKit, cash: GardenResult['cash']): void {
+function staffCorner(kit: AnchorKit, cash: CashDesk | null): void {
   const fr = kit.fr, w = cash?.wall ?? 'L';
   const [, bv] = cash ? uvOf(kit, cash.back) : [0, 2];
   const got = [...wallLine(kit, 'cabinetTall', w, bv + 1.2, fr.D - 0.6, {max: 1}), ...wallLine(kit, 'stockShelf', w, bv + 1.2, fr.D - 0.6, {max: 2, front: 0.9, variant: () => stockVariant('cartons')})];
@@ -388,8 +423,9 @@ function pegboards(kit: AnchorKit, benches: readonly PropPlacement[]): void {
   const fr = kit.fr;
   let n = 0;
   for (const b of benches) {
-    const [u, v] = uvOf(kit, b), w: FWall = u < fr.W / 2 ? 'L' : 'R';
-    if (mountAt(kit, 'toolPegboard', w, v, 1.15)) n++;
+    const [u, v] = uvOf(kit, b), back = Math.abs(normYaw(b.rot - fr.toFront)) < 0.1;
+    const w: FWall = back ? 'B' : u < fr.W / 2 ? 'L' : 'R';
+    if (mountAt(kit, 'toolPegboard', w, back ? u : v, 1.15)) n++;
   }
   if (benches.length && !n) kit.skipped.push('pegboards');
 }
@@ -485,7 +521,8 @@ function backRooms(kit: AnchorKit): void {
     const shed = a.type === 'stock-room';
     let open = 0;
     if (shed) {
-      if (put('cabinetTall')) open++;
+      // the tool locker: a tall two-door cabinet, else a locker bank, else a tool chest (whatever the room's free wall takes)
+      if (put('cabinetTall') ?? put('staffLockers', {purpose: GARDEN_HOLDER_PURPOSE.lockers}) ?? put('rollingToolChest')) open++;
       if (put('fridge', {purpose: GARDEN_HOLDER_PURPOSE.fridge})) open++;
     } else if (put('fridge', {purpose: GARDEN_HOLDER_PURPOSE.fridge})) open++;
     const aid = backMount(ctx, a, 'firstAidWallKit', base, 1.3);
@@ -499,9 +536,10 @@ function backRooms(kit: AnchorKit): void {
         for (const lx of [-0.55, 0.5]) if (kit.onTop(pb, 'skyDGeraniumPot', lx, 0.1, top, anyYaw(kit))) (pb.cut ??= []).push({y: top, x0: r3(lx - pot.w / 2 - 0.02), x1: r3(lx + pot.w / 2 + 0.02)});
       }
     }
-    if (put('staffLockers')) open++;
+    if (put('staffLockers', {purpose: GARDEN_HOLDER_PURPOSE.lockers})) open++;
     for (let k = 0; k < (shed ? 2 : 1); k++) if (put('storageTote')) open++;
     if (shed && put('cardboardBoxFlaps')) open++;
     if (!open) kit.skipped.push(`back room ${id}: no openable storage fitted`);
+    for (const p of L.props) if (p.area === id && p.kind === 'staffLockers' && !p.purpose) p.purpose = GARDEN_HOLDER_PURPOSE.lockers;
   }
 }
