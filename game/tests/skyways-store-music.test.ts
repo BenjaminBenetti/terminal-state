@@ -21,7 +21,7 @@ import {propPhysics} from '../src/damage/materials';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
-import {HANDFUL, lootProfile} from '../src/items/lootTables';
+import {ECON_CATS, HANDFUL, HOLDER_ALLOW, econCat, lootProfile} from '../src/items/lootTables';
 import {isLootHolderKind} from '../src/items/loot';
 import {purposeById, purposeLoot} from '../src/gen/purposes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
@@ -221,13 +221,17 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
       }
       if (an.zones.length) expect(kinds('skyMuSign')).toBe(1);
       expect(kinds('skyMuGigPoster')).toBeGreaterThanOrEqual(2);
-      // back rooms: each gets openable storage (lockers / cabinet / crate) beside the shelving
+      // back rooms: each has shelving (the station dresser's or ours — placed first, so a small inset room / an office gets one) or a
+      // RECORDED reason none fits; openable storage (lockers / cabinet / crate) beside it
       const {stock} = storeAreas(l, an);
       expect(stock.length).toBeGreaterThanOrEqual(1);
       let storage = 0;
       for (const s of stock) {
-        const here = l.props.filter(p => p.area === s);
-        expect(here.some(p => ['shelf', 'stockShelf'].includes(p.kind)), `seed ${seed} back room ${s} shelving`).toBe(true);
+        const here = l.props.filter(p => p.area === s), rec = res.backRooms.find(b => b.area === s);
+        expect(rec, `seed ${seed} back room ${s} dressed`).toBeTruthy();
+        const shelved = here.some(p => ['shelf', 'stockShelf', 'officeShelf'].includes(p.kind));
+        if (shelved) expect(rec!.shelving).toMatch(/^(existing|added )/);
+        else { expect(rec!.shelving, `seed ${seed} back room ${s}: shelving or a recorded reason`).toMatch(/^none: .{20,}/); expect(res.skipped.some(x => x.startsWith(`back room ${s}: none`))).toBe(true); }
         storage += here.filter(p => auditCls.get(p.kind) === 'openable' || auditCls.get(p.kind) === 'existing').length;
       }
       expect(storage, `seed ${seed} openable back-room storage`).toBeGreaterThanOrEqual(2);
@@ -273,11 +277,11 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
     for (const p of props.filter(q => q.kind === 'skyMuStool')) { expect(p.host).toBeUndefined(); expect(p.y).toBeCloseTo(l.areas[p.area].floorY ?? l.levels[p.level ?? 0].baseY ?? 0, 2); }
   }, 120_000);
 
-  it('loot: the store\'s purposes and per-holder overrides are existing ones; every holder rolls on-theme rows (no ammo on the floor / in the booths)', () => {
+  it('loot: existing purposes / per-holder overrides; every holder\'s TABLE on theme, no ammo rows on the floor / in the booths; rolled lots are table items or the economy\'s off-theme finds', () => {
     expect(STORE_MUSIC.purposes).toEqual({floor: 'mall-music', zones: 'office-listening', stock: 'mall-music-back', office: 'mall-music-back'});
     for (const id of [...Object.values(STORE_MUSIC.purposes), ...Object.values(MUSIC_HOLDER_PURPOSE)]) expect(purposeById(id), id).toBeTruthy();
     const FRONT_OK = new Set(['battery', 'flare', 'water', 'cola', 'juice', 'chocolate', 'chips', 'beans', 'bandage', 'noodles']);
-    let holders = 0, lots = 0;
+    let holders = 0, lots = 0, frontLots = 0, frontOffTable = 0;
     for (const {seed, layout: l, anchor: an} of HITS) {
       const A = storeAreas(l, an), front = new Set([...A.floor, ...A.zones]);
       for (const h of layoutHolderDetails(l, lootProfile('skyways'))) {
@@ -286,15 +290,22 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
         lots += h.lots.length;
         const spec = purposeLoot(h.areaType, h.kind);
         expect(spec, `seed ${seed} ${h.kind} @ ${h.areaType}`).toBeTruthy();
-        // (primary, integration) the store's TABLES never carry ammo on the floor / in the booths; a rolled lot may still be the global
-        // scarcity economy's off-theme find (items/lootEconomy.ts: ~16-18 % of finds; off-theme ammo is a handful of rounds) — existing
-        // behaviour on every level, so a rolled ammo lot is accepted only as that handful
-        if (front.has(h.prop.area)) {
-          expect((spec?.items ?? []).some(([id]) => /^ammo_/.test(id)), `seed ${seed} ${h.kind} @ ${h.areaType}: an ammo row`).toBe(false);
-          for (const lot of h.lots) {
-            if (/^ammo_/.test(lot.itemId)) { expect(lot.count, `seed ${seed} ${h.kind}: off-theme handful`).toBeLessThanOrEqual(HANDFUL[lot.itemId]?.[1] ?? 0); continue; }
-            expect(FRONT_OK.has(lot.itemId), `seed ${seed} ${h.kind} @ ${h.areaType}: ${lot.itemId}`).toBe(true);
-          }
+        const rows = new Set((spec?.items ?? []).map(([id]) => id));
+        expect(rows.size).toBeGreaterThan(0);
+        if (!front.has(h.prop.area)) continue;
+        // the DESIGN (deterministic): front-of-house tables are on theme and carry no ammo row (the store's no-ammo rule)
+        for (const id of rows) expect(FRONT_OK.has(id), `seed ${seed} ${h.kind} @ ${h.areaType}: table row ${id}`).toBe(true);
+        // the ROLL: every lot is a table item, or the global scarcity economy's find (items/lootEconomy.ts: ~16-18 % of finds turn
+        // off-theme on every level, any category the fixture may hold — HOLDER_ALLOW; off-theme ammo only ever a handful of rounds)
+        const allow = HOLDER_ALLOW[h.kind] ?? ECON_CATS;
+        for (const lot of h.lots) {
+          frontLots++;
+          if (rows.has(lot.itemId)) continue;
+          frontOffTable++;
+          const cat = econCat(lot.itemId);
+          expect(cat, `seed ${seed} ${h.kind}: ${lot.itemId} is a known item`).not.toBeNull();
+          expect(allow.includes(cat!), `seed ${seed} ${h.kind}: ${lot.itemId} (${cat}) the fixture may hold`).toBe(true);
+          if (cat === 'ammo') expect(lot.count, `seed ${seed} ${h.kind}: off-theme ammo is a handful`).toBeLessThanOrEqual(HANDFUL[lot.itemId]?.[1] ?? 0);
         }
       }
       // the floor's holders roll the music store's rows; the booths the listening lounge's
@@ -305,6 +316,8 @@ describe('Northern Groove Records on real seeds (both formats)', () => {
     }
     expect(holders).toBeGreaterThan(20);
     expect(lots).toBeGreaterThan(0);
+    // the off-table finds stay the economy's minority (a generous bound: ~16-18 % off-theme corpus-wide)
+    if (frontLots >= 10) expect(frontOffTable / frontLots).toBeLessThan(0.5);
     // no store pickups on the floor (noFloorLoot): the records are physical stock, not items
     for (const {layout: l, anchor: an} of HITS) {
       const A = storeAreas(l, an);

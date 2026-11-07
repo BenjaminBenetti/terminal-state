@@ -50,7 +50,8 @@ export interface MusicDressResult {
   faced: number[];
   cashDesk: {back: number | null; counters: number[]; aisle: [number, number, number, number] | null};
   booths: {zone: number | null; console: number; turntable: number | null; headphones: number | null; stools: number[]}[];
-  backRooms: {area: number; added: number[]}[];
+  /** Each back room: what was added and its shelving ('existing', 'added <kind>', or 'none: <recorded reason>'). */
+  backRooms: {area: number; added: number[]; shelving: string}[];
 }
 const RESULTS = new WeakMap<StationLayout, MusicDressResult[]>();
 /** QA / tests: what dressMusicStore placed in a layout (the generator ignores it). */
@@ -104,7 +105,7 @@ export function dressMusicStore(layout: StationLayout, rng: Rng, anchor: Skyways
   kit.posters(2);
   // the back rooms (or the staff corner by the cash desk)
   const rooms = anchor.stock.map(s => layout.areas[s]).filter(a => a && kit.storeys.has(a.level ?? 0));
-  for (const a of rooms) res.backRooms.push({area: a.id, added: backRoom(kit, a).map(idx)});
+  for (const a of rooms) { const b = backRoom(kit, a); res.backRooms.push({area: a.id, added: b.added.map(idx), shelving: b.shelving}); }
   if (anchor.stock.length > rooms.length) kit.skipped.push('a back room on another storey (not dressed)');
   if (!rooms.length) staffCorner(kit, desk);
   kit.lift();
@@ -546,21 +547,33 @@ function reserveAround(kit: AnchorKit, ps: PropPlacement[], level: number, margi
  * A back room (stock room / office, already shelved by the station dresser): staff lockers, a supply cabinet (openable), open shelving
  * with crates of records on its tiers, lidded crates, a staff desk with its chair and a fridge where they fit; record crates stacked on
  * the floor along a wall. Placed through the shared primitive on the room's own context (door zones, swing strips, connectivity).
- * Returns what it added.
+ * SHELVING comes first (a small room inset in the footprint, or an office the station dresser furnished without it, still gets an open
+ * shelving unit of record crates; a narrower access strip in a small room). Returns what it added and the shelving's state (`none: …`
+ * = the recorded reason no unit fits).
  */
-function backRoom(kit: AnchorKit, a: Area): PropPlacement[] {
+function backRoom(kit: AnchorKit, a: Area): {added: PropPlacement[]; shelving: string} {
   const layout = kit.layout, level = a.level ?? 0, rng = kit.rng;
   const ctx = makePlaceCtx(layout, rng, level, {x0: a.x - 3, y0: a.y - 3, x1: a.x + a.w + 3, y1: a.y + a.h + 3});
   const added: PropPlacement[] = [];
   const add = (p: PropPlacement | null) => { if (p) { added.push(p); kit.placed.push(p); } return p; };
-  const big = a.w * a.h * CELL * CELL >= 14;
+  const m2 = a.w * a.h * CELL * CELL, big = m2 >= 14;
   const office = a.type === 'agent-office';
   const storage = () => layout.props.filter(p => p.area === a.id && OPENABLE_STORAGE.has(p.kind)).length;
+  let shelving = layout.props.some(p => p.area === a.id && SHELVING.has(p.kind)) ? 'existing' : '';
+  if (!shelving) {
+    for (const [k, front] of [['shelf', 0.9], ['shelf', 0.6], ['stockShelf', 0.6]] as [PropKind, number][]) {
+      const sh = add(againstWall(ctx, a, k, front));
+      if (!sh) continue;
+      if (k === 'shelf') for (const p of cratesOnShelf(kit, sh)) added.push(p);
+      shelving = `added ${k}`;
+      break;
+    }
+    if (!shelving) { shelving = `none: no ${PROP_DEFS.shelf.w} m run of solid wall with a 0.6 m access strip free in this ${m2.toFixed(1)} m2 ${a.type}`; kit.skipped.push(`back room ${a.id}: ${shelving}`); }
+  }
   if (!layout.props.some(p => p.area === a.id && p.kind === 'staffLockers')) add(againstWall(ctx, a, 'staffLockers', 0.6));
   add(againstWall(ctx, a, 'cabinetTall', 0.6));
   if (!office) {
-    const sh = add(againstWall(ctx, a, 'shelf', 0.9));
-    if (sh) for (const p of cratesOnShelf(kit, sh)) added.push(p);
+    if (shelving === 'existing') { const sh = add(againstWall(ctx, a, 'shelf', 0.9)); if (sh) for (const p of cratesOnShelf(kit, sh)) added.push(p); }
     for (let i = 0, n = rng.int(1, 2); i < n; i++) add(againstWall(ctx, a, 'crate', 0));
     for (let i = 0, n = rng.int(2, 4); i < n; i++) add(placeAgainstWall(ctx, a, 'skyDRecordCrate', {tries: 16}));
   }
@@ -573,8 +586,10 @@ function backRoom(kit: AnchorKit, a: Area): PropPlacement[] {
   for (const k of ['crate', 'footlocker', 'cabinetLow', 'crate'] as PropKind[]) if (storage() < 2) add(againstWall(ctx, a, k, k === 'cabinetLow' ? 0.6 : 0));
   if (storage() < 2) kit.skipped.push(`back room ${a.id}: ${storage()} openable storage`);
   if (!added.length) kit.skipped.push(`back room ${a.id}: nothing fits`);
-  return added;
+  return {added, shelving};
 }
+/** Shelving kinds a back room counts as its shelving. */
+const SHELVING: ReadonlySet<string> = new Set(['shelf', 'stockShelf', 'officeShelf']);
 /** Openable storage kinds counted for a back room (existing openables / holders with moving parts). */
 const OPENABLE_STORAGE: ReadonlySet<string> = new Set(['staffLockers', 'cabinetTall', 'cabinetLow', 'crate', 'footlocker', 'safe', 'filingCabinet', 'officeFiling', 'fridge', 'desk', 'executiveDesk', 'mallCashwrapCounter', 'storageTote', 'dresserDrawers']);
 /** A prop with its back to a wall of the room: every wall position (0.25 m steps, shuffled) through the shared primitive. */
