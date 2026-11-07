@@ -119,6 +119,11 @@ describe('glazed bridge roofs', () => {
         // the deck's floor: the paver finish (its stand-in without the texture)
         const g = L.levels[2].grid, [cx, cy] = g.cellOf((b.rect.x0 + b.rect.x1) / 2, (b.rect.z0 + b.rect.z1) / 2);
         expect(a.floorKey(2, g.idx(cx, cy))).toBe('skyways-floor-pavers');
+        // no fixture hangs at the ridge: the deck's lights are daylight under the glass (gen/skyways/skylights.ts glazedBridgeDaylight)
+        const deckLights = L.lights.filter(l => l.area === b.area);
+        expect(deckLights.filter(l => !l.virtual).length, `${b.id} fixtures`).toBe(0);
+        for (const l of deckLights) expect(l.y, `${b.id} light under the glass`).toBeLessThan(b.roof!.springY);
+        expect(L.lights.filter(l => l.virtual && l.x > b.rect.x0 && l.x < b.rect.x1 && l.z > b.rect.z0 && l.z < b.rect.z1).length, `${b.id} daylight`).toBeGreaterThan(0);
         log(`seed ${seed} ${b.id} ${b.roof!.style} w ${b.width} len ${b.length}: ribs ${st.ribs} panes ${st.panes} purlins ${st.purlins} meshes ${st.meshes} tris ${st.triangles}`);
       }
       // no down-facing drawn surface inside a roofed deck above the springing line other than the roof itself

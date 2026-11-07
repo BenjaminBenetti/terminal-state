@@ -7,10 +7,12 @@
 //  - the grid: the coffer cells' ceiling rises by SKYLIGHT.depth (the builder then draws the well's walls as the area's ceiling step
 //    faces and no slab ceiling over it: world/skywaysArch.ts ceilKey; world/skywaysSkylights.ts the glass and the sky at its top).
 //    Walkability, floors, doors and props are untouched (the coffer is above the ceiling line);
+//  - the glazed bridges (layout version 3 roofs): their decks' ceiling fixtures become daylight sources under the glass
+//    (glazedBridgeDaylight: nothing hangs at the roof's ridge);
 //  - daylight: one fixture-less (virtual) light-field source under each coffer (the Office's DAYLIGHT_TINT); ceiling fixtures that
 //    hung where a coffer now opens are dropped by index.ts dropFloatingFixtures (this pass runs before it).
-// Excluded: the add-on's rooms, anchor stores / shops, bridges, back of house, stair cores (class 'public' areas only), the courts
-// with a hung landmark (the bronze geese hang from the ceiling).
+// Excluded: the add-on's rooms, anchor stores / shops, bridges, back of house, stair cores, tenant office wings (class 'public' areas
+// only), the courts with a hung landmark (the bronze geese hang from the ceiling).
 
 import {CELL, FLOOR} from '../grid';
 import type {LightPlacement, StationLayout} from '../stationTypes';
@@ -98,7 +100,35 @@ export function skywaysSkylights(layout: StationLayout): number {
   }
   info.skylights = out;
   moveFixturesOutOfWells(layout, out);
+  glazedBridgeDaylight(layout);
   return out.length;
+}
+
+/** A glazed bridge's daylight source: its drop under the springing line and its power (the lighting pass's fixtures it replaces). */
+export const BRIDGE_DAYLIGHT = {below: 0.3, power: 0.42} as const;
+
+/**
+ * Under a glazed bridge roof (layout version 3: the deck's ceiling is the roof's apex, nothing to hang a fixture from but the glass)
+ * the lighting pass's ceiling fixtures of the deck become fixture-less DAYLIGHT sources (virtual, the Office's DAYLIGHT_TINT) at the
+ * same spots, BRIDGE_DAYLIGHT.below under the springing line: the tube is lit by the sky through its glass, no lamp floats at the ridge.
+ */
+function glazedBridgeDaylight(layout: StationLayout): number {
+  const info = layout.skyways!;
+  let n = 0;
+  for (const b of info.bridges) {
+    if (!b.roof) continue;
+    for (const l of layout.lights) {
+      if (l.virtual || l.area !== b.area) continue;
+      l.virtual = true;
+      l.y = r3(b.roof.springY - BRIDGE_DAYLIGHT.below);
+      l.tint = DAYLIGHT_TINT;
+      l.warm = false; l.broken = false; l.flicker = false; l.dying = false;
+      l.power = BRIDGE_DAYLIGHT.power;
+      l.level = b.level;
+      n++;
+    }
+  }
+  return n;
 }
 
 /**
@@ -129,7 +159,7 @@ function moveFixturesOutOfWells(layout: StationLayout, wells: readonly SkywaysSk
 /** A skyway-storey public court / concourse of a usable size (the skylit courts' and the court bench-planters' candidates). */
 export function skylightCandidate(layout: StationLayout, a: StationLayout['areas'][number]): boolean {
   return (a.level ?? 0) === SKYWAYS_LEVEL.skyway && a.publicSpace && a.kind !== 'passage' && a.type !== 'shop' && a.type !== 'eatery' && a.type !== 'washroom'
-    && (a.type as string) !== 'stair-core' && !NOT_SKYLIT.test(a.label ?? '') && !layout.skyways?.bridges.some(b => b.area === a.id)
+    && (a.type as string) !== 'stair-core' && !/^office-/.test(a.type as string) && !NOT_SKYLIT.test(a.label ?? '') && !layout.skyways?.bridges.some(b => b.area === a.id)
     && Math.min(a.w, a.h) >= SKYLIGHT.minSide && a.w * a.h * CELL * CELL >= SKYLIGHT.minArea;
 }
 

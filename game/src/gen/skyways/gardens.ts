@@ -67,7 +67,7 @@ function keepCirculation(ctx: PlaceCtx, layout: StationLayout): void {
 function excludedAreas(layout: StationLayout): Set<number> {
   const info = layout.skyways!, out = new Set<number>([...info.bridges.map(b => b.area), ...info.addon.areas]);
   for (const an of info.anchors ?? []) for (const id of [an.floor, ...(an.upper !== undefined ? [an.upper] : []), ...an.zones, ...an.stock]) out.add(id);
-  for (const a of layout.areas) if (!a.publicSpace || a.type === 'shop' || a.type === 'eatery' || out.has(a.parent)) out.add(a.id);
+  for (const a of layout.areas) if (!a.publicSpace || a.type === 'shop' || a.type === 'eatery' || /^office-/.test(a.type as string) || out.has(a.parent)) out.add(a.id);
   return out;
 }
 
