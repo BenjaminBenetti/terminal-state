@@ -12,6 +12,7 @@ import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
 import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 import type {FuelHudView} from '../world/fuelPort'; // task train-fuel-system (lane PORT)
+import {FUEL} from '../fuel/fuel'; // task studio-general-armor-20261107-231448-01 (the two-tank pip row)
 
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL readout — a row at the top of the light panel in the
 // battery meter's style (icon, label, four quarter pips like the battery bar's cells, cream text; amber when the train cannot make one
@@ -21,6 +22,7 @@ const FUEL_CSS = `
 #fuel-tag .pips { display: flex; gap: 2px; }
 #fuel-tag .pips i { width: 11px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
 #fuel-tag .pips i.on { background: var(--cream); }
+#fuel-tag .pips i.gap { margin-left: 4px; }
 #fuel-tag .txt { color: var(--cream); white-space: nowrap; }
 #fuel-tag.low .pips i.on { background: var(--mustard); }
 #fuel-tag.low .txt, #fuel-tag.low .ico { color: var(--mustard); }`;
@@ -324,7 +326,8 @@ export class Hud {
     if (!v) return;
     el.classList.toggle('low', v.low);
     el.title = 'Train fuel: one tank = one stop. Pour fuel cans in at the fuel cap (E); fuel cans in the train chest and fuel carts inside the car are burnt by themselves when the train departs.';
-    const pips = Array.from({length: 4}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}"></i>`).join('');
+    // (task studio-general-armor-20261107-231448-01) the train's two-tank reserve: two groups of four quarter pips (one group = one hop)
+    const pips = Array.from({length: FUEL.trainTankUnits}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}${i > 0 && i % FUEL.tankUnits === 0 ? ' gap' : ''}"></i>`).join('');
     el.innerHTML = `<span class="ico">${ICONS.fuelCan}</span><span class="pips">${pips}</span><span class="txt">${v.text.replace(/[&<>]/g, c => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'))}</span>`;
   }
   private fuelKey = '';
