@@ -41,6 +41,9 @@ export interface Ramp {
   risers: number;
   /** Clear height above the pitch line (the ceiling follows the flight). */
   headroom: number;
+  /** Task studio-skyways-rework-20261107-054512-01: an OPEN stair well (a large headroom) whose band is capped by the cell's own
+   *  ceiling (ceil[i]: the well's ceiling) everywhere — render, rays and collision alike. Absent: the legacy rule (unchanged). */
+  capCeil?: boolean;
 }
 
 export interface StandPoint { x: number; y: number; z: number }
@@ -202,7 +205,10 @@ export class Grid {
     if (!this.inBounds(x, y)) return Infinity;
     const i = y * this.w + x;
     const r = this.rampIdx[i];
-    if (r >= 0) { const R = this.ramps[r]; return rampHeight(R, R.axis === 'x' ? wx : wz) + R.headroom; }
+    if (r >= 0) {
+      const R = this.ramps[r], c = rampHeight(R, R.axis === 'x' ? wx : wz) + R.headroom;
+      return R.capCeil && this.hasCeil(i) ? Math.min(c, this.ceil[i]) : c;
+    }
     return this.hasCeil(i) ? this.ceil[i] : Infinity;
   }
   /** Lowest floor of any carved cell (physics slab depth). */

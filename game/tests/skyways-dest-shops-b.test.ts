@@ -14,8 +14,8 @@ import {fileURLToPath} from 'node:url';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout, Area} from '../src/gen/stationTypes';
 import type {SkywaysAnchor} from '../src/gen/skyways/skywaysTypes';
-import {skywaysIssues} from '../src/gen/skyways/validate';
-import {ANCHOR_FAMILIES} from '../src/gen/skyways/carve';
+import {skywaysIssues} from '../src/gen/skyways/legacy77/validate';
+import {ANCHOR_FAMILIES} from '../src/gen/skyways/legacy77/carve';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../src/gen/props';
 import {doorSide} from '../src/gen/placeKit';
@@ -26,7 +26,7 @@ import {holderFinds, holderTable, isLootHolderKind, type HolderKind} from '../sr
 import {SKYWAYS_DEST_PROPS, type SkywaysDestProp} from '../src/assets/skywaysDestProps.generated';
 import {DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
 import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SCALE, SHOPS_B_SPECS, SKYD_SCREEN_PARTS} from '../src/gen/skyways/destinations/kindsShopsB';
-import {SHOPS_B_FAMILIES} from '../src/gen/skyways/destinations/shopsB';
+import {SHOPS_B_FAMILIES} from '../src/gen/skyways/legacy77/destinations/shopsB';
 
 const pub = (rel: string) => fileURLToPath(new URL('../public/' + rel, import.meta.url));
 const near = (a: number, b: number, eps = 1e-3) => Math.abs(a - b) <= eps;

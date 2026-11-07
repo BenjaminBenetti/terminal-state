@@ -87,7 +87,13 @@ export interface SkywaysBridge {
   length: number;
   /** Starts with broken panes and gas already flowing across it (a mask is needed). */
   breached: boolean;
+  /** (layout version 3, task studio-skyways-rework-20261107-054512-01) the glazed roof: its cross-section, the absolute y where it
+   *  springs from the glazed side walls (the side glazing's head) and its apex (the deck's ceiling); ribs every `rib` m. */
+  roof?: SkywaysBridgeRoof;
 }
+
+/** A bridge's glazed roof (world/skywaysArch.ts draws it; the deck's area ceiling = apexY). */
+export interface SkywaysBridgeRoof { style: 'vault' | 'faceted' | 'gable' | 'flat'; springY: number; apexY: number; rib: number }
 
 export interface SkywaysStreet {
   /** Road + sidewalks between two building rows (world m; street level). */
