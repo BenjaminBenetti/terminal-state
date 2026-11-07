@@ -94,6 +94,7 @@ export class FuelStations {
   private holderInputs(cm: ContainerManager): {ins: FuelHolderIn[]; byKey: Map<string, Holder>} {
     const ins: FuelHolderIn[] = [], byKey = new Map<string, Holder>();
     for (const h of cm.all) {
+      if (h.prop.cargo) continue; // task train-all-cargo: a carried holder (always open and empty) is never a fuel slot: the generated order stays
       const key = holderKeyOf(h);
       byKey.set(key, h);
       ins.push({key, kind: h.kind, index: h.index, area: h.prop.area, level: h.prop.level ?? 0, x: h.prop.x, z: h.prop.z, surfaces: h.surfaces, lots: h.state.lots});

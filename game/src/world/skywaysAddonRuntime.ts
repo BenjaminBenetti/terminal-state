@@ -57,7 +57,8 @@ export interface Rope {
 export function planRopes(layout: StationLayout): Rope[] {
   const car = layout.skyways?.addon.car;
   if (!car) return planQueueRopes(layout);
-  const posts = layout.props.filter(p => p.kind === 'skywaysPrizeStanchion' && (p.level ?? 0) === car.level)
+  // (task train-all-cargo: a carried stanchion is loose decor, one the station lost to the train is gone: neither joins the ring)
+  const posts = layout.props.filter(p => p.kind === 'skywaysPrizeStanchion' && (p.level ?? 0) === car.level && !p.cargo && !p.cargoGone)
     .map(p => ({p, a: Math.atan2(p.x - car.x, p.z - car.z)})).sort((q, r) => q.a - r.a).map(q => q.p);
   const out: Rope[] = [];
   for (let i = 0; i < posts.length && posts.length > 1; i++) {
@@ -79,7 +80,7 @@ export function planQueueRopes(layout: StationLayout): Rope[] {
   for (const chain of layout.skyways?.addon.queues ?? []) {
     for (let i = 0; i + 1 < chain.length; i++) {
       const a = layout.props[chain[i]], b = layout.props[chain[i + 1]];
-      if (a?.kind !== 'skywaysPrizeStanchion' || b?.kind !== 'skywaysPrizeStanchion') continue;
+      if (a?.kind !== 'skywaysPrizeStanchion' || b?.kind !== 'skywaysPrizeStanchion' || a.cargoGone || b.cargoGone) continue; // (task train-all-cargo)
       const span = Math.hypot(a.x - b.x, a.z - b.z);
       if (span > SKYWAYS_ROPE.maxSpan) continue;
       out.push({a, b, len: span * SKYWAYS_ROPE.slack, floor: a.y, dropped: false, last: []});
@@ -102,7 +103,8 @@ export function ropeLine(rope: Rope, pose: (p: PropPlacement, out: THREE.Matrix4
   va.set(0, SKYWAYS_STANCHION.ringY, 0).applyMatrix4(ma);
   vb.set(0, SKYWAYS_STANCHION.ringY, 0).applyMatrix4(mb);
   const span = va.distanceTo(vb);
-  if (!rope.dropped && (ma.elements[5] < UPRIGHT_COS || mb.elements[5] < UPRIGHT_COS || span > rope.len)) rope.dropped = true;
+  // (task train-all-cargo: a post taken away in the train — cargoGone — drops its ropes too)
+  if (!rope.dropped && (ma.elements[5] < UPRIGHT_COS || mb.elements[5] < UPRIGHT_COS || span > rope.len || rope.a.cargoGone || rope.b.cargoGone)) rope.dropped = true;
   if (!rope.dropped) {
     // a hanging cable: parabolic sag for its length (s = sqrt(3 L (S - L) / 8)), ends on the eye rings
     const sag = Math.sqrt(Math.max(0, 3 * span * (rope.len - span) / 8));
@@ -162,7 +164,7 @@ export class SkywaysAddonRuntime {
 
   install(): this {
     const h = this.host;
-    h.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_ADDON_ART_WAIT_MS))]) : Promise.resolve()));
+    h.sectionPreloads?.push(layout => (layout.skyways || layout.props.some(p => p.cargo) ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_ADDON_ART_WAIT_MS))]) : Promise.resolve()));
     h.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     h.frameHooks.push(() => this.frame());
     return this;

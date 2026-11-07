@@ -348,6 +348,14 @@ export interface PropPlacement {
    * statics and loose-item queries keep the box. The mall's round atrium columns (gen/mall/columns.ts).
    */
   round?: boolean;
+  /**
+   * Task studio-beta-train-all-cargo-20261107-184244-01 (world/trainPropCargo.ts): a CARRIED prop appended to this layout (the train's
+   * cargo in its parked car, or one left lying in this station) — its canonical identity ('<section id>#<layout index>' where it was
+   * generated). Absent on every generated placement.
+   */
+  cargo?: string;
+  /** Task train-all-cargo: a generated placement this station lost to the train (hidden at build; never respawned, roped or stocked). */
+  cargoGone?: boolean;
 }
 
 export function footprint(kind: PropKind, rot: number): {hx: number; hz: number} {

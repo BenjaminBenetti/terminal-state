@@ -30,6 +30,17 @@ export class LevelResources {
   private readonly owned = new Map<string, Set<Disposable>>();
   /** Set once a level is built (Game.buildSection), cleared when the next level is prepared: a load while sealed counts as `late`. */
   sealed = false;
+  /**
+   * Task studio-beta-train-all-cargo-20261107-184244-01: (level, url) pairs requested since the section being prepared began
+   * (beginSection; null until the Game calls it). A carried prop's art (a Skyways poster board in the Subway's train) is loaded under its
+   * own level by the section's preloads; retainOnly keeps what this section asked for, whatever its level, instead of releasing it.
+   */
+  private requested: Set<string> | null = null;
+
+  /** Task train-all-cargo: a section starts preparing (Game.prepareSection) — what it requests from now on is retained by retainOnly. */
+  beginSection(): void {
+    this.requested = new Set();
+  }
   readonly stats = {loaded: 0, failed: 0, refused: 0, released: 0, late: 0};
 
   constructor(private readonly loadTexture: TextureLoad = url => new THREE.TextureLoader().loadAsync(assetUrl(url))) {}
@@ -41,6 +52,7 @@ export class LevelResources {
       console.warn(`Level ${level} asked for another level's texture (refused): ${url}`);
       return Promise.resolve(null);
     }
+    this.requested?.add(`${level}\u0000${url}`); // (task train-all-cargo)
     let per = this.pending.get(level);
     if (!per) this.pending.set(level, (per = new Map()));
     const cached = per.get(url);
@@ -83,13 +95,18 @@ export class LevelResources {
     let n = 0;
     for (const lv of [...new Set([...this.pending.keys(), ...this.textures.keys(), ...this.owned.keys()])]) {
       if (lv === level) continue;
-      for (const t of this.textures.get(lv)?.values() ?? []) { t.dispose(); n++; }
-      const owned = [...(this.owned.get(lv) ?? [])];
+      // task train-all-cargo: what the section being built requested stays (its textures + the owned materials mapping them)
+      const keep = new Set<string>(), keptTex = new Set<THREE.Texture>();
+      for (const url of new Set([...(this.pending.get(lv)?.keys() ?? []), ...(this.textures.get(lv)?.keys() ?? [])])) if (this.requested?.has(`${lv}\u0000${url}`)) keep.add(url);
+      for (const [url, t] of this.textures.get(lv) ?? []) { if (keep.has(url)) { keptTex.add(t); continue; } t.dispose(); n++; }
+      const all = [...(this.owned.get(lv) ?? [])], kept = all.filter(r => keptTex.has((r as {map?: THREE.Texture | null}).map as THREE.Texture));
+      const owned = all.filter(r => !kept.includes(r));
       if (owned.length) retire(() => { for (const r of owned) { try { r.dispose(); } catch (err) { console.warn('Releasing a level resource failed', err); } } });
       n += owned.length;
-      this.pending.delete(lv);
-      this.textures.delete(lv);
-      this.owned.delete(lv);
+      if (!keep.size && !kept.length) { this.pending.delete(lv); this.textures.delete(lv); this.owned.delete(lv); continue; }
+      for (const url of [...(this.pending.get(lv)?.keys() ?? [])]) if (!keep.has(url)) this.pending.get(lv)!.delete(url);
+      for (const url of [...(this.textures.get(lv)?.keys() ?? [])]) if (!keep.has(url)) this.textures.get(lv)!.delete(url);
+      if (kept.length) this.owned.set(lv, new Set(kept)); else this.owned.delete(lv);
     }
     this.stats.released += n;
     return n;

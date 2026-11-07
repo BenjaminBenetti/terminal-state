@@ -196,6 +196,7 @@ function drawCables(group: THREE.Group, kind: string, list: readonly PropPlaceme
   const {y, xs} = destHangCables(m);
   const mats: {level: number; m: THREE.Matrix4}[] = [];
   for (const p of list) {
+    if (p.cargo) continue; // (task train-all-cargo: a carried prop is not hung from this ceiling)
     const g = layout.levels?.[p.level ?? 0]?.grid ?? layout.grid, s = destPlacementScale(p) * k, c = Math.cos(p.rot), sn = Math.sin(p.rot);
     for (const ox of xs) {
       const wx = p.x + ox * s * c, wz = p.z - ox * s * sn, y0 = p.y + y * s, ceil = g.ceilAt(wx, wz);

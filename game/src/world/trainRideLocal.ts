@@ -40,6 +40,24 @@ export interface RideLocalModel {
   named: Record<string, PropPlacement>;
   /** The console box used (train-local). */
   console: ConsoleRect;
+  /** Task train-all-cargo: riding cargo footprints by owner (setRideCargoBoxes) and the model's own index while any are set. */
+  cargo?: {base: PropIndex; boxes: Map<string, readonly PropPlacement[]>};
+}
+
+/**
+ * Task studio-beta-train-all-cargo-20261107-184244-01: riding cargo the player collides with — the fuel carts' and the carried props'
+ * footprints (step frame), by owner. The model's index becomes its own boxes + every owner's (rebuilt on a change); with none left it is
+ * exactly its own index again. One owner never undoes another's.
+ */
+export function setRideCargoBoxes(model: RideLocalModel, owner: string, boxes: readonly PropPlacement[] | null): void {
+  if (!model.cargo) {
+    if (!boxes?.length) return;
+    model.cargo = {base: model.props, boxes: new Map()};
+  }
+  const c = model.cargo;
+  if (boxes?.length) c.boxes.set(owner, [...boxes]); else c.boxes.delete(owner);
+  if (!c.boxes.size) { model.props = c.base; model.cargo = undefined; return; }
+  model.props = new PropIndex(model.levels, [...model.boxes, ...[...c.boxes.values()].flat()]);
 }
 
 const box = (x0: number, x1: number, z0: number, z1: number, h: number): PropPlacement => ({

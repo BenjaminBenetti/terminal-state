@@ -312,7 +312,7 @@ describe('train loose cargo: refused rides, teardowns, saves', () => {
     refuse(f => { items(f)[0].q = [0, 0, 0, 2]; }, /orientation/);
     refuse(f => { items(f)[0].x = 1e4; }, /cargo x/);
     refuse(f => { delete items(f)[1].id; }, /bag needs an id/);
-    refuse(f => { f.run.participants['player-train'].cargo.v = 2; }, /version/);
+    refuse(f => { f.run.participants['player-train'].cargo.v = 3; }, /version/); // (task train-all-cargo: v2 = items + props, the current format)
     refuse(f => { const inv = f.run.carry.inventory; inv.pack[0] = {uid: 910001, itemId: 'water', count: 1}; }, /duplicate item uid/); // shared with the carried inventory
   });
 

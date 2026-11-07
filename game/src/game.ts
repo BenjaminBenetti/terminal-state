@@ -148,6 +148,8 @@ import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task tra
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
+import {installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
+import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
 import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from './assets/companyAssets'; // Task office-overhaul-20261030 (lane TENANTS): company models load lazily per layout (officeModelKeysFor); lane FURN (office-props-physics-scale-20261030): + the separated loose clutter
@@ -353,6 +355,8 @@ export class Game {
   fuelCarts!: FuelCarts;
   /** Task train-loose-cargo: the train's loose items / bags (world/trainCargo.ts). */
   trainCargo!: TrainCargoSystem;
+  /** Task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard (world/trainPropCargo.ts). */
+  trainPropCargo!: TrainPropCargo;
   /** Task skyways-level-20261106 (lane CAR): the Skyways prize car — while `driving`, update() steps the player through it (world/skywaysCar.ts). */
   skywaysCar!: SkywaysCar;
   /** Task office-overhaul-20261030 (lane INTERACT, #13): bathroom stalls — door collision, walk-in, close refusal, toilet model (world/stalls.ts). */
@@ -408,6 +412,12 @@ export class Game {
   readonly stateListeners: ((state: GameState, prev: GameState) => void)[] = [];
   /** Awaited after a section is generated and before it is built (lazy models / textures the builder needs). */
   readonly sectionPreloads: ((layout: StationLayout) => Promise<void>)[] = [];
+  /**
+   * Task studio-beta-train-all-cargo-20261107-184244-01: layout augmentation — run in prepareSection right after generateSection (`phase`
+   * 'prepare': before the model keys / preloads, with the run being prepared) and at the top of buildSection ('build': the installed run,
+   * before anything reads the layout). The train's prop cargo appends the carried props here (world/trainPropCargo.ts).
+   */
+  readonly sectionLayoutHooks: ((layout: StationLayout, key: SectionKey, run: RunState, phase: 'prepare' | 'build') => void)[] = [];
   /** Extra `propModels` keys a section needs besides its p7 props (lane WORLD-GEN: office models): fetched before the build, kept by the trim. */
   // (round 2, R3) + the generated annex genset model on a layout with a genset record (a shared file: every annex-bearing level)
   // (task mall-lingerie-20261102, lane STORE) + the lingerie store's display sets: lane FIT's outfit files they are cut from (lazy, same keys)
@@ -648,6 +658,10 @@ export class Game {
     // runs FIRST — unshifted — and its build LAST)
     this.trainCargo = installTrainCargo(this);
     hookName('trainCargo');
+    // task studio-beta-train-all-cargo-20261107-184244-01: the movable props aboard travel too (after the item cargo: its teardown runs first
+    // — unshifted —, its holders hook after the fuel holders', its build last, after the train's floor colliders)
+    this.trainPropCargo = installTrainPropCargo(this);
+    hookName('trainPropCargo');
     this.sectionModelKeys.push(playerTrainModelKeys);
     this.sectionModelKeys.push(skywaysKitchenModelKeysFor); // task studio-skyways-level-20261106-054448 (lane FOOD): the ramen restaurant's skyways-* models
     this.sectionModelKeys.push(skywaysAddonModelKeysFor); // task studio-skyways-level-20261106-054448 (lane ADDON): the add-on's skyways-* models
@@ -764,7 +778,9 @@ export class Game {
   async prepareSection(key: SectionKey, run: RunState = this.run, onProgress?: (frac: number, label: string) => void): Promise<StationLayout> {
     this.lifecycleCounts.prepare++;
     this.propModels.sealed = this.levelResources.sealed = false; // lane PACKAGE (track3): the loading screen fetches the level's assets
+    this.levelResources.beginSection(); // (task train-all-cargo: a carried prop's art, whatever its level, stays with this section)
     const layout = this.generateSection(key, run);
+    for (const f of this.sectionLayoutHooks) { try { f(layout, key, run, 'prepare'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     const lazyKeys = this.modelKeysFor(layout, key.level);
     await this.propModels.ensure(lazyKeys, onProgress);
     for (const k of lazyKeys) { const g = this.propModels.get(k); if (g) trackUploads(modelTextures(g)); } // (lane PERF, track3) upload recorder only
@@ -776,12 +792,32 @@ export class Game {
 
   /** Iteration 16: every lazy model key a section uses (p7 props + lane keys, e.g. office models). */
   private modelKeysFor(layout: StationLayout, level: LevelId): string[] {
-    const extra = this.sectionModelKeys.flatMap(f => { try { return [...f(layout)]; } catch (err) { console.warn('Iteration 16: section model keys failed', err); return []; } });
+    // task train-all-cargo: CARRIED props (placement.cargo: the train's, or left in this station) bring their own models whatever their
+    // level (a mall cafe chair in the Subway's train): the generated placements under the level rule, the carried ones' keys as well
+    const carried = layout.props.filter(p => p.cargo);
+    const own = carried.length ? {...layout, props: layout.props.filter(p => !p.cargo)} : layout;
     // Task track3-eaton-centre-20261031 (lane PACKAGE): another level's own art (assets/levelAssets.ts, e.g. mall-*.glb outside the
     // mall) is never fetched or kept for this level
-    const sel = selectLevelKeys(level, [...new Set([...p7ModelKeysFor(layout), ...extra])], this.propModels.catalogue);
+    const sel = selectLevelKeys(level, this.layoutModelKeys(own), this.propModels.catalogue);
     if (sel.foreign.length) console.warn(`Level ${level} asked for another level's models (skipped): ${sel.foreign.join(', ')}`);
-    return sel.keys;
+    return carried.length ? [...new Set([...sel.keys, ...this.carriedModelKeys(layout, carried)])] : sel.keys;
+  }
+
+  private layoutModelKeys(layout: StationLayout): string[] {
+    const extra = this.sectionModelKeys.flatMap(f => { try { return [...f(layout)]; } catch (err) { console.warn('Iteration 16: section model keys failed', err); return []; } });
+    return [...new Set([...p7ModelKeysFor(layout), ...extra])];
+  }
+
+  /** Task train-all-cargo: the lazy model keys carried placements add (beyond what the layout without props asks for). */
+  private carriedModelKeys(layout: StationLayout, carried: readonly PropPlacement[]): string[] {
+    const none = new Set(this.layoutModelKeys({...layout, props: []}));
+    return this.layoutModelKeys({...layout, props: [...carried]}).filter(k => !none.has(k));
+  }
+
+  /** Task train-all-cargo: are the lazy models these carried placements need resident (a fetch that failed: they wait as records)? */
+  carriedModelsReady(layout: StationLayout, props: readonly PropPlacement[]): boolean {
+    const cat = this.propModels.catalogue;
+    return this.carriedModelKeys(layout, props).every(k => !cat[k] || this.propModels.has(k));
   }
 
   /** Lane PACKAGE (track3): the current level's lazy working set / resident set (QA `__LL.levelAssets()`). */
@@ -874,6 +910,8 @@ export class Game {
     this.layout = layout;
     this.currentSeed = layout.seed >>> 0;
     this.rand = mulberry32(layout.seed ^ 0x5bd1e995);
+    // task train-all-cargo: the carried props exactly as the installed run has them (Retry / Load installed theirs after the prepare)
+    for (const f of this.sectionLayoutHooks) { try { f(layout, key, this.run, 'build'); } catch (err) { console.warn('train-all-cargo: a layout hook failed', err); } }
     // Iteration 07 (Lane P2): the prepared layout (its lazy prop models loaded); placements whose model is missing are dropped.
     const p7Keys = p7ModelKeysFor(this.layout), keep = new Set(this.modelKeysFor(this.layout, key.level));
     dropUnloadedP7(this.layout, new Set(p7Keys.filter(k => this.propModels.has(k))));
@@ -1191,7 +1229,7 @@ export class Game {
    */
   commitEndingSave(): CommitResult | null {
     if (!this.run.campaign) return null;
-    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); } // (task fuel-feedback: the station's fuel record with its memory)
+    if (this.world) { this.saveSectionMemory(); this.gear.flush(); this.fuelStations?.flush(); this.trainPropCargo?.flush(); } // (task fuel-feedback: the station's fuel record with its memory; task train-all-cargo: its carried / lost props)
     return this.commitSave('ending', {pose: {...trainSpawnLocal(), yaw: 0, pitch: 0, crouched: false}});
   }
 
@@ -1214,6 +1252,7 @@ export class Game {
         else if (u.status === 'unchanged') console.warn(`Terminal State: save compatibility — no Maintenance Route could be added to this older save (${u.reason}); it loads unchanged.`);
         return u.state;
       });
+      this.trainPropCargo?.notePrepared(p.run, p.data.participants as Record<string, unknown> | undefined); // (task train-all-cargo: their models are prepared too)
       return {ok: true, restore: {...p, slot: v.value.meta.slot, revision: v.value.meta.revision}};
     } catch (err) { return {ok: false, error: `This save cannot be loaded (${String((err as Error)?.message ?? err).slice(0, 160)}).`}; }
   }
@@ -1511,7 +1550,7 @@ export class Game {
   fuelCheck(hops: number): {ok: true; cost: number; debit: FuelDebit; carts: CartFuel[]} | {ok: false; error: string} {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
     const carts = this.fuelCartsLike();
-    const block = carts?.departBlock() ?? null;
+    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? null; // (task train-all-cargo: nor a prop in a doorway)
     if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
     const debit = planDebit(cost, tf.tank, aboard, chest);

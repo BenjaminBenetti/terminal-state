@@ -57,7 +57,7 @@ import {FUEL, cartProblem, tanksText, type CargoCartJSON, type CartFuel, type St
 import {PORT, cartAboard, cartStraddles, fuelPortLocal, type FuelCartsLike} from '../fuel/trainPort';
 import {playerTrainPlacement, trainToWorld, worldToTrain, type TrainPlacement} from '../gen/playerTrain';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from './playerTrainSpec';
-import {RIDE_FRAME, type RideLocalModel} from './trainRideLocal';
+import {RIDE_FRAME, setRideCargoBoxes, type RideLocalModel} from './trainRideLocal';
 import {rayBox, rayCylinder, type Box3Like, type P3} from './towerShared';
 import {CART, cartFloorAt, cartMass, pushByPlayer, separateCarts, separatePlayer, stepCart, turnToward, wrapYaw, type CartBody, type CartTarget, type CartWorld} from './fuelCartPhysics';
 import {CART_LOOK, CartHose, buildCartView, cartMaterials, cartModelsGen, loadCartModels, refreshCartBody, setGauge, type CartView} from './fuelCartModel';
@@ -814,15 +814,15 @@ export class FuelCarts implements FuelCartsLike {
       kind: 'column', x: c.local.x + RIDE_FRAME.ox, z: c.local.z + RIDE_FRAME.oz, y: -1, rot: 0, area: -1,
       hx: CART.radius, hz: CART.radius, h: H, blocksSight: false, variant: 0, level: 0, round: true,
     }));
-    const mine = new PropIndex(model.levels, [...model.boxes, ...boxes]);
-    model.props = mine;
-    this.captured.swap = {model, orig, mine};
+    // (task train-all-cargo: shared with the carried props' footprints — world/trainRideLocal.ts setRideCargoBoxes, by owner)
+    setRideCargoBoxes(model, 'fuel-carts', boxes);
+    this.captured.swap = {model, orig, mine: model.props};
   }
 
   private unswapRideCollision(): void {
     const s = this.captured?.swap;
     if (!s) return;
-    if (s.model.props === s.mine) s.model.props = s.orig;
+    setRideCargoBoxes(s.model, 'fuel-carts', null);
     this.captured!.swap = null;
   }
 

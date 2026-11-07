@@ -26,7 +26,8 @@ import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
-import {cargoProblem} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items
+import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
+import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
@@ -196,6 +197,21 @@ const STACK_KEYS = ['uid', 'itemId', 'count', 'mag', 'bag', 'filter', 'air'] as 
  * validateRunData sets it for the duration of its walk; migrateFilterUnits then rescales the charges to FILTER_LIFE_S.
  */
 let filterCapS: number = FILTER_LIFE_S;
+/**
+ * Task train-all-cargo: the carried-prop identities seen in the scope being checked (the run: its memories + the train; the Retry snapshot:
+ * its own) — one prop, one place: never aboard AND lying in a station, never in two stations.
+ */
+let propScope = new Set<string>();
+
+/** Task train-all-cargo: carried props / riders of real prop kinds, each identity once per scope. */
+function carriedProps(list: readonly CargoPropJSON[], path: string): void {
+  list.forEach((c, i) => {
+    const known = (k: string) => Object.prototype.hasOwnProperty.call(PROP_DEFS, k);
+    if (!known(c.kind) || (c.riders ?? []).some(r => !known(r.kind))) bad(`${path}[${i}].kind`, 'not a known prop kind');
+    if (propScope.has(c.id)) bad(`${path}[${i}].id`, `carried prop ${c.id} is in two places`);
+    propScope.add(c.id);
+  });
+}
 
 /**
  * An item stack: a known item, a legal count, a weapon's magazine, a gas mask's filter, a backpack's own contents (one level).
@@ -454,6 +470,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
       const cp = cargoProblem(r.cargo);
       if (cp) bad(`${p}.cargo`, cp);
       (r.cargo as {items: {stack: unknown}[]}).items.forEach((it, i) => stack(it.stack, `${p}.cargo.items[${i}].stack`, {uid: true, inBag: false, seen, needBag: true}));
+      carriedProps((r.cargo as {props?: CargoPropJSON[]}).props ?? [], `${p}.cargo.props`); // task train-all-cargo: v2's movable props aboard
     }
   }
 }
@@ -483,6 +500,11 @@ function lanes(v: unknown, path: string): void {
     if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp);
     // task skyways-vehicle-20261107 (v2): the trunk's stacks as strictly as the Lockbox's (uids unique within it, bags, mags, filter, air)
     if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
+  }
+  if (has(o, STATION_PROPS_LANE)) { // task train-all-cargo: the layout props the station lost to the train + the carried props lying there
+    const sp = stationPropsProblem(o[STATION_PROPS_LANE]);
+    if (sp) bad(`${path}.${STATION_PROPS_LANE}`, sp);
+    carriedProps((o[STATION_PROPS_LANE] as {here: CargoPropJSON[]}).here, `${path}.${STATION_PROPS_LANE}.here`);
   }
 }
 
@@ -565,9 +587,13 @@ function entry(v: unknown, path: string, net: SubwayNetwork): void {
   survival(e.survival, `${path}.survival`);
   battery(e.battery, `${path}.battery`);
   const seen = new Set<number>();
-  inventory(e.inventory, `${path}.inventory`, seen);
-  participants(e.lanes, `${path}.lanes`, seen);
-  memories(e.memories, `${path}.memories`, ids, scope ?? '\u0000');
+  const outer = propScope;
+  propScope = new Set(); // (task train-all-cargo: the snapshot is its own world)
+  try {
+    inventory(e.inventory, `${path}.inventory`, seen);
+    participants(e.lanes, `${path}.lanes`, seen);
+    memories(e.memories, `${path}.memories`, ids, scope ?? '\u0000');
+  } finally { propScope = outer; }
   stats(e.stats, `${path}.stats`);
 }
 
@@ -581,7 +607,9 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
   const prevCap = filterCapS;
   filterCapS = has(r, 'filterLifeS') ? num(r.filterLifeS, `${path}.filterLifeS`, 1, 3600) : LEGACY_FILTER_LIFE_S;
-  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; }
+  const prevProps = propScope;
+  propScope = new Set();
+  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; }
 }
 
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
