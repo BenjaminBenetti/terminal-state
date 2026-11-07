@@ -10,6 +10,7 @@ import type {StationLayout} from '../gen/stationTypes';
 import {destArtAtlas, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysDestArtMaterial, skywaysDestAtlases} from './skywaysDestinations';
+import {preloadSkywaysStoreDesign} from './skywaysStoreDesignRuntime'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN)
 
 /** Longest wait for the art atlases before the world is built (then: the plain boards). */
 export const SKYWAYS_DEST_ART_WAIT_MS = 6000;
@@ -31,6 +32,8 @@ export class SkywaysDestRuntime {
 
   install(): this {
     this.host.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_DEST_ART_WAIT_MS))]) : Promise.resolve()));
+    // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-DESIGN): the design store's framed-print atlas (its own preload)
+    this.host.sectionPreloads?.push(layout => (layout.skyways ? Promise.race([preloadSkywaysStoreDesign(this.host, layout), new Promise<void>(r => setTimeout(r, SKYWAYS_DEST_ART_WAIT_MS))]) : Promise.resolve()));
     return this;
   }
 
