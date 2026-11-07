@@ -17,6 +17,7 @@ import {areaConnected, makePlaceCtx, markCell, tryPlaceProp, type PlaceCtx} from
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import type {StationLayout} from '../stationTypes';
 import {keepLandmarkClear} from './destinations/landmarks';
+import {SKYWAYS_MAP_BOARDS} from './mapBoards';
 import {SKYLIGHT, skylightCandidate} from './skylights';
 import {SKYWAYS_LEVEL} from './skywaysTypes';
 import {SKYWAYS_PRIZE_LANE_HALF} from './addonPrize';
@@ -76,6 +77,15 @@ function keepCirculation(ctx: PlaceCtx, layout: StationLayout): void {
     const hall = layout.areas[sf.hall];
     if (!hall || (hall.level ?? 0) !== lv) continue;
     keep(sf.ox - 2, sf.oy - 2, sf.ox + sf.ow + 2, sf.oy + sf.oh + 2);
+  }
+  // (lead integration) every map board's walking ring and its reading strip in front of the face (gen/skyways/mapBoards.ts)
+  for (const p of layout.props) {
+    if (p.kind !== 'skywaysMapBoard' || (p.level ?? 0) !== lv) continue;
+    const fx = Math.sin(p.rot), fz = Math.cos(p.rot), reach = p.hz + SKYWAYS_MAP_BOARDS.front + 0.3;
+    for (let t = -p.hz - SKYWAYS_MAP_BOARDS.ring; t <= reach; t += 0.25) for (let w = -p.hx - SKYWAYS_MAP_BOARDS.ring; w <= p.hx + SKYWAYS_MAP_BOARDS.ring; w += 0.25) {
+      const [x, y] = g.cellOf(p.x + fx * t + fz * w, p.z + fz * t - fx * w);
+      keep(x, y, x + 1, y + 1);
+    }
   }
 }
 

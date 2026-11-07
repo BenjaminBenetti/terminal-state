@@ -118,6 +118,14 @@ export function keepLandmarkClear(ctx: PlaceCtx, layout: StationLayout): void {
     const ax = a && courtAxis(a) === 'z' ? 0 : 1, az = 1 - ax;
     const x0 = lm.x - ax * half, z0 = lm.z - az * half, x1 = lm.x + ax * half, z1 = lm.z + az * half;
     keepCells(ctx, x0, z0, x1, z1, R);
+    // (task studio-skyways-rework-20261107-054512-01) and the court's walking lanes: from each opening to the hero (the court's own
+    // openings when it is not dressed yet: the atrium greenery runs before it; the later passes — planted galleries / courts, map
+    // boards — never close them either)
+    const d = landmarkDressOf(layout).find(q => q.id === lm.id);
+    for (const o of d?.openings ?? (a ? courtOpenings(ctx.g, a) : [])) {
+      const inward = ({N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0]} as const)[o.side];
+      keepCells(ctx, o.x + inward[0] * 0.25, o.z + inward[1] * 0.25, lm.x, lm.z, LANDMARK_DRESS.laneHalf + 0.3, lm.area);
+    }
   }
 }
 
@@ -279,7 +287,8 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     const d = Math.hypot(o.x - X, o.z - Z);
     if (d <= ringR) continue;
     const ux = (X - o.x) / d, uz = (Z - o.z) / d;
-    keepCells(ctx, o.x, o.z, o.x + ux * (d - ringR), o.z + uz * (d - ringR), LANDMARK_DRESS.laneHalf, area.id);
+    // (rework: + half a metre — the cell quantisation and a placed box's edge never pinch the 1.2 m lane)
+    keepCells(ctx, o.x, o.z, o.x + ux * (d - ringR), o.z + uz * (d - ringR), LANDMARK_DRESS.laneHalf + 0.5, area.id);
   }
 
   // --- 3. the plaque beside the main approach, facing the visitor -----------------------------------------------------------------
