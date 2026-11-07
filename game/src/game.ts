@@ -1549,7 +1549,8 @@ export class Game {
   fuelCheck(hops: number): {ok: true; cost: number; debit: FuelDebit; carts: CartFuel[]} | {ok: false; error: string} {
     const cheat = !!this.run.campaign?.cheat, cost = routeCost(hops, cheat);
     const carts = this.fuelCartsLike();
-    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? null; // (task train-all-cargo: nor a prop in a doorway)
+    // (task train-all-cargo: nor a prop in a doorway; task cargo-overflow: nor more aboard than can travel — props, then loose items / bags)
+    const block = carts?.departBlock() ?? this.trainPropCargo?.departBlock() ?? this.trainCargo?.departBlock?.() ?? null;
     if (block) { this.hud.toast(block, true); this.sfx?.denied(); return {ok: false, error: block}; }
     const aboard = carts?.aboard() ?? [], tf = this.playerTrain.fuel, chest = this.playerTrain.lockbox.slots;
     const debit = planDebit(cost, tf.tank, aboard, chest);
@@ -2403,7 +2404,7 @@ export class Game {
       if (!st) return;
       if (this.use && !this.inv.find(this.use.uid)) this.cancelUse('dropped');
       const n = st.count;
-      if (!this.trainCargo.dropRiding(st)) { this.inv.add(st); if (this.trainRide.refuseDrop()) this.sfx.denied(); return; } // (no car view: as before)
+      if (!this.trainCargo.dropRiding(st)) { this.inv.add(st); if (this.trainCargo.dropFull || this.trainRide.refuseDrop()) this.sfx.denied(); return; } // (no car view: as before; task cargo-overflow: a full floor says so itself)
       this.hud.toast(`Dropped ${n > 1 ? `${n} × ` : ''}${itemDef(st.itemId).short}`);
       this.syncHeld();
       return;

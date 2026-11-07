@@ -8,6 +8,11 @@
 // (world/trainCargo.ts insideCar, train-local) belongs to the TRAIN; anything else to the station it lies in. No suck radius. A prop whose
 // collider straddles the car's wall line (a doorway) refuses the departure (departBlock, like a fuel cart in a doorway): the doors never cut
 // a prop and nothing is moved through them.
+// EVERYTHING ABOARD TRAVELS (task studio-beta-train-cargo-overflow-20261107-210410-01): ownership is where a prop lies, never a capacity cut.
+// More than CARGO.maxProps (256) props aboard, or one carrying more than CARGO.maxRiders (32) riders, refuses the departure in the same
+// pre-departure check (Game.fuelCheck: before the fuel draw, the carts' capture, the doors and any capture); records are never cut to fit.
+// No prop holds a render slot (the damage system's 96 detach cap) while it rests in the car or rides: carried props are handed back to their
+// shared instances once adopted (DynamicItems.handBack), withdrawn ones' instances are hidden.
 //
 // IDENTITY: '<section id>#<generated layout index>' of the placement it was generated as (kept through every move). The source station
 // remembers it GONE (lane STATION_PROPS_LANE `gone`: hidden on every rebuild, never respawned); a station it is left in owns it (`here`).
@@ -50,6 +55,9 @@ export const PROP_CARGO = {
 
 export const PROP_CARGO_TEXT = {
   doorway: 'Something is stuck in the train doorway — push it fully inside or out onto the platform',
+  // task studio-beta-train-cargo-overflow-20261107-210410-01: everything aboard travels, or the train does not leave
+  overloaded: (n: number) => `The train is overloaded — ${n} loose things lie in it, at most ${CARGO.maxProps} can travel. Push ${n - CARGO.maxProps} out first`,
+  overhung: `Too much hangs on one thing in the train (at most ${CARGO.maxRiders}) — take some of it off first`,
 } as const;
 
 type Phase = 'prepare' | 'build';
@@ -83,7 +91,14 @@ function quarterYaw(q: THREE.Quaternion): number {
 }
 
 interface Hidden { obj: THREE.Object3D; parent: THREE.Object3D | null }
-interface Withdrawn { prop: PropPlacement; index: number; matrix: THREE.Matrix4; parts: Hidden[]; riders: PropPlacement[] }
+/** A shared instance hidden (zero matrix) and the matrix it drew with. */
+interface HiddenInstance { mesh: THREE.InstancedMesh; index: number; matrix: THREE.Matrix4 }
+/**
+ * A withdrawn prop: out of the simulation and the scene. Task cargo-overflow: it holds NO render slot (the damage system's detach cap) —
+ * its own meshes are handed back to its shared instances (PropDamage.reattach), which are then hidden; only a prop that cannot hand them
+ * back (a broken body) keeps its own meshes (`parts`, out of the scene).
+ */
+interface Withdrawn { prop: PropPlacement; index: number; matrix: THREE.Matrix4; parts: Hidden[]; inst: HiddenInstance[]; riders: PropPlacement[] }
 
 interface Appended {
   rec: CargoPropJSON;
@@ -104,7 +119,7 @@ interface RidingProp {
   src: (Withdrawn & {gen: number}) | null;
 }
 
-interface HolderLike { holderFor(p: PropPlacement): unknown; emptyHolder(p: PropPlacement): boolean; removeHolder(p: PropPlacement): boolean }
+interface HolderLike { holderFor(p: PropPlacement): unknown; emptyHolder(p: PropPlacement): boolean; removeHolder(p: PropPlacement): boolean; ownRoot?(p: PropPlacement): THREE.Object3D | null }
 
 /** What the system needs of Game (structural: the Node tests drive it with the real physics / damage / containers / train / ride). */
 export interface PropCargoHost {
@@ -119,12 +134,14 @@ export interface PropCargoHost {
     dynamicItems: {
       loose(): LooseProp[];
       adoptLoose(prop: PropPlacement, index: number, at: THREE.Matrix4, target?: THREE.Matrix4): boolean;
-      withdraw(prop: PropPlacement): {matrix: THREE.Matrix4; parts: THREE.Object3D[]} | null;
+      handBack?(prop: PropPlacement): boolean;
+      withdraw(prop: PropPlacement, o?: {detach?: boolean}): {matrix: THREE.Matrix4; parts: THREE.Object3D[]} | null;
       restHeight(prop: PropPlacement): number;
     };
     propsChanged(x: number, z: number): void;
   };
-  damage: {props: {index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>}; states: Map<PropPlacement, {hp: number; spec: {integrity: number}}>; state(prop: PropPlacement, index?: number): {hp: number; spec: {integrity: number}}}};
+  damage: {props: {index: {inst: Map<PropPlacement, {mesh: THREE.InstancedMesh; index: number}[]>}; states: Map<PropPlacement, {hp: number; spec: {integrity: number}; parts?: unknown[] | null}>;
+    state(prop: PropPlacement, index?: number): {hp: number; spec: {integrity: number}}; reattach?(prop: PropPlacement, dropMarks?: boolean): string}};
   containers: HolderLike | null;
   trainRuntime?: {spec: PlayerTrainSpec; view: {root: THREE.Object3D} | null; train: {placement: TrainPlacement} | null} | null;
   trainRide?: {riding: boolean; phase: string; model?: RideLocalModel} | null;
@@ -208,8 +225,8 @@ export class TrainPropCargo {
   }
 
   /**
-   * The train's loose props now (in the parked car `p`), by identity: at most CARGO.maxProps (identity order) — any beyond that stay the
-   * station's (never silently dropped from a record).
+   * The train's loose props now (in the parked car `p`), by identity — ALL of them: ownership is where a prop lies, never a capacity cut
+   * (task cargo-overflow: more than CARGO.maxProps refuses the departure instead, departBlock).
    */
   private trainOwned(p: TrainPlacement | null = this.parked()): {lp: LooseProp; id: string}[] {
     if (!p || !this.here) return [];
@@ -219,9 +236,12 @@ export class TrainPropCargo {
       const id = this.idOf(lp.prop);
       if (id) out.push({lp, id});
     }
-    out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
-    const room = Math.max(0, CARGO.maxProps - this.riding.length - this.pending.length);
-    return out.slice(0, room);
+    return out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  }
+
+  /** Task cargo-overflow: the props that would travel now (riding, aboard, waiting) — the departure's count. */
+  aboardCount(): number {
+    return this.riding.length + this.trainOwned().length + this.pending.length;
   }
 
   /** The 8 collider corners of a loose prop, train-local. */
@@ -235,12 +255,18 @@ export class TrainPropCargo {
   }
 
   /**
-   * The departure refusal (Game.fuelCheck, with the fuel carts' doorway rule): a loose prop straddling the car's wall line — its collider
-   * centre inside the car with a corner well outside, or the other way round — would be cut by the doors. Null: free to leave.
+   * The departure refusal (Game.fuelCheck, with the fuel carts' doorway rule; checked BEFORE the fuel draw, the carts' capture, the doors
+   * and any capture of ours): a loose prop straddling the car's wall line — its collider centre inside the car with a corner well outside,
+   * or the other way round — would be cut by the doors. Task cargo-overflow: everything aboard travels or the train does not leave — more
+   * than CARGO.maxProps props aboard (riding / in the car / waiting), or one carrying more than CARGO.maxRiders riders, refuses too.
+   * Null: free to leave.
    */
   departBlock(): string | null {
     const p = this.parked(), Sp = this.spec;
     if (!p || !Sp) return null;
+    const aboard = this.trainOwned(p), n = aboard.length + this.riding.length + this.pending.length;
+    if (n > CARGO.maxProps) { this.counts.blocked++; return PROP_CARGO_TEXT.overloaded(n); }
+    if (aboard.some(a => a.lp.riders.length > CARGO.maxRiders)) { this.counts.blocked++; return PROP_CARGO_TEXT.overhung; }
     const T = PROP_CARGO.wallTol;
     for (const lp of this.host.physics.dynamicItems.loose()) {
       const c = this.localCentre(lp, p);
@@ -275,7 +301,7 @@ export class TrainPropCargo {
     const st = this.host.damage.props.states.get(prop);
     if (st && st.spec.integrity > 0 && st.hp < st.spec.integrity) rec.hp = r5(Math.max(0, st.hp) / st.spec.integrity);
     if (lp.riders.length) {
-      rec.riders = lp.riders.slice(0, CARGO.maxRiders).map(r => {
+      rec.riders = lp.riders.map(r => { // (never cut: more than CARGO.maxRiders refuses the departure)
         r.rel.decompose(V2, Q, S);
         const rr: CargoRiderJSON = {kind: r.prop.kind, variant: Math.max(0, r.prop.variant | 0), ...sizeOf(r.prop, di.restHeight(r.prop)), x: r5(V2.x), y: r5(V2.y), z: r5(V2.z), q: quat(Q)};
         if (r.prop.purpose && PURPOSE_OK.test(r.prop.purpose)) rr.purpose = r.prop.purpose;
@@ -292,7 +318,8 @@ export class TrainPropCargo {
     for (const {lp, id} of this.trainOwned(p)) out.push(this.recordOf(lp, id, p));
     for (const r of this.pending) out.push(structuredClone(r));
     const seen = new Set<string>();
-    return out.filter(r => !seen.has(r.id) && !!seen.add(r.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, CARGO.maxProps);
+    // (never cut to CARGO.maxProps: a departure beyond it is refused; a save beyond it is refused as invalid — nothing silently left out)
+    return out.filter(r => !seen.has(r.id) && !!seen.add(r.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   }
 
   /** Load / Continue / Retry / New game: the train's props become exactly `props` (its current ones leave the world first). */
@@ -445,17 +472,25 @@ export class TrainPropCargo {
       if (a.rec.hp !== undefined) { const s = h.damage.props.state(a.prop, idx); s.hp = a.rec.hp * s.spec.integrity; }
       const ok = h.physics.dynamicItems.adoptLoose(a.prop, idx, placeM(a.prop), a.matrix);
       if (ok) this.counts.adopted++;
+      // (task cargo-overflow: resting, drawn by its shared instances again — no detach slot held, whatever the number carried)
+      if (ok && !(riding && a.owner === 'train')) h.physics.dynamicItems.handBack?.(a.prop);
       if (a.owner !== 'train' || !ok) continue; // (not adopted: it stands at its placement; its record stays where it was)
       trainIds.add(a.rec.id);
       if (!riding) continue;
       // an arriving car: hidden until it stops (the riding copies show it meanwhile)
       const lp = h.physics.dynamicItems.loose().find(l => l.prop === a.prop);
-      const w = lp ? this.withdraw(lp) : null;
-      if (!w) continue;
       let r = this.riding.find(x => x.rec.id === a.rec.id);
+      const made = !r;
       if (!r) { r = {rec: structuredClone(a.rec), obj: null, geos: [], mats: [], src: null}; this.riding.push(r); this.captured = true; } // (a pending one: it rides in too)
-      r.src = {...w, gen: this.gen};
-      if (!r.obj) this.makeCopy(r, w.parts.map(q => q.obj), w.matrix);
+      const rr = r;
+      const w = lp ? this.withdraw(lp, rr.obj ? undefined : (objs, m) => this.makeCopy(rr, objs, m)) : null;
+      if (!w) { // (it could not be hidden: it simply stays where it is, loose in the parked car — never also a riding record)
+        this.dropCopy(rr);
+        this.riding.splice(this.riding.indexOf(rr), 1);
+        void made;
+        continue;
+      }
+      rr.src = {...w, gen: this.gen};
     }
     // the train's props are in this world now (the riding ones stay records until the stop)
     this.pending = this.pending.filter(r => !trainIds.has(r.id));
@@ -511,7 +546,8 @@ export class TrainPropCargo {
     // carried props that never went loose here (no render / model): kept where they were recorded
     for (const r of w.deferred) if (!here.some(x => x.id === r.id)) here.push(structuredClone(r));
     for (const a of w.appended) if (a.owner === 'station' && !lpOf(this.host, a.prop) && !this.riding.some(r => r.rec.id === a.rec.id) && !here.some(r => r.id === a.rec.id)) here.push(structuredClone(a.rec));
-    const rec: StationPropsJSON = {v: 1, gone: [...gone.values()].sort((a, b) => a.i - b.i).slice(0, CARGO.gone), here: here.sort((a, b) => (a.id < b.id ? -1 : 1)).slice(0, CARGO.stationProps)};
+    // (never cut: the bounds are the save format's input safety — a station beyond them fails to save, it never loses or respawns a prop)
+    const rec: StationPropsJSON = {v: 1, gone: [...gone.values()].sort((a, b) => a.i - b.i), here: here.sort((a, b) => (a.id < b.id ? -1 : 1))};
     this.host.run.setLaneStore(STATION_PROPS_LANE, rec.gone.length || rec.here.length ? rec : undefined, w.key);
     this.counts.flushes++;
   }
@@ -538,18 +574,38 @@ export class TrainPropCargo {
   // The ride
 
   /** A loose prop out of the world: its body withdrawn, its objects out of the scene (kept to show it again). */
-  private withdraw(lp: LooseProp): Withdrawn | null {
-    const w = this.host.physics.dynamicItems.withdraw(lp.prop);
+  private withdraw(lp: LooseProp, copy?: (objs: THREE.Object3D[], matrix: THREE.Matrix4) => void): Withdrawn | null {
+    const h = this.host, pd = h.damage.props;
+    const w = h.physics.dynamicItems.withdraw(lp.prop, {detach: false});
     if (!w) return null;
-    const parts = w.parts.map(obj => ({obj, parent: obj.parent}));
+    const all = [lp.prop, ...lp.riders.map(r => r.prop)];
+    // task cargo-overflow: hand its render slots back (its shared instances draw it again at its pose) — no capacity tied to the damage
+    // system's detach cap; a prop that cannot (a broken body) keeps its own meshes out of the scene, as before
+    let released = true;
+    for (const q of all) if (pd.states.get(q)?.parts && (pd.reattach?.(q, true) ?? 'never') !== 'ok') released = false;
+    const objs: THREE.Object3D[] = [], inst: HiddenInstance[] = [], parts: Hidden[] = [];
+    if (released) {
+      for (const q of all) for (const e of pd.index.inst.get(q) ?? []) {
+        const m = new THREE.Matrix4();
+        e.mesh.getMatrixAt(e.index, m);
+        if (m.determinant() === 0) continue;
+        inst.push({mesh: e.mesh, index: e.index, matrix: m});
+        objs.push(instancePart(e.mesh, e.index, m));
+      }
+      const root = h.containers?.ownRoot?.(lp.prop);
+      if (root) { objs.push(root); parts.push({obj: root, parent: root.parent}); }
+    } else for (const o of w.parts) { objs.push(o); parts.push({obj: o, parent: o.parent}); }
+    copy?.(objs, w.matrix);
+    for (const i of inst) { i.mesh.setMatrixAt(i.index, ZERO); i.mesh.instanceMatrix.needsUpdate = true; }
     for (const q of parts) q.obj.removeFromParent();
     lp.prop.cargoGone = true; // (its ropes drop; it is not part of this station any more)
-    this.host.physics.propsChanged(lp.prop.x, lp.prop.z);
-    return {prop: lp.prop, index: lp.index, matrix: w.matrix, parts, riders: lp.riders.map(r => r.prop)};
+    h.physics.propsChanged(lp.prop.x, lp.prop.z);
+    return {prop: lp.prop, index: lp.index, matrix: w.matrix, parts, inst, riders: lp.riders.map(r => r.prop)};
   }
 
   /** A withdrawn prop's objects back in the scene (a stop in its own world). */
   private reshow(w: Withdrawn): void {
+    for (const i of w.inst) { i.mesh.setMatrixAt(i.index, i.matrix); i.mesh.instanceMatrix.needsUpdate = true; }
     for (const q of w.parts) if (q.parent && !q.obj.parent) q.parent.add(q.obj);
   }
 
@@ -560,11 +616,11 @@ export class TrainPropCargo {
     let n = 0;
     for (const {lp, id} of this.trainOwned(p)) {
       const rec = this.recordOf(lp, id, p);
-      const w = this.withdraw(lp);
-      if (!w) continue;
+      const r: RidingProp = {rec, obj: null, geos: [], mats: [], src: null};
+      const w = this.withdraw(lp, (objs, m) => this.makeCopy(r, objs, m));
+      if (!w) continue; // (only a prop without a body: not loose, never the train's)
       this.markGone(lp);
-      const r: RidingProp = {rec, obj: null, geos: [], mats: [], src: {...w, gen: this.gen}};
-      this.makeCopy(r, w.parts.map(q => q.obj), w.matrix);
+      r.src = {...w, gen: this.gen};
       this.riding.push(r);
       n++;
     }
@@ -588,6 +644,7 @@ export class TrainPropCargo {
       src.prop.h = h.physics.dynamicItems.restHeight(src.prop);
       for (const rd of src.riders) rd.h = h.physics.dynamicItems.restHeight(rd);
       if (!h.physics.dynamicItems.adoptLoose(src.prop, h.layout?.props.indexOf(src.prop) ?? src.index, src.matrix, this.trainMatrix(p, r.rec))) { this.pending.push(r.rec); continue; }
+      h.physics.dynamicItems.handBack?.(src.prop); // (task cargo-overflow: no detach slot held while it rests)
       this.unmarkGone(src); // (in the parked car: the train's while it lies there; its position decides at the flush)
       n++;
     }
@@ -625,7 +682,8 @@ export class TrainPropCargo {
         m.geometry = s.geometry.clone();
         r.geos.push(m.geometry);
         const list = Array.isArray(s.material) ? s.material : [s.material];
-        const cl = list.map(x => { const k = x.clone(); r.mats.push(k); return k; });
+        const tint = s.userData.cargoTint as THREE.Color | undefined; // (an instance's per-instance colour: the accent it was drawn with)
+        const cl = list.map(x => { const k = x.clone(); if (tint && (k as THREE.MeshStandardMaterial).color) (k as THREE.MeshStandardMaterial).color.multiply(tint); r.mats.push(k); return k; });
         m.material = Array.isArray(s.material) ? cl : cl[0];
         const data = s.userData[PROP_DATA_KEY] as Float32Array | undefined;
         if (data) m.userData[PROP_DATA_KEY] = data.slice(); // (the per-object damage data: marks as drawn)
@@ -686,6 +744,20 @@ export class TrainPropCargo {
 export function carriedModelKeys(keysOf: (layout: StationLayout) => readonly string[], layout: StationLayout, carried: readonly PropPlacement[]): string[] {
   const none = new Set(keysOf({...layout, props: []}));
   return [...new Set(keysOf({...layout, props: [...carried]}))].filter(k => !none.has(k));
+}
+
+const ZERO = new THREE.Matrix4().makeScale(0, 0, 0);
+
+/** One shared instance as a stand-alone object (its geometry / material, its world matrix, its per-instance colour) — a riding copy's source. */
+function instancePart(im: THREE.InstancedMesh, index: number, local: THREE.Matrix4): THREE.Mesh {
+  im.updateWorldMatrix(true, false);
+  const mesh = new THREE.Mesh(im.geometry, im.material);
+  mesh.matrixAutoUpdate = false;
+  mesh.matrix.multiplyMatrices(im.matrixWorld, local);
+  mesh.castShadow = im.castShadow;
+  mesh.receiveShadow = im.receiveShadow;
+  if (im.instanceColor) mesh.userData.cargoTint = new THREE.Color().fromArray(im.instanceColor.array as Float32Array, index * 3);
+  return mesh;
 }
 
 function lpOf(h: PropCargoHost, prop: PropPlacement): LooseProp | undefined {

@@ -782,6 +782,23 @@ export class DynamicItems {
     return true;
   }
 
+  /**
+   * Task studio-beta-train-cargo-overflow-20261107-210410-01: hand a RESTING loose prop's own meshes back to its shared instances now, at
+   * its pose (the background reclaim's step, for this prop whatever stands beside it — the parked train's car is a dynamic volume, where
+   * the reclaim never looks): it stays loose; waking it detaches it again. So any number of carried props can rest in the car without
+   * holding the damage system's detach slots. False: not loose / moving / nothing to hand back / it cannot (a broken body).
+   */
+  handBack(prop: PropPlacement): boolean {
+    const e = this.ents.get(prop), d = this.detacher;
+    if (!e?.body || !e.parts || !e.prop || e.body.type === CANNON.Body.DYNAMIC || !d?.reattach) return false;
+    if (d.reattach(e.prop, true) !== 'ok') return false;
+    for (const rd of e.riders ?? []) d.reattach(rd.prop, true);
+    e.parts = undefined;
+    this.reclaimQ.delete(e);
+    this.counts.reclaimed++;
+    return true;
+  }
+
   /** Task train-all-cargo: a resting loose prop's body (and its drawn parts) to the object matrix `m`, at rest. */
   private place(e: Ent, m: THREE.Matrix4): void {
     const b = e.body!;
@@ -799,15 +816,16 @@ export class DynamicItems {
 
   /**
    * Task train-all-cargo: take a loose prop out of the simulation for good (its body, its entity): drawn by its own meshes first (a
-   * reclaimed one is detached again at its pose). Returns its object matrix as drawn and the objects drawing it (detached meshes, a
+   * reclaimed one is detached again at its pose; with `detach: false` it is left to its shared instances, parts []). Returns its object matrix as drawn and the objects drawing it (detached meshes, a
    * holder's own root, its riders' meshes; world-matrix driven) — the caller hides / re-shows them. Null: not loose / no render.
    */
-  withdraw(prop: PropPlacement): {matrix: THREE.Matrix4; parts: THREE.Object3D[]} | null {
+  withdraw(prop: PropPlacement, o: {detach?: boolean} = {}): {matrix: THREE.Matrix4; parts: THREE.Object3D[]} | null {
     const e = this.ents.get(prop);
     if (!e?.body || !e.prop) return null;
-    if (!e.parts && !this.redetach(e)) return null;
+    // (task cargo-overflow: `detach: false` — a prop drawn by its shared instances again (reclaimed) stays so: no render slot needed, parts [])
+    if (!e.parts && o.detach !== false && !this.redetach(e)) return null;
     if (e.body.type === CANNON.Body.DYNAMIC) this.syncEnt(e, false);
-    const matrix = this.objMatrix(e, new THREE.Matrix4()), parts = e.parts!.map(p => p.mesh);
+    const matrix = this.objMatrix(e, new THREE.Matrix4()), parts = (e.parts ?? []).map(p => p.mesh);
     if (e.dragging) this.dragStop(e);
     const was = this.active.has(e);
     this.unrest(e);

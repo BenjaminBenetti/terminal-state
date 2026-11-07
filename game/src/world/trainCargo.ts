@@ -48,6 +48,9 @@ export const CARGO_TEXT = {
   wear: '<b>[E]</b> Wear the backpack',
   backTaken: 'Your back is taken — set your own backpack down after the stop to swap',
   noRoom: 'No room in inventory — drop something (Tab)',
+  // task studio-beta-train-cargo-overflow-20261107-210410-01: everything aboard travels, or the train does not leave / takes no more
+  overloaded: (n: number) => `Too many loose items in the train — ${n} lie in it, at most ${CARGO.maxItems} can travel. Pick some up or use the Lockbox first`,
+  floorFull: `The train's floor is full (${CARGO.maxItems} loose items) — keep it, or use the Lockbox`,
 } as const;
 
 interface Riding {
@@ -265,8 +268,34 @@ export class TrainCargoSystem {
       }
     }
     for (const r of this.pending) out.push(structuredClone(r));
-    return out.sort(byKey).slice(0, CARGO.maxItems);
+    // (task cargo-overflow: never cut to CARGO.maxItems — a departure beyond it is refused, a riding drop beyond it too; a save beyond it is
+    // refused as invalid: nothing aboard is silently left out of the record)
+    return out.sort(byKey);
   }
+
+  /** Task cargo-overflow: the loose items that would travel now (riding, in the parked car, waiting). */
+  aboardCount(): number {
+    const h = this.host, p = this.parked();
+    let n = this.riding.length + this.pending.length;
+    if (p) {
+      for (const pk of h.pickups.list) if (this.ownsPickup(pk)) n++;
+      for (const b of h.gear?.bags ?? []) if (b.grounded && this.ownsBag(b)) n++;
+    }
+    return n;
+  }
+
+  /**
+   * Task cargo-overflow: the departure refusal (Game.fuelCheck, BEFORE the fuel draw, the carts' capture, the doors and any capture): more
+   * than CARGO.maxItems loose items / bags aboard cannot all travel, so the train does not leave. Null: free to leave.
+   */
+  departBlock(): string | null {
+    if (!this.parked()) return null;
+    const n = this.aboardCount();
+    return n > CARGO.maxItems ? CARGO_TEXT.overloaded(n) : null;
+  }
+
+  /** Task cargo-overflow: the last riding drop was refused because the car's floor is full (Game.dropRef: its own message, not the ride's). */
+  dropFull = false;
 
   /** Load / Continue / Retry / New game: the cargo becomes exactly `items` (the train's current items go first; idempotent). */
   restore(items: readonly CargoItemJSON[]): void {
@@ -427,7 +456,11 @@ export class TrainCargoSystem {
    */
   dropRiding(stack: ItemStack): boolean {
     const h = this.host, S = this.spec, L = h.trainRide?.local;
+    this.dropFull = false;
     if (!S || !L || !this.isRiding || !h.trainRuntime?.view?.root) return false;
+    // (task cargo-overflow: the car's floor holds at most CARGO.maxItems loose items — beyond, the stack stays in the inventory, untouched)
+    const adds = stack.itemId === 'fuel_can' ? Math.max(1, stack.count) : 1;
+    if (this.riding.length + this.pending.length + adds > CARGO.maxItems) { this.dropFull = true; h.hud.toast(CARGO_TEXT.floorFull, true); return false; }
     const T = TRAIN_CARGO, fx = -Math.sin(L.yaw), fz = -Math.cos(L.yaw);
     const clampX = (v: number) => Math.max(S.interior.x0 + T.margin, Math.min(S.interior.x1 - T.margin, v));
     const clampZ = (v: number) => Math.max(-S.interior.halfWidth + T.margin, Math.min(S.interior.halfWidth - T.margin, v));

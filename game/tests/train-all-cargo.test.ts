@@ -22,7 +22,7 @@ import {PLAYER_TRAIN_SPEC as SPEC} from '../src/world/playerTrainSpec';
 import {RIDE_FRAME, carToWorld, fromStep, setRideCargoBoxes} from '../src/world/trainRideLocal';
 import {PickupManager} from '../src/world/pickups';
 import {Inventory} from '../src/items/inventory';
-import {TrainCargoSystem} from '../src/world/trainCargo';
+import {CARGO_TEXT, TrainCargoSystem} from '../src/world/trainCargo';
 import {PROP_CARGO_TEXT, TrainPropCargo, carriedModelKeys} from '../src/world/trainPropCargo';
 import {CARGO, STATION_PROPS_LANE, cargoProblem, propsProblem, stationPropsProblem, type CargoPropJSON, type StationPropsJSON} from '../src/run/trainCargo';
 import {PlayerTrainRecord} from '../src/run/playerTrain';
@@ -162,6 +162,16 @@ function pick(w: World, kinds: readonly string[], used: Set<PropPlacement> = new
 /** "Pushed into the car": the prop goes loose and comes to rest at a train-local pose (the state a shove leaves it in). */
 function pushIn(c: Rig, w: World, t: {p: PropPlacement; i: number}, lx: number, lz: number, yaw: number): void {
   expect(w.ph.dynamicItems.adoptLoose(t.p, t.i, placeM(t.p), carPose(c.h.trainPlacement!, lx, lz, yaw))).toBe(true);
+}
+
+/**
+ * Is the prop drawn: by its own detached meshes in the scene, or by its shared instance(s) at a real matrix (task cargo-overflow: a resting
+ * carried prop is handed back to its instances — DynamicItems.handBack — holding no detach slot).
+ */
+function drawn(w: World, p: PropPlacement): boolean {
+  if (w.pd.states.get(p)?.parts?.some(pt => !!pt.mesh.parent)) return true;
+  const m = new THREE.Matrix4();
+  return (w.pd.index.inst.get(p) ?? []).some(e => { e.mesh.getMatrixAt(e.index, m); return m.determinant() !== 0; });
 }
 
 /** Carried props loose in the world now (by identity). */
@@ -369,7 +379,7 @@ describe('train prop cargo: a whole journey, unload, revisit, return', () => {
       expect(v.distanceTo(new THREE.Vector3(want.x, want.y, want.z))).toBeLessThan(1e-3);
       expect(q.angleTo(s.local.q.clone().premultiply(new THREE.Quaternion().setFromAxisAngle(UP, p2.yaw)))).toBeLessThan(1e-3);
       expect(props.ownsLoose(l)).toBe(true);
-      expect(w.pd.states.get(prop)?.parts?.some(pt => !!pt.mesh.parent)).toBe(true); // drawn (its own meshes in the scene)
+      expect(drawn(w, prop)).toBe(true); // drawn (its own meshes in the scene, or — resting — its shared instance again)
     }
     const binHere = B.props.find(q => q.cargo === src[0].id)!;
     expect(w.cm.holderFor(binHere)!.state.lots).toEqual([]); // no invented loot
@@ -445,7 +455,7 @@ describe('train prop cargo: the Office\'s furniture rides to the Subway', () => 
       expect([q.kind, q.variant]).toEqual([t.p.kind, t.p.variant]);
       expect(looseOf(w, q), `${q.kind} loose in the Subway's car`).toBeTruthy();
       expect(props.ownsLoose(looseOf(w, q)!)).toBe(true);
-      expect(w.pd.states.get(q)?.parts?.some(pt => !!pt.mesh.parent)).toBe(true);
+      expect(drawn(w, q)).toBe(true);
     }
     const holder = w.cm.holderFor(A.props.find(x => x.cargo === `${sectionId(KB)}#${box.i}`)!)!;
     expect(holder.state.lots).toEqual([]);
@@ -496,7 +506,7 @@ describe('train prop cargo: saves, refused and failed-back departures', () => {
     expect(l).toBeTruthy();
     const d = new THREE.Vector3().setFromMatrixPosition(l.matrix).distanceTo(new THREE.Vector3().setFromMatrixPosition(before));
     expect(d).toBeLessThan(1e-3);
-    expect(w.pd.states.get(a.p)!.parts!.every(pt => !!pt.mesh.parent)).toBe(true);
+    expect(drawn(w, a.p)).toBe(true);
     expect(w.L.props.filter(q => q.cargo).length).toBe(0); // (no copy appended: the original itself)
     expect(props.props().map(r => r.id)).toEqual([`${sectionId(KA)}#${a.i}`]);
     leave(c); // the teardown: in the parked car -> the train's (pending), the station lost it
@@ -701,4 +711,131 @@ describe('train prop cargo: generic for every movable kind (present and future),
     }
     expect(fails).toEqual([]);
   }, 240000);
+});
+
+// Task studio-beta-train-cargo-overflow-20261107-210410-01: everything aboard travels exactly once, or the departure is refused BEFORE
+// anything moves (Game.fuelCheck: before the fuel draw, the carts' capture, the doors and any capture). Beyond the damage system's
+// detach cap (96) too: a withdrawn prop holds no render slot.
+describe('train cargo overflow: all aboard travels, or the train does not leave', () => {
+  /** n records of one small kind on a 3-D grid inside the car (train-local). */
+  function grid(kind: PropKind, n: number, tag: number): CargoPropJSON[] {
+    const I = SPEC.interior, d = PROP_DEFS[kind], out: CargoPropJSON[] = [];
+    const step = 0.3, xs: number[] = [], zs: number[] = [];
+    for (let x = I.x0 + 0.25; x < I.x1 - 0.25; x += step) xs.push(+x.toFixed(4));
+    for (let z = -I.halfWidth + 0.25; z < I.halfWidth - 0.25; z += step) zs.push(+z.toFixed(4));
+    for (let i = 0; out.length < n; i++) {
+      const layer = Math.floor(i / (xs.length * zs.length)), k = i % (xs.length * zs.length);
+      out.push({id: `st-${tag}:main#${i}`, kind, variant: i % 3, w: d.w, d: d.d, h: d.h, x: xs[k % xs.length], y: SPEC.floorY + layer * 0.5, z: zs[Math.floor(k / xs.length)], q: [0, 0, 0, 1]});
+    }
+    return out;
+  }
+
+  /** The REAL Game.fuelCheck on a shell with these cargo systems (the fuel tank as the witness that nothing was drawn). */
+  async function fuelCheck(c: Rig) {
+    const {Game} = await import('../src/game');
+    const toasts: string[] = [];
+    const shell = {run: {campaign: {cheat: false}}, trainPropCargo: c.props, trainCargo: c.items, hud: {toast: (t: string) => toasts.push(t)}, sfx: {denied: () => toasts.push('denied')},
+      playerTrain: c.h.playerTrain};
+    Object.setPrototypeOf(shell, Game.prototype);
+    return {r: (shell as unknown as {fuelCheck(h: number): {ok: boolean; error?: string}}).fuelCheck(1), toasts};
+  }
+
+  it('257 props aboard (beyond the 96-slot detach cap): refused before anything moves; one pushed out -> all 256 ride and all 256 arrive', async () => {
+    const c = rig(SUB()), {h, ride, props} = c;
+    const recs = grid('campLantern', CARGO.maxProps + 1, 77);
+    props.restoreProps(recs);
+    let w = enter(c, SUB(), KA);
+    const inCar = w.L.props.filter(q => q.cargo);
+    expect(inCar.length).toBe(257);
+    expect(inCar.filter(q => looseOf(w, q) && props.ownsLoose(looseOf(w, q)!)).length).toBe(257); // all loose, all the train's
+    h.playerTrain.fuel.tank = 4; // (a full tank: one hop's fuel — the refusal below is the cargo's, not the fuel's)
+    const tank0 = h.playerTrain.fuel.tank;
+    // the refusal: through the real Game.fuelCheck, BEFORE the draw / the carts / the doors — nothing touched
+    const {r, toasts} = await fuelCheck(c);
+    expect(r).toEqual({ok: false, error: PROP_CARGO_TEXT.overloaded(257)});
+    expect(toasts).toEqual([PROP_CARGO_TEXT.overloaded(257), 'denied']);
+    expect(h.playerTrain.fuel.tank).toEqual(tank0);
+    expect(props.riding).toEqual([]);
+    expect(inCar.every(q => !!looseOf(w, q))).toBe(true);
+    // one pushed out onto the platform: 256 = the bound -> free to leave
+    const out = inCar[0], at = looseOf(w, out)!.matrix.clone(), p0 = h.trainPlacement!;
+    const ow = trainToWorld(p0, 0, SPEC.floorY, -(SPEC.width / 2 + 1.5));
+    expect(w.ph.dynamicItems.withdraw(out)).toBeTruthy();
+    out.h = w.ph.dynamicItems.restHeight(out);
+    expect(w.ph.dynamicItems.adoptLoose(out, w.L.props.indexOf(out), at, new THREE.Matrix4().makeTranslation(ow.x, ow.y, ow.z))).toBe(true);
+    expect(props.departBlock()).toBeNull();
+    expect((await fuelCheck(c)).r.ok).toBe(true);
+    expect(h.playerTrain.fuel.tank).toBe(tank0); // (fuelCheck plans the draw; travelToStation applies it after the check)
+    // the ride: EVERY one of the 256 is captured (each withdrawal hands its render slot back: no 96 limit), none left in the station's car spot
+    void ride.depart();
+    run(h, 80, () => ride.phase === 'transit');
+    expect(props.riding.length).toBe(256);
+    expect(props.riding.every(x => (x.obj?.children.length ?? 0) > 0)).toBe(true);
+    expect(inCar.slice(1).every(q => !looseOf(w, q))).toBe(true);
+    expect(looseOf(w, out)).toBeTruthy(); // the platform's stays the station's
+    expect(w.pd.detachedCount).toBeLessThan(96);
+    leave(c);
+    expect(cargoProblem({v: 2, items: [], props: props.props()})).toBeNull();
+    expect(props.props().length).toBe(256);
+    // they all arrive: appended hidden while riding, loose in the new car after the stop
+    const B = OFF();
+    w = enter(c, B, KB);
+    void ride.arrive();
+    run(h, 150, () => !ride.riding);
+    await Promise.resolve();
+    run(h, 0.1);
+    const arrived = B.props.filter(q => q.cargo);
+    expect(arrived.length).toBe(256);
+    expect(arrived.filter(q => looseOf(w, q) && props.ownsLoose(looseOf(w, q)!)).length).toBe(256);
+    expect(props.riding).toEqual([]);
+  }, 300000);
+
+  it('a prop carrying more riders than a record holds refuses the departure (never cut to fit)', () => {
+    const c = rig(SUB());
+    const d = PROP_DEFS.garmentRail;
+    const riders = Array.from({length: CARGO.maxRiders + 1}, (_, k) => ({kind: 'garmentHangingGroup', variant: k % 3, w: 0.3, d: 0.3, h: 1, x: -0.6 + k * 0.035, y: 0.4, z: 0, q: [0, 0, 0, 1] as [number, number, number, number]}));
+    c.props.restoreProps([{id: 'st-41:main#3', kind: 'garmentRail', variant: 0, w: d.w, d: d.d, h: d.h, x: 0, y: SPEC.floorY, z: 0, q: [0, 0, 0, 1], riders}]);
+    const w = enter(c, SUB(), KA);
+    const rail = w.L.props.find(q => q.kind === 'garmentRail' && q.cargo)!;
+    expect(looseOf(w, rail)!.riders.length).toBe(CARGO.maxRiders + 1);
+    expect(c.props.departBlock()).toBe(PROP_CARGO_TEXT.overhung);
+    expect(c.props.props()[0].riders!.length).toBe(CARGO.maxRiders + 1); // (the record is never cut: such a save is refused as invalid)
+  }, 120000);
+
+  it('257 loose items aboard: refused before anything moves; at 256 all ride, and a riding drop onto the full floor stays in the inventory', async () => {
+    const c = rig(SUB()), {h, ride, items, pickups, inv} = c;
+    enter(c, SUB(), KA);
+    const p = h.trainPlacement!, I = SPEC.interior;
+    const put = (i: number) => {
+      const st = inv.makeStack('water', 1);
+      const lx = I.x0 + 0.3 + (i % 48) * 0.3, lz = -I.halfWidth + 0.3 + Math.floor(i / 48) * 0.3;
+      const wpos = trainToWorld(p, lx, SPEC.floorY, lz);
+      return pickups.add(st, wpos.x, wpos.y, wpos.z, p.yaw);
+    };
+    const all = Array.from({length: CARGO.maxItems + 1}, (_, i) => put(i));
+    expect(items.aboardCount()).toBe(257);
+    const {r} = await fuelCheck(c);
+    expect(r).toEqual({ok: false, error: CARGO_TEXT.overloaded(257)});
+    expect(items.riding).toEqual([]);
+    expect(pickups.list.length).toBe(257);
+    pickups.remove(all[0]); // (picked up)
+    expect(items.departBlock()).toBeNull();
+    void ride.depart();
+    run(h, 80, () => ride.phase === 'transit');
+    expect(items.riding.length).toBe(256);
+    // the floor is full: a riding drop is refused (the REAL Game.dropRef puts it back), nothing lost, its own message
+    const {Game} = await import('../src/game');
+    const st = inv.makeStack('medkit', 2);
+    st.count = 2;
+    inv.add(st);
+    const toasts: string[] = [];
+    const shell = {inv, use: null, hud: {toast: (t: string) => { toasts.push(t); }}, sfx: {denied: () => toasts.push('denied')}, syncHeld: () => {}, cancelUse: () => {},
+      trainRide: {riding: true, refuseDrop: () => { toasts.push('ride-refused'); return true; }}, trainCargo: items};
+    Object.setPrototypeOf(shell, Game.prototype);
+    (shell as unknown as {dropRef(ref: unknown): void}).dropRef(inv.find(st.uid)!);
+    expect(inv.count('medkit')).toBe(2);
+    expect(items.riding.length).toBe(256);
+    expect(toasts).toEqual(['denied']); // (not the ride's "use the Lockbox" note: the cargo said why, on the game's HUD)
+    expect(h.toasts.at(-1)).toBe(CARGO_TEXT.floorFull);
+  }, 180000);
 });

@@ -1038,6 +1038,12 @@ export class ContainerManager {
     return true;
   }
 
+  /** Task cargo-overflow: the holder's own world-matrix-driven root (a loose spill holder's lid / liner), or null. */
+  ownRoot(prop: PropPlacement): THREE.Object3D | null {
+    const h = this.holderFor(prop);
+    return h?.open?.root ?? h?.root ?? null;
+  }
+
   /**
    * Task train-all-cargo: a holder its station lost to the train (a revisit): emptied, never an [E] target again (loose: the hit test skips
    * it), its own meshes out of the scene. Its shared body instances are hidden by the caller (the damage render index).

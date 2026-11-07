@@ -17,8 +17,13 @@
 
 import type {StackJSON} from '../items/inventory';
 
-/** Limits (items / props; train-local metres; a station's lists). */
-export const CARGO = {maxItems: 256, pos: 40, maxProps: 96, maxRiders: 16, size: 12, stationProps: 192, gone: 512, world: 1e5} as const;
+/**
+ * Limits (items / props; train-local metres; a station's lists) — input-safety bounds of the save format, never truncation points.
+ * Task studio-beta-train-cargo-overflow-20261107-210410-01: what lies aboard travels whole or the departure is refused BEFORE anything
+ * moves (world/trainCargo.ts / world/trainPropCargo.ts departBlock: more than maxItems loose items, more than maxProps loose props, a prop
+ * with more than maxRiders riders); records are never cut to fit (a save beyond a bound is refused as invalid, the game untouched).
+ */
+export const CARGO = {maxItems: 256, pos: 40, maxProps: 256, maxRiders: 32, size: 12, stationProps: 1024, gone: 4096, world: 1e5} as const;
 
 /** One loose thing aboard: an item lying as a pickup ('item') or a grounded backpack ('bag', with its bag id). */
 export interface CargoItemJSON {

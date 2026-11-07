@@ -226,7 +226,9 @@ User: "Let’s have all items on the train move with the train!" — confirmed f
   parked car: its collider centre inside the car interior (`world/trainPropCargo.ts`). It rides to the next station:
   - it keeps its kind, variant, size, purpose, integrity and exact pose (any yaw or tilt);
   - decor riding it (`ridesHost`: garments on a rail) travels inside its record;
-  - a prop straddling a doorway refuses the departure.
+  - a prop straddling a doorway refuses the departure;
+  - everything aboard travels, or the train does not leave: more than 256 props (or 256 loose items, or a prop with more than 32
+    riders) refuses the departure before anything moves; nothing is ever cut from a record or left behind.
 - **New movable kinds** need nothing extra:
   - the carried copy is built by the kind's own family builder, appended to the next layout;
   - its models / Skyways art load in any level while it is carried;
