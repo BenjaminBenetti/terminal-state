@@ -1,0 +1,915 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-store-music-art-20261107",
+ "task": "studio-alpha-skyways-shops-20261107-054512-01",
+ "lane": "STORE-MUSIC (Skyways major store: Northern Groove Records)",
+ "status": "runtime derivatives (crop / resize / pack only) of SIX static art sheets generated for this project with Codex native image_gen (owned Codex CLI, codex exec -> built-in image_gen) under the store brief's authorization (Codex image-gen for the stores' wall / sign / record-cover art, no numerical cap; 6 accepted of 6 attempts); fictional covers / bands / venues, no real artists or trademarks requested; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "game/src/world/skywaysStoreMusic.ts: LP sleeve faces in the record-bin stock / faced-out new-arrivals ledges (covers atlas), gig posters, the NEW ARRIVALS / LISTENING BOOTHS boards and the bin genre cards (signs atlas)",
+ "rebuild": "node tools/asset-pipeline/skyways-stores/music/build-music-art.mjs --raw <raw dir>",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/music/codex/{covers-1..4,posters,signs}.png + <job>.receipt.json (prompt, Codex session id, native output, sha256) + attempts.log + prompts.json + run_codex.py (private raw backup, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI 0.163.0)",
+ "recipe": {
+  "covers": {
+   "detect": "black gutter lines (columns / rows >= 85 % near-black) -> 4 x 4 cells per sheet",
+   "crop": "cell inset 1.2 %",
+   "resize": "248 x 248 lanczos3 (fill)",
+   "pad": "4 px edge-extend (copy)",
+   "atlas": "8 x 8 cells of 256 px, cover index = sheet * 16 + row * 4 + column"
+  },
+  "signs": {
+   "detect": "posters: black gutters (2 x 2); signs: non-black rectangles on the black ground (row bands, then column runs)",
+   "posters": "504 x 760 each (inset 0.6 %)",
+   "boards": "1016 px wide at their own aspect",
+   "cards": "248 px wide at their own aspect",
+   "pad": "4 px edge-extend (copy)"
+  },
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips)"
+ },
+ "sources": {
+  "covers-1": {
+   "file": "covers-1.png",
+   "sha256": "a09b72883008b24f55a8a71352db2916390f9c50df4ea74c4fc00288f74fd3b5",
+   "bytes": 3353007,
+   "width": 1254,
+   "height": 1254,
+   "codex": {
+    "session": "01a1b4be-037b-77c2-9e4b-54cadcc388e8",
+    "nativeOutput": "exec-2dc865e7-b525-48f4-b1d6-0379897a58d9.png",
+    "seconds": 63.9
+   },
+   "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a prairie grain elevator at golden sunset in loose oil paint; 2) four long-haired young musicians standing in a snowy field, faded 1970s colour photograph of fictional people; 3) a psychedelic swirl of orange, magenta and purple liquid light; 4) a lone pickup truck on an empty highway under green northern lights, airbrush illustration; 5) a black-and-white close-up of a fictional saxophonist in smoky club light; 6) minimalist Bauhaus circles and bars in red, cream and black; 7) a moose silhouette against a huge pink moon, two-colour screenprint; 8) a rain-wet neon city street at night, synth-wave colours; 9) a fictional woman with an acoustic guitar on a wooden porch, warm vintage film photo; 10) a punk collage of torn paper, safety pins and photocopy textures; 11) a crystal chandelier in a dark concert hall, elegant classical photograph; 12) a surreal melting clock draped over a wheat field, painting; 13) a mirror ball scattering coloured light over a dark dance floor; 14) a frozen lake with a tiny red ice-fishing hut, cold blue photograph; 15) a vintage reel-to-reel tape machine, studio product photograph; 16) bold op-art concentric circles in teal and mustard. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+  },
+  "covers-2": {
+   "file": "covers-2.png",
+   "sha256": "b3a7f253408acf24a8ad47c461fb0414c68a1fbfe78c8de369d3fe7e7439eb59",
+   "bytes": 3297405,
+   "width": 1254,
+   "height": 1254,
+   "codex": {
+    "session": "01a1b4bf-9fa5-74a3-9813-c7d7b9741ce1",
+    "nativeOutput": "exec-f8b4ee22-940e-4f78-aa34-37acda9b64dd.png",
+    "seconds": 140
+   },
+   "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a fictional soul singer in a sequined gold jacket against a deep orange backdrop, 1970s studio portrait; 2) a funk band of fictional musicians in platform shoes jumping mid-air, saturated photo; 3) a blue-toned jazz trio silhouetted in a doorway, high-contrast photo; 4) a hand-painted blues guitarist on a crate at a railway siding, gouache; 5) a gospel choir in purple robes seen from above, vintage colour photo; 6) abstract brush strokes in indigo and gold, cool-jazz style; 7) a vintage convertible car parked under palm trees at dusk, airbrushed; 8) a close-up of a trumpet bell with warm stage lights, bokeh; 9) a 1960s graphic of interlocking orange and brown rounded shapes; 10) a smoky lounge with an empty microphone stand under a spotlight; 11) a fictional couple dancing in a living room, grainy Polaroid look; 12) a woodcut-style print of a riverboat at night; 13) a bright pop-art pattern of lips and stars in red and turquoise (no words); 14) a hammond organ in a dark church, moody photograph; 15) a hand-drawn spiral sun over rolling hills in earthy tones; 16) a split-tone photo of city rooftops at dawn in pink and teal. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+  },
+  "covers-3": {
+   "file": "covers-3.png",
+   "sha256": "9239c98e5db314248178a92c7037b99196dacffc64dbf3970bc0ca3fe53b48da",
+   "bytes": 3315615,
+   "width": 1254,
+   "height": 1254,
+   "codex": {
+    "session": "01a1b4c1-c2c1-7b41-ae6c-88b86c1a0170",
+    "nativeOutput": "exec-ac92cad0-0d9a-43f4-95a4-24aa43c91b19.png",
+    "seconds": 70.7
+   },
+   "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a chrome wireframe mountain range on a black grid horizon, 1980s computer graphic; 2) a fictional new-wave singer with dramatic geometric make-up, pastel studio portrait; 3) a heavy-metal painting of a stormy sky with lightning over a black castle; 4) a fictional hip-hop crew on a brick stoop with a boombox, 1990s film photo; 5) a cassette tape with ribbon unspooled into a heart shape, flat illustration; 6) a glowing synthesizer keyboard close-up in magenta light; 7) a skateboarder silhouetted in a concrete bowl at sunset; 8) a pixel-art spaceship drifting past a ringed planet; 9) a stark red and black Constructivist composition of diagonal bars; 10) a fictional goth band in black coats under a streetlight in fog; 11) a graffiti-style spray-paint abstract burst on a concrete wall with no letters; 12) a fluorescent jellyfish in deep blue water; 13) a 1980s memphis-design pattern of squiggles and triangles; 14) a motorcycle headlight cutting through night rain; 15) a mirrored sphere reflecting a desert, surreal photo; 16) a black-and-white photocopied crowd at a basement show, high contrast. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+  },
+  "covers-4": {
+   "file": "covers-4.png",
+   "sha256": "b3c3c7ccfd3c3188c31026f54ab87e7fa839542fa2aa3085b9394e66692e08eb",
+   "bytes": 3658556,
+   "width": 1254,
+   "height": 1254,
+   "codex": {
+    "session": "01a1b4c2-d70e-7ce3-a15b-ae4a242d2e1d",
+    "nativeOutput": "exec-f22ed316-1aa3-4d44-ad0f-64cc0f51425e.png",
+    "seconds": 66.8
+   },
+   "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a fictional country singer in a cowboy hat leaning on a fence at a rodeo ground, warm 1970s photo; 2) a hand-stitched quilt pattern in red, white and denim blue; 3) a misty pine forest at dawn, soft ambient photograph; 4) a fictional indie band of four sitting on a ratty couch in a garage, flash photo; 5) a botanical engraving of wild prairie roses on cream paper; 6) an oil painting of a string quartet in candlelight; 7) a chinook arch cloud over foothills at sunset, dramatic sky photo; 8) a watercolour fox curled in snow; 9) a minimalist single brushstroke circle in black ink on rice paper; 10) a vintage map-like topographic contour pattern in brown and green; 11) a canoe on a glassy lake reflecting red maples, painted; 12) a fictional fiddler dancing at a barn party, motion-blurred photo; 13) a kaleidoscope of tropical flowers in vivid colours; 14) a dusty desert motel sign shape with no letters against a violet sky; 15) a stained-glass window pattern in jewel tones; 16) a long-exposure photo of a passenger train crossing a trestle bridge at night. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+  },
+  "posters": {
+   "file": "posters.png",
+   "sha256": "242cac5ceea3598d42f9198d9ea849a032f82d16df2d42169ea7c6bc01d4e732",
+   "bytes": 3267488,
+   "width": 1024,
+   "height": 1536,
+   "codex": {
+    "session": "01a1b4c3-dc67-7211-8a8c-6d7e8c96495d",
+    "nativeOutput": "exec-3f775aab-691f-40e8-bc1f-e5c6a311d0f1.png",
+    "seconds": 47.6
+   },
+   "prompt": "A flat, straight-on PORTRAIT image (2:3) laid out as a precise 2 x 2 grid of four ORIGINAL fictional concert gig posters, every poster an equal 2:3 portrait rectangle, separated by uniform thin solid pure-black gutters with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat poster artwork filling its rectangle edge to edge: no wall, no tape, no frame, no perspective, no shadow. Fictional bands at a fictional prairie record store, 1970s to 1990s styles; the ONLY words allowed are these, spelled exactly, in large simple lettering: poster 1 (top left, two-colour screenprint of a grain elevator under a huge sun, orange and navy): \"PRAIRIE STATIC\" and \"LIVE IN-STORE\"; poster 2 (top right, psychedelic hand-lettered style in purple, pink and lime with swirling clouds): \"THE HOARFROST\" and \"SATURDAY NIGHT\"; poster 3 (bottom left, punk photocopy collage, black, white and red, a fictional singer shouting into a microphone): \"CHINOOK ARCH\" and \"ALL AGES\"; poster 4 (bottom right, elegant art-deco jazz poster in gold and teal with a stylised saxophone): \"NORTHERN LIGHTS QUARTET\" and \"ONE NIGHT ONLY\". No other text, numbers, dates, logos, real bands, real venues, trademarks or signatures."
+  },
+  "signs": {
+   "file": "signs.png",
+   "sha256": "af32b37d034ab552f7846919a541bafe0c1d8149a309f30181eb44132dfaa4ef",
+   "bytes": 1659520,
+   "width": 1536,
+   "height": 1024,
+   "codex": {
+    "session": "01a1b4c4-96d7-72b0-b86b-143108b45d20",
+    "nativeOutput": "exec-40b8286c-e2e8-4a9d-a10d-d01077d175fa.png",
+    "seconds": 35.2
+   },
+   "prompt": "A flat, straight-on LANDSCAPE image (3:2) on a pure solid black background showing ten separate ORIGINAL hand-painted record-store signs, each a clean flat rectangle with generous pure-black space around it (no sign touches another or the edge): top row, one wide horizontal sign board (about 4:1) in cream paint on a deep burgundy board with a thin gold pinstripe border reading exactly \"NEW ARRIVALS\"; second row, one wide horizontal sign board (about 4:1) in the same style reading exactly \"LISTENING BOOTHS\"; below them, two rows of four small identical-size horizontal divider cards (about 2:1), each a cream card with a coloured top band and one hand-lettered word in black, spelled exactly: \"ROCK\", \"JAZZ\", \"FOLK\", \"SOUL\" (third row) and \"PUNK\", \"COUNTRY\", \"BLUES\", \"ELECTRONIC\" (fourth row). Flat artwork only: no perspective, no shadows, no wall, no hands, no screws, no extra text, numbers, logos or trademarks."
+  }
+ },
+ "files": [
+  {
+   "file": "textures/skyways/stores/music/music-covers.jpg",
+   "sha256": "64e412a156191029e5b8a0f96dce2fe5d9f5a8666a6db413d71c3b8fa476599c",
+   "bytes": 1100565,
+   "width": 2048,
+   "height": 2048,
+   "cells": [
+    {
+     "index": 0,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 4,
+      "x1": 309,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 1,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 2,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 3,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 4,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 4,
+      "x1": 309,
+      "y0": 316,
+      "y1": 623
+     }
+    },
+    {
+     "index": 5,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 316,
+      "y1": 623
+     }
+    },
+    {
+     "index": 6,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 316,
+      "y1": 623
+     }
+    },
+    {
+     "index": 7,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 316,
+      "y1": 623
+     }
+    },
+    {
+     "index": 8,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 4,
+      "x1": 309,
+      "y0": 630,
+      "y1": 936
+     }
+    },
+    {
+     "index": 9,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 630,
+      "y1": 936
+     }
+    },
+    {
+     "index": 10,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 630,
+      "y1": 936
+     }
+    },
+    {
+     "index": 11,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 630,
+      "y1": 936
+     }
+    },
+    {
+     "index": 12,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 4,
+      "x1": 309,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 13,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 14,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 15,
+     "sheet": "covers-1",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 16,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 5,
+      "x1": 311,
+      "y0": 6,
+      "y1": 311
+     }
+    },
+    {
+     "index": 17,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 318,
+      "x1": 623,
+      "y0": 6,
+      "y1": 311
+     }
+    },
+    {
+     "index": 18,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 630,
+      "x1": 935,
+      "y0": 6,
+      "y1": 311
+     }
+    },
+    {
+     "index": 19,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 942,
+      "x1": 1248,
+      "y0": 6,
+      "y1": 311
+     }
+    },
+    {
+     "index": 20,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 5,
+      "x1": 311,
+      "y0": 318,
+      "y1": 623
+     }
+    },
+    {
+     "index": 21,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 318,
+      "x1": 623,
+      "y0": 318,
+      "y1": 623
+     }
+    },
+    {
+     "index": 22,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 630,
+      "x1": 935,
+      "y0": 318,
+      "y1": 623
+     }
+    },
+    {
+     "index": 23,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 942,
+      "x1": 1248,
+      "y0": 318,
+      "y1": 623
+     }
+    },
+    {
+     "index": 24,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 5,
+      "x1": 311,
+      "y0": 629,
+      "y1": 935
+     }
+    },
+    {
+     "index": 25,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 318,
+      "x1": 623,
+      "y0": 629,
+      "y1": 935
+     }
+    },
+    {
+     "index": 26,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 630,
+      "x1": 935,
+      "y0": 629,
+      "y1": 935
+     }
+    },
+    {
+     "index": 27,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 942,
+      "x1": 1248,
+      "y0": 629,
+      "y1": 935
+     }
+    },
+    {
+     "index": 28,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 5,
+      "x1": 311,
+      "y0": 941,
+      "y1": 1247
+     }
+    },
+    {
+     "index": 29,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 318,
+      "x1": 623,
+      "y0": 941,
+      "y1": 1247
+     }
+    },
+    {
+     "index": 30,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 630,
+      "x1": 935,
+      "y0": 941,
+      "y1": 1247
+     }
+    },
+    {
+     "index": 31,
+     "sheet": "covers-2",
+     "rect": {
+      "x0": 942,
+      "x1": 1248,
+      "y0": 941,
+      "y1": 1247
+     }
+    },
+    {
+     "index": 32,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 4,
+      "x1": 310,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 33,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 34,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 35,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 4,
+      "y1": 309
+     }
+    },
+    {
+     "index": 36,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 4,
+      "x1": 310,
+      "y0": 316,
+      "y1": 622
+     }
+    },
+    {
+     "index": 37,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 316,
+      "y1": 622
+     }
+    },
+    {
+     "index": 38,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 316,
+      "y1": 622
+     }
+    },
+    {
+     "index": 39,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 316,
+      "y1": 622
+     }
+    },
+    {
+     "index": 40,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 4,
+      "x1": 310,
+      "y0": 630,
+      "y1": 935
+     }
+    },
+    {
+     "index": 41,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 630,
+      "y1": 935
+     }
+    },
+    {
+     "index": 42,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 630,
+      "y1": 935
+     }
+    },
+    {
+     "index": 43,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 630,
+      "y1": 935
+     }
+    },
+    {
+     "index": 44,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 4,
+      "x1": 310,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 45,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 46,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 631,
+      "x1": 936,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 47,
+     "sheet": "covers-3",
+     "rect": {
+      "x0": 944,
+      "x1": 1249,
+      "y0": 943,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 48,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 3,
+      "x1": 310,
+      "y0": 2,
+      "y1": 309
+     }
+    },
+    {
+     "index": 49,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 2,
+      "y1": 309
+     }
+    },
+    {
+     "index": 50,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 630,
+      "x1": 937,
+      "y0": 2,
+      "y1": 309
+     }
+    },
+    {
+     "index": 51,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 943,
+      "x1": 1250,
+      "y0": 2,
+      "y1": 309
+     }
+    },
+    {
+     "index": 52,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 3,
+      "x1": 310,
+      "y0": 315,
+      "y1": 622
+     }
+    },
+    {
+     "index": 53,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 315,
+      "y1": 622
+     }
+    },
+    {
+     "index": 54,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 630,
+      "x1": 937,
+      "y0": 315,
+      "y1": 622
+     }
+    },
+    {
+     "index": 55,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 943,
+      "x1": 1250,
+      "y0": 315,
+      "y1": 622
+     }
+    },
+    {
+     "index": 56,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 3,
+      "x1": 310,
+      "y0": 629,
+      "y1": 936
+     }
+    },
+    {
+     "index": 57,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 629,
+      "y1": 936
+     }
+    },
+    {
+     "index": 58,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 630,
+      "x1": 937,
+      "y0": 629,
+      "y1": 936
+     }
+    },
+    {
+     "index": 59,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 943,
+      "x1": 1250,
+      "y0": 629,
+      "y1": 936
+     }
+    },
+    {
+     "index": 60,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 3,
+      "x1": 310,
+      "y0": 942,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 61,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 317,
+      "x1": 623,
+      "y0": 942,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 62,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 630,
+      "x1": 937,
+      "y0": 942,
+      "y1": 1249
+     }
+    },
+    {
+     "index": 63,
+     "sheet": "covers-4",
+     "rect": {
+      "x0": 943,
+      "x1": 1250,
+      "y0": 942,
+      "y1": 1249
+     }
+    }
+   ]
+  },
+  {
+   "file": "textures/skyways/stores/music/music-signs.jpg",
+   "sha256": "e2fa1c95ecf4ec6a6380d8abd125add19a31609700ceff9a1b6a35335588dd6c",
+   "bytes": 567200,
+   "width": 2048,
+   "height": 1152,
+   "pieces": [
+    {
+     "piece": "poster-0",
+     "sheet": "posters",
+     "rect": {
+      "x0": 5,
+      "x1": 507,
+      "y0": 5,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "poster-1",
+     "sheet": "posters",
+     "rect": {
+      "x0": 516,
+      "x1": 1018,
+      "y0": 5,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "poster-2",
+     "sheet": "posters",
+     "rect": {
+      "x0": 5,
+      "x1": 507,
+      "y0": 771,
+      "y1": 1530
+     }
+    },
+    {
+     "piece": "poster-3",
+     "sheet": "posters",
+     "rect": {
+      "x0": 516,
+      "x1": 1018,
+      "y0": 771,
+      "y1": 1530
+     }
+    },
+    {
+     "piece": "new-arrivals",
+     "sheet": "signs",
+     "rect": {
+      "x0": 104,
+      "y0": 80,
+      "x1": 1431,
+      "y1": 282
+     }
+    },
+    {
+     "piece": "listening-booths",
+     "sheet": "signs",
+     "rect": {
+      "x0": 104,
+      "y0": 343,
+      "x1": 1431,
+      "y1": 553
+     }
+    },
+    {
+     "piece": "genre-rock",
+     "sheet": "signs",
+     "rect": {
+      "x0": 55,
+      "y0": 617,
+      "x1": 375,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "genre-jazz",
+     "sheet": "signs",
+     "rect": {
+      "x0": 423,
+      "y0": 617,
+      "x1": 744,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "genre-folk",
+     "sheet": "signs",
+     "rect": {
+      "x0": 791,
+      "y0": 617,
+      "x1": 1112,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "genre-soul",
+     "sheet": "signs",
+     "rect": {
+      "x0": 1160,
+      "y0": 617,
+      "x1": 1480,
+      "y1": 763
+     }
+    },
+    {
+     "piece": "genre-punk",
+     "sheet": "signs",
+     "rect": {
+      "x0": 55,
+      "y0": 809,
+      "x1": 375,
+      "y1": 957
+     }
+    },
+    {
+     "piece": "genre-country",
+     "sheet": "signs",
+     "rect": {
+      "x0": 423,
+      "y0": 809,
+      "x1": 744,
+      "y1": 957
+     }
+    },
+    {
+     "piece": "genre-blues",
+     "sheet": "signs",
+     "rect": {
+      "x0": 791,
+      "y0": 809,
+      "x1": 1112,
+      "y1": 957
+     }
+    },
+    {
+     "piece": "genre-electronic",
+     "sheet": "signs",
+     "rect": {
+      "x0": 1160,
+      "y0": 809,
+      "x1": 1480,
+      "y1": 957
+     }
+    }
+   ]
+  }
+ ]
+}
