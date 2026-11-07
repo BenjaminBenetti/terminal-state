@@ -2775,6 +2775,7 @@ export class Game {
     // Iteration 16: `aimOffset` (lane INJURY: arm-injury sway) moves the real aim — shots, crosshair and the optic dot follow it
     this.camera.rotation.set(p.pitch + this.recoilPitch + this.aimOffset.pitch + Math.sin(t * 37) * 0.02 * sh, p.yaw + this.recoilYaw + this.aimOffset.yaw + Math.sin(t * 29) * 0.02 * sh, Math.sin(t * 23) * 0.015 * sh);
     this.trainRide?.tiltCamera(this.camera); // (lane RIDE) the moving car's roll / pitch (its jostle) on the view; no-op when not riding
+    this.skywaysCar?.tiltCamera(this.camera); // (Skyways prize display) its body pitch on a flight; no-op out of it / on flat floor
     const targetFov = this.aiming ? (WEAPONS[this.weapon.def?.id ?? 'rifle']?.aimFov ?? 60) : this.settings.fov;
     const fov = this.camera.fov + (targetFov - this.camera.fov) * Math.min(1, dt * 14 || 1);
     if (Math.abs(fov - this.camera.fov) > 0.01) { this.camera.fov = fov; this.camera.updateProjectionMatrix(); }
