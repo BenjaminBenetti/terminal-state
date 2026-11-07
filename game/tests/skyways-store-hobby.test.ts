@@ -15,7 +15,7 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {LEVELS} from '../src/levels/registry';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
-import {compartmentTable, holderTable, isLootHolderKind} from '../src/items/loot';
+import {compartmentTable, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {lootProfile} from '../src/items/lootTables';
 import {AMMO_ITEM_IDS} from '../src/items/calibers';
 import {purposeById} from '../src/gen/purposes';
@@ -143,13 +143,13 @@ describe('Skyways store: Grain Elevator Models (hobby)', () => {
       // the themed holders: the workbench / tool chest / paint rack roll craft-hardware supplies, the glass cases batteries
       for (const k of ['workbench', 'toolChest', 'paintRack'] as const) for (const p of role(h, k)) {
         expect(p.purpose).toBe(HOBBY_HOLDER_PURPOSE.workbench);
-        const ids = holderTable(p.kind, p.purpose!, prof).rows.map(r => r[0]);
+        const ids = holderTable(p.kind as HolderKind, p.purpose!, prof).rows.map(r => r[0]);
         expect(ids).toContain('battery');
         expect(ids).toContain('flare');
       }
       for (const p of [...role(h, 'glassCase'), ...role(h, 'glassCounter')]) {
         expect(p.purpose).toBe(HOBBY_HOLDER_PURPOSE.glass);
-        expect(holderTable(p.kind, p.purpose!, prof).rows.map(r => r[0])).toContain('battery');
+        expect(holderTable(p.kind as HolderKind, p.purpose!, prof).rows.map(r => r[0])).toContain('battery');
       }
       // the kit shelving / aisles roll the toy store's floor stock
       for (const p of [...role(h, 'kitShelf'), ...role(h, 'kitGondola')]) expect(p.purpose ?? A[p.area].purpose).toBe(P.floor);
