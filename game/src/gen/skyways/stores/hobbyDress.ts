@@ -31,7 +31,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, SHELF_TIER_Y, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../../props';
 import {stockVariant} from '../../purposeShapes';
-import {begin, commit, makePlaceCtx, mountProp, rollback, tryPlaceProp, wallRange, wallSpot, type PlaceCtx} from '../../placeKit';
+import {WALL_ROT, begin, commit, makePlaceCtx, mountProp, rollback, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
 import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld} from '../addonFrame';
@@ -56,7 +56,9 @@ export type HobbyRole =
   | 'staffCorner' | 'backStorage' | 'staffDesk';
 export interface HobbyStoreResult {
   anchor: string;
-  /** The flank (frame end: 0 = u 0, 1 = u W) the cash desk stands on, -1 when the fallback counter was used. */
+  /** A point 1.25 m inside the storefront entry (world m) and the store's storey. */
+  entry: {x: number; z: number; level: number};
+  /** The flank (frame end: 0 = u 0, 1 = u W) the cash desk stands on / beside, -1 when the fallback counter was used. */
   cashEnd: 0 | 1 | -1;
   roles: Partial<Record<HobbyRole, PropPlacement[]>>;
   lanes: ShopsALane[];
@@ -66,6 +68,15 @@ export interface HobbyStoreResult {
 const RESULTS = new WeakMap<StationLayout, HobbyStoreResult[]>();
 /** QA / tests: the hobby stores dressed in a layout (the generator ignores it). */
 export function hobbyStoreDressOf(layout: StationLayout): readonly HobbyStoreResult[] { return RESULTS.get(layout) ?? []; }
+/**
+ * QA / tests: a role's props as they stand in the finished layout (matched by kind, position and storey — robust to a later pass
+ * re-creating the prop records).
+ */
+export function hobbyRoleProps(layout: StationLayout, rec: HobbyStoreResult, role: HobbyRole): PropPlacement[] {
+  const key = (p: PropPlacement) => `${p.kind}@${p.x},${p.z},${p.y},${p.level ?? 0}`;
+  const want = new Set((rec.roles[role] ?? []).map(key));
+  return want.size ? layout.props.filter(p => want.has(key(p))) : [];
+}
 
 /** Kit-stack budget per store (each stack is an ~830-triangle instance; enough to read as packed kit walls). */
 export const HOBBY_KIT_STACKS = 140;
@@ -74,7 +85,8 @@ export const HOBBY_KIT_STACKS = 140;
 export function dressHobbyStore(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number {
   if (!layout.areas[anchor.floor]) return 0;
   const kit = new AnchorKit(layout, rng, anchor);
-  const res: HobbyStoreResult = {anchor: anchor.id, cashEnd: -1, roles: {}, lanes: kit.lanes, skipped: kit.skipped, placed: 0};
+  const [ix, iz] = kit.inside(1.25);
+  const res: HobbyStoreResult = {anchor: anchor.id, entry: {x: r3(ix), z: r3(iz), level: kit.level}, cashEnd: -1, roles: {}, lanes: kit.lanes, skipped: kit.skipped, placed: 0};
   const add = (role: HobbyRole, ...ps: (PropPlacement | null | undefined)[]) => { for (const p of ps) if (p) (res.roles[role] ??= []).push(p); };
   kit.reserveDoors();
   // the fixed pieces first (the lanes route round them): the cash desk, the back rooms' additions (no back room, or no room there for
@@ -98,7 +110,10 @@ export function dressHobbyStore(layout: StationLayout, rng: Rng, anchor: Skyways
   let left = HOBBY_KIT_STACKS;
   const shelves = kit.wallRun('shelf', {cluster: 4, gap: 0.5, max: rng.int(8, 14), front: 0.9});
   add('kitShelf', ...shelves);
-  const runs = fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: rng.int(2, 4), orient: kit.fr.W >= kit.fr.D ? 'u' : 'v'});
+  // (the kit aisles along the floor's long axis first, then across it where the floor left over suits that better)
+  const wantRuns = rng.int(3, 5), long = kit.fr.W >= kit.fr.D ? 'u' : 'v';
+  const runs = fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: wantRuns, orient: long});
+  if (runs.length < wantRuns) runs.push(...fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: wantRuns - runs.length, orient: long === 'u' ? 'v' : 'u'}));
   for (const run of runs) add('kitGondola', ...run);
   if (!runs.length) kit.skipped.push('kit aisles (gondola runs)');
   for (const sh of rng.shuffle(shelves.slice())) { if (left <= 0) break; const ks = shelfKits(kit, sh, left); left -= ks.length; add('kitStack', ...ks); }
@@ -132,62 +147,38 @@ const tOf = (side: Side, x: number, z: number): number => (side === 'N' || side 
 // The cash desk
 
 /**
- * The cash desk against a flank wall near the front: the back counter (mallCashwrapCounter) backed to the wall, a 1.2 m staff aisle in
- * front of its drawers, then the counter run facing the shop — the till counter (with the register) nearer the front, the glass display
- * counter deeper in. The wider flank (from the entry) first. Fallback: a till counter beside the entry and the back counter on the
- * nearest wall.
+ * The cash desk against a wall near the entry: the back counter (mallCashwrapCounter) backed to the wall, a 1.2 m staff aisle in front
+ * of its drawers, then the counter run parallel to it facing the shop — the till counter (with the register) on the entry's side, the
+ * glass display counter beyond it. Tried on the flanks near the front (the flank nearer the entry first), on the front wall beside the
+ * entry, then deeper on the flanks (a flank door / window near the front). Fallback: a till counter beside the entry (the glass counter
+ * in line behind it) and the back counter on the nearest wall.
  */
 function cashDesk(kit: AnchorKit, res: HobbyStoreResult, add: Add): void {
-  const fr = kit.fr, cw = PROP_DEFS.mallCashwrapCounter, sc = PROP_DEFS.shopCounter;
-  const lo = kit.uE - kit.entry.half, hi = fr.W - (kit.uE + kit.entry.half);
-  const ends: (0 | 1)[] = lo === hi ? kit.rng.shuffle([0, 1] as (0 | 1)[]) : lo > hi ? [0, 1] : [1, 0];
-  // (the counters' backs on the first cell line past the back counter's 0.92 m drawer strip)
-  const U = Math.ceil((0.03 + cw.d + 0.92) / CELL) * CELL;
-  for (const end of ends) {
-    const side = flankSide(kit, end), s = end ? -1 : 1, uWall = end ? fr.W : 0;
-    // (near the front first; a flank door / window there pushes it deeper)
-    for (const vc of [2.6, 3.1, 3.6, 4.2, 4.8, 5.6, 6.4, 7.2, 8.0]) {
-      if (vc + 1.6 > fr.D - 2.0) break;
-      const got: PropPlacement[] = [];
-      const ok = kit.cluster(() => {
-        const [wx, wz] = kit.uv(uWall + s * (0.03 + cw.d / 2), vc);
-        const a = kit.areaAt(wx, wz);
-        if (!a) return false;
-        const t = tOf(side, wx, wz);
-        if (!kit.solidWall(a, side, t, 'mallCashwrapCounter')) return false;
-        const sp = wallSpot(a, side, t, 'mallCashwrapCounter');
-        const back = kit.put('mallCashwrapCounter', sp.x, sp.z, sp.rot, {area: a, front: 0.9});
-        if (!back) return false;
-        got.push(back);
-        // the run: [till, glass counter] along v, their backs on the cell line U from the wall
-        const rot = end ? fr.minusU : fr.plusU;
-        const v0 = snapEdge(vc - sc.w / 2 - 0.005, sc.w / 2);
-        const kinds: PropKind[] = ['shopCounter', 'glassCounter'];
-        for (let k = 0; k < kinds.length; k++) {
-          const d = PROP_DEFS[kinds[k]];
-          const [x, z] = kit.uv(uWall + s * (U + d.d / 2), v0 + k * (sc.w + 0.01));
-          const p = kit.put(kinds[k], x, z, rot, {front: 1.0});
-          if (!p) { if (k === 0) return false; break; }
-          if (kinds[k] === 'glassCounter') p.purpose = HOBBY_HOLDER_PURPOSE.glass;
-          got.push(p);
-        }
-        // the staff aisle: free floor (the back counter's strip is reserved already), kept clear
-        const n = got.length - 1;
-        const A0 = Math.ceil((0.03 + cw.d) / CELL) * CELL;
-        const [ax, az] = kit.uv(uWall + s * (A0 + 0.02), Math.min(v0 - sc.w / 2, vc - cw.w / 2)), [bx, bz] = kit.uv(uWall + s * (U - 0.02), Math.max(v0 + (n - 0.5) * sc.w, vc + cw.w / 2));
-        const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
-        if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
-        kit.keepBox(box[0], box[1], box[2], box[3]);
-        return true;
-      });
-      if (!ok) continue;
-      res.cashEnd = end;
-      add('backCounter', got[0]);
-      add('till', got[1]);
-      add('glassCounter', got[2]);
-      register(kit, got[1], add);
-      return;
-    }
+  const fr = kit.fr, E = kit.entry;
+  const lo = kit.uE - E.half, hi = fr.W - (kit.uE + E.half);
+  const ends: (0 | 1)[] = lo === hi ? kit.rng.shuffle([0, 1] as (0 | 1)[]) : lo < hi ? [0, 1] : [1, 0];
+  const flank = (v: number) => ends.map(end => ({side: flankSide(kit, end), at: kit.uv(end ? fr.W - 0.5 : 0.5, v), toTill: kit.uv(end ? fr.W - 0.5 : 0.5, v - 1), end}));
+  const cands: {side: Side; at: [number, number]; toTill: [number, number]; end: 0 | 1 | -1}[] = [];
+  for (const v of [2.6, 3.1, 3.6, 4.2]) cands.push(...flank(v));
+  // (the front wall beside the entry: the till toward the entry)
+  for (const du of [1.6, 2.2, 3.0, 4.0]) for (const end of ends) {
+    const s = end ? 1 : -1, u = kit.uE + s * (E.half + du + 1.0);
+    if (u < 1.2 || u > fr.W - 1.2) continue;
+    cands.push({side: fr.front, at: kit.uv(u, 0.5), toTill: kit.uv(u - s, 0.5), end});
+  }
+  for (const v of [4.8, 5.6, 6.4, 7.2, 8.0]) if (v + 1.6 <= fr.D - 2.0) cands.push(...flank(v));
+  for (const c of cands) {
+    const a = kit.areaAt(c.at[0], c.at[1]);
+    if (!a) continue;
+    const t = tOf(c.side, c.at[0], c.at[1]), dir = Math.sign(tOf(c.side, c.toTill[0], c.toTill[1]) - t) || 1;
+    const got = cashRun(kit, a, c.side, t, dir);
+    if (!got) continue;
+    res.cashEnd = c.end;
+    add('backCounter', got[0]);
+    add('till', got[1]);
+    add('glassCounter', got[2]);
+    register(kit, got[1], add);
+    return;
   }
   // fallback: a till counter beside the entry (its customer side to the entry aisle) with the glass counter behind it in line, the back
   // counter on the nearest free wall
@@ -209,6 +200,45 @@ function cashDesk(kit: AnchorKit, res: HobbyStoreResult, add: Add): void {
   }
   kit.skipped.push('cash desk');
 }
+/**
+ * One cash-desk cluster on `side` of `a` round the wall coordinate `t` (`dir`: along the wall toward the till end), all-or-nothing:
+ * [back counter, till, glass counter?] or null. Every piece's ends on cell lines; the counters' backs on the first cell line past the
+ * back counter's 0.92 m drawer strip (a ~1.2 m staff aisle, reserved).
+ */
+function cashRun(kit: AnchorKit, a: Area, side: Side, t: number, dir: number): PropPlacement[] | null {
+  const cw = PROP_DEFS.mallCashwrapCounter, sc = PROP_DEFS.shopCounter;
+  const U = Math.ceil((0.03 + cw.d + 0.92) / CELL) * CELL, A0 = Math.ceil((0.03 + cw.d) / CELL) * CELL;
+  const tc = r3(Math.round((t - cw.w / 2) / CELL) * CELL + cw.w / 2), rot = WALL_ROT[side];
+  const got: PropPlacement[] = [];
+  const ok = kit.cluster(() => {
+    if (!kit.solidWall(a, side, tc, 'mallCashwrapCounter')) return false;
+    const sp = wallSpot(a, side, tc, 'mallCashwrapCounter');
+    const back = kit.put('mallCashwrapCounter', sp.x, sp.z, sp.rot, {area: a, front: 0.9});
+    if (!back) return false;
+    got.push(back);
+    // the run centred on the back counter: the till's outer end T0, the glass counter beyond it
+    const T0 = tc + dir * sc.w;
+    const kinds: PropKind[] = ['shopCounter', 'glassCounter'];
+    for (let k = 0; k < kinds.length; k++) {
+      const d = PROP_DEFS[kinds[k]];
+      const [x, z] = wallXZ(a, side, T0 - dir * (k * (sc.w + 0.01) + sc.w / 2), U + d.d / 2);
+      const p = kit.put(kinds[k], r3(x), r3(z), rot, {front: 1.0});
+      if (!p) { if (k === 0) return false; break; }
+      if (kinds[k] === 'glassCounter') p.purpose = HOBBY_HOLDER_PURPOSE.glass;
+      got.push(p);
+    }
+    // the staff aisle between the back counter's drawers and the counters' backs: free floor, kept clear
+    const tEnd = T0 - dir * ((got.length - 1) * (sc.w + 0.01));
+    const t0 = Math.min(tc - cw.w / 2, T0, tEnd), t1 = Math.max(tc + cw.w / 2, T0, tEnd);
+    const [ax, az] = wallXZ(a, side, t0 + 0.02, A0 + 0.02), [bx, bz] = wallXZ(a, side, t1 - 0.02, U - 0.02);
+    const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
+    if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
+    kit.keepBox(box[0], box[1], box[2], box[3]);
+    return true;
+  });
+  return ok ? got : null;
+}
+
 function register(kit: AnchorKit, till: PropPlacement, add: Add): void {
   const reg = kit.onTop(till, 'cashRegister', 0.25, -0.08, SHOP_COUNTER_TOP_Y);
   if (reg) { (till.cut ??= []).push({y: SHOP_COUNTER_TOP_Y, x0: 0.25 - 0.26, x1: 0.25 + 0.26}); add('register', reg); }
