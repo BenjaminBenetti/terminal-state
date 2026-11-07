@@ -31,6 +31,11 @@ import type {StationLayout} from '../src/gen/stationTypes';
 import {findStores, storeAreas, storeProps, type StoreHit} from './helpers/skywaysStores';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import * as THREE from 'three';
+import {buildSkywaysDestProp} from '../src/world/skywaysDestinations';
+import {WorldMaterials} from '../src/world/materials';
+import {fakeEnvTextures} from './helpers/openablesFixture';
+import {installCanvasShim} from './helpers/canvas2d';
 
 const PROFILE = lootProfile('skyways');
 let hits: StoreHit[] = [];
@@ -288,12 +293,34 @@ describe('Skyways store: Blue Line Sports (hockey)', () => {
     for (const f of STORE_HOCKEY_MALL_MODELS) expect(fs.existsSync(path.join(__dirname, '../public/assets/models', f)), f).toBe(true);
   });
 
+  it('the renderer draws every drawn kind as instanced parts (one batch per variant, per material: prop-<kind>-v<n>-<mat>)', () => {
+    const restore = installCanvasShim(false);
+    try { drawAll(); } finally { restore(); }
+  });
+  function drawAll(): void {
+    const wm = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17});
+    const noModel = () => 0;
+    for (const k of STORE_HOCKEY_KINDS) {
+      const group = new THREE.Group(), def = PROP_DEFS[k];
+      const list: PropPlacement[] = [0, 1, 1].map((v, i) => ({kind: k, x: i * 3, z: 0, y: 0, rot: 0, area: 0, hx: def.w / 2, hz: def.d / 2, h: def.h, blocksSight: false, variant: v}));
+      const n = buildSkywaysDestProp(group, k as never, list, wm, noModel as never, {});
+      expect(n, k).toBe(3);
+      const meshes: THREE.InstancedMesh[] = [];
+      group.traverse(o => { if ((o as THREE.InstancedMesh).isInstancedMesh) meshes.push(o as THREE.InstancedMesh); });
+      expect(meshes.length, k).toBeGreaterThan(1);
+      for (const m of meshes) expect(m.name, k).toMatch(new RegExp(`^prop-${k}-v[01]-`));
+      // every batch of variant 1 holds its two placements; materials are real (paints, steel, glass)
+      for (const m of meshes.filter(q => q.name.includes('-v1-'))) expect(m.count).toBe(2);
+      for (const m of meshes) expect(m.material).toBeInstanceOf(THREE.Material);
+    }
+  }
+
   it('is deterministic (the same seed dresses the same store)', () => {
     const h = hits[0];
     const a = LEVELS.skyways.generate('main', {levelSeed: h.seed, startWeapon: 'pistol', layoutVersion: 3} as never) as StationLayout;
     const an = a.skyways!.anchors!.find(x => x.family === 'hockey')!;
-    const sig = (l: StationLayout, ps: PropPlacement[]) => ps.map(p => [p.kind, p.x, p.z, p.y, p.rot, p.variant, p.purpose ?? ''].join(',')).join(';');
-    expect(sig(a, storeProps(a, an))).toBe(sig(h.layout, storeProps(h.layout, h.anchor)));
+    const sig = (ps: PropPlacement[]) => ps.map(p => [p.kind, p.x, p.z, p.y, p.rot, p.variant, p.purpose ?? ''].join(',')).join(';');
+    expect(sig(storeProps(a, an))).toBe(sig(storeProps(h.layout, h.anchor)));
   }, 120_000);
 });
 
