@@ -58,7 +58,7 @@ export const SPACE_FILL: Readonly<Record<MapSpaceKind, string>> = {
 export const OTHER_STOREY_FILL = 'rgba(130,165,185,0.10)';
 /** The chip colour of a destination label by kind. */
 const CHIP: Readonly<Record<MapLabel['kind'], string>> = {event: '#b67fe2', anchor: '#e0a945', landmark: '#8fd27a', restaurant: '#e7684c', food: '#ec8c3a', station: '#4aa3e0'};
-const LABEL_ORDER: readonly MapLabel['kind'][] = ['station', 'event', 'anchor', 'landmark', 'restaurant', 'food'];
+const LABEL_ORDER: readonly MapLabel['kind'][] = ['station', 'event', 'landmark', 'anchor', 'restaurant', 'food'];
 
 // ---------------------------------------------------------------------------------------------
 // Projection (north up: canvas x = world x, canvas y = world z; z is south)
@@ -211,22 +211,10 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
     if (own && pass === 'skyway') for (const p of [l.pts[0], l.pts[l.pts.length - 1]]) { disc(ctx, X(p.x), Y(p.z), 6, PAL.skyway); disc(ctx, X(p.x), Y(p.z), 3, PAL.face); }
   }
   dash(ctx, []);
-  // reserved boxes for the label placement: building names first, then the run icons
+  // reserved boxes for the label placement: the run icons (fixed spots) first, then the building names (a free corner of the footprint)
   const taken: Box[] = [];
   const inPlan = (b: Box) => [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]].every(([x, y]) => Math.hypot(x - PC.cx, y - PC.cy) <= PC.r + 30);
-  for (const b of plan.buildings) {
-    const r = b.rect, x = X(r.x0) + 6, y = Y(r.z0) + 6, w = (r.x1 - r.x0) * k - 12;
-    const name = b.name.toUpperCase();
-    let fs = 19;
-    ctx.font = `bold ${fs}px ${FONT}`;
-    while (fs > 12 && ctx.measureText(name).width > w) { fs--; ctx.font = `bold ${fs}px ${FONT}`; }
-    const lines = ctx.measureText(name).width > w && name.includes(' ') ? [name.slice(0, name.lastIndexOf(' ')), name.slice(name.lastIndexOf(' ') + 1)] : [name];
-    const tw = Math.min(w, Math.max(...lines.map(s => ctx.measureText(s).width))), th = lines.length * (fs + 3) + 4;
-    rrect(ctx, x - 3, y - 2, tw + 8, th, 4); ctx.fillStyle = 'rgba(9,13,17,0.62)'; ctx.fill();
-    lines.forEach((s, i) => text(ctx, s, x + 1, y + fs / 2 + 1 + i * (fs + 3), `bold ${fs}px ${FONT}`, PAL.name));
-    if (b.station) chip(ctx, 'station', x + tw + 18, y + fs / 2 + 1, 18);
-    taken.push({x0: x - 3, y0: y - 2, x1: x + tw + (b.station ? 32 : 6), y1: y - 2 + th});
-  }
+  const free = (b: Box) => !taken.some(t => hit(t, b));
   for (const run of plan.runs) {
     if (run.lower !== level && run.upper !== level) continue;
     const x = X(run.x), y = Y(run.z), s = 20;
@@ -234,6 +222,22 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
     // a small up / down tick: where it goes from here
     text(ctx, run.upper === level ? '▼' : '▲', x + s / 2 + 7, y, `bold 11px ${FONT}`, '#d9dee2', 'center');
     taken.push({x0: x - s / 2 - 1, y0: y - s / 2 - 1, x1: x + s / 2 + 13, y1: y + s / 2 + 1});
+  }
+  for (const b of plan.buildings) {
+    const r = b.rect, w = (r.x1 - r.x0) * k - 12;
+    const name = b.name.toUpperCase();
+    let fs = 19;
+    ctx.font = `bold ${fs}px ${FONT}`;
+    while (fs > 12 && ctx.measureText(name).width > w) { fs--; ctx.font = `bold ${fs}px ${FONT}`; }
+    const lines = ctx.measureText(name).width > w && name.includes(' ') ? [name.slice(0, name.lastIndexOf(' ')), name.slice(name.lastIndexOf(' ') + 1)] : [name];
+    const tw = Math.min(w, Math.max(...lines.map(q => ctx.measureText(q).width))), th = lines.length * (fs + 3) + 4, bw = tw + (b.station ? 32 : 6) + 3;
+    const corners = [[X(r.x0) + 6, Y(r.z0) + 6], [X(r.x1) - 6 - bw + 3, Y(r.z0) + 6], [X(r.x0) + 6, Y(r.z1) - 6 - th + 2], [X(r.x1) - 6 - bw + 3, Y(r.z1) - 6 - th + 2]];
+    const boxAt = ([x, y]: number[]): Box => ({x0: x - 3, y0: y - 2, x1: x - 3 + bw, y1: y - 2 + th});
+    const [x, y] = corners.find(c => free(boxAt(c))) ?? corners[0];
+    rrect(ctx, x - 3, y - 2, tw + 8, th, 4); ctx.fillStyle = 'rgba(9,13,17,0.62)'; ctx.fill();
+    lines.forEach((q, i) => text(ctx, q, x + 1, y + fs / 2 + 1 + i * (fs + 3), `bold ${fs}px ${FONT}`, PAL.name));
+    if (b.station) chip(ctx, 'station', x + tw + 18, y + fs / 2 + 1, 18);
+    taken.push(boxAt([x, y]));
   }
   // washrooms on this storey: a small WC chip (no text)
   for (const s of plan.spaces) {
@@ -261,24 +265,29 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
       const font = `${bright ? '600 ' : ''}${fs}px ${FONT}`;
       ctx.font = font;
       const tw = ctx.measureText(str).width, th = fs + 8;
-      const tries: Box[] = [
-        {x0: x + cs / 2 + 3, y0: y - th / 2, x1: x + cs / 2 + 3 + tw + 10, y1: y + th / 2},
-        {x0: x - cs / 2 - 3 - tw - 10, y0: y - th / 2, x1: x - cs / 2 - 3, y1: y + th / 2},
-        {x0: x - (tw + 10) / 2, y0: y + cs / 2 + 2, x1: x + (tw + 10) / 2, y1: y + cs / 2 + 2 + th},
-        {x0: x - (tw + 10) / 2, y0: y - cs / 2 - 2 - th, x1: x + (tw + 10) / 2, y1: y - cs / 2 - 2},
-      ];
       const chipBox = {x0: x - cs / 2, y0: y - cs / 2, x1: x + cs / 2, y1: y + cs / 2};
-      const box = tries.find(b => inPlan(b) && !taken.some(t => hit(t, b)));
+      // the chip marks the spot (never on a name, an icon or another label); when the spot is taken, a plate alone just beside it
+      const chipOk = free(chipBox), w = tw + 10;
+      const tries: Box[] = chipOk ? [
+        {x0: x + cs / 2 + 3, y0: y - th / 2, x1: x + cs / 2 + 3 + w, y1: y + th / 2},
+        {x0: x - cs / 2 - 3 - w, y0: y - th / 2, x1: x - cs / 2 - 3, y1: y + th / 2},
+        {x0: x - w / 2, y0: y + cs / 2 + 2, x1: x + w / 2, y1: y + cs / 2 + 2 + th},
+        {x0: x - w / 2, y0: y - cs / 2 - 2 - th, x1: x + w / 2, y1: y - cs / 2 - 2},
+      ] : [0, th + 2, -(th + 2), 2 * (th + 2), -2 * (th + 2)].map(dy => ({x0: x - w / 2, y0: y - th / 2 + dy, x1: x + w / 2, y1: y + th / 2 + dy}));
+      const box = tries.find(b => inPlan(b) && free(b));
       if (!box) continue;
-      chip(ctx, l.kind, x, y, cs, bright ? 1 : 0.6);
+      if (chipOk) { chip(ctx, l.kind, x, y, cs, bright ? 1 : 0.6); taken.push(chipBox); }
       rrect(ctx, box.x0, box.y0, box.x1 - box.x0, box.y1 - box.y0, 4); ctx.fillStyle = bright ? PAL.plate : 'rgba(9,13,17,0.45)'; ctx.fill();
       text(ctx, str, box.x0 + 5, (box.y0 + box.y1) / 2 + 0.5, font, bright ? PAL.text : PAL.dim);
-      taken.push(box, chipBox);
+      taken.push(box);
       placed = true;
       break;
     }
     // (no free spot: this storey's destination keeps its chip — never an overlapping label; another storey's is left out)
-    if (!placed && bright) { chip(ctx, l.kind, x, y, cs); taken.push({x0: x - cs / 2, y0: y - cs / 2, x1: x + cs / 2, y1: y + cs / 2}); }
+    if (!placed && bright) {
+      const cb = {x0: x - cs / 2, y0: y - cs / 2, x1: x + cs / 2, y1: y + cs / 2};
+      if (free(cb)) { chip(ctx, l.kind, x, y, cs); taken.push(cb); }
+    }
   }
   // header: the complex's name, what this is, this storey
   text(ctx, plan.name.toUpperCase(), C, MAP_FACE.header.title, `bold 40px ${FONT}`, '#f2f4f5', 'center');
