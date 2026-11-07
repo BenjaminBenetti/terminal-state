@@ -36,15 +36,19 @@ import {dropExtensions, extendTracks, finishExtensions, trackExtConfig, TRACK_EX
 import {populateExtensions} from '../annexContent';
 import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
-import {carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
+import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
 import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX} from './layoutVersion';
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
 import {dressSkywaysAddon} from './addon';
+import {dressSkywaysOfficeWing} from './officeWing';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
+import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
+import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
+import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -176,7 +180,10 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'), {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: task studio-alpha-skyways-shops-20261107-054512-01)
+  dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
+  placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
+  dressSkywaysGardens(layout, rng.fork('skyways-gardens')); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) planted galleries + court bench-planters
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
@@ -190,6 +197,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // --- Lighting, daylight, traversal ------------------------------------------------------------------------------------------
   applyLighting(layout, rng.fork('lighting'));
   addSkywaysDaylight(layout);
+  skywaysSkylights(layout); // (task studio-skyways-rework-20261107-054512-01, lane ARCH) skylight coffers + their daylight (before dropFloatingFixtures)
   finishTraversal(layout);
   dropFloatingFixtures(layout);
 
@@ -281,6 +289,9 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
       approach: a.approach,
       ...(car ? {car} : {}),
       ...(a.id === 'convention' ? {convention: {stage: a.stage ? rectW(a.stage) : rectW(a.hall), statues: []}} : {}),
+      // (layout version 3) the convention venue's areas by role; the prize car's public display
+      ...(a.venue ? {venue: a.venue.map(v => ({role: v.role, area: v.area}))} : {}),
+      ...(a.id === 'prize-car' && !a.areas.length ? {display: true} : {}),
     },
     restaurant: sc.ramen ? {area: sc.ramen.dining, kitchen: sc.ramen.kitchen, building: sc.ramen.building, level: sc.ramen.level, name: layout.areas[sc.ramen.dining].label} : null,
     start: {x: start.x, z: start.z, yaw: start.yaw, level: 0},
@@ -288,6 +299,7 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     family: f.family, topology: f.topology, pedways: sc.pedways.slice(),
     anchors: sc.anchors.map(an => ({id: an.id, family: an.family, name: an.name, building: an.building, level: an.level, format: an.format, floor: an.floor,
       rect: rectW(an.rect), storefront: an.storefront, front: an.front, ...(an.upper !== null ? {upper: an.upper} : {}), zones: an.zones.slice(), stock: an.stock.slice(), ceilY: an.ceilY})),
+    ...(sc.officeWing ? {officeWing: {building: sc.officeWing.building, level: sc.officeWing.level, tenant: sc.officeWing.tenant, rooms: sc.officeWing.rooms.map(q => ({...q}))}} : {}),
     landmarks: sc.landmarks.map(m => ({id: m.id, family: m.family, name: m.name, building: m.building, level: m.level, area: m.area,
       x: r3((m.cx - ox) * CELL), z: r3((m.cy - oy) * CELL), y: BASES[m.level], radius: m.radius, height: m.height, atrium: m.atrium})),
   };
@@ -349,10 +361,12 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
     for (let y = r.y - oy - pad; y < r.y - oy + r.h + pad; y++) for (let x = r.x - ox - pad; x < r.x - ox + r.w + pad; x++) if (g.inBounds(x, y)) cells.push(g.idx(x, y));
     out.push({level, cells});
   };
+  // (layout version 3) the run-outs: RUN_OUT cells straight beyond both ends (a car lines up with the flight), 4 before
+  const M = RUN_OUT;
   for (const rc of sc.runs) {
     const r = rc.rect;
-    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - 4, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - 4, w: r.w, h: 4};
-    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - 4 : r.x + r.w, y: r.y, w: 4, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - 4 : r.y + r.h, w: r.w, h: 4};
+    const mouthLo = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x + r.w : r.x - M, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y + r.h : r.y - M, w: r.w, h: M};
+    const mouthHi = rc.axis === 'x' ? {x: rc.from === 'lo' ? r.x - M : r.x + r.w, y: r.y, w: M, h: r.h} : {x: r.x, y: rc.from === 'lo' ? r.y - M : r.y + r.h, w: r.w, h: M};
     add(rc.lower, mouthLo); add(rc.lower + 1, mouthHi);
   }
   for (const b of sc.bridges) {
@@ -377,6 +391,20 @@ function holds(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: number):
       for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === id) cells.push(g.idx(x, y));
       out.push({level: lv, cells});
     }
+  }
+  // (layout version 3) the office wing: the office dresser furnishes it
+  for (const q of sc.officeWing?.rooms ?? []) {
+    const a = layout.areas[q.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === q.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
+  }
+  // (layout version 3) the convention venue: its public event areas belong to the venue dresser (the washrooms, backstage and storage
+  // keep the station's ordinary dressing)
+  for (const v of sc.addon.venue ?? []) {
+    if (v.role === 'washrooms' || v.role === 'backstage' || v.role === 'storage') continue;
+    const a = layout.areas[v.area], g = layout.levels[a.level ?? 0].grid, cells: number[] = [];
+    for (let y = a.y; y < a.y + a.h; y++) for (let x = a.x; x < a.x + a.w; x++) if (g.inBounds(x, y) && g.area[g.idx(x, y)] === v.area) cells.push(g.idx(x, y));
+    out.push({level: a.level ?? 0, cells});
   }
   add(sc.addon.level, sc.addon.hall);
   add(sc.addon.level, sc.addon.entry, 3);

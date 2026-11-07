@@ -24,7 +24,7 @@ import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {holderFinds, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {SKYWAYS_DEST_PROPS, type SkywaysDestProp} from '../src/assets/skywaysDestProps.generated';
-import {DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
+import {DEST_POSTERS_OF} from '../src/gen/skyways/legacy77/destinations/art';
 import {HUNG_CLEAR, PLANET_MOBILE_HANG, PLANT_BENCH_TOP, SHOPS_B_KINDS, SHOPS_B_MODEL, SHOPS_B_SCALE, SHOPS_B_SPECS, SKYD_SCREEN_PARTS} from '../src/gen/skyways/destinations/kindsShopsB';
 import {SHOPS_B_FAMILIES} from '../src/gen/skyways/legacy77/destinations/shopsB';
 
@@ -38,6 +38,8 @@ const MINE: ReadonlySet<string> = new Set([...SHOPS_B_KINDS, 'shopCounter', 'sho
 /** Host tops (m above the host's base) of the hosts this lane stacks on. */
 const TOP: Readonly<Partial<Record<PropKind, number>>> = {skyDPlantBench: PLANT_BENCH_TOP(), merchTable: PROP_DEFS.merchTable.h, shopCounter: SHOP_COUNTER_TOP_Y};
 
+// (task studio-skyways-rework-20261107-054512-01) these dressers' GAME77 output, on the stations entered before the rework: layout version 2
+// through the frozen generator (gen/skyways/legacy77/). The reworked stores (layout version 3) are the store lanes' own tests.
 interface Shop { seed: number; layout: StationLayout; an: SkywaysAnchor; areas: Area[]; props: PropPlacement[] }
 const SEEDS = Array.from({length: 14}, (_, i) => i + 1);
 const layouts = new Map<number, StationLayout>();

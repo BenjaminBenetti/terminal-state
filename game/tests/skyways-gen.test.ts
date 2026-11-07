@@ -145,7 +145,8 @@ describe('Skyways: generated layouts', () => {
     }
   });
 
-  it('the prize car (when drawn): its spot in the add-on hall on the skyway level, clear, with a wide way out', () => {
+  // (task studio-skyways-rework-20261107-054512-01, layout version 3; user: "prize car in public walkway / atrium, not separate room")
+  it('the prize car (when drawn): on a public display in its host\'s skyway court (no add-on room), clear, with a wide way out', () => {
     let n = 0;
     for (const s of SEEDS) {
       const l = gen(s), a = l.skyways!.addon;
@@ -153,20 +154,28 @@ describe('Skyways: generated layouts', () => {
       n++;
       const c = a.car!;
       expect(c.level).toBe(2);
-      expect(a.areas).toContain(c.area);
+      expect(a.display).toBe(true);
+      expect(a.areas).toEqual([]);
+      const court = l.areas[c.area];
+      expect(court.publicSpace).toBe(true);
+      expect(court.label).toMatch(/^Skyway (court|galleria)/);
       const g = l.levels[2].grid;
       for (const t of [-1.6, 0, 1.6]) expect(g.circleClear(c.x - Math.sin(c.yaw) * t, c.z - Math.cos(c.yaw) * t, 1.05)).toBe(true);
     }
     expect(n).toBeGreaterThan(0);
   });
 
-  it('the convention (when drawn): its hall, stage and support rooms with washrooms', () => {
+  it('the convention (when drawn): its venue floor (main hall, stage, exhibitors, registration, panels) with washrooms', () => {
     let n = 0;
     for (const s of SEEDS) {
       const l = gen(s), a = l.skyways!.addon;
       if (a.id !== 'convention') continue;
       n++;
       expect(a.convention).toBeTruthy();
+      expect(a.level).toBe(2);
+      const roles = new Set((a.venue ?? []).map(v => v.role));
+      for (const r of ['main-hall', 'exhibitors', 'registration', 'panel', 'washrooms'] as const) expect(roles.has(r), r).toBe(true);
+      for (const v of a.venue!) expect(l.areas[v.area].level).toBe(2);
       expect(a.areas.some(id => l.areas[id].type === 'washroom')).toBe(true);
       const h = a.hall;
       expect((h.x1 - h.x0) * (h.z1 - h.z0)).toBeGreaterThan(150); // a substantial hall (m²)

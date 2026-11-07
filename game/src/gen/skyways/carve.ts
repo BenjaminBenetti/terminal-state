@@ -37,7 +37,7 @@ import {layStairRun, transitSpecs, type StairFlight, type StairSpec} from '../tr
 import {STORE_PURPOSES} from '../purposes';
 import type {Area, Rect, ShopUse, Side, Storefront} from '../stationTypes';
 import {BASES, CLEAR, STOREY, type FrameBuilding, type RunLanes, type SkywaysFrame} from './frame';
-import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysPlan, SkywaysShopFamily} from './skywaysTypes';
+import type {SkywaysAddonId, SkywaysAnchorFormat, SkywaysBridgeRoof, SkywaysLandmarkFamily, SkywaysOfficeRole, SkywaysPlan, SkywaysShopFamily, SkywaysVenueRole} from './skywaysTypes';
 import {SKYWAYS_RAMEN_PURPOSE} from './ramenPurposes';
 import {decompose} from '../mall/skeleton';
 
@@ -48,7 +48,11 @@ export type CellRect = Rect;
 export const RUN = transitSpecs(STOREY);
 /** Cells of a stair run (pitch + top landing) for one storey. */
 export const RUN_CELLS = RUN.cells;
-const LANE_W = {escalator: 3, stair: 5} as const;
+// (layout version 3: a fixed stair lane is 3 m wide between its rails / balustrades; GAME77's were 2.5 m)
+const LANE_W = {escalator: 3, stair: 6} as const;
+/** (layout version 3) Straight run-out (cells) of flat hub floor kept beyond both ends of a public run where the hub allows: 6 m of
+ *  open floor in line with the flight (gen/skyways/index.ts holds it clear of props during the station dress). */
+export const RUN_OUT = 12;
 /** Open stair wells' ramp headroom (capped by the well's ceiling: Ramp.capCeil). */
 const RUN_OPEN_HEADROOM = 40;
 const lanesW = (l: RunLanes) => l.reduce((q, k) => q + LANE_W[k], 0);
@@ -133,7 +137,17 @@ export interface AddonCarve {
   /** Prize car: the car's spot (cells, centre) and heading (rad, camera convention). */
   car: {cx: number; cy: number; yaw: number} | null;
   washrooms: number[];
+  /** (layout version 3) the convention VENUE's areas by role (the host's whole skyway floor). */
+  venue?: VenueRoomCarve[];
 }
+
+/** (layout version 3) A tenant's office wing (gen/skyways/officeWing.ts dresses it). */
+export interface OfficeWingCarve { building: string; level: number; tenant: string; rooms: {role: SkywaysOfficeRole; area: number}[] }
+/** Original tenant names of the office wings (fictional companies). */
+export const OFFICE_TENANTS = ['Chinook Analytics', 'Bow River Mutual', 'Parkland Engineering', 'Foothills Legal Group', 'Prairie Sky Software', 'Elbow Valley Energy', 'Aspen & Coulee Architects', 'Nose Hill Logistics'];
+
+/** (layout version 3) One area of the convention venue and what it is for. */
+export interface VenueRoomCarve { role: SkywaysVenueRole; area: number }
 
 export interface RamenCarve { building: string; level: number; dining: number; kitchen: number }
 
@@ -194,6 +208,8 @@ export interface SkywaysCarve {
   /** (destinations pass) The anchor shops and the landmark courts. */
   anchors: AnchorCarve[];
   landmarks: LandmarkCarve[];
+  /** (layout version 3) a tenant's office wing, or null. */
+  officeWing: OfficeWingCarve | null;
   /** Carved extent (canvas cells). */
   X0: number; Z0: number; X1: number; Z1: number;
   /** Atrium court roof height (absolute y). */
@@ -273,18 +289,26 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   // --- 1. Hubs and wells (per building plan) -------------------------------------------------------------------------------------
   for (const b of f.buildings) {
     const I = interiorOf(b), isSt = b.id === station.id, host = b.id === f.addonHost;
+    // (layout version 3) the prize display stands in the host's own skyway court: no hall beyond it, so the host's hub keeps its size
+    const hostHall = host && (legacy || f.addon !== 'prize-car');
     const mg = isSt ? 8 : 10;
     const bridged = bridgedSidesOf(b);
-    const hostSide = host ? [...bridged][0] ?? null : null;
+    const hostSide = hostHall ? [...bridged][0] ?? null : null;
     let hub: CellRect;
+    // (layout version 3: atria on most buildings) a galleria needs a long, wide enough interior; else the building takes a court plan
+    if (!legacy && b.plan === 'galleria' && !isSt && !host) {
+      const ax = b.axis === 'x', L = ax ? I.w : I.h, A = ax ? I.h : I.w;
+      if (A - 2 * mg < (b.atrium ? 22 : 16) || L - 2 * (mg + 4) < RUN_CELLS + 14) b.plan = 'court';
+    }
     if (b.plan === 'galleria') {
       // a long spine hall through the building (both storeys); the host's spine runs in from its one bridge and stops short of
       // the far end (the add-on hall takes it)
       const ax = b.axis === 'x', L = ax ? I.w : I.h, A = ax ? I.h : I.w, s0 = ax ? I.x : I.y, c00 = ax ? I.y : I.x;
       let len = L - 2 * rng.int(mg, mg + 4);
-      const wid = Math.min(A - 2 * mg, isSt ? rng.int(36, 42) : rng.int(17, 22));
+      // (layout version 3: an atrium galleria's spine is wider: walkways either side of its long glazed opening)
+      const wid = Math.min(A - 2 * mg, isSt ? rng.int(36, 42) : b.atrium && !legacy ? rng.int(22, 28) : rng.int(17, 22));
       let a0 = s0 + Math.round((L - len) / 2);
-      if (host && hostSide) {
+      if (hostHall && hostSide) {
         len = Math.max(RUN_CELLS + 14, Math.round(L * rng.range(0.48, 0.58)));
         a0 = hostSide === (ax ? 'W' : 'N') ? s0 + mg : s0 + L - mg - len;
       }
@@ -297,9 +321,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       else if (b.plan === 'offset') { hw = Math.round(I.w * rng.range(0.42, 0.52)); hd = Math.round(I.h * rng.range(0.42, 0.52)); }
       else { hw = Math.round(I.w * rng.range(0.48, 0.6)); hd = Math.round(I.h * rng.range(0.46, 0.58)); }
       if (b.atrium) { hw = Math.max(hw, 36); hd = Math.max(hd, 32); }
-      if (host) { hw = Math.min(hw, 30); hd = Math.min(hd, 28); }
+      if (hostHall) { hw = Math.min(hw, 30); hd = Math.min(hd, 28); }
       // a foyer approach: the host lobby is wider along its far side (the foyer beside the run, never onto it)
-      if (host && f.addonApproach === 'foyer' && hostSide) {
+      if (hostHall && f.addonApproach === 'foyer' && hostSide) {
         if (hostSide === 'W' || hostSide === 'E') { hw = Math.min(hw, 28); hd = Math.min(Math.max(hd, 32), 34); } else { hw = Math.min(Math.max(hw, 32), 34); hd = Math.min(hd, 28); }
       }
       hw = Math.max(28, Math.min(hw, I.w - (isSt ? 16 : 20)));
@@ -311,13 +335,13 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
         hx = b.corner & 1 ? I.x + I.w - mg - hw : I.x + mg;
         hy = b.corner & 2 ? I.y + I.h - mg - hd : I.y + mg;
       }
-      if (host && hostSide) {
+      if (hostHall && hostSide) {
         // the add-on hall takes the far side of the host: push the hub toward the host's bridge
         const m = f.addonApproach === 'foyer' ? 6 : 10;
         if (hostSide === 'W') hx = I.x + m; else if (hostSide === 'E') hx = I.x + I.w - m - hw;
         else if (hostSide === 'N') hy = I.y + m; else hy = I.y + I.h - m - hd;
       }
-      const mh = host ? 6 : mg;
+      const mh = hostHall ? 6 : mg;
       hx = Math.max(I.x + mh, Math.min(hx, I.x + I.w - mh - hw));
       hy = Math.max(I.y + mh, Math.min(hy, I.y + I.h - mh - hd));
       if (hw < 26 || hd < 24) return fail(`hub-${b.id}`);
@@ -328,6 +352,11 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       const g = rng.int(7, 9);
       atrium = {x: hub.x + g, y: hub.y + g, w: hub.w - 2 * g, h: hub.h - 2 * g};
       if (atrium.w < 12 || atrium.h < 10) atrium = null;
+    } else if (b.atrium && b.plan === 'galleria' && !legacy) {
+      // (layout version 3) a GALLERIA atrium: the spine's long glazed opening, skyway walkways along both long sides, landings at its ends
+      const ax = b.axis === 'x', gA = rng.int(5, 6), gL = rng.int(6, 10);
+      atrium = ax ? {x: hub.x + gL, y: hub.y + gA, w: hub.w - 2 * gL, h: hub.h - 2 * gA} : {x: hub.x + gA, y: hub.y + gL, w: hub.w - 2 * gA, h: hub.h - 2 * gL};
+      if (Math.min(atrium.w, atrium.h) < 8 || Math.max(atrium.w, atrium.h) < 18) atrium = null;
     }
     const edgeLen = (s: Side) => sideLen(hub, s);
     const wells: WellPlan[] = [];
@@ -336,14 +365,17 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     /** An open well hugging hub edge `s`: `len` along it from fraction `at`, `lw` deep, inside the hub, clear of the other wells. */
     const wellOn = (s: Side, lw: number, at: number, len = RUN_CELLS): CellRect | null => {
       const ax = alongXSide(s), L = edgeLen(s);
-      if (L < len + 8) return null;
-      const lo = (ax ? hub.x : hub.y) + 4, hi = (ax ? hub.x : hub.y) + L - 4 - len;
-      const tries = [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98];
-      for (const t of tries) {
-        const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
-        const atLow = s === 'N' || s === 'W';
-        const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
-        if (!clashes(r)) return r;
+      // (layout version 3) a straight run-out of RUN_OUT cells of hub floor beyond both ends where the edge allows (the old 4 else)
+      for (const m of legacy ? [4] : [RUN_OUT, 4]) {
+        if (L < len + 2 * m) continue;
+        const lo = (ax ? hub.x : hub.y) + m, hi = (ax ? hub.x : hub.y) + L - m - len;
+        const tries = [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98];
+        for (const t of tries) {
+          const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
+          const atLow = s === 'N' || s === 'W';
+          const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
+          if (!clashes(r)) return r;
+        }
       }
       return null;
     };
@@ -427,7 +459,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   }
 
   // --- 1c. Wells: the public run(s) 1 -> 2 and a pedway building's stair well 0 -> 1, clear of the bridges' landings ---------------
-  for (const bc of carves.values()) if (!placeWells(bc)) return fail(`hub-run-${bc.b.id}`);
+  // (layout version 3) a building whose wells do not fit round its atrium opening keeps its runs and loses the opening
+  for (const bc of carves.values()) if (!placeWells(bc) && (legacy || !bc.atrium || ((bc.atrium = null), !placeWells(bc)))) return fail(`hub-run-${bc.b.id}`);
 
   // the skyway-level cells of every atrium opening stay open air: no later room may be carved into them (rock again at the end)
   for (const bc of carves.values()) if (bc.atrium) keepAir(bc.atrium);
@@ -505,11 +538,31 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     }
   }
 
+  // (layout version 3) the public runs' run-outs (RUN_OUT cells straight beyond both ends; the head on the upper storey, the foot on the
+  // lower): kept plain by the storefronts below
+  const runOuts: {level: number; rect: CellRect}[] = [];
+  for (const rc of runs) {
+    const r = rc.rect, M = RUN_OUT;
+    const lo = rc.axis === 'x' ? {x: r.x - M, y: r.y, w: M, h: r.h} : {x: r.x, y: r.y - M, w: r.w, h: M};
+    const hi = rc.axis === 'x' ? {x: r.x + r.w, y: r.y, w: M, h: r.h} : {x: r.x, y: r.y + r.h, w: r.w, h: M};
+    // 'lo' = the top landing at the low end: the head (upper storey) there, the foot (lower storey) beyond the high end
+    runOuts.push({level: rc.lower + 1, rect: rc.from === 'lo' ? lo : hi}, {level: rc.lower, rect: rc.from === 'lo' ? hi : lo});
+  }
+
   // --- 6. The add-on hall --------------------------------------------------------------------------------------------------------
   const hostC = carves.get(f.addonHost)!;
-  const addon = carveAddon(hostC, f.addon, f.addonLevel, f.addonApproach);
+  // (layout version 3) the convention takes its host's whole skyway floor (a VENUE: the bridges lead straight into it); the prize car
+  // stands on a public PRIZE DISPLAY in the host's skyway court (no showroom room)
+  const venue = !legacy && f.addon === 'convention';
+  const addon = venue ? carveVenue(hostC) : !legacy && f.addon === 'prize-car' ? carvePrizeDisplay(hostC) : carveAddon(hostC, f.addon, f.addonLevel, f.addonApproach);
   if (!addon) return fail(`addon-${f.addon}-${f.addonLevel}`);
-  addonAreas.push(...addon.areas);
+  addonAreas.push(...addon.areas, ...(addon.venue ?? []).map(v => v.area));
+
+  // (layout version 3) the tenant's OFFICE WING, before the anchors take the hub sides: the frame's office building and storey (the
+  // other storey when that one has no room)
+  let officeWing: OfficeWingCarve | null = null;
+  const offC = legacy ? undefined : [...carves.values()].find(bc => bc.b.offices > 0 && bc.b.id !== f.addonHost);
+  if (offC) officeWing = carveOfficeWing(offC, offC.b.offices) ?? carveOfficeWing(offC, 3 - offC.b.offices);
 
   // --- 6a. DESTINATIONS: the landmark courts (atrium courts first) and the large ANCHOR shops ------------------------------------
   const landmarks = legacy ? [] : placeLandmarks();
@@ -569,6 +622,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     // (destinations pass: more shops overall, the anchors took some lobby walls)
     for (const level of [1, 2]) {
       if (legacy) { if (rng.chance(bc.plan === 'court' || bc.plan === 'offset' ? 0.45 : 0.25)) arcade(bc, level); continue; }
+      if (venue && host && level === f.addonLevel) continue; // (the venue floor: no shop arcade)
       const p = bc.plan === 'court' || bc.plan === 'offset' ? 0.75 : 0.5;
       if (rng.chance(p)) arcade(bc, level);
       if (rng.chance(p * 0.45)) arcade(bc, level);
@@ -577,6 +631,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     for (const level of [1, 2]) {
       if (host && level === f.addonLevel) continue;
       const offices = b.offices === level;
+      // (layout version 3; user: "occasional accessible office building floor") the building's tenant office: a real OFFICE WING (open
+      // plan, meeting room, private offices, break room) instead of a corridor suite (that one when no wing fits)
+      if (offices && officeWing?.building === bc.b.id) continue;
       if (offices || rng.chance(legacy ? 0.4 : 0.28)) serviceCorridor(bc, level, offices);
     }
   }
@@ -593,6 +650,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     for (const level of [1, 2]) {
       const pub = (bc.publicAreas.get(level) ?? []).filter(id => !addon.areas.includes(id));
       const fc = foodCourt?.building === bc.b.id && foodCourt.level === level;
+      if (venue && bc.b.id === f.addonHost && level === f.addonLevel) continue; // (the venue floor: its own washrooms / back of house, no shops)
       washroom(bc, level, pub);
       if (fc) shopsOn(bc, level, pub.filter(id => id !== foodCourt!.area), 'food', rng.int(2, 4));
       shopsOn(bc, level, pub, level === 1 ? 'mixed' : 'skyway', legacy ? (level === 1 ? rng.int(5, 8) : rng.int(6, 10)) : level === 1 ? rng.int(10, 14) : rng.int(11, 16));
@@ -612,7 +670,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     X0 = Math.min(X0, r.x); Z0 = Math.min(Z0, r.y); X1 = Math.max(X1, r.x + r.w); Z1 = Math.max(Z1, r.y + r.h);
   }
   if (X0 - 4 < 1 || Z0 - 4 < 1 || X1 + 4 > k.g.w || Z1 + 4 > k.g.h) return fail('canvas');
-  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, anchors, landmarks, X0, Z0, X1, Z1, roofY};
+  return {f, block, concourse, runs, bridges, buildings: [...carves.values()], windows, storefronts, addon, ramen, pedways, foodCourt, anchors, landmarks, officeWing, X0, Z0, X1, Z1, roofY};
 
   // ===========================================================================================================================
   // Local helpers (closures over the kit / records)
@@ -633,17 +691,20 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const clashes = (r: CellRect, upper: boolean) => wells.some(w => overlapsR(grow(w.rect, 3), r)) || (upper && bc.mouths.some(m => overlapsR(grow(m, 3), r)));
     // the add-on host: its runs stay at the BRIDGE end of the lobby (the far side is the hall's entry / foyer)
     const hostLow = hostSide === 'W' || hostSide === 'N';
-    const wellOn = (s: Side, lw: number, at: number, len = RUN_CELLS, upper = true): CellRect | null => {
+    const wellOn = (s: Side, lw: number, at: number, len = RUN_CELLS, upper = true, margins: readonly number[] = legacy ? [4] : [RUN_OUT, 4]): CellRect | null => {
       const ax = alongXSide(s), L = edgeLen(s);
-      if (L < len + 8) return null;
-      const lo = (ax ? hub.x : hub.y) + 4, hi = (ax ? hub.x : hub.y) + L - 4 - len;
       const flank = hostSide && alongXSide(s) === alongXSide(opposite(hostSide)) === false;
       const tries = flank ? [0, 0.1, 0.2, 0.3, 0.4].map(t => (hostLow ? t : 1 - t)) : [at, 0.5, 0.15, 0.85, 0.3, 0.7, 0.02, 0.98, 0.4, 0.6];
-      for (const t of tries) {
-        const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
-        const atLow = s === 'N' || s === 'W';
-        const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
-        if (!clashes(r, upper)) return r;
+      // (layout version 3) a straight run-out of RUN_OUT cells of hub floor beyond both ends where the edge allows (the old 4 else)
+      for (const m of margins) {
+        if (L < len + 2 * m) continue;
+        const lo = (ax ? hub.x : hub.y) + m, hi = (ax ? hub.x : hub.y) + L - m - len;
+        for (const t of tries) {
+          const a0 = Math.round(lo + (hi - lo) * Math.max(0, Math.min(1, t)));
+          const atLow = s === 'N' || s === 'W';
+          const r: CellRect = ax ? {x: a0, y: atLow ? hub.y : hub.y + hub.h - lw, w: len, h: lw} : {x: atLow ? hub.x : hub.x + hub.w - lw, y: a0, w: lw, h: len};
+          if (!clashes(r, upper)) return r;
+        }
       }
       return null;
     };
@@ -656,6 +717,9 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const edgeKey = (q: Side) => (bridged.has(q) ? 2 : 0) + (b.plan === 'galleria' && alongXSide(q) !== (b.axis === 'x') ? 1 : 0) + (hostSide && q === opposite(hostSide) ? 4 : 0);
     const edgeOrder = rng.shuffle(usable.slice()).sort((p, q) => edgeKey(p) - edgeKey(q));
     let main: WellPlan | null = null;
+    // (layout version 3) every edge with the full run-out first, then the old margin (legacy: one pass, the old margin)
+    for (const margin of legacy ? [4] : [RUN_OUT, 4]) {
+    if (main) break;
     for (const s of edgeOrder) {
       const depth = depthOf(s);
       const opts: [RunLanes, number][] = [[['stair'], 1]];
@@ -666,10 +730,11 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       if (lanesW(lanes) > depth - 10) continue;
       // a bridged edge: the run at one end of it (the bridge takes the rest); a galleria: near one end of the spine
       const at = bridged.has(s) || b.plan === 'galleria' ? (rng.chance(0.5) ? 0.04 : 0.96) : isSt && !alongXSide(s) ? (f.transitEdge === 'S' ? 0.02 : 0.98) : rng.range(0.15, 0.85);
-      const r = wellOn(s, lanesW(lanes), at);
+      const r = wellOn(s, lanesW(lanes), at, RUN_CELLS, true, [margin]);
       if (!r) continue;
       main = {id: `run-${b.id}`, rect: r, axis: alongXSide(s) ? 'x' : 'z', lanes, lower: 1, from: rng.chance(0.5) ? 'lo' : 'hi'};
       break;
+    }
     }
     if (!main) return false;
     wells.push(main);
@@ -750,21 +815,31 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       }
       return {axis};
     };
-    // atrium courts first
+    // atrium courts first, at the opening's centre (layout version 3: a court split by a stair well — the hero slides along its court
+    // piece, still under the opening, until its walking ring and the lanes into it stay inside the piece)
+    const slide = (a: Area, fam: SkywaysLandmarkFamily, cx: number, cy: number, at: CellRect): [number, number] => {
+      if (legacy) return [cx, cy];
+      const F = LANDMARK_FAMILIES[fam], m = (F.radius + 2.6) / CELL, ml = Math.max(m, ((F.long ?? 0) / 2 + 2.0) / CELL), alongX = a.w >= a.h;
+      const mx = alongX ? ml : m, my = alongX ? m : ml;
+      const cl = (v: number, lo: number, hi: number, inLo: number, inHi: number) => (lo > hi ? v : Math.max(Math.max(lo, inLo), Math.min(Math.min(hi, inHi), v)));
+      return [cl(cx, a.x + mx, a.x + a.w - mx, at.x + 1, at.x + at.w - 1), cl(cy, a.y + my, a.y + a.h - my, at.y + 1, at.y + at.h - 1)];
+    };
     for (const bc of rng.shuffle([...carves.values()])) {
       if (!bc.atrium || out.length >= 4) continue;
       const cx = bc.atrium.x + bc.atrium.w / 2, cy = bc.atrium.y + bc.atrium.h / 2;
       const g1 = k.grid(1), a = k.areas[g1.area[g1.idx(Math.floor(cx), Math.floor(cy))]];
       if (!a || addonAreas.includes(a.id)) continue;
-      const fam = take(q => !!fits(a, 1, q, cx, cy, true));
+      const fam = take(q => { const [x, y] = slide(a, q, cx, cy, bc.atrium!); return g1.area[g1.idx(Math.floor(x), Math.floor(y))] === a.id && !!fits(a, 1, q, x, y, true); });
       if (!fam) continue;
-      out.push(landmark(fam, bc, 1, a, cx, cy, true, fits(a, 1, fam, cx, cy, true)!.axis));
+      const [x, y] = slide(a, fam, cx, cy, bc.atrium);
+      out.push(landmark(fam, bc, 1, a, x, y, true, fits(a, 1, fam, x, y, true)!.axis));
     }
     // then up to two big plain courts (street or skyway level), the biggest first
     const plain: [BuildingCarve, number, Area][] = [];
     for (const bc of carves.values()) for (const lv of [1, 2]) for (const id of bc.hubAreas.get(lv) ?? []) {
       const a = k.areas[id];
-      if (addonAreas.includes(a.id) || out.some(m => m.area === a.id) || Math.min(a.w, a.h) < 18 || (bc.atrium && overlapsR(a, bc.atrium))) continue;
+      // (layout version 3: never the court holding the prize display)
+      if (addonAreas.includes(a.id) || out.some(m => m.area === a.id) || Math.min(a.w, a.h) < 18 || (bc.atrium && overlapsR(a, bc.atrium)) || (addon?.car && overlapsR(grow(a, 2), addon.hall))) continue;
       if (out.some(m => m.building === bc.b.id)) continue;
       plain.push([bc, lv, a]);
     }
@@ -919,11 +994,13 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       well = far === 'N' ? {x: r.x + t, y: r.y, w: RUN_CELLS, h: lw} : far === 'S' ? {x: r.x + t, y: r.y + r.h - lw, w: RUN_CELLS, h: lw}
         : far === 'W' ? {x: r.x, y: r.y + t, w: lw, h: RUN_CELLS} : {x: r.x + r.w - lw, y: r.y + t, w: lw, h: RUN_CELLS};
     }
-    // (task studio-alpha-skyways-shops-20261107-054512-01, layout version 3) every major store gets a back room: the back rooms' sizes
-    // are drawn first; when no stock-room site is free beyond the floor, the stock room is INSET in a far corner of the footprint (a wall
-    // ring between it and the floor), clear of the storefront, the stair well's landings and the zones' doors. Older versions: as before.
-    const backsEarly = opts.storeBackRooms ? backSizes() : null;
-    const inset = backsEarly && !backSiteFree(backsEarly[0][2], backsEarly[0][3]) ? insetBack(backsEarly[0][2], backsEarly[0][3]) : null;
+    // (task studio-alpha-skyways-shops-20261107-054512-01, layout version 3) every major store gets a back room: when no stock-room site
+    // is free beyond the floor, the stock room is INSET in the footprint (a far corner or a flank; a wall ring between it and the floor),
+    // clear of the storefront, the stair well's landings and the zones' doors.
+    // (rng-neutral: the inset's own size / corner draws come from a fork, so the carve's main stream — and every later pass's layout —
+    // stays as without the stores; the back rooms' main draws keep their place below)
+    const ir = rng.fork(`store-back-${fam}`), insetSize: [number, number] = [ir.int(10, 14), ir.int(7, 9)];
+    const inset = opts.storeBackRooms && !backSiteFree(insetSize[0], insetSize[1]) ? insetBack(insetSize[0], insetSize[1], ir) : null;
     // the sales floor (with its storefront): a whole rect, or the pieces round the stair well (the storefront fronts the largest)
     const an = {family: fam, name: F.name, ceil: ceilY, entryW: rng.int(4, 6)};
     let sf: Storefront;
@@ -965,8 +1042,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     }
     // back rooms: a stock room (and an office) beyond the far wall or a flank, staff doors from the floor
     const stock: number[] = [];
-    const backs: [string, Area['type'], number, number][] = backsEarly ?? backSizes();
-    for (const [label, type, along, deep] of backs) {
+    const backs: [string, Area['type'], number, number][] = backSizes();
+    for (const [label, type, along0, deep0] of backs) {
       let a: Area | null = null;
       if (inset && type === 'stock-room') {
         // the inset stock room: its staff door through the ring wall into the floor piece in front of it
@@ -977,7 +1054,10 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
         stock.push(a.id);
         continue;
       }
-      for (const bs of [s, ...SIDES.filter(q => q !== s && q !== hubSide)]) {
+      // (version 3: a stock room the drawn size cannot site takes the size the inset check found a site for)
+      const sizes: [number, number][] = opts.storeBackRooms && type === 'stock-room' ? [[along0, deep0], insetSize] : [[along0, deep0]];
+      for (const [along, deep] of sizes) for (const bs of [s, ...SIDES.filter(q => q !== s && q !== hubSide)]) {
+        if (a) break;
         const n = sideLen(floorRect, bs) - along;
         for (let t = 2; t <= n - 2 && !a; t += 3) {
           const rr = beyond(floorRect, bs, t, along, deep);
@@ -989,7 +1069,6 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
           const bg = gapOn(floorRect, bs, t + Math.floor(along / 2) - 1, 3);
           k.carveDoor(bg, pieceBehind(bg, opposite(bs)), a, CLEAR.door, false, {staff: true}); // (+ the piece in front: see the zones)
         }
-        if (a) break;
       }
       if (a) stock.push(a.id);
     }
@@ -1023,7 +1102,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
      * centred on the ring's floor side) and the side it opens `into`. Null when no spot clears the storefront, the stair well's landings,
      * the zones' doors and keeps >= 6 cells of floor in front of it.
      */
-    function insetBack(along: number, deep0: number): {room: CellRect; cut: CellRect; door: CellRect; into: Side} | null {
+    function insetBack(along: number, deep0: number, ir: Rng): {room: CellRect; cut: CellRect; door: CellRect; into: Side} | null {
       const fr = floorRect;
       const zoneDoors = zoneRects.map(([zr, , , dw]) => {
         const side: Side = zr.x >= fr.x + fr.w ? 'E' : zr.x + zr.w <= fr.x ? 'W' : zr.y >= fr.y + fr.h ? 'S' : 'N';
@@ -1032,25 +1111,34 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       });
       const flanks = SIDES.filter(q => q !== s && q !== hubSide);
       // (the flank spots: centred, then toward either end — a two-level shop's stair well along the far wall can take the middle)
-      const cands: [Side, 'lo' | 'hi' | 'mid' | 'lo2' | 'hi2'][] = [...((rng.chance(0.5) ? ['lo', 'hi'] : ['hi', 'lo']) as ('lo' | 'hi')[]).map(e => [s, e] as [Side, 'lo' | 'hi']),
+      const cands: [Side, 'lo' | 'hi' | 'mid' | 'lo2' | 'hi2'][] = [...((ir.chance(0.5) ? ['lo', 'hi'] : ['hi', 'lo']) as ('lo' | 'hi')[]).map(e => [s, e] as [Side, 'lo' | 'hi']),
         ...flanks.flatMap(q => (['mid', 'lo2', 'hi2'] as const).map(e => [q, e] as [Side, 'mid' | 'lo2' | 'hi2']))];
-      for (const [q, at] of cands) {
+      // (each spot from the drawn length down to 8 cells: a shorter room clears a centred zone door / a landing)
+      for (const [q, at] of cands) for (let al0 = q === s ? along : Math.min(along, sideLen(fr, q) - 10); al0 >= 8; al0 -= 2) {
         const L = sideLen(fr, q), D = sideLen(fr, alongXSide(q) ? 'W' : 'N');
         // (a shallow front hall — the cinema's lobby band — takes a shallower room; a short flank a shorter one)
-        const deep = Math.min(deep0, D - 7), al = q === s ? along : Math.min(along, L - 10);
-        if (deep < 4 || al < 8 || al + 2 > L - 8) continue;
+        const deep = Math.min(deep0, D - 7), al = al0;
+        if (deep < 4 || al + 2 > L - 8) continue;
         const t = at === 'lo' ? 0 : at === 'hi' ? L - al : at === 'mid' ? Math.floor((L - al) / 2) : at === 'lo2' ? 2 : L - al - 2;
         const room: CellRect = q === 'N' ? {x: fr.x + t, y: fr.y, w: al, h: deep} : q === 'S' ? {x: fr.x + t, y: fr.y + fr.h - deep, w: al, h: deep}
           : q === 'W' ? {x: fr.x, y: fr.y + t, w: deep, h: al} : {x: fr.x + fr.w - deep, y: fr.y + t, w: deep, h: al};
         const gr = grow(room, 1), x0 = Math.max(gr.x, fr.x), y0 = Math.max(gr.y, fr.y);
         const cut: CellRect = {x: x0, y: y0, w: Math.min(gr.x + gr.w, fr.x + fr.w) - x0, h: Math.min(gr.y + gr.h, fr.y + fr.h) - y0};
         if (overlapsR(grow(cut, 2), gap)) continue;
-        if (well && overlapsR(grow(cut, 1), grow(well, 4))) continue;
+        // the internal stair keeps its landings (7 cells beyond both ends of the run, as the two-level format guarantees) and a cell of
+        // floor along its open side; the floor beside the run itself may take the room
+        if (well) {
+          const keep: CellRect = alongXSide(s) ? {x: well.x - 7, y: well.y - 1, w: well.w + 14, h: well.h + 2} : {x: well.x - 1, y: well.y - 7, w: well.w + 2, h: well.h + 14};
+          if (overlapsR(cut, keep)) continue;
+        }
         if (zoneDoors.some(zd => overlapsR(grow(cut, 1), zd))) continue;
         // the staff door: the ring's floor side, centred
         const into = opposite(q), m = Math.floor((al - 3) / 2);
         const door: CellRect = q === 'N' ? {x: room.x + m, y: room.y + deep, w: 3, h: 1} : q === 'S' ? {x: room.x + m, y: room.y - 1, w: 3, h: 1}
           : q === 'W' ? {x: room.x + deep, y: room.y + m, w: 1, h: 3} : {x: room.x - 1, y: room.y + m, w: 1, h: 3};
+        // (it opens onto floor: never onto the stair run)
+        const [dx, dy] = frontCell(door, into);
+        if (well && inRect(grow(well, 1), dx, dy)) continue;
         return {room, cut, door, into};
       }
       return null;
@@ -1447,6 +1535,174 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     return {id, building: b.id, level: lv, approach: foyer ? 'foyer' : 'direct', hall: r, hallArea: hall.id, areas, entry: gap, foyer, stage, car, washrooms};
   }
 
+  /**
+   * (layout version 3, task studio-skyways-rework-20261107-054512-01; user: "a bridge should lead directly into the event building /
+   * floor ... several connected event areas") The CONVENTION VENUE: the host's whole skyway floor is rented to the event —
+   *  - the MAIN HALL (stage + audience) beyond a hub side with its back-of-house strip (green room = backstage, event storage,
+   *    washrooms): the classic hall search (tryAddon), foyer approach and all;
+   *  - the host's skyway court = the EXHIBITORS' FLOOR (artist alley, vendor tables, exhibits);
+   *  - the corridors in from the bridges = REGISTRATION (welcome desks, badge queue);
+   *  - two PANEL ROOMS and a PHOTO LOUNGE beyond the court's other sides (public doors);
+   * every one of them in `venue` by role (the venue dresser fills them; the station's generic dresser keeps out). The street level
+   * below stays the building's ordinary lobby, its stair the venue's second way in.
+   */
+  /** The side of the add-on hall its entry (the door from the lobby / foyer) lies on, seen from the hall. */
+  function hallSideOf(a: AddonCarve): Side {
+    const e = a.entry, r = a.hall;
+    return e.h === 1 ? (e.y < r.y ? 'N' : 'S') : (e.x < r.x ? 'W' : 'E');
+  }
+
+  function carveVenue(bc: BuildingCarve): AddonCarve | null {
+    const lv = 2;
+    const main = carveAddon(bc, 'convention', lv, f.addonApproach);
+    if (!main) return null;
+    const venue: VenueRoomCarve[] = [];
+    const hall = k.areas[main.hallArea];
+    hall.label = 'Main stage hall';
+    venue.push({role: 'main-hall', area: main.hallArea});
+    for (const id of main.areas) {
+      if (id === main.hallArea) continue;
+      const t = k.areas[id].type;
+      venue.push({role: t === 'washroom' ? 'washrooms' : t === 'crew-room' ? 'backstage' : t === 'storage' ? 'storage' : 'registration', area: id});
+      if (t === 'concourse') k.areas[id].label = 'Main stage foyer';
+    }
+    const hubIds = bc.hubAreas.get(lv) ?? [];
+    for (const id of hubIds) { k.areas[id].label = `Exhibitors' floor · ${bName(bc.b)}`; venue.push({role: 'exhibitors', area: id}); }
+    // the corridors in from the bridges (and any other skyway-level public piece of the host): registration
+    for (const id of bc.publicAreas.get(lv) ?? []) {
+      if (hubIds.includes(id) || main.areas.includes(id)) continue;
+      k.areas[id].label = `Registration · ${bName(bc.b)}`;
+      venue.push({role: 'registration', area: id});
+    }
+    // panel rooms and a photo lounge beyond the free sides of the exhibitors' floor (largest pieces first), else of the main hall
+    // (never its entry side) — roomy first, a compact size where only that fits; public doors
+    const want: [SkywaysVenueRole, string][] = [['panel', 'Panel room A'], ['photo-lounge', 'Photo lounge'], ['panel', 'Panel room B']];
+    const hosts = [...hubIds.map(id => k.areas[id]).sort((p, q) => q.w * q.h - p.w * p.h), hall];
+    const sizes = (role: SkywaysVenueRole): [number, number][] => role === 'panel' ? [[rng.int(16, 22), rng.int(12, 16)], [rng.int(12, 15), rng.int(10, 12)]] : [[rng.int(14, 20), rng.int(10, 14)], [rng.int(10, 13), rng.int(8, 10)]];
+    const hallEntry = hallSideOf(main);
+    for (const [role, label] of want) {
+      let made: Area | null = null;
+      for (const [along, deep] of sizes(role)) {
+        for (const P of hosts) {
+          for (const s of rng.shuffle(SIDES.slice())) {
+            if (P === hall && s === hallEntry) continue;
+            const N = sideLen(P, s) - along;
+            for (let t = 1; t <= N - 1 && !made; t += 2) {
+              const r = beyond(P, s, t, along, deep);
+              const door = gapOn(P, s, t + Math.floor(along / 2) - 2, 4);
+              if (!free(r, lv, bc.I) || !k.solid(door, lv)) continue;
+              made = k.addArea(r, 'room', 'concourse', ceilOf(lv, CLEAR.skyway), P.id, {...opt(lv), label, publicSpace: true, role: 'great-hall'});
+              k.carveDoor(door, P, made, CLEAR.door, false);
+            }
+            if (made) break;
+          }
+          if (made) break;
+        }
+        if (made) break;
+      }
+      if (made) { venue.push({role, area: made.id}); addPublic(bc, lv, made.id); }
+    }
+    if (!venue.some(v => v.role === 'panel')) return null; // several connected event areas, never one hall
+    return {...main, venue};
+  }
+
+  /**
+   * (layout version 3; user: "prize car in public walkway / atrium, not separate room") The PRIZE DISPLAY: the car stands in its host's
+   * skyway court like a real prize draw — the roomiest spot of the court's pieces (its stanchion ring + the board fit on flat floor,
+   * clear of the run wells and the bridge landings), nose toward the nearest bridge landing (its clear way out onto the skyways).
+   * No add-on rooms (`areas` empty: the court keeps its shops); `hall` = the display zone, `hallArea` = the court piece.
+   */
+  function carvePrizeDisplay(bc: BuildingCarve): AddonCarve | null {
+    const lv = 2, g = k.grid(lv);
+    const wells = [...bc.runs12, ...(bc.transit ? [bc.transit] : [])].map(w => grow(w.rect, 2));
+    const mouths = bc.mouths.map(m => grow(m, 2));
+    // (the zone may span the court's pieces round the wells: any court floor of the host's skyway level)
+    const court = new Set(bc.hubAreas.get(lv) ?? []);
+    // the court's openings so far (bridge corridors) and its walls (where the shopfronts go later): the zone keeps 2 cells of court
+    // floor all round it, so the doors' strips stay walkable and the stanchions find their places
+    const doors = k.doors.filter(d => court.has(d.a) || court.has(d.b)).map(d => grow({x: d.x, y: d.y, w: d.w, h: d.h}, 2));
+    const M = 2;
+    /** The roomiest spot for a display zone of half size R (cells), or null. */
+    const find = (R: number): {cx: number; cy: number; score: number; area: number; R: number} | null => {
+      let best: {cx: number; cy: number; score: number; area: number; R: number} | null = null;
+      for (const id of court) {
+        const P = k.areas[id];
+        for (let cy = P.y + R; cy <= P.y + P.h - R; cy += 2) for (let cx = P.x + R; cx <= P.x + P.w - R; cx += 2) {
+          const zone: CellRect = {x: cx - R, y: cy - R, w: 2 * R, h: 2 * R};
+          if (wells.some(w => overlapsR(w, zone)) || mouths.some(m => overlapsR(m, zone)) || doors.some(d => overlapsR(d, zone))) continue;
+          let ok = true;
+          for (let y = zone.y - M; y < zone.y + zone.h + M && ok; y++) for (let x = zone.x - M; x < zone.x + zone.w + M && ok; x++) {
+            const i = g.idx(x, y);
+            if (g.cells[i] !== FLOOR || g.rampIdx[i] >= 0 || !court.has(g.area[i])) ok = false;
+          }
+          if (!ok) continue;
+          const score = Math.min(cx - P.x, P.x + P.w - cx, cy - P.y, P.y + P.h - cy) - 0.05 * Math.hypot(cx - (P.x + P.w / 2), cy - (P.y + P.h / 2)) + rng.range(0, 0.5);
+          if (!best || score > best.score) best = {cx, cy, score, area: id, R};
+        }
+      }
+      return best;
+    };
+    // display zone half size (cells): the stanchion ring (~4.1 m radius) with room for its board beside it; tighter in a smaller court
+    const best = find(10) ?? find(9) ?? find(8) ?? find(7);
+    if (!best) return null;
+    const {cx, cy, R} = best;
+    // nose toward the nearest bridge landing (else along the court's long axis)
+    const P = k.areas[best.area];
+    const mid = bc.mouths.map(m => ({x: m.x + m.w / 2, y: m.y + m.h / 2})).sort((p, q) => Math.hypot(p.x - cx, p.y - cy) - Math.hypot(q.x - cx, q.y - cy))[0];
+    const to = mid ?? (P.w >= P.h ? {x: cx + 1, y: cy} : {x: cx, y: cy + 1});
+    const yaw = Math.atan2(-(to.x - cx), -(to.y - cy));
+    const hall: CellRect = {x: cx - R, y: cy - R, w: 2 * R, h: 2 * R};
+    // the stand point (a cell) on the display's edge toward the way out
+    const ux = Math.sign(Math.round(to.x - cx)), uy = Math.sign(Math.round(to.y - cy));
+    const entry: CellRect = {x: cx + ux * (R - 1), y: cy + uy * (R - 1), w: 1, h: 1};
+    return {id: 'prize-car', building: bc.b.id, level: lv, approach: 'direct', hall, hallArea: best.area, areas: [], entry, foyer: null, stage: null, car: {cx, cy, yaw}, washrooms: []};
+  }
+
+  /**
+   * (layout version 3, task studio-skyways-rework-20261107-054512-01) A tenant's OFFICE WING off a public lobby / court of its building:
+   * the OPEN-PLAN office beyond a hub side (a wide public entrance from the lobby), and off its other sides a meeting room, two private
+   * offices and a break room (doors from the open plan). Dressed with the office kit (gen/skyways/officeWing.ts); null when it cannot fit.
+   */
+  function carveOfficeWing(bc: BuildingCarve, level: number): OfficeWingCarve | null {
+    const tenant = OFFICE_TENANTS[(f.seed >>> 0) % OFFICE_TENANTS.length];
+    const pieces = (bc.hubAreas.get(level) ?? []).map(id => k.areas[id]).filter(a => !addonAreas.includes(a.id)).sort((p, q) => q.w * q.h - p.w * p.h);
+    for (const P of pieces) {
+      for (const s of rng.shuffle(SIDES.slice())) {
+        const along = rng.int(20, 28), deep = rng.int(14, 18);
+        const N = sideLen(P, s) - along;
+        for (let t = 1; t <= N - 1; t += 2) {
+          const r = beyond(P, s, t, along, deep);
+          const door = gapOn(P, s, t + Math.floor(along / 2) - 2, 4);
+          if (!free(r, level, bc.I) || !k.solid(door, level)) continue;
+          const open = k.addArea(r, 'room', 'office-open', ceilOf(level, CLEAR.skyway), P.id, {...opt(level), label: `${tenant} · open office`, publicSpace: true});
+          k.carveDoor(door, P, open, CLEAR.door, false);
+          addPublic(bc, level, open.id);
+          const rooms: {role: SkywaysOfficeRole; area: number}[] = [{role: 'open', area: open.id}];
+          const want: [SkywaysOfficeRole, string, [number, number], [number, number]][] = [['meeting', 'meeting room', [11, 13], [9, 10]], ['office', 'office', [7, 8], [7, 8]],
+            ['office', 'office', [7, 8], [7, 8]], ['break', 'break room', [10, 12], [8, 9]]];
+          const back = opposite(s);
+          for (const [role, lab, al, dp] of want) {
+            let made: Area | null = null;
+            for (const rs of [back, ...SIDES.filter(q => q !== back && q !== s)]) {
+              const A = rng.int(al[0], al[1]), D = rng.int(dp[0], dp[1]), n = sideLen(open, rs) - A;
+              for (let u = 1; u <= n - 1 && !made; u += 2) {
+                const rr = beyond(open, rs, u, A, D);
+                const g = gapOn(open, rs, u + Math.floor(A / 2) - 1, 3);
+                if (!free(rr, level, bc.I) || !k.solid(g, level)) continue;
+                made = k.addArea(rr, 'room', 'office-room', ceilOf(level, CLEAR.back), open.id, {...opt(level), label: `${tenant} · ${lab}`, publicSpace: true});
+                k.carveDoor(g, open, made, CLEAR.door, false);
+              }
+              if (made) break;
+            }
+            if (made) rooms.push({role, area: made.id});
+          }
+          return {building: bc.b.id, level, tenant, rooms};
+        }
+      }
+    }
+    return null;
+  }
+
   function carveRamen(bc: BuildingCarve): RamenCarve | null {
     // a compact dining room off a public edge with its kitchen beside it (skyway level, then street level, then the pedway concourse)
     const tries: [BuildingCarve, number][] = [[bc, 2], [bc, 1], [sc, 0]];
@@ -1561,6 +1817,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
           while (!free(r, level, inside ?? undefined) && d - 2 >= 7) { d -= 2; r = beyond(P, s, t, w, d); }
           const gap = gapOn(P, s, t, w);
           if (!free(r, level, inside ?? undefined) || !k.solid(gap, level)) { t += 2; continue; }
+          // (layout version 3) the walls alongside a public run's run-outs stay plain (a car lines up there, no shopfront glazing)
+          if (!legacy && runOuts.some(q => q.level === level && overlapsR(grow(q.rect, 1), gap))) { t += 2; continue; }
           const sf = shopfront(level, P, s, gap, r, use);
           storefronts.push(sf);
           useCount.set(use, (useCount.get(use) ?? 0) + 1);

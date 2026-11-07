@@ -1,10 +1,10 @@
 // Task studio-skyways-level-20261106-054448 (lane CAR): the prize car's arcade kinematics (world/skywaysCarPhysics.ts) on a hand-built hall
 // (tests/helpers/skywaysCarWorld.ts): acceleration / top speed, braking then reversing, the reverse cap, coasting, the handbrake,
 // steering (left is +yaw, the wheel-angle limit falls with speed), and the world: walls stop it (never inside a wall, an impact
-// reported with the right normal), a glancing wall slides it, a railing / a low soffit / a prop stop it, stair ramps / drops /
-// another storey are refused by the floor rule (the footprint never leaves its storey's floor).
+// reported with the right normal), a glancing wall slides it, a railing / a low soffit / a prop stop it, drops / another storey are
+// refused by the floor rule (the footprint never leaves its storey's floor; ramps: only while the axle rule holds — task skyways-vehicle).
 import {describe, expect, it} from 'vitest';
-import {CAR_PHYS, NO_CONTROLS, footprintFloor, nearestCircle, stepCar, steerMax, type CarBody, type CarControls, type CarWorld} from '../src/world/skywaysCarPhysics';
+import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, footprintFloor, nearestCircle, stepCar, steerMax, type CarBody, type CarControls, type CarWorld} from '../src/world/skywaysCarPhysics';
 import {CAR_SPEC, carToWorld, worldToCar} from '../src/world/skywaysCarSpec';
 import {HALL, hallLevels, prop, propIndex} from './helpers/skywaysCarWorld';
 
@@ -174,13 +174,18 @@ describe('skyways car vs the world (walls, rails, props, floor rule)', () => {
     expect(c.z).toBeLessThan(6); // drove under the sign
   });
 
-  it('the floor rule: never onto a stair ramp, never over the drop, never onto another storey', () => {
+  it('the floor rule: onto a ramp only while it holds (never over an open side / the end drop), never over the drop, never onto another storey', () => {
     const w: CarWorld = {levels, props: null};
-    // the ramp's foot (z = 20) from the north, heading south (+Z: yaw PI)
+    // the ramp's foot (z = 20) from the north, heading south (+Z: yaw PI). Task skyways-vehicle-20261107 (user: "drive up / down
+    // stairs"): the car now takes ramps (was: refused outright) — this hall's 2 m ramp has OPEN flat sides and ends in a 1.2 m drop, so
+    // it climbs only while no floor under its body lies more than CAR_STAIRS.drop below the body line, and never off the ramp's end.
     const r = car(11, 14, Math.PI, 8);
-    run(r, w, ctl({forward: true}), 2);
-    expect(r.y).toBe(0);
-    for (const k of G.circles) expect(carToWorld(r.x, r.z, r.yaw, 0, k.z).z + k.r * CAR_PHYS.rim).toBeLessThanOrEqual(HALL.ramp.z0 + 1e-6);
+    run(r, w, ctl({forward: true}), 3, () => {
+      expect(r.y).toBeGreaterThanOrEqual(-1e-6);
+      expect(r.y).toBeLessThanOrEqual(CAR_STAIRS.drop + 0.05); // (the open sides: floor 0 under the body)
+      for (const k of G.circles) expect(carToWorld(r.x, r.z, r.yaw, 0, k.z).z - k.r).toBeLessThan(HALL.ramp.z1); // never past the end
+    });
+    expect(r.y).toBeGreaterThan(0.2); // it did climb onto it
     // toward the 3 m drop at x = 30 (heading +X)
     const d = car(24, 20, -Math.PI / 2, 12);
     let maxX = 0;

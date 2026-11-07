@@ -22,7 +22,7 @@ import type {LocationEmitter} from '../audio/sfx';
 /** Placement / level of each location sound (gains multiply the cue's CUE_GAIN; first estimates for the ear pass). */
 export const SKYWAYS_DEST_AUDIO = {
   // (task studio-skyways-rework-20261107-054512-01, user: "clock tick too loud / far" -> half the level, heard in its court only:
-  // 8 m instead of 26 m, sfx.ts LOCATION_AUDIO.ref.clockTick 2 m and the chime's court-local range)
+  // 8 m instead of 26 m, sfx.ts LOCATION_AUDIO.ref.clockTick 2 m; the chime strikes only within the same 8 m)
   clock: {lift: 3, gain: 0.5, range: 8},
   arcade: {lift: 1.2, gain: 1, rangePad: 8},
   projector: {inset: 0.6, port: 3, ceilGap: 0.5, gain: 1, rangePad: 2},

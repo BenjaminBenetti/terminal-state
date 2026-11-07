@@ -25,7 +25,7 @@ import {SKYWAYS_DEST_PROPS} from '../src/assets/skywaysDestProps.generated';
 import {SHOPS_A_KINDS, SHOPS_A_MODEL, SHOPS_A_SPECS, bookTableTiers, bookcaseShelves, canoeHangY, destDims} from '../src/gen/skyways/destinations/kindsShopsA';
 import {BOOK_STACK_BUDGET, CANOE_CLEAR, SHOPS_A_FAMILIES, skywaysShopsADressOf, type ShopsAResult} from '../src/gen/skyways/legacy77/destinations/shopsA';
 import {SHOPS_A_LANE_HALF} from '../src/gen/skyways/legacy77/destinations/skywaysShopsAKit';
-import {DEST_POSTER, DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
+import {DEST_POSTER, DEST_POSTERS_OF} from '../src/gen/skyways/legacy77/destinations/art';
 import {lootProfile} from '../src/items/lootTables';
 import {layoutHolderDetails} from './helpers/lootEconomy';
 
@@ -33,6 +33,8 @@ import {layoutHolderDetails} from './helpers/lootEconomy';
 // music hall / multi-zone, hobby hall, design hall / two-level)
 const SEEDS = [2, 3, 4, 5, 6, 9, 12];
 const cache = new Map<number, StationLayout>();
+// (task studio-skyways-rework-20261107-054512-01) these dressers' GAME77 output, on the stations entered before the rework: layout version 2
+// through the frozen generator (gen/skyways/legacy77/). The reworked stores (layout version 3) are the store lanes' own tests.
 const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const anchorsOf = (l: StationLayout) => skywaysShopsADressOf(l).map(r => ({r, an: l.skyways!.anchors!.find(a => a.id === r.anchor)!}));
 const all = () => SEEDS.flatMap(s => anchorsOf(gen(s)).map(x => ({...x, l: gen(s), seed: s})));

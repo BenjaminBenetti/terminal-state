@@ -389,15 +389,18 @@ on the build worker. Raw takes are kept outside Git.
 <!-- END train-fuel-audio-20261106 -->
 
 <!-- BEGIN skyways-car-audio-20261106 (skyways-car-build.mjs) -->
-## Skyways prize-car audio (engine idle / drive loops, tyre skid, door)
+## Skyways prize-car audio (engine idle / drive loops, engine start, reverse whine, brake stop, tyre skid, door)
 Generated for this project with the user's local Last Line Sound Lab CPU 0.1.0 (Stable Audio 3 Small-SFX, w8a8) under the Skyways
-task's local Sound Lab allowance (4 jobs of a 12-job cap). Powered by Stability AI. Stability AI Community License +
-Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime derivatives (trim, fades, loop,
-levelling, MP3) built by `tools/audio-pipeline/skyways-car-build.mjs` (provenance: `assets/derivatives/audio-skyways-car.json`). Not reviewed by ear
-on the build worker. Raw takes are kept outside Git.
+task's local Sound Lab allowance (round 1: 4 jobs of the Skyways task's 12-job cap) and the rework's (round 2: 8 jobs of the Skyways rework's 8-job audio allowance). Powered by Stability AI.
+Stability AI Community License + Gemma Terms of Use; conditional prototype status, not production or commercial clearance. Runtime
+derivatives (trim, fades, loop, layer mix, levelling, MP3) built by `tools/audio-pipeline/skyways-car-build.mjs` (provenance:
+`assets/derivatives/audio-skyways-car.json`). Not reviewed by ear on the build worker. Raw takes are kept outside Git.
 
-- `assets/audio/car-engine-idle-loop.mp3` — carIdle (Sound Lab job 20261106T071502-1422195354)
-- `assets/audio/car-engine-drive-loop.mp3` — carDrive (Sound Lab job 20261106T071506-522183325)
+- `assets/audio/car-engine-idle-loop.mp3` — carIdle (Sound Lab jobs 20261107T060608-1026530035 + 20261107T060428-1611127821)
+- `assets/audio/car-engine-drive-loop.mp3` — carDrive (Sound Lab jobs 20261107T060433-429155089 + 20261106T071506-522183325)
+- `assets/audio/car-engine-start.mp3` — carStart (Sound Lab job 20261107T060438-1607570711)
+- `assets/audio/car-reverse-loop.mp3` — carReverse (Sound Lab job 20261107T060442-1790482092)
+- `assets/audio/car-brake.mp3` — carBrake (Sound Lab job 20261107T060447-234821177)
 - `assets/audio/car-skid.mp3` — carSkid (Sound Lab job 20261106T071511-1842152276)
 - `assets/audio/car-door.mp3` — carDoor (Sound Lab job 20261106T071515-1534666901)
 <!-- END skyways-car-audio-20261106 -->

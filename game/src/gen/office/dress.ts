@@ -228,7 +228,8 @@ export function cubicleFarm(d: OfficeDress, ctx: PlaceCtx, a: Area, role: 'open'
 }
 
 /** Conference table on the room's long axis (two end to end in a big boardroom); chairs come in postDress. */
-function conferenceTable(_d: OfficeDress, ctx: PlaceCtx, a: Area): void {
+// (exported: task studio-skyways-rework-20261107-054512-01, the Skyways office wing's meeting room)
+export function conferenceTable(_d: OfficeDress, ctx: PlaceCtx, a: Area): void {
   const alongX = a.w >= a.h;
   const rot = alongX ? 0 : Math.PI / 2;
   const cx = (a.x + a.w / 2) * CELL, cz = (a.y + a.h / 2) * CELL;

@@ -16,8 +16,7 @@
 import * as THREE from 'three';
 import type {PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/stationTypes';
-import {SKYWAYS_ART, type SkywaysArtAtlasKey} from '../assets/skywaysArt.generated';
-import {SKYWAYS_STANCHION} from '../gen/skyways/addonKinds';
+import {SKYWAYS_ADDON_ART, SKYWAYS_STANCHION, type SkywaysAddonArtKey} from '../gen/skyways/addonKinds';
 import {SKYWAYS_ROPE, SKYWAYS_TURNTABLE_R} from '../gen/skyways/addonPrize';
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysAddonArtMaterial, skywaysAddonAtlases} from './skywaysAddon';
@@ -57,7 +56,7 @@ export interface Rope {
 /** The ropes of a layout: neighbouring stanchions round the car's spot (by angle), gaps over maxSpan left open. */
 export function planRopes(layout: StationLayout): Rope[] {
   const car = layout.skyways?.addon.car;
-  if (!car) return [];
+  if (!car) return planQueueRopes(layout);
   const posts = layout.props.filter(p => p.kind === 'skywaysPrizeStanchion' && (p.level ?? 0) === car.level)
     .map(p => ({p, a: Math.atan2(p.x - car.x, p.z - car.z)})).sort((q, r) => q.a - r.a).map(q => q.p);
   const out: Rope[] = [];
@@ -67,6 +66,24 @@ export function planRopes(layout: StationLayout): Rope[] {
     const span = Math.hypot(a.x - b.x, a.z - b.z);
     if (span > SKYWAYS_ROPE.maxSpan) continue;
     out.push({a, b, len: span * SKYWAYS_ROPE.slack, floor: a.y, dropped: false, last: []});
+  }
+  return out;
+}
+
+/**
+ * (lane VENUE, layout version 3) The convention venue's registration queue lines (addon.queues: chains of stanchion prop indices):
+ * a rope between each pair of neighbours of a chain within the rope's span.
+ */
+export function planQueueRopes(layout: StationLayout): Rope[] {
+  const out: Rope[] = [];
+  for (const chain of layout.skyways?.addon.queues ?? []) {
+    for (let i = 0; i + 1 < chain.length; i++) {
+      const a = layout.props[chain[i]], b = layout.props[chain[i + 1]];
+      if (a?.kind !== 'skywaysPrizeStanchion' || b?.kind !== 'skywaysPrizeStanchion') continue;
+      const span = Math.hypot(a.x - b.x, a.z - b.z);
+      if (span > SKYWAYS_ROPE.maxSpan) continue;
+      out.push({a, b, len: span * SKYWAYS_ROPE.slack, floor: a.y, dropped: false, last: []});
+    }
   }
   return out;
 }
@@ -154,8 +171,8 @@ export class SkywaysAddonRuntime {
   /** The atlases this layout's add-on panels show -> one material each (released with the level). Never rejects. */
   async preload(layout: StationLayout): Promise<void> {
     const atlases = skywaysAddonAtlases(new Set(layout.props.map(p => p.kind)));
-    await Promise.all(atlases.map(async (atlas: SkywaysArtAtlasKey) => {
-      const tex = await this.host.levelResources.load(LEVEL, SKYWAYS_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
+    await Promise.all(atlases.map(async (atlas: SkywaysAddonArtKey) => {
+      const tex = await this.host.levelResources.load(LEVEL, SKYWAYS_ADDON_ART[atlas].url, {srgb: true, repeat: false}).catch(() => null);
       if (!tex) { setSkywaysAddonArtMaterial(atlas, null); return; }
       // the same texture (a Retry of the level keeps its resources): the same material
       let m = this.artMats.get(tex);
@@ -172,22 +189,26 @@ export class SkywaysAddonRuntime {
   build(layout: StationLayout): void {
     if (this.root) this.teardown();
     const car = layout.skyways?.addon.car;
-    if (!car) return;
+    // (lane VENUE) without a car: the convention venue's queue ropes only
+    const ropes = planRopes(layout);
+    if (!car && !ropes.length) return;
     const root = new THREE.Group();
     root.name = 'skyways-addon';
-    // --- the turntable: a dark lacquered disc 2.5 cm high with a brushed rim stripe (render only) ---
-    const discMat = new SurfaceNodeMaterial({color: 0x15171a, roughness: 0.32, metalness: 0.35});
-    const rimMat = new SurfaceNodeMaterial({color: 0x9aa0a8, roughness: 0.38, metalness: 0.8});
-    const disc = new THREE.CylinderGeometry(SKYWAYS_TURNTABLE_R, SKYWAYS_TURNTABLE_R + 0.02, 0.025, 72);
-    disc.translate(0, 0.0125, 0);
-    const rim = new THREE.RingGeometry(SKYWAYS_TURNTABLE_R - 0.16, SKYWAYS_TURNTABLE_R - 0.1, 72);
-    rim.rotateX(-Math.PI / 2);
-    rim.translate(0, 0.0255, 0);
-    const discMesh = new THREE.Mesh(disc, discMat), rimMesh = new THREE.Mesh(rim, rimMat);
-    for (const m of [discMesh, rimMesh]) { m.position.set(car.x, car.y, car.z); m.name = 'skyways-turntable'; m.userData.level = car.level; m.castShadow = false; m.receiveShadow = true; root.add(m); }
-    this.owned.push(disc, rim, discMat, rimMat);
+    if (car) {
+      // --- the turntable: a dark lacquered disc 2.5 cm high with a brushed rim stripe (render only) ---
+      const discMat = new SurfaceNodeMaterial({color: 0x15171a, roughness: 0.32, metalness: 0.35});
+      const rimMat = new SurfaceNodeMaterial({color: 0x9aa0a8, roughness: 0.38, metalness: 0.8});
+      const disc = new THREE.CylinderGeometry(SKYWAYS_TURNTABLE_R, SKYWAYS_TURNTABLE_R + 0.02, 0.025, 72);
+      disc.translate(0, 0.0125, 0);
+      const rim = new THREE.RingGeometry(SKYWAYS_TURNTABLE_R - 0.16, SKYWAYS_TURNTABLE_R - 0.1, 72);
+      rim.rotateX(-Math.PI / 2);
+      rim.translate(0, 0.0255, 0);
+      const discMesh = new THREE.Mesh(disc, discMat), rimMesh = new THREE.Mesh(rim, rimMat);
+      for (const m of [discMesh, rimMesh]) { m.position.set(car.x, car.y, car.z); m.name = 'skyways-turntable'; m.userData.level = car.level; m.castShadow = false; m.receiveShadow = true; root.add(m); }
+      this.owned.push(disc, rim, discMat, rimMat);
+    }
     // --- the ropes: one merged tube mesh ---
-    this.ropes = planRopes(layout);
+    this.ropes = ropes;
     if (this.ropes.length) {
       const per = (ROPE_TUBE.seg + 1) * ROPE_TUBE.sides, n = this.ropes.length;
       const pos = new Float32Array(n * per * 3), nrm = new Float32Array(n * per * 3), idx: number[] = [];
@@ -199,12 +220,14 @@ export class SkywaysAddonRuntime {
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3).setUsage(THREE.DynamicDrawUsage));
       geo.setIndex(idx);
-      // fixed bounds: the ropes never leave the ring's neighbourhood (dropped ones lie where they fell)
-      geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(car.x, car.y + 0.5, car.z), 9);
+      // fixed bounds: the ropes never leave the ring's / the queue line's neighbourhood (dropped ones lie where they fell)
+      const posts = ropes.flatMap(r => [r.a, r.b]), cx = posts.reduce((t, p) => t + p.x, 0) / posts.length, cz = posts.reduce((t, p) => t + p.z, 0) / posts.length;
+      const rad = Math.max(9, ...posts.map(p => Math.hypot(p.x - cx, p.z - cz) + 3));
+      geo.boundingSphere = car ? new THREE.Sphere(new THREE.Vector3(car.x, car.y + 0.5, car.z), 9) : new THREE.Sphere(new THREE.Vector3(cx, posts[0].y + 0.5, cz), rad);
       const mat = new SurfaceNodeMaterial({color: 0x6a0d16, roughness: 0.9, metalness: 0});
       const mesh = new THREE.Mesh(geo, mat);
       mesh.name = 'skyways-velvet-ropes';
-      mesh.userData.level = car.level;
+      mesh.userData.level = car ? car.level : posts[0].level ?? 0;
       mesh.castShadow = false;
       root.add(mesh);
       this.ropeMesh = mesh;

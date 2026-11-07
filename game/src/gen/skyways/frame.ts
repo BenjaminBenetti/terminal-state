@@ -150,7 +150,9 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
   const family = shape.weighted(Object.entries(FAMILIES).map(([k, v]) => [k as SkywaysFamily, v.weight] as const));
   const F = FAMILIES[family], {cols, rows} = F;
   const addon = ADDON_OVERRIDE ?? skywaysAddonOf(levelSeed);
-  const addonLevel = skywaysAddonLevelOf(levelSeed, addon);
+  // (layout version 3, task studio-skyways-rework-20261107-054512-01) the add-on always takes its host's BRIDGE level: the convention is
+  // the host's whole skyway floor (a bridge leads straight into the event floor), the prize display stands in its skyway court
+  const addonLevel: 1 | 2 = opts.legacy ? skywaysAddonLevelOf(levelSeed, addon) : 2;
   const key = (c: number, r: number) => c * 31 + r;
   // --- Blocks: the station (bottom row), the empty lots, the add-on host ---------------------------------------------------------
   const stationCol = rng.int(0, cols - 1), stationRow = rows - 1;
@@ -263,7 +265,8 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
   const others = rng.shuffle(buildings.filter(q => q.id !== host.id && q.id !== station.id));
   // (destinations pass: one to three atrium courts — the landmark courts under the glass)
   // (legacy = layout version 1: GAME76's one or two)
-  const nHub = Math.min(others.length, rng.int(1, opts.legacy ? 2 : 3));
+  // (layout version 3: open atria are the rule, not the exception — most buildings, at least two; court or a long glazed galleria)
+  const nHub = opts.legacy ? Math.min(others.length, rng.int(1, 2)) : Math.min(others.length, Math.max(2, Math.round(others.length * rng.range(0.7, 1))));
   for (let i = 0; i < nHub; i++) { others[i].role = 'hub'; others[i].atrium = true; }
   // Bridges: width (cells) — at least 5.5 m wherever the prize car may drive (every bridge: the car roams the skyway level); now and
   // then a WIDE gallery bridge (7.5-9 m); a lateral preference along the two buildings' shared span
@@ -285,7 +288,7 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
     else if (q.id === host.id) {
       q.plan = rng.weighted([['court', 0.55], ['galleria', 0.45]] as const);
       q.axis = sides[0] === 'E' || sides[0] === 'W' ? 'x' : 'z'; // the spine runs in from the host's one bridge
-    } else if (q.atrium) q.plan = 'court';
+    } else if (q.atrium) q.plan = opts.legacy ? 'court' : rng.weighted([['court', 0.6], ['galleria', 0.4]] as const);
     else q.plan = rng.weighted([['galleria', 0.35], ['offset', 0.25], ['cross', 0.25], ['court', 0.15]] as const);
     if (q.plan === 'galleria' && q.id !== station.id && q.id !== host.id) q.axis = ew > ns ? 'x' : ns > ew ? 'z' : rng.chance(0.75) ? (longX ? 'x' : 'z') : (longX ? 'z' : 'x');
     if (q.plan === 'offset') {
