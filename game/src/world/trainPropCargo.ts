@@ -56,6 +56,8 @@ type Phase = 'prepare' | 'build';
 const ONE = new THREE.Vector3(1, 1, 1), UP = new THREE.Vector3(0, 1, 0);
 const V = new THREE.Vector3(), V2 = new THREE.Vector3(), Q = new THREE.Quaternion(), QY = new THREE.Quaternion(), M = new THREE.Matrix4(), S = new THREE.Vector3();
 const r5 = (v: number) => (Math.round(v * 1e5) / 1e5) || 0;
+/** (run/trainCargo.ts lookProblem's purpose rule: a record is always valid) */
+const PURPOSE_OK = /^[\x20-\x7e]{1,64}$/;
 const quarter = (rot: number) => Math.round(rot / (Math.PI / 2)) & 1;
 const placeM = (p: PropPlacement) => new THREE.Matrix4().compose(V.set(p.x, p.y, p.z), Q.setFromAxisAngle(UP, p.rot), ONE);
 
@@ -68,8 +70,8 @@ function quat(q: THREE.Quaternion): [number, number, number, number] {
 
 /** The placement's object-frame size (width x, depth z, height) from its AABB half extents + quarter-turn yaw. */
 function sizeOf(p: PropPlacement, h: number): {w: number; d: number; h: number} {
-  const q = quarter(p.rot);
-  return {w: r5((q ? p.hz : p.hx) * 2), d: r5((q ? p.hx : p.hz) * 2), h: r5(h)};
+  const q = quarter(p.rot), c = (v: number) => r5(Math.max(0.01, Math.min(CARGO.size, v)));
+  return {w: c((q ? p.hz : p.hx) * 2), d: c((q ? p.hx : p.hz) * 2), h: c(h)};
 }
 
 /** Yaw about +Y of an orientation (YXZ order), snapped to a quarter turn in (-PI, PI]. */
@@ -203,6 +205,23 @@ export class TrainPropCargo {
     return this.insideCar(c.x, c.y, c.z);
   }
 
+  /**
+   * The train's loose props now (in the parked car `p`), by identity: at most CARGO.maxProps (identity order) — any beyond that stay the
+   * station's (never silently dropped from a record).
+   */
+  private trainOwned(p: TrainPlacement | null = this.parked()): {lp: LooseProp; id: string}[] {
+    if (!p || !this.here) return [];
+    const out: {lp: LooseProp; id: string}[] = [];
+    for (const lp of this.host.physics.dynamicItems.loose()) {
+      if (!this.ownsLoose(lp, p)) continue;
+      const id = this.idOf(lp.prop);
+      if (id) out.push({lp, id});
+    }
+    out.sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+    const room = Math.max(0, CARGO.maxProps - this.riding.length - this.pending.length);
+    return out.slice(0, room);
+  }
+
   /** The 8 collider corners of a loose prop, train-local. */
   private corners(lp: LooseProp, p: TrainPlacement): {x: number; y: number; z: number}[] {
     const out: {x: number; y: number; z: number}[] = [];
@@ -248,16 +267,16 @@ export class TrainPropCargo {
     lp.matrix.decompose(V, Q, S);
     let pos = {x: V.x, y: V.y, z: V.z};
     if (p) { pos = worldToTrain(p, V.x, V.y, V.z); Q.premultiply(QY.setFromAxisAngle(UP, -p.yaw)); }
-    const rec: CargoPropJSON = {id, kind: prop.kind, variant: prop.variant | 0, ...sizeOf(prop, di.restHeight(prop)), x: r5(pos.x), y: r5(pos.y), z: r5(pos.z), q: quat(Q)};
-    if (prop.purpose) rec.purpose = prop.purpose;
+    const rec: CargoPropJSON = {id, kind: prop.kind, variant: Math.max(0, prop.variant | 0), ...sizeOf(prop, di.restHeight(prop)), x: r5(pos.x), y: r5(pos.y), z: r5(pos.z), q: quat(Q)};
+    if (prop.purpose && PURPOSE_OK.test(prop.purpose)) rec.purpose = prop.purpose;
     if (!p) rec.level = prop.level ?? 0;
     const st = this.host.damage.props.states.get(prop);
     if (st && st.spec.integrity > 0 && st.hp < st.spec.integrity) rec.hp = r5(Math.max(0, st.hp) / st.spec.integrity);
     if (lp.riders.length) {
       rec.riders = lp.riders.slice(0, CARGO.maxRiders).map(r => {
         r.rel.decompose(V2, Q, S);
-        const rr: CargoRiderJSON = {kind: r.prop.kind, variant: r.prop.variant | 0, ...sizeOf(r.prop, di.restHeight(r.prop)), x: r5(V2.x), y: r5(V2.y), z: r5(V2.z), q: quat(Q)};
-        if (r.prop.purpose) rr.purpose = r.prop.purpose;
+        const rr: CargoRiderJSON = {kind: r.prop.kind, variant: Math.max(0, r.prop.variant | 0), ...sizeOf(r.prop, di.restHeight(r.prop)), x: r5(V2.x), y: r5(V2.y), z: r5(V2.z), q: quat(Q)};
+        if (r.prop.purpose && PURPOSE_OK.test(r.prop.purpose)) rr.purpose = r.prop.purpose;
         return rr;
       });
     }
@@ -268,11 +287,7 @@ export class TrainPropCargo {
   props(): CargoPropJSON[] {
     const out = this.riding.map(r => structuredClone(r.rec));
     const p = this.parked();
-    if (p && this.here) for (const lp of this.host.physics.dynamicItems.loose()) {
-      if (!this.ownsLoose(lp, p)) continue;
-      const id = this.idOf(lp.prop);
-      if (id) out.push(this.recordOf(lp, id, p));
-    }
+    for (const {lp, id} of this.trainOwned(p)) out.push(this.recordOf(lp, id, p));
     for (const r of this.pending) out.push(structuredClone(r));
     const seen = new Set<string>();
     return out.filter(r => !seen.has(r.id) && !!seen.add(r.id)).sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, CARGO.maxProps);
@@ -452,37 +467,35 @@ export class TrainPropCargo {
   /** Teardown (FIRST): the train's props become its records, the station's lane its gone / here. */
   private onTeardown(): void {
     if (!this.here) return;
-    const p = this.parked();
+    const p = this.parked(), took = new Set<PropPlacement>();
     if (!(this.isRiding && this.captured) && p) {
-      for (const lp of this.host.physics.dynamicItems.loose()) {
-        if (!this.ownsLoose(lp, p)) continue;
-        const id = this.idOf(lp.prop);
-        if (!id) continue;
+      for (const {lp, id} of this.trainOwned(p)) {
         this.pending.push(this.recordOf(lp, id, p));
         this.markGone(lp);
+        took.add(lp.prop);
         this.counts.pending++;
       }
     }
-    this.flush(true);
+    this.flush(took);
     for (const r of this.riding) r.src = null; // (the world goes: its withdrawn objects with it)
     this.here = null;
   }
 
   /**
    * The station's lane now (teardown; Game.commitEndingSave): `gone` = what it had lost + generated props it lost since (withdrawn into
-   * the train / lying in the parked car); `here` = carried props lying in it, not in the parked car. `leaving` (teardown): the train's in
-   * the car were already taken by the teardown.
+   * the train / lying in the parked car); `here` = carried props lying in it, not the train's. `took` (teardown): the train's props the
+   * teardown just took (else: the train's now).
    */
-  flush(leaving = false): void {
+  flush(took?: ReadonlySet<PropPlacement>): void {
     const w = this.here;
     if (!w) return;
-    const p = this.parked();
     const gone = new Map<number, GonePropJSON>(w.gone.map(g => [g.i, g]));
     for (const g of w.goneNow.values()) gone.set(g.i, g);
     const here: CargoPropJSON[] = [];
+    const train = took ?? new Set(this.trainOwned().map(t => t.lp.prop));
     for (const lp of this.host.physics.dynamicItems.loose()) {
-      if (p && this.ownsLoose(lp, p)) { // the train's (a generated one: lost to it)
-        if (!leaving) for (const q of [lp.prop, ...lp.riders.map(r => r.prop)]) { const g = this.goneOf(q); if (g) gone.set(g.i, g); }
+      if (train.has(lp.prop)) { // the train's (a generated one: lost to it)
+        for (const q of [lp.prop, ...lp.riders.map(r => r.prop)]) { const g = q.cargo ? null : this.goneOf(q); if (g) gone.set(g.i, g); }
         continue;
       }
       if (lp.prop.cargo && !lp.prop.cargo.includes('/')) here.push(this.recordOf(lp, lp.prop.cargo, null));
@@ -536,10 +549,7 @@ export class TrainPropCargo {
     const h = this.host, root = h.trainRuntime?.view?.root, p = h.trainRuntime?.train?.placement;
     if (!root || !p || !this.here) return 0;
     let n = 0;
-    for (const lp of h.physics.dynamicItems.loose()) {
-      if (!this.ownsLoose(lp, p)) continue;
-      const id = this.idOf(lp.prop);
-      if (!id) continue;
+    for (const {lp, id} of this.trainOwned(p)) {
       const rec = this.recordOf(lp, id, p);
       const w = this.withdraw(lp);
       if (!w) continue;
@@ -657,6 +667,16 @@ export class TrainPropCargo {
     return {riding: this.riding.map(r => ({id: r.rec.id, kind: r.rec.kind, x: r.rec.x, y: r.rec.y, z: r.rec.z, drawn: !!r.obj})), pending: this.pending.map(r => r.id),
       appended: this.here?.appended.map(a => ({id: a.rec.id, kind: a.rec.kind, owner: a.owner})) ?? [], captured: this.captured, counts: {...this.counts}};
   }
+}
+
+/**
+ * The lazy model keys CARRIED placements add to a layout (`keysOf`: the Game's every-hook key list for a layout): what the layout with
+ * just them asks for beyond the layout without props. Game.modelKeysFor lets these through the level rule (assets/levelAssets.ts
+ * selectLevelKeys / foreignTo) — a carried mall cafe chair loads its mall model in the Subway's train.
+ */
+export function carriedModelKeys(keysOf: (layout: StationLayout) => readonly string[], layout: StationLayout, carried: readonly PropPlacement[]): string[] {
+  const none = new Set(keysOf({...layout, props: []}));
+  return [...new Set(keysOf({...layout, props: [...carried]}))].filter(k => !none.has(k));
 }
 
 function lpOf(h: PropCargoHost, prop: PropPlacement): LooseProp | undefined {

@@ -148,7 +148,7 @@ import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task tra
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
 import {installTrainRide, type TrainRide} from './world/trainRide'; // task campaign-foundation-20261102 (lane RIDE): the moving train (ride mode, transit tunnel)
 import {installTrainCargo, type TrainCargoSystem} from './world/trainCargo'; // task train-loose-cargo: every loose item / bag aboard travels with the train
-import {installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
+import {carriedModelKeys, installTrainPropCargo, type TrainPropCargo} from './world/trainPropCargo'; // task train-all-cargo: every movable prop aboard travels too
 import type {PropPlacement} from './gen/props';
 import {SingleFlight, travelRefusal, type TravelResult} from './run/travelGate';
 import {OFFICE_MODEL_FILES} from './assets/officeAssets'; // Iteration 16 (lane ASSETS registry): office models load through propModels
@@ -808,10 +808,9 @@ export class Game {
     return [...new Set([...p7ModelKeysFor(layout), ...extra])];
   }
 
-  /** Task train-all-cargo: the lazy model keys carried placements add (beyond what the layout without props asks for). */
+  /** Task train-all-cargo: the lazy model keys carried placements add (world/trainPropCargo.ts carriedModelKeys). */
   private carriedModelKeys(layout: StationLayout, carried: readonly PropPlacement[]): string[] {
-    const none = new Set(this.layoutModelKeys({...layout, props: []}));
-    return this.layoutModelKeys({...layout, props: [...carried]}).filter(k => !none.has(k));
+    return carriedModelKeys(l => this.layoutModelKeys(l), layout, carried);
   }
 
   /** Task train-all-cargo: are the lazy models these carried placements need resident (a fetch that failed: they wait as records)? */

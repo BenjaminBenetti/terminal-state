@@ -18,7 +18,7 @@
 import type {StackJSON} from '../items/inventory';
 
 /** Limits (items / props; train-local metres; a station's lists). */
-export const CARGO = {maxItems: 256, pos: 40, maxProps: 48, maxRiders: 16, size: 12, stationProps: 192, gone: 512, world: 1e5} as const;
+export const CARGO = {maxItems: 256, pos: 40, maxProps: 96, maxRiders: 16, size: 12, stationProps: 192, gone: 512, world: 1e5} as const;
 
 /** One loose thing aboard: an item lying as a pickup ('item') or a grounded backpack ('bag', with its bag id). */
 export interface CargoItemJSON {
@@ -98,7 +98,7 @@ function lookProblem(c: Record<string, unknown>, what: string): string | null {
   if (typeof c.kind !== 'string' || !PROP_KIND_RE.test(c.kind)) return `${what} needs a prop kind`;
   if (typeof c.variant !== 'number' || !Number.isInteger(c.variant) || c.variant < 0 || c.variant > 1e9) return `${what} variant out of range`;
   for (const k of ['w', 'd', 'h']) if (!finite(c[k], CARGO.size) || (c[k] as number) <= 0) return `${what} size ${k} out of range`;
-  if (c.purpose !== undefined && (typeof c.purpose !== 'string' || !/^[A-Za-z0-9 _-]{1,48}$/.test(c.purpose))) return `${what} purpose is malformed`;
+  if (c.purpose !== undefined && (typeof c.purpose !== 'string' || !/^[\x20-\x7e]{1,64}$/.test(c.purpose))) return `${what} purpose is malformed`; // (area purposes, 'waste:<what>', annex keys)
   return null;
 }
 
@@ -168,8 +168,8 @@ export function stationPropsProblem(v: unknown): string | null {
 export function cargoProblem(v: unknown): string | null {
   if (!v || typeof v !== 'object' || Array.isArray(v)) return 'the train cargo must be an object';
   const o = v as Record<string, unknown>;
-  for (const k of Object.keys(o)) if (k !== 'v' && k !== 'items' && !(k === 'props' && o.v === 2)) return `unexpected train cargo field '${k}'`;
   if (o.v !== 1 && o.v !== 2) return 'unsupported train cargo version';
+  for (const k of Object.keys(o)) if (k !== 'v' && k !== 'items' && !(k === 'props' && o.v === 2)) return `unexpected train cargo field '${k}'`;
   if (!Array.isArray(o.items) || o.items.length > CARGO.maxItems) return `train cargo must list at most ${CARGO.maxItems} items`;
   const ids = new Set<string>();
   for (const it of o.items) {
