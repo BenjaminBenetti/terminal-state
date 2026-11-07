@@ -36,6 +36,7 @@ import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // ta
 import {buildStoreMusicProp, isStoreMusicKind} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 import {drawStoreGarden, isStoreGardenDrawn} from './skywaysStoreGarden'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-GARDEN)
+import {buildStoreBooksProp, isStoreBooksDrawnKind} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
 
 type Fit = {w: number; h: number; d: number; anchor: 'bottom' | 'top'};
 type InstanceModel = (group: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: Fit, name: string) => number;
@@ -229,6 +230,8 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   const draw = list.filter(p => !destCollisionOnly(p));
   if (!draw.length) return 0;
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
+  // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS): the bookshop's category signs / rugs (code-drawn + Codex art)
+  if (isStoreBooksDrawnKind(kind)) return buildStoreBooksProp(group, kind, draw, wm);
   if (isScienceArtKind(kind)) return drawScienceArt(group, kind, draw, wm); // (lane STORE-SCIENCE: the science store's framed Codex wall art)
   if (isStoreMusicKind(kind)) return buildStoreMusicProp(group, kind, draw, wm); // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01): the record store's own kinds
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed

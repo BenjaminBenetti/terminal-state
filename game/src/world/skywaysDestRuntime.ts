@@ -10,6 +10,7 @@ import type {StationLayout} from '../gen/stationTypes';
 import {destArtAtlas, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysDestArtMaterial, skywaysDestAtlases} from './skywaysDestinations';
+import {installSkywaysStoreBooks} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
 import {preloadScienceArt} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {preloadStoreMusicArt} from './skywaysStoreMusic'; // lane STORE-MUSIC (task studio-alpha-skyways-shops-20261107-054512-01)
 
@@ -62,5 +63,6 @@ export class SkywaysDestRuntime {
 
 /** Installs the destinations runtime into a Game (one call in the Game constructor). */
 export function installSkywaysDestinations(host: SkywaysDestHost): SkywaysDestRuntime {
+  installSkywaysStoreBooks(host); // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS): the bookshop's sign / rug atlas
   return new SkywaysDestRuntime(host).install();
 }
