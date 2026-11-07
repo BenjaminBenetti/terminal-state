@@ -19,6 +19,8 @@
 // at the left door's stand point if a player circle fits there on the same storey floor (nothing solid, a clear line from the seat),
 // else the right, the front, the back; none -> "No room to get out". Death, any state other than playing / paused / inventory, a
 // teardown (travel / Retry / Load / New game) -> the player is out, the car stays parked, the controls cleared.
+// THE TRUNK (lane TRUNK, world/skywaysCarTrunk.ts through `rear`): the crosshair on the boot (the rear zone) while standing behind the car
+// -> its prompt and [E] open the trunk view instead; anywhere else the doors rule above (the two stand zones never overlap).
 // DRIVING: W drive, S brake / reverse, A / D steer, Space handbrake (world/skywaysCarPhysics.ts: arcade kinematics, the rigid
 // multi-circle body against the world's collision, the floor rule). Mouse look is relative to the car (the yaw clamped to
 // ±CAR_RT.lookYaw; settings / inversion untouched: Game's applyMouseLook runs as ever). No fire / melee / ADS / flares / throws
@@ -237,6 +239,11 @@ export class SkywaysCar {
   trunkJSON: (StackJSON | null)[] = emptyTrunk();
   /** The live trunk (lane TRUNK's store) supplies the slots to store, when present. */
   trunkSource: (() => (StackJSON | null)[]) | null = null;
+  /**
+   * (lane TRUNK) The trunk at the car's rear (world/skywaysCarTrunk.ts): when the crosshair is on the rear zone from behind the car,
+   * its prompt shows and [E] opens it instead of the doors rule (one action per press; never while seated: E gets out first).
+   */
+  rear: {aimed(): boolean; interact(): boolean; readonly prompt: string} | null = null;
   /** QA / tests. */
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
@@ -377,11 +384,12 @@ export class SkywaysCar {
   // ---------------------------------------------------------------------------------------------------------------------
   // Enter / exit
 
-  /** [E]: while driving, get out; else get in when aiming at the car by a door. */
+  /** [E]: while driving, get out; else the trunk when aiming at its rear zone from behind (lane TRUNK); else get in when aiming at the car by a door. */
   onInteract(): boolean {
     const h = this.host;
     if (!this.worldLive || !this.body || h.state !== 'playing') return false;
     if (this.driving) { this.tryExit(); return true; }
+    if (this.rear?.aimed() && this.rear.interact()) return true;
     if (!this.canEnter() || !this.pickAim()) return false;
     this.enter();
     return true;
@@ -577,7 +585,7 @@ export class SkywaysCar {
     this.syncView();
     if (this.driving) this.driveAudio();
     if (this.driving) this.prompt = CAR_TEXT.driving;
-    else this.prompt = h.state === 'playing' && this.canEnter() && this.pickAim() ? CAR_TEXT.getIn : null;
+    else this.prompt = h.state !== 'playing' || !this.canEnter() ? null : this.rear?.aimed() ? this.rear.prompt : this.pickAim() ? CAR_TEXT.getIn : null;
   }
 
   /** (lane CAR2) The engine's world position (CAR_RT.engineAt under the bonnet). */
