@@ -11,6 +11,7 @@ import {destArtAtlas, type DestArtAtlasKey} from '../gen/skyways/destinations/sk
 import {SurfaceNodeMaterial} from './materials';
 import {setSkywaysDestArtMaterial, skywaysDestAtlases} from './skywaysDestinations';
 import {installSkywaysStoreBooks} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
+import {preloadScienceArt} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 
 /** Longest wait for the art atlases before the world is built (then: the plain boards). */
 export const SKYWAYS_DEST_ART_WAIT_MS = 6000;
@@ -38,7 +39,8 @@ export class SkywaysDestRuntime {
   /** The atlases this layout's posters / plaques show -> one material each (released with the level). Never rejects. */
   async preload(layout: StationLayout): Promise<void> {
     const atlases = skywaysDestAtlases(new Set(layout.props.map(p => p.kind)));
-    await Promise.all(atlases.map(async (atlas: DestArtAtlasKey) => {
+    // (+ lane STORE-SCIENCE: the science store's wall-art atlas, when placed — in parallel)
+    await Promise.all([preloadScienceArt(layout, this.host), ...atlases.map(async (atlas: DestArtAtlasKey) => {
       const rec = destArtAtlas(atlas);
       const tex = rec ? await this.host.levelResources.load(LEVEL, rec.url, {srgb: true, repeat: false}).catch(() => null) : null;
       if (!tex) { setSkywaysDestArtMaterial(atlas, null); this.counts.artMissing++; return; }
@@ -52,7 +54,7 @@ export class SkywaysDestRuntime {
       }
       setSkywaysDestArtMaterial(atlas, m);
       this.counts.artLoaded++;
-    }));
+    })]);
   }
 }
 

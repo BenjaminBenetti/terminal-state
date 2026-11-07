@@ -2304,6 +2304,11 @@
       "sha256": "4bce598e61906c02d6fe9ce753b2a396f6277452ac838ee24a873049fe481b4b"
     },
     {
+      "path": "assets/derivatives/skyways-store-science-art-20261107.json",
+      "bytes": 8822,
+      "sha256": "3602a0378d949842107ca0e9fc59f59c3d7a55e7c12e2666624c2a1a99dd419c"
+    },
+    {
       "path": "assets/derivatives/skyways-sushi-mascot.json",
       "bytes": 3347,
       "sha256": "717d6975e384ac23a480a97fa4b2bb939b6922e7ccbb09dcf175af64df6cdc9b"
@@ -4817,6 +4822,11 @@
       "path": "assets/textures/skyways/stores/books/skyways-store-books-art.jpg",
       "bytes": 235936,
       "sha256": "3f49ebc115a59fdc968d8ccf63fad33e6e89f513aa646d10e2e2a315f20a56ae"
+    },
+    {
+      "path": "assets/textures/skyways/stores/science/science-art.jpg",
+      "bytes": 1072718,
+      "sha256": "b99893617b40127d854ee4f03039532805fd1f55a93ae04108d20c1ea0cf9ca5"
     },
     {
       "path": "assets/textures/train/train-int-bulkhead.jpg",

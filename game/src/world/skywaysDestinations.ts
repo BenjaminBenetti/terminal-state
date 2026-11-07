@@ -32,6 +32,7 @@ import {purposeMaterial} from './purposeTextures';
 import {destHangCables, destModelHung, destModelKey, destModelOf, destModelRow} from '../gen/skyways/destinations/skywaysDestModels';
 import {destArtCrop, destArtOf, destArtPiece, type DestArtAtlasKey} from '../gen/skyways/destinations/skywaysDestArtMap';
 import {shapeMaterials} from './shapeMaterials';
+import {drawScienceArt, isScienceArtKind} from './skywaysStoreScienceArt'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 import {buildStoreBooksProp, isStoreBooksDrawnKind} from './skywaysStoreBooks'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS)
 
@@ -229,6 +230,7 @@ export function buildSkywaysDestProp(group: THREE.Group, kind: SkywaysDestKind, 
   if (kind === 'skyDPoster' || kind === 'skyDPlaque') return drawArt(group, kind, draw, wm);
   // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-BOOKS): the bookshop's category signs / rugs (code-drawn + Codex art)
   if (isStoreBooksDrawnKind(kind)) return buildStoreBooksProp(group, kind, draw, wm);
+  if (isScienceArtKind(kind)) return drawScienceArt(group, kind, draw, wm); // (lane STORE-SCIENCE: the science store's framed Codex wall art)
   // the cinema screen has no model: its masking frame and matte surface (lane SHOPS-B's parts), drawn as placed
   if (kind === 'skyDCinemaScreen') { drawParts(group, kind, SKYD_SCREEN_PARTS, draw, wm, scaleM); return draw.length; }
   // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-HOCKEY) a store kind drawn by code: its spec's parts, one batch per variant
