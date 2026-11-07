@@ -57,6 +57,7 @@ const TYPE_W: Partial<Record<string, number>> = {
 
 function areaWeight(a: Area): number {
   if (a.role === 'stair' || a.type === 'stair-core' || a.storefront !== undefined) return 0;
+  if (a.noFloorLoot) return 0; // (task studio-alpha-skyways-shops-20261107-054512-01: a Skyways major store: no floor piles)
   const w: number = (a.purpose ? PURPOSE_W[a.purpose] : undefined) ?? TYPE_W[a.type] ?? (a.level && !a.publicSpace ? 1 : 0);
   return a.level ? w * 1.3 : w; // spread finds onto the upper / lower storeys too
 }

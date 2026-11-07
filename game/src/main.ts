@@ -11,7 +11,7 @@ import {installPerfOverlay, type PerfOverlay} from './debug/overlay';
 import {installPerfRecorder} from './debug/perfRecorderUi'; // task studio-performance-recorder-20261103-043629 (lane RECORDER): the player's performance recorder
 import {milestoneBadge, readMilestones} from './run/milestones'; // task reactor-build-20261101 (lane RESTART): the title's earned badge
 // task campaign-foundation-20261102 (lane MENU): the main menu, its diorama and the persisted settings
-import {MainMenuController, MainMenuView, bootLine, mountSettingsForm, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
+import {MainMenuController, MainMenuView, bootLine, mountControlsForm, mountSettingsForm, type DevStart, type MenuHost, type SlotView} from './ui/mainMenu';
 import {SettingsStore, browserSettingsStorage, copySettingsInto} from './ui/settingsStore';
 import {MENU_TRAIN_KEYS, MenuScene, type MenuRenderer, type MenuSceneAssets} from './world/menuScene';
 import {OFFICE_ASSETS, loadOfficeAsset, loadOfficeTexture, type OfficeAssetId} from './assets/officeAssets';
@@ -174,6 +174,8 @@ async function boot(): Promise<void> {
   game.onSettingsChanged = key => { if (key === 'muted') settings.set({muted: game.settings.muted}); }; // the M key
   window.addEventListener('storage', e => { if (e.key === settings.key) settings.reload(); }); // another tab changed them
   mountSettingsForm($('#pause-settings'), settings, {idPrefix: 'set-', qualityPresets: ATMOSPHERE_QUALITY});
+  // (task studio-alpha-survival-controls-20261107-060450-01) the input preferences live under Controls: the same store, ids set-*
+  mountControlsForm($('#pause-controls-form'), settings, {idPrefix: 'set-'});
 
   // --- menus and settings ---
   // Iteration 16 (lane RUN): the pause menu travels to the other level (the run carries over) or starts a new game (confirmed: it
@@ -294,6 +296,7 @@ async function boot(): Promise<void> {
   });
   const menuView = new MainMenuView($('#mm-view'), menu, {
     settings: box => { mountSettingsForm(box, settings, {idPrefix: 'mm-set-', qualityPresets: ATMOSPHERE_QUALITY}); recorder.mountPanel(box, {idPrefix: 'mm-'}); }, // (+ lane RECORDER's Performance section; lane MENU: the quality help line)
+    controlsForm: box => { mountControlsForm(box, settings, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01: input preferences under Controls)
     qaButton: qa ? qaButton : null,
     overlayHost: titleEl, // (lane MENU, campaign polish item 4: submenus open front and centre over the diorama)
   });

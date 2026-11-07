@@ -3,13 +3,54 @@
  "asset": "audio-skyways-car-20261106",
  "task": "studio-skyways-level-20261106-054448-01",
  "lane": "lead",
- "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (the task's local Sound Lab allowance; 4 jobs of the task's 12-job cap)",
- "plannedBy": "tools/audio-pipeline/skyways-car-plan.py",
- "rebuild": "SOUND_LAB_AUDIO_DIR=<raw dir> node tools/audio-pipeline/skyways-car-build.mjs",
+ "revision": {
+  "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+  "lane": "AUDIO",
+  "why": "the round-1 engine loops were sub-bass only (centroid 48 / 76 Hz; 99.8 % of the energy under 300 Hz): effectively inaudible on small speakers. Round 2: mid-range engine layers + engine start / reverse whine / brake-to-stop.",
+  "round1": {
+   "carIdle": {
+    "clip": "car-engine-idle-01",
+    "jobId": "20261106T071502-1422195354",
+    "rawSha256": "3874af68af54f0d46cf7e9147264495aa75832b584cf6a2d4e6e2325df7e845c",
+    "metrics": {
+     "rmsDbfs": -20,
+     "peakDbfs": -10.7,
+     "centroidHz": 47,
+     "shareAbove180HzDb": -20.3,
+     "shareAbove355HzDb": -29.1,
+     "loopSeam": {
+      "wrapJump": 0.0008,
+      "meanStep": 0.0008,
+      "edgeLevelDb": 2.32
+     }
+    }
+   },
+   "carDrive": {
+    "clip": "car-engine-drive-01",
+    "jobId": "20261106T071506-522183325",
+    "rawSha256": "ca94017354797148dc475c21b5fb7a0f9fdce27f33075d42b44d4fdb3f8bd3fb",
+    "metrics": {
+     "rmsDbfs": -20,
+     "peakDbfs": -10.2,
+     "centroidHz": 74,
+     "shareAbove180HzDb": -12.4,
+     "shareAbove355HzDb": -28.1,
+     "loopSeam": {
+      "wrapJump": 0.0011,
+      "meanStep": 0.001,
+      "edgeLevelDb": 0.96
+     }
+    }
+   }
+  }
+ },
+ "generatedBy": "the existing LOCAL Sound Lab through tools/audio-pipeline/soundlab_runner.py (round 1: 4 jobs of the Skyways task's 12-job cap; round 2: 8 jobs of the Skyways rework's 8-job audio allowance)",
+ "plannedBy": "tools/audio-pipeline/skyways-car-plan.py (round 1), tools/audio-pipeline/skyways-car2-plan.py (round 2)",
+ "rebuild": "SOUND_LAB_AUDIO_DIR=<round-1 raw dir> SOUND_LAB_AUDIO_DIR_V2=<round-2 raw dir> node tools/audio-pipeline/skyways-car-build.mjs",
  "license": {
   "status": "Conditional prototype status: Stability AI Community License (2024-07-05) + Gemma Terms of Use (2026-04-01). Not production or commercial clearance. \"Powered by Stability AI\" if distributed. Outputs may not be used to build or improve a foundational generative AI model.",
   "kitStatus": "Conditional. Not commercially cleared by this kit.",
-  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (per-0.1 s level, per-0.25 s spectral centroid, peak, silence). The user taste-tests in game.",
+  "review": "NOT LISTENED TO on the worker (no audio output): structural analysis only (band levels, spectral centroid, YIN f0 / envelope-modulation tracks, loop-seam continuity, peak, silence). `metrics` describe signal structure only. The user taste-tests in game.",
   "gameReady": false,
   "approved": false,
   "notice": "game/public/assets/audio/NOTICE.md"
@@ -20,7 +61,7 @@
    "cue": "carIdle",
    "url": "assets/audio/car-engine-idle-loop.mp3",
    "bytes": 21106,
-   "sha256": "9f0c271b94d3b4739cc4cb5ef047818a160185fa34f2ac06dbb1619acaec2714",
+   "sha256": "ad06c1566cc2d002eefd8312c567df304a6fcf38b7ca0f61f2c3fc595b9b0563",
    "dur": 2.6,
    "loop": {
     "start": 0.1,
@@ -28,32 +69,96 @@
    },
    "ops": [
     "mono",
-    "stationary window from 1.5 s (std 0.77 dB over 0.5 s blocks, searched from 0.8 s)",
-    "loop 2.4 s, equal-power crossfade 0.4 s",
+    "car-engine-idle-03: loop from 1.9 s, 2.4 s, equal-power crossfade 0.4 s, rms -20 dBFS (8.4 dB) x 1",
+    "car-engine-idle-02: loop from 1.72 s, 2.4 s, equal-power crossfade 0.4 s, rms -20 dBFS (1.1 dB) x 0.7",
+    "layers summed (1 : 0.7)",
     "margins 0.1 s",
-    "rms -20 dBFS (2.1 dB)",
+    "rms -20 dBFS (-1.7 dB)",
     "mp3 mono 64 kbps"
    ],
+   "metrics": {
+    "rmsDbfs": -20,
+    "peakDbfs": -6.7,
+    "centroidHz": 1216,
+    "shareAbove180HzDb": -2.2,
+    "shareAbove355HzDb": -2.4,
+    "loopSeam": {
+     "wrapJump": 0.0048,
+     "meanStep": 0.0234,
+     "edgeLevelDb": 0.11
+    }
+   },
    "source": {
-    "clip": "car-engine-idle-01",
-    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-engine-idle-01.wav",
-    "rawSha256": "3874af68af54f0d46cf7e9147264495aa75832b584cf6a2d4e6e2325df7e845c",
+    "clip": "car-engine-idle-03",
+    "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-idle-03.wav",
+    "rawSha256": "7cabc7cf0389d5a3899ae06f458a206d14aa71d8838c55f8b978983f2ab7d571",
     "rawBytes": 1058444,
-    "labFile": "sfx_a-modern-v8-sports-car-engine-idling-ste_w8a8_seed1422195354_071502.wav",
-    "labSidecarSha256": "00d3335cb9de99074a1be32f75eb97ce55fc45610733083471f29cfcfdef462a",
-    "jobId": "20261106T071502-1422195354",
-    "prompt": "TrackType: SFX, a modern V8 sports car engine idling steadily with the car standing still: a deep smooth burbling rumble at a constant low rpm, steady and continuous, no revving, no start, no stop, heard from the driver seat inside the cabin, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
-    "seed": 1422195354,
+    "labFile": "sfx_a-sports-car-engine-running-at-a-steady_w8a8_seed1026530035_060608.wav",
+    "labSidecarSha256": "b39ab8cd7c1f20e983b8b7dfdc74c5217c45522ff00d547f2fec25ae40dc8415",
+    "jobId": "20261107T060608-1026530035",
+    "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+    "prompt": "TrackType: SFX, a sports car engine running at a steady idle with the bonnet open, microphone close to the engine block: a busy mechanical idle with rattling ticking valves, a buzzy throbbing motor note and a faint belt whirr, constant rpm, steady and continuous, no revving, no start, no stop, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1026530035,
     "seconds": 6,
     "steps": 8,
     "cfg": 1
-   }
+   },
+   "layers": [
+    {
+     "role": "mechanical mid-range (audible layer)",
+     "gain": 1,
+     "window": {
+      "startS": 1.9,
+      "lengthS": 2.4,
+      "crossfadeS": 0.4
+     },
+     "source": {
+      "clip": "car-engine-idle-03",
+      "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-idle-03.wav",
+      "rawSha256": "7cabc7cf0389d5a3899ae06f458a206d14aa71d8838c55f8b978983f2ab7d571",
+      "rawBytes": 1058444,
+      "labFile": "sfx_a-sports-car-engine-running-at-a-steady_w8a8_seed1026530035_060608.wav",
+      "labSidecarSha256": "b39ab8cd7c1f20e983b8b7dfdc74c5217c45522ff00d547f2fec25ae40dc8415",
+      "jobId": "20261107T060608-1026530035",
+      "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+      "prompt": "TrackType: SFX, a sports car engine running at a steady idle with the bonnet open, microphone close to the engine block: a busy mechanical idle with rattling ticking valves, a buzzy throbbing motor note and a faint belt whirr, constant rpm, steady and continuous, no revving, no start, no stop, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+      "seed": 1026530035,
+      "seconds": 6,
+      "steps": 8,
+      "cfg": 1
+     }
+    },
+    {
+     "role": "sub-bass firing pulses (body)",
+     "gain": 0.7,
+     "window": {
+      "startS": 1.72,
+      "lengthS": 2.4,
+      "crossfadeS": 0.4
+     },
+     "source": {
+      "clip": "car-engine-idle-02",
+      "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-idle-02.wav",
+      "rawSha256": "a6d3eec4f76ebd4cd2a0a548564a03a0e98a76574e8ec40337e91e3d5d9c082d",
+      "rawBytes": 1058444,
+      "labFile": "sfx_a-sports-car-engine-idling-steadily-with_w8a8_seed1611127821_060428.wav",
+      "labSidecarSha256": "03ccce0e7e4a6b4966ac5adbe75cbdd76066449c7c5ed8c4fe283d783983a5de",
+      "jobId": "20261107T060428-1611127821",
+      "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+      "prompt": "TrackType: SFX, a sports car engine idling steadily with the car standing still, recorded outdoors with the microphone close to the exhaust tailpipe: a clear lumpy exhaust burble with distinct firing pulses, a raspy mid-range engine note and a light mechanical valve tick, constant rpm, steady and continuous, no revving, no start, no stop, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+      "seed": 1611127821,
+      "seconds": 6,
+      "steps": 8,
+      "cfg": 1
+     }
+    }
+   ]
   },
   {
    "cue": "carDrive",
    "url": "assets/audio/car-engine-drive-loop.mp3",
    "bytes": 21106,
-   "sha256": "3aec0dfccce66b8cc9e6029937b840eb65e5171e88ef47ddf623c67202f5b91b",
+   "sha256": "09f8a9cbd94637967742a34a9f3ffa054e121784077773819ba7ed7e82b51359",
    "dur": 2.6,
    "loop": {
     "start": 0.1,
@@ -61,23 +166,206 @@
    },
    "ops": [
     "mono",
-    "stationary window from 1.5 s (std 2.22 dB over 0.5 s blocks, searched from 0.8 s)",
-    "loop 2.4 s, equal-power crossfade 0.4 s",
+    "car-engine-drive-02: loop from 1.28 s, 1.2 s grain x2, equal-power crossfade 0.2 s, rms -20 dBFS (-6.3 dB) x 1",
+    "car-engine-drive-01: loop from 1.5 s, 2.4 s, equal-power crossfade 0.4 s, rms -20 dBFS (-0.6 dB) x 0.5",
+    "layers summed (1 : 0.5)",
     "margins 0.1 s",
-    "rms -20 dBFS (-0.6 dB)",
+    "rms -20 dBFS (-1.0 dB)",
     "mp3 mono 64 kbps"
    ],
+   "metrics": {
+    "rmsDbfs": -20,
+    "peakDbfs": -8.6,
+    "centroidHz": 265,
+    "shareAbove180HzDb": -3.5,
+    "shareAbove355HzDb": -9.1,
+    "loopSeam": {
+     "wrapJump": 0.0001,
+     "meanStep": 0.0056,
+     "edgeLevelDb": 1.98
+    }
+   },
    "source": {
-    "clip": "car-engine-drive-01",
-    "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-engine-drive-01.wav",
-    "rawSha256": "ca94017354797148dc475c21b5fb7a0f9fdce27f33075d42b44d4fdb3f8bd3fb",
+    "clip": "car-engine-drive-02",
+    "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-drive-02.wav",
+    "rawSha256": "7c43926c7a9bcfec1181884b91747180ae8dbbf8087d8db2fb562dc69bb18e15",
     "rawBytes": 1058444,
-    "labFile": "sfx_a-modern-v8-sports-car-engine-pulling-at_w8a8_seed522183325_071506.wav",
-    "labSidecarSha256": "c0e426ebfdc1b601da7186a23b522bad235f4987659907e6d9c0f83172e8f757",
-    "jobId": "20261106T071506-522183325",
-    "prompt": "TrackType: SFX, a modern V8 sports car engine pulling at a steady medium rpm while cruising: a constant throaty growl with a smooth exhaust note, no gear changes, constant speed, no tyre noise, heard from the driver seat inside the cabin, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
-    "seed": 522183325,
+    "labFile": "sfx_a-sports-car-engine-held-at-a-steady-hig_w8a8_seed429155089_060433.wav",
+    "labSidecarSha256": "67539ae4b933caa74cf483d08bded6aeb71b8fa549137071883399d656cc6984",
+    "jobId": "20261107T060433-429155089",
+    "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+    "prompt": "TrackType: SFX, a sports car engine held at a steady high rpm under load, recorded with the microphone close to the engine and exhaust: a loud bright raspy engine howl with a strong exhaust rasp and intake roar, rich harmonics, constant pitch, steady and continuous, no gear changes, no tyre noise, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 429155089,
     "seconds": 6,
+    "steps": 8,
+    "cfg": 1
+   },
+   "layers": [
+    {
+     "role": "mid-range growl (audible layer)",
+     "gain": 1,
+     "window": {
+      "startS": 1.28,
+      "lengthS": 1.2,
+      "crossfadeS": 0.2,
+      "repeats": 2
+     },
+     "source": {
+      "clip": "car-engine-drive-02",
+      "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-drive-02.wav",
+      "rawSha256": "7c43926c7a9bcfec1181884b91747180ae8dbbf8087d8db2fb562dc69bb18e15",
+      "rawBytes": 1058444,
+      "labFile": "sfx_a-sports-car-engine-held-at-a-steady-hig_w8a8_seed429155089_060433.wav",
+      "labSidecarSha256": "67539ae4b933caa74cf483d08bded6aeb71b8fa549137071883399d656cc6984",
+      "jobId": "20261107T060433-429155089",
+      "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+      "prompt": "TrackType: SFX, a sports car engine held at a steady high rpm under load, recorded with the microphone close to the engine and exhaust: a loud bright raspy engine howl with a strong exhaust rasp and intake roar, rich harmonics, constant pitch, steady and continuous, no gear changes, no tyre noise, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+      "seed": 429155089,
+      "seconds": 6,
+      "steps": 8,
+      "cfg": 1
+     }
+    },
+    {
+     "role": "steady sub-bass growl (body)",
+     "gain": 0.5,
+     "window": {
+      "startS": 1.5,
+      "lengthS": 2.4,
+      "crossfadeS": 0.4
+     },
+     "source": {
+      "clip": "car-engine-drive-01",
+      "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-engine-drive-01.wav",
+      "rawSha256": "ca94017354797148dc475c21b5fb7a0f9fdce27f33075d42b44d4fdb3f8bd3fb",
+      "rawBytes": 1058444,
+      "labFile": "sfx_a-modern-v8-sports-car-engine-pulling-at_w8a8_seed522183325_071506.wav",
+      "labSidecarSha256": "c0e426ebfdc1b601da7186a23b522bad235f4987659907e6d9c0f83172e8f757",
+      "jobId": "20261106T071506-522183325",
+      "task": "studio-skyways-level-20261106-054448-01",
+      "prompt": "TrackType: SFX, a modern V8 sports car engine pulling at a steady medium rpm while cruising: a constant throaty growl with a smooth exhaust note, no gear changes, constant speed, no tyre noise, heard from the driver seat inside the cabin, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+      "seed": 522183325,
+      "seconds": 6,
+      "steps": 8,
+      "cfg": 1
+     }
+    }
+   ]
+  },
+  {
+   "cue": "carStart",
+   "url": "assets/audio/car-engine-start.mp3",
+   "bytes": 21106,
+   "sha256": "be0896066e2aa0c987a6c4fc3591b31ffcf49427d2423d653cf8ec7cb41417be",
+   "dur": 2.6,
+   "ops": [
+    "mono",
+    "trim 0-2.6 s",
+    "cosine fades 0.003 / 0.3 s",
+    "peak -1 dBFS (5.6 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "metrics": {
+    "rmsDbfs": -15.9,
+    "peakDbfs": -1,
+    "centroidHz": 402,
+    "shareAbove180HzDb": -6.9,
+    "shareAbove355HzDb": -8.7
+   },
+   "source": {
+    "clip": "car-engine-start-01",
+    "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-engine-start-01.wav",
+    "rawSha256": "925bfc0ff20075333ad4d9b43e891607359f82e7196d45b9573ef347079530bb",
+    "rawBytes": 529244,
+    "labFile": "sfx_a-sports-car-engine-started-with-the-key_w8a8_seed1607570711_060438.wav",
+    "labSidecarSha256": "c73daaf731b1f0fdbe34e459c7649857f6479a2e3c01e3d46c29794b4b48f513",
+    "jobId": "20261107T060438-1607570711",
+    "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+    "prompt": "TrackType: SFX, a sports car engine started with the key, microphone close to the engine: the electric starter motor whirrs and cranks for half a second, the engine catches with a loud bark and one short rev, then settles into a steady burbling idle, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1607570711,
+    "seconds": 3,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "carReverse",
+   "url": "assets/audio/car-reverse-loop.mp3",
+   "bytes": 13374,
+   "sha256": "a5e8b0b294fd47cd11f9e959c1b2dccd9a4498e021ec86a0a7b0334c1a1eaf03",
+   "dur": 1.62,
+   "loop": {
+    "start": 0.1,
+    "length": 1.42
+   },
+   "ops": [
+    "mono",
+    "car-reverse-01: high-pass 700 Hz (2nd-order, Q 0.707)",
+    "car-reverse-01: loop from 0.7 s, 1.42 s, equal-power crossfade 0.3 s, rms -20 dBFS (20.3 dB) x 1",
+    "margins 0.1 s",
+    "rms -20 dBFS (-1.4 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "metrics": {
+    "rmsDbfs": -20,
+    "peakDbfs": -2.9,
+    "centroidHz": 1052,
+    "shareAbove180HzDb": -0.2,
+    "shareAbove355HzDb": -0.7,
+    "loopSeam": {
+     "wrapJump": 0.0135,
+     "meanStep": 0.0087,
+     "edgeLevelDb": 7.11
+    }
+   },
+   "source": {
+    "clip": "car-reverse-01",
+    "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-reverse-01.wav",
+    "rawSha256": "a550f21e4ec02a317efccce77ade43a3a7cb4930345d65ac290c8395c065594f",
+    "rawBytes": 705644,
+    "labFile": "sfx_a-car-rolling-slowly-backwards-in-revers_w8a8_seed1790482092_060442.wav",
+    "labSidecarSha256": "9ec751b12ba7033832c9e3ce5e6ab8a93cd6eddaabba8bcd877b78c48f18d587",
+    "jobId": "20261107T060442-1790482092",
+    "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+    "prompt": "TrackType: SFX, a car rolling slowly backwards in reverse gear: the steady high-pitched whine of the gearbox in reverse over a soft low engine hum, constant speed, continuous, no beeping, no tyre squeal, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 1790482092,
+    "seconds": 4,
+    "steps": 8,
+    "cfg": 1
+   }
+  },
+  {
+   "cue": "carBrake",
+   "url": "assets/audio/car-brake.mp3",
+   "bytes": 14001,
+   "sha256": "4f8cf65f6248b1ecd8c4a3470ecacfb24e99cd918b5ebe60e109033d13d23e33",
+   "dur": 1.7,
+   "ops": [
+    "mono",
+    "trim 0.05-1.75 s",
+    "cosine fades 0.005 / 0.15 s",
+    "peak -1 dBFS (13.8 dB)",
+    "mp3 mono 64 kbps"
+   ],
+   "metrics": {
+    "rmsDbfs": -21.7,
+    "peakDbfs": -1,
+    "centroidHz": 1286,
+    "shareAbove180HzDb": -1.8,
+    "shareAbove355HzDb": -2.1
+   },
+   "source": {
+    "clip": "car-brake-01",
+    "rawFile": "reference/tasks/skyways-vehicle-20261107-054512/audio/raw/car-brake-01.wav",
+    "rawSha256": "2911e99a519fbcd160894afefa180f19e8db8f072f811f5eba5ec16d6f9f6081",
+    "rawBytes": 352844,
+    "labFile": "sfx_a-car-braking-to-a-stop-on-a-smooth-ston_w8a8_seed234821177_060447.wav",
+    "labSidecarSha256": "a4adfc2d8e7ddb124e70f9f0e563d5ce9c62a94fb77e8a688c36187cd91f0180",
+    "jobId": "20261107T060447-234821177",
+    "task": "studio-beta-skyways-vehicle-20261107-054512-01",
+    "prompt": "TrackType: SFX, a car braking to a stop on a smooth stone floor: a short sharp brake squeal and a soft tyre scrub, then the car body rocks on its springs with a dull suspension clunk, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
+    "seed": 234821177,
+    "seconds": 2,
     "steps": 8,
     "cfg": 1
    }
@@ -95,6 +383,13 @@
     "peak -1 dBFS (3.0 dB)",
     "mp3 mono 64 kbps"
    ],
+   "metrics": {
+    "rmsDbfs": -20.1,
+    "peakDbfs": -1,
+    "centroidHz": 1127,
+    "shareAbove180HzDb": -0.1,
+    "shareAbove355HzDb": -2.3
+   },
    "source": {
     "clip": "car-skid-01",
     "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-skid-01.wav",
@@ -103,6 +398,7 @@
     "labFile": "sfx_car-tyres-skidding-and-screeching-briefl_w8a8_seed1842152276_071511.wav",
     "labSidecarSha256": "117468085e476b9cdcad2bbd1ceeed824e5e22c7d5f7ce73bdd05e70a9b7ce0f",
     "jobId": "20261106T071511-1842152276",
+    "task": "studio-skyways-level-20261106-054448-01",
     "prompt": "TrackType: SFX, car tyres skidding and screeching briefly on a smooth polished stone floor during a hard stop, a sharp rubber squeal that fades out, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
     "seed": 1842152276,
     "seconds": 2,
@@ -123,6 +419,13 @@
     "peak -1 dBFS (1.9 dB)",
     "mp3 mono 64 kbps"
    ],
+   "metrics": {
+    "rmsDbfs": -23.9,
+    "peakDbfs": -1,
+    "centroidHz": 414,
+    "shareAbove180HzDb": -2,
+    "shareAbove355HzDb": -5.3
+   },
    "source": {
     "clip": "car-door-01",
     "rawFile": "reference/tasks/skyways-level-20261106-054448/audio/raw/car-door-01.wav",
@@ -131,6 +434,7 @@
     "labFile": "sfx_a-heavy-car-door-opened-with-a-latch-cli_w8a8_seed1534666901_071515.wav",
     "labSidecarSha256": "3e3388527a23939b44632ccb626e17240e4451fb98942b20b36b796ed1cc1d40",
     "jobId": "20261106T071515-1534666901",
+    "task": "studio-skyways-level-20261106-054448-01",
     "prompt": "TrackType: SFX, a heavy car door opened with a latch click and then shut with a solid muffled thunk, close mic, recorded dry with no echo or reverb, no words, no music, no background noise.",
     "seed": 1534666901,
     "seconds": 2,

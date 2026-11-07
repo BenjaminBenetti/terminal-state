@@ -670,6 +670,11 @@ function injectCss(doc: Document): void {
 export interface MainMenuViewOptions {
   /** The settings form for the Settings view (mounted once, shown only there). */
   settings?: (container: HTMLElement) => void;
+  /**
+   * Task studio-alpha-survival-controls-20261107-060450-01: the input-preferences form (mountControlsForm: sensitivity, invert X / Y)
+   * for the Controls view, above the bindings (mounted once, shown only there).
+   */
+  controlsForm?: (container: HTMLElement) => void;
   /** Extra element (the QA #btn-start) adopted as the qa-start action button. */
   qaButton?: HTMLButtonElement | null;
   /** Where the centred submenu dialog is mounted (default: the side column's parent, i.e. the #title section). */
@@ -687,6 +692,8 @@ export class MainMenuView {
   private readonly overlay: HTMLElement;
   private readonly dialog: HTMLElement;
   private readonly settingsBox: HTMLElement;
+  /** (task studio-alpha-survival-controls-20261107-060450-01) the Controls view's input preferences. */
+  private readonly controlsFormBox: HTMLElement;
   private readonly controlsBox: HTMLElement;
   private readonly head: HTMLElement;
   private readonly body: HTMLElement;
@@ -708,12 +715,14 @@ export class MainMenuView {
     this.dialog.setAttribute('aria-labelledby', 'mm-dialog-title');
     this.head = el('mm-view mm-head-box');
     this.settingsBox = el('mm-settings settings hidden'); // (the class, not [hidden]: .settings sets display: grid)
+    this.controlsFormBox = el('mm-settings mm-controls-form settings hidden');
     this.controlsBox = el('mm-controls controls-grid hidden');
     this.body = el('mm-body');
-    this.dialog.append(el('stripe'), this.head, this.settingsBox, this.controlsBox, this.body);
+    this.dialog.append(el('stripe'), this.head, this.settingsBox, this.controlsFormBox, this.controlsBox, this.body);
     this.overlay.append(this.dialog);
     (o.overlayHost ?? this.side?.parentElement ?? root).append(this.overlay);
     o.settings?.(this.settingsBox);
+    o.controlsForm?.(this.controlsFormBox);
     ctl.onChange(() => this.render());
     for (const box of [root, this.overlay]) {
       box.addEventListener('keydown', e => this.onKey(e as KeyboardEvent));
@@ -824,6 +833,7 @@ export class MainMenuView {
     this.overlay.classList.toggle('hidden', !open);
     this.dialog.dataset.view = m.view;
     this.settingsBox.classList.toggle('hidden', m.view !== 'settings');
+    this.controlsFormBox.classList.toggle('hidden', m.view !== 'controls' || !this.o.controlsForm);
     this.controlsBox.classList.toggle('hidden', m.view !== 'controls');
     if (open) {
       const head = this.head;
@@ -851,8 +861,9 @@ export class MainMenuView {
     this.lastView = m.view;
     if (!this.visibleFlag) return;
     if (opened) {
-      // a freshly opened Settings view starts on its first control (its only action is Back, at the foot of the form)
-      const first = m.view === 'settings' ? this.settingsBox.querySelector<HTMLElement>('input, select') : null;
+      // a freshly opened Settings / Controls view starts on its first control (its only action is Back, at the foot of the form)
+      const first = m.view === 'settings' ? this.settingsBox.querySelector<HTMLElement>('input, select')
+        : m.view === 'controls' ? this.controlsFormBox.querySelector<HTMLElement>('input, select') : null;
       if (first) { this.programmatic = true; try { first.focus({preventScroll: true}); } finally { this.programmatic = false; } this.lastFocus = null; }
       else this.focusCurrent(true);
       return;
@@ -919,12 +930,9 @@ export interface SettingsFormOptions {
   timers?: CoalesceTimers;
 }
 
-/** Builds the settings controls into `box` (replacing its children), bound both ways to `store`. Returns an unsubscribe. */
-export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: SettingsFormOptions): () => void {
+/** The form's field builders (one store; ids P + id): shared by the Settings and the Controls forms. */
+function formKit(box: HTMLElement, store: SettingsStore, P: string) {
   const d = box.ownerDocument;
-  const P = o.idPrefix;
-  const vp = o.viewport ?? (() => ({w: globalThis.innerWidth ?? 1280, h: globalThis.innerHeight ?? 720, dpr: globalThis.devicePixelRatio ?? 1}));
-  box.replaceChildren();
   const label = (text: string, cls?: string) => { const l = d.createElement('label'); if (cls) l.className = cls; l.append(text, ' '); return l; };
   const range = (id: string, text: string, min: number, max: number, step: number, fmt: (v: number) => string, get: (s: Readonly<GameSettings>) => number, set: (v: number) => Partial<GameSettings>) => {
     const l = label(text);
@@ -947,11 +955,58 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     box.append(l);
     return (s: Readonly<GameSettings>) => { if (i.checked !== s[key]) i.checked = s[key]; };
   };
-  const sync: ((s: Readonly<GameSettings>) => void)[] = [];
+  return {d, label, range, check};
+}
+
+/** The short note shown only when the stored settings could not be read / saved (both forms). */
+function storeNote(box: HTMLElement, store: SettingsStore): (s: Readonly<GameSettings>) => void {
+  const note = box.ownerDocument.createElement('p');
+  note.className = 'set-note';
+  box.append(note);
+  return () => {
+    const r = store.loadReport;
+    note.textContent = !store.persistent ? 'Settings could not be saved in this browser: they apply for this session only.'
+      : r.source === 'invalid' ? 'Some saved settings were invalid and were reset.' : '';
+  };
+}
+
+/** Bind a form's sync functions to the store; returns the unsubscribe. */
+function bindForm(store: SettingsStore, sync: ((s: Readonly<GameSettings>) => void)[], extra: () => void = () => {}): () => void {
+  const all = (s: Readonly<GameSettings>) => { for (const f of sync) f(s); };
+  all(store.get());
+  const off = store.subscribe(s => all(s));
+  return () => { off(); extra(); };
+}
+
+/**
+ * Task studio-alpha-survival-controls-20261107-060450-01 (user: control-related settings — inversion, sensitivity — belong in Controls,
+ * not Settings): the INPUT preferences — mouse sensitivity, invert mouse X / Y — as their own form, bound both ways to the SAME settings
+ * store (one persisted record: defaults / validation / storage unchanged). Mounted in the main menu's Controls view and the pause
+ * menu's Controls section (ids P + 'sens' / 'invert-x' / 'invert' as before). Returns an unsubscribe.
+ */
+export function mountControlsForm(box: HTMLElement, store: SettingsStore, o: Pick<SettingsFormOptions, 'idPrefix'>): () => void {
+  box.replaceChildren();
+  const {range, check} = formKit(box, store, o.idPrefix);
   const B = SETTINGS_BOUNDS;
+  const sync: ((s: Readonly<GameSettings>) => void)[] = [];
   sync.push(range('sens', 'Mouse sensitivity', B.sens.min, B.sens.max, B.sens.step, v => v.toFixed(2), s => s.sens, v => ({sens: v})));
   sync.push(check('invert-x', 'Invert mouse X', 'invertX')); // task mouse-axis-invert (each axis on its own; the Y box keeps its id)
   sync.push(check('invert', 'Invert mouse Y', 'invertY'));
+  sync.push(storeNote(box, store));
+  return bindForm(store, sync);
+}
+
+/**
+ * Builds the settings controls (view, audio, graphics: everything but the input preferences, which are the Controls form's) into `box`
+ * (replacing its children), bound both ways to `store`. Returns an unsubscribe.
+ */
+export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: SettingsFormOptions): () => void {
+  const P = o.idPrefix;
+  const vp = o.viewport ?? (() => ({w: globalThis.innerWidth ?? 1280, h: globalThis.innerHeight ?? 720, dpr: globalThis.devicePixelRatio ?? 1}));
+  box.replaceChildren();
+  const {d, label, range, check} = formKit(box, store, P);
+  const sync: ((s: Readonly<GameSettings>) => void)[] = [];
+  const B = SETTINGS_BOUNDS;
   sync.push(range('fov', 'Field of view', B.fov.min, B.fov.max, B.fov.step, v => `${v.toFixed(0)}°`, s => s.fov, v => ({fov: v})));
   sync.push(range('vol', 'Master volume', 0, 100, 1, v => `${v} %`, s => volumePercent(s.volume), v => ({volume: volumeFromPercent(v)})));
   sync.push(check('mute', 'Mute audio (M)', 'muted'));
@@ -1006,18 +1061,8 @@ export function mountSettingsForm(box: HTMLElement, store: SettingsStore, o: Set
     });
   }
   // only a short note when something is wrong (lane MENU, campaign polish item 2: no explanatory copy otherwise)
-  const note = d.createElement('p');
-  note.className = 'set-note';
-  box.append(note);
-  sync.push(() => {
-    const r = store.loadReport;
-    note.textContent = !store.persistent ? 'Settings could not be saved in this browser: they apply for this session only.'
-      : r.source === 'invalid' ? 'Some saved settings were invalid and were reset.' : '';
-  });
-  const all = (s: Readonly<GameSettings>) => { for (const f of sync) f(s); };
-  all(store.get());
-  const off = store.subscribe(s => all(s));
-  const onResize = () => all(store.get());
+  sync.push(storeNote(box, store));
+  const onResize = () => { for (const f of sync) f(store.get()); };
   globalThis.addEventListener?.('resize', onResize);
-  return () => { off(); resApply?.cancel(); globalThis.removeEventListener?.('resize', onResize); };
+  return bindForm(store, sync, () => { resApply?.cancel(); globalThis.removeEventListener?.('resize', onResize); });
 }

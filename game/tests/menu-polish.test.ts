@@ -213,7 +213,7 @@ import {MiniEl, MiniEvent, MiniText, installMiniDom} from './helpers/paperMapDom
 import {SAVE_SLOTS, STORAGE_KEYS, type SaveMeta} from '../src/campaign/types';
 import {CONTROLS} from '../src/ui/hud';
 import {ATMOSPHERE_QUALITY} from '../src/render/atmosphere';
-import {DEV_CODES_HINT, MainMenuController, MainMenuView, mountSettingsForm, type ImportResult, type MenuHost, type SlotView} from '../src/ui/mainMenu';
+import {DEV_CODES_HINT, MainMenuController, MainMenuView, mountControlsForm, mountSettingsForm, type ImportResult, type MenuHost, type SlotView} from '../src/ui/mainMenu';
 import {
   CoalescedApply, QUALITY_LABEL, QUALITY_OPTIONS, RENDER_PERCENT, SETTINGS_DEFAULTS, SettingsStore, nativePixelRatio, parseStoredSettings,
   qualityDescription, renderPercent, renderPixelRatio, renderScaleFromPercent, type SettingsStorage,
@@ -277,6 +277,7 @@ function mountMenu(host: MenuHost = new Host(), o: {store?: SettingsStore; timer
   const view = new MainMenuView(root as unknown as HTMLElement, ctl, {
     overlayHost: title as unknown as HTMLElement,
     settings: box => { mountSettingsForm(box, store, {idPrefix: 'mm-set-', viewport: () => ({w: 1920, h: 1080, dpr: 1}), qualityPresets: ATMOSPHERE_QUALITY, timers: o.timers}); },
+    controlsForm: box => { mountControlsForm(box, store, {idPrefix: 'mm-set-'}); }, // (task studio-alpha-survival-controls-20261107-060450-01)
   });
   const overlay = title.querySelector('.mm-overlay')!, dialog = title.querySelector('.mm-dialog')!;
   const btn = (id: string, inDialog = ctl.view !== 'main') => (inDialog ? dialog : root).querySelector(`[data-action="${id}"]`);
@@ -375,12 +376,49 @@ describe('item 4: submenus open front and centre (the real view)', () => {
     const m = mountMenu();
     try {
       m.press(m.btn('settings'));
-      const first = m.dialog.querySelector('#mm-set-sens');
+      const first = m.dialog.querySelector('#mm-set-fov'); // (the input preferences moved to Controls: task studio-alpha-survival-controls-20261107-060450-01)
       expect(m.dom.doc.activeElement).toBe(first);
       m.ctl.setBoot(true, 1);
       m.ctl.refresh(); // a controller re-render
       expect(m.dom.doc.activeElement).toBe(first);
     } finally { m.dom.uninstall(); }
+  });
+
+  // Task studio-alpha-survival-controls-20261107-060450-01: the input preferences moved from Settings to Controls (main menu + pause)
+  it('Controls carries the input preferences (sensitivity, invert X / Y) above the bindings and opens on them; Settings no longer does', () => {
+    const m = mountMenu();
+    try {
+      m.press(m.btn('settings'));
+      const boxes = m.dialog.querySelectorAll('.mm-settings'); // [the Settings form, the Controls form]
+      expect(boxes[1].classList.contains('mm-controls-form')).toBe(true);
+      const setIds = boxes[0].querySelectorAll('input').map(i => i.id);
+      expect(setIds).not.toContain('mm-set-sens');
+      expect(setIds).not.toContain('mm-set-invert-x');
+      expect(setIds).not.toContain('mm-set-invert');
+      expect(setIds).toEqual(expect.arrayContaining(['mm-set-fov', 'mm-set-vol', 'mm-set-mute', 'mm-set-sway', 'mm-set-res']));
+      expect(m.dialog.querySelector('.mm-controls-form')!.classList.contains('hidden')).toBe(true);
+      m.press(m.btn('back'));
+      m.press(m.btn('controls'));
+      const form = m.dialog.querySelector('.mm-controls-form')!;
+      expect(form.classList.contains('hidden')).toBe(false);
+      expect(form.querySelectorAll('input').map(i => i.id)).toEqual(['mm-set-sens', 'mm-set-invert-x', 'mm-set-invert']);
+      expect(m.dom.doc.activeElement).toBe(m.dialog.querySelector('#mm-set-sens')); // the view opens on its first control
+      expect(m.dialog.querySelector('.mm-controls')!.classList.contains('hidden')).toBe(false); // the bindings stay
+      // the sensitivity slider writes the one store
+      const sens = m.dialog.querySelector('#mm-set-sens') as unknown as MiniEl & {value: string; dispatchEvent(e: MiniEvent): void};
+      sens.value = '1.5'; sens.dispatchEvent(new MiniEvent('input'));
+      expect(m.store.get().sens).toBe(1.5);
+      m.press(m.btn('back'));
+      expect(m.ctl.view).toBe('main');
+    } finally { m.dom.uninstall(); }
+  });
+
+  it('the pause menu: a Settings and a Controls section (input preferences + bindings), mounted from the one store', () => {
+    const html = SRC('index.html'), main = SRC('src/main.ts');
+    expect(html.indexOf('id="pause-settings"')).toBeLessThan(html.indexOf('id="pause-controls-form"'));
+    expect(html.indexOf('id="pause-controls-form"')).toBeLessThan(html.indexOf('id="controls-pause"'));
+    expect(main).toMatch(/mountControlsForm\(\$\('#pause-controls-form'\), settings, \{idPrefix: 'set-'\}\)/);
+    expect(main).toMatch(/controlsForm: box => \{ mountControlsForm\(box, settings, \{idPrefix: 'mm-set-'\}\); \}/);
   });
 
   it('mainModel() is the main list whatever submenu is on top (the side column\'s content)', async () => {
@@ -801,13 +839,15 @@ describe('item 9 / DEATH (real Game methods, recorded fakes)', async () => {
 });
 
 // Task studio-beta-mouse-axis-invert-20261105-005156-01 (user: "They want invert option on the X / Y axis of the mouse!")
-describe('mouse axis inverts: two separate toggles in the main-menu Settings and the pause form (one store)', () => {
+// Task studio-alpha-survival-controls-20261107-060450-01 (user: control-related settings belong in Controls, not Settings): the toggles
+// (and the sensitivity) live in the Controls view / the pause menu's Controls form now — the same store and ids.
+describe('mouse axis inverts: two separate toggles in the main-menu Controls and the pause Controls form (one store)', () => {
   type Box = MiniEl & {checked: boolean; dispatchEvent(e: MiniEvent): void};
   it('"Invert mouse X" and "Invert mouse Y": both off by default, each sets and persists only its own key, the other form follows', () => {
     const mem = new MemStorage();
     const m = mountMenu(new Host(), {store: new SettingsStore(mem)});
     try {
-      m.press(m.btn('settings'));
+      m.press(m.btn('controls'));
       const x = m.dialog.querySelector('#mm-set-invert-x') as unknown as Box, y = m.dialog.querySelector('#mm-set-invert') as unknown as Box;
       expect(x.parentElement!.textContent).toContain('Invert mouse X');
       expect(y.parentElement!.textContent).toContain('Invert mouse Y');
@@ -828,7 +868,7 @@ describe('mouse axis inverts: two separate toggles in the main-menu Settings and
       // the in-game pause form (prefix set-) over the same store shows the same state and writes the same keys
       const box = m.dom.doc.createElement('div');
       m.dom.doc.body.appendChild(box);
-      mountSettingsForm(box as unknown as HTMLElement, m.store, {idPrefix: 'set-', viewport: () => ({w: 1920, h: 1080, dpr: 1}), qualityPresets: ATMOSPHERE_QUALITY});
+      mountControlsForm(box as unknown as HTMLElement, m.store, {idPrefix: 'set-'});
       const px = box.querySelector('#set-invert-x') as unknown as Box, py = box.querySelector('#set-invert') as unknown as Box;
       expect([!!px.checked, !!py.checked]).toEqual([false, true]);
       flip(px, true);

@@ -26,6 +26,7 @@ import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {SKYWAYS_DEST_PROPS, type SkywaysDestPropKey} from '../src/assets/skywaysDestProps.generated';
 import {SKYWAYS_DEST_ART, SKYWAYS_DEST_PLAQUE_BY_LANDMARK} from '../src/assets/skywaysDestArt.generated';
+import {SCIENCE_ART} from '../src/gen/skyways/stores/scienceArt.generated'; // task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-SCIENCE)
 import {DEST_PLAQUE_OF, DEST_PLAQUE_PIECES, DEST_POSTER, DEST_POSTER_PIECES} from '../src/gen/skyways/destinations/art';
 import {DEST_POSTER_BASE_Y, LANDMARK_KIND, LANDMARK_ROUND, LANDMARK_SCALE, LANDMARKS_KINDS, destCollisionOnly, landmarkUppers} from '../src/gen/skyways/destinations/kindsLandmarks';
 import {SKYWAYS_DEST_KINDS, SKYWAYS_DEST_SPECS, type SkywaysDestKind} from '../src/gen/skyways/destinations/registry';
@@ -429,11 +430,12 @@ describe('world/skywaysDestinations.ts + skywaysDestRuntime.ts: every destinatio
       load: async (level, url) => { asked.push(`${level}:${url}`); return url.includes('plaques') ? null : new THREE.Texture(); },
       own: (_l, r) => { owned.push(r); return r; }}});
     await rt.preload(layout);
-    expect(asked.sort()).toEqual([`skyways:${SKYWAYS_DEST_ART.plaques.url}`, `skyways:${SKYWAYS_DEST_ART.posters.url}`]);
+    // (+ lane STORE-SCIENCE: the sample places every destination kind, the science store's wall art too -> its atlas, one more owned material)
+    expect(asked.sort()).toEqual([`skyways:${SKYWAYS_DEST_ART.plaques.url}`, `skyways:${SKYWAYS_DEST_ART.posters.url}`, `skyways:${SCIENCE_ART.url}`]);
     for (const u of asked) expect(levelOfAsset(u.slice('skyways:'.length)), u).toBe('skyways');
     expect(skywaysDestArtLoaded('posters')).toBe(true);
     expect(skywaysDestArtLoaded('plaques')).toBe(false);
-    expect(owned.length).toBe(1);
+    expect(owned.length).toBe(2);
     expect(rt.counts).toEqual({artLoaded: 1, artMissing: 1});
     setSkywaysDestArtMaterial('posters', null);
     asked.length = 0;

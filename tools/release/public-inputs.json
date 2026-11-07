@@ -5,13 +5,13 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 52440,
-      "sha256": "3ebdff5f608a9034524c8110335dd28bd963eb9c164b8fa201790c67f30b7e1a"
+      "bytes": 58630,
+      "sha256": "41a66f750ba1e49bfe3653222603260d15b1cd2254afa2d88c8cff39f20e2429"
     },
     {
       "path": "assets/audio/NOTICE.md",
-      "bytes": 2298,
-      "sha256": "73ca53424184c66caf17ef561c42978c80e62a3703548ef37ae9e36b649233d3"
+      "bytes": 2400,
+      "sha256": "76b66e652196dd09d94795169b92f146770251c0254e1d4e5c4f7e5ebb3fab19"
     },
     {
       "path": "assets/audio/bed-buzz-02-loop.mp3",
@@ -94,6 +94,11 @@
       "sha256": "2a002263494a0295313ba44c8c9cd9d70a291ba2ecd320b836fa1ecaacc5c171"
     },
     {
+      "path": "assets/audio/car-brake.mp3",
+      "bytes": 14001,
+      "sha256": "4f8cf65f6248b1ecd8c4a3470ecacfb24e99cd918b5ebe60e109033d13d23e33"
+    },
+    {
       "path": "assets/audio/car-door.mp3",
       "bytes": 14210,
       "sha256": "34fa395aab37cd4b5340aecf827377fa7ef6a7310f35231101e9bc5b1e5d2291"
@@ -101,12 +106,22 @@
     {
       "path": "assets/audio/car-engine-drive-loop.mp3",
       "bytes": 21106,
-      "sha256": "3aec0dfccce66b8cc9e6029937b840eb65e5171e88ef47ddf623c67202f5b91b"
+      "sha256": "09f8a9cbd94637967742a34a9f3ffa054e121784077773819ba7ed7e82b51359"
     },
     {
       "path": "assets/audio/car-engine-idle-loop.mp3",
       "bytes": 21106,
-      "sha256": "9f0c271b94d3b4739cc4cb5ef047818a160185fa34f2ac06dbb1619acaec2714"
+      "sha256": "ad06c1566cc2d002eefd8312c567df304a6fcf38b7ca0f61f2c3fc595b9b0563"
+    },
+    {
+      "path": "assets/audio/car-engine-start.mp3",
+      "bytes": 21106,
+      "sha256": "be0896066e2aa0c987a6c4fc3591b31ffcf49427d2423d653cf8ec7cb41417be"
+    },
+    {
+      "path": "assets/audio/car-reverse-loop.mp3",
+      "bytes": 13374,
+      "sha256": "a5e8b0b294fd47cd11f9e959c1b2dccd9a4498e021ec86a0a7b0334c1a1eaf03"
     },
     {
       "path": "assets/audio/car-skid.mp3",
@@ -1670,8 +1685,8 @@
     },
     {
       "path": "assets/derivatives/audio-skyways-car.json",
-      "bytes": 6147,
-      "sha256": "99fc2e1ea561846af6e9e25293805851325a13b6657480a68fc9587a98e85b9d"
+      "bytes": 18483,
+      "sha256": "d8f140d4af18467393d1555137b3ad7b598e52708bee6488cc1cf08f694d86d8"
     },
     {
       "path": "assets/derivatives/audio-skyways-destinations.json",
@@ -1967,6 +1982,26 @@
       "path": "assets/derivatives/rifle-optic-iteration04.json",
       "bytes": 10032,
       "sha256": "e0061f969f5ddcce652f6cfd022ba31106adbdd83b738aea71ae31669cee83d2"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-brick-wall.json",
+      "bytes": 2590,
+      "sha256": "523e930332919c145a7420bf6e02a77e2aa447f298a7c8dd1ba2ead9fbf7c6f2"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-herringbone.json",
+      "bytes": 2588,
+      "sha256": "93e92aaf5e4bd538a5043936008987c869d208c347d28b722f7dde56fde83ad4"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-pavers.json",
+      "bytes": 2562,
+      "sha256": "e2297ade87b80a20b323852b8bd25a13b90ecbf0bdac603da08d4063bc765741"
+    },
+    {
+      "path": "assets/derivatives/skyways-arch-wood-slats.json",
+      "bytes": 2589,
+      "sha256": "b19afe2852cd7ce559d6c479d8f57c371d4abe0c5d2605550f215b96025a21b2"
     },
     {
       "path": "assets/derivatives/skyways-car-dash-model.json",
@@ -2299,9 +2334,19 @@
       "sha256": "36cea54c291259d32bade5b0911f262bb8a646026887bdfd385cfee33a2209f1"
     },
     {
+      "path": "assets/derivatives/skyways-store-art-20261107.json",
+      "bytes": 60076,
+      "sha256": "fdb316c2f18e790882cb482b212caf35de428a029d457f3d55fab65ba462c327"
+    },
+    {
       "path": "assets/derivatives/skyways-sushi-mascot.json",
       "bytes": 3347,
       "sha256": "717d6975e384ac23a480a97fa4b2bb939b6922e7ccbb09dcf175af64df6cdc9b"
+    },
+    {
+      "path": "assets/derivatives/skyways-venue-art.json",
+      "bytes": 9512,
+      "sha256": "50494e1803ba773cf7756176f3f8e23a1f446b586a27e1b07e58ce14518bb6cc"
     },
     {
       "path": "assets/derivatives/skyways-wreck-army-truck.json",
@@ -4769,6 +4814,26 @@
       "sha256": "639a45cd6f5a0b0a11dae3e7005392fe4cfc4a7f2c3b656b9e3b8be7c51b74fd"
     },
     {
+      "path": "assets/textures/skyways/arch/skyways-arch-brick-wall.jpg",
+      "bytes": 236194,
+      "sha256": "c6094083d0ccc87bba9477cb531f4708483af9c6ad6d9f8d8ed90ac8b1693e82"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-herringbone.jpg",
+      "bytes": 208710,
+      "sha256": "a5b47023f7aa57cf22bc59921135aa915b97af94ddd1d8fc74ff8176532dbc7d"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-pavers.jpg",
+      "bytes": 177666,
+      "sha256": "ddb82a28af1eb8ea63153fad1f8b50827cde232ffea76531dd177db23387c679"
+    },
+    {
+      "path": "assets/textures/skyways/arch/skyways-arch-wood-slats.jpg",
+      "bytes": 135544,
+      "sha256": "3f3fc0b3cc66cac1b8b4029d6fe5c92efb67525aedbc0e8c6c8ad157c3828b2c"
+    },
+    {
       "path": "assets/textures/skyways/skyways-con-banners.jpg",
       "bytes": 404398,
       "sha256": "76650d4d903dc650511250a376525173fbb20cc59f29d39d1e68b0b2da08474f"
@@ -4807,6 +4872,41 @@
       "path": "assets/textures/skyways/skyways-ramen-art.jpg",
       "bytes": 457852,
       "sha256": "9f1b40a4e9cb97b70264d69c6a0cd1d9c439a07a532093842db6f4ed35d6742f"
+    },
+    {
+      "path": "assets/textures/skyways/skyways-venue-art.jpg",
+      "bytes": 650289,
+      "sha256": "19f89351a58f6a0a36adaf3adbdd8ea6a475fcceb231b35990239796c6edac02"
+    },
+    {
+      "path": "assets/textures/skyways/stores/books/skyways-store-books-art.jpg",
+      "bytes": 235936,
+      "sha256": "3f49ebc115a59fdc968d8ccf63fad33e6e89f513aa646d10e2e2a315f20a56ae"
+    },
+    {
+      "path": "assets/textures/skyways/stores/cinema/cinema-art.jpg",
+      "bytes": 614283,
+      "sha256": "ad6d1e2b4ffb12522794337af8c58603aefc9a5feb38d1353b38bbd84d75f5a0"
+    },
+    {
+      "path": "assets/textures/skyways/stores/design/skyways-store-design-prints.jpg",
+      "bytes": 219687,
+      "sha256": "13278f8e58a44fc44aaec1bc1b8c6bc59a954fb5805f4c3d9a88ef11fd46a465"
+    },
+    {
+      "path": "assets/textures/skyways/stores/music/music-covers.jpg",
+      "bytes": 1100565,
+      "sha256": "64e412a156191029e5b8a0f96dce2fe5d9f5a8666a6db413d71c3b8fa476599c"
+    },
+    {
+      "path": "assets/textures/skyways/stores/music/music-signs.jpg",
+      "bytes": 567200,
+      "sha256": "e2fa1c95ecf4ec6a6380d8abd125add19a31609700ceff9a1b6a35335588dd6c"
+    },
+    {
+      "path": "assets/textures/skyways/stores/science/science-art.jpg",
+      "bytes": 1072718,
+      "sha256": "b99893617b40127d854ee4f03039532805fd1f55a93ae04108d20c1ea0cf9ca5"
     },
     {
       "path": "assets/textures/train/train-int-bulkhead.jpg",

@@ -61,6 +61,7 @@ export class Input {
 
   constructor(private readonly canvas: HTMLCanvasElement, readonly qa: boolean) {
     window.addEventListener('keydown', e => {
+      if (this.suppressed.has(e.code)) { e.preventDefault(); return; } // (a key an overlay closed with: ignored until released)
       if ((e.target as HTMLElement)?.tagName === 'INPUT' && e.code !== 'Tab' && e.code !== 'Escape') return;
       if (e.code === MELEE_KEY && !isMeleeKey(e)) return; // SLOT: Ctrl / Alt / Meta + ` or typing: not the game's (not consumed)
       if (shouldPreventKey(e, this.active)) e.preventDefault();
@@ -70,7 +71,7 @@ export class Input {
       }
       this.keys.add(e.code);
     });
-    window.addEventListener('keyup', e => { this.keys.delete(e.code); });
+    window.addEventListener('keyup', e => { this.keys.delete(e.code); this.suppressed.delete(e.code); });
     window.addEventListener('blur', () => this.clear());
     // Ask before leaving a run in progress (not in QA automation).
     window.addEventListener('beforeunload', e => {
@@ -163,6 +164,18 @@ export class Input {
   }
   hit(code: string): boolean {
     return this.pressed.has(code);
+  }
+
+  /**
+   * Task studio-alpha-survival-controls-20261107-060450-01: the keys an overlay consumed (the train map closed with E / Tab) — their
+   * auto-repeat / still-held keydowns are ignored until the key is released, so a held E never starts a hold-to-take, a held Tab never
+   * opens the inventory.
+   */
+  private readonly suppressed = new Set<string>();
+  suppressUntilRelease(code: string): void {
+    this.suppressed.add(code);
+    this.keys.delete(code);
+    this.pressed.delete(code);
   }
 
   clear(): void {

@@ -13,14 +13,25 @@
 // asset: assets/levelAssets.ts 'skyways'). Without the model (Node tests, a failed fetch) a simple STAND-IN body (named
 // 'skyways-car-stand-in', a console warning) keeps the car drivable; a car built before the model arrived is upgraded in place.
 
+//
+// Task skyways-vehicle-20261107 (lane VIS): the Meshy dash's steering wheel TURNS — the baked wheel is separated from the dash at load
+// (world/skywaysCarWheel.ts splitWheel: a triangle partition, two geometries over the SAME vertex attributes, one split per loaded GLB
+// shared by every view) and mounted on a pivot turning about its measured axis (WHEEL_RIM), in the dash's own material; the LAMPS
+// (world/skywaysCarLights.ts): the body's own lamp triangles drawn again as glowing lenses (one shared material per loaded GLB), plain
+// lens boxes on the stand-in.
+
 import * as THREE from 'three';
 import {GLTFLoader, type GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {assetUrl} from '../assets/loader';
 import type {CarSpec} from './skywaysCarSpec';
 import {COCKPIT_URLS, FILL_COLOR, cockpitLayout, fillMesh} from './skywaysCarCockpit';
+import {WHEEL_RIM, ringNormal, splitWheel, type WheelSplit} from './skywaysCarWheel';
+import {CAR_LAMPS, lampTriangles, lensMaterialFrom} from './skywaysCarLights';
 
 /** Steering-wheel turns per front-wheel radian (a quick rack: full lock 0.55 rad ~ 140°). */
 export const WHEEL_RATIO = 4.4;
+/** (lane VIS) The wheel follows the steering through a light exponential ease (time constant, s: a ~0.04 s lag, never steppy). */
+export const WHEEL_EASE = 0.04;
 
 export interface CarModels { car: GLTF | null; dash: GLTF | null; seat: GLTF | null }
 const NO_MODELS: CarModels = {car: null, dash: null, seat: null};
@@ -49,6 +60,9 @@ export function loadSkywaysCarModel(spec: CarSpec): Promise<CarModels> {
     const [car, dash, seat] = await Promise.all([one(spec.url), one(COCKPIT_URLS.dash), one(COCKPIT_URLS.seat)]);
     loaded = {car, dash, seat};
     carModelsGen++;
+    // (lane VIS) the wheel split and the lamp lenses now, behind the loading screen (cached: the views only look them up)
+    if (dash) dashWheel(dash);
+    if (car) carLens(car);
     return loaded;
   })();
   return cache;
@@ -66,6 +80,7 @@ export function releaseSkywaysCarModel(): boolean {
       mat.dispose();
     }
   });
+  dropDerived();
   loaded = NO_MODELS;
   cache = null;
   cacheUrls = '';
@@ -75,8 +90,107 @@ export function releaseSkywaysCarModel(): boolean {
 
 /** Tests: models injected (or cleared) without a fetch. */
 export function setSkywaysCarModelsForTests(m: CarModels): void {
+  dropDerived();
   loaded = m;
   carModelsGen++;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------
+// (lane VIS) Derived per loaded GLB: the dash's wheel split, the body's lamp lenses (built once, shared by every view)
+
+/** The meshes under a root in traversal order (a clone lists its meshes in the source's order). */
+function meshesOf(root: THREE.Object3D): THREE.Mesh[] {
+  const out: THREE.Mesh[] = [];
+  root.traverse(o => { if ((o as THREE.Mesh).isMesh) out.push(o as THREE.Mesh); });
+  return out;
+}
+
+/** An attribute's xyz as a plain array (interleaved or not). */
+function xyzOf(a: THREE.BufferAttribute | THREE.InterleavedBufferAttribute): Float32Array {
+  const out = new Float32Array(a.count * 3);
+  for (let i = 0; i < a.count; i++) { out[3 * i] = a.getX(i); out[3 * i + 1] = a.getY(i); out[3 * i + 2] = a.getZ(i); }
+  return out;
+}
+
+/** A geometry drawing `tris` of `src` over its OWN attributes (shared, not copied); its bounds from the referenced vertices only. */
+function subGeometry(src: THREE.BufferGeometry, tris: Uint32Array, name: string): THREE.BufferGeometry {
+  const g = new THREE.BufferGeometry();
+  g.name = name;
+  for (const [k, a] of Object.entries(src.attributes)) g.setAttribute(k, a);
+  const pos = src.getAttribute('position');
+  g.setIndex(new THREE.BufferAttribute(pos.count <= 65535 ? Uint16Array.from(tris) : tris, 1));
+  const box = new THREE.Box3(), p = new THREE.Vector3();
+  for (let k = 0; k < tris.length; k++) box.expandByPoint(p.fromBufferAttribute(pos, tris[k]));
+  g.boundingBox = box;
+  g.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
+  return g;
+}
+
+/** The dash's wheel split for one loaded dash GLB: which mesh (traversal index), the two geometries, the partition's counts. */
+export interface DashWheel { mesh: number; dash: THREE.BufferGeometry; wheel: THREE.BufferGeometry; stats: WheelSplit['stats'] }
+/** The body's lamp lenses for one loaded car GLB: the body mesh (traversal index), the lens geometry and its ONE shared material. */
+export interface CarLens { mesh: number; geo: THREE.BufferGeometry; material: THREE.MeshStandardMaterial; tris: number }
+
+let wheelCache: {src: GLTF; v: DashWheel | null} | null = null;
+let lensCache: {src: GLTF; v: CarLens | null} | null = null;
+
+function dropWheel(): void {
+  if (wheelCache?.v) { wheelCache.v.dash.dispose(); wheelCache.v.wheel.dispose(); }
+  wheelCache = null;
+}
+function dropLens(): void {
+  if (lensCache?.v) { lensCache.v.geo.dispose(); lensCache.v.material.dispose(); } // (the lens shares the body's textures: they go with the GLB)
+  lensCache = null;
+}
+function dropDerived(): void {
+  dropWheel();
+  dropLens();
+}
+
+/** Sanity bounds of a wheel split (a re-cooked dash that no longer matches WHEEL_RIM keeps its wheel still rather than tearing). */
+export const WHEEL_SPLIT_SANITY = {minTris: 1000, maxShare: 0.35} as const;
+
+/**
+ * The dash GLB's steering wheel separated (cached per GLB; null: no plausible wheel at WHEEL_RIM — the dash stays whole and still, a
+ * console warning).
+ */
+export function dashWheel(g: GLTF): DashWheel | null {
+  if (wheelCache?.src === g) return wheelCache.v;
+  dropWheel();
+  let v: DashWheel | null = null;
+  const meshes = meshesOf(g.scene);
+  for (let i = 0; i < meshes.length && !v; i++) {
+    const geo = meshes[i].geometry, pos = geo.getAttribute('position');
+    if (!pos) continue;
+    const split = splitWheel(xyzOf(pos), geo.index ? geo.index.array : null, WHEEL_RIM);
+    const s = split.stats;
+    if (s.wheel < WHEEL_SPLIT_SANITY.minTris || s.wheel > s.tris * WHEEL_SPLIT_SANITY.maxShare) continue;
+    v = {mesh: i, dash: subGeometry(geo, split.dash, 'skyways-car-dash-body'), wheel: subGeometry(geo, split.wheel, 'skyways-car-dash-wheel'), stats: s};
+  }
+  if (!v && typeof document !== 'undefined') console.warn('skyways car: no steering wheel found in the dash model (kept still)');
+  wheelCache = {src: g, v};
+  return v;
+}
+
+/** Sanity bounds of the lamp lenses (a re-cooked body that no longer matches CAR_LAMPS shows no lenses rather than odd patches). */
+export const LENS_SANITY = {minTris: 100, maxTris: 4000} as const;
+
+/** The car GLB's lamp lenses (cached per GLB; null: none found — the beam still works). */
+export function carLens(g: GLTF): CarLens | null {
+  if (lensCache?.src === g) return lensCache.v;
+  dropLens();
+  let v: CarLens | null = null;
+  const meshes = meshesOf(g.scene);
+  for (let i = 0; i < meshes.length && !v; i++) {
+    const m = meshes[i], geo = m.geometry, pos = geo.getAttribute('position'), nrm = geo.getAttribute('normal');
+    if (!pos || !nrm || isGlass(m) || Array.isArray(m.material)) continue;
+    const tris = lampTriangles(xyzOf(pos), xyzOf(nrm), geo.index ? geo.index.array : null);
+    const n = tris.length / 3;
+    if (n < LENS_SANITY.minTris || n > LENS_SANITY.maxTris) continue;
+    v = {mesh: i, geo: subGeometry(geo, tris, 'skyways-car-lamp-lens'), material: lensMaterialFrom(m.material), tris: n};
+  }
+  lensCache = {src: g, v};
+  return v;
 }
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -84,7 +198,7 @@ export function setSkywaysCarModelsForTests(m: CarModels): void {
 
 let shared: {
   trim: THREE.MeshStandardMaterial; dash: THREE.MeshStandardMaterial; seat: THREE.MeshStandardMaterial; wheel: THREE.MeshStandardMaterial; fill: THREE.MeshStandardMaterial;
-  standPaint: THREE.MeshStandardMaterial; standGlass: THREE.MeshStandardMaterial; standTyre: THREE.MeshStandardMaterial;
+  standPaint: THREE.MeshStandardMaterial; standGlass: THREE.MeshStandardMaterial; standTyre: THREE.MeshStandardMaterial; standLens: THREE.MeshStandardMaterial;
   box: THREE.BufferGeometry; ring: THREE.BufferGeometry; cyl: THREE.BufferGeometry;
 } | null = null;
 
@@ -103,6 +217,8 @@ export function carMaterials(): NonNullable<typeof shared> {
     standPaint: std('skyways-car-stand-in-paint', 0x8c1a16, {roughness: 0.35, metalness: 0.4}),
     standGlass,
     standTyre: std('skyways-car-stand-in-tyre', 0x121212, {roughness: 0.9}),
+    // (lane VIS) the stand-in's lamp lenses: dark glass until switched on (emissiveIntensity only)
+    standLens: std('skyways-car-stand-in-lens', 0x2a2d31, {roughness: 0.2, metalness: 0.1, emissive: CAR_LAMPS.lens.color, emissiveIntensity: 0}),
     box: new THREE.BoxGeometry(1, 1, 1),
     ring: new THREE.TorusGeometry(1, 0.1, 8, 28),
     cyl: new THREE.CylinderGeometry(1, 1, 1, 16, 1),
@@ -119,8 +235,15 @@ export interface CarView {
   body: THREE.Group;
   /** The cockpit (model or procedural). */
   cockpit: THREE.Group;
-  /** The steering wheel's spin pivot (rotation.z = the wheel turn), null for a cockpit model. */
+  /**
+   * The steering wheel's spin pivot (rotation.z = the wheel turn about its axis toward the driver): the procedural wheel's, or (lane VIS)
+   * the Meshy dash's separated wheel; null only when the dash model has no plausible wheel (it stays still).
+   */
   wheel: THREE.Object3D | null;
+  /** (lane VIS) The wheel's shown angle (rad, eased toward steer x WHEEL_RATIO). */
+  wheelAngle: number;
+  /** (lane VIS) The lamp lenses' ONE material (the model's shared lens material / the stand-in's), null: no lenses on this body. */
+  lens: THREE.MeshStandardMaterial | null;
   /** carModelsGen the body was built with; stand-in = no car model was available. */
   gen: number;
   standIn: boolean;
@@ -133,14 +256,23 @@ const isGlass = (m: THREE.Mesh): boolean => {
   return false;
 };
 
-/** The approved model: paint outside, the BackSide trim twin inside, the glass both sides in one pass. */
-function modelBody(g: GLTF): THREE.Group {
+/** The approved model: paint outside, the BackSide trim twin inside, the glass both sides in one pass; (lane VIS) the lamp lenses. */
+function modelBody(g: GLTF): {group: THREE.Group; lens: THREE.MeshStandardMaterial | null} {
   const S = carMaterials(), root = new THREE.Group();
   root.name = 'skyways-car-body';
   const scene = g.scene.clone(true);
   scene.name = 'skyways-car-model';
-  const meshes: THREE.Mesh[] = [];
-  scene.traverse(o => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+  const meshes = meshesOf(scene);
+  // (lane VIS) the lenses: the body's own lamp triangles over its paint (shared geometry + material, a child of that body mesh)
+  const L = carLens(g), host = L ? meshes[L.mesh] : undefined;
+  if (L && host) {
+    const lens = new THREE.Mesh(L.geo, L.material);
+    lens.name = 'skyways-car-lamp-lens';
+    lens.userData.carPart = 'lens';
+    lens.userData.noShadow = true;
+    lens.castShadow = false;
+    host.add(lens);
+  }
   for (const m of meshes) {
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     if (isGlass(m)) {
@@ -158,10 +290,10 @@ function modelBody(g: GLTF): THREE.Group {
     m.add(twin);
   }
   root.add(scene);
-  return root;
+  return {group: root, lens: L && host ? L.material : null};
 }
 
-/** No model (Node tests / a failed fetch): a plain coupe-sized stand-in, its cabin glazed so the view out still works. */
+/** No model (Node tests / a failed fetch): a plain coupe-sized stand-in, its cabin glazed so the view out still works; two lens boxes. */
 function standInBody(spec: CarSpec): THREE.Group {
   const S = carMaterials(), g = new THREE.Group();
   g.name = 'skyways-car-stand-in';
@@ -176,6 +308,8 @@ function standInBody(spec: CarSpec): THREE.Group {
     const t = new THREE.Mesh(S.cyl, S.standTyre);
     t.scale.set(w.r, 0.22, w.r); t.rotation.z = Math.PI / 2; t.position.set(w.x, w.y, w.z); t.userData.carPart = 'tyre'; g.add(t);
   }
+  const Lp = CAR_LAMPS.projector;
+  for (const sx of [-1, 1]) box(0.3, 0.07, 0.03, sx * Lp.x, Lp.y, -L / 2 - 0.005, S.standLens, 'lens').userData.noShadow = true;
   return g;
 }
 
@@ -237,7 +371,7 @@ function fillGeometry(spec: CarSpec): THREE.BufferGeometry {
  * The Meshy cockpit (car frame, world/skywaysCarCockpit.ts cockpitLayout): the dash (its wheel rim on the eye's x), the two seats turned to
  * face it, and the plain dark fillers. The parts keep their own materials (Meshy maps); nothing here casts a shadow.
  */
-function modelCockpit(spec: CarSpec, dash: GLTF, seat: GLTF): THREE.Group {
+function modelCockpit(spec: CarSpec, dash: GLTF, seat: GLTF): {group: THREE.Group; wheel: THREE.Object3D | null} {
   const S = carMaterials(), lay = cockpitLayout(spec), g = new THREE.Group();
   g.name = 'skyways-car-cockpit-model';
   const part = (m: GLTF, pose: {x: number; y: number; z: number; rotY: number; scale: number}, name: string) => {
@@ -248,15 +382,50 @@ function modelCockpit(spec: CarSpec, dash: GLTF, seat: GLTF): THREE.Group {
     s.scale.setScalar(pose.scale);
     s.traverse(o => { if ((o as THREE.Mesh).isMesh) o.userData.carPart = 'cockpit'; });
     g.add(s);
+    return s;
   };
-  part(dash, lay.dash, 'skyways-car-dash-model');
+  const wheel = mountWheel(dash, part(dash, lay.dash, 'skyways-car-dash-model'));
   lay.seats.forEach((p, i) => part(seat, p, i ? 'skyways-car-seat-right' : 'skyways-car-seat-left'));
   // the fillers: one mesh (firewall + shelves + tunnel + risers), built once per layout and shared by every view
   const fill = new THREE.Mesh(fillGeometry(spec), S.fill);
   fill.name = 'skyways-car-cockpit-fill';
   fill.userData.carPart = 'cockpit';
   g.add(fill);
-  return g;
+  return {group: g, wheel};
+}
+
+const AXIS_Z = new THREE.Vector3(0, 0, 1);
+
+/**
+ * (lane VIS) The dash clone's baked wheel made to turn: its mesh draws the split dash, and the separated wheel (the same material: the
+ * Meshy maps, one program) hangs under pivot (at WHEEL_RIM's centre, local +Z = the axis toward the driver) -> spin (rotation.z = the
+ * turn) -> the wheel mesh (the inverse of the pivot's frame: at turn 0 exactly where it was baked). Returns the spin (null: no wheel).
+ */
+function mountWheel(src: GLTF, dashRoot: THREE.Object3D): THREE.Object3D | null {
+  const sp = dashWheel(src), mesh = sp ? meshesOf(dashRoot)[sp.mesh] : undefined;
+  if (!sp || !mesh) return null;
+  mesh.geometry = sp.dash;
+  const R = WHEEL_RIM, [nx, ny, nz] = ringNormal(R);
+  const pivot = new THREE.Group();
+  pivot.name = 'skyways-car-wheel-pivot';
+  pivot.position.set(R.x, R.y, R.z);
+  pivot.quaternion.setFromUnitVectors(AXIS_Z, new THREE.Vector3(nx, ny, nz));
+  const spin = new THREE.Group();
+  spin.name = 'skyways-car-wheel-spin';
+  const w = new THREE.Mesh(sp.wheel, mesh.material);
+  w.name = 'skyways-car-wheel';
+  w.userData.carPart = 'cockpit';
+  w.quaternion.copy(pivot.quaternion).invert();
+  w.position.set(-R.x, -R.y, -R.z).applyQuaternion(w.quaternion);
+  mesh.add(pivot);
+  pivot.add(spin);
+  spin.add(w);
+  return spin;
+}
+
+/** The body (model or stand-in) and its lens material. */
+function bodyOf(spec: CarSpec, m: CarModels): {group: THREE.Group; lens: THREE.MeshStandardMaterial | null} {
+  return m.car ? modelBody(m.car) : {group: standInBody(spec), lens: carMaterials().standLens};
 }
 
 /** A car's view (car frame) from the current models (else the stand-in / procedural cockpit). */
@@ -264,13 +433,11 @@ export function buildCarView(spec: CarSpec): CarView {
   const m = skywaysCarModels();
   const group = new THREE.Group();
   group.name = 'skyways-car';
-  const body = m.car ? modelBody(m.car) : standInBody(spec);
+  const {group: body, lens} = bodyOf(spec, m);
   group.add(body);
-  let cockpit: THREE.Group, wheel: THREE.Object3D | null = null;
-  if (m.dash && m.seat) cockpit = modelCockpit(spec, m.dash, m.seat);
-  else ({group: cockpit, wheel} = proceduralCockpit(spec));
+  const {group: cockpit, wheel} = m.dash && m.seat ? modelCockpit(spec, m.dash, m.seat) : proceduralCockpit(spec);
   group.add(cockpit);
-  return {group, body, cockpit, wheel, gen: carModelsGen, standIn: !m.car};
+  return {group, body, cockpit, wheel, wheelAngle: 0, lens, gen: carModelsGen, standIn: !m.car};
 }
 
 /** Rebuild the body / cockpit from the current models (they arrived after the view was built). */
@@ -279,14 +446,19 @@ export function refreshCarView(v: CarView, spec: CarSpec): void {
   v.gen = carModelsGen;
   const m = skywaysCarModels();
   v.group.remove(v.body, v.cockpit);
-  v.body = m.car ? modelBody(m.car) : standInBody(spec);
+  ({group: v.body, lens: v.lens} = bodyOf(spec, m));
   v.standIn = !m.car;
-  if (m.dash && m.seat) { v.cockpit = modelCockpit(spec, m.dash, m.seat); v.wheel = null; }
-  else ({group: v.cockpit, wheel: v.wheel} = proceduralCockpit(spec));
+  ({group: v.cockpit, wheel: v.wheel} = m.dash && m.seat ? modelCockpit(spec, m.dash, m.seat) : proceduralCockpit(spec));
+  if (v.wheel) v.wheel.rotation.z = v.wheelAngle;
   v.group.add(v.body, v.cockpit);
 }
 
-/** The steering wheel shows the front-wheel angle (no allocation). */
-export function setWheel(v: CarView, steer: number): void {
-  if (v.wheel) v.wheel.rotation.z = steer * WHEEL_RATIO;
+/**
+ * The steering wheel shows the front-wheel angle x WHEEL_RATIO (no allocation): with dt, through the light WHEEL_EASE ease (the physics
+ * already eases the steering itself); without, at once.
+ */
+export function setWheel(v: CarView, steer: number, dt?: number): void {
+  const to = steer * WHEEL_RATIO;
+  v.wheelAngle = dt !== undefined && dt > 0 ? v.wheelAngle + (to - v.wheelAngle) * (1 - Math.exp(-dt / WHEEL_EASE)) : to;
+  if (v.wheel) v.wheel.rotation.z = v.wheelAngle;
 }

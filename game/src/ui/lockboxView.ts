@@ -8,6 +8,11 @@
 // lowers the lid (setLockboxOpen(false)).
 // While it is open the digit keys belong to it (consumed: never the quick slots or any other binding) and feed the developer code:
 // 1 3 3 7 drops the gear bundle into the Lockbox when ALL of it fits (items/devGrant.ts), else nothing changes.
+//
+// Task studio-beta-skyways-vehicle-20261107-054512-01 (lane TRUNK): LockboxView takes StoreViewOptions (its DOM id / CSS scope, the
+// name in the title and in running text, the slot count, the store side's columns and heading; default LOCKBOX_VIEW = the Lockbox
+// exactly as before) so the Skyways prize car's trunk (world/skywaysCarTrunk.ts) is the same view and the same Inventory.storeMove /
+// storeQuick / storeWornBag moves over its own slot list. The 1337 drop stays the Lockbox's (LockboxSystem only).
 
 import type {Game} from '../game';
 import {itemIconHtml} from './itemIcons';
@@ -70,16 +75,37 @@ export interface LockboxViewHost {
 
 type Side = 'hotbar' | 'pack' | 'store' | 'throw' | 'melee';
 const refOf = (el: HTMLElement | null): StoreSideRef | null => el && el.dataset.bar ? {bar: el.dataset.bar as Side, index: Number(el.dataset.index)} as StoreSideRef : null;
-const CLOSED_TEXT = 'Open the Lockbox (E) to reach into it.';
 
-const CSS = `
+/** (lane TRUNK) What the transfer view shows for its store (the Lockbox: LOCKBOX_VIEW). */
+export interface StoreViewOptions {
+  /** The root element's DOM id and CSS scope (one view per id). */
+  id: string;
+  /** The title / short name ('Lockbox'). */
+  name: string;
+  /** The store in running text ('the Lockbox'). */
+  the: string;
+  /** The store's slot count (the title counts the live list). */
+  slots: number;
+  /** The store side's grid columns. */
+  columns: number;
+  /** The store side's heading. */
+  heading: string;
+}
+
+export const LOCKBOX_VIEW: Readonly<StoreViewOptions> = Object.freeze({id: 'lockboxview', name: LOCKBOX_NAME, the: `the ${LOCKBOX_NAME}`, slots: LOCKBOX_SLOTS,
+  columns: 10, heading: 'Train storage · travels with you'});
+
+const capital = (t: string) => t.charAt(0).toUpperCase() + t.slice(1);
+
+/** The view's CSS scoped to its id (the Lockbox: exactly the original rules); the store grid takes its columns' share of the width. */
+const css = (id: string, columns: number) => `
 #lockboxview { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 92px; pointer-events: auto; cursor: default; }
 #lockboxview.hidden { display: none; }
-#lockboxview .lb-panel { width: min(1240px, calc(100vw - 24px)); background: rgba(16, 18, 20, 0.9); border: 1px solid #3a3f44; border-top: 3px solid var(--teal); padding: 10px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--cream); font-size: 13px; }
+#lockboxview .lb-panel { width: min(${Math.round((1240 * (7 + columns)) / 17)}px, calc(100vw - 24px)); background: rgba(16, 18, 20, 0.9); border: 1px solid #3a3f44; border-top: 3px solid var(--teal); padding: 10px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--cream); font-size: 13px; }
 #lockboxview .lb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 6px; }
 #lockboxview .lb-head b { font-size: 15px; letter-spacing: 0.04em; }
 #lockboxview .lb-live { color: var(--red); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
-#lockboxview .lb-cols { display: grid; grid-template-columns: 7fr 26px 10fr; gap: 8px; align-items: start; }
+#lockboxview .lb-cols { display: grid; grid-template-columns: 7fr 26px ${columns}fr; gap: 8px; align-items: start; }
 #lockboxview .lb-arrow { align-self: center; text-align: center; color: var(--cream-dim); font-size: 18px; }
 #lockboxview h4 { margin: 4px 0; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--cream-dim); font-weight: 600; }
 #lockboxview .slots { display: grid; gap: 6px; }
@@ -105,8 +131,9 @@ const CSS = `
 #lockboxview-ghost { position: fixed; left: -40px; top: -27px; width: 80px; height: 54px; z-index: 61; pointer-events: none; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(21, 23, 26, 0.88); border: 1px solid var(--teal); color: var(--cream); font-size: 11px; }
 #lockboxview-ghost img.ico3d { width: 70px; height: 34px; object-fit: contain; }
 #lockboxview-ghost svg { width: 46px; height: 24px; }
-`;
-let styled = false;
+${columns === 6 || columns === 7 || columns === 10 ? '' : `#lockboxview .lb-g${columns} { grid-template-columns: repeat(${columns}, 1fr); }\n`}`.split('#lockboxview').join(`#${id}`);
+/** CSS injected once per view id. */
+const styled = new Set<string>();
 
 export class LockboxView {
   private root: HTMLElement | null = null;
@@ -118,7 +145,7 @@ export class LockboxView {
   /** Last action (QA / tests). */
   last: {kind: string; from?: StoreSideRef; to?: StoreSideRef | null; result: string} | null = null;
 
-  constructor(private readonly host: LockboxViewHost) {}
+  constructor(private readonly host: LockboxViewHost, readonly opts: Readonly<StoreViewOptions> = LOCKBOX_VIEW) {}
 
   get visible(): boolean {
     return !!this.root && !this.root.classList.contains('hidden');
@@ -140,31 +167,33 @@ export class LockboxView {
 
   private mount(): void {
     if (this.root || typeof document === 'undefined') return;
-    if (!styled) {
-      styled = true;
+    const o = this.opts;
+    if (!styled.has(o.id)) {
+      styled.add(o.id);
       const st = document.createElement('style');
-      st.id = 'lockbox-styles';
-      st.textContent = CSS;
+      st.id = o.id === LOCKBOX_VIEW.id ? 'lockbox-styles' : `${o.id}-styles`;
+      st.textContent = css(o.id, o.columns);
       document.head.appendChild(st);
     }
     const el = document.createElement('section');
-    el.id = 'lockboxview';
+    el.id = o.id;
     el.className = 'hidden';
-    el.setAttribute('aria-label', LOCKBOX_NAME);
+    el.setAttribute('aria-label', o.name);
     el.innerHTML = `<div class="lb-panel">
-      <div class="lb-head"><b class="lb-title">${LOCKBOX_NAME}</b><span class="lb-live">● Not paused — keep an eye out</span></div>
+      <div class="lb-head"><b class="lb-title">${o.name}</b><span class="lb-live">● Not paused — keep an eye out</span></div>
       <div class="lb-cols">
         <div class="lb-side"><h4>Melee · quick slots · grenade slot</h4><div class="slots lb-g7" data-side="hotbar"></div><h4 class="lb-pockets">Pockets</h4><div class="slots lb-g6" data-side="pack"></div></div>
         <div class="lb-arrow">⇄</div>
-        <div class="lb-side"><h4>Train storage · travels with you</h4><div class="slots lb-g10" data-side="store"></div></div>
+        <div class="lb-side"><h4>${o.heading}</h4><div class="slots lb-g${o.columns}" data-side="store"></div></div>
       </div>
       <div class="lb-note"></div>
       <div class="lb-actions"><button class="lb-stow" type="button">Stow worn backpack</button><button class="lb-close primary" type="button">Close (E)</button></div>
-      <div class="lb-help">Click an item to move it across · drag onto a slot · Shift-drag splits · a backpack taken out is worn · walking away or getting hit closes the Lockbox</div>
+      <div class="lb-help">Click an item to move it across · drag onto a slot · Shift-drag splits · a backpack taken out is worn · walking away or getting hit closes ${o.the}</div>
     </div>`;
     (document.querySelector('#app') ?? document.body).appendChild(el);
     this.root = el;
-    const slotEl = (e: Event) => (e.target as HTMLElement | null)?.closest?.('#lockboxview .slot') as HTMLElement | null;
+    const slotSel = `#${o.id} .slot`;
+    const slotEl = (e: Event) => (e.target as HTMLElement | null)?.closest?.(slotSel) as HTMLElement | null;
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
       const ref = refOf(slotEl(e));
@@ -198,7 +227,7 @@ export class LockboxView {
         if (!this.visible || !st) { this.cancelDrag(); return; }
         d.active = true;
         const g = document.createElement('div');
-        g.id = 'lockboxview-ghost';
+        g.id = `${this.opts.id}-ghost`;
         g.innerHTML = `${itemIconHtml(st.itemId)}${d.count > 1 ? `<span class="count">×${d.count}</span>` : ''}`;
         document.body.appendChild(g);
         d.ghost = g;
@@ -213,7 +242,7 @@ export class LockboxView {
       this.suppressClick = true;
       setTimeout(() => { this.suppressClick = false; }, 0);
       const target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
-      const to = refOf(target?.closest?.('#lockboxview .slot') as HTMLElement | null);
+      const to = refOf(target?.closest?.(slotSel) as HTMLElement | null);
       this.cancelDrag();
       if (to && this.visible) this.move(d.from, to, d.count);
     });
@@ -235,14 +264,14 @@ export class LockboxView {
   /** Click-transfer to the other side (also the QA hook). Returns how many items moved. */
   quick(ref: StoreSideRef): number {
     const slots = this.host.slots(), inv = this.host.inv();
-    if (!slots) { this.say(CLOSED_TEXT, true); return 0; }
+    if (!slots) { this.say(this.closedText(), true); return 0; }
     const st = this.stackAt(ref);
     const name = st ? itemDef(st.itemId).short : '';
     const bag = ref.bar === 'store' && isBagItem(st?.itemId);
     const n = inv.storeQuick(slots, ref);
     this.last = {kind: 'quick', from: ref, result: String(n)};
-    if (n > 0) this.say(bag ? `Wearing the ${name.toLowerCase()} (its contents came with it)` : `${n > 1 ? `${n} × ` : ''}${name} → ${ref.bar === 'store' ? 'you' : LOCKBOX_NAME}`, false);
-    else if (inv.refusal) this.say(inv.refusal.text, true);
+    if (n > 0) this.say(bag ? `Wearing the ${name.toLowerCase()} (its contents came with it)` : `${n > 1 ? `${n} × ` : ''}${name} → ${ref.bar === 'store' ? 'you' : this.opts.name}`, false);
+    else if (inv.refusal) this.say(this.storeText(inv.refusal.text), true);
     this.host.changed();
     this.render();
     return n;
@@ -251,10 +280,10 @@ export class LockboxView {
   /** Drag-move (also the QA hook). */
   move(from: StoreSideRef, to: StoreSideRef, count?: number): string {
     const slots = this.host.slots(), inv = this.host.inv();
-    if (!slots) { this.say(CLOSED_TEXT, true); return 'closed'; }
+    if (!slots) { this.say(this.closedText(), true); return 'closed'; }
     const r = inv.storeMove(slots, from, to, count);
     this.last = {kind: 'move', from, to, result: r};
-    if (r === 'refused' && inv.refusal) this.say(inv.refusal.text, true);
+    if (r === 'refused' && inv.refusal) this.say(this.storeText(inv.refusal.text), true);
     else if (r !== 'none') this.say('', false);
     this.host.changed();
     this.render();
@@ -264,14 +293,25 @@ export class LockboxView {
   /** "Stow worn backpack": the worn bag (with its contents) into the first free Lockbox slot. */
   stow(): boolean {
     const slots = this.host.slots(), inv = this.host.inv();
-    if (!slots) { this.say(CLOSED_TEXT, true); return false; }
+    if (!slots) { this.say(this.closedText(), true); return false; }
     const worn = inv.worn('backpack'); // (task filter-tension-airtank: an Airtank Backpack is stowed whole too — name what went in)
     const ok = inv.storeWornBag(slots);
     this.last = {kind: 'stow', result: String(ok)};
-    this.say(ok ? (worn && !isBagItem(worn.itemId) ? `${itemDef(worn.itemId).name} stowed in the ${LOCKBOX_NAME}` : `Backpack stowed in the ${LOCKBOX_NAME} (its contents stay inside)`) : inv.refusal?.text ?? 'Nothing to stow.', !ok);
+    const the = this.opts.the;
+    this.say(ok ? (worn && !isBagItem(worn.itemId) ? `${itemDef(worn.itemId).name} stowed in ${the}` : `Backpack stowed in ${the} (its contents stay inside)`) : this.storeText(inv.refusal?.text ?? 'Nothing to stow.'), !ok);
     this.host.changed();
     this.render();
     return ok;
+  }
+
+  private closedText(): string {
+    return `Open ${this.opts.the} (E) to reach into it.`;
+  }
+
+  /** The Inventory's store refusals name the Lockbox: another store's view names itself (the Lockbox's own text is unchanged). */
+  storeText(text: string): string {
+    const the = this.opts.the, lb = LOCKBOX_VIEW.the;
+    return the === lb ? text : text.split(lb).join(the).split(capital(lb)).join(capital(the));
   }
 
   say(text: string, bad: boolean): void {
@@ -292,7 +332,7 @@ export class LockboxView {
       const count = def ? (w ? (w.melee ? '' : `<span class="count">${st!.mag}/${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
       const fx = def?.kind === 'consumable' ? effectText(def) : '';
       const inside = st?.bag ? ` (${st.bag.filter(Boolean).length} inside)` : '';
-      const verb = ref.bar === 'store' ? (st && isBagItem(st.itemId) ? 'to wear it' : 'to take it') : 'into the Lockbox';
+      const verb = ref.bar === 'store' ? (st && isBagItem(st.itemId) ? 'to wear it' : 'to take it') : `into ${this.opts.the}`;
       const title = def ? ` title="${def.name}${inside}${fx ? ` — ${fx}` : ''}. Click to move it ${verb} · drag to a slot"` : '';
       const extra = ref.bar === 'pack' && ref.index >= PACK_SIZE ? ' gear-extra' : '';
       const held = ref.bar === sel.bar && ref.index === sel.index ? ' held' : '';
@@ -311,12 +351,12 @@ export class LockboxView {
     const pk = root.querySelector('.lb-pockets');
     if (pk) pk.textContent = `Pockets · ${inv.pack.length}${ex ? ` (${PACK_SIZE} + ${ex} chest rig)` : ''}`;
     const tt = root.querySelector('.lb-title');
-    if (tt) tt.textContent = `${LOCKBOX_NAME} · ${slots.filter(Boolean).length}/${slots.length} slots used`; // (a runtime count: no bundled '/40' fragment, ci:package)
+    if (tt) tt.textContent = `${this.opts.name} · ${slots.filter(Boolean).length}/${slots.length} slots used`; // (a runtime count: no bundled '/40' fragment, ci:package)
     const stow = root.querySelector('.lb-stow') as HTMLButtonElement | null;
     if (stow) {
       const worn = inv.worn('backpack');
       stow.disabled = !worn;
-      stow.title = worn ? `Put your backpack (and everything in it) into the ${LOCKBOX_NAME}` : 'You are not wearing a backpack';
+      stow.title = worn ? `Put your backpack (and everything in it) into ${this.opts.the}` : 'You are not wearing a backpack';
     }
     const n = root.querySelector('.lb-note');
     if (n) { n.textContent = this.note; n.classList.toggle('refused', this.noteBad); }

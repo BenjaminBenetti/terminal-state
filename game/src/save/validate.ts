@@ -25,7 +25,7 @@ import {LOCKBOX_SLOTS} from '../run/trainLockbox';
 import {PLAYER_TRAIN_PARTICIPANT} from '../run/playerTrain';
 import {BAG_LANE} from '../run/bagStore';
 import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuelProblem, type FuelDebit} from '../fuel/fuel';
-import {SKYWAYS_CAR_LANE, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
+import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
 import {cargoProblem} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
@@ -478,7 +478,12 @@ function lanes(v: unknown, path: string): void {
   for (const k of keys) str(k, path, 48, LANE_ID, 'a lane id');
   if (has(o, BAG_LANE)) sectionBags(o[BAG_LANE], `${path}.${BAG_LANE}`);
   if (has(o, FUEL_LANE)) { const fp = stationFuelProblem(o[FUEL_LANE]); if (fp) bad(`${path}.${FUEL_LANE}`, fp); } // task train-fuel-system
-  if (has(o, SKYWAYS_CAR_LANE)) { const cp = skywaysCarProblem(o[SKYWAYS_CAR_LANE]); if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp); } // task skyways-level-20261106 (lane CAR)
+  if (has(o, SKYWAYS_CAR_LANE)) { // task skyways-level-20261106 (lane CAR)
+    const car = o[SKYWAYS_CAR_LANE], cp = skywaysCarProblem(car);
+    if (cp) bad(`${path}.${SKYWAYS_CAR_LANE}`, cp);
+    // task skyways-vehicle-20261107 (v2): the trunk's stacks as strictly as the Lockbox's (uids unique within it, bags, mags, filter, air)
+    if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
+  }
 }
 
 function pickup(v: unknown, path: string): void {

@@ -196,7 +196,7 @@ export class BlightBurstSystem {
         rec.blast.damage = r3(dmg);
         if (dmg >= 0.5) {
           const location = blastHitLocation(this.rand(), !!P.crouched);
-          const res = h.blastPlayer({amount: dmg, source: 'blast', location, attacker: 'blightbelly'}, cx, cz);
+          const res = h.blastPlayer({amount: dmg, source: 'blast', location, attacker: 'blightbelly', enemy: true}, cx, cz); // (enemy: task studio-alpha-survival-controls-20261107-060450-01)
           rec.blast.applied = r3(res.applied);
           rec.blast.location = location;
           this.counts.blasts++;

@@ -202,7 +202,8 @@ function bridgeHoles(b: {id: string; rect: SkywaysRect}, bridges: readonly Bridg
   return out;
 }
 
-interface BridgeRec { id: string; axis: 'x' | 'z'; rect: SkywaysRect; deckY: number; ceilY: number; breached: boolean }
+/** (springY: task studio-skyways-rework-20261107-054512-01, lane ARCH — a glazed roof springs there: no opaque roof, fascias stop under it) */
+interface BridgeRec { id: string; axis: 'x' | 'z'; rect: SkywaysRect; deckY: number; ceilY: number; breached: boolean; springY?: number }
 
 /** An atrium building's tower: the largest strip of the footprint beside the atrium (at least 6 m deep), else null. */
 export function towerStrip(r: SkywaysRect, atrium: SkywaysRect): SkywaysRect | null {
@@ -223,7 +224,7 @@ export function planSkywaysExterior(layout: StationLayout): SkywaysExteriorPlan 
   const bridges: BridgeRec[] = info.bridges.map(b => {
     const deckY = storeyY(b.level);
     const ceil = layout.areas[b.area]?.ceil;
-    return {id: b.id, axis: b.axis, rect: b.rect, deckY, ceilY: ceil !== undefined && ceil > deckY + 2 ? ceil : deckY + 3.5, breached: b.breached};
+    return {id: b.id, axis: b.axis, rect: b.rect, deckY, ceilY: ceil !== undefined && ceil > deckY + 2 ? ceil : deckY + 3.5, breached: b.breached, ...(b.roof ? {springY: b.roof.springY} : {})};
   });
   // --- shells ---
   const shells: ShellPlan[] = info.buildings.map(b => {
@@ -262,12 +263,14 @@ function planBridge(br: BridgeRec, info: SkywaysInfo): BridgePlan {
   const [lat0, lat1] = alongZ ? [d.x0, d.x1] : [d.z0, d.z1];
   const [al0, al1] = alongZ ? [d.z0, d.z1] : [d.x0, d.x1];
   const o0 = lat0 - CELL, o1 = lat1 + CELL;
-  const y0 = br.deckY - SKYWAYS_EXT.deckDepth, y1 = br.ceilY + SKYWAYS_EXT.roofDepth;
+  // (task studio-skyways-rework-20261107-054512-01, lane ARCH) a glazed roof (world/skywaysBridgeRoofs.ts, seen from inside and out):
+  // no opaque roof slab; the fascias / posts stop under the roof's wall plate at the springing line
+  const y0 = br.deckY - SKYWAYS_EXT.deckDepth, y1 = br.springY !== undefined ? br.springY - 0.03 : br.ceilY + SKYWAYS_EXT.roofDepth;
   const outer: SkywaysRect = alongZ ? {x0: o0, z0: al0, x1: o1, z1: al1} : {x0: al0, z0: o0, x1: al1, z1: o1};
   const faces: PlaneRect[] = [];
   // underside / roof (axis y: s = x, t = z)
   faces.push({axis: 'y', c: y0, n: -1, s0: outer.x0, s1: outer.x1, t0: outer.z0, t1: outer.z1});
-  faces.push({axis: 'y', c: y1, n: 1, s0: outer.x0, s1: outer.x1, t0: outer.z0, t1: outer.z1});
+  if (br.springY === undefined) faces.push({axis: 'y', c: y1, n: 1, s0: outer.x0, s1: outer.x1, t0: outer.z0, t1: outer.z1});
   const steel: ColorBox[] = [], glass: BridgePlan['glass'] = [];
   const sideAxis: 'x' | 'z' = alongZ ? 'x' : 'z';
   const box = (a0: number, a1: number, c0: number, c1: number, ya: number, yb: number): ColorBox => (alongZ
@@ -725,7 +728,9 @@ export class SkywaysExteriorRuntime {
     if (this.fogBox && this.fogBox.kind === kind && this.fogBox.id === id) return;
     this.fogBox = {kind, id};
     setExteriorFootprint(rect);
-    EXT_U.roofY.value = kind === 'atrium' ? -1e9 : 1e9;
+    // (lane ARCH) under a glazed bridge roof every exterior ray is outdoor too (the sky through the roof glass, as in an atrium)
+    const glazed = kind === 'bridge' && !!info.bridges.find(q => q.id === id)?.roof;
+    EXT_U.roofY.value = kind === 'atrium' || glazed ? -1e9 : 1e9;
   }
 
   /** The eye stands in an atrium building above the street and its vault is in the view frustum (within reach). */
