@@ -163,6 +163,16 @@ export class SkywaysArch {
         for (const id of up) this.anchorAreas.set(id, {family: an.family, zone: false, upper: true});
       }
       for (const id of an.zones) this.anchorAreas.set(id, {family: an.family, zone: true});
+      // (task studio-skyways-rework-integration-20261107-115426-01) the two-level store's own internal stair (gen/skyways/carve.ts
+      // carveRun 'shop-<family>': a stair core inside the store's footprint) is the store's too: its well and flight walls take the
+      // store's finish, not the public plaster
+      if (an.upper !== undefined) {
+        const r = an.rect, e = 1e-6;
+        for (const a of layout.areas) {
+          if ((a.type as string) !== 'stair-core') continue;
+          if (a.x * CELL >= r.x0 - e && (a.x + a.w) * CELL <= r.x1 + e && a.y * CELL >= r.z0 - e && (a.y + a.h) * CELL <= r.z1 + e) this.anchorAreas.set(a.id, {family: an.family, zone: false});
+        }
+      }
     }
     this.atriumRoof = new Float32Array(g0.w * g0.h);
     for (const b of this.info.buildings) {
@@ -301,10 +311,10 @@ export class SkywaysArch {
       const cls = this.classOf(f.area);
       // (task studio-alpha-skyways-shops-20261107-054512-01) an anchor store's walls ARE its storefront-unit walls (the builder draws them
       // 'tileShop'): they take the store's finish before the storefront rule, or the store reads as the Subway tile box
-      if (cls === 'anchor' && !f.slope) return {...f, finish: this.anchorWallKey(f.area)};
+      // (integration 20261107-115426: the internal stair's sloped flank faces too — a raking dado, never a strip of Subway tile)
+      if (cls === 'anchor') return {...f, finish: this.anchorWallKey(f.area)};
       if (f.finish === 'tileShop') return f;
       if (cls === 'station' || cls === 'shop') return f;
-      if (cls === 'anchor') return {...f, finish: this.anchorWallKey(f.area)};
       // (task studio-skyways-rework-20261107-054512-01, lane ARCH) a roofed bridge's side walls stop at the springing line (the glass
       // roof is there); a skylight coffer's well walls (the ceiling step over a skylit court) take the plain plaster of a light well;
       // the skylit / atrium courts' walls the textured brick

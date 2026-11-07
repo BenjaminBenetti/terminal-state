@@ -117,10 +117,10 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
       for (const f of w.wallFaces) {
         const cls = a.classOf(f.area);
         // (task studio-alpha-skyways-shops-20261107-054512-01) a store's own walls are its unit's 'tileShop' faces: every one takes the
-        // store's finish (never the Subway shop tile)
-        if (cls === 'anchor' && !f.slope) { expect(f.finish, 'a store wall').toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
+        // store's finish (never the Subway shop tile) — the flank faces of a two-level store's internal stair too (integration
+        // 20261107-115426)
+        if (cls === 'anchor') { expect(f.finish, 'a store wall').toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
         if (f.finish === 'tileShop' || cls === 'station' || cls === 'shop') { expect(f.finish.startsWith('skyways-'), `${f.finish} ${cls}`).toBe(false); continue; }
-        if (cls === 'anchor') { expect(f.finish).toMatch(/^skyways-anchor-wall-[a-z]+@/); expect(finishClass(f.finish)).not.toBeNull(); continue; }
         if (f.slope) { expect(['skyways-wall', 'skyways-boh']).toContain(f.finish); continue; }
         // (lane ARCH) a skylight coffer's well walls: the plain plaster of a light well
         const well = (L.skyways!.skylights ?? []).some(s => s.area === f.area && f.y0 >= s.ceilY - 0.02);
@@ -130,6 +130,18 @@ describe('SkywaysArch: the finishes of a real Skyways layout', () => {
         expect(['office', 'paint']).toContain(finishFamily(f.finish));
       }
       expect(w.wallFaces.filter(f => f.finish === 'skyways-wall').length).toBeGreaterThan(200);
+      // (integration 20261107-115426) a two-level store's own internal stair core (inside its footprint) is the store's: classed
+      // 'anchor', so its well and flight walls take the store's finish (seed 1 has one: the design store)
+      for (const an of (L.skyways!.anchors ?? []).filter(q => q.upper !== undefined)) {
+        const r = an.rect;
+        const cores = L.areas.filter(q => q.type === 'stair-core' && q.x * 0.5 >= r.x0 && (q.x + q.w) * 0.5 <= r.x1 && q.y * 0.5 >= r.z0 && (q.y + q.h) * 0.5 <= r.z1);
+        expect(cores.length, `${an.name}: its internal stair`).toBeGreaterThan(0);
+        for (const q of cores) {
+          expect(a.classOf(q.id), q.label).toBe('anchor');
+          expect(w.wallFaces.filter(f => f.area === q.id).every(f => f.finish.startsWith('skyways-anchor-wall-')), q.label).toBe(true);
+        }
+      }
+      if (seed === 1) expect((L.skyways!.anchors ?? []).some(q => q.upper !== undefined), 'seed 1 has a two-level store').toBe(true);
       // door frames: dark steel on the skyways storeys, the station's steel on the platforms
       expect(a.doorTrimKey(1, L.areas.find(q => skywaysAreaClass(q, bridges) === 'public'))).toBe('skyways-trim');
       expect(a.doorTrimKey(0, L.areas[L.platform])).toBeNull();
