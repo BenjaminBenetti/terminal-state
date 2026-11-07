@@ -7,7 +7,7 @@
 // Reads (never modifies) the private raw backup OUTSIDE Git (reference/tasks/skyways-rework-20261107-054512/shops/books/codex/:
 // LEDGER.jsonl, raw/<tag>-<session>-exec-<id>.png, prompts/<tag>.txt) and writes deterministically:
 //   game/public/assets/textures/skyways/stores/books/skyways-store-books-art.jpg   sRGB JPEG atlas (mozjpeg q85, 4:2:0, no metadata)
-//   game/public/assets/derivatives/skyways-store-books-art-20261107.json           provenance (ledger rows, sessions, prompt + raw sha256s,
+//   game/public/assets/derivatives/skyways-store-art-20261107.json           provenance (ledger rows, sessions, prompt + raw sha256s,
 //                                                                                  crop / placement rects)
 //   game/src/gen/skyways/stores/booksArt.generated.ts                              atlas url / size / per-piece UV rects (three.js
 //                                                                                  convention: v = 0 at the image bottom; inset half a texel)
@@ -17,6 +17,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {createRequire} from 'node:module';
+import {STORE_ART_PROV_REL, storeProvenanceBuffer} from '../storeProvenance.mjs'; // (primary, integration: one combined store-art provenance record)
 
 const require = createRequire(import.meta.url);
 const sharp = require('sharp');
@@ -26,7 +27,7 @@ const TASK = 'studio-alpha-skyways-shops-20261107-054512-01';
 const TASK_REL = 'reference/tasks/skyways-rework-20261107-054512/shops/books/codex';
 const PUB = path.join(root, 'game/public');
 const ATLAS_REL = 'assets/textures/skyways/stores/books/skyways-store-books-art.jpg';
-const PROV_REL = 'assets/derivatives/skyways-store-books-art-20261107.json';
+const PROV_REL = STORE_ART_PROV_REL;
 const TS_REL = 'game/src/gen/skyways/stores/booksArt.generated.ts';
 const ALLOW = path.join(root, 'tools/release/public-inputs.json');
 const W = 1024, H = 1024, QUALITY = 85, FILL = {r: 24, g: 24, b: 28};
@@ -134,7 +135,7 @@ const prov = {
   output: {path: ATLAS_REL, bytes: atlas.length, sha256: sha(atlas), width: W, height: H},
   sources,
 };
-const provBuf = Buffer.from(JSON.stringify(prov, null, 1) + '\n');
+const provBuf = storeProvenanceBuffer('books', prov);
 
 const q = s => `'${s}'`;
 const ts = [

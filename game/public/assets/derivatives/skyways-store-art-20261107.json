@@ -1,0 +1,1761 @@
+{
+ "schema": "last-line-derivative-set/1",
+ "asset": "skyways-store-art-20261107",
+ "task": "studio-alpha-skyways-shops-20261107-054512-01",
+ "note": "the Skyways major stores' Codex art provenance, one section per store (each written by that store's build script under tools/asset-pipeline/skyways-stores/<family>/); unapproved prototypes, provider terms apply, no licence or commercial clearance implied",
+ "stores": {
+  "books": {
+   "schema": "last-line-derivative/1",
+   "asset": "skyways-store-books-art-20261107",
+   "task": "studio-alpha-skyways-shops-20261107-054512-01",
+   "lane": "STORE-BOOKS (Skyways major store: Paper Prairie Books)",
+   "status": "runtime derivative (crop / resize / atlas pack only) of ORIGINAL static artwork generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways major stores (no numerical cap; 2 calls, both accepted at the first attempt); invented shop signage; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+   "use": "Paper Prairie Books (Skyways, layout version 3): the eight category signs on the bookcases' headers / the feature tables (skyBooksSign variants) and the two area rugs (skyBooksRug variants), drawn by game/src/world/skywaysStoreBooks.ts",
+   "rebuild": "node tools/asset-pipeline/skyways-stores/books/build-books-art.mjs",
+   "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/books/codex/{LEDGER.jsonl, raw/<tag>-<session>-exec-<id>.png, prompts/<tag>.txt} (private raw backup, outside Git)",
+   "generator": "Codex native image_gen (owned Codex CLI)",
+   "recipe": {
+    "crop": "each board / rug at its measured edge on the sheet (backdrop-difference mask: row bands, then column bands; 1 px inset)",
+    "resize": {
+     "kernel": "lanczos3",
+     "fit": "fill (the box's own aspect kept: signs 512 px wide, rugs 512 x 341)"
+    },
+    "colour": "sRGB, alpha removed",
+    "pack": "atlas 1024x1024, empty area rgb(24,24,28)",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    },
+    "uv": "three.js convention (v = 0 at the image bottom), each rect inset by half a texel",
+    "tool": "sharp (libvips) via tools/asset-pipeline/skyways-stores/books/build-books-art.mjs"
+   },
+   "output": {
+    "path": "assets/textures/skyways/stores/books/skyways-store-books-art.jpg",
+    "bytes": 235936,
+    "sha256": "3f49ebc115a59fdc968d8ccf63fad33e6e89f513aa646d10e2e2a315f20a56ae",
+    "width": 1024,
+    "height": 1024
+   },
+   "sources": [
+    {
+     "id": "books-01-signs",
+     "subject": "sheet of eight carved walnut bookshop category signs, cream-and-gold serif lettering (invented shop signage)",
+     "source": {
+      "file": "raw/books-01-signs-01a1b4b7-fdc3-7ab1-9759-447874509f08-exec-ce5d2951-efb6-4d6f-8cc2-4e045ef74969.png",
+      "sha256": "a5d55b1e432622ebc4e923e3a6e156043b28912956f05cc980076341a13b8362",
+      "bytes": 2281916,
+      "width": 1536,
+      "height": 1024
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "session": "01a1b4b7-fdc3-7ab1-9759-447874509f08",
+      "nativeOutput": "exec-ce5d2951-efb6-4d6f-8cc2-4e045ef74969.png",
+      "nativeSha256Matches": true,
+      "exit": 0,
+      "launched": "2026-11-07T06:35:19Z",
+      "finished": "2026-11-07T06:35:57Z"
+     },
+     "prompt": "A flat, straight-on, evenly lit product sheet of EIGHT separate hand-painted wooden bookshop category signs for an independent prairie bookshop, arranged in an exact grid of 2 columns by 4 rows on a plain flat charcoal-grey background, with equal clear gaps of background between the signs and a generous empty margin around the whole grid. Every sign is exactly the same size: a landscape rectangle three times as wide as it is tall, filling its grid cell. Each sign is a dark stained walnut board with a thin carved bevelled border, warm aged varnish and faint wood grain, lettered in large, clean, centred cream-and-gold serif capitals in classic sign-writer style, perfectly legible and spelled exactly as given, with no other words. Row 1, left: \"FICTION\"; row 1, right: \"LOCAL HISTORY\". Row 2, left: \"MAPS & TRAVEL\"; row 2, right: \"CHILDREN'S BOOKS\". Row 3, left: \"RARE BOOKS\"; row 3, right: \"POETRY\". Row 4, left: \"PRAIRIE AUTHORS\"; row 4, right: \"NEW & NOTABLE\". Front-on orthographic view with no perspective, no cast shadows, no hanging chains or hooks, no hands, no people, no logos, no watermark, no extra text.",
+     "promptSha256": "0fa1bfcae728e421614b9bc79a87cdce8dd04ec33c219c9751746aaf4d22f3ed",
+     "pieces": [
+      {
+       "piece": "fiction",
+       "source": [
+        56,
+        113,
+        690,
+        180
+       ],
+       "atlas": [
+        0,
+        0,
+        512,
+        134
+       ]
+      },
+      {
+       "piece": "local-history",
+       "source": [
+        790,
+        113,
+        690,
+        180
+       ],
+       "atlas": [
+        512,
+        0,
+        512,
+        134
+       ]
+      },
+      {
+       "piece": "maps-travel",
+       "source": [
+        56,
+        335,
+        690,
+        172
+       ],
+       "atlas": [
+        0,
+        136,
+        512,
+        128
+       ]
+      },
+      {
+       "piece": "childrens",
+       "source": [
+        790,
+        335,
+        690,
+        172
+       ],
+       "atlas": [
+        512,
+        136,
+        512,
+        128
+       ]
+      },
+      {
+       "piece": "rare-books",
+       "source": [
+        56,
+        548,
+        690,
+        169
+       ],
+       "atlas": [
+        0,
+        272,
+        512,
+        125
+       ]
+      },
+      {
+       "piece": "poetry",
+       "source": [
+        790,
+        548,
+        690,
+        169
+       ],
+       "atlas": [
+        512,
+        272,
+        512,
+        125
+       ]
+      },
+      {
+       "piece": "prairie-authors",
+       "source": [
+        56,
+        757,
+        690,
+        167
+       ],
+       "atlas": [
+        0,
+        408,
+        512,
+        124
+       ]
+      },
+      {
+       "piece": "new-notable",
+       "source": [
+        790,
+        757,
+        690,
+        167
+       ],
+       "atlas": [
+        512,
+        408,
+        512,
+        124
+       ]
+      }
+     ]
+    },
+    {
+     "id": "books-02-rugs",
+     "subject": "two area rugs seen from above: a worn Persian-style reading-room rug, a children's prairie play rug",
+     "source": {
+      "file": "raw/books-02-rugs-01a1b4b9-d81a-75c0-a3ec-357310021f78-exec-d89e177e-23b8-4221-8c1a-4ae7239efed1.png",
+      "sha256": "825eeaf8ec4325b34213fcbefe8e71351bb5ce37a5245a8696d80c7956c4481c",
+      "bytes": 2460990,
+      "width": 1536,
+      "height": 1024
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "session": "01a1b4b9-d81a-75c0-a3ec-357310021f78",
+      "nativeOutput": "exec-d89e177e-23b8-4221-8c1a-4ae7239efed1.png",
+      "nativeSha256Matches": true,
+      "exit": 0,
+      "launched": "2026-11-07T06:37:20Z",
+      "finished": "2026-11-07T06:38:01Z"
+     },
+     "prompt": "A flat, top-down, straight-down orthographic texture sheet of TWO separate rectangular area rugs side by side on a plain flat charcoal-grey background, each rug filling one half of the image with an equal clear gap between them and an even empty margin all round, evenly lit with no shadows and no perspective. Left rug: a worn traditional wool reading-room rug with a Persian-style medallion and border pattern in deep madder red, ochre, navy and cream, slightly faded, short fringe at both short ends. Right rug: a cheerful children's-corner play rug in soft primary colours, a simple pattern of stylised prairie hills, a winding river, little trees and stars, low-pile and slightly worn. Both rugs are landscape rectangles about one and a half times as wide as they are tall, seen exactly from above, completely flat, no furniture, no objects, no people, no text, no logos, no watermark.",
+     "promptSha256": "ed15404aae61a9a59164a5e4d5e61ce43f87aab8933a2353ee4d11f4bbb728d2",
+     "pieces": [
+      {
+       "piece": "rug-reading",
+       "source": [
+        12,
+        267,
+        744,
+        495
+       ],
+       "atlas": [
+        0,
+        560,
+        512,
+        341
+       ]
+      },
+      {
+       "piece": "rug-children",
+       "source": [
+        780,
+        267,
+        744,
+        495
+       ],
+       "atlas": [
+        512,
+        560,
+        512,
+        341
+       ]
+      }
+     ]
+    }
+   ]
+  },
+  "cinema": {
+   "schema": "last-line-derivative/1",
+   "asset": "skyways-store-cinema-art-20261107",
+   "task": "studio-alpha-skyways-shops-20261107-054512-01",
+   "lane": "STORE-CINEMA (Skyways major store \"Aurora Picture House\")",
+   "status": "runtime derivative of FIVE static artworks generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit authorization of Codex store art for the Skyways major stores (5 accepted of 5 attempts); provider terms apply; unapproved prototype, no licence or commercial clearance implied; every film, title and tagline is invented (no real films, studios, actors or brands)",
+   "use": "game/src/world/skywaysStoreCinema.ts: the poster cases / poster stands (one poster per variant) and the concession board (gen/skyways/stores/cinemaArt.ts pieces, cropped to the face aspect)",
+   "rebuild": "node tools/asset-pipeline/skyways-stores/cinema/build-art.mjs",
+   "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/cinema/codex/{raw/<name>-<session>-exec-<id>.png, prompts/<name>.txt, LEDGER.jsonl, runs/rollout-*.jsonl} (read-only raw masters, outside Git)",
+   "generator": "Codex native image_gen (owned Codex CLI)",
+   "recipe": {
+    "crop": "centred to the slot aspect (sources already 2:3 / 3:2: full frame kept)",
+    "resize": {
+     "kernel": "lanczos3",
+     "posters": "512 x 768",
+     "board": "960 x 640"
+    },
+    "colour": "sRGB, alpha none",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    },
+    "tool": "sharp (libvips) via tools/asset-pipeline/skyways-stores/cinema/build-art.mjs"
+   },
+   "output": {
+    "file": "assets/textures/skyways/stores/cinema/cinema-art.jpg",
+    "width": 2048,
+    "height": 1408,
+    "bytes": 614283,
+    "sha256": "ad6d1e2b4ffb12522794337af8c58603aefc9a5feb38d1353b38bbd84d75f5a0"
+   },
+   "files": [
+    {
+     "id": "coulee",
+     "subject": "film poster: invented 1950s western \"THE COULEE KID\" (tagline \"SHOWDOWN AT DRY CREEK\")",
+     "source": {
+      "file": "cinema-p1-01a1b4b8-94e3-7773-9097-7517d41ca0ae-exec-1f04dd52-8ceb-41ba-9c24-39219b49f624.png",
+      "sha256": "0da7c72ca68ca151ba3b1982f65fc26f72063e3ddc117b19c52f17436e39ca6d",
+      "bytes": 3190256,
+      "width": 1024,
+      "height": 1536,
+      "hasAlpha": false
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "threadId": "01a1b4b8-94e3-7773-9097-7517d41ca0ae",
+      "nativeOutput": "exec-1f04dd52-8ceb-41ba-9c24-39219b49f624.png",
+      "exit": 0,
+      "launched": "2026-11-07T06:35:57Z",
+      "seconds": 37.6,
+      "attempts": 1
+     },
+     "promptSha256": "a494e2e0741a444acfedf4667af1d5a063eebe0f15c4cadd4fbd5854a6b3e559",
+     "crop": {
+      "x": 0,
+      "y": 0,
+      "w": 1024,
+      "h": 1536
+     },
+     "slot": {
+      "x": 0,
+      "y": 0,
+      "w": 512,
+      "h": 768
+     }
+    },
+    {
+     "id": "hoppers",
+     "subject": "film poster: invented 1950s creature feature \"THE HOPPERS\" (tagline \"THEY CAME WITH THE HARVEST\")",
+     "source": {
+      "file": "cinema-p2-01a1b4b9-27fa-7140-9de3-8c48fdeee72a-exec-ceab21e5-df79-4e86-a976-76bc209bcdcc.png",
+      "sha256": "2d9655073573875a74ba79b32bc14bc8f039f97fd0decb451a5381e3d0e465e4",
+      "bytes": 3378865,
+      "width": 1024,
+      "height": 1536,
+      "hasAlpha": false
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "threadId": "01a1b4b9-27fa-7140-9de3-8c48fdeee72a",
+      "nativeOutput": "exec-ceab21e5-df79-4e86-a976-76bc209bcdcc.png",
+      "exit": 0,
+      "launched": "2026-11-07T06:36:35Z",
+      "seconds": 45.1,
+      "attempts": 1
+     },
+     "promptSha256": "21d613c3ba2e6e1ec6ad489790d2a32f076d15c4ff3dc40f17bf37ca9b5f8098",
+     "crop": {
+      "x": 0,
+      "y": 0,
+      "w": 1024,
+      "h": 1536
+     },
+     "slot": {
+      "x": 512,
+      "y": 0,
+      "w": 512,
+      "h": 768
+     }
+    },
+    {
+     "id": "midway",
+     "subject": "film poster: invented 1950s musical \"Moonlight on the Midway\" (tagline \"SONGS! LAUGHS! ROMANCE!\")",
+     "source": {
+      "file": "cinema-p3-01a1b4ba-761b-79b1-948f-4dfa1ab596e9-exec-52884a3c-19b7-4c49-b629-12e00536b17d.png",
+      "sha256": "5441cbd4e7ef1cf267cf8be2985309479af2ac04bc4b0fa38153496cee20cfbc",
+      "bytes": 3008892,
+      "width": 1024,
+      "height": 1536,
+      "hasAlpha": false
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "threadId": "01a1b4ba-761b-79b1-948f-4dfa1ab596e9",
+      "nativeOutput": "exec-52884a3c-19b7-4c49-b629-12e00536b17d.png",
+      "exit": 0,
+      "launched": "2026-11-07T06:38:01Z",
+      "seconds": 33.5,
+      "attempts": 1
+     },
+     "promptSha256": "66799e17f3c7bc1b78cdf79ac0bf19b1af1898434d20d7e338debdda8f154c9f",
+     "crop": {
+      "x": 0,
+      "y": 0,
+      "w": 1024,
+      "h": 1536
+     },
+     "slot": {
+      "x": 1024,
+      "y": 0,
+      "w": 512,
+      "h": 768
+     }
+    },
+    {
+     "id": "skywalk",
+     "subject": "film poster: invented 1940s film noir \"SKYWALK AT MIDNIGHT\" (tagline \"SOMEONE KNOWS TOO MUCH\")",
+     "source": {
+      "file": "cinema-p4-01a1b4bd-4f83-7563-8cf3-f61503cd4d47-exec-4cf664e2-d317-4acc-a821-c1556660279b.png",
+      "sha256": "53c868f126b1b0f4973320340dee4492abf71081144e917a4a38118f7c5f711d",
+      "bytes": 3186052,
+      "width": 1024,
+      "height": 1536,
+      "hasAlpha": false
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "threadId": "01a1b4bd-4f83-7563-8cf3-f61503cd4d47",
+      "nativeOutput": "exec-4cf664e2-d317-4acc-a821-c1556660279b.png",
+      "exit": 0,
+      "launched": "2026-11-07T06:41:07Z",
+      "seconds": 46,
+      "attempts": 1
+     },
+     "promptSha256": "0e63b849c7cba441459dfdcbd8cc6fd26eb4a6b1f6839ac0a9d16846cfdfb8a7",
+     "crop": {
+      "x": 0,
+      "y": 0,
+      "w": 1024,
+      "h": 1536
+     },
+     "slot": {
+      "x": 1536,
+      "y": 0,
+      "w": 512,
+      "h": 768
+     }
+    },
+    {
+     "id": "refreshments",
+     "subject": "concession board: art-deco \"REFRESHMENTS\" panel with popcorn, soda, candy, chocolate, hot dog, ice cream",
+     "source": {
+      "file": "cinema-menu-01a1b4be-fd51-71e0-a5e8-63b68766c71d-exec-b35903cd-5f84-4c7f-bdc2-d543cbccaf19.png",
+      "sha256": "05228912f3fb1685a8a1d13330c1df5eab018155daa7153c315df3bc5ba16643",
+      "bytes": 3190364,
+      "width": 1536,
+      "height": 1024,
+      "hasAlpha": false
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "threadId": "01a1b4be-fd51-71e0-a5e8-63b68766c71d",
+      "nativeOutput": "exec-b35903cd-5f84-4c7f-bdc2-d543cbccaf19.png",
+      "exit": 0,
+      "launched": "2026-11-07T06:42:57Z",
+      "seconds": 41.5,
+      "attempts": 1
+     },
+     "promptSha256": "897e6f00427d6ff8ad98bd339b220e10cb2bfdd44319977cde9d61a43e240636",
+     "crop": {
+      "x": 0,
+      "y": 0,
+      "w": 1536,
+      "h": 1024
+     },
+     "slot": {
+      "x": 0,
+      "y": 768,
+      "w": 960,
+      "h": 640
+     }
+    }
+   ]
+  },
+  "design": {
+   "schema": "last-line-derivative/1",
+   "asset": "skyways-store-design-art-20261107",
+   "task": "studio-alpha-skyways-shops-20261107-054512-01",
+   "lane": "STORE-DESIGN (Skyways major store: Larch & Loom Home)",
+   "status": "runtime derivative of SIX static framed-art-print artworks generated for this project with Codex native image_gen (owned Codex CLI) in ONE call (1 accepted of 1 attempt) under the store lanes' authorization (COMMON brief: Codex art for the store's wall / sign / poster / cover art, economical); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+   "use": "game/src/world/skywaysStoreDesignDraw.ts: the skyDsArtPrint framed prints (pale-oak frame + white mat drawn as boxes, the art face one atlas piece each; loaded behind the loading screen by world/skywaysStoreDesignRuntime.ts; without the atlas a plain board)",
+   "rebuild": "node tools/asset-pipeline/skyways-stores/design/build-art.mjs",
+   "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/design/codex/{design-prints-original.png, receipt.json, prompt.txt, instruction.txt, attempts.log, codex-session.jsonl, SOURCES-SHA256.txt} (read-only raw master, outside Git)",
+   "generator": "Codex native image_gen (owned Codex CLI)",
+   "source": {
+    "file": "design-prints-original.png",
+    "sha256": "502456e94600216be22695e812f52c8b61e292968a06b75736e03a55138bf50b",
+    "bytes": 2558485,
+    "width": 1024,
+    "height": 1536,
+    "channels": 3,
+    "hasAlpha": false
+   },
+   "codex": {
+    "generator": "Codex native built-in image_gen (owned Codex CLI codex exec, codex-cli 0.163.0)",
+    "threadId": "01a1b4f6-8104-7391-9ec0-584414b4be67",
+    "nativeOutput": "exec-5bc0223b-f97c-4a8a-b704-8c0208d05e64.png",
+    "nativeSha256Matches": true,
+    "exit": 0,
+    "launched": "2026-11-07T07:43:36Z",
+    "finished": "2026-11-07T07:44:19Z",
+    "agentModel": "gpt-6.1-sol (session rollout; the image model id is not reported)"
+   },
+   "prompt": "Six original wall-art prints for a calm Scandinavian home-design showroom, shown together as a clean product sheet: exactly six separate artworks arranged in a precise grid of 3 columns and 2 rows on a pure flat white background, every artwork the same size, a tall portrait rectangle (2:3), separated by wide even white gutters and a wide white margin around the sheet. Straight-on, flat, evenly lit, print-ready artwork only: no frames, no mats, no walls, no shadows, no text, no letters, no logos, no signatures, no watermarks. The six artworks: 1) mid-century abstract overlapping arches and circles in sage green, ochre, terracotta and cream; 2) a minimal ink line drawing of a prairie horizon with a low winter sun, lots of empty paper; 3) a botanical study of larch branches with small cones in muted greens and browns on warm paper; 4) a woven-textile geometric pattern in oatmeal, charcoal and rust like a loom weaving; 5) a soft watercolour of a northern lake with birch trees and a pale blue sky; 6) a bold Scandinavian graphic of stacked organic shapes in mustard, dusty blue and charcoal. Cohesive muted palette, high quality, matte paper texture.",
+   "recipe": {
+    "find": "the six artworks: row then column projections of near-white pixels (all channels > 238; a line is white when < 1 % of its sampled pixels are not), 2 rows x 3 columns",
+    "crop": "8 px inside each artwork's edge",
+    "resize": {
+     "width": 332,
+     "height": 576,
+     "fit": "cover (centre) to the sheet's own ~0.58 portrait aspect (a few px trimmed)",
+     "kernel": "lanczos3"
+    },
+    "pack": {
+     "layout": "3 x 2",
+     "width": 996,
+     "height": 1152,
+     "order": "row-major as on the sheet"
+    },
+    "colour": "sRGB, alpha none",
+    "encode": {
+     "format": "jpeg",
+     "quality": 86,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    },
+    "tool": "sharp (libvips) via tools/asset-pipeline/skyways-stores/design/build-art.mjs"
+   },
+   "pieces": [
+    {
+     "index": 0,
+     "subject": "mid-century abstract arches and circles (sage, ochre, terracotta, cream)",
+     "sourceBox": {
+      "x0": 16,
+      "y0": 213,
+      "x1": 338,
+      "y1": 758
+     },
+     "uv": {
+      "u0": 0.000502,
+      "v0": 0.500434,
+      "u1": 0.332831,
+      "v1": 0.999566
+     }
+    },
+    {
+     "index": 1,
+     "subject": "ink line drawing of a prairie horizon with a low winter sun",
+     "sourceBox": {
+      "x0": 353,
+      "y0": 213,
+      "x1": 671,
+      "y1": 758
+     },
+     "uv": {
+      "u0": 0.333835,
+      "v0": 0.500434,
+      "u1": 0.666165,
+      "v1": 0.999566
+     }
+    },
+    {
+     "index": 2,
+     "subject": "botanical study of larch branches with cones",
+     "sourceBox": {
+      "x0": 687,
+      "y0": 213,
+      "x1": 1008,
+      "y1": 758
+     },
+     "uv": {
+      "u0": 0.667169,
+      "v0": 0.500434,
+      "u1": 0.999498,
+      "v1": 0.999566
+     }
+    },
+    {
+     "index": 3,
+     "subject": "woven-textile geometric pattern (oatmeal, charcoal, rust)",
+     "sourceBox": {
+      "x0": 16,
+      "y0": 783,
+      "x1": 337,
+      "y1": 1336
+     },
+     "uv": {
+      "u0": 0.000502,
+      "v0": 0.000434,
+      "u1": 0.332831,
+      "v1": 0.499566
+     }
+    },
+    {
+     "index": 4,
+     "subject": "watercolour of a northern lake with birch trees",
+     "sourceBox": {
+      "x0": 352,
+      "y0": 783,
+      "x1": 672,
+      "y1": 1336
+     },
+     "uv": {
+      "u0": 0.333835,
+      "v0": 0.000434,
+      "u1": 0.666165,
+      "v1": 0.499566
+     }
+    },
+    {
+     "index": 5,
+     "subject": "Scandinavian graphic of stacked organic shapes (mustard, dusty blue, charcoal)",
+     "sourceBox": {
+      "x0": 688,
+      "y0": 783,
+      "x1": 1008,
+      "y1": 1336
+     },
+     "uv": {
+      "u0": 0.667169,
+      "v0": 0.000434,
+      "u1": 0.999498,
+      "v1": 0.499566
+     }
+    }
+   ],
+   "output": {
+    "url": "assets/textures/skyways/stores/design/skyways-store-design-prints.jpg",
+    "bytes": 219687,
+    "sha256": "13278f8e58a44fc44aaec1bc1b8c6bc59a954fb5805f4c3d9a88ef11fd46a465",
+    "width": 996,
+    "height": 1152,
+    "format": "jpeg"
+   }
+  },
+  "music": {
+   "schema": "last-line-derivative/1",
+   "asset": "skyways-store-music-art-20261107",
+   "task": "studio-alpha-skyways-shops-20261107-054512-01",
+   "lane": "STORE-MUSIC (Skyways major store: Northern Groove Records)",
+   "status": "runtime derivatives (crop / resize / pack only) of SIX static art sheets generated for this project with Codex native image_gen (owned Codex CLI, codex exec -> built-in image_gen) under the store brief's authorization (Codex image-gen for the stores' wall / sign / record-cover art, no numerical cap; 6 accepted of 6 attempts); fictional covers / bands / venues, no real artists or trademarks requested; provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+   "use": "game/src/world/skywaysStoreMusic.ts: LP sleeve faces in the record-bin stock / faced-out new-arrivals ledges (covers atlas), gig posters, the NEW ARRIVALS / LISTENING BOOTHS boards and the bin genre cards (signs atlas)",
+   "rebuild": "node tools/asset-pipeline/skyways-stores/music/build-music-art.mjs --raw <raw dir>",
+   "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/music/codex/{covers-1..4,posters,signs}.png + <job>.receipt.json (prompt, Codex session id, native output, sha256) + attempts.log + prompts.json + run_codex.py (private raw backup, outside Git)",
+   "generator": "Codex native image_gen (owned Codex CLI 0.163.0)",
+   "recipe": {
+    "covers": {
+     "detect": "black gutter lines (columns / rows >= 85 % near-black) -> 4 x 4 cells per sheet",
+     "crop": "cell inset 1.2 %",
+     "resize": "248 x 248 lanczos3 (fill)",
+     "pad": "4 px edge-extend (copy)",
+     "atlas": "8 x 8 cells of 256 px, cover index = sheet * 16 + row * 4 + column"
+    },
+    "signs": {
+     "detect": "posters: black gutters (2 x 2); signs: non-black rectangles on the black ground (row bands, then column runs)",
+     "posters": "504 x 760 each (inset 0.6 %)",
+     "boards": "1016 px wide at their own aspect",
+     "cards": "248 px wide at their own aspect",
+     "pad": "4 px edge-extend (copy)"
+    },
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    },
+    "tool": "sharp (libvips)"
+   },
+   "sources": {
+    "covers-1": {
+     "file": "covers-1.png",
+     "sha256": "a09b72883008b24f55a8a71352db2916390f9c50df4ea74c4fc00288f74fd3b5",
+     "bytes": 3353007,
+     "width": 1254,
+     "height": 1254,
+     "codex": {
+      "session": "01a1b4be-037b-77c2-9e4b-54cadcc388e8",
+      "nativeOutput": "exec-2dc865e7-b525-48f4-b1d6-0379897a58d9.png",
+      "seconds": 63.9
+     },
+     "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a prairie grain elevator at golden sunset in loose oil paint; 2) four long-haired young musicians standing in a snowy field, faded 1970s colour photograph of fictional people; 3) a psychedelic swirl of orange, magenta and purple liquid light; 4) a lone pickup truck on an empty highway under green northern lights, airbrush illustration; 5) a black-and-white close-up of a fictional saxophonist in smoky club light; 6) minimalist Bauhaus circles and bars in red, cream and black; 7) a moose silhouette against a huge pink moon, two-colour screenprint; 8) a rain-wet neon city street at night, synth-wave colours; 9) a fictional woman with an acoustic guitar on a wooden porch, warm vintage film photo; 10) a punk collage of torn paper, safety pins and photocopy textures; 11) a crystal chandelier in a dark concert hall, elegant classical photograph; 12) a surreal melting clock draped over a wheat field, painting; 13) a mirror ball scattering coloured light over a dark dance floor; 14) a frozen lake with a tiny red ice-fishing hut, cold blue photograph; 15) a vintage reel-to-reel tape machine, studio product photograph; 16) bold op-art concentric circles in teal and mustard. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+    },
+    "covers-2": {
+     "file": "covers-2.png",
+     "sha256": "b3a7f253408acf24a8ad47c461fb0414c68a1fbfe78c8de369d3fe7e7439eb59",
+     "bytes": 3297405,
+     "width": 1254,
+     "height": 1254,
+     "codex": {
+      "session": "01a1b4bf-9fa5-74a3-9813-c7d7b9741ce1",
+      "nativeOutput": "exec-f8b4ee22-940e-4f78-aa34-37acda9b64dd.png",
+      "seconds": 140
+     },
+     "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a fictional soul singer in a sequined gold jacket against a deep orange backdrop, 1970s studio portrait; 2) a funk band of fictional musicians in platform shoes jumping mid-air, saturated photo; 3) a blue-toned jazz trio silhouetted in a doorway, high-contrast photo; 4) a hand-painted blues guitarist on a crate at a railway siding, gouache; 5) a gospel choir in purple robes seen from above, vintage colour photo; 6) abstract brush strokes in indigo and gold, cool-jazz style; 7) a vintage convertible car parked under palm trees at dusk, airbrushed; 8) a close-up of a trumpet bell with warm stage lights, bokeh; 9) a 1960s graphic of interlocking orange and brown rounded shapes; 10) a smoky lounge with an empty microphone stand under a spotlight; 11) a fictional couple dancing in a living room, grainy Polaroid look; 12) a woodcut-style print of a riverboat at night; 13) a bright pop-art pattern of lips and stars in red and turquoise (no words); 14) a hammond organ in a dark church, moody photograph; 15) a hand-drawn spiral sun over rolling hills in earthy tones; 16) a split-tone photo of city rooftops at dawn in pink and teal. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+    },
+    "covers-3": {
+     "file": "covers-3.png",
+     "sha256": "9239c98e5db314248178a92c7037b99196dacffc64dbf3970bc0ca3fe53b48da",
+     "bytes": 3315615,
+     "width": 1254,
+     "height": 1254,
+     "codex": {
+      "session": "01a1b4c1-c2c1-7b41-ae6c-88b86c1a0170",
+      "nativeOutput": "exec-ac92cad0-0d9a-43f4-95a4-24aa43c91b19.png",
+      "seconds": 70.7
+     },
+     "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a chrome wireframe mountain range on a black grid horizon, 1980s computer graphic; 2) a fictional new-wave singer with dramatic geometric make-up, pastel studio portrait; 3) a heavy-metal painting of a stormy sky with lightning over a black castle; 4) a fictional hip-hop crew on a brick stoop with a boombox, 1990s film photo; 5) a cassette tape with ribbon unspooled into a heart shape, flat illustration; 6) a glowing synthesizer keyboard close-up in magenta light; 7) a skateboarder silhouetted in a concrete bowl at sunset; 8) a pixel-art spaceship drifting past a ringed planet; 9) a stark red and black Constructivist composition of diagonal bars; 10) a fictional goth band in black coats under a streetlight in fog; 11) a graffiti-style spray-paint abstract burst on a concrete wall with no letters; 12) a fluorescent jellyfish in deep blue water; 13) a 1980s memphis-design pattern of squiggles and triangles; 14) a motorcycle headlight cutting through night rain; 15) a mirrored sphere reflecting a desert, surreal photo; 16) a black-and-white photocopied crowd at a basement show, high contrast. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+    },
+    "covers-4": {
+     "file": "covers-4.png",
+     "sha256": "b3c3c7ccfd3c3188c31026f54ab87e7fa839542fa2aa3085b9394e66692e08eb",
+     "bytes": 3658556,
+     "width": 1254,
+     "height": 1254,
+     "codex": {
+      "session": "01a1b4c2-d70e-7ce3-a15b-ae4a242d2e1d",
+      "nativeOutput": "exec-f22ed316-1aa3-4d44-ad0f-64cc0f51425e.png",
+      "seconds": 66.8
+     },
+     "prompt": "A flat, straight-on, perfectly square digital contact sheet showing exactly 16 different ORIGINAL fictional vinyl LP album cover artworks arranged in a precise 4 x 4 grid. Every cell is an equal perfect square; the covers are separated by uniform thin solid pure-black gutters (about 1.5 percent of the image width) with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat front cover artwork filling its square edge to edge: no sleeve photographed in perspective, no vinyl disc, no shadow, no hands, no mockup, no frame. The 16 covers, left to right, top to bottom: 1) a fictional country singer in a cowboy hat leaning on a fence at a rodeo ground, warm 1970s photo; 2) a hand-stitched quilt pattern in red, white and denim blue; 3) a misty pine forest at dawn, soft ambient photograph; 4) a fictional indie band of four sitting on a ratty couch in a garage, flash photo; 5) a botanical engraving of wild prairie roses on cream paper; 6) an oil painting of a string quartet in candlelight; 7) a chinook arch cloud over foothills at sunset, dramatic sky photo; 8) a watercolour fox curled in snow; 9) a minimalist single brushstroke circle in black ink on rice paper; 10) a vintage map-like topographic contour pattern in brown and green; 11) a canoe on a glassy lake reflecting red maples, painted; 12) a fictional fiddler dancing at a barn party, motion-blurred photo; 13) a kaleidoscope of tropical flowers in vivid colours; 14) a dusty desert motel sign shape with no letters against a violet sky; 15) a stained-glass window pattern in jewel tones; 16) a long-exposure photo of a passenger train crossing a trestle bridge at night. Strictly NO text of any kind anywhere: no letters, words, numbers, titles, band names, logos, record-label marks, stickers, barcodes or signatures. No real artists, no real album artwork, no recognisable celebrities, no trademarks. Vary photography, painting, illustration, collage and graphic design; strong, varied colour palettes; subtle printed-paper texture and slight vintage wear."
+    },
+    "posters": {
+     "file": "posters.png",
+     "sha256": "242cac5ceea3598d42f9198d9ea849a032f82d16df2d42169ea7c6bc01d4e732",
+     "bytes": 3267488,
+     "width": 1024,
+     "height": 1536,
+     "codex": {
+      "session": "01a1b4c3-dc67-7211-8a8c-6d7e8c96495d",
+      "nativeOutput": "exec-3f775aab-691f-40e8-bc1f-e5c6a311d0f1.png",
+      "seconds": 47.6
+     },
+     "prompt": "A flat, straight-on PORTRAIT image (2:3) laid out as a precise 2 x 2 grid of four ORIGINAL fictional concert gig posters, every poster an equal 2:3 portrait rectangle, separated by uniform thin solid pure-black gutters with a matching thin pure-black outer border; nothing else on the sheet. Each cell shows ONLY the flat poster artwork filling its rectangle edge to edge: no wall, no tape, no frame, no perspective, no shadow. Fictional bands at a fictional prairie record store, 1970s to 1990s styles; the ONLY words allowed are these, spelled exactly, in large simple lettering: poster 1 (top left, two-colour screenprint of a grain elevator under a huge sun, orange and navy): \"PRAIRIE STATIC\" and \"LIVE IN-STORE\"; poster 2 (top right, psychedelic hand-lettered style in purple, pink and lime with swirling clouds): \"THE HOARFROST\" and \"SATURDAY NIGHT\"; poster 3 (bottom left, punk photocopy collage, black, white and red, a fictional singer shouting into a microphone): \"CHINOOK ARCH\" and \"ALL AGES\"; poster 4 (bottom right, elegant art-deco jazz poster in gold and teal with a stylised saxophone): \"NORTHERN LIGHTS QUARTET\" and \"ONE NIGHT ONLY\". No other text, numbers, dates, logos, real bands, real venues, trademarks or signatures."
+    },
+    "signs": {
+     "file": "signs.png",
+     "sha256": "af32b37d034ab552f7846919a541bafe0c1d8149a309f30181eb44132dfaa4ef",
+     "bytes": 1659520,
+     "width": 1536,
+     "height": 1024,
+     "codex": {
+      "session": "01a1b4c4-96d7-72b0-b86b-143108b45d20",
+      "nativeOutput": "exec-40b8286c-e2e8-4a9d-a10d-d01077d175fa.png",
+      "seconds": 35.2
+     },
+     "prompt": "A flat, straight-on LANDSCAPE image (3:2) on a pure solid black background showing ten separate ORIGINAL hand-painted record-store signs, each a clean flat rectangle with generous pure-black space around it (no sign touches another or the edge): top row, one wide horizontal sign board (about 4:1) in cream paint on a deep burgundy board with a thin gold pinstripe border reading exactly \"NEW ARRIVALS\"; second row, one wide horizontal sign board (about 4:1) in the same style reading exactly \"LISTENING BOOTHS\"; below them, two rows of four small identical-size horizontal divider cards (about 2:1), each a cream card with a coloured top band and one hand-lettered word in black, spelled exactly: \"ROCK\", \"JAZZ\", \"FOLK\", \"SOUL\" (third row) and \"PUNK\", \"COUNTRY\", \"BLUES\", \"ELECTRONIC\" (fourth row). Flat artwork only: no perspective, no shadows, no wall, no hands, no screws, no extra text, numbers, logos or trademarks."
+    }
+   },
+   "files": [
+    {
+     "file": "textures/skyways/stores/music/music-covers.jpg",
+     "sha256": "64e412a156191029e5b8a0f96dce2fe5d9f5a8666a6db413d71c3b8fa476599c",
+     "bytes": 1100565,
+     "width": 2048,
+     "height": 2048,
+     "cells": [
+      {
+       "index": 0,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 4,
+        "x1": 309,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 1,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 2,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 3,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 4,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 4,
+        "x1": 309,
+        "y0": 316,
+        "y1": 623
+       }
+      },
+      {
+       "index": 5,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 316,
+        "y1": 623
+       }
+      },
+      {
+       "index": 6,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 316,
+        "y1": 623
+       }
+      },
+      {
+       "index": 7,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 316,
+        "y1": 623
+       }
+      },
+      {
+       "index": 8,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 4,
+        "x1": 309,
+        "y0": 630,
+        "y1": 936
+       }
+      },
+      {
+       "index": 9,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 630,
+        "y1": 936
+       }
+      },
+      {
+       "index": 10,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 630,
+        "y1": 936
+       }
+      },
+      {
+       "index": 11,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 630,
+        "y1": 936
+       }
+      },
+      {
+       "index": 12,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 4,
+        "x1": 309,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 13,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 14,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 15,
+       "sheet": "covers-1",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 16,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 5,
+        "x1": 311,
+        "y0": 6,
+        "y1": 311
+       }
+      },
+      {
+       "index": 17,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 318,
+        "x1": 623,
+        "y0": 6,
+        "y1": 311
+       }
+      },
+      {
+       "index": 18,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 630,
+        "x1": 935,
+        "y0": 6,
+        "y1": 311
+       }
+      },
+      {
+       "index": 19,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 942,
+        "x1": 1248,
+        "y0": 6,
+        "y1": 311
+       }
+      },
+      {
+       "index": 20,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 5,
+        "x1": 311,
+        "y0": 318,
+        "y1": 623
+       }
+      },
+      {
+       "index": 21,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 318,
+        "x1": 623,
+        "y0": 318,
+        "y1": 623
+       }
+      },
+      {
+       "index": 22,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 630,
+        "x1": 935,
+        "y0": 318,
+        "y1": 623
+       }
+      },
+      {
+       "index": 23,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 942,
+        "x1": 1248,
+        "y0": 318,
+        "y1": 623
+       }
+      },
+      {
+       "index": 24,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 5,
+        "x1": 311,
+        "y0": 629,
+        "y1": 935
+       }
+      },
+      {
+       "index": 25,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 318,
+        "x1": 623,
+        "y0": 629,
+        "y1": 935
+       }
+      },
+      {
+       "index": 26,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 630,
+        "x1": 935,
+        "y0": 629,
+        "y1": 935
+       }
+      },
+      {
+       "index": 27,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 942,
+        "x1": 1248,
+        "y0": 629,
+        "y1": 935
+       }
+      },
+      {
+       "index": 28,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 5,
+        "x1": 311,
+        "y0": 941,
+        "y1": 1247
+       }
+      },
+      {
+       "index": 29,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 318,
+        "x1": 623,
+        "y0": 941,
+        "y1": 1247
+       }
+      },
+      {
+       "index": 30,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 630,
+        "x1": 935,
+        "y0": 941,
+        "y1": 1247
+       }
+      },
+      {
+       "index": 31,
+       "sheet": "covers-2",
+       "rect": {
+        "x0": 942,
+        "x1": 1248,
+        "y0": 941,
+        "y1": 1247
+       }
+      },
+      {
+       "index": 32,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 4,
+        "x1": 310,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 33,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 34,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 35,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 4,
+        "y1": 309
+       }
+      },
+      {
+       "index": 36,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 4,
+        "x1": 310,
+        "y0": 316,
+        "y1": 622
+       }
+      },
+      {
+       "index": 37,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 316,
+        "y1": 622
+       }
+      },
+      {
+       "index": 38,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 316,
+        "y1": 622
+       }
+      },
+      {
+       "index": 39,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 316,
+        "y1": 622
+       }
+      },
+      {
+       "index": 40,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 4,
+        "x1": 310,
+        "y0": 630,
+        "y1": 935
+       }
+      },
+      {
+       "index": 41,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 630,
+        "y1": 935
+       }
+      },
+      {
+       "index": 42,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 630,
+        "y1": 935
+       }
+      },
+      {
+       "index": 43,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 630,
+        "y1": 935
+       }
+      },
+      {
+       "index": 44,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 4,
+        "x1": 310,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 45,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 46,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 631,
+        "x1": 936,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 47,
+       "sheet": "covers-3",
+       "rect": {
+        "x0": 944,
+        "x1": 1249,
+        "y0": 943,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 48,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 3,
+        "x1": 310,
+        "y0": 2,
+        "y1": 309
+       }
+      },
+      {
+       "index": 49,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 2,
+        "y1": 309
+       }
+      },
+      {
+       "index": 50,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 630,
+        "x1": 937,
+        "y0": 2,
+        "y1": 309
+       }
+      },
+      {
+       "index": 51,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 943,
+        "x1": 1250,
+        "y0": 2,
+        "y1": 309
+       }
+      },
+      {
+       "index": 52,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 3,
+        "x1": 310,
+        "y0": 315,
+        "y1": 622
+       }
+      },
+      {
+       "index": 53,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 315,
+        "y1": 622
+       }
+      },
+      {
+       "index": 54,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 630,
+        "x1": 937,
+        "y0": 315,
+        "y1": 622
+       }
+      },
+      {
+       "index": 55,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 943,
+        "x1": 1250,
+        "y0": 315,
+        "y1": 622
+       }
+      },
+      {
+       "index": 56,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 3,
+        "x1": 310,
+        "y0": 629,
+        "y1": 936
+       }
+      },
+      {
+       "index": 57,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 629,
+        "y1": 936
+       }
+      },
+      {
+       "index": 58,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 630,
+        "x1": 937,
+        "y0": 629,
+        "y1": 936
+       }
+      },
+      {
+       "index": 59,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 943,
+        "x1": 1250,
+        "y0": 629,
+        "y1": 936
+       }
+      },
+      {
+       "index": 60,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 3,
+        "x1": 310,
+        "y0": 942,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 61,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 317,
+        "x1": 623,
+        "y0": 942,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 62,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 630,
+        "x1": 937,
+        "y0": 942,
+        "y1": 1249
+       }
+      },
+      {
+       "index": 63,
+       "sheet": "covers-4",
+       "rect": {
+        "x0": 943,
+        "x1": 1250,
+        "y0": 942,
+        "y1": 1249
+       }
+      }
+     ]
+    },
+    {
+     "file": "textures/skyways/stores/music/music-signs.jpg",
+     "sha256": "e2fa1c95ecf4ec6a6380d8abd125add19a31609700ceff9a1b6a35335588dd6c",
+     "bytes": 567200,
+     "width": 2048,
+     "height": 1152,
+     "pieces": [
+      {
+       "piece": "poster-0",
+       "sheet": "posters",
+       "rect": {
+        "x0": 5,
+        "x1": 507,
+        "y0": 5,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "poster-1",
+       "sheet": "posters",
+       "rect": {
+        "x0": 516,
+        "x1": 1018,
+        "y0": 5,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "poster-2",
+       "sheet": "posters",
+       "rect": {
+        "x0": 5,
+        "x1": 507,
+        "y0": 771,
+        "y1": 1530
+       }
+      },
+      {
+       "piece": "poster-3",
+       "sheet": "posters",
+       "rect": {
+        "x0": 516,
+        "x1": 1018,
+        "y0": 771,
+        "y1": 1530
+       }
+      },
+      {
+       "piece": "new-arrivals",
+       "sheet": "signs",
+       "rect": {
+        "x0": 104,
+        "y0": 80,
+        "x1": 1431,
+        "y1": 282
+       }
+      },
+      {
+       "piece": "listening-booths",
+       "sheet": "signs",
+       "rect": {
+        "x0": 104,
+        "y0": 343,
+        "x1": 1431,
+        "y1": 553
+       }
+      },
+      {
+       "piece": "genre-rock",
+       "sheet": "signs",
+       "rect": {
+        "x0": 55,
+        "y0": 617,
+        "x1": 375,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "genre-jazz",
+       "sheet": "signs",
+       "rect": {
+        "x0": 423,
+        "y0": 617,
+        "x1": 744,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "genre-folk",
+       "sheet": "signs",
+       "rect": {
+        "x0": 791,
+        "y0": 617,
+        "x1": 1112,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "genre-soul",
+       "sheet": "signs",
+       "rect": {
+        "x0": 1160,
+        "y0": 617,
+        "x1": 1480,
+        "y1": 763
+       }
+      },
+      {
+       "piece": "genre-punk",
+       "sheet": "signs",
+       "rect": {
+        "x0": 55,
+        "y0": 809,
+        "x1": 375,
+        "y1": 957
+       }
+      },
+      {
+       "piece": "genre-country",
+       "sheet": "signs",
+       "rect": {
+        "x0": 423,
+        "y0": 809,
+        "x1": 744,
+        "y1": 957
+       }
+      },
+      {
+       "piece": "genre-blues",
+       "sheet": "signs",
+       "rect": {
+        "x0": 791,
+        "y0": 809,
+        "x1": 1112,
+        "y1": 957
+       }
+      },
+      {
+       "piece": "genre-electronic",
+       "sheet": "signs",
+       "rect": {
+        "x0": 1160,
+        "y0": 809,
+        "x1": 1480,
+        "y1": 957
+       }
+      }
+     ]
+    }
+   ]
+  },
+  "science": {
+   "schema": "last-line-derivative/1",
+   "asset": "skyways-store-science-art-20261107",
+   "task": "studio-alpha-skyways-shops-20261107-054512-01",
+   "lane": "STORE-SCIENCE",
+   "status": "runtime derivative of five pieces of static wall art cut from THREE images generated for this project with Codex native image_gen (owned Codex CLI) under the store lanes' Codex authorization (task studio-alpha-skyways-shops-20261107-054512-01: \"Codex image-gen ... for the stores' wall / sign / cover art\", no numerical cap; 3 calls, 3 accepted); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+   "use": "game/src/world/skywaysStoreScienceArt.ts: the art faces of the Big Sky Wonders wall-art kinds (gen/skyways/stores/kinds/science.ts skySciStarMap / skySciChart / skySciPoster) in Skyways layout version >= 3",
+   "rebuild": "node tools/asset-pipeline/skyways-stores/science/build-science-art.mjs",
+   "rawStorage": "reference/tasks/skyways-rework-20261107-054512/shops/science/codex/<job>/{<session>-exec-<id>.png, prompt.txt, instruction.txt, receipt.json, rollout-*.jsonl, last.txt} + ledger.jsonl (raw backup outside Git; never overwritten)",
+   "generator": "Codex native image_gen (owned Codex CLI)",
+   "recipe": {
+    "crop": "extract (px) per piece: the triptych split inside its measured off-white gutters; the mural and the chart whole",
+    "resize": {
+     "kernel": "lanczos3",
+     "fit": "fill (aspect kept: target sizes match the crops / a uniform 2/3 for the chart)"
+    },
+    "pack": {
+     "width": 2048,
+     "height": 2048,
+     "fill": "#10182a",
+     "gap": ">= 8 px",
+     "uv": "three.js (v = 0 at the bottom), inset half a texel"
+    },
+    "colour": "sRGB, alpha none",
+    "encode": {
+     "format": "jpeg",
+     "quality": 85,
+     "mozjpeg": true,
+     "chromaSubsampling": "4:2:0",
+     "metadata": "stripped"
+    },
+    "tool": "sharp (libvips)"
+   },
+   "sources": [
+    {
+     "job": "star-map-mural",
+     "source": {
+      "file": "01a1b4ba-f910-7120-94ba-572e8b2422a6-exec-7d0bbfd1-65de-4a27-a5a9-af8ef425f338.png",
+      "sha256": "1a3020f57311481701489f58c09cc5a7f13f8ac7e0747200b95f4e54702dd333",
+      "bytes": 3371016,
+      "width": 1536,
+      "height": 1024,
+      "channels": 3
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "session": "01a1b4ba-f910-7120-94ba-572e8b2422a6",
+      "nativeOutput": "exec-7d0bbfd1-65de-4a27-a5a9-af8ef425f338.png",
+      "rollout": "rollout-2026-11-07T06-38-34-01a1b4ba-f910-7120-94ba-572e8b2422a6.jsonl"
+     },
+     "promptSha256": "41eb9b2f311f5336b5e3ad962188de41ba6e3c62458392e9d070df6bbeb5203e",
+     "prompt": "A wide printed wall mural for a family science and astronomy store: a beautiful star chart of the northern night sky. Deep navy-blue background, hundreds of small white and pale-gold stars of varied brightness, the constellations drawn as thin gold lines joining their stars (the Big Dipper, Cassiopeia, Cygnus, Orion, Lyra, Draco, Perseus), a soft milky band of the Milky Way crossing diagonally, a faint pale-blue celestial coordinate grid of arcs and meridians, a thin gold horizon ring along the lower edge with tiny tick marks, and a row of small moon-phase discs along the bottom margin. Flat graphic artwork viewed straight on, filling the entire image edge to edge: no frame, no wall, no room, no people, no perspective, no text, no letters, no numbers, no logos. Mid-century screen-print style with a lightly aged matte paper texture. Landscape 3:2."
+    },
+    {
+     "job": "kit-posters",
+     "source": {
+      "file": "01a1b4bc-6669-7b53-b83a-0149c6fa7065-exec-d7904dc9-96f7-474e-a627-19d3e05d1ba0.png",
+      "sha256": "fd146adda76e09a47310b3abee297a370c872c47f1557cfb48d3b135a8807338",
+      "bytes": 3462775,
+      "width": 1536,
+      "height": 1024,
+      "channels": 3
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "session": "01a1b4bc-6669-7b53-b83a-0149c6fa7065",
+      "nativeOutput": "exec-d7904dc9-96f7-474e-a627-19d3e05d1ba0.png",
+      "rollout": "rollout-2026-11-07T06-40-08-01a1b4bc-6669-7b53-b83a-0149c6fa7065.jsonl"
+     },
+     "promptSha256": "c191845bb1305ae6a2859709b1af4efb719de665187fb1099591a7d4a3782c36",
+     "prompt": "Three separate vintage advertising posters for a science discovery toy store, placed side by side in one image with equal narrow plain off-white gutters between them; each poster is a tall portrait panel filling its third of the image from top to bottom, all three the same size, shown straight on. Poster 1: a boxed children's chemistry set with test tubes in a rack, round flasks and bright bubbling green, blue and orange liquids, headline CHEMISTRY SET. Poster 2: a crystal-growing kit, glowing purple and sky-blue crystal geodes and a glass jar of growing crystals, headline GROW CRYSTALS. Poster 3: a build-your-own robot kit, a friendly retro tin robot surrounded by gears, bolts and a screwdriver, headline BUILD A ROBOT. Mid-century screen-print style in a deep navy blue, gold and white palette with bright accent colours, lightly aged matte paper. Flat graphic art: no frames, no wall, no room, no people photographed, no perspective, no real brand names or logos. Landscape 3:2."
+    },
+    {
+     "job": "periodic-chart",
+     "source": {
+      "file": "01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99-exec-7b641b01-9f36-4c6f-96ae-be11cdc81eea.png",
+      "sha256": "ac46eefb1f41262e623d33b07c4097fc68fb9725749af7d12b74081ec8c8cc95",
+      "bytes": 2271648,
+      "width": 1536,
+      "height": 1024,
+      "channels": 3
+     },
+     "codex": {
+      "generator": "Codex native image_gen (owned Codex CLI)",
+      "session": "01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99",
+      "nativeOutput": "exec-7b641b01-9f36-4c6f-96ae-be11cdc81eea.png",
+      "rollout": "rollout-2026-11-07T06-39-23-01a1b4bb-b7b1-70a1-ad68-26cc8a3ffd99.jsonl"
+     },
+     "promptSha256": "ac4e4cbec363c2d4b80761c4b12441124859f683f2cfda7079675e7882971e38",
+     "prompt": "A classroom wall chart in the style of a periodic table of the elements, shown straight on and filling the entire image edge to edge. An off-white background with a deep navy title band across the top reading PERIODIC TABLE in bold white capitals. Below it a grid of square tiles in the classic periodic-table silhouette: two tall columns on the left, a lower block of ten columns in the middle, six tall columns on the right, and two separate rows of tiles underneath. Each tile shows one large one- or two-letter element symbol and a small number above it, colour-coded in soft families: coral red, orange, sunflower yellow, leaf green, teal, sky blue and violet. Clean flat print graphic, vintage school-chart style, lightly aged matte paper. No frame, no wall, no room, no people, no perspective, no logos. Landscape 3:2."
+    }
+   ],
+   "pieces": [
+    {
+     "id": "starMap",
+     "subject": "star chart of the northern sky (navy, gold constellations, Milky Way, moon phases)",
+     "job": "star-map-mural",
+     "crop": [
+      0,
+      0,
+      1536,
+      1024
+     ],
+     "packedSize": [
+      1536,
+      1024
+     ],
+     "packedAt": [
+      0,
+      0
+     ],
+     "uv": {
+      "u0": 0.000244,
+      "v0": 0.500244,
+      "u1": 0.749756,
+      "v1": 0.999756,
+      "aspect": 1.5
+     }
+    },
+    {
+     "id": "chemistry",
+     "subject": "kit poster: CHEMISTRY SET (triptych panel 1)",
+     "job": "kit-posters",
+     "crop": [
+      11,
+      10,
+      487,
+      1004
+     ],
+     "packedSize": [
+      487,
+      1004
+     ],
+     "packedAt": [
+      1552,
+      0
+     ],
+     "uv": {
+      "u0": 0.758057,
+      "v0": 0.51001,
+      "u1": 0.995361,
+      "v1": 0.999756,
+      "aspect": 0.48506
+     }
+    },
+    {
+     "id": "chart",
+     "subject": "periodic-table-style classroom chart",
+     "job": "periodic-chart",
+     "crop": [
+      0,
+      0,
+      1536,
+      1024
+     ],
+     "packedSize": [
+      1024,
+      683
+     ],
+     "packedAt": [
+      0,
+      1040
+     ],
+     "uv": {
+      "u0": 0.000244,
+      "v0": 0.158936,
+      "u1": 0.499756,
+      "v1": 0.491943,
+      "aspect": 1.499268
+     }
+    },
+    {
+     "id": "crystals",
+     "subject": "kit poster: GROW CRYSTALS (triptych panel 2)",
+     "job": "kit-posters",
+     "crop": [
+      525,
+      10,
+      487,
+      1004
+     ],
+     "packedSize": [
+      487,
+      1004
+     ],
+     "packedAt": [
+      1040,
+      1040
+     ],
+     "uv": {
+      "u0": 0.508057,
+      "v0": 0.002197,
+      "u1": 0.745361,
+      "v1": 0.491943,
+      "aspect": 0.48506
+     }
+    },
+    {
+     "id": "robot",
+     "subject": "kit poster: BUILD A ROBOT (triptych panel 3)",
+     "job": "kit-posters",
+     "crop": [
+      1039,
+      10,
+      487,
+      1004
+     ],
+     "packedSize": [
+      487,
+      1004
+     ],
+     "packedAt": [
+      1544,
+      1040
+     ],
+     "uv": {
+      "u0": 0.75415,
+      "v0": 0.002197,
+      "u1": 0.991455,
+      "v1": 0.491943,
+      "aspect": 0.48506
+     }
+    }
+   ],
+   "output": {
+    "url": "assets/textures/skyways/stores/science/science-art.jpg",
+    "bytes": 1072718,
+    "sha256": "b99893617b40127d854ee4f03039532805fd1f55a93ae04108d20c1ea0cf9ca5",
+    "width": 2048,
+    "height": 2048,
+    "format": "jpeg"
+   }
+  }
+ }
+}

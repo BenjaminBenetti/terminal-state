@@ -62,7 +62,7 @@ describe('Skyways cinema store: kinds, art, audits', () => {
     expect(a).toBeTruthy();
     const file = path.join(__dirname, '../public', a.url);
     expect(fs.existsSync(file), a.url).toBe(true);
-    const prov = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/assets/derivatives/skyways-store-cinema-art-20261107.json'), 'utf8'));
+    const prov = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/assets/derivatives/skyways-store-art-20261107.json'), 'utf8')).stores.cinema; // (the combined store-art record)
     expect(prov.generator).toMatch(/Codex native image_gen/);
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(prov.files).toHaveLength(5);
@@ -73,7 +73,7 @@ describe('Skyways cinema store: kinds, art, audits', () => {
     expect(JSON.stringify(prov)).not.toMatch(/\/workspaces\/|\/home\/|https?:\/\//);
     // the cooked atlas, its provenance and CREDITS are allowlisted public inputs (bytes / sha256 as built)
     const allow = JSON.parse(fs.readFileSync(path.join(__dirname, '../../tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
-    for (const rel of [a.url, 'assets/derivatives/skyways-store-cinema-art-20261107.json', 'assets/CREDITS.md']) {
+    for (const rel of [a.url, 'assets/derivatives/skyways-store-art-20261107.json', 'assets/CREDITS.md']) {
       const row = allow.files.find(f => f.path === rel), b = fs.readFileSync(path.join(__dirname, '../public', rel));
       expect(row, rel).toBeTruthy();
       expect(row!.bytes, rel).toBe(b.length);

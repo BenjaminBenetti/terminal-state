@@ -76,7 +76,7 @@ describe('Paper Prairie Books: kinds, assets, palette', () => {
     for (const k of [...BOOKS_SIGN_PIECES, ...BOOKS_RUG_PIECES]) expect(BOOKS_ART.pieces[k], k).toBeTruthy();
     for (const k of BOOKS_SIGN_PIECES) expect(BOOKS_SIGN_BOARD.face.w / BOOKS_ART.pieces[k].aspect).toBeLessThan(BOOKS_SIGN_BOARD.h);
     for (const k of BOOKS_RUG_PIECES) expect(Math.abs(BOOKS_ART.pieces[k].aspect - 1.5)).toBeLessThan(0.02);
-    const prov = JSON.parse(fs.readFileSync(path.join(PUB, 'assets/derivatives/skyways-store-books-art-20261107.json'), 'utf8'));
+    const prov = JSON.parse(fs.readFileSync(path.join(PUB, 'assets/derivatives/skyways-store-art-20261107.json'), 'utf8')).stores.books; // (the combined store-art record)
     expect(prov.generator).toMatch(/Codex native image_gen/);
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(prov.sources).toHaveLength(2);

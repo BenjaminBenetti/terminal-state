@@ -480,7 +480,7 @@ Six original framed-art-print artworks generated for this project with Codex nat
 sheet; Codex thread 01a1b4f6-8104-7391-9ec0-584414b4be67) under the Skyways store lanes' art authorization (task
 studio-alpha-skyways-shops-20261107-054512-01). Runtime derivative (locate / crop / resize / JPEG atlas pack only) built by
 `tools/asset-pipeline/skyways-stores/design/build-art.mjs`; provenance with the prompt and source hash:
-`assets/derivatives/skyways-store-design-art-20261107.json`. The raw generation stays private (studio reference task folder).
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.design`). The raw generation stays private (studio reference task folder).
 
 - `assets/textures/skyways/stores/design/skyways-store-design-prints.jpg` — mid-century arches, a prairie horizon line drawing, larch
   branches, a woven-textile pattern, a birch-lake watercolour and stacked organic shapes.
@@ -493,7 +493,7 @@ Three static artworks generated for this project with Codex native image_gen (ow
 store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): a northern star-chart mural, a periodic-table
 style classroom chart and a triptych of vintage science-kit posters. Runtime derivative (crop / resize / atlas pack only) built by
 `tools/asset-pipeline/skyways-stores/science/build-science-art.mjs`; provenance with the prompts and source hashes:
-`assets/derivatives/skyways-store-science-art-20261107.json`. The raw generations stay private (studio reference task folder).
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.science`). The raw generations stay private (studio reference task folder).
 
 - `assets/textures/skyways/stores/science/science-art.jpg` — the star map, the chart and the three kit posters.
 - Unapproved prototypes; provider terms apply; no commercial clearance implied.
@@ -506,7 +506,7 @@ store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-
 sheets, no text, no real artists or artwork requested), four fictional gig posters, and the NEW ARRIVALS / LISTENING BOOTHS boards and
 eight genre cards. Runtime derivatives (crop / resize / atlas pack only) built by
 `tools/asset-pipeline/skyways-stores/music/build-music-art.mjs`; provenance with the prompts and source hashes:
-`assets/derivatives/skyways-store-music-art-20261107.json`. The raw generations stay private (studio reference task folder).
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.music`). The raw generations stay private (studio reference task folder).
 
 - `assets/textures/skyways/stores/music/music-covers.jpg` — the 64 cover faces of the record-bin stock and the new-arrivals wall.
 - `assets/textures/skyways/stores/music/music-signs.jpg` — the gig posters, the two boards and the genre cards.
@@ -519,7 +519,7 @@ Two static art sheets generated for this project with Codex native image_gen (ow
 store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01): eight carved walnut category signs (invented shop
 signage) and two area rugs (a worn reading-room rug, a children's prairie play rug). Runtime derivative (crop / resize / atlas pack
 only) built by `tools/asset-pipeline/skyways-stores/books/build-books-art.mjs`; provenance with the prompts and source hashes:
-`assets/derivatives/skyways-store-books-art-20261107.json`. The raw generations stay private (studio reference task folder).
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.books`). The raw generations stay private (studio reference task folder).
 
 - `assets/textures/skyways/stores/books/skyways-store-books-art.jpg` — the signs and the rugs.
 - Unapproved prototypes; provider terms apply; no commercial clearance implied.
@@ -531,7 +531,7 @@ Five original flat artworks generated for this project with Codex native image_g
 Skyways store lanes' art authorization (task studio-alpha-skyways-shops-20261107-054512-01). The films, titles and taglines are
 invented (no real films, studios, actors or brands). Runtime derivative (crop / resize / JPEG atlas pack only) built by
 `tools/asset-pipeline/skyways-stores/cinema/build-art.mjs`; provenance with the Codex threads, prompt and source hashes:
-`assets/derivatives/skyways-store-cinema-art-20261107.json`. The raw generations stay private (studio reference task folder).
+`assets/derivatives/skyways-store-art-20261107.json` (section `stores.cinema`). The raw generations stay private (studio reference task folder).
 
 - `assets/textures/skyways/stores/cinema/cinema-art.jpg` — four film posters ("The Coulee Kid", "The Hoppers", "Moonlight on the
   Midway", "Skywalk at Midnight") and the art-deco REFRESHMENTS concession board.

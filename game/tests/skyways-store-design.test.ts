@@ -359,7 +359,7 @@ describe('Larch & Loom Home: the Codex print atlas', () => {
     const file = path.join(pub, DESIGN_ART.url);
     expect(fs.existsSync(file)).toBe(true);
     expect(levelOfAsset(DESIGN_ART.url)).toBe('skyways');
-    const prov = JSON.parse(fs.readFileSync(path.join(pub, 'assets/derivatives/skyways-store-design-art-20261107.json'), 'utf8'));
+    const prov = JSON.parse(fs.readFileSync(path.join(pub, 'assets/derivatives/skyways-store-art-20261107.json'), 'utf8')).stores.design; // (the combined store-art record)
     expect(prov.generator).toMatch(/Codex native image_gen/);
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(prov.codex.nativeSha256Matches).toBe(true);
@@ -375,7 +375,7 @@ describe('Larch & Loom Home: the Codex print atlas', () => {
   it('the atlas and its provenance are allowlisted at their current bytes; no URLs / local paths in the public provenance; CREDITS credits the prints', () => {
     const pub = fileURLToPath(new URL('../public/', import.meta.url));
     const allow = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../../tools/release/public-inputs.json', import.meta.url)), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
-    const PROV = 'assets/derivatives/skyways-store-design-art-20261107.json';
+    const PROV = 'assets/derivatives/skyways-store-art-20261107.json'; // (the combined store-art record)
     for (const rel of [DESIGN_ART.url, PROV]) {
       const b = fs.readFileSync(path.join(pub, rel));
       expect(allow.files.find(f => f.path === rel), rel).toEqual({path: rel, bytes: b.length, sha256: crypto.createHash('sha256').update(b).digest('hex')});

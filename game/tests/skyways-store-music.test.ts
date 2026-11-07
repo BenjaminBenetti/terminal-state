@@ -393,7 +393,7 @@ describe('Northern Groove Records: renderer and art', () => {
       expect(a.url.startsWith('assets/textures/skyways/stores/music/')).toBe(true);
       expect(sha(path.join(ROOT, 'game/public', a.url))).toBe(a.sha256);
     }
-    const prov = JSON.parse(fs.readFileSync(path.join(ROOT, 'game/public/assets/derivatives/skyways-store-music-art-20261107.json'), 'utf8'));
+    const prov = JSON.parse(fs.readFileSync(path.join(ROOT, 'game/public/assets/derivatives/skyways-store-art-20261107.json'), 'utf8')).stores.music; // (the combined store-art record)
     expect(prov.generator).toMatch(/Codex native image_gen/);
     expect(prov.status).toMatch(/unapproved prototype/);
     expect(Object.keys(prov.sources).sort()).toEqual(['covers-1', 'covers-2', 'covers-3', 'covers-4', 'posters', 'signs']);
@@ -402,7 +402,7 @@ describe('Northern Groove Records: renderer and art', () => {
     for (const p of ['new-arrivals', 'listening-booths', 'poster-0', 'poster-3', 'genre-rock', 'genre-electronic']) expect(MUSIC_ART.signs.pieces[p], p).toBeTruthy();
     // the reviewed public inputs allowlist the cooked files at their exact size / hash
     const allow = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
-    for (const rel of [MUSIC_ART.covers.url, MUSIC_ART.signs.url, 'assets/derivatives/skyways-store-music-art-20261107.json']) {
+    for (const rel of [MUSIC_ART.covers.url, MUSIC_ART.signs.url, 'assets/derivatives/skyways-store-art-20261107.json']) {
       const f = path.join(ROOT, 'game/public', rel), e = allow.files.find(q => q.path === rel);
       expect(e, rel).toBeTruthy();
       expect(e!.bytes).toBe(fs.statSync(f).size);

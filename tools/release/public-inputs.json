@@ -5,8 +5,8 @@
   "files": [
     {
       "path": "assets/CREDITS.md",
-      "bytes": 58535,
-      "sha256": "b32435c875d51f3ccbecbfd4cb58a097a42946d412cd94788543196c0b447143"
+      "bytes": 58630,
+      "sha256": "41a66f750ba1e49bfe3653222603260d15b1cd2254afa2d88c8cff39f20e2429"
     },
     {
       "path": "assets/audio/NOTICE.md",
@@ -2334,29 +2334,9 @@
       "sha256": "36cea54c291259d32bade5b0911f262bb8a646026887bdfd385cfee33a2209f1"
     },
     {
-      "path": "assets/derivatives/skyways-store-books-art-20261107.json",
-      "bytes": 7679,
-      "sha256": "4bce598e61906c02d6fe9ce753b2a396f6277452ac838ee24a873049fe481b4b"
-    },
-    {
-      "path": "assets/derivatives/skyways-store-cinema-art-20261107.json",
-      "bytes": 6726,
-      "sha256": "8ae282b1b4a0b9093219fe8949157acab180d7e0afc6565736bf502a3fd5578c"
-    },
-    {
-      "path": "assets/derivatives/skyways-store-design-art-20261107.json",
-      "bytes": 5828,
-      "sha256": "155fe8c011187315b9ac8bc0cc9b512e8632f9458b154384aee86490b2bd0106"
-    },
-    {
-      "path": "assets/derivatives/skyways-store-music-art-20261107.json",
-      "bytes": 27036,
-      "sha256": "9e9e18f31825f504a734af7f3c4ca6527b4fc7242e6cb1eb43706c8157b2b35d"
-    },
-    {
-      "path": "assets/derivatives/skyways-store-science-art-20261107.json",
-      "bytes": 8822,
-      "sha256": "3602a0378d949842107ca0e9fc59f59c3d7a55e7c12e2666624c2a1a99dd419c"
+      "path": "assets/derivatives/skyways-store-art-20261107.json",
+      "bytes": 60076,
+      "sha256": "fdb316c2f18e790882cb482b212caf35de428a029d457f3d55fab65ba462c327"
     },
     {
       "path": "assets/derivatives/skyways-sushi-mascot.json",

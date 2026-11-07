@@ -277,7 +277,7 @@ describe('Big Sky Wonders wall art: Codex atlas, frames and faces (world/skyways
   it('the atlas and its provenance are in game/public (level-only Skyways), every piece inside the atlas at the art\'s own aspect', () => {
     const jpg = fs.readFileSync(fileURLToPath(new URL('../public/' + SCIENCE_ART.url, import.meta.url)));
     expect(levelOfAsset(SCIENCE_ART.url)).toBe('skyways');
-    const prov = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../public/assets/derivatives/skyways-store-science-art-20261107.json', import.meta.url)), 'utf8'));
+    const prov = JSON.parse(fs.readFileSync(fileURLToPath(new URL('../public/assets/derivatives/skyways-store-art-20261107.json', import.meta.url)), 'utf8')).stores.science; // (the combined store-art record)
     expect(prov.output.sha256).toBe(crypto.createHash('sha256').update(jpg).digest('hex'));
     expect(prov.generator).toMatch(/Codex native image_gen/);
     expect(prov.status).toMatch(/unapproved prototype/);

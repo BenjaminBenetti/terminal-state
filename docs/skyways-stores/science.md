@@ -150,7 +150,7 @@ There were three Codex native `image_gen` calls, all accepted:
 They are processed only (crop / resize / pack) into `game/public/assets/textures/skyways/stores/science/science-art.jpg` (2048²,
 level-only Skyways). The build script is `tools/asset-pipeline/skyways-stores/science/build-science-art.mjs`.
 
-- Provenance: `game/public/assets/derivatives/skyways-store-science-art-20261107.json`. Its status is "unapproved prototype, provider
+- Provenance: `game/public/assets/derivatives/skyways-store-art-20261107.json`. Its status is "unapproved prototype, provider
   terms apply".
 - Raw originals, prompts, session ids and rollouts are in the lane's raw backup outside Git.
 - Until the atlas loads, the faces show a plain board. They never show drawn substitute art.

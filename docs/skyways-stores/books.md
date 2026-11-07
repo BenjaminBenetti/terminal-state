@@ -70,5 +70,5 @@ ceiling. Other storey: oak wainscot (1.15 m) under warm cream plaster, deep gree
 Two Codex native image_gen calls (owned route), both accepted first time: the category sign sheet and the rug sheet. Crop / resize /
 pack only: `tools/asset-pipeline/skyways-stores/books/build-books-art.mjs` ->
 `game/public/assets/textures/skyways/stores/books/skyways-store-books-art.jpg` (1024², 236 KB), provenance
-`game/public/assets/derivatives/skyways-store-books-art-20261107.json` (unapproved prototype, provider terms apply). Raw originals,
+`game/public/assets/derivatives/skyways-store-art-20261107.json` (unapproved prototype, provider terms apply). Raw originals,
 prompts and the ledger stay in the private raw backup outside Git.
