@@ -1952,7 +1952,7 @@ function carveRun(k: Kit, id: string, building: string, lower: number, rect: Cel
   const clear = hi === 1 ? CLEAR.lobby : CLEAR.corridor;
   const ceil = r2(BASES[hi] + clear + (enclosed ? 0.4 : 0));
   const kinds = lanes.includes('escalator') ? (lanes.includes('stair') ? 'Escalators & stairs' : 'Escalators') : 'Stairs';
-  const label = id === 'transit' ? `${kinds} · Concourse – Street level` : id.startsWith('pedway') ? 'Stairs · Pedway – Street level' : `${kinds} · Street level – +15`;
+  const label = id === 'transit' ? `${kinds} · Concourse – Street level` : id.startsWith('pedway') ? 'Stairs · Pedway – Street level' : `${kinds} · Street level – Skywalk`; // (version 4: generic wording)
   const area = k.addArea(rect, 'passage', 'stair-core', ceil, -1, {...(lower ? {level: lower, floorY: BASES[lower]} : {}), also: [hi], role: 'stair', publicSpace: true, label});
   const out: RunLaneCarve[] = [];
   let off = 0;

@@ -84,6 +84,7 @@ import {installStalls, type StallSystem} from './world/stalls'; // Task office-o
 import {installTower, type TowerRuntime} from './world/towerRuntime'; // Iteration 16 (lane TOWER): elevator, stair doors, windows, exterior
 import {installSkywaysWindows, type SkywaysWindowRuntime} from './world/skywaysWindows'; // task studio-skyways-level-20261106-054448 (lane GAS): the Skyways glazing
 import {installSkywaysExterior} from './world/skywaysExterior'; // task studio-skyways-level-20261106-054448 (lane VIEW): the city outside the Skyways glass
+import {skywalkText} from './gen/skyways/skywalkText'; // task studio-skywalk-variety-20261107-231448-01: player-facing Skyways wording
 import {installOfficeAtmosphere} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office textures, roof outdoor fog
 import {installMallAtmosphere} from './world/mallAtmosphere'; // Task track3-eaton-centre-20261031 (lane ARCH): the mall's light haze / far plane
 import {installReactorArch} from './world/reactor/archInstall'; // task reactor-build-20261101 (lane ARCH): Reactor surface sets, deep haze / far plane, kit visuals tick
@@ -2885,7 +2886,7 @@ export class Game {
     const storey = (this.layout.office || this.layout.mall || this.layout.skyways) && area >= 0 ? storeyLabel(this.layout, this.layout.areas[area].level ?? 0) : '';
     // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed)
     const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
-    const storeyText = storeyName && !(area >= 0 && this.layout.areas[area].label.includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
+    const storeyText = storeyName && !(area >= 0 && (this.layout.skyways ? skywalkText(this.layout.areas[area].label) : this.layout.areas[area].label).includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       // lane AMMO: a gun shows the caliber it loads ("Pistol · 9mm"); the reserve counts that caliber's pool.
@@ -2896,7 +2897,7 @@ export class Game {
       hint, prompt, promptItem: lanePrompt ? undefined : this.currentTarget?.stack.itemId,
       remaining: this.zombies.filter(z => z.brain.alive).length, total: this.layout.zombies.length, // Iteration 16: kills earlier in the run stay dead (not spawned)
       objLine: '', // (campaign foundation) the scavenge objective has no kill counter
-      area: area >= 0 ? `${this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name,
+      area: area >= 0 ? `${this.layout.skyways ? skywalkText(this.layout.areas[area].label) : this.layout.areas[area].label}${storeyText} · ${this.layout.name}` : (multi ? this.levels.cellKindAt(p.x, p.z, p.y) : this.layout.grid.get(...this.layout.grid.cellOf(p.x, p.z))) === 2 ? `Track bed · ${this.layout.name}` : this.layout.name, // (Skyways: no '+15' wording, task studio-skywalk-variety-20261107-231448-01)
       spreadPx, aiming: this.aiming, flashlight: this.flashlightOn,
       use: this.use ? {label: useLabel(itemDef(this.use.itemId)), progress: this.use.t / this.use.total} : null,
       food: this.survival.hunger, water: this.survival.thirst,

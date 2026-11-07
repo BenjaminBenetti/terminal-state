@@ -63,7 +63,7 @@ export const SKYWAYS_REJECTS = new Map<string, number>();
 export const SKYWAYS_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, lastFail: '', issues: [] as string[]};
 /** Grid cell budget (W x H) of the layout with its track extensions (per-storey arrays scale with it). */
 export const SKYWAYS_EXT_MAX_CELLS = 120_000;
-/** Display name of the complex ("<name> +15"). */
+/** Display name of the complex ("<name> Skywalk"; versions 1–3 recorded "<name> +15"). */
 export const SKYWAYS_GENERIC_NAME = 'Skyways';
 
 export interface SkywaysGenOptions {
@@ -278,13 +278,13 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
     return {x, y: BASES[a.level], z, yaw: r3(a.car.yaw), level: a.level, area: ga.area[ga.idx(cx, cy)]};
   })() : undefined;
   const entryCell = a.entry;
-  const name = `${host.b.name.split(' ')[0]} +15`;
+  const name = `${host.b.name.split(' ')[0]} Skywalk`; // (version 4: generic wording)
   void levelSeed;
   return {
     version: 1, name, groundY, storeys: [
       {level: 0, role: 'station', label: 'Concourse', baseY: BASES[0], clear: CLEAR.concourse},
       {level: 1, role: 'street', label: 'Street level', baseY: BASES[1], clear: CLEAR.lobby},
-      {level: 2, role: 'skyway', label: '+15 Skyway', baseY: BASES[2], clear: CLEAR.skyway},
+      {level: 2, role: 'skyway', label: 'Skywalk', baseY: BASES[2], clear: CLEAR.skyway}, // (version 4: generic wording, task studio-skywalk-variety-20261107-231448-01)
     ],
     buildings, bridges, streets, windows,
     addon: {
