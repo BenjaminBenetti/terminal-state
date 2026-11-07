@@ -375,7 +375,7 @@ line whose velvet ropes the runtime draws from `addon.queues`, the welcome sign,
 a mannequin cosplay display), panel rooms (two tables, panelists, audience rows, a tripod screen), the photo lounge (photo-op wall,
 `photo-pose` statue, armchairs / bean bags / ottoman / plants) and event wayfinding on the sign system. Every furniture group is kept only
 if every opening of its area that was reachable before stays reachable by a 1.2 m wide path (then reserved as lanes); 1.5 m stays clear in
-front of every door. Existing kinds keep their classes; FOUR new art-panel kinds (`gen/skyways/addonKinds.ts`, drawn by
+front of every door. Existing kinds keep their classes; FIVE new art-panel kinds (`gen/skyways/addonKinds.ts`, drawn by
 `world/skywaysAddon.ts` from the venue's Codex atlas `textures/skyways/skyways-venue-art.jpg`, crop / pack only):
 
 | Kind | What | Openables audit | Physics audit | Scale check W×H×D (contact) |
@@ -384,6 +384,12 @@ front of every door. Existing kinds keep their classes; FOUR new art-panel kinds
 | `skywaysVenueScreen` | tripod projection screen showing the panel's title slide (variant = slide) | `none` | **dynamic** 9 kg box, `pad` | 2.18 × 2.30 × 0.50 m, screen 0.80–2.20 m; grounded (T-foot) |
 | `skywaysVenueRegSign` | framed registration sign screwed to the wall behind the badge desks | `none` | static `mounted` | 1.56 × 1.06 m at 1.30–2.36 m |
 | `skywaysVenueTableBanner` | vinyl booth banner zip-tied along a vendor table's cloth front (hosted on the table; variant = studio) | `none` | static `mounted` | 0.90 × 0.60 m at 0.11–0.71 m, under the 0.757 m top |
+| `skywaysVenueWallScreen` | a compact panel room's projection screen fixed to the wall behind the panel (variant = slide) | `none` | static `mounted` | 1.88 × 1.28 × 0.05 m at 1.15–2.43 m |
+
+- Every carved event room is dressed, compact ones too: a narrow panel room gets one table and two panelists, closer audience rows and
+  the slide on the wall screen; a compact lounge keeps its photo wall, the posed statue only where it fits, the seating that fits.
+- Routes: besides each area's own openings, the WHOLE walk (the public venue areas + the main hall) is checked from every bridge mouth;
+  the main hall keeps a lane from its entry to every other door of it (the rooms carved off it, the back of house).
 
 - No loose items baked in: the panels are print + frame only; merch / chairs are separate props.
 - The STAGE (`gen/skyways/stageSupport.ts`, user: "anime stage stairs must be walkable"): at runtime (`game.ts`, after the world is drawn,
@@ -393,7 +399,7 @@ front of every door. Existing kinds keep their classes; FOUR new art-panel kinds
   height, and collision-only truss boxes (stage variant 2) keep bodies out of the truss / backdrop line. Zombies' paths reach the deck by
   the steps. Version 3 stands the deck edge on a cell line (drawn ↔ support exact but the bottom riser, 8 cm); the frozen v1 / v2 stages
   get the same runtime support (within 0.15 m), their layout data unchanged.
-- Renders: the four kinds (shape GLBs) + `skyways-con-merch-table.glb`, `scale-check.mjs --prop … --lift 1.3 (sign) / 0.11 (banner)`,
+- Renders: the five kinds (shape GLBs) + `skyways-con-merch-table.glb`, `scale-check.mjs --prop … --lift 1.3 (sign) / 0.11 (banner) / 1.15 (wall screen)`,
   viewed beside zombie `lastshift` at runtime scale 1.0.
 - Tests: `tests/skyways-venue.test.ts` (roles, signature pieces, nothing floating, 1.2 m routes from every bridge mouth to every room door /
   the stage steps / the washrooms, door strips, wayfinding arrows, the venue atlas' provenance; the drawn stage heights vs the support; a

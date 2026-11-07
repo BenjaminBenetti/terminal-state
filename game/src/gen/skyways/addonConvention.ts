@@ -60,7 +60,7 @@ export interface ConventionResult {
   booth: PropPlacement[];
   statues: {role: StatueRole; pose: SkywaysMascotPoseName; scale: number; prop: PropPlacement}[];
   /** The reserved lanes (world segments, half width). */
-  lanes: {ax: number; az: number; bx: number; bz: number; half: number; to: 'stage' | 'washrooms'}[];
+  lanes: {ax: number; az: number; bx: number; bz: number; half: number; to: 'stage' | 'washrooms' | 'rooms'}[];
   washroomDoor: Door | null;
 }
 
@@ -144,6 +144,12 @@ export function dressConvention(d: AddonDresser): ConventionResult {
     const W = doorPoint(wDoor, hall);
     wIn = [W.x + W.nx * 0.8, W.z + W.nz * 0.8];
     lane(d, res, ein, wIn, 'washrooms');
+  }
+  // (lane VENUE, layout version 3) and to every other door of the hall: the venue's event rooms carved off it, the back of house
+  for (const door of layout.doors) {
+    if ((door.a !== hall.id && door.b !== hall.id) || door === d.entry || door === wDoor) continue;
+    const P = doorPoint(door, hall);
+    lane(d, res, ein, [P.x + P.nx * 0.8, P.z + P.nz * 0.8], 'rooms');
   }
 
   // --- 3. audience rows facing the stage ------------------------------------------------------------------------------------
@@ -334,7 +340,7 @@ export function conventionStatues(res: Pick<ConventionResult, 'statues'>, level:
 
 // ---------------------------------------------------------------------------------------------
 
-function lane(d: AddonDresser, res: ConventionResult, a: readonly [number, number], b: readonly [number, number], to: 'stage' | 'washrooms'): void {
+function lane(d: AddonDresser, res: ConventionResult, a: readonly [number, number], b: readonly [number, number], to: 'stage' | 'washrooms' | 'rooms'): void {
   d.keepSegment(a[0], a[1], b[0], b[1], CON_LANE_HALF);
   res.lanes.push({ax: r3(a[0]), az: r3(a[1]), bx: r3(b[0]), bz: r3(b[1]), half: CON_LANE_HALF, to});
 }

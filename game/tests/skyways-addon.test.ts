@@ -124,7 +124,7 @@ function reach(L: StationLayout, level: number, from: [number, number], to: [num
 
 describe('add-on kinds: registered, classified in both audits, models / art on file', () => {
   it('every kind has a footprint, a never-breaking damage class, one openables row and a physics row that agrees with the live physics', () => {
-    expect(SKYWAYS_ADDON_KINDS.length).toBe(17); // 13 + (lane VENUE) the photo-op wall, the tripod screen, the registration sign, the table banner
+    expect(SKYWAYS_ADDON_KINDS.length).toBe(18); // 13 + (lane VENUE) the photo-op wall, the tripod screen, the registration sign, the table banner, the wall screen
     for (const k of SKYWAYS_ADDON_KINDS) {
       expect(isSkywaysAddonKind(k)).toBe(true);
       expect(/^[A-Za-z]+$/.test(k), `${k}: prop-<kind> mesh names (damage/propDamage.ts NAME_RE)`).toBe(true);
@@ -502,7 +502,7 @@ describe('world/skywaysAddon.ts + skywaysAddonRuntime.ts: drawn at real size, ro
     props.push(...ringPosts());
     // (lane VENUE) the venue's art panels: the photo-op wall, a tripod screen, the registration sign on a wall, a banner on the table front
     props.push(place('skywaysVenuePhotoWall', 50, 30), place('skywaysVenueScreen', 56, 30, {variant: 1}), place('skywaysVenueRegSign', 60, 0.52, {y: 1.3, mounted: true}),
-      place('skywaysVenueTableBanner', 30, 25 + 0.415, {y: 0.11, mounted: true, host: ti, variant: 2}));
+      place('skywaysVenueTableBanner', 30, 25 + 0.415, {y: 0.11, mounted: true, host: ti, variant: 2}), place('skywaysVenueWallScreen', 64, 0.53, {y: 1.15, mounted: true, variant: 1}));
     return {layout: room(props), stage, table};
   }
 
