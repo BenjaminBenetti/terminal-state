@@ -59,6 +59,8 @@ export interface PutOpts {
   doorOk?: boolean;
   /** Skip the door-zone rule (1 m round every door): only for pieces that belong beside a door (a bin, a cabinet by the frame). */
   zoneOk?: boolean;
+  /** May stand on reserved floor (a lane's edge): only light movable posts that leave the lane passable (the rope queue). */
+  keepOk?: boolean;
 }
 
 export class CinemaKit {
@@ -68,6 +70,19 @@ export class CinemaKit {
   readonly lobby: Region;
   readonly placed: PropPlacement[] = [];
   readonly skipped: string[] = [];
+  /** Why floor placements were refused (reason -> count; QA / tests). */
+  readonly refused: Record<string, number> = {};
+  /** QA: when set, refusals are described here. */
+  trace: string[] | null = null;
+  /** The dresser's current step (keys `refused`). */
+  phase = '';
+  private cur = '';
+  private no(why: string): null {
+    const key = this.phase ? `${this.phase}:${why}` : why;
+    this.refused[key] = (this.refused[key] ?? 0) + 1;
+    if (this.trace && this.trace.length < 400) this.trace.push(`${key} ${this.cur}`);
+    return null;
+  }
   /** The storefront entry: centre along the front (u, lobby frame) and its half width (m). */
   readonly entryU: number;
   readonly entryHalf: number;
@@ -104,7 +119,9 @@ export class CinemaKit {
     const box: Area = {...as[0], x: x0, y: y0, w: x1 - x0, h: y1 - y0};
     const fr = hallFrame(box, front), set = new Set(ids), g = this.g;
     const base = as[0].floorY ?? this.layout.levels[this.level]?.baseY ?? 0;
-    const allDoors = this.layout.doors.filter(d => this.touches(d, set));
+    // the region's own doors (recorded against one of its areas: the auditorium door may be recorded against the floor while it opens
+    // off a piece) that open onto one of its cells
+    const allDoors = this.layout.doors.filter(d => (set.has(d.a) || set.has(d.b)) && this.touches(d, set));
     const doors: RegionDoor[] = [];
     for (const d of allDoors) {
       if (d.shopfront) continue;
@@ -122,9 +139,12 @@ export class CinemaKit {
   }
   /** Does door `d` open onto a cell of the set (a cell beside its rect)? */
   private touches(d: Door, set: ReadonlySet<number>): boolean {
-    for (let y = d.y - 1; y <= d.y + d.h; y++) for (let x = d.x - 1; x <= d.x + d.w; x++) if (this.inSet(set, x, y)) return true;
+    // a cell directly in front of / behind the opening (never a diagonal neighbour round a corner)
+    if (d.h === 1) { for (let x = d.x; x < d.x + d.w; x++) if (this.inSet(set, x, d.y - 1) || this.inSet(set, x, d.y + 1)) return true; return false; }
+    for (let y = d.y; y < d.y + d.h; y++) if (this.inSet(set, d.x - 1, y) || this.inSet(set, d.x + 1, y)) return true;
     return false;
   }
+
   private inSet(set: ReadonlySet<number>, x: number, y: number): boolean {
     const g = this.g;
     return g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && set.has(g.area[g.idx(x, y)]);
@@ -176,9 +196,14 @@ export class CinemaKit {
   /** The approach point of a door (0.9 m in front of it, inside the region). */
   approach(dr: RegionDoor, off = 0.9): [number, number] { return [r3(dr.u + dr.nu * off), r3(dr.v + dr.nv * off)]; }
   /** A lane from (u0, v0) to a door: across at `vRun` to the door's approach line, then straight to its opening. */
-  laneToDoor(rg: Region, u0: number, v0: number, vRun: number, dr: RegionDoor, half = 0.75): void {
+  laneToDoor(rg: Region, u0: number, v0: number, vRun: number, dr: RegionDoor, half = 0.75, frontRun?: number): void {
     const [au, av] = this.approach(dr);
-    if (dr.nu !== 0) {
+    if (dr.nu !== 0 && frontRun !== undefined) {
+      // a door in a side wall: across along the front strip `frontRun`, up beside that wall to its depth, into it (the room's middle
+      // stays free)
+      const wu = dr.u + dr.nu * (half + 0.15);
+      this.keepUV(rg, u0, frontRun, wu, frontRun, half); this.keepUV(rg, wu, frontRun, wu, dr.v, half); this.keepUV(rg, wu, dr.v, dr.u, dr.v, half);
+    } else if (dr.nu !== 0) {
       // a door in a side wall: along v to its depth, across to it
       this.keepUV(rg, u0, v0, u0, av, half); this.keepUV(rg, u0, av, dr.u, dr.v, half);
     } else {
@@ -202,22 +227,25 @@ export class CinemaKit {
 
   /** A floor prop at world (x, z) on the region's floor (the rules in the header); recorded and journaled. */
   putXZ(rg: Region, kind: PropKind, x: number, z: number, yaw: number, o: PutOpts = {}): PropPlacement | null {
+    if (this.trace) { const [u, v] = this.uv(rg, x, z); this.cur = `${kind} ${rg.name} u ${u.toFixed(2)} v ${v.toFixed(2)}`; }
     const g = this.g, ctx = this.ctx, def = PROP_DEFS[kind];
     const rot = quarterYaw(yaw);
     const {hx, hz} = footprint(kind, rot);
     x = r3(x); z = r3(z);
     const [x0, y0, x1, y1] = cellsOfBox(x, z, hx, hz);
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
-      if (!this.inSet(rg.ids, cx, cy)) return null;
+      if (!this.inSet(rg.ids, cx, cy)) return this.no('outside');
       const i = g.idx(cx, cy);
-      if (g.blocked[i] || ctx.keep[i] || ctx.edge[i] || g.rampIdx[i] >= 0) return null;
-      if (ctx.doorCell[i] && !o.doorOk) return null;
-      if (ctx.zone[i] && !o.zoneOk) return null;
+      if (g.blocked[i]) return this.no('blocked');
+      if (ctx.keep[i] && !o.keepOk) { if (this.trace) { const [cu, cv] = this.uv(rg, (cx + 0.5) * CELL, (cy + 0.5) * CELL); this.cur += ` cell u ${cu} v ${cv}`; } return this.no('keep'); }
+      if (ctx.edge[i] || g.rampIdx[i] >= 0) return this.no('edge');
+      if (ctx.doorCell[i] && !o.doorOk) return this.no('door');
+      if (ctx.zone[i] && !o.zoneOk) return this.no('zone');
     }
     const area = this.areaAt(rg, x, z);
-    if (!area) return null;
+    if (!area) return this.no('outside');
     const f = this.floorAt(rg, x, z);
-    if (!boxClear(ctx, x - hx, x + hx, f, f + def.h, z - hz, z + hz)) return null;
+    if (!boxClear(ctx, x - hx, x + hx, f, f + def.h, z - hz, z + hz)) return this.no('box');
     // walkway ring
     let ring: [number, number, number, number] | null = null;
     if (o.ring) {
@@ -225,9 +253,9 @@ export class CinemaKit {
       ring = [x0 - rc, y0 - rc, x1 + rc, y1 + rc];
       for (let cy = ring[1]; cy <= ring[3]; cy++) for (let cx = ring[0]; cx <= ring[2]; cx++) {
         if (cx >= x0 && cx <= x1 && cy >= y0 && cy <= y1) continue;
-        if (!g.walkable(cx, cy)) return null;
+        if (!g.walkable(cx, cy)) return this.no('ring');
         const i = g.idx(cx, cy);
-        if (ctx.keep[i] && !rg.ids.has(g.area[i])) return null;
+        if (ctx.keep[i] && !rg.ids.has(g.area[i])) return this.no('ring');
       }
     }
     // access strip in front (openables: their swing / drawer strip over the full width)
@@ -236,17 +264,17 @@ export class CinemaKit {
     if (o.front || swing) {
       const hd = def.d / 2, fl = Math.max(o.front ?? 0, swing), hw = swing ? def.w / 2 - 0.02 : def.w / 2 * 0.8;
       strip = cellsOfBox(x + fx * (hd + fl / 2), z + fz * (hd + fl / 2), fx ? fl / 2 : hw, fz ? fl / 2 : hw);
-      for (let cy = strip[1]; cy <= strip[3]; cy++) for (let cx = strip[0]; cx <= strip[2]; cx++) if (!g.walkable(cx, cy)) return null;
+      for (let cy = strip[1]; cy <= strip[3]; cy++) for (let cx = strip[0]; cx <= strip[2]; cx++) if (!g.walkable(cx, cy)) return this.no('front');
     }
     // stocked displays: no wall within 1.5 m in front
     if (STOCK_DISPLAY_KINDS.has(kind)) {
       const hd = def.d / 2, fl = STOCK_OPEN_FRONT, hw = def.w / 2 * 0.8;
       const [c0, c1, c2, c3] = cellsOfBox(x + fx * (hd + fl / 2), z + fz * (hd + fl / 2), fx ? fl / 2 : hw, fz ? fl / 2 : hw);
-      for (let cy = c1; cy <= c3; cy++) for (let cx = c0; cx <= c2; cx++) if (g.get(cx, cy) === SOLID) return null;
+      for (let cy = c1; cy <= c3; cy++) for (let cx = c0; cx <= c2; cx++) if (g.get(cx, cy) === SOLID) return this.no('display front');
     }
     const s = this.save();
     for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); this.mark(g.blocked, i); if (def.blocksSight) this.mark(g.sightBlocked, i); }
-    if (!this.connected(rg)) { this.restore(s); return null; }
+    if (!this.connected(rg)) { this.restore(s); return this.no('connect'); }
     if (strip) for (let cy = strip[1]; cy <= strip[3]; cy++) for (let cx = strip[0]; cx <= strip[2]; cx++) if (g.inBounds(cx, cy)) this.mark(ctx.keep, g.idx(cx, cy));
     if (ring) for (let cy = ring[1]; cy <= ring[3]; cy++) for (let cx = ring[0]; cx <= ring[2]; cx++) if (g.inBounds(cx, cy) && !g.blocked[g.idx(cx, cy)]) this.mark(ctx.keep, g.idx(cx, cy));
     const p: PropPlacement = {kind, x, z, y: r3(f), rot, area: area.id, hx: r3(hx), hz: r3(hz), h: def.h, blocksSight: def.blocksSight, variant: o.variant ?? 0,
@@ -265,11 +293,49 @@ export class CinemaKit {
     p.hx = p.hz = r3(hx);
     return p;
   }
-  /** Contiguous units (seat rows, counter runs): all or nothing. */
+  /**
+   * A contiguous run (seat rows): every footprint on free unreserved floor of the region (touching units may share a boundary cell: a
+   * 2.4 m block is not a whole number of cells), no 3D overlap with any prop or each other, then all cells blocked at once; all or
+   * nothing, the region staying one connected room.
+   */
   putRow(rg: Region, items: readonly {kind: PropKind; x: number; z: number; rot: number; variant?: number}[], o: PutOpts = {}): PropPlacement[] {
+    if (!items.length) return [];
+    const g = this.g, ctx = this.ctx;
+    const boxes = items.map(it => {
+      const rot = quarterYaw(it.rot), {hx, hz} = footprint(it.kind, rot), x = r3(it.x), z = r3(it.z);
+      return {...it, rot, hx, hz, x, z, f: this.floorAt(rg, x, z), h: PROP_DEFS[it.kind].h};
+    });
+    for (const [n, b] of boxes.entries()) {
+      const [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) {
+        if (!this.inSet(rg.ids, cx, cy)) return this.no('outside') ?? [];
+        const i = g.idx(cx, cy);
+        if (g.blocked[i]) return this.no('blocked') ?? [];
+        if (ctx.keep[i]) return this.no('keep') ?? [];
+        if (ctx.edge[i] || ctx.doorCell[i] || ctx.zone[i] || g.rampIdx[i] >= 0) return this.no('door') ?? [];
+      }
+      if (!boxClear(ctx, b.x - b.hx, b.x + b.hx, b.f, b.f + b.h, b.z - b.hz, b.z + b.hz)) return this.no('box') ?? [];
+      for (let j = 0; j < n; j++) {
+        const q = boxes[j];
+        if (Math.min(b.x + b.hx, q.x + q.hx) - Math.max(b.x - b.hx, q.x - q.hx) > 0.01 && Math.min(b.z + b.hz, q.z + q.hz) - Math.max(b.z - b.hz, q.z - q.hz) > 0.01) return this.no('overlap') ?? [];
+      }
+    }
+    const s = this.save();
+    for (const b of boxes) {
+      const [x0, y0, x1, y1] = cellsOfBox(b.x, b.z, b.hx, b.hz);
+      for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) { const i = g.idx(cx, cy); this.mark(g.blocked, i); if (PROP_DEFS[b.kind].blocksSight) this.mark(g.sightBlocked, i); }
+    }
+    if (!this.connected(rg)) { this.restore(s); return this.no('connect') ?? []; }
     const out: PropPlacement[] = [];
-    const ok = items.length > 0 && this.tx(() => items.every(it => { const p = this.putXZ(rg, it.kind, it.x, it.z, it.rot, {...o, variant: it.variant ?? o.variant}); if (p) out.push(p); return !!p; }));
-    return ok ? out : [];
+    for (const b of boxes) {
+      const area = this.areaAt(rg, b.x, b.z)!;
+      const p: PropPlacement = {kind: b.kind, x: b.x, z: b.z, y: r3(b.f), rot: b.rot, area: area.id, hx: r3(b.hx), hz: r3(b.hz), h: b.h, blocksSight: PROP_DEFS[b.kind].blocksSight,
+        variant: b.variant ?? o.variant ?? 0, ...(this.level ? {level: this.level} : {}), ...(o.purpose ? {purpose: o.purpose} : {})};
+      this.layout.props.push(p);
+      this.placed.push(p);
+      out.push(p);
+    }
+    return out;
   }
 
   /**

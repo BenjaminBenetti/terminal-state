@@ -27,7 +27,6 @@ import {CELL} from '../../grid';
 import {PROP_DEFS, type PropKind, type PropPlacement} from '../../props';
 import {doorSide} from '../../placeKit';
 import {hostTop} from '../../props07Dress';
-import {stockVariant} from '../../purposeShapes';
 import type {Area, SignPlacement, SignStyle, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {OPP, doorBetween} from '../addonFrame';
@@ -56,8 +55,12 @@ export interface CinemaResult {
   signs: SignPlacement[];
   /** Region frames (tests: lanes / routes). */
   lobbyIds: number[];
+  /** Why floor placements were refused (reason -> count; QA). */
+  refused: Record<string, number>;
 }
 export const CINEMA_LAST = new Map<string, CinemaResult>();
+/** QA: trace refusals and keep the reserved cells (tests / tools only). */
+export const CINEMA_DEBUG = {trace: false, keepCells: [] as number[], log: [] as string[]};
 
 const snap = (v: number) => Math.round(v * 2) / 2;
 const cellUp = (v: number) => Math.ceil(v / CELL - 1e-6) * CELL;
@@ -68,12 +71,16 @@ const counterBack = (backD: number): number => cellUp(0.03 + backD + 0.95);
 /** Dresses one Aurora Picture House; returns the props placed. */
 export function dressCinema(layout: StationLayout, rng: Rng, anchor: SkywaysAnchor): number {
   const k = new CinemaKit(layout, rng, anchor);
-  const res: CinemaResult = {props: [], skipped: k.skipped, concession: [], booth: null, queue: [], cases: [], staff: [], seats: 0, signs: [], lobbyIds: [...k.lobby.ids]};
+  if (CINEMA_DEBUG.trace) k.trace = CINEMA_DEBUG.log = [];
+  const res: CinemaResult = {props: [], skipped: k.skipped, concession: [], booth: null, queue: [], cases: [], staff: [], seats: 0, signs: [], lobbyIds: [...k.lobby.ids], refused: k.refused};
   const s0 = layout.signs.length;
-  const lobby = dressLobby(k, res);
+  // the back rooms first (their own rooms), then the lobby (its staff corner only for what they had no room for), then the auditorium
+  dressBackRooms(k, res);
+  dressLobby(k, res);
   for (const z of anchor.zones) { const a = layout.areas[z]; if (a) dressAuditorium(k, a, res); }
-  dressBackRooms(k, res, lobby);
+  for (const kind of ['filingCabinet', 'staffLockers'] as const) if (!res.staff.some(p => p.kind === kind)) k.skipped.push(kind);
   res.props = k.placed;
+  if (CINEMA_DEBUG.trace) { CINEMA_DEBUG.keepCells = []; k.ctx.keep.forEach((v, i) => { if (v && !k.g.blocked[i]) CINEMA_DEBUG.keepCells.push(i); }); }
   res.signs = layout.signs.slice(s0);
   CINEMA_LAST.set(anchor.id, res);
   return k.count;
@@ -84,7 +91,7 @@ export function dressCinema(layout: StationLayout, rng: Rng, anchor: SkywaysAnch
 
 interface LobbyPlan { concession: {side: -1 | 1; u0: number; u1: number; outer: number} | null }
 
-function dressLobby(k: CinemaKit, res: CinemaResult): LobbyPlan {
+function dressLobby(k: CinemaKit, res: CinemaResult): void {
   const L = k.lobby, an = k.anchor, W = L.fr.W, D = L.fr.D;
   k.settleDoors(L);
   const audDoors = L.doors.filter(d => an.zones.includes(d.to));
@@ -93,21 +100,56 @@ function dressLobby(k: CinemaKit, res: CinemaResult): LobbyPlan {
   const du = aud?.u ?? W / 2, dHalf = aud?.half ?? 1.0;
   const cd = PROP_DEFS.shopCounter.d;
   const cv = r3(D - counterBack(PROP_DEFS.cabinetLow.d) - cd / 2);
-  const vMid = r3(Math.max(1.3, Math.min(2.2, cv - cd / 2 - 0.8)));
+  // the cross walk runs in front of the counters' customer strip (its edge never reaches the counter front)
+  const AUD_HALF = 0.9, vMid = r3(Math.max(1.2, Math.min(2.2, cv - cd / 2 - AUD_HALF - 0.05)));
   // --- lanes: the entry spine, the walk to the auditorium doors (wide) and to every staff door
   const spine = Math.max(0.75, Math.min(1.1, k.entryHalf));
-  k.keepUV(L, k.entryU, 0, k.entryU, vMid, spine);
-  for (const d of audDoors) k.laneToDoor(L, k.entryU, 0, vMid, d, Math.min(1.0, d.half));
-  for (const d of staffDoors) k.laneToDoor(L, k.entryU, 0, vMid, d, 0.75);
-  // --- the concession stand (the roomier side of the auditorium doors first)
-  const plan: LobbyPlan = {concession: null};
-  const spans = ([-1, 1] as const).map(s => ({s, span: backSpan(k, L, du + s * (dHalf + 1.1), s)})).sort((p, q) => (q.span[1] - q.span[0]) - (p.span[1] - p.span[0]));
-  for (const {s, span} of spans) { if ((plan.concession = concession(k, L, res, s, span, cv))) break; }
-  if (!plan.concession) k.skipped.push('concession');
-  // --- the box office by the entry, on the side away from the walk to the auditorium (its window toward the entry spine)
+  // (the spine ends short of the counters' front: its round end cap never reaches a counter)
+  k.keepUV(L, k.entryU, 0, k.entryU, Math.min(vMid, cv - cd / 2 - spine - 0.05), spine);
+  for (const d of audDoors) k.laneToDoor(L, k.entryU, 0, vMid, d, Math.min(AUD_HALF, d.half));
+  // (a staff door in a side wall: along the storefront strip and up that wall, the lobby middle free)
+  for (const d of staffDoors) k.laneToDoor(L, k.entryU, 0, vMid, d, d.nu !== 0 ? 0.6 : 0.75, 0.5);
+  k.trace?.push(`lanes entryU ${k.entryU} half ${k.entryHalf} du ${du} W ${W} D ${D} vMid ${vMid} cv ${cv} doors ${L.doors.map(d => `${d.to}@${d.u},${d.v} n${d.nu},${d.nv}`).join(' ')}`);
+  // --- the box office by the entry (on the side away from the walk to the auditorium) and the concession stand (the roomier side of the
+  // auditorium doors first): kiosk first, else (no stand fitted beside it) the stand first and the kiosk where it still fits
   const bDir: -1 | 1 = du >= k.entryU ? -1 : 1;
-  res.booth = boxOffice(k, L, res, bDir, spine) ?? boxOffice(k, L, res, (-bDir) as -1 | 1, spine);
+  const spans = ([-1, 1] as const).map(s => ({s, span: backSpan(k, L, du + s * (dHalf + 1.1), s)})).sort((p, q) => (q.span[1] - q.span[0]) - (p.span[1] - p.span[0]));
+  const plan: LobbyPlan = {concession: null};
+  const booth = () => { k.phase = 'booth'; return boxOffice(k, L, res, bDir, spine) ?? boxOffice(k, L, res, (-bDir) as -1 | 1, spine); };
+  const stand = () => { k.phase = 'concession'; for (const {s, span} of spans) { const c = concession(k, L, res, s, span, cv); if (c) return c; } return null; };
+  // both orders are tried (no rng drawn: repeatable) and the better lobby kept: the fuller stand, then the kiosk and its queue
+  const s0 = k.save(), r0 = {queue: res.queue.length, staff: res.staff.length, skipped: k.skipped.length};
+  const reset = () => { k.restore(s0); res.queue.length = r0.queue; res.staff.length = r0.staff; k.skipped.length = r0.skipped; res.concession = []; };
+  const score = (b: ReturnType<typeof booth>, c: LobbyPlan['concession']) =>
+    (c ? 10 + 3 * res.concession.filter(p => p.kind === 'shopCounter' || p.kind === 'shopDisplay').length + res.concession.length * 0.1 : 0) + (b ? 6 + Math.min(4, res.queue.length) : 0);
+  const kioskFirst = (): [ReturnType<typeof booth>, LobbyPlan['concession']] => { const b = booth(); return [b, stand()]; };
+  const standFirst = (): [ReturnType<typeof booth>, LobbyPlan['concession']] => { const c = stand(); return [booth(), c]; };
+  let [b, c] = kioskFirst();
+  const scoreA = score(b, c);
+  reset();
+  [b, c] = standFirst();
+  if (score(b, c) < scoreA) { reset(); [b, c] = kioskFirst(); }
+  plan.concession = c;
+  res.booth = b?.booth ?? null;
+  if (b) k.layout.signs.push(b.sign);
   if (!res.booth) k.skipped.push('box office');
+  if (!plan.concession) k.skipped.push('concession');
+  else {
+    const c = plan.concession;
+    const pc = nearest(k, L, 'skyDPopcornCart', c.outer + c.side * 1.4, cv - 1.2, 2.5, L.fr.toFront, {ring: 0.3});
+    if (pc) res.concession.push(pc); else k.skipped.push('popcorn cart');
+  }
+  k.phase = 'lobby';
+  // --- lobby benches against the side walls (else the back wall), facing in
+  let benches = 0;
+  for (const w of ['L', 'R', 'B'] as const) {
+    if (benches >= 2) break;
+    const len = w === 'B' ? W : D;
+    for (let t = w === 'B' ? 1.0 : 0.6; t + PROP_DEFS.bench.w <= len - 0.4 && benches < 2; t += 0.5) {
+      if (k.atWall(L, w, r3(t + PROP_DEFS.bench.w / 2), 'bench', {front: 0.6})) { benches++; break; }
+    }
+  }
+  if (!benches) k.skipped.push('benches');
   // --- NOW SHOWING poster cases: flanking the auditorium doors, then the side walls, then the back wall
   const first = k.rng.int(0, CINEMA_POSTER_PIECES.length - 1);
   const caseAt = (w: Wall, t: number) => {
@@ -124,16 +166,6 @@ function dressLobby(k: CinemaKit, res: CinemaResult): LobbyPlan {
   let nStands = 0;
   for (const [u, v] of stands) if (nearest(k, L, 'storeCinemaPosterStand', u, v, 1.6, L.fr.toFront, {ring: 0.3, variant: (first + 2 + nStands) % CINEMA_POSTER_PIECES.length})) nStands++;
   if (!nStands) k.skipped.push('poster stand');
-  // --- lobby benches against the side walls (else the back wall), facing in
-  let benches = 0;
-  for (const w of ['L', 'R', 'B'] as const) {
-    if (benches >= 2) break;
-    const len = w === 'B' ? W : D;
-    for (let t = w === 'B' ? 1.0 : 1.2; t + PROP_DEFS.bench.w <= len - 0.6 && benches < 2; t += 0.5) {
-      if (k.atWall(L, w, r3(t + PROP_DEFS.bench.w / 2), 'bench', {front: 0.6})) { benches++; break; }
-    }
-  }
-  if (!benches) k.skipped.push('benches');
   // --- a bin by the auditorium doors; the coming-attractions bills on what wall is left
   if (aud) for (const s of [1, -1]) if (k.put(L, 'bin', r3(du + s * (dHalf + 0.45)), r3(D - PROP_DEFS.bin.d / 2 - 0.03), L.fr.toFront, {zoneOk: true})) break;
   const bills = DEST_POSTERS_OF.cinema;
@@ -143,10 +175,15 @@ function dressLobby(k: CinemaKit, res: CinemaResult): LobbyPlan {
     if ([...res.cases, ...k.placed.filter(p => p.kind === 'skyDPoster')].some(p => { const [pu, pv] = k.uv(L, p.x, p.z); return Math.hypot(pu - u, pv - v) < 1.6; })) continue;
     if (k.mount(L, w, r3(t), 'skyDPoster', DEST_POSTER_BASE_Y, bills[nb % bills.length])) nb++;
   }
+  // --- the staff pieces the back rooms and the concession had no room for: beside a staff door, on the lobby side of its wall
+  for (const kind of STAFF_KINDS) {
+    if (res.staff.some(p => p.kind === kind)) continue;
+    const p = staffDoors.map(d => besideDoor(k, L, d, kind, {purpose: CINEMA_PURPOSES.office})).find(Boolean);
+    if (p) res.staff.push(p);
+  }
   // --- plates: SCREEN 1 over the auditorium doors, STAFF ONLY over the staff doors (the lobby side)
   for (const d of audDoors) doorPlate(k, L, d, {kind: 'info', text: audDoors.length > 1 ? `SCREEN ${audDoors.indexOf(d) + 1}` : 'SCREEN 1', w: 1.6, style: CINEMA_SIGN_STYLE});
   for (const d of staffDoors) doorPlate(k, L, d, {kind: 'service', text: 'STAFF ONLY'});
-  return plan;
 }
 
 /** World offset between a placed prop and a frame wall spot (spacing checks). */
@@ -194,12 +231,15 @@ function concession(k: CinemaKit, L: Region, res: CinemaResult, s: -1 | 1, span:
       const lo = Math.max(span[0], u0 - 0.9), hi = Math.min(span[1], u1 + 0.9);
       const units: PropPlacement[] = [];
       const order: PropKind[] = s < 0 ? ['shopCooler', 'cabinetLow', 'shopBackbar'] : ['shopBackbar', 'cabinetLow', 'shopCooler'];
-      let cursor = lo;
+      let cursor = cellUp(lo - 1e-6);
       for (const kind of order) {
         const p = back(kind, cursor, hi);
-        if (p) { units.push(p); cursor = k.uv(L, p.x, p.z)[0] + PROP_DEFS[kind].w / 2 + 0.04; }
+        if (p) { units.push(p); cursor = cellUp(k.uv(L, p.x, p.z)[0] + PROP_DEFS[kind].w / 2 + 0.02); }
       }
       if (!units.some(p => p.kind === 'shopCooler') || !units.some(p => p.kind === 'cabinetLow')) return false;
+      // the ice-cream chest freezer (sliding lids) beside them when the wall has room
+      const fz = back('chestFreezer', cursor, Math.min(span[1], hi + 1.6));
+      if (fz) units.push(fz);
       out.push(...units);
       // on top: the till by the doors' end, the popcorn machine at the outer end; the soda fountain on the back counter, the hot-dog
       // roller on the cupboards
@@ -230,39 +270,71 @@ function concession(k: CinemaKit, L: Region, res: CinemaResult, s: -1 | 1, span:
       return true;
     });
     if (got) {
+      // the staff corner beyond the back units (what the back rooms had no room for): the filing cabinet / lockers on the office purpose
+      const backs = res.concession.filter(p => p.kind === 'shopCooler' || p.kind === 'cabinetLow' || p.kind === 'shopBackbar').map(p => k.uv(L, p.x, p.z)[0] + s * PROP_DEFS[p.kind].w / 2);
+      const edge = s < 0 ? Math.min(...backs, u0) : Math.max(...backs, u1);
+      for (const kind of STAFF_KINDS) {
+        if (res.staff.some(p => p.kind === kind)) continue;
+        for (let t = 0.05; t < 3.0; t += CELL) {
+          const p = k.atWall(L, 'B', r3(edge + s * (t + PROP_DEFS[kind].w / 2)), kind, {purpose: CINEMA_PURPOSES.office});
+          if (p) { res.staff.push(p); break; }
+        }
+      }
       // the snack rack at the run's outer end (customer side), the vintage popcorn cart out on the lobby floor near it
-      const sr = k.put(L, 'snackRack', r3(outer - s * (PROP_DEFS.snackRack.w / 2 + 0.15)), cv, L.fr.toFront);
+      const sr = k.put(L, 'snackRack', r3(outer + s * (PROP_DEFS.snackRack.w / 2 + 0.15)), cv, L.fr.toFront);
       if (sr) res.concession.push(sr); else k.skipped.push('snack rack');
-      const pc = nearest(k, L, 'skyDPopcornCart', outer - s * 1.4, cv - 1.5, 2.0, L.fr.toFront, {ring: 0.3});
-      if (pc) res.concession.push(pc); else k.skipped.push('popcorn cart');
       return got;
     }
   }
   return null;
 }
 
-/** The ticket kiosk on side `dir` of the entry spine, its window toward it, and the rope queue off the window. */
-function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spine: number): PropPlacement | null {
-  const bk = PROP_DEFS.skyDTicketBooth, yaw = dir < 0 ? L.fr.plusU : L.fr.minusU;
-  const bv = r3(0.5 + bk.w / 2);
-  for (let off = 1.6; off <= 4.6; off += 0.5) {
-    const bu = r3(snap(k.entryU + dir * (spine + off + bk.d / 2)));
-    if (bu - bk.d / 2 < 0.4 || bu + bk.d / 2 > L.fr.W - 0.4) break;
-    const booth = k.put(L, 'skyDTicketBooth', bu, bv, yaw);
+/**
+ * The ticket kiosk near the entry: beside the entry spine on side `dir` with its window toward the spine, else against the storefront wall
+ * (outside the entry's door zone) with its window toward the lobby, scanning outward on side `dir`. Then its rope queue (movable posts) off
+ * the window, and the hanging BOX OFFICE plate.
+ */
+function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spine: number): {booth: PropPlacement; sign: SignPlacement} | null {
+  const bk = PROP_DEFS.skyDTicketBooth;
+  const tries: {u: number; v: number; yaw: number; nu: number; nv: number}[] = [];
+  // beside the spine, window toward it (its front edge clear of the storefront's door zone: 1 m)
+  for (const off of [1.6, 2.1, 1.1, 2.6, 0.6, 3.1, 0.3, 3.6]) for (const bv of [r3(1.05 + bk.w / 2), r3(1.35 + bk.w / 2)]) {
+    tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.d / 2))), v: bv, yaw: dir < 0 ? L.fr.plusU : L.fr.minusU, nu: -dir, nv: 0});
+  }
+  // back to the storefront wall, window toward the lobby
+  for (let off = 0.5; off <= 9; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(0.05 + bk.d / 2), yaw: L.fr.toBack, nu: 0, nv: 1});
+  for (const t of tries) {
+    const half = t.nu ? bk.d / 2 : bk.w / 2;
+    if (t.u - half < 0.3 || t.u + half > L.fr.W - 0.3) continue;
+    const booth = k.put(L, 'skyDTicketBooth', t.u, t.v, t.yaw);
     if (!booth) continue;
-    // the queue: two rows of rope posts from the window toward the spine (only on free floor: the spine stays open)
-    const face = bu - dir * bk.d / 2;
-    for (const dv of [-0.6, 0.6]) for (let q = 0; q < 3; q++) {
-      const pu = r3(face - dir * (0.45 + q * 0.8));
-      if (Math.abs(pu - k.entryU) < spine + 0.2) break;
-      const p = k.putRound(L, 'skywaysPrizeStanchion', pu, r3(bv + dv), 0);
-      if (p) res.queue.push(p);
+    // the queue: two rows of rope posts off the window on free floor; else a rope line along the spine's edge on the kiosk's side (light
+    // movable posts on the lane's edge: >= 1.6 m of it stays clear); a kiosk against the wall: posts beside it
+    const across = t.nu ? [t.v - 0.6, t.v + 0.6] : [t.u - 0.6, t.u + 0.6];
+    for (const a of across) for (let q = 0; q < 3; q++) {
+      const along = (t.nu ? t.u : t.v) + (t.nu || t.nv) * (bk.d / 2 + 0.45 + q * 0.8);
+      if (t.nu && Math.abs(along - k.entryU) < spine + 0.2) break;
+      const p = t.nu ? k.putRound(L, 'skywaysPrizeStanchion', r3(along), r3(a), 0) : k.putRound(L, 'skywaysPrizeStanchion', r3(a), r3(along), 0);
+      if (!p) break;
+      res.queue.push(p);
+    }
+    if (res.queue.length < 2 && t.nu) {
+      for (const v of [t.v - 0.85, t.v, t.v + 0.85]) {
+        const p = k.putRound(L, 'skywaysPrizeStanchion', r3(k.entryU + dir * (spine - 0.2)), r3(v), 0, {keepOk: true});
+        if (p) res.queue.push(p);
+      }
+    }
+    if (res.queue.length < 2 && !t.nu) {
+      for (const sd of [-1, 1]) for (const v of [0.45, 1.25]) {
+        const p = k.putRound(L, 'skywaysPrizeStanchion', r3(t.u + sd * (bk.w / 2 + 0.4)), r3(v), 0);
+        if (p) res.queue.push(p);
+      }
     }
     // the hanging plate over the kiosk
-    const [x, z] = k.xz(L, bu, bv), a = k.areaAt(L, x, z);
-    if (a) k.layout.signs.push({x, y: r3(L.base + Math.min(bk.h + 0.45, (a.ceil - L.base) - 0.5)), z, rot: L.fr.toFront, kind: 'info', text: 'BOX OFFICE', area: a.id, hang: true, w: 1.5,
-      style: CINEMA_SIGN_STYLE, ...(k.level ? {level: k.level} : {})});
-    return booth;
+    const [x, z] = k.xz(L, t.u, t.v);
+    const sign: SignPlacement = {x, y: r3(L.base + Math.min(bk.h + 0.45, (k.layout.areas[booth.area].ceil - L.base) - 0.5)), z, rot: L.fr.toFront, kind: 'info', text: 'BOX OFFICE',
+      area: booth.area, hang: true, w: 1.5, style: CINEMA_SIGN_STYLE, ...(k.level ? {level: k.level} : {})};
+    return {booth, sign};
   }
   return null;
 }
@@ -283,6 +355,21 @@ function nearest(k: CinemaKit, rg: Region, kind: PropKind, cu: number, cv: numbe
   return null;
 }
 
+/**
+ * A wall piece beside a door, on the region's side of the door's wall (its back to that wall, facing along the door's normal), the
+ * nearest free spot either side of the opening (clear of the door cells; the door zone may be used: a piece by a staff door).
+ */
+function besideDoor(k: CinemaKit, rg: Region, d: RegionDoor, kind: PropKind, o: PutOpts = {}): PropPlacement | null {
+  const def = PROP_DEFS[kind], off = 0.25 + 0.03 + def.d / 2;
+  const yaw = d.nv > 0 ? rg.fr.toBack : d.nv < 0 ? rg.fr.toFront : d.nu > 0 ? rg.fr.plusU : rg.fr.minusU;
+  for (let t = d.half + 0.5 + def.w / 2; t <= d.half + 3.5; t += CELL) for (const side of [-1, 1]) {
+    const [u, v] = d.nv !== 0 ? [d.u + side * t, d.v + d.nv * off] : [d.u + d.nu * off, d.v + side * t];
+    const p = k.put(rg, kind, r3(u), r3(v), yaw, {...o, zoneOk: true});
+    if (p) return p;
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------------------------
 // The auditorium
 
@@ -300,6 +387,7 @@ function dressAuditorium(k: CinemaKit, aud: Area, res: CinemaResult): void {
   if (!door) { k.skipped.push('auditorium door'); return; }
   // the screen on the FAR wall, facing the lobby door (the door wall is the projection side)
   const A = k.region('auditorium', [aud.id], OPP[doorSide(door, aud)]);
+  k.phase = 'aud';
   k.settleDoors(A);
   const W = A.fr.W, D = A.fr.D, clear = aud.ceil - A.base;
   const sy = Math.max(SKYD_SCREEN.minY, Math.min(SKYD_SCREEN.y, clear - (SKYD_SCREEN.h + 2 * SKYD_SCREEN.border) - SKYD_SCREEN.ceilGap));
@@ -323,9 +411,10 @@ function dressAuditorium(k: CinemaKit, aud: Area, res: CinemaResult): void {
   k.keepUV(A, W - SIDE / 2, 2.4, W - SIDE / 2, D - 0.4, SIDE / 2);
   k.keepUV(A, du, D, du, 2.4, 0.7);
   k.keepUV(A, 0, D - BACK / 2, W, D - BACK / 2, BACK / 2);
-  // seat rows: from 3 m off the screen to the back aisle, groups of up to three 4-seat blocks between the aisles; a few torn out
+  // seat rows: from 2.6 m off the screen to the back aisle, groups of up to three 4-seat blocks between the aisles; a few torn out
+  k.phase = 'seats';
   const sd = PROP_DEFS.skyDCinemaSeats.d, swd = PROP_DEFS.skyDCinemaSeats.w;
-  for (let v = 3.0; v + sd <= D - BACK + 1e-6; v += 1.05) {
+  for (let v = 2.6; v + sd <= D - BACK + 1e-6; v += 1.05) {
     for (const [a, b] of [[SIDE, du - 0.75], [du + 0.75, W - SIDE]] as const) {
       const groups = seatGroups(b - a, swd);
       const total = groups.reduce((t, q) => t + q, 0) * swd + Math.max(0, groups.length - 1) * 1.2;
@@ -352,10 +441,12 @@ function dressAuditorium(k: CinemaKit, aud: Area, res: CinemaResult): void {
 
 /**
  * The back rooms: the stock room gains flap-lid cartons and an ice-cream chest freezer; the staff side (the office when carved, else the
- * stock room, else a corner behind the concession) gets the openable filing cabinet and staff lockers on the office purpose.
+ * stock room) gets the openable filing cabinet and staff lockers (the office purpose on those holders outside the office). What finds no
+ * room here goes to the staff corner behind the concession (dressLobby).
  */
-function dressBackRooms(k: CinemaKit, res: CinemaResult, plan: LobbyPlan): void {
+function dressBackRooms(k: CinemaKit, res: CinemaResult): void {
   const an = k.anchor;
+  k.phase = 'back';
   const rooms = an.stock.map(id => k.layout.areas[id]).filter((a): a is Area => !!a);
   const regions = rooms.map(a => {
     const d = k.layout.doors.find(q => (q.a === a.id || q.b === a.id) && q.staff);
@@ -373,36 +464,22 @@ function dressBackRooms(k: CinemaKit, res: CinemaResult, plan: LobbyPlan): void 
     }
     return null;
   };
-  if (stock) {
-    const fz = anyWall(stock.rg, 'chestFreezer');
-    if (!fz) k.skipped.push('stock chest freezer');
-    for (let i = 0; i < 2; i++) anyWall(stock.rg, 'cardboardBoxFlaps');
-  }
-  // the staff side: the office first, else the stock room (office purpose on these holders there)
+  // the staff side first (the office, else the stock room on the office purpose), then the stock room's freezer / cartons
   const staffIn = (r: {a: Area; rg: Region} | undefined, purpose?: string) => {
     if (!r) return;
-    const o = purpose ? {purpose} : {};
-    for (const kind of ['filingCabinet', 'staffLockers'] as PropKind[]) {
+    for (const kind of STAFF_KINDS) {
       if (res.staff.some(p => p.kind === kind)) continue;
-      const p = anyWall(r.rg, kind, o);
+      const p = anyWall(r.rg, kind, purpose ? {purpose} : {});
       if (p) res.staff.push(p);
     }
   };
   staffIn(office);
   staffIn(stock, CINEMA_PURPOSES.office);
-  // still missing: a staff corner behind the concession (the back wall beyond the run's outer end)
-  if (plan.concession && res.staff.length < 2) {
-    const L = k.lobby, c = plan.concession;
-    for (const kind of ['filingCabinet', 'staffLockers'] as PropKind[]) {
-      if (res.staff.some(p => p.kind === kind)) continue;
-      for (let t = 0; t < 3.5; t += CELL) {
-        const u = c.outer - c.side * (t + PROP_DEFS[kind].w / 2 + 0.1);
-        const p = k.atWall(L, 'B', r3(u), kind, {purpose: CINEMA_PURPOSES.office});
-        if (p) { res.staff.push(p); break; }
-      }
-    }
+  if (stock) {
+    if (!k.placed.some(p => p.kind === 'chestFreezer')) anyWall(stock.rg, 'chestFreezer');
+    for (let i = 0; i < 2; i++) anyWall(stock.rg, 'cardboardBoxFlaps');
   }
-  if (!res.staff.some(p => p.kind === 'filingCabinet')) k.skipped.push('filing cabinet');
-  if (!res.staff.some(p => p.kind === 'staffLockers')) k.skipped.push('staff lockers');
-  void stockVariant;
 }
+
+/** The staff side's openable storage: the filing cabinet (drawers) and the staff lockers. */
+const STAFF_KINDS: readonly PropKind[] = ['filingCabinet', 'staffLockers'];
