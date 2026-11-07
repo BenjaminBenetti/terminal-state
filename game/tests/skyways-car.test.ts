@@ -11,7 +11,7 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {CAR_RT, CAR_TEXT} from '../src/world/skywaysCar';
 import {CAR_SPEC, carToWorld} from '../src/world/skywaysCarSpec';
 import {CAR_PHYS, nearestCircle} from '../src/world/skywaysCarPhysics';
-import {SKYWAYS_CAR_LANE, skywaysCarProblem, skywaysCarRecord} from '../src/world/skywaysCarStore';
+import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord} from '../src/world/skywaysCarStore';
 import {WHEEL_RATIO, buildCarView, setSkywaysCarModelsForTests, setWheel} from '../src/world/skywaysCarModel';
 import {MAX_SHOT_DV} from '../src/physics/dynamicItems';
 import {checksumOf} from '../src/save/checksum';
@@ -345,11 +345,17 @@ describe('skyways car: props, glass, bullets', () => {
 describe('skyways car: persistence', () => {
   it('the record validator: exact keys, finite bounded numbers', () => {
     const ok = skywaysCarRecord(12.34567, 4.2, -8, 7, 2);
-    expect(ok).toEqual({v: 1, x: 12.3457, y: 4.2, z: -8, yaw: +(7 - 2 * Math.PI).toFixed(4), level: 2});
+    expect(ok).toEqual({v: 2, x: 12.3457, y: 4.2, z: -8, yaw: +(7 - 2 * Math.PI).toFixed(4), level: 2, lights: false, trunk: emptyTrunk()});
     expect(skywaysCarProblem(ok)).toBeNull();
+    // (an older v1 record stays valid and upgrades once: lamps off, an empty trunk)
+    const v1 = {v: 1, x: 1, y: 0, z: 2, yaw: 0.5, level: 0};
+    expect(skywaysCarProblem(v1)).toBeNull();
+    expect(upgradeCarRecord(v1 as never)).toEqual({...v1, v: 2, lights: false, trunk: emptyTrunk()});
     for (const [bad, re] of [
       [null, /object/], [[], /object/], [{...ok, extra: 1}, /unexpected car field 'extra'/], [{v: 1, x: 0, y: 0, z: 0, yaw: 0}, /missing car field 'level'/],
-      [{...ok, v: 2}, /version/], [{...ok, x: Number.NaN}, /position/], [{...ok, z: 1e6}, /position/], [{...ok, y: '1'}, /height/],
+      [{...ok, v: 3}, /version/], [{...v1, lights: true}, /unexpected car field 'lights'/], [{...ok, lights: 1}, /lights/], [{...ok, trunk: []}, /trunk/],
+      [{...ok, trunk: [...emptyTrunk().slice(1), 'x']}, /trunk slot/],
+      [{...ok, x: Number.NaN}, /position/], [{...ok, z: 1e6}, /position/], [{...ok, y: '1'}, /height/],
       [{...ok, yaw: 9}, /heading/], [{...ok, level: 1.5}, /storey/], [{...ok, level: -1}, /storey/], [{...ok, level: 64}, /storey/],
     ] as [unknown, RegExp][]) expect(skywaysCarProblem(bad), JSON.stringify(bad)).toMatch(re);
   });
@@ -369,6 +375,25 @@ describe('skyways car: persistence', () => {
     const r = validateSaveFile(f);
     expect(r.ok).toBe(false);
     expect((r as {error: string}).error).toMatch(/skyways\.car.*heading/);
+    // (record v2) the trunk's stacks are checked as strictly as the Lockbox's
+    const refuse = (trunk: unknown[], re: RegExp) => {
+      const t = structuredClone(base);
+      t.run.memories[`${sid(1)}:main`].lanes[SKYWAYS_CAR_LANE].trunk = trunk;
+      t.checksum = checksumOf(t.run);
+      const q = validateSaveFile(t);
+      expect(q.ok, JSON.stringify(trunk)).toBe(false);
+      expect((q as {error: string}).error).toMatch(re);
+    };
+    const slots = (...a: unknown[]) => [...a, ...emptyTrunk()].slice(0, emptyTrunk().length);
+    const kept = structuredClone(base);
+    kept.run.memories[`${sid(1)}:main`].lanes[SKYWAYS_CAR_LANE].trunk = slots({uid: 900001, itemId: 'water', count: 1}, null, {uid: 900002, itemId: 'pistol', count: 1, mag: 5});
+    kept.checksum = checksumOf(kept.run);
+    const kr = validateSaveFile(kept);
+    expect(kr.ok, kr.ok ? '' : (kr as {error: string}).error).toBe(true);
+    refuse(slots({uid: 900001, itemId: 'water', count: 99}), /count/);
+    refuse(slots({uid: 900001, itemId: 'nope', count: 1}), /unknown item/);
+    refuse(slots({uid: 900001, itemId: 'water', count: 1}, {uid: 900001, itemId: 'water', count: 1}), /duplicate item uid/);
+    refuse(slots({itemId: 'water', count: 1}), /uid/);
   });
 
   it('stored at teardown / on getting out; restored on the next build; a bad or off-floor record falls back to the spawn; never a duplicate', () => {

@@ -5,6 +5,7 @@
 // with nothing carved above it; a foyer joins the lobby to the hall), the food court is lined with counters and seated.
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
+import {skywaysIssues as legacyIssues} from '../src/gen/skyways/legacy77/validate';
 import type {StationLayout} from '../src/gen/stationTypes';
 import {skywaysIssues} from '../src/gen/skyways/validate';
 import {skywaysAddonLevelOf, skywaysAddonOf, skywaysFrame} from '../src/gen/skyways/frame';
@@ -18,6 +19,9 @@ import {CAR_SPEC} from '../src/world/skywaysCarSpec';
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
 const cache = new Map<number, StationLayout>();
 const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'}))); return l; };
+/** (task studio-skyways-rework-20261107-054512-01) stations entered before the rework: the frozen GAME77 generator (layout version 2). */
+const cache77 = new Map<number, StationLayout>();
+const gen77 = (s: number): StationLayout => { let l = cache77.get(s); if (!l) cache77.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const inside = (r: SkywaysRect, x: number, z: number, pad = 0) => x >= r.x0 - pad && x <= r.x1 + pad && z >= r.z0 - pad && z <= r.z1 + pad;
 const centre = (l: StationLayout, id: number): [number, number] => { const a = l.areas[id]; return [(a.x + a.w / 2) * CELL, (a.y + a.h / 2) * CELL]; };
 
@@ -34,7 +38,8 @@ describe('Skyways layout variety: the frame', () => {
       peds.add(f.lowerLinks.length);
       appr.add(f.addonApproach);
       if (f.foodCourt) fc++;
-      if (f.addon === 'convention') conv.add(f.addonLevel); else expect(f.addonLevel).toBe(2); // the car drives the skyway level
+      // (layout version 3) the add-on always takes its host's bridge level: the convention's venue floor, the prize display's court
+      if (f.addon === 'convention') conv.add(f.addonLevel); else expect(f.addonLevel).toBe(2);
       const host = f.buildings.find(b => b.id === f.addonHost)!;
       if (!((host.col === 0 || host.col === f.cols - 1) && (host.row === 0 || host.row === f.rows - 1))) nonCorner++;
       // the localized branch: exactly ONE bridge to the host; the rest of the network connected without it
@@ -45,14 +50,15 @@ describe('Skyways layout variety: the frame', () => {
       // the add-on and its storey never move with a retry
       expect(skywaysFrame(s, 5).addon).toBe(f.addon);
       expect(skywaysFrame(s, 5).addonLevel).toBe(f.addonLevel);
-      expect(f.addonLevel).toBe(skywaysAddonLevelOf(s, skywaysAddonOf(s)));
+      expect(f.addonLevel).toBe(2);
+      void skywaysAddonLevelOf; void skywaysAddonOf;
     }
     expect([...fam.keys()].sort()).toEqual(['block-2x2', 'block-2x3', 'block-3x2', 'chain-4x2', 'cluster-3x3']);
     for (const n of fam.values()) expect(n / N).toBeGreaterThan(0.05);
     expect([...plans].sort()).toEqual(['court', 'cross', 'galleria', 'offset']);
     expect([...topo].sort()).toEqual(['looped', 'tree']);
     expect([...peds].sort()).toEqual([0, 1, 2]);
-    expect([...conv].sort()).toEqual([1, 2]);
+    expect([...conv].sort()).toEqual([2]);
     expect([...appr].sort()).toEqual(['direct', 'foyer']);
     expect(nonCorner).toBeGreaterThan(N * 0.1); // arm ends of L / T / chain networks, not only grid corners
     expect(fc / N).toBeGreaterThan(0.6);
@@ -60,12 +66,36 @@ describe('Skyways layout variety: the frame', () => {
 });
 
 describe('Skyways layout variety: generated layouts stay coherent', () => {
-  it('validate, and the carved variety occurs over the sample (plans, pedways, foyers, a street-level ballroom, food courts)', () => {
+  it('validate, and the carved variety occurs over the sample (plans, pedways, atria, both add-ons on the bridge level, food courts)', () => {
     const plans = new Set<string>(), placements = new Set<string>(), fams = new Set<string>();
     let pedways = 0, foodCourts = 0;
     for (const s of SEEDS) {
       const l = gen(s), info = l.skyways!;
       expect(skywaysIssues(l), `seed ${s}`).toEqual([]);
+      for (const b of info.buildings) plans.add(b.plan!);
+      placements.add(`${info.addon.id}@${info.addon.level}/${info.addon.approach}`);
+      fams.add(info.family!);
+      pedways += info.pedways?.length ?? 0;
+      if (info.buildings.some(b => b.foodCourt)) foodCourts++;
+    }
+    // (layout version 3: atria take most buildings, so offset / cross plans are rarer in a 12-seed sample; the 400-frame test sees all four)
+    expect(plans.has('court') && plans.has('galleria')).toBe(true);
+    expect(plans.size).toBeGreaterThanOrEqual(3);
+    expect(fams.size).toBeGreaterThanOrEqual(3);
+    // (layout version 3) both add-ons, always on the bridge level
+    expect([...placements].some(p => p.startsWith('convention@2'))).toBe(true);
+    expect([...placements].some(p => p.startsWith('prize-car@2'))).toBe(true);
+    expect([...placements].every(p => p.includes('@2/'))).toBe(true);
+    expect(pedways).toBeGreaterThan(0);
+    expect(foodCourts).toBeGreaterThan(0);
+  });
+
+  it('GAME77 (layout version 2): validate, and the carved variety occurs over the sample (plans, pedways, foyers, a street-level ballroom, food courts)', () => {
+    const plans = new Set<string>(), placements = new Set<string>(), fams = new Set<string>();
+    let pedways = 0, foodCourts = 0;
+    for (const s of SEEDS) {
+      const l = gen77(s), info = l.skyways!;
+      expect(legacyIssues(l), `seed ${s}`).toEqual([]);
       for (const b of info.buildings) plans.add(b.plan!);
       placements.add(`${info.addon.id}@${info.addon.level}/${info.addon.approach}`);
       fams.add(info.family!);
@@ -107,9 +137,31 @@ describe('Skyways layout variety: generated layouts stay coherent', () => {
     }
   });
 
-  it('the ONE add-on stays on its host (a one-bridge branch): a ballroom is double height with nothing above it, a foyer joins the lobby to the hall', () => {
+  it('the ONE add-on stays on its host (a one-bridge branch) on its bridge level: the convention venue floor, the prize display in its court', () => {
     for (const s of SEEDS) {
       const l = gen(s), info = l.skyways!, ad = info.addon;
+      const host = info.buildings.find(b => b.id === ad.building)!;
+      expect(info.bridges.filter(b => b.a === host.id || b.b === host.id).length).toBe(1);
+      expect(ad.level).toBe(2);
+      const on = (id: number) => { const [x, z] = centre(l, id); return inside(host.rect, x, z); };
+      for (const id of ad.areas) expect(on(id), `seed ${s}: add-on area ${l.areas[id].label} on its host`).toBe(true);
+      if (ad.id === 'convention') {
+        for (const v of ad.venue!) { expect(on(v.area), `seed ${s}: venue ${v.role} on its host`).toBe(true); expect(l.areas[v.area].level).toBe(2); }
+        // the bridge leads straight into the venue: its deck's door on the host side opens onto a venue area
+        const br = info.bridges.find(b => b.a === host.id || b.b === host.id)!;
+        const venue = new Set(ad.venue!.map(v => v.area));
+        expect(l.doors.some(d => (d.a === br.area && venue.has(d.b)) || (d.b === br.area && venue.has(d.a))), `seed ${s}: bridge -> venue`).toBe(true);
+      } else {
+        expect(ad.display).toBe(true);
+        expect(on(ad.car!.area)).toBe(true);
+        expect(ad.car!.level).toBe(2);
+      }
+    }
+  });
+
+  it('GAME77 (layout version 2): the ONE add-on stays on its host (a one-bridge branch): a ballroom is double height with nothing above it, a foyer joins the lobby to the hall', () => {
+    for (const s of SEEDS) {
+      const l = gen77(s), info = l.skyways!, ad = info.addon;
       const host = info.buildings.find(b => b.id === ad.building)!;
       expect(info.bridges.filter(b => b.a === host.id || b.b === host.id).length).toBe(1);
       for (const id of ad.areas) { const [x, z] = centre(l, id); expect(inside(host.rect, x, z), `seed ${s}: add-on area ${l.areas[id].label} on its host`).toBe(true); }
@@ -156,11 +208,11 @@ describe('Skyways layout variety: generated layouts stay coherent', () => {
   });
 });
 
-describe('Skyways layout variety: the prize car leaves a foyer-approached hall', () => {
+describe('Skyways layout variety (GAME77 stations, layout version 2): the prize car leaves a foyer-approached hall', () => {
   it('drives from its spot out of the hall, through the foyer and into the host lobby (real storey geometry)', () => {
     let n = 0;
     for (const s of SEEDS) {
-      const l = gen(s), ad = l.skyways!.addon;
+      const l = gen77(s), ad = l.skyways!.addon;
       if (ad.id !== 'prize-car' || ad.approach !== 'foyer') continue;
       n++;
       const hall = l.areas[ad.areas[0]], foyer = ad.areas.map(id => l.areas[id]).find(a => a.id !== hall.id && a.kind === 'concourse')!;

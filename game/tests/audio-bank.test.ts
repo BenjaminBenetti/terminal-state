@@ -81,6 +81,7 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         // beacon motor (a short mechanical cycle at one beacon) — the Reactor's machine BED stays under the >= 5 s bed rule
         const SHORT: Record<string, [number, number]> = {flareBurn: [3, 4], reactorRodLoop: [2, 3], reactorBeacon: [1.5, 2.5], cartRoll: [3, 4], // (+ task train-fuel-system, lane PORT: the fuel cart's positional rolling loop)
           carIdle: [2, 3], carDrive: [2, 3], // (+ task skyways-level-20261106, lane CAR2: the prize car's engine loops — a steady engine cycle, re-pitched every frame)
+          carReverse: [1.2, 2], // (+ round 2, task skyways-vehicle-20261107 lane AUDIO: the reverse-gear whine — two of its ~0.7 s pulse periods)
           // (+ task skyways-destinations-20261106, lane AUDIO: positional LOCATION loops cut from 4 s takes — the clock tick is beat-aligned to 5 of
           // the take's tick intervals, the arcade / projector loops are the takes' whole steady spans; each sounds only near its one place)
           clockTick: [2, 3], arcadeAttract: [2.5, 3.5], projectorRun: [2, 3]};
@@ -208,8 +209,10 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       hoseConnect: () => { sfx.hoseConnect(true, at); sfx.hoseConnect(false); },
       cartRoll: () => { sfx.cartRoll(0.6, at); sfx.cartRoll(1, at); sfx.cartRoll(0); sfx.stopCartRoll(); },
       // task skyways-level-20261106 (lane CAR2): the prize car's engine loops (one channel), tyre skid, door
-      carEngine: () => { sfx.carEngine(0, 0, at, {rev: true}); sfx.carEngine(0.7, 1, at); sfx.stopCarEngine(); },
+      carEngine: () => { sfx.carEngine(0, 0, at, {rev: true}); sfx.carEngine(0.7, 1, at); sfx.carEngine(0.2, 1, at, {reverse01: 0.6}); sfx.stopCarEngine(); },
       carSkid: () => { ctx.currentTime += 1; sfx.carSkid(at); }, carDoor: () => sfx.carDoor(at),
+      // (+ round 2, task skyways-vehicle-20261107 lane AUDIO: the brake-to-stop, the car's own contacts)
+      carBrake: () => { ctx.currentTime += 2; sfx.carBrake(at, 0.5); }, carImpact: () => { ctx.currentTime += 1; sfx.carImpact(2, 0.6, 2, 6, 'car'); sfx.carImpact(2, 0.8, 2, 5, 'flesh'); },
       // task skyways-destinations-20261106 (lane AUDIO): a location emitter's loop channel starts at the next emitter tick
       setLocationEmitters: () => { sfx.setLocationEmitters([{...at, cue: 'arcadeAttract', gain: 1, range: 20}]); for (let i = 0; i < 13; i++) sfx.setListener(2, 1.6, 3, 0); sfx.setLocationEmitters([]); },
       ambience: () => {

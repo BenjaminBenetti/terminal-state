@@ -31,12 +31,22 @@ import type {DamageClass, PhysMat, StaticWhy} from '../../damage/materials';
 import type {ShapeMat} from '../propShapes';
 import {SKYWAYS_MESHY_PROPS, type SkywaysMeshyPropKey} from '../../assets/skywaysMeshyProps.generated';
 import {SKYWAYS_MASCOT, type SkywaysMascotPoseName} from '../../assets/skywaysMascot.generated';
-import {SKYWAYS_ART, SKYWAYS_CON_BANNERS, SKYWAYS_CON_POSTERS, SKYWAYS_CON_PRINTS, type SkywaysArtAtlasKey} from '../../assets/skywaysArt.generated';
+import {SKYWAYS_ART, SKYWAYS_CON_BANNERS, SKYWAYS_CON_POSTERS, SKYWAYS_CON_PRINTS} from '../../assets/skywaysArt.generated';
+import {SKYWAYS_VENUE_ART, SKYWAYS_VENUE_BOOTHS, SKYWAYS_VENUE_SLIDES} from '../../assets/skywaysVenueArt.generated';
+
+/** Every atlas the add-on panels show: the GAME77 convention / prize / ramen art and (lane VENUE) the venue's. */
+export const SKYWAYS_ADDON_ART = {...SKYWAYS_ART, ...SKYWAYS_VENUE_ART};
+export type SkywaysAddonArtKey = keyof typeof SKYWAYS_ADDON_ART;
 
 export const SKYWAYS_ADDON_KINDS = [
   'skywaysConStage', 'skywaysConBackdrop', 'skywaysConMerchTable', 'skywaysConFigureBox', 'skywaysConPlush', 'skywaysConPrintCard',
   'skywaysConPoster', 'skywaysConPosterBoard', 'skywaysConBanner', 'skywaysConWelcome', 'skywaysMascotStatue',
   'skywaysPrizeStanchion', 'skywaysPrizeBoard',
+  // (lane VENUE, layout version 3) the convention venue's art panels: the photo lounge's photo-op wall, the panel rooms' tripod
+  // screens, the registration sign behind the badge desks, the artist-alley booth banners on the vendor tables' fronts
+  'skywaysVenuePhotoWall', 'skywaysVenueScreen', 'skywaysVenueRegSign', 'skywaysVenueTableBanner',
+  // (a compact panel room: the title slide on a projection screen fixed to the wall behind the panel)
+  'skywaysVenueWallScreen',
 ] as const;
 export type SkywaysAddonKind = (typeof SKYWAYS_ADDON_KINDS)[number];
 const KIND_SET: ReadonlySet<string> = new Set(SKYWAYS_ADDON_KINDS);
@@ -113,7 +123,7 @@ export const SKYWAYS_MASCOT_POSES = Object.keys(SKYWAYS_MASCOT.poses) as Skyways
 // Art panels (flat textured faces of the Codex atlases; front +Z, metres)
 
 /** An art face of a kind: atlas piece shown on a quad of w x h centred at p (prop frame), facing +Z (back: also mirrored on -Z). */
-export interface AddonArtFace { atlas: SkywaysArtAtlasKey; piece: string; w: number; h: number; p: readonly [number, number, number]; back?: boolean; rx?: number }
+export interface AddonArtFace { atlas: SkywaysAddonArtKey; piece: string; w: number; h: number; p: readonly [number, number, number]; back?: boolean; rx?: number }
 /** A frame / stand box (prop frame, centre p, size s; shape-material key: world/shapeMaterials.ts). */
 export interface AddonPart { m: ShapeMat; s: readonly [number, number, number]; p: readonly [number, number, number]; rx?: number }
 
@@ -125,7 +135,19 @@ export const SKYWAYS_ART_SIZE = {
   welcome: {w: 1.2, h: 0.8},
   print: {w: 0.18, h: 0.18},
   prize: {w: 1.8, h: 1.2},
+  // (lane VENUE) the venue's panels (3:2 art)
+  photoWall: {w: 3.0, h: 2.0},
+  screen: {w: 2.1, h: 1.4},
+  regSign: {w: 1.5, h: 1.0},
+  tableBanner: {w: 0.9, h: 0.6},
+  wallScreen: {w: 1.8, h: 1.2},
 } as const;
+/** (lane VENUE) Table banner: its tilt (rx) along the cloth's front, the bottom of the vinyl above the floor (its placement y) and its plane in
+ *  front of the table's centre (m: the cloth's front runs z 0.38 at the top .. 0.43 at the floor). Placed there, hosted on its table. */
+export const SKYWAYS_TABLE_BANNER = {rx: -0.08, y0: 0.11, z: 0.415} as const;
+/** (lane VENUE) Photo-op wall / tripod screen: bottom of the printed panel above the floor (m). */
+export const SKYWAYS_PHOTO_WALL_Y0 = 0.42;
+export const SKYWAYS_SCREEN_Y0 = 0.8;
 
 const PS = SKYWAYS_ART_SIZE;
 /** Bottom of a wall poster's frame above the floor (m). */
@@ -151,6 +173,11 @@ const DEFS: Record<SkywaysAddonKind, {w: number; d: number; h: number; blocksSig
   skywaysMascotStatue: {w: SKYWAYS_STATUE_PLINTH.r * 2, d: SKYWAYS_STATUE_PLINTH.r * 2, h: r3(SKYWAYS_STATUE_PLINTH.h + SKYWAYS_MASCOT.height)},
   skywaysPrizeStanchion: {w: SKYWAYS_STANCHION.radius * 2, d: SKYWAYS_STANCHION.radius * 2, h: SKYWAYS_MESHY_PROPS.skyways_prize_stanchion.h},
   skywaysPrizeBoard: {w: 1.9, d: 0.56, h: 2.12},
+  skywaysVenuePhotoWall: {w: 3.14, d: 0.6, h: 2.5},
+  skywaysVenueScreen: {w: 2.24, d: 0.56, h: 2.3},
+  skywaysVenueRegSign: {w: 1.56, d: 0.03, h: 1.06},
+  skywaysVenueTableBanner: {w: 0.92, d: 0.06, h: 0.62},
+  skywaysVenueWallScreen: {w: 1.88, d: 0.05, h: 1.28},
 };
 
 /** Frame / stand parts and art faces of the panel kinds (prop frame; variant = the art piece index). Model kinds: []. */
@@ -226,6 +253,54 @@ export function skywaysAddonShape(kind: SkywaysAddonKind, variant = 0): {parts: 
     case 'skywaysMascotStatue':
       box('concrete', [SKYWAYS_STATUE_PLINTH.r * 2, SKYWAYS_STATUE_PLINTH.h, SKYWAYS_STATUE_PLINTH.r * 2], [0, SKYWAYS_STATUE_PLINTH.h / 2, 0]);
       break;
+    case 'skywaysVenuePhotoWall': {
+      // a printed panel in a steel frame between two posts on sandbag-weighted base plates (the art on the front; the back plain)
+      const {w, h} = PS.photoWall, y0 = SKYWAYS_PHOTO_WALL_Y0, H = DEFS.skywaysVenuePhotoWall.h;
+      box('panel', [w + 0.04, h + 0.04, 0.03], [0, y0 + h / 2, 0]);
+      box('steelDark', [w + 0.14, 0.05, 0.05], [0, y0 + h + 0.045, -0.02]); box('steelDark', [w + 0.14, 0.05, 0.05], [0, y0 - 0.045, -0.02]);
+      for (const s of [-1, 1]) {
+        box('steelDark', [0.05, H, 0.05], [s * (w / 2 + 0.045), H / 2, -0.02]);
+        box('steelDark', [0.1, 0.05, DEFS.skywaysVenuePhotoWall.d], [s * (w / 2 + 0.045), 0.025, 0]);
+        box('black', [0.3, 0.12, 0.22], [s * (w / 2 - 0.2), 0.06, -0.16]);
+      }
+      faces.push({atlas: 'venueArt', piece: 'photo-wall', w, h, p: [0, y0 + h / 2, 0.017]});
+      break;
+    }
+    case 'skywaysVenueScreen': {
+      // a tripod projection screen: the white screen in a thin black border (the panel's title slide on it), its post and the
+      // tripod's three legs
+      const {w, h} = PS.screen, y0 = SKYWAYS_SCREEN_Y0, D = DEFS.skywaysVenueScreen.d;
+      box('black', [w + 0.08, h + 0.08, 0.02], [0, y0 + h / 2, 0]);
+      box('steelDark', [0.04, y0 + h + 0.1, 0.04], [0, (y0 + h + 0.1) / 2, -0.04]);
+      box('steelDark', [0.035, 0.035, D / 2 - 0.08], [0, 0.03, -0.04 - (D / 2 - 0.08) / 2]);
+      for (const s of [-1, 1]) box('steelDark', [0.6, 0.035, 0.035], [s * 0.3, 0.03, -0.04 + 0.1]);
+      faces.push({atlas: 'venueArt', piece: pick(SKYWAYS_VENUE_SLIDES), w, h, p: [0, y0 + h / 2, 0.012]});
+      break;
+    }
+    case 'skywaysVenueRegSign': {
+      // the registration sign screwed to the wall behind the badge desks (back at z -d/2): an aluminium frame round the print
+      const {w, h} = PS.regSign, f = 0.03, d = DEFS.skywaysVenueRegSign.d;
+      box('steelBright', [w + 2 * f, f, d], [0, f / 2, 0]); box('steelBright', [w + 2 * f, f, d], [0, h + 1.5 * f, 0]);
+      box('steelBright', [f, h, d], [-(w + f) / 2, h / 2 + f, 0]); box('steelBright', [f, h, d], [(w + f) / 2, h / 2 + f, 0]);
+      box('panel', [w, h, 0.01], [0, h / 2 + f, -d / 2 + 0.005]);
+      faces.push({atlas: 'venueArt', piece: 'registration', w, h, p: [0, h / 2 + f, -d / 2 + 0.011]});
+      break;
+    }
+    case 'skywaysVenueWallScreen': {
+      // a fixed projection screen on the wall (back at z -d/2): the white screen in a black border showing the panel's title slide
+      const {w, h} = PS.wallScreen, d = DEFS.skywaysVenueWallScreen.d;
+      box('black', [w + 0.08, h + 0.08, d], [0, (h + 0.08) / 2, 0]);
+      box('steelDark', [w + 0.08, 0.06, d], [0, h + 0.05, 0]); // the roller housing along the top
+      faces.push({atlas: 'venueArt', piece: pick(SKYWAYS_VENUE_SLIDES), w, h, p: [0, 0.04 + h / 2, d / 2 + 0.002]});
+      break;
+    }
+    case 'skywaysVenueTableBanner': {
+      // a vinyl booth banner zip-tied along the front of a vendor table's cloth (placed on the cloth's front, the table's yaw; tilted with it)
+      const {w, h} = PS.tableBanner, b = SKYWAYS_TABLE_BANNER;
+      box('panel', [w, h, 0.004], [0, h / 2, 0], b.rx);
+      faces.push({atlas: 'venueArt', piece: pick(SKYWAYS_VENUE_BOOTHS), w, h, p: [0, h / 2, 0.004], rx: b.rx});
+      break;
+    }
     default: break;
   }
   return {parts, faces};
@@ -254,12 +329,18 @@ export const SKYWAYS_ADDON_PHYS: Readonly<Record<SkywaysAddonKind, AddonPhys>> =
   skywaysMascotStatue: {dynamic: false, why: 'anchored', how: 'life-size resin mascot statue (~150 kg) on a round concrete plinth bolted to the floor: never moves (a statue, never an NPC)'},
   skywaysPrizeStanchion: {dynamic: true, mass: 8, mat: 'pad', shape: 'cylinder', how: 'chrome rope stanchion on a weighted base (~8 kg): walked into it slides, shot / rammed it tips over (its velvet ropes drop to the floor)'},
   skywaysPrizeBoard: {dynamic: true, mass: 12, mat: 'pad', shape: 'box', how: 'prize-draw display board between two posts on flat feet (~12 kg): walked into it slides, shot / rammed it tips over'},
+  skywaysVenuePhotoWall: {dynamic: false, why: 'anchored', how: 'pop-up photo-op wall: a 3 x 2 m printed panel in a steel frame between two posts on sandbag-weighted base plates (~45 kg): a bump or a bullet does not shove it'},
+  skywaysVenueScreen: {dynamic: true, mass: 9, mat: 'pad', shape: 'box', how: 'tripod projection screen (~9 kg: a 2.1 m screen on a three-legged stand): walked into it slides, shot it slides / tips over'},
+  skywaysVenueRegSign: {dynamic: false, why: 'mounted', how: 'printed registration sign in an aluminium frame screwed to the wall behind the badge desks'},
+  skywaysVenueWallScreen: {dynamic: false, why: 'mounted', how: 'fixed projection screen (the panel\'s title slide) screwed to the wall behind a compact panel room\'s table'},
+  skywaysVenueTableBanner: {dynamic: false, why: 'mounted', how: 'vinyl booth banner zip-tied along the front of a vendor table\'s cloth (no table, no banner: it never stands on its own)'},
 };
 
 const DAMAGE: Readonly<Record<SkywaysAddonKind, DamageClass>> = {
   skywaysConStage: 'wood', skywaysConBackdrop: 'fabric', skywaysConMerchTable: 'fabric', skywaysConFigureBox: 'cardboard', skywaysConPlush: 'fabric',
   skywaysConPrintCard: 'plastic', skywaysConPoster: 'cardboard', skywaysConPosterBoard: 'plastic', skywaysConBanner: 'fabric', skywaysConWelcome: 'plastic',
   skywaysMascotStatue: 'plastic', skywaysPrizeStanchion: 'steel', skywaysPrizeBoard: 'plastic',
+  skywaysVenuePhotoWall: 'fabric', skywaysVenueScreen: 'fabric', skywaysVenueRegSign: 'plastic', skywaysVenueTableBanner: 'fabric', skywaysVenueWallScreen: 'fabric',
 };
 /** Damage class (damage/materials.ts PropDamageSpec, 'never' breaks: marks only — no destructibility system). */
 export const SKYWAYS_ADDON_DAMAGE_CLASS: Readonly<Record<SkywaysAddonKind, DamageClass>> = DAMAGE;
@@ -287,6 +368,11 @@ export const SKYWAYS_ADDON_OPEN_AUDIT: readonly {kind: SkywaysAddonKind; cls: 'e
   {kind: 'skywaysMascotStatue', cls: 'none', role: 'decor', how: 'solid resin statue on a plinth: nothing to open'},
   {kind: 'skywaysPrizeStanchion', cls: 'none', role: 'equipment', how: 'rope stanchion post: nothing to open'},
   {kind: 'skywaysPrizeBoard', cls: 'none', role: 'decor', how: 'prize-draw display board on posts'},
+  {kind: 'skywaysVenuePhotoWall', cls: 'none', role: 'decor', how: 'freestanding printed photo-op wall in a steel frame'},
+  {kind: 'skywaysVenueScreen', cls: 'none', role: 'equipment', how: 'tripod projection screen: nothing to open'},
+  {kind: 'skywaysVenueRegSign', cls: 'none', role: 'decor', how: 'framed wall sign'},
+  {kind: 'skywaysVenueTableBanner', cls: 'none', role: 'decor', how: 'vinyl banner on a table front'},
+  {kind: 'skywaysVenueWallScreen', cls: 'none', role: 'decor', how: 'projection screen fixed to a wall: nothing to open'},
 ];
 
 /**
@@ -302,6 +388,8 @@ export const SKYWAYS_ADDON_SCALE = {
 } as const;
 
 /** Poses by role (the convention's statues). */
-export const SKYWAYS_STATUE_POSE: Readonly<Record<'entrance-wave' | 'washroom-point' | 'stage-cheer' | 'merch-bow' | 'green-room-stand', SkywaysMascotPoseName>> = {
+export const SKYWAYS_STATUE_POSE: Readonly<Record<'entrance-wave' | 'washroom-point' | 'stage-cheer' | 'merch-bow' | 'green-room-stand' | 'registration-wave' | 'photo-pose', SkywaysMascotPoseName>> = {
   'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand',
+  // (lane VENUE, layout version 3) the venue's registration greeter and the photo lounge's photo-op pose
+  'registration-wave': 'wave', 'photo-pose': 'cheer',
 };

@@ -20,11 +20,10 @@ import type {GLTF} from 'three/addons/loaders/GLTFLoader.js';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {PROP_DEFS, type PropPlacement} from '../gen/props';
 import type {ShapeMat} from '../gen/propShapes';
-import {SKYWAYS_ART, type SkywaysArtAtlasKey} from '../assets/skywaysArt.generated';
 import {SKYWAYS_MESHY_PROPS} from '../assets/skywaysMeshyProps.generated';
 import {SKYWAYS_MASCOT, type SkywaysMascotPoseName} from '../assets/skywaysMascot.generated';
-import {SKYWAYS_ADDON_MODEL, SKYWAYS_MASCOT_MODEL_KEY, SKYWAYS_MASCOT_POSES, SKYWAYS_STAGE_MODEL_SHIFT, SKYWAYS_STATUE_PLINTH, skywaysAddonModelKey,
-  skywaysAddonShape, type AddonArtFace, type AddonPart, type SkywaysAddonKind} from '../gen/skyways/addonKinds';
+import {SKYWAYS_ADDON_ART, SKYWAYS_ADDON_MODEL, SKYWAYS_MASCOT_MODEL_KEY, SKYWAYS_MASCOT_POSES, SKYWAYS_STAGE_MODEL_SHIFT, SKYWAYS_STATUE_PLINTH, skywaysAddonModelKey,
+  skywaysAddonShape, type AddonArtFace, type AddonPart, type SkywaysAddonArtKey, type SkywaysAddonKind} from '../gen/skyways/addonKinds';
 import {shapeMaterials} from './shapeMaterials';
 import {SurfaceNodeMaterial, type WorldMaterials} from './materials';
 
@@ -37,24 +36,24 @@ const placeM = (p: PropPlacement) => new THREE.Matrix4().compose(new THREE.Vecto
 // ---------------------------------------------------------------------------------------------
 // Art materials (one per atlas; set by the runtime's preload)
 
-const ART = new Map<SkywaysArtAtlasKey, THREE.Material>();
+const ART = new Map<SkywaysAddonArtKey, THREE.Material>();
 let plainBoard: THREE.Material | null = null;
 /** The runtime hands in an atlas's material (null: forget it). */
-export function setSkywaysAddonArtMaterial(atlas: SkywaysArtAtlasKey, m: THREE.Material | null): void {
+export function setSkywaysAddonArtMaterial(atlas: SkywaysAddonArtKey, m: THREE.Material | null): void {
   if (m) ART.set(atlas, m); else ART.delete(atlas);
 }
 /** The atlas material, or the plain board stand-in when the atlas is not loaded (never drawn art). */
-export function skywaysAddonArtMaterial(atlas: SkywaysArtAtlasKey): THREE.Material {
+export function skywaysAddonArtMaterial(atlas: SkywaysAddonArtKey): THREE.Material {
   const m = ART.get(atlas);
   if (m) return m;
   if (!plainBoard) { plainBoard = new SurfaceNodeMaterial({color: 0xd9d5cc, roughness: 0.85, metalness: 0}); plainBoard.name = 'skyways-addon-board-plain'; }
   return plainBoard;
 }
 /** Does the art of this atlas show (QA / tests)? */
-export const skywaysAddonArtLoaded = (atlas: SkywaysArtAtlasKey): boolean => ART.has(atlas);
+export const skywaysAddonArtLoaded = (atlas: SkywaysAddonArtKey): boolean => ART.has(atlas);
 /** The atlases a kind's faces use. */
-export function skywaysAddonAtlases(kinds: Iterable<string>): SkywaysArtAtlasKey[] {
-  const out = new Set<SkywaysArtAtlasKey>();
+export function skywaysAddonAtlases(kinds: Iterable<string>): SkywaysAddonArtKey[] {
+  const out = new Set<SkywaysAddonArtKey>();
   for (const k of kinds) for (let v = 0; v < 8; v++) for (const f of skywaysAddonShape(k as SkywaysAddonKind, v).faces) out.add(f.atlas);
   return [...out].sort();
 }
@@ -85,7 +84,7 @@ function partGeo(part: AddonPart): THREE.BufferGeometry {
 
 /** A quad of an atlas piece (both faces when `back`: the rear one mirrored so it reads the right way round). */
 export function artFaceGeometry(f: AddonArtFace): THREE.BufferGeometry {
-  const piece = (SKYWAYS_ART[f.atlas].pieces as Record<string, {u0: number; v0: number; u1: number; v1: number}>)[f.piece];
+  const piece = (SKYWAYS_ADDON_ART[f.atlas].pieces as Record<string, {u0: number; v0: number; u1: number; v1: number}>)[f.piece];
   const quad = (back: boolean) => {
     const g = new THREE.PlaneGeometry(f.w, f.h);
     const uv = g.attributes.uv as THREE.BufferAttribute;

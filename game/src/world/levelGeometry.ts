@@ -66,7 +66,8 @@ export function cellCeil(g: Grid, i: number): number {
   if (r >= 0) {
     const R = g.ramps[r], W = g.w, cx = i % W, cy = (i - cx) / W;
     const s = ((R.axis === 'x' ? cx : cy) + 0.5) * CELL;
-    return rampHeight(R, s) + R.headroom;
+    const c = rampHeight(R, s) + R.headroom;
+    return R.capCeil && g.hasCeil(i) ? Math.min(c, g.ceil[i]) : c; // (task studio-skyways-rework-20261107-054512-01: open wells)
   }
   return g.hasCeil(i) ? g.ceil[i] : g.floorOf(i) + DEFAULT_CEIL;
 }

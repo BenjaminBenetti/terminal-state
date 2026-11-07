@@ -1,0 +1,74 @@
+{
+ "schema": "last-line-derivative/1",
+ "asset": "skyways-arch-herringbone",
+ "task": "studio-skyways-rework-20261107-054512-01",
+ "lane": "ARCH",
+ "status": "runtime derivative (tile crop / resize / JPEG only) of an ORIGINAL tileable surface texture generated for this project with Codex native image_gen (owned Codex CLI) under the user's explicit art authorization for the Skyways rework (no numerical image cap, user override); provider terms apply; unapproved prototype, no licence or commercial clearance implied",
+ "use": "Skyways skylit / atrium courts: the floor (herringbone brick)",
+ "subject": "herringbone glazed clay brick paver floor (warm terracotta / amber / chocolate), top-down, tileable",
+ "rebuild": "node tools/asset-pipeline/props/build-skyways-arch-textures.mjs",
+ "rawStorage": "reference/tasks/skyways-rework-20261107-054512/gen/{LEDGER.jsonl, raw/codex-<n>-exec-<id>.png, prompts/arch-<n>.txt} (private, outside Git)",
+ "generator": "Codex native image_gen (owned Codex CLI)",
+ "codex": {
+  "generator": "Codex native image_gen (owned Codex CLI)",
+  "ledgerCall": 101,
+  "session": "01a1b4af-423e-7af3-a7e8-4adfb2d7fe61",
+  "requested": "2026-11-07T06:25:46.874830Z",
+  "finished": "2026-11-07T06:26:22.508566Z",
+  "seconds": 35.6
+ },
+ "prompt": {
+  "file": "arch-101.txt",
+  "sha256": "4d0babd01c0e2441a1c21b931c41c123b88091c9de63279064b1ebb46f6c2172"
+ },
+ "source": {
+  "file": "codex-101-exec-89df56d1-38d1-4ba9-9daa-20faf7c662dc.png",
+  "sha256": "4060935fde6910329f7d7cd3e4a9e6ccdcc34e9bebbd2301f213450b682e7831",
+  "bytes": 3180304,
+  "width": 1254,
+  "height": 1254
+ },
+ "recipe": {
+  "crop": {
+   "x": 0,
+   "y": 0,
+   "w": 1254,
+   "h": 1254,
+   "why": "full frame (tiles as delivered)"
+  },
+  "resize": {
+   "width": 1024,
+   "height": 1024,
+   "kernel": "lanczos3",
+   "fit": "fill"
+  },
+  "colour": "sRGB, alpha removed",
+  "encode": {
+   "format": "jpeg",
+   "quality": 85,
+   "mozjpeg": true,
+   "chromaSubsampling": "4:2:0",
+   "metadata": "stripped"
+  },
+  "tool": "sharp (libvips) via tools/asset-pipeline/props/build-skyways-arch-textures.mjs"
+ },
+ "tileCheck": {
+  "seamLR": 8.2,
+  "interiorLR": 5.3,
+  "seamTB": 13.8,
+  "interiorTB": 5.9,
+  "note": "mean absolute grey difference (0..255) across the wrap seams vs between interior neighbour rows / columns"
+ },
+ "spanM": {
+  "u": 1.3,
+  "v": 1.3
+ },
+ "output": {
+  "url": "assets/textures/skyways/arch/skyways-arch-herringbone.jpg",
+  "bytes": 208710,
+  "sha256": "a5b47023f7aa57cf22bc59921135aa915b97af94ddd1d8fc74ff8176532dbc7d",
+  "width": 1024,
+  "height": 1024,
+  "format": "jpeg"
+ }
+}

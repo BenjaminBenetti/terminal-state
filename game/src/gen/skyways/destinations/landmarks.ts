@@ -118,6 +118,14 @@ export function keepLandmarkClear(ctx: PlaceCtx, layout: StationLayout): void {
     const ax = a && courtAxis(a) === 'z' ? 0 : 1, az = 1 - ax;
     const x0 = lm.x - ax * half, z0 = lm.z - az * half, x1 = lm.x + ax * half, z1 = lm.z + az * half;
     keepCells(ctx, x0, z0, x1, z1, R);
+    // (task studio-skyways-rework-20261107-054512-01) and the court's walking lanes: from each opening to the hero (the court's own
+    // openings when it is not dressed yet: the atrium greenery runs before it; the later passes — planted galleries / courts, map
+    // boards — never close them either)
+    const d = landmarkDressOf(layout).find(q => q.id === lm.id);
+    for (const o of d?.openings ?? (a ? courtOpenings(ctx.g, a) : [])) {
+      const inward = ({N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0]} as const)[o.side];
+      keepCells(ctx, o.x + inward[0] * 0.25, o.z + inward[1] * 0.25, lm.x, lm.z, LANDMARK_DRESS.laneHalf + 0.3, lm.area);
+    }
   }
 }
 
@@ -136,12 +144,13 @@ function keepCells(ctx: PlaceCtx, ax: number, az: number, bx: number, bz: number
 
 /**
  * The court's openings: runs of its boundary cells whose outward neighbour is walkable floor of another area (doorways, open sides
- * onto a corridor / the rest of the lobby), one per run, at the run's middle on the boundary line.
+ * onto a corridor / the rest of the lobby), one per run, at the run's middle on the boundary line. (Task studio-skyways-rework-
+ * 20261107-054512-01: never a stair well's side — its flights' cells are a run's, not a way in: an atrium court split by a well.)
  */
 export function courtOpenings(g: Grid, a: Area): {x: number; z: number; side: Side; n: number}[] {
   const out: {x: number; z: number; side: Side; n: number}[] = [];
   const own = (x: number, y: number) => g.inBounds(x, y) && g.area[g.idx(x, y)] === a.id && g.cells[g.idx(x, y)] === FLOOR;
-  const open = (x: number, y: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] !== a.id;
+  const open = (x: number, y: number, fy: number) => g.inBounds(x, y) && g.cells[g.idx(x, y)] === FLOOR && g.area[g.idx(x, y)] !== a.id && g.rampIdx[g.idx(x, y)] < 0 && Math.abs(g.floor[g.idx(x, y)] - fy) < 0.4;
   const sides: [Side, number, number, number, number, number, number][] = [
     // side, start x, start y, step x, step y, outward dx, dy
     ['N', a.x, a.y, 1, 0, 0, -1], ['S', a.x, a.y + a.h - 1, 1, 0, 0, 1], ['W', a.x, a.y, 0, 1, -1, 0], ['E', a.x + a.w - 1, a.y, 0, 1, 1, 0],
@@ -158,7 +167,7 @@ export function courtOpenings(g: Grid, a: Area): {x: number; z: number; side: Si
     };
     for (let k = 0; k < len; k++) {
       const x = sx + dx * k, y = sy + dy * k;
-      if (own(x, y) && open(x + ox, y + oy)) { if (run < 0) run = k; } else flush(k);
+      if (own(x, y) && open(x + ox, y + oy, g.floor[g.idx(x, y)])) { if (run < 0) run = k; } else flush(k);
     }
     flush(len);
   }
@@ -278,7 +287,8 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     const d = Math.hypot(o.x - X, o.z - Z);
     if (d <= ringR) continue;
     const ux = (X - o.x) / d, uz = (Z - o.z) / d;
-    keepCells(ctx, o.x, o.z, o.x + ux * (d - ringR), o.z + uz * (d - ringR), LANDMARK_DRESS.laneHalf, area.id);
+    // (rework: + half a metre — the cell quantisation and a placed box's edge never pinch the 1.2 m lane)
+    keepCells(ctx, o.x, o.z, o.x + ux * (d - ringR), o.z + uz * (d - ringR), LANDMARK_DRESS.laneHalf + 0.5, area.id);
   }
 
   // --- 3. the plaque beside the main approach, facing the visitor -----------------------------------------------------------------
@@ -287,6 +297,13 @@ export function dressLandmark(layout: StationLayout, rng: Rng, lm: SkywaysLandma
     const dirs = [toMain, ...res.openings.slice().sort((p, q) => q.n - p.n).map(o => yawToward(o.x - X, o.z - Z)), 0, Math.PI / 2, Math.PI, -Math.PI / 2];
     const variant = DEST_PLAQUE_OF[lm.family], dep = PROP_DEFS.skyDPlaque.d / 2;
     // (the station's desire lines crossed the court's middle before the hero stood there: the reserved lanes above replace them)
+    // (rework: the main lane's mouth stays open — a disc where the way in crosses into the court — so the plaque stands beside the
+    // approach, never in it)
+    const mainO = res.openings.reduce((b, o) => (o.n > b.n ? o : b), res.openings[0]);
+    if (mainO) {
+      const inward = ({N: [0, 1], S: [0, -1], W: [1, 0], E: [-1, 0]} as const)[mainO.side];
+      keepCells(ctx, mainO.x + inward[0] * 0.75, mainO.z + inward[1] * 0.75, mainO.x + inward[0] * 0.75, mainO.z + inward[1] * 0.75, 1.3, area.id);
+    }
     outer: for (const yaw of dirs) {
       const ux = Math.sin(yaw), uz = Math.cos(yaw), rot = quarter(yaw), base = halfToward(ux, uz) + ext + dep + 0.15;
       for (const radial of [0, 0.5, 1.0, 1.6, 2.4]) for (const lateral of [1.3, -1.3, 1.9, -1.9, 2.6, -2.6]) {

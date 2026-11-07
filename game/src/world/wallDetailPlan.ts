@@ -387,7 +387,7 @@ const overlaps = (a: Rect, b: Rect, m = 0) => a.s0 < b.s1 + m && a.s1 > b.s0 - m
 function shopBoxes(layout: StationLayout): PlanCtx['shopBoxes'] {
   const out: PlanCtx['shopBoxes'] = [];
   for (const sf of layout.storefronts) {
-    try { for (const b of storefrontParts(layout, sf).boxes) out.push(b); } catch { /* malformed bay: its opening keep-out still applies */ }
+    try { for (const b of storefrontParts(layout, sf, {anchorSign: true}).boxes) out.push(b); } catch { /* malformed bay: its opening keep-out still applies */ }
   }
   for (const b of layout.decor ?? []) out.push(b);
   return out;

@@ -22,6 +22,7 @@ import {BUNKER_STATIC} from '../gen/reactor/complex/bunkerKinds'; // task reacto
 import {SKYWAYS_KITCHEN_PHYS, isSkywaysKitchenKind} from '../gen/skyways/kitchenKinds'; // task studio-skyways-level-20261106-054448 (lane FOOD)
 import {SKYWAYS_ADDON_PHYS, isSkywaysAddonKind} from '../gen/skyways/addonKinds'; // task studio-skyways-level-20261106-054448 (lane ADDON)
 import {SKYWAYS_DEST_PHYS, isSkywaysDestKind} from '../gen/skyways/destinations/registry'; // task studio-skyways-destinations-20261106-170011-01
+import {SKYWAYS_MAPBOARD_PHYS, isSkywaysMapBoardKind} from '../gen/skyways/mapBoardKind'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 
 export interface PhysAuditRow {
   kind: string;
@@ -153,14 +154,14 @@ function officeRow(kind: string, r: OfficePhys): PhysAuditRow {
 /** Lane FOOD (skyways): a ramen-restaurant kind's row — its class / body from the live physics (PROP_DEFS.physics), its reason from the table. */
 function skywaysRow(kind: string): PhysAuditRow {
   // (lane ADDON: + the add-on's kinds, gen/skyways/addonKinds.ts SKYWAYS_ADDON_PHYS — same row shape)
-  const r = isSkywaysAddonKind(kind) ? SKYWAYS_ADDON_PHYS[kind] : isSkywaysDestKind(kind) ? SKYWAYS_DEST_PHYS[kind] : SKYWAYS_KITCHEN_PHYS[kind as keyof typeof SKYWAYS_KITCHEN_PHYS], ph = propPhysics(kind);
+  const r = isSkywaysAddonKind(kind) ? SKYWAYS_ADDON_PHYS[kind] : isSkywaysDestKind(kind) ? SKYWAYS_DEST_PHYS[kind] : isSkywaysMapBoardKind(kind) ? SKYWAYS_MAPBOARD_PHYS[kind] : SKYWAYS_KITCHEN_PHYS[kind as keyof typeof SKYWAYS_KITCHEN_PHYS], ph = propPhysics(kind); // (lane MAPS: + the directory board)
   if (!r.dynamic) return {kind, cls: 'static', why: r.why, how: r.how, src: 'skyways'};
   return {kind, cls: 'dynamic', mass: ph.mass, shape: ph.shape ?? 'box', mat: ph.mat ?? 'metal', contact: !!ph.contact && dynamicKind(kind), ...(ph.onHost ? {onHost: true} : {}), how: r.how, src: 'skyways'};
 }
 
 /** kind -> its physics-affordance row; a kind with no row here is UNCLASSIFIED (tests fail). */
 export const PROP_PHYSICS_AUDIT: Readonly<Record<string, PhysAuditRow>> = Object.fromEntries(ALL_PROP_KINDS.flatMap(k => {
-  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : isSkywaysKitchenKind(k) || isSkywaysAddonKind(k) || isSkywaysDestKind(k) ? skywaysRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds)
+  const row = isOfficeKind(k) ? officeRow(k, (OFFICE_PHYS as Record<string, OfficePhys>)[k]) : isSkywaysKitchenKind(k) || isSkywaysAddonKind(k) || isSkywaysDestKind(k) || isSkywaysMapBoardKind(k) ? skywaysRow(k) : subwayRow(k); // (lane ADDON: + the add-on kinds)
   return row ? [[k, row]] : [];
 }));
 

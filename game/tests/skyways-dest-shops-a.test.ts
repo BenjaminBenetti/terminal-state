@@ -9,10 +9,12 @@
 //    and never overlapping, floor props never overlapping;
 //  - the reserved lanes (entry -> every door / zone / the stair mouth / the main aisle) stay clear and wide;
 //  - the anchors' loot holders are present and roll finite loot; the level validates and regenerates identically.
+// (task studio-alpha-skyways-shops-20261107-054512-01) these describe the GAME77 (layout version 2) dressers, frozen in gen/skyways/legacy77/:
+// the layouts are generated at version 2 and the dress records / validation read from the frozen modules. Version 3's major stores: tests/skyways-store-*.
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {skywaysIssues} from '../src/gen/skyways/validate';
+import {skywaysIssues} from '../src/gen/skyways/legacy77/validate';
 import {FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHELF_TIER_Y, SHOP_COUNTER_TOP_Y, type PropPlacement} from '../src/gen/props';
 import {PROP_DAMAGE, PHYS_MATS, propPhysics} from '../src/damage/materials';
@@ -21,9 +23,9 @@ import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
 import {SKYWAYS_DEST_PROPS} from '../src/assets/skywaysDestProps.generated';
 import {SHOPS_A_KINDS, SHOPS_A_MODEL, SHOPS_A_SPECS, bookTableTiers, bookcaseShelves, canoeHangY, destDims} from '../src/gen/skyways/destinations/kindsShopsA';
-import {BOOK_STACK_BUDGET, CANOE_CLEAR, SHOPS_A_FAMILIES, skywaysShopsADressOf, type ShopsAResult} from '../src/gen/skyways/destinations/shopsA';
-import {SHOPS_A_LANE_HALF} from '../src/gen/skyways/destinations/skywaysShopsAKit';
-import {DEST_POSTER, DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
+import {BOOK_STACK_BUDGET, CANOE_CLEAR, SHOPS_A_FAMILIES, skywaysShopsADressOf, type ShopsAResult} from '../src/gen/skyways/legacy77/destinations/shopsA';
+import {SHOPS_A_LANE_HALF} from '../src/gen/skyways/legacy77/destinations/skywaysShopsAKit';
+import {DEST_POSTER, DEST_POSTERS_OF} from '../src/gen/skyways/legacy77/destinations/art';
 import {lootProfile} from '../src/items/lootTables';
 import {layoutHolderDetails} from './helpers/lootEconomy';
 
@@ -31,7 +33,9 @@ import {layoutHolderDetails} from './helpers/lootEconomy';
 // music hall / multi-zone, hobby hall, design hall / two-level)
 const SEEDS = [2, 3, 4, 5, 6, 9, 12];
 const cache = new Map<number, StationLayout>();
-const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'}))); return l; };
+// (task studio-skyways-rework-20261107-054512-01) these dressers' GAME77 output, on the stations entered before the rework: layout version 2
+// through the frozen generator (gen/skyways/legacy77/). The reworked stores (layout version 3) are the store lanes' own tests.
+const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never))); return l; };
 const anchorsOf = (l: StationLayout) => skywaysShopsADressOf(l).map(r => ({r, an: l.skyways!.anchors!.find(a => a.id === r.anchor)!}));
 const all = () => SEEDS.flatMap(s => anchorsOf(gen(s)).map(x => ({...x, l: gen(s), seed: s})));
 const kindsIn = (l: StationLayout, r: ShopsAResult) => { const m: Record<string, number> = {}; for (const i of r.props) m[l.props[i].kind] = (m[l.props[i].kind] ?? 0) + 1; return m; };
@@ -256,7 +260,7 @@ describe('Skyways destinations SHOPS-A: the dressed anchors', () => {
   });
 
   it('regenerates identically', () => {
-    const s = 5, a = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'});
+    const s = 5, a = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol', layoutVersion: 2} as never);
     const pick = (l: StationLayout) => skywaysShopsADressOf(l).map(r => r.props.map(i => l.props[i]));
     expect(JSON.stringify(pick(a))).toBe(JSON.stringify(pick(gen(s))));
   });
