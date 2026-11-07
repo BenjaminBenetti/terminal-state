@@ -378,6 +378,14 @@ describe('Northern Groove Records: renderer and art', () => {
     for (const s of Object.values(prov.sources) as {sha256: string; codex: {session: string}}[]) { expect(s.sha256).toMatch(/^[0-9a-f]{64}$/); expect(s.codex.session).toBeTruthy(); }
     expect(prov.files.map((f: {sha256: string}) => f.sha256)).toEqual([MUSIC_ART.covers.sha256, MUSIC_ART.signs.sha256]);
     for (const p of ['new-arrivals', 'listening-booths', 'poster-0', 'poster-3', 'genre-rock', 'genre-electronic']) expect(MUSIC_ART.signs.pieces[p], p).toBeTruthy();
+    // the reviewed public inputs allowlist the cooked files at their exact size / hash
+    const allow = JSON.parse(fs.readFileSync(path.join(ROOT, 'tools/release/public-inputs.json'), 'utf8')) as {files: {path: string; bytes: number; sha256: string}[]};
+    for (const rel of [MUSIC_ART.covers.url, MUSIC_ART.signs.url, 'assets/derivatives/skyways-store-music-art-20261107.json']) {
+      const f = path.join(ROOT, 'game/public', rel), e = allow.files.find(q => q.path === rel);
+      expect(e, rel).toBeTruthy();
+      expect(e!.bytes).toBe(fs.statSync(f).size);
+      expect(e!.sha256).toBe(sha(f));
+    }
   });
 });
 
