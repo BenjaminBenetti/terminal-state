@@ -9,10 +9,12 @@
 //    and never overlapping, floor props never overlapping;
 //  - the reserved lanes (entry -> every door / zone / the stair mouth / the main aisle) stay clear and wide;
 //  - the anchors' loot holders are present and roll finite loot; the level validates and regenerates identically.
+// (task studio-alpha-skyways-shops-20261107-054512-01) these describe the GAME77 (layout version 2) dressers, frozen in gen/skyways/legacy77/:
+// the layouts are generated at version 2 and the dress records / validation read from the frozen modules. Version 3's major stores: tests/skyways-store-*.
 import {describe, expect, it} from 'vitest';
 import {LEVELS} from '../src/levels/registry';
 import type {StationLayout} from '../src/gen/stationTypes';
-import {skywaysIssues} from '../src/gen/skyways/validate';
+import {skywaysIssues} from '../src/gen/skyways/legacy77/validate';
 import {FLOOR} from '../src/gen/grid';
 import {PROP_DEFS, SHELF_TIER_Y, SHOP_COUNTER_TOP_Y, type PropPlacement} from '../src/gen/props';
 import {PROP_DAMAGE, PHYS_MATS, propPhysics} from '../src/damage/materials';
@@ -21,8 +23,8 @@ import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {dynamicKind} from '../src/physics/dynamicItems';
 import {SKYWAYS_DEST_PROPS} from '../src/assets/skywaysDestProps.generated';
 import {SHOPS_A_KINDS, SHOPS_A_MODEL, SHOPS_A_SPECS, bookTableTiers, bookcaseShelves, canoeHangY, destDims} from '../src/gen/skyways/destinations/kindsShopsA';
-import {BOOK_STACK_BUDGET, CANOE_CLEAR, SHOPS_A_FAMILIES, skywaysShopsADressOf, type ShopsAResult} from '../src/gen/skyways/destinations/shopsA';
-import {SHOPS_A_LANE_HALF} from '../src/gen/skyways/destinations/skywaysShopsAKit';
+import {BOOK_STACK_BUDGET, CANOE_CLEAR, SHOPS_A_FAMILIES, skywaysShopsADressOf, type ShopsAResult} from '../src/gen/skyways/legacy77/destinations/shopsA';
+import {SHOPS_A_LANE_HALF} from '../src/gen/skyways/legacy77/destinations/skywaysShopsAKit';
 import {DEST_POSTER, DEST_POSTERS_OF} from '../src/gen/skyways/destinations/art';
 import {lootProfile} from '../src/items/lootTables';
 import {layoutHolderDetails} from './helpers/lootEconomy';
