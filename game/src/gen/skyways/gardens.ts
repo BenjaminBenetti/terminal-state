@@ -13,7 +13,7 @@
 
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
-import {makePlaceCtx, markCell, tryPlaceProp, type PlaceCtx} from '../placeKit';
+import {areaConnected, makePlaceCtx, markCell, tryPlaceProp, type PlaceCtx} from '../placeKit';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
 import type {StationLayout} from '../stationTypes';
 import {keepLandmarkClear} from './destinations/landmarks';
@@ -55,7 +55,21 @@ function keepCirculation(ctx: PlaceCtx, layout: StationLayout): void {
     if (r.axis === 'x') { keep(r.x - M, r.y - 1, r.x, r.y + r.h + 1); keep(r.x + r.w, r.y - 1, r.x + r.w + M, r.y + r.h + 1); }
     else { keep(r.x - 1, r.y - M, r.x + r.w + 1, r.y); keep(r.x - 1, r.y + r.h, r.x + r.w + 1, r.y + r.h + M); }
   }
-  if (info.addon.level === lv) { const [cx, cy] = g.cellOf(info.addon.entry.x, info.addon.entry.z); keep(cx - 4, cy - 4, cx + 5, cy + 5); }
+  if (info.addon.level === lv) {
+    const [cx, cy] = g.cellOf(info.addon.entry.x, info.addon.entry.z);
+    keep(cx - 4, cy - 4, cx + 5, cy + 5);
+    // the add-on's hall / the prize display zone (+ 1 m), and the prize car's way out fore and aft (its body discs + a 3.2 m lane)
+    const h = info.addon.hall;
+    keep(Math.floor(h.x0 / CELL) - 2, Math.floor(h.z0 / CELL) - 2, Math.ceil(h.x1 / CELL) + 2, Math.ceil(h.z1 / CELL) + 2);
+    const car = info.addon.car;
+    if (car && car.level === lv) {
+      const fx = -Math.sin(car.yaw), fz = -Math.cos(car.yaw);
+      for (let t = -7; t <= 7; t += 0.5) for (let w = -1.8; w <= 1.8; w += 0.5) {
+        const [x, y] = g.cellOf(car.x + fx * t - fz * w, car.z + fz * t + fx * w);
+        keep(x, y, x + 1, y + 1);
+      }
+    }
+  }
   for (const sf of layout.storefronts ?? []) {
     const hall = layout.areas[sf.hall];
     if (!hall || (hall.level ?? 0) !== lv) continue;
@@ -129,8 +143,11 @@ function galleryTroughs(layout: StationLayout, rng: Rng, st: GardenStats): void 
           const i = g.idx(cx, cy), area = g.area[i];
           const {hx, hz} = footprint(TROUGH, e.rot);
           const p: PropPlacement = {kind: TROUGH, x: r3(x), z: r3(z), y: r3(g.floorOf(i)), rot: r3(e.rot), area, hx, hz, h: PROP_DEFS[TROUGH].h, blocksSight: false, variant: rng.int(0, 9999), level: lv};
+          const cells = Array.from({length: GARDEN.seg}, (_, k) => { const [bx, by] = cell(q0 + k); return g.idx(bx, by); });
+          for (const c of cells) g.blocked[c] = 1;
+          // never trap a cell (a gap left beside another fixture): the gallery area stays one connected walk
+          if (!areaConnected(ctx, layout.areas[area])) { for (const c of cells) g.blocked[c] = 0; st.refused++; continue; }
           layout.props.push(p);
-          for (let k = 0; k < GARDEN.seg; k++) { const [bx, by] = cell(q0 + k); g.blocked[g.idx(bx, by)] = 1; }
           st.troughs++;
         }
         t = u;
