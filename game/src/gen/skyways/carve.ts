@@ -1016,6 +1016,16 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const floor = k.areas[sf.unit];
     floor.purpose = F.use;
     for (const q of pieces) if (q !== main) { const a = k.addArea(q, 'room', 'shop', ceilY, floor.id, {...opt(lv), label: F.name, publicSpace: true}); a.purpose = F.use; }
+    // (task studio-alpha-skyways-shops-20261107-054512-01, version 3) the storefront opening's cells belong to the floor PIECE behind each
+    // cell (carveDoor stamped them all the main piece's: on a floor split round a stair well / an inset back room the opening spans
+    // several pieces, and a piece reached through cells stamped another's read as cut off to the placement checks). Ids only: no geometry.
+    if (opts.storeBackRooms && pieces.length > 1) {
+      for (let y = gap.y; y < gap.y + gap.h; y++) for (let x = gap.x; x < gap.x + gap.w; x++) {
+        const [bx, by] = frontCell({x, y, w: 1, h: 1}, hubSide === 'N' ? 'S' : hubSide === 'S' ? 'N' : hubSide === 'W' ? 'E' : 'W');
+        const behind = k.areas[g.area[g.idx(bx, by)]];
+        if (behind && behind.parent === floor.id && behind.type === 'shop' && !zoneRects.some(([zr]) => inRect(zr, bx, by))) g.area[g.idx(x, y)] = behind.id;
+      }
+    }
     const zones: number[] = [];
     for (const [zr, label, type, dw] of zoneRects) {
       const a = k.addArea(zr, 'room', type, label === 'Auditorium' ? ceilOf(lv, ANCHOR_CLEAR.hall[lv - 1]) : ceilOf(lv, CLEAR.shop), floor.id, {...opt(lv), label: `${label} · ${F.name}`, publicSpace: true});
