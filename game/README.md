@@ -13,7 +13,7 @@ bands and menu boards, glazed shops, roll-down shutters, a service corridor behi
 the middle), washrooms, sealed street-exit stairs and back-of-house (stock rooms with shelving,
 storage, crew/utility rooms, closets) — 22–32 rigged zombies (iteration 12: doubled) that fall as
 physics ragdolls, physical casings, both existing guns, a five-slot hotbar + backpack, visible
-searchable loot, food/drink with slow hunger/thirst (both start at 80%), death and restart. Campaign runs autosave
+searchable loot, food/drink with hunger/thirst (both start at 80%; full to empty in about 23 / 16 active minutes; at 0, 5 % of max health per active minute), death and restart. Campaign runs autosave
 into three local save slots and settings persist (both `localStorage`, see Campaign below); no IndexedDB, cloud or server.
 
 ## Commands (from the repo root)
@@ -247,8 +247,9 @@ keeps them under 70 %).
 Every load opens the **main menu** (`src/ui/mainMenu.ts`) beside a real-time diorama (`src/world/menuScene.ts`: the ruined
 city in green fog, surface tracks, the player train; render only, no world state). Boot builds the renderer and the diorama
 first, then loads the game files in the background (a line at the foot of the menu); New game / Continue wait for them. No
-level is built before New game / Continue. Settings (sensitivity, invert, FOV 60-100, master volume 0-100 %, mute, quality,
-render resolution, and train sway 0-100 % = the moving train's jostle on the view, 0 = off) persist in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
+level is built before New game / Continue. Settings (FOV 60-100, master volume 0-100 %, mute, quality, render resolution, and train
+sway 0-100 % = the moving train's jostle on the view, 0 = off) and the Controls' input preferences (mouse sensitivity, invert X / Y:
+the main menu's Controls view and the pause menu's Controls section, above the key bindings) persist in one record in `localStorage` (`terminal-state.settings.v1`, `src/ui/settingsStore.ts`); the pause menu edits
 the same store.
 
 Campaign polish (task campaign-polish-20261103, lane MENU): the side column lists only Continue / New game / Load save / Settings /
