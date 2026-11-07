@@ -51,14 +51,14 @@ const PAL = {
 } as const;
 /** Fill of a space on its own storey (solid) by kind. */
 export const SPACE_FILL: Readonly<Record<MapSpaceKind, string>> = {
-  hub: '#4d7385', shop: '#2c3843', anchor: '#7a5f30', food: '#76462f', washroom: '#2f5d80', event: '#5f4276', platform: '#46525c',
+  hub: '#4d7385', shop: '#2c3843', anchor: '#7a5f30', food: '#76462f', washroom: '#2f5d80', event: '#5f4276', office: '#3d4c66', platform: '#46525c',
   stair: '#5a6874', pedway: '#6d5a26', bridge: '#2f7c80',
 };
 /** The faint fill of another storey's public space. */
 export const OTHER_STOREY_FILL = 'rgba(130,165,185,0.10)';
 /** The chip colour of a destination label by kind. */
-const CHIP: Readonly<Record<MapLabel['kind'], string>> = {event: '#b67fe2', anchor: '#e0a945', landmark: '#8fd27a', restaurant: '#e7684c', food: '#ec8c3a', station: '#4aa3e0'};
-const LABEL_ORDER: readonly MapLabel['kind'][] = ['station', 'event', 'landmark', 'anchor', 'restaurant', 'food'];
+const CHIP: Readonly<Record<MapLabel['kind'], string>> = {event: '#b67fe2', anchor: '#e0a945', office: '#93acd8', landmark: '#8fd27a', restaurant: '#e7684c', food: '#ec8c3a', station: '#4aa3e0'};
+const LABEL_ORDER: readonly MapLabel['kind'][] = ['station', 'event', 'landmark', 'anchor', 'office', 'restaurant', 'food'];
 
 // ---------------------------------------------------------------------------------------------
 // Projection (north up: canvas x = world x, canvas y = world z; z is south)
@@ -186,7 +186,7 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
     if (s.level !== level) continue;
     ctx.fillStyle = SPACE_FILL[s.kind];
     ctx.fillRect(X(s.rect.x0), Y(s.rect.z0), (s.rect.x1 - s.rect.x0) * k, (s.rect.z1 - s.rect.z0) * k);
-    if (s.kind === 'shop' || s.kind === 'anchor' || s.kind === 'food' || s.kind === 'washroom' || s.kind === 'event') {
+    if (s.kind === 'shop' || s.kind === 'anchor' || s.kind === 'food' || s.kind === 'washroom' || s.kind === 'event' || s.kind === 'office') {
       ctx.strokeStyle = 'rgba(150,175,190,0.45)'; ctx.lineWidth = 1;
       ctx.strokeRect(X(s.rect.x0) + 0.5, Y(s.rect.z0) + 0.5, (s.rect.x1 - s.rect.x0) * k - 1, (s.rect.z1 - s.rect.z0) * k - 1);
     }

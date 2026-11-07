@@ -35,7 +35,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 
 installCanvasShim(false);
 
-/** Real seeds: both add-ons (prize-car display 1-3, 6; convention venue 4, 5) and four frame families. */
+/** Real seeds: both add-ons (prize-car display 1-3, 6; convention venue 4, 5), office wings (3, 5, 6) and four frame families. */
 const SEEDS = [1, 2, 3, 4, 5, 6];
 const cache = new Map<number, StationLayout>();
 const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'} as never))); return l; };
@@ -192,6 +192,7 @@ describe('Skyways map boards: placement on real seeds', () => {
 
 describe('Skyways map boards: the plan matches the layout', () => {
   it('buildings, bridges (one +15 line each through its deck), pedways, runs and every destination', () => {
+    let offices = 0;
     for (const s of SEEDS) {
       const L = gen(s), info = L.skyways!, plan = skywaysMapPlan(L)!;
       expect(plan.name).toBe(info.name);
@@ -227,6 +228,12 @@ describe('Skyways map boards: the plan matches the layout', () => {
       if (info.restaurant) expect(texts, `seed ${s}`).toContain(info.restaurant.name);
       if (info.buildings.some(b => b.foodCourt)) expect(texts).toContain('Food court');
       expect(plan.labels.some(l => l.kind === 'station' && l.level === 0)).toBe(true);
+      // (layout v3) a tenant office wing: drawn as office space, labelled by its tenant on its storey
+      if (info.officeWing) {
+        offices++;
+        expect(plan.labels.some(l => l.kind === 'office' && l.text === info.officeWing!.tenant && l.level === info.officeWing!.level), `seed ${s} wing`).toBe(true);
+        for (const r of info.officeWing.rooms) expect(plan.spaces.find(q => q.area === r.area)?.kind, `seed ${s} wing room`).toBe('office');
+      }
       const ev = plan.labels.filter(l => l.kind === 'event');
       expect(ev.every(l => l.level === info.addon.level)).toBe(true);
       if (info.addon.id === 'prize-car') expect(ev.map(l => l.text)).toEqual(['Grand Prize Draw']);
@@ -238,6 +245,7 @@ describe('Skyways map boards: the plan matches the layout', () => {
         expect(ev.some(l => /backstage|storage|washroom/i.test(l.text))).toBe(false);
       } else expect(ev.length).toBe(1);
     }
+    expect(offices, 'office wings in the sample (seeds 3, 5, 6)').toBeGreaterThan(0);
   });
 
   it('YOU ARE HERE at the board\'s projected position (inside the plan); the floor context line names its storey and building', () => {

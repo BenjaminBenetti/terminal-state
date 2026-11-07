@@ -17,9 +17,9 @@ import type {SkywaysRect} from '../gen/skyways/skywaysTypes';
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
 
-export type MapSpaceKind = 'hub' | 'shop' | 'anchor' | 'food' | 'washroom' | 'event' | 'platform' | 'stair' | 'pedway' | 'bridge';
+export type MapSpaceKind = 'hub' | 'shop' | 'anchor' | 'food' | 'washroom' | 'event' | 'office' | 'platform' | 'stair' | 'pedway' | 'bridge';
 export interface MapSpace { level: number; kind: MapSpaceKind; rect: SkywaysRect; area: number }
-export type MapLabelKind = 'event' | 'anchor' | 'landmark' | 'restaurant' | 'food' | 'station';
+export type MapLabelKind = 'event' | 'anchor' | 'office' | 'landmark' | 'restaurant' | 'food' | 'station';
 export interface MapLabel { kind: MapLabelKind; text: string; level: number; x: number; z: number; building: string | null }
 /** A stair / escalator run between two storeys (its well rect; `kind` from its lanes). */
 export interface MapRun { lower: number; upper: number; kind: 'stairs' | 'escalator' | 'mixed'; rect: SkywaysRect; x: number; z: number; transit: boolean }
@@ -83,14 +83,17 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
   const spaces: MapSpace[] = [];
   const runAreas = new Set<number>();
   for (const k of layout.levelLinks ?? []) { const f = layout.traversal.stairs[k.traversalId ?? -1]; if (f) runAreas.add(f.area); }
+  // (layout v3) a tenant's office wing: its rooms drawn as the tenant's floor (the wing is not public space)
+  const office = new Set((info.officeWing?.rooms ?? []).map(r => r.area));
   for (const a of layout.areas) {
-    if (!a.publicSpace || a.ext) continue;
+    if (!(a.publicSpace || office.has(a.id)) || a.ext) continue;
     const lv = levelOf(a), rect = rectOf(a);
     let kind: MapSpaceKind;
     if (runAreas.has(a.id) || a.type === 'stair-core') kind = 'stair';
     else if (bridges.has(a.id)) kind = 'bridge';
     else if (addon.has(a.id)) kind = 'event';
     else if (anchorAreas.has(a.id)) kind = 'anchor';
+    else if (office.has(a.id)) kind = 'office';
     else if (food.has(a.id) || a.type === 'eatery') kind = 'food';
     else if (a.type === 'washroom') kind = 'washroom';
     else if (a.kind === 'platform') kind = 'platform';
@@ -186,6 +189,12 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
     if (an.upper !== undefined) { const u = layout.areas[an.upper]; if (u) label('anchor', an.name, levelOf(u), c.x, c.z); }
   }
   for (const m of info.landmarks ?? []) label('landmark', m.name, m.level, m.x, m.z);
+  if (info.officeWing) {
+    // the tenant's name at its wing's largest room (the open plan)
+    const rooms = info.officeWing.rooms.map(r => layout.areas[r.area]).filter((q): q is Area => !!q);
+    const big = rooms.length ? rooms.reduce((p, q) => (q.w * q.h > p.w * p.h ? q : p)) : null;
+    if (big && !SKYWAYS_MAP_FORBIDDEN.test(info.officeWing.tenant)) { const c = centre(rectOf(big)); label('office', info.officeWing.tenant, info.officeWing.level, c.x, c.z); }
+  }
   if (info.restaurant) { const a = layout.areas[info.restaurant.area]; if (a) { const c = centre(rectOf(a)); label('restaurant', info.restaurant.name, info.restaurant.level, c.x, c.z); } }
   for (const b of info.buildings) if (b.foodCourt) { const a = layout.areas[b.foodCourt.area]; if (a) { const c = centre(rectOf(a)); label('food', 'Food court', b.foodCourt.level, c.x, c.z); } }
   {
