@@ -24,10 +24,10 @@
 // piles (the store areas are noFloorLoot). The decor stock (lanterns, stoves, garment groups) are separate loose props, never items.
 
 import type {Rng} from '../../../core/rng';
-import {CELL} from '../../grid';
-import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../../props';
+import {CELL, FLOOR} from '../../grid';
+import {PROP_DEFS, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../../props';
 import {stockVariant} from '../../purposeShapes';
-import {makePlaceCtx, mountProp, propBlocksDoorway, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
+import {OPENABLE_FRONT, cellsOfBox, makePlaceCtx, mountProp, propBlocksDoorway, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
 import type {Area, PickupPlacement, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld} from '../addonFrame';
@@ -67,8 +67,8 @@ export interface OutfitterResult {
   canoes: {prop: number; cable: number}[];
   /** The cash desk: the counter modules, the wall-backed back counter / cabinet, the till; the staff stock corner (no back room). */
   desk: {counters: number[]; back: number | null; register: number | null; firstAid: number | null; corner: number[]};
-  /** Back rooms dressed (area ids) and what was added there (prop indices). */
-  backRooms: {area: number; added: number[]}[];
+  /** Back rooms dressed (area ids), what was added there (prop indices) and a station wall shelf turned into the lockers (or null). */
+  backRooms: {area: number; added: number[]; swapped: number | null}[];
 }
 const RESULTS = new WeakMap<StationLayout, OutfitterResult[]>();
 /** QA / tests: the outfitter dressing of a layout (one entry per outfitter anchor; the generator ignores it). */
@@ -108,7 +108,10 @@ export function dressOutfitter(layout: StationLayout, rng: Rng, anchor: SkywaysA
   kit.posters(3);
 
   // --- the back rooms -----------------------------------------------------------------------------------------------------------
-  for (const a of backRooms) res.backRooms.push({area: a.id, added: dressBackRoom(kit, a).map(p => P.indexOf(p))});
+  for (const a of backRooms) {
+    const d = dressBackRoom(kit, a);
+    res.backRooms.push({area: a.id, added: d.added.map(p => P.indexOf(p)), swapped: d.swapped ? P.indexOf(d.swapped) : null});
+  }
 
   kit.lift();
   // the real backpack (absolute height: after the lift)
@@ -167,54 +170,72 @@ function onSupport(kit: AnchorKit, host: PropPlacement, kind: PropKind, lx: numb
 interface Desk { counters: PropPlacement[]; back: PropPlacement | null; register: PropPlacement | null; firstAid: PropPlacement | null; corner: PropPlacement[] }
 
 /**
- * The cash desk on a flank wall by the entry: the back counter / cabinet backed to the wall, the staff aisle, the counter run parallel
- * to the wall facing the floor (the till on the module nearest the door), the first-aid kit on the wall beyond the back counter and,
+ * Where a cash-desk bay may start: a wall `side` of a sales piece, the bay's near end `t0` (world m along the wall, on a cell line) and
+ * the direction it runs (+-1 in t), best first: a flank wall within a few metres of the front, the front wall itself beside the entry
+ * (the till by the door, the bay running away from the entry), then deeper flank spots.
+ */
+function deskBays(kit: AnchorKit): {side: Side; t0: number; dir: number; score: number}[] {
+  const fr = kit.fr, out: {side: Side; t0: number; dir: number; score: number}[] = [];
+  for (const side of flankSides(kit)) for (const v0 of [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.5, 5.5, 6.5]) {
+    out.push({side, t0: Math.round(flankT(kit, v0) / CELL) * CELL, dir: Math.sign(flankT(kit, v0 + 1) - flankT(kit, v0)), score: v0 <= 3.5 ? v0 : v0 + 3});
+  }
+  // the front wall: t along it is x (a N / S front) or z (a W / E front) of frame u
+  const tOfU = (u: number) => { const [x, z] = kit.uv(u, 0); return fr.front === 'N' || fr.front === 'S' ? x : z; };
+  const du = Math.sign(tOfU(1) - tOfU(0));
+  for (const s of [1, -1]) for (let k = 0; k < 6; k++) {
+    const u = kit.uE + s * (kit.entry.half + 0.6 + k * CELL);
+    if (u < 0.3 || u > fr.W - 0.3) continue;
+    out.push({side: fr.front, t0: Math.round(tOfU(u) / CELL) * CELL, dir: s * du, score: 3.6 + k * 0.5});
+  }
+  return out.sort((p, q) => p.score - q.score);
+}
+
+/**
+ * The cash desk by the entry (deskBays): the back counter / cabinet backed to the wall, the staff aisle, the counter run parallel to
+ * the wall facing the floor (the till on the module nearest the door), the first-aid kit on the wall beyond the back counter and,
  * without a back room, the staff stock corner on along that wall. Falls back to a counter run beside the entry + a cabinet on a wall.
  */
 function cashDesk(kit: AnchorKit, corner: boolean): Desk | null {
-  const cD = PROP_DEFS.shopCounter.d, cW = PROP_DEFS.shopCounter.w;
-  for (const nm of [2, 1]) for (const backKind of ['mallCashwrapCounter', 'cabinetLow'] as PropKind[]) for (const side of flankSides(kit)) {
+  const cD = PROP_DEFS.shopCounter.d, cW = PROP_DEFS.shopCounter.w, bays = deskBays(kit);
+  for (const nm of [2, 1]) for (const backKind of ['mallCashwrapCounter', 'cabinetLow'] as PropKind[]) for (const {side, t0, dir} of bays) {
     const bD = PROP_DEFS[backKind].d, bW = PROP_DEFS[backKind].w;
     const back = Math.ceil((0.03 + bD + OUTFITTER_STAFF_AISLE) / CELL - 1e-6) * CELL; // the counters' back edge (from the wall line)
     const runLen = Math.max(bW, nm * cW + (nm - 1) * 0.01);
     for (const a of salesAreas(kit)) {
       const [lo, hi] = wallRange(a, side);
-      for (const v0 of [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.5, 5.5, 6.5]) {
-        const t0 = Math.round(flankT(kit, v0) / CELL) * CELL, dir = Math.sign(flankT(kit, v0 + 1) - flankT(kit, v0));
-        if (Math.min(t0, t0 + dir * runLen) < lo + 0.05 || Math.max(t0, t0 + dir * runLen) > hi - 0.05) continue;
-        const tB = t0 + dir * bW / 2;
-        if (!kit.solidWall(a, side, tB, backKind)) continue;
-        const got: PropPlacement[] = [];
-        const hold = {bc: null as PropPlacement | null};
-        const ok = kit.cluster(() => {
-          const s = wallSpot(a, side, tB, backKind);
-          hold.bc = kit.put(backKind, s.x, s.z, s.rot, {area: a, front: 0.6});
-          if (!hold.bc) return false;
-          for (let k = 0; k < nm; k++) {
-            const [x, z] = wallXZ(a, side, t0 + dir * (cW / 2 + k * (cW + 0.01)), back + cD / 2 + 0.005);
-            const p = kit.put('shopCounter', x, z, s.rot, {front: 1.0});
-            if (!p) return false;
-            got.push(p);
-          }
-          // the staff aisle between them (its whole cells: from the cell line past the back unit to the counters' back edge): free, reserved
-          const [ax, az] = wallXZ(a, side, t0, Math.ceil((0.03 + bD) / CELL - 1e-6) * CELL), [bx, bz] = wallXZ(a, side, t0 + dir * runLen, back);
-          const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
-          if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
-          kit.keepBox(box[0], box[1], box[2], box[3]);
-          return true;
-        });
-        if (!ok || !hold.bc) continue;
-        const desk: Desk = {counters: got, back: hold.bc, register: till(kit, got[0]), firstAid: null, corner: []};
-        // the first-aid kit on the staff side, just past the back counter (its dressings: a first-aid room's)
-        const ctx = kit.st().ctx;
-        for (const dt of [0.3, 0.55, 0.8, -0.3]) {
-          const t = dt > 0 ? t0 + dir * (bW + dt) : t0 + dir * dt;
-          const fa = mountProp(ctx, a, side, t, 'firstAidWallKit', 1.3, kit.st().base);
-          if (fa) { fa.purpose = OUTFITTER_FIRST_AID_PURPOSE; desk.firstAid = fa; break; }
+      if (Math.min(t0, t0 + dir * runLen) < lo + 0.05 || Math.max(t0, t0 + dir * runLen) > hi - 0.05) continue;
+      const tB = t0 + dir * bW / 2;
+      if (!kit.solidWall(a, side, tB, backKind)) continue;
+      const got: PropPlacement[] = [];
+      const hold = {bc: null as PropPlacement | null};
+      const ok = kit.cluster(() => {
+        const s = wallSpot(a, side, tB, backKind);
+        hold.bc = kit.put(backKind, s.x, s.z, s.rot, {area: a, front: 0.6});
+        if (!hold.bc) return false;
+        for (let k = 0; k < nm; k++) {
+          const [x, z] = wallXZ(a, side, t0 + dir * (cW / 2 + k * (cW + 0.01)), back + cD / 2 + 0.005);
+          const p = kit.put('shopCounter', x, z, s.rot, {front: 1.0});
+          if (!p) return false;
+          got.push(p);
         }
-        if (corner) desk.corner = staffCorner(kit, a, side, t0 + dir * (bW + 0.95), dir);
-        return desk;
+        // the staff aisle between them (its whole cells: from the cell line past the back unit to the counters' back edge): free, reserved
+        const [ax, az] = wallXZ(a, side, t0, Math.ceil((0.03 + bD) / CELL - 1e-6) * CELL), [bx, bz] = wallXZ(a, side, t0 + dir * runLen, back);
+        const box = [Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz)] as const;
+        if (!kit.boxFree(box[0], box[1], box[2], box[3], kit.level, true)) return false;
+        kit.keepBox(box[0], box[1], box[2], box[3]);
+        return true;
+      });
+      if (!ok || !hold.bc) continue;
+      const desk: Desk = {counters: got, back: hold.bc, register: till(kit, got[0]), firstAid: null, corner: []};
+      // the first-aid kit on the staff side, just past the back counter (its dressings: a first-aid room's)
+      const ctx = kit.st().ctx;
+      for (const dt of [0.3, 0.55, 0.8, -0.3]) {
+        const t = dt > 0 ? t0 + dir * (bW + dt) : t0 + dir * dt;
+        const fa = mountProp(ctx, a, side, t, 'firstAidWallKit', 1.3, kit.st().base);
+        if (fa) { fa.purpose = OUTFITTER_FIRST_AID_PURPOSE; desk.firstAid = fa; break; }
       }
+      if (corner) desk.corner = staffCorner(kit, a, side, t0 + dir * (bW + 0.95), dir);
+      return desk;
     }
   }
   // fallback: a counter run beside the entry facing it (its staff aisle behind) and an openable cabinet on the nearest wall
@@ -371,21 +392,23 @@ function hangCanoe(kit: AnchorKit, spots: [number, number][], under: number, rot
 
 /**
  * `n` units of `kind` side by side with their backs to one wall (`sides`, every sales piece), the group centred as near `near` as the
- * wall allows (a solid wall behind each); all or nothing. Returns the units (or []).
+ * wall allows (a solid wall behind each); all or nothing. Each unit's low edge lies on a cell line, the units a whole number of cells
+ * apart (packed units never share a grid cell). Returns the units (or []).
  */
 function wallGroup(kit: AnchorKit, kind: PropKind, sides: readonly Side[], n: number, near: [number, number], o: {front?: number; variant?: () => number} = {}): PropPlacement[] {
-  const def = PROP_DEFS[kind], span = n * def.w + (n - 1) * 0.02;
+  const def = PROP_DEFS[kind], pitch = Math.max(def.w, (Math.floor((def.w - 0.08) / CELL) + 1) * CELL), span = (n - 1) * pitch + def.w;
   const cands: {a: Area; side: Side; t: number; d: number}[] = [];
   for (const a of salesAreas(kit)) for (const side of sides) {
     const [lo, hi] = wallRange(a, side);
-    for (let t = lo + 0.35 + span / 2; t <= hi - 0.35 - span / 2; t += 0.25) {
-      const [x, z] = wallXZ(a, side, t, def.d / 2);
+    // (t = the group's low edge, on a cell line)
+    for (let t = Math.ceil((lo + 0.3) / CELL) * CELL; t + span <= hi - 0.3; t += CELL) {
+      const [x, z] = wallXZ(a, side, t + span / 2, def.d / 2);
       cands.push({a, side, t, d: Math.hypot(x - near[0], z - near[1])});
     }
   }
   cands.sort((p, q) => p.d - q.d);
-  for (const c of cands.slice(0, 60)) {
-    const ts = Array.from({length: n}, (_, k) => c.t - span / 2 + def.w / 2 + k * (def.w + 0.02));
+  for (const c of cands.slice(0, 80)) {
+    const ts = Array.from({length: n}, (_, k) => c.t + def.w / 2 + k * pitch);
     if (!ts.every(t => kit.solidWall(c.a, c.side, t, kind))) continue;
     const got: PropPlacement[] = [];
     const ok = kit.cluster(() => {
@@ -473,11 +496,14 @@ function bootWall(kit: AnchorKit): void {
   let wall: PropPlacement[] = [];
   for (const sides of [flankSides(kit), [fr.back]] as Side[][]) for (const n of [2, 1]) if (!wall.length) wall = wallGroup(kit, 'shoeWallDisplay', sides, n, kit.uv(fr.W / 2, fr.D * 0.55), {front: 0.6});
   if (!wall.length) { kit.skipped.push('boot wall'); return; }
-  const host = wall[Math.floor((wall.length - 1) / 2)], dW = PROP_DEFS.shoeWallDisplay.d, o = PROP_DEFS.ottoman;
-  for (const dl of [wall.length > 1 ? (PROP_DEFS.shoeWallDisplay.w + 0.02) / 2 : 0, 0, 0.6, -0.6]) {
-    const [x, z] = toWorld(host, dl, dW / 2 + 0.6 + o.d / 2 + 0.06);
-    if (kit.put('ottoman', x, z, host.rot)) return;
+  // (the try-on ottoman centred on the wall, just beyond its access strip, its long side along it)
+  const mid = {x: wall.reduce((s, p) => s + p.x, 0) / wall.length, z: wall.reduce((s, p) => s + p.z, 0) / wall.length, rot: wall[0].rot};
+  const dW = PROP_DEFS.shoeWallDisplay.d, o = PROP_DEFS.ottoman;
+  for (const gap of [0.1, 0.35, 0.6]) for (const dl of [0, 0.5, -0.5, 1.0, -1.0]) {
+    const [x, z] = toWorld(mid, dl, dW / 2 + 0.6 + gap + o.d / 2);
+    if (kit.put('ottoman', x, z, mid.rot)) return;
   }
+  kit.skipped.push('boot wall ottoman');
 }
 
 /** OUTERWEAR: clothing wall units (garment groups on their rails, two each) on any free wall. */
@@ -493,9 +519,11 @@ function trailFood(kit: AnchorKit): void {
   const fr = kit.fr, rng = kit.rng, sides = (['N', 'S', 'E', 'W'] as Side[]).filter(s => s !== fr.front);
   let food: PropPlacement[] = [];
   for (let n = rng.int(2, 3); n >= 1 && !food.length; n--) food = wallGroup(kit, 'stockShelf', sides, n, kit.uv(fr.W * 0.7, fr.D * 0.7), {front: 0.9, variant: () => stockVariant('grocery')});
+  // the drinks cooler(s) beside the food, else anywhere along the walls
   const at = food[food.length - 1] ?? null;
-  const [cx, cz] = at ? [at.x, at.z] : kit.inside(3);
-  for (let i = 0, n = rng.int(1, 2); i < n; i++) kit.putNearWall('shopCooler', cx, cz, {tries: 50});
+  const near: [number, number][] = [...(at ? [[at.x, at.z] as [number, number]] : []), kit.inside(3), kit.uv(fr.W / 2, fr.D)];
+  let want = rng.int(1, 2);
+  for (const [cx, cz] of near) while (want > 0 && kit.putNearWall('shopCooler', cx, cz, {tries: 80})) want--;
 }
 
 /** The CAMP KITCHEN: more plank shelving along the free walls, stoves and lanterns as stock. */
@@ -626,7 +654,7 @@ function stockTiers(kit: AnchorKit, t: PropPlacement, kind: PropKind, per: [numb
  * Placed through the shared primitive on the room's own context (its walls / door zones), in the storey's local frame (the kit's lift
  * raises them with the sales floor). Returns what was added.
  */
-function dressBackRoom(kit: AnchorKit, a: Area): PropPlacement[] {
+function dressBackRoom(kit: AnchorKit, a: Area): {added: PropPlacement[]; swapped: PropPlacement | null} {
   const layout = kit.layout, level = a.level ?? 0, out: PropPlacement[] = [];
   const ctx: PlaceCtx = makePlaceCtx(layout, kit.rng, level, {x0: a.x - 3, y0: a.y - 3, x1: a.x + a.w + 3, y1: a.y + a.h + 3});
   const sides = kit.rng.shuffle(['N', 'S', 'E', 'W'] as Side[]);
@@ -648,12 +676,48 @@ function dressBackRoom(kit: AnchorKit, a: Area): PropPlacement[] {
     return 0;
   };
   if (a.type === 'agent-office') a.label = OUTFITTER_OFFICE_LABEL;
-  // staff lockers (else a tall cabinet / a filing cabinet: openable storage either way)
-  along(['staffLockers', 'cabinetTall', 'filingCabinet'], 1, 0.6);
+  // staff lockers (else a tall cabinet / a filing cabinet: openable storage either way); a stock room the station dresser already
+  // lined with shelving trades one wall shelf for the lockers in place (same width, its back to the same wall)
+  let swapped: PropPlacement | null = null;
+  if (!along(['staffLockers', 'cabinetTall', 'filingCabinet'], 1, 0.6) && a.type === 'stock-room') swapped = shelfToLockers(kit, ctx, a);
   if (a.type === 'stock-room') {
-    along(['cardboardBoxFlaps'], kit.rng.int(2, 3));
-    along(['storageTote'], 1);
+    along(['cardboardBoxFlaps'], kit.rng.int(2, 3), 0.5);
+    along(['storageTote'], 1, 0.5);
   }
-  if (!out.length) kit.skipped.push(`back room ${a.id}: nothing added`);
-  return out;
+  if (!out.length && !swapped) kit.skipped.push(`back room ${a.id}: nothing added`);
+  return {added: out, swapped};
+}
+
+/**
+ * A stock room with no free wall for lockers: one of the station dresser's wall shelves (a station prop of this room, nothing standing
+ * on it) becomes the staff lockers in place — the same 1.2 m width, its back kept to the same wall (the 5 cm deeper body steps out),
+ * its door strip open floor, no other prop under its new box. Returns the converted prop (its layout index unchanged) or null.
+ */
+function shelfToLockers(kit: AnchorKit, ctx: PlaceCtx, a: Area): PropPlacement | null {
+  const L = kit.layout, g = ctx.g, sd = PROP_DEFS.stockShelf, lk = PROP_DEFS.staffLockers;
+  if (Math.abs(lk.w - sd.w) > 0.01) return null;
+  const hosted = new Set(L.props.map(p => p.host).filter((h): h is number => h !== undefined));
+  for (let i = 0; i < kit.p0; i++) {
+    const p = L.props[i];
+    if (p.area !== a.id || p.kind !== 'stockShelf' || hosted.has(i) || p.mounted) continue;
+    const fx = Math.round(Math.sin(p.rot)), fz = Math.round(Math.cos(p.rot));
+    // backed to the room's wall: the cell just behind it is no floor of this room
+    const [bcx, bcy] = g.cellOf(p.x - fx * (sd.d / 2 + 0.1), p.z - fz * (sd.d / 2 + 0.1));
+    if (g.inBounds(bcx, bcy) && g.cells[g.idx(bcx, bcy)] === FLOOR && g.area[g.idx(bcx, bcy)] === a.id) continue;
+    const shift = (lk.d - sd.d) / 2, x = r3(p.x + fx * shift), z = r3(p.z + fz * shift);
+    const f = OPENABLE_FRONT.staffLockers ?? 0.6, hw = lk.w / 2 - 0.02;
+    const [c0, c1, c2, c3] = cellsOfBox(x + fx * (lk.d / 2 + f / 2), z + fz * (lk.d / 2 + f / 2), fx ? f / 2 : hw, fz ? f / 2 : hw);
+    let open = true;
+    for (let cy = c1; cy <= c3 && open; cy++) for (let cx = c0; cx <= c2; cx++) if (!g.walkable(cx, cy)) { open = false; break; }
+    if (!open) continue;
+    const {hx, hz} = footprint('staffLockers', p.rot);
+    if (L.props.some((q, j) => j !== i && (q.level ?? 0) === (p.level ?? 0) && !q.mounted && q.host === undefined
+      && Math.abs(q.x - x) < q.hx + hx - 0.01 && Math.abs(q.z - z) < q.hz + hz - 0.01)) continue;
+    Object.assign(p, {kind: 'staffLockers', x, z, hx: r3(hx), hz: r3(hz), h: lk.h, blocksSight: lk.blocksSight, variant: 0});
+    delete p.cut;
+    const [b0, b1, b2, b3] = cellsOfBox(x, z, hx, hz);
+    for (let cy = b1; cy <= b3; cy++) for (let cx = b0; cx <= b2; cx++) if (g.inBounds(cx, cy)) { g.blocked[g.idx(cx, cy)] = 1; if (lk.blocksSight) g.sightBlocked[g.idx(cx, cy)] = 1; }
+    return p;
+  }
+  return null;
 }
