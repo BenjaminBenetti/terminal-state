@@ -71,7 +71,7 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
   if (cached) return cached;
   const buildings: MapBuilding[] = info.buildings.map(b => ({id: b.id, name: b.name, rect: {...b.rect}, station: b.role === 'station'}));
   const buildingAt = (x: number, z: number): string | null => buildings.find(b => inside(b.rect, x, z))?.id ?? null;
-  const addon = new Set(info.addon.areas);
+  const addon = new Set([...info.addon.areas, ...(info.addon.venue ?? []).map(v => v.area)]);
   const bridges = new Map(info.bridges.map(b => [b.area, b]));
   const anchorAreas = new Set<number>();
   for (const an of info.anchors ?? []) { anchorAreas.add(an.floor); if (an.upper !== undefined) anchorAreas.add(an.upper); for (const z of an.zones) anchorAreas.add(z); }
@@ -162,7 +162,20 @@ export function skywaysMapPlan(layout: StationLayout): SkywaysMapPlan | null {
   const label = (kind: MapLabelKind, text: string, level: number, x: number, z: number) => labels.push({kind, text, level, x: r2(x), z: r2(z), building: buildingAt(x, z)});
   {
     const a = info.addon, c = centre(a.hall);
-    if (a.id === 'convention') {
+    if (a.id === 'convention' && a.venue?.length) {
+      // (layout v3) the venue floor: its public parts by their event names (the stage hall, the exhibitors' floor, registration, the
+      // panel rooms, the photo lounge) — one label per name, at its largest piece
+      const best = new Map<string, Area>();
+      for (const v of a.venue) {
+        if (v.role === 'washrooms' || v.role === 'backstage' || v.role === 'storage') continue;
+        const q = layout.areas[v.area];
+        if (!q) continue;
+        const name = q.label.replace(/ · .*$/, '');
+        const cur = best.get(name);
+        if (!cur || q.w * q.h > cur.w * cur.h) best.set(name, q);
+      }
+      for (const [name, q] of best) { const qc = centre(rectOf(q)); label('event', SKYWAYS_MAP_FORBIDDEN.test(name) ? 'Convention' : name, levelOf(q), qc.x, qc.z); }
+    } else if (a.id === 'convention') {
       const hall = a.areas.map(i => layout.areas[i]).find(q => q && inside(rectOf(q), c.x, c.z)) ?? layout.areas[a.areas[0]];
       label('event', hall?.label && !SKYWAYS_MAP_FORBIDDEN.test(hall.label) ? hall.label : 'Convention hall', a.level, c.x, c.z);
     } else label('event', 'Grand Prize Draw', a.level, c.x, c.z);

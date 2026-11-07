@@ -92,7 +92,8 @@ export function placeSkywaysMapBoards(layout: StationLayout, rng: Rng): number {
   };
   const wallOf = (lv: number): Float32Array => { let w = walls.get(lv); if (!w) walls.set(lv, (w = wallDistance(levels[lv].grid))); return w; };
   const placed: PropPlacement[] = [];
-  const addonAreas = new Set(info.addon.areas);
+  // (the add-on's rooms and, layout v3, every area of the convention VENUE: the venue dresser's floor, its entries included)
+  const addonAreas = new Set([...info.addon.areas, ...(info.addon.venue ?? []).map(v => v.area)]);
   const anchorAreas = new Set<number>((info.anchors ?? []).flatMap(an => [an.floor, ...(an.upper !== undefined ? [an.upper] : []), ...an.zones]));
   const bridgeAreas = new Set(info.bridges.map(b => b.area));
   /** The public HUB areas of a building on a storey (lobbies, courts, galleries, arcades, entrance halls, the food court). */

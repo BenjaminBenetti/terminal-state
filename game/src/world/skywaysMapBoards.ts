@@ -213,7 +213,8 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
   dash(ctx, []);
   // reserved boxes for the label placement: the run icons (fixed spots) first, then the building names (a free corner of the footprint)
   const taken: Box[] = [];
-  const inPlan = (b: Box) => [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]].every(([x, y]) => Math.hypot(x - PC.cx, y - PC.cy) <= PC.r + 30);
+  // (labels stay inside the plan circle, under the header and above the legend row)
+  const inPlan = (b: Box) => b.y0 >= MAP_FACE.header.sub + 26 && b.y1 <= MAP_FACE.legendY - 16 && [[b.x0, b.y0], [b.x1, b.y0], [b.x0, b.y1], [b.x1, b.y1]].every(([x, y]) => Math.hypot(x - PC.cx, y - PC.cy) <= PC.r + 30);
   const free = (b: Box) => !taken.some(t => hit(t, b));
   for (const run of plan.runs) {
     if (run.lower !== level && run.upper !== level) continue;

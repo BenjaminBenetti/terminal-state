@@ -35,6 +35,7 @@ import {installCanvasShim} from './helpers/canvas2d';
 
 installCanvasShim(false);
 
+/** Real seeds: both add-ons (prize-car display 1-3, 6; convention venue 4, 5) and four frame families. */
 const SEEDS = [1, 2, 3, 4, 5, 6];
 const cache = new Map<number, StationLayout>();
 const gen = (s: number): StationLayout => { let l = cache.get(s); if (!l) cache.set(s, (l = LEVELS.skyways.generate('main', {levelSeed: s, startWeapon: 'pistol'} as never))); return l; };
@@ -107,7 +108,11 @@ describe('Skyways map boards: placement on real seeds', () => {
       expect(transit, `seed ${s}`).toBeTruthy();
       expect(bs.some(b => (b.level ?? 0) === 0 && Math.hypot(b.x - transit.bottom.x, b.z - transit.bottom.z) < 16), `seed ${s} concourse`).toBe(true);
       // every building: a board on its street level and on its skyway level (each has public hub floor on both)
-      for (const b of info.buildings) for (const lv of [1, 2]) expect(bs.some(p => p.level === lv && inside(b.rect, p.x, p.z)), `seed ${s} ${b.name} L${lv}`).toBe(true);
+      // (layout v3: a convention host's skyway floor is the event VENUE — the venue dresser's, no board inside it)
+      for (const b of info.buildings) for (const lv of [1, 2]) {
+        if (lv === info.addon.level && b.id === info.addon.building && info.addon.venue?.length) { expect(bs.some(p => p.level === lv && info.addon.venue!.some(v => v.area === p.area)), `seed ${s} venue`).toBe(false); continue; }
+        expect(bs.some(p => p.level === lv && inside(b.rect, p.x, p.z)), `seed ${s} ${b.name} L${lv}`).toBe(true);
+      }
       // bridge landings: most bridge ends have a board within 12 m of the landing inside the building
       let ends = 0, served = 0;
       for (const br of info.bridges) {
@@ -191,7 +196,11 @@ describe('Skyways map boards: the plan matches the layout', () => {
       const L = gen(s), info = L.skyways!, plan = skywaysMapPlan(L)!;
       expect(plan.name).toBe(info.name);
       expect(plan.buildings.map(b => [b.id, b.name])).toEqual(info.buildings.map(b => [b.id, b.name]));
-      for (const b of plan.buildings) for (const lv of [1, 2]) expect(plan.spaces.some(q => q.level === lv && q.kind === 'hub' && inside(b.rect, (q.rect.x0 + q.rect.x1) / 2, (q.rect.z0 + q.rect.z1) / 2)), `seed ${s} ${b.name}`).toBe(true);
+      // every building's public floor on both storeys (a convention host's skyway floor drawn as the event venue)
+      for (const b of plan.buildings) for (const lv of [1, 2]) {
+        const kind = lv === info.addon.level && b.id === info.addon.building && info.addon.venue?.length ? 'event' : 'hub';
+        expect(plan.spaces.some(q => q.level === lv && q.kind === kind && inside(b.rect, (q.rect.x0 + q.rect.x1) / 2, (q.rect.z0 + q.rect.z1) / 2)), `seed ${s} ${b.name} L${lv}`).toBe(true);
+      }
       const sky = plan.lines.filter(l => l.kind === 'skyway');
       expect(sky.map(l => l.id).sort()).toEqual(info.bridges.map(b => b.id).sort());
       for (const br of info.bridges) {
@@ -219,9 +228,15 @@ describe('Skyways map boards: the plan matches the layout', () => {
       if (info.buildings.some(b => b.foodCourt)) expect(texts).toContain('Food court');
       expect(plan.labels.some(l => l.kind === 'station' && l.level === 0)).toBe(true);
       const ev = plan.labels.filter(l => l.kind === 'event');
-      expect(ev.length).toBe(1);
-      expect(ev[0].level).toBe(info.addon.level);
-      if (info.addon.id === 'prize-car') expect(ev[0].text).toBe('Grand Prize Draw');
+      expect(ev.every(l => l.level === info.addon.level)).toBe(true);
+      if (info.addon.id === 'prize-car') expect(ev.map(l => l.text)).toEqual(['Grand Prize Draw']);
+      else if (info.addon.venue?.length) {
+        // the venue's public parts by their event names (never its back of house)
+        expect(ev.map(l => l.text)).toContain('Main stage hall');
+        expect(ev.some(l => /^Exhibitors/.test(l.text))).toBe(true);
+        expect(ev.some(l => /^Panel room/.test(l.text))).toBe(true);
+        expect(ev.some(l => /backstage|storage|washroom/i.test(l.text))).toBe(false);
+      } else expect(ev.length).toBe(1);
     }
   });
 
