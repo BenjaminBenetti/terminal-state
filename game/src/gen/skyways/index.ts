@@ -44,6 +44,7 @@ import {dressSkywaysAddon} from './addon';
 import {dressSkywaysRamen} from './ramen';
 import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
+import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
 
 export {skywaysFrame, skywaysAddonOf, setSkywaysAddonOverride, skywaysSeed} from './frame';
@@ -175,6 +176,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'));
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
+  placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
 
   // --- Whole-level populations ------------------------------------------------------------------------------------------------
   const g0 = layout.grid, [sx, sy] = g0.cellOf(start.x, start.z);
