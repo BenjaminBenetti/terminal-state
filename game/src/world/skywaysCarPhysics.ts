@@ -10,14 +10,24 @@
 // (<= subStep m, <= subYaw rad); a sub-step's pose is settled against the world with the player's own collision (core/physics.ts
 // resolveCircle against the same Levels + PropIndex: walls, slab edges, low soffits at the car's clear height, RAILINGS at deck
 // height, props) by translating the whole body out of its deepest contact (a few iterations), then the FLOOR RULE: every circle's
-// footprint (centre + 8 rim points) must stand on ITS storey's floor within ±floorTol of the car, never on a stair / escalator ramp
-// cell, never in a dynamic volume (the elevator cab, the parked train): no stairs, no drops — rails, atrium edges and building edges
-// stop it. A refused sub-step tries the move without the turn, the turn alone, then each axis alone (it slides along an edge); none ->
+// footprint (centre + 8 rim points) must stand on ITS storey's floor within ±floorTol of the car, never in a dynamic volume (the
+// elevator cab, the parked train): no drops — rails, atrium edges and building edges stop it.
+// STAIRS (task studio-beta-skyways-vehicle-20261107-054512-01, user: "drive up / down stairs"): where the footprint meets a stair /
+// ramp cell (Grid.ramps: the flight's pitch line), carPose() rests the body on its AXLES instead — each wheel on the floor under it
+// (Levels.supportIn near the body line: the pitch line on a flight, the landing beyond), the two wheels of an axle level (no roll), the
+// body line through the axles giving the car's height and PITCH (at most CAR_STAIRS.maxPitch), the storey the footprint centre stands
+// on (it changes at the landings); every footprint sample must lie under the body line by at most `drop` (no edge, open flight side or
+// hole under the car) and above it by at most `bump` (the crest / the first steps under the bumper). Collision on a flight: a circle
+// whose footprint meets ramp cells collides with its feet just under the highest floor beneath it (CAR_STAIRS.rampFeet < STEP_UP), so the
+// flight's own floor never reads as a wall, while walls, rails and low soffits (the car's clear height over the pitch line) still stop
+// it. No teleport, no noclip, no step height that climbs walls: a flight too narrow for the body stops it like any wall. Slopes: gravity
+// along the line (CAR_STAIRS.slopeAccel x sin pitch: uphill slows, downhill pulls) and the travel is horizontal speed x cos pitch. A refused sub-step tries the move without the turn, the turn alone, then each axis alone (it slides along an edge); none ->
 // it stops there. The speed follows what actually happened (the motion along the new heading, never more than before): a wall met
 // head-on stops the car (a small bounce above bounceMin), a glancing one slides it along. The CLOSING speed into the obstacle (the
 // velocity against the contact normal) is reported as the impact (world/skywaysCar.ts: glass, sound).
 
 import {resolveCircle, type PropIndex} from '../core/physics';
+import {CELL} from '../gen/grid';
 import type {Levels} from '../gen/levels';
 import {carToWorld, type CarSpec} from './skywaysCarSpec';
 
@@ -68,8 +78,28 @@ export const CAR_PHYS = {
   alignRate: 4,
 } as const;
 
-/** What the controller needs of the car's anchors. */
-export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'>;
+/** What the controller needs of the car's anchors (`wheels`: the axles for stairs; absent = axles at ±wheelBase / 2, track 1.6 m). */
+export type CarGeom = Pick<CarSpec, 'circles' | 'wheelBase' | 'height'> & Partial<Pick<CarSpec, 'wheels'>>;
+
+/** Stairs (see the header). */
+export const CAR_STAIRS = {
+  /** Steepest body pitch (rad): flights are 30°. */
+  maxPitch: (36 * Math.PI) / 180,
+  /** A sample's floor is looked for up to `climb` m above the body line (a rising flight / its landing), any distance below it. */
+  climb: 0.6,
+  /** The two wheels of an axle at most this far apart in height (m: no roll — the car takes a flight square-on). */
+  roll: 0.3,
+  /** Under the body: a floor at most `bump` m above the axle line (a crest / the first steps under the bumper) … */
+  bump: 0.45,
+  /** … and at most `drop` m below it (m: never an edge, an open flight side or a hole under the car). */
+  drop: 0.8,
+  /** A circle meeting ramp cells collides with its feet this far under the highest floor beneath it (m; < STEP_UP). */
+  rampFeet: 0.4,
+  /** Gravity along a slope (m/s² x sin pitch). */
+  slopeAccel: 3,
+  /** Pitch hints a stored pose is tried with at a build (rad): flat, then up / down a 30° flight. */
+  loadPitches: [0, 0.5236, -0.5236] as readonly number[],
+} as const;
 
 export interface CarBody {
   /** Footprint centre (world) and the floor under it (absolute y). */
@@ -84,6 +114,8 @@ export interface CarBody {
   level: number;
   /** Last frame's actual yaw rate (rad/s). */
   yawRate: number;
+  /** Body pitch (rad; > 0 = nose up) — on a stair flight (absent / 0 on flat floor). */
+  pitch?: number;
 }
 
 export interface CarControls { forward: boolean; back: boolean; left: boolean; right: boolean; handbrake: boolean }
@@ -177,12 +209,56 @@ export function footprintFloor(L: Levels, x: number, z: number, yaw: number, y: 
 
 interface Settled { x: number; z: number; sx: number; sz: number; circle: number }
 
+/** Any ramp (stair flight) cell, on any storey, under a circle's bounding square at (x, z)? */
+function nearRamp(L: Levels, x: number, z: number, r: number): boolean {
+  const g0 = L.main, x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL), y0 = Math.floor((z - r) / CELL), y1 = Math.floor((z + r) / CELL);
+  for (let k = 0; k < L.count; k++) {
+    const ri = L.grid(k).rampIdx;
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (g0.inBounds(cx, cy) && ri[cy * g0.w + cx] >= 0) return true;
+  }
+  return false;
+}
+
+interface Sample { f: number; level: number; ramp: boolean }
+const SMP: Sample = {f: 0, level: 0, ramp: false};
+
 /**
- * Settle the rigid body at (x, z, yaw) with feet at y: repeatedly translate it out of its deepest circle contact (resolveCircle per
- * circle: walls / ledges / rails / props at the car's clear height). False when it does not come free in a few iterations (wedged).
+ * The floor under (x, z) near height `hint`: the highest floor at most 2 x CAR_STAIRS.climb above it in the band holding hint + climb
+ * (so a landing up to `climb` above the body line is found even though the line runs under it; floors below: any band), never a
+ * dynamic volume.
  */
-export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: number, y: number, out: Settled): boolean {
-  const s = Math.sin(yaw), c = Math.cos(yaw), H = g.height + CAR_PHYS.clearPad;
+function sampleAt(L: Levels, x: number, z: number, hint: number, out: Sample): boolean {
+  const s = L.supportIn(x, z, hint + CAR_STAIRS.climb, CAR_STAIRS.climb);
+  if (!s || s.volume) return false;
+  out.f = s.floor;
+  out.level = s.level;
+  out.ramp = L.grid(s.level).rampIdx[s.cell] >= 0;
+  return true;
+}
+
+/**
+ * A circle's collision feet: the body line's height there (`hint`) — or, when ramp cells lie under it, just under the highest floor
+ * beneath it (CAR_STAIRS.rampFeet: the flight's own floor never blocks; walls, rails and the clear height over the pitch line do).
+ */
+function circleFeet(L: Levels, x: number, z: number, r: number, hint: number): number {
+  if (!nearRamp(L, x, z, r)) return hint;
+  let m = -Infinity;
+  const rr = r * CAR_PHYS.rim;
+  if (sampleAt(L, x, z, hint, SMP)) m = SMP.f;
+  for (const [ux, uz] of RIM) if (sampleAt(L, x + ux * rr, z + uz * rr, hint, SMP) && SMP.f > m) m = SMP.f;
+  return m > -Infinity ? Math.max(hint - CAR_STAIRS.climb, m - CAR_STAIRS.rampFeet) : hint;
+}
+
+const FEET: number[] = [];
+
+/**
+ * Settle the rigid body at (x, z, yaw) with feet at y (the body line at the footprint centre; `pitch` tilts it along the car): repeatedly
+ * translate it out of its deepest circle contact (resolveCircle per circle at that circle's feet: walls / ledges / rails / props at the
+ * car's clear height; a circle over a flight: circleFeet). False when it does not come free in a few iterations (wedged).
+ */
+export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: number, y: number, out: Settled, pitch = 0): boolean {
+  const s = Math.sin(yaw), c = Math.cos(yaw), H = g.height + CAR_PHYS.clearPad, tp = Math.tan(pitch);
+  for (let i = 0; i < g.circles.length; i++) { const k = g.circles[i]; FEET[i] = circleFeet(w.levels, x + k.z * s, z + k.z * c, k.r, y - k.z * tp); }
   let cx = x, cz = z;
   out.sx = out.sz = 0;
   out.circle = -1;
@@ -190,7 +266,7 @@ export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: n
     let bx = 0, bz = 0, bd = 0, bi = -1;
     for (let i = 0; i < g.circles.length; i++) {
       const k = g.circles[i], wx = cx + k.z * s, wz = cz + k.z * c;
-      const [rx, rz] = resolveCircle(w.levels, w.props, wx, wz, k.r, y, H);
+      const [rx, rz] = resolveCircle(w.levels, w.props, wx, wz, k.r, FEET[i], H);
       const px = rx - wx, pz = rz - wz, d = px * px + pz * pz;
       if (d > bd) { bd = d; bx = px; bz = pz; bi = i; }
     }
@@ -202,15 +278,108 @@ export function settlePose(w: CarWorld, g: CarGeom, x: number, z: number, yaw: n
   return false;
 }
 
+/** The car's resting pose (carPose): its height at the footprint centre, pitch (> 0 nose up), storey, any ramp under it. */
+export interface CarPose { y: number; pitch: number; level: number; ramp: boolean }
+
+const LZ: number[] = [], SF: number[] = [];
+/** QA / tests: why the last carPose refused ('' = it did not). */
+export const CAR_POSE_DEBUG = {why: ''};
+const AX: Sample = {f: 0, level: 0, ramp: false};
+
+/** The axles (car-frame z: front < rear) and the wheel tracks (x) of a geometry. */
+function axles(g: CarGeom): {zf: number; zr: number; xl: number; xr: number} {
+  const W = g.wheels;
+  if (W && W.length >= 4) {
+    const zf = (W[0].z + W[1].z) / 2, zr = (W[2].z + W[3].z) / 2;
+    return {zf, zr, xl: Math.min(W[0].x, W[2].x), xr: Math.max(W[1].x, W[3].x)};
+  }
+  return {zf: -g.wheelBase / 2, zr: g.wheelBase / 2, xl: -0.8, xr: 0.8};
+}
+
+/**
+ * Where the car rests at (x, z, yaw), given its previous body line (height y at the footprint centre, `pitch`) (null: refused). Flat
+ * floor (no ramp cell under the footprint, the car level): the strict rule — every sample (circle centres + 8 rim points) within
+ * ±floorTol of y (`level` = the storey it was on: the result's storey is the footprint centre's). Otherwise the AXLE rule (see the
+ * header): the body line through the axles' floors, roll / pitch / bump / drop limits, the storey of the floor under the centre.
+ */
+export function carPose(L: Levels, x: number, z: number, yaw: number, y: number, pitch: number, _level: number, g: CarGeom, out?: CarPose): CarPose | null {
+  const P = CAR_PHYS, S = CAR_STAIRS, sn = Math.sin(yaw), cs = Math.cos(yaw), tp = Math.tan(pitch);
+  const wx = (lx: number, lz: number) => x + lx * cs + lz * sn, wz = (lx: number, lz: number) => z - lx * sn + lz * cs;
+  let n = 0, ramp = false;
+  const no = (why: string): null => { CAR_POSE_DEBUG.why = why; return null; };
+  CAR_POSE_DEBUG.why = '';
+  if (!sampleAt(L, x, z, y, SMP)) return no('no floor at the centre');
+  const cf = SMP.f, cl = SMP.level;
+  ramp = SMP.ramp;
+  const A = axles(g), tm = Math.tan(S.maxPitch);
+  /** How far a floor may come up toward the body at car-frame z: the overhangs past the axles meet a flight at up to maxPitch. */
+  const overOf = (lz: number) => (lz < A.zf ? A.zf - lz : lz > A.zr ? lz - A.zr : 0);
+  for (const k of g.circles) {
+    const rr = k.r * P.rim;
+    for (let j = -1; j < RIM.length; j++) {
+      const lx = j < 0 ? 0 : RIM[j][0] * rr, lz = k.z + (j < 0 ? 0 : RIM[j][1] * rr);
+      // (searched from the highest a floor may be there: the line, or over an overhang the approach / departure allowance)
+      if (!sampleAt(L, wx(lx, lz), wz(lx, lz), y - lz * tp + overOf(lz) * tm, SMP)) return no(`no floor under sample lz ${lz.toFixed(2)}`);
+      LZ[n] = lz; SF[n] = SMP.f; n++;
+      if (SMP.ramp) ramp = true;
+    }
+  }
+  const res = out ?? {y: 0, pitch: 0, level: 0, ramp: false};
+  if (!ramp && Math.abs(pitch) < 1e-6) {
+    // flat floor: as before (every sample ±floorTol of the car). (task skyways-vehicle: a seamless join to another storey's grid at the
+    // SAME height — a stair head between its rails — is floor too; the storey follows the footprint centre)
+    if (Math.abs(cf - y) > P.floorTol + 1e-6) return no('flat: centre off the height');
+    for (let i = 0; i < n; i++) if (Math.abs(SF[i] - y) > P.floorTol + 1e-6) return no('flat: a sample off the height');
+    res.y = cf; res.pitch = 0; res.level = cl; res.ramp = false;
+    return res;
+  }
+  // the axle rule: each wheel on the floor under it, the body line through the axles
+  let flatAxles = 0; // (wheels on ordinary floor, not a flight)
+  const wheel = (lx: number, lz: number): number | null => {
+    if (!sampleAt(L, wx(lx, lz), wz(lx, lz), y - lz * tp, AX)) return null;
+    if (!AX.ramp) flatAxles++;
+    return AX.f;
+  };
+  const fl = wheel(A.xl, A.zf), fr = wheel(A.xr, A.zf), rl = wheel(A.xl, A.zr), rr = wheel(A.xr, A.zr);
+  if (fl === null || fr === null || rl === null || rr === null) return no('a wheel without floor');
+  if (Math.abs(fl - fr) > S.roll || Math.abs(rl - rr) > S.roll) return no('roll');
+  const F = Math.max(fl, fr), R = Math.max(rl, rr), p2 = Math.atan2(F - R, A.zr - A.zf);
+  if (Math.abs(p2) > S.maxPitch) return no('too steep');
+  // all four wheels on ordinary floor: a step between the axles is a step (a stage edge, a curb), never a flight
+  if (flatAxles === 4 && Math.abs(F - R) > P.floorTol + 1e-6) return no('a step between the axles');
+  const t2 = Math.tan(p2), y2 = R + (F - R) * A.zr / (A.zr - A.zf);
+  if (Math.abs(y2 - y) > S.climb) return no('a jump'); // (never a jump: a sub-step / a stored pose stays near its body line)
+  for (let i = 0; i < n; i++) {
+    const hl = y2 - LZ[i] * t2;
+    // the overhangs (ahead of the front axle / behind the rear one) may meet a flight rising toward them (an approach / departure angle
+    // up to maxPitch: the bumper over the first steps before the wheels take them, the tail over the floor as the car tips up)
+    const over = overOf(LZ[i]);
+    if (SF[i] > hl + S.bump + over * tm) return no(`floor into the body at lz ${LZ[i].toFixed(2)} (${(SF[i] - hl).toFixed(2)} over the line)`);
+    if (SF[i] < hl - S.drop) return no(`a drop under the body at lz ${LZ[i].toFixed(2)} (${(hl - SF[i]).toFixed(2)})`);
+  }
+  if (!ramp && Math.abs(p2) < 1e-3) {
+    // off the flight: flat again — one storey under the whole footprint
+    if (Math.abs(cf - y) > P.floorTol + S.climb / 2) return no('off the flight: a jump');
+    for (let i = 0; i < n; i++) if (Math.abs(SF[i] - cf) > P.floorTol + 1e-6) return no('off the flight: uneven floor');
+    res.y = cf; res.pitch = 0; res.level = cl; res.ramp = false;
+    return res;
+  }
+  res.y = y2; res.pitch = p2; res.level = cl; res.ramp = ramp;
+  return res;
+}
+
 interface MoveOut { blocked: boolean; refused: boolean; sx: number; sz: number; circle: number }
 const SET: Settled = {x: 0, z: 0, sx: 0, sz: 0, circle: -1};
 
+const POSE: CarPose = {y: 0, pitch: 0, level: 0, ramp: false};
+
 function tryPose(b: CarBody, w: CarWorld, g: CarGeom, x: number, z: number, yaw: number, out: MoveOut): boolean {
-  if (!settlePose(w, g, x, z, yaw, b.y, SET)) return false;
-  const f = footprintFloor(w.levels, SET.x, SET.z, yaw, b.y, b.level, g);
-  if (f === null) return false;
+  const pitch = b.pitch ?? 0;
+  if (!settlePose(w, g, x, z, yaw, b.y, SET, pitch)) return false;
+  const p = carPose(w.levels, SET.x, SET.z, yaw, b.y, pitch, b.level, g, POSE);
+  if (p === null) return false;
   if (Math.hypot(SET.sx, SET.sz) > 1e-6) { out.blocked = true; out.sx += SET.sx; out.sz += SET.sz; out.circle = SET.circle; }
-  b.x = SET.x; b.z = SET.z; b.yaw = yaw; b.y = f;
+  b.x = SET.x; b.z = SET.z; b.yaw = yaw; b.y = p.y; b.level = p.level; b.pitch = p.pitch;
   return true;
 }
 
@@ -257,11 +426,13 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
   if (!(dt > 0)) return out;
   dt = Math.min(dt, CAR_PHYS.maxDt);
   const rate = updateControls(b, ctl, dt, g);
-  const v = b.v;
+  const pitch = b.pitch ?? 0;
+  if (Math.abs(pitch) > 0.01) b.v = clamp(b.v - CAR_STAIRS.slopeAccel * Math.sin(pitch) * dt, -CAR_PHYS.reverseMax, CAR_PHYS.forwardMax); // (stairs: uphill slows, downhill pulls)
+  const v = b.v, cp = Math.cos(pitch);
   if (Math.abs(v) < 1e-5) { b.v = 0; b.yawRate = 0; return out; }
   const mid = b.yaw + (rate * dt) / 2, fx = -Math.sin(mid), fz = -Math.cos(mid);
   const x0 = b.x, z0 = b.z, yaw0 = b.yaw;
-  moveCar(b, w, g, fx * v * dt, fz * v * dt, rate * dt, MV);
+  moveCar(b, w, g, fx * v * cp * dt, fz * v * cp * dt, rate * dt, MV);
   const ax = b.x - x0, az = b.z - z0;
   out.moved = Math.hypot(ax, az);
   b.yawRate = wrapAngle(b.yaw - yaw0) / dt;
@@ -280,7 +451,7 @@ export function stepCar(b: CarBody, w: CarWorld, g: CarGeom, ctl: CarControls, d
   } else {
     // head-on / stuck: the motion along the new heading — never more than before, never reversed by a push
     const hx = -Math.sin(b.yaw), hz = -Math.cos(b.yaw);
-    nv = (ax * hx + az * hz) / dt;
+    nv = (ax * hx + az * hz) / dt / Math.max(0.5, cp); // (along the slope on a flight)
     if (Math.sign(nv) !== Math.sign(v)) nv = 0;
     else if (Math.abs(nv) > Math.abs(v)) nv = v;
   }

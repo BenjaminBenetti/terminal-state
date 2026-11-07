@@ -57,7 +57,7 @@ import {STAND_EYE} from '../player/player';
 import {paneCentre, type PaneRef} from './windowBreach';
 import {rayBox, type Box3Like} from './towerShared';
 import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
-import {CAR_PHYS, NO_CONTROLS, footprintFloor, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarStep, type CarWorld} from './skywaysCarPhysics';
+import {CAR_PHYS, CAR_STAIRS, NO_CONTROLS, carPose, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarPose, type CarStep, type CarWorld} from './skywaysCarPhysics';
 import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
 import type {StackJSON} from '../items/inventory';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
@@ -205,7 +205,7 @@ export interface SkywaysCarHost {
 /** Keys the driver uses (MoveInput-like; Game's Input also carries mousePressed). */
 export interface DriveInput { down(code: string): boolean; hit(code: string): boolean; mousePressed?: readonly boolean[] }
 
-const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tn = new THREE.Vector3();
+const tv = new THREE.Vector3(), tv2 = new THREE.Vector3(), tn = new THREE.Vector3(), tq = new THREE.Quaternion();
 const near = new Set<number>();
 const approach = (v: number, to: number, step: number): number => (v < to ? Math.min(to, v + step) : Math.max(to, v - step));
 const clamp = (v: number, a: number, b: number): number => (v < a ? a : v > b ? b : v);
@@ -300,14 +300,20 @@ export class SkywaysCar {
     const L = this.host.levels;
     if (!spawn || !L) { if (releaseSkywaysCarModel()) this.counts.released++; return; }
     const rec = this.readRecord();
-    const ok = (p: {x: number; y: number; z: number; yaw: number; level: number}) => p.level >= 0 && p.level < L.count && footprintFloor(L, p.x, p.z, p.yaw, p.y, p.level, this.spec) !== null;
-    const pose = rec && ok(rec) ? rec : spawn;
+    // (stairs) a stored pose may stand on a flight: tried flat, then up / down a flight's pitch
+    const fit = (p: {x: number; y: number; z: number; yaw: number; level: number}): CarPose | null => {
+      if (p.level < 0 || p.level >= L.count) return null;
+      for (const pitch of CAR_STAIRS.loadPitches) { const q = carPose(L, p.x, p.z, p.yaw, p.y, pitch, p.level, this.spec); if (q) return q; }
+      return null;
+    };
+    const fromRec = rec ? fit(rec) : null;
+    const pose = fromRec ? rec! : spawn;
     // (record v2) the car's own state comes back with it even when its pose fell back to the spawn (never lost, never doubled)
     this.lights = rec?.lights ?? false;
     this.trunkJSON = rec ? structuredClone(rec.trunk) : emptyTrunk();
     this.source = pose === rec ? 'record' : 'spawn';
-    const y = footprintFloor(L, pose.x, pose.z, pose.yaw, pose.y, pose.level, this.spec) ?? pose.y;
-    this.body = {x: pose.x, y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: pose.level, yawRate: 0};
+    const at = fromRec ?? fit(spawn);
+    this.body = {x: pose.x, y: at?.y ?? pose.y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: at?.level ?? pose.level, yawRate: 0, pitch: at?.pitch ?? 0};
     this.view = buildCarView(this.spec);
     this.view.group.name = 'skyways-car';
     if (this.view.standIn && typeof document !== 'undefined') console.warn('skyways car: the model is not loaded — a stand-in body is drawn');
@@ -452,16 +458,18 @@ export class SkywaysCar {
     const r = P.radius, gap = 0.55;
     const cands: [typeof S.exits.left, 'left' | 'right' | 'front' | 'back'][] = [
       [S.exits.left, 'left'], [S.exits.right, 'right'], [{x: 0, z: -S.length / 2 - gap}, 'front'], [{x: 0, z: S.length / 2 + gap}, 'back']];
-    const seat = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z);
+    const seat = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z), tp = Math.tan(b.pitch ?? 0), onFlight = Math.abs(b.pitch ?? 0) > 1e-4;
     for (const [c, side] of cands) {
       const w = carToWorld(b.x, b.z, b.yaw, c.x, c.z);
-      const s = L.supportIn(w.x, w.z, b.y, STEP_UP);
-      if (!s || s.volume || s.level !== b.level || Math.abs(s.floor - b.y) > 0.3) continue;
+      // (stairs) the body line's height there: beside / ahead of / behind a car on a flight the stand point is on the flight's floor
+      const hl = b.y - c.z * tp;
+      const s = L.supportIn(w.x, w.z, hl + 0.05, STEP_UP);
+      if (!s || s.volume || (!onFlight && s.level !== b.level) || Math.abs(s.floor - hl) > (onFlight ? 0.45 : 0.3)) continue;
       if (!L.circleClear(w.x, w.z, r, s.floor)) continue;
       const [rx, rz] = resolveCircle(L, h.propIndex, w.x, w.z, r, s.floor, STAND_EYE + 0.12);
       if (Math.hypot(rx - w.x, rz - w.z) > 1e-4) continue; // a prop there
       if (nearestCircle(S, b.x, b.z, b.yaw, w.x, w.z).d < r + 0.02) continue;
-      if (!L.lineOfSight({x: seat.x, y: b.y + 0.9, z: seat.z}, {x: w.x, y: s.floor + 0.9, z: w.z}, {slack: 0.1})) continue;
+      if (!L.lineOfSight({x: seat.x, y: b.y - S.eye.z * tp + 0.9, z: seat.z}, {x: w.x, y: s.floor + 0.9, z: w.z}, {slack: 0.1})) continue;
       return {x: w.x, y: s.floor, z: w.z, side};
     }
     return null;
@@ -531,9 +539,11 @@ export class SkywaysCar {
   /** The player's world pose = the driver's seat (feet on the car's floor, the eye at the seated eye), its view yaw relative to the car. */
   private writePlayer(dt: number): void {
     const b = this.body!, P = this.host.player, S = this.spec;
-    const e = carToWorld(b.x, b.z, b.yaw, S.eye.x, S.eye.z);
-    P.x = e.x; P.z = e.z; P.y = b.y;
-    P.eye = b.y + S.eye.y;
+    // (stairs) the seat rides the body's pitch: the eye (car frame) turned about the car's lateral axis, then the yaw
+    const p = b.pitch ?? 0, cp = Math.cos(p), sp = Math.sin(p);
+    const ez = S.eye.y * sp + S.eye.z * cp, e = carToWorld(b.x, b.z, b.yaw, S.eye.x, ez);
+    P.x = e.x; P.z = e.z; P.y = b.y - S.eye.z * sp;
+    P.eye = b.y + S.eye.y * cp - S.eye.z * sp;
     P.yaw = b.yaw + this.lookYaw;
     this.yawSeen = b.yaw;
     P.vx = -Math.sin(b.yaw) * b.v; P.vz = -Math.cos(b.yaw) * b.v; P.vy = 0;
@@ -543,6 +553,20 @@ export class SkywaysCar {
     P.stamina = Math.min(100, P.stamina + 18 * dt);
     P.justJumped = P.justLanded = P.justRung = P.justClimbed = P.justLetGo = P.stanceChanged = false;
     P.landSpeed = 0;
+  }
+
+  /**
+   * (stairs) Game.updateCamera's hook: while seated, the view pitches with the car's body (on a flight the cockpit and the view tilt
+   * together; the player's own look is relative to it). No-op out of the car / on flat floor.
+   */
+  tiltCamera(camera: THREE.Camera): void {
+    const b = this.body;
+    if (!this.driving || !b) return;
+    const p = b.pitch ?? 0;
+    if (Math.abs(p) < 1e-5) return;
+    // a turn of `p` about the car's lateral axis (world: its +X turned by the yaw), applied on top of the look
+    tq.setFromAxisAngle(tv.set(Math.cos(b.yaw), 0, -Math.sin(b.yaw)), p);
+    camera.quaternion.premultiply(tq);
   }
 
   /** Game.startUse: no item use while driving (true = refused, with the note). */
@@ -607,9 +631,10 @@ export class SkywaysCar {
     const v = this.view, b = this.body;
     if (!v || !b) return;
     const g = v.group;
-    if (g.position.x !== b.x || g.position.y !== b.y || g.position.z !== b.z || g.rotation.y !== b.yaw) {
+    const pitch = b.pitch ?? 0;
+    if (g.position.x !== b.x || g.position.y !== b.y || g.position.z !== b.z || g.rotation.y !== b.yaw || g.rotation.x !== pitch) {
       g.position.set(b.x, b.y, b.z);
-      g.rotation.set(0, b.yaw, 0);
+      g.rotation.set(pitch, b.yaw, 0, 'YXZ'); // (stairs: the yaw, then the pitch about the car's own lateral axis; nose -Z up for > 0)
       g.updateMatrixWorld(true);
     }
     setWheel(v, b.steer);
@@ -644,8 +669,10 @@ export class SkywaysCar {
     const fx = -Math.sin(b.yaw), fz = -Math.cos(b.yaw), moving = this.driving && Math.abs(b.v) > 0.05;
     for (const z of h.zombies) {
       const q = z.brain;
-      if (!q.alive || q.climbing || z.ragdolled || Math.abs(q.y - b.y) > CAR_RT.storeyY) continue;
+      if (!q.alive || q.climbing || z.ragdolled) continue;
       const r = q.stats.radius, dx = q.x - b.x, dz = q.z - b.z;
+      // (stairs) the same storey = near the body line's height at the body (on a flight it rises along the car)
+      if (Math.abs(q.y - (b.y - worldToCar(b.x, b.z, b.yaw, q.x, q.z).z * Math.tan(b.pitch ?? 0))) > CAR_RT.storeyY) continue;
       if (dx * dx + dz * dz > (reach + r) ** 2) continue;
       const n = nearestCircle(S, b.x, b.z, b.yaw, q.x, q.z), overlap = r - n.d;
       if (overlap <= 0) continue;
