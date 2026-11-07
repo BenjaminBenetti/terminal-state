@@ -33,9 +33,10 @@
 // walkers too (contact wake + the walker shove up to 12 m/s). Glass: a hit faster than CAR_RT.glassSpeed breaks the Skyways window
 // pane(s) at the contact through the gas system's break path (breakPane: gas comes in — the established rule; the wall cells still stop
 // the car) and shatters a glazed prop there through damage.hitWorld (nothing else is damaged). Bullets meeting the car stop on it.
-// PERSISTENCE: the lane store SKYWAYS_CAR_LANE {v, x, y, z, yaw, level} (world/skywaysCarStore.ts; strict, validated by
-// save/validate.ts) — written at teardown, on getting out and when play pauses; read at the build (a record that no longer satisfies
-// the floor rule falls back to the generator's spawn). Exactly one car per station world.
+// PERSISTENCE: the lane store SKYWAYS_CAR_LANE {v: 2, x, y, z, yaw, level, lights, trunk} (world/skywaysCarStore.ts; strict, validated by
+// save/validate.ts; a v1 record upgrades once: lamps off, an empty trunk) — written at teardown, on getting out and when play pauses;
+// read at the build (a record that no longer satisfies the floor rule falls back to the generator's spawn; its lamps / trunk stay).
+// Exactly one car per station world.
 // AUDIO: `audio` (CarAudio; lane CAR2: the Sound Lab car set through audio/sfx.ts carEngine / stopCarEngine / carSkid / carDoor) — the
 // engine runs only while someone is in the car: it starts on getting in (a short rev), follows the speed / throttle every frame (idle at
 // rest), stops on getting out / death / a state change / teardown (a pause or a new world also silences it in Sfx); the tyre skid on a
@@ -57,7 +58,8 @@ import {paneCentre, type PaneRef} from './windowBreach';
 import {rayBox, type Box3Like} from './towerShared';
 import {CAR_SPEC, carToWorld, worldToCar, type CarSpec} from './skywaysCarSpec';
 import {CAR_PHYS, NO_CONTROLS, footprintFloor, nearestCircle, settlePose, stepCar, wrapAngle, type CarBody, type CarControls, type CarImpact, type CarStep, type CarWorld} from './skywaysCarPhysics';
-import {SKYWAYS_CAR_LANE, skywaysCarProblem, skywaysCarRecord, type SkywaysCarRecord} from './skywaysCarStore';
+import {SKYWAYS_CAR_LANE, emptyTrunk, skywaysCarProblem, skywaysCarRecord, upgradeCarRecord, type SkywaysCarRecord, type SkywaysCarRecordV1} from './skywaysCarStore';
+import type {StackJSON} from '../items/inventory';
 import {buildCarView, carModelsGen, loadSkywaysCarModel, refreshCarView, releaseSkywaysCarModel, setWheel, type CarView} from './skywaysCarModel';
 
 export const CAR_RT = {
@@ -227,6 +229,14 @@ export class SkywaysCar {
   audio: CarAudio;
   /** Where the car came from this build ('record' | 'spawn'), QA. */
   source: 'record' | 'spawn' | null = null;
+  /**
+   * Task skyways-vehicle-20261107 (record v2): the car's own state kept with it at its station — its lamps on / off and the trunk's
+   * slots (StackJSON, uids kept). Read at the build (a v1 / missing record: off / empty), written by store().
+   */
+  lights = false;
+  trunkJSON: (StackJSON | null)[] = emptyTrunk();
+  /** The live trunk (lane TRUNK's store) supplies the slots to store, when present. */
+  trunkSource: (() => (StackJSON | null)[]) | null = null;
   /** QA / tests. */
   readonly counts = {builds: 0, teardowns: 0, enters: 0, exits: 0, exitRefused: 0, forced: 0, kills: 0, crushed: 0, pushes: 0, propKicks: 0,
     impacts: 0, panes: 0, propGlass: 0, stores: 0, bullets: 0, released: 0, notes: 0};
@@ -292,6 +302,9 @@ export class SkywaysCar {
     const rec = this.readRecord();
     const ok = (p: {x: number; y: number; z: number; yaw: number; level: number}) => p.level >= 0 && p.level < L.count && footprintFloor(L, p.x, p.z, p.yaw, p.y, p.level, this.spec) !== null;
     const pose = rec && ok(rec) ? rec : spawn;
+    // (record v2) the car's own state comes back with it even when its pose fell back to the spawn (never lost, never doubled)
+    this.lights = rec?.lights ?? false;
+    this.trunkJSON = rec ? structuredClone(rec.trunk) : emptyTrunk();
     this.source = pose === rec ? 'record' : 'spawn';
     const y = footprintFloor(L, pose.x, pose.z, pose.yaw, pose.y, pose.level, this.spec) ?? pose.y;
     this.body = {x: pose.x, y, z: pose.z, yaw: wrapAngle(pose.yaw), v: 0, steer: 0, level: pose.level, yawRate: 0};
@@ -335,11 +348,11 @@ export class SkywaysCar {
     this.counts.teardowns++;
   }
 
-  /** The station's car record (valid, else null). */
+  /** The station's car record (valid, else null), as v2 (a v1 record: lamps off, an empty trunk). */
   readRecord(): SkywaysCarRecord | null {
     let raw: unknown;
     try { raw = this.host.run.laneStore(SKYWAYS_CAR_LANE); } catch { raw = undefined; }
-    return raw !== undefined && skywaysCarProblem(raw) === null ? raw as SkywaysCarRecord : null;
+    return raw !== undefined && skywaysCarProblem(raw) === null ? upgradeCarRecord(raw as SkywaysCarRecordV1 | SkywaysCarRecord) : null;
   }
 
   /** Where the car stands now -> this station's lane store. */
@@ -347,7 +360,8 @@ export class SkywaysCar {
     const b = this.body;
     if (!b || !this.worldLive) return;
     try {
-      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level));
+      if (this.trunkSource) this.trunkJSON = this.trunkSource();
+      this.host.run.setLaneStore(SKYWAYS_CAR_LANE, skywaysCarRecord(b.x, b.y, b.z, b.yaw, b.level, {lights: this.lights, trunk: this.trunkJSON}));
       this.counts.stores++;
     } catch (err) { console.warn('skyways car: storing the record failed', err); }
   }
