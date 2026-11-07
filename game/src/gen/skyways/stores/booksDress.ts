@@ -47,6 +47,11 @@ const SIGN_TOP: Partial<Record<PropKind, () => number>> = {
 /** The Mall bookcase's open shelf decks (prop frame; gen/mall/kinds.ts MALL_SURFACES.bookstoreBookcase: x +-0.52, z +-0.18). */
 const M09_SHELVES = [0.36, 0.85, 1.25, 1.63] as const;
 const M09_SHELF = {x: 0.52, z: 0.18, clear: [0.46, 0.37, 0.35, 0.54]} as const;
+/**
+ * Grid packing along a row (wall cases, run units): the start (m) of the next fixture after one ending at `end` — never sharing a cell
+ * with it (placeKit.cellsOfBox trims 4 cm off a box), 2 mm apart where the cell line allows (rows start on a cell line).
+ */
+export const packStart = (end: number): number => Math.max(end + 0.002, (Math.floor((end - 0.04) / CELL) + 1) * CELL - 0.035);
 
 /** The bays' categories in order (the entrance storey / the other storey). */
 const FLOOR_CATS = [BOOKS_SIGN.fiction, BOOKS_SIGN.localHistory, BOOKS_SIGN.mapsTravel, BOOKS_SIGN.poetry, BOOKS_SIGN.prairieAuthors];
@@ -146,7 +151,8 @@ class BooksDresser {
     if (kit.other === null) { this.kidsCorner(L); this.rareBooks(L, false); }
     // the bays round the walls (back wall first), then the island stacks, then more tables where the floor is still open
     this.bayWalls(L, FLOOR_CATS);
-    this.islandRuns(L, kit.other === null ? rng.int(5, 9) : rng.int(4, 8), [BOOKS_SIGN.fiction, BOOKS_SIGN.poetry, BOOKS_SIGN.localHistory, BOOKS_SIGN.fiction]);
+    this.islandRuns(L, kit.other === null ? rng.int(6, 10) : rng.int(5, 9), [BOOKS_SIGN.fiction, BOOKS_SIGN.poetry, BOOKS_SIGN.localHistory, BOOKS_SIGN.fiction]);
+    this.fillWalls(L);
     this.tables.push(...this.lattice(L, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.0, 3.0], max: rng.int(0, 2)}));
     this.plants(L);
     if (rng.chance(0.6)) this.stepLadder(L);
@@ -161,7 +167,8 @@ class BooksDresser {
     this.rareBooks(L, true);
     this.readingNook(L, 'any');
     this.bayWalls(L, UPPER_CATS);
-    this.islandRuns(L, rng.int(3, 7), [BOOKS_SIGN.fiction, BOOKS_SIGN.localHistory, BOOKS_SIGN.poetry]);
+    this.islandRuns(L, rng.int(4, 8), [BOOKS_SIGN.fiction, BOOKS_SIGN.localHistory, BOOKS_SIGN.poetry]);
+    this.fillWalls(L);
     this.tables.push(...this.lattice(L, 'skyDBookTable', {level: L, round: true, ring: 0.8, pitch: [3.0, 3.0], max: rng.int(1, 2)}));
     this.plants(L);
     kit.posters(2, L);
@@ -288,7 +295,7 @@ class BooksDresser {
         for (const bay of this.bayWall(L, a, side, next, side === fr.front ? 2 : 6)) this.bays.push(bay);
       }
     }
-    // a sign on each bay with two or more cases (its header: centred over the bay's wall cases)
+    // a sign on each bay with two wall cases (or one closed by a spur): its header, centred over the bay's wall cases
     for (const b of this.bays.filter(q => q.level === L && !q.cases.some(c => this.signs.some(s => Math.hypot(s.x - c.x, s.z - c.z) < 1.2)))) {
       if (b.cases.length >= 2 || (b.cases.length === 1 && b.spurs.length)) this.bayHeader(b.cases, b.sign);
     }
@@ -296,35 +303,37 @@ class BooksDresser {
 
   /**
    * One wall's bays: groups of two wall cases (the oak bookcase; the Mall's openable bookcase with map drawers for MAPS & TRAVEL), each
-   * group closed by a SPUR — two bookcases back to back, perpendicular to the wall, their fronts into the bays on either side.
+   * group closed by a SPUR — two bookcases back to back, perpendicular to the wall, their fronts into the bays on either side. Packed
+   * on the cell grid (packStart: neighbours never share a cell, 1-2 mm apart where the cases allow): a bay is 4 m (two 1.51 m cases
+   * + the 0.9 m spur).
    */
   private bayWall(L: number, a: Area, side: Side, next: () => number, maxBays: number): {level: number; sign: number; cases: PropPlacement[]; spurs: PropPlacement[]}[] {
     const kit = this.kit, out: {level: number; sign: number; cases: PropPlacement[]; spurs: PropPlacement[]}[] = [];
     const [lo, hi] = wallRange(a, side);
-    const half = PROP_DEFS.skyDBookcase.d + 0.005; // the spur's half thickness (two cases back to back)
-    let t = lo + 0.03, cat = next();
+    const half = PROP_DEFS.skyDBookcase.d + 0.005; // the spur's half thickness (two cases back to back, 1 cm apart)
+    let t = Math.ceil(lo / CELL - 1e-6) * CELL, cat = next();
     while (t < hi - 1.2 && out.length < maxBays) {
       const kind: PropKind = cat === BOOKS_SIGN.mapsTravel && this.m09.length < 4 ? 'bookstoreBookcase' : 'skyDBookcase';
       const w = PROP_DEFS[kind].w, cases: PropPlacement[] = [];
       let tt = t;
-      for (let k = 0; k < 2 && tt + w <= hi - 0.03; k++) {
+      for (let k = 0; k < 2 && tt + w <= hi - 0.01; k++) {
         const c = tt + w / 2;
         if (!kit.solidWall(a, side, c, kind, L)) break;
         const sp = wallSpot(a, side, c, kind);
         const p = kit.put(kind, sp.x, sp.z, sp.rot, {level: L, area: a, front: kind === 'bookstoreBookcase' ? 1.0 : 0.9});
         if (!p) break;
         cases.push(p);
-        tt += w + 0.012;
+        tt = packStart(tt + w);
       }
       if (!cases.length) { t += CELL; continue; }
       for (const p of cases) (p.kind === 'bookstoreBookcase' ? this.m09 : this.cases).push(p);
       // the spur closing this bay: its seam on a cell line past the last case
-      const T = Math.ceil((tt + half + 0.005) / CELL - 1e-6) * CELL;
+      const T = Math.ceil((tt + half) / CELL - 1e-6) * CELL;
       const spurs = T + half < hi - 0.4 ? this.spur(L, a, side, T) : [];
       this.cases.push(...spurs);
       out.push({level: L, sign: cat, cases, spurs});
       cat = next();
-      t = spurs.length ? T + half + 0.012 : tt + CELL;
+      t = spurs.length ? packStart(T + half) : Math.ceil(tt / CELL - 1e-6) * CELL;
     }
     return out;
   }
@@ -377,7 +386,8 @@ class BooksDresser {
   private islandRuns(L: number, max: number, cats: readonly number[]): void {
     const kit = this.kit, fr = kit.fr, def = PROP_DEFS.skyDBookcase;
     const orient: 'u' | 'v' = fr.W >= fr.D ? 'v' : 'u';
-    const runs = this.fillRuns(L, 'skyDBookcase', {units: [2, 3], aisle: 1.3, max, orient});
+    // (3-unit runs first, then 2; single back-to-back pairs only where nothing longer fits — a small hall)
+    const runs = this.fillRuns(L, 'skyDBookcase', {units: [1, 3], aisle: 1.3, max, orient});
     runs.forEach((run, i) => {
       this.cases.push(...run);
       this.runs.push(run);
@@ -390,6 +400,8 @@ class BooksDresser {
       const e = ends[near] + (near === 0 ? -1 : 1) * (def.w / 2 - BOOKS_SIGN_BOARD.d / 2 - 0.01);
       const [x, z] = alongV ? kit.uv(mid, e) : kit.uv(e, mid);
       const rot = alongV ? fr.toFront : near === 0 ? fr.minusU : fr.plusU;
+      // (end-caps on the first few runs: one header per aisle pair, not a sign forest)
+      if (i >= 4 || run.length < 4) return;
       const host = run.slice().sort((p, q) => Math.hypot(p.x - x, p.z - z) - Math.hypot(q.x - x, q.z - z))[0];
       this.sign(x, z, host.y + (SIGN_TOP.skyDBookcase!()), rot, cats[i % cats.length], host, 1);
     });
@@ -480,7 +492,7 @@ class BooksDresser {
    * bookcase / the dresser's own wall run of cases.
    */
   private kidsCorner(L: number): void {
-    const kit = this.kit, dr = PROP_DEFS.dresserDrawers, bb = PROP_DEFS.beanBag, R = BOOKS_RUG_SIZE;
+    const kit = this.kit, dr = PROP_DEFS.dresserDrawers, R = BOOKS_RUG_SIZE;
     const [ox, oz] = L === kit.level ? kit.inside(1) : [kit.mouths.get(L)?.x ?? kit.entry.x, kit.mouths.get(L)?.z ?? kit.entry.z];
     const spots = this.rng.shuffle(kit.wallSpots('dresserDrawers', ox, oz, L).filter((_, i) => i % 2 === 0)).slice(0, 40);
     for (const sp of spots) {
@@ -493,10 +505,10 @@ class BooksDresser {
         st.dresser = dresser;
         // the rug's centre in front of the dresser (the drawers' strip kept), the bean bags on it side by side, facing the dresser
         const rz = dr.d / 2 + 0.65 + R.d / 2, rot = normYaw(dresser.rot + Math.PI), {hx, hz} = footprint('beanBag', rot);
-        for (const s of this.rng.shuffle([-1, 1])) {
-          const [x, z] = toWorld(dresser, s * (bb.w / 2 + 0.03), rz);
+        for (const s of this.rng.shuffle([-1, 1])) for (const lat of [0.65, 0.8, 0.95, 1.1]) {
+          const [x, z] = toWorld(dresser, s * lat, rz);
           const p = kit.put('beanBag', snapEdge(x, hx), snapEdge(z, hz), rot, {level: L});
-          if (p) { got.push(p); seats.push(p); }
+          if (p) { got.push(p); seats.push(p); break; }
         }
         if (!seats.length) return false;
         // a bookcase either side of the dresser on the same wall (the bay)
@@ -568,15 +580,20 @@ class BooksDresser {
         // the staff desk out in front of the cabinets: its drawer (sitter) side toward them, the chair between (the sitter faces the
         // room, the cases at their back); the desk's far side to the room
         const dd = PROP_DEFS.desk, rot = normYaw(mid.rot + Math.PI), {hx, hz} = footprint('desk', rot);
-        for (const off of [gc.d / 2 + 0.8 + 0.1 + PROP_DEFS.officeChair.d + 0.15 + dd.d / 2, gc.d / 2 + 2.4 + dd.d / 2]) {
-          const [x, z] = toWorld(mid, this.rng.range(-0.3, 0.3), off);
+        const off0 = gc.d / 2 + 0.8 + 0.1 + PROP_DEFS.officeChair.d + 0.15 + dd.d / 2;
+        for (const [lat, off] of [0, -0.6, 0.6, -1.2, 1.2].flatMap(l => [off0, off0 + 0.5, off0 + 1.0].map(o => [l, o]))) {
+          const [x, z] = toWorld(mid, lat, off);
           const g2: PropPlacement[] = [];
           const ok2 = kit.cluster(() => {
             const p = kit.put('desk', snapEdge(x, hx), snapEdge(z, hz), rot, {level: L});
             if (!p) return false;
             g2.push(p);
-            const [cx, cz] = toWorld(p, 0, dd.d / 2 + 0.42);
-            const c = kit.put('officeChair', cx, cz, mid.rot, {level: L});
+            // (the chair pulled up to the drawer side: the first offset whose cells clear the desk's)
+            let c: PropPlacement | null = null;
+            for (const oz of [0.8, 0.95, 1.05]) {
+              const [cx, cz] = toWorld(p, 0, oz);
+              if ((c = kit.put('officeChair', cx, cz, mid.rot, {level: L}))) break;
+            }
             if (!c) return false;
             g2.push(c);
             return true;
@@ -730,40 +747,53 @@ class BooksDresser {
     return out;
   }
 
-  /** Double-sided island runs (shopsA fillRuns): two rows back to back on a cell line, `units` long, aisles `aisle` m wide. */
+  /**
+   * Double-sided island runs: two rows back to back on a cell line, aisles `aisle` m wide (each unit's front strip). Full-length runs
+   * first (the longest that fits, then shorter: a pass per length, longest first), so the stacks read as runs, not scattered pairs;
+   * each candidate's whole footprint is checked free (kit.boxFree) before any placement is tried. Units packed on the cell grid.
+   */
   private fillRuns(L: number, kind: PropKind, o: {units: [number, number]; aisle: number; max: number; orient: 'u' | 'v'}): PropPlacement[][] {
     const kit = this.kit, fr = kit.fr, def = PROP_DEFS[kind], out: PropPlacement[][] = [];
     if (o.max <= 0) return out;
     const along = o.orient === 'u';
-    const pitch = Math.max(def.w + 0.02, (Math.floor((def.w - 0.04) / CELL) + 1) * CELL);
+    // (unit starts along the run: packed on the cell grid, never sharing a cell — packStart)
+    const starts = [0];
+    for (let k = 1; k < o.units[1]; k++) starts.push(packStart(starts[k - 1] + def.w));
     const us: number[] = [], vs: number[] = [];
     for (let u = CELL; u <= fr.W - CELL; u += CELL) us.push(u);
     for (let v = 2.5; v <= fr.D - CELL; v += CELL) vs.push(v);
     if (this.rng.chance(0.5)) us.reverse();
-    vs.reverse();
-    for (const v of vs) for (const u of us) {
-      if (out.length >= o.max) return out;
-      const n = this.rng.int(o.units[0], o.units[1]);
-      const got: PropPlacement[] = [];
-      const ok = kit.cluster(() => {
-        for (let k = 0; k < n; k++) {
-          const side: PropPlacement[] = [];
-          for (const s of [-1, 1]) {
-            const t = k * pitch + def.w / 2;
+    if (this.rng.chance(0.5)) vs.reverse();
+    for (let n = o.units[1]; n >= o.units[0]; n--) {
+      const len = starts[n - 1] + def.w;
+      for (const v of vs) for (const u of us) {
+        if (out.length >= o.max) return out;
+        // the run's footprint free before trying it (a cheap reject)
+        const [ax, az] = along ? kit.uv(u, v - def.d) : kit.uv(u - def.d, v), [bx, bz] = along ? kit.uv(u + len, v + def.d) : kit.uv(u + def.d, v + len);
+        if (!kit.boxFree(Math.min(ax, bx), Math.min(az, bz), Math.max(ax, bx), Math.max(az, bz), L)) continue;
+        const got: PropPlacement[] = [];
+        const ok = kit.cluster(() => {
+          for (let k = 0; k < n; k++) for (const s of [-1, 1]) {
+            const t = starts[k] + def.w / 2;
             const [pu, pv] = along ? [u + t, v + s * def.d / 2] : [u + s * def.d / 2, v + t];
             const rot = along ? (s < 0 ? fr.toFront : fr.toBack) : (s < 0 ? fr.minusU : fr.plusU);
             const [x, z] = kit.uv(pu, pv);
             const p = kit.put(kind, x, z, rot, {level: L, front: o.aisle});
-            if (p) side.push(p);
+            if (!p) return false;
+            got.push(p);
           }
-          got.push(...side);
-          if (side.length < 2) return k > 0;
-        }
-        return true;
-      }, L);
-      if (ok) out.push(got);
+          return true;
+        }, L);
+        if (ok) out.push(got);
+      }
     }
     return out;
+  }
+
+  /** The remaining solid wall stretches lined with plain oak cases (between the features; their fronts kept as an aisle). */
+  private fillWalls(L: number): void {
+    const kit = this.kit;
+    for (const p of kit.wallRun('skyDBookcase', {level: L, front: 0.9})) this.cases.push(p);
   }
 
   /** Candidate centres over the storey (frame u / v), the far corner first or shuffled. */
@@ -814,7 +844,8 @@ function backRoom(layout: StationLayout, rng: Rng, a: Area): PropPlacement[] {
   const added: PropPlacement[] = [];
   for (const [kind, n, front] of BACK_ADD[a.type] ?? []) {
     for (let k = 0; k < n; k++) {
-      const p = againstWall(ctx, a, kind, front, rng);
+      // (a carton also stands out on the floor where the walls are taken: the room's free cells, its way through kept)
+      const p = againstWall(ctx, a, kind, front, rng) ?? (kind === 'cardboardBoxFlaps' ? onFloor(ctx, a, kind, rng) : null);
       if (!p) break;
       added.push(p);
     }
@@ -825,6 +856,17 @@ function backRoom(layout: StationLayout, rng: Rng, a: Area): PropPlacement[] {
     p.y = r3(p.y + (g.inBounds(cx, cy) ? g.floorOf(g.idx(cx, cy)) : (a.floorY ?? 0)));
   }
   return added;
+}
+
+/** One `kind` on a free floor cell of the room (shuffled, at most 40 tries; tryPlaceProp keeps the room connected), or null. */
+function onFloor(ctx: PlaceCtx, a: Area, kind: PropKind, rng: Rng): PropPlacement | null {
+  const cells: [number, number][] = [];
+  for (let y = a.y + 1; y < a.y + a.h - 1; y++) for (let x = a.x + 1; x < a.x + a.w - 1; x++) cells.push([x, y]);
+  for (const [x, y] of rng.shuffle(cells).slice(0, 40)) {
+    const p = tryPlaceProp(ctx, a, kind, r3((x + 0.5) * CELL), r3((y + 0.5) * CELL), rng.pick([0, Math.PI / 2, Math.PI, -Math.PI / 2]));
+    if (p) return p;
+  }
+  return null;
 }
 
 /** One `kind` backed to a solid wall of the room (sides shuffled, a 0.25 m scan), or null. */

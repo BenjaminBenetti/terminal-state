@@ -12,7 +12,7 @@
 // management office's desk.
 //
 // Palette (user: "distinct major-store walls … wood in the bookstore"): full-height walnut panelling (the Office wood wainscot run floor
-// to ceiling, 0.9 m panel seams) with a near-black walnut trim, an oak strip floor and a plain warm ceiling on the sales floor; the
+// to ceiling, 0.6 m boards) with a near-black walnut trim, an oak strip floor and a plain warm ceiling on the sales floor; the
 // other storey (the mezzanine / lower floor: children's corner, rare books) an oak wainscot under warm cream plaster on a deep green
 // library carpet.
 
@@ -25,11 +25,11 @@ export const STORE_BOOKS: SkywaysStoreSpec = {
   dress: (layout, rng, anchor) => dressBooksStore(layout, rng, anchor),
   purposes: {floor: 'mall-books', upper: 'mall-books', stock: 'mall-books-back', office: 'mall-management'},
   finish: {
-    wall: {paint: 0xe6dccb, lower: 0x6b4428, trim: 0x2a1a10, kind: 'wood', lowerTop: 4.0, skirt: 0.14, rail: 0.035, peel: 0.18, panel: 0.9},
+    wall: {paint: 0xe6dccb, lower: 0x6b4428, trim: 0x2a1a10, kind: 'wood', lowerTop: 4.0, skirt: 0.14, rail: 0.035, peel: 0.18, panel: 0.6},
     floor: ['wood', 0x8a5f3c],
     ceil: ['plain', 0xe8dcc6],
     upper: {
-      wall: {paint: 0xe9dcc0, lower: 0x8a5a34, trim: 0x2a1a10, kind: 'wood', lowerTop: 1.15, skirt: 0.14, rail: 0.04, peel: 0.2, panel: 0.6},
+      wall: {paint: 0xe9dcc0, lower: 0x8a5a34, trim: 0x2a1a10, kind: 'wood', lowerTop: 1.15, skirt: 0.14, rail: 0.04, peel: 0.2, panel: 0.45},
       floor: ['carpet', 0x3d5240],
       ceil: ['plain', 0xeee4d0],
     },
