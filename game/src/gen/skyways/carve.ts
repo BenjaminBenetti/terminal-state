@@ -1449,6 +1449,12 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
    * every one of them in `venue` by role (the venue dresser fills them; the station's generic dresser keeps out). The street level
    * below stays the building's ordinary lobby, its stair the venue's second way in.
    */
+  /** The side of the add-on hall its entry (the door from the lobby / foyer) lies on, seen from the hall. */
+  function hallSideOf(a: AddonCarve): Side {
+    const e = a.entry, r = a.hall;
+    return e.h === 1 ? (e.y < r.y ? 'N' : 'S') : (e.x < r.x ? 'W' : 'E');
+  }
+
   function carveVenue(bc: BuildingCarve): AddonCarve | null {
     const lv = 2;
     const main = carveAddon(bc, 'convention', lv, f.addonApproach);
@@ -1471,21 +1477,27 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       k.areas[id].label = `Registration · ${bName(bc.b)}`;
       venue.push({role: 'registration', area: id});
     }
-    // panel rooms and a photo lounge beyond the court's free sides (public doors from the exhibitors' floor), largest pieces first
-    const want: [SkywaysVenueRole, string][] = [['panel', 'Panel room A'], ['panel', 'Panel room B'], ['photo-lounge', 'Photo lounge']];
-    const pieces = hubIds.map(id => k.areas[id]).sort((p, q) => q.w * q.h - p.w * p.h);
+    // panel rooms and a photo lounge beyond the free sides of the exhibitors' floor (largest pieces first), else of the main hall
+    // (never its entry side) — roomy first, a compact size where only that fits; public doors
+    const want: [SkywaysVenueRole, string][] = [['panel', 'Panel room A'], ['photo-lounge', 'Photo lounge'], ['panel', 'Panel room B']];
+    const hosts = [...hubIds.map(id => k.areas[id]).sort((p, q) => q.w * q.h - p.w * p.h), hall];
+    const sizes = (role: SkywaysVenueRole): [number, number][] => role === 'panel' ? [[rng.int(16, 22), rng.int(12, 16)], [rng.int(12, 15), rng.int(10, 12)]] : [[rng.int(14, 20), rng.int(10, 14)], [rng.int(10, 13), rng.int(8, 10)]];
+    const hallEntry = hallSideOf(main);
     for (const [role, label] of want) {
       let made: Area | null = null;
-      for (const P of pieces) {
-        for (const s of rng.shuffle(SIDES.slice())) {
-          const along = role === 'panel' ? rng.int(16, 22) : rng.int(14, 20), deep = role === 'panel' ? rng.int(12, 16) : rng.int(10, 14);
-          const N = sideLen(P, s) - along;
-          for (let t = 1; t <= N - 1 && !made; t += 2) {
-            const r = beyond(P, s, t, along, deep);
-            const door = gapOn(P, s, t + Math.floor(along / 2) - 2, 4);
-            if (!free(r, lv, bc.I) || !k.solid(door, lv)) continue;
-            made = k.addArea(r, 'room', 'concourse', ceilOf(lv, CLEAR.skyway), P.id, {...opt(lv), label, publicSpace: true, role: 'great-hall'});
-            k.carveDoor(door, P, made, CLEAR.door, false);
+      for (const [along, deep] of sizes(role)) {
+        for (const P of hosts) {
+          for (const s of rng.shuffle(SIDES.slice())) {
+            if (P === hall && s === hallEntry) continue;
+            const N = sideLen(P, s) - along;
+            for (let t = 1; t <= N - 1 && !made; t += 2) {
+              const r = beyond(P, s, t, along, deep);
+              const door = gapOn(P, s, t + Math.floor(along / 2) - 2, 4);
+              if (!free(r, lv, bc.I) || !k.solid(door, lv)) continue;
+              made = k.addArea(r, 'room', 'concourse', ceilOf(lv, CLEAR.skyway), P.id, {...opt(lv), label, publicSpace: true, role: 'great-hall'});
+              k.carveDoor(door, P, made, CLEAR.door, false);
+            }
+            if (made) break;
           }
           if (made) break;
         }
