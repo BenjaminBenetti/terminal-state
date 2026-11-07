@@ -301,14 +301,19 @@ function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spin
   const bk = PROP_DEFS.skyDTicketBooth;
   const tries: {u: number; v: number; yaw: number; nu: number; nv: number}[] = [];
   // beside the spine, window toward it (its front edge clear of the storefront's door zone: 1 m)
-  for (const off of [1.6, 2.1, 1.1, 2.6, 0.6, 3.1, 0.3, 3.6]) for (const bv of [r3(1.05 + bk.w / 2), r3(1.35 + bk.w / 2)]) {
+  for (const off of [1.6, 2.1, 1.1, 2.6, 0.6, 3.1, 0.3, 3.6, 4.1, 4.6, 5.1, 5.6, 6.1, 6.6]) for (const bv of [r3(1.05 + bk.w / 2), r3(1.35 + bk.w / 2)]) {
     tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.d / 2))), v: bv, yaw: dir < 0 ? L.fr.plusU : L.fr.minusU, nu: -dir, nv: 0});
   }
-  // back to the storefront wall, window toward the lobby
-  for (let off = 0.5; off <= L.fr.W; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(0.05 + bk.d / 2), yaw: L.fr.toBack, nu: 0, nv: 1});
+  // back to the storefront wall, window toward the lobby (flush: its 1.54 m depth stays inside three cells, clear of a counter strip)
+  for (let off = 0.5; off <= L.fr.W; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(bk.d / 2 + 0.001), yaw: L.fr.toBack, nu: 0, nv: 1});
+  // a narrow lobby whose walks fill its front band: back to the end wall on side `dir` (window toward the entry), else back to the back
+  // wall (window toward the storefront)
+  const endU = dir < 0 ? r3(0.05 + bk.d / 2) : r3(L.fr.W - 0.05 - bk.d / 2);
+  for (let v = 1.05 + bk.w / 2; v + bk.w / 2 <= L.fr.D - 0.05; v += 0.5) tries.push({u: endU, v: r3(v), yaw: dir < 0 ? L.fr.plusU : L.fr.minusU, nu: -dir, nv: 0});
+  for (let off = 0.5; off <= L.fr.W; off += 0.5) tries.push({u: r3(snap(k.entryU + dir * (spine + off + bk.w / 2))), v: r3(L.fr.D - 0.05 - bk.d / 2), yaw: L.fr.toFront, nu: 0, nv: -1});
   for (const t of tries) {
     const half = t.nu ? bk.d / 2 : bk.w / 2;
-    if (t.u - half < 0.3 || t.u + half > L.fr.W - 0.3) continue;
+    if (t.u - half < 0.03 || t.u + half > L.fr.W - 0.03) continue;
     const booth = k.put(L, 'skyDTicketBooth', t.u, t.v, t.yaw);
     if (!booth) continue;
     // the queue: two rows of rope posts off the window on free floor; else a rope line along the spine's edge on the kiosk's side (light
@@ -321,21 +326,22 @@ function boxOffice(k: CinemaKit, L: Region, res: CinemaResult, dir: -1 | 1, spin
       if (!p) break;
       res.queue.push(p);
     }
-    if (res.queue.length < 2 && t.nu) {
-      for (const v of [t.v - 0.85, t.v, t.v + 0.85]) {
-        const p = k.putRound(L, 'skywaysPrizeStanchion', r3(k.entryU + dir * (spine - 0.2)), r3(v), 0, {keepOk: true});
-        if (p) res.queue.push(p);
-      }
-    }
     if (res.queue.length < 2 && !t.nu) {
       for (const sd of [-1, 1]) for (const v of [0.45, 1.25]) {
         const p = k.putRound(L, 'skywaysPrizeStanchion', r3(t.u + sd * (bk.w / 2 + 0.4)), r3(v), 0);
         if (p) res.queue.push(p);
       }
     }
-    // (else: the nearest free floor in front of the window)
+    // (else: a rope line along the entry spine's edge on the kiosk's side — light movable posts on the lane's edge, >= 1.6 m of it clear —
+    // then the nearest free floor in front of the window)
+    const side = Math.sign(t.u - k.entryU) || dir;
+    for (const v of [1.2, 2.0, 2.8]) {
+      if (res.queue.length >= 2) break;
+      const p = k.putRound(L, 'skywaysPrizeStanchion', r3(k.entryU + side * (spine - 0.2)), v, 0, {keepOk: true});
+      if (p) res.queue.push(p);
+    }
     for (let i = 0; res.queue.length < 2 && i < 2; i++) {
-      const p = nearest(k, L, 'skywaysPrizeStanchion', t.u + (t.nu || 0) * (bk.d / 2 + 0.5), t.v + (t.nv || 0) * (bk.d / 2 + 0.5), 1.5, 0);
+      const p = nearest(k, L, 'skywaysPrizeStanchion', t.u + (t.nu || 0) * (bk.d / 2 + 0.5), t.v + (t.nv || 0) * (bk.d / 2 + 0.5), 2.5, 0);
       if (!p) break;
       p.round = true; p.hx = p.hz = r3(PROP_DEFS.skywaysPrizeStanchion.w / 2);
       res.queue.push(p);
