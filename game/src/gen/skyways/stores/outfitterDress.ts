@@ -27,7 +27,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, footprint, type PropKind, type PropPlacement} from '../../props';
 import {stockVariant} from '../../purposeShapes';
-import {OPENABLE_FRONT, cellsOfBox, makePlaceCtx, mountProp, propBlocksDoorway, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
+import {OPENABLE_FRONT, WALL_MOUNT_Y, cellsOfBox, makePlaceCtx, mountProp, propBlocksDoorway, tryPlaceProp, wallRange, wallSpot, wallXZ, type PlaceCtx} from '../../placeKit';
 import type {Area, PickupPlacement, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld} from '../addonFrame';
@@ -552,10 +552,14 @@ function hang(kit: AnchorKit, host: PropPlacement, kind: PropKind, du = 0): Prop
 function floorFixtures(kit: AnchorKit): void {
   const rng = kit.rng;
   if (kit.fr.W * kit.fr.D >= 120) lattice(kit, 'tentDisplay', {ring: 1.0, pitch: [3.4, 3.4], v: [kit.fr.D * 0.4, kit.fr.D - 2.0], max: 1});
+  // the gondola aisles pack the open floor first (deep floor first; along the long axis, else across it), the islands fill round them
+  const want = rng.int(3, 6);
+  let runs = fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: want, orient: longAxis(kit)});
+  if (runs.length < 2) runs = runs.concat(fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: want - runs.length, orient: longAxis(kit) === 'u' ? 'v' : 'u'}));
+  for (const run of runs) for (const g of run) gondolaStock(kit, g);
   for (const t of lattice(kit, 'skyDBookTable', {round: true, ring: 0.8, pitch: [3.0, 3.0], v: [2.6, Math.max(3.2, kit.fr.D * 0.5)], max: rng.int(1, 2)})) stockTiers(kit, t, 'skyDLantern', [2, 4]);
   for (const r of lattice(kit, 'garmentRail', {ring: 0.7, pitch: [2.6, 2.4], max: rng.int(2, 3)})) if (rng.chance(0.8)) hang(kit, r, 'garmentHangingGroup');
   for (const r of lattice(kit, 'garmentRailRound', {ring: 0.7, pitch: [2.6, 2.6], max: rng.int(1, 2)})) if (rng.chance(0.8)) hang(kit, r, 'garmentHangingGroup');
-  for (const run of fillRuns(kit, kit.level, 'retailGondola', {units: [2, 3], aisle: 1.3, max: rng.int(3, 6), orient: longAxis(kit)})) for (const g of run) gondolaStock(kit, g);
 }
 
 /** Camp stoves as stock on a gondola's decks (front-aligned, spans cut), on about half the units. */
@@ -657,6 +661,14 @@ function stockTiers(kit: AnchorKit, t: PropPlacement, kind: PropKind, per: [numb
 function dressBackRoom(kit: AnchorKit, a: Area): {added: PropPlacement[]; swapped: PropPlacement | null} {
   const layout = kit.layout, level = a.level ?? 0, out: PropPlacement[] = [];
   const ctx: PlaceCtx = makePlaceCtx(layout, kit.rng, level, {x0: a.x - 3, y0: a.y - 3, x1: a.x + a.w + 3, y1: a.y + a.h + 3});
+  // the room's wall-hung pieces (the station dresser's notice board / key cabinet / data cabinet ...: hung at y >= WALL_MOUNT_Y, they
+  // block no cell; their reservation lived on the station dresser's own context) keep their cells here too: nothing stands under them
+  const floor = a.floorY ?? layout.levels[level]?.baseY ?? 0;
+  for (const p of layout.props) {
+    if ((p.level ?? 0) !== level || p.area !== a.id || p.host !== undefined || !(p.mounted || p.y - floor >= WALL_MOUNT_Y - 0.01)) continue;
+    const [x0, y0, x1, y1] = cellsOfBox(p.x, p.z, p.hx, p.hz);
+    for (let cy = y0; cy <= y1; cy++) for (let cx = x0; cx <= x1; cx++) if (ctx.g.inBounds(cx, cy)) ctx.keep[ctx.g.idx(cx, cy)] = 1;
+  }
   const sides = kit.rng.shuffle(['N', 'S', 'E', 'W'] as Side[]);
   // `n` of the first kind that fits, backs to a wall (every wall, 0.25 m steps), each with its access strip
   const along = (kinds: readonly PropKind[], n: number, front?: number): number => {
@@ -711,7 +723,8 @@ function shelfToLockers(kit: AnchorKit, ctx: PlaceCtx, a: Area): PropPlacement |
     for (let cy = c1; cy <= c3 && open; cy++) for (let cx = c0; cx <= c2; cx++) if (!g.walkable(cx, cy)) { open = false; break; }
     if (!open) continue;
     const {hx, hz} = footprint('staffLockers', p.rot);
-    if (L.props.some((q, j) => j !== i && (q.level ?? 0) === (p.level ?? 0) && !q.mounted && q.host === undefined
+    // (no other prop under its new box — wall-hung ones included while they hang lower than the lockers' top)
+    if (L.props.some((q, j) => j !== i && (q.level ?? 0) === (p.level ?? 0) && q.host === undefined && q.y < p.y + lk.h - 0.01
       && Math.abs(q.x - x) < q.hx + hx - 0.01 && Math.abs(q.z - z) < q.hz + hz - 0.01)) continue;
     Object.assign(p, {kind: 'staffLockers', x, z, hx: r3(hx), hz: r3(hz), h: lk.h, blocksSight: lk.blocksSight, variant: 0});
     delete p.cut;
