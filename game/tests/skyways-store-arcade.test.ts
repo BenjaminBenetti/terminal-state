@@ -14,7 +14,7 @@ import {STORE_ARCADE_KINDS, STORE_ARCADE_MALL_MODELS} from '../src/gen/skyways/s
 import {ANCHOR_STYLES, anchorStyleOf} from '../src/gen/skyways/destinations/anchorStyles';
 import {OPENABLE_AUDIT} from '../src/world/openablesSpec';
 import {PROP_PHYSICS_AUDIT} from '../src/damage/physicsAudit';
-import {holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
+import {compartmentTable, holderTable, isLootHolderKind, type HolderKind} from '../src/items/loot';
 import {AMMO_ITEM_IDS} from '../src/items/calibers';
 import {MALL_KIND_ASSET} from '../src/gen/mall/kinds';
 import {PROP_DEFS, type PropPlacement} from '../src/gen/props';
@@ -125,6 +125,9 @@ describe('Skyways store: Starfall Arcade (layout version 3)', () => {
         const t = holderTable(p.kind as HolderKind, lootKey(l, p));
         if (t.source !== 'own') for (const [item] of t.rows) expect(ammo.has(item), `seed ${h.seed}: ${p.kind} (${lootKey(l, p)}) rolls ${item}`).toBe(false);
         if (l.areas[p.area]?.type === 'shop' && p.kind !== 'staffLockers') for (const [item] of t.rows) expect(ammo.has(item), `seed ${h.seed}: sales floor ${p.kind} rolls ${item}`).toBe(false);
+        // (a desk's drawers: their own table narrowed to the key's desk rows — the workshop bench holds no rounds)
+        const inside = compartmentTable(p.kind as HolderKind, lootKey(l, p));
+        if (inside && p.kind !== 'staffLockers') for (const [item] of inside.rows) expect(ammo.has(item), `seed ${h.seed}: ${p.kind} drawers roll ${item}`).toBe(false);
       }
       // the overrides sit on the right holders
       for (const p of roles(h).party ?? []) if (p.kind === ARCADE_FLOOR_KINDS.partyTable) expect(p.purpose).toBe(ARCADE_HOLDER_PURPOSE.party);
