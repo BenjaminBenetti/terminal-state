@@ -1,8 +1,9 @@
 // Task studio-alpha-skyways-shops-20261107-054512-01 (lane STORE-HOBBY): GRAIN ELEVATOR MODELS — the layout-version-3 interior of the
 // Skyways hobby / model shop (a 'hall': one big sales floor, plus its back rooms). A real model shop, not toys in a Subway box:
 //
-//  - the CASH DESK at a flank wall near the front: a till counter and a glass display counter in a run facing the shop, a staff aisle
-//    behind them and the wall-backed BACK COUNTER (Mall M01 mallCashwrapCounter: 5 drawers + a cupboard that open) behind the aisle;
+//  - the CASH DESK by the entry (a flank wall near the front, else the front wall beside the entry): a till counter and a glass display
+//    counter in a run facing the shop, a staff aisle behind them and the wall-backed BACK COUNTER (Mall M01 mallCashwrapCounter: 5
+//    drawers + a cupboard that open) behind the aisle;
 //  - the tin-toy ROBOT greeting the entry and the model-railway LAYOUT TABLE (the prairie grain-elevator diorama, kit model) as the
 //    centrepiece with a clear viewing ring;
 //  - the WORKBENCH / demo corner on a far wall: a desk with drawers (the demo table: soldering station + toolbox on top, a chair at it,
@@ -13,9 +14,10 @@
 //  - KIT WALLS (open steel shelving along the free walls) and low KIT AISLES (Mall M03 gondola runs, back to back, 1.4 m: the layout
 //    stays in view over them), all stocked with separate loose stacks of boxed kits (skyDModelKits) on their measured tiers;
 //  - the family's poster art (lane ART2D's Codex hobby poster) on solid walls;
-//  - BACK ROOMS: the stock room keeps the station dresser's shelving / cartons and gains openable cartons, a storage tote and staff
-//    lockers (a staff desk when the store has no office); the office keeps its desk / safe / cabinets and gains lockers. Without any
-//    back room a staff stock corner (tall cabinet, carton shelving, an openable carton) stands behind the cash desk.
+//  - BACK ROOMS: the stock room keeps the station dresser's shelving / cartons / crates and gains openable cartons and a storage tote
+//    (a staff desk when the store has no office); staff lockers go in the office, else the stock room, else (both full) on the cash
+//    desk's wall behind it. Without any back room a whole staff stock corner (tall cabinet, carton shelving, an openable carton,
+//    lockers) stands there.
 //
 // Loot (gen/skyways/stores/hobby.ts STORE_HOBBY.purposes + the per-holder keys HOBBY_HOLDER_PURPOSE below — existing purposes only, the
 // ramen precedent: PropPlacement.purpose): the sales floor rolls the Mall toy store ('mall-toys': batteries, snacks and drinks left
@@ -44,11 +46,11 @@ export const HOBBY_HOLDER_PURPOSE = {
   workbench: 'mall-hardware',
   /** The glass display cabinets and the glass display counter: the RC / train-controller case. */
   glass: 'mall-electronics',
-  /** The staff stock corner (only without a back room). */
+  /** The staff corner on the sales floor (its lockers / stock storage are the back of house's). */
   staff: 'mall-toys-back',
 } as const;
 
-/** What the dresser placed, by role (QA / tests). The prop objects themselves (indices shift when a later pass drops a prop). */
+/** What the dresser placed, by role (QA / tests: hobbyRoleProps finds them in the finished layout). */
 export type HobbyRole =
   | 'backCounter' | 'till' | 'glassCounter' | 'register' | 'robot' | 'diorama'
   | 'workbench' | 'toolChest' | 'paintRack' | 'pegboard' | 'partsBins' | 'benchTop' | 'chair'
@@ -506,9 +508,10 @@ function fillRuns(kit: AnchorKit, level: number, kind: PropKind, o: {units: [num
 // Back rooms
 
 /**
- * The back rooms (already shelved / furnished by the station dresser under their room purposes): the stock room gains openable cartons,
- * a storage tote and staff lockers (else a tall cabinet), and a staff desk with a chair when the store has no office; the office gains
- * staff lockers. Placed through the shared primitive on the store level's grid (local height frame, lifted with the rest).
+ * The back rooms (already shelved / furnished by the station dresser under their room purposes): staff lockers in the office, else
+ * the stock room (else a tall cabinet there); the stock room gains openable cartons and a storage tote, and a staff desk with a chair
+ * when the store has no office. Placed through the shared primitive on the store level's grid (local height frame, lifted with the
+ * rest). True when the staff lockers / cabinet found a wall (else the caller puts the lockers in the staff corner).
  */
 function backRooms(kit: AnchorKit, res: HobbyStoreResult, add: Add): boolean {
   const L = kit.layout, rooms = kit.an.stock.map(id => L.areas[id]).filter((a): a is Area => !!a);
