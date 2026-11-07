@@ -735,7 +735,7 @@ export function stairWallZones(p: Piece, kind: WallKind, pitch: ((u: number) => 
 export interface CeilRun { level: number; row: number; x0: number; x1: number; y: number; area: number; voidCell: boolean }
 
 /**
- * Ceiling runs of every level: each open, non-ramp cell's band ceiling, unless another band of the
+ * Ceiling runs of every level: each open, non-ramp cell's band ceiling (+ a capped open well's ramp cells), unless another band of the
  * column starts right there (the space continues upward). `skip` excludes cells (door rects).
  */
 export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: number, i: number) => boolean): CeilRun[] {
@@ -744,7 +744,10 @@ export function ceilingRuns(levels: Level[], cols: LevelColumns, skip?: (level: 
   const W = cols.W, H = cols.H;
   const ok = (L: number, i: number): number => {
     const g = levels[L].grid;
-    if (!isOpenCell(g.cells[i]) || g.rampIdx[i] >= 0 || (skip && skip(L, i))) return NaN;
+    // (task studio-skywalk-variety-20261107-231448-01, user bug: "a hole in the roof above the stairs") a ramp cell has no flat ceiling
+    // (its flight draws a pitch-following one) — EXCEPT a capped open well (Ramp.capCeil, the Skyways runs): its band rises to the
+    // well's own ceiling, which nothing else draws (traversalBuilder skips the following ceiling of an open well)
+    if (!isOpenCell(g.cells[i]) || (g.rampIdx[i] >= 0 && !g.ramps[g.rampIdx[i]].capCeil) || (skip && skip(L, i))) return NaN;
     // Task office-overhaul-20261030 (lane STRUCT): open sky (the roof's nominal band top, the hatch shaft above it): no ceiling.
     // Task reactor-submit-roof-fog-20261102 (lane ROOF): with an opening mask (LevelSky.open) only its cells; the rest keep the roof.
     if (sky && cellCeil(g, i) >= sky.ceil - 0.01 && (!sky.open || sky.open[i] === 1)) return NaN;

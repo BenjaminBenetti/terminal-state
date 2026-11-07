@@ -14,7 +14,7 @@ import {CELL, rampHeight} from '../src/gen/grid';
 import {Player} from '../src/player/player';
 import type {StationLayout} from '../src/gen/stationTypes';
 import type {StairFlight} from '../src/gen/traversal';
-import {cellCeil} from '../src/world/levelGeometry';
+import {LevelColumns, cellCeil, ceilingRuns, stationLevels} from '../src/world/levelGeometry';
 import {skywaysEscalatorFlights} from '../src/world/traversalBuilder';
 
 const DT = 1 / 60;
@@ -71,6 +71,30 @@ describe('Skyways stairs (user bug: low bulkhead over the approach, invisible ba
           expect(cellCeil(g, g.idx(cx, cy)), `seed ${seed} flight ${f.id} drawn ceiling at ${u}`).toBeCloseTo(well, 3);
         }
       }
+    }
+  });
+
+  // (task studio-skywalk-variety-20261107-231448-01, user bug + screenshot: "a hole in the roof above the initial stairs up from the
+  // subway ... the roof is missing above them") the band above was right, but NOTHING DREW the well's ceiling over the flight cells
+  // (ceilingRuns skipped every ramp cell; an open well draws no pitch-following ceiling): the storey above / the open sky showed through.
+  it('every open well has a DRAWN ceiling over its flights at the well ceiling (no hole into the storey above / the sky)', () => {
+    for (const [seed, v] of [[1, undefined], [2, undefined], [4, undefined], [103855126, 3], [4, 2]] as [number, number | undefined][]) {
+      const l = gen(seed, v), levels = stationLevels(l), cols = new LevelColumns(levels);
+      const runs = ceilingRuns(levels, cols);
+      const covered = (lv: number, i: number, y: number) => runs.some(r => r.level === lv && r.row === Math.floor(i / cols.W) && i % cols.W >= r.x0 && i % cols.W < r.x1 && Math.abs(r.y - y) < 1e-3);
+      let cells = 0;
+      for (const f of l.traversal.stairs) {
+        const lk = l.levelLinks.find(k => k.traversalId === f.id);
+        if (!lk) continue;
+        const g = l.levels[lk.lower].grid, R = g.ramps[f.ramp], well = l.areas[f.area].ceil;
+        for (let y = R.y; y < R.y + R.h; y++) for (let x = R.x; x < R.x + R.w; x++) {
+          const i = g.idx(x, y);
+          // the owner of the run's (deduplicated) band draws it: one of the two storeys the run joins
+          expect(covered(lk.lower, i, well) || covered(lk.lower + 1, i, well), `seed ${seed} v${v ?? 'cur'} flight ${f.id} cell ${x},${y}`).toBe(true);
+          cells++;
+        }
+      }
+      expect(cells, `seed ${seed}`).toBeGreaterThan(100);
     }
   });
 
