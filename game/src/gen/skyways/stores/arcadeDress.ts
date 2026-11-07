@@ -30,10 +30,12 @@ import {CELL, FLOOR} from '../../grid';
 import {PROP_DEFS, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../../props';
 import {begin, commit, doorSide as doorSideOf, makePlaceCtx, mountProp, rollback, tryPlaceProp, wallSpot, WALL_MOUNT_Y, type PlaceCtx} from '../../placeKit';
 import {stockVariant} from '../../purposeShapes';
-import type {Area, Side, StationLayout} from '../../stationTypes';
+import {isLootHolderKind} from '../../../items/loot';
+import type {Area, Door, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {doorPoint, hallFrame, toWorld, uvXZ, xzUV, type HallFrame} from '../addonFrame';
 import {ShopsBDresser, quarterYaw, type Wall} from '../destinations/skywaysShopsBKit';
+import {DEST_POSTERS_OF} from '../destinations/art';
 
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const upCell = (t: number) => Math.ceil(t / CELL - 1e-6) * CELL;
@@ -107,6 +109,60 @@ class ArcadePlan {
     this.ps = d.entryU >= this.W / 2 ? 'L' : 'R';
     this.cl = this.ps === 'L' ? 'R' : 'L';
     this.segs = this.pieces.flatMap(p => this.wallSegs(p));
+    this.doors = L.doors.filter(q => this.ids.has(q.a) || this.ids.has(q.b));
+    for (const q of this.doors) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) if (d.g.inBounds(x, y)) this.doorCells.add(d.g.idx(x, y));
+  }
+
+  // --- REACH: a 1 m wide walk from the storefront to every holder the arcade placed and to every back-room door --------------------------
+  /** The store floor's doors (the storefront and the back rooms') and their cells. */
+  private readonly doors: Door[];
+  private readonly doorCells = new Set<number>();
+  private stamp: Int32Array | null = null;
+  private stampCur = 0;
+  private txDepth = 0;
+  /**
+   * Blocks of 2 x 2 free cells (a 1 m square of open floor) reached from the storefront over the store's floor pieces: every floor
+   * holder the arcade placed and every back-room door has one within a cell of it. O(floor cells + holders).
+   */
+  private reachOK(): boolean {
+    const g = this.d.g, n = g.w * g.h;
+    if (!this.stamp || this.stamp.length !== n) { this.stamp = new Int32Array(n); this.stampCur = 0; }
+    const st = this.stamp, cur = ++this.stampCur;
+    const free = (x: number, y: number) => { if (!g.inBounds(x, y)) return false; const i = g.idx(x, y); return g.cells[i] === FLOOR && !g.blocked[i] && (this.ids.has(g.area[i]) || this.doorCells.has(i)); };
+    const blk = (x: number, y: number) => free(x, y) && free(x + 1, y) && free(x, y + 1) && free(x + 1, y + 1);
+    const stack: number[] = [];
+    for (const q of this.doors) if (q.shopfront) for (let y = q.y - 2; y <= q.y + q.h + 1; y++) for (let x = q.x - 2; x <= q.x + q.w + 1; x++) if (blk(x, y) && st[g.idx(x, y)] !== cur) { st[g.idx(x, y)] = cur; stack.push(g.idx(x, y)); }
+    while (stack.length) {
+      const i = stack.pop()!, x = i % g.w, y = (i - x) / g.w;
+      for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) if (blk(nx, ny) && st[g.idx(nx, ny)] !== cur) { st[g.idx(nx, ny)] = cur; stack.push(g.idx(nx, ny)); }
+    }
+    const hit = (x0: number, y0: number, x1: number, y1: number) => {
+      for (let y = y0 - 2; y <= y1 + 1; y++) for (let x = x0 - 2; x <= x1 + 1; x++) if (g.inBounds(x, y) && st[g.idx(x, y)] === cur) return true;
+      return false;
+    };
+    for (const q of this.doors) if (!q.shopfront && !hit(q.x, q.y, q.x + q.w - 1, q.y + q.h - 1)) return false;
+    for (const p of this.d.placed) {
+      if (p.host !== undefined || p.mounted || !this.ids.has(p.area) || !isLootHolderKind(p.kind)) continue;
+      const [x0, y0] = g.cellOf(p.x - p.hx, p.z - p.hz), [x1, y1] = g.cellOf(p.x + p.hx - 0.01, p.z + p.hz - 0.01);
+      if (!hit(x0, y0, x1, y1)) return false;
+    }
+    return true;
+  }
+  /** All or nothing, and REACH still holds afterwards (nested calls: the outermost checks). */
+  private txn(fn: () => boolean): boolean {
+    if (this.txDepth) return fn();
+    this.txDepth++;
+    try { return this.d.tx(() => fn() && this.reachOK()); } finally { this.txDepth--; }
+  }
+  /** d.put under REACH. */
+  private putG(kind: PropKind, u: number, v: number, yaw: number, o: Parameters<ShopsBDresser['put']>[4] = {}): PropPlacement | null {
+    let p: PropPlacement | null = null;
+    return this.txn(() => !!(p = this.d.put(kind, u, v, yaw, o))) ? p : null;
+  }
+  /** d.putRow under REACH. */
+  private rowG(items: Parameters<ShopsBDresser['putRow']>[0], a: Area, front: number): PropPlacement[] {
+    let got: PropPlacement[] = [];
+    return this.txn(() => (got = this.d.putRow(items, a, front)).length > 0) ? got : [];
   }
 
   private add(role: string, ...ps: (PropPlacement | null | undefined)[]): PropPlacement[] {
@@ -181,8 +237,12 @@ class ArcadePlan {
       list.push({kind: k, x, z, rot: yaw, variant});
       at += w + gap;
     }
-    if (list.length === 1 && !front) { const it = list[0]; const p = this.d.putXZ(it.kind, it.x, it.z, it.rot, {area: s.area, variant: it.variant}); return p ? [p] : []; }
-    return this.d.putRow(list, s.area, front);
+    if (list.length === 1 && !front) {
+      const it = list[0];
+      let p: PropPlacement | null = null;
+      return this.txn(() => !!(p = this.d.putXZ(it.kind, it.x, it.z, it.rot, {area: s.area, variant: it.variant}))) && p ? [p] : [];
+    }
+    return this.rowG(list, s.area, front);
   }
   /** Runs of up to `run` units of `kind` along [from, to] of a segment (cell-aligned starts, shrinking runs, `gapRuns` m between runs). */
   private fillSeg(s: Seg, kind: PropKind, from: number, to: number, o: {run?: number; max?: number; front?: number; gap?: number; gapRuns?: number; variant?: number} = {}): PropPlacement[] {
@@ -286,7 +346,10 @@ class ArcadePlan {
     const main = (q: Seg) => q.area === d.floor, side = (q: Seg) => q.w === 'L' || q.w === 'R';
     const rank = (q: Seg) => (main(q) ? 0 : 6) + (side(q) ? (q.t0 < 0.6 ? 0 : 2) + (q.w === this.ps ? 0 : 1) : 4);
     const segs = this.segs.filter(q => q.w !== 'F' && q.t1 - q.t0 >= 3.0).sort((p, q) => rank(p) - rank(q) || (q.t1 - q.t0) - (p.t1 - p.t0));
-    for (const s of segs) for (let k = 0; k < runs.length; k++) {
+    // (the main floor's walls first, the full counter before a shorter one; then the other pieces' walls the same way)
+    const order: [Seg, number][] = [];
+    for (const inMain of [true, false]) for (let k = 0; k < runs.length; k++) for (const s of segs) if (main(s) === inMain) order.push([s, k]);
+    for (const [s, k] of order) {
       const kinds = runs[k], back = backs[k], runW = kinds.reduce((a, q) => a + PROP_DEFS[q].w, 0);
       const backW = back.reduce((a, [q]) => a + PROP_DEFS[q].w + 0.25, -0.25);
       const backD = Math.max(...back.map(([q]) => PROP_DEFS[q].d)), ub = Math.ceil((0.03 + backD + 0.95) / CELL - 1e-6) * CELL;
@@ -296,7 +359,8 @@ class ArcadePlan {
         for (const t0 of starts) {
           if (t0 + Math.max(runW, backW) > s.t1 - 0.4 || t0 < s.t0) continue;
           const mods: PropPlacement[] = [], units: PropPlacement[] = [];
-          const ok = d.tx(() => {
+          let reg: PropPlacement | null = null;
+          const ok = this.txn(() => {
             let t = t0;
             for (const q of kinds) {
               const def = PROP_DEFS[q], [u, v] = this.offWall(s, t + def.w / 2, ub + def.d / 2);
@@ -314,14 +378,18 @@ class ArcadePlan {
               b = snapCell(b) + PROP_DEFS[q].w + 0.25;
             }
             const till = mods.find(p => p.kind === 'shopCounter');
-            if (till) this.add('register', d.onTop(till, 'cashRegister', r3(PROP_DEFS.shopCounter.w / 2 - PROP_DEFS.cashRegister.w / 2 - 0.12), 0, SHOP_COUNTER_TOP_Y));
+            if (till) reg = d.onTop(till, 'cashRegister', r3(PROP_DEFS.shopCounter.w / 2 - PROP_DEFS.cashRegister.w / 2 - 0.12), 0, SHOP_COUNTER_TOP_Y);
             return true;
           });
           if (!ok) continue;
+          this.add('register', reg);
           for (const p of [...mods, ...units]) if (p.kind === 'glassCounter' || p.kind === 'glassDisplayCabinet') p.purpose = ARCADE_HOLDER_PURPOSE.prize;
           this.add('counter', ...mods);
           this.add('counterBack', ...units);
           this.wrap = {seg: s, t0, t1: t0 + runW, back1: t0 + Math.max(runW, backW)};
+          // the staff aisle stays open out past both ends of the run (nothing placed later pinches its mouths)
+          const mid = (0.03 + backD + ub) / 2, [au, av] = this.offWall(s, t0 - 1.2, mid), [bu, bv] = this.offWall(s, t0 + Math.max(runW, backW) + 1.2, mid);
+          d.keepUV(au, av, bu, bv, Math.max(0.5, (ub - 0.03 - backD) / 2));
           return;
         }
       }
@@ -343,7 +411,7 @@ class ArcadePlan {
       if (got.length >= 2 || Math.abs(t - eu) < half + 0.9) continue;
       if (got.some(p => Math.hypot(...this.uvOf(p).map((c, i) => c - [t, 0][i]) as [number, number]) < 1.2 && Math.abs(this.uvOf(p)[0] - t) < 1.2)) continue;
       const [u, v, yaw] = this.onWall(s, t, k);
-      const p = d.put(k, u, v, yaw, {front: 0.8, area: s.area});
+      const p = this.putG(k, u, v, yaw, {front: 0.8, area: s.area});
       if (p) got.push(p);
     }
     // at the counter's end (facing its customers)
@@ -357,7 +425,7 @@ class ArcadePlan {
     }
     if (!got.length) {
       for (const [u, v] of [[eu - half - 1.2, 1.6], [eu + half + 1.2, 1.6], [eu - half - 1.2, 2.4], [eu + half + 1.2, 2.4]] as [number, number][]) {
-        const area = this.areaAt(u, v), p = area ? d.put(k, u, v, u < eu ? this.fr.plusU : this.fr.minusU, {front: 0.8, area}) : null;
+        const area = this.areaAt(u, v), p = area ? this.putG(k, u, v, u < eu ? this.fr.plusU : this.fr.minusU, {front: 0.8, area}) : null;
         if (p) { got.push(p); break; }
       }
     }
@@ -368,7 +436,7 @@ class ArcadePlan {
 
   /** The giant teddy prize on the floor beside the counter's customer side. */
   private teddy(): void {
-    const d = this.d, k = ARCADE_FLOOR_KINDS.teddy, mods = this.roles.counter ?? [];
+    const k = ARCADE_FLOOR_KINDS.teddy, mods = this.roles.counter ?? [];
     const ref = mods[mods.length - 1] ?? mods[0];
     const spots: [number, number][] = [];
     if (ref && this.wrap) {
@@ -382,7 +450,7 @@ class ArcadePlan {
     }
     for (let v = 1.5; v <= Math.min(this.D - 1.5, 4.0); v += 0.5) for (const du of [3, 4, 5, 6]) spots.push([this.d.entryU + (this.ps === 'L' ? -du : du), v]);
     for (const [u, v] of spots) {
-      const area = this.areaAt(u, v), p = area ? d.put(k, snapCell(u), snapCell(v), this.fr.toFront, {ring: 0.4, area}) : null;
+      const area = this.areaAt(u, v), p = area ? this.putG(k, snapCell(u), snapCell(v), this.fr.toFront, {ring: 0.4, area}) : null;
       if (p) { this.add('teddy', p); return; }
     }
     this.skip('giant teddy');
@@ -422,10 +490,17 @@ class ArcadePlan {
   /** Claw cranes near the entry on the other side (else any side wall): a bank of 2-4. */
   private claws(): void {
     const k = ARCADE_FLOOR_KINDS.claw;
-    const n = this.d.rng.int(2, 4);
-    for (const s of [...this.sideSegs(this.cl, 2), ...this.sideSegs(this.ps, 2).filter(q => q !== this.wrap?.seg)]) {
-      const got = this.fillSeg(s, k, s.t0 < 0.6 ? 1.0 : s.t0 + 0.3, s.t1 - 0.3, {run: n, max: n, front: 1.0, gap: 0.05});
-      if (got.length) { this.add('claw', ...got); return; }
+    const n = this.d.rng.int(2, 4), eu = this.d.entryU;
+    // near the entry: the claws' side wall from the storefront, the storefront wall's solid stretches (the window display), then any
+    // side wall; a bank of two or more first, a single crane only as the last resort
+    const front = (q: Seg) => q.area === this.d.floor && q.t0 < 0.6;
+    const cands = [...this.sideSegs(this.cl, 2).filter(front), ...this.segs.filter(q => q.w === 'F').sort((p, q) => Math.abs((q.t0 + q.t1) / 2 - eu) - Math.abs((p.t0 + p.t1) / 2 - eu)),
+      ...this.sideSegs(this.cl, 2).filter(q => !front(q)), ...this.sideSegs(this.ps, 2).filter(q => q !== this.wrap?.seg)];
+    for (const min of [2, 1]) for (const s of cands) {
+      const from = s.w === 'F' ? s.t0 + 0.3 : s.t0 < 0.6 ? 1.0 : s.t0 + 0.3;
+      let got: PropPlacement[] = [];
+      if (!this.txn(() => (got = this.fillSeg(s, k, from, s.t1 - 0.3, {run: n, max: n, front: 1.0, gap: 0.05})).length >= min)) got = [];
+      if (got.length >= min) { this.add('claw', ...got); return; }
     }
     this.skip('claw cranes');
   }
@@ -452,7 +527,7 @@ class ArcadePlan {
       const [x, z] = this.d.xz(u, v);
       if (out.some(p => Math.hypot(p.x - x, p.z - z) < apart)) continue;
       const area = this.areaAt(u, v);
-      const p = area ? this.d.put(kind, u, v, yaw(), {ring, area}) : null;
+      const p = area ? this.putG(kind, u, v, yaw(), {ring, area}) : null;
       if (p) { if (purpose) p.purpose = purpose; out.push(p); }
     }
     return out;
@@ -530,7 +605,7 @@ class ArcadePlan {
       if (u1 - u0 < 2.2) continue;
       const plan: (keyof typeof BAND)[] = [];
       let R = v1 - v0;
-      for (const b of ['CAB2', 'AH', 'CAB2', 'PB1', 'AH', 'CAB1'] as const) if (R >= BAND[b]) { plan.push(b); R -= BAND[b]; }
+      for (const b of ['CAB2', 'PB1', 'AH', 'CAB2', 'AH', 'CAB1'] as const) if (R >= BAND[b]) { plan.push(b); R -= BAND[b]; }
       if (!plan.length && R >= BAND.CAB1) plan.push('CAB1');
       let v = v0 + Math.max(0, R / 2);
       for (const b of plan) {
@@ -569,7 +644,7 @@ class ArcadePlan {
       if (prev && Math.abs(this.uvOf(p)[0] - this.uvOf(prev)[0]) < PROP_DEFS[k].w + 0.1) last.push(p); else runs.push([p]);
     }
     for (const run of runs) for (let n = run.length; n >= 1; n--) {
-      const got = this.d.putRow(run.slice(0, n).map(p => { const [x, z] = this.d.xz(this.uvOf(p)[0], seam + cd / 2); return {kind: k, x, z, rot: this.fr.toBack}; }), q, 1.0);
+      const got = this.rowG(run.slice(0, n).map(p => { const [x, z] = this.d.xz(this.uvOf(p)[0], seam + cd / 2); return {kind: k, x, z, rot: this.fr.toBack}; }), q, 1.0);
       if (got.length) { this.add('cabinetRow', ...got); break; }
     }
   }
@@ -580,7 +655,7 @@ class ArcadePlan {
       let got: PropPlacement[] = [];
       for (let n = Math.min(per, Math.floor((u1 - u) / w)); n >= 2 && !got.length; n--) {
         const items = Array.from({length: n}, (_, i) => { const [x, z] = this.d.xz(u + PROP_DEFS[kind].w / 2 + i * w, v); return {kind, x, z, rot: yaw}; });
-        got = this.d.putRow(items, q, front);
+        got = this.rowG(items, q, front);
       }
       if (got.length) { out.push(...got); u = snapCell(u + got.length * w + 1.4 + 0.25); } else u += CELL;
     }
@@ -600,8 +675,21 @@ class ArcadePlan {
   /** The arcade's posters on the main floor's walls and on the other pieces' (solid wall only, never glazing / doors). */
   private posters(): void {
     const d = this.d;
-    this.add('poster', ...d.posters(d.rng.int(2, 3)));
+    this.add('poster', ...d.posters(d.rng.int(1, 2)));
     for (const q of this.pieces.slice(1)) this.add('poster', ...d.posters(1, ['L', 'R', 'B'], q, hallFrame(q, d.anchor.front)));
+    // high on the walls over the cabinet banks / machines (an arcade's marquee row: base 2.1 m, clear of the 1.8-2.05 m machines)
+    const want = d.rng.int(3, 4), piece = DEST_POSTERS_OF.arcade, out: PropPlacement[] = [];
+    const spots: [Seg, number][] = [];
+    for (const s of this.segs) if (s.w !== 'F') for (let t = s.t0 + 0.7; t <= s.t1 - 0.7; t += 0.5) spots.push([s, t]);
+    for (const [s, t] of d.rng.shuffle(spots)) {
+      if (out.length >= want) break;
+      const [x, z] = d.xz(...(s.w === 'L' || s.w === 'R' ? [s.line, t] : [t, s.line]) as [number, number]);
+      if ([...out, ...(this.roles.poster ?? [])].some(p => Math.hypot(p.x - x, p.z - z) < 3.0)) continue;
+      const side = d.side(s.w);
+      const p = d.mount(s.area, side, side === 'N' || side === 'S' ? x : z, 'skyDPoster', 2.1, piece[out.length % piece.length]);
+      if (p) out.push(p);
+    }
+    this.add('poster', ...out);
     if (!this.roles.poster?.length) this.skip('posters');
   }
 
@@ -626,6 +714,44 @@ class ArcadePlan {
           if (ctx.g.inBounds(cx, cy) && ctx.g.area[ctx.g.idx(cx, cy)] === id && !ctx.g.blocked[ctx.g.idx(cx, cy)]) ctx.keep[ctx.g.idx(cx, cy)] = 1;
         }
       }
+      // REACH: every floor piece of the room stays at the end of a 1 m wide walk from its door (blocks of 2 x 2 free cells); a new
+      // piece is kept only when it is reached and nothing reached before is cut off (the station dresser's shelving included)
+      const g = ctx.g, roomDoors = d.layout.doors.filter(q => q.a === id || q.b === id), doorCells = new Set<number>();
+      for (const q of roomDoors) for (let y = q.y; y < q.y + q.h; y++) for (let x = q.x; x < q.x + q.w; x++) if (g.inBounds(x, y)) doorCells.add(g.idx(x, y));
+      const free = (x: number, y: number) => { if (!g.inBounds(x, y)) return false; const i = g.idx(x, y); return g.cells[i] === FLOOR && !g.blocked[i] && (g.area[i] === id || doorCells.has(i)); };
+      const reached = (): Set<PropPlacement> => {
+        const blk = (x: number, y: number) => free(x, y) && free(x + 1, y) && free(x, y + 1) && free(x + 1, y + 1);
+        const seen = new Set<number>(), stack: number[] = [];
+        for (const q of roomDoors) for (let y = q.y - 2; y <= q.y + q.h + 1; y++) for (let x = q.x - 2; x <= q.x + q.w + 1; x++) if (blk(x, y) && !seen.has(g.idx(x, y))) { seen.add(g.idx(x, y)); stack.push(g.idx(x, y)); }
+        while (stack.length) {
+          const i = stack.pop()!, x = i % g.w, y = (i - x) / g.w;
+          for (const [nx, ny] of [[x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]]) if (blk(nx, ny) && !seen.has(g.idx(nx, ny))) { seen.add(g.idx(nx, ny)); stack.push(g.idx(nx, ny)); }
+        }
+        const out = new Set<PropPlacement>();
+        for (const p of d.layout.props) {
+          if (p.area !== id || p.mounted || p.host !== undefined) continue;
+          const [x0, y0] = g.cellOf(p.x - p.hx, p.z - p.hz), [x1, y1] = g.cellOf(p.x + p.hx - 0.01, p.z + p.hz - 0.01);
+          let ok = false;
+          for (let y = y0 - 2; y <= y1 + 1 && !ok; y++) for (let x = x0 - 2; x <= x1 + 1 && !ok; x++) ok = g.inBounds(x, y) && seen.has(g.idx(x, y));
+          if (ok) out.add(p);
+        }
+        return out;
+      };
+      // (the reached set as of the last kept piece: rolled-back attempts leave the room as it was)
+      let reachNow = reached();
+      /** Keeps the pieces placed since `begin` only when REACH holds (else rolls them back). */
+      const keepIf = (added: readonly PropPlacement[]): boolean => {
+        const after = reached();
+        if (added.every(p => after.has(p)) && [...reachNow].every(p => after.has(p))) { commit(ctx); reachNow = after; return true; }
+        rollback(ctx);
+        return false;
+      };
+      const place = (kind: PropKind, x: number, z: number, rot: number, o: {front?: number; variant?: number; ring?: number}): PropPlacement | null => {
+        begin(ctx);
+        const p = tryPlaceProp(ctx, room, kind, r3(x), r3(z), rot, o);
+        if (!p) { rollback(ctx); return null; }
+        return keepIf([p]) ? p : null;
+      };
       // (every wall spot in turn, quarter-metre steps, the sides in a seeded order: a lined stock room still finds its free stretches)
       const sides = d.rng.shuffle(['N', 'E', 'S', 'W'] as Side[]);
       const put = (role: string, kind: PropKind, o: {front?: number; variant?: number; purpose?: string} = {}) => {
@@ -634,7 +760,7 @@ class ArcadePlan {
           const alongX = side === 'N' || side === 'S', lo = (alongX ? room.x : room.y) * CELL, hi = (alongX ? room.x + room.w : room.y + room.h) * CELL, hw = PROP_DEFS[kind].w / 2;
           for (let t = lo + hw + 0.05; t <= hi - hw - 0.05 + 1e-6 && !p; t += 0.25) {
             const s = wallSpot(room, side, r3(t), kind);
-            p = tryPlaceProp(ctx, room, kind, r3(s.x), r3(s.z), s.rot, {front: o.front, variant: o.variant});
+            p = place(kind, s.x, s.z, s.rot, {front: o.front, variant: o.variant});
           }
           if (p) break;
         }
@@ -653,7 +779,7 @@ class ArcadePlan {
         for (let x = room.x * CELL + 0.5; x <= (room.x + room.w) * CELL - 0.5; x += 0.25) for (let z = room.y * CELL + 0.5; z <= (room.y + room.h) * CELL - 0.5; z += 0.25) spots.push([x, z]);
         spots.sort((a, b) => Math.hypot(a[0] - cx, a[1] - cz) - Math.hypot(b[0] - cx, b[1] - cz));
         for (const [x, z] of spots) {
-          const p = tryPlaceProp(ctx, room, kind, r3(x), r3(z), faceDoor, {ring});
+          const p = place(kind, x, z, faceDoor, {ring});
           if (!p) continue;
           p.y = r3(p.y + base);
           if (purpose) p.purpose = purpose;
@@ -691,14 +817,12 @@ class ArcadePlan {
                 ch = tryPlaceProp(ctx, room, 'rollingToolChest', r3(wx), r3(wz), dk.rot, {});
                 if (ch) break;
               }
-              if (dk && (chest || ch)) {
-                commit(ctx);
-                desk = dk;
-                for (const p of [dk, ...(ch ? [ch] : [])]) { p.y = r3(p.y + base); p.purpose = ARCADE_HOLDER_PURPOSE.tech; d.placed.push(p); this.add('workshop', p); }
-                if (ch) chest = ch;
-                break;
-              }
-              rollback(ctx);
+              if (!dk || !(chest || ch)) { rollback(ctx); continue; }
+              if (!keepIf(ch ? [dk, ch] : [dk])) continue; // (rolled back)
+              desk = dk;
+              for (const p of [dk, ...(ch ? [ch] : [])]) { p.y = r3(p.y + base); p.purpose = ARCADE_HOLDER_PURPOSE.tech; d.placed.push(p); this.add('workshop', p); }
+              if (ch) chest = ch;
+              break;
             }
             if (desk) break;
           }
