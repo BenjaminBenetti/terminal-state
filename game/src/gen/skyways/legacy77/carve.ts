@@ -53,6 +53,8 @@ export const RUN = transitSpecs(STOREY);
 /** Cells of a stair run (pitch + top landing) for one storey. */
 export const RUN_CELLS = RUN.cells;
 const LANE_W = {escalator: 3, stair: 5} as const;
+/** Open stair wells' ramp headroom (capped by the well's ceiling: Ramp.capCeil). */
+const RUN_OPEN_HEADROOM = 40;
 const lanesW = (l: RunLanes) => l.reduce((q, k) => q + LANE_W[k], 0);
 
 export interface RunLaneCarve { kind: 'escalator' | 'stair'; rect: CellRect; flights: number[] }
@@ -1592,14 +1594,16 @@ function carveRun(k: Kit, id: string, building: string, lower: number, rect: Cel
   const area = k.addArea(rect, 'passage', 'stair-core', ceil, -1, {...(lower ? {level: lower, floorY: BASES[lower]} : {}), also: [hi], role: 'stair', publicSpace: true, label});
   const out: RunLaneCarve[] = [];
   let off = 0;
-  const spec = (kind: 'escalator' | 'stair'): StairSpec => (kind === 'escalator' ? RUN.escalator : RUN.stair);
+  // (task studio-skyways-rework-20261107-054512-01, user bug: a low bulkhead hung over the stair approach) an OPEN well: the flights'
+  // band rises to the well's ceiling (capCeil: capped by ceil[i] below), never a 2.5 m soffit following the flight
+  const spec = (kind: 'escalator' | 'stair'): StairSpec => ({...(kind === 'escalator' ? RUN.escalator : RUN.stair), headroom: RUN_OPEN_HEADROOM});
   for (const kind of lanes) {
     const w = LANE_W[kind];
     const r: CellRect = axis === 'x' ? {x: rect.x, y: rect.y + off, w: rect.w, h: w} : {x: rect.x + off, y: rect.y, w, h: rect.h};
     off += w;
     const fl: StairFlight[] = layStairRun([k.grid(lower), k.grid(hi)], r, area.id, axis, from, BASES[hi], BASES[lower], spec(kind));
     const ids: number[] = [];
-    for (const q of fl) { q.id = k.flights.length; q.spec = kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); }
+    for (const q of fl) { q.id = k.flights.length; q.spec = kind === 'escalator' ? 'escalator' : 'transit'; ids.push(q.id); k.flights.push(q); k.grid(lower).ramps[q.ramp].capCeil = true; }
     out.push({kind, rect: r, flights: ids});
   }
   // an open well: both storeys' bands rise to the upper storey's ceiling over the whole run

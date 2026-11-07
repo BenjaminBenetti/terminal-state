@@ -296,6 +296,9 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
  * between its lanes — on the lower storey following the pitch from the bottom edge to the top of the flight, on the upper storey a flat
  * run over the whole length (the upper floor's well guard) — and the WELL END: a flat rail on the upper storey across the bottom edge.
  */
+/** How far an escalator's bottom newel (and its glass balustrade) reaches beyond the flight's foot (world/traversalBuilder.ts ESC.newelBottom). */
+const SKYWAYS_ESC_NEWEL_BOTTOM = 1.2;
+
 function runRails(sc: SkywaysCarve, ox: number, oy: number, flights: readonly StairFlight[]): RailRun[] {
   const out: RailRun[] = [];
   const W = (cx: number) => r3((cx - ox) * CELL), Z = (cy: number) => r3((cy - oy) * CELL);
@@ -317,9 +320,16 @@ function runRails(sc: SkywaysCarve, ox: number, oy: number, flights: readonly St
         ? {level, x0: r3(s0), z0: along, x1: r3(s1), z1: along, y0: r3(y0), y1: r3(y1), nx: 0, nz: normal, kind: 'railing', h: 1.0, ...(hidden ? {hidden: true} : {})}
         : {level, x0: along, z0: r3(s0), x1: along, z1: r3(s1), y0: r3(y0), y1: r3(y1), nx: normal, nz: 0, kind: 'railing', h: 1.0, ...(hidden ? {hidden: true} : {})});
     };
+    // (task studio-skyways-rework-20261107-054512-01, user bug: invisible solid barriers at varying stair seams) a seam between two
+    // fixed stair lanes has NO rail (one wide stair, the same pitch); an escalator lane's sides keep the collision of the glass
+    // balustrade world/traversalBuilder.ts now DRAWS (its bottom newel included); the outer pitch rails stay drawn railings
+    const kindAt = (i: number): string[] => i === 0 ? [rc.lanes[0].kind] : i === 1 ? [rc.lanes[rc.lanes.length - 1].kind] : [rc.lanes[i - 2].kind, rc.lanes[i - 1].kind];
+    const beyond = botEdge + (rc.from === 'hi' ? -1 : 1) * SKYWAYS_ESC_NEWEL_BOTTOM;
     lines.forEach((along, i) => {
-      const inner = i >= 2, normal = i === 1 ? 1 : -1;
-      seg(lo, along, botEdge, yLo, sTop, yHi, normal, inner);
+      const inner = i >= 2, normal = i === 1 ? 1 : -1, esc = kindAt(i).includes('escalator');
+      if (inner && !esc) return;
+      if (esc) seg(lo, along, beyond, yLo, botEdge, yLo, normal, true);
+      seg(lo, along, botEdge, yLo, sTop, yHi, normal, esc);
       seg(hi, along, inner ? sTop : botEdge, yHi, topEdge, yHi, normal, inner);
     });
     out.push(rc.axis === 'x'
