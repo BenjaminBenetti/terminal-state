@@ -655,3 +655,50 @@ describe('train prop cargo: the REAL Game methods on a minimal shell', () => {
     expect(hook).toBeLessThan(Math.min(keys, drop, world));
   });
 });
+
+describe('train prop cargo: generic for every movable kind (present and future), no cargo whitelist', () => {
+  // the movable kinds come from the game's own registry + movable trait at run time: a kind added later is in this list automatically
+  const MOVABLE = (Object.keys(PROP_DEFS) as PropKind[]).filter(k => dynamicKind(k)).sort();
+
+  it('the cargo modules name no prop kind (one generic path keyed on the movable trait; nothing per kind)', async () => {
+    const fs = await import('node:fs');
+    const kinds = new Set(Object.keys(PROP_DEFS));
+    for (const f of ['src/world/trainPropCargo.ts', 'src/run/trainCargo.ts']) {
+      const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const named = [...src.matchAll(/['"`]([A-Za-z][A-Za-z0-9]*)['"`]/g)].map(m => m[1]).filter(s => kinds.has(s));
+      expect(named.filter(k => k !== 'column'), f).toEqual([]); // (the ride collision's own footprint boxes are 'column' boxes, like the fuel carts')
+    }
+    expect(MOVABLE.length).toBeGreaterThanOrEqual(118);
+  });
+
+  it('EVERY movable kind (each family) arrives in the Subway\'s car from a record: drawn, loose, recorded back exactly', () => {
+    const fails: string[] = [];
+    const rec = (k: PropKind, i: number, n: number): CargoPropJSON => {
+      const d = PROP_DEFS[k], I = SPEC.interior, lx = I.x0 + 0.6 + ((I.x1 - I.x0 - 1.2) * i) / Math.max(1, n - 1);
+      // (a kind taller than the car's interior can only have been pushed in lying on its side: tipped over along the car's length)
+      const tall = d.h > SPEC.ceilingY - SPEC.floorY - 0.2, q = tall ? new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2) : new THREE.Quaternion();
+      return {id: `st-09:main#${1000 + MOVABLE.indexOf(k)}`, kind: k, variant: 0, w: Math.min(d.w, CARGO.size), d: Math.min(d.d, CARGO.size), h: Math.min(Math.max(d.h, 0.05), CARGO.size),
+        x: lx, y: SPEC.floorY + (tall ? d.w / 2 : 0), z: tall ? 0 : (i % 3 - 1) * 0.5, q: [+q.x.toFixed(5), +q.y.toFixed(5), +q.z.toFixed(5), +q.w.toFixed(5)]};
+    };
+    // (two arrivals: at most CARGO.maxProps aboard at once)
+    for (const batch of [MOVABLE.filter((_, i) => i % 2 === 0), MOVABLE.filter((_, i) => i % 2 === 1)]) {
+      const c = rig(SUB());
+      const recs = batch.map((k, i) => rec(k, i, batch.length));
+      expect(propsProblem(recs, {world: false, max: CARGO.maxProps})).toBeNull();
+      c.props.restoreProps(recs);
+      const L = SUB(), w = enter(c, L, KA);
+      for (const r of recs) {
+        const q = L.props.find(x => x.cargo === r.id);
+        if (!q) { fails.push(`${r.kind}: not appended`); continue; }
+        if (!(w.pd.index.inst.get(q)?.length || w.pd.states.get(q)?.parts?.length)) fails.push(`${r.kind}: not drawn`);
+        const l = looseOf(w, q);
+        if (!l) { fails.push(`${r.kind}: not loose`); continue; }
+        const back = c.props.recordOf(l, r.id, c.h.trainPlacement!);
+        if (back.kind !== r.kind || Math.abs(back.x - r.x) > 1e-3 || Math.abs(back.z - r.z) > 1e-3) fails.push(`${r.kind}: record changed`);
+      }
+      const all = c.props.props();
+      expect(new Set(all.map(r => r.id)).size).toBe(recs.length);
+    }
+    expect(fails).toEqual([]);
+  }, 240000);
+});

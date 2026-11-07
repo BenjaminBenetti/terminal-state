@@ -451,11 +451,11 @@ export class TrainPropCargo {
       // an arriving car: hidden until it stops (the riding copies show it meanwhile)
       const lp = h.physics.dynamicItems.loose().find(l => l.prop === a.prop);
       const w = lp ? this.withdraw(lp) : null;
-      const r = this.riding.find(x => x.rec.id === a.rec.id);
-      if (w && r) {
-        r.src = {...w, gen: this.gen};
-        if (!r.obj) this.makeCopy(r, w.parts.map(q => q.obj), w.matrix);
-      }
+      if (!w) continue;
+      let r = this.riding.find(x => x.rec.id === a.rec.id);
+      if (!r) { r = {rec: structuredClone(a.rec), obj: null, geos: [], mats: [], src: null}; this.riding.push(r); this.captured = true; } // (a pending one: it rides in too)
+      r.src = {...w, gen: this.gen};
+      if (!r.obj) this.makeCopy(r, w.parts.map(q => q.obj), w.matrix);
     }
     // the train's props are in this world now (the riding ones stay records until the stop)
     this.pending = this.pending.filter(r => !trainIds.has(r.id));

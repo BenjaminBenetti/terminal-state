@@ -14,7 +14,7 @@
 //    only when a post moved.
 
 import * as THREE from 'three';
-import type {PropPlacement} from '../gen/props';
+import {levelArtWanted, type PropPlacement} from '../gen/props';
 import type {StationLayout} from '../gen/stationTypes';
 import {SKYWAYS_ADDON_ART, SKYWAYS_STANCHION, type SkywaysAddonArtKey} from '../gen/skyways/addonKinds';
 import {SKYWAYS_ROPE, SKYWAYS_TURNTABLE_R} from '../gen/skyways/addonPrize';
@@ -164,7 +164,7 @@ export class SkywaysAddonRuntime {
 
   install(): this {
     const h = this.host;
-    h.sectionPreloads?.push(layout => (layout.skyways || layout.props.some(p => p.cargo) ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_ADDON_ART_WAIT_MS))]) : Promise.resolve()));
+    h.sectionPreloads?.push(layout => (levelArtWanted(layout, !!layout.skyways) ? Promise.race([this.preload(layout), new Promise<void>(r => setTimeout(r, SKYWAYS_ADDON_ART_WAIT_MS))]) : Promise.resolve()));
     h.sectionHooks.push({build: layout => this.build(layout), teardown: () => this.teardown()});
     h.frameHooks.push(() => this.frame());
     return this;

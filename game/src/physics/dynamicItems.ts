@@ -770,7 +770,8 @@ export class DynamicItems {
   /**
    * Task train-all-cargo: make `prop` loose with its body at the object matrix `at` — where its render is drawn now (a fresh placement:
    * its placement pose; a withdrawn prop: where it was withdrawn) — then move it to `target` (its exact carried pose: any yaw / tilt).
-   * The floor rule is not asked (the car's floor, a carried pose); the kind must be dynamic and nothing may rest on it. A resting
+   * The floor / nothing-on-top rules are not asked (the car's floor, a carried pose; carried props are adopted top-down); the kind must be
+   * dynamic. A resting
    * static body, as any loose prop at rest. False: already loose, not a dynamic kind, no render to drive or no physics world.
    */
   adoptLoose(prop: PropPlacement, index: number, at: THREE.Matrix4, target: THREE.Matrix4 = at): boolean {
@@ -821,8 +822,9 @@ export class DynamicItems {
     let e = this.ents.get(prop);
     if (e) return e;
     const ph = propPhysics(prop.kind);
-    // (task train-all-cargo: `at` = a carried prop adopted where it is drawn — the kind rule only, see adoptLoose)
-    if (at ? !dynamicKind(prop.kind) || this.supportsOther(prop) || prop.h <= 0.02 : !this.isDynamicProp(prop) || prop.h <= 0.02) return null;
+    // (task train-all-cargo: `at` = a carried prop adopted where it is drawn — the kind rule only, see adoptLoose: its upright placement box
+    // says nothing about its carried pose (a tall one lying on its side under the car's roof), and carried props go loose top-down)
+    if (at ? !dynamicKind(prop.kind) || prop.h <= 0.02 : !this.isDynamicProp(prop) || prop.h <= 0.02) return null;
     let meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
     // task office-props-physics-scale-20261030 (lane PHYS): the detach budget is full — hand a resting prop's render back first
     if ((!meshes || !meshes.length) && this.reclaim(1) > 0) meshes = this.detacher?.detachForPhysics(prop, index) ?? null;
