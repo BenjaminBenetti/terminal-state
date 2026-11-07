@@ -244,7 +244,8 @@ function skywaysInfo(layout: StationLayout, sc: SkywaysCarve, ox: number, oy: nu
   const groundY = BASES[1];
   const buildings = sc.buildings.map(bc => ({
     id: bc.b.id, name: bc.b.name, role: bc.b.role, rect: rectW(bc.b), top: r3(groundY + bc.b.height),
-    levels: [1, 2], ...(bc.atrium ? {atrium: {rect: rectW(bc.atrium), roofY: sc.roofY}} : {}), plan: bc.plan,
+    levels: bc.b.programme === 'gallery' ? [2] : [1, 2], ...(bc.atrium ? {atrium: {rect: rectW(bc.atrium), roofY: sc.roofY}} : {}), plan: bc.plan,
+    programme: bc.b.programme, // (layout version 4: what the building is; a bridge house has the bridge level only)
     ...(sc.foodCourt?.building === bc.b.id ? {foodCourt: {level: sc.foodCourt.level, area: sc.foodCourt.area}} : {}),
   }));
   if (buildings.find(b => b.id === f.station)) buildings.find(b => b.id === f.station)!.levels = [0, 1, 2];
