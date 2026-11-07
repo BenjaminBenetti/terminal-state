@@ -259,7 +259,9 @@ describe('the convention hall on the real seeds', () => {
       const recs = ad.convention!.statues;
       const roles = recs.map(s => s.role);
       for (const r of ['entrance-wave', 'washroom-point', 'stage-cheer', 'merch-bow']) expect(roles, `seed ${seed}`).toContain(r);
-      const want: Record<string, string> = {'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand'};
+      // (+ layout version 3, lane VENUE: the registration greeter and the photo lounge's pose on the venue floor beyond the hall)
+      const want: Record<string, string> = {'entrance-wave': 'wave', 'washroom-point': 'point', 'stage-cheer': 'cheer', 'merch-bow': 'bow', 'green-room-stand': 'stand',
+        'registration-wave': 'wave', 'photo-pose': 'cheer'};
       for (const s of recs) {
         expect(s.pose).toBe(want[s.role]);
         expect(s.level).toBe(ad.level);
