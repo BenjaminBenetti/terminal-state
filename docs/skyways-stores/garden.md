@@ -29,9 +29,14 @@ around an inset back room. Lanes are reserved from the entry to every door, and 
   taken, they go out on the floor.
 - **Bench field.**
   - Slatted plant benches (`skyDPlantBench`) stand end to end in runs, with 1.5 m between runs and 1.3 m aisles between lines.
-  - The runs go parallel to the storefront or into the depth, whichever holds more benches.
+  - The dresser tries runs parallel to the storefront and runs into the depth, each from several start depths (2.5 / 3.0 / 3.5 m).
+    Every option is a dry run, and the one holding the most benches wins.
+  - The field is placed before the entry band's free-standing racks and stands. A shallow floor keeps its bench lines; the seed
+    racks and flower stands then find room around them, or stand as islands deeper in.
   - Geranium pots fill about 60 % of each bench top.
-  - If the floor is too cut up for runs, tiered flower stands stand as islands instead.
+  - If fewer than two benches fit, tiered flower stands stand as islands instead. This happens when the lanes to the back rooms or
+    an inset back room leave no line for a second run. The dresser records the substitute in its result, as `bench runs: N fit
+    (lanes / inset back room), M flower-stand islands instead`, and the test accepts it only with that record.
 - **Hanging-basket zone.**
   - Basket rails (`storeGardenBasketRail`) hang over the benches and turn with them.
   - The double-height glasshouse gets 3 to 5 rails, with the baskets' bottoms at 2.6 to 3.4 m. A hall gets 1 or 2 rails at 2.4 m.
