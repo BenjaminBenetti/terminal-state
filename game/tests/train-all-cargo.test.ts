@@ -549,3 +549,73 @@ describe('train prop cargo: the look across levels, riders, containers, resource
     expect(lr.get('skyways', kept)).toBeUndefined();
   }, 120000);
 });
+
+describe('train prop cargo: the REAL Game methods on a minimal shell', () => {
+  it('prepareSection runs the layout hooks before the model keys: a carried mall chair\'s model is fetched for the Subway (the level rule alone refuses it)', async () => {
+    const {Game} = await import('../src/game');
+    const L = SUB(), fetched: string[][] = [], begun: number[] = [];
+    const chair: PropPlacement = {kind: 'cafeChair', x: 1, z: 1, y: 0, rot: 0, area: 0, hx: 0.25, hz: 0.25, h: 0.85, blocksSight: false, variant: 0, cargo: 'st-05:main#30'};
+    const catalogue = {'office-cafe-chair': {url: 'assets/models/mall-cafe-chair.glb', bytes: 1}};
+    const shell = {
+      lifecycleCounts: {prepare: 0}, propModels: {sealed: true, catalogue, ensure: async (k: string[]) => { fetched.push(k); }, get: () => undefined},
+      levelResources: {sealed: true, beginSection: () => { begun.push(1); }}, generateSection: () => L,
+      sectionLayoutHooks: [(l: StationLayout, _k: SectionKey, _r: unknown, phase: string) => { expect(phase).toBe('prepare'); l.props.push(chair); }],
+      sectionModelKeys: [officeModelKeysFor], sectionPreloads: [],
+    };
+    Object.setPrototypeOf(shell, Game.prototype);
+    const out = await (shell as unknown as {prepareSection(k: SectionKey, r: unknown): Promise<StationLayout>}).prepareSection(KA, {});
+    expect(out).toBe(L);
+    expect(begun).toEqual([1]);
+    expect(fetched[0]).toContain('office-cafe-chair');
+    expect(selectLevelKeys('subway', ['office-cafe-chair'], catalogue).foreign).toEqual(['office-cafe-chair']);
+    // the same key asked for by a GENERATED placement stays refused (another level's art is never fetched for its own sake)
+    const gen = {...chair, cargo: undefined};
+    L.props.splice(L.props.indexOf(chair), 1, gen);
+    expect((shell as unknown as {modelKeysFor(l: StationLayout, lv: string): string[]}).modelKeysFor(L, 'subway')).not.toContain('office-cafe-chair');
+  });
+
+  it('commitEndingSave flushes the station\'s carried / lost props with its memory, before the commit; fuelCheck refuses a prop in a doorway', async () => {
+    const {Game} = await import('../src/game');
+    const order: string[] = [];
+    const shell = {
+      run: {campaign: {cheat: false}}, world: {}, saveSectionMemory: () => order.push('memory'), gear: {flush: () => order.push('bags')}, fuelStations: {flush: () => order.push('fuel')},
+      trainPropCargo: {flush: () => order.push('props'), departBlock: () => PROP_CARGO_TEXT.doorway}, commitSave: (r: string) => { order.push(`commit:${r}`); return {ok: true}; },
+      hud: {toast: (t: string) => order.push(`toast:${t}`)}, sfx: {denied: () => order.push('denied')},
+    };
+    Object.setPrototypeOf(shell, Game.prototype);
+    const g = shell as unknown as {commitEndingSave(): unknown; fuelCheck(h: number): {ok: boolean; error?: string}};
+    expect(g.commitEndingSave()).toEqual({ok: true});
+    expect(order).toEqual(['memory', 'bags', 'fuel', 'props', 'commit:ending']);
+    order.length = 0;
+    expect(g.fuelCheck(1)).toEqual({ok: false, error: PROP_CARGO_TEXT.doorway});
+    expect(order).toEqual([`toast:${PROP_CARGO_TEXT.doorway}`, 'denied']);
+  });
+
+  it('decodeSave hands the save\'s train props to the prop cargo before anything is installed (their models are prepared with the station)', async () => {
+    const {Game} = await import('../src/game');
+    const hs = new Harness(fixtureCampaign({current: sid(1), known: [sid(0), sid(1)], visited: [sid(0), sid(1)]}));
+    hs.run.current = {level: 'subway', section: 'main', station: sid(1)};
+    hs.run.memory().visits = 1;
+    const rec: CargoPropJSON = {id: 'st-00:main#9', kind: 'skyMuBinRecords', variant: 0, w: 0.6, d: 0.4, h: 0.5, x: 0, y: SPEC.floorY, z: 0, q: [0, 0, 0, 1]};
+    hs.train.cargo.setProps([rec]);
+    const noted: {run: object; props: CargoPropJSON[]}[] = [];
+    const props = new TrainPropCargo({} as never);
+    const shell = {
+      saveValidate: {}, trainPropCargo: {notePrepared: (run: object, parts: Record<string, unknown>) => { props.notePrepared(run, parts); noted.push({run, props: ((parts['player-train'] as {cargo: {props: CargoPropJSON[]}}).cargo.props)}); }},
+    };
+    Object.setPrototypeOf(shell, Game.prototype);
+    const d = (shell as unknown as {decodeSave(f: unknown): {ok: boolean; restore?: {run: object}; error?: string}}).decodeSave(hs.file('arrival', 1));
+    expect(d.ok, d.error).toBe(true);
+    expect(noted.length).toBe(1);
+    expect(noted[0].run).toBe(d.restore!.run);
+    expect(noted[0].props).toEqual([rec]);
+  });
+
+  it('buildSection runs the build-phase layout hooks before it reads the layout (model keys, the p7 drop, the world)', async () => {
+    const {Game} = await import('../src/game');
+    const body = (Game.prototype as unknown as {buildSection: () => void}).buildSection.toString();
+    const hook = body.search(/sectionLayoutHooks[\s\S]{0,160}['"]build['"]/), keys = body.indexOf('modelKeysFor'), drop = body.indexOf('dropUnloadedP7'), world = body.indexOf('buildWorld');
+    expect(hook).toBeGreaterThan(0);
+    expect(hook).toBeLessThan(Math.min(keys, drop, world));
+  });
+});
