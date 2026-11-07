@@ -1346,12 +1346,15 @@ export class Game {
     const run = this.run;
     if (!run.campaign || this.mapBack) return false;
     if (mode === 'travel') run.campaign = revealAround(run.campaign, run.campaign.current);
+    // (task studio-alpha-survival-controls-20261107-060450-01) E / Tab close the map too: the ones physically down now (the console's E)
+    // close it only after a release; the key that closes it is kept from the game until released (no interact / inventory / depart)
+    const heldKeys = ['KeyE', 'Tab'].filter(c => this.input.down(c));
     this.mapBack = this.state;
     this.setState('map');
     this.paperMap.open({
-      state: run.campaign, mode,
+      state: run.campaign, mode, heldKeys,
       onConfirm: to => { this.closeTravelMap(); void this.travelToStation(to); },
-      onClose: () => this.closeTravelMap(),
+      onClose: key => { if (key) this.input.suppressUntilRelease(key); this.closeTravelMap(); },
       onCheat: () => (run.campaign = enableCheat(run.campaign!)),
       fuel: this.mapFuel(), // task train-fuel-system: station fuel bars, the trip's cost and the train's reserves
     });

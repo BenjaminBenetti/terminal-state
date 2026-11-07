@@ -91,7 +91,9 @@ describe('pure layout', () => {
     const k = (code: string, o: Record<string, unknown> = {}, onButton = false) => paperMapKeyAction({code, ...o}, onButton);
     expect([k('Digit1'), k('Numpad7'), k('Digit3', {repeat: true})]).toEqual([{kind: 'digit', digit: '1'}, {kind: 'digit', digit: '7'}, {kind: 'swallow'}]);
     expect([k('Escape'), k('Enter'), k('Enter', {}, true), k('Space', {}, true)]).toEqual([{kind: 'close'}, {kind: 'select'}, {kind: 'native'}, {kind: 'native'}]);
-    expect([k('Tab'), k('Tab', {shiftKey: true})]).toEqual([{kind: 'tab', back: false}, {kind: 'tab', back: true}]);
+    // (task studio-alpha-survival-controls-20261107-060450-01) E and Tab close on a fresh press (Tab no longer cycles the stations)
+    expect([k('Tab'), k('Tab', {shiftKey: true}), k('KeyE')]).toEqual([{kind: 'closeKey', code: 'Tab'}, {kind: 'closeKey', code: 'Tab'}, {kind: 'closeKey', code: 'KeyE'}]);
+    expect([k('KeyE', {repeat: true}), k('Tab', {repeat: true})]).toEqual([{kind: 'swallow'}, {kind: 'swallow'}]);
     expect([k('ArrowLeft'), k('ArrowUp', {shiftKey: true})]).toEqual([{kind: 'arrow', dir: 'left', pan: false}, {kind: 'arrow', dir: 'up', pan: true}]);
     expect([k('Equal', {key: '+'}), k('NumpadSubtract'), k('KeyF'), k('Home'), k('Backspace')]).toEqual([{kind: 'zoom', dir: 1}, {kind: 'zoom', dir: -1}, {kind: 'fit'}, {kind: 'sheet'}, {kind: 'cancel'}]);
     expect([k('KeyR', {ctrlKey: true}), k('F5'), k('Digit1', {metaKey: true}), k('KeyA', {target: {tagName: 'INPUT'}})]).toEqual(new Array(4).fill({kind: 'pass'}));
@@ -239,6 +241,46 @@ describe('the overlay', () => {
     expect(hits().length).toBe(net.nodes.length);
   });
 
+  // Task studio-alpha-survival-controls-20261107-060450-01 (user: "E again or Tab close the train map"): edge-safe with the REAL input
+  it('E again / Tab close it like Esc: never the press that opened it, never a repeat; the closing key never reaches the game', () => {
+    const input = new Input({addEventListener() {}} as unknown as HTMLCanvasElement, true);
+    input.active = true;
+    const seen: string[] = [];
+    input.onKey = c => seen.push(c);
+    const keys: (string | undefined)[] = [];
+    const body = dom.doc.body;
+    const down = (code: string, repeat = false) => { const e = new MiniEvent('keydown', {code, key: code, repeat, cancelable: true}); (dom.doc.activeElement ?? body).dispatchEvent(e); return e; };
+    const up = (code: string) => (dom.doc.activeElement ?? body).dispatchEvent(new MiniEvent('keyup', {code, key: code}));
+    // the console's E opened it and is still held: its repeats and the held key itself never close it
+    map.open({state: atHub(), heldKeys: ['KeyE'], onClose: key => { keys.push(key); if (key) input.suppressUntilRelease(key); }});
+    for (let i = 0; i < 5; i++) down('KeyE', true);
+    down('KeyE'); // (a stray non-repeat while still held)
+    expect(map.isOpen).toBe(true);
+    up('KeyE'); // released: armed
+    const e = down('KeyE'); // a fresh press closes
+    expect([map.isOpen, keys, e.defaultPrevented]).toEqual([false, ['KeyE'], true]);
+    // the closing press never reached the game (no interact), and its held repeats are ignored until it is released
+    for (let i = 0; i < 3; i++) down('KeyE', true);
+    expect([seen, [...input.pressed], input.down('KeyE')]).toEqual([[], [], false]);
+    up('KeyE');
+    dom.key('KeyE');
+    expect(seen).toEqual(['KeyE']); // released: E is the game's again
+    // Tab: closes, and never opens the inventory on the way out (nor on its repeats)
+    seen.length = 0;
+    map.open({state: atHub(), onClose: key => { keys.push(key); if (key) input.suppressUntilRelease(key); }});
+    down('Tab');
+    expect([map.isOpen, keys.at(-1)]).toEqual([false, 'Tab']);
+    down('Tab', true);
+    expect([seen, input.down('Tab')]).toEqual([[], false]);
+    up('Tab');
+    // Esc still closes (no key passed); digits still go to the 1337 matcher, never the game
+    map.open({state: atHub(), onClose: key => keys.push(key)});
+    dom.type('13');
+    expect(seen).toEqual([]);
+    dom.key('Escape');
+    expect([map.isOpen, keys.at(-1)]).toEqual([false, undefined]);
+  });
+
   it('digits never leak to the game; the Lockbox keeps its own 1337 when the map is closed', () => {
     // the REAL input listener (window, bubble) and the REAL Lockbox controller (window, capture), as in the game
     const input = new Input({addEventListener() {}} as unknown as HTMLCanvasElement, true);
@@ -272,18 +314,13 @@ describe('the overlay', () => {
     expect(seen).toContain('Digit2'); // with both closed the quick slot key reaches the game again
   });
 
-  it('keyboard: Tab cycles the destinations (Shift+Tab back), arrows pick by direction, Enter selects, Enter on Depart is the button\'s', () => {
+  it('keyboard: arrows pick by direction, Enter selects, Enter on Depart is the button\'s', () => {
     const s = atHub();
     const dests = destinations(s);
     expect(dests.length).toBeGreaterThanOrEqual(2);
     open(s);
-    const seenTab: string[] = [];
-    for (let i = 0; i < dests.length; i++) { dom.key('Tab'); seenTab.push(map.focused!); }
-    expect([...seenTab].sort()).toEqual([...dests].sort());
-    dom.key('Tab');
-    expect(map.focused).toBe(seenTab[0]); // wraps
-    dom.key('Tab', {shiftKey: true});
-    expect(map.focused).toBe(seenTab[seenTab.length - 1]);
+    dom.key('ArrowRight'); // nothing focused yet: the first destination
+    expect(dests).toContain(map.focused);
     expect(dom.doc.querySelector('.pm-focused')).not.toBeNull();
     // arrows (travel mode): the destination in the arrow's direction from the train's station
     const lay = paperLayout(net), here = lay.get(s.current)!;
