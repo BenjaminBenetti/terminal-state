@@ -50,10 +50,12 @@ const PAL = {
   text: '#eef2f4', dim: '#93a1ac', plate: 'rgba(9,13,17,0.74)',
 } as const;
 /** Fill of a space on its own storey (solid) by kind. */
-const SPACE_FILL: Readonly<Record<MapSpaceKind, string>> = {
+export const SPACE_FILL: Readonly<Record<MapSpaceKind, string>> = {
   hub: '#4d7385', shop: '#2c3843', anchor: '#7a5f30', food: '#76462f', washroom: '#2f5d80', event: '#5f4276', platform: '#46525c',
   stair: '#5a6874', pedway: '#6d5a26', bridge: '#2f7c80',
 };
+/** The faint fill of another storey's public space. */
+export const OTHER_STOREY_FILL = 'rgba(130,165,185,0.10)';
 /** The chip colour of a destination label by kind. */
 const CHIP: Readonly<Record<MapLabel['kind'], string>> = {event: '#b67fe2', anchor: '#e0a945', landmark: '#8fd27a', restaurant: '#e7684c', food: '#ec8c3a', station: '#4aa3e0'};
 const LABEL_ORDER: readonly MapLabel['kind'][] = ['station', 'event', 'anchor', 'landmark', 'restaurant', 'food'];
@@ -177,7 +179,7 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
   // the other storeys' public spaces, faint; this storey's, solid
   for (const s of plan.spaces) {
     if (s.level === level || s.kind === 'platform' || s.kind === 'stair') continue;
-    ctx.fillStyle = 'rgba(130,165,185,0.10)';
+    ctx.fillStyle = OTHER_STOREY_FILL;
     ctx.fillRect(X(s.rect.x0), Y(s.rect.z0), (s.rect.x1 - s.rect.x0) * k, (s.rect.z1 - s.rect.z0) * k);
   }
   for (const s of plan.spaces) {
@@ -236,10 +238,13 @@ export function drawSkywaysMapFace(ctx: Ctx, plan: SkywaysMapPlan, level: number
   // washrooms on this storey: a small WC chip (no text)
   for (const s of plan.spaces) {
     if (s.level !== level || s.kind !== 'washroom') continue;
-    const x = X((s.rect.x0 + s.rect.x1) / 2), y = Y((s.rect.z0 + s.rect.z1) / 2);
-    rrect(ctx, x - 13, y - 9, 26, 18, 4); ctx.fillStyle = '#9fc6d8'; ctx.fill();
-    text(ctx, 'WC', x, y + 0.5, `bold 11px ${FONT}`, '#14212b', 'center');
-    taken.push({x0: x - 13, y0: y - 9, x1: x + 13, y1: y + 9});
+    const cx = X((s.rect.x0 + s.rect.x1) / 2), cy = Y((s.rect.z0 + s.rect.z1) / 2);
+    // (inside the washroom's own rect when it is big enough; never over a name / icon)
+    const spot = [[0, 0], [0, 14], [0, -14], [16, 0], [-16, 0]].map(([dx, dy]) => ({x: cx + dx, y: cy + dy})).find(q => !taken.some(t => hit(t, {x0: q.x - 13, y0: q.y - 9, x1: q.x + 13, y1: q.y + 9})));
+    if (!spot) continue;
+    rrect(ctx, spot.x - 13, spot.y - 9, 26, 18, 4); ctx.fillStyle = '#9fc6d8'; ctx.fill();
+    text(ctx, 'WC', spot.x, spot.y + 0.5, `bold 11px ${FONT}`, '#14212b', 'center');
+    taken.push({x0: spot.x - 13, y0: spot.y - 9, x1: spot.x + 13, y1: spot.y + 9});
   }
   // destination labels: this storey's bright on plates, the other storeys' dim with their storey tag; no overlaps
   const own = plan.labels.filter(l => l.level === level).sort((a, b) => LABEL_ORDER.indexOf(a.kind) - LABEL_ORDER.indexOf(b.kind));
