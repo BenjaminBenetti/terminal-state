@@ -18,8 +18,8 @@
 //    GearSystem.record leave the train's own out — the ending save's mid-section flush too). Its build runs after the train / gear builds.
 //  - SAVES: the 'player-train' participant's `cargo` (run/trainCargo.ts; TrainCargo.live = this system): riding items, the train's pickups /
 //    bags in the parked car and pending records, at save time. restore() (Load / Continue / Retry / New game) replaces them exactly.
-// Not covered: the fuel carts (their own cargo) and the Lockbox (its slots) — never captured twice; layout props knocked loose (no
-// cross-station identity; they stay with their station like every loose prop).
+// Not covered: the fuel carts (their own cargo) and the Lockbox (its slots) — never captured twice. Layout props knocked loose into the car
+// travel too, as the train's PROP cargo (task studio-beta-train-all-cargo-20261107-184244-01: world/trainPropCargo.ts).
 // Fuel: loose fuel cans travel like any item; the automatic burn stays tank -> carts aboard -> chest cans (fuel/fuel.ts planDebit).
 
 import * as THREE from 'three';

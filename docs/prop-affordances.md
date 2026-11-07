@@ -220,6 +220,25 @@ office-props-physics-scale-20261030, lane PHYS; `tests/contact-physics.test.ts`)
   `__LL.goWalkInto('officeChair')` / `__LL.goWalkInto('archiveBoxes')` (Office), hold W ~1 s, then `__LL.walkIntoCheck()` →
   `loose: true`, `moved` > 0.3, `shots: 0` (a spill holder: `spilled` = `lotsBefore`, `lotsLeft` 0).
 
+### Carried by the player train (task studio-beta-train-all-cargo-20261107-184244-01)
+User: "Let’s have all items on the train move with the train!" — confirmed for movable furniture, decor and containers.
+- **Who travels:** every movable kind (`dynamicKind`), in every level, with no list to maintain. It travels when it lies loose in the
+  parked car: its collider centre inside the car interior (`world/trainPropCargo.ts`). It rides to the next station:
+  - it keeps its kind, variant, size, purpose, integrity and exact pose (any yaw or tilt);
+  - decor riding it (`ridesHost`: garments on a rail) travels inside its record;
+  - a prop straddling a doorway refuses the departure.
+- **New movable kinds** need nothing extra:
+  - the carried copy is built by the kind's own family builder, appended to the next layout;
+  - its models / Skyways art load in any level while it is carried;
+  - it is made loose at its pose with `DynamicItems.adoptLoose`.
+- A kind drawn by a builder that reads per-layout context must keep working for an appended placement with no `shop` / `host` and a
+  nearby `area`.
+- **Containers:** a movable container is always a spill holder. Knocked loose, its lots spill where it stood (once), so it travels
+  open and empty and its contents travel as item cargo. A holder copy is emptied (no invented loot) and the fuel-can slots skip it.
+- **Identity:** `'<section id>#<generated index>'`. The source station hides the generated original for good (`train-cargo.props`
+  lane `gone`); the station a carried prop is left in owns it (`here`). One prop, one place: save-validated.
+- **Tests:** `tests/train-all-cargo.test.ts`.
+
 ## 4. Checks for a new prop
 - Unit tests:
   - its audit classes;
