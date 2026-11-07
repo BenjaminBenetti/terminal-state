@@ -60,7 +60,6 @@ const world = (seed: number): BuiltWorld => {
   return w;
 };
 const log = (s: string) => fs.appendFileSync(LOG, s + '\n');
-const tris = (m: THREE.Mesh) => (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3;
 const meshesNamed = (w: BuiltWorld, re: RegExp) => { const out: THREE.Mesh[] = []; w.group.traverse(o => { if ((o as THREE.Mesh).isMesh && re.test(o.name)) out.push(o as THREE.Mesh); }); return out; };
 
 beforeAll(() => { mats = new WorldMaterials(fakeEnvTextures(), 7, {w: 1.2, h: 0.19, d: 0.17}); fs.writeFileSync(LOG, ''); });
