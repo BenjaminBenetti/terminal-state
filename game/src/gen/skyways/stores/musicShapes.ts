@@ -23,8 +23,8 @@ export interface MusicFace { atlas: 'covers' | 'signs'; piece: string; w: number
 
 /** Footprints / heights of the drawn kinds (m). */
 export const MUSIC_DIMS = {
-  turntable: {w: 0.45, h: 0.135, d: 0.36},
-  headphones: {w: 0.19, h: 0.07, d: 0.2},
+  turntable: {w: 0.45, h: 0.115, d: 0.36},
+  headphones: {w: 0.2, h: 0.05, d: 0.15},
   stool: {w: 0.4, h: 0.66, d: 0.4},
   binLabel: {w: 0.25, h: 0.115, d: 0.006},
   poster: {w: 0.62, h: 0.93, d: 0.025},
@@ -59,14 +59,14 @@ export function turntableParts(): MusicPart[] {
 /** Closed-back studio headphones lying folded on the counter: two ear cups, the padded band arching over them. */
 export function headphonesParts(): MusicPart[] {
   return [
-    {m: 'black', cyl: {r: 0.045, h: 0.04, seg: 16}, p: [-0.05, 0.02, 0.0]},
-    {m: 'black', cyl: {r: 0.045, h: 0.04, seg: 16}, p: [0.05, 0.02, 0.0]},
-    {m: 'plasticSeat', cyl: {r: 0.038, h: 0.006, seg: 16}, p: [-0.05, 0.043, 0.0]},
-    {m: 'plasticSeat', cyl: {r: 0.038, h: 0.006, seg: 16}, p: [0.05, 0.043, 0.0]},
+    {m: 'black', cyl: {r: 0.045, h: 0.04, seg: 16}, p: [-0.05, 0.02, 0.03]},
+    {m: 'black', cyl: {r: 0.045, h: 0.04, seg: 16}, p: [0.05, 0.02, 0.03]},
+    {m: 'plasticSeat', cyl: {r: 0.038, h: 0.006, seg: 16}, p: [-0.05, 0.043, 0.03]},
+    {m: 'plasticSeat', cyl: {r: 0.038, h: 0.006, seg: 16}, p: [0.05, 0.043, 0.03]},
     // the band: three flat segments arching from cup to cup (lying flat, toward -Z)
-    {m: 'steelDark', box: [0.03, 0.012, 0.06], p: [-0.085, 0.02, -0.055], rx: 0},
-    {m: 'steelDark', box: [0.03, 0.012, 0.06], p: [0.085, 0.02, -0.055], rx: 0},
-    {m: 'black', box: [0.2, 0.014, 0.03], p: [0, 0.02, -0.085]},
+    {m: 'steelDark', box: [0.03, 0.012, 0.06], p: [-0.085, 0.02, -0.025]},
+    {m: 'steelDark', box: [0.03, 0.012, 0.06], p: [0.085, 0.02, -0.025]},
+    {m: 'black', box: [0.2, 0.014, 0.03], p: [0, 0.02, -0.055]},
   ];
 }
 

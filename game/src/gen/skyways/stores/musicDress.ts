@@ -22,7 +22,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL} from '../../grid';
 import {PROP_DEFS, SHELF_TIER_Y, SHOP_COUNTER_TOP_Y, type PropKind, type PropPlacement} from '../../props';
 import {stockVariant} from '../../purposeShapes';
-import {WALL_ROT, backed, makePlaceCtx, placeAgainstWall, tryPlaceProp, wallRange, wallXZ} from '../../placeKit';
+import {WALL_ROT, areaBase, backed, makePlaceCtx, placeAgainstWall, tryPlaceProp, wallRange, wallSpot, wallXZ} from '../../placeKit';
 import type {Area, Side, StationLayout} from '../../stationTypes';
 import type {SkywaysAnchor} from '../skywaysTypes';
 import {normYaw, toWorld, yawToward} from '../addonFrame';
@@ -77,18 +77,20 @@ export function dressMusicStore(layout: StationLayout, rng: Rng, anchor: Skyways
   guitarWall(kit);
   kit.wallRun('stockShelf', {cluster: 2, gap: 0.6, max: rng.int(1, 2), front: 0.9, variant: () => stockVariant('devices')});
   if (kit.zones.length) boothSign(kit);
-  // the browsing floor: double-sided rack runs (aisles from the front), every bay stocked, a genre card per rack, dig crates at the ends
-  const runs = fillRuns(kit, 'skyDRecordBins', {units: [2, 3], aisle: 1.25, max: rng.int(6, 12), orient: kit.fr.W >= kit.fr.D ? 'v' : 'u'});
+  // the browsing floor: double-sided rack runs (aisles from the front) packing the floor, then single racks backed to the free walls;
+  // every bay stocked, a genre card per rack (one genre per run), dig crates at the island runs' ends
+  const runs = fillRuns(kit, 'skyDRecordBins', {units: [2, 4], aisle: 1.2, max: rng.int(12, 20), orient: kit.fr.W >= kit.fr.D ? 'v' : 'u'});
   if (!runs.length) kit.skipped.push('record bins');
   const genres = rng.shuffle(MUSIC_LABEL_GENRES.map((_, i) => i));
-  runs.forEach((run, k) => {
+  const stockRun = (run: PropPlacement[], k: number) => {
     for (const rack of run) {
       res.racks.push(idx(rack));
       res.blocks.set(idx(rack), stockRack(kit, rack).map(idx));
       binLabel(kit, rack, genres[k % genres.length]);
     }
-    digCrates(kit, run);
-  });
+  };
+  runs.forEach((run, k) => { stockRun(run, k); digCrates(kit, run); });
+  stockRun(kit.wallRun('skyDRecordBins', {cluster: 3, gap: 1.0, max: rng.int(3, 8), front: 1.2}), runs.length);
   // a jukebox near the booths (else mid-floor), a row of dig crates along a free wall
   const bz = kit.zones[0];
   const [jx, jz] = bz ? [(bz.x + bz.w / 2) * CELL, (bz.y + bz.h / 2) * CELL] : kit.inside(kit.fr.D * 0.6);
@@ -550,21 +552,42 @@ function backRoom(kit: AnchorKit, a: Area): PropPlacement[] {
   const add = (p: PropPlacement | null) => { if (p) { added.push(p); kit.placed.push(p); } return p; };
   const big = a.w * a.h * CELL * CELL >= 14;
   const office = a.type === 'agent-office';
-  if (!layout.props.some(p => p.area === a.id && p.kind === 'staffLockers')) add(placeAgainstWall(ctx, a, 'staffLockers', {front: 0.6, tries: 30}));
-  add(placeAgainstWall(ctx, a, 'cabinetTall', {front: 0.6, tries: 30}));
+  const storage = () => layout.props.filter(p => p.area === a.id && OPENABLE_STORAGE.has(p.kind)).length;
+  if (!layout.props.some(p => p.area === a.id && p.kind === 'staffLockers')) add(againstWall(ctx, a, 'staffLockers', 0.6));
+  add(againstWall(ctx, a, 'cabinetTall', 0.6));
   if (!office) {
-    const sh = add(placeAgainstWall(ctx, a, 'shelf', {front: 0.9, tries: 30}));
+    const sh = add(againstWall(ctx, a, 'shelf', 0.9));
     if (sh) for (const p of cratesOnShelf(kit, sh)) added.push(p);
-    for (let i = 0, n = rng.int(1, 2); i < n; i++) add(placeAgainstWall(ctx, a, 'crate', {tries: 20}));
+    for (let i = 0, n = rng.int(1, 2); i < n; i++) add(againstWall(ctx, a, 'crate', 0));
     for (let i = 0, n = rng.int(2, 4); i < n; i++) add(placeAgainstWall(ctx, a, 'skyDRecordCrate', {tries: 16}));
   }
   if ((big || office) && !layout.props.some(p => p.area === a.id && (p.kind === 'desk' || p.kind === 'executiveDesk'))) {
-    const d = add(placeAgainstWall(ctx, a, 'desk', {front: 0.9, tries: 30}));
+    const d = add(againstWall(ctx, a, 'desk', 0.9));
     if (d) { const [cx, cz] = toWorld(d, 0, PROP_DEFS.desk.d / 2 + 0.3); add(tryPlaceProp(ctx, a, 'officeSwivelChair', cx, cz, normYaw(d.rot + Math.PI))); }
   }
-  if (big && rng.chance(0.6) && !layout.props.some(p => p.area === a.id && p.kind === 'fridge')) add(placeAgainstWall(ctx, a, 'fridge', {front: 0.6, tries: 20}));
+  if (big && rng.chance(0.6) && !layout.props.some(p => p.area === a.id && p.kind === 'fridge')) add(againstWall(ctx, a, 'fridge', 0.6));
+  // at least two pieces of openable storage in every back room: smaller lidded / door pieces where the tall ones did not fit
+  for (const k of ['crate', 'footlocker', 'cabinetLow', 'crate'] as PropKind[]) if (storage() < 2) add(againstWall(ctx, a, k, k === 'cabinetLow' ? 0.6 : 0));
+  if (storage() < 2) kit.skipped.push(`back room ${a.id}: ${storage()} openable storage`);
   if (!added.length) kit.skipped.push(`back room ${a.id}: nothing fits`);
   return added;
+}
+/** Openable storage kinds counted for a back room (existing openables / holders with moving parts). */
+const OPENABLE_STORAGE: ReadonlySet<string> = new Set(['staffLockers', 'cabinetTall', 'cabinetLow', 'crate', 'footlocker', 'safe', 'filingCabinet', 'officeFiling', 'fridge', 'desk', 'executiveDesk', 'mallCashwrapCounter', 'storageTote', 'dresserDrawers']);
+/** A prop with its back to a wall of the room: every wall position (0.25 m steps, shuffled) through the shared primitive. */
+function againstWall(ctx: ReturnType<typeof makePlaceCtx>, a: Area, kind: PropKind, front: number): PropPlacement | null {
+  const def = PROP_DEFS[kind], spots: {side: Side; t: number}[] = [], base = areaBase(ctx.layout, a);
+  for (const side of ['N', 'S', 'E', 'W'] as Side[]) {
+    const [lo, hi] = wallRange(a, side);
+    for (let t = lo + 0.1 + def.w / 2; t <= hi - 0.1 - def.w / 2; t += 0.25) spots.push({side, t});
+  }
+  for (const {side, t} of ctx.rng.shuffle(spots)) {
+    if (!backed(ctx, a, side, t - def.w / 2, t + def.w / 2, base + 0.05) || !backed(ctx, a, side, t - def.w / 2, t + def.w / 2, base + Math.min(def.h, 2.2) - 0.05)) continue;
+    const s = wallSpot(a, side, t, kind);
+    const p = tryPlaceProp(ctx, a, kind, s.x, s.z, s.rot, front ? {front} : {});
+    if (p) return p;
+  }
+  return null;
 }
 /** Crates of records on an open shelving unit's tiers (two per tier; the shelf's loot surfaces give up their spans). */
 function cratesOnShelf(kit: AnchorKit, sh: PropPlacement): PropPlacement[] {

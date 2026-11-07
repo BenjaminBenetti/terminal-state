@@ -90,6 +90,13 @@ function h01(a: number, b: number, c = 0): number {
   return (x >>> 0) / 4294967296;
 }
 
+/** A fixed shuffle of the 64 covers: the bin styles' front sleeves take the first 2 x BIN_STYLES, the faced rows the rest (no repeats in view). */
+const COVER_PERM: readonly number[] = (() => {
+  const a = Array.from({length: MUSIC_COVER_COUNT}, (_, i) => i);
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(h01(i, 977, 5) * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+})();
+
 /** Signed distance (along the sleeve's forward normal) from the plane of a sleeve standing at (z, y) with `lean` to a point (pz, py). */
 const planeDist = (z: number, y: number, lean: number, pz: number, py: number): number => Math.cos(lean) * (pz - z) + Math.sin(lean) * (py - y);
 
@@ -156,12 +163,14 @@ export function binBlock(variant: number): BinBlock {
       z = nz;
       lean = Math.max(9 * deg, lean - h01(rowIx, style, 100 + k) * 0.45 * deg);
     }
-    // covers: a fixed shuffle per style; the back face shows another cover (the record's back sleeve)
+    // covers: a fixed shuffle per style (the FRONT sleeve — the one a customer sees — distinct for every style); the back face shows
+    // another cover (the record's back sleeve). (the front sleeve is the last; its cover is set below)
     const cover = Math.floor(h01(rowIx * 31 + style, k, 7) * MUSIC_COVER_COUNT);
     const back = (cover + 17 + Math.floor(h01(rowIx, style, 300 + k) * 29)) % MUSIC_COVER_COUNT;
     const dx = (h01(rowIx, style, 500 + k) * 2 - 1) * BIN_PLAY;
     sleeves.push({dx: r4(dx), z: r4(z), y: r4(binFloorY(row, z)), lean: r4(lean), cover, back});
   }
+  sleeves[sleeves.length - 1].cover = COVER_PERM[rowIx * BIN_STYLES + style];
   // box: every corner of every sleeve (a sleeve is a thin slab: bottom edge (z, y), top edge back by s sin(lean))
   let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const q of sleeves) {
@@ -208,7 +217,7 @@ export function facedRow(variant: number): FacedSleeve[] {
   for (let k = 0; k < FACED_PER_LEDGE; k++) {
     const x = (k - (FACED_PER_LEDGE - 1) / 2) * FACED_PITCH + (h01(v, k, 41) * 2 - 1) * 0.02;
     // the lean that puts the sleeve's back on the board: its bottom edge at the ledge's lip side, its top on the board face
-    out.push({x: r4(x), lean: facedLean(), cover: Math.floor(h01(v + 101, k, 43) * MUSIC_COVER_COUNT)});
+    out.push({x: r4(x), lean: facedLean(), cover: COVER_PERM[(2 * BIN_STYLES + v * FACED_PER_LEDGE + k) % MUSIC_COVER_COUNT]});
   }
   return out;
 }
