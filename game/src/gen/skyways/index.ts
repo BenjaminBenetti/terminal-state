@@ -38,10 +38,11 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
+import {SKYWAYS_COSPLAY_FLOORS_MIN_VERSION, SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
 import {skywaysPatrolGraph} from './patrol'; // task studio-skywalk-encounters-20261108-074144-01: the horde patrol graph (version 5)
 import {placeHordes} from '../../ai/hordePlace'; // (the Mall's horde placement)
 import {placeCosplaySpawns, retagCosplaySpawns} from './cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY)
+import {placeCosplayFloorSpawns} from './cosplayFloors'; // task studio-cosplay-general-20261108-225231-01 (lane UPPER): version 6
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {generateSkywaysLevel as generateSkywaysLegacy80} from './legacy80/index'; // (task studio-skywalk-variety-20261107-231448-01) version 3, frozen
 import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
@@ -234,6 +235,9 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   // (task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY; layout version 5+) the convention's cosplay zombies — LAST, after the
   // ambient runs, the hordes and the annex 'service' spawns: every other spawn keeps its index; own fork (drawn from only with the convention)
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_ENCOUNTERS_MIN_VERSION) placeCosplaySpawns(layout, rng.fork('skyways-cosplay-spawns'), field.keep, spawns);
+  // (task studio-cosplay-general-20261108-225231-01, lane UPPER; layout version 6+) + the crowd on the convention building's other public
+  // floor (joined to the venue by its stair): appended right after the venue's run, own fork — every earlier spawn keeps its index
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_COSPLAY_FLOORS_MIN_VERSION) placeCosplayFloorSpawns(layout, rng.fork('skyways-cosplay-floors'), field.keep, spawns);
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
   return layout;
