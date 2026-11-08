@@ -36,7 +36,7 @@ const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replac
 const CSS = `
 #tradeview { position: fixed; inset: 0; z-index: 45; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 92px; pointer-events: auto; cursor: default; }
 #tradeview.hidden { display: none; }
-#tradeview .tr-panel { width: min(1240px, calc(100vw - 24px)); background: rgba(16, 18, 20, 0.92); border: 1px solid #3a3f44; border-top: 3px solid var(--mustard); padding: 10px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--cream); font-size: 13px; }
+#tradeview .tr-panel { width: min(1240px, calc(100vw - 24px)); max-height: calc(100vh - 104px); overflow-y: auto; box-sizing: border-box; background: rgba(16, 18, 20, 0.92); border: 1px solid #3a3f44; border-top: 3px solid var(--mustard); padding: 10px 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); color: var(--cream); font-size: 13px; }
 #tradeview .tr-head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 6px; }
 #tradeview .tr-head .tr-title { font-size: 15px; letter-spacing: 0.04em; flex: 1; }
 #tradeview .tr-wallet { font-size: 14px; color: var(--mustard); }
