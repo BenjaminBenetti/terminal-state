@@ -2,7 +2,9 @@
 // placement for really key items" / "about 4 tanks average per level, distributed as standard loot so not forced to comb the whole level
 // for the last can"): WHERE a station's fuel cans lie as ordinary LOOT LOTS — on shelf tiers, tables, counters and inside storage
 // (cabinets, crates, lockers, tool chests) — pure and deterministic (no three.js; its own RNG `fuel-holders:<stationId>` over the layout
-// seed; the holders' own rolled lots, streams and lot ids are never touched: a fuel lot only takes FREE room beside them).
+// seed; the holders' own rolled lots, streams and lot ids are never touched: a fuel lot only takes FREE room beside them). Task
+// studio-base-salvage-20261108-073314-01: the additive base salvage lot (items/loot.ts isSalvageLotId) is left out of that room — the fuel
+// slots are exactly what they were before it existed — and yields where a can lands on it (world/containers.ts addLots).
 //
 // fuelHolderSlots(): every eligible holder (FUEL_HOLDERS.kinds x the room's fuel affinity — gen/fuelPlacement.ts fuelWeight: back-of-house,
 //   utility, storage, workshops first; never platforms / passages / concourses / stairs — reachable on foot from the train door, at least
@@ -15,7 +17,7 @@
 //   What no holder can take is `short` (the caller lays those cans loose — the rare fallback).
 import {Rng, hashString} from '../core/rng';
 import {placementBox, orientedSize, type Orient, type Surface} from '../items/lootLayout';
-import type {Lot} from '../items/loot';
+import {isSalvageLotId, type Lot} from '../items/loot';
 import {FUEL, fuelLotKey} from '../fuel/fuel';
 import type {StationLayout} from './stationTypes';
 import {fuelReachableAreas, fuelWeight} from './fuelPlacement';
@@ -113,7 +115,7 @@ export function fuelHolderSlots(layout: StationLayout, holders: readonly FuelHol
     if (w <= 0 || !h.surfaces.length) continue;
     if (reach && !reach.get(h.level)?.has(h.area)) continue;
     if (tp && h.level === tp.level && Math.hypot(h.x - tp.x, h.z - tp.z) < FUEL_HOLDERS.minFromTrain) continue;
-    const taken = h.lots.map(l => placementBox(l.itemId, l));
+    const taken = h.lots.filter(l => !isSalvageLotId(l.id)).map(l => placementBox(l.itemId, l)); // (base salvage: yields to a can)
     const lots: Lot[] = [];
     const rnd = () => r.next();
     for (let k = 0; k < FUEL_HOLDERS.perHolder; k++) {

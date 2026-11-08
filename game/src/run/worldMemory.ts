@@ -9,6 +9,7 @@ import {canonicalItemId} from '../items/calibers';
 import type {ContainerManager} from '../world/containers';
 import type {Pickup, PickupManager} from '../world/pickups';
 import {applyHolderRecord, captureHolder, holderKey, type HolderRecord, type PickupRecord, type StackRecord} from './memory';
+import {isSalvageLotId} from '../items/loot'; // task studio-base-salvage-20261108-073314-01
 
 /** Plain deep copy of a stack without its uid. */
 export function stackRecord(st: ItemStack): StackRecord {
@@ -83,4 +84,22 @@ export function applyHolders(cm: ContainerManager, recs: Record<string, HolderRe
     }
   }
   return {applied, removed};
+}
+
+/**
+ * Task studio-base-salvage-20261108-073314-01: right after ContainerManager.build — before the fuel lots, the shelf filler and applyHolders
+ * — a REMEMBERED holder drops the additive base salvage lot (items/loot.ts isSalvageLotId) its record does not list: one realized before
+ * the base salvage existed (an old save) never gains it, one whose lot was taken / yielded to a fuel can never gets it back, and the
+ * filler / fuel placement see the holder exactly as it was left. Unremembered holders keep theirs (new loot). Returns the lots dropped.
+ */
+export function dropUnrecordedSalvage(cm: ContainerManager, recs: Record<string, HolderRecord>): number {
+  let dropped = 0;
+  for (const h of cm.all) {
+    const rec = recs[holderKeyOf(h)];
+    if (!rec) continue;
+    const keep = new Set(rec.lots), before = h.state.lots.length;
+    h.state.lots = h.state.lots.filter(l => !isSalvageLotId(l.id) || keep.has(l.id));
+    dropped += before - h.state.lots.length;
+  }
+  return dropped;
 }

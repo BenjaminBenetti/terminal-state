@@ -5,8 +5,8 @@ import {describe, expect, it} from 'vitest';
 import {CELL, FLOOR} from '../src/gen/grid';
 import {levelDistance} from '../src/gen/levelGen';
 import {levelsOf} from '../src/gen/levels';
-import {isLootHolderKind, holderTable} from '../src/items/loot';
-import {lootProfile} from '../src/items/lootTables';
+import {extraSalvageRule, isLootHolderKind, holderTable} from '../src/items/loot';
+import {MARKET_WORKSHOP_KEY, lootProfile} from '../src/items/lootTables';
 import {rollLevelGear} from '../src/levels/gearAdapter';
 import {LEVELS, arrivalPose} from '../src/levels/registry';
 import {MARKET_STALLS} from '../src/gen/market/marketTypes';
@@ -113,18 +113,31 @@ describe('the Survivor Market generator', () => {
     }
   });
 
-  it('the calm rules: no enemies, hordes, annexes, gas records or free loot; every holder is empty under the market profile', () => {
+  // task studio-base-salvage-20261108-073314-01: the ONE exception — the workshop's own storage (tool chest, plank shelving, crates) carries
+  // the workshop key, whose own table is empty too; its only possible find is the market's additive basic-salvage lot (lootTables
+  // MARKET_SALVAGE; tests/base-salvage.test.ts) — every other holder keeps the exact empty key and no salvage rule
+  it('the calm rules: no enemies, hordes, annexes, gas records or free loot; every holder table is empty under the market profile', () => {
     const P = lootProfile('market');
+    const STORES = new Set(['rollingToolChest', 'outdoorsPlankShelving', 'crate']);
     for (const {seed, L} of layouts) {
       expect([seed, L.zombies.length, L.hordes?.length ?? 0, L.pickups.length]).toEqual([seed, 0, 0, 0]);
       expect(L.extensions).toBeUndefined();
       expect(L.office ?? L.mall ?? L.reactor ?? L.skyways).toBeUndefined();
+      let stores = 0;
       for (const p of L.props) {
         if (!isLootHolderKind(p.kind)) continue;
-        expect([seed, p.kind, p.purpose]).toEqual([seed, p.kind, MARKET_EMPTY_KEY]);
+        const workshop = p.purpose === MARKET_WORKSHOP_KEY;
+        expect([seed, p.kind, p.purpose]).toEqual([seed, p.kind, workshop ? MARKET_WORKSHOP_KEY : MARKET_EMPTY_KEY]);
+        if (workshop) {
+          stores++;
+          expect(STORES.has(p.kind), `${seed} ${p.kind}`).toBe(true);
+          expect(L.areas[p.area].purpose, `${seed} ${p.kind}`).toBe('workshop');
+        }
         const t = holderTable(p.kind, p.purpose!, P);
         expect(t.empty === 1 || t.lots[1] === 0 || !t.rows.length, `${seed} ${p.kind}`).toBe(true);
+        expect(!!extraSalvageRule(p.kind, p.purpose!, P), `${seed} ${p.kind} salvage`).toBe(workshop);
       }
+      expect(stores, `${seed} workshop stores`).toBeGreaterThanOrEqual(3);
     }
     // the level-wide gear / mask roll is empty: the registry places nothing
     for (const s of SEEDS) {

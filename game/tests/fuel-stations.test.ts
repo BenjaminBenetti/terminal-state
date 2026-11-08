@@ -25,7 +25,7 @@ import {createRun, type RunState} from '../src/run/runState';
 import {applyHolders, captureHolders, capturePickups, holderKeyOf, restorePickup} from '../src/run/worldMemory';
 import {Inventory} from '../src/items/inventory';
 import {placementBox} from '../src/items/lootLayout';
-import {takeLot} from '../src/items/loot';
+import {isSalvageLotId, takeLot} from '../src/items/loot';
 import {lootProfile} from '../src/items/lootTables';
 import {SEEDS, fixtureCampaign, sid} from './helpers/saveFixture';
 
@@ -60,6 +60,8 @@ describe('fuel cans as loot lots in shelves / counters / storage (gen/fuelHolder
     const {ins} = holdersOf(l, level);
     const slots = fuelHolderSlots(l, ins, 'st-07');
     expect(fuelHolderSlots(l, ins, 'st-07')).toEqual(slots);
+    // (task studio-base-salvage-20261108-073314-01) the additive base salvage lots never move a can: the very same slots without them
+    expect(fuelHolderSlots(l, ins.map(h => ({...h, lots: h.lots.filter(r => !isSalvageLotId(r.id))})), 'st-07')).toEqual(slots);
     expect(fuelHolderSlots(l, ins, 'st-08').map(s => s.key)).not.toEqual(slots.map(s => s.key)); // another station: another order
     expect(slots.length).toBeGreaterThanOrEqual(60);
     const tp = playerTrainPlacement(l)!, byKey = new Map(ins.map(h => [h.key, h]));
@@ -82,6 +84,7 @@ describe('fuel cans as loot lots in shelves / counters / storage (gen/fuelHolder
       expect(b.max[1] - b.min[1]).toBeLessThanOrEqual(surf.clear); // fits under the next tier / lid
       if (surf.part !== undefined) expect(s.lot.part).toBe(surf.part); // a compartment's lot is behind its door / in its drawer
       for (const r of h.lots) {
+        if (isSalvageLotId(r.id)) continue; // (base salvage: it yields to a can — world/containers.ts addLots; tests/base-salvage.test.ts)
         const o = placementBox(r.itemId, r);
         const hit = b.min[0] < o.max[0] && b.max[0] > o.min[0] && b.min[1] < o.max[1] - 0.002 && b.max[1] > o.min[1] + 0.002 && b.min[2] < o.max[2] && b.max[2] > o.min[2];
         expect(hit, `${s.key} overlaps rolled lot ${r.id}`).toBe(false);

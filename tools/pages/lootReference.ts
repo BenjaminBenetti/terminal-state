@@ -23,7 +23,7 @@ import {
 import {ITEMS} from '../../game/src/items/items';
 import {GEAR_ITEMS, FILTER_LIFE_S} from '../../game/src/items/gear';
 import {
-  CONTAINER_KINDS, HOLDER_LABEL, SURFACE_KINDS, compartmentTable, holderTable, isContainerKind, isLootHolderKind,
+  CONTAINER_KINDS, HOLDER_LABEL, SURFACE_KINDS, compartmentTable, extraSalvageRule, holderTable, isContainerKind, isLootHolderKind,
   type HolderKind, type HolderTable,
 } from '../../game/src/items/loot';
 import {catAvailable, holderTheme} from '../../game/src/items/lootEconomy';
@@ -147,6 +147,12 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   floorMoved: boolean;
   /** Track 2 (lane CONTENT): the level's station grows seeded service annexes (gen/annexContent.ts): their floor program variant. */
   annex: boolean;
+  /**
+   * Task studio-base-salvage-20261108-073314-01: holder contexts a level's DRESSER can place that the small census may miss (a store /
+   * room that only some levels get) — code paths, declared here with the generator that places them and a WITNESS level seed in which
+   * it does (game/tests/loot-reference.test.ts generates every witness and requires the context). Shown as 'declared', never 'observed'.
+   */
+  declared?: readonly {kind: string; areaKey: string; by: string; witness: number}[];
 }>> = {
   subway: {floor: 'subway', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: true, annex: true},
   office: {floor: 'office', weapons: 'office-plan', pistolBoxes: false, rewards: [LT.ROOF_CACHE_KEY], rewardFinds: [LT.ROOF_FIND_KEY], storeys: true, floorMoved: false, annex: true},
@@ -158,7 +164,10 @@ export const LEVEL_ADAPTER: Readonly<Record<LevelId, {
   // Task studio-skyways-level-20261106-054448-01 (primary): SKYWAYS — the Office's loose floor program over its three storeys
   // — no loose floor program (user 2026-11-06: ordinary small loot sits on shelves / counters / in containers; the floor is reserved for
   // key finds) — and the station weapon finds (gen/weaponFinds.ts placeWeaponFinds).
-  skyways: {floor: 'none', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true},
+  skyways: {floor: 'none', weapons: 'station', pistolBoxes: true, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: true,
+    // (task studio-base-salvage-20261108-073314-01) the science store's hands-on demo bench: an Office lab bench (its own drawer table:
+    // dressings, cells, bio mater) on the store's 'mall-toys' sales floor — only levels with that store place it
+    declared: [{kind: 'labBench', areaKey: 'mall-toys', by: 'game/src/gen/skyways/stores/scienceDress.ts demoBench (the science store)', witness: 1201}]},
   // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): THE SURVIVOR MARKET — no free loot: no loose floor program, no weapon
   // finds, no pistol-start boxes, no annex (trackExtensions 'none'); every holder it places carries the exact empty key (gen/market/dress.ts)
   market: {floor: 'none', weapons: 'none', pistolBoxes: false, rewards: [], rewardFinds: [], storeys: false, floorMoved: false, annex: false},
@@ -196,6 +205,11 @@ export const LOOT_TABLES_EXPORT_ROLES: Readonly<Record<string, string>> = {
   MALL_OVERRIDES: 'levels (profiles: mall overrides)', MALL_PROFILE: 'levels (profiles: mall)',
   REACTOR_OVERRIDES: 'levels (profiles: reactor overrides)', REACTOR_PROFILE: 'levels (profiles: reactor)', // task reactor-build-20261101
   MARKET_PROFILE: 'levels (profiles: market — no free loot)', // task studio-survivor-market-20261108-005807-01
+  // task studio-base-salvage-20261108-073314-01: the shared ADDITIVE base salvage (the BASE_*_SALVAGE row lists are tables: auto-detected)
+  // and the market's one salvage place (its workshop storage)
+  BASE_SALVAGE: 'economy.salvage (base levels, additive) + holder base-salvage lots',
+  MARKET_SALVAGE: 'economy.salvage (market workshop, additive) + holder base-salvage lots', MARKET_WORKSHOP_KEY: 'market workshop storage (loot key -> purpose market-workshop: holder contexts)',
+  MARKET_WORKSHOP_EMPTY: 'market workshop storage own table (empty; purpose market-workshop)',
   // task reactor-playtest-round2-20261102 (lane ARRIVAL): the Reactor's total-loot hold (slot lots / container empty overrides, the
   // mall's storage fill scaled in the Reactor's own tables)
   REACTOR_PICKED_OVER: 'levels (profiles: reactor overrides)', REACTOR_FILL_SCALE: 'economy.storageFill (reactor scale)', REACTOR_TABLES: 'profile tables (reactor)',
@@ -691,6 +705,12 @@ function buildLevel(B: Builder, level: LevelId, P: LootProfile, census: readonly
       if (!occ.has(key)) occ.set(key, {seeds: new Set(), holders: 0, storeys: new Set(), companies: new Set()});
     }
   }
+  // task studio-base-salvage-20261108-073314-01: + the contexts its dressers declare (generator adapter; witnessed by a test)
+  const declaredBy = new Map<string, string>();
+  for (const d of LEVEL_ADAPTER[level].declared ?? []) {
+    const key = `${d.kind}@${d.areaKey}`;
+    if (!occ.has(key)) { occ.set(key, {seeds: new Set(), holders: 0, storeys: new Set(), companies: new Set()}); declaredBy.set(key, `${d.by}; e.g. level seed ${d.witness}`); }
+  }
   // the level's reward keys (generator adapter) are always contexts
   for (const key of LEVEL_ADAPTER[level].rewards) {
     const rw = P.tables.rewards?.[key];
@@ -703,6 +723,7 @@ function buildLevel(B: Builder, level: LevelId, P: LootProfile, census: readonly
     const o = occ.get(key)!;
     const occurrence: OccurrenceInfo = {
       basis: o.holders ? 'observed' : 'declared', levelsObserved: o.seeds.size, samples: census.length, holdersObserved: o.holders,
+      ...(declaredBy.has(key) ? {declaredBy: declaredBy.get(key)!} : {}),
       ...(o.storeys.size ? {storeys: sortStoreys([...o.storeys])} : {}), ...(o.companies.size ? {companies: [...o.companies].sort()} : {}),
     };
     holders.push(holderContext(B, level, P, tag, kind, areaKey, false, occurrence));
@@ -770,6 +791,8 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
   const notes: string[] = [];
   const purpose = purposeById(areaKey);
   const isReward = ht.source === 'reward';
+  // task studio-base-salvage-20261108-073314-01: the additive base salvage rule (the holder's own context only, never a compartment's)
+  const additive = compartment ? undefined : extraSalvageRule(kind as HolderKind, areaKey, P, ht);
   const areaKind: HolderContext['areaKind'] = isReward ? 'reward-key' : purpose ? 'purpose' : areaKey === 'default' ? 'default' : 'room-type';
   const areaLabel = isReward ? (P.tables.rewards?.[areaKey]?.label ?? areaKey) : purpose?.label ?? areaKey;
   let tableId: string | null = null;
@@ -807,7 +830,15 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
     const final = exact ? out : finalLot(P, kind, areaKey, ht.rows, out);
     if (exact) notes.push('Annex-local exact table (LootSpec.exact): its own empty / lots / rows are the odds — no keep cut, no re-theme, no limb conversion (the level\'s slot scaling still applies).');
     gates.pNotEmpty = rd(pRoll);
-    expected = expectedOf([{pRoll, lots: ht.lots, raw: out, final}]);
+    const parts: RollPart[] = [{pRoll, lots: ht.lots, raw: out, final}];
+    // task studio-base-salvage-20261108-073314-01: + the ADDITIVE base salvage lot (its own roll part: P = the rule's share, one lot, the
+    // rule's rows under the profile's overrides; not part of the table roll, so no raw outcome)
+    if (additive) {
+      const sOut: OutcomeMap = new Map(), rs = resolveRows(P, additive.rows).filter(r => r[1] > 0), pr = pickProbs(rs.map(r => r[1]));
+      rs.forEach(([j], i) => addOut(sOut, j, pr[i], pr[i] * boxMean(P, kind, j)));
+      if (sOut.size) parts.push({pRoll: additive.share, lots: [1, 1], raw: new Map(), final: sOut});
+    }
+    expected = expectedOf(parts);
     if (ht.source === 'legacy') {
       const T = P.tables, room = T.areaWeights[areaKey] ?? T.areaWeights.default, mod = T.holderMod[kind];
       gates.categories = catShares(LEGACY_CATS.map((c, i) => [c, catWeight(P, c, room[i] * mod[i])] as const).filter(([, w]) => w > 0)).map(c => ({...c, weight: rd(c.weight)}));
@@ -818,17 +849,19 @@ function holderContext(B: Builder, level: LevelId, P: LootProfile, tag: string, 
     if (CONTAINER_THEMED.has(kind)) notes.push('Container-themed: its own rows apply in any room (CONTAINER_THEMED); the room theme still steers scarce re-themes.');
   }
   if (compartment) notes.push('Separate compartment roll (drawers / cupboards; own stream and scarcity stream). Rolled when the holder\'s openable model is active — the shipped build loads every model.');
-  if (occurrence.basis === 'declared') notes.push('Declared by a purpose / reward but not placed in any sample level (not exhaustive).');
-  // task track3-eaton-centre-20261031 (lane PROFILES): the level's salvage rows in this holder's table
-  const rule = (ht.source === 'own' || ht.source === 'purpose') && ht.rows.length ? salvageRule(P, kind, areaKey) : undefined;
-  if (rule) notes.push(`Salvage: the ${level} profile adds crafting-material rows (${rd(rule.share)} of the table weight before overrides; kept exactly as rolled) — ${salvageOrigin(P, kind, areaKey)}.`);
+  if (occurrence.basis === 'declared') notes.push(occurrence.declaredBy ? `Declared by the level generator (${occurrence.declaredBy}) but not placed in any sample level: a possible source, not a sampled one.` : 'Declared by a purpose / reward but not placed in any sample level (not exhaustive).');
+  // task track3-eaton-centre-20261031 (lane PROFILES): the level's salvage rows in this holder's table (task studio-base-salvage-20261108-073314-01:
+  // or its ADDITIVE base salvage lot)
+  const rule = additive ?? (!P.tables.salvage?.extra && (ht.source === 'own' || ht.source === 'purpose') && ht.rows.length ? salvageRule(P, kind, areaKey) : undefined);
+  if (additive) notes.push(`Base salvage: with probability ${rd(additive.share)} per holder (before overrides and fit) ONE extra crafting-material lot — ${salvageOrigin(P, kind, areaKey)}; additive (its own stream, a free spot beside the rolled lots: every other find of this holder is unchanged), kept exactly as rolled, finite and remembered; included in the expected values (it yields to a fuel can laid on it).`);
+  else if (rule) notes.push(`Salvage: the ${level} profile adds crafting-material rows (${rd(rule.share)} of the table weight before overrides; kept exactly as rolled) — ${salvageOrigin(P, kind, areaKey)}.`);
   // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the level's storage fill of this holder kind (items/loot.ts storageFill)
   const sf = P.tables.storageFill?.[kind];
   if (sf && ht.rows.length && ht.source !== 'reward' && ht.source !== 'fixture') notes.push(`Storage fill: each compartment this roll leaves empty rolls once more on its own stream — ${rd(sf.chance)} x min(1, compartment loot area / ${sf.area} m²), U{${sf.lots[0]}..${sf.lots[1]}} lots from these rows within ${(sf.cats ?? LT.STORAGE_FILL_CATS).join(' / ')}${Object.keys(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).length ? ` (row weights x ${Object.entries(sf.weights ?? (sf.cats ? {} : LT.STORAGE_FILL_WEIGHTS)).map(([c, w]) => `${c} ${w}`).join(', ')})` : ''}${(sf.fallback ?? (sf.cats ? [] : LT.STORAGE_FILL_FALLBACK)).length ? `; ${(sf.fallback ?? LT.STORAGE_FILL_FALLBACK).join(' / ')} only when nothing else of these rows fits there (except in ${LT.STORAGE_FILL_STOCK_THEMES.join(' / ')}-themed places, where they are the stock)` : ''}, only among the items that fit the compartment (HOLDER_ALLOW applies; not in the expected values above).`);
   return {
     id, level, kind, kindLabel: label(kind), slot, compartment, areaKey, areaLabel, areaKind, source: ht.source, tableId,
     ...(rewardPicks ? {rewardPicks} : {}), gates, scarcity,
-    ...(rule ? {salvage: {from: salvageOrigin(P, kind, areaKey), share: rule.share, rows: rowsTable(rule.rows)}} : {}),
+    ...(rule ? {salvage: {from: salvageOrigin(P, kind, areaKey), share: rule.share, rows: rowsTable(rule.rows), ...(additive ? {additive: true} : {})}} : {}),
     expected, occurrence, class: cls, notes,
   };
 }
@@ -982,7 +1015,10 @@ function economyOf(B: Builder, P: LootProfile): EconomyInfo {
     ...(X.salvage ? {salvage: {
       purposes: Object.entries(X.salvage.purposes ?? {}).map(([key, r]) => ({key, share: r.share, rows: rowsTable(r.rows)})),
       themes: Object.entries(X.salvage.themes ?? {}).map(([key, r]) => ({key, share: r!.share, rows: rowsTable(r!.rows)})),
-      note: 'Crafting-material rows added at resolution time to the own / purpose tables of a place whose purpose (first) or loot theme has an entry: each rule\'s rows take `share` of the holder table\'s weight before overrides, are rolled per lot like any row and kept exactly as rolled. Never legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders or holders whose allow list excludes materials (items/lootEconomy.ts salvageRule / withSalvage).',
+      ...(X.salvage.extra ? {additive: true} : {}),
+      note: X.salvage.extra
+        ? 'ADDITIVE base salvage (the basic crafting materials of every level on these tables): a holder whose purpose (first) or loot theme has an entry gets, with probability `share` (per holder, before overrides and fit), ONE extra crafting-material lot from the rule\'s mix — on its own stream, in a free spot beside its rolled lots, so every other find is exactly unchanged; kept exactly as rolled, finite, remembered, never refilled (a holder remembered from before this rule never gains it; the lot yields to a fuel can laid on it). Ordinary own / purpose tables only: never exact annex / cache / market-empty tables, legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders or holders whose allow list excludes materials (items/loot.ts extraSalvageRule / salvageLot). Per-holder chances, not a per-level rate: how many fitting holders a level has is the generator\'s.'
+        : 'Crafting-material rows added at resolution time to the own / purpose tables of a place whose purpose (first) or loot theme has an entry: each rule\'s rows take `share` of the holder table\'s weight before overrides, are rolled per lot like any row and kept exactly as rolled. Never legacy room-type tables, curated rewards, fixtures, container-themed storage, junk holders or holders whose allow list excludes materials (items/lootEconomy.ts salvageRule / withSalvage).',
     }} : {}),
     // Task mall-playtest-revision-20261031 (lane SHOPS, U10): the per-compartment storage fill (absent for the Subway / Office tables)
     ...(X.storageFill ? {storageFill: {

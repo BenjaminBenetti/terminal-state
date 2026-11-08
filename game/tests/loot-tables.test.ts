@@ -5,7 +5,7 @@
 
 import {describe, expect, it} from 'vitest';
 import {
-  BASELINE_PROFILE, BASE_TABLES, CACHE_CRATE, ECON_CATS, HOLDER_SLOTS, LEGACY_POOL, OFFICE_DESK, OFFICE_ROWS, OPENABLE_TABLES, PROFILES,
+  BASELINE_PROFILE, BASE_TABLES, CACHE_CRATE, ECON_CATS, HOLDER_SLOTS, LEGACY_POOL, MARKET_SALVAGE, OFFICE_DESK, OFFICE_ROWS, OPENABLE_TABLES, PROFILES,
   REACTOR_FILL_SCALE, SLOT_CATEGORIES, STORE_DRINKS, TENANT_ARMS, TOILET_ROWS, catWeight, econCat, floorChance, floorCount, gearParams, keepChance, lootProfile,
   resolveRows, slotEmpty, slotLots, validateLootProfile, type EconCat, type LootProfile, type OwnTable,
 } from '../src/items/lootTables';
@@ -123,16 +123,22 @@ describe('profiles: one per logical level, today\'s tables, no overrides', () =>
       // Task track3-eaton-centre-20261031 (lane PROFILES): the mall = the base tables + its salvage, with its explicit overrides
       // (tests/mall-profiles.test.ts checks them); the Subway and the Office keep the shared tables and no overrides
       if (id === 'mall') {
-        for (const [k, v] of Object.entries(BASE_TABLES)) expect((p.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
+        // (task studio-base-salvage-20261108-073314-01: its own salvage replaces the base one — never both)
+        for (const [k, v] of Object.entries(BASE_TABLES)) if (k !== 'salvage') expect((p.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
         expect(p.tables.salvage).toBeDefined();
+        expect(p.tables.salvage).not.toBe(BASE_TABLES.salvage);
         continue;
       }
       // Task studio-survivor-market-20261108-005807-01 (lane LEVEL): the Survivor Market = the base tables under the NO-FREE-LOOT overrides
       // (every economy category 0, every slot 0 lots, no floor finds, an empty gear roll)
+      // task studio-base-salvage-20261108-073314-01: + the workshop's basic salvage (MARKET_SALVAGE replaces the base one; the 'material'
+      // category alone weighs 1 for it; every slot still 0 lots, so no holder's own table rolls anything — tests/base-salvage.test.ts)
       if (id === 'market') {
-        expect(p.tables).toBe(BASE_TABLES);
+        for (const [k, v] of Object.entries(BASE_TABLES)) if (k !== 'salvage') expect((p.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
+        expect(p.tables.salvage).toBe(MARKET_SALVAGE);
         expect(Object.keys(p.overrides)).toEqual(['categoryWeight', 'slot', 'floor', 'gear']);
-        expect(Object.values(p.overrides.categoryWeight!).every(v => v === 0)).toBe(true);
+        expect(Object.entries(p.overrides.categoryWeight!).every(([c, v]) => v === (c === 'material' ? 1 : 0))).toBe(true);
+        expect(Object.values(p.overrides.slot!).every(o => o?.lots === 0)).toBe(true);
         expect(p.overrides.gear).toEqual({mean: 0, cap: 0});
         continue;
       }

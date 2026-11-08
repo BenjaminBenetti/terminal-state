@@ -25,12 +25,13 @@ import {MALL_HOLDER_KINDS, type MallHolderKind} from '../gen/mall/kinds'; // Tas
 import {effectText, itemDef} from './items';
 import {ammoText} from './calibers'; // lane AMMO (knife-melee-20261030)
 import type {Inventory} from './inventory';
-import {packItems, type Placement, type Surface} from './lootLayout';
+import {freeLotSpot, packItems, placementBox, type Placement, type Surface} from './lootLayout';
 import {scarceFinds, type Find} from './lootEconomy';
 import {withSalvage} from './lootEconomy'; // Task track3-eaton-centre-20261031 (lane PROFILES): mall salvage rows
+import {salvageRule} from './lootEconomy'; // task studio-base-salvage-20261108-073314-01: the additive base salvage lot
 import {
   BASELINE_PROFILE, LEGACY_CATS, catWeight, resolveRows, slotEmpty, slotLots, slotOf,
-  type ItemRows, type LegacyCat, type LootProfile, type LootSpec, type LotRange, type OwnTable, type SlotCategory,
+  type ItemRows, type LegacyCat, type LootProfile, type LootSpec, type LotRange, type OwnTable, type SalvageRule, type SlotCategory,
 } from './lootTables';
 import {rewardTable, type RewardTable} from './lootTables'; // Task office-interactions-layout-20261030 (lane ROOF): curated rewards
 import {CONTAINER_THEMED} from './lootTables'; // Task office-interactions-layout-20261030 (lane OPEN): container-themed storage
@@ -298,6 +299,9 @@ export function holderFinds(seed: number, index: number, kind: HolderKind, areaT
   if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile).map(e => ({...e, source: 'roll' as const}));
   const out = t.exact ? rollItems(holderRng(seed, index, kind), kind, t, areaType, profile).map(e => ({...e, source: 'roll' as const}))
     : scarceFinds(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), findContext(kind, areaType, t.rows, profile), scarceRng(seed, index, kind));
+  // (task base-salvage: the additive base salvage lot, before fit — after the holder's own roll, before any compartment roll)
+  const sv = salvageEntry(seed, index, kind, areaType, t, profile);
+  if (sv) out.push({...sv.entry, source: 'salvage'});
   const inside = withCompartments ? compartmentTable(kind, areaType, profile) : null;
   if (inside) {
     out.push(...scarceFinds(rollRows(mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0)), kind, inside, profile), findContext(kind, areaType, inside.rows, profile), scarceRng(seed, index, kind, ':inside')));
@@ -366,7 +370,9 @@ export function rollLootItems(seed: number, index: number, kind: HolderKind, are
   if (t.source === 'reward') return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile); // lane ROOF: exact, no scarcity cut
   // (round 2, lane CACHE: an annex-local exact table too — as holderFinds / rollHolderLots roll it; this QA helper used to cut it)
   if (t.exact) return rollItems(holderRng(seed, index, kind), kind, t, areaType, profile);
-  return scarce(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
+  const out = scarce(rollItems(holderRng(seed, index, kind), kind, t, areaType, profile), scarceRng(seed, index, kind), kind, areaType, t.rows, profile);
+  const sv = salvageEntry(seed, index, kind, areaType, t, profile); // (task base-salvage: + the additive base salvage lot)
+  return sv ? [...out, sv.entry] : out;
 }
 
 /** Deterministic contents placed on the holder's surfaces (items that fit nowhere are dropped). */
@@ -393,7 +399,7 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
     const r2 = mulberry32(hashString(`loot:${kind}:${index}:inside`, seed >>> 0));
     const b = rollOn(r2, index * 1000 + 500, r => scarce(rollRows(r, kind, inside, profile), s2, kind, areaType, inside.rows, profile), parts);
     const ab = [...a, ...b].map(l => tagPart(l, surfaces));
-    return t.exact ? ab : storageFill(seed, index, kind, areaType, surfaces, ab, inside.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+    return t.exact ? ab : salvageLot(seed, index, kind, areaType, t, surfaces, storageFill(seed, index, kind, areaType, surfaces, ab, inside.rows, profile), profile); // (lane SHOPS, U10: none unless the profile has one)
   }
   const r = holderRng(seed, index, kind);
   const raw = rollItems(r, kind, t, areaType, profile);
@@ -412,7 +418,57 @@ export function rollHolderLots(seed: number, index: number, kind: HolderKind, ar
   placed.forEach((p, i) => { if (p) lots.push(tagPart({id: index * 1000 + i, ...items[i], ...p}, surfaces)); });
   // (playtest revision: an exact annex table is the annex's whole budget — the mall's storage fill never tops it up, so a searched-clean
   // holder stays clean and the annex economy is the same on every level)
-  return t.exact ? lots : storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile); // (lane SHOPS, U10: none unless the profile has one)
+  // (task studio-base-salvage-20261108-073314-01: + the additive base salvage lot, last — after the storage fill, beside every lot)
+  return t.exact ? lots : salvageLot(seed, index, kind, areaType, t, surfaces, storageFill(seed, index, kind, areaType, surfaces, lots, t.rows, profile), profile); // (lane SHOPS, U10: none unless the profile has one)
+}
+
+/** Lot id offset of the base salvage lot (index * 1000 + SALVAGE_ID: clear of rolled 0.., compartment 500.., fill 600.. and fuel 900.. ids). */
+export const SALVAGE_ID = 700;
+/** Is `id` a holder's base salvage lot (salvageLot)? Fuel placement leaves those out of its taken room; an added lot on one removes it. */
+export function isSalvageLotId(id: number): boolean {
+  return id >= 0 && id % 1000 === SALVAGE_ID;
+}
+
+/**
+ * Task studio-base-salvage-20261108-073314-01: the ADDITIVE salvage rule a holder rolls its one extra lot from (lootTables SalvageTables
+ * `extra`: BASE_SALVAGE), or undefined — the level's salvage rule (lootEconomy salvageRule: purpose entry, else the loot theme's; never
+ * container-themed storage, junk bins, holders that may not hold materials, opted-out tables) for an ORDINARY own / purpose table only:
+ * never an exact annex / cache / market-empty table, a curated reward, a fixture or a plain-room (legacy) holder.
+ */
+export function extraSalvageRule(kind: HolderKind, areaType: string, profile: LootProfile = BASELINE_PROFILE, t: HolderTable = holderTable(kind, areaType, profile)): SalvageRule | undefined {
+  if (!profile.tables.salvage?.extra || t.exact || (t.source !== 'own' && t.source !== 'purpose')) return undefined;
+  return salvageRule(profile, kind, areaType);
+}
+
+/** The additive salvage stream of a holder (its own: no other roll of the holder moves). */
+function salvageRng(seed: number, index: number, kind: HolderKind): () => number {
+  return mulberry32(hashString(`loot:${kind}:${index}:salvage`, seed >>> 0));
+}
+
+/**
+ * The holder's extra salvage entry (null: none): with probability `rule.share` ONE lot of the rule's rows (the profile's item / category
+ * weights applied; an override zeroing them means none), its stack size as any roll of this holder kind. Same draws as salvageLot.
+ */
+function salvageEntry(seed: number, index: number, kind: HolderKind, areaType: string, t: HolderTable, profile: LootProfile): {entry: LootEntry; r: () => number} | null {
+  const rule = extraSalvageRule(kind, areaType, profile, t);
+  if (!rule) return null;
+  const rows = resolveRows(profile, rule.rows).filter(x => x[1] > 0);
+  if (!rows.length) return null;
+  const r = salvageRng(seed, index, kind);
+  if (r() >= rule.share) return null;
+  const itemId = pick(rows, r);
+  return {entry: {itemId, count: lotCount(itemId, kind, r, profile)}, r};
+}
+
+/**
+ * Task studio-base-salvage-20261108-073314-01: `lots` + the holder's extra salvage lot (id index * 1000 + SALVAGE_ID) in a FREE spot beside
+ * them (lootLayout freeLotSpot: no rolled lot moves or is covered; none = the lot is not placed, like any lot that does not fit).
+ */
+function salvageLot(seed: number, index: number, kind: HolderKind, areaType: string, t: HolderTable, surfaces: readonly Surface[], lots: Lot[], profile: LootProfile): Lot[] {
+  const sv = salvageEntry(seed, index, kind, areaType, t, profile);
+  if (!sv || !surfaces.length) return lots;
+  const p = freeLotSpot(sv.entry.itemId, surfaces, lots.map(l => placementBox(l.itemId, l)), sv.r);
+  return p ? [...lots, tagPart({id: index * 1000 + SALVAGE_ID, ...sv.entry, ...p}, surfaces)] : lots;
 }
 
 /** Lot id offset of storage-fill lots (index * 1000 + FILL_ID_BASE + (compartment + 1) * 3 + k: clear of the roll's own ids). */

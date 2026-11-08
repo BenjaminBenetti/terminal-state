@@ -295,13 +295,23 @@ export interface ThemeEconomy {
  * category weight overrides like any row. Rolled per lot like every row and kept EXACTLY as rolled (category 'material'), so the
  * share is the per-lot material chance before overrides. Applied at RESOLUTION time (items/lootEconomy.ts withSalvage) to own /
  * purpose tables only (never legacy room-type tables, curated rewards or fixtures), only where the holder may hold materials
- * (HOLDER_ALLOW), never to container-themed storage (CONTAINER_THEMED: the container decides) or junk holders.
+ * (HOLDER_ALLOW), never to container-themed storage (CONTAINER_THEMED: the container decides) or junk holders. Task
+ * studio-base-salvage-20261108-073314-01: in ADDITIVE tables (SalvageTables `extra`: BASE_SALVAGE) `share` is instead the PER-HOLDER
+ * chance (0 < share ≤ 1) of one extra salvage lot.
  */
 export interface SalvageRule { rows: ItemRows; share: number }
-/** Salvage per place: by purpose id first (gen/purposes.ts), else by the holder's loot theme. Absent = none (every shipped level). */
+/** Salvage per place: by purpose id first (gen/purposes.ts), else by the holder's loot theme (base levels: BASE_SALVAGE; the mall: MALL_SALVAGE). */
 export interface SalvageTables {
   purposes?: Readonly<Record<string, SalvageRule>>;
   themes?: Readonly<Partial<Record<LootTheme, SalvageRule>>>;
+  /**
+   * Task studio-base-salvage-20261108-073314-01: HOW the share applies. Absent (the mall's MALL_SALVAGE): the salvage rows join the holder's
+   * table (withSalvage) — a lot is salvage with probability `share`, the other rows thin by (1 − share). True (BASE_SALVAGE): ADDITIVE —
+   * `share` is the chance that a fitting holder gets ONE extra salvage lot (items/loot.ts salvageLot: its own stream, a free spot beside
+   * the rolled lots), so every other find — ammo, cells, flares, food, medicine, their placement and the holder's lot count — is exactly
+   * unchanged. Ordinary own / purpose tables only: never an exact annex / cache table, a curated reward or a fixture.
+   */
+  extra?: boolean;
 }
 
 /**
@@ -487,7 +497,8 @@ export const SERVER_SPARES_ROWS: ItemRows = [['battery', 1.4], ['flare', 0.6], [
  * Task studio-alpha-track2-round2-20261031-01 (round 2): the annex signature rooms' tool lockers — the server spares WITHOUT the
  * crafting materials. The annexes grow on the Subway too, and the Subway never holds a material (craft-materials test); the
  * playtest revision's lockers used SERVER_SPARES_ROWS, so a deep intact boiler / generator-room locker could roll electrical parts
- * (found on Subway 1002 / 1043 / 1234). Materials stay in the server racks / cupboards.
+ * (found on Subway 1002 / 1043 / 1234). Materials stay in the server racks / cupboards. (Task studio-base-salvage-20261108-073314-01:
+ * the Subway's materials now come from the shared base salvage lot only — BASE_SALVAGE — never from these rows.)
  */
 export const ANNEX_SPARES_ROWS: ItemRows = SERVER_SPARES_ROWS.filter(([id]) => !isMaterialItem(id));
 /**
@@ -714,8 +725,8 @@ export const ANNEX_PICKED: LootSpec = {items: ANNEX_PICKED_ROWS, lots: [1, 1], e
  * yields ~60-100 non-ammo supplies; an annex is ~1/4 of its walkable area, so ~15-25 non-ammo finds per annex is the core's density.
  */
 export const ANNEX_SUPPLY_KEY = 'annex-supply';
-// (no crafting materials: they belong to the server racks / cupboards only — items/lootTables.ts HOLDER_ALLOW, craft-materials /
-// office-openables tests: "the Subway never holds a material")
+// (no crafting materials: their rows belong to the server racks / cupboards only — items/lootTables.ts HOLDER_ALLOW; an exact annex
+// table never takes the base salvage lot either: items/loot.ts extraSalvageRule, tests/base-salvage.test.ts)
 export const ANNEX_SUPPLY_ROWS: ItemRows = [
   ['water', 1], ['cola', 0.45], ['beans', 0.85], ['noodles', 0.4], ['chocolate', 0.4], ['bandage', 0.75], ['medkit', 0.12],
   ['battery', 0.6], ['flare', 0.35],
@@ -981,7 +992,10 @@ export interface LootTables {
   rewards?: Readonly<Record<string, RewardTable>>;
   /** Task gas-mask-roof-feedback-20261030 (item 10): curated find rewards by key (REWARD_FINDS; absent / {} = none). */
   rewardFinds?: Readonly<Record<string, RewardFind>>;
-  /** Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material salvage per place (SalvageTables; absent = none). */
+  /**
+   * Task track3-eaton-centre-20261031 (lane PROFILES): crafting-material salvage per place (SalvageTables; absent = none). Task
+   * studio-base-salvage-20261108-073314-01: BASE_TABLES carries BASE_SALVAGE; a profile's own table REPLACES it (one rule per holder).
+   */
   salvage?: SalvageTables;
   /**
    * Task mall-playtest-revision-20261031 (lane SHOPS, U10): per-COMPARTMENT storage fill by holder kind (StorageFill; absent = none:
@@ -991,6 +1005,66 @@ export interface LootTables {
   /** Task mall-round3-20261031 (lane SHOPS, R6): rare-gear placement bias by room purpose / piece (GearPlacement; absent = none). */
   gearPlace?: GearPlacement;
 }
+// ---------------------------------------------------------------------------------------
+// Task studio-base-salvage-20261108-073314-01 (user: "what about if we changed the base loot table? these items are supposed to be
+// basic and found in all levels" -> "ok that sounds good. Lets do that"): THE SHARED BASE SALVAGE. The three crafting materials (bio
+// mater, electrical parts, scrap metal) are BASIC supplies: every profile rolling BASE_TABLES (Subway, Office, Skyways, any future
+// level) gives the holders of its service / storage / workshop / plant rooms (scrap and wiring first), its tech rooms (wiring first)
+// and its medical / lab rooms (bio mater) a modest chance of ONE extra salvage lot, through the ordinary salvage routing
+// (items/lootEconomy.ts salvageRule: purpose entry, else the loot theme's; never container-themed storage, junk bins or holders that may
+// not hold materials — no fridge / cooler / gun locker / medicine cabinet / food fixture takes them: HOLDER_ALLOW). ADDITIVE (`extra`):
+// the holder's own roll, its scarcity cut and its placement are untouched — no food / ammo / medicine / cell / flare chance moves. Finite
+// like every lot: rolled once per holder on its own stream, remembered by lot id (a holder remembered from before this rule never gains
+// it), never refilled; no floor scatter, no guaranteed find. A level with its OWN salvage tables (the mall's MALL_SALVAGE, the Reactor
+// through the mall's) replaces these wholesale — one rule per holder, never both — and covers every base context itself
+// (tests/base-salvage.test.ts). Shares are PER-HOLDER chances in a fitting holder before overrides and fit (docs/loot-tables.md
+// "Base salvage"), never a per-level rate.
+
+/** Storage / service rooms / annex plant: shelving brackets, conduit, cable, now and then a forgotten specimen jar. */
+export const BASE_SERVICE_SALVAGE: ItemRows = [[SCRAP_METAL, 1.6], [ELECTRICAL_PARTS, 1.2], [BIO_MATER, 0.35]];
+/** Electrical / signal / IT rooms and the tech theme: stripped boards and wiring first, some chassis scrap. */
+export const BASE_ELECTRICAL_SALVAGE: ItemRows = [[ELECTRICAL_PARTS, 3], [SCRAP_METAL, 0.8]];
+/** Workshops and plant rooms (pumps, boilers, generators, ventilation): offcuts, brackets and fixings first, some wiring. */
+export const BASE_WORKSHOP_SALVAGE: ItemRows = [[SCRAP_METAL, 3], [ELECTRICAL_PARTS, 1]];
+/** Medical / first-aid / lab rooms: sealed specimen jars of culture. */
+export const BASE_BIO_SALVAGE: ItemRows = [[BIO_MATER, 1]];
+
+/** THE BASE SALVAGE (BASE_TABLES.salvage): purpose entries first (the places that obviously hold them), else the loot theme's. */
+export const BASE_SALVAGE: SalvageTables = {
+  // (additive: one extra lot at most per holder, every other find exactly as before — no other supply moves to compensate)
+  extra: true,
+  purposes: {
+    workshop: {rows: BASE_WORKSHOP_SALVAGE, share: 0.18}, 'office-workshop': {rows: BASE_WORKSHOP_SALVAGE, share: 0.18},
+    'electrical-room': {rows: BASE_ELECTRICAL_SALVAGE, share: 0.18}, 'electrical-closet': {rows: BASE_ELECTRICAL_SALVAGE, share: 0.18},
+    'signal-room': {rows: BASE_ELECTRICAL_SALVAGE, share: 0.14}, 'office-it': {rows: BASE_ELECTRICAL_SALVAGE, share: 0.12},
+    'pump-room': {rows: BASE_WORKSHOP_SALVAGE, share: 0.12}, 'boiler-room': {rows: BASE_WORKSHOP_SALVAGE, share: 0.12},
+    'generator-room': {rows: BASE_WORKSHOP_SALVAGE, share: 0.12}, 'turbine-hall': {rows: BASE_WORKSHOP_SALVAGE, share: 0.12},
+    'ventilation-plant': {rows: BASE_WORKSHOP_SALVAGE, share: 0.12},
+    storage: {rows: BASE_SERVICE_SALVAGE, share: 0.1}, 'office-storage': {rows: BASE_SERVICE_SALVAGE, share: 0.1},
+    'office-utility': {rows: BASE_SERVICE_SALVAGE, share: 0.1}, 'custodial-room': {rows: BASE_SERVICE_SALVAGE, share: 0.08},
+    'office-lab': {rows: BASE_BIO_SALVAGE, share: 0.12}, 'office-labfloor': {rows: BASE_BIO_SALVAGE, share: 0.12},
+    'first-aid-room': {rows: BASE_BIO_SALVAGE, share: 0.06}, 'supply-closet': {rows: BASE_BIO_SALVAGE, share: 0.06},
+  },
+  themes: {
+    service: {rows: BASE_SERVICE_SALVAGE, share: 0.06},
+    tech: {rows: BASE_ELECTRICAL_SALVAGE, share: 0.06},
+    medical: {rows: BASE_BIO_SALVAGE, share: 0.04},
+  },
+};
+
+/**
+ * The SURVIVOR MARKET's one salvage place (task studio-base-salvage-20261108-073314-01): the settlement's WORKSHOP storage — its rolling tool
+ * chest, salvaged plank shelving and crates (gen/market/dress.ts) — holds nothing of its own (MARKET_WORKSHOP_EMPTY) but may hold ONE base
+ * salvage lot of the SAME shared base rows (MARKET_SALVAGE, additive): finite, often absent. Every other market holder keeps the exact
+ * empty key (the residents' things are not loot); the traders' goods stay trade stock (market/trade). A loot key set by the market
+ * dresser only (gen/purposes.ts 'market-workshop': weight 0, max 0).
+ */
+export const MARKET_WORKSHOP_KEY = 'market-workshop';
+/** The workshop storage's own table: nothing (an ordinary table, not exact — so the market's additive salvage lot applies to it). */
+export const MARKET_WORKSHOP_EMPTY: LootSpec = {items: [], lots: [0, 0], empty: 1};
+/** The market's salvage: the workshop storage only (no theme entries — never a kitchen cupboard, a bunk locker or a stall). */
+export const MARKET_SALVAGE: SalvageTables = {extra: true, purposes: {[MARKET_WORKSHOP_KEY]: {rows: BASE_SERVICE_SALVAGE, share: 0.5}}};
+
 export const BASE_TABLES: LootTables = {
   areaWeights: AREA_WEIGHTS, holderMod: HOLDER_MOD, holderEmpty: HOLDER_EMPTY, holderLots: HOLDER_LOTS, fullRooms: FULL_ROOMS,
   pool: LEGACY_POOL, vendingFood: VENDING_FOOD,
@@ -1000,6 +1074,7 @@ export const BASE_TABLES: LootTables = {
   gear: GEAR_LOOT,
   rewards: REWARD_TABLES, // lane ROOF (office-interactions-layout-20261030)
   rewardFinds: REWARD_FINDS, // task gas-mask-roof-feedback-20261030 (item 10)
+  salvage: BASE_SALVAGE, // task studio-base-salvage-20261108-073314-01: the basic crafting materials on every base level
 };
 
 /** Multiplier tables (all optional; 1 = unchanged, 0 = never). */
@@ -1286,9 +1361,14 @@ export const REACTOR_PROFILE: LootProfile = {id: 'reactor', label: 'Reactor', ta
  * level-wide gear roll is empty (gear cap 0; the mask / filter roll is 0 / 0: gen/maskLoot.ts). The station's common fuel plan is not
  * loot tables (world/fuelStations.ts, the shared rule for every station).
  */
+// Task studio-base-salvage-20261108-073314-01 (user: the crafting materials "are supposed to be basic and found in all levels"): the one
+// exception is BASIC SALVAGE in the workshop's own storage (MARKET_SALVAGE: one additive lot of the shared base rows, MARKET_WORKSHOP_KEY
+// holders only). The profile lets the 'material' category through for it; every slot still rolls NO lots, so no holder's own table
+// rolls anything (no free guns / food / medicine / stock, nothing seeps into the kitchen or the bunks) and the base theme salvage is
+// replaced by the workshop-only table.
 export const MARKET_PROFILE: LootProfile = {
-  id: 'market', label: 'Survivor Market (no free loot)', tables: BASE_TABLES, overrides: {
-    categoryWeight: Object.fromEntries(ECON_CATS.map(c => [c, 0])) as Multipliers<EconCat>,
+  id: 'market', label: 'Survivor Market (no free loot; basic salvage in the workshop)', tables: {...BASE_TABLES, salvage: MARKET_SALVAGE}, overrides: {
+    categoryWeight: Object.fromEntries(ECON_CATS.map(c => [c, c === 'material' ? 1 : 0])) as Multipliers<EconCat>,
     slot: Object.fromEntries(SLOT_CATEGORIES.map(s => [s, {lots: 0}])) as LootOverrides['slot'],
     floor: {chance: Object.fromEntries(ECON_CATS.map(c => [c, 0])) as Multipliers<EconCat>},
     gear: {mean: 0, cap: 0},
@@ -1296,8 +1376,10 @@ export const MARKET_PROFILE: LootProfile = {
 };
 
 /**
- * THE PER-LEVEL PROFILES. Both current levels use today's tables with NO overrides (the user likes the current rates). A new level
- * adds its entry here (Record<LevelId, …> makes that mandatory); a deeper level tunes through `overrides` (docs/loot-tables.md).
+ * THE PER-LEVEL PROFILES. Subway / Office / Skyways use the base tables with NO overrides (their basic salvage is BASE_SALVAGE); the mall
+ * and the Reactor bring their own salvage (it replaces the base one); the market lets only its workshop's basic salvage through. A new
+ * level adds its entry here (Record<LevelId, …> makes that mandatory) and inherits the base salvage by rolling BASE_TABLES; a deeper
+ * level tunes through `overrides` (docs/loot-tables.md).
  */
 export const PROFILES: Readonly<Record<LevelId, LootProfile>> = {
   subway: {id: 'subway', label: 'Subway', tables: BASE_TABLES, overrides: {}},
@@ -1570,13 +1652,15 @@ export function validateLootProfile(p: LootProfile): string[] {
     const sv = t.salvage;
     if (!sv || typeof sv !== 'object') bad('tables.salvage', 'not salvage tables');
     else {
-      known('tables.salvage', sv, ['purposes', 'themes']);
+      known('tables.salvage', sv, ['purposes', 'themes', 'extra']);
+      // (task studio-base-salvage-20261108-073314-01: `extra` = additive — its share is a per-holder chance, so 1 is allowed)
+      if (sv.extra !== undefined && typeof sv.extra !== 'boolean') bad('tables.salvage.extra', `${String(sv.extra)} is not a boolean`);
       const rule = (path: string, r: SalvageRule) => {
         if (!r || typeof r !== 'object') { bad(path, 'not a salvage rule'); return; }
         known(path, r, ['rows', 'share']);
         rows(`${path}.rows`, r.rows);
         if (Array.isArray(r.rows)) r.rows.forEach((row, i) => { if (!isMaterialItem(row[0])) bad(`${path}.rows[${i}]`, `${String(row[0])} is not a crafting material`); });
-        if (!(typeof r.share === 'number' && r.share > 0 && r.share < 1)) bad(`${path}.share`, `${String(r.share)} is not in (0, 1)`);
+        if (!(typeof r.share === 'number' && r.share > 0 && (sv.extra ? r.share <= 1 : r.share < 1))) bad(`${path}.share`, `${String(r.share)} is not in (0, ${sv.extra ? '1]' : '1)'}`);
         if (Array.isArray(r.rows) && !r.rows.some(row => finiteNonNeg(row[1]) && row[1] > 0)) bad(`${path}.rows`, 'no row with weight > 0');
       };
       for (const [k, r] of Object.entries(sv.purposes ?? {})) rule(`tables.salvage.purposes.${k}`, r);

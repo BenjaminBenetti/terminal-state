@@ -36,13 +36,13 @@ import {rayAabb} from '../combat/hitscan';
 import type {Inventory} from '../items/inventory';
 import {itemDims} from '../items/items';
 import {
-  HOLDER_LABEL, createHolderState, holderPrompt, isContainerKind, isLootHolderKind, lotEntries, lotPrompt,
+  HOLDER_LABEL, createHolderState, holderPrompt, isContainerKind, isLootHolderKind, isSalvageLotId, lotEntries, lotPrompt,
   nextHolderAction, openMessage, partAction, partOpenMessage, partPrompt, remainingCount, takeAll, takeLot, takeLots, transferMessage,
   type HolderKind, type HolderState, type Lot, type PartInfo, type SurfaceKind, type TransferResult,
 } from '../items/loot';
 import {BASELINE_PROFILE, type LootProfile} from '../items/lootTables'; // Task loot-tables-20261030 (lane LOOT)
 import {
-  CABINET_SPECS, DEFAULT_SHELF, cabinetInsert, cabinetInterior, holderSurfaces, placementBox,
+  CABINET_SPECS, DEFAULT_SHELF, cabinetInsert, cabinetInterior, holderSurfaces, lotBoxesOverlap, placementBox,
   type Dims, type ShelfInfo, type Surface, type SurfaceOptions,
 } from '../items/lootLayout';
 import {MeshStandardNodeMaterial} from 'three/webgpu'; // Iteration 13 (MAT-A)
@@ -616,14 +616,20 @@ export class ContainerManager {
     for (const {holder: h, lots} of adds) {
       const ids = new Set(h.state.lots.map(l => l.id));
       let k = 0;
+      const boxes: ReturnType<typeof placementBox>[] = [];
       for (const l of lots) {
         if (ids.has(l.id)) continue;
         ids.add(l.id);
         h.state.lots.push({...l});
+        boxes.push(placementBox(l.itemId, l));
         k++;
       }
       if (!k) continue;
-      h.state.rolled += k;
+      // (task studio-base-salvage-20261108-073314-01) the additive base salvage lot yields: an added lot resting on it removes it (fuel
+      // placement leaves it out of its taken room, so the fuel cans lie exactly where they did before the base salvage)
+      const before = h.state.lots.length;
+      h.state.lots = h.state.lots.filter(l => !isSalvageLotId(l.id) || !boxes.some(b => lotBoxesOverlap(placementBox(l.itemId, l), b)));
+      h.state.rolled += k - (before - h.state.lots.length);
       this.placeLots(h);
       n += k;
     }

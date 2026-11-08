@@ -59,7 +59,12 @@ It records each loot holder's `(kind, loot key)` exactly as `ContainerManager.bu
 area.type`. It also records the storey and the tenant company.
 
 - A context is **observed** ("observed in N of M sample levels") or **declared**. Declared means a purpose observed in that level
-  lists the holder kind, but no sample level placed one.
+  lists the holder kind, or the generator adapter declares it (`LEVEL_ADAPTER[level].declared`), but no sample level placed one.
+  Item pages say which: "sampled · k of N", or "declared, not sampled".
+- A **generator-declared** context is a holder a level's dresser places only in some levels: the Skyways science store's demo lab
+  bench (`labBench@mall-toys`, its drawers' bio mater) is the first. Each entry names the code that places it and a **witness**
+  level seed in which it does. `tests/loot-reference.test.ts` generates every witness and requires the context. The fixed sample
+  seeds are not raised to find it.
 - Tables that no observed context uses are flagged `unobserved`. They are real tables and are still shown.
 - The census is a sample, not exhaustive, and it is labelled as such everywhere.
 

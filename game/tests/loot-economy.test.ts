@@ -15,6 +15,7 @@ import {
 } from '../src/items/lootEconomy';
 import {ALL_PURPOSES} from '../src/gen/purposes';
 import {ITEMS} from '../src/items/items';
+import {MATERIAL_IDS} from '../src/items/craftMaterials';
 import {canonicalItemId} from '../src/items/calibers';
 import {openableActive} from '../src/world/openablesSpec';
 import {ECONOMY_CORPUS, corpusTotals, generateCorpus, nonAmmo, stationEconomy, type EconTotals} from './helpers/lootEconomy';
@@ -36,7 +37,7 @@ const BASE_NON_AMMO = BASELINE.units.food + BASELINE.units.drink + BASELINE.unit
 
 const ALL_MODELS = new Proxy({}, {get: () => ({}), has: () => true}) as Record<string, unknown>;
 
-interface ThemedFind { theme: LootTheme; itemId: string; source: 'roll' | 'find' | 'pickup'; kind: string }
+interface ThemedFind { theme: LootTheme; itemId: string; source: 'roll' | 'find' | 'salvage' | 'pickup'; kind: string }
 /** Every holder find (tagged roll / find, before placement) + every loose pickup of a station, with the theme it follows. */
 function stationFinds(l: StationLayout): ThemedFind[] {
   const out: ThemedFind[] = [];
@@ -98,7 +99,11 @@ describe('scarce resources over the fixed corpus (vs d632ce8)', () => {
     // weapon, each with its matching box)
     expect(TOTALS_OFF().units.weapon).toBe(BASELINE.units.weapon);
     expect(Math.abs(u.weapon - BASELINE.units.weapon)).toBeLessThanOrEqual(2);
-    expect(u.other).toBe(0);
+    // (task studio-base-salvage-20261108-073314-01) the only units outside the d632ce8 categories are the crafting materials of the
+    // ADDITIVE base salvage lot (the helper's census predates them: 'other'); everything above is exactly what it was without them
+    const mats = MATERIAL_IDS.reduce((n, id) => n + (TOTALS().items[id] ?? 0), 0);
+    expect(mats).toBeGreaterThan(0);
+    expect(u.other).toBe(mats);
     // loose floor ammo boxes are untouched; loose meds thin like the rest
     expect(TOTALS_OFF().bySource.pickup.ammo).toBe(BASELINE.bySource.pickup.ammo);
     expect(ratio(TOTALS().bySource.pickup.ammo, BASELINE.bySource.pickup.ammo)).toBeGreaterThan(0.95);
@@ -163,8 +168,9 @@ describe('soft room-purpose weights', () => {
       for (const f of stationFinds(l)) {
         const c = econCat(f.itemId);
         if (c === 'ammo') { ammoAll += 1; if (f.theme === 'security') ammoSec += 1; }
-        // the holders' original ammo rolls and the loose floor ammo boxes are exempt (unchanged); every scarce find counts
-        if (f.source === 'roll' || f.theme === 'public' || c === null || (f.source === 'pickup' && c === 'ammo')) continue;
+        // the holders' original ammo rolls and the loose floor ammo boxes are exempt (unchanged); every scarce find counts (task
+        // studio-base-salvage-20261108-073314-01: the additive base salvage lot is no scarce find either)
+        if (f.source === 'roll' || f.source === 'salvage' || f.theme === 'public' || c === null || (f.source === 'pickup' && c === 'ammo')) continue;
         const m = by.get(f.theme) ?? {on: 0, all: 0};
         by.set(f.theme, m);
         m.all++;

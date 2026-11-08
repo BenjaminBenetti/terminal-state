@@ -66,8 +66,9 @@ export function holderTheme(kind: string, areaKey: string): LootTheme {
 
 // ---------------------------------------------------------------------------------------
 // Task track3-eaton-centre-20261031 (lane PROFILES): SALVAGE (lootTables SalvageRule / LootTables.salvage) — crafting-material rows a
-// level adds to the own / purpose tables of a themed place. Absent in every shipped level's tables: withSalvage returns the very
-// same row array, so Subway / Office draws are byte-identical.
+// level adds to the own / purpose tables of a themed place. Task studio-base-salvage-20261108-073314-01: every base level now carries
+// BASE_SALVAGE (the basic materials in service / tech / medical places), ADDITIVE (`extra`: one extra lot, items/loot.ts salvageLot —
+// withSalvage leaves those tables' rows untouched); a holder without a rule gets the very same row array.
 
 /**
  * The salvage rule a holder gets under `profile` (undefined: none): the purpose entry of its loot key, else its loot theme's entry.
@@ -92,6 +93,8 @@ export function salvageRule(profile: LootProfile, kind: string, areaKey: string)
  * (resolveRows) — so before overrides a lot is salvage with probability `share`.
  */
 export function withSalvage(profile: LootProfile, kind: string, areaKey: string, rows: ItemRows): ItemRows {
+  // (task studio-base-salvage-20261108-073314-01: ADDITIVE salvage — BASE_SALVAGE — never joins the table: items/loot.ts salvageLot)
+  if (profile.tables.salvage?.extra) return rows;
   const rule = salvageRule(profile, kind, areaKey);
   if (!rule || !rows.length) return rows;
   const total = rows.reduce((s, r) => s + r[1], 0), mix = rule.rows.reduce((s, r) => s + r[1], 0);
@@ -108,8 +111,11 @@ function allowedCats(kind: string): EconCat[] {
 type Row = readonly [string, number];
 type Rnd = () => number;
 interface Entry { itemId: string; count: number }
-/** A holder entry after the economy: `roll` = the holder's original ammo roll (exempt), `find` = a scarce (re-themed) find. */
-export interface Find extends Entry { source: 'roll' | 'find' }
+/**
+ * A holder entry after the economy: `roll` = the holder's original ammo roll (exempt), `find` = a scarce (re-themed) find, `salvage` = its
+ * additive base salvage lot (task studio-base-salvage-20261108-073314-01: items/loot.ts salvageLot; kept exactly as rolled, never a find).
+ */
+export interface Find extends Entry { source: 'roll' | 'find' | 'salvage' }
 
 function pickRow<T>(rows: readonly (readonly [T, number])[], r: Rnd): T {
   const total = rows.reduce((s, row) => s + row[1], 0);
