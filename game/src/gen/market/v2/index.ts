@@ -34,6 +34,9 @@ export const SETTLE_REJECTS = new Map<string, number>();
 /** Timing of the last generateSettlement call (ms), its attempts / carve failures and the last attempt's issues (QA / tests). */
 export const SETTLE_GEN_STATS = {ms: 0, attempts: 0, carveFails: 0, issues: [] as string[]};
 
+/** Rooftops without a clear ladder spot (QA / tests). */
+export const LADDER_FAILS: string[] = [];
+
 /** Storey labels (HUD / map). */
 export function settleStoreyLabel(level: number): string {
   return level === 2 ? 'Rooftops' : level === 1 ? 'Catwalks' : 'Market lanes';
@@ -104,7 +107,11 @@ function trySettlement(f: SettleFrame, genSeed: number, seed: number, attempt: n
   // --- Furnishing (own pass), the upper storeys' props onto their floors, lighting, traversal -------------------------------------
   const nr = rng.fork('market-names');
   const names = Object.fromEntries(MARKET_STALLS.map(id => [id, stallName(id, nr)])) as Record<MarketStallId, string>;
+  // (the placement kit holds every traversal ladder's stand cells clear on the GROUND storey — the rooftop ladders stand on the catwalks:
+  // their level links keep their feet / heads clear on their own storeys instead, so they are left out of that list while dressing)
+  layout.traversal.ladders = layout.traversal.ladders.filter(l => l.kind !== 'maintenance');
   const anchors = dressSettlement(layout, sc, rng.fork('dress'), names);
+  layout.traversal.ladders.push(...roofLadders);
   if (!anchors) return null;
   liftLevels(layout, {lights: layout.lights.length, signs: layout.signs.length});
   for (const a of layout.areas) a.lighting = 'lit';
@@ -140,8 +147,9 @@ function rooftopLadders(layout: StationLayout, sc: SettleCarve): Ladder[] | null
   const M = (x: number) => (sc.f.mirror ? W - 1 - x : x); // a canonical column -> world column
   const doors = layout.doors.filter(d => d.level === 1);
   const out: Ladder[] = [];
-  /** Candidate wall row (world), the ladder's face z, direction toward the rooftop, the rooftop's x span (world cells, [x0, x1)). */
-  const roofs: {row: number; faceZ: number; dir: 1 | -1; x0: number; x1: number; prefer: number}[] = [];
+  /** Per rooftop, its candidate walls: the wall row (world), the ladder's face z, direction toward the rooftop, the x span (world cells). */
+  type Face = {row: number; faceZ: number; dir: 1 | -1; x0: number; x1: number; prefer: number};
+  const roofs: Face[][] = [];
   const span = (cx0: number, cx1: number) => { const a = M(cx0), b = M(cx1 - 1); return [Math.min(a, b), Math.max(a, b) + 1] as const; };
   const preferIn = (x0: number, x1: number, rowY: number) => {
     const c = sc.closed.find(r => r.y <= rowY && r.y + r.h > rowY && r.x >= x0 && r.x + r.w <= x1);
@@ -149,27 +157,27 @@ function rooftopLadders(layout: StationLayout, sc: SettleCarve): Ladder[] | null
   };
   {
     const [x0, x1] = span(S.x0, S.x1), row = R.pw + S.rowD - S.cat - 1;
-    roofs.push({row, faceZ: (row + 1) * CELL, dir: -1, x0, x1, prefer: preferIn(x0, x1, row)});
+    roofs.push([{row, faceZ: (row + 1) * CELL, dir: -1, x0, x1, prefer: preferIn(x0, x1, row)}]);
   }
   {
     const [x0, x1] = span(S.x0, S.x1), row = R.b0 + S.cat;
-    roofs.push({row, faceZ: row * CELL, dir: 1, x0, x1, prefer: preferIn(x0, x1, row)});
+    roofs.push([{row, faceZ: row * CELL, dir: 1, x0, x1, prefer: preferIn(x0, x1, row)}]);
   }
   for (const b of sc.blocks) {
-    const u = b.upper;
-    roofs.push({row: u.y, faceZ: u.y * CELL, dir: 1, x0: u.x, x1: u.x + u.w, prefer: u.x + u.w / 2});
+    const u = b.upper, prefer = u.x + u.w / 2;
+    roofs.push([{row: u.y, faceZ: u.y * CELL, dir: 1, x0: u.x, x1: u.x + u.w, prefer}, {row: u.y + u.h - 1, faceZ: (u.y + u.h) * CELL, dir: -1, x0: u.x, x1: u.x + u.w, prefer}]);
   }
-  for (const rf of roofs) {
-    const xs: number[] = [];
-    for (let x = rf.x0 + 2; x < rf.x1 - 2; x++) xs.push(x);
-    xs.sort((p, q) => Math.abs(p + 0.5 - rf.prefer) - Math.abs(q + 0.5 - rf.prefer) || p - q);
+  for (const faces of roofs) {
+    const cands: [Face, number][] = [];
+    for (const rf of faces) for (let x = rf.x0 + 2; x < rf.x1 - 2; x++) cands.push([rf, x]);
+    cands.sort(([p, a], [q, b]) => Math.abs(a + 0.5 - p.prefer) - Math.abs(b + 0.5 - q.prefer) || a - b || p.row - q.row);
     let done = false;
-    for (const cx of xs) {
+    for (const [rf, cx] of cands) {
       const x = r3((cx + 0.5) * CELL);
-      // the wall itself (3 cells, no opening) and no home door within 1.5 m of the ladder
+      // the wall itself (3 cells, no opening) and no home door within 1 m of the ladder
       let wall = true;
       for (let dx = -1; dx <= 1; dx++) if (g1.cells[g1.idx(cx + dx, rf.row)] !== SOLID) wall = false;
-      if (!wall || doors.some(d => d.y === rf.row && cx + 3 >= d.x && cx - 3 < d.x + d.w)) continue;
+      if (!wall || doors.some(d => d.y === rf.row && cx + 2 >= d.x && cx - 2 < d.x + d.w)) continue;
       const bottom = {x, y: B1, z: r3(rf.faceZ - rf.dir * LADDER.standOff)}, top = {x, y: B2, z: r3(rf.faceZ + rf.dir * LADDER.topIn)};
       const [bx, by] = g1.cellOf(bottom.x, bottom.z), [tx, ty] = g2.cellOf(top.x, top.z);
       if (g1.cells[g1.idx(bx, by)] !== FLOOR || g2.cells[g2.idx(tx, ty)] !== FLOOR) continue;
@@ -182,7 +190,7 @@ function rooftopLadders(layout: StationLayout, sc: SettleCarve): Ladder[] | null
       done = true;
       break;
     }
-    if (!done) return null;
+    if (!done) { LADDER_FAILS.push(`no ladder spot: row ${faces[0].row} x ${faces[0].x0}..${faces[0].x1}`); return null; }
   }
   return out;
 }

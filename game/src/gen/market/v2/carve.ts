@@ -170,7 +170,7 @@ export function carveSettlement(k: Kit, f: SettleFrame, rng: Rng): SettleCarve |
   const frontRuns: [number, number][] = [[X0, g[0].x - 1], [g[0].x + g[0].w + 1, g[1].x - 1], [g[1].x + g[1].w + 1, X1]];
   const frontSlots: Rect[] = [];
   for (const [a, b] of frontRuns) {
-    const ws = fillRun(a, b, 8, 14, 11, rng);
+    const ws = fillRun(a, b, 7, 16, 11, rng);
     if (!ws) return fail('front row run does not split');
     let x = a;
     for (const w of ws) { frontSlots.push({x, y: fy0, w, h: fh}); x += w + 1; }

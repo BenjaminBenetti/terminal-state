@@ -202,7 +202,7 @@ export function storeyLabel(layout: StationLayout, level: number): string {
   if (r) return r.label;
   const k = layout.skyways?.storeys.find(t => t.level === level); // Skyways: 'Concourse', 'Street level', 'Skywalk'
   if (k) return skywalkText(k.label); // (task studio-skywalk-variety-20261107-231448-01: no '+15' in player text)
-  return layout.market ? marketStoreyLabel(level) : ''; // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
+  return layout.market ? marketStoreyLabel(level, layout.market.v) : ''; // (+ version 2's storeys: task studio-market-rework-20261108-074144-01) // (task studio-survivor-market-20261108-005807-01: 'Market floor', 'Housing deck')
 }
 
 /** The player pose a level starts at: the office's platform start (layout.office.start), else layout.playerSpawn. */

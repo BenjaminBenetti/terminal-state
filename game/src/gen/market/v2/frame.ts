@@ -30,7 +30,7 @@ export const SETTLE = {
   x0: 6,
   x1: 94,
   /** Absolute floor of each storey (m) and the container interiors' ceiling height above their floor (m). */
-  bases: [0, 2.95, 5.85] as const,
+  bases: [0, 2.95, 5.9] as const,
   cont: 2.6,
   /** The shed roof over the lanes, the catwalks and the rooftops (m, absolute). */
   roofY: 8.6,

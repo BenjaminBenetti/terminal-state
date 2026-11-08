@@ -22,7 +22,7 @@ import type {Rng} from '../../../core/rng';
 import {CELL} from '../../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../../props';
 import {isLootHolderKind} from '../../../items/loot';
-import {makePlaceCtx, mountProp, tryPlaceProp, type PlaceCtx, type PlaceOpts} from '../../placeKit';
+import {makePlaceCtx, mountProp, tryPlaceProp, type PlaceOpts} from '../../placeKit';
 import type {Area, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../../stationTypes';
 import {MARKET_EMPTY_KEY} from '../dress';
 import {STALL_SIGNS} from '../names';
@@ -151,13 +151,14 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
   const ontoOf = (c: ContainerCarve): Area => area(layout.doors.find(d => d.b === c.area)?.a ?? c.area);
 
   // --- 1. The six stalls ------------------------------------------------------------------------------------------------------------
+  let why = ''; // (QA: why the last shop did not fit)
   for (const c of sc.containers) {
     if (c.use !== 'shop' || !c.stall) continue;
     const a = area(c.area), F = frameOf(c, sc.bases);
     a.label = names[c.stall];
     a.noFloorLoot = true;
     const d = c.row === 'front' ? walkIn(F, a, c.stall) : counterFront(F, a, c.stall);
-    if (!d) return fail(`${c.stall} shop`);
+    if (!d) return fail(`${c.stall} ${c.row} shop ${why}`);
     anchors.stalls.push(d);
     light(a, F.x(F.U / 2), F.z(F.V * 0.55), S.cont - 0.02, {power: 0.9});
     if (F.U > 5.2) light(a, F.x(F.U * 0.2), F.z(F.V * 0.3), S.cont - 0.02, {power: 0.6});
@@ -172,7 +173,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     const props: PropPlacement[] = [];
     for (let k = 0; k < modules; k++) {
       const p = put(a, 'shopCounter', F.x(u0 + cw / 2 + k * cw), F.z(v), F.out, {doorOk: true});
-      if (!p) return null;
+      if (!p) { why = `module ${k}`; return null; }
       props.push(p);
     }
     return {props, x0: F.x(u0), x1: F.x(u0 + runW), u0, u1: u0 + runW};
@@ -205,7 +206,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     const vCounter = 2.0, vTrader = 3.0, vFront = 1.1;
     const gapLeft = rng.chance(0.5);
     const run = counterRun(F, a, vCounter, 2, gapLeft);
-    if (!run) return null;
+    if (!run) { why = `counter (${F.U} m) ${why}`; return null; }
     for (const p of run.props) displaysOf(p, displays);
     for (const p of backRow(F, a, kit.back, 0.05, F.U - 0.05, 0.1, rng.chance(0.5))) if (p.kind !== 'coatRack') displaysOf(p, displays);
     // side shelving in the customer zone (both side walls), then the trade's floor props in the trader zone's free end
@@ -216,7 +217,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
       if (free[1] - free[0] >= w + 1.0) put(a, k, F.x(gapLeft ? free[0] + w / 2 + 0.05 : free[1] - w / 2 - 0.05), F.z(vTrader + 0.1), F.out);
     }
     if (id === 'medical') mountProp(ctxOf(a), a, F.face, F.x(gapLeft ? F.U - 0.6 : 0.6), 'firstAidWallKit', 1.35, F.base);
-    if (displays.length < 4) return null;
+    if (displays.length < 4) { why = `${displays.length} displays (${F.U} m)`; return null; }
     return stallRecord(F, a, id, run, vCounter, vTrader, vFront, displays);
   }
   /** A counter-fronted shop (Back Lane): entry 0-1 m, counter 1.1-1.9 m, trader 2-3 m, side shelving 2-3.4 m, back wall 3.5-4 m. */
@@ -226,14 +227,14 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     const modules = F.U >= 6.0 ? 3 : 2;
     const gapLeft = rng.chance(0.5);
     const run = counterRun(F, a, vCounter, modules, gapLeft) ?? counterRun(F, a, vCounter, 2, gapLeft);
-    if (!run) return null;
+    if (!run) { why = `counter (${F.U} m) ${why}`; return null; }
     for (const p of run.props) displaysOf(p, displays);
     for (const p of backRow(F, a, kit.back, 0.05, F.U - 0.05, 0.1, rng.chance(0.5))) if (p.kind !== 'coatRack') displaysOf(p, displays);
     // side fixture on the far side from the trader's way in (in the trader zone), the trade's floor prop by the other wall
     displaysOf(sideProp(F, a, kit.side, gapLeft ? 'R' : 'L', 2.75), displays);
     const k = kit.extra[0], w = PROP_DEFS[k].d;
     put(a, k, F.x(gapLeft ? w / 2 + 0.05 : F.U - w / 2 - 0.05), F.z(3.0), gapLeft ? WALL_ROT.W : WALL_ROT.E);
-    if (displays.length < 4) return null;
+    if (displays.length < 4) { why = `${displays.length} displays (${F.U} m)`; return null; }
     return stallRecord(F, a, id, run, vCounter, vTrader, vFront, displays);
   }
 
@@ -291,7 +292,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     if (run) onHost(run.props[Math.floor(run.props.length / 2)], 'campLantern', 0, -0.15);
     const line = backRow(F, a, ['wokLine', 'grillLine', 'shopBackbar', 'ingredientBin', 'ingredientBin', 'waterCooler'], 0.1, F.U - 0.1, 0.1, rng.chance(0.5));
     for (const p of line) {
-      if (p.kind === 'wokLine' || p.kind === 'grillLine') use('cook', p.x, F.z(F.V - 1.15), a, p.x, p.z);
+      if (p.kind === 'wokLine' || p.kind === 'grillLine') use('cook', p.x, F.z(2.5), a, p.x, p.z);
       if (p.kind === 'shopBackbar') { onHost(p, 'riceCooker', -0.55, 0.05, 0.914); onHost(p, 'deepFryer', 0.45, 0.05, 0.914); }
     }
     for (const u of [0.25, 0.6, 0.85]) light(a, F.x(F.U * u), F.z(2.4), S.cont - 0.02, {power: 0.95});
@@ -308,7 +309,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
   function dressWorkshop(F: Frame, a: Area): void {
     a.label = 'Workshop';
     const row = backRow(F, a, ['repairBench', 'benchGrinderStand', 'repairBench', 'rollingToolChest'], 0.1, F.U - 0.1, 0.2, rng.chance(0.5));
-    for (const p of row) if (p.kind === 'repairBench') use('work', p.x, F.z(F.V - 1.05), a, p.x, p.z);
+    for (const p of row) if (p.kind === 'repairBench') use('work', p.x, F.z(F.V - 1.4), a, p.x, p.z);
     mountProp(ctxOf(a), a, 'W', F.c.rect.y * CELL + F.V * 0.45, 'toolPegboard', 1.05, F.base);
     mountProp(ctxOf(a), a, 'E', F.c.rect.y * CELL + F.V * 0.45, 'partsBinRack', 1.15, F.base);
     put(a, 'airCompressor', F.x(F.U * 0.3), F.z(1.2), F.out);
@@ -400,7 +401,11 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     for (const x of [R.x0 + 2.5, (R.x0 + R.x1) / 2, R.x1 - 2.5]) for (const z of [R.z0 + 1.8, R.z1 - 1.8]) light(a, x, z, S.roofY - 1.6, {power: 0.95});
   }
   // lane lamps: pendants hung from the shed roof down the middle of the lanes every ~6.5 m (2 m rods); the alleys' own
-  for (const [a, R] of [[L.market, ML], [L.back, BL]] as const) for (let x = R.x0 + 3; x < R.x1 - 2; x += 6.5) light(a, x + rng.range(-0.5, 0.5), (R.z0 + R.z1) / 2, S.roofY - 1.9, {power: 0.85});
+  const underBridge = (x: number, z: number) => g0.ceilAt(x, z) < S.cont + 0.05;
+  for (const [a, R] of [[L.market, ML], [L.back, BL]] as const) for (let x = R.x0 + 3; x < R.x1 - 2; x += 6.5) {
+    const lx = x + rng.range(-0.5, 0.5), lz = (R.z0 + R.z1) / 2;
+    if (!underBridge(lx, lz)) light(a, lx, lz, S.roofY - 1.9, {power: 0.85});
+  }
   for (const a of [L.west, L.cross, L.east]) { const R = W(a); light(a, (R.x0 + R.x1) / 2, (R.z0 + R.z1) / 2, S.roofY - 2.0, {power: 0.75}); }
   for (const g of sc.gates) { const a = area(g.area), R = W(g.rect); a.noFloorLoot = true; light(a, (R.x0 + R.x1) / 2, (R.z0 + R.z1) / 2, S.cont - 0.02, {power: 0.85}); }
   // under each bridge a lamp; the alleys' names on the bridge fascia are the stall boards' job, not here
@@ -426,23 +431,33 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     use('idle', R.x1 - 1.5, R.z0 + 2.2, a, R.x1 - 1.5, R.z0);
   }
 
-  // --- 5. Storey 1: the catwalks (chairs, plants, crates against the upper containers), lamps on the upper container walls ----------
-  const cats: Area[] = [sc.frontDeck.catwalk, sc.backDeck.catwalk, ...sc.blocks.map(b => area(b.ring))];
+  // --- 5. Storey 1: the catwalks (chairs, plants, crates against the upper containers), lamps hung from the roof ----------------------
+  // each catwalk strip: its area, x span, the upper containers' wall line (z) and the direction the strip lies from it (+1: south)
+  const R0 = sc.rows;
+  const xs = (a: Area) => ({x0: a.x * CELL, x1: (a.x + a.w) * CELL});
+  const strips: {a: Area; x0: number; x1: number; wall: number; dir: 1 | -1}[] = [
+    {a: sc.frontDeck.catwalk, ...xs(sc.frontDeck.catwalk), wall: (R0.pw + S.rowD - S.cat) * CELL, dir: 1},
+    {a: sc.backDeck.catwalk, ...xs(sc.backDeck.catwalk), wall: (R0.b0 + S.cat) * CELL, dir: -1},
+  ];
+  for (const b of sc.blocks) {
+    const a = area(b.ring), u = b.upper;
+    strips.push({a, x0: u.x * CELL, x1: (u.x + u.w) * CELL, wall: u.y * CELL, dir: -1}, {a, x0: u.x * CELL, x1: (u.x + u.w) * CELL, wall: (u.y + u.h) * CELL, dir: 1});
+  }
   const catThings: PropKind[] = ['plasticStackChair', 'deadPlant', 'crate', 'foldingChair', 'bicycle', 'deadPlant', 'crate'];
-  for (const a of cats) {
-    a.noFloorLoot = true;
-    const R = W(a);
-    const n = Math.max(2, Math.round((R.x1 - R.x0) / 7));
+  for (const st of strips) {
+    st.a.noFloorLoot = true;
+    const n = Math.max(1, Math.round((st.x1 - st.x0) / 7));
+    const zMid = st.wall + st.dir * S.cat * CELL / 2;
     for (let k = 0; k < n; k++) {
-      const x = R.x0 + (R.x1 - R.x0) * (k + 0.5) / n + rng.range(-1, 1);
-      for (const z of [R.z0 + 0.3, R.z1 - 0.3]) {
-        const kind = catThings[rng.int(0, catThings.length - 1)];
-        const p = put(a, kind, x, z, z < (R.z0 + R.z1) / 2 ? 0 : Math.PI);
-        if (p && (kind === 'plasticStackChair' || kind === 'foldingChair')) use('sit', p.x, p.z, a, p.x, z < (R.z0 + R.z1) / 2 ? p.z + 1 : p.z - 1);
-      }
-      light(a, x, (R.z0 + R.z1) / 2, S.roofY - 1.3, {power: 0.6});
+      const x = st.x0 + (st.x1 - st.x0) * (k + 0.5) / n + rng.range(-1, 1);
+      const kind = catThings[rng.int(0, catThings.length - 1)];
+      const rot = kind === 'bicycle' ? Math.PI / 2 : st.dir > 0 ? 0 : Math.PI;
+      const {hz} = footprint(kind, rot);
+      const p = put(st.a, kind, x, st.wall + st.dir * (hz + 0.04), rot);
+      if (p && (kind === 'plasticStackChair' || kind === 'foldingChair')) use('sit', p.x, p.z, st.a, p.x, p.z + st.dir);
+      light(st.a, Math.min(st.x1 - 0.5, x + 2.5), zMid, S.roofY - 1.3, {power: 0.6});
     }
-    use('idle', R.x0 + (R.x1 - R.x0) * rng.range(0.2, 0.8), (R.z0 + R.z1) / 2, a, R.x0, R.z0 - 5);
+    use('idle', st.x0 + (st.x1 - st.x0) * rng.range(0.25, 0.75), st.wall + st.dir * 1.0, st.a, st.x0, st.wall + st.dir * 5);
   }
 
   // --- 6. Storey 2: the rooftops (tents, bedrolls, water tanks, a camp table), lamps hanging from the roof --------------------------
