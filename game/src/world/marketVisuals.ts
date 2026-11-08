@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {StationLayout} from '../gen/stationTypes';
 import {marketAwnings, marketFans, type MarketFan} from '../gen/market/art';
+import {settleLines, type MarketLine} from '../gen/market/v2/art';
 import {SurfaceNodeMaterial} from './materials';
 import {marketSpan, marketTexture} from './marketTextures';
 import {MOOD, syncGlowFog} from './lights';
@@ -31,6 +32,8 @@ export interface MarketView {
   fans: MarketFan[];
   rotors: THREE.InstancedMesh | null;
   awnings: number;
+  /** Task studio-market-rework-20261108-074144-01: lines across the lanes (layout version 2: laundry / cables). */
+  lines: number;
   geometries: THREE.BufferGeometry[];
   materials: THREE.Material[];
 }
@@ -62,7 +65,7 @@ function awningGeometry(layout: StationLayout): {canvas: THREE.BufferGeometry; b
   const pos: number[] = [], uv: number[] = [], idx: number[] = [];
   const battens: THREE.BufferGeometry[] = [];
   for (const a of list) {
-    const b = pos.length / 3, z1 = a.z + a.depth, slant = Math.hypot(a.depth, a.yWall - a.yEdge);
+    const b = pos.length / 3, z1 = a.z + (a.dir ?? 1) * a.depth, slant = Math.hypot(a.depth, a.yWall - a.yEdge);
     pos.push(a.x0, a.yWall, a.z, a.x1, a.yWall, a.z, a.x1, a.yEdge, z1, a.x0, a.yEdge, z1);
     uv.push(a.x0 / span.u, 0, a.x1 / span.u, 0, a.x1 / span.u, slant / span.v, a.x0 / span.u, slant / span.v);
     idx.push(b, b + 2, b + 1, b, b + 3, b + 2);
@@ -79,6 +82,48 @@ function awningGeometry(layout: StationLayout): {canvas: THREE.BufferGeometry; b
   const bg = mergeGeometries(battens);
   for (const g of battens) g.dispose();
   return {canvas, battens: bg, n: list.length};
+}
+
+/** Laundry colours (plain dyed cloth: no texture) and the cable / pole steel. */
+const CLOTH = [0xb8463a, 0x3d6a8f, 0xd9c9a3, 0x6b8f4e, 0xc98a2b, 0x8a5a8c, 0xe6e2d6, 0x4a4a52];
+
+/**
+ * Task studio-market-rework-20261108-074144-01: the lines across the lanes (layout version 2) — a sagging wire between two short poles
+ * lashed to the catwalk railings, with laundry hanging from most of them: wire + poles one merged geometry (the fan steel), the cloth
+ * one merged geometry with vertex colours. Visual only (high over the lane, gen/market/v2/art.ts).
+ */
+function lineGeometry(lines: readonly MarketLine[]): {steel: THREE.BufferGeometry; cloth: THREE.BufferGeometry | null} | null {
+  if (!lines.length) return null;
+  const steel: THREE.BufferGeometry[] = [], cloth: THREE.BufferGeometry[] = [];
+  const at = (l: MarketLine, t: number) => new THREE.Vector3(l.x0 + (l.x1 - l.x0) * t, l.y - l.sag * 4 * t * (1 - t), l.z0 + (l.z1 - l.z0) * t);
+  const seg = (a: THREE.Vector3, b: THREE.Vector3, r: number) => {
+    const g = new THREE.CylinderGeometry(r, r, a.distanceTo(b), 4, 1, true);
+    g.applyMatrix4(new THREE.Matrix4().compose(a.clone().add(b).multiplyScalar(0.5), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize()), new THREE.Vector3(1, 1, 1)));
+    steel.push(g.toNonIndexed()); g.dispose();
+  };
+  for (const l of lines) {
+    const N = 8;
+    for (let k = 0; k < N; k++) seg(at(l, k / N), at(l, (k + 1) / N), 0.008);
+    for (const t of [0, 1]) { const p = at(l, t); seg(new THREE.Vector3(p.x, 2.95 + 1.05, p.z), new THREE.Vector3(p.x, p.y + 0.05, p.z), 0.025); }
+    if (!l.laundry) continue;
+    let h = (l.seed * 2654435761) >>> 0;
+    const rnd = () => ((h = Math.imul(h ^ (h >>> 15), 0x2c1b3c6d) >>> 0) / 0x100000000);
+    for (let t = 0.12 + rnd() * 0.1; t < 0.9; t += 0.12 + rnd() * 0.08) {
+      const p = at(l, t), w = 0.35 + rnd() * 0.3, hh = 0.35 + rnd() * 0.3;
+      const g = new THREE.PlaneGeometry(w, hh);
+      g.translate(0, -hh / 2, 0);
+      g.rotateY(-Math.atan2(l.z1 - l.z0, l.x1 - l.x0)); // (its width along the line)
+      g.translate(p.x, p.y, p.z);
+      const c = new THREE.Color(CLOTH[Math.floor(rnd() * CLOTH.length)]);
+      const n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      cloth.push(g.toNonIndexed()); g.dispose();
+    }
+  }
+  const out = {steel: mergeGeometries(steel), cloth: cloth.length ? mergeGeometries(cloth) : null};
+  for (const g of [...steel, ...cloth]) g.dispose();
+  return out;
 }
 
 /** Builds the market's fans + awnings for a layout (null: not a market). Pure three.js (tests call it directly). */
@@ -122,8 +167,26 @@ export function buildMarketView(layout: StationLayout): MarketView | null {
     battens.name = 'market-awning-battens';
     root.add(canvas, battens);
   }
+  // --- (version 2) lines across the lanes: wire + poles (steel), laundry (plain dyed cloth, vertex colours, both sides) ---
+  const lines = layout.market.v === 2 ? settleLines(layout) : [];
+  const lg = lineGeometry(lines);
+  if (lg) {
+    geometries.push(lg.steel);
+    const wires = new THREE.Mesh(lg.steel, steel);
+    wires.name = 'market-lines';
+    root.add(wires);
+    if (lg.cloth) {
+      const clothMat = new SurfaceNodeMaterial({vertexColors: true, roughness: 0.95, metalness: 0, side: THREE.DoubleSide});
+      clothMat.name = 'market-laundry';
+      materials.push(clothMat);
+      geometries.push(lg.cloth);
+      const laundry = new THREE.Mesh(lg.cloth, clothMat);
+      laundry.name = 'market-laundry';
+      root.add(laundry);
+    }
+  }
   for (const o of root.children) { o.castShadow = false; o.receiveShadow = false; o.userData.level = 0; }
-  const view: MarketView = {root, fans, rotors, awnings: aw?.n ?? 0, geometries, materials};
+  const view: MarketView = {root, fans, rotors, awnings: aw?.n ?? 0, lines: lines.length, geometries, materials};
   turnFans(view, 0);
   return view;
 }

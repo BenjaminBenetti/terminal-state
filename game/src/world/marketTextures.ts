@@ -42,7 +42,7 @@ const SPEC: Readonly<Record<MarketTextureKey, {rough: number; metal: number; dec
 
 const cache = new WeakMap<WorldMaterials, Map<string, SurfaceNodeMaterial>>();
 /** The textured finish material of `key` (null: the texture is not loaded). One per WorldMaterials + texture + name. */
-export function marketTexturedMaterial(mats: WorldMaterials, key: MarketTextureKey, name: string): SurfaceNodeMaterial | null {
+export function marketTexturedMaterial(mats: WorldMaterials, key: MarketTextureKey, name: string, tint?: THREE.Color): SurfaceNodeMaterial | null {
   const t = marketTexture(key);
   if (!t) return null;
   let per = cache.get(mats);
@@ -50,6 +50,7 @@ export function marketTexturedMaterial(mats: WorldMaterials, key: MarketTextureK
   let m = per.get(name);
   if (m && m.map === t) return m;
   m = new SurfaceNodeMaterial({map: t, roughness: SPEC[key].rough, metalness: SPEC[key].metal, ...(SPEC[key].double ? {side: THREE.DoubleSide} : {})});
+  if (tint) m.color.copy(tint); // (task studio-market-rework-20261108-074144-01: a version-2 container paint over the same texture)
   m.name = name;
   m.userData.marketTexture = key;
   applyDecay(m, SPEC[key].decay);

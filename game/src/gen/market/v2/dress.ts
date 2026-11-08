@@ -312,10 +312,10 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     for (const p of row) if (p.kind === 'repairBench') use('work', p.x, F.z(F.V - 1.4), a, p.x, p.z);
     mountProp(ctxOf(a), a, 'W', F.c.rect.y * CELL + F.V * 0.45, 'toolPegboard', 1.05, F.base);
     mountProp(ctxOf(a), a, 'E', F.c.rect.y * CELL + F.V * 0.45, 'partsBinRack', 1.15, F.base);
-    put(a, 'airCompressor', F.x(F.U * 0.3), F.z(1.2), F.out);
-    put(a, 'portableGenerator', F.x(F.U * 0.72), F.z(1.25), F.out);
-    put(a, 'tripodWorkLight', F.x(F.U * 0.5), F.z(2.0), F.out + Math.PI);
-    put(a, 'stepLadder', F.x(F.U - 0.6), F.z(1.4), WALL_ROT.E);
+    // the floor props in the corners by the opening (the middle stays clear: the station's common fuel plan stores its cans here)
+    put(a, 'airCompressor', F.x(0.45), F.z(0.3), F.out + Math.PI);
+    put(a, 'portableGenerator', F.x(F.U - 0.4), F.z(0.42), F.out + Math.PI);
+    put(a, 'tripodWorkLight', F.x(F.U - 0.6), F.z(F.V - 1.5), WALL_ROT.E);
     for (const u of [0.3, 0.75]) light(a, F.x(F.U * u), F.z(2.5), S.cont - 0.02, {power: 0.9});
   }
   function dressTea(F: Frame, a: Area): void {
