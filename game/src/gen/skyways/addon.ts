@@ -18,6 +18,8 @@ import {conventionStatues, dressConvention, type ConventionResult} from './addon
 import {dressPrizeCar, type PrizeCarResult} from './addonPrize';
 import {dressPrizeDisplay, prizeDisplayDresser} from './addonPrizeDisplay';
 import {dressSkywaysVenue, type VenueResult} from './venueDress';
+import {dressConventionSnacks, type ConSnackResult} from './skywaysConSnacks'; // task studio-skywalk-variety-20261107-231448-01 (lane DRESS)
+import {skywaysGenVersion} from './layoutVersion';
 
 export interface AddonDressResult {
   id: SkywaysAddon['id'] | null;
@@ -25,6 +27,8 @@ export interface AddonDressResult {
   prize?: PrizeCarResult;
   /** (lane VENUE, layout version 3) the convention venue's public areas beyond the main hall. */
   venue?: VenueResult;
+  /** (task studio-skywalk-variety-20261107-231448-01, lane DRESS; layout version 4) the drinks / snacks on the event's table tops. */
+  snacks?: ConSnackResult;
   /** Every prop placed here (layout.props order). */
   props: PropPlacement[];
   /** Pieces that could not be placed (QA). */
@@ -72,6 +76,10 @@ export function dressSkywaysAddon(layout: StationLayout, rng: Rng): AddonDressRe
     res.venue = dressSkywaysVenue(layout, rng) ?? undefined;
     if (res.venue && info.addon.convention) info.addon.convention.statues.push(...conventionStatues(res.venue, info.addon.level));
   }
+  // (task studio-skywalk-variety-20261107-231448-01, lane DRESS; layout version 4 only, its own fork) a few drinks / snacks on the
+  // event's table tops: the badge desks, the panel tables, at most about one vendor table in three
+  // (a small venue placing fewer than the target is not a skipped piece: its note stays in res.snacks.skipped)
+  if (res.convention && skywaysGenVersion(layout) >= 4) res.snacks = dressConventionSnacks(layout, rng.fork('skyways-con-snacks'), {convention: res.convention, ...(res.venue ? {venue: res.venue} : {})});
   res.props = layout.props.slice(d.p0);
   res.skipped.push(...d.skipped);
   RESULTS.set(layout, {res, index: new Map(layout.props.map((p, i) => [p, i] as const).filter(([, i]) => i >= d.p0))});

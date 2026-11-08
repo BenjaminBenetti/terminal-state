@@ -1359,6 +1359,15 @@ function specialSources(B: Builder, profiles: ReadonlyMap<LevelId, LootProfile>)
     knobs: [{what: 'the loose servings', value: 'RAMEN_LOOSE / RAMEN_LOOSE_ROWS', at: B.src.at(F.tables, 'RAMEN_LOOSE_ROWS'), overrides: ['none']}],
     at: [B.src.at(F.tables, 'RAMEN_LOOSE_ROWS')],
   });
+  // --- task studio-skywalk-variety-20261107-231448-01 (lane DRESS): the Skyways convention's table snacks (layout version 4)
+  if (levels.includes('skyways')) add({
+    id: 'skyways-con-snacks', family: 'fixture', label: 'Skyways convention: drinks / snacks on the event tables', class: 'conditional', levels: ['skyways'],
+    summary: 'Placed once per level seed with the convention add-on (layout version 4) by gen/skyways/skywaysConSnacks.ts dressConventionSnacks: CON_SNACKS.total (7-12, fewer when the venue has few tables) single servings standing on the event\'s table tops — the badge staff\'s drink / snack on a registration desk or two and at most about one vendor table in three (CON_TABLE_SNACK_ROWS; the first one off a panel table is always a bubble tea), the panelists\' drinks on the panel tables (CON_PANEL_DRINK_ROWS). Never on the floor; finite: remembered like every pickup, never refilled.',
+    items: [...new Map([...LT.CON_TABLE_SNACK_ROWS, ...LT.CON_PANEL_DRINK_ROWS].map(([itemId]) => [itemId, {itemId, count: 1, note: 'one serving'}])).values()],
+    probability: 'Seeded: 7-12 single servings per convention venue (the prize-car add-on and older layout versions: none).',
+    knobs: [{what: 'the table snacks', value: 'CON_SNACKS / CON_TABLE_SNACK_ROWS / CON_PANEL_DRINK_ROWS', at: B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), overrides: ['none']}],
+    at: [B.src.at(F.tables, 'CON_TABLE_SNACK_ROWS'), B.src.at(F.tables, 'CON_PANEL_DRINK_ROWS')],
+  });
 
   // --- task reactor-build-20261101: the Reactor's restart parts (guaranteed, placed ONCE by its generator; never in a loot table)
   if (levels.includes('reactor')) add({

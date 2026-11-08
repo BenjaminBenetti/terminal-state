@@ -11,6 +11,7 @@
 // The Mall's finish rows ('mall-…|row') keep the station rule (its gallery terrazzo / tiled walls already match it).
 
 import type {DamageClass} from './materials';
+import {skywaysShopImpact} from '../world/skywaysShopFinish'; // task studio-skywalk-variety-20261107-231448-01 (lane DRESS): pure data
 
 const REACTOR: Readonly<Record<string, DamageClass>> = {
   'reactor-wall': 'concrete', 'reactor-roof': 'concrete', 'reactor-floor': 'concrete', 'reactor-ceil': 'concrete',
@@ -44,6 +45,8 @@ export function finishClass(key: string | null | undefined): DamageClass | null 
   if (key in REACTOR_CORE) return REACTOR_CORE[key]; // task reactor-expansion-20261101 (lane CORE)
   if (key === 'annexWall') return 'concrete';
   if (key in SKYWAYS) return SKYWAYS[key]; // task studio-skyways-level-20261106-054448 (lane VIEW): world/skywaysArch.ts keys
+  // (task studio-skywalk-variety-20261107-231448-01, lane DRESS) the small shops' palettes: skyways-shop-{wall|floor}|<finish row>
+  if (key.startsWith('skyways-shop-')) return skywaysShopImpact(key);
   // (task studio-skyways-rework-20261107-054512-01) the anchor stores' finishes: skyways-anchor-{wall-<class>|floor-<kind>|ceil-<kind>}@<family>
   const an = /^skyways-anchor-(wall|floor|ceil)-([a-z]+)@/.exec(key);
   if (an) return an[1] === 'wall' ? (an[2] as DamageClass) : an[1] === 'floor' ? OFFICE_FLOOR[an[2]] ?? null : OFFICE_CEIL[an[2]] ?? null;

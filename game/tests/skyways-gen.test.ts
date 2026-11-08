@@ -17,6 +17,7 @@ import {FOOD_IDS, DRINK_IDS} from '../src/items/items';
 import {SKYWAYS_RAMEN_PURPOSE} from '../src/gen/skyways/ramenPurposes';
 import {CELL, FLOOR, SOLID} from '../src/gen/grid';
 import {outfitterDressOf} from '../src/gen/skyways/stores/outfitterDress'; // (task studio-alpha-skyways-shops-20261107-054512-01, lane STORE-OUTFITTER)
+import {skywaysConSnacksOf} from '../src/gen/skyways/skywaysConSnacks'; // (task studio-skywalk-variety-20261107-231448-01, lane DRESS)
 
 const SEEDS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 const cache = new Map<number, StationLayout>();
@@ -140,7 +141,9 @@ describe('Skyways: generated layouts', () => {
       const l = gen(s), r = l.skyways!.restaurant;
       if (!r) continue;
       expect(l.areas[r.area].purpose).toBe(SKYWAYS_RAMEN_PURPOSE.dining);
-      const food = l.pickups.filter(p => FOOD.has(p.itemId));
+      // (lane DRESS, layout version 4) the convention's table snacks are the venue's own (tests/skyways-con-snacks.test.ts)
+      const snacks = new Set((skywaysConSnacksOf(l) ?? []).map(q => q.pickup));
+      const food = l.pickups.filter(p => FOOD.has(p.itemId) && !snacks.has(p));
       expect(food.length).toBeGreaterThanOrEqual(2);
       expect(food.length).toBeLessThanOrEqual(4);
       for (const p of food) {
@@ -154,8 +157,11 @@ describe('Skyways: generated layouts', () => {
   it('ordinary small loot is not piled on the floor: the only loose floor finds are weapon finds (+ their ammo / pistol-start boxes)', () => {
     for (const s of SEEDS.slice(0, 5)) {
       const l = gen(s), r = l.skyways!.restaurant;
+      const snacks = new Set((skywaysConSnacksOf(l) ?? []).map(q => q.pickup));
       for (const p of l.pickups) {
         if (FOOD.has(p.itemId) || l.areas[p.area]?.ext) continue; // the restaurant's plates; the annex keeps its own program
+        // (lane DRESS, layout version 4: the convention's drinks / snacks stand on its table tops, never on the floor)
+        if (snacks.has(p)) { expect(p.y - l.levels[p.level ?? 0].baseY, `seed ${s}: ${p.itemId} on a table`).toBeGreaterThan(0.7); continue; }
         // (lane STORE-OUTFITTER: the outfitter's ONE real backpack, a gear find standing on its pack-wall shelf — not a floor pile)
         if (outfitterDressOf(l).some(r => r.backpack && l.pickups[r.backpack.pickup] === p)) continue;
         expect(/^(rifle|shotgun|pistol|ammo_|gas_mask|gas_filter)/.test(p.itemId) || p.reward !== undefined, `seed ${s}: ${p.itemId}`).toBe(true);
