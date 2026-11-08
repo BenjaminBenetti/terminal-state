@@ -18,6 +18,8 @@
 //    transaction per click: the press is consumed, its click / context menu ignored — no world fire, no drag, nothing repeats), and the
 //    ordinary pick -> quantity -> Confirm flow is unchanged.
 import {itemIconHtml} from '../../ui/itemIcons';
+import {hideTooltip, refreshTooltip, tipAttrs} from '../../ui/tooltip'; // task studio-market-rework-20261108-074144-01: the game's own tooltip (Alpha's ui/tooltip.ts)
+import {itemTip} from '../../ui/itemTip';
 import {ICONS} from '../../ui/icons';
 import {ITEMS} from '../../items/items';
 import {GEAR_SLOTS, GEAR_SLOT_NAMES} from '../../items/gear';
@@ -126,6 +128,7 @@ export class TradeView {
   hide(): void {
     this.selection = null;
     this.root?.classList.add('hidden');
+    hideTooltip(); // the tooltip goes with the panel
   }
 
   private mount(): void {
@@ -346,20 +349,21 @@ export class TradeView {
       const def = st ? ITEMS[st.itemId] : null;
       const w = def?.kind === 'weapon' ? WEAPONS[def.weaponId!] : null;
       const count = def ? (w ? (w.melee ? '' : `<span class="count">${st!.mag ?? 0} of ${w.magazine}</span>`) : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      let price = '', no = false, why = '', quick = '';
+      let price = '', no = false, why = '', quick = '', worth = '';
       const ref: SlotRef = {bar: bar as SlotRef['bar'], index: i};
       if (st && side === 'sell') {
         const q = quoteSell(c, ref);
-        if (q.ok) price = `sell ${q.price}`; else { price = '—'; no = true; why = q.text; }
-      } else if (st) price = `${buyPrice(st, st.count)}`;
+        if (q.ok) { price = `sell ${q.price}`; worth = `This stall pays ${tiesText(q.price)}${st.count > 1 ? ' for the lot' : ''}`; } else { price = '—'; no = true; why = q.text; }
+      } else if (st) { const n = buyPrice(st, st.count); price = `${n}`; worth = `Costs ${tiesText(n)}${st.count > 1 ? ' for the lot' : ''}`; }
       if (st && !no) { // exactly what a Ctrl+click does (the quantity / price Confirm would use)
         const sel: TradeSel = side === 'sell' ? {side: 'sell', ref} : {side: 'buy', index: i};
         const n = this.quickQty(sel), qb = sel.side === 'buy' ? quoteBuy(c, i, n) : null, q = qb ?? quoteSell(c, ref, n);
         const short = qb?.ok && !qb.afford ? ` (you have ${tiesText(qb.have)})` : '';
-        if (q.ok) quick = ` · Ctrl+click: ${sel.side} ${amountText(st.itemId, q.count)} for ${tiesText(q.price)}${short}`;
+        if (q.ok) quick = `Ctrl+click: ${sel.side} ${amountText(st.itemId, q.count)} for ${tiesText(q.price)}${short}`;
       }
-      const cond = st ? conditionText(st) : '';
-      const title = def ? ` title="${esc(`${def.name}${cond ? ` — ${cond}` : ''}${why ? ` · ${why}` : ''}${quick}`)}"` : '';
+      // the game's tooltip (ui/tooltip.ts; never a native title, which outlives the panel): this stack's own lines (rounds, filter, air,
+      // armour left, a bag's contents), what the stall pays / charges or why it refuses (amber), and what a Ctrl+click does
+      const title = st && def ? tipAttrs(itemTip(st, quick || (no ? undefined : 'Click to pick it, then Confirm'), {inv, lines: [why || worth], tone: no ? 'warn' : undefined})) : '';
       const cls = `slot tr-cell${def ? ' filled' : ''}${no ? ' tr-no' : ''}${isSel(side, bar, i) ? ' tr-sel' : ''}${bar === 'pack' && i >= PACK_SIZE ? ' gear-extra' : ''}`;
       return `<div class="${cls}" data-side="${side}" data-bar="${bar}" data-index="${i}"${title}>${key}${def ? itemIconHtml(def.id) : ''}<span class="nm">${def ? esc(def.short) : ''}</span>${count}<span class="tr-price">${price}</span></div>`;
     };
@@ -392,5 +396,6 @@ export class TradeView {
     for (const b of root.querySelectorAll?.('.tr-qtys button') ?? []) (b as HTMLButtonElement).disabled = !st || st.count <= 1;
     const n = root.querySelector('.tr-note');
     if (n) { n.textContent = this.note; n.classList.toggle('refused', this.noteBad); }
+    refreshTooltip(); // the slots were rewritten: the tooltip re-binds to the one under the pointer (its new text) or hides
   }
 }

@@ -19,6 +19,8 @@ import {installFakeDom, type FakeEl, type FakeDom} from './helpers/fakeDom';
 import {carriedTies, giveTies, hostility, tradeHost, tradeState} from './helpers/marketTradeFixture';
 
 const P = (i: number): SlotRef => ({bar: 'pack', index: i});
+/** An item cell's game tooltip (ui/tooltip.ts data-tip*: heading, lines, hint — never a native title), as one text. */
+const tip = (e: FakeEl): string => { expect(e.title).toBe(''); return [e.dataset.tip, e.dataset.tipBody, e.dataset.tipHint].filter(Boolean).join('\n'); };
 
 let dom: FakeDom;
 beforeAll(() => { dom = installFakeDom(); });
@@ -128,10 +130,11 @@ describe('market trade view: the panel', () => {
     expect(pack[1].innerHTML).toMatch(/<span class="tr-price">sell \d+<\/span>/); // 9mm at the gunsmith
     expect(pack[0].innerHTML).toMatch(/<span class="tr-price">sell \d+<\/span>/); // water: off the gunsmith's line, but it buys it (lower multiple)
     expect(pack[0].className).not.toContain('tr-no');
-    expect(pack[0].title).toMatch(/Ctrl\+click: sell 3 × Water for \d+ ties$/);
+    expect(tip(pack[0])).toMatch(/Ctrl\+click: sell 3 × Water for \d+ ties$/);
     expect(pack[2].className).toContain('tr-no');
-    expect(pack[2].title).toMatch(/reactor/); // the startup key: never for sale
-    expect(pack[2].title).not.toMatch(/Ctrl\+click/);
+    expect(tip(pack[2])).toMatch(/reactor/); // the startup key: never for sale
+    expect(tip(pack[2])).not.toMatch(/Ctrl\+click/);
+    expect([pack[2].dataset.tipTone, pack[0].dataset.tipTone, pack[0].dataset.tipHint]).toEqual(['warn', undefined, expect.stringMatching(/^Ctrl\+click: sell 3 × Water/)]); // a refusal is amber; the hint says what Ctrl+click does
     // the deal line names a stall that pays more (the layout's signs)
     t.sys.view.select({side: 'sell', ref: P(0)});
     expect(t.sys.view.deal).toMatch(/^Sell 3 × Water for \d+ ties · GENERAL STALL pays \d+$/);
@@ -232,8 +235,8 @@ describe('market trade view: Ctrl+click (user: "ctrl+click should sell or buy it
     t.standAt('gun');
     t.press();
     const cell = dom.el('[data-side="pack"]').children[1]; // 40 x 9mm
-    expect(cell.title).toMatch(/Ctrl\+click: sell 40 9mm rounds for (\d+) ties$/);
-    const price = Number(/for (\d+) ties$/.exec(cell.title)![1]);
+    expect(tip(cell)).toMatch(/Ctrl\+click: sell 40 9mm rounds for (\d+) ties$/);
+    const price = Number(/for (\d+) ties$/.exec(tip(cell))![1]);
     const trades = t.sys.counts.trades;
     const e = press(cell, {ctrl: true});
     fire('mousedown', e);
@@ -253,7 +256,7 @@ describe('market trade view: Ctrl+click (user: "ctrl+click should sell or buy it
     v.select({side: 'sell', ref: P(1)});
     v.setQty(7);
     const cell = dom.el('[data-side="pack"]').children[1];
-    expect(cell.title).toMatch(/Ctrl\+click: sell 7 9mm rounds for \d+ ties$/);
+    expect(tip(cell)).toMatch(/Ctrl\+click: sell 7 9mm rounds for \d+ ties$/);
     for (const o of [{}, {ctrl: true, button: 2}]) { const e = press(cell, o); fire('mousedown', e); expect(e.stopped).toBe(false); }
     expect(t.sys.counts.trades).toBe(0);
     fire('mousedown', press(cell, {meta: true}));
@@ -266,8 +269,8 @@ describe('market trade view: Ctrl+click (user: "ctrl+click should sell or buy it
     const lot = stock[i], n = lot.count, cost = buyPrice(lot, n), have = carriedTies(t.h.inv);
     expect(cost).toBeLessThanOrEqual(have);
     const sc = dom.el('[data-side="stock"]').children[i];
-    expect(sc.title.endsWith(`for ${cost} ties`)).toBe(true);
-    expect(sc.title).toMatch(/Ctrl\+click: buy /);
+    expect(tip(sc).endsWith(`for ${cost} ties`)).toBe(true);
+    expect(tip(sc)).toMatch(/Ctrl\+click: buy /);
     fire('mousedown', press(sc, {ctrl: true}));
     expect([t.sys.counts.trades, carriedTies(t.h.inv), stock.includes(lot)]).toEqual([2, have - cost, false]);
   });
