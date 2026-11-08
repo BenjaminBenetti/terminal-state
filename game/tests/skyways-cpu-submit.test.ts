@@ -14,6 +14,9 @@
 //    rising over the roofs never level-culled (world/levelCulling.ts);
 //  - fine per-storey cohorts and the per-storey, culler-decided loot display (world/builder.ts, containers.ts, storefrontBuilder.ts);
 //  - enemies, pickups and the prize car decided from their boxes every update (world/reactor/cpuActorCulling.ts, now the Skyways too);
+//  - the flashlight's shadow frustum and near-plane clip zone (follow-up, version 4): a torch within its 0.2 m near plane of a wall sees
+//    through it, so nothing in its frustum is hidden for it then, and an unclipped torch must be slab-blocked itself; portal tiles are
+//    tested out to the fog's reach by view depth (the 55 m cap culled a fixture the fog still drew);
 //  - correctness: a depth-buffered oracle — the eye (to the fog distance), the flashlight's shadow camera (its 30 m) — finds no visible
 //    mesh hidden and no hidden moving object whose whole cull box shows a pixel, on the trace poses, bridges, atria, the street level
 //    looking out of its windows, the skyway storey's windows, stair cores and the station, on layout versions 3 and 4.
@@ -40,16 +43,18 @@ const TRACE = [{x: 33.62, z: 78.26}, {x: 40, z: 77}] as const;
 const VERSIONS = [3, SKYWAYS_LAYOUT_VERSION] as const;
 
 /**
- * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg; the poses on their cell centres).
- * Measured on the lane's branch (layout v3 = v4 for this seed then): worst 510, total 6,525 per version (rules off, with the new build's
- * fine cohorts: 10,949). The same 24 views at the trace's exact coordinates on the code BEFORE the fixes: worst 975 (yaw 330 at (40, 77)),
- * total 12,430; after: worst 523, total 6,942 — the east-facing (240-330 deg) views 557-975 -> 267-523. A failure means the Skyways'
- * submitted work grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator
- * (its building programmes are being reworked): its caps carry headroom and its cut is checked over the east-facing views together.
+ * The budget: scene + flashlight-shadow draws over the trace sweep (2 positions x 12 yaws, every 30 deg) on real open floor (openNear).
+ * Layout v3: the trace's own spots (to the cell centre) — measured worst 506, total 6,295 (rules off, with the new build's fine cohorts:
+ * 10,720); at the trace's exact coordinates the code BEFORE lane PERF drew worst 975 (yaw 330 at (40, 77)), total 12,430 over these yaws.
+ * Layout v4 (the building programmes): the trace's coordinates are SOLID on storey 2, so the poses are the nearest open floor
+ * ((30.75, 75.25) and (42.25, 77.25) at the time) — measured worst 432, total 5,779 (rules off 12,628); the code before lane PERF drew
+ * worst 1,283 / 998 at those poses (15 deg sweeps: 14,356 / 11,312 -> 6,276 / 5,405). A failure means the Skyways' submitted work
+ * grew: measure again (LL_SKYWAYS_CPU_OUT) and decide consciously before raising a cap. Version 4 is the live generator: its east-facing
+ * cut is checked over those views together.
  */
 const BUDGET = {
   3: {worst: 560, total: 7200, eastCut: 0.25},
-  4: {worst: 640, total: 8200, eastCut: 0.2},
+  4: {worst: 480, total: 6400, eastCut: 0.25},
 } as const;
 
 /**
@@ -132,7 +137,7 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
     expect(c.windowRule).toBe(true);
   }, 600_000);
 
-  for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2, 2 positions x 12 yaws) within budget; the rules cut every east-facing view`, async () => {
+  for (const v of VERSIONS) it(`layout v${v}: the trace sweep (storey 2 open floor, 2 positions x 12 yaws) within budget; the rules cut the east-facing views`, async () => {
     const S = await skywaysPerfScene(SEED, v);
     const B = BUDGET[v === 3 ? 3 : 4];
     let worst = 0, total = 0, offTotal = 0, eastOn = 0, eastOff = 0;
