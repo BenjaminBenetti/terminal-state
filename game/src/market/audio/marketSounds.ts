@@ -282,3 +282,11 @@ export class MarketSounds implements MarketAudioApi {
 export function installMarketAudio(game: unknown): MarketSounds {
   return new MarketSounds(game as MarketAudioHost).install();
 }
+
+/** QA hook (spread into window.__LL by qa.ts) for SHORT serial browser spot checks: the system's groups / voices / counts + the Sfx side. */
+export function marketAudioQaApi(sys: () => unknown, sfxState: () => unknown) {
+  return {
+    /** {system: groups handed to the audio, sounding voices, queued starts, counters; sfx: crowd channels (murmur, level), voices, counters}. */
+    marketAudio: () => { const s = sys(); return {system: s instanceof MarketSounds ? s.qa() : null, sfx: sfxState()}; },
+  };
+}

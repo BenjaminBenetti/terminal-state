@@ -21,6 +21,7 @@ import {hordeQaApi} from './ai/hordeQa'; // Task track3-eaton-centre-20261031 (l
 import {gearQaApi} from './gear/qa'; // Iteration 16 (lane GEAR): gear / backpack spot-check hooks
 import {marketTradeQaApi} from './market/trade/tradeSystem'; // task studio-survivor-market-20261108-005807-01 (lane TRADE)
 import {marketCombatQaApi} from './market/combat/marketCombat'; // task studio-market-rework-20261108-074144-01 (lane COMBAT)
+import {marketAudioQaApi} from './market/audio/marketSounds'; // task studio-market-bar-20261108-225231-01 (lane AUDIO)
 import {marketWaresQaApi} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES)
 import {towerQaApi} from './world/towerQa'; // Iteration 16 (lane TOWER): elevator / stair door / exterior spot-check hooks
 import {officeArchQaApi} from './world/officeAtmosphere'; // Task office-overhaul-20261030 (lane ARCH): office finishes / green exterior fog tuning
@@ -362,6 +363,7 @@ export function installQaHooks(game: Game): void {
     ...gearQaApi(game), // Iteration 16 (lane GEAR): gear(), gearGive(id), bagPlace(), bagOpen(), bagQuick('pack:0'), bagMove(a, b), bagWear(), bagClose()
     ...marketTradeQaApi(() => game.trade), // task studio-survivor-market-20261108-005807-01 (lane TRADE): trade(), the stalls' stock / balance / deal line
     ...marketCombatQaApi(() => game.marketCombat), // task studio-market-rework-20261108-074144-01 (lane COMBAT): marketCombat() (hostility, people, rounds), marketProvoke(stall?, kind?)
+    ...marketAudioQaApi(() => game.marketAudio, () => game.sfx.marketAudioState()), // task studio-market-bar-20261108-225231-01 (lane AUDIO): marketAudio() (murmur groups / channels, voices, counts)
     ...marketWaresQaApi(() => game.marketWares), // task studio-market-rework-20261108-074144-01 (lane WARES): wares(), waresSteal(uid)
     ...towerQaApi(game), // Iteration 17 / office-overhaul (lane LIFT): tower(), towerGoLanding(floor), towerGoCab(), liftButtons(), liftAim(id), liftPress(id, 'mouse' | 'key'), liftState(), towerExteriorTune({...})
     ...officeArchQaApi(game), // Task office-overhaul-20261030 (lane ARCH): exteriorFogTune({...}), officeArch(), officeArchTune({...}), roofFog()

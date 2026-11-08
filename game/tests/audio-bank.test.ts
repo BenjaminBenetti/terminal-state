@@ -21,6 +21,7 @@ import {CLIP_BYTES_FUEL, CLIP_GAPS_FUEL, CLIP_MANIFEST_FUEL} from '../src/audio/
 import {CLIP_BYTES_SKYWAYS_CAR, CLIP_GAPS_SKYWAYS_CAR, CLIP_MANIFEST_SKYWAYS_CAR} from '../src/audio/manifest.skywaysCar.generated'; // task skyways-level-20261106: the prize car set
 import {CLIP_BYTES_SKYWAYS_DESTINATIONS, CLIP_GAPS_SKYWAYS_DESTINATIONS, CLIP_MANIFEST_SKYWAYS_DESTINATIONS} from '../src/audio/manifest.skywaysDestinations.generated'; // task skyways-destinations-20261106 (lane AUDIO)
 import {CLIP_BYTES_HEAD_HIT, CLIP_GAPS_HEAD_HIT, CLIP_MANIFEST_HEAD_HIT} from '../src/audio/manifest.headHit.generated'; // task studio-general-armor-20261107-231448-01: the head-hit skull crack
+import {CLIP_BYTES_MARKET_BAR, CLIP_GAPS_MARKET_BAR, CLIP_MANIFEST_MARKET_BAR} from '../src/audio/manifest.marketBar.generated'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set
 
 // Iteration 06 (Lane D): the runtime bank = iteration-05 manifest + the iteration-06 breaking cues.
 // Iteration 07 (Lane K): + shot item / chunk / light prop landing cues (i07k).
@@ -28,9 +29,9 @@ import {CLIP_BYTES_HEAD_HIT, CLIP_GAPS_HEAD_HIT, CLIP_MANIFEST_HEAD_HIT} from '.
 // Iteration 11: + the dedicated pistol shot. Iteration 12 (AUDIO): + battery insert, flare ignite / burn loop / out, flashlight flicker.
 // Task track1-siren-blightbelly-20261031 (lane AUDIO): + Siren hum / scream, Blightbelly burst / gas hiss (t1).
 // Task studio-alpha-strainer-reach-squish-20261101-201110-01 (lane AUDIO): + the Strainer's wet footfalls / swing / contact / squish.
-const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT};
-const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT];
-const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT;
+const CLIP_MANIFEST: Record<string, readonly {url: string; dur: number; loop?: {start: number; length: number}; src: string}[]> = {...CLIP_MANIFEST_I05, ...CLIP_MANIFEST_I06, ...CLIP_MANIFEST_I07K, ...CLIP_MANIFEST_I07Q, ...CLIP_MANIFEST_I11, ...CLIP_MANIFEST_I12, ...CLIP_MANIFEST_COUGH, ...CLIP_MANIFEST_T1, ...CLIP_MANIFEST_STRAINER, ...CLIP_MANIFEST_REACTOR, ...CLIP_MANIFEST_REACTOR_STARTUP, ...CLIP_MANIFEST_REACTOR_ENDING, ...CLIP_MANIFEST_FUEL, ...CLIP_MANIFEST_SKYWAYS_CAR, ...CLIP_MANIFEST_SKYWAYS_DESTINATIONS, ...CLIP_MANIFEST_HEAD_HIT, ...CLIP_MANIFEST_MARKET_BAR};
+const CLIP_GAPS = [...CLIP_GAPS_I05, ...CLIP_GAPS_I06, ...CLIP_GAPS_I07K, ...CLIP_GAPS_I07Q, ...CLIP_GAPS_I11, ...CLIP_GAPS_I12, ...CLIP_GAPS_COUGH, ...CLIP_GAPS_T1, ...CLIP_GAPS_STRAINER, ...CLIP_GAPS_REACTOR, ...CLIP_GAPS_REACTOR_STARTUP, ...CLIP_GAPS_REACTOR_ENDING, ...CLIP_GAPS_FUEL, ...CLIP_GAPS_SKYWAYS_CAR, ...CLIP_GAPS_SKYWAYS_DESTINATIONS, ...CLIP_GAPS_HEAD_HIT, ...CLIP_GAPS_MARKET_BAR];
+const CLIP_BYTES = CLIP_BYTES_I05 + CLIP_BYTES_I06 + CLIP_BYTES_I07K + CLIP_BYTES_I07Q + CLIP_BYTES_I11 + CLIP_BYTES_I12 + CLIP_BYTES_COUGH + CLIP_BYTES_T1 + CLIP_BYTES_STRAINER + CLIP_BYTES_REACTOR + CLIP_BYTES_REACTOR_STARTUP + CLIP_BYTES_REACTOR_ENDING + CLIP_BYTES_FUEL + CLIP_BYTES_SKYWAYS_CAR + CLIP_BYTES_SKYWAYS_DESTINATIONS + CLIP_BYTES_HEAD_HIT + CLIP_BYTES_MARKET_BAR;
 import {Sfx} from '../src/audio/sfx';
 import {FakeCtx, fakeBank, fakeBuffer} from './helpers/fakeAudio';
 
@@ -96,13 +97,16 @@ describe('Sound Lab clip manifest + bundled assets', () => {
   });
 
   it('provenance names a raw Sound Lab source (prompt, seed, hash) for every bundled clip', () => {
-    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
+    const provs = ['audio-iteration05.json', 'audio-iteration06.json', 'audio-iteration07k.json', 'audio-iteration07-creature.json', 'audio-iteration11-pistol.json', 'audio-iteration12.json', 'audio-cough.json', 'audio-track1.json', 'audio-strainer.json', 'audio-reactor.json', 'audio-reactor-startup.json', 'audio-reactor-ending.json', 'audio-fuel.json', 'audio-skyways-car.json', 'audio-skyways-destinations.json', 'audio-head-hit.json', 'audio-market-bar.json'].map(f => JSON.parse(fs.readFileSync(path.join(GAME, 'public/assets/derivatives', f), 'utf8')));
     for (const prov of provs) {
       expect(prov.license.gameReady).toBe(false);
       expect(prov.license.status).toMatch(/Conditional prototype/);
     }
     const prov = provs.reduce((acc, p) => ({...acc, derivatives: [...acc.derivatives, ...p.derivatives]}));
-    const byUrl = new Map<string, {sha256: string; source: {clip: string; rawSha256: string; rawFile: string; prompt: string; seed: number; jobId: string | null}}>(prov.derivatives.map((d: {url: string}) => [d.url, d]));
+    const byUrl = new Map<string, {sha256: string; source: {clip: string; rawSha256: string; rawFile?: string; prompt?: string; promptSha256?: string; seed: number; jobId: string | null}}>(prov.derivatives.map((d: {url: string}) => [d.url, d]));
+    // task studio-market-bar-20261108-225231-01 (lane AUDIO): the market set's public record names its raw takes by hashes only (the lane brief:
+    // no prompts / paths) — the prompt's SHA-256 instead of its text, no raw path; its builder verified each raw against the runner sidecar
+    const hashOnly = new Set<string>(provs.find(p => p.asset === 'audio-market-bar-20261108')!.derivatives.map((d: {url: string}) => d.url));
     const rawChecked = new Set<string>();
     for (const refs of Object.values(CLIP_MANIFEST)) {
       for (const r of refs) {
@@ -110,12 +114,15 @@ describe('Sound Lab clip manifest + bundled assets', () => {
         expect(d, r.url).toBeTruthy();
         expect(d!.source.clip).toBe(r.src);
         expect(d!.source.rawSha256).toMatch(/^[0-9a-f]{64}$/);
-        expect(d!.source.prompt).toMatch(/^TrackType: SFX/);
+        if (hashOnly.has(r.url)) {
+          expect(d!.source.promptSha256).toMatch(/^[0-9a-f]{64}$/);
+          expect([d!.source.prompt, d!.source.rawFile]).toEqual([undefined, undefined]);
+        } else expect(d!.source.prompt).toMatch(/^TrackType: SFX/);
         expect(Number.isInteger(d!.source.seed)).toBe(true);
         expect(d!.source.jobId).toMatch(/^\d{8}T\d{6}-\d+$/);
         expect(createHash('sha256').update(fs.readFileSync(path.join(GAME, 'public', r.url))).digest('hex')).toBe(d!.sha256);
-        const raw = path.join(ROOT, d!.source.rawFile);
-        if (fs.existsSync(raw) && !rawChecked.has(raw)) { // reference mount present: raw bytes unchanged
+        const raw = d!.source.rawFile ? path.join(ROOT, d!.source.rawFile) : '';
+        if (raw && fs.existsSync(raw) && !rawChecked.has(raw)) { // reference mount present: raw bytes unchanged
           rawChecked.add(raw);
           expect(createHash('sha256').update(fs.readFileSync(raw)).digest('hex')).toBe(d!.source.rawSha256);
         }
@@ -149,7 +156,9 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
     // task skyways-level-20261106 (lane CAR2): releasing the car's engine channel / its QA state (play nothing)
     'stopCarEngine', 'carAudioState',
     // task skyways-destinations-20261106 (lane AUDIO): the location emitters' tick / gate / release / QA state (setLocationEmitters is exercised below)
-    'locHeard', 'updateLocations', 'releaseLocation', 'trimLocationFades', 'locationAudioState']);
+    'locHeard', 'updateLocations', 'releaseLocation', 'trimLocationFades', 'locationAudioState',
+    // task studio-market-bar-20261108-225231-01 (lane AUDIO): the crowd murmur channels' release / fade bound / stop and the QA state (play nothing)
+    'stopCrowd', 'releaseCrowd', 'trimCrowdFades', 'marketAudioState']);
 
   it('never creates an oscillator or plays a non-bank buffer (all public cues, all areas)', async () => {
     const made: FakeCtx[] = [];
@@ -218,6 +227,11 @@ describe('no synthesis: every cue path plays a Sound Lab clip', () => {
       // (+ round 2, task skyways-vehicle-20261107 lane AUDIO: the brake-to-stop, the car's own contacts)
       carBrake: () => { ctx.currentTime += 2; sfx.carBrake(at, 0.5); }, carImpact: () => { ctx.currentTime += 1; sfx.carImpact(2, 0.6, 2, 6, 'car'); sfx.carImpact(2, 0.8, 2, 5, 'flesh'); },
       // task skyways-destinations-20261106 (lane AUDIO): a location emitter's loop channel starts at the next emitter tick
+      // task studio-market-bar-20261108-225231-01 (lane AUDIO): the register, a person's scream / grunt (followed, then faded), the retch, the crowd murmur
+      marketCash: () => sfx.marketCash(),
+      marketVoice: () => { for (const k of ['scream', 'grunt'] as const) { const h = sfx.marketVoice(k, 3, 1.5, 3, {rate: 0.95}); h?.setPos(3.5, 1.5, 3); h?.stop(); } },
+      marketRetch: () => { ctx.currentTime += 1; sfx.marketRetch(); },
+      crowdChatter: () => { sfx.crowdChatter([{x: 4, y: 1.5, z: 4, level: 0.8, cue: 'marketChatter'}, {x: -6, y: 1.5, z: 2, level: 0.5, cue: 'marketBarChatter'}]); sfx.crowdChatter([]); },
       setLocationEmitters: () => { sfx.setLocationEmitters([{...at, cue: 'arcadeAttract', gain: 1, range: 20}]); for (let i = 0; i < 13; i++) sfx.setListener(2, 1.6, 3, 0); sfx.setLocationEmitters([]); },
       ambience: () => {
         for (const area of ['platform', 'service-corridor', 'washroom', 'food-court', 'utility']) { sfx.setRoom('medium', area); for (let i = 0; i < 400; i++) { ctx.currentTime += 0.25; sfx.ambience(0.25); } }
