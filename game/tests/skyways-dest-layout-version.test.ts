@@ -10,6 +10,9 @@
 // Task studio-skywalk-variety-20261107-231448-01: version 4 is the building programmes; version 3 regenerates through the FROZEN
 // version-3 core (gen/skyways/legacy80/). Version 3's fingerprints (the full skyways record, area / prop loot purposes included) were
 // computed on main ebc2034a193ee29cccf42f289a93ac80c13cf4a4 (GAME80) before any change and must stay identical.
+// Task studio-cosplay-general-20261108-225231-01 (lane UPPER): version 6 adds the convention's second-floor cosplay crowd; version 5's
+// fingerprints (GAME85-87: the same full record as version 4's, every enemy record in full) were computed on main
+// c1ded2f5d61b9b343d12ae39e3a59e39b89296ed before any version-6 change and must stay identical.
 import {describe, expect, it} from 'vitest';
 import * as crypto from 'node:crypto';
 import {LEVELS} from '../src/levels/registry';
@@ -37,6 +40,12 @@ const GAME84: Record<number, string> = {
   103855126: 'ee325ff2adcb0462',
 };
 
+const GAME87: Record<number, string> = {
+  1: '8111a2ba5c2f9d17', 2: '9557a6f7321cc7eb', 3: '66f9e6a63c5b5a6a', 4: 'ede5bbe80df3aef3', 5: '408584268556631f',
+  6: '2c2119605b53ca71', 7: '303fc925b03af63c', 8: '6c70ce42c68f04b5', 707: '70bf54d399e0684e', 4242: '054c538f93ab5dd1',
+  103855126: '2537e7d45437f344',
+};
+
 function fingerprint80(seed: number): string {
   const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 3} as never);
   const info = {...(l.skyways as unknown as Record<string, unknown>)};
@@ -50,8 +59,8 @@ function fingerprint80(seed: number): string {
  * area / prop with its loot purpose, every enemy record IN FULL (family, context, look, type, storey) and the hordes; computed on main
  * 63a5f92355f3841b2543b54318c4ee757f0fd5a2 before any version-5 change (the Siren / horde / cosplay / Mall-store pass).
  */
-function fingerprint84(seed: number): string {
-  const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion: 4} as never);
+function fingerprint84(seed: number, layoutVersion = 4): string {
+  const l = LEVELS.skyways.generate('main', {levelSeed: seed, startWeapon: 'pistol', layoutVersion} as never);
   const info = {...(l.skyways as unknown as Record<string, unknown>)};
   const fp = JSON.stringify({info, areas: l.areas.map(a => [a.x, a.y, a.w, a.h, a.label, a.type, a.ceil, a.level ?? 0, a.purpose ?? null]), props: l.props.map(p => [p.kind, p.x, p.z, p.y, p.rot, p.level ?? 0, p.variant ?? 0, p.purpose ?? null]),
     pickups: l.pickups.map(p => [p.itemId, p.x, p.z]), zombies: l.zombies, hordes: l.hordes ?? [], lights: l.lights.length, sf: l.storefronts, links: l.levelLinks.length});
@@ -103,6 +112,10 @@ describe('Skyways layout version (save compatibility)', () => {
 
   it('version 4 regenerates GAME81-84 exactly (fingerprints pinned on main 63a5f92, before version 5)', () => {
     for (const [s, want] of Object.entries(GAME84)) expect(fingerprint84(Number(s)), `seed ${s}`).toBe(want);
+  });
+
+  it('version 5 regenerates GAME85-87 exactly (the full version-4 record; fingerprints pinned on main c1ded2f, before version 6)', () => {
+    for (const [s, want] of Object.entries(GAME87)) expect(fingerprint84(Number(s), 5), `seed ${s}`).toBe(want);
   });
 
   it('version 2 adds the destinations: anchors and landmark courts', () => {
