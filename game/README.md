@@ -77,8 +77,8 @@ Inventory (Tab / I, iteration 04): drag and drop with the mouse — drop an item
 slot or backpack slot to move it (the same item stacks up to its limit, a different item swaps,
 Shift-drag splits off half a stack); the HUD quick-slot bar under the screen also accepts drops;
 drag it **outside the inventory panel to drop it** on the floor in front of you. Click selects an
-item (details, Use / Equip / Drop buttons, 1–5 assigns it to a quick slot); double-click or
-right-click uses food / drink / medicine (right-click equips a gun); keyboard: Enter selects the
+item (details, Use / Equip / Drop buttons, 1–5 assigns it to a quick slot); double-click,
+Ctrl+click (Cmd+click) or right-click uses food / drink / medicine (right-click equips a gun); keyboard: Enter selects the
 focused slot, Delete drops it. Item icons everywhere (inventory, quick slots, drag ghost, pickup
 prompt) are renders of the actual runtime 3D models, made once at load through the game's own
 renderer (one offscreen render target, then disposed); the old SVG silhouettes are only a fallback.
@@ -123,7 +123,7 @@ Food and water: FOOD and WATER bars under HP/ST both start at 80% (spawn, new st
 drain slowly only while playing (about −8 food / −12 water per 15 minutes; menus and the
 inventory freeze them). At 0 you slowly lose health. 3 drinks (water, cola, orange juice) and 4
 foods (chocolate, chips, canned beans, instant noodles): hold one in a quick slot and left click,
-or in the inventory double-click / right-click it (or select + Eat/Drink).
+or in the inventory double-click / Ctrl+click / right-click it (or select + Eat/Drink).
 
 Damage and breaking (iteration 06, `src/damage/`): every bullet hit is resolved to a material class
 (`src/damage/materials.ts`: concrete, tile, terrazzo, plaster, ballast, sheet metal, steel, wood, glass,
@@ -338,8 +338,9 @@ Task studio-general-armor-20261107-231448-01 (`src/player/armor.ts`).
 - **One pool.** Worn gear with armor adds to one armor value. It is not tied to a body part. Gear in pockets, bags, the
   Lockbox or cargo adds nothing. A **pip** is 2.5 %. The armor vest gives 4 pips (10 %) and the hard hat 1 pip (2.5 %). The
   pool is capped at 80 %.
-- **HUD.** Blue pips sit above the health bar, ten to a row (a full row is 25 %). Further rows stack on the first and overlap
-  it by about 25 %. The display moves in half pips, rounded down; the stored value keeps its fraction.
+- **HUD.** Blue circular pips sit above the health bar, ten to a row spanning its width (a full row is 25 %). Further rows
+  stack on the first and overlap it by 25 % of a pip. The display moves in half pips (a half-filled circle), rounded down;
+  the stored value keeps its fraction.
 - **Enemy damage only.** An enemy's hit, from any enemy type, loses the pool's share of its damage, whatever it hits. The
   enemy damage multiplier applies first. Falls, toxic gas and starving or dehydration never meet the armor.
 - **Injury save.** The game rolls an injury from an enemy hit as for an unarmored player. If it would injure you, a second
