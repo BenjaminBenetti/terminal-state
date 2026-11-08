@@ -55,7 +55,7 @@ export function splitSkywaysMerch(layout: StationLayout): MerchSplit {
     } else if (p.kind === 'skyMuFacedRecords' && p.host !== undefined) {
       // the row's five sleeves along its ledge (row frame x), on the cover wall that hosts the row
       const hi = p.host, sleeves = facedRow(p.variant), c = Math.cos(p.rot), s = Math.sin(p.rot);
-      const at = (x: number) => ({x: r3(p.x + x * c), z: r3(p.z - x * s)});
+      const x0 = p.x, z0 = p.z, at = (x: number) => ({x: r3(x0 + x * c), z: r3(z0 - x * s)}); // (from the row's own place: p becomes sleeve 0)
       const ac = Math.abs(Math.cos(p.rot)), as = Math.abs(Math.sin(p.rot));
       const hx = r3(ac * FACED_LP.w / 2 + as * FACED_LP.d / 2), hz = r3(as * FACED_LP.w / 2 + ac * FACED_LP.d / 2);
       const base = {...p};

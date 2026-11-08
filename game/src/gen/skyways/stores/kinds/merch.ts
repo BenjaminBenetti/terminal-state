@@ -50,7 +50,7 @@ export function demoDeviceParts(phone: boolean): DestDrawnPart[] {
   return [
     {m: 'black', s: [S.w, S.h, S.d], p: [0, S.h / 2, 0]},
     {m: 'black', s: [dw, dh, DEMO_DEV.t], p: [0, cy, 0], rx},
-    {m: 'deviceScreen', s: [r3(dw - 0.014), r3(dh - 0.016), 0.004], p: [0, r3(cy + ny * 0.008), r3(nz * 0.008)], rx},
+    {m: 'deviceScreen', s: [dw - 0.014, dh - 0.016, 0.004], p: [0, cy + ny * 0.008, nz * 0.008], rx},
   ];
 }
 /** The box of a demo device on its stand (m): the stand's footprint / the leaning device. */
