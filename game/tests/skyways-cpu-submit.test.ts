@@ -52,17 +52,27 @@ const BUDGET = {
   4: {worst: 640, total: 8200, eastCut: 0.2},
 } as const;
 
-/** The nearest open storey-2 floor cell centre to (x, z) within 6 m (the trace pose as generated; a reworked layout may move walls). */
-function openNear(S: SkywaysPerfScene, level: number, x: number, z: number): {x: number; z: number} | null {
-  const g = S.layout.levels[level].grid;
-  let best: {x: number; z: number} | null = null, bd = Infinity;
-  for (let dz = -6; dz <= 6; dz += CELL) for (let dx = -6; dx <= 6; dx += CELL) {
-    const [cx, cy] = g.cellOf(x + dx, z + dz);
-    if (!g.inBounds(cx, cy)) continue;
+/**
+ * The nearest REAL OPEN FLOOR of a storey to (x, z) within 12 m: a cell centre whose 3 x 3 cells are walkable, unblocked, flat floor at
+ * the storey's own floor height (no stair flight, no other deck) — where a player can stand, the player's 0.3 m radius clear. On layout
+ * v3 that is the trace's own spot (to the cell centre); on version 4 (the building programmes moved the walls) the trace's coordinates
+ * are SOLID on storey 2, so the trace-equivalent pose is the nearest such floor — never a point over a stair flight or inside a wall.
+ */
+function openNear(S: SkywaysPerfScene, level: number, x: number, z: number): {x: number; z: number; y: number} | null {
+  const g = S.layout.levels[level].grid, base = S.layout.levels[level].baseY;
+  const flat = (cx: number, cy: number) => {
+    if (!g.inBounds(cx, cy)) return false;
     const i = g.idx(cx, cy);
-    if (g.cells[i] !== FLOOR || g.blocked[i]) continue;
+    return g.cells[i] === FLOOR && !g.blocked[i] && g.rampIdx[i] < 0 && Math.abs(g.floor[i] - base) < 0.05;
+  };
+  let best: {x: number; z: number; y: number} | null = null, bd = Infinity;
+  for (let dz = -12; dz <= 12; dz += CELL) for (let dx = -12; dx <= 12; dx += CELL) {
+    const [cx, cy] = g.cellOf(x + dx, z + dz);
+    let ok = true;
+    for (let j = -1; j <= 1 && ok; j++) for (let q = -1; q <= 1 && ok; q++) ok = flat(cx + q, cy + j);
+    if (!ok) continue;
     const d = dx * dx + dz * dz;
-    if (d < bd) { bd = d; best = {x: (cx + 0.5) * CELL, z: (cy + 0.5) * CELL}; }
+    if (d < bd) { bd = d; best = {x: (cx + 0.5) * CELL, z: (cy + 0.5) * CELL, y: base}; }
   }
   return best;
 }
@@ -75,7 +85,7 @@ function oraclePoses(S: SkywaysPerfScene): PerfPose[] {
   const L = S.layout, info = L.skyways!, outp: PerfPose[] = [];
   const base = (lv: number) => L.levels[lv].baseY;
   const ok = (lv: number, x: number, z: number) => { const g = L.levels[lv].grid, [cx, cy] = g.cellOf(x, z); return g.inBounds(cx, cy) && g.cells[g.idx(cx, cy)] === FLOOR && !g.blocked[g.idx(cx, cy)]; };
-  for (const t of TRACE) { const p = openNear(S, 2, t.x, t.z); if (p) for (let d = 0; d < 360; d += 45) outp.push({name: 'trace', x: p.x, y: base(2) + PERF_EYE, z: p.z, yaw: deg(d), pitch: 0}); }
+  for (const t of TRACE) { const p = openNear(S, 2, t.x, t.z); if (p) for (let d = 0; d < 360; d += 45) outp.push({name: 'trace', x: p.x, y: p.y + PERF_EYE, z: p.z, yaw: deg(d), pitch: 0}); }
   for (const b of info.bridges) {
     const r = b.rect, mx = (r.x0 + r.x1) / 2, mz = (r.z0 + r.z1) / 2;
     for (const d of [0, 90, 180, 270]) outp.push({name: `bridge-${b.id}`, x: mx, y: base(b.level) + PERF_EYE, z: mz, yaw: deg(d), pitch: d === 90 ? -0.25 : 0});
@@ -128,9 +138,10 @@ describe('the REAL Skyways: render objects per view (scene + flashlight shadow p
     let worst = 0, total = 0, offTotal = 0, eastOn = 0, eastOff = 0;
     for (const t of TRACE) {
       const p0 = openNear(S, 2, t.x, t.z);
-      expect(p0, `an open storey-2 cell near (${t.x}, ${t.z})`).not.toBeNull();
+      expect(p0, `open storey-2 floor near (${t.x}, ${t.z})`).not.toBeNull();
+      out(`v${v} trace (${t.x}, ${t.z}) -> pose (${p0!.x}, ${p0!.z}) on the storey-2 floor`);
       for (let d = 0; d < 360; d += 30) {
-        const p: PerfPose = {name: 'trace', x: p0!.x, y: S.layout.levels[2].baseY + PERF_EYE, z: p0!.z, yaw: deg(d), pitch: 0};
+        const p: PerfPose = {name: 'trace', x: p0!.x, y: p0!.y + PERF_EYE, z: p0!.z, yaw: deg(d), pitch: 0};
         const off = perfMeasure(S, p, false);
         perfDone(off);
         const on = perfMeasure(S, p, true);

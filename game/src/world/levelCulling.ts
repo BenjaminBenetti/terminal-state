@@ -87,6 +87,13 @@
 //    seed the portal hops;
 //  - a mesh rising over the top storey's occlusion range (stair wells' walls up to the building tops, the atrium vaults: seen over the
 //    roofs through any glass) is never level-culled.
+// THE FLASHLIGHT'S NEAR PLANE (follow-up, version-4 programmes): the torch's shadow camera clips everything nearer than its near plane
+// (render/atmosphere.ts SHADOW_NEAR 0.2 m; up to ~0.27 m at its corners). A torch within that of a wall (the player hugging a wall on
+// the right: the torch sits 0.2 m right of the eye) sees THROUGH the wall — from inside the solid, through back faces — into the next
+// room and down through slabs (lane PERF's depth oracle on version 4: 16 meshes the rules hid owned shadow-map pixels). With window
+// tiles (Skyways) each light viewpoint gets its shadow frustum and its near-plane CLIP ZONE: a mesh outside the frustum is decided by
+// the eye alone (the shadow pass never draws it); inside it, a light whose clip zone reaches solid structure keeps every mesh (no slab
+// or storey occlusion for it), and an unclipped light must also be slab-blocked itself (the slab planes were the eye's only).
 // `everyStorey` (QA / tests): every storey a candidate, no portal / level rule at all (the upper bound the window rule is checked
 // against). And on such a stack of <= LEGACY_STACK storeys (the Skyways' three) a mesh spanning several bands registers as an
 // unlevelled entry (fog, slab planes, per-storey slices) instead of never being culled. Without `slabs.windows` nothing here runs.
@@ -416,6 +423,17 @@ export class LevelCuller {
   airStats = {tested: 0, seen: 0, levels: [] as number[]};
   /** The window rule on / off (Skyways only; tests / QA A-B: off = the portal / level rule alone, as before). */
   windowRule = true;
+  /**
+   * Task studio-skywalk-variety (lane PERF, follow-up; Skyways only: window tiles): per lit light viewpoint of the last prepare (the order
+   * of the occlusion's viewpoints 1..n), its position (x y z), shadow frustum and whether its near-plane clip zone reaches solid.
+   */
+  private readonly lightPts: number[] = [];
+  private readonly lightFr: THREE.Frustum[] = [];
+  private readonly lightClip: boolean[] = [];
+  private readonly lightCam = new THREE.PerspectiveCamera();
+  private readonly lightV = new THREE.Vector3();
+  /** Light viewpoints whose clip zone reached solid at the last prepare (QA / tests; Skyways only). */
+  lightsClipped = 0;
 
   constructor(private readonly levels: readonly Level[], private readonly cols: LevelColumns, private readonly levelAt: LevelResolver,
     opts?: {atrium?: Uint8Array; slabs?: {see?: readonly SeeRect[]; glass?: readonly {x0: number; z0: number; x1: number; z1: number}[]; everyStorey?: boolean;
@@ -483,6 +501,89 @@ export class LevelCuller {
     this.airStats.tested = tested;
     this.airStats.seen = seen;
     this.airStats.levels = [...air].sort((a, b) => a - b);
+  }
+
+  /**
+   * Task studio-skywalk-variety (lane PERF, follow-up): the lit light viewpoints' shadow frusta (their own camera: the light's position,
+   * looking at its target, fov 2 x angle x focus, the shadow map's aspect, near / far = shadow camera near / the light's distance — what
+   * three's SpotLightShadow.updateMatrices builds, without touching the light's shadow state) and clip zones (Skyways only).
+   */
+  private prepareLights(): void {
+    this.lightPts.length = this.lightClip.length = 0;
+    let n = 0, clipped = 0;
+    for (const v of this.viewpoints) {
+      if (!v.visible || (v as THREE.Light).isLight && (v as THREE.Light).intensity <= 0) continue;
+      v.updateWorldMatrix(true, false);
+      const pos = this.lightV.setFromMatrixPosition(v.matrixWorld);
+      this.lightPts.push(pos.x, pos.y, pos.z);
+      const fr = (this.lightFr[n] ??= new THREE.Frustum());
+      const sl = v as THREE.SpotLight, cam = this.lightCam;
+      let r = 0;
+      if (sl.isSpotLight && sl.shadow) {
+        const sc = sl.shadow.camera as THREE.PerspectiveCamera;
+        cam.fov = THREE.MathUtils.RAD2DEG * 2 * sl.angle * sl.shadow.focus;
+        cam.aspect = (sl.shadow.mapSize.width / sl.shadow.mapSize.height) * (sl.shadow.aspect ?? 1);
+        cam.near = sc.near; cam.far = sl.distance || sc.far;
+        cam.updateProjectionMatrix();
+        cam.position.copy(pos);
+        sl.target.updateWorldMatrix(true, false);
+        cam.lookAt(this.vp.setFromMatrixPosition(sl.target.matrixWorld));
+        cam.updateMatrixWorld(true);
+        this.pm.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+        fr.setFromProjectionMatrix(this.pm);
+        // the near plane's corner distance: near x sqrt(1 + tan^2 of the half diagonal)
+        const tv = Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2), th = tv * cam.aspect;
+        r = cam.near * Math.sqrt(1 + tv * tv + th * th);
+      } else {
+        // any other light: every direction (no frustum skip), its distance
+        for (const pl of fr.planes) pl.set(new THREE.Vector3(0, 0, 0), 1);
+        r = 0.2;
+      }
+      const c = this.clipReachesSolid(pos.x, pos.y, pos.z, r);
+      this.lightClip[n] = c;
+      if (c) clipped++;
+      n++;
+    }
+    this.lightFr.length = n;
+    this.lightsClipped = clipped;
+  }
+
+  /** Whether the ball of radius r round (x, y, z) reaches a column point outside every free band and see volume (or the grid's edge). */
+  private clipReachesSolid(x: number, y: number, z: number, r: number): boolean {
+    const {W, H} = this.cols, ss = this.seeStart;
+    for (let cy = Math.floor((z - r) / CELL); cy <= Math.floor((z + r) / CELL); cy++) for (let cx = Math.floor((x - r) / CELL); cx <= Math.floor((x + r) / CELL); cx++) {
+      const dx = Math.max(cx * CELL - x, 0, x - (cx + 1) * CELL), dz = Math.max(cy * CELL - z, 0, z - (cy + 1) * CELL);
+      if (dx * dx + dz * dz > r * r) continue;
+      if (cx < 0 || cy < 0 || cx >= W || cy >= H) return true;
+      const i = cy * W + cx, h = Math.sqrt(r * r - dx * dx - dz * dz), lo = y - h, hi = y + h;
+      let free = false;
+      for (let k = 0; k < this.cols.count(i) && !free; k++) {
+        const g = this.levels[this.cols.level(i, k)].grid;
+        const ra = ramp(g, i);
+        const f = ra ? ra[0] : g.floorOf(i), c = ra ? ra[1] : cellCeil(g, i);
+        free = f <= lo && c >= hi;
+      }
+      if (!free && ss) for (let k = ss[i]; k < ss[i + 1] && !free; k++) free = this.seeY[2 * k] <= lo && this.seeY[2 * k + 1] >= hi;
+      if (!free) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Task studio-skywalk-variety (lane PERF, follow-up): a box the eye's slab test hides is hidden only if every lit light that may draw it
+   * (its shadow frustum holds the box) is slab-blocked from its own position too, and none of them sees from inside solid (Skyways only;
+   * true elsewhere: the slab planes stay the eye's, as before).
+   */
+  private slabLights(en: Entry): boolean {
+    const n = this.lightFr.length;
+    if (!n || !this.winTiles.length) return true;
+    for (let p = 0; p < n; p++) {
+      this.box.min.set(en.x0, en.y0, en.z0); this.box.max.set(en.x1, en.y1, en.z1);
+      if (!this.lightFr[p].intersectsBox(this.box)) continue;
+      if (this.lightClip[p]) return false;
+      if (!this.slabHidden(en, this.lightV.set(this.lightPts[3 * p], this.lightPts[3 * p + 1], this.lightPts[3 * p + 2]))) return false;
+    }
+    return true;
   }
 
   /**
@@ -645,6 +746,7 @@ export class LevelCuller {
     this.occlRange.length = 0;
     this.occlState = this.occlusion && this.enabled;
     if (this.occlHere !== levels) { this.occlHere.clear(); for (const l of levels) this.occlHere.add(l); }
+    if (this.winTiles.length) this.prepareLights(); // (task studio-skywalk-variety, lane PERF: the torch's frustum / clip zone; Skyways)
     if (!NL || !this.occlusion || !this.enabled || inCab) return false;
     const e = this.eye;
     pts.push(e.x, e.y, e.z);
@@ -847,6 +949,13 @@ export class LevelCuller {
       const dx = Math.max(x0 - px, 0, px - x1), dz = Math.max(z0 - pz, 0, pz - z1);
       const near = Math.sqrt(dx * dx + dz * dz) - 1e-4;
       if (near > this.occlRange[p]) continue; // beyond this light's shadow camera: it never draws the mesh
+      // (task studio-skywalk-variety, lane PERF: outside a light's shadow frustum the shadow pass never draws it; a light seeing from
+      // inside solid through its clipped near plane cannot prove anything hidden — Skyways only)
+      if (p > 0 && this.lightFr.length >= p) {
+        this.box.min.set(x0, sy0, z0); this.box.max.set(x1, sy1, z1);
+        if (!this.lightFr[p - 1].intersectsBox(this.box)) continue;
+        if (this.lightClip[p - 1]) return false;
+      }
       const same = py > o.lo && py < o.hi;
       let j = 0;
       if (!same) {
@@ -1170,9 +1279,17 @@ export class LevelCuller {
     if (this.enabled) {
       this.pm.multiplyMatrices((camera as THREE.PerspectiveCamera).projectionMatrix, camera.matrixWorldInverse);
       this.fr.setFromProjectionMatrix(this.pm);
+      // (task studio-skywalk-variety, lane PERF, follow-up: with window tiles — the Skyways — a portal tile is tested out to the fog's
+      // own reach, by view depth like every entry: the 55 m cap culled a stair well's storey-1 fixture 55-58 m away that the fog still
+      // draws, lane PERF's depth oracle on version 4; elsewhere the 55 m horizontal cap stands)
+      const me1 = camera.matrixWorld.elements, f1 = Math.hypot(me1[8], me1[9], me1[10]) || 1, wx = -me1[8] / f1, wy = -me1[9] / f1, wz = -me1[10] / f1;
+      const byDepth = this.winTiles.length > 0;
       const seen = (t: Tile, k: number): boolean => {
         const dx = Math.max(t.x0 - e.x, 0, e.x - t.x1), dz = Math.max(t.z0 - e.z, 0, e.z - t.z1);
-        if (dx * dx + dz * dz > PORTAL_MAX_DIST * PORTAL_MAX_DIST) return false;
+        if (byDepth) {
+          const depth = Math.min(wx * (t.x0 - e.x), wx * (t.x1 - e.x)) + Math.min(wy * (t.y0 - e.y), wy * (t.y1 - e.y)) + Math.min(wz * (t.z0 - e.z), wz * (t.z1 - e.z));
+          if (depth > this.maxDistance) return false;
+        } else if (dx * dx + dz * dz > PORTAL_MAX_DIST * PORTAL_MAX_DIST) return false;
         this.box.min.set(t.x0, t.y0, t.z0); this.box.max.set(t.x1, t.y1, t.z1);
         // Right beside the tile (just off a run's end): visible without frustum / sight tests.
         const inside = dx * dx + dz * dz <= PORTAL_NEAR * PORTAL_NEAR && e.y >= t.y0 - 0.5 && e.y <= t.y1 + 0.5;
@@ -1186,10 +1303,7 @@ export class LevelCuller {
       // Task track3 (lane ARCH): the atrium first (mall only): its levels join `shown` before the pair-portal hops.
       if (this.atriumTiles.length) this.updateAtrium(e, shown, ov !== null);
       // Task studio-skywalk-variety (lane PERF): the storeys seen through glass (Skyways only) join `shown` before the hops too
-      if (this.winTiles.length) {
-        const me0 = camera.matrixWorld.elements, f0 = Math.hypot(me0[8], me0[9], me0[10]) || 1;
-        this.updateAir(e, shown, here, -me0[8] / f0, -me0[9] / f0, -me0[10] / f0);
-      }
+      if (this.winTiles.length) this.updateAir(e, shown, here, wx, wy, wz);
       // Breadth-first over levels (iteration 12: one extra hop, the lower level down the second run of a stair core seen
       // from the upper landing; task office-seamless-20261029: as many hops as storeys, e.g. up a scissor stair). A hop
       // tests the tiles with exactly one side among the levels shown so far; each tile's test runs at most once.
@@ -1244,7 +1358,7 @@ export class LevelCuller {
       // Task mall-round2 (lane ARCH, M09): a street exit's doors / street view only while its glazed opening may be seen (mall only)
       if (show && this.enabled && en.aperture && !this.apertureSeen(en.aperture, e, ov !== null)) { show = false; apCulled++; }
       // Task track3 (lane PERF): the mall's slab occlusion (no planes elsewhere: Subway / Office unchanged)
-      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHiddenAt(en, e)) { show = false; slab++; }
+      if (show && this.enabled && this.slabs && this.slabPlanes.length && this.slabHiddenAt(en, e) && this.slabLights(en)) { show = false; slab++; }
       // Task mall-round2 (lane PERF): same-storey occlusion last (only meshes every other rule shows; see OCCL_*)
       if (this.occl.length) {
         en.base = show;
@@ -1313,7 +1427,7 @@ export class LevelCuller {
         en.x0 = b.min.x; en.y0 = b.min.y; en.z0 = b.min.z; en.x1 = b.max.x; en.y1 = b.max.y; en.z1 = b.max.z;
         const depth = Math.min(fx * (en.x0 - e.x), fx * (en.x1 - e.x)) + Math.min(fy * (en.y0 - e.y), fy * (en.y1 - e.y)) + Math.min(fz * (en.z0 - e.z), fz * (en.z1 - e.z));
         hide = depth > this.maxDistance
-          || (this.slabs && this.slabPlanes.length > 0 && this.slabHidden(en, e))
+          || (this.slabs && this.slabPlanes.length > 0 && this.slabHidden(en, e) && this.slabLights(en))
           || (this.occlusion && this.occlState && (en.occ = this.occlusionLevel(en)) !== -1 && this.occludedNow(en));
       }
       if (hide && !t.hidden) {
