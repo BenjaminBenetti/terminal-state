@@ -39,7 +39,8 @@ import {OFFICE_FLOORS} from '../../game/src/gen/office/frame';
 import {MALL_RINGS} from '../../game/src/gen/mall/mallTypes'; // task track3-eaton-centre-20261031 (lane PROFILES)
 import {LINGERIE_SPAWN_RULES, LINGERIE_STORES_MAX} from '../../game/src/gen/mall/lingerieSpawns'; // task mall-lingerie-20261102-221554 (lane CONTEXT): the lingerie store's zone
 import {COSPLAY_CONVENTIONS_MAX, COSPLAY_SPAWN_RULES} from '../../game/src/gen/skyways/cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY): the convention's zone
-import {COSPLAY_CONTEXT} from '../../game/src/ai/cosplayContext';
+import * as CC from '../../game/src/ai/cosplayContext';
+const {COSPLAY_CONTEXT} = CC;
 import {TRACK_EXT, TRACK_EXT_MALL, TRACK_EXT_MARKET, TRACK_EXT_REACTOR, TRACK_EXT_SKYWAYS} from '../../game/src/gen/trackExt/config'; // Track 2 (lane CONTENT): annexes per level (the service zone's runs); + the mall's (task mall-playtest-revision-20261031: at most 1)
 import {CELL} from '../../game/src/gen/grid';
 import {ROOM_LABEL} from '../../game/src/gen/stationKit';
@@ -360,6 +361,14 @@ class Sources {
 
 /** Export name of a spawnTables object (by identity): rules shared by several contexts link to their named constant. */
 const EXPORT_NAME = new Map<unknown, string>(Object.entries(ST).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [v, k]));
+/**
+ * (task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY) rule objects declared OUTSIDE spawnTables (the Skyways convention's
+ * zone context lives in its own leaf module, ai/cosplayContext.ts): their export name and the file their source links point into.
+ */
+const EXPORT_FILE = new Map<unknown, string>();
+for (const [k, v] of Object.entries(CC)) if (v && typeof v === 'object' && !EXPORT_NAME.has(v)) { EXPORT_NAME.set(v, k); EXPORT_FILE.set(v, F.cosplayContext); }
+/** The file a rule object's source link points into (spawnTables unless declared elsewhere). */
+const fileOf = (obj: unknown): string => EXPORT_FILE.get(obj) ?? F.tables;
 
 // ---------------------------------------------------------------------------------------------------------------------------
 // Helpers
@@ -746,12 +755,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
           const fams = c.families, den = fams.reduce((s2, [, w]) => s2 + w, 0);
           return {rows: fams.map(([family, weight]) => ({family, weight, share: den > 0 ? rd(weight / den) : 0})),
             note: 'This context\'s OWN pool: its spawns draw their family from it (the same single roll per spawn, room modifiers and eligibility on top) instead of the level pool. The shares are CONFIGURED selection probabilities per spawn, not quotas: a 5-6-enemy annex may hold none or several; the sampled census shows the placed outcome.',
-            at: src.at(F.tables, symbolOf(fams, `${base}.contexts.${id}.families`))};
+            at: src.at(fileOf(fams), symbolOf(fams, `${base}.contexts.${id}.families`))};
         })()} : {}),
         placement: {
           areaWeights: weightsInfo(pl.areaWeights), caps: capsInfo(pl.caps), triesPerArea: pl.tries,
           spacing: {metres: pl.spacingM, scope: storeyed ? 'straight line, same storey' : 'straight line'},
-          keepAway, eligibility, explanation, at: src.at(F.tables, symbolOf(pl, plPath)),
+          keepAway, eligibility, explanation, at: src.at(fileOf(pl), symbolOf(pl, plPath)),
         },
         rejection, ...(a.hook ? {hook: a.hook} : {}), at: src.at(F.tables, `${base}.contexts.${id}`),
       };
@@ -895,12 +904,12 @@ export function buildEnemyReference(opts: EnemyReferenceOptions = {}): EnemyRefe
       ...[...new Set(Object.values(P.contexts).map(c => c!.placement))].flatMap(pl => {
         const name = symbolOf(pl, `${base}.placement`);
         return [
-          {what: 'area weights', value: `${pl.areaWeights.rules.length} rules, otherwise ${pl.areaWeights.otherwise}`, at: src.at(F.tables, symbolOf(pl.areaWeights, `${name}.areaWeights`))},
-          {what: 'caps', value: `passes ${pl.caps.passes.join(' / ')}; ${pl.caps.rules.length} rules`, at: src.at(F.tables, symbolOf(pl.caps, `${name}.caps`))},
-          {what: 'tries per area visit', value: pl.tries, at: src.at(F.tables, `${name}.tries`)},
-          {what: 'spacing (m)', value: pl.spacingM, at: src.at(F.tables, `${name}.spacingM`)},
-          {what: 'keep-away from the start (cells)', value: pl.startCells, at: src.at(F.tables, `${name}.startCells`), note: `${pl.startCells * CELL} m walking`},
-          ...(pl.landingKeepM !== undefined ? [{what: 'landing keep-off (m)', value: pl.landingKeepM, at: src.at(F.tables, `${name}.landingKeepM`)}] : []),
+          {what: 'area weights', value: `${pl.areaWeights.rules.length} rules, otherwise ${pl.areaWeights.otherwise}`, at: src.at(fileOf(pl), symbolOf(pl.areaWeights, `${name}.areaWeights`))},
+          {what: 'caps', value: `passes ${pl.caps.passes.join(' / ')}; ${pl.caps.rules.length} rules`, at: src.at(fileOf(pl), symbolOf(pl.caps, `${name}.caps`))},
+          {what: 'tries per area visit', value: pl.tries, at: src.at(fileOf(pl), `${name}.tries`)},
+          {what: 'spacing (m)', value: pl.spacingM, at: src.at(fileOf(pl), `${name}.spacingM`)},
+          {what: 'keep-away from the start (cells)', value: pl.startCells, at: src.at(fileOf(pl), `${name}.startCells`), note: `${pl.startCells * CELL} m walking`},
+          ...(pl.landingKeepM !== undefined ? [{what: 'landing keep-off (m)', value: pl.landingKeepM, at: src.at(fileOf(pl), `${name}.landingKeepM`)}] : []),
         ];
       }),
       ...(mv ? [{what: 'storey moves (keep on main, passes, tries, spacing)', value: `${mv.mainKeep}, ${mv.passes}, ${mv.tries}, ${mv.spacingM} m / ${mv.spacingDy} m`, at: levelMoves!.at}] : []),
