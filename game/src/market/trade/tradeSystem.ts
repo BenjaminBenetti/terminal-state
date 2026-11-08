@@ -198,7 +198,8 @@ export class TradeSystem {
 
   prompt(): string | null {
     if (this.open || !this.target) return null;
-    return `<b>[E]</b> Trade — ${this.target.name} · ${tiesText(this.wallet.ties)}`;
+    const sign = this.target.name.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); // (the HUD prompt is markup)
+    return `<b>[E]</b> Trade — ${sign} · ${tiesText(this.wallet.ties)}`;
   }
 
   /** [E]: open the stall in reach. */

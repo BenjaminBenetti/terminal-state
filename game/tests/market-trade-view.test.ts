@@ -30,10 +30,11 @@ function market(ties = 0) {
   return {...t, talks, snap};
 }
 
+/** A keydown as the window's capture listener sees it (+ whether it was consumed). */
 const key = (code: string) => {
   const e = {code, key: code, repeat: false, ctrlKey: false, altKey: false, metaKey: false, target: {tagName: 'BODY'}, prevented: false, stopped: false,
     preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }};
-  return e;
+  return e as unknown as KeyboardEvent & {prevented: boolean; stopped: boolean};
 };
 
 describe('market trade: the [E] prompt and opening a stall', () => {

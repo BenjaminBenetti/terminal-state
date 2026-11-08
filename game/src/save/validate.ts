@@ -7,7 +7,8 @@
 // future version is a friendly rejection; MIGRATIONS is the versioned upgrade hook, v1 is the only format so far) -> checksum
 // (FNV-1a of the canonical run JSON; integrity, not security) -> the run's exact shape and ranges (item ids must exist in the item
 // registry with legal counts / magazines / filters / bag contents; archetypes are LevelIds; station ids belong to the network;
-// memory keys are `${stationId}:${section}`; no duplicate uid among the carried inventory + Lockbox) -> the network graph
+// memory keys are `${stationId}:${section}`; no duplicate uid among the carried inventory + Lockbox + train cargo + every market
+// station's stall stock — task studio-survivor-market-20261108-005807-01, lane TRADE: uidScope) -> the network graph
 // (structural checks here, plus lane NET's validateNetwork when injected) -> logical campaign checks (current / known / visited /
 // transit endpoints in the network, the transit leaves `current`, a non-cheat transit follows a track edge or — campaign-polish lane
 // MAP — a multi-hop `route` over visited stations: campaign/discovery.ts transitRouteProblem) -> the metadata
