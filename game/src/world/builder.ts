@@ -250,8 +250,9 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
     return best;
   };
   // task static-batching-warmup-20261105 (world/staticCohorts.ts): coarse cohorts for cheap models where the culler has no atrium / slab
-  // occlusion (the mall / Reactor keep fine chunks: their per-box occlusion is what removes draws there)
-  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor;
+  // occlusion (the mall / Reactor keep fine chunks: their per-box occlusion is what removes draws there; task studio-skywalk-variety-
+  // 20261107-231448-01, lane PERF: + the Skyways, occlusion-culled now)
+  const coarseCohorts = !layout.mall && !(layout as {reactor?: unknown}).reactor && !layout.skyways;
   const instanceModel = (gr: THREE.Group, gltf: GLTF, placements: THREE.Matrix4[], fit: {w: number; h: number; d: number; anchor: 'bottom' | 'top'}, name: string) =>
     addInstancedModel(gr, gltf, placements, fit, name, levelAt, coarseCohorts);
   const group = new THREE.Group();

@@ -13,6 +13,12 @@
 //  - a ragdolled enemy (physics owns its bones; the root no longer follows) is released: drawn as before (frustum only).
 // Hidden = moved to the cull layer (never `visible`); the AI, physics, hit volumes, audio and every gameplay system are untouched.
 // Inert on every other level (nothing is tracked: the mall's culler supports it but nothing registers there).
+//
+// Task studio-skywalk-variety-20261107-231448-01 (lane PERF, user: "looking in some directions causes lag"): + the SKYWAYS (its culler
+// has the same slab / storey occlusion now, world/skywaysOcclusion.ts). Its enemies, pickups and the prize car were frustum-culled only
+// — under the Skyways' raised far plane (the exterior city: 700 m) every one in the view cone was drawn, through any number of walls and
+// far beyond the fog (the trace's turn: ~50 enemy draws facing east). The car's VIEW group (it carries the car's current pose; the
+// car root does not) is tracked like a pickup (its box at its current transform); an eye inside that box never hides it.
 
 import * as THREE from 'three';
 
@@ -21,10 +27,12 @@ interface TrackingCuller { track(obj: THREE.Object3D, box: (out: THREE.Box3) => 
 export interface ReactorCpuCullingHost {
   frameHooks: ((dt: number) => void)[];
   sectionHooks: {build?(layout: never): void; teardown?(): void}[];
-  layout?: {reactor?: unknown} | null;
+  layout?: {reactor?: unknown; skyways?: unknown} | null;
   world?: {culler?: unknown} | null;
   zombies: readonly {root: THREE.Object3D; ragdolled: boolean}[];
   pickups?: {list: readonly {obj: THREE.Object3D}[]} | null;
+  /** (task studio-skywalk-variety, lane PERF) The Skyways prize car: its current view group (null: no car in this world). */
+  skywaysCar?: {view: {group: THREE.Object3D} | null} | null;
 }
 
 /** A tracked object's cull sphere in its own (root / pickup object) space. */
@@ -90,10 +98,10 @@ export class ReactorCpuCulling {
     host.sectionHooks.push({teardown: () => this.clear()});
   }
 
-  /** Brings the tracked set in line with the live enemies / pickups (Reactor only; otherwise releases everything it holds). */
+  /** Brings the tracked set in line with the live enemies / pickups (the Reactor and the Skyways; otherwise releases everything it holds). */
   sync(): void {
     const h = this.host, c = h.world?.culler as Partial<TrackingCuller> | undefined;
-    if (!h.layout?.reactor || !c || typeof c.track !== 'function' || typeof c.untrack !== 'function') { this.clear(); return; }
+    if (!(h.layout?.reactor || h.layout?.skyways) || !c || typeof c.track !== 'function' || typeof c.untrack !== 'function') { this.clear(); return; }
     if (c !== this.culler) { this.clear(); this.culler = c as TrackingCuller; }
     const culler = this.culler!;
     const live = this.live;
@@ -114,17 +122,21 @@ export class ReactorCpuCulling {
     }
     for (const root of this.actors.keys()) if (!live.has(root)) { culler.untrack(root); this.actors.delete(root); }
     live.clear();
-    for (const p of h.pickups?.list ?? []) {
-      const obj = p.obj;
-      live.add(obj);
-      if (this.items.has(obj)) continue;
-      const l = pickupLocalSphere(obj);
-      this.items.set(obj, l);
-      if (l) culler.track(obj, out => sphereBox(obj, l, out));
-    }
+    const car = h.layout?.skyways ? h.skywaysCar?.view?.group ?? null : null; // (task studio-skywalk-variety, lane PERF)
+    for (const obj of car ? [car] : []) this.item(culler, obj, live);
+    for (const p of h.pickups?.list ?? []) this.item(culler, p.obj, live);
     for (const obj of this.items.keys()) if (!live.has(obj)) { culler.untrack(obj); this.items.delete(obj); }
     this.stats.actors = this.actors.size;
     this.stats.pickups = this.items.size;
+  }
+
+  /** A pickup-like object (its model box as a sphere, at its current transform) in the tracked set. */
+  private item(culler: TrackingCuller, obj: THREE.Object3D, live: Set<THREE.Object3D>): void {
+    live.add(obj);
+    if (this.items.has(obj)) return;
+    const l = pickupLocalSphere(obj);
+    this.items.set(obj, l);
+    if (l) culler.track(obj, out => sphereBox(obj, l, out));
   }
 
   /** Everything shown and forgotten (teardown, another level, a new world). */

@@ -47,6 +47,7 @@ import {SKYWAYS_CAR} from '../../src/assets/skywaysCar.generated';
 import {COCKPIT_URLS} from '../../src/world/skywaysCarCockpit';
 import {CAR_SPEC} from '../../src/world/skywaysCarSpec';
 import {buildCarView, setSkywaysCarModelsForTests} from '../../src/world/skywaysCarModel';
+import {ReactorCpuCulling} from '../../src/world/reactor/cpuActorCulling';
 
 installCanvasShim(false);
 for (const k of ['clip', 'rect']) (ShimContext.prototype as unknown as Record<string, unknown>)[k] ??= () => {};
@@ -67,6 +68,8 @@ export interface SkywaysPerfScene {
   exteriorRoot: THREE.Object3D | null;
   /** Moving objects: enemy roots, the pickups group and the prize car's view (when the add-on places one). */
   enemies: EnemyActor[]; pickups: PickupManager; car: THREE.Object3D | null; dyn: THREE.Object3D[];
+  /** The game's moving-object culling runtime on this world (Game's frame hook: sync() before the culler's update). */
+  tracking: ReactorCpuCulling;
   /** The fake host camera the exterior runtime gates on (positioned by `gateExterior`). */
   hostCamera: THREE.PerspectiveCamera;
 }
@@ -111,6 +114,7 @@ async function build(seed: number, version: number): Promise<SkywaysPerfScene> {
     const {actor} = createEnemyActor(sp, models, rand, () => new ZombieActor(looks.build(pickZombieLook(seed, i, sp.type, looks.available)), sp, rand));
     actor.brain.y = actor.root.position.y = sp.y ?? layout.levels[sp.level ?? 0].grid.floorAt(sp.x, sp.z);
     actor.syncTransform();
+    actor.root.position.y = actor.brain.y; // (Game.update: syncTransform, then the feet on the brain's floor height — the zombie actor's sync puts y 0)
     markShadows(actor.root, false, false);
     return actor;
   });
@@ -138,7 +142,7 @@ async function build(seed: number, version: number): Promise<SkywaysPerfScene> {
   const exteriorRoot = exterior.view?.root ?? null;
   const roots = [world.group, cm.group, stock.group, ...(glazingRoot ? [glazingRoot] : []), ...(addonRoot ? [addonRoot] : [])];
   // the prize car's view at its spawn as SkywaysCar.onBuild / decorateView / syncView place it (stripped models; the paint casts)
-  let car: THREE.Object3D | null = null;
+  let car: THREE.Object3D | null = null, carView: THREE.Object3D | null = null;
   const spawn = layout.skyways?.addon?.car;
   if (spawn) {
     const [body, dash, seat] = await Promise.all([loadModel(SKYWAYS_CAR.url), loadModel(COCKPIT_URLS.dash), loadModel(COCKPIT_URLS.seat)]);
@@ -152,10 +156,12 @@ async function build(seed: number, version: number): Promise<SkywaysPerfScene> {
     car = new THREE.Group();
     car.name = 'skyways-car-root';
     car.add(v.group);
+    carView = v.group;
   }
   const dyn = [...enemies.map(e => e.root), pickups.group, ...(car ? [car] : [])];
   for (const o of [...roots, ...dyn, ...(exteriorRoot ? [exteriorRoot] : [])]) o.updateMatrixWorld(true);
-  return {seed, version, layout, world, cm, stock, glazing, exterior, roots, exteriorRoot, enemies, pickups, car, dyn, hostCamera};
+  const tracking = new ReactorCpuCulling({frameHooks: [], sectionHooks: [], layout, world, zombies: enemies, pickups, skywaysCar: {view: carView ? {group: carView} : null}});
+  return {seed, version, layout, world, cm, stock, glazing, exterior, roots, exteriorRoot, enemies, pickups, car, dyn, hostCamera, tracking};
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -262,3 +268,31 @@ export function gateExterior(S: SkywaysPerfScene, cam: THREE.PerspectiveCamera):
   (S.exterior as unknown as {checkT: number}).checkT = 0;
   S.exterior.frame(0.2);
 }
+
+/** A view measured: scene / flashlight-shadow census (static roots + moving objects + the gated exterior), its camera and torch. */
+export interface PerfView { scene: Census; shadow: Census; cam: THREE.PerspectiveCamera; torch: THREE.SpotLight }
+
+/**
+ * Scene + flashlight-shadow draws at a pose as the game decides them: the loot display filled for this eye, the moving objects tracked
+ * (the game's frame hook) or released, the culler forced, the exterior gated. `rules: false` = the Skyways culler's slab / storey
+ * occlusion, its window rule and the moving-object tracking off (the portal / level rule and the fog alone). Call `done(view)` after.
+ */
+export function perfMeasure(S: SkywaysPerfScene, p: PerfPose, rules = true): PerfView {
+  const cam = perfCam(p), torch = perfTorch(cam), c = S.world.culler;
+  c.viewpoints = [torch];
+  c.slabs = c.occlusion = c.windowRule = rules;
+  (S.cm as unknown as {lastEye: THREE.Vector3}).lastEye.copy(cam.position);
+  (S.cm as unknown as {dirty: boolean}).dirty = true;
+  S.cm.update(0.2, 0);
+  for (const o of [...S.roots, ...S.dyn]) o.updateMatrixWorld(true);
+  if (rules) S.tracking.sync(); else S.tracking.clear();
+  c.update(cam, true);
+  gateExterior(S, cam);
+  torch.shadow.camera.layers.mask = cam.layers.mask;
+  const all = [...S.roots, ...S.dyn, ...(S.exteriorRoot ? [S.exteriorRoot] : [])];
+  return {scene: renderCensus(S, all, cam), shadow: renderCensus(S, all, torch.shadow.camera, true), cam, torch};
+}
+export const perfDone = (v: PerfView) => { v.cam.remove(v.torch, v.torch.target); };
+
+/** One line of a census: its total and the non-zero categories. */
+export const censusLine = (c: Census) => `${c.total} (${PERF_CATEGORIES.filter(k => c[k]).map(k => `${k} ${c[k]}`).join(', ')})`;
