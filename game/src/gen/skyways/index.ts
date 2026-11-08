@@ -22,7 +22,7 @@ import {deriveRails, levelDistance, registerApertures} from '../levelGen';
 import {applyLighting, dress} from '../stationDress';
 import {finishTraversal, placeLadders, type StairFlight} from '../traversal';
 import {assignEnemyArchetypes} from '../../ai/creatureSpawn';
-import {spawnProfile, type SpawnProfile} from '../../ai/spawnTables';
+import {skywaysSpawnProfileFor, type SpawnProfile} from '../../ai/spawnTables'; // (task studio-skywalk-encounters-20261108-074144-01: by layout version)
 import {applyFamilySpacing} from '../../ai/familySpacing';
 import {lootProfile, type LootProfile} from '../../items/lootTables';
 import type {SectionGenContext} from '../../levels/types';
@@ -38,7 +38,10 @@ import type {TrackExtContext} from '../trackExt/types';
 import {BASES, CLEAR, CROP_MARGIN, SKYWAYS_CANVAS, skywaysFrame, skywaysSeed, type SkywaysFrame} from './frame';
 import {RUN_OUT, carveSkyways, lastSkywaysCarveFail, type SkywaysCarve} from './carve';
 import {skywaysIssues} from './validate';
-import {SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
+import {SKYWAYS_ENCOUNTERS_MIN_VERSION, SKYWAYS_LAYOUT_VERSION, SKYWAYS_LEGACY77_MAX, SKYWAYS_LEGACY80, markSkywaysGenVersion} from './layoutVersion';
+import {skywaysPatrolGraph} from './patrol'; // task studio-skywalk-encounters-20261108-074144-01: the horde patrol graph (version 5)
+import {placeHordes} from '../../ai/hordePlace'; // (the Mall's horde placement)
+import {placeCosplaySpawns, retagCosplaySpawns} from './cosplaySpawns'; // task studio-skywalk-encounters-20261108-074144-01 (lane COSPLAY)
 import {generateSkywaysLevel as generateSkywaysLegacy77} from './legacy77/index';
 import {generateSkywaysLevel as generateSkywaysLegacy80} from './legacy80/index'; // (task studio-skywalk-variety-20261107-231448-01) version 3, frozen
 import {markStoreAreas, SKYWAYS_STORES_MIN_VERSION} from './stores/index'; // task studio-alpha-skyways-shops-20261107-054512-01
@@ -49,6 +52,7 @@ import {dressSkywaysAtriums, dressSkywaysFoodCourts} from './greenery';
 import {dressSkywaysDestinations} from './destinations/index';
 import {placeSkywaysMapBoards} from './mapBoards'; // task studio-skyways-rework-20261107-054512-01 (lane MAPS)
 import {splitSkywaysMerch} from './skywaysMerchSplit'; // task studio-skywalk-variety-20261107-231448-01 (lane MERCH)
+import {assignSkywaysMallStores, dressSkywaysMallStores, skywaysMallStoreHolds} from './skywaysMallStores'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES)
 import {dressSkywaysGardens} from './gardens'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): gallery troughs / court bench-planters
 import {skywaysSkylights} from './skylights'; // task studio-skyways-rework-20261107-054512-01 (lane ARCH): skylight coffers of the skyway courts
 import {SKYWAYS_LEVEL, type SkywaysInfo, type SkywaysRect, type SkywaysWindow} from './skywaysTypes';
@@ -83,7 +87,7 @@ export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOpt
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) === SKYWAYS_LEGACY80) return generateSkywaysLegacy80(ctx, opts);
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile('skyways');
-  const spawns = opts.spawns ?? spawnProfile('skyways');
+  const spawns = opts.spawns ?? skywaysSpawnProfileFor(ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION); // (versions 1-4: the frozen version-4 profile)
   const trackExt = opts.trackExt ?? trackExtConfig('skyways');
   const seed = skywaysSeed(ctx.levelSeed);
   let fallback: StationLayout | null = null;
@@ -100,6 +104,7 @@ export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOpt
     let issues = skywaysIssues(layout, {startCells: startCells(spawns)});
     if (issues.length && (layout.extensions?.tunnels.length || layout.extensions?.annexes.length)) {
       dropExtensions(layout);
+      retagCosplaySpawns(layout); // (lane COSPLAY) the convention's spawns moved down past the dropped 'service' spawns (per-index tags)
       issues = skywaysIssues(layout, {startCells: startCells(spawns)});
       if (!issues.length) TRACK_EXT_STATS.rescued++;
     }
@@ -122,7 +127,7 @@ const startCells = (p: SpawnProfile): number => {
 /** QA / tests: one attempt of a frame salt (null when the program does not fit). */
 export function skywaysAttempt(ctx: SectionGenContext, salt = 0, opts: SkywaysGenOptions = {}): StationLayout | null {
   const seed = skywaysSeed(ctx.levelSeed);
-  return tryLevel(skywaysFrame(ctx.levelSeed, salt), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? spawnProfile('skyways'), opts.trackExt ?? trackExtConfig('skyways'));
+  return tryLevel(skywaysFrame(ctx.levelSeed, salt), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? skywaysSpawnProfileFor(ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION), opts.trackExt ?? trackExtConfig('skyways'));
 }
 
 /** The Skyways extendTracks context: east / south growth only from the fixed crop origin; only the station storey must be rock. */
@@ -170,7 +175,8 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   layout.startWeapon = ctx.startWeapon ?? 'rifle';
 
   // --- Dressing (run mouths, bridge decks' middle lane, the add-on hall held clear) -----------------------------------------------
-  const release = holdCells(layout, holds(layout, sc, ox, oy));
+  assignSkywaysMallStores(layout, rng.fork('skyways-mall-stores'), ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION); // (version 5, lane STORES: a few Mall store families; held clear below)
+  const release = holdCells(layout, [...holds(layout, sc, ox, oy), ...skywaysMallStoreHolds(layout)]);
   if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_STORES_MIN_VERSION) markStoreAreas(layout.areas, sc.anchors); // (task studio-alpha-skyways-shops-20261107-054512-01: no floor piles in the stores)
   dress(layout, rng.fork('dress'));
   release();
@@ -185,6 +191,7 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   dressSkywaysFoodCourts(layout, rng.fork('skyways-food-courts'));
   // (task studio-skyways-destinations-20261106-170011-01) the anchor shops' interiors and the landmark courts' centrepieces
   dressSkywaysDestinations(layout, rng.fork('skyways-destinations'), {version: ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION}); // (+ the version: task studio-alpha-skyways-shops-20261107-054512-01)
+  dressSkywaysMallStores(layout, rng.fork('skyways-mall-stores-dress')); // (task studio-skywalk-encounters-20261108-074144-01, lane STORES: version 5 only)
   dressSkywaysOfficeWing(layout, rng.fork('skyways-office')); // (task studio-skyways-rework-20261107-054512-01) the tenant office wing
   if (ram) dressSkywaysRamen(layout, rng.fork('skyways-ramen'), {dining: layout.areas[ram.area], ...(ram.kitchen !== undefined ? {kitchen: layout.areas[ram.kitchen]} : {}), level: ram.level});
   placeSkywaysMapBoards(layout, rng.fork('skyways-map-boards')); // task studio-skyways-rework-20261107-054512-01 (lane MAPS): the local directory boards (layout v3 only)
@@ -206,6 +213,17 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   finishTraversal(layout);
   dropFloatingFixtures(layout);
 
+  // --- Roaming hordes (layout version 5: task studio-skywalk-encounters-20261108-074144-01; the Mall's mechanism) -------------------
+  // After the ambient runs (their positions are kept off) and the traversal finishing; on the street / skyway storeys' patrol graph,
+  // never on a stair run's mouth, a bridge deck's middle lane or a store interior (the dressers' holds); own fork: no other draw moves.
+  // Appended after every ambient spawn, before the annex 'service' spawns: every ambient spawn keeps its index.
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_ENCOUNTERS_MIN_VERSION && spawns.horde) {
+    layout.skyways.patrol = skywaysPatrolGraph(layout);
+    const hold = holdCells(layout, holds(layout, sc, ox, oy));
+    placeHordes(layout, spawns.horde, rng.fork('skyways-hordes'), {dist: field.dist, patrol: layout.skyways.patrol});
+    hold();
+  }
+
   // --- Track2 attach + the one family roll ------------------------------------------------------------------------------------
   if (ext) {
     finishExtensions(layout, ext, {ox, oy, grow: 'east-south'});
@@ -213,6 +231,9 @@ function tryLevel(f: SkywaysFrame, genSeed: number, seed: number, attempt: numbe
   }
   // (task studio-skywalk-variety-20261107-231448-01, lane MERCH) version 4: fixture-drawn merchandise -> separate movable stock props
   splitSkywaysMerch(layout);
+  // (task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY; layout version 5+) the convention's cosplay zombies — LAST, after the
+  // ambient runs, the hordes and the annex 'service' spawns: every other spawn keeps its index; own fork (drawn from only with the convention)
+  if ((ctx.layoutVersion ?? SKYWAYS_LAYOUT_VERSION) >= SKYWAYS_ENCOUNTERS_MIN_VERSION) placeCosplaySpawns(layout, rng.fork('skyways-cosplay-spawns'), field.keep, spawns);
   assignEnemyArchetypes(layout, spawns);
   applyFamilySpacing(layout, spawns);
   return layout;

@@ -339,7 +339,9 @@ export function dressStorefront(api: ShopDressApi, layout: StationLayout, sf: St
     }
   }
   // (task studio-skyways-destinations-20261106-170011-01) a Skyways destination anchor: its own dresser furnishes the interior
-  if (sf.anchor) return;
+  // (task studio-skywalk-encounters-20261108-074144-01, lane STORES: + a Skyways Mall store family, layout version >= 5 — the Mall
+  // programme's own recipe furnishes it: gen/skyways/skywaysMallStores.ts)
+  if (sf.anchor || sf.mall) return;
   const themeV = P.stock ? stockVariant(P.stock) : 0;
   const variantOf = (r: PropRule) => (r.variant === 'stock' ? themeV : r.variant ?? 0);
   const cw = PROP_DEFS.shopCounter.w;

@@ -26,6 +26,7 @@ import {canvasTexture} from './canvasTextures';
 import {SurfaceNodeMaterial, surfaceMaterial} from './materials';
 import {PAINT, purposeMaterial, purposeMenuMaterial} from './purposeTextures';
 import {planCohorts, trianglesOf} from './staticCohorts'; // task static-batching-warmup-20261105
+import {drawMallFascia} from './skywaysMallFascia'; // task studio-skywalk-encounters-20261108-074144-01 (lane STORES): Mall store families' fascias
 
 export interface StorefrontDeps {
   /** Shape material by key (falls back to a related key). */
@@ -390,6 +391,12 @@ function fasciaAtlas(storefronts: Storefront[], faces: ShopFace[]): {texture: TH
       // Slot aspect follows the sign: wide signs use the full slot, short ones a narrower slice.
       const aspect = f.w / f.h;
       const sw = Math.min(SW, Math.round(SH * aspect));
+      // (task studio-skywalk-encounters-20261108-074144-01, lane STORES) a Skywalk Mall store family: its slot in the Mall brand style
+      if (sf.mall) {
+        drawMallFascia(ctx, x, y, sw, SH, sf.name, sf.mall, sf.sign, rnd);
+        rects.set(f, [x / W, 1 - (y + SH) / H, (x + sw) / W, 1 - y / H]);
+        return;
+      }
       const k = sf.sign === 'lit' ? 1 : sf.sign === 'dim' ? 0.55 : 0.22;
       const light = luminance(sf.color) > 0.6;
       ctx.fillStyle = light ? hex(0x1d2023, k) : hex(sf.color, k);

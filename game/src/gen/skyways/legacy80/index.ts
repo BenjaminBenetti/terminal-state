@@ -29,7 +29,7 @@ import {deriveRails, levelDistance, registerApertures} from '../../levelGen';
 import {applyLighting, dress} from '../../stationDress';
 import {finishTraversal, placeLadders, type StairFlight} from '../../traversal';
 import {assignEnemyArchetypes} from '../../../ai/creatureSpawn';
-import {spawnProfile, type SpawnProfile} from '../../../ai/spawnTables';
+import {SKYWAYS_V4_SPAWN_PROFILE, type SpawnProfile} from '../../../ai/spawnTables'; // (task studio-skywalk-encounters-20261108-074144-01: the frozen pre-version-5 profile)
 import {applyFamilySpacing} from '../../../ai/familySpacing';
 import {lootProfile, type LootProfile} from '../../../items/lootTables';
 import type {SectionGenContext} from '../../../levels/types';
@@ -85,7 +85,7 @@ const r3 = (v: number) => Math.round(v * 1000) / 1000;
 export function generateSkywaysLevel(ctx: SectionGenContext, opts: SkywaysGenOptions = {}): StationLayout {
   const t0 = typeof performance !== 'undefined' ? performance.now() : Date.now();
   const loot = opts.loot ?? lootProfile('skyways');
-  const spawns = opts.spawns ?? spawnProfile('skyways');
+  const spawns = opts.spawns ?? SKYWAYS_V4_SPAWN_PROFILE;
   const trackExt = opts.trackExt ?? trackExtConfig('skyways');
   const seed = skywaysSeed(ctx.levelSeed);
   let fallback: StationLayout | null = null;
@@ -124,7 +124,7 @@ const startCells = (p: SpawnProfile): number => {
 /** QA / tests: one attempt of a frame salt (null when the program does not fit). */
 export function skywaysAttempt(ctx: SectionGenContext, salt = 0, opts: SkywaysGenOptions = {}): StationLayout | null {
   const seed = skywaysSeed(ctx.levelSeed);
-  return tryLevel(skywaysFrame(ctx.levelSeed, salt), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? spawnProfile('skyways'), opts.trackExt ?? trackExtConfig('skyways'));
+  return tryLevel(skywaysFrame(ctx.levelSeed, salt), seed, seed, 0, ctx, opts.loot ?? lootProfile('skyways'), opts.spawns ?? SKYWAYS_V4_SPAWN_PROFILE, opts.trackExt ?? trackExtConfig('skyways'));
 }
 
 /** The Skyways extendTracks context: east / south growth only from the fixed crop origin; only the station storey must be rock. */

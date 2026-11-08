@@ -54,6 +54,10 @@ import {
   skywaysShopWallKey, type SkywaysShopPalette,
 } from './skywaysShopFinish';
 import {MALL_SPAN, floorRow, mallSurfaceMaterial, wallRow, writeRow} from './mallSurfaces';
+// (task studio-skywalk-encounters-20261108-074144-01, lane STORES) the Mall store families' own Mall finishes (layout version >= 5), as
+// rows of the same small-shop programs
+import {skywaysMallFinish, skywaysMallFloorKey, skywaysMallProgramOf, skywaysMallRows, skywaysMallWallKey} from './skywaysMallFinish';
+import {SKYWAYS_MALL_STORE_PROGRAMS, type SkywaysMallStoreProgram} from '../gen/skyways/skywaysMallPool';
 
 // ---------------------------------------------------------------------------------------------
 // Styles (pure data)
@@ -146,6 +150,9 @@ export class SkywaysArch {
   /** (lane DRESS) area id -> its small shop palette (null: the builder's rule), cached; the palettes' finish rows are written once. */
   private readonly shopPal = new Map<number, SkywaysShopPalette | null>();
   private shopRows = false;
+  /** (task studio-skywalk-encounters-20261108-074144-01, lane STORES) area id -> its Mall store programme (null: none), cached. */
+  private readonly mallPro = new Map<number, SkywaysMallStoreProgram | null>();
+  private mallRows = false;
 
   static for(layout: StationLayout, mats: WorldMaterials, levels: readonly Level[]): SkywaysArch | null {
     return layout.skyways ? new SkywaysArch(layout, mats, levels) : null;
@@ -277,8 +284,28 @@ export class SkywaysArch {
     }
   }
 
+  /** (task studio-skywalk-encounters-20261108-074144-01, lane STORES) a Mall store family's programme (layout version >= 5), cached. */
+  mallStoreProgram(areaId: number): SkywaysMallStoreProgram | null {
+    let p = this.mallPro.get(areaId);
+    if (p === undefined) this.mallPro.set(areaId, (p = skywaysMallProgramOf(this.layout, areaId)));
+    return p;
+  }
+
+  /** (lane STORES) Writes the Mall store programmes' rows (just below the palettes' rows; once per build, only when a store is drawn). */
+  private writeMallRows(): void {
+    if (this.mallRows) return;
+    this.mallRows = true;
+    for (const p of SKYWAYS_MALL_STORE_PROGRAMS) {
+      const r = skywaysMallRows(p), f = skywaysMallFinish(p);
+      writeRow(r.wall, wallRow(f.wall));
+      writeRow(r.floor, floorRow(f.floor));
+    }
+  }
+
   /** (lane DRESS) A small shop's wall key ('skyways-shop-wall|<row>': the Mall wall program, the palette's row per vertex), or null. */
   private shopWallKey(areaId: number): string | null {
+    const m = this.mallStoreProgram(areaId); // (lane STORES) a Mall store: its programme's Mall wall row, the same program / mesh
+    if (m) { this.writeMallRows(); this.def(SKYWAYS_SHOP_WALL_KEY, () => mallSurfaceMaterial('wall')); return skywaysMallWallKey(m); }
     const p = this.shopPalette(areaId);
     if (!p) return null;
     this.writeShopRows();
@@ -287,6 +314,8 @@ export class SkywaysArch {
   }
 
   private shopFloorKey(areaId: number): string | null {
+    const m = this.mallStoreProgram(areaId); // (lane STORES) a Mall store: its programme's Mall floor row
+    if (m) { this.writeMallRows(); this.def(SKYWAYS_SHOP_FLOOR_KEY, () => mallSurfaceMaterial('floor')); return skywaysMallFloorKey(m); }
     const p = this.shopPalette(areaId);
     if (!p) return null;
     this.writeShopRows();

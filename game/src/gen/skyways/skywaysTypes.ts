@@ -14,6 +14,7 @@
 // Gas: every SkywaysWindow is a breakable glazed span in a SOLID wall run (the Office window rule): shooting a pane admits real toxic
 // gas from outside (world/gas); `breached` spans start broken with gas already flowing.
 
+import type {MallPatrolNode} from '../mall/mallTypes'; // task studio-skywalk-encounters-20261108-074144-01: the horde patrol graph
 import type {OfficePose, Side} from '../stationTypes';
 
 /** The add-on pool (equal weights: one per level seed). */
@@ -273,6 +274,11 @@ export interface SkywaysLandmark {
 /** layout.skyways (written by gen/skyways/index.ts). */
 export interface SkywaysInfo {
   version: 1;
+  /**
+   * Task studio-skywalk-encounters-20261108-074144-01 (layout version 5): the patrol graph the roaming hordes walk (gen/skyways/patrol.ts;
+   * the Mall's node shape); absent before version 5 (no hordes).
+   */
+  patrol?: MallPatrolNode[];
   /** Display name of the complex ("Calder +15"). */
   name: string;
   /** Street level (absolute y): the exterior ground. */

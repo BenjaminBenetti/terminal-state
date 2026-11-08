@@ -245,8 +245,76 @@ fork (`skyways-enemies-<storey>`), tags its spawns with the context:
 - **`floor`**: the skyway level (concourses, bridges, atrium galleries, shops, the add-on hall), U{10..15}.
 - **`service`**: `SERVICE_CONTEXT`, the station's Beyond-the-Station annex (`TRACK_EXT_SKYWAYS.annex.max = 1`, the standard
   one-roll chance), appended last; the Strainer only there (`STRAINER_CONTEXTS` unchanged).
+- **`cosplay`** (layout version 5+; task studio-skywalk-encounters-20261108-074144-01, lane COSPLAY; user: "the animie convention
+  "event" should have special "cosplay zombies" spawned, which are just zombies wearing special clothing"): the CONVENTION zone
+  `COSPLAY_CONTEXT` (`game/src/ai/cosplayContext.ts`). Only when the level's one add-on is the anime convention (never the prize
+  display; at most one per level: `COSPLAY_CONVENTIONS_MAX`), `game/src/gen/skyways/cosplaySpawns.ts` `placeCosplaySpawns` runs ONE
+  run on its own fork (`skyways-cosplay-spawns`, drawn from only then): **U{4..6}** spawns (`COSPLAY_ZONE_BUDGET`) on the venue's
+  public event floor (main hall, exhibitors' floor, photo lounge, panel rooms: round-robin, the main hall first), each a 3 × 3-clear
+  walkable floor cell, never a ramp, ≥ 36 walking cells from the start, 5 m off the run landings, ≥ 3 m from every door of those
+  areas and from the add-on's entry, ≥ 2.5 m from every mascot statue, off the stage + 1 m, 2 m from every enemy on the storey, a
+  0.5 m disc never splitting the storey (`COSPLAY_PLACEMENT` + `COSPLAY_SPAWN_RULES`). Every spawn is a shambler tagged
+  `ZombieSpawn.look = 'cosplay'` and the context `cosplay`, APPENDED after every other spawn (ambient, annex `service`): every other
+  index is unchanged. Families: its OWN pool `COSPLAY_FAMILY_POOL` (ordinary zombies only); no eligibility rule names it; not in
+  the storey counts. Looks: `chooseSpawnLook` gives exactly these spawns a costume — `game/src/ai/cosplay.ts` `cosplayLook(layout
+  seed, spawn index)` (bear-ear hat + wig, oversized mascot head, sushi hat, alternate-palette wig + uniform; consecutive spawns differ),
+  built by its SEPARATE `createCosplayLibrary` (the ordinary pool can never pick a costume piece), only when buildable exactly, else the
+  ordinary pick; the files (`COSPLAY_MODEL_FILES`) load lazily, only for a layout holding a cosplay-tagged spawn
+  (`cosplayModelKeysFor`). Versions 1-4 never run it (`SKYWAYS_V4_SPAWN_PROFILE` has no such context). Tests:
+  `game/tests/skyways-cosplay-spawns.test.ts`, `game/tests/skyways-cosplay-looks.test.ts`.
 - No horde pool and no room modifiers. One family roll at the end (`assignEnemyArchetypes`). The convention mascot statues are
   static props, never enemies.
+
+This was layout versions 1–4. That profile is frozen as `SKYWAYS_V4_SPAWN_PROFILE`, and stations entered under those versions keep
+it exactly (`skywaysSpawnProfileFor(version)`; fingerprints in `tests/skyways-dest-layout-version.test.ts`).
+
+### Version 5: the Siren and the horde at the Mall's rules
+
+<!-- Task studio-skywalk-encounters-20261108-074144-01. User: "It feels like the siren cannot spawn on this level, It should spawn the
+same amount as the mall" / "I want to have at least 1 random zombie hoard spawn on this map (just like the mall hoard)". -->
+
+**Siren.** Before version 5 she could **not** spawn on Skyways: the pool weight was 0 and there was no eligibility rule. With the
+Office's placement, storefront units weighted 0.5, only about 1.25 of a level's roughly 22 street / skyway slots would have passed
+her room gates anyway. That is the Mall's own pre-R8 finding.
+
+`SKYWAYS_SPAWN_PROFILE` (version 5) uses the Mall's rules unchanged:
+- **Draw.** `MALL_SIREN_WEIGHT` 0.8.
+- **Placement.** The Mall's retail-floor placement on the `street` and `floor` contexts (`MALL_RING_PLACEMENT`: shop sales floors ×
+  `MALL_SHOP_WEIGHT` 6). The counts and the station storey's Office placement are unchanged.
+- **Room gates.** The Mall's gates (`SKYWAYS_SIREN_ELIGIBILITY`): enclosed rooms of the street / skyway storeys, room ≥ 4 × 4 m, a
+  clear 1.5 × 1.5 m patch, doorways ≥ 3 m away, never sealing passage, ≤ 4 per level.
+- **Spacing.** 24 m apart.
+
+| Census (48 finished version-5 levels, seeds 1201 + k·7919, k = 0..47) | Skyways | The Mall (its census) |
+|---|---|---|
+| Sirens per level (mean) | 1.54 (halves 1.75 / 1.33) | 1.96 (halves 2.17 / 1.75) |
+| Levels with none | 7 / 48 (14.6 %) | 8.3 % |
+| Share of the placed non-horde enemies | ~4.6 % of ~33 | 10.3 % of ~19 |
+
+The Mall's rules are not boosted here. The draw is close to saturation, so the remaining gap comes from Skywalk's smaller, fuller
+shop rooms passing her room gates less often. Before the Mall store units took their dense Mall fit-outs, the same census read
+1.79.
+
+She is never on the station storey, in an annex, in a horde or in the convention's cosplay crowd.
+
+**Horde.** The Mall's horde pool is `SKYWAYS_HORDE` = `MALL_HORDE`, only with `placement.storeys` [1, 2]:
+- 1–2 groups of 5–20 ordinary zombies, 40 % coated;
+- the Mall's budget (32 members, 20 per storey, one group per storey) and its group / member / ambient spacing;
+- each start ≥ 45 m walking and ≥ 28 m straight from the start;
+- members clipped to the storey's patrol route (18 m per member) and the Mall's patrol pace.
+
+Groups roam the **Skyways patrol graph** (`gen/skyways/patrol.ts`):
+- nodes every ~8 m on the public walkways (kind `concourse` / `passage`, never a stair core) of the street and skyway storeys;
+- verified walks between them, plus the stair runs between those two storeys;
+- never the station storey with the train.
+
+Placement is `placeHordes` on its own fork (`skyways-hordes`). It runs after the ambient runs, so their positions are kept off, and
+after the traversal finishing. The dressers' holds stay clear (stair-run mouths, bridge-deck lanes, store interiors).
+
+The census (48 finished levels): 1.44 groups per level, **no level without a horde**, 17.0 members per level. Members are
+`layout.zombies` entries appended after every ambient spawn and before the annex's. The normal kill memory keeps killed members dead
+on return or Continue. A group with no living member stays dead, and the living ones start again from their placed positions (as
+in the Mall). Runtime: `HordeDirector` walks `layout.skyways.patrol`.
 
 ## The Survivor Market (`market`)
 
