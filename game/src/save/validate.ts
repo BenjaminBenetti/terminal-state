@@ -28,6 +28,9 @@ import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuel
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
+import {MARKET_STALLS} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
+import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
+import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
 import {checksumOf, utf8Bytes} from './checksum';
 import {transitRouteProblem} from '../campaign/discovery';
 import {hashString} from '../core/rng'; // (task studio-skyways-level-20261106-054448-01: the pre-Skyways seed default)
@@ -202,6 +205,12 @@ let filterCapS: number = FILTER_LIFE_S;
  * its own) — one prop, one place: never aboard AND lying in a station, never in two stations.
  */
 let propScope = new Set<string>();
+/**
+ * Task studio-survivor-market-20261108-005807-01 (lane TRADE): the item uids of the scope being checked — the run: its carried inventory,
+ * Lockbox, train cargo AND every market station's stall stock (all memories); the Retry snapshot: its own. One item, one uid: a stock stack
+ * may never share a uid with a carried / stored one or with another stall's.
+ */
+let uidScope = new Set<number>();
 
 /** Task train-all-cargo: carried props / riders of real prop kinds, each identity once per scope. */
 function carriedProps(list: readonly CargoPropJSON[], path: string): void {
@@ -450,6 +459,7 @@ function participants(v: unknown, path: string, seen: Set<number>): void {
   const keys = Object.keys(o);
   if (keys.length > SAVE_LIMITS.participants) bad(path, 'too many run participants');
   for (const k of keys) str(k, path, 48, LANE_ID, 'a participant id');
+  if (o[WALLET_PARTICIPANT] !== undefined) { const wp = walletProblem(o[WALLET_PARTICIPANT]); if (wp) bad(`${path}.${WALLET_PARTICIPANT}`, wp); } // lane TRADE: the Rail Ties balance
   const t = o[PLAYER_TRAIN_PARTICIPANT];
   if (t !== undefined && t !== null) {
     const p = `${path}.${PLAYER_TRAIN_PARTICIPANT}`, r = obj(t, p);
@@ -488,6 +498,27 @@ function sectionBags(v: unknown, path: string): void {
   });
 }
 
+/**
+ * Task studio-survivor-market-20261108-005807-01 (lane TRADE): a market station's stall stock (market/trade/stock.ts MarketStockJSON) —
+ * every stall listed, at most STOCK_MAX stacks each, every stack as strictly as the Lockbox's (item, count, mag, filter, air, bag) with
+ * its uid in the scope's set (uidScope); no reactor restart part, no backpack holding items.
+ */
+function marketStock(v: unknown, path: string): void {
+  const o = obj(v, path);
+  only(o, path, ['v', 'stalls']);
+  if (o.v !== 1) bad(`${path}.v`, 'unsupported market stock version');
+  const st = obj(o.stalls, `${path}.stalls`);
+  only(st, `${path}.stalls`, MARKET_STALLS);
+  for (const id of MARKET_STALLS) {
+    arr(st[id], `${path}.stalls.${id}`, STOCK_MAX).forEach((s, i) => {
+      const p = `${path}.stalls.${id}[${i}]`;
+      stack(s, p, {uid: true, inBag: false, seen: uidScope, needBag: true});
+      if (itemOf((s as {itemId: unknown}).itemId, `${p}.itemId`).kind === 'part') bad(p, 'a reactor restart part is not trade stock');
+      if (((s as {bag?: unknown[]}).bag ?? []).some(c => c !== null)) bad(p, 'a backpack in stock must be empty');
+    });
+  }
+}
+
 function lanes(v: unknown, path: string): void {
   const o = obj(v, path);
   const keys = Object.keys(o);
@@ -501,6 +532,7 @@ function lanes(v: unknown, path: string): void {
     // task skyways-vehicle-20261107 (v2): the trunk's stacks as strictly as the Lockbox's (uids unique within it, bags, mags, filter, air)
     if ((car as {v: number}).v === 2) slotList((car as {trunk: unknown}).trunk, `${path}.${SKYWAYS_CAR_LANE}.trunk`, TRUNK_SLOTS, new Set());
   }
+  if (has(o, MARKET_STOCK_LANE)) marketStock(o[MARKET_STOCK_LANE], `${path}.${MARKET_STOCK_LANE}`); // lane TRADE: a market station's stall stock
   if (has(o, STATION_PROPS_LANE)) { // task train-all-cargo: the layout props the station lost to the train + the carried props lying there
     const sp = stationPropsProblem(o[STATION_PROPS_LANE]);
     if (sp) bad(`${path}.${STATION_PROPS_LANE}`, sp);
@@ -587,13 +619,14 @@ function entry(v: unknown, path: string, net: SubwayNetwork): void {
   survival(e.survival, `${path}.survival`);
   battery(e.battery, `${path}.battery`);
   const seen = new Set<number>();
-  const outer = propScope;
+  const outer = propScope, outerUids = uidScope;
   propScope = new Set(); // (task train-all-cargo: the snapshot is its own world)
+  uidScope = seen; // (lane TRADE: its station's stall stock shares the snapshot's uid set)
   try {
     inventory(e.inventory, `${path}.inventory`, seen);
     participants(e.lanes, `${path}.lanes`, seen);
     memories(e.memories, `${path}.memories`, ids, scope ?? '\u0000');
-  } finally { propScope = outer; }
+  } finally { propScope = outer; uidScope = outerUids; }
   stats(e.stats, `${path}.stats`);
 }
 
@@ -607,9 +640,10 @@ export function validateRunData(v: unknown, o: ValidateOptions = {}, path = 'run
   if (r.v !== 1) bad(`${path}.v`, 'unsupported run version');
   const prevCap = filterCapS;
   filterCapS = has(r, 'filterLifeS') ? num(r.filterLifeS, `${path}.filterLifeS`, 1, 3600) : LEGACY_FILTER_LIFE_S;
-  const prevProps = propScope;
+  const prevProps = propScope, prevUids = uidScope;
   propScope = new Set();
-  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; }
+  uidScope = new Set(); // (lane TRADE: the run's one uid set — memories' stall stock, carry, Lockbox, cargo)
+  try { return validateRunBody(r, o, path); } finally { filterCapS = prevCap; propScope = prevProps; uidScope = prevUids; }
 }
 
 function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: string): SerializedRunV1 {
@@ -632,7 +666,7 @@ function validateRunBody(r: Record<string, unknown>, o: ValidateOptions, path: s
   if (r.entry !== null) entry(r.entry, `${path}.entry`, c.network);
   const carry = obj(r.carry, `${path}.carry`);
   only(carry, `${path}.carry`, ['inventory', 'vitals', 'survival', 'battery']);
-  const seen = new Set<number>(); // carried inventory + Lockbox: one item, one uid
+  const seen = uidScope; // carried inventory + Lockbox (+ lane TRADE: every station's stall stock, checked with the memories above): one item, one uid
   inventory(carry.inventory, `${path}.carry.inventory`, seen);
   vitals(carry.vitals, `${path}.carry.vitals`);
   survival(carry.survival, `${path}.carry.survival`);
