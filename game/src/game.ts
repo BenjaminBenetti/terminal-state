@@ -3007,7 +3007,6 @@ export class Game {
     // (+ Skyways: 'Concourse' / 'Street level' / '+15 Skyway' as printed)
     const storeyName = !storey ? '' : this.layout.mall ? (storey === 'Subway' ? '' : storey) : this.layout.skyways ? storey : storey === 'L' ? 'Lobby' : `Floor ${storey}`;
     const storeyText = storeyName && !(area >= 0 && (this.layout.skyways ? skywalkText(this.layout.areas[area].label) : this.layout.areas[area].label).includes(storeyName)) ? ` · ${storeyName}` : ''; // (a stairwell label already names its floor)
-    const tempArmor = this.beerEffects?.tempArmor() ?? 0; // (task studio-market-bar-20261108-225231-01, lane BEER) Ironclad Stout
     this.hud.update({
       hp: p.hp, maxHp: p.maxHp, stamina: p.stamina,
       // lane AMMO: a gun shows the caliber it loads ("Pistol · 9mm"); the reserve counts that caliber's pool.
@@ -3025,8 +3024,8 @@ export class Game {
       // Iteration 12 (LIGHT): battery meter + flare (grenade slot) count
       battery: {charge: this.torch.battery.charge, on: this.flashlightOn, flicker: this.torch.battery.flicker, spares: this.inv.count('battery')},
       flares: {count: this.inv.count('flare'), burning: this.flares.burningCount},
-      armor: armorPool(this.inv.gear, tempArmor), // task studio-general-armor-20261107-231448-01: the blue armour pips (+ lane BEER: the effective pool)
-      armorTemp: tempArmor > 0 ? armorPool(this.inv.gear, tempArmor) - armorPool(this.inv.gear) : 0, // (lane BEER) the Stout's share in it (capped)
+      armor: armorPool(this.inv.gear), // task studio-general-armor-20261107-231448-01: the blue armour pips
+      armorTemp: this.beerEffects?.tempArmor() ?? 0, // (task studio-market-bar-20261108-225231-01, lane BEER) Ironclad Stout: shown on top, distinguishable
       beer: this.beerEffects?.active ?? null, // (lane BEER) the active timed beer: name + time left
     }, this.inv);
   }
@@ -3459,8 +3458,7 @@ export class Game {
    */
   applyPlayerHit(raw: PlayerHit): ResolvedHit {
     const hit = incomingHit(raw);
-    // (task studio-market-bar-20261108-225231-01, lane BEER) + Ironclad Stout's temporary armour in the same pool (never worn down)
-    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand, undefined, this.beerEffects?.tempArmor() ?? 0);
+    const {resolved} = armorHit(hit, this.inv.gear, this.wearRand, undefined, this.beerEffects?.tempArmor() ?? 0); // (task studio-market-bar-20261108-225231-01, lane BEER: + Ironclad Stout's temporary armour in the same pool, never worn down)
     this.player.takeDamage(resolved.applied);
     for (const fn of this.hitListeners) fn(resolved);
     return resolved;

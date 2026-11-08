@@ -137,9 +137,9 @@ export interface HudState {
   /** (task studio-general-armor-20261107-231448-01) The worn armour pool (player/armor.ts armorPool): the blue pips above the health bar. */
   armor?: number;
   /**
-   * Task studio-market-bar-20261108-225231-01 (lane BEER): the TEMPORARY share of `armor` (Ironclad Stout; 0..armor). `armor` is then the
-   * EFFECTIVE pool (armorPool(worn, temp): worn + temp under the one cap) and the top-most tempHalfPips(armor, armorTemp) half pips show as
-   * temporary (class `temp`).
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): the TEMPORARY armour (Ironclad Stout: 0.125 = 5 pips; Game.beerEffects.tempArmor()).
+   * The pips then show the EFFECTIVE pool min(ARMOR.cap, armor + armorTemp) — what an enemy hit meets (player/armor.ts armorPool(worn,
+   * temp)) — and its temporary share (the top-most pips; class `temp`) distinguishably. `armor` stays the worn pool.
    */
   armorTemp?: number;
   /** (lane BEER) The active timed beer (Game.beerEffects.active): its name / effect and the active seconds left; null = none. */
@@ -198,11 +198,13 @@ export class Hud {
 
   /**
    * (task studio-general-armor-20261107-231448-01) The armour pips above the health bar (written only when the shown half-pip count changes).
-   * Task studio-market-bar-20261108-225231-01 (lane BEER): `pool` = the EFFECTIVE pool; `temp` = its temporary share (Ironclad Stout) —
-   * the top-most pips holding any of the tempHalfPips(pool, temp) half pips get the class `temp` (same shape, pale blue).
+   * Task studio-market-bar-20261108-225231-01 (lane BEER): `temp` = the temporary armour (Ironclad Stout). The pips show the EFFECTIVE pool
+   * min(ARMOR.cap, pool + temp) (`pool` = the worn pool, as before); the top-most pips holding any of its temporary half pips (its share
+   * under the cap: tempHalfPips) get the class `temp` (same shape, pale blue).
    */
-  setArmor(pool: number, temp = 0): void {
-    const rows = pipRows(pool), keep = displayHalfPips(pool) - tempHalfPips(pool, temp); // (lane BEER) half pips that are worn armour
+  setArmor(worn: number, temp = 0): void {
+    const pool = Math.min(ARMOR.cap, worn + (temp > 0 ? temp : 0)), share = pool - Math.min(worn, pool); // (lane BEER) the effective pool, temp's share in it
+    const rows = pipRows(pool), keep = displayHalfPips(pool) - tempHalfPips(pool, share); // (lane BEER) the half pips that are worn armour
     const cls = (p: 'full' | 'half', i: number) => [p === 'half' ? 'half' : '', 2 * i + (p === 'half' ? 0 : 1) >= keep ? 'temp' : ''].filter(Boolean).join(' ');
     if (temp > 0) ensureBeerCss();
     this.set('armor', `${rows.map(r => r.join(',')).join('|')}#${keep}`, () => {
@@ -223,7 +225,7 @@ export class Hud {
       const step = ARMOR_PIP_H * (1 - ARMOR.rowOverlap);
       el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map((p, j) => { const c = cls(p, k * ARMOR.pipsPerRow + j); return c ? `<i class="${c}"></i>` : '<i></i>'; }).join('')}</div>`).join('');
       el.classList.toggle('none', !rows.length);
-      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury${temp > 0 ? ` — ${pipsText(temp)} of them temporary (Ironclad Stout)` : ''}` : '';
+      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury${share > 0 ? ` — ${pipsText(share)} of them temporary (Ironclad Stout)` : ''}` : '';
       const row = bar.parentElement as HTMLElement | null;
       if (row) row.style.marginTop = rows.length ? `${6 + ARMOR_PIP_GAP + ARMOR_PIP_H + (rows.length - 1) * step}px` : '';
     });
