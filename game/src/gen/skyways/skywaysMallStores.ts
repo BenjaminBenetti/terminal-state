@@ -17,8 +17,8 @@
 //    gear bias); no floor piles (Area.noFloorLoot, like the major stores).
 // The pool: Mall families that fit the Skywalk's small units (their Mall minimum size AND the unit's inferred Mall lot family —
 // gen/mall/lots.ts lotSuits) and add variety beside the base pools and the ten major stores (no gun shop, pharmacy, phone, florist, books,
-// music, sports / outdoors, arcade): women's fashion, shoes, jewellery, beauty, optician, luggage, toys, pets. A map lets 2-4 of them (as
-// far as fitting units exist), each family at most once, spread out (SKYWAYS_MALL_STORES.spacing on a storey).
+// music, sports / outdoors, arcade): women's fashion, shoes, jewellery, beauty, optician, luggage, pets (gen/skyways/skywaysMallPool.ts).
+// A map lets 2-4 of them (as far as fitting units exist), each family at most once, spread out (SKYWAYS_MALL_STORES.spacing on a storey).
 //
 // Streams: assignSkywaysMallStores draws on its own fork (`skyways-mall-stores`) BEFORE the station dresser (no carve / frame draw moves;
 // the units' geometry is the carve's); dressSkywaysMallStores furnishes each unit on its own fork (`mall-store:<storefront id>`). The
@@ -42,6 +42,8 @@ export {SKYWAYS_MALL_STORE_PROGRAMS, type SkywaysMallStoreProgram} from './skywa
 /** Per-map rules: how many Mall stores a map asks for (weighted), the least centre distance (m) of two on one storey, the light step. */
 export const SKYWAYS_MALL_STORES = {
   count: [[2, 0.35], [3, 0.45], [4, 0.2]] as readonly (readonly [number, number])[],
+  /** Order weight of a family (1 when absent): the women's fashion store (what a mall is known for) and the shoe store come up more often. */
+  weight: {womenswear: 3, shoes: 1.5} as Readonly<Partial<Record<SkywaysMallStoreProgram, number>>>,
   spacing: 14,
   lightStep: 6.0,
 } as const;
@@ -97,7 +99,16 @@ export function assignSkywaysMallStores(layout: StationLayout, rng: Rng, version
   if (version < SKYWAYS_ENCOUNTERS_MIN_VERSION) return [];
   const cands = layout.storefronts.filter(sf => mallStoreEligible(layout, sf)).map(sf => ({sf, ...unitSize(layout, sf)}));
   const target = rng.weighted(SKYWAYS_MALL_STORES.count);
-  const order = rng.shuffle([...SKYWAYS_MALL_STORE_PROGRAMS]);
+  // the families in a seeded order (weighted: fashion more often) — the map's picks are the first `target` of them that some unit
+  // fits, placed BIGGEST first (so a small family never takes the one unit a big one needs); the rest stand by (a pick left without a
+  // spaced unit)
+  const left: [SkywaysMallStoreProgram, number][] = SKYWAYS_MALL_STORE_PROGRAMS.map(p => [p, SKYWAYS_MALL_STORES.weight[p] ?? 1]);
+  const drawn: SkywaysMallStoreProgram[] = [];
+  while (left.length) { const p = rng.weighted(left); drawn.push(p); left.splice(left.findIndex(q => q[0] === p), 1); }
+  const fitsSome = (p: MallProgram) => cands.some(c => mallStoreFits(p, c.width, c.depth));
+  const able = drawn.filter(fitsSome);
+  const area = (p: MallProgram) => MALL_PROGRAMS[p].min.area;
+  const order = [...able.slice(0, target).sort((p, q) => area(q) - area(p)), ...able.slice(target)];
   const taken = new Set<number>(), out: SkywaysMallStore[] = [];
   const used = new Set(layout.storefronts.map(sf => sf.name));
   const centre = (sf: Storefront) => { const a = layout.areas[sf.unit]; return {x: (a.x + a.w / 2) * CELL, z: (a.y + a.h / 2) * CELL, level: sf.level ?? 0}; };

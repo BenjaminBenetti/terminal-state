@@ -199,6 +199,25 @@ storey, never the station concourse; `Storefront.ownDress` keeps the generic fit
 carry a few real drinks / snacks (`skywaysConSnacks.ts`); player text says "Skywalk" (`skywalkText.ts`, every version).
 Tests: `tests/skyways-programmes.test.ts`.
 
+## Mall store families (layout version 5)
+
+A few ordinary glazed retail units are let to MALL store families (`gen/skyways/skywaysMallStores.ts`, pool `skywaysMallPool.ts`):
+women's fashion, shoes, jewellery, beauty, optician, luggage and pets. None of them duplicates a base shop use or one of the
+ten major stores.
+- **Which units:** units from the base shop pools above the station storey, never an anchor, a food unit or the ramen restaurant. The
+  unit must fit the programme's Mall minimum size and the Mall lot family it reads as (`gen/mall/lots.ts lotSuits`). A map asks for
+  2-4 stores, each family at most once, at least 14 m apart on a storey. The draws use their own forks; the carve is unchanged.
+- **What they are:** the Mall store itself, not a sign over a generic box:
+  - the programme's fictional brand on a fascia drawn in the Mall brand style (`world/skywaysMallFascia.ts`, inside the one
+    lettering atlas);
+  - its Mall walls and floor (`world/skywaysMallFinish.ts`: finish rows of the small shops' programs, so no draw call is added);
+  - its Mall focal display and recipe (`gen/mall/shopsDress.ts dressMallRecipe`), using existing Mall kinds that are in both audits;
+  - fixture-drawn merchandise is split by the version-4 rule (`skywaysMerchSplit.ts`).
+- **Loot:** the holders roll their `mall-<programme>` purpose under the Skyways profile (base tables and base salvage, never the
+  Mall's profile). There are no floor piles (`noFloorLoot`).
+- **Saves:** stations entered at versions 1-4 never get one. `Storefront.mall` is set only at version 5.
+Tests: `tests/skyways-mall-stores.test.ts`, `tests/skyways-mall-stores-view.test.ts`.
+
 ## The add-on (exactly one)
 
 The hall's side of the host lobby varies (only halls at least 70 % of the roomiest that fits), and it is entered straight from the
