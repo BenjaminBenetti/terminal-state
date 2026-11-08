@@ -31,6 +31,12 @@ import {placeStationFuel} from '../src/gen/fuelPlacement';
 import {FUEL} from '../src/fuel/fuel';
 import {WARES, stallSurfaces} from '../src/market/wares/slots';
 import {planStall} from '../src/market/wares/plan';
+import {selectLevelKeys} from '../src/assets/levelAssets';
+import {P7_FILES, p7ModelKeysFor} from '../src/gen/props07';
+import {OFFICE_MODEL_FILES} from '../src/assets/officeAssets';
+import {COMPANY_MODEL_FILES, COMPANY_PART_MODEL_FILES} from '../src/assets/companyAssets';
+import {MALL_MODEL_FILES} from '../src/assets/mallAssets';
+import {officeModelKeysFor} from '../src/gen/office/index';
 import type {StationLayout} from '../src/gen/stationTypes';
 
 const SEEDS = [1, 2, 3, 42, 777, 4242, 9001, 123456, 0xdeadbeef, 20261108];
@@ -211,5 +217,13 @@ describe('the Survivor Market, layout version 2 (the container settlement)', () 
     expect(SPAWN_PROFILES.market.contexts.station!.count).toEqual([0, 0]);
     expect(SPAWN_PROFILES.market.horde).toBeUndefined();
     expect(LEVELS.market.trackExtensions).toBe('none');
+  });
+
+  it('existing art only: every lazy model it places is shared or one the market may load (no other level\'s own art)', () => {
+    const files = {...P7_FILES, ...OFFICE_MODEL_FILES, ...COMPANY_MODEL_FILES, ...COMPANY_PART_MODEL_FILES, ...MALL_MODEL_FILES};
+    for (const {seed, L} of layouts) {
+      const keys = [...new Set([...p7ModelKeysFor(L), ...officeModelKeysFor(L)])];
+      expect(selectLevelKeys('market', keys, files).foreign, `${seed}`).toEqual([]);
+    }
   });
 });
