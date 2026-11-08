@@ -15,7 +15,14 @@
 //    gunshots, given growls / zombie attacks, shoved by the physics walkers or carried as train cargo.
 //  - Task studio-market-rework-20261108-074144-01 (lane COMBAT): they CAN be attacked (market/combat/marketCombat.ts: the player's
 //    bullets / knife through their own hit volumes; one successful attack or a theft turns the settlement hostile). Once hostile the combat
-//    system drives everyone (`takeover`: this calm frame stands aside), removes the fled (`remove`) and reuses `settle` for collision.
+//    system drives everyone (`takeover`: this calm frame stands aside; the bottles are put away) and reuses `settle` / `route`. Nobody is
+//    ever removed by it (task studio-market-bar-20261108-225231-01: fleers hide in their refuges, present).
+//  - Task studio-market-bar-20261108-225231-01 (lane PEOPLE): BAR PATRONS — at a 'drink' spot (layout v3's bar: a stool / a table seat)
+//    a resident drinks: a runtime drinking loop (market/people/drinkClips.ts: hold, raise, sip, lower; two variants, a random phase) with
+//    a bottle in the right hand (market/people/bottle.ts: the beer's model, else the cola can), seated on the spot's seat when one stands
+//    there (market/people/seats.ts), else standing at the counter; patrons linger and the first residents of a layout with a bar start
+//    there (its regulars favour its spots). THE BARTENDER (the 'bar' stall's trader) works the counter (the Work loop) between talks. A
+//    layout without 'drink' spots runs exactly as before.
 //  - LAZY MODEL: the cast file is a level-only lazy model (sectionModelKeys: only a layout with `market` asks for it); the people are
 //    spawned in the section build (before the loading-screen warm-up, which therefore compiles them); teardown removes them.
 //  - SEEDED: looks / posts / initial spots come from the station seed on this system's own hash streams (no game / generator RNG
@@ -33,9 +40,14 @@ import {moveCircle, resolveCircle, type PropIndex} from '../core/physics';
 import {groundOf} from '../ai/motor';
 import {hashString, mulberry32} from '../core/rng';
 import {PLAYER_TRAIN_SPEC, type PlayerTrainSpec} from '../world/playerTrainSpec';
+import type {PropPlacement} from '../gen/props';
 import {HumanWardrobe} from './humanWardrobe';
 import {HumanActor} from './humanActor';
 import {MARKET_HUMAN_KEY, marketCast, marketHumanModelKeys, SPOT_CLIP, type HumanClip} from './humanLooks';
+import {rigFromSkeleton} from './combat/combatClips';
+import {DRINK_CLIP, bottleGrip, drinkClips, seatBucket, type BottleSpec} from './people/drinkClips';
+import {attachBottle, patronBottle, type BottleSource} from './people/bottle';
+import {seatAt} from './people/seats';
 
 /** Tuning. */
 export const MARKET_PEOPLE = {
@@ -59,6 +71,12 @@ export const MARKET_PEOPLE = {
   keepout: {body: 0.6, apron: 1.6, apronSide: 0.5, band: 2.5},
   /** Animation LOD: full rate within `near` m of the player, every 2nd frame within `mid` m, else every 4th. */
   lod: {near: 16, mid: 34},
+  /**
+   * (Task studio-market-bar-20261108-225231-01, lane PEOPLE) Bar patrons: seconds at a 'drink' spot (min, max); the chance a patron stays
+   * on for another round instead of leaving; how many times likelier a regular picks a 'drink' spot; the share of the residents (at most
+   * one per 'drink' spot) who start at the bar as its regulars.
+   */
+  drink: {dwell: [35, 90] as [number, number], stay: 0.45, regularWeight: 6, regulars: 0.34},
 } as const;
 
 /** A keep-out rectangle in world x / z. */
@@ -95,9 +113,16 @@ export interface MarketPeopleHost {
   frameHooks: ((dt: number) => void)[];
   sectionModelKeys: ((layout: never) => readonly string[])[];
   atmosphere?: {markShadows(root: THREE.Object3D, cast: boolean): void} | null;
+  /** (lane PEOPLE) The loading-screen warm-up's pools (the patrons' bottles compile there). */
+  warmRegistry?: {addPool(name: string, roots: () => readonly THREE.Object3D[]): void} | null;
 }
 
-interface Trader { id: string; stall: MarketStall; actor: HumanActor; postYaw: number; rand: () => number; swapT: number }
+/** (lane PEOPLE) The 'bar' stall's id (layout v3; the BAR lane adds it to MarketStallId). */
+const BAR_STALL = 'bar';
+
+interface Trader { id: string; stall: MarketStall; actor: HumanActor; postYaw: number; rand: () => number; swapT: number; bartender: boolean }
+/** (lane PEOPLE) A patron's round at a 'drink' spot: its loop variant, its seat (null: standing at the counter). */
+interface Drinking { variant: 0 | 1; clip: string; seat: {x: number; z: number; y: number} | null }
 interface Resident {
   /** (lane COMBAT) the person's id in the hostility record ('resident:<index>'). */
   id: string;
@@ -109,6 +134,10 @@ interface Resident {
   path: Waypoint[] | null; wp: number;
   /** Stuck detection. */
   checkT: number; checkX: number; checkZ: number;
+  /** (lane PEOPLE) A bar regular (starts at the bar, favours its spots); the round it is drinking; its bottle (in the right hand). */
+  regular: boolean;
+  drink: Drinking | null;
+  bottle: {holder: THREE.Object3D; spec: BottleSpec} | null;
 }
 
 /** The contract's yaw (forward = (-sin, -cos)) -> the model's rotation (the humans face +Z: forward = (sin, cos)). */
@@ -125,8 +154,18 @@ export class MarketPeople {
   private wardrobe: HumanWardrobe | null = null;
   private market: MarketLayout | null = null;
   private tick = 0;
+  /** (lane PEOPLE) Each spot's seat (index-aligned with `spots`; null: none / not a 'drink' spot). */
+  private seats: ({x: number; z: number; y: number} | null)[] = [];
+  /** (lane PEOPLE) The patrons' bottle model (resolved once per build) and whether the bottles were put away (hostile). */
+  private bottleModel: BottleSource | null = null;
+  private stowed = false;
   /** QA / tests. */
-  readonly counts = {built: 0, paths: 0, pathFails: 0, arrivals: 0, replans: 0, greetings: 0};
+  readonly counts = {built: 0, paths: 0, pathFails: 0, arrivals: 0, replans: 0, greetings: 0, rounds: 0, lingers: 0};
+  /**
+   * (lane PEOPLE) Where the patrons' bottle comes from (default: the beer's model, else the cola can — market/people/bottle.ts); tests
+   * hand in a loaded model.
+   */
+  bottleSource: () => BottleSource | null = patronBottle;
   /** Optional: called when a greeting starts (the trade lane may hook audio). */
   onGreet: ((stallId: MarketStallId) => void) | null = null;
   /** Task studio-market-rework-20261108-074144-01 (lane COMBAT): true = the combat system drives every person this frame (hostile). */
@@ -140,6 +179,8 @@ export class MarketPeople {
     h.sectionHooks.push({build: (layout: never) => this.build(layout as {seed: number; market?: MarketLayout}), teardown: () => this.teardown()});
     h.frameHooks.push(dt => this.frame(dt));
     if (h.propModels.catalogue && !h.propModels.catalogue[MARKET_HUMAN_KEY]) console.warn('market people: the prop library has no market-human-cast entry (add MARKET_HUMAN_MODEL_FILES to its file map)');
+    // (lane PEOPLE) one patron's bottle (shown) compiles on the loading screen like the hostile people's guns
+    h.warmRegistry?.addPool('market-bottles', () => { const b = this.residents.find(r => r.bottle)?.bottle?.holder; return b ? [b] : []; });
     return this;
   }
 
@@ -180,7 +221,7 @@ export class MarketPeople {
   // ---------------------------------------------------------------------------------------------------------------------
   // Section lifecycle
 
-  build(layout: {seed: number; market?: MarketLayout}): void {
+  build(layout: {seed: number; market?: MarketLayout; props?: readonly PropPlacement[]}): void {
     this.teardown();
     const M = layout.market;
     if (!M) return;
@@ -191,6 +232,9 @@ export class MarketPeople {
     this.market = M;
     this.keepout = trainKeepout(this.host.trainPlacement);
     this.spots = M.spots.filter(s => !this.inKeepout(s.x, s.z, s.y, MARKET_PEOPLE.radius));
+    this.seats = this.spots.map(s => (s.kind === 'drink' ? seatAt(s, layout.props) : null));
+    this.stowed = false;
+    this.bottleModel = this.spots.some(s => s.kind === 'drink') ? this.bottleSource() : null;
     const nRes = Math.min(Math.max(0, M.residents | 0), this.spots.length);
     const cast = marketCast(layout.seed, M.stalls.length, nRes, W.available);
     const seed = layout.seed >>> 0;
@@ -199,20 +243,30 @@ export class MarketPeople {
       actor.x = stall.trader.x; actor.z = stall.trader.z; actor.y = stall.trader.y;
       actor.yaw = modelYaw(stall.trader.yaw);
       const rand = mulberry32(hashString(`market-trader:${stall.id}`, seed));
-      actor.play(rand() < 0.6 ? 'Talk' : 'Idle', 0);
+      const bartender = (stall.id as string) === BAR_STALL;
+      actor.play(bartender ? 'Work' : rand() < 0.6 ? 'Talk' : 'Idle', 0);
       this.add(actor);
-      this.traders.push({id: `trader:${stall.id}`, stall, actor, postYaw: actor.yaw, rand, swapT: 4 + rand() * 8});
+      this.traders.push({id: `trader:${stall.id}`, stall, actor, postYaw: actor.yaw, rand, swapT: 4 + rand() * 8, bartender});
     });
     // residents start at distinct seeded spots, each with its own remaining dwell
     const order = this.spots.map((_, i) => i);
     const sh = mulberry32(hashString('market-resident-spots', seed));
     for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(sh() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    // (lane PEOPLE) a layout with a bar: its regulars (a third of the residents, one per 'drink' spot at most) start on its spots — moved to
+    // the front of the seeded order, the rest keep theirs (no 'drink' spot: the order is untouched)
+    const drinkAt = order.filter(i => this.spots[i].kind === 'drink');
+    const nRegulars = Math.min(drinkAt.length, Math.round(nRes * MARKET_PEOPLE.drink.regulars));
+    if (nRegulars > 0) {
+      const first = drinkAt.slice(0, nRegulars);
+      order.splice(0, order.length, ...first, ...order.filter(i => !first.includes(i)));
+    }
     for (let i = 0; i < nRes; i++) {
       const rand = mulberry32(hashString(`market-resident:${i}`, seed));
       const actor = new HumanActor(W.build(cast.residents[i]), rand());
       const s = this.spots[order[i]];
       actor.x = s.x; actor.z = s.z; actor.y = s.y; actor.yaw = modelYaw(s.yaw);
-      const r: Resident = {id: `resident:${i}`, index: i, actor, rand, speed: actor.walkSpeed * (0.9 + rand() * 0.14), state: 'idle', spot: order[i], timer: 0, path: null, wp: 0, checkT: 0, checkX: s.x, checkZ: s.z};
+      const r: Resident = {id: `resident:${i}`, index: i, actor, rand, speed: actor.walkSpeed * (0.9 + rand() * 0.14), state: 'idle', spot: order[i], timer: 0, path: null, wp: 0, checkT: 0, checkX: s.x, checkZ: s.z,
+        regular: i < nRegulars, drink: null, bottle: null};
       this.arrive(r, true);
       this.add(actor);
       this.residents.push(r);
@@ -232,6 +286,8 @@ export class MarketPeople {
     this.residents.length = 0;
     this.market = null;
     this.spots = [];
+    this.seats = [];
+    this.bottleModel = null;
     this.keepout = [];
   }
 
@@ -276,6 +332,7 @@ export class MarketPeople {
   private arrive(r: Resident, initial = false): void {
     const s = this.spots[r.spot];
     r.state = 'idle'; r.path = null; r.wp = 0;
+    if (s.kind === 'drink' && this.startDrinking(r, initial)) { if (!initial) this.counts.arrivals++; return; }
     const clip: HumanClip = r.actor.has(SPOT_CLIP[s.kind]) ? SPOT_CLIP[s.kind] : 'Idle';
     r.actor.play(clip, initial ? 0 : 0.6);
     const [a, b] = MARKET_PEOPLE.dwell[clip] ?? MARKET_PEOPLE.dwell.Idle;
@@ -283,13 +340,60 @@ export class MarketPeople {
     if (!initial) this.counts.arrivals++;
   }
 
+  // ---------------------------------------------------------------------------------------------------------------------
+  // (lane PEOPLE) Bar patrons
+
+  /**
+   * A round at the resident's 'drink' spot: the drinking loop of its body (seated on the spot's seat, else standing), a seeded variant
+   * at a random phase, the bottle in its hand. False when the loop cannot be built (the plain spot loop then).
+   */
+  private startDrinking(r: Resident, initial: boolean): boolean {
+    const src = this.bottleModel, gltf = this.host.propModels.get(MARKET_HUMAN_KEY), a = r.actor;
+    if (!src || !gltf) return false;
+    const seat = this.seats[r.spot] ?? null;
+    const cm = seat ? seatBucket(seat.y - a.y) : null;
+    const variant = (r.rand() < 0.5 ? 0 : 1) as 0 | 1;
+    try {
+      const rig = rigFromSkeleton(a.meshes[0].skeleton, a.prefix);
+      if (!r.bottle) {
+        const hand = a.bone('R_Hand');
+        if (!hand) return false;
+        r.bottle = attachBottle(hand, src, bottleGrip(rig));
+        this.host.atmosphere?.markShadows(r.bottle.holder, false);
+      }
+      a.addClips(drinkClips(gltf, a.look.body, a.prefix, rig, r.bottle.spec, cm).clips);
+    } catch (err) { console.warn('market people: no drinking clips for', r.id, err); return false; }
+    const clip = cm === null ? DRINK_CLIP.stand(variant) : DRINK_CLIP.sit(variant, cm);
+    r.drink = {variant, clip, seat};
+    r.bottle.holder.visible = true;
+    a.play(clip, initial ? 0 : 0.6, r.rand());
+    if (initial && seat) { a.x = seat.x; a.z = seat.z; }
+    const [lo, hi] = MARKET_PEOPLE.drink.dwell;
+    r.timer = (initial ? r.rand() : 1) * (lo + r.rand() * (hi - lo));
+    this.counts.rounds++;
+    return true;
+  }
+
+  /** The round is over (leaving the spot / the market turns hostile): the bottle put away. */
+  private stopDrinking(r: Resident): void {
+    if (r.bottle) r.bottle.holder.visible = false;
+    r.drink = null;
+  }
+
   /** Pick a free spot and a route to it; false (and a short wait) when none was found this time. */
   private depart(r: Resident): boolean {
+    // (lane PEOPLE) a patron often stays for another round
+    if (r.drink && r.rand() < MARKET_PEOPLE.drink.stay) {
+      const [lo, hi] = MARKET_PEOPLE.drink.dwell;
+      r.timer = lo + r.rand() * (hi - lo);
+      this.counts.lingers++;
+      return true;
+    }
     const used = new Set(this.residents.filter(o => o !== r).map(o => o.spot));
     const a = r.actor;
     const cands = this.spots.map((s, i) => ({s, i})).filter(c => c.i !== r.spot && !used.has(c.i));
-    // nearer spots are likelier (a settlement's short errands), any free spot possible
-    const w = cands.map(c => 1 / (4 + Math.hypot(c.s.x - a.x, c.s.z - a.z, (c.s.y - a.y) * 3)));
+    // nearer spots are likelier (a settlement's short errands), any free spot possible; a bar regular favours the bar
+    const w = cands.map(c => (r.regular && c.s.kind === 'drink' ? MARKET_PEOPLE.drink.regularWeight : 1) / (4 + Math.hypot(c.s.x - a.x, c.s.z - a.z, (c.s.y - a.y) * 3)));
     for (let tries = 0; tries < 3 && cands.length; tries++) {
       let total = 0; for (const v of w) total += v;
       let x = r.rand() * total, k = 0;
@@ -298,6 +402,7 @@ export class MarketPeople {
       const path = this.host.pathfinder.find(a.x, a.z, c.s.x, c.s.z, 0.34, MARKET_PEOPLE.maxExpand, {ay: a.y, by: c.s.y, noLinks: true});
       this.counts.paths++;
       if (path && path.length && this.routeClear(a.x, a.z, a.y, path)) {
+        this.stopDrinking(r);
         r.spot = c.i; r.path = path; r.wp = 0; r.state = 'walk';
         r.checkT = 0; r.checkX = a.x; r.checkZ = a.z;
         a.play('Walk', 0.35);
@@ -315,9 +420,16 @@ export class MarketPeople {
     if (r.state === 'idle') {
       const s = this.spots[r.spot];
       a.yaw = turnToward(a.yaw, modelYaw(s.yaw), P.turnRate * 0.5 * dt);
-      // ease onto the spot itself (arrival tolerance, pushes)
-      const dx = s.x - a.x, dz = s.z - a.z, d = Math.hypot(dx, dz);
-      if (d > 0.02 && d < 1.2) { const k = Math.min(1, dt * 1.5); [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx * k, dz * k, P.radius, a.y, P.height); }
+      const seat = r.drink?.seat;
+      if (seat) {
+        // (lane PEOPLE) a seated patron slides onto its seat (it sits ON the stool / chair: no circle collision against it)
+        const dx = seat.x - a.x, dz = seat.z - a.z, k = Math.min(1, dt * 3);
+        a.x += dx * k; a.z += dz * k;
+      } else {
+        // ease onto the spot itself (arrival tolerance, pushes)
+        const dx = s.x - a.x, dz = s.z - a.z, d = Math.hypot(dx, dz);
+        if (d > 0.02 && d < 1.2) { const k = Math.min(1, dt * 1.5); [a.x, a.z] = moveCircle(this.host.levels, this.host.propIndex, a.x, a.z, dx * k, dz * k, P.radius, a.y, P.height); }
+      }
       r.timer -= dt;
       if (r.timer <= 0) this.depart(r);
       return 0;
@@ -368,7 +480,10 @@ export class MarketPeople {
 
   frame(dt: number): void {
     if (!this.market || dt <= 0) return;
-    if (this.takeover?.()) return; // (lane COMBAT: hostile — the combat system moves / animates everyone)
+    if (this.takeover?.()) { // (lane COMBAT: hostile — the combat system moves / animates everyone)
+      if (!this.stowed) { for (const r of this.residents) this.stopDrinking(r); this.stowed = true; } // (lane PEOPLE: the bottles put away)
+      return;
+    }
     const h = this.host, P = MARKET_PEOPLE, pl = h.player;
     this.tick++;
     const speeds = this.residents.map(r => this.stepResident(r, dt));
@@ -376,6 +491,7 @@ export class MarketPeople {
     const all = this.people;
     for (const r of this.residents) {
       const a = r.actor;
+      if (r.state === 'idle' && r.drink?.seat) continue; // (lane PEOPLE: a seated patron stays on its seat; the others step round it)
       for (const o of all) {
         if (o === a || Math.abs(o.y - a.y) > 1) continue;
         const dx = a.x - o.x, dz = a.z - o.z, d = Math.hypot(dx, dz), min = 2 * P.radius;
@@ -396,7 +512,11 @@ export class MarketPeople {
       a.yaw = turnToward(a.yaw, engaged ? t.postYaw + Math.max(-P.turnMax, Math.min(P.turnMax, off)) : t.postYaw, 2.5 * dt);
       t.swapT -= dt;
       if (engaged && a.loop !== 'Talk') a.play('Talk', 0.4);
-      else if (t.swapT <= 0) { a.play(a.loop === 'Talk' ? 'Idle' : 'Talk', 0.5); t.swapT = 5 + t.rand() * 9; }
+      else if (t.swapT <= 0) {
+        // (lane PEOPLE) the bartender works the counter (wiping, pouring: the Work loop) between a word and a pause; the others talk / idle
+        if (t.bartender) { a.play(a.loop === 'Work' ? (t.rand() < 0.5 ? 'Idle' : 'Talk') : 'Work', 0.5); t.swapT = a.loop === 'Work' ? 8 + t.rand() * 10 : 3 + t.rand() * 4; }
+        else { a.play(a.loop === 'Talk' ? 'Idle' : 'Talk', 0.5); t.swapT = 5 + t.rand() * 9; }
+      }
     }
     // animate (distance LOD) + sync
     all.forEach((a, i) => {
