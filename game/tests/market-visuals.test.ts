@@ -29,6 +29,10 @@ describe('the Survivor Market look', () => {
     for (const k of [MARKET_KEYS.wall, MARKET_KEYS.roof, MARKET_KEYS.ply, MARKET_KEYS.deck]) expect(used, k).toContain(k);
     for (const k of Object.values(MARKET_KEYS)) { expect(isArchFinish(k)).toBe(true); expect(finishClass(k), k).not.toBeNull(); }
     expect(marketAreaClass(L.areas[L.platform])).toBe('platform');
+    // the open shed (square / platform / bed) is the culler's atrium; the rooms under the deck and the deck itself are not
+    const at = w.marketArch!.atrium, cellAt = (x: number, z: number) => L.grid.idx(...L.grid.cellOf(x, z));
+    expect(at[cellAt(L.playerSpawn.x, L.playerSpawn.z)]).toBe(1);
+    for (const s of L.market!.spots) if (s.level === 1 || s.kind === 'cook' || s.kind === 'work') expect(at[cellAt(s.x, s.z)], s.kind).toBe(0);
     expect(w.marketArch!.floorKey(0, L.grid.idx(...L.grid.cellOf(L.playerSpawn.x, L.playerSpawn.z)))).toBeNull(); // the platform slab
     // a non-market layout gets no market arch
     expect(buildWorld(LEVELS.subway.generate('main', {levelSeed: 77}), mats, {}).marketArch).toBeUndefined();

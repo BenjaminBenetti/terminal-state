@@ -786,7 +786,8 @@ export function buildWorld(layout: StationLayout, mats: WorldMaterials, models: 
   // Task studio-reactor-submit-roof-fog-20261102 (lane CPU): + the mall's slab / storey occlusion on the Reactor (rooms, side complexes
   // and holders behind the pit's rock / under the slabs are not submitted); the vessel's undrawn column is see-through, no glass shafts
   const culler = new LevelCuller(levels, cols, levelAt, mall ? {atrium: mall.atrium, slabs: {see: (layout.mall?.elevators ?? []).map(e => e.shaft)}}
-    : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}} : undefined);
+    : reactor ? {atrium: reactor.pitMask, slabs: {see: reactor.occlusionSee(), glass: []}}
+    : mkt ? {atrium: mkt.atrium} : undefined); // (task studio-survivor-market-20261108-005807-01: the open shed as atrium tiles, no slabs)
   culler.register(group);
   return {group, fixtures, tubes, stats: {meshes, triangles: Math.round(triangles), instances, levels: levels.length, archMeshes}, wallFaces: treatFaces, rails, levelAt, culler,
     ...(office ? {officeArch: office} : {}), ...(mall ? {mallArch: mall} : {}), ...(trackExt ? {trackExt} : {}), ...(reactor ? {reactorArch: reactor} : {}), ...(sky ? {skywaysArch: sky} : {}), ...(mkt ? {marketArch: mkt} : {}),

@@ -145,8 +145,8 @@ export function dressMarket(layout: StationLayout, mc: MarketCarve, rng: Rng, na
       if (busy(x, PROP_DEFS.bench.w / 2)) continue;
       if (put(a, 'bench', x, r.z1 - PROP_DEFS.bench.d / 2 - 0.05, Math.PI)) { benches++; x += 6; }
     }
-    // name plates on the back wall, either side of the first gate
-    const g = gx[0];
+    // name plates on the back wall, either side of the gate nearer the platform's middle (the one the parked train opens onto)
+    const pc = (r.x0 + r.x1) / 2, g = gx.slice().sort((p, q) => Math.abs((p.x0 + p.x1) / 2 - pc) - Math.abs((q.x0 + q.x1) / 2 - pc))[0];
     for (const sx of [g.x0 - 1.6, g.x1 + 1.6]) sign({kind: 'station', text: layout.name, area: a.id, x: sx, z: r.z1 - 0.02, y: 2.6, rot: Math.PI});
     for (let x = r.x0 + 3; x < r.x1 - 2; x += 6) light(a, x, (r.z0 + r.z1) / 2, 4.5, {warm: false, power: 0.75});
   }

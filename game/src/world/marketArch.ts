@@ -12,6 +12,7 @@
 // wall treatment (world/wallDetailPlan.ts).
 
 import * as THREE from 'three';
+import {SOLID} from '../gen/grid';
 import type {Level} from '../gen/levels';
 import type {Area, StationLayout} from '../gen/stationTypes';
 import {SurfaceNodeMaterial, surfaceMaterial, thinTrim, type WorldMaterials} from './materials';
@@ -48,7 +49,18 @@ export class MarketArch {
     return layout.market ? new MarketArch(layout, mats, levels) : null;
   }
 
-  private constructor(readonly layout: StationLayout, readonly mats: WorldMaterials, readonly levels: readonly Level[]) {}
+  /**
+   * Per cell (layout grid): 1 = the open shed — a shed-floor column whose band rises past the housing deck's walking zone (the square,
+   * the platform, the track bed, the open stair). The level culler takes these as ATRIUM tiles (world/levelCulling.ts, the mall's rule
+   * without its slabs): a bounded number of sight tests per update instead of a pair portal for every tile of the big square.
+   */
+  readonly atrium: Uint8Array;
+
+  private constructor(readonly layout: StationLayout, readonly mats: WorldMaterials, readonly levels: readonly Level[]) {
+    const g = layout.grid, top = (levels[1]?.baseY ?? 0) + 2.4;
+    this.atrium = new Uint8Array(g.w * g.h);
+    for (let i = 0; i < g.cells.length; i++) if (g.cells[i] !== SOLID && g.hasCeil(i) && g.ceil[i] >= top) this.atrium[i] = 1;
+  }
 
   classOf(areaId: number): MarketClass {
     let c = this.classCache.get(areaId);
