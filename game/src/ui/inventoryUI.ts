@@ -32,6 +32,7 @@ import {itemIconHtml} from './itemIcons';
 import {effectText, itemDef, useButtonLabel} from '../items/items';
 import {MELEE_REF, PACK_SIZE, THROW_REF, isMeleeItem, type Bar, type Inventory, type SlotRef} from '../items/inventory';
 import {AIRTANK_AIR_S, FILTER_LIFE_S, GEAR_SLOTS, GEAR_SLOT_NAMES, gearStatText, isAirtank, isBagItem, isFilterMask} from '../items/gear';
+import {armorPool, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01
 import {WEAPONS, reserveFor, weaponsForCaliber} from '../weapons/weapons';
 import {CALIBERS, CALIBER_IDS, ammoItemFor} from '../items/calibers'; // lane AMMO
 import {MATERIAL_NOTE} from '../items/craftMaterials'; // lane RACK (office-props-physics-scale-20261030)
@@ -466,7 +467,7 @@ export class InventoryUI {
       const count = def ? (def.kind === 'weapon' ? (WEAPONS[def.weaponId!].melee ? '' : `<span class="count">${st!.mag}/${WEAPONS[def.weaponId!].magazine}</span>`)
         : isFilterMask(def.id) ? `<span class="count">${filterPct(st!.filter)}%</span>` // mask lane: the fitted filter
         : st!.count > 1 ? `<span class="count">×${st!.count}</span>` : '') : '';
-      let title = def ? ` title="${attr(def.name)}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
+      let title = def ? ` title="${attr(def.name)}${usable ? ` — ${effectText(def)}. Double-click or right-click to ${useButtonLabel(def).toLowerCase()}` : ''}${def.kind === 'gear' ? ` — ${gearStatText(def.gear!, st)}. Double-click or right-click to ${ref.bar === 'gear' ? 'take it off' : 'wear it'}` : ''}. Drag to move · Shift-drag to split · drag out of the panel to drop"` : '';
       // Iteration 16: gear slots (slot name + empty silhouette); the worn backpack's contents stay hidden
       let lead = ref.bar === 'hotbar' ? `<span class="key">${ref.index + 1}</span>` : '';
       let cls = '';
@@ -510,7 +511,7 @@ export class InventoryUI {
         : wdef?.caliber ? `Takes ${CALIBERS[wdef.caliber].label} (${CALIBERS[wdef.caliber].designation}) · ${reserveFor(wdef, inv)} in reserve`
         : wdef?.melee ? `Melee · hold click to wind up, release to slash · reach ${wdef.range} m · never needs ammo · ${this.selected?.bar === 'melee' ? 'in the melee slot: ~ draws it' : 'right-click / double-click / Equip puts it in the melee slot (~)'}` // lane KNIFE / SLOT
         : def?.kind === 'consumable' ? `${effectText(def)} · ${def.useTime ?? 1} s to ${useButtonLabel(def).toLowerCase()} · double-click or right-click to ${useButtonLabel(def).toLowerCase()}`
-        : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
+        : def?.kind === 'gear' ? `${isFilterMask(def.id) ? `Filter ${filterPct(st!.filter)} % fitted · ${inv.count('gas_filter')} spare · ` : ''}${isAirtank(def.id) ? `${airText(st!.air)} · ` : ''}${gearStatText(def.gear!, st)} · ${worn ? (isBagItem(def.id) ? 'press 6 then click to set it down (contents only on the ground)' : 'double-click / right-click / Take off to remove') : `double-click / right-click / Wear to put it on (${GEAR_SLOT_NAMES[def.gear!.slot].toLowerCase()} slot)`}`
         : def?.kind === 'throwable' ? (this.selected?.bar === 'throw' ? 'In the grenade slot: hold G to ready it, release to throw' : 'Right-click / double-click / Equip puts it in the grenade slot (G)') // INTERACT (#6)
         : def?.kind === 'supply' ? `A worn gas mask fits one by itself when its filter runs out · ${inv.count(def.id)} carried where the mask can reach them (not in a worn backpack)` // mask lane
         : def?.kind === 'material' ? `${MATERIAL_NOTE} · ${inv.count(def.id)} in pockets / quick slots` // lane RACK (office-props-physics-scale-20261030)
@@ -540,7 +541,10 @@ export class InventoryUI {
     const ph = document.querySelector('#inv-pack')?.previousElementSibling;
     if (ph && ph.tagName === 'H3') ph.textContent = `Pockets · ${inv.pack.length}${ex ? ` (${PACK_SIZE} + ${ex} from the chest rig)` : ''}`;
     const mods: string[] = [];
-    for (const st of inv.gearSlots) if (st) { const t = gearStatText(itemDef(st.itemId).gear!); if (t) mods.push(t); }
+    // (task studio-general-armor-20261107-231448-01) the worn armour as ONE pool first ("armor 5 pips (12.5 %)"), then each item's other stats
+    const pool = armorPool(inv.gear);
+    if (pool > 0) mods.push(`armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(2)} %) — cuts every hit; same chance to shrug off an injury`);
+    for (const st of inv.gearSlots) if (st) { const t = gearStatText({...itemDef(st.itemId).gear!, armor: undefined}); if (t) mods.push(t); }
     const sum = document.querySelector('#inv-gear-wrap .gear-sum');
     if (sum) sum.textContent = mods.length ? mods.join(' · ') : 'nothing worn — gear is rare: armor vest, chest rig, backpack, hard hat, boots, gloves, gas mask';
     const note = document.querySelector('#inv-gear-note');

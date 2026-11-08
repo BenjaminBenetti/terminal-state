@@ -8,9 +8,11 @@
 //
 // Triggers (real gameplay only):
 //  - hits through Game.hitListeners (player/hits.ts): an ARM / LEG hit injures that limb with a chance that scales with the HP
-//    damage actually taken (after armor: a fully absorbed hit never injures) — 0.022 per point, capped at 0.45: a 10-damage
+//    damage the hit carries — 0.022 per point, capped at 0.45: a 10-damage
 //    zombie swipe 22 %, a 15-damage coated swipe 33 %; a rat / dog bite on a leg tears more (x1.4; bites mostly land low,
-//    biteHitLocation). Head / torso hits never injure a limb.
+//    biteHitLocation). Head / torso hits never injure a limb. (task studio-general-armor-20261107-231448-01) The chance is rolled on
+//    the RAW hit, as for an unarmored player; then the ARMOUR SAVE: the hit's worn armour pool (player/armor.ts) is the chance that
+//    candidate does not happen. Hard landings save the same way.
 //  - hard landings (Player.justLanded / landSpeed): no risk below 8.5 m/s touchdown (≈ a 2.1 m fall — the 1.15 m platform drop
 //    into the track bed, even with a jump on top, lands at ≤ 7.5 m/s), 20 % there, rising to 85 % at 13 m/s (≈ 5 m).
 // No death spiral: an injured limb cannot be injured again (no stacking), at most arm + leg, and after any injury no new one
@@ -30,6 +32,7 @@ import type {ModifierSource, PlayerModifiers} from './modifiers';
 import {LIMBS, treatsText, type Limb} from '../items/medical';
 import type {ItemDef} from '../items/items';
 import {STAMINA_PCT_PER_UNIT} from './player'; // task studio-alpha-survival-controls-20261107-060450-01 (the stamina reserve's units)
+import {injurySaved} from './armor'; // task studio-general-armor-20261107-231448-01: the armour save
 
 export type {Limb};
 export type LimbSide = 'left' | 'right';
@@ -74,12 +77,15 @@ export const INJURY = {
 
 const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
 
-/** Chance that a resolved arm / leg hit injures that limb (0 for head / torso, absorbed or tiny hits). */
-export function hitInjuryChance(hit: Pick<ResolvedHit, 'location' | 'applied' | 'source'>): number {
+/**
+ * Chance that an arm / leg hit injures that limb for an UNARMORED player (0 for head / torso or tiny hits): from the hit's raw amount
+ * (task studio-general-armor-20261107-231448-01: armour no longer lowers this candidate — the armour save does, once, in InjurySystem.onHit).
+ */
+export function hitInjuryChance(hit: Pick<ResolvedHit, 'location' | 'amount' | 'source'>): number {
   if (hit.location !== 'arm' && hit.location !== 'leg') return 0;
-  if (!(hit.applied >= INJURY.minDamage)) return 0;
+  if (!(hit.amount >= INJURY.minDamage)) return 0;
   const mult = hit.source === 'creature' && hit.location === 'leg' ? INJURY.biteLegMult : 1;
-  return Math.min(INJURY.hitChanceMax, INJURY.hitChancePerDamage * hit.applied * mult);
+  return Math.min(INJURY.hitChanceMax, INJURY.hitChancePerDamage * hit.amount * mult);
 }
 
 /** Chance that a touchdown at `speed` m/s injures a leg. */
@@ -178,21 +184,38 @@ export class InjurySystem {
     return limb;
   }
 
-  /** A resolved hit on the player (Game.hitListeners). Returns the limb that got injured, if any. */
+  /** Injuries the armour save cancelled (task studio-general-armor-20261107-231448-01; QA / tests) and the limb of the last one. */
+  saves = 0;
+  lastSave: Limb | null = null;
+
+  /**
+   * A resolved hit on the player (Game.hitListeners). Returns the limb that got injured, if any. The candidate is rolled as for an
+   * unarmored player; the armour save (the hit's pool) may then cancel it (task studio-general-armor-20261107-231448-01).
+   */
   onHit(hit: ResolvedHit): Limb | null {
     const limb = hit.location === 'arm' || hit.location === 'leg' ? hit.location : null;
     if (!limb || !this.canInjure(limb)) return null;
     const p = hitInjuryChance(hit);
     if (p <= 0 || this.rand() >= p) return null;
+    if (this.saved(limb, hit.armor ?? 0)) return null;
     return this.injure(limb, hit.source === 'creature' ? 'bite' : hit.source === 'fall' ? 'fall' : 'hit');
   }
 
-  /** A touchdown at `speed` m/s (Player.justLanded / landSpeed). Returns 'leg' when it injured the leg. */
-  onLanding(speed: number): Limb | null {
+  /** A touchdown at `speed` m/s (Player.justLanded / landSpeed) with the worn armour pool. Returns 'leg' when it injured the leg. */
+  onLanding(speed: number, armor = 0): Limb | null {
     const p = landingInjuryChance(speed);
     if (p <= 0 || !this.canInjure('leg')) return null;
     if (this.rand() >= p) return null;
+    if (this.saved('leg', armor)) return null;
     return this.injure('leg', 'fall');
+  }
+
+  /** The armour save of an injury candidate: true = cancelled (one roll against the pool). */
+  private saved(limb: Limb, armor: number): boolean {
+    if (!(armor > 0) || !injurySaved(armor, this.rand())) return false;
+    this.saves++;
+    this.lastSave = limb;
+    return true;
   }
 
   /** QA / spot checks only (`__game.injuries.force('leg')` with ?qa): injure a limb now, bypassing the roll and the cooldown. */
@@ -351,6 +374,8 @@ export interface InjuryHost {
 /** Private Game state the frame hook reads (passed by the Game constructor). */
 export interface InjuryAccess {
   aiming(): boolean;
+  /** (task studio-general-armor-20261107-231448-01) The worn armour pool now (player/armor.ts armorPool): the landing injury's save. */
+  armor?(): number;
 }
 
 /**
@@ -375,7 +400,7 @@ export function installInjuries(game: InjuryHost, access: InjuryAccess, sys = ne
     const p = game.player;
     sys.tick(dt);
     if (p.justLanded && p.alive) {
-      const limb = sys.onLanding(p.landSpeed);
+      const limb = sys.onLanding(p.landSpeed, access.armor?.() ?? 0);
       if (limb) { game.sfx.hurt(); announce(limb); }
     }
     if (sys.limbs.leg && p.sprinting) p.stamina = Math.max(0, p.stamina - INJURY.legSprintDrain * STAMINA_PCT_PER_UNIT * dt); // (units -> meter %: task studio-alpha-survival-controls-20261107-060450-01)

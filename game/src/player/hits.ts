@@ -1,9 +1,9 @@
 // Iteration 16 (primary, shared contract): one pipeline for damage TO THE PLAYER, so gear armor (lane GEAR) and limb
 // injuries (lane INJURY) see every hit the same way.
 //
-// Order: Game.hurtPlayer builds a PlayerHit (where it lands, how hard) -> armor reduces the HP damage for the hit
-// location (PlayerModifiers.armorHead / armorTorso; limbs are not armored by the base tier) -> HP damage -> the injury
-// system decides whether an arm / leg gets injured (it sees the hit BEFORE armor reduction, plus the absorbed part).
+// Order: Game.hurtPlayer builds a PlayerHit (where it lands, how hard) -> (task studio-general-armor-20261107-231448-01) the worn armour POOL
+// (player/armor.ts, the same for every body part) reduces the HP damage -> HP damage -> the injury system rolls an injury as for an
+// UNARMORED player (the hit's raw amount) and then the armour save (the hit's pool) may cancel it.
 
 export type HitLocation = 'head' | 'torso' | 'arm' | 'leg';
 /**
@@ -49,12 +49,13 @@ export interface ResolvedHit extends PlayerHit {
   applied: number;
   /** Damage the armor absorbed. */
   absorbed: number;
+  /** (task studio-general-armor-20261107-231448-01) The armour pool this hit met (its snapshot: the injury save rolls against it; wear comes after). */
+  armor?: number;
 }
 
-/** Armor reduction for a hit (pure). */
-export function armorFor(hit: PlayerHit, armorHead: number, armorTorso: number): {applied: number; absorbed: number} {
-  const a = hit.location === 'head' ? armorHead : hit.location === 'torso' ? armorTorso : 0;
-  const applied = hit.amount * (1 - Math.max(0, Math.min(0.8, a)));
+/** Armor reduction for a hit (pure): the pooled armour fraction off the hit's damage, whatever it lands on (capped at 0.8). */
+export function armorFor(hit: PlayerHit, armor: number): {applied: number; absorbed: number} {
+  const applied = hit.amount * (1 - Math.max(0, Math.min(0.8, armor)));
   return {applied, absorbed: hit.amount - applied};
 }
 
