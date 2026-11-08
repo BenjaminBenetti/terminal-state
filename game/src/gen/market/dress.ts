@@ -3,7 +3,8 @@
 // counters, racks and shelving, the p7 workshop / kitchen kit, pallet beds, partitions, tents, chairs and tables); every placement
 // through the shared placement kit (gen/placeKit.ts: blocked cells, access strips, connectivity), deterministic on the `dress` fork.
 //
-// THE MARKET RULE (calm settlement, no theft simulation): nothing placed here holds loot. Every loot-holder kind gets the exact empty
+// THE MARKET RULE (calm settlement, no theft simulation): nothing placed here holds loot — except the workshop's own storage, which holds
+// a little basic salvage (task studio-base-salvage-20261108-073314-01: MARKET_WORKSHOP_KEY). Every other loot-holder kind gets the exact empty
 // purpose key (MARKET_EMPTY_KEY = items/lootTables.ts ANNEX_PICKED_KEY: `{empty: 1, exact: true}`) — openable storage still opens and
 // is empty; the traders' goods are the trade stock (market/trade), never pickups. (The station's common fuel plan is the one exception
 // the common rules place: world/fuelStations.ts lays it into the workshop's storage like at every station.)
@@ -11,7 +12,7 @@
 import type {Rng} from '../../core/rng';
 import {CELL, FLOOR} from '../grid';
 import {PROP_DEFS, footprint, type PropKind, type PropPlacement} from '../props';
-import {ANNEX_PICKED_KEY} from '../../items/lootTables';
+import {ANNEX_PICKED_KEY, MARKET_WORKSHOP_KEY} from '../../items/lootTables';
 import {isLootHolderKind} from '../../items/loot';
 import {forceProp, makePlaceCtx, mountProp, tryPlaceProp, type PlaceCtx, type PlaceOpts} from '../placeKit';
 import type {Area, LightPlacement, Rect, Side, SignPlacement, StationLayout} from '../stationTypes';
@@ -215,6 +216,9 @@ export function dressMarket(layout: StationLayout, mc: MarketCarve, rng: Rng, na
     // from the outer (canonical west) wall inward: benches, the grinder, the tool chest, salvaged shelving, crates
     const dir = (west > 0 ? -1 : 1) as 1 | -1;
     const row = backRow(a, r, ['repairBench', 'benchGrinderStand', 'repairBench', 'rollingToolChest', 'outdoorsPlankShelving', 'crate', 'crate'], dir);
+    // (task studio-base-salvage-20261108-073314-01) the workshop's own storage holds a little BASIC SALVAGE (the shared base rows: scrap,
+    // wiring, now and then a specimen jar) — the one exception to the empty key; never the stalls, the kitchen or the bunks
+    for (const p of row) if (p.kind === 'rollingToolChest' || p.kind === 'outdoorsPlankShelving' || p.kind === 'crate') p.purpose = MARKET_WORKSHOP_KEY;
     for (const p of row) if (p.kind === 'repairBench') use('work', p.x, p.z - 1.0, a, p.x, p.z);
     // on the outer wall: the pegboard and the parts bins; on the floor: a work light, the generator, the compressor
     const outer: Side = west > 0 ? 'E' : 'W';

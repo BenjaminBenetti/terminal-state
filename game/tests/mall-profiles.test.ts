@@ -28,7 +28,7 @@ import {LEVELS, LEVEL_IDS} from '../src/levels/registry';
 import {holderTable, rollLootItems, type HolderKind} from '../src/items/loot';
 import {salvageRule, withSalvage} from '../src/items/lootEconomy';
 import {
-  BASE_TABLES, BASELINE_PROFILE, MALL_FLOOR, MALL_GEAR_PLACE, MALL_PROFILE, MALL_SALVAGE, MALL_STORAGE_FILL, PROFILES, STORAGE_FILL_FALLBACK, lootProfile, validateLootProfile,
+  BASE_SALVAGE, BASE_TABLES, BASELINE_PROFILE, MALL_FLOOR, MALL_GEAR_PLACE, MALL_PROFILE, MALL_SALVAGE, MALL_STORAGE_FILL, PROFILES, STORAGE_FILL_FALLBACK, lootProfile, validateLootProfile,
   type LootProfile,
 } from '../src/items/lootTables';
 import {MATERIAL_IDS, isMaterialItem} from '../src/items/craftMaterials';
@@ -94,7 +94,8 @@ describe('mall loot profile', () => {
     expect(MALL.label).not.toMatch(/Eaton/);
     // every rate table but the salvage / storage fill is the SAME object as the base tables: consumables, ammo / calibres, box sizes,
     // scarcity, limb shares, rare gear and rewards behave exactly as in the other levels
-    for (const [k, v] of Object.entries(BASE_TABLES)) expect((MALL.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
+    // (task studio-base-salvage-20261108-073314-01: the base tables' own salvage — BASE_SALVAGE — is REPLACED by the mall's: one rule per holder)
+    for (const [k, v] of Object.entries(BASE_TABLES)) if (k !== 'salvage') expect((MALL.tables as unknown as Record<string, unknown>)[k], k).toBe(v);
     expect(MALL.tables.salvage).toBe(MALL_SALVAGE);
     expect(MALL.tables.storageFill).toBe(MALL_STORAGE_FILL);
     // task mall-round3-20261031 (lane SHOPS, R6): + the rare-gear PLACEMENT bias (where the ONE roll lands: themed shops); the gear
@@ -104,7 +105,7 @@ describe('mall loot profile', () => {
     for (const l of ['subway', 'office'] as const) {
       expect(PROFILES[l].tables).toBe(BASE_TABLES);
       expect(PROFILES[l].overrides).toEqual({});
-      expect(BASE_TABLES.salvage).toBeUndefined();
+      expect(BASE_TABLES.salvage).toBe(BASE_SALVAGE); // (task base-salvage: the shared basic materials, additive)
       expect(BASE_TABLES.storageFill).toBeUndefined();
       expect(BASE_TABLES.gearPlace).toBeUndefined();
     }

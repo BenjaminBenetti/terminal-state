@@ -127,6 +127,12 @@
 //     gear placements (6 Subway + 3 Office layouts): 0 length changes, 3 differ only in item id. Holders, the Office pickups, the roof
 //     find and every core / reserve-off subway pickup hash are unchanged. Re-pinned: subwayPickups fd47fecc -> 6ccb7466, gearRolls
 //     77148ba3 -> 9569e152, gearPlaced ecb0c21c -> c738fc00 (core view 3d2b40a1 -> 3cdaa67d, reserve off 2bc1c5bb -> 91aa0673).
+// 19. Task studio-base-salvage-20261108-073314-01 (user: the crafting materials "are supposed to be basic and found in all levels") — NEW
+//     pins only. The shared base tables gained the ADDITIVE base salvage (items/lootTables.ts BASE_SALVAGE `extra`): a fitting holder may
+//     get ONE extra material lot (id index * 1000 + 700, items/loot.ts salvageLot) on its own stream, in a free spot beside its lots.
+//     Every holder hash above is now taken over the OTHER lots and is byte-identical to stage 18 — the proof that no rolled lot, its
+//     item, count, placement or id moved; the salvage lots get their own pins (subwaySalvage / officeSalvage). Pickups (no floor
+//     scatter), the roof find and the gear roll / placement are unchanged.
 
 import {describe, expect, it} from 'vitest';
 import {generateStation} from '../src/gen/station';
@@ -136,6 +142,7 @@ import type {PickupPlacement, StationLayout} from '../src/gen/stationTypes';
 import type {LevelId} from '../src/levels/types';
 import {ECONOMY_CORPUS, layoutHolders} from './helpers/lootEconomy';
 import {ROOF_FIND_KEY} from '../src/items/lootTables';
+import {isSalvageLotId} from '../src/items/loot';
 import {coreView} from '../src/gen/trackExt/index';
 import {TRACK_EXT_RESERVE_OFF} from './helpers/trackExtCore';
 
@@ -157,6 +164,8 @@ const GOLDEN = {
   officePickups: '1aa35d40', // stage 17 (= the core view): was c60b27da; stage 15: was 5fa98572; stage 11: was 92a1d2ed; stage 10; stage 9: b8b6ff4e (+ the annexes' floor finds)
   /** Stage 5: the roof find's own pickups (PickupPlacement.reward). */
   officeRoofFind: '3ba3548d',
+  /** Stage 19: the additive base salvage lots alone (every other hash is over the other lots: unchanged). */
+  subwaySalvage: '4594872a', officeSalvage: '86c72045', // stage 19: 78 lots over the 18 stations / 8 over the 3 Office levels
   gearRolls: '9569e152', // stage 18 (task filter-tension-airtank: + the Airtank Backpack gear row): was 77148ba3
   /** Stage 6 (Track 2): gear on translated stations; stage 7: + the core reserve. */
   gearPlaced: 'c738fc00', // stage 18 (the gear row, item ids only): was ecb0c21c; stage 17: was 87da653f; stage 15: was 879dd375 (the logical layout re-crops translated stations); stage 10 (translated live coordinates); was fee77ca3
@@ -171,13 +180,16 @@ function fnv() {
 }
 const r = (v: number) => (Math.round(v * 1000) / 1000).toString();
 
-function mixHolders(f: ReturnType<typeof fnv>, l: StationLayout): {holders: number; lots: number} {
+/** Stage 19: `rolled` = every lot but the additive base salvage lots (the pre-stage-19 hash, byte for byte); `salvage` = those alone. */
+function mixHolders(f: ReturnType<typeof fnv>, l: StationLayout, pick: 'rolled' | 'salvage' = 'rolled'): {holders: number; lots: number} {
   let lots = 0;
   const hs = layoutHolders(l);
   f.mix(`L${l.seed}`);
   for (const h of hs) {
+    const list = h.lots.filter(t => isSalvageLotId(t.id) === (pick === 'salvage'));
+    if (pick === 'salvage' && !list.length) continue;
     f.mix(`H${h.kind}#${h.index}@${h.areaType}:`);
-    for (const t of h.lots) {
+    for (const t of list) {
       lots++;
       f.mix(`${t.id}${t.itemId}x${t.count}p${t.part ?? '-'}s${t.surface}(${r(t.x)},${r(t.y)},${r(t.z)})${r(t.yaw)}${t.orient};`);
     }
@@ -211,6 +223,12 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
     }
     // stage 6 / 7 proof: with the core reserve OFF, the core view hashes exactly as main did
     for (const l of subwayOff()) { const c = coreView(l); mixHolders(fho, c); mixPickups(fo, c.pickups); }
+    // stage 19: the additive base salvage lots on their own
+    const fs = fnv();
+    let salvage = 0;
+    for (const l of subway()) salvage += mixHolders(fs, l, 'salvage').lots;
+    report('subwaySalvage', fs.hex(), `${salvage} base salvage lots`);
+    expect(fs.hex()).toBe(GOLDEN.subwaySalvage);
     report('subwayHolders', fh.hex(), `${holders} holders, ${lots} lots`);
     report('subwayPickups', fp.hex(), `${pickups} pickups`);
     report('subwayHolders / subwayPickups (core view)', `${fhc.hex()} / ${fc.hex()}`);
@@ -244,6 +262,12 @@ describe('loot golden (baseline profiles reproduce dfb3a06 exactly)', () => {
       mixPickups(fpc, core.rest);
       mixPickups(frc, core.own);
     }
+    // stage 19: the additive base salvage lots on their own
+    const fs = fnv();
+    let salvage = 0;
+    for (const l of office()) salvage += mixHolders(fs, l, 'salvage').lots;
+    report('officeSalvage', fs.hex(), `${salvage} base salvage lots`);
+    expect(fs.hex()).toBe(GOLDEN.officeSalvage);
     report('officeHolders', fh.hex(), `${holders} holders, ${lots} lots`);
     report('officePickups', fp.hex(), `${pickups} pickups`);
     report('officeRoofFind', fr.hex(), `${finds} pickups`);

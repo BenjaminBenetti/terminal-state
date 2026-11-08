@@ -19,6 +19,7 @@ import {
   OFF_THEME_WEIGHTS, BOX_COUNT, gearParams, lootProfile, type LootProfile, type LootSpec, type OwnTable,
 } from '../src/items/lootTables';
 import {ITEMS} from '../src/items/items';
+import {MATERIAL_IDS} from '../src/items/craftMaterials';
 import {
   CONTAINER_KINDS, SURFACE_KINDS, compartmentTable, holderFinds, holderTable, isLootHolderKind, rollLootItems, rollTableItems,
   type HolderKind, type LootEntry,
@@ -91,6 +92,34 @@ function agree(h: HolderContext, emp: ReturnType<typeof empirical>, field: 'unit
 
 // ---------------------------------------------------------------------------------------------------------------------------
 describe('loot reference: coverage (unknown registrations fail)', () => {
+  // task studio-base-salvage-20261108-073314-01: dresser-declared contexts are REAL (each witness level places it) and shown as declared,
+  // never as sampled; every level lists a holder context for each crafting material (the shared base salvage / its own salvage)
+  it('generator-declared holder contexts: witnessed, shown as declared (not sampled); all three materials have a source on every level', () => {
+    const r = ref();
+    let declared = 0;
+    for (const id of LEVEL_IDS) {
+      for (const d of LEVEL_ADAPTER[id].declared ?? []) {
+        declared++;
+        const w = censusLayout(id, d.witness);
+        expect(w.holders.some(h => h.kind === d.kind && h.areaKey === d.areaKey), `${id} ${d.kind}@${d.areaKey} in witness level ${d.witness}`).toBe(true);
+        const h = level(id).holders.find(x => x.id === `${id}/${d.kind}@${d.areaKey}`)!;
+        expect(h, `${id}/${d.kind}@${d.areaKey}`).toBeDefined();
+        if (h.occurrence.holdersObserved === 0) {
+          expect(h.occurrence.basis).toBe('declared');
+          expect(h.occurrence.declaredBy).toContain(String(d.witness));
+        } else expect(h.occurrence.basis).toBe('observed');
+      }
+      for (const m of MATERIAL_IDS) {
+        const src = level(id).holders.filter(h => h.expected?.items.some(i => i.itemId === m && i.units > 0));
+        expect(src.length, `${id}: a holder context yielding ${m}`).toBeGreaterThan(0);
+      }
+    }
+    expect(declared).toBeGreaterThan(0);
+    // the Skyways science store's demo bench (its own drawer table: bio mater) is listed although no sample level places the store
+    const bench = level('skyways').holders.find(h => h.id === 'skyways/labBench@mall-toys')!;
+    expect(bench.expected!.items.find(i => i.itemId === 'bio_mater')!.units).toBeGreaterThan(0);
+  });
+
   it('lists exactly the registered logical levels with their real profiles (never the test-only reducedFood example)', () => {
     const r = ref();
     expect(r.levels.map(l => l.id)).toEqual([...LEVEL_IDS]);
@@ -499,7 +528,12 @@ describe('loot reference: probability maths and override / empty-table paths', (
         const t = h.compartment ? compartmentTable(h.kind as HolderKind, h.areaKey, synthetic)! : holderTable(h.kind as HolderKind, h.areaKey, synthetic);
         expect([h.gates.empty, h.gates.lots], h.id).toEqual([t.empty, t.lots]);
         if (h.tableId) expect(r.tables[h.tableId].rows.map(x => [x.itemId, x.weight]), h.id).toEqual(t.rows.map(x => [x[0], x[1]]));
-        if (h.slot === 'shelf' && h.expected) expect(h.expected.units, h.id).toBe(0);
+        // (task studio-base-salvage-20261108-073314-01: slot overrides shape the TABLE roll; the additive base salvage lot is the salvage
+        // table's — shelves rolling no lots keep only that, if they have it)
+        if (h.slot === 'shelf' && h.expected) {
+          expect(h.expected.rawUnits, h.id).toBe(0);
+          for (const it of h.expected.items) if (it.units > 0) expect(!!h.salvage?.additive && h.salvage.rows.some(x => x.itemId === it.itemId), `${h.id} ${it.itemId}`).toBe(true);
+        }
       }
     }
     expect(Object.keys(r.tables).some(id => id.endsWith('~synthetic'))).toBe(true);

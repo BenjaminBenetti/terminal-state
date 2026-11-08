@@ -34,6 +34,7 @@ import {
   ANNEX_CACHE_CRATE, ANNEX_CACHE_KEY, ANNEX_CACHE_KIT, ANNEX_CACHE_PANTRY, // round 2 (lane CACHE, R5): the survivor caches deeper in
   ANNEX_CACHE_LOCKER, // round 3 (lane HIDEOUT): the hideout's footlocker
   ANNEX_SPARES_ROWS, // the annex signature rooms' tool / spares rows (+ TENANT_SUPPLY); round 2: without crafting materials
+  MARKET_WORKSHOP_EMPTY, MARKET_WORKSHOP_KEY, // task studio-base-salvage-20261108-073314-01: the market workshop's storage (basic salvage only)
 } from '../items/lootTables';
 // Lane AMMO (knife-melee-20261030): a table's rifle / shotgun ammo rows are GENERIC ammo — their total weight split ~1/3 each over
 // 9mm / 5.56×45mm / 12-gauge (genericAmmo). Rows that only ever held 9mm (office desks / drawers, police cabinets) stay 9mm: the
@@ -1233,6 +1234,13 @@ function ANNEX_PURPOSES(): Record<string, RoomPurpose> {
     [ANNEX_SCRAPS_KEY]: {
       id: ANNEX_SCRAPS_KEY, category: 'back', theme: 'service', label: 'Picked-over stores (a leftover)', slots: ['storage'], kinds: ['room', 'closet', 'service'], weight: 0, max: 0,
       light: [0, 0.3, 0.7], props: [], loot: {default: ANNEX_SCRAPS}, floor: {},
+    },
+    // task studio-base-salvage-20261108-073314-01: the Survivor Market WORKSHOP's own storage (items/lootTables.ts MARKET_WORKSHOP_KEY; set by
+    // gen/market/dress.ts only): nothing of its own (an ordinary empty table) — its one possible find is the market's additive basic
+    // salvage lot (lootTables MARKET_SALVAGE: the shared base rows)
+    [MARKET_WORKSHOP_KEY]: {
+      id: MARKET_WORKSHOP_KEY, category: 'back', theme: 'service', label: 'Workshop stores', slots: ['storage'], kinds: ['room'], weight: 0, max: 0,
+      light: [0, 0.3, 0.7], props: [], loot: {default: MARKET_WORKSHOP_EMPTY}, floor: {},
     },
     // task studio-alpha-track2-round2-20261031-01 (lane CACHE, R5): the storage of a deep annex room a survivor lived in
     // (gen/annexCache.ts; prop-level loot key like the stash): themed per container — pantry shelf, kit cabinet, supply crate (the

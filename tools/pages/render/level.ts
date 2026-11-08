@@ -240,7 +240,8 @@ function holderContextBlock(site: Site, level: LevelInfo, page: string, h: Holde
       const t = tableNote;
       stages.push(`<li><strong>Item per lot</strong> from ${tableLink(site, page, h.tableId)}${t ? ` (${t.rows.length} rows, denominator ${num(t.denominator)})` : ''}: each row's share is conditional on one draw from this table. ${badge('conditional', 'conditional')}</li>`);
     }
-    if (h.salvage) stages.push(`<li><strong>Salvage rows.</strong> This level adds crafting-material rows to the table (${pct(h.salvage.share)} of its weight before overrides; from <code>${esc(h.salvage.from)}</code>): ${h.salvage.rows.map(r => `${esc(itemName(site, r.itemId))} ${pct(r.share)}`).join(', ')} of them. Materials are kept exactly as rolled. ${badge('exact', 'exact')}</li>`);
+    if (h.salvage?.additive) stages.push(`<li><strong>Base salvage lot.</strong> With probability ${pct(h.salvage.share)} per holder (before overrides and fit; from <code>${esc(h.salvage.from)}</code>) this holder also gets ONE extra crafting-material lot: ${h.salvage.rows.map(r => `${esc(itemName(site, r.itemId))} ${pct(r.share)}`).join(', ')}. Additive: its own roll, in a free spot beside the other lots, so nothing above changes. Kept exactly as rolled; included in the expected values. ${badge('exact', 'exact')}</li>`);
+    else if (h.salvage) stages.push(`<li><strong>Salvage rows.</strong> This level adds crafting-material rows to the table (${pct(h.salvage.share)} of its weight before overrides; from <code>${esc(h.salvage.from)}</code>): ${h.salvage.rows.map(r => `${esc(itemName(site, r.itemId))} ${pct(r.share)}`).join(', ')} of them. Materials are kept exactly as rolled. ${badge('exact', 'exact')}</li>`);
     stages.push(`<li><strong>Stack size.</strong> ${g.bigBoxes ? 'Ammo boxes use the large box-count ranges.' : 'Ammo boxes use the normal box-count ranges.'} See <a href="${esc(href(page, `${site.levelDir.get(level.id)!}/economy.html#stack-sizes`))}">stack sizes</a>.</li>`);
     stages.push(`<li><strong>Scarcity.</strong> ${scarcityText(h.scarcity)}</li>`);
     if (!h.scarcity.exempt) stages.push(`<li><strong>Limb treatments.</strong> ${pct(h.scarcity.limbShare)} of healing finds become a limb treatment (share from the ${h.scarcity.limbFrom === 'holder' ? 'holder kind' : 'theme'}).</li>`);
@@ -493,7 +494,7 @@ function salvageBody(site: Site, sv: NonNullable<EconomyInfo['salvage']>): strin
 <p>${prose(sv.note)}</p>
 ${table({
     caption: 'Salvage rules (purpose entries win over theme entries)',
-    head: ['By', 'Key', 'Share of the table weight', 'Salvage mix (conditional shares)'],
+    head: ['By', 'Key', sv.additive ? 'Chance of one extra lot (per holder, before fit)' : 'Share of the table weight', 'Salvage mix (conditional shares)'],
     numeric: [2],
     rows: rows.map(r => [esc(r.by), `<code>${esc(r.key)}</code>`, pct(r.share), r.rows.map(x => `${esc(itemName(site, x.itemId))} ${pct(x.share)}`).join(', ')]),
   })}`;

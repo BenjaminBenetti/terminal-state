@@ -16,7 +16,7 @@ import {
   econCat, lootProfile, validateLootProfile, type OwnTable,
 } from '../src/items/lootTables';
 import {scarceFinds} from '../src/items/lootEconomy';
-import {describeLoot, holderFinds, lotPrompt} from '../src/items/loot';
+import {describeLoot, holderFinds, isSalvageLotId, lotPrompt} from '../src/items/loot';
 import {ITEM_CLASS, ITEM_PHYSICS} from '../src/damage/materials';
 import {ICONS} from '../src/ui/icons';
 import {MATERIAL_MODEL_SOURCE, materialItemModel} from '../src/world/materialItems';
@@ -162,18 +162,28 @@ describe('loot: economy category material — finite, themed, kept as rolled, ne
     console.info(`[craft-materials] serverRack over ${N} rolls: ${withAny} hold something; units ${JSON.stringify(units)}`);
   });
 
-  it('the Subway never holds a material (unrelated pools untouched)', () => {
+  // task studio-base-salvage-20261108-073314-01 (user: the materials "are supposed to be basic and found in all levels"): the Subway's
+  // materials are the ADDITIVE base salvage lot only (items/loot.ts isSalvageLotId) — every other lot of every pool is no material, and
+  // no loose pickup is one (no floor scatter)
+  it('the Subway holds materials only as the base salvage lot (unrelated pools untouched, no floor scatter)', () => {
+    let salvage = 0;
     for (const seed of [1, 2, 3]) {
       const l = generateStation(seed);
-      for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `seed ${seed} ${h.kind}`).toBe(false);
+      for (const h of layoutHolders(l)) for (const lot of h.lots) {
+        expect(isMaterialItem(lot.itemId), `seed ${seed} ${h.kind} lot ${lot.id}`).toBe(isSalvageLotId(lot.id));
+        if (isSalvageLotId(lot.id)) salvage++;
+      }
       for (const p of l.pickups) expect(isMaterialItem(p.itemId)).toBe(false);
     }
+    expect(salvage).toBeGreaterThan(0);
     // (round 2) its service annexes too: the signature lockers once rolled the server spares' electrical parts (1002 / 1043 / 1234;
-    // lane AREA: 1002 / 1043 now roll the area absent -> their FRESH replacements rolling it PRESENT; 1234 still present)
+    // lane AREA: 1002 / 1043 now roll the area absent -> their FRESH replacements rolling it PRESENT; 1234 still present) — their own
+    // tables stay without materials (an annex room on an ordinary purpose table may take the base salvage lot like any room; the exact
+    // supply / scraps / stash / cache tables never do: items/loot.ts extraSalvageRule)
     for (const seed of [FRESH.subwayHatch, FRESH.subwayTunnel, 1234]) {
       const l = generateStation(seed);
       expect(l.extensions!.annexes.length, `seed ${seed} annexes`).toBeGreaterThan(0);
-      for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `annex seed ${seed} ${h.kind}`).toBe(false);
+      for (const h of layoutHolders(l)) for (const lot of h.lots) expect(isMaterialItem(lot.itemId), `annex seed ${seed} ${h.kind} lot ${lot.id}`).toBe(isSalvageLotId(lot.id));
     }
   });
 });
