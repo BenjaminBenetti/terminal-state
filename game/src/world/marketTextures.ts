@@ -3,7 +3,7 @@
 // canvas awning tarp; provenance assets/derivatives/market-textures.json) loaded BEHIND THE LOADING SCREEN as level-only resources
 // (textures/market/*.jpg through LevelResources, released with the level; never a mid-play fetch) and the materials world/marketArch.ts /
 // world/marketVisuals.ts build on them — the Skyways rework's recipe (world/skywaysArchTextures.ts):
-//  - a section runtime (installMarketTextures: one tagged line in Game) whose section preload fetches the four textures for a market
+//  - a section runtime (installMarketTextures: one tagged line in Game) whose section preload fetches the market textures for a market
 //    layout and registers them here before the world is built; a missing / slow texture leaves that finish on its plain stand-in;
 //  - marketTexturedMaterial: a SurfaceNodeMaterial over the texture (the builder's uvs / the texture span from MarketArch.scale) with the
 //    shared 30-year decay hook (world/decay.ts applyDecay: grime toward the floor, streaks, stains). One material per finish, cached per
@@ -36,6 +36,7 @@ export const usesMarketTextures = (layout: Pick<StationLayout, 'market'>): boole
 const SPEC: Readonly<Record<MarketTextureKey, {rough: number; metal: number; decay: DecayProfile; double?: boolean}>> = {
   wall: {rough: 0.72, metal: 0.25, decay: OFFICE_DECAY.wall},
   roof: {rough: 0.7, metal: 0.3, decay: OFFICE_DECAY.ceiling},
+  rib: {rough: 0.7, metal: 0.3, decay: OFFICE_DECAY.wall}, // (version 2's container walls: the roof sheet turned upright)
   ply: {rough: 0.88, metal: 0, decay: OFFICE_DECAY.wall},
   tarp: {rough: 0.95, metal: 0, decay: OFFICE_DECAY.ceiling, double: true},
 };

@@ -64,7 +64,7 @@ describe('the Survivor Market registration', () => {
       expect(row).toEqual({path: t.url, bytes: buf.length, sha256: crypto.createHash('sha256').update(buf).digest('hex')});
     }
     const prov = JSON.parse(fs.readFileSync(path.join(ROOT, 'game/public/assets/derivatives/market-textures.json'), 'utf8'));
-    expect(Object.keys(prov.textures).sort()).toEqual(['market-corrugated-roof', 'market-corrugated-wall', 'market-plywood', 'market-tarp']);
+    expect(Object.keys(prov.textures).sort()).toEqual(['market-container-rib', 'market-corrugated-roof', 'market-corrugated-wall', 'market-plywood', 'market-tarp']);
     for (const r of Object.values(prov.textures) as {codex: {generator: string; session: string}}[]) expect(r.codex.generator).toMatch(/Codex native image_gen/);
     for (const f of ['mall-gun-wall-rack', 'mall-outdoors-plank-shelving', 'mall-camping-tent-display']) {
       expect(assetAllowedIn('market', `assets/models/${f}.glb`)).toBe(true);

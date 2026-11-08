@@ -31,12 +31,13 @@ export const MARKET_STANDIN = {wall: 0x7a4b3a, roof: 0x6f706c, ply: 0x8a7458, tr
 
 /**
  * Task studio-market-rework-20261108-074144-01: the container paints of layout version 2 (texture, linear tint scale). The galvanized
- * sheet is tinted to the usual shipping-container colours; the patchwork keeps its own colours (lightly warmed / cooled).
+ * sheet ('rib': the roof source turned a quarter turn, so its ribs run up the wall like a container's) is tinted to the usual
+ * shipping-container colours; the patchwork keeps its own colours (lightly warmed / cooled).
  */
 export const MARKET_PAINTS: readonly {tex: MarketTextureKey; color: number; gain: number}[] = [
-  {tex: 'wall', color: 0xffffff, gain: 1}, {tex: 'roof', color: 0xc4573c, gain: 1.7}, {tex: 'roof', color: 0x40709f, gain: 1.7},
-  {tex: 'roof', color: 0x5a8a4c, gain: 1.7}, {tex: 'roof', color: 0xd9a63a, gain: 1.6}, {tex: 'roof', color: 0xe4ded0, gain: 1.45},
-  {tex: 'wall', color: 0xd8e2e8, gain: 1}, {tex: 'roof', color: 0x8c3a30, gain: 1.7},
+  {tex: 'wall', color: 0xffffff, gain: 1}, {tex: 'rib', color: 0xc4573c, gain: 1.7}, {tex: 'rib', color: 0x40709f, gain: 1.7},
+  {tex: 'rib', color: 0x5a8a4c, gain: 1.7}, {tex: 'rib', color: 0xd9a63a, gain: 1.6}, {tex: 'rib', color: 0xe4ded0, gain: 1.45},
+  {tex: 'wall', color: 0xd8e2e8, gain: 1}, {tex: 'rib', color: 0x8c3a30, gain: 1.7},
 ];
 export const marketPaintKey = (i: number) => `market-cont-${i}`;
 
