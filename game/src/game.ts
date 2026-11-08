@@ -160,6 +160,7 @@ import {installMarketCombat, playerPelletDamage, type MarketCombat, type MarketC
 import type {MarketHostilityApi} from './market/hostility';
 import type {BeerEffectsApi, VomitApi} from './market/beer/effectsApi'; // task studio-market-bar-20261108-225231-01 (seams)
 import type {MarketAudioApi} from './market/marketAudio';
+import {installMarketAudio} from './market/audio/marketSounds'; // task studio-market-bar-20261108-225231-01 (lane AUDIO): Game.marketAudio
 import {installMarketWares, type MarketWares} from './market/wares/wares'; // task studio-market-rework-20261108-074144-01 (lane WARES): the stalls' owned stock on display, the red Steal
 import {installLockbox, type LockboxSystem} from './ui/lockboxView'; // task train-lockbox-windows-20261101-232156 (lane BOX): the train's 40-slot Lockbox view + 1337 drop
 import {installSkywaysTrunk} from './world/skywaysCarTrunk'; // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): the Skyways car's 16-slot trunk
@@ -705,6 +706,11 @@ export class Game {
     this.marketCombat = installMarketCombat(this);
     this.marketHostility = this.marketCombat;
     hookName('marketCombat');
+    // task studio-market-bar-20261108-225231-01 (lane AUDIO): after the people / combat (its section build and frame read them) — the market's
+    // sounds (Game.marketAudio, market/marketAudio.ts): the trade's register cue, the calm crowd's murmur, the fleers' screams / fighters'
+    // grunts (the people call them), the player's retch; inert without a market (the retch / register play wherever they are called)
+    this.marketAudio = installMarketAudio(this);
+    hookName('marketAudio');
     installSkywaysTrunk(this); hookName('skywaysTrunk'); // task studio-beta-skyways-vehicle-20261107 (lane TRUNK): after the car (its section hook follows the car's) and the Lockbox; inert without the car
     // task campaign-foundation-20261102 (lane RIDE): the moving train — no frame hook (update() calls it in the player's slot), the
     // transit tunnel (built on the first section build, warm pool 'train-transit'), the gear's no-set-down-while-moving rule

@@ -23,6 +23,7 @@ import type {RunState} from '../../run/runState';
 import type {RunParticipant} from '../../run/snapshot';
 import {MARKET_STALLS, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
 import type {MarketHostilityApi} from '../hostility';
+import type {MarketAudioApi} from '../marketAudio';
 import type {CargoItemJSON} from '../../run/trainCargo';
 import {trainSpawnLocal} from '../../gen/playerTrain';
 import {PLAYER_TRAIN_SPEC} from '../../world/playerTrainSpec';
@@ -86,6 +87,8 @@ export interface TradeHost {
   marketHostility?: MarketHostilityApi | null;
   /** The run's player train (run/playerTrain.ts): its Lockbox and loose cargo take an old balance's overflow. Read live. */
   playerTrain?: {lockbox: {readonly slots: (ItemStack | null)[]; version: number}; cargo: {records(): CargoItemJSON[]; add(item: CargoItemJSON): void}} | null;
+  /** Task studio-market-bar-20261108-225231-01 (lane AUDIO): the market's sounds (market/marketAudio.ts) — one register cue per successful trade. Read live. */
+  marketAudio?: Pick<MarketAudioApi, 'cash'> | null;
 }
 
 const now = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
@@ -366,6 +369,7 @@ export class TradeSystem {
       this.counts.trades++;
       this.host.syncHeld?.();
       sfx?.pickup?.();
+      this.host.marketAudio?.cash(); // task studio-market-bar-20261108-225231-01 (lane AUDIO): THE success commit — one subtle register cue per trade
     } else sfx?.denied?.();
     return r;
   }

@@ -154,6 +154,13 @@ export const CUE_GAIN: Record<CueId, number> = {
   // -1 dBFS. The location loops sit in the bed band (under the fans / the cart); the chime is a bell across a court: heard, under a
   // gunshot. First estimates for the ear pass (derivatives/audio-skyways-destinations.json).
   clockTick: 0.5, clockChime: 0.7, arcadeAttract: 0.26, projectorRun: 0.22,
+  // Task studio-market-bar-20261108-225231-01 (lane AUDIO, tools/audio-pipeline/market-audio-build.mjs; MARKET_AUDIO): the market set. The
+  // register is peak -1 dBFS, the voices loudness-levelled (screams -16, grunts / retch -18 LUFS, -1 dBFS ceiling), the murmur loops RMS
+  // -20 dBFS. These gains = derivatives/audio-market-bar.json mixCalibration (loudness AT THE SOURCE): screams -19.5 (just under a zombie
+  // groan -18.5), grunts -21 (~ a zombie attack -20.3), the retch -23 (the player's own vocal, just over the hurt grunt -24.0), the register
+  // -28 (SUBTLE: under the cough -25.9), each murmur loop -31 LUFS integrated at its panner's reference distance (a low bed). First
+  // estimates for the ear pass (not auditioned).
+  marketCash: 0.24, marketChatter: 0.33, marketBarChatter: 0.3, marketScream: 0.58, marketGrunt: 0.71, marketRetch: 0.35,
 };
 
 const TYPE_ROOM: Record<string, RoomKind> = {
@@ -260,7 +267,9 @@ const IMPACT_CUE: Record<Surface, CueId> = {concrete: 'impactConcrete', tile: 'i
  * `fg` = a foreground (listener-relative) player hit confirm, bounded by HIT_CONFIRM.maxVoices. `vocal` (task
  * office-overhaul-20261030, lane AUDIO) = an enemy vocal's rank distance (m) in the VOCAL_GATE.cap simultaneous vocals.
  */
-interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean; fg?: boolean; vocal?: number }
+interface Voice { inp: GainNode; nodes: AudioNode[]; srcs: AudioScheduledSourceNode[]; pending: number; end: number; hrtf: boolean; fg?: boolean; vocal?: number;
+  /** (task studio-market-bar-20261108-225231-01, lane AUDIO) a world voice's panner: a market person's voice follows the person (marketVoice). */
+  pan?: PannerNode }
 interface VoiceOpts {
   /** World position; omitted = at the listener (player's own sounds, UI). */
   at?: Pos;
@@ -584,6 +593,52 @@ function hash01(seed: number, n: number): number {
 }
 interface LocationChannel { e: LocationEmitter; src: AudioBufferSourceNode; g: GainNode; v: number; released: number }
 
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane AUDIO; user: "Subtle cash-register sound on buy/sell." "Background chatter; screams from
+ * fleeing survivors and angry grunts from attackers."): the MARKET's Sound Lab cues (clips market-*.mp3, tools/audio-pipeline/
+ * market-audio-build.mjs; provenance derivatives/audio-market-bar.json, levels: its mixCalibration = CUE_GAIN). market/audio/marketAudio.ts
+ * decides WHEN and WHERE (the trade's success commit, the people's events, the crowd groups); this section only plays:
+ *  - marketCash: ONE register cue at the player (no panner: the counter is right in front of them), a small room send.
+ *  - marketVoice: one person's panic scream / angry grunt at a world point (distance, air / occlusion low-pass, HRTF while free, reverb
+ *    send; never route-gated: a human scream carries); at most `max` of a kind sound at once (past the cap: dropped — the market system
+ *    staggers and caps before this). `rate` = the person's own voice pitch (processing). The handle moves it with the person (setPos) and
+ *    fades it (stop: the person died / hid / left).
+ *  - marketRetch: the player's retch (no panner; one at a time: a sounding one is cut first). Any level (a beer can be drunk anywhere).
+ *  - crowdChatter: the crowd MURMUR — at most `crowd.voices` positional loop channels (loop -> gain -> low-pass -> panner -> the AMBIENT
+ *    bus: the beds' own-shot ducking, pause / menu mute) at the groups the market system hands over each tick (position, level 0..1, which
+ *    murmur). A channel follows its group (the nearest live channel of the same murmur within `crowd.match` m; eased), a new group gets a
+ *    channel created from silence and eased in, a channel whose group is gone fades out (`crowd.fadeOut`) and is released; at most
+ *    `crowd.voices` fading channels exist (an older one is cut). [] = every channel fades (hostility, nobody calm near). Occlusion muffles
+ *    and lowers a channel like the fans. A new world (setWorld) and stopCrowd release them all.
+ */
+export type CrowdCue = 'marketChatter' | 'marketBarChatter';
+export interface CrowdGroup {
+  x: number; y: number; z: number;
+  /** 0..1: how many calm people talk there (x CUE_GAIN; 1 = the murmur's mix level at its reference distance). */
+  level: number;
+  cue: CrowdCue;
+}
+export type MarketVoiceKind = 'scream' | 'grunt';
+export interface MarketVoiceHandle {
+  /** Move the voice with its person (world m). */
+  setPos(x: number, y: number, z: number): void;
+  /** Fade it out (s) and stop. Idempotent. */
+  stop(fadeS?: number): void;
+  /** Still sounding (not stopped, not ended). */
+  readonly playing: boolean;
+}
+export const MARKET_AUDIO = {
+  cash: {send: 0.12, jitter: 0.02, gainJitter: 0.5},
+  scream: {ref: 2.6, rolloff: 1, maxDist: 50, send: 0.5, max: 3, jitter: 0.02, gainJitter: 1, occMax: 0.8},
+  grunt: {ref: 2, rolloff: 1.1, maxDist: 36, send: 0.4, max: 3, jitter: 0.03, gainJitter: 1, occMax: 0.8},
+  retch: {send: 0.06, cutFade: 0.1},
+  crowd: {voices: 3, ref: 4, rolloff: 1, tau: 0.5, posTau: 0.35, fadeOut: 1.2, lowpassHz: 9000, occlusion: 0.55, match: 6, eps: 0.004},
+} as const;
+const CROWD_CUES: ReadonlySet<string> = new Set<CrowdCue>(['marketChatter', 'marketBarChatter']);
+/** Counters of the market set (Sfx.marketAudioState). */
+export interface MarketAudioCounts { cash: number; screams: number; grunts: number; capped: number; retches: number; crowdStarts: number; crowdStops: number; crowdCuts: number }
+interface CrowdChannel { cue: CrowdCue; src: AudioBufferSourceNode; g: GainNode; lp: BiquadFilterNode; pan: PannerNode; pos: Pos; v: number; released: number }
+
 export type WeaponSoundKind = 'rifle' | 'shotgun' | 'pistol';
 
 /**
@@ -643,6 +698,11 @@ export class Sfx {
   private locCh: LocationChannel[] = [];
   private locChime = {seed: 0, n: 0, left: Infinity, t: -1};
   private locStats = {starts: 0, stops: 0, cuts: 0, chimes: 0};
+  // Task studio-market-bar-20261108-225231-01 (lane AUDIO): the market's voices per kind, the retch, the crowd murmur channels, counters
+  private mVoices: Record<MarketVoiceKind, Voice[]> = {scream: [], grunt: []};
+  private retchVoice: Voice | null = null;
+  private crowdCh: CrowdChannel[] = [];
+  private mStats: MarketAudioCounts = {cash: 0, screams: 0, grunts: 0, capped: 0, retches: 0, crowdStarts: 0, crowdStops: 0, crowdCuts: 0};
   private pannersCreated = 0;
   private dropped = 0;
   private culled = 0;
@@ -879,7 +939,7 @@ export class Sfx {
    * (new occlusion) also fades out every burning-flare loop of the previous one.
    */
   setWorld(o: {occlusion?: ((x: number, z: number, y?: number) => number) | null; emitters?: Pos[]; fans?: readonly FanSource[]}): void {
-    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); this.stopCarEngine(0.05); this.setLocationEmitters([], 0.05); } // track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble; lane CAR2: the car engine; skyways-destinations (lane AUDIO): the location emitters
+    if (o.occlusion !== undefined) { this.occlusion = o.occlusion; this.stopFlares(0.05); this.stopMachines(0.05); this.stopTrack1Cues(0.05); this.stopDrags(0.05); this.stopCartRoll(0.05); this.stopCarEngine(0.05); this.setLocationEmitters([], 0.05); this.stopCrowd(0.05); } // (+ market bar, lane AUDIO: the crowd murmur) track1 (lane AUDIO): hums / hisses too; M01: drags; train-fuel (lane PORT): the cart rumble; lane CAR2: the car engine; skyways-destinations (lane AUDIO): the location emitters
     if (o.emitters) { this.emitters = o.emitters.slice(0, 256); this.emitterTick = 99; }
     if (o.fans) { // (R4) a new world's fans: every channel lets go of the old ones (fade), the next tick picks again
       this.fans = o.fans.slice(0, 64);
@@ -960,6 +1020,7 @@ export class Sfx {
     const nodes: AudioNode[] = [inp];
     let out: AudioNode = inp;
     let hrtf = false;
+    let pan: PannerNode | undefined;
     if (o.at) {
       // air absorption with distance, plus a heavy lowpass when the source is around a corner
       const cutoff = Math.min(20000, 17000 / (1 + dist * 0.04)) * (occ > 0 ? 0.08 + 0.92 * (1 - occ) : 1);
@@ -974,6 +1035,7 @@ export class Sfx {
       this.setPannerPos(p, o.at.x, o.at.y, o.at.z);
       out.connect(p).connect(this.master);
       nodes.push(p);
+      pan = p;
     } else if (o.pan !== undefined && typeof ctx.createStereoPanner === 'function') {
       // Iteration 12: listener-relative voice with a restrained stereo position (no distance model at all).
       const sp = ctx.createStereoPanner();
@@ -991,6 +1053,7 @@ export class Sfx {
       nodes.push(s);
     }
     const v: Voice = {inp, nodes, srcs: [], pending: 0, end: now + 0.05, hrtf, fg: !!o.fg};
+    if (pan) v.pan = pan;
     this.voices.push(v);
     return v;
   }
@@ -2729,5 +2792,161 @@ export class Sfx {
     const v = this.voice(o);
     if (v) this.sVoices[kind].push(v);
     return v;
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Task studio-market-bar-20261108-225231-01 (lane AUDIO): the MARKET set (MARKET_AUDIO; Sound Lab clips market-*; silent no-ops when audio
+  // is paused / not started or a clip is missing — never a stand-in sound).
+
+  /** ONE subtle cash-register cue at the player (a successful buy / sell). Returns true when it played. */
+  marketCash(): boolean {
+    const C = MARKET_AUDIO.cash;
+    const ok = !!this.play(this.voice({send: C.send, pri: 1}), 'marketCash', {jitter: C.jitter, gainJitter: C.gainJitter});
+    if (ok) this.mStats.cash++;
+    return ok;
+  }
+
+  /**
+   * One market person's panic scream / angry grunt at a world point (the mouth), `rate` = the person's voice pitch. Null: paused / culled /
+   * the kind's cap (MARKET_AUDIO[kind].max sounding) / no clip. The handle follows the person and fades it out.
+   */
+  marketVoice(kind: MarketVoiceKind, x: number, y: number, z: number, o: {rate?: number} = {}): MarketVoiceHandle | null {
+    const ctx = this.live;
+    if (!ctx || ![x, y, z].every(Number.isFinite)) return null;
+    const S = MARKET_AUDIO[kind], now = ctx.currentTime;
+    const list = this.mVoices[kind] = this.mVoices[kind].filter(v => v.end > now);
+    if (list.length >= S.max) { this.mStats.capped++; return null; }
+    const v = this.voice({at: {x, y, z}, hrtf: true, ref: S.ref, rolloff: S.rolloff, send: S.send, pri: 1, maxDist: S.maxDist, occMax: S.occMax});
+    const cue: CueId = kind === 'scream' ? 'marketScream' : 'marketGrunt';
+    const rate = Number.isFinite(o.rate) ? Math.max(0.5, Math.min(2, o.rate!)) : 1;
+    if (!v || !this.play(v, cue, {rate, jitter: S.jitter, gainJitter: S.gainJitter})) return null;
+    list.push(v);
+    if (kind === 'scream') this.mStats.screams++; else this.mStats.grunts++;
+    const self = this;
+    let stopped = false;
+    return {
+      setPos(px: number, py: number, pz: number) {
+        if (stopped || !v.pan || ![px, py, pz].every(Number.isFinite)) return;
+        self.setPannerPos(v.pan, px, py, pz);
+      },
+      stop(fadeS = 0.15) {
+        if (stopped) return;
+        stopped = true;
+        self.fadeVoice(v, fadeS);
+      },
+      get playing() { return !stopped && v.end > (self.ctx?.currentTime ?? Infinity); },
+    };
+  }
+
+  /** The player's retch (the throw-up action): one at a time (a sounding one is cut first). Returns its length (s); 0 = nothing played. */
+  marketRetch(): number {
+    const R = MARKET_AUDIO.retch;
+    if (this.retchVoice) { this.cutVoice(this.retchVoice, R.cutFade); this.retchVoice = null; }
+    const v = this.voice({send: R.send, pri: 2});
+    const clip = this.play(v, 'marketRetch', {jitter: 0.03, gainJitter: 0.5});
+    if (!v || !clip) return 0;
+    this.retchVoice = v;
+    this.mStats.retches++;
+    return clip.dur;
+  }
+
+  /** The crowd murmur's groups this tick (see MARKET_AUDIO): channels follow / start / fade. [] = everything fades. Plays only clips. */
+  crowdChatter(groups: readonly CrowdGroup[]): void {
+    const ctx = this.ctx, bus = this.ambBus;
+    if (!ctx || !bus) return;
+    const C = MARKET_AUDIO.crowd, t = ctx.currentTime;
+    this.crowdCh = this.crowdCh.filter(c => c.released < 0 || t < c.released + C.fadeOut + 0.1);
+    const want = groups.filter(g => CROWD_CUES.has(g.cue) && [g.x, g.y, g.z, g.level].every(Number.isFinite) && g.level > 0).slice(0, C.voices);
+    // each group keeps the nearest live channel of its murmur within `match` m (greedy by distance)
+    const live = this.crowdCh.filter(c => c.released < 0), pairs: {g: number; c: CrowdChannel; d: number}[] = [];
+    want.forEach((g, i) => { for (const c of live) if (c.cue === g.cue) { const d = Math.hypot(g.x - c.pos.x, g.y - c.pos.y, g.z - c.pos.z); if (d <= C.match) pairs.push({g: i, c, d}); } });
+    pairs.sort((p, q) => p.d - q.d);
+    const of = new Map<number, CrowdChannel>(), taken = new Set<CrowdChannel>();
+    for (const p of pairs) if (!of.has(p.g) && !taken.has(p.c)) { of.set(p.g, p.c); taken.add(p.c); }
+    for (const c of live) if (!taken.has(c)) this.releaseCrowd(c, C.fadeOut);
+    this.trimCrowdFades();
+    want.forEach((g, i) => {
+      let c = of.get(i);
+      const at = {x: g.x, y: g.y, z: g.z};
+      if (!c) {
+        if (!this.bank.has(g.cue)) return; // not decoded yet: silent until it is (no silent-play count per tick)
+        const clip = this.bank.pick(g.cue);
+        if (!clip) return;
+        const src = ctx.createBufferSource();
+        src.buffer = clip.buffer;
+        src.loop = true;
+        const a = clip.loopStart ?? clip.offset, b = clip.loopEnd ?? clip.offset + clip.dur;
+        src.loopStart = a;
+        src.loopEnd = b;
+        src.playbackRate.value = rnd(0.98, 1.02); // two channels of one murmur never phase into one
+        const gn = ctx.createGain();
+        gn.gain.value = 0;
+        const lp = ctx.createBiquadFilter();
+        lp.type = 'lowpass'; lp.frequency.value = C.lowpassHz; lp.Q.value = 0.5;
+        const pan = this.makePanner(ctx, false, C.ref, C.rolloff);
+        this.setPannerPos(pan, at.x, at.y, at.z);
+        src.connect(gn).connect(lp).connect(pan).connect(bus);
+        const nodes: AudioNode[] = [src, gn, lp, pan];
+        src.onended = () => { for (const n of nodes) { try { n.disconnect(); } catch { /* already gone */ } } nodes.length = 0; };
+        src.start(t, a + Math.random() * Math.max(0, b - a));
+        this.soundsStarted++;
+        this.mStats.crowdStarts++;
+        c = {cue: g.cue, src, g: gn, lp, pan, pos: {...at}, v: -1, released: -1};
+        this.crowdCh.push(c);
+      } else if (Math.hypot(at.x - c.pos.x, at.y - c.pos.y, at.z - c.pos.z) > 0.05) {
+        c.pos = at; // ease the panner toward the group (people drift; never a jump)
+        const p = c.pan;
+        if (p.positionX) { p.positionX.setTargetAtTime(at.x, t, C.posTau); p.positionY.setTargetAtTime(at.y, t, C.posTau); p.positionZ.setTargetAtTime(at.z, t, C.posTau); }
+        else this.setPannerPos(p, at.x, at.y, at.z);
+      }
+      const d = this.dist(at), occ = this.occlusion && d > 1.5 ? clamp01(this.occlusion(at.x, at.z, at.y)) : 0;
+      const v = CUE_GAIN[g.cue] * Math.min(1, g.level) * AMBIENT_LEVEL * (1 - C.occlusion * occ);
+      c.lp.frequency.setTargetAtTime(C.lowpassHz * (occ > 0 ? 0.12 + 0.88 * (1 - occ) : 1), t, 0.3);
+      if (Math.abs(v - c.v) < C.eps) return;
+      c.v = v;
+      c.g.gain.cancelScheduledValues(t);
+      c.g.gain.setTargetAtTime(v, t, C.tau);
+    });
+  }
+
+  /** Fade out every crowd murmur channel (leaving the market / a new world). Plays nothing. */
+  stopCrowd(fadeS: number = MARKET_AUDIO.crowd.fadeOut): void {
+    for (const c of this.crowdCh) this.releaseCrowd(c, fadeS);
+    this.trimCrowdFades();
+  }
+
+  /** A crowd channel fades out (`fadeS`) and its loop stops (kept until the fade ends: the fading bound). Plays nothing. */
+  private releaseCrowd(c: CrowdChannel, fadeS: number): void {
+    if (c.released >= 0) return;
+    const ctx = this.ctx;
+    c.released = ctx?.currentTime ?? 0;
+    this.mStats.crowdStops++;
+    if (!ctx) return;
+    const t = ctx.currentTime, f = Math.max(0.01, fadeS);
+    c.g.gain.cancelScheduledValues(t);
+    c.g.gain.setTargetAtTime(0, t, f / 3);
+    try { c.src.stop(t + f + 0.05); } catch { /* already stopped */ }
+  }
+
+  /** Beyond MARKET_AUDIO.crowd.voices fading channels, the oldest are cut now (a quick ramp, then stop). Plays nothing. */
+  private trimCrowdFades(): void {
+    const ctx = this.ctx;
+    const fading = this.crowdCh.filter(q => q.released >= 0);
+    while (fading.length > MARKET_AUDIO.crowd.voices) {
+      const old = fading.shift()!, t = ctx?.currentTime ?? 0;
+      old.g.gain.cancelScheduledValues(t);
+      old.g.gain.setTargetAtTime(0, t, 0.01);
+      try { old.src.stop(t + 0.04); } catch { /* already stopped */ }
+      this.crowdCh.splice(this.crowdCh.indexOf(old), 1);
+      this.mStats.crowdCuts++;
+    }
+  }
+
+  /** QA / tests: the market set's live state (sounding crowd channels: murmur + target level; voices per kind; counters). */
+  marketAudioState(): {crowd: {cue: CrowdCue; level: number; x: number; y: number; z: number}[]; crowdFading: number; screamVoices: number; gruntVoices: number; retch: boolean} & MarketAudioCounts {
+    const now = this.ctx?.currentTime ?? 0, live = this.crowdCh.filter(c => c.released < 0);
+    return {crowd: live.map(c => ({cue: c.cue, level: Math.max(0, c.v), ...c.pos})), crowdFading: this.crowdCh.length - live.length,
+      screamVoices: this.mVoices.scream.filter(v => v.end > now).length, gruntVoices: this.mVoices.grunt.filter(v => v.end > now).length,
+      retch: !!this.retchVoice && this.retchVoice.end > now, ...this.mStats};
   }
 }
