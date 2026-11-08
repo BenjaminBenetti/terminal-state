@@ -728,11 +728,14 @@ export const SKYWAYS_SIREN_ELIGIBILITY: FamilyEligibility = {
 export const SKYWAYS_SIREN_SPACING: FamilySpacing = {spacingM: 24, why: 'never two Sirens within earshot of one another (her hum carries 24 m), as in the Mall'};
 /**
  * The Skyways Siren DRAW weight = the Mall's (MALL_SIREN_WEIGHT 0.8). With the Mall's retail-floor placement (shops x MALL_SHOP_WEIGHT)
- * on the street / skyway storeys, its room gates, cap 4 and 24 m spacing, NO separate tuning was needed. Census (48 version-5 levels,
- * level seeds 1201 + k x 7919, k = 0..47): mean 1.79 Sirens per level (first half 1.88, second half 1.71; the Mall's census: 1.96 —
- * tuning half 2.17, validation half 1.75); levels with none 5 / 48 (10.4 %; the Mall 8.3 %); 5.8 % of the ~31 placed ambient enemies;
- * never on the station storey, in an annex, a horde or the convention crowd. Before (versions 1-4): 0 — she could not spawn.
- * (With the Office's placement — storefront units 0.5 — only ~1.25 slots per level passed her room gates: the Mall's R8 finding.)
+ * on the street / skyway storeys, its room gates, cap 4 and 24 m spacing — the Mall's rules unchanged, no Skyways-only boost. Census of
+ * the finished version 5 (48 levels, level seeds 1201 + k x 7919, k = 0..47; Mall store families and the cosplay crowd included):
+ * mean 1.54 Sirens per level (halves 1.75 / 1.33; 1.79 before the Mall store units took their dense Mall fit-outs) — the Mall's census:
+ * 1.96 (halves 2.17 / 1.75); levels with none 7 / 48 (14.6 %; the Mall 8.3 %); ~4.6 % of the ~33 placed non-horde enemies. The draw
+ * is near saturation (0.8: nearly every eligible slot outside the Blightbelly / rat-dog bands is a Siren), so the remaining gap is
+ * Skywalk's smaller, fuller shop rooms passing her gates less often — not her odds. Never on the station storey, in an annex, a horde
+ * or the convention crowd. Before (versions 1-4): 0 — she could not spawn. (With the Office's placement — storefront units 0.5 — only
+ * ~1.25 slots per level passed her room gates: the Mall's R8 finding.)
  */
 export const SKYWAYS_SIREN_WEIGHT = MALL_SIREN_WEIGHT;
 /**

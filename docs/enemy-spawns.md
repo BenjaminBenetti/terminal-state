@@ -285,11 +285,15 @@ her room gates anyway. That is the Mall's own pre-R8 finding.
   clear 1.5 × 1.5 m patch, doorways ≥ 3 m away, never sealing passage, ≤ 4 per level.
 - **Spacing.** 24 m apart.
 
-| Census (48 version-5 levels, seeds 1201 + k·7919, k = 0..47) | Skyways | The Mall (its census) |
+| Census (48 finished version-5 levels, seeds 1201 + k·7919, k = 0..47) | Skyways | The Mall (its census) |
 |---|---|---|
-| Sirens per level (mean) | 1.79 (halves 1.88 / 1.71) | 1.96 (halves 2.17 / 1.75) |
-| Levels with none | 5 / 48 (10.4 %) | 8.3 % |
-| Share of the placed ambient enemies | 5.8 % of ~31 | 10.3 % of ~19 |
+| Sirens per level (mean) | 1.54 (halves 1.75 / 1.33) | 1.96 (halves 2.17 / 1.75) |
+| Levels with none | 7 / 48 (14.6 %) | 8.3 % |
+| Share of the placed non-horde enemies | ~4.6 % of ~33 | 10.3 % of ~19 |
+
+The Mall's rules are not boosted here. The draw is close to saturation, so the remaining gap comes from Skywalk's smaller, fuller
+shop rooms passing her room gates less often. Before the Mall store units took their dense Mall fit-outs, the same census read
+1.79.
 
 She is never on the station storey, in an annex, in a horde or in the convention's cosplay crowd.
 
@@ -307,7 +311,7 @@ Groups roam the **Skyways patrol graph** (`gen/skyways/patrol.ts`):
 Placement is `placeHordes` on its own fork (`skyways-hordes`). It runs after the ambient runs, so their positions are kept off, and
 after the traversal finishing. The dressers' holds stay clear (stair-run mouths, bridge-deck lanes, store interiors).
 
-The census: 1.42 / 1.46 groups per level (halves), **no level without a horde**, 16–18 members per level. Members are
+The census (48 finished levels): 1.44 groups per level, **no level without a horde**, 17.0 members per level. Members are
 `layout.zombies` entries appended after every ambient spawn and before the annex's. The normal kill memory keeps killed members dead
 on return or Continue. A group with no living member stays dead, and the living ones start again from their placed positions (as
 in the Mall). Runtime: `HordeDirector` walks `layout.skyways.patrol`.

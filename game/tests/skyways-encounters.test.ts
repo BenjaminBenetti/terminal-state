@@ -1,7 +1,7 @@
 // Task studio-skywalk-encounters-20261108-074144-01 (Skywalk user feedback): layout version 5's ENCOUNTERS —
 //  1. "It feels like the siren cannot spawn on this level, It should spawn the same amount as the mall": she could not (versions 1-4:
 //     siren weight 0, no eligibility); version 5 rolls the MALL'S rules (draw 0.8, retail placement with shops x 6, enclosed-room gates,
-//     cap 4, 24 m spacing) on the street / skyway storeys — census in ai/spawnTables.ts SKYWAYS_SIREN_WEIGHT (48 levels: 1.79 / level,
+//     cap 4, 24 m spacing) on the street / skyway storeys — census in ai/spawnTables.ts SKYWAYS_SIREN_WEIGHT (48 levels: 1.54 / level,
 //     the Mall 1.96);
 //  2. "I want to have at least 1 random zombie hoard spawn on this map (just like the mall hoard)": the Mall's horde pool and placement
 //     on a Skyways patrol graph (gen/skyways/patrol.ts), >= 1 group on every new level, never on the station storey / a stair / near
@@ -87,7 +87,7 @@ describe('version 5 levels: Sirens in enclosed street / skyway rooms only; at le
         expect(Math.hypot(p.x - q.x, (p.y ?? 0) - (q.y ?? 0), p.z - q.z), `seed ${seed}`).toBeGreaterThanOrEqual(24 - 1e-6);
       }
     }
-    expect(total / SEEDS.length).toBeGreaterThan(0.8); // (the 48-level census: 1.79 per level)
+    expect(total / SEEDS.length).toBeGreaterThan(0.8); // (the 48-level census: 1.54 per level)
   }, 120000);
 
   it('hordes: >= 1 group on every level, the Mall\'s pool (zombies only), street / skyway storeys, far from the start, off stairs', () => {
