@@ -338,15 +338,21 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       // (layout version 4) a MARKET HALL fills its building (a ring of counters round it); an office TOWER LOBBY is generous (the grand
       // stair stands free in it with floor all round)
       if (b.programme === 'hall') { hw = I.w - rng.int(18, 22); hd = I.h - rng.int(18, 22); }
-      else if (b.programme === 'tower') { hw = Math.max(hw, Math.round(I.w * rng.range(0.56, 0.66))); hd = Math.max(hd, Math.round(I.h * rng.range(0.56, 0.66))); }
+      else if (b.programme === 'tower') {
+        hw = Math.max(hw, Math.round(I.w * rng.range(0.56, 0.66))); hd = Math.max(hd, Math.round(I.h * rng.range(0.56, 0.66)));
+        // the grand stair's run + a full run-out beyond both ends along the lobby's long axis
+        const need = RUN_CELLS + 2 * RUN_OUT + 6;
+        if (I.w >= I.h) hw = Math.max(hw, Math.min(I.w - 14, need)); else hd = Math.max(hd, Math.min(I.h - 14, need));
+      }
       // (layout version 4: a convention host's skyway court is the exhibitors' floor — a little roomier)
       if (hostHall) { hw = Math.min(hw, venue ? 34 : 30); hd = Math.min(hd, venue ? 32 : 28); }
       // a foyer approach: the host lobby is wider along its far side (the foyer beside the run, never onto it)
       if (hostHall && f.addonApproach === 'foyer' && hostSide) {
         if (hostSide === 'W' || hostSide === 'E') { hw = Math.min(hw, 28); hd = Math.min(Math.max(hd, 32), 34); } else { hw = Math.min(Math.max(hw, 32), 34); hd = Math.min(hd, 28); }
       }
-      hw = Math.max(28, Math.min(hw, I.w - (isSt ? 16 : 20)));
-      hd = Math.max(26, Math.min(hd, I.h - (isSt ? 16 : 20)));
+      const edge = isSt ? 16 : b.programme === 'tower' ? 14 : 20; // (a tower lobby: ends of 3.5 m for its entrance / lookouts)
+      hw = Math.max(28, Math.min(hw, I.w - edge));
+      hd = Math.max(26, Math.min(hd, I.h - edge));
       if (isSt) { hw = Math.max(hw, Math.min(I.w - 16, 46)); hd = Math.max(hd, Math.min(I.h - 16, 40)); } // both wells + a walkway
       let hx = I.x + Math.round((I.w - hw) / 2) + rng.int(-3, 3);
       let hy = I.y + Math.round((I.h - hd) / 2) + rng.int(-3, 3);
@@ -369,7 +375,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     let atrium: CellRect | null = null;
     if (b.atrium && b.plan === 'court') {
       // (layout version 4: a market hall's gallery ring is narrow — the hall is open from its floor to the glass)
-      const g = b.programme === 'hall' ? rng.int(5, 6) : rng.int(7, 9);
+      const g = b.programme === 'hall' ? rng.int(4, 5) : rng.int(7, 9);
       atrium = {x: hub.x + g, y: hub.y + g, w: hub.w - 2 * g, h: hub.h - 2 * g};
       if (atrium.w < 12 || atrium.h < 10) atrium = null;
     } else if (b.atrium && b.plan === 'galleria' && !legacy) {
@@ -584,6 +590,16 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
   const offC = legacy ? undefined : [...carves.values()].find(bc => bc.b.offices > 0 && bc.b.id !== f.addonHost);
   if (offC) officeWing = carveOfficeWing(offC, offC.b.offices) ?? carveOfficeWing(offC, 3 - offC.b.offices);
 
+  // (layout version 4) a BRIDGE HOUSE's lookouts over the streets first (its long walls would otherwise go to the anchors and shops):
+  // every free facade, two along a long one
+  for (const bc of carves.values()) {
+    if (bc.b.programme !== 'gallery') continue;
+    const bridged = new Set<Side>(bridges.filter(q => q.a === bc.b.id || q.b === bc.b.id).map(q => sideToward(bc.b, carves.get(q.a === bc.b.id ? q.b : q.a)!.b, q.axis)));
+    for (const s of SIDES.filter(q => !bridged.has(q))) {
+      if (sideLen(bc.hub, s) >= 50) { lookout(bc, s, 'low', rng.int(10, 13)); lookout(bc, s, 'high', rng.int(10, 13)); } else lookout(bc, s, 'centre', rng.int(10, 13));
+    }
+  }
+
   // --- 6a. DESTINATIONS: the landmark courts (atrium courts first) and the large ANCHOR shops ------------------------------------
   const landmarks = legacy ? [] : placeLandmarks();
   const anchors = legacy ? [] : carveAnchors();
@@ -618,10 +634,7 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
     const bridged = new Set<Side>(bridges.filter(q => q.a === b.id || q.b === b.id).map(q => sideToward(b, carves.get(q.a === b.id ? q.b : q.a)!.b, q.axis)));
     const host = b.id === f.addonHost;
     if (b.programme === 'gallery') {
-      // (layout version 4) a BRIDGE HOUSE: lookout lounges over the streets on every free facade (two along a long one), no street doors
-      for (const s of SIDES.filter(q => !bridged.has(q))) {
-        if (sideLen(hub, s) >= 50) { lookout(bc, s, 'low', rng.int(10, 13)); lookout(bc, s, 'high', rng.int(10, 13)); } else lookout(bc, s, 'centre', rng.int(10, 13));
-      }
+      // (layout version 4) a BRIDGE HOUSE: no street doors (its lookouts were carved before the anchors)
     } else if (b.programme === 'hall') {
       // (layout version 4) a MARKET HALL: market doors on two facades (the street runs through the hall), a lookout up on the gallery
       for (const s of rng.shuffle(SIDES.slice()).slice(0, 2)) entranceHall(bc, s, 'centre', rng.int(10, 12));
@@ -792,7 +805,8 @@ export function carveSkyways(k: Kit, rng: Rng, f: SkywaysFrame, opts: {legacy?: 
       if (depth - 12 >= 10) opts.push([['stair', 'stair'], 0.8]);
       if (depth - 12 >= 11 && depth >= 30) opts.push([['escalator', 'stair', 'escalator'], b.atrium || isSt ? 3 : 1]);
       // (layout version 4: the convention host's run is one stair lane — its skyway court is the exhibitors' floor, kept open)
-      const lanes: RunLanes = hostSide && (f.addonApproach === 'foyer' || venue) ? ['stair'] : rng.weighted(opts);
+      // (a market hall: one narrow run along its edge — the hall's opening keeps its size)
+      const lanes: RunLanes = hostSide && (f.addonApproach === 'foyer' || venue) ? ['stair'] : b.programme === 'hall' ? rng.weighted(opts.filter(([l]) => l.length <= 2 && lanesW(l) <= 9)) : rng.weighted(opts);
       if (lanesW(lanes) > depth - 10) continue;
       // a bridged edge: the run at one end of it (the bridge takes the rest); a galleria: near one end of the spine
       const at = bridged.has(s) || b.plan === 'galleria' ? (rng.chance(0.5) ? 0.04 : 0.96) : isSt && !alongXSide(s) ? (f.transitEdge === 'S' ? 0.02 : 0.98) : rng.range(0.15, 0.85);

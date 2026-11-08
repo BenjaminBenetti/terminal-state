@@ -290,16 +290,38 @@ export function skywaysFrame(levelSeed: number, salt = 0, opts: {legacy?: boolea
     for (let i = 0; i < order.length; i++) for (const n of pr.shuffle(nbrs(order[i]))) if (!seen.has(n.id)) { seen.add(n.id); order.push(n); }
     for (const q of buildings) if (!seen.has(q.id)) order.push(q);
     const done = new Map<string, SkywaysProgramme>(), count: Record<SkywaysProgramme, number> = {classic: 0, gallery: 0, hall: 0, tower: 0};
+    // (a market hall wants a broad block — its stair well takes a side of a narrow one; a bridge house a long one)
+    let q: FrameBuilding = station;
+    const fitOf = (b: FrameBuilding, kd: SkywaysProgramme) => (kd === 'gallery' && b.w * b.h < 2400 ? 0.5 : kd === 'hall' && Math.min(b.w, b.h) < 64 ? 0.15 : 1);
+    const fit = (kd: SkywaysProgramme) => fitOf(q, kd);
     // (the station row's neighbours / the building north of the station may take an underground pedway: they keep a street lobby)
     const pedwayCand = new Set([byCell(stationCol - 1, stationRow), byCell(stationCol + 1, stationRow), byCell(stationCol, stationRow - 1)].filter(Boolean).map(q => q!.id));
-    for (const q of order) {
+    for (q of order) {
       if (q.id === host.id) { done.set(q.id, 'classic'); count.classic++; continue; }
       const kinds: [SkywaysProgramme, number][] = q.id === station.id ? [['hall', 1], ['tower', 1], ['classic', 0.8]]
         : [['gallery', pedwayCand.has(q.id) ? 0.35 : 1.15], ['hall', 1], ['tower', 0.95], ['classic', 0.75]];
       const near = nbrs(q).map(n => done.get(n.id)).filter(Boolean);
-      const w = kinds.map(([kd, base]) => [kd, base * (near.includes(kd) ? 0.12 : 1) / (1 + 2.5 * count[kd]) * (kd === 'gallery' && q.w * q.h < 2400 ? 0.5 : 1)] as [SkywaysProgramme, number]);
+      const w = kinds.map(([kd, base]) => [kd, base * (near.includes(kd) ? 0.12 : 1) / (1 + 2.5 * count[kd]) * fit(kd) * (count[kd] ? 1 : 2)] as [SkywaysProgramme, number]);
       const kd = pr.weighted(w);
       done.set(q.id, kd); count[kd]++;
+    }
+    // at least three programmes on a map of four or more buildings: a building of the commonest kind takes a missing one (the best fit;
+    // never the host, a bridge house never at the station / a pedway candidate)
+    const want = Math.min(3, buildings.length >= 4 ? 3 : buildings.length);
+    for (let guard = 0; guard < 4 && new Set(done.values()).size < want; guard++) {
+      const missing = (['gallery', 'hall', 'tower', 'classic'] as SkywaysProgramme[]).filter(kd => !count[kd]);
+      let best: {q: FrameBuilding; kd: SkywaysProgramme; s: number} | null = null;
+      for (const b of order) {
+        const q = b, cur = done.get(q.id)!;
+        if (q.id === host.id || count[cur] < 2) continue;
+        for (const kd of missing) {
+          if (kd === 'gallery' && (q.id === station.id || pedwayCand.has(q.id))) continue;
+          const sc = fitOf(q, kd) * (nbrs(q).some(n => done.get(n.id) === kd) ? 0.5 : 1) + pr.next() * 0.01;
+          if (!best || sc > best.s) best = {q, kd, s: sc};
+        }
+      }
+      if (!best) break;
+      count[done.get(best.q.id)!]--; done.set(best.q.id, best.kd); count[best.kd]++;
     }
     for (const q of buildings) {
       q.programme = done.get(q.id) ?? 'classic';

@@ -160,12 +160,15 @@ export function edgeBand(g: Grid, i: number, alongX: boolean, plane: number, t0:
     return {f0: f, f1: f, c0: c, c1: c, sloped: false};
   }
   const R = g.ramps[r];
+  // (task studio-skywalk-variety-20261107-231448-01) a capped open well (Ramp.capCeil, the Skyways runs): the band — and so the well's
+  // side walls — stops at the well's ceiling, like cellCeil (its 40 m open headroom drew the walls up through the roofs)
+  const cap = (c: number) => (R.capCeil && g.hasCeil(i) ? Math.min(c, g.ceil[i]) : c);
   if ((R.axis === 'x') === alongX) {
     const fa = rampHeight(R, t0), fb = rampHeight(R, t1);
-    return {f0: fa - skirt, f1: fb - skirt, c0: fa + R.headroom, c1: fb + R.headroom, sloped: Math.abs(fa - fb) > EPS};
+    return {f0: fa - skirt, f1: fb - skirt, c0: cap(fa + R.headroom), c1: cap(fb + R.headroom), sloped: Math.abs(fa - fb) > EPS};
   }
   const f = rampHeight(R, plane);
-  return {f0: f, f1: f, c0: f + R.headroom, c1: f + R.headroom, sloped: false};
+  return {f0: f, f1: f, c0: cap(f + R.headroom), c1: cap(f + R.headroom), sloped: false};
 }
 
 /**
