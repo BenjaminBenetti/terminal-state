@@ -12,7 +12,7 @@
 //    released without pausing, hitListeners (a hit closes it), stateListeners (any state but playing closes it), walking away / dying
 //    closes it, inputOwners (the mouse belongs to the view while it is open).
 // Every transaction (market/trade/transactions.ts) writes the station's stock record back in the same step.
-import type {Inventory, SlotRef} from '../../items/inventory';
+import type {Inventory, ItemStack, SlotRef} from '../../items/inventory';
 import type {SectionKey} from '../../levels/types';
 import type {RunState} from '../../run/runState';
 import type {RunParticipant} from '../../run/snapshot';
@@ -160,6 +160,24 @@ export class TradeSystem {
     this.stock = null;
     this.target = null;
     this.key = null;
+  }
+
+  /**
+   * Task studio-market-rework-20261108-074144-01: the ONE path besides a trade that takes a stack out of a stall's stock — the owned
+   * displayed wares (market/wares) when the player steals one: removes `count` (default all) of stock stack `uid` and records the stock at
+   * once. The whole stack leaves as the same object (uid / state kept); a partial take is a fresh-uid piece (the run's counter). Null: not
+   * in stock (nothing changes).
+   */
+  takeStock(stall: MarketStallId, uid: number, count?: number): ItemStack | null {
+    const list = this.stock?.stalls[stall];
+    const i = list ? list.findIndex(st => st.uid === uid) : -1;
+    if (!list || i < 0) return null;
+    const st = list[i], n = Math.max(1, Math.min(st.count, Math.floor(count ?? st.count)));
+    let piece: ItemStack;
+    if (n >= st.count) { piece = st; list.splice(i, 1); } else { piece = {...st, uid: this.host.inv.allocUid(), count: n}; delete piece.bag; st.count -= n; }
+    this.stock!.version++;
+    this.write();
+    return piece;
   }
 
   /** The station's stock record -> its lane memory (after seeding and after every trade). */
