@@ -214,19 +214,23 @@ export function carveSettlement(k: Kit, f: SettleFrame, rng: Rng): SettleCarve |
   // --- 5. The back row: the communal kitchen opposite the yard, the bunk room, the workshop, two counter-fronted shops --------------
   const by0 = R.b0 + 1;
   const yc = Math.round((yx0 + yx1) / 2), kx0 = yc - 7, kx1 = yc + 7;
-  const left = fillRun(X0, kx0 - 1, 8, 14, 11, rng), right = fillRun(kx1 + 1, X1, 8, 14, 11, rng);
+  // the workshop: a wide fixed slot at the outer end of the longer run (its clear middle floor stores the station's common fuel plan)
+  const WS = 13, wsLeft = kx0 - 1 - X0 >= X1 - kx1 - 1;
+  const wsSlot: Rect = {x: wsLeft ? X0 : X1 - WS, y: by0, w: WS, h: fh};
+  const left = fillRun(wsLeft ? X0 + WS + 1 : X0, kx0 - 1, 8, 14, 11, rng), right = fillRun(kx1 + 1, wsLeft ? X1 : X1 - WS - 1, 8, 14, 11, rng);
   if (!left || !right) return fail('back row run does not split');
   const backSlots: Rect[] = [];
-  { let x = X0; for (const w of left) { backSlots.push({x, y: by0, w, h: fh}); x += w + 1; } }
+  { let x = wsLeft ? X0 + WS + 1 : X0; for (const w of left) { backSlots.push({x, y: by0, w, h: fh}); x += w + 1; } }
   const kitchenSlot = {x: kx0, y: by0, w: kx1 - kx0, h: fh};
   { let x = kx1 + 1; for (const w of right) { backSlots.push({x, y: by0, w, h: fh}); x += w + 1; } }
-  if (backSlots.filter(r => r.w >= 9).length < backStalls.length + 1) return fail('back row too narrow for its shops');
+  if (backSlots.filter(r => r.w >= 9).length < backStalls.length) return fail('back row too narrow for its shops');
   container(kitchenSlot, 0, 'N', kitchenSlot.w - 2, 'kitchen', 'back', back, {wide: true, label: 'Communal kitchen'});
-  // shops on the widest slots, the workshop and the bunk room next, the rest storage / homes
+  container(wsSlot, 0, 'N', 6, 'workshop', 'back', back, {wide: true, label: 'Workshop'});
+  // shops on the widest slots, the bunk room next, the rest storage / homes
   const order = backSlots.map((r, i) => ({r, i, key: r.w + rng.next() * 0.5})).sort((p, q) => q.key - p.key);
   const backUse = new Map<number, {use: ContainerUse; stall?: MarketStallId}>();
   backStalls.forEach((id, j) => backUse.set(order[j].i, {use: 'shop', stall: id}));
-  for (const use of ['workshop', 'bunks', 'storage', 'home', 'storage', 'home'] as ContainerUse[]) {
+  for (const use of ['bunks', 'storage', 'home', 'storage', 'home'] as ContainerUse[]) {
     const s = order.find(o => !backUse.has(o.i));
     if (s) backUse.set(s.i, {use});
   }

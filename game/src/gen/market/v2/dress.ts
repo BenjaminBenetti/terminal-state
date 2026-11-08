@@ -308,7 +308,7 @@ export function dressSettlement(layout: StationLayout, sc: SettleCarve, rng: Rng
     // the floor props in the corners by the opening (the middle stays clear: the station's common fuel plan stores its cans here)
     put(a, 'airCompressor', F.x(0.45), F.z(0.3), F.out + Math.PI);
     put(a, 'portableGenerator', F.x(F.U - 0.4), F.z(0.42), F.out + Math.PI);
-    put(a, 'tripodWorkLight', F.x(F.U - 0.6), F.z(F.V - 1.5), WALL_ROT.E);
+    put(a, 'tripodWorkLight', F.x(F.U * 0.5), F.z(0.45), F.out + Math.PI); // (by the opening, lighting the benches)
     for (const u of [0.3, 0.75]) light(a, F.x(F.U * u), F.z(2.5), S.cont - 0.02, {power: 0.9});
   }
   function dressTea(F: Frame, a: Area): void {
