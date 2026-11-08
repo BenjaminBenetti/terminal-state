@@ -3,9 +3,20 @@
 // player's train pulls into for a pit stop: no enemies, clean air, six trader stalls, housing, a communal kitchen, a workbench corner
 // (SCENERY ONLY). Written by the generator into `layout.market`; plain JSON-safe data.
 
-/** The six trader stalls, in their fixed order (stock seeding / UI order). */
+/** The six trader stalls, in their fixed order (stock seeding / UI order): every layout version places exactly these. */
 export const MARKET_STALLS = ['gun', 'medical', 'fuel', 'general', 'gear', 'scrap'] as const;
-export type MarketStallId = typeof MARKET_STALLS[number];
+/** One of the six shops (the stall ids every layout version places; the generators' shop containers). */
+export type MarketShopId = typeof MARKET_STALLS[number];
+/**
+ * Task studio-market-bar-20261108-225231-01 (lane BAR): the bar's bartender, a stall of its own (layout version 3 only: versions 1 and 2
+ * place the six above and no bar). Code that iterates a station's stalls reads layout.market.stalls (never assumes every id is present).
+ */
+export const BAR_STALL = 'bar' as const;
+/** Every stall id there is, in the fixed order (the six, then the bar). */
+export const MARKET_STALLS_ALL = [...MARKET_STALLS, BAR_STALL] as const;
+export type MarketStallId = typeof MARKET_STALLS_ALL[number];
+/** Whether a value is a known stall id (any version). */
+export const isMarketStallId = (v: unknown): v is MarketStallId => (MARKET_STALLS_ALL as readonly unknown[]).includes(v);
 
 /** A storey-local point (world x / z, absolute floor height y, its layout storey). */
 export interface MarketPoint { x: number; z: number; y: number; level: number }
@@ -58,7 +69,7 @@ export interface MarketLayout {
    * 3 (task studio-market-bar-20261108-225231-01): version 2's settlement plus a substantial upper-level bar (its bartender a stall).
    */
   v: 1 | 2 | 3;
-  /** Exactly one stall per MARKET_STALLS id. */
+  /** Exactly one stall per MARKET_STALLS id (version 3: + the bar, BAR_STALL, last). */
   stalls: MarketStall[];
   /** Resident spots (wander targets / idle posts), at least a dozen, spread over the market's storeys. */
   spots: MarketSpot[];

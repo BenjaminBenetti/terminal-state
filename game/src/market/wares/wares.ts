@@ -32,7 +32,7 @@ import * as THREE from 'three';
 import {ITEM_DIMS, itemDef} from '../../items/items';
 import {ammoText} from '../../items/calibers';
 import {stackFromJSON, stackToJSON, type ItemStack} from '../../items/inventory';
-import {MARKET_STALLS, type MarketLayout, type MarketStallId} from '../../gen/market/marketTypes';
+import {isMarketStallId, type MarketLayout, type MarketStallId} from '../../gen/market/marketTypes';
 import type {PropPlacement} from '../../gen/props';
 import type {Pickup} from '../../world/pickups';
 import {localBounds} from '../../physics/dynamicItems';
@@ -134,7 +134,7 @@ export class MarketWares {
     if (!stock) return;
     this.stock = stock;
     for (const stall of m.stalls) {
-      if (!(MARKET_STALLS as readonly string[]).includes(stall.id)) continue;
+      if (!isMarketStallId(stall.id)) continue; // (the six; layout version 3: + the bar — task studio-market-bar-20261108-225231-01)
       const list = stock.stalls[stall.id] ?? [];
       const pk = planStall(list, stallSurfaces(layout, stall), id => this.dimsOf(id));
       this.packers.set(stall.id, pk);

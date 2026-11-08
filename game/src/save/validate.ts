@@ -29,7 +29,7 @@ import {FUEL, FUEL_LANE, debitProblem, debitUnits, stationFuelProblem, trainFuel
 import {SKYWAYS_CAR_LANE, TRUNK_SLOTS, skywaysCarProblem} from '../world/skywaysCarStore'; // task skyways-level-20261106 (lane CAR): the prize car's pose
 import {STATION_PROPS_LANE, cargoProblem, stationPropsProblem, type CargoPropJSON} from '../run/trainCargo'; // task train-loose-cargo: the train's loose items (+ train-all-cargo: props)
 import {PROP_DEFS} from '../gen/props'; // task train-all-cargo: carried props are of real kinds
-import {MARKET_STALLS} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
+import {BAR_STALL, MARKET_STALLS, MARKET_STALLS_ALL} from '../gen/market/marketTypes'; // task studio-survivor-market-20261108-005807-01 (lane TRADE): the stalls' stock + the Rail Ties wallet
 import {MARKET_STOCK_LANE, STOCK_MAX} from '../market/trade/stock';
 import {MARKET_HOSTILITY_LANE, marketHostilityProblem} from '../market/combat/record'; // task studio-market-rework-20261108-074144-01 (lane COMBAT): a market station's hostility
 import {WALLET_PARTICIPANT, walletProblem} from '../market/trade/wallet';
@@ -509,15 +509,16 @@ function sectionBags(v: unknown, path: string): void {
  * Task studio-survivor-market-20261108-005807-01 (lane TRADE): a market station's stall stock (market/trade/stock.ts MarketStockJSON) —
  * every stall listed, at most STOCK_MAX stacks each, every stack as strictly as the Lockbox's (item, count, mag, filter, air, bag) with
  * its uid in the scope's set (uidScope); no reactor restart part, no Rail Ties (task studio-market-rework-20261108-074144-01: the money is
- * never stock), no backpack holding items.
+ * never stock), no backpack holding items. Task studio-market-bar-20261108-225231-01 (lane BAR): + the bar's list where the station has a
+ * bar holding something (layout version 3; optional — an old record or a market without a bar has the six only).
  */
 function marketStock(v: unknown, path: string): void {
   const o = obj(v, path);
   only(o, path, ['v', 'stalls']);
   if (o.v !== 1) bad(`${path}.v`, 'unsupported market stock version');
   const st = obj(o.stalls, `${path}.stalls`);
-  only(st, `${path}.stalls`, MARKET_STALLS);
-  for (const id of MARKET_STALLS) {
+  only(st, `${path}.stalls`, MARKET_STALLS_ALL, MARKET_STALLS);
+  for (const id of [...MARKET_STALLS, ...(has(st, BAR_STALL) ? [BAR_STALL] : [])]) {
     arr(st[id], `${path}.stalls.${id}`, STOCK_MAX).forEach((s, i) => {
       const p = `${path}.stalls.${id}[${i}]`;
       stack(s, p, {uid: true, inBag: false, seen: uidScope, needBag: true});

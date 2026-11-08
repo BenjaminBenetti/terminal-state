@@ -17,7 +17,7 @@
 // finite stock, nothing else).
 import {PROP_DEFS, SHELF_TIER_Y, type PropPlacement} from '../../gen/props';
 import {cutSurfaces} from '../../gen/props07';
-import {MARKET_STALLS, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
+import {isMarketStallId, type MarketLayout, type MarketStall, type MarketStallId} from '../../gen/market/marketTypes';
 import {isContainerKind, isSurfaceKind} from '../../items/loot';
 import {holderSurfaces, type SurfaceHolder} from '../../items/lootLayout';
 
@@ -151,7 +151,7 @@ export function stallSurfaces(layout: Layoutish, stall: MarketStall): WareSurfac
 /** Every stall's display surfaces (empty without a market). */
 export function marketSurfaces(layout: Layoutish): Partial<Record<MarketStallId, WareSurface[]>> {
   const out: Partial<Record<MarketStallId, WareSurface[]>> = {};
-  for (const s of layout.market?.stalls ?? []) if ((MARKET_STALLS as readonly string[]).includes(s.id)) out[s.id] = stallSurfaces(layout, s);
+  for (const s of layout.market?.stalls ?? []) if (isMarketStallId(s.id)) out[s.id] = stallSurfaces(layout, s); // (+ the bar: task studio-market-bar-20261108-225231-01)
   return out;
 }
 

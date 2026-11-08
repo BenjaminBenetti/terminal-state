@@ -6,7 +6,7 @@
 // reputation): the cause, and per person (traders 'trader:<stall>', residents 'resident:<i>') alive / dead / fled, hp, the role it took
 // (flee / fight), its gun, rounds in the magazine + spare rounds, its posture and where it stands / lies. Dead stay dead (their body lies
 // where it fell), fled stay gone.
-import {MARKET_STALLS, type MarketStallId} from '../../gen/market/marketTypes';
+import {MARKET_STALLS_ALL, type MarketStallId} from '../../gen/market/marketTypes'; // (+ the bar's bartender: task studio-market-bar-20261108-225231-01)
 
 export const MARKET_HOSTILITY_LANE = 'market.hostility';
 
@@ -45,7 +45,7 @@ export interface MarketHostilityJSON {
 /** Person ids: one trader per stall, residents by index. */
 export const traderId = (stall: MarketStallId): string => `trader:${stall}`;
 export const residentId = (i: number): string => `resident:${i}`;
-const PERSON_ID = new RegExp(`^(trader:(${MARKET_STALLS.join('|')})|resident:\\d{1,2})$`);
+const PERSON_ID = new RegExp(`^(trader:(${MARKET_STALLS_ALL.join('|')})|resident:\\d{1,2})$`);
 export const MARKET_PERSON_MAX = 64;
 export const MARKET_PERSON_HP_MAX = 1000;
 /** Generous caps on carried rounds (a shotgun / pistol / rifle magazine is <= 30; spares a few magazines). */
@@ -82,7 +82,7 @@ export function marketHostilityProblem(v: unknown): string | null {
   if (v.v !== 1) return 'unsupported market hostility version';
   if (v.hostile !== true) return 'a hostility record is always hostile';
   if (v.cause !== 'attack' && v.cause !== 'theft') return 'bad cause';
-  if (v.stall !== undefined && !(MARKET_STALLS as readonly unknown[]).includes(v.stall)) return 'bad stall';
+  if (v.stall !== undefined && !(MARKET_STALLS_ALL as readonly unknown[]).includes(v.stall)) return 'bad stall';
   if (v.cause === 'theft' && v.stall === undefined) return 'a theft names its stall';
   if (!isObj(v.people)) return 'bad people';
   const ids = Object.keys(v.people);
