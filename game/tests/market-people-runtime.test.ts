@@ -6,7 +6,6 @@
 //  - traders stay at their posts, face the counter front, turn toward a customer, greet on onTalk; traderAt reports the post;
 //  - they are not enemies: nothing is added to a zombie list, no hit volumes / brains; teardown removes them; deterministic.
 import {beforeAll, describe, expect, it} from 'vitest';
-import {readFileSync} from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import * as THREE from 'three';
@@ -15,7 +14,7 @@ import {NodeIO} from '@gltf-transform/core';
 import {ALL_EXTENSIONS} from '@gltf-transform/extensions';
 import {generateStation} from '../src/gen/station';
 import {levelsOf} from '../src/gen/levels';
-import {CELL, PathFinder} from '../src/gen/grid';
+import {PathFinder} from '../src/gen/grid';
 import {PropIndex} from '../src/core/physics';
 import {playerTrainPlacement} from '../src/gen/playerTrain';
 import {hashString, mulberry32} from '../src/core/rng';
@@ -94,7 +93,6 @@ describe('market people on a generated station', () => {
   it('residents wander along real paths on the platform floor, never into the trench or the train keep-out; traders hold their posts', () => {
     const {layout, host, sys, probe} = world(11);
     host.sectionHooks[0].build!(layout as never);
-    const M = layout.market!;
     expect(sys.traders.length).toBe(6);
     expect(sys.residents.length).toBe(12);
     expect(host.scene.children.length).toBe(18);
@@ -103,7 +101,7 @@ describe('market people on a generated station', () => {
     const posts = sys.traders.map(t => ({x: t.actor.x, z: t.actor.z}));
     const visited = new Set<number>();
     const dt = 1 / 30;
-    let minGap = Infinity, minY = 0;
+    let minGap = Infinity;
     for (let f = 0; f < 30 * 150; f++) {
       host.frameHooks[0](dt);
       for (const r of sys.residents) {
@@ -112,7 +110,6 @@ describe('market people on a generated station', () => {
         // never down in a track bed (stairs to an underpass are fine: those pass under the bed, far below its floor)
         const bed = layout.trenches.find(t => a.x > t.x0 && a.x < t.x1 && a.z > t.z0 && a.z < t.z1 && Math.abs(a.y - t.floorY) < 0.6);
         expect(bed, `resident ${r.index} in a track bed at ${a.x.toFixed(2)}, ${a.y.toFixed(2)}, ${a.z.toFixed(2)}`).toBeUndefined();
-        minY = Math.min(minY, a.y);
         expect(host.levels.supportIn(a.x, a.z, a.y, 0.3), `resident ${r.index} off the floor at ${a.x.toFixed(2)}, ${a.z.toFixed(2)}`).not.toBeNull();
         // walkable on the storey it stands on (a route may take the stairs down to an underpass)
         const G = host.levels.grid(host.levels.levelAt(a.x, a.z, a.y)), [cx, cy] = G.cellOf(a.x, a.z);
@@ -127,7 +124,6 @@ describe('market people on a generated station', () => {
     expect(sys.counts.pathFails).toBeLessThan(sys.counts.paths / 2);
     // separation keeps bodies apart (brief overlaps while passing are resolved within the frame)
     expect(minGap).toBeGreaterThan(MARKET_PEOPLE.radius);
-    void M; void CELL; void minY;
   });
 
   it('steps away from the player and never pushes the player', () => {
