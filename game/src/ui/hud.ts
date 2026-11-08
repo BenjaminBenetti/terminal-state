@@ -12,6 +12,20 @@ import {CRITICAL, LOW} from '../player/survival';
 import type {LimbInjury} from '../player/injuries'; // Iteration 16 (lane INJURY)
 import type {MaskHudView} from '../gear/gasMask'; // task gasmask-breach-20261030 (mask lane)
 import type {FuelHudView} from '../world/fuelPort'; // task train-fuel-system (lane PORT)
+import {FUEL} from '../fuel/fuel'; // task studio-general-armor-20261107-231448-01 (the two-tank pip row)
+import {ARMOR, pipRows, pipsText} from '../player/armor'; // task studio-general-armor-20261107-231448-01 (the armour pips)
+
+// task studio-general-armor-20261107-231448-01: the ARMOUR pips — blue pips just above the health bar, as wide as it (ten pips a row = 25 %), in half-pip steps
+// rounded down (player/armor.ts pipRows). A row past ten stacks on top of the one below, overlapping it by ARMOR.rowOverlap of its
+// height; the HP row's top margin grows with the rows so nothing above the vitals is covered. No pips with no armour.
+const ARMOR_PIP_H = 6, ARMOR_PIP_GAP = 3;
+const ARMOR_CSS = `
+#vitals .bar.health { position: relative; }
+#armor-pips { position: absolute; left: -1px; right: -1px; bottom: calc(100% + ${ARMOR_PIP_GAP}px); height: 0; pointer-events: none; }
+#armor-pips.none { display: none; }
+#armor-pips .arow { position: absolute; left: 0; right: 0; display: grid; grid-template-columns: repeat(${ARMOR.pipsPerRow}, 1fr); gap: 2px; }
+#armor-pips i { height: ${ARMOR_PIP_H}px; box-sizing: border-box; background: #3d8fe0; border: 1px solid #0d1d30; box-shadow: 0 0 3px rgba(61, 143, 224, 0.45); }
+#armor-pips i.half { width: 50%; }`;
 
 // Task studio-beta-train-fuel-system-20261106-024923-01 (lane PORT): the train FUEL readout — a row at the top of the light panel in the
 // battery meter's style (icon, label, four quarter pips like the battery bar's cells, cream text; amber when the train cannot make one
@@ -21,6 +35,7 @@ const FUEL_CSS = `
 #fuel-tag .pips { display: flex; gap: 2px; }
 #fuel-tag .pips i { width: 11px; height: 7px; background: #111315; border: 1px solid #3a3f44; }
 #fuel-tag .pips i.on { background: var(--cream); }
+#fuel-tag .pips i.gap { margin-left: 4px; }
 #fuel-tag .txt { color: var(--cream); white-space: nowrap; }
 #fuel-tag.low .pips i.on { background: var(--mustard); }
 #fuel-tag.low .txt, #fuel-tag.low .ico { color: var(--mustard); }`;
@@ -85,6 +100,8 @@ export interface HudState {
   battery?: {charge: number; on: boolean; flicker: number; spares: number};
   /** Iteration 12 (LIGHT): flares carried (grenade slot; G since task office-overhaul-20261030) and burning in the world. */
   flares?: {count: number; burning: number};
+  /** (task studio-general-armor-20261107-231448-01) The worn armour pool (player/armor.ts armorPool): the blue pips above the health bar. */
+  armor?: number;
 }
 
 export class Hud {
@@ -137,6 +154,33 @@ export class Hud {
     vitals.appendChild(el);
   }
 
+  /** (task studio-general-armor-20261107-231448-01) The armour pips above the health bar (written only when the shown half-pip count changes). */
+  setArmor(pool: number): void {
+    const rows = pipRows(pool);
+    this.set('armor', rows.map(r => r.join(',')).join('|'), () => {
+      const bar = document.querySelector('#vitals .bar.health') as HTMLElement | null;
+      if (!bar) return;
+      if (!document.querySelector('#armor-css')) {
+        const st = document.createElement('style');
+        st.id = 'armor-css';
+        st.textContent = ARMOR_CSS;
+        document.head.appendChild(st);
+      }
+      let el = document.querySelector('#armor-pips') as HTMLElement | null;
+      if (!el) {
+        el = document.createElement('div');
+        el.id = 'armor-pips';
+        bar.appendChild(el);
+      }
+      const step = ARMOR_PIP_H * (1 - ARMOR.rowOverlap);
+      el.innerHTML = rows.map((r, k) => `<div class="arow" style="bottom:${k * step}px">${r.map(p => p === 'half' ? '<i class="half"></i>' : '<i></i>').join('')}</div>`).join('');
+      el.classList.toggle('none', !rows.length);
+      el.title = rows.length ? `Armor ${pipsText(pool)} pips (${+(pool * 100).toFixed(1)} %): cuts every enemy hit and may save you from its injury` : '';
+      const row = bar.parentElement as HTMLElement | null;
+      if (row) row.style.marginTop = rows.length ? `${6 + ARMOR_PIP_GAP + ARMOR_PIP_H + (rows.length - 1) * step}px` : '';
+    });
+  }
+
   /**
    * Iteration 16 (lane INJURY): show the injured arm / leg (player/injuries.ts; called every frame by its frame hook, writes only
    * on change). A new injury flashes the silhouette.
@@ -179,6 +223,7 @@ export class Hud {
   update(s: HudState, inv: Inventory): void {
     const hpFrac = Math.max(0, s.hp / s.maxHp);
     this.set('hp', String(Math.ceil(s.hp)), v => { $('#hp-num').textContent = v; $<HTMLElement>('#vitals .health .fill').style.width = `${hpFrac * 100}%`; $('#vitals .health').classList.toggle('low', hpFrac < 0.3); $('#vignette').classList.toggle('low', hpFrac < 0.3); });
+    this.setArmor(s.armor ?? 0); // task studio-general-armor-20261107-231448-01
     this.set('st', s.stamina.toFixed(0), v => { $<HTMLElement>('#vitals .stam .fill').style.width = `${v}%`; });
     this.set('wn', s.weaponName, v => { $('#weapon-name').textContent = v; });
     this.set('mag', s.melee ? 'melee' : s.mag === null ? '' : `${s.mag}|${s.reserve}`, v => {
@@ -324,7 +369,8 @@ export class Hud {
     if (!v) return;
     el.classList.toggle('low', v.low);
     el.title = 'Train fuel: one tank = one stop. Pour fuel cans in at the fuel cap (E); fuel cans in the train chest and fuel carts inside the car are burnt by themselves when the train departs.';
-    const pips = Array.from({length: 4}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}"></i>`).join('');
+    // (task studio-general-armor-20261107-231448-01) the train's two-tank reserve: two groups of four quarter pips (one group = one hop)
+    const pips = Array.from({length: FUEL.trainTankUnits}, (_, i) => `<i class="${i < v.pips ? 'on' : ''}${i > 0 && i % FUEL.tankUnits === 0 ? ' gap' : ''}"></i>`).join('');
     el.innerHTML = `<span class="ico">${ICONS.fuelCan}</span><span class="pips">${pips}</span><span class="txt">${v.text.replace(/[&<>]/g, c => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'))}</span>`;
   }
   private fuelKey = '';

@@ -9,8 +9,9 @@
 //    EVERY storey — around it). Thrown from just right of / below the eye at 9 m/s along the view + 2.4 m/s up + the
 //    player's velocity, tumbling end over end. Bounces, rolls and settles; at rest (0.5 s still, or after 10 s) the body
 //    leaves the world and the flare lies where it stopped. Ground clamp + an out-of-world guard (restore last good pose).
-//  - Burning: 50 s total (0.35 s strike flare-up, steady sputter 0.68..1.0, last 6 s fade), then out; the burnt husk lies
-//    there another 20 s and is removed. Red PointLight (0xff2a12, 7 cd, 10 m cutoff, decay 2) 0.1 m above the head, a hot
+//  - Burning: 100 s total (0.35 s strike flare-up, steady sputter 0.68..1.0, last 6 s fade), then out; the burnt husk lies
+//    there another 20 s and is removed. (task studio-general-armor-20261107-231448-01, user: "increase flair light distance 4x! Increase duration 2x": the burn
+//    50 -> 100 s, the light's reach 11.5 -> 46 m.) Red PointLight (0xff2a12, 7 cd, 10 m cutoff, decay 2) 0.1 m above the head, a hot
 //    head + additive glow sprite, RED volumetric smoke from the atmosphere lane's emitter and the light registered as a
 //    fog scatter light — all moved from the same head position every frame (light, smoke, AI light source, burn sound).
 //  - AI: each burning flare is a LightSource {kind 'flare', omni, spot = the flare, attractRange 28 m x fade}.
@@ -29,7 +30,7 @@ import {FlareLight} from '../world/flareLight'; // Iteration 15: occluded like i
 
 export const FLARE = {
   /** Seconds of burn (incl. the fade), seconds of fade at the end, strike flare-up, husk lifetime after burn-out. */
-  burn: 50,
+  burn: 100,
   fade: 6,
   ignite: 0.35,
   husk: 20,
@@ -49,7 +50,10 @@ export const FLARE = {
   // Iteration 15 (user: "a very strong red light ... really light up an area"): 7 cd / 10 m -> 42 cd (6x) / 11.5 m (inside
   // the +-11.75 m occlusion window: world/flareLight.ts keeps walls / other storeys dark), same red, physical decay 2.
   // At 2 / 5 / 8 m: 10.5 / 1.7 / 0.66 (was 1.75 / 0.28 / 0.11); the fog glow is rebalanced in ATMOSPHERE.scatterLightScatter.
-  light: {color: 0xff2a12, intensity: 42, distance: 11.5, decay: 2, lift: 0.1},
+  // (task studio-general-armor-20261107-231448-01) the reach x4: the cutoff 11.5 -> 46 m, the SAME candela / red / physical inverse-square decay (as bright up close; at
+  // 10 / 15 / 20 / 30 m: 0.42 / 0.19 / 0.105 / 0.047 lit instead of ~0.08 / 0 / 0 / 0), inside its 1 m-texel +-48 m occlusion window
+  // (render/smoke.ts VIS_TEXEL.scatter), so walls / other storeys stay dark; the fog glow follows the same distance.
+  light: {color: 0xff2a12, intensity: 42, distance: 46, decay: 2, lift: 0.1},
   /** Enemies with line of sight within this range notice a burning flare (scaled by the fade). */
   attractRange: 28,
   /** Smoke emitter request (render/atmosphere smoke API; bounded there). */

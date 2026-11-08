@@ -20,18 +20,20 @@ import {openableActive} from '../src/world/openablesSpec';
 import {ECONOMY_CORPUS, stationEconomy} from './helpers/lootEconomy';
 import {generateStation, type StationLayout} from '../src/gen/station';
 
-const hit = (o: Partial<ResolvedHit>): ResolvedHit => ({amount: 15, applied: 15, absorbed: 0, source: 'zombie', location: 'arm', ...o});
+// (task studio-general-armor-20261107-231448-01) an UNARMORED hit unless stated: its raw amount = the damage taken
+const hit = (o: Partial<ResolvedHit>): ResolvedHit => ({amount: o.applied ?? 15, applied: 15, absorbed: 0, source: 'zombie', location: 'arm', ...o});
 /** A system whose every roll is `v` (0 = always injures, 0.999 = never). */
 const fixed = (v: number) => new InjurySystem(() => v);
 
 describe('triggers: hits', () => {
-  it('chance scales with the HP damage taken, bounded, limbs only, never for absorbed hits', () => {
+  it('chance scales with the hit\'s raw damage (as for an unarmored player), bounded, limbs only', () => {
     expect(hitInjuryChance(hit({applied: 15}))).toBeCloseTo(0.33, 6); // the 25-40 % band for a 15-damage hit
     expect(hitInjuryChance(hit({applied: 10, location: 'leg'}))).toBeCloseTo(0.22, 6);
     expect(hitInjuryChance(hit({applied: 100}))).toBe(INJURY.hitChanceMax);
     expect(hitInjuryChance(hit({location: 'torso'}))).toBe(0);
     expect(hitInjuryChance(hit({location: 'head'}))).toBe(0);
-    expect(hitInjuryChance(hit({applied: 0, absorbed: 15}))).toBe(0); // fully absorbed
+    // armour does not lower the candidate (its save roll does, once: tests/armor.test.ts)
+    expect(hitInjuryChance(hit({amount: 15, applied: 7.5, absorbed: 7.5, armor: 0.5}))).toBeCloseTo(0.33, 6);
     expect(hitInjuryChance(hit({applied: 0.5}))).toBe(0);
     // rat / dog bite on a leg tears more; on an arm it does not
     expect(hitInjuryChance(hit({applied: 7, location: 'leg', source: 'creature'}))).toBeCloseTo(7 * 0.022 * 1.4, 6);
